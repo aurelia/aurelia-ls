@@ -56,6 +56,8 @@ export const ExpressionFrameworkErrorCode = {
   ParseNoArrowParamDestructuring: frameworkErrorCode('expression-parser', 'ErrorNames', 'parse_no_arrow_param_destructuring', 'AUR0175'),
   /** `expression-parser ErrorNames.parse_rest_must_be_last`; a rest parameter is not the final arrow parameter. */
   ParseRestMustBeLast: frameworkErrorCode('expression-parser', 'ErrorNames', 'parse_rest_must_be_last', 'AUR0176'),
+  /** `expression-parser ErrorNames.parse_unsupported_object_binding_pattern`; Repeat object patterns require shallow, unique, non-reserved local identifiers. */
+  ParseUnsupportedObjectBindingPattern: frameworkErrorCode('expression-parser', 'ErrorNames', 'parse_unsupported_object_binding_pattern', 'AUR0177'),
   /** `expression-parser ErrorNames.parse_no_arrow_fn_body`; block-bodied arrow functions are not accepted. */
   ParseNoArrowFnBody: frameworkErrorCode('expression-parser', 'ErrorNames', 'parse_no_arrow_fn_body', 'AUR0178'),
   /** `expression-parser ErrorNames.parse_unexpected_double_dot`; a leading `..` token is not an Aurelia expression. */

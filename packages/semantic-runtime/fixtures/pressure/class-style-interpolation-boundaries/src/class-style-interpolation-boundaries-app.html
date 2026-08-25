@@ -8,4 +8,29 @@
       ${summary}
     </p>
   </article>
+
+  <div
+    class="meter ${featured ? 'featured' : ''}"
+    style="width: ${progress}%; --accent: ${accentColor}; transform: translateX(calc(${offset}px + 1%)); background-image: url('${imageUrl}')"
+    title="Item ${itemId}"
+    data-item-id="item-${itemId}"
+    aria-label="Progress ${progress}%"
+    plugin-note="note-${itemId}"
+  ></div>
+
+  <div style.bind="styleRules"></div>
+  <div css.bind="styleRules"></div>
+  <div width.style="widthStyle" --accent.style="accentColor"></div>
+
+  <svg viewBox="0 0 ${viewWidth} ${viewHeight}" aria-label="Progress chart ${progress}%">
+    <text><![CDATA[${title}]]></text>
+    <rect x="${offset}" width="${viewWidth}" fill="${accentColor}"></rect>
+    <use xlink:href="${iconHref}"></use>
+    <foreignObject x="0" y="0" width="${viewWidth}" height="${viewHeight}">
+      <input value="${title}" aria-label="Item ${itemId}">
+      <svg viewBox="0 0 ${viewWidth} ${viewHeight}">
+        <circle cx="${offset}" cy="${offset}" r="${progress}"></circle>
+      </svg>
+    </foreignObject>
+  </svg>
 </section>

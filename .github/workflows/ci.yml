@@ -14,11 +14,12 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # CI is currently scoped to semantic-runtime and MCP release confidence.
-  # Legacy compiler/SSR/SSG/Vite/playground lanes are parked until they target semantic-runtime.
+  # CI covers semantic-runtime, the Language Server and VS Code products, bounded host support, and MCP release confidence.
+  # Legacy compiler/semantic-workspace/SSR/SSG/Vite/playground lanes are parked until they target semantic-runtime.
   semantic-runtime:
-    name: Semantic Runtime Contracts
+    name: IDE Semantic Assurance
     runs-on: ubuntu-latest
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@v4
         with:
@@ -46,18 +47,173 @@ jobs:
         env:
           PNPM_APPROVE_BUILDS: esbuild
 
+      - name: Bootstrap linked Aurelia dependencies
+        run: pnpm bootstrap:aurelia
+
       - name: Build semantic runtime
+        id: semantic_build
+        continue-on-error: true
         run: pnpm --filter @aurelia-ls/semantic-runtime build
 
-      - name: Check public query/type-system contracts
-        run: node packages/semantic-runtime/scripts/contract-suite.mjs --route diagnostics --route inquiry --route kernel --route type-system --skip-build
+      - name: Test semantic runtime
+        id: semantic_tests
+        if: ${{ always() && steps.semantic_build.outcome == 'success' }}
+        continue-on-error: true
+        run: pnpm test:semantic-runtime:built
 
-      - name: Check open-seam release contracts
-        run: node packages/semantic-runtime/scripts/contract-suite.mjs --route evaluation --route di --domain 'mcp;api;open-seams;reason-kinds' --skip-build
+      - name: Check strict semantic conformance
+        id: semantic_conformance
+        if: ${{ always() && steps.semantic_build.outcome == 'success' }}
+        continue-on-error: true
+        run: pnpm test:semantic-conformance:built
+
+      - name: Check semantic product contracts
+        id: semantic_product_contracts
+        if: ${{ always() && steps.semantic_build.outcome == 'success' }}
+        continue-on-error: true
+        run: pnpm test:semantic-contracts:product:built
+
+      - name: Check semantic runtime contracts
+        id: semantic_runtime_contracts
+        if: ${{ always() && steps.semantic_build.outcome == 'success' }}
+        continue-on-error: true
+        run: pnpm test:semantic-contracts:runtime:built
+
+      - name: Build aggregate IDE lanes
+        id: semantic_lane_build
+        if: ${{ always() }}
+        continue-on-error: true
+        run: pnpm --filter @aurelia-ls/language-server build
+
+      - name: Check aggregate IDE lanes
+        id: semantic_lanes
+        if: ${{ always() && steps.semantic_lane_build.outcome == 'success' }}
+        continue-on-error: true
+        run: pnpm test:ide:lanes:built
+
+      - name: Require complete semantic assurance
+        if: ${{ always() }}
+        env:
+          BUILD_OUTCOME: ${{ steps.semantic_build.outcome }}
+          TEST_OUTCOME: ${{ steps.semantic_tests.outcome }}
+          CONFORMANCE_OUTCOME: ${{ steps.semantic_conformance.outcome }}
+          PRODUCT_CONTRACT_OUTCOME: ${{ steps.semantic_product_contracts.outcome }}
+          RUNTIME_CONTRACT_OUTCOME: ${{ steps.semantic_runtime_contracts.outcome }}
+          LANE_BUILD_OUTCOME: ${{ steps.semantic_lane_build.outcome }}
+          LANE_OUTCOME: ${{ steps.semantic_lanes.outcome }}
+        run: |
+          for outcome in "$BUILD_OUTCOME" "$TEST_OUTCOME" "$CONFORMANCE_OUTCOME" "$PRODUCT_CONTRACT_OUTCOME" "$RUNTIME_CONTRACT_OUTCOME" "$LANE_BUILD_OUTCOME" "$LANE_OUTCOME"; do
+            test "$outcome" = success
+          done
+
+  ide-products:
+    name: Full Language Server and VS Code Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Verify submodules
+        run: |
+          git submodule status --recursive
+          test -f aurelia/package.json
+          test -f aurelia2-plugins/packages/aurelia2-table/package.json
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.5.2
+          run_install: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.x
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+        env:
+          PNPM_APPROVE_BUILDS: esbuild
+
+      - name: Bootstrap linked Aurelia dependencies
+        run: pnpm bootstrap:aurelia
+
+      - name: Build language-server types
+        id: language_server_build
+        continue-on-error: true
+        run: pnpm --filter @aurelia-ls/language-server build
+
+      - name: Test full language server
+        id: language_server_tests
+        if: ${{ always() && steps.language_server_build.outcome == 'success' }}
+        continue-on-error: true
+        run: node scripts/run-vitest.mjs packages/language-server/test
+
+      - name: Typecheck language-server tests
+        id: language_server_typecheck
+        if: ${{ always() && steps.language_server_build.outcome == 'success' }}
+        continue-on-error: true
+        run: pnpm --filter @aurelia-ls/language-server typecheck:test
+
+      - name: Lint language server
+        id: language_server_lint
+        if: ${{ always() }}
+        continue-on-error: true
+        run: pnpm lint:language-server
+
+      - name: Build VS Code types
+        id: vscode_build
+        if: ${{ always() }}
+        continue-on-error: true
+        run: pnpm exec tsc -b packages/vscode
+
+      - name: Bundle VS Code extension
+        id: vscode_bundle
+        if: ${{ always() && steps.language_server_build.outcome == 'success' && steps.vscode_build.outcome == 'success' }}
+        continue-on-error: true
+        run: pnpm --filter aurelia-2 run bundle
+
+      - name: Test full VS Code extension
+        id: vscode_tests
+        if: ${{ always() && steps.vscode_bundle.outcome == 'success' }}
+        continue-on-error: true
+        run: node scripts/run-vitest.mjs packages/vscode/test
+
+      - name: Typecheck VS Code tests
+        id: vscode_typecheck
+        if: ${{ always() && steps.vscode_build.outcome == 'success' }}
+        continue-on-error: true
+        run: pnpm --filter aurelia-2 typecheck:test
+
+      - name: Lint VS Code extension
+        id: vscode_lint
+        if: ${{ always() }}
+        continue-on-error: true
+        run: pnpm lint:vscode
+
+      - name: Require complete IDE product checks
+        if: ${{ always() }}
+        env:
+          LANGUAGE_SERVER_BUILD_OUTCOME: ${{ steps.language_server_build.outcome }}
+          LANGUAGE_SERVER_OUTCOME: ${{ steps.language_server_tests.outcome }}
+          LANGUAGE_SERVER_TYPECHECK_OUTCOME: ${{ steps.language_server_typecheck.outcome }}
+          LANGUAGE_SERVER_LINT_OUTCOME: ${{ steps.language_server_lint.outcome }}
+          VSCODE_BUILD_OUTCOME: ${{ steps.vscode_build.outcome }}
+          VSCODE_BUNDLE_OUTCOME: ${{ steps.vscode_bundle.outcome }}
+          VSCODE_OUTCOME: ${{ steps.vscode_tests.outcome }}
+          VSCODE_TYPECHECK_OUTCOME: ${{ steps.vscode_typecheck.outcome }}
+          VSCODE_LINT_OUTCOME: ${{ steps.vscode_lint.outcome }}
+        run: |
+          for outcome in "$LANGUAGE_SERVER_BUILD_OUTCOME" "$LANGUAGE_SERVER_OUTCOME" "$LANGUAGE_SERVER_TYPECHECK_OUTCOME" "$LANGUAGE_SERVER_LINT_OUTCOME" "$VSCODE_BUILD_OUTCOME" "$VSCODE_BUNDLE_OUTCOME" "$VSCODE_OUTCOME" "$VSCODE_TYPECHECK_OUTCOME" "$VSCODE_LINT_OUTCOME"; do
+            test "$outcome" = success
+          done
 
   mcp-release:
     name: MCP Release Pack
     runs-on: ubuntu-latest
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
         with:
@@ -85,28 +241,179 @@ jobs:
         env:
           PNPM_APPROVE_BUILDS: esbuild
 
+      - name: Bootstrap linked Aurelia dependencies
+        run: pnpm bootstrap:aurelia
+
       - name: Smoke Atlas source maps
+        id: mcp_atlas
+        continue-on-error: true
         run: pnpm --filter @aurelia-ls/atlas smoke
 
+      - name: Test MCP
+        id: mcp_tests
+        continue-on-error: true
+        run: pnpm --filter @aurelia-ls/mcp test
+
+      - name: Typecheck MCP tests
+        id: mcp_typecheck
+        continue-on-error: true
+        run: pnpm --filter @aurelia-ls/mcp typecheck:test
+
       - name: Probe source stdio MCP
+        id: mcp_source_probe
+        continue-on-error: true
         run: pnpm --filter @aurelia-ls/mcp probe:stdio
 
-      - name: Check MCP release contracts
-        run: pnpm --filter @aurelia-ls/mcp contract:release
+      - name: Check MCP release-document contracts
+        id: mcp_release_docs
+        continue-on-error: true
+        run: pnpm --filter @aurelia-ls/mcp contract:release-docs
+
+      - name: Check MCP adversarial-surface contracts
+        id: mcp_adversarial_contracts
+        continue-on-error: true
+        run: pnpm --filter @aurelia-ls/mcp contract:adversarial-surface
+
+      - name: Check MCP pattern-semantic contracts
+        id: mcp_pattern_contracts
+        continue-on-error: true
+        run: pnpm --filter @aurelia-ls/mcp contract:patterns-semantic
+
+      - name: Check MCP continuation contracts
+        id: mcp_continuation_contracts
+        continue-on-error: true
+        run: pnpm --filter @aurelia-ls/mcp contract:continuation-pass-through
 
       - name: Pack MCP release tarball
+        id: mcp_pack
+        continue-on-error: true
         run: pnpm --filter @aurelia-ls/mcp release:pack
 
       - name: Probe release tarball
+        id: mcp_tarball_probe
+        if: ${{ always() }}
+        continue-on-error: true
         run: pnpm --filter @aurelia-ls/mcp probe:release-tarball
 
       - name: Probe project-local install
+        id: mcp_local_install_probe
+        if: ${{ always() }}
+        continue-on-error: true
         run: pnpm --filter @aurelia-ls/mcp probe:project-local-install
 
       - name: Upload MCP release tarball
+        id: mcp_upload
+        if: ${{ always() && steps.mcp_pack.outcome == 'success' }}
+        continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
           name: aurelia-ls-mcp-release
           path: packages/mcp/.release/*.tgz
           if-no-files-found: error
           include-hidden-files: true
+
+      - name: Require complete MCP release checks
+        if: ${{ always() }}
+        env:
+          ATLAS_OUTCOME: ${{ steps.mcp_atlas.outcome }}
+          TEST_OUTCOME: ${{ steps.mcp_tests.outcome }}
+          TYPECHECK_OUTCOME: ${{ steps.mcp_typecheck.outcome }}
+          SOURCE_PROBE_OUTCOME: ${{ steps.mcp_source_probe.outcome }}
+          RELEASE_DOCS_OUTCOME: ${{ steps.mcp_release_docs.outcome }}
+          ADVERSARIAL_CONTRACT_OUTCOME: ${{ steps.mcp_adversarial_contracts.outcome }}
+          PATTERN_CONTRACT_OUTCOME: ${{ steps.mcp_pattern_contracts.outcome }}
+          CONTINUATION_CONTRACT_OUTCOME: ${{ steps.mcp_continuation_contracts.outcome }}
+          PACK_OUTCOME: ${{ steps.mcp_pack.outcome }}
+          TARBALL_PROBE_OUTCOME: ${{ steps.mcp_tarball_probe.outcome }}
+          LOCAL_INSTALL_PROBE_OUTCOME: ${{ steps.mcp_local_install_probe.outcome }}
+          UPLOAD_OUTCOME: ${{ steps.mcp_upload.outcome }}
+        run: |
+          for outcome in "$ATLAS_OUTCOME" "$TEST_OUTCOME" "$TYPECHECK_OUTCOME" "$SOURCE_PROBE_OUTCOME" "$RELEASE_DOCS_OUTCOME" "$ADVERSARIAL_CONTRACT_OUTCOME" "$PATTERN_CONTRACT_OUTCOME" "$CONTINUATION_CONTRACT_OUTCOME" "$PACK_OUTCOME" "$TARBALL_PROBE_OUTCOME" "$LOCAL_INSTALL_PROBE_OUTCOME" "$UPLOAD_OUTCOME"; do
+            test "$outcome" = success
+          done
+
+  ide-support:
+    name: IDE Support Contracts (${{ matrix.platform }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: Linux
+            os: ubuntu-latest
+          - platform: Windows
+            os: windows-latest
+          - platform: macOS
+            os: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Verify submodules
+        shell: bash
+        run: |
+          git submodule status --recursive
+          test -f aurelia/package.json
+          test -f aurelia2-plugins/packages/aurelia2-table/package.json
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.5.2
+          run_install: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.x
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+        env:
+          PNPM_APPROVE_BUILDS: esbuild
+
+      - name: Bootstrap linked Aurelia dependencies
+        run: pnpm bootstrap:aurelia
+
+      - name: Check bounded IDE support contracts
+        run: pnpm test:ide:support
+
+  vscode-extension-host:
+    name: VS Code Extension Host Support (Windows)
+    runs-on: windows-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Verify submodules
+        shell: bash
+        run: |
+          git submodule status --recursive
+          test -f aurelia/package.json
+          test -f aurelia2-plugins/packages/aurelia2-table/package.json
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.5.2
+          run_install: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.x
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+        env:
+          PNPM_APPROVE_BUILDS: esbuild
+
+      - name: Bootstrap linked Aurelia dependencies
+        run: pnpm bootstrap:aurelia
+
+      - name: Test release VS Code Worker hosts
+        run: pnpm test:vscode:extension-host:release

@@ -8,12 +8,18 @@ import {
 import {
   TypeSystemProjectBuilder,
 } from '../out/type-system/project.js';
+import { projectTypeSystemProgramSources } from '../out/type-system/program-source-authority.js';
 import {
   readTypeSystemOverlayDiagnostics,
 } from '../out/type-system/diagnostics.js';
 import {
   TemplateTypeSystemOverlayBuilder,
 } from '../out/template/template-type-system-overlay.js';
+import {
+  IterateBindingInstruction,
+  IteratorBindingInstruction,
+  MultiAttrInstruction,
+} from '../out/template/instruction-ir.js';
 import {
   frameworkTemplateControllerSemantics,
   runtimeHtmlTemplateControllerSemantics,
@@ -57,11 +63,11 @@ const runtimeControllers = collectAppRows(app, SemanticAppQueryKind.RuntimeContr
 const resource = app.emission.templates.resources[0] ?? null;
 const overlayEmission = resource == null
   ? null
-  : new TemplateTypeSystemOverlayBuilder(runtime.workspace.store, app.emission.typeSystem)
+  : new TemplateTypeSystemOverlayBuilder(runtime.workspace.store, app.emission.project, app.emission.typeSystem)
     .build(resource, 'contract-template-controller-built-ins');
 const overlayTypeSystem = overlayEmission?.overlaySource == null
   ? null
-  : new TypeSystemProjectBuilder().build(
+  : new TypeSystemProjectBuilder(projectTypeSystemProgramSources).build(
     app.project,
     app.emission.evaluation,
     {
@@ -89,8 +95,14 @@ const uiVirtualizationCatalogControllers = UiVirtualizationBuiltInResourceCatalo
   .sort(compareTemplateControllerRows);
 const expressionTypes = overlayTypeSystem == null || overlayEmission?.overlaySource == null
   ? new Map()
-  : readOverlayVariableExpressionTypes(overlayTypeSystem, overlayEmission.overlaySource.fileName);
+  : readOverlayVariableExpressionTypes(
+      overlayTypeSystem,
+      overlayEmission.overlaySource.fileName,
+      overlayEmission.expressionProbes,
+    );
 const branchSlotDisplays = branchScopeSlotDisplays(resource);
+const promiseBranchLinks = (resource?.runtimeAnalysis.scopes.templateControllerLinks ?? [])
+  .filter((link) => ['pending', 'then', 'catch'].includes(link.sourceController.name));
 const virtualRepeatProbe = await readVirtualRepeatProbe();
 
 const failures = [];
@@ -103,8 +115,8 @@ const assert = (condition, message) => {
 assert(resource != null, 'Expected the built-in template-controller fixture to compile one app resource.');
 assert(overlayEmission?.skippedExpressions.length === 0, `Expected all built-in controller expressions to be overlay-representable, observed skips=${overlayEmission?.skippedExpressions.length ?? 'missing'}.`);
 assert(overlayDiagnostics.length === 0, `Expected built-in controller overlay to have no diagnostics, observed ${overlayDiagnostics.length}.`);
-assert(overlayEmission?.expressionProbes.some((probe) => probe.expressionText === 'resolved') !== true, 'Expected promise then target expression to be owned by promise-result scope, not emitted as a standalone probe.');
-assert(overlayEmission?.expressionProbes.some((probe) => probe.expressionText === 'reason') !== true, 'Expected promise catch target expression to be owned by promise-result scope, not emitted as a standalone probe.');
+assert(overlayEmission?.expressionProbes.some((probe) => probe.authoredExpressionText === 'resolved') !== true, 'Expected the from-view then assignment target to be modeled by runtime-assignment state, not emitted as a standalone read probe.');
+assert(overlayEmission?.expressionProbes.some((probe) => probe.authoredExpressionText === 'reason') !== true, 'Expected the from-view catch assignment target to be modeled by runtime-assignment state, not emitted as a standalone read probe.');
 assertSameTemplateControllerSet(
   runtimeHtmlCatalogControllers,
   frameworkRuntimeHtmlTemplateControllers,
@@ -164,6 +176,19 @@ assertExpressionType('repeatIndex.toFixed()', 'string');
 assertExpressionType('resolved.label', 'string');
 assertExpressionType('resolved.labelLength()', 'number');
 assertExpressionType('formatReason(reason)', 'string');
+assertExpressionType('formatReason(carrierReason)', 'string');
+assertExpressionType('formatReason($parent.rejectedReason)', 'string');
+assert(
+  new Set(promiseBranchLinks.map((link) => link.targetController.productHandle)).size === 4,
+  `Expected promise branches to retain four concrete promise applications, observed ${new Set(promiseBranchLinks.map((link) => link.targetController.productHandle)).size}.`,
+);
+assert(
+  promiseBranchLinks.every((link) =>
+    link.targetController.name === 'promise'
+    && link.sourceController.parent?.parent?.productHandle === link.targetController.productHandle
+  ),
+  'Expected every promise branch to link to its concrete enclosing promise controller application.',
+);
 assertExpressionType('listOnly(mode)', 'string');
 assertExpressionType('detailOnly(mode)', 'string');
 assertExpressionType('otherOnly(mode)', 'string');
@@ -192,6 +217,79 @@ assert(
 assert(
   virtualRepeatProbe.skippedExpressionCount === 0,
   `Expected virtual-repeat overlay to have no skipped expressions, observed ${virtualRepeatProbe.skippedExpressionCount}.`,
+);
+assert(
+  virtualRepeatProbe.syntaxCatalog?.packageId === 'ui-virtualization'
+  && virtualRepeatProbe.syntaxCatalog?.group === 'ui-virtualization-syntax',
+  `Expected DefaultVirtualizationConfiguration to admit the ui-virtualization syntax catalog, observed ${JSON.stringify(virtualRepeatProbe.syntaxCatalog)}.`,
+);
+assert(
+  virtualRepeatProbe.syntaxCatalog?.patternTargetName === 'VirtualRepeatForAttributePattern'
+  && virtualRepeatProbe.syntaxCatalog?.pattern === 'virtual-repeat.for'
+  && virtualRepeatProbe.syntaxCatalog?.patternSymbols === '.-',
+  `Expected exact virtual-repeat.for pattern identity, observed ${JSON.stringify(virtualRepeatProbe.syntaxCatalog)}.`,
+);
+assert(
+  virtualRepeatProbe.syntaxCatalog?.commandTargetName === 'IterateBindingCommand'
+  && virtualRepeatProbe.syntaxCatalog?.commandName === 'forof'
+  && virtualRepeatProbe.syntaxCatalog?.commandKey === 'au:resource:binding-command:forof'
+  && sameStrings(virtualRepeatProbe.syntaxCatalog?.producedInstructionTypeNames, ['IterateBindingInstruction']),
+  `Expected exact forof command identity and IterateBindingInstruction framework product name, observed ${JSON.stringify(virtualRepeatProbe.syntaxCatalog)}.`,
+);
+assert(
+  virtualRepeatProbe.syntaxCatalog?.sourceKind === 'external-address'
+  && virtualRepeatProbe.syntaxCatalog?.sourceScheme === 'aurelia-package-catalog'
+  && virtualRepeatProbe.syntaxCatalog?.sourceValue === 'ui-virtualization:ui-virtualization-syntax',
+  `Expected ui-virtualization package-catalog provenance, observed ${JSON.stringify(virtualRepeatProbe.syntaxCatalog)}.`,
+);
+assert(
+  virtualRepeatProbe.syntaxCatalog?.selectedByDefaultConfiguration === true,
+  'Expected ui-virtualization.default-configuration to select the plugin syntax catalog.',
+);
+assert(
+  virtualRepeatProbe.lowering?.syntaxTarget === 'virtual-repeat'
+  && virtualRepeatProbe.lowering?.syntaxCommand === 'forof'
+  && virtualRepeatProbe.lowering?.commandName === 'forof'
+  && virtualRepeatProbe.lowering?.state === 'complete',
+  `Expected virtual-repeat.for to lower through the selected forof command, observed ${JSON.stringify(virtualRepeatProbe.lowering)}.`,
+);
+assert(
+  virtualRepeatProbe.lowering?.instructionClass === 'IterateBindingInstruction'
+  && virtualRepeatProbe.lowering?.sharedIteratorAbstraction === true
+  && virtualRepeatProbe.lowering?.frameworkInstructionType === 200
+  && virtualRepeatProbe.lowering?.targetProperty === 'items'
+  && sameStrings(virtualRepeatProbe.lowering?.localNames, ['virtualProduct'])
+  && virtualRepeatProbe.lowering?.objectBindingSourceKeyCount === 0,
+  `Expected forof to reuse the single-identifier semantic iterator abstraction, observed ${JSON.stringify(virtualRepeatProbe.lowering)}.`,
+);
+assert(
+  virtualRepeatProbe.lowering?.gapTarget === 'gap'
+  && virtualRepeatProbe.lowering?.gapCommand === null
+  && virtualRepeatProbe.lowering?.gapValue === '8'
+  && virtualRepeatProbe.lowering?.gapLinkedFromIterator === true,
+  `Expected static virtual-repeat gap tail data to survive iterator lowering, observed ${JSON.stringify(virtualRepeatProbe.lowering)}.`,
+);
+assert(
+  virtualRepeatProbe.unsupportedDeclaration?.issueCount === 3
+  && virtualRepeatProbe.unsupportedDeclaration?.certainty === 'definite'
+  && virtualRepeatProbe.unsupportedDeclaration?.message === 'Virtual repeat requires a single binding identifier and does not materialize destructured locals',
+  `Expected one definite rejection per virtual-repeat binding pattern, observed ${JSON.stringify(virtualRepeatProbe.unsupportedDeclaration)}.`,
+);
+assert(
+  sameStrings(virtualRepeatProbe.unsupportedDeclaration?.parsedLocalNames, ['label', 'nullableLabel', 'scalarItem'])
+  && sameStrings(virtualRepeatProbe.unsupportedDeclaration?.objectBindingSourceKeys, ['label', 'label'])
+  && virtualRepeatProbe.unsupportedDeclaration?.destructuredLocalProjected === false
+  && virtualRepeatProbe.unsupportedDeclaration?.coreProjectionIssueCount === 0
+  && virtualRepeatProbe.unsupportedDeclaration?.publicDiagnosticCount === 3
+  && virtualRepeatProbe.unsupportedDeclaration?.publicDiagnosticMissingInput === 'virtual-repeat-declaration:binding-pattern-runtime-unsupported'
+  && virtualRepeatProbe.unsupportedDeclaration?.publicDiagnosticSummary === 'Virtual repeat requires a single binding identifier and does not materialize destructured locals.',
+  `Expected parser carriers without projected locals or borrowed core Repeat diagnostics, observed ${JSON.stringify(virtualRepeatProbe.unsupportedDeclaration)}.`,
+);
+assert(
+  virtualRepeatProbe.capabilityDemand?.demandKind === 'ui-virtualization.default-resources'
+  && virtualRepeatProbe.capabilityDemand?.requiredCapability === 'ui-virtualization.default-resources'
+  && virtualRepeatProbe.capabilityDemand?.admissionState === 'admitted',
+  `Expected exact admitted ui-virtualization capability demand, observed ${JSON.stringify(virtualRepeatProbe.capabilityDemand)}.`,
 );
 
 assertBranchSlotDisplay('mode', '"list"');
@@ -226,13 +324,43 @@ const summary = {
     probes: overlayEmission?.expressionProbes.length ?? 0,
     skips: overlayEmission?.skippedExpressions.length ?? 0,
     diagnostics: overlayDiagnostics.length,
+    diagnosticRows: overlayDiagnostics.map((diagnostic) => ({
+      code: diagnostic.diagnostic.code,
+      message: diagnostic.diagnostic.message,
+      generatedSource: diagnostic.diagnostic.source == null
+        ? null
+        : {
+            start: diagnostic.diagnostic.source.start,
+            end: diagnostic.diagnostic.source.end,
+            text: overlayEmission.overlaySource.text.slice(
+              Math.max(0, (diagnostic.diagnostic.source.start ?? 0) - 80),
+              Math.min(
+                overlayEmission.overlaySource.text.length,
+                (diagnostic.diagnostic.source.end ?? diagnostic.diagnostic.source.start ?? 0) + 80,
+              ),
+            ),
+          },
+      segment: diagnostic.segment?.label ?? null,
+      authoredSource: diagnostic.authoredSource == null
+        ? null
+        : {
+            start: diagnostic.authoredSource.sourceStart,
+            end: diagnostic.authoredSource.sourceEnd,
+            label: diagnostic.authoredSource.label,
+          },
+    })),
   },
+  promiseBranchLinks: promiseBranchLinks.length,
   expressionTypes: Object.fromEntries(expressionTypes),
   virtualRepeat: {
     controllerCount: virtualRepeatProbe.controllerCount,
     expressionTypes: Object.fromEntries(virtualRepeatProbe.expressionTypes),
     overlayDiagnostics: virtualRepeatProbe.overlayDiagnosticCount,
     skippedExpressions: virtualRepeatProbe.skippedExpressionCount,
+    syntaxCatalog: virtualRepeatProbe.syntaxCatalog,
+    lowering: virtualRepeatProbe.lowering,
+    unsupportedDeclaration: virtualRepeatProbe.unsupportedDeclaration,
+    capabilityDemand: virtualRepeatProbe.capabilityDemand,
   },
   branchSlotDisplays: Object.fromEntries([...branchSlotDisplays].map(([key, value]) => [key, [...value].sort()])),
 };
@@ -317,9 +445,13 @@ function compareTemplateControllerRows(left, right) {
 function readOverlayVariableExpressionTypes(
   typeSystem,
   overlayFileName,
+  expressionProbes = [],
 ) {
-  const sourceFile = typeSystem.readProgramSourceFileByPath(overlayFileName);
+  const sourceFile = typeSystem.readProgramSourceFileByHostPath(overlayFileName);
   const rows = new Map();
+  const authoredExpressionByLocal = new Map(expressionProbes.flatMap((probe) =>
+    probe.authoredExpressionText == null ? [] : [[probe.localName, probe.authoredExpressionText]]
+  ));
   if (sourceFile == null) {
     return rows;
   }
@@ -331,7 +463,7 @@ function readOverlayVariableExpressionTypes(
       && node.initializer != null
     ) {
       rows.set(
-        node.initializer.getText(sourceFile),
+        authoredExpressionByLocal.get(node.name.text) ?? node.initializer.getText(sourceFile),
         typeSystem.checker.typeToString(typeSystem.checker.getTypeAtLocation(node.name)),
       );
     }
@@ -351,15 +483,17 @@ async function readVirtualRepeatProbe() {
   });
   const runtimeControllers = collectAppRows(app, SemanticAppQueryKind.RuntimeControllers, 100);
   const resource = app.emission.templates.resources[0] ?? null;
+  const syntaxFacts = readVirtualRepeatSyntaxFacts(runtime, app, resource);
   if (resource == null) {
     return {
       controllerCount: 0,
       expressionTypes: new Map(),
       overlayDiagnosticCount: 0,
       skippedExpressionCount: 0,
+      ...syntaxFacts,
     };
   }
-  const overlayEmission = new TemplateTypeSystemOverlayBuilder(runtime.workspace.store, app.emission.typeSystem)
+  const overlayEmission = new TemplateTypeSystemOverlayBuilder(runtime.workspace.store, app.emission.project, app.emission.typeSystem)
     .build(resource, 'contract-ui-virtualization-template-controller');
   if (overlayEmission.overlaySource == null) {
     return {
@@ -367,9 +501,10 @@ async function readVirtualRepeatProbe() {
       expressionTypes: new Map(),
       overlayDiagnosticCount: 0,
       skippedExpressionCount: overlayEmission.skippedExpressions.length,
+      ...syntaxFacts,
     };
   }
-  const overlayTypeSystem = new TypeSystemProjectBuilder().build(
+  const overlayTypeSystem = new TypeSystemProjectBuilder(projectTypeSystemProgramSources).build(
     app.project,
     app.emission.evaluation,
     {
@@ -381,10 +516,134 @@ async function readVirtualRepeatProbe() {
   );
   return {
     controllerCount: virtualRepeatControllerCount(runtimeControllers),
-    expressionTypes: readOverlayVariableExpressionTypes(overlayTypeSystem, overlayEmission.overlaySource.fileName),
+    expressionTypes: readOverlayVariableExpressionTypes(
+      overlayTypeSystem,
+      overlayEmission.overlaySource.fileName,
+      overlayEmission.expressionProbes,
+    ),
     overlayDiagnosticCount: overlayDiagnostics.length,
     skippedExpressionCount: overlayEmission.skippedExpressions.length,
+    ...syntaxFacts,
   };
+}
+
+function readVirtualRepeatSyntaxFacts(runtime, app, resource) {
+  const catalog = app.emission.appWorld.configuredSyntax.catalogEmission.catalogs.find((candidate) =>
+    candidate.packageId === 'ui-virtualization'
+    && candidate.group === 'ui-virtualization-syntax'
+  ) ?? null;
+  const pattern = catalog?.attributePatterns.find((candidate) =>
+    candidate.targetName === 'VirtualRepeatForAttributePattern'
+  ) ?? null;
+  const command = catalog?.bindingCommands.find((candidate) => candidate.name === 'forof') ?? null;
+  const source = pattern?.sourceAddressHandle == null
+    ? null
+    : runtime.workspace.store.read(pattern.sourceAddressHandle);
+  const selection = catalog == null
+    ? null
+    : app.emission.appWorld.configuredSyntax.selections.find((candidate) =>
+        candidate.frameworkKind === 'ui-virtualization.default-configuration'
+        && candidate.catalogProductHandles.includes(catalog.productHandle)
+      ) ?? null;
+  const syntax = resource?.compilation.authoredAttributeSyntaxes.find((candidate) =>
+    candidate.rawName === 'virtual-repeat.for'
+  ) ?? null;
+  const lowering = resource?.compilation.bindingCommandLowering.lowerings.find((candidate) =>
+    candidate.command.name === 'forof'
+  ) ?? null;
+  const iterator = resource?.compilation.bindingCommandLowering.instructions.find((candidate) =>
+    candidate instanceof IterateBindingInstruction
+    && lowering?.instructionProductHandles.includes(candidate.productHandle)
+  ) ?? null;
+  const gap = resource?.compilation.bindingCommandLowering.instructions.find((candidate) =>
+    candidate instanceof MultiAttrInstruction
+    && candidate.target === 'gap'
+    && iterator?.tailInstructionProductHandles.includes(candidate.productHandle)
+  ) ?? null;
+  const unsupportedIssues = resource?.runtimeAnalysis.scopes.scopeIssues.filter((candidate) =>
+    candidate.issueKind === 'unsupported-repeat-declaration'
+  ) ?? [];
+  const unsupportedIssue = unsupportedIssues[0] ?? null;
+  const unsupportedLocalNames = new Set(['label', 'nullableLabel', 'scalarItem']);
+  const unsupportedIterators = resource?.compilation.bindingCommandLowering.instructions.filter((candidate) =>
+    candidate instanceof IteratorBindingInstruction
+    && candidate.localNames.some((name) => unsupportedLocalNames.has(name))
+  ) ?? [];
+  const destructuredLocalProjected = resource?.runtimeAnalysis.scopes.derivedScopes.some((candidate) =>
+    candidate.scopeCreators.some((creator) =>
+      creator.introducedSlotNames.some((name) => unsupportedLocalNames.has(name))
+    )
+  ) ?? false;
+  const coreProjectionIssues = resource?.runtimeAnalysis.scopes.scopeIssues.filter((candidate) =>
+    candidate.issueKind === 'destructuring-non-object'
+    || candidate.issueKind === 'repeat-object-binding-nullish'
+    || candidate.issueKind === 'array-rest-non-array'
+  ) ?? [];
+  const unsupportedDiagnostics = collectAppRows(app, SemanticAppQueryKind.AppDiagnostics, 100).filter((candidate) =>
+    candidate.diagnosticKind === 'unsupported-repeat-declaration'
+  );
+  const unsupportedDiagnostic = unsupportedDiagnostics[0] ?? null;
+  const capabilityDemand = app.emission.capabilityDemands.readDemands().find((candidate) =>
+    candidate.authoredName === 'virtual-repeat.for'
+    && candidate.requiredCapability === 'ui-virtualization.default-resources'
+  ) ?? null;
+
+  return {
+    syntaxCatalog: catalog == null ? null : {
+      packageId: catalog.packageId,
+      group: catalog.group,
+      patternTargetName: pattern?.targetName ?? null,
+      pattern: pattern?.patterns[0]?.pattern ?? null,
+      patternSymbols: pattern?.patterns[0]?.symbols ?? null,
+      commandTargetName: command?.targetName ?? null,
+      commandName: command?.name ?? null,
+      commandKey: command?.key ?? null,
+      producedInstructionTypeNames: command?.producedInstructionTypeNames ?? [],
+      sourceKind: source?.kind ?? null,
+      sourceScheme: source?.scheme ?? null,
+      sourceValue: source?.value ?? null,
+      selectedByDefaultConfiguration: selection != null,
+    },
+    lowering: syntax == null || lowering == null ? null : {
+      syntaxTarget: syntax.target,
+      syntaxCommand: syntax.command,
+      commandName: lowering.command.name,
+      state: lowering.state,
+      instructionClass: iterator?.constructor.name ?? null,
+      sharedIteratorAbstraction: iterator instanceof IteratorBindingInstruction,
+      frameworkInstructionType: iterator?.frameworkInstructionType ?? null,
+      targetProperty: iterator?.targetProperty ?? null,
+      localNames: iterator?.localNames ?? [],
+      objectBindingSourceKeyCount: iterator?.objectBindingSourceKeys.length ?? -1,
+      gapTarget: gap?.target ?? null,
+      gapCommand: gap?.command ?? null,
+      gapValue: gap?.value ?? null,
+      gapLinkedFromIterator: gap != null && iterator?.tailInstructionProductHandles.includes(gap.productHandle) === true,
+    },
+    unsupportedDeclaration: {
+      issueCount: unsupportedIssues.length,
+      certainty: unsupportedIssue?.certainty ?? null,
+      message: unsupportedIssue?.message ?? null,
+      parsedLocalNames: unsupportedIterators.flatMap((candidate) => candidate.localNames),
+      objectBindingSourceKeys: unsupportedIterators.flatMap((candidate) => candidate.objectBindingSourceKeys),
+      destructuredLocalProjected,
+      coreProjectionIssueCount: coreProjectionIssues.length,
+      publicDiagnosticCount: unsupportedDiagnostics.length,
+      publicDiagnosticMissingInput: unsupportedDiagnostic?.missingInput ?? null,
+      publicDiagnosticSummary: unsupportedDiagnostic?.summary ?? null,
+    },
+    capabilityDemand: capabilityDemand == null ? null : {
+      demandKind: capabilityDemand.demandKind,
+      requiredCapability: capabilityDemand.requiredCapability,
+      admissionState: capabilityDemand.admissionState,
+    },
+  };
+}
+
+function sameStrings(actual, expected) {
+  return Array.isArray(actual)
+    && actual.length === expected.length
+    && actual.every((value, index) => value === expected[index]);
 }
 
 function virtualRepeatControllerCount(runtimeControllers) {

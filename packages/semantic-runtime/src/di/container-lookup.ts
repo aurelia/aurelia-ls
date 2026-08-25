@@ -1,5 +1,8 @@
 import type { IdentityHandle } from '../kernel/handles.js';
-import type { ContainerLookupKey } from './container-key.js';
+import {
+  ContainerLookupKeyKind,
+  type ContainerLookupKey,
+} from './container-key.js';
 import type { ContainerReference } from './container-reference.js';
 import type {
   ContainerFactorySlot,
@@ -28,7 +31,8 @@ export const enum ContainerLookupState {
   Disposed = 'disposed',
 }
 
-export const enum ContainerLookupFailureKind {
+/** Exact framework failure selected while resolving a key through container, factory, registry, or resolver semantics. */
+export const enum ContainerResolutionFailureKind {
   /** `kernel ErrorNames.none_resolver_found`; DefaultResolver.none rejected a missing DI key. */
   NoneResolverFound = 'none-resolver-found',
   /** `kernel ErrorNames.unable_jit_non_constructor`; JIT/factory lookup did not receive a constructable value. */
@@ -39,6 +43,12 @@ export const enum ContainerLookupFailureKind {
   NoJitInterface = 'no-jit-interface',
   /** `kernel ErrorNames.no_construct_native_fn`; factory/invoke was asked to construct a native function. */
   NoConstructNativeFunction = 'no-construct-native-function',
+  /** `kernel ErrorNames.null_undefined_key`; a validating container API received null or undefined. */
+  NullUndefinedKey = 'null-undefined-key',
+  /** `kernel ErrorNames.null_resolver_from_register`; registry JIT produced neither a resolver nor a registration. */
+  NullResolverFromRegister = 'null-resolver-from-register',
+  /** `kernel ErrorNames.invalid_new_instance_on_interface`; fresh interface activation has no constructable factory. */
+  InvalidNewInstanceOnInterface = 'invalid-new-instance-on-interface',
 }
 
 export class ContainerResolverLookup {
@@ -60,7 +70,7 @@ export class ContainerResolverLookup {
     /** Whether runtime auto-registration would be considered after a miss. */
     readonly autoRegister: boolean,
     /** Exact runtime failure branch when the lookup could model one. */
-    readonly failureKind: ContainerLookupFailureKind | null = null,
+    readonly failureKind: ContainerResolutionFailureKind | null = null,
   ) {}
 
   get keyIdentityHandle(): IdentityHandle {
@@ -68,7 +78,7 @@ export class ContainerResolverLookup {
   }
 
   get frameworkErrorCode(): DiFrameworkErrorCodeValue | null {
-    return frameworkErrorCodeForContainerLookupFailureKind(this.failureKind);
+    return frameworkErrorCodeForContainerResolutionFailureKind(this.failureKind);
   }
 }
 
@@ -85,7 +95,7 @@ export class ContainerFactoryLookup {
     /** Factory slot found for the key. */
     readonly factorySlot: ContainerFactorySlot | null,
     /** Exact runtime failure branch when the lookup could model one. */
-    readonly failureKind: ContainerLookupFailureKind | null = null,
+    readonly failureKind: ContainerResolutionFailureKind | null = null,
   ) {}
 
   get keyIdentityHandle(): IdentityHandle {
@@ -93,7 +103,7 @@ export class ContainerFactoryLookup {
   }
 
   get frameworkErrorCode(): DiFrameworkErrorCodeValue | null {
-    return frameworkErrorCodeForContainerLookupFailureKind(this.failureKind);
+    return frameworkErrorCodeForContainerResolutionFailureKind(this.failureKind);
   }
 }
 
@@ -108,7 +118,7 @@ export class ContainerInvocation {
     /** Container where the invocation began. */
     readonly requestor: ContainerReference,
     /** Exact runtime failure branch when the invoke guard can model one. */
-    readonly failureKind: ContainerLookupFailureKind | null = null,
+    readonly failureKind: ContainerResolutionFailureKind | null = null,
   ) {}
 
   get keyIdentityHandle(): IdentityHandle {
@@ -116,7 +126,7 @@ export class ContainerInvocation {
   }
 
   get frameworkErrorCode(): DiFrameworkErrorCodeValue | null {
-    return frameworkErrorCodeForContainerLookupFailureKind(this.failureKind);
+    return frameworkErrorCodeForContainerResolutionFailureKind(this.failureKind);
   }
 }
 
@@ -137,21 +147,99 @@ export class ContainerResourceLookup {
   ) {}
 }
 
-export function frameworkErrorCodeForContainerLookupFailureKind(
-  failureKind: ContainerLookupFailureKind | null,
+export function frameworkErrorCodeForContainerResolutionFailureKind(
+  failureKind: ContainerResolutionFailureKind | null,
 ): DiFrameworkErrorCodeValue | null {
   switch (failureKind) {
-    case ContainerLookupFailureKind.NoneResolverFound:
+    case ContainerResolutionFailureKind.NoneResolverFound:
       return DiFrameworkErrorCode.NoneResolverFound;
-    case ContainerLookupFailureKind.UnableJitNonConstructor:
+    case ContainerResolutionFailureKind.UnableJitNonConstructor:
       return DiFrameworkErrorCode.UnableJitNonConstructor;
-    case ContainerLookupFailureKind.NoJitIntrinsicType:
+    case ContainerResolutionFailureKind.NoJitIntrinsicType:
       return DiFrameworkErrorCode.NoJitIntrinsicType;
-    case ContainerLookupFailureKind.NoJitInterface:
+    case ContainerResolutionFailureKind.NoJitInterface:
       return DiFrameworkErrorCode.NoJitInterface;
-    case ContainerLookupFailureKind.NoConstructNativeFunction:
+    case ContainerResolutionFailureKind.NoConstructNativeFunction:
       return DiFrameworkErrorCode.NoConstructNativeFunction;
+    case ContainerResolutionFailureKind.NullUndefinedKey:
+      return DiFrameworkErrorCode.NullUndefinedKey;
+    case ContainerResolutionFailureKind.NullResolverFromRegister:
+      return DiFrameworkErrorCode.NullResolverFromRegister;
+    case ContainerResolutionFailureKind.InvalidNewInstanceOnInterface:
+      return DiFrameworkErrorCode.InvalidNewInstanceOnInterface;
     case null:
+      return null;
+  }
+}
+
+/** Runtime `_jitRegister` failures that depend only on the resolved key shape. */
+export function containerJitRegistrationFailureKind(
+  key: ContainerLookupKey,
+): ContainerResolutionFailureKind | null {
+  switch (key.keyKind) {
+    case ContainerLookupKeyKind.IntrinsicConstructable:
+      return ContainerResolutionFailureKind.NoJitIntrinsicType;
+    case ContainerLookupKeyKind.String:
+    case ContainerLookupKeyKind.Symbol:
+    case ContainerLookupKeyKind.Resource:
+    case ContainerLookupKeyKind.Object:
+    case ContainerLookupKeyKind.Primitive:
+    case ContainerLookupKeyKind.Nullish:
+      return ContainerResolutionFailureKind.UnableJitNonConstructor;
+    case ContainerLookupKeyKind.Interface:
+      return ContainerResolutionFailureKind.NoJitInterface;
+    case ContainerLookupKeyKind.Unknown:
+    case ContainerLookupKeyKind.Constructable:
+    case ContainerLookupKeyKind.NativeFunction:
+    case ContainerLookupKeyKind.Registry:
+    case ContainerLookupKeyKind.Resolver:
+      return null;
+  }
+}
+
+/** Runtime `getFactory` failures that depend only on the resolved key shape. */
+export function containerFactoryFailureKind(
+  key: ContainerLookupKey,
+): ContainerResolutionFailureKind | null {
+  switch (key.keyKind) {
+    case ContainerLookupKeyKind.NativeFunction:
+    case ContainerLookupKeyKind.IntrinsicConstructable:
+      return ContainerResolutionFailureKind.NoConstructNativeFunction;
+    case ContainerLookupKeyKind.String:
+    case ContainerLookupKeyKind.Symbol:
+    case ContainerLookupKeyKind.Resource:
+    case ContainerLookupKeyKind.Object:
+    case ContainerLookupKeyKind.Primitive:
+    case ContainerLookupKeyKind.Nullish:
+    case ContainerLookupKeyKind.Interface:
+    case ContainerLookupKeyKind.Registry:
+    case ContainerLookupKeyKind.Resolver:
+      return ContainerResolutionFailureKind.UnableJitNonConstructor;
+    case ContainerLookupKeyKind.Unknown:
+    case ContainerLookupKeyKind.Constructable:
+      return null;
+  }
+}
+
+/** Runtime `invoke` failures that depend only on the resolved key shape. */
+export function containerInvocationFailureKind(
+  key: ContainerLookupKey,
+): ContainerResolutionFailureKind | null {
+  switch (key.keyKind) {
+    case ContainerLookupKeyKind.NativeFunction:
+    case ContainerLookupKeyKind.IntrinsicConstructable:
+      return ContainerResolutionFailureKind.NoConstructNativeFunction;
+    case ContainerLookupKeyKind.String:
+    case ContainerLookupKeyKind.Symbol:
+    case ContainerLookupKeyKind.Resource:
+    case ContainerLookupKeyKind.Object:
+    case ContainerLookupKeyKind.Primitive:
+    case ContainerLookupKeyKind.Nullish:
+    case ContainerLookupKeyKind.Unknown:
+    case ContainerLookupKeyKind.Constructable:
+    case ContainerLookupKeyKind.Registry:
+    case ContainerLookupKeyKind.Resolver:
+    case ContainerLookupKeyKind.Interface:
       return null;
   }
 }

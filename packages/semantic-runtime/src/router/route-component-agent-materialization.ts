@@ -6,9 +6,11 @@ import {
   ContainerContextResolverSlotRequest,
   type ContainerChildMaterializationEmission,
 } from '../di/container-materializer.js';
+import { FrameworkIntrinsicDiKey } from '../di/framework-intrinsic-di-key.js';
 import type { Container } from '../di/container.js';
 import { ConfigurationProductDetails } from '../configuration/product-details.js';
 import { ObservationProductDetails } from '../observation/product-details.js';
+import { RuntimeExpressionProductDetails } from '../runtime-expression/product-details.js';
 import {
   EvidenceKind,
   EvidenceRole,
@@ -28,15 +30,22 @@ import {
   MaterializedProduct,
 } from '../kernel/materialization.js';
 import {
+  KernelPublicationPlan,
   KernelStoreBatch,
-  type KernelStore,
-  type KernelStoreRecord,
+  publishProductDetails,
+  type KernelPublicationContext,
+} from '../kernel/publication.js';
+import type {
+  KernelStore,
+  KernelStoreReadView,
+  KernelStoreRecord,
 } from '../kernel/store.js';
 import { KernelVocabulary } from '../kernel/vocabulary.js';
 import { CustomElementDefinition } from '../resources/custom-element-definition.js';
 import { ResourceProductDetails } from '../resources/product-details.js';
 import {
   ComponentAgentModel,
+  RouterRealizationStageKind,
   type RouteContextModel,
   type RouteNodeModel,
 } from './model.js';
@@ -46,24 +55,27 @@ import { routerProductRecords } from './router-product-records.js';
 import {
   RuntimeControllerCreationKind,
   RuntimeControllerFrame,
-  RuntimeControllerLifecycleStage,
-  RuntimeControllerLifecycleStepKind,
+  RuntimeControllerAssemblyStage,
+  RuntimeControllerAssemblyStepKind,
 } from '../template/runtime-controller.js';
 import type { TemplateCompilationProjectEmission } from '../template/template-compilation-project-pass.js';
 import { TemplateProductDetails } from '../template/product-details.js';
 import {
-  runtimeWatchersForDefinition,
+  RuntimeOperationReachability,
+} from '../runtime-expression/runtime-operation.js';
+import {
+  runtimeWatcherMaterializationsForDefinition,
 } from '../template/runtime-watcher-factory.js';
 import {
   runtimeWatcherClaimsForController,
   runtimeWatcherRecordsForController,
 } from '../template/runtime-watcher-publication.js';
 import type { TypeSystemProject } from '../type-system/project.js';
+import type { CheckerExpressionTypeWorld } from '../type-system/expression-type-world.js';
 
 /** ComponentAgent products created by pre-activation route-tree compilation. */
 export class RouteComponentAgentMaterializationProjectResult {
   constructor(
-    readonly project: ProjectBootFrame,
     readonly componentAgents: readonly ComponentAgentModel[],
     readonly controllers: readonly RuntimeControllerFrame[],
   ) {}
@@ -83,8 +95,9 @@ export class RouteComponentAgentMaterializationProjectPass {
 
   constructor(
     readonly store: KernelStore,
+    readonly publication: KernelPublicationContext,
   ) {
-    this.childContainerMaterializer = new ContainerChildMaterializer(store);
+    this.childContainerMaterializer = new ContainerChildMaterializer(store, publication);
   }
 
   materializeAndEmit(
@@ -95,10 +108,8 @@ export class RouteComponentAgentMaterializationProjectPass {
     typeSystem: TypeSystemProject,
   ): RouteComponentAgentMaterializationProjectResult {
     const emissions = this.componentAgentEmissions(routeRuntime, routeTree, templates, typeSystem);
-    this.commitComponentAgentRecords(project, emissions);
-    this.publishControllerDetails(emissions);
+    this.publishComponentAgents(project, emissions);
     return new RouteComponentAgentMaterializationProjectResult(
-      project,
       emissions.map((emission) => emission.componentAgent),
       emissions.flatMap((emission) => emission.controller == null ? [] : [emission.controller]),
     );
@@ -115,44 +126,45 @@ export class RouteComponentAgentMaterializationProjectPass {
     return routeTree.readRouteNodes().flatMap((routeNode) =>
       componentAgentEmissionForRouteNode(
         this.store,
+        this.publication,
         this.childContainerMaterializer,
         routeRuntime,
         routeContextsByIdentity,
         compiledTemplateByDefinition,
         routeNode,
+        templates.expressionWorld,
         typeSystem,
       )
     );
   }
 
-  private commitComponentAgentRecords(
+  private publishComponentAgents(
     project: ProjectBootFrame,
     emissions: readonly ComponentAgentEmission[],
   ): void {
-    const records = emissions.flatMap((emission) => emission.records);
-    if (records.length > 0) {
-      this.store.commit(new KernelStoreBatch(records, `router-component-agent:${project.projectKey}`));
-    }
-  }
-
-  private publishControllerDetails(
-    emissions: readonly ComponentAgentEmission[],
-  ): void {
-    for (const emission of emissions) {
-      if (emission.controller == null) {
-        continue;
-      }
-      this.store.productDetails.add(
-        ConfigurationProductDetails.Controller,
-        emission.controller.productHandle,
-        emission.controller.toControllerProduct(),
-      );
-      this.store.productDetails.addAll(TemplateProductDetails.RuntimeWatcher, emission.controller.readWatchers());
-      this.store.productDetails.addAll(
-        ObservationProductDetails.RuntimeWatcherObservedDependency,
-        emission.controller.readWatchers().flatMap((watcher) => watcher.observedDependencies),
-      );
-    }
+    const controllers = emissions.flatMap((emission) => emission.controller == null ? [] : [emission.controller]);
+    const watchers = controllers.flatMap((controller) => controller.readWatchers());
+    this.publication.publish(new KernelPublicationPlan(
+      new KernelStoreBatch(
+        emissions.flatMap((emission) => emission.records),
+        `router-component-agent:${project.projectKey}`,
+      ),
+      [
+        ...publishProductDetails(
+          ConfigurationProductDetails.Controller,
+          controllers.map((controller) => controller.toControllerProduct()),
+        ),
+        ...publishProductDetails(TemplateProductDetails.RuntimeWatcher, watchers),
+        ...publishProductDetails(
+          RuntimeExpressionProductDetails.AccessUse,
+          watchers.flatMap((watcher) => watcher.accessUses),
+        ),
+        ...publishProductDetails(
+          ObservationProductDetails.RuntimeWatcherObservedDependency,
+          watchers.flatMap((watcher) => watcher.observedDependencies),
+        ),
+      ],
+    ));
   }
 }
 
@@ -186,11 +198,13 @@ function routeContextsByIdentityHandle(
 
 function componentAgentEmissionForRouteNode(
   store: KernelStore,
+  publication: KernelPublicationContext,
   childContainerMaterializer: ContainerChildMaterializer,
   routeRuntime: RouteRuntimeTopologyProjectResult,
   routeContextsByIdentity: ReadonlyMap<IdentityHandle | null, RouteContextModel>,
   compiledTemplateByDefinition: ReadonlyMap<string, ProductHandle>,
   routeNode: RouteNodeModel,
+  expressionWorld: CheckerExpressionTypeWorld,
   typeSystem: TypeSystemProject,
 ): readonly ComponentAgentEmission[] {
   if (routeNode.recognizedRoute == null) {
@@ -206,29 +220,34 @@ function componentAgentEmissionForRouteNode(
   const routeContextContainer = routeRuntime.containerForRouteContext(routeContext.identityHandle);
   return [componentAgentEmission(
     store,
+    publication,
     childContainerMaterializer,
     routeNode,
     routeContext,
     routeContextContainer,
-    customElementDefinitionForRouteNode(store, routeNode),
+    customElementDefinitionForRouteNode(publication, routeNode),
     compiledTemplateByDefinition.get(routeNode.component?.resolvedProductHandle ?? '') ?? null,
+    expressionWorld,
     typeSystem,
   )];
 }
 
 function componentAgentEmission(
   store: KernelStore,
+  publication: KernelPublicationContext,
   childContainerMaterializer: ContainerChildMaterializer,
   routeNode: RouteNodeModel,
   routeContext: RouteContextModel,
   routeContextContainer: Container | null,
   definition: CustomElementDefinition | null,
   compiledTemplateProductHandle: ProductHandle | null,
+  expressionWorld: CheckerExpressionTypeWorld,
   typeSystem: TypeSystemProject,
 ): ComponentAgentEmission {
-  const handles = componentAgentHandles(store, routeNode);
+  const handles = componentAgentHandles(publication, routeNode);
   const controllerEmission = componentAgentControllerEmission(
     store,
+    publication,
     childContainerMaterializer,
     `${handles.local}:controller`,
     routeNode,
@@ -236,6 +255,7 @@ function componentAgentEmission(
     definition,
     compiledTemplateProductHandle,
     handles.provenanceHandle,
+    expressionWorld,
     typeSystem,
   );
   const componentAgent = componentAgentModel(
@@ -244,13 +264,13 @@ function componentAgentEmission(
     handles.sourceAddressHandle,
     routeContext.toReference(),
     routeNode.toReference(),
-    routeContext.viewportAgent,
+    routeNode.viewportAgentCandidate,
     controllerEmission?.controller ?? null,
     routeNode,
   );
   return {
     records: recordsForComponentAgent(
-      store,
+      publication,
       handles.local,
       componentAgent,
       routeContext,
@@ -265,7 +285,7 @@ function componentAgentEmission(
 }
 
 function componentAgentHandles(
-  store: KernelStore,
+  store: KernelStoreReadView,
   routeNode: RouteNodeModel,
 ): ComponentAgentHandles {
   const local = `router-component-agent:${routeNode.identityHandle}`;
@@ -281,6 +301,7 @@ function componentAgentHandles(
 
 function componentAgentControllerEmission(
   store: KernelStore,
+  publication: KernelPublicationContext,
   childContainerMaterializer: ContainerChildMaterializer,
   local: string,
   routeNode: RouteNodeModel,
@@ -288,12 +309,14 @@ function componentAgentControllerEmission(
   definition: CustomElementDefinition | null,
   compiledTemplateProductHandle: ProductHandle | null,
   provenanceHandle: ProvenanceHandle,
+  expressionWorld: CheckerExpressionTypeWorld,
   typeSystem: TypeSystemProject,
 ): RoutedControllerEmission | null {
   return routeContextContainer == null || definition == null
     ? null
     : routedControllerEmission(
       store,
+      publication,
       childContainerMaterializer,
       local,
       routeNode,
@@ -301,6 +324,7 @@ function componentAgentControllerEmission(
       definition,
       compiledTemplateProductHandle,
       provenanceHandle,
+      expressionWorld,
       typeSystem,
     );
 }
@@ -311,16 +335,17 @@ function componentAgentModel(
   sourceAddressHandle: RouteNodeModel['sourceAddressHandle'],
   routeContext: ComponentAgentModel['routeContext'],
   routeNodeReference: ComponentAgentModel['routeNode'],
-  viewportAgent: ComponentAgentModel['viewportAgent'],
+  viewportAgentCandidate: ComponentAgentModel['viewportAgentCandidate'],
   controller: RuntimeControllerFrame | null,
   routeNode: RouteNodeModel,
 ): ComponentAgentModel {
   return new ComponentAgentModel(
     productHandle,
     identityHandle,
+    RouterRealizationStageKind.Planned,
     routeContext,
     routeNodeReference,
-    viewportAgent,
+    viewportAgentCandidate,
     controller?.productHandle ?? null,
     routeNode.component,
     sourceAddressHandle,
@@ -328,7 +353,7 @@ function componentAgentModel(
 }
 
 function recordsForComponentAgent(
-  store: KernelStore,
+  store: KernelStoreReadView,
   local: string,
   componentAgent: ComponentAgentModel,
   routeContext: RouteContextModel,
@@ -362,6 +387,7 @@ function recordsForComponentAgent(
 
 function routedControllerEmission(
   store: KernelStore,
+  publication: KernelPublicationContext,
   childContainerMaterializer: ContainerChildMaterializer,
   local: string,
   routeNode: RouteNodeModel,
@@ -369,6 +395,7 @@ function routedControllerEmission(
   definition: CustomElementDefinition,
   compiledTemplateProductHandle: ProductHandle | null,
   provenanceHandle: ProvenanceHandle,
+  expressionWorld: CheckerExpressionTypeWorld,
   typeSystem: TypeSystemProject,
 ): RoutedControllerEmission {
   const sourceAddressHandle = routeNode.sourceAddressHandle;
@@ -379,20 +406,29 @@ function routedControllerEmission(
     routeContextContainer,
   );
   const controller = routedControllerFrame(
-    store,
+    publication,
     local,
     definition,
     childContainer,
     sourceAddressHandle,
     provenanceHandle,
   );
-  for (const watcher of runtimeWatchersForDefinition(store, local, controller, definition, typeSystem)) {
+  for (const watcher of runtimeWatcherMaterializationsForDefinition(
+    store,
+    publication,
+    local,
+    controller,
+    definition,
+    expressionWorld,
+    typeSystem,
+    RuntimeOperationReachability.Open,
+  )) {
     controller.addWatcher(watcher);
   }
   recordRoutedControllerHydration(controller, childContainer, sourceAddressHandle);
-  const claim = routedControllerCompiledTemplateClaim(store, local, controller, compiledTemplateProductHandle, provenanceHandle);
+  const claim = routedControllerCompiledTemplateClaim(publication, local, controller, compiledTemplateProductHandle, provenanceHandle);
   return {
-    records: recordsForRoutedController(store, local, childContainer, controller, claim, provenanceHandle),
+    records: recordsForRoutedController(store, publication, local, childContainer, controller, claim, provenanceHandle),
     controller,
   };
 }
@@ -404,23 +440,26 @@ function routedComponentChildContainer(
   routeContextContainer: Container,
 ): ContainerChildMaterializationEmission {
   const sourceAddressHandle = routeNode.sourceAddressHandle;
-  return childContainerMaterializer.materializeChild(new ContainerChildMaterializationRequest(
-    local,
-    routeContextContainer,
+  return childContainerMaterializer.materializeChild(new ContainerChildMaterializationRequest({
+    localKey: local,
+    parent: routeContextContainer,
     sourceAddressHandle,
-    `${routeNode.path}:routed-component-container`,
-    [
-      new ContainerContextResolverSlotRequest('INode', sourceAddressHandle),
+    localName: `${routeNode.path}:routed-component-container`,
+    contextResolvers: [
+      new ContainerContextResolverSlotRequest({
+        interfaceName: FrameworkIntrinsicDiKey.INode,
+        sourceAddressHandle,
+      }),
     ],
-    {
+    configuration: {
       inheritParentResources: true,
       sourceAddressHandle,
     } satisfies ContainerConfigurationRequest,
-  ));
+  }));
 }
 
 function routedControllerFrame(
-  store: KernelStore,
+  store: KernelStoreReadView,
   local: string,
   definition: CustomElementDefinition,
   childContainer: ContainerChildMaterializationEmission,
@@ -451,9 +490,9 @@ function recordRoutedControllerHydration(
   childContainer: ContainerChildMaterializationEmission,
   sourceAddressHandle: RouteNodeModel['sourceAddressHandle'],
 ): void {
-  controller.recordLifecycleStep(
-    RuntimeControllerLifecycleStage.Hydration,
-    RuntimeControllerLifecycleStepKind.CreateChildContainer,
+  controller.recordAssemblyStep(
+    RuntimeControllerAssemblyStage.Hydration,
+    RuntimeControllerAssemblyStepKind.CreateChildContainer,
     childContainer.container.productHandle,
     sourceAddressHandle,
     'RouteContext._createComponentAgent created a child container with inherited resources for routed component construction.',
@@ -461,7 +500,7 @@ function recordRoutedControllerHydration(
 }
 
 function routedControllerCompiledTemplateClaim(
-  store: KernelStore,
+  store: KernelStoreReadView,
   local: string,
   controller: RuntimeControllerFrame,
   compiledTemplateProductHandle: ProductHandle | null,
@@ -480,6 +519,7 @@ function routedControllerCompiledTemplateClaim(
 
 function recordsForRoutedController(
   store: KernelStore,
+  publication: KernelPublicationContext,
   local: string,
   childContainer: ContainerChildMaterializationEmission,
   controller: RuntimeControllerFrame,
@@ -531,13 +571,13 @@ function compiledTemplatesByDefinition(
 }
 
 function customElementDefinitionForRouteNode(
-  store: KernelStore,
+  publication: KernelPublicationContext,
   routeNode: RouteNodeModel,
 ): CustomElementDefinition | null {
   const productHandle = routeNode.component?.resolvedProductHandle ?? null;
   if (productHandle == null) {
     return null;
   }
-  const definition = store.productDetails.read(ResourceProductDetails.Definition, productHandle);
+  const definition = publication.readProductDetail(ResourceProductDetails.Definition, productHandle);
   return definition instanceof CustomElementDefinition ? definition : null;
 }

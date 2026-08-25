@@ -19,15 +19,16 @@ import { TemplateProductDetails } from '../template/product-details.js';
 import {
   PropertyBinding,
   RuntimeBindingTargetKind,
-  SpreadValueBinding,
   type RuntimeBinding,
   type RuntimeBindingTargetAccess,
   type RuntimeBindingTargetOperation,
 } from '../template/runtime-binding.js';
 import {
-  frameworkTemplateControllerSemanticsForName,
+  BuiltInTemplateControllerFlowKind,
+  frameworkTemplateControllerSemanticsForController,
   type BuiltInTemplateControllerSemantics,
 } from '../template/template-controller-semantics.js';
+import type { ProductDetailReadView } from '../kernel/product-details.js';
 import type { RuntimeControllerFrame } from '../template/runtime-controller.js';
 import { CheckerAsyncTypeProjector } from '../type-system/checker-async-type-projector.js';
 import type { RuntimeRenderingEmission } from '../template/runtime-rendering-materializer.js';
@@ -51,6 +52,7 @@ import {
 import {
   CheckerTypeShapeAccess,
   readCheckerTypeShape,
+  type CheckerTypeShapeRuntimeObjectMemberAccess,
 } from '../type-system/checker-type-shape-access.js';
 import {
   checkerPrimitiveType,
@@ -77,8 +79,10 @@ import {
 } from '../type-system/checker-collection-types.js';
 import {
   expressionProductHandleForBinding,
+  runtimeBindingSourceExpression,
 } from './runtime-binding-expression.js';
 import {
+  aggregateRuntimeBindingSourceExpressionChainIndex,
   checkerContextForRuntimeBindingSourceExpressionProjection,
   RuntimeBindingSourceExpressionProjectionKind,
   type RuntimeBindingSourceExpressionContextProjection,
@@ -226,7 +230,7 @@ export class RuntimeBindingValueChannelTypeSupport {
       return first;
     }
 
-    const checkerBackedUnion = checkerBackedUnionTypeForReferences(this.store, references);
+    const checkerBackedUnion = checkerBackedUnionTypeForReferences(this.typeProjector.publication, references);
     if (checkerBackedUnion != null) {
       return this.projectCheckerType(
         local,
@@ -245,7 +249,7 @@ export class RuntimeBindingValueChannelTypeSupport {
     sourceAddressHandle: AddressHandle | null,
   ): CheckerTypeReference {
     const display = uniqueStrings(references.map((reference) =>
-      reference.display ?? reference.checkerKey ?? 'unknown'
+      reference.display ?? reference.semanticKey ?? 'unknown'
     )).join(' | ');
     return this.typeProjector.ensureSyntheticProjection({
       localKey: local,
@@ -390,19 +394,19 @@ export class RuntimeBindingValueChannelTypeSupport {
     return carrier == null ? [] : booleanLiteralValuesForType(carrier.type) ?? [];
   }
 
-  memberType(
+  runtimeObjectMemberAccess(
     reference: CheckerTypeReference | null,
     propertyName: string,
-  ): CheckerTypeReference | null {
+  ): CheckerTypeShapeRuntimeObjectMemberAccess | null {
     const shape = this.readTypeShape(reference);
     if (shape == null) {
       return null;
     }
-    return this.typeAccess.memberValueAccess(
+    return this.typeAccess.runtimeObjectMemberValueAccess(
       shape,
       propertyName,
-      `${reference?.productHandle ?? reference?.checkerKey ?? 'runtime-binding'}:member:${propertyName}`,
-    ).valueReference;
+      `${reference?.productHandle ?? reference?.semanticKey ?? 'runtime-binding'}:runtime-object-member:${propertyName}`,
+    );
   }
 
   checkedSourceShape(
@@ -490,7 +494,7 @@ export class RuntimeBindingValueChannelTypeSupport {
   }
 
   readTypeShape(reference: CheckerTypeReference | null): CheckerTypeShape | null {
-    return readCheckerTypeShape(this.store, reference);
+    return reference == null ? null : this.typeAccess.resolveReference(reference);
   }
 }
 
@@ -569,7 +573,7 @@ export class RuntimeBindingValueChannelDraftSupport {
 
   constructor(
     private readonly store: KernelStore,
-    typeProjector: CheckerTypeProjector,
+    private readonly typeProjector: CheckerTypeProjector,
   ) {
     this.types = new RuntimeBindingValueChannelTypeSupport(store, typeProjector);
   }
@@ -730,6 +734,8 @@ export class RuntimeBindingValueChannelDraftSupport {
   ): RuntimeBindingSourceExpressionContextProjection | null {
     const projection = context.sourceExpressionContexts.projectSource({
       binding,
+      expressionProductHandle: expressionProductHandleForBinding(binding),
+      expressionChainIndex: aggregateRuntimeBindingSourceExpressionChainIndex(ast),
       expression: ast,
       localKey: `${local}:expression-type`,
     });
@@ -782,9 +788,10 @@ export class RuntimeBindingValueChannelDraftSupport {
     context: BindingValueChannelDraftContext,
   ): BuiltInTemplateControllerSemantics | null {
     const controller = this.controllerForTargetAccess(targetAccess, context);
-    return controller?.name == null
-      ? null
-      : frameworkTemplateControllerSemanticsForName(controller.name);
+    return frameworkTemplateControllerSemanticsForController(
+      this.typeProjector.publication,
+      controller,
+    );
   }
 
   controllerForTargetAccess(
@@ -808,14 +815,18 @@ export class RuntimeBindingValueChannelDraftSupport {
     context: BindingValueChannelDraftContext,
   ): CheckerTypeReference | null {
     const branchController = this.controllerForTargetAccess(targetAccess, context);
-    const promiseController = nearestNamedControllerAncestor(branchController, 'promise');
+    const promiseController = nearestTemplateControllerAncestor(
+      this.typeProjector.publication,
+      branchController,
+      BuiltInTemplateControllerFlowKind.Promise,
+    );
     const promiseValueBinding = promiseController == null
       ? null
       : this.propertyBindingForControllerTarget(promiseController, context, ['value']);
     if (promiseValueBinding == null) {
       return null;
     }
-    const promiseType = this.sourceTypeForBinding(promiseValueBinding, context, 'value');
+    const promiseType = this.sourceTypeForBinding(promiseValueBinding, context);
     return this.types.awaitedTypeReference(
       `${local}:promise-fulfilled-value`,
       promiseType,
@@ -826,14 +837,15 @@ export class RuntimeBindingValueChannelDraftSupport {
   sourceTypeForBinding(
     binding: RuntimeValueChannelBinding,
     context: BindingValueChannelDraftContext,
-    targetProperty: string | null = null,
   ): CheckerTypeReference | null {
-    const ast = this.bindingExpressionAst(expressionProductHandleForBinding(binding));
+    const ast = runtimeBindingSourceExpression(this.typeProjector.publication, binding);
     if (ast == null) {
       return null;
     }
     const projection = context.sourceExpressionContexts.projectSource({
       binding,
+      expressionProductHandle: expressionProductHandleForBinding(binding),
+      expressionChainIndex: aggregateRuntimeBindingSourceExpressionChainIndex(ast),
       expression: ast,
       localKey: `binding-value-channel:${binding.productHandle}:${expressionProductHandleForBinding(binding) ?? 'binding-expression'}:source-type`,
     });
@@ -847,22 +859,18 @@ export class RuntimeBindingValueChannelDraftSupport {
     if (evaluation.kind !== CheckerExpressionTypeEvaluationResultKind.Type) {
       return null;
     }
-    if (binding instanceof SpreadValueBinding && targetProperty != null) {
-      return this.types.memberType(evaluation.typeReference, targetProperty);
-    }
     return evaluation.typeReference;
   }
 
   sourceTypeReaderForBinding(
     binding: RuntimeValueChannelBinding,
     context: BindingValueChannelDraftContext,
-    targetProperty: string | null = null,
   ): BindingSourceTypeReader {
     let evaluated = false;
     let sourceType: CheckerTypeReference | null = null;
     return () => {
       if (!evaluated) {
-        sourceType = this.sourceTypeForBinding(binding, context, targetProperty);
+        sourceType = this.sourceTypeForBinding(binding, context);
         evaluated = true;
       }
       return sourceType;
@@ -871,7 +879,7 @@ export class RuntimeBindingValueChannelDraftSupport {
 
   /** Reads the runtime-accepted binding AST through the template expression product substrate. */
   bindingExpressionAst(productHandle: ProductHandle | null): ExpressionAstNode | null {
-    return bindingExpressionAstForProduct(this.store, productHandle);
+    return bindingExpressionAstForProduct(this.typeProjector.publication, productHandle);
   }
 
   optionElementsFor(select: HtmlElement): readonly HtmlElement[] {
@@ -905,7 +913,7 @@ export class RuntimeBindingValueChannelDraftSupport {
   private textContent(element: HtmlElement): string {
     return element.children.map((child) => {
       if (child.nodeKind === HtmlIrNodeKind.Text && child.productHandle != null) {
-        const text = this.store.productDetails.read(TemplateProductDetails.HtmlNode, child.productHandle);
+        const text = this.typeProjector.publication.readProductDetail(TemplateProductDetails.HtmlNode, child.productHandle);
         return text instanceof HtmlText ? text.text : '';
       }
       const childElement = this.htmlElementFor(child);
@@ -917,7 +925,7 @@ export class RuntimeBindingValueChannelDraftSupport {
     if (reference?.productHandle == null) {
       return null;
     }
-    const node = this.store.productDetails.read(TemplateProductDetails.HtmlNode, reference.productHandle);
+    const node = this.typeProjector.publication.readProductDetail(TemplateProductDetails.HtmlNode, reference.productHandle);
     return node instanceof HtmlElement ? node : null;
   }
 
@@ -925,7 +933,7 @@ export class RuntimeBindingValueChannelDraftSupport {
     return element.attributes
       .map((attribute) => attribute.productHandle == null
         ? null
-        : this.store.productDetails.read(TemplateProductDetails.HtmlAttribute, attribute.productHandle))
+        : this.typeProjector.publication.readProductDetail(TemplateProductDetails.HtmlAttribute, attribute.productHandle))
       .filter((attribute): attribute is HtmlAttribute => attribute != null);
   }
 
@@ -943,13 +951,19 @@ export class RuntimeBindingValueChannelDraftSupport {
   }
 }
 
-function nearestNamedControllerAncestor(
+function nearestTemplateControllerAncestor(
+  store: ProductDetailReadView,
   controller: RuntimeControllerFrame | null,
-  name: string,
+  flowKind: BuiltInTemplateControllerFlowKind,
 ): RuntimeControllerFrame | null {
   let current = controller?.parent ?? null;
   while (current != null) {
-    if (current.name === name) {
+    if (
+      frameworkTemplateControllerSemanticsForController(
+        store,
+        current,
+      )?.flowKind === flowKind
+    ) {
       return current;
     }
     current = current.parent;

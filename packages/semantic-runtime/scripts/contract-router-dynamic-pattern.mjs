@@ -166,6 +166,65 @@ const expectedEffects = [
     ],
     'signature',
   ),
+  ExpectedSemanticEffect.atLeast(
+    'Recursively rendered router bindings should use their exact controller and child-local compiler resource scope.',
+    'route',
+    'route',
+    2,
+    null,
+    [
+      effectFilter('routeProductKind', 'recognized-route'),
+      effectFilter('parameterValuePairs', 'productId=darjeeling'),
+    ],
+    'signature',
+  ),
+  ExpectedSemanticEffect.signatureFact(
+    'Reached recursively rendered router bindings should retain their connectable source dependency.',
+    'binding-observed-dependency',
+    'template',
+    'template-binding',
+    'present',
+    null,
+    [
+      effectFilter('definitionName', 'route-link'),
+      effectFilter('sourceName', 'productId'),
+      effectFilter('dependencyKind', 'template-expression-read'),
+    ],
+  ),
+  ExpectedSemanticEffect.signatureFact(
+    'Binding data flow should distinguish a connectable source shape from source evaluation blocked during astBind.',
+    'binding-data-flow',
+    'template',
+    'template-binding',
+    'present',
+    null,
+    [
+      effectFilter('definitionName', 'route-link'),
+      effectFilter('sourceName', 'blockedProductId'),
+      effectFilter('sourceEvaluationKind', 'connectable-read'),
+      effectFilter('sourceEvaluationReachability', 'blocked-by-bind-failure'),
+    ],
+  ),
+  ExpectedSemanticEffect.absent(
+    'A binding whose expression-resource bind phase failed must not publish runtime observed dependencies.',
+    'binding-observed-dependency',
+    'template',
+    'template-binding',
+    [
+      effectFilter('definitionName', 'route-link'),
+      effectFilter('sourceName', 'blockedProductId'),
+    ],
+  ),
+  ExpectedSemanticEffect.absent(
+    'A converter behind an outer binding-behavior bind failure must not be resurrected by static source-value evaluation.',
+    'route',
+    'route',
+    null,
+    [
+      effectFilter('routeProductKind', 'recognized-route'),
+      effectFilter('parameterValuePairs', 'productId=blocked-by-missing-behavior'),
+    ],
+  ),
   ExpectedSemanticEffect.absent(
     'Inline load route plus dynamic params must not treat the route id as the route parameter value.',
     'route',
@@ -174,6 +233,16 @@ const expectedEffects = [
     [
       effectFilter('routeProductKind', 'route-node'),
       effectFilter('parameterValuePairs', 'productId=product-detail'),
+    ],
+  ),
+  ExpectedSemanticEffect.absent(
+    'Open-with-value router instruction candidates must not become confident recognized routes.',
+    'route',
+    'route',
+    null,
+    [
+      effectFilter('routeProductKind', 'recognized-route'),
+      effectFilter('parameterValuePairs', 'productId=pressured'),
     ],
   ),
   ExpectedSemanticEffect.atLeast(
@@ -230,6 +299,21 @@ const openSeams = app.ask({
   kind: SemanticAppQueryKind.OpenSeams,
   page: { size: 20 },
 }).value;
+const typedNavigationInstructions = app.ask({
+  kind: SemanticAppQueryKind.TypedNavigationInstructions,
+  detail: 'handles',
+  page: { size: 100 },
+}).value;
+const viewportInstructions = app.ask({
+  kind: SemanticAppQueryKind.ViewportInstructions,
+  detail: 'handles',
+  page: { size: 100 },
+}).value;
+const viewportInstructionTrees = app.ask({
+  kind: SemanticAppQueryKind.ViewportInstructionTrees,
+  detail: 'handles',
+  page: { size: 100 },
+}).value;
 const unresolvedVendorModuleDiagnostic = typeScriptDiagnostics.rows.find((row) =>
   row.diagnosticKind === 'TS2307'
   && row.message.includes('router-pressure-vendor-links')
@@ -239,6 +323,35 @@ const targetOpenReasonSource = openSeams.rows
   .find((source) => source.reasonKind === 'router-href-click-interception-target-open');
 const explicitExternalHrefOpenSeam = openSeams.rows.find((row) =>
   openSeamSourceTexts(row).some((text) => text.includes('explicitExternalHref'))
+);
+const pressuredTree = viewportInstructionTrees.rows.find((row) =>
+  sourceReferenceText(row.source).includes('pressuredInstruction')
+);
+const pressuredViewport = viewportInstructions.rows.find((row) =>
+  sourceReferenceText(row.source).includes('pressuredInstruction')
+);
+const pressuredTyped = typedNavigationInstructions.rows.find((row) =>
+  sourceReferenceText(row.source).includes('pressuredInstruction')
+);
+const pressuredTreeMaterialization = pressuredTree?.handles == null
+  ? null
+  : runtime.workspace.store.readMaterializations().find((materialization) =>
+      materialization.productHandles.includes(pressuredTree.handles.productHandle)
+    ) ?? null;
+const pressuredProductSeams = pressuredTreeMaterialization == null
+  ? []
+  : pressuredTreeMaterialization.openSeamHandles.flatMap((handle) => {
+      const seam = runtime.workspace.store.readOpenSeam(handle);
+      return seam == null ? [] : [seam];
+    });
+const pressuredSourceIsExact = openSeams.rows.some((row) =>
+  row.reasonKinds.includes('external-module-value')
+  && row.reasonSources.some((source) =>
+    sourceReferenceText(source.source).includes('routeInstructionDefaults')
+  )
+);
+const pressuredOpenSeamRow = openSeams.rows.find((row) =>
+  openSeamSourceTexts(row).some((text) => text.includes('pressuredInstruction'))
 );
 
 if (unresolvedVendorModuleDiagnostic != null) {
@@ -253,6 +366,15 @@ if (targetOpenReasonSource?.sourceRange == null || targetOpenReasonSource.source
 if (explicitExternalHrefOpenSeam != null) {
   failures.push('Expected explicit external dynamic href values to bypass router instruction open seams.');
 }
+if (pressuredTree?.closure !== 'open' || pressuredViewport?.closure !== 'open' || pressuredTyped?.closure !== 'open') {
+  failures.push(`Expected the retained router instruction candidate and all of its instruction products to stay open, observed tree=${pressuredTree?.closure ?? 'missing'}, viewport=${pressuredViewport?.closure ?? 'missing'}, typed=${pressuredTyped?.closure ?? 'missing'}.`);
+}
+if (pressuredProductSeams.length === 0 || !pressuredProductSeams.some((seam) => seam.reasonKinds.includes('external-module-value'))) {
+  failures.push('Expected the open ViewportInstructionTree materialization to retain its evaluator-origin seam handle.');
+}
+if (!pressuredSourceIsExact) {
+  failures.push('Expected retained router pressure to preserve the exact TypeScript evaluator source for routeInstructionDefaults.');
+}
 
 const summary = {
   fixture: 'router-dynamic-pattern',
@@ -262,6 +384,18 @@ const summary = {
     reasonKind: targetOpenReasonSource.reasonKind,
     hasSource: targetOpenReasonSource.source != null,
     sourceRange: targetOpenReasonSource.sourceRange,
+  },
+  pressuredInstruction: {
+    treeClosure: pressuredTree?.closure ?? null,
+    viewportClosure: pressuredViewport?.closure ?? null,
+    typedClosure: pressuredTyped?.closure ?? null,
+    materializationOpenSeams: pressuredProductSeams.length,
+    exactEvaluatorSource: pressuredSourceIsExact,
+    reasonSources: pressuredOpenSeamRow?.reasonSources.map((source) => ({
+      reasonKind: source.reasonKind,
+      source: sourceReferenceText(source.source),
+      path: source.source?.path ?? null,
+    })) ?? [],
   },
   expectedEffects: expectedEffects.length,
   verification: verification.effectResults.map((result) => ({

@@ -10,9 +10,9 @@
       "import": "./out/main.js",
       "types": "./out/main.d.ts"
     },
-    "./api": {
-      "import": "./out/api.js",
-      "types": "./out/api.d.ts"
+    "./protocol": {
+      "import": "./out/protocol.js",
+      "types": "./out/protocol.d.ts"
     }
   },
   "license": "MIT",
@@ -23,13 +23,15 @@
   "scripts": {
     "build": "tsc -b",
     "typecheck": "tsc --noEmit",
-    "typecheck:test": "tsc --noEmit -p tsconfig.test.json"
+    "typecheck:test": "tsc --noEmit -p tsconfig.test.json",
+    "measure:incrementality": "node scripts/measure-incrementality.mjs",
+    "measure:protocol": "node scripts/measure-protocol-responsiveness.mjs"
   },
   "dependencies": {
-    "@aurelia-ls/compiler": "workspace:*",
-    "@aurelia-ls/semantic-workspace": "workspace:*",
-    "vscode-languageserver": "^9.0.1",
-    "vscode-languageserver-textdocument": "^1.0.11",
+    "@aurelia-ls/semantic-runtime": "workspace:*",
+    "vscode-jsonrpc": "^9.0.1",
+    "vscode-languageserver": "^10.1.0",
+    "vscode-languageserver-textdocument": "^1.0.13",
     "vscode-uri": "^3.0.8"
   },
   "peerDependencies": {

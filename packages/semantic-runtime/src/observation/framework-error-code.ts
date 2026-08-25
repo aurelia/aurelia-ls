@@ -13,12 +13,6 @@ export const RuntimeObservationFrameworkErrorCode = {
     'invalid_observable_decorator_usage',
     'AUR0224',
   ),
-  StoppingStoppedEffect: frameworkErrorCode(
-    'runtime',
-    'ErrorNames',
-    'stopping_a_stopped_effect',
-    'AUR0225',
-  ),
   AssignReadonlySize: frameworkErrorCode(
     'runtime',
     'ErrorNames',

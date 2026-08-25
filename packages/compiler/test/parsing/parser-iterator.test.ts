@@ -109,24 +109,38 @@ describe("expression-parser / IsIterator (ForOfStatement)", () => {
     expect(decl.rest?.name.name).toBe("rest");
   });
 
-  test("{ a: foo = bar, ...rest } of entries", () => {
-    const code = "{ a: foo = bar, ...rest } of entries";
+  test.each([
+    "{ id, id } of items",
+    "{ id: value, name: value } of items",
+    "{ id: $index } of items",
+    "{ id: $item } of items",
+    "{ id: constructor } of items",
+    "{ id: __proto__ } of items",
+    "{ id: target.member } of items",
+    "{ id: target[0] } of items",
+    "{ id: compute() } of items",
+    "{ id: target = fallback } of items",
+    "{ user: { name } } of items",
+    "{ pair: [key, value] } of items",
+  ])("rejects unsupported RC2 object binding %s", (code) => {
     const ast = parseIterator(code);
+    expect(ast.$kind).toBe("BadExpression");
+    expect(ast.frameworkErrorCode).toBe("AUR0177");
+  });
 
-    const decl = ast.declaration;
-    expect(decl.$kind).toBe("ObjectBindingPattern");
-    expect(decl.properties.length).toBe(1);
+  test.each([
+    "{ id name } of items",
+    "{ id: value name: other } of items",
+  ])("keeps missing object-binding separators on AUR0167 for %s", (code) => {
+    const ast = parseIterator(code);
+    expect(ast.$kind).toBe("BadExpression");
+    expect(ast.frameworkErrorCode).toBe("AUR0167");
+  });
 
-    const prop = decl.properties[0];
-    expect(prop.key).toBe("a");
-    expect(prop.value.$kind).toBe("BindingPatternDefault");
-    expect(prop.value.target.$kind).toBe("BindingIdentifier");
-    expect(prop.value.target.name.name).toBe("foo");
-    expect(prop.value.default.$kind).toBe("AccessScope");
-    expect(prop.value.default.name.name).toBe("bar");
-
-    expect(decl.rest?.$kind).toBe("BindingIdentifier");
-    expect(decl.rest?.name.name).toBe("rest");
+  test("object binding rest retains the RC2 grammar error code", () => {
+    const ast = parseIterator("{ id, ...rest } of items");
+    expect(ast.$kind).toBe("BadExpression");
+    expect(ast.frameworkErrorCode).toBe("AUR0164");
   });
 
   test("[] of items is accepted and produces an empty array pattern", () => {
@@ -168,7 +182,8 @@ describe("expression-parser / IsIterator (ForOfStatement)", () => {
     const parser = new ExpressionParser();
     const ast = parser.parse("{ ...rest a } of items", "IsIterator");
     expect(ast.$kind).toBe("BadExpression");
-    expect(ast.message).toBe("Expected '}' after object pattern rest element");
+    expect(ast.message).toBe("Object binding pattern rest is not supported");
+    expect(ast.frameworkErrorCode).toBe("AUR0164");
     expect(ast.span.start >= 2).toBe(true);
     expect(ast.span.end >= ast.span.start).toBe(true);
   });
@@ -216,7 +231,8 @@ describe("expression-parser / IsIterator (ForOfStatement)", () => {
     const parser = new ExpressionParser();
     const ast = parser.parse("{ ...rest, a } of items", "IsIterator");
     expect(ast.$kind).toBe("BadExpression");
-    expect(ast.message).toBe("Rest element must be in the last position of an object pattern");
+    expect(ast.message).toBe("Object binding pattern rest is not supported");
+    expect(ast.frameworkErrorCode).toBe("AUR0164");
   });
 
   test("invalid identifier 'import' in lhs is rejected", () => {

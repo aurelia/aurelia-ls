@@ -1,0 +1,14 @@
+{
+  "name": "@aurelia-ls/lane-harness",
+  "version": "0.0.0",
+  "private": true,
+  "description": "LSP-boundary lane tests: boots the real language server against fixture workspaces, drives standard LSP requests, snapshots applied results.",
+  "type": "module",
+  "engines": {
+    "node": ">=22.13 <25"
+  },
+  "scripts": {
+    "lane": "node scripts/run-lane.mjs",
+    "detect": "node scripts/detect-lanes.mjs"
+  }
+}

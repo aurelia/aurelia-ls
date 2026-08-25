@@ -39,6 +39,24 @@ export function expressionSpanContainsOffset(
   return span.start <= offset && offset <= span.end;
 }
 
+export function expressionSourceSpansEqual(
+  left: SourceSpan,
+  right: SourceSpan,
+): boolean {
+  return left.start === right.start
+    && left.end === right.end
+    && left.file?.id === right.file?.id;
+}
+
+export function expressionSourceSpanContains(
+  outer: SourceSpan,
+  inner: SourceSpan,
+): boolean {
+  return outer.file?.id === inner.file?.id
+    && outer.start <= inner.start
+    && inner.end <= outer.end;
+}
+
 function hasSourceSpanFileSlot(span: SpanLike): span is SourceSpan {
   return span instanceof SourceSpan
     || Object.prototype.hasOwnProperty.call(span, 'file');

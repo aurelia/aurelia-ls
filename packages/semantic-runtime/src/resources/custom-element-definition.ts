@@ -5,6 +5,7 @@ import type {
 } from '../kernel/handles.js';
 import type { FieldProvenance } from '../kernel/provenance.js';
 import { auLink } from '../kernel/au-link.js';
+import type { StaticCallableSlot } from '../evaluation/function-execution.js';
 import type { BindableDefinition, BindableDefinitionContribution } from './bindable-definition.js';
 import { ResourceDefinitionKind } from './resource-kind.js';
 import type { ComponentResourceDefinitionContributionKind } from './resource-kind.js';
@@ -60,6 +61,8 @@ export class CustomElementCaptureDefinition {
   constructor(
     readonly kind: CustomElementCaptureKind,
     readonly predicateTarget: ResourceTargetReference | null = null,
+    /** Stable slot resolved by the current app-analysis callable authority. */
+    readonly predicateSlot: StaticCallableSlot | null = null,
   ) {}
 }
 
@@ -69,6 +72,8 @@ export class CustomElementTemplateDefinition {
     readonly markup: string | null = null,
     readonly addressHandle: AddressHandle | null = null,
     readonly sourceMap: TemplateSourceOffsetMap | null = null,
+    /** Revision of the complete authored file from which markup and metadata were admitted. */
+    readonly authoredSourceRevision: string | null = null,
   ) {}
 }
 
@@ -153,5 +158,7 @@ export class CustomElementDefinition {
     readonly processContent: ResourceTargetReference | null,
     readonly contributions: readonly CustomElementDefinitionContribution[] = [],
     readonly fieldProvenance: readonly FieldProvenance<CustomElementDefinitionField>[] = [],
+    /** Exact address for the authored public resource-name token, when the declaration has one. */
+    readonly nameSourceAddressHandle: AddressHandle | null = null,
   ) {}
 }

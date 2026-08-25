@@ -1,5 +1,7 @@
 {
-  "outcome": "hit",
+  "result": "answered",
+  "selection": "not-applicable",
+  "coverage": "complete",
   "summary": "Previewed app-builder ontology SourcePlan with 30 file(s) and 0 issue(s).",
   "value": {
     "displayText": "App-builder SourcePlan preview: root=., template=none, target=none, source=application-assembly, files=30, witnesses=243, controlUses=15, expectedEffects=18, handoffNotes=7, decisionBundles=5, issues=0.",
@@ -1566,25 +1568,25 @@
         "dependencies": [
           {
             "specifier": "@aurelia/router",
-            "versionRange": "^2.0.0-rc.1",
+            "versionRange": "^2.0.0-rc.2",
             "scope": "dependency",
             "kind": "source-plan-package-dependency"
           },
           {
             "specifier": "@aurelia/runtime-html",
-            "versionRange": "^2.0.0-rc.1",
+            "versionRange": "^2.0.0-rc.2",
             "scope": "dependency",
             "kind": "source-plan-package-dependency"
           },
           {
             "specifier": "aurelia",
-            "versionRange": "^2.0.0-rc.1",
+            "versionRange": "^2.0.0-rc.2",
             "scope": "dependency",
             "kind": "source-plan-package-dependency"
           },
           {
             "specifier": "@aurelia/vite-plugin",
-            "versionRange": "^2.0.0-rc.1",
+            "versionRange": "^2.0.0-rc.2",
             "scope": "devDependency",
             "kind": "source-plan-package-dependency"
           },

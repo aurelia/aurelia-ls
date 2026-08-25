@@ -53,4 +53,8 @@ export class TemplateOverlayScopeAliasesApp {
   selectById(id: string): boolean {
     return this.items.some((item) => item.id === id);
   }
+
+  acceptApp(app: TemplateOverlayScopeAliasesApp): string {
+    return app.title;
+  }
 }

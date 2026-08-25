@@ -38,6 +38,8 @@ export const enum ResourceIssueKind {
   CustomAttributeAlreadyRegistered = 'custom-attribute-already-registered',
   ValueConverterAlreadyRegistered = 'value-converter-already-registered',
   BindingBehaviorAlreadyRegistered = 'binding-behavior-already-registered',
+  BindingCommandAlreadyRegistered = 'binding-command-already-registered',
+  ResourceAliasAlreadyRegistered = 'resource-alias-already-registered',
 }
 
 export type ResourceIssueSeverity =
@@ -53,7 +55,14 @@ export type ResourceIssueField =
   | 'frameworkErrorCode'
   | 'source';
 
-/** Source-backed resource metadata failure corresponding to an Aurelia runtime-html boundary. */
+export class ResourceIssueRelatedInformation {
+  constructor(
+    readonly message: string,
+    readonly sourceAddressHandle: AddressHandle | null,
+  ) {}
+}
+
+/** Source-backed resource metadata or registration failure corresponding to an Aurelia framework boundary. */
 export class ResourceIssue {
   constructor(
     /** Product handle for the materialized issue product. */
@@ -74,6 +83,8 @@ export class ResourceIssue {
     readonly frameworkErrorCode: string | null,
     /** Source address for the authored metadata that triggered the issue. */
     readonly sourceAddressHandle: AddressHandle | null,
+    /** Additional source-backed context that explains the issue without replacing its primary locus. */
+    readonly relatedInformation: readonly ResourceIssueRelatedInformation[],
     /** Field-level provenance for source facts that matter to explanation or ambiguity. */
     readonly fieldProvenance: readonly FieldProvenance<ResourceIssueField>[] = [],
     /** Diagnostic severity implied by the modeled framework path. */

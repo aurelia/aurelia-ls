@@ -1,0 +1,14 @@
+{
+  "fixture": "packages/semantic-runtime/fixtures/pressure/template-overlay-value-converter",
+  "lanes": {
+    "diagnostics": [
+      {
+        "id": "overlay-value-converter-template",
+        "file": "src/template-overlay-value-converter-app.html",
+        "verdict": "correct",
+        "reason": "The full document-diagnostic pull returns the invalid value-converter argument as one TS2345 item on the authored `minimumText` span with no generated-overlay leakage.",
+        "note": "NEW 2026-07-08. Diagnostics lane canary for value-converter overlay lowering. VERDICT 2026-07-08: correct. The invalid converter argument is reported on the authored argument span, with checker evidence mapped through overlay provenance and without treating generated helper/source text as user-authored code. This matches the template-type-checking precedent from Angular/Vue-style virtual checker surfaces: generated code should enrich template feedback while diagnostics point at the original template."
+      }
+    ]
+  }
+}

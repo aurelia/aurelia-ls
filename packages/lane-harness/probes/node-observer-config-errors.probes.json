@@ -1,0 +1,14 @@
+{
+  "fixture": "packages/semantic-runtime/fixtures/pressure/node-observer-config-errors",
+  "lanes": {
+    "diagnostics": [
+      {
+        "id": "node-observer-main-source",
+        "file": "src/main.ts",
+        "verdict": "correct",
+        "reason": "The full document-diagnostic pull returns the three duplicate NodeObserverLocator mapping rows on the exact duplicate configuration calls.",
+        "note": "NEW 2026-07-07. Configuration diagnostics for duplicate NodeObserverLocator mappings. VERDICT 2026-07-07: correct."
+      }
+    ]
+  }
+}

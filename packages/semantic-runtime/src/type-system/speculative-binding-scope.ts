@@ -1,6 +1,5 @@
 import type {
   AddressHandle,
-  IdentityHandle,
   ProductHandle,
 } from '../kernel/handles.js';
 import type { KernelStore } from '../kernel/store.js';
@@ -8,7 +7,6 @@ import {
   BindingContext,
   BindingContextSlotDraft,
   BindingScope,
-  BindingScopeOwnerKind,
   OverrideContext,
   mergeBindingContextSlotDrafts,
   type BindingContextSlot,
@@ -24,11 +22,8 @@ export interface SpeculativeBindingScopeOverlayRequest {
 
 interface SpeculativeBindingScopeOverlayHandles {
   readonly scopeProductHandle: ProductHandle;
-  readonly scopeIdentityHandle: IdentityHandle;
   readonly bindingContextProductHandle: ProductHandle;
-  readonly bindingContextIdentityHandle: IdentityHandle;
   readonly overrideContextProductHandle: ProductHandle;
-  readonly overrideContextIdentityHandle: IdentityHandle;
 }
 
 /**
@@ -48,15 +43,16 @@ export function speculativeBindingScopeOverlay(
   const overrideContext = speculativeOverrideContextOverlay(request, handles, sourceAddressHandle);
   return new BindingScope(
     handles.scopeProductHandle,
-    handles.scopeIdentityHandle,
-    request.base.parent,
+    request.base.identityHandle,
+    request.base.runtimeParent,
     bindingContext,
     overrideContext,
     request.base.isBoundary,
-    BindingScopeOwnerKind.SyntheticView,
+    request.base.ownerKind,
     sourceAddressHandle,
     request.base.fieldProvenance,
-    request.base.scopeCreators,
+    [],
+    request.base,
   );
 }
 
@@ -66,11 +62,8 @@ function speculativeBindingScopeOverlayHandles(
 ): SpeculativeBindingScopeOverlayHandles {
   return {
     scopeProductHandle: store.handles.product(`speculative-binding-scope:${localKey}`),
-    scopeIdentityHandle: store.handles.identity(`speculative-binding-scope:${localKey}`),
     bindingContextProductHandle: store.handles.product(`speculative-binding-context:${localKey}`),
-    bindingContextIdentityHandle: store.handles.identity(`speculative-binding-context:${localKey}`),
     overrideContextProductHandle: store.handles.product(`speculative-override-context:${localKey}`),
-    overrideContextIdentityHandle: store.handles.identity(`speculative-override-context:${localKey}`),
   };
 }
 
@@ -81,7 +74,7 @@ function speculativeBindingContextOverlay(
 ): BindingContext {
   return new BindingContext(
     handles.bindingContextProductHandle,
-    handles.bindingContextIdentityHandle,
+    request.base.bindingContext.identityHandle,
     request.base.bindingContext.contextKind,
     request.base.bindingContext.ownerProductHandle,
     request.base.bindingContext.contextType,
@@ -98,7 +91,7 @@ function speculativeOverrideContextOverlay(
 ): OverrideContext {
   return new OverrideContext(
     handles.overrideContextProductHandle,
-    handles.overrideContextIdentityHandle,
+    request.base.overrideContext.identityHandle,
     handles.scopeProductHandle,
     request.base.overrideContext.contextType,
     mergedSlots(request.base.overrideContext.slots, request.overrideContextSlots),

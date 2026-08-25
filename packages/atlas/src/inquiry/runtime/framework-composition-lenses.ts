@@ -9,6 +9,7 @@ import {
 } from "../../framework/relationships.js";
 import { readFrameworkDiIndex } from "../../framework/di-index.js";
 import {
+  AuLinkFacetState,
   readAuLinkModel,
   type AuLinkAnchorRow,
   type SourceProject,
@@ -38,7 +39,9 @@ import {
   EvidenceConfidence,
   EvidenceKind,
   EvidenceRole,
+  OpenSeamKind,
   type Evidence,
+  type OpenSeam,
 } from "../evidence.js";
 import type { Inquiry } from "../inquiry.js";
 import { LensId } from "../lens.js";
@@ -103,6 +106,7 @@ interface FrameworkCompositionFilters extends FrameworkDiscoveryFilters {
   readonly relation?: string;
   readonly mechanism?: string;
   readonly phase?: string;
+  readonly facet?: string;
   readonly emulationLayer?: string;
   readonly emulationMode?: string;
   readonly obligationKind?: string;
@@ -160,7 +164,14 @@ export function answerFrameworkComposition(
   const filters = compositionFiltersFromInquiry(inquiry);
   const limit = rowLimit(inquiry);
   const offset = pageOffset(inquiry);
-  const basis = compositionBasis(sourceProject);
+  const auLinkAnchors = readAuLinkModel(sourceProject, {}).anchors;
+  const unresolvedAuLinkAnchors = auLinkAnchors.filter(
+    (anchor) => anchor.facetState === AuLinkFacetState.Unresolved,
+  );
+  const basis = compositionBasis(
+    sourceProject,
+    projection === "emulation" ? 0 : unresolvedAuLinkAnchors.length,
+  );
 
   if (projection === "emulation") {
     const emulationFilters = emulationFiltersFromInquiry(inquiry);
@@ -199,9 +210,11 @@ export function answerFrameworkComposition(
     sourceProject,
     filters,
     queryTerms,
+    auLinkAnchors,
   );
   const actors = actorRowsForClaims(claims);
   const baseValue = compositionValue(queryTerms, actors, claims);
+  const openSeams = unresolvedAuLinkCompositionOpenSeams(unresolvedAuLinkAnchors);
 
   if (projection === "actors") {
     return COMPOSITION_ACTOR_ROW_FAMILY.answer({
@@ -211,6 +224,8 @@ export function answerFrameworkComposition(
       limit,
       basis,
       value: (page) => ({ ...baseValue, actors: page.rows }),
+      outcome: compositionOutcome,
+      openSeams: () => openSeams,
     });
   }
 
@@ -222,6 +237,8 @@ export function answerFrameworkComposition(
       limit,
       basis,
       value: (page) => ({ ...baseValue, claims: page.rows }),
+      outcome: compositionOutcome,
+      openSeams: () => openSeams,
     });
   }
 
@@ -236,6 +253,8 @@ export function answerFrameworkComposition(
       actors: actors.slice(0, Math.min(actors.length, 20)),
       claims: page.rows,
     }),
+    outcome: compositionOutcome,
+    openSeams: () => openSeams,
     summary: (page) =>
       `Framework composition has ${actors.length} actor(s) and ${claims.length} signed claim(s); returned ${page.rows.length} claim row(s).`,
   });
@@ -258,10 +277,13 @@ function readFrameworkCompositionClaims(
   sourceProject: SourceProject,
   filters: FrameworkCompositionFilters,
   queryTerms: readonly string[],
+  auLinkAnchors: readonly AuLinkAnchorRow[],
 ): readonly SemanticClaim[] {
   const readerFilters = readerFiltersForComposition(filters, queryTerms);
   const claims = uniqueClaims([
-    ...readAuLinkModel(sourceProject, {}).anchors.map(claimFromAuLinkAnchor),
+    ...auLinkAnchors
+      .filter((row) => row.facetState !== AuLinkFacetState.Unresolved)
+      .map(claimFromAuLinkAnchor),
     ...readFrameworkDiIndex(sourceProject).relationships.map((row) =>
       claimFromRelationship(row, LensId.FrameworkDi, "relationships", [
         BasisKind.TypeScriptChecker,
@@ -430,13 +452,16 @@ function claimFromAuLinkAnchor(row: AuLinkAnchorRow): SemanticClaim {
   return {
     id: `framework-claim:${LensId.BridgeAuLink}:${row.id}`,
     family: SemanticClaimFamily.Bridge,
-    predicate: SemanticClaimPredicate.MirrorsFrameworkTarget,
+    predicate: row.facetState === AuLinkFacetState.Unqualified
+      ? SemanticClaimPredicate.CorrespondsToFrameworkTarget
+      : SemanticClaimPredicate.ModelsFrameworkFacet,
     mechanism: SemanticClaimMechanism.AuLink,
     phase: SemanticClaimPhase.SemanticMapping,
     packageId: row.packageId,
+    facet: row.facet ?? undefined,
     subject: {
-      id: entityId(SemanticEntityKind.ProductClass, row.target.name ?? row.symbolName, "semantic-runtime"),
-      kind: SemanticEntityKind.ProductClass,
+      id: entityId(row.target.kind, row.target.name ?? row.symbolName, "semantic-runtime"),
+      kind: row.target.kind,
       name: row.target.name ?? row.symbolName,
       packageId: "semantic-runtime",
       source: productSource,
@@ -460,7 +485,9 @@ function claimFromAuLinkAnchor(row: AuLinkAnchorRow): SemanticClaim {
     closure: row.frameworkTarget.status,
     source: productSource,
     sourceRowId: row.id,
-    summary: `${row.target.name ?? row.symbolName} mirrors ${row.linkId} through auLink.`,
+    summary: row.facet === null
+      ? `${row.target.name ?? row.symbolName} corresponds to ${row.linkId} through an unqualified auLink.`
+      : `${row.target.name ?? row.symbolName} models the ${row.facet} facet of ${row.linkId} through auLink.`,
   };
 }
 
@@ -562,6 +589,7 @@ function compositionClaimMatches(
     (filters.mechanism === undefined ||
       claim.mechanism === filters.mechanism) &&
     (filters.phase === undefined || claim.phase === filters.phase) &&
+    (filters.facet === undefined || claim.facet === filters.facet) &&
     (queryTerms.length === 0 ||
       queryTerms.some((term) => claimMatchesTerm(claim, term)))
   );
@@ -573,7 +601,8 @@ function claimMatchesTerm(claim: SemanticClaim, term: string): boolean {
     entityMatchesTerm(claim.object, term) ||
     claim.summary.includes(term) ||
     claim.predicate.includes(term) ||
-    claim.family.includes(term)
+    claim.family.includes(term) ||
+    claim.facet?.includes(term) === true
   );
 }
 
@@ -607,6 +636,7 @@ function hasStructuredCompositionFilter(filters: FrameworkCompositionFilters): b
     filters.relation !== undefined ||
     filters.mechanism !== undefined ||
     filters.phase !== undefined ||
+    filters.facet !== undefined ||
     filters.targetName !== undefined;
 }
 
@@ -639,6 +669,7 @@ const frameworkCompositionFilterKeys = [
   "relation",
   "mechanism",
   "phase",
+  "facet",
   "query",
 ] as const satisfies readonly (keyof FrameworkCompositionFilters & string)[];
 
@@ -965,7 +996,14 @@ function claimContinuations(
 
 function sourceFiltersForClaim(row: SemanticClaim): Inquiry["filters"] {
   if (row.sourceLens === LensId.BridgeAuLink) {
-    return { symbolName: row.object.aliases?.[0] ?? row.object.name };
+    return {
+      packageId: row.packageId,
+      symbolName: row.object.aliases?.[0] ?? row.object.name,
+      facet: row.facet,
+      facetState: row.facet === undefined
+        ? AuLinkFacetState.Unqualified
+        : AuLinkFacetState.Exact,
+    };
   }
   const filters: Record<string, unknown> = {
     relation: row.predicate,
@@ -991,6 +1029,7 @@ function uniqueClaims(
     const key = [
       claim.family,
       claim.predicate,
+      claim.facet,
       claim.subject.id,
       claim.object.id,
       claim.source?.filePath,
@@ -1025,18 +1064,67 @@ function entityId(
   return `entity:${packageId ?? "repo"}:${kind}:${name}`;
 }
 
-function compositionBasis(sourceProject: SourceProject): readonly Basis[] {
+function compositionBasis(
+  sourceProject: SourceProject,
+  unresolvedAuLinkFacetCount: number,
+): readonly Basis[] {
   return [
     sourceIndexBasis(sourceProject),
     checkerBasis(sourceProject),
     {
       kind: BasisKind.AuLink,
-      closure: BasisClosure.Exact,
+      closure: unresolvedAuLinkFacetCount === 0
+        ? BasisClosure.Exact
+        : BasisClosure.Partial,
       authority: BasisAuthority.Product,
       freshness: BasisFreshness.Live,
       identity: sourceProject.snapshot().identity,
-      summary:
-        "Product-to-framework auLink anchors joined into framework composition claims.",
+      summary: unresolvedAuLinkFacetCount === 0
+        ? "Product-to-framework auLink anchors joined into framework composition claims."
+        : `${unresolvedAuLinkFacetCount} auLink placement(s) have unresolved facet semantics and were omitted from framework composition claims.`,
+      limitations: unresolvedAuLinkFacetCount === 0
+        ? undefined
+        : [
+          "An unresolved decorator options object can select either an unqualified correspondence or a named semantic facet.",
+        ],
     },
   ];
+}
+
+function unresolvedAuLinkCompositionOpenSeams(
+  anchors: readonly AuLinkAnchorRow[],
+): readonly OpenSeam[] {
+  const first = anchors[0];
+  if (first === undefined) {
+    return [];
+  }
+  const source = sourceRangeFromFileSpan(first.file.repoPath, first.decoratorSpan);
+  return [{
+    id: "framework.composition:aulink-facet-unresolved",
+    kind: OpenSeamKind.InsufficientBasis,
+    summary:
+      `${anchors.length} auLink placement(s) have an unresolved final facet and cannot honestly produce composition claims.`,
+    evidence: {
+      id: first.id,
+      kind: EvidenceKind.AuLinkAnchor,
+      role: EvidenceRole.Boundary,
+      confidence: EvidenceConfidence.Unknown,
+      summary: "Decorator option ordering does not close whether this placement is unqualified or facet-bounded.",
+      source,
+      data: first,
+    },
+    data: {
+      unresolvedFacetPlacements: anchors.length,
+    },
+  }];
+}
+
+function compositionOutcome(
+  page: { readonly rows: readonly unknown[] },
+  openSeams: readonly OpenSeam[],
+): OutcomeKind {
+  if (openSeams.length > 0) {
+    return OutcomeKind.Partial;
+  }
+  return page.rows.length === 0 ? OutcomeKind.Miss : OutcomeKind.Hit;
 }

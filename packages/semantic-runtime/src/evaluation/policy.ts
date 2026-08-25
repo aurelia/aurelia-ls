@@ -6,6 +6,13 @@ export const enum StaticEvaluationExpressionStatementDisposition {
   ExternallyOwned = 'externally-owned',
 }
 
+export const enum StaticEvaluationBranchMode {
+  /** Preserve representative values across unresolved branches without claiming branch-local effects. */
+  RepresentativeValues = 'representative-values',
+  /** Admit effects only along branches whose control flow reduced to one concrete path. */
+  PathProvenEffects = 'path-proven-effects',
+}
+
 export interface StaticEvaluationExpressionStatementPolicyInput {
   readonly expression: ts.Expression;
   readonly environment: ModuleEnvironmentRecord;
@@ -25,6 +32,8 @@ export interface StaticEvaluationGuardrails {
   readonly maxLoopIterations: number;
   /** Maximum callback executions a collection intrinsic may spend before returning an imprecise value. */
   readonly maxIntrinsicCallbackEvaluations: number;
+  /** Maximum sibling branch evaluations shared by one root evaluator operation. */
+  readonly maxBranchEvaluations: number;
 }
 
 export const DefaultStaticEvaluationGuardrails: StaticEvaluationGuardrails = {
@@ -32,12 +41,14 @@ export const DefaultStaticEvaluationGuardrails: StaticEvaluationGuardrails = {
   maxStatements: 5000,
   maxLoopIterations: 200,
   maxIntrinsicCallbackEvaluations: 500,
+  maxBranchEvaluations: 64,
 };
 
 export class StaticEvaluationPolicy {
   constructor(
     readonly expressionStatementPolicies: readonly StaticEvaluationExpressionStatementPolicy[] = [],
     readonly guardrails: StaticEvaluationGuardrails = DefaultStaticEvaluationGuardrails,
+    readonly branchMode: StaticEvaluationBranchMode = StaticEvaluationBranchMode.RepresentativeValues,
   ) {}
 
   dispositionForExpressionStatement(

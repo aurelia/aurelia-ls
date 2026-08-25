@@ -4,7 +4,6 @@ import type {
   AddressHandle,
   IdentityHandle,
 } from '../kernel/handles.js';
-import type { KernelStore } from '../kernel/store.js';
 import type { EvaluationValue } from '../evaluation/values.js';
 import { CustomElementDefinition } from '../resources/custom-element-definition.js';
 import {
@@ -34,9 +33,10 @@ import {
   commonTypeReference,
 } from '../type-system/expression-type-synthesis.js';
 import {
-  checkerCallableContextSignatures,
   checkerSignatureCandidateBasis,
   checkerSignatureParameterType,
+  checkerValueCallability,
+  CheckerValueCallabilityKind,
 } from '../type-system/checker-signature-parameters.js';
 import type { RuntimeBinding } from './runtime-binding.js';
 import {
@@ -52,13 +52,13 @@ export interface CompositionModelEvaluation {
 }
 
 export function activationModelHandoff(
-  store: KernelStore,
+  projector: CheckerTypeProjector,
   definition: CustomElementDefinition,
   model: CompositionModelEvaluation,
   localKey: string,
 ): CompositionActivationModelHandoff {
   return activationModelHandoffForType(
-    store,
+    projector,
     definition.target.targetType,
     model,
     localKey,
@@ -69,7 +69,7 @@ export function activationModelHandoff(
 }
 
 export function activationModelHandoffForType(
-  store: KernelStore,
+  projector: CheckerTypeProjector,
   targetType: CheckerTypeReference | null,
   model: CompositionModelEvaluation,
   localKey: string,
@@ -77,7 +77,7 @@ export function activationModelHandoffForType(
   ownerIdentityHandle: IdentityHandle | null,
   missingTypeReason: string,
 ): CompositionActivationModelHandoff {
-  const targetTypeShape = readCheckerTypeShape(store, targetType);
+  const targetTypeShape = readCheckerTypeShape(projector.publication, targetType);
   const targetCarrier = targetTypeShape?.carrier ?? null;
   if (targetCarrier == null) {
     return openActivationHandoff(
@@ -108,9 +108,19 @@ export function activationModelHandoffForType(
       activate.openReason,
     );
   }
+  if (activate.kind === 'non-callable') {
+    return new CompositionActivationModelHandoff(
+      CompositionActivateMethodKind.NonCallable,
+      CompositionActivationModelHandoffKind.ActivateNonCallable,
+      null,
+      model.sourceType,
+      null,
+      null,
+    );
+  }
 
   const parameterProjection = activationParameterTypeReference(
-    store,
+    projector,
     activate.checker,
     activate.signatures,
     localKey,
@@ -118,11 +128,11 @@ export function activationModelHandoffForType(
     ownerIdentityHandle,
     activate.location,
   );
-  return activationModelHandoffForParameterProjection(store, model, parameterProjection);
+  return activationModelHandoffForParameterProjection(projector, model, parameterProjection);
 }
 
 function activationModelHandoffForParameterProjection(
-  store: KernelStore,
+  projector: CheckerTypeProjector,
   model: CompositionModelEvaluation,
   parameterProjection: ActivationParameterProjection,
 ): CompositionActivationModelHandoff {
@@ -167,7 +177,7 @@ function activationModelHandoffForParameterProjection(
     );
   }
 
-  const assignable = checkerTypeReferenceAssignable(store, model.sourceType, parameterReference);
+  const assignable = checkerTypeReferenceAssignable(projector.publication, model.sourceType, parameterReference);
   return new CompositionActivationModelHandoff(
     CompositionActivateMethodKind.Present,
     assignable === true
@@ -207,6 +217,9 @@ type ActivateMethodProjection =
     readonly openReason: string;
   }
   | {
+    readonly kind: 'non-callable';
+  }
+  | {
     readonly kind: 'present';
     readonly checker: ts.TypeChecker;
     readonly signatures: readonly ts.Signature[];
@@ -243,30 +256,35 @@ function activateMethodProjection(
   if (activateType == null) {
     return {
       kind: 'open',
-      handoffKind: CompositionActivationModelHandoffKind.ActivationParameterOpen,
+      handoffKind: CompositionActivationModelHandoffKind.Open,
       openReason: 'Resolved component activate member had no readable value type.',
     };
   }
 
-  const signatures = checkerCallableContextSignatures(targetCarrier.checker, activateType);
-  if (signatures.length === 0) {
+  const callability = checkerValueCallability(targetCarrier.checker, activateType);
+  if (callability.kind === CheckerValueCallabilityKind.NonCallable) {
+    return {
+      kind: 'non-callable',
+    };
+  }
+  if (callability.kind === CheckerValueCallabilityKind.Open) {
     return {
       kind: 'open',
-      handoffKind: CompositionActivationModelHandoffKind.ActivationParameterOpen,
-      openReason: 'Resolved component activate member was not callable.',
+      handoffKind: CompositionActivationModelHandoffKind.Open,
+      openReason: 'Resolved component activate member callability remained open.',
     };
   }
 
   return {
     kind: 'present',
     checker: targetCarrier.checker,
-    signatures,
+    signatures: callability.signatures,
     location,
   };
 }
 
 function activationParameterTypeReference(
-  store: KernelStore,
+  projector: CheckerTypeProjector,
   checker: ts.TypeChecker,
   signatures: readonly ts.Signature[],
   localKey: string,
@@ -275,7 +293,7 @@ function activationParameterTypeReference(
   fallbackLocation: ts.Node,
 ): ActivationParameterProjection {
   const frame = activationParameterProjectionFrame(
-    store,
+    projector,
     checker,
     signatures,
     localKey,
@@ -297,7 +315,7 @@ function activationParameterTypeReference(
     };
   }
 
-  const checkerUnion = checkerBackedUnionTypeForReferences(store, parameterReferences);
+  const checkerUnion = checkerBackedUnionTypeForReferences(projector.publication, parameterReferences);
   if (checkerUnion == null) {
     return {
       kind: 'open',
@@ -305,7 +323,7 @@ function activationParameterTypeReference(
     };
   }
 
-  const unionReference = new CheckerTypeProjector(store).ensureProjection({
+  const unionReference = projector.ensureProjection({
     localKey: `${localKey}:activate-parameter-union`,
     checker: checkerUnion.checker,
     type: checkerUnion.type,
@@ -323,7 +341,7 @@ function activationParameterTypeReference(
 }
 
 function activationParameterProjectionFrame(
-  store: KernelStore,
+  projector: CheckerTypeProjector,
   checker: ts.TypeChecker,
   signatures: readonly ts.Signature[],
   localKey: string,
@@ -334,7 +352,7 @@ function activationParameterProjectionFrame(
   const candidates = checkerSignatureCandidateBasis(signatures, 1);
   const parameterReferences = candidates
     .map((candidate) => activateParameterReference(
-      store,
+      projector,
       checker,
       candidate.signature,
       candidate.signatureIndex,
@@ -371,7 +389,7 @@ function activationParameterProjectionIssue(
 }
 
 function activateParameterReference(
-  store: KernelStore,
+  projector: CheckerTypeProjector,
   checker: ts.TypeChecker,
   signature: ts.Signature,
   signatureIndex: number,
@@ -387,7 +405,7 @@ function activateParameterReference(
   const parameterLocation = parameter.symbol.valueDeclaration
     ?? parameter.symbol.declarations?.[0]
     ?? fallbackLocation;
-  const parameterShape = new CheckerTypeProjector(store).ensureProjection({
+  const parameterShape = projector.ensureProjection({
     localKey: `${localKey}:activate-parameter:${signatureIndex}`,
     checker,
     type: parameter.type,

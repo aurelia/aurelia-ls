@@ -1,0 +1,1559 @@
+{
+  "schemaVersion": "aurelia-resource-discovery-host-fixture/1",
+  "copyInputs": [
+    {
+      "sourceFixture": "app-pattern-routed-catalog-storefront",
+      "include": [
+        "package.json",
+        "src/**",
+        "tsconfig.json"
+      ],
+      "destination": "."
+    },
+    {
+      "sourceFixture": "resource-registration-local-templates",
+      "include": [
+        "package.json",
+        "src/**",
+        "tsconfig.json"
+      ],
+      "destination": "host-corpus/local-templates"
+    },
+    {
+      "sourceFixture": "plugin-capability-app-root-isolation",
+      "include": [
+        "src/**",
+        "tsconfig.json"
+      ],
+      "destination": "host-corpus/overlap"
+    },
+    {
+      "sourceFixture": "resource-registration-duplicates",
+      "include": [
+        "package.json",
+        "src/**",
+        "tsconfig.json"
+      ],
+      "destination": "host-corpus/duplicates"
+    },
+    {
+      "sourceFixture": "resource-registration-effective-definitions",
+      "include": [
+        "package.json",
+        "src/**",
+        "tsconfig.json"
+      ],
+      "destination": "host-corpus/effective-definitions"
+    }
+  ],
+  "generatedInputs": [
+    {
+      "id": "guardrail",
+      "destination": "host-corpus/guardrail",
+      "generatorVersion": "resource-discovery-guardrail/1",
+      "lanes": [
+        "current-stable",
+        "minimum"
+      ]
+    },
+    {
+      "id": "long-suffix-duplicates",
+      "destination": "host-corpus/long-scent",
+      "generatorVersion": "resource-discovery-long-suffix/1",
+      "lanes": [
+        "current-stable",
+        "minimum"
+      ]
+    },
+    {
+      "id": "open-coverage",
+      "destination": "host-corpus/open",
+      "generatorVersion": "resource-discovery-open-coverage/1",
+      "lanes": [
+        "current-stable",
+        "minimum"
+      ]
+    },
+    {
+      "id": "package-origins",
+      "destination": "host-corpus/package-origin",
+      "generatorVersion": "resource-discovery-package-origins/1",
+      "lanes": [
+        "current-stable"
+      ]
+    },
+    {
+      "id": "page-drain",
+      "destination": "host-corpus/page-drain",
+      "generatorVersion": "resource-discovery-page-drain/1",
+      "lanes": [
+        "current-stable"
+      ]
+    }
+  ],
+  "projects": [
+    {
+      "projectKey": "host-alpha",
+      "relativeRoot": ".",
+      "sourceInput": "supplied",
+      "relativeFiles": [
+        "host-corpus/duplicates/src/aurelia-assets.d.ts",
+        "host-corpus/duplicates/src/main.ts",
+        "host-corpus/duplicates/src/resource-registration-duplicates-app.html",
+        "host-corpus/duplicates/src/resource-registration-duplicates-app.ts",
+        "host-corpus/duplicates/src/resources.ts",
+        "host-corpus/effective-definitions/src/aurelia-assets.d.ts",
+        "host-corpus/effective-definitions/src/effective-definitions-app.html",
+        "host-corpus/effective-definitions/src/effective-definitions-app.ts",
+        "host-corpus/effective-definitions/src/imported-target-card.ts",
+        "host-corpus/effective-definitions/src/main.ts",
+        "host-corpus/effective-definitions/src/resource-api-errors.ts",
+        "host-corpus/effective-definitions/src/resources.ts",
+        "host-corpus/local-templates/src/aurelia-assets.d.ts",
+        "host-corpus/local-templates/src/global-resources.ts",
+        "host-corpus/local-templates/src/local-templates-app.html",
+        "host-corpus/local-templates/src/local-templates-app.ts",
+        "host-corpus/local-templates/src/main.ts",
+        "host-corpus/local-templates/src/secondary-host.html",
+        "host-corpus/local-templates/src/secondary-host.ts",
+        "host-corpus/long-scent/left/shared/duplicate-card.ts",
+        "host-corpus/long-scent/right/shared/duplicate-card.ts",
+        "host-corpus/long-scent/src/main.ts",
+        "host-corpus/overlap/src/admitted-plugin-app.html",
+        "host-corpus/overlap/src/admitted-plugin-app.ts",
+        "host-corpus/overlap/src/main.ts",
+        "host-corpus/overlap/src/shared-plugin-app.html",
+        "host-corpus/overlap/src/shared-plugin-app.ts",
+        "host-corpus/overlap/src/state.ts",
+        "host-corpus/overlap/src/unadmitted-plugin-app.html",
+        "host-corpus/overlap/src/unadmitted-plugin-app.ts",
+        "host-corpus/package-origin/app/src/main.ts",
+        "host-corpus/page-drain/src/main.ts",
+        "src/app.html",
+        "src/app.ts",
+        "src/aurelia-assets.d.ts",
+        "src/components/item-card.html",
+        "src/components/item-card.ts",
+        "src/main.ts",
+        "src/models/item.ts",
+        "src/routes/item-detail-route.html",
+        "src/routes/item-detail-route.ts",
+        "src/routes/item-list-route.html",
+        "src/routes/item-list-route.ts",
+        "src/services/item-catalog-service.ts",
+        "src/state/catalog-state.ts"
+      ],
+      "excludedRelativeRoots": [
+        ".host-packages",
+        "host-corpus/guardrail",
+        "host-corpus/open",
+        "host-corpus/package-origin/app/node_modules"
+      ]
+    },
+    {
+      "projectKey": "host-beta",
+      "relativeRoot": ".",
+      "sourceInput": "supplied",
+      "relativeFiles": [
+        "host-corpus/overlap/src/admitted-plugin-app.html",
+        "host-corpus/overlap/src/admitted-plugin-app.ts",
+        "host-corpus/overlap/src/main.ts",
+        "host-corpus/overlap/src/shared-plugin-app.html",
+        "host-corpus/overlap/src/shared-plugin-app.ts",
+        "host-corpus/overlap/src/state.ts",
+        "host-corpus/overlap/src/unadmitted-plugin-app.html",
+        "host-corpus/overlap/src/unadmitted-plugin-app.ts"
+      ],
+      "excludedRelativeRoots": []
+    },
+    {
+      "projectKey": "host-guardrail",
+      "relativeRoot": "host-corpus/guardrail",
+      "sourceInput": "discover",
+      "sourceDiscoveryOptions": {
+        "extensions": [
+          ".ts"
+        ],
+        "maxFiles": 1
+      },
+      "excludedRelativeRoots": []
+    },
+    {
+      "projectKey": "host-open",
+      "relativeRoot": "host-corpus/open",
+      "sourceInput": "supplied",
+      "relativeFiles": [
+        "src/a-main.ts"
+      ],
+      "excludedRelativeRoots": []
+    }
+  ],
+  "witnesses": {
+    "projectTemplateAmbiguity": {
+      "admission": "required",
+      "relativePath": "host-corpus/overlap/src/shared-plugin-app.html",
+      "source": {
+        "size": 52,
+        "sha256": "c80ac8fd39ac95e00d2aae028dcac21213cc30af36de68a2a32fa31ceeb51a99",
+        "anchor": "<template>",
+        "anchorOffset": 0,
+        "cursor": {
+          "line": 0,
+          "character": 10
+        }
+      },
+      "excludedAppRootIdentityKey": "typescript-resource:v1:5EsohJa8ZPz7ZfvI5o74H5",
+      "projectKeys": [
+        "host-alpha",
+        "host-beta"
+      ],
+      "projects": [
+        {
+          "projectKey": "host-alpha",
+          "templateIdentityKey": "template-source:v1:ydeLXlnc_mBAQZBxX7Utun",
+          "scopes": [
+            {
+              "scopeIdentityKey": "template-resource-scope:v1:kQWeKrSZ95gLvmXbZfgHGV",
+              "rowCount": 35,
+              "selectableRowCount": 0,
+              "navigationUnavailableIdentityKeys": [
+                "framework-resource:v1:ao3wTTlYz7gkydrxZPeA8g",
+                "framework-resource:v1:XFZvawNY8tSHKfMrkPYlVR",
+                "framework-resource:v1:JmEwA1AmCPgbpnvMLPw58D",
+                "framework-resource:v1:RALZMjfBSmX4ddzovn5609",
+                "framework-resource:v1:UL6PxX66V_s24aIUucaLCa",
+                "framework-resource:v1:DwQXc67bKMgBxSqvewUPt7",
+                "framework-resource:v1:5Cw0YndFzEBfg1QqTZ3THf",
+                "framework-resource:v1:eKzi7MC8mjUYcxn3I_l2QF",
+                "framework-resource:v1:vHWQn-abkAkcdMFER7dheM",
+                "framework-resource:v1:MbyOB0rd7zRpAU1zntucZZ",
+                "framework-resource:v1:12x4HoZx9h_bPJr4W8YG7k",
+                "framework-resource:v1:mAcTTtBp28SDAMHflblLj8",
+                "framework-resource:v1:D_YoVx1_tZjK_HsBt6baFQ",
+                "framework-resource:v1:rPJTn6pYcjOQz7CXSVpuKX",
+                "framework-resource:v1:yvoliOYVJchBwlnUvNp1aD",
+                "framework-resource:v1:_g9f2vA2KLEKUxsOwmKiES",
+                "framework-resource:v1:4IB3hhpkPsBLdXPWhYVTYa",
+                "framework-resource:v1:jFAQaLC0jv5WKRUG0VbxXT",
+                "framework-resource:v1:R_Xe8kqyXWDMIrY8BVI6IK",
+                "framework-resource:v1:4wil6_SwjRTRbF2z3xrkna",
+                "framework-resource:v1:6C6s6QIhanOjNwqYdwlihR",
+                "framework-resource:v1:A06kH3i292JXWo0jcEDbjL",
+                "framework-resource:v1:QM8wgkWsK5FwRJzQ1PtXju",
+                "framework-resource:v1:0De9lC7RwXvUG4SG4zs2i9",
+                "framework-resource:v1:Ou0ahKqK7IJu4ET65i4CiB",
+                "framework-resource:v1:K4dO4eL0tOG7gaAHMXbADm",
+                "framework-resource:v1:UFcH3lWbZSCC8WaY_-LROr",
+                "framework-resource:v1:GmDIWXEaclFXDfPZCc5TTZ",
+                "framework-resource:v1:q62Q2pjVSKinxBFgCjCl5s",
+                "framework-resource:v1:vfuHn1iT2Tv8E05WAiRfz9",
+                "framework-resource:v1:aHxO4elfWRr5A7wif0kkIE",
+                "framework-resource:v1:nIsAFXiPczseixTncQhn66",
+                "framework-resource:v1:nZJdZSlr_4dcfHiC5Te-q8",
+                "framework-resource:v1:wLF9HAV7CnLAGIlNstI5lU",
+                "framework-resource:v1:yGFE27i0AA4ZP_MkERXG5F"
+              ],
+              "navigationUnavailableReason": "external-catalog",
+              "definitionName": "shared-plugin-app",
+              "compilationLane": "app-runtime",
+              "source": {
+                "start": 0,
+                "end": 52
+              },
+              "resourceIdentityKeys": [
+                "framework-resource:v1:ao3wTTlYz7gkydrxZPeA8g",
+                "framework-resource:v1:XFZvawNY8tSHKfMrkPYlVR",
+                "framework-resource:v1:JmEwA1AmCPgbpnvMLPw58D",
+                "framework-resource:v1:RALZMjfBSmX4ddzovn5609",
+                "framework-resource:v1:UL6PxX66V_s24aIUucaLCa",
+                "framework-resource:v1:DwQXc67bKMgBxSqvewUPt7",
+                "framework-resource:v1:5Cw0YndFzEBfg1QqTZ3THf",
+                "framework-resource:v1:eKzi7MC8mjUYcxn3I_l2QF",
+                "framework-resource:v1:vHWQn-abkAkcdMFER7dheM",
+                "framework-resource:v1:MbyOB0rd7zRpAU1zntucZZ",
+                "framework-resource:v1:12x4HoZx9h_bPJr4W8YG7k",
+                "framework-resource:v1:mAcTTtBp28SDAMHflblLj8",
+                "framework-resource:v1:D_YoVx1_tZjK_HsBt6baFQ",
+                "framework-resource:v1:rPJTn6pYcjOQz7CXSVpuKX",
+                "framework-resource:v1:yvoliOYVJchBwlnUvNp1aD",
+                "framework-resource:v1:_g9f2vA2KLEKUxsOwmKiES",
+                "framework-resource:v1:4IB3hhpkPsBLdXPWhYVTYa",
+                "framework-resource:v1:jFAQaLC0jv5WKRUG0VbxXT",
+                "framework-resource:v1:R_Xe8kqyXWDMIrY8BVI6IK",
+                "framework-resource:v1:4wil6_SwjRTRbF2z3xrkna",
+                "framework-resource:v1:6C6s6QIhanOjNwqYdwlihR",
+                "framework-resource:v1:A06kH3i292JXWo0jcEDbjL",
+                "framework-resource:v1:QM8wgkWsK5FwRJzQ1PtXju",
+                "framework-resource:v1:0De9lC7RwXvUG4SG4zs2i9",
+                "framework-resource:v1:Ou0ahKqK7IJu4ET65i4CiB",
+                "framework-resource:v1:K4dO4eL0tOG7gaAHMXbADm",
+                "framework-resource:v1:UFcH3lWbZSCC8WaY_-LROr",
+                "framework-resource:v1:GmDIWXEaclFXDfPZCc5TTZ",
+                "framework-resource:v1:q62Q2pjVSKinxBFgCjCl5s",
+                "framework-resource:v1:vfuHn1iT2Tv8E05WAiRfz9",
+                "framework-resource:v1:aHxO4elfWRr5A7wif0kkIE",
+                "framework-resource:v1:nIsAFXiPczseixTncQhn66",
+                "framework-resource:v1:nZJdZSlr_4dcfHiC5Te-q8",
+                "framework-resource:v1:wLF9HAV7CnLAGIlNstI5lU",
+                "framework-resource:v1:yGFE27i0AA4ZP_MkERXG5F"
+              ],
+              "mustExcludeResourceIdentityKeys": []
+            },
+            {
+              "scopeIdentityKey": "template-resource-scope:v1:sYGd8lgb0DmojJtGcGvScL",
+              "rowCount": 27,
+              "selectableRowCount": 0,
+              "navigationUnavailableIdentityKeys": [
+                "framework-resource:v1:ao3wTTlYz7gkydrxZPeA8g",
+                "framework-resource:v1:XFZvawNY8tSHKfMrkPYlVR",
+                "framework-resource:v1:JmEwA1AmCPgbpnvMLPw58D",
+                "framework-resource:v1:RALZMjfBSmX4ddzovn5609",
+                "framework-resource:v1:UL6PxX66V_s24aIUucaLCa",
+                "framework-resource:v1:DwQXc67bKMgBxSqvewUPt7",
+                "framework-resource:v1:5Cw0YndFzEBfg1QqTZ3THf",
+                "framework-resource:v1:eKzi7MC8mjUYcxn3I_l2QF",
+                "framework-resource:v1:vHWQn-abkAkcdMFER7dheM",
+                "framework-resource:v1:MbyOB0rd7zRpAU1zntucZZ",
+                "framework-resource:v1:12x4HoZx9h_bPJr4W8YG7k",
+                "framework-resource:v1:mAcTTtBp28SDAMHflblLj8",
+                "framework-resource:v1:D_YoVx1_tZjK_HsBt6baFQ",
+                "framework-resource:v1:rPJTn6pYcjOQz7CXSVpuKX",
+                "framework-resource:v1:yvoliOYVJchBwlnUvNp1aD",
+                "framework-resource:v1:_g9f2vA2KLEKUxsOwmKiES",
+                "framework-resource:v1:4IB3hhpkPsBLdXPWhYVTYa",
+                "framework-resource:v1:jFAQaLC0jv5WKRUG0VbxXT",
+                "framework-resource:v1:R_Xe8kqyXWDMIrY8BVI6IK",
+                "framework-resource:v1:4wil6_SwjRTRbF2z3xrkna",
+                "framework-resource:v1:6C6s6QIhanOjNwqYdwlihR",
+                "framework-resource:v1:A06kH3i292JXWo0jcEDbjL",
+                "framework-resource:v1:QM8wgkWsK5FwRJzQ1PtXju",
+                "framework-resource:v1:0De9lC7RwXvUG4SG4zs2i9",
+                "framework-resource:v1:Ou0ahKqK7IJu4ET65i4CiB",
+                "framework-resource:v1:K4dO4eL0tOG7gaAHMXbADm",
+                "framework-resource:v1:UFcH3lWbZSCC8WaY_-LROr"
+              ],
+              "navigationUnavailableReason": "external-catalog",
+              "definitionName": "shared-plugin-app",
+              "compilationLane": "app-runtime",
+              "source": {
+                "start": 0,
+                "end": 52
+              },
+              "resourceIdentityKeys": [
+                "framework-resource:v1:ao3wTTlYz7gkydrxZPeA8g",
+                "framework-resource:v1:XFZvawNY8tSHKfMrkPYlVR",
+                "framework-resource:v1:JmEwA1AmCPgbpnvMLPw58D",
+                "framework-resource:v1:RALZMjfBSmX4ddzovn5609",
+                "framework-resource:v1:UL6PxX66V_s24aIUucaLCa",
+                "framework-resource:v1:DwQXc67bKMgBxSqvewUPt7",
+                "framework-resource:v1:5Cw0YndFzEBfg1QqTZ3THf",
+                "framework-resource:v1:eKzi7MC8mjUYcxn3I_l2QF",
+                "framework-resource:v1:vHWQn-abkAkcdMFER7dheM",
+                "framework-resource:v1:MbyOB0rd7zRpAU1zntucZZ",
+                "framework-resource:v1:12x4HoZx9h_bPJr4W8YG7k",
+                "framework-resource:v1:mAcTTtBp28SDAMHflblLj8",
+                "framework-resource:v1:D_YoVx1_tZjK_HsBt6baFQ",
+                "framework-resource:v1:rPJTn6pYcjOQz7CXSVpuKX",
+                "framework-resource:v1:yvoliOYVJchBwlnUvNp1aD",
+                "framework-resource:v1:_g9f2vA2KLEKUxsOwmKiES",
+                "framework-resource:v1:4IB3hhpkPsBLdXPWhYVTYa",
+                "framework-resource:v1:jFAQaLC0jv5WKRUG0VbxXT",
+                "framework-resource:v1:R_Xe8kqyXWDMIrY8BVI6IK",
+                "framework-resource:v1:4wil6_SwjRTRbF2z3xrkna",
+                "framework-resource:v1:6C6s6QIhanOjNwqYdwlihR",
+                "framework-resource:v1:A06kH3i292JXWo0jcEDbjL",
+                "framework-resource:v1:QM8wgkWsK5FwRJzQ1PtXju",
+                "framework-resource:v1:0De9lC7RwXvUG4SG4zs2i9",
+                "framework-resource:v1:Ou0ahKqK7IJu4ET65i4CiB",
+                "framework-resource:v1:K4dO4eL0tOG7gaAHMXbADm",
+                "framework-resource:v1:UFcH3lWbZSCC8WaY_-LROr"
+              ],
+              "mustExcludeResourceIdentityKeys": [
+                "framework-resource:v1:GmDIWXEaclFXDfPZCc5TTZ",
+                "framework-resource:v1:q62Q2pjVSKinxBFgCjCl5s",
+                "framework-resource:v1:vfuHn1iT2Tv8E05WAiRfz9",
+                "framework-resource:v1:aHxO4elfWRr5A7wif0kkIE",
+                "framework-resource:v1:nIsAFXiPczseixTncQhn66",
+                "framework-resource:v1:nZJdZSlr_4dcfHiC5Te-q8",
+                "framework-resource:v1:wLF9HAV7CnLAGIlNstI5lU",
+                "framework-resource:v1:yGFE27i0AA4ZP_MkERXG5F"
+              ]
+            }
+          ]
+        },
+        {
+          "projectKey": "host-beta",
+          "templateIdentityKey": "template-source:v1:aXAp9VL3Etbnnw5m7uZlUx",
+          "scopes": [
+            {
+              "scopeIdentityKey": "template-resource-scope:v1:DyenXVI3F4LdZsCEbczI_4",
+              "rowCount": 27,
+              "selectableRowCount": 0,
+              "navigationUnavailableIdentityKeys": [
+                "framework-resource:v1:ao3wTTlYz7gkydrxZPeA8g",
+                "framework-resource:v1:XFZvawNY8tSHKfMrkPYlVR",
+                "framework-resource:v1:JmEwA1AmCPgbpnvMLPw58D",
+                "framework-resource:v1:RALZMjfBSmX4ddzovn5609",
+                "framework-resource:v1:UL6PxX66V_s24aIUucaLCa",
+                "framework-resource:v1:DwQXc67bKMgBxSqvewUPt7",
+                "framework-resource:v1:5Cw0YndFzEBfg1QqTZ3THf",
+                "framework-resource:v1:eKzi7MC8mjUYcxn3I_l2QF",
+                "framework-resource:v1:vHWQn-abkAkcdMFER7dheM",
+                "framework-resource:v1:MbyOB0rd7zRpAU1zntucZZ",
+                "framework-resource:v1:12x4HoZx9h_bPJr4W8YG7k",
+                "framework-resource:v1:mAcTTtBp28SDAMHflblLj8",
+                "framework-resource:v1:D_YoVx1_tZjK_HsBt6baFQ",
+                "framework-resource:v1:rPJTn6pYcjOQz7CXSVpuKX",
+                "framework-resource:v1:yvoliOYVJchBwlnUvNp1aD",
+                "framework-resource:v1:_g9f2vA2KLEKUxsOwmKiES",
+                "framework-resource:v1:4IB3hhpkPsBLdXPWhYVTYa",
+                "framework-resource:v1:jFAQaLC0jv5WKRUG0VbxXT",
+                "framework-resource:v1:R_Xe8kqyXWDMIrY8BVI6IK",
+                "framework-resource:v1:4wil6_SwjRTRbF2z3xrkna",
+                "framework-resource:v1:6C6s6QIhanOjNwqYdwlihR",
+                "framework-resource:v1:A06kH3i292JXWo0jcEDbjL",
+                "framework-resource:v1:QM8wgkWsK5FwRJzQ1PtXju",
+                "framework-resource:v1:0De9lC7RwXvUG4SG4zs2i9",
+                "framework-resource:v1:Ou0ahKqK7IJu4ET65i4CiB",
+                "framework-resource:v1:K4dO4eL0tOG7gaAHMXbADm",
+                "framework-resource:v1:UFcH3lWbZSCC8WaY_-LROr"
+              ],
+              "navigationUnavailableReason": "external-catalog",
+              "definitionName": "shared-plugin-app",
+              "compilationLane": "app-runtime",
+              "source": {
+                "start": 0,
+                "end": 52
+              },
+              "resourceIdentityKeys": [
+                "framework-resource:v1:ao3wTTlYz7gkydrxZPeA8g",
+                "framework-resource:v1:XFZvawNY8tSHKfMrkPYlVR",
+                "framework-resource:v1:JmEwA1AmCPgbpnvMLPw58D",
+                "framework-resource:v1:RALZMjfBSmX4ddzovn5609",
+                "framework-resource:v1:UL6PxX66V_s24aIUucaLCa",
+                "framework-resource:v1:DwQXc67bKMgBxSqvewUPt7",
+                "framework-resource:v1:5Cw0YndFzEBfg1QqTZ3THf",
+                "framework-resource:v1:eKzi7MC8mjUYcxn3I_l2QF",
+                "framework-resource:v1:vHWQn-abkAkcdMFER7dheM",
+                "framework-resource:v1:MbyOB0rd7zRpAU1zntucZZ",
+                "framework-resource:v1:12x4HoZx9h_bPJr4W8YG7k",
+                "framework-resource:v1:mAcTTtBp28SDAMHflblLj8",
+                "framework-resource:v1:D_YoVx1_tZjK_HsBt6baFQ",
+                "framework-resource:v1:rPJTn6pYcjOQz7CXSVpuKX",
+                "framework-resource:v1:yvoliOYVJchBwlnUvNp1aD",
+                "framework-resource:v1:_g9f2vA2KLEKUxsOwmKiES",
+                "framework-resource:v1:4IB3hhpkPsBLdXPWhYVTYa",
+                "framework-resource:v1:jFAQaLC0jv5WKRUG0VbxXT",
+                "framework-resource:v1:R_Xe8kqyXWDMIrY8BVI6IK",
+                "framework-resource:v1:4wil6_SwjRTRbF2z3xrkna",
+                "framework-resource:v1:6C6s6QIhanOjNwqYdwlihR",
+                "framework-resource:v1:A06kH3i292JXWo0jcEDbjL",
+                "framework-resource:v1:QM8wgkWsK5FwRJzQ1PtXju",
+                "framework-resource:v1:0De9lC7RwXvUG4SG4zs2i9",
+                "framework-resource:v1:Ou0ahKqK7IJu4ET65i4CiB",
+                "framework-resource:v1:K4dO4eL0tOG7gaAHMXbADm",
+                "framework-resource:v1:UFcH3lWbZSCC8WaY_-LROr"
+              ],
+              "mustExcludeResourceIdentityKeys": [
+                "framework-resource:v1:GmDIWXEaclFXDfPZCc5TTZ",
+                "framework-resource:v1:q62Q2pjVSKinxBFgCjCl5s",
+                "framework-resource:v1:vfuHn1iT2Tv8E05WAiRfz9",
+                "framework-resource:v1:aHxO4elfWRr5A7wif0kkIE",
+                "framework-resource:v1:nIsAFXiPczseixTncQhn66",
+                "framework-resource:v1:nZJdZSlr_4dcfHiC5Te-q8",
+                "framework-resource:v1:wLF9HAV7CnLAGIlNstI5lU",
+                "framework-resource:v1:yGFE27i0AA4ZP_MkERXG5F"
+              ]
+            },
+            {
+              "scopeIdentityKey": "template-resource-scope:v1:yNEIWOdR2n--gCE9MlTL-T",
+              "rowCount": 35,
+              "selectableRowCount": 0,
+              "navigationUnavailableIdentityKeys": [
+                "framework-resource:v1:ao3wTTlYz7gkydrxZPeA8g",
+                "framework-resource:v1:XFZvawNY8tSHKfMrkPYlVR",
+                "framework-resource:v1:JmEwA1AmCPgbpnvMLPw58D",
+                "framework-resource:v1:RALZMjfBSmX4ddzovn5609",
+                "framework-resource:v1:UL6PxX66V_s24aIUucaLCa",
+                "framework-resource:v1:DwQXc67bKMgBxSqvewUPt7",
+                "framework-resource:v1:5Cw0YndFzEBfg1QqTZ3THf",
+                "framework-resource:v1:eKzi7MC8mjUYcxn3I_l2QF",
+                "framework-resource:v1:vHWQn-abkAkcdMFER7dheM",
+                "framework-resource:v1:MbyOB0rd7zRpAU1zntucZZ",
+                "framework-resource:v1:12x4HoZx9h_bPJr4W8YG7k",
+                "framework-resource:v1:mAcTTtBp28SDAMHflblLj8",
+                "framework-resource:v1:D_YoVx1_tZjK_HsBt6baFQ",
+                "framework-resource:v1:rPJTn6pYcjOQz7CXSVpuKX",
+                "framework-resource:v1:yvoliOYVJchBwlnUvNp1aD",
+                "framework-resource:v1:_g9f2vA2KLEKUxsOwmKiES",
+                "framework-resource:v1:4IB3hhpkPsBLdXPWhYVTYa",
+                "framework-resource:v1:jFAQaLC0jv5WKRUG0VbxXT",
+                "framework-resource:v1:R_Xe8kqyXWDMIrY8BVI6IK",
+                "framework-resource:v1:4wil6_SwjRTRbF2z3xrkna",
+                "framework-resource:v1:6C6s6QIhanOjNwqYdwlihR",
+                "framework-resource:v1:A06kH3i292JXWo0jcEDbjL",
+                "framework-resource:v1:QM8wgkWsK5FwRJzQ1PtXju",
+                "framework-resource:v1:0De9lC7RwXvUG4SG4zs2i9",
+                "framework-resource:v1:Ou0ahKqK7IJu4ET65i4CiB",
+                "framework-resource:v1:K4dO4eL0tOG7gaAHMXbADm",
+                "framework-resource:v1:UFcH3lWbZSCC8WaY_-LROr",
+                "framework-resource:v1:GmDIWXEaclFXDfPZCc5TTZ",
+                "framework-resource:v1:q62Q2pjVSKinxBFgCjCl5s",
+                "framework-resource:v1:vfuHn1iT2Tv8E05WAiRfz9",
+                "framework-resource:v1:aHxO4elfWRr5A7wif0kkIE",
+                "framework-resource:v1:nIsAFXiPczseixTncQhn66",
+                "framework-resource:v1:nZJdZSlr_4dcfHiC5Te-q8",
+                "framework-resource:v1:wLF9HAV7CnLAGIlNstI5lU",
+                "framework-resource:v1:yGFE27i0AA4ZP_MkERXG5F"
+              ],
+              "navigationUnavailableReason": "external-catalog",
+              "definitionName": "shared-plugin-app",
+              "compilationLane": "app-runtime",
+              "source": {
+                "start": 0,
+                "end": 52
+              },
+              "resourceIdentityKeys": [
+                "framework-resource:v1:ao3wTTlYz7gkydrxZPeA8g",
+                "framework-resource:v1:XFZvawNY8tSHKfMrkPYlVR",
+                "framework-resource:v1:JmEwA1AmCPgbpnvMLPw58D",
+                "framework-resource:v1:RALZMjfBSmX4ddzovn5609",
+                "framework-resource:v1:UL6PxX66V_s24aIUucaLCa",
+                "framework-resource:v1:DwQXc67bKMgBxSqvewUPt7",
+                "framework-resource:v1:5Cw0YndFzEBfg1QqTZ3THf",
+                "framework-resource:v1:eKzi7MC8mjUYcxn3I_l2QF",
+                "framework-resource:v1:vHWQn-abkAkcdMFER7dheM",
+                "framework-resource:v1:MbyOB0rd7zRpAU1zntucZZ",
+                "framework-resource:v1:12x4HoZx9h_bPJr4W8YG7k",
+                "framework-resource:v1:mAcTTtBp28SDAMHflblLj8",
+                "framework-resource:v1:D_YoVx1_tZjK_HsBt6baFQ",
+                "framework-resource:v1:rPJTn6pYcjOQz7CXSVpuKX",
+                "framework-resource:v1:yvoliOYVJchBwlnUvNp1aD",
+                "framework-resource:v1:_g9f2vA2KLEKUxsOwmKiES",
+                "framework-resource:v1:4IB3hhpkPsBLdXPWhYVTYa",
+                "framework-resource:v1:jFAQaLC0jv5WKRUG0VbxXT",
+                "framework-resource:v1:R_Xe8kqyXWDMIrY8BVI6IK",
+                "framework-resource:v1:4wil6_SwjRTRbF2z3xrkna",
+                "framework-resource:v1:6C6s6QIhanOjNwqYdwlihR",
+                "framework-resource:v1:A06kH3i292JXWo0jcEDbjL",
+                "framework-resource:v1:QM8wgkWsK5FwRJzQ1PtXju",
+                "framework-resource:v1:0De9lC7RwXvUG4SG4zs2i9",
+                "framework-resource:v1:Ou0ahKqK7IJu4ET65i4CiB",
+                "framework-resource:v1:K4dO4eL0tOG7gaAHMXbADm",
+                "framework-resource:v1:UFcH3lWbZSCC8WaY_-LROr",
+                "framework-resource:v1:GmDIWXEaclFXDfPZCc5TTZ",
+                "framework-resource:v1:q62Q2pjVSKinxBFgCjCl5s",
+                "framework-resource:v1:vfuHn1iT2Tv8E05WAiRfz9",
+                "framework-resource:v1:aHxO4elfWRr5A7wif0kkIE",
+                "framework-resource:v1:nIsAFXiPczseixTncQhn66",
+                "framework-resource:v1:nZJdZSlr_4dcfHiC5Te-q8",
+                "framework-resource:v1:wLF9HAV7CnLAGIlNstI5lU",
+                "framework-resource:v1:yGFE27i0AA4ZP_MkERXG5F"
+              ],
+              "mustExcludeResourceIdentityKeys": []
+            }
+          ]
+        }
+      ]
+    },
+    "longSuffixDuplicates": {
+      "admission": "required",
+      "projectKey": "host-alpha",
+      "kind": "custom-element",
+      "name": "duplicate-card",
+      "sharedFinalSegments": "shared/duplicate-card.ts",
+      "rows": [
+        {
+          "identityKey": "typescript-resource:v1:9FI9Lgdc9qpJlcrJE8OVgA",
+          "relativePath": "host-corpus/long-scent/left/shared/duplicate-card.ts",
+          "shortestUniqueSuffix": "left/shared/duplicate-card.ts",
+          "publicName": {
+            "start": 68,
+            "end": 82
+          }
+        },
+        {
+          "identityKey": "typescript-resource:v1:azpBidTgEqjH8hleJeG8v2",
+          "relativePath": "host-corpus/long-scent/right/shared/duplicate-card.ts",
+          "shortestUniqueSuffix": "right/shared/duplicate-card.ts",
+          "publicName": {
+            "start": 68,
+            "end": 82
+          }
+        }
+      ]
+    },
+    "localTemplateAndBindables": {
+      "admission": "required",
+      "projectKey": "host-alpha",
+      "rows": [
+        {
+          "identityKey": "local-template-resource:v1:O7K0fKSFZ2Hd3gEeu4g8CY",
+          "name": "local-chip",
+          "ownerIdentityKey": "typescript-resource:v1:wZ7Erzdq3JePDEWb3Nz_cm",
+          "ownerName": "local-templates-app",
+          "relativePath": "host-corpus/local-templates/src/local-templates-app.html",
+          "publicName": {
+            "start": 42,
+            "end": 52
+          },
+          "bindables": [
+            {
+              "identityKey": "resource-bindable:v1:Vi1cqgkjAl0QiCZaWRvahT",
+              "name": "label",
+              "attribute": "public-label"
+            }
+          ]
+        },
+        {
+          "identityKey": "local-template-resource:v1:Tl4PBXWFHMiN0xwd3vfb-D",
+          "name": "local-icon",
+          "ownerIdentityKey": "typescript-resource:v1:wZ7Erzdq3JePDEWb3Nz_cm",
+          "ownerName": "local-templates-app",
+          "relativePath": "host-corpus/local-templates/src/local-templates-app.html",
+          "publicName": {
+            "start": 283,
+            "end": 293
+          },
+          "bindables": [
+            {
+              "identityKey": "resource-bindable:v1:blJbJ47pWS59m3Vod0O9Bt",
+              "name": "value",
+              "attribute": "value"
+            }
+          ]
+        },
+        {
+          "identityKey": "local-template-resource:v1:_IC3Pmgr7hV-73x_50Ba75",
+          "name": "outer-local",
+          "ownerIdentityKey": "typescript-resource:v1:wZ7Erzdq3JePDEWb3Nz_cm",
+          "ownerName": "local-templates-app",
+          "relativePath": "host-corpus/local-templates/src/local-templates-app.html",
+          "publicName": {
+            "start": 407,
+            "end": 418
+          },
+          "bindables": [
+            {
+              "identityKey": "resource-bindable:v1:tnVPX7y-4wfvwqD11cVfAw",
+              "name": "outerValue",
+              "attribute": "outer-value"
+            }
+          ]
+        },
+        {
+          "identityKey": "local-template-resource:v1:3hu-DkXwQr8JukFX6twbbV",
+          "name": "nested-local",
+          "ownerIdentityKey": "typescript-resource:v1:wZ7Erzdq3JePDEWb3Nz_cm",
+          "ownerName": "local-templates-app",
+          "relativePath": "host-corpus/local-templates/src/local-templates-app.html",
+          "publicName": {
+            "start": 522,
+            "end": 534
+          },
+          "bindables": [
+            {
+              "identityKey": "resource-bindable:v1:4bI3pL_4XWn24PNh4BDZ1P",
+              "name": "nestedValue",
+              "attribute": "nested-value"
+            }
+          ]
+        },
+        {
+          "identityKey": "local-template-resource:v1:9KfnkpHjb7m0Atj1q3KaU-",
+          "name": "local-chip",
+          "ownerIdentityKey": "typescript-resource:v1:I57WkBJEJI_rwx6Ki_swuP",
+          "ownerName": "secondary-host",
+          "relativePath": "host-corpus/local-templates/src/secondary-host.html",
+          "publicName": {
+            "start": 42,
+            "end": 52
+          },
+          "bindables": [
+            {
+              "identityKey": "resource-bindable:v1:ic87mmz7Hwvq725b81Lza6",
+              "name": "secondaryLabel",
+              "attribute": "secondary-label"
+            }
+          ]
+        }
+      ]
+    },
+    "aliasAndCrossKindCollisions": {
+      "admission": "required",
+      "projectKey": "host-alpha",
+      "sameKindRows": [
+        {
+          "identityKey": "typescript-resource:v1:zE-xXYphvL7Qdfqpv_K0--",
+          "kind": "binding-behavior",
+          "name": "duplicateTrack",
+          "relativePath": "host-corpus/duplicates/src/resources.ts",
+          "publicName": { "start": 959, "end": 973 }
+        },
+        {
+          "identityKey": "typescript-resource:v1:z6sa6iUKKQXYmDbslaD0Wm",
+          "kind": "binding-behavior",
+          "name": "duplicateTrack",
+          "relativePath": "host-corpus/duplicates/src/resources.ts",
+          "publicName": { "start": 1084, "end": 1098 }
+        },
+        {
+          "identityKey": "typescript-resource:v1:1wQOYrWXyvikcOAp4VSl8t",
+          "kind": "custom-attribute",
+          "name": "duplicate-flag",
+          "relativePath": "host-corpus/duplicates/src/resources.ts",
+          "publicName": { "start": 489, "end": 503 }
+        },
+        {
+          "identityKey": "typescript-resource:v1:BuMoqRu6hwl5eYQMHNUG9y",
+          "kind": "custom-attribute",
+          "name": "duplicate-flag",
+          "relativePath": "host-corpus/duplicates/src/resources.ts",
+          "publicName": { "start": 573, "end": 587 }
+        },
+        {
+          "identityKey": "typescript-resource:v1:eKfiwZYbF4NKP8SjrmBMgZ",
+          "kind": "custom-element",
+          "name": "duplicate-card",
+          "relativePath": "host-corpus/duplicates/src/resources.ts",
+          "publicName": { "start": 231, "end": 245 }
+        },
+        {
+          "identityKey": "typescript-resource:v1:YiwXspGB0cx_KSGavwll0Y",
+          "kind": "custom-element",
+          "name": "duplicate-card",
+          "relativePath": "host-corpus/duplicates/src/resources.ts",
+          "publicName": { "start": 364, "end": 378 }
+        },
+        {
+          "identityKey": "typescript-resource:v1:srXE8wFVDRnRIEtD6VbIjD",
+          "kind": "custom-element",
+          "name": "canonical-winner",
+          "relativePath": "host-corpus/duplicates/src/resources.ts",
+          "publicName": { "start": 3023, "end": 3039 }
+        },
+        {
+          "identityKey": "typescript-resource:v1:Y0b7gz-_QxkB9aoja6s220",
+          "kind": "custom-element",
+          "name": "canonical-loser",
+          "relativePath": "host-corpus/duplicates/src/resources.ts",
+          "publicName": { "start": 3178, "end": 3193 }
+        },
+        {
+          "identityKey": "typescript-resource:v1:JEDJ_gZpqPafx0l4u09HwH",
+          "kind": "value-converter",
+          "name": "duplicateFormat",
+          "relativePath": "host-corpus/duplicates/src/resources.ts",
+          "publicName": { "start": 656, "end": 671 }
+        },
+        {
+          "identityKey": "typescript-resource:v1:cDD_axH87ix99NCyXrJ1yl",
+          "kind": "value-converter",
+          "name": "duplicateFormat",
+          "relativePath": "host-corpus/duplicates/src/resources.ts",
+          "publicName": { "start": 807, "end": 822 }
+        }
+      ],
+      "aliases": [
+        {
+          "resourceIdentityKey": "typescript-resource:v1:dd1_tUIy4fVH8eDb3WYCzm",
+          "resourceName": "alias-after-primary",
+          "aliasName": "alias-primary",
+          "aliasIdentityKey": "resource-alias:v1:KmrBqAi1dc7nqIpzatGRP7",
+          "relativePath": "host-corpus/duplicates/src/resources.ts",
+          "source": { "start": 2323, "end": 2336 }
+        },
+        {
+          "resourceIdentityKey": "typescript-resource:v1:6ZkGur6DuiTIuSKdUp8cmv",
+          "resourceName": "alias-before-primary",
+          "aliasName": "primary-after-alias",
+          "aliasIdentityKey": "resource-alias:v1:6rgKkGJjMOYiPQkxZH06f7",
+          "relativePath": "host-corpus/duplicates/src/resources.ts",
+          "source": { "start": 2470, "end": 2489 }
+        },
+        {
+          "resourceIdentityKey": "typescript-resource:v1:97e80_ZvGyfA2RwSM4nFAv",
+          "resourceName": "alias-owner-one",
+          "aliasName": "shared-card-alias",
+          "aliasIdentityKey": "resource-alias:v1:qUUmtnt3JJNHCHRMcfGfH-",
+          "relativePath": "host-corpus/duplicates/src/resources.ts",
+          "source": { "start": 1927, "end": 1944 }
+        },
+        {
+          "resourceIdentityKey": "typescript-resource:v1:62nl1tO598tO53ebhz9c6S",
+          "resourceName": "alias-owner-two",
+          "aliasName": "shared-card-alias",
+          "aliasIdentityKey": "resource-alias:v1:ZbUyP6Ip21bugLJvIqPCaI",
+          "relativePath": "host-corpus/duplicates/src/resources.ts",
+          "source": { "start": 2068, "end": 2085 }
+        }
+      ],
+      "crossKindRows": [
+        {
+          "identityKey": "typescript-resource:v1:zxNXJTXXb94kmSL0n7oeEk",
+          "kind": "binding-behavior",
+          "name": "shared",
+          "relativePath": "host-corpus/effective-definitions/src/resources.ts",
+          "publicName": { "start": 3433, "end": 3439 }
+        },
+        {
+          "identityKey": "typescript-resource:v1:RA01Hcju_jOxurmNFarRD7",
+          "kind": "custom-attribute",
+          "name": "shared",
+          "relativePath": "host-corpus/effective-definitions/src/resources.ts",
+          "publicName": { "start": 3105, "end": 3111 }
+        },
+        {
+          "identityKey": "typescript-resource:v1:ikUz5nEJEvfZ5s6UuZMJRo",
+          "kind": "custom-attribute",
+          "name": "shared-control",
+          "relativePath": "host-corpus/effective-definitions/src/resources.ts",
+          "publicName": { "start": 4308, "end": 4322 }
+        },
+        {
+          "identityKey": "typescript-resource:v1:oy3vnsXEaD9yGV3XQEerfz",
+          "kind": "custom-element",
+          "name": "shared",
+          "relativePath": "host-corpus/effective-definitions/src/resources.ts",
+          "publicName": { "start": 2938, "end": 2944 }
+        },
+        {
+          "identityKey": "typescript-resource:v1:BFHTJc5v2jUeyhHUOVVg4W",
+          "kind": "template-controller",
+          "name": "shared-control",
+          "relativePath": "host-corpus/effective-definitions/src/resources.ts",
+          "publicName": { "start": 4213, "end": 4227 }
+        },
+        {
+          "identityKey": "typescript-resource:v1:B7Z3_wTmWy4_QDh-CAFwjK",
+          "kind": "value-converter",
+          "name": "shared",
+          "relativePath": "host-corpus/effective-definitions/src/resources.ts",
+          "publicName": { "start": 3302, "end": 3308 }
+        }
+      ]
+    },
+    "headerOnlyMetadata": {
+      "admission": "required",
+      "projectKey": "host-alpha",
+      "rows": [
+        {
+          "identityKey": "typescript-resource:v1:i7-VvGHSPotbtQ-jgX_9VC",
+          "kind": "binding-behavior",
+          "name": "static-behavior-shadowed",
+          "metadataState": "header-only",
+          "originKind": "project",
+          "relativePath": "host-corpus/effective-definitions/src/resources.ts",
+          "publicName": null,
+          "declaration": { "start": 1503, "end": 1760 },
+          "implementation": { "start": 1565, "end": 1583 },
+          "navigation": { "start": 1565, "end": 1583 },
+          "navigationRole": "implementation",
+          "navigationUnavailableReason": null
+        },
+        {
+          "identityKey": "typescript-resource:v1:Ec31eGjVJEy7YXP2cPhGtj",
+          "kind": "custom-attribute",
+          "name": "static-attribute-shadowed",
+          "metadataState": "header-only",
+          "originKind": "project",
+          "relativePath": "host-corpus/effective-definitions/src/resources.ts",
+          "publicName": null,
+          "declaration": { "start": 1280, "end": 1501 },
+          "implementation": { "start": 1343, "end": 1362 },
+          "navigation": { "start": 1343, "end": 1362 },
+          "navigationRole": "implementation",
+          "navigationUnavailableReason": null
+        },
+        {
+          "identityKey": "typescript-resource:v1:cXIDhg1414VCstqWtz5L3B",
+          "kind": "custom-element",
+          "name": "decorator-shadowed",
+          "metadataState": "header-only",
+          "originKind": "project",
+          "relativePath": "host-corpus/effective-definitions/src/resources.ts",
+          "publicName": null,
+          "declaration": { "start": 1086, "end": 1158 },
+          "implementation": { "start": 1136, "end": 1155 },
+          "navigation": { "start": 1136, "end": 1155 },
+          "navigationRole": "implementation",
+          "navigationUnavailableReason": null
+        },
+        {
+          "identityKey": "typescript-resource:v1:lJiv--wprPODzHgreMXFy8",
+          "kind": "custom-element",
+          "name": "static-shadowed",
+          "metadataState": "header-only",
+          "originKind": "project",
+          "relativePath": "host-corpus/effective-definitions/src/resources.ts",
+          "publicName": null,
+          "declaration": { "start": 844, "end": 1084 },
+          "implementation": { "start": 895, "end": 914 },
+          "navigation": { "start": 895, "end": 914 },
+          "navigationRole": "implementation",
+          "navigationUnavailableReason": null
+        },
+        {
+          "identityKey": "typescript-resource:v1:X3_c5PhV53YQaNT_Nl4hy1",
+          "kind": "value-converter",
+          "name": "decorator-converter-shadowed",
+          "metadataState": "header-only",
+          "originKind": "project",
+          "relativePath": "host-corpus/effective-definitions/src/resources.ts",
+          "publicName": null,
+          "declaration": { "start": 1762, "end": 1920 },
+          "implementation": { "start": 1823, "end": 1851 },
+          "navigation": { "start": 1823, "end": 1851 },
+          "navigationRole": "implementation",
+          "navigationUnavailableReason": null
+        }
+      ]
+    },
+    "packageOrigins": {
+      "admission": "current-only",
+      "projectKey": "host-alpha",
+      "rows": [
+        {
+          "identityKey": "typescript-resource:v1:zCJQhkzFyTXAsII48F_LH-",
+          "name": "installed-package-card",
+          "originKind": "package",
+          "packageName": "@acme/installed-resource-kit",
+          "moduleKey": "host-corpus/package-origin/app/node_modules/@acme/installed-resource-kit/src/index.ts",
+          "relativePath": "host-corpus/package-origin/app/node_modules/@acme/installed-resource-kit/src/index.ts",
+          "publicName": { "start": 80, "end": 102 },
+          "implementation": { "start": 169, "end": 189 },
+          "navigationRole": "public-name"
+        },
+        {
+          "identityKey": "typescript-resource:v1:kJLaQlJhqTVZD5c1jQ97qA",
+          "name": "linked-package-card",
+          "originKind": "package",
+          "packageName": "@acme/linked-resource-kit",
+          "moduleKey": ".host-packages/linked-resource-kit/src/index.ts",
+          "relativePath": ".host-packages/linked-resource-kit/src/index.ts",
+          "publicName": { "start": 80, "end": 99 },
+          "implementation": { "start": 163, "end": 180 },
+          "navigationRole": "public-name"
+        },
+        {
+          "identityKey": "typescript-resource:v1:DR3pJed-AmNocL1iZ8ANmU",
+          "name": "package-origin-app",
+          "originKind": "project",
+          "packageName": null,
+          "moduleKey": "host-corpus/package-origin/app/src/main.ts",
+          "relativePath": "host-corpus/package-origin/app/src/main.ts",
+          "publicName": { "start": 246, "end": 264 },
+          "implementation": { "start": 450, "end": 466 },
+          "navigationRole": "public-name"
+        }
+      ]
+    },
+    "pathlessFramework": {
+      "admission": "required",
+      "projectKey": "host-alpha",
+      "identityKey": "framework-resource:v1:12x4HoZx9h_bPJr4W8YG7k",
+      "kind": "template-controller",
+      "name": "repeat",
+      "originKind": "framework",
+      "packageName": "@aurelia/runtime-html",
+      "publicName": null,
+      "navigationRole": null,
+      "navigationUnavailableReason": "external-catalog"
+    },
+    "guardrail": {
+      "admission": "required",
+      "projectKey": "host-guardrail",
+      "sourceDiscoveryOptions": {
+        "extensions": [
+          ".ts"
+        ],
+        "maxFiles": 1
+      },
+      "result": "answered",
+      "coverage": "truncated",
+      "selection": "not-applicable",
+      "displayTextIncludes": "source-discovery guardrail",
+      "rowCount": 28,
+      "completeness": {
+        "fullDefinitions": 28,
+        "headerOnly": 0,
+        "visibilityOnly": 0,
+        "localTemplates": 0,
+        "excludedCompilerSyntax": 19,
+        "unnamedDefinitions": 0,
+        "unresolvedModules": 0,
+        "openVisibility": 0
+      },
+      "appRow": {
+        "identityKey": "typescript-resource:v1:QR1GGbNHIgBozNkhlI0cnW",
+        "name": "guardrail-app",
+        "relativePath": "host-corpus/guardrail/src/a-main.ts",
+        "publicName": { "start": 75, "end": 88 }
+      },
+      "excludedDefinitionRelativePath": "host-corpus/guardrail/src/z-over-limit.ts",
+      "excludedDefinitionName": "over-limit",
+      "availability": {
+        "result": "answered",
+        "selection": "exact",
+        "coverage": "truncated",
+        "rowCount": 27
+      }
+    },
+    "openCoverage": {
+      "admission": "required",
+      "projectKey": "host-open",
+      "unresolvedModuleSpecifier": "./missing-resource",
+      "result": "answered",
+      "selection": "not-applicable",
+      "coverage": "open",
+      "rowCount": 28,
+      "completeness": {
+        "fullDefinitions": 28,
+        "headerOnly": 0,
+        "visibilityOnly": 0,
+        "localTemplates": 0,
+        "excludedCompilerSyntax": 19,
+        "unnamedDefinitions": 0,
+        "unresolvedModules": 1,
+        "openVisibility": 0
+      },
+      "appRow": {
+        "identityKey": "typescript-resource:v1:V-gCP1whFcd-3Sk_GtH8Mr",
+        "name": "open-coverage-app",
+        "metadataState": "full-definition",
+        "relativePath": "host-corpus/open/src/a-main.ts",
+        "publicName": { "start": 104, "end": 121 }
+      },
+      "availability": {
+        "result": "answered",
+        "selection": "exact",
+        "coverage": "open",
+        "rowCount": 27
+      }
+    },
+    "pageDrain": {
+      "admission": "current-only",
+      "projectKey": "host-alpha",
+      "result": "answered",
+      "selection": "not-applicable",
+      "coverage": "open",
+      "pageSize": 500,
+      "pageRequestCount": 2,
+      "generatedResourceCount": 501,
+      "rowCount": 606,
+      "completeness": {
+        "fullDefinitions": 601,
+        "headerOnly": 5,
+        "visibilityOnly": 0,
+        "localTemplates": 5,
+        "excludedCompilerSyntax": 60,
+        "unnamedDefinitions": 0,
+        "unresolvedModules": 0,
+        "openVisibility": 2
+      },
+      "first": {
+        "identityKey": "typescript-resource:v1:uUlPN8dTsbnF50cz40Wrk9",
+        "name": "page-drain-000",
+        "relativePath": "host-corpus/page-drain/src/main.ts",
+        "publicName": { "start": 75, "end": 89 }
+      },
+      "last": {
+        "identityKey": "typescript-resource:v1:PRF4xWb1OJ6VM7Xdd8ywya",
+        "name": "page-drain-500",
+        "relativePath": "host-corpus/page-drain/src/main.ts",
+        "publicName": { "start": 65075, "end": 65089 }
+      }
+    },
+    "shiftedAndRemovedNavigation": {
+      "admission": "required",
+      "projectKey": "host-alpha",
+      "availabilityRace": {
+        "template": {
+          "relativePath": "host-corpus/long-scent/src/main.ts",
+          "size": 524,
+          "sha256": "ac34eda309963fbb30e712231a22ca078500d23fdbdcafbc9d0a6a8cda61ebf3",
+          "anchor": "<duplicate-card>",
+          "anchorOffset": 264,
+          "cursor": { "line": 6, "character": 29 }
+        },
+        "excludedAppRootIdentityKey": "typescript-resource:v1:b079pogsRRexNF_ZxBe0Wk",
+        "baseline": {
+          "projectKey": "host-alpha",
+          "result": "answered",
+          "selection": "exact",
+          "coverage": "complete",
+          "rowCount": 28,
+          "selectableRowCount": 1,
+          "navigationUnavailableIdentityKeys": [
+            "framework-resource:v1:ao3wTTlYz7gkydrxZPeA8g",
+            "framework-resource:v1:XFZvawNY8tSHKfMrkPYlVR",
+            "framework-resource:v1:JmEwA1AmCPgbpnvMLPw58D",
+            "framework-resource:v1:RALZMjfBSmX4ddzovn5609",
+            "framework-resource:v1:UL6PxX66V_s24aIUucaLCa",
+            "framework-resource:v1:DwQXc67bKMgBxSqvewUPt7",
+            "framework-resource:v1:5Cw0YndFzEBfg1QqTZ3THf",
+            "framework-resource:v1:eKzi7MC8mjUYcxn3I_l2QF",
+            "framework-resource:v1:vHWQn-abkAkcdMFER7dheM",
+            "framework-resource:v1:MbyOB0rd7zRpAU1zntucZZ",
+            "framework-resource:v1:12x4HoZx9h_bPJr4W8YG7k",
+            "framework-resource:v1:mAcTTtBp28SDAMHflblLj8",
+            "framework-resource:v1:D_YoVx1_tZjK_HsBt6baFQ",
+            "framework-resource:v1:rPJTn6pYcjOQz7CXSVpuKX",
+            "framework-resource:v1:yvoliOYVJchBwlnUvNp1aD",
+            "framework-resource:v1:_g9f2vA2KLEKUxsOwmKiES",
+            "framework-resource:v1:4IB3hhpkPsBLdXPWhYVTYa",
+            "framework-resource:v1:jFAQaLC0jv5WKRUG0VbxXT",
+            "framework-resource:v1:R_Xe8kqyXWDMIrY8BVI6IK",
+            "framework-resource:v1:4wil6_SwjRTRbF2z3xrkna",
+            "framework-resource:v1:6C6s6QIhanOjNwqYdwlihR",
+            "framework-resource:v1:A06kH3i292JXWo0jcEDbjL",
+            "framework-resource:v1:QM8wgkWsK5FwRJzQ1PtXju",
+            "framework-resource:v1:0De9lC7RwXvUG4SG4zs2i9",
+            "framework-resource:v1:Ou0ahKqK7IJu4ET65i4CiB",
+            "framework-resource:v1:K4dO4eL0tOG7gaAHMXbADm",
+            "framework-resource:v1:UFcH3lWbZSCC8WaY_-LROr"
+          ],
+          "templateIdentityKey": "template-source:v1:Tkv7BxS6oxVmzjOgIRC496",
+          "scopeIdentityKey": "template-resource-scope:v1:jrk2dmORqV2AsPAQBBOVBN",
+          "definitionName": "long-suffix-app",
+          "compilationLane": "app-runtime",
+          "templateSource": {
+            "relativePath": "host-corpus/long-scent/src/main.ts",
+            "start": 264,
+            "end": 297
+          },
+          "rows": [
+            { "identityKey": "typescript-resource:v1:9FI9Lgdc9qpJlcrJE8OVgA", "state": "available", "visibilityKind": "local" },
+            { "identityKey": "framework-resource:v1:ao3wTTlYz7gkydrxZPeA8g", "state": "available", "visibilityKind": "local" },
+            { "identityKey": "framework-resource:v1:XFZvawNY8tSHKfMrkPYlVR", "state": "available", "visibilityKind": "local" },
+            { "identityKey": "framework-resource:v1:JmEwA1AmCPgbpnvMLPw58D", "state": "available", "visibilityKind": "local" },
+            { "identityKey": "framework-resource:v1:RALZMjfBSmX4ddzovn5609", "state": "available", "visibilityKind": "local" },
+            { "identityKey": "framework-resource:v1:UL6PxX66V_s24aIUucaLCa", "state": "available", "visibilityKind": "local" },
+            { "identityKey": "framework-resource:v1:DwQXc67bKMgBxSqvewUPt7", "state": "available", "visibilityKind": "local" },
+            { "identityKey": "framework-resource:v1:5Cw0YndFzEBfg1QqTZ3THf", "state": "available", "visibilityKind": "local" },
+            { "identityKey": "framework-resource:v1:eKzi7MC8mjUYcxn3I_l2QF", "state": "available", "visibilityKind": "local" },
+            { "identityKey": "framework-resource:v1:vHWQn-abkAkcdMFER7dheM", "state": "available", "visibilityKind": "local" },
+            { "identityKey": "framework-resource:v1:MbyOB0rd7zRpAU1zntucZZ", "state": "available", "visibilityKind": "local" },
+            { "identityKey": "framework-resource:v1:12x4HoZx9h_bPJr4W8YG7k", "state": "available", "visibilityKind": "local" },
+            { "identityKey": "framework-resource:v1:mAcTTtBp28SDAMHflblLj8", "state": "available", "visibilityKind": "local" },
+            { "identityKey": "framework-resource:v1:D_YoVx1_tZjK_HsBt6baFQ", "state": "available", "visibilityKind": "local" },
+            { "identityKey": "framework-resource:v1:rPJTn6pYcjOQz7CXSVpuKX", "state": "available", "visibilityKind": "local" },
+            { "identityKey": "framework-resource:v1:yvoliOYVJchBwlnUvNp1aD", "state": "available", "visibilityKind": "local" },
+            { "identityKey": "framework-resource:v1:_g9f2vA2KLEKUxsOwmKiES", "state": "available", "visibilityKind": "local" },
+            { "identityKey": "framework-resource:v1:4IB3hhpkPsBLdXPWhYVTYa", "state": "available", "visibilityKind": "local" },
+            { "identityKey": "framework-resource:v1:jFAQaLC0jv5WKRUG0VbxXT", "state": "available", "visibilityKind": "local" },
+            { "identityKey": "framework-resource:v1:R_Xe8kqyXWDMIrY8BVI6IK", "state": "available", "visibilityKind": "local" },
+            { "identityKey": "framework-resource:v1:4wil6_SwjRTRbF2z3xrkna", "state": "available", "visibilityKind": "local" },
+            { "identityKey": "framework-resource:v1:6C6s6QIhanOjNwqYdwlihR", "state": "available", "visibilityKind": "local" },
+            { "identityKey": "framework-resource:v1:A06kH3i292JXWo0jcEDbjL", "state": "available", "visibilityKind": "local" },
+            { "identityKey": "framework-resource:v1:QM8wgkWsK5FwRJzQ1PtXju", "state": "available", "visibilityKind": "local" },
+            { "identityKey": "framework-resource:v1:0De9lC7RwXvUG4SG4zs2i9", "state": "available", "visibilityKind": "local" },
+            { "identityKey": "framework-resource:v1:Ou0ahKqK7IJu4ET65i4CiB", "state": "available", "visibilityKind": "local" },
+            { "identityKey": "framework-resource:v1:K4dO4eL0tOG7gaAHMXbADm", "state": "available", "visibilityKind": "local" },
+            { "identityKey": "framework-resource:v1:UFcH3lWbZSCC8WaY_-LROr", "state": "available", "visibilityKind": "local" }
+          ]
+        },
+        "scopeEdit": {
+          "relativePath": "host-corpus/long-scent/src/main.ts",
+          "before": "  dependencies: [LeftLongSuffixDuplicateCard, RightLongSuffixDuplicateCard],",
+          "after": "  dependencies: [RightLongSuffixDuplicateCard],",
+          "editedSize": 495,
+          "editedSha256": "9e23fd6bf8ce276391580db74f51b134ab9fc4faa9a2b6e1d7c725b0cf8f393a",
+          "keptGlobalRegistration": "  .register(LeftLongSuffixDuplicateCard, RightLongSuffixDuplicateCard)",
+          "inventoryIdentityKeysStillPresent": [
+            "typescript-resource:v1:9FI9Lgdc9qpJlcrJE8OVgA",
+            "typescript-resource:v1:azpBidTgEqjH8hleJeG8v2"
+          ],
+          "expectedAvailability": {
+            "projectKey": "host-alpha",
+            "result": "answered",
+            "selection": "exact",
+            "coverage": "complete",
+            "templateIdentityKey": "template-source:v1:Tkv7BxS6oxVmzjOgIRC496",
+            "scopeIdentityKey": "template-resource-scope:v1:117AGAh7rKTCWxZX1Ks9NB",
+            "definitionName": "long-suffix-app",
+            "compilationLane": "app-runtime",
+            "templateSource": {
+              "relativePath": "host-corpus/long-scent/src/main.ts",
+              "start": 264,
+              "end": 297
+            },
+            "rowCount": 28,
+            "removed": {
+              "identityKey": "typescript-resource:v1:9FI9Lgdc9qpJlcrJE8OVgA",
+              "state": "available",
+              "visibilityKind": "local"
+            },
+            "added": {
+              "identityKey": "typescript-resource:v1:azpBidTgEqjH8hleJeG8v2",
+              "state": "available",
+              "visibilityKind": "local"
+            },
+            "retainedIdentityKeys": [
+              "framework-resource:v1:ao3wTTlYz7gkydrxZPeA8g",
+              "framework-resource:v1:XFZvawNY8tSHKfMrkPYlVR",
+              "framework-resource:v1:JmEwA1AmCPgbpnvMLPw58D",
+              "framework-resource:v1:RALZMjfBSmX4ddzovn5609",
+              "framework-resource:v1:UL6PxX66V_s24aIUucaLCa",
+              "framework-resource:v1:DwQXc67bKMgBxSqvewUPt7",
+              "framework-resource:v1:5Cw0YndFzEBfg1QqTZ3THf",
+              "framework-resource:v1:eKzi7MC8mjUYcxn3I_l2QF",
+              "framework-resource:v1:vHWQn-abkAkcdMFER7dheM",
+              "framework-resource:v1:MbyOB0rd7zRpAU1zntucZZ",
+              "framework-resource:v1:12x4HoZx9h_bPJr4W8YG7k",
+              "framework-resource:v1:mAcTTtBp28SDAMHflblLj8",
+              "framework-resource:v1:D_YoVx1_tZjK_HsBt6baFQ",
+              "framework-resource:v1:rPJTn6pYcjOQz7CXSVpuKX",
+              "framework-resource:v1:yvoliOYVJchBwlnUvNp1aD",
+              "framework-resource:v1:_g9f2vA2KLEKUxsOwmKiES",
+              "framework-resource:v1:4IB3hhpkPsBLdXPWhYVTYa",
+              "framework-resource:v1:jFAQaLC0jv5WKRUG0VbxXT",
+              "framework-resource:v1:R_Xe8kqyXWDMIrY8BVI6IK",
+              "framework-resource:v1:4wil6_SwjRTRbF2z3xrkna",
+              "framework-resource:v1:6C6s6QIhanOjNwqYdwlihR",
+              "framework-resource:v1:A06kH3i292JXWo0jcEDbjL",
+              "framework-resource:v1:QM8wgkWsK5FwRJzQ1PtXju",
+              "framework-resource:v1:0De9lC7RwXvUG4SG4zs2i9",
+              "framework-resource:v1:Ou0ahKqK7IJu4ET65i4CiB",
+              "framework-resource:v1:K4dO4eL0tOG7gaAHMXbADm",
+              "framework-resource:v1:UFcH3lWbZSCC8WaY_-LROr"
+            ]
+          },
+          "retiredBaselineScopeReproof": {
+            "requestedProjectKey": "host-alpha",
+            "requestedScopeIdentityKey": "template-resource-scope:v1:jrk2dmORqV2AsPAQBBOVBN",
+            "response": {
+              "projectKey": "host-alpha",
+              "result": "answered",
+              "selection": "absent",
+              "coverage": "complete",
+              "displayText": "Choose a current template compiler scope before inspecting available resources.",
+              "selectedTemplate": null,
+              "candidates": [
+                {
+                  "templateIdentityKey": "template-source:v1:Tkv7BxS6oxVmzjOgIRC496",
+                  "scopeIdentityKey": "template-resource-scope:v1:117AGAh7rKTCWxZX1Ks9NB",
+                  "definitionName": "long-suffix-app",
+                  "compilationLane": "app-runtime",
+                  "source": {
+                    "relativePath": "host-corpus/long-scent/src/main.ts",
+                    "start": 264,
+                    "end": 297
+                  }
+                }
+              ],
+              "rows": [],
+              "completeness": {
+                "fullDefinitions": 30,
+                "headerOnly": 0,
+                "visibilityOnly": 0,
+                "localTemplates": 0,
+                "excludedCompilerSyntax": 19,
+                "unnamedDefinitions": 0,
+                "unresolvedModules": 0,
+                "openVisibility": 2
+              }
+            }
+          },
+          "restartWithoutSelection": {
+            "requestedProjectKey": null,
+            "requestedScopeIdentityKey": null,
+            "response": {
+              "projectKey": "host-alpha",
+              "result": "answered",
+              "selection": "exact",
+              "coverage": "complete",
+              "displayText": "long-suffix-app: 28 available runtime resource(s).",
+              "rowCount": 28,
+              "selectableRowCount": 1,
+              "navigationUnavailableIdentityKeys": [
+                "framework-resource:v1:ao3wTTlYz7gkydrxZPeA8g",
+                "framework-resource:v1:XFZvawNY8tSHKfMrkPYlVR",
+                "framework-resource:v1:JmEwA1AmCPgbpnvMLPw58D",
+                "framework-resource:v1:RALZMjfBSmX4ddzovn5609",
+                "framework-resource:v1:UL6PxX66V_s24aIUucaLCa",
+                "framework-resource:v1:DwQXc67bKMgBxSqvewUPt7",
+                "framework-resource:v1:5Cw0YndFzEBfg1QqTZ3THf",
+                "framework-resource:v1:eKzi7MC8mjUYcxn3I_l2QF",
+                "framework-resource:v1:vHWQn-abkAkcdMFER7dheM",
+                "framework-resource:v1:MbyOB0rd7zRpAU1zntucZZ",
+                "framework-resource:v1:12x4HoZx9h_bPJr4W8YG7k",
+                "framework-resource:v1:mAcTTtBp28SDAMHflblLj8",
+                "framework-resource:v1:D_YoVx1_tZjK_HsBt6baFQ",
+                "framework-resource:v1:rPJTn6pYcjOQz7CXSVpuKX",
+                "framework-resource:v1:yvoliOYVJchBwlnUvNp1aD",
+                "framework-resource:v1:_g9f2vA2KLEKUxsOwmKiES",
+                "framework-resource:v1:4IB3hhpkPsBLdXPWhYVTYa",
+                "framework-resource:v1:jFAQaLC0jv5WKRUG0VbxXT",
+                "framework-resource:v1:R_Xe8kqyXWDMIrY8BVI6IK",
+                "framework-resource:v1:4wil6_SwjRTRbF2z3xrkna",
+                "framework-resource:v1:6C6s6QIhanOjNwqYdwlihR",
+                "framework-resource:v1:A06kH3i292JXWo0jcEDbjL",
+                "framework-resource:v1:QM8wgkWsK5FwRJzQ1PtXju",
+                "framework-resource:v1:0De9lC7RwXvUG4SG4zs2i9",
+                "framework-resource:v1:Ou0ahKqK7IJu4ET65i4CiB",
+                "framework-resource:v1:K4dO4eL0tOG7gaAHMXbADm",
+                "framework-resource:v1:UFcH3lWbZSCC8WaY_-LROr"
+              ],
+              "selectedTemplate": {
+                "templateIdentityKey": "template-source:v1:Tkv7BxS6oxVmzjOgIRC496",
+                "scopeIdentityKey": "template-resource-scope:v1:117AGAh7rKTCWxZX1Ks9NB",
+                "definitionName": "long-suffix-app",
+                "compilationLane": "app-runtime",
+                "source": {
+                  "relativePath": "host-corpus/long-scent/src/main.ts",
+                  "start": 264,
+                  "end": 297
+                }
+              },
+              "candidates": [
+                {
+                  "templateIdentityKey": "template-source:v1:Tkv7BxS6oxVmzjOgIRC496",
+                  "scopeIdentityKey": "template-resource-scope:v1:117AGAh7rKTCWxZX1Ks9NB",
+                  "definitionName": "long-suffix-app",
+                  "compilationLane": "app-runtime",
+                  "source": {
+                    "relativePath": "host-corpus/long-scent/src/main.ts",
+                    "start": 264,
+                    "end": 297
+                  }
+                }
+              ],
+              "rows": [
+                { "identityKey": "typescript-resource:v1:azpBidTgEqjH8hleJeG8v2", "state": "available", "visibilityKind": "local" },
+                { "identityKey": "framework-resource:v1:ao3wTTlYz7gkydrxZPeA8g", "state": "available", "visibilityKind": "local" },
+                { "identityKey": "framework-resource:v1:XFZvawNY8tSHKfMrkPYlVR", "state": "available", "visibilityKind": "local" },
+                { "identityKey": "framework-resource:v1:JmEwA1AmCPgbpnvMLPw58D", "state": "available", "visibilityKind": "local" },
+                { "identityKey": "framework-resource:v1:RALZMjfBSmX4ddzovn5609", "state": "available", "visibilityKind": "local" },
+                { "identityKey": "framework-resource:v1:UL6PxX66V_s24aIUucaLCa", "state": "available", "visibilityKind": "local" },
+                { "identityKey": "framework-resource:v1:DwQXc67bKMgBxSqvewUPt7", "state": "available", "visibilityKind": "local" },
+                { "identityKey": "framework-resource:v1:5Cw0YndFzEBfg1QqTZ3THf", "state": "available", "visibilityKind": "local" },
+                { "identityKey": "framework-resource:v1:eKzi7MC8mjUYcxn3I_l2QF", "state": "available", "visibilityKind": "local" },
+                { "identityKey": "framework-resource:v1:vHWQn-abkAkcdMFER7dheM", "state": "available", "visibilityKind": "local" },
+                { "identityKey": "framework-resource:v1:MbyOB0rd7zRpAU1zntucZZ", "state": "available", "visibilityKind": "local" },
+                { "identityKey": "framework-resource:v1:12x4HoZx9h_bPJr4W8YG7k", "state": "available", "visibilityKind": "local" },
+                { "identityKey": "framework-resource:v1:mAcTTtBp28SDAMHflblLj8", "state": "available", "visibilityKind": "local" },
+                { "identityKey": "framework-resource:v1:D_YoVx1_tZjK_HsBt6baFQ", "state": "available", "visibilityKind": "local" },
+                { "identityKey": "framework-resource:v1:rPJTn6pYcjOQz7CXSVpuKX", "state": "available", "visibilityKind": "local" },
+                { "identityKey": "framework-resource:v1:yvoliOYVJchBwlnUvNp1aD", "state": "available", "visibilityKind": "local" },
+                { "identityKey": "framework-resource:v1:_g9f2vA2KLEKUxsOwmKiES", "state": "available", "visibilityKind": "local" },
+                { "identityKey": "framework-resource:v1:4IB3hhpkPsBLdXPWhYVTYa", "state": "available", "visibilityKind": "local" },
+                { "identityKey": "framework-resource:v1:jFAQaLC0jv5WKRUG0VbxXT", "state": "available", "visibilityKind": "local" },
+                { "identityKey": "framework-resource:v1:R_Xe8kqyXWDMIrY8BVI6IK", "state": "available", "visibilityKind": "local" },
+                { "identityKey": "framework-resource:v1:4wil6_SwjRTRbF2z3xrkna", "state": "available", "visibilityKind": "local" },
+                { "identityKey": "framework-resource:v1:6C6s6QIhanOjNwqYdwlihR", "state": "available", "visibilityKind": "local" },
+                { "identityKey": "framework-resource:v1:A06kH3i292JXWo0jcEDbjL", "state": "available", "visibilityKind": "local" },
+                { "identityKey": "framework-resource:v1:QM8wgkWsK5FwRJzQ1PtXju", "state": "available", "visibilityKind": "local" },
+                { "identityKey": "framework-resource:v1:0De9lC7RwXvUG4SG4zs2i9", "state": "available", "visibilityKind": "local" },
+                { "identityKey": "framework-resource:v1:Ou0ahKqK7IJu4ET65i4CiB", "state": "available", "visibilityKind": "local" },
+                { "identityKey": "framework-resource:v1:K4dO4eL0tOG7gaAHMXbADm", "state": "available", "visibilityKind": "local" },
+                { "identityKey": "framework-resource:v1:UFcH3lWbZSCC8WaY_-LROr", "state": "available", "visibilityKind": "local" }
+              ],
+              "completeness": {
+                "fullDefinitions": 30,
+                "headerOnly": 0,
+                "visibilityOnly": 0,
+                "localTemplates": 0,
+                "excludedCompilerSyntax": 19,
+                "unnamedDefinitions": 0,
+                "unresolvedModules": 0,
+                "openVisibility": 2
+              }
+            }
+          }
+        },
+        "afterRemoval": {
+          "inventory": {
+            "projectKey": "host-alpha",
+            "result": "answered",
+            "selection": "not-applicable",
+            "coverage": "open",
+            "rowCount": 29,
+            "completeness": {
+              "fullDefinitions": 29,
+              "headerOnly": 0,
+              "visibilityOnly": 0,
+              "localTemplates": 0,
+              "excludedCompilerSyntax": 19,
+              "unnamedDefinitions": 0,
+              "unresolvedModules": 0,
+              "openVisibility": 2
+            },
+            "removedIdentityKey": "typescript-resource:v1:azpBidTgEqjH8hleJeG8v2",
+            "removedIdentityPresent": false
+          },
+          "retiredRightOnlyScopeReproof": {
+            "requestedProjectKey": "host-alpha",
+            "requestedScopeIdentityKey": "template-resource-scope:v1:117AGAh7rKTCWxZX1Ks9NB",
+            "response": {
+              "projectKey": "host-alpha",
+              "result": "answered",
+              "selection": "absent",
+              "coverage": "complete",
+              "displayText": "Choose a current template compiler scope before inspecting available resources.",
+              "selectedTemplate": null,
+              "candidates": [
+                {
+                  "templateIdentityKey": "template-source:v1:Tkv7BxS6oxVmzjOgIRC496",
+                  "scopeIdentityKey": "template-resource-scope:v1:b_7B4CPaLeGYVX6iYBfdsJ",
+                  "definitionName": "long-suffix-app",
+                  "compilationLane": "app-runtime",
+                  "source": {
+                    "relativePath": "host-corpus/long-scent/src/main.ts",
+                    "start": 264,
+                    "end": 297
+                  }
+                }
+              ],
+              "rows": [],
+              "completeness": {
+                "fullDefinitions": 29,
+                "headerOnly": 0,
+                "visibilityOnly": 0,
+                "localTemplates": 0,
+                "excludedCompilerSyntax": 19,
+                "unnamedDefinitions": 0,
+                "unresolvedModules": 0,
+                "openVisibility": 2
+              }
+            }
+          },
+          "restartWithoutSelection": {
+            "requestedProjectKey": null,
+            "requestedScopeIdentityKey": null,
+            "response": {
+              "projectKey": "host-alpha",
+              "result": "answered",
+              "selection": "exact",
+              "coverage": "complete",
+              "displayText": "long-suffix-app: 28 available runtime resource(s).",
+              "rowCount": 28,
+              "selectableRowCount": 1,
+              "navigationUnavailableIdentityKeys": [
+                "framework-resource:v1:ao3wTTlYz7gkydrxZPeA8g",
+                "framework-resource:v1:XFZvawNY8tSHKfMrkPYlVR",
+                "framework-resource:v1:JmEwA1AmCPgbpnvMLPw58D",
+                "framework-resource:v1:RALZMjfBSmX4ddzovn5609",
+                "framework-resource:v1:UL6PxX66V_s24aIUucaLCa",
+                "framework-resource:v1:DwQXc67bKMgBxSqvewUPt7",
+                "framework-resource:v1:5Cw0YndFzEBfg1QqTZ3THf",
+                "framework-resource:v1:eKzi7MC8mjUYcxn3I_l2QF",
+                "framework-resource:v1:vHWQn-abkAkcdMFER7dheM",
+                "framework-resource:v1:MbyOB0rd7zRpAU1zntucZZ",
+                "framework-resource:v1:12x4HoZx9h_bPJr4W8YG7k",
+                "framework-resource:v1:mAcTTtBp28SDAMHflblLj8",
+                "framework-resource:v1:D_YoVx1_tZjK_HsBt6baFQ",
+                "framework-resource:v1:rPJTn6pYcjOQz7CXSVpuKX",
+                "framework-resource:v1:yvoliOYVJchBwlnUvNp1aD",
+                "framework-resource:v1:_g9f2vA2KLEKUxsOwmKiES",
+                "framework-resource:v1:4IB3hhpkPsBLdXPWhYVTYa",
+                "framework-resource:v1:jFAQaLC0jv5WKRUG0VbxXT",
+                "framework-resource:v1:R_Xe8kqyXWDMIrY8BVI6IK",
+                "framework-resource:v1:4wil6_SwjRTRbF2z3xrkna",
+                "framework-resource:v1:6C6s6QIhanOjNwqYdwlihR",
+                "framework-resource:v1:A06kH3i292JXWo0jcEDbjL",
+                "framework-resource:v1:QM8wgkWsK5FwRJzQ1PtXju",
+                "framework-resource:v1:0De9lC7RwXvUG4SG4zs2i9",
+                "framework-resource:v1:Ou0ahKqK7IJu4ET65i4CiB",
+                "framework-resource:v1:K4dO4eL0tOG7gaAHMXbADm",
+                "framework-resource:v1:UFcH3lWbZSCC8WaY_-LROr"
+              ],
+              "selectedTemplate": {
+                "templateIdentityKey": "template-source:v1:Tkv7BxS6oxVmzjOgIRC496",
+                "scopeIdentityKey": "template-resource-scope:v1:b_7B4CPaLeGYVX6iYBfdsJ",
+                "definitionName": "long-suffix-app",
+                "compilationLane": "app-runtime",
+                "source": {
+                  "relativePath": "host-corpus/long-scent/src/main.ts",
+                  "start": 264,
+                  "end": 297
+                }
+              },
+              "candidates": [
+                {
+                  "templateIdentityKey": "template-source:v1:Tkv7BxS6oxVmzjOgIRC496",
+                  "scopeIdentityKey": "template-resource-scope:v1:b_7B4CPaLeGYVX6iYBfdsJ",
+                  "definitionName": "long-suffix-app",
+                  "compilationLane": "app-runtime",
+                  "source": {
+                    "relativePath": "host-corpus/long-scent/src/main.ts",
+                    "start": 264,
+                    "end": 297
+                  }
+                }
+              ],
+              "rows": [
+                { "identityKey": "framework-resource:v1:ao3wTTlYz7gkydrxZPeA8g", "state": "available", "visibilityKind": "local" },
+                { "identityKey": "framework-resource:v1:XFZvawNY8tSHKfMrkPYlVR", "state": "available", "visibilityKind": "local" },
+                { "identityKey": "framework-resource:v1:JmEwA1AmCPgbpnvMLPw58D", "state": "available", "visibilityKind": "local" },
+                { "identityKey": "framework-resource:v1:RALZMjfBSmX4ddzovn5609", "state": "available", "visibilityKind": "local" },
+                { "identityKey": "framework-resource:v1:UL6PxX66V_s24aIUucaLCa", "state": "available", "visibilityKind": "local" },
+                { "identityKey": "framework-resource:v1:DwQXc67bKMgBxSqvewUPt7", "state": "available", "visibilityKind": "local" },
+                { "identityKey": "framework-resource:v1:5Cw0YndFzEBfg1QqTZ3THf", "state": "available", "visibilityKind": "local" },
+                { "identityKey": "framework-resource:v1:eKzi7MC8mjUYcxn3I_l2QF", "state": "available", "visibilityKind": "local" },
+                { "identityKey": "framework-resource:v1:vHWQn-abkAkcdMFER7dheM", "state": "available", "visibilityKind": "local" },
+                { "identityKey": "framework-resource:v1:MbyOB0rd7zRpAU1zntucZZ", "state": "available", "visibilityKind": "local" },
+                { "identityKey": "framework-resource:v1:12x4HoZx9h_bPJr4W8YG7k", "state": "available", "visibilityKind": "local" },
+                { "identityKey": "framework-resource:v1:mAcTTtBp28SDAMHflblLj8", "state": "available", "visibilityKind": "local" },
+                { "identityKey": "framework-resource:v1:D_YoVx1_tZjK_HsBt6baFQ", "state": "available", "visibilityKind": "local" },
+                { "identityKey": "framework-resource:v1:rPJTn6pYcjOQz7CXSVpuKX", "state": "available", "visibilityKind": "local" },
+                { "identityKey": "framework-resource:v1:yvoliOYVJchBwlnUvNp1aD", "state": "available", "visibilityKind": "local" },
+                { "identityKey": "framework-resource:v1:_g9f2vA2KLEKUxsOwmKiES", "state": "available", "visibilityKind": "local" },
+                { "identityKey": "framework-resource:v1:4IB3hhpkPsBLdXPWhYVTYa", "state": "available", "visibilityKind": "local" },
+                { "identityKey": "framework-resource:v1:jFAQaLC0jv5WKRUG0VbxXT", "state": "available", "visibilityKind": "local" },
+                { "identityKey": "framework-resource:v1:R_Xe8kqyXWDMIrY8BVI6IK", "state": "available", "visibilityKind": "local" },
+                { "identityKey": "framework-resource:v1:4wil6_SwjRTRbF2z3xrkna", "state": "available", "visibilityKind": "local" },
+                { "identityKey": "framework-resource:v1:6C6s6QIhanOjNwqYdwlihR", "state": "available", "visibilityKind": "local" },
+                { "identityKey": "framework-resource:v1:A06kH3i292JXWo0jcEDbjL", "state": "available", "visibilityKind": "local" },
+                { "identityKey": "framework-resource:v1:QM8wgkWsK5FwRJzQ1PtXju", "state": "available", "visibilityKind": "local" },
+                { "identityKey": "framework-resource:v1:0De9lC7RwXvUG4SG4zs2i9", "state": "available", "visibilityKind": "local" },
+                { "identityKey": "framework-resource:v1:Ou0ahKqK7IJu4ET65i4CiB", "state": "available", "visibilityKind": "local" },
+                { "identityKey": "framework-resource:v1:K4dO4eL0tOG7gaAHMXbADm", "state": "available", "visibilityKind": "local" },
+                { "identityKey": "framework-resource:v1:UFcH3lWbZSCC8WaY_-LROr", "state": "available", "visibilityKind": "local" },
+                { "identityKey": "typescript-resource:v1:9FI9Lgdc9qpJlcrJE8OVgA", "state": "available", "visibilityKind": "local" }
+              ],
+              "completeness": {
+                "fullDefinitions": 29,
+                "headerOnly": 0,
+                "visibilityOnly": 0,
+                "localTemplates": 0,
+                "excludedCompilerSyntax": 19,
+                "unnamedDefinitions": 0,
+                "unresolvedModules": 0,
+                "openVisibility": 2
+              }
+            }
+          }
+        }
+      },
+      "shifted": {
+        "identityKey": "typescript-resource:v1:9FI9Lgdc9qpJlcrJE8OVgA",
+        "relativePath": "host-corpus/long-scent/left/shared/duplicate-card.ts",
+        "prefix": "// shifted resource\n",
+        "initialPublicName": { "start": 68, "end": 82 },
+        "shiftedPublicName": { "start": 88, "end": 102 }
+      },
+      "removed": {
+        "identityKey": "typescript-resource:v1:azpBidTgEqjH8hleJeG8v2",
+        "relativePath": "host-corpus/long-scent/right/shared/duplicate-card.ts",
+        "replacement": "export class RightLongSuffixDuplicateCard {}\n",
+        "expectedPresentAfterRefresh": false
+      }
+    }
+  },
+  "lanePolicy": {
+    "requiredWorkerLanes": [
+      "current-stable",
+      "minimum"
+    ],
+    "minimumVersion": "1.91.0",
+    "authoritativeTransport": "worker",
+    "optionalTransports": [
+      "ipc"
+    ],
+    "currentStableOnlyWitnesses": [
+      "packageOrigins",
+      "pageDrain"
+    ]
+  }
+}

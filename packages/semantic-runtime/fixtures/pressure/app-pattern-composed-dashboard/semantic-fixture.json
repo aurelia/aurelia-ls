@@ -211,8 +211,12 @@
       "role": "signature",
       "filters": [
         {
-          "field": "componentInputFulfillmentKind",
-          "value": "promise"
+          "field": "componentInputConsumptionKind",
+          "value": "await-thenable"
+        },
+        {
+          "field": "componentInputValueStateKind",
+          "value": "fulfilled"
         },
         {
           "field": "componentResolutionKind",
@@ -242,8 +246,12 @@
       "role": "signature",
       "filters": [
         {
-          "field": "templateInputFulfillmentKind",
-          "value": "promise"
+          "field": "templateInputConsumptionKind",
+          "value": "await-thenable"
+        },
+        {
+          "field": "templateInputValueStateKind",
+          "value": "fulfilled"
         },
         {
           "field": "componentResolutionKind",

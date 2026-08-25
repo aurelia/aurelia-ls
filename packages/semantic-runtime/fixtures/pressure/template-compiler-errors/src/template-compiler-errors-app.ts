@@ -1,5 +1,7 @@
-import { bindable, customAttribute } from '@aurelia/runtime-html';
+import { bindable, customAttribute, customElement } from '@aurelia/runtime-html';
+import template from './template-compiler-errors-app.html';
 
+@customElement({ name: 'template-compiler-errors-app', template })
 export class TemplateCompilerErrorsApp {
   enabled = true;
 }

@@ -1,4 +1,4 @@
-import { type Answer } from "../answer.js";
+import { OutcomeKind, type Answer } from "../answer.js";
 import type { Inquiry } from "../inquiry.js";
 import { LensId } from "../lens.js";
 import { RepoRootLocus } from "../locus.js";
@@ -30,7 +30,7 @@ import { answerFrameworkRouter } from "./framework-router-lenses.js";
 const DEFAULT_TERRITORY_ROWS = 600;
 const UNSHAPED = "<unshaped>";
 
-/** Framework export shapes a product concept most directly mirrors; used for ordering, not hiding. */
+/** Framework export shapes a product concept most directly corresponds to; used for ordering, not hiding. */
 const INSTANTIABLE_SHAPES = new Set(["class", "di-interface"]);
 
 /** How a family's capability constructs are read from its source lens. */
@@ -91,32 +91,54 @@ export function enumerateFrameworkTerritoryConstructs(
   sourceProject: SourceProject,
   budgetRows: number = DEFAULT_TERRITORY_ROWS,
 ): readonly FrameworkTerritoryConstruct[] {
+  return readFrameworkTerritoryFamilies(sourceProject, budgetRows)
+    .flatMap((family) => family.constructs);
+}
+
+interface FrameworkTerritoryFamilyRead {
+  readonly family: TerritoryFamily;
+  readonly constructs: readonly FrameworkTerritoryConstruct[];
+  readonly basisClosure: FrameworkCoverageBasisClosure;
+  readonly basisRowCount: number;
+  readonly basisTotalRows: number | null;
+  readonly basisContinuationCount: number;
+}
+
+function readFrameworkTerritoryFamilies(
+  sourceProject: SourceProject,
+  budgetRows: number,
+): readonly FrameworkTerritoryFamilyRead[] {
+  return TERRITORY_FAMILIES.map((family) =>
+    readFrameworkTerritoryFamily(sourceProject, family, budgetRows),
+  );
+}
+
+function readFrameworkTerritoryFamily(
+  sourceProject: SourceProject,
+  family: TerritoryFamily,
+  budgetRows: number,
+): FrameworkTerritoryFamilyRead {
   const constructs: FrameworkTerritoryConstruct[] = [];
-  for (const family of TERRITORY_FAMILIES) {
-    const answer = answerFrameworkFamily(family.lens, family.projection, sourceProject, budgetRows);
-    if (answer === undefined) {
-      continue;
-    }
-    const rows = readArrayField(answer.value, family.arrayField);
-    if (family.shape === FrameworkFamilyShape.Catalog) {
-      for (const row of rows) {
-        const symbol = family.symbolOf === undefined ? null : family.symbolOf(row);
-        if (symbol === null || symbol.length === 0) {
-          continue;
-        }
-        constructs.push({
-          family: family.id,
-          lensId: family.lens,
-          familyShape: family.shape,
-          identity: symbol,
-          symbol,
-          kind: family.kindOf === undefined ? null : family.kindOf(row),
-          exportShape: family.shapeOf === undefined ? null : family.shapeOf(row),
-          packageId: family.packageOf === undefined ? null : family.packageOf(row),
-        });
+  const answer = answerFrameworkFamily(family.lens, family.projection, sourceProject, budgetRows);
+  const rows = readArrayField(answer?.value, family.arrayField);
+  if (family.shape === FrameworkFamilyShape.Catalog) {
+    for (const row of rows) {
+      const symbol = family.symbolOf === undefined ? null : family.symbolOf(row);
+      if (symbol === null || symbol.length === 0) {
+        continue;
       }
-      continue;
+      constructs.push({
+        family: family.id,
+        lensId: family.lens,
+        familyShape: family.shape,
+        identity: symbol,
+        symbol,
+        kind: family.kindOf === undefined ? null : family.kindOf(row),
+        exportShape: family.shapeOf === undefined ? null : family.shapeOf(row),
+        packageId: family.packageOf === undefined ? null : family.packageOf(row),
+      });
     }
+  } else {
     const seen = new Set<string>();
     for (const field of family.facetFields ?? []) {
       for (const row of rows) {
@@ -142,7 +164,24 @@ export function enumerateFrameworkTerritoryConstructs(
       }
     }
   }
-  return constructs;
+  const basisClosure = frameworkTerritoryAnswerIsComplete(answer)
+    ? FrameworkCoverageBasisClosure.Complete
+    : FrameworkCoverageBasisClosure.Partial;
+  return {
+    family,
+    constructs,
+    basisClosure,
+    basisRowCount: rows.length,
+    basisTotalRows: answer?.page?.total
+      ?? (basisClosure === FrameworkCoverageBasisClosure.Complete ? rows.length : null),
+    basisContinuationCount: answer?.continuations.length ?? 0,
+  };
+}
+
+function frameworkTerritoryAnswerIsComplete(answer: Answer | undefined): boolean {
+  return answer !== undefined
+    && (answer.outcome === OutcomeKind.Hit || answer.outcome === OutcomeKind.Miss)
+    && answer.page?.nextCursor === undefined;
 }
 
 export interface FrameworkReverseCoverageShapeGroup {
@@ -151,72 +190,193 @@ export interface FrameworkReverseCoverageShapeGroup {
   readonly symbols: readonly string[];
 }
 
-export interface FrameworkReverseCoverageFamily {
-  readonly family: string;
-  readonly total: number;
-  readonly mirrored: number;
-  readonly mirroredWithRoleEvidence: number;
-  readonly instantiableTotal: number;
-  readonly instantiableMirrored: number;
-  readonly notMirroredByShape: readonly FrameworkReverseCoverageShapeGroup[];
+/** Closure of the contributing framework inventory page for one coverage family. */
+export const enum FrameworkCoverageBasisClosure {
+  /** The owning framework lens reported the complete current family basis. */
+  Complete = "complete",
+  /** The owning framework lens retained further or otherwise unclosed basis rows. */
+  Partial = "partial",
 }
 
-/** Reverse coverage: catalog-family constructs joined to semantic-runtime auLink mirror targets. */
+export interface FrameworkReverseCoverageFamily {
+  readonly family: string;
+  readonly basisClosure: FrameworkCoverageBasisClosure;
+  readonly basisRowCount: number;
+  readonly basisTotalRows: number | null;
+  readonly basisContinuationCount: number;
+  readonly mappingBasisClosure: FrameworkCoverageBasisClosure;
+  readonly mappingBasisRowCount: number;
+  readonly mappingBasisTotalRows: number | null;
+  readonly mappingBasisContinuationCount: number;
+  readonly total: number;
+  /** Constructs with either an unqualified correspondence or a named semantic-facet model. */
+  readonly modeled: number;
+  /** Constructs with a facetless auLink placement whose correspondence breadth is unqualified. */
+  readonly unqualifiedModeled: number;
+  /** Constructs modeled only through one or more named semantic facets. */
+  readonly facetOnlyModeled: number;
+  /** Constructs whose only placement has an unresolved final facet value. */
+  readonly unresolvedMappings: number;
+  readonly modeledWithRoleEvidence: number;
+  readonly instantiableTotal: number;
+  readonly instantiableModeled: number;
+  readonly instantiableUnqualifiedModeled: number;
+  readonly instantiableFacetOnlyModeled: number;
+  readonly instantiableUnresolvedMappings: number;
+  readonly facetOnlyByShape: readonly FrameworkReverseCoverageShapeGroup[];
+  readonly unresolvedByShape: readonly FrameworkReverseCoverageShapeGroup[];
+  readonly notModeledByShape: readonly FrameworkReverseCoverageShapeGroup[];
+}
+
+const enum FrameworkReverseCoverageState {
+  /** No product placement models this framework construct. */
+  Unmodeled = "unmodeled",
+  /** One or more named facets model decisions without claiming whole-target parity. */
+  SemanticFacet = "semantic-facet",
+  /** A placement exists, but its final facet value cannot be recovered. */
+  Unresolved = "unresolved",
+  /** At least one facetless placement establishes unqualified correspondence. */
+  Unqualified = "unqualified",
+}
+
+interface FrameworkReverseCoverageEntry {
+  readonly shape: string;
+  readonly state: FrameworkReverseCoverageState;
+  readonly roleEvidence: boolean;
+}
+
+/** Reverse coverage: catalog-family constructs joined to unqualified and semantic-facet auLink models. */
 export function frameworkReverseCoverage(
   sourceProject: SourceProject,
   budgetRows: number = DEFAULT_TERRITORY_ROWS,
 ): readonly FrameworkReverseCoverageFamily[] {
   const mirrorAnswer = answerFrameworkFamily(LensId.BridgeAuLink, "mirror", sourceProject, budgetRows);
-  const mirrorRoleBySymbol = new Map<string, number>();
-  for (const row of readArrayField(mirrorAnswer?.value, "mirror")) {
-    const symbol = stringField(row, "symbolName");
-    if (symbol !== null) {
-      mirrorRoleBySymbol.set(symbol, numberField(row, "roleEvidenceCount"));
+  const mirrorRows = readArrayField(mirrorAnswer?.value, "mirror");
+  const mappingBasisClosure = frameworkTerritoryAnswerIsComplete(mirrorAnswer)
+    ? FrameworkCoverageBasisClosure.Complete
+    : FrameworkCoverageBasisClosure.Partial;
+  const mirrorByLinkId = new Map<string, {
+    readonly unqualifiedPlacementCount: number;
+    readonly semanticFacetPlacementCount: number;
+    readonly unresolvedFacetPlacementCount: number;
+    readonly roleEvidenceCount: number;
+  }>();
+  for (const row of mirrorRows) {
+    const linkId = stringField(row, "linkId");
+    if (linkId !== null) {
+      mirrorByLinkId.set(linkId, {
+        unqualifiedPlacementCount: numberField(row, "unqualifiedPlacementCount"),
+        semanticFacetPlacementCount: numberField(row, "semanticFacetPlacementCount"),
+        unresolvedFacetPlacementCount: numberField(row, "unresolvedFacetPlacementCount"),
+        roleEvidenceCount: numberField(row, "roleEvidenceCount"),
+      });
     }
   }
 
+  const territoryFamilies = readFrameworkTerritoryFamilies(sourceProject, budgetRows)
+    .filter((read) => read.family.shape === FrameworkFamilyShape.Catalog);
   const families: FrameworkReverseCoverageFamily[] = [];
-  for (const family of TERRITORY_FAMILIES) {
-    if (family.shape !== FrameworkFamilyShape.Catalog) {
-      continue;
-    }
-    const answer = answerFrameworkFamily(family.lens, family.projection, sourceProject, budgetRows);
-    const bySymbol = new Map<string, { shape: string; mirrored: boolean; roleEvidence: boolean }>();
-    for (const row of readArrayField(answer?.value, family.arrayField)) {
-      const symbol = family.symbolOf === undefined ? null : family.symbolOf(row);
-      if (symbol === null || symbol.length === 0) {
+  for (const familyRead of territoryFamilies) {
+    const familyId = familyRead.family.id;
+    const bySymbol = new Map<string, FrameworkReverseCoverageEntry>();
+    for (const construct of familyRead.constructs) {
+      if (construct.symbol === null) {
         continue;
       }
-      const shape = (family.shapeOf === undefined ? null : family.shapeOf(row)) ?? UNSHAPED;
-      const existing = bySymbol.get(symbol);
+      const linkId = construct.packageId === null
+        ? null
+        : `${construct.packageId}:${construct.symbol}`;
+      const identity = linkId ?? `unknown-package:${construct.symbol}`;
+      const shape = construct.exportShape ?? UNSHAPED;
+      const existing = bySymbol.get(identity);
       if (existing === undefined) {
-        const role = mirrorRoleBySymbol.get(symbol);
-        bySymbol.set(symbol, { shape, mirrored: role !== undefined, roleEvidence: (role ?? 0) > 0 });
+        const mirror = linkId === null ? undefined : mirrorByLinkId.get(linkId);
+        const state = mirror == null
+          ? FrameworkReverseCoverageState.Unmodeled
+          : mirror.unqualifiedPlacementCount > 0
+            ? FrameworkReverseCoverageState.Unqualified
+            : mirror.semanticFacetPlacementCount > 0
+              ? FrameworkReverseCoverageState.SemanticFacet
+              : mirror.unresolvedFacetPlacementCount > 0
+                ? FrameworkReverseCoverageState.Unresolved
+                : FrameworkReverseCoverageState.Unmodeled;
+        bySymbol.set(identity, {
+          shape,
+          state,
+          roleEvidence: (
+            state === FrameworkReverseCoverageState.Unqualified
+            || state === FrameworkReverseCoverageState.SemanticFacet
+          )
+            && (mirror?.roleEvidenceCount ?? 0) > 0,
+        });
       } else if (!INSTANTIABLE_SHAPES.has(existing.shape) && INSTANTIABLE_SHAPES.has(shape)) {
-        existing.shape = shape;
+        bySymbol.set(identity, { ...existing, shape });
       }
     }
     const constructs = [...bySymbol.values()];
     const instantiable = constructs.filter((entry) => INSTANTIABLE_SHAPES.has(entry.shape));
+    const unqualifiedModeled = constructs.filter(
+      (entry) => entry.state === FrameworkReverseCoverageState.Unqualified,
+    );
+    const facetOnlyModeled = constructs.filter((entry) => entry.state === FrameworkReverseCoverageState.SemanticFacet);
+    const unresolvedMappings = constructs.filter(
+      (entry) => entry.state === FrameworkReverseCoverageState.Unresolved,
+    );
+    const instantiableUnqualifiedModeled = instantiable.filter(
+      (entry) => entry.state === FrameworkReverseCoverageState.Unqualified,
+    );
+    const instantiableFacetOnlyModeled = instantiable.filter(
+      (entry) => entry.state === FrameworkReverseCoverageState.SemanticFacet,
+    );
+    const instantiableUnresolvedMappings = instantiable.filter(
+      (entry) => entry.state === FrameworkReverseCoverageState.Unresolved,
+    );
     families.push({
-      family: family.id,
+      family: familyId,
+      basisClosure: familyRead.basisClosure,
+      basisRowCount: familyRead.basisRowCount,
+      basisTotalRows: familyRead.basisTotalRows,
+      basisContinuationCount: familyRead.basisContinuationCount,
+      mappingBasisClosure,
+      mappingBasisRowCount: mirrorRows.length,
+      mappingBasisTotalRows: mirrorAnswer?.page?.total
+        ?? (mappingBasisClosure === FrameworkCoverageBasisClosure.Complete ? mirrorRows.length : null),
+      mappingBasisContinuationCount: mirrorAnswer?.continuations.length ?? 0,
       total: constructs.length,
-      mirrored: constructs.filter((entry) => entry.mirrored).length,
-      mirroredWithRoleEvidence: constructs.filter((entry) => entry.roleEvidence).length,
+      modeled: unqualifiedModeled.length + facetOnlyModeled.length,
+      unqualifiedModeled: unqualifiedModeled.length,
+      facetOnlyModeled: facetOnlyModeled.length,
+      unresolvedMappings: unresolvedMappings.length,
+      modeledWithRoleEvidence: constructs.filter((entry) => entry.roleEvidence).length,
       instantiableTotal: instantiable.length,
-      instantiableMirrored: instantiable.filter((entry) => entry.mirrored).length,
-      notMirroredByShape: groupNotMirroredByShape(bySymbol),
+      instantiableModeled: instantiableUnqualifiedModeled.length + instantiableFacetOnlyModeled.length,
+      instantiableUnqualifiedModeled: instantiableUnqualifiedModeled.length,
+      instantiableFacetOnlyModeled: instantiableFacetOnlyModeled.length,
+      instantiableUnresolvedMappings: instantiableUnresolvedMappings.length,
+      facetOnlyByShape: groupCoverageByShape(
+        bySymbol,
+        FrameworkReverseCoverageState.SemanticFacet,
+      ),
+      unresolvedByShape: groupCoverageByShape(
+        bySymbol,
+        FrameworkReverseCoverageState.Unresolved,
+      ),
+      notModeledByShape: groupCoverageByShape(
+        bySymbol,
+        FrameworkReverseCoverageState.Unmodeled,
+      ),
     });
   }
   return families;
 }
 
-function groupNotMirroredByShape(
-  bySymbol: ReadonlyMap<string, { shape: string; mirrored: boolean }>,
+function groupCoverageByShape(
+  bySymbol: ReadonlyMap<string, FrameworkReverseCoverageEntry>,
+  state: FrameworkReverseCoverageState,
 ): readonly FrameworkReverseCoverageShapeGroup[] {
   const byShape = new Map<string, string[]>();
   for (const [symbol, entry] of bySymbol) {
-    if (entry.mirrored) {
+    if (entry.state !== state) {
       continue;
     }
     const bucket = byShape.get(entry.shape) ?? [];

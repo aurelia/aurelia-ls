@@ -7,6 +7,7 @@ verifyLazyClaimLifetime();
 verifyRetainedAnswerReuseAndVeto();
 verifyFailureRetentionAndRetry();
 verifyRetainedAnswerByteBudget();
+verifyAnswerStateSurvivesValueEviction();
 verifyContinuationEnvelopeByteBudget();
 verifyRetainedRecordBudgetPreservesActiveParents();
 verifyEpochDisposalIndexes();
@@ -62,6 +63,18 @@ function verifyRetainedAnswerReuseAndVeto() {
   expect(afterReuse.retainedAnswerHits === 1, 'Retained-answer hit counter should increment on reuse.');
   expect(afterReuse.disposedQueryClaimRecords === 2, 'Answer-side query-claim disposal should be counted on materialization and reuse.');
 
+  const differentlyShaped = graph.answer(queryInput('reuse', {
+    responsePolicyKey: 'contract-bounded-response-policy',
+  }), () => {
+    materializations += 1;
+    return hit('differently shaped answer');
+  });
+  expect(
+    differentlyShaped.summary === 'differently shaped answer',
+    'Different response-shaping policy must not reuse a retained DTO from the same semantic query.',
+  );
+  expect(materializations === 2, 'Different response policy should materialize one distinct answer.');
+
   const vetoed = graph.answer(queryInput('reuse'), () => {
     materializations += 1;
     return hit('vetoed answer');
@@ -70,7 +83,7 @@ function verifyRetainedAnswerReuseAndVeto() {
   });
 
   expect(vetoed.summary === 'vetoed answer', 'A boundary reuse veto should force rematerialization.');
-  expect(materializations === 2, 'Boundary reuse veto should run the answer closure exactly once more.');
+  expect(materializations === 3, 'Boundary reuse veto should run the answer closure exactly once more.');
 }
 
 function verifyFailureRetentionAndRetry() {
@@ -140,6 +153,35 @@ function verifyRetainedAnswerByteBudget() {
   expect(snapshot.budgetDisposedAnswerValues > 0, 'Answer-value byte budget pruning should be visible in counters.');
 }
 
+function verifyAnswerStateSurvivesValueEviction() {
+  const graph = new QueryClaimGraph('contract-answer-state-retention', retainSmallAnswerPolicy({
+    retainedAnswerTotalByteLimit: 1,
+  }));
+  graph.answer(queryInput('state-retention'), () => hit('open paged answer', {
+    rows: [{ id: 1 }],
+  }, {
+    coverage: 'open',
+    page: {
+      returnedRows: 1,
+      totalRows: 3,
+      exhausted: false,
+      nextCursor: 'opaque',
+      clamped: true,
+      byteClamped: false,
+    },
+  }));
+
+  const record = graph.readRecords()[0];
+  expect(record?.retainedAnswerValue === false, 'The test must evict the retained answer value.');
+  expect(record?.result === 'answered', 'Claim history should retain the answer result after value eviction.');
+  expect(record?.selection === 'not-applicable', 'Claim history should retain selection after value eviction.');
+  expect(record?.coverage === 'open', 'Claim history should retain semantic coverage after value eviction.');
+  expect(record?.pageState?.returnedRows === 1, 'Claim history should retain returned page rows after value eviction.');
+  expect(record?.pageState?.totalRows === 3, 'Claim history should retain the known page total after value eviction.');
+  expect(record?.pageState?.exhausted === false && record?.pageState?.hasNextCursor === true, 'Claim history should retain page progress after value eviction.');
+  expect(record?.pageState?.clamped === true, 'Claim history should retain transport clamping after value eviction.');
+}
+
 function verifyContinuationEnvelopeByteBudget() {
   const graph = new QueryClaimGraph('contract-continuation-byte-budget', retainSmallAnswerPolicy({
     retainedAnswerTotalByteLimit: 260,
@@ -199,6 +241,7 @@ function queryInput(queryKey, options = {}) {
     queryKind: options.queryKind ?? 'contract-query',
     queryKey,
     locusKey: options.locusKey ?? `locus:${queryKey}`,
+    responsePolicyKey: options.responsePolicyKey ?? 'contract-default-response-policy',
     epochKeys: options.epochKeys,
     materializationPolicy: options.materializationPolicy ?? 'projection-only',
   };
@@ -206,7 +249,9 @@ function queryInput(queryKey, options = {}) {
 
 function hit(summary, value = {}, extra = {}) {
   return {
-    outcome: 'hit',
+    result: 'answered',
+    selection: 'not-applicable',
+    coverage: 'complete',
     summary,
     value,
     ...extra,

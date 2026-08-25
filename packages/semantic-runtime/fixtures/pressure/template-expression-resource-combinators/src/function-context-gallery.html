@@ -1,0 +1,9 @@
+<template>
+  <button class="event-compound-assignment" click.trigger="count += $event.detail"></button>
+  <button class="event-keyed-assignment" click.trigger="labels[selectedId] = item.label"></button>
+  <button class="event-postfix-update" click.trigger="count++"></button>
+  <button class="event-prefix-update" click.trigger="--count"></button>
+  <button class="event-arrow-chain" click.trigger="items.filter(candidate => candidate.active).forEach(candidate => select(candidate))"></button>
+  <button class="event-optional-call" click.trigger="maybeSelect?.(item)"></button>
+  <button class="event-empty" click.trigger=""></button>
+</template>

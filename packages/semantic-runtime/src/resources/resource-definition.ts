@@ -1,5 +1,8 @@
+import type ts from 'typescript';
+import type { AddressHandle } from '../kernel/handles.js';
 import type {
   AttributePatternObservation,
+  ResourceAliasObservation,
   ResourceTargetObservation,
 } from './resource-observation-primitives.js';
 import type { AttributePatternDefinition } from './attribute-pattern-definition.js';
@@ -19,7 +22,9 @@ export class CustomElementDefinitionHeader {
     /** Static custom element name when recognition closed over one. */
     readonly name: string | null,
     /** Static aliases that name the same custom element definition. */
-    readonly aliases: readonly string[] = [],
+    readonly aliases: readonly ResourceAliasObservation[] = [],
+    /** Exact authored token for the public custom element name, when one exists. */
+    readonly nameSourceNode: ts.Node | null = null,
   ) {}
 }
 
@@ -32,7 +37,9 @@ export class CustomAttributeDefinitionHeader {
     /** Static custom attribute name when recognition closed over one. */
     readonly name: string | null,
     /** Static aliases that name the same custom attribute definition. */
-    readonly aliases: readonly string[] = [],
+    readonly aliases: readonly ResourceAliasObservation[] = [],
+    /** Exact authored token for the public custom attribute name, when one exists. */
+    readonly nameSourceNode: ts.Node | null = null,
   ) {}
 }
 
@@ -45,7 +52,9 @@ export class TemplateControllerDefinitionHeader {
     /** Static template controller attribute name when recognition closed over one. */
     readonly name: string | null,
     /** Static aliases that name the same template controller definition. */
-    readonly aliases: readonly string[] = [],
+    readonly aliases: readonly ResourceAliasObservation[] = [],
+    /** Exact authored token for the public template controller name, when one exists. */
+    readonly nameSourceNode: ts.Node | null = null,
   ) {}
 }
 
@@ -58,7 +67,9 @@ export class ValueConverterDefinitionHeader {
     /** Static value converter name when recognition closed over one. */
     readonly name: string | null,
     /** Static aliases that name the same value converter definition. */
-    readonly aliases: readonly string[] = [],
+    readonly aliases: readonly ResourceAliasObservation[] = [],
+    /** Exact authored token for the public value converter name, when one exists. */
+    readonly nameSourceNode: ts.Node | null = null,
   ) {}
 }
 
@@ -71,7 +82,9 @@ export class BindingBehaviorDefinitionHeader {
     /** Static binding behavior name when recognition closed over one. */
     readonly name: string | null,
     /** Static aliases that name the same binding behavior definition. */
-    readonly aliases: readonly string[] = [],
+    readonly aliases: readonly ResourceAliasObservation[] = [],
+    /** Exact authored token for the public binding behavior name, when one exists. */
+    readonly nameSourceNode: ts.Node | null = null,
   ) {}
 }
 
@@ -84,7 +97,9 @@ export class BindingCommandDefinitionHeader {
     /** Static binding command name when recognition closed over one. */
     readonly name: string | null,
     /** Static aliases that name the same binding command definition. */
-    readonly aliases: readonly string[] = [],
+    readonly aliases: readonly ResourceAliasObservation[] = [],
+    /** Exact authored token for the public binding command name, when one exists. */
+    readonly nameSourceNode: ts.Node | null = null,
   ) {}
 }
 
@@ -122,3 +137,34 @@ export type FullResourceDefinition =
 export type TemplateCompilableResourceDefinition =
   | CustomElementDefinition
   | CustomAttributeDefinition;
+
+/** Exact authored public-name token for a named resource definition, without declaration fallback. */
+export function resourceDefinitionNameSourceAddressHandle(
+  definition: FullResourceDefinition,
+): AddressHandle | null {
+  return 'nameSourceAddressHandle' in definition ? definition.nameSourceAddressHandle : null;
+}
+
+/**
+ * Best navigation/identity witness for a resource's primary runtime name.
+ *
+ * Named definitions prefer their exact name token, then target token, then broad definition carrier. Syntax resources
+ * without a public-name field preserve their historical broad definition-source fallback.
+ */
+export function resourceDefinitionNameNavigationAddressHandle(
+  definition: FullResourceDefinition,
+): AddressHandle | null {
+  return 'nameSourceAddressHandle' in definition
+    ? definition.nameSourceAddressHandle
+      ?? definition.target.addressHandle
+      ?? definition.sourceAddressHandle
+    : definition.sourceAddressHandle;
+}
+
+export function taxonomyResourceKindForDefinition(
+  definition: FullResourceDefinition,
+): ResourceDefinitionKind {
+  return definition.type === ResourceDefinitionKind.CustomAttribute && definition.isTemplateController
+    ? ResourceDefinitionKind.TemplateController
+    : definition.type;
+}

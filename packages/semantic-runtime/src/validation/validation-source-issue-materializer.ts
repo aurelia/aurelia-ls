@@ -27,6 +27,11 @@ import {
 import { issuePublicationWithRecords } from '../kernel/issue-publication.js';
 import type { IdentityHandle } from '../kernel/handles.js';
 import { localKeyPart } from '../kernel/local-key.js';
+import {
+  KernelPublicationPlan,
+  publishProductDetails,
+  type KernelPublicationContext,
+} from '../kernel/publication.js';
 import { sourceSpanAddressForSite, type SourceSpanSite } from '../kernel/source-address.js';
 import {
   KernelStore,
@@ -97,6 +102,7 @@ const PROPERTY_RULE_RESET_METHODS = new Set([
 const PROPERTY_RULE_ADD_METHODS = new Set([
   'required',
   'matches',
+  // Deprecated by the framework but still a rule-producing call in existing source chains.
   'email',
   'minLength',
   'maxLength',
@@ -178,6 +184,7 @@ export class ValidationSourceIssueMaterializer {
 
   constructor(
     readonly store: KernelStore,
+    readonly publication: KernelPublicationContext,
   ) {
     this.publisher = new ValidationIssuePublisher(store);
   }
@@ -192,12 +199,13 @@ export class ValidationSourceIssueMaterializer {
     const publications = distinctValidationIssueSites(sites)
       .map((site, index) => this.publicationForSite(project, site, index));
     const records = publications.flatMap((publication) => publication.records);
-    if (records.length > 0) {
-      this.store.commit(new KernelStoreBatch(records, `validation-source-issues:${project.projectKey}`));
-    }
-    for (const publication of publications) {
-      this.store.productDetails.add(ValidationProductDetails.Issue, publication.issue.productHandle, publication.issue);
-    }
+    this.publication.publish(new KernelPublicationPlan(
+      new KernelStoreBatch(records, `validation-source-issues:${project.projectKey}`),
+      publishProductDetails(
+        ValidationProductDetails.Issue,
+        publications.map((publication) => publication.issue),
+      ),
+    ));
     return new ValidationSourceIssueProjectResult(
       publications.map((publication) => publication.issue),
       records,
@@ -234,7 +242,7 @@ function readValidationIssueSourceSites(
   const defaultModelHydratorActive = validationDefaultModelHydratorActive(configuration);
   const sourcePathByFileName = typeSystemSourcePathIndex(project, typeSystem);
   return project.sourceFiles.flatMap((source) => {
-    const sourceFile = typeSystem.readProgramSourceFileByPath(source.path);
+    const sourceFile = typeSystem.readProgramSourceFileByProjectPath(source.path);
     if (sourceFile == null) {
       return [];
     }

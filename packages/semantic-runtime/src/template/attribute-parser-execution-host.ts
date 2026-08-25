@@ -20,7 +20,7 @@ export class BuiltInAttributeParserExecutionHost implements AttributeParserExecu
     const emission = this.world.attributePatterns.find((candidate) =>
       candidate.executable.productHandle === executableProductHandle
     ) ?? null;
-    if (emission == null) {
+    if (emission?.handler == null) {
       return null;
     }
     return executeBuiltInAttributePattern(

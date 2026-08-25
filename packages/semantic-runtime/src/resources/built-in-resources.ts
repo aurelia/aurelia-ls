@@ -86,6 +86,13 @@ export enum BuiltInValueConverterName {
   Translation = 't',
 }
 
+export const enum BuiltInValueConverterSignalName {
+  /** Locale changes invalidate translation and international-number/date converter results. */
+  Translation = 'aurelia-translation-signal',
+  /** Clock ticks invalidate relative-time converter results independently of locale changes. */
+  RelativeTime = 'aurelia-relativetime-signal',
+}
+
 export type BuiltInResourceField =
   | 'targetName'
   | 'resourceKind'
@@ -98,6 +105,7 @@ export type BuiltInResourceField =
 export type BuiltInResourceCatalogField =
   | 'packageId'
   | 'group'
+  | 'variantKey'
   | 'resources'
   | 'source';
 
@@ -285,6 +293,7 @@ export class RuntimeHtmlSanitizeValueConverterResource {
   readonly aliases: readonly string[] = [];
   readonly packageId = BuiltInResourcePackage.RuntimeHtml;
   readonly group = BuiltInResourceGroup.DefaultResources;
+  readonly signalNames: readonly BuiltInValueConverterSignalName[] = [];
 
   constructor(
     readonly productHandle: ProductHandle | null = null,
@@ -574,6 +583,7 @@ export class I18nTranslationValueConverterResource {
   readonly aliases: readonly string[] = [];
   readonly packageId = BuiltInResourcePackage.I18n;
   readonly group = BuiltInResourceGroup.DefaultResources;
+  readonly signalNames = [BuiltInValueConverterSignalName.Translation] as const;
 
   constructor(
     readonly productHandle: ProductHandle | null = null,
@@ -608,6 +618,7 @@ export class I18nDateFormatValueConverterResource {
   readonly aliases: readonly string[] = [];
   readonly packageId = BuiltInResourcePackage.I18n;
   readonly group = BuiltInResourceGroup.DefaultResources;
+  readonly signalNames = [BuiltInValueConverterSignalName.Translation] as const;
 
   constructor(
     readonly productHandle: ProductHandle | null = null,
@@ -642,6 +653,7 @@ export class I18nNumberFormatValueConverterResource {
   readonly aliases: readonly string[] = [];
   readonly packageId = BuiltInResourcePackage.I18n;
   readonly group = BuiltInResourceGroup.DefaultResources;
+  readonly signalNames = [BuiltInValueConverterSignalName.Translation] as const;
 
   constructor(
     readonly productHandle: ProductHandle | null = null,
@@ -676,6 +688,10 @@ export class I18nRelativeTimeValueConverterResource {
   readonly aliases: readonly string[] = [];
   readonly packageId = BuiltInResourcePackage.I18n;
   readonly group = BuiltInResourceGroup.DefaultResources;
+  readonly signalNames = [
+    BuiltInValueConverterSignalName.Translation,
+    BuiltInValueConverterSignalName.RelativeTime,
+  ] as const;
 
   constructor(
     readonly productHandle: ProductHandle | null = null,
@@ -818,6 +834,7 @@ export type BuiltInResource =
 export interface BuiltInResourceCatalogInput {
   readonly packageId: BuiltInResourcePackage;
   readonly group: BuiltInResourceGroup;
+  readonly variantKey?: string | null;
   readonly resources: readonly BuiltInResource[];
 }
 
@@ -837,6 +854,8 @@ export class BuiltInResourceCatalog {
     readonly packageId: BuiltInResourcePackage,
     /** Configuration group that admits the catalog. */
     readonly group: BuiltInResourceGroup,
+    /** Configuration-derived catalog variant, or null for the package default. */
+    readonly variantKey: string | null,
     /** Built-in resource headers in runtime registration order. */
     readonly resources: readonly BuiltInResource[],
     /** Source address for the framework catalog. */

@@ -5,9 +5,12 @@ import {
   createSemanticRuntime,
   ExpectedSemanticEffect,
   ExpectedSemanticEffectFilter,
+  ExpectedSemanticEffectKind,
+  ExpectedSemanticEffectScope,
   readFixtureVerificationSnapshot,
   verifyFixtureEffects,
 } from '../out/index.js';
+import { KernelOpenSeamKinds } from '../out/kernel/vocabulary/index.js';
 
 const packageRoot = path.resolve(fileURLToPath(new URL('..', import.meta.url)));
 const fixtureRoot = path.join(packageRoot, 'fixtures/pressure/router-active-link-state');
@@ -31,6 +34,36 @@ const expectedEffects = [
     [
       effectFilter('routeProductKind', 'router-options'),
       effectFilter('activeClass', 'is-active'),
+    ],
+    'signature',
+  ),
+  ExpectedSemanticEffect.fact(
+    'An imported HomeRoute reference should retain its authored class name and resolve to its custom-element identity.',
+    'route',
+    'route',
+    null,
+    'present',
+    null,
+    [
+      effectFilter('routeProductKind', 'route-config'),
+      effectFilter('component.name', 'HomeRoute'),
+      effectFilter('component.resolvedName', 'home-route'),
+      effectFilter('component.resolved', true),
+    ],
+    'signature',
+  ),
+  ExpectedSemanticEffect.fact(
+    'An imported SettingsRoute reference should retain its authored class name and resolve to its custom-element identity.',
+    'route',
+    'route',
+    null,
+    'present',
+    null,
+    [
+      effectFilter('routeProductKind', 'route-config'),
+      effectFilter('component.name', 'SettingsRoute'),
+      effectFilter('component.resolvedName', 'settings-route'),
+      effectFilter('component.resolved', true),
     ],
     'signature',
   ),
@@ -99,10 +132,13 @@ const expectedEffects = [
     ],
     'signature',
   ),
-  ExpectedSemanticEffect.absent(
-    'Router active-link state fixture should close without open seams.',
-    'open-seam-closure',
-  ),
+  ...Object.values(KernelOpenSeamKinds.Router).map((entry) => ExpectedSemanticEffect.absent(
+    `Router active-link state should close without ${entry.key} seams.`,
+    ExpectedSemanticEffectKind.OpenSeamClosure,
+    ExpectedSemanticEffectScope.Route,
+    null,
+    [effectFilter('seamKindKey', entry.key)],
+  )),
 ];
 
 const snapshot = readFixtureVerificationSnapshot(app);

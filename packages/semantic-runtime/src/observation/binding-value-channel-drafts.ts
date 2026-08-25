@@ -1,4 +1,5 @@
 import type { KernelStore } from '../kernel/store.js';
+import type { IdentityHandle } from '../kernel/handles.js';
 import {
   AttributeBinding,
   ContentBinding,
@@ -9,21 +10,25 @@ import {
   SpreadValueBinding,
   StateDispatchBinding,
   RuntimeBindingTargetAccessStrategy,
+  RuntimeNodeObserverConfigFieldState,
   type RuntimeBindingSourceOperation,
   type RuntimeBindingTargetAccess,
   type RuntimeBindingTargetOperation,
 } from '../template/runtime-binding.js';
 import type { CheckerTypeProjector } from '../type-system/checker-projector.js';
+import { CheckerRuntimeObjectMemberAdmissionKind } from '../type-system/checker-related-types.js';
 import type {
   BindingSourceTypeReader,
   BindingValueChannelDraftContext,
   RuntimeBindingValueChannelDraft,
+  RuntimeBindingValueChannelDraftResult,
   RuntimeValueChannelBinding,
 } from './binding-value-channel-draft-types.js';
 import {
   RuntimeBindingValueChannelAuthority,
   RuntimeBindingValueChannelKind,
 } from './runtime-binding-observation.js';
+import { RuntimeOperationRealization } from '../runtime-expression/runtime-operation.js';
 import {
   BuiltInTemplateControllerFlowKind,
   type BuiltInTemplateControllerSemantics,
@@ -43,6 +48,7 @@ export type {
   BindingValueExpression,
   CheckedSourceShape,
   RuntimeBindingValueChannelDraft,
+  RuntimeBindingValueChannelDraftResult,
   RuntimeValueChannelBinding,
   SelectMultipleMode,
 } from './binding-value-channel-draft-types.js';
@@ -77,16 +83,19 @@ class RuntimeBindingValueChannelDraftFrame {
     this.readSourceType = support.sourceTypeReaderForBinding(
       binding,
       context,
-      targetAccess?.targetProperty ?? null,
     );
   }
 
-  read(): RuntimeBindingValueChannelDraft {
+  read(): RuntimeBindingValueChannelDraftResult | null {
+    if (this.binding instanceof SpreadValueBinding) {
+      return this.spreadValueChannelDraft();
+    }
+    return directValueChannelDraft(this.readDraft(), this.openReasonOwnerIdentityHandle());
+  }
+
+  private readDraft(): RuntimeBindingValueChannelDraft {
     if (this.binding instanceof RefBinding || this.binding instanceof StateDispatchBinding) {
       return this.directBinding.valueChannelDraftForSourceOperation(this.sourceOperation, this.readSourceType);
-    }
-    if (this.binding instanceof SpreadValueBinding && this.targetAccess == null) {
-      return this.openSpreadBindingWithoutClosedBindable();
     }
     if (
       this.binding instanceof AttributeBinding
@@ -105,12 +114,60 @@ class RuntimeBindingValueChannelDraftFrame {
       return this.openMissingTargetAccess();
     }
     if (this.targetAccess.openReason != null) {
-      return this.openTargetAccess();
+      const resourceChannel = this.resourceValueChannelDraft(this.targetAccess);
+      return resourceChannel == null
+        ? this.openTargetAccess()
+        : {
+            ...resourceChannel,
+            openReason: this.targetAccess.openReason,
+          };
     }
     if (this.targetAccess.frameworkErrorCode != null) {
       return this.rejectedTargetAccess();
     }
     return this.closedTargetAccessDraft();
+  }
+
+  private spreadValueChannelDraft(): RuntimeBindingValueChannelDraftResult | null {
+    const targetAccess = this.targetAccess;
+    if (targetAccess == null) {
+      throw new Error('SpreadValueBinding value-channel materialization requires a target candidate.');
+    }
+    const sourceType = this.readSourceType();
+    const access = this.support.types.runtimeObjectMemberAccess(
+      sourceType,
+      targetAccess.targetProperty,
+    );
+    if (access?.admissionKind === CheckerRuntimeObjectMemberAdmissionKind.Impossible) {
+      return null;
+    }
+    return {
+      draft: this.readDraft(),
+      realization: runtimeBindingRealizationForAdmission(access?.admissionKind ?? null),
+      openReasonOwnerIdentityHandle: this.openReasonOwnerIdentityHandle(),
+      admittedSourceOwnerType: sourceType,
+      admittedSourceValueType: access?.valueType?.toReference() ?? null,
+      admittedSourceMemberKind: access?.memberKind ?? null,
+      admittedSourceMemberHandle: access?.member?.detailHandle ?? null,
+      admittedSourceMemberSourceAddressHandle: access?.memberSourceAddressHandle ?? null,
+    };
+  }
+
+  private openReasonOwnerIdentityHandle(): IdentityHandle | null {
+    if ((this.binding instanceof RefBinding || this.binding instanceof StateDispatchBinding)
+      && this.sourceOperation?.openReason != null) {
+      return this.sourceOperation.identityHandle;
+    }
+    if ((this.binding instanceof AttributeBinding
+      || this.binding instanceof ContentBinding
+      || this.binding instanceof LetBinding
+      || this.binding instanceof ListenerBinding)
+      && this.targetOperation?.openReason != null) {
+      return this.targetOperation.identityHandle;
+    }
+    return this.targetAccess?.openReason == null
+      ? null
+      : this.targetAccess.identityHandle;
   }
 
   private closedTargetAccessDraft(): RuntimeBindingValueChannelDraft {
@@ -135,12 +192,51 @@ class RuntimeBindingValueChannelDraftFrame {
         return this.selectValueObserverDraft(targetAccess);
       case RuntimeBindingTargetAccessStrategy.CheckedObserver:
         return this.checkedObserverDraft(targetAccess);
+      case RuntimeBindingTargetAccessStrategy.ValueAttributeObserver:
+        return this.valueAttributeObserverDraft(targetAccess);
+      case RuntimeBindingTargetAccessStrategy.CustomNodeObserver:
+        return this.customNodeObserverDraft(targetAccess);
       default:
-        return this.frameworkCustomAttributeValueChannelDraft(targetAccess)
-          ?? this.routerResourceValueChannelDraft(targetAccess)
-          ?? this.templateControllerValueChannelDraft(targetAccess)
+        return this.resourceValueChannelDraft(targetAccess)
           ?? this.rawPropertyValueChannelDraft(targetAccess);
     }
+  }
+
+  private resourceValueChannelDraft(targetAccess: RuntimeBindingTargetAccess): RuntimeBindingValueChannelDraft | null {
+    return this.frameworkCustomAttributeValueChannelDraft(targetAccess)
+      ?? this.routerResourceValueChannelDraft(targetAccess)
+      ?? this.templateControllerValueChannelDraft(targetAccess);
+  }
+
+  private valueAttributeObserverDraft(targetAccess: RuntimeBindingTargetAccess): RuntimeBindingValueChannelDraft {
+    const config = targetAccess.nodeObserverConfig;
+    const transportOpen = config == null
+      || config.fieldState('readonly') === RuntimeNodeObserverConfigFieldState.Open
+      || config.fieldState('default') === RuntimeNodeObserverConfigFieldState.Open;
+    return {
+      channelKind: RuntimeBindingValueChannelKind.ValueAttributeObserverProperty,
+      authority: RuntimeBindingValueChannelAuthority.ObserverSemantics,
+      runtimeValueType: this.support.types.targetAccessRuntimeInputType(`${this.local}:value-attribute-observer-input`, targetAccess),
+      valueDomain: [],
+      isCollection: null,
+      openReason: transportOpen
+        ? 'ValueAttributeObserver target-write or nullish-default policy did not close from NodeObserverLocator configuration.'
+        : null,
+    };
+  }
+
+  private customNodeObserverDraft(targetAccess: RuntimeBindingTargetAccess): RuntimeBindingValueChannelDraft {
+    const constructorName = targetAccess.nodeObserverConfig?.observerConstructorName;
+    return {
+      channelKind: RuntimeBindingValueChannelKind.Open,
+      authority: RuntimeBindingValueChannelAuthority.Open,
+      runtimeValueType: targetAccess.propertyType,
+      valueDomain: [],
+      isCollection: null,
+      openReason: constructorName == null
+        ? 'App-owned node observer transport semantics are not statically modeled.'
+        : `App-owned node observer '${constructorName}' has a closed target selection but unmodeled value transport semantics.`,
+    };
   }
 
   private frameworkCustomAttributeValueChannelDraft(targetAccess: RuntimeBindingTargetAccess): RuntimeBindingValueChannelDraft | null {
@@ -262,17 +358,6 @@ class RuntimeBindingValueChannelDraftFrame {
     return this.checkedObserver.valueChannelDraft(this.local, this.binding, targetAccess, this.readSourceType, this.context);
   }
 
-  private openSpreadBindingWithoutClosedBindable(): RuntimeBindingValueChannelDraft {
-    return {
-      channelKind: RuntimeBindingValueChannelKind.Open,
-      authority: RuntimeBindingValueChannelAuthority.Open,
-      runtimeValueType: this.readSourceType(),
-      valueDomain: [],
-      isCollection: null,
-      openReason: 'SpreadValueBinding could not close its target bindable keys for per-bindable inner PropertyBinding materialization.',
-    };
-  }
-
   private openMissingTargetAccess(): RuntimeBindingValueChannelDraft {
     return {
       channelKind: RuntimeBindingValueChannelKind.Open,
@@ -359,7 +444,7 @@ export class RuntimeBindingValueChannelDraftMaterializer {
     targetOperation: RuntimeBindingTargetOperation | null,
     sourceOperation: RuntimeBindingSourceOperation | null,
     context: BindingValueChannelDraftContext,
-  ): RuntimeBindingValueChannelDraft {
+  ): RuntimeBindingValueChannelDraftResult | null {
     return new RuntimeBindingValueChannelDraftFrame(
       this.support,
       this.directBinding,
@@ -372,5 +457,37 @@ export class RuntimeBindingValueChannelDraftMaterializer {
       sourceOperation,
       context,
     ).read();
+  }
+}
+
+function directValueChannelDraft(
+  draft: RuntimeBindingValueChannelDraft,
+  openReasonOwnerIdentityHandle: IdentityHandle | null,
+): RuntimeBindingValueChannelDraftResult {
+  return {
+    draft,
+    realization: RuntimeOperationRealization.Direct,
+    openReasonOwnerIdentityHandle,
+    admittedSourceOwnerType: null,
+    admittedSourceValueType: null,
+    admittedSourceMemberKind: null,
+    admittedSourceMemberHandle: null,
+    admittedSourceMemberSourceAddressHandle: null,
+  };
+}
+
+function runtimeBindingRealizationForAdmission(
+  admission: CheckerRuntimeObjectMemberAdmissionKind | null,
+): RuntimeOperationRealization {
+  switch (admission) {
+    case CheckerRuntimeObjectMemberAdmissionKind.Guaranteed:
+      return RuntimeOperationRealization.Guaranteed;
+    case CheckerRuntimeObjectMemberAdmissionKind.Conditional:
+      return RuntimeOperationRealization.Conditional;
+    case CheckerRuntimeObjectMemberAdmissionKind.Open:
+    case null:
+      return RuntimeOperationRealization.Open;
+    case CheckerRuntimeObjectMemberAdmissionKind.Impossible:
+      throw new Error('Impossible spread member admission must not materialize a value channel.');
   }
 }

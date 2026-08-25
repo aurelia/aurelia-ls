@@ -4,10 +4,22 @@
 </section>
 
 <au-compose component.bind="summaryComponent" model.bind="selectedWidget" template.bind="summaryTemplate"></au-compose>
+<au-compose component.bind="nonCallableActivationComponent" model.bind="selectedWidget" template.bind="summaryTemplate"></au-compose>
+<au-compose component.bind="openActivationComponent" model.bind="selectedWidget" template.bind="summaryTemplate"></au-compose>
 <au-compose component.bind="summaryClass" model.bind="selectedWidget" template.bind="summaryTemplate"></au-compose>
 <au-compose component.bind="selectedWidgetComponent" model.bind="selectedWidget"></au-compose>
 <au-compose component.bind="getAsyncComponent()" model.bind="selectedWidget"></au-compose>
 <au-compose template.bind="getAsyncTemplate()" scope-behavior="scoped" composition.bind="composition"></au-compose>
+<au-compose template.bind="getOpenTemplate()" scope-behavior="scoped"></au-compose>
+<au-compose component.bind="rejectedComponent" model.bind="selectedWidget"></au-compose>
+<au-compose template.bind="rejectedTemplate"></au-compose>
+<au-compose component.bind="selectedWidgetComponent" model.bind="promisedModel"></au-compose>
+<au-compose
+  template.bind="summaryTemplate"
+  scope-behavior.bind="promisedScopeBehavior"
+  tag.bind="promisedTag"
+  flush-mode.bind="promisedFlushMode">
+</au-compose>
 <au-compose component="chart-widget" model.bind="selectedWidget"></au-compose>
 <au-compose component="inventory-widget" model="static-widget"></au-compose>
 

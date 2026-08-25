@@ -2,6 +2,7 @@ import ts from 'typescript';
 import type { AddressHandle } from '../kernel/handles.js';
 import { localKeyPart } from '../kernel/local-key.js';
 import { HtmlNamespaceKind } from '../template/html-ir.js';
+import { runtimeLocalName } from '../template/runtime-dom-name.js';
 import {
   CheckerTypeMemberProjectionPolicy,
   type CheckerTypeProjectionRequest,
@@ -9,8 +10,13 @@ import {
 } from './checker-projector.js';
 import type { TypeSystemProject } from './project.js';
 import {
+  CheckerTypeWitnessName,
+  TYPE_SYSTEM_CHECKER_TYPE_WITNESS_ORIGIN_KEY,
+} from './overlay.js';
+import {
   CheckerTypeProjectionOrigin,
   type CheckerTypeReference,
+  type CheckerTypeShape,
 } from './type-shape.js';
 import {
   firstSymbolDeclaration,
@@ -86,12 +92,12 @@ export function resolveCheckerDomNodeTypeFromTagNameMap(
   namespace: HtmlNamespaceKind,
   location: ts.Node,
 ): ts.Type | null {
-  const lowerTagName = tagName.toLowerCase();
+  const localName = runtimeLocalName(tagName, namespace);
   for (const mapName of tagNameMapNames(namespace)) {
     const mapType = globalDeclaredType(typeSystem, mapName, location);
     const tagSymbol = mapType == null
       ? null
-      : typeSystem.checker.getPropertyOfType(mapType, lowerTagName) ?? null;
+      : typeSystem.checker.getPropertyOfType(mapType, localName) ?? null;
     if (tagSymbol != null) {
       return typeSystem.checker.getTypeOfSymbolAtLocation(
         tagSymbol,
@@ -132,12 +138,61 @@ export function resolveCheckerDomEventType(
     }
   }
   for (const fallbackName of CHECKER_DOM_EVENT_FALLBACK_TYPE_NAMES) {
-    const fallbackType = globalDeclaredType(typeSystem, fallbackName, location);
+    const fallbackType = checkerDomEventFallbackType(typeSystem, fallbackName, location);
     if (fallbackType != null) {
       return fallbackType;
     }
   }
   return null;
+}
+
+function checkerDomEventFallbackType(
+  typeSystem: TypeSystemProject,
+  fallbackName: typeof CHECKER_DOM_EVENT_FALLBACK_TYPE_NAMES[number],
+  location: ts.Node,
+): ts.Type | null {
+  if (fallbackName !== 'CustomEvent') {
+    return globalDeclaredType(typeSystem, fallbackName, location);
+  }
+  if (globalDeclaredType(typeSystem, fallbackName, location) == null) {
+    return null;
+  }
+  const witness = typeSystem.readOverlayTypeAlias(
+    TYPE_SYSTEM_CHECKER_TYPE_WITNESS_ORIGIN_KEY,
+    CheckerTypeWitnessName.CustomEventUnknown,
+  );
+  return witness == null || (witness.flags & ts.TypeFlags.Any) !== 0
+    ? null
+    : witness;
+}
+
+/** Project the lib.dom event maps used by listener typing into enumerable completion products. */
+export function projectCheckerDomEventMapTypes(
+  typeSystem: TypeSystemProject,
+  projector: CheckerTypeProjector,
+): readonly CheckerTypeShape[] {
+  const location = checkerLookupLocation(typeSystem);
+  if (location == null) {
+    return [];
+  }
+  return CHECKER_DOM_EVENT_MAP_TYPE_NAMES.flatMap((mapName) => {
+    const type = globalDeclaredType(typeSystem, mapName, location);
+    return type == null
+      ? []
+      : [projector.ensureProjection({
+          localKey: [
+            'dom-event-map',
+            localKeyPart(typeSystem.project.projectKey),
+            localKeyPart(mapName),
+          ].join(':'),
+          checker: typeSystem.checker,
+          type,
+          origin: CheckerTypeProjectionOrigin.TypeChecker,
+          sourceNode: location,
+          sourceAddressHandle: null,
+          display: mapName,
+        })];
+  });
 }
 
 export function checkerLookupLocation(typeSystem: TypeSystemProject): ts.SourceFile | null {

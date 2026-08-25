@@ -1,3 +1,25 @@
+import {
+  evaluateStaticCallableTruthiness,
+  StaticCallableExecutionBindings,
+  StaticCallableSlot,
+  StaticCallableTruthinessKind,
+} from '../evaluation/function-execution.js';
+import {
+  StaticInvocationKind,
+  StaticInvocationNotApplicable,
+  staticInvocationValue,
+} from '../evaluation/invocation.js';
+import { delegateStaticEvaluationRuntimeHost } from '../evaluation/runtime-host.js';
+import {
+  EvaluationBooleanValue,
+  EvaluationBoundaryKind,
+  EvaluationBoundaryObjectValue,
+  EvaluationBoundaryValue,
+  EvaluationObjectProperty,
+  EvaluationObjectPropertyState,
+  EvaluationStringValue,
+  EvaluationValueKind,
+} from '../evaluation/values.js';
 import { isStandardSvgAttribute } from '../observation/svg-analyzer-data.generated.js';
 import {
   hasHtmlAttribute,
@@ -6,6 +28,10 @@ import {
   normalizeHtmlTagName,
   type HtmlAttributeLike,
 } from './html-ir.js';
+import {
+  runtimeAttributeName,
+  runtimeNodeName,
+} from './runtime-dom-name.js';
 
 /** Minimal element shape consumed by AttrMapper without depending on DOM nodes. */
 export interface TemplateAttributeMapperNode {
@@ -16,9 +42,9 @@ export interface TemplateAttributeMapperNode {
 
 export class AttributeMapperMapping {
   constructor(
-    /** Runtime nodeName lane consumed by AttrMapper.map, normalized to the framework's uppercase HTML node names. */
+    /** Exact app-authored nodeName key consumed by AttrMapper.map. */
     readonly tagName: string | null,
-    /** Authored attribute key before binding-command lowering maps it to a target property. */
+    /** Exact app-authored attribute key consumed by AttrMapper.map. */
     readonly attributeName: string,
     /** Runtime property key selected for the attribute. */
     readonly propertyName: string,
@@ -27,18 +53,86 @@ export class AttributeMapperMapping {
 
 export class AttributeMapperTwoWayRule {
   constructor(
-    /** Runtime nodeName/tagName required by an app-authored useTwoWay predicate. */
-    readonly tagName: string | null,
-    /** Runtime attribute/property key required by an app-authored useTwoWay predicate. */
-    readonly propertyName: string | null,
+    /** Stable slot for the app predicate retained by the current execution candidate. */
+    readonly predicateSlot: StaticCallableSlot,
   ) {}
 
   matches(
     node: TemplateAttributeMapperNode,
     propertyName: string,
-  ): boolean {
-    return (this.tagName == null || normalizeHtmlTagName(node.tagName) === normalizeHtmlTagName(this.tagName))
-      && (this.propertyName == null || propertyName === this.propertyName);
+    callables: StaticCallableExecutionBindings,
+  ): boolean | null {
+    const predicate = callables.target(this.predicateSlot);
+    if (predicate == null) {
+      return null;
+    }
+    const predicateNode = predicate.value.declaration;
+    const element = new EvaluationBoundaryObjectValue(
+      EvaluationBoundaryKind.HostEnvironment,
+      'aurelia.attr-mapper.element',
+      new Map([
+        ['tagName', new EvaluationObjectProperty(
+          'tagName',
+          new EvaluationStringValue(runtimeNodeName(node.tagName, node.namespace), predicateNode),
+          predicateNode,
+          EvaluationObjectPropertyState.Closed,
+        )],
+        ['nodeName', new EvaluationObjectProperty(
+          'nodeName',
+          new EvaluationStringValue(runtimeNodeName(node.tagName, node.namespace), predicateNode),
+          predicateNode,
+          EvaluationObjectPropertyState.Closed,
+        )],
+        ['hasAttribute', new EvaluationObjectProperty(
+          'hasAttribute',
+          new EvaluationBoundaryValue(
+            EvaluationBoundaryKind.HostEnvironment,
+            attrMapperHasAttributeBoundaryPath,
+            predicateNode,
+          ),
+          predicateNode,
+          EvaluationObjectPropertyState.Closed,
+        )],
+      ]),
+      predicateNode,
+    );
+    const result = evaluateStaticCallableTruthiness(
+      predicate,
+      [
+        element,
+        new EvaluationStringValue(runtimeAttributeName(propertyName, node.namespace), predicateNode),
+      ],
+      (baseHost) => delegateStaticEvaluationRuntimeHost(baseHost, (frame) => {
+        if (
+          frame.kind !== StaticInvocationKind.Call
+          || frame.callee.value.kind !== EvaluationValueKind.BoundaryValue
+          || frame.callee.value.path !== attrMapperHasAttributeBoundaryPath
+        ) {
+          return StaticInvocationNotApplicable;
+        }
+        const arguments_ = frame.argumentList.exactEvidence();
+        const name = arguments_?.[0]?.value;
+        if (name?.kind !== EvaluationValueKind.String) {
+          return StaticInvocationNotApplicable;
+        }
+        return staticInvocationValue(new EvaluationBooleanValue(
+          node.attributes?.some((attribute) =>
+            attribute.rawName != null
+            && runtimeAttributeName(attribute.rawName, node.namespace)
+              === runtimeAttributeName(name.value, node.namespace)
+          ) ?? false,
+          frame.node,
+        ));
+      }),
+    );
+    switch (result.kind) {
+      case StaticCallableTruthinessKind.True:
+        return true;
+      case StaticCallableTruthinessKind.False:
+        return false;
+      case StaticCallableTruthinessKind.Open:
+        return null;
+    }
   }
 }
 
@@ -60,16 +154,15 @@ export class AttributeMapperConfiguration {
   ) {
     for (const mapping of mappings) {
       if (mapping.tagName == null) {
-        this.globalMappings.set(normalizeAttributeName(mapping.attributeName), mapping.propertyName);
+        this.globalMappings.set(mapping.attributeName, mapping.propertyName);
         continue;
       }
-      const tagName = normalizeHtmlTagName(mapping.tagName);
-      let tagMappings = this.mappingsByTag.get(tagName);
+      let tagMappings = this.mappingsByTag.get(mapping.tagName);
       if (tagMappings == null) {
         tagMappings = new Map();
-        this.mappingsByTag.set(tagName, tagMappings);
+        this.mappingsByTag.set(mapping.tagName, tagMappings);
       }
-      tagMappings.set(normalizeAttributeName(mapping.attributeName), mapping.propertyName);
+      tagMappings.set(mapping.attributeName, mapping.propertyName);
     }
   }
 
@@ -81,8 +174,8 @@ export class AttributeMapperConfiguration {
     element: TemplateAttributeMapperNode,
     attr: string,
   ): string | null {
-    const attributeName = normalizeAttributeName(attr);
-    return this.mappingsByTag.get(normalizeHtmlTagName(element.tagName))?.get(attributeName)
+    const attributeName = runtimeAttributeName(attr, element.namespace);
+    return this.mappingsByTag.get(runtimeNodeName(element.tagName, element.namespace))?.get(attributeName)
       ?? this.globalMappings.get(attributeName)
       ?? null;
   }
@@ -90,10 +183,19 @@ export class AttributeMapperConfiguration {
   isTwoWay(
     node: TemplateAttributeMapperNode,
     propertyName: string,
-  ): boolean {
-    return this.twoWayRules.some((rule) => rule.matches(node, propertyName));
+    callables: StaticCallableExecutionBindings,
+  ): boolean | null {
+    for (const rule of this.twoWayRules) {
+      const matches = rule.matches(node, propertyName, callables);
+      if (matches !== false) {
+        return matches;
+      }
+    }
+    return false;
   }
 }
+
+const attrMapperHasAttributeBoundaryPath = 'aurelia.attr-mapper.element.hasAttribute';
 
 export function mapAttribute(
   element: TemplateAttributeMapperNode,
@@ -114,11 +216,18 @@ export function mapAttribute(
             : null;
   return tagMapping
     ?? globalAttributeMapping(lowerAttr)
-    ?? (isDataAttribute(element, attr) ? attr : null);
+    ?? (isDataAttribute(element, attr) ? runtimeAttributeName(attr, element.namespace) : null);
 }
 
 export function camelCaseAttributeName(value: string): string {
   return value.replace(/-([a-z])/g, (_match, char: string) => char.toUpperCase());
+}
+
+/** RC2 `<let>` target normalization preserves underscores as authored. */
+export function normalizeLetBindingTarget(target: string): string {
+  return target.includes('_')
+    ? target.replace(/-+([A-Za-z0-9])/g, (_match, char: string) => char.toUpperCase())
+    : camelCaseAttributeName(target);
 }
 
 export function shouldDefaultToTwoWay(
@@ -232,8 +341,4 @@ function attributeValue(
   name: string,
 ): string | null {
   return htmlAttributeValue(owner, name);
-}
-
-function normalizeAttributeName(value: string): string {
-  return value.toLowerCase();
 }

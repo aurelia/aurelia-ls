@@ -12,15 +12,15 @@ import {
   ContainerLookupKeyKind,
 } from './container-key.js';
 import {
-  isAureliaCreateInterfaceCallee,
+  isAureliaInterfaceKeyDeclaration,
 } from './interface-key-recognition.js';
 import {
   readAureliaResolverWrapperCall,
 } from './resolver-wrapper-recognition.js';
 import {
   firstSymbolDeclaration,
-  symbolForExpression,
 } from '../type-system/checker-node-helpers.js';
+import type { TypeSystemProject } from '../type-system/project.js';
 
 export type DiNullishKeyArgumentKind = NullishExpressionKind;
 
@@ -65,7 +65,7 @@ export function readNullishKeyArguments(
 }
 
 export function containerLookupKeyKindForExpression(
-  checker: ts.TypeChecker,
+  typeSystem: TypeSystemProject,
   expression: ts.Expression | null,
 ): ContainerLookupKeyKind {
   if (expression == null) {
@@ -92,27 +92,38 @@ export function containerLookupKeyKindForExpression(
   if (ts.isClassExpression(current)) {
     return ContainerLookupKeyKind.Constructable;
   }
-  if (readAureliaResolverWrapperCall(checker, current) != null) {
+  if (readAureliaResolverWrapperCall(typeSystem, current) != null) {
     return ContainerLookupKeyKind.Resolver;
   }
   if (ts.isIdentifier(current) && intrinsicTypeNames.has(current.text)) {
     return ContainerLookupKeyKind.IntrinsicConstructable;
   }
 
-  const declaration = declarationForExpression(checker, current);
+  const symbol = typeSystem.readProgramAliasedSymbolAtLocation(current);
+  const declaration = symbol == null ? null : firstSymbolDeclaration(symbol);
   if (declaration == null) {
     return ContainerLookupKeyKind.Unknown;
   }
-  if (isAureliaInterfaceKeyDeclaration(checker, declaration)) {
+  return containerLookupKeyKindForDeclaration(typeSystem, declaration);
+}
+
+/** Classify a canonical runtime value declaration through the same branches as an authored key expression. */
+export function containerLookupKeyKindForDeclaration(
+  typeSystem: TypeSystemProject,
+  declaration: ts.Declaration,
+): ContainerLookupKeyKind {
+  if (isAureliaInterfaceKeyDeclaration(typeSystem, declaration)) {
     return ContainerLookupKeyKind.Interface;
   }
   if (isRegistryKeyDeclaration(declaration)) {
     return ContainerLookupKeyKind.Registry;
   }
-  if (ts.isClassDeclaration(declaration) || ts.isClassExpression(declaration)) {
-    return ContainerLookupKeyKind.Constructable;
-  }
-  if (ts.isFunctionDeclaration(declaration) || ts.isFunctionExpression(declaration)) {
+  if (
+    ts.isClassDeclaration(declaration)
+    || ts.isClassExpression(declaration)
+    || ts.isFunctionDeclaration(declaration)
+    || ts.isFunctionExpression(declaration)
+  ) {
     return ContainerLookupKeyKind.Constructable;
   }
   return ContainerLookupKeyKind.Unknown;
@@ -173,29 +184,6 @@ export function containerKeyExpressionIdentityKind(
     }
   }
   return DiContainerKeyExpressionIdentityKind.Stable;
-}
-
-function declarationForExpression(
-  checker: ts.TypeChecker,
-  expression: ts.Expression,
-): ts.Declaration | null {
-  const symbol = symbolForExpression(checker, expression);
-  return symbol == null ? null : firstSymbolDeclaration(symbol);
-}
-
-function isAureliaInterfaceKeyDeclaration(
-  checker: ts.TypeChecker,
-  declaration: ts.Declaration,
-): boolean {
-  if (!ts.isVariableDeclaration(declaration)) {
-    return false;
-  }
-  const initializer = declaration.initializer == null
-    ? null
-    : unwrapExpression(declaration.initializer);
-  return initializer != null &&
-    ts.isCallExpression(initializer) &&
-    isAureliaCreateInterfaceCallee(checker, unwrapExpression(initializer.expression));
 }
 
 const intrinsicTypeNames = new Set<string>([

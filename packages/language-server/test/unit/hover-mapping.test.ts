@@ -1,0 +1,3345 @@
+import { describe, expect, test } from "vitest";
+import { TextDocument } from "vscode-languageserver-textdocument";
+import { mapSemanticRuntimeTemplateHover } from "../../src/mapping/lsp-types.js";
+import { WorkspaceDocumentUris } from "../../src/utils/document-uri.js";
+
+const documentUris = new WorkspaceDocumentUris();
+documentUris.configure("file:///C:/projects/app");
+
+function source(path: string, start: number, end: number, role = "name") {
+  return {
+    kind: "source-span-address",
+    label: `${path}@${start}..${end}`,
+    path,
+    start,
+    end,
+    role,
+  };
+}
+
+function typescriptSource(
+  path: string,
+  start: number,
+  end: number,
+  overrides: Record<string, unknown> = {},
+) {
+  return {
+    kind: "typescript-node",
+    label: `${path}@${start}..${end}`,
+    path,
+    start,
+    end,
+    ...overrides,
+  };
+}
+
+function harness(text: string, token: string, occurrence = 0) {
+  const path = "src/hover.html";
+  const uri = documentUris.uriForWorkspaceRelativePath(path)!;
+  const document = TextDocument.create(uri, "html", 1, text);
+  let start = -1;
+  let from = 0;
+  for (let index = 0; index <= occurrence; index += 1) {
+    start = text.indexOf(token, from);
+    from = start + token.length;
+  }
+  if (start < 0) throw new Error(`Missing test token ${token}.`);
+  const activeSource = source(path, start, start + token.length);
+  return {
+    activeSource,
+    document,
+    map(
+      valueOverrides: Record<string, unknown>,
+      answerOverrides: Record<string, unknown> = {},
+    ) {
+      return mapSemanticRuntimeTemplateHover({
+        schemaVersion: "0.2",
+        result: "answered",
+        selection: "exact",
+        coverage: "complete",
+        summary: "mock",
+        ...answerOverrides,
+        value: {
+          displayText: "must stay below the presentation boundary",
+          siteKind: "expression",
+          activeSource,
+          expressionFrontier: null,
+          missingInputs: [],
+          template: { compilationLane: "authoring", source: null },
+          html: {
+            nodeKind: "text",
+            tagName: null,
+            namespace: null,
+            attributeName: null,
+            attributeValue: null,
+            source: null,
+            tagNameSource: null,
+            closingTagNameSource: null,
+            attributeSource: null,
+          },
+          valueSite: null,
+          selectedDefinition: null,
+          selectedBindable: null,
+          selectedRouteTarget: null,
+          selectedMemberName: null,
+          selectedMember: null,
+          selectedCall: null,
+          selectedExpression: null,
+          uncertainty: null,
+          memberOwnerType: null,
+          diagnostics: [],
+          diagnosticPresentation: null,
+          ...valueOverrides,
+        },
+      } as never, {
+        documentUris,
+        originDocument: document,
+      });
+    },
+  };
+}
+
+function textSource(text: string, token: string, role = "expression") {
+  const start = text.indexOf(token);
+  if (start < 0) throw new Error(`Missing test source ${token}.`);
+  return source("src/hover.html", start, start + token.length, role);
+}
+
+function markdown(mapped: ReturnType<typeof mapSemanticRuntimeTemplateHover>): string {
+  return (mapped.value?.contents as { value?: string } | undefined)?.value ?? "";
+}
+
+function member(name: string, scopeRole: string | null, typeDisplay = "Item") {
+  return {
+    name,
+    memberKind: "property",
+    typeDisplay,
+    isOptional: false,
+    isReadonly: false,
+    visibilityKind: scopeRole == null ? "public" : null,
+    isDeprecated: scopeRole == null ? false : null,
+    documentation: null,
+    deprecationReason: null,
+    scopeRole,
+    source: null,
+    declarationSource: null,
+  };
+}
+
+function memberText(text: string, overrides: Record<string, unknown> = {}) {
+  return {
+    format: "plaintext",
+    text,
+    isTruncated: false,
+    sourceCount: 1,
+    sources: [typescriptSource("src/hover.ts", 10, 20)],
+    ...overrides,
+  };
+}
+
+function selectedCall(
+  calleeSource: ReturnType<typeof source>,
+  callSource: ReturnType<typeof source>,
+  overrides: Record<string, unknown> = {},
+) {
+  return {
+    status: "exact",
+    callKind: "scope",
+    optionalChain: false,
+    presentationKind: "method",
+    signatureName: "formatSelection",
+    signatureTail: "(value: string): string",
+    signatureIsTruncated: false,
+    candidateCount: 2,
+    selectedCandidateIndex: 0,
+    genericParameterCount: 0,
+    signatureProvenance: "declaration",
+    source: calleeSource,
+    callSource,
+    declarationSource: typescriptSource("src/hover.ts", 40, 55),
+    documentation: null,
+    isDeprecated: false,
+    deprecationReason: null,
+    openReason: null,
+    ...overrides,
+  };
+}
+
+function expression(
+  sourceReference: ReturnType<typeof source>,
+  overrides: Record<string, unknown> = {},
+) {
+  return {
+    expressionKind: "AccessThis",
+    authoredScopeAncestor: 0,
+    scopeLookupAncestor: 0,
+    typeDisplay: "HoverApp",
+    typeShapeKind: "class",
+    typeOrigin: "type-checker",
+    openKind: null,
+    openReason: null,
+    source: sourceReference,
+    typeSource: null,
+    typeDeclarationSource: null,
+    ...overrides,
+  };
+}
+
+function definition(overrides: Record<string, unknown> = {}) {
+  const matchedName = typeof overrides.matchedName === "string"
+    ? overrides.matchedName
+    : "product-card";
+  return {
+    resourceKind: "custom-element",
+    name: "product-card",
+    matchedName,
+    authoredMatchedName: null,
+    runtimeMatchedName: matchedName,
+    targetName: "ProductCard",
+    source: null,
+    nameSource: null,
+    matchedNameSource: null,
+    targetSource: null,
+    ...overrides,
+  };
+}
+
+function bindable(overrides: Record<string, unknown> = {}) {
+  return {
+    name: "item",
+    attribute: "item",
+    callback: "itemChanged",
+    mode: "toView",
+    setterKind: "property",
+    setterTargetName: "item",
+    nullable: false,
+    valueType: "Item",
+    valueTypeShapeKind: "class",
+    effectiveValueTypeShapeKind: "class",
+    valueTypeHasCallSignature: false,
+    valueTypeHasMembers: true,
+    valueTypeIsWeak: false,
+    source: null,
+    nameSource: null,
+    attributeSource: null,
+    propertySource: null,
+    callbackSource: null,
+    callbackTargetSource: null,
+    modeSource: null,
+    setSource: null,
+    setterTargetSource: null,
+    typeSource: null,
+    nullableSource: null,
+    ownerDefinitionProductHandle: null,
+    usagePresentationKind: null,
+    usageEffectiveMode: null,
+    usageModeAuthority: null,
+    usageModeCommand: null,
+    usageModeCommandSource: null,
+    usageModeCommandKind: null,
+    usageModeLocus: null,
+    usageModeTargetSource: null,
+    usageModeSource: null,
+    usageModeOpenReason: null,
+    ...overrides,
+  };
+}
+
+function diagnostic(
+  summary: string,
+  severity: "error" | "information" | "warning",
+  diagnosticKind = "missing-expression-member",
+) {
+  return {
+    diagnosticKind,
+    diagnosticAuthority: "semantic-authoring-policy",
+    frameworkErrorCode: null,
+    severity,
+    summary,
+    missingInput: null,
+    missingInputs: [],
+    source: null,
+    selectedMemberName: null,
+    ownerTypeDisplay: null,
+    ownerTypeShapeKind: null,
+    ownerTypeOrigin: null,
+    suggestion: null,
+  };
+}
+
+describe("bounded semantic hover mapping", () => {
+  test("requires an exact inquiry selection before reading an otherwise valid carrier", () => {
+    const test = harness("<template>${item}</template>", "item");
+    const value = {
+      selectedMemberName: "item",
+      selectedMember: member("item", null),
+    };
+    for (const selection of ["absent", "ambiguous", "rerouted", "not-applicable"]) {
+      expect(test.map(value, { selection })).toEqual({
+        value: null,
+        failures: [`Semantic runtime returned hover selection=${selection}; exact selection is required.`],
+      });
+    }
+  });
+
+  test("keeps a repeat local primary and omits its resource and bindable machinery", () => {
+    const test = harness("<template>${item}</template>", "item");
+    const mapped = test.map({
+      selectedMemberName: "item",
+      selectedMember: member("item", "repeat-local"),
+      selectedBindable: bindable(),
+      selectedDefinition: definition(),
+    });
+
+    expect(markdown(mapped)).toBe("```ts\nitem: Item\n```\n\nRepeat local.");
+    expect(markdown(mapped)).not.toContain("Default mode");
+    expect(markdown(mapped)).not.toContain("product-card");
+    expect(mapped.failures).toEqual([]);
+
+  });
+
+  test("preserves an exact kebab-case let declaration while requiring its member source", () => {
+    const test = harness(
+      '<template><let local-title.bind="title"></let></template>',
+      "local-title",
+    );
+    const selectedMember = {
+      ...member("localTitle", "let-local", "string"),
+      source: test.activeSource,
+    };
+    const mapped = test.map({
+      siteKind: "attribute-name",
+      selectedMemberName: "localTitle",
+      selectedMember,
+    });
+
+    expect(markdown(mapped)).toBe("```ts\nlocal-title: string\n```\n\nLet local.");
+    expect(mapped.failures).toEqual([]);
+
+    const mismatched = test.map({
+      siteKind: "attribute-name",
+      selectedMemberName: "localTitle",
+      selectedMember: {
+        ...selectedMember,
+        source: source(
+          "src/hover.html",
+          test.activeSource.start + 1,
+          test.activeSource.end,
+        ),
+      },
+    });
+    expect(mismatched.value).toBeNull();
+    expect(mismatched.failures).toEqual([
+      "Hover selected member does not match the exact authored token.",
+    ]);
+  });
+
+  test("authenticates an exact callback-parameter declaration carrier", () => {
+    const test = harness(
+      "<template>${items.map(entry => entry.name)}</template>",
+      "entry",
+    );
+    const mapped = test.map({
+      selectedMemberName: "entry",
+      selectedMember: {
+        ...member("entry", "callback-parameter", "Item"),
+        source: test.activeSource,
+      },
+    });
+
+    expect(markdown(mapped)).toBe("```ts\nentry: Item\n```\n\nCallback parameter.");
+    expect(mapped.failures).toEqual([]);
+  });
+
+  test("renders each exact bare binding-context qualifier from authored ancestry", () => {
+    const current = harness("<template>${$this}</template>", "$this");
+    const currentMapped = current.map({
+      selectedExpression: expression(current.activeSource),
+    });
+    expect(markdown(currentMapped)).toBe([
+      "```ts",
+      "$this: HoverApp",
+      "```",
+      "",
+      "Current Aurelia binding context.",
+    ].join("\n"));
+    expect(currentMapped.value?.range).toEqual({
+      start: current.document.positionAt(current.activeSource.start),
+      end: current.document.positionAt(current.activeSource.end),
+    });
+    expect(currentMapped.failures).toEqual([]);
+
+    const parent = harness("<template>${$parent}</template>", "$parent");
+    const parentMapped = parent.map({
+      selectedExpression: expression(parent.activeSource, {
+        authoredScopeAncestor: 1,
+        scopeLookupAncestor: 1,
+        typeDisplay: "HoverApp",
+      }),
+    });
+    expect(markdown(parentMapped)).toBe([
+      "```ts",
+      "$parent: HoverApp",
+      "```",
+      "",
+      "Parent Aurelia binding context.",
+    ].join("\n"));
+    expect(parentMapped.value?.range).toEqual({
+      start: parent.document.positionAt(parent.activeSource.start),
+      end: parent.document.positionAt(parent.activeSource.end),
+    });
+    expect(parentMapped.failures).toEqual([]);
+
+    const nested = harness("<template>${$parent.$parent}</template>", "$parent", 1);
+    const nestedMapped = nested.map({
+      selectedExpression: expression(nested.activeSource, {
+        authoredScopeAncestor: 2,
+        scopeLookupAncestor: 4,
+        typeDisplay: "RootApp",
+      }),
+    });
+    expect(markdown(nestedMapped)).toBe([
+      "```ts",
+      "$parent: RootApp",
+      "```",
+      "",
+      "Aurelia binding context 2 parent scopes up.",
+    ].join("\n"));
+    expect(nestedMapped.value?.range).toEqual({
+      start: nested.document.positionAt(nested.activeSource.start),
+      end: nested.document.positionAt(nested.activeSource.end),
+    });
+    expect(nestedMapped.failures).toEqual([]);
+  });
+
+  test("keeps missing parent ancestry typed as unavailable without fabricating a type", () => {
+    const parent = harness("<template>${$parent}</template>", "$parent");
+    const mapped = parent.map({
+      selectedExpression: expression(parent.activeSource, {
+        authoredScopeAncestor: 1,
+        scopeLookupAncestor: 1,
+        typeDisplay: null,
+        typeShapeKind: null,
+        typeOrigin: null,
+        openKind: "missing-ancestor",
+        openReason: "No parent scope exists.",
+      }),
+      uncertainty: {
+        category: "type-information-incomplete",
+        affectedDomain: "binding-context",
+        affectedLocus: "selected-expression",
+      },
+    }, { coverage: "open" });
+
+    expect(markdown(mapped)).toBe([
+      "```ts",
+      "$parent",
+      "```",
+      "",
+      "Parent Aurelia binding context.",
+      "",
+      "No parent Aurelia binding context is reachable.",
+    ].join("\n"));
+    expect(markdown(mapped)).not.toContain("No parent scope exists");
+    expect(markdown(mapped)).not.toContain("missing-ancestor");
+    expect(mapped.value?.range).toEqual({
+      start: parent.document.positionAt(parent.activeSource.start),
+      end: parent.document.positionAt(parent.activeSource.end),
+    });
+    expect(mapped.failures).toEqual([]);
+
+    const excess = harness("<template>${$parent.$parent}</template>", "$parent", 1);
+    const excessMapped = excess.map({
+      selectedExpression: expression(excess.activeSource, {
+        authoredScopeAncestor: 2,
+        scopeLookupAncestor: 2,
+        typeDisplay: null,
+        typeShapeKind: null,
+        typeOrigin: null,
+        openKind: "missing-ancestor",
+        openReason: "Only one parent scope exists.",
+      }),
+      uncertainty: {
+        category: "type-information-incomplete",
+        affectedDomain: "binding-context",
+        affectedLocus: "selected-expression",
+      },
+    }, { coverage: "open" });
+    expect(markdown(excessMapped)).toBe([
+      "```ts",
+      "$parent",
+      "```",
+      "",
+      "Aurelia binding context 2 parent scopes up.",
+      "",
+      "No Aurelia binding context is reachable 2 parent scopes up.",
+    ].join("\n"));
+    expect(excessMapped.value?.range).toEqual({
+      start: excess.document.positionAt(excess.activeSource.start),
+      end: excess.document.positionAt(excess.activeSource.end),
+    });
+    expect(excessMapped.failures).toEqual([]);
+  });
+
+  test("fails closed for incoherent binding-context ancestry and token spelling", () => {
+    const parent = harness("<template>${$parent}</template>", "$parent");
+    for (const overrides of [
+      { authoredScopeAncestor: -1 },
+      { authoredScopeAncestor: 1.5 },
+      { scopeLookupAncestor: -1 },
+      { authoredScopeAncestor: 2, scopeLookupAncestor: 1 },
+      { scopeLookupAncestor: Number.MAX_SAFE_INTEGER + 1 },
+      { expressionKind: "AccessScope" },
+    ]) {
+      expect(parent.map({
+        selectedExpression: expression(parent.activeSource, {
+          authoredScopeAncestor: 1,
+          scopeLookupAncestor: 1,
+          ...overrides,
+        }),
+      }).failures).toEqual([
+        "Hover selected expression has unsupported binding-context ancestry.",
+      ]);
+    }
+
+    expect(parent.map({
+      selectedExpression: expression(parent.activeSource, {
+        authoredScopeAncestor: 0,
+        scopeLookupAncestor: 0,
+      }),
+    }).failures).toEqual([
+      "Hover selected expression does not match its exact authored binding-context token.",
+    ]);
+
+    expect(parent.map({
+      selectedExpression: expression(parent.activeSource, {
+        authoredScopeAncestor: 1,
+        scopeLookupAncestor: 1,
+        openKind: "missing-ancestor",
+        openReason: "forged missing ancestor",
+        typeDisplay: "FabricatedParent",
+      }),
+    }).failures).toEqual([
+      "Hover selected expression has incoherent missing-ancestor evidence.",
+    ]);
+
+    const current = harness("<template>${$this}</template>", "$this");
+    expect(current.map({
+      selectedExpression: expression(current.activeSource, {
+        authoredScopeAncestor: 0,
+        scopeLookupAncestor: 0,
+        openKind: "missing-ancestor",
+        openReason: "forged missing ancestor",
+        typeDisplay: null,
+      }),
+      uncertainty: {
+        category: "type-information-incomplete",
+        affectedDomain: "binding-context",
+        affectedLocus: "selected-expression",
+      },
+    }, { coverage: "open" }).failures).toEqual([
+      "Hover selected expression has incoherent missing-ancestor evidence.",
+    ]);
+  });
+
+  test("keeps a component property named $parent as an ordinary member after $this", () => {
+    const property = harness("<template>${$this.$parent}</template>", "$parent");
+    const mapped = property.map({
+      selectedMemberName: "$parent",
+      selectedMember: {
+        ...member("$parent", null, "17"),
+        isReadonly: true,
+      },
+    });
+
+    expect(markdown(mapped)).toBe("```ts\nreadonly $parent: 17\n```");
+    expect(markdown(mapped)).not.toContain("binding context");
+    expect(mapped.value?.range).toEqual({
+      start: property.document.positionAt(property.activeSource.start),
+      end: property.document.positionAt(property.activeSource.end),
+    });
+    expect(mapped.failures).toEqual([]);
+  });
+
+  test("renders checker visibility, deprecation, and source-authored documentation as bounded plaintext", () => {
+    const documented = harness("<template>${legacyStatus}</template>", "legacyStatus");
+    const mapped = documented.map({
+      selectedMemberName: "legacyStatus",
+      selectedMember: {
+        ...member("legacyStatus", null, "string"),
+        isOptional: true,
+        isReadonly: true,
+        visibilityKind: "protected",
+        isDeprecated: true,
+        deprecationReason: memberText("Use `catalogStatus` instead."),
+        documentation: memberText(
+          "Legacy **catalog** [guide](command:aurelia.open) at https://example.test.",
+        ),
+      },
+    });
+
+    expect(markdown(mapped)).toBe([
+      "```ts",
+      "protected readonly legacyStatus?: string",
+      "```",
+      "",
+      "Deprecated: Use \\`catalogStatus\\` instead.",
+      "Legacy \\*\\*catalog\\*\\* \\[guide\\](command\\:aurelia.open) at https\\://example.test.",
+    ].join("\n"));
+    expect(markdown(mapped)).not.toMatch(/\b(?:https?|mailto|file|command):/iu);
+    expect(mapped.value?.range).toEqual({
+      start: documented.document.positionAt(documented.activeSource.start),
+      end: documented.document.positionAt(documented.activeSource.end),
+    });
+    expect(mapped.failures).toEqual([]);
+
+    for (const [visibilityKind, expectedIdentity] of [
+      ["private", "private value: number"],
+      ["public", "value: number"],
+      ["unknown", "value: number"],
+    ] as const) {
+      const visibility = harness("<template>${value}</template>", "value");
+      const visibilityMapped = visibility.map({
+        selectedMemberName: "value",
+        selectedMember: {
+          ...member("value", null, "number"),
+          visibilityKind,
+        },
+      });
+      expect(markdown(visibilityMapped)).toBe(`\`\`\`ts\n${expectedIdentity}\n\`\`\``);
+      expect(visibilityMapped.failures).toEqual([]);
+    }
+
+    const generic = harness("<template>${legacy}</template>", "legacy");
+    const cappedSources = Array.from({ length: 8 }, (_, index) =>
+      typescriptSource(`src/member-${index}.ts`, index, index + 1)
+    );
+    const genericMapped = generic.map({
+      selectedMemberName: "legacy",
+      selectedMember: {
+        ...member("legacy", null, "string"),
+        isDeprecated: true,
+        documentation: memberText("Legacy value.\n\nInternal migration details stay outside default hover.", {
+          isTruncated: true,
+          sourceCount: 9,
+          sources: cappedSources,
+        }),
+      },
+    });
+    expect(markdown(genericMapped)).toBe([
+      "```ts",
+      "legacy: string",
+      "```",
+      "",
+      "Deprecated.",
+      "Legacy value.",
+    ].join("\n"));
+    expect(markdown(genericMapped)).not.toContain("Internal migration details");
+    expect(genericMapped.failures).toEqual([]);
+
+    const spanBacked = harness("<template>${spanBacked}</template>", "spanBacked");
+    const spanBackedMapped = spanBacked.map({
+      selectedMemberName: "spanBacked",
+      selectedMember: {
+        ...member("spanBacked", null, "string"),
+        documentation: memberText("Kernel-backed documentation.", {
+          sources: [source("src/span-backed.ts", 4, 18, "documentation")],
+        }),
+      },
+    });
+    expect(markdown(spanBackedMapped)).toBe([
+      "```ts",
+      "spanBacked: string",
+      "```",
+      "",
+      "Kernel-backed documentation.",
+    ].join("\n"));
+    expect(spanBackedMapped.failures).toEqual([]);
+  });
+
+  test("renders only the exact selected overload with its declaration context and family badge", () => {
+    const text = "<template>${formatSelection(title)}</template>";
+    const test = harness(text, "formatSelection");
+    const mapped = test.map({
+      selectedMemberName: "formatSelection",
+      selectedMember: {
+        ...member("formatSelection", null, "{ (value: string): string; (value: number): number }"),
+        memberKind: "method",
+        visibilityKind: "protected",
+        documentation: memberText("Member-family documentation must not replace the selected signature."),
+      },
+      selectedCall: selectedCall(
+        test.activeSource,
+        textSource(text, "formatSelection(title)"),
+        {
+          documentation: memberText(
+            "Selected **string** overload at command:aurelia.open.",
+          ),
+          isDeprecated: true,
+          deprecationReason: memberText("Use formatTextSelection."),
+        },
+      ),
+    });
+
+    expect(markdown(mapped)).toBe([
+      "```ts",
+      "protected formatSelection(value: string): string (+1 overload)",
+      "```",
+      "",
+      "Deprecated: Use formatTextSelection.",
+      "Selected \\*\\*string\\*\\* overload at command\\:aurelia.open.",
+    ].join("\n"));
+    expect(markdown(mapped)).not.toContain("number");
+    expect(markdown(mapped)).not.toContain("Member-family documentation");
+    expect(mapped.value?.range).toEqual({
+      start: test.document.positionAt(test.activeSource.start),
+      end: test.document.positionAt(test.activeSource.end),
+    });
+    expect(mapped.failures).toEqual([]);
+  });
+
+  test("preserves private visibility on an exact selected call signature", () => {
+    const text = "<template>${formatSelection(title)}</template>";
+    const test = harness(text, "formatSelection");
+    const mapped = test.map({
+      selectedMemberName: "formatSelection",
+      selectedMember: {
+        ...member("formatSelection", null, "(value: string) => string"),
+        memberKind: "method",
+        visibilityKind: "private",
+      },
+      selectedCall: selectedCall(
+        test.activeSource,
+        textSource(text, "formatSelection(title)"),
+        { candidateCount: 1 },
+      ),
+    });
+
+    expect(markdown(mapped)).toBe([
+      "```ts",
+      "private formatSelection(value: string): string",
+      "```",
+    ].join("\n"));
+    expect(mapped.failures).toEqual([]);
+  });
+
+  test("keeps callable-value grammar distinct and optional-chain invocation visually quiet", () => {
+    const text = "<template>${tools.identity?. (title)}</template>";
+    const test = harness(text, "identity");
+    const mapped = test.map({
+      selectedMemberName: "identity",
+      selectedMember: {
+        ...member("identity", null, "<T>(value: T) => T"),
+        memberKind: "property",
+        isReadonly: true,
+        documentation: memberText("Callable-family documentation must be replaced by exact null."),
+      },
+      selectedCall: selectedCall(
+        test.activeSource,
+        textSource(text, "tools.identity?. (title)"),
+        {
+          callKind: "member",
+          optionalChain: true,
+          presentationKind: "callable-value",
+          signatureName: "identity",
+          signatureTail: "<string>(value: string) => string",
+          candidateCount: 1,
+          genericParameterCount: 1,
+          documentation: null,
+        },
+      ),
+    });
+
+    expect(markdown(mapped)).toBe([
+      "```ts",
+      "readonly identity: <string>(value: string) => string",
+      "```",
+    ].join("\n"));
+    expect(markdown(mapped)).not.toContain("identity?.");
+    expect(markdown(mapped)).not.toContain("Callable-family documentation");
+    expect(mapped.failures).toEqual([]);
+  });
+
+  test("discloses semantic signature truncation before the overload badge exactly once", () => {
+    const text = "<template>${formatSelection(title)}</template>";
+    const test = harness(text, "formatSelection");
+    const truncatedTail = `(${"x".repeat(599)}`;
+    expect(Array.from(truncatedTail)).toHaveLength(600);
+    const mapped = test.map({
+      selectedMemberName: "formatSelection",
+      selectedMember: { ...member("formatSelection", null, "Function"), memberKind: "method" },
+      selectedCall: selectedCall(
+        test.activeSource,
+        textSource(text, "formatSelection(title)"),
+        {
+          signatureTail: truncatedTail,
+          signatureIsTruncated: true,
+          candidateCount: 3,
+        },
+      ),
+    });
+    expect(markdown(mapped)).toMatch(/^```ts\nformatSelection\(x+…\n```$/u);
+    expect(markdown(mapped).match(/…/gu)).toHaveLength(1);
+    expect(markdown(mapped)).not.toContain("overload");
+
+    const complete = test.map({
+      selectedMemberName: "formatSelection",
+      selectedMember: { ...member("formatSelection", null, "Function"), memberKind: "method" },
+      selectedCall: selectedCall(
+        test.activeSource,
+        textSource(text, "formatSelection(title)"),
+        { candidateCount: 1 },
+      ),
+    });
+    expect(markdown(complete)).not.toContain("…");
+  });
+
+  test("keeps synthesized callable-union signatures exact without borrowing declaration metadata", () => {
+    const text = "<template>${tools.unionCallable(title)}</template>";
+    const test = harness(text, "unionCallable");
+    const mapped = test.map({
+      selectedMemberName: "unionCallable",
+      selectedMember: {
+        ...member("unionCallable", null, "((value: string) => string) | ((value: string) => number)"),
+        memberKind: "property",
+        documentation: memberText("Family documentation must not leak into a synthesized signature."),
+        isDeprecated: true,
+        deprecationReason: memberText("Family deprecation must not leak."),
+      },
+      selectedCall: selectedCall(
+        test.activeSource,
+        textSource(text, "tools.unionCallable(title)"),
+        {
+          callKind: "member",
+          presentationKind: "callable-value",
+          signatureName: "unionCallable",
+          signatureTail: "(value: string) => string | number",
+          candidateCount: 1,
+          genericParameterCount: null,
+          signatureProvenance: "synthesized",
+          declarationSource: null,
+          documentation: null,
+          isDeprecated: null,
+          deprecationReason: null,
+        },
+      ),
+    });
+
+    expect(markdown(mapped)).toBe([
+      "```ts",
+      "unionCallable: (value: string) => string | number",
+      "```",
+    ].join("\n"));
+    expect(markdown(mapped)).not.toContain("Family documentation");
+    expect(markdown(mapped)).not.toContain("Deprecated");
+    expect(mapped.failures).toEqual([]);
+  });
+
+  test("withholds open, stale, and hostile call enrichment without erasing the member hover", () => {
+    const text = "<template>${formatSelection(title)} ${otherCall(title)}</template>";
+    const test = harness(text, "formatSelection");
+    const call = selectedCall(test.activeSource, textSource(text, "formatSelection(title)"));
+    const baseMember = {
+      ...member("formatSelection", null, "(value: unknown) => unknown"),
+      memberKind: "method",
+      documentation: memberText("Authenticated member fallback."),
+    };
+    const expected = [
+      "```ts",
+      "formatSelection: (value: unknown) => unknown",
+      "```",
+      "",
+      "Authenticated member fallback.",
+    ].join("\n");
+    const hostile: readonly Record<string, unknown>[] = [
+      {
+        ...call,
+        status: "open",
+        presentationKind: null,
+        signatureTail: null,
+        signatureIsTruncated: false,
+        selectedCandidateIndex: null,
+        genericParameterCount: null,
+        signatureProvenance: null,
+        declarationSource: null,
+        documentation: null,
+        isDeprecated: null,
+        openReason: "Selection stayed open.",
+      },
+      { ...call, status: "invented" },
+      { ...call, callKind: "global" },
+      { ...call, callKind: "function" },
+      { ...call, optionalChain: "yes" },
+      { ...call, signatureName: "otherCall" },
+      { ...call, source: textSource(text, "otherCall", "active-template-token") },
+      { ...call, source: { ...test.activeSource, kind: "typescript-node" } },
+      { ...call, callSource: textSource(text, "otherCall(title)") },
+      { ...call, callSource: { ...textSource(text, "formatSelection(title)"), kind: "typescript-node" } },
+      { ...call, callSource: { ...textSource(text, "formatSelection(title)"), anchor: { kind: "bad" } } },
+      { ...call, presentationKind: "callable-value" },
+      { ...call, signatureTail: " : string" },
+      { ...call, signatureTail: "(value: string): string\nunsafe" },
+      { ...call, signatureTail: "(value: \"Cafe\u0301\"): string" },
+      { ...call, signatureTail: "(value: string): str\u202eing" },
+      { ...call, signatureTail: "(value: string): str\u2028ing" },
+      { ...call, signatureTail: "(value: string): str\u2029ing" },
+      { ...call, signatureTail: `(${"x".repeat(600)}` },
+      { ...call, signatureTail: "(value: string): string", genericParameterCount: 1 },
+      { ...call, signatureIsTruncated: "yes" },
+      { ...call, signatureIsTruncated: true },
+      { ...call, candidateCount: 0 },
+      { ...call, candidateCount: 1.5 },
+      { ...call, selectedCandidateIndex: null },
+      { ...call, selectedCandidateIndex: 2 },
+      { ...call, genericParameterCount: null },
+      { ...call, signatureProvenance: "declaration", declarationSource: null },
+      { ...call, signatureProvenance: "declaration", isDeprecated: false, deprecationReason: memberText("No.") },
+      { ...call, signatureProvenance: "declaration", documentation: memberText("Unsafe", { format: "markdown" }) },
+      {
+        ...call,
+        signatureProvenance: "synthesized",
+        declarationSource: null,
+        documentation: memberText("Borrowed."),
+        isDeprecated: null,
+      },
+      { ...call, openReason: "Exact rows cannot be open." },
+    ];
+
+    for (const selectedCallRow of hostile) {
+      const mapped = test.map({
+        selectedMemberName: "formatSelection",
+        selectedMember: baseMember,
+        selectedCall: selectedCallRow,
+      });
+      expect(markdown(mapped)).toBe(expected);
+      expect(mapped.failures).toEqual([]);
+    }
+  });
+
+  test("keeps a broad named-lookup Open call quiet without inventing a parent member", () => {
+    const text = "<template>${broadCall(value)}</template>";
+    const test = harness(text, "broadCall");
+    const mapped = test.map({
+      selectedMemberName: null,
+      selectedMember: null,
+      memberOwnerType: null,
+      selectedCall: {
+        ...selectedCall(test.activeSource, textSource(text, "broadCall(value)")),
+        status: "open",
+        signatureName: "broadCall",
+        presentationKind: null,
+        signatureTail: null,
+        signatureIsTruncated: false,
+        candidateCount: 0,
+        selectedCandidateIndex: null,
+        genericParameterCount: null,
+        signatureProvenance: null,
+        declarationSource: null,
+        documentation: null,
+        isDeprecated: null,
+        deprecationReason: null,
+        openReason: "Broad named lookup cannot authenticate one receiver member.",
+      },
+    });
+
+    expect(mapped).toEqual({ value: null, failures: [] });
+  });
+
+  test("discloses upstream member-text truncation and preserves the hover leaf budget", () => {
+    const documented = harness("<template>${legacyStatus}</template>", "legacyStatus");
+    const mapped = documented.map({
+      selectedMemberName: "legacyStatus",
+      selectedMember: {
+        ...member("legacyStatus", null, "string"),
+        isDeprecated: true,
+        deprecationReason: memberText("Use catalogStatus instead", { isTruncated: true }),
+        documentation: memberText("word ".repeat(100).trimEnd(), { isTruncated: true }),
+      },
+    });
+    const rendered = markdown(mapped);
+    const context = rendered.split("\n\n")[1]?.split("\n") ?? [];
+
+    expect(context[0]).toBe("Deprecated: Use catalogStatus instead…");
+    expect(context[1]?.endsWith("…")).toBe(true);
+    expect(Array.from(context[0] ?? "").length).toBeLessThanOrEqual(160);
+    expect(Array.from(context[1] ?? "").length).toBeLessThanOrEqual(160);
+    expect(Array.from(rendered).length).toBeLessThanOrEqual(640);
+    expect(mapped.failures).toEqual([]);
+  });
+
+  test("fails closed for incoherent or malformed checker member presentation metadata", () => {
+    const test = harness("<template>${value}</template>", "value");
+    const malformed: Array<{
+      readonly selectedMember: Record<string, unknown>;
+      readonly failure: string;
+    }> = [
+      {
+        selectedMember: { ...member("value", "repeat-local"), documentation: memberText("No local docs.") },
+        failure: "Hover selected template local carries unsupported checker declaration metadata.",
+      },
+      {
+        selectedMember: { ...member("value", null), visibilityKind: null },
+        failure: "Hover selected synthetic member carries unsupported checker declaration metadata.",
+      },
+      {
+        selectedMember: { ...member("value", null), visibilityKind: "package" },
+        failure: "Hover selected member has unsupported checker visibility.",
+      },
+      {
+        selectedMember: { ...member("value", null), isDeprecated: null },
+        failure: "Hover selected checker member has no exact deprecation state.",
+      },
+      {
+        selectedMember: {
+          ...member("value", null),
+          isDeprecated: false,
+          deprecationReason: memberText("Use nextValue."),
+        },
+        failure: "Hover selected member deprecation reason does not match its deprecation state.",
+      },
+      {
+        selectedMember: {
+          ...member("value", null),
+          documentation: memberText("Unsafe", { format: "markdown" }),
+        },
+        failure: "Hover selected member documentation has malformed plaintext provenance.",
+      },
+      ...[
+        "Cafe\u0301",
+        "one\r\ntwo",
+        "one\ttwo",
+        "one\u0007two",
+        "one\u0085two",
+        "one\u202etwo",
+        "\ufeffone",
+        " leading",
+        "trailing ",
+        "one \ntwo",
+        "one\n\n\ntwo",
+      ].map((text) => ({
+        selectedMember: {
+          ...member("value", null),
+          documentation: memberText(text),
+        },
+        failure: "Hover selected member documentation has malformed plaintext provenance.",
+      })),
+      {
+        selectedMember: {
+          ...member("value", null),
+          documentation: memberText("x".repeat(801)),
+        },
+        failure: "Hover selected member documentation has malformed plaintext provenance.",
+      },
+      ...[
+        { label: "src/a.ts@1..2", path: "src/a.ts", start: 1, end: 2 },
+        { kind: "typescript-node", path: "src/a.ts", start: 1, end: 2 },
+        { kind: "typescript-node", label: "src/a.ts@1..2", start: 1, end: 2 },
+        { kind: "fake-span", label: "src/a.ts@1..2", path: "src/a.ts", start: 1, end: 2 },
+        typescriptSource("src/a.ts", 1, 2, { label: "" }),
+        typescriptSource("src/a.ts", 1, 2, { path: "   " }),
+        typescriptSource("src/a.ts", 1.5, 2),
+        typescriptSource("src/a.ts", 1, 2.5),
+        typescriptSource("src/a.ts", -1, 2),
+        typescriptSource("src/a.ts", 2, 1),
+        typescriptSource("src/a.ts", 1, 1),
+        typescriptSource("src/a.ts", Number.MAX_SAFE_INTEGER + 1, Number.MAX_SAFE_INTEGER + 2),
+        typescriptSource("src/a.ts", 1, 2, { anchor: { kind: "malformed" } }),
+      ].map((sourceValue) => ({
+        selectedMember: {
+          ...member("value", null),
+          documentation: memberText("Malformed source", { sources: [sourceValue] }),
+        },
+        failure: "Hover selected member documentation has malformed plaintext provenance.",
+      })),
+      {
+        selectedMember: {
+          ...member("value", null),
+          documentation: memberText(Array.from({ length: 9 }, () => "line").join("\n")),
+        },
+        failure: "Hover selected member documentation has malformed plaintext provenance.",
+      },
+      {
+        selectedMember: {
+          ...member("value", null),
+          isDeprecated: true,
+          deprecationReason: memberText("x".repeat(241)),
+        },
+        failure: "Hover selected member deprecation reason has malformed plaintext provenance.",
+      },
+      {
+        selectedMember: {
+          ...member("value", null),
+          isDeprecated: true,
+          deprecationReason: memberText("one\ntwo"),
+        },
+        failure: "Hover selected member deprecation reason has malformed plaintext provenance.",
+      },
+      {
+        selectedMember: {
+          ...member("value", null),
+          documentation: memberText("   "),
+        },
+        failure: "Hover selected member documentation has malformed plaintext provenance.",
+      },
+      {
+        selectedMember: {
+          ...member("value", null),
+          documentation: memberText("No source", { sourceCount: 0, sources: [] }),
+        },
+        failure: "Hover selected member documentation has malformed plaintext provenance.",
+      },
+      {
+        selectedMember: {
+          ...member("value", null),
+          documentation: memberText("Too many sources", {
+            sourceCount: 1,
+            sources: [
+              typescriptSource("src/a.ts", 1, 2),
+              typescriptSource("src/b.ts", 1, 2),
+            ],
+          }),
+        },
+        failure: "Hover selected member documentation has malformed plaintext provenance.",
+      },
+      {
+        selectedMember: {
+          ...member("value", null),
+          documentation: memberText("Missing source", {
+            sourceCount: 2,
+            sources: [typescriptSource("src/a.ts", 1, 2)],
+          }),
+        },
+        failure: "Hover selected member documentation has malformed plaintext provenance.",
+      },
+      {
+        selectedMember: {
+          ...member("value", null),
+          documentation: memberText("Non-exact source", {
+            sources: [{ kind: "source-file-address", label: "src/a.ts", path: "src/a.ts" }],
+          }),
+        },
+        failure: "Hover selected member documentation has malformed plaintext provenance.",
+      },
+    ];
+
+    for (const row of malformed) {
+      const mapped = test.map({
+        selectedMemberName: "value",
+        selectedMember: row.selectedMember,
+      });
+      expect(mapped.value).toBeNull();
+      expect(mapped.failures).toEqual([row.failure]);
+    }
+
+    const privateIdentifier = harness("<template>${#private}</template>", "#private");
+    const privateIdentifierMapped = privateIdentifier.map({
+      selectedMemberName: "#private",
+      selectedMember: member("#private", null, "string"),
+    });
+    expect(privateIdentifierMapped.value).toBeNull();
+    expect(privateIdentifierMapped.failures).toEqual([
+      "Hover selected checker member name is not authorable in an Aurelia expression.",
+    ]);
+  });
+
+  test("requires typed member uncertainty for a missing type and rejects unknown scope roles", () => {
+    const test = harness("<template>${item}</template>", "item");
+    const missingType = member("item", "repeat-local", null);
+    expect(test.map({
+      selectedMemberName: "item",
+      selectedMember: missingType,
+    }).failures).toEqual([
+      "Hover selected member has neither a type nor typed member uncertainty.",
+    ]);
+
+    const qualified = test.map({
+      selectedMemberName: "item",
+      selectedMember: missingType,
+      uncertainty: {
+        category: "type-information-incomplete",
+        affectedDomain: "member",
+        affectedLocus: "selected-member",
+      },
+    });
+    expect(markdown(qualified)).toBe([
+      "```ts",
+      "item",
+      "```",
+      "",
+      "Repeat local.",
+      "",
+      "Type unavailable in the current template scope.",
+    ].join("\n"));
+
+    expect(test.map({
+      selectedMemberName: "item",
+      selectedMember: member("item", "invented-role"),
+    }).failures).toEqual(["Hover selected member has an unsupported scope role."]);
+
+    const openProjected = test.map({
+      selectedMemberName: "item",
+      selectedMember: member("item", "repeat-local", "Item"),
+      uncertainty: {
+        category: "type-information-incomplete",
+        affectedDomain: "member",
+        affectedLocus: "selected-member",
+      },
+    });
+    expect(markdown(openProjected)).toContain("item: Item");
+    expect(markdown(openProjected)).toContain("Type information is incomplete for this expression.");
+
+    const literalUnknown = test.map({
+      selectedMemberName: "item",
+      selectedMember: member("item", "repeat-local", "unknown"),
+    });
+    expect(markdown(literalUnknown)).toContain("item: unknown");
+    expect(markdown(literalUnknown)).not.toContain("incomplete");
+  });
+
+  test("leads with the exact resource alias and keeps canonical identity in one context line", () => {
+    const test = harness("<template><legacy-card></legacy-card></template>", "legacy-card");
+    const mapped = test.map({
+      siteKind: "tag-name",
+      html: {
+        nodeKind: "element",
+        tagName: "legacy-card",
+        attributeName: null,
+        attributeValue: "",
+        source: null,
+        tagNameSource: test.activeSource,
+        closingTagNameSource: null,
+        attributeSource: null,
+      },
+      selectedDefinition: definition({ matchedName: "legacy-card" }),
+    });
+
+    expect(markdown(mapped)).toBe([
+      "```html",
+      "<legacy-card>",
+      "```",
+      "",
+      "Aurelia custom element. Alias for: `product-card`.",
+    ].join("\n"));
+    expect(markdown(mapped)).not.toContain("ProductCard");
+    expect(mapped.value?.range).toEqual({
+      start: test.document.positionAt(test.activeSource.start),
+      end: test.document.positionAt(test.activeSource.end),
+    });
+
+    const sourceBacked = test.map({
+      siteKind: "tag-name",
+      html: {
+        nodeKind: "element",
+        tagName: "legacy-card",
+        attributeName: null,
+        attributeValue: null,
+        source: null,
+        tagNameSource: test.activeSource,
+        closingTagNameSource: null,
+        attributeSource: null,
+      },
+      selectedDefinition: definition({
+        matchedName: "legacy-card",
+        targetSource: source("src/product-card.ts", 13, 24),
+      }),
+    });
+    expect(markdown(sourceBacked)).toContain(
+      "Aurelia custom element. Alias for: `product-card`. Implementation: `ProductCard`.",
+    );
+  });
+
+  test("preserves authored tag spelling while authenticating browser-normalized element identity", () => {
+    const text = "<template><PrOdUcT-CaRd></pRoDuCt-CaRd></template>";
+    const closing = harness(text, "pRoDuCt-CaRd");
+    const openingStart = text.indexOf("PrOdUcT-CaRd");
+    const mapped = closing.map({
+      siteKind: "tag-name",
+      html: {
+        nodeKind: "element",
+        tagName: "PrOdUcT-CaRd",
+        namespace: "html",
+        attributeName: null,
+        attributeValue: null,
+        source: null,
+        tagNameSource: source("src/hover.html", openingStart, openingStart + "PrOdUcT-CaRd".length),
+        closingTagNameSource: closing.activeSource,
+        attributeSource: null,
+      },
+      selectedDefinition: definition({
+        authoredMatchedName: null,
+        runtimeMatchedName: "product-card",
+      }),
+    });
+
+    expect(markdown(mapped)).toContain("<pRoDuCt-CaRd>");
+    expect(mapped.failures).toEqual([]);
+    expect(mapped.value?.range).toEqual({
+      start: closing.document.positionAt(closing.activeSource.start),
+      end: closing.document.positionAt(closing.activeSource.end),
+    });
+  });
+
+  test("authenticates authored HTML, SVG, command, and as-element identities on both axes", () => {
+    const htmlAttribute = harness("<template><div FOCUS></div></template>", "FOCUS");
+    const htmlMapped = htmlAttribute.map({
+      siteKind: "attribute-name",
+      html: {
+        nodeKind: "element",
+        tagName: "div",
+        namespace: "html",
+        attributeName: "FOCUS",
+        attributeValue: null,
+        source: null,
+        tagNameSource: null,
+        closingTagNameSource: null,
+        attributeSource: htmlAttribute.activeSource,
+      },
+      selectedDefinition: definition({
+        resourceKind: "custom-attribute",
+        name: "focus-ring",
+        matchedName: "focus",
+        authoredMatchedName: "FOCUS",
+        runtimeMatchedName: "focus",
+      }),
+    });
+    expect(markdown(htmlMapped)).toContain("(custom attribute) FOCUS");
+    expect(markdown(htmlMapped)).toContain("Alias for: `focus-ring`.");
+    expect(htmlMapped.failures).toEqual([]);
+
+    const svgAttribute = harness("<template><svg VIEWBOX=\"0 0 1 1\"></svg></template>", "VIEWBOX");
+    const svgMapped = svgAttribute.map({
+      siteKind: "attribute-name",
+      html: {
+        nodeKind: "element",
+        tagName: "svg",
+        namespace: "svg",
+        attributeName: "VIEWBOX",
+        attributeValue: "0 0 1 1",
+        source: null,
+        tagNameSource: null,
+        closingTagNameSource: null,
+        attributeSource: source(
+          "src/hover.html",
+          svgAttribute.activeSource.start,
+          svgAttribute.activeSource.end + '=\"0 0 1 1\"'.length,
+        ),
+      },
+      selectedDefinition: definition({
+        resourceKind: "custom-attribute",
+        name: "viewBox",
+        matchedName: "viewBox",
+        authoredMatchedName: "VIEWBOX",
+        runtimeMatchedName: "viewBox",
+      }),
+    });
+    expect(markdown(svgMapped)).toContain("(custom attribute) VIEWBOX");
+    expect(svgMapped.failures).toEqual([]);
+
+    const command = harness("<template><input VALUE.BIND=\"item\"></template>", "BIND");
+    const attributeStart = command.activeSource.start - "VALUE.".length;
+    const commandMapped = command.map({
+      siteKind: "binding-command-name",
+      html: {
+        nodeKind: "element",
+        tagName: "input",
+        namespace: "html",
+        attributeName: "VALUE.BIND",
+        attributeValue: "item",
+        source: null,
+        tagNameSource: null,
+        closingTagNameSource: null,
+        attributeSource: source(
+          "src/hover.html",
+          attributeStart,
+          command.activeSource.end + '=\"item\"'.length,
+        ),
+      },
+      valueSite: { bindingCommandName: "bind" },
+      selectedDefinition: definition({
+        resourceKind: "binding-command",
+        name: "bind",
+        matchedName: "bind",
+        authoredMatchedName: "BIND",
+        runtimeMatchedName: "bind",
+      }),
+    });
+    expect(markdown(commandMapped)).toContain("(binding command) BIND");
+    expect(commandMapped.failures).toEqual([]);
+
+    const specializedCommand = harness("<template><p T.BIND=\"key\"></p></template>", "BIND");
+    const specializedStart = specializedCommand.activeSource.start - "T.".length;
+    const specializedMapped = specializedCommand.map({
+      siteKind: "binding-command-name",
+      html: {
+        nodeKind: "element",
+        tagName: "p",
+        namespace: "html",
+        attributeName: "T.BIND",
+        attributeValue: "key",
+        source: null,
+        tagNameSource: null,
+        closingTagNameSource: null,
+        attributeSource: source(
+          "src/hover.html",
+          specializedStart,
+          specializedCommand.activeSource.end + '=\"key\"'.length,
+        ),
+      },
+      valueSite: { bindingCommandName: "t.bind" },
+      selectedDefinition: definition({
+        resourceKind: "binding-command",
+        name: "t.bind",
+        matchedName: "t.bind",
+        authoredMatchedName: "BIND",
+        runtimeMatchedName: "t.bind",
+      }),
+    });
+    expect(markdown(specializedMapped)).toContain("(binding command) BIND");
+    expect(specializedMapped.failures).toEqual([]);
+
+    const asElement = harness(
+      '<template><div AS-ELEMENT="PRODUCT-CARD"></div></template>',
+      "PRODUCT-CARD",
+    );
+    const asElementMapped = asElement.map({
+      siteKind: "attribute-value",
+      html: {
+        nodeKind: "element",
+        tagName: "div",
+        namespace: "html",
+        attributeName: "AS-ELEMENT",
+        attributeValue: "PRODUCT-CARD",
+        source: null,
+        tagNameSource: null,
+        closingTagNameSource: null,
+        attributeSource: source(
+          "src/hover.html",
+          asElement.activeSource.start - 'AS-ELEMENT="'.length,
+          asElement.activeSource.end + 1,
+        ),
+      },
+      selectedDefinition: definition({
+        authoredMatchedName: "PRODUCT-CARD",
+        runtimeMatchedName: "product-card",
+      }),
+    });
+    expect(markdown(asElementMapped)).toContain("(custom element) PRODUCT-CARD");
+    expect(asElementMapped.failures).toEqual([]);
+  });
+
+  test("rejects stale runtime identity and SVG compound-name guesses", () => {
+    const stale = harness("<template><div FOCUS></div></template>", "FOCUS");
+    const staleMapped = stale.map({
+      siteKind: "attribute-name",
+      html: {
+        nodeKind: "element",
+        tagName: "div",
+        namespace: "html",
+        attributeName: "FOCUS",
+        attributeValue: null,
+        source: null,
+        tagNameSource: null,
+        closingTagNameSource: null,
+        attributeSource: stale.activeSource,
+      },
+      selectedDefinition: definition({
+        resourceKind: "custom-attribute",
+        name: "focus",
+        matchedName: "focus",
+        authoredMatchedName: "FOCUS",
+        runtimeMatchedName: "other",
+      }),
+    });
+    expect(staleMapped.value).toBeNull();
+    expect(staleMapped.failures).toEqual([
+      "Hover selected resource does not match the exact authored token.",
+    ]);
+
+    const svgCompound = harness(
+      '<template><svg VIEWBOX.BIND="item"></svg></template>',
+      "VIEWBOX",
+    );
+    const compoundMapped = svgCompound.map({
+      siteKind: "attribute-name",
+      html: {
+        nodeKind: "element",
+        tagName: "svg",
+        namespace: "svg",
+        attributeName: "VIEWBOX.BIND",
+        attributeValue: "item",
+        source: null,
+        tagNameSource: null,
+        closingTagNameSource: null,
+        attributeSource: source(
+          "src/hover.html",
+          svgCompound.activeSource.start,
+          svgCompound.activeSource.end + '.BIND="item"'.length,
+        ),
+      },
+      selectedDefinition: definition({
+        resourceKind: "custom-attribute",
+        name: "viewBox",
+        matchedName: "viewBox",
+        authoredMatchedName: "VIEWBOX",
+        runtimeMatchedName: "viewBox",
+      }),
+    });
+    expect(compoundMapped.value).toBeNull();
+    expect(compoundMapped.failures).toEqual([
+      "Hover selected resource does not match the exact authored token.",
+    ]);
+  });
+
+  test("keeps expression resource aliases exact and case-sensitive", () => {
+    const alias = harness("<template>${item | FormatName}</template>", "FormatName");
+    const mapped = alias.map({
+      siteKind: "expression-value-converter",
+      html: { namespace: null },
+      selectedDefinition: definition({
+        resourceKind: "value-converter",
+        name: "formatName",
+        matchedName: "FormatName",
+        authoredMatchedName: "FormatName",
+        runtimeMatchedName: "FormatName",
+      }),
+    });
+    expect(markdown(mapped)).toContain("(value converter) FormatName");
+    expect(markdown(mapped)).toContain("Alias for: `formatName`.");
+    expect(mapped.failures).toEqual([]);
+  });
+
+  test("withholds attribute-pattern cards without reporting a mapping failure", () => {
+    const pattern = harness('<template><div foo.DATA="item"></div></template>', "DATA");
+    const mapped = pattern.map({
+      siteKind: "attribute-name",
+      html: {
+        nodeKind: "element",
+        tagName: "div",
+        namespace: "html",
+        attributeName: "foo.DATA",
+        attributeValue: "item",
+        source: null,
+        tagNameSource: null,
+        closingTagNameSource: null,
+        attributeSource: source(
+          "src/hover.html",
+          pattern.activeSource.start - "foo.".length,
+          pattern.activeSource.end + '=\"item\"'.length,
+        ),
+      },
+      selectedDefinition: definition({
+        resourceKind: "attribute-pattern",
+        name: null,
+        matchedName: null,
+        authoredMatchedName: "DATA",
+        runtimeMatchedName: "PART.data",
+      }),
+    });
+
+    expect(mapped).toEqual({ value: null, failures: [] });
+  });
+
+  test("fails closed on an unsupported future HTML namespace", () => {
+    const token = harness("<template><product-card></product-card></template>", "product-card");
+    const mapped = token.map({
+      siteKind: "tag-name",
+      html: {
+        nodeKind: "element",
+        tagName: "product-card",
+        namespace: "future-namespace",
+        attributeName: null,
+        attributeValue: null,
+        source: null,
+        tagNameSource: token.activeSource,
+        closingTagNameSource: null,
+        attributeSource: null,
+      },
+      selectedDefinition: definition(),
+    });
+
+    expect(mapped).toEqual({
+      value: null,
+      failures: ["Hover HTML namespace has an unsupported value."],
+    });
+  });
+
+  test("renders only an exact as-element value as an audible non-tag custom-element identity", () => {
+    const token = "decorator-card-alias";
+    const test = harness(
+      `<template><button as-element="${token}"></button></template>`,
+      token,
+    );
+    const mapped = test.map({
+      siteKind: "attribute-value",
+      html: {
+        nodeKind: "element",
+        tagName: "button",
+        attributeName: "as-element",
+        attributeValue: token,
+        source: null,
+        tagNameSource: null,
+        closingTagNameSource: null,
+        attributeSource: source(
+          "src/hover.html",
+          test.activeSource.start - 'as-element="'.length,
+          test.activeSource.end + 1,
+        ),
+      },
+      valueSite: null,
+      selectedDefinition: definition({
+        name: "decorator-card",
+        matchedName: token,
+        targetName: "DecoratorCard",
+        targetSource: source("src/decorator-card.ts", 13, 26),
+      }),
+    });
+
+    expect(markdown(mapped)).toContain("(custom element) decorator-card-alias");
+    expect(markdown(mapped)).not.toContain("<decorator-card-alias>");
+    expect(markdown(mapped)).toContain(
+      "Aurelia custom element. Alias for: `decorator-card`. Implementation: `DecoratorCard`.",
+    );
+    expect(mapped.failures).toEqual([]);
+
+    const unrelated = harness(
+      `<template><button title="${token}"></button></template>`,
+      token,
+    );
+    const unrelatedMapped = unrelated.map({
+      siteKind: "attribute-value",
+      html: {
+        nodeKind: "element",
+        tagName: "button",
+        attributeName: "title",
+        attributeValue: token,
+        source: null,
+        tagNameSource: null,
+        closingTagNameSource: null,
+        attributeSource: source(
+          "src/hover.html",
+          unrelated.activeSource.start - 'title="'.length,
+          unrelated.activeSource.end + 1,
+        ),
+      },
+      selectedDefinition: definition({
+        name: "decorator-card",
+        matchedName: token,
+      }),
+    });
+    expect(unrelatedMapped.value).toBeNull();
+    expect(unrelatedMapped.failures).toEqual([]);
+  });
+
+  test("lets an exact custom-attribute token outrank its primary bindable carrier", () => {
+    for (const matchedName of ["decorator-tooltip", "decorator-tip"]) {
+      const test = harness(
+        `<template><button ${matchedName}="hello"></button></template>`,
+        matchedName,
+      );
+      const mapped = test.map({
+        siteKind: "attribute-name",
+        html: {
+          nodeKind: "element",
+          tagName: "button",
+          attributeName: matchedName,
+          attributeValue: "hello",
+          source: null,
+          tagNameSource: null,
+          closingTagNameSource: null,
+          attributeSource: source(
+            "src/hover.html",
+            test.activeSource.start,
+            test.activeSource.end + '="hello"'.length,
+          ),
+        },
+        selectedBindable: bindable({ name: "message", attribute: "message" }),
+        selectedDefinition: definition({
+          resourceKind: "custom-attribute",
+          name: "decorator-tooltip",
+          matchedName,
+          targetName: "DecoratorTooltip",
+        }),
+      });
+
+      expect(markdown(mapped)).toContain(`(custom attribute) ${matchedName}`);
+      expect(markdown(mapped)).not.toContain("(bindable)");
+      if (matchedName === "decorator-tip") {
+        expect(markdown(mapped)).toContain("Alias for: `decorator-tooltip`.");
+      }
+      expect(mapped.failures).toEqual([]);
+    }
+
+    const controller = harness(
+      '<template><div repeat.for="item of items"></div></template>',
+      "repeat",
+    );
+    const controllerMapped = controller.map({
+      siteKind: "attribute-name",
+      html: {
+        nodeKind: "element",
+        tagName: "div",
+        attributeName: "repeat.for",
+        attributeValue: "item of items",
+        source: null,
+        tagNameSource: null,
+        closingTagNameSource: null,
+        attributeSource: source(
+          "src/hover.html",
+          controller.activeSource.start,
+          controller.activeSource.end + '.for="item of items"'.length,
+        ),
+      },
+      selectedBindable: bindable({ name: "items", attribute: "items" }),
+      selectedDefinition: definition({
+        resourceKind: "template-controller",
+        name: "repeat",
+        matchedName: "repeat",
+        targetName: "Repeat",
+      }),
+    });
+    expect(markdown(controllerMapped)).toContain("(template controller) repeat");
+    expect(markdown(controllerMapped)).not.toContain("(bindable)");
+    expect(controllerMapped.failures).toEqual([]);
+  });
+
+  test("accepts an exact bare custom-attribute alias despite an attribute-value site classification", () => {
+    const test = harness(
+      '<template><ref-panel focus focus-ring.ref="controller"></ref-panel></template>',
+      "focus",
+    );
+    const mapped = test.map({
+      siteKind: "attribute-value",
+      html: {
+        nodeKind: "element",
+        tagName: "ref-panel",
+        attributeName: "focus",
+        attributeValue: null,
+        source: null,
+        tagNameSource: null,
+        closingTagNameSource: null,
+        attributeSource: test.activeSource,
+      },
+      selectedBindable: bindable({
+        name: "value",
+        attribute: "value",
+        valueType: null,
+        valueTypeShapeKind: "unknown",
+      }),
+      selectedDefinition: definition({
+        resourceKind: "custom-attribute",
+        name: "focus-ring",
+        matchedName: "focus",
+        targetName: "FocusRing",
+        targetSource: source("src/focus-ring.ts", 13, 22),
+      }),
+      uncertainty: {
+        category: "type-information-incomplete",
+        affectedDomain: "bindable",
+        affectedLocus: "selected-bindable",
+      },
+    });
+
+    expect(mapped.failures).toEqual([]);
+    expect(markdown(mapped)).toContain("(custom attribute) focus");
+    expect(markdown(mapped)).toContain("Alias for: `focus-ring`.");
+    expect(markdown(mapped)).toContain("Implementation: `FocusRing`.");
+    expect(markdown(mapped)).not.toContain("(bindable)");
+    expect(markdown(mapped)).not.toContain("Type unavailable");
+  });
+
+  test("keeps top-level custom-attribute identity while composing exact primary-bindable mode context", () => {
+    const mapResourceUsage = (
+      rawAttribute: string,
+      attributeValue: string,
+      usageOverrides: Record<string, unknown>,
+      htmlOverrides: Record<string, unknown> = {},
+    ) => {
+      const markup = `<template><section ${rawAttribute}="${attributeValue}"></section></template>`;
+      const test = harness(markup, "two-way-state");
+      const attributeStart = rawAttribute.startsWith(":")
+        ? test.activeSource.start - 1
+        : test.activeSource.start;
+      const valueStart = markup.indexOf(`"${attributeValue}"`, attributeStart) + 1;
+      const valueSource = source("src/hover.html", valueStart, valueStart + attributeValue.length);
+      const modeSource = source("src/two-way-state.ts", 40, 47, "mode");
+      const command = rawAttribute.startsWith(":")
+        ? "bind"
+        : rawAttribute.includes(".") ? rawAttribute.slice(rawAttribute.indexOf(".") + 1) : null;
+      const commandSource = rawAttribute.startsWith(":")
+        ? source("src/hover.html", attributeStart, attributeStart + 1)
+        : command == null
+          ? null
+          : source(
+              "src/hover.html",
+              test.activeSource.end + 1,
+              test.activeSource.end + 1 + command.length,
+            );
+      return test.map({
+        siteKind: "attribute-name",
+        html: {
+          nodeKind: "element",
+          tagName: "section",
+          attributeName: rawAttribute,
+          attributeValue,
+          source: null,
+          tagNameSource: null,
+          closingTagNameSource: null,
+          attributeSource: source(
+            "src/hover.html",
+            attributeStart,
+            valueStart + attributeValue.length + 1,
+          ),
+          attributeValueSource: valueSource,
+          ...htmlOverrides,
+        },
+        valueSite: null,
+        selectedDefinition: definition({
+          resourceKind: "custom-attribute",
+          name: "two-way-state",
+          matchedName: "two-way-state",
+          authoredMatchedName: "two-way-state",
+          runtimeMatchedName: "two-way-state",
+          targetName: "TwoWayState",
+          targetSource: source("src/two-way-state.ts", 8, 19),
+        }),
+        selectedBindable: bindable({
+          name: "data",
+          attribute: "data",
+          mode: "twoWay",
+          modeSource,
+          valueType: "unknown",
+          usagePresentationKind: "resource-primary",
+          usageModeCommand: command,
+          usageModeCommandSource: commandSource,
+          usageModeCommandKind: command == null ? null : "built-in",
+          usageModeLocus: rawAttribute.startsWith(":") ? "attribute-pattern" : "attribute",
+          usageModeTargetSource: test.activeSource,
+          ...usageOverrides,
+        }),
+      });
+    };
+
+    const defaulted = mapResourceUsage("two-way-state.bind", "state", {
+      usageEffectiveMode: "twoWay",
+      usageModeAuthority: "bindable-default",
+      usageModeSource: source("src/two-way-state.ts", 40, 47, "mode"),
+    });
+    expect(markdown(defaulted)).toContain("(custom attribute) two-way-state");
+    expect(markdown(defaulted)).toContain("Effective mode: two way (bindable default).");
+    expect(markdown(defaulted)).toContain("Aurelia custom attribute. Implementation: `TwoWayState`.");
+    expect(markdown(defaulted)).not.toContain("(bindable)");
+
+    const shorthand = mapResourceUsage(":two-way-state", "state", {
+      usageEffectiveMode: "twoWay",
+      usageModeAuthority: "bindable-default",
+      usageModeSource: source("src/two-way-state.ts", 40, 47, "mode"),
+    });
+    expect(markdown(shorthand)).toContain("(custom attribute) two-way-state");
+    expect(markdown(shorthand)).toContain("Effective mode: two way (bindable default).");
+
+    const literal = mapResourceUsage("two-way-state", "static", {
+      usageEffectiveMode: null,
+      usageModeAuthority: "plain-literal",
+      usageModeSource: source(
+        "src/hover.html",
+        "<template><section two-way-state=\"".length,
+        "<template><section two-way-state=\"static".length,
+      ),
+    });
+    expect(markdown(literal)).toContain("Static value; no binding mode.");
+    expect(markdown(literal)).toContain("(custom attribute) two-way-state");
+
+    const interpolation = mapResourceUsage("two-way-state", "${state}", {
+      usageEffectiveMode: "toView",
+      usageModeAuthority: "interpolation",
+      usageModeSource: source(
+        "src/hover.html",
+        "<template><section two-way-state=\"".length,
+        "<template><section two-way-state=\"${state}".length,
+      ),
+    });
+    expect(markdown(interpolation)).toContain(
+      "Effective mode: to view (interpolation). Default mode: two way.",
+    );
+    expect(markdown(interpolation)).toContain("(custom attribute) two-way-state");
+
+    const mismatchedOwner = mapResourceUsage("two-way-state.bind", "state", {
+      usagePresentationKind: "bindable-attribute",
+      usageEffectiveMode: "twoWay",
+      usageModeAuthority: "bindable-default",
+      usageModeSource: source("src/two-way-state.ts", 40, 47, "mode"),
+    });
+    expect(markdown(mismatchedOwner)).toContain("(custom attribute) two-way-state");
+    expect(markdown(mismatchedOwner)).not.toContain("Effective mode");
+    expect(markdown(mismatchedOwner)).not.toContain("(bindable)");
+
+    const retiredPrimary = mapResourceUsage("two-way-state.bind", "state", {
+      usageModeTargetSource: source("src/hover.html", 0, 1),
+      usageEffectiveMode: "twoWay",
+      usageModeAuthority: "bindable-default",
+      usageModeSource: source("src/two-way-state.ts", 40, 47, "mode"),
+    });
+    expect(markdown(retiredPrimary)).toContain("(custom attribute) two-way-state");
+    expect(markdown(retiredPrimary)).not.toContain("Effective mode");
+    expect(retiredPrimary.failures).toEqual([]);
+
+    const staleValue = mapResourceUsage("two-way-state.bind", "state", {
+      usageEffectiveMode: "twoWay",
+      usageModeAuthority: "bindable-default",
+      usageModeSource: source("src/two-way-state.ts", 40, 47, "mode"),
+    }, { attributeValue: "other" });
+    const staleCommand = mapResourceUsage("two-way-state.bind", "state", {
+      usageEffectiveMode: "twoWay",
+      usageModeAuthority: "bindable-default",
+      usageModeCommandSource: source("src/hover.html", 0, 1),
+      usageModeSource: source("src/two-way-state.ts", 40, 47, "mode"),
+    });
+    const staleAuthority = mapResourceUsage("two-way-state.bind", "state", {
+      usageEffectiveMode: "twoWay",
+      usageModeAuthority: "invented-authority",
+      usageModeSource: source("src/two-way-state.ts", 40, 47, "mode"),
+    });
+    const openOwnership = mapResourceUsage("two-way-state.bind", "state", {
+      usagePresentationKind: null,
+      usageEffectiveMode: null,
+      usageModeAuthority: "open",
+      usageModeOpenReason: "Resource ownership is open.",
+      usageModeSource: null,
+    });
+    for (const withheld of [staleValue, staleCommand, staleAuthority, openOwnership]) {
+      expect(markdown(withheld)).toContain("(custom attribute) two-way-state");
+      expect(markdown(withheld)).not.toContain("Effective mode");
+      expect(markdown(withheld)).not.toContain("Static value");
+      expect(withheld.failures).toEqual([]);
+    }
+
+    for (const mapped of [defaulted, shorthand, literal, interpolation, mismatchedOwner]) {
+      expect(mapped.failures).toEqual([]);
+    }
+  });
+
+  test("renders source-authenticated bindable name, attribute, and default-mode declarations", () => {
+    const text = [
+      "<template>",
+      '  <bindable name="oneTimeValue" attribute="one-time-value" mode="oneTime"></bindable>',
+      "</template>",
+    ].join("\n");
+    const declarationSource = (authored: string) => {
+      const start = text.indexOf(`"${authored}"`) + 1;
+      return source("src/hover.html", start, start + authored.length);
+    };
+    const nameSource = declarationSource("oneTimeValue");
+    const attributeSource = declarationSource("one-time-value");
+    const modeSource = declarationSource("oneTime");
+    const declarationBindable = (valueType: string | null = "string") => bindable({
+      name: "oneTimeValue",
+      attribute: "one-time-value",
+      mode: "oneTime",
+      valueType,
+      nameSource,
+      attributeSource,
+      modeSource,
+    });
+
+    const name = harness(text, "oneTimeValue");
+    const nameMapped = name.map({
+      siteKind: "unknown",
+      selectedMemberName: "oneTimeValue",
+      selectedMember: {
+        ...member("oneTimeValue", null, "string"),
+        source: name.activeSource,
+      },
+      selectedBindable: declarationBindable(),
+    });
+    expect(markdown(nameMapped)).toBe([
+      "```ts",
+      "(bindable) oneTimeValue: string",
+      "```",
+      "",
+      "Public attribute: `one-time-value`. Default mode: one time.",
+    ].join("\n"));
+    expect(nameMapped.failures).toEqual([]);
+
+    const attribute = harness(text, "one-time-value");
+    const attributeMapped = attribute.map({
+      siteKind: "unknown",
+      selectedBindable: declarationBindable(),
+    });
+    expect(markdown(attributeMapped)).toBe([
+      "```ts",
+      "(bindable) one-time-value: string",
+      "```",
+      "",
+      "Maps to: `oneTimeValue`. Default mode: one time.",
+    ].join("\n"));
+    expect(attributeMapped.failures).toEqual([]);
+
+    const mode = harness(text, "oneTime", 1);
+    const modeMapped = mode.map({
+      siteKind: "attribute-value",
+      selectedBindable: declarationBindable(null),
+      uncertainty: {
+        category: "type-information-incomplete",
+        affectedDomain: "bindable",
+        affectedLocus: "selected-bindable",
+      },
+    });
+    expect(modeMapped.failures).toEqual([]);
+    expect(markdown(modeMapped)).toBe([
+      "```text",
+      "(binding mode) oneTime",
+      "```",
+      "",
+      "Default for: `one-time-value`.",
+    ].join("\n"));
+    expect(markdown(modeMapped)).not.toContain("Type unavailable");
+
+    const forged = name.map({
+      siteKind: "unknown",
+      selectedBindable: bindable({
+        name: "differentName",
+        attribute: "one-time-value",
+        mode: "oneTime",
+        nameSource: name.activeSource,
+        attributeSource,
+        modeSource,
+      }),
+    });
+    expect(forged.value).toBeNull();
+    expect(forged.failures).toEqual([
+      "Hover selected bindable declaration does not match the exact authored token.",
+    ]);
+
+    const usageMetadataOnDeclaration = name.map({
+      siteKind: "unknown",
+      selectedBindable: {
+        ...declarationBindable("string"),
+        usageEffectiveMode: "oneTime",
+        usageModeAuthority: "explicit-command",
+        usageModeCommand: "one-time",
+        usageModeCommandSource: name.activeSource,
+        usageModeSource: name.activeSource,
+      },
+    });
+    expect(usageMetadataOnDeclaration.value).toBeNull();
+    expect(usageMetadataOnDeclaration.failures).toEqual([
+      "Hover selected bindable declaration carries usage-effective mode metadata.",
+    ]);
+
+    const unavailable = harness(
+      '<template><bindable name="unusedValue"></bindable></template>',
+      "unusedValue",
+    );
+    const unavailableMapped = unavailable.map({
+      siteKind: "unknown",
+      selectedBindable: bindable({
+        name: "unusedValue",
+        attribute: "unusedValue",
+        mode: "default",
+        valueType: null,
+        nameSource: unavailable.activeSource,
+      }),
+      uncertainty: {
+        category: "type-information-incomplete",
+        affectedDomain: "bindable",
+        affectedLocus: "selected-bindable",
+      },
+    });
+    expect(markdown(unavailableMapped)).toBe([
+      "```ts",
+      "(bindable) unusedValue",
+      "```",
+      "",
+      "Default mode: default.",
+      "",
+      "Type unavailable for this bindable.",
+    ].join("\n"));
+    expect(unavailableMapped.failures).toEqual([]);
+  });
+
+  test("labels a commanded bindable target with an exact current value-site carrier", () => {
+    const token = "one-time-value";
+    const rawAttribute = `${token}.bind`;
+    const test = harness(
+      `<template><mode-panel ${rawAttribute}="item"></mode-panel></template>`,
+      token,
+    );
+    const targetSource = source("src/mode-panel.ts", 10, 19);
+    const commandSource = source(
+      "src/hover.html",
+      test.activeSource.end + 1,
+      test.activeSource.end + 1 + "bind".length,
+    );
+    const valueSource = source(
+      "src/hover.html",
+      test.activeSource.end + '.bind="'.length,
+      test.activeSource.end + '.bind="item'.length,
+    );
+    const mapped = test.map({
+      siteKind: "attribute-name",
+      html: {
+        nodeKind: "element",
+        tagName: "mode-panel",
+        attributeName: rawAttribute,
+        attributeValue: "item",
+        source: null,
+        tagNameSource: null,
+        closingTagNameSource: null,
+        attributeSource: source(
+          "src/hover.html",
+          test.activeSource.start,
+          test.activeSource.start + `${rawAttribute}="item"`.length,
+        ),
+        attributeValueSource: valueSource,
+      },
+      valueSite: null,
+      selectedBindable: bindable({
+        name: "oneTimeValue",
+        attribute: "one-time-value",
+        mode: "oneTime",
+        valueType: "string",
+        usagePresentationKind: "bindable-attribute",
+        usageEffectiveMode: "toView",
+        usageModeAuthority: "framework-fallback",
+        usageModeCommand: "bind",
+        usageModeCommandSource: commandSource,
+        usageModeCommandKind: "built-in",
+        usageModeLocus: "attribute",
+        usageModeTargetSource: test.activeSource,
+        usageModeSource: commandSource,
+      }),
+      selectedDefinition: definition({
+        name: "mode-panel",
+        matchedName: "mode-panel",
+        targetName: "ModePanel",
+        targetSource,
+      }),
+    });
+
+    expect(markdown(mapped)).toBe([
+      "```ts",
+      "(bindable) one-time-value: string",
+      "```",
+      "",
+      "Effective mode: to view (framework fallback). Default mode: one time.",
+      "Maps to: `ModePanel.oneTimeValue`.",
+    ].join("\n"));
+    expect(mapped.failures).toEqual([]);
+  });
+
+  test("renders exact usage-effective modes and authorities ahead of maps-to context", () => {
+    const createUsage = (rawAttribute: string, attributeValue: string) => {
+      const target = rawAttribute.split(".", 1)[0]!;
+      const command = rawAttribute.includes(".") ? rawAttribute.slice(rawAttribute.indexOf(".") + 1) : null;
+      const markup = `<template><mode-panel ${rawAttribute}="${attributeValue}"></mode-panel></template>`;
+      const test = harness(markup, target);
+      const attributeStart = test.activeSource.start;
+      const attributeSource = source(
+        "src/hover.html",
+        attributeStart,
+        attributeStart + `${rawAttribute}="${attributeValue}"`.length,
+      );
+      const valueStart = markup.indexOf(`"${attributeValue}"`, attributeStart) + 1;
+      const valueSource = source("src/hover.html", valueStart, valueStart + attributeValue.length, "value");
+      const commandSource = command == null
+        ? null
+        : source(
+            "src/hover.html",
+            test.activeSource.end + 1,
+            test.activeSource.end + 1 + command.length,
+            "command",
+          );
+      const modeSource = source("src/mode-panel.ts", 30, 37, "mode");
+      const map = (
+        bindableOverrides: Record<string, unknown>,
+        htmlOverrides: Record<string, unknown> = {},
+      ) => test.map({
+        siteKind: "attribute-name",
+        html: {
+          nodeKind: "element",
+          tagName: "mode-panel",
+          attributeName: rawAttribute,
+          attributeValue,
+          source: null,
+          tagNameSource: null,
+          closingTagNameSource: null,
+          attributeSource,
+          attributeValueSource: valueSource,
+          ...htmlOverrides,
+        },
+        valueSite: null,
+        selectedBindable: bindable({
+          name: "labelText",
+          attribute: "display-label",
+          mode: "toView",
+          modeSource,
+          valueType: "string",
+          usagePresentationKind: "bindable-attribute",
+          usageModeLocus: "attribute",
+          usageModeTargetSource: test.activeSource,
+          usageModeCommandSource: commandSource,
+          ...bindableOverrides,
+        }),
+        selectedDefinition: definition({
+          name: "mode-panel",
+          matchedName: "mode-panel",
+          targetName: "ModePanel",
+          targetSource: source("src/mode-panel.ts", 8, 17),
+        }),
+      });
+      return { test, map, valueSource, commandSource, modeSource, markup };
+    };
+
+    const defaulted = createUsage("display-label.bind", "item.name");
+    const defaultedMapped = defaulted.map({
+      mode: "oneTime",
+      modeSource: defaulted.modeSource,
+      usageEffectiveMode: "oneTime",
+      usageModeAuthority: "bindable-default",
+      usageModeCommand: "bind",
+      usageModeCommandKind: "built-in",
+      usageModeSource: defaulted.modeSource,
+    });
+    expect(markdown(defaultedMapped)).toBe([
+      "```ts",
+      "(bindable) display-label: string",
+      "```",
+      "",
+      "Effective mode: one time (bindable default).",
+      "Maps to: `ModePanel.labelText`.",
+    ].join("\n"));
+
+    const explicit = createUsage("display-label.two-way", "item.name");
+    const explicitMapped = explicit.map({
+      usageEffectiveMode: "twoWay",
+      usageModeAuthority: "explicit-command",
+      usageModeCommand: "two-way",
+      usageModeCommandKind: "built-in",
+      usageModeSource: explicit.commandSource,
+    });
+    expect(markdown(explicitMapped)).toBe([
+      "```ts",
+      "(bindable) display-label: string",
+      "```",
+      "",
+      "Effective mode: two way (explicit command). Default mode: to view.",
+      "Maps to: `ModePanel.labelText`.",
+    ].join("\n"));
+
+    const behavior = createUsage("display-label.bind", "item.name & twoWay");
+    const behaviorStart = behavior.markup.indexOf("twoWay");
+    const behaviorMapped = behavior.map({
+      usageEffectiveMode: "twoWay",
+      usageModeAuthority: "binding-behavior",
+      usageModeCommand: "bind",
+      usageModeCommandKind: "built-in",
+      usageModeSource: source("src/hover.html", behaviorStart, behaviorStart + "twoWay".length),
+    });
+    expect(markdown(behaviorMapped)).toContain(
+      "Effective mode: two way (binding behavior). Default mode: to view.",
+    );
+
+    const interpolation = createUsage("display-label", "Hello ${item.name}");
+    const interpolationMapped = interpolation.map({
+      mode: "twoWay",
+      usageEffectiveMode: "toView",
+      usageModeAuthority: "interpolation",
+      usageModeCommand: null,
+      usageModeCommandSource: null,
+      usageModeCommandKind: null,
+      usageModeSource: interpolation.valueSource,
+    });
+    expect(markdown(interpolationMapped)).toContain(
+      "Effective mode: to view (interpolation). Default mode: two way.",
+    );
+
+    const literal = createUsage("display-label", "Static label");
+    const literalMapped = literal.map({
+      usageEffectiveMode: null,
+      usageModeAuthority: "plain-literal",
+      usageModeCommand: null,
+      usageModeCommandSource: null,
+      usageModeCommandKind: null,
+      usageModeSource: literal.valueSource,
+    });
+    expect(markdown(literalMapped)).toBe([
+      "```ts",
+      "(bindable) display-label: string",
+      "```",
+      "",
+      "Static value; no binding mode.",
+      "Maps to: `ModePanel.labelText`.",
+    ].join("\n"));
+
+    const defaultSentinel = createUsage("display-label.bind", "item.name");
+    const defaultSentinelMapped = defaultSentinel.map({
+      mode: "default",
+      usageEffectiveMode: "toView",
+      usageModeAuthority: "framework-fallback",
+      usageModeCommand: "bind",
+      usageModeCommandKind: "built-in",
+      usageModeSource: defaultSentinel.commandSource,
+    });
+    expect(markdown(defaultSentinelMapped)).toContain("Effective mode: to view (framework fallback).");
+    expect(markdown(defaultSentinelMapped)).not.toContain("Default mode: default.");
+
+    const open = createUsage("display-label.custom", "item.name & customMode");
+    const customModeStart = open.markup.indexOf("customMode");
+    const openMapped = open.map({
+      usageEffectiveMode: null,
+      usageModeAuthority: "open",
+      usageModeCommand: "custom",
+      usageModeCommandSource: open.commandSource,
+      usageModeCommandKind: "custom",
+      usageModeSource: source("src/hover.html", customModeStart, customModeStart + "customMode".length),
+      usageModeOpenReason: "Custom command execution is open.",
+    });
+    expect(markdown(openMapped)).toBe([
+      "```ts",
+      "(bindable) display-label: string",
+      "```",
+      "",
+      "Maps to: `ModePanel.labelText`.",
+    ].join("\n"));
+    expect(markdown(openMapped)).not.toContain("Custom command execution");
+
+    const unknown = createUsage("display-label.unknown", "item.name");
+    const unknownMapped = unknown.map({
+      usageEffectiveMode: null,
+      usageModeAuthority: "open",
+      usageModeCommand: "unknown",
+      usageModeCommandKind: null,
+      usageModeSource: null,
+      usageModeOpenReason: "No executable command kind is available.",
+    });
+    expect(markdown(unknownMapped)).toBe([
+      "```ts",
+      "(bindable) display-label: string",
+      "```",
+      "",
+      "Maps to: `ModePanel.labelText`.",
+    ].join("\n"));
+
+    for (const mapped of [
+      defaultedMapped,
+      explicitMapped,
+      behaviorMapped,
+      interpolationMapped,
+      literalMapped,
+      defaultSentinelMapped,
+      openMapped,
+      unknownMapped,
+    ]) {
+      expect(mapped.failures).toEqual([]);
+    }
+  });
+
+  test("authenticates exact inline multi-binding target and command grammar", () => {
+    const markup = [
+      "<template>",
+      '  <section display-hint="display-label.bind: item.name; tone.bind: item.tone"></section>',
+      "</template>",
+    ].join("\n");
+    const test = harness(markup, "display-label");
+    const attributeStart = markup.indexOf("display-hint");
+    const attributeEnd = markup.indexOf('"', markup.indexOf('="', attributeStart) + 2) + 1;
+    const commandStart = test.activeSource.end + 1;
+    const outerValueStart = markup.indexOf("display-label.bind");
+    const outerRawValue = "display-label.bind: item.name; tone.bind: item.tone";
+    const outerValueSource = source(
+      "src/hover.html",
+      outerValueStart,
+      outerValueStart + outerRawValue.length,
+    );
+    const mapped = test.map({
+      siteKind: "attribute-name",
+      html: {
+        nodeKind: "element",
+        tagName: "section",
+        attributeName: "display-hint",
+        attributeValue: "display-label.bind: item.name; tone.bind: item.tone",
+        source: null,
+        tagNameSource: null,
+        closingTagNameSource: null,
+        attributeSource: source("src/hover.html", attributeStart, attributeEnd),
+        attributeValueSource: outerValueSource,
+      },
+      valueSite: {
+        siteKind: "multi-binding-value",
+        rawValue: outerRawValue,
+        bindingCommandName: null,
+        bindableAttribute: "message",
+        source: outerValueSource,
+      },
+      selectedBindable: bindable({
+        name: "labelText",
+        attribute: "display-label",
+        mode: "toView",
+        valueType: "string",
+        usagePresentationKind: "bindable-attribute",
+        usageEffectiveMode: "toView",
+        usageModeAuthority: "framework-fallback",
+        usageModeCommand: "bind",
+        usageModeCommandSource: source("src/hover.html", commandStart, commandStart + "bind".length),
+        usageModeCommandKind: "built-in",
+        usageModeLocus: "multi-binding",
+        usageModeTargetSource: test.activeSource,
+        usageModeSource: source("src/hover.html", commandStart, commandStart + "bind".length),
+      }),
+      selectedDefinition: definition({
+        resourceKind: "custom-attribute",
+        name: "display-hint",
+        matchedName: "display-hint",
+        targetName: "DisplayHint",
+        targetSource: source("src/display-hint.ts", 8, 19),
+      }),
+    });
+
+    expect(markdown(mapped)).toBe([
+      "```ts",
+      "(bindable) display-label: string",
+      "```",
+      "",
+      "Effective mode: to view (framework fallback).",
+      "Maps to: `DisplayHint.labelText`.",
+    ].join("\n"));
+    expect(mapped.failures).toEqual([]);
+  });
+
+  test("authenticates colon binding shorthand as a browser-normalized bind usage", () => {
+    const markup = '<template><mode-panel :display-label="item.name"></mode-panel></template>';
+    const test = harness(markup, "display-label");
+    const attributeStart = test.activeSource.start - 1;
+    const valueStart = markup.indexOf('"item.name"') + 1;
+    const valueSource = source("src/hover.html", valueStart, valueStart + "item.name".length);
+    const mapped = test.map({
+      siteKind: "attribute-name",
+      html: {
+        nodeKind: "element",
+        tagName: "mode-panel",
+        attributeName: ":display-label",
+        attributeValue: "item.name",
+        source: null,
+        tagNameSource: null,
+        closingTagNameSource: null,
+        attributeSource: source(
+          "src/hover.html",
+          attributeStart,
+          valueStart + "item.name".length + 1,
+        ),
+        attributeValueSource: valueSource,
+      },
+      valueSite: null,
+      selectedBindable: bindable({
+        name: "labelText",
+        attribute: "display-label",
+        mode: "toView",
+        valueType: "string",
+        usagePresentationKind: "bindable-attribute",
+        usageEffectiveMode: "toView",
+        usageModeAuthority: "framework-fallback",
+        usageModeCommand: "bind",
+        usageModeCommandSource: source("src/hover.html", attributeStart, attributeStart + 1),
+        usageModeCommandKind: "built-in",
+        usageModeLocus: "attribute-pattern",
+        usageModeTargetSource: test.activeSource,
+        usageModeSource: source("src/hover.html", attributeStart, attributeStart + 1),
+      }),
+      selectedDefinition: definition({
+        name: "mode-panel",
+        matchedName: "mode-panel",
+        targetName: "ModePanel",
+        targetSource: source("src/mode-panel.ts", 8, 17),
+      }),
+    });
+
+    expect(markdown(mapped)).toBe([
+      "```ts",
+      "(bindable) display-label: string",
+      "```",
+      "",
+      "Effective mode: to view (framework fallback).",
+      "Maps to: `ModePanel.labelText`.",
+    ].join("\n"));
+    expect(mapped.failures).toEqual([]);
+  });
+
+  test("fails closed for inconsistent usage default, effective, command, locus, and source carriers", () => {
+    const markup = [
+      '<template><mode-panel display-label.bind="item"></mode-panel>',
+      '<span data-command="bind" data-mode="twoWay" data-value="item"></span></template>',
+    ].join("");
+    const test = harness(markup, "display-label");
+    const commandStart = test.activeSource.end + 1;
+    const commandSource = source("src/hover.html", commandStart, commandStart + "bind".length);
+    const attributeSource = source(
+      "src/hover.html",
+      test.activeSource.start,
+      test.activeSource.start + 'display-label.bind="item"'.length,
+    );
+    const valueStart = markup.indexOf('"item"') + 1;
+    const valueSource = source("src/hover.html", valueStart, valueStart + "item".length);
+    const modeSource = source("src/mode-panel.ts", 20, 27);
+    const remoteCommandStart = markup.lastIndexOf("bind");
+    const remoteModeStart = markup.lastIndexOf("twoWay");
+    const remoteValueStart = markup.lastIndexOf("item");
+    const map = (
+      overrides: Record<string, unknown>,
+      htmlOverrides: Record<string, unknown> = {},
+    ) => test.map({
+      siteKind: "attribute-name",
+      html: {
+        nodeKind: "element",
+        tagName: "mode-panel",
+        attributeName: "display-label.bind",
+        attributeValue: "item",
+        source: null,
+        tagNameSource: null,
+        closingTagNameSource: null,
+        attributeSource,
+        attributeValueSource: valueSource,
+        ...htmlOverrides,
+      },
+      valueSite: null,
+      selectedBindable: bindable({
+        name: "labelText",
+        attribute: "display-label",
+        mode: "toView",
+        modeSource,
+        valueType: "string",
+        usagePresentationKind: "bindable-attribute",
+        usageEffectiveMode: "toView",
+        usageModeAuthority: "framework-fallback",
+        usageModeCommand: "bind",
+        usageModeCommandSource: commandSource,
+        usageModeCommandKind: "built-in",
+        usageModeLocus: "attribute",
+        usageModeTargetSource: test.activeSource,
+        usageModeSource: commandSource,
+        ...overrides,
+      }),
+    });
+
+    const inconsistent: readonly Record<string, unknown>[] = [
+      {
+        usageEffectiveMode: null,
+        usageModeAuthority: null,
+        usageModeCommand: null,
+        usageModeCommandSource: null,
+        usageModeCommandKind: null,
+        usageModeSource: null,
+      },
+      { usageModeAuthority: "invented-authority" },
+      { usageEffectiveMode: "default" },
+      { usageModeCommand: "to-view" },
+      { usageModeCommandSource: source("src/hover.html", commandStart + 1, commandStart + 3) },
+      {
+        usageModeCommandSource: source(
+          "src/hover.html",
+          remoteCommandStart,
+          remoteCommandStart + "bind".length,
+        ),
+      },
+      { usageModeCommandKind: "opaque" },
+      { usageModeSource: source("src/hover.html", commandStart + 1, commandStart + 3) },
+      {
+        usageModeAuthority: "binding-behavior",
+        usageEffectiveMode: "twoWay",
+        usageModeSource: source(
+          "src/hover.html",
+          remoteModeStart,
+          remoteModeStart + "twoWay".length,
+        ),
+      },
+      { usageModeAuthority: "framework-fallback", usageEffectiveMode: "twoWay" },
+      {
+        usageModeAuthority: "explicit-command",
+        usageModeCommand: "bind",
+        usageModeCommandKind: "built-in",
+        usageEffectiveMode: "twoWay",
+      },
+      {
+        usageModeAuthority: "explicit-command",
+        usageModeCommand: "bind",
+        usageModeCommandKind: "custom",
+        usageEffectiveMode: "twoWay",
+      },
+      {
+        usageModeAuthority: "bindable-default",
+        usageEffectiveMode: "toView",
+        usageModeSource: commandSource,
+      },
+      {
+        mode: "default",
+        usageModeAuthority: "bindable-default",
+        usageEffectiveMode: "toView",
+        usageModeSource: modeSource,
+      },
+      {
+        usageModeAuthority: "plain-literal",
+        usageEffectiveMode: "toView",
+        usageModeCommand: null,
+        usageModeCommandSource: null,
+        usageModeCommandKind: null,
+        usageModeSource: valueSource,
+      },
+      {
+        usageModeAuthority: "interpolation",
+        usageEffectiveMode: "fromView",
+        usageModeCommand: null,
+        usageModeCommandSource: null,
+        usageModeCommandKind: null,
+        usageModeSource: valueSource,
+      },
+      {
+        usageModeAuthority: "open",
+        usageEffectiveMode: "toView",
+        usageModeOpenReason: "Open.",
+      },
+      {
+        usageModeAuthority: "open",
+        usageEffectiveMode: null,
+        usageModeOpenReason: null,
+      },
+      {
+        usageModeAuthority: "open",
+        usageEffectiveMode: null,
+        usageModeOpenReason: "   ",
+      },
+      { usageModeOpenReason: "Not open." },
+    ];
+
+    for (const overrides of inconsistent) {
+      const mapped = map(overrides);
+      expect(mapped.value).toBeNull();
+      expect(mapped.failures).toEqual([
+        "Hover selected bindable usage mode metadata is inconsistent.",
+      ]);
+    }
+
+    const staleValueSite = map({}, { attributeValue: "xxxx" });
+    expect(staleValueSite.value).toBeNull();
+    expect(staleValueSite.failures).toEqual([
+      "Hover selected bindable usage mode metadata is inconsistent.",
+    ]);
+    const borrowedValueSite = map({}, {
+      attributeValueSource: source(
+        "src/hover.html",
+        remoteValueStart,
+        remoteValueStart + "item".length,
+      ),
+    });
+    expect(borrowedValueSite.value).toBeNull();
+    expect(borrowedValueSite.failures).toEqual([
+      "Hover selected bindable usage mode metadata is inconsistent.",
+    ]);
+
+    const wrongTarget = map({
+      usageModeTargetSource: source(
+        "src/hover.html",
+        test.activeSource.start + 1,
+        test.activeSource.end,
+      ),
+    });
+    expect(wrongTarget.value).toBeNull();
+    expect(wrongTarget.failures).toEqual([
+      "Hover selected bindable metadata does not match the authored attribute spelling.",
+    ]);
+
+    const wrongLocus = map({ usageModeLocus: "invented-locus" });
+    expect(wrongLocus.value).toBeNull();
+    expect(wrongLocus.failures).toEqual([
+      "Hover selected bindable has an unsupported usage locus.",
+    ]);
+
+    const unknownPresentation = map({ usagePresentationKind: "invented-presentation" });
+    expect(unknownPresentation.value).toBeNull();
+    expect(unknownPresentation.failures).toEqual([
+      "Hover selected bindable has an unsupported usage presentation kind.",
+    ]);
+
+    const orphanedResourcePresentation = map({ usagePresentationKind: "resource-primary" });
+    expect(orphanedResourcePresentation.value).toBeNull();
+    expect(orphanedResourcePresentation.failures).toEqual([]);
+  });
+
+  test("lets the exact binding-command resource own the command suffix locus", () => {
+    const rawAttribute = "item.bind";
+    const test = harness(
+      `<template><product-card ${rawAttribute}="item"></product-card></template>`,
+      "bind",
+    );
+    const mapped = test.map({
+      siteKind: "binding-command-name",
+      html: {
+        nodeKind: "element",
+        tagName: "product-card",
+        attributeName: rawAttribute,
+        attributeValue: "item",
+        source: null,
+        tagNameSource: null,
+        closingTagNameSource: null,
+        attributeSource: source(
+          "src/hover.html",
+          test.activeSource.start - "item.".length,
+          test.activeSource.end,
+        ),
+      },
+      valueSite: { bindingCommandName: "bind" },
+      selectedBindable: bindable(),
+      selectedDefinition: definition({
+        resourceKind: "binding-command",
+        name: "bind",
+        matchedName: "bind",
+        targetName: "BindBindingCommand",
+      }),
+    });
+
+    expect(markdown(mapped)).toContain("(binding command) bind");
+    expect(markdown(mapped)).toContain("Aurelia binding command.");
+    expect(markdown(mapped)).not.toContain("(bindable)");
+    expect(mapped.failures).toEqual([]);
+  });
+
+  test("requires and translates typed bindable uncertainty when its value type is unavailable", () => {
+    const token = "item";
+    const rawAttribute = `${token}.bind`;
+    const test = harness(
+      `<template><product-card ${rawAttribute}="item"></product-card></template>`,
+      token,
+    );
+    const value = {
+      siteKind: "attribute-name",
+      html: {
+        nodeKind: "element",
+        tagName: "product-card",
+        attributeName: rawAttribute,
+        attributeValue: "item",
+        source: null,
+        tagNameSource: null,
+        closingTagNameSource: null,
+        attributeSource: source(
+          "src/hover.html",
+          test.activeSource.start,
+          test.activeSource.start + `${rawAttribute}="item"`.length,
+        ),
+        attributeValueSource: source(
+          "src/hover.html",
+          test.activeSource.end + '.bind="'.length,
+          test.activeSource.end + '.bind="item'.length,
+        ),
+      },
+      valueSite: null,
+      selectedBindable: bindable({
+        valueType: null,
+        usagePresentationKind: "bindable-attribute",
+        usageEffectiveMode: "toView",
+        usageModeAuthority: "framework-fallback",
+        usageModeCommand: "bind",
+        usageModeCommandSource: source(
+          "src/hover.html",
+          test.activeSource.end + 1,
+          test.activeSource.end + 1 + "bind".length,
+        ),
+        usageModeCommandKind: "built-in",
+        usageModeLocus: "attribute",
+        usageModeTargetSource: test.activeSource,
+        usageModeSource: source(
+          "src/hover.html",
+          test.activeSource.end + 1,
+          test.activeSource.end + 1 + "bind".length,
+        ),
+      }),
+    };
+    expect(test.map(value).failures).toEqual([
+      "Hover selected bindable has neither a type nor typed bindable uncertainty.",
+    ]);
+
+    const qualified = test.map({
+      ...value,
+      uncertainty: {
+        category: "type-information-incomplete",
+        affectedDomain: "bindable",
+        affectedLocus: "selected-bindable",
+      },
+    });
+    expect(markdown(qualified)).toContain("(bindable) item");
+    expect(markdown(qualified)).toContain("Effective mode: to view (framework fallback).");
+    expect(markdown(qualified)).toContain("Type unavailable for this bindable.");
+
+    const uncommanded = harness(
+      '<template><product-card item="item"></product-card></template>',
+      "item",
+    );
+    const uncommandedValueSource = source(
+      "src/hover.html",
+      uncommanded.activeSource.end + 2,
+      uncommanded.activeSource.end + 2 + "item".length,
+    );
+    const uncommandedMapped = uncommanded.map({
+      siteKind: "attribute-name",
+      html: {
+        nodeKind: "element",
+        tagName: "product-card",
+        attributeName: "item",
+        attributeValue: "item",
+        source: null,
+        tagNameSource: null,
+        closingTagNameSource: null,
+        attributeSource: source(
+          "src/hover.html",
+          uncommanded.activeSource.start,
+          uncommandedValueSource.end + 1,
+        ),
+        attributeValueSource: uncommandedValueSource,
+      },
+      valueSite: null,
+      selectedBindable: bindable({
+        usagePresentationKind: "bindable-attribute",
+        usageEffectiveMode: null,
+        usageModeAuthority: "plain-literal",
+        usageModeCommand: null,
+        usageModeCommandSource: null,
+        usageModeCommandKind: null,
+        usageModeLocus: "attribute",
+        usageModeTargetSource: uncommanded.activeSource,
+        usageModeSource: uncommandedValueSource,
+      }),
+    });
+    expect(markdown(uncommandedMapped)).toContain("(bindable) item: Item");
+    expect(markdown(uncommandedMapped)).toContain("Static value; no binding mode.");
+    expect(uncommandedMapped.failures).toEqual([]);
+
+    const valueless = harness(
+      "<template><product-card selected   ></product-card></template>",
+      "selected",
+    );
+    const valuelessAttributeSource = source(
+      "src/hover.html",
+      valueless.activeSource.start,
+      valueless.activeSource.end + 3,
+    );
+    const valuelessMapped = valueless.map({
+      siteKind: "attribute-value",
+      html: {
+        nodeKind: "element",
+        tagName: "product-card",
+        attributeName: "selected",
+        attributeValue: "",
+        source: null,
+        tagNameSource: null,
+        closingTagNameSource: null,
+        attributeSource: valuelessAttributeSource,
+        attributeValueSource: null,
+      },
+      valueSite: null,
+      selectedBindable: bindable({
+        name: "selected",
+        attribute: "selected",
+        valueType: "boolean",
+        usagePresentationKind: "bindable-attribute",
+        usageEffectiveMode: null,
+        usageModeAuthority: "plain-literal",
+        usageModeCommand: null,
+        usageModeCommandSource: null,
+        usageModeCommandKind: null,
+        usageModeLocus: "attribute",
+        usageModeTargetSource: valueless.activeSource,
+        usageModeSource: valuelessAttributeSource,
+      }),
+    });
+    expect(valuelessMapped.failures).toEqual([]);
+    expect(markdown(valuelessMapped)).toContain("Static value; no binding mode.");
+  });
+
+  test("gives an exact route target precedence over the route bindable", () => {
+    const token = "items/:id";
+    const test = harness(`<template><a load="${token}"></a></template>`, token);
+    const mapped = test.map({
+      siteKind: "attribute-value",
+      selectedBindable: bindable({ name: "load", attribute: "load" }),
+      selectedRouteTarget: {
+        targetKind: "route-path",
+        matchedName: "items/:id",
+        routeConfigId: "item-detail",
+        source: source("src/routes.ts", 0, 80),
+        targetSource: source("src/routes.ts", 12, 23),
+      },
+    });
+
+    expect(markdown(mapped)).toBe([
+      "```text",
+      '(route path) "items/:id"',
+      "```",
+      "",
+      "Configured route id: `item-detail`.",
+    ].join("\n"));
+    expect(markdown(mapped)).not.toContain("bindable");
+    expect(mapped.value?.range == null ? null : test.document.getText(mapped.value.range)).toBe(token);
+    expect(mapped.failures).toEqual([]);
+  });
+
+  test("preserves a dynamic authored route path and discloses its configured route id", () => {
+    const token = "items/item-1";
+    const test = harness(
+      `<template><a load="${token}?ref=featured#details"></a></template>`,
+      token,
+    );
+    const mapped = test.map({
+      siteKind: "attribute-value",
+      selectedRouteTarget: {
+        targetKind: "route-path",
+        matchedName: "items/:itemId",
+        routeConfigId: "item-detail",
+        source: source("src/routes.ts", 0, 80),
+        targetSource: source("src/routes.ts", 12, 25),
+      },
+    });
+
+    expect(markdown(mapped)).toBe([
+      "```text",
+      '(route path) "items/item-1"',
+      "```",
+      "",
+      "Configured route id: `item-detail`.",
+    ].join("\n"));
+    expect(mapped.value?.range == null ? null : test.document.getText(mapped.value.range)).toBe(token);
+    expect(mapped.failures).toEqual([]);
+  });
+
+  test("preserves unquoted and single-quoted exact route ids", () => {
+    const cases = [
+      {
+        text: '<template><a load="route: product-detail"></a></template>',
+        token: "product-detail",
+        identity: '(route id) "product-detail"',
+      },
+      {
+        text: '<template><a load.bind="\'product-detail\'"></a></template>',
+        token: "'product-detail'",
+        identity: "(route id) 'product-detail'",
+      },
+    ];
+    for (const routeCase of cases) {
+      const test = harness(routeCase.text, routeCase.token);
+      const mapped = test.map({
+        siteKind: "attribute-value",
+        selectedRouteTarget: {
+          targetKind: "route-id",
+          matchedName: "product-detail",
+          routeConfigId: "product-detail",
+          source: source("src/routes.ts", 0, 80),
+          targetSource: source("src/routes.ts", 12, 26),
+        },
+      });
+      expect(markdown(mapped)).toContain(routeCase.identity);
+      expect(mapped.failures).toEqual([]);
+    }
+  });
+
+  test("ignores contextual load resource metadata on route query and fragment text", () => {
+    const text = '<template><a load="items/item-1?ref=featured#details"></a></template>';
+    for (const token of ["ref", "featured", "details"]) {
+      const test = harness(text, token);
+      const mapped = test.map({
+        siteKind: "attribute-value",
+        selectedDefinition: definition({
+          resourceKind: "custom-attribute",
+          name: "load",
+          matchedName: "load",
+          targetName: "LoadCustomAttribute",
+        }),
+      });
+      expect(mapped).toEqual({ value: null, failures: [] });
+    }
+  });
+
+  test("fails closed when route source or authored spelling does not authenticate the target", () => {
+    const test = harness('<template><a load="items/:other"></a></template>', '"items/:other"');
+    const route = {
+      targetKind: "route-id",
+      matchedName: "item-detail",
+      routeConfigId: "item-detail",
+      source: source("src/routes.ts", 0, 80),
+      targetSource: source("src/routes.ts", 12, 23),
+    };
+    expect(test.map({ selectedRouteTarget: route }).failures).toEqual([
+      "Hover selected route target does not match the exact authored token.",
+    ]);
+    expect(test.map({ selectedRouteTarget: { ...route, targetSource: null } }).failures).toEqual([
+      "Hover selected route target has no exact declaration source.",
+    ]);
+  });
+
+  test("renders one presenter-selected diagnostic and excludes overlapping uncertainty", () => {
+    const test = harness("<template>${missing}</template>", "missing");
+    const rows = [
+      diagnostic("Checker context must stay in Problems.", "information", "template-expression-typescript-diagnostic"),
+      { ...diagnostic("`missing` is not declared.", "warning"), source: test.activeSource },
+      diagnostic("A co-located withheld row.", "warning", "weak-expression-member-owner"),
+    ];
+    const mapped = test.map({
+      selectedMemberName: "missing",
+      diagnostics: rows,
+      diagnosticPresentation: {
+        kind: "presented",
+        rawRowCount: 3,
+        group: {
+          groupKey: "missing:missing",
+          subject: null,
+          primary: { rowId: "primary", rowIndex: 1, role: "primary", relation: null },
+          related: [{
+            rowId: "checker",
+            rowIndex: 0,
+            role: "contextual",
+            relation: "checker-evidence",
+          }],
+          rawRowCount: 2,
+          primarySeverity: "warning",
+          maxRawSeverity: "warning",
+        },
+      },
+      uncertainty: {
+        category: "type-information-incomplete",
+        affectedDomain: "member",
+        affectedLocus: "selected-member",
+      },
+    });
+
+    expect(markdown(mapped)).toContain("Warning `missing-expression-member`: \\`missing\\` is not declared.");
+    expect(markdown(mapped)).not.toContain("Checker context");
+    expect(markdown(mapped)).not.toContain("co-located withheld");
+    expect(markdown(mapped)).not.toContain("Type information is incomplete");
+  });
+
+  test("keeps member deprecation and documentation subordinate to one exact diagnostic status", () => {
+    const test = harness("<template>${legacyStatus}</template>", "legacyStatus");
+    const rows = [{
+      ...diagnostic("The legacy status is unavailable in this branch.", "warning"),
+      source: test.activeSource,
+    }];
+    const mapped = test.map({
+      selectedMemberName: "legacyStatus",
+      selectedMember: {
+        ...member("legacyStatus", null, "string"),
+        isDeprecated: true,
+        deprecationReason: memberText("Use catalogStatus."),
+        documentation: memberText("Legacy catalog status."),
+      },
+      diagnostics: rows,
+      diagnosticPresentation: {
+        kind: "presented",
+        rawRowCount: 1,
+        group: {
+          groupKey: "missing:legacyStatus",
+          subject: null,
+          primary: { rowId: "primary", rowIndex: 0, role: "primary", relation: null },
+          related: [],
+          rawRowCount: 1,
+          primarySeverity: "warning",
+          maxRawSeverity: "warning",
+        },
+      },
+    });
+
+    expect(markdown(mapped)).toBe([
+      "```ts",
+      "legacyStatus: string",
+      "```",
+      "",
+      "Deprecated: Use catalogStatus.",
+      "Legacy catalog status.",
+      "",
+      "Warning `missing-expression-member`: The legacy status is unavailable in this branch.",
+    ].join("\n"));
+    expect(mapped.failures).toEqual([]);
+  });
+
+  test("ranges a diagnostic-only card to its authenticated primary instead of the broad active expression", () => {
+    const test = harness("<template>${describe(true)}</template>", "describe(true)");
+    const trueSource = source(
+      "src/hover.html",
+      test.activeSource.start + "describe(".length,
+      test.activeSource.end - 1,
+    );
+    const mapped = test.map({
+      diagnostics: [{
+        ...diagnostic("No overload matches this call.", "error", "template-expression-typescript-diagnostic"),
+        typeScriptDiagnosticCode: 2769,
+        source: trueSource,
+      }],
+      diagnosticPresentation: {
+        kind: "presented",
+        rawRowCount: 1,
+        group: {
+          groupKey: "typescript:2769",
+          subject: null,
+          primary: { rowId: "primary", rowIndex: 0, role: "primary", relation: null },
+          related: [],
+          rawRowCount: 1,
+          primarySeverity: "error",
+          maxRawSeverity: "error",
+        },
+      },
+    });
+
+    expect(markdown(mapped)).toContain("Error `TS2769`: No overload matches this call.");
+    expect(mapped.value?.range == null ? null : test.document.getText(mapped.value.range)).toBe("true");
+    expect(mapped.failures).toEqual([]);
+  });
+
+  test("fails closed for malformed compact diagnostic group counts, indices, severities, and relations", () => {
+    const test = harness("<template>${missing}</template>", "missing");
+    const rows = [
+      { ...diagnostic("Primary.", "warning"), source: test.activeSource },
+      diagnostic("Context.", "information", "template-expression-typescript-diagnostic"),
+    ];
+    const validGroup = {
+      groupKey: "missing:missing",
+      subject: null,
+      primary: { rowId: "primary", rowIndex: 0, role: "primary", relation: null },
+      related: [{
+        rowId: "context",
+        rowIndex: 1,
+        role: "contextual",
+        relation: "checker-evidence",
+      }],
+      rawRowCount: 2,
+      primarySeverity: "warning",
+      maxRawSeverity: "warning",
+    };
+    const scenarios = [{
+      presentation: { kind: "presented", rawRowCount: 1, group: validGroup },
+      failure: "Hover diagnostic presentation does not conserve its compact raw rows.",
+    }, {
+      presentation: {
+        kind: "presented",
+        rawRowCount: 2,
+        group: { ...validGroup, rawRowCount: 1 },
+      },
+      failure: "Hover diagnostic presentation has an invalid group structure.",
+    }, {
+      presentation: {
+        kind: "presented",
+        rawRowCount: 2,
+        group: {
+          ...validGroup,
+          related: [{ ...validGroup.related[0], rowIndex: 0 }],
+        },
+      },
+      failure: "Hover diagnostic presentation has an invalid or duplicate compact row index.",
+    }, {
+      presentation: {
+        kind: "presented",
+        rawRowCount: 2,
+        group: { ...validGroup, primarySeverity: "error" },
+      },
+      failure: "Hover diagnostic presentation primary severity does not match its compact row.",
+    }, {
+      presentation: {
+        kind: "presented",
+        rawRowCount: 2,
+        group: { ...validGroup, maxRawSeverity: "information" },
+      },
+      failure: "Hover diagnostic presentation maximum severity does not match its compact rows.",
+    }, {
+      presentation: {
+        kind: "presented",
+        rawRowCount: 2,
+        group: {
+          ...validGroup,
+          related: [{ ...validGroup.related[0], relation: "made-up-relation" }],
+        },
+      },
+      failure: "Hover diagnostic presentation has an invalid contextual row.",
+    }];
+
+    for (const scenario of scenarios) {
+      expect(test.map({
+        diagnostics: rows,
+        diagnosticPresentation: scenario.presentation,
+      }).failures).toEqual([scenario.failure]);
+    }
+  });
+
+  test("authenticates presented primary severity, document, and active-locus overlap", () => {
+    const test = harness("<template>${missing}</template>", "missing");
+    const presentation = {
+      kind: "presented",
+      rawRowCount: 1,
+      group: {
+        groupKey: "missing:missing",
+        subject: null,
+        primary: { rowId: "primary", rowIndex: 0, role: "primary", relation: null },
+        related: [],
+        rawRowCount: 1,
+        primarySeverity: "warning",
+        maxRawSeverity: "warning",
+      },
+    };
+    const cases = [{
+      row: diagnostic("No source.", "warning"),
+      failure: "Hover presented diagnostic primary has no exact authored source.",
+    }, {
+      row: {
+        ...diagnostic("Wrong document.", "warning"),
+        source: { ...test.activeSource, path: "src/foreign.html" },
+      },
+      failure: "Hover presented diagnostic primary does not target the requesting document.",
+    }, {
+      row: {
+        ...diagnostic("Wrong locus.", "warning"),
+        source: source("src/hover.html", 0, 1),
+      },
+      failure: "Hover presented diagnostic primary does not overlap the active authored locus.",
+    }, {
+      row: {
+        ...diagnostic("Unknown severity.", "warning"),
+        severity: "catastrophic",
+        source: test.activeSource,
+      },
+      presentation: {
+        ...presentation,
+        group: {
+          ...presentation.group,
+          primarySeverity: "catastrophic",
+          maxRawSeverity: "catastrophic",
+        },
+      },
+      failure: "Hover diagnostic presentation has an unsupported severity.",
+    }];
+
+    for (const candidate of cases) {
+      expect(test.map({
+        diagnostics: [candidate.row],
+        diagnosticPresentation: candidate.presentation ?? presentation,
+      }).failures).toEqual([candidate.failure]);
+    }
+  });
+
+  test("validates a withheld outcome but emits neither raw diagnostics nor a synthetic card", () => {
+    const test = harness("<template>${maybe}</template>", "maybe");
+    const rows = [{
+      ...diagnostic("Weak owner detail.", "information", "weak-expression-member-owner"),
+      source: test.activeSource,
+    }];
+    const mapped = test.map({
+      diagnostics: rows,
+      diagnosticPresentation: {
+        kind: "withheld",
+        rawRowCount: 1,
+        withheld: { rowId: "weak", rowIndex: 0, reason: "context-only-weak-owner" },
+      },
+    });
+    expect(mapped).toEqual({ value: null, failures: [] });
+
+    const malformed = test.map({
+      diagnostics: rows,
+      diagnosticPresentation: {
+        kind: "withheld",
+        rawRowCount: 1,
+        withheld: { rowId: "weak", rowIndex: 2, reason: "context-only-weak-owner" },
+      },
+    });
+    expect(malformed.failures).toEqual([
+      "Hover diagnostic presentation has no valid compact withheld row.",
+    ]);
+
+    const wrongDocument = test.map({
+      diagnostics: [{
+        ...rows[0],
+        source: { ...test.activeSource, path: "src/foreign.html" },
+      }],
+      diagnosticPresentation: {
+        kind: "withheld",
+        rawRowCount: 1,
+        withheld: { rowId: "weak", rowIndex: 0, reason: "context-only-weak-owner" },
+      },
+    });
+    expect(wrongDocument.failures).toEqual([
+      "Hover withheld diagnostic row does not target the requesting document.",
+    ]);
+
+    for (const ineligible of [{
+      ...rows[0],
+      diagnosticAuthority: "typescript",
+    }, {
+      ...rows[0],
+      missingInputs: ["expression-member-owner-type:missing-slot-type"],
+    }]) {
+      expect(test.map({
+        diagnostics: [ineligible],
+        diagnosticPresentation: {
+          kind: "withheld",
+          rawRowCount: 1,
+          withheld: { rowId: "weak", rowIndex: 0, reason: "context-only-weak-owner" },
+        },
+      }).failures).toEqual([
+        "Hover diagnostic presentation withheld row is not eligible weak-owner context.",
+      ]);
+    }
+  });
+
+  test("allows typed route uncertainty alone but not low-scent member or resource uncertainty", () => {
+    const test = harness("<template>${target}</template>", "target");
+    const dynamicRoute = test.map({
+      uncertainty: {
+        category: "dynamic-route-target",
+        affectedDomain: "route",
+        affectedLocus: "route-target",
+      },
+    });
+    expect(markdown(dynamicRoute)).toBe("Dynamic route target.");
+
+    const memberOnly = test.map({
+      uncertainty: {
+        category: "type-information-incomplete",
+        affectedDomain: "member",
+        affectedLocus: "selected-member",
+      },
+    });
+    const resourceOnly = test.map({
+      uncertainty: {
+        category: "resource-availability-incomplete",
+        affectedDomain: "resource",
+        affectedLocus: "selected-resource",
+      },
+    });
+    expect(memberOnly).toEqual({
+      value: null,
+      failures: ["Hover uncertainty has an unsupported domain or locus relationship."],
+    });
+    expect(resourceOnly).toEqual({
+      value: null,
+      failures: ["Hover uncertainty has an unsupported domain or locus relationship."],
+    });
+  });
+
+  test("returns null for generic HTML, value-site, and unpresented raw-diagnostic fallbacks", () => {
+    const test = harness('<template><div title="hello"></div></template>', "title");
+    const generic = test.map({
+      html: {
+        nodeKind: "element",
+        tagName: "div",
+        attributeName: "title",
+        attributeValue: "hello",
+        source: null,
+        tagNameSource: null,
+        closingTagNameSource: null,
+        attributeSource: test.activeSource,
+      },
+      valueSite: {
+        siteKind: "attribute-value",
+        rawValue: "hello",
+        entryFamily: null,
+        bindingCommandName: null,
+        bindableName: null,
+        bindableAttribute: null,
+        source: test.activeSource,
+      },
+      diagnostics: [diagnostic("Raw only.", "error")],
+    });
+
+    expect(generic).toEqual({ value: null, failures: [] });
+  });
+});

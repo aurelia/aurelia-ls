@@ -1,8 +1,123 @@
 # Changelog
 
-Core packages changelog for `@aurelia-ls/*` (compiler, transform, build, language-server).
+Cross-consumer technical record for Aurelia language tooling. Product-specific
+changes and migrations live in the
+[VS Code changelog](packages/vscode/CHANGELOG.md) and versioned
+[MCP release notes](packages/mcp/release-notes/). Historical entries below
+preserve the repository's earlier package line.
 
-For VS Code extension changelog, see [`packages/vscode/CHANGELOG.md`](packages/vscode/CHANGELOG.md).
+---
+
+## Unreleased
+
+VS Code 0.5.0 and MCP 0.3.0 are the two product artifacts in this release.
+`@aurelia-ls/semantic-runtime` is their shared internal substrate; the language
+server is the internal VS Code protocol adapter.
+
+### Shared semantic authority and source identity
+
+- Semantic-runtime provides the shared project model used by the language
+  server and MCP. Project discovery and configuration happen there, and the same
+  model produces diagnostics, explanations, and framework-aware answers with
+  explicit coverage and currentness.
+- Source identity separates the physical TypeScript file from its evaluator
+  and package identity, and separates navigation from edit authority. Linked or
+  external declarations can be current and navigable without becoming editable;
+  ambiguous edits fail closed.
+- Template and application results publish as one coherent generation, so one
+  answer cannot mix old and new evidence. Managed workspace sessions reconcile
+  source files, configuration, and analysis state before serving a new
+  operation.
+- Resource answers keep execution result, selection, and coverage separate from
+  publication freshness and failure. Inventory and template availability retain
+  stable identities, origin, aliases, and bindables.
+
+### Framework and template analysis
+
+- Static analysis covers template scopes, binding semantics, resource
+  registration, source-resolvable routing, plugin and state setup, and bounded
+  composition.
+- Editor and MCP answers retain source links for DI, observation, property
+  access, and composition.
+- Template query coverage spans authoring, inspection, navigation, safe
+  refactoring, diagnostics, and document structure. Edit ranges are exact where
+  selection and edit authority are proved.
+- Causal explanations are available for capability diagnostics, uncertain
+  bindings, resource availability, and attribute interpretation.
+- The optional `aurelia.project.json` V1 contract shares source exclusions and
+  finding presentation between IDE and MCP consumers.
+- Semantic-runtime's canonical V1 schema and parser own configuration meaning.
+  VS Code bundles a separate editor-assistance schema for offline JSONC
+  annotations and keeps semantic validation in semantic-runtime.
+- Router intelligence covers source-resolvable IDs, load paths, parameters, and
+  route/viewport topology. The static model stops before live navigation, guard
+  execution, scheduling, or arbitrary plugin code.
+
+### Language server and VS Code
+
+- The language server consumes semantic-runtime directly. It manages
+  synchronized documents and the LSP request/diagnostic lifecycle. Feature
+  authority moved from compiler and semantic-workspace to semantic-runtime.
+- VS Code uses one Worker-backed language-server session per admitted root.
+  Restarts, client replacement, request mapping, and multi-root transitions now
+  have explicit lifecycle handling.
+- Resource-scoped activation supports automatic confirmation, explicit enable,
+  and hard-subtree disable modes for filesystem-backed workspace folders.
+- Authoring, hover inspection, navigation/refactoring, and document-structure
+  features now share source-backed answers. Navigation requires an exact source
+  mapping and keeps the authored spelling through HTML/SVG normalization; edits
+  also require authored authority.
+- Rename authenticates every target by content, document version, and real path
+  before native F2 applies one workspace edit and creates one undo unit. The
+  transaction is refused when any candidate remains unresolved.
+- The diagnostic pipeline keeps its raw facts. Problems shows an actionable
+  primary finding with contextual evidence, and Quick Fixes re-plan against
+  current text. Ordinary project TypeScript/JavaScript diagnostics stay under
+  their native authority.
+- Native HTML mode is the default. Opt-in native-diagnostic suppression is
+  exact-ownership gated and also suppresses legitimate embedded CSS/JavaScript
+  findings for admitted Aurelia templates.
+- **Aurelia Resources** lives in Explorer. It supports browsing and
+  navigation, with search and recovery when needed. Each row explains what the
+  resource is, where it came from, and how its aliases and bindables behave.
+- Older overlay/virtual UI and duplicate or experimental editor surfaces were
+  removed. The [VS Code changelog](packages/vscode/CHANGELOG.md) owns the exact
+  command and setting migrations.
+- VS Code 0.5.0 targets VS Code 1.91+ and filesystem-backed local workspaces.
+  Virtual workspaces are unsupported, and remote development is not part of the
+  release-tested host envelope.
+
+### MCP
+
+- MCP source identity advances to 0.3.0 with 19 named tools and 91 semantic app
+  query kinds. `aurelia_project_configurations` inspects configuration and its
+  exact diagnostics without opening the full app analysis.
+- Workspace calls use `projectRootHints` and `excludedWorkspaceRoots` and return
+  the normalized `workspaceDescriptor` used for analysis. Semantic answers use
+  independent `result`, `selection`, and `coverage` axes.
+- `aurelia_app_query_catalog` is static, workspace-independent vocabulary and no
+  longer accepts `workspaceRoot`.
+- Managed sessions reconcile workspace changes and expose cache ownership.
+  Transport contracts cover paging, continuations, open-seam grouping by
+  authored source site, and structured handler/runtime errors.
+- The MCP server makes no project-file writes. Cache management can reclaim
+  in-memory analysis state.
+- The tarball includes curated Aurelia Patterns and bundled Aurelia docs, with
+  orientation resources and workflow prompts to guide clients. See the
+  [MCP 0.3.0 release notes](packages/mcp/release-notes/mcp-v0.3.0.md) for the
+  strict-client migration and versioned protocol reference.
+
+### Reliability and package status
+
+- Each confirmed root owns a separate source world and cache, with independent
+  delivery and currentness. Operations refuse stale or mismatched evidence
+  across sessions and generations.
+- Repeat, routing, validation, virtualization, and supporting Patterns align
+  with the RC2-era Aurelia framework contract used by this release candidate.
+- `@aurelia-ls/compiler` and `@aurelia-ls/semantic-workspace` are retained
+  legacy/internal packages. The current language tooling authority is
+  semantic-runtime. MCP Patterns are the current public authoring surface;
+  app-builder is internal.
 
 ---
 
@@ -257,8 +372,15 @@ Compiler diagnostics implemented:
 
 ---
 
-## Versioning Policy
+## Release Lines
 
-Core packages (`@aurelia-ls/compiler`, `@aurelia-ls/transform`, `@aurelia-ls/build`, `@aurelia-ls/language-server`) share a unified version number. They are tightly coupled and changes typically cascade across packages.
+The VS Code extension (`aurelia-2`) and MCP server have independent product
+versions and release notes. Semantic-runtime is their shared internal substrate;
+the language server is the internal VS Code adapter. Neither forms a separately
+supported core release line.
 
-The VS Code extension (`aurelia-2`) has an independent version and release cycle. See its [changelog](packages/vscode/CHANGELOG.md) for extension-specific changes.
+Compiler, semantic-workspace, transform, Vite, SSR, and SSG entries above record
+their earlier package line. The current extension
+migration is maintained in the
+[VS Code changelog](packages/vscode/CHANGELOG.md); MCP migrations are maintained
+in versioned [MCP release notes](packages/mcp/release-notes/).

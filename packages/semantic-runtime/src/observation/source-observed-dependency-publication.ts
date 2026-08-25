@@ -10,10 +10,6 @@ import {
   MaterializedProduct,
   MaterializationRecord,
 } from '../kernel/materialization.js';
-import {
-  sourceSpanAddressForSite,
-  type SourceSpanAddressPublication,
-} from '../kernel/source-address.js';
 import type {
   KernelStore,
   KernelStoreRecord,
@@ -24,8 +20,8 @@ import {
 } from '../kernel/vocabulary.js';
 import {
   runtimeObservedDependencyIdentityLocalName,
-  type RuntimeObservedDependencyDraft,
 } from './runtime-observed-dependency-draft.js';
+import type { RuntimeObservedDependencyOccurrence } from './runtime-observed-dependency.js';
 
 export interface SourceObservedDependencyOwner {
   readonly productHandle: ProductHandle;
@@ -36,9 +32,8 @@ export interface SourceObservedDependencyOwner {
 export interface SourceObservedDependencyRecordInput {
   readonly store: KernelStore;
   readonly local: string;
-  readonly sourceFileAddressHandle: AddressHandle;
   readonly owner: SourceObservedDependencyOwner;
-  readonly draft: RuntimeObservedDependencyDraft;
+  readonly occurrence: RuntimeObservedDependencyOccurrence;
   readonly index: number;
   readonly provenanceHandle: ProvenanceHandle;
   readonly claimPredicateKey: ClaimPredicateKey;
@@ -57,7 +52,6 @@ export class SourceObservedDependencyRecordSet {
 interface SourceObservedDependencyPublicationFrame {
   readonly productHandle: ProductHandle;
   readonly identityHandle: IdentityHandle;
-  readonly source: SourceSpanAddressPublication | null;
   readonly sourceAddressHandle: AddressHandle | null;
   readonly claim: SemanticClaim;
 }
@@ -80,14 +74,7 @@ function sourceObservedDependencyPublicationFrame(
 ): SourceObservedDependencyPublicationFrame {
   const productHandle = input.store.handles.product(input.local);
   const identityHandle = input.store.handles.identity(input.local);
-  const source = input.draft.spanStart == null || input.draft.spanEnd == null
-    ? null
-    : sourceSpanAddressForSite(input.store, input.local, {
-      sourceFileAddressHandle: input.sourceFileAddressHandle,
-      start: input.draft.spanStart,
-      end: input.draft.spanEnd,
-    });
-  const sourceAddressHandle = source?.handle ?? input.owner.addressHandle;
+  const sourceAddressHandle = input.occurrence.sourceAddressHandle;
   const claim = new SemanticClaim(
     input.store.handles.claim(`${input.local}:${input.claimLocalName}`),
     input.owner.productHandle,
@@ -98,7 +85,6 @@ function sourceObservedDependencyPublicationFrame(
   return {
     productHandle,
     identityHandle,
-    source,
     sourceAddressHandle,
     claim,
   };
@@ -109,13 +95,12 @@ function sourceObservedDependencyKernelRecords(
   frame: SourceObservedDependencyPublicationFrame,
 ): readonly KernelStoreRecord[] {
   return [
-    ...(frame.source?.records ?? []),
     new ObservationIdentity(
       frame.identityHandle,
       KernelVocabulary.Binding.ObservedDependency.key,
       input.owner.identityHandle,
       frame.sourceAddressHandle,
-      runtimeObservedDependencyIdentityLocalName(input.draft, input.index),
+      runtimeObservedDependencyIdentityLocalName(input.occurrence, input.index),
     ),
     new MaterializedProduct(
       frame.productHandle,

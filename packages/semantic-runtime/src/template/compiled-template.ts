@@ -33,6 +33,10 @@ export const enum TemplateRenderTargetKind {
 export type CompiledTemplateField =
   | 'htmlDocument'
   | 'state'
+  | 'compilerReachableNodes'
+  | 'hasSlots'
+  | 'nativeSlotOutlets'
+  | 'needsCompile'
   | 'targets'
   | 'surrogates'
   | 'source';
@@ -68,6 +72,29 @@ export class TemplateRenderTarget {
   ) {}
 }
 
+/** Compiler-reachable native Shadow DOM `<slot>` outlet retained behind the framework `hasSlots` flag. */
+export const enum CompiledNativeSlotNameKind {
+  /** No authored name target; this is the browser's default slot. */
+  Default = 'default',
+  /** One authored static name value determines the outlet. */
+  Static = 'static',
+  /** A binding or interpolation can change the outlet name at runtime. */
+  Dynamic = 'dynamic',
+}
+
+export class CompiledNativeSlotOutlet {
+  constructor(
+    /** Authored native slot element. */
+    readonly node: HtmlNodeReference,
+    /** Whether the name is default, static, or runtime-controlled. */
+    readonly nameKind: CompiledNativeSlotNameKind,
+    /** Static outlet name, or null when runtime binding controls the name. */
+    readonly name: string | null,
+    /** Exact authored `name` value span, or null only for the default slot. */
+    readonly nameSourceAddressHandle: AddressHandle | null,
+  ) {}
+}
+
 /**
  * Compiled template product at the handoff between compiler evaluation and runtime rendering emulation.
  *
@@ -77,6 +104,11 @@ export class TemplateRenderTarget {
  */
 @auLink('template-compiler:ICompiledElementComponentDefinition')
 export class CompiledTemplate {
+  /** Effective native `<slot>` presence computed from compiler-reachable outlet facts. */
+  get hasSlots(): boolean {
+    return this.nativeSlotOutlets.length > 0;
+  }
+
   constructor(
     /** Product handle for the materialized-product envelope that represents this compiled template. */
     readonly productHandle: ProductHandle,
@@ -86,6 +118,12 @@ export class CompiledTemplate {
     readonly htmlDocumentProductHandle: ProductHandle,
     /** Compiler closure state for the current substrate. */
     readonly state: CompiledTemplateState,
+    /** Authored element/text products reached by the framework compiler's DOM traversal. */
+    readonly compilerReachableNodeProductHandles: readonly ProductHandle[],
+    /** Compiler-reachable native Shadow DOM slot outlets that justify `hasSlots`. */
+    readonly nativeSlotOutlets: readonly CompiledNativeSlotOutlet[],
+    /** Framework output invariant when compilation closed; null when no usable output was proved. */
+    readonly needsCompile: false | null,
     /** Runtime render targets in the order Rendering will receive them. */
     readonly targets: readonly TemplateRenderTarget[],
     /** Surrogate/host instruction sequence, when modeled. */

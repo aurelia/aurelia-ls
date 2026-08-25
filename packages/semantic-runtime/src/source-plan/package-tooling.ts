@@ -237,7 +237,7 @@ function isPackageModuleSpecifier(
 
 function aureliaPackageVersion(specifier: string): string {
   return specifier === 'aurelia' || specifier.startsWith('@aurelia/')
-    ? '^2.0.0-rc.1'
+    ? '^2.0.0-rc.2'
     : '*';
 }
 

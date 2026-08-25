@@ -1,0 +1,44 @@
+import { customElement } from '@aurelia/runtime-html';
+import {
+  externalFlushMode,
+  externalModel,
+  externalScopeBehavior,
+  externalTag,
+  externalTemplate,
+  runtimeCompositionDefaults,
+} from 'au-compose-pressure-inputs';
+import {
+  awaitedPressureWidget,
+  broadPressureWidget,
+} from './awaited-pressure-widget';
+import { PressureWidget, type PressureWidgetModel } from './pressure-widget';
+import { PressureWidget as UnregisteredPressureWidget } from './unregistered-pressure-widget';
+import template from './au-compose-open-pressure-app.html';
+
+const pressuredComponentCarrier = {
+  component: PressureWidget,
+  ...runtimeCompositionDefaults,
+};
+
+@customElement({
+  name: 'au-compose-open-pressure-app',
+  template,
+  dependencies: [PressureWidget],
+})
+export class AuComposeOpenPressureApp {
+  readonly closedComponent = PressureWidget;
+  readonly pressuredComponent = pressuredComponentCarrier.component;
+  readonly awaitedPressureWidget = awaitedPressureWidget;
+  readonly broadPressureWidget = broadPressureWidget;
+  readonly closedModel: PressureWidgetModel = { message: 'closed model' };
+
+  get partialComponent(): typeof PressureWidget | typeof UnregisteredPressureWidget {
+    return globalThis.location.hash.length > 0 ? PressureWidget : UnregisteredPressureWidget;
+  }
+
+  readonly externalTemplate = externalTemplate;
+  readonly externalModel = externalModel;
+  readonly externalScopeBehavior = externalScopeBehavior;
+  readonly externalTag = externalTag;
+  readonly externalFlushMode = externalFlushMode;
+}

@@ -16,8 +16,9 @@
       "guidance": [
         "Start here when registration key/value/registry-parameter source records, DI key identities, field provenance, or recognition open seams change.",
         "Keep key provenance separate from provider-key provenance; registry lookup keys such as `Registration.defer(...)` are not ordinary admitted-key claims.",
-        "Use kernel DI key identity records instead of hiding key semantics in descriptions or local strings.",
-        "Constructable DI key identities must come from evaluator- or checker-proven runtime value shape and should carry a TypeScript declaration identity when the declaration is source-backed."
+        "Use DiKeyIdentityEmitter and kernel DI key identity records instead of hiding key semantics in descriptions or local strings.",
+        "Constructable DI key identities must come from evaluator- or checker-proven runtime value shape and should carry a TypeScript declaration identity when the declaration is source-backed.",
+        "When DI spends an open admission, retain the admission materialization's exact seam handle. Mint a new DI seam only for a blocker discovered by DI itself; do not translate registration reasons into parallel generic seams."
       ],
       "anchors": [
         {
@@ -29,9 +30,9 @@
         },
         {
           "kind": "source",
-          "filePath": "packages/semantic-runtime/src/kernel/di-key-identity.ts",
-          "symbolName": "DiKeyIdentitySeed",
-          "summary": "Kernel DI key identity seed taxonomy, including evaluator-proven constructable keys."
+          "filePath": "packages/semantic-runtime/src/di/di-key-identity-emitter.ts",
+          "symbolName": "DiKeyIdentityEmitter",
+          "summary": "Canonical declaration/value identity authority shared by registration, framework effects, and activation."
         },
         {
           "kind": "source",
@@ -66,7 +67,7 @@
       "guidance": [
         "Start here when registration admission product classes, strategy-to-product-kind mapping, admission claims, or batch framing changes.",
         "Keep support records in RegistrationAdmissionSupportMaterializer and runtime container effects in DI world construction.",
-        "Preserve scope-owned emission: source-module inquiry products and configuration-step-owned admission products are related but not interchangeable."
+        "Configuration-step reachability owns admission emission. Do not recreate the deleted source-wide syntax pass: a Registration.* occurrence is not evidence that any container spends it."
       ],
       "anchors": [
         {
@@ -93,6 +94,127 @@
       ],
       "createdAt": "2026-05-12",
       "updatedAt": "2026-05-12"
+    },
+    {
+      "id": "decision:framework-registration-capability-vs-runtime-shape",
+      "kind": "decision",
+      "domains": [
+        "registration",
+        "semantic-runtime",
+        "evaluation",
+        "configuration",
+        "di"
+      ],
+      "summary": "Framework capability identity, runtime registration shape, and residual effect closure are separate facts.",
+      "rationale": "A known framework export can be a direct registry, recursive registration group, non-registrable factory namespace, persistent builder result, or AppTask factory. The former manifest role/chain-method table synthesized register shape from capability identity and caused bare State/AppTask factory namespaces and registration arrays to masquerade as registries. Static evaluation now preserves exact value stages, generic registration follows ECMAScript enumerable carrier semantics, canonical DI registration values retain exact runtime shape, and framework effect packages own their modeled effects plus honest residual openness.",
+      "guidance": [
+        "Keep framework-registration-manifest.ts about export identity, source-generation availability, and semantic capabilities; do not restore role, chain-method, or synthetic register-shape policy there.",
+        "Treat callable register as direct IRegistry shape and arrays, objects, and module namespaces as recursive enumerable carriers. Use readEvaluationEnumerableOwnEntries rather than adding another consumer-local walker.",
+        "StateDefaultConfiguration, AppTask, LoggerConfiguration, and StyleConfiguration exports are factory namespaces. Only their evaluated method results carry FrameworkRegistrationKind registration identity.",
+        "Preserve known entries and residual membership/order openness together. A partial evaluator value must not become either false closure or an all-or-nothing loss of known registrations.",
+        "Let frameworkDiRegistrationEffectsForKind own only modeled DI provider/task effects and residual DI coverage. Resource, syntax, renderer, compiler-world, and app-task materializers own closure for their own answer families; do not infer global closure from another family.",
+        "At an admission boundary, exact evaluator carrier classification outranks source recognition even when it proves that no framework package applies. After spending, frameworkRegistrationKindForOperation(...) is the sole effective-package authority.",
+        "Derive capability blockers through seam materialization ownership and exact registration operations. A known framework residual blocks only capabilities carried by that operation; an unclassified registration remains conservatively unconstrained."
+      ],
+      "anchors": [
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/registration/framework-registration-manifest.ts",
+          "symbolName": "FrameworkRegistrationCapability",
+          "summary": "First-party export identity and semantic-capability manifest without a runtime-shape state machine."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/configuration/aurelia-evaluation-runtime.ts",
+          "symbolName": "AureliaFrameworkRegistrationFactoryEvaluation",
+          "summary": "Evaluator-only identity for a factory namespace whose result, not base value, is registrable."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/evaluation/enumerable-own-properties.ts",
+          "symbolName": "readEvaluationEnumerableOwnEntries",
+          "summary": "Shared ECMAScript enumerable-own projection with known entries and residual closure state."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/di/container-registration.ts",
+          "symbolName": "frameworkRegistrationKindForOperation",
+          "summary": "Effective framework package selected for one concrete registration application."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/di/framework-registration-effects.ts",
+          "symbolName": "frameworkDiRegistrationEffectsForKind",
+          "summary": "DI-owned first-party effect and residual-coverage authority, separate from catalog closure."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/di/registration-open-pressure.ts",
+          "symbolName": "registrationOpenPressureFacts",
+          "summary": "Shared unresolved-registration facts from materialization-owned seams and exact registration operations."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/di/registration-open-pressure.ts",
+          "symbolName": "registrationHidingOpenSeamsForContainer",
+          "summary": "Container-chain projection of unresolved registration pressure."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/di/registration-open-pressure.ts",
+          "symbolName": "registrationOpenSeamCanHideFrameworkCapability",
+          "summary": "Capability-specific predicate for unresolved registration pressure."
+        },
+        {
+          "kind": "fixture",
+          "path": "packages/semantic-runtime/fixtures/pressure/di-registration-carriers",
+          "summary": "Arrays, namespace barrels, source registries, factory namespaces, and exact first-party factory results."
+        },
+        {
+          "kind": "doc",
+          "path": "packages/semantic-runtime/src/registration/README.md",
+          "summary": "Registration grammar and manifest ownership doctrine."
+        }
+      ],
+      "liveChecks": [
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/configuration/aurelia-evaluation-runtime.ts",
+          "symbolName": "AureliaFrameworkRegistrationFactoryEvaluation"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/evaluation/enumerable-own-properties.ts",
+          "symbolName": "readEvaluationEnumerableOwnEntries"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/di/framework-registration-effects.ts",
+          "symbolName": "frameworkDiRegistrationEffectsForKind"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/di/container-registration.ts",
+          "symbolName": "frameworkRegistrationKindForOperation"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/di/registration-open-pressure.ts",
+          "symbolName": "registrationOpenPressureFacts"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/di/registration-open-pressure.ts",
+          "symbolName": "registrationHidingOpenSeamsForContainer"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/di/registration-open-pressure.ts",
+          "symbolName": "registrationOpenSeamCanHideFrameworkCapability"
+        }
+      ],
+      "createdAt": "2026-07-19",
+      "updatedAt": "2026-07-25"
     }
   ]
 }

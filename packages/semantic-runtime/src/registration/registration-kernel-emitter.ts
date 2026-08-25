@@ -18,20 +18,20 @@ import type {
   ProvenanceHandle,
 } from '../kernel/handles.js';
 import {
+  type DiKeyIdentityKind,
   RegistrationIdentity,
   TypeScriptDeclarationIdentity,
 } from '../kernel/identity.js';
 import {
-  diKeyIdentityRecord,
-  type DiKeyIdentityRecord,
-  type DiKeyIdentitySeed,
-} from '../kernel/di-key-identity.js';
-import {
   MaterializationRecord,
   MaterializedProduct,
 } from '../kernel/materialization.js';
-import { OpenSeamReasonKind } from '../kernel/open-seam.js';
 import {
+  OpenSeam,
+  OpenSeamReasonKind,
+} from '../kernel/open-seam.js';
+import {
+  aggregateFieldProvenance,
   compactFieldProvenance,
   FieldProvenance,
   ProvenanceRecord,
@@ -64,27 +64,38 @@ import {
   ResolverRegistrationAdmission,
 } from './registration-admission.js';
 import {
-  RegistrationAdmissionObservation,
-  RegistrationKeyObservation,
+  EvaluatedRegistrationCarrier,
+  RegistrationCarrierKind,
   RegistrationKeyObservationKind,
   RegistrationRecognitionOpen,
-  RegistrationValueObservation,
+  type RegistrationAdmissionObservation,
+  type RegistrationKeyObservation,
+  type RegistrationValueObservation,
 } from './registration-observation.js';
 import {
-  FrameworkRegistrationKind,
   RegistrationKeyReference,
   RegistrationValueKind,
   RegistrationValueReference,
 } from './registration-reference.js';
 import {
-  isFrameworkRegistrationGroupKind,
-} from './framework-registration-manifest.js';
+  DiKeyExpressionIdentityRequest,
+  type DiKeyIdentityEmission,
+  DiKeyIdentityEmitter,
+} from '../di/di-key-identity-emitter.js';
+import type { KernelPublicationContext } from '../kernel/publication.js';
+import type { TypeSystemProject } from '../type-system/project.js';
+import {
+  sourceSpanForCheckerDeclaration,
+  type DeclarationSourcePublication,
+} from '../type-system/declaration-source.js';
 
 export const enum RegistrationEmissionScope {
   /** Source-level registration recognition for inquiry or lower-level analysis. */
   SourceModule = 'source-module',
   /** Registration admission owned by a configuration step in an app-world sequence. */
   ConfigurationStep = 'configuration-step',
+  /** Conditional registration admission owned by a reached DI registration operation. */
+  DiRegistrationOperation = 'di-registration-operation',
 }
 
 /** Inputs shared by registration emission for one evaluated source module. */
@@ -96,6 +107,12 @@ export class RegistrationEmissionContext {
     readonly moduleKey: string,
     /** Source-file address admitted by boot or host setup. */
     readonly sourceFileAddressHandle: AddressHandle,
+    /** Exact source-file address for every admitted node used by this emission. */
+    private readonly sourceFileAddressHandleForNode_: (node: ts.Node) => AddressHandle | null,
+    /** Project identity used to scope primitive DI keys in a shared kernel store. */
+    readonly projectKey: string | null,
+    /** Shared TypeChecker epoch used to canonicalize imported and reexported key declarations. */
+    readonly typeSystem: TypeSystemProject | null,
     /** Emission scope that owns the emitted registration records. */
     readonly emissionScope: RegistrationEmissionScope = RegistrationEmissionScope.SourceModule,
     /** Scope-local owner key, such as a configuration step local key. */
@@ -111,6 +128,17 @@ export class RegistrationEmissionContext {
   get batchLabel(): string {
     return `registration-admission:${this.recordKeyPrefix}`;
   }
+
+  sourceFileAddressHandleForNode(node: ts.Node): AddressHandle {
+    const handle = this.sourceFileAddressHandleForNode_(node);
+    if (handle != null) {
+      return handle;
+    }
+    if (node.getSourceFile() === this.sourceFile) {
+      return this.sourceFileAddressHandle;
+    }
+    throw new Error('Registration emission cannot attach a foreign node to the caller source-file address.');
+  }
 }
 
 /** Result of emitting registration observations into the kernel. */
@@ -120,7 +148,49 @@ export class RegistrationKernelEmission {
     readonly admissions: readonly RegistrationAdmissionProduct[],
     /** Kernel records committed for these admissions. */
     readonly records: readonly KernelStoreRecord[],
+    /** Candidate-local evaluator values and their exact source occurrences, indexed by emitted admission product. */
+    readonly evaluatedCarriersByAdmissionProduct: ReadonlyMap<ProductHandle, EvaluatedRegistrationCarrier>,
+    /** Exact source carrier nodes retained for candidate-local occurrence joins. */
+    readonly sourceNodesByAdmissionProduct: ReadonlyMap<ProductHandle, ts.Node>,
+    /** Exact source nodes for the runtime values offered by each admission. */
+    readonly runtimeValueSourceNodesByAdmissionProduct: ReadonlyMap<ProductHandle, ts.Node>,
+    /** Admission-local recognition pressure retained without reconstructing materialization envelopes. */
+    readonly openSeamsByAdmissionProduct: ReadonlyMap<ProductHandle, readonly OpenSeam[]>,
   ) {}
+}
+
+/**
+ * Kernel support for one reached runtime registration value without publishing another source-admission product.
+ * DI uses this when candidate-local evaluator evidence closes a generic source admission.
+ */
+export class RegistrationValueSupportEmission {
+  constructor(
+    readonly records: readonly KernelStoreRecord[],
+    readonly sourceAddressHandle: AddressHandle,
+    readonly sourceProvenanceHandle: ProvenanceHandle,
+    readonly key: RegistrationKeyReference,
+    readonly value: RegistrationValueReference | null,
+    readonly registryParameters: readonly RegistrationValueReference[],
+    readonly fieldProvenance: readonly FieldProvenance<RegistrationAdmissionField>[],
+    readonly openSeams: readonly OpenSeam[],
+  ) {}
+}
+
+/** Candidate-local admission shape refined from stronger evaluator evidence. */
+export class RegistrationAdmissionRefinementEmission {
+  constructor(
+    readonly support: RegistrationValueSupportEmission,
+    /** Operation-local view retaining the source admission's durable product and identity handles. */
+    readonly admission: RegistrationAdmissionProduct,
+  ) {}
+
+  get records(): readonly KernelStoreRecord[] {
+    return this.support.records;
+  }
+
+  get openSeams(): readonly OpenSeam[] {
+    return this.support.openSeams;
+  }
 }
 
 class RegistrationClaimTarget {
@@ -142,7 +212,6 @@ class RegistrationObservationSourceSet {
     readonly records: readonly KernelStoreRecord[],
     readonly addressHandle: AddressHandle,
     readonly provenanceHandle: ProvenanceHandle,
-    readonly declarationIdentityHandle: IdentityHandle | null = null,
   ) {}
 }
 
@@ -199,7 +268,7 @@ interface RegistrationRegistryParameterEmissionSet {
   readonly records: readonly KernelStoreRecord[];
   readonly references: readonly RegistrationValueReference[];
   readonly claimTargets: readonly RegistrationClaimTarget[];
-  readonly provenanceHandles: readonly ProvenanceHandle[];
+  readonly fieldProvenance: FieldProvenance<RegistrationAdmissionField> | null;
 }
 
 interface RegistrationObservationSupportSet {
@@ -213,6 +282,8 @@ interface RegistrationObservationSupportSet {
 class RegistrationAdmissionSupportMaterializer {
   constructor(
     readonly store: KernelStore,
+    private readonly publication: KernelPublicationContext,
+    private readonly keyIdentityEmitter: DiKeyIdentityEmitter,
   ) {}
 
   materialize(
@@ -254,14 +325,30 @@ class RegistrationAdmissionSupportMaterializer {
     }
 
     const source = this.recordsForKeySource(context, observation, local);
-    const identityHandle = this.store.handles.identity(`registration-key:${local}`);
+    const records = [...source.records];
+    const identity = this.keyIdentityEmitter.emitExpressionKeyIdentity(
+      records,
+      this.publication,
+      new DiKeyExpressionIdentityRequest(
+        context.projectKey,
+        observation.node,
+        observation.localName,
+        observation.evaluatedValue,
+        observation.constructableSource,
+        context.typeSystem,
+        this.store.handles.identity(`registration-key:${local}`),
+        source.addressHandle,
+      ),
+    );
     return new RegistrationKeyEmission(
-      [
-        ...source.records,
-        this.registrationKeyIdentity(identityHandle, observation, source),
-      ],
-      new RegistrationKeyReference(identityHandle, source.addressHandle, observation.localName),
-      identityHandle,
+      records,
+      new RegistrationKeyReference(
+        identity.identityHandle,
+        source.addressHandle,
+        observation.localName,
+        identity.keyKind,
+      ),
+      identity.identityHandle,
       source.provenanceHandle,
     );
   }
@@ -269,7 +356,7 @@ class RegistrationAdmissionSupportMaterializer {
   private absentRegistrationKey(admissionAddressHandle: AddressHandle): RegistrationKeyEmission {
     return new RegistrationKeyEmission(
       [],
-      new RegistrationKeyReference(null, admissionAddressHandle, null),
+      new RegistrationKeyReference(null, admissionAddressHandle, null, null),
       null,
       null,
     );
@@ -283,13 +370,13 @@ class RegistrationAdmissionSupportMaterializer {
     const addressHandle = this.store.handles.address(`registration-key:${local}`);
     const evidenceHandle = this.store.handles.evidence(`registration-key:${local}`);
     const provenanceHandle = this.store.handles.provenance(`registration-key:${local}`);
-    const declaration = this.recordsForConstructableKeyDeclaration(observation, local);
+    const sourceFile = observation.node.getSourceFile();
     return new RegistrationObservationSourceSet(
       [
         new SourceSpanAddress(
           addressHandle,
-          context.sourceFileAddressHandle,
-          observation.node.getStart(context.sourceFile),
+          observation.sourceFileAddressHandle ?? context.sourceFileAddressHandleForNode(observation.node),
+          observation.node.getStart(sourceFile),
           observation.node.end,
           SourceSpanRole.Value,
         ),
@@ -306,71 +393,9 @@ class RegistrationAdmissionSupportMaterializer {
           provenanceHandle,
           [evidenceHandle],
         ),
-        ...declaration.records,
       ],
       addressHandle,
       provenanceHandle,
-      declaration.identityHandle,
-    );
-  }
-
-  private registrationKeyIdentity(
-    identityHandle: IdentityHandle,
-    observation: RegistrationKeyObservation,
-    source: RegistrationObservationSourceSet,
-  ): DiKeyIdentityRecord {
-    return diKeyIdentityRecord(
-      identityHandle,
-      registrationKeyIdentitySeed(observation, source.declarationIdentityHandle),
-      source.addressHandle,
-      `Registration key expression still needs DI key classification: ${observation.localName ?? ts.SyntaxKind[observation.node.kind]}.`,
-    );
-  }
-
-  private recordsForConstructableKeyDeclaration(
-    observation: RegistrationKeyObservation,
-    local: string,
-  ): {
-    readonly records: readonly KernelStoreRecord[];
-    readonly identityHandle: IdentityHandle | null;
-  } {
-    const constructable = observation.constructableSource;
-    if (constructable == null) {
-      return { records: [], identityHandle: null };
-    }
-
-    const declarationIdentityHandle = this.store.handles.identity(`registration-key:${local}:constructable-declaration`);
-    const declarationAddress = constructable.sourceFileAddressHandle == null
-      ? null
-      : this.constructableDeclarationAddress(constructable.declaration, constructable.sourceFileAddressHandle, local);
-    return {
-      records: [
-        ...(declarationAddress == null ? [] : [declarationAddress]),
-        new TypeScriptDeclarationIdentity(
-          declarationIdentityHandle,
-          constructable.moduleKey,
-          null,
-          observation.localName ?? ts.getNameOfDeclaration(constructable.declaration)?.getText() ?? null,
-          declarationAddress?.handle ?? null,
-        ),
-      ],
-      identityHandle: declarationIdentityHandle,
-    };
-  }
-
-  private constructableDeclarationAddress(
-    declaration: ts.ClassLikeDeclaration | ts.FunctionLikeDeclaration,
-    sourceFileAddressHandle: AddressHandle,
-    local: string,
-  ): SourceSpanAddress {
-    const sourceFile = declaration.getSourceFile();
-    const addressNode = ts.getNameOfDeclaration(declaration) ?? declaration;
-    return new SourceSpanAddress(
-      this.store.handles.address(`registration-key:${local}:constructable-declaration`),
-      sourceFileAddressHandle,
-      addressNode.getStart(sourceFile),
-      addressNode.end,
-      SourceSpanRole.Name,
     );
   }
 
@@ -384,10 +409,39 @@ class RegistrationAdmissionSupportMaterializer {
     }
 
     const handles = this.registrationValueHandles(observation, local);
+    const records = [...this.recordsForValueSource(context, observation, handles)];
+    const declarationSource = this.registrationValueDeclarationSource(context, observation);
+    this.keyIdentityEmitter.emitDeclarationSourceRecords(records, declarationSource);
+    const keyIdentity = observation.keyObservation == null
+      ? null
+      : this.keyIdentityEmitter.emitExpressionKeyIdentity(
+          records,
+          this.publication,
+          new DiKeyExpressionIdentityRequest(
+            context.projectKey,
+            observation.keyObservation.node,
+            observation.keyObservation.localName,
+            observation.keyObservation.evaluatedValue,
+            observation.keyObservation.constructableSource,
+            context.typeSystem,
+            this.store.handles.identity(`registration-value:${local}:key`),
+            handles.addressHandle,
+          ),
+        );
+    const fallbackIdentity = declarationSource == null
+      ? this.registrationValueDeclarationIdentity(context, observation, handles)
+      : null;
+    if (fallbackIdentity != null) {
+      records.push(fallbackIdentity);
+    }
+    const identityHandle = keyIdentity?.identityHandle
+      ?? declarationSource?.identity.handle
+      ?? fallbackIdentity?.handle
+      ?? null;
     return new RegistrationValueEmission(
-      this.recordsForValueSource(context, observation, handles),
-      this.registrationValueReference(observation, handles),
-      observation.productHandle ?? handles.identityHandle ?? handles.addressHandle,
+      records,
+      this.registrationValueReference(observation, handles, identityHandle, keyIdentity?.keyKind ?? null),
+      observation.productHandle ?? identityHandle ?? handles.addressHandle,
       handles.provenanceHandle,
     );
   }
@@ -417,7 +471,7 @@ class RegistrationAdmissionSupportMaterializer {
     const records: KernelStoreRecord[] = [
       new SourceSpanAddress(
         handles.addressHandle,
-        observation.sourceFileAddressHandle ?? context.sourceFileAddressHandle,
+        observation.sourceFileAddressHandle ?? context.sourceFileAddressHandleForNode(observation.node),
         observation.node.getStart(sourceFile),
         observation.node.end,
         observation.isDeclaration ? SourceSpanRole.Name : SourceSpanRole.Value,
@@ -434,11 +488,30 @@ class RegistrationAdmissionSupportMaterializer {
         [handles.evidenceHandle],
       ),
     ];
-    const identity = this.registrationValueDeclarationIdentity(context, observation, handles);
-    if (identity != null) {
-      records.push(identity);
-    }
     return records;
+  }
+
+  private registrationValueDeclarationSource(
+    context: RegistrationEmissionContext,
+    observation: RegistrationValueObservation,
+  ): DeclarationSourcePublication | null {
+    if (context.typeSystem == null || observation.valueKind === RegistrationValueKind.AliasTarget) {
+      return null;
+    }
+    const symbol = context.typeSystem.readProgramAliasedSymbolAtLocation(
+      registrationValueSymbolSite(observation.node),
+    );
+    if (symbol == null) {
+      return null;
+    }
+    const declarations = symbol.declarations ?? (symbol.valueDeclaration == null ? [] : [symbol.valueDeclaration]);
+    return sourceSpanForCheckerDeclaration(
+      this.publication,
+      context.typeSystem.checker,
+      symbol,
+      declarations,
+      SourceSpanRole.Name,
+    );
   }
 
   private registrationValueDeclarationIdentity(
@@ -446,11 +519,16 @@ class RegistrationAdmissionSupportMaterializer {
     observation: RegistrationValueObservation,
     handles: RegistrationValueHandles,
   ): TypeScriptDeclarationIdentity | null {
-    return handles.identityHandle == null
+    const moduleKey = observation.moduleKey
+      ?? (observation.sourceFileAddressHandle == null
+        || observation.sourceFileAddressHandle === context.sourceFileAddressHandle
+        ? context.moduleKey
+        : null);
+    return handles.identityHandle == null || moduleKey == null
       ? null
       : new TypeScriptDeclarationIdentity(
         handles.identityHandle,
-        observation.moduleKey ?? context.moduleKey,
+        moduleKey,
         null,
         observation.localName,
         handles.addressHandle,
@@ -460,15 +538,20 @@ class RegistrationAdmissionSupportMaterializer {
   private registrationValueReference(
     observation: RegistrationValueObservation,
     handles: RegistrationValueHandles,
+    identityHandle: IdentityHandle | null,
+    keyKind: DiKeyIdentityKind | null,
   ): RegistrationValueReference {
     return new RegistrationValueReference(
       observation.valueKind,
-      handles.identityHandle,
+      identityHandle,
       observation.productHandle,
       handles.addressHandle,
       observation.localName,
       observation.frameworkKind,
       observation.registryBody,
+      keyKind,
+      observation.resourceLookupKeys,
+      observation.resourceKind,
     );
   }
 
@@ -487,12 +570,38 @@ class RegistrationAdmissionSupportMaterializer {
       if (value.reference != null) {
         references.push(value.reference);
       }
-      if (value.claimTargetHandle != null && value.provenanceHandle != null) {
-        claimTargets.push(new RegistrationClaimTarget(value.claimTargetHandle, value.provenanceHandle));
+      if (value.provenanceHandle != null) {
         provenanceHandles.push(value.provenanceHandle);
       }
+      if (value.claimTargetHandle != null && value.provenanceHandle != null) {
+        claimTargets.push(new RegistrationClaimTarget(value.claimTargetHandle, value.provenanceHandle));
+      }
     });
-    return { records, references, claimTargets, provenanceHandles };
+    const provenanceByHandle = new Map<ProvenanceHandle, ProvenanceRecord>(
+      records.flatMap((record) => record instanceof ProvenanceRecord
+        ? [[record.handle, record] as const]
+        : []),
+    );
+    const aggregate = aggregateFieldProvenance<RegistrationAdmissionField>(
+      'registryParameters',
+      provenanceHandles,
+      this.store.handles.provenance(`registration-registry-parameters:${local}`),
+      (handle) => {
+        const localRecord = provenanceByHandle.get(handle);
+        if (localRecord != null) {
+          return localRecord;
+        }
+        const published = this.publication.read(handle);
+        return published instanceof ProvenanceRecord ? published : null;
+      },
+    );
+    records.push(...aggregate.records);
+    return {
+      records,
+      references,
+      claimTargets,
+      fieldProvenance: aggregate.fieldProvenance,
+    };
   }
 
   private recordsForOpenSeams(
@@ -506,14 +615,13 @@ class RegistrationAdmissionSupportMaterializer {
         localKey: `registration-open:${local}:${seam.openKind}:${index}`,
         openKind: seam.openKind,
         summary: seam.summary,
-        sourceFileAddressHandle: context.sourceFileAddressHandle,
-        start: seam.node.getStart(context.sourceFile),
+        sourceFileAddressHandle: context.sourceFileAddressHandleForNode(seam.node),
+        start: seam.node.getStart(seam.node.getSourceFile()),
         end: seam.node.end,
         evidenceRoles: [EvidenceRole.Diagnostic, EvidenceRole.Registration],
         reasonKinds: seam.reasonKinds.length === 0
           ? registrationOpenSeamReasonKinds(seam.openKind)
           : seam.reasonKinds,
-        includeProvenanceRecord: true,
       })),
     );
   }
@@ -522,12 +630,28 @@ class RegistrationAdmissionSupportMaterializer {
 /** Emits registration observations into the durable kernel graph. */
 export class RegistrationKernelEmitter {
   private readonly supportMaterializer: RegistrationAdmissionSupportMaterializer;
+  private readonly keyIdentityEmitter: DiKeyIdentityEmitter;
 
   constructor(
     /** Hot analysis store that receives registration-admission records. */
     readonly store: KernelStore,
+    /** Candidate-aware publication used to reuse canonical declaration and key records. */
+    readonly publication: KernelPublicationContext,
   ) {
-    this.supportMaterializer = new RegistrationAdmissionSupportMaterializer(store);
+    this.keyIdentityEmitter = new DiKeyIdentityEmitter(publication);
+    this.supportMaterializer = new RegistrationAdmissionSupportMaterializer(
+      store,
+      publication,
+      this.keyIdentityEmitter,
+    );
+  }
+
+  /** Normalize a non-registration carrier, such as AppTask, through the same canonical DI-key corridor. */
+  materializeKeyIdentity(
+    records: KernelStoreRecord[],
+    request: DiKeyExpressionIdentityRequest,
+  ): DiKeyIdentityEmission {
+    return this.keyIdentityEmitter.emitExpressionKeyIdentity(records, this.publication, request);
   }
 
   emit(
@@ -548,12 +672,92 @@ export class RegistrationKernelEmitter {
   ): RegistrationKernelEmission {
     const records: KernelStoreRecord[] = [];
     const admissions: RegistrationAdmissionProduct[] = [];
+    const evaluatedCarriersByAdmissionProduct = new Map<ProductHandle, EvaluatedRegistrationCarrier>();
+    const sourceNodesByAdmissionProduct = new Map<ProductHandle, ts.Node>();
+    const runtimeValueSourceNodesByAdmissionProduct = new Map<ProductHandle, ts.Node>();
+    const openSeamsByAdmissionProduct = new Map<ProductHandle, readonly OpenSeam[]>();
     observations.forEach((observation, index) => {
       const emission = this.recordsForObservation(context, observation, index);
       records.push(...emission.records);
       admissions.push(emission.admission);
+      sourceNodesByAdmissionProduct.set(emission.admission.productHandle, observation.sourceNode);
+      if (observation.registeredValue != null) {
+        runtimeValueSourceNodesByAdmissionProduct.set(
+          emission.admission.productHandle,
+          observation.registeredValue.node,
+        );
+      }
+      const evaluatedValue = observation.evaluatedCarrierValue;
+      if (evaluatedValue != null) {
+        evaluatedCarriersByAdmissionProduct.set(
+          emission.admission.productHandle,
+          new EvaluatedRegistrationCarrier(observation.sourceNode, evaluatedValue),
+        );
+      }
+      if (emission.openSeams.length > 0) {
+        openSeamsByAdmissionProduct.set(emission.admission.productHandle, emission.openSeams);
+      }
     });
-    return new RegistrationKernelEmission(admissions, records);
+    return new RegistrationKernelEmission(
+      admissions,
+      records,
+      evaluatedCarriersByAdmissionProduct,
+      sourceNodesByAdmissionProduct,
+      runtimeValueSourceNodesByAdmissionProduct,
+      openSeamsByAdmissionProduct,
+    );
+  }
+
+  /** Materialize source/key/value support for a reached runtime registration value without inventing an admission. */
+  materializeValueSupport(
+    context: RegistrationEmissionContext,
+    observation: RegistrationAdmissionObservation,
+    local: string,
+  ): RegistrationValueSupportEmission {
+    const source = this.recordsForObservationSource(context, observation, local);
+    const support = this.supportMaterializer.materialize(context, observation, local, source);
+    return new RegistrationValueSupportEmission(
+      [
+        ...source.records,
+        ...support.records,
+      ],
+      source.addressHandle,
+      source.provenanceHandle,
+      support.key.reference,
+      support.value.reference,
+      support.registryParameters.references,
+      registrationAdmissionFieldProvenance(support.key, support.value, support.registryParameters),
+      support.seams.records.filter((record): record is OpenSeam => record instanceof OpenSeam),
+    );
+  }
+
+  /**
+   * Refine one durable source admission for a concrete DI application without publishing a duplicate admission product.
+   */
+  materializeAdmissionRefinement(
+    context: RegistrationEmissionContext,
+    sourceAdmission: RegistrationAdmissionProduct,
+    observation: RegistrationAdmissionObservation,
+    local: string,
+  ): RegistrationAdmissionRefinementEmission {
+    const support = this.materializeValueSupport(context, observation, local);
+    const product = this.admissionProductForObservation(
+      observation,
+      sourceAdmission.productHandle,
+      sourceAdmission.identityHandle,
+      sourceAdmission.sourceAddressHandle ?? support.sourceAddressHandle,
+      mergeRegistrationAdmissionFieldProvenance(
+        sourceAdmission.fieldProvenance,
+        support.fieldProvenance,
+      ),
+      support.key,
+      support.value,
+      support.registryParameters,
+    );
+    return new RegistrationAdmissionRefinementEmission(
+      support,
+      product.admission,
+    );
   }
 
   private recordsForObservation(
@@ -563,11 +767,12 @@ export class RegistrationKernelEmitter {
   ): {
     readonly records: readonly KernelStoreRecord[];
     readonly admission: RegistrationAdmissionProduct;
+    readonly openSeams: readonly OpenSeam[];
   } {
     const records: KernelStoreRecord[] = [];
     const local = sourceNodeOrdinalLocalKey({
       prefix: context.recordKeyPrefix,
-      sourceFile: context.sourceFile,
+      sourceFile: observation.sourceNode.getSourceFile(),
       node: observation.sourceNode,
       index,
     });
@@ -579,7 +784,11 @@ export class RegistrationKernelEmitter {
 
     const admission = this.recordsForObservationProduct(observation, local, source, support);
     records.push(...admission.records);
-    return { records, admission: admission.admission };
+    return {
+      records,
+      admission: admission.admission,
+      openSeams: support.seams.records.filter((record): record is OpenSeam => record instanceof OpenSeam),
+    };
   }
 
   private recordsForObservationProduct(
@@ -706,8 +915,8 @@ export class RegistrationKernelEmitter {
       [
         new SourceSpanAddress(
           sourceAddressHandle,
-          context.sourceFileAddressHandle,
-          observation.sourceNode.getStart(context.sourceFile),
+          context.sourceFileAddressHandleForNode(observation.sourceNode),
+          observation.sourceNode.getStart(observation.sourceNode.getSourceFile()),
           observation.sourceNode.end,
           SourceSpanRole.Range,
         ),
@@ -715,7 +924,9 @@ export class RegistrationKernelEmitter {
           sourceEvidenceHandle,
           EvidenceKind.ConfigurationFlow,
           [EvidenceRole.Registration],
-          `${observation.carrierKind} admitted a ${observation.strategy} registration.`,
+          observation.carrierKind === RegistrationCarrierKind.RegistrationFactoryCall
+            ? `Registration factory produced a ${observation.strategy} runtime registration value.`
+            : `${observation.carrierKind} admitted a ${observation.strategy} registration.`,
           sourceAddressHandle,
         ),
         new ProvenanceRecord(
@@ -739,11 +950,12 @@ export class RegistrationKernelEmitter {
     registryParameters: readonly RegistrationValueReference[],
   ): RegistrationAdmissionProductEmission {
     const frameworkKind = value?.frameworkKind ?? null;
-    if (frameworkKind != null && isFrameworkRegistrationGroupKind(frameworkKind)) {
+    if (frameworkKind != null && observation.strategy === RegistrationStrategy.FrameworkGroup) {
       return new RegistrationAdmissionProductEmission(
         new FrameworkRegistrationAdmission(
           productHandle,
           identityHandle,
+          observation.carrierKind,
           observation.admissionKind,
           frameworkKind,
           value,
@@ -758,6 +970,7 @@ export class RegistrationKernelEmitter {
         new ParameterizedRegistryAdmission(
           productHandle,
           identityHandle,
+          observation.carrierKind,
           observation.admissionKind,
           key,
           registryParameters,
@@ -772,6 +985,7 @@ export class RegistrationKernelEmitter {
         new RegistryRegistrationAdmission(
           productHandle,
           identityHandle,
+          observation.carrierKind,
           observation.admissionKind,
           value,
           sourceAddressHandle,
@@ -785,6 +999,7 @@ export class RegistrationKernelEmitter {
         new ResourceRegistrationAdmission(
           productHandle,
           identityHandle,
+          observation.carrierKind,
           observation.admissionKind,
           value,
           sourceAddressHandle,
@@ -799,6 +1014,7 @@ export class RegistrationKernelEmitter {
         new ResolverRegistrationAdmission(
           productHandle,
           identityHandle,
+          observation.carrierKind,
           observation.admissionKind,
           observation.strategy,
           observation.keyRole,
@@ -814,6 +1030,7 @@ export class RegistrationKernelEmitter {
       new OpenRegistrationAdmission(
         productHandle,
         identityHandle,
+        observation.carrierKind,
         observation.admissionKind,
         observation.strategy,
         observation.keyRole,
@@ -946,14 +1163,23 @@ function registrationOpenSeamReasonKinds(
 function registrationAdmissionFieldProvenance(
   key: { readonly provenanceHandle: ProvenanceHandle | null },
   value: { readonly provenanceHandle: ProvenanceHandle | null },
-  registryParameters: { readonly provenanceHandles: readonly ProvenanceHandle[] },
+  registryParameters: { readonly fieldProvenance: FieldProvenance<RegistrationAdmissionField> | null },
 ): readonly FieldProvenance<RegistrationAdmissionField>[] {
-  const registryParametersProvenanceHandle = registryParameters.provenanceHandles[0] ?? null;
   return compactFieldProvenance<RegistrationAdmissionField>([
     key.provenanceHandle == null ? null : new FieldProvenance('targetKey', key.provenanceHandle),
     value.provenanceHandle == null ? null : new FieldProvenance('registeredValue', value.provenanceHandle),
-    registryParametersProvenanceHandle == null ? null : new FieldProvenance('registryParameters', registryParametersProvenanceHandle),
+    registryParameters.fieldProvenance,
   ]);
+}
+
+function mergeRegistrationAdmissionFieldProvenance(
+  source: readonly FieldProvenance<RegistrationAdmissionField>[],
+  refined: readonly FieldProvenance<RegistrationAdmissionField>[],
+): readonly FieldProvenance<RegistrationAdmissionField>[] {
+  const byField = new Map<RegistrationAdmissionField, FieldProvenance<RegistrationAdmissionField>>();
+  for (const entry of source) byField.set(entry.field, entry);
+  for (const entry of refined) byField.set(entry.field, entry);
+  return [...byField.values()];
 }
 
 function hasRegistrationOpen(
@@ -966,43 +1192,20 @@ function hasRegistrationOpen(
 function isResourceRegistrationReference(
   reference: RegistrationValueReference | null,
 ): reference is RegistrationValueReference {
-  return reference?.valueKind === RegistrationValueKind.ResourceDefinition
-    && reference.productHandle != null;
+  return (
+    reference?.valueKind === RegistrationValueKind.ResourceDefinition
+    || reference?.valueKind === RegistrationValueKind.ResourceDefinitionConstraint
+  ) && reference.productHandle != null;
 }
 
-function stringLiteralValue(node: ts.Node): string | null {
-  if (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node)) {
-    return node.text;
+function registrationValueSymbolSite(node: ts.Node): ts.Node {
+  if (
+    ts.isClassDeclaration(node)
+    || ts.isClassExpression(node)
+    || ts.isFunctionDeclaration(node)
+    || ts.isFunctionExpression(node)
+  ) {
+    return node.name ?? node;
   }
-  return null;
-}
-
-function registrationKeyIdentitySeed(
-  observation: RegistrationKeyObservation,
-  constructableDeclarationHandle: IdentityHandle | null,
-): DiKeyIdentitySeed {
-  if (observation.observationKind === RegistrationKeyObservationKind.Constructable) {
-    return {
-      kind: 'constructable-key',
-      candidateName: observation.localName,
-      declarationHandle: constructableDeclarationHandle,
-    };
-  }
-  const stringValue = stringLiteralValue(observation.node);
-  if (stringValue != null) {
-    return {
-      kind: 'string-key',
-      candidateName: stringValue,
-    };
-  }
-  if (observation.localName != null) {
-    return {
-      kind: 'identifier-name',
-      candidateName: observation.localName,
-    };
-  }
-  return {
-    kind: 'open-expression',
-    candidateName: null,
-  };
+  return node;
 }

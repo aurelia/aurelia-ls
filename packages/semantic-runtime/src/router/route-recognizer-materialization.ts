@@ -11,9 +11,14 @@ import type {
   ProvenanceHandle,
 } from '../kernel/handles.js';
 import {
+  KernelPublicationPlan,
   KernelStoreBatch,
-  type KernelStore,
-  type KernelStoreRecord,
+  publishProductDetails,
+  type KernelPublicationContext,
+} from '../kernel/publication.js';
+import type {
+  KernelStoreReadView,
+  KernelStoreRecord,
 } from '../kernel/store.js';
 import { KernelVocabulary } from '../kernel/vocabulary.js';
 import {
@@ -33,6 +38,7 @@ import {
   type RouteConfigContextModel,
   type RouteConfigModel,
 } from './model.js';
+import { RouterProductDetails } from './product-details.js';
 import {
   parseConfigurableRoutePath,
   ROUTE_RECOGNIZER_RESIDUE_PARAMETER,
@@ -104,7 +110,7 @@ export class RouteRecognizerMaterializationProjectResult {
 /** Parse authored route-config paths into ConfigurableRoute facts before State/Endpoint graph materialization. */
 export class RouteRecognizerMaterializationProjectPass {
   materializeAndEmit(
-    store: KernelStore,
+    publication: KernelPublicationContext,
     project: ProjectBootFrame,
     routeContexts: RouteConfigContextMaterializationProjectResult,
   ): RouteRecognizerMaterializationProjectResult {
@@ -114,22 +120,19 @@ export class RouteRecognizerMaterializationProjectPass {
     const routeEmissions = routeConfigContexts
       .flatMap((routeConfigContext) =>
         this.materializeRouteConfigContext(
-          store,
+          publication,
           routeConfigContext,
           routeConfigContextsByIdentity,
           routeConfigsByIdentity,
-          routeContexts.usesEagerLoading(),
+          routeContexts.usesEagerLoading(routeConfigContext),
         )
       );
-    const stateGraphs = materializeStateGraphs(store, routeEmissions);
+    const stateGraphs = materializeStateGraphs(publication, routeEmissions);
     const records = [
       ...routeEmissions.flatMap((emission) => emission.records),
       ...stateGraphs.flatMap((stateGraph) => stateGraph.records),
     ];
-    if (records.length > 0) {
-      store.commit(new KernelStoreBatch(records, `route-recognizer:${project.projectKey}`));
-    }
-    return new RouteRecognizerMaterializationProjectResult(
+    const result = new RouteRecognizerMaterializationProjectResult(
       project,
       routeEmissions.map((emission) => emission.configurableRoute),
       routeEmissions.flatMap((emission) => emission.endpoints),
@@ -139,10 +142,15 @@ export class RouteRecognizerMaterializationProjectPass {
         ...stateGraphs.flatMap((stateGraph) => stateGraph.issues),
       ],
     );
+    publication.publish(new KernelPublicationPlan(
+      new KernelStoreBatch(records, `route-recognizer:${project.projectKey}`),
+      publishProductDetails(RouterProductDetails.Endpoint, result.readEndpoints()),
+    ));
+    return result;
   }
 
   private materializeRouteConfigContext(
-    store: KernelStore,
+    store: KernelStoreReadView,
     routeConfigContext: RouteConfigContextModel,
     routeConfigContextsByIdentity: ReadonlyMap<RouteConfigContextModel['identityHandle'], RouteConfigContextModel>,
     routeConfigIndex: ReadonlyMap<RouteConfigModel['identityHandle'], RouteConfigModel>,
@@ -175,7 +183,7 @@ export class RouteRecognizerMaterializationProjectPass {
   }
 
   private materializeConfigurableRoute(
-    store: KernelStore,
+    store: KernelStoreReadView,
     routeConfigContext: RouteConfigContextModel,
     routeConfig: RouteConfigModel,
     path: string,
@@ -218,7 +226,7 @@ export class RouteRecognizerMaterializationProjectPass {
   }
 
   private configurableRoutePathSite(
-    store: KernelStore,
+    store: KernelStoreReadView,
     routeConfigContext: RouteConfigContextModel,
     routeConfig: RouteConfigModel,
     path: string,
@@ -227,7 +235,8 @@ export class RouteRecognizerMaterializationProjectPass {
     parentPathIndex: number,
   ): ConfigurableRoutePathSite {
     const local = `route-recognizer-configurable-route:${routeConfigContext.identityHandle}:route:${routeConfig.identityHandle}:path:${index}:parent:${parentPathIndex}`;
-    const sourceAddressHandle = routeConfig.pathSourceAddressHandle;
+    const sourceAddressHandle = routeConfig.pathSourceAddressHandles[index]
+      ?? routeConfig.sourceAddressHandle;
     const parse = parseConfigurableRoutePath(path, routeConfig.caseSensitive === true);
     const provenanceHandle = store.handles.provenance(local);
     return {
@@ -250,7 +259,7 @@ export class RouteRecognizerMaterializationProjectPass {
   }
 
   private materializeEndpoints(
-    store: KernelStore,
+    store: KernelStoreReadView,
     routeConfigContext: RouteConfigContextModel,
     configurableRoute: ConfigurableRouteModel,
     parse: ConfigurableRouteParse,
@@ -356,7 +365,7 @@ function configurableRouteModel(
 }
 
 function recordsForConfigurableRoute(
-  store: KernelStore,
+  store: KernelStoreReadView,
   local: string,
   configurableRoute: ConfigurableRouteModel,
   routeConfigContext: RouteConfigContextModel,
@@ -384,7 +393,7 @@ function recordsForConfigurableRoute(
 }
 
 function materializeStateGraphs(
-  store: KernelStore,
+  store: KernelStoreReadView,
   routeEmissions: readonly ConfigurableRouteEmission[],
 ): readonly RouteRecognizerStateGraphEmission[] {
   const emissionsByRecognizer = new Map<string, ConfigurableRouteEmission[]>();
@@ -461,7 +470,7 @@ function residualEndpointParameters(
 }
 
 function endpointModel(
-  store: KernelStore,
+  store: KernelStoreReadView,
   local: string,
   recognizer: RouteRecognizerReference,
   configurableRoute: RouteRecognizerReference,
@@ -487,7 +496,7 @@ function endpointModel(
 }
 
 function endpointReference(
-  store: KernelStore,
+  store: KernelStoreReadView,
   local: string,
   path: string,
   sourceAddressHandle: RouteConfigModel['sourceAddressHandle'],
@@ -502,7 +511,7 @@ function endpointReference(
 }
 
 function recordsForEndpointPublication(
-  store: KernelStore,
+  store: KernelStoreReadView,
   local: string,
   endpoint: EndpointModel,
   routeConfigContext: RouteConfigContextModel,
@@ -530,7 +539,7 @@ class ConfigurableRouteEndpointEmission {
 }
 
 function endpointRecords(
-  store: KernelStore,
+  store: KernelStoreReadView,
   local: string,
   endpoint: EndpointModel,
   routeConfigContext: RouteConfigContextModel,
@@ -570,7 +579,7 @@ class RouteRecognizerStateGraphBuilder {
   private readonly root: MutableRouteRecognizerState;
 
   constructor(
-    readonly store: KernelStore,
+    readonly store: KernelStoreReadView,
     readonly routeConfigContext: RouteConfigContextModel,
   ) {
     this.root = this.createState(
@@ -923,7 +932,7 @@ function requiredConfigurableRouteForEndpoint(
 }
 
 function stateRecords(
-  store: KernelStore,
+  store: KernelStoreReadView,
   routeConfigContext: RouteConfigContextModel,
   state: StateModel,
   mutable: MutableRouteRecognizerState,
@@ -945,7 +954,7 @@ function stateRecords(
 }
 
 function issueRecordsForPublication(
-  store: KernelStore,
+  store: KernelStoreReadView,
   routeConfigContext: RouteConfigContextModel,
   issue: RouteRecognizerIssueModel,
 ): readonly KernelStoreRecord[] {
@@ -967,7 +976,7 @@ function issueRecordsForPublication(
 }
 
 function routeRecognizerIssueModel(
-  store: KernelStore,
+  store: KernelStoreReadView,
   local: string,
   recognizer: RouteRecognizerReference,
   issueKind: RouteRecognizerIssueKind,

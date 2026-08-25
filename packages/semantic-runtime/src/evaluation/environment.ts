@@ -3,6 +3,12 @@ import {
   EvaluationUndefined,
   type EvaluationValue,
 } from './values.js';
+import {
+  compactEvaluationOpenSeams,
+  type EvaluationOpenSeam,
+} from './seams.js';
+import { EvaluationValueEvidence } from './value-pressure.js';
+import type { StaticEvaluationValueGraph } from './evaluation-graph.js';
 
 export const enum EvaluationBindingKind {
   /** Binding introduced by `var`. */
@@ -34,6 +40,8 @@ export const enum EvaluationBindingState {
 
 /** One binding cell inside a module or function environment record. */
 export class EvaluationBinding {
+  public openSeams: readonly EvaluationOpenSeam[];
+
   constructor(
     /** Name used for lexical lookup. */
     readonly name: string,
@@ -44,19 +52,37 @@ export class EvaluationBinding {
     /** Declaration node that produced the binding, when one exists. */
     readonly declaration: ts.Node | null,
     /** Current binding state. */
-    public state: EvaluationBindingState = EvaluationBindingState.Uninitialized,
+    public state: EvaluationBindingState,
     /** Current evaluator-local value. */
-    public value: EvaluationValue = EvaluationUndefined,
-  ) {}
+    public value: EvaluationValue,
+    /** Exact pressure that qualifies the retained value in this lexical slot. */
+    openSeams: readonly EvaluationOpenSeam[],
+  ) {
+    this.openSeams = compactEvaluationOpenSeams(openSeams);
+  }
+
+  /** Replace only the mutable cell state while preserving declaration and mutability identity. */
+  replaceState(
+    state: EvaluationBindingState,
+    value: EvaluationValue,
+    openSeams: readonly EvaluationOpenSeam[],
+  ): void {
+    this.state = state;
+    this.value = value;
+    this.openSeams = compactEvaluationOpenSeams(openSeams);
+  }
 }
 
 /** ECMAScript-like environment record for one module or evaluator-local function call. */
 export class ModuleEnvironmentRecord {
   private readonly bindings = new Map<string, EvaluationBinding>();
+  private graphOwner: StaticEvaluationValueGraph | null = null;
 
   constructor(
     /** Module or call-frame key that owns this environment. */
     readonly moduleKey: string,
+    /** Lexical environment consulted after this frame's own binding cells. */
+    readonly outer: ModuleEnvironmentRecord | null,
   ) {}
 
   /** Declare or replace a binding cell. */
@@ -66,7 +92,15 @@ export class ModuleEnvironmentRecord {
     mutable: boolean,
     declaration: ts.Node | null,
   ): EvaluationBinding {
-    const binding = new EvaluationBinding(name, bindingKind, mutable, declaration);
+    const binding = new EvaluationBinding(
+      name,
+      bindingKind,
+      mutable,
+      declaration,
+      EvaluationBindingState.Uninitialized,
+      EvaluationUndefined,
+      [],
+    );
     this.bindings.set(name, binding);
     return binding;
   }
@@ -78,26 +112,34 @@ export class ModuleEnvironmentRecord {
     bindingKind: EvaluationBindingKind,
     mutable: boolean,
     declaration: ts.Node | null,
+    openSeams: readonly EvaluationOpenSeam[],
   ): EvaluationBinding {
     const binding = this.bindings.get(name)
       ?? this.declareBinding(name, bindingKind, mutable, declaration);
-    binding.value = value;
-    binding.state = value.kind === 'unknown'
+    const compactOpenSeams = compactEvaluationOpenSeams(openSeams);
+    binding.replaceState(value.kind === 'unknown' || compactOpenSeams.length > 0
       ? EvaluationBindingState.Open
-      : EvaluationBindingState.Initialized;
+      : EvaluationBindingState.Initialized, value, compactOpenSeams);
     return binding;
   }
 
   /** Assign a value to an existing mutable binding. */
-  setBinding(name: string, value: EvaluationValue): boolean {
+  setBinding(
+    name: string,
+    value: EvaluationValue,
+    openSeams: readonly EvaluationOpenSeam[],
+  ): boolean {
     const binding = this.bindings.get(name);
-    if (binding == null || !binding.mutable) {
+    if (binding == null) {
+      return this.outer?.setBinding(name, value, openSeams) ?? false;
+    }
+    if (!binding.mutable) {
       return false;
     }
-    binding.value = value;
-    binding.state = value.kind === 'unknown'
+    const compactOpenSeams = compactEvaluationOpenSeams(openSeams);
+    binding.replaceState(value.kind === 'unknown' || compactOpenSeams.length > 0
       ? EvaluationBindingState.Open
-      : EvaluationBindingState.Initialized;
+      : EvaluationBindingState.Initialized, value, compactOpenSeams);
     return true;
   }
 
@@ -108,12 +150,25 @@ export class ModuleEnvironmentRecord {
 
   /** Read a binding cell by lexical name. */
   readBinding(name: string): EvaluationBinding | null {
+    return this.bindings.get(name) ?? this.outer?.readBinding(name) ?? null;
+  }
+
+  /** Read only this lexical record's own binding cell. */
+  readOwnBinding(name: string): EvaluationBinding | null {
     return this.bindings.get(name) ?? null;
   }
 
   /** Read a binding value by lexical name. */
   readValue(name: string): EvaluationValue | null {
-    return this.bindings.get(name)?.value ?? null;
+    return this.readBinding(name)?.value ?? null;
+  }
+
+  /** Read a binding value together with the pressure retained by its lexical edge. */
+  readEvidence(name: string): EvaluationValueEvidence | null {
+    const binding = this.readBinding(name);
+    return binding == null
+      ? null
+      : new EvaluationValueEvidence(binding.value, binding.openSeams);
   }
 
   /** Snapshot all binding cells in insertion order. */
@@ -121,9 +176,42 @@ export class ModuleEnvironmentRecord {
     return [...this.bindings.values()];
   }
 
-  /** Clone the environment for branch/function interpretation while sharing evaluator-local values. */
+  /** Install an exact binding snapshot while a separate evaluation session reconstructs an aliased value graph. */
+  installBinding(binding: EvaluationBinding): void {
+    this.bindings.set(binding.name, binding);
+  }
+
+  /** Mark this environment as part of one mutable evaluation graph. */
+  adoptGraphOwner(owner: StaticEvaluationValueGraph): void {
+    if (this.graphOwner != null && this.graphOwner !== owner) {
+      throw new Error(`Evaluation environment ${this.moduleKey} already belongs to another graph owner.`);
+    }
+    this.graphOwner = owner;
+  }
+
+  belongsToGraph(owner: StaticEvaluationValueGraph): boolean {
+    return this.graphOwner === owner;
+  }
+
+  /** Read graph ownership without exposing a writable carrier to evaluator consumers. */
+  readGraphOwner(): StaticEvaluationValueGraph | null {
+    return this.graphOwner;
+  }
+
+  /** Create a lexical call/constructor frame whose writes reach captured outer binding cells. */
+  createChild(moduleKey: string): ModuleEnvironmentRecord {
+    const child = new ModuleEnvironmentRecord(moduleKey, this);
+    child.graphOwner = this.graphOwner;
+    return child;
+  }
+
+  /** Snapshot this lexical environment chain while sharing evaluator-local value graphs. */
   clone(moduleKey: string = this.moduleKey): ModuleEnvironmentRecord {
-    const clone = new ModuleEnvironmentRecord(moduleKey);
+    const clone = new ModuleEnvironmentRecord(
+      moduleKey,
+      this.outer?.clone(this.outer.moduleKey) ?? null,
+    );
+    clone.graphOwner = this.graphOwner;
     for (const binding of this.bindings.values()) {
       clone.bindings.set(
         binding.name,
@@ -134,6 +222,7 @@ export class ModuleEnvironmentRecord {
           binding.declaration,
           binding.state,
           binding.value,
+          binding.openSeams,
         ),
       );
     }

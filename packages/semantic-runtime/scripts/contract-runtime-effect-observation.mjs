@@ -19,11 +19,12 @@ const effects = app.ask({
 }).value.rows;
 const observedDependencies = app.ask({
   kind: 'runtime-effect-observed-dependencies',
+  detail: 'handles',
   page: { size: 100 },
 }).value.rows;
 
 const failures = [
-  effectCountExpectation(effects, 5),
+  effectCountExpectation(effects, 6),
   effectExpectation(
     'Run effect should use the RunEffect connectable branch and execute immediately.',
     effects,
@@ -68,11 +69,23 @@ const failures = [
     'address.city',
   ),
   dependencyExpectation(
+    'Resolver-wrapped static inject should expose IObservation through the canonical class dependency plan.',
+    observedDependencies,
+    'observer-locator-function-key',
+    'proxy-property-read',
+    'status.label',
+  ),
+  dependencyExpectation(
     'Run effect should publish synchronous @observable getter reads from the active connectable window.',
     observedDependencies,
     'connectable-run',
     'observable-property-read',
     'this.state.tracker.coord',
+  ),
+  nestedAccessUseHandleExpectation(
+    'Detailed source-effect dependencies should retain handles on nested access-use targets.',
+    observedDependencies,
+    'profile.name',
   ),
 ].filter(Boolean);
 
@@ -87,13 +100,13 @@ const summary = {
   })),
   observedDependencies: observedDependencies.map((row) => ({
     dependencyEvaluationKind: row.dependencyEvaluationKind,
-    dependencyKind: row.dependencyKind,
-    expressionKind: row.expressionKind,
-    sourceName: row.sourceName,
-    sourceRootName: row.sourceRootName,
-    memberName: row.memberName,
-    observedMemberKind: row.observedMemberKind,
-    source: row.source?.label ?? null,
+    dependencyKind: row.occurrence.dependencyKind,
+    expressionKind: row.occurrence.expressionKind,
+    sourceName: row.occurrence.sourceName,
+    sourceRootName: row.occurrence.sourceRootName,
+    memberName: row.occurrence.memberName,
+    observedMemberKind: row.occurrence.observedMemberKind,
+    source: row.occurrence.source?.label ?? null,
   })),
 };
 
@@ -146,10 +159,21 @@ function openEffectExpectation(summary, rows) {
 function dependencyExpectation(summary, rows, dependencyEvaluationKind, dependencyKind, sourceName) {
   const row = rows.find((candidate) =>
     candidate.dependencyEvaluationKind === dependencyEvaluationKind
-    && candidate.dependencyKind === dependencyKind
-    && candidate.sourceName === sourceName
+    && candidate.occurrence.dependencyKind === dependencyKind
+    && candidate.occurrence.sourceName === sourceName
   );
   return row == null
     ? `${summary}: missing ${dependencyEvaluationKind}/${dependencyKind}/${sourceName}.`
     : null;
+}
+
+function nestedAccessUseHandleExpectation(summary, rows, sourceName) {
+  const row = rows.find((candidate) => candidate.occurrence.sourceName === sourceName);
+  return row?.occurrence.accessUse?.targetLinks?.some((target) =>
+    target.authorityProductHandle != null
+    && target.targetIdentityHandle != null
+    && target.declarationSourceAddressHandle != null
+  )
+    ? null
+    : summary;
 }

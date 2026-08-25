@@ -4,9 +4,14 @@ import type {
   BindingScope,
 } from '../configuration/scope.js';
 import {
+  RuntimeExpressionAccessTargetResolution,
+  type RuntimeExpressionAccessUse,
+} from '../runtime-expression/runtime-expression-access-use.js';
+import { TypeSystemHotDetails } from '../type-system/product-details.js';
+import {
   localKeyPart,
 } from '../kernel/local-key.js';
-import type { KernelStore } from '../kernel/store.js';
+import type { KernelPublicationContext } from '../kernel/publication.js';
 import {
   checkerSymbolMemberSourceProjection,
 } from '../type-system/checker-type-member-source.js';
@@ -21,49 +26,136 @@ import type {
   CheckerExpressionTypeEvaluator,
 } from '../type-system/expression-type-evaluator.js';
 import {
-  type RuntimeBindingObservedDependency,
-  RuntimeObservedMemberSourceState,
+  CheckerTypeMember,
+} from '../type-system/type-shape.js';
+import {
+  RuntimeObservedDependencyOccurrence,
   RuntimeObservedDependencyKind,
-} from './runtime-binding-observation.js';
-import type { RuntimeObservedDependencyDraft } from './runtime-observed-dependency-draft.js';
+  RuntimeObservedMemberSourceState,
+  RuntimeObservedMemberSourceRoute,
+} from './runtime-observed-dependency.js';
+import type {
+  RuntimeObservedDependencyAccessUseDraft,
+  RuntimeObservedDependencyDraft,
+} from './runtime-observed-dependency-draft.js';
 
 export interface RuntimeObservedMemberSourceProjection {
-  readonly observedMemberKind: RuntimeObservedDependencyDraft['observedMemberKind'];
-  readonly observedMemberSourceAddressHandle: RuntimeObservedDependencyDraft['observedMemberSourceAddressHandle'];
+  readonly observedMemberKind: Exclude<RuntimeObservedDependencyDraft['observedMemberKind'], undefined>;
+  readonly observedMemberSourceAddressHandle: Exclude<
+    RuntimeObservedDependencyDraft['observedMemberSourceAddressHandle'],
+    undefined
+  >;
+  /** Whose declaration the address is; owner-value routes are navigation aids, never member proof. */
+  readonly observedMemberSourceRoute: RuntimeObservedMemberSourceRoute | null;
 }
 
 export function observedMemberSourceForCheckerSymbol(
-  store: KernelStore,
+  publication: KernelPublicationContext,
+  checker: ts.TypeChecker,
   symbol: ts.Symbol | null | undefined,
   declarations: readonly ts.Declaration[] | null = null,
 ): RuntimeObservedMemberSourceProjection | null {
   if (symbol == null) {
     return null;
   }
-  const projection = checkerSymbolMemberSourceProjection(store, symbol, declarations ?? undefined);
+  const projection = checkerSymbolMemberSourceProjection(
+    publication,
+    checker,
+    symbol,
+    declarations ?? undefined,
+  );
   return {
     observedMemberKind: projection.memberKind,
     observedMemberSourceAddressHandle: projection.sourceAddressHandle,
+    observedMemberSourceRoute: projection.sourceAddressHandle == null
+      ? null
+      : RuntimeObservedMemberSourceRoute.MemberDeclaration,
   };
 }
 
 export function observedMemberSourceFields(
   projection: RuntimeObservedMemberSourceProjection | null,
-): Pick<RuntimeObservedDependencyDraft, 'observedMemberKind' | 'observedMemberSourceAddressHandle'> {
+): Pick<RuntimeObservedDependencyDraft, 'observedMemberKind' | 'observedMemberSourceAddressHandle' | 'observedMemberSourceRoute'> {
   return projection == null
     ? {}
     : {
       observedMemberKind: projection.observedMemberKind,
       observedMemberSourceAddressHandle: projection.observedMemberSourceAddressHandle,
+      observedMemberSourceRoute: projection.observedMemberSourceRoute,
     };
 }
 
-export function observedMemberSourceStateForBindingDependency(input: {
+/** Reuses the target already closed for an access occurrence instead of re-projecting its spelling. */
+export function observedMemberSourceForRuntimeExpressionAccessUse(
+  publication: KernelPublicationContext,
+  accessUse: RuntimeExpressionAccessUse,
+): RuntimeObservedMemberSourceProjection | null {
+  if (
+    accessUse.targetResolution !== RuntimeExpressionAccessTargetResolution.Exact
+    || accessUse.targetLinks.length !== 1
+  ) {
+    return null;
+  }
+  const target = accessUse.targetLinks[0]!;
+  const member = target.targetTypeMemberHandle == null
+    ? null
+    : publication.readHotDetail(TypeSystemHotDetails.TypeMember, target.targetTypeMemberHandle);
+  if (!(member instanceof CheckerTypeMember) && target.declarationSourceAddressHandle == null) {
+    return null;
+  }
+  return {
+    observedMemberKind: member instanceof CheckerTypeMember ? member.memberKind : null,
+    observedMemberSourceAddressHandle: target.declarationSourceAddressHandle,
+    observedMemberSourceRoute: target.declarationSourceAddressHandle == null
+      ? null
+      : RuntimeObservedMemberSourceRoute.MemberDeclaration,
+  };
+}
+
+export function runtimeObservedDependencyOccurrence(input: {
+  readonly dependency: RuntimeObservedDependencyAccessUseDraft;
+  readonly scope: BindingScope | null;
+  readonly projection?: RuntimeObservedMemberSourceProjection | null;
+}): RuntimeObservedDependencyOccurrence {
+  const projection = mergedObservedMemberSourceProjection(
+    input.dependency,
+    input.projection ?? null,
+  );
+  return new RuntimeObservedDependencyOccurrence(
+    input.dependency.accessUseProductHandle,
+    input.dependency.dependencyKind,
+    input.dependency.expressionKind,
+    input.dependency.sourceName,
+    input.dependency.sourceRootName,
+    input.dependency.memberName,
+    input.dependency.keyExpression,
+    input.dependency.methodName,
+    projection.observedMemberKind,
+    projection.observedMemberSourceAddressHandle,
+    observedMemberSourceStateForDependency({
+      dependency: input.dependency,
+      scope: input.scope,
+      projection,
+    }),
+    projection.observedMemberSourceRoute,
+    input.dependency.sourceFileAddressHandle ?? null,
+    input.dependency.scopeLookupAncestor ?? null,
+    input.dependency.spanStart,
+    input.dependency.spanEnd,
+    input.dependency.memberNameSpanStart ?? null,
+    input.dependency.memberNameSpanEnd ?? null,
+    input.dependency.accessUseSourceAddressHandle,
+  );
+}
+
+function observedMemberSourceStateForDependency(input: {
   readonly dependency: RuntimeObservedDependencyDraft;
   readonly scope: BindingScope | null;
-  readonly projection: RuntimeObservedMemberSourceProjection | null;
+  readonly projection: RuntimeObservedMemberSourceProjection;
 }): RuntimeObservedMemberSourceState {
-  if (input.projection?.observedMemberSourceAddressHandle != null) {
+  // Source means "a source route is closed", including honest owner-value routes for weak/dynamic
+  // owners; consumers that need member-declaration proof must additionally check the route field.
+  if (input.projection.observedMemberSourceAddressHandle != null) {
     return RuntimeObservedMemberSourceState.Source;
   }
   if (isTemporaryObservedCollectionOwner(input.dependency)) {
@@ -78,27 +170,42 @@ export function observedMemberSourceStateForBindingDependency(input: {
   return RuntimeObservedMemberSourceState.Open;
 }
 
-export function isRuntimeObservedDependencyScopeOpenRoot(
-  dependency: RuntimeBindingObservedDependency,
-): boolean {
-  return dependency.observedMemberSourceState === RuntimeObservedMemberSourceState.ScopeOpen
-    && isDirectScopeRootDependency(dependency);
+function mergedObservedMemberSourceProjection(
+  dependency: RuntimeObservedDependencyDraft,
+  projection: RuntimeObservedMemberSourceProjection | null,
+): RuntimeObservedMemberSourceProjection {
+  const observedMemberKind = projection?.observedMemberKind
+    ?? dependency.observedMemberKind
+    ?? null;
+  const observedMemberSourceAddressHandle = projection?.observedMemberSourceAddressHandle
+    ?? dependency.observedMemberSourceAddressHandle
+    ?? null;
+  const observedMemberSourceRoute = projection?.observedMemberSourceRoute
+    ?? dependency.observedMemberSourceRoute
+    ?? (observedMemberSourceAddressHandle == null
+      ? null
+      : RuntimeObservedMemberSourceRoute.MemberDeclaration);
+  return {
+    observedMemberKind,
+    observedMemberSourceAddressHandle,
+    observedMemberSourceRoute,
+  };
 }
 
 export function observedDependencyWithMemberSourceForCheckerType<TDraft extends RuntimeObservedDependencyDraft>(
-  store: KernelStore | null | undefined,
+  publication: KernelPublicationContext,
   checker: ts.TypeChecker,
   ownerType: ts.Type | null | undefined,
   draft: TDraft,
 ): TDraft {
-  if (store == null || ownerType == null) {
+  if (ownerType == null) {
     return draft;
   }
   const path = simpleObservedDependencyPath(draft);
   if (path.length === 0) {
     return draft;
   }
-  const projection = observedMemberSourceForCheckerPath(store, checker, ownerType, path);
+  const projection = observedMemberSourceForCheckerPath(publication, checker, ownerType, path);
   return projection == null
     ? draft
     : {
@@ -148,17 +255,30 @@ export function observedMemberSourceForBindingDependency(input: {
     input.evaluator,
     input.localKey,
   );
+  // When checker member lookup fails (unknown element type, missing member on a primitive), the
+  // owner's projection is returned as an owner-value route so navigation keeps its best source
+  // without masquerading as a member declaration.
   if (access == null) {
     return ownerSource;
   }
+  if (access.memberSourceAddressHandle != null) {
+    return {
+      observedMemberKind: access.memberKind,
+      observedMemberSourceAddressHandle: access.memberSourceAddressHandle,
+      observedMemberSourceRoute: RuntimeObservedMemberSourceRoute.MemberDeclaration,
+    };
+  }
   return {
     observedMemberKind: access.memberKind,
-    observedMemberSourceAddressHandle: access.sourceAddressHandle ?? ownerSource?.observedMemberSourceAddressHandle ?? null,
+    observedMemberSourceAddressHandle: ownerSource?.observedMemberSourceAddressHandle ?? null,
+    observedMemberSourceRoute: ownerSource?.observedMemberSourceAddressHandle == null
+      ? null
+      : RuntimeObservedMemberSourceRoute.OwnerValue,
   };
 }
 
 export function observedMemberSourceForCheckerPath(
-  store: KernelStore,
+  publication: KernelPublicationContext,
   checker: ts.TypeChecker,
   ownerType: ts.Type,
   path: readonly string[],
@@ -175,7 +295,7 @@ export function observedMemberSourceForCheckerPath(
     }
     current = checkerSymbolValueType(checker, currentSymbol);
   }
-  return observedMemberSourceForCheckerSymbol(store, currentSymbol);
+  return observedMemberSourceForCheckerSymbol(publication, checker, currentSymbol);
 }
 
 function simpleObservedDependencyPath(
@@ -198,6 +318,12 @@ function directObservedMemberSourceProjection(
   return {
     observedMemberKind: dependency.observedMemberKind ?? null,
     observedMemberSourceAddressHandle: dependency.observedMemberSourceAddressHandle ?? null,
+    // Preset draft addresses come from checker member-source projections (proxy, trackable-method,
+    // checker-path walks), so an unrouted preset address is the member's own declaration.
+    observedMemberSourceRoute: dependency.observedMemberSourceRoute
+      ?? (dependency.observedMemberSourceAddressHandle == null
+        ? null
+        : RuntimeObservedMemberSourceRoute.MemberDeclaration),
   };
 }
 
@@ -231,9 +357,16 @@ function observedScopeNameProjectionForDependency(
       name,
       `${localKey}:observed-dependency:scope-slot:${dependency.spanStart ?? 'open'}:${localKeyPart(name)}`,
     );
+    const sourceAddressHandle = access?.memberSourceAddressHandle ?? lookup.slot.sourceAddressHandle ?? null;
     return {
       observedMemberKind: access?.memberKind ?? null,
-      observedMemberSourceAddressHandle: lookup.slot.sourceAddressHandle ?? access?.sourceAddressHandle ?? null,
+      observedMemberSourceAddressHandle: sourceAddressHandle,
+      // A resolved checker member is the identity the expression observes. Slot provenance can be
+      // a distinct declaration surface (for example static bindable metadata), so use it only when
+      // the member substrate cannot name the reached declaration.
+      observedMemberSourceRoute: sourceAddressHandle == null
+        ? null
+        : RuntimeObservedMemberSourceRoute.MemberDeclaration,
     };
   }
   const access = evaluator.memberValueAccessForReference(
@@ -245,7 +378,10 @@ function observedScopeNameProjectionForDependency(
     ? null
     : {
       observedMemberKind: access.memberKind,
-      observedMemberSourceAddressHandle: access.sourceAddressHandle,
+      observedMemberSourceAddressHandle: access.memberSourceAddressHandle,
+      observedMemberSourceRoute: access.memberSourceAddressHandle == null
+        ? null
+        : RuntimeObservedMemberSourceRoute.MemberDeclaration,
     };
 }
 
@@ -264,6 +400,9 @@ function observedOwnerSourceProjectionForDependency(
     return {
       observedMemberKind: null,
       observedMemberSourceAddressHandle: lookup.slot.sourceAddressHandle,
+      observedMemberSourceRoute: lookup.slot.sourceAddressHandle == null
+        ? null
+        : RuntimeObservedMemberSourceRoute.OwnerValue,
     };
   }
   const access = evaluator.memberValueAccessForReference(
@@ -275,7 +414,10 @@ function observedOwnerSourceProjectionForDependency(
     ? null
     : {
       observedMemberKind: null,
-      observedMemberSourceAddressHandle: access.sourceAddressHandle,
+      observedMemberSourceAddressHandle: access.memberSourceAddressHandle ?? access.sourceAddressHandle,
+      observedMemberSourceRoute: (access.memberSourceAddressHandle ?? access.sourceAddressHandle) == null
+        ? null
+        : RuntimeObservedMemberSourceRoute.OwnerValue,
     };
 }
 

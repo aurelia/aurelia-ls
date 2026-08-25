@@ -30,6 +30,8 @@ export const enum ConfigurationOptionValueKind {
   Number = 'number',
   /** A null option value. */
   Null = 'null',
+  /** An explicitly authored or statically evaluated undefined option value. */
+  Undefined = 'undefined',
   /** An object literal or object-like evaluated value. */
   Object = 'object',
   /** An array literal or array-like evaluated value. */
@@ -45,6 +47,7 @@ export const enum ConfigurationOptionValueKind {
 export type ConfigurationOptionField =
   | 'contributionKind'
   | 'configurationKind'
+  | 'configurationValue'
   | 'optionPath'
   | 'value'
   | 'source';
@@ -129,6 +132,16 @@ export class NullConfigurationOptionValue {
   ) {}
 }
 
+/** Explicit undefined option value. */
+export class UndefinedConfigurationOptionValue {
+  readonly valueKind = ConfigurationOptionValueKind.Undefined;
+
+  constructor(
+    /** Source address for the expression that produced undefined. */
+    readonly addressHandle: AddressHandle | null,
+  ) {}
+}
+
 /** Object-like option value that should stay referential until a narrower product shape exists. */
 export class ObjectConfigurationOptionValue {
   readonly valueKind = ConfigurationOptionValueKind.Object;
@@ -209,6 +222,7 @@ export type ConfigurationOptionValue =
   | StringArrayConfigurationOptionValue
   | NumberConfigurationOptionValue
   | NullConfigurationOptionValue
+  | UndefinedConfigurationOptionValue
   | ObjectConfigurationOptionValue
   | ArrayConfigurationOptionValue
   | CallbackConfigurationOptionValue
@@ -231,6 +245,8 @@ export class ConfigurationOptionContribution {
     readonly contributionKind: ConfigurationOptionContributionKind,
     /** Framework configuration object that owns this option path, when the receiver is recognized. */
     readonly configurationKind: FrameworkRegistrationKind | null,
+    /** Source of the configuration value whose runtime instance receives this contribution. */
+    readonly configurationValueSourceAddressHandle: AddressHandle | null,
     /** Runtime option path, such as `coercingOptions.enableCoercion` or `devToolsOptions.disable`. */
     readonly optionPath: readonly string[],
     /** Value reference observed for this option path. */

@@ -156,8 +156,7 @@
         {
           "kind": "doc",
           "path": "packages/atlas/workbench/agent-handoff.md",
-          "heading": "Autonomous Loop Posture",
-          "summary": "Atlas-first internal development posture."
+          "summary": "Atlas-first internal development posture (the handoff's former Autonomous Loop Posture section; the doc has since been restructured)."
         },
         {
           "kind": "doc",

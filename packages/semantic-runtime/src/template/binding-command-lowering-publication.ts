@@ -5,6 +5,7 @@ import {
 import { SemanticClaim } from '../kernel/claim.js';
 import {
   OpenSeam,
+  type OpenSeamReasonKind,
 } from '../kernel/open-seam.js';
 import {
   EvidenceKind,
@@ -32,7 +33,7 @@ import {
   ProvenanceRecord,
 } from '../kernel/provenance.js';
 import type {
-  KernelStore,
+  KernelStoreReadView,
   KernelStoreRecord,
 } from '../kernel/store.js';
 import {
@@ -48,6 +49,10 @@ import {
   AttributeSyntax,
   type AttributeParserParseResult,
 } from './attribute-syntax.js';
+import {
+  attributeSyntaxPartSources,
+  type AttributeSyntaxPartSources,
+} from './attribute-syntax-source.js';
 import type {
   BindingCommandLoweringRequest,
 } from './binding-command-lowering-materializer.js';
@@ -59,7 +64,6 @@ import {
   MultiBindingLowering,
   MultiBindingSegment,
 } from './binding-command-execution.js';
-import type { TemplateCompilerWorldEmission } from './compiler-world-materializer.js';
 import type { TemplateBindableReference } from './compiler-world-reference.js';
 import {
   TemplateExpressionParse,
@@ -69,6 +73,7 @@ import {
 import {
   TemplateValueSitePublicationRequest,
   TemplateValueSitePublisher,
+  type TemplateValueSiteExpressionParser,
 } from './value-site-publication.js';
 import {
   runtimeExpressionParseContextForSourceSpanAddress,
@@ -168,7 +173,7 @@ export interface MultiBindingSegmentPublicationSelection {
 /** Publishes ordinary binding-command build inputs and command-lowering products. */
 export class BindingCommandProductPublisher {
   constructor(
-    readonly store: KernelStore,
+    readonly store: KernelStoreReadView,
   ) {}
 
   publishBindingCommandBuildInput(
@@ -372,7 +377,7 @@ export class BindingCommandLoweringPublisher {
   private readonly valueSitePublisher: TemplateValueSitePublisher;
 
   constructor(
-    readonly store: KernelStore,
+    readonly store: KernelStoreReadView,
   ) {
     this.valueSitePublisher = new TemplateValueSitePublisher(store);
   }
@@ -404,6 +409,7 @@ export class BindingCommandLoweringPublisher {
     source: BindingCommandLoweringSourceSet,
     addressHandle: AddressHandle | null,
     summary: string,
+    reasonKinds: readonly OpenSeamReasonKind[],
     seamKindKey: OpenSeamKindKey = KernelVocabulary.Compiler.OpenExecutableBody.key,
   ): OpenSeam {
     return new OpenSeam(
@@ -412,6 +418,7 @@ export class BindingCommandLoweringPublisher {
       summary,
       addressHandle,
       source.evidenceHandle,
+      reasonKinds,
     );
   }
 
@@ -449,18 +456,34 @@ export class BindingCommandLoweringPublisher {
     source: BindingCommandLoweringSourceSet,
     attribute: HtmlAttribute,
     parse: AttributeParserParseResult,
-    sourceAddressHandle: AddressHandle | null,
+    syntaxSourceAddressHandle: AddressHandle | null,
+    nameSource: AddressHandle | SourceSpanAddress | null,
   ): PublishedMultiBindingAttributeSyntax {
+    const nameSourceAddressHandle = nameSource instanceof SourceSpanAddress
+      ? nameSource.handle
+      : nameSource;
+    const partSources = attributeSyntaxPartSources(
+      this.store,
+      local,
+      nameSource,
+      parse.execution.rawName,
+      parse,
+    );
     const syntax = this.createMultiBindingAttributeSyntax(
       this.attributeSyntaxHandles(`${local}:attribute-syntax`),
       source,
       attribute,
       parse,
-      sourceAddressHandle,
+      syntaxSourceAddressHandle,
+      nameSourceAddressHandle,
+      partSources,
     );
     return new PublishedMultiBindingAttributeSyntax(
       syntax,
-      this.recordsForMultiBindingAttributeSyntax(site, syntax, sourceAddressHandle),
+      [
+        ...partSources.records,
+        ...this.recordsForMultiBindingAttributeSyntax(site, syntax, syntaxSourceAddressHandle),
+      ],
       [],
     );
   }
@@ -473,6 +496,7 @@ export class BindingCommandLoweringPublisher {
     syntax: AttributeSyntax,
     parsed: ParsedMultiBindingSegment,
     selection: MultiBindingSegmentPublicationSelection,
+    targetSourceAddressHandle: AddressHandle | null,
     sourceAddressHandle: AddressHandle | null,
   ): PublishedMultiBindingSegment {
     const segment = this.createMultiBindingSegment(
@@ -482,6 +506,7 @@ export class BindingCommandLoweringPublisher {
       syntax,
       parsed,
       selection,
+      targetSourceAddressHandle,
       sourceAddressHandle,
     );
     const claims = this.claimsForMultiBindingSegment(
@@ -499,6 +524,7 @@ export class BindingCommandLoweringPublisher {
         site,
         syntax,
         segment,
+        targetSourceAddressHandle,
         sourceAddressHandle,
         claims,
       ),
@@ -535,7 +561,7 @@ export class BindingCommandLoweringPublisher {
   publishMultiBindingExpressionParse(
     local: string,
     source: BindingCommandLoweringSourceSet,
-    compilerWorld: TemplateCompilerWorldEmission,
+    parser: TemplateValueSiteExpressionParser,
     originalSite: TemplateValueSite,
     segment: MultiBindingSegment,
     syntax: AttributeSyntax,
@@ -548,7 +574,7 @@ export class BindingCommandLoweringPublisher {
     const publication = this.valueSitePublisher.publish(new TemplateValueSitePublicationRequest(
       `${local}:value-site`,
       `${local}:expression-parse`,
-      compilerWorld.expressionParser,
+      parser,
       source.provenanceHandle,
       TemplateValueSiteKind.CustomAttributeValue,
       expression,
@@ -592,7 +618,7 @@ export class BindingCommandLoweringPublisher {
       : this.createMultiBindingInterpolationInstruction(handles, owner, attribute, target, parse, sourceAddressHandle);
   }
 
-  segmentSourceAddress(
+  segmentSyntaxSourceAddress(
     local: string,
     addressHandle: AddressHandle | null,
     segment: ParsedMultiBindingSegment,
@@ -600,7 +626,42 @@ export class BindingCommandLoweringPublisher {
     readonly handle: AddressHandle | null;
     readonly record: SourceSpanAddress | null;
   } {
-    const address = addressHandle == null ? null : this.store.readAddress(addressHandle);
+    return this.segmentPartSourceAddress(`${local}:syntax`, addressHandle, segment.start, segment.end, SourceSpanRole.Range);
+  }
+
+  segmentNameSourceAddress(
+    local: string,
+    addressHandle: AddressHandle | null,
+    segment: ParsedMultiBindingSegment,
+  ): {
+    readonly handle: AddressHandle | null;
+    readonly record: SourceSpanAddress | null;
+  } {
+    return this.segmentPartSourceAddress(`${local}:name`, addressHandle, segment.start, segment.nameEnd, SourceSpanRole.Name);
+  }
+
+  segmentValueSourceAddress(
+    local: string,
+    addressHandle: AddressHandle | null,
+    segment: ParsedMultiBindingSegment,
+  ): {
+    readonly handle: AddressHandle | null;
+    readonly record: SourceSpanAddress | null;
+  } {
+    return this.segmentPartSourceAddress(`${local}:value`, addressHandle, segment.valueStart, segment.valueEnd, SourceSpanRole.Value);
+  }
+
+  private segmentPartSourceAddress(
+    local: string,
+    addressHandle: AddressHandle | null,
+    start: number,
+    end: number,
+    role: SourceSpanRole,
+  ): {
+    readonly handle: AddressHandle | null;
+    readonly record: SourceSpanAddress | null;
+  } {
+    const address = addressHandle == null ? null : this.store.read(addressHandle);
     if (!(address instanceof SourceSpanAddress)) {
       return { handle: addressHandle, record: null };
     }
@@ -610,9 +671,9 @@ export class BindingCommandLoweringPublisher {
       record: new SourceSpanAddress(
         handle,
         address.fileHandle,
-        address.start + segment.valueStart,
-        address.start + segment.valueEnd,
-        SourceSpanRole.Value,
+        address.start + start,
+        address.start + end,
+        role,
       ),
     };
   }
@@ -643,6 +704,7 @@ export class BindingCommandLoweringPublisher {
     syntax: AttributeSyntax,
     parsed: ParsedMultiBindingSegment,
     selection: MultiBindingSegmentPublicationSelection,
+    targetSourceAddressHandle: AddressHandle | null,
     sourceAddressHandle: AddressHandle | null,
   ): MultiBindingSegment {
     const handles = this.multiBindingSegmentHandles(local);
@@ -657,6 +719,7 @@ export class BindingCommandLoweringPublisher {
       parsed.segmentIndex,
       parsed.rawName,
       parsed.rawValue,
+      targetSourceAddressHandle,
       sourceAddressHandle,
       [],
     );
@@ -738,12 +801,13 @@ export class BindingCommandLoweringPublisher {
     site: TemplateValueSite,
     syntax: AttributeSyntax,
     segment: MultiBindingSegment,
+    targetSourceAddressHandle: AddressHandle | null,
     sourceAddressHandle: AddressHandle | null,
     claims: readonly SemanticClaim[],
   ): readonly KernelStoreRecord[] {
     return [
       ...this.recordsForMultiBindingAttributeSyntaxProduct(source, syntax),
-      ...this.recordsForMultiBindingSegmentProduct(site, source, syntax, segment, sourceAddressHandle),
+      ...this.recordsForMultiBindingSegmentProduct(site, source, syntax, segment, targetSourceAddressHandle, sourceAddressHandle),
       ...multiBindingSegmentPublicationClaims(claims),
     ];
   }
@@ -760,6 +824,7 @@ export class BindingCommandLoweringPublisher {
     source: BindingCommandLoweringSourceSet,
     syntax: AttributeSyntax,
     segment: MultiBindingSegment,
+    targetSourceAddressHandle: AddressHandle | null,
     sourceAddressHandle: AddressHandle | null,
   ): readonly KernelStoreRecord[] {
     return [
@@ -767,7 +832,7 @@ export class BindingCommandLoweringPublisher {
         segment.identityHandle,
         KernelVocabulary.Compiler.MultiBindingSegment.key,
         site.identityHandle,
-        sourceAddressHandle,
+        targetSourceAddressHandle ?? sourceAddressHandle,
         syntax.target,
       ),
       new MaterializedProduct(
@@ -792,24 +857,33 @@ export class BindingCommandLoweringPublisher {
     source: BindingCommandLoweringSourceSet,
     attribute: HtmlAttribute,
     parse: AttributeParserParseResult,
-    sourceAddressHandle: AddressHandle | null,
+    syntaxSourceAddressHandle: AddressHandle | null,
+    nameSourceAddressHandle: AddressHandle | null,
+    partSources: AttributeSyntaxPartSources,
   ): AttributeSyntax {
     const execution = parse.execution;
     return bindProductDetailEnvelope(new AttributeSyntax(
       execution.syntaxKind,
       execution.rawName,
+      execution.rawName,
+      nameSourceAddressHandle,
       execution.rawValue,
       execution.target,
+      partSources.targetSourceAddressHandle,
       execution.command,
+      partSources.commandSourceAddressHandle,
       execution.parts,
+      partSources.patternParts,
       parse.pattern,
+      parse.interpretation?.compiledPatternProductHandle ?? null,
+      partSources.patternLiterals,
       attribute.toReference(),
       [],
     ), new MaterializedProduct(
       handles.productHandle,
       KernelVocabulary.Template.AttributeSyntax.key,
       handles.identityHandle,
-      sourceAddressHandle,
+      syntaxSourceAddressHandle,
       source.provenanceHandle,
     ));
   }
@@ -956,7 +1030,7 @@ export class BindingCommandLoweringPublisher {
 }
 
 function claimsForProducedInstructions(
-  store: KernelStore,
+  store: KernelStoreReadView,
   local: string,
   source: BindingCommandLoweringSourceSet,
   producerHandle: ProductHandle,

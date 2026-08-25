@@ -37,7 +37,7 @@ export function registerAureliaSemanticRuntimePrompts(
     'aurelia_inspect_app_feature',
     {
       title: 'Inspect Aurelia App Feature',
-      description: 'Guide an MCP client through read-only semantic-runtime app inspection for a feature or repair task.',
+      description: 'Guide an MCP client through semantic-runtime app inspection for a feature or repair task.',
       argsSchema: {
         workspaceRoot: z.string().describe('Absolute workspace root to inspect.'),
         featureGoal: z.string().describe('Short description of the feature, issue, or slice under inspection.'),

@@ -53,7 +53,6 @@ export class DynamicKeyedValidationApp {
       .required()
       .ensure('email')
       .required()
-      .email()
       .ensure((person) => person.address.line1)
       .required();
   }

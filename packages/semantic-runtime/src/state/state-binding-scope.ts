@@ -1,19 +1,22 @@
 import type { BindingBehaviorExpression } from '../expression/ast.js';
-import type { BindingScope } from '../configuration/scope.js';
-import { BindingScope as RuntimeBindingScope } from '../configuration/scope.js';
 import {
+  BindingScope,
   BindingScopeCreator,
+  BindingScopeCreatorKind,
 } from '../configuration/scope.js';
 import {
+  BindingScopeConstructionEmission,
   BindingScopeMaterializer,
-  type BindingScopeConstructionEmission,
 } from '../configuration/scope-materializer.js';
 import type { AddressHandle, IdentityHandle, ProductHandle } from '../kernel/handles.js';
-import type { KernelStore } from '../kernel/store.js';
+import type { KernelSourceFileReadView } from '../kernel/store.js';
+import type { CheckerTypeProjector } from '../type-system/checker-projector.js';
 import { localKeyPart } from '../kernel/local-key.js';
 import { BuiltInBindingBehaviorName } from '../resources/built-in-resources.js';
-import { staticStringLiteralExpression } from '../template/binding-behavior-expression.js';
+import { staticStringLiteralExpression } from '../template/expression-resource-occurrence.js';
+import { sourceAddressForRuntimeExpressionSpan } from '../template/runtime-expression-source-address.js';
 import type { StateStoreConfiguration } from './model.js';
+import type { StateStoreVisibilitySelection } from './state-store-visibility.js';
 import {
   configuredStateStoreForName,
   stateStoreDisplayName,
@@ -45,13 +48,65 @@ export class StateBindingScopeProjector {
   private readonly scopeMaterializer: BindingScopeMaterializer;
 
   constructor(
-    readonly store: KernelStore,
-    readonly stateStores: readonly StateStoreConfiguration[],
+    readonly kernel: KernelSourceFileReadView,
+    readonly storeSelection: StateStoreVisibilitySelection,
+    readonly projector: CheckerTypeProjector,
   ) {
-    this.scopeMaterializer = new BindingScopeMaterializer(store);
+    this.scopeMaterializer = new BindingScopeMaterializer(kernel, projector);
   }
 
   scopeForBindingBehavior(
+    expression: BindingBehaviorExpression,
+    parent: BindingScope,
+    bindingProductHandle: ProductHandle,
+    carrierSourceAddressHandle: AddressHandle | null,
+  ): StateBindingScopeProjection {
+    const localKey = [
+      'runtime-binding-state-scope',
+      bindingProductHandle,
+      parent.productHandle,
+      expression.span.start,
+      expression.span.end,
+    ].join(':');
+    const source = sourceAddressForRuntimeExpressionSpan(
+      this.kernel,
+      `${localKey}:behavior-name`,
+      carrierSourceAddressHandle,
+      expression.name.span,
+    );
+    const projection = this.scopeForStoreName(
+      stateStoreNameForBindingBehavior(expression),
+      parent,
+      localKey,
+      source.handle,
+      undefined,
+      undefined,
+      [new BindingScopeCreator(
+        BindingScopeCreatorKind.StateBindingBehavior,
+        bindingProductHandle,
+        source.handle,
+      )],
+    );
+    if (projection.emission == null) {
+      return projection;
+    }
+    const emission = projection.emission;
+    return new StateBindingScopeProjection(
+      projection.scope,
+      projection.store,
+      projection.openReason,
+      new BindingScopeConstructionEmission(
+        emission.bindingContext,
+        emission.overrideContext,
+        emission.scope,
+        [...source.records, ...emission.records],
+        emission.bindingContextMaterialized,
+      ),
+    );
+  }
+
+  /** Speculative state scope for unrendered TypeChecker evaluation; no durable binding owner exists at this boundary. */
+  scopeForSpeculativeBindingBehavior(
     expression: BindingBehaviorExpression,
     parent: BindingScope,
     localKey: string,
@@ -62,7 +117,7 @@ export class StateBindingScopeProjector {
       parent,
       [
         localKey,
-        'state-binding-scope',
+        'speculative-state-binding-scope',
         expression.span.start,
         expression.span.end,
       ].join(':'),
@@ -86,12 +141,13 @@ export class StateBindingScopeProjector {
         'The state binding behavior uses a dynamic store argument; semantic-runtime cannot choose a store state type yet.',
       );
     }
-    const configuredStore = configuredStateStoreForName(this.stateStores, storeName);
+    const configuredStore = configuredStateStoreForName(this.storeSelection.stores, storeName);
     if (configuredStore == null) {
       return new StateBindingScopeProjection(
         null,
         null,
-        `The state binding behavior references store "${stateStoreDisplayName(storeName)}", but no configured store is visible to expression evaluation.`,
+        this.storeSelection.openReason
+          ?? `The state binding behavior references store "${stateStoreDisplayName(storeName)}", but no configured store is visible to expression evaluation.`,
       );
     }
     if (configuredStore.initialStateType == null) {
@@ -101,7 +157,7 @@ export class StateBindingScopeProjector {
         `Configured store "${stateStoreDisplayName(configuredStore.name)}" does not carry a projected initial-state type.`,
       );
     }
-    const emission = this.scopeMaterializer.prepare(RuntimeBindingScope.fromStateBindingScope({
+    const emission = this.scopeMaterializer.prepare(BindingScope.fromStateBindingScope({
       localKey: [
         localKey,
         localKeyPart(stateStoreDisplayName(configuredStore.name)),

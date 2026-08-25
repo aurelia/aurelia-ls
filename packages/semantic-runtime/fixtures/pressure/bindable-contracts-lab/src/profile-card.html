@@ -1,0 +1,9 @@
+<template>
+  <article data-selected-id.bind="selectedId">
+    <h2>${title}</h2>
+    <p>${labelText}</p>
+    <p>${summary}</p>
+    <p>${normalizedLabel}/${stringifiedLabel}: ${quantity}/${strictQuantity}</p>
+    <button click.trigger="onAction?.(title)">${count}</button>
+  </article>
+</template>

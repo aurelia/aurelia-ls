@@ -17,12 +17,15 @@ const app = await runtime.openApp({
 
 const resource = app.emission.templates.resources[0] ?? null;
 const featuredSlot = resource == null ? null : repeatLocalSlot(resource, 'featured');
-const featuredId = featuredSlot?.staticValue == null ? null : readStaticProperty(featuredSlot.staticValue, 'id');
-const featuredLabel = featuredSlot?.staticValue == null ? null : readStaticProperty(featuredSlot.staticValue, 'label');
+const featuredValue = slotStaticValue(featuredSlot);
+const featuredId = featuredValue == null ? null : readStaticProperty(featuredValue, 'id');
+const featuredLabel = featuredValue == null ? null : readStaticProperty(featuredValue, 'label');
 const dynamicFeaturedSlot = resource == null ? null : repeatLocalSlot(resource, 'dynamicFeatured');
+const dynamicProductsSlot = resource == null ? null : scopeSlot(resource, 'dynamicProducts');
 const fallbackProductSlot = resource == null ? null : repeatLocalSlot(resource, 'fallbackProduct');
-const fallbackProductId = fallbackProductSlot?.staticValue == null ? null : readStaticProperty(fallbackProductSlot.staticValue, 'id');
-const fallbackProductLabel = fallbackProductSlot?.staticValue == null ? null : readStaticProperty(fallbackProductSlot.staticValue, 'label');
+const fallbackProductValue = slotStaticValue(fallbackProductSlot);
+const fallbackProductId = fallbackProductValue == null ? null : readStaticProperty(fallbackProductValue, 'id');
+const fallbackProductLabel = fallbackProductValue == null ? null : readStaticProperty(fallbackProductValue, 'label');
 const templateDiagnosticRows = app.ask({ kind: 'template-diagnostics', page: { size: 50 } }).value.rows;
 
 const failures = [];
@@ -35,7 +38,7 @@ const assert = (condition, message) => {
 assert(resource != null, 'Expected the value-converter source-value fixture to compile one app resource.');
 assert(featuredSlot != null, 'Expected repeat local `featured` to materialize a binding-context slot.');
 assert(
-  featuredSlot?.staticValue != null,
+  featuredValue != null,
   'Expected repeat local `featured` to carry a static representative value after value-converter toView reduction.',
 );
 assert(
@@ -52,8 +55,15 @@ assert(
   `Expected dynamic withContext repeat local to keep its checker element type, observed ${dynamicFeaturedSlot?.targetType?.display ?? 'missing'}.`,
 );
 assert(
-  dynamicFeaturedSlot?.staticValue == null,
-  'Expected dynamic withContext source-value reduction to stay open instead of choosing one concrete value-converter arity.',
+  dynamicFeaturedSlot?.staticValueEvaluation?.closure === 'open'
+    && dynamicFeaturedSlot.staticValueEvaluation.value == null,
+  'Expected dynamic withContext source-value reduction to retain explicit open evidence instead of choosing one concrete value-converter arity.',
+);
+assert(dynamicProductsSlot != null, 'Expected dynamic withContext <let> target `dynamicProducts` to materialize an override-context slot.');
+assert(
+  dynamicProductsSlot?.staticValueEvaluation?.closure === 'open'
+    && dynamicProductsSlot.staticValueEvaluation.value == null,
+  'Expected dynamic withContext <let> target to retain the source evaluation pressure instead of collapsing to an unqualified runtime slot.',
 );
 assert(fallbackProductSlot != null, 'Expected non-strict nullish fallback repeat local `fallbackProduct` to materialize a binding-context slot.');
 assert(
@@ -76,11 +86,14 @@ assert(
 const summary = {
   fixtureRoot,
   hasResource: resource != null,
-  slotStaticValueKind: featuredSlot?.staticValue?.kind ?? null,
+  slotStaticValueKind: featuredValue?.kind ?? null,
   featuredId,
   featuredLabel,
   dynamicFeaturedType: dynamicFeaturedSlot?.targetType?.display ?? null,
-  dynamicFeaturedHasStaticValue: dynamicFeaturedSlot?.staticValue != null,
+  dynamicFeaturedValueClosure: dynamicFeaturedSlot?.staticValueEvaluation?.closure ?? null,
+  dynamicFeaturedHasStaticValue: dynamicFeaturedSlot?.staticValueEvaluation?.value != null,
+  dynamicProductsValueClosure: dynamicProductsSlot?.staticValueEvaluation?.closure ?? null,
+  dynamicProductsReasonKinds: dynamicProductsSlot?.staticValueEvaluation?.openReasonKinds ?? [],
   fallbackProductType: fallbackProductSlot?.targetType?.display ?? null,
   fallbackProductId,
   fallbackProductLabel,
@@ -105,6 +118,22 @@ function repeatLocalSlot(resource, name) {
     }
   }
   return null;
+}
+
+function scopeSlot(resource, name) {
+  for (const scope of resource.runtimeAnalysis.scopes.readScopes()) {
+    const slot = scope.bindingContext.slots.find((candidate) => candidate.name === name)
+      ?? scope.overrideContext.slots.find((candidate) => candidate.name === name)
+      ?? null;
+    if (slot != null) {
+      return slot;
+    }
+  }
+  return null;
+}
+
+function slotStaticValue(slot) {
+  return slot?.staticValueEvaluation?.value ?? null;
 }
 
 function readStaticProperty(value, propertyName) {

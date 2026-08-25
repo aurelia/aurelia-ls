@@ -1,21 +1,22 @@
 import ts from 'typescript';
 import type { AddressHandle } from '../kernel/handles.js';
-import type { OpenSeamReasonKind } from '../kernel/open-seam.js';
+import { OpenSeamReasonKind } from '../kernel/open-seam.js';
 import {
-  EvaluationRead,
-  readStaticStringArrayValue,
   readStaticStringValue,
+  type EvaluationRead,
   type StaticEvaluationExpressionReader,
 } from '../evaluation/expression-reader.js';
-import { openSeamReasonKindForEvaluationBoundary } from '../evaluation/boundary-open-reason.js';
 import {
-  evaluationOpenSeamDefaultReasonKinds,
-  type EvaluationOpenSeam,
-} from '../evaluation/seams.js';
+  openSeamReasonKindsForEvaluationRead,
+} from '../evaluation/boundary-open-reason.js';
 import {
   hasStaticModifier,
   readPropertyName,
 } from '../evaluation/ts-syntax.js';
+import {
+  closedStaticValueMemberValue,
+  readStaticValueProperty,
+} from '../evaluation/property-access.js';
 import {
   EvaluationValueKind,
   evaluationObjectUncertaintySummaries,
@@ -33,6 +34,15 @@ export class ConvergenceOpen {
     readonly summary: string,
     readonly node: ts.Node,
     readonly reasonKinds: readonly OpenSeamReasonKind[],
+  ) {}
+}
+
+/** One optional scalar definition field, retaining any open evaluation pressure beside a known value. */
+export class ConvergenceScalarRead<TValue> {
+  constructor(
+    readonly value: TValue | null,
+    readonly open: readonly ConvergenceOpen[],
+    readonly sourceNode: ts.Node | null,
   ) {}
 }
 
@@ -76,6 +86,23 @@ export function convergenceOpenForRead(
   );
 }
 
+/**
+ * Retain evaluator causality when evaluation itself is open; use the framework-shape reason only for a closed value
+ * that the resource metadata contract rejects.
+ */
+export function convergenceOpenForRejectedReadShape(
+  summary: string,
+  read: EvaluationRead<EvaluationValue> | null,
+  closedShapeReasonKinds: readonly OpenSeamReasonKind[],
+): readonly ConvergenceOpen[] {
+  const evaluationReasonKinds = openSeamReasonKindsForEvaluationRead(read);
+  return convergenceOpenForNode(
+    summary,
+    read?.node ?? read?.value?.node,
+    evaluationReasonKinds.length === 0 ? closedShapeReasonKinds : evaluationReasonKinds,
+  );
+}
+
 export function nullableConvergenceOpenForRead(
   summary: string,
   read: EvaluationRead<EvaluationValue> | null,
@@ -84,14 +111,23 @@ export function nullableConvergenceOpenForRead(
   return convergenceOpenForRead(summary, read, reasonKinds)[0] ?? null;
 }
 
+/** Publish only lower-level evaluator pressure, without treating a closed value as open by itself. */
+export function convergenceOpenForReadPressure(
+  summary: string,
+  read: EvaluationRead<EvaluationValue> | null,
+): readonly ConvergenceOpen[] {
+  return openSeamReasonKindsForEvaluationRead(read).length === 0
+    ? []
+    : convergenceOpenForRead(summary, read, []);
+}
+
 export function convergenceReasonKindsForRead(
   read: EvaluationRead<EvaluationValue> | null,
   fallbackReasonKinds: readonly OpenSeamReasonKind[],
 ): readonly OpenSeamReasonKind[] {
   return compactConvergenceOpenReasonKinds([
     ...fallbackReasonKinds,
-    ...convergenceReasonKindsForEvaluationOpenSeams(read?.openSeams ?? []),
-    ...convergenceReasonKindsForEvaluationValue(read?.value ?? null),
+    ...openSeamReasonKindsForEvaluationRead(read),
   ]);
 }
 
@@ -101,39 +137,6 @@ export function convergenceSummaryForObjectUncertainties(
 ): string {
   const summaries = evaluationObjectUncertaintySummaries(value);
   return summaries.length === 0 ? fallbackSummary : `${fallbackSummary} ${summaries.join('; ')}.`;
-}
-
-function convergenceReasonKindsForEvaluationOpenSeams(
-  openSeams: readonly EvaluationOpenSeam[],
-): readonly OpenSeamReasonKind[] {
-  return openSeams.flatMap((seam) =>
-    seam.reasonKinds.length === 0
-      ? evaluationOpenSeamDefaultReasonKinds(seam.seamKind)
-      : seam.reasonKinds
-  );
-}
-
-function convergenceReasonKindsForEvaluationValue(
-  value: EvaluationValue | null,
-): readonly OpenSeamReasonKind[] {
-  if (value == null) {
-    return [];
-  }
-  switch (value.kind) {
-    case EvaluationValueKind.BoundaryValue:
-    case EvaluationValueKind.BoundaryObject:
-      return [openSeamReasonKindForEvaluationBoundary(value.boundaryKind)];
-    case EvaluationValueKind.Object:
-      return value.uncertainties.flatMap((uncertainty) =>
-        uncertainty.boundaryKind == null ? [] : [openSeamReasonKindForEvaluationBoundary(uncertainty.boundaryKind)]
-      );
-    case EvaluationValueKind.Array:
-      return value.uncertainties.flatMap((uncertainty) =>
-        uncertainty.boundaryKind == null ? [] : [openSeamReasonKindForEvaluationBoundary(uncertainty.boundaryKind)]
-      );
-    default:
-      return [];
-  }
 }
 
 function compactConvergenceOpenReasonKinds(
@@ -173,6 +176,32 @@ export function readNearestStaticClassProperty(
   return null;
 }
 
+/** Transparent-wrapper-aware variable declaration that receives one expression's exact return value. */
+export function assignedExpressionVariableDeclaration(
+  expression: ts.Node,
+): ts.VariableDeclaration | null {
+  let carrier = expression;
+  while (
+    carrier.parent != null
+    && (
+      ts.isAsExpression(carrier.parent)
+      || ts.isTypeAssertionExpression(carrier.parent)
+      || ts.isParenthesizedExpression(carrier.parent)
+      || ts.isNonNullExpression(carrier.parent)
+      || ts.isSatisfiesExpression(carrier.parent)
+    )
+  ) {
+    carrier = carrier.parent;
+  }
+  const declaration = carrier.parent;
+  return declaration != null
+    && ts.isVariableDeclaration(declaration)
+    && declaration.initializer === carrier
+    && ts.isIdentifier(declaration.name)
+    ? declaration
+    : null;
+}
+
 export function readObjectProperty(
   reader: StaticEvaluationExpressionReader,
   expression: ts.Expression | null,
@@ -181,14 +210,12 @@ export function readObjectProperty(
   if (expression == null) {
     return null;
   }
-  const evaluated = reader.evaluateExpression(expression);
-  if (evaluated.value?.kind !== EvaluationValueKind.Object) {
-    return null;
-  }
-  const property = evaluated.value.properties.get(propertyName);
-  return property == null
+  const read = reader.readObjectProperty(expression, propertyName);
+  return read.value == null
+    && read.openSeams.length === 0
+    && read.abruptCompletion == null
     ? null
-    : new EvaluationRead(property.value, property.node, evaluated.openSeams);
+    : read;
 }
 
 export function readFieldValue(
@@ -215,9 +242,11 @@ export function readBooleanField(
   definitionExpression: ts.Expression | null,
   targetClass: ts.ClassLikeDeclarationBase | null,
   fieldName: string,
-): boolean | null {
-  const value = readFieldValue(context, definitionExpression, targetClass, fieldName)?.value;
-  return value?.kind === EvaluationValueKind.Boolean ? value.value : null;
+  openSummary: string,
+): ConvergenceScalarRead<boolean> {
+  const read = readFieldValue(context, definitionExpression, targetClass, fieldName);
+  const value = read?.value?.kind === EvaluationValueKind.Boolean ? read.value.value : null;
+  return convergenceScalarRead(read, value, openSummary);
 }
 
 export function readStringField(
@@ -225,21 +254,35 @@ export function readStringField(
   definitionExpression: ts.Expression | null,
   targetClass: ts.ClassLikeDeclarationBase | null,
   fieldName: string,
-): string | null {
-  const value = readFieldValue(context, definitionExpression, targetClass, fieldName)?.value;
-  return value == null ? null : readStaticStringValue(value);
+  openSummary: string,
+): ConvergenceScalarRead<string> {
+  const read = readFieldValue(context, definitionExpression, targetClass, fieldName);
+  const value = read?.value == null ? null : readStaticStringValue(read.value);
+  return convergenceScalarRead(read, value, openSummary);
 }
 
-export function readStaticStringArrayClassProperty(
-  context: ResourceRecognitionContext,
-  targetClass: ts.ClassLikeDeclarationBase | null,
-  fieldName: string,
-): readonly string[] {
-  const value = readStaticClassPropertyValue(context, targetClass, fieldName)?.value;
-  if (value == null) {
-    return [];
+function convergenceScalarRead<TValue>(
+  read: EvaluationRead<EvaluationValue> | null,
+  value: TValue | null,
+  openSummary: string,
+): ConvergenceScalarRead<TValue> {
+  if (read == null) {
+    return new ConvergenceScalarRead<TValue>(null, [], null);
   }
-  return readStaticStringArrayValue(value) ?? [];
+  const closedAbsence = read.value?.kind === EvaluationValueKind.Undefined
+    || read.value?.kind === EvaluationValueKind.Null;
+  const reasonKinds = openSeamReasonKindsForEvaluationRead(read);
+  return (value != null || closedAbsence) && reasonKinds.length === 0
+    ? new ConvergenceScalarRead<TValue>(value, [], read.node ?? read.value?.node ?? null)
+    : new ConvergenceScalarRead<TValue>(
+        value,
+        convergenceOpenForRejectedReadShape(
+          openSummary,
+          read,
+          [OpenSeamReasonKind.ResourceDefinitionFieldOpen],
+        ),
+        read.node ?? read.value?.node ?? null,
+      );
 }
 
 export function readObjectString(
@@ -249,8 +292,9 @@ export function readObjectString(
   if (value == null) {
     return null;
   }
-  const property = value.properties.get(propertyName);
-  return property == null ? null : readStaticStringValue(property.value);
+  const read = readStaticValueProperty(value, propertyName, value.node);
+  const memberValue = closedStaticValueMemberValue(read);
+  return memberValue == null ? null : readStaticStringValue(memberValue);
 }
 
 export function targetReferenceForFunction(
@@ -346,21 +390,4 @@ export function openIfPresent(
   return definitionRead == null
     ? convergenceOpenForNode(summary, staticExpression, reasonKinds)
     : convergenceOpenForRead(summary, definitionRead, reasonKinds);
-}
-
-export function mergeAliases(
-  ...aliasLists: readonly (readonly string[])[]
-): readonly string[] {
-  const seen = new Set<string>();
-  const result: string[] = [];
-  for (const aliases of aliasLists) {
-    for (const alias of aliases) {
-      if (seen.has(alias)) {
-        continue;
-      }
-      seen.add(alias);
-      result.push(alias);
-    }
-  }
-  return result;
 }

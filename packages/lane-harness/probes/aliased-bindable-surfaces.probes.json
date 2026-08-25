@@ -1,0 +1,66 @@
+{
+  "fixture": "packages/semantic-runtime/fixtures/pressure/aliased-bindable-surfaces",
+  "lanes": {
+    "rename": [
+      {
+        "id": "bindable-property-labelText-skips-explicit-alias",
+        "file": "src/product-card.html",
+        "anchor": "${labelText}",
+        "at": "labelText",
+        "newName": "headlineText",
+        "verdict": "correct",
+        "reason": "A bindable property rename edits the TS property declaration and component-template member usage, while the explicit public alias display-label remains stable.",
+        "note": "NEW 2026-07-08. Explicit bindable aliases are references to the property for navigation, but they are not property-name-derived template syntax. Property rename must not rewrite an authored alias contract."
+      },
+      {
+        "id": "bindable-alias-display-label-top-level",
+        "file": "src/app.html",
+        "anchor": "display-label.bind=\"aliasLabel\"",
+        "at": "display-label",
+        "newName": "headline-label",
+        "verdict": "correct",
+        "reason": "Explicit alias rename edits the authored bindable attribute literal and the matching top-level template usage, with no TS edits.",
+        "note": "NEW 2026-07-08. Separate alias-rename surface for @bindable({ attribute }) on a custom element."
+      },
+      {
+        "id": "bindable-alias-display-label-inline-multi-binding",
+        "file": "src/app.html",
+        "anchor": "display-hint=\"display-label.bind: aliasLabel",
+        "at": "display-label",
+        "newName": "hint-label",
+        "verdict": "correct",
+        "reason": "Explicit alias rename works inside custom-attribute inline multi-binding syntax by using the segment target source span.",
+        "note": "NEW 2026-07-08. Regression probe for cursor dispatch spending MultiBindingSegment.targetSourceAddressHandle instead of the enclosing custom-attribute value/default bindable."
+      }
+    ],
+    "references": [
+      {
+        "id": "bindable-property-labelText-includes-explicit-alias",
+        "file": "src/product-card.html",
+        "anchor": "${labelText}",
+        "at": "labelText",
+        "verdict": "correct",
+        "reason": "Property references include the TS declaration, component-template usage, and explicit public alias usage as a real read of the bindable property.",
+        "note": "NEW 2026-07-08. Explicit aliases are included in references even though property rename deliberately does not edit them."
+      },
+      {
+        "id": "bindable-alias-display-label-top-level",
+        "file": "src/app.html",
+        "anchor": "display-label.bind=\"aliasLabel\"",
+        "at": "display-label",
+        "verdict": "correct",
+        "reason": "Alias references stay on the alias surface: authored attribute literal plus matching top-level template usage.",
+        "note": "NEW 2026-07-08. Comparable cursor for explicit alias rename."
+      },
+      {
+        "id": "bindable-alias-display-label-inline-multi-binding",
+        "file": "src/app.html",
+        "anchor": "display-hint=\"display-label.bind: aliasLabel",
+        "at": "display-label",
+        "verdict": "correct",
+        "reason": "Alias references stay on the inline segment alias surface: authored attribute literal plus matching segment target token.",
+        "note": "NEW 2026-07-08. Confirms multi-binding segment selection uses the segment bindable rather than the custom attribute primary/default bindable."
+      }
+    ]
+  }
+}

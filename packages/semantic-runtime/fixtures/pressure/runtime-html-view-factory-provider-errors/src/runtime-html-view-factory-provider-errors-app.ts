@@ -1,9 +1,12 @@
 import { resolve } from '@aurelia/kernel';
 import {
   customAttribute,
+  customElement,
   IViewFactory,
 } from '@aurelia/runtime-html';
+import template from './runtime-html-view-factory-provider-errors-app.html';
 
+@customElement({ name: 'runtime-html-view-factory-provider-errors-app', template })
 export class RuntimeHtmlViewFactoryProviderErrorsApp {
   message = 'ViewFactory provider pressure';
 }

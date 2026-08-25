@@ -10,7 +10,7 @@ import {
   SemanticAppQueryKind,
   SemanticControlUseClassificationKind,
   SemanticControlUseInventorySourceKind,
-  SemanticRuntimeAnswerOutcome,
+  SemanticRuntimeAnswerResult,
   SemanticRuntimeDetail,
 } from '../out/index.js';
 
@@ -151,7 +151,7 @@ async function collectRuntimeAppQueryRows(runtime, request, pageSize) {
       ...request,
       page: { size: pageSize, cursor },
     });
-    assert.notEqual(answer.outcome, SemanticRuntimeAnswerOutcome.Error);
+    assert.notEqual(answer.result, SemanticRuntimeAnswerResult.Failed);
     rows.push(...answer.value.rows);
     cursor = answer.page?.nextCursor ?? null;
   } while (cursor != null);

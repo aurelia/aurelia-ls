@@ -54,7 +54,7 @@ if (summary.rows.some((row) => row.reasonKinds.length === 0)) {
 
 function expectSiteReason(seamKindKey, reasonKind) {
   const row = sites.rows.find((candidate) =>
-    candidate.seamKindKey === seamKindKey
+    candidate.seamKindKeys.includes(seamKindKey)
     && candidate.reasonKinds.includes(reasonKind)
   );
   if (row == null) {
@@ -74,7 +74,7 @@ if (failures.length > 0) {
   console.log(JSON.stringify({
     ok: true,
     siteReasons: sites.rows.map((row) => ({
-      seamKindKey: row.seamKindKey,
+      seamKindKeys: row.seamKindKeys,
       reasonKinds: row.reasonKinds,
       source: row.source?.label,
     })),

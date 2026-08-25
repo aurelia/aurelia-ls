@@ -1,0 +1,58 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://aurelia.io/schemas/aurelia.project.schema.json",
+  "title": "Aurelia Project Configuration",
+  "description": "Static semantic project configuration consumed by Aurelia tooling.",
+  "allowComments": true,
+  "allowTrailingCommas": true,
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version"],
+  "properties": {
+    "$schema": {
+      "type": "string"
+    },
+    "version": {
+      "const": 1,
+      "description": "Required configuration format version."
+    },
+    "authoredSources": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "excludedRoots": {
+          "description": "Project-relative descendant directory roots that remain readable as dependencies but are not authored project sources.",
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "^(?!\\s)(?!.*\\s$)(?![!\\\\/])(?![A-Za-z][A-Za-z0-9+.-]*:)(?!.*[?*\\[\\]{}])(?!(?:.*[\\\\/])?\\.{1,2}(?:[\\\\/]|$))(?!.*[\\u0000-\\u001F\\u007F])[^\\\\/]+(?:[\\\\/][^\\\\/]+)*$"
+          }
+        }
+      }
+    },
+    "findings": {
+      "description": "Projection-only policy for admitted semantic finding rules. It does not remove underlying analysis evidence.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "aurelia.analysis.dynamic-registration-spread": {
+          "$ref": "#/$defs/findingDisposition",
+          "default": "information"
+        }
+      },
+      "patternProperties": {
+        "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*(?:\\.[a-z][a-z0-9]*(?:-[a-z0-9]+)*)+$": {
+          "$ref": "#/$defs/findingDisposition"
+        }
+      }
+    }
+  },
+  "$defs": {
+    "findingDisposition": {
+      "description": "Whether and at what presentation level this exact semantic finding is projected.",
+      "type": "string",
+      "enum": ["off", "information", "warning", "error"]
+    }
+  }
+}

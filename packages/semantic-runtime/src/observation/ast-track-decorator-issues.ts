@@ -1,7 +1,12 @@
 import {
-  KernelStore,
   KernelStoreBatch,
+  type KernelStore,
 } from '../kernel/store.js';
+import {
+  KernelPublicationPlan,
+  publishProductDetails,
+  type KernelPublicationContext,
+} from '../kernel/publication.js';
 import { localKeyPart } from '../kernel/local-key.js';
 import type { ProjectBootFrame } from '../boot/frames.js';
 import type { TypeSystemProject } from '../type-system/project.js';
@@ -20,8 +25,8 @@ import {
   ObservationProductDetails,
 } from './product-details.js';
 import {
-  AstTrackDecoratorSite,
   readInvalidAstTrackDecoratorSites,
+  type AstTrackDecoratorSite,
 } from './ast-track-decorator-recognition.js';
 import {
   ObservationSourceIssueProjectResult,
@@ -34,6 +39,7 @@ export class AstTrackDecoratorIssueMaterializer {
 
   constructor(
     readonly store: KernelStore,
+    readonly publication: KernelPublicationContext,
   ) {
     this.publisher = new ObservationIssuePublisher(store);
   }
@@ -46,16 +52,13 @@ export class AstTrackDecoratorIssueMaterializer {
       .map((site, index) => this.publicationForSite(project, site, index));
 
     const records = publications.flatMap((publication) => publication.records);
-    if (records.length > 0) {
-      this.store.commit(new KernelStoreBatch(records, 'ast-track-decorator-issues'));
-    }
-    for (const publication of publications) {
-      this.store.productDetails.add(
+    this.publication.publish(new KernelPublicationPlan(
+      new KernelStoreBatch(records, 'ast-track-decorator-issues'),
+      publishProductDetails(
         ObservationProductDetails.Issue,
-        publication.issue.productHandle,
-        publication.issue,
-      );
-    }
+        publications.map((publication) => publication.issue),
+      ),
+    ));
 
     return new ObservationSourceIssueProjectResult(
       publications.map((publication) => publication.issue),

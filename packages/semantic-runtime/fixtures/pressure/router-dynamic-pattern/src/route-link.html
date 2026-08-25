@@ -1,0 +1,6 @@
+<button type="button" load.bind="productId | routeInstruction">
+  <slot></slot>
+</button>
+<button type="button" load.bind="blockedProductId | routeInstruction & missingBehavior">
+  Blocked route
+</button>

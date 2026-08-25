@@ -15,6 +15,15 @@ export const enum SourceLanguage {
   Json = 'json',
 }
 
+export const SOURCE_LANGUAGE_VALUES = [
+  SourceLanguage.Unknown,
+  SourceLanguage.TypeScript,
+  SourceLanguage.JavaScript,
+  SourceLanguage.Html,
+  SourceLanguage.Css,
+  SourceLanguage.Json,
+] as const;
+
 export const enum SourceFileRole {
   /** Source that can participate in the application semantic world. */
   AppSource = 'app-source',
@@ -43,6 +52,22 @@ export const enum SourceFileRole {
   /** Use when the host or discovery cannot classify the source role yet. */
   Unknown = 'unknown',
 }
+
+export const SOURCE_FILE_ROLE_VALUES = [
+  SourceFileRole.AppSource,
+  SourceFileRole.RootDocument,
+  SourceFileRole.Template,
+  SourceFileRole.Style,
+  SourceFileRole.PackageManifest,
+  SourceFileRole.TestSource,
+  SourceFileRole.ExampleSource,
+  SourceFileRole.ToolingConfig,
+  SourceFileRole.ToolingScript,
+  SourceFileRole.Declaration,
+  SourceFileRole.ExternalSource,
+  SourceFileRole.Generated,
+  SourceFileRole.Unknown,
+] as const;
 
 export const enum SourceSpanRole {
   /** The best default jump target for a fact or record. */
@@ -80,8 +105,15 @@ export class SourceFileAddress {
   ) {}
 }
 
+/** Minimal authored source locus shared by stored addresses and transient evaluator evidence. */
+export interface SourceSpanLocus {
+  readonly fileHandle: AddressHandle;
+  readonly start: number;
+  readonly end: number;
+}
+
 /** Address for a meaningful source range inside one file. */
-export class SourceSpanAddress {
+export class SourceSpanAddress implements SourceSpanLocus {
   /** String discriminator for serialized source-span address records. */
   readonly kind = 'source-span-address' as const;
 
@@ -106,6 +138,15 @@ export function sourceSpanContains(
   return outer.fileHandle === inner.fileHandle
     && outer.start <= inner.start
     && inner.end <= outer.end;
+}
+
+export function sourceSpansEqual(
+  left: SourceSpanLocus,
+  right: SourceSpanLocus,
+): boolean {
+  return left.fileHandle === right.fileHandle
+    && left.start === right.start
+    && left.end === right.end;
 }
 
 export function sourceSpanContainsOffset(

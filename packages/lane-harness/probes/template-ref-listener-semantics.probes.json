@@ -1,0 +1,80 @@
+{
+  "fixture": "packages/semantic-runtime/fixtures/pressure/template-ref-listener-semantics",
+  "lanes": {
+    "rename": [
+      {
+        "id": "named-custom-attribute-ref-target",
+        "file": "src/template-ref-listener-semantics-app.html",
+        "anchor": "focus-ring.ref=\"focusRingController\"",
+        "at": "focus-ring",
+        "newName": "focus-halo",
+        "verdict": "correct",
+        "reason": "A named ref target is a primary-name resource usage, so rename updates the primary declaration plus every ordinary and named-ref `focus-ring` usage atomically while preserving the separately authored `focus` alias.",
+        "note": "NEW 2026-07-13. Representative LSP projection of same-node named-ref resource identity and the resource-ref-target edit kind."
+      }
+    ],
+    "references": [
+      {
+        "id": "named-custom-attribute-ref-target",
+        "file": "src/template-ref-listener-semantics-app.html",
+        "anchor": "focus-ring.ref=\"focusRingController\"",
+        "at": "focus-ring",
+        "verdict": "correct",
+        "reason": "References include the custom-attribute primary and alias declarations plus every ordinary, alias, and named-ref usage with exact token spans.",
+        "note": "NEW 2026-07-13; strengthened 2026-08-03. Confirms the IDE spends resource identity, including every authored public-name declaration, instead of rescanning attribute spelling."
+      }
+    ],
+    "hover": [
+      {
+        "id": "named-custom-attribute-ref-target",
+        "file": "src/template-ref-listener-semantics-app.html",
+        "anchor": "focus-ring.ref=\"focusRingController\"",
+        "at": "focus-ring",
+        "verdict": "correct",
+        "reason": "Hover identifies the same-node ref target as the FocusRing custom attribute rather than describing the ref command generically.",
+        "note": "NEW 2026-07-13. Cursor dispatch spends the resolved named-ref controller definition."
+      },
+      {
+        "id": "keyboard-listener-event",
+        "file": "src/template-ref-listener-semantics-app.html",
+        "anchor": "handleKeyboard($event)",
+        "at": "$event",
+        "verdict": "correct",
+        "reason": "Listener hover projects keydown through the DOM event map as KeyboardEvent.",
+        "note": "NEW 2026-07-13. Representative event-family TypeChecker projection at the IDE boundary."
+      },
+      {
+        "id": "resource-alias-focus",
+        "file": "src/template-ref-listener-semantics-app.html",
+        "anchor": "<ref-panel focus focus-ring.ref=\"aliasFocusRingController\"></ref-panel>",
+        "at": "focus",
+        "atOccurrence": 1,
+        "verdict": "correct",
+        "reason": "Hover leads with the exact bare custom-attribute alias and keeps its canonical resource name and source-backed implementation as subordinate context.",
+        "note": "B2 non-tag alias witness: exact attribute-source ownership must outrank the unrelated default bindable carrier and its suppressed type uncertainty."
+      }
+    ],
+    "definition": [
+      {
+        "id": "named-custom-attribute-ref-target",
+        "file": "src/template-ref-listener-semantics-app.html",
+        "anchor": "focus-ring.ref=\"focusRingController\"",
+        "at": "focus-ring",
+        "verdict": "correct",
+        "reason": "Definition navigates from the named ref target to the source-backed custom-attribute implementation class.",
+        "note": "NEW 2026-07-13. Representative navigation projection for named refs."
+      }
+    ],
+    "documentHighlight": [
+      {
+        "id": "named-custom-attribute-ref-target",
+        "file": "src/template-ref-listener-semantics-app.html",
+        "anchor": "focus-ring.ref=\"focusRingController\"",
+        "at": "focus-ring",
+        "verdict": "correct",
+        "reason": "Document highlights include the ordinary primary usage, both same-file named ref targets, and the bare alias because all four resolve to one resource identity.",
+        "note": "NEW 2026-07-13. Highlights inherit the shared resource-reference context."
+      }
+    ]
+  }
+}

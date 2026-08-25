@@ -10,7 +10,7 @@ import {
 } from '../../source-plan/source-plan.js';
 import type { AppBuilderPartSourceFragment } from '../part-source-invocation.js';
 import type {
-  AppBuilderEffectContractId as AppBuilderEffectContractIdValue,
+  AppBuilderEffectContractId,
 } from './effect.js';
 import type { AppBuilderControlUseInventoryRow } from './control-use-inventory.js';
 import type { AppBuilderOntologyRowRef } from './relation.js';
@@ -64,7 +64,7 @@ export interface AppBuilderSourceLoweringSourcePlanFrame {
   readonly sourcePlan: SourcePlan | null;
   readonly sourceLoweringSelectionKind: AppBuilderSourceLoweringSourcePlanSelectionKind | null;
   readonly sourceLoweringTargetRefs: readonly AppBuilderOntologyRowRef[];
-  readonly effectContractIds: readonly AppBuilderEffectContractIdValue[];
+  readonly effectContractIds: readonly AppBuilderEffectContractId[];
   readonly expectedEffectKinds: readonly ExpectedSemanticEffectKind[];
   readonly expectedEffects: readonly AppBuilderExpectedSemanticEffectPreview[];
   readonly controlUseInventoryRows: readonly AppBuilderControlUseInventoryRow[];
@@ -97,7 +97,7 @@ interface SourcePlanTemplateFragmentLowering {
   readonly fileTextFragments: readonly AppBuilderPartSourceFragment[];
   readonly contributionFragments: readonly AppBuilderPartSourceFragment[];
   readonly sourceLoweringTargetRefs: readonly AppBuilderOntologyRowRef[];
-  readonly effectContractIds: readonly AppBuilderEffectContractIdValue[];
+  readonly effectContractIds: readonly AppBuilderEffectContractId[];
   readonly controlUseInventoryRows: readonly AppBuilderControlUseInventoryRow[];
 }
 
@@ -381,7 +381,7 @@ function sourcePlanFrameEffectContractIds(
   directLowerings: SourcePlanDirectLowerings,
   sourceLoweringComponentPair: AppBuilderSourceLoweringComponentPair | null,
   lowering: SourcePlanTemplateFragmentLowering | null,
-): readonly AppBuilderEffectContractIdValue[] {
+): readonly AppBuilderEffectContractId[] {
   return [
     ...(directLowerings.sourceLoweringAppShell?.effectContractIds ?? []),
     ...(directLowerings.sourceLoweringApplicationAssembly?.effectContractIds ?? []),
@@ -455,7 +455,7 @@ function selectedTemplateLowering(
   readonly fileTextFragments: readonly AppBuilderPartSourceFragment[];
   readonly contributionFragments: readonly AppBuilderPartSourceFragment[];
   readonly sourceLoweringTargetRefs: readonly AppBuilderOntologyRowRef[];
-  readonly effectContractIds: readonly AppBuilderEffectContractIdValue[];
+  readonly effectContractIds: readonly AppBuilderEffectContractId[];
   readonly controlUseInventoryRows: readonly AppBuilderControlUseInventoryRow[];
 } | null {
   if (composition != null && invocation == null) {

@@ -1,4 +1,6 @@
 import { parseConfigurableRoutePath } from '../router/route-configurable-path.js';
+import type { FrameworkRegistrationCapability } from '../registration/framework-registration-manifest.js';
+import type { FrameworkRegistrationKind } from '../registration/registration-reference.js';
 import type { AureliaConfigurationAdmissionKind } from './aurelia-configuration-admission-kind.js';
 import type { SourcePlanProjectTooling } from './package-tooling.js';
 import type { TypeScriptImportRequirement } from './typescript-import-source.js';
@@ -105,6 +107,8 @@ export enum SourcePlanContributionOriginKind {
   AppBuilderSourceLoweringComposition = 'app-builder-source-lowering-composition',
   /** Contribution originated from a framework configuration admission. */
   AureliaConfigurationAdmission = 'aurelia-configuration-admission',
+  /** Contribution originated from an Aurelia framework registration admission. */
+  AureliaFrameworkRegistrationAdmission = 'aurelia-framework-registration-admission',
 }
 
 /** App-builder part invocation identity carried by a neutral source-plan contribution. */
@@ -150,13 +154,21 @@ export interface SourcePlanAureliaConfigurationAdmissionOrigin {
   readonly admissionKind: AureliaConfigurationAdmissionKind;
 }
 
+/** Framework registration admission identity carried by a neutral source-plan contribution. */
+export interface SourcePlanAureliaFrameworkRegistrationAdmissionOrigin {
+  readonly kind: SourcePlanContributionOriginKind.AureliaFrameworkRegistrationAdmission;
+  readonly registrationKind: FrameworkRegistrationKind;
+  readonly capability: FrameworkRegistrationCapability;
+}
+
 /** Source-plan contribution origin before a concrete file span exists. */
 export type SourcePlanContributionOrigin =
   | SourcePlanAppBuilderPartSourceInvocationOrigin
   | SourcePlanAppBuilderSourceLoweringTargetOrigin
   | SourcePlanAppBuilderSourceLoweringInvocationOrigin
   | SourcePlanAppBuilderSourceLoweringCompositionOrigin
-  | SourcePlanAureliaConfigurationAdmissionOrigin;
+  | SourcePlanAureliaConfigurationAdmissionOrigin
+  | SourcePlanAureliaFrameworkRegistrationAdmissionOrigin;
 
 /** Base fields shared by source-plan file contributions. */
 interface SourcePlanContributionBase {
@@ -938,6 +950,17 @@ export function sourcePlanAureliaConfigurationAdmissionOrigin(
   return {
     kind: SourcePlanContributionOriginKind.AureliaConfigurationAdmission,
     admissionKind,
+  };
+}
+
+export function sourcePlanAureliaFrameworkRegistrationAdmissionOrigin(
+  registrationKind: FrameworkRegistrationKind,
+  capability: FrameworkRegistrationCapability,
+): SourcePlanAureliaFrameworkRegistrationAdmissionOrigin {
+  return {
+    kind: SourcePlanContributionOriginKind.AureliaFrameworkRegistrationAdmission,
+    registrationKind,
+    capability,
   };
 }
 

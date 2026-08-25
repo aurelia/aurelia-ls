@@ -1,5 +1,9 @@
 import { auLink } from '../kernel/au-link.js';
 import type {
+  AccessKeyedExpression,
+  AccessMemberExpression,
+  AccessScopeExpression,
+  AccessThisExpression,
   ArrayLiteralExpression,
   ArrowFunction,
   BinaryExpression,
@@ -21,11 +25,17 @@ import type {
 } from '../expression/ast.js';
 import type { AddressHandle } from '../kernel/handles.js';
 import { localKeyPart } from '../kernel/local-key.js';
+import { MaterializedProduct } from '../kernel/materialization.js';
+import type { ProductDetailReadView } from '../kernel/product-details.js';
 import type { KernelStore } from '../kernel/store.js';
-import type { StateStoreConfiguration } from '../state/model.js';
 import { StateBindingScopeProjector } from '../state/state-binding-scope.js';
+import type { StateStoreVisibilitySelection } from '../state/state-store-visibility.js';
 import {
   BindingScope,
+  BindingContextKind,
+  BindingScopeLookupKind,
+  type BindingScopeContext,
+  type BindingScopeLocatedLookup,
 } from '../configuration/scope.js';
 import type { TemplateResourceScope } from '../template/compiler-world.js';
 import {
@@ -40,12 +50,10 @@ import {
   sameCheckerTypeReference,
 } from './type-shape.js';
 import {
+  type CheckerRepeatableHandlerAdmission,
   CheckerTypeNullishPresence,
   checkerTypeShapeNullishPresence,
 } from './checker-related-types.js';
-import {
-  CheckerBindingPatternLocalProjection,
-} from './binding-pattern-locals.js';
 import {
   CheckerTypeShapeAccess,
   type CheckerTypeShapeMemberValueAccess,
@@ -86,6 +94,18 @@ import type { RuntimeValueConverterMethodName } from './value-converter-call-sur
 import { CheckerExpressionScopeProjector } from './expression-scope-projector.js';
 import { CheckerExpressionArrayMethodProjector } from './expression-array-method-projector.js';
 import { TypeSystemProductDetails } from './product-details.js';
+import {
+  CheckerExpressionAccessTarget,
+  CheckerExpressionAccessTargetResolution,
+} from './expression-access-target.js';
+
+export type CheckerExpressionAccessTargetExpression =
+  | AccessThisExpression
+  | AccessScopeExpression
+  | CallScopeExpression
+  | AccessMemberExpression
+  | CallMemberExpression
+  | AccessKeyedExpression;
 
 type CheckerExpressionCallableCallExpression =
   | CallScopeExpression
@@ -128,16 +148,16 @@ export class CheckerExpressionTypeEvaluator {
   private readonly resources: CheckerExpressionResourceProjector;
 
   constructor(
-    readonly store: KernelStore,
+    private readonly store: KernelStore,
     readonly projector: CheckerTypeProjector,
     /** Compiler resource scope visible at this expression site, when template compilation supplied one. */
-    readonly resourceScope: TemplateResourceScope | null = null,
-    readonly cache: CheckerExpressionTypeEvaluationCache = new CheckerExpressionTypeEvaluationCache(),
-    readonly stateStores: readonly StateStoreConfiguration[] = [],
+    readonly resourceScope: TemplateResourceScope | null,
+    readonly cache: CheckerExpressionTypeEvaluationCache,
+    readonly stateStoreSelection: StateStoreVisibilitySelection,
   ) {
     this.typeAccess = new CheckerTypeShapeAccess(store, projector);
     this.synthesis = new CheckerExpressionTypeSynthesizer(projector);
-    this.support = new CheckerExpressionTypeSupport(store, projector, this.typeAccess, this.synthesis);
+    this.support = new CheckerExpressionTypeSupport(projector, this.typeAccess, this.synthesis);
     this.branchScopes = new CheckerExpressionBranchScopeProjector(store, projector);
     this.access = new CheckerExpressionAccessProjector(this.support, this.typeAccess, {
       evaluateNode: (context) => this.evaluateNode(context),
@@ -157,7 +177,7 @@ export class CheckerExpressionTypeEvaluator {
       this.access,
       this.calls,
       resourceScope,
-      new StateBindingScopeProjector(store, stateStores),
+      new StateBindingScopeProjector(store, stateStoreSelection, projector),
       {
         evaluateNode: (context) => this.evaluateNode(context),
       },
@@ -186,6 +206,12 @@ export class CheckerExpressionTypeEvaluator {
     this.memberOwners = new CheckerExpressionMemberOwnerProjector({
       evaluateNode: (context) =>
         this.evaluate(context),
+      evaluateScopeOwner: (expression, context) =>
+        this.scopes.evaluateScopeOwner(
+          expression,
+          context.scope,
+          context.projectionLocalKey(),
+        ),
       arrowFunctionScope: (expression, context) =>
         this.contextualTypes.arrowFunctionScope(expression, context.scope, context.projectionLocalKey(), context.sourceAddressHandle, context.contextualType),
       contextualArgumentType: (expression, argumentIndex, context) =>
@@ -196,10 +222,32 @@ export class CheckerExpressionTypeEvaluator {
         this.contextualTypes.contextualArrayElementType(contextualType, elementIndex, localKey, sourceAddressHandle),
       contextualObjectPropertyType: (contextualType, propertyName, localKey, sourceAddressHandle) =>
         this.contextualTypes.contextualObjectPropertyType(contextualType, propertyName, localKey, sourceAddressHandle),
+      shortCircuitRightScope: (expression, context) =>
+        this.branchScopes.shortCircuitRightScope(
+          expression,
+          context.scope,
+          `${context.projectionLocalKey()}:member-owner:right-scope`,
+          context.sourceAddressHandle,
+        ),
+      conditionalBranchScope: (expression, branch, context) =>
+        branch === 'truthy'
+          ? this.branchScopes.truthyScope(
+              expression.condition,
+              context.scope,
+              `${context.projectionLocalKey()}:member-owner:condition:truthy`,
+              context.sourceAddressHandle,
+            )
+          : this.branchScopes.falsyScope(
+              expression.condition,
+              context.scope,
+              `${context.projectionLocalKey()}:member-owner:condition:falsy`,
+              context.sourceAddressHandle,
+            ),
     });
   }
 
   evaluate(context: CheckerExpressionTypeEvaluationContext): CheckerExpressionTypeEvaluation {
+    this.requireCurrent();
     return this.evaluateNode(context);
   }
 
@@ -208,6 +256,7 @@ export class CheckerExpressionTypeEvaluator {
     methodName: RuntimeValueConverterMethodName,
     inputType: CheckerTypeReference,
   ): CheckerExpressionTypeEvaluation {
+    this.requireCurrent();
     const expression = context.expression;
     const input = this.support.resolveReference(
       expression,
@@ -226,10 +275,18 @@ export class CheckerExpressionTypeEvaluator {
     );
   }
 
+  contextualBindingBehaviorArgumentTypes(
+    context: CheckerExpressionTypeEvaluationContext<Extract<ExpressionAstNode, { readonly $kind: 'BindingBehavior' }>>,
+  ): readonly (CheckerTypeReference | null)[] | null {
+    this.requireCurrent();
+    return this.resources.contextualBindingBehaviorArgumentTypes(context.expression, context);
+  }
+
   evaluateMemberOwnerAtOffset(
     context: CheckerExpressionTypeEvaluationContext,
     offset: number,
   ): CheckerExpressionTypeEvaluation {
+    this.requireCurrent();
     const evaluation = this.memberOwners.evaluateAtOffset(
       context,
       offset,
@@ -246,6 +303,7 @@ export class CheckerExpressionTypeEvaluator {
     offset: number,
     memberName: string,
   ): CheckerTypeShapeMemberValueAccess | null {
+    this.requireCurrent();
     const owner = this.evaluateMemberOwnerAtOffset(
       context,
       offset,
@@ -262,11 +320,109 @@ export class CheckerExpressionTypeEvaluator {
       : this.typeAccess.memberValueAccess(ownerShape, memberName, `${context.projectionLocalKey()}:member:${localKeyPart(memberName)}`);
   }
 
+  /** Recover the exact derived evaluation context for one occurrence inside the root expression. */
+  evaluationContextForExpression(
+    context: CheckerExpressionTypeEvaluationContext,
+    expression: ExpressionAstNode,
+  ): CheckerExpressionTypeEvaluationContext | null {
+    this.requireCurrent();
+    return this.memberOwners.contextForExpression(context, expression);
+  }
+
+  /** Resolve the declaration/scope authority reached by one exact authored access occurrence. */
+  resolveAccessTarget(
+    context: CheckerExpressionTypeEvaluationContext,
+    expression: CheckerExpressionAccessTargetExpression,
+  ): CheckerExpressionAccessTargetResolution {
+    this.requireCurrent();
+    const targetContext = this.memberOwners.contextForExpression(context, expression)
+      ?? context;
+    if (expression.$kind === 'AccessThis') {
+      const located = targetContext.scope.locateThis(expression.ancestor);
+      if (
+        located.lookupKind === BindingScopeLookupKind.MissingAncestor
+        || located.context == null
+      ) {
+        return CheckerExpressionAccessTargetResolution.open();
+      }
+      const authority = this.committedContextAuthority(located);
+      if (authority != null) {
+        return CheckerExpressionAccessTargetResolution.exact(new CheckerExpressionAccessTarget(
+          authority.productHandle,
+          authority.identityHandle,
+          null,
+          null,
+          authority.sourceAddressHandle,
+        ));
+      }
+      if (located.context.contextType == null) {
+        return CheckerExpressionAccessTargetResolution.open();
+      }
+      const contextShape = this.typeAccess.resolveReference(located.context.contextType);
+      return contextShape == null
+        ? CheckerExpressionAccessTargetResolution.open()
+        : CheckerExpressionAccessTargetResolution.exact(new CheckerExpressionAccessTarget(
+            contextShape.productHandle,
+            contextShape.identityHandle,
+            null,
+            null,
+            contextShape.declarationSourceAddressHandle ?? contextShape.sourceAddressHandle,
+          ));
+    }
+    if (expression.$kind === 'AccessScope' || expression.$kind === 'CallScope') {
+      const located = targetContext.scope.locate(expression.name.name, expression.ancestor);
+      if (located.lookupKind === BindingScopeLookupKind.MissingAncestor) {
+        return CheckerExpressionAccessTargetResolution.open();
+      }
+      if (located.slot != null) {
+        const authority = this.committedContextAuthority(located);
+        return CheckerExpressionAccessTargetResolution.exact(new CheckerExpressionAccessTarget(
+          authority?.productHandle ?? null,
+          located.slot.targetIdentityHandle,
+          located.slot.targetTypeMemberHandle,
+          located.slot.targetTypeSourceMemberHandle,
+          located.slot.sourceAddressHandle,
+        ));
+      }
+      if (located.context?.contextType == null) {
+        return CheckerExpressionAccessTargetResolution.open();
+      }
+      const contextShape = this.typeAccess.resolveReference(located.context.contextType);
+      return contextShape == null
+        ? CheckerExpressionAccessTargetResolution.open()
+        : this.access.resolveMemberTarget(
+            contextShape,
+            expression.name.name,
+            `${targetContext.projectionLocalKey()}:access-target:scope:${localKeyPart(expression.name.name)}`,
+          );
+    }
+
+    const targetOffset = expression.$kind === 'AccessKeyed'
+      ? expression.key.span.start
+      : expression.name.span.start;
+    const owner = this.memberOwners.evaluateAtOffset(targetContext, targetOffset);
+    if (owner?.kind !== CheckerExpressionTypeEvaluationResultKind.Type) {
+      return CheckerExpressionAccessTargetResolution.open();
+    }
+    const ownerShape = this.typeAccess.resolveReference(owner.typeReference);
+    if (ownerShape == null) {
+      return CheckerExpressionAccessTargetResolution.open();
+    }
+    return expression.$kind === 'AccessKeyed'
+      ? this.access.resolveKeyedTarget(expression, targetContext, ownerShape)
+      : this.access.resolveMemberTarget(
+          ownerShape,
+          expression.name.name,
+          `${targetContext.projectionLocalKey()}:access-target:member:${localKeyPart(expression.name.name)}`,
+        );
+  }
+
   memberValueAccessForReference(
     ownerReference: CheckerTypeReference | null,
     memberName: string,
     localKey: string,
   ): CheckerTypeShapeMemberValueAccess | null {
+    this.requireCurrent();
     if (ownerReference == null) {
       return null;
     }
@@ -276,22 +432,43 @@ export class CheckerExpressionTypeEvaluator {
       : this.typeAccess.memberValueAccess(ownerShape, memberName, `${localKey}:member:${localKeyPart(memberName)}`);
   }
 
-  evaluateIteratorElement(
-    context: CheckerExpressionTypeEvaluationContext,
-  ): CheckerExpressionTypeEvaluation {
-    return this.iterables.evaluateIteratorElement(context);
-  }
-
-  evaluateIteratorLocals(
-    context: CheckerExpressionTypeEvaluationContext,
-  ): CheckerExpressionTypeEvaluation | CheckerBindingPatternLocalProjection {
-    return this.iterables.evaluateIteratorLocals(context);
+  private committedContextAuthority(
+    located: BindingScopeLocatedLookup,
+  ): BindingScopeContext | null {
+    let scope = located.scope;
+    let context = located.context;
+    while (scope != null && context != null) {
+      if (this.projector.publication.read(context.productHandle) instanceof MaterializedProduct) {
+        return context;
+      }
+      // Callback and narrowing scopes are evaluation state, not durable products. Preserve their lookup result while
+      // routing public authority to the nearest published context that represents the same semantic identity.
+      const predecessor = scope.predecessor;
+      if (predecessor == null) {
+        return null;
+      }
+      const predecessorContext = context.contextKind === BindingContextKind.Override
+        ? predecessor.overrideContext
+        : predecessor.bindingContext;
+      if (predecessorContext.identityHandle !== context.identityHandle) {
+        return null;
+      }
+      scope = predecessor;
+      context = predecessorContext;
+    }
+    return null;
   }
 
   evaluateIteratorProjection(
     context: CheckerExpressionTypeEvaluationContext,
+    handlerAdmission: CheckerRepeatableHandlerAdmission,
   ): CheckerExpressionIteratorProjection {
-    return this.iterables.evaluateIteratorProjection(context);
+    this.requireCurrent();
+    return this.iterables.evaluateIteratorProjection(context, handlerAdmission);
+  }
+
+  private requireCurrent(): void {
+    this.projector.publication.requireCurrent();
   }
 
   private evaluateNode(
@@ -302,7 +479,7 @@ export class CheckerExpressionTypeEvaluator {
     return this.cache.readOrEvaluate(
       cacheKey,
       () => this.evaluateNodeUncached(effectiveContext),
-      (evaluation) => cachedExpressionEvaluationProductsAreLive(this.store, evaluation),
+      (evaluation) => cachedExpressionEvaluationProductsAreLive(this.projector.publication, evaluation),
     );
   }
 
@@ -445,6 +622,14 @@ export class CheckerExpressionTypeEvaluator {
     expression: CallScopeExpression,
     context: CheckerExpressionTypeEvaluationContext,
   ): CheckerExpressionTypeEvaluation {
+    const optionalOwner = this.scopes.evaluateOptionalScopeOwnerShortCircuit(
+      expression,
+      context.scope,
+      context.projectionLocalKey(),
+    );
+    if (optionalOwner != null) {
+      return optionalOwner;
+    }
     const callee = this.evaluateCallScopeCallee(expression, context);
     if (callee.kind === CheckerExpressionTypeEvaluationResultKind.Open) {
       return callee;
@@ -681,6 +866,7 @@ export class CheckerExpressionTypeEvaluator {
       expression.name.name,
       expression.ancestor,
       `${context.projectionLocalKey()}:callee:${expression.name.name}`,
+      false,
     );
   }
 
@@ -1008,7 +1194,7 @@ export class CheckerExpressionTypeEvaluator {
     if (no.kind === CheckerExpressionTypeEvaluationResultKind.Open) {
       return no;
     }
-    if (yes.typeShape.checkerKey === no.typeShape.checkerKey) {
+    if (yes.typeShape.semanticKey === no.typeShape.semanticKey) {
       return yes;
     }
     return this.support.evaluateTypeUnion(
@@ -1095,14 +1281,14 @@ export class CheckerExpressionTypeEvaluator {
 }
 
 function cachedExpressionEvaluationProductsAreLive(
-  store: KernelStore,
+  store: ProductDetailReadView,
   evaluation: CheckerExpressionTypeEvaluation,
 ): boolean {
   const reference = evaluation.kind === CheckerExpressionTypeEvaluationResultKind.Type
     ? evaluation.typeReference
     : evaluation.partialTypeReference;
   return reference?.productHandle == null
-    || store.productDetails.read(TypeSystemProductDetails.TypeShape, reference.productHandle) != null;
+    || store.readProductDetail(TypeSystemProductDetails.TypeShape, reference.productHandle) != null;
 }
 
 function typeReferenceForEvaluation(

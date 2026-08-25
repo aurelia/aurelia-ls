@@ -2,7 +2,7 @@
   "schemaVersion": "atlas-memory.v1",
   "records": [
     {
-      "id": "frontier:aurelia-app-frame-materializer",
+      "id": "frontier:aurelia-application-materializer",
       "kind": "pressure-frontier",
       "domains": [
         "semantic-runtime",
@@ -11,33 +11,33 @@
         "application",
         "world-construction"
       ],
-      "summary": "AureliaAppFrameMaterializer is the configuration frontier that materializes Aurelia facade, root container, AppRootConfig, and AppRoot products for a sequence.",
-      "rationale": "The app frame is the bridge between recognized configuration flow and the spendable app/container/root products used by DI, controller, lifecycle, and rendering work. Keeping it explicit avoids pushing root-admission behavior into configuration recognition or app-world composition.",
+      "summary": "AureliaApplicationMaterializer publishes exact Aurelia facade-construction and app-root operations.",
+      "rationale": "One cached app frame cannot represent a facade created in one module and reused by several ordered app operations. The materializer publishes the implicit container, facade, and constructor-installed contextual providers only at the exact creation step; each app operation publishes its own config and AppRoot and prepares the shared IAppRoot provider. Keeping this operation boundary explicit prevents configuration and DI from reconstructing targets or conflating existing values with outputs.",
       "guidance": [
-        "Start here when work touches Aurelia facade admission, root container products, app-root config, AppRoot identity, or AppRootUsesConfig claims.",
-        "Keep app-frame products distinct from per-step configuration products and app-world project phase orchestration.",
-        "Use configuration README and DI world-construction guidance before changing root container or app-root semantics."
+        "Start here when work touches exact Aurelia facade creation, root container products, constructor InstanceProviders, app-root config, AppRoot identity, or AppRootUsesConfig claims.",
+        "Keep operation target products distinct from products created by the operation; one facade may own several ordered AppRoots.",
+        "Use the configuration and DI READMEs before changing root-container, contextual-provider, or app-root semantics; active start/stop lifecycle remains outside this boundary."
       ],
       "anchors": [
         {
           "kind": "source",
-          "filePath": "packages/semantic-runtime/src/configuration/aurelia-app-frame-materializer.ts",
-          "symbolName": "AureliaAppFrameMaterializer",
-          "line": 108,
-          "summary": "Aurelia facade/root-container/AppRoot admission frame materializer."
+          "filePath": "packages/semantic-runtime/src/configuration/aurelia-application-materializer.ts",
+          "symbolName": "AureliaApplicationMaterializer",
+          "line": 120,
+          "summary": "Exact Aurelia facade-construction and app-root operation materializer."
         }
       ],
       "liveChecks": [
         {
           "kind": "product-large-class",
-          "className": "AureliaAppFrameMaterializer",
-          "filePath": "packages/semantic-runtime/src/configuration/aurelia-app-frame-materializer.ts",
+          "className": "AureliaApplicationMaterializer",
+          "filePath": "packages/semantic-runtime/src/configuration/aurelia-application-materializer.ts",
           "minLineCount": 300,
           "minMethodCount": 10
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-05-12"
+      "updatedAt": "2026-07-19"
     },
     {
       "id": "frontier:container-child-materializer",
@@ -125,31 +125,67 @@
         "semantic-runtime",
         "di",
         "world-construction",
-        "kernel-publication"
+        "kernel-publication",
+        "evaluation"
       ],
-      "summary": "DiWorldConstructor is the current broad DI world-construction pressure point.",
-      "rationale": "This class is adjacent to evaluator-backed DI closure, registration publication, resolver effects, and product-record emission. It should be read before adding another local DI world or registration materialization path.",
+      "summary": "DiWorldConstructor coordinates path-proven registration spending into exact container-owned DI products.",
+      "rationale": "The constructor remains a broad coordination point, but evaluator execution, registration-value materialization, key identity, provider activation, source-node ownership, and publication now have separate owners. Future cleanup should preserve that boundary: this class orders app/container spending and aggregates emissions; it must not become another source parser, evaluator, runtime-shape classifier, key authority, or world-global provider index.",
       "guidance": [
         "Check framework.di and framework.admission before extending this constructor from app pressure alone.",
-        "Framework registration effects can emit resolver slots, resource slots, app tasks, and root-shared factory slots; keep `registerFactory(...)` effects as `ContainerFactorySlot` products instead of modeling them as resolver shortcuts.",
-        "ValidationHtmlConfiguration uses this lane for the `IValidationController` factory while ValidationConfiguration/ValidationHtmlConfiguration also contribute validation service resolvers.",
-        "If repeated record construction appears, look for publication helpers before moving behavior into KernelStore.",
-        "Treat split decisions as framework-interface splits, not generic small-class cleanup."
+        "Materialize reusable resolver/registry values through DiRegistrationValueMaterializer before creating the application operation. Exact evaluator evidence is authoritative, including an exact null framework classification.",
+        "Spend evaluator-known registry functions only through DiRegistrationSpendingCascade when an executed configuration path supplies the exact occurrence-local registry value. RegistryBodyStepIndex joins retained AST-node identity to candidate-local execution; do not restore source-span containment or address-to-AST recovery.",
+        "Registry bodies and bounded AppTask callbacks share evaluation-owned executeStaticFunctionEffects for PathProvenEffects semantics. DI owns exact registry/container receiver dispatch and ordered registration spending, not a private branch interpreter.",
+        "Use an active recursion stack for unable_auto_register authority; completed repeated registry calls are distinct ordered effects, not a global visited-set duplicate.",
+        "ContainerRegistrationOperation is the application occurrence authority. It retains the exact admission, reusable value, receiving container, evidence authority, effective framework kind, identity, and ordinal; downstream consumers must not rebuild these relations from product handles.",
+        "Every DiRegistrationOpenSeamScope is authoritative application/container uncertainty even when its exact seam kind is evaluation-owned. Consumers must not re-filter those scopes through a DI-only seam-kind list.",
+        "Derive compiler-world visibility from canonical ITemplateCompiler provider identity on the app container's consulting chain, not from manifest capability presence.",
+        "Framework registration effects can emit resolver slots, resource slots, app tasks, and root-shared factory slots; keep registerFactory effects as ContainerFactorySlot products instead of resolver shortcuts.",
+        "Use DiKeyIdentityEmitter for all key publication and DiProviderActivationView for provider/default/activation reads rather than adding constructor-local identity or source graphs.",
+        "Treat splits as framework-interface boundaries, not generic small-class cleanup."
       ],
+      "nextActionPolicy": "proactive",
       "anchors": [
         {
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/di/world-constructor.ts",
           "symbolName": "DiWorldConstructor",
-          "line": 425,
-          "summary": "DI world construction class."
+          "summary": "Coordinates exact-container registration spending and DI world emission."
         },
         {
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/di/world-constructor.ts",
-          "symbolName": "DiRegistrationSpendingFrame",
-          "line": 134,
-          "summary": "Registration spending work frame used during DI world construction."
+          "symbolName": "DiRegistrationSpendingCascade",
+          "summary": "Path-proven recursive registry spending with active recursion detection."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/di/container-registration.ts",
+          "symbolName": "ContainerRegistrationOperation",
+          "summary": "Exact ordered registration application occurrence."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/configuration/registry-body-index.ts",
+          "symbolName": "RegistryBodyStepIndex",
+          "summary": "Registry declaration inventory joined by retained node identity to exact candidate-local execution and occurrence values."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/di/world-construction.ts",
+          "symbolName": "RegisteredAppTask",
+          "summary": "Spent AppTask evidence retaining exact source evaluator metadata without lifecycle execution."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/di/registry-execution.ts",
+          "symbolName": "DiRegistryExecutionResult",
+          "summary": "DI-owned registry/container dispatch result over evaluation-owned path-proven function execution."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/evaluation/function-execution.ts",
+          "symbolName": "executeStaticFunctionEffects",
+          "summary": "Canonical path-proven function-effect execution shared with bounded AppTask callbacks."
         },
         {
           "kind": "lens",
@@ -174,14 +210,14 @@
         },
         {
           "kind": "product-large-class",
-          "className": "DiRegistrationSpendingFrame",
+          "className": "DiRegistrationSpendingCascade",
           "filePath": "packages/semantic-runtime/src/di/world-constructor.ts",
-          "minLineCount": 100,
-          "minMethodCount": 8
+          "minLineCount": 120,
+          "minMethodCount": 4
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-05-12"
+      "updatedAt": "2026-07-25"
     },
     {
       "id": "frontier:resolver",
@@ -198,6 +234,7 @@
         "Inspect Resolver before changing resolver slot products, registration strategies, or container lookup behavior.",
         "Resolver slots should retain the modeled resolver object when DI publication owns it; do not fall back to resolver product handles when a framework-shaped method such as getFactory needs resolver state.",
         "ResolverStrategy mirrors Aurelia's numeric resolver strategy enum; cached callback registration stores cached state on a callback resolver, and invalid strategy values claim invalid_resolver_strategy / AUR0005.",
+        "Keep Resolver abstract lookup answers pure. Do not copy the framework resolver's activation-time resolving flag or factory cache into speculative reads; cyclic_dependency / AUR0003 belongs to DiDependencyCycleIssueMaterializer, which owns the closed provider and activation graph required to prove re-entry.",
         "Resolver wrapper calls such as newInstanceOf(...) are source-recognized as resolver keys; invalid_new_instance_on_interface / AUR0017 is exact only when the container state is proven fresh and the wrapped interface has no default registration.",
         "Use InstanceProvider for contextual provider semantics and no_instance_provided / AUR0013; keep it at provider-resolution level until a source/runtime lifecycle path proves a diagnostic.",
         "Keep resolver model changes grounded in framework.di rather than local app pressure alone.",
@@ -216,6 +253,12 @@
           "filePath": "packages/semantic-runtime/src/di/instance-provider.ts",
           "symbolName": "InstanceProvider",
           "summary": "Semantic-runtime InstanceProvider model for contextual DI providers."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/di/dependency-cycle-issues.ts",
+          "symbolName": "DiDependencyCycleIssueMaterializer",
+          "summary": "Closed provider/activation graph owner for cyclic dependency authority."
         },
         {
           "kind": "lens",
@@ -239,7 +282,7 @@
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-05-13"
+      "updatedAt": "2026-07-17"
     },
     {
       "id": "frontier:di-world-publication-materializers",
@@ -249,13 +292,16 @@
         "di",
         "kernel-publication",
         "registration",
-        "resources"
+        "resources",
+        "identity"
       ],
-      "summary": "DI world-publication materializers publish registries, resolvers, resource slots, self resolvers, app tasks, issue products, source evidence, claims, and open seams for DI world construction.",
-      "rationale": "DI world construction has several distinct publication lanes. Keeping them grouped under one durable record makes future cleanup start from the common publication layer before moving behavior into Container or DiWorldConstructor.",
+      "summary": "DI world-publication materializers publish container-owned products and claims while DiKeyIdentityEmitter owns canonical key identity.",
+      "rationale": "DI world construction has several distinct publication lanes. Keeping their shared envelopes together prevents repeated KernelStoreRecord assembly, while keeping key normalization in its dedicated emitter prevents publication helpers from recreating occurrence-local or friendly-name identity schemes.",
       "guidance": [
         "Start here when work touches DI resolver, registry, resource slot, self resolver, app-task, issue, source, claim, or open-seam records.",
-        "Keep publication helpers in world-publication.ts unless a framework DI concept deserves its own direct semantic model.",
+        "Keep product/source/claim publication helpers in world-publication.ts unless a framework DI concept deserves its own direct semantic model.",
+        "Route every durable DI key through DiKeyIdentityEmitter. Publication materializers may consume an emitted identity but must not derive one from localName or source occurrence.",
+        "Framework/plugin effects should resolve public package exports through TypeSystemProject before publication; private support keys remain explicit unknown identities.",
         "If repeated KernelStoreRecord construction returns in DI, inspect these materializers before adding another local emitter."
       ],
       "anchors": [
@@ -263,29 +309,31 @@
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/di/world-publication.ts",
           "symbolName": "DiRegistryPublicationMaterializer",
-          "line": 310,
           "summary": "DI registry publication materializer."
         },
         {
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/di/world-publication.ts",
           "symbolName": "DiResolverPublicationMaterializer",
-          "line": 673,
           "summary": "DI resolver and resolver-slot publication materializer."
         },
         {
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/di/world-publication.ts",
           "symbolName": "DiResourceSlotPublicationMaterializer",
-          "line": 879,
           "summary": "DI resource-slot publication materializer."
         },
         {
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/di/world-publication.ts",
           "symbolName": "DiContainerSelfResolverPublicationMaterializer",
-          "line": 1102,
           "summary": "DI container self-resolver publication materializer."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/di/di-key-identity-emitter.ts",
+          "symbolName": "DiKeyIdentityEmitter",
+          "summary": "Canonical DI key identity publication authority shared by authored and framework effects."
         },
         {
           "kind": "lens",
@@ -325,10 +373,17 @@
           "filePath": "packages/semantic-runtime/src/di/world-publication.ts",
           "minLineCount": 120,
           "minMethodCount": 8
+        },
+        {
+          "kind": "product-large-class",
+          "className": "DiKeyIdentityEmitter",
+          "filePath": "packages/semantic-runtime/src/di/di-key-identity-emitter.ts",
+          "minLineCount": 500,
+          "minMethodCount": 15
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-05-12"
+      "updatedAt": "2026-07-19"
     },
     {
       "id": "decision:di-issues-own-kernel-resource-duplicates",
@@ -485,7 +540,7 @@
         {
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/di/container-lookup.ts",
-          "symbolName": "ContainerLookupFailureKind",
+          "symbolName": "ContainerResolutionFailureKind",
           "summary": "Container lookup failure branch vocabulary for exact framework errors."
         },
         {
@@ -546,22 +601,30 @@
         "di",
         "framework-errors",
         "diagnostics",
-        "world-construction"
+        "world-construction",
+        "activation"
       ],
-      "summary": "DiDependencyCycleIssueMaterializer owns exact kernel cyclic_dependency diagnostics for closed source-visible singleton activation graphs.",
-      "rationale": "Aurelia throws cyclic_dependency when a singleton resolver is re-entered during activation. Semantic-runtime can claim that framework path only when it can form a closed graph from singleton providers, instance-time resolve(...) dependencies, and a concrete container.get(...) entry point.",
+      "summary": "DiDependencyCycleIssueMaterializer owns exact cyclic_dependency diagnostics over the shared DI provider-activation view.",
+      "rationale": "Aurelia throws cyclic_dependency when a singleton provider is re-entered during activation. Semantic-runtime can claim that framework path only from a concrete container lookup, canonical provider identity, lifetime/default-provider semantics, and a closed activation dependency graph. Those facts now come from DiProviderActivationView rather than a second name-keyed source graph.",
       "guidance": [
-        "Start here before extending cyclic_dependency / AUR0003 coverage beyond interface singleton providers and instance-time resolve(...) dependencies.",
-        "Keep this as a source-backed DI graph materializer until controller activation can contribute richer runtime-current-container state.",
-        "If the graph needs more provider kinds, ground the provider semantics in framework.di and registration effects before adding app-shaped shortcuts."
+        "Start here before extending cyclic_dependency / AUR0003 coverage beyond currently proven provider and activation shapes.",
+        "Consume DiProviderActivationView for provider, alias, default-registration, lifetime, handler/requestor, and activation edges; do not reconstruct another source-name graph in the diagnostic lane.",
+        "Keep cycle policy domain-owned. Registration recursion spends unable_auto_register, evaluator module recursion remains an evaluation outcome, and singleton activation re-entry spends cyclic_dependency.",
+        "Only publish exact framework authority when the provider chain and activation entry are closed. Open constructors, callbacks, dynamic containers, or unresolved keys must remain honest pressure rather than speculative cycles.",
+        "If the graph needs more provider kinds, improve registration/DI activation publication first and let the diagnostic materializer inherit them."
       ],
       "anchors": [
         {
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/di/dependency-cycle-issues.ts",
           "symbolName": "DiDependencyCycleIssueMaterializer",
-          "line": 60,
-          "summary": "Source-visible dependency-cycle issue materializer."
+          "summary": "Closed provider-activation cycle diagnostic materializer."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/di/provider-activation.ts",
+          "symbolName": "DiProviderActivationView",
+          "summary": "Shared derived provider/default/lifetime/activation authority."
         },
         {
           "kind": "lens",
@@ -581,10 +644,183 @@
           "filePath": "packages/semantic-runtime/src/di/dependency-cycle-issues.ts",
           "minLineCount": 55,
           "minMethodCount": 3
+        },
+        {
+          "kind": "product-large-class",
+          "className": "DiProviderActivationView",
+          "filePath": "packages/semantic-runtime/src/di/provider-activation.ts",
+          "minLineCount": 300,
+          "minMethodCount": 15
         }
       ],
       "createdAt": "2026-05-13",
-      "updatedAt": "2026-05-15"
+      "updatedAt": "2026-07-19"
+    },
+    {
+      "id": "decision:canonical-di-key-identity",
+      "kind": "decision",
+      "domains": [
+        "semantic-runtime",
+        "di",
+        "identity",
+        "type-system",
+        "evaluation"
+      ],
+      "summary": "Canonical DI key identity is declaration/value based and separate from authored occurrences and container lookup behavior.",
+      "rationale": "Aurelia DI compares runtime key values, while semantic-runtime previously minted occurrence-local identities and later consumers compensated with friendly-name joins. The settled model has one identity authority: aliases and re-exports converge through declaration or runtime-value evidence, authored source/provenance remains occurrence-local, and the container's JIT/lookup branch is a separate axis. This removes name masquerade without retaining evaluator objects in durable products.",
+      "guidance": [
+        "Use DiKeyIdentityEmitter for every durable authored, evaluated, framework, or plugin DI key; do not publish another local DI key identity envelope.",
+        "Treat friendlyName/localName as presentation only. Interface objects with equal friendly names are distinct unless declaration/value evidence proves aliasing.",
+        "Keep DiKeyIdentityKind separate from ContainerLookupKeyKind: identity describes runtime equality, while lookup kind describes the container branch. A constructable registry remains a constructable identity.",
+        "Resolve public framework/plugin effects through TypeSystemProject.readProgramExportedSymbol and the normal declaration identity path. Keep private or unprovable support keys as UnknownDiKeyIdentity instead of joining them by name.",
+        "Keep authored occurrence addresses and provenance on registrations, calls, and tasks. Sharing semantic key identity must not collapse source occurrences.",
+        "Framework intrinsics such as IContainer and ITemplateCompiler retain canonical identities across package declaration surfaces."
+      ],
+      "anchors": [
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/di/di-key-identity-emitter.ts",
+          "symbolName": "DiKeyIdentityEmitter",
+          "summary": "Sole publication facade for durable DI key identity."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/di/di-key-identity-emitter.ts",
+          "symbolName": "DiKeyIdentityEmission",
+          "summary": "Carries canonical identity family and the distinct runtime lookup branch."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/type-system/project.ts",
+          "symbolName": "TypeSystemProject",
+          "summary": "Published TypeChecker authority, including package-export symbol lookup."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/di/source-key-expression.ts",
+          "symbolName": "containerLookupKeyKindForDeclaration",
+          "summary": "Derives container lookup behavior independently from semantic key identity."
+        },
+        {
+          "kind": "doc",
+          "path": "packages/semantic-runtime/src/di/README.md",
+          "summary": "Owning boundary and identity doctrine for the DI model."
+        },
+        {
+          "kind": "fixture",
+          "path": "packages/semantic-runtime/fixtures/pressure/di-key-identity",
+          "summary": "Adversarial aliases, re-exports, equal friendly names, symbols, object keys, primitives, and registry-shaped constructables."
+        }
+      ],
+      "liveChecks": [
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/di/di-key-identity-emitter.ts",
+          "symbolName": "DiKeyIdentityEmitter"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/di/di-key-identity-emitter.ts",
+          "symbolName": "DiKeyIdentityEmission"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/di/source-key-expression.ts",
+          "symbolName": "containerLookupKeyKindForDeclaration"
+        },
+        {
+          "kind": "product-large-class",
+          "className": "DiKeyIdentityEmitter",
+          "filePath": "packages/semantic-runtime/src/di/di-key-identity-emitter.ts",
+          "minLineCount": 500,
+          "minMethodCount": 15
+        }
+      ],
+      "createdAt": "2026-07-19",
+      "updatedAt": "2026-07-19"
+    },
+    {
+      "id": "decision:di-registration-admission-value-application",
+      "kind": "decision",
+      "domains": [
+        "semantic-runtime",
+        "di",
+        "registration",
+        "configuration",
+        "evaluation",
+        "kernel-publication",
+        "provenance"
+      ],
+      "summary": "DI keeps registration admission, reusable runtime registration value, and concrete application occurrence as three distinct identities.",
+      "rationale": "One normalized admission may be applied repeatedly or to several containers, while one evaluated registry or resolver value may be reused by those applications. Compressing these identities into an admission handle caused consumers to rebuild application topology, source recognition to override exact evaluator evidence, and registry/configuration ownership to be reconstructed from source spans. ContainerRegistrationOperation now retains the exact admission and canonical runtime value for one ordered container application, with durable edges for both relations.",
+      "guidance": [
+        "Treat RegistrationAdmissionProduct as the normalized value offered to registration, DiRegistrationValueProduct as a reusable runtime resolver or registry object, and ContainerRegistrationOperation as one ordered application to one concrete container.",
+        "Use Di.AppliesRegistration for operation-to-admission topology and Di.UsesRegistrationValue for operation-to-reusable-value topology. Container and produced-effect ownership use Di.ProducesProduct.",
+        "Exact evaluator evidence is authoritative even when it proves that no framework package applies. Post-spending consumers must use frameworkRegistrationKindForOperation(...) and must not reclassify operation.admission.",
+        "When registry-body execution supplies a stronger exact class carrier than source recognition retained, project and resource-enrich an operation-local dispatch shape through DiRegistrationValueMaterializer. Keep ContainerRegistrationOperation.admission and Di.AppliesRegistration on the original durable source product; the dispatch shape guides spending only and must never become a second product behind the same handle.",
+        "Use registrationOperationsVisibleToContainer(...) for consulting-chain visibility. Do not restore container-to-admission helper joins or sibling/world-global admission scans.",
+        "ConfigurationEvaluationBindings owns generation-local evaluator and AST-node relations. Registry-body execution and option ownership must use those relations directly instead of reverse-mapping source addresses or comparing spans.",
+        "Treat every DiRegistrationOpenSeamScope as authoritative application/container uncertainty regardless of the retained seam's domain kind. Evaluator-owned branch or call pressure can hide nested registry effects; only raw pre-application configuration seams need kind filtering.",
+        "Configured catalog construction is pre-spending evidence. It may classify an admission from its retained evaluator carrier, but app-world selection must join the catalog to an exact operation by both admission identity and effective framework kind.",
+        "Keep provider activation downstream of spent slots and canonical registration values. Do not create a second registration-application graph inside DiProviderActivationView."
+      ],
+      "nextActionPolicy": "when-touched",
+      "anchors": [
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/di/container-registration.ts",
+          "symbolName": "ContainerRegistrationOperation",
+          "summary": "Exact application occurrence with admission, reusable value, evidence authority, effective framework kind, container, and ordinal."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/configuration/configuration-evaluation-bindings.ts",
+          "symbolName": "ConfigurationEvaluationBindings",
+          "summary": "Generation-local exact evaluator and AST-node relations retained outside durable kernel records."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/di/world-construction.ts",
+          "symbolName": "registrationOperationsVisibleToContainer",
+          "summary": "Shared consulting-container-chain operation projection."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/di/registration-value-materializer.ts",
+          "symbolName": "DiRegistrationValueMaterializer",
+          "summary": "Candidate-local evaluator refinement and reusable registration-value materialization."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/kernel/vocabulary/claim-predicates.ts",
+          "symbolName": "KernelClaimPredicates",
+          "summary": "Durable AppliesRegistration, UsesRegistrationValue, and ProducesProduct topology."
+        },
+        {
+          "kind": "doc",
+          "path": "packages/semantic-runtime/src/di/README.md",
+          "summary": "Durable DI application identity and ownership doctrine."
+        }
+      ],
+      "liveChecks": [
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/di/container-registration.ts",
+          "symbolName": "ContainerRegistrationOperation"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/configuration/configuration-evaluation-bindings.ts",
+          "symbolName": "ConfigurationEvaluationBindings"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/di/world-construction.ts",
+          "symbolName": "registrationOperationsVisibleToContainer"
+        }
+      ],
+      "createdAt": "2026-07-25",
+      "updatedAt": "2026-08-24"
     }
   ]
 }

@@ -3,18 +3,40 @@ import type { KernelStore } from '../kernel/store.js';
 import { readTemplateExpressionParse } from '../template/expression-parse-product.js';
 import {
   type RuntimeBindingDataFlow,
+  type RuntimeBindingDataFlowValueConverterWritebackStage,
   type RuntimeBindingObservedDependency,
 } from '../observation/runtime-binding-observation.js';
+import { RuntimeOperationRealization } from '../runtime-expression/runtime-operation.js';
+import {
+  runtimeExpressionAccessUseRow,
+} from './runtime-expression-projections.js';
+import {
+  type ObservedDependencyOwnerProjectionInput,
+  observedDependencyOccurrenceRow,
+  observedDependencyOwnerRow,
+  observedDependencyRowKey,
+} from './observed-dependency-projections.js';
+import { RuntimeExpressionAccessOwnerKind } from '../runtime-expression/runtime-expression-access-use.js';
 import {
   runtimeBindingPrimitiveValueApiDisplay,
   runtimeBindingPrimitiveValueDomainKinds,
 } from '../observation/runtime-binding-primitive-value.js';
 import type { TemplateExpressionParse } from '../template/value-site.js';
+import type { TemplateVisibleResourceReference } from '../template/compiler-world-reference.js';
 import {
   describeAddress,
+  semanticSourceReferenceMatchesFilePath,
+  sourceReferenceForParserSpan,
+  type SemanticSourceReference,
 } from './source-reference.js';
+import { runtimeAssignmentTargetAstForExpression } from '../expression/runtime-assignment.js';
+import { bindingDataFlowDirectionIncludesTargetToSource } from '../observation/binding-data-flow-direction.js';
+import { completedTemplateExpressionAstForParse } from '../template/expression-parse-projection.js';
+import { ListenerBinding } from '../template/runtime-binding.js';
+import type { RuntimeExpressionResourceLifecycleEffects } from '../template/runtime-expression-resource.js';
 import type {
   SemanticBindingDataFlowRow,
+  SemanticBindingDataFlowValueConverterWritebackStageRow,
   SemanticBindingDataFlowIssueKind,
   SemanticBindingDataFlowIssueSummaryRow,
   SemanticBindingDataFlowSummaryResult,
@@ -31,8 +53,14 @@ import type {
   SemanticBindingValueChannelSummaryResult,
   SemanticBindingValueChannelSummaryRow,
   SemanticObservedMemberSourceState,
+  SemanticObservedDependencyLocus,
+  SemanticRuntimeExpressionAccessUseRow,
+  SemanticExpressionResourceLifecycleEffectsRow,
   SemanticTargetOperationRow,
+  SemanticTemplateResourceReferenceRow,
+  SemanticValueConverterApplicationRow,
 } from './contracts.js';
+import { SemanticObservedDependencyLocusKind } from './contracts.js';
 import {
   resourceLocalBindingBehaviorApplications,
   resourceLocalBindingDataFlows,
@@ -41,7 +69,13 @@ import {
   resourceLocalBindingTargetAccesses,
   resourceLocalBindingTargetOperations,
   resourceLocalBindingValueChannels,
-} from './runtime-resource-ownership.js';
+  resourceLocalRuntimeExpressionAccessUses,
+  resourceLocalRuntimeBindings,
+  resourceLocalValueConverterApplications,
+} from '../template/runtime-resource-ownership.js';
+import {
+  runtimeWatcherProjectionControllers,
+} from './controller-projections.js';
 
 const BINDING_SUMMARY_NAME_LIMIT = 12;
 const BINDING_SUMMARY_TYPE_LIMIT = 8;
@@ -61,7 +95,31 @@ export function readBindingTargetAccessRows(
         targetKind: access.targetKind,
         targetProperty: access.targetProperty,
         strategy: access.strategy,
-        eventNames: access.eventNames,
+        fallbackStrategy: access.fallbackStrategy,
+        observerCacheDisposition: access.observerCacheDisposition,
+        supportsCallback: access.supportsCallback,
+        supportsCoercer: access.supportsCoercer,
+        observerSource: describeAddress(store, access.observerSourceAddressHandle),
+        objectObservationAdapters: access.objectObservationAdapters.map((adapter) => ({
+          order: adapter.order,
+          adapterName: adapter.adapterName,
+          appTaskSlot: adapter.appTaskSlot,
+          source: describeAddress(store, adapter.sourceAddressHandle),
+          ...(handles ? { sourceAddressHandle: adapter.sourceAddressHandle } : {}),
+        })),
+        controllerObserverSetupOutcome: access.controllerObserverSetupOutcome,
+        bindReachability: access.bindReachability,
+        nodeObserverConfig: access.nodeObserverConfig == null
+          ? null
+          : {
+            observerKind: access.nodeObserverConfig.observerKind,
+            observerConstructorName: access.nodeObserverConfig.observerConstructorName,
+            eventNames: access.nodeObserverConfig.eventNames,
+            readonlyValue: access.nodeObserverConfig.readonlyValue,
+            defaultValue: access.nodeObserverConfig.defaultValue,
+            fieldStates: access.nodeObserverConfig.fieldStates,
+            openReason: access.nodeObserverConfig.openReason,
+          },
         targetType: access.targetType?.display ?? null,
         targetTypeSource: access.targetTypeSource,
         propertyType: access.propertyType?.display ?? null,
@@ -79,6 +137,9 @@ export function readBindingTargetAccessRows(
             targetAccessProductHandle: access.productHandle,
             targetTypeProductHandle: access.targetType?.productHandle ?? null,
             propertyTypeProductHandle: access.propertyType?.productHandle ?? null,
+            observerSourceProductHandle: access.observerSourceProductHandle,
+            observerSourceIdentityHandle: access.observerSourceIdentityHandle,
+            observerSourceAddressHandle: access.observerSourceAddressHandle,
             sourceAddressHandle: access.sourceAddressHandle,
           },
         } : {}),
@@ -96,32 +157,46 @@ export function readTargetOperationRows(
   handles: boolean,
 ): readonly SemanticTargetOperationRow[] {
   return bindingProjectionResources(emission)
-    .flatMap((resource): readonly SemanticTargetOperationRow[] =>
-      resourceLocalBindingTargetOperations(store, resource).map((operation) => ({
-        definitionName: resource.compilation.definition.name,
-        ownerKind: operation.ownerKind,
-        bindingKind: operation.binding?.bindingKind ?? null,
-        rendererKind: operation.renderer?.rendererKind ?? null,
-        targetKind: operation.targetKind,
-        targetAttribute: operation.targetAttribute,
-        targetProperty: operation.targetProperty,
-        staticValue: operation.value,
-        operationKind: operation.operationKind,
-        affectedNames: operation.affectedNames,
-        authority: operation.authority,
-        openReason: operation.openReason,
-        source: describeAddress(store, operation.sourceAddressHandle),
-        ...(handles ? {
-          handles: {
-            bindingProductHandle: operation.binding?.productHandle ?? null,
-            rendererProductHandle: operation.renderer?.productHandle ?? null,
-            instructionProductHandle: operation.instructionProductHandle,
-            targetOperationProductHandle: operation.productHandle,
-            sourceAddressHandle: operation.sourceAddressHandle,
-          },
-        } : {}),
-      }))
-    )
+    .flatMap((resource): readonly SemanticTargetOperationRow[] => {
+      const bindingByProductHandle = new Map(
+        resourceLocalRuntimeBindings(store, resource).map((binding) => [binding.productHandle, binding] as const),
+      );
+      return resourceLocalBindingTargetOperations(store, resource).map((operation) => {
+        const binding = operation.binding?.productHandle == null
+          ? null
+          : bindingByProductHandle.get(operation.binding.productHandle) ?? null;
+        const listener = binding instanceof ListenerBinding ? binding : null;
+        return {
+          definitionName: resource.compilation.definition.name,
+          ownerKind: operation.ownerKind,
+          bindingKind: operation.binding?.bindingKind ?? null,
+          rendererKind: operation.renderer?.rendererKind ?? null,
+          targetKind: operation.targetKind,
+          targetAttribute: operation.targetAttribute,
+          targetProperty: operation.targetProperty,
+          staticValue: operation.value,
+          operationKind: operation.operationKind,
+          affectedNames: operation.affectedNames,
+          reachability: operation.reachability,
+          listenerStrategy: listener?.strategy ?? null,
+          eventModifier: listener?.eventModifier ?? null,
+          eventModifierSource: describeAddress(store, listener?.eventModifierSourceAddressHandle ?? null),
+          authority: operation.authority,
+          openReason: operation.openReason,
+          source: describeAddress(store, operation.sourceAddressHandle),
+          ...(handles ? {
+            handles: {
+              bindingProductHandle: operation.binding?.productHandle ?? null,
+              rendererProductHandle: operation.renderer?.productHandle ?? null,
+              instructionProductHandle: operation.instructionProductHandle,
+              targetOperationProductHandle: operation.productHandle,
+              sourceAddressHandle: operation.sourceAddressHandle,
+              eventModifierSourceAddressHandle: listener?.eventModifierSourceAddressHandle ?? null,
+            },
+          } : {}),
+        };
+      });
+    })
     .sort((left, right) =>
       `${left.definitionName}:${left.ownerKind}:${left.targetAttribute}:${left.targetProperty}:${left.operationKind}`
         .localeCompare(`${right.definitionName}:${right.ownerKind}:${right.targetAttribute}:${right.targetProperty}:${right.operationKind}`)
@@ -142,6 +217,7 @@ export function readBindingSourceOperationRows(
         targetName: operation.targetName,
         targetType: operation.targetType?.display ?? null,
         operationKind: operation.operationKind,
+        reachability: operation.reachability,
         authority: operation.authority,
         openReason: operation.openReason,
         source: describeAddress(store, operation.sourceAddressHandle),
@@ -169,30 +245,154 @@ export function readBindingBehaviorApplicationRows(
 ): readonly SemanticBindingBehaviorApplicationRow[] {
   return bindingProjectionResources(emission)
     .flatMap((resource): readonly SemanticBindingBehaviorApplicationRow[] =>
-      resourceLocalBindingBehaviorApplications(store, resource).map((application) => ({
+      resourceLocalBindingBehaviorApplications(store, resource).map((application) => {
+        const source = describeAddress(store, application.sourceAddressHandle);
+        return {
         definitionName: resource.compilation.definition.name,
         bindingKind: application.binding.bindingKind,
         behaviorName: application.behaviorName,
+        resource: templateResourceReferenceRow(store, application.resource, handles),
         phase: application.phase,
+        origin: application.origin,
         argumentCount: application.argumentCount,
         staticArgumentValues: application.staticArgumentValues,
+        chainIndex: application.chainIndex,
+        authoredChainDepth: application.authoredChainDepth,
+        runtimeChainDepth: application.runtimeChainDepth,
+        bindReachability: application.bindReachability,
+        phaseReachability: application.phaseReachability,
+        bindOrder: application.bindOrder,
+        phaseOrder: application.phaseOrder,
+        lifecycleEffects: expressionResourceLifecycleEffectsRow(store, application.lifecycleEffects, handles),
+        argumentSources: expressionArgumentSources(source, application.argumentSpans),
         targetKind: application.targetAccess?.targetKind ?? null,
         targetProperty: application.targetAccess?.targetProperty ?? null,
-        source: describeAddress(store, application.sourceAddressHandle),
+        source,
         ...(handles ? {
           handles: {
             bindingProductHandle: application.binding.productHandle,
+            expressionProductHandle: application.expressionProductHandle,
             bindingBehaviorApplicationProductHandle: application.productHandle,
             targetAccessProductHandle: application.targetAccess?.productHandle ?? null,
             sourceAddressHandle: application.sourceAddressHandle,
           },
         } : {}),
-      }))
+        };
+      })
     )
     .sort((left, right) =>
-      `${left.definitionName}:${left.behaviorName}:${left.targetProperty ?? ''}:${left.bindingKind}`
-        .localeCompare(`${right.definitionName}:${right.behaviorName}:${right.targetProperty ?? ''}:${right.bindingKind}`)
+      `${left.definitionName}:${left.behaviorName}:${left.phase}:${left.targetProperty ?? ''}:${left.bindingKind}`
+        .localeCompare(`${right.definitionName}:${right.behaviorName}:${right.phase}:${right.targetProperty ?? ''}:${right.bindingKind}`)
     );
+}
+
+export function readValueConverterApplicationRows(
+  emission: AureliaAppWorldProjectEmission,
+  store: KernelStore,
+  handles: boolean,
+): readonly SemanticValueConverterApplicationRow[] {
+  return bindingProjectionResources(emission)
+    .flatMap((resource): readonly SemanticValueConverterApplicationRow[] =>
+      resourceLocalValueConverterApplications(store, resource).map((application) => {
+        const source = describeAddress(store, application.sourceAddressHandle);
+        return {
+        definitionName: resource.compilation.definition.name,
+        bindingKind: application.binding.bindingKind,
+        converterName: application.converterName,
+        resource: templateResourceReferenceRow(store, application.resource, handles),
+        phase: application.phase,
+        origin: application.origin,
+        argumentCount: application.argumentCount,
+        chainIndex: application.chainIndex,
+        authoredChainDepth: application.authoredChainDepth,
+        runtimeChainDepth: application.runtimeChainDepth,
+        bindReachability: application.bindReachability,
+        phaseReachability: application.phaseReachability,
+        bindOrder: application.bindOrder,
+        phaseOrder: application.phaseOrder,
+        lifecycleEffects: expressionResourceLifecycleEffectsRow(store, application.lifecycleEffects, handles),
+        argumentSources: expressionArgumentSources(source, application.argumentSpans),
+        source,
+        ...(handles ? {
+          handles: {
+            bindingProductHandle: application.binding.productHandle,
+            expressionProductHandle: application.expressionProductHandle,
+            valueConverterApplicationProductHandle: application.productHandle,
+            sourceAddressHandle: application.sourceAddressHandle,
+          },
+        } : {}),
+        };
+      })
+    )
+    .sort((left, right) =>
+      `${left.definitionName}:${left.converterName}:${left.phase}:${left.bindingKind}`
+        .localeCompare(`${right.definitionName}:${right.converterName}:${right.phase}:${right.bindingKind}`)
+    );
+}
+
+function expressionResourceLifecycleEffectsRow(
+  store: KernelStore,
+  effects: RuntimeExpressionResourceLifecycleEffects,
+  handles: boolean,
+): SemanticExpressionResourceLifecycleEffectsRow {
+  return {
+    effectKinds: effects.effectKinds,
+    signalState: effects.signalState,
+    signals: effects.signals.map((signal) => ({
+      name: signal.name,
+      source: describeAddress(store, signal.sourceAddressHandle),
+      ...(handles ? {
+        handles: {
+          sourceAddressHandle: signal.sourceAddressHandle,
+        },
+      } : {}),
+    })),
+    rateLimitDelayMilliseconds: effects.rateLimitDelayMilliseconds,
+    rateLimitDelayState: effects.rateLimitDelayState,
+    configurationSource: describeAddress(store, effects.configurationSourceAddressHandle),
+    openReason: effects.openReason,
+    openReasonKinds: effects.openReasonKinds,
+    ...(handles ? {
+      handles: {
+        configurationSourceAddressHandle: effects.configurationSourceAddressHandle,
+      },
+    } : {}),
+  };
+}
+
+function expressionArgumentSources(
+  source: SemanticSourceReference | null,
+  argumentSpans: readonly { readonly start: number; readonly end: number }[],
+): readonly (SemanticSourceReference | null)[] {
+  return argumentSpans.map((span) =>
+    source?.path == null
+      ? null
+      : sourceReferenceForParserSpan(source.path, span, 'argument')
+  );
+}
+
+function templateResourceReferenceRow(
+  store: KernelStore,
+  resource: TemplateVisibleResourceReference | null,
+  handles: boolean,
+): SemanticTemplateResourceReferenceRow | null {
+  if (resource == null) {
+    return null;
+  }
+  return {
+    resourceKind: resource.resourceKind,
+    name: resource.name,
+    visibilityKind: resource.visibilityKind,
+    source: describeAddress(store, resource.sourceAddressHandle),
+    ...(handles ? {
+      handles: {
+        resourceProductHandle: resource.resourceProductHandle,
+        resourceIdentityHandle: resource.resourceIdentityHandle,
+        definitionProductHandle: resource.definitionProductHandle,
+        sourceAddressHandle: resource.sourceAddressHandle,
+      },
+    } : {}),
+  };
 }
 
 export function readBindingValueChannelRows(
@@ -217,8 +417,19 @@ export function readBindingValueChannelRows(
         sourceOperationKind: valueChannel.sourceOperation?.operationKind ?? null,
         channelKind: valueChannel.channelKind,
         authority: valueChannel.authority,
+        targetMutationKind: valueChannel.targetMutationKind,
+        nullishDefault: valueChannel.nullishDefault,
+        nullishDefaultState: valueChannel.nullishDefaultState,
         rawTargetPropertyType: valueChannel.rawTargetPropertyType?.display ?? null,
         runtimeValueType: valueChannel.runtimeValueType?.display ?? null,
+        realization: valueChannel.realization,
+        bindReachability: valueChannel.bindReachability,
+        admittedSourceValueType: valueChannel.admittedSourceValueType?.display ?? null,
+        admittedSourceMemberKind: valueChannel.admittedSourceMemberKind,
+        admittedSourceMemberSource: describeAddress(
+          store,
+          valueChannel.admittedSourceMemberSourceAddressHandle,
+        ),
         valueDomain: valueChannel.valueDomain,
         primitiveValueDomain: valueChannel.primitiveValueDomain,
         primitiveValueDomainKinds: runtimeBindingPrimitiveValueDomainKinds(valueChannel.primitiveValueDomain),
@@ -238,6 +449,8 @@ export function readBindingValueChannelRows(
             sourceOperationProductHandle: valueChannel.sourceOperation?.productHandle ?? null,
             rawTargetPropertyTypeProductHandle: valueChannel.rawTargetPropertyType?.productHandle ?? null,
             runtimeValueTypeProductHandle: valueChannel.runtimeValueType?.productHandle ?? null,
+            admittedSourceValueTypeProductHandle: valueChannel.admittedSourceValueType?.productHandle ?? null,
+            admittedSourceMemberSourceAddressHandle: valueChannel.admittedSourceMemberSourceAddressHandle,
             sourceAddressHandle: valueChannel.sourceAddressHandle,
           },
         } : {}),
@@ -290,6 +503,40 @@ export function readBindingDataFlowRows(
     );
 }
 
+export function readRuntimeExpressionAccessUseRows(
+  emission: AureliaAppWorldProjectEmission,
+  store: KernelStore,
+  handles: boolean,
+): readonly SemanticRuntimeExpressionAccessUseRow[] {
+  const templateRows = bindingProjectionResources(emission)
+    .flatMap((resource): readonly SemanticRuntimeExpressionAccessUseRow[] =>
+      resourceLocalRuntimeExpressionAccessUses(store, resource).map((accessUse) =>
+        runtimeExpressionAccessUseRow(resource.compilation.definition.name, accessUse, store, handles)
+      )
+    );
+  const sourceRows = [
+    ...emission.runtimeEffects.readAccessUses(),
+    ...emission.computedObserverSources.readAccessUses(),
+  ].map((accessUse) => runtimeExpressionAccessUseRow(null, accessUse, store, handles));
+  const watcherRows = runtimeWatcherProjectionControllers(emission).flatMap(
+    ({ renderingDefinitionName, controller }) =>
+      controller.readWatchers().flatMap((watcher) =>
+        watcher.accessUses.map((accessUse) =>
+          runtimeExpressionAccessUseRow(renderingDefinitionName, accessUse, store, handles)
+        )
+      ),
+  );
+  return [...templateRows, ...watcherRows, ...sourceRows]
+    .sort((left, right) => {
+      const leftSource = left.source;
+      const rightSource = right.source;
+      return `${leftSource?.path ?? ''}:${leftSource?.start ?? -1}:${left.operationKind}:${left.operationIndex ?? -1}`
+        .localeCompare(
+          `${rightSource?.path ?? ''}:${rightSource?.start ?? -1}:${right.operationKind}:${right.operationIndex ?? -1}`,
+        );
+    });
+}
+
 export function readBindingDataFlowSummary(
   emission: AureliaAppWorldProjectEmission,
   store: KernelStore,
@@ -310,33 +557,96 @@ export function readBindingObservedDependencyRows(
   emission: AureliaAppWorldProjectEmission,
   store: KernelStore,
   handles: boolean,
+  locus?: SemanticObservedDependencyLocus | null,
 ): readonly SemanticBindingObservedDependencyRow[] {
-  return bindingProjectionResources(emission)
-    .flatMap((resource): readonly SemanticBindingObservedDependencyRow[] =>
-      resourceLocalBindingObservedDependencies(store, resource).map((dependency) =>
-        bindingObservedDependencyRow(resource.compilation.definition.name, dependency, store, handles)
-      )
-    )
-    .sort((left, right) =>
-      `${left.definitionName}:${left.sourceName ?? ''}:${left.dependencyKind}:${left.memberName ?? ''}`
-        .localeCompare(`${right.definitionName}:${right.sourceName ?? ''}:${right.dependencyKind}:${right.memberName ?? ''}`)
-    );
+  return filterBindingObservedDependencyFacts(
+    bindingObservedDependencyFacts(emission, store),
+    locus,
+  ).map((fact) => bindingObservedDependencyRow(fact, store, handles));
 }
 
 export function readBindingObservedDependencySummary(
   emission: AureliaAppWorldProjectEmission,
   store: KernelStore,
+  locus?: SemanticObservedDependencyLocus | null,
 ): SemanticBindingObservedDependencySummaryResult {
-  const rows = readBindingObservedDependencyRows(emission, store, false);
-  const summaryRows = summarizeBindingObservedDependencies(rows);
-  const memberSourceStateRows = summarizeBindingObservedDependencyMemberSourceStates(rows);
+  const facts = filterBindingObservedDependencyFacts(
+    bindingObservedDependencyFacts(emission, store),
+    locus,
+  );
+  const summaryRows = summarizeBindingObservedDependencies(facts);
+  const memberSourceStateRows = summarizeBindingObservedDependencyMemberSourceStates(facts);
   return {
-    displayText: bindingObservedDependencySummaryDisplayText(rows.length, summaryRows, memberSourceStateRows),
-    totalRows: rows.length,
+    displayText: bindingObservedDependencySummaryDisplayText(facts.length, summaryRows, memberSourceStateRows),
+    totalRows: facts.length,
     summaryRows: summaryRows.length,
     memberSourceStateRows,
     rows: summaryRows,
   };
+}
+
+interface BindingObservedDependencyProjectionFact {
+  readonly definitionName: string;
+  readonly dependency: RuntimeBindingObservedDependency;
+  readonly owner: ObservedDependencyOwnerProjectionInput;
+  readonly ownerKey: string;
+  readonly rowKey: string;
+  readonly source: SemanticSourceReference | null;
+}
+
+function bindingObservedDependencyFacts(
+  emission: AureliaAppWorldProjectEmission,
+  store: KernelStore,
+): readonly BindingObservedDependencyProjectionFact[] {
+  return bindingProjectionResources(emission)
+    .flatMap((resource): readonly BindingObservedDependencyProjectionFact[] =>
+      resourceLocalBindingObservedDependencies(store, resource).map((dependency) => {
+        const owner: ObservedDependencyOwnerProjectionInput = {
+          kind: RuntimeExpressionAccessOwnerKind.Binding,
+          productHandle: dependency.binding.productHandle,
+          identityHandle: dependency.binding.identityHandle,
+          sourceAddressHandle: dependency.binding.addressHandle,
+        };
+        const ownerRow = observedDependencyOwnerRow(store, owner, false);
+        return {
+          definitionName: resource.compilation.definition.name,
+          dependency,
+          owner,
+          ownerKey: ownerRow.ownerKey,
+          rowKey: observedDependencyRowKey(ownerRow, dependency.identityHandle),
+          source: describeAddress(store, dependency.occurrence.sourceAddressHandle),
+        };
+      })
+    )
+    .sort((left, right) => {
+      const leftOccurrence = left.dependency.occurrence;
+      const rightOccurrence = right.dependency.occurrence;
+      return `${left.definitionName}:${leftOccurrence.sourceName ?? ''}:${leftOccurrence.dependencyKind}:${leftOccurrence.memberName ?? ''}:${left.rowKey}`
+        .localeCompare(
+          `${right.definitionName}:${rightOccurrence.sourceName ?? ''}:${rightOccurrence.dependencyKind}:${rightOccurrence.memberName ?? ''}:${right.rowKey}`,
+        );
+    });
+}
+
+function filterBindingObservedDependencyFacts(
+  facts: readonly BindingObservedDependencyProjectionFact[],
+  locus: SemanticObservedDependencyLocus | null | undefined,
+): readonly BindingObservedDependencyProjectionFact[] {
+  if (locus == null || locus.kind === SemanticObservedDependencyLocusKind.Project) {
+    return facts;
+  }
+  switch (locus.kind) {
+    case SemanticObservedDependencyLocusKind.SourceFile:
+      return facts.filter((fact) =>
+        semanticSourceReferenceMatchesFilePath(fact.source, locus.sourceFile.filePath)
+      );
+    case SemanticObservedDependencyLocusKind.Owner:
+      return facts.filter((fact) => fact.ownerKey === locus.ownerKey);
+    case SemanticObservedDependencyLocusKind.Row:
+      return facts.filter((fact) => fact.rowKey === locus.rowKey);
+    case SemanticObservedDependencyLocusKind.Cluster:
+      return facts.filter((fact) => bindingObservedDependencyClusterKey(fact) === locus.clusterKey);
+  }
 }
 
 export function bindingProjectionResources(
@@ -357,6 +667,8 @@ function summarizeBindingValueChannels(
       row.channelKind,
       row.targetKind ?? '',
       row.targetProperty ?? '',
+      row.targetMutationKind,
+      row.realization,
       sortedValues(row.observerCouplings).join(','),
     ].join('|');
     let group = groups.get(key);
@@ -365,6 +677,8 @@ function summarizeBindingValueChannels(
         channelKind: row.channelKind,
         targetKind: row.targetKind,
         targetProperty: row.targetProperty,
+        targetMutationKind: row.targetMutationKind,
+        realization: row.realization,
         count: 0,
         bindingKinds: new Set(),
         authorities: new Set(),
@@ -398,7 +712,9 @@ function summarizeBindingValueChannels(
     if (row.usesCustomMatcher) {
       group.customMatcherCount += 1;
     }
-    if (row.openReason != null || row.openReasonKinds.length > 0) {
+    if (row.realization === RuntimeOperationRealization.Open
+      || row.openReason != null
+      || row.openReasonKinds.length > 0) {
       group.openCount += 1;
     }
     for (const reason of row.openReasonKinds) {
@@ -410,6 +726,8 @@ function summarizeBindingValueChannels(
       channelKind: group.channelKind,
       targetKind: group.targetKind,
       targetProperty: group.targetProperty,
+      targetMutationKind: group.targetMutationKind,
+      realization: group.realization,
       count: group.count,
       bindingKinds: sortedValues(group.bindingKinds),
       authorities: sortedValues(group.authorities),
@@ -425,8 +743,8 @@ function summarizeBindingValueChannels(
       openReasonKinds: sortedValues(group.openReasonKinds),
     }))
     .sort((left, right) =>
-      `${left.channelKind}:${left.targetKind ?? ''}:${left.targetProperty ?? ''}:${left.observerCouplings.join(',')}`
-        .localeCompare(`${right.channelKind}:${right.targetKind ?? ''}:${right.targetProperty ?? ''}:${right.observerCouplings.join(',')}`)
+      `${left.channelKind}:${left.targetKind ?? ''}:${left.targetProperty ?? ''}:${left.targetMutationKind}:${left.realization}:${left.observerCouplings.join(',')}`
+        .localeCompare(`${right.channelKind}:${right.targetKind ?? ''}:${right.targetProperty ?? ''}:${right.targetMutationKind}:${right.realization}:${right.observerCouplings.join(',')}`)
     );
 }
 
@@ -473,6 +791,8 @@ interface BindingValueChannelSummaryAccumulator {
   readonly channelKind: SemanticBindingValueChannelSummaryRow['channelKind'];
   readonly targetKind: SemanticBindingValueChannelSummaryRow['targetKind'];
   readonly targetProperty: string | null;
+  readonly targetMutationKind: SemanticBindingValueChannelSummaryRow['targetMutationKind'];
+  readonly realization: SemanticBindingValueChannelSummaryRow['realization'];
   count: number;
   readonly bindingKinds: Set<SemanticBindingValueChannelSummaryRow['bindingKinds'][number]>;
   readonly authorities: Set<SemanticBindingValueChannelSummaryRow['authorities'][number]>;
@@ -521,6 +841,10 @@ function bindingDataFlowSummaryGroups(
 function bindingDataFlowSummaryKey(row: SemanticBindingDataFlowRow): string {
   return [
     row.direction,
+    row.realization,
+    row.sourceEvaluationKind,
+    row.sourceEvaluationReachability,
+    row.targetMutationKind,
     row.targetKind ?? '',
     row.targetProperty ?? '',
     row.valueChannelKind ?? '',
@@ -533,6 +857,10 @@ function bindingDataFlowSummaryAccumulator(
 ): BindingDataFlowSummaryAccumulator {
   return {
     direction: row.direction,
+    realization: row.realization,
+    sourceEvaluationKind: row.sourceEvaluationKind,
+    sourceEvaluationReachability: row.sourceEvaluationReachability,
+    targetMutationKind: row.targetMutationKind,
     targetKind: row.targetKind,
     targetProperty: row.targetProperty,
     valueChannelKind: row.valueChannelKind,
@@ -613,6 +941,10 @@ function bindingDataFlowSummaryRow(
 ): SemanticBindingDataFlowSummaryRow {
   return {
     direction: group.direction,
+    realization: group.realization,
+    sourceEvaluationKind: group.sourceEvaluationKind,
+    sourceEvaluationReachability: group.sourceEvaluationReachability,
+    targetMutationKind: group.targetMutationKind,
     targetKind: group.targetKind,
     targetProperty: group.targetProperty,
     valueChannelKind: group.valueChannelKind,
@@ -645,7 +977,7 @@ function bindingDataFlowSummaryRow(
 }
 
 function bindingDataFlowSummarySortKey(row: SemanticBindingDataFlowSummaryRow): string {
-  return `${row.direction}:${row.valueChannelKind ?? ''}:${row.targetKind ?? ''}:${row.targetProperty ?? ''}:${row.sourceKind}`;
+  return `${row.direction}:${row.realization}:${row.sourceEvaluationKind}:${row.sourceEvaluationReachability}:${row.targetMutationKind}:${row.valueChannelKind ?? ''}:${row.targetKind ?? ''}:${row.targetProperty ?? ''}:${row.sourceKind}`;
 }
 
 function summarizeBindingDataFlowIssues(
@@ -791,6 +1123,10 @@ function bindingDataFlowIssueKinds(
 
 interface BindingDataFlowSummaryAccumulator {
   readonly direction: SemanticBindingDataFlowSummaryRow['direction'];
+  readonly realization: SemanticBindingDataFlowSummaryRow['realization'];
+  readonly sourceEvaluationKind: SemanticBindingDataFlowSummaryRow['sourceEvaluationKind'];
+  readonly sourceEvaluationReachability: SemanticBindingDataFlowSummaryRow['sourceEvaluationReachability'];
+  readonly targetMutationKind: SemanticBindingDataFlowSummaryRow['targetMutationKind'];
   readonly targetKind: SemanticBindingDataFlowSummaryRow['targetKind'];
   readonly targetProperty: string | null;
   readonly valueChannelKind: SemanticBindingDataFlowSummaryRow['valueChannelKind'];
@@ -841,25 +1177,22 @@ function isEmptyArrayInferenceTypeDisplay(display: string | null): boolean {
 }
 
 function summarizeBindingObservedDependencies(
-  rows: readonly SemanticBindingObservedDependencyRow[],
+  facts: readonly BindingObservedDependencyProjectionFact[],
 ): readonly SemanticBindingObservedDependencySummaryRow[] {
   const groups = new Map<string, BindingObservedDependencySummaryAccumulator>();
-  for (const row of rows) {
-    const key = [
-      row.dependencyKind,
-      row.bindingKind,
-      row.observedMemberSourceState,
-      row.observedMemberKind ?? '',
-      row.sourceRootName ?? '',
-    ].join('|');
+  for (const fact of facts) {
+    const occurrence = fact.dependency.occurrence;
+    const key = bindingObservedDependencyClusterKey(fact);
     let group = groups.get(key);
     if (group == null) {
       group = {
-        dependencyKind: row.dependencyKind,
-        bindingKind: row.bindingKind,
-        observedMemberSourceState: row.observedMemberSourceState,
-        observedMemberKind: row.observedMemberKind,
-        sourceRootName: row.sourceRootName,
+        clusterKey: key,
+        dependencyKind: occurrence.dependencyKind,
+        bindingKind: fact.dependency.binding.bindingKind,
+        realization: fact.dependency.realization,
+        observedMemberSourceState: occurrence.observedMemberSourceState,
+        observedMemberKind: occurrence.observedMemberKind,
+        sourceRootName: occurrence.sourceRootName,
         count: 0,
         expressionKinds: new Set(),
         sourceRootNames: new Set(),
@@ -873,29 +1206,31 @@ function summarizeBindingObservedDependencies(
       groups.set(key, group);
     }
     group.count += 1;
-    group.expressionKinds.add(row.expressionKind);
-    addNameParts(group.sourceRootNames, row.sourceRootName);
-    if (row.sourceName != null) {
-      group.sourceNames.add(row.sourceName);
+    group.expressionKinds.add(occurrence.expressionKind);
+    addNameParts(group.sourceRootNames, occurrence.sourceRootName);
+    if (occurrence.sourceName != null) {
+      group.sourceNames.add(occurrence.sourceName);
     }
-    if (row.memberName != null) {
-      group.memberNames.add(row.memberName);
+    if (occurrence.memberName != null) {
+      group.memberNames.add(occurrence.memberName);
     }
-    if (row.methodName != null) {
-      group.methodNames.add(row.methodName);
+    if (occurrence.methodName != null) {
+      group.methodNames.add(occurrence.methodName);
     }
-    if (row.keyExpression != null) {
-      group.keyExpressions.add(row.keyExpression);
+    if (occurrence.keyExpression != null) {
+      group.keyExpressions.add(occurrence.keyExpression);
     }
-    group.definitionNames.add(row.definitionName);
-    if (row.observedMemberSourceState === 'source') {
+    group.definitionNames.add(fact.definitionName);
+    if (occurrence.observedMemberSourceState === 'source') {
       group.sourceBackedCount += 1;
     }
   }
   return [...groups.values()]
     .map((group): SemanticBindingObservedDependencySummaryRow => ({
+      clusterKey: group.clusterKey,
       dependencyKind: group.dependencyKind,
       bindingKind: group.bindingKind,
+      realization: group.realization,
       observedMemberSourceState: group.observedMemberSourceState,
       observedMemberKind: group.observedMemberKind,
       sourceRootName: group.sourceRootName,
@@ -917,20 +1252,35 @@ function summarizeBindingObservedDependencies(
     }))
     .sort((left, right) =>
       right.count - left.count
-      || `${left.dependencyKind}:${left.bindingKind}:${left.observedMemberSourceState}:${left.observedMemberKind ?? ''}:${left.sourceRootName ?? ''}`
-        .localeCompare(`${right.dependencyKind}:${right.bindingKind}:${right.observedMemberSourceState}:${right.observedMemberKind ?? ''}:${right.sourceRootName ?? ''}`)
+      || `${left.dependencyKind}:${left.bindingKind}:${left.realization}:${left.observedMemberSourceState}:${left.observedMemberKind ?? ''}:${left.sourceRootName ?? ''}`
+        .localeCompare(`${right.dependencyKind}:${right.bindingKind}:${right.realization}:${right.observedMemberSourceState}:${right.observedMemberKind ?? ''}:${right.sourceRootName ?? ''}`)
     );
 }
 
+function bindingObservedDependencyClusterKey(
+  fact: BindingObservedDependencyProjectionFact,
+): string {
+  const occurrence = fact.dependency.occurrence;
+  return [
+    occurrence.dependencyKind,
+    fact.dependency.binding.bindingKind,
+    fact.dependency.realization,
+    occurrence.observedMemberSourceState,
+    occurrence.observedMemberKind ?? '',
+    occurrence.sourceRootName ?? '',
+  ].join('|');
+}
+
 function summarizeBindingObservedDependencyMemberSourceStates(
-  rows: readonly SemanticBindingObservedDependencyRow[],
+  facts: readonly BindingObservedDependencyProjectionFact[],
 ): readonly SemanticBindingObservedDependencyMemberSourceStateSummaryRow[] {
   const groups = new Map<SemanticObservedMemberSourceState, BindingObservedDependencyMemberSourceStateSummaryAccumulator>();
-  for (const row of rows) {
-    let group = groups.get(row.observedMemberSourceState);
+  for (const fact of facts) {
+    const occurrence = fact.dependency.occurrence;
+    let group = groups.get(occurrence.observedMemberSourceState);
     if (group == null) {
       group = {
-        observedMemberSourceState: row.observedMemberSourceState,
+        observedMemberSourceState: occurrence.observedMemberSourceState,
         count: 0,
         dependencyKinds: new Set(),
         bindingKinds: new Set(),
@@ -939,15 +1289,15 @@ function summarizeBindingObservedDependencyMemberSourceStates(
         definitionNames: new Set(),
         sourceBackedCount: 0,
       };
-      groups.set(row.observedMemberSourceState, group);
+      groups.set(occurrence.observedMemberSourceState, group);
     }
     group.count += 1;
-    group.dependencyKinds.add(row.dependencyKind);
-    group.bindingKinds.add(row.bindingKind);
-    group.observedMemberKinds.add(row.observedMemberKind);
-    addNameParts(group.sourceRootNames, row.sourceRootName);
-    group.definitionNames.add(row.definitionName);
-    if (row.observedMemberSourceState === 'source') {
+    group.dependencyKinds.add(occurrence.dependencyKind);
+    group.bindingKinds.add(fact.dependency.binding.bindingKind);
+    group.observedMemberKinds.add(occurrence.observedMemberKind);
+    addNameParts(group.sourceRootNames, occurrence.sourceRootName);
+    group.definitionNames.add(fact.definitionName);
+    if (occurrence.observedMemberSourceState === 'source') {
       group.sourceBackedCount += 1;
     }
   }
@@ -971,8 +1321,10 @@ function summarizeBindingObservedDependencyMemberSourceStates(
 }
 
 interface BindingObservedDependencySummaryAccumulator {
+  readonly clusterKey: string;
   readonly dependencyKind: SemanticBindingObservedDependencySummaryRow['dependencyKind'];
   readonly bindingKind: SemanticBindingObservedDependencySummaryRow['bindingKind'];
+  readonly realization: SemanticBindingObservedDependencySummaryRow['realization'];
   readonly observedMemberSourceState: SemanticObservedMemberSourceState;
   readonly observedMemberKind: SemanticBindingObservedDependencySummaryRow['observedMemberKind'];
   readonly sourceRootName: string | null;
@@ -1067,6 +1419,7 @@ function bindingObservedDependencySummaryDisplayText(
 function bindingValueChannelClusterLabel(row: SemanticBindingValueChannelSummaryRow): string {
   return [
     row.channelKind,
+    row.realization,
     bindingTargetLabel(row.targetKind, row.targetProperty),
     row.observerCouplings.length === 0 ? 'uncoupled' : row.observerCouplings.join('+'),
   ].join('/');
@@ -1075,6 +1428,8 @@ function bindingValueChannelClusterLabel(row: SemanticBindingValueChannelSummary
 function bindingDataFlowClusterLabel(row: SemanticBindingDataFlowSummaryRow): string {
   return [
     row.direction,
+    row.realization,
+    `${row.sourceEvaluationKind}:${row.sourceEvaluationReachability}`,
     row.sourceKind,
     row.valueChannelKind ?? 'no-value-channel',
     bindingTargetLabel(row.targetKind, row.targetProperty),
@@ -1085,6 +1440,7 @@ function bindingObservedDependencyClusterLabel(row: SemanticBindingObservedDepen
   return [
     row.dependencyKind,
     row.bindingKind,
+    row.realization,
     row.observedMemberSourceState,
     row.observedMemberKind ?? 'unknown-member-kind',
     row.sourceRootName ?? 'unknown-root',
@@ -1160,7 +1516,8 @@ function incrementNullableBooleanCounts(
   }
 }
 
-function bindingDataFlowRow(
+/** Project one runtime binding data-flow lane without reconstructing checker or runtime facts in consumers. */
+export function bindingDataFlowRow(
   definitionName: string,
   dataFlow: RuntimeBindingDataFlow,
   store: KernelStore,
@@ -1171,7 +1528,12 @@ function bindingDataFlowRow(
     definitionName,
     bindingKind: dataFlow.binding.bindingKind,
     direction: dataFlow.direction,
+    realization: dataFlow.realization,
+    sourceEvaluationKind: dataFlow.sourceEvaluationKind,
+    sourceEvaluationReachability: dataFlow.sourceEvaluationReachability,
+    targetMutationKind: dataFlow.targetMutationKind,
     strictBinding: dataFlow.strictBinding,
+    accessUseCount: dataFlow.accessUseProductHandles.length,
     expressionParseState: parse?.state ?? null,
     expressionParseResultKind: parse?.resultKind ?? null,
     valueSiteKind: parse?.site.siteKind ?? null,
@@ -1182,6 +1544,7 @@ function bindingDataFlowRow(
     sourceTypeOpenReason: dataFlow.sourceTypeOpenReason,
     sourceTypeOpenKind: dataFlow.sourceTypeOpenKind,
     sourceAssignmentTargetType: dataFlow.sourceAssignmentTargetType?.display ?? null,
+    sourceAssignmentOccurrenceSource: sourceAssignmentOccurrenceSource(store, dataFlow, parse),
     sourceAssignmentTargetSource: describeAddress(store, dataFlow.sourceAssignmentTargetSourceAddressHandle),
     targetKind: dataFlow.targetAccess?.targetKind
       ?? dataFlow.targetOperation?.targetKind
@@ -1195,6 +1558,12 @@ function bindingDataFlowRow(
     sourceOperationKind: dataFlow.sourceOperation?.operationKind ?? null,
     targetPropertyType: dataFlow.targetPropertyType?.display ?? null,
     targetValueType: dataFlow.targetValueType?.display ?? null,
+    targetToSourceValueType: dataFlow.targetToSourceValueType?.display ?? null,
+    targetToSourceValueTypeOpenReason: dataFlow.targetToSourceValueTypeOpenReason,
+    targetToSourceValueTypeOpenKind: dataFlow.targetToSourceValueTypeOpenKind,
+    valueConverterWritebackStages: dataFlow.valueConverterWritebackStages.map((stage) =>
+      bindingDataFlowValueConverterWritebackStageRow(store, stage, handles)
+    ),
     valueChannelKind: dataFlow.valueChannel?.channelKind ?? null,
     sourceWritable: dataFlow.sourceWritable,
     sourceAssignmentKind: dataFlow.sourceAssignmentKind,
@@ -1206,11 +1575,13 @@ function bindingDataFlowRow(
     targetToSourceTypeMismatchKinds: dataFlow.targetToSourceTypeMismatchKinds,
     frameworkErrorCode: dataFlow.frameworkErrorCode,
     openReason: dataFlow.openReason,
+    expressionSource: describeAddress(store, parse?.sourceAddressHandle ?? null),
     source: describeAddress(store, dataFlow.sourceAddressHandle),
     ...(handles ? {
       handles: {
         bindingProductHandle: dataFlow.binding.productHandle,
         dataFlowProductHandle: dataFlow.productHandle,
+        accessUseProductHandles: dataFlow.accessUseProductHandles,
         targetAccessProductHandle: dataFlow.targetAccess?.productHandle ?? null,
         targetOperationProductHandle: dataFlow.targetOperation?.productHandle ?? null,
         sourceOperationProductHandle: dataFlow.sourceOperation?.productHandle ?? null,
@@ -1222,43 +1593,89 @@ function bindingDataFlowRow(
         sourceAssignmentTargetSourceAddressHandle: dataFlow.sourceAssignmentTargetSourceAddressHandle,
         targetPropertyTypeProductHandle: dataFlow.targetPropertyType?.productHandle ?? null,
         targetValueTypeProductHandle: dataFlow.targetValueType?.productHandle ?? null,
+        targetToSourceValueTypeProductHandle: dataFlow.targetToSourceValueType?.productHandle ?? null,
         sourceAddressHandle: dataFlow.sourceAddressHandle,
       },
     } : {}),
   };
 }
 
+function bindingDataFlowValueConverterWritebackStageRow(
+  store: KernelStore,
+  stage: RuntimeBindingDataFlowValueConverterWritebackStage,
+  handles: boolean,
+): SemanticBindingDataFlowValueConverterWritebackStageRow {
+  return {
+    converterName: stage.converterName,
+    stageIndex: stage.stageIndex,
+    origin: stage.origin,
+    runtimeChainDepth: stage.runtimeChainDepth,
+    phaseOrder: stage.phaseOrder,
+    phaseReachability: stage.phaseReachability,
+    projectionState: stage.projectionState,
+    inputType: stage.inputType?.display ?? null,
+    inputTypeSource: describeAddress(store, stage.inputType?.sourceAddressHandle ?? null),
+    outputType: stage.outputType?.display ?? null,
+    outputTypeSource: describeAddress(store, stage.outputType?.sourceAddressHandle ?? null),
+    openReason: stage.openReason,
+    openKind: stage.openKind,
+    source: describeAddress(store, stage.sourceAddressHandle),
+    ...(handles ? {
+      handles: {
+        valueConverterApplicationProductHandle: stage.application.productHandle,
+        inputTypeProductHandle: stage.inputType?.productHandle ?? null,
+        outputTypeProductHandle: stage.outputType?.productHandle ?? null,
+        sourceAddressHandle: stage.sourceAddressHandle,
+      },
+    } : {}),
+  };
+}
+
+function sourceAssignmentOccurrenceSource(
+  store: KernelStore,
+  dataFlow: RuntimeBindingDataFlow,
+  parse: TemplateExpressionParse | null,
+): SemanticSourceReference | null {
+  if (parse == null || !bindingDataFlowDirectionIncludesTargetToSource(dataFlow.direction)) {
+    return null;
+  }
+  const expression = completedTemplateExpressionAstForParse(parse);
+  if (expression == null) {
+    return null;
+  }
+  const target = runtimeAssignmentTargetAstForExpression(expression);
+  if (target.$kind !== 'AccessScope' && target.$kind !== 'AccessMember') {
+    return null;
+  }
+  const expressionSource = describeAddress(store, parse.sourceAddressHandle);
+  return expressionSource?.path == null
+    ? null
+    : sourceReferenceForParserSpan(expressionSource.path, target.name.span, 'name');
+}
+
 function bindingObservedDependencyRow(
-  definitionName: string,
-  dependency: RuntimeBindingObservedDependency,
+  fact: BindingObservedDependencyProjectionFact,
   store: KernelStore,
   handles: boolean,
 ): SemanticBindingObservedDependencyRow {
+  const dependency = fact.dependency;
+  const owner = observedDependencyOwnerRow(store, fact.owner, handles);
+  const occurrence = observedDependencyOccurrenceRow(store, dependency.occurrence, handles);
   return {
-    definitionName,
+    definitionName: fact.definitionName,
     bindingKind: dependency.binding.bindingKind,
-    dependencyKind: dependency.dependencyKind,
-    expressionKind: dependency.expressionKind,
-    sourceName: dependency.sourceName,
-    sourceRootName: dependency.sourceRootName,
-    memberName: dependency.memberName,
-    keyExpression: dependency.keyExpression,
-    methodName: dependency.methodName,
-    observedMemberKind: dependency.observedMemberKind,
-    observedMemberSource: describeAddress(store, dependency.observedMemberSourceAddressHandle),
-    observedMemberSourceState: dependency.observedMemberSourceState,
-    spanStart: dependency.spanStart,
-    spanEnd: dependency.spanEnd,
-    source: describeAddress(store, dependency.sourceAddressHandle),
+    realization: dependency.realization,
+    rowKey: fact.rowKey,
+    owner,
+    occurrence,
     ...(handles ? {
       handles: {
         bindingProductHandle: dependency.binding.productHandle,
         dataFlowProductHandle: dependency.dataFlowProductHandle,
         observedDependencyProductHandle: dependency.productHandle,
+        observedDependencyIdentityHandle: dependency.identityHandle,
         expressionProductHandle: dependency.expressionProductHandle,
         bindingScopeProductHandle: dependency.bindingScope?.productHandle ?? null,
-        observedMemberSourceAddressHandle: dependency.observedMemberSourceAddressHandle,
-        sourceAddressHandle: dependency.sourceAddressHandle,
       },
     } : {}),
   };

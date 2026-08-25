@@ -25,7 +25,7 @@ import type {
   SemanticTargetOperationRow,
   SemanticTemplateDiagnosticRow,
 } from '../api/contracts.js';
-import { SemanticAppQueryKind, SemanticRuntimeAnswerOutcome } from '../api/contracts.js';
+import { SemanticAppQueryKind, SemanticRuntimeAnswerResult } from '../api/contracts.js';
 import type { SemanticApplicationTopologyResult } from '../api/app-topology.js';
 import { semanticRouteEffectQueryKinds } from '../api/route-effect-facts.js';
 import type {
@@ -229,7 +229,7 @@ function readAnswerValue<TValue>(
   app: FixtureVerificationAppSnapshotSource,
   kind: SemanticAppQueryKind,
 ): TValue {
-  const answer = app.ask({ kind });
+  const answer = app.ask({ kind, inquiryProfile: 'fixture' });
   assertVerificationSnapshotAnswerSupported(answer, kind);
   return answer.value as TValue;
 }
@@ -244,6 +244,7 @@ function readPagedRows<TRow>(
   do {
     const answer = app.ask({
       kind,
+      inquiryProfile: 'fixture',
       page: { size: pageSize, cursor },
     });
     assertVerificationSnapshotAnswerSupported(answer, kind);
@@ -284,7 +285,7 @@ function assertVerificationSnapshotAnswerSupported(
   answer: SemanticRuntimeAnswer<unknown>,
   kind: SemanticAppQueryKind,
 ): void {
-  if (answer.outcome === SemanticRuntimeAnswerOutcome.Unsupported) {
+  if (answer.result === SemanticRuntimeAnswerResult.Unsupported) {
     throw new Error(`Cannot build fixture verification snapshot: ${kind} is unsupported for the opened app. ${answer.summary}`);
   }
 }

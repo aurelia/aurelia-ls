@@ -32,6 +32,11 @@ import type {
 } from '../kernel/handles.js';
 import { issuePublicationWithRecords } from '../kernel/issue-publication.js';
 import { localKeyPart } from '../kernel/local-key.js';
+import {
+  KernelPublicationPlan,
+  publishProductDetails,
+  type KernelPublicationContext,
+} from '../kernel/publication.js';
 import { sourceSpanAddressForSite, type SourceSpanSite } from '../kernel/source-address.js';
 import {
   KernelStore,
@@ -142,6 +147,7 @@ export class FetchClientSourceIssueMaterializer {
 
   constructor(
     readonly store: KernelStore,
+    readonly publication: KernelPublicationContext,
   ) {
     this.publisher = new FetchClientIssuePublisher(store);
   }
@@ -155,12 +161,13 @@ export class FetchClientSourceIssueMaterializer {
     const publications = distinctFetchClientIssueSites(sites)
       .map((site, index) => this.publicationForSite(project, site, index));
     const records = publications.flatMap((publication) => publication.records);
-    if (records.length > 0) {
-      this.store.commit(new KernelStoreBatch(records, `fetch-client-source-issues:${project.projectKey}`));
-    }
-    for (const publication of publications) {
-      this.store.productDetails.add(FetchClientProductDetails.Issue, publication.issue.productHandle, publication.issue);
-    }
+    this.publication.publish(new KernelPublicationPlan(
+      new KernelStoreBatch(records, `fetch-client-source-issues:${project.projectKey}`),
+      publishProductDetails(
+        FetchClientProductDetails.Issue,
+        publications.map((publication) => publication.issue),
+      ),
+    ));
     return new FetchClientSourceIssueProjectResult(
       publications.map((publication) => publication.issue),
       records,
@@ -195,7 +202,7 @@ function readFetchClientIssueSourceSites(
 ): readonly FetchClientIssueSourceSite[] {
   const sourcePathByFileName = typeSystemSourcePathIndex(project, typeSystem);
   return project.sourceFiles.flatMap((source) => {
-    const sourceFile = typeSystem.readProgramSourceFileByPath(source.path);
+    const sourceFile = typeSystem.readProgramSourceFileByProjectPath(source.path);
     if (sourceFile == null) {
       return [];
     }

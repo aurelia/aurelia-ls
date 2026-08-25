@@ -4,14 +4,16 @@ import type {
   AccessScopeExpression,
 } from '../expression/ast.js';
 import {
+  BindingContextSlotAssignmentAccessKind,
   BindingScope,
   BindingScopeCreatorKind,
   BindingScopeLookupKind,
   type BindingContextSlot,
 } from '../configuration/scope.js';
-import type { AddressHandle } from '../kernel/handles.js';
+import type { AddressHandle, ProductHandle } from '../kernel/handles.js';
 import { localKeyPart } from '../kernel/local-key.js';
 import type { KernelStore } from '../kernel/store.js';
+import type { KernelPublicationContext } from '../kernel/publication.js';
 import {
   checkerTypeShapeIsDefinitelyNullish,
 } from '../type-system/checker-related-types.js';
@@ -43,6 +45,8 @@ export const enum SourceWriteCapabilityKind {
   TypeScriptStrictness = 'typescript-strictness',
   /** Aurelia `astAssign` itself rejects this source shape. */
   RuntimeUnassignable = 'runtime-unassignable',
+  /** The slot is mutable framework state but is not an author-owned binding assignment target. */
+  FrameworkManagedReadOnly = 'framework-managed-read-only',
   /** The product cannot prove the source write policy yet. */
   Open = 'open',
 }
@@ -69,6 +73,7 @@ export interface BindingDataFlowSourceWriteCapabilityTypeAccess {
 export class BindingDataFlowSourceWriteCapabilityProjector {
   constructor(
     private readonly store: KernelStore,
+    private readonly publication: KernelPublicationContext,
     private readonly typeAccess: BindingDataFlowSourceWriteCapabilityTypeAccess,
   ) {}
 
@@ -76,6 +81,12 @@ export class BindingDataFlowSourceWriteCapabilityProjector {
     expression: AccessScopeExpression,
     scope: BindingScope,
   ): SourceWriteCapability {
+    if (expression.optional) {
+      return sourceWriteCapabilityRuntimeUnassignable(
+        'Aurelia binding expressions do not assign through an optional scope path.',
+        RuntimeBindingDataFlowSourceAssignmentReasonKind.RuntimeExpressionUnassignable,
+      );
+    }
     if (isHostAccessScope(expression)) {
       return sourceWriteCapabilityRuntimeUnassignable(
         "Aurelia astAssign rejects assignment to the reserved '$host' access scope.",
@@ -87,13 +98,6 @@ export class BindingDataFlowSourceWriteCapabilityProjector {
       return sourceWriteCapabilityOpen(
         'Scope lookup could not resolve the requested ancestor for runtime assignment.',
         RuntimeBindingDataFlowSourceAssignmentReasonKind.ScopeLookupMissingAncestor,
-      );
-    }
-    const runtimeAssignmentSlot = runtimeAssignmentScopeSlotForLookup(lookup.scope, lookup.slot);
-    if (runtimeAssignmentSlot != null) {
-      return sourceWriteCapabilityWritable(
-        runtimeAssignmentSlot.targetType,
-        runtimeAssignmentSlot.sourceAddressHandle,
       );
     }
     if (lookup.slot == null) {
@@ -200,21 +204,34 @@ export class BindingDataFlowSourceWriteCapabilityProjector {
   }
 
   private forSlot(slot: BindingContextSlot): SourceWriteCapability {
-    if (slot.targetProductHandle == null) {
+    if (slot.assignmentAccessKind === BindingContextSlotAssignmentAccessKind.Writable) {
+      return sourceWriteCapabilityWritable(slot.targetType, slot.sourceAddressHandle);
+    }
+    if (slot.assignmentAccessKind === BindingContextSlotAssignmentAccessKind.FrameworkManagedReadOnly) {
+      return sourceWriteCapabilityFrameworkManagedReadOnly(
+        `Runtime scope slot '${slot.name}' is managed by Aurelia and is not an author-owned assignment target.`,
+        RuntimeBindingDataFlowSourceAssignmentReasonKind.ScopeSlotFrameworkManaged,
+        slot.targetType,
+        slot.sourceAddressHandle,
+      );
+    }
+    if (slot.targetTypeMemberHandle == null) {
       return sourceWriteCapabilityTypeScriptStrictness(
         'Scope slot is runtime-only and does not carry a TypeChecker member product; Aurelia astAssign can still write to the runtime context.',
         null,
         RuntimeBindingDataFlowSourceAssignmentReasonKind.ScopeSlotRuntimeOnly,
+        slot.targetType,
+        slot.sourceAddressHandle,
       );
     }
-    const member = this.store.hotDetails.read(TypeSystemHotDetails.TypeMember, slot.targetProductHandle);
+    const member = this.publication.readHotDetail(TypeSystemHotDetails.TypeMember, slot.targetTypeMemberHandle);
     return member == null
       ? sourceWriteCapabilityOpen(
         'Scope slot member product was not available for runtime assignment policy.',
         RuntimeBindingDataFlowSourceAssignmentReasonKind.ScopeSlotTypeCheckerMemberUnavailable,
       )
       : sourceWriteCapabilityForMemberAccess(
-        checkerTypeMemberWriteAccess(member, this.store),
+        checkerTypeMemberWriteAccess(member, this.publication),
         member.ownerType.display,
         member.ownerType,
         member.ownerType.sourceAddressHandle,
@@ -222,31 +239,29 @@ export class BindingDataFlowSourceWriteCapabilityProjector {
   }
 }
 
-export function runtimeAssignmentScopeSlotForAccessScope(
+export function runtimeAssignmentInputScopeForAccessScope(
   expression: AccessScopeExpression,
+  assignmentInstructionProductHandle: ProductHandle,
   scope: BindingScope,
-): BindingContextSlot | null {
-  if (expression.ancestor !== 0 || isHostAccessScope(expression)) {
-    return null;
+): BindingScope {
+  if (isHostAccessScope(expression)) {
+    return scope;
   }
-  const lookup = scope.locate(expression.name.name, expression.ancestor);
-  return runtimeAssignmentScopeSlotForLookup(lookup.scope, lookup.slot);
-}
-
-function runtimeAssignmentScopeSlotForLookup(
-  scope: BindingScope | null,
-  slot: BindingContextSlot | null,
-): BindingContextSlot | null {
-  return slot != null && isRuntimeAssignmentScopeSlot(scope, slot)
-    ? slot
-    : null;
-}
-
-function isRuntimeAssignmentScopeSlot(scope: BindingScope | null, slot: BindingContextSlot): boolean {
-  return scope?.scopeCreators.some((creator) =>
-    creator.creatorKind === BindingScopeCreatorKind.RuntimeAssignment
-    && creator.introducedSlotNames.includes(slot.name)
-  ) === true;
+  let current: BindingScope | null = scope;
+  while (current != null) {
+    const ownsAssignment = current.scopeCreators.some((candidate) =>
+      candidate.creatorKind === BindingScopeCreatorKind.RuntimeAssignment
+      && candidate.productHandle === assignmentInstructionProductHandle
+    );
+    if (ownsAssignment) {
+      const predecessor = current.predecessor;
+      return predecessor?.locate(expression.name.name, expression.ancestor).slot == null
+        ? scope
+        : predecessor;
+    }
+    current = current.predecessor;
+  }
+  return scope;
 }
 
 function isHostAccessScope(expression: AccessScopeExpression): boolean {
@@ -293,6 +308,22 @@ export function sourceWriteCapabilityRuntimeUnassignable(
   return {
     capabilityKind: SourceWriteCapabilityKind.RuntimeUnassignable,
     checkerWritable: false,
+    reason,
+    reasonKind,
+    assignmentTargetType,
+    assignmentTargetSourceAddressHandle,
+  };
+}
+
+function sourceWriteCapabilityFrameworkManagedReadOnly(
+  reason: string,
+  reasonKind: RuntimeBindingDataFlowSourceAssignmentReasonKind,
+  assignmentTargetType: CheckerTypeReference | null = null,
+  assignmentTargetSourceAddressHandle: AddressHandle | null = null,
+): SourceWriteCapability {
+  return {
+    capabilityKind: SourceWriteCapabilityKind.FrameworkManagedReadOnly,
+    checkerWritable: null,
     reason,
     reasonKind,
     assignmentTargetType,

@@ -9,14 +9,19 @@ import type {
   IdentityHandle,
 } from '../kernel/handles.js';
 import {
+  KernelPublicationPlan,
   KernelStoreBatch,
-  type KernelStore,
-  type KernelStoreRecord,
+  type KernelPublicationContext,
+} from '../kernel/publication.js';
+import type {
+  KernelStoreReadView,
+  KernelStoreRecord,
 } from '../kernel/store.js';
 import { KernelVocabulary } from '../kernel/vocabulary.js';
 import {
   RouteConfigContextModel,
   RouteConfigKind,
+  RouteConfigStageKind,
   RouterModelKind,
   RouterReference,
   RouteRecognizerModelKind,
@@ -24,15 +29,23 @@ import {
   RouteRecognizerModel,
   RouteRecognizerOwnershipKind,
   type RouteConfigModel,
+  type RouterOptionsModel,
+  resolvedRouteableComponentName,
 } from './model.js';
-import type { RouteConfigRecognitionProjectResult } from './route-config-recognition.js';
-import type { RouterOptionsMaterializationProjectResult } from './router-options-materialization.js';
+import type { RouteConfigConvergenceProjectResult } from './route-config-convergence.js';
+import { RouterOptionsMaterializationProjectResult } from './router-options-materialization.js';
 import { routeRecognizerProductRecords, routerProductRecords } from './router-product-records.js';
 
 interface RouteConfigContextEmission {
   readonly records: readonly KernelStoreRecord[];
   readonly context: RouteConfigContextModel;
   readonly recognizer: RouteRecognizerModel | null;
+}
+
+interface RootRouteConfigUse {
+  readonly appRoot: AppRoot | null;
+  readonly routeConfig: RouteConfigModel;
+  readonly options: RouterOptionsModel | null;
 }
 
 class RouteConfigGraph {
@@ -45,7 +58,11 @@ class RouteConfigGraph {
   ) {
     for (const routeConfig of routeConfigs) {
       this.configsByIdentity.set(routeConfig.identityHandle, routeConfig);
-      if (routeConfig.routeKind === RouteConfigKind.Route && routeConfig.component?.resolvedIdentityHandle != null) {
+      if (
+        routeConfig.stage === RouteConfigStageKind.Definition
+        && routeConfig.routeKind === RouteConfigKind.Route
+        && routeConfig.component?.resolvedIdentityHandle != null
+      ) {
         this.configsByComponentIdentity.set(routeConfig.component.resolvedIdentityHandle, routeConfig);
       }
     }
@@ -62,43 +79,30 @@ class RouteConfigGraph {
     return this.routeConfigs.filter((routeConfig) => !this.childIdentityHandles.has(routeConfig.identityHandle));
   }
 
-  rootsForAppRoots(appRoots: readonly AppRoot[]): readonly RouteConfigModel[] {
-    const roots: RouteConfigModel[] = [];
-    const seen = new Set<IdentityHandle>();
+  rootsForAppRoots(
+    appRoots: readonly AppRoot[],
+    routerOptions: RouterOptionsMaterializationProjectResult,
+  ): readonly RootRouteConfigUse[] {
+    const roots: RootRouteConfigUse[] = [];
     for (const appRoot of appRoots) {
       const componentIdentity = appRoot.component?.identityHandle ?? null;
       if (componentIdentity == null) {
         continue;
       }
       const routeConfig = this.configsByComponentIdentity.get(componentIdentity);
-      if (routeConfig == null || seen.has(routeConfig.identityHandle)) {
+      const options = routerOptions.readRouterOptionsForAppRoot(appRoot);
+      if (routeConfig == null || options == null) {
         continue;
       }
-      seen.add(routeConfig.identityHandle);
-      roots.push(routeConfig);
+      roots.push({ appRoot, routeConfig, options });
     }
     return roots;
   }
 
   childrenOf(routeConfig: RouteConfigModel): readonly RouteConfigModel[] {
-    const directChildren = routeConfig.childRoutes
+    return routeConfig.childRoutes
       .map((child) => child.identityHandle == null ? null : this.configsByIdentity.get(child.identityHandle) ?? null)
       .filter((child): child is RouteConfigModel => child != null);
-    if (directChildren.length > 0) {
-      return directChildren;
-    }
-    const componentRouteConfig = this.componentRouteConfigFor(routeConfig);
-    if (componentRouteConfig == null || componentRouteConfig.identityHandle === routeConfig.identityHandle) {
-      return [];
-    }
-    return this.childrenOf(componentRouteConfig);
-  }
-
-  private componentRouteConfigFor(routeConfig: RouteConfigModel): RouteConfigModel | null {
-    const componentIdentity = routeConfig.component?.resolvedIdentityHandle ?? null;
-    return componentIdentity == null
-      ? null
-      : this.configsByComponentIdentity.get(componentIdentity) ?? null;
   }
 }
 
@@ -109,7 +113,7 @@ export class RouteConfigContextMaterializationProjectResult {
     readonly routeConfigs: readonly RouteConfigModel[],
     readonly routeConfigContexts: readonly RouteConfigContextModel[],
     readonly routeRecognizers: readonly RouteRecognizerModel[],
-    readonly useEagerLoading: boolean,
+    readonly routerOptions: RouterOptionsMaterializationProjectResult,
   ) {}
 
   readRouteConfigs(): readonly RouteConfigModel[] {
@@ -124,66 +128,65 @@ export class RouteConfigContextMaterializationProjectResult {
     return this.routeRecognizers;
   }
 
-  usesEagerLoading(): boolean {
-    return this.useEagerLoading;
+  usesEagerLoading(context: RouteConfigContextModel): boolean {
+    return this.routerOptions.readRouterOptionsForReference(context.options)?.useEagerLoading === true;
   }
 }
 
 /** Materialize the RouteConfigContext topology that owns child route registration and recognizer instances. */
 export class RouteConfigContextMaterializationProjectPass {
   materializeAndEmit(
-    store: KernelStore,
+    publication: KernelPublicationContext,
     project: ProjectBootFrame,
-    routes: RouteConfigRecognitionProjectResult,
-    routerOptions: RouterOptionsMaterializationProjectResult | null = null,
-    configuration: ConfigurationRecognitionProjectResult | null = null,
+    routes: RouteConfigConvergenceProjectResult,
+    routerOptions: RouterOptionsMaterializationProjectResult,
+    configuration: ConfigurationRecognitionProjectResult,
   ): RouteConfigContextMaterializationProjectResult {
     const graph = new RouteConfigGraph(routes.readRouteConfigs());
-    const useEagerLoading = routerOptions?.readEffectiveRouterOptions()?.useEagerLoading === true;
-    const rootRouteConfigs = rootRouteConfigsForContextMaterialization(graph, configuration);
-    const emissions = this.materializeRootContextTrees(store, graph, rootRouteConfigs, useEagerLoading);
+    const rootRouteConfigs = rootRouteConfigsForContextMaterialization(graph, configuration, routerOptions);
+    const emissions = this.materializeRootContextTrees(publication, graph, rootRouteConfigs);
     const records = emissions.flatMap((emission) => emission.records);
-    if (records.length > 0) {
-      store.commit(new KernelStoreBatch(records, `router-route-config-context:${project.projectKey}`));
-    }
+    publication.publish(new KernelPublicationPlan(
+      new KernelStoreBatch(records, `router-route-config-context:${project.projectKey}`),
+    ));
     return new RouteConfigContextMaterializationProjectResult(
       project,
       graph.routeConfigs,
       emissions.map((emission) => emission.context),
       emissions.flatMap((emission) => emission.recognizer == null ? [] : [emission.recognizer]),
-      useEagerLoading,
+      routerOptions,
     );
   }
 
   private materializeRootContextTrees(
-    store: KernelStore,
+    store: KernelStoreReadView,
     graph: RouteConfigGraph,
-    rootRouteConfigs: readonly RouteConfigModel[],
-    useEagerLoading: boolean,
+    rootRouteConfigs: readonly RootRouteConfigUse[],
   ): readonly RouteConfigContextEmission[] {
-    const emitted = new Set<IdentityHandle>();
-    return rootRouteConfigs.flatMap((routeConfig) => this.materializeContextTree(
+    return rootRouteConfigs.flatMap((rootUse) => this.materializeContextTree(
       store,
       graph,
-      routeConfig,
+      rootUse.routeConfig,
+      rootUse.appRoot,
+      rootUse.options,
       null,
       null,
       0,
-      routeConfigContextName(routeConfig),
-      useEagerLoading,
-      emitted,
+      routeConfigContextName(rootUse.routeConfig),
+      new Set(),
     ));
   }
 
   private materializeContextTree(
-    store: KernelStore,
+    store: KernelStoreReadView,
     graph: RouteConfigGraph,
     routeConfig: RouteConfigModel,
+    appRoot: AppRoot | null,
+    options: RouterOptionsModel | null,
     parent: RouteConfigContextModel | null,
     root: RouteConfigContextModel | null,
     depth: number,
     friendlyPath: string,
-    useEagerLoading: boolean,
     emitted: Set<IdentityHandle>,
   ): readonly RouteConfigContextEmission[] {
     if (routeConfig.routeKind === RouteConfigKind.Redirect || emitted.has(routeConfig.identityHandle)) {
@@ -193,12 +196,13 @@ export class RouteConfigContextMaterializationProjectPass {
     const emission = this.materializeRouteConfigContext(
       store,
       routeConfig,
+      appRoot,
+      options,
       parent,
       root,
       children,
       depth,
       friendlyPath,
-      useEagerLoading,
     );
     emitted.add(routeConfig.identityHandle);
     const currentRoot = root ?? emission.context;
@@ -208,28 +212,30 @@ export class RouteConfigContextMaterializationProjectPass {
         store,
         graph,
         child,
+        appRoot,
+        options,
         emission.context,
         currentRoot,
         depth + 1,
         `${friendlyPath}/${routeConfigContextName(child)}`,
-        useEagerLoading,
         emitted,
       )),
     ];
   }
 
   private materializeRouteConfigContext(
-    store: KernelStore,
+    store: KernelStoreReadView,
     routeConfig: RouteConfigModel,
+    appRoot: AppRoot | null,
+    options: RouterOptionsModel | null,
     parent: RouteConfigContextModel | null,
     root: RouteConfigContextModel | null,
     children: readonly RouteConfigModel[],
     depth: number,
     friendlyPath: string,
-    useEagerLoading: boolean,
   ): RouteConfigContextEmission {
-    const contextLocal = `router-route-config-context:${routeConfig.identityHandle}`;
-    const ownsRecognizer = parent == null || !useEagerLoading;
+    const contextLocal = `router-route-config-context:${appRoot?.identityHandle ?? 'unrooted'}:${routeConfig.identityHandle}`;
+    const ownsRecognizer = parent == null || options?.useEagerLoading !== true;
     const recognizerLocal = `${contextLocal}:recognizer`;
     const contextReference = routeConfigContextReference(store, contextLocal, routeConfig, friendlyPath);
     const recognizerReference = routeConfigContextRecognizerReference(
@@ -244,6 +250,8 @@ export class RouteConfigContextMaterializationProjectPass {
       store,
       contextLocal,
       routeConfig,
+      appRoot,
+      options,
       parent,
       root,
       children,
@@ -267,7 +275,7 @@ export class RouteConfigContextMaterializationProjectPass {
 }
 
 function routeConfigContextReference(
-  store: KernelStore,
+  store: KernelStoreReadView,
   contextLocal: string,
   routeConfig: RouteConfigModel,
   friendlyPath: string,
@@ -282,7 +290,7 @@ function routeConfigContextReference(
 }
 
 function routeConfigContextRecognizerReference(
-  store: KernelStore,
+  store: KernelStoreReadView,
   recognizerLocal: string,
   routeConfig: RouteConfigModel,
   parent: RouteConfigContextModel | null,
@@ -301,9 +309,11 @@ function routeConfigContextRecognizerReference(
 }
 
 function materializedRouteConfigContext(
-  store: KernelStore,
+  store: KernelStoreReadView,
   contextLocal: string,
   routeConfig: RouteConfigModel,
+  appRoot: AppRoot | null,
+  options: RouterOptionsModel | null,
   parent: RouteConfigContextModel | null,
   root: RouteConfigContextModel | null,
   children: readonly RouteConfigModel[],
@@ -315,6 +325,8 @@ function materializedRouteConfigContext(
   return new RouteConfigContextModel(
     store.handles.product(contextLocal),
     store.handles.identity(contextLocal),
+    appRoot?.toReference() ?? null,
+    options?.toReference() ?? null,
     parent?.toReference() ?? null,
     root?.toReference() ?? contextReference,
     routeConfig.toReference(),
@@ -328,7 +340,7 @@ function materializedRouteConfigContext(
 }
 
 function ownedRouteRecognizer(
-  store: KernelStore,
+  store: KernelStoreReadView,
   recognizerLocal: string,
   routeConfig: RouteConfigModel,
   contextReference: RouterReference,
@@ -343,7 +355,7 @@ function ownedRouteRecognizer(
 }
 
 function routeConfigContextRecords(
-  store: KernelStore,
+  store: KernelStoreReadView,
   contextLocal: string,
   routeConfig: RouteConfigModel,
   parent: RouteConfigContextModel | null,
@@ -358,7 +370,7 @@ function routeConfigContextRecords(
     productHandle: context.productHandle,
     identityHandle: context.identityHandle,
     productKindKey: KernelVocabulary.Router.RouteConfigContext.key,
-    ownerHandle: parent?.identityHandle ?? routeConfig.identityHandle,
+    ownerHandle: parent?.identityHandle ?? context.appRoot?.identityHandle ?? routeConfig.identityHandle,
     materializationOwnerHandle: routeConfig.identityHandle,
     sourceAddressHandle: routeConfig.sourceAddressHandle,
     localName: context.friendlyPath,
@@ -369,7 +381,7 @@ function routeConfigContextRecords(
 }
 
 function routeRecognizerRecords(
-  store: KernelStore,
+  store: KernelStoreReadView,
   recognizerLocal: string,
   context: RouteConfigContextModel,
   recognizer: RouteRecognizerModel | null,
@@ -394,7 +406,7 @@ function routeRecognizerRecords(
 }
 
 function routeConfigContextName(routeConfig: RouteConfigModel): string {
-  return routeConfig.component?.localName
+  return resolvedRouteableComponentName(routeConfig.component)
     ?? routeConfig.id
     ?? routeConfig.paths.find((path) => path.length > 0)
     ?? '(anonymous-route)';
@@ -402,10 +414,11 @@ function routeConfigContextName(routeConfig: RouteConfigModel): string {
 
 function rootRouteConfigsForContextMaterialization(
   graph: RouteConfigGraph,
-  configuration: ConfigurationRecognitionProjectResult | null,
-): readonly RouteConfigModel[] {
-  const appRoots = configuration?.readConfiguration().appRoots ?? [];
+  configuration: ConfigurationRecognitionProjectResult,
+  routerOptions: RouterOptionsMaterializationProjectResult,
+): readonly RootRouteConfigUse[] {
+  const appRoots = configuration.readConfiguration().appRoots;
   return appRoots.length === 0
-    ? graph.roots()
-    : graph.rootsForAppRoots(appRoots);
+    ? graph.roots().map((routeConfig) => ({ appRoot: null, routeConfig, options: null }))
+    : graph.rootsForAppRoots(appRoots, routerOptions);
 }

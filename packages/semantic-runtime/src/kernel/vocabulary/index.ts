@@ -62,6 +62,7 @@ export const KernelVocabulary = {
   Router: {
     ...KernelOpenSeamKinds.Router,
     ...KernelProductKinds.Router,
+    ...KernelClaimPredicates.Router,
   },
   RouteRecognizer: {
     ...KernelProductKinds.RouteRecognizer,
@@ -98,6 +99,10 @@ export const KernelVocabulary = {
     ...KernelInstructionKinds.Template,
     ...KernelProductKinds.Template,
     ...KernelClaimPredicates.Template,
+  },
+  RuntimeExpression: {
+    ...KernelProductKinds.RuntimeExpression,
+    ...KernelClaimPredicates.RuntimeExpression,
   },
   Binding: {
     ...KernelOpenSeamKinds.Binding,

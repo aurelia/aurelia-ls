@@ -2,13 +2,23 @@
 
 See [../README.md](../README.md) for the folder-wide rebuild map and Atlas and auLink rule.
 
-This folder owns the in-process API boundary for opening an Aurelia app with the semantic runtime. It is a library
-surface, not a daemon, CLI, or snapshot format.
+This folder defines the internal, in-process API for opening and querying an
+Aurelia app. In this README, `public` means exported from semantic-runtime, not
+supported as a standalone package or MCP endpoint. App-builder remains internal;
+MCP authoring uses Aurelia Patterns followed by semantic verification.
 
-The API should stay close to the typed substrate. It may compose boot, evaluation, configuration, DI, resource,
-compiler, rendering, and TypeChecker-backed products, but it should not recreate those layers as private summary tables.
-When an answer becomes awkward, prefer improving the underlying product records or adding a narrow query projection over
-building compatibility glue here.
+`semanticWorkspaceDescriptorForRuntimeOptions(...)` is the shared, serializable source-world boundary used by IDE,
+MCP, and future AOT adapters. It normalizes workspace exclusions and either automatic marker discovery plus host root
+hints or a complete explicit-project topology; store namespaces and live input-authority objects are deliberately not
+semantic facts. `parseSemanticWorkspaceDescriptor(...)` is the strict untrusted JSON entry point for
+`semantic-workspace/1`: it rejects unknown versions/properties, invented source vocabularies, and non-normalized paths
+or set-like arrays. `semanticRuntimeOptionsForWorkspaceDescriptor(...)` reconstructs boot options only after that
+validation. Ordinary consumers should use shared discovery and select an admitted `projectKey`; explicit projects are
+for hosts that own the complete project/source topology, not a shortcut for choosing one app.
+
+The API composes typed products from their owning layers. If an answer is
+awkward, improve those products or add a focused projection. Keep substrate
+mirrors and compatibility tables out of the API layer.
 
 Keep `runtime.ts` as the boot/app facade. Public query enums, answer envelopes, row interfaces, and result interfaces
 belong in `contracts.ts`; row projection helpers that are already specific to one substrate family should live in
@@ -21,25 +31,30 @@ family. `route-query-registry.ts` owns the shared route query descriptors: `Sema
 `routeProductKind`, row reader, and answer label. `route-effect-facts.ts` is the authoring-facing bridge over those
 descriptors so API dispatch, verification, and orientation share one registry of router product rows.
 Template-family answerers live in `app-template-queries.ts`: that module owns template-compilation rows plus
-template completion, cursor-info, and diagnostic query handoff, while the runtime facade keeps only app opening,
+template completion, cursor-info, references, inlay hints, and diagnostic query handoff, while the runtime facade keeps only app opening,
 app-level dispatch, and direct cursor-locus convenience methods.
 App-query identity, locus, and invalidation epoch keys live in `app-query-identity.ts`. Keep reuse/invalidation keys
 there rather than rebuilding private string keys in the MCP adapter, scripts, or individual answerers.
-`semanticAppQueryCatalogShape(...)` is the shared boundary that drops unsupported envelope fields before app dispatch,
+`unsupportedSemanticAppQuerySelectorFields(...)` is the catalog-owned authority for caller fields that the current query
+cannot consume. `answerUnsupportedSemanticAppQuerySelectors(...)` turns those facts into an `unsupported` answer before
+app-world construction, while `semanticAppQueryRequestKey(...)` keeps invalid request shapes distinct from the normalized
+valid-query identity. `semanticAppQueryCatalogShape(...)` then normalizes the supported envelope before app dispatch,
 claim identity, materialization policy, authoring-template opt-in, default inquiry-profile selection, and continuation
-target-query shaping. Use it when a new query option is added so unsupported cursor/source/detail knobs do not fragment
-caches, epoch keys, or pre-open policy. Continuation builders may still inherit explicit target-policy hints from the
-caller, such as diagnostic projection, but the final `targetQuery` must be shaped against the target catalog row.
-`SemanticApp.ask(...)` therefore dispatches and records claims with the shaped query while passing the original caller
-query to continuation generation, so follow-up target policy survives without changing current-query materialization.
+target-query shaping. Update these boundaries together when a query option is added so unsupported cursor/source/detail
+knobs neither disappear nor contaminate caches, epoch keys, or pre-open policy.
+`SemanticApp.answerRoutedQuery(...)` records the shaped semantic answer and neutral continuation rows. Public
+`SemanticApp.ask(...)`, routed runtime answers, and batch answers apply `continuationIntents` and continuation-target
+`diagnosticProjection` only after their last reusable claim boundary. A diagnostic query that consumes
+`diagnosticProjection` still includes it in current-query identity; a source query that does not consume it may use the
+same field solely as response-envelope policy for diagnostic continuation targets.
 Its non-router dispatch is grouped through `semanticAppQueryCatalogRow(...).group`; keep that as the public app-query
 family boundary before adding another branch table or moving a substrate-family answerer back into `runtime.ts`.
 `semanticAppQuerySourceFileLocus(...)` owns the cursor-to-source-file bridge used by catalog shaping and continuation
 source-locus evidence; do not recreate a local `sourceFile ?? cursor.filePath` helper in query answerers.
-Public source-locus DTOs, bounded row source-reference traversal, and source-precision classification live in
-`source-reference.ts`. Use those helpers when an answer policy needs to discover source precision from returned rows;
-do not add another recursive DTO walker or authored/generated/external ranking in a diagnostic, continuation, hover, or
-future edit surface.
+Public source-locus DTOs, bounded row source-reference traversal, and per-reference source-facet classification live in
+`source-reference.ts`. Use those helpers when an answer policy needs to inspect returned source evidence; do not add
+another recursive DTO walker or authored/generated/external ranking in a diagnostic, continuation, hover, or future edit
+surface.
 `PUBLIC_SOURCE_REFERENCE_CARRIER_KEYS` is intentionally contract-checked against public row DTOs whose nested fields
 contain `SemanticSourceReference`, and the contract also synthesizes those DTO paths to prove the runtime collector can
 actually reach them. Add a carrier key when a row nests source-bearing objects instead of widening the collector to
@@ -47,8 +62,9 @@ arbitrary object recursion or adding depth-based special cases.
 Generated addresses may be anchored to either source addresses or semantic identities. Public source descriptions must
 follow the shared kernel source-address resolver so identity-backed generated products can still point back to authored
 TypeScript or template spans instead of dropping to broad generated carriers.
-Continuation source-precision policy also follows `SemanticSourceReference.anchor` for authored template/source carriers;
-generated-address rows intentionally remain `generated-anchor` even when they carry an authored anchor.
+Continuation source facts follow `SemanticSourceReference.anchor` for authored template/source carriers. A generated
+reference retains its `generated` facet alongside the authored/exact facets of its anchor instead of being collapsed to
+one representative precision.
 `describeStoredAddress(...)` intentionally mirrors the address-kind switch in the kernel source resolver without sharing
 its result type: the API layer must preserve visible carriers such as `generated-address` and `template-node-address`,
 while `kernel/source-address.ts` collapses those carriers to their nearest authored source for internal source lookup.
@@ -56,7 +72,7 @@ Routed app-query defaults and retention choices live in `app-query-policy.ts`: d
 selection, authoring-template opt-in, minimum analysis depth upgrades, materialization-policy overrides, and
 `appRetention` disposal decisions are API policy, not transport adapter behavior.
 Typed app-query follow-ups live in `app-query-continuations.ts`. That module is the public continuation policy point:
-it maps answered query families to compact `targetQuery` shapes plus intent, cost, evidence, staleness, and blocker
+it maps answered query families to compact `targetQuery` shapes plus intent, cost, evidence, epoch dependencies, and blocker
 metadata. Keep it catalog-aware and lazy; do not rebuild app facts or adapter-specific ranking there.
 Continuation target queries should carry only modifiers the target catalog row can consume. Cursor and source-file loci
 are first normalized through the source query's catalog shape so unsupported loci do not leak into follow-ups; detail,
@@ -66,23 +82,61 @@ continuation evidence.
 Continuation cost uses the same query-specific materialization policy as the app-query answer path. For example,
 `diagnosticProjection: 'available-products'` removes answer-time TypeChecker projection cost, but it does not pretend an
 app-world diagnostic family is project-frame cheap.
-Even cheap `next-page` continuations should inherit target query staleness, because a cursor over project or source rows
-is not current-epoch stable merely because following it is inexpensive. Source-capable catalog rows are still
-project-epoch sensitive until the shaped `targetQuery` carries a cursor or `sourceFile` locus.
+Even cheap `next-page` continuations should expose the target query's epoch dependencies, because a cursor over project
+or source rows is not stable merely because following it is inexpensive. Keep runtime-session, project-input,
+app-world, and source-input dependencies as independent facts: app-world targets depend on both the admitted project
+input and the selected app generation, while a cursor, source-file selector, or source-file dependency locus adds the
+source-input authority. Do not collapse these into one ranked staleness value.
 The app-query catalog also exposes `runtimeBoundary`: `runtime-static`, `project-frame`, `static-evaluation`, or
 `app-world`. Keep that boundary honest whenever adding a query kind. It is the public signal that lets MCP/LSP-style
 adapters ask cheap static/project/evaluation questions without accidentally paying for full app construction.
 `continuationIntents` is a response-envelope filter over those typed rows. It is deliberately not part of app-query or
 app-builder query identity, locus, materialization policy, or query-claim invalidation because it does not change the
 semantic facts being answered; it only narrows which follow-up moves are returned and inherited by their target query
-payloads.
+payloads. Reusable claims retain the unfiltered continuation set; projection happens after the outermost claim read so
+one caller's intent cannot poison a later response.
 Query cost still belongs to `runtimeBoundary`, `minimumAnalysisDepth`, `materializationPolicy`, `inquiryProfile`,
 paging, and query-claim retention. Intent should not become a shadow query policy.
 
 ## Shape
 
-Use `createSemanticRuntime(...)` to boot a workspace, then `runtime.openApp(...)` to materialize the current app-world
-view for one project. `SemanticApp.ask(...)` accepts a small query envelope for app facts; direct cursor-locus
+`SemanticRuntime` is one resolved source-world snapshot. `createSemanticRuntime(...)` is appropriate for bounded
+one-shot and snapshot/AOT work, but its answer receipts are current only relative to that admitted snapshot; they do
+not repeatedly rediscover whether the live host now has a different project/source topology. Long-lived IDE, MCP, and
+build-daemon consumers must own a `ManagedSemanticWorkspaceSession`. That shared boundary validates source-world
+admission at operation ingress and egress, coalesces re-resolution, keeps the warm runtime for an equivalent portable
+plan, and atomically replaces the private store/runtime incarnation when the plan changes. Its callback must include
+all paging and consumer projection work. The callback receives a positive, revocable query facade rather than the raw
+runtime: facade answers are composed into the operation receipt automatically, and facade promises still pending when
+the callback finishes are drained before egress. Use `absorb(...)` only for a semantic answer obtained outside that
+facade; explicitly absorbing a facade answer is rejected so receipt observation is not duplicated. Facade answer
+envelopes remain portable DTOs after the callback, but their process-private root and nested proofs are revoked at that
+boundary. The callback context exposes the pinned `sourceWorldRevision` for operation-local transport identities; it is
+not an analysis basis, because the exact query and mapping reads have not yet been composed at ingress. Consumers that
+deliberately retain a bounded mapped result with executable currentness must use
+`runWithReceipt(...)`, retain its opaque managed receipt alongside the mapped value, and dispose that receipt when the
+cache entry is replaced.
+Reconciliation may coalesce or retry before admission, but an admitted callback runs at most once: a stale egress is a
+typed operation failure for the protocol/client to reissue, never an implicit replay of consumer mapping or side effects.
+Descriptor parity means IDE, MCP, and AOT apply the same semantic rules to the same admitted input snapshot. Independent
+MCP disk authority cannot literally share unsaved IDE buffers until a future IDE-session proxy or immutable overlay
+handoff supplies that same source snapshot and its revisions.
+
+Managed cache control uses the same writer-preferring FIFO boundary. `analysisCacheOverview({}, projector)` is a shared,
+session-local read whose projector receives only the supplied control answer. `clearAnalysisCache({}, projector)` closes
+reader admission, drains the FIFO-selected incumbent, clears its session-owned cache exactly once, and keeps projection
+inside the exclusive operation. A topology change during the drain reports `reconciliation-pending`; it does not stale-
+reject or replay the successful clear, and reconciliation runs before later readers. The leading request is deliberately
+required because the projector is required; pass `{}` while session-local clear has no policy knobs.
+
+Process-owned TypeScript dependency SourceFile retention has a separate zero-session authority:
+`semanticRuntimeProcessTypeSystemCacheOverview(...)` and `clearSemanticRuntimeProcessTypeSystemCache(...)`. Aggregate
+consumers should observe or clear that cache once per process operation, not once per managed workspace. Legacy raw
+`SemanticRuntime.analysisCacheOverview(...)` and `clearAnalysisCache(...)` compose the session-local and process-owned
+views for one-shot callers; managed session overview, clear, retirement, and disposal never rescan or clear process state.
+
+Use a runtime snapshot to open one project app with `runtime.openApp(...)`. `SemanticApp.ask(...)` accepts a small query
+envelope for app facts; direct cursor-locus
 convenience methods such as `runtime.templateCompletions(...)`, `runtime.templateCursorInfo(...)`, and
 `runtime.templateDiagnostics(...)` live on the runtime facade because they may need to select or reopen an app before
 answering.
@@ -90,15 +144,25 @@ Default `openApp()` uses `runtime-topology`, the cheapest complete app-world tie
 methods default to `binding-observation` because those answers intentionally need observer/data-flow diagnostics and
 weak-member pressure. Generic adapters should read `runtime.appQueryCatalog()` and open the catalog row's
 `minimumAnalysisDepth` instead of treating the deepest tier as a default.
+An opened `SemanticApp` pins one exact committed app-analysis generation from static evaluation through resources, DI,
+templates, observation, state, capability, and router fan-in. Same-runtime replacement or lifetime disposal makes that
+app stale; `ask(...)`, profile/cache reads,
+and template access fail closed rather than combining current kernel rows with an old object graph. Runtime cache and
+cursor-locus admission skip stale apps and rebuild a coherent app epoch on the next request. Template-query objects
+also spend that authority on every operation; capturing one before replacement does not preserve access to stale rows.
 Generic adapters that only need one answer should prefer `runtime.answerAppQuery(...)` over manual
 `openApp(...).ask(...)`. That routed API reads the app-query catalog for default depth, derives an inquiry profile from
 the locus when the caller did not supply one, records a runtime-level routed answer claim before returning, and disposes
-app epochs for recompute-friendly profiles such as MCP orientation. When that recompute-friendly default disposes the
-app epoch, it also clears the process-local TypeScript dependency SourceFile cache; pass
-`typeSystemDependencyCacheClearPolicy: 'preserve'` when a session intentionally wants to keep the next TypeChecker
-Program warm. Long-lived adapters can still force `appRetention: 'retain-app'` when they intend to reuse the opened app
-world, or `appRetention: 'dispose-app'` when a public transport must reclaim even a previously cached compatible app
-epoch after a one-off answer.
+app epochs for recompute-friendly profiles such as MCP orientation. Disposing the app epoch also retires its reusable
+base Program/checker generation. The recompute-friendly default separately clears the process-local TypeScript
+dependency SourceFile cache; pass `typeSystemDependencyCacheClearPolicy: 'preserve'` when a session wants to warm the
+next Program reconstruction without retaining the complete checker. Long-lived adapters can still force
+`appRetention: 'retain-app'` when they intend to reuse the opened app world and checker, or
+`appRetention: 'dispose-app'` when a public transport must reclaim even a previously cached compatible app epoch after a
+one-off answer.
+App-world queries at `detail: 'handles'` automatically retain their owning app generation because those handles are
+opaque navigable pointers into that generation. An explicit `appRetention: 'dispose-app'` combination is rejected
+instead of returning dead handles. App-world-free handle answers remain independent of app retention.
 When a client needs several related app answers, prefer `runtime.answerAppQueries(...)` over issuing several routed
 queries from the transport. The batch opens the smallest app-world depth satisfying every child query, compiles the
 union of child cursor/file authoring templates by default, records one runtime-level batch claim, and lets each child
@@ -127,15 +191,18 @@ Pass `continuationIntents` when a caller only wants moves for a
 current task such as `diagnose`, `inspect`, or `repair`; leave it unset for the full menu. App-builder continuations are
 API-level navigation over the catalog/readiness/detail/source-lowering surfaces; they should not become a recommendation
 engine or a replacement for the app-builder ontology.
-App-builder detail routes use a selected-detail posture for MCP token economy:
+App-builder detail routes use a selected-detail posture for compact internal inspection:
 unscoped detail calls return compact base rows, counts, and readiness/state
 summaries, while explicit row selectors or family filters activate rich joins by
 default. A caller should use catalog/readiness answers to select refs and then
 drill into detail; broad detail expansion is still possible, but only through
 explicit `include*` flags.
-Continuation evidence `coverage` is a proof posture, not a confidence score. Paged row tables, overviews, and summary
-tables report `partial-known-gaps`; exact cursor-locus follow-ups can report `complete-for-locus`; future or
-insufficiently modeled families should stay `unknown` instead of implying completeness.
+Public answers expose three independent proof axes rather than one overloaded outcome. `result` records whether execution
+answered, was unsupported or invalid, or failed; `selection` records exact, absent, ambiguous, rerouted, or
+not-applicable locus selection; `coverage` records complete, open, truncated, or not-applicable semantic coverage.
+Transport paging is reported only in `page`. Continuation evidence separately declares a source requirement and preserves
+per-reference source facts plus independent runtime-session, project-input, app-world, and source-input epoch
+dependencies; it does not restate answer coverage or manufacture a confidence score.
 When phase-kernel telemetry is enabled, those same phase rows also carry compact kernel deltas and optional product/detail
 breakdown rows, so disposed-app answers can explain which template or runtime phase created the answer-local products
 that the claim graph later reclaimed.
@@ -148,12 +215,38 @@ Small retained DTO values are bounded twice: profiles choose which materializati
 query-claim graph enforces both a per-answer byte limit and a total retained-answer byte budget. When the value budget
 is exceeded, claim rows remain available for reuse diagnostics and invalidation, but old public DTO objects are dropped
 so a long MCP-style orientation session does not turn the graph into an unbounded answer cache.
+Every retained answer value is guarded by an exact executable receipt. Its public `analysisBasis` contains only the
+portable semantic-workspace/source-world stamp and value revisions; the process-private lease retains exact input and
+semantic-environment reads plus this runtime's answer-lifetime witness. Lease checks never rerun source-world discovery:
+that is the managed session's ingress/egress responsibility. Equivalent source-world plans keep the witness, while a
+fresh runtime replacement or `clearAnalysisCache()` invalidates old detached capabilities. This distinction lets IDE,
+MCP, and AOT compare the same semantic basis without treating store keys, handles, event ordinals, or currentness policy
+as portable semantics.
+Nested answer materialization uses one optimistic synchronous transaction across runtime and app query-claim graphs.
+Fresh child leases are observed into the root builder and may delegate their scan only when that builder exactly subsumes
+them; the root receipt validates once before any provisional answer becomes externally committed. Retained reuse first
+composes invocation-local planning reads with the historical graph lease. A committed aggregate validates before it may
+taint the root; a same-token aggregate is observed before delegation so the current invocation's reads cannot disappear.
+The temporary aggregate is released after use and never replaces the historical graph-owned lease.
+Project-input, source-world, analysis-receipt, and app-generation validators resample their relevant authority after
+fallible/reentrant callbacks. A callback that publishes a relevant input event or revokes a combined generation cannot
+return a receipt or cache generation that was current only at the start of validation.
+An intended race that survives those validators escapes as `SemanticRuntimeAnalysisCurrentnessError`, with the stable
+code `SEMANTIC_RUNTIME_ANALYSIS_CURRENTNESS_CHANGED` and JSON-safe reason, lease, generation, read, semantic-fact, and
+facet facts.
+That nominal error is shared semantic evidence, not a transport retry decision: consumers may classify the direct error
+with `isSemanticRuntimeAnalysisCurrentnessError`, but must not infer staleness from message text, a nested `cause`, an
+`AggregateError`, or a failure receipt that happened to become stale later. Arbitrary mapper, lease-callback, ownership,
+and invariant failures retain their original identity and do not authorize retained-answer eviction or automatic retry.
+Transport page policy is not semantic query identity, but it is retained-answer response-policy identity. A bounded
+caller and an unbounded caller may share semantic materialization while never replaying each other's clamped DTO.
 App-world-free app-query answers stay at the runtime boundary. `SourceFiles` can answer from the booted project frame,
 and `UnresolvedModules` can answer from read-only Aurelia
 static evaluation without emitting kernel records or opening an app epoch. `answerAppQuery(...)` and
 all-app-world-free `answerAppQueries(...)` batches therefore avoid TypeSystem construction, template compilation, and
-app-epoch disposal. When every child query is runtime-static, the batch stays workspace-level too: it does not select a
-project, and the batch result has `projectKey: null` and `analysisDepth: null`. Project-frame and static-evaluation
+app-epoch disposal. When every child query is runtime-static, or every child refuses during selector preflight, the batch
+stays workspace-level too: it does not select a project, and the batch result has `projectKey: null` and
+`analysisDepth: null`. Project-frame and static-evaluation
 batches still select the owning project because their answers depend on admitted source files or static project
 evaluation. All app-world-free batch results mark `appWorldOpened: false` and carry no `appProfile`; that absence is
 intentional, not missing telemetry. When a routed app-world-free request includes telemetry options, the answer envelope
@@ -161,6 +254,16 @@ may carry an `appWorldFreeProfile` with static-evaluation phase, source-host, an
 answer-boundary telemetry, not an opened app profile. Each child row in an app-world-free batch still enters the runtime
 query-claim graph as a nested child claim, so row-level reuse and source/project invalidation remain graph-owned without
 manufacturing an opened app just to get child claim storage.
+Routed app-world answers that explicitly pass `telemetry` also carry a compact `routedAnswer` envelope profile. Its
+retrospective relative markers divide the synchronous call into routed planning/cache preflight and the answer
+transaction. `preflight-complete` identifies the only current candidate location for a future observation/abort check;
+profiling does not perform that check or yield, and the call still runs synchronously end to end. The reported
+`longestUninterruptedMilliseconds` is the largest span between those candidate boundaries and is measurement evidence
+for scheduling work, not permission to yield inside the transaction. Any future asynchronous resume must rerun or
+freshly validate planning and cache preflight before it opens the synchronous answer transaction. The profile exists
+only on successfully returned answers; thrown cancellation, currentness, and failure paths require caller-side timing.
+Planning can also populate or rebind the immutable project-shape cache before the marker, so aborting there prevents app
+open and query-claim publication but does not promise that no internal planning cache was warmed.
 One-off routed app disposal is part of the answer boundary, not an afterthought outside the graph. The runtime-level
 claim records both the kernel products/details/hot details materialized for the answer and the app/query-claim records
 reclaimed after the answer is shaped, so cache overview can show "spent during answer" separately from "retained after
@@ -179,12 +282,12 @@ Conversely, `appRetention: 'retain-app'` disables retained-answer reuse when no 
 because the caller is asking to warm the app world for follow-up tools, not merely to receive the same DTO again.
 Direct static facade answers such as `runtime.appQueryCatalog(...)` are also claim-backed. Public adapters should use
 runtime facade methods rather than raw catalog readers when the answer crosses a transport boundary, so retention,
-reuse, and cache overview all observe the same query-outcome layer. Inside an already-entered claim boundary, use the
+reuse, and cache overview all observe the same query-answer layer. Inside an already-entered claim boundary, use the
 focused raw answer builder instead of calling another public facade method; otherwise an implementation detail can
 create an unrelated default-profile claim even though only one public answer crossed the API boundary.
-The retired legacy recipe-authoring catalog, guidance, and recipe-plan answers have been removed. Public app generation
-should return through app-builder once that algebra has a stable API instead of preserving recipe-shaped compatibility
-surfaces here.
+The retired legacy recipe-authoring catalog, guidance, and recipe-plan answers have been removed. Do not restore
+recipe-shaped compatibility here. App-builder remains internal; current public
+authoring guidance comes from Aurelia Patterns.
 For component handoff, keep the declared type and the effective TypeChecker shape separate. A nullable object bindable
 such as `Product | null` should still surface as an object-shaped input for orientation while preserving the nullable
 declared type for assignability, diagnostics, and code actions.
@@ -192,8 +295,17 @@ Opened-app convenience answers such as `app.summary()`, `app.openSeams()`, and `
 claim-backed too. They re-enter `SemanticApp.ask(...)` when called outside an active answer materialization, so direct
 library use and routed transport use share the same answer-boundary claim graph instead of creating a second untracked
 projection path.
-One runtime instance memoizes opened app-worlds by project key; create a fresh runtime for an edit/reopen cycle that
-needs new source admission.
+One runtime instance memoizes opened app-worlds by project-input revision and semantic request shape. Existing admitted
+source/config edits should advance the shared `SemanticRuntimeProjectInputAuthority`; the next request captures one
+immutable host generation, rejects stale retained facades, and replaces only that project's app generation. Rebuild the
+runtime only when project discovery or source-admission membership changes.
+Long-lived adapters may attach a `SemanticRuntimeProjectInputCurrentnessPolicy` to that authority. The policy receives
+one frozen exact-read descriptor at a time. It may return `PushObserved` only for a request whose every mutation calls
+`advance()`, or `SessionSnapshot` with a non-empty immutable snapshot identity. Every unclassified read remains
+`PullValidated`, so editor-owned text can avoid same-generation polling without granting that trust to imported
+dependencies, directory membership, package data, or MCP filesystem input. Exact values still decide carry across
+event generations. Classifier and snapshot-identity transitions must be synchronized with an event advance so no proof
+can enter before revocation. Snapshot identity must name immutable input output, not merely a mutable session UUID.
 `runtime.summary()` is the cheap project-selection answer: it returns project shape/analysis rollups, the default app
 candidate key, app candidates with root directories, and opt-in paged project rows. It defaults to no project rows so
 large monorepos stay summary-first. Use it before `openApp(...)` in monorepos so callers can open a specific app project
@@ -203,17 +315,21 @@ distort the query graph they are inspecting or pruning. Pass `inquiryProfile` wh
 first project-selection answer counted with the same consumer lane as later routed app answers. Scripts or adapters that
 need to iterate project rows must request `projectPage.size`; otherwise they should rely on the rollups and
 `appCandidates` only.
+Each project row also exposes the boot-owned `admissionOrigins` that explain why that exact frame exists. Marker origins
+name their exact source file and, when relevant, the host hint that reopened discovery below a prune/depth boundary.
+Consumers should keep this project-topology provenance separate from `shapeKind`, `analysisKind`, and native
+configuration diagnostics: admission cause is not evidence that a project is an Aurelia app or that its configuration
+is valid.
 `runtime.analysisCacheOverview(...)` is the session-retention x-ray for long-lived adapters such as MCP. It reports
-runtime-level static and routed-app query claims, cached app epochs, their construction inquiry profile/top phases, per-consumer
-query-claim graph telemetry, the small process-local project compiler-options cache, current process memory, and
+runtime-level static and routed-app query claims, cached app epochs, their construction inquiry profile/top phases,
+per-consumer query-claim graph telemetry, current process memory, and
 optional kernel-density breakdowns. App-world cache identity is semantic shape
-(project, depth, and authoring-template scope), not query-retention profile: the same app epoch can answer MCP, LSP,
+(project, project-input revision, depth, and authoring-template scope), not query-retention profile: the same app epoch can answer MCP, LSP,
 fixture, AOT, and exploration queries while `SemanticApp.ask(...)` records those answers in separate profile-shaped
 query-claim graphs.
-The compiler-options cache is reported separately from TypeSystem dependency SourceFile caching because it retains only
-tsconfig/path-mapping/root-file shape and config diagnostics by project root, then returns cloned options, root filenames,
-and diagnostic rows to TypeScript consumers. Treat it as boot/input read amplification visibility, not as app-world
-semantic retention.
+Project compiler options are rebuilt once for each captured project-input generation and shared by static evaluation
+and TypeSystem construction through the `ProjectBootFrame`. TypeScript dependency `SourceFile` caching remains the
+separate process-local CPU/memory trade-off reported by cache telemetry.
 Ordinary TypeScript diagnostics exposed through `TypeScriptDiagnostics`, `TypeScriptDiagnosticSummary`, and unified app
 diagnostics are Program/tsconfig correctness rows. They intentionally do not include LanguageService suggestion
 diagnostics, quick fixes, organize-import actions, or refactor edits; those are a future LSP/code-action surface that
@@ -221,16 +337,17 @@ should reuse the same project epoch without changing the meaning of the repair-o
 Query-claim records distinguish the exact answer locus from invalidation epoch keys. For example, a cursor query uses a
 cursor-shaped locus for reuse/history but also depends on its source-file epoch; adapters that keep a runtime session
 open across edits should call `runtime.disposeQueryClaims({ sourceFilePath })` after a source change when they only need
-to clear answer-outcome storage, or `runtime.clearAnalysisCache()` when the edit makes retained app-world products
-stale. The runtime canonicalizes source-file loci to project-relative paths before assigning query keys and epoch keys,
-so absolute host paths and project-relative paths converge on the same source-epoch claim. App-local
+to clear retained answer storage, or `runtime.clearAnalysisCache()` when the edit makes retained app-world products
+stale. The runtime resolves absolute, workspace-relative, and project-relative inputs through exact project ownership,
+refuses cross-domain ambiguity, and publishes admitted loci in the workspace-relative source-address domain before
+assigning host-case-aware query and epoch keys. App-local
 `disposeQueryClaimsForSourceEpoch(...)` remains available for callers that already own a `SemanticApp`, but transport
 adapters should prefer the runtime method so runtime-level routed claims and app-owned claims are invalidated together.
 The disposal answer includes per-profile `profileDisposals` rows. Use those rows to confirm whether a source edit or
 manual cleanup hit runtime-level routed claims, cached-app claims, or both; the flat disposed counts are only the rollup.
 It also echoes the selected `invalidationKind` and `epochKeys`. Treat those as the public trace of the disposal
 strategy: `manual` has no epoch filter, `project-epoch` prunes project-scoped outcomes, and `source-epoch` prunes both
-the canonical project-relative source epoch and the containing project epoch because project-wide answers can depend on
+the canonical workspace source epoch and the containing project epoch because project-wide answers can depend on
 one changed source. New adapters should extend that strategy layer rather than constructing graph disposal policies
 locally.
 Use `includeQueryClaimRows` with a small `rowLimit` when aggregate query-claim counters are not enough and a caller
@@ -240,13 +357,11 @@ which rich details are retaining mass.
 Use `includeTypeSystemDependencyEntries` with a small `rowLimit` when dependency SourceFile cache density says a bucket
 is hot but the next decision needs the largest retained TypeScript dependency entries. Keep it off for ordinary adapter
 status reads because bucket counts and source-text totals are usually enough.
-Treat the workspace
-`KernelStore` as session-lifetime for boot/source records and dependency declaration cache state. App-world products now
-have an explicit reclaim boundary: `runtime.clearAnalysisCache()` drops cached app epochs and disposes kernel records,
-product details, hot details, and their record-handle character mass back to the first app-construction marker while
-leaving the booted workspace available for reuse. The TypeSystemProject compiler-host source-file cache is
-process-local because it trades memory for much
-cheaper repeated Program construction over dependency and library declaration files; pass
+Treat the workspace `KernelStore` as session-lifetime for boot/source records and workspace support. Reusable base
+Program/checker generations are project-locus computations: compatible app replacements may share one, while explicit
+app disposal and `runtime.clearAnalysisCache()` retire them. The TypeSystemProject compiler-host dependency `SourceFile`
+cache is a separate process-local structure because it trades memory for much cheaper repeated Program construction
+over dependency and library declaration files; pass
 `typeSystemDependencyCacheClearPolicy: 'all'` to `clearAnalysisCache(...)` when reclaiming that memory is more
 important than keeping the next app open warm. For one-off routed public calls, pass the same policy to
 `answerAppQuery(...)` or `answerAppQueries(...)` so the clear is part of the answer claim rather than a separate
@@ -255,7 +370,8 @@ control-plane cleanup. Use narrower policies such as `default-libraries`, `node-
 classes warm. The overview also reports cached source-text character count plus node_modules,
 declaration, default-library, external-declaration, canonical-path, and duplicate parse-option entry counts so
 long-lived adapters can distinguish warm TypeScript dependency/library retention from app-world kernel or query-claim
-retention. It also reports the dominant retained source-text bucket and a suggested dependency-cache clear policy, plus
+retention. The entry/text ceilings and superseded-revision/capacity-eviction counters distinguish automatic bounded
+retention from caller-requested clear operations. It also reports the dominant retained source-text bucket and a suggested dependency-cache clear policy, plus
 process-lifetime clear operations, source-text characters reclaimed by cache policy, and the cleared default-library /
 external-declaration bucket split. The
 host-cache counters split cacheable node_modules/external-declaration reads from fresh-source, project-source, and
@@ -263,16 +379,14 @@ external-source bypasses, and include hit/write source-text traffic so warm-sess
 newly admitted dependency/library text. Cacheability remains a named policy rather than an accidental filesystem side
 effect.
 Analysis-cache overview and clear answers own compact `displayText` for public shells: overview text reports retained
-app epochs, workspace kernel mass, process memory, TypeScript dependency-cache policy, compiler-options cache counters,
-query-claim retention, and whether high-cardinality breakdowns were omitted; clear text reports reclaimed app epochs,
+app epochs, workspace kernel mass, process memory, TypeScript dependency-cache policy, query-claim retention, and
+whether high-cardinality breakdowns were omitted; clear text reports reclaimed app epochs,
 query claims, kernel records/details/handles, and dependency-cache buckets. Public adapters may add their own
 server-session wrapper text, but they should not reinterpret semantic-runtime cache telemetry locally.
-Restart the runtime session when
-source admission, dependency declarations, or project
-discovery must be rebuilt from disk. Until app-world handles are salted by request shape, opening a non-compatible app
-epoch for a project
-that already has cached app records clears cached app epochs before rebuilding; this prevents shallow-to-deep upgrades
-from duplicating kernel handles in one workspace store.
+Advance the project-input authority for content/config changes inside the admitted project topology. Restart the runtime
+when project discovery or source-admission membership must be rebuilt. Opening a non-compatible analysis-depth or
+authoring-template shape atomically replaces the prior generation at that project locus without disturbing other
+project generations in the workspace store.
 
 Authoring/LSP callers can opt into standalone resource-library templates without changing the default app topology:
 
@@ -286,52 +400,93 @@ const app = await runtime.openApp({
 When `projectKey` is omitted, `sourceFilePath` selects the admitted project that owns the file. If
 `authoringTemplateSourceFiles` is omitted, the same source file becomes the authoring template selection. Callers that
 already know the project can still pass `projectKey` and `authoringTemplateSourceFiles` explicitly.
+Retained-app reuse preserves the `includeAuthoringTemplates` admission bit separately from an empty/unbounded source
+selection. A project-only app therefore cannot satisfy a later source-locus authoring request merely because both
+requests normalize to an empty source-file list and no limit.
 `TemplateCompilations` returns a `compilationLane` of `app-runtime` or `authoring` so callers can distinguish hydrated
 app templates from source-file-selected authoring templates. Use `authoringTemplateLimit` only as an explicit pressure
 budget or fallback when no source file is known.
+
+`AttributeInterpretationExplanation` is the projection-only compiler companion for one exact top-level authored HTML
+attribute name. The cursor must fall inside the exact name span; attribute values, expression tokens, and secondary
+inline multi-binding names do not select this V1 query. Equally specific app-runtime or authoring compiler contexts
+return `ambiguous` with distinct structural subjects rather than choosing a scope. An exact answer projects the
+already-materialized AttrSyntax, classification, value-site/parser, binding-command lowering, final instruction,
+compiler-issue, capture, and exact source-backed compiler-seam facts. It does not reparse source, run TypeChecker work,
+or create a second compiler model.
+
+Conclusions distinguish instruction-backed effects, capture, compiler control, ordinary HTML attributes, closed
+compiler errors, and honestly open interpretation. Effects use author-facing verbs while retaining the typed
+instruction kind as evidence. A plain attribute is queryable as an exact `plain-attribute` answer, but IDE affordances
+may deliberately suppress that inert row. Missing instruction products are never presented as proof that Aurelia
+"ignored" or "omitted" an attribute: without an explicit final-disposition carrier, a classified non-plain attribute
+with no proved effect remains open. Only open facts tied to the exact attribute carrier qualify the answer; unrelated
+project module debt does not contaminate it. Source-discovery truncation remains answer-wide and produces typed
+`truncated` uncertainty. The answer envelope `analysisBasis` is the freshness authority, next steps are capped at
+three, and the first available source step points to the selected bindable/resource/command declaration before an
+issue/blocker source and requery guidance. MCP consumes the same generic app-query result without a dedicated schema.
 
 Cursor-locus callers can skip that manual open step by asking the runtime facade directly:
 
 ```ts
 const cursorInfo = await runtime.templateCursorInfo({
-  cursor: { filePath: 'packages/my-package/src/my-element.html', line: 12, character: 18, offset: 340 },
+  cursor: { filePath: 'packages/my-package/src/my-element.html', line: 12, character: 18 },
 });
 ```
 
+Public cursor queries accept line/character as the complete locus contract. An explicit offset is an optimization for
+editor clients; completions, cursor info, references, rename, and code actions normalize a missing offset through the
+same authored-source resolver before performing containment checks.
+
 `templateCursorInfo(...)` and `templateCompletions(...)` first reuse any already opened app-world whose compiled
-template owns the cursor source. That preserves app context for templates that entered the compiler world through an
-app dependency or plugin package. If no opened app contains the cursor source, the facade selects the owning project,
+template owns the cursor source and whose pinned template generation is still current. That preserves app context for
+templates that entered the compiler world through an app dependency or plugin package. If no opened app contains the
+cursor source, the facade selects the owning project,
 enables authoring-template compilation by default, and opens an authoring world whose default source selection is the
 cursor file. App callers can still pass `projectKey`, `includeAuthoringTemplates: false`, explicit authoring source
 options, or `authoringTemplateLimit` when they need different scope or budget behavior.
 
 Rows default to compact source labels and counts. Opaque kernel handles are intentionally opt-in through
 `SemanticRuntimeDetail.Handles`; they are useful for exact in-process follow-up navigation but too noisy for initial
-answers. Paged app rows use offset cursors for this in-process facade. Earlier semantic-string cursors looked nicer but
-quietly assumed every row projection had a unique display key, which is false for repeated controller and binding
-shapes; exact follow-up navigation should use handles instead of cursor text. A paged query returns `partial` only
-when the returned page has a `nextCursor`; a caller that drains all pages should see a final `hit`, even when the last
-page is smaller than the total row count. Cursor-scoped template completion answers may carry an opaque continuation
-cursor from the completion inquiry because the candidate set is not a durable row table.
-Paged row tables are bounded by row count and by estimated UTF-8 JSON size for the returned row array. Dense families
-such as binding observed-dependency rows can hit the payload budget before they hit the row-count clamp; in that case
-the page returns fewer rows, sets `byteClamped: true`, reports `estimatedRowsJsonBytes` and `maxRowsJsonBytes`, and
-still provides `nextCursor` when more rows are available. Public adapters should treat this as pagination, not lossy
-truncation. Callers that need complete row families should drain `nextCursor`; `partial` is a successful bounded page
-state for dense answers.
-`OpenSeamSites` reads the same unpaged seam row set as `OpenSeams`, then groups repeated derivations by authored
-source span and seam kind. Use it before raw seams or kind summaries when a large app reports hundreds of seams: one
-authored expression can produce many raw evaluator rows after callback/intrinsic expansion, and the public first read
-should say "two authored sites covering six raw rows" rather than making derivation count look like problem count.
-`OpenSeamSummary` remains the kind/reason cluster view for understanding dominant seam families after the site-level
+answers. Paged app rows use opaque cursors bound to normalized query identity, project/app generation, and ordering
+version. Cross-query, stale-generation, malformed, and out-of-range cursors return `invalid` answers instead of being
+interpreted as raw offsets. Exact follow-up navigation should use answer-local row/owner/cluster keys or handle
+projection rather than cursor text. Paging never changes answer coverage: a bounded page can remain
+`answered/not-applicable/complete` when the query enumerated its declared semantic basis. `page.nextCursor` alone says
+that more transport rows remain. A size-zero page returns rollup/total state without rows and can still provide a
+followable continuation.
+Paged row tables are bounded by row count and target an estimated UTF-8 JSON size for the returned row array. Dense
+families such as binding observed-dependency rows can hit the payload target before they hit the row-count clamp; in
+that case the page returns fewer rows, sets `byteClamped: true`, reports `estimatedRowsJsonBytes` and
+`maxRowsJsonBytes`, and still provides `nextCursor` when more rows are available. The first selected row is returned
+even when it alone exceeds the byte target so that paging can advance; `estimatedRowsJsonBytes` can therefore exceed
+`maxRowsJsonBytes` for that one-row progress case. Public adapters should treat this as pagination, not lossy
+truncation. Callers that need complete row families should drain `nextCursor`; semantic `coverage` remains independent
+from row-count and byte clamping.
+Answerers whose deterministic row order can be derived from compact candidate facts page those candidates before rich
+row projection. A size-zero or rejected-cursor request must therefore do no selected-row work. Byte-budgeted pages may
+project one additional candidate to decide that it does not fit, but that lookahead is neither returned nor consumed by
+the continuation cursor.
+`AnalysisLimitations` is the normal product-pressure read. It applies explicit semantic-runtime rules and effective
+project policy to conserved seam causality, then returns one finding per admitted rule and exact authored source site.
+It is intentionally not a count or filter over all product-pressure seams. `OpenSeamSites` reads the same unpaged seam
+fact set as `OpenSeams`, then groups repeated derivations by exact authored root source for deliberate audit. One site
+may therefore retain multiple seam kinds, reason kinds, boundary kinds, and pressure kinds. Use it before raw seams or
+kind summaries when an audit reports hundreds of seams: one authored expression can produce many raw evaluator rows
+after callback/intrinsic expansion, and the audit should say "two authored sites covering six raw rows" rather than
+making derivation count look like problem count.
+`OpenSeamSummary` remains the typed seam-kind/reason-signature cluster view for understanding dominant seam families after the site-level
 problem count is clear. Raw seam, site, and summary answers all own compact `displayText`: raw rows report seam-kind
 and reason-kind rollups plus a few source-backed samples, site rows report unique authored locations with raw-row and
 variant counts, while summary rows report dominant clusters, source-file coverage, and sample locations. `OpenSeams`,
-`OpenSeamSites`, and `OpenSeamSummary` accept `sourceFile`, `openSeamKindKey`, and `openSeamReasonKind` so a large
-cluster count always has a direct drill-down path. Public adapters should forward that text before asking for handle
-detail.
+`OpenSeamSites`, and `OpenSeamSummary` accept source, kind, reason, answer-local cluster, and answer-local site selectors
+so a large cluster count always has a direct drill-down path. Summary/site queries do not support handle detail and
+refuse that selector rather than silently dropping it; raw `OpenSeams` owns handle projection.
 `AppOverview` is the compact app-opening answer for MCP and other AI callers. It composes summary, topology counts,
-diagnostic clusters, and open-seam clusters without making adapters reconstruct that answer locally. The topology child read uses a compact summary projection instead of
+diagnostic clusters, and configured analysis limitations without making adapters reconstruct that answer locally. It
+also retains a typed `openSeams` child as explicit audit/compatibility data, but its normal display does not promote raw
+seam counts or samples. `analysisLimitationPageSize` defaults to five; `openSeamPageSize` independently defaults to zero
+and an explicit value still requests raw authored-site audit rows. The topology child read uses a compact summary projection instead of
 asking the full `AppTopology` row DTO and summarizing afterward. Call `AppTopology` directly when row families or
 bindable value type surfaces are needed; those surfaces remain opt-in through `includeTypeSurfaces`, keeping overview
 answers from spending answer-local TypeChecker member projections or retaining broad topology DTOs.
@@ -348,7 +503,8 @@ instead of a cursor-bearing page when samples are needed. Use the specific route
 `ViewportAgents`, when a caller needs cursor paging for one family. Router overview also owns `displayText` so public
 clients can see the route/runtime-tree counts, issue state, and row-sampling policy before opening raw router rows.
 `readSemanticAppQueryCatalog()` and `runtime.appQueryCatalog()` expose the supported app query vocabulary with group,
-result-role, paging/detail, source-file, cursor, router-product, and minimum analysis-depth metadata. `pagingKind`
+result-role, paging/detail, source-file, cursor, type-surface capability, materialization policy, router-product, and
+minimum analysis-depth metadata. `pagingKind`
 distinguishes ordinary offset row cursors from router row-sample sizing and cursor-locus
 continuations. Public adapters such as MCP should use `minimumAnalysisDepth` for default generic-query opening so first reads can stay at
 `runtime-topology` while binding-owned rows still request their required substrate. The catalog accepts `group` and
@@ -394,6 +550,10 @@ const dialogIssues = app.ask({ kind: SemanticAppQueryKind.DialogIssues });
 const configurationIssues = app.ask({ kind: SemanticAppQueryKind.ConfigurationIssues });
 const evaluationIssues = app.ask({ kind: SemanticAppQueryKind.EvaluationIssues });
 const observationIssues = app.ask({ kind: SemanticAppQueryKind.ObservationIssues });
+const resourceInventory = app.ask({
+  kind: SemanticAppQueryKind.ResourceInventory,
+  page: { size: 200 },
+});
 const definitions = app.ask({ kind: SemanticAppQueryKind.ResourceDefinitions });
 const resourceIssues = app.ask({ kind: SemanticAppQueryKind.ResourceIssues });
 const routerOptions = app.ask({ kind: SemanticAppQueryKind.RouterOptions });
@@ -418,6 +578,15 @@ const templates = app.ask({
   kind: SemanticAppQueryKind.TemplateCompilations,
   page: { size: 20 },
 });
+const availableResources = app.ask({
+  kind: SemanticAppQueryKind.TemplateResourceAvailability,
+  cursor: {
+    filePath: 'src/my-element.html',
+    line: 12,
+    character: 18,
+    offset: 340,
+  },
+});
 const exactTemplateRows = app.ask({
   kind: SemanticAppQueryKind.TemplateCompilations,
   page: { size: 5 },
@@ -441,6 +610,37 @@ const cursorInfo = app.ask({
     character: 18,
     offset: 340,
   },
+});
+const templateReferences = app.ask({
+  kind: SemanticAppQueryKind.TemplateReferences,
+  cursor: {
+    filePath: 'src/my-element.html',
+    line: 12,
+    character: 18,
+    offset: 340,
+  },
+  includeDeclaration: true,
+  page: { size: 50 },
+});
+const templateCodeActions = app.ask({
+  kind: SemanticAppQueryKind.TemplateCodeActions,
+  cursor: {
+    filePath: 'src/my-element.html',
+    line: 12,
+    character: 18,
+    offset: 340,
+  },
+  diagnosticProjection: 'type-projection',
+});
+const templateInlayHints = app.ask({
+  kind: SemanticAppQueryKind.TemplateInlayHints,
+  sourceFile: { filePath: 'src/my-element.html' },
+  page: { size: 50 },
+});
+const templateSemanticTokens = app.ask({
+  kind: SemanticAppQueryKind.TemplateSemanticTokens,
+  sourceFile: { filePath: 'src/my-element.html' },
+  page: { size: 200 },
 });
 const templateDiagnostics = app.ask({
   kind: SemanticAppQueryKind.TemplateDiagnostics,
@@ -494,17 +694,38 @@ not treated as portal bindables. Runtime binding diagnostics also include i18n `
 missing `t`/`t.bind` keys (`AUR4000`), duplicate `t-params.bind` on the same translated element (`AUR4001`), and
 dynamic key expressions whose checker type is definitely not string-compatible (`AUR4002`).
 Unmet framework capability demands surface as `framework-capability-not-registered` rows rather than generic
-`template-compiler-error` rows. The producer currently covers runtime-html shorthand syntax, i18n/state plugin syntax,
-router/validation-html/ui-virtualization built-in resources, and expression-owned value-converter/binding-behavior
-resources. Authored sites remain inert or unresolved when their framework capability is not registered, while the
-diagnostic suggestion targets the framework capability and includes manifest/import availability evidence when present.
-When no local manifest/import evidence exists, the suggestion says so instead of implying the package is already
-available. Diagnostic-action classification treats these rows as app-source framework-capability registration pressure
-with source-edit policy still open, because the template demand site is not itself the bootstrap edit location.
+`template-compiler-error` rows. A separately closed `framework-capability-configured-out` row means that the owning
+plugin/configuration is admitted but an exact option value excludes the requested alias, resource, or syntax surface.
+The producer covers runtime-html shorthand syntax, i18n/state plugin syntax, router/validation-html/ui-virtualization
+built-in resources, and expression-owned value-converter/binding-behavior resources. Authored sites remain inert or
+unresolved when their capability is unavailable; diagnostics retain exact registration-admission sources,
+configured-out option sources, and manifest/import availability evidence as three distinct planes.
+When no local manifest/import evidence exists, registration guidance says so instead of implying the package is already
+available. Diagnostic-action classification treats missing registration as app-source capability-registration pressure.
+`TemplateCodeActions` can promote supported rows to exact source operations when local package/import evidence exists and
+the owning template world can be routed back to an app-root `.app(...)` chain. Configured-out rows remain guidance unless
+a source planner can prove the intended configuration replacement; the current implementation deliberately invents no
+such edit.
 `FrameworkCapabilityDemands` exposes the underlying authored demand rows directly, including admission state,
-package/import availability evidence, source-file scoping, related issue lanes, and compact actionability posture.
-Use it to inspect registered, missing, unknown, and chain-unproven capability demand facts without changing which rows
-become diagnostics.
+registration-admission sources, configured-out option sources, package/import availability evidence, source-file
+scoping, related issue lanes, and compact actionability posture. Use it to inspect admitted, configured-out, missing,
+unknown, and chain-unproven capability demand facts without changing which rows become diagnostics.
+`FrameworkCapabilityExplanation` is the cursor-locus product answer over those conserved facts. It selects only exact
+template-authored demand spans, optionally narrowed by the closed `frameworkCapability` selector, and fails closed with
+`absent` or `ambiguous` selection rather than choosing a contender in an adapter. An exact answer authors the subject,
+conclusion, admission/configuration/package/blocker evidence, uncertainty, and at most three source- or query-backed
+next steps. Missing package evidence never becomes an install or registration claim. Admission-unknown, chain-unproven,
+and blocker-backed answers retain open coverage. The answer envelope's `analysisBasis` remains the only currentness
+authority; value-level text only tells callers to requery after source or project changes. Source-service API demands
+remain outside this first explanation slice because their consulting-container ownership requires a separate DI/service
+experience.
+Each template demand also exposes its compiler analysis-context handle. The same component definition can be compiled
+under more than one app-root world, so consumers must join by definition plus analysis context rather than collapsing
+rows by source or resource spelling. Built-in ownership follows the resolver-selected resource catalog member; a known
+plugin spelling is consulted only when no resource resolved.
+Host-dependent plugin options are projected as unknown demands with blocking open-seam handles even when compilation
+uses a conservative default-shaped catalog for recovery. Template diagnostics intentionally emit only for
+`not-admitted` and `configured-out`; an open option is inspection pressure, not evidence for either accusation.
 Weak-member template diagnostics reuse the cursor-info member-owner path and therefore must use each resource's
 runtime-analysis expression world. This keeps diagnostic rows aligned with completion/cursor answers for binding
 behavior lifecycle cases such as i18n `t.bind` evaluate-only keys versus `t-params.bind` source-scope projection.
@@ -523,23 +744,64 @@ inline template references, generated template addresses, and HTML node/value pr
 different authored spans. The API selection path therefore matches the source file and offset against the resource's
 authored HTML span set and prefers the narrowest matching span. The pressure script compares this public API answer with
 the lower-level inquiry answer so wrapper/source-selection drift is visible without printing app source details.
-The API also threads the app emission's modeled `RouteConfig` product handles into the completion inquiry. This lets
-`load="|"` answer from router facts as `router-route` candidates instead of treating the value as an open string or
-re-scanning source for route-like names.
+Cursor dispatch can also select a narrower evaluator-derived lexical scope than the durable parent binding-scope handle,
+for example inside arrow callbacks. Completion answering must spend that selected scope directly; re-reading only the
+parent product loses callback locals and shadowing identity. The public page cursor is transport state. Adapters that need
+a complete candidate family drain it without changing semantic coverage, while LSP `isIncomplete` remains reserved for a
+client requery against a list that is intentionally narrowed as typing changes.
+The API also threads the app emission's modeled `RouteConfig` product handles and router-instruction parameter endpoint
+plans into the completion inquiry. This lets `load="|"` answer from router facts as `router-route` candidates and lets
+`params.bind="{ | }"` answer from selected endpoints as `router-route-parameter` candidates without re-scanning source
+or re-evaluating the route expression.
+The cursor adapter likewise preserves narrower authoring domains that broad HTML site kinds cannot express by
+themselves. Ref-target candidates are host-sensitive and come from the same-node hydration products used by runtime ref
+validation; listener events come from the active TypeScript DOM event-map projections; listener modifiers come from
+the framework-default modifier model; and local-template bindable modes come from the exact declaration product and
+mode source address. The candidate kind records that semantic role while `siteKind` remains the compatible broad
+attribute-name or attribute-value surface expected by IDE clients. Once selected, an exact authoring domain owns the
+candidate list; generic attribute or value collectors do not add unrelated candidates to that syntax position.
+The public result preserves this narrower `domainKind`. Framework-default modifier candidates carry open answer coverage
+until the app-effective `IKeyMapping` and `IModifiedEventHandlerCreator` registrations can be projected; custom handler
+implementations do not expose an enumerable modifier vocabulary and must never be presented as a closed list.
 Completion answers own compact `displayText` with site kind, candidate count, template lane/path, frontier/missing-input
 state, and a small candidate preview. Public clients should forward that instead of turning candidate rows into prose in
 the adapter.
+Cursor-derived and inquiry-derived missing inputs share one honesty boundary: if either remains, a completion is
+`answered/exact/open`. Do not merge missing inputs into the value after computing complete coverage; that produces a
+self-contradictory public answer.
 `TemplateCursorInfo` uses the same cursor-to-template selection and value-site classification path, but returns the
 semantic site under the cursor rather than completion candidates: site kind, HTML node/attribute, active value site,
 selected definition, selected bindable, selected expression member, member-owner type, parser frontier, and template
-lane. It is the shared footing for future hover, definition, diagnostic, and explanation APIs. Bindable selection is
-source-bearing when the resource definition has authored bindable metadata, so go-to-definition can later target the
-bindable declaration instead of stopping at the owning custom element or custom attribute. Expression-member selection
-keeps the owner type available for completion and diagnostics, but also resolves the exact authored member token when
-the cursor is on a closed member name; hover/definition can then target the member declaration rather than only the
-owner type. The owner type row deliberately exposes both the template/expression projection source and the TypeScript
-declaration source. Hover/explanation can point at the projection source when answering "why this type here?", while
-definition and owner-type repair planning should prefer the declaration source when the checker can name one.
+lane. It is the shared footing for hover, definition, diagnostics, and explanation APIs. Bindable selection exposes its
+metadata source fields separately from `propertySource` and `callbackTargetSource`; definition can therefore target the
+implementation while references and rename retain all authored metadata declarations. Expression-member selection
+keeps the owner type available for completion and diagnostics, and distinguishes the source that introduced a scope slot
+from the TypeScript `declarationSource` reached by its identity. The owner type row likewise exposes both the
+template/expression projection source and the TypeScript declaration source. Explanation consumers can point at the
+projection source when answering "why this type here?"; default hover keeps projection and declaration provenance below
+its presentation boundary. Definition and owner-type repair planning should prefer the declaration source when the
+checker can name one.
+A cursor on router navigation syntax can additionally expose one `selectedRouteTarget`. Plain `load`/`href` route
+expressions resolve through the recognized route to an exact authored RouteConfig path, while eager `route:` forms
+resolve through their endpoint plan to the exact authored RouteConfig id. Query and fragment text, open navigation
+values, and multiple distinct endpoint targets do not produce a selected target. Definition adapters must spend this
+cursor-owned fact instead of scanning RouteNodes or matching broad instruction spans.
+A resolved scope slot proves a root symbol independently; member-owner projection is optional enrichment in that case,
+so an unavailable owner context must not turn otherwise complete scope completions into an open answer.
+Cursor answers also expose `activeSource` as the narrowest authored token locus proven by the owning parser or
+materialized HTML product. HTML elements preserve separate opening- and closing-tag name addresses, while attributes
+preserve name and value addresses; those durable lexical fields carry source-observation evidence and field provenance
+in addition to their broader node/attribute carrier. Expression tokens remain parser-owned spans projected directly to
+`SemanticSourceReference`: allocating one hot kernel address per expression token would reverse the kernel-compression
+boundary without adding a more durable product fact. IDE adapters should consume these loci and refuse invalid offsets,
+not rescan document text or clamp stale spans into apparently valid ranges.
+File diagnostics use the parser's canonical scope-access inventory for missing roots and unsupported host globals;
+they do not infer roots from observed-dependency rows. Listener and dispatch sources are intentionally untracked, but
+their names still require diagnostics, navigation, and repair. Scope slots and checker-projected members decide whether
+one of those structural roots is proven. Parser frontier subtrees remain available for completion and recovery, while
+root-absence diagnostics wait for a canonical AST so one syntax error does not cascade into false missing-member rows.
+When a parser token narrows a broader expression carrier, source projection retains that carrier's workspace, file-role,
+and authored anchor metadata instead of trading provenance for token precision.
 Those member declarations may come from app source, source-shipped packages, or Program-only declaration files. The API
 should surface the source reference when the TypeChecker can name the declaration. If the cursor is on a member of an
 index-signature-only owner, cursor-info may report that selected member as an index-signature access with the indexed
@@ -549,9 +811,77 @@ Index-signature selected members are only synthesized for string-capable indexed
 such as primitive or array-like keyed reads, must not make arbitrary dot members look real. When a member token is
 authored on a known owner type but the owner does not project that member, cursor-info reports
 `missing-expression-member` with an inspect or declare-member action target instead of hiding the mismatch behind a
-completion hit.
-Cursor-info answers also own `displayText` for MCP/LSP-style hover or explanation surfaces: selected HTML/value site,
-resource/bindable/member/owner facts, cursor diagnostics, missing inputs, and the next focused tool family.
+successful completion list.
+Cursor-info answers also retain `displayText` for compact MCP/debug summaries. LSP hover consumes the structured selected
+facts, `diagnosticPresentation`, and typed uncertainty; it does not render raw `missingInputs`.
+`TemplateReferences` and `TemplateRename` share one canonical binding-resolution target and authored-occurrence closure.
+The parse owns exact tokens, the rendered binding owns target interpretation, and a runtime access use is attached only
+when Aurelia actually has an operation that spends that resolution. This keeps a `fromView`-only attribute source
+navigable and renameable without falsely reporting a source read or data-flow edge. Returned
+`template-usage` rows use the exact authored member token as their primary `source`; declaration rows can include both
+the TypeScript property and distinct bindable metadata names, with `bindableDeclarationKind` preserving the authored
+form. Default-derived attribute spellings join through the bindable's property target, explicit aliases remain a
+separate public-name surface, and conventional `${name}Changed` propagation spends the converged callback target rather
+than reconstructing a class AST locally. TypeScript member closure is projected from the Program-owned related-symbol
+adapter, so interfaces and implementations, base members and overrides, accessor pairs, overload declarations,
+contextual object properties, and destructuring sites remain one family without an API-local symbol scan. Related
+declarations are all retained when `includeDeclaration` is true. References may include external or standard-library
+declarations; rename first asks TypeScript for eligibility and then requires every related source to be editable.
+TypeScript denial or one non-editable source refuses both prepare and execution, including conventional bindable
+callback propagation, rather than returning a partial `WorkspaceEdit`.
+Lexical and member references join parse-owned occurrences through the binding-context resolution and materialized
+`BindingScope`; they do not require a runtime use or observed-dependency row. That distinction keeps listener, dispatch,
+one-time, non-evaluated, blocked, and other intentionally untracked syntax navigable. When runtime uses and observed
+dependencies exist for a resolution, the same reference row carries every richer lineage handle; it neither chooses a
+representative operation nor emits a second occurrence. An occurrence equal to its slot's authored declaration locus is
+not emitted again as a usage.
+Resource reference contexts do not require a mappable authored declaration in order to return authored usages.
+Framework/catalog resources anchor the query at the active usage and omit the nonexistent declaration row; their
+definition product remains the matching authority. Rename stays unavailable with
+`resource-name-has-no-authored-source`, which distinguishes a real selected resource with no workspace-owned name token
+from a cursor that selected no source-backed semantic surface at all.
+Named `PART.ref` targets join that same resource closure through the controller already resolved during controller bind.
+Their usage/edit kind is `ref-target`; language targets such as `element`, `controller`, `component`, and `view` are
+excluded. Semantic tokens spend the same relation and exact pattern-part loci: resolved custom elements, custom
+attributes, and template controllers use their Aurelia resource token roles, listener event names use `aureliaEvent`,
+and listener modifiers use `aureliaModifier`. Deprecated authored `view-model.ref` remains visible as a deprecated
+keyword even though lowering executes `component.ref` semantics.
+`TemplateCodeActions` is the conservative edit-planning projection for runtime-owned template diagnostics at a cursor.
+It reads the same diagnostic rows as `TemplateDiagnostics`, but only turns a suggestion into an edit when semantic-runtime
+can prove the authored target and exact insertion span. Supported edit families include `declare-view-model-member`
+for missing root-scope members, and `register-framework-capability` for closed framework capability demands whose
+owning compiler world resolves to an app-root `.app(...)` chain with local package/import evidence. Framework
+registration edits are planned through `source-plan`: imports are updated with TypeScript AST spans, and
+`.register(...)` is inserted before the proven app-root call. Other diagnostic suggestions remain structured repair
+intent until a future planner can prove their source operation; clients should not treat every suggestion row as an
+automatic fix. Code-action rows retain a non-empty set of source diagnostics, carry the same diagnostic-stage `repair`
+affordance, and prove plan availability with a non-empty tuple of exact edits. Every edit carries a non-null authored
+source and `oldText`; insertion plans use the empty string so delayed hosts can validate them under the same
+all-or-nothing rule as replacements. Equivalent-plan deduplication merges the
+source diagnostic evidence instead of choosing one representative diagnostic. The split is intentional: a diagnostic
+may be guided or `source-edit-policy-open` while one returned quick fix carries a concrete multi-edit plan, because the
+source planner has crossed the stricter authored-operation boundary for that app context.
+`configure-framework-capability` is a distinct structured suggestion for a surface excluded by closed plugin options.
+It does not become a code action merely because the option source is known: the intended new value, alias policy, or
+subscriber template is product intent and must be proven by a dedicated planner before an edit is safe.
+`TemplateInlayHints` is the IDE-shaped template hint projection. Rows are source-file filterable and currently expose
+implicit binding-mode resolution: authored default `.bind` command intent, the resolved runtime binding mode, a
+display-friendly mode label, and exact authored insertion source. The row's primary `source` is the attribute-name span
+where an LSP client should place the hint; broader attribute and runtime binding spans remain available as
+`attributeSource` and `bindingSource` for explanation or lower-level follow-up. Explicit mode commands such as
+`.to-view` and `.two-way` should not produce rows because their intent is already visible in source.
+`TemplateSemanticTokens` is the shared IDE token-coloring projection. Rows are source-file filterable and use the
+stable LSP-facing token legend exported from the public contract. Tokens are conservative, source-linked facts derived
+from compiled templates and parsed expressions: resolved Aurelia elements, bindables, commands, template controllers,
+custom attributes, `<let>` declarations, interpolation/value-expression identifiers, value converters, and binding
+behaviors. Element rows use the exact materialized opening and closing tag-name addresses rather than rediscovering names
+inside the broader element carrier. Token rows are presentation evidence only; edit, rename, and repair features should use cursor-info,
+references, diagnostics, and future edit-policy answers rather than inferring authority from coloring.
+`TemplateFoldingRanges` is the shared IDE folding projection. Rows are source-file filterable and carry exact authored
+element spans derived from compiled HTML structure, with tag name, definition name, child count, and self-closing state
+for consumers that want explanation or secondary grouping. The query intentionally returns only multiline authored
+regions and requires only runtime-topology facts; LSP clients should translate the row `source` spans to native folding
+ranges rather than reparsing template text.
 Authoring orientation exposes both individual `repairs` and grouped `repairClusters`. Individual rows preserve the
 cursor/file evidence needed for later edits; clusters are the first large-data view for apps with many repeated weak
 typing diagnostics, grouping by repair kind, diagnostic/open-seam class, suggestion action, target kind, missing input
@@ -562,7 +892,7 @@ distinct target member names, and member-level hints with evidence counts plus o
 hints also carry their source: `selected-member` when the TypeChecker already projected the
 member, `assignment-target` when a binding assignment target supplies the value type, or `binding-target` when a
 value-site target type can honestly be inferred. Missing coverage is still useful signal; do not fill it from text
-interpolation or a weak/null target observer just to make an autofix look complete. Pressure scripts must summarize
+interpolation or a weak/null target observer just to make an edit plan look complete. Pressure scripts must summarize
 those dimensions without printing app-specific member names or paths, but the API keeps them available for future
 code-action planning, such as proposing an interface shape from repeated weak-owner member reads or deciding which
 member hints still need value-type inference. Keep repair/edit planning outside diagnostic row projection: diagnostics
@@ -583,7 +913,7 @@ Clusters also publish a planning classification: `planKind`, likely `changeDomai
 semantic repair intents, not edits. A weak owner cluster can now say "strengthen this app-source owner type" and carry
 the observed member/type surface, while a router or evaluator seam can stay in the runtime-policy or substrate lane. The
 readiness value keeps source edit policy, missing target source, runtime intent, and substrate work distinct so a future
-code-action layer does not mistake a high-count cluster for an immediately safe autofix.
+code-action layer does not mistake a high-count cluster for an immediately safe edit plan.
 Source-bearing open seams publish a `runtime-boundary` action target when the owning seam has an authored address. That
 does not mean the edit is known; it means the future planner has a precise source locus for collecting user/product
 intent, such as deciding whether a dynamic router `href` is deliberately external, should become a static navigation
@@ -595,8 +925,9 @@ declaration provenance.
 Like app API pressure, cursor-locus pressure accepts explicit `--fixture` and `--root` selectors for focused canary
 runs. Prefer those selectors over env-only root overrides when comparing cursor-info behavior across overlay, router,
 and form pressure fixtures; the printed aggregate still omits source text and raw paths.
-Completion pressure classes prefer cursor-diagnostic-backed labels when the LSP envelope already explains a miss or
-partial answer, but the script still prints the underlying `missingInputs` counters separately. That keeps actionable
+Completion pressure classes prefer cursor-diagnostic-backed labels when the LSP envelope already explains an absent or
+open answer, but the script still prints the underlying `missingInputs` counters separately. It also reports result,
+selection, and coverage independently so an answered-but-open completion is not flattened into execution failure. That keeps actionable
 repair surfaces such as missing scope-slot types visible without making them look like unexplained autocomplete gaps.
 It also seeds a bounded `diagnostic-probe` lane from file/app diagnostic source ranges before generic expression
 sampling. The reader may inspect more diagnostic rows than it samples and then chooses loci by diagnostic pressure class,
@@ -644,8 +975,10 @@ checker evidence without turning overlay diagnostics into a second public diagno
 Diagnostic rows keep `missingInput` as the primary compact reason and also expose `missingInputs` for the full reason
 set. Binding assignment strictness can legitimately carry multiple TypeScript-policy reasons for one authored source
 span, so consumers should aggregate `missingInputs` when they need pressure counts or code-action routing.
-Binding data-flow rows expose `sourceAssignmentTargetSource` when source writeability was resolved through a
-TypeChecker-backed scope/context member. Template diagnostics use the same address for their suggestion action target,
+Binding data-flow rows expose `sourceAssignmentOccurrenceSource` for the exact authored token receiving a
+target-to-source write and `sourceAssignmentTargetSource` for the declaration/context slot reached by Aurelia scope
+lookup. Template references and rename join those two facts so pure writes remain navigable without masquerading as
+observed reads. Template diagnostics use the target address for their suggestion action target,
 which lets a future code action jump from `value.bind="priority"` or a custom two-way bindable directly to the
 authored getter/setter/member that receives the observer value.
 Binding data-flow summary rows preserve compact source-type open counts and issue rollups so MCP/LSP callers can explain
@@ -668,11 +1001,19 @@ that controls commonly write strings even when their visual domain looks numeric
 Runtime-unassignable target-to-source bindings are separate from TypeScript strictness. Aurelia's `astAssign` falls
 through without updating unsupported expression targets, so semantic-runtime reports those as
 `binding-source-assignment-runtime-noop` with `use-assignable-expression` guidance rather than as framework errors.
+Framework-managed scope state is a third class. Repeat contextuals are readable authoring surfaces but are updated by
+the framework, so attempted writeback reports `binding-source-assignment-framework-managed` under
+`semantic-authoring-policy`. This remains true for `$index` and `$length` even though `Repeat` mutates their runtime
+properties internally; runtime representation does not grant template-author assignment authority.
 Source-assignment diagnostics are published from binding data-flow rather than template checker overlays, because
 data-flow already knows the binding direction, target observer/value channel, source write capability, and Aurelia
 `astAssign` policy. When a parse AST is available, the public diagnostic source narrows through
 `runtimeAssignmentTargetAstForParse(...)` to the authored assignment expression target (`binding-source-assignment`)
 instead of the whole binding attribute; repair action targets still use the TypeChecker member/declaration source.
+The opposite direction is owned by the same product. A proven `sourceToTargetAssignable: false` publishes
+`binding-target-assignment-strictness` on the authored source expression, distinguishing general incompatibility from
+nullable-source-to-required-target pressure. This must not be delegated to generated overlays: only binding data-flow
+knows the effective mode, converter result, child bindable target type, and runtime value channel together.
 The reserved `$host` access scope is the exception on both read and write paths. A missing `$host` runtime context maps
 to `ast_$host_not_found` (`AUR0105`) during source evaluation, and framework `astAssign` throws
 `ast_no_assign_$host` (`AUR0106`) before ordinary scope lookup during writeback. Binding data-flow therefore reports
@@ -699,14 +1040,28 @@ binding behaviors map to `ast_behavior_not_found` (`AUR0101`), and duplicate aut
 `ast_behavior_duplicated` (`AUR0102`) through `RuntimeHtmlAstFrameworkErrorCode`. The repair guidance for those rows
 should route to resource registration or expression rewrite, not callable-expression repair.
 Repeat destructuring is owned by scope construction instead: `RuntimeBindingScopeIssue` products spend checker-backed
-binding-pattern projection and map non-object or non-Array-rest item shapes to `AUR0112`. Keep this partial: the Atlas
+binding-pattern projection and map nullish object-pattern items or non-Array array-rest sources to `AUR0112`. Non-nullish
+primitive object-pattern items remain valid under RC2 semantics. Keep this partial: the Atlas
 runtime `ast*` frontier is broader than these call/destructuring diagnostics, and unmodeled runtime AST failures should
 stay unclaimed until the matching expression, assignment, or scope-effect substrate exists.
 Repeat source compatibility is also scope-owned, but its authority comes from runtime-html `RepeatableHandlerResolver`
 rather than runtime AST: scope construction now maps sources outside the built-in repeat categories to
 `repeat_non_iterable` (`AUR0777`) through `RuntimeHtmlControllerFrameworkErrorCode`. The modeled default
-categories are arrays, sets, maps, numbers, and nullish. App-registered `IRepeatableHandler`s are future DI/configuration
-pressure, so do not broaden this with generic TypeScript iterable or array-like heuristics before that substrate exists.
+categories are arrays, sets, maps, numbers, and nullish. Scope construction also spends the exact
+`all(IRepeatableHandler)` lookup from the active render container. Framework `ArrayLikeHandler` admits object values
+with numeric length, while app-owned handlers reuse their DI resolver state, evaluated class declaration, and
+checker-visible `iterate(value, callback)` contract. A source outside a closed handler value domain remains rejected;
+an admitted custom source stays open when its item contract is unknown. Do not broaden this with generic TypeScript
+iterable heuristics or with registration-presence-only guesses.
+The same scope-issue product family reports `template-controller-null-binding-context` for a built-in `with` value that
+can reach `null`. This row has `framework-runtime-behavior` authority rather than a framework error code: runtime-html
+passes `null` into the child `Scope`, and ordinary scope lookup later throws a JavaScript error while applying `in` to
+that binding context. `undefined` is intentionally excluded because `with` replaces it with `{}`. The diagnostic source
+is the exact value expression, and the retained source type drives definite-versus-possible severity.
+`unsupported-repeat-declaration` now describes the narrower `virtual-repeat` boundary. RC2 core `repeat` admits the
+supported shallow object-pattern lane, but the virtualization controller reads one `BindingIdentifier`; object and
+array patterns therefore create no destructured locals there. The row intentionally has no framework error code,
+targets the exact declaration span, and recommends rewriting to one virtual-repeat local plus property access.
 Repeat option diagnostics are controller-owned. Runtime rendering now publishes `RuntimeControllerIssue` products for
 the `Repeat` constructor failures that inspect iterator tail `MultiAttrInstruction`s: invalid `key` commands
 (`AUR0775`), extraneous option targets (`AUR0776`), and invalid `contextual` commands (`AUR0821`). Template diagnostics
@@ -738,7 +1093,9 @@ Runtime renderer diagnostics are owned by `RuntimeRendererIssue` when the failur
 binding/controller product exists. `RefBindingRenderer` maps `view.ref` to `AUR0750` because runtime-html rejects that
 ref target during `getRefTarget(...)`, maps missing named ref targets to `AUR0751` only after a custom-element host
 exists, and maps `AUR0762`/`AUR0763` for the framework `findElementControllerFor(...)` host checks that happen before
-controller/component or named custom-element fallback can resolve on ordinary DOM elements. `SpreadValueRenderer` maps
+controller/component or named custom-element fallback can resolve on ordinary DOM elements. Ref renderer rows use the
+exact authored target part and the `template-syntax` diagnostic subject; transformed or missing targets must not fall
+back to the whole attribute carrier. `SpreadValueRenderer` maps
 invalid spread targets to `AUR0820` when `.spread` lowering produces a `SpreadValueBindingInstruction` target other than
 `$bindables`. Diagnostics surface these as `runtime-renderer-framework-error` rows.
 Runtime binding-behavior diagnostics are owned below the API by `RuntimeBindingBehaviorIssue`. Built-in bind-time
@@ -749,13 +1106,15 @@ Custom binding-behavior bind methods can contribute direct `PropertyBinding.useT
 the compiler resource scope; conflicting target-subscriber effects surface as `AUR9995`.
 The sibling `AUR9993` service replacement failure is intentionally unclaimed until semantic-runtime models non-default
 `INodeObserverLocator` configuration.
-`BindingBehaviorApplications` exposes the positive side of that same materializer: each authored `& behavior`
-application that survives resource lookup and bind-time modeling reports its behavior name, owning binding kind,
+`BindingBehaviorApplications` exposes the application side of that same materializer: each authored `& behavior`
+attempt reports its behavior name, owning binding kind,
 bind-time phase, argument count, statically known scalar/template literal argument values, target kind/property, source
-address, and optional product handles. Use this query when authoring needs to verify that a generated template
+address, nullable resolved resource, and optional product handles. A null resource retains the attempted application
+that owns AUR0101 instead of deleting the authored use before diagnostics. Use this query when authoring needs to verify that a generated template
 materialized a behavior such as validation-html `& validate:'blur'`; keep it distinct from diagnostics, which only
 surface rejected or conflicting applications.
-Runtime value-converter diagnostics are owned below the API by `RuntimeValueConverterIssue`. Built-in `sanitize`
+Runtime value-converter diagnostics are owned below the API by `RuntimeValueConverterIssue`. Missing converter lookup
+is a bind-phase AUR0103 issue attached to an application whose resource is null. Built-in `sanitize`
 invocation now spends runtime-html `method_not_implemented` (`AUR0099`) only when the converter resource is visible and
 the active container tree has no modeled `ISanitizer` resolver; app-provided sanitizer registrations suppress the
 diagnostic. Template diagnostics surface that row as `runtime-value-converter-framework-error` with service-registration
@@ -816,10 +1175,22 @@ than identical to every semantic checker root. The Program may include evaluated
 observation and template analysis can ask the checker about Program-owned nodes, while ordinary TypeScript diagnostics
 only iterate the parsed tsconfig diagnostic source set when one exists. Semantic-runtime overlay sources are also
 checker roots, but their diagnostics stay hidden until a query can map a synthetic span back to authored Aurelia source.
-Config read/parse/option diagnostics are kept on the same surface, so public adapters do not need to shell out to `tsc` or build a second Program. It preserves
-`diagnosticDomain` and `relatedQueryKind` so callers can drill back into the owning query instead of treating app
-diagnostics as a separate semantic layer. The owning diagnostic rows are collected before the app-level page is applied;
-do not page a child query and then aggregate it, or pressure summaries will hide high-volume diagnostic classes.
+Config read/parse/option diagnostics are kept on the same surface, so public adapters do not need to shell out to `tsc`
+or build a second Program. This aggregation is a normalized index, not a replacement owner record. Every app diagnostic
+preserves the common facts available from its owning row: phase, raw framework authority, missing inputs, structured
+subject kind/name/source, related information, repair suggestion, and source role use explicit nullable or empty values
+rather than disappearing by domain. Evaluation and DI subjects preserve their existing domain enums, resource subjects
+reuse the existing resource taxonomy, and template/observation subjects use the normalized member/expression vocabulary;
+adapters must not widen these back to `string` or drop `subjectName`. Phase and diagnostic kind are closed unions of the
+owning domain ontologies and must be interpreted with `diagnosticDomain`. TypeScript diagnostic kinds remain extensible
+only through the explicit `TS${number}` namespace; aggregation must not widen any of these fields to an ungoverned
+string. At `detail: "handles"`, the
+normalized handle carrier preserves the owning issue product/identity/source route plus any modeled owner,
+related-source, template-source, or resource-definition routes;
+compact rows omit the handle carrier. Domain-specific payload remains on the owning query. `diagnosticDomain`
+and `relatedQueryKind` identify that query family so callers do not have to treat app diagnostics as a separate semantic
+layer or reverse-engineer ownership from wording. The owning diagnostic rows are collected before the app-level page is
+applied; do not page a child query and then aggregate it, or pressure summaries will hide high-volume diagnostic classes.
 `AppDiagnosticSummary` reads that same unpaged diagnostic row set, then clusters by diagnostic domain, kind, authority,
 framework code, severity, and owning query. Use it before raw rows when a large app needs dominant diagnostic classes
 rather than the first source-ordered page. App diagnostic row and summary answers also own compact `displayText` with
@@ -850,15 +1221,43 @@ ordinary `.ts` diagnostics: they come from a virtual TypeScript source that repl
 materialized binding-scope ancestry, then maps admitted checker diagnostics back to the authored template span. Keep the
 public admission policy narrow. Syntax/name-resolution/implicit-any complaints from generated overlay code are
 substrate pressure unless the overlay can prove a specific authored cause; public rows currently admit semantic
-missing-member, nullish access, type/argument mismatch, and readonly-assignment-style codes and carry
+missing-member, nullish access, type/argument mismatch, overload rejection, non-callable values, and
+readonly-assignment-style codes and carry
 `missingInput: "typescript:TS####"` plus a structured action target. Nullish overlay diagnostics use
 `guard-nullish-expression` because the authored repair is usually a guard, optional chain, or earlier narrowing step;
 other admitted checker rows stay on `inspect-owner-type` until the diagnostic policy can prove a more specific repair.
-When a semantic-runtime diagnostic already owns
-the same authored missing-member span, the overlay row is suppressed as duplicate checker evidence rather than surfaced
-as a second user issue; TypeScript-native rows such as argument mismatches, arity mismatches, nullish access, and
-unknown-owner access remain public. Template overlay rows share the same TypeScript diagnostic severity mapping as
-ordinary TypeScript diagnostic rows so unified diagnostic answers do not drift by lane.
+Raw template and app diagnostic tables retain admitted checker rows even when a semantic-runtime diagnostic owns the
+same authored relationship. Detailed rows preserve the overlay lifecycle phase, semantic product, identity and source
+address, origin key, generated file, and mapped segment label. `AppDiagnostics.presentation` is the answer-local user-facing
+join: exact missing-member or assignment agreement keeps the Aurelia-aware semantic row primary and attaches the
+TypeScript row as contextual `checker-evidence`. Exact diagnostic-source equality, rather than subject-envelope equality,
+owns this join because a checker call subject can enclose the semantic member-access subject. Checker ownership remains
+one-to-one so coincident authored sources cannot consume the same checker fact twice. Resource metadata uses the same
+contextual relation only for three explicit decorator agreements: AUR0228 with TS2769, AUR0227 with TS1166, and AUR9990
+with TS1241/TS1270. It does not infer generic duplicate policy from overlapping ranges.
+This avoids duplicate editor diagnostics without deleting independent facts needed by MCP, AOT, explanation, or future
+policy consumers. TypeScript-native rows such as argument mismatch,
+arity mismatch, nullish access, and unknown-owner access remain primary. Template overlay rows share the same TypeScript
+diagnostic severity mapping as ordinary TypeScript diagnostic rows so unified diagnostic answers do not drift by lane.
+Presentation also carries explicit answer-local `withheld` references for context-only weak-owner facts that remain after
+all causal, semantic, and checker grouping passes. Index-signature, `any`, and no-members inspection facts stay in raw
+rows and may remain contextual, but do not become standalone Problems. A weak owner with
+`expression-member-owner-type:missing-slot-type` remains primary because its exact scope-slot locus supports a
+`declare-scope-slot-type` repair. Presentation conserves every raw row exactly once across group primary rows, contextual
+rows, and withheld references: `rawRowCount === primaryCount + contextualCount + withheldCount`; no raw row index may be
+missing or appear in more than one role. Problems adapters must honor a present presentation instead of republishing raw
+rows. A presentation built for an incomplete page is answer-local and must be recomputed after page reassembly.
+Raw diagnostic rows can also carry product-grounded `diagnosticRelations` independently from this presentation policy.
+Adapters must spend those answer-local identities before detaching rows. Standard LSP `Diagnostic.data` and unresolved
+`CodeAction.data` outlive one semantic answer, so they retain stable diagnostic/source facts but not kernel handles or
+answer-local relation identities; custom inspection responses may retain the identities only while carrying the whole
+answer and its related rows together. Published diagnostic batches should include the document version.
+Repeat source rejection spends the retained iterator effect, runtime binding, child-Scope creator, and introduced local
+slot to relate its later facts to the owning `AUR0777` row. Assignment strictness is parallel semantic evidence about
+that same runtime operation; checker and weak-owner diagnostics rooted in the rejected local are derived analysis
+consequences. The owning diagnostic identity and relation target remain present in compact rows so paging and LSP
+reassembly never fall back to source/code coincidence. Presentation may group those rows, but aggregation and paging
+must preserve every raw fact. Do not infer these edges from source proximity or message text.
 `AppOverview` uses `available-products` for its nested diagnostic summary so a compact first read does not publish
 query-time type products or full Program diagnostics. Explicit `AppDiagnostics`, `AppDiagnosticSummary`,
 `TypeScriptDiagnostics`, `TypeScriptDiagnosticSummary`, and `TemplateDiagnostics` calls still default to the repair
@@ -868,18 +1267,24 @@ summary/orientation flows can request `available-products`, while deeper repair,
 request `type-projection` and accept the measured CPU/memory cost.
 The policy for turning weak owner and binding assignment pressure into cursor/file diagnostic rows lives in
 `template-diagnostic-policy.ts`. Keep that boundary honest: cursor/template readers should locate source and semantic
-context, while the policy module owns severity, suggestion kind, action target, and product-policy wording.
+context, while the policy module owns severity, suggestion kind, action target, and product-policy wording. A definite
+missing member on a closed owner is a warning independently from whether that owner admits a declaration edit;
+repairability changes the suggestion, not the correctness severity. Framework-derived summaries normalize the producer's
+useful sentence once and keep framework subsystem identity and AUR codes in structured fields instead of repeating generic
+`Aurelia ... rejects ...` wrappers. Native TypeScript messages remain verbatim, with their diagnostic code preserved
+separately.
 The legacy recipe-authoring catalog, guidance, orientation, and recipe-plan answers have been removed from this API.
 Do not add compatibility wrappers for them in `runtime.ts`, MCP, or query catalog rows. The preserved source artifacts
-now live as neutral fixture pressure and source-plan/app-builder substrate. Public app-generation answers grow through
-`SemanticRuntime.appBuilderQueryCatalog(...)` and `SemanticRuntime.answerAppBuilderQuery(...)`, a static/generation
-workflow facade kept separate from app-world query kinds. The app-builder facade includes read-only
-`ontology-catalog` terrain, selectable `target-catalog` rows, recommendation-policy review, source-lowering preflight, input readiness, input contract detail, affordance
-detail, application pattern detail, collection concept detail, control pattern detail, effect contract detail, policy
-axis detail, style detail, menu discovery,
-app-builder source-lowering invocation, app-builder source-lowering composition, source-lowering preview, concrete `part-source-invocation`
-callbacks, catalog integrity, and SourcePlan generation;
-MCP should forward those runtime-facade answers rather than reconstructing app-builder policy locally. The lower-level
+now live as neutral fixture pressure and source-plan/app-builder substrate.
+
+`SemanticRuntime.appBuilderQueryCatalog(...)` and
+`SemanticRuntime.answerAppBuilderQuery(...)` remain exported internal facades
+for contracts, fixture materialization, source-lowering research, and evidence
+harvesting. They are separate from app-world query kinds and are not registered
+as current MCP tools. The detailed boundary belongs to
+[`../app-builder/README.md`](../app-builder/README.md).
+
+The lower-level
 `answerSemanticRuntimeAppBuilderQuery(...)` and `answerSemanticRuntimeAppBuilderQueryCatalog(...)` helpers are pure
 deterministic answerers for contracts, generated fixture materialization, and registry checks; they do not attach
 query-claim wrapping or typed continuations unless a caller explicitly uses the shared continuation projector.
@@ -887,21 +1292,21 @@ Diagnostics-to-action and
 future edit planning should grow from diagnostic/open-seam rows rather than from the old recipe/orientation shape.
 The app-builder query catalog and answerer registry are one checked API surface:
 adding a query kind must add enum value, catalog row, and answerer together so a
-transport cannot advertise an uncallable app-builder query.
-`ontology-catalog` is summary-first for public/MCP reads: it reports domain
+caller cannot select an uncallable app-builder query.
+`ontology-catalog` is summary-first for internal reads: it reports domain
 summaries, total row counts, source-lowering-implemented counts, relation counts,
 and display flags by default. Full ontology row families require
 `includeRows: true`, and relation graph rows require `includeRelations: true`
 or an explicit relation-kind filter, so broad orientation does not ship the
 entire app-builder graph unless the caller asks for detail.
 Input readiness accepts contract-wide markers, facet-scoped markers, and facet payloads; facet payloads validate
-against `input-contract-detail` schemas where modeled, so public callers can prove concrete supplied facts before
-source lowering without making the MCP invent missing app intent.
+against `input-contract-detail` schemas where modeled, so internal callers can prove concrete supplied facts before
+source lowering without relying on hidden app intent.
 Target catalog source-lowering availability is reverse canary coverage from current source-lowering surfaces to ontology
 rows; it is not a source-lowering support flag.
-No-argument target catalog answers return a 25-row first page in actionable-first order so the broad MCP/menu read stays
+No-argument target catalog answers return a 25-row first page in actionable-first order so broad internal reads stay
 compact while still exposing a cursor. Explicit filters, exact target selections, and caller-supplied page requests use
-the shared public paging behavior.
+the shared paging behavior.
 Target catalog rows also carry compact policy handles: whether the row is a local defaulting candidate, the optional
 defaulting policy scope/rationale, and whether a contextual executable row requires policy satisfaction. Full
 applicability/evidence rows remain in `recommendation-policy`, and satisfaction state remains in preflight where a
@@ -952,7 +1357,13 @@ same lane: dynamic property bindings such as `component.bind`, `model.bind`, `co
 come from controller binding, while static `scope-behavior`, `tag`, and `flush-mode` come from literal
 `SetPropertyInstruction`s on the hydrate instruction. Component/template/model inputs also carry direct/promise/absent/open
 fulfillment fields so API callers can tell when a framework-supported promise-valued composition input was statically
-unwrapped. Plain object and non-resource constructable components report
+unwrapped. TypeChecker-backed component rows separately expose candidate coverage: `complete` means every member of a
+finite exact named-class basis resolved to a custom-element definition, `partial` retains useful candidates when that
+basis or its resource mapping is not exhaustive, and `open` means no useful resource identity survived. A broad
+construct signature can therefore contribute a candidate through its return type without claiming complete coverage.
+Candidate coverage does not claim the runtime-selected component value is known and never authorizes materializing one
+concrete child from a multi-candidate set. Plain object
+and non-resource constructable components report
 `componentResolutionKind=object-view-model`; they can still contribute activation handoff rows, but they do not claim
 compiled-template or candidate resource-analysis coverage because no custom-element definition exists.
 Rows also carry `renderingContextKind` so callers can separate a resource's definition-local template analysis from
@@ -970,6 +1381,10 @@ applications, runtime watcher rows, watcher observed-dependency rows, runtime co
 value-channel rows, and data-flow rows must travel together with summary, topology, source files, and open seams.
 Unsupported row-backed projections fail at snapshot construction time, so callers do not mistake a too-shallow analysis
 depth for absence of the expected semantic facts.
+The helper uses the `fixture` inquiry profile for every constituent query. A snapshot is one batch operation over one app
+epoch, so its answer-local products remain available across the related query set instead of being reconstructed after
+every row family. A harness that creates a fresh cold runtime for comparison should retire that runtime after reading the
+snapshot; this keeps batch-local reuse distinct from cross-fixture retention.
 `runtime-watcher`, `runtime-watcher-observed-dependency`, `binding-observed-dependency`,
 `computed-observer-source`, and `computed-observer-observed-dependency` expected effects form the first route-scoped
 semantic-contract lane for observation pressure. Focused fixtures assert controller-owned watcher admission, proxy
@@ -1004,6 +1419,10 @@ sites, weak owner shapes such as `any`, index-signature-only records, or owner t
 reported there so callers can explain the absence of candidates. They are not, by themselves, proof of a missing
 semantic-runtime rule; pressure scripts classify them as weak-type pressure unless a concrete typed member was lost
 between scope construction and the answer.
+Cursor inquiry also spends framework capability-demand products at the exact authored site. A recovered resource or
+scope can still provide useful candidates, locals, and types when its capability is not admitted, but the required
+capability remains in `missingInputs` and answer coverage stays open. The diagnostic projection may present the same
+fact as an actionable error; it is not the source of the cursor answer's epistemic state.
 
 `AppTopology` is the first app-building projection. It composes already-materialized configuration, resource, compiler,
 template, authored router facts, and source CSS imports into app roots, components, route configs, bindables,
@@ -1065,8 +1484,10 @@ cover `AUR4101`, `AUR4102`, `AUR4105`, `AUR4106`, and `AUR4108` only when the fr
 serialized validation payloads and live custom-rule execution remain unclaimed until semantic-runtime admits those
 product surfaces.
 
-When `createSemanticRuntime` is opened without explicit projects, boot discovers package/tsconfig project frames for
-monorepo-shaped workspaces. Default `openApp()` chooses an `aurelia-app` project from import/receiver-grounded bootstrap
+When `createSemanticRuntime` is opened without explicit projects, boot discovers the union of package, tsconfig,
+jsconfig, and native Aurelia configuration marker roots for monorepo-shaped workspaces. Hosts with additional workspace
+topology knowledge can supply `projectRootHints`; semantic-runtime merges those boundaries into the same discovery and
+configuration authority. Default `openApp()` chooses an `aurelia-app` project from import/receiver-grounded bootstrap
 signals without constructing and
 emitting rejected candidates into the shared kernel store; callers with a known app package should still pass
 `projectKey` explicitly. If no app-shaped project exists, `openApp()` now fails closed instead of treating an arbitrary
@@ -1108,20 +1529,37 @@ shape env vars: `aurelia-app`, `aurelia-resource-library`, `aurelia-package`, an
 rows. Use it for project/source-root footing pressure before treating a missing import as an evaluator or Aurelia
 semantic gap.
 
+`AnalysisLimitations` is the policy-aware product surface over open semantic facts. The first admitted rule is
+`aurelia.analysis.dynamic-registration-spread`, which defaults to `information`. It reports only exact authored
+app-source registration spreads whose typed runtime/framework reason and materialization evidence prove that the
+`configuration.sequence` product remains open. Evidence-only seams, tool-coverage boundaries, unrelated product
+pressure, imprecise source loci, and other seam families stay queryable but do not become findings merely because they
+exist. New rules require their own adjudicated causal and product predicate.
+
+Each row carries a stable rule-plus-exact-source `findingKey`, semantic-rule authority, explanation and action text,
+typed reason facts, exact authored spread source/range, current `open` coverage, and answer-local seam-site,
+materialization, and affected-product evidence keys. The result also exposes the exact project key, conventional native
+policy-file path and existence, and the effective disposition/authority/source trace for every admitted rule. The
+project configuration can set a rule to `off`, `information`, `warning`, or `error`; `off` removes its rows and normal
+reported count while `candidateCount`/`suppressedCandidateCount` preserve a bounded policy trace and the underlying
+seams remain available through audit queries. Disposition is presentation policy rather than a generic semantic seam
+severity. Reported rows enter `AppDiagnostics` mechanically under the `analysis` domain with
+`semantic-authoring-policy` authority and their configured disposition; suppressed/raw candidates never enter it.
+
 `OpenSeams` is app-emission scoped, not a raw dump of the shared workspace kernel store. In a monorepo runtime session,
 opening another project should not make seam rows bleed into the first app answer. The projection includes source-
 addressed seams owned by the app's admitted/evaluated sources plus emission-local DI, template, runtime rendering,
 observer, value-channel, and data-flow seams that may not have a precise authored address yet.
-`OpenSeamSites` is the default public trust surface for these rows. It keeps raw seam rows available for detail but
-groups them by exact source path/span plus seam kind, then reports `rawRowCount`, `variantCount`, attempt kinds,
-boundary kinds, reason kinds, and the best source range that can be calculated at query time. This grouping is
+`OpenSeamSites` is the default grouped audit surface for these rows. It keeps raw seam rows available for detail but
+groups them by exact root source path/span, then reports every seam kind, `rawRowCount`, `variantCount`, boundary kinds,
+pressure kinds, reason kinds, materialization/product impact, and the best source range that can be calculated at query time. This grouping is
 answer-local and does not add durable kernel records; it exists because kernel records intentionally preserve
 derivation-level detail while MCP/IDE first reads need authored-site counts.
 `OpenSeamSummary` remains the family-cluster view, but its samples should be just as actionable as site rows: keep
 `sampleSources` for source-reference identity and use `sampleSourceSites` when text or UI needs authored
 `path:line:column` locations. Summary rows also carry `uniqueSiteCount`, so cluster displays can distinguish raw
 derivation amplification from the number of authored sites that need inspection.
-Rows expose human `summary` text, typed `reasonKinds`, and optional `reasonSources` for reason-level source/evidence
+Raw rows expose human `summary` text, typed `reasonKinds`, and optional `reasonSources` for reason-level source/evidence
 when one coherent seam has adjacent contributing source sites. Pressure scripts should aggregate the typed reason kinds
 when present, reserving summary text for human inspection and raw-detail debugging. For example, a router resource whose
 instruction value depends on host environment state remains a router open seam, but carries both
@@ -1130,6 +1568,20 @@ When the same router seam is blocked by a binding expression, router materializa
 `router-instruction-needs-static-value` reason and attach the lower-level binding-source reason, such as a runtime scope
 slot without a static value carrier. This keeps ownership honest: router owns the product seam; observation owns the
 source-value explanation.
+Open-seam pressure is causal rather than cloned prose. `evidence-only` means a seam is queryable at its authored root but
+does not block a published product; `product-pressure` means a `MaterializationOpenSeamRelation` links the same root seam
+to one or more materialization owners and affected products. Public raw rows preserve structured owner/product impacts,
+site rows conserve their aggregate cardinality, and cluster rows group only by typed seam kind plus reason signature.
+Never infer causality from source containment or manufacture a downstream seam with rewritten summary text.
+Transforming consumers spend that relation locally. Evidence-only seams and pressure on unrelated products do not block
+an operation. Pressure whose `impactKey` matches the exact requested materialization selects a semantics-preserving
+runtime fallback when the product contract provides one and blocks only that transformation when it does not. There is
+no global seam severity from which IDE, MCP, or future AOT consumers may infer whole-app failure.
+Boundary kinds are derived only from typed reason facts. `cause-unresolved` means the producer proved that the result is
+open but did not prove one narrower causal family; do not replace it with a more specific boundary inferred from prose or
+code location. Split the producer reason when stronger evidence exists. Source identity, authored-site grouping, and
+source-file counts include workspace and file-role identity in addition to path/span so equal-looking monorepo paths do
+not collapse across projects.
 Dynamic `href` router-resource seams can also carry `router-href-externality-open`. That reason means the framework
 would decide at runtime whether the value is an external URL before creating viewport instructions; semantic-runtime has
 not proven either the external lane or a static internal route string. Click-interception facts are separate:
@@ -1165,6 +1617,68 @@ channel/type inputs, `firstDefined(...)` with no defined argument, and `Metadata
 framework utility guards use `frameworkRawErrorAuthority` instead of synthetic AUR codes. `AppDiagnostics` reports these
 rows under the `evaluation` domain and links back to `evaluation-issues`.
 
+`ResourceInventory` is the product-facing resource-discovery answer for one explicitly selected app project. It folds
+project definitions, configured framework catalogs, compiler-visible resources, and compiler-local
+`<template as-custom-element>` definitions into one deterministic five-kind inventory: custom elements, custom
+attributes, template controllers, value converters, and binding behaviors. Binding commands and attribute patterns
+remain compiler-syntax products and are counted as excluded syntax rather than masquerading as runtime resources.
+
+Inventory `identityKey` values are opaque semantic projections, never kernel handles. Framework resources derive
+identity and package origin from their modeled catalog. TypeScript-authored resources use retained module/export/local
+declaration identity plus registration kind as their base, so ordinary public-name changes and source-offset moves do
+not replace a uniquely owned product identity. If several retained candidates share that base, the one authoritative
+full definition keeps it; otherwise header evidence precedes visibility-only evidence. Remaining contenders receive
+deterministic variant identities in their relative semantic-emission order, without adding public names or source
+offsets to the identity. More than one full definition for the same TypeScript owner and registration kind is an
+invariant failure rather than an arbitrary winner.
+Compiler-local templates use their template-family owner, taxonomy kind, public name, and same-owner duplicate ordinal.
+Only a row with no semantic declaration owner falls back to an exact source locus. Aliases and bindables receive child
+identities under the owning resource. The promise is stability across app generations while the semantic owner is unchanged,
+not persistence across arbitrary declaration moves or ambiguous duplicate emission reordering. `origin` reports project,
+framework/package, external, or unknown ownership without guessing package names from paths.
+
+Inventory source roles remain distinct: `sources.publicName` is the exact authored public-name token,
+`sources.declaration` is the full declaration/carrier, and `sources.implementation` is the exact implementation target.
+Navigation should prefer the public-name source, then the implementation source when conventions leave no authored
+public-name token. Pathless framework/catalog rows remain visible and explicitly non-navigable. Declaration provenance
+does not absorb admission provenance: a framework row can retain an external catalog declaration while a template
+availability row points at the authored registration that admitted it.
+
+Inventory bindable identity, mode, setter/nullability policy, and source roles are part of the compact default answer.
+Checker-backed value-type surfaces are enrichment: pass `includeTypeSurfaces: true` when a consumer needs them and
+inspect `typeSurfacesIncluded` to distinguish an intentionally compact answer from unavailable type facts. Compact rows
+preserve the type-surface fields as `null`, so adapters do not need a second DTO. Resource evidence is converged before
+projection and each final definition is projected once; repeated configured/compiler/visibility occurrences must not
+multiply checker work or select a different definition by visitation order. `TemplateResourceAvailability` follows the
+same selector contract while retaining its cursor-selected scope semantics.
+
+`TemplateResourceAvailability` is the cursor-scoped companion. It selects the narrowest compiled template occurrence
+and returns exactly that compiler world's effective runtime-resource scope. Equally specific occurrences from different
+app roots return `selection: ambiguous` with candidate template/scope identities and no unioned rows. A caller must
+choose a project before opening the app and must choose a candidate scope before treating availability as exact. Pass
+the chosen `scopeIdentityKey` back as `templateResourceScopeIdentityKey`; a stale or unrelated key returns
+`selection: absent` with the current candidates rather than selecting another scope.
+
+`ResourceAvailabilityExplanation` is the causal companion for one exact top-level inventory identity. It requires a
+cursor and `resourceIdentityKey`, accepts `templateResourceScopeIdentityKey` only to adjudicate a returned compiler-
+scope ambiguity, and never falls back from identity to public name. V1 explains only the resource's canonical runtime
+key. Inventory aliases remain definition metadata and are not treated as proof that an alias was effectively registered.
+If a product remains broadly visible through a surviving alias but has an exact exclusion for its canonical key, that
+canonical-key exclusion wins and the explanation reports `shadowed` rather than `available`.
+The answer distinguishes an effective winner, a retained lookup-key exclusion with exact loser/winner witnesses,
+closed framework configuration exclusion, closed not-admission, and admission that remains unknown because typed
+registration/configuration seams or discovery limits can hide the resource. Source discovery truncation and unresolved
+module evidence therefore never produce a closed `not-admitted` conclusion. The engine authors subject, conclusion,
+evidence, uncertainty, currentness, and at most three next steps; clients must not reconstruct causality by joining
+inventory and availability rows. The answer envelope's `analysisBasis` is the sole freshness authority.
+
+Registration-hiding seams are conservative across the selected container chain. Until the substrate carries an exact
+seam-to-resource-key ordering witness, a relevant seam keeps modeled `available` and `shadowed` winners open as well as
+modeled absences. It also keeps a `configured-out` conclusion open: the closed option remains valid evidence about the
+modeled provider, but the seam can still supply the canonical key through another registration. Recognized framework
+registration groups are exempt only where their closed catalog family proves that a residual non-resource DI seam
+cannot publish the requested resource key.
+
 `ResourceDefinitions` exposes converged Aurelia resource definitions recognized from explicit decorators, runtime
 definition objects, static fields, metadata, and project conventions before app-world/compiler visibility is known.
 This is the right query for plugin-library and monorepo package pressure where a package can define resources without
@@ -1172,7 +1686,16 @@ booting an app root. Rows include resource kind, declaration modes, name/key/ali
 dependencies, template shape, watch metadata, attribute-pattern entries, custom-element/custom-attribute flags, and
 optional kernel handles. Declaration modes preserve the convergence carrier mechanism, so public analysis and future
 generation policy can distinguish decorator, static, definition-object/factory, and current convention resource styles
-without re-reading source.
+without re-reading source. Its bindable type surface is part of that full definition contract rather than an optional
+selector, so the query is always classified as `query-type-projection`; callers wanting the compact app-facing catalog
+should use `ResourceInventory` instead.
+Resource source loci are intentionally not interchangeable: `source` is the metadata carrier that produced the
+definition, `targetSource` is the exact target token used for navigation and edits, and `targetDeclarationSource` is
+the full class or variable declaration used by hierarchy/outline consumers. Imported define-call targets retain the
+target module's source ownership for both target loci; consumers must not re-anchor target offsets to the module that
+contains the resource definition call.
+Public `resourceKind` fields are author-facing taxonomy; consumers that need framework registration-key joins should
+derive registration identity with `registrationResourceKindFor(...)`.
 Watch rows expose the metadata shape that resource convergence can statically close: expression kind/property key,
 callback kind/property key, flush mode, and source references for the expression/callback carriers when known.
 `ResourceIssues` exposes known framework failures in that same resource metadata lane. It is for closed static errors,
@@ -1183,8 +1706,10 @@ seam instead. It also owns runtime-html duplicate resource-definition registrati
 DI registration spending can prove the duplicate named resource slot, plus direct runtime-html resource API failures
 (`AUR0151`, `AUR0152`, `AUR0759`, `AUR0760`, `AUR0761`) when TypeChecker-resolved call sites and recognized resource
 definitions prove the same framework path.
-`ResourceVisibility` stays narrower: it answers which definitions are visible to a particular compiler world after
-configuration, DI, and resource-scope composition have materialized.
+`ResourceVisibility` stays lower-level: it enumerates every compiler world's raw visibility rows after configuration,
+DI, and resource-scope composition have materialized. Handle detail includes the retained resource identity for exact
+in-process joins, but handles are store-local and must never become presentation identity. Product consumers that need
+one template's effective resources should use `TemplateResourceAvailability` rather than joining or unioning these rows.
 
 `ConfigurationIssues` exposes known framework failures discovered while reading source-backed configuration products.
 It currently includes direct runtime `Scope` API nullish-argument failures (`null_scope` / `AUR0203` and
@@ -1202,17 +1727,24 @@ metadata. `AppDiagnostics` aggregates configuration, DI, observation,
 evaluation, template, resource, router, and route-recognizer diagnostics by reading each owning diagnostic row set first, then applying the
 app-level page; do not page one diagnostic domain before aggregation or app-level counts will drift.
 
-`RouterOptions` exposes effective option products materialized from `RouterConfiguration` admissions and
-owner-tagged `customize(...)` option contributions. Rows include the framework-defaulted booleans and strings that are
-already used by static topology, especially `useHref`, `useUrlFragmentHash`, and `useEagerLoading`. These rows are the
-authoring/API view of router option convergence; they are not a navigation runtime state snapshot.
+`RouterOptions` exposes effective option products materialized from concrete `RouterConfiguration` DI registration
+uses. Each row is owned by one `AppRoot` and reports the root/component, receiving container, exact registration use,
+configuration-value definition source, and framework-defaulted booleans and strings used by static topology,
+especially `useHref`, `useUrlFragmentHash`, and `useEagerLoading`. An unregistered customized value produces no row;
+one value reused by several roots produces one row per registration use. These rows are the authoring/API view of
+root-owned router option convergence; they are not a navigation runtime state snapshot.
 
-`Routes` exposes source-backed authored router route configs recognized from `@route(...)`, `Route.configure(...)`, and
-Aurelia's static route metadata path used by `Route.getConfig(...)`. Rows preserve route kind, paths,
-origin kind, value kind, id/title/redirect/viewport/data/nav/fallback presence, child-route cardinality, routeable component reference kind,
-whether that routeable has resolved to a concrete resource definition, source, and optional handles. Dynamic
-`import(...)` route components are reported through the promise routeable lane even when their fulfilled custom element
-definition is already known.
+`Routes` is a source-backed authoring view built as a contribution/effective join. It emits one row per authored
+`@route(...)`, `Route.configure(...)`, static metadata, or child-route contribution; `originKind`, `valueKind`, execution
+state, effect kind, and source describe that contribution, while stage, closure, normalized fields, field states, and
+open fields come from its associated definition or per-use applied `RouteConfig`. `effectiveUseCount`,
+`effectiveVariantCount`, and `effectiveFieldsStable` disclose when one authored contribution participates in several
+effective uses instead of duplicating the authoring row or selecting a use silently. Rows also retain routeable component
+and fallback resolution plus optional handles. `idSource` identifies the exact authored id token, or the path token from
+which Aurelia derived the id; `pathSources` retains one exact token per normalized path. These addresses are distinct
+from the broad contribution carrier and are the declaration loci used by route completions and navigation. Dynamic
+`import(...)` route components stay in the promise routeable lane even when their fulfilled custom-element definition
+is already known.
 
 `RoutePatterns` is the next lower route-recognizer layer. It parses closed route-config paths into
 `ConfigurableRoute`-shaped rows with `Parameter`, `StaticSegment`, `DynamicSegment`, and `StarSegment` facts,
@@ -1246,13 +1778,25 @@ RouteConfigContext eager path generation publishes `eager-path-generation-failed
 whose endpoint path cannot be generated from the provided params. Rows preserve route-config and recognized-route
 references when available, the component/path/redirect fields relevant to the owning router algorithm, source, and
 optional handles.
+Definitely executed duplicate `RouterConfiguration` registrations in one modeled app root publish
+`duplicate-router-configuration` with `rcHasRootContext` / `AUR3168` authority. The second registration is primary, the
+first is related, and no arbitrary RouterOptions/topology winner is produced. App diagnostic presentation keeps the
+same-source duplicate built-in resource rows as contextual runtime consequences so the IDE reports one causal error
+without deleting raw resource evidence.
+Router issues may also carry related information when one source fact has several concrete router contexts. The
+`shared-base-route-context-parameter-read` warning is a `semantic-authoring-policy` row rather than a framework error:
+it points at the inherited base call and relates every routed descendant without selecting one owner or merging their
+route parameter domains.
 Template diagnostics also project router issue rows whose authored source belongs to the selected template. Those rows
 use `router-framework-error` so file-level and cursor-locus APIs can surface `load`/`href` expression parser,
 instruction creation, recognition, viewport-resolution, and eager path-generation failures without moving issue
 ownership out of the router domain. `AppDiagnostics` still reads the owning router issue lane and filters those
-template-projected copies to avoid double-counting. Cursor-info uses the same projection path and should prefer the
-exact expression/value span from parser or HTML value provenance over the broader attribute carrier when a router issue
-originates in a template value.
+template-projected copies to avoid double-counting. The shared router diagnostic policy attaches `missingInput` and
+`fix-router-instruction` repair intent to the owning `RouterIssues` row only when its source proves a template-authored
+instruction failure; `AppDiagnostics` preserves that repair facet. TypeScript route-config, redirect, and recognizer
+issues do not acquire template-expression guidance merely because they share the router issue product. Cursor-info uses
+the same projection path and should prefer the exact expression/value span from parser or HTML value provenance over
+the broader attribute carrier when a router issue originates in a template value.
 `RecognizedRoutes` exposes the next layer for closed static router-resource instruction paths. Rows carry the recognized
 path, residue presence, fulfilled parameter count, parameter-name groups, decoded parameter values, recognizer
 reference, causing `ViewportInstruction` / `ViewportInstructionTree`, route-context closure, redirect depth,
@@ -1268,22 +1812,34 @@ recursive child recognized-route rows when the residual `ViewportInstruction` se
 component's child `RouteConfigContext`; the child row carries the routed child context, while the parent row preserves
 the residual parameter value that the framework keeps as the parent route-node residue handoff.
 
-Resolved routeable components also seed template compilation. That recursive rendering bridge lets routed component
+Resolved routeable components also seed template compilation. Routeable rows preserve authored `name` separately from
+the resolved custom-element `resolvedName`; route-context paths, viewport `usedBy` matching, and planned route nodes
+spend the resolved name while source navigation retains the authored carrier. An unresolved routeable keeps
+`resolvedName: null` and cannot cross into a planned node by borrowing its authored label. That recursive rendering bridge lets routed component
 templates and nested `au-viewport` / `ViewportAgent` topology show up before a future route-tree/navigation emulator
 exists. App roots seed the route-context topology when they are known; resource-only package analysis can still fall
 back to graph roots. Treat this as static route/component topology, not as proof that viewport activation or guard
 lifecycles ran.
-The app summary also distinguishes configured-route contexts from runtime route contexts: `routeConfigContexts` counts
+The app summary also distinguishes configured-route contexts from potential route contexts: `routeConfigContexts` counts
 the `RouteConfigContext`/recognizer topology, while `routeContexts` counts the static `RouteContext` products that join
-those config contexts to parent/root context, modeled child containers, and hosting viewport agents. `routerViewports`
-and `viewportAgents` are owned by those runtime route contexts, not by the config-context layer. The
+those config contexts to parent/root context, modeled child containers, and hosting viewport-agent candidates.
+`routerViewports` and `viewportAgents` are potential products owned by those contexts, not by the config-context layer.
+Rows carry `realizationStage: potential`; no current public row claims live router state. The
 `RouteContexts`, `RouteContextParameterReads`, `RouterViewports`, and `ViewportAgents` queries expand those counts into
-compact rows with labels, source references, container/host-controller closure, and optional handles.
+compact rows with labels, source references, container/host-controller closure, and optional handles. Viewport rows
+also expose `single`/`optional`/`many`/`open` presence, per-field closure, and exact `name`/`usedBy`/`default`/`fallback`
+sources. Open bound values remain null plus structured field state and open seams; they are never rewritten as absent
+framework defaults.
 `RouteContextParameterReads` specifically reports source-backed `RouteContext.getRouteParameters(...)` calls, the
 declared parameter keys on the TypeScript call, the route-config paths for the owning routed component, the recognized
-path parameter names, and whether declared non-path keys are only query/open parameters.
-`RouteTrees` and `RouteNodes` expose the route-tree layers that are currently closed: the synthetic root tree/node that
-`Router.routeTree` creates before navigation, and context-relative transition trees compiled from closed static
+path parameter names, and whether declared non-path keys are only query/open parameters. Ownership joins through the
+module-local custom-element target identity carried by effective route configs; `componentClassName` is display data,
+not a semantic key. Inherited calls publish one row per known routed descendant instead of unioning their parameter
+domains; `ownershipKind` distinguishes direct, inherited, and unmatched rows, while `knownOwnerCount` preserves the
+one-to-many cardinality. Multiple inherited owners also produce a policy-owned RouterIssue at the base call with exact
+related route sources; one inherited owner does not produce that warning.
+`RouteTrees` and `RouteNodes` expose the route-tree layers that are currently closed. Synthetic root tree/node rows use
+`realizationStage: potential`; context-relative transition rows use `realizationStage: planned` and are compiled from closed static
 `ViewportInstructionTree` products when their recognized routes point at non-redirect route configs. Rows carry
 instruction-tree closure, root context/config/component labels, node counts, effective options closure, query/fragment
 shape, instruction/original-instruction references, recognized-route references, decoded params, child-first and
@@ -1296,7 +1852,9 @@ path-only parameters and include-query parameters; include-query append/by-route
 query values across route contexts because Aurelia copies the active instruction-tree query params onto every active
 route node before aggregation. Treat these rows as pre-activation
 route-tree compilation facts; the runtime still does not claim to have run guards, scheduled viewport updates,
-activated component agents, or exhausted every redirect edge case. Redirect routes that reach transition
+activated component agents, or exhausted every redirect edge case. Planned route nodes retain a
+`viewportAgentCandidate` and `viewportCandidateResolution: sole`; the candidate has not passed the framework's live
+availability gate. Multiple or runtime-dependent candidates produce open seams and no partial plan. Redirect routes that reach transition
 compilation without a modeled redirect target still surface an explicit router open-seam reason instead of silently
 disappearing from the transition tree. Closed static redirect targets are consumed through their
 `redirectSourceRouteConfig` edge, and framework-rejected redirect targets or expression shapes surface as
@@ -1313,9 +1871,10 @@ as typed open-seam reason kinds. Object-form router resource values first run th
 substrate; successful generation re-enters this RouteExpression-backed lane, while framework-shaped failures surface in
 `RouterIssues` and `AppDiagnostics`.
 
-`ComponentAgents` exposes the first static `RouteContext._createComponentAgent(...)` handoff for recognized transition
-nodes. Rows connect the route context, route node, selected viewport agent, resolved routeable component, and routed
-controller product. The corresponding `RuntimeControllers` rows use the `routed-custom-element` creation kind and
+`ComponentAgents` exposes the first planned `RouteContext._createComponentAgent(...)` handoff for recognized transition
+nodes. Rows connect the route context, route node, sole viewport-agent candidate, resolved routeable component, and routed
+controller product. The candidate is not called selected because live availability and scheduling have not run. The
+corresponding `RuntimeControllers` rows use the `routed-custom-element` creation kind and
 `created` readiness: the controller and child container exist as framework-shaped pre-activation facts, but guards,
 viewport scheduling, and component activation are still outside the current runtime claim.
 
@@ -1373,6 +1932,17 @@ Aggregate rows are intentionally cardinality-aware rather than instance-precise:
 `templateControllerLinkKind` and `linkedTemplateControllerName` when Aurelia's `link(...)` hook connects them to a
 controlling template controller, such as `else -> if` or `then/catch -> promise`.
 
+`RuntimeCompositions` exposes dynamic `AuCompose` input consumption and settlement independently from component
+candidate coverage and child materialization. Only component/template inputs are await-thenable; direct model/control
+inputs preserve Promise values rather than being silently unwrapped. Closed component values may materialize one
+composition-owned child controller/container, while complete TypeChecker candidate sets remain alternatives rather than
+inventing one selected runtime child.
+
+`TemplateContentProjections` exposes compiler provider sequences, runtime AuSlot selected/fallback/empty views, native
+Shadow DOM slot outlets, declaring/receiving controllers, hydration contexts, AuSlotsInfo, closure, and exact source
+loci. These rows project the shared runtime rendering and contextual-DI products; adapters must not reselect providers
+or reconstruct projection ownership from tag/source containment.
+
 `BindingTargetAccesses` exposes target-side accessor/observer lookup selected during `Controller.bind` for runtime
 property bindings and interpolations: accessor versus observer lookup, target kind, target property, selected built-in
 strategy, DOM events, target/property type displays, target type source, writability, observability, authority, source
@@ -1391,6 +1961,11 @@ strategy; the row uses `diagnosticReason` for that closed framework rejection wh
 unresolved observer-locator semantics. `TemplateDiagnostics` and `AppDiagnostics` surface the closed rejection as
 `binding-target-access-framework-error` with a `configure-node-observer` suggestion that points at the observer-config
 boundary, and the value-channel row reports `rejected-target-access` rather than opening data-flow again.
+When node observer configuration participates, the row carries one nested config with observer kind/constructor,
+events, readonly policy, primitive default, and independent field states. `absent`, `closed`, and `open` distinguish an
+omitted field from a proved value and from a retained candidate that a later dynamic object write may replace. The
+target-access authority also identifies renderer or binding-behavior overrides so clients do not infer precedence from
+the selected strategy alone.
 
 `TargetOperations` exposes direct target updates that do not ask `ObserverLocator`. Rows include an owner lane:
 renderer-owned operations from `SetPropertyRenderer`, `SetAttributeRenderer`, `SetClassAttributeRenderer`, and
@@ -1398,7 +1973,9 @@ renderer-owned operations from `SetPropertyRenderer`, `SetAttributeRenderer`, `S
 `.style`, ordinary attribute writes, `ContentBinding.updateTarget(...)` for text content writes, and
 `ListenerBinding.bind(...)` for event listener subscription. Rows report owner kind, binding/renderer kind, target
 attribute, target property/token/key, static value when one exists, operation kind, affected names, authority, source
-address, optional handles, and row-local open pressure. `BindingTargetOperations` remains as a compatibility entrypoint
+address, optional handles, and row-local open pressure. Listener subscription rows join their retained binding product
+to expose trigger/capture strategy, modifier text, the exact event-name source, and any exact modifier source separately
+from the enclosing binding. `BindingTargetOperations` remains as a compatibility entrypoint
 for the same projection while callers migrate to the broader name.
 
 `BindingSourceOperations` exposes source-side binding behavior that should not be squeezed into DOM target updates.
@@ -1407,22 +1984,44 @@ for the same projection while callers migrate to the broader name.
 names return the custom attribute view-model, `controller` returns the controller product, and unsupported `view.ref`
 stays open. These rows are consumed by value-channel and data-flow projections as `ref-target` target-to-source flow.
 
-`BindingBehaviorApplications` exposes successfully materialized runtime binding-behavior applications after the
-compiler resource scope, rendered binding product, controller bind phase, and binding-behavior materializer have all had
-their say. Rows intentionally describe positive applications rather than errors: behavior name, owning binding kind,
-phase, argument count, static scalar/template literal argument values, target kind/property, source address, and
-optional handles. Source addresses prefer the exact binding-behavior name span, including names inside interpolation
-holes, and only fall back to the broader binding carrier when no source file can be recovered. Authoring
-verification uses this lane for fact-level effects such as "the generated validated form actually produced `& validate`
-applications" before deriving higher-level validation ownership taste.
+`BindingBehaviorApplications` exposes each authored runtime binding-behavior application in its `bind` and `unbind`
+phases after the shared expression-resource plan and controller target facts have had their say. Rows retain the
+behavior name, owning binding kind, exact arguments and sources, interpolation-hole `chainIndex`, authored and effective
+runtime chain depths, bind and phase reachability/order, target kind/property, exact behavior-name source, nullable
+resolved resource, and optional handles. The two depth fields stay distinct because reached behaviors such as i18n can
+project additional runtime resource wrappers that have no authored depth. A null resource is the retained cause of
+AUR0101; blocked rows remain structural facts while `phaseReachability` says whether framework execution reaches them.
+Controller activation reachability is independent from that structural plan. When activation is open, known resource
+identity, chain order, effective mode, and conditional lifecycle effects remain available with open reachability;
+reached-only framework issues wait until execution is proved. Do not erase those facts merely because the owning
+controller may not activate, and do not upgrade their conditional effects to reached execution.
+`lifecycleEffects` reports phase-local closed or open behavior effects such as binding-mode replacement/restoration,
+target-observer or subscriber installation, signal listeners, debounce/throttle state, listener self filtering,
+validation/state connections, and expression projection. Exact signal arguments and rate-limit values keep their own
+sources and framework defaults. It does not duplicate ordinary source observation: connectable source reads and target
+subscriptions remain owned by binding data-flow and target-access products.
+
+`ValueConverterApplications` mirrors that execution lane for both authored `| converter` expressions and converters
+inserted by structurally admitted binding behaviors. Rows distinguish `bind`, `to-view`, `from-view`, and `unbind`, retain application
+origin plus authored/runtime depths, and use the same bind/phase reachability vocabulary as behaviors. `to-view` phase
+order runs inner-to-outer; `from-view` runs outer-to-inner. Phase order records the static order of a bind-reachable,
+resolved application, not a promise that an app converter cannot throw before a later step. Bind and unbind lifecycle
+effects retain value-converter signal subscriptions: built-ins spend auLink-backed exact signal constants, while
+app-owned converter instances use the shared static source-value evaluator and preserve the `signals` property source,
+each known array-element source, and honest open-array pressure. Conversion rows do not duplicate those lifecycle
+effects. A null resource preserves the attempted application whose issue product owns bind-phase AUR0103. Use this query
+when IDE/LSP, MCP, or future build/AOT consumers need execution facts rather than token-coloring or diagnostic inference.
+Ref bindings legitimately publish both conversion phases: bind and cleanup assign the resolved ref target through
+`astAssign`/`fromView`, while unbind evaluates the wrapped source through `toView` before deciding whether to clear it.
+Treating every non-property binding as to-view-only loses real ref writeback and breaks stage/application provenance.
 
 `BindingValueChannels` exposes the observer/accessor or direct-operation value shape that runtime data flow should use
 instead of blindly treating the raw DOM property as the transported value. Use `BindingValueChannelSummary` first when
 an MCP/LSP caller needs a low-token explanation of which value-channel and observer-coupling mechanisms are present
 before drilling into exact authored rows. The summary groups by channel kind, target kind/property, and
-`observerCouplings`, and also returns coupling-count rows so form/control answers can say, for example, that the app is
-using select option-list mutation observation, select array mutation, checked collection mutation, or custom matcher
-comparison without listing every binding. Summary set fields are capped and paired with `*Count` fields where large apps
+realization plus `observerCouplings`, and also returns coupling-count rows so form/control answers can say, for example,
+that the app is using select option-list mutation observation, select array mutation, checked collection mutation, or
+custom matcher comparison without listing every binding. Summary set fields are capped and paired with `*Count` fields where large apps
 can have more definitions, target properties, or value types than the compact first read should print; `page.size: 0`
 returns only the non-paged coupling rollup. Detailed rows also carry `usesCustomMatcher` so checked/select channels can
 report that Aurelia runtime comparison is delegated to an app-provided matcher even though the matcher function body
@@ -1451,20 +2050,39 @@ while `primitiveValueDomain`, `primitiveValueDomainKinds`, and `primitiveValueDo
 values such as `null`, booleans, and numbers from `model.bind` without string coercion. This matters for nullable
 select placeholders and radio groups because Aurelia compares model values directly; API consumers should use the
 primitive domain when explaining or repairing form value flow.
+Rows and summary groups also report `targetMutationKind`. This separates a normal target write, a readonly observer that
+suppresses target writes, a source-only operation, and unresolved mutation policy from the channel's value domain.
+Generic value-attribute channels additionally expose the nullish default plus its field state; consumers may explain or
+check nullish source transport only when that default is closed.
 Class/style value channels report `class.bind` and class interpolation token channels, `.class` toggle channels with
 their toggled class names, `style.bind` and style interpolation rule channels, and `.style` property channels with the
 targeted CSS property. Text interpolation through `ContentBinding` reports `text-content` channels backed by
 `text-content-set` target operations. `SpreadValueBinding` reports the target/value shape of its per-bindable inner
 `PropertyBinding` fan-out when the target component's bindable keys are statically known, instead of pretending that
-`...$bindables` is a static DOM property. `SpreadBinding`-owned inner bindings created from captured `...$attrs` are
+`...$bindables` is a static DOM property. Its target-access rows remain the potential candidate set. A value-channel row
+exists only for a key that can pass Aurelia's runtime object/property-presence guards; `realization` distinguishes
+guaranteed, conditional, and open admission, while `admittedSourceValueType` is the member type on the successful guard
+branch. `admittedSourceMemberKind` and `admittedSourceMemberSource` preserve an exact declaration only when every
+admitted lane agrees. Provably impossible keys do not masquerade as inner bindings; a checker-missing property on a
+structural object type remains open because extra runtime properties are valid TypeScript values.
+`SpreadBinding`-owned inner bindings created from captured `...$attrs` are
 reported through the same target-access, target-operation, value-channel, and data-flow projections as ordinary
 bindings, while their ownership remains a binding-to-binding runtime claim under the hood.
-Binding-family public rows are resource-local by authored source ownership, not by whichever recursive aggregate render
-pass materialized them first. Aggregate child custom-element rendering remains visible for controller topology, but API
-projections filter binding-backed rows to the resource whose template contains the binding source span. Captured
-`...$attrs` are the main canary: a forwarded inner input binding can render inside a wrapper component while its source
-expression still belongs to the parent usage template that authored the captured attribute. Render-controller ownership
-is only a fallback for rows that genuinely lack exact source spans.
+Binding-family public rows are resource-local by authored instruction ownership, not by whichever recursive aggregate
+render pass materialized them first. Aggregate child custom-element rendering remains visible for controller topology,
+but API projections join each binding to its exact compiled instruction. Runtime-created spread instructions spend
+their normalized captured-`AttrSyntax` origin claim. Captured `...$attrs` are the main canary: a forwarded inner input
+binding can render inside a wrapper component while its instruction still belongs to the parent usage template that
+authored the captured attribute. Conversely, compiler-local templates can share a source file with their owner while
+retaining distinct compiled instruction sets. Render/source controllers describe execution and lookup environments, not
+authored resource ownership; source-span containment is reserved for rows with no binding/instruction product.
+Project-level producers consume the same
+`runtime-resource-ownership` projection before publishing source-owned diagnostics; otherwise a child binding visible
+in both parent aggregate rendering and child analysis would produce duplicate semantic facts before the API is reached.
+Expression references, completions, semantic tokens, capability demands, and overlay diagnostics follow the same
+authored-resource rule for dynamic expression parses, value sites, and instructions. They must not enumerate a recursive
+aggregate render directly; runtime instruction/scope selection may inspect that aggregate only after the source-owned
+expression has been selected.
 `repeat.for` owner bindings use the `template-controller-iteration` value channel and Aurelia repeat-source
 compatibility rather than raw `Repeat.items` TypeScript assignability. Dynamic `model.bind` on `<option>` or `<input>`
 uses the `element-model-value` channel, because Aurelia's select and checked observers read the element's model value as
@@ -1475,13 +2093,31 @@ Use `BindingDataFlowSummary` first when a client needs a compact explanation of 
 assignability/writeback pressure, framework error codes, issue rollups, and the source roots involved. Pass
 `page.size: 0` for an issue-rollup-only first read, then page summary or raw data-flow rows after the issue kind,
 target/value-channel family, or source root is known. Detailed rows report binding
-direction, parser publication state/result kind, value-site kind, source expression lane/name/root/type, raw target
+direction, source-evaluation lifecycle, parser publication state/result kind, value-site kind, source expression lane/name/root/type, raw target
 property type, observer/direct-operation runtime value type, TypeChecker source-type pressure, source writability for
-target-to-source flows, TypeChecker assignability checks in the active directions, optional framework error code, source
-address, optional handles, and row-local runtime data-flow open pressure. This is the compact pressure signal for
+target-to-source flows, target mutation policy, TypeChecker assignability checks in the active directions, optional framework error code, source
+address, exact `expressionSource`, optional handles, and row-local runtime data-flow open pressure. Flow direction records
+value transport; `sourceEvaluationKind` separately records whether Aurelia evaluates with a connectable, without one,
+or treats the source as an assignment target. `sourceEvaluationReachability` independently records whether the rendered
+binding's complete expression-resource bind chain reached that source operation. Blocked rows retain prospective
+TypeChecker/assignment evidence and the lifecycle cause; they do not claim that the runtime performed the read. A
+suppressed target write does not erase source evaluation or the remaining target-to-source edge; these axes stay
+independent. This is the compact pressure signal for
 two-way form controls, setter-backed state, class/style presentation bindings, template-controller value bindings, and
 future validation/write diagnostics. Direct spread value bindings appear here as source-to-target flow from each spread
-object property into the corresponding target bindable, such as `featuredCardBindings.productId -> productId`.
+object property admitted by its value channel into the corresponding target bindable, such as
+`featuredCardBindings.productId -> productId`. Their `realization` field preserves whether the runtime inner binding is
+guaranteed, conditional, or open. A targetless `source-read` flow is always present for the authored outer expression;
+member flows represent only the generated inner bindings that can pass the runtime object and `key in source` guards.
+Observed-dependency answers use the same outer/member split. Generated member rows may carry a checker declaration
+route, but their template source remains the authored outer spread expression because no generated inner member token
+exists. Structurally open generated reads remain source-open rather than borrowing a declaration from one possible lane.
+For target-to-source edges, `targetToSourceValueType` is the final observer value after Aurelia's outer-to-inner
+`fromView` chain. `valueConverterWritebackStages` retains each target-specific checker input/output and its projection
+state, then links it to the existing runtime converter application for origin, phase order/reachability, exact
+converter-token source, and optional product handles. A `type` projection does not imply runtime execution: blocked
+applications keep their runtime reachability, and stages after an open conversion remain `input-open`. Source-independent
+primitive type products may legitimately have no type source; the converter token remains the exact authored locus.
 Captured `...$attrs` flows appear as the concrete inner binding that `TemplateCompiler.compileSpread(...)` produced,
 for example a forwarded `disabled.bind="false"` reporting boolean-to-boolean flow on the inner input element. Captured
 parent expressions can also surface here: the storefront `field-shell` wrapper reports forwarded `value.bind="email"`
@@ -1500,13 +2136,61 @@ template-to-state/service handoff as read/write interaction rows. This lets idio
 the API reads the binding row's materialized `BindingScope`, locates the root slot, and requires that slot's source to
 match the injected member source before publishing a direct support-member handoff.
 
+`BindingUncertaintyExplanation` is the cursor-locus product answer over those binding facts. V1 selects only
+template-authored `PropertyBinding` products, groups every target-specific data-flow lane by binding identity, and
+fails closed with `absent` or `ambiguous` selection when no unique current template/compiler context owns the cursor.
+It accepts no template-scope selector: shared-template and multi-world ownership remains visible as ambiguity rather
+than becoming client-side choreography. An exact answer authors a structural subject, neutral proved/partial/blocked
+conclusion, canonical data-flow rows, data-flow-owned open-seam blockers with lane indexes, explicit uncertainty, and
+at most three source- or query-backed next steps. Closed negative facts such as false assignability, nullish mismatch,
+readonly/runtime-unassignable writeback, and TypeScript strictness mismatches remain closed but are stated as proved
+incompatibilities; a missing assignability result in a direction that requires it remains open. The answer envelope's
+`analysisBasis` owns freshness. Value-level `currentness` only explains that authority and carries no competing revision
+token. Listener, spread, translation/state, and other binding families remain outside this deliberately small slice.
+IDE, MCP, and future consumers should render the engine-authored conclusion/uncertainty and follow typed sources or
+queries; they must not reconstruct causality from nullable row fields. MCP uses the generic app-query/catalog surface,
+not a binding-specific tool.
+
+`RuntimeExpressionAccessUses` exposes the lossless owner-qualified operation uses beneath binding, watcher,
+source-effect, and computed-observer execution. It deliberately does not enumerate authored template tokens that no
+runtime operation spends; template references and rename consume the binding-resolution layer for that authoring
+closure. Each row retains its exact operation slot, origin, access form and role,
+runtime phase, tracking mode, realization and reachability, control-flow qualifiers, execution multiplicity, semantic
+coverage, target closure, exact access/token source, and optional substrate handles. This is the query for questions
+about what Aurelia will read, call, or assign even when the operation is untracked, blocked, generated, or still open.
+It is not a subscription list. Observation rows below include the same access-use execution summary and require a
+lineage handle to the owning access fact, so MCP, IDE, and future AOT consumers must not reconstruct operation semantics
+from dependency display names.
+`scopeLookupAncestor`, `authoredScopeAncestor`, and `callbackScopeDepth` are separate facts. Unqualified names can have
+lookup ancestor zero inside a callback because Aurelia scope lookup falls through by name; explicit `$this`/`$parent`
+lowering can include callback escape depth. `lexicalLocal` and exact declaration target links distinguish callback
+parameters, including same-name nested parameters, without a consumer-local lexical graph.
+Binding-owned method-body rows retain their TypeScript source while inheriting the invoking binding's template-resource
+ownership. A source-file mismatch across that handoff is not evidence that the row belongs to a different resource.
+The query belongs to the observation catalog group rather than the binding group because it spans binding, watcher,
+source-effect, and computed-observer owners. Its typed continuations lead to each owner-specific effect family plus
+observation issues. Nested `executionQualifiers`, `targetLinks`, and owner-specific `accessUse` projections are
+registered source-reference carriers, so continuation evidence and other public source-precision policies see every
+nested authored or declaration locus instead of only the row's top-level source.
+
 `BindingObservedDependencies` exposes the concrete source-side reads that a source-to-target binding evaluation would
-collect through Aurelia's template connectable circuit. Rows preserve expression kind, source/root/member/key
-names, method name for calls, parser-local spans, source reference, and optional handles back to the runtime binding,
-data-flow edge, expression parse, and binding scope. Member reads also carry TypeChecker member kind and declaration
-source when the binding scope can close the owner expression. The `observedMemberSourceState` field distinguishes
+collect through Aurelia's template connectable circuit. Every row has an answer-local `rowKey`, a structured `owner`
+reference, and one shared `occurrence` shape used by binding, watcher, source-effect, and computed-observer families.
+The occurrence preserves expression kind, source/root/member/key names, method name for calls, parser-local spans,
+source reference, and required access-use lineage; optional row handles lead back to the runtime binding, data-flow edge,
+expression parse, and binding scope. Member reads also carry TypeChecker
+member kind and declaration source when the binding scope can close the owner expression. Repeated authored occurrences
+remain separate rows even when Aurelia would coalesce their live observer subscription. The
+occurrence's `observedMemberSourceState` field distinguishes
 closed source routes from honest non-member carriers such as temporary collection call results, `$` runtime scope names,
 and genuinely open scope roots, so aggregate pressure does not treat every null declaration source as provenance loss.
+`occurrence.memberTokenSource` names the value carrier whose observer is requested; for a derived call such as
+`items.filter().map()`, that can be `filter`. The linked access use names the `map` operation occurrence. Do not flatten
+those two loci into one source field. Owner keys and row keys are opaque within the current answer epoch and must not
+expose or be reconstructed from kernel handle strings.
+Rows are published only when `sourceEvaluationKind` is connectable-read and
+`sourceEvaluationReachability` is reached. A blocked binding remains visible in `BindingDataFlows` for diagnostics and
+explanation, while this query stays an honest runtime-effect projection.
 Use `BindingObservedDependencySummary` first when a client needs low-token observation evidence. It groups dependency
 kind, binding kind, source root, member source state, observed member kind, sampled source/member/method/key names, and
 definition counts, and it also publishes member-source-state rollups. Grouping by source root keeps direct `state`
@@ -1538,16 +2222,19 @@ writes the same trackable-method marker consumed by `@astTrack` for methods.
 `ComputedObserver` rows with proxy-auto dependency collection; decorated getters with explicit deps publish
 `ControlledComputedObserver` rows. `ComputedObserverObservedDependencies` is the source-observer companion row family:
 plain getter bodies and dependency functions publish proxy property/collection reads, explicit dependency strings
-publish expression-observer reads at the dependency literal span, and explicit dependency keys with `deep: true` publish
-the first TypeChecker-shaped `deep-property-read` / `deep-collection-read` rows for nested observable value shapes.
+publish one authored access row per path segment at the dependency literal span, and explicit dependency keys with
+`deep: true` additionally publish generated TypeChecker-shaped `deep-property-read` / `deep-collection-read` rows for
+nested observable value shapes. The authored rows retain exact declaration targets; generated deep candidates retain
+their synthetic origin and coverage instead of masquerading as extra source tokens.
 These rows are source-backed getter capability/projection rows. A direct `ObserverLocator.getObserver(obj, fn)`
 function-key request is still a runtime `ComputedObserver` branch, but it is a concrete observer lookup call site and
 should be modeled by a call-site product, not folded into getter availability rows. Pair computed observer source rows
 with binding observed dependencies, runtime-effect rows, watcher rows, or target-access rows when the question is
 whether a concrete runtime lookup is actually used by a template, source API call, or watcher.
 
-`RuntimeEffects` exposes direct source-level `Observation.watch(...)` / `IObservation.watch(...)` and
-`Observation.run(...)` / `IObservation.run(...)` effects. Rows preserve the effect kind, the framework
+`RuntimeEffects` exposes immutable construction-site plans for direct source-level `Observation.watch(...)` /
+`IObservation.watch(...)` and `Observation.run(...)` / `IObservation.run(...)` calls. These rows do not claim live
+`IEffect` identity, subscription state, or stop lifecycle. They preserve the effect kind, the framework
 dependency-evaluation handoff, the static `immediate` option when closed, observed dependency count, source reference,
 and optional product handles. `RuntimeEffectObservedDependencies` is the source API companion row family: string watch
 expressions use the `ast-evaluate` path that mirrors `getExpressionObserver(...)`, function getters use the
@@ -1573,8 +2260,10 @@ admitted through `Controller.addBinding(...)` in the framework, but watchers are
 before ordinary rendered bindings and need their own source/resource metadata handle.
 `RuntimeWatcherObservedDependencies` is the execution-detail companion for watcher reads that semantic-runtime can close
 today. Expression watchers parse the accepted string property key with Aurelia property-expression semantics and reuse
-the same connectable dependency collector as binding data-flow, so rows can explain `AccessScope`, `AccessMember`,
+the same access-use and connectable policies as binding data flow, so rows can explain `AccessScope`, `AccessMember`,
 `AccessKeyed`, and collection-call dependencies without reclassifying the watcher as an ordinary renderer binding.
+Each authored path segment retains its own source token and target declaration through the shared source-root checker
+resolver.
 Computed watchers use a first `ProxyObservable` function-body projection to explain property and collection reads rooted
 in the wrapped dependency function parameter, including nested collection callback values and simple local aliases or
 object destructuring. Collection-call rows are TypeChecker-discriminated when receiver types are visible, so ordinary

@@ -22,8 +22,7 @@ export class OnboardingWizard {
       .ensure((profile) => profile.name)
       .required()
       .ensure((profile) => profile.email)
-      .required()
-      .email();
+      .required();
   }
 
   async next(): Promise<void> {

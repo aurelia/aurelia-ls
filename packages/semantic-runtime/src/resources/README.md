@@ -31,6 +31,21 @@ imported decorator arguments and exact source spans use the right evaluator envi
 Source-address materialization should use only contexts admitted by this index. If a TypeChecker node is not owned by a
 resource-recognition context, leave the source span absent or surface an open seam rather than re-resolving a file name
 from the store and risking a span attached to the wrong project/source admission.
+Convention-derived resources are transform output, not a consequence of class/file shape alone. The project pass spends
+the shared `StaticProjectEvaluationPass` with tooling-config roots and a narrow Vite host adapter; it does not grow a
+second configuration evaluator. Source-local ambient declarations encountered there remain host boundaries rather than
+collapsing to `undefined`. The resulting static Vite configuration proves `@aurelia/vite-plugin` convention preprocessing
+for each matching source. Vite and plugin factory identity enters through the module evaluator's external-value resolver,
+so local import/export forwarding does not collapse back to syntax matching. Include/exclude patterns are applied through the same
+`@rollup/pluginutils/createFilter` implementation used by the framework plugin. Missing tooling or
+`enableConventions: false` does not admit a convention resource. Dynamic plugin lists, options, or filters publish
+`resource.open-convention-transform-admission` rather than producing confident definitions. Recognition provenance
+retains the tooling transform and paired-template evidence; open admission seams spend evaluator boundary reason kinds,
+and only evaluator-executed plugin calls can produce evidence or seams. A derived public name remains non-editable until
+an authored name token exists. ESM imports/exports and CommonJS `require(...)`/`module.exports` spend the same evaluator
+and admission path. This reader currently owns Vite configuration only. Webpack-loader, Gulp, Parcel, and ts-jest use the
+same Aurelia preprocessor through different configuration carriers and need their own admission readers and pressure
+fixtures before they are treated as covered. Non-static filter values remain open rather than being approximated.
 Generic expression and value reads belong in `evaluation`; resource field readers should only interpret Aurelia
 definition fields such as `type`, `name`, `aliases`, `pattern`, and `symbols`.
 `resource-definition-source.ts` is the product-free companion for source
@@ -53,6 +68,12 @@ instructions. Decorators, static `$au`, and imperative `.define(...)` calls keep
 they share the same named-definition field reader for `name`, `aliases`, header creation, and carrier-owned open seams.
 Do not reintroduce carrier-local name/alias parsing unless a framework carrier genuinely diverges from the shared
 runtime definition shape.
+Carrier identity is not declaration identity. When a TypeScript target is provable, target publication resolves the
+Program-owned alias-normalized symbol and reuses the canonical declaration-source identity. Distinct decorators,
+static metadata, and define calls can therefore retain separate source observations and products while joining on one
+declaration. `ResourceDefinitionIndex.lookupByTypeScriptDeclaration(...)` is the shared declaration-to-definition join;
+consumers must not fall back to global local-name matching. Checker type-shape identity remains an owned type projection
+and must not be used as declaration equality.
 
 Definition models sit beyond headers. Recognition observations are the AST-bearing layer; definition models use
 kernel handles, scalar fields, entry-level source handles, and field provenance rather than retaining TypeScript
@@ -68,9 +89,15 @@ Do not collapse these back into generic headers; resource queries and future gen
 `CustomElementDefinition`, `CustomAttributeDefinition`, `ValueConverterDefinition`, `BindingBehaviorDefinition`,
 `BindingCommandDefinition`, and `AttributePatternDefinition` are fully formed metadata definitions before DI admission
 or template compilation. Template controllers currently converge through the custom-attribute shape with
-`isTemplateController: true`, while retaining a distinct resource identity and query projection. Convergence is the
-operation that turns headers and source metadata into full definitions; it is recorded through
+`isTemplateController: true`, while retaining distinct author-facing taxonomy and query projection. Framework
+registration identity still uses the custom-attribute key space; use `registrationResourceKindFor(...)` for joins
+that mirror runtime lookup. Convergence is the operation that turns headers and source metadata into full definitions; it is recorded through
 materialization/provenance rather than being baked into the product name.
+The project result then selects framework-effective definitions by registration kind, canonical target declaration,
+carrier precedence, and execution order. `definitionSelections` retains the superseded carrier definitions beside the
+effective definition, while `readDefinitions()` exposes only the active set to configuration, DI, compiler-world, and
+query consumers. Do not reconstruct precedence in an answer or discard the losing carrier products; they remain the
+source/provenance evidence for why the selected definition won.
 
 Framework-owned built-ins enter the resource layer as resource headers. `built-in-resources.ts` records the runtime-html,
 i18n, state, router, and validation-html default resource catalogs as concrete, runtime-linked model classes so compiler worlds can see
@@ -115,6 +142,10 @@ records, product-detail registration, and the batch commit. `resource-recognitio
 identity handoff, TypeChecker-backed target type projection, resource identities, aliases, attribute-pattern identities,
 and recognition open-seam publication. Keep those support records out of carrier recognition and convergence so headers
 remain the narrow bridge between AST observations and full definition models.
+The emitter stages nested checker declaration projections, observation records, definition-header details, and their
+source/provenance records into one strict first-publication closure before touching the store. This is atomic admission,
+not an independent resource-generation authority; later same-runtime replacement belongs to the configuration/resource
+lifecycle gate rather than a second manifest hidden inside recognition.
 
 Emitter results return typed definition-header handles for downstream materializers. The converger consumes
 those handles plus the AST-bearing observations and emits `resource.definition` products with field provenance and
@@ -125,9 +156,12 @@ metadata walks the class prototype chain from base to derived, while `Type.binda
 lookup and therefore uses the nearest static `bindables` member in the constructor chain. Other resource fields should
 not inherit unless the framework source shows the same exception. Inherited bindable decorators and inherited static
 `bindables` entries must use the source-local recognition context for the class or member that declared them, not the
-subclass context currently being converged. Bindable definitions preserve the source address for the metadata entry or
-member declaration that produced them, because template attribute completion, go-to-definition, and later rename support
-need that narrower origin instead of only the owning resource definition. Member `@bindable(...)` still contributes the
+subclass context currently being converged. Bindable definitions preserve exact source addresses for authored metadata
+fields (`name`, `attribute`, `callback`, `mode`, and `set`) and separately retain TypeChecker-backed property and callback
+targets when the owner type proves them. Metadata provenance explains how a bindable was configured; the property target
+names the TypeScript symbol that template expressions and default-derived attributes address. References and rename spend
+both surfaces, while go-to-definition prefers the backing property implementation. Do not collapse a static/definition
+metadata token into the property source or rediscover that relation in an IDE lane. Member `@bindable(...)` still contributes the
 property as bindable when its optional config object stays open; checker-visible `set` properties become open setter
 metadata, and the unresolved config fields remain visible as seams instead of erasing the bindable. Known primitive,
 nullish, and string member-decorator arguments follow the framework's property-decorator default-config path rather
@@ -152,6 +186,12 @@ annotations sit in the same priority position as the framework metadata helpers:
 definition-object fields, and static class fields remain own-type
 fallbacks unless the framework source names an inheritance exception. If an annotation exists but cannot close to a
 static fact, convergence should surface an open seam rather than erasing the decorator or inventing a default.
+Function-valued custom-element `capture` metadata preserves three deliberately separated carriers: a durable
+source-backed target reference for resource identity/provenance, a stable callable slot in the converged definition,
+and a candidate-local `StaticCallableTarget` in resource-recognition execution bindings. Both definition-object and
+`@capture(...)` forms use the same boundary. Compiler worlds receive the current binding sidecar under evaluation
+generation authority; durable definition comparison spends only the slot, never an evaluator value. This keeps kernel
+products serializable and prevents obsolete closure graphs from becoming resource identity.
 `resource-definition-converger.ts` owns convergence orchestration, product publication, aliases, open seams, and the
 custom-element definition assembly path. `CustomElementConvergenceFrame` is the per-definition read epoch for custom
 element metadata; it owns the shared local-key prefix, annotation priority, bindable/watch/template/dependency reads,
@@ -194,6 +234,13 @@ template/resource completions should ask this index rather than rebuilding name 
 hits stay unresolved until the owning scope model can disambiguate them. For router string routeables, the index exposes
 custom-element-only lookup plus dependency-scoped custom-element lookup so a parent component's `dependencies` array can
 disambiguate same-named resources without making the router maintain its own resource map.
+TypeScript expression lookup remaps evaluator/source AST nodes into the current Program, resolves import aliases to the
+declaration, and then spends the declaration source file's module key plus local name. Consumers must not interpret an
+imported identifier as though its declaration belonged to the consuming module, or build a second symbol-to-resource map.
+Configuration registration enrichment spends this authored-expression lookup before evaluator-derived carrier/value
+fallbacks. That ordering is required for values such as `const Card = CustomElement.define(...)`: resource recognition
+owns the definition, while the authored `register(Card)` expression supplies the declaration join that an evaluator
+object alone cannot honestly reconstruct.
 
 Open seams are part of the product here. A carrier with an open kind, name, alias, pattern, or target should still
 produce kernel pressure rather than disappearing or pretending to be complete.

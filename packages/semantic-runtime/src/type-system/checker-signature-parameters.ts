@@ -2,6 +2,7 @@ import ts from 'typescript';
 
 import {
   checkerIterableElementType,
+  checkerTypeIsDefaultLibraryFunctionInterface,
 } from './checker-related-types.js';
 import {
   checkerRawTypeAssignable,
@@ -32,6 +33,20 @@ export interface CheckerSignatureReturnType {
   readonly type: ts.Type;
 }
 
+export const enum CheckerValueCallabilityKind {
+  /** Every statically reachable value is callable. */
+  Callable = 'callable',
+  /** Every statically reachable value is non-callable. */
+  NonCallable = 'non-callable',
+  /** Callability depends on a weak, generic, or mixed runtime value. */
+  Open = 'open',
+}
+
+export interface CheckerValueCallability {
+  readonly kind: CheckerValueCallabilityKind;
+  readonly signatures: readonly ts.Signature[];
+}
+
 /** Creates runtime argument facts whose concrete values exist but whose static value types are intentionally unknown. */
 export function checkerRuntimeUnknownArguments(
   checker: ts.TypeChecker,
@@ -51,6 +66,17 @@ export function checkerCallableContextSignatures(
   }
   const nonNullable = checker.getNonNullableType(type);
   return nonNullable === type ? direct : nonNullable.getCallSignatures();
+}
+
+/**
+ * Classifies whether a checker-backed runtime value is callable without treating "no common signature" as proof that
+ * every possible value is non-callable.
+ */
+export function checkerValueCallability(
+  checker: ts.TypeChecker,
+  type: ts.Type,
+): CheckerValueCallability {
+  return computeCheckerValueCallability(checker, type, new Set());
 }
 
 /** Selects overload candidates by runtime argument count before falling back to every signature. */
@@ -208,7 +234,7 @@ export function checkerCallableRequiresTypePredicate(
   checker: ts.TypeChecker,
   type: ts.Type,
 ): boolean {
-  const signatures = checkerCallableContextSignatures(checker, type);
+  const signatures = type.getCallSignatures();
   return signatures.length > 0
     && signatures.every((signature) => checker.getTypePredicateOfSignature(signature) != null);
 }
@@ -251,4 +277,85 @@ function checkerCallableSignatureParameterSurface(
     return `${checkerSymbolIsRestParameter(parameter) ? '...' : ''}${checkerSymbolIsOptionalParameter(parameter) ? '?' : ''}${parameter.getName()}:${parameterType == null ? 'unknown' : checker.typeToString(parameterType.type)}`;
   });
   return `${checkerRequiredParameterCount(signature)}:${checkerSignatureHasRestParameter(signature) ? 'rest' : 'fixed'}:${parameters.join(',')}`;
+}
+
+function computeCheckerValueCallability(
+  checker: ts.TypeChecker,
+  type: ts.Type,
+  seen: Set<ts.Type>,
+): CheckerValueCallability {
+  if (seen.has(type)) {
+    return callability(CheckerValueCallabilityKind.Open);
+  }
+  const path = new Set(seen);
+  path.add(type);
+
+  if ((type.flags & (ts.TypeFlags.Any | ts.TypeFlags.Unknown | ts.TypeFlags.Never)) !== 0) {
+    return callability(CheckerValueCallabilityKind.Open);
+  }
+
+  if ((type.flags & (
+    ts.TypeFlags.TypeParameter
+    | ts.TypeFlags.IndexedAccess
+    | ts.TypeFlags.Conditional
+    | ts.TypeFlags.Substitution
+  )) !== 0) {
+    const constraint = checker.getBaseConstraintOfType(type);
+    return constraint == null || constraint === type
+      ? callability(CheckerValueCallabilityKind.Open)
+      : computeCheckerValueCallability(checker, constraint, path);
+  }
+
+  if (type.isUnion()) {
+    return aggregateCallability(
+      type.types.map((constituent) => computeCheckerValueCallability(checker, constituent, path)),
+      'all',
+    );
+  }
+
+  if (type.isIntersection()) {
+    return aggregateCallability(
+      type.types.map((constituent) => computeCheckerValueCallability(checker, constituent, path)),
+      'any',
+    );
+  }
+
+  if (checkerTypeIsDefaultLibraryFunctionInterface(type)) {
+    return callability(CheckerValueCallabilityKind.Open);
+  }
+
+  const signatures = type.getCallSignatures();
+  if (signatures.length > 0) {
+    return callability(CheckerValueCallabilityKind.Callable, signatures);
+  }
+
+  return callability(CheckerValueCallabilityKind.NonCallable);
+}
+
+function aggregateCallability(
+  values: readonly CheckerValueCallability[],
+  callablePolicy: 'all' | 'any',
+): CheckerValueCallability {
+  if (values.length === 0) {
+    return callability(CheckerValueCallabilityKind.NonCallable);
+  }
+  const callable = callablePolicy === 'all'
+    ? values.every((value) => value.kind === CheckerValueCallabilityKind.Callable)
+    : values.some((value) => value.kind === CheckerValueCallabilityKind.Callable);
+  if (callable) {
+    return callability(
+      CheckerValueCallabilityKind.Callable,
+      values.flatMap((value) => value.signatures),
+    );
+  }
+  return values.every((value) => value.kind === CheckerValueCallabilityKind.NonCallable)
+    ? callability(CheckerValueCallabilityKind.NonCallable)
+    : callability(CheckerValueCallabilityKind.Open);
+}
+
+function callability(
+  kind: CheckerValueCallabilityKind,
+  signatures: readonly ts.Signature[] = [],
+): CheckerValueCallability {
+  return { kind, signatures };
 }

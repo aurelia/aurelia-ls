@@ -1,4 +1,13 @@
 import type ts from 'typescript';
+import { evaluationAbruptCompletionSummary } from '../evaluation/completion.js';
+import { openSeamReasonKindsForEvaluationRead } from '../evaluation/boundary-open-reason.js';
+import type { EvaluationRead } from '../evaluation/expression-reader.js';
+import { evaluationOpenSeamDefaultReasonKinds } from '../evaluation/seams.js';
+import type { EvaluationValue } from '../evaluation/values.js';
+import type {
+  AureliaContainerEvaluation,
+  AureliaFacadeEvaluation,
+} from './aurelia-evaluation-runtime.js';
 import type { OpenSeamReasonKind } from '../kernel/open-seam.js';
 import type { OpenSeamKindKey } from '../kernel/vocabulary.js';
 import type { RegistrationAdmissionObservation } from '../registration/registration-observation.js';
@@ -26,6 +35,10 @@ export const enum ConfigurationCarrierKind {
   AureliaRegisterCall = 'aurelia-register-call',
   /** Direct container registration call such as `container.register(...)`. */
   ContainerRegisterCall = 'container-register-call',
+  /** Direct root-container factory call such as `DI.createContainer(...)`. */
+  ContainerFactoryCall = 'container-factory-call',
+  /** Direct child-container factory call such as `container.createChild(...)`. */
+  ContainerChildFactoryCall = 'container-child-factory-call',
   /** Registration call inside an `IRegistry.register(container, ...)` body. */
   RegistryRegisterMethod = 'registry-register-method',
   /** Configuration customization call such as `StandardConfiguration.customize(...)`. */
@@ -43,9 +56,40 @@ export class ConfigurationRecognitionOpen {
     readonly summary: string,
     /** Source node where the unresolved pressure appeared. */
     readonly node: ts.Node,
-    /** Lower-level producer reasons that caused this configuration seam, when available. */
-    readonly reasonKinds: readonly OpenSeamReasonKind[] = [],
+    /** Lower-level producer reasons that caused this configuration seam. */
+    readonly reasonKinds: readonly OpenSeamReasonKind[],
   ) {}
+}
+
+/** Project one evaluator read into source-precise configuration pressure without flattening its causes. */
+export function configurationRecognitionOpensForEvaluationRead(
+  read: EvaluationRead<EvaluationValue>,
+  openKind: OpenSeamKindKey,
+  summary: string,
+  fallbackNode: ts.Node,
+): readonly ConfigurationRecognitionOpen[] {
+  const opens = read.openSeams.map((seam) => new ConfigurationRecognitionOpen(
+    openKind,
+    seam.summary,
+    seam.node,
+    seam.reasonKinds.length === 0
+      ? evaluationOpenSeamDefaultReasonKinds(seam.seamKind)
+      : seam.reasonKinds,
+  ));
+  const coveredReasons = new Set(opens.flatMap((open) => open.reasonKinds));
+  const residualReasons = openSeamReasonKindsForEvaluationRead(read)
+    .filter((reason) => !coveredReasons.has(reason));
+  if (residualReasons.length > 0) {
+    opens.push(new ConfigurationRecognitionOpen(
+      openKind,
+      read.abruptCompletion == null
+        ? summary
+        : evaluationAbruptCompletionSummary(read.abruptCompletion),
+      read.node ?? fallbackNode,
+      residualReasons,
+    ));
+  }
+  return opens;
 }
 
 /** Source-level resource/component target observed in an app-root config. */
@@ -57,6 +101,8 @@ export class ConfigurationTargetObservation {
     readonly node: ts.Node,
     /** Whether the node is an actual declaration/name site rather than only a reference expression. */
     readonly isDeclaration: boolean,
+    /** Candidate-local evaluator read retained for resource lookup and open-pressure projection. */
+    readonly evaluation: EvaluationRead<EvaluationValue>,
   ) {}
 }
 
@@ -165,7 +211,30 @@ export class ConfigurationStepObservation {
     readonly registrationAdmissions: readonly RegistrationAdmissionObservation[] = [],
     /** Unresolved points that must stay visible to later consumers. */
     readonly openSeams: readonly ConfigurationRecognitionOpen[] = [],
+    /** Project-evaluation identity for a source-created container receiver. */
+    readonly containerEvaluation: AureliaContainerEvaluation | null = null,
+    /** Project-evaluation identity for the Aurelia facade receiver. */
+    readonly aureliaEvaluation: AureliaFacadeEvaluation | null = null,
+    /** Project-wide modeled execution order; null for source inventories that have not run. */
+    readonly executionOrdinal: number | null = null,
   ) {}
+
+  withExecutionOrdinal(executionOrdinal: number): ConfigurationStepObservation {
+    return new ConfigurationStepObservation(
+      this.carrierKind,
+      this.stepKind,
+      this.sourceNode,
+      this.receiverLocalName,
+      this.appRootConfig,
+      this.appTasks,
+      this.optionContributions,
+      this.registrationAdmissions,
+      this.openSeams,
+      this.containerEvaluation,
+      this.aureliaEvaluation,
+      executionOrdinal,
+    );
+  }
 }
 
 /** Ordered configuration flow observed in one evaluated source module. */

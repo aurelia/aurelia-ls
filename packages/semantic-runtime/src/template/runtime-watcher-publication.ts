@@ -14,7 +14,10 @@ import type {
 import { KernelVocabulary } from '../kernel/vocabulary.js';
 import { runtimeObservedDependencyRecords } from '../observation/runtime-observed-dependency-publication.js';
 import type { RuntimeControllerFrame } from './runtime-controller.js';
-import type { RuntimeWatcher } from './runtime-watcher.js';
+import type {
+  RuntimeWatcher,
+  RuntimeWatcherMaterialization,
+} from './runtime-watcher.js';
 
 export function runtimeWatcherClaimsForController(
   store: KernelStore,
@@ -38,8 +41,15 @@ export function runtimeWatcherRecordsForController(
   provenanceHandle: ProvenanceHandle,
   claims: readonly SemanticClaim[],
 ): readonly KernelStoreRecord[] {
-  return controller.readWatchers().flatMap((watcher) =>
-    runtimeWatcherRecords(store, `${local}:watcher:${watcher.productHandle}`, controller, watcher, provenanceHandle, claims)
+  return controller.readWatcherMaterializations().flatMap((materialization) =>
+    runtimeWatcherRecords(
+      store,
+      `${local}:watcher:${materialization.watcher.productHandle}`,
+      controller,
+      materialization,
+      provenanceHandle,
+      claims,
+    )
   );
 }
 
@@ -47,11 +57,13 @@ function runtimeWatcherRecords(
   store: KernelStore,
   local: string,
   controller: RuntimeControllerFrame,
-  watcher: RuntimeWatcher,
+  materialization: RuntimeWatcherMaterialization,
   provenanceHandle: ProvenanceHandle,
   claims: readonly SemanticClaim[],
 ): readonly KernelStoreRecord[] {
+  const watcher = materialization.watcher;
   return [
+    ...materialization.accessUsePublications.flatMap((accessUse) => accessUse.records),
     new BindingIdentity(
       watcher.identityHandle,
       controller.identityHandle,
@@ -87,7 +99,6 @@ function runtimeWatcherObservedDependencyRecords(
       local: dependencyLocal,
       owner: {
         identityHandle: watcher.identityHandle,
-        sourceAddressHandle: watcher.sourceAddressHandle,
       },
       dependency,
       index,

@@ -1,28 +1,32 @@
 import ts from 'typescript';
+import type { SourceFileAdmission } from '../boot/frames.js';
 import {
   SourceFileAddress,
   SourceFileRole,
   SourceSpanAddress,
   SourceSpanRole,
 } from '../kernel/address.js';
-import type { AddressHandle } from '../kernel/handles.js';
-import {
-  EvidenceKind,
-  EvidenceRecord,
-  EvidenceRole,
-} from '../kernel/evidence.js';
 import { TypeScriptDeclarationIdentity } from '../kernel/identity.js';
+import type { KernelRecordHandle } from '../kernel/handles.js';
 import { localKeyPart } from '../kernel/local-key.js';
-import { ProvenanceRecord } from '../kernel/provenance.js';
-import type {
-  KernelStore,
-  KernelStoreRecord,
-} from '../kernel/store.js';
 import {
-  inferSourceFileRole,
-  inferSourceLanguage,
-} from '../kernel/source-classification.js';
+  KernelPublicationPlan,
+  type KernelPublicationContext,
+} from '../kernel/publication.js';
+import {
+  KernelStoreBatch,
+  type KernelStoreRecord,
+} from '../kernel/store.js';
 import { normalizeHostPath } from '../kernel/source-address.js';
+import {
+  externalizeSourceFileRole,
+  inferSourceFileRole,
+} from '../kernel/source-classification.js';
+import {
+  projectTypeSystemProgramSources,
+  type TypeSystemProgramSourceCatalog,
+} from './program-source-authority.js';
+import { canonicalTypeSystemPath } from './source-file-path.js';
 
 export interface DeclarationSourcePublication {
   readonly address: SourceSpanAddress;
@@ -35,7 +39,63 @@ export interface CheckerNodeSourceSpanPublication {
   readonly records: readonly KernelStoreRecord[];
 }
 
+/** Ensure the canonical checker-owned source-file address for a node is available to later source-span products. */
+export function ensureSourceFileAddressForCheckerNode(
+  publication: KernelPublicationContext,
+  checker: ts.TypeChecker,
+  node: ts.Node,
+): SourceFileAddress {
+  const source = sourceFileAddressForDeclaration(
+    publication,
+    checkerDeclarationSourceContext(checker),
+    node.getSourceFile(),
+  );
+  publishMissingCheckerSourceRecords(
+    publication,
+    source.records,
+    `type-system:checker-source-file:${source.address.path}`,
+  );
+  return source.address;
+}
+
+/** Publish checker source records that are neither committed nor staged in the current publication. */
+export function publishMissingCheckerSourceRecords(
+  publication: KernelPublicationContext,
+  records: readonly KernelStoreRecord[],
+  label: string,
+): void {
+  const missing = records.filter((record) =>
+    publication.read(record.handle as KernelRecordHandle) == null
+  );
+  if (missing.length > 0) {
+    publication.publish(new KernelPublicationPlan(new KernelStoreBatch(missing, label)));
+  }
+}
+
+/** Append declaration source records that are not already published or staged in the current batch. */
+export function appendDeclarationSourceRecords(
+  publication: KernelPublicationContext,
+  records: KernelStoreRecord[],
+  declarationSource: DeclarationSourcePublication | null,
+  stagedRecordHandles: Set<string> | null = null,
+): void {
+  if (declarationSource == null) {
+    return;
+  }
+  for (const record of declarationSource.records) {
+    if (
+      publication.read(record.handle) == null
+      && !records.some((existing) => existing.handle === record.handle)
+      && !stagedRecordHandles?.has(record.handle)
+    ) {
+      records.push(record);
+      stagedRecordHandles?.add(record.handle);
+    }
+  }
+}
+
 interface DeclarationSourceSpan {
+  readonly projectKey: string;
   readonly sourceFileAddress: SourceFileAddress;
   readonly sourceFileRecords: readonly KernelStoreRecord[];
   readonly start: number;
@@ -47,32 +107,83 @@ interface SourceFileAddressPublication {
   readonly records: readonly KernelStoreRecord[];
 }
 
+/** Project and source-lifetime context attached to one process-local TypeChecker epoch. */
+export class CheckerDeclarationSourceContext {
+  private readonly overlaySourcePaths: ReadonlySet<string>;
+
+  constructor(
+    readonly projectKey: string,
+    readonly programSources: TypeSystemProgramSourceCatalog,
+    overlaySourcePaths: ReadonlySet<string>,
+    private readonly admittedSourcesByPath: ReadonlyMap<string, SourceFileAdmission> = new Map(),
+  ) {
+    this.overlaySourcePaths = new Set([...overlaySourcePaths].map(normalizeHostPath));
+  }
+
+  isOverlaySource(fileName: string): boolean {
+    return this.overlaySourcePaths.has(normalizeHostPath(fileName));
+  }
+
+  admittedSource(fileName: string): SourceFileAdmission | null {
+    return this.admittedSourcesByPath.get(canonicalTypeSystemPath(fileName)) ?? null;
+  }
+}
+
+const checkerDeclarationSourceContexts = new WeakMap<ts.TypeChecker, CheckerDeclarationSourceContext>();
+
+/** Bind process-local checker objects to the semantic project/source authority that created them. */
+export function registerCheckerDeclarationSourceContext(
+  checker: ts.TypeChecker,
+  context: CheckerDeclarationSourceContext,
+): void {
+  checkerDeclarationSourceContexts.set(checker, context);
+}
+
+/** Register a raw contract/test checker whose source locations are owned by its isolated publication. */
+export function registerIsolatedCheckerDeclarationSourceContext(
+  checker: ts.TypeChecker,
+  projectKey: string,
+): void {
+  registerCheckerDeclarationSourceContext(
+    checker,
+    new CheckerDeclarationSourceContext(projectKey, projectTypeSystemProgramSources, new Set()),
+  );
+}
+
+/** Stable logical-project namespace for semantic identities projected from one checker generation. */
+export function checkerDeclarationSourceProjectKey(checker: ts.TypeChecker): string {
+  return checkerDeclarationSourceContext(checker).projectKey;
+}
+
 export function sourceSpanForCheckerDeclaration(
-  store: KernelStore,
+  publication: KernelPublicationContext,
+  checker: ts.TypeChecker,
   symbol: ts.Symbol,
   declarations: readonly ts.Declaration[],
   role: SourceSpanRole,
 ): DeclarationSourcePublication | null {
-  const span = declarationSourceSpan(store, symbol, declarations);
+  const span = declarationSourceSpan(publication, checker, symbol, declarations);
   if (span == null) {
     return null;
   }
-  return declarationSourcePublication(store, symbol, span, role);
+  return declarationSourcePublication(publication, symbol, span, role);
 }
 
 /** Materialize a navigable source span for a checker node without minting a declaration identity. */
 export function sourceSpanForCheckerNode(
-  store: KernelStore,
+  publication: KernelPublicationContext,
+  checker: ts.TypeChecker,
   localKey: string,
   node: ts.Node,
   role: SourceSpanRole,
 ): CheckerNodeSourceSpanPublication {
   const sourceFile = node.getSourceFile();
-  const sourceFilePublication = sourceFileAddressForDeclaration(store, sourceFile);
+  const context = checkerDeclarationSourceContext(checker);
+  const sourceFilePublication = sourceFileAddressForDeclaration(publication, context, sourceFile);
   const start = node.getStart(sourceFile);
   const end = node.end;
-  const local = checkerNodeSourceLocal(sourceFilePublication.address, localKey, start, end, role);
-  const addressHandle = store.handles.address(`${local}:span`);
+  const local = checkerNodeSourceLocal(context.projectKey, sourceFilePublication.address, localKey, start, end, role);
+  const addressHandle = publication.handles.address(`${local}:span`);
   return {
     address: new SourceSpanAddress(
       addressHandle,
@@ -94,27 +205,14 @@ export function sourceSpanForCheckerNode(
   };
 }
 
-/**
- * Read an already-admitted source-file address for a checker node.
- *
- * Use this for diagnostics that scan app-authored declarations through TypeChecker carriers but should not publish
- * issues against checker-only framework, ambient, or dependency files.
- */
-export function admittedSourceFileAddressHandleForCheckerNode(
-  store: KernelStore,
-  node: ts.Node,
-): AddressHandle | null {
-  return store.readBestSourceFileAddressForFileName(node.getSourceFile().fileName)?.handle ?? null;
-}
-
 function declarationSourcePublication(
-  store: KernelStore,
+  publication: KernelPublicationContext,
   symbol: ts.Symbol,
   span: DeclarationSourceSpan,
   role: SourceSpanRole,
 ): DeclarationSourcePublication {
   const local = declarationSourceLocal(span, role);
-  const addressHandle = store.handles.address(`${local}:span`);
+  const addressHandle = publication.handles.address(`${local}:span`);
   const address = new SourceSpanAddress(
     addressHandle,
     span.sourceFileAddress.handle,
@@ -123,7 +221,7 @@ function declarationSourcePublication(
     role,
   );
   const identity = new TypeScriptDeclarationIdentity(
-    store.handles.identity(`${local}:identity`),
+    publication.handles.identity(`${local}:identity`),
     span.sourceFileAddress.path,
     null,
     symbol.getName(),
@@ -141,7 +239,8 @@ function declarationSourcePublication(
 }
 
 function declarationSourceSpan(
-  store: KernelStore,
+  publication: KernelPublicationContext,
+  checker: ts.TypeChecker,
   symbol: ts.Symbol,
   declarations: readonly ts.Declaration[],
 ): DeclarationSourceSpan | null {
@@ -150,9 +249,11 @@ function declarationSourceSpan(
     return null;
   }
   const sourceFile = declaration.getSourceFile();
-  const sourceFilePublication = sourceFileAddressForDeclaration(store, sourceFile);
+  const context = checkerDeclarationSourceContext(checker);
+  const sourceFilePublication = sourceFileAddressForDeclaration(publication, context, sourceFile);
   const addressNode = declarationAddressNode(declaration);
   return {
+    projectKey: context.projectKey,
     sourceFileAddress: sourceFilePublication.address,
     sourceFileRecords: sourceFilePublication.records,
     start: addressNode.getStart(sourceFile),
@@ -166,7 +267,7 @@ function declarationSourceLocal(
 ): string {
   return [
     'type-system-declaration',
-    span.sourceFileAddress.workspaceKey,
+    localKeyPart(span.projectKey),
     localKeyPart(span.sourceFileAddress.path),
     span.start,
     span.end,
@@ -175,6 +276,7 @@ function declarationSourceLocal(
 }
 
 function checkerNodeSourceLocal(
+  projectKey: string,
   sourceFileAddress: SourceFileAddress,
   localKey: string,
   start: number,
@@ -183,7 +285,7 @@ function checkerNodeSourceLocal(
 ): string {
   return [
     'type-system-node',
-    sourceFileAddress.workspaceKey,
+    localKeyPart(projectKey),
     localKeyPart(sourceFileAddress.path),
     localKeyPart(localKey),
     start,
@@ -193,74 +295,44 @@ function checkerNodeSourceLocal(
 }
 
 function sourceFileAddressForDeclaration(
-  store: KernelStore,
+  publication: KernelPublicationContext,
+  context: CheckerDeclarationSourceContext,
   sourceFile: ts.SourceFile,
 ): SourceFileAddressPublication {
-  // TypeChecker declarations can come from boot-admitted app sources, ambient declarations, framework declarations, or
-  // dependency declarations. Reuse an admitted source-file address when one exists; otherwise deliberately admit a
-  // checker-program source address for declaration navigation without treating it as discovered app source.
-  const existing = store.readBestSourceFileAddressForFileName(sourceFile.fileName);
-  if (existing != null) {
-    return { address: existing, records: [] };
+  const admittedSource = context.admittedSource(sourceFile.fileName);
+  if (admittedSource != null) {
+    const admittedAddress = publication.read(admittedSource.addressHandle);
+    if (!(admittedAddress instanceof SourceFileAddress)) {
+      throw new Error(`Checker source ${sourceFile.fileName} refers to missing admission ${admittedSource.addressHandle}.`);
+    }
+    return { address: admittedAddress, records: [] };
   }
-  return programSourceFileAddressPublication(store, sourceFile.fileName);
-}
-
-function programSourceFileAddressPublication(
-  store: KernelStore,
-  fileName: string,
-): SourceFileAddressPublication {
-  const path = normalizeHostPath(fileName);
-  const local = `program-source-file:${localKeyPart(path)}`;
-  const address = programSourceFileAddress(store, local, path);
-  return {
-    address,
-    records: [
-      address,
-      ...programSourceFileAdmissionRecords(store, local, address),
-    ],
-  };
-}
-
-function programSourceFileAddress(
-  store: KernelStore,
-  local: string,
-  path: string,
-): SourceFileAddress {
-  return new SourceFileAddress(
-    store.handles.address(local),
-    'type-system-program',
-    path,
-    inferSourceLanguage(path),
-    programSourceFileRole(path),
+  if (context.isOverlaySource(sourceFile.fileName)) {
+    return projectTypeSystemProgramSources.sourceFile(
+      publication,
+      context.projectKey,
+      sourceFile.fileName,
+      SourceFileRole.Generated,
+    );
+  }
+  return context.programSources.sourceFile(
+    publication,
+    context.projectKey,
+    sourceFile.fileName,
+    programSourceFileRole(sourceFile.fileName),
   );
+}
+
+function checkerDeclarationSourceContext(checker: ts.TypeChecker): CheckerDeclarationSourceContext {
+  const context = checkerDeclarationSourceContexts.get(checker) ?? null;
+  if (context == null) {
+    throw new Error('TypeChecker declaration projection requires a registered project source context.');
+  }
+  return context;
 }
 
 function programSourceFileRole(path: string): SourceFileRole {
-  const inferred = inferSourceFileRole(path);
-  return inferred === SourceFileRole.Declaration || inferred === SourceFileRole.Generated
-    ? inferred
-    : SourceFileRole.ExternalSource;
-}
-
-function programSourceFileAdmissionRecords(
-  store: KernelStore,
-  local: string,
-  address: SourceFileAddress,
-): readonly (EvidenceRecord | ProvenanceRecord)[] {
-  const evidenceHandle = store.handles.evidence(local);
-  const evidence = new EvidenceRecord(
-    evidenceHandle,
-    EvidenceKind.SourceObservation,
-    [EvidenceRole.Admission],
-    'Program source file observed through a TypeChecker declaration.',
-    address.handle,
-  );
-  const provenance = new ProvenanceRecord(
-    store.handles.provenance(local),
-    [evidenceHandle],
-  );
-  return [evidence, provenance];
+  return externalizeSourceFileRole(inferSourceFileRole(path));
 }
 
 function declarationAddressNode(declaration: ts.Declaration): ts.Node {

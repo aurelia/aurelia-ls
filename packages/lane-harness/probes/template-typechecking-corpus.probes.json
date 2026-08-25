@@ -1,0 +1,76 @@
+{
+  "fixture": "packages/semantic-runtime/fixtures/pressure/template-typechecking-corpus",
+  "lanes": {
+    "diagnostics": [
+      {
+        "id": "typechecking-read-expressions",
+        "file": "src/read-expressions.html",
+        "verdict": "correct",
+        "reason": "The full document-diagnostic pull returns proven missing members as semantic Warning primaries with matching TS2339 facts contextual, while independent nullish, call, overload, return, global, and object-literal checker failures remain direct Errors on authored spans.",
+        "note": "NEW 2026-07-12. Representative standard document-pull adapter replay for the dedicated expression/typechecking corpus. The callback `missingLabel` duplicate joins the existing causal groups, conserving 17 raw facts as 13 visible Problems without leaking generated TypeScript loci; dense semantic truth remains in semantic-conformance."
+      },
+      {
+        "id": "typechecking-write-bindings",
+        "file": "src/write-bindings.html",
+        "verdict": "correct",
+        "reason": "The full document-diagnostic pull returns distinct assignment-policy diagnostics for non-writable sources, source-to-target mismatch, nullish-to-required targets, and target-to-source writeback mismatch at the authored binding expressions.",
+        "note": "NEW 2026-07-12. Representative adapter replay for binding direction, writeability, and bidirectional type compatibility."
+      },
+      {
+        "id": "typechecking-resource-boundaries",
+        "file": "src/resource-boundaries.html",
+        "verdict": "correct",
+        "reason": "The full document-diagnostic pull returns converter call/type diagnostics, missing converter and behavior bind-phase errors, duplicate behavior application, semantic member evidence, and child-bindable assignment mismatch at their authored loci.",
+        "note": "NEW 2026-07-12. Representative adapter replay for the framework astBind resource lifecycle and typed child-resource boundary."
+      }
+    ],
+    "hover": [
+      {
+        "id": "optional-chain-member-type",
+        "file": "src/read-expressions.html",
+        "anchor": "${maybeItem?.label}",
+        "at": "label",
+        "verdict": "correct",
+        "reason": "Describes the selected `label` member as `string`; optional access does not erase member identity or widen the member value, and internal nullable-owner shape stays outside the card.",
+        "note": "B2 member-card witness: exact `label: string` identity with no raw owner-shape or provenance context."
+      },
+      {
+        "id": "logical-and-narrowed-member-type",
+        "file": "src/read-expressions.html",
+        "anchor": "${maybeItem && maybeItem.label}",
+        "at": "label",
+        "verdict": "correct",
+        "reason": "Describes the right-branch `label` member as `string` under the existing short-circuit branch scope.",
+        "note": "B2 narrowed-member witness: exact `label: string` identity with no raw owner-shape or branch-analysis detail."
+      },
+      {
+        "id": "let-local-kebab-declaration",
+        "file": "src/scope-projections.html",
+        "anchor": "<let upper-label.bind=\"item.label.toUpperCase()\">",
+        "at": "upper-label",
+        "verdict": "correct",
+        "reason": "Hover preserves the exact kebab-case declaration spelling while presenting the proved let-local type and role.",
+        "note": "B2 declaration-spelling witness: source equality authorizes `upper-label`; ordinary uses remain keyed by semantic `upperLabel`."
+      },
+      {
+        "id": "pathological-long-diagnostic-summary",
+        "file": "src/read-expressions.html",
+        "anchor": "${describe(true)}",
+        "at": "true",
+        "verdict": "correct",
+        "reason": "The status-only TS2769 hover ranges exactly over `true`, normalizes and deterministically clips the long overload summary, and remains within the 640-code-point card budget.",
+        "note": "B2 production budget canary using the existing checker diagnostic; no synthetic long-type fixture is required for this packet."
+      }
+    ],
+    "references": [
+      {
+        "id": "unknown-member-concrete-candidate-honesty",
+        "file": "src/read-expressions.html",
+        "anchor": "class=\"unknown-invalid\">${unknownValue.label}",
+        "at": "label",
+        "verdict": "correct",
+        "reason": "References should return only the selected authored occurrence, retain the second same-owner unknown member as an unverified candidate, and report that concrete omission without inserting a false-positive location."
+      }
+    ]
+  }
+}

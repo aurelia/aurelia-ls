@@ -8,6 +8,7 @@ export class ParsedMultiBindingSegment {
     readonly rawValue: string,
     readonly start: number,
     readonly end: number,
+    readonly nameEnd: number,
     readonly valueStart: number,
     readonly valueEnd: number,
   ) {}
@@ -73,6 +74,7 @@ export function parseInlineMultiBindingSegments(
       rawValue.slice(valueStart, valueEnd),
       start,
       valueEnd,
+      i,
       valueStart,
       valueEnd,
     ));

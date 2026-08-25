@@ -3,7 +3,14 @@ import {
   mapExpressionPrimitiveLiteralValue,
   type ExpressionPrimitiveLiteralValue,
 } from '../expression/ast.js';
-import type { EvaluationEnvironmentRecordReference } from './environment-reference.js';
+import type { ModuleEnvironmentRecord } from './environment.js';
+import {
+  compactEvaluationOpenSeams,
+  type EvaluationOpenSeam,
+} from './seams.js';
+import type { EvaluationValueEvidence } from './value-pressure.js';
+
+const noEvaluationOpenSeams: readonly EvaluationOpenSeam[] = [];
 
 export const enum EvaluationValueKind {
   /** Value that could not be reduced without guessing. */
@@ -46,7 +53,7 @@ export const enum EvaluationValueKind {
   Instance = 'instance',
   /** Module namespace value assembled from a linked module record. */
   ModuleNamespace = 'module-namespace',
-  /** Promise-like value with a statically known fulfillment lane. */
+  /** Promise-like value with explicit fulfilled, rejected, or open settlement evidence. */
   Promise = 'promise',
 }
 
@@ -61,6 +68,23 @@ export const enum EvaluationBoundaryKind {
   BindingScope = 'binding-scope',
 }
 
+/** Describe why one evaluator value remains owned by a boundary outside local static evaluation. */
+export function evaluationBoundaryReason(
+  boundaryKind: EvaluationBoundaryKind,
+  path: string,
+): string {
+  switch (boundaryKind) {
+    case EvaluationBoundaryKind.HostEnvironment:
+      return `${path} is provided by the host environment.`;
+    case EvaluationBoundaryKind.ExternalModule:
+      return `${path} is provided by an external module boundary.`;
+    case EvaluationBoundaryKind.AsyncExecution:
+      return `${path} is produced by async execution outside synchronous static evaluation.`;
+    case EvaluationBoundaryKind.BindingScope:
+      return `${path} is supplied by the runtime binding scope.`;
+  }
+}
+
 /** Unknown value carrying the reason evaluation stayed open. */
 export class EvaluationUnknownValue {
   readonly kind = EvaluationValueKind.Unknown;
@@ -72,6 +96,8 @@ export class EvaluationUnknownValue {
     readonly node: ts.Node | null = null,
     /** Whether an explicit open seam has already been recorded for this unknown. */
     readonly hasOpenSeam: boolean = false,
+    /** Best-known value retained for semantic projection but forbidden from evaluator execution. */
+    readonly retainedCandidate: EvaluationValue | null = null,
   ) {}
 }
 
@@ -171,12 +197,26 @@ export class EvaluationDateValue {
 
 /** One array element and the expression that produced it. */
 export class EvaluationArrayElement {
+  readonly openSeams: readonly EvaluationOpenSeam[];
+
   constructor(
     /** Element value after local evaluation. */
     readonly value: EvaluationValue,
     /** Source expression that produced this element, when one exists. */
     readonly expression: ts.Expression | null,
-  ) {}
+    /** Exact evaluator pressure produced while computing this element. */
+    openSeams: readonly EvaluationOpenSeam[] = noEvaluationOpenSeams,
+    /** Runtime array index for this retained present element, or null when position is not statically known. */
+    readonly runtimeIndex: number | null = null,
+  ) {
+    this.openSeams = compactEvaluationOpenSeams(openSeams);
+  }
+
+  withRuntimeIndex(runtimeIndex: number | null): EvaluationArrayElement {
+    return this.runtimeIndex === runtimeIndex
+      ? this
+      : new EvaluationArrayElement(this.value, this.expression, this.openSeams, runtimeIndex);
+  }
 }
 
 export const enum EvaluationArrayUncertaintyKind {
@@ -184,8 +224,6 @@ export const enum EvaluationArrayUncertaintyKind {
   BoundarySpread = 'boundary-spread',
   /** Array membership depends on a dynamic conditional branch whose chosen lane is not statically known. */
   ConditionalBranch = 'conditional-branch',
-  /** Array membership includes an elision hole, so the evaluator cannot treat every slot as an authored element. */
-  OmittedElement = 'omitted-element',
   /** Array membership depends on a spread value that did not reduce to an evaluator-local Array. */
   NonArraySpread = 'non-array-spread',
   /** Array order depends on an operation that could not be reduced to exact static ordering. */
@@ -201,63 +239,316 @@ export interface EvaluationArrayUncertainty {
 
 const emptyEvaluationArrayUncertainties: readonly EvaluationArrayUncertainty[] = [];
 
+export interface EvaluationArrayShapeInit {
+  /** Exact runtime `length`, or null when unknown insertion/removal can change it. */
+  readonly exactLength: number | null;
+  /** Whether every present element and every hole is known, independently of their final order. */
+  readonly hasExactElements: boolean;
+  /** Whether retained elements remain in their exact runtime order. */
+  readonly hasExactOrder: boolean;
+  /** Compact local reasons for any open array axis. */
+  readonly uncertainties: readonly EvaluationArrayUncertainty[];
+  /** Pressure that prevents runtime `length` from closing. */
+  readonly extentOpenSeams: readonly EvaluationOpenSeam[];
+  /** Pressure that prevents retained elements from closing to exact positions. */
+  readonly elementOpenSeams: readonly EvaluationOpenSeam[];
+  /** Pressure that prevents retained elements from closing to exact order. */
+  readonly orderOpenSeams: readonly EvaluationOpenSeam[];
+}
+
+/** Immutable closure state for the independent axes of one evaluator-local array. */
+export class EvaluationArrayShape {
+  readonly uncertainties: readonly EvaluationArrayUncertainty[];
+  readonly extentOpenSeams: readonly EvaluationOpenSeam[];
+  readonly elementOpenSeams: readonly EvaluationOpenSeam[];
+  readonly orderOpenSeams: readonly EvaluationOpenSeam[];
+
+  constructor(
+    readonly exactLength: number | null,
+    readonly hasExactElements: boolean,
+    readonly hasExactOrder: boolean,
+    uncertainties: readonly EvaluationArrayUncertainty[],
+    extentOpenSeams: readonly EvaluationOpenSeam[],
+    elementOpenSeams: readonly EvaluationOpenSeam[],
+    orderOpenSeams: readonly EvaluationOpenSeam[],
+  ) {
+    if (exactLength != null && (!Number.isInteger(exactLength) || exactLength < 0)) {
+      throw new Error('An exact evaluator array length must be a non-negative integer.');
+    }
+    if (hasExactElements && exactLength == null) {
+      throw new Error('Exact evaluator array elements require an exact runtime length.');
+    }
+    this.uncertainties = uncertainties.length === 0
+      ? emptyEvaluationArrayUncertainties
+      : uniqueEvaluationArrayUncertainties(uncertainties);
+    this.extentOpenSeams = compactEvaluationOpenSeams(extentOpenSeams);
+    this.elementOpenSeams = compactEvaluationOpenSeams(elementOpenSeams);
+    this.orderOpenSeams = compactEvaluationOpenSeams(orderOpenSeams);
+  }
+
+  static exact(length: number): EvaluationArrayShape {
+    return new EvaluationArrayShape(length, true, true, [], [], [], []);
+  }
+
+  static from(init: EvaluationArrayShapeInit): EvaluationArrayShape {
+    return new EvaluationArrayShape(
+      init.exactLength,
+      init.hasExactElements,
+      init.hasExactOrder,
+      init.uncertainties,
+      init.extentOpenSeams,
+      init.elementOpenSeams,
+      init.orderOpenSeams,
+    );
+  }
+
+  get hasExactPositions(): boolean {
+    return this.hasExactElements && this.hasExactOrder;
+  }
+
+  get aggregateOpenSeams(): readonly EvaluationOpenSeam[] {
+    return compactEvaluationOpenSeams([
+      ...this.extentOpenSeams,
+      ...this.elementOpenSeams,
+      ...this.orderOpenSeams,
+    ]);
+  }
+
+  withUnknownExtent(
+    openSeams: readonly EvaluationOpenSeam[],
+    uncertainty: EvaluationArrayUncertainty | null = null,
+  ): EvaluationArrayShape {
+    return EvaluationArrayShape.from({
+      exactLength: null,
+      hasExactElements: false,
+      hasExactOrder: this.hasExactOrder,
+      uncertainties: appendArrayShapeUncertainty(this.uncertainties, uncertainty),
+      extentOpenSeams: [...this.extentOpenSeams, ...openSeams],
+      elementOpenSeams: [...this.elementOpenSeams, ...openSeams],
+      orderOpenSeams: this.orderOpenSeams,
+    });
+  }
+
+  withUnknownElements(
+    openSeams: readonly EvaluationOpenSeam[],
+    uncertainty: EvaluationArrayUncertainty | null = null,
+  ): EvaluationArrayShape {
+    return EvaluationArrayShape.from({
+      exactLength: this.exactLength,
+      hasExactElements: false,
+      hasExactOrder: this.hasExactOrder,
+      uncertainties: appendArrayShapeUncertainty(this.uncertainties, uncertainty),
+      extentOpenSeams: this.extentOpenSeams,
+      elementOpenSeams: [...this.elementOpenSeams, ...openSeams],
+      orderOpenSeams: this.orderOpenSeams,
+    });
+  }
+
+  withUnknownOrder(
+    openSeams: readonly EvaluationOpenSeam[],
+    uncertainty: EvaluationArrayUncertainty | null = null,
+  ): EvaluationArrayShape {
+    return EvaluationArrayShape.from({
+      exactLength: this.exactLength,
+      hasExactElements: this.hasExactElements,
+      hasExactOrder: false,
+      uncertainties: appendArrayShapeUncertainty(this.uncertainties, uncertainty),
+      extentOpenSeams: this.extentOpenSeams,
+      elementOpenSeams: this.elementOpenSeams,
+      orderOpenSeams: [...this.orderOpenSeams, ...openSeams],
+    });
+  }
+
+  withExactLengthDelta(delta: number): EvaluationArrayShape {
+    if (this.exactLength == null) {
+      return this;
+    }
+    const exactLength = this.exactLength + delta;
+    if (!Number.isInteger(delta) || exactLength < 0) {
+      throw new Error('An evaluator array length delta must preserve a non-negative integer length.');
+    }
+    return EvaluationArrayShape.from({
+      exactLength,
+      hasExactElements: this.hasExactElements,
+      hasExactOrder: this.hasExactOrder,
+      uncertainties: this.uncertainties,
+      extentOpenSeams: this.extentOpenSeams,
+      elementOpenSeams: this.elementOpenSeams,
+      orderOpenSeams: this.orderOpenSeams,
+    });
+  }
+}
+
 /** Array value with element-level evaluator values. */
 export class EvaluationArrayValue {
   readonly kind = EvaluationValueKind.Array;
   readonly elements: EvaluationArrayElement[];
-  uncertainties: readonly EvaluationArrayUncertainty[];
+  private _shape: EvaluationArrayShape;
 
   constructor(
     /** Concrete element values in array order. */
     elements: readonly EvaluationArrayElement[],
-    /** Whether a spread or hole prevented exact element closure. */
-    public mayHaveUnknownElements: boolean,
     /** Syntax node that produced the value, when one exists. */
     readonly node: ts.Node | null = null,
-    /** Whether membership is known but order was affected by an unclosed ordering operation. */
-    public mayHaveUnknownOrder: boolean = false,
-    /** Compact local reasons for unknown membership/order, kept out of durable kernel records. */
-    uncertainties: readonly EvaluationArrayUncertainty[] = emptyEvaluationArrayUncertainties,
+    /** Independent closure state for extent, element positions, and order. */
+    shape: EvaluationArrayShape = EvaluationArrayShape.exact(elements.length),
   ) {
-    this.elements = [...elements];
-    this.uncertainties = uncertainties.length === 0
-      ? emptyEvaluationArrayUncertainties
-      : uniqueEvaluationArrayUncertainties(uncertainties);
+    this.elements = normalizeEvaluationArrayElements(elements, shape);
+    this._shape = shape;
   }
 
-  /** Mark the array as having element membership or values that static evaluation could not close. */
-  markUnknownElements(uncertainty: EvaluationArrayUncertainty | null = null): void {
-    this.mayHaveUnknownElements = true;
-    if (uncertainty != null) {
-      this.appendUncertainty(uncertainty);
-    }
+  get exactLength(): number | null {
+    return this._shape.exactLength;
   }
 
-  /** Mark the array as having an ordering operation that static evaluation could not close. */
-  markUnknownOrder(uncertainty: EvaluationArrayUncertainty | null = null): void {
-    this.mayHaveUnknownOrder = true;
-    if (uncertainty != null) {
-      this.appendUncertainty(uncertainty);
-    }
+  get shape(): EvaluationArrayShape {
+    return this._shape;
+  }
+
+  get hasExactElementPositions(): boolean {
+    return this._shape.hasExactPositions;
+  }
+
+  get isDense(): boolean {
+    return this._shape.hasExactPositions && this._shape.exactLength === this.elements.length;
+  }
+
+  elementAtRuntimeIndex(runtimeIndex: number): EvaluationArrayElement | null {
+    return this.elements.find((element) => element.runtimeIndex === runtimeIndex) ?? null;
+  }
+
+  get mayHaveUnknownElements(): boolean {
+    return !this._shape.hasExactElements;
+  }
+
+  get mayHaveUnknownOrder(): boolean {
+    return !this._shape.hasExactOrder;
+  }
+
+  get uncertainties(): readonly EvaluationArrayUncertainty[] {
+    return this._shape.uncertainties;
+  }
+
+  get extentOpenSeams(): readonly EvaluationOpenSeam[] {
+    return this._shape.extentOpenSeams;
+  }
+
+  get elementOpenSeams(): readonly EvaluationOpenSeam[] {
+    return this._shape.elementOpenSeams;
+  }
+
+  get orderOpenSeams(): readonly EvaluationOpenSeam[] {
+    return this._shape.orderOpenSeams;
+  }
+
+  get aggregateOpenSeams(): readonly EvaluationOpenSeam[] {
+    return this._shape.aggregateOpenSeams;
+  }
+
+  markUnknownExtent(
+    openSeams: readonly EvaluationOpenSeam[],
+    uncertainty: EvaluationArrayUncertainty | null = null,
+  ): void {
+    this.setShape(this._shape.withUnknownExtent(openSeams, uncertainty));
+  }
+
+  markUnknownElements(
+    openSeams: readonly EvaluationOpenSeam[],
+    uncertainty: EvaluationArrayUncertainty | null = null,
+  ): void {
+    this.setShape(this._shape.withUnknownElements(openSeams, uncertainty));
+  }
+
+  markUnknownOrder(
+    openSeams: readonly EvaluationOpenSeam[],
+    uncertainty: EvaluationArrayUncertainty | null = null,
+  ): void {
+    this.setShape(this._shape.withUnknownOrder(openSeams, uncertainty));
+  }
+
+  adjustExactLength(delta: number): void {
+    this.setShape(this._shape.withExactLengthDelta(delta));
   }
 
   /** Replace known element order after a mutating array operation such as sort. */
   replaceElementOrder(
     elements: readonly EvaluationArrayElement[],
-    mayHaveUnknownOrder: boolean,
+    orderIsOpen: boolean,
+    orderOpenSeams: readonly EvaluationOpenSeam[],
   ): void {
-    this.elements.splice(0, this.elements.length, ...elements);
-    this.mayHaveUnknownOrder ||= mayHaveUnknownOrder;
+    if (orderIsOpen) {
+      const shape = this._shape.withUnknownOrder(orderOpenSeams, {
+        kind: EvaluationArrayUncertaintyKind.UnknownOrder,
+        node: this.node,
+      });
+      this.replaceElements(elements, shape);
+      return;
+    }
+    this.replaceElements(
+      elements.map((element, runtimeIndex) => element.withRuntimeIndex(runtimeIndex)),
+      this._shape,
+    );
   }
 
-  private appendUncertainty(
-    uncertainty: EvaluationArrayUncertainty,
+  /** Atomically replace retained elements and closure state so positional invariants cannot drift. */
+  replaceElements(
+    elements: readonly EvaluationArrayElement[],
+    shape: EvaluationArrayShape = this._shape,
   ): void {
-    if (this.uncertainties === emptyEvaluationArrayUncertainties) {
-      this.uncertainties = [];
-    }
-    appendEvaluationArrayUncertainty(this.uncertainties as EvaluationArrayUncertainty[], uncertainty);
+    const normalized = normalizeEvaluationArrayElements(elements, shape);
+    this.elements.splice(0, this.elements.length, ...normalized);
+    this._shape = shape;
   }
+
+  private setShape(shape: EvaluationArrayShape): void {
+    if (!shape.hasExactPositions) {
+      for (let index = 0; index < this.elements.length; index += 1) {
+        this.elements[index] = this.elements[index]!.withRuntimeIndex(null);
+      }
+    }
+    this._shape = shape;
+  }
+}
+
+function normalizeEvaluationArrayElements(
+  elements: readonly EvaluationArrayElement[],
+  shape: EvaluationArrayShape,
+): EvaluationArrayElement[] {
+  if (!shape.hasExactPositions) {
+    return elements.map((element) => element.withRuntimeIndex(null));
+  }
+  if (shape.exactLength == null) {
+    throw new Error('Exact evaluator array positions require an exact runtime length.');
+  }
+  if (elements.length === shape.exactLength) {
+    return elements.map((element, runtimeIndex) => element.withRuntimeIndex(runtimeIndex));
+  }
+  const seen = new Set<number>();
+  let previous = -1;
+  for (const element of elements) {
+    const runtimeIndex = element.runtimeIndex;
+    if (
+      runtimeIndex == null
+      || runtimeIndex < 0
+      || runtimeIndex >= shape.exactLength
+      || runtimeIndex <= previous
+      || seen.has(runtimeIndex)
+    ) {
+      throw new Error('An exact sparse evaluator array requires unique ascending runtime element indices.');
+    }
+    seen.add(runtimeIndex);
+    previous = runtimeIndex;
+  }
+  return [...elements];
+}
+
+function appendArrayShapeUncertainty(
+  uncertainties: readonly EvaluationArrayUncertainty[],
+  uncertainty: EvaluationArrayUncertainty | null,
+): readonly EvaluationArrayUncertainty[] {
+  return uncertainty == null
+    ? uncertainties
+    : mergeEvaluationArrayUncertainties(uncertainties, [uncertainty]);
 }
 
 export function evaluationArrayBoundarySpreadUncertainty(
@@ -285,8 +576,6 @@ export function evaluationArrayUncertaintySummaries(
         return uncertainty.boundaryPath == null
           ? 'membership depends on a dynamic conditional branch'
           : `membership depends on conditional branch ${uncertainty.boundaryPath}`;
-      case EvaluationArrayUncertaintyKind.OmittedElement:
-        return 'membership includes an elision hole';
       case EvaluationArrayUncertaintyKind.NonArraySpread:
         return 'membership depends on a spread value that did not reduce to an array';
       case EvaluationArrayUncertaintyKind.UnknownOrder:
@@ -363,58 +652,331 @@ export interface EvaluationObjectUncertainty {
 
 const emptyEvaluationObjectUncertainties: readonly EvaluationObjectUncertainty[] = [];
 
-/** Set value with evaluator-local element membership. */
-export class EvaluationSetValue {
-  readonly kind = EvaluationValueKind.Set;
-  readonly elements: EvaluationArrayElement[];
+export interface EvaluationKeyedCollectionShapeInit {
+  /** Exact active runtime entry count, or null when a keyed mutation can add or remove an entry. */
+  readonly exactSize: number | null;
+  /** Whether every active runtime key/member identity and presence is known. */
+  readonly hasExactMembership: boolean;
+  /** Whether retained active entries occupy exact runtime iteration positions. */
+  readonly hasExactOrder: boolean;
+  /** Pressure that prevents the active entry count from closing. */
+  readonly sizeOpenSeams: readonly EvaluationOpenSeam[];
+  /** Pressure that prevents member/key identity and presence from closing. */
+  readonly membershipOpenSeams: readonly EvaluationOpenSeam[];
+  /** Pressure that prevents exact insertion positions from closing. */
+  readonly orderOpenSeams: readonly EvaluationOpenSeam[];
+}
+
+/** Immutable closure state shared by evaluator-local Set and Map values. */
+export class EvaluationKeyedCollectionShape {
+  readonly sizeOpenSeams: readonly EvaluationOpenSeam[];
+  readonly membershipOpenSeams: readonly EvaluationOpenSeam[];
+  readonly orderOpenSeams: readonly EvaluationOpenSeam[];
 
   constructor(
-    /** Concrete element values in insertion order. */
-    elements: readonly EvaluationArrayElement[],
-    /** Whether a spread, non-array iterable, or weak collection prevented exact membership closure. */
-    readonly mayHaveUnknownElements: boolean,
-    /** Syntax node that produced the value, when one exists. */
-    readonly node: ts.Node | null = null,
-    /** Whether this represents a WeakSet constructor, where membership cannot be enumerated at runtime. */
-    readonly weak: boolean = false,
+    readonly exactSize: number | null,
+    readonly hasExactMembership: boolean,
+    readonly hasExactOrder: boolean,
+    sizeOpenSeams: readonly EvaluationOpenSeam[],
+    membershipOpenSeams: readonly EvaluationOpenSeam[],
+    orderOpenSeams: readonly EvaluationOpenSeam[],
   ) {
-    this.elements = [...elements];
+    if (exactSize != null && (!Number.isInteger(exactSize) || exactSize < 0)) {
+      throw new Error('An exact evaluator keyed-collection size must be a non-negative integer.');
+    }
+    if (hasExactMembership && exactSize == null) {
+      throw new Error('Exact evaluator keyed-collection membership requires an exact runtime size.');
+    }
+    this.sizeOpenSeams = compactEvaluationOpenSeams(sizeOpenSeams);
+    this.membershipOpenSeams = compactEvaluationOpenSeams(membershipOpenSeams);
+    this.orderOpenSeams = compactEvaluationOpenSeams(orderOpenSeams);
+  }
+
+  static exact(size: number): EvaluationKeyedCollectionShape {
+    return new EvaluationKeyedCollectionShape(size, true, true, [], [], []);
+  }
+
+  static from(init: EvaluationKeyedCollectionShapeInit): EvaluationKeyedCollectionShape {
+    return new EvaluationKeyedCollectionShape(
+      init.exactSize,
+      init.hasExactMembership,
+      init.hasExactOrder,
+      init.sizeOpenSeams,
+      init.membershipOpenSeams,
+      init.orderOpenSeams,
+    );
+  }
+
+  get aggregateOpenSeams(): readonly EvaluationOpenSeam[] {
+    return compactEvaluationOpenSeams([
+      ...this.sizeOpenSeams,
+      ...this.membershipOpenSeams,
+      ...this.orderOpenSeams,
+    ]);
+  }
+
+  withOpenMembership(
+    openSeams: readonly EvaluationOpenSeam[],
+    exactSize: number | null,
+    hasExactOrder: boolean,
+  ): EvaluationKeyedCollectionShape {
+    return EvaluationKeyedCollectionShape.from({
+      exactSize,
+      hasExactMembership: false,
+      hasExactOrder,
+      sizeOpenSeams: exactSize == null ? [...this.sizeOpenSeams, ...openSeams] : this.sizeOpenSeams,
+      membershipOpenSeams: [...this.membershipOpenSeams, ...openSeams],
+      orderOpenSeams: hasExactOrder ? this.orderOpenSeams : [...this.orderOpenSeams, ...openSeams],
+    });
+  }
+
+  withExactSizeDelta(delta: number): EvaluationKeyedCollectionShape {
+    if (this.exactSize == null) {
+      return this;
+    }
+    const exactSize = this.exactSize + delta;
+    if (!Number.isInteger(delta) || exactSize < 0) {
+      throw new Error('An evaluator keyed-collection size delta must preserve a non-negative integer size.');
+    }
+    return EvaluationKeyedCollectionShape.from({
+      exactSize,
+      hasExactMembership: this.hasExactMembership,
+      hasExactOrder: this.hasExactOrder,
+      sizeOpenSeams: this.sizeOpenSeams,
+      membershipOpenSeams: this.membershipOpenSeams,
+      orderOpenSeams: this.orderOpenSeams,
+    });
   }
 }
 
-/** One Map entry and the expression that produced it. */
-export class EvaluationMapEntry {
-  constructor(
-    /** Entry key after local evaluation. */
-    readonly key: EvaluationValue,
-    /** Entry value after local evaluation. */
-    readonly value: EvaluationValue,
-    /** Source expression that produced this entry, when one exists. */
-    readonly expression: ts.Expression | null,
-  ) {}
+export const enum EvaluationKeyedCollectionEntryState {
+  /** The retained entry is definitely active in the collection. */
+  Present = 'present',
+  /** The retained candidate may or may not occupy one active collection entry. */
+  Conditional = 'conditional',
+  /** An exact delete or clear removed the entry while preserving iterator lineage. */
+  Deleted = 'deleted',
 }
 
-/** Map value with evaluator-local key/value entries. */
+/** One Set member candidate with independent identity and presence evidence. */
+export class EvaluationSetElement {
+  readonly openSeams: readonly EvaluationOpenSeam[];
+  readonly presenceOpenSeams: readonly EvaluationOpenSeam[];
+
+  constructor(
+    readonly value: EvaluationValue,
+    readonly expression: ts.Expression | null,
+    openSeams: readonly EvaluationOpenSeam[] = noEvaluationOpenSeams,
+    readonly state: EvaluationKeyedCollectionEntryState = EvaluationKeyedCollectionEntryState.Present,
+    presenceOpenSeams: readonly EvaluationOpenSeam[] = noEvaluationOpenSeams,
+  ) {
+    this.openSeams = compactEvaluationOpenSeams(openSeams);
+    this.presenceOpenSeams = compactEvaluationOpenSeams(presenceOpenSeams);
+  }
+
+  withState(
+    state: EvaluationKeyedCollectionEntryState,
+    additionalOpenSeams: readonly EvaluationOpenSeam[] = noEvaluationOpenSeams,
+  ): EvaluationSetElement {
+    return state === this.state && additionalOpenSeams.length === 0
+      ? this
+      : new EvaluationSetElement(
+          this.value,
+          this.expression,
+          this.openSeams,
+          state,
+          state === EvaluationKeyedCollectionEntryState.Conditional
+            ? [...this.presenceOpenSeams, ...additionalOpenSeams]
+            : additionalOpenSeams,
+        );
+  }
+}
+
+/** Set value with evaluator-local keyed membership and independent iteration capability. */
+export class EvaluationSetValue {
+  readonly kind = EvaluationValueKind.Set;
+  readonly elements: EvaluationSetElement[];
+  private _shape: EvaluationKeyedCollectionShape;
+
+  constructor(
+    elements: readonly EvaluationSetElement[],
+    readonly node: ts.Node | null = null,
+    shape: EvaluationKeyedCollectionShape = EvaluationKeyedCollectionShape.exact(elements.length),
+    /** WeakSet retains keyed membership but deliberately exposes neither iteration nor size. */
+    readonly weak: boolean = false,
+  ) {
+    this.elements = [...elements];
+    this._shape = shape;
+  }
+
+  get shape(): EvaluationKeyedCollectionShape {
+    return this._shape;
+  }
+
+  get exactSize(): number | null {
+    return this._shape.exactSize;
+  }
+
+  get mayHaveUnknownElements(): boolean {
+    return !this._shape.hasExactMembership;
+  }
+
+  get mayHaveUnknownOrder(): boolean {
+    return !this._shape.hasExactOrder;
+  }
+
+  get aggregateOpenSeams(): readonly EvaluationOpenSeam[] {
+    return this._shape.aggregateOpenSeams;
+  }
+
+  /** Atomically replace retained membership history and collection closure state. */
+  replaceElements(
+    elements: readonly EvaluationSetElement[],
+    shape: EvaluationKeyedCollectionShape = this._shape,
+  ): void {
+    this.elements.splice(0, this.elements.length, ...elements);
+    this._shape = shape;
+  }
+}
+
+/** One Map entry with independent key, value, and active-presence evidence. */
+export class EvaluationMapEntry {
+  readonly keyOpenSeams: readonly EvaluationOpenSeam[];
+  readonly valueOpenSeams: readonly EvaluationOpenSeam[];
+  readonly presenceOpenSeams: readonly EvaluationOpenSeam[];
+
+  constructor(
+    readonly key: EvaluationValue,
+    readonly value: EvaluationValue,
+    readonly keyExpression: ts.Expression | null,
+    readonly valueExpression: ts.Expression | null,
+    keyOpenSeams: readonly EvaluationOpenSeam[] = noEvaluationOpenSeams,
+    valueOpenSeams: readonly EvaluationOpenSeam[] = noEvaluationOpenSeams,
+    readonly state: EvaluationKeyedCollectionEntryState = EvaluationKeyedCollectionEntryState.Present,
+    presenceOpenSeams: readonly EvaluationOpenSeam[] = noEvaluationOpenSeams,
+  ) {
+    this.keyOpenSeams = compactEvaluationOpenSeams(keyOpenSeams);
+    this.valueOpenSeams = compactEvaluationOpenSeams(valueOpenSeams);
+    this.presenceOpenSeams = compactEvaluationOpenSeams(presenceOpenSeams);
+  }
+
+  withValue(
+    value: EvaluationValue,
+    expression: ts.Expression | null,
+    openSeams: readonly EvaluationOpenSeam[] = noEvaluationOpenSeams,
+  ): EvaluationMapEntry {
+    return new EvaluationMapEntry(
+      this.key,
+      value,
+      this.keyExpression,
+      expression,
+      this.keyOpenSeams,
+      openSeams,
+    );
+  }
+
+  withValueOpenSeams(openSeams: readonly EvaluationOpenSeam[]): EvaluationMapEntry {
+    return openSeams.length === 0
+      ? this
+      : new EvaluationMapEntry(
+          this.key,
+          this.value,
+          this.keyExpression,
+          this.valueExpression,
+          this.keyOpenSeams,
+          [...this.valueOpenSeams, ...openSeams],
+          this.state,
+          this.presenceOpenSeams,
+        );
+  }
+
+  withState(
+    state: EvaluationKeyedCollectionEntryState,
+    additionalOpenSeams: readonly EvaluationOpenSeam[] = noEvaluationOpenSeams,
+  ): EvaluationMapEntry {
+    return state === this.state && additionalOpenSeams.length === 0
+      ? this
+      : new EvaluationMapEntry(
+          this.key,
+          this.value,
+          this.keyExpression,
+          this.valueExpression,
+          this.keyOpenSeams,
+          this.valueOpenSeams,
+          state,
+          state === EvaluationKeyedCollectionEntryState.Conditional
+            ? [...this.presenceOpenSeams, ...additionalOpenSeams]
+            : additionalOpenSeams,
+        );
+  }
+}
+
+/** Map value with evaluator-local keyed membership and independent iteration capability. */
 export class EvaluationMapValue {
   readonly kind = EvaluationValueKind.Map;
   readonly entries: EvaluationMapEntry[];
+  private _shape: EvaluationKeyedCollectionShape;
 
   constructor(
-    /** Concrete entries in insertion order. */
     entries: readonly EvaluationMapEntry[],
-    /** Whether a spread, malformed entry, non-array iterable, or weak collection prevented exact entry closure. */
-    readonly mayHaveUnknownEntries: boolean,
-    /** Syntax node that produced the value, when one exists. */
     readonly node: ts.Node | null = null,
-    /** Whether this represents a WeakMap constructor, where entries cannot be enumerated at runtime. */
+    shape: EvaluationKeyedCollectionShape = EvaluationKeyedCollectionShape.exact(entries.length),
+    /** WeakMap retains keyed membership but deliberately exposes neither iteration nor size. */
     readonly weak: boolean = false,
   ) {
     this.entries = [...entries];
+    this._shape = shape;
+  }
+
+  get shape(): EvaluationKeyedCollectionShape {
+    return this._shape;
+  }
+
+  get exactSize(): number | null {
+    return this._shape.exactSize;
+  }
+
+  get mayHaveUnknownEntries(): boolean {
+    return !this._shape.hasExactMembership;
+  }
+
+  get mayHaveUnknownOrder(): boolean {
+    return !this._shape.hasExactOrder;
+  }
+
+  get aggregateOpenSeams(): readonly EvaluationOpenSeam[] {
+    return this._shape.aggregateOpenSeams;
+  }
+
+  /** Atomically replace retained membership history and collection closure state. */
+  replaceEntries(
+    entries: readonly EvaluationMapEntry[],
+    shape: EvaluationKeyedCollectionShape = this._shape,
+  ): void {
+    this.entries.splice(0, this.entries.length, ...entries);
+    this._shape = shape;
   }
 }
 
 /** One object property and the expression or method that produced it. */
+export const enum EvaluationObjectPropertyState {
+  /** No later unknown-key write can replace the retained value. */
+  Closed,
+  /** A later unknown computed key or spread may replace the retained value. */
+  Open,
+}
+
+export const enum EvaluationObjectPropertyPresence {
+  /** The property definitely exists on the retained runtime object. */
+  Present = 'present',
+  /** The property exists on only some retained execution lanes. */
+  Conditional = 'conditional',
+}
+
 export class EvaluationObjectProperty {
+  readonly openSeams: readonly EvaluationOpenSeam[];
+  readonly presenceOpenSeams: readonly EvaluationOpenSeam[];
+
   constructor(
     /** Property name after local key evaluation. */
     readonly name: string,
@@ -422,27 +984,120 @@ export class EvaluationObjectProperty {
     readonly value: EvaluationValue,
     /** Source node that produced this property. */
     readonly node: ts.Node | null,
-  ) {}
+    /** Whether the retained value is the effective final write for this property. */
+    readonly state: EvaluationObjectPropertyState,
+    /** Exact evaluator pressure produced by this value or a later write that may replace it. */
+    openSeams: readonly EvaluationOpenSeam[] = noEvaluationOpenSeams,
+    /** Whether this key is definitely present independently of retained value precision. */
+    readonly presence: EvaluationObjectPropertyPresence = EvaluationObjectPropertyPresence.Present,
+    /** Exact pressure preventing property-presence closure. */
+    presenceOpenSeams: readonly EvaluationOpenSeam[] = noEvaluationOpenSeams,
+  ) {
+    this.openSeams = compactEvaluationOpenSeams(openSeams);
+    this.presenceOpenSeams = compactEvaluationOpenSeams(presenceOpenSeams);
+  }
+
+  withState(
+    state: EvaluationObjectPropertyState,
+    additionalOpenSeams: readonly EvaluationOpenSeam[] = noEvaluationOpenSeams,
+  ): EvaluationObjectProperty {
+    return state === this.state && additionalOpenSeams.length === 0
+      ? this
+      : new EvaluationObjectProperty(
+          this.name,
+          this.value,
+          this.node,
+          state,
+          [...this.openSeams, ...additionalOpenSeams],
+          this.presence,
+          this.presenceOpenSeams,
+        );
+  }
+
+  withPresence(
+    presence: EvaluationObjectPropertyPresence,
+    additionalOpenSeams: readonly EvaluationOpenSeam[] = noEvaluationOpenSeams,
+  ): EvaluationObjectProperty {
+    return presence === this.presence && additionalOpenSeams.length === 0
+      ? this
+      : new EvaluationObjectProperty(
+          this.name,
+          this.value,
+          this.node,
+          this.state,
+          this.openSeams,
+          presence,
+          presence === EvaluationObjectPropertyPresence.Conditional
+            ? [...this.presenceOpenSeams, ...additionalOpenSeams]
+            : additionalOpenSeams,
+        );
+  }
+}
+
+/** Mark retained property values open when a later unknown-key write may replace them. */
+export function openEvaluationObjectProperties(
+  properties: Map<string, EvaluationObjectProperty>,
+  openSeams: readonly EvaluationOpenSeam[] = noEvaluationOpenSeams,
+): void {
+  for (const [name, property] of properties) {
+    properties.set(name, property.withState(EvaluationObjectPropertyState.Open, openSeams));
+  }
 }
 
 /** Object value with evaluator-local property values. */
 export class EvaluationObjectValue {
   readonly kind = EvaluationValueKind.Object;
   readonly uncertainties: readonly EvaluationObjectUncertainty[];
+  private _shapeOpenSeams: readonly EvaluationOpenSeam[];
+  private _propertyOrderOpenSeams: readonly EvaluationOpenSeam[];
 
   constructor(
     /** Known own properties by string key. */
     readonly properties: Map<string, EvaluationObjectProperty>,
     /** Whether a spread or computed key prevented exact property closure. */
-    readonly mayHaveUnknownProperties: boolean,
+    public mayHaveUnknownProperties: boolean,
     /** Syntax node that produced the value, when one exists. */
     readonly node: ts.Node | null = null,
     /** Compact local reasons for unknown property membership, kept out of durable kernel records. */
     uncertainties: readonly EvaluationObjectUncertainty[] = emptyEvaluationObjectUncertainties,
+    /** Exact pressure that prevents the object's property membership from closing. */
+    shapeOpenSeams: readonly EvaluationOpenSeam[] = noEvaluationOpenSeams,
+    /** Exact pressure that prevents known enumerable properties from having one proven runtime order. */
+    propertyOrderOpenSeams: readonly EvaluationOpenSeam[] = noEvaluationOpenSeams,
   ) {
     this.uncertainties = uncertainties.length === 0
       ? emptyEvaluationObjectUncertainties
       : uniqueEvaluationObjectUncertainties(uncertainties);
+    this._shapeOpenSeams = compactEvaluationOpenSeams(shapeOpenSeams);
+    this._propertyOrderOpenSeams = compactEvaluationOpenSeams(propertyOrderOpenSeams);
+  }
+
+  get shapeOpenSeams(): readonly EvaluationOpenSeam[] {
+    return this._shapeOpenSeams;
+  }
+
+  retainShapeOpenSeams(openSeams: readonly EvaluationOpenSeam[]): void {
+    if (openSeams.length === 0) {
+      return;
+    }
+    this._shapeOpenSeams = compactEvaluationOpenSeams([
+      ...this._shapeOpenSeams,
+      ...openSeams,
+    ]);
+  }
+
+  get propertyOrderOpenSeams(): readonly EvaluationOpenSeam[] {
+    return this._propertyOrderOpenSeams;
+  }
+
+  retainPropertyOrderOpenSeams(openSeams: readonly EvaluationOpenSeam[]): void {
+    if (openSeams.length === 0) {
+      return;
+    }
+    this._propertyOrderOpenSeams = compactEvaluationOpenSeams([
+      ...this._propertyOrderOpenSeams,
+      ...openSeams,
+    ]);
   }
 }
 
@@ -539,8 +1194,14 @@ export class EvaluationBoundaryObjectValue {
     properties: ReadonlyMap<string, EvaluationObjectProperty> = new Map(),
     /** Source node that introduced the boundary object. */
     readonly node: ts.Node | null = null,
+    /** Whether the boundary object retains a runtime callable identity. */
+    readonly callable: boolean = false,
   ) {
     this.properties = new Map(properties);
+  }
+
+  get reason(): string {
+    return evaluationBoundaryReason(this.boundaryKind, this.path);
   }
 }
 
@@ -558,16 +1219,7 @@ export class EvaluationBoundaryValue {
   ) {}
 
   get reason(): string {
-    switch (this.boundaryKind) {
-      case EvaluationBoundaryKind.HostEnvironment:
-        return `${this.path} is provided by the host environment.`;
-      case EvaluationBoundaryKind.ExternalModule:
-        return `${this.path} is provided by an external module boundary.`;
-      case EvaluationBoundaryKind.AsyncExecution:
-        return `${this.path} is produced by async execution outside synchronous static evaluation.`;
-      case EvaluationBoundaryKind.BindingScope:
-        return `${this.path} is supplied by the runtime binding scope.`;
-    }
+    return evaluationBoundaryReason(this.boundaryKind, this.path);
   }
 }
 
@@ -659,18 +1311,56 @@ export function appendEvaluationStringLikePart(
 export class EvaluationFunctionValue {
   readonly kind = EvaluationValueKind.Function;
   readonly properties: Map<string, EvaluationObjectProperty>;
+  private _shapeOpenSeams: readonly EvaluationOpenSeam[];
+  private _propertyOrderOpenSeams: readonly EvaluationOpenSeam[];
 
   constructor(
     /** Function-like declaration captured by this value. */
     readonly declaration: ts.FunctionLikeDeclaration,
     /** Captured environment record used for local calls. */
-    readonly environment: EvaluationEnvironmentRecordReference,
+    readonly environment: ModuleEnvironmentRecord,
     /** Syntax node that produced the value, when one exists. */
     readonly node: ts.Node | null = null,
     /** Evaluator-local own properties assigned to the function object. */
     properties: ReadonlyMap<string, EvaluationObjectProperty> = new Map(),
+    /** Whether a computed write prevented exact own-property membership. */
+    public mayHaveUnknownProperties: boolean = false,
+    /** Exact pressure that prevents the function object's property membership from closing. */
+    shapeOpenSeams: readonly EvaluationOpenSeam[] = noEvaluationOpenSeams,
+    /** Exact pressure that prevents known enumerable properties from having one proven runtime order. */
+    propertyOrderOpenSeams: readonly EvaluationOpenSeam[] = noEvaluationOpenSeams,
   ) {
     this.properties = new Map(properties);
+    this._shapeOpenSeams = compactEvaluationOpenSeams(shapeOpenSeams);
+    this._propertyOrderOpenSeams = compactEvaluationOpenSeams(propertyOrderOpenSeams);
+  }
+
+  get shapeOpenSeams(): readonly EvaluationOpenSeam[] {
+    return this._shapeOpenSeams;
+  }
+
+  retainShapeOpenSeams(openSeams: readonly EvaluationOpenSeam[]): void {
+    if (openSeams.length === 0) {
+      return;
+    }
+    this._shapeOpenSeams = compactEvaluationOpenSeams([
+      ...this._shapeOpenSeams,
+      ...openSeams,
+    ]);
+  }
+
+  get propertyOrderOpenSeams(): readonly EvaluationOpenSeam[] {
+    return this._propertyOrderOpenSeams;
+  }
+
+  retainPropertyOrderOpenSeams(openSeams: readonly EvaluationOpenSeam[]): void {
+    if (openSeams.length === 0) {
+      return;
+    }
+    this._propertyOrderOpenSeams = compactEvaluationOpenSeams([
+      ...this._propertyOrderOpenSeams,
+      ...openSeams,
+    ]);
   }
 }
 
@@ -678,18 +1368,58 @@ export class EvaluationFunctionValue {
 export class EvaluationClassValue {
   readonly kind = EvaluationValueKind.Class;
   readonly properties: Map<string, EvaluationObjectProperty>;
+  private _shapeOpenSeams: readonly EvaluationOpenSeam[];
+  private _propertyOrderOpenSeams: readonly EvaluationOpenSeam[];
 
   constructor(
     /** Class declaration or expression represented by this value. */
     readonly declaration: ts.ClassLikeDeclaration,
     /** Captured environment record available to later class-aware materializers. */
-    readonly environment: EvaluationEnvironmentRecordReference,
+    readonly environment: ModuleEnvironmentRecord,
     /** Syntax node that produced the value, when one exists. */
     readonly node: ts.Node | null = null,
     /** Evaluator-local own/static properties assigned to the class object. */
     properties: ReadonlyMap<string, EvaluationObjectProperty> = new Map(),
+    /** Whether a computed static name or write prevented exact own-property membership. */
+    public mayHaveUnknownProperties: boolean = false,
+    /** Exact pressure that prevents the class object's property membership from closing. */
+    shapeOpenSeams: readonly EvaluationOpenSeam[] = noEvaluationOpenSeams,
+    /** Exact pressure that prevents known enumerable static properties from having one proven runtime order. */
+    propertyOrderOpenSeams: readonly EvaluationOpenSeam[] = noEvaluationOpenSeams,
+    /** Exact evaluator-local superclass whose static and prototype-visible properties precede this class. */
+    readonly baseClass: EvaluationClassValue | null = null,
   ) {
     this.properties = new Map(properties);
+    this._shapeOpenSeams = compactEvaluationOpenSeams(shapeOpenSeams);
+    this._propertyOrderOpenSeams = compactEvaluationOpenSeams(propertyOrderOpenSeams);
+  }
+
+  get shapeOpenSeams(): readonly EvaluationOpenSeam[] {
+    return this._shapeOpenSeams;
+  }
+
+  retainShapeOpenSeams(openSeams: readonly EvaluationOpenSeam[]): void {
+    if (openSeams.length === 0) {
+      return;
+    }
+    this._shapeOpenSeams = compactEvaluationOpenSeams([
+      ...this._shapeOpenSeams,
+      ...openSeams,
+    ]);
+  }
+
+  get propertyOrderOpenSeams(): readonly EvaluationOpenSeam[] {
+    return this._propertyOrderOpenSeams;
+  }
+
+  retainPropertyOrderOpenSeams(openSeams: readonly EvaluationOpenSeam[]): void {
+    if (openSeams.length === 0) {
+      return;
+    }
+    this._propertyOrderOpenSeams = compactEvaluationOpenSeams([
+      ...this._propertyOrderOpenSeams,
+      ...openSeams,
+    ]);
   }
 }
 
@@ -697,6 +1427,9 @@ export class EvaluationClassValue {
 export class EvaluationInstanceValue {
   readonly kind = EvaluationValueKind.Instance;
   readonly properties: Map<string, EvaluationObjectProperty>;
+  private _constructionOpenSeams: readonly EvaluationOpenSeam[];
+  private _shapeOpenSeams: readonly EvaluationOpenSeam[];
+  private _propertyOrderOpenSeams: readonly EvaluationOpenSeam[];
 
   constructor(
     /** Class value whose constructor/prototype shape produced this instance. */
@@ -704,11 +1437,104 @@ export class EvaluationInstanceValue {
     /** Evaluator-local own and prototype-visible instance properties. */
     properties: ReadonlyMap<string, EvaluationObjectProperty> = new Map(),
     /** Whether constructor or field execution left additional instance shape unknown. */
-    readonly mayHaveUnknownProperties: boolean = false,
+    public mayHaveUnknownProperties: boolean = false,
     /** Syntax node that produced the instance, when one exists. */
     readonly node: ts.Node | null = null,
+    /** Constructor-wide pressure that can affect every member read. */
+    constructionOpenSeams: readonly EvaluationOpenSeam[] = noEvaluationOpenSeams,
+    /** Pressure from unknown property names that affects membership without qualifying later exact writes. */
+    shapeOpenSeams: readonly EvaluationOpenSeam[] = noEvaluationOpenSeams,
+    /** Exact pressure that prevents known enumerable properties from having one proven runtime order. */
+    propertyOrderOpenSeams: readonly EvaluationOpenSeam[] = noEvaluationOpenSeams,
   ) {
     this.properties = new Map(properties);
+    this._constructionOpenSeams = compactEvaluationOpenSeams(constructionOpenSeams);
+    this._shapeOpenSeams = compactEvaluationOpenSeams(shapeOpenSeams);
+    this._propertyOrderOpenSeams = compactEvaluationOpenSeams(propertyOrderOpenSeams);
+  }
+
+  get constructionOpenSeams(): readonly EvaluationOpenSeam[] {
+    return this._constructionOpenSeams;
+  }
+
+  retainConstructionOpenSeams(openSeams: readonly EvaluationOpenSeam[]): void {
+    if (openSeams.length === 0) {
+      return;
+    }
+    this._constructionOpenSeams = compactEvaluationOpenSeams([
+      ...this._constructionOpenSeams,
+      ...openSeams,
+    ]);
+  }
+
+  get shapeOpenSeams(): readonly EvaluationOpenSeam[] {
+    return this._shapeOpenSeams;
+  }
+
+  retainShapeOpenSeams(openSeams: readonly EvaluationOpenSeam[]): void {
+    if (openSeams.length === 0) {
+      return;
+    }
+    this._shapeOpenSeams = compactEvaluationOpenSeams([
+      ...this._shapeOpenSeams,
+      ...openSeams,
+    ]);
+  }
+
+  get propertyOrderOpenSeams(): readonly EvaluationOpenSeam[] {
+    return this._propertyOrderOpenSeams;
+  }
+
+  retainPropertyOrderOpenSeams(openSeams: readonly EvaluationOpenSeam[]): void {
+    if (openSeams.length === 0) {
+      return;
+    }
+    this._propertyOrderOpenSeams = compactEvaluationOpenSeams([
+      ...this._propertyOrderOpenSeams,
+      ...openSeams,
+    ]);
+  }
+}
+
+export type EvaluationLocalPropertyCarrier =
+  | EvaluationObjectValue
+  | EvaluationFunctionValue
+  | EvaluationClassValue
+  | EvaluationInstanceValue;
+
+/** Return whether one evaluator value owns a locally mutable ECMAScript property table and closure state. */
+export function isEvaluationLocalPropertyCarrier(
+  value: EvaluationValue,
+): value is EvaluationLocalPropertyCarrier {
+  return value.kind === EvaluationValueKind.Object
+    || value.kind === EvaluationValueKind.Function
+    || value.kind === EvaluationValueKind.Class
+    || value.kind === EvaluationValueKind.Instance;
+}
+
+/** Open own-property membership after a computed write while retaining every still-known property value. */
+export function openEvaluationLocalPropertyMembership(
+  value: EvaluationLocalPropertyCarrier,
+  openSeams: readonly EvaluationOpenSeam[],
+): void {
+  value.mayHaveUnknownProperties = true;
+  value.retainShapeOpenSeams(openSeams);
+  openEvaluationObjectProperties(value.properties, openSeams);
+}
+
+/** One named export retained by a statically assembled module namespace. */
+export class EvaluationModuleNamespaceExport {
+  readonly openSeams: readonly EvaluationOpenSeam[];
+
+  constructor(
+    readonly name: string,
+    readonly value: EvaluationValue,
+    /** Export specifier or ultimate declaration that exposes this name, when known. */
+    readonly sourceNode: ts.Node | null,
+    /** Exact pressure qualifying the exported value while namespace membership remains known. */
+    openSeams: readonly EvaluationOpenSeam[] = noEvaluationOpenSeams,
+  ) {
+    this.openSeams = compactEvaluationOpenSeams(openSeams);
   }
 }
 
@@ -719,23 +1545,114 @@ export class EvaluationModuleNamespaceValue {
   constructor(
     /** Module key whose exports are represented by this namespace. */
     readonly moduleKey: string,
-    /** Export values by exported name. */
-    readonly exports: ReadonlyMap<string, EvaluationValue>,
+    /** Export rows by exported name in ECMAScript module-namespace key order. */
+    readonly exportEntries: ReadonlyMap<string, EvaluationModuleNamespaceExport>,
+    /** Whether unresolved star edges or ambiguous exports prevented exact namespace membership. */
+    readonly mayHaveUnknownExports: boolean,
     /** Syntax node that produced the namespace, when one exists. */
     readonly node: ts.Node | null = null,
   ) {}
 }
 
-/** Promise-shaped value such as `import(...)` with a statically known fulfillment value. */
+/** Settlement authority retained by an evaluator Promise without claiming when it becomes observable. */
+export const enum EvaluationPromiseSettlementKind {
+  /** The Promise is known to fulfill with the retained value evidence. */
+  Fulfilled = 'fulfilled',
+  /** The Promise is known to reject with the retained reason evidence. */
+  Rejected = 'rejected',
+  /** Fulfillment versus rejection cannot be selected without runtime execution. */
+  Open = 'open',
+}
+
+/** One Promise settlement lane with exact evidence for its value or best-known candidate. */
+export class EvaluationPromiseSettlement {
+  constructor(
+    readonly kind: EvaluationPromiseSettlementKind,
+    readonly evidence: EvaluationValueEvidence,
+  ) {}
+}
+
+/** Promise-shaped value such as `import(...)` with explicit settlement evidence. */
 export class EvaluationPromiseValue {
   readonly kind = EvaluationValueKind.Promise;
 
-  constructor(
-    /** Value that would be observed by promise fulfillment when static evaluation can close it. */
-    readonly fulfilledValue: EvaluationValue,
+  private forkShell = false;
+
+  private constructor(
+    private settlementState: EvaluationPromiseSettlement | null,
     /** Syntax node that produced the promise, when one exists. */
     readonly node: ts.Node | null = null,
   ) {}
+
+  get settlement(): EvaluationPromiseSettlement {
+    if (this.settlementState == null) {
+      throw new Error('Evaluation Promise graph-fork shell has not been completed.');
+    }
+    return this.settlementState;
+  }
+
+  static fromSettlement(
+    settlement: EvaluationPromiseSettlement,
+    node: ts.Node | null = null,
+  ): EvaluationPromiseValue {
+    return new EvaluationPromiseValue(settlement, node);
+  }
+
+  static fulfilled(
+    evidence: EvaluationValueEvidence,
+    node: ts.Node | null = null,
+  ): EvaluationPromiseValue {
+    return EvaluationPromiseValue.fromSettlement(
+      new EvaluationPromiseSettlement(EvaluationPromiseSettlementKind.Fulfilled, evidence),
+      node,
+    );
+  }
+
+  static rejected(
+    evidence: EvaluationValueEvidence,
+    node: ts.Node | null = null,
+  ): EvaluationPromiseValue {
+    return EvaluationPromiseValue.fromSettlement(
+      new EvaluationPromiseSettlement(EvaluationPromiseSettlementKind.Rejected, evidence),
+      node,
+    );
+  }
+
+  static open(
+    evidence: EvaluationValueEvidence,
+    node: ts.Node | null = null,
+  ): EvaluationPromiseValue {
+    return EvaluationPromiseValue.fromSettlement(
+      new EvaluationPromiseSettlement(EvaluationPromiseSettlementKind.Open, evidence),
+      node,
+    );
+  }
+
+  /** Create an unpublished shell so graph-preserving session forks can close Promise back-edges. */
+  static forkShell(node: ts.Node | null): EvaluationPromiseValue {
+    const shell = new EvaluationPromiseValue(null, node);
+    shell.forkShell = true;
+    return shell;
+  }
+
+  /** Complete a graph-fork shell exactly once before the session graph is exposed. */
+  completeFork(settlement: EvaluationPromiseSettlement): void {
+    if (!this.forkShell) {
+      throw new Error('Evaluation Promise value is not an incomplete graph-fork shell.');
+    }
+    this.settlementState = settlement;
+    this.forkShell = false;
+  }
+}
+
+/** Return a Promise fulfillment only when both settlement selection and fulfillment evidence are closed. */
+export function closedEvaluationPromiseFulfillment(
+  promise: EvaluationPromiseValue,
+): EvaluationValue | null {
+  return promise.settlement.kind === EvaluationPromiseSettlementKind.Fulfilled
+    && promise.settlement.evidence.openSeams.length === 0
+    ? promise.settlement.evidence.value
+    : null;
 }
 
 /** Concrete primitive value classes that can be safely converted to JS primitive values. */
@@ -784,6 +1701,41 @@ export type EvaluationValue =
   | EvaluationInstanceValue
   | EvaluationModuleNamespaceValue
   | EvaluationPromiseValue;
+
+/**
+ * Returns whether ECMAScript call semantics are provably available for an evaluated value.
+ *
+ * `null` means the value belongs to an unresolved boundary and must not be treated as either callable or non-callable.
+ */
+export function readEvaluationCallability(value: EvaluationValue): boolean | null {
+  switch (value.kind) {
+    case EvaluationValueKind.Function:
+      return true;
+    case EvaluationValueKind.BoundaryObject:
+      return value.callable;
+    case EvaluationValueKind.Unknown:
+    case EvaluationValueKind.BoundaryValue:
+      return null;
+    case EvaluationValueKind.Undefined:
+    case EvaluationValueKind.Null:
+    case EvaluationValueKind.Boolean:
+    case EvaluationValueKind.Number:
+    case EvaluationValueKind.BigInt:
+    case EvaluationValueKind.String:
+    case EvaluationValueKind.StringPattern:
+    case EvaluationValueKind.RegularExpression:
+    case EvaluationValueKind.Date:
+    case EvaluationValueKind.Array:
+    case EvaluationValueKind.Set:
+    case EvaluationValueKind.Map:
+    case EvaluationValueKind.Object:
+    case EvaluationValueKind.Class:
+    case EvaluationValueKind.Instance:
+    case EvaluationValueKind.ModuleNamespace:
+    case EvaluationValueKind.Promise:
+      return false;
+  }
+}
 
 /** Return parts for values that can participate in string-pattern concatenation. */
 export function readEvaluationStringLikeParts(
@@ -892,10 +1844,9 @@ export function readEvaluationPrimitive(value: EvaluationPrimitiveValue): string
   }
 }
 
-/** Compare evaluator values using ECMAScript primitive value equality and identity for object-like values. */
-export function evaluationValuesEqual(left: EvaluationValue, right: EvaluationValue): boolean {
-  if (isEvaluationPrimitiveValue(left) && isEvaluationPrimitiveValue(right)) {
-    return readEvaluationPrimitive(left) === readEvaluationPrimitive(right);
-  }
-  return left === right;
+/** Canonicalize the only keyed-collection key whose retained representation differs from SameValueZero identity. */
+export function canonicalEvaluationKeyedCollectionKey(value: EvaluationValue): EvaluationValue {
+  return value.kind === EvaluationValueKind.Number && Object.is(value.value, -0)
+    ? new EvaluationNumberValue(0, value.node)
+    : value;
 }

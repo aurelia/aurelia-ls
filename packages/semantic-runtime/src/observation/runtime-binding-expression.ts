@@ -1,5 +1,12 @@
 import type { BindingScope } from '../configuration/scope.js';
+import {
+  PrimitiveLiteralExpression,
+  type ExpressionAstNode,
+} from '../expression/ast.js';
+import { SourceSpan } from '../expression/source-span.js';
 import type { ProductHandle } from '../kernel/handles.js';
+import type { ProductDetailReadView } from '../kernel/product-details.js';
+import { bindingExpressionAstForProduct } from '../template/expression-parse-product.js';
 import {
   AttributeBinding,
   ContentBinding,
@@ -70,7 +77,9 @@ export function isRuntimeDataFlowBinding(
 
 /** Identifies binding data-flow rows that expose source expression reads without generic accessor/observer targets. */
 export function isRuntimeSourceOnlyDataFlowBinding(binding: RuntimeDataFlowBinding): boolean {
-  return binding instanceof TranslationBinding && binding.bindingKind === RuntimeBindingKind.TranslationParameters;
+  return binding instanceof ListenerBinding
+    || binding instanceof StateDispatchBinding
+    || (binding instanceof TranslationBinding && binding.bindingKind === RuntimeBindingKind.TranslationParameters);
 }
 
 export function expressionProductHandleForBinding(
@@ -81,6 +90,20 @@ export function expressionProductHandleForBinding(
     return binding.expressionProductHandles[0] ?? null;
   }
   return binding.expressionProductHandle;
+}
+
+/** Rehydrates the runtime source AST across parsed expressions and compressed framework literal sources. */
+export function runtimeBindingSourceExpression(
+  store: ProductDetailReadView,
+  binding: RuntimeExpressionBinding,
+): ExpressionAstNode | null {
+  const parsed = bindingExpressionAstForProduct(store, expressionProductHandleForBinding(binding));
+  if (parsed != null) {
+    return parsed;
+  }
+  return binding instanceof LetBinding && binding.literalValue != null
+    ? new PrimitiveLiteralExpression(new SourceSpan(0, 0, null), binding.literalValue)
+    : null;
 }
 
 /**
@@ -107,10 +130,10 @@ export class RuntimeInstructionScopeLookup {
     runtimeBindings: RuntimeRenderingEmission,
     binding: RuntimeBinding,
   ): BindingScope | null {
-    const renderContext = runtimeBindings.readRenderContextForBinding(binding.productHandle);
+    const renderContext = runtimeBindings.requireRenderContextForBinding(binding.productHandle);
     return this.scopeForInstruction(
       binding.instructionProductHandle,
-      renderContext?.renderingController.productHandle ?? null,
+      renderContext.sourceController.productHandle,
     );
   }
 

@@ -1,11 +1,19 @@
 import ts from 'typescript';
 import { auLink } from '../kernel/au-link.js';
-import type { AddressHandle } from '../kernel/handles.js';
+import type {
+  AddressHandle,
+  IdentityHandle,
+  ProductHandle,
+  ProvenanceHandle,
+} from '../kernel/handles.js';
 import { localKeyPart } from '../kernel/local-key.js';
 import type { KernelStore } from '../kernel/store.js';
 import {
+  AppTaskSlot,
+  appTaskSlotHasRun,
+} from '../configuration/app-task.js';
+import {
   CheckerTypeProjector,
-  type CheckerTypeProjectionRequest,
 } from '../type-system/checker-projector.js';
 import { TypeSystemProductDetails } from '../type-system/product-details.js';
 import type { TypeSystemProject } from '../type-system/project.js';
@@ -13,14 +21,20 @@ import {
   checkerTypeExtendsCollection,
 } from '../type-system/checker-collection-types.js';
 import {
-  checkerPropertySymbol,
-  checkerSymbolValueType,
-} from '../type-system/checker-node-helpers.js';
-import {
-  CheckerTypeProjectionOrigin,
   CheckerTypeReference,
+  CheckerTypeMemberKind,
+  type CheckerTypeShape,
   type CheckerTypeCarrier,
 } from '../type-system/type-shape.js';
+import {
+  CheckerRuntimeMemberPresence,
+  CheckerTypeShapeAccess,
+  CheckerTypeShapeMemberValueAccessKind,
+  CheckerTypeShapeMemberWriteAccessKind,
+  checkerRuntimeAccessorDescriptorPresence,
+  type CheckerTypeShapeMemberValueAccess,
+  type CheckerTypeShapeMemberWriteAccess,
+} from '../type-system/checker-type-shape-access.js';
 import {
   CheckerDomNodeTypeSource,
   checkerLookupLocation,
@@ -29,20 +43,40 @@ import {
 import {
   RuntimeBindingTargetAccessAuthority,
   RuntimeBindingTargetAccessLookup,
+  RuntimeBindingTargetAccessProvenance,
   RuntimeBindingTargetAccessStrategy,
+  RuntimeBindingTargetObserverCacheDisposition,
+  RuntimeControllerObserverSetupOutcome,
+  RuntimeObjectObservationAdapterReference,
+  RuntimeNodeObserverConfig,
+  RuntimeNodeObserverConfigFieldState,
+  RuntimeNodeObserverKind,
   RuntimeBindingTargetKind,
   RuntimeBindingTargetTypeSource,
+  type RuntimeBindingTarget,
 } from '../template/runtime-binding.js';
 import {
   HtmlNamespaceKind,
-  normalizeHtmlTagName,
 } from '../template/html-ir.js';
+import { runtimeNodeName } from '../template/runtime-dom-name.js';
 import { isStandardSvgAttribute } from './svg-analyzer-data.generated.js';
 import { RuntimeHtmlObservationFrameworkErrorCode } from './framework-error-code.js';
 import {
   isNodeNamespaceAttribute,
   nodeNamespaceAttribute,
 } from './node-namespace-attributes.js';
+import {
+  ComputedObserverRuntimeKind,
+  type ComputedObserverSource,
+  type ComputedObserverSourceProjectResult,
+} from './computed-observer-source.js';
+import {
+  ObservableDescriptorRecognitionState,
+  observableDescriptorRecognitionForMember,
+} from './observable-decorator-recognition.js';
+import {
+  ComputedObservationDependencyMode,
+} from './computed-observation.js';
 
 export class ObserverLocatorLookupRequest {
   constructor(
@@ -68,6 +102,8 @@ export class ObserverLocatorLookupRequest {
     readonly allowDirtyCheck: boolean = false,
     /** Whether this lookup needs a projected property type product, or only observer strategy/writability facts. */
     readonly projectPropertyType: boolean = true,
+    /** Latest AppTask slot whose observer-service mutations have executed before this lookup. */
+    readonly objectAdapterBoundary: AppTaskSlot = AppTaskSlot.Activating,
   ) {}
 
   withLookup(lookup: RuntimeBindingTargetAccessLookup): ObserverLocatorLookupRequest {
@@ -83,6 +119,7 @@ export class ObserverLocatorLookupRequest {
       this.sourceAddressHandle,
       this.allowDirtyCheck,
       this.projectPropertyType,
+      this.objectAdapterBoundary,
     );
   }
 }
@@ -97,17 +134,27 @@ export class ObserverLocatorLookupResult {
       input.targetKind,
       input.targetProperty,
       RuntimeBindingTargetAccessStrategy.Unknown,
-      [],
+      null,
+      RuntimeBindingTargetObserverCacheDisposition.Open,
+      null,
       input.targetType,
       input.targetType == null ? null : RuntimeBindingTargetTypeSource.Reference,
       null,
       null,
       null,
-      false,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      [],
       RuntimeBindingTargetAccessAuthority.Open,
       reason,
       null,
       null,
+      null,
+      RuntimeBindingTargetAccessProvenance.none,
     );
   }
 
@@ -116,56 +163,148 @@ export class ObserverLocatorLookupResult {
     readonly targetKind: RuntimeBindingTargetKind,
     readonly targetProperty: string,
     readonly strategy: RuntimeBindingTargetAccessStrategy,
-    readonly eventNames: readonly string[],
+    readonly fallbackStrategy: RuntimeBindingTargetAccessStrategy | null,
+    readonly observerCacheDisposition: RuntimeBindingTargetObserverCacheDisposition,
+    readonly nodeObserverConfig: RuntimeNodeObserverConfig | null,
     readonly targetType: CheckerTypeReference | null,
     readonly targetTypeSource: RuntimeBindingTargetTypeSource | null,
     readonly propertyType: CheckerTypeReference | null,
     readonly propertyExists: boolean | null,
     readonly isWritable: boolean | null,
-    readonly isObservable: boolean,
+    readonly isObservable: boolean | null,
+    readonly supportsCallback: boolean | null,
+    readonly supportsCoercer: boolean | null,
+    readonly observerSourceProductHandle: ProductHandle | null,
+    readonly observerSourceIdentityHandle: IdentityHandle | null,
+    readonly observerSourceAddressHandle: AddressHandle | null,
+    readonly objectObservationAdapters: readonly RuntimeObjectObservationAdapterReference[],
     readonly authority: RuntimeBindingTargetAccessAuthority,
     readonly openReason: string | null = null,
     readonly frameworkErrorCode: RuntimeHtmlObservationFrameworkErrorCode | null = null,
     readonly diagnosticReason: string | null = null,
+    readonly controllerObserverSetupOutcome: RuntimeControllerObserverSetupOutcome | null = null,
+    readonly selectionProvenance: RuntimeBindingTargetAccessProvenance = RuntimeBindingTargetAccessProvenance.none,
   ) {}
 
-  get supportsCallback(): boolean {
-    return observerStrategySupportsCallback(this.strategy);
+  /** Apply a renderer- or binding-behavior-supplied target observer over ordinary ObserverLocator selection. */
+  withTargetObserver(
+    strategy: RuntimeBindingTargetAccessStrategy | null,
+    eventNames: readonly string[] | null,
+    authority: RuntimeBindingTargetAccessAuthority,
+    provenanceHandles: readonly ProvenanceHandle[] = [],
+  ): ObserverLocatorLookupResult {
+    const selectedStrategy = strategy ?? this.strategy;
+    const nodeObserverConfig = strategy != null
+      ? null
+      : eventNames == null
+        ? this.nodeObserverConfig?.withEventNames(
+          [],
+          RuntimeNodeObserverConfigFieldState.Open,
+          'Binding behavior target-observer event names depend on runtime expression values.',
+        ) ?? null
+        : this.nodeObserverConfig?.withEventNames(
+          eventNames,
+          RuntimeNodeObserverConfigFieldState.Closed,
+          null,
+        ) ?? null;
+    return new ObserverLocatorLookupResult(
+      this.lookup,
+      this.targetKind,
+      this.targetProperty,
+      selectedStrategy,
+      null,
+      RuntimeBindingTargetObserverCacheDisposition.NotApplicable,
+      nodeObserverConfig,
+      this.targetType,
+      this.targetTypeSource,
+      this.propertyType,
+      this.propertyExists,
+      this.isWritable,
+      isSubscribableStrategy(selectedStrategy),
+      observerStrategySupportsCallback(selectedStrategy),
+      observerStrategySupportsCoercer(selectedStrategy),
+      null,
+      null,
+      null,
+      [],
+      authority,
+      this.openReason,
+      null,
+      null,
+      null,
+      this.selectionProvenance.replacedByTargetObserver(provenanceHandles),
+    );
   }
 
-  get supportsCoercer(): boolean {
-    return observerStrategySupportsCoercer(this.strategy);
+  /** Reuse the observer installed during controller hydration, including for a later getAccessor request. */
+  forControllerSetupAccess(
+    lookup: RuntimeBindingTargetAccessLookup,
+    outcome: RuntimeControllerObserverSetupOutcome,
+    setupProvenanceHandles: readonly ProvenanceHandle[] = [],
+  ): ObserverLocatorLookupResult {
+    return new ObserverLocatorLookupResult(
+      lookup,
+      this.targetKind,
+      this.targetProperty,
+      this.strategy,
+      this.fallbackStrategy,
+      this.observerCacheDisposition,
+      this.nodeObserverConfig,
+      this.targetType,
+      this.targetTypeSource,
+      this.propertyType,
+      this.propertyExists,
+      this.isWritable,
+      this.isObservable,
+      this.supportsCallback,
+      this.supportsCoercer,
+      this.observerSourceProductHandle,
+      this.observerSourceIdentityHandle,
+      this.observerSourceAddressHandle,
+      this.objectObservationAdapters,
+      outcome === RuntimeControllerObserverSetupOutcome.Open
+        ? RuntimeBindingTargetAccessAuthority.Open
+        : this.authority,
+      outcome === RuntimeControllerObserverSetupOutcome.Open
+        ? this.openReason ?? `Controller observer setup for '${this.targetProperty}' remained open.`
+        : this.openReason,
+      this.frameworkErrorCode,
+      this.diagnosticReason,
+      outcome,
+      this.selectionProvenance.withControllerObserverSetup(setupProvenanceHandles),
+    );
   }
 }
 
 type TypeResolution = {
   readonly checker: ts.TypeChecker;
   readonly type: ts.Type;
+  readonly shape: CheckerTypeShape;
   readonly reference: CheckerTypeReference | null;
   readonly location: ts.Node;
   readonly source: RuntimeBindingTargetTypeSource;
 };
 
 type PropertyResolution = {
-  readonly symbol: ts.Symbol | null;
-  readonly type: ts.Type | null;
-  readonly typeReference: CheckerTypeReference | null;
+  readonly valueAccess: CheckerTypeShapeMemberValueAccess;
+  readonly writeAccess: CheckerTypeShapeMemberWriteAccess;
   readonly exists: boolean | null;
   readonly hasAccessorDescriptor: boolean | null;
   readonly isWritable: boolean | null;
 };
 
-type ComputedObserverExplicitDependency =
-  | string
-  | symbol
-  | ((obj: unknown, observer?: unknown) => unknown);
-
-export type NodeObserverConfig = {
-  readonly type?: typeof ValueAttributeObserver | typeof CheckedObserver | typeof SelectValueObserver;
-  readonly events: readonly string[];
-  readonly readonly: boolean;
-  readonly default?: unknown;
-};
+interface ObjectAccessSelection {
+  readonly strategy: RuntimeBindingTargetAccessStrategy;
+  readonly fallbackStrategy: RuntimeBindingTargetAccessStrategy | null;
+  readonly cacheDisposition: RuntimeBindingTargetObserverCacheDisposition;
+  readonly isObservable: boolean | null;
+  readonly supportsCallback: boolean | null;
+  readonly supportsCoercer: boolean | null;
+  readonly observerSource: ComputedObserverSource | null;
+  readonly objectAdapters: readonly ObjectObservationAdapterRegistration[];
+  readonly openReason: string | null;
+  readonly provenance: RuntimeBindingTargetAccessProvenance;
+}
 
 export class NodeObserverLocatorNodeConfig {
   constructor(
@@ -174,7 +313,7 @@ export class NodeObserverLocatorNodeConfig {
     /** Target property key configured on the node. */
     readonly propertyName: string,
     /** Runtime observer config selected for the node/property pair. */
-    readonly config: NodeObserverConfig,
+    readonly config: RuntimeNodeObserverConfig,
   ) {}
 }
 
@@ -183,7 +322,7 @@ export class NodeObserverLocatorGlobalConfig {
     /** Target property key configured globally. */
     readonly propertyName: string,
     /** Runtime observer config selected for every node with this property. */
-    readonly config: NodeObserverConfig,
+    readonly config: RuntimeNodeObserverConfig,
   ) {}
 }
 
@@ -238,442 +377,72 @@ export class NodeObserverLocatorConfiguration {
   }
 }
 
-/**
- * Semantic-runtime model of Aurelia's runtime PropertyAccessor.
- *
- * Aurelia's object getAccessor path falls back to this accessor for ordinary object keys; TypeChecker facts are
- * evidence for tooling policy, not the rule that admits or rejects the framework accessor.
- */
-@auLink('runtime:PropertyAccessor')
-export class PropertyAccessor {
-  readonly type = RuntimeBindingTargetAccessStrategy.PropertyAccessor;
-  private value: unknown = undefined;
+/** App-authored IObjectObservationAdapter registration retained without executing the adapter. */
+export class ObjectObservationAdapterRegistration extends RuntimeObjectObservationAdapterReference {}
 
-  getValue(): unknown {
-    return this.value;
-  }
-
-  setValue(value: unknown): void {
-    this.value = value;
-  }
-}
-
-/**
- * Semantic-runtime model of Aurelia's DataAttributeAccessor.
- *
- * The accessor identity is separate from RuntimeBindingTargetAccess records: the accessor owns the framework operation
- * shape, while target-access records own per-binding provenance and TypeChecker facts.
- */
-@auLink('runtime-html:DataAttributeAccessor')
-export class DataAttributeAccessor {
-  readonly type = RuntimeBindingTargetAccessStrategy.DataAttributeAccessor;
-  private value: string | null = null;
-
-  getValue(): string | null {
-    return this.value;
-  }
-
-  setValue(newValue: string | null): void {
-    this.value = newValue;
-  }
-
-  subscribe(): void {}
-
-  unsubscribe(): void {}
-}
-
-/**
- * Semantic-runtime model of Aurelia's AttributeNSAccessor.
- *
- * Runtime-html selects this accessor for a small XML namespace table before falling back to the generic SVG/data
- * attribute accessor. The semantic model keeps the namespace URI visible so future projections can explain why an
- * authored `xlink:*`, `xml:*`, or `xmlns*` target did not follow the ordinary attribute path.
- */
-@auLink('runtime-html:AttributeNSAccessor')
-export class AttributeNSAccessor {
-  readonly type = RuntimeBindingTargetAccessStrategy.AttributeNSAccessor;
-  private value: string | null = null;
+/** Complete app-scoped ObserverLocator configuration visible to one compiler/runtime world. */
+export class ObserverLocatorConfiguration {
+  static readonly empty = new ObserverLocatorConfiguration(
+    NodeObserverLocatorConfiguration.empty,
+    [],
+  );
 
   constructor(
-    readonly namespace: string,
+    readonly node: NodeObserverLocatorConfiguration,
+    readonly objectAdapters: readonly ObjectObservationAdapterRegistration[],
   ) {}
-
-  getValue(): string | null {
-    return this.value;
-  }
-
-  setValue(newValue: string | null): void {
-    this.value = newValue;
-  }
-
-  subscribe(): void {}
-
-  unsubscribe(): void {}
-}
-
-/**
- * Semantic-runtime model of Aurelia's SetterObserver.
- *
- * Runtime creates a setter observer for ordinary data properties and for missing object keys. The static emulator keeps
- * the property-exists fact beside the selected observer so a later policy layer can decide how strict to be.
- */
-@auLink('runtime:SetterObserver')
-export class SetterObserver {
-  readonly type = RuntimeBindingTargetAccessStrategy.SetterObserver;
-  readonly doNotCache = true;
-  readonly subs: readonly unknown[] = [];
-  private value: unknown = undefined;
-  private callback: ((newValue: unknown, oldValue: unknown) => void) | null = null;
-
-  constructor() {}
-
-  getValue(): unknown {
-    return this.value;
-  }
-
-  setValue(value: unknown): void {
-    const oldValue = this.value;
-    this.value = value;
-    this.callback?.(value, oldValue);
-  }
-
-  start(): void {}
-
-  stop(): void {}
-
-  subscribe(): void {}
-
-  unsubscribe(): void {}
-
-  useCallback(callback: (newValue: unknown, oldValue: unknown) => void): void {
-    this.callback = callback;
-  }
-
-  useCoercer(): void {}
-
-  useFlush(): void {}
-}
-
-/**
- * Semantic-runtime model of Aurelia's ComputedObserver branch.
- *
- * The framework reaches this when object observer creation sees a configurable accessor descriptor or receives a
- * function key directly. The static variant uses TypeScript accessor declarations as the descriptor signal; `readonly`
- * data fields are TypeScript write-policy facts, not proof that runtime `ObserverLocator` would choose this branch.
- */
-@auLink('runtime:ComputedObserver')
-export class ComputedObserver {
-  readonly type = RuntimeBindingTargetAccessStrategy.ComputedObserver;
-  readonly doNotCache = true;
-  readonly obs: readonly unknown[] = [];
-  readonly oL: ObserverLocator | null = null;
-  readonly subs: readonly unknown[] = [];
-  $get: (() => unknown) | null = null;
-  $set: ((value: unknown) => void) | null = null;
-  private value: unknown = undefined;
-
-  constructor() {}
-
-  getValue(): unknown {
-    return this.value;
-  }
-
-  setValue(value: unknown): void {
-    this.value = value;
-  }
-
-  compute(): unknown {
-    return this.value;
-  }
-
-  handleChange(): void {}
-
-  handleCollectionChange(): void {}
-
-  handleDirty(): void {}
-
-  init(): void {}
-
-  observe(): void {}
-
-  observeCollection(): void {}
-
-  observeExpression(): void {}
-
-  run(): void {}
-
-  subscribe(): void {}
-
-  subscribeTo(): void {}
-
-  unsubscribe(): void {}
-
-  useCallback(): void {}
-
-  useCoercer(): void {}
-
-  useFlush(): void {}
-}
-
-/**
- * Semantic-runtime model of Aurelia's ControlledComputedObserver branch.
- *
- * The public target-access strategy is still computed-observer shaped, but the framework uses this separate observer
- * when computed metadata provides explicit dependencies. Keep it named so source-observer projection work can
- * distinguish explicit dependency observation from proxy/body collection without routing through decorator metadata
- * alone.
- */
-@auLink('runtime:ControlledComputedObserver')
-export class ControlledComputedObserver {
-  readonly type = RuntimeBindingTargetAccessStrategy.ComputedObserver;
-  readonly doNotCache = false;
-  readonly observers: readonly unknown[] = [];
-  private value: unknown = undefined;
-  private callback: ((newValue: unknown, oldValue: unknown) => void) | null = null;
-
-  constructor(
-    readonly dependencies: readonly ComputedObserverExplicitDependency[] = [],
-    readonly flush: 'sync' | 'async' = 'async',
-    readonly deep = false,
-  ) {}
-
-  getValue(): unknown {
-    return this.value;
-  }
-
-  setValue(value: unknown): void {
-    const oldValue = this.value;
-    this.value = value;
-    this.callback?.(value, oldValue);
-  }
-
-  handleChange(): void {}
-
-  handleCollectionChange(): void {}
-
-  subscribe(): void {}
-
-  unsubscribe(): void {}
-
-  useCallback(callback: (newValue: unknown, oldValue: unknown) => void): void {
-    this.callback = callback;
-  }
-
-  useCoercer(): void {}
-
-  useFlush(): void {}
-}
-
-/** Semantic-runtime model of Aurelia's array `length` observer branch. */
-@auLink('runtime:CollectionLengthObserver')
-export class CollectionLengthObserver {
-  readonly type = RuntimeBindingTargetAccessStrategy.CollectionLengthObserver;
-
-  getValue(): number {
-    return 0;
-  }
-
-  setValue(_newValue: number): void {}
-
-  subscribe(): void {}
-
-  unsubscribe(): void {}
-}
-
-/** Semantic-runtime model of Aurelia's map/set `size` observer branch. */
-@auLink('runtime:CollectionSizeObserver')
-export class CollectionSizeObserver {
-  readonly type = RuntimeBindingTargetAccessStrategy.CollectionSizeObserver;
-
-  getValue(): number {
-    return 0;
-  }
-
-  setValue(): void {}
-
-  subscribe(): void {}
-
-  unsubscribe(): void {}
-}
-
-/** Semantic-runtime model of Aurelia's array index observer branch. */
-@auLink('runtime:ArrayIndexObserver')
-export class ArrayIndexObserver {
-  readonly type = RuntimeBindingTargetAccessStrategy.ArrayIndexObserver;
-
-  getValue(): unknown {
-    return undefined;
-  }
-
-  setValue(_newValue: unknown): void {}
-
-  subscribe(): void {}
-
-  unsubscribe(): void {}
-}
-
-/**
- * Semantic-runtime model of Aurelia's ValueAttributeObserver.
- *
- * This mirrors NodeObserverLocator's built-in value observer config for input, textarea, content, and scroll targets.
- */
-@auLink('runtime-html:ValueAttributeObserver')
-export class ValueAttributeObserver {
-  readonly type = RuntimeBindingTargetAccessStrategy.ValueAttributeObserver;
-  private value: unknown = '';
-  private oldValue: unknown = '';
-  private hasChanges = false;
-  private config: NodeObserverConfig = { events: inputEvents, readonly: false, default: '' };
-
-  constructor() {}
-
-  useConfig(config: NodeObserverConfig): void {
-    this.config = config;
-  }
-
-  getValue(): unknown {
-    return this.value;
-  }
-
-  setValue(newValue: string | null): void {
-    if (Object.is(newValue, this.value)) {
-      return;
-    }
-    this.oldValue = this.value;
-    this.value = newValue ?? this.config.default;
-    this.hasChanges = true;
-    if (!this.config.readonly) {
-      this.flushChanges();
-    }
-  }
-
-  handleEvent(): void {
-    this.oldValue = this.value;
-    this.hasChanges = false;
-  }
-
-  private flushChanges(): void {
-    this.hasChanges = false;
-  }
-}
-
-/**
- * Semantic-runtime model of Aurelia's CheckedObserver selection branch.
- *
- * The static model owns the observer identity and event surface; value-domain closure is materialized later by the
- * binding value-channel pass because it needs the authored input plus source expression facts.
- */
-@auLink('runtime-html:CheckedObserver')
-export class CheckedObserver {
-  readonly type = RuntimeBindingTargetAccessStrategy.CheckedObserver;
-  readonly oL: ObserverLocator | null = null;
-  private value: unknown = undefined;
-  private oldValue: unknown = undefined;
-  private config: NodeObserverConfig = { events: checkedEvents, readonly: false };
-
-  constructor() {}
-
-  useConfig(config: NodeObserverConfig): void {
-    this.config = config;
-  }
-
-  getValue(): unknown {
-    return this.value;
-  }
-
-  setValue(newValue: unknown): void {
-    this.oldValue = this.value;
-    this.value = newValue;
-  }
-
-  handleCollectionChange(): void {}
-
-  handleChange(): void {}
-
-  handleEvent(): void {
-    this.oldValue = this.value;
-  }
-}
-
-/**
- * Semantic-runtime model of Aurelia's SelectValueObserver selection branch.
- *
- * The observer owns the target-access choice. Single/multiple option value semantics stay with value-channel
- * materialization, where the authored option graph and TypeChecker-visible source value can be joined.
- */
-@auLink('runtime-html:SelectValueObserver')
-export class SelectValueObserver {
-  readonly type = RuntimeBindingTargetAccessStrategy.SelectValueObserver;
-  private value: unknown = undefined;
-  private oldValue: unknown = undefined;
-  private hasChanges = false;
-  private config: NodeObserverConfig = { events: selectEvents, readonly: false, default: '' };
-
-  constructor() {}
-
-  useConfig(config: NodeObserverConfig): void {
-    this.config = config;
-  }
-
-  getValue(): unknown {
-    return this.value ?? this.config.default;
-  }
-
-  setValue(newValue: unknown): void {
-    this.oldValue = this.value;
-    this.value = newValue;
-    this.hasChanges = !Object.is(newValue, this.oldValue);
-    this.flushChanges();
-  }
-
-  handleCollectionChange(): void {
-    this.syncOptions();
-  }
-
-  syncOptions(): void {}
-
-  syncValue(): boolean {
-    this.oldValue = this.value;
-    return !Object.is(this.value, this.oldValue);
-  }
-
-  handleEvent(): void {
-    if (this.syncValue()) {
-      this.flush();
-    }
-  }
-
-  private flushChanges(): void {
-    if (this.hasChanges) {
-      this.hasChanges = false;
-      this.syncOptions();
-    }
-  }
-
-  private flush(): void {}
 }
 
 const inputEvents = ['change', 'input'] as const;
 const contentEvents = ['change', 'input', 'blur', 'keyup', 'paste'] as const;
 const scrollEvents = ['scroll'] as const;
-const checkedEvents = ['change'] as const;
 const selectEvents = ['change'] as const;
 
+function frameworkNodeObserverConfig(
+  observerKind: RuntimeNodeObserverKind,
+  observerConstructorName: string,
+  typeState: RuntimeNodeObserverConfigFieldState,
+  eventNames: readonly string[],
+  readonlyValue = false,
+  readonlyState = RuntimeNodeObserverConfigFieldState.Absent,
+  defaultValue: RuntimeNodeObserverConfig['defaultValue'] = undefined,
+  defaultState = RuntimeNodeObserverConfigFieldState.Absent,
+): RuntimeNodeObserverConfig {
+  return new RuntimeNodeObserverConfig(
+    observerKind,
+    observerConstructorName,
+    eventNames,
+    readonlyValue,
+    defaultValue,
+    {
+      type: typeState,
+      events: RuntimeNodeObserverConfigFieldState.Closed,
+      readonly: readonlyState,
+      default: defaultState,
+    },
+    null,
+  );
+}
+
 /**
- * Semantic-runtime model of Aurelia's ObserverLocator.
+ * Static owner of Aurelia's node observer-selection semantics.
  *
- * The runtime framework shape is the public product noun; the implementation remains TypeChecker-backed because this
- * substrate needs static closure rather than live DOM/JS mutation.
+ * The linked framework classes are possible decisions of this selector, not live observer instances mirrored here.
  */
-@auLink('runtime-html:NodeObserverLocator')
+@auLink('runtime-html:NodeObserverLocator', { facet: 'observer-selection-semantics' })
+@auLink('runtime-html:DataAttributeAccessor', { facet: 'observer-selection-semantics' })
+@auLink('runtime-html:AttributeNSAccessor', { facet: 'observer-selection-semantics' })
+@auLink('runtime-html:ValueAttributeObserver', { facet: 'observer-selection-semantics' })
+@auLink('runtime-html:CheckedObserver', { facet: 'observer-selection-semantics' })
+@auLink('runtime-html:SelectValueObserver', { facet: 'observer-selection-semantics' })
 export class NodeObserverLocator {
   static readonly register = 'runtime-html:INodeObserverLocator';
 
   /** Aurelia defaults node observers to dirty-checking unknown native properties. */
   allowDirtyCheck = true;
 
-  private readonly events = new Map<string, Map<string, NodeObserverConfig>>();
-  private readonly globalEvents = new Map<string, NodeObserverConfig>();
+  private readonly events = new Map<string, Map<string, RuntimeNodeObserverConfig>>();
+  private readonly globalEvents = new Map<string, RuntimeNodeObserverConfig>();
   private readonly overrides = new Map<string, Set<string>>();
   private readonly globalOverrides = new Set<string>();
   private readonly svg = 'runtime-html:ISVGAnalyzer';
@@ -682,24 +451,81 @@ export class NodeObserverLocator {
     private readonly observerLocator: ObserverLocator,
     configuration: NodeObserverLocatorConfiguration = NodeObserverLocatorConfiguration.empty,
   ) {
-    const inputEventsConfig: NodeObserverConfig = { events: inputEvents, readonly: false, default: '' };
+    const inputEventsConfig = frameworkNodeObserverConfig(
+      RuntimeNodeObserverKind.ValueAttribute,
+      'ValueAttributeObserver',
+      RuntimeNodeObserverConfigFieldState.Absent,
+      inputEvents,
+      false,
+      RuntimeNodeObserverConfigFieldState.Absent,
+      '',
+      RuntimeNodeObserverConfigFieldState.Closed,
+    );
     this.useConfig({
       INPUT: {
         value: inputEventsConfig,
-        valueAsNumber: { events: inputEvents, readonly: false, default: 0 },
-        checked: { type: CheckedObserver, events: inputEvents, readonly: false },
-        files: { events: inputEvents, readonly: true },
+        valueAsNumber: frameworkNodeObserverConfig(
+          RuntimeNodeObserverKind.ValueAttribute,
+          'ValueAttributeObserver',
+          RuntimeNodeObserverConfigFieldState.Absent,
+          inputEvents,
+          false,
+          RuntimeNodeObserverConfigFieldState.Absent,
+          0,
+          RuntimeNodeObserverConfigFieldState.Closed,
+        ),
+        checked: frameworkNodeObserverConfig(
+          RuntimeNodeObserverKind.Checked,
+          'CheckedObserver',
+          RuntimeNodeObserverConfigFieldState.Closed,
+          inputEvents,
+        ),
+        files: frameworkNodeObserverConfig(
+          RuntimeNodeObserverKind.ValueAttribute,
+          'ValueAttributeObserver',
+          RuntimeNodeObserverConfigFieldState.Absent,
+          inputEvents,
+          true,
+          RuntimeNodeObserverConfigFieldState.Closed,
+        ),
       },
       SELECT: {
-        value: { type: SelectValueObserver, events: selectEvents, readonly: false, default: '' },
+        value: frameworkNodeObserverConfig(
+          RuntimeNodeObserverKind.Select,
+          'SelectValueObserver',
+          RuntimeNodeObserverConfigFieldState.Closed,
+          selectEvents,
+          false,
+          RuntimeNodeObserverConfigFieldState.Absent,
+          '',
+          RuntimeNodeObserverConfigFieldState.Closed,
+        ),
       },
       TEXTAREA: {
         value: inputEventsConfig,
       },
     });
 
-    const contentEventsConfig: NodeObserverConfig = { events: contentEvents, readonly: false, default: '' };
-    const scrollEventsConfig: NodeObserverConfig = { events: scrollEvents, readonly: false, default: 0 };
+    const contentEventsConfig = frameworkNodeObserverConfig(
+      RuntimeNodeObserverKind.ValueAttribute,
+      'ValueAttributeObserver',
+      RuntimeNodeObserverConfigFieldState.Absent,
+      contentEvents,
+      false,
+      RuntimeNodeObserverConfigFieldState.Absent,
+      '',
+      RuntimeNodeObserverConfigFieldState.Closed,
+    );
+    const scrollEventsConfig = frameworkNodeObserverConfig(
+      RuntimeNodeObserverKind.ValueAttribute,
+      'ValueAttributeObserver',
+      RuntimeNodeObserverConfigFieldState.Absent,
+      scrollEvents,
+      false,
+      RuntimeNodeObserverConfigFieldState.Absent,
+      0,
+      RuntimeNodeObserverConfigFieldState.Closed,
+    );
     this.useConfigGlobal({
       scrollTop: scrollEventsConfig,
       scrollLeft: scrollEventsConfig,
@@ -716,16 +542,12 @@ export class NodeObserverLocator {
     configuration.applyTo(this);
   }
 
-  handles(input: ObserverLocatorLookupRequest): boolean {
-    return input.targetKind === RuntimeBindingTargetKind.Node;
-  }
-
-  useConfig(config: Record<string, Record<string, NodeObserverConfig>>): void;
-  useConfig(nodeName: string, key: string, events: NodeObserverConfig): void;
+  useConfig(config: Record<string, Record<string, RuntimeNodeObserverConfig>>): void;
+  useConfig(nodeName: string, key: string, events: RuntimeNodeObserverConfig): void;
   useConfig(
-    nodeNameOrConfig: string | Record<string, Record<string, NodeObserverConfig>>,
+    nodeNameOrConfig: string | Record<string, Record<string, RuntimeNodeObserverConfig>>,
     key?: string,
-    eventsConfig?: NodeObserverConfig,
+    eventsConfig?: RuntimeNodeObserverConfig,
   ): void {
     if (typeof nodeNameOrConfig === 'string') {
       this.setNodeConfig(nodeNameOrConfig, key ?? '', eventsConfig);
@@ -738,14 +560,14 @@ export class NodeObserverLocator {
     }
   }
 
-  useConfigGlobal(config: Record<string, NodeObserverConfig>): void;
-  useConfigGlobal(key: string, events: NodeObserverConfig): void;
+  useConfigGlobal(config: Record<string, RuntimeNodeObserverConfig>): void;
+  useConfigGlobal(key: string, events: RuntimeNodeObserverConfig): void;
   useConfigGlobal(
-    configOrKey: string | Record<string, NodeObserverConfig>,
-    eventsConfig?: NodeObserverConfig,
+    configOrKey: string | Record<string, RuntimeNodeObserverConfig>,
+    eventsConfig?: RuntimeNodeObserverConfig,
   ): void {
     if (typeof configOrKey === 'string') {
-      this.globalEvents.set(configOrKey, eventsConfig ?? { events: [], readonly: false, default: undefined });
+      this.globalEvents.set(configOrKey, eventsConfig ?? RuntimeNodeObserverConfig.open('Node observer global config was not provided.'));
       return;
     }
     for (const [key, config] of Object.entries(configOrKey)) {
@@ -784,22 +606,15 @@ export class NodeObserverLocator {
     return this.lookup(input.withLookup(RuntimeBindingTargetAccessLookup.Observer));
   }
 
-  getNodeObserverConfig(tagName: string, key: string): NodeObserverConfig | undefined {
+  getNodeObserverConfig(tagName: string, key: string): RuntimeNodeObserverConfig | undefined {
     return this.events.get(tagName)?.get(key)
       ?? this.globalEvents.get(key);
   }
 
-  getNodeObserver(input: ObserverLocatorLookupRequest): RuntimeBindingTargetAccessStrategy | null {
-    const tagName = input.tagName == null ? null : normalizeHtmlTagName(input.tagName);
-    if (tagName == null) {
-      return null;
-    }
-    const config = this.getNodeObserverConfig(tagName, input.targetProperty);
-    return config == null ? null : nodeObserverStrategyForConfig(config);
-  }
-
   private lookup(input: ObserverLocatorLookupRequest): ObserverLocatorLookupResult {
-    const tagName = input.tagName == null ? null : normalizeHtmlTagName(input.tagName);
+    const tagName = input.tagName == null
+      ? null
+      : runtimeNodeName(input.tagName, input.namespace ?? HtmlNamespaceKind.Html);
     const config = tagName == null ? undefined : this.getNodeObserverConfig(tagName, input.targetProperty);
     const hasAccessorOverride = tagName != null && this.hasAccessorOverride(tagName, input.targetProperty);
     return this.observerLocator.createObserver(input, config, this.allowDirtyCheck, hasAccessorOverride);
@@ -808,7 +623,7 @@ export class NodeObserverLocator {
   private setNodeConfig(
     nodeName: string,
     key: string,
-    config: NodeObserverConfig | undefined,
+    config: RuntimeNodeObserverConfig | undefined,
   ): void {
     if (config == null || key === '') {
       return;
@@ -840,23 +655,30 @@ export class NodeObserverLocator {
   }
 }
 
-@auLink('runtime:IObserverLocator')
-@auLink('runtime:ObserverLocator')
+/** Static owner of Aurelia's object and node observer-selection decisions. */
+@auLink('runtime:IObserverLocator', { facet: 'observer-selection-semantics' })
+@auLink('runtime:ObserverLocator', { facet: 'observer-selection-semantics' })
+@auLink('runtime:PropertyAccessor', { facet: 'observer-selection-semantics' })
+@auLink('runtime:SetterObserver', { facet: 'observer-selection-semantics' })
+@auLink('runtime:ComputedObserver', { facet: 'observer-selection-semantics' })
+@auLink('runtime:ControlledComputedObserver', { facet: 'observer-selection-semantics' })
+@auLink('runtime:CollectionLengthObserver', { facet: 'observer-selection-semantics' })
+@auLink('runtime:CollectionSizeObserver', { facet: 'observer-selection-semantics' })
+@auLink('runtime:ArrayIndexObserver', { facet: 'observer-selection-semantics' })
 export class ObserverLocator {
   private readonly projector: CheckerTypeProjector;
+  private readonly typeAccess: CheckerTypeShapeAccess;
   private readonly nodeObserverLocator: NodeObserverLocator;
-  private readonly adapters: unknown[] = [];
 
   constructor(
     private readonly store: KernelStore,
-    nodeObserverLocatorConfiguration: NodeObserverLocatorConfiguration = NodeObserverLocatorConfiguration.empty,
+    projector: CheckerTypeProjector,
+    private readonly configuration: ObserverLocatorConfiguration = ObserverLocatorConfiguration.empty,
+    private readonly computedObserverSources: ComputedObserverSourceProjectResult | null = null,
   ) {
-    this.projector = new CheckerTypeProjector(store);
-    this.nodeObserverLocator = new NodeObserverLocator(this, nodeObserverLocatorConfiguration);
-  }
-
-  addAdapter(adapter: unknown): void {
-    this.adapters.push(adapter);
+    this.projector = projector;
+    this.typeAccess = new CheckerTypeShapeAccess(store, projector);
+    this.nodeObserverLocator = new NodeObserverLocator(this, configuration.node);
   }
 
   getAccessor(input: ObserverLocatorLookupRequest): ObserverLocatorLookupResult {
@@ -867,26 +689,13 @@ export class ObserverLocator {
     return this.lookup(input.withLookup(RuntimeBindingTargetAccessLookup.Observer));
   }
 
-  getExpressionObserver(): null {
-    return null;
-  }
-
-  getComputedObserver(explicitDependencies: readonly ComputedObserverExplicitDependency[] = []): ComputedObserver | ControlledComputedObserver {
-    return explicitDependencies.length === 0
-      ? new ComputedObserver()
-      : new ControlledComputedObserver(explicitDependencies);
-  }
-
-  getArrayObserver(): null {
-    return null;
-  }
-
-  getMapObserver(): null {
-    return null;
-  }
-
-  getSetObserver(): null {
-    return null;
+  /** Whether updateTrigger can reconfigure the native observer for this exact runtime target/property pair. */
+  hasNodeObserverConfig(target: RuntimeBindingTarget, targetProperty: string): boolean {
+    if (target.targetKind !== RuntimeBindingTargetKind.Node || target.tagName == null) {
+      return false;
+    }
+    const tagName = runtimeNodeName(target.tagName, target.namespace ?? HtmlNamespaceKind.Html);
+    return this.nodeObserverLocator.getNodeObserverConfig(tagName, targetProperty) != null;
   }
 
   private lookup(input: ObserverLocatorLookupRequest): ObserverLocatorLookupResult {
@@ -910,11 +719,13 @@ export class ObserverLocator {
 
   createObserver(
     input: ObserverLocatorLookupRequest,
-    config: NodeObserverConfig | undefined,
+    config: RuntimeNodeObserverConfig | undefined,
     nodeAllowDirtyCheck: boolean,
     hasAccessorOverride: boolean,
   ): ObserverLocatorLookupResult {
-    const tagName = input.tagName == null ? null : normalizeHtmlTagName(input.tagName);
+    const tagName = input.tagName == null
+      ? null
+      : runtimeNodeName(input.tagName, input.namespace ?? HtmlNamespaceKind.Html);
     if (tagName == null) {
       return this.open(input, 'Native node target did not carry a closed HTML tag name.');
     }
@@ -945,7 +756,7 @@ export class ObserverLocator {
       ? RuntimeHtmlObservationFrameworkErrorCode.NodeObserverStrategyNotFound
       : null;
     const openReason = frameworkErrorCode == null
-      ? targetAccessOpenReason(tagName, input.targetProperty, strategy)
+      ? targetAccessOpenReason(tagName, input.targetProperty, strategy, config)
       : null;
     const diagnosticReason = targetAccessDiagnosticReason(tagName, input.targetProperty, frameworkErrorCode);
 
@@ -954,47 +765,174 @@ export class ObserverLocator {
       input.targetKind,
       input.targetProperty,
       strategy,
-      nodeAccessEvents(strategy, config),
+      null,
+      observerCacheDisposition(input.lookup, strategy),
+      config ?? null,
       targetType?.reference ?? null,
       targetType?.source ?? null,
-      property?.typeReference ?? null,
+      property?.valueAccess.valueReference ?? null,
       property?.exists ?? null,
       property?.isWritable ?? null,
       isSubscribableStrategy(strategy),
+      observerStrategySupportsCallback(strategy),
+      observerStrategySupportsCoercer(strategy),
+      null,
+      null,
+      null,
+      [],
       authorityFor(strategy, targetType, true, frameworkErrorCode),
       openReason,
       frameworkErrorCode,
       diagnosticReason,
+      null,
+      RuntimeBindingTargetAccessProvenance.none,
     );
   }
 
   private lookupObject(input: ObserverLocatorLookupRequest): ObserverLocatorLookupResult {
     const targetType = this.resolveReferenceType(input, input.targetType);
     const property = targetType == null ? null : this.resolveProperty(input, targetType);
-    const strategy = objectAccessStrategy(input.lookup, input.targetProperty, targetType, property);
+    const selection = this.objectAccessSelection(input, targetType, property);
 
     return new ObserverLocatorLookupResult(
       input.lookup,
       input.targetKind,
       input.targetProperty,
-      strategy,
-      [],
+      selection.strategy,
+      selection.fallbackStrategy,
+      selection.cacheDisposition,
+      null,
       input.targetType ?? targetType?.reference ?? null,
       input.targetType != null || targetType != null ? RuntimeBindingTargetTypeSource.Reference : null,
-      property?.typeReference ?? null,
+      property?.valueAccess.valueReference ?? null,
       property?.exists ?? null,
       property?.isWritable ?? null,
-      isSubscribableStrategy(strategy),
+      selection.isObservable,
+      selection.supportsCallback,
+      selection.supportsCoercer,
+      selection.observerSource?.productHandle ?? null,
+      selection.observerSource?.identityHandle ?? null,
+      selection.observerSource?.sourceAddressHandle ?? null,
+      selection.objectAdapters,
       authorityFor(
-        strategy,
+        selection.strategy,
         targetType,
         input.lookup === RuntimeBindingTargetAccessLookup.Accessor
-          && strategy === RuntimeBindingTargetAccessStrategy.PropertyAccessor,
+          && selection.strategy === RuntimeBindingTargetAccessStrategy.PropertyAccessor,
         null,
       ),
+      selection.openReason,
       null,
       null,
       null,
+      selection.provenance,
+    );
+  }
+
+  private objectAccessSelection(
+    input: ObserverLocatorLookupRequest,
+    targetType: TypeResolution | null,
+    property: PropertyResolution | null,
+  ): ObjectAccessSelection {
+    if (input.lookup === RuntimeBindingTargetAccessLookup.Accessor) {
+      return closedObjectAccessSelection(
+        RuntimeBindingTargetAccessStrategy.PropertyAccessor,
+        RuntimeBindingTargetObserverCacheDisposition.NotApplicable,
+      );
+    }
+    const collectionStrategy = collectionAccessStrategy(targetType, input.targetProperty);
+    if (collectionStrategy != null) {
+      return closedObjectAccessSelection(
+        collectionStrategy,
+        observerCacheDisposition(input.lookup, collectionStrategy),
+      );
+    }
+    const observableDescriptor = observableDescriptorRecognitionForMember(
+      targetType?.shape.carrier?.declarations ?? [],
+      property?.valueAccess.declarations ?? [],
+      input.targetProperty,
+    );
+    const objectAdapters = this.configuration.objectAdapters.filter((adapter) =>
+      appTaskSlotHasRun(adapter.appTaskSlot, input.objectAdapterBoundary)
+    );
+    if (observableDescriptor === ObservableDescriptorRecognitionState.Exact
+      || property?.hasAccessorDescriptor === true) {
+      const fallback = observableDescriptor === ObservableDescriptorRecognitionState.Exact
+        ? closedObjectAccessSelection(
+            RuntimeBindingTargetAccessStrategy.ObservableSetterNotifier,
+            RuntimeBindingTargetObserverCacheDisposition.Cached,
+            null,
+            false,
+            false,
+          )
+        : this.objectAccessorFallbackSelection(input, property!);
+      if (objectAdapters.length > 0) {
+        return openObjectAccessSelection(
+          fallback,
+          objectAdapters,
+          `Ordered object-observation adapters may override the '${fallback.strategy}' fallback for '${input.targetProperty}'.`,
+        );
+      }
+      return fallback;
+    }
+    if (observableDescriptor === ObservableDescriptorRecognitionState.Open) {
+      const fallback = property?.hasAccessorDescriptor === false
+        ? closedObjectAccessSelection(
+            RuntimeBindingTargetAccessStrategy.SetterObserver,
+            RuntimeBindingTargetObserverCacheDisposition.Cached,
+          )
+        : property == null
+          ? closedObjectAccessSelection(
+              RuntimeBindingTargetAccessStrategy.SetterObserver,
+              RuntimeBindingTargetObserverCacheDisposition.Cached,
+            )
+          : this.objectAccessorFallbackSelection(input, property);
+      return openObjectAccessSelection(
+        fallback,
+        objectAdapters,
+        `Dynamic @observable class configuration may install a getter-owned observer for '${input.targetProperty}'.`,
+      );
+    }
+    return closedObjectAccessSelection(
+      RuntimeBindingTargetAccessStrategy.SetterObserver,
+      RuntimeBindingTargetObserverCacheDisposition.Cached,
+    );
+  }
+
+  private objectAccessorFallbackSelection(
+    input: ObserverLocatorLookupRequest,
+    property: PropertyResolution,
+  ): ObjectAccessSelection {
+    const declarationIdentityHandle = property.valueAccess.member?.declarationIdentityHandle ?? null;
+    const observerSource = declarationIdentityHandle == null
+      ? null
+      : this.computedObserverSources?.readComputedObserverForMember(declarationIdentityHandle) ?? null;
+    const strategy = observerSource?.observerKind === ComputedObserverRuntimeKind.ControlledComputedObserver
+      ? RuntimeBindingTargetAccessStrategy.ControlledComputedObserver
+      : RuntimeBindingTargetAccessStrategy.ComputedObserver;
+    if (observerSource?.dependencyMode === ComputedObservationDependencyMode.DependencyFunction
+      || observerSource?.dependencyMode === ComputedObservationDependencyMode.Open) {
+      return {
+        strategy: RuntimeBindingTargetAccessStrategy.Unknown,
+        fallbackStrategy: strategy,
+        cacheDisposition: RuntimeBindingTargetObserverCacheDisposition.Open,
+        isObservable: null,
+        supportsCallback: null,
+        supportsCoercer: null,
+        observerSource,
+        objectAdapters: [],
+        openReason: observerSource.dependencyMode === ComputedObservationDependencyMode.DependencyFunction
+          ? `Computed dependency functions for '${input.targetProperty}' are source-proved, but the current framework runtime contract does not close their observer construction.`
+          : `Computed dependencies for '${input.targetProperty}' are not statically closed enough to select an observer.`,
+        provenance: new RuntimeBindingTargetAccessProvenance(
+          observerSource.provenanceHandle == null ? [] : [observerSource.provenanceHandle],
+        ),
+      };
+    }
+    return closedObjectAccessSelection(
+      strategy,
+      RuntimeBindingTargetObserverCacheDisposition.Cached,
+      observerSource,
     );
   }
 
@@ -1005,19 +943,23 @@ export class ObserverLocator {
     if (input.typeSystem == null || reference?.productHandle == null) {
       return null;
     }
-    const shape = this.store.productDetails.read(TypeSystemProductDetails.TypeShape, reference.productHandle);
-    const carrier = shape?.carrier ?? null;
-    if (carrier == null) {
+    const shape = this.projector.publication.readProductDetail(
+      TypeSystemProductDetails.TypeShape,
+      reference.productHandle,
+    );
+    if (shape == null || shape.carrier == null) {
       return null;
     }
+    const carrier = shape.carrier;
     const location = firstDeclaration(carrier) ?? checkerLookupLocation(input.typeSystem);
     if (location == null) {
       return null;
     }
-    const targetReference = shape?.toReference() ?? reference;
+    const targetReference = shape.toReference();
     return {
       checker: carrier.checker,
       type: carrier.type,
+      shape,
       reference: targetReference,
       location,
       source: RuntimeBindingTargetTypeSource.Reference,
@@ -1042,9 +984,19 @@ export class ObserverLocator {
     if (resolution == null) {
       return null;
     }
+    const shape = resolution.reference.productHandle == null
+      ? null
+      : this.projector.publication.readProductDetail(
+        TypeSystemProductDetails.TypeShape,
+        resolution.reference.productHandle,
+      );
+    if (shape == null) {
+      return null;
+    }
     return {
       checker: resolution.checker,
       type: resolution.type,
+      shape,
       reference: resolution.reference,
       location: resolution.location,
       source: resolution.source === CheckerDomNodeTypeSource.TagNameMap
@@ -1057,48 +1009,30 @@ export class ObserverLocator {
     input: ObserverLocatorLookupRequest,
     target: TypeResolution,
   ): PropertyResolution {
-    const symbol = checkerPropertySymbol(target.checker, target.type, input.targetProperty);
-    if (symbol == null) {
-      return {
-        symbol: null,
-        type: null,
-        typeReference: null,
-        exists: false,
-        hasAccessorDescriptor: null,
-        isWritable: null,
-      };
-    }
-    const propertyType = input.projectPropertyType
-      ? checkerSymbolValueType(target.checker, symbol, target.location)
-      : null;
+    const valueAccess = this.typeAccess.memberValueAccess(
+      target.shape,
+      input.targetProperty,
+      `${input.localKey}:observer-locator:property:${localKeyPart(input.targetProperty)}`,
+    );
+    const writeAccess = this.typeAccess.memberWriteAccess(target.shape, input.targetProperty);
+    const exists = valueAccess.accessKind === CheckerTypeShapeMemberValueAccessKind.Missing
+      ? false
+      : valueAccess.member != null
+        || valueAccess.memberKind === CheckerTypeMemberKind.IndexSignature
+        ? true
+        : null;
+    const accessorDescriptor = checkerRuntimeAccessorDescriptorPresence(target.shape, valueAccess);
     return {
-      symbol,
-      type: propertyType,
-      typeReference: propertyType == null
-        ? null
-        : this.projectTypeReference(input, target.checker, propertyType, `property:${localKeyPart(input.targetProperty)}`, target.location),
-      exists: true,
-      hasAccessorDescriptor: hasAccessorDeclaration(symbol),
-      isWritable: isWritableProperty(symbol),
+      valueAccess,
+      writeAccess,
+      exists,
+      hasAccessorDescriptor: accessorDescriptor === CheckerRuntimeMemberPresence.Present
+        ? true
+        : accessorDescriptor === CheckerRuntimeMemberPresence.Absent
+          ? false
+          : null,
+      isWritable: checkerWriteAccessIsWritable(writeAccess),
     };
-  }
-
-  private projectTypeReference(
-    input: ObserverLocatorLookupRequest,
-    checker: ts.TypeChecker,
-    type: ts.Type,
-    suffix: string,
-    sourceNode: ts.Node | null,
-  ): CheckerTypeReference {
-    const shape = this.projector.ensureProjection({
-      localKey: `${input.localKey}:observer-locator:${suffix}`,
-      checker,
-      type,
-      origin: CheckerTypeProjectionOrigin.TypeChecker,
-      sourceNode,
-      sourceAddressHandle: input.sourceAddressHandle,
-    } satisfies CheckerTypeProjectionRequest);
-    return shape.toReference();
   }
 
   private open(
@@ -1116,7 +1050,7 @@ function nodeAccessStrategy(
   lookup: RuntimeBindingTargetAccessLookup,
   allowDirtyCheck: boolean,
   property: PropertyResolution | null,
-  config: NodeObserverConfig | undefined,
+  config: RuntimeNodeObserverConfig | undefined,
   hasAccessorOverride: boolean,
 ): RuntimeBindingTargetAccessStrategy {
   if (lookup === RuntimeBindingTargetAccessLookup.Observer
@@ -1132,7 +1066,7 @@ function nodeObserverStrategy(
   targetProperty: string,
   allowDirtyCheck: boolean,
   property: PropertyResolution | null,
-  config: NodeObserverConfig | undefined,
+  config: RuntimeNodeObserverConfig | undefined,
 ): RuntimeBindingTargetAccessStrategy {
   if (targetProperty === 'class') {
     return RuntimeBindingTargetAccessStrategy.ClassAttributeAccessor;
@@ -1182,9 +1116,12 @@ function targetAccessOpenReason(
   tagName: string,
   targetProperty: string,
   strategy: RuntimeBindingTargetAccessStrategy,
+  config: RuntimeNodeObserverConfig | undefined,
 ): string | null {
   return strategy === RuntimeBindingTargetAccessStrategy.Unknown
-    ? `NodeObserverLocator could not close '${tagName}.${targetProperty}' through built-in config or TypeChecker surface.`
+    ? config?.fieldState('type') === RuntimeNodeObserverConfigFieldState.Open
+      ? config.openReason ?? `NodeObserverLocator config for '${tagName}.${targetProperty}' did not close its observer constructor.`
+      : `NodeObserverLocator could not close '${tagName}.${targetProperty}' through built-in config or TypeChecker surface.`
     : null;
 }
 
@@ -1205,7 +1142,7 @@ function nodeObserverStrategyNotFound(
   lookup: RuntimeBindingTargetAccessLookup,
   allowDirtyCheck: boolean,
   property: PropertyResolution | null,
-  config: NodeObserverConfig | undefined,
+  config: RuntimeNodeObserverConfig | undefined,
   hasAccessorOverride: boolean,
 ): boolean {
   if (lookup !== RuntimeBindingTargetAccessLookup.Observer && !hasAccessorOverride) {
@@ -1224,25 +1161,6 @@ function nodeObserverStrategyNotFound(
     return false;
   }
   return true;
-}
-
-function objectAccessStrategy(
-  lookup: RuntimeBindingTargetAccessLookup,
-  targetProperty: string,
-  targetType: TypeResolution | null,
-  property: PropertyResolution | null,
-): RuntimeBindingTargetAccessStrategy {
-  if (lookup === RuntimeBindingTargetAccessLookup.Accessor) {
-    return RuntimeBindingTargetAccessStrategy.PropertyAccessor;
-  }
-  const collectionStrategy = collectionAccessStrategy(targetType, targetProperty);
-  if (collectionStrategy != null) {
-    return collectionStrategy;
-  }
-  if (isComputedObserverProperty(property)) {
-    return RuntimeBindingTargetAccessStrategy.ComputedObserver;
-  }
-  return RuntimeBindingTargetAccessStrategy.SetterObserver;
 }
 
 function collectionAccessStrategy(
@@ -1264,31 +1182,18 @@ function collectionAccessStrategy(
   return null;
 }
 
-function isComputedObserverProperty(property: PropertyResolution | null): boolean {
-  return property?.exists === true && property.hasAccessorDescriptor === true;
-}
-
-function nodeObserverStrategyForConfig(config: NodeObserverConfig): RuntimeBindingTargetAccessStrategy {
-  if (config.type === CheckedObserver) {
-    return RuntimeBindingTargetAccessStrategy.CheckedObserver;
-  }
-  if (config.type === SelectValueObserver) {
-    return RuntimeBindingTargetAccessStrategy.SelectValueObserver;
-  }
-  return RuntimeBindingTargetAccessStrategy.ValueAttributeObserver;
-}
-
-function nodeAccessEvents(
-  strategy: RuntimeBindingTargetAccessStrategy,
-  config: NodeObserverConfig | undefined,
-): readonly string[] {
-  switch (strategy) {
-    case RuntimeBindingTargetAccessStrategy.CheckedObserver:
-    case RuntimeBindingTargetAccessStrategy.SelectValueObserver:
-    case RuntimeBindingTargetAccessStrategy.ValueAttributeObserver:
-      return config?.events ?? [];
-    default:
-      return [];
+function nodeObserverStrategyForConfig(config: RuntimeNodeObserverConfig): RuntimeBindingTargetAccessStrategy {
+  switch (config.observerKind) {
+    case RuntimeNodeObserverKind.ValueAttribute:
+      return RuntimeBindingTargetAccessStrategy.ValueAttributeObserver;
+    case RuntimeNodeObserverKind.Checked:
+      return RuntimeBindingTargetAccessStrategy.CheckedObserver;
+    case RuntimeNodeObserverKind.Select:
+      return RuntimeBindingTargetAccessStrategy.SelectValueObserver;
+    case RuntimeNodeObserverKind.Custom:
+      return RuntimeBindingTargetAccessStrategy.CustomNodeObserver;
+    case RuntimeNodeObserverKind.Open:
+      return RuntimeBindingTargetAccessStrategy.Unknown;
   }
 }
 
@@ -1354,9 +1259,12 @@ function isSubscribableStrategy(strategy: RuntimeBindingTargetAccessStrategy): b
     case RuntimeBindingTargetAccessStrategy.CollectionLengthObserver:
     case RuntimeBindingTargetAccessStrategy.CollectionSizeObserver:
     case RuntimeBindingTargetAccessStrategy.ComputedObserver:
+    case RuntimeBindingTargetAccessStrategy.ControlledComputedObserver:
+    case RuntimeBindingTargetAccessStrategy.CustomNodeObserver:
     case RuntimeBindingTargetAccessStrategy.DirtyCheck:
     case RuntimeBindingTargetAccessStrategy.SelectValueObserver:
     case RuntimeBindingTargetAccessStrategy.SetterObserver:
+    case RuntimeBindingTargetAccessStrategy.ObservableSetterNotifier:
     case RuntimeBindingTargetAccessStrategy.ValueAttributeObserver:
       return true;
     default:
@@ -1366,12 +1274,14 @@ function isSubscribableStrategy(strategy: RuntimeBindingTargetAccessStrategy): b
 
 function observerStrategySupportsCallback(strategy: RuntimeBindingTargetAccessStrategy): boolean {
   return strategy === RuntimeBindingTargetAccessStrategy.SetterObserver
-    || strategy === RuntimeBindingTargetAccessStrategy.ComputedObserver;
+    || strategy === RuntimeBindingTargetAccessStrategy.ComputedObserver
+    || strategy === RuntimeBindingTargetAccessStrategy.ControlledComputedObserver;
 }
 
 function observerStrategySupportsCoercer(strategy: RuntimeBindingTargetAccessStrategy): boolean {
   return strategy === RuntimeBindingTargetAccessStrategy.SetterObserver
-    || strategy === RuntimeBindingTargetAccessStrategy.ComputedObserver;
+    || strategy === RuntimeBindingTargetAccessStrategy.ComputedObserver
+    || strategy === RuntimeBindingTargetAccessStrategy.ControlledComputedObserver;
 }
 
 function isArrayIndexProperty(property: string): boolean {
@@ -1382,39 +1292,91 @@ function isArrayIndexProperty(property: string): boolean {
   return Number.isInteger(index) && index >= 0 && String(index) === property;
 }
 
-function isWritableProperty(symbol: ts.Symbol): boolean | null {
-  const declarations = symbol.declarations ?? [];
-  if (declarations.length === 0) {
-    return null;
+function checkerWriteAccessIsWritable(
+  access: CheckerTypeShapeMemberWriteAccess,
+): boolean | null {
+  switch (access.accessKind) {
+    case CheckerTypeShapeMemberWriteAccessKind.Writable:
+    case CheckerTypeShapeMemberWriteAccessKind.StringIndexWritable:
+    case CheckerTypeShapeMemberWriteAccessKind.NumberIndexWritable:
+      return true;
+    case CheckerTypeShapeMemberWriteAccessKind.Readonly:
+    case CheckerTypeShapeMemberWriteAccessKind.GetterWithoutSetter:
+    case CheckerTypeShapeMemberWriteAccessKind.MethodLike:
+    case CheckerTypeShapeMemberWriteAccessKind.StringIndexReadonly:
+    case CheckerTypeShapeMemberWriteAccessKind.NumberIndexReadonly:
+      return false;
+    case CheckerTypeShapeMemberWriteAccessKind.DeclarationMissing:
+    case CheckerTypeShapeMemberWriteAccessKind.Missing:
+      return null;
   }
-  const hasSetter = declarations.some((declaration) => ts.isSetAccessorDeclaration(declaration));
-  if (hasSetter) {
-    return true;
-  }
-  const hasGetter = declarations.some((declaration) => ts.isGetAccessorDeclaration(declaration));
-  if (hasGetter) {
-    return false;
-  }
-  if (declarations.some(hasReadonlyModifier)) {
-    return false;
-  }
-  return true;
 }
 
-function hasAccessorDeclaration(symbol: ts.Symbol): boolean | null {
-  const declarations = symbol.declarations ?? [];
-  if (declarations.length === 0) {
-    return null;
-  }
-  return declarations.some((declaration) =>
-    ts.isGetAccessorDeclaration(declaration)
-    || ts.isSetAccessorDeclaration(declaration)
-  );
+function closedObjectAccessSelection(
+  strategy: RuntimeBindingTargetAccessStrategy,
+  cacheDisposition: RuntimeBindingTargetObserverCacheDisposition,
+  observerSource: ComputedObserverSource | null = null,
+  supportsCallback: boolean | null = observerStrategySupportsCallback(strategy),
+  supportsCoercer: boolean | null = observerStrategySupportsCoercer(strategy),
+): ObjectAccessSelection {
+  return {
+    strategy,
+    fallbackStrategy: null,
+    cacheDisposition,
+    isObservable: isSubscribableStrategy(strategy),
+    supportsCallback,
+    supportsCoercer,
+    observerSource,
+    objectAdapters: [],
+    openReason: null,
+    provenance: new RuntimeBindingTargetAccessProvenance(
+      observerSource?.provenanceHandle == null ? [] : [observerSource.provenanceHandle],
+    ),
+  };
 }
 
-function hasReadonlyModifier(declaration: ts.Declaration): boolean {
-  return ts.canHaveModifiers(declaration)
-    && ts.getModifiers(declaration)?.some((modifier) => modifier.kind === ts.SyntaxKind.ReadonlyKeyword) === true;
+function openObjectAccessSelection(
+  fallback: ObjectAccessSelection,
+  objectAdapters: readonly ObjectObservationAdapterRegistration[],
+  openReason: string,
+): ObjectAccessSelection {
+  return {
+    strategy: RuntimeBindingTargetAccessStrategy.Unknown,
+    fallbackStrategy: fallback.strategy,
+    cacheDisposition: RuntimeBindingTargetObserverCacheDisposition.Open,
+    isObservable: null,
+    supportsCallback: null,
+    supportsCoercer: null,
+    observerSource: fallback.observerSource,
+    objectAdapters,
+    openReason,
+    provenance: new RuntimeBindingTargetAccessProvenance(
+      fallback.provenance.observerSource,
+      objectAdapters.flatMap((adapter) =>
+        adapter.provenanceHandle == null ? [] : [adapter.provenanceHandle]
+      ),
+      fallback.provenance.controllerObserverSetup,
+      fallback.provenance.targetObserverOverride,
+    ),
+  };
+}
+
+function observerCacheDisposition(
+  lookup: RuntimeBindingTargetAccessLookup,
+  strategy: RuntimeBindingTargetAccessStrategy,
+): RuntimeBindingTargetObserverCacheDisposition {
+  if (lookup !== RuntimeBindingTargetAccessLookup.Observer) {
+    return RuntimeBindingTargetObserverCacheDisposition.NotApplicable;
+  }
+  switch (strategy) {
+    case RuntimeBindingTargetAccessStrategy.ArrayIndexObserver:
+    case RuntimeBindingTargetAccessStrategy.ClassAttributeAccessor:
+      return RuntimeBindingTargetObserverCacheDisposition.NotCached;
+    case RuntimeBindingTargetAccessStrategy.Unknown:
+      return RuntimeBindingTargetObserverCacheDisposition.Open;
+    default:
+      return RuntimeBindingTargetObserverCacheDisposition.Cached;
+  }
 }
 
 function firstDeclaration(carrier: CheckerTypeCarrier): ts.Declaration | null {

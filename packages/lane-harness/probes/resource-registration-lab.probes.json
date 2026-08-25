@@ -1,0 +1,106 @@
+{
+  "fixture": "packages/semantic-runtime/fixtures/pressure/resource-registration-lab",
+  "lanes": {
+    "references": [
+      {
+        "id": "decorator-element-class-origin",
+        "file": "src/resources.ts",
+        "anchor": "export class DecoratorCard",
+        "at": "DecoratorCard",
+        "verdict": "correct",
+        "reason": "A TypeScript resource implementation declaration dispatches the same semantic resource relation as its template names.",
+        "note": "Stage 1 boundary witness: includes primary and alias declarations plus canonical, alias, and as-element usages; ordinary TypeScript references remain owned by the TypeScript provider."
+      },
+      {
+        "id": "decorator-element-primary-name-origin",
+        "file": "src/resources.ts",
+        "anchor": "name: 'decorator-card'",
+        "at": "decorator-card",
+        "verdict": "correct",
+        "reason": "An authored primary resource-name token dispatches all declarations and template usages of the same resource identity.",
+        "note": "The exact public-name address is a first-class reference origin rather than a TypeScript identifier guess."
+      },
+      {
+        "id": "decorator-element-alias-origin",
+        "file": "src/resources.ts",
+        "anchor": "aliases: ['decorator-card-alias']",
+        "at": "decorator-card-alias",
+        "verdict": "correct",
+        "reason": "An authored resource alias is another declaration of the same resource identity and reaches canonical and alias template uses.",
+        "note": "References intentionally follow resource identity; rename remains name-surface-specific."
+      },
+      {
+        "id": "decorator-element-ts-use-origin",
+        "file": "src/resource-lab-app.ts",
+        "anchor": "    DecoratorCard,",
+        "at": "DecoratorCard",
+        "verdict": "correct",
+        "reason": "A non-declaration TypeScript usage activates the resource reference context without becoming a synthetic semantic output row.",
+        "note": "Regression witness for separating reference-context activation from rename-eligible rows."
+      },
+      {
+        "id": "static-element-class-origin",
+        "file": "src/resources.ts",
+        "anchor": "export class StaticPanel",
+        "at": "StaticPanel",
+        "verdict": "correct",
+        "reason": "Static $au metadata resources resolve from their implementation declaration through the shared resource index.",
+        "note": "Covers the static-definition recognition form."
+      },
+      {
+        "id": "define-call-element-class-origin",
+        "file": "src/resources.ts",
+        "anchor": "export class DefinedBadge",
+        "at": "DefinedBadge",
+        "verdict": "correct",
+        "reason": "Define-call resources resolve from their implementation declaration through the shared resource index.",
+        "note": "Covers CustomElement.define metadata without a decorator or static $au field."
+      },
+      {
+        "id": "unadmitted-convention-class-stays-typescript-only",
+        "file": "src/convention-panel.ts",
+        "anchor": "export class ConventionPanel",
+        "at": "ConventionPanel",
+        "verdict": "correct",
+        "reason": "Without plugin-conventions transform admission, ConventionPanel is not a proven Aurelia resource; references remain on the ordinary TypeScript symbol and do not invent a template relation.",
+        "note": "Negative control for the resource-index dispatch: the semantic-conformance contract explicitly requires convention resources to have transform admission."
+      },
+      {
+        "id": "custom-attribute-class-origin",
+        "file": "src/resources.ts",
+        "anchor": "export class DecoratorTooltip",
+        "at": "DecoratorTooltip",
+        "verdict": "correct",
+        "reason": "Custom-attribute implementation declarations reach primary and alias attribute-target usages.",
+        "note": "Exercises registration-identity matching for custom attributes."
+      },
+      {
+        "id": "template-controller-class-origin",
+        "file": "src/resources.ts",
+        "anchor": "export class SurfaceGate",
+        "at": "SurfaceGate",
+        "verdict": "correct",
+        "reason": "Template-controller taxonomy resolves through custom-attribute registration identity and reaches both public names.",
+        "note": "Regression witness for the registration-identity versus taxonomy split."
+      },
+      {
+        "id": "value-converter-class-origin",
+        "file": "src/resources.ts",
+        "anchor": "export class FormatNameValueConverter",
+        "at": "FormatNameValueConverter",
+        "verdict": "correct",
+        "reason": "Value-converter implementation declarations reach converter-name occurrences for primary and alias names.",
+        "note": "Expression resources spend the same definition identity as template-origin references."
+      },
+      {
+        "id": "binding-behavior-class-origin",
+        "file": "src/resources.ts",
+        "anchor": "export class TrackEditBindingBehavior",
+        "at": "TrackEditBindingBehavior",
+        "verdict": "correct",
+        "reason": "Binding-behavior implementation declarations reach behavior-name occurrences for primary and alias names.",
+        "note": "Expression resources spend the same definition identity as template-origin references."
+      }
+    ]
+  }
+}

@@ -1,11 +1,12 @@
 import path from 'node:path';
 import ts from 'typescript';
 import type { ProjectBootFrame, SourceFileAdmission } from '../boot/frames.js';
-import { buildProjectCompilerOptionsResult } from '../boot/project-compiler-options.js';
 import {
   SourceFileRole,
   SourceLanguage,
 } from '../kernel/address.js';
+import { isStaticEvaluationGlobalName } from '../expression/global-names.js';
+import type { SemanticRuntimeProjectInputHost } from '../kernel/project-input.js';
 import { EvaluationBoundaryKind, EvaluationBoundaryValue } from './values.js';
 import type { StaticEvaluationRuntimeHost } from './evaluator.js';
 
@@ -21,9 +22,13 @@ export class StaticEvaluationAmbientGlobalDeclarations {
   resolveIdentifier(
     identifier: ts.Identifier,
   ): EvaluationBoundaryValue | null {
-    return this.names.has(identifier.text)
+    return this.names.has(identifier.text) && !isStaticEvaluationGlobalName(identifier.text)
       ? new EvaluationBoundaryValue(EvaluationBoundaryKind.HostEnvironment, identifier.text, identifier)
       : null;
+  }
+
+  readNameCount(): number {
+    return this.names.size;
   }
 }
 
@@ -32,15 +37,19 @@ export class StaticEvaluationAmbientGlobalDeclarations {
  */
 export function readStaticEvaluationAmbientGlobalDeclarations(
   project: ProjectBootFrame,
-  readSourceFile: (moduleKey: string) => ts.SourceFile | null,
+  inputHost: SemanticRuntimeProjectInputHost,
 ): StaticEvaluationAmbientGlobalDeclarations {
   const names = new Set<string>();
-  collectCompilerOptionAmbientGlobalNames(project, names);
+  collectCompilerOptionAmbientGlobalNames(project, inputHost, names);
   for (const admission of project.sourceFiles) {
     if (!isAmbientDeclarationAdmission(admission)) {
       continue;
     }
-    const sourceFile = readSourceFile(admission.path);
+    const fileName = path.resolve(project.rootDir, admission.path);
+    const text = inputHost.readFile(fileName);
+    const sourceFile = text == null
+      ? null
+      : ts.createSourceFile(fileName, text, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
     if (sourceFile?.isDeclarationFile !== true) {
       continue;
     }
@@ -56,8 +65,17 @@ export function withStaticEvaluationAmbientGlobals(
   runtimeHost: StaticEvaluationRuntimeHost,
   ambientGlobals: StaticEvaluationAmbientGlobalDeclarations,
 ): StaticEvaluationRuntimeHost {
+  const baseBranchOperations = runtimeHost.graphIsolatedBranchOperations;
   return {
     ...runtimeHost,
+    graphIsolatedBranchOperations: baseBranchOperations == null
+      ? undefined
+      : {
+          ...baseBranchOperations,
+          resolveIdentifier: (identifier, environment, moduleKey) =>
+            baseBranchOperations.resolveIdentifier?.(identifier, environment, moduleKey)
+            ?? ambientGlobals.resolveIdentifier(identifier),
+        },
     resolveIdentifier: (identifier, environment, moduleKey) =>
       runtimeHost.resolveIdentifier?.(identifier, environment, moduleKey)
       ?? ambientGlobals.resolveIdentifier(identifier),
@@ -96,9 +114,10 @@ function isDeclareGlobalStatement(
 
 function collectCompilerOptionAmbientGlobalNames(
   project: ProjectBootFrame,
+  inputHost: SemanticRuntimeProjectInputHost,
   names: Set<string>,
 ): void {
-  const options = buildProjectCompilerOptionsResult(project.rootDir, [project.workspaceRootDir]).options;
+  const options = project.compilerOptions.options;
   if (options.noLib === true) {
     return;
   }
@@ -109,11 +128,12 @@ function collectCompilerOptionAmbientGlobalNames(
     : options.lib.map((lib) => resolveCompilerLibFileName(libDirectory, lib));
   const visited = new Set<string>();
   for (const entry of entries) {
-    collectCompilerLibAmbientGlobalNames(entry, names, visited);
+    collectCompilerLibAmbientGlobalNames(inputHost, entry, names, visited);
   }
 }
 
 function collectCompilerLibAmbientGlobalNames(
+  inputHost: SemanticRuntimeProjectInputHost,
   fileName: string,
   names: Set<string>,
   visited: Set<string>,
@@ -123,7 +143,7 @@ function collectCompilerLibAmbientGlobalNames(
     return;
   }
   visited.add(normalized);
-  const text = ts.sys.readFile(fileName);
+  const text = inputHost.readFile(fileName);
   if (text == null) {
     return;
   }
@@ -131,7 +151,12 @@ function collectCompilerLibAmbientGlobalNames(
   collectAmbientValueNames(sourceFile.statements, names);
   const directory = path.dirname(fileName);
   for (const reference of sourceFile.libReferenceDirectives) {
-    collectCompilerLibAmbientGlobalNames(resolveCompilerLibFileName(directory, reference.fileName), names, visited);
+    collectCompilerLibAmbientGlobalNames(
+      inputHost,
+      resolveCompilerLibFileName(directory, reference.fileName),
+      names,
+      visited,
+    );
   }
 }
 

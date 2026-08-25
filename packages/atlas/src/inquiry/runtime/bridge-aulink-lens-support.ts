@@ -45,6 +45,8 @@ export function auLinkModelFilters(
     readonly targetName?: string;
     readonly filePath?: string;
     readonly frameworkStatus?: string;
+    readonly facet?: string;
+    readonly facetState?: string;
     readonly query?: string;
   },
   options: { readonly includeQuery?: boolean } = {},
@@ -56,6 +58,8 @@ export function auLinkModelFilters(
     targetName: filters.targetName,
     filePath: filters.filePath,
     frameworkStatus: filters.frameworkStatus,
+    facet: filters.facet,
+    facetState: filters.facetState,
     query: options.includeQuery === true ? filters.query : undefined,
   };
 }

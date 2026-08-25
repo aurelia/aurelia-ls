@@ -1,7 +1,7 @@
 import { frameworkErrorCode } from '../kernel/framework-error-code.js';
 
 /**
- * Aurelia runtime-html resource/controller error-code labels that resource
+ * Aurelia resource-definition and registration error-code labels that resource
  * metadata convergence can cite when it models the same framework failure.
  */
 export const ResourceFrameworkErrorCode = {
@@ -45,6 +45,8 @@ export const ResourceFrameworkErrorCode = {
   ValueConverterExisted: frameworkErrorCode('runtime-html', 'ErrorNames', 'value_converter_existed', 'AUR0155'),
   /** `runtime-html ErrorNames.binding_behavior_existed`; a binding-behavior definition is registered into a container that already has the behavior key. */
   BindingBehaviorExisted: frameworkErrorCode('runtime-html', 'ErrorNames', 'binding_behavior_existed', 'AUR0156'),
+  /** `template-compiler ErrorNames.binding_command_existed`; a binding-command definition is registered into a container that already has the command key. */
+  BindingCommandExisted: frameworkErrorCode('template-compiler', 'ErrorNames', 'binding_command_existed', 'AUR0157'),
 } as const;
 
 export type ResourceFrameworkErrorCode =

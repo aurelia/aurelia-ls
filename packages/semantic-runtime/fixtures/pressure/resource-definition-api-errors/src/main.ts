@@ -23,6 +23,8 @@ BindingBehavior.getDefinition(PlainThing);
 })
 export class ResourceDefinitionApiErrorsApp {}
 
+CustomElement.getDefinition(ResourceDefinitionApiErrorsApp);
+
 new Aurelia()
   .register(StandardConfiguration)
   .app({

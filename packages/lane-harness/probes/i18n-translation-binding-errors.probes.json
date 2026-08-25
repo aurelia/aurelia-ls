@@ -1,0 +1,14 @@
+{
+  "fixture": "packages/semantic-runtime/fixtures/pressure/i18n-translation-binding-errors",
+  "lanes": {
+    "diagnostics": [
+      {
+        "id": "i18n-translation-binding-template",
+        "file": "src/i18n-translation-binding-errors-app.html",
+        "verdict": "correct",
+        "reason": "The full document-diagnostic pull returns the i18n binding lifecycle rows on the missing-key parameter binding, invalid key bindings, and duplicate t-params site with exact template spans.",
+        "note": "NEW 2026-07-07. I18n translation binding diagnostics for missing key, duplicate parameter bindings, and invalid key expressions. VERDICT 2026-07-07: correct."
+      }
+    ]
+  }
+}

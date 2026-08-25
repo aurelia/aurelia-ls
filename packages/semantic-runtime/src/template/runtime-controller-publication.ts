@@ -18,6 +18,7 @@ import type {
   KernelStore,
   KernelStoreRecord,
 } from '../kernel/store.js';
+import type { KernelPublicationContext } from '../kernel/publication.js';
 import {
   KernelVocabulary,
 } from '../kernel/vocabulary.js';
@@ -44,6 +45,7 @@ class RuntimeControllerPublication {
 export class RuntimeControllerPublicationMaterializer {
   constructor(
     private readonly store: KernelStore,
+    private readonly publication: KernelPublicationContext,
   ) {}
 
   recordController(
@@ -123,6 +125,9 @@ export class RuntimeControllerPublicationMaterializer {
       ...nullableClaim(this.instructionCreatesControllerClaim(local, controller, source)),
       ...nullableClaim(this.controllerUsesCompiledTemplateClaim(local, controller, projectContext, source)),
       ...nullableClaim(this.controllerUsesInstructionSequenceClaim(local, controller, source)),
+      ...nullableClaim(this.controllerConstructedWithHydrationContextClaim(local, controller, source)),
+      ...nullableClaim(this.controllerUsesHydrationContextClaim(local, controller, source)),
+      ...nullableClaim(this.controllerUsesAuSlotsInfoClaim(local, controller, source)),
       ...(viewFactory == null ? [] : viewFactory.claims),
       ...nullableClaim(this.viewFactoryCreatesSyntheticViewClaim(local, controller, source)),
     ];
@@ -186,7 +191,9 @@ export class RuntimeControllerPublicationMaterializer {
     projectContext: TemplateRuntimeAnalysisProjectContext,
     source: RuntimeRenderingSourceSet,
   ): SemanticClaim | null {
-    const compiledTemplateProductHandle = projectContext.readCompiledTemplateForDefinition(controller.definitionProductHandle);
+    const compiledTemplateProductHandle = projectContext
+      .readResourceForDefinition(controller.definitionProductHandle)
+      ?.compiledTemplateProductHandle ?? null;
     return compiledTemplateProductHandle == null
       ? null
       : new SemanticClaim(
@@ -203,7 +210,7 @@ export class RuntimeControllerPublicationMaterializer {
     controller: RuntimeControllerFrame,
     source: RuntimeRenderingSourceSet,
   ): SemanticClaim | null {
-    const instructionSequenceProductHandle = instructionSequenceProductHandleForController(this.store, controller);
+    const instructionSequenceProductHandle = instructionSequenceProductHandleForController(this.publication, controller);
     return instructionSequenceProductHandle == null
       ? null
       : new SemanticClaim(
@@ -211,6 +218,57 @@ export class RuntimeControllerPublicationMaterializer {
         controller.productHandle,
         KernelVocabulary.Configuration.ControllerUsesInstructionSequence.key,
         instructionSequenceProductHandle,
+        source.provenanceHandle,
+      );
+  }
+
+  private controllerUsesHydrationContextClaim(
+    local: string,
+    controller: RuntimeControllerFrame,
+    source: RuntimeRenderingSourceSet,
+  ): SemanticClaim | null {
+    const context = controller.readHydrationContext();
+    return context == null
+      ? null
+      : new SemanticClaim(
+        this.store.handles.claim(`${local}:uses-hydration-context`),
+        controller.productHandle,
+        KernelVocabulary.Configuration.ControllerUsesHydrationContext.key,
+        context.productHandle,
+        source.provenanceHandle,
+      );
+  }
+
+  private controllerConstructedWithHydrationContextClaim(
+    local: string,
+    controller: RuntimeControllerFrame,
+    source: RuntimeRenderingSourceSet,
+  ): SemanticClaim | null {
+    const context = controller.readConstructionHydrationContext();
+    return context == null
+      ? null
+      : new SemanticClaim(
+        this.store.handles.claim(`${local}:constructed-with-hydration-context`),
+        controller.productHandle,
+        KernelVocabulary.Configuration.ControllerConstructedWithHydrationContext.key,
+        context.productHandle,
+        source.provenanceHandle,
+      );
+  }
+
+  private controllerUsesAuSlotsInfoClaim(
+    local: string,
+    controller: RuntimeControllerFrame,
+    source: RuntimeRenderingSourceSet,
+  ): SemanticClaim | null {
+    const slotsInfo = controller.readAuSlotsInfo();
+    return slotsInfo == null
+      ? null
+      : new SemanticClaim(
+        this.store.handles.claim(`${local}:uses-au-slots-info`),
+        controller.productHandle,
+        KernelVocabulary.Configuration.ControllerUsesAuSlotsInfo.key,
+        slotsInfo.productHandle,
         source.provenanceHandle,
       );
   }
@@ -269,18 +327,25 @@ export class RuntimeControllerPublicationMaterializer {
         controller.identityHandle,
         [controller.productHandle],
         publication.materializationClaimHandles,
+        [...new Set(controller.readObserverSetups().flatMap((setup) => setup.openSeamHandles))].sort(),
       ),
-      ...runtimeWatcherRecordsForController(this.store, local, controller, source.provenanceHandle, publication.claims),
+      ...runtimeWatcherRecordsForController(
+        this.store,
+        local,
+        controller,
+        source.provenanceHandle,
+        publication.claims,
+      ),
       ...publication.claims,
     ];
   }
 }
 
 function childInstructionSequenceProductHandleForInstruction(
-  store: KernelStore,
+  publication: KernelPublicationContext,
   instructionProductHandle: ProductHandle,
 ): ProductHandle | null {
-  const instruction = store.productDetails.read(TemplateProductDetails.Instruction, instructionProductHandle);
+  const instruction = publication.readProductDetail(TemplateProductDetails.Instruction, instructionProductHandle);
   if (instruction == null || !('childInstructionSequenceProductHandle' in instruction)) {
     return null;
   }
@@ -290,7 +355,7 @@ function childInstructionSequenceProductHandleForInstruction(
 }
 
 function instructionSequenceProductHandleForController(
-  store: KernelStore,
+  publication: KernelPublicationContext,
   controller: RuntimeControllerFrame,
 ): ProductHandle | null {
   if (controller.instructionSequenceProductHandle != null) {
@@ -299,7 +364,7 @@ function instructionSequenceProductHandleForController(
   if (controller.instructionProductHandle == null) {
     return null;
   }
-  return childInstructionSequenceProductHandleForInstruction(store, controller.instructionProductHandle);
+  return childInstructionSequenceProductHandleForInstruction(publication, controller.instructionProductHandle);
 }
 
 function uniqueClaimHandles(

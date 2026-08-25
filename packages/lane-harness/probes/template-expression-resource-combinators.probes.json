@@ -1,0 +1,95 @@
+{
+  "fixture": "packages/semantic-runtime/fixtures/pressure/template-expression-resource-combinators",
+  "lanes": {
+    "rename": [
+      {
+        "id": "inner-behavior-behind-missing-outer",
+        "file": "src/resource-combinator-gallery.html",
+        "anchor": "${item.label & innerAudit:'inner' & missingBehavior}",
+        "at": "innerAudit",
+        "newName": "innerTrace",
+        "verdict": "correct",
+        "reason": "Resource rename follows the authored inner binding-behavior occurrence even though a missing outer behavior blocks its runtime application, updating the explicit name declaration and every usage atomically.",
+        "note": "NEW 2026-07-13. Representative LSP replay for the structural-occurrence/runtime-application authority split."
+      }
+    ],
+    "references": [
+      {
+        "id": "inner-behavior-behind-missing-outer",
+        "file": "src/resource-combinator-gallery.html",
+        "anchor": "${item.label & innerAudit:'inner' & missingBehavior}",
+        "at": "innerAudit",
+        "verdict": "correct",
+        "reason": "References retain the declaration and all authored innerAudit occurrences independently of whether each enclosing resource chain can bind.",
+        "note": "NEW 2026-07-13. Confirms symbol closure consumes structural occurrences rather than successful runtime applications."
+      }
+    ],
+    "hover": [
+      {
+        "id": "nested-arrow-current-context",
+        "file": "src/scope-path-gallery.html",
+        "anchor": "group.items.map(item => $this.heading).join(', ')",
+        "at": "heading",
+        "verdict": "correct",
+        "reason": "Hover resolves $this through both nested Aurelia callback scopes to the component heading declaration and preserves its readonly literal type.",
+        "note": "NEW 2026-07-13. Representative IDE projection of parser-owned callback scope depth."
+      },
+      {
+        "id": "reserved-current-context-member",
+        "file": "src/scope-path-gallery.html",
+        "anchor": "${$this.$parent.toFixed()}",
+        "at": "$parent",
+        "verdict": "correct",
+        "reason": "Hover treats $parent after an authored $this qualifier as the component property named $parent, not as the generated parent-scope alias.",
+        "note": "NEW 2026-07-13. Collision witness for generated TypeScript scope aliases."
+      }
+    ],
+    "definition": [
+      {
+        "id": "inner-behavior-behind-missing-outer",
+        "file": "src/resource-combinator-gallery.html",
+        "anchor": "${item.label & innerAudit:'inner' & missingBehavior}",
+        "at": "innerAudit",
+        "verdict": "correct",
+        "reason": "Definition navigates from a structurally valid inner behavior token to its implementation class despite the outer bind failure; rename remains on the explicit @bindingBehavior name surface.",
+        "note": "NEW 2026-07-13. Adapter witness for failure-independent resource lookup."
+      },
+      {
+        "id": "nested-arrow-current-context",
+        "file": "src/scope-path-gallery.html",
+        "anchor": "group.items.map(item => $this.heading).join(', ')",
+        "at": "heading",
+        "verdict": "correct",
+        "reason": "Definition resolves the nested callback's $this.heading access to the component field rather than a callback parameter scope.",
+        "note": "NEW 2026-07-13. Adapter witness for semantic callback ancestry."
+      }
+    ],
+    "documentHighlight": [
+      {
+        "id": "converter-behind-missing-behavior",
+        "file": "src/resource-combinator-gallery.html",
+        "anchor": "${count | numberText:prefix & missingBehavior}",
+        "at": "numberText",
+        "verdict": "correct",
+        "reason": "Highlights include every same-document numberText occurrence, including the converter nested behind a missing behavior.",
+        "note": "NEW 2026-07-13. Confirms document highlights inherit structural resource reference closure."
+      }
+    ],
+    "diagnostics": [
+      {
+        "id": "expression-parser-and-authoring-errors",
+        "file": "src/invalid-expression-gallery.html",
+        "verdict": "correct",
+        "reason": "Framework parser errors and stricter auto-fixable authoring-policy diagnostics retain exact authored loci and distinct authority.",
+        "note": "NEW 2026-07-13. Representative standard document-pull projection for parser recovery and resource-tail gaps."
+      },
+      {
+        "id": "resource-lifecycle-and-argument-errors",
+        "file": "src/resource-combinator-gallery.html",
+        "verdict": "correct",
+        "reason": "Missing and duplicate resources, built-in lifecycle failures, binding-behavior argument type errors, and missing argument members all project at authored source spans.",
+        "note": "NEW 2026-07-13. Representative adapter replay for resource application and checker-witness diagnostics."
+      }
+    ]
+  }
+}

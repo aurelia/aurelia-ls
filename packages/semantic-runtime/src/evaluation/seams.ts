@@ -28,6 +28,8 @@ export const EvaluationOpenSeamKind = {
   DynamicMutation: KernelVocabulary.Evaluation.DynamicMutation.key,
   /** A dynamic import or non-literal module edge could not be linked statically. */
   DynamicImport: KernelVocabulary.Evaluation.DynamicImport.key,
+  /** A source-oriented read could not select complete immutable evidence from reached invocation occurrences. */
+  InvocationSourceRead: KernelVocabulary.Evaluation.InvocationSourceRead.key,
 } as const satisfies Record<string, OpenSeamKindKey>;
 
 export type EvaluationOpenSeamKind =
@@ -61,6 +63,8 @@ export function evaluationOpenSeamDefaultReasonKinds(
       return [OpenSeamReasonKind.StaticEvaluationDynamicMutation];
     case EvaluationOpenSeamKind.DynamicImport:
       return [OpenSeamReasonKind.StaticEvaluationDynamicImport];
+    case EvaluationOpenSeamKind.InvocationSourceRead:
+      return [OpenSeamReasonKind.StaticEvaluationInvocationSourceReadOpen];
     default:
       return [];
   }
@@ -85,4 +89,41 @@ export class EvaluationOpenSeam {
   ) {
     this.sourceFile = node.getSourceFile();
   }
+}
+
+/** Collapse repeated publication of the same epistemic pressure within one evaluator read. */
+export function compactEvaluationOpenSeams(
+  seams: readonly EvaluationOpenSeam[],
+): readonly EvaluationOpenSeam[] {
+  const compact: EvaluationOpenSeam[] = [];
+  for (const seam of seams) {
+    if (compact.some((candidate) => sameEvaluationOpenSeam(candidate, seam))) {
+      continue;
+    }
+    compact.push(seam);
+  }
+  return compact;
+}
+
+/** Compare two compact epistemic pressure sets without depending on publication order. */
+export function evaluationOpenSeamSetsEqual(
+  left: readonly EvaluationOpenSeam[],
+  right: readonly EvaluationOpenSeam[],
+): boolean {
+  const compactLeft = compactEvaluationOpenSeams(left);
+  const compactRight = compactEvaluationOpenSeams(right);
+  return compactLeft.length === compactRight.length
+    && compactLeft.every((seam) => compactRight.some((candidate) => sameEvaluationOpenSeam(seam, candidate)));
+}
+
+function sameEvaluationOpenSeam(
+  left: EvaluationOpenSeam,
+  right: EvaluationOpenSeam,
+): boolean {
+  return left.seamKind === right.seamKind
+    && left.summary === right.summary
+    && left.node === right.node
+    && left.moduleKey === right.moduleKey
+    && left.reasonKinds.length === right.reasonKinds.length
+    && left.reasonKinds.every((reason, index) => reason === right.reasonKinds[index]);
 }

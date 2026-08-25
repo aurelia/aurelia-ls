@@ -35,6 +35,17 @@ const sourceFileDiagnostics = app.ask({
   sourceFile: { filePath: 'src/typescript-project-diagnostics-state.ts' },
   page: { size: 20 },
 }).value;
+const relatedInformationSourceFileDiagnostics = app.ask({
+  kind: SemanticAppQueryKind.TypeScriptDiagnostics,
+  sourceFile: { filePath: 'src/typescript-related-information.ts' },
+  page: { size: 20 },
+}).value;
+const relatedInformationAppDiagnostics = app.ask({
+  kind: SemanticAppQueryKind.AppDiagnostics,
+  sourceFile: { filePath: 'src/typescript-related-information.ts' },
+  diagnosticProjection: 'type-projection',
+  page: { size: 20 },
+}).value;
 const configFileDiagnostics = app.ask({
   kind: SemanticAppQueryKind.TypeScriptDiagnostics,
   sourceFile: { filePath: 'tsconfig.json' },
@@ -58,6 +69,15 @@ const ts2322Diagnostic = diagnostics.rows.find((row) =>
 const ts2769Diagnostic = diagnostics.rows.find((row) =>
   row.diagnosticKind === 'TS2769'
   && row.source?.path.endsWith('typescript-project-diagnostics-state.ts') === true
+);
+const ts2741RelatedDiagnostic = relatedInformationSourceFileDiagnostics.rows.find((row) =>
+  row.diagnosticKind === 'TS2741'
+  && row.source?.path.endsWith('typescript-related-information.ts') === true
+);
+const ts2741RelatedAppDiagnostic = relatedInformationAppDiagnostics.rows.find((row) =>
+  row.diagnosticDomain === 'typescript'
+  && row.diagnosticKind === 'TS2741'
+  && row.source?.path.endsWith('typescript-related-information.ts') === true
 );
 const ts2322Cluster = summary.rows.find((row) => row.diagnosticKind === 'TS2322');
 const ts2769Cluster = summary.rows.find((row) => row.diagnosticKind === 'TS2769');
@@ -141,6 +161,23 @@ if (ts2769Cluster == null || ts2769Cluster.count < 1) {
 if (ts2769Cluster?.sourceRoles.some((row) => row.role === 'app-source' && row.count >= 1) !== true) {
   failures.push('Expected TS2769 summary to retain app-source role counts.');
 }
+if (ts2741RelatedDiagnostic == null) {
+  failures.push('Expected source-file TypeScript diagnostics to include the cross-file related-information TS2741 canary.');
+}
+if (
+  ts2741RelatedDiagnostic?.relatedInformation.length !== 1
+  || ts2741RelatedDiagnostic.relatedInformation[0]?.source?.path.endsWith('diagnostic-contract.ts') !== true
+  || ts2741RelatedDiagnostic.relatedInformation[0]?.sourceRole !== 'app-source'
+) {
+  failures.push('Expected TypeScript TS2741 diagnostics to preserve relatedInformation for diagnostic-contract.ts.');
+}
+if (
+  ts2741RelatedAppDiagnostic?.relatedInformation?.length !== 1
+  || ts2741RelatedAppDiagnostic.relatedInformation[0]?.source?.path.endsWith('diagnostic-contract.ts') !== true
+  || ts2741RelatedAppDiagnostic.relatedInformation[0]?.sourceRole !== 'app-source'
+) {
+  failures.push('Expected AppDiagnostics to preserve TypeScript relatedInformation for diagnostic-contract.ts.');
+}
 if (configDiagnostic == null) {
   failures.push('Expected TypeScript diagnostics to include tsconfig option diagnostics.');
 }
@@ -221,6 +258,7 @@ if (failures.length > 0) {
         .reduce((total, row) => total + row.count, 0),
       overlayRootSources: profile.programRootFiles.overlaySources,
       typeScriptRelation: summary.typeScript.versionRelation,
+      relatedInformationRows: relatedInformationAppDiagnostics.rows.length,
     },
   }, null, 2));
 }

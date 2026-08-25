@@ -2,9 +2,11 @@ import type { KernelRecordHandle } from '../kernel/handles.js';
 import type { KernelStore } from '../kernel/store.js';
 import {
   InquiryAnswer,
+  InquiryAnswerCoverage,
+  InquiryAnswerResult,
+  InquiryAnswerSelection,
   InquiryContinuation,
   InquiryContinuationKind,
-  InquiryOutcomeKind,
 } from './answer.js';
 import { KernelExactBasis } from './basis.js';
 import {
@@ -103,17 +105,17 @@ function resolveSourceFileSelector(
   store: KernelStore,
   selector: SourceFileSelector,
 ): InquiryAnswer<InquiryLocus, InquirySelector> {
-  const matches = store.readSourceFileAddressesByFileName(selector.filePath);
+  const resolution = store.resolveSourceFileAddressByFileName(selector.filePath);
 
-  if (matches.length === 0) {
+  if (resolution.kind === 'absent') {
     return miss(
       new SourceFileInquiryLocus(selector.filePath),
       selector,
       'No admitted source file matched the selected path.',
     );
   }
-  if (matches.length > 1) {
-    const continuations = matches.map((match) =>
+  if (resolution.kind === 'ambiguous') {
+    const continuations = resolution.candidates.map((match) =>
       new InquiryContinuation(
         InquiryContinuationKind.SelectSourceFile,
         `Narrow to admitted source file ${match.path}.`,
@@ -121,31 +123,19 @@ function resolveSourceFileSelector(
         SOURCE_SELECTION_CONTINUATION,
       )
     );
-    return new InquiryAnswer(
-      InquiryOutcomeKind.Ambiguous,
-      new SourceFileInquiryLocus(selector.filePath),
-      `Multiple admitted source files matched ${selector.filePath}.`,
-      KernelExactBasis,
-      new SourceFileInquiryLocus(selector.filePath),
-      [],
-      [],
-      [],
-      [],
+    return new InquiryAnswer({
+      result: InquiryAnswerResult.Answered,
+      selection: InquiryAnswerSelection.Ambiguous,
+      coverage: InquiryAnswerCoverage.Complete,
+      locus: new SourceFileInquiryLocus(selector.filePath),
+      summary: `Multiple admitted source files matched ${selector.filePath}.`,
+      basis: KernelExactBasis,
+      value: new SourceFileInquiryLocus(selector.filePath),
       continuations,
-      null,
-      null,
-    );
+    });
   }
 
-  const match = matches[0];
-  if (match === undefined) {
-    return miss(
-      new SourceFileInquiryLocus(selector.filePath),
-      selector,
-      'No admitted source file matched the selected path.',
-    );
-  }
-  return hit(new SourceFileInquiryLocus(match.path, match.handle), selector);
+  return hit(new SourceFileInquiryLocus(resolution.source.path, resolution.source.handle), selector);
 }
 
 function resolveSourceCursorSelector(
@@ -153,21 +143,21 @@ function resolveSourceCursorSelector(
   selector: SourceCursorSelector,
 ): InquiryAnswer<InquiryLocus, InquirySelector> {
   const fileAnswer = resolveSourceFileSelector(store, new SourceFileSelector(selector.cursor.filePath));
-  if (fileAnswer.outcome !== InquiryOutcomeKind.Hit || fileAnswer.value.kind !== 'source-file') {
-    return new InquiryAnswer(
-      fileAnswer.outcome,
-      new SourceCursorInquiryLocus(selector.cursor),
-      fileAnswer.summary,
-      fileAnswer.basis,
-      new SourceCursorInquiryLocus(selector.cursor),
-      fileAnswer.evidenceHandles,
-      fileAnswer.provenanceHandles,
-      fileAnswer.claimHandles,
-      fileAnswer.openSeamHandles,
-      fileAnswer.continuations,
-      null,
-      null,
-    );
+  if (fileAnswer.selection !== InquiryAnswerSelection.Exact || fileAnswer.value.kind !== 'source-file') {
+    return new InquiryAnswer({
+      result: fileAnswer.result,
+      selection: fileAnswer.selection,
+      coverage: fileAnswer.coverage,
+      locus: new SourceCursorInquiryLocus(selector.cursor),
+      summary: fileAnswer.summary,
+      basis: fileAnswer.basis,
+      value: new SourceCursorInquiryLocus(selector.cursor),
+      evidenceHandles: fileAnswer.evidenceHandles,
+      provenanceHandles: fileAnswer.provenanceHandles,
+      claimHandles: fileAnswer.claimHandles,
+      openSeamHandles: fileAnswer.openSeamHandles,
+      continuations: fileAnswer.continuations,
+    });
   }
   return hit(
     new SourceCursorInquiryLocus(selector.cursor, fileAnswer.value.addressHandle),
@@ -180,21 +170,21 @@ function resolveSourceRangeSelector(
   selector: SourceRangeSelector,
 ): InquiryAnswer<InquiryLocus, InquirySelector> {
   const fileAnswer = resolveSourceFileSelector(store, new SourceFileSelector(selector.range.filePath));
-  if (fileAnswer.outcome !== InquiryOutcomeKind.Hit || fileAnswer.value.kind !== 'source-file') {
-    return new InquiryAnswer(
-      fileAnswer.outcome,
-      new SourceRangeInquiryLocus(selector.range),
-      fileAnswer.summary,
-      fileAnswer.basis,
-      new SourceRangeInquiryLocus(selector.range),
-      fileAnswer.evidenceHandles,
-      fileAnswer.provenanceHandles,
-      fileAnswer.claimHandles,
-      fileAnswer.openSeamHandles,
-      fileAnswer.continuations,
-      null,
-      null,
-    );
+  if (fileAnswer.selection !== InquiryAnswerSelection.Exact || fileAnswer.value.kind !== 'source-file') {
+    return new InquiryAnswer({
+      result: fileAnswer.result,
+      selection: fileAnswer.selection,
+      coverage: fileAnswer.coverage,
+      locus: new SourceRangeInquiryLocus(selector.range),
+      summary: fileAnswer.summary,
+      basis: fileAnswer.basis,
+      value: new SourceRangeInquiryLocus(selector.range),
+      evidenceHandles: fileAnswer.evidenceHandles,
+      provenanceHandles: fileAnswer.provenanceHandles,
+      claimHandles: fileAnswer.claimHandles,
+      openSeamHandles: fileAnswer.openSeamHandles,
+      continuations: fileAnswer.continuations,
+    });
   }
   return hit(
     new SourceRangeInquiryLocus(selector.range, fileAnswer.value.addressHandle),
@@ -206,20 +196,15 @@ function hit(
   locus: InquiryLocus,
   selector: InquirySelector,
 ): InquiryAnswer<InquiryLocus, InquirySelector> {
-  return new InquiryAnswer(
-    InquiryOutcomeKind.Hit,
+  return new InquiryAnswer({
+    result: InquiryAnswerResult.Answered,
+    selection: InquiryAnswerSelection.Exact,
+    coverage: InquiryAnswerCoverage.Complete,
     locus,
-    'Resolved inquiry selector to a locus.',
-    KernelExactBasis,
-    locus,
-    [],
-    [],
-    [],
-    [],
-    [],
-    null,
-    null,
-  );
+    summary: 'Resolved inquiry selector to a locus.',
+    basis: KernelExactBasis,
+    value: locus,
+  });
 }
 
 function miss(
@@ -227,17 +212,15 @@ function miss(
   selector: InquirySelector,
   summary: string,
 ): InquiryAnswer<InquiryLocus, InquirySelector> {
-  return new InquiryAnswer(
-    InquiryOutcomeKind.Miss,
+  return new InquiryAnswer({
+    result: InquiryAnswerResult.Answered,
+    selection: InquiryAnswerSelection.Absent,
+    coverage: InquiryAnswerCoverage.Complete,
     locus,
     summary,
-    KernelExactBasis,
-    locus,
-    [],
-    [],
-    [],
-    [],
-    [
+    basis: KernelExactBasis,
+    value: locus,
+    continuations: [
       new InquiryContinuation(
         InquiryContinuationKind.ListAdmittedSources,
         'Inspect admitted source files before selecting a source locus.',
@@ -245,7 +228,5 @@ function miss(
         SOURCE_INVENTORY_CONTINUATION,
       ),
     ],
-    null,
-    null,
-  );
+  });
 }

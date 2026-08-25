@@ -1,14 +1,20 @@
 import ts from 'typescript';
 import { KernelStore } from '../out/kernel/store.js';
-import { BindingContextKind, BindingScopeConstructionRequest, BindingScopeOwnerKind } from '../out/configuration/scope.js';
+import {
+  BindingContextKind,
+  BindingScopeBindingContextConstruction,
+  BindingScopeConstructionRequest,
+  BindingScopeOwnerKind,
+} from '../out/configuration/scope.js';
 import { BindingScopeMaterializer } from '../out/configuration/scope-materializer.js';
 import { SourceSpan } from '../out/expression/source-span.js';
 import { PrimitiveLiteralExpression } from '../out/expression/ast.js';
 import { CheckerTypeProjector, CheckerTypeMemberProjectionPolicy } from '../out/type-system/checker-projector.js';
-import { CheckerExpressionTypeEvaluator } from '../out/type-system/expression-type-evaluator.js';
+import { CheckerExpressionTypeWorld } from '../out/type-system/expression-type-world.js';
 import { CheckerExpressionTypeEvaluationContext } from '../out/type-system/expression-type-context.js';
 import { CheckerExpressionTypeEvaluationResultKind } from '../out/type-system/expression-type-evaluation.js';
 import { CheckerTypeProjectionOrigin } from '../out/type-system/type-shape.js';
+import { registerIsolatedCheckerDeclarationSourceContext } from '../out/type-system/declaration-source.js';
 
 const sourceFileName = 'contract-expression-primitive-literals.ts';
 const sourceText = 'export interface ContractRoot { value: string; }\n';
@@ -24,10 +30,11 @@ host.fileExists = (fileName) => fileName === sourceFileName || ts.sys.fileExists
 
 const program = ts.createProgram([sourceFileName], { strict: true, target: ts.ScriptTarget.Latest, noEmit: true }, host);
 const checker = program.getTypeChecker();
+registerIsolatedCheckerDeclarationSourceContext(checker, 'contract-expression-primitive-literals');
 const rootInterface = sourceFile.statements.find(ts.isInterfaceDeclaration);
 const rootType = rootInterface == null ? checker.getUnknownType() : checker.getTypeAtLocation(rootInterface.name);
 const store = new KernelStore('contract-expression-primitive-literals');
-const projector = new CheckerTypeProjector(store);
+const projector = new CheckerTypeProjector(store, store);
 const rootReference = projector.ensureProjection({
   localKey: 'contract-expression-primitive-literals:root',
   checker,
@@ -38,21 +45,22 @@ const rootReference = projector.ensureProjection({
   display: checker.typeToString(rootType),
   memberProjection: CheckerTypeMemberProjectionPolicy.Lazy,
 }).toReference();
-const scope = new BindingScopeMaterializer(store).construct(new BindingScopeConstructionRequest(
+const scope = new BindingScopeMaterializer(store, projector).construct(new BindingScopeConstructionRequest(
   'contract-expression-primitive-literals:scope',
   BindingScopeOwnerKind.SyntheticView,
   null,
   null,
   null,
-  BindingContextKind.Synthetic,
-  rootReference,
-  [],
+  BindingScopeBindingContextConstruction.materialize(
+    BindingContextKind.Synthetic,
+    rootReference,
+  ),
   null,
   [],
   true,
   null,
 )).scope;
-const evaluator = new CheckerExpressionTypeEvaluator(store, projector);
+const evaluator = new CheckerExpressionTypeWorld(store, projector).evaluator();
 const failures = [];
 
 assertLiteralType('string literal', 'open', '"open"');

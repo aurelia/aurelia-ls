@@ -71,6 +71,17 @@ export class CompletedInputFailureTracker {
     return failure;
   }
 
+  hardErrorAt(
+    span: SourceSpan,
+    message: string,
+    text: string | null,
+    frameworkErrorCode: string | null = null,
+  ): ParseFailure {
+    const failure = ParseHardFailure.create(span, message, text, frameworkErrorCode);
+    this.recordFailure(failure);
+    return failure;
+  }
+
   error(
     message: string,
     token?: Token,

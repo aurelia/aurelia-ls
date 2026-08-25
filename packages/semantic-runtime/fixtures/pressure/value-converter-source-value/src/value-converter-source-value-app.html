@@ -1,10 +1,18 @@
 <template>
+  <let dynamic-products.bind="products | dynamicContextProducts"></let>
+  <span>${dynamicProducts.length}</span>
   <section repeat.for="featured of products | featuredProducts">
     <span>${featured.id}</span>
     <span>${featured.label}</span>
   </section>
   <section repeat.for="dynamicFeatured of products | dynamicContextProducts">
     <span>${dynamicFeatured.id}</span>
+  </section>
+  <section repeat.for="importedSignalProduct of products | importedSignalProducts">
+    <span>${importedSignalProduct.id}</span>
+  </section>
+  <section repeat.for="openSignalProduct of products | openSignalProducts">
+    <span>${openSignalProduct.id}</span>
   </section>
   <section repeat.for="fallbackProduct of maybeCatalog.products || fallbackProducts">
     <span>${fallbackProduct.label}</span>

@@ -1,17 +1,22 @@
+import path from 'node:path';
 import type { TypeSystemDiagnostic } from '../type-system/diagnostics.js';
 import {
   readTypeSystemProjectDiagnostics,
   readTypeSystemProjectSourceDiagnostics,
 } from '../type-system/diagnostics.js';
 import type { TypeSystemProject } from '../type-system/project.js';
-import { sourcePathMatchesFileName } from '../kernel/source-address.js';
-import type { SourceFileAdmission } from '../boot/frames.js';
+import { sameTypeSystemSourcePath } from '../type-system/source-file-path.js';
+import {
+  projectSourceAdmissionForHostPath,
+  workspaceSourcePathForHostPath,
+} from '../boot/source-ownership.js';
 import {
   answer,
-  outcomeForPagedRows,
+  COMPLETE_COLLECTION_ANSWER_OPTIONS,
   pageRows,
 } from './answer-helpers.js';
 import {
+  SemanticRuntimeAnswerResult,
   type SemanticRuntimeAnswer,
   type SemanticRuntimePageInput,
   type SemanticRuntimeSourceFileInput,
@@ -40,14 +45,14 @@ export function readSemanticTypeScriptDiagnostics(
   const paged = pageRows(rows, page);
   const typeScript = semanticTypeScriptEnvironmentSummary(typeSystem);
   return answer(
-    outcomeForPagedRows(paged),
+    SemanticRuntimeAnswerResult.Answered,
     `Returned ${paged.rows.length} of ${rows.length} TypeScript diagnostic row(s).`,
     {
       displayText: semanticTypeScriptDiagnosticsDisplayText(paged.rows, rows.length, typeScript),
       typeScript,
       rows: paged.rows,
     },
-    paged.page,
+    { ...COMPLETE_COLLECTION_ANSWER_OPTIONS, page: paged.page },
   );
 }
 
@@ -62,7 +67,7 @@ export function readSemanticTypeScriptDiagnosticSummary(
   const paged = pageRows(rows, page);
   const typeScript = semanticTypeScriptEnvironmentSummary(typeSystem);
   return answer(
-    outcomeForPagedRows(paged),
+    SemanticRuntimeAnswerResult.Answered,
     `Returned ${paged.rows.length} of ${rows.length} TypeScript diagnostic cluster(s) covering ${diagnosticRows.length} diagnostic row(s).`,
     {
       totalDiagnosticRows: diagnosticRows.length,
@@ -70,7 +75,7 @@ export function readSemanticTypeScriptDiagnosticSummary(
       typeScript,
       rows: paged.rows,
     },
-    paged.page,
+    { ...COMPLETE_COLLECTION_ANSWER_OPTIONS, page: paged.page },
   );
 }
 
@@ -80,12 +85,28 @@ export function readSemanticTypeScriptDiagnosticRows(
   sourceFile: SemanticRuntimeSourceFileInput | null | undefined,
 ): readonly SemanticTypeScriptDiagnosticRow[] {
   const sourceFilePath = sourceFile?.filePath ?? null;
+  const pathResolution = sourceFilePath == null
+    ? null
+    : typeSystem.project.sourceOwnership.resolveWorkspacePath(sourceFilePath);
+  const resolvedSource = pathResolution?.kind === 'resolved' ? pathResolution.source : null;
+  const requestedHostPath = sourceFilePath == null
+    ? null
+    : resolvedSource?.hostPath
+      ?? (path.isAbsolute(sourceFilePath)
+        ? path.resolve(sourceFilePath)
+        : path.resolve(typeSystem.project.workspaceRootDir, sourceFilePath));
   const diagnostics = sourceFilePath == null
     ? readTypeSystemProjectDiagnostics(typeSystem)
-    : readTypeSystemProjectSourceDiagnostics(typeSystem, sourceFilePath);
+    : readTypeSystemProjectSourceDiagnostics(typeSystem, requestedHostPath!);
   return diagnostics
     .map((diagnostic) => semanticTypeScriptDiagnosticRow(typeSystem, projectKey, diagnostic))
-    .filter((row) => typeScriptDiagnosticMatchesSource(row, sourceFilePath));
+    .filter((row) => typeScriptDiagnosticMatchesSource(
+      row,
+      resolvedSource?.workspacePath
+        ?? (requestedHostPath == null
+          ? null
+          : workspaceSourcePathForHostPath(typeSystem.project.workspaceRootDir, requestedHostPath)),
+    ));
 }
 
 export function semanticTypeScriptDiagnosticSummaryRows(
@@ -155,7 +176,7 @@ interface MutableTypeScriptDiagnosticSummary {
   readonly phase: SemanticTypeScriptDiagnosticSummaryRow['phase'];
   readonly category: SemanticTypeScriptDiagnosticSummaryRow['category'];
   readonly code: number;
-  readonly diagnosticKind: string;
+  readonly diagnosticKind: SemanticTypeScriptDiagnosticSummaryRow['diagnosticKind'];
   readonly severity: SemanticTemplateCursorDiagnosticSeverity;
   readonly typescriptSource: string | null;
   count: number;
@@ -180,14 +201,14 @@ function semanticTypeScriptDiagnosticRow(
     severity: semanticTypeScriptDiagnosticSeverity(diagnostic.category),
     message: diagnostic.message,
     typescriptSource: diagnostic.typescriptSource,
-    source: sourceReferenceForTypeSystemDiagnostic(diagnostic.source),
+    source: sourceReferenceForTypeSystemDiagnostic(typeSystem, diagnostic.source),
     sourceRole,
     relatedInformation: diagnostic.relatedInformation.map((related): SemanticTypeScriptDiagnosticRelatedInformationRow => ({
       category: related.category,
       code: related.code,
       message: related.message,
       typescriptSource: related.typescriptSource,
-      source: sourceReferenceForTypeSystemDiagnostic(related.source),
+      source: sourceReferenceForTypeSystemDiagnostic(typeSystem, related.source),
       sourceRole: sourceRoleForTypeSystemDiagnostic(typeSystem, related.source),
     })),
   };
@@ -200,30 +221,32 @@ function sourceRoleForTypeSystemDiagnostic(
   if (source == null) {
     return null;
   }
-  return sourceAdmissionForDiagnosticFileName(typeSystem.project.sourceFiles, source.fileName)?.role
-    ?? typeSystem.readProgramSourceFileRole(source.fileName);
-}
-
-function sourceAdmissionForDiagnosticFileName(
-  sources: readonly SourceFileAdmission[],
-  fileName: string,
-): SourceFileAdmission | null {
-  return sources.find((source) => sourcePathMatchesFileName(source.path, fileName)) ?? null;
+  return projectSourceAdmissionForHostPath(typeSystem.project, source.fileName)?.role
+    ?? typeSystem.readProgramSourceFileRoleByHostPath(source.fileName);
 }
 
 function sourceReferenceForTypeSystemDiagnostic(
+  typeSystem: TypeSystemProject,
   source: TypeSystemDiagnostic['source'],
 ): SemanticSourceReference | null {
   if (source == null) {
     return null;
   }
+  const pathResolution = typeSystem.project.sourceOwnership.resolvePath(source.fileName);
+  const ownedSource = pathResolution.kind === 'resolved' ? pathResolution.source : null;
+  const canonicalPath = ownedSource?.workspacePath
+    ?? workspaceSourcePathForHostPath(typeSystem.project.workspaceRootDir, source.fileName);
+  const sourceFileRole = ownedSource?.admission.role
+    ?? typeSystem.readProgramSourceFileRoleByHostPath(source.fileName);
   return {
     kind: 'typescript-diagnostic',
-    label: `${source.fileName}@${source.start}..${source.end}`,
-    path: source.fileName,
+    label: `${canonicalPath}@${source.start}..${source.end}`,
+    path: canonicalPath,
     start: source.start,
     end: source.end,
     role: `line:${source.line}:character:${source.character}`,
+    ...(ownedSource == null ? {} : { sourceWorkspaceKey: ownedSource.projectKey }),
+    ...(sourceFileRole == null ? {} : { sourceFileRole }),
   };
 }
 
@@ -246,7 +269,7 @@ function typeScriptDiagnosticMatchesSource(
   filePath: string | null,
 ): boolean {
   return filePath == null
-    || (row.source?.path != null && sourcePathMatchesFileName(row.source.path, filePath));
+    || (row.source?.path != null && sameTypeSystemSourcePath(row.source.path, filePath));
 }
 
 function semanticTypeScriptDiagnosticsDisplayText(

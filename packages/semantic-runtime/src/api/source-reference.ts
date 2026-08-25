@@ -1,5 +1,11 @@
+import path from 'node:path';
 import type ts from 'typescript';
-import { InquirySourcePrecision } from '../inquiry/continuation-intent.js';
+import type { ProjectBootFrame } from '../boot/frames.js';
+import { workspaceSourcePathForHostPath } from '../boot/source-ownership.js';
+import {
+  InquirySourceFacet,
+  type InquirySourceFacetValue,
+} from '../inquiry/continuation-intent.js';
 import {
   isDefaultLibrarySourceFile,
   normalizeTypeSystemPath,
@@ -10,20 +16,20 @@ import {
   authoredSourceAddressForAnchorHandle,
   isSemanticAddressRecord,
   readSourceAnchorRecord,
-  sourcePathMatchesFileName,
   type SourceAnchorHandle,
 } from '../kernel/source-address.js';
+import { sameTypeSystemSourcePath } from '../type-system/source-file-path.js';
 import type { SourceSpan } from '../expression/source-span.js';
 import type {
   ExternalAddress,
   GeneratedAddress,
   SemanticAddress,
   SourceFileAddress,
-  SourceFileRole,
   SourceSpanAddress,
   TemplateAddress,
   TemplateNodeAddress,
 } from '../kernel/address.js';
+import { SourceFileRole } from '../kernel/address.js';
 import type { KernelStore } from '../kernel/store.js';
 import type { TemplateCompilerWorldEmission } from '../template/compiler-world-materializer.js';
 
@@ -39,6 +45,13 @@ export interface SemanticSourceReference {
   readonly scheme?: string;
   readonly value?: string;
   readonly anchor?: SemanticSourceReference | null;
+}
+
+/** One distinct source reference and its independent evidence facets behind a continuation. */
+export interface SemanticContinuationSourceFact {
+  readonly source: SemanticSourceReference | null;
+  readonly facets: readonly InquirySourceFacetValue[];
+  readonly count: number;
 }
 
 export function isExternalDependencySourceReference(
@@ -57,30 +70,63 @@ export function isExternalDependencySourceReference(
 export const PUBLIC_SOURCE_REFERENCE_CARRIER_KEYS = new Set<string>([
   'source',
   'sources',
+  'documentation',
+  'deprecationReason',
+  'locality',
+  'pathSources',
+  'edit',
+  'accessUse',
+  'occurrence',
+  'owner',
+  'executionQualifiers',
+  'targetLinks',
   'actionTargets',
+  'argumentSources',
+  'lifecycleEffects',
+  'signals',
   'sampleSources',
   'sampleSourceSites',
   'reasonSources',
+  'impacts',
+  'products',
+  'ownerSource',
+  'fieldSources',
+  'admissionSources',
+  'configurationSources',
+  'blockingOpenSeamSources',
   'template',
   'values',
   'evidence',
   'suggestion',
   'actionTarget',
+  'edits',
   'expressionSource',
   'callbackSource',
   'targetSource',
   'observedMemberSource',
+  'memberTokenSource',
+  'objectObservationAdapters',
+  'admittedSourceMemberSource',
   'attributeSource',
   'declarationSource',
   'declarationSources',
+  'sourceAssignmentOccurrenceSource',
   'sourceAssignmentTargetSource',
+  'valueConverterWritebackStages',
   'resource',
+  'aliases',
   'bindables',
   'watches',
   'issues',
   'patterns',
   'relatedInformation',
   'relatedSources',
+  'subject',
+  'valueSites',
+  'lowerings',
+  'effects',
+  'blockers',
+  'nextSteps',
   'packageEvidence',
   'component',
   'fallback',
@@ -89,6 +135,7 @@ export const PUBLIC_SOURCE_REFERENCE_CARRIER_KEYS = new Set<string>([
   'routeNode',
   'viewport',
   'viewportAgent',
+  'viewportAgentCandidate',
   'viewportInstruction',
   'viewportInstructionTree',
   'recognizedRoute',
@@ -103,7 +150,7 @@ export const PUBLIC_SOURCE_REFERENCE_CARRIER_KEYS = new Set<string>([
   'conflictingEndpoint',
   'state',
   'redirectSourceRouteConfig',
-  'lifecycleSteps',
+  'assemblySteps',
 ]);
 
 /** Collect source references from public answer row DTOs through the bounded carrier vocabulary. */
@@ -119,47 +166,70 @@ export function semanticSourceReferencesInAnswerRows(value: unknown): readonly S
   return sources;
 }
 
-/** Derive the strongest public source precision carried by source-bearing answer rows. */
-export function semanticSourcePrecisionForAnswerRows(value: unknown): InquirySourcePrecision | undefined {
-  const sources = semanticSourceReferencesInAnswerRows(value);
-  return sources.length === 0 ? undefined : semanticSourcePrecisionForReferences(sources);
-}
-
-/** Derive the strongest public source precision from source references without hiding generated anchors. */
-export function semanticSourcePrecisionForReferences(
-  sources: readonly (SemanticSourceReference | null)[],
-): InquirySourcePrecision {
-  let precision = InquirySourcePrecision.NotRequired;
-  for (const source of sources) {
-    precision = strongerSemanticSourcePrecision(precision, semanticSourcePrecisionForReference(source));
-    if (precision === InquirySourcePrecision.GeneratedAnchor) {
-      return precision;
+/** Classify one public source reference without collapsing generated/external/authored dimensions into a rank. */
+export function semanticSourceFacetsForReference(
+  source: SemanticSourceReference | null,
+): readonly InquirySourceFacet[] {
+  if (source == null) {
+    return [InquirySourceFacet.Unavailable];
+  }
+  const facets = new Set<InquirySourceFacet>();
+  const generated = source.kind === 'generated-address'
+    || source.scheme === 'generated'
+    || source.sourceFileRole === SourceFileRole.Generated;
+  if (generated) {
+    facets.add(InquirySourceFacet.Generated);
+  }
+  if (
+    source.kind === 'external-address'
+    || source.sourceFileRole === SourceFileRole.ExternalSource
+    || isExternalDependencySourceReference(source)
+  ) {
+    facets.add(InquirySourceFacet.External);
+    return [...facets].sort();
+  }
+  const anchorFacets = source.anchor == null
+    ? []
+    : semanticSourceFacetsForReference(source.anchor);
+  for (const facet of anchorFacets) {
+    if (facet !== InquirySourceFacet.Unavailable) {
+      facets.add(facet);
     }
   }
-  return precision;
+  if (source.path != null && !generated) {
+    facets.add(InquirySourceFacet.AuthoredSource);
+    facets.add(
+      source.start != null && source.end != null
+        ? InquirySourceFacet.ExactAuthoredSpan
+        : InquirySourceFacet.CarrierSpan,
+    );
+  }
+  if (facets.size === 0) {
+    facets.add(InquirySourceFacet.Unavailable);
+  }
+  return [...facets].sort();
 }
 
-/** Classify one public source reference for continuation, diagnostic, and future edit evidence gates. */
-export function semanticSourcePrecisionForReference(
-  source: SemanticSourceReference | null,
-): InquirySourcePrecision {
-  if (source == null) {
-    return InquirySourcePrecision.NotRequired;
+/** Preserve each distinct source reference and facet set instead of selecting one representative precision. */
+export function semanticContinuationSourceFacts(
+  sources: readonly (SemanticSourceReference | null)[],
+): readonly SemanticContinuationSourceFact[] {
+  const facts = new Map<string, SemanticContinuationSourceFact>();
+  for (const source of sources) {
+    const facets = semanticSourceFacetsForReference(source);
+    const key = JSON.stringify([semanticSourceReferenceKey(source), facets]);
+    const existing = facts.get(key);
+    facts.set(key, {
+      source,
+      facets,
+      count: (existing?.count ?? 0) + 1,
+    });
   }
-  if (source.kind === 'generated-address' || source.scheme === 'generated') {
-    return InquirySourcePrecision.GeneratedAnchor;
-  }
-  if (source.kind === 'external-address' || isExternalDependencySourceReference(source)) {
-    return InquirySourcePrecision.External;
-  }
-  if (source.start != null && source.end != null) {
-    return InquirySourcePrecision.ExactAuthoredSpan;
-  }
-  const anchorPrecision = semanticSourcePrecisionForReference(source.anchor ?? null);
-  if (anchorPrecision !== InquirySourcePrecision.NotRequired) {
-    return anchorPrecision;
-  }
-  return source.path != null ? InquirySourcePrecision.CarrierSpan : InquirySourcePrecision.NotRequired;
+  return [...facts.values()].sort((left, right) =>
+    semanticSourceReferenceKey(left.source).localeCompare(
+      semanticSourceReferenceKey(right.source),
+    )
+  );
 }
 
 /** Match a public source reference or authored anchor against a requested source-file path. */
@@ -170,32 +240,52 @@ export function semanticSourceReferenceMatchesFilePath(
   if (source == null) {
     return false;
   }
-  return (source.path != null && sourcePathMatchesFileName(source.path, filePath))
+  return (source.path != null && sameTypeSystemSourcePath(source.path, filePath))
     || semanticSourceReferenceMatchesFilePath(source.anchor ?? null, filePath);
 }
 
-/** Pick the higher-evidence source precision without numeric confidence scoring. */
-export function strongerSemanticSourcePrecision(
-  left: InquirySourcePrecision,
-  right: InquirySourcePrecision,
-): InquirySourcePrecision {
-  return semanticSourcePrecisionRank(right) > semanticSourcePrecisionRank(left) ? right : left;
+/** Follow anchors until an exact authored span is available. */
+export function semanticExactSourceReference(
+  source: SemanticSourceReference | null,
+): SemanticSourceReference | null {
+  if (source == null) {
+    return null;
+  }
+  if (source.start != null && source.end != null) {
+    return source;
+  }
+  return semanticExactSourceReference(source.anchor ?? null);
 }
 
-/** Rank source precision only inside the evidence lattice, not as a user-facing confidence score. */
-export function semanticSourcePrecisionRank(precision: InquirySourcePrecision): number {
-  switch (precision) {
-    case InquirySourcePrecision.GeneratedAnchor:
-      return 4;
-    case InquirySourcePrecision.External:
-      return 3;
-    case InquirySourcePrecision.ExactAuthoredSpan:
-      return 2;
-    case InquirySourcePrecision.CarrierSpan:
-      return 1;
-    case InquirySourcePrecision.NotRequired:
-      return 0;
+/** Test whether a public source reference's exact authored span contains an offset. */
+export function semanticSourceReferenceContainsOffset(
+  source: SemanticSourceReference | null,
+  offset: number | null | undefined,
+): boolean {
+  if (offset == null) {
+    return false;
   }
+  const exact = semanticExactSourceReference(source);
+  return exact?.start != null
+    && exact.end != null
+    && Number.isInteger(exact.start)
+    && Number.isInteger(exact.end)
+    && exact.start <= offset
+    && offset <= exact.end;
+}
+
+/** Test whether a public source reference's exact authored span contains a file-scoped offset. */
+export function semanticSourceReferenceContainsFileOffset(
+  source: SemanticSourceReference | null,
+  filePath: string | null | undefined,
+  offset: number | null | undefined,
+): boolean {
+  if (filePath == null) {
+    return false;
+  }
+  const exact = semanticExactSourceReference(source);
+  return semanticSourceReferenceContainsOffset(exact, offset)
+    && semanticSourceReferenceMatchesFilePath(source, filePath);
 }
 
 /** Runtime guard for public source-reference DTOs crossing API/transport boundaries. */
@@ -235,6 +325,49 @@ function collectSemanticSourceReferences(
   }
 }
 
+/** Canonical identity for one public source-reference carrier, including workspace and nested anchor provenance. */
+export function semanticSourceReferenceKey(
+  source: SemanticSourceReference | null,
+): string {
+  if (source == null) {
+    return '(unavailable)';
+  }
+  return JSON.stringify([
+    source.kind,
+    source.label,
+    source.path ?? '',
+    source.start ?? '',
+    source.end ?? '',
+    source.scheme ?? '',
+    source.value ?? '',
+    source.role ?? '',
+    source.sourceWorkspaceKey ?? '',
+    source.sourceFileRole ?? '',
+    semanticSourceReferenceKey(source.anchor ?? null),
+  ]);
+}
+
+/** Canonical file identity for counts that must not collapse equal paths from different workspaces. */
+export function semanticSourceReferenceFileKey(
+  source: SemanticSourceReference | null,
+): string | null {
+  if (source == null) {
+    return null;
+  }
+  if (source.path != null) {
+    return JSON.stringify([
+      sourceWorkspaceKey(source),
+      source.path,
+    ]);
+  }
+  return semanticSourceReferenceFileKey(source.anchor ?? null);
+}
+
+function sourceWorkspaceKey(source: SemanticSourceReference): string {
+  return source.sourceWorkspaceKey
+    ?? (source.anchor == null ? '' : sourceWorkspaceKey(source.anchor));
+}
+
 export function compilerWorldLabel(
   store: KernelStore,
   compilerWorld: TemplateCompilerWorldEmission,
@@ -266,6 +399,7 @@ export function sourceReferenceForParserSpan(
   filePath: string,
   span: SourceSpan,
   role: string = 'range',
+  carrier: SemanticSourceReference | null = null,
 ): SemanticSourceReference {
   return {
     kind: 'source-span-address',
@@ -274,19 +408,77 @@ export function sourceReferenceForParserSpan(
     start: span.start,
     end: span.end,
     role,
+    ...(carrier?.sourceWorkspaceKey == null ? {} : { sourceWorkspaceKey: carrier.sourceWorkspaceKey }),
+    ...(carrier?.sourceFileRole == null ? {} : { sourceFileRole: carrier.sourceFileRole }),
+    ...(carrier?.anchor == null ? {} : { anchor: carrier.anchor }),
   };
 }
 
-export function sourceReferenceForTsNode(node: ts.Node): SemanticSourceReference {
+/** Project-aware TypeScript node source using the workspace-relative public source-address domain when admitted. */
+export function sourceReferenceForProjectTsNode(
+  project: Pick<ProjectBootFrame, 'workspaceRootDir' | 'rootDir' | 'sourceOwnership'>,
+  node: ts.Node,
+): SemanticSourceReference {
   const sourceFile = node.getSourceFile();
-  const start = node.getStart(sourceFile);
-  const end = node.getEnd();
+  return sourceReferenceForProjectTypeScriptSpan(
+    project,
+    sourceFile.fileName,
+    node.getStart(sourceFile),
+    node.getEnd(),
+  );
+}
+
+/** Raw checker-path source for presentation-only nodes when no semantic project context is available. */
+export function sourceReferenceForUnqualifiedTypeScriptNode(node: ts.Node): SemanticSourceReference {
+  const sourceFile = node.getSourceFile();
+  return sourceReferenceForTypeScriptSpan(
+    sourceFile.fileName,
+    node.getStart(sourceFile),
+    node.getEnd(),
+  );
+}
+
+/** Project-aware TypeScript span source; non-admitted Program sources retain their absolute checker path. */
+export function sourceReferenceForProjectTypeScriptSpan(
+  project: Pick<ProjectBootFrame, 'workspaceRootDir' | 'rootDir' | 'sourceOwnership'>,
+  fileName: string,
+  start: number,
+  end: number,
+  sourceFileRole: SourceFileRole | null = null,
+): SemanticSourceReference {
+  const hostPath = path.isAbsolute(fileName) ? path.resolve(fileName) : path.resolve(project.rootDir, fileName);
+  const resolution = project.sourceOwnership.resolvePath(hostPath);
+  return resolution.kind === 'resolved'
+    ? sourceReferenceForTypeScriptSpan(
+      resolution.source.workspacePath,
+      start,
+      end,
+      sourceFileRole ?? resolution.source.admission.role,
+      resolution.source.projectKey,
+    )
+    : sourceReferenceForTypeScriptSpan(
+      workspaceSourcePathForHostPath(project.workspaceRootDir, hostPath),
+      start,
+      end,
+      sourceFileRole,
+    );
+}
+
+export function sourceReferenceForTypeScriptSpan(
+  fileName: string,
+  start: number,
+  end: number,
+  sourceFileRole: SourceFileRole | null = null,
+  sourceWorkspaceKey: string | null = null,
+): SemanticSourceReference {
   return {
     kind: 'typescript-node',
-    label: `${sourceFile.fileName}@${start}..${end}`,
-    path: sourceFile.fileName,
+    label: `${fileName}@${start}..${end}`,
+    path: fileName,
     start,
     end,
+    ...(sourceWorkspaceKey == null ? {} : { sourceWorkspaceKey }),
+    ...(sourceFileRole == null ? {} : { sourceFileRole }),
   };
 }
 
@@ -381,7 +573,7 @@ function describeGeneratedAddressAnchor(
   return describeSourceAnchorHandle(store, address.anchorHandle);
 }
 
-function describeSourceAnchorHandle(
+export function describeSourceAnchorHandle(
   store: KernelStore,
   handle: SourceAnchorHandle | null,
 ): SemanticSourceReference | null {
@@ -405,7 +597,7 @@ function describeSourceAnchorHandle(
   return describeIdentityReference(anchorRecord);
 }
 
-function describeIdentityReference(identity: SemanticIdentity): SemanticSourceReference {
+export function describeIdentityReference(identity: SemanticIdentity): SemanticSourceReference {
   return {
     kind: identity.kind,
     label: identityReferenceLabel(identity),
@@ -447,6 +639,7 @@ function identityReferenceLabel(identity: SemanticIdentity): string {
     case 'fetch-client-identity':
     case 'dialog-identity':
     case 'compiler-identity':
+    case 'runtime-expression-identity':
       return identity.localName ?? identity.productKindKey;
     case 'type-system-identity':
       return identity.display ?? identity.productKindKey;

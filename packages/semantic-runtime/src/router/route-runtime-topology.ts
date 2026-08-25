@@ -6,45 +6,78 @@ import {
   ContainerChildMaterializer,
   ContainerContextResolverSlotRequest,
 } from '../di/container-materializer.js';
+import { FrameworkIntrinsicDiKey } from '../di/framework-intrinsic-di-key.js';
 import {
   EvidenceKind,
   EvidenceRecord,
   EvidenceRole,
 } from '../kernel/evidence.js';
+import type { OpenSeam } from '../kernel/open-seam.js';
+import { OpenSeamReasonKind } from '../kernel/open-seam.js';
 import type {
   EvidenceHandle,
   IdentityHandle,
   ProvenanceHandle,
 } from '../kernel/handles.js';
 import {
+  FieldProvenance,
   ProvenanceRecord,
 } from '../kernel/provenance.js';
 import {
+  KernelPublicationPlan,
   KernelStoreBatch,
-  type KernelStore,
-  type KernelStoreRecord,
+  publishProductDetails,
+  type KernelPublicationContext,
+} from '../kernel/publication.js';
+import type {
+  KernelStore,
+  KernelStoreReadView,
+  KernelStoreRecord,
 } from '../kernel/store.js';
 import { KernelVocabulary } from '../kernel/vocabulary.js';
 import {
   HydrateElementInstruction,
+  InterpolationInstruction,
+  PropertyBindingInstruction,
   SetPropertyInstruction,
 } from '../template/instruction-ir.js';
+import {
+  templateInstructionAuthoredValueSource,
+  type TemplateInstructionAuthoredValueSource,
+} from '../template/instruction-authored-value-source.js';
 import { TemplateProductDetails } from '../template/product-details.js';
-import type { TemplateCompilationProjectEmission } from '../template/template-compilation-project-pass.js';
+import type {
+  TemplateCompilationProjectEmission,
+  TemplateResourceRuntimeAnalysisEmission,
+} from '../template/template-compilation-project-pass.js';
 import {
   RuntimeControllerCreationKind,
   type RuntimeControllerFrame,
 } from '../template/runtime-controller.js';
 import {
+  BuiltInTemplateControllerChildViewCardinality,
+  frameworkTemplateControllerSemanticsForController,
+} from '../template/template-controller-semantics.js';
+import { RuntimeBindingSourceValueEvaluator } from '../observation/binding-source-value-evaluator.js';
+import { RuntimeBindingSourceValueEvaluationClosure } from '../configuration/binding-source-value-evaluation.js';
+import { EvaluationValueKind } from '../evaluation/values.js';
+import {
   RouteConfigContextModel,
   RouteConfigKind,
   RouteContextModel,
+  RouterRealizationStageKind,
   RouterModelKind,
   RouterReference,
+  ViewportAgentCandidateResolutionKind,
   ViewportAgentModel,
   ViewportCustomElementModel,
+  ViewportFieldState,
+  ViewportFieldStateKind,
   ViewportRequestModel,
+  resolvedRouteableComponentName,
   type RouteConfigModel,
+  type ViewportField,
+  type ViewportValueField,
 } from './model.js';
 import type { RouteConfigContextMaterializationProjectResult } from './route-context-materialization.js';
 import {
@@ -52,7 +85,13 @@ import {
   routeConfigContextsByComponentDefinition,
   routeConfigIndex,
 } from './route-topology-index.js';
-import { routerIdentityProductRecords, routerProductRecords } from './router-product-records.js';
+import {
+  routerIdentityProductRecords,
+  routerOpenSeamRecords,
+  routerProductRecords,
+  type RouterOpenSeamRecordEmission,
+} from './router-product-records.js';
+import { RouterProductDetails } from './product-details.js';
 
 const DEFAULT_VIEWPORT_NAME = 'default';
 
@@ -65,6 +104,7 @@ interface RouteRuntimeContextEmission {
 
 interface ViewportRuntimeEmission {
   readonly records: readonly KernelStoreRecord[];
+  readonly openSeams: readonly OpenSeam[];
   readonly draft: ViewportDraft;
   readonly viewport: ViewportCustomElementModel;
   readonly viewportAgent: ViewportAgentModel;
@@ -88,13 +128,19 @@ class RouteRuntimeTopologyState {
       ...this.viewports.flatMap((emission) => emission.records),
     ];
   }
+
+  readOpenSeams(): readonly OpenSeam[] {
+    return this.viewports.flatMap((emission) => emission.openSeams);
+  }
 }
 
 interface ViewportProperties {
-  readonly name: string;
-  readonly usedBy: readonly string[];
+  readonly name: string | null;
+  readonly usedBy: readonly string[] | null;
   readonly defaultComponent: string | null;
   readonly fallback: string | null;
+  readonly fieldStates: readonly ViewportFieldState[];
+  readonly fieldProvenance: readonly FieldProvenance<ViewportField>[];
 }
 
 interface ViewportDraft {
@@ -102,7 +148,23 @@ interface ViewportDraft {
   readonly localKey: string;
   readonly controller: RuntimeControllerFrame;
   readonly properties: ViewportProperties;
+  readonly presenceCardinality: BuiltInTemplateControllerChildViewCardinality;
   readonly index: number;
+}
+
+const enum ViewportAgentCandidateMatchKind {
+  Match = 'match',
+  Mismatch = 'mismatch',
+  Open = 'open',
+}
+
+export class ViewportAgentCandidateResolution {
+  constructor(
+    readonly resolutionKind: ViewportAgentCandidateResolutionKind,
+    readonly candidate: ViewportAgentModel | null,
+    readonly definiteCandidates: readonly ViewportAgentModel[],
+    readonly openCandidates: readonly ViewportAgentModel[],
+  ) {}
 }
 
 /** RouteContext, au-viewport, and ViewportAgent products materialized from static router/rendering topology. */
@@ -114,10 +176,10 @@ export class RouteRuntimeTopologyProjectResult {
   private readonly containerByRouteContextIdentity: ReadonlyMap<IdentityHandle, Container>;
 
   constructor(
-    readonly project: ProjectBootFrame,
     readonly routeContexts: readonly RouteContextModel[],
     readonly viewports: readonly ViewportCustomElementModel[],
     readonly viewportAgents: readonly ViewportAgentModel[],
+    readonly openSeams: readonly OpenSeam[],
     routeContextContainers: ReadonlyMap<IdentityHandle, Container> = new Map(),
   ) {
     this.routeContextsByRouteConfigContextIdentity = routeContextsByRouteConfigContextIdentity(routeContexts);
@@ -139,13 +201,17 @@ export class RouteRuntimeTopologyProjectResult {
     return this.viewportAgents;
   }
 
+  readRouteContextContainers(): readonly Container[] {
+    return [...new Set(this.containerByRouteContextIdentity.values())];
+  }
+
   routeContextsForRouteConfigContext(identityHandle: IdentityHandle | null): readonly RouteContextModel[] {
     return identityHandle == null
       ? []
       : this.routeContextsByRouteConfigContextIdentity.get(identityHandle) ?? [];
   }
 
-  routeContextForRouteConfigContextAndViewportAgent(
+  routeContextForRouteConfigContextAndViewportAgentCandidate(
     routeConfigContextIdentity: IdentityHandle | null,
     viewportAgentIdentity: IdentityHandle | null,
   ): RouteContextModel | null {
@@ -157,21 +223,55 @@ export class RouteRuntimeTopologyProjectResult {
     ) ?? null;
   }
 
-  resolveViewportAgent(
+  resolveViewportAgentCandidates(
     routeContextIdentity: IdentityHandle | null,
     request: ViewportRequestModel,
-  ): ViewportAgentModel | null {
+  ): ViewportAgentCandidateResolution {
     if (routeContextIdentity == null) {
-      return null;
+      return new ViewportAgentCandidateResolution(ViewportAgentCandidateResolutionKind.None, null, [], []);
     }
     const agents = this.viewportAgentsByRouteContextIdentity.get(routeContextIdentity) ?? [];
-    return agents.find((agent) => {
+    const definiteCandidates: ViewportAgentModel[] = [];
+    const openCandidates: ViewportAgentModel[] = [];
+    for (const agent of agents) {
       const viewportIdentity = agent.viewport.identityHandle;
       const viewport = viewportIdentity == null
         ? null
         : this.viewportsByIdentity.get(viewportIdentity) ?? null;
-      return viewport != null && viewportHandles(viewport, request);
-    }) ?? null;
+      if (viewport == null) {
+        continue;
+      }
+      const match = viewportAgentCandidateMatch(viewport, request);
+      if (match === ViewportAgentCandidateMatchKind.Match) {
+        definiteCandidates.push(agent);
+      } else if (match === ViewportAgentCandidateMatchKind.Open) {
+        openCandidates.push(agent);
+      }
+    }
+    if (openCandidates.length > 0) {
+      return new ViewportAgentCandidateResolution(
+        ViewportAgentCandidateResolutionKind.Open,
+        null,
+        definiteCandidates,
+        openCandidates,
+      );
+    }
+    if (definiteCandidates.length === 1) {
+      return new ViewportAgentCandidateResolution(
+        ViewportAgentCandidateResolutionKind.Sole,
+        definiteCandidates[0]!,
+        definiteCandidates,
+        [],
+      );
+    }
+    return new ViewportAgentCandidateResolution(
+      definiteCandidates.length === 0
+        ? ViewportAgentCandidateResolutionKind.None
+        : ViewportAgentCandidateResolutionKind.Multiple,
+      null,
+      definiteCandidates,
+      [],
+    );
   }
 
   containerForRouteContext(identityHandle: IdentityHandle | null): Container | null {
@@ -187,30 +287,37 @@ export class RouteRuntimeTopologyProjectPass {
 
   constructor(
     readonly store: KernelStore,
+    readonly publication: KernelPublicationContext,
   ) {
-    this.childContainerMaterializer = new ContainerChildMaterializer(store);
+    this.childContainerMaterializer = new ContainerChildMaterializer(store, publication);
   }
 
   materializeAndEmit(
     project: ProjectBootFrame,
     routeConfigContexts: RouteConfigContextMaterializationProjectResult,
     templates: TemplateCompilationProjectEmission,
+    sourceValueEvaluator: RuntimeBindingSourceValueEvaluator,
   ): RouteRuntimeTopologyProjectResult {
     const state = new RouteRuntimeTopologyFrame(
-      this.store,
+      this.publication,
       this.childContainerMaterializer,
       routeConfigContexts,
       templates,
+      sourceValueEvaluator,
     ).materialize();
     const records = state.readRecords();
-    if (records.length > 0) {
-      this.store.commit(new KernelStoreBatch(records, `router-runtime-topology:${project.projectKey}`));
-    }
+    this.publication.publish(new KernelPublicationPlan(
+      new KernelStoreBatch(records, `router-runtime-topology:${project.projectKey}`),
+      publishProductDetails(
+        RouterProductDetails.Viewport,
+        state.viewports.map((emission) => emission.viewport),
+      ),
+    ));
     return new RouteRuntimeTopologyProjectResult(
-      project,
       state.routeContexts.map((emission) => emission.routeContext),
       state.viewports.map((emission) => emission.viewport),
       state.viewports.map((emission) => emission.viewportAgent),
+      state.readOpenSeams(),
       routeContextContainersByIdentity(state.routeContexts),
     );
   }
@@ -224,15 +331,21 @@ class RouteRuntimeTopologyFrame {
   private readonly state = new RouteRuntimeTopologyState();
 
   constructor(
-    private readonly store: KernelStore,
+    private readonly publication: KernelPublicationContext,
     private readonly childContainerMaterializer: ContainerChildMaterializer,
     routeConfigContexts: RouteConfigContextMaterializationProjectResult,
     private readonly templates: TemplateCompilationProjectEmission,
+    sourceValueEvaluator: RuntimeBindingSourceValueEvaluator,
   ) {
     const contexts = routeConfigContexts.readRouteConfigContexts();
     this.configs = routeConfigIndex(routeConfigContexts);
     this.childrenByParent = routeConfigContextChildrenByParent(contexts);
-    this.viewportDraftsByOwner = viewportDraftsByOwnerContext(store, routeConfigContexts, templates);
+    this.viewportDraftsByOwner = viewportDraftsByOwnerContext(
+      publication,
+      routeConfigContexts,
+      templates,
+      sourceValueEvaluator,
+    );
     this.rootContexts = contexts.filter((context) => context.parent == null);
   }
 
@@ -249,7 +362,12 @@ class RouteRuntimeTopologyFrame {
     hostingViewport: ViewportRuntimeEmission | null,
   ): void {
     const routeConfig = requiredRouteConfigForContext(routeConfigContext, this.configs);
-    const parentContainer = parentContainerForRouteContext(routeConfig, hostingViewport, this.templates);
+    const parentContainer = parentContainerForRouteContext(
+      routeConfigContext,
+      routeConfig,
+      hostingViewport,
+      this.templates,
+    );
     const routeContext = this.materializeRouteContext(
       routeConfigContext,
       parentRouteContext,
@@ -292,7 +410,7 @@ class RouteRuntimeTopologyFrame {
       parentContainer,
     );
     const routeContext = materializedRouteContext(
-      this.store,
+      this.publication,
       local,
       routeConfigContext,
       parent,
@@ -302,7 +420,7 @@ class RouteRuntimeTopologyFrame {
     return {
       records: [
         ...(containerEmission?.records ?? []),
-        ...routeContextRecords(this.store, local, routeConfigContext, routeContext),
+        ...routeContextRecords(this.publication, local, routeConfigContext, routeContext),
       ],
       routeConfigContext,
       routeContext,
@@ -328,10 +446,15 @@ class RouteRuntimeTopologyFrame {
   ): ViewportRuntimeEmission {
     const local = `router-viewport:${routeContext.identityHandle}:${draft.localKey}:${index}:${draft.controller.productHandle}`;
     const agentLocal = `${local}:agent`;
-    const viewport = materializedViewport(this.store, local, routeContext, draft);
-    const viewportAgent = materializedViewportAgent(this.store, agentLocal, routeContext, draft, viewport);
+    const viewport = materializedViewport(this.publication, local, routeContext, draft);
+    const viewportAgent = materializedViewportAgent(this.publication, agentLocal, routeContext, draft, viewport);
+    const topologyOpenSeams = viewportTopologyOpenSeams(this.publication, local, routeContext, draft);
     return {
-      records: viewportRuntimeRecords(this.store, local, agentLocal, owner, draft, viewport, viewportAgent),
+      records: [
+        ...viewportRuntimeRecords(this.publication, local, agentLocal, owner, draft, viewport, viewportAgent),
+        ...topologyOpenSeams.flatMap((emission) => emission.records),
+      ],
+      openSeams: topologyOpenSeams.map((emission) => emission.openSeam),
       draft,
       viewport,
       viewportAgent,
@@ -349,21 +472,30 @@ function materializedRouteContextContainer(
     return null;
   }
   const sourceAddressHandle = routeConfigContext.sourceAddressHandle;
-  return materializer.materializeChild(new ContainerChildMaterializationRequest(
-    `${local}:container`,
-    parentContainer,
+  return materializer.materializeChild(new ContainerChildMaterializationRequest({
+    localKey: `${local}:container`,
+    parent: parentContainer,
     sourceAddressHandle,
-    `${routeConfigContext.friendlyPath}:route-context-container`,
-    [
-      new ContainerContextResolverSlotRequest('IController', sourceAddressHandle),
-      new ContainerContextResolverSlotRequest('IRouteContext', sourceAddressHandle),
-      new ContainerContextResolverSlotRequest('IContextRouter', sourceAddressHandle),
+    localName: `${routeConfigContext.friendlyPath}:route-context-container`,
+    contextResolvers: [
+      new ContainerContextResolverSlotRequest({
+        interfaceName: FrameworkIntrinsicDiKey.IController,
+        sourceAddressHandle,
+      }),
+      new ContainerContextResolverSlotRequest({
+        interfaceName: FrameworkIntrinsicDiKey.IRouteContext,
+        sourceAddressHandle,
+      }),
+      new ContainerContextResolverSlotRequest({
+        interfaceName: FrameworkIntrinsicDiKey.IContextRouter,
+        sourceAddressHandle,
+      }),
     ],
-  ));
+  }));
 }
 
 function materializedRouteContext(
-  store: KernelStore,
+  store: KernelStoreReadView,
   local: string,
   routeConfigContext: RouteConfigContextModel,
   parent: RouteRuntimeContextEmission | null,
@@ -380,10 +512,12 @@ function materializedRouteContext(
   return new RouteContextModel(
     store.handles.product(local),
     store.handles.identity(local),
+    RouterRealizationStageKind.Potential,
     parent?.routeContext.toReference() ?? null,
     parent?.routeContext.root ?? selfReference,
     container?.toReference() ?? null,
     null,
+    routeConfigContext.options,
     routeConfigContext.toReference(),
     hostingViewport?.viewportAgent.toReference() ?? null,
     routeConfigContext.friendlyPath,
@@ -392,7 +526,7 @@ function materializedRouteContext(
 }
 
 function routeContextRecords(
-  store: KernelStore,
+  store: KernelStoreReadView,
   local: string,
   routeConfigContext: RouteConfigContextModel,
   routeContext: RouteContextModel,
@@ -416,7 +550,7 @@ function routeContextRecords(
 }
 
 function materializedViewport(
-  store: KernelStore,
+  store: KernelStoreReadView,
   local: string,
   routeContext: RouterReference,
   draft: ViewportDraft,
@@ -424,18 +558,22 @@ function materializedViewport(
   return new ViewportCustomElementModel(
     store.handles.product(local),
     store.handles.identity(local),
+    RouterRealizationStageKind.Potential,
+    draft.presenceCardinality,
     routeContext,
     draft.controller.productHandle,
     draft.properties.name,
     draft.properties.usedBy,
     draft.properties.defaultComponent,
     draft.properties.fallback,
+    draft.properties.fieldStates,
     draft.controller.sourceAddressHandle,
+    draft.properties.fieldProvenance,
   );
 }
 
 function materializedViewportAgent(
-  store: KernelStore,
+  store: KernelStoreReadView,
   agentLocal: string,
   routeContext: RouterReference,
   draft: ViewportDraft,
@@ -444,15 +582,18 @@ function materializedViewportAgent(
   return new ViewportAgentModel(
     store.handles.product(agentLocal),
     store.handles.identity(agentLocal),
+    RouterRealizationStageKind.Potential,
+    draft.presenceCardinality,
     viewport.toReference(),
     routeContext,
+    viewport.name,
     draft.controller.productHandle,
     draft.controller.sourceAddressHandle,
   );
 }
 
 function viewportRuntimeRecords(
-  store: KernelStore,
+  store: KernelStoreReadView,
   local: string,
   agentLocal: string,
   owner: RouteConfigContextModel,
@@ -466,6 +607,54 @@ function viewportRuntimeRecords(
     ...viewportRuntimeSourceRecords(evidenceHandle, provenanceHandle, draft),
     ...viewportProductRecords(store, local, owner, draft, viewport, provenanceHandle),
     ...viewportAgentProductRecords(store, agentLocal, draft, viewport, viewportAgent, provenanceHandle),
+  ];
+}
+
+function viewportTopologyOpenSeams(
+  store: KernelStoreReadView,
+  local: string,
+  routeContext: RouterReference,
+  draft: ViewportDraft,
+): readonly RouterOpenSeamRecordEmission[] {
+  const ownerHandle = routeContext.identityHandle;
+  if (ownerHandle == null) {
+    throw new Error(`Potential viewport '${local}' is missing its RouteContext identity owner.`);
+  }
+  const valueSeams = draft.properties.fieldStates.flatMap((state) => {
+    if (
+      state.stateKind !== ViewportFieldStateKind.Referential
+      && state.stateKind !== ViewportFieldStateKind.Open
+    ) {
+      return [];
+    }
+    const summary = state.openReason
+      ?? `au-viewport ${state.field} requires a runtime value before static topology can close.`;
+    return [routerOpenSeamRecords(store, {
+      local: `${local}:open-field:${state.field}`,
+      seamKindKey: KernelVocabulary.Router.OpenTopology.key,
+      ownerHandle,
+      summary,
+      sourceAddressHandle: state.sourceAddressHandle ?? draft.controller.sourceAddressHandle,
+      reasonKinds: [OpenSeamReasonKind.RouterViewportValueOpen, ...state.openReasonKinds],
+      evidenceKind: EvidenceKind.SemanticObservation,
+      evidenceRoles: [EvidenceRole.TransformInput],
+    })];
+  });
+  if (draft.presenceCardinality === BuiltInTemplateControllerChildViewCardinality.Single) {
+    return valueSeams;
+  }
+  return [
+    ...valueSeams,
+    routerOpenSeamRecords(store, {
+      local: `${local}:open-presence:${draft.presenceCardinality}`,
+      seamKindKey: KernelVocabulary.Router.OpenTopology.key,
+      ownerHandle,
+      summary: `au-viewport presence is '${draft.presenceCardinality}' under its template-controller ancestry; live availability cannot be selected statically.`,
+      sourceAddressHandle: draft.controller.sourceAddressHandle,
+      reasonKinds: [OpenSeamReasonKind.RouterViewportPresenceOpen],
+      evidenceKind: EvidenceKind.SemanticObservation,
+      evidenceRoles: [EvidenceRole.TransformInput],
+    }),
   ];
 }
 
@@ -487,7 +676,7 @@ function viewportRuntimeSourceRecords(
 }
 
 function viewportProductRecords(
-  store: KernelStore,
+  store: KernelStoreReadView,
   local: string,
   owner: RouteConfigContextModel,
   draft: ViewportDraft,
@@ -507,7 +696,7 @@ function viewportProductRecords(
 }
 
 function viewportAgentProductRecords(
-  store: KernelStore,
+  store: KernelStoreReadView,
   local: string,
   draft: ViewportDraft,
   viewport: ViewportCustomElementModel,
@@ -546,9 +735,10 @@ function routeConfigContextChildrenByParent(
 }
 
 function viewportDraftsByOwnerContext(
-  store: KernelStore,
+  publication: KernelPublicationContext,
   routeConfigContexts: RouteConfigContextMaterializationProjectResult,
   templates: TemplateCompilationProjectEmission,
+  sourceValueEvaluator: RuntimeBindingSourceValueEvaluator,
 ): ReadonlyMap<IdentityHandle, readonly ViewportDraft[]> {
   const routeContextByDefinition = routeConfigContextsByComponentDefinition(routeConfigContexts);
   const draftsByOwner = new Map<IdentityHandle, ViewportDraft[]>();
@@ -560,13 +750,16 @@ function viewportDraftsByOwnerContext(
       continue;
     }
     const controllers = resource.runtimeAnalysis.runtimeRendering.controllers.filter(isViewportController);
-    for (const owner of ownerRouteConfigContext) {
+    for (const owner of ownerRouteConfigContext.filter((candidate) =>
+      templateResourceBelongsToAppRoot(resource, candidate)
+    )) {
       controllers.forEach((controller, index) => {
         const draft: ViewportDraft = {
           ownerRouteConfigContext: owner,
           localKey: resource.compilation.localKey,
           controller,
-          properties: viewportPropertiesFromController(store, controller),
+          properties: viewportPropertiesFromController(publication, controller, sourceValueEvaluator),
+          presenceCardinality: viewportPresenceCardinality(publication, controller),
           index,
         };
         const drafts = draftsByOwner.get(owner.identityHandle);
@@ -582,6 +775,7 @@ function viewportDraftsByOwnerContext(
 }
 
 function parentContainerForRouteContext(
+  routeConfigContext: RouteConfigContextModel,
   routeConfig: RouteConfigModel,
   hostingViewport: ViewportRuntimeEmission | null,
   templates: TemplateCompilationProjectEmission,
@@ -589,7 +783,7 @@ function parentContainerForRouteContext(
   if (hostingViewport != null) {
     return hostingViewport.draft.controller.containerFrame;
   }
-  return rootControllerForRouteConfig(routeConfig, templates)?.containerFrame ?? null;
+  return rootControllerForRouteConfig(routeConfigContext, routeConfig, templates)?.containerFrame ?? null;
 }
 
 function routeContextContainersByIdentity(
@@ -603,6 +797,7 @@ function routeContextContainersByIdentity(
 }
 
 function rootControllerForRouteConfig(
+  routeConfigContext: RouteConfigContextModel,
   routeConfig: RouteConfigModel,
   templates: TemplateCompilationProjectEmission,
 ): RuntimeControllerFrame | null {
@@ -611,7 +806,10 @@ function rootControllerForRouteConfig(
     return null;
   }
   for (const resource of templates.resources) {
-    if (resource.compilation.definition.productHandle !== definitionProductHandle) {
+    if (
+      resource.compilation.definition.productHandle !== definitionProductHandle
+      || !templateResourceBelongsToAppRoot(resource, routeConfigContext)
+    ) {
       continue;
     }
     return resource.runtimeAnalysis.runtimeRendering.controllers.find((controller) =>
@@ -619,6 +817,14 @@ function rootControllerForRouteConfig(
     ) ?? null;
   }
   return null;
+}
+
+function templateResourceBelongsToAppRoot(
+  resource: TemplateResourceRuntimeAnalysisEmission,
+  routeConfigContext: RouteConfigContextModel,
+): boolean {
+  return (resource.compilation.compilerWorld.world.appRoot?.productHandle ?? null)
+    === (routeConfigContext.appRoot?.productHandle ?? null);
 }
 
 function routeContextsByRouteConfigContextIdentity(
@@ -649,7 +855,10 @@ function routeContextsByRouteConfigContextAndViewportAgentIdentity(
       return [];
     }
     return [[
-      routeContextViewportAgentKey(routeConfigContextIdentity, routeContext.viewportAgent?.identityHandle ?? null),
+      routeContextViewportAgentKey(
+        routeConfigContextIdentity,
+        routeContext.hostingViewportAgentCandidate?.identityHandle ?? null,
+      ),
       routeContext,
     ] as const];
   }));
@@ -688,22 +897,52 @@ function selectHostingViewports(
   if (routeConfig.routeKind === RouteConfigKind.Redirect) {
     return [];
   }
-  const requestedComponent = routeConfig.component?.localName ?? '';
+  const requestedComponent = resolvedRouteableComponentName(routeConfig.component) ?? '';
   const request = new ViewportRequestModel(routeConfig.viewport ?? DEFAULT_VIEWPORT_NAME, requestedComponent);
-  return viewports.filter((emission) => viewportHandles(emission.viewport, request));
+  return viewports.filter((emission) =>
+    viewportAgentCandidateMatch(emission.viewport, request) !== ViewportAgentCandidateMatchKind.Mismatch
+  );
 }
 
-function viewportHandles(
+function viewportAgentCandidateMatch(
   viewport: ViewportCustomElementModel,
   request: ViewportRequestModel,
-): boolean {
-  if (request.viewportName !== DEFAULT_VIEWPORT_NAME && viewport.name !== request.viewportName) {
-    return false;
+): ViewportAgentCandidateMatchKind {
+  let open = false;
+  const nameState = viewportFieldState(viewport, 'name');
+  if (request.viewportName !== DEFAULT_VIEWPORT_NAME) {
+    if (viewportFieldIsOpen(nameState) || viewport.name == null) {
+      open = true;
+    } else if (viewport.name !== request.viewportName) {
+      return ViewportAgentCandidateMatchKind.Mismatch;
+    }
   }
-  if (viewport.usedBy.length > 0 && !viewport.usedBy.includes(request.componentName)) {
-    return false;
+  const usedByState = viewportFieldState(viewport, 'usedBy');
+  if (viewportFieldIsOpen(usedByState) || viewport.usedBy == null) {
+    open = true;
+  } else if (viewport.usedBy.length > 0 && !viewport.usedBy.includes(request.componentName)) {
+    return ViewportAgentCandidateMatchKind.Mismatch;
   }
-  return true;
+  if (viewport.presenceCardinality !== BuiltInTemplateControllerChildViewCardinality.Single) {
+    open = true;
+  }
+  return open ? ViewportAgentCandidateMatchKind.Open : ViewportAgentCandidateMatchKind.Match;
+}
+
+function viewportFieldState(
+  viewport: ViewportCustomElementModel,
+  field: ViewportValueField,
+): ViewportFieldState {
+  const state = viewport.fieldStates.find((candidate) => candidate.field === field) ?? null;
+  if (state == null) {
+    throw new Error(`Potential au-viewport '${viewport.identityHandle}' is missing ${field} field state.`);
+  }
+  return state;
+}
+
+function viewportFieldIsOpen(state: ViewportFieldState): boolean {
+  return state.stateKind === ViewportFieldStateKind.Referential
+    || state.stateKind === ViewportFieldStateKind.Open;
 }
 
 function isViewportController(controller: RuntimeControllerFrame): boolean {
@@ -712,35 +951,293 @@ function isViewportController(controller: RuntimeControllerFrame): boolean {
 }
 
 function viewportPropertiesFromController(
-  store: KernelStore,
+  publication: KernelPublicationContext,
   controller: RuntimeControllerFrame,
+  sourceValueEvaluator: RuntimeBindingSourceValueEvaluator,
 ): ViewportProperties {
   const instruction = controller.instructionProductHandle == null
     ? null
-    : store.productDetails.read(TemplateProductDetails.Instruction, controller.instructionProductHandle);
-  const staticValues = new Map<string, string>();
+    : publication.readProductDetail(TemplateProductDetails.Instruction, controller.instructionProductHandle);
+  const bindableInstructions = new Map<string, SetPropertyInstruction | PropertyBindingInstruction | InterpolationInstruction>();
   if (instruction instanceof HydrateElementInstruction) {
     for (const handle of instruction.bindableInstructionProductHandles) {
-      const bindableInstruction = store.productDetails.read(TemplateProductDetails.Instruction, handle);
-      if (bindableInstruction instanceof SetPropertyInstruction) {
-        staticValues.set(bindableInstruction.targetProperty, bindableInstruction.value);
+      const bindableInstruction = publication.readProductDetail(TemplateProductDetails.Instruction, handle);
+      if (
+        bindableInstruction instanceof SetPropertyInstruction
+        || bindableInstruction instanceof PropertyBindingInstruction
+        || bindableInstruction instanceof InterpolationInstruction
+      ) {
+        const target = viewportBindableInstructionTarget(bindableInstruction);
+        if (target != null && !bindableInstructions.has(target)) {
+          bindableInstructions.set(target, bindableInstruction);
+        }
       }
     }
   }
+  const fields = [
+    viewportStringField(
+      publication,
+      controller,
+      'name',
+      DEFAULT_VIEWPORT_NAME,
+      bindableInstructions.get('name') ?? null,
+      sourceValueEvaluator,
+    ),
+    viewportStringField(
+      publication,
+      controller,
+      'usedBy',
+      '',
+      bindableInstructions.get('usedBy') ?? null,
+      sourceValueEvaluator,
+    ),
+    viewportStringField(
+      publication,
+      controller,
+      'default',
+      '',
+      bindableInstructions.get('default') ?? null,
+      sourceValueEvaluator,
+    ),
+    viewportStringField(
+      publication,
+      controller,
+      'fallback',
+      '',
+      bindableInstructions.get('fallback') ?? null,
+      sourceValueEvaluator,
+    ),
+  ] as const;
+  const [name, usedBy, defaultComponent, fallback] = fields;
   return {
-    name: nonEmpty(staticValues.get('name')) ?? DEFAULT_VIEWPORT_NAME,
-    usedBy: splitList(staticValues.get('usedBy')),
-    defaultComponent: nonEmpty(staticValues.get('default')),
-    fallback: nonEmpty(staticValues.get('fallback')),
+    name: name.value,
+    usedBy: usedBy.value == null ? null : splitList(usedBy.value),
+    defaultComponent: nonEmpty(defaultComponent.value),
+    fallback: nonEmpty(fallback.value),
+    fieldStates: fields.map((field) => field.state),
+    fieldProvenance: fields.flatMap((field) =>
+      field.state.sourceProvenanceHandle == null
+        ? []
+        : [new FieldProvenance<ViewportField>(
+            field.state.field,
+            field.state.sourceProvenanceHandle,
+          )]
+    ),
   };
 }
 
-function splitList(value: string | undefined): readonly string[] {
-  return value == null
-    ? []
-    : value.split(',').filter((entry) => entry.length > 0);
+interface ViewportStringField {
+  readonly value: string | null;
+  readonly state: ViewportFieldState;
 }
 
-function nonEmpty(value: string | undefined): string | null {
+function viewportStringField(
+  publication: KernelPublicationContext,
+  controller: RuntimeControllerFrame,
+  field: ViewportValueField,
+  defaultValue: string,
+  instruction: SetPropertyInstruction | PropertyBindingInstruction | InterpolationInstruction | null,
+  sourceValueEvaluator: RuntimeBindingSourceValueEvaluator,
+): ViewportStringField {
+  const authoredSource = instruction == null
+    ? null
+    : templateInstructionAuthoredValueSource(publication, instruction);
+  const boundRead = sourceValueEvaluator.evaluateInitialBoundControllerPropertyValue(
+    controller.productHandle,
+    field,
+  );
+  if (boundRead != null) {
+    const bound = boundRead.source;
+    const evaluated = boundRead.evaluation;
+    const sourceWitness = viewportFieldSourceWitness(
+      authoredSource,
+      bound?.sourceAddressHandle ?? null,
+      bound?.sourceProvenanceHandle ?? null,
+      instruction?.sourceAddressHandle ?? null,
+    );
+    const sourceAddressHandle = sourceWitness.sourceAddressHandle;
+    const provenanceHandle = sourceWitness.provenanceHandle;
+    if (evaluated.value?.kind === EvaluationValueKind.String) {
+      return {
+        value: evaluated.value.value,
+        state: evaluated.closure === RuntimeBindingSourceValueEvaluationClosure.Value
+          ? createViewportFieldState(
+              field,
+              ViewportFieldStateKind.Closed,
+              sourceAddressHandle,
+              authoredSource,
+              provenanceHandle,
+            )
+          : new ViewportFieldState(
+              field,
+              ViewportFieldStateKind.Open,
+              sourceAddressHandle,
+              evaluated.openReason,
+              evaluated.openReasonKinds,
+              authoredSource?.instructionProductHandle ?? null,
+              authoredSource?.attributeProductHandle ?? null,
+              provenanceHandle,
+            ),
+      };
+    }
+    if (
+      evaluated.closure === RuntimeBindingSourceValueEvaluationClosure.Value
+      && evaluated.value != null
+    ) {
+      return {
+        value: null,
+        state: new ViewportFieldState(
+          field,
+          ViewportFieldStateKind.Referential,
+          sourceAddressHandle,
+          `au-viewport ${field} binding closed to '${evaluated.value.kind}', not a concrete string.`,
+          [],
+          authoredSource?.instructionProductHandle ?? null,
+          authoredSource?.attributeProductHandle ?? null,
+          provenanceHandle,
+        ),
+      };
+    }
+    return {
+      value: null,
+      state: new ViewportFieldState(
+        field,
+        ViewportFieldStateKind.Open,
+        sourceAddressHandle,
+        evaluated.openReason,
+        evaluated.openReasonKinds,
+        authoredSource?.instructionProductHandle ?? null,
+        authoredSource?.attributeProductHandle ?? null,
+        provenanceHandle,
+      ),
+    };
+  }
+  if (instruction instanceof SetPropertyInstruction) {
+    return {
+      value: instruction.value,
+      state: createViewportFieldState(
+        field,
+        ViewportFieldStateKind.Closed,
+        authoredSource?.sourceAddressHandle ?? instruction.sourceAddressHandle,
+        authoredSource,
+        authoredSource?.provenanceHandle ?? null,
+      ),
+    };
+  }
+  if (instruction != null) {
+    return {
+      value: null,
+      state: new ViewportFieldState(
+        field,
+        ViewportFieldStateKind.Open,
+        authoredSource?.sourceAddressHandle ?? instruction.sourceAddressHandle,
+        `au-viewport ${field} has an authored binding without a retained bound-controller source value.`,
+        [OpenSeamReasonKind.BindingSourceNeedsRuntimeValue],
+        authoredSource?.instructionProductHandle ?? null,
+        authoredSource?.attributeProductHandle ?? null,
+        authoredSource?.provenanceHandle ?? null,
+      ),
+    };
+  }
+  return {
+    value: defaultValue,
+    state: new ViewportFieldState(field, ViewportFieldStateKind.Defaulted, null),
+  };
+}
+
+function viewportFieldSourceWitness(
+  authoredSource: TemplateInstructionAuthoredValueSource | null,
+  boundSourceAddressHandle: ViewportFieldState['sourceAddressHandle'],
+  boundSourceProvenanceHandle: ProvenanceHandle | null,
+  instructionSourceAddressHandle: ViewportFieldState['sourceAddressHandle'],
+): {
+  readonly sourceAddressHandle: ViewportFieldState['sourceAddressHandle'];
+  readonly provenanceHandle: ProvenanceHandle | null;
+} {
+  if (authoredSource?.sourceAddressHandle != null && authoredSource.provenanceHandle != null) {
+    return {
+      sourceAddressHandle: authoredSource.sourceAddressHandle,
+      provenanceHandle: authoredSource.provenanceHandle,
+    };
+  }
+  if (boundSourceAddressHandle != null && boundSourceProvenanceHandle != null) {
+    return {
+      sourceAddressHandle: boundSourceAddressHandle,
+      provenanceHandle: boundSourceProvenanceHandle,
+    };
+  }
+  return {
+    sourceAddressHandle: authoredSource?.sourceAddressHandle
+      ?? boundSourceAddressHandle
+      ?? instructionSourceAddressHandle,
+    provenanceHandle: null,
+  };
+}
+
+function createViewportFieldState(
+  field: ViewportValueField,
+  stateKind: ViewportFieldStateKind,
+  sourceAddressHandle: ViewportFieldState['sourceAddressHandle'],
+  authoredSource: TemplateInstructionAuthoredValueSource | null,
+  provenanceHandle: ProvenanceHandle | null,
+): ViewportFieldState {
+  return new ViewportFieldState(
+    field,
+    stateKind,
+    sourceAddressHandle,
+    null,
+    [],
+    authoredSource?.instructionProductHandle ?? null,
+    authoredSource?.attributeProductHandle ?? null,
+    provenanceHandle,
+  );
+}
+
+function viewportBindableInstructionTarget(
+  instruction: SetPropertyInstruction | PropertyBindingInstruction | InterpolationInstruction,
+): string | null {
+  if (instruction instanceof SetPropertyInstruction || instruction instanceof PropertyBindingInstruction) {
+    return instruction.targetProperty;
+  }
+  return instruction instanceof InterpolationInstruction ? instruction.target : null;
+}
+
+function viewportPresenceCardinality(
+  publication: KernelPublicationContext,
+  controller: RuntimeControllerFrame,
+): BuiltInTemplateControllerChildViewCardinality {
+  let cardinality = BuiltInTemplateControllerChildViewCardinality.Single;
+  let current = controller.parent;
+  while (current != null) {
+    if (current.creationKind === RuntimeControllerCreationKind.TemplateController) {
+      const semantics = frameworkTemplateControllerSemanticsForController(
+        publication,
+        current,
+      );
+      if (semantics == null) {
+        return BuiltInTemplateControllerChildViewCardinality.Open;
+      }
+      if (semantics.childViewCardinality === BuiltInTemplateControllerChildViewCardinality.Open) {
+        return BuiltInTemplateControllerChildViewCardinality.Open;
+      }
+      if (semantics.childViewCardinality === BuiltInTemplateControllerChildViewCardinality.Many) {
+        cardinality = BuiltInTemplateControllerChildViewCardinality.Many;
+      } else if (
+        semantics.childViewCardinality === BuiltInTemplateControllerChildViewCardinality.Optional
+        && cardinality === BuiltInTemplateControllerChildViewCardinality.Single
+      ) {
+        cardinality = BuiltInTemplateControllerChildViewCardinality.Optional;
+      }
+    }
+    current = current.parent;
+  }
+  return cardinality;
+}
+
+function splitList(value: string): readonly string[] {
+  return value.length === 0 ? [] : value.split(',').filter((entry) => entry.length > 0);
+}
+
+function nonEmpty(value: string | null): string | null {
   return value == null || value.length === 0 ? null : value;
 }

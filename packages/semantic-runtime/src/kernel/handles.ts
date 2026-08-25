@@ -15,12 +15,14 @@ export const enum KernelHandleKind {
   OpenSeam = 'open-seam',
   /** Handle for a materialized product inside one analysis store. */
   Product = 'product',
+  /** Handle for a product-owned detail kept outside the normalized product graph. */
+  HotDetail = 'hot-detail',
   /** Handle for a materialization record inside one analysis store. */
   Materialization = 'materialization',
 }
 
 /**
- * Branded string handle for record links in the active analysis store.
+ * Branded string handle for store-local links in the active analysis store.
  *
  * Handles are serializable for tests, tooling continuations, and inspection, but they are not durable semantic
  * identities and do not promise cross-run snapshot recovery.
@@ -47,6 +49,9 @@ export type OpenSeamHandle = KernelHandle<KernelHandleKind.OpenSeam>;
 
 /** Store-local handle for a materialized product. */
 export type ProductHandle = KernelHandle<KernelHandleKind.Product>;
+
+/** Store-local handle for a product-owned hot detail. */
+export type HotDetailHandle = KernelHandle<KernelHandleKind.HotDetail>;
 
 /** Store-local handle for a materialization record. */
 export type MaterializationHandle = KernelHandle<KernelHandleKind.Materialization>;
@@ -84,11 +89,11 @@ function compactHandlePart(
     value,
     role === 'store' ? compactHandleStorePrefixLength : compactHandleLocalPrefixLength,
   );
-  return `${role}~${prefix}~${stableHandleHash(value)}`;
+  return `${role}~${prefix}~${stableKernelLocalHash(value)}`;
 }
 
 function serializeKernelHandle<TKind extends KernelHandleKind>(
-  storeKey: string,
+  encodedStoreKey: string,
   kind: TKind,
   local: string,
 ): KernelHandle<TKind> {
@@ -96,12 +101,7 @@ function serializeKernelHandle<TKind extends KernelHandleKind>(
   // product graphs inspectable without retaining megabytes of repeated, URI-encoded handle ancestry in hot paths. The
   // prefix/hash form is a deliberate memory trade-off: exact semantic identity belongs in identity records and source
   // addresses, while handles only need to be stable inside one analysis store.
-  return [
-    'kernel',
-    encodeHandlePart(compactHandlePart(storeKey, 'store')),
-    kind,
-    encodeHandlePart(compactHandlePart(local, 'local')),
-  ].join(':') as KernelHandle<TKind>;
+  return `kernel:${encodedStoreKey}:${kind}:${encodeHandlePart(compactHandlePart(local, 'local'))}` as KernelHandle<TKind>;
 }
 
 function readableCompactPrefix(value: string, maxLength: number): string {
@@ -112,7 +112,8 @@ function readableCompactPrefix(value: string, maxLength: number): string {
   return normalized.length === 0 ? 'value' : normalized;
 }
 
-function stableHandleHash(value: string): string {
+/** Stable compact hash shared by kernel local-key carriers that must retain suffix entropy. */
+export function stableKernelLocalHash(value: string): string {
   let hash = 0xcbf29ce484222325n;
   for (let index = 0; index < value.length; index += 1) {
     hash ^= BigInt(value.charCodeAt(index));
@@ -123,48 +124,57 @@ function stableHandleHash(value: string): string {
 
 /** Scoped handle factory for analysis-step-local record keys in one active analysis store. */
 export class KernelHandleFactory {
+  private readonly encodedStoreKey: string;
+
   constructor(
     /** Human-readable label for the store that owns handles minted by this factory. */
-    private readonly storeKey: string,
-  ) {}
+    storeKey: string,
+  ) {
+    this.encodedStoreKey = encodeHandlePart(compactHandlePart(storeKey, 'store'));
+  }
 
   /** Mint an address handle from an analysis-step-local key. */
   address(local: string): AddressHandle {
-    return serializeKernelHandle(this.storeKey, KernelHandleKind.Address, local);
+    return serializeKernelHandle(this.encodedStoreKey, KernelHandleKind.Address, local);
   }
 
   /** Mint an identity handle from an analysis-step-local key. */
   identity(local: string): IdentityHandle {
-    return serializeKernelHandle(this.storeKey, KernelHandleKind.Identity, local);
+    return serializeKernelHandle(this.encodedStoreKey, KernelHandleKind.Identity, local);
   }
 
   /** Mint an evidence handle from an analysis-step-local key. */
   evidence(local: string): EvidenceHandle {
-    return serializeKernelHandle(this.storeKey, KernelHandleKind.Evidence, local);
+    return serializeKernelHandle(this.encodedStoreKey, KernelHandleKind.Evidence, local);
   }
 
   /** Mint a provenance handle from an analysis-step-local key. */
   provenance(local: string): ProvenanceHandle {
-    return serializeKernelHandle(this.storeKey, KernelHandleKind.Provenance, local);
+    return serializeKernelHandle(this.encodedStoreKey, KernelHandleKind.Provenance, local);
   }
 
   /** Mint a claim handle from an analysis-step-local key. */
   claim(local: string): ClaimHandle {
-    return serializeKernelHandle(this.storeKey, KernelHandleKind.Claim, local);
+    return serializeKernelHandle(this.encodedStoreKey, KernelHandleKind.Claim, local);
   }
 
   /** Mint an open-seam handle from an analysis-step-local key. */
   openSeam(local: string): OpenSeamHandle {
-    return serializeKernelHandle(this.storeKey, KernelHandleKind.OpenSeam, local);
+    return serializeKernelHandle(this.encodedStoreKey, KernelHandleKind.OpenSeam, local);
   }
 
   /** Mint a product handle from an analysis-step-local key. */
   product(local: string): ProductHandle {
-    return serializeKernelHandle(this.storeKey, KernelHandleKind.Product, local);
+    return serializeKernelHandle(this.encodedStoreKey, KernelHandleKind.Product, local);
+  }
+
+  /** Mint a handle for a product-owned hot detail. */
+  hotDetail(local: string): HotDetailHandle {
+    return serializeKernelHandle(this.encodedStoreKey, KernelHandleKind.HotDetail, local);
   }
 
   /** Mint a materialization handle from an analysis-step-local key. */
   materialization(local: string): MaterializationHandle {
-    return serializeKernelHandle(this.storeKey, KernelHandleKind.Materialization, local);
+    return serializeKernelHandle(this.encodedStoreKey, KernelHandleKind.Materialization, local);
   }
 }

@@ -1,5 +1,6 @@
 import { computed, nowrap } from '@aurelia/runtime';
-import { watch } from '@aurelia/runtime-html';
+import { customElement, watch } from '@aurelia/runtime-html';
+import template from './watcher-proxy-dependencies-app.html';
 
 interface Product {
   readonly id: string;
@@ -30,6 +31,7 @@ class DeferredCallbackHost {
   }
 }
 
+@customElement({ name: 'watcher-proxy-dependencies-app', template })
 export class WatcherProxyDependenciesApp {
   products: Product[] = [
     { id: 'p1', name: 'Desk lamp', tags: ['featured', 'lighting'] },

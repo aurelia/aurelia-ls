@@ -4,6 +4,7 @@ import ts from 'typescript';
 import type { ProjectBootFrame } from '../boot/frames.js';
 import {
   sourceSpanContains,
+  type SourceFileAddress,
   type SourceSpanAddress,
 } from '../kernel/address.js';
 import {
@@ -18,7 +19,11 @@ import {
   EvidenceRecord,
   EvidenceRole,
 } from '../kernel/evidence.js';
-import type { SourceSpan } from '../expression/source-span.js';
+import { SemanticClaim } from '../kernel/claim.js';
+import type {
+  BindingBehaviorExpression,
+  ValueConverterExpression,
+} from '../expression/ast.js';
 import type {
   AddressHandle,
   IdentityHandle,
@@ -26,7 +31,6 @@ import type {
   ProductHandle,
 } from '../kernel/handles.js';
 import type { OpenSeam } from '../kernel/open-seam.js';
-import { OpenSeamReasonKind } from '../kernel/open-seam.js';
 import { FrameworkIdentity } from '../kernel/identity.js';
 import { localKeyPart } from '../kernel/local-key.js';
 import {
@@ -37,8 +41,15 @@ import {
   ProvenanceRecord,
 } from '../kernel/provenance.js';
 import {
+  KernelPublicationPlan,
+  publishProductDetails,
+  type KernelPublicationContext,
+} from '../kernel/publication.js';
+import {
   KernelStoreBatch,
   type KernelStore,
+  type KernelMaterializationReadView,
+  type KernelStoreReadView,
   type KernelStoreRecord,
 } from '../kernel/store.js';
 import {
@@ -47,22 +58,39 @@ import {
 import { uniqueStrings } from '../kernel/collections.js';
 import { KernelVocabulary } from '../kernel/vocabulary.js';
 import type { ConfigurationKernelEmission } from '../configuration/configuration-kernel-emitter.js';
+import {
+  FrameworkCapabilityConfigurationMembership,
+  i18nTranslationSyntaxConfigurationForAdmission,
+  validationHtmlResourceConfigurationForAdmission,
+} from '../configuration/framework-capability-configuration.js';
 import type { AppTaskDefinition } from '../configuration/app-task.js';
-import type {
-  ConfigurationSequence,
-  ConfigurationStep,
-} from '../configuration/configuration-sequence.js';
 import {
   type DiContainerChainFacts,
-  readDiContainerChainFacts,
 } from '../di/container-chain.js';
 import {
+  frameworkRegistrationKindForOperation,
+  type ContainerRegistrationOperation,
+} from '../di/container-registration.js';
+import type { DiWorldConstructionEmission } from '../di/world-construction.js';
+import { registrationOperationsVisibleToContainer } from '../di/world-construction.js';
+import {
+  registrationHidingOpenSeamsForContainer,
+  registrationOpenPressureFacts,
+  registrationOpenSeamCanHideFrameworkCapability,
+  type RegistrationOpenPressureFact,
+} from '../di/registration-open-pressure.js';
+import {
   FrameworkRegistrationCapability,
+  frameworkRegistrationCapabilitiesForKind,
   frameworkRegistrationKindsForCapability,
   frameworkRegistrationModuleNamesForCapability,
 } from '../registration/framework-registration-manifest.js';
+import type { RegistrationAdmissionProduct } from '../registration/registration-admission.js';
 import type { TypeSystemProject } from '../type-system/project.js';
 import {
+  compileAttributePatternDefinition,
+  isBetterAttributePatternScore,
+  type AttributePatternScore,
   type AttributeSyntax,
 } from '../template/attribute-syntax.js';
 import {
@@ -70,13 +98,17 @@ import {
   BuiltInSyntaxGroup,
   findUniqueBuiltInBindingCommandByName,
   parseBuiltInAttributeSyntax,
+  type BuiltInAttributePattern,
   type BuiltInBindingCommand,
 } from '../template/built-in-syntax.js';
 import {
-  bindingBehaviorExpressions,
-  valueConverterExpressions,
-} from '../template/binding-behavior-expression.js';
-import { findVisibleTemplateResource } from '../template/compiler-resource-lookup.js';
+  bindingBehaviorResourceOccurrences,
+  valueConverterResourceOccurrences,
+} from '../template/expression-resource-occurrence.js';
+import {
+  findVisibleTemplateResource,
+  readBuiltInVisibleTemplateResource,
+} from '../template/compiler-resource-lookup.js';
 import {
   runtimeAcceptedBindingExpressionAstForParse,
 } from '../template/expression-parse-projection.js';
@@ -87,17 +119,24 @@ import {
   htmlElementLookupName,
   type HtmlAttribute,
 } from '../template/html-ir.js';
+import { runtimeAttributeName } from '../template/runtime-dom-name.js';
 import type {
   TemplateCompilationProjectEmission,
   TemplateResourceRuntimeAnalysisEmission,
 } from '../template/template-compilation-project-pass.js';
 import {
-  templateExpressionParsesForResource,
-} from '../template/template-expression-selection.js';
-import {
   sourceAddressForRuntimeExpressionSpan,
 } from '../template/runtime-expression-source-address.js';
-import type { TemplateExpressionParse } from '../template/value-site.js';
+import type {
+  TemplateExpressionParse,
+} from '../template/value-site.js';
+import {
+  resourceLocalCompilerReachableHtmlAttributeProductHandles,
+  resourceLocalCompilerReachableHtmlNodeProductHandles,
+} from '../template/runtime-resource-ownership.js';
+import {
+  resourceLocalEffectiveTemplateExpressionParses,
+} from '../template/template-expression-selection.js';
 import {
   allBuiltInResources,
   BuiltInResourcePackage,
@@ -117,11 +156,12 @@ import {
 } from './capability-demand.js';
 import { FrameworkProductDetails } from './product-details.js';
 import {
-  FrameworkServiceRoot,
+  type FrameworkServiceRoot,
   FrameworkServiceRootBasis,
   FrameworkServiceRootKind,
   frameworkServiceRootBasisResolvesDiKey,
 } from './service-root.js';
+import type { FrameworkServiceRootEnrichmentProjectResult } from './service-root-enrichment-materializer.js';
 
 interface CapabilityDemandSite {
   readonly siteKind: FrameworkCapabilityDemandSiteKind;
@@ -136,6 +176,10 @@ interface CapabilityDemandSite {
   readonly localKeyParts?: readonly string[];
   readonly templateSourceAddressHandle?: AddressHandle | null;
   readonly resourceDefinitionProductHandle?: ProductHandle | null;
+  readonly analysisContextProductHandle?: ProductHandle | null;
+  readonly admissionSourceAddressHandles?: readonly AddressHandle[];
+  readonly configurationSourceAddressHandles?: readonly AddressHandle[];
+  readonly expressionResourceApplicationProductHandles?: readonly ProductHandle[];
   readonly sourceRecords?: readonly KernelStoreRecord[];
 }
 
@@ -154,30 +198,38 @@ class CapabilityDemandPublication {
 export class FrameworkCapabilityDemandMaterializer {
   constructor(
     readonly store: KernelStore,
+    readonly publication: KernelPublicationContext,
   ) {}
 
   materializeAndEmit(
     project: ProjectBootFrame,
     typeSystem: TypeSystemProject,
     templates: TemplateCompilationProjectEmission,
-    configuration: ConfigurationKernelEmission | null = null,
-    serviceRoots: readonly FrameworkServiceRoot[] = [],
+    configuration: ConfigurationKernelEmission,
+    diWorld: DiWorldConstructionEmission,
+    containerChainFacts: DiContainerChainFacts,
+    serviceRoots: readonly FrameworkServiceRoot[],
+    serviceRootEnrichment: FrameworkServiceRootEnrichmentProjectResult,
   ): FrameworkCapabilityDemandProjectResult {
     const availability = readCapabilityAvailabilityEvidence(project, typeSystem);
-    const publications = capabilityDemandSites(this.store, typeSystem, templates, configuration, serviceRoots).map((site, index) =>
-      this.publishDemand(project, site, availability, index)
-    );
+    const publications = capabilityDemandSites(
+      this.publication,
+      typeSystem,
+      templates,
+      configuration,
+      diWorld,
+      containerChainFacts,
+      serviceRoots,
+      serviceRootEnrichment,
+    ).map((site, index) => this.publishDemand(project, site, availability, index));
     const records = publications.flatMap((publication) => publication.records);
-    if (records.length > 0) {
-      this.store.commit(new KernelStoreBatch(records, `framework-capability-demands:${project.projectKey}`));
-    }
-    for (const publication of publications) {
-      this.store.productDetails.add(
+    this.publication.publish(new KernelPublicationPlan(
+      new KernelStoreBatch(records, `framework-capability-demands:${project.projectKey}`),
+      publishProductDetails(
         FrameworkProductDetails.CapabilityDemand,
-        publication.demand.productHandle,
-        publication.demand,
-      );
-    }
+        publications.map((publication) => publication.demand),
+      ),
+    ));
     return new FrameworkCapabilityDemandProjectResult(
       publications.map((publication) => publication.demand),
       records,
@@ -223,6 +275,18 @@ export class FrameworkCapabilityDemandMaterializer {
       site.ownerIdentityHandle,
       site.templateSourceAddressHandle ?? site.resource?.compilation.unit.templateSource.sourceAddressHandle ?? null,
       site.resourceDefinitionProductHandle ?? site.resource?.compilation.definition.productHandle ?? null,
+      site.analysisContextProductHandle ?? site.resource?.compilation.analysisContextProductHandle ?? null,
+      site.admissionSourceAddressHandles ?? [],
+      site.configurationSourceAddressHandles ?? [],
+    );
+    const applicationClaims = (site.expressionResourceApplicationProductHandles ?? []).map(
+      (applicationProductHandle, applicationIndex) => new SemanticClaim(
+        this.store.handles.claim(`${local}:expression-resource-application:${applicationIndex}`),
+        productHandle,
+        KernelVocabulary.Framework.CapabilityDemandHasExpressionResourceApplication.key,
+        applicationProductHandle,
+        provenanceHandle,
+      ),
     );
     const records = [
       ...(site.sourceRecords ?? []),
@@ -248,10 +312,12 @@ export class FrameworkCapabilityDemandMaterializer {
         site.sourceAddressHandle,
         provenanceHandle,
       ),
+      ...applicationClaims,
       new MaterializationRecord(
         this.store.handles.materialization(local),
         identityHandle,
         [productHandle],
+        applicationClaims.map((claim) => claim.handle),
       ),
     ];
     return new CapabilityDemandPublication(demand, records);
@@ -259,36 +325,60 @@ export class FrameworkCapabilityDemandMaterializer {
 }
 
 function capabilityDemandSites(
-  store: KernelStore,
+  publication: KernelPublicationContext,
   typeSystem: TypeSystemProject,
   templates: TemplateCompilationProjectEmission,
-  configuration: ConfigurationKernelEmission | null,
+  configuration: ConfigurationKernelEmission,
+  diWorld: DiWorldConstructionEmission,
+  containerChainFacts: DiContainerChainFacts,
   serviceRoots: readonly FrameworkServiceRoot[],
+  serviceRootEnrichment: FrameworkServiceRootEnrichmentProjectResult,
 ): readonly CapabilityDemandSite[] {
+  const templateAdmissions = new TemplateCapabilityAdmissionContext(
+    publication,
+    configuration,
+    diWorld,
+    containerChainFacts,
+  );
   return uniqueDemandSites([
     ...templates.resources,
     ...templates.authoringResources,
   ].flatMap((resource) => [
-    ...syntaxCapabilityDemandSites(resource),
-    ...bindingCommandCapabilityDemandSites(resource),
-    ...resourceCapabilityDemandSites(resource),
-    ...expressionResourceCapabilityDemandSites(store, resource),
-  ]).concat(sourceServiceApiCapabilityDemandSites(store, typeSystem, templates, configuration, serviceRoots)));
-}
-
-function sourceServiceApiCapabilityDemandSites(
-  store: KernelStore,
-  typeSystem: TypeSystemProject,
-  templates: TemplateCompilationProjectEmission,
-  configuration: ConfigurationKernelEmission | null,
-  serviceRoots: readonly FrameworkServiceRoot[],
-): readonly CapabilityDemandSite[] {
-  const admissionContext = new SourceServiceApiAdmissionContext(
-    store,
+    ...syntaxCapabilityDemandSites(resource, templateAdmissions),
+    ...bindingCommandCapabilityDemandSites(resource, templateAdmissions),
+    ...resourceCapabilityDemandSites(publication, resource, templateAdmissions),
+    ...expressionResourceCapabilityDemandSites(publication, resource, templateAdmissions),
+  ]).concat(sourceServiceApiCapabilityDemandSites(
+    publication,
     typeSystem,
     templates,
     configuration,
+    diWorld,
+    containerChainFacts,
     serviceRoots,
+    serviceRootEnrichment,
+  )));
+}
+
+function sourceServiceApiCapabilityDemandSites(
+  publication: KernelPublicationContext,
+  typeSystem: TypeSystemProject,
+  templates: TemplateCompilationProjectEmission,
+  configuration: ConfigurationKernelEmission,
+  diWorld: DiWorldConstructionEmission,
+  containerChainFacts: DiContainerChainFacts,
+  serviceRoots: readonly FrameworkServiceRoot[],
+  serviceRootEnrichment: FrameworkServiceRootEnrichmentProjectResult,
+): readonly CapabilityDemandSite[] {
+  const admissionContext = new SourceServiceApiAdmissionContext(
+    publication,
+    typeSystem,
+    templates,
+    configuration,
+    diWorld,
+    containerChainFacts,
+    serviceRoots,
+    serviceRootEnrichment,
   );
   return serviceRoots.flatMap((root): readonly CapabilityDemandSite[] => {
     if (!frameworkServiceRootBasisResolvesDiKey(root.basis)) {
@@ -298,7 +388,7 @@ function sourceServiceApiCapabilityDemandSites(
     if (descriptor == null) {
       return [];
     }
-    const admission = admissionContext.admissionForRoot(root);
+    const admission = admissionContext.admissionForRoot(root, descriptor.requiredCapability);
     return [{
       siteKind: FrameworkCapabilityDemandSiteKind.SourceServiceApi,
       demandKind: descriptor.demandKind,
@@ -335,32 +425,39 @@ class SourceServiceApiAdmission {
 
 class SourceServiceApiAdmissionContext {
   private readonly chainFacts: DiContainerChainFacts;
-  private readonly resolvedDiKeyClaimsByRoot: ReadonlyMap<ProductHandle, readonly IdentityHandle[]>;
-  private readonly registrationHidingOpenSeams: readonly OpenSeam[];
-  private readonly registrationHidingOpenSeamContainerScopes: ReadonlyMap<OpenSeamHandle, readonly IdentityHandle[]>;
+  private readonly registrationOpenPressure: readonly RegistrationOpenPressureFact[];
   private readonly serviceRootsByProduct: ReadonlyMap<ProductHandle, FrameworkServiceRoot>;
+  private readonly appTaskContainerIdentitiesByTask: ReadonlyMap<ProductHandle, readonly IdentityHandle[]>;
   private readonly consultingContainerCache = new Map<ProductHandle, IdentityHandle | null>();
   private readonly consultingContainerStack = new Set<ProductHandle>();
 
   constructor(
-    private readonly store: KernelStore,
+    private readonly publication: KernelPublicationContext,
     private readonly typeSystem: TypeSystemProject,
     private readonly templates: TemplateCompilationProjectEmission,
-    private readonly configuration: ConfigurationKernelEmission | null,
+    private readonly configuration: ConfigurationKernelEmission,
+    diWorld: DiWorldConstructionEmission,
+    chainFacts: DiContainerChainFacts,
     serviceRoots: readonly FrameworkServiceRoot[],
+    private readonly serviceRootEnrichment: FrameworkServiceRootEnrichmentProjectResult,
   ) {
-    this.chainFacts = readDiContainerChainFacts(store);
-    this.resolvedDiKeyClaimsByRoot = rootResolvedDiKeyClaimsByRoot(store);
-    this.registrationHidingOpenSeams = registrationHidingOpenSeams(store);
-    this.registrationHidingOpenSeamContainerScopes = registrationHidingOpenSeamContainerScopes(store, configuration, this.chainFacts);
+    this.chainFacts = chainFacts;
+    this.registrationOpenPressure = registrationOpenPressureFacts(
+      diWorld,
+      configuration.openSeamScopes,
+    );
     this.serviceRootsByProduct = new Map(serviceRoots.map((root) => [root.productHandle, root]));
+    this.appTaskContainerIdentitiesByTask = appTaskContainerIdentitiesByTask(diWorld);
   }
 
-  admissionForRoot(root: FrameworkServiceRoot): SourceServiceApiAdmission {
+  admissionForRoot(
+    root: FrameworkServiceRoot,
+    requiredCapability: FrameworkRegistrationCapability,
+  ): SourceServiceApiAdmission {
     if (!frameworkServiceRootBasisResolvesDiKey(root.basis)) {
       return new SourceServiceApiAdmission(FrameworkCapabilityAdmissionState.NotAdmitted);
     }
-    const resolvedKeyHandles = this.resolvedDiKeyClaimsByRoot.get(root.productHandle) ?? [];
+    const resolvedKeyHandles = root.serviceKeyIdentityHandle == null ? [] : [root.serviceKeyIdentityHandle];
     const consultingContainer = this.consultingContainerIdentityForRoot(root);
     if (
       consultingContainer != null
@@ -368,7 +465,11 @@ class SourceServiceApiAdmissionContext {
     ) {
       return new SourceServiceApiAdmission(FrameworkCapabilityAdmissionState.Admitted);
     }
-    const blockingOpenSeams = this.registrationHidingOpenSeamsForRoot(root, consultingContainer);
+    const blockingOpenSeams = this.registrationHidingOpenSeamsForRoot(
+      root,
+      requiredCapability,
+      consultingContainer,
+    );
     if (blockingOpenSeams.length > 0) {
       return new SourceServiceApiAdmission(
         FrameworkCapabilityAdmissionState.AdmissionUnknown,
@@ -386,29 +487,37 @@ class SourceServiceApiAdmissionContext {
 
   private registrationHidingOpenSeamsForRoot(
     root: FrameworkServiceRoot,
+    requiredCapability: FrameworkRegistrationCapability,
     consultingContainer: IdentityHandle | null,
   ): readonly OpenSeam[] {
     const consultingChain = consultingContainer == null
       ? null
       : new Set(this.chainFacts.containerChainIdentityHandles(consultingContainer));
-    return this.registrationHidingOpenSeams.filter((seam) =>
-      this.registrationHidingOpenSeamBlocksRoot(seam, root, consultingChain)
-    );
+    const seams = new Map<OpenSeamHandle, OpenSeam>();
+    for (const fact of this.registrationOpenPressure) {
+      if (this.registrationHidingOpenSeamBlocksRoot(fact, root, requiredCapability, consultingChain)) {
+        seams.set(fact.seam.handle, fact.seam);
+      }
+    }
+    return [...seams.values()];
   }
 
   private registrationHidingOpenSeamBlocksRoot(
-    seam: OpenSeam,
+    fact: RegistrationOpenPressureFact,
     root: FrameworkServiceRoot,
+    requiredCapability: FrameworkRegistrationCapability,
     consultingChain: ReadonlySet<IdentityHandle> | null,
   ): boolean {
-    const scopedContainers = this.registrationHidingOpenSeamContainerScopes.get(seam.handle) ?? [];
-    if (scopedContainers.length > 0) {
+    if (!registrationOpenSeamCanHideFrameworkCapability(fact.operation, requiredCapability)) {
+      return false;
+    }
+    if (fact.containerIdentityHandles != null) {
       return consultingChain == null
-        ? sourceAddressesMayShareFile(this.store, root.sourceAddressHandle, seam.addressHandle)
-        : scopedContainers.some((container) => consultingChain.has(container));
+        ? sourceAddressesMayShareFile(this.publication, root.sourceAddressHandle, fact.seam.addressHandle)
+        : fact.containerIdentityHandles.some((identityHandle) => consultingChain.has(identityHandle));
     }
     return consultingChain == null
-      && sourceAddressesMayShareFile(this.store, root.sourceAddressHandle, seam.addressHandle);
+      && sourceAddressesMayShareFile(this.publication, root.sourceAddressHandle, fact.seam.addressHandle);
   }
 
   private consultingContainerIdentityForRoot(root: FrameworkServiceRoot): IdentityHandle | null {
@@ -433,8 +542,11 @@ class SourceServiceApiAdmissionContext {
         return this.containerGetConsultingContainerIdentity(root);
       case FrameworkServiceRootBasis.DiActivationBacked:
         return this.resourceActivationConsultingContainerIdentity(root);
-      case FrameworkServiceRootBasis.FrameworkTypeAnnotation:
       case FrameworkServiceRootBasis.DirectConstructor:
+        return this.chainFacts.containerIdentityHandleForProduct(
+          this.serviceRootEnrichment.directContainerProductHandleForRoot(root.productHandle),
+        );
+      case FrameworkServiceRootBasis.FrameworkTypeAnnotation:
       case FrameworkServiceRootBasis.DeclarationSourceMatched:
       case FrameworkServiceRootBasis.CandidateOpen:
         return null;
@@ -452,51 +564,37 @@ class SourceServiceApiAdmissionContext {
   }
 
   private appTaskConsultingContainerIdentity(root: FrameworkServiceRoot): IdentityHandle | null {
-    if (this.configuration == null) {
-      return null;
-    }
-    const rootSpan = sourceSpanAddressForAddress(this.store, root.sourceAddressHandle);
+    const rootSpan = sourceSpanAddressForAddress(this.publication, root.sourceAddressHandle);
     if (rootSpan == null) {
       return null;
     }
     const containerHandles = this.configuration.appTasks.flatMap((appTask) => {
-      if (!appTaskContainsRoot(this.store, appTask, rootSpan)) {
+      if (!appTaskContainsRoot(this.publication, appTask, rootSpan)) {
         return [];
       }
-      const appRootContainerProductHandle = this.appRootContainerProductHandleForAppTask(appTask);
-      const containerIdentityHandle = this.chainFacts.containerIdentityHandleForProduct(appRootContainerProductHandle);
-      return containerIdentityHandle == null ? [] : [containerIdentityHandle];
+      return this.appTaskContainerIdentitiesByTask.get(appTask.productHandle) ?? [];
     });
     return uniqueIdentityHandleOrNull(containerHandles);
   }
 
-  private appRootContainerProductHandleForAppTask(appTask: AppTaskDefinition): ProductHandle | null {
-    if (this.configuration == null) {
-      return null;
-    }
-    const step = this.configuration.steps.find((candidate) => stepContainsAppTask(candidate, appTask)) ?? null;
-    const sequence = step == null
-      ? null
-      : sequenceForStep(this.configuration.sequences, step);
-    const appRootProductHandle = sequence?.appRoot?.productHandle ?? null;
-    const appRoot = appRootProductHandle == null
-      ? null
-      : this.configuration.appRoots.find((candidate) => candidate.productHandle === appRootProductHandle) ?? null;
-    return appRoot?.container.productHandle ?? null;
-  }
-
   private resourceActivationConsultingContainerIdentity(root: FrameworkServiceRoot): IdentityHandle | null {
-    const rootSpan = sourceSpanAddressForAddress(this.store, root.sourceAddressHandle);
+    const rootSpan = sourceSpanAddressForAddress(this.publication, root.sourceAddressHandle);
     if (rootSpan == null) {
       return null;
     }
-    const containerHandles = [
+    const matchingResources = [
       ...this.templates.resources,
       ...this.templates.authoringResources,
-    ].flatMap((resource) => {
-      if (!resourceDefinitionContainsSpan(this.store, this.typeSystem, resource, rootSpan)) {
-        return [];
-      }
+    ].filter((resource) =>
+      resourceDefinitionContainsSpan(this.publication, this.typeSystem, resource, rootSpan)
+    );
+    const appRootResources = matchingResources.filter((resource) =>
+      resource.compilation.definition.productHandle != null
+      && resource.compilation.definition.productHandle === resource.compilation.appRootDefinitionProductHandle
+    );
+    // App.app({ component }) proves activation in this cohort; compiler visibility in sibling worlds does not.
+    const activationResources = appRootResources.length > 0 ? appRootResources : matchingResources;
+    const containerHandles = activationResources.flatMap((resource) => {
       const containerIdentityHandle = this.chainFacts.containerIdentityHandleForProduct(
         resource.compilation.compilerWorld.container.productHandle,
       );
@@ -507,7 +605,7 @@ class SourceServiceApiAdmissionContext {
 }
 
 function appTaskContainsRoot(
-  store: KernelStore,
+  store: KernelStoreReadView,
   appTask: AppTaskDefinition,
   rootSpan: SourceSpanAddress,
 ): boolean {
@@ -519,25 +617,27 @@ function appTaskContainsRoot(
     || spanContains(taskSpan, rootSpan);
 }
 
-function stepContainsAppTask(
-  step: ConfigurationStep,
-  appTask: AppTaskDefinition,
-): boolean {
-  return step.appTasks.some((reference) => reference.productHandle === appTask.productHandle);
-}
-
-function sequenceForStep(
-  sequences: readonly ConfigurationSequence[],
-  step: ConfigurationStep,
-): ConfigurationSequence | null {
-  const sequenceProductHandle = step.sequence?.productHandle ?? null;
-  return sequenceProductHandle == null
-    ? null
-    : sequences.find((sequence) => sequence.productHandle === sequenceProductHandle) ?? null;
+function appTaskContainerIdentitiesByTask(
+  world: DiWorldConstructionEmission,
+): ReadonlyMap<ProductHandle, readonly IdentityHandle[]> {
+  const result = new Map<ProductHandle, Set<IdentityHandle>>();
+  for (const registration of world.registeredAppTasks) {
+    const containerIdentityHandle = registration.container.identityHandle;
+    if (containerIdentityHandle == null) {
+      continue;
+    }
+    let containers = result.get(registration.task.productHandle);
+    if (containers == null) {
+      containers = new Set();
+      result.set(registration.task.productHandle, containers);
+    }
+    containers.add(containerIdentityHandle);
+  }
+  return new Map([...result].map(([handle, containers]) => [handle, [...containers]]));
 }
 
 function resourceDefinitionContainsSpan(
-  store: KernelStore,
+  store: KernelStoreReadView,
   typeSystem: TypeSystemProject,
   resource: TemplateResourceRuntimeAnalysisEmission,
   rootSpan: SourceSpanAddress,
@@ -553,10 +653,10 @@ function resourceDefinitionContainsSpan(
   if (targetName == null) {
     return false;
   }
-  const sourceFilePath = sourceFilePathForSpan(store, rootSpan);
-  const sourceFile = sourceFilePath == null
+  const sourceFileAddress = sourceFileAddressForSpan(store, rootSpan);
+  const sourceFile = sourceFileAddress == null
     ? null
-    : typeSystem.readProgramSourceFileByPath(sourceFilePath);
+    : typeSystem.readProgramSourceFileForAddress(sourceFileAddress);
   return sourceFile == null
     ? false
     : classDeclarationNamedContainsSpan(sourceFile, targetName, rootSpan);
@@ -569,12 +669,12 @@ function spanContains(
   return outer != null && sourceSpanContains(outer, inner);
 }
 
-function sourceFilePathForSpan(
-  store: KernelStore,
+function sourceFileAddressForSpan(
+  store: KernelStoreReadView,
   span: SourceSpanAddress,
-): string | null {
-  const file = store.readAddress(span.fileHandle);
-  return file?.kind === 'source-file-address' ? file.path : null;
+): SourceFileAddress | null {
+  const file = store.read(span.fileHandle);
+  return file?.kind === 'source-file-address' ? file : null;
 }
 
 function classDeclarationNamedContainsSpan(
@@ -611,39 +711,363 @@ function uniqueIdentityHandleOrNull(
     : null;
 }
 
-function admissionStateForBoolean(
-  admitted: boolean,
-): FrameworkCapabilityAdmissionState {
-  return admitted
-    ? FrameworkCapabilityAdmissionState.Admitted
-    : FrameworkCapabilityAdmissionState.NotAdmitted;
+class TemplateCapabilityAdmission {
+  constructor(
+    readonly admissionState: FrameworkCapabilityAdmissionState,
+    readonly admissionSourceAddressHandles: readonly AddressHandle[] = [],
+    readonly configurationSourceAddressHandles: readonly AddressHandle[] = [],
+    readonly blockingOpenSeamHandles: readonly OpenSeamHandle[] = [],
+  ) {}
+}
+
+class TemplateCapabilityAdmissionContext {
+  private readonly operationsByContainer = new Map<ProductHandle, readonly ContainerRegistrationOperation[]>();
+
+  constructor(
+    private readonly store: KernelMaterializationReadView,
+    private readonly configuration: ConfigurationKernelEmission,
+    private readonly world: DiWorldConstructionEmission,
+    private readonly containerChainFacts: DiContainerChainFacts,
+  ) {}
+
+  forSyntax(
+    resource: TemplateResourceRuntimeAnalysisEmission,
+    syntax: AttributeSyntax,
+    demand: CapabilityDemandDescriptor,
+    admitted: boolean,
+  ): TemplateCapabilityAdmission {
+    const admissionSources = this.admissionSourceAddressHandles(resource, demand.requiredCapability);
+    if (demand.requiredCapability === FrameworkRegistrationCapability.I18nTranslationSyntax) {
+      return this.forConfiguredSurface(
+        resource,
+        demand.requiredCapability,
+        admitted,
+        (admission) => {
+          const configuration = i18nTranslationSyntaxConfigurationForAdmission(
+            this.store,
+            this.configuration,
+            admission,
+          );
+          return {
+            membership: configuration.membership(syntax.runtimeRawName),
+            exclusionSourceAddressHandle: configuration.exclusionSourceAddressHandle(syntax.runtimeRawName),
+            openSeamHandles: configuration.openSeamHandles,
+          };
+        },
+      );
+    }
+    return this.forObservedAdmission(
+      resource,
+      demand.requiredCapability,
+      admitted,
+      admissionSources,
+    );
+  }
+
+  forResource(
+    resource: TemplateResourceRuntimeAnalysisEmission,
+    builtIn: BuiltInResource,
+    demand: CapabilityDemandDescriptor,
+    admitted: boolean,
+  ): TemplateCapabilityAdmission {
+    const admissionSources = this.admissionSourceAddressHandles(resource, demand.requiredCapability);
+    if (builtIn.packageId === BuiltInResourcePackage.ValidationHtml) {
+      return this.forConfiguredSurface(
+        resource,
+        demand.requiredCapability,
+        admitted,
+        (admission) => {
+          const configuration = validationHtmlResourceConfigurationForAdmission(
+            this.store,
+            this.configuration,
+            admission,
+          );
+          return {
+            membership: configuration.membership(builtIn.name),
+            exclusionSourceAddressHandle: configuration.exclusionSourceAddressHandle(builtIn.name),
+            openSeamHandles: configuration.openSeamHandles(builtIn.name),
+          };
+        },
+      );
+    }
+    return this.forObservedAdmission(
+      resource,
+      demand.requiredCapability,
+      admitted,
+      admissionSources,
+    );
+  }
+
+  forCapability(
+    resource: TemplateResourceRuntimeAnalysisEmission,
+    capability: FrameworkRegistrationCapability,
+    admitted: boolean,
+  ): TemplateCapabilityAdmission {
+    return this.forObservedAdmission(
+      resource,
+      capability,
+      admitted,
+      this.admissionSourceAddressHandles(resource, capability),
+    );
+  }
+
+  private forConfiguredSurface(
+    resource: TemplateResourceRuntimeAnalysisEmission,
+    capability: FrameworkRegistrationCapability,
+    admitted: boolean,
+    configurationForAdmission: (admission: RegistrationAdmissionProduct) => ConfiguredSurfaceMembership,
+  ): TemplateCapabilityAdmission {
+    const admissions = uniqueRegistrationAdmissions(
+      this.operationsForResource(resource)
+        .filter((operation) => frameworkRegistrationOperationCarriesCapability(operation, capability))
+        .map((operation) => operation.admission),
+    );
+    const admissionSources = [...new Set(admissions.flatMap((admission) =>
+      admission.sourceAddressHandle == null ? [] : [admission.sourceAddressHandle]
+    ))];
+    if (admissions.length === 0) {
+      return this.forObservedAdmission(
+        resource,
+        capability,
+        false,
+        admissionSources,
+      );
+    }
+    const memberships = admissions.map(configurationForAdmission);
+    if (memberships.some((membership) =>
+      membership.membership === FrameworkCapabilityConfigurationMembership.Included
+    )) {
+      return new TemplateCapabilityAdmission(
+        admitted
+          ? FrameworkCapabilityAdmissionState.Admitted
+          : FrameworkCapabilityAdmissionState.AdmissionUnknown,
+        admissionSources,
+        [],
+        admitted ? [] : this.blockingOpenSeamHandles(resource, capability),
+      );
+    }
+    const openMemberships = memberships.filter((membership) =>
+      membership.membership === FrameworkCapabilityConfigurationMembership.Open
+    );
+    if (openMemberships.length > 0) {
+      return new TemplateCapabilityAdmission(
+        FrameworkCapabilityAdmissionState.AdmissionUnknown,
+        admissionSources,
+        [],
+        [...new Set(openMemberships.flatMap((membership) => membership.openSeamHandles))],
+      );
+    }
+    const exclusionSourceAddressHandles = [...new Set(memberships.flatMap((membership) =>
+      membership.exclusionSourceAddressHandle == null ? [] : [membership.exclusionSourceAddressHandle]
+    ))];
+    const blockingOpenSeamHandles = this.blockingOpenSeamHandles(resource, capability);
+    if (blockingOpenSeamHandles.length > 0) {
+      return new TemplateCapabilityAdmission(
+        FrameworkCapabilityAdmissionState.AdmissionUnknown,
+        admissionSources,
+        exclusionSourceAddressHandles,
+        blockingOpenSeamHandles,
+      );
+    }
+    return new TemplateCapabilityAdmission(
+      FrameworkCapabilityAdmissionState.ConfiguredOut,
+      admissionSources,
+      exclusionSourceAddressHandles,
+    );
+  }
+
+  private admissionSourceAddressHandles(
+    resource: TemplateResourceRuntimeAnalysisEmission,
+    capability: FrameworkRegistrationCapability,
+  ): readonly AddressHandle[] {
+    return [...new Set(this.operationsForResource(resource)
+      .filter((operation) => frameworkRegistrationOperationCarriesCapability(operation, capability))
+      .flatMap((operation) =>
+        operation.admission.sourceAddressHandle == null
+          ? []
+          : [operation.admission.sourceAddressHandle]
+      ))];
+  }
+
+  /**
+   * Absence is diagnostic only in a concrete app-root world whose registration chain is closed for this capability.
+   * Authoring islands and container-scoped registration pressure retain uncertainty instead of accusing a missing
+   * registration from an incomplete compiler world.
+   */
+  private forObservedAdmission(
+    resource: TemplateResourceRuntimeAnalysisEmission,
+    capability: FrameworkRegistrationCapability,
+    admitted: boolean,
+    admissionSourceAddressHandles: readonly AddressHandle[],
+  ): TemplateCapabilityAdmission {
+    if (admitted) {
+      return new TemplateCapabilityAdmission(
+        FrameworkCapabilityAdmissionState.Admitted,
+        admissionSourceAddressHandles,
+      );
+    }
+    const blockingOpenSeamHandles = this.blockingOpenSeamHandles(resource, capability);
+    if (
+      resource.compilation.appRootDefinitionProductHandle == null
+      || blockingOpenSeamHandles.length > 0
+    ) {
+      return new TemplateCapabilityAdmission(
+        FrameworkCapabilityAdmissionState.AdmissionUnknown,
+        admissionSourceAddressHandles,
+        [],
+        blockingOpenSeamHandles,
+      );
+    }
+    return new TemplateCapabilityAdmission(
+      FrameworkCapabilityAdmissionState.NotAdmitted,
+      admissionSourceAddressHandles,
+    );
+  }
+
+  private blockingOpenSeamHandles(
+    resource: TemplateResourceRuntimeAnalysisEmission,
+    capability: FrameworkRegistrationCapability,
+  ): readonly OpenSeamHandle[] {
+    return registrationHidingOpenSeamsForContainer(
+      this.world,
+      this.configuration.openSeamScopes,
+      this.containerChainFacts,
+      resource.compilation.compilerWorld.container.identityHandle,
+      (operation) => registrationOpenSeamCanHideFrameworkCapability(operation, capability),
+    ).map((seam) => seam.handle);
+  }
+
+  private operationsForResource(
+    resource: TemplateResourceRuntimeAnalysisEmission,
+  ): readonly ContainerRegistrationOperation[] {
+    const container = resource.compilation.compilerWorld.container;
+    const containerProductHandle = container.productHandle;
+    if (containerProductHandle == null) {
+      return [];
+    }
+    let operations = this.operationsByContainer.get(containerProductHandle);
+    if (operations == null) {
+      operations = registrationOperationsVisibleToContainer(
+        container,
+        this.world,
+        this.containerChainFacts,
+      );
+      this.operationsByContainer.set(containerProductHandle, operations);
+    }
+    return operations;
+  }
+}
+
+interface ConfiguredSurfaceMembership {
+  readonly membership: FrameworkCapabilityConfigurationMembership;
+  readonly exclusionSourceAddressHandle: AddressHandle | null;
+  readonly openSeamHandles: readonly OpenSeamHandle[];
+}
+
+function compilerWorldBuiltInAttributePatternMatchForSyntax(
+  resource: TemplateResourceRuntimeAnalysisEmission,
+  syntax: AttributeSyntax,
+): readonly [handler: BuiltInAttributePattern, score: AttributePatternScore] | null {
+  const compiledPatternProductHandle = syntax.compiledPatternProductHandle;
+  if (compiledPatternProductHandle == null) {
+    return null;
+  }
+  const pattern = resource.compilation.compilerWorld.attributePatterns.find((candidate) =>
+    candidate.handler != null
+    && candidate.compiledPatterns.some((compiled) => compiled.productHandle === compiledPatternProductHandle)
+  ) ?? null;
+  const compiled = pattern?.compiledPatterns.find((candidate) =>
+    candidate.productHandle === compiledPatternProductHandle
+  ) ?? null;
+  return pattern?.handler != null && compiled != null
+    ? [pattern.handler, compiled.score]
+    : null;
+}
+
+function compilerWorldBuiltInBindingCommand(
+  resource: TemplateResourceRuntimeAnalysisEmission,
+  commandName: string,
+): BuiltInBindingCommand | null {
+  const executable = resource.compilation.compilerWorld.bindingCommandResolver.get(commandName);
+  if (executable == null) {
+    return null;
+  }
+  return resource.compilation.compilerWorld.bindingCommands.find((command) =>
+    command.executable.productHandle === executable.productHandle
+  )?.handler ?? null;
 }
 
 function syntaxCapabilityDemandSites(
   resource: TemplateResourceRuntimeAnalysisEmission,
+  admissionContext: TemplateCapabilityAdmissionContext,
 ): readonly CapabilityDemandSite[] {
-  return resource.compilation.attributeSyntax.syntaxes.flatMap((syntax) => {
-    const parsed = parseBuiltInAttributeSyntax(syntax.rawName, syntax.rawValue);
-    if (parsed.handler == null) {
+  const compilerReachableAttributes = resourceLocalCompilerReachableHtmlAttributeProductHandles(resource);
+  return resource.compilation.authoredAttributeSyntaxes.flatMap((syntax) => {
+    if (
+      syntax.attribute.productHandle == null
+      || !compilerReachableAttributes.has(syntax.attribute.productHandle)
+    ) {
       return [];
     }
-    const demand = capabilityForBuiltInSyntaxGroup(parsed.handler.group);
+    const admittedPattern = compilerWorldBuiltInAttributePatternMatchForSyntax(resource, syntax);
+    const admittedHandler = admittedPattern?.[0] ?? null;
+    const handler = admittedHandler ?? parseBuiltInAttributeSyntax(syntax.runtimeRawName, syntax.rawValue).handler;
+    if (handler == null) {
+      return [];
+    }
+    const demand = capabilityForBuiltInSyntaxGroup(handler.group);
     if (demand == null) {
       return [];
     }
-    return [siteForAttributeSyntax(resource, syntax, demand, compilerWorldAdmitsBuiltInSyntaxGroup(resource, parsed.handler.group))];
+    const sites = [siteForAttributeSyntax(
+      resource,
+      syntax,
+      demand,
+      admissionContext.forSyntax(resource, syntax, demand, admittedHandler != null),
+    )];
+    const knownPattern = parseBuiltInAttributeSyntax(syntax.runtimeRawName, syntax.rawValue);
+    if (
+      admittedPattern != null
+      && knownPattern.handler != null
+      && knownPattern.pattern != null
+      && knownPattern.handler.group !== admittedHandler?.group
+      && isBetterAttributePatternScore(
+        compileAttributePatternDefinition(knownPattern.pattern).score,
+        admittedPattern[1],
+      )
+    ) {
+      const knownDemand = capabilityForBuiltInSyntaxGroup(knownPattern.handler.group);
+      if (knownDemand != null) {
+        sites.push(siteForAttributeSyntax(
+          resource,
+          syntax,
+          knownDemand,
+          admissionContext.forSyntax(resource, syntax, knownDemand, false),
+        ));
+      }
+    }
+    return sites;
   });
 }
 
 function bindingCommandCapabilityDemandSites(
   resource: TemplateResourceRuntimeAnalysisEmission,
+  admissionContext: TemplateCapabilityAdmissionContext,
 ): readonly CapabilityDemandSite[] {
-  return resource.compilation.attributeSyntax.syntaxes.flatMap((syntax) => {
-    const commandName = syntax.command?.toLowerCase() ?? null;
+  const compilerReachableAttributes = resourceLocalCompilerReachableHtmlAttributeProductHandles(resource);
+  return resource.compilation.authoredAttributeSyntaxes.flatMap((syntax) => {
+    if (
+      syntax.attribute.productHandle == null
+      || !compilerReachableAttributes.has(syntax.attribute.productHandle)
+    ) {
+      return [];
+    }
+    const commandName = syntax.command;
     if (commandName == null) {
       return [];
     }
-    const command = findUniqueBuiltInBindingCommandByName(commandName);
+    const admittedCommand = compilerWorldBuiltInBindingCommand(resource, commandName);
+    const command = admittedCommand ?? findUniqueBuiltInBindingCommandByName(commandName);
     if (command == null) {
       return [];
     }
@@ -651,33 +1075,63 @@ function bindingCommandCapabilityDemandSites(
     if (demand == null) {
       return [];
     }
-    const admitted = resource.compilation.compilerWorld.bindingCommandResolver.get(commandName) != null;
-    return [siteForAttributeSyntax(resource, syntax, demand, admitted)];
+    return [siteForAttributeSyntax(
+      resource,
+      syntax,
+      demand,
+      admissionContext.forSyntax(resource, syntax, demand, admittedCommand != null),
+    )];
   });
 }
 
 function resourceCapabilityDemandSites(
+  publication: KernelPublicationContext,
   resource: TemplateResourceRuntimeAnalysisEmission,
+  admissionContext: TemplateCapabilityAdmissionContext,
 ): readonly CapabilityDemandSite[] {
   const attributesByProduct = new Map(resource.compilation.html.attributes.map((attribute) => [attribute.productHandle, attribute]));
   const ownersByAttributeProduct = htmlElementAttributeOwnersByAttributeProduct(
     resource.compilation.html.nodes,
     resource.compilation.html.attributes,
   );
+  const compilerReachableNodes = resourceLocalCompilerReachableHtmlNodeProductHandles(resource);
+  const compilerReachableAttributes = resourceLocalCompilerReachableHtmlAttributeProductHandles(resource);
   return [
-    ...elementResourceCapabilityDemandSites(resource, ownersByAttributeProduct),
-    ...attributeResourceCapabilityDemandSites(resource, attributesByProduct, ownersByAttributeProduct),
+    ...elementResourceCapabilityDemandSites(
+      publication,
+      resource,
+      ownersByAttributeProduct,
+      compilerReachableNodes,
+      admissionContext,
+    ),
+    ...attributeResourceCapabilityDemandSites(
+      publication,
+      resource,
+      attributesByProduct,
+      ownersByAttributeProduct,
+      compilerReachableAttributes,
+      admissionContext,
+    ),
   ];
 }
 
 function elementResourceCapabilityDemandSites(
+  publication: KernelPublicationContext,
   resource: TemplateResourceRuntimeAnalysisEmission,
   ownersByAttributeProduct: ReadonlyMap<string, HtmlElementAttributeOwner>,
+  compilerReachableNodes: ReadonlySet<ProductHandle>,
+  admissionContext: TemplateCapabilityAdmissionContext,
 ): readonly CapabilityDemandSite[] {
   const elementOwners = elementOwnersForResource(resource, ownersByAttributeProduct);
   return elementOwners.flatMap((owner) => {
+    if (!compilerReachableNodes.has(owner.element.productHandle)) {
+      return [];
+    }
     const lookupName = htmlElementLookupName(owner.element, owner);
-    const builtIn = builtInResourceFor(ResourceDefinitionKind.CustomElement, lookupName);
+    const selected = resource.compilation.compilerWorld.resourceResolver.el(lookupName);
+    const builtIn = selected == null
+      ? builtInResourceFor(ResourceDefinitionKind.CustomElement, lookupName)
+      : readBuiltInVisibleTemplateResource(publication, selected);
     if (builtIn == null) {
       return [];
     }
@@ -685,68 +1139,89 @@ function elementResourceCapabilityDemandSites(
     if (demand == null) {
       return [];
     }
-    const admitted = resource.compilation.compilerWorld.resourceResolver.el(lookupName) != null;
-    return [siteForElementResource(resource, owner.element, lookupName, demand, admitted)];
+    return [siteForElementResource(
+      resource,
+      owner.element,
+      lookupName,
+      demand,
+      admissionContext.forResource(resource, builtIn, demand, selected != null),
+    )];
   });
 }
 
 function attributeResourceCapabilityDemandSites(
+  publication: KernelPublicationContext,
   resource: TemplateResourceRuntimeAnalysisEmission,
   attributesByProduct: ReadonlyMap<string, HtmlAttribute>,
   ownersByAttributeProduct: ReadonlyMap<string, HtmlElementAttributeOwner>,
+  compilerReachableAttributes: ReadonlySet<ProductHandle>,
+  admissionContext: TemplateCapabilityAdmissionContext,
 ): readonly CapabilityDemandSite[] {
   return resource.compilation.attributeSyntax.syntaxes.flatMap((syntax) => {
+    if (
+      syntax.attribute.productHandle == null
+      || !compilerReachableAttributes.has(syntax.attribute.productHandle)
+    ) {
+      return [];
+    }
     const attribute = syntax.attribute.productHandle == null
       ? null
       : attributesByProduct.get(syntax.attribute.productHandle) ?? null;
     const owner = syntax.attribute.productHandle == null
       ? null
       : ownersByAttributeProduct.get(syntax.attribute.productHandle) ?? null;
-    const builtIn = builtInAttributeResourceForSyntax(syntax, attribute, owner);
-    if (builtIn == null) {
+    const selected = resource.compilation.compilerWorld.resourceResolver.attr(syntax.target);
+    const builtIn = selected == null
+      ? builtInAttributeResourceForSyntax(syntax, attribute, owner)
+      : readBuiltInVisibleTemplateResource(publication, selected);
+    if (
+      builtIn == null
+      || suppressBuiltInAttributeResourceDemand(builtIn, syntax, attribute, owner)
+    ) {
       return [];
     }
     const demand = capabilityForBuiltInResource(builtIn);
     if (demand == null) {
       return [];
     }
-    const admitted = resource.compilation.compilerWorld.resourceResolver.attr(syntax.target) != null;
-    return [siteForAttributeSyntax(resource, syntax, demand, admitted)];
+    return [siteForAttributeSyntax(
+      resource,
+      syntax,
+      demand,
+      admissionContext.forResource(resource, builtIn, demand, selected != null),
+    )];
   });
 }
 
 function expressionResourceCapabilityDemandSites(
-  store: KernelStore,
+  publication: KernelPublicationContext,
   resource: TemplateResourceRuntimeAnalysisEmission,
+  admissionContext: TemplateCapabilityAdmissionContext,
 ): readonly CapabilityDemandSite[] {
-  return templateExpressionParsesForResource(resource).flatMap((parse, parseIndex) => {
+  return resourceLocalEffectiveTemplateExpressionParses(publication, resource).flatMap((parse, parseIndex) => {
     const expression = runtimeAcceptedBindingExpressionAstForParse(parse);
     if (expression == null) {
       return [];
     }
     return [
-      ...valueConverterExpressions(expression).flatMap((converter, converterIndex) =>
+      ...valueConverterResourceOccurrences(expression).flatMap(({ expression: converter }, converterIndex) =>
         siteForExpressionResource(
-          store,
+          publication,
           resource,
           parse,
-          FrameworkCapabilityDemandSiteKind.TemplateValueConverter,
-          ResourceDefinitionKind.ValueConverter,
-          converter.name.name,
-          converter.name.span,
+          converter,
           `parse:${parseIndex}:value-converter:${converterIndex}`,
+          admissionContext,
         )
       ),
-      ...bindingBehaviorExpressions(expression).flatMap((behavior, behaviorIndex) =>
+      ...bindingBehaviorResourceOccurrences(expression).flatMap(({ expression: behavior }, behaviorIndex) =>
         siteForExpressionResource(
-          store,
+          publication,
           resource,
           parse,
-          FrameworkCapabilityDemandSiteKind.TemplateBindingBehavior,
-          ResourceDefinitionKind.BindingBehavior,
-          behavior.name.name,
-          behavior.name.span,
+          behavior,
           `parse:${parseIndex}:binding-behavior:${behaviorIndex}`,
+          admissionContext,
         )
       ),
     ];
@@ -757,14 +1232,17 @@ function siteForAttributeSyntax(
   resource: TemplateResourceRuntimeAnalysisEmission,
   syntax: AttributeSyntax,
   demand: CapabilityDemandDescriptor,
-  admitted: boolean,
+  admission: TemplateCapabilityAdmission,
 ): CapabilityDemandSite {
   return {
     siteKind: FrameworkCapabilityDemandSiteKind.TemplateAttribute,
     demandKind: demand.demandKind,
     requiredCapability: demand.requiredCapability,
     authoredName: syntax.rawName,
-    admissionState: admissionStateForBoolean(admitted),
+    admissionState: admission.admissionState,
+    blockingOpenSeamHandles: admission.blockingOpenSeamHandles,
+    admissionSourceAddressHandles: admission.admissionSourceAddressHandles,
+    configurationSourceAddressHandles: admission.configurationSourceAddressHandles,
     sourceAddressHandle: syntax.sourceAddressHandle,
     ownerIdentityHandle: syntax.identityHandle,
     resource,
@@ -776,14 +1254,17 @@ function siteForElementResource(
   element: HtmlElement,
   lookupName: string,
   demand: CapabilityDemandDescriptor,
-  admitted: boolean,
+  admission: TemplateCapabilityAdmission,
 ): CapabilityDemandSite {
   return {
     siteKind: FrameworkCapabilityDemandSiteKind.TemplateElement,
     demandKind: demand.demandKind,
     requiredCapability: demand.requiredCapability,
     authoredName: lookupName,
-    admissionState: admissionStateForBoolean(admitted),
+    admissionState: admission.admissionState,
+    blockingOpenSeamHandles: admission.blockingOpenSeamHandles,
+    admissionSourceAddressHandles: admission.admissionSourceAddressHandles,
+    configurationSourceAddressHandles: admission.configurationSourceAddressHandles,
     sourceAddressHandle: element.sourceAddressHandle,
     ownerIdentityHandle: element.identityHandle,
     resource,
@@ -791,25 +1272,24 @@ function siteForElementResource(
 }
 
 function siteForExpressionResource(
-  store: KernelStore,
+  publication: KernelPublicationContext,
   resource: TemplateResourceRuntimeAnalysisEmission,
   parse: TemplateExpressionParse,
-  siteKind: FrameworkCapabilityDemandSiteKind.TemplateValueConverter | FrameworkCapabilityDemandSiteKind.TemplateBindingBehavior,
-  resourceKind: ResourceDefinitionKind.ValueConverter | ResourceDefinitionKind.BindingBehavior,
-  authoredName: string,
-  nameSpan: SourceSpan,
+  expression: ValueConverterExpression | BindingBehaviorExpression,
   localPart: string,
+  admissionContext: TemplateCapabilityAdmissionContext,
 ): readonly CapabilityDemandSite[] {
-  const builtIn = builtInResourceFor(resourceKind, authoredName);
-  if (builtIn == null) {
-    return [];
-  }
-  const demand = capabilityForBuiltInResource(builtIn);
-  if (demand == null) {
-    return [];
-  }
+  const isValueConverter = expression.$kind === 'ValueConverter';
+  const siteKind = isValueConverter
+    ? FrameworkCapabilityDemandSiteKind.TemplateValueConverter
+    : FrameworkCapabilityDemandSiteKind.TemplateBindingBehavior;
+  const resourceKind = isValueConverter
+    ? ResourceDefinitionKind.ValueConverter
+    : ResourceDefinitionKind.BindingBehavior;
+  const authoredName = expression.name.name;
+  const nameSpan = expression.name.span;
   const expressionSource = sourceAddressForRuntimeExpressionSpan(
-    store,
+    publication,
     [
       'framework-capability-demand-expression',
       localKeyPart(resource.compilation.localKey),
@@ -820,19 +1300,71 @@ function siteForExpressionResource(
     parse.sourceAddressHandle,
     nameSpan,
   );
-  const admitted = findVisibleTemplateResource(
+  const plan = resource.runtimeAnalysis.expressionResourcePlan;
+  const planFacts = isValueConverter
+    ? (() => {
+        const entries = plan.readValueConverterEntries(parse.productHandle, expression);
+        return {
+          admitted: entries.length === 0
+            ? null
+            : entries.every((entry) => entry.resource != null),
+          selectedBuiltIn: entries.find((entry) => entry.builtInResource != null)?.builtInResource ?? null,
+          hasUnresolvedResource: entries.length === 0 || entries.some((entry) => entry.resource == null),
+          applicationProductHandles: entries.flatMap((entry) =>
+            resource.runtimeAnalysis.valueConverter.readApplicationsForPlanEntry(entry).map((application) =>
+              application.productHandle
+            )
+          ),
+        };
+      })()
+    : (() => {
+        const entries = plan.readBindingBehaviorEntries(parse.productHandle, expression);
+        return {
+          admitted: entries.length === 0
+            ? null
+            : entries.every((entry) => entry.resource != null),
+          selectedBuiltIn: entries.find((entry) => entry.builtInResource != null)?.builtInResource ?? null,
+          hasUnresolvedResource: entries.length === 0 || entries.some((entry) => entry.resource == null),
+          applicationProductHandles: entries.flatMap((entry) =>
+            resource.runtimeAnalysis.bindingBehavior.readApplicationsForPlanEntry(entry).map((application) =>
+              application.productHandle
+            )
+          ),
+        };
+      })();
+  const visibleResource = findVisibleTemplateResource(
     resource.compilation.compilerWorld.resourceScope,
     resourceKind,
     authoredName,
-  ) != null;
+  );
+  const visibleBuiltIn = readBuiltInVisibleTemplateResource(publication, visibleResource);
+  const builtIn = planFacts.selectedBuiltIn
+    ?? (
+      planFacts.hasUnresolvedResource
+        ? visibleResource == null
+          ? builtInResourceFor(resourceKind, authoredName)
+          : visibleBuiltIn
+        : null
+    );
+  if (builtIn == null) {
+    return [];
+  }
+  const demand = capabilityForBuiltInResource(builtIn);
+  if (demand == null) {
+    return [];
+  }
+  const admitted = planFacts.admitted ?? visibleResource != null;
+  const admission = admissionContext.forCapability(resource, demand.requiredCapability, admitted);
   return [{
     siteKind,
     demandKind: demand.demandKind,
     requiredCapability: demand.requiredCapability,
     authoredName,
-    admissionState: admissionStateForBoolean(admitted),
+    admissionState: admission.admissionState,
+    admissionSourceAddressHandles: admission.admissionSourceAddressHandles,
     sourceAddressHandle: expressionSource.handle,
     ownerIdentityHandle: parse.identityHandle,
+    expressionResourceApplicationProductHandles: planFacts.applicationProductHandles,
     resource,
     sourceRecords: expressionSource.records,
   }];
@@ -872,6 +1404,11 @@ function capabilityForBuiltInSyntaxGroup(
         demandKind: FrameworkCapabilityDemandKind.StateBindingSyntax,
         requiredCapability: FrameworkRegistrationCapability.StateBindingSyntax,
       };
+    case BuiltInSyntaxGroup.UiVirtualizationSyntax:
+      return {
+        demandKind: FrameworkCapabilityDemandKind.UiVirtualizationDefaultResources,
+        requiredCapability: FrameworkRegistrationCapability.UiVirtualizationDefaultResources,
+      };
     case BuiltInSyntaxGroup.DefaultBindingLanguage:
       return {
         demandKind: FrameworkCapabilityDemandKind.RuntimeHtmlDefaultBindingLanguage,
@@ -898,6 +1435,11 @@ function capabilityForBuiltInBindingCommand(
       return {
         demandKind: FrameworkCapabilityDemandKind.StateBindingSyntax,
         requiredCapability: FrameworkRegistrationCapability.StateBindingSyntax,
+      };
+    case BuiltInSyntaxGroup.UiVirtualizationSyntax:
+      return {
+        demandKind: FrameworkCapabilityDemandKind.UiVirtualizationDefaultResources,
+        requiredCapability: FrameworkRegistrationCapability.UiVirtualizationDefaultResources,
       };
   }
 }
@@ -968,25 +1510,16 @@ function sourceServiceApiDemandDescriptor(
   }
 }
 
-function compilerWorldAdmitsBuiltInSyntaxGroup(
-  resource: TemplateResourceRuntimeAnalysisEmission,
-  group: BuiltInSyntaxGroup,
-): boolean {
-  const world = resource.compilation.compilerWorld;
-  return world.attributePatterns.some((pattern) => pattern.handler.group === group)
-    || world.bindingCommands.some((command) => command.handler.group === group);
-}
-
 function builtInResourceFor(
   resourceKind: ResourceDefinitionKind,
   name: string,
 ): BuiltInResource | null {
-  const normalized = name.toLowerCase();
+  const expectedResourceKind = String(resourceKind);
   return allBuiltInResources().find((resource) =>
-    resource.resourceKind === resourceKind
+    String(resource.resourceKind) === expectedResourceKind
     && (
-      resource.name.toLowerCase() === normalized
-      || resource.aliases.some((alias) => alias.toLowerCase() === normalized)
+      String(resource.name) === name
+      || resource.aliases.some((alias) => alias === name)
     )
   ) ?? null;
 }
@@ -1014,8 +1547,8 @@ function suppressBuiltInAttributeResourceDemand(
     return false;
   }
   const explicitExternal = owner?.attributes.some((candidate) =>
-    candidate.rawName.toLowerCase() === 'external'
-    || candidate.rawName.toLowerCase() === 'data-external'
+    runtimeAttributeName(candidate.rawName, owner.element.namespace) === 'external'
+    || runtimeAttributeName(candidate.rawName, owner.element.namespace) === 'data-external'
   ) ?? false;
   if (explicitExternal) {
     return true;
@@ -1059,6 +1592,7 @@ function uniqueDemandSites(
   for (const site of sites) {
     const key = [
       site.resourceDefinitionProductHandle ?? site.resource?.compilation.definition.productHandle ?? site.localKeyParts?.join(':') ?? '',
+      site.analysisContextProductHandle ?? site.resource?.compilation.analysisContextProductHandle ?? '',
       site.siteKind,
       site.requiredCapability,
       site.authoredName,
@@ -1082,6 +1616,7 @@ function frameworkCapabilityDemandLocalKey(
     'framework-capability-demand',
     projectKey,
     ...(site.localKeyParts ?? [
+      localKeyPart(site.analysisContextProductHandle ?? site.resource?.compilation.analysisContextProductHandle ?? 'no-analysis-context'),
       localKeyPart(site.resource?.compilation.localKey ?? 'unknown'),
       index.toString(),
       localKeyPart(site.authoredName),
@@ -1089,180 +1624,27 @@ function frameworkCapabilityDemandLocalKey(
   ].join(':');
 }
 
-function rootResolvedDiKeyClaimsByRoot(
-  store: KernelStore,
-): ReadonlyMap<ProductHandle, readonly IdentityHandle[]> {
-  const result = new Map<ProductHandle, IdentityHandle[]>();
-  for (const claim of store.readClaims()) {
-    if (claim.predicateKey !== KernelVocabulary.Framework.RootResolvesDiKey.key) {
-      continue;
-    }
-    const existing = result.get(claim.subjectHandle as ProductHandle);
-    if (existing == null) {
-      result.set(claim.subjectHandle as ProductHandle, [claim.objectHandle as IdentityHandle]);
-    } else {
-      existing.push(claim.objectHandle as IdentityHandle);
-    }
-  }
-  return result;
-}
-
-function registrationHidingOpenSeams(
-  store: KernelStore,
-): readonly OpenSeam[] {
-  return store.readOpenSeams().filter(isRegistrationHidingOpenSeam);
-}
-
-function registrationHidingOpenSeamContainerScopes(
-  store: KernelStore,
-  configuration: ConfigurationKernelEmission | null,
-  chainFacts: DiContainerChainFacts,
-): ReadonlyMap<OpenSeamHandle, readonly IdentityHandle[]> {
-  const sequencesByProduct = new Map(
-    (configuration?.sequences ?? []).map((sequence) => [sequence.productHandle, sequence] as const),
-  );
-  const stepsByProduct = new Map(
-    (configuration?.steps ?? []).map((step) => [step.productHandle, step] as const),
-  );
-  const stepsByRegistrationAdmissionProduct = configurationStepsByRegistrationAdmissionProduct(configuration?.steps ?? []);
-  const appRootContainerProductsByAppRootProduct = new Map(
-    (configuration?.appRoots ?? []).flatMap((appRoot) =>
-      appRoot.container.productHandle == null
-        ? []
-        : [[appRoot.productHandle, appRoot.container.productHandle] as const]
-    ),
-  );
-  const result = new Map<OpenSeamHandle, IdentityHandle[]>();
-  for (const materialization of store.readMaterializations()) {
-    if (materialization.openSeamHandles.length === 0) {
-      continue;
-    }
-    const containers = uniqueIdentityHandles(materialization.productHandles.flatMap((productHandle) =>
-      scopedContainerIdentityHandlesForProduct(
-        productHandle,
-        stepsByProduct,
-        stepsByRegistrationAdmissionProduct,
-        sequencesByProduct,
-        appRootContainerProductsByAppRootProduct,
-        chainFacts,
-      )
-    ));
-    if (containers.length === 0) {
-      continue;
-    }
-    for (const seamHandle of materialization.openSeamHandles) {
-      appendIdentityHandles(result, seamHandle, containers);
-    }
-  }
-  return new Map([...result].map(([handle, containers]) => [handle, uniqueIdentityHandles(containers)]));
-}
-
-function scopedContainerIdentityHandlesForProduct(
-  productHandle: ProductHandle,
-  stepsByProduct: ReadonlyMap<ProductHandle, ConfigurationStep>,
-  stepsByRegistrationAdmissionProduct: ReadonlyMap<ProductHandle, readonly ConfigurationStep[]>,
-  sequencesByProduct: ReadonlyMap<ProductHandle, ConfigurationSequence>,
-  appRootContainerProductsByAppRootProduct: ReadonlyMap<ProductHandle, ProductHandle>,
-  chainFacts: DiContainerChainFacts,
-): readonly IdentityHandle[] {
-  const containers: IdentityHandle[] = [];
-  const diOwner = chainFacts.owningContainerIdentityHandleForProduct(productHandle);
-  if (diOwner != null) {
-    containers.push(diOwner);
-  }
-
-  const step = stepsByProduct.get(productHandle) ?? null;
-  const stepContainer = step == null
-    ? null
-    : containerIdentityHandleForConfigurationStep(step, sequencesByProduct, appRootContainerProductsByAppRootProduct, chainFacts);
-  if (stepContainer != null) {
-    containers.push(stepContainer);
-  }
-
-  for (const admissionStep of stepsByRegistrationAdmissionProduct.get(productHandle) ?? []) {
-    const admissionStepContainer = containerIdentityHandleForConfigurationStep(
-      admissionStep,
-      sequencesByProduct,
-      appRootContainerProductsByAppRootProduct,
-      chainFacts,
-    );
-    if (admissionStepContainer != null) {
-      containers.push(admissionStepContainer);
-    }
-  }
-
-  return uniqueIdentityHandles(containers);
-}
-
-function configurationStepsByRegistrationAdmissionProduct(
-  steps: readonly ConfigurationStep[],
-): ReadonlyMap<ProductHandle, readonly ConfigurationStep[]> {
-  const result = new Map<ProductHandle, ConfigurationStep[]>();
-  for (const step of steps) {
-    for (const admissionProductHandle of step.registrationAdmissionProductHandles) {
-      const existing = result.get(admissionProductHandle);
-      if (existing == null) {
-        result.set(admissionProductHandle, [step]);
-      } else {
-        existing.push(step);
-      }
-    }
-  }
-  return result;
-}
-
-function containerIdentityHandleForConfigurationStep(
-  step: ConfigurationStep,
-  sequencesByProduct: ReadonlyMap<ProductHandle, ConfigurationSequence>,
-  appRootContainerProductsByAppRootProduct: ReadonlyMap<ProductHandle, ProductHandle>,
-  chainFacts: DiContainerChainFacts,
-): IdentityHandle | null {
-  const sequenceProductHandle = step.sequence?.productHandle ?? null;
-  const sequence = sequenceProductHandle == null
-    ? null
-    : sequencesByProduct.get(sequenceProductHandle) ?? null;
-  const appRootProductHandle = sequence?.appRoot?.productHandle ?? null;
-  return chainFacts.containerIdentityHandleForProduct(
-    appRootProductHandle == null
-      ? null
-      : appRootContainerProductsByAppRootProduct.get(appRootProductHandle) ?? null,
-  );
-}
-
-function appendIdentityHandles(
-  map: Map<OpenSeamHandle, IdentityHandle[]>,
-  key: OpenSeamHandle,
-  values: readonly IdentityHandle[],
-): void {
-  const existing = map.get(key);
-  if (existing == null) {
-    map.set(key, [...values]);
-  } else {
-    existing.push(...values);
-  }
-}
-
-function isRegistrationHidingOpenSeam(
-  seam: OpenSeam,
+function frameworkRegistrationOperationCarriesCapability(
+  operation: ContainerRegistrationOperation,
+  capability: FrameworkRegistrationCapability,
 ): boolean {
-  switch (seam.seamKindKey) {
-    case KernelVocabulary.Di.OpenRegistryBody.key:
-      return true;
-    case KernelVocabulary.Di.OpenRegistrationSpending.key:
-      return seam.reasonKinds.some(isRegistrationHidingDiSpendingReason);
-    case KernelVocabulary.Registration.OpenKeyExpression.key:
-    case KernelVocabulary.Registration.OpenValueExpression.key:
-    case KernelVocabulary.Registration.OpenStrategy.key:
-    case KernelVocabulary.Registration.OpenSpread.key:
-    case KernelVocabulary.Registration.OpenAliasTarget.key:
-      return true;
-    default:
-      return false;
+  const frameworkKind = frameworkRegistrationKindForOperation(operation);
+  return frameworkKind != null
+    && frameworkRegistrationCapabilitiesForKind(frameworkKind).includes(capability);
+}
+
+function uniqueRegistrationAdmissions(
+  admissions: readonly RegistrationAdmissionProduct[],
+): readonly RegistrationAdmissionProduct[] {
+  const byProduct = new Map<ProductHandle, RegistrationAdmissionProduct>();
+  for (const admission of admissions) {
+    byProduct.set(admission.productHandle, admission);
   }
+  return [...byProduct.values()];
 }
 
 function sourceAddressesMayShareFile(
-  store: KernelStore,
+  store: KernelStoreReadView,
   leftHandle: AddressHandle | null,
   rightHandle: AddressHandle | null,
 ): boolean {
@@ -1273,34 +1655,12 @@ function sourceAddressesMayShareFile(
     || left.fileHandle === right.fileHandle;
 }
 
-function uniqueIdentityHandles(
-  handles: readonly IdentityHandle[],
-): readonly IdentityHandle[] {
-  return [...new Set(handles)];
-}
-
-function isRegistrationHidingDiSpendingReason(
-  reason: OpenSeamReasonKind,
-): boolean {
-  switch (reason) {
-    case OpenSeamReasonKind.DiRegistrationContainerOpen:
-    case OpenSeamReasonKind.DiRegistrationAdmissionOpen:
-    case OpenSeamReasonKind.DiRegistrationKeyOpen:
-    case OpenSeamReasonKind.DiRegistrationStrategyOpen:
-    case OpenSeamReasonKind.DiRegistrationPublicationOpen:
-    case OpenSeamReasonKind.DiRegistryBodyOpen:
-      return true;
-    default:
-      return false;
-  }
-}
-
 function readCapabilityAvailabilityEvidence(
   project: ProjectBootFrame,
   typeSystem: TypeSystemProject,
 ): CapabilityAvailabilityEvidenceContext {
   const rows = [
-    ...manifestDependencyEvidence(project, readPackageManifest(project.rootDir), FrameworkCapabilityPackageEvidenceKind.ProjectManifestDependency),
+    ...manifestDependencyEvidence(project, readPackageManifest(project.inputGeneration.host, project.rootDir), FrameworkCapabilityPackageEvidenceKind.ProjectManifestDependency),
     ...manifestDependencyEvidence(project, nearestWorkspaceManifestForProject(project), FrameworkCapabilityPackageEvidenceKind.WorkspaceManifestDependency),
     ...sourceImportEvidence(project, typeSystem),
   ];
@@ -1359,7 +1719,7 @@ function sourceImportEvidence(
   typeSystem: TypeSystemProject,
 ): readonly FrameworkCapabilityPackageEvidence[] {
   return project.sourceFiles.flatMap((source) => {
-    const sourceFile = typeSystem.readProgramSourceFileByPath(source.path);
+    const sourceFile = typeSystem.readProgramSourceFileByProjectPath(source.path);
     if (sourceFile == null) {
       return [];
     }
@@ -1456,7 +1816,7 @@ function nearestWorkspaceManifestForProject(
   let current = path.dirname(projectRoot);
 
   while (isHostPathWithin(current, workspaceRoot)) {
-    const manifest = readPackageManifest(current);
+    const manifest = readPackageManifest(project.inputGeneration.host, current);
     if (manifest != null && manifestWorkspacesIncludeProject(manifest, current, projectRoot)) {
       return manifest;
     }

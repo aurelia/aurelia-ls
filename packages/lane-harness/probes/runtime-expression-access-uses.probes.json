@@ -1,0 +1,159 @@
+{
+  "fixture": "packages/semantic-runtime/fixtures/pressure/runtime-expression-access-uses",
+  "lanes": {
+    "rename": [
+      {
+        "id": "callback-local-filter-item",
+        "file": "src/runtime-expression-access-uses-app.html",
+        "anchor": "filter(item => item.label)",
+        "at": "item",
+        "newName": "entry",
+        "verdict": "correct",
+        "reason": "Rename should update only the callback declaration and its own usage, preserving the independent map and repeat locals with the same spelling."
+      },
+      {
+        "id": "form-name-all-access-modes",
+        "file": "src/runtime-expression-access-uses-app.html",
+        "anchor": "value.one-time=\"form.name\"",
+        "at": "name",
+        "newName": "displayName",
+        "verdict": "correct",
+        "reason": "Rename should conserve every authored form.name occurrence across conditional, interpolation, optional, one-time, two-way, listener-read, and assignment roles plus the TypeScript declaration."
+      }
+    ],
+    "references": [
+      {
+        "id": "callback-local-filter-item",
+        "file": "src/runtime-expression-access-uses-app.html",
+        "anchor": "filter(item => item.label)",
+        "at": "item",
+        "atOccurrence": 2,
+        "verdict": "correct",
+        "reason": "References should return exactly the filter callback declaration and usage, excluding same-spelled locals in sibling and nested callback scopes."
+      },
+      {
+        "id": "outer-shadowed-callback-item",
+        "file": "src/runtime-expression-access-uses-app.html",
+        "anchor": "+ item.id).join('|')",
+        "at": "item",
+        "verdict": "correct",
+        "reason": "The outer callback usage should join only to the outer declaration and must not capture the shadowing inner callback local."
+      },
+      {
+        "id": "form-name-all-access-modes",
+        "file": "src/runtime-expression-access-uses-app.html",
+        "anchor": "value.one-time=\"form.name\"",
+        "at": "name",
+        "verdict": "correct",
+        "reason": "References should return the TypeScript declaration and all nine template occurrences, regardless of observation tracking, binding mode, or read/write role."
+      }
+    ],
+    "hover": [
+      {
+        "id": "callback-local-filter-item",
+        "file": "src/runtime-expression-access-uses-app.html",
+        "anchor": "filter(item => item.label)",
+        "at": "item",
+        "atOccurrence": 2,
+        "verdict": "correct",
+        "reason": "Hover should identify the lexical callback local as AccessUseItem rather than the component owner or a same-spelled sibling local."
+      },
+      {
+        "id": "form-name-member",
+        "file": "src/runtime-expression-access-uses-app.html",
+        "anchor": "value.one-time=\"form.name\"",
+        "at": "name",
+        "verdict": "correct",
+        "reason": "Hover should resolve the nested member as string while preserving its exact TypeScript declaration authority."
+      },
+      {
+        "id": "documented-deprecated-member",
+        "file": "src/runtime-expression-access-uses-app.html",
+        "anchor": "form.name = fallbackName",
+        "at": "fallbackName",
+        "verdict": "correct",
+        "reason": "Hover should keep the member signature primary, then show the exact source-authored deprecation reason and bounded plaintext documentation."
+      },
+      {
+        "id": "bare-current-context",
+        "file": "src/runtime-expression-access-uses-app.html",
+        "anchor": "${$this} / ${items.map(item => $this).length}",
+        "at": "$this",
+        "atOccurrence": 1,
+        "verdict": "correct",
+        "reason": "Hover should present the exact bare `$this` token as the current Aurelia binding context with its proved component type.",
+        "note": "B2 current-context witness: the card is owned by the bare AccessThis expression rather than a selected member or a generic expression fallback."
+      },
+      {
+        "id": "bare-parent-context",
+        "file": "src/runtime-expression-access-uses-app.html",
+        "anchor": "${$this} / ${$parent}",
+        "at": "$parent",
+        "verdict": "correct",
+        "reason": "Hover should present the exact bare `$parent` token as the proved parent Aurelia binding context with its exact authored range.",
+        "note": "Slice 2 parent-context witness: the card is selected from the authored binding-scope prefix and must not be confused with an ordinary component member named `$parent`."
+      }
+    ],
+    "definition": [
+      {
+        "id": "callback-local-filter-item",
+        "file": "src/runtime-expression-access-uses-app.html",
+        "anchor": "filter(item => item.label)",
+        "at": "item",
+        "atOccurrence": 2,
+        "verdict": "correct",
+        "reason": "Definition should navigate from the callback usage to that callback's own parameter token."
+      },
+      {
+        "id": "form-name-member",
+        "file": "src/runtime-expression-access-uses-app.html",
+        "anchor": "value.one-time=\"form.name\"",
+        "at": "name",
+        "verdict": "correct",
+        "reason": "Definition should navigate from the template member token to the exact nested TypeScript property declaration."
+      }
+    ],
+    "documentHighlight": [
+      {
+        "id": "callback-local-filter-item",
+        "file": "src/runtime-expression-access-uses-app.html",
+        "anchor": "filter(item => item.label)",
+        "at": "item",
+        "atOccurrence": 2,
+        "verdict": "correct",
+        "reason": "Highlights should contain only the selected callback declaration and usage, preserving lexical shadow boundaries within one document."
+      },
+      {
+        "id": "form-name-all-access-modes",
+        "file": "src/runtime-expression-access-uses-app.html",
+        "anchor": "value.one-time=\"form.name\"",
+        "at": "name",
+        "verdict": "correct",
+        "reason": "Highlights should include all nine template member occurrences while excluding the cross-file TypeScript declaration."
+      }
+    ],
+    "completions": [
+      {
+        "id": "callback-local-expression-scope",
+        "file": "src/runtime-expression-access-uses-app.html",
+        "anchor": "filter(item => item.label)",
+        "at": "item",
+        "atOccurrence": 2,
+        "watch": {
+          "present": ["item", "items", "form", "fallbackName"],
+          "absent": ["entry"]
+        },
+        "verdict": "correct",
+        "reason": "Completion inside a callback should merge the lexical item with owner-scope members without inventing a renamed or sibling callback local."
+      }
+    ],
+    "diagnostics": [
+      {
+        "id": "valid-runtime-access-algebra",
+        "file": "src/runtime-expression-access-uses-app.html",
+        "verdict": "correct",
+        "reason": "Conditional, optional, callback, assignment, resource-argument, and repeat-auxiliary access forms in this fixture are valid Aurelia and should return an empty full document-diagnostic report."
+      }
+    ]
+  }
+}

@@ -1,0 +1,31 @@
+<template>
+  <alias-carrier value.bind="message"></alias-carrier>
+  <annotation-alias value.bind="message"></annotation-alias>
+  <object-alias value.bind="message"></object-alias>
+  <type-alias value.bind="message"></type-alias>
+
+  <decorator-effective></decorator-effective>
+  <define-effective></define-effective>
+  <invoked-helper-card></invoked-helper-card>
+  <uninvoked-helper-card></uninvoked-helper-card>
+  <dead-branch-card></dead-branch-card>
+  <anonymous-card></anonymous-card>
+  <imported-target-card></imported-target-card>
+  <inline-anonymous-card></inline-anonymous-card>
+  <section decorator-attribute-effective></section>
+  <span>${message | define-converter-effective}</span>
+  <input value.bind="message & decorator-behavior-effective">
+  <input value.define-command-effective="message">
+
+  <shared shared="message.bind: message; detail.shared: message; patterned.data: message"></shared>
+  <span>${message | shared & shared}</span>
+  <input value.shared="message">
+  <input value.static-command="message">
+  <input value.static-cmd="message">
+  <input value.defined-command="message">
+  <input value.defined-cmd="message">
+  <div title.data="message"></div>
+  <div title::created="message"></div>
+
+  <section shared-control.bind="enabled"></section>
+</template>

@@ -1,8 +1,4 @@
 import { TypeSystemOverlaySourceBuilder } from '../type-system/overlay.js';
-import {
-  CHECKER_DOM_EVENT_FALLBACK_TYPE_NAMES,
-  CHECKER_DOM_EVENT_MAP_TYPE_NAMES,
-} from '../type-system/dom-node-type.js';
 
 export interface TemplateTypeSystemOverlayPreludeViewModel {
   readonly typeName: string;
@@ -14,8 +10,8 @@ export const enum TemplateTypeSystemOverlayPreludeHelperKey {
   Repeat = 'repeat',
   /** Resource-call helper used by value-converter overlay projection. */
   ValueConverter = 'value-converter',
-  /** Listener event-map helper used by $event overlay scopes. */
-  Event = 'event',
+  /** Bind-time argument helper used by binding-behavior overlay projection. */
+  BindingBehavior = 'binding-behavior',
   /** Type-predicate helper used by switch/case overlay guards. */
   SwitchCase = 'switch-case',
 }
@@ -25,8 +21,8 @@ export const enum TemplateTypeSystemOverlayPreludeHelperOwner {
   RepeatTemplateController = 'repeat-template-controller',
   /** Runtime value-converter materialization and useConverter-shaped toView calls. */
   RuntimeValueConverter = 'runtime-value-converter',
-  /** Runtime listener binding invocation and DOM event-map lookup. */
-  ListenerBinding = 'listener-binding',
+  /** Runtime binding-behavior materialization and value-transparent bind calls. */
+  RuntimeBindingBehavior = 'runtime-binding-behavior',
   /** Runtime-html Switch/Case matching and TypeChecker equality narrowing. */
   SwitchTemplateController = 'switch-template-controller',
 }
@@ -69,11 +65,13 @@ export const templateTypeSystemOverlayPreludeHelpers: readonly TemplateTypeSyste
     ],
   },
   {
-    key: TemplateTypeSystemOverlayPreludeHelperKey.Event,
-    owner: TemplateTypeSystemOverlayPreludeHelperOwner.ListenerBinding,
-    summary: 'Aurelia listener $event event-map lookup for generated listener scope layers.',
-    emittedNames: ['__au_event'],
-    lines: [templateTypeSystemOverlayDomEventHelperLine()],
+    key: TemplateTypeSystemOverlayPreludeHelperKey.BindingBehavior,
+    owner: TemplateTypeSystemOverlayPreludeHelperOwner.RuntimeBindingBehavior,
+    summary: 'Independent Aurelia binding-behavior bind-time argument witnesses.',
+    emittedNames: ['__au_binding_behavior_argument'],
+    lines: [
+      'declare function __au_binding_behavior_argument<T = unknown>(value: T): void;',
+    ],
   },
   {
     key: TemplateTypeSystemOverlayPreludeHelperKey.SwitchCase,
@@ -113,12 +111,4 @@ function appendPreludeHelper(
   for (const line of helper.lines) {
     builder.appendLine(line);
   }
-}
-
-function templateTypeSystemOverlayDomEventHelperLine(): string {
-  const [fallback] = CHECKER_DOM_EVENT_FALLBACK_TYPE_NAMES;
-  const clauses = CHECKER_DOM_EVENT_MAP_TYPE_NAMES
-    .map((mapName) => `K extends keyof ${mapName} ? ${mapName}[K]`)
-    .join(' : ');
-  return `type __au_event<K extends string> = ${clauses} : ${fallback};`;
 }

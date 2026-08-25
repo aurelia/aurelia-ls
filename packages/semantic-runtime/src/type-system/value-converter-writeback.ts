@@ -23,8 +23,28 @@ export interface RuntimeAssignmentValueConverterWritebackEvaluator {
   ): CheckerExpressionTypeEvaluation;
 }
 
+export const enum RuntimeValueConverterWritebackStageState {
+  /** The checker projected this converter's `fromView` return type. */
+  Type = 'type',
+  /** The checker attempted this converter's `fromView` call but could not close its return type. */
+  Open = 'open',
+  /** A prior converter left the input type open, so this structural stage could not be projected. */
+  InputOpen = 'input-open',
+}
+
+export interface RuntimeAssignmentValueConverterWritebackStage {
+  readonly converter: ValueConverterExpression;
+  /** Outer-to-inner `astAssign` execution order. */
+  readonly stageIndex: number;
+  readonly state: RuntimeValueConverterWritebackStageState;
+  readonly inputType: CheckerTypeReference | null;
+  readonly outputType: CheckerTypeReference | null;
+  readonly openReason: string | null;
+  readonly openKind: CheckerExpressionTypeOpenKind | null;
+}
+
 export interface RuntimeAssignmentValueConverterWritebackProjection {
-  readonly converterCount: number;
+  readonly stages: readonly RuntimeAssignmentValueConverterWritebackStage[];
   readonly targetToSourceValueType: CheckerTypeReference | null;
   readonly openReason: string | null;
   readonly openKind: CheckerExpressionTypeOpenKind | null;
@@ -44,17 +64,44 @@ export function projectRuntimeAssignmentValueConverterWriteback(input: {
     return null;
   }
   if (input.targetValueType == null) {
+    const openReason = 'Target-to-source value type was not projected.';
     return {
-      converterCount: converters.length,
+      stages: converters.map((converter, stageIndex) => ({
+        converter,
+        stageIndex,
+        state: RuntimeValueConverterWritebackStageState.InputOpen,
+        inputType: null,
+        outputType: null,
+        openReason,
+        openKind: null,
+      })),
       targetToSourceValueType: null,
-      openReason: null,
+      openReason,
       openKind: null,
     };
   }
 
-  let current = input.targetValueType;
+  const stages: RuntimeAssignmentValueConverterWritebackStage[] = [];
+  let current: CheckerTypeReference | null = input.targetValueType;
+  let partialCurrent: CheckerTypeReference | null = null;
+  let openReason: string | null = null;
+  let openKind: CheckerExpressionTypeOpenKind | null = null;
   for (let index = 0; index < converters.length; index += 1) {
     const converter = converters[index]!;
+    if (current == null) {
+      stages.push({
+        converter,
+        stageIndex: index,
+        state: RuntimeValueConverterWritebackStageState.InputOpen,
+        inputType: partialCurrent,
+        outputType: null,
+        openReason: `Writeback input remains open after an earlier converter: ${openReason ?? 'no closed input type was available.'}`,
+        openKind,
+      });
+      partialCurrent = null;
+      continue;
+    }
+    const stageInput = current;
     const evaluation = input.evaluator.evaluateValueConverterMethodFromType(
       input.context.child(
         converter,
@@ -64,20 +111,38 @@ export function projectRuntimeAssignmentValueConverterWriteback(input: {
       current,
     );
     if (evaluation.kind === CheckerExpressionTypeEvaluationResultKind.Open) {
-      return {
-        converterCount: converters.length,
-        targetToSourceValueType: null,
+      stages.push({
+        converter,
+        stageIndex: index,
+        state: RuntimeValueConverterWritebackStageState.Open,
+        inputType: stageInput,
+        outputType: evaluation.partialTypeReference,
         openReason: evaluation.summary,
         openKind: evaluation.openKind,
-      };
+      });
+      current = null;
+      partialCurrent = evaluation.partialTypeReference;
+      openReason = evaluation.summary;
+      openKind = evaluation.openKind;
+      continue;
     }
     current = evaluation.typeReference;
+    partialCurrent = current;
+    stages.push({
+      converter,
+      stageIndex: index,
+      state: RuntimeValueConverterWritebackStageState.Type,
+      inputType: stageInput,
+      outputType: current,
+      openReason: null,
+      openKind: null,
+    });
   }
 
   return {
-    converterCount: converters.length,
+    stages,
     targetToSourceValueType: current,
-    openReason: null,
-    openKind: null,
+    openReason,
+    openKind,
   };
 }

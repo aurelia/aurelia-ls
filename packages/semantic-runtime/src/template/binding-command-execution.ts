@@ -7,6 +7,7 @@ import type {
 import type { FieldProvenance } from '../kernel/provenance.js';
 import type { BindableDefinition } from '../resources/bindable-definition.js';
 import type { ResourceTargetReference } from '../resources/resource-reference.js';
+import type { SourceSpan } from '../expression/source-span.js';
 import type { AttributeSyntax } from './attribute-syntax.js';
 import type { HtmlAttributeReference, HtmlNodeReference } from './html-ir.js';
 import type { TemplateValueSiteReference } from './value-site.js';
@@ -115,7 +116,10 @@ export class BindingCommandIteratorParse {
   constructor(
     readonly expressionProductHandle: ProductHandle | null,
     readonly localNames: readonly string[],
+    /** Object-pattern source keys aligned with `localNames`; empty for non-object declarations. */
+    readonly objectBindingSourceKeys: readonly (string | number)[],
     readonly rawTailText: string | null,
+    readonly tailSpan: SourceSpan | null,
   ) {}
 }
 
@@ -167,6 +171,7 @@ export interface BindingCommandBuildContext {
   parsePropertyExpression(
     expression: string,
     info: BindingCommandBuildInfo,
+    sourceSpan: SourceSpan | null,
   ): ProductHandle | null;
 
   parseFunctionExpression(
@@ -193,7 +198,7 @@ export interface BindingCommandBuildContext {
   isTwoWay(
     node: HtmlNodeReference,
     attr: string,
-  ): boolean;
+  ): boolean | null;
 }
 
 export class BindingCommandBuildResult {
@@ -241,7 +246,7 @@ export class BindingCommandExecutable {
     /** Runtime DI/resource key for this command. */
     readonly key: string,
     /** Mirrors built-in command behavior that tells the template compiler whether to keep the source attr. */
-    readonly ignoreAttr: boolean,
+    readonly ignoreAttr: boolean | null,
     /** How much of command execution is known to this substrate. */
     readonly executionKind: BindingCommandExecutionKind,
     /** Source address for the command definition or registration. */
@@ -258,8 +263,6 @@ export class BindingCommandExecutable {
 /** Runtime IBindingCommandResolver model for one compiler world/container. */
 @auLink('template-compiler:IBindingCommandResolver')
 export class BindingCommandResolverService {
-  private readonly _cache = new Map<string, BindingCommandExecutable | null>();
-
   constructor(
     /** Product handle for the materialized-product envelope that represents this resolver service. */
     readonly productHandle: ProductHandle,
@@ -280,19 +283,9 @@ export class BindingCommandResolverService {
 
   /** Runtime `IBindingCommandResolver.get(container, name)` shape for this container-scoped service. */
   get(commandName: string): BindingCommandExecutable | null {
-    if (this._cache.has(commandName)) {
-      return this._cache.get(commandName) ?? null;
-    }
-    const command = this.commands.find((candidate) =>
+    return this.commands.find((candidate) =>
       candidate.name === commandName || candidate.aliases.includes(commandName)
     ) ?? null;
-    this._cache.set(commandName, command);
-    return command;
-  }
-
-  /** Snapshot command lookup cache for answer envelopes or later kernel emission. */
-  readCachedCommands(): ReadonlyMap<string, BindingCommandExecutable | null> {
-    return new Map(this._cache);
   }
 
   toReference(): TemplateCompilerServiceReference {
@@ -386,6 +379,8 @@ export class MultiBindingSegment {
     readonly rawName: string,
     /** Raw segment value after the colon. */
     readonly rawValue: string,
+    /** Source address for the parsed target inside the segment name. */
+    readonly targetSourceAddressHandle: AddressHandle | null,
     /** Source address for the segment value. */
     readonly sourceAddressHandle: AddressHandle | null,
     /** Field-level provenance for source facts that matter to explanation or ambiguity. */

@@ -1,8 +1,8 @@
 import {
-  SemanticAppAnalysisDepth,
   semanticAppAnalysisDepthMax,
   normalizeSemanticAppAnalysisDepth,
 } from '../configuration/app-analysis.js';
+import type { SemanticAppAnalysisDepth } from '../configuration/app-analysis.js';
 import {
   readSemanticRuntimeInquiryProfileDefinition,
   type SemanticRuntimeInquiryProfile,
@@ -19,6 +19,8 @@ import type {
 } from './contracts.js';
 import {
   SemanticAppQueryKind,
+  SemanticObservedDependencyLocusKind,
+  SemanticRuntimeDetail,
 } from './contracts.js';
 import {
   semanticAppQueryCatalogShape,
@@ -86,13 +88,14 @@ export function semanticAppQueryMaterializationPolicy(
   catalogPolicy: SemanticQueryMaterializationPolicy,
 ): SemanticQueryMaterializationPolicy {
   const shapedQuery = semanticAppQueryCatalogShape(query);
-  return diagnosticProjectionControlsMaterialization(shapedQuery)
+  const defaultProjectionPolicy = diagnosticProjectionControlsMaterialization(shapedQuery)
     && shapedQuery.diagnosticProjection === 'available-products'
     && catalogPolicy === 'query-type-projection'
     ? 'projection-only'
-    : shapedQuery.kind === SemanticAppQueryKind.AppTopology && shapedQuery.includeTypeSurfaces === true
-      ? 'query-type-projection'
-      : catalogPolicy;
+    : catalogPolicy;
+  return shapedQuery.includeTypeSurfaces === true
+    ? 'query-type-projection'
+    : defaultProjectionPolicy;
 }
 
 function diagnosticProjectionControlsMaterialization(query: SemanticAppQuery): boolean {
@@ -125,12 +128,23 @@ export function isRuntimeStaticAppQuery(query: SemanticAppQuery): boolean {
 }
 
 export function appQuerySourceFilePath(
-  request: SemanticRuntimeAppQueryRequest,
+  request: SemanticAppQuery | SemanticRuntimeAppQueryRequest,
 ): string | null {
-  return request.cursor?.filePath
-    ?? request.sourceFile?.filePath
-    ?? request.sourceFilePath
-    ?? null;
+  return appQuerySourceFilePaths(request)[0] ?? null;
+}
+
+/** Every exact source locus carried by one query, without silently selecting only the first field. */
+export function appQuerySourceFilePaths(
+  request: SemanticAppQuery | SemanticRuntimeAppQueryRequest,
+): readonly string[] {
+  return [...new Set([
+    request.cursor?.filePath ?? null,
+    request.sourceFile?.filePath ?? null,
+    'sourceFilePath' in request ? request.sourceFilePath ?? null : null,
+    request.observedDependencyLocus?.kind === SemanticObservedDependencyLocusKind.SourceFile
+      ? request.observedDependencyLocus.sourceFile.filePath
+      : null,
+  ].filter((filePath): filePath is string => filePath != null && filePath.trim().length > 0))];
 }
 
 export function appQueryNeedsAuthoringTemplates(
@@ -143,11 +157,17 @@ export function appQueryNeedsAuthoringTemplates(
 export function appQueryBatchSourceFilePath(
   request: SemanticRuntimeAppQueryBatchRequest,
 ): string | null {
-  return request.sourceFilePath
-    ?? request.queries
-      .map((query) => query.cursor?.filePath ?? query.sourceFile?.filePath ?? null)
-      .find((filePath): filePath is string => filePath != null && filePath.trim().length > 0)
-    ?? null;
+  return appQueryBatchSourceFilePaths(request)[0] ?? null;
+}
+
+/** Every exact source locus carried by a batch and its children. */
+export function appQueryBatchSourceFilePaths(
+  request: SemanticRuntimeAppQueryBatchRequest,
+): readonly string[] {
+  return [...new Set([
+    request.sourceFilePath ?? null,
+    ...request.queries.flatMap(appQuerySourceFilePaths),
+  ].filter((filePath): filePath is string => filePath != null && filePath.trim().length > 0))];
 }
 
 export function appQueryBatchAuthoringTemplateSourceFiles(
@@ -230,9 +250,12 @@ export function defaultInquiryProfileForRoutedAppQueryBatch(
 }
 
 export function shouldDisposeAppAfterRoutedQuery(
-  request: { readonly appRetention?: SemanticAppRetentionPolicy | null },
+  request: RoutedAppRetentionRequest,
   inquiryProfile: SemanticRuntimeInquiryProfile,
 ): boolean {
+  if (routedQueryRequiresRetainedApp(request)) {
+    return false;
+  }
   switch (request.appRetention) {
     case 'retain-app':
       return false;
@@ -245,11 +268,34 @@ export function shouldDisposeAppAfterRoutedQuery(
   }
 }
 
+/** Reject an answer boundary that would return opaque handles after revoking their owning app generation. */
+export function assertCompatibleRoutedAppRetention(request: RoutedAppRetentionRequest): void {
+  if (request.appRetention === 'dispose-app' && routedQueryRequiresRetainedApp(request)) {
+    throw new Error(
+      "Routed app queries with detail='handles' cannot use appRetention='dispose-app'; "
+      + 'opaque kernel handles remain navigable only while their app generation is retained.',
+    );
+  }
+}
+
+interface RoutedAppRetentionRequest {
+  readonly appRetention?: SemanticAppRetentionPolicy | null;
+  readonly detail?: SemanticAppQuery['detail'];
+  readonly queries?: readonly SemanticAppQuery[];
+  readonly typeSystemDependencyCacheClearPolicy?: SemanticTypeSystemDependencyCacheClearPolicy | null;
+}
+
+function routedQueryRequiresRetainedApp(request: RoutedAppRetentionRequest): boolean {
+  if (request.queries == null) {
+    return request.detail === SemanticRuntimeDetail.Handles;
+  }
+  return request.queries.some((query) =>
+    query.detail === SemanticRuntimeDetail.Handles && !isAppWorldFreeAppQuery(query)
+  );
+}
+
 export function typeSystemDependencyCacheClearPolicyForRoutedQuery(
-  request: {
-    readonly appRetention?: SemanticAppRetentionPolicy | null;
-    readonly typeSystemDependencyCacheClearPolicy?: SemanticTypeSystemDependencyCacheClearPolicy | null;
-  },
+  request: RoutedAppRetentionRequest,
   inquiryProfile: SemanticRuntimeInquiryProfile,
 ): SemanticTypeSystemDependencyCacheClearPolicy {
   if (request.typeSystemDependencyCacheClearPolicy != null) {

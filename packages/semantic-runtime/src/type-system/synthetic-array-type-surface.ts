@@ -1,6 +1,6 @@
 import { aureliaArrayMethodTypeProjectionNames } from '../expression/array-method-semantics.js';
 import { localKeyPart } from '../kernel/local-key.js';
-import type { KernelStore } from '../kernel/store.js';
+import type { KernelHandleFactory } from '../kernel/handles.js';
 import {
   checkerIndexedAccessSupportsNumber,
   CheckerTypeMember,
@@ -19,18 +19,17 @@ export function checkerTypeShapeIsSyntheticRuntimeArray(shape: CheckerTypeShape)
 
 /** Synthetic Array prototype members that API member-surface inquiries can enumerate without checker carriers. */
 export function syntheticRuntimeArrayTypeMembers(
-  store: KernelStore,
+  handles: KernelHandleFactory,
   typeShape: CheckerTypeShape,
-  localKeySeed: string,
 ): readonly CheckerTypeMember[] {
   if (!checkerTypeShapeIsSyntheticRuntimeArray(typeShape)) {
     return [];
   }
   const ownerType = typeShape.toReference();
-  const localKey = `synthetic-array-member-surface:${localKeyPart(localKeySeed)}:${localKeyPart(typeShape.checkerKey)}`;
-  return aureliaArrayMethodTypeProjectionNames.map((name, index) =>
+  const localKey = `synthetic-array-member-surface:${localKeyPart(typeShape.productHandle)}`;
+  return aureliaArrayMethodTypeProjectionNames.map((name) =>
     new CheckerTypeMember(
-      store.handles.product(`type-member:${localKey}:${index}:${localKeyPart(name)}`),
+      handles.hotDetail(`type-member:${localKey}:${localKeyPart(name)}`),
       name,
       CheckerTypeMemberKind.Method,
       ownerType,

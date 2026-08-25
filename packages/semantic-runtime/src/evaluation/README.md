@@ -35,6 +35,9 @@ projects static type and member surfaces from the checker for template/expressio
 - Preserve host-environment and external-module carriers as explicit evaluator-local boundary object/value carriers, so
   boundary-dependent expressions propagate without being mislabeled as generic dynamic branches, missing identifiers, or
   object-property fallbacks.
+- Source-local ambient value declarations (`declare const`, `declare function`, `declare class`, and `declare enum`) are
+  host boundaries because TypeScript erases them and an external runtime supplies their values. Keep that distinct from
+  an ordinary uninitialized `let`/`var`, whose JavaScript value is `undefined`.
 - Preserve string-shaped expressions with known static text and dynamic boundary holes as `EvaluationStringPatternValue`
   rather than flattening them to unknown or a generic boundary value. Consumers such as router instruction
   materialization can use the static prefix while still treating the holes as runtime supplied.
@@ -55,8 +58,8 @@ projects static type and member surfaces from the checker for template/expressio
   (`AUR0020`), and `Metadata.define(...)` calls with no metadata key through exact raw framework Error authority.
   Resource-definition materialization still belongs to downstream resource/registration lanes.
 - Keep generic TypeScript syntax and evaluator-value operations, such as expression unwrapping, modifier checks, and
-  evaluator value equality, in `ts-syntax.ts` and `values.ts` rather than reintroducing local copies inside recognizers
-  or intrinsic handlers.
+  value relations, in `ts-syntax.ts`, `values.ts`, and `value-relation.ts` rather than reintroducing local copies inside
+  recognizers or intrinsic handlers.
 - Provide a project-level evaluation envelope that boot-admitted Aurelia passes can share, so resource recognition,
   configuration recognition, and later DI/template materializers do not each invent their own source-evaluation loop.
 - Resolve local TypeScript-authored module specifiers faithfully enough for source analysis, including emitted `.js`
@@ -129,6 +132,69 @@ configuration values to degrade when a recognizer asks a second question about t
 `StaticEvaluationExpressionReader` keeps one evaluator per reader for those follow-up reads, matching the
 binding-source evaluation frame's per-source evaluator lifetime so guardrails and seam checkpoints do not reset for
 every property or target probe.
+The reader does not create an isolation boundary. Production consumers acquire one
+`StaticProjectEvaluationGeneration` per project/profile locus. Its admitted evaluator graph is a reusable baseline:
+`readBaseline()` is restricted to consumers that only inspect completed facts, while every replaceable or speculative
+analysis owner calls generation `forkSession()` once and shares that graph-preserving session across its readers and
+evaluator-backed consumers. The fork copies mutable environments, objects, collections, functions, classes,
+instances, namespaces, promise fulfillment values, completions, and runtime-host returns while preserving aliases and
+cycles, including Promise back-edges and class/instance knots. Runtime hosts transfer any semantic identity they own
+outside the generic value graph (for example Aurelia registration and registry-body metadata), and the transfer context
+forks mutable child values retained by that metadata. Metadata transfer is cycle-aware because framework metadata can
+legitimately point back to its carrier, as with an interface resolver builder used as its own instance value.
+Call-frame environments inherit the session realm. Values already proven to belong to that realm are adopted so
+host-installed aliases and captured closures stay exact; canonical or foreign values returned by a runtime host are
+forked instead of being claimed by the first session that sees them. Session-bound runtime hosts retain their canonical
+product host, and one module graph uses one host identity, so a candidate-owned session can itself be forked for an
+isolated downstream phase without routing returned values back through the parent session. Forking per reader is incorrect: one authored
+configuration/resource value would acquire several unrelated
+identities, breaking joins such as two app roots that intentionally share one router configuration. Project-wide
+template-runtime analysis inside a complete app-analysis candidate and its downstream post-template binding/router
+evaluation each own an explicit forked session, separate from the admitted project-evaluation graph and from one
+another, so rejected work cannot mutate the incumbent or leak mutable evaluator state across lifecycle phases. The
+shared template-runtime session is why its current lifecycle child spans every runtime dependency SCC; splitting those
+SCCs requires an explicit evaluator-realm partition rather than independent forks that only appear isolated.
+`StaticCallableTarget` is the candidate-local companion for consumers that must execute an already-retained function
+rather than rediscover it from syntax. Durable products retain a `StaticCallableSlot`; the current app-analysis
+candidate resolves that slot through `StaticCallableExecutionBindings`, whose owning evaluation generation checks
+currentness before exposing the exact closure. `evaluateStaticCallableTruthiness(...)` forks that closure-bearing value
+graph, preserves its evaluator policy and runtime host, and admits only closed truthiness reached without audit
+pressure or modeled mutation. The fork prevents speculative writes from escaping; the mutation check prevents
+independently replayed stateful predicates from being mistaken for Aurelia's ordered runtime state. Evaluator values
+never enter durable product comparison. Compiler reads retain the observed policy result, so reuse follows semantic
+truthiness while a new candidate always supplies the executable authority.
+`StaticEvaluationValueGraph` is the ownership capability for those mutable values and environments. Evaluator-created
+values enter through `retainProduced(...)`, including an instance before its field initializers execute so recursive
+`this` references keep one identity. A runtime host may mutate an already-owned environment with foreign values;
+`reconcileEnvironmentAfterExternal(...)` forks those values into the owning graph after the host returns. Do not merge
+these lifecycles or infer graph ownership from a value's environment: produced values and externally inserted values
+cross the boundary in opposite directions.
+The reusable computation records the profile, compiler/toolchain environment, and exact positive and negative project
+and host reads. Consumer-local read scopes share one immutable memoized project-input value view but retain separate
+manifests for app and tooling profiles. Project-input event identity is a run-local admission guard rather than a
+semantic read: advancing the event generation with exactly equal inputs may reuse the admitted evaluator, while a
+candidate prepared against a revoked generation cannot commit. Exact reads decide semantic serviceability. An
+unannounced host write therefore makes the private incumbent unavailable to public consumers without deleting it; an
+exact revert can make it serviceable again, and a changed candidate can replace it atomically. The outer app generation
+still fails closed whenever its captured project-input event is no longer current, even if an upstream evaluator is
+semantically reusable.
+Event-only reuse rebinds ambient-global and profile evaluator read scopes through the new project-input generation's
+shared captured host. It also advances the admitted result's current `ProjectBootFrame`, without rebuilding or mutating
+the evaluator value graph. This is a value-recapture operation, not a carried boolean proof: acquisition and final
+publication each validate through a fresh `ComputationReadValidationScope`, so a source mutation between them still
+rejects the candidate.
+Acquisition returns a `StaticProjectEvaluationAccess` bound to the synchronous validation proof that admitted or reused
+the generation. Profile, baseline, context, and session-fork reads spend that access instead of reopening the same
+project/profile/baseline closure independently. App preparation may share one proof across its app-evaluation,
+convention-tooling, and TypeSystem acquisitions because those generations repeat exact leaves; final commit and every
+later public currentness check use fresh proofs. The operation-local proof does not replace the evaluator generation's
+domain-owned serviceability roots or the lifecycle's broader transition read set. The access is not a retained
+generation handle and must not escape the synchronous operation that acquired it.
+Ambient value declarations are a separate project/compiler computation shared by all evaluator profiles. It reads the
+configured TypeScript libraries and admitted project declaration files once, retains their exact positive and negative
+input reads, and is observed transitively by the app and Vite evaluation generations. This is intentionally upstream of
+profile-specific module evaluation: app and tooling policies may differ, but `window`, `process`, and project ambient
+declarations do not acquire a second meaning merely because another evaluation profile asks the question.
 Product runtime hosts may expose framework-shaped intrinsics only at the host boundary. Aurelia's host handles browser
 ambient globals such as `document`, `window`, `self`, `customElements`, and `console` as host-environment boundaries so
 app admission can preserve host-dependent setup expressions without reporting them as missing identifiers. It also
@@ -165,6 +231,14 @@ files remain admitted source records but do not enter app-world static evaluatio
 module-graph envelope from source-host work: source-file reads/parses, TypeScript module resolution, evaluator path
 probes, declaration-source mapping, and cached file-system probes are visible so performance work can choose between
 CPU, memory, and precision instead of adding broad caches blindly.
+Graph-discovered physical source locations reuse the project-qualified source-admission authority; they are not outputs
+of the replaceable evaluator generation. The evaluator generation owns whether a module is reachable and the exact
+text/existence/resolution reads that established that reachability. Keeping those lifetimes separate lets downstream
+records retain valid source-address references while a later evaluator generation removes or relocates an import.
+NodeNext package conditions are part of that graph identity. Parsed sources retain TypeScript's implied module format,
+each import/re-export/dynamic-import/require carrier retains its exact `ResolutionMode`, and graph plus host caches key
+an edge by `(from, specifier, mode)`. A CommonJS require therefore cannot overwrite an import edge with the same text;
+the shared resolver still decides the target, while evaluator package admission remains a separate policy boundary.
 The module-source host reports specifier-shape counters as well as resolution outcomes. Use `querySuffixCalls`,
 `assetSpecifierCalls`, `extensionlessRelativeCalls`, and `emittedJavaScriptRelativeCalls` to understand the authored
 module graph before changing caches or source-admission policy. Asset/query-shaped relative imports path-probe before
@@ -188,7 +262,10 @@ mapping or root admission policy; a large evaluated-source count only becomes ac
 attributed to app-authored code, source-shipped package code, workspace-external source, or asset modules.
 `module-graph.ts` is runtime-shaped, not TypeChecker-shaped. Type-only imports and type-only re-exports are not runtime
 edges and must stay out of the evaluator import/export graph. Otherwise ordinary type cycles can become artificial
-runtime cycles and turn closed class values into open import bindings during DI/source-value activation.
+runtime cycles and turn closed class values into open import bindings during DI/source-value activation. Import entries
+retain the exact local binding node, including named import specifiers and aliases, rather than only the enclosing
+declaration. Evaluated imported values can therefore carry canonical exported identity and exact local provenance
+through shorthand object properties without a consumer-local alias resolver.
 
 `declaration-instantiation.ts` owns ECMAScript declaration-instantiation shape for a source file or interpreted block:
 import bindings, function hoists, and top-level class lexical cells. Top-level class declarations are declared before
@@ -201,12 +278,30 @@ separate from statement execution so module linkage and hoisting do not drift be
 `module` through it, and `StaticModuleGraphEvaluator` reads local CommonJS exports through the same helpers. Do not add
 separate `exports` / `module.exports` readers in graph or recognizer code.
 
+`enumerable-own-properties.ts` owns the evaluator's ECMAScript-shaped enumerable-own-property projection. Object
+intrinsics and recursive Aurelia registration carriers consume the same ordered entries for arrays, objects,
+instances, functions, boundary objects, and module namespaces. Module namespace projection retains live re-export
+identity, excludes ambiguous star exports, and stays open when export membership or order cannot close; recognizers
+must not rebuild a syntax-only object-map walker beside it.
+
 `literals.ts` owns array and object literal construction through a small host delegation boundary, similar to
 `intrinsics.ts`. Keep literal element/property traversal there, but keep recursion, property-name reading, seam policy,
 and unknown/boundary construction on `StaticEvaluator` so the extracted code does not become a second evaluator. Object
-spread accepts both boundary objects and boundary values as unresolved spread carriers; array spread only treats boundary
-values as unresolved iterable carriers and should keep boundary objects on the dynamic-mutation seam path unless a real
-ECMAScript-modeling reason changes that policy.
+spread accepts both boundary objects and boundary values as unresolved spread carriers. Array spread classifies an
+unknown iterator source, including boundary values and non-modeled boundary objects, as `dynamic-loop`, never as a
+mutation. Literal construction audits that reached runtime work while retaining the same pressure on the resulting
+shape; `evaluationValueEvidence(...)` prevents carrier-owned pressure from also qualifying the lexical binding edge.
+Known object properties retain per-property final-write state. A later unknown computed key, unresolved spread, or
+unsupported member opens every property written before it because the runtime write may replace any key; a later exact
+property write closes that property again. Object spread and `Object.assign(...)` preserve the same source order instead
+of using object-wide `mayHaveUnknownProperties` as a substitute for effective-value certainty. Property readers must
+spend that state: an open retained property is a useful candidate, not a closed runtime value.
+Object, function, class, and instance carriers retain property membership and enumerable order independently from
+per-property value state. Conditional presence or an unresolved computed name opens membership; different insertion
+orders can leave membership exact while opening only order. `enumerable-own-properties.ts` spends those axes directly,
+so an uncertain property value does not make `Object.keys(...)` structurally open and an order-dependent result cannot
+masquerade as exact. Forks, object spread/rest, `Object.assign(...)`, and `Object.fromEntries(...)` must conserve both
+axes.
 
 `class-values.ts` owns static class property materialization, instance property materialization, parameter properties, and
 guarded constructor execution over evaluator-local class values. Keep class lifecycle details there while preserving the
@@ -215,6 +310,95 @@ owning evaluator's recursion, binding-pattern host, and open-seam stream.
 `function-values.ts` owns evaluator-local function invocation: argument binding, `this` binding, async fulfillment
 boundaries, block completion handling, and expression-bodied return values. Property accessors and intrinsics should
 call this lane through evaluator host methods instead of duplicating call-frame construction.
+
+`EvaluationValueEvidence` is the canonical payload for every value-bearing edge. Lexical bindings, function and
+constructor arguments, parameter/rest slots, intrinsic callback inputs/results, array/Set elements, return/throw
+completions, ESM imports/re-exports/namespaces, and CommonJS exports/require reads must carry both the best-known value
+and the exact pressure qualifying that edge. Container-owned pressure stays on addressable child slots or shape
+carriers; it must not be flattened onto unrelated siblings. The
+module-wide audit seam stream remains complete evidence of what evaluation encountered, while the causal stream is
+consumed into edge carriers and replayed only when that edge is read. A retained candidate may be projected, but it
+must not select a branch, invoke a getter/function, perform arithmetic, or otherwise execute as a closed value.
+Moving already-audited pressure into an array shape, property, or other child carrier is not another encounter and must
+not append a duplicate audit row; reading that carrier later is the point at which causal pressure is replayed.
+
+`value-relation.ts` is the authority for ECMAScript strict equality, SameValue, and SameValueZero over evaluator
+carriers. Object identity belongs to one evaluator-local lineage, not to source spelling, paths, or structural shape.
+Session forks and repeated module-namespace projections preserve that lineage while retaining independent state and
+source-node snapshots. Independent host-boundary objects remain an open identity relation unless the host or session
+proves an alias. Consumers must spend the tri-state relation and keep `open` distinct from a confident miss; only
+consumers whose contract deliberately retains exact matches may use the boolean views.
+
+`branch-state.ts` owns finite state reconciliation for an unresolved conditional expression. Each arm evaluates in a
+separate session fork from one baseline; the join plans environment and aliased value-graph updates transactionally,
+then commits only after the complete graph closes. It preserves common lineage, marks branch-created identity
+indeterminate, retains conditional property/collection presence, and keeps extent, membership, order, and value
+pressure on their owning axes. The selector qualifies an axis only when the sibling evidence differs; a conditional
+that returns the same already-open carrier must not relabel inherited pressure as branch-dependent. Runtime hosts with side metadata remain ineligible until they provide an explicit
+metadata-join contract; cloning metadata into two lanes is not evidence that divergent metadata can be reconciled.
+
+Array closure is multi-axis. `EvaluationArrayShape` retains runtime extent, exact present-element/hole positions, and
+order independently, together with the exact seams that open each axis. Authored elisions are exact holes, so
+`[, value]` has length two and one present element at runtime index one. An unresolved spread opens extent and positions
+without inventing a reorder; sort can open order without contaminating length. `EvaluationEnumerableOwnEntries` owns
+the corresponding membership/order projection for `Object.keys`/`values`/`entries`, so those consumers do not
+reconstruct shape from lossy booleans.
+
+Keyed collections retain the same distinction without pretending that keys are array positions.
+`EvaluationKeyedCollectionShape` keeps exact size, membership, and iteration order as independent axes.
+`EvaluationSetElement` carries value and identity evidence; `EvaluationMapEntry` carries key and value evidence
+independently, plus presence state for conditional writes and exact tombstones. The shared keyed-collection operation
+algebra owns SameValueZero lookup, overwrite-in-place, insertion order, delete, and clear semantics. Exact later writes
+may repair their own key after an open mutation, but must not close unrelated membership. Weak collection capability is
+orthogonal to membership precision: weak collections deliberately do not expose size, clear, or iteration.
+
+`iterator-projection.ts` is the authority for modeled built-in iteration. Drained projections serve spread and
+constructor-style consumers; live iterators serve loops and callback-bearing consumers whose bodies may mutate the
+source. Array holes yield `undefined`, strings advance by Unicode code point, Set/Map iteration follows the append-only
+collection row log, and Map pair iteration preserves key and value evidence independently. Do not substitute own-property
+enumeration for iterable order or reconstruct live iteration from a precomputed array.
+
+`EvaluationArgumentList` is the evaluator's positional call-phase product. It evaluates authored arguments left-to-right,
+expands Array/Set/Map/String spreads with iterator semantics, and separates unclosed arity/order from pressure on one
+exact runtime slot. An open spread that may fail stops definite evaluation of later arguments; those later effects need a
+future conditional-continuation carrier rather than being published as facts. Local calls, global intrinsics, and array
+intrinsics consume this product instead of re-reading `CallExpression.arguments`; a pressured slot may flow into an
+unused parameter without contaminating the return, but an unclosed spread prevents speculative callee effects.
+Syntax-only recognition such as module-specifier validation may still inspect authored arguments, but it must not
+masquerade as value evaluation.
+
+`StaticEvaluationExecutionTopology` is the retained partial order for modeled execution. Each lane owns an ordered
+event list; `StaticConditionalExecution` nests mutually exclusive child lanes rather than flattening either arm into
+definite effects. Ordinals are local to one lane and must never be compared across siblings. The compatibility
+`invocationEvaluations` projection contains only invocation events definitely reached in that exact lane. Consumers
+that understand conditional reachability must traverse the topology and preserve the qualifying branch seam.
+
+`StaticInvocationFrame` is the transient dispatch product after one reference evaluation and one argument-list phase.
+It carries callee, receiver/`this`, computed property-key, authored-argument, and expanded positional evidence; runtime
+hosts and intrinsic families decide applicability from those values without re-evaluating source. Retained preparation
+evidence snapshots that completed phase immediately before dispatch; retained normal or abrupt completion evidence is
+snapshotted separately after dispatch. Later mutation therefore cannot rewrite either historical stage, while explicit
+`StaticInvocationIdentity` and evaluator-value lineage preserve event and runtime identity across those snapshot graphs.
+`StaticInvocationOccurrence` means the ECMAScript invocation operation was actually reached and owns its completion.
+`StaticInvocationPreparationBoundary` means reference and argument preparation ran but an open argument list prevented
+proving that invocation occurred. It is deliberately absent from the derived `invocations` view, while remaining
+available to domain recognizers that must project a scoped uncertainty from the evaluated receiver and authored spread.
+`StaticModuleEvaluationExpressionReader` spends these immutable edges and completions; it must return an explicit
+`evaluation.invocation-source-read` seam when no unique retained edge exists, never replay an invocation AST against a
+later lexical environment.
+
+`executeStaticFunctionEffects(...)` is the shared boundary for domain consumers that intentionally spend one retained
+function's side effects. It preserves the caller's policy and guardrails but forces `PathProvenEffects`, so DI registry
+execution and bounded AppTask service execution cannot drift into different branch semantics. It is not a lifecycle
+scheduler or permission to execute arbitrary callbacks; the caller still owns the exact arguments, runtime-host
+operations, candidate-local graph fork, and domain projection of reached invocation evidence.
+
+Statement completion is the authoritative control-flow result. Local functions, constructors, accessors, and runtime
+hosts tunnel abrupt completion through the evaluator's value-shaped recursive internals, then restore it at the nearest
+statement or direct-read boundary. Direct reads expose a nullable value plus the exact completion; DI, binding, and
+resource consumers must carry that completion until their own result boundary instead of replacing it with an unknown
+value. Compact kernel seams retain a machine-readable `static-evaluation-abrupt-completion` reason rather than the
+potentially large evaluator-local thrown value graph.
 
 `binding-patterns.ts` owns environment-cell materialization for variable declarations, function/constructor parameters,
 destructuring defaults, rest bindings, and supported loop declaration initializers. It uses a small host delegation
@@ -233,10 +417,17 @@ can close over evaluator-modeled objects, arrays, namespaces, classes, or admitt
 numeric `+`/`-`, `typeof`, and `void` share that same table; TypeScript-only `~` also stays there for the static
 evaluator while Aurelia parser admission continues to reject it.
 
-`global-intrinsics.ts` owns value-level semantics for Aurelia expression-parser globals such as `parseInt`, `Math`,
-`JSON`, `Array`, and `Object`. This is shared by the TS-shaped static evaluator and Aurelia binding-source value
-evaluation: parser admission stays in `expression/global-names.ts`, TypeChecker projection stays in the type-system
-lane, and host-dependent globals remain boundary/runtime-open values instead of becoming observed binding dependencies.
+`global-intrinsics.ts` owns value-level semantics for ECMAScript globals modeled by static evaluation, such as
+`parseInt`, `Math`, `JSON`, `Array`, `Object`, `WeakMap`, `WeakSet`, and `Promise`. Aurelia binding expressions admit the
+exact `aureliaExpressionGlobalNames` subset; TypeScript-shaped static evaluation spends the broader
+`staticEvaluationGlobalNames` vocabulary. Both sets live in `expression/global-names.ts`, but widening evaluator support
+must never silently widen Aurelia parser admission. TypeChecker projection stays in the type-system lane, and
+host-dependent globals remain boundary/runtime-open values instead of becoming observed binding dependencies. Intrinsic
+dispatch must establish that a callee or receiver path belongs to the relevant modeled set before evaluating arguments.
+Probe-time argument evaluation is observable evaluator work and would otherwise duplicate calls, pressure, and abrupt
+completion before ordinary local-function dispatch. Host boundary objects retain callable capability explicitly, so
+`typeof` spends the value carrier instead of rebuilding constructor/function lists from source spelling. Keyed carriers
+likewise retain weak capability explicitly; `instanceof` and host tags must not collapse WeakMap/WeakSet into Map/Set.
 
 `representative-values.ts` owns conservative value summaries for places where semantic-runtime intentionally does not
 materialize every possible runtime instance. Repeated template views and speculative conditional branches can keep exact
@@ -292,8 +483,10 @@ TypeScript-authored.
   `array.reduce`, `array.reduceRight`, `array.fill`, `array.flat`, `array.includes`, `array.indexOf`, `array.join`,
   `array.slice`, `array.sort`, `array.toSpliced`, `array.with`, `array.push`, `array.pop`, `array.shift`, `array.unshift`, `array.splice`,
   `array.reverse`, string `slice`, `localeCompare`, `startsWith`, `endsWith`, `includes`, `indexOf`,
-  `split`, `replace`, `replaceAll`, `trim`, case transforms, `Map.get`, `Map.set`, `Map.has`, `Map.delete`,
-  `Set.has`, `Set.add`, `Set.delete`, and `Promise.resolve` over evaluator-known values.
+  `split`, `replace`, `replaceAll`, `trim`, case transforms, `new Map`, `new WeakMap`, `Map.get`, `Map.set`, `Map.has`,
+  `Map.delete`, `Map.clear`, `new Set`, `new WeakSet`, `Set.has`, `Set.add`, `Set.delete`, `Set.clear`, and
+  `Promise.resolve` over evaluator-known values. Map and Set operations spend the shared keyed-collection algebra rather
+  than maintaining intrinsic-local membership rules.
 - Function and class values are callable/constructable carriers plus ordinary JavaScript property carriers. Static
   evaluator-local assignments such as `factory.someKey = value` should update the function/class value instead of
   opening a dynamic-mutation seam. Class construction and local getter reads are guarded static interpretation lanes;
@@ -315,12 +508,17 @@ TypeScript-authored.
   to the declared names so downstream materializers can decide whether a product-specific seam is needed.
 - Optional property access, element access, and optional calls over concrete `null`/`undefined` receivers reduce to
   `undefined`. Optional chains over unknown or boundary receivers still preserve the underlying unknown/boundary lane.
-- Async function calls return `EvaluationPromiseValue` with an `async-execution` boundary as the fulfillment value.
-  `Promise.resolve(value)` wraps a statically known value into the same promise lane so downstream consumers can unwrap
-  framework-supported promise inputs without treating the ambient `Promise` object as a host boundary. Promise
-  `then`/`catch`/`finally` intrinsics preserve the fulfillment lane without running callbacks; deeper async
-  scheduling, rejection state, and callback execution remain future evaluator substrate rather than product-level
-  guesswork.
+- `EvaluationPromiseValue` owns explicit fulfilled, rejected, or open settlement evidence without claiming when that
+  settlement becomes observable. `Promise.resolve(...)`, `Promise.reject(...)`, dynamic imports, and async-function
+  boundaries all publish through this vocabulary. Downstream consumers may unwrap only a closed fulfillment; rejection
+  and open settlement must not be reinterpreted as a missing or fulfilled value.
+- Promise `then`/`catch`/`finally` preserve the incoming settlement when the selected handler is absent or definitely
+  non-callable. Callable reactions do not execute in the synchronous module graph and currently leave the resulting
+  settlement open. Graph-isolated reaction execution and scheduling belong to the evaluator's future execution-lane
+  substrate, not product-level callbacks or recognizer replay.
+- `for await...of` does not execute its body synchronously. Until promise outcome and continuation scheduling have an
+  explicit evaluator carrier, it returns an open completion after evaluating the iterable expression. Do not recover
+  apparent progress by publishing body or post-loop effects as definite facts.
 - Boundary objects are not ordinary evaluator objects with a missing-property fallback. Known boundary object properties
   can be read or written inside the current evaluator pass, while unknown boundary property reads produce
   `EvaluationBoundaryValue`. Expression-level operations over boundary values return another boundary value instead of
@@ -352,8 +550,12 @@ TypeScript-authored.
   and the old post-TypeScript path-probe retry should stay out unless a profile shows it resolves real modules.
 - `ModuleLoader` mirrors the framework's direct-input and promise-fulfillment distinction: direct values must be
   promises or non-null object-like values; promise fulfillments reject only nullish modules and otherwise produce an
-  analyzed module, with non-object fulfillments yielding an empty item list. `ModuleItem.definition` is deliberately
-  empty until resource-definition convergence owns the handoff from analyzed exports to resource definitions.
+  analyzed module, with non-object fulfillments yielding an empty item list. Its item filter follows JavaScript
+  `typeof`: every definitely non-null object or function export survives, primitives do not, and evaluator-open values
+  keep module-item membership open rather than disappearing from an apparently exact result. An analyzed module retains
+  known items, per-item pressure, and separate membership/order pressure; consumers must not infer closure merely because
+  known exports survived the handoff. `ModuleItem.definition` is deliberately empty until resource-definition
+  convergence owns the handoff from analyzed exports to resource definitions.
 - `EvaluationKernelEmitter` currently maps evaluator seam kinds onto general `KernelVocabulary.Evaluation` keys.
   Keep this emitter narrow: it translates evaluator-local seams to product-owned seam vocabulary, but it must not
   learn Aurelia resource, configuration, registration, template, or DI semantics.
@@ -362,14 +564,21 @@ TypeScript-authored.
   into imprecise evaluator values, such as unknown array order or membership, before it poisons module evaluation as a
   hard statement-limit seam.
 - Collection callback guardrails follow that rule. Callback-bearing array intrinsics use `IntrinsicCallbackFrame` to
-  checkpoint interpretation and restore abandoned seams/counters when the callback budget is exhausted, then return an
-  imprecise evaluator result rather than publishing a generic `dynamic-call` seam from the evaluator. If a later product
-  truly needs exact membership, order, or scalar closure, that product should emit the domain-specific open seam at
-  consumption time.
+  admit the complete worst-case traversal before executing user code; budget exhaustion never relies on rolling back
+  evaluator-visible mutations. Native callback methods snapshot the initial `length` but read each future runtime index
+  live, including holes filled or elements replaced by earlier callbacks, and never visit appended indices beyond that
+  snapshot. Callback arguments and results cross the host boundary as `EvaluationValueEvidence`; map-like results
+  localize pressure to output slots, while predicates, reducers, and comparators stop before an open candidate can
+  choose control flow or order.
 - Mutating array intrinsics update the evaluator-local receiver. `push`, `unshift`, `reverse`, exact `splice`, exact
   `pop`, exact `shift`, `sort`, and `fill` should not return detached arrays that hide receiver effects. When a spread,
-  unknown range, or non-exact receiver prevents exact closure, mark receiver membership/order imprecise or return an
-  evaluator unknown instead of pretending subsequent reads see an exact array.
+  splice range, or non-exact receiver prevents extent/order closure, retain its exact pressure on receiver shape and
+  return an evaluator unknown instead of pretending subsequent reads see an exact array. `fill` never changes extent or
+  order: an unknown fill range qualifies existing element values instead. Exact inserted/fill values retain pressure on
+  their element slots; scalar returns such as `push` length must not inherit pressure they do not use.
+- Computed property names are identity decisions. An exact-looking value carrying evaluator pressure may remain useful
+  evidence, but it cannot choose an object/class key or destructuring slot. The shared property-name reader refuses the
+  candidate and replays its exact seams so every structural consumer observes the same open identity.
 - Evaluation and TypeChecker projection will meet at several future boundaries, especially DI, view-model scopes,
   SSR/SSG, and template expression tooling. Keep that handoff explicit through product handles, identities, claims,
   and provenance rather than letting either layer pretend it owns the whole story.

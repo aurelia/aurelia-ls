@@ -65,7 +65,7 @@ Disposed-kernel telemetry includes handle-character mass as well as record, prod
 Use `rootHandleChars`, `disposedHandleChars`, and net handle characters to separate logical disposal from transient
 string/handle bulk, especially when an MCP-style answer briefly builds a large app world and then discards it.
 The query-claim line also prints `roots=root/child`, `maxDepth`, retained dependency-edge counts, and compact index
-cardinalities as `q/l/e/m/o` for query-kind, locus, epoch, materialization-policy, and outcome-key buckets. Those counts
+cardinalities as `q/l/e/m/r` for query-kind, locus, epoch, materialization-policy, and answer-reuse-key buckets. Those counts
 make retained answer storage, nested answer invalidation, and invalidation shape visible without dumping every retained
 row. It also prints record-budget and
 answer-value budget disposal counts separately: a graph can drop old retained DTO values to stay within the profile's
@@ -161,7 +161,8 @@ versus newly admitted dependency/library text, and use cache density to understa
 node_modules, declarations, default libraries, and external declarations so memory triage can stay non-extractive while
 still showing which cache class is carrying the mass. Program root/source-file rows also print overlapping source-text
 bucket mass, so a run can tell whether a large Program is mostly app roots, framework/dependency declarations, or
-default-library text before changing source admission or dependency-cache policy. It also reports duplicate parse-option sets so repeated
+default-library text before changing source admission or dependency-cache policy. It also reports the hard entry/text
+limits, superseded-revision and least-recently-used capacity evictions, and duplicate parse-option sets so repeated
 canonical paths can be attributed to systematic TypeScript parse-option families without printing dependency paths. Set
 `SEMANTIC_RUNTIME_TELEMETRY_TYPE_SYSTEM_CACHE_CLEAR_POLICY=default-libraries`, `node-modules`,
 `external-declarations`, or `all` when a run should record before/after dependency-cache density and clear totals at
@@ -174,10 +175,9 @@ full recomputation and cursor-style warm local state.
 The retained heap cost of cached TypeScript `SourceFile` objects can be far larger than their raw source text. Treat
 source-text density as attribution, not as heap-size accounting: the AST/object graph is the reason one-off MCP-style
 routed calls may need to clear dependency SourceFiles even when retained text looks modest.
-The project compiler-options cache row is a different, much smaller lane. It shows whether static evaluation and
-TypeSystem construction are reusing the same root-level tsconfig/path-mapping shape inside a process; hits there remove
-repeated filesystem/source-root discovery but do not imply that TypeScript Program objects or app-world products are
-being retained.
+The compact compiler-options profile describes the one options result captured for the current project-input
+generation. Static evaluation and TypeSystem construction share that frame; telemetry should not report a separate
+process-global compiler-options cache or imply cross-generation reuse.
 Routed-batch telemetry keeps compact nested construction phases even when the app epoch is disposed after answering.
 Use those rows when MCP-style calls need to explain TypeSystem, static-evaluation, resource-recognition, template, or
 template-runtime cost without retaining the app world just to inspect it. The TypeSystem lane also prints the compact
@@ -219,9 +219,10 @@ For `scripts/app-telemetry.mjs`, `SEMANTIC_RUNTIME_TELEMETRY_KERNEL_BREAKDOWNS=t
 x-ray, while `SEMANTIC_RUNTIME_TELEMETRY_PHASE_KERNEL_BREAKDOWNS=true` separately opts phase boundaries into full
 breakdowns. Keep the latter off for large-app canaries unless phase-owned product-kind deltas are the actual target.
 `SEMANTIC_RUNTIME_TELEMETRY_PHASE_DETAIL_DENSITY=true` adds compact phase-local detail-density rows to that same
-phase-breakdown lane. It is intentionally implemented from store markers rather than full snapshot diffs, so disposed
-routed app worlds can explain peak detail shape without retaining the app world and without recounting the whole store
-at every phase boundary.
+phase-breakdown lane. It is intentionally implemented from the active kernel publication's markers rather than full
+snapshot diffs. Immediate phases observe the committed store; atomic computation phases observe the logical candidate
+with the prior owned closure hidden and staged writes visible. Disposed routed app worlds can therefore explain peak
+detail shape without retaining the app world and without recounting the whole store at every phase boundary.
 Routed disposed-app answers keep compact phase kernel summaries in the app profile when phase-kernel telemetry is
 enabled, including phase record/product counts and, when phase breakdowns are on, top product/detail/source-span rows.
 This is the template/runtime analogue of query-claim dependency-cache attribution: the answer can dispose products at

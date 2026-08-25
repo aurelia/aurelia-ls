@@ -1,110 +1,126 @@
-# Aurelia Language Server
+# Aurelia Language Tooling
 
-Language intelligence for Aurelia 2: IDE features, semantic-runtime analysis, and a read-only MCP release for AI coding tools.
+Aurelia 2 language intelligence is available through a VS Code extension and a
+local MCP server. Both use the shared **Aurelia semantic runtime** and work from
+the same project model.
+
+## VS Code Extension
+
+Install [Aurelia 2](https://marketplace.visualstudio.com/items?itemName=AureliaEffect.aurelia-2)
+from the Marketplace:
+
+```text
+ext install AureliaEffect.aurelia-2
+```
+
+The extension provides:
+
+- Template completions and enriched hover.
+- Definitions, references, highlights, and safety-checked rename.
+- Aurelia findings and Quick Fixes that re-check the current document.
+- Semantic coloring and source-backed document structure, with optional
+  binding-mode hints.
+- Resource inventory and availability, with origin, alias, and bindable context.
+- Contextual explanations for supported diagnostics, binding uncertainty,
+  attribute interpretation, resource availability, and configured limitations.
+
+See the [extension README](packages/vscode/README.md) for the full reference and
+troubleshooting. Version-specific changes and the complete 0.4-to-0.5 migration
+are in the [extension changelog](packages/vscode/CHANGELOG.md).
 
 ## MCP Release
 
-The `@aurelia-ls/mcp` package is distributed as a GitHub Release tarball until npm publishing is available. It is a
-local, read-only MCP server that lets AI coding tools inspect Aurelia workspaces, query TypeScript/Aurelia/template
-diagnostics, follow router and open-seam surfaces, fetch curated Aurelia Patterns examples, use bundled Aurelia docs
-without runtime web requests, and use typed continuation hints.
+`@aurelia-ls/mcp` exposes a source-grounded Aurelia app model to AI coding
+clients. It includes diagnostics, resource and route analysis, curated Aurelia
+Patterns, and bundled Aurelia docs. The MCP server makes no project-file writes;
+cache management changes only in-memory analysis state.
 
-For trustworthy TypeScript diagnostics, install it inside the project being analyzed:
+The latest hosted tarball is MCP 0.2.0. The source tree targets 0.3.0; its
+[package README](packages/mcp/README.md) explains the difference and links the
+versioned protocol reference.
+
+To keep MCP diagnostics aligned with the project's TypeScript, install the
+hosted release inside the Aurelia app:
 
 ```bash
 npm i -D https://github.com/aurelia/aurelia-ls/releases/download/mcp-v0.2.0/aurelia-ls-mcp-0.2.0.tgz
 ```
 
-Then configure your MCP client to run:
+Then configure the MCP client to run:
 
 ```bash
 node --max-old-space-size=8192 ./node_modules/@aurelia-ls/mcp/au-mcp.js
 ```
 
-Provider-specific config examples are in the
-[MCP provider setup guides](packages/mcp/docs/providers/README.md).
+See the [provider setup guides](packages/mcp/docs/providers/README.md) and the
+published [MCP 0.2.0 release notes](packages/mcp/release-notes/mcp-v0.2.0.md).
 
-For a quick trial:
+## Shared Semantic Runtime
 
-```bash
-npx -y https://github.com/aurelia/aurelia-ls/releases/download/mcp-v0.2.0/aurelia-ls-mcp-0.2.0.tgz
-```
+`@aurelia-ls/semantic-runtime` is the internal model shared by the language
+server and MCP. It models the project and produces semantic answers with the
+evidence needed to judge their scope and freshness.
 
-Direct URL `npx` is convenient for smoke testing, but project-local install is preferred for serious diagnostics because
-the analyzer can resolve the same TypeScript package as the workspace. After restarting the MCP client, verify that the
-TypeScript relation is `same-package`. See the [MCP README](packages/mcp/README.md) and
-[MCP release notes](packages/mcp/release-notes/mcp-v0.2.0.md) for details.
+Responsibilities around the shared model are divided as follows:
 
-## VS Code Extension
+- The language server keeps documents synchronized and maps semantic answers to
+  LSP.
+- The VS Code extension manages workspace activation, processes, and native
+  editor presentation.
+- MCP adapts the model for AI clients and adds Aurelia Patterns plus bundled
+  Aurelia docs.
 
-Install from the [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=AureliaEffect.aurelia-2):
+Analysis is bounded to static, source-resolvable behavior. Dynamic boundaries
+stay visible in answer coverage and explanations; runtime execution is outside
+the model.
 
-```
-ext install AureliaEffect.aurelia-2
-```
+## Repository Map
 
-The extension analyzes your Aurelia project and provides:
+| Package | Role | Status |
+|---|---|---|
+| `aurelia-2` | VS Code extension | Current product |
+| `@aurelia-ls/mcp` | Local MCP server | Current product; GitHub tarball distribution |
+| `@aurelia-ls/semantic-runtime` | Shared semantic authority | Current internal substrate |
+| `@aurelia-ls/language-server` | LSP lifecycle and protocol adapter | Current internal VS Code path |
+| `@aurelia-ls/patterns` | Curated Patterns and Aurelia docs snapshot support | Current internal MCP content |
+| `@aurelia-ls/atlas` | Repository/framework navigation and architecture memory | Internal maintainer tooling |
+| `@aurelia-ls/lane-harness` | Cross-surface language-server acceptance | Internal assurance tooling |
+| `@aurelia-ls/integration-harness` | Compiler/build integration fixtures | Internal assurance tooling |
+| `@aurelia-ls/compiler` | Earlier template compiler pipeline | Retained legacy/internal package |
+| `@aurelia-ls/semantic-workspace` | Earlier semantic workspace engine | Retained legacy/internal package |
+| `@aurelia-ls/transform`, `@aurelia-ls/vite-plugin` | Build-time/AOT packages | Retained outside the current VS Code/MCP release lines |
+| `@aurelia-ls/ssr`, `@aurelia-ls/ssg` | Rendering packages | Retained outside the current VS Code/MCP release lines |
 
-- **Hover** — component interfaces, binding modes, types, contextual variables, provenance
-- **Diagnostics** — unknown elements, missing bindables, binding mismatches — with confidence-based severity so you don't get false positives on valid code
-- **Completions** — elements, attributes, binding commands, expressions, value converters, binding behaviors — scoped to what's actually registered
-- **Go to Definition** — jump from template to source for any Aurelia construct
-- **Find References** — locate all usages of a component or bindable across templates
-- **Rename** — cross-file rename with safety checks (won't apply partial changes)
-- **Semantic Tokens** — coloring that distinguishes custom elements from HTML, bindables from plain attributes
-- **Resource Explorer** — browse all resources in your project from the sidebar
+## Build From Source
 
-See the [extension README](packages/vscode/README.md) for the full feature list and screenshots.
-
-## How It Works
-
-The project is built around a **semantic workspace** that analyzes your Aurelia project — scanning source files, third-party packages, builtins, and configuration — and builds a unified model of every resource, its bindables, its registration scope, and where each piece of knowledge came from.
-
-The language server and the AOT compiler both consume this model. IDE features get their answers from the same analysis that drives compilation, which means hover, diagnostics, and completions all agree with each other and with the build output.
-
-When the analysis hits a limit — a dynamic registration pattern, a third-party package the analyzer can't fully trace — it records what it couldn't determine and why. Diagnostics demote to warnings, hover cards show confidence indicators, completions flag gaps. The goal is that you can trust what the tooling tells you.
-
-## Packages
-
-| Package | What it does |
-|---------|-------------|
-| `@aurelia-ls/mcp` | Read-only MCP server for semantic-runtime workspace/app queries |
-| `@aurelia-ls/semantic-runtime` | Aurelia semantic substrate used by the MCP release |
-| `@aurelia-ls/atlas` | Internal repo/framework navigation and maintenance lenses |
-| `@aurelia-ls/compiler` | Template compiler and project analysis pipeline |
-| `@aurelia-ls/semantic-workspace` | Semantic model, incremental invalidation, and feature query surface |
-| `@aurelia-ls/language-server` | LSP adapter — translates workspace queries into LSP responses |
-| `@aurelia-ls/transform` | Build-time AOT transform (injects compiled templates into source) |
-| `@aurelia-ls/vite-plugin` | Vite integration for dev server and production builds |
-| `@aurelia-ls/ssr` | Server-side rendering |
-| `@aurelia-ls/ssg` | Static site generation |
-| `@aurelia-ls/integration-harness` | End-to-end test harness |
-| `aurelia-2` | [VS Code extension](https://marketplace.visualstudio.com/items?itemName=AureliaEffect.aurelia-2) |
-
-## Building from Source
+Requires Node >=22.13 <25 and pnpm 11.5.2. The repository links Aurelia framework
+packages from the `aurelia/` submodule.
 
 ```bash
 git clone --recurse-submodules https://github.com/aurelia/aurelia-ls.git
 cd aurelia-ls
-
-# Build aurelia-ls
 pnpm install
-pnpm run build
+pnpm bootstrap:aurelia
+pnpm build
 ```
 
-The repo links Aurelia framework packages from the `aurelia/` submodule through
-`pnpm-workspace.yaml` overrides, so the submodule must be initialized. The MCP
-and semantic-runtime MCP paths do not require building the Aurelia submodule
-itself.
+`pnpm bootstrap:aurelia` installs the linked framework workspace's dependency
+closure without running lifecycle scripts. See [Getting Started](docs/getting-started.md)
+for focused product setup, tests, and extension debugging.
 
 ## Documentation
 
-- [Getting Started](./docs/getting-started.md) — setup and installation
-- [Architecture](./docs/architecture.md) — how the compiler pipeline works
+- [Getting Started](docs/getting-started.md)
+- [Project Configuration V1](docs/project-configuration.md)
+- [VS Code extension reference](packages/vscode/README.md)
+- [MCP package and protocol reference](packages/mcp/README.md)
+- [Architecture](docs/architecture.md)
+- [Cross-consumer changelog](CHANGELOG.md)
 
 ## Status
 
-This is pre-release software under active development. See [CHANGELOG](./CHANGELOG.md) for updates.
+VS Code 0.5.0 and MCP 0.3.0 are under active release preparation. Published
+product links above identify the currently hosted artifacts.
 
 ## License
 

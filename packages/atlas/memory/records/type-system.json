@@ -18,9 +18,12 @@
       "guidance": [
         "Start here when a feature needs a checker epoch, source-file lookup, module export type lookup, or runtime target instance type for a resource.",
         "Keep evaluator source admission and TypeChecker Program construction threaded through this epoch instead of rebuilding local programs.",
+        "TypeSystemProjectComputationService owns one admitted base Program/checker generation per logical project. Event-only and HTML-only app replacement may reuse it only after project structure, the evaluated TS/JS source projection, and every exact positive and negative compiler-host read rebase unchanged; TS/JS, compiler-option, module-resolution, or source-set changes admit a fresh generation.",
+        "Rebase the stable compiler-host facade through the target project-input generation's shared captured host under the acquisition proof already used by evaluator and checker generations. The rebase is exact value recapture, not a cached currentness boolean; final app publication must validate again through a fresh proof.",
+        "Keep the reusable checker generation, the current authored-input frame, and the process-local dependency SourceFile cache as three distinct lifetimes. Template overlays read authored HTML through the current app frame, explicit app disposal retires the complete Program/checker, and dependency-cache preserve only warms later reconstruction.",
         "Keep ordinary TypeScript and tsconfig diagnostics on this Program/tsconfig epoch. MCP and public API calls should use semantic-runtime's typescript-diagnostics surfaces instead of shelling out to tsc or rebuilding a separate Program.",
         "Do not conflate Program/tsconfig correctness diagnostics with Atlas's LanguageService suggestion/code-action lane. Semantic-runtime's current TypeScript diagnostic surface is tsc/noEmit-shaped repair pressure; suggestions, quick fixes, refactors, and organize-imports belong in a later LSP/code-action surface over the same epoch.",
-        "Keep TypeScript diagnostic source roles separate from TypeScript's optional diagnostic `source` label. Diagnostic rows should ask TypeSystemProject.readProgramSourceFileRole so boot-admitted project/config files keep their SourceFileRole and checker-owned dependency or overlay files classify through Program source buckets rather than API-local filename heuristics.",
+        "Keep TypeScript diagnostic source roles separate from TypeScript's optional diagnostic `source` label. Diagnostic rows should ask TypeSystemProject.readProgramSourceFileRoleByHostPath with an exact absolute host identity so boot-admitted project/config files keep their SourceFileRole and checker-owned dependency or overlay files classify through Program source buckets rather than API-local filename heuristics.",
         "Keep checker-observed dependency sources distinct from opened-app source roles. Program-owned default-library and external declaration files classify as declaration, generated overlays classify as generated, and non-declaration implementation files under node_modules classify as external-source so unified diagnostics and repair planning do not route dependency/plugin template overlay errors as editable app source.",
         "Preserve diagnostic inquiry cost by locus. Project-wide diagnostics may spend and cache the full Program diagnostic set, but source-file diagnostics should use readTypeSystemProjectSourceDiagnostics so one file or tsconfig inquiry does not force every app source diagnostic.",
         "If app loading is slow, inspect TypeSystemProject phase timings and phase item counts before guessing at semantic-runtime bulk cost.",
@@ -28,10 +31,11 @@
         "Keep TypeSystemProject profile item counts flowing through app pressure scripts so future performance work can compare evaluated source files, overlay sources, compiler-host files, final Program files, and source-file composition.",
         "Keep source-text character buckets flowing beside Program/root file counts. Counts answer breadth; overlapping text buckets answer which files are carrying retained TypeScript text/AST mass before changing source admission or dependency-cache policy.",
         "Keep non-overlapping Program source-file group rows beside the overlapping buckets. Groups name exactly one owner per Program file, such as project source, semantic-runtime overlay source, TypeScript default libraries, a node_modules package, external declarations, or external source; use them to identify which dependency/package class is carrying source-text mass.",
-        "Keep compiler-host source-text traffic visible beside hit/miss/write counts. Write text shows dependency/library SourceFiles admitted into the warm cache during cold Program construction; hit text shows how much cached SourceFile text the next Program reused.",
+        "Keep compiler-host source-text traffic and automatic eviction counters visible beside hit/miss/write counts. Write text shows dependency/library SourceFiles admitted into the warm cache during cold Program construction; hit text shows how much cached SourceFile text the next Program reused; superseded-revision and capacity eviction text distinguish bounded retention from explicit clear operations.",
         "Keep optional phase-memory attribution flowing through routed app profile summaries. One-off public calls need to see whether TypeSystem Program construction is the heap/RSS frontier even after the app epoch and dependency SourceFile cache are disposed.",
         "Keep the TypeSystem compiler-options profile visible beside Program source-file counts. Target, module resolution, configured library count, baseUrl, and path-mapping counts explain whether TypeScript breadth came from app config, fallback fixture defaults, or source-map discovery before source admission is changed.",
-        "Project compiler options are boot-owned and process-cached by project root plus discovery roots, then cloned for each TypeScript consumer alongside config root filenames and config diagnostic rows. If static evaluation and TypeSystem setup both need options for the same root/discovery set, the second read should hit that cache rather than rediscovering workspace/source-root mappings. Aurelia framework package type mappings are discovered dynamically from `aurelia/packages/*/package.json` plus `dist/types/index.d.ts`; do not reintroduce a hand-maintained package list, because generated fixtures may import validation-html, i18n, state, dialog, or other framework package APIs that need exact checker types.",
+        "Project compiler options are built once from the captured project-input host on each ProjectBootFrame, then shared by static evaluation and TypeSystem construction for that generation. Do not restore the removed process-global project-root cache: tsconfig, path mappings, roots, and config diagnostics must advance with the same immutable input generation. Aurelia framework package type mappings are discovered dynamically from `aurelia/packages/*/package.json` plus `dist/types/index.d.ts`; do not reintroduce a hand-maintained package list, because generated fixtures may import validation-html, i18n, state, dialog, or other framework package APIs that need exact checker types.",
+        "Keep source ownership explicit during checker projection. Boot-admitted app sources and generated overlay sources are project-qualified; physical checker-only dependency, framework, ambient, and default-library source addresses are workspace-support-owned through TypeSystemProgramSourceAuthority so no app generation becomes their accidental first owner.",
         "Out-of-tree generated fixtures must build TypeSystem compiler options with both the fixture root and the semantic-runtime workspace root as a discovery root. Otherwise local Aurelia checkout paths and workspace package mappings disappear, DI state projections degrade to `any`, and correct template scope/observer behavior can be mistaken for a binding semantics failure.",
         "No-tsconfig roots use semantic-runtime's fallback modern web library profile instead of TypeScript's full Latest library universe; real app tsconfig files remain authoritative and should keep TypeScript's own lib defaults when they omit an explicit lib.",
         "Treat decorator-mode diagnostics as compiler-options truth, not as semantic-runtime noise. The current local Aurelia declarations are standard-decorator-shaped; fixture tsconfigs that opt into legacy `experimentalDecorators` can legitimately surface TS1238/TS1240 and should be corrected or marked as intentional pressure rather than filtered.",
@@ -48,8 +52,9 @@
         "Generated template overlays should replay authored expression text inside the already-materialized BindingScope ancestry rather than stringifying projected type displays. Let the checker infer through imported view-model types, root binding-context aliases, and runtime-shaped scope blocks.",
         "When a generated overlay needs a type annotation for a semantic slot that has no same-scope alias, prefer an importable TypeScript type expression over a display string. Runtime-assignment writeback locals can project the target bindable member as an indexed access such as `SyntheticTableCustomAttribute[\"activeRow\"]`, preserving private domain-model names through the exported controller surface.",
         "Use generated-type-expression.ts for generated TypeScript type annotations. It owns source-stable importable type expressions, including structural type nodes such as function types whose parameter or return types need import rewriting and checker-global declarations such as DOM element interfaces; do not make overlay builders fall back to display strings or child placeholder member types.",
-        "Treat missing type-reference handles as open identity evidence, not equality. Same-reference checks should require matching product handles, matching checker keys, or an intentionally synthetic/primitive display match; otherwise unrelated null-handled references can collapse overlay and data-flow types.",
-        "Keep template overlay semantic selection, expression projection, mapping, and generated TypeScript emission split: template-expression-selection owns shared expression/value-site and expression-parse to runtime-scope lookup; template-type-system-overlay-expression owns copied authored expression projection and named unsupported-Aurelia-expression pressure; TemplateTypeSystemOverlayBuilder consumes semantic products; template-type-system-overlay-plan owns the typed scope layers and text emission.",
+        "Treat missing type-reference handles as open identity evidence, not equality. Same-reference checks should require matching product handles, matching project-qualified semantic type keys, or an intentionally synthetic/primitive display match; otherwise unrelated null-handled references can collapse overlay and data-flow types.",
+        "Keep template overlay resource ownership, semantic selection, expression projection, mapping, and generated TypeScript emission split: runtime-resource-ownership owns source-local expressions/value sites/instructions projected from recursive aggregate render products; template-expression-selection owns expression-parse to runtime-instruction and runtime-scope lookup where aggregate context is required; template-type-system-overlay-expression owns copied/generated authored expression projection and named unsupported-Aurelia-expression pressure; TemplateTypeSystemOverlayBuilder consumes semantic products; template-type-system-overlay-plan owns the typed scope layers and text emission.",
+        "Recursive aggregate rendering is reachability/topology evidence, not authored-resource ownership. Cursor, diagnostics, semantic-token, completion, capability-demand, and overlay consumers should select dynamic parses/value sites/instructions through runtime-resource-ownership before consulting aggregate instruction/scope context; do not let a parent overlay or API answer claim child-authored template expressions. Runtime spread products retain exact captured AttrSyntax origins, which must outrank source-span containment so nested same-file template ranges do not become ownership heuristics.",
         "Overlay work is read-first. Before adding a local unsupported-construct branch, query Atlas memory and Work Router, inspect the Aurelia framework source, and inspect existing semantic-runtime products/materializers/evaluator paths. The usual correct answer is to project an existing product, deepen the semantic product, or improve Atlas visibility before emitting a new overlay skip.",
         "Overlay awkwardness is substrate pressure, not just overlay backlog. If full AST support, fromView/twoWay writeback, observer write capability, value-channel typing, controller scope, or built-in resource semantics make generated TypeScript hard to express, pause and inspect the lower semantic-runtime owner before expanding overlay-local machinery. A bottom-up substrate improvement should be preferred when it can benefit diagnostics, completions, authoring, edit planning, and overlay together.",
         "Value-converter call-surface policy lives in type-system/value-converter-call-surface.ts. Expression typing, source-value reduction, and generated template overlays should share the same `toView`/`fromView`/`withContext` vocabulary and checker-visible `withContext === true` branch classifier instead of rediscovering converter arity locally.",
@@ -64,12 +69,13 @@
         "The template-overlay-value-converter fixture proves importable value converters project through direct checker-visible `toView(...)` method calls in interpolation, `if.bind`, and `repeat.for` contexts. TypeScript's native overload selection owns return and argument policy, literal `withContext = true` inserts the framework caller-context parameter before authored converter arguments, checker-visible dynamic `withContext` emits both strict-true runtime branches, the direct TypeChecker evaluator and generated overlay both infer the same return-distinct branch union, converter types without `toView` use the runtime-identity helper to match runtime-html `useConverter(...)`, and TS2345 argument diagnostics map back to the authored converter argument span while retaining the semantic expression product handle behind the generated segment.",
         "Binding-context-changing overlay scopes now include `with.bind`, promise pending/result contexts, and state binding scopes. `with.bind` locals come from the value scope's binding context, and listener-event scopes nested inside that value scope must inherit the generated parent alias so `$parent` still targets the outer Aurelia scope. Promise `then` locals use the awaited parent promise type, promise `catch` locals are `unknown`, and state locals come from modeled `StateBindingScope` context member expressions rather than raw template name lookup.",
         "Built-in value converters can derive importable overlay target types from checker carrier declarations when resource identity metadata is not enough. Truly missing converters use an unknown converter placeholder so the wrapped expression and converter arguments stay checker-visible while semantic diagnostics own the missing-resource issue.",
-        "Full in-repo app pressure currently reports zero template overlay skips. Treat any future skip reappearance as a signal to inspect the semantic owner or Atlas route first, not as a prompt to add generated TypeScript fallbacks.",
+        "App-pressure overlay skips are an explicit substrate inventory, not a zero-count success metric. Invalid fixtures may fail closed, and current honest frontiers include app-owned lifecycle code that constructs Scope plus local templates without an importable view-model identity. Classify each skip by semantic owner before changing it; do not manufacture scope/type facts or add generated TypeScript fallbacks to chase zero.",
         "BindingScope.scopeCreators is the hot semantic-object mirror for runtime products and framework-semantic reasons that create or narrow a scope, including runtime scope effects, listener events, state binding, runtime assignments, and template-controller branch/value facts. Overlay and inquiry consumers that need to replay scope causes should consume that field instead of rediscovering effects from rendered instructions or source spans.",
         "When inline multi-binding parsing or overlay copying loses exact source spans, inspect binding-command lowering and value-site publication before changing the overlay builder. Secondary segment SourceSpanAddress records can be uncommitted while parsing, so callers must pass an explicit expression parse context for the segment value span.",
         "Same-level narrowed scopes should preserve creator facts from their base scope plus the narrowing instruction. Overlay consumers need those base creators to replay copied let/repeat/runtime-assignment slots before emitting the branch condition. Runtime scope effects still project their own source from the parent/source scope so a generated overlay cannot let a `let` or repeat effect read the local it is creating.",
         "Template-controller branch replay is not identical to TypeChecker narrowing. If `CheckerExpressionScopeNarrower` cannot publish refined slots for an `if.bind` or adjacent `else`, scope construction should still record a `TemplateControllerCondition` creator with the condition instruction and polarity instead of degrading to an anonymous branch.",
-        "`$this`, `$parent`, and boundary `this` source tokens are binding-context alias pressure, not ordinary TypeScript name-resolution failures. Root `$this`, identifier-repeat current `$this`, destructured-repeat current `$this`, and nested repeat `$parent` chains are represented by generated aliases; boundary `this` is represented by wrapping the overlay in a typed resource-template function. Non-replayed binding-pattern current aliases should stay explicit skips until BindingScope replay can represent them without TypeScript-only lookup rules.",
+        "`$this`, `$parent`, and boundary `this` source tokens are binding-context alias pressure, not ordinary TypeScript name-resolution failures. Root `$this`, identifier-repeat current `$this`, destructured-repeat current `$this`, and nested repeat `$parent` chains are represented by generated aliases; boundary `this` is represented by wrapping the overlay in a typed resource-template function. Framework parser arrow-callback depth is separate from authored template ancestry: spend preserved AuthoredScopePath for explicit `$this`/`$parent`, and subtract callback depth only for implicit scope lookup. Non-replayed binding-pattern current aliases should stay explicit skips until BindingScope replay can represent them without TypeScript-only lookup rules.",
+        "Interpolation is framework-owned runtime expression lowering, not a binding-class special case: generated overlays should preserve ordered literal parts and lower each hole through globalThis.String(...) while retaining authored hole segments. Static LetBinding literal sources are separately compressed as literalValue and should rehydrate through runtimeBindingSourceExpression for type/data-flow evaluation without fabricating an authored AST span.",
         "Use app pressure overlay skip summary buckets before opening raw app templates. The summaries intentionally collapse source-specific values while distinguishing ancestor alias, value-converter, binding-behavior, custom-expression, and statement-shape overlay gaps.",
         "Overlay diagnostics are an explicit lane, not part of ordinary project diagnostics. Use readTypeSystemOverlayDiagnostics only when a caller deliberately wants checker diagnostics from synthetic sources mapped through overlay segments to authored Aurelia source.",
         "Copied overlay expression segments can map diagnostics back to exact authored spans when generated and source lengths match. The overlay contract proves a same-length missing-member expression maps TS2339 back to the exact authored token rather than the broader expression carrier.",
@@ -78,7 +84,7 @@
         "TemplateCursorInfo honors the same type-projection overlay diagnostic lane at the active authored cursor span. Reuse template overlay diagnostic rows and duplicate suppression there; do not create a separate hover/checker diagnostic path for TS2345, TS2554, nullish access, TS2322/TS2588 assignment-shaped rows, or future admitted overlay TypeScript evidence. Binding-assignment cursor rows must be available before overlay cursor rows so duplicate suppression matches file/app diagnostics.",
         "Treat TypeSystem Program-node source-file misses as app-graph alignment pressure before adding local checker fallbacks. If a resource target node came from a project-local evaluated TS/JS module, that module should be a semantic Program root even when it is not eligible for ordinary tsconfig diagnostics; external/dependency misses need a separate admission policy.",
         "Use the compiler-host source-file cache for node_modules files and external declaration files before adding a second checker host path. App pressure reports host source-cache hits, misses, writes, bypasses, cacheable-read lanes, bypass lanes, Program source-file composition, and source-text density by dependency class; current-project authored files should continue to bypass or come from evaluated sources so edits do not get hidden behind global cache state.",
-        "Use TypeSystemProject.readProgramSourceFileByPath or readProgramSourceFileByModuleKey when scanning source for checker-backed materialization. Evaluator-owned AST access is deliberately named readEvaluatedSourceFileByPath/readEvaluatedSourceFileByModuleKey so call sites do not accidentally pair evaluation SourceFiles with the checker.",
+        "Use TypeSystemProject.readProgramSourceFileByHostPath for exact absolute host identity, readProgramSourceFileByProjectPath for explicit project-relative input, or readProgramSourceFileByModuleKey when scanning source for checker-backed materialization. Evaluator-owned AST access is deliberately named readEvaluatedSourceFileByPath/readEvaluatedSourceFileByModuleKey so call sites do not accidentally pair evaluation SourceFiles with the checker.",
         "Use source-address-expression.ts for the shared source-span address to exact TypeScript expression read. State initial-state type projection and binding-source value reduction both spend it; do not copy local smallestExpressionForSpan walks into evaluator, state, router, or template code.",
         "Use TypeSystemProject.readProgramNode, readProgramTypeAtLocation, readProgramTypeFromTypeNode, readProgramSymbolAtLocation, readProgramAliasedSymbolAtLocation, readProgramTypeOfSymbolAtLocation, or readRuntimeTargetType before asking the TypeChecker about nodes that originated in evaluation, resource convergence, or source discovery. Checker APIs expect Program-owned nodes; alien AST identities can crash or return misleading symbols even when file/span text matches.",
         "Use readTypeScriptSourceSyntaxDiagnostics when a source generator, slot validator, or fixture/source-plan lowerer only needs isolated TypeScript syntax diagnostics. That helper is the no-Program source-syntax boundary; do not call ts.transpileModule directly from app-builder or future source-generation surfaces.",
@@ -99,33 +105,47 @@
         "Keep clear counters visible in analysis-cache overview. Lifetime clear operations, cleared entries, cleared source-text characters, cleared default-library/external-declaration bucket mass, and last clear policy are cache-churn evidence for CPU-vs-memory decisions after the immediate clear result has scrolled away.",
         "For routed one-off answers, read the query-claim cleared dependency-cache bucket split before changing the profile default. The cache may already be empty by the time analysis-cache overview runs, so the answer claim is the right layer for explaining what the clear reclaimed.",
         "Keep dependency-cache density cached and invalidated on cache write/clear so repeated analysis-cache overview reads do not rescan retained TypeScript SourceFiles.",
-        "Cache keys should stay canonical-path plus TypeScript parse-option keys. If duplicate canonical-path entries appear, treat that as parse-option pressure before changing cacheability or clearing behavior.",
-        "declaration-source.ts is the intentional filename-to-source-address bridge for TypeChecker declarations. Reuse admitted source-file addresses when present, and only materialize `type-system-program` source files for checker-only ambient/framework/dependency declarations; scanned app-source diagnostics should carry admitted handles instead.",
-        "Use admittedSourceFileAddressHandleForCheckerNode when a checker-carrier consumer scans declaration bodies for app diagnostics and should skip checker-only framework/ambient/dependency files instead of admitting them as diagnostic sources.",
-        "Checker type members are hot details, not durable kernel products. Use their hot product handle for in-process follow-up only; value-type projections and binding-scope slots should parent to the declaration identity when present, otherwise the owning type-shape identity.",
+        "Keep dependency cache identity at canonical path plus TypeScript parse options, with exactly one newest source-text revision retained per identity. Changed dependencies replace the warm entry without invalidating SourceFiles already owned by old Programs; duplicate canonical-path entries should therefore represent legitimate parse-option separation rather than revision history.",
+        "Keep the process dependency SourceFile cache least-recently-used bounded by both entry count and source-text characters. The fixed limits preserve normal warm reuse without adding per-adapter configuration, while explicit bucket clear policies remain the lower-retention control when memory pressure outweighs warmth.",
+        "declaration-source.ts is the intentional filename-to-source-address bridge for TypeChecker declarations. Read app and generated-overlay admissions through the candidate-aware project publication; delegate checker-only ambient/framework/dependency physical sources to the workspace TypeSystemProgramSourceAuthority. Only isolated lower-level contracts use project-owned fallback publication.",
+        "When a checker-carrier consumer scans declaration bodies for app diagnostics, spend the project admission/site evidence it already carries. A workspace-owned checker-only source address proves a Program location, not authored app admission or diagnostic ownership.",
+        "Checker type members are product-owned hot details, not durable kernel products. Use their HotDetailHandle for exact in-process follow-up, retain the owning TypeShape ProductHandle separately, and parent value-type projections and binding-scope slots to the declaration identity when present or the owning type-shape identity otherwise.",
         "Do not store direct member source addresses when a TypeScriptDeclarationIdentity already owns the declaration span. Use checkerTypeMemberSourceAddressHandle to derive the source for API rows, completion candidates, and value-type projections.",
-        "Completion candidates may read checker TypeMember hot details when they already hold a slot/member product handle. This is the intended middle layer for member kind, visibility, readonly/optional, and hook-name facts; do not promote TypeMember rows back into durable kernel products merely for public answer shaping.",
+        "Completion candidates may read checker TypeMember hot details when they already hold a slot/member detail handle. This is the intended middle layer for member kind, visibility, readonly/optional, and hook-name facts; public rows should expose the durable owner product separately and must not promote TypeMember rows back into durable kernel products merely for answer shaping.",
+        "Synthetic Array members must be admitted through the same owner-aware hot-detail publication path before a scope slot or API row retains their detail handles.",
         "Member visibility is a TypeScript declaration fact, not an app-builder or MCP ranking heuristic. Keep `CheckerTypeMemberVisibilityKind` grounded in declaration/private-identifier/modifier inspection and let consumers decide presentation policy.",
         "Use CheckerTypeShapeAccess.iteratedValueType when a consumer needs to spend a compact related iterable reference. TypeShape related refs are intentionally light; consumers such as synthetic Array.flat/flatMap and repeat scope construction should hydrate through the owner checker carrier rather than treating a product-handle-less iterated reference as missing type information.",
         "Use CheckerTypeProjectionRequest.memberProjection deliberately: resource target types should publish lazy member surfaces and checker carriers during app construction, while cursor/completion or explicit member-surface answers should spend the richer projection when they need enumeration.",
         "Route checker index-signature reads through checkerStringIndexValueType and checkerNumberIndexValueType. checker-related-types.ts owns the union-aware getIndexTypeOfType call; router, observation, binding, and template consumers should not grow feature-local index-access helpers.",
         "Use checkerTypeHasAnyName when a feature needs generic exported/interface-style checker type-name matching. Feature materializers should not grow local apparent-type/name/display candidate lists unless they are modeling a domain-specific runtime rule such as proxy-observation wrapping.",
         "Use checkerArrayOrTupleType(...) for the low-level TypeScript Array/tuple predicate, checker-collection-types.ts for reusable literal-domain, runtime Array/tuple, and collection/map element/key/value checker facts, and checker-primitive-types.ts for broad primitive assignability plus callable-return primitive checks. Observation value channels, proxy observation, binding-pattern runtime checks, and binding data-flow are consumers of that type-system substrate rather than owners of local collection/primitive-shape helpers.",
-        "Runtime binding-scope construction is an intentional enumeration consumer. If a lazy context type must support Aurelia name lookup, project the member surface through BindingScopeSlotProjector/readOrProjectCheckerTypeMembers instead of adding feature-local fallbacks in router, observation, completion, or diagnostics code.",
+        "Runtime binding-scope construction is an intentional enumeration consumer. If a lazy context type must support Aurelia name lookup, project the member surface through BindingScopeSlotProjector/readOrProjectCheckerTypeMembersInProjection instead of adding feature-local fallbacks in router, observation, completion, or diagnostics code.",
         "When an Aurelia source expression must become a source slot, route AccessScope/AccessThis/AccessMember through bindingContextSlotDraftForExpressionAccess(...) so Scope lookup and TypeChecker member continuation stay on one path."
       ],
       "anchors": [
         {
           "kind": "source",
-          "filePath": "packages/semantic-runtime/src/type-system/project.ts",
-          "symbolName": "TypeSystemProject",
-          "line": 134,
-          "summary": "Current app-local TypeScript Program/checker epoch."
+          "filePath": "packages/semantic-runtime/src/type-system/program-source-authority.ts",
+          "symbolName": "TypeSystemProgramSourceAuthority",
+          "summary": "Workspace ownership for canonical checker-only physical source locations, distinct from project-owned app and overlay sources."
         },
         {
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/type-system/project.ts",
-          "symbolName": "TypeSystemProject.readProgramSourceFileRole",
+          "symbolName": "TypeSystemProject",
+          "line": 134,
+          "summary": "Logical-project TypeScript Program/checker epoch consumed by app analysis."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/type-system/project-computation.ts",
+          "symbolName": "TypeSystemProjectComputationService",
+          "summary": "Admits, exactly rebases, replaces, and retires reusable base Program/checker generations by logical project."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/type-system/project.ts",
+          "symbolName": "TypeSystemProject.readProgramSourceFileRoleByHostPath",
           "summary": "Shared role classifier for Program-owned diagnostic and repair sources."
         },
         {
@@ -234,8 +254,13 @@
         },
         {
           "kind": "source",
+          "filePath": "packages/semantic-runtime/src/template/runtime-resource-ownership.ts",
+          "summary": "Shared authored-resource ownership projection for bindings, dynamic parses, value sites, and instructions inside recursive aggregate rendering."
+        },
+        {
+          "kind": "source",
           "filePath": "packages/semantic-runtime/src/template/template-expression-selection.ts",
-          "summary": "Shared template expression/value-site and expression-parse to runtime-scope selector used by cursor inquiries, diagnostics, and overlays."
+          "summary": "Shared expression-parse to runtime-instruction and runtime-scope selector for consumers that require aggregate render context."
         },
         {
           "kind": "source",
@@ -272,10 +297,24 @@
       "liveChecks": [
         {
           "kind": "product-large-class",
+          "className": "TypeSystemProgramSourceAuthority",
+          "filePath": "packages/semantic-runtime/src/type-system/program-source-authority.ts",
+          "minLineCount": 180,
+          "minMethodCount": 6
+        },
+        {
+          "kind": "product-large-class",
           "className": "TypeSystemProject",
           "filePath": "packages/semantic-runtime/src/type-system/project.ts",
           "minLineCount": 80,
           "minMethodCount": 8
+        },
+        {
+          "kind": "product-large-class",
+          "className": "TypeSystemProjectComputationService",
+          "filePath": "packages/semantic-runtime/src/type-system/project-computation.ts",
+          "minLineCount": 80,
+          "minMethodCount": 4
         },
         {
           "kind": "source-declaration-exists",
@@ -343,7 +382,7 @@
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-05-25"
+      "updatedAt": "2026-07-22"
     },
     {
       "id": "reuse:checker-expression-type-world",
@@ -416,7 +455,7 @@
         }
       ],
       "createdAt": "2026-05-13",
-      "updatedAt": "2026-05-25"
+      "updatedAt": "2026-07-18"
     },
     {
       "id": "frontier:checker-type-shape-access",
@@ -434,9 +473,10 @@
         "Start here when a feature needs member value type, dynamic keyed access, finite literal-key access, or array/tuple numeric access from a type-shape product.",
         "Do not collapse index-signature, finite-key, numeric-key, and dot-member semantics into one fuzzy member lookup.",
         "Use checkerTypeNullishPresence(...) and CheckerTypeShapeAccess.nonNullishTypeShape(...) when expression, overlay, diagnostic, or source-value consumers need maybe-nullish read/call semantics. Optional and non-strict maybe-nullish member/keyed/call reads should evaluate the non-nullish lane and union the result with undefined; strict or unknown strictness should stay explicit runtime/open pressure.",
-        "Use checkerTypeShapeNullishUnionHasValueProperty(...) when diagnostic or cursor policy needs to decide whether a missing member on a checker-backed nullable union is really nullish pressure rather than a weak member. Do not duplicate union constituent property walks in API answer code.",
+        "Lazy cursor member projection should ask the checker for the owner's non-nullable value lane while preserving the original nullable owner identity and display. Diagnostic policy consumes that member result directly; do not reopen union constituent property walks in API answer code.",
         "Prefer checker-backed union projection from expression-type-support before falling back to synthetic common-member unions when all alternatives came from one checker epoch. This keeps nullable collection, member, and call surfaces available to repeat, source-value, overlay, and diagnostic consumers.",
         "Use memberValueAccess when diagnostics, expression reads, or repairs need to distinguish missing members from checker-visible members whose value type could not be projected.",
+        "Use runtimeObjectMemberValueAccess when framework behavior first guards a value with object admission plus `key in value`. It rejects impossible union lanes and default-library broad function interfaces, marks optional/indexed lanes conditional, and keeps default-library Object, weak lanes, and checker-missing structural object properties open. Directly synthesized object literals may prove key absence. The result returns only the successful branch's member value type and retains an exact member source only when every admitted lane proves the same checker symbol. Match broad runtime categories through default-library declaration provenance, not names, and do not emulate the relation with ordinary member access or silently select one type when a checker-backed union cannot be created.",
         "Use memberWriteAccess when observation or a future policy layer needs TypeChecker writability; downstream code should map the result into framework policy instead of reopening checker symbols locally.",
         "Use checker-node-helpers.ts for low-level TypeChecker property-symbol and symbol-value reads that are intentionally below projected type-shape products. Repeated `getPropertyOfType(type, name) ?? getPropertyOfType(getApparentType(type), name)`, single declared-property probes in feature code, or first-declaration `getTypeOfSymbolAtLocation(...)` patterns are split-brain canaries unless a framework lookup deliberately needs a narrower path.",
         "Recent checker-helper reuse moved observer-locator, template diagnostics, resource bindable/watch convergence, router route-parameter reads, controller creation, and configuration registry-shape property probes through `checkerPropertySymbol(...)`; remaining direct `getPropertyOfType` rows are intentionally concentrated in type-system internals.",
@@ -447,7 +487,7 @@
         "memberWriteAccess is also the source-route handoff for writes. When it falls back to a raw checker/apparent-property symbol, materialize the member value/declaration source in the access result so binding data-flow can publish sourceAssignmentTargetSource for from-view/two-way repair targets.",
         "String-index write access proves writeability through TypeChecker index-signature policy, but the app-owned owner-expression route may still be supplied by observation when no concrete member declaration exists.",
         "Declarationless checker properties from mapped types are not automatically open. Use the checker carrier's mapped readonly token to classify mutable `Record<K, V>` finite properties as writable and `Readonly<Record<K, V>>` finite properties as TypeScript strictness.",
-        "If QueryClaimGraph disposes answer-local type projections, CheckerTypeProjector must evict stale checker-key index rows before reuse so CheckerTypeShapeAccess never receives a dead product handle. `contract:type-projection-lifetime` is the focused proof for this lifetime rule.",
+        "Type-shape and hot-member lifetime follows ordinary computation-owned product/detail publication. If answer-local disposal removes a projection, a later consumer must reproject through the current checker generation rather than tolerate a dead product handle or restore a projector sidecar index. `contract:type-projection-lifetime` is the focused proof for this rule.",
         "If a missing member looks like a weak-typing diagnostic, preserve the open reason rather than synthesizing a misleading member."
       ],
       "anchors": [
@@ -472,9 +512,21 @@
         },
         {
           "kind": "source",
+          "filePath": "packages/semantic-runtime/src/type-system/checker-related-types.ts",
+          "symbolName": "checkerRuntimeObjectMemberAdmission",
+          "summary": "Shared checker relation for framework object plus property-presence guards over union, optional, indexed, weak, and impossible source types."
+        },
+        {
+          "kind": "source",
           "filePath": "packages/semantic-runtime/src/type-system/checker-type-shape-access.ts",
-          "symbolName": "checkerTypeShapeNullishUnionHasValueProperty",
-          "summary": "Shared nullable-union value-member policy used by diagnostics before reporting weak-member pressure."
+          "symbolName": "CheckerTypeShapeAccess.runtimeObjectMemberValueAccess",
+          "summary": "Projected type-shape bridge for guarded runtime member admission and successful-branch value type."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/type-system/checker-type-member-surface.ts",
+          "symbolName": "projectCheckerTypeMemberSurfaceInProjection",
+          "summary": "Lazy member-surface projection through the checker non-nullable value lane while retaining owner identity."
         },
         {
           "kind": "source",
@@ -501,7 +553,7 @@
         {
           "kind": "script",
           "command": "pnpm --filter @aurelia-ls/semantic-runtime contract:type-projection-lifetime",
-          "summary": "Contract proving CheckerTypeShapeAccess cannot receive stale projected type handles from the projector sidecar index after marker disposal."
+          "summary": "Contract proving disposed answer-local type projections re-enter through current computation-owned product/detail publication."
         },
         {
           "kind": "script",
@@ -519,7 +571,7 @@
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-05-25"
+      "updatedAt": "2026-07-24"
     },
     {
       "id": "reuse:checker-backed-union-projection",
@@ -803,7 +855,7 @@
         "Inline Aurelia arrow functions cannot express TypeScript type-predicate returns. When overloaded callback APIs such as Array.prototype.filter differ only by a type-predicate callback return, reject the type-guard overload for inline arrows and preserve the common callback parameter surface for contextual parameter typing.",
         "If collection callback diagnostics lose owner precision while data-flow still closes the expression, inspect this projector before adding observation or diagnostics special cases. The template-collection-observation fixture covers products.filter(...).map(...).join(...) as the canary.",
         "Direct type-parameter inference from non-callback arguments also belongs here. The projector may infer a signature type parameter from an ordinary argument such as `Array.prototype.reduce`'s initial value before projecting callback locals or direct type-parameter returns; keep this narrow and shared instead of cloning TypeScript inference in consumers.",
-        "Use projectRuntimeAssignmentValueConverterWriteback(...) when binding data-flow or runtime-assignment scope construction needs fromView writeback; do not grow another astAssign converter-chain loop beside the shared TypeChecker call path.",
+        "Use projectRuntimeAssignmentValueConverterWriteback(...) when binding data-flow or runtime-assignment scope construction needs fromView writeback; it retains every outer-to-inner structural stage plus the final converted type, so do not grow another astAssign converter-chain loop beside the shared TypeChecker call path. Runtime application identity/reachability belongs to observation and is joined there rather than duplicated in this checker projector.",
         "Template overlays should emit direct checker-visible `toView(...)` method calls instead of generic conditional helper wrappers; reserve the runtime-identity helper for missing converters or converter targets without `toView`, and model checker-visible dynamic `withContext` as both strict-true runtime branches. Keep the overlay and direct CheckerExpressionTypeEvaluator branch-union contracts paired when changing value-converter call projection.",
         "Keep nested generic inference, synthetic-argument inference, custom expression plugins, and richer collection prototype semantics explicit until their missing facts are modeled."
       ],
@@ -829,7 +881,7 @@
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/type-system/value-converter-writeback.ts",
           "symbolName": "projectRuntimeAssignmentValueConverterWriteback",
-          "summary": "Shared astAssign fromView chain projection used by data-flow and runtime-assignment scope construction."
+          "summary": "Shared astAssign fromView chain projection that retains every structural stage and the final type for data-flow and runtime-assignment scope construction."
         },
         {
           "kind": "source",
@@ -847,7 +899,7 @@
         }
       ],
       "createdAt": "2026-05-13",
-      "updatedAt": "2026-05-25"
+      "updatedAt": "2026-07-13"
     },
     {
       "id": "reuse:typescript-environment-fidelity",
@@ -918,6 +970,139 @@
       ],
       "createdAt": "2026-06-11",
       "updatedAt": "2026-06-11"
+    },
+    {
+      "id": "decision:typescript-carrier-versus-semantic-identity",
+      "kind": "decision",
+      "domains": [
+        "type-system",
+        "checker",
+        "kernel",
+        "incrementality",
+        "semantic-runtime"
+      ],
+      "summary": "TypeChecker objects are Program-local carriers, while project-qualified semantic type keys own cross-Program kernel identity only where declaration evidence supports it.",
+      "rationale": "A fresh Program is required for every captured project-input generation, but rebuilding the Program must not remint every unchanged semantic type product. Conversely, raw ts.Type, ts.Symbol, ts.Node, and checker objects cannot cross Program epochs. Stable kernel identity and carrier lifetime are separate axes: the owning computation republishes fresh carriers at project-qualified semantic handles, and consumers reject foreign checker objects rather than putting the Program epoch back into durable identity.",
+      "guidance": [
+        "Construct a fresh Program for each type-system generation. TypeScript may receive the prior Program for structural reuse only when both generations belong to the same logical project.",
+        "Keep raw checker objects Program-local and validate carrier.checker before borrowing a projected shape or member. Fresh carriers replace at stable semantic handles through the owning computation.",
+        "Qualify semantic type keys by logical project. Equal displays, paths, or source spans from different projects are not the same semantic identity.",
+        "Include generic or instantiated display in declared/library-backed type keys; declaration identity alone cannot distinguish ReadonlyArray<unknown> from ReadonlyArray<string>.",
+        "The current declaration locator includes source position and can conservatively churn after unrelated prefix edits. Keep that limitation visible until a shared declaration reconciler exists.",
+        "Do not substitute TypeChecker.getFullyQualifiedName as universal identity. Local declarations can share bare names and anonymous symbols commonly collapse to __object.",
+        "A future lexical/export-path identity is admissible only for provably module-addressable named declarations and must feed both declaration-source identity and type-shape identity. Keep positional fallback for local, anonymous, computed, and ambiguous declarations."
+      ],
+      "nextActionPolicy": "when-touched",
+      "anchors": [
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/type-system/checker-projector.ts",
+          "symbolName": "CheckerTypeProjector",
+          "summary": "Project-qualified semantic type projection and Program-local carrier validation."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/type-system/declaration-source.ts",
+          "symbolName": "checkerDeclarationSourceProjectKey",
+          "summary": "Shared logical-project namespace for checker-backed semantic identities."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/type-system/project.ts",
+          "symbolName": "TypeSystemProjectBuilder",
+          "summary": "Fresh Program construction with same-logical-project oldProgram reuse."
+        },
+        {
+          "kind": "doc",
+          "path": "packages/semantic-runtime/src/type-system/README.md",
+          "summary": "Carrier lifetime, semantic identity, and positional declaration-locator limits."
+        }
+      ],
+      "liveChecks": [
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/type-system/checker-projector.ts",
+          "symbolName": "CheckerTypeProjector"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/type-system/project.ts",
+          "symbolName": "TypeSystemProjectBuilder"
+        }
+      ],
+      "createdAt": "2026-07-21",
+      "updatedAt": "2026-07-21"
+    },
+    {
+      "id": "decision:typescript-related-member-closure",
+      "kind": "decision",
+      "domains": [
+        "semantic-runtime",
+        "type-system",
+        "typescript",
+        "references",
+        "rename",
+        "lsp"
+      ],
+      "summary": "TypeScript owns cross-symbol member reference and rename closure inside the existing Program epoch.",
+      "rationale": "TypeScript member families can cross distinct checker symbols through interface implementation, inheritance and overrides, accessor pairs, overloads, contextual object properties, destructuring, and inferred shorthand. A semantic-runtime whole-Program equal-symbol scan therefore produced partial reference and rename answers. The TypeSystemProject epoch now delegates related-symbol closure to TypeScript's own reference and rename engine without constructing a second Program or LanguageService.",
+      "guidance": [
+        "Use TypeSystemProject.readProgramRelatedMemberFamilyByHostPath with an exact absolute host identity when a template or TypeScript-origin operation needs cross-file member references or rename edits; do not restore a Program-wide checker-symbol equality scan.",
+        "Preserve every TypeScript-authored declaration and reference returned by the family, including prefix/suffix rewrites for shorthand forms. References may report external sources, but rename must refuse the complete operation when any related site is native, dependency-owned, generated, or otherwise non-editable.",
+        "The adapter consumes an undeclared TypeScript runtime API from the existing Program epoch. Keep TypeScript pinned exactly, retain the runtime shape guard, and treat the current-version plus TypeScript 5 compatibility contracts as the upgrade gate; do not add a lossy fallback scanner.",
+        "When TypeScript's related-symbol engine is unavailable, references remain explicitly open and rename refuses. Unavailability must not masquerade as a complete declaration-only family.",
+        "Bracket/string-literal template member selection is an upstream expression cursor-surface concern. Do not compensate for missing template dispatch inside related-member closure."
+      ],
+      "nextActionPolicy": "when-touched",
+      "anchors": [
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/type-system/related-member-symbols.ts",
+          "symbolName": "readTypeSystemRelatedMemberFamily",
+          "summary": "Adapter over TypeScript's related reference and rename engine, including source-role and editability classification."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/type-system/project.ts",
+          "symbolName": "TypeSystemProject.readProgramRelatedMemberFamilyByHostPath",
+          "summary": "Existing Program-epoch entry point for related member closure."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/api/app-template-queries.ts",
+          "symbolName": "typeScriptRelatedMemberFamilyRead",
+          "summary": "Shared API consumption by template references, template rename, and TypeScript-origin propagation."
+        },
+        {
+          "kind": "doc",
+          "path": "packages/semantic-runtime/src/type-system/README.md",
+          "summary": "Related-member ownership, conservative failure behavior, and TypeScript version boundary."
+        },
+        {
+          "kind": "fixture",
+          "path": "packages/semantic-runtime/fixtures/pressure/typescript-related-member-closure",
+          "summary": "Cross-symbol member families spanning interfaces, inheritance, accessors, overloads, contextual properties, destructuring, shorthand, and native members."
+        }
+      ],
+      "liveChecks": [
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/type-system/related-member-symbols.ts",
+          "symbolName": "readTypeSystemRelatedMemberFamily"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/type-system/project.ts",
+          "symbolName": "TypeSystemProject.readProgramRelatedMemberFamilyByHostPath"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/api/app-template-queries.ts",
+          "symbolName": "typeScriptRelatedMemberFamilyRead"
+        }
+      ],
+      "createdAt": "2026-08-01",
+      "updatedAt": "2026-08-04"
     }
   ]
 }

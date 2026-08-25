@@ -1,0 +1,39 @@
+<template>
+  <template as-custom-element="local-chip">
+    <bindable name="label" attribute="public-label"></bindable>
+    <span>${label}</span>
+  </template>
+
+  <decorator-card label.bind="title"></decorator-card>
+  <decorator-card-alias label.bind="title"></decorator-card-alias>
+  <static-panel title.bind="title"></static-panel>
+  <static-panel-alias title.bind="title"></static-panel-alias>
+  <defined-badge label.bind="title"></defined-badge>
+  <defined-badge-alias label.bind="title"></defined-badge-alias>
+  <convention-panel></convention-panel>
+
+  <section decorator-tooltip="message.bind: title"></section>
+  <section decorator-tip="message.bind: title"></section>
+  <section static-flag.bind="isActive"></section>
+  <section flagged.bind="isActive"></section>
+  <section defined-accent="tone.bind: accentTone"></section>
+  <section accented="tone.bind: accentTone"></section>
+  <section surface-gate.bind="isActive"></section>
+  <section surface-door.bind="isActive"></section>
+
+  <local-chip public-label.bind="title"></local-chip>
+  <button as-element="decorator-card" label.bind="title"></button>
+  <button as-element="decorator-card-alias" label.bind="title"></button>
+
+  <span>${title | formatName}</span>
+  <span>${title | fmtName}</span>
+  <span>${isActive | staticStatus}</span>
+  <span>${count | definedCode}</span>
+  <span>${count | codeText}</span>
+
+  <input value.bind="title & trackEdit">
+  <input value.bind="title & track">
+  <input value.bind="title & staticAudit">
+  <input value.bind="title & definedMask">
+  <input value.bind="title & mask">
+</template>

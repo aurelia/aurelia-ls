@@ -5,7 +5,9 @@ packages:
   - "playground/*"
 
 allowBuilds:
+  '@vscode/vsce-sign': false
   esbuild: true
+  keytar: false
 
 overrides:
   aurelia: "link:aurelia/packages/aurelia"

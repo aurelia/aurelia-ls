@@ -1,0 +1,58 @@
+<template>
+  <ul>
+    <li repeat.for="item of items">
+      <span class="repeat-valid">${item.label}</span>
+      <span class="repeat-invalid">${item.missingLabel}</span>
+      <span class="repeat-index-valid">${$index.toFixed()}</span>
+      <span class="repeat-index-readonly">${$index = 1}</span>
+      <span class="repeat-first-invalid">${$first.toUpperCase()}</span>
+      <span class="repeat-callback-valid">${items.filter(candidate => candidate.id === item.id).length}</span>
+      <span class="repeat-callback-invalid">${items.filter(candidate => candidate.missingFlag).length}</span>
+      <let upper-label.bind="item.label.toUpperCase()"></let>
+      <span class="let-valid">${upperLabel.toLowerCase()}</span>
+      <span class="let-invalid">${upperLabel.missing}</span>
+      <projection-panel>
+        <span class="projected-valid">${item.label}</span>
+        <span class="projected-invalid">${item.missingProjectedLabel}</span>
+      </projection-panel>
+      <ul>
+        <li repeat.for="child of item.children">
+          <span class="nested-valid">${child.label}</span>
+          <span class="nested-parent-valid">${$parent.item.label}</span>
+          <span class="nested-parent-invalid">${$parent.item.missingLabel}</span>
+          <span class="nested-root-valid">${$parent.$parent.heading}</span>
+        </li>
+      </ul>
+    </li>
+  </ul>
+
+  <dl>
+    <template repeat.for="[key, entry] of entries">
+      <dt class="destructure-key-valid">${key.toUpperCase()}</dt>
+      <dd class="destructure-value-valid">${entry.label}</dd>
+      <dd class="destructure-value-invalid">${entry.missingLabel}</dd>
+    </template>
+  </dl>
+
+  <section with.bind="selectedItem">
+    <span class="with-valid">${label}</span>
+    <span class="with-invalid">${missingLabel}</span>
+    <span class="with-parent-valid">${$parent.heading}</span>
+  </section>
+
+  <section if.bind="selectedItem">
+    <span class="if-narrow-valid">${selectedItem.label}</span>
+  </section>
+
+  <div promise.bind="itemPromise">
+    <span pending>Loading</span>
+    <template then="settledItem">
+      <span class="promise-valid">${settledItem.label}</span>
+      <span class="promise-invalid">${settledItem.missingLabel}</span>
+    </template>
+    <template catch="itemError">
+      <span class="promise-error-valid">${String(itemError)}</span>
+      <span class="promise-error-invalid">${itemError.message}</span>
+    </template>
+  </div>
+</template>

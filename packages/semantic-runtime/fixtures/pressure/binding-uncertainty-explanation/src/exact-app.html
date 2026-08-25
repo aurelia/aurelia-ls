@@ -1,0 +1,11 @@
+<section>
+  <input value.to-view="name">
+  <input value.two-way="readonlyName">
+  <a href="#" active.class="active">Overview</a>
+  <strict-card title.bind="maybeTitle"></strict-card>
+  <select value.bind="selectedNullable" multiple.bind="true">
+    <option model.bind="'alpha'">Alpha</option>
+    <option model.bind="'beta'">Beta</option>
+  </select>
+  <button click.trigger="save()">Save</button>
+</section>

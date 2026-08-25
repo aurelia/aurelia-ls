@@ -3,7 +3,6 @@ import type {
   IdentityHandle,
   ProductHandle,
 } from '../kernel/handles.js';
-import type { FieldProvenance } from '../kernel/provenance.js';
 import type { ObservationFrameworkErrorCode } from './framework-error-code.js';
 
 export const enum ObservationIssuePhase {
@@ -28,14 +27,20 @@ export const enum ObservationIssueKind {
   NonTrackableTemplateMethodCall = 'non-trackable-template-method-call',
 }
 
-export type ObservationIssueField =
-  | 'phase'
-  | 'issueKind'
-  | 'message'
-  | 'frameworkErrorCode'
-  | 'source'
-  | 'subjectName'
-  | 'relatedSources';
+export const enum ObservationIssueRelatedSourceKind {
+  /** Declaration of the method whose body is not observed through an ordinary template call. */
+  SubjectDeclaration = 'subject-declaration',
+  /** Method-body state read that will not be collected as a dependency of the template binding. */
+  HiddenStateRead = 'hidden-state-read',
+}
+
+export class ObservationIssueRelatedSource {
+  constructor(
+    readonly kind: ObservationIssueRelatedSourceKind,
+    readonly addressHandle: AddressHandle,
+    readonly displayName: string | null,
+  ) {}
+}
 
 /** Source-backed observation failure corresponding to an Aurelia runtime boundary. */
 export class ObservationIssue {
@@ -56,11 +61,9 @@ export class ObservationIssue {
     readonly frameworkErrorCode: ObservationFrameworkErrorCode | null,
     /** Source address for the authored site that triggered the issue. */
     readonly sourceAddressHandle: AddressHandle | null,
-    /** Additional source addresses that explain the issue without taking over its primary diagnostic location. */
-    readonly relatedSourceAddressHandles: readonly AddressHandle[] = [],
+    /** Typed source evidence that explains the issue without taking over its primary diagnostic location. */
+    readonly relatedSources: readonly ObservationIssueRelatedSource[] = [],
     /** Issue-specific subject name, such as the called method, when repair planning needs a compact handle. */
     readonly subjectName: string | null = null,
-    /** Field-level provenance for source facts that matter to explanation or ambiguity. */
-    readonly fieldProvenance: readonly FieldProvenance<ObservationIssueField>[] = [],
   ) {}
 }

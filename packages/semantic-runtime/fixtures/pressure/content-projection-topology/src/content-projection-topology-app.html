@@ -1,0 +1,41 @@
+<template>
+  <projection-receiver>
+    <h2 au-slot="heading">${heading}: ${$host.exposedLabel}</h2>
+    <strong au-slot="heading">${message | projectionLabel}: ${$host.exposedLabel}</strong>
+    <span au-slot="ambiguous">${$host.exposedLabel}</span>
+
+    <template au-slot>
+      <p class="plain-template-projection">${message}: ${$host.receiverLabel}</p>
+      <au-compose component="scoped-compose-widget"></au-compose>
+    </template>
+
+    <template au-slot="actions" repeat.for="action of actions">
+      <button type="button">${action}: ${$parent.$host.receiverLabel}</button>
+    </template>
+
+    <span au-slot="">Empty attribute maps to the default projection.</span>
+    <span au-slot="unused">Unmatched provider still has a projection context: ${$host}</span>
+  </projection-receiver>
+
+  <projection-receiver>
+    <p>${message}</p>
+  </projection-receiver>
+
+  <projection-receiver data-fallback-note="captured by the receiver" title.bind="message | fallbackLabel & fallbackAudit:heading"></projection-receiver>
+  <projection-receiver></projection-receiver>
+
+  <projection-relay>
+    <em au-slot="forwarded">${message | projectionLabel}: ${$host.relayLabel}</em>
+  </projection-relay>
+
+  <shadow-slot-receiver>
+    <p>This remains ordinary shadow-host light content.</p>
+    <span au-slot="named">${heading}</span>
+  </shadow-slot-receiver>
+
+  <slot-reachability-receiver></slot-reachability-receiver>
+
+  <opaque-content-shell>
+    <projection-receiver expose-heading.bind="message" click.delegate="message">${message | projectionLabel}: ${notCompiledByOpenProcessContent}</projection-receiver>
+  </opaque-content-shell>
+</template>

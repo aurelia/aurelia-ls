@@ -1,11 +1,14 @@
-import { readFileSync } from 'node:fs';
 import path from 'node:path';
+import type { SemanticRuntimeProjectInputHost } from './project-input.js';
+import { sourceTextContentRevision } from './source-text-revision.js';
 
 /** Authored file text plus line metadata for source spans that must refer back to user-written files. */
 export interface AuthoredSourceText {
   readonly sourcePath: string;
   readonly hostPath: string;
   readonly text: string;
+  /** Stable identity of the exact authored file value admitted by this cache. */
+  readonly contentRevision: string;
   readonly lineStarts: readonly number[];
 }
 
@@ -15,6 +18,7 @@ export class AuthoredSourceTextCache {
 
   constructor(
     private readonly rootDir: string,
+    private readonly inputHost: SemanticRuntimeProjectInputHost,
   ) {}
 
   read(sourcePath: string): AuthoredSourceText | null {
@@ -39,18 +43,16 @@ export class AuthoredSourceTextCache {
     if (cached !== undefined) {
       return cached;
     }
-    let source: AuthoredSourceText | null;
-    try {
-      const text = readFileSync(hostPath, 'utf8');
-      source = {
-        sourcePath,
-        hostPath,
-        text,
-        lineStarts: authoredSourceLineStartsForText(text),
-      };
-    } catch {
-      source = null;
-    }
+    const text = this.inputHost.readFile(hostPath);
+    const source = text === undefined
+      ? null
+      : {
+          sourcePath,
+          hostPath,
+          text,
+          contentRevision: sourceTextContentRevision(text),
+          lineStarts: authoredSourceLineStartsForText(text),
+        };
     this.sourcesByHostPath.set(hostPath, source);
     return source;
   }
@@ -63,20 +65,6 @@ export function authoredSourceHostPath(
   return path.isAbsolute(sourcePath)
     ? sourcePath
     : path.resolve(rootDir, sourcePath);
-}
-
-export function authoredSourceHostPathCandidates(
-  workspaceRootDir: string,
-  projectRootDir: string,
-  sourcePath: string,
-): readonly string[] {
-  if (path.isAbsolute(sourcePath)) {
-    return [sourcePath];
-  }
-  return [...new Set([
-    path.resolve(projectRootDir, sourcePath),
-    path.resolve(workspaceRootDir, sourcePath),
-  ])];
 }
 
 export function authoredSourcePositionForOffset(

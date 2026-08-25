@@ -17,6 +17,7 @@ import {
   isClassMemberWithExpressionChildren,
   type ClassMemberWithExpressionChildren,
 } from '../type-system/ts-class-member.js';
+import { AURELIA_RESOLVER_WRAPPER_KINDS } from './resolver-wrapper-recognition.js';
 import {
   readNullishKeyArguments,
   type DiNullishKeyArgument,
@@ -28,18 +29,7 @@ const AURELIA_RESOLVE_MODULES = new Set([
   '@aurelia/kernel',
 ]);
 
-const AURELIA_RESOLVE_KEY_WRAPPER_EXPORTS = new Set([
-  'all',
-  'lazy',
-  'optional',
-  'factory',
-  'own',
-  'resource',
-  'optionalResource',
-  'allResources',
-  'newInstanceForScope',
-  'newInstanceOf',
-]);
+const AURELIA_RESOLVE_KEY_WRAPPER_EXPORTS = new Set<string>(AURELIA_RESOLVER_WRAPPER_KINDS);
 
 /** Import-aware source site for Aurelia's ambient `resolve(...)` DI API. */
 export class DiResolveCallSite {
@@ -66,6 +56,10 @@ export class DiResolveCallSite {
     readonly keyImportModuleSpecifier: string | null,
     readonly keyImportName: string | null,
     readonly keyImportKind: DiResolveKeyImportKind,
+    /** Program-owned source call used by checker-backed recognition and source products. */
+    readonly sourceNode: ts.CallExpression,
+    /** Program-owned unwrapped key expression, when directly authored. */
+    readonly keyExpression: ts.Expression | null,
   ) {}
 }
 
@@ -150,7 +144,7 @@ export function readDiResolveCallSites(
 ): readonly DiResolveCallSite[] {
   const sourcePathByFileName = typeSystemSourcePathIndex(project, typeSystem);
   return project.sourceFiles.flatMap((source) => {
-    const sourceFile = typeSystem.readProgramSourceFileByPath(source.path);
+    const sourceFile = typeSystem.readProgramSourceFileByProjectPath(source.path);
     return sourceFile == null
       ? []
       : readSourceFileDiResolveCallSites(source.path, source.addressHandle, sourceFile, typeSystem, sourcePathByFileName);
@@ -262,6 +256,8 @@ function recordDiResolveCallSite(
     target.importModuleSpecifier,
     target.importName,
     target.importKind,
+    node,
+    keyExpression,
   ));
 }
 

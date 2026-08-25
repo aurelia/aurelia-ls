@@ -1,15 +1,21 @@
 import assert from 'node:assert/strict';
 import ts from 'typescript';
-import { BindingContextKind, BindingScopeConstructionRequest, BindingScopeOwnerKind } from '../out/configuration/scope.js';
+import {
+  BindingContextKind,
+  BindingScopeBindingContextConstruction,
+  BindingScopeConstructionRequest,
+  BindingScopeOwnerKind,
+} from '../out/configuration/scope.js';
 import { BindingScopeMaterializer } from '../out/configuration/scope-materializer.js';
 import { ExpressionParser } from '../out/expression/expression-parser.js';
 import { ExpressionParseResultKind } from '../out/expression/parse-result-algebra.js';
 import { KernelStore } from '../out/kernel/store.js';
 import { CheckerTypeProjector, CheckerTypeMemberProjectionPolicy } from '../out/type-system/checker-projector.js';
-import { CheckerExpressionTypeEvaluator } from '../out/type-system/expression-type-evaluator.js';
+import { CheckerExpressionTypeWorld } from '../out/type-system/expression-type-world.js';
 import { CheckerExpressionTypeEvaluationContext } from '../out/type-system/expression-type-context.js';
 import { CheckerExpressionTypeEvaluationResultKind } from '../out/type-system/expression-type-evaluation.js';
 import { CheckerTypeProjectionOrigin } from '../out/type-system/type-shape.js';
+import { registerIsolatedCheckerDeclarationSourceContext } from '../out/type-system/declaration-source.js';
 
 const sourceFileName = 'contract-expression-branch-narrowing.ts';
 const sourceText = `
@@ -53,13 +59,14 @@ host.fileExists = (fileName) => fileName === sourceFileName || ts.sys.fileExists
 
 const program = ts.createProgram([sourceFileName], { strict: true, target: ts.ScriptTarget.Latest, noEmit: true }, host);
 const checker = program.getTypeChecker();
+registerIsolatedCheckerDeclarationSourceContext(checker, 'contract-expression-branch-narrowing');
 const rootInterface = sourceFile.statements.find((statement) =>
   ts.isInterfaceDeclaration(statement) && statement.name.text === 'ContractRoot'
 );
 assert.notEqual(rootInterface, undefined);
 
 const store = new KernelStore('contract-expression-branch-narrowing');
-const projector = new CheckerTypeProjector(store);
+const projector = new CheckerTypeProjector(store, store);
 const rootReference = projector.ensureProjection({
   localKey: 'contract-expression-branch-narrowing:root',
   checker,
@@ -69,22 +76,23 @@ const rootReference = projector.ensureProjection({
   memberProjection: CheckerTypeMemberProjectionPolicy.Lazy,
 }).toReference();
 
-const scope = new BindingScopeMaterializer(store).construct(new BindingScopeConstructionRequest(
+const scope = new BindingScopeMaterializer(store, projector).construct(new BindingScopeConstructionRequest(
   'contract-expression-branch-narrowing:scope',
   BindingScopeOwnerKind.SyntheticView,
   null,
   null,
   null,
-  BindingContextKind.Synthetic,
-  rootReference,
-  [],
+  BindingScopeBindingContextConstruction.materialize(
+    BindingContextKind.Synthetic,
+    rootReference,
+  ),
   null,
   [],
   true,
   null,
 )).scope;
 
-const evaluator = new CheckerExpressionTypeEvaluator(store, projector);
+const evaluator = new CheckerExpressionTypeWorld(store, projector).evaluator();
 const parser = new ExpressionParser();
 
 assertExpressionType(

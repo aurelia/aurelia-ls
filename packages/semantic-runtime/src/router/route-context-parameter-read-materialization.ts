@@ -2,9 +2,6 @@ import ts from 'typescript';
 
 import type { ProjectBootFrame } from '../boot/frames.js';
 import {
-  readSourceImportBindings,
-} from '../evaluation/import-bindings.js';
-import {
   readPropertyName,
   sourceSiteForNode,
   type TypeScriptSourceSiteContext,
@@ -22,24 +19,30 @@ import {
   type SourceSpanAddressPublication,
 } from '../kernel/source-address.js';
 import {
-  KernelStore,
+  KernelPublicationPlan,
   KernelStoreBatch,
-  type KernelStoreRecord,
+  publishProductDetails,
+  type KernelPublicationContext,
+} from '../kernel/publication.js';
+import type {
+  KernelStoreReadView,
+  KernelStoreRecord,
 } from '../kernel/store.js';
 import { KernelVocabulary } from '../kernel/vocabulary.js';
-import type { FullResourceDefinition } from '../resources/resource-definition.js';
 import type { ResourceDefinitionIndex } from '../resources/resource-definition-index.js';
+import { ResourceDefinitionKind } from '../resources/resource-kind.js';
+import {
+  frameworkDeclarationSourceSpec,
+  symbolMatchesFrameworkDeclarationSource,
+} from '../type-system/framework-declaration-source.js';
 import type { TypeSystemProject } from '../type-system/project.js';
 import {
   checkerPropertySymbol,
   checkerSymbolValueType,
 } from '../type-system/checker-node-helpers.js';
 import { checkerStringIndexValueType } from '../type-system/checker-related-types.js';
-import {
-  normalizeTypeSystemSourceFileName,
-  typeSystemSourcePathIndex,
-} from '../type-system/source-path-index.js';
-import type { RouteConfigRecognitionProjectResult } from './route-config-recognition.js';
+import { typeSystemSourcePathIndex } from '../type-system/source-path-index.js';
+import type { RouteConfigConvergenceProjectResult } from './route-config-convergence.js';
 import type { RouteRecognizerMaterializationProjectResult } from './route-recognizer-materialization.js';
 import type {
   ConfigurableRouteModel,
@@ -51,19 +54,24 @@ import type {
 } from './model.js';
 import {
   RouteContextParameterReadModel,
-  RouteableComponentKind,
+  RouteContextParameterReadOwnershipKind,
+  RouterIssueKind,
+  RouterIssueModel,
+  RouterIssuePhase,
+  RouterIssueRelatedInformation,
 } from './model.js';
 import { RouterProductDetails } from './product-details.js';
+import { routerIssueProductRecords } from './router-issue-publication.js';
 import { routerProductRecords } from './router-product-records.js';
 
-const ROUTE_CONTEXT_MODULES = new Set([
-  '@aurelia/router',
-]);
-
-const ROUTE_CONTEXT_EXPORTS = new Set([
-  'IRouteContext',
-  'RouteContext',
-]);
+const ROUTE_CONTEXT_GET_ROUTE_PARAMETERS_DECLARATIONS = frameworkDeclarationSourceSpec(
+  new Set(['getRouteParameters']),
+  ['@aurelia/router'],
+  [
+    '/aurelia/packages/router/src/route-context.ts',
+    '/aurelia/packages/router/dist/types/route-context.d.ts',
+  ],
+);
 
 type RouteContextParameterReadIncludeQueryParams = boolean | null;
 
@@ -81,6 +89,7 @@ interface RouteContextParameterReadSite {
   readonly start: number;
   readonly end: number;
   readonly enclosingClassName: string | null;
+  readonly enclosingClass: ts.ClassDeclaration | null;
   readonly enclosingMemberName: string | null;
   readonly declaredKeys: readonly RouteContextParameterKey[];
   readonly declaredOpenKeySpace: boolean;
@@ -88,9 +97,10 @@ interface RouteContextParameterReadSite {
   readonly includeQueryParams: RouteContextParameterReadIncludeQueryParams;
 }
 
-interface RouteContextParameterReadEmission {
+interface RouteContextParameterReadSiteEmission {
   readonly records: readonly KernelStoreRecord[];
-  readonly read: RouteContextParameterReadModel;
+  readonly reads: readonly RouteContextParameterReadModel[];
+  readonly issues: readonly RouterIssueModel[];
 }
 
 interface ComponentRouteContextParameterFacts {
@@ -99,48 +109,70 @@ interface ComponentRouteContextParameterFacts {
   readonly routePathParameterNames: readonly string[];
 }
 
+interface ComponentRouteContextParameterOwner {
+  readonly ownershipKind: RouteContextParameterReadOwnershipKind;
+  readonly facts: ComponentRouteContextParameterFacts;
+}
+
 /** Source-backed RouteContext.getRouteParameters(...) reads, matched back to route-recognizer path parameters. */
 export class RouteContextParameterReadProjectResult {
   constructor(
     readonly project: ProjectBootFrame,
     readonly reads: readonly RouteContextParameterReadModel[],
+    readonly issues: readonly RouterIssueModel[],
   ) {}
 
   readRouteContextParameterReads(): readonly RouteContextParameterReadModel[] {
     return this.reads;
+  }
+
+  readIssues(): readonly RouterIssueModel[] {
+    return this.issues;
   }
 }
 
 /** Materializes RouteContext.getRouteParameters(...) source reads without pretending to execute navigation. */
 export class RouteContextParameterReadMaterializer {
   materializeAndEmit(
-    store: KernelStore,
+    publication: KernelPublicationContext,
     project: ProjectBootFrame,
     typeSystem: TypeSystemProject,
     resourceIndex: ResourceDefinitionIndex,
-    routes: RouteConfigRecognitionProjectResult,
+    routes: RouteConfigConvergenceProjectResult,
     recognizer: RouteRecognizerMaterializationProjectResult,
   ): RouteContextParameterReadProjectResult {
-    const sites = readRouteContextParameterReadSites(project, typeSystem);
-    const routesByComponentClassName = routeParameterFactsByComponentClassName(
-      resourceIndex,
+    const routesByComponentIdentity = routeParameterFactsByComponentIdentity(
       routes.readRouteConfigs(),
       recognizer.readConfigurableRoutes(),
     );
-    const emissions = sites.map((site, index) =>
-      emitRouteContextParameterRead(store, project, site, routesByComponentClassName.get(site.enclosingClassName ?? ''), index)
+    const ownersByClass = routeParameterOwnersByClass(
+      project,
+      typeSystem,
+      resourceIndex,
+      routesByComponentIdentity,
     );
+    const sites = readRouteContextParameterReadSites(project, typeSystem);
+    const emissions = sites.map((site, index) => emitRouteContextParameterReadSite(
+      publication,
+      project,
+      site,
+      site.enclosingClass == null ? [] : ownersByClass.get(site.enclosingClass) ?? [],
+      index,
+    ));
     const records = emissions.flatMap((emission) => emission.records);
-    if (records.length > 0) {
-      store.commit(new KernelStoreBatch(records, `router-route-context-parameter-reads:${project.projectKey}`));
-      store.productDetails.addAll(
+    const reads = emissions.flatMap((emission) => emission.reads);
+    const issues = emissions.flatMap((emission) => emission.issues);
+    publication.publish(new KernelPublicationPlan(
+      new KernelStoreBatch(records, `router-route-context-parameter-reads:${project.projectKey}`),
+      publishProductDetails(
         RouterProductDetails.RouteContextParameterRead,
-        emissions.map((emission) => emission.read),
-      );
-    }
+        reads,
+      ),
+    ));
     return new RouteContextParameterReadProjectResult(
       project,
-      emissions.map((emission) => emission.read),
+      reads,
+      issues,
     );
   }
 }
@@ -151,7 +183,7 @@ function readRouteContextParameterReadSites(
 ): readonly RouteContextParameterReadSite[] {
   const sourcePathByFileName = typeSystemSourcePathIndex(project, typeSystem);
   return project.sourceFiles.flatMap((source) => {
-    const sourceFile = typeSystem.readProgramSourceFileByPath(source.path);
+    const sourceFile = typeSystem.readProgramSourceFileByProjectPath(source.path);
     return sourceFile == null
       ? []
       : readSourceFileRouteContextParameterReadSites(
@@ -171,21 +203,20 @@ function readSourceFileRouteContextParameterReadSites(
   typeSystem: TypeSystemProject,
   sourcePathByFileName: ReadonlyMap<string, string>,
 ): readonly RouteContextParameterReadSite[] {
-  const checker = typeSystem.checker;
-  const routeContextBindings = readSourceImportBindings(context.sourceFile, ROUTE_CONTEXT_MODULES, ROUTE_CONTEXT_EXPORTS);
   const sites: RouteContextParameterReadSite[] = [];
   const visit = (
     node: ts.Node,
     enclosingClassName: string | null,
+    enclosingClass: ts.ClassDeclaration | null,
     enclosingMemberName: string | null,
   ): void => {
     if (ts.isClassDeclaration(node) && node.name != null) {
-      ts.forEachChild(node, (child) => visit(child, node.name!.text, null));
+      ts.forEachChild(node, (child) => visit(child, node.name!.text, node, null));
       return;
     }
     if (ts.isClassElement(node)) {
       const memberName = classElementRouteContextParameterMemberName(node, context.sourceFile);
-      ts.forEachChild(node, (child) => visit(child, enclosingClassName, memberName));
+      ts.forEachChild(node, (child) => visit(child, enclosingClassName, enclosingClass, memberName));
       return;
     }
     recordRouteContextParameterReadSite(
@@ -193,15 +224,90 @@ function readSourceFileRouteContextParameterReadSites(
       context,
       typeSystem,
       sourcePathByFileName,
-      routeContextBindings,
       node,
       enclosingClassName,
+      enclosingClass,
       enclosingMemberName,
     );
-    ts.forEachChild(node, (child) => visit(child, enclosingClassName, enclosingMemberName));
+    ts.forEachChild(node, (child) => visit(child, enclosingClassName, enclosingClass, enclosingMemberName));
   };
-  visit(context.sourceFile, null, null);
+  visit(context.sourceFile, null, null, null);
   return sites;
+}
+
+function routeParameterOwnersByClass(
+  project: ProjectBootFrame,
+  typeSystem: TypeSystemProject,
+  resourceIndex: ResourceDefinitionIndex,
+  factsByComponentIdentity: ReadonlyMap<IdentityHandle, ComponentRouteContextParameterFacts>,
+): ReadonlyMap<ts.ClassDeclaration, readonly ComponentRouteContextParameterOwner[]> {
+  const ownersByClass = new Map<ts.ClassDeclaration, ComponentRouteContextParameterOwner[]>();
+  for (const source of project.sourceFiles) {
+    const sourceFile = typeSystem.readProgramSourceFileByProjectPath(source.path);
+    if (sourceFile == null) {
+      continue;
+    }
+    const visit = (node: ts.Node): void => {
+      if (ts.isClassDeclaration(node) && node.name != null) {
+        const componentIdentityHandle = routeableComponentIdentityForClass(typeSystem, resourceIndex, node);
+        const facts = componentIdentityHandle == null
+          ? null
+          : factsByComponentIdentity.get(componentIdentityHandle) ?? null;
+        if (facts != null) {
+          const prototypeChain = typeSystem.readClassPrototypeChain(node);
+          for (let index = 0; index < prototypeChain.length; index += 1) {
+            const ownerClass = prototypeChain[index]!;
+            if (!ts.isClassDeclaration(ownerClass)) {
+              continue;
+            }
+            const owners = ownersByClass.get(ownerClass) ?? [];
+            if (!owners.some((owner) => owner.facts === facts)) {
+              owners.push({
+                ownershipKind: index === 0
+                  ? RouteContextParameterReadOwnershipKind.Direct
+                  : RouteContextParameterReadOwnershipKind.Inherited,
+                facts,
+              });
+              ownersByClass.set(ownerClass, owners);
+            }
+          }
+        }
+      }
+      ts.forEachChild(node, visit);
+    };
+    visit(sourceFile);
+  }
+  for (const owners of ownersByClass.values()) {
+    owners.sort((left, right) => componentRouteContextParameterOwnerKey(left)
+      .localeCompare(componentRouteContextParameterOwnerKey(right)));
+  }
+  return ownersByClass;
+}
+
+function componentRouteContextParameterOwnerKey(
+  owner: ComponentRouteContextParameterOwner,
+): string {
+  const component = owner.facts.component;
+  return [
+    component?.resolvedName ?? component?.localName ?? '',
+    component?.resolvedIdentityHandle ?? component?.identityHandle ?? '',
+  ].join(':');
+}
+
+function routeableComponentIdentityForClass(
+  typeSystem: TypeSystemProject,
+  resourceIndex: ResourceDefinitionIndex,
+  declaration: ts.ClassDeclaration,
+): IdentityHandle | null {
+  const moduleKey = typeSystem.readModuleKeyForSourceFile(declaration.getSourceFile());
+  const localName = declaration.name?.text ?? null;
+  if (moduleKey == null || localName == null) {
+    return null;
+  }
+  const definition = resourceIndex.lookupByModuleLocal(moduleKey, localName);
+  return definition?.type === ResourceDefinitionKind.CustomElement
+    ? definition.target.identityHandle
+    : null;
 }
 
 function recordRouteContextParameterReadSite(
@@ -209,9 +315,9 @@ function recordRouteContextParameterReadSite(
   context: TypeScriptSourceSiteContext,
   typeSystem: TypeSystemProject,
   sourcePathByFileName: ReadonlyMap<string, string>,
-  routeContextBindings: ReturnType<typeof readSourceImportBindings>,
   node: ts.Node,
   enclosingClassName: string | null,
+  enclosingClass: ts.ClassDeclaration | null,
   enclosingMemberName: string | null,
 ): void {
   if (!ts.isCallExpression(node) || !ts.isPropertyAccessExpression(unwrapExpression(node.expression))) {
@@ -220,7 +326,7 @@ function recordRouteContextParameterReadSite(
   const access = unwrapExpression(node.expression) as ts.PropertyAccessExpression;
   if (
     access.name.text !== 'getRouteParameters'
-    || !isAureliaRouteContextGetRouteParameters(typeSystem, access, sourcePathByFileName, routeContextBindings)
+    || !isAureliaRouteContextGetRouteParameters(typeSystem, access, sourcePathByFileName)
   ) {
     return;
   }
@@ -231,6 +337,7 @@ function recordRouteContextParameterReadSite(
       sourceFile: context.sourceFile,
       call: node,
       enclosingClassName,
+      enclosingClass,
       enclosingMemberName,
       declaredKeys: declared.keys,
       declaredOpenKeySpace: declared.openKeySpace,
@@ -244,60 +351,18 @@ function isAureliaRouteContextGetRouteParameters(
   typeSystem: TypeSystemProject,
   access: ts.PropertyAccessExpression,
   sourcePathByFileName: ReadonlyMap<string, string>,
-  routeContextBindings: ReturnType<typeof readSourceImportBindings>,
 ): boolean {
-  if (isImportedRouteContextResolveReceiver(access.expression, routeContextBindings)) {
-    return true;
-  }
   const checker = typeSystem.checker;
   const receiverType = typeSystem.readProgramTypeAtLocation(access.expression);
   const symbol = typeSystem.readProgramSymbolAtLocation(access.name)
     ?? (receiverType == null ? null : checkerPropertySymbol(checker, receiverType, 'getRouteParameters'))
     ?? null;
-  const declarations = symbol?.declarations ?? [];
-  return declarations.some((declaration) => isFrameworkRouteContextDeclaration(declaration, sourcePathByFileName));
-}
-
-function isImportedRouteContextResolveReceiver(
-  receiver: ts.Expression,
-  routeContextBindings: ReturnType<typeof readSourceImportBindings>,
-): boolean {
-  const current = unwrapExpression(receiver);
-  if (!ts.isCallExpression(current) || current.arguments.length === 0) {
-    return false;
-  }
-  const callee = unwrapExpression(current.expression);
-  if (
-    !(ts.isIdentifier(callee) && callee.text === 'resolve')
-    && !(ts.isPropertyAccessExpression(callee) && callee.name.text === 'resolve')
-  ) {
-    return false;
-  }
-  const key = unwrapExpression(current.arguments[0]!);
-  if (ts.isIdentifier(key)) {
-    const imported = routeContextBindings.locals.get(key.text);
-    return imported === 'IRouteContext' || imported === 'RouteContext';
-  }
-  if (
-    ts.isPropertyAccessExpression(key)
-    && (key.name.text === 'IRouteContext' || key.name.text === 'RouteContext')
-    && ts.isIdentifier(unwrapExpression(key.expression))
-  ) {
-    return routeContextBindings.namespaces.has((unwrapExpression(key.expression) as ts.Identifier).text);
-  }
-  return false;
-}
-
-function isFrameworkRouteContextDeclaration(
-  declaration: ts.Declaration,
-  sourcePathByFileName: ReadonlyMap<string, string>,
-): boolean {
-  const sourceFileName = normalizeTypeSystemSourceFileName(declaration.getSourceFile().fileName);
-  const projectSourcePath = sourcePathByFileName.get(sourceFileName) ?? sourceFileName;
-  const normalized = projectSourcePath.replace(/\\/g, '/');
-  return normalized.includes('/aurelia/packages/router/src/route-context.ts')
-    || normalized.includes('/aurelia/packages/router/dist/types/route-context.d.ts')
-    || normalized.includes('/@aurelia/router/');
+  return symbolMatchesFrameworkDeclarationSource(
+    symbol,
+    checker,
+    sourcePathByFileName,
+    ROUTE_CONTEXT_GET_ROUTE_PARAMETERS_DECLARATIONS,
+  );
 }
 
 function declaredRouteParameterKeys(
@@ -447,11 +512,10 @@ function isRouteContextParameterMergeStrategy(
     || value === 'by-route';
 }
 
-function routeParameterFactsByComponentClassName(
-  resourceIndex: ResourceDefinitionIndex,
+function routeParameterFactsByComponentIdentity(
   routeConfigs: readonly RouteConfigModel[],
   configurableRoutes: readonly ConfigurableRouteModel[],
-): ReadonlyMap<string, ComponentRouteContextParameterFacts> {
+): ReadonlyMap<IdentityHandle, ComponentRouteContextParameterFacts> {
   const configurableRoutesByRouteConfig = new Map<IdentityHandle, readonly ConfigurableRouteModel[]>();
   for (const route of configurableRoutes) {
     if (route.routeConfig.identityHandle == null) {
@@ -463,50 +527,24 @@ function routeParameterFactsByComponentClassName(
     ]);
   }
 
-  const factsByClassName = new Map<string, ComponentRouteContextParameterFacts>();
+  const factsByComponentIdentity = new Map<IdentityHandle, ComponentRouteContextParameterFacts>();
   for (const routeConfig of routeConfigs) {
-    const className = routeConfigComponentClassName(resourceIndex, routeConfig);
-    if (className == null) {
+    const componentIdentityHandle = routeConfig.component?.resolvedIdentityHandle ?? null;
+    if (componentIdentityHandle == null) {
       continue;
     }
-    const existing = factsByClassName.get(className);
+    const existing = factsByComponentIdentity.get(componentIdentityHandle);
     const parameterNames = uniqueStrings([
       ...(existing?.routePathParameterNames ?? []),
       ...routePathParameterNames(configurableRoutesByRouteConfig.get(routeConfig.identityHandle) ?? []),
     ], 'sorted');
-    factsByClassName.set(className, {
+    factsByComponentIdentity.set(componentIdentityHandle, {
       component: existing?.component ?? routeConfig.component,
       routeConfigs: [...(existing?.routeConfigs ?? []), routeConfig],
       routePathParameterNames: parameterNames,
     });
   }
-  return factsByClassName;
-}
-
-function routeConfigComponentClassName(
-  resourceIndex: ResourceDefinitionIndex,
-  routeConfig: RouteConfigModel,
-): string | null {
-  const component = routeConfig.component;
-  if (component == null) {
-    return null;
-  }
-  const definition = routeConfigComponentDefinition(resourceIndex, component);
-  return definition?.target.localName
-    ?? (component.componentKind === RouteableComponentKind.ClassReference
-      || component.componentKind === RouteableComponentKind.ResourceDefinition
-      ? component.localName
-      : null)
-    ?? null;
-}
-
-function routeConfigComponentDefinition(
-  resourceIndex: ResourceDefinitionIndex,
-  component: RouteableComponentReference,
-): FullResourceDefinition | null {
-  return resourceIndex.lookupByProduct(component.resolvedProductHandle)
-    ?? resourceIndex.lookupByTargetIdentity(component.resolvedIdentityHandle)
-    ?? null;
+  return factsByComponentIdentity;
 }
 
 function routePathParameterNames(
@@ -515,13 +553,63 @@ function routePathParameterNames(
   return uniqueStrings(configurableRoutes.flatMap((route) => route.parameters.map((parameter) => parameter.name)), 'sorted');
 }
 
-function emitRouteContextParameterRead(
-  store: KernelStore,
+function emitRouteContextParameterReadSite(
+  store: KernelStoreReadView,
   project: ProjectBootFrame,
   site: RouteContextParameterReadSite,
-  facts: ComponentRouteContextParameterFacts | undefined,
+  owners: readonly ComponentRouteContextParameterOwner[],
   index: number,
-): RouteContextParameterReadEmission {
+): RouteContextParameterReadSiteEmission {
+  const siteLocal = sourceNodeOrdinalLocalKey({
+    prefix: `router-route-context-parameter-read:${project.projectKey}:${localKeyPart(site.sourcePath)}`,
+    sourceFile: site.sourceFile,
+    node: site.call,
+    index,
+  });
+  const source = sourceSpanAddressForSite(store, siteLocal, site);
+  const readOwners: readonly (ComponentRouteContextParameterOwner | null)[] = owners.length === 0
+    ? [null]
+    : owners;
+  const readEmissions = readOwners.map((owner, ownerIndex) => {
+    const local = owners.length <= 1
+      ? siteLocal
+      : `${siteLocal}:owner:${ownerIndex}:${localKeyPart(owner == null ? 'unmatched' : componentRouteContextParameterOwnerKey(owner))}`;
+    return emitRouteContextParameterRead(
+      store,
+      site,
+      owner,
+      owners.length,
+      local,
+      source,
+    );
+  });
+  const issueEmission = sharedBaseRouteContextParameterReadIssue(
+    store,
+    site,
+    owners,
+    siteLocal,
+    source,
+  );
+  return {
+    records: [
+      ...source.records,
+      ...readEmissions.flatMap((emission) => emission.records),
+      ...(issueEmission?.records ?? []),
+    ],
+    reads: readEmissions.map((emission) => emission.read),
+    issues: issueEmission == null ? [] : [issueEmission.issue],
+  };
+}
+
+function emitRouteContextParameterRead(
+  store: KernelStoreReadView,
+  site: RouteContextParameterReadSite,
+  owner: ComponentRouteContextParameterOwner | null,
+  knownOwnerCount: number,
+  local: string,
+  source: SourceSpanAddressPublication,
+): { readonly records: readonly KernelStoreRecord[]; readonly read: RouteContextParameterReadModel } {
+  const facts = owner?.facts;
   const routePathParameterNames = facts?.routePathParameterNames ?? [];
   const declaredParameterNames = site.declaredKeys.map((key) => key.name);
   const missingRoutePathParameterNames = site.declaredOpenKeySpace
@@ -535,17 +623,12 @@ function emitRouteContextParameterRead(
     declaredNonPathParameterNames,
     site.includeQueryParams,
   );
-  const local = sourceNodeOrdinalLocalKey({
-    prefix: `router-route-context-parameter-read:${project.projectKey}:${localKeyPart(site.sourcePath)}`,
-    sourceFile: site.sourceFile,
-    node: site.call,
-    index,
-  });
-  const source = sourceSpanAddressForSite(store, local, site);
   const read = new RouteContextParameterReadModel(
     store.handles.product(local),
     store.handles.identity(local),
     site.enclosingClassName,
+    owner?.ownershipKind ?? RouteContextParameterReadOwnershipKind.Unmatched,
+    knownOwnerCount,
     facts?.component ?? null,
     facts?.routeConfigs.map((routeConfig) => routeConfig.toReference()) ?? [],
     site.mergeStrategy,
@@ -560,16 +643,78 @@ function emitRouteContextParameterRead(
     source.handle,
   );
   return {
-    records: [
-      ...source.records,
-      ...routeContextParameterReadRecords(store, local, read, facts, source),
-    ],
+    records: routeContextParameterReadRecords(store, local, read, facts, source),
     read,
   };
 }
 
+function sharedBaseRouteContextParameterReadIssue(
+  store: KernelStoreReadView,
+  site: RouteContextParameterReadSite,
+  owners: readonly ComponentRouteContextParameterOwner[],
+  siteLocal: string,
+  source: SourceSpanAddressPublication,
+): { readonly records: readonly KernelStoreRecord[]; readonly issue: RouterIssueModel } | null {
+  if (
+    owners.length < 2
+    || !owners.some((owner) => owner.ownershipKind === RouteContextParameterReadOwnershipKind.Inherited)
+  ) {
+    return null;
+  }
+  const issueLocal = `${siteLocal}:shared-base-owner-issue`;
+  const componentClassName = site.enclosingClassName ?? 'base class';
+  const message = `RouteContext parameter read on '${componentClassName}' is shared by ${owners.length} routed components; declare the read on each concrete routed component or pass parameters into shared logic.`;
+  const relatedInformation = owners.map((owner) => new RouterIssueRelatedInformation(
+    owner.ownershipKind === RouteContextParameterReadOwnershipKind.Direct
+      ? `Routed component '${componentRouteContextParameterOwnerName(owner)}' declares this RouteContext parameter read.`
+      : `Routed component '${componentRouteContextParameterOwnerName(owner)}' inherits this RouteContext parameter read.`,
+    owner.facts.component?.sourceAddressHandle
+      ?? owner.facts.routeConfigs[0]?.sourceAddressHandle
+      ?? null,
+  ));
+  const issue = new RouterIssueModel(
+    store.handles.product(issueLocal),
+    store.handles.identity(issueLocal),
+    RouterIssuePhase.RouteContextParameterReadOwnership,
+    RouterIssueKind.SharedBaseRouteContextParameterRead,
+    message,
+    'warning',
+    null,
+    null,
+    null,
+    'getRouteParameters',
+    'one routed component owner',
+    `${owners.length} routed component owners`,
+    site.enclosingClassName,
+    null,
+    null,
+    null,
+    source.handle,
+    relatedInformation,
+  );
+  return {
+    issue,
+    records: routerIssueProductRecords(store, {
+      local: issueLocal,
+      issue,
+      ownerHandle: issue.identityHandle,
+      sourceAddressHandle: source.handle,
+      localName: site.enclosingClassName,
+      evidenceSummary: message,
+    }),
+  };
+}
+
+function componentRouteContextParameterOwnerName(
+  owner: ComponentRouteContextParameterOwner,
+): string {
+  return owner.facts.component?.resolvedName
+    ?? owner.facts.component?.localName
+    ?? 'routed component';
+}
+
 function routeContextParameterReadRecords(
-  store: KernelStore,
+  store: KernelStoreReadView,
   local: string,
   read: RouteContextParameterReadModel,
   facts: ComponentRouteContextParameterFacts | undefined,

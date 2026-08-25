@@ -68,6 +68,12 @@ export class ComposeDashboardApp {
       void model;
     },
   };
+  readonly nonCallableActivationComponent = {
+    activate: 'not callable',
+  };
+  readonly openActivationComponent: { readonly activate: Function } = {
+    activate(): void {},
+  };
   readonly summaryClass = SummaryPanel;
   readonly selectedWidgetId = 'stock';
   composition: AuCompose['composition'] | null = null;
@@ -104,4 +110,15 @@ export class ComposeDashboardApp {
   getAsyncTemplate(): Promise<string> {
     return Promise.resolve(this.summaryTemplate);
   }
+
+  async getOpenTemplate(): Promise<string> {
+    return this.summaryTemplate;
+  }
+
+  readonly rejectedComponent = Promise.reject('component unavailable');
+  readonly rejectedTemplate: Promise<string> = Promise.reject('template unavailable');
+  readonly promisedModel = Promise.resolve(this.selectedWidget);
+  readonly promisedScopeBehavior = Promise.resolve('scoped' as const);
+  readonly promisedTag = Promise.resolve('article');
+  readonly promisedFlushMode = Promise.resolve('async' as const);
 }

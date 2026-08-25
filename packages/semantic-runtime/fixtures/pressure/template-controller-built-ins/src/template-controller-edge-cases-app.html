@@ -1,0 +1,41 @@
+<template>
+  <template repeat.for="{ id, label } of products">
+    <span>${id}:${label}</span>
+  </template>
+
+  <template repeat.for="windowProduct of unregisteredProductWindow">
+    <span>${windowProduct.label}</span>
+  </template>
+
+  <template repeat.for="unsupportedProduct of unsupportedRepeatSource">
+    <span>${unsupportedProduct.label}</span>
+  </template>
+
+  <template repeat.for="writeProbeProduct of products">
+    <input type="checkbox" checked.two-way="$odd">
+    <input type="number" value-as-number.two-way="$index">
+    <input type="number" value-as-number.two-way="$length">
+  </template>
+
+  <section with.bind="maybeProduct">
+    <span>${label}</span>
+  </section>
+
+  <section promise.resolve="productPromise">
+    <let carrier-result.bind="products[0]"></let>
+    <p then="carrierResult">${$this.carrierResult?.label}</p>
+  </section>
+
+  <section if.bind="maybeProduct">
+    <p then="nestedResult">${nestedResult?.label}</p>
+  </section>
+
+  <template switch.bind="portalMessage">
+    <p default-case>first default</p>
+    <p default-case>second default</p>
+  </template>
+
+  <template portal="target.bind: portalTarget; position: afterbegin; strict: true">
+    <p>${portalMessage}</p>
+  </template>
+</template>

@@ -48,7 +48,7 @@ import {
   AppBuilderSourceLoweringMessageKind,
   AppBuilderSourceLoweringVisualHookTarget,
   APP_BUILDER_SOURCE_LOWERING_TARGET_ROWS,
-  SemanticRuntimeAnswerOutcome,
+  SemanticRuntimeAnswerResult,
   SemanticRuntimeAppBuilderQueryKind,
   SourcePatternParameterKey,
   answerSemanticRuntimeAppBuilderQuery,
@@ -131,14 +131,14 @@ async function materializeGeneratedAppBuilderFixtures() {
       appBuilderGeneratedFixtureDetailRequest(materializedRequest),
     );
 
-    if (answer.outcome !== SemanticRuntimeAnswerOutcome.Hit || answer.value.sourcePlan == null) {
+    if (answer.result !== SemanticRuntimeAnswerResult.Answered || answer.value.sourcePlan == null) {
       console.error(`${spec.fixtureId}: source-lowering issues`, JSON.stringify(answer.value?.issues ?? [], null, 2));
       throw new Error(`${spec.fixtureId}: app-builder source lowering did not produce a complete SourcePlan: ${answer.summary}`);
     }
     if (!sourcePlanHasCompleteText(answer.value.sourcePlan)) {
       throw new Error(`${spec.fixtureId}: app-builder SourcePlan did not include complete file text.`);
     }
-    if (detailedAnswer.outcome !== SemanticRuntimeAnswerOutcome.Hit || detailedAnswer.value.sourcePlan == null) {
+    if (detailedAnswer.result !== SemanticRuntimeAnswerResult.Answered || detailedAnswer.value.sourcePlan == null) {
       throw new Error(`${spec.fixtureId}: app-builder detailed verification query did not produce a complete SourcePlan: ${detailedAnswer.summary}`);
     }
 

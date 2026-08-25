@@ -9,8 +9,6 @@ import {
 
 /** Stable identity of a component lifecycle method exposed as an app-builder part. */
 export enum AppBuilderComponentLifecycleId {
-  /** `define()` compile-time custom-element hook. */
-  DefineHook = 'define-hook',
   /** `hydrating()` custom-element hydration hook. */
   HydratingHook = 'hydrating-hook',
   /** `hydrated()` custom-element hydration hook. */
@@ -54,17 +52,6 @@ export interface AppBuilderComponentLifecycleDescriptor {
 }
 
 export const APP_BUILDER_COMPONENT_LIFECYCLES: readonly AppBuilderComponentLifecycleDescriptor[] = [
-  {
-    id: AppBuilderComponentLifecycleId.DefineHook,
-    title: 'Define Hook',
-    summary: 'Customize custom-element definition before hydration continues.',
-    hookName: ComponentLifecycleHookName.Define,
-    syntaxCue: `${ComponentLifecycleHookName.Define}() { ... }`,
-    applicationSites: [AppBuilderPartApplicationSiteKind.TypeScriptClassMember],
-    operationKind: AppBuilderPartOperationKind.ApplyComponentLifecycleHook,
-    requiredSlotKinds: [],
-    optionalSlotKinds: [AppBuilderPartSlotKind.TypeScriptMethodBodyStatements],
-  },
   {
     id: AppBuilderComponentLifecycleId.HydratingHook,
     title: 'Hydrating Hook',

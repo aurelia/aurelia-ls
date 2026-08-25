@@ -1,0 +1,25 @@
+{
+  "fixture": "packages/semantic-runtime/fixtures/pressure/router-instruction-errors",
+  "lanes": {
+    "diagnostics": [
+      {
+        "id": "router-load-missing-route",
+        "file": "src/router-instruction-errors-app.html",
+        "verdict": "correct",
+        "reason": "The owning router diagnostic preserves the AUR3401 code, router domain, authored `missing-route` span, router-specific repair intent, exact target coverage, and guided app-source actionability without claiming that an edit plan exists.",
+        "note": "ADJUDICATED 2026-07-11. Repair guidance now survives RouterIssues through AppDiagnostics and the IDE adapter; the separate code-action probe keeps the non-mutating boundary explicit."
+      }
+    ],
+    "codeAction": [
+      {
+        "id": "router-load-missing-route-no-edit-action",
+        "file": "src/router-instruction-errors-app.html",
+        "anchor": "load=\"missing-route\"",
+        "at": "missing-route",
+        "verdict": "correct",
+        "reason": "Router instruction diagnostics have guided repair intent but no conservative source-operation planner yet, so the code-action lane should return no edit-backed quick fix rather than inventing a route edit.",
+        "note": "NEW 2026-07-09. Positive boundary canary: repair guidance belongs on diagnostics until a route repair planner can produce validated edits."
+      }
+    ]
+  }
+}

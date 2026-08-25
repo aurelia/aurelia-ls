@@ -2,20 +2,27 @@ import {
   RuntimeBindingSourceValueEvaluator,
 } from '../observation/binding-source-value-evaluator.js';
 import {
-  RuntimeBindingSourceValueEvaluationKind,
-} from '../observation/binding-source-value-evaluation.js';
+  bindingSourceValueEvaluationWithPressure,
+  openBindingSourceSlotNoStaticValue,
+  RuntimeBindingSourceValueEvaluation,
+} from '../configuration/binding-source-value-evaluation.js';
 import {
   projectRuntimeBindingSourceValueContextInScope,
 } from '../observation/binding-source-value-evaluation-context.js';
 import type { BindingScope } from '../configuration/scope.js';
 import type { TemplateResourceScope } from './compiler-world.js';
 import {
-  RuntimeBindingExpressionScopeProjector,
+  type RuntimeBindingExpressionScopeProjectionReader,
 } from '../observation/runtime-binding-expression-scope.js';
-import type { RuntimeExpressionBinding } from '../observation/runtime-binding-expression.js';
+import {
+  expressionProductHandleForBinding,
+  type RuntimeExpressionBinding,
+} from '../observation/runtime-binding-expression.js';
 import type { RuntimeRenderingEmission } from './runtime-rendering-materializer.js';
+import type { RuntimeExpressionResourcePlan } from './runtime-expression-resource-plan.js';
 import {
   EvaluationArrayValue,
+  EvaluationKeyedCollectionEntryState,
   EvaluationValueKind,
   type EvaluationValue,
 } from '../evaluation/values.js';
@@ -39,16 +46,20 @@ export function repeatStaticLocalValue(
   sourceValueEvaluator: RuntimeBindingSourceValueEvaluator | null,
   binding: RuntimeExpressionBinding | null = null,
   runtimeBindings: RuntimeRenderingEmission | null = null,
-  bindingExpressionScopes: RuntimeBindingExpressionScopeProjector | null = null,
+  bindingExpressionScopes: RuntimeBindingExpressionScopeProjectionReader | null = null,
+  expressionResourcePlan: RuntimeExpressionResourcePlan | null = null,
   resourceScope: TemplateResourceScope | null = null,
-): EvaluationValue | null {
+): RuntimeBindingSourceValueEvaluation | null {
   if (sourceValueEvaluator == null || parse?.result.kind !== ExpressionParseResultKind.IteratorSuccess) {
     return null;
   }
   const contextProjection = projectRuntimeBindingSourceValueContextInScope({
     runtimeBindings,
     bindingExpressionScopes,
+    expressionResourcePlan,
     binding,
+    expressionProductHandle: binding == null ? null : expressionProductHandleForBinding(binding),
+    expressionChainIndex: 0,
     expression: parse.result.ast.iterable,
     localKey: `repeat-static-local:${effect.productHandle}:${localName}:iterable`,
     sourceScope: parent,
@@ -58,17 +69,41 @@ export function repeatStaticLocalValue(
     return null;
   }
   const evaluation = sourceValueEvaluator.evaluate(contextProjection.context);
-  if (evaluation.kind !== RuntimeBindingSourceValueEvaluationKind.Value || evaluation.value == null) {
-    return null;
-  }
-  const item = repeatItemRepresentativeValue(evaluation.value, `repeat.${localName}`, effect.sourceAddressHandle == null ? null : localName);
+  const item = evaluation.value == null
+    ? null
+    : repeatItemRepresentativeValue(
+        evaluation.value,
+        `repeat.${localName}`,
+        effect.sourceAddressHandle == null ? null : localName,
+      );
   if (item == null) {
-    return null;
+    return bindingSourceValueEvaluationWithPressure(
+      openBindingSourceSlotNoStaticValue(
+        `Repeat source did not expose a representative value for local '${localName}'.`,
+      ),
+      [evaluation],
+    );
   }
-  if (effect.localNames.length === 1) {
-    return item;
-  }
-  return readRepresentativeProperty(item, localName) ?? null;
+  const localIndex = effect.localNames.indexOf(localName);
+  const objectBindingSourceKey = localIndex < 0
+    ? undefined
+    : effect.objectBindingSourceKeys[localIndex];
+  const localValue = objectBindingSourceKey === undefined
+    ? effect.localNames.length === 1
+      ? item
+      : readRepresentativeProperty(item, localName)
+    : readRepresentativeProperty(item, String(objectBindingSourceKey));
+  return localValue == null
+    ? bindingSourceValueEvaluationWithPressure(
+        openBindingSourceSlotNoStaticValue(
+          `Repeat representative value did not expose destructured local '${localName}'.`,
+        ),
+        [evaluation],
+      )
+    : bindingSourceValueEvaluationWithPressure(
+        RuntimeBindingSourceValueEvaluation.value(localValue),
+        [evaluation],
+      );
 }
 
 function repeatItemRepresentativeValue(
@@ -80,8 +115,21 @@ function repeatItemRepresentativeValue(
     return representativeFromArray(value, path, sourceLabel);
   }
   if (value.kind === EvaluationValueKind.Set && !value.weak) {
+    if (
+      value.mayHaveUnknownElements
+      || value.mayHaveUnknownOrder
+      || value.elements.some((element) =>
+        element.state !== EvaluationKeyedCollectionEntryState.Present
+        || element.openSeams.length > 0
+        || element.presenceOpenSeams.length > 0
+      )
+    ) {
+      return null;
+    }
     return representativeEvaluationValues(
-      value.elements.map((element) => element.value),
+      value.elements
+        .filter((element) => element.state === EvaluationKeyedCollectionEntryState.Present)
+        .map((element) => element.value),
       path,
       sourceLabel,
     );

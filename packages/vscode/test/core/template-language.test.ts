@@ -1,0 +1,909 @@
+import { describe, expect, test, vi } from "vitest";
+import type { VscodeApi } from "../../out/vscode-api.js";
+import { OwnedTemplateLanguageController } from "../../out/template-language.js";
+import { createVscodeApi } from "../helpers/vscode-stub.js";
+
+describe("owned template language containment", () => {
+  test("keeps default-disabled templates in native HTML without ownership pulls", async () => {
+    const harness = createHarness([
+      ["file:///workspace/src/owned.html", "html"],
+      ["file:///workspace/src/manual.html", "aurelia-html"],
+    ], (uri) => ownership(uri, true), { suppressNative: "omitted" });
+
+    harness.controller.start();
+    await settleAsyncWork();
+    harness.fireTopology();
+    harness.fireAnalysis("source-text");
+    harness.setSession(false);
+    harness.setSession(true);
+    harness.recorded.fireConfigurationChanged("editor.fontSize");
+    await settleAsyncWork();
+
+    expect(harness.requests).not.toHaveBeenCalled();
+    expect(harness.languageIds()).toEqual(["html", "aurelia-html"]);
+    expect(harness.recorded.languageChanges).toEqual([]);
+    await harness.controller.disposeAsync();
+    expect(harness.languageIds()).toEqual(["html", "aurelia-html"]);
+  });
+
+  test("toggles containment in both directions without claiming manual custom mode", async () => {
+    const harness = createHarness([
+      ["file:///workspace/src/owned.html", "html"],
+      ["file:///workspace/src/manual.html", "aurelia-html"],
+    ], (uri) => ownership(uri, uri.endsWith("/owned.html")), { suppressNative: false });
+    harness.controller.start();
+    await settleAsyncWork();
+    expect(harness.requests).not.toHaveBeenCalled();
+
+    harness.setSuppressNative(true);
+    await vi.waitFor(() => expect(harness.languageIds()).toEqual(["aurelia-html", "aurelia-html"]));
+    expect(harness.requests).toHaveBeenCalledTimes(2);
+
+    harness.setSuppressNative(false);
+    await vi.waitFor(() => expect(harness.languageIds()).toEqual(["html", "aurelia-html"]));
+    expect(harness.requests).toHaveBeenCalledTimes(2);
+
+    harness.setSuppressNative(true);
+    await vi.waitFor(() => expect(harness.languageIds()).toEqual(["aurelia-html", "aurelia-html"]));
+    expect(harness.requests).toHaveBeenCalledTimes(4);
+    expect(harness.recorded.languageChanges.map((entry) => entry.languageId)).toEqual([
+      "aurelia-html",
+      "html",
+      "aurelia-html",
+    ]);
+
+    await harness.controller.disposeAsync();
+    expect(harness.languageIds()).toEqual(["html", "aurelia-html"]);
+  });
+
+  test("rejects an enabled ownership answer after suppression is disabled", async () => {
+    const stale = deferred<ReturnType<typeof ownership>>();
+    const harness = createHarness(
+      [["file:///workspace/src/stale.html", "html"]],
+      () => stale.promise,
+    );
+    harness.controller.start();
+    await vi.waitFor(() => expect(harness.requests).toHaveBeenCalledTimes(1));
+
+    harness.setSuppressNative(false);
+    stale.resolve(ownership("file:///workspace/src/stale.html", true));
+    await settleAsyncWork();
+
+    expect(harness.requests).toHaveBeenCalledTimes(1);
+    expect(harness.languageIds()).toEqual(["html"]);
+    expect(harness.recorded.languageChanges).toEqual([]);
+    await harness.controller.disposeAsync();
+  });
+
+  test("converges to disabled after a non-cancellable enable transition", async () => {
+    const harness = createHarness(
+      [["file:///workspace/src/race.html", "html"]],
+      (uri) => ownership(uri, true),
+    );
+    const enable = deferred<void>();
+    const original = harness.vscode.languages.setTextDocumentLanguage;
+    const transitions: string[] = [];
+    harness.vscode.languages.setTextDocumentLanguage = async (document, languageId) => {
+      transitions.push(languageId);
+      if (languageId === "aurelia-html") await enable.promise;
+      return original(document, languageId);
+    };
+    harness.controller.start();
+    await vi.waitFor(() => expect(transitions).toEqual(["aurelia-html"]));
+
+    harness.setSuppressNative(false);
+    enable.resolve();
+    await vi.waitFor(() => expect(harness.languageIds()).toEqual(["html"]));
+    await settleAsyncWork();
+
+    expect(harness.requests).toHaveBeenCalledTimes(1);
+    expect(transitions).toEqual(["aurelia-html", "html"]);
+    await harness.controller.disposeAsync();
+  });
+
+  test("converges to enabled after a non-cancellable disable restoration", async () => {
+    const harness = createHarness(
+      [["file:///workspace/src/race.html", "html"]],
+      (uri) => ownership(uri, true),
+    );
+    harness.controller.start();
+    await vi.waitFor(() => expect(harness.languageIds()).toEqual(["aurelia-html"]));
+
+    const disable = deferred<void>();
+    const original = harness.vscode.languages.setTextDocumentLanguage;
+    const transitions: string[] = [];
+    harness.vscode.languages.setTextDocumentLanguage = async (document, languageId) => {
+      transitions.push(languageId);
+      if (languageId === "html") await disable.promise;
+      return original(document, languageId);
+    };
+    harness.setSuppressNative(false);
+    await vi.waitFor(() => expect(transitions).toEqual(["html"]));
+
+    harness.setSuppressNative(true);
+    disable.resolve();
+    await vi.waitFor(() => expect(harness.languageIds()).toEqual(["aurelia-html"]));
+    await settleAsyncWork();
+
+    expect(harness.requests).toHaveBeenCalledTimes(2);
+    expect(transitions).toEqual(["html", "aurelia-html"]);
+    await harness.controller.disposeAsync();
+  });
+
+  test("applies resource-scoped folder settings independently", async () => {
+    const workspaceConfiguration = {
+      "file:///workspace-a": { "aurelia.templateDiagnostics.suppressNative": true },
+      "file:///workspace-b": { "aurelia.templateDiagnostics.suppressNative": false },
+    };
+    const harness = createHarness([
+      ["file:///workspace-a/src/app.html", "html"],
+      ["file:///workspace-b/src/app.html", "html"],
+    ], (uri) => ownership(uri, true), {
+      suppressNative: false,
+      workspaceFolders: [
+        { name: "workspace-a", uri: "file:///workspace-a" },
+        { name: "workspace-b", uri: "file:///workspace-b" },
+      ],
+      workspaceConfiguration,
+    });
+    harness.controller.start();
+    await vi.waitFor(() => expect(harness.languageIds()).toEqual(["aurelia-html", "html"]));
+    expect(harness.requests).toHaveBeenCalledTimes(1);
+
+    workspaceConfiguration["file:///workspace-b"]["aurelia.templateDiagnostics.suppressNative"] = true;
+    harness.recorded.fireConfigurationChanged(
+      "aurelia.templateDiagnostics.suppressNative",
+      "file:///workspace-b",
+    );
+    await vi.waitFor(() => expect(harness.languageIds()).toEqual(["aurelia-html", "aurelia-html"]));
+    expect(harness.requests).toHaveBeenCalledTimes(2);
+
+    workspaceConfiguration["file:///workspace-a"]["aurelia.templateDiagnostics.suppressNative"] = false;
+    harness.recorded.fireConfigurationChanged(
+      "aurelia.templateDiagnostics.suppressNative",
+      "file:///workspace-a",
+    );
+    await vi.waitFor(() => expect(harness.languageIds()).toEqual(["html", "aurelia-html"]));
+    expect(harness.requests).toHaveBeenCalledTimes(2);
+    await harness.controller.disposeAsync();
+  });
+
+  test("uses exact semantic template association within one admitted project", async () => {
+    const harness = createHarness([
+      ["file:///workspace/src/components/product-card.html", "html"],
+      ["file:///workspace/src/unrelated.html", "html"],
+    ], (uri) => ownership(uri, uri.endsWith("/components/product-card.html"), "template"));
+
+    harness.controller.start();
+    await vi.waitFor(() => expect(harness.languageIds()).toEqual([
+      "aurelia-html",
+      "html",
+    ]));
+    await settleAsyncWork();
+
+    expect(harness.requests).toHaveBeenCalledTimes(2);
+    expect(harness.requests.mock.results.map((result) => result.value.owners)).toEqual([
+      [{ projectKey: "app", role: "template" }],
+      [{ projectKey: "app", role: "template" }],
+    ]);
+    await harness.controller.disposeAsync();
+
+    expect(harness.languageIds()).toEqual(["html", "html"]);
+  });
+
+  test("switches every proven open template, leaves ordinary HTML alone, and restores on session loss", async () => {
+    const harness = createHarness([
+      ["file:///workspace/src/app.html", "html"],
+      ["file:///workspace/docs/index.html", "html"],
+      ["file:///workspace/src/card.html", "html"],
+    ], (uri) => ownership(uri, uri.includes("/src/")));
+    const originalApp = harness.vscode.workspace.textDocuments[0];
+    const originalCard = harness.vscode.workspace.textDocuments[2];
+
+    harness.controller.start();
+    await vi.waitFor(() => expect(harness.languageIds()).toEqual([
+      "aurelia-html",
+      "html",
+      "aurelia-html",
+    ]));
+    expect(harness.vscode.workspace.textDocuments[0]).not.toBe(originalApp);
+    expect(harness.vscode.workspace.textDocuments[2]).not.toBe(originalCard);
+    await settleAsyncWork();
+    expect(harness.requests).toHaveBeenCalledTimes(3);
+
+    harness.setSession(false);
+    await vi.waitFor(() => expect(harness.languageIds()).toEqual(["html", "html", "html"]));
+    expect(harness.requests).toHaveBeenCalledTimes(3);
+    await harness.controller.disposeAsync();
+  });
+
+  test("rejects a stale ownership answer after a newer source analysis answer", async () => {
+    const stale = deferred<ReturnType<typeof ownership>>();
+    let request = 0;
+    const harness = createHarness(
+      [["file:///workspace/src/app.html", "html"]],
+      (uri) => request++ === 0 ? stale.promise : ownership(uri, false),
+    );
+    harness.controller.start();
+    await vi.waitFor(() => expect(harness.requests).toHaveBeenCalledTimes(1));
+
+    harness.fireAnalysis("source-text");
+    await settleAsyncWork();
+    expect(harness.requests).toHaveBeenCalledTimes(1);
+    stale.resolve(ownership("file:///workspace/src/app.html", true));
+    await vi.waitFor(() => expect(harness.requests).toHaveBeenCalledTimes(2));
+
+    expect(harness.languageIds()).toEqual(["html"]);
+    expect(harness.recorded.languageChanges).toEqual([]);
+    await harness.controller.disposeAsync();
+  });
+
+  test("re-proves live true-to-false and false-to-true associations after script analysis settles", async () => {
+    let owned = true;
+    const harness = createHarness(
+      [["file:///workspace/src/live-card.html", "html"]],
+      (uri) => ownership(uri, owned, "template"),
+    );
+    harness.controller.start();
+    await vi.waitFor(() => expect(harness.languageIds()).toEqual(["aurelia-html"]));
+    expect(harness.requests).toHaveBeenCalledTimes(1);
+
+    harness.fireAnalysis("source-text", "file:///other-workspace");
+    await settleAsyncWork();
+    expect(harness.requests).toHaveBeenCalledTimes(1);
+
+    owned = false;
+    harness.fireAnalysis("source-text");
+    await vi.waitFor(() => expect(harness.languageIds()).toEqual(["html"]));
+    expect(harness.requests).toHaveBeenCalledTimes(2);
+
+    owned = true;
+    harness.fireAnalysis("source-text");
+    await vi.waitFor(() => expect(harness.languageIds()).toEqual(["aurelia-html"]));
+    expect(harness.requests).toHaveBeenCalledTimes(3);
+    expect(harness.recorded.languageChanges.map((entry) => entry.languageId)).toEqual([
+      "aurelia-html",
+      "html",
+      "aurelia-html",
+    ]);
+    await harness.controller.disposeAsync();
+  });
+
+  test("retains settled ownership without a new pull for HTML-only analysis waves", async () => {
+    const uri = "file:///workspace/src/live-card.html";
+    const harness = createHarness(
+      [[uri, "html"]],
+      (requestUri) => ownership(requestUri, true, "template"),
+    );
+    harness.controller.start();
+    await vi.waitFor(() => expect(harness.languageIds()).toEqual(["aurelia-html"]));
+    await settleAsyncWork();
+    expect(harness.requests).toHaveBeenCalledTimes(1);
+
+    harness.fireAnalysis("source-text", "file:///workspace", [uri]);
+    harness.fireAnalysis("source-text", "file:///workspace", [
+      "file:///workspace/src/other.html",
+      "file:///workspace/src/live-card.css",
+    ]);
+    await settleAsyncWork();
+
+    expect(harness.requests).toHaveBeenCalledTimes(1);
+    expect(harness.languageIds()).toEqual(["aurelia-html"]);
+    await harness.controller.disposeAsync();
+  });
+
+  test.each([
+    ["a malformed source identity", "not a uri"],
+    ["a non-file HTML source", "vscode-remote://ssh-remote+dev/workspace/src/other.html"],
+    ["an unknown file source shape", "file:///workspace/src/other.aurelia"],
+  ])("conservatively re-proves settled ownership for %s", async (_label, changedSourceUri) => {
+    const uri = "file:///workspace/src/live-card.html";
+    const harness = createHarness(
+      [[uri, "html"]],
+      (requestUri) => ownership(requestUri, true, "template"),
+    );
+    harness.controller.start();
+    await vi.waitFor(() => expect(harness.languageIds()).toEqual(["aurelia-html"]));
+    await settleAsyncWork();
+    expect(harness.requests).toHaveBeenCalledTimes(1);
+
+    harness.fireAnalysis("source-text", "file:///workspace", [changedSourceUri]);
+    await vi.waitFor(() => expect(harness.requests).toHaveBeenCalledTimes(2));
+
+    expect(harness.languageIds()).toEqual(["aurelia-html"]);
+    await harness.controller.disposeAsync();
+  });
+
+  test("retries a failed initial proof on the next settled notification even when only HTML changed", async () => {
+    let request = 0;
+    const uri = "file:///workspace/src/retry.html";
+    const harness = createHarness(
+      [[uri, "html"]],
+      (requestUri) => request++ === 0
+        ? Promise.reject(new Error("initial ownership unavailable"))
+        : ownership(requestUri, true, "template"),
+    );
+    harness.controller.start();
+    await vi.waitFor(() => expect(harness.requests).toHaveBeenCalledTimes(1));
+    await settleAsyncWork();
+
+    harness.fireAnalysis("source-text", "file:///workspace", [uri]);
+    await vi.waitFor(() => expect(harness.languageIds()).toEqual(["aurelia-html"]));
+    expect(harness.requests).toHaveBeenCalledTimes(2);
+    await harness.controller.disposeAsync();
+  });
+
+  test("coalesces HTML notifications into one unsettled retry and ignores them after ownership settles", async () => {
+    const stale = deferred<ReturnType<typeof ownership>>();
+    let request = 0;
+    const uri = "file:///workspace/src/dirty-pull.html";
+    const harness = createHarness(
+      [[uri, "html"]],
+      (requestUri) => request++ === 0 ? stale.promise : ownership(requestUri, false),
+    );
+    harness.controller.start();
+    await vi.waitFor(() => expect(harness.requests).toHaveBeenCalledTimes(1));
+
+    harness.fireAnalysis("source-text", "file:///workspace", [uri]);
+    harness.fireAnalysis("source-text", "file:///workspace", [uri]);
+    harness.fireAnalysis("source-text", "file:///workspace", [uri]);
+    await settleAsyncWork();
+    expect(harness.requests).toHaveBeenCalledTimes(1);
+
+    stale.resolve(ownership(uri, true));
+    await vi.waitFor(() => expect(harness.requests).toHaveBeenCalledTimes(2));
+    await settleAsyncWork();
+
+    expect(harness.requests).toHaveBeenCalledTimes(2);
+    expect(harness.languageIds()).toEqual(["html"]);
+    expect(harness.recorded.languageChanges).toEqual([]);
+
+    harness.fireAnalysis("source-text", "file:///workspace", [uri]);
+    await settleAsyncWork();
+    expect(harness.requests).toHaveBeenCalledTimes(2);
+
+    await harness.controller.disposeAsync();
+  });
+
+  test("fails closed on ownership rejection and restores only controller-selected custom mode", async () => {
+    let reject = false;
+    const harness = createHarness([
+      ["file:///workspace/src/controlled.html", "html"],
+      ["file:///workspace/src/manual.html", "aurelia-html"],
+    ], (uri) => reject
+      ? Promise.reject(new Error(`ownership rejected for ${uri}`))
+      : ownership(uri, true, "template"));
+    harness.controller.start();
+    await vi.waitFor(() => expect(harness.languageIds()).toEqual([
+      "aurelia-html",
+      "aurelia-html",
+    ]));
+    await settleAsyncWork();
+
+    reject = true;
+    harness.fireAnalysis("source-text");
+    await vi.waitFor(() => expect(harness.languageIds()).toEqual([
+      "html",
+      "aurelia-html",
+    ]));
+    expect(harness.requests).toHaveBeenCalledTimes(4);
+    expect(harness.recorded.languageChanges.map((entry) => entry.languageId)).toEqual([
+      "aurelia-html",
+      "html",
+    ]);
+    await harness.controller.disposeAsync();
+    expect(harness.languageIds()).toEqual(["html", "aurelia-html"]);
+  });
+
+  test("re-proves a newer owned answer after an in-flight failure restoration", async () => {
+    let answerKind: "owned" | "reject" = "owned";
+    const harness = createHarness(
+      [["file:///workspace/src/recovery-race.html", "html"]],
+      (uri) => answerKind === "reject"
+        ? Promise.reject(new Error(`ownership rejected for ${uri}`))
+        : ownership(uri, true, "template"),
+    );
+    harness.controller.start();
+    await vi.waitFor(() => expect(harness.languageIds()).toEqual(["aurelia-html"]));
+    await settleAsyncWork();
+
+    const restore = deferred<void>();
+    const original = harness.vscode.languages.setTextDocumentLanguage;
+    let restoreCalls = 0;
+    let concurrent = 0;
+    let maximumConcurrent = 0;
+    harness.vscode.languages.setTextDocumentLanguage = async (document, languageId) => {
+      concurrent += 1;
+      maximumConcurrent = Math.max(maximumConcurrent, concurrent);
+      try {
+        if (languageId === "html") {
+          restoreCalls += 1;
+          await restore.promise;
+        }
+        return await original(document, languageId);
+      } finally {
+        concurrent -= 1;
+      }
+    };
+
+    answerKind = "reject";
+    harness.fireAnalysis("source-text");
+    await vi.waitFor(() => expect(restoreCalls).toBe(1));
+
+    answerKind = "owned";
+    harness.fireAnalysis("source-text");
+    await settleAsyncWork();
+    expect(harness.requests).toHaveBeenCalledTimes(2);
+    restore.resolve();
+
+    await vi.waitFor(() => expect(harness.languageIds()).toEqual(["aurelia-html"]));
+    await vi.waitFor(() => expect(harness.requests).toHaveBeenCalledTimes(3));
+    expect(maximumConcurrent).toBe(1);
+    expect(harness.recorded.languageChanges.map((entry) => entry.languageId)).toEqual([
+      "aurelia-html",
+      "html",
+      "aurelia-html",
+    ]);
+    await harness.controller.disposeAsync();
+    expect(harness.languageIds()).toEqual(["html"]);
+  });
+
+  test("keeps an exactly owned root document in HTML mode", async () => {
+    const harness = createHarness(
+      [["file:///workspace/index.html", "html"]],
+      (uri) => ({ ...ownership(uri, false), owners: [{ projectKey: "app", role: "root-document" }] }),
+    );
+    harness.controller.start();
+    await vi.waitFor(() => expect(harness.requests).toHaveBeenCalledTimes(1));
+    await settleAsyncWork();
+
+    expect(harness.languageIds()).toEqual(["html"]);
+    expect(harness.recorded.languageChanges).toEqual([]);
+    await harness.controller.disposeAsync();
+  });
+
+  test("invalidates an ownership answer when its document closes", async () => {
+    const answer = deferred<ReturnType<typeof ownership>>();
+    const harness = createHarness(
+      [["file:///workspace/src/app.html", "html"]],
+      () => answer.promise,
+    );
+    harness.controller.start();
+    await vi.waitFor(() => expect(harness.requests).toHaveBeenCalledTimes(1));
+    const document = harness.vscode.workspace.textDocuments[0]!;
+    harness.recorded.fireDocumentClosed(document);
+    answer.resolve(ownership(document.uri.toString(), true));
+    await settleAsyncWork();
+
+    expect(harness.vscode.workspace.textDocuments).toEqual([]);
+    expect(harness.recorded.languageChanges).toEqual([]);
+    await harness.controller.disposeAsync();
+  });
+
+  test("reconciles a topology withdrawal that races a non-cancellable language switch", async () => {
+    let owned = true;
+    const harness = createHarness(
+      [["file:///workspace/src/app.html", "html"]],
+      (uri) => ownership(uri, owned),
+    );
+    const change = deferred<void>();
+    const original = harness.vscode.languages.setTextDocumentLanguage;
+    harness.vscode.languages.setTextDocumentLanguage = async (document, languageId) => {
+      if (languageId === "aurelia-html") await change.promise;
+      return original(document, languageId);
+    };
+    harness.controller.start();
+    await vi.waitFor(() => expect(harness.requests).toHaveBeenCalledTimes(1));
+
+    owned = false;
+    harness.fireTopology();
+    change.resolve();
+    await vi.waitFor(() => expect(harness.requests.mock.calls.length).toBeGreaterThanOrEqual(2));
+    await vi.waitFor(() => expect(harness.languageIds()).toEqual(["html"]));
+    expect(harness.requests.mock.calls.length).toBeGreaterThanOrEqual(2);
+    expect(harness.requests.mock.calls.length).toBeLessThanOrEqual(3);
+    await harness.controller.disposeAsync();
+  });
+
+  test("tracks one converged transition when the host reopens the same document object", async () => {
+    let owned = true;
+    const harness = createHarness(
+      [["file:///workspace/src/same-object-converged.html", "html"]],
+      (uri) => ownership(uri, owned),
+    );
+    const originalDocument = harness.vscode.workspace.textDocuments[0]!;
+    const transitions: string[] = [];
+    const lifecycle: Array<{ phase: "close" | "open"; languageId: string }> = [];
+    harness.vscode.workspace.onDidCloseTextDocument((document) => {
+      lifecycle.push({ phase: "close", languageId: document.languageId });
+    });
+    harness.vscode.workspace.onDidOpenTextDocument((document) => {
+      lifecycle.push({ phase: "open", languageId: document.languageId });
+    });
+    harness.vscode.languages.setTextDocumentLanguage = (document, languageId) => {
+      transitions.push(languageId);
+      harness.recorded.fireDocumentClosed(document);
+      document.languageId = languageId;
+      harness.recorded.languageChanges.push({ document, languageId });
+      harness.recorded.fireDocumentOpened(document);
+      return Promise.resolve(document);
+    };
+
+    harness.controller.start();
+    await vi.waitFor(() => expect(harness.languageIds()).toEqual(["aurelia-html"]));
+    await settleAsyncWork();
+    expect(harness.vscode.workspace.textDocuments).toEqual([originalDocument]);
+    expect(harness.requests).toHaveBeenCalledTimes(1);
+    expect(transitions).toEqual(["aurelia-html"]);
+    expect(lifecycle).toEqual([
+      { phase: "close", languageId: "html" },
+      { phase: "open", languageId: "aurelia-html" },
+    ]);
+
+    owned = false;
+    harness.fireTopology();
+    await vi.waitFor(() => expect(harness.languageIds()).toEqual(["html"]));
+    await settleAsyncWork();
+    expect(harness.vscode.workspace.textDocuments).toEqual([originalDocument]);
+    expect(harness.requests).toHaveBeenCalledTimes(2);
+    expect(transitions).toEqual(["aurelia-html", "html"]);
+    expect(lifecycle).toEqual([
+      { phase: "close", languageId: "html" },
+      { phase: "open", languageId: "aurelia-html" },
+      { phase: "close", languageId: "aurelia-html" },
+      { phase: "open", languageId: "html" },
+    ]);
+    await harness.controller.disposeAsync();
+    expect(transitions).toEqual(["aurelia-html", "html"]);
+  });
+
+  test("reconciles a stale switch when the host mutates and reopens the same document object", async () => {
+    let owned = true;
+    const harness = createHarness(
+      [["file:///workspace/src/same-object.html", "html"]],
+      (uri) => ownership(uri, owned),
+    );
+    const originalDocument = harness.vscode.workspace.textDocuments[0]!;
+    const change = deferred<void>();
+    const transitions: string[] = [];
+    const lifecycle: Array<{ phase: "close" | "open"; languageId: string }> = [];
+    harness.vscode.workspace.onDidCloseTextDocument((document) => {
+      lifecycle.push({ phase: "close", languageId: document.languageId });
+    });
+    harness.vscode.workspace.onDidOpenTextDocument((document) => {
+      lifecycle.push({ phase: "open", languageId: document.languageId });
+    });
+    harness.vscode.languages.setTextDocumentLanguage = async (document, languageId) => {
+      transitions.push(languageId);
+      if (languageId === "aurelia-html") await change.promise;
+      harness.recorded.fireDocumentClosed(document);
+      document.languageId = languageId;
+      harness.recorded.languageChanges.push({ document, languageId });
+      harness.recorded.fireDocumentOpened(document);
+      return document;
+    };
+    harness.controller.start();
+    await vi.waitFor(() => expect(transitions).toEqual(["aurelia-html"]));
+
+    owned = false;
+    harness.fireTopology();
+    await settleAsyncWork();
+    expect(harness.requests).toHaveBeenCalledTimes(1);
+    expect(harness.vscode.workspace.textDocuments).toEqual([originalDocument]);
+    expect(originalDocument.languageId).toBe("html");
+
+    change.resolve();
+    await vi.waitFor(() => expect(harness.requests.mock.calls.length).toBeGreaterThanOrEqual(2));
+    await vi.waitFor(() => expect(harness.languageIds()).toEqual(["html"]));
+    await vi.waitFor(() => expect(transitions).toEqual(["aurelia-html", "html"]));
+    expect(harness.vscode.workspace.textDocuments).toEqual([originalDocument]);
+    expect(harness.requests).toHaveBeenCalledTimes(2);
+    expect(lifecycle).toEqual([
+      { phase: "close", languageId: "html" },
+      { phase: "open", languageId: "aurelia-html" },
+      { phase: "close", languageId: "aurelia-html" },
+      { phase: "open", languageId: "html" },
+    ]);
+
+    await settleAsyncWork();
+    expect(harness.requests).toHaveBeenCalledTimes(2);
+    expect(transitions).toEqual(["aurelia-html", "html"]);
+    await harness.controller.disposeAsync();
+    expect(transitions).toEqual(["aurelia-html", "html"]);
+  });
+
+  test("serializes repeated owned reconciles behind one non-cancellable language switch", async () => {
+    const harness = createHarness(
+      [["file:///workspace/src/app.html", "html"]],
+      (uri) => ownership(uri, true),
+    );
+    const change = deferred<void>();
+    const original = harness.vscode.languages.setTextDocumentLanguage;
+    let calls = 0;
+    let concurrent = 0;
+    let maximumConcurrent = 0;
+    let closes = 0;
+    let opens = 0;
+    harness.vscode.workspace.onDidCloseTextDocument(() => { closes += 1; });
+    harness.vscode.workspace.onDidOpenTextDocument(() => { opens += 1; });
+    harness.vscode.languages.setTextDocumentLanguage = async (document, languageId) => {
+      calls += 1;
+      concurrent += 1;
+      maximumConcurrent = Math.max(maximumConcurrent, concurrent);
+      try {
+        if (languageId === "aurelia-html") await change.promise;
+        return await original(document, languageId);
+      } finally {
+        concurrent -= 1;
+      }
+    };
+    harness.controller.start();
+    await vi.waitFor(() => expect(calls).toBe(1));
+
+    harness.fireTopology();
+    harness.fireTopology();
+    await settleAsyncWork();
+    expect(calls).toBe(1);
+    expect(maximumConcurrent).toBe(1);
+
+    change.resolve();
+    await vi.waitFor(() => expect(harness.languageIds()).toEqual(["aurelia-html"]));
+    await settleAsyncWork();
+    expect(calls).toBe(1);
+    expect(maximumConcurrent).toBe(1);
+    expect({ closes, opens }).toEqual({ closes: 1, opens: 1 });
+    const requestCount = harness.requests.mock.calls.length;
+    await settleAsyncWork();
+    expect(harness.requests).toHaveBeenCalledTimes(requestCount);
+    await harness.controller.disposeAsync();
+  });
+
+  test("waits for an in-flight switch before restoring during deactivation", async () => {
+    const harness = createHarness(
+      [["file:///workspace/src/app.html", "html"]],
+      (uri) => ownership(uri, true),
+    );
+    const change = deferred<void>();
+    const original = harness.vscode.languages.setTextDocumentLanguage;
+    harness.vscode.languages.setTextDocumentLanguage = async (document, languageId) => {
+      if (languageId === "aurelia-html") await change.promise;
+      return original(document, languageId);
+    };
+    harness.controller.start();
+    await vi.waitFor(() => expect(harness.requests).toHaveBeenCalledTimes(1));
+    await vi.waitFor(() => expect(harness.vscode.languages.setTextDocumentLanguage).toBeDefined());
+    await settleAsyncWork();
+
+    const disposal = harness.controller.disposeAsync();
+    change.resolve();
+    await disposal;
+
+    expect(harness.languageIds()).toEqual(["html"]);
+    expect(harness.recorded.languageChanges.map((entry) => entry.languageId)).toEqual([
+      "aurelia-html",
+      "html",
+    ]);
+  });
+
+  test("does not restore a custom mode that the controller did not select", async () => {
+    const harness = createHarness(
+      [["file:///workspace/src/manual.html", "aurelia-html"]],
+      (uri) => ownership(uri, true),
+    );
+    harness.controller.start();
+    await vi.waitFor(() => expect(harness.requests).toHaveBeenCalledTimes(1));
+    await harness.controller.disposeAsync();
+
+    expect(harness.languageIds()).toEqual(["aurelia-html"]);
+    expect(harness.recorded.languageChanges).toEqual([]);
+  });
+
+  test.each([
+    ["unowned", true],
+    ["sessionless", false],
+  ])("preserves a manually selected custom mode when %s", async (_label, active) => {
+    const harness = createHarness(
+      [["file:///workspace/src/manual-unowned.html", "aurelia-html"]],
+      (uri) => ownership(uri, false),
+    );
+    if (!active) harness.setSession(false);
+    harness.controller.start();
+    await settleAsyncWork();
+    await harness.controller.disposeAsync();
+
+    expect(harness.languageIds()).toEqual(["aurelia-html"]);
+    expect(harness.recorded.languageChanges).toEqual([]);
+  });
+
+  test("does not carry controller ownership across a real close and reopen", async () => {
+    let owned = true;
+    const harness = createHarness(
+      [["file:///workspace/src/reopened.html", "html"]],
+      (uri) => ownership(uri, owned),
+    );
+    harness.controller.start();
+    await vi.waitFor(() => expect(harness.languageIds()).toEqual(["aurelia-html"]));
+
+    const controlled = harness.vscode.workspace.textDocuments[0]!;
+    owned = false;
+    harness.recorded.fireDocumentClosed(controlled);
+    expect(harness.vscode.workspace.textDocuments).toEqual([]);
+    const reopened = {
+      uri: controlled.uri,
+      languageId: "aurelia-html",
+      text: controlled.text,
+      getText: () => controlled.text,
+    };
+    harness.recorded.fireDocumentOpened(reopened);
+    expect(harness.vscode.workspace.textDocuments).toEqual([reopened]);
+    await vi.waitFor(() => expect(harness.requests).toHaveBeenCalledTimes(2));
+    await settleAsyncWork();
+    expect(harness.languageIds()).toEqual(["aurelia-html"]);
+    await harness.controller.disposeAsync();
+
+    expect(harness.languageIds()).toEqual(["aurelia-html"]);
+    expect(harness.recorded.languageChanges.map((entry) => entry.languageId)).toEqual([
+      "aurelia-html",
+    ]);
+  });
+
+  test("drops controller ownership when a genuine close displaces an in-flight restore", async () => {
+    let owned = true;
+    const harness = createHarness(
+      [["file:///workspace/src/restore-race.html", "html"]],
+      (uri) => ownership(uri, owned),
+    );
+    harness.controller.start();
+    await vi.waitFor(() => expect(harness.languageIds()).toEqual(["aurelia-html"]));
+
+    const restore = deferred<void>();
+    const original = harness.vscode.languages.setTextDocumentLanguage;
+    let restoreCalls = 0;
+    harness.vscode.languages.setTextDocumentLanguage = async (document, languageId) => {
+      if (languageId === "html") {
+        restoreCalls += 1;
+        await restore.promise;
+      }
+      return original(document, languageId);
+    };
+    owned = false;
+    harness.fireTopology();
+    await vi.waitFor(() => expect(restoreCalls).toBe(1));
+
+    const restoring = harness.vscode.workspace.textDocuments[0]!;
+    harness.recorded.fireDocumentClosed(restoring);
+    expect(harness.vscode.workspace.textDocuments).toEqual([]);
+    const reopened = {
+      uri: restoring.uri,
+      languageId: "aurelia-html",
+      text: restoring.text,
+      getText: () => restoring.text,
+    };
+    harness.recorded.fireDocumentOpened(reopened);
+    expect(harness.vscode.workspace.textDocuments).toEqual([reopened]);
+    restore.resolve();
+
+    await vi.waitFor(() => expect(harness.requests.mock.calls.length).toBeGreaterThanOrEqual(3));
+    await settleAsyncWork();
+    expect(harness.languageIds()).toEqual(["aurelia-html"]);
+    expect(harness.recorded.languageChanges.map((entry) => entry.languageId)).toEqual([
+      "aurelia-html",
+    ]);
+    await harness.controller.disposeAsync();
+    expect(harness.languageIds()).toEqual(["aurelia-html"]);
+  });
+});
+
+function createHarness(
+  inputs: readonly (readonly [uri: string, languageId: string])[],
+  answer: (uri: string) => ReturnType<typeof ownership> | Promise<ReturnType<typeof ownership>>,
+  options: {
+    readonly suppressNative?: boolean | "omitted";
+    readonly workspaceFolders?: Array<{ name: string; uri: string }>;
+    readonly workspaceConfiguration?: Record<string, Record<string, unknown>>;
+  } = {},
+) {
+  const configuration: Record<string, unknown> = {};
+  if (options.suppressNative !== "omitted") {
+    configuration["aurelia.templateDiagnostics.suppressNative"] = options.suppressNative ?? true;
+  }
+  const { vscode, recorded } = createVscodeApi({
+    workspaceFolders: options.workspaceFolders ?? [{ name: "workspace", uri: "file:///workspace" }],
+    configuration,
+    workspaceConfiguration: options.workspaceConfiguration,
+    openDocuments: inputs.map(([uri, languageId]) => ({ uri, languageId, text: "<template></template>" })),
+  });
+  const requests = vi.fn(answer);
+  const sessionListeners = new Set<() => void>();
+  type AnalysisPayload =
+    | {
+        changeKind: "source-text";
+        changedSourceUris: readonly string[];
+        workspace: { key: string };
+      }
+    | {
+        changeKind: "topology";
+        workspace: { key: string };
+      };
+  const analysisListeners = new Set<(payload: AnalysisPayload) => void>();
+  const session = { workspace: { key: "file:///workspace" }, client: {} };
+  let active = true;
+  const ctx = {
+    vscode: vscode as unknown as VscodeApi,
+    logger: { warn: vi.fn() },
+    languageClient: {
+      sessionForUri: () => active ? session : undefined,
+      onDidChangeSessions: (listener: () => void) => {
+        sessionListeners.add(listener);
+        return { dispose: () => sessionListeners.delete(listener) };
+      },
+    },
+    lsp: {
+      getSourceOwnership: async (uri: string) => ({
+        ...(await requests(uri)),
+        workspace: { key: "file:///workspace", name: "workspace", uri: "file:///workspace" },
+      }),
+      onAnalysisChanged: (listener: (payload: AnalysisPayload) => void) => {
+        analysisListeners.add(listener);
+        return { dispose: () => analysisListeners.delete(listener) };
+      },
+    },
+  };
+  const controller = new OwnedTemplateLanguageController(ctx as never);
+  return {
+    controller,
+    recorded,
+    requests,
+    vscode,
+    languageIds: () => vscode.workspace.textDocuments.map((document) => document.languageId),
+    setSession(value: boolean) {
+      active = value;
+      for (const listener of sessionListeners) listener();
+    },
+    setSuppressNative(value: boolean) {
+      configuration["aurelia.templateDiagnostics.suppressNative"] = value;
+      recorded.fireConfigurationChanged("aurelia.templateDiagnostics.suppressNative");
+    },
+    fireTopology() {
+      for (const listener of analysisListeners) {
+        listener({ changeKind: "topology", workspace: { key: "file:///workspace" } });
+      }
+    },
+    fireAnalysis(
+      changeKind: "source-text" | "topology",
+      workspaceKey = "file:///workspace",
+      changedSourceUris: readonly string[] = ["file:///workspace/src/app.ts"],
+    ) {
+      for (const listener of analysisListeners) {
+        listener(changeKind === "source-text"
+          ? { changeKind, changedSourceUris, workspace: { key: workspaceKey } }
+          : { changeKind, workspace: { key: workspaceKey } });
+      }
+    },
+  };
+}
+
+function ownership(
+  uri: string,
+  templateOwned: boolean,
+  ownerRole: string | null = templateOwned ? "template" : null,
+) {
+  return {
+    fingerprint: "test",
+    sourceUri: uri,
+    answer: { result: "answered" },
+    templateOwned,
+    owners: ownerRole == null ? [] : [{ projectKey: "app", role: ownerRole }],
+  };
+}
+
+async function settleAsyncWork(): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  await new Promise((resolve) => setTimeout(resolve, 0));
+}
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((res) => { resolve = res; });
+  return { promise, resolve };
+}

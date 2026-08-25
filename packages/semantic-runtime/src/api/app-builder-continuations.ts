@@ -49,18 +49,16 @@ import {
 } from '../kernel/collections.js';
 import {
   InquiryContinuationCost,
+  InquiryContinuationEpochDependency,
   InquiryContinuationIntent,
-  InquiryEvidenceCoverage,
-  InquiryEvidenceStaleness,
-  InquiryEvidenceState,
-  InquirySourcePrecision,
+  InquirySourceRequirement,
   inquiryContinuationIntents,
 } from '../inquiry/continuation-intent.js';
 import {
   InquiryContinuationKind,
 } from '../inquiry/answer.js';
 import {
-  SemanticRuntimeAnswerOutcome,
+  SemanticRuntimeAnswerResult,
   type SemanticRuntimeAnswer,
   type SemanticRuntimeContinuationRow,
 } from './contracts.js';
@@ -85,10 +83,7 @@ type AppBuilderContinuationSeed = {
   readonly rationale: string;
   readonly targetAppBuilderQuery: SemanticRuntimeAppBuilderQueryRequest;
   readonly intents: readonly InquiryContinuationIntent[];
-  readonly evidenceState?: InquiryEvidenceState;
-  readonly coverage?: InquiryEvidenceCoverage;
-  readonly sourcePrecision?: InquirySourcePrecision;
-  readonly staleness?: InquiryEvidenceStaleness;
+  readonly sourceRequirement?: InquirySourceRequirement;
   readonly cost?: InquiryContinuationCost;
   readonly blockers?: readonly string[];
 };
@@ -442,7 +437,6 @@ function addInputContractDetailContinuations(
           includeSourceLoweringConsumers: true,
         },
       }),
-      InquiryEvidenceState.Inferred,
     ));
   }
   if (inputContractDetailCanOpenSourceLoweringValueSupportRows(result.value)) {
@@ -454,7 +448,6 @@ function addInputContractDetailContinuations(
           includeSourceLoweringValueSupport: true,
         },
       }),
-      InquiryEvidenceState.Inferred,
     ));
   }
   const consumerTargetRefs = uniqueRefs([
@@ -470,7 +463,6 @@ function addInputContractDetailContinuations(
           includeInputReadiness: true,
         },
       }),
-      InquiryEvidenceState.Inferred,
     ));
     seeds.push(inspect(
       'Check source-lowering preflight for targets that consume the returned input facets.',
@@ -480,7 +472,6 @@ function addInputContractDetailContinuations(
           suppliedInputs: suppliedInputsForQuery(query),
         },
       }),
-      InquiryEvidenceState.Inferred,
     ));
   }
   if (query.kind === SemanticRuntimeAppBuilderQueryKind.InputContractDetail) {
@@ -543,7 +534,6 @@ function addPartContinuations(
             partSourceLoweringPreview: query.partMenu,
             page: semanticRuntimeContinuationPageInput(query),
           }),
-          InquiryEvidenceState.Inferred,
         ));
       }
       break;
@@ -797,7 +787,6 @@ function addSourceLoweringPreflightMissingInputContinuations(
         includePayloadSchemas: true,
       },
     }),
-    InquiryEvidenceState.Inferred,
     ['Preflight keeps compact rows by default; the continuation opens the exact missing input contracts instead of making app-builder guess.'],
   ));
 }
@@ -826,7 +815,6 @@ function addSourceLoweringPreflightBlockerContinuations(
           includePayloadSchemas: true,
         },
       }),
-      InquiryEvidenceState.Inferred,
       ['Target-specific source facts are finer than coarse input-readiness; preflight issues name the exact fields involved.'],
     ));
   }
@@ -843,7 +831,6 @@ function addSourceLoweringPreflightBlockerContinuations(
           includePayloadSchemas: true,
         },
       }),
-      InquiryEvidenceState.Inferred,
       ['Collection Table lowering accepts basic table projection first; query features require target-specific source facts that preflight reports explicitly.'],
     ));
   }
@@ -951,7 +938,6 @@ function addSourcePlanPlacementContinuations(
           affordanceIds: [AppBuilderAffordanceId.SourcePlanPreview],
         },
       }),
-      InquiryEvidenceState.Inferred,
       ['SourcePlan preview placement is SourceRoot plus SourceTargetPath in the app-builder input ontology.'],
     ),
     inspect(
@@ -965,7 +951,6 @@ function addSourcePlanPlacementContinuations(
           ],
         },
       }),
-      InquiryEvidenceState.Inferred,
     ),
   );
 }
@@ -985,7 +970,6 @@ function addEffectContractDetailContinuation(
         effectContractIds: effectContractIds as AppBuilderEffectContractId[],
       },
     }),
-    InquiryEvidenceState.Inferred,
   ));
 }
 
@@ -1031,10 +1015,6 @@ function addNextPageContinuation(
     },
     intents: [InquiryContinuationIntent.Inspect],
     cost: InquiryContinuationCost.Free,
-    evidenceState: InquiryEvidenceState.NotRequired,
-    coverage: InquiryEvidenceCoverage.PartialKnownGaps,
-    sourcePrecision: InquirySourcePrecision.NotRequired,
-    staleness: InquiryEvidenceStaleness.CurrentEpoch,
   });
 }
 
@@ -1158,11 +1138,10 @@ function orient(
 function inspect(
   rationale: string,
   targetAppBuilderQuery: SemanticRuntimeAppBuilderQueryRequest,
-  evidenceState: InquiryEvidenceState = InquiryEvidenceState.NotRequired,
   blockers: readonly string[] = [],
 ): AppBuilderContinuationSeed {
   return {
-    ...seed(rationale, targetAppBuilderQuery, [InquiryContinuationIntent.Inspect], evidenceState),
+    ...seed(rationale, targetAppBuilderQuery, [InquiryContinuationIntent.Inspect]),
     blockers,
   };
 }
@@ -1171,7 +1150,7 @@ function author(
   rationale: string,
   targetAppBuilderQuery: SemanticRuntimeAppBuilderQueryRequest,
 ): AppBuilderContinuationSeed {
-  return seed(rationale, targetAppBuilderQuery, [InquiryContinuationIntent.Author], InquiryEvidenceState.Inferred);
+  return seed(rationale, targetAppBuilderQuery, [InquiryContinuationIntent.Author]);
 }
 
 function verify(
@@ -1185,14 +1164,12 @@ function seed(
   rationale: string,
   targetAppBuilderQuery: SemanticRuntimeAppBuilderQueryRequest,
   intents: readonly InquiryContinuationIntent[],
-  evidenceState: InquiryEvidenceState = InquiryEvidenceState.NotRequired,
 ): AppBuilderContinuationSeed {
   return {
     kind: InquiryContinuationKind.FollowQuery,
     rationale,
     targetAppBuilderQuery,
     intents,
-    evidenceState,
   };
 }
 
@@ -1206,10 +1183,9 @@ function seedToRow(seed: AppBuilderContinuationSeed): SemanticRuntimeContinuatio
     intents: seed.intents,
     cost: seed.cost ?? costForAppBuilderQuery(targetRow),
     evidence: {
-      evidenceState: seed.evidenceState ?? evidenceStateForAppBuilderQuery(targetRow),
-      coverage: seed.coverage ?? InquiryEvidenceCoverage.PartialKnownGaps,
-      sourcePrecision: seed.sourcePrecision ?? InquirySourcePrecision.NotRequired,
-      staleness: seed.staleness ?? InquiryEvidenceStaleness.CurrentEpoch,
+      sourceRequirement: seed.sourceRequirement ?? InquirySourceRequirement.NotRequired,
+      sourceFacts: [],
+      epochDependencies: [InquiryContinuationEpochDependency.RuntimeSession],
     },
     blockers: seed.blockers ?? [],
   };
@@ -1233,15 +1209,6 @@ function costForAppBuilderQuery(
     case SemanticRuntimeAppBuilderQueryPosture.PartSourceSubstrate:
       return InquiryContinuationCost.ProjectionOnly;
   }
-}
-
-function evidenceStateForAppBuilderQuery(
-  row: SemanticRuntimeAppBuilderQueryCatalogRow,
-): InquiryEvidenceState {
-  return row.posture === SemanticRuntimeAppBuilderQueryPosture.OntologyReadModel
-    || row.posture === SemanticRuntimeAppBuilderQueryPosture.SurfaceMap
-    ? InquiryEvidenceState.NotRequired
-    : InquiryEvidenceState.Inferred;
 }
 
 function appBuilderQuery(

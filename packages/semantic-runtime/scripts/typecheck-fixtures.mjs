@@ -6,7 +6,10 @@ import ts from 'typescript';
 
 const packageRoot = path.resolve(fileURLToPath(new URL('..', import.meta.url)));
 const workspaceRoot = path.resolve(packageRoot, '../..');
-const frameworkPackageRoot = path.join(workspaceRoot, 'aurelia/packages');
+const frameworkPackageRoots = [
+  path.join(workspaceRoot, 'aurelia/packages'),
+  path.join(workspaceRoot, 'aurelia/packages-tooling'),
+];
 const defaultFixtureRootSpecs = [
   {
     root: path.join(packageRoot, 'fixtures/app-builder'),
@@ -59,9 +62,10 @@ async function discoverTypecheckableFixtureRoots(rootSpecs) {
 }
 
 async function collectTypecheckableFixtureRoots(root, discovered, include) {
+  const hasTsconfig = await fileExists(path.join(root, 'tsconfig.json'));
   const hasPackageTypecheck = await fileExists(path.join(root, 'package.json'))
-    && await fileExists(path.join(root, 'tsconfig.json'));
-  const hasSourceOnlyTypecheck = await fileExists(path.join(root, 'semantic-fixture.json'))
+    && hasTsconfig;
+  const hasSourceOnlyTypecheck = (hasTsconfig || await fileExists(path.join(root, 'semantic-fixture.json')))
     && (await collectTypeScriptFixtureSourceFiles(root)).length > 0;
   if (!hasPackageTypecheck && !hasSourceOnlyTypecheck) {
     for (const entry of await readdirIfExists(root)) {
@@ -96,21 +100,28 @@ async function resolveRequestedRoot(arg) {
 
 async function aureliaPackagePathMappings() {
   const mappings = {};
-  const entries = await readdir(frameworkPackageRoot, { withFileTypes: true });
-  for (const entry of entries) {
-    if (!entry.isDirectory()) {
-      continue;
+  for (const packageRoot of frameworkPackageRoots) {
+    const entries = await readdir(packageRoot, { withFileTypes: true });
+    for (const entry of entries) {
+      if (!entry.isDirectory()) {
+        continue;
+      }
+      const packageJsonPath = path.join(packageRoot, entry.name, 'package.json');
+      const packageJson = await readJsonIfExists(packageJsonPath);
+      if (packageJson == null || typeof packageJson.name !== 'string') {
+        continue;
+      }
+      const typesPath = path.join(packageRoot, entry.name, 'dist/types/index.d.ts');
+      if (!await fileExists(typesPath)) {
+        continue;
+      }
+      mappings[packageJson.name] = [slash(path.relative(workspaceRoot, typesPath))];
     }
-    const packageJsonPath = path.join(frameworkPackageRoot, entry.name, 'package.json');
-    const packageJson = await readJsonIfExists(packageJsonPath);
-    if (packageJson == null || typeof packageJson.name !== 'string') {
-      continue;
-    }
-    const typesPath = path.join(frameworkPackageRoot, entry.name, 'dist/types/index.d.ts');
-    if (!await fileExists(typesPath)) {
-      continue;
-    }
-    mappings[packageJson.name] = [slash(path.relative(workspaceRoot, typesPath))];
+  }
+  const frameworkViteTypes = path.join(workspaceRoot, 'aurelia/node_modules/vite/dist/node/index.d.ts');
+  if (await fileExists(frameworkViteTypes)) {
+    // Tooling declarations and fixture configs must share one Vite type universe across major versions.
+    mappings.vite = [slash(path.relative(workspaceRoot, frameworkViteTypes))];
   }
   return mappings;
 }
@@ -153,6 +164,14 @@ async function typecheckFixture(root, pathMappings) {
 
 async function typecheckSourceOnlyFixture(root, sourceFiles, pathMappings) {
   const overlayPath = path.join(tempRoot, `${safeFileName(path.relative(packageRoot, root))}.tsconfig.json`);
+  const templateModulePath = path.join(tempRoot, 'fixture-template-modules.d.ts');
+  await writeFile(templateModulePath, [
+    "declare module '*.html' {",
+    '  const template: string;',
+    '  export default template;',
+    '}',
+    '',
+  ].join('\n'));
   await writeFile(overlayPath, JSON.stringify({
     compilerOptions: {
       target: 'ES2022',
@@ -167,7 +186,7 @@ async function typecheckSourceOnlyFixture(root, sourceFiles, pathMappings) {
       ignoreDeprecations: '6.0',
       noEmit: true,
     },
-    files: sourceFiles.map(slash),
+    files: [...sourceFiles, templateModulePath].map(slash),
   }, null, 2));
 
   const diagnostics = readTypecheckDiagnostics(overlayPath);

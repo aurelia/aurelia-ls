@@ -102,13 +102,14 @@ import {
   type AppBuilderRecommendationPolicyRow,
   type AppBuilderRecommendationPolicySummary,
 } from '../app-builder/policy/index.js';
-import { answer } from './answer-helpers.js';
 import {
-  outcomeForPagedRows,
+  answer,
+  COMPLETE_COLLECTION_ANSWER_OPTIONS,
+  NON_APPLICABLE_ANSWER_OPTIONS,
   pageRows,
 } from './answer-helpers.js';
 import {
-  SemanticRuntimeAnswerOutcome,
+  SemanticRuntimeAnswerResult,
   type SemanticRuntimeAnswer,
   type SemanticRuntimePageInput,
   type SemanticRuntimePageResult,
@@ -851,6 +852,20 @@ SemanticRuntimeAppBuilderQueryAnswerer
 
 assertCompleteAppBuilderQuerySurface();
 
+function appBuilderAnswer<TValue>(
+  result: SemanticRuntimeAnswerResult,
+  summary: string,
+  value: TValue,
+  page: SemanticRuntimePageResult | null = null,
+): SemanticRuntimeAnswer<TValue> {
+  return answer(result, summary, value, {
+    ...(result === SemanticRuntimeAnswerResult.Answered
+      ? COMPLETE_COLLECTION_ANSWER_OPTIONS
+      : NON_APPLICABLE_ANSWER_OPTIONS),
+    page,
+  });
+}
+
 /** Read the public app-builder query catalog without materializing any app or source plan. */
 export function readSemanticRuntimeAppBuilderQueryCatalog(
   request: SemanticRuntimeAppBuilderQueryCatalogRequest = {},
@@ -873,8 +888,8 @@ export function answerSemanticRuntimeAppBuilderQueryCatalog(
   request: SemanticRuntimeAppBuilderQueryCatalogRequest = {},
 ): SemanticRuntimeAnswer<SemanticRuntimeAppBuilderQueryCatalogResult> {
   const value = readSemanticRuntimeAppBuilderQueryCatalog(request);
-  return answer(
-    SemanticRuntimeAnswerOutcome.Hit,
+  return appBuilderAnswer(
+    SemanticRuntimeAnswerResult.Answered,
     `Returned ${value.rows.length} app-builder query catalog row(s).`,
     value,
   );
@@ -925,8 +940,8 @@ function answerAppBuilderPartMenuQuery(
 ): SemanticRuntimeAnswer<SemanticRuntimeAppBuilderQueryResult> {
   const value = appBuilderPartMenu(request.partMenu);
   const paged = pageAppBuilderPartMenu(value, request.page ?? undefined);
-  return answer(
-    outcomeForPagedRows(paged),
+  return appBuilderAnswer(
+    SemanticRuntimeAnswerResult.Answered,
     `Returned ${paged.value.parts.length} of ${paged.page.totalRows} app-builder part row(s).`,
     paged.value,
     paged.page,
@@ -937,8 +952,8 @@ function answerAppBuilderOntologyCatalogQuery(
   request: SemanticRuntimeAppBuilderQueryRequest,
 ): SemanticRuntimeAnswer<SemanticRuntimeAppBuilderQueryResult> {
   const value = appBuilderOntologyCatalog(request.ontologyCatalog);
-  return answer(
-    SemanticRuntimeAnswerOutcome.Hit,
+  return appBuilderAnswer(
+    SemanticRuntimeAnswerResult.Answered,
     `Returned app-builder ontology catalog with ${value.domainSummaries.length} domain summary row(s).`,
     value,
   );
@@ -948,8 +963,8 @@ function answerAppBuilderInputReadinessQuery(
   request: SemanticRuntimeAppBuilderQueryRequest,
 ): SemanticRuntimeAnswer<SemanticRuntimeAppBuilderQueryResult> {
   const value = appBuilderInputReadiness(request.inputReadiness);
-  return answer(
-    value.issues.length === 0 ? SemanticRuntimeAnswerOutcome.Hit : SemanticRuntimeAnswerOutcome.Partial,
+  return appBuilderAnswer(
+    SemanticRuntimeAnswerResult.Answered,
     `Returned app-builder input readiness for ${value.targets.length} target row(s) with ${value.issues.length} issue(s).`,
     value,
   );
@@ -959,8 +974,8 @@ function answerAppBuilderInputContractDetailQuery(
   request: SemanticRuntimeAppBuilderQueryRequest,
 ): SemanticRuntimeAnswer<SemanticRuntimeAppBuilderQueryResult> {
   const value = appBuilderInputContractDetail(request.inputContractDetail);
-  return answer(
-    SemanticRuntimeAnswerOutcome.Hit,
+  return appBuilderAnswer(
+    SemanticRuntimeAnswerResult.Answered,
     `Returned app-builder input contract detail for ${value.rows.length} contract row(s).`,
     value,
   );
@@ -970,8 +985,8 @@ function answerAppBuilderArchitectureOptionsQuery(
   request: SemanticRuntimeAppBuilderQueryRequest,
 ): SemanticRuntimeAnswer<SemanticRuntimeAppBuilderQueryResult> {
   const value = appBuilderArchitectureOptions(request.architectureOptions);
-  return answer(
-    SemanticRuntimeAnswerOutcome.Hit,
+  return appBuilderAnswer(
+    SemanticRuntimeAnswerResult.Answered,
     `Returned ${value.rows.length} app-builder architecture option row(s).`,
     value,
   );
@@ -981,8 +996,8 @@ function answerAppBuilderAffordanceDetailQuery(
   request: SemanticRuntimeAppBuilderQueryRequest,
 ): SemanticRuntimeAnswer<SemanticRuntimeAppBuilderQueryResult> {
   const value = appBuilderAffordanceDetail(request.affordanceDetail);
-  return answer(
-    value.issues.length === 0 ? SemanticRuntimeAnswerOutcome.Hit : SemanticRuntimeAnswerOutcome.Partial,
+  return appBuilderAnswer(
+    SemanticRuntimeAnswerResult.Answered,
     `Returned app-builder affordance detail for ${value.rows.length} affordance row(s) with ${value.issues.length} issue(s).`,
     value,
   );
@@ -992,8 +1007,8 @@ function answerAppBuilderApplicationPatternDetailQuery(
   request: SemanticRuntimeAppBuilderQueryRequest,
 ): SemanticRuntimeAnswer<SemanticRuntimeAppBuilderQueryResult> {
   const value = appBuilderApplicationPatternDetail(request.applicationPatternDetail);
-  return answer(
-    value.issues.length === 0 ? SemanticRuntimeAnswerOutcome.Hit : SemanticRuntimeAnswerOutcome.Partial,
+  return appBuilderAnswer(
+    SemanticRuntimeAnswerResult.Answered,
     `Returned app-builder application pattern detail for ${value.rows.length} pattern row(s) with ${value.issues.length} issue(s).`,
     value,
   );
@@ -1003,8 +1018,8 @@ function answerAppBuilderCollectionConceptDetailQuery(
   request: SemanticRuntimeAppBuilderQueryRequest,
 ): SemanticRuntimeAnswer<SemanticRuntimeAppBuilderQueryResult> {
   const value = appBuilderCollectionConceptDetail(request.collectionConceptDetail);
-  return answer(
-    value.issues.length === 0 ? SemanticRuntimeAnswerOutcome.Hit : SemanticRuntimeAnswerOutcome.Partial,
+  return appBuilderAnswer(
+    SemanticRuntimeAnswerResult.Answered,
     `Returned app-builder collection concept detail for ${value.rows.length} collection concept row(s) with ${value.issues.length} issue(s).`,
     value,
   );
@@ -1014,8 +1029,8 @@ function answerAppBuilderControlManifestDetailQuery(
   request: SemanticRuntimeAppBuilderQueryRequest,
 ): SemanticRuntimeAnswer<SemanticRuntimeAppBuilderQueryResult> {
   const value = appBuilderControlManifestDetail(request.controlManifestDetail);
-  return answer(
-    value.issues.length === 0 ? SemanticRuntimeAnswerOutcome.Hit : SemanticRuntimeAnswerOutcome.Partial,
+  return appBuilderAnswer(
+    SemanticRuntimeAnswerResult.Answered,
     `Returned app-builder control manifest detail for ${value.rows.length} manifest row(s) with ${value.issues.length} issue(s).`,
     value,
   );
@@ -1025,8 +1040,8 @@ function answerAppBuilderControlPatternDetailQuery(
   request: SemanticRuntimeAppBuilderQueryRequest,
 ): SemanticRuntimeAnswer<SemanticRuntimeAppBuilderQueryResult> {
   const value = appBuilderControlPatternDetail(request.controlPatternDetail);
-  return answer(
-    value.issues.length === 0 ? SemanticRuntimeAnswerOutcome.Hit : SemanticRuntimeAnswerOutcome.Partial,
+  return appBuilderAnswer(
+    SemanticRuntimeAnswerResult.Answered,
     `Returned app-builder control pattern detail for ${value.rows.length} control pattern row(s) with ${value.issues.length} issue(s).`,
     value,
   );
@@ -1036,8 +1051,8 @@ function answerAppBuilderEffectContractDetailQuery(
   request: SemanticRuntimeAppBuilderQueryRequest,
 ): SemanticRuntimeAnswer<SemanticRuntimeAppBuilderQueryResult> {
   const value = appBuilderEffectContractDetail(request.effectContractDetail);
-  return answer(
-    value.issues.length === 0 ? SemanticRuntimeAnswerOutcome.Hit : SemanticRuntimeAnswerOutcome.Partial,
+  return appBuilderAnswer(
+    SemanticRuntimeAnswerResult.Answered,
     `Returned app-builder effect contract detail for ${value.rows.length} effect contract row(s) with ${value.issues.length} issue(s).`,
     value,
   );
@@ -1047,8 +1062,8 @@ function answerAppBuilderPolicyDetailQuery(
   request: SemanticRuntimeAppBuilderQueryRequest,
 ): SemanticRuntimeAnswer<SemanticRuntimeAppBuilderQueryResult> {
   const value = appBuilderPolicyDetail(request.policyDetail);
-  return answer(
-    value.issues.length === 0 ? SemanticRuntimeAnswerOutcome.Hit : SemanticRuntimeAnswerOutcome.Partial,
+  return appBuilderAnswer(
+    SemanticRuntimeAnswerResult.Answered,
     `Returned app-builder policy detail for ${value.rows.length} policy axis row(s) with ${value.issues.length} issue(s).`,
     value,
   );
@@ -1062,8 +1077,8 @@ function answerAppBuilderRecommendationPolicyQuery(
   const summary = value.rowsIncluded
     ? `Returned ${paged.value.rows.length} of ${paged.page.totalRows} app-builder recommendation policy row(s) with ${value.issues.length} issue(s).`
     : `Returned app-builder recommendation policy summary for ${value.filteredRowCount} of ${value.totalRowCount} row(s) with ${value.issues.length} issue(s).`;
-  return answer(
-    value.issues.length === 0 ? outcomeForPagedRows(paged) : SemanticRuntimeAnswerOutcome.Partial,
+  return appBuilderAnswer(
+    SemanticRuntimeAnswerResult.Answered,
     summary,
     paged.value,
     paged.page,
@@ -1074,8 +1089,8 @@ function answerAppBuilderStyleDetailQuery(
   request: SemanticRuntimeAppBuilderQueryRequest,
 ): SemanticRuntimeAnswer<SemanticRuntimeAppBuilderQueryResult> {
   const value = appBuilderStyleDetail(request.styleDetail);
-  return answer(
-    value.issues.length === 0 ? SemanticRuntimeAnswerOutcome.Hit : SemanticRuntimeAnswerOutcome.Partial,
+  return appBuilderAnswer(
+    SemanticRuntimeAnswerResult.Answered,
     `Returned app-builder style detail for ${value.stylingMechanismRows.length} styling mechanism row(s) and ${value.visualPolicyRows.length} visual policy row(s) with ${value.issues.length} issue(s).`,
     value,
   );
@@ -1086,8 +1101,8 @@ function answerAppBuilderTargetCatalogQuery(
 ): SemanticRuntimeAnswer<SemanticRuntimeAppBuilderQueryResult> {
   const value = appBuilderTargetCatalog(request.targetCatalog);
   const paged = pageAppBuilderTargetCatalog(value, appBuilderTargetCatalogPageInput(request));
-  return answer(
-    value.issues.length === 0 ? outcomeForPagedRows(paged) : SemanticRuntimeAnswerOutcome.Partial,
+  return appBuilderAnswer(
+    SemanticRuntimeAnswerResult.Answered,
     `Returned ${paged.value.rows.length} of ${paged.page.totalRows} app-builder target row(s) with ${value.issues.length} issue(s).`,
     paged.value,
     paged.page,
@@ -1108,8 +1123,8 @@ function answerAppBuilderSourceLoweringPreflightQuery(
   request: SemanticRuntimeAppBuilderQueryRequest,
 ): SemanticRuntimeAnswer<SemanticRuntimeAppBuilderQueryResult> {
   const value = appBuilderSourceLoweringPreflight(request.sourceLoweringPreflight);
-  return answer(
-    value.issues.length === 0 ? SemanticRuntimeAnswerOutcome.Hit : SemanticRuntimeAnswerOutcome.Partial,
+  return appBuilderAnswer(
+    SemanticRuntimeAnswerResult.Answered,
     `Returned app-builder source-lowering preflight for ${value.rows.length} target row(s) with ${value.issues.length} issue(s).`,
     value,
   );
@@ -1119,8 +1134,8 @@ function answerAppBuilderSourceLoweringInvocationQuery(
   request: SemanticRuntimeAppBuilderQueryRequest,
 ): SemanticRuntimeAnswer<SemanticRuntimeAppBuilderQueryResult> {
   const value = appBuilderSourceLoweringInvocation(request.sourceLoweringInvocation);
-  return answer(
-    value.issues.length === 0 ? SemanticRuntimeAnswerOutcome.Hit : SemanticRuntimeAnswerOutcome.Partial,
+  return appBuilderAnswer(
+    SemanticRuntimeAnswerResult.Answered,
     `Lowered app-builder ontology source target '${value.targetRef == null ? 'none' : `${value.targetRef.kind}:${value.targetRef.id}`}' with ${value.fragments.length} fragment(s) and ${value.issues.length} issue(s).`,
     value,
   );
@@ -1130,8 +1145,8 @@ function answerAppBuilderSourceLoweringCompositionQuery(
   request: SemanticRuntimeAppBuilderQueryRequest,
 ): SemanticRuntimeAnswer<SemanticRuntimeAppBuilderQueryResult> {
   const value = appBuilderSourceLoweringComposition(request.sourceLoweringComposition);
-  return answer(
-    value.issues.length === 0 ? SemanticRuntimeAnswerOutcome.Hit : SemanticRuntimeAnswerOutcome.Partial,
+  return appBuilderAnswer(
+    SemanticRuntimeAnswerResult.Answered,
     `Composed app-builder ontology source target '${value.targetRef == null ? 'none' : `${value.targetRef.kind}:${value.targetRef.id}`}' with ${value.fragments.length} fragment(s), ${value.contributingFragments.length} contributing fragment(s), and ${value.issues.length} issue(s).`,
     value,
   );
@@ -1145,8 +1160,8 @@ function answerAppBuilderSourceLoweringSourcePlanQuery(
     sourcePlan,
     request.sourceLoweringSourcePlan?.includeSourcePlanContributions === true,
   );
-  return answer(
-    value.issues.length === 0 ? SemanticRuntimeAnswerOutcome.Hit : SemanticRuntimeAnswerOutcome.Partial,
+  return appBuilderAnswer(
+    SemanticRuntimeAnswerResult.Answered,
     `Previewed app-builder ontology SourcePlan with ${value.sourcePlan?.files.length ?? 0} file(s) and ${value.issues.length} issue(s).`,
     value,
   );
@@ -1195,8 +1210,8 @@ function answerAppBuilderPartSourceLoweringPreviewQuery(
 ): SemanticRuntimeAnswer<SemanticRuntimeAppBuilderQueryResult> {
   const value = appBuilderPartSourceLoweringPreview(request.partSourceLoweringPreview ?? request.partMenu);
   const paged = pageAppBuilderPartSourceLoweringPreview(value, request.page ?? undefined);
-  return answer(
-    value.issueCount === 0 ? outcomeForPagedRows(paged) : SemanticRuntimeAnswerOutcome.Partial,
+  return appBuilderAnswer(
+    SemanticRuntimeAnswerResult.Answered,
     `Previewed ${paged.value.rows.length} of ${paged.page.totalRows} app-builder part source-lowering sample(s) with ${value.issueCount} issue(s).`,
     paged.value,
     paged.page,
@@ -1213,15 +1228,15 @@ function answerAppBuilderPartSourceInvocationQuery(
       queryKind: request.kind,
       summary: `App-builder query '${request.kind}' requires a partSourceInvocation payload with partKind, partId, and any required slotAssignments.`,
     }]);
-    return answer(
-      SemanticRuntimeAnswerOutcome.Partial,
+    return appBuilderAnswer(
+      SemanticRuntimeAnswerResult.Invalid,
       `App-builder part source invocation is incomplete: ${value.issues.length} issue(s).`,
       value,
     );
   }
   const value = lowerAppBuilderPartSourceInvocation(invocation);
-  return answer(
-    value.issues.length === 0 ? SemanticRuntimeAnswerOutcome.Hit : SemanticRuntimeAnswerOutcome.Partial,
+  return appBuilderAnswer(
+    SemanticRuntimeAnswerResult.Answered,
     `Lowered app-builder part invocation '${value.invocation.partKind}:${value.invocation.partId}' with state '${value.state}'.`,
     value,
   );
@@ -1231,8 +1246,8 @@ function answerAppBuilderCatalogIntegrityQuery(
   _request: SemanticRuntimeAppBuilderQueryRequest,
 ): SemanticRuntimeAnswer<SemanticRuntimeAppBuilderQueryResult> {
   const value = readSemanticRuntimeAppBuilderCatalogIntegrity();
-  return answer(
-    value.issueCount === 0 ? SemanticRuntimeAnswerOutcome.Hit : SemanticRuntimeAnswerOutcome.Partial,
+  return appBuilderAnswer(
+    SemanticRuntimeAnswerResult.Answered,
     `Checked app-builder catalog integrity with ${value.issueCount} issue(s).`,
     value,
   );

@@ -46,6 +46,16 @@ open seams, or inquiry answers.
 - `parse-result-algebra.ts` is parser-owned publication.
 - `parse-result-inspection.ts` is the stable query surface for downstream
   consumers that should not rebuild sibling-kind switches locally.
+- Member-owner inspection follows the parser's `MemberName` continuation class, not one frontier enum. Both
+  `AwaitingMemberName` and `AwaitingChainSegment` can retain a member receiver; the latter covers optional-chain and
+  `$parent.` scope-path frontiers. Consumers must spend the published continuation algebra rather than discard those
+  receivers and recreate incomplete-syntax policy.
+- `ObjectLiteralExpression.keys`, `keySpans`, and `values` are index-aligned. Key spans preserve authored identifier,
+  string, and numeric key tokens even though Aurelia's runtime AST only needs decoded key values. Cursor consumers use
+  `ExpressionParseResultInspector.objectLiteralKeyContextAtOffset(...)` to distinguish key slots from value expressions
+  and to identify already-authored keys; they must not rescan expression text for object punctuation. Incomplete nested
+  objects recover their depth from the companion publication's matched-delimiter stack rather than treating every
+  object-key frontier as a root object.
 
 ## Core Design Decisions
 
@@ -106,6 +116,11 @@ open seams, or inquiry answers.
 - `parse-result-inspection.ts`
   Stable family/outcome inspection helpers for consumers. Member-owner and member-name reads share one AST traversal
   primitive so new expression kinds do not require parallel recursive switches in cursor, diagnostic, and hover paths.
+  Object-literal key-context inspection is parser-owned for the same reason: nested objects, shorthand keys, companion
+  prefixes, and key/value source boundaries should not be reconstructed by completion lanes.
+  Parse-result consumers narrow the closed result algebra through `ExpressionParseResultKind` or inspector type guards,
+  never by probing for incidental fields such as `ast`, `activeHole`, or `frontierKind`. Use `instanceof` only for a
+  nominal nested carrier that has no discriminator of its own and remains inside the parser process.
 - `runtime-assignment.ts`
   Expression-level `astAssign` target and value-converter chain helpers. Binding data-flow, template scope
   construction, overlays, and diagnostics should share these transparent-wrapper rules instead of rediscovering
@@ -156,9 +171,9 @@ state, with special corridors split out by ownership:
   delimiter publication carries `AUR0167` so paren, indexed-access, call,
   arrow-head, and binding-pattern close gaps keep the framework parser code
   visible without duplicating it at every caller. Scope-special roots preserve
-  authored `$this.member` and `$parent.member` origin in
-  `ScopeExpressionRootKind` even when the runtime-shaped AST lowers them to
-  `AccessScope`/`CallScope`; downstream consumers should spend that root kind
+  ordered `$this`/`$parent` qualifier spans, exact-ancestor lookup, and optional
+  access in `AuthoredScopePath` even when the runtime-shaped AST lowers them to
+  `AccessScope`/`CallScope`; downstream consumers should spend that syntax provenance
   instead of re-reading source text for `$this.` or `$parent.` prefixes.
 - `completed-input-left-hand-side-corridor.ts`
   `new`, member access, optional chaining, keyed access, calls, and tagged
@@ -172,8 +187,8 @@ state, with special corridors split out by ownership:
   tagged-template tails resume only after the `NewExpression` is closed. This
   keeps `new Foo()` from becoming a call-shaped constructor target and prevents
   runtime AST diagnostics from seeing class construction as an ordinary call.
-  Call-scope lowering copies `AccessScope.rootKind`, so `$this.method()` and
-  `$parent.method()` keep their authored scope origin after the call transform.
+  Call-scope lowering copies `AccessScope.authoredScopePath`, so `$this.method()` and
+  `$parent.method()` keep every authored qualifier and optional-access fact after the call transform.
 - `completed-input-tail-corridor.ts`
   Value-converter and binding-behavior tails.
 - `completed-input-arrow-corridor.ts`

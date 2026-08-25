@@ -51,9 +51,10 @@ consumers pressure these layers and then refactor horizontally when the boundari
 - When adding a prominent framework-shaped product concept, add or verify the corresponding `auLink` decorator while
   the framework source is fresh in context. If the bridge view is noisy, improve Atlas role/topology classification
   before treating the semantic-runtime concept as ungrounded.
-- Use `auLink` placement facets only when one framework symbol is deliberately modeled by several product concepts.
-  Current examples are built-in resource definitions, built-in template-controller semantics, and router runtime models;
-  same-facet duplicate placements should still be treated as split-brain.
+- Use facetless `auLink` for unqualified framework correspondence; it does not promise whole-target parity. Use a named
+  facet when a product owns one framework decision without recreating the target's complete member surface. Current examples are resource definitions,
+  binding-behavior/value-converter/template-controller semantics, router runtime models, and observer selection;
+  same-link/same-facet duplicate placements should still be treated as split-brain.
 - Put durable semantics in product records and vocabulary, not in documentation tables.
 - Keep uncertainty explicit with open seams instead of flattening partial knowledge into resolved-looking facts.
 - If a framework-shaped fact is consumed by more than one domain, or justifies any framework-coded positive diagnostic,
@@ -239,13 +240,13 @@ compilation, rendering dispatch, and TypeChecker-backed scope products. Keep ini
 kernel handles only through explicit detail projections so the API can serve app developers and AI callers without
 forcing every query into full graph expansion.
 Query outcomes now pass through `QueryClaimGraph` before public answer serialization. Treat that graph as the lazy
-answer/outcome layer, not as a kernel substitute: durable facts still belong in kernel products and claims, while
+answer-state layer, not as a kernel substitute: durable facts still belong in kernel products and claims, while
 answer-local work, nested query composition, payload shape, query type projections, and disposal policy belong in
 the query-claim layer. When a public query grows kernel products, first check the query catalog materialization policy
 and telemetry output before adding another cache or eager projection.
 Telemetry pressure has already shown a few useful compression rules:
 type-member details can be hot children of a durable type-shape rather than durable products themselves; declaration-backed
-TypeChecker/evaluated-value type shapes can converge by checker key and declaration source while expression/binding rows
+TypeChecker/evaluated-value type shapes can converge by project-qualified semantic type key and declaration source while expression/binding rows
 own the user-facing source locus; checker-owned union/intersection keys can converge structurally when their
 constituents are source-independent; template-requested checker-returned types should keep `TypeChecker` origin instead
 of being mislabeled as synthetic; and kernel handle strings are session transport links that may compact long recursive
@@ -267,9 +268,9 @@ source-file selection keeps the authoring compiler world tied to the file being 
 remains a pressure/fallback budget, not the durable API shape. This split exists because external monorepo sampling
 showed hundreds of recognized custom-element templates with no app-root compiler world, while compiling all of them at
 once can exhaust the Node heap. The durable direction is file/locus-budgeted authoring opens, not pretending every
-recognized component is part of the hydrated app topology. Source-file address lookup now indexes suffixes of admitted
-source paths, so project-relative editor paths can resolve to the same source-file addresses as workspace-relative or
-absolute host paths. `openApp({ sourceFilePath, includeAuthoringTemplates: true })` now uses the source file to select
+recognized component is part of the hydrated app topology. `ProjectSourceOwnershipIndex` joins each admission's exact
+absolute, workspace-relative, and project-relative aliases; conflicting relative domains remain ambiguous rather than
+choosing a longer suffix. `openApp({ sourceFilePath, includeAuthoringTemplates: true })` now uses the source file to select
 the owning project when the caller does not already know a monorepo project key, and uses that file as the default
 authoring template selection.
 Direct cursor-locus API calls (`templateCompletions(...)` / `templateCursorInfo(...)`) have a slightly different
@@ -309,32 +310,34 @@ components also seed template compilation as routeable resources, which lets
 nested routed templates and `au-viewport` / `ViewportAgent` topology surface before a future route-tree/navigation
 emulator exists. Treat this as recursive static topology, not viewport activation.
 
-Router option convergence now sits before route-context materialization. `RouterConfiguration` admissions create
-framework-defaulted `RouterOptions` products, owner-tagged `customize(...)` option contributions fold into those options,
-and the API exposes them through `routerOptions`. Route-context topology starts from configured app roots when the app
-root is known, with graph-root fallback for library-style package analysis. Component-level static route metadata is
-applied during topology traversal when a route points at a component that owns child route metadata, so nested child
-routes become visible without requiring navigation. `useEagerLoading: true` reuses the root recognizer for child
-contexts and materializes parent-prefixed recognizer paths while keeping local authored route paths separate. A future
-applied-`RouteConfig` product may still be needed if consumers need exact `RouteConfig._applyChildRouteConfig(...)`
-provenance rather than topology-level application.
+Router option convergence now spends concrete DI registration operations before route-context materialization.
+`RouterConfiguration` admissions and owner-tagged `customize(...)` contributions become framework-defaulted
+`RouterOptions` only when registered, with one product and exact definition/use provenance per `AppRoot`. Reused
+configuration values remain shared definitions with distinct rooted uses; a duplicate registration publishes AUR3168
+and withholds an arbitrary topology winner. Route-context topology starts from configured app roots when the app root
+is known, with graph-root fallback for library-style package analysis. Definition and per-use applied
+`RouteConfig` products converge class metadata, child overlays, inherited parent policy, and framework defaults before
+topology consumes them, so nested child routes become visible without repeating `RouteConfig._applyChildRouteConfig(...)`
+precedence downstream. `useEagerLoading: true` reuses the root recognizer for child contexts and materializes
+parent-prefixed recognizer paths while keeping local authored route paths separate.
 
-Route runtime topology now separates `RouteContext` from `RouteConfigContext`. The former is materialized after routed
+Route runtime topology now separates potential `RouteContext` from static `RouteConfigContext`. The former is materialized after routed
 templates are compiled, because it needs the controller/container and `au-viewport` boundaries that the framework uses
 when `ViewportCustomElement.hydrated`, `RouteContext._registerViewport`, and `Router._getRouteContext` cooperate.
-`ViewportCustomElement` and `ViewportAgent` products now point at runtime `RouteContext` references; child route contexts
-point back to the hosting viewport agent selected through framework-shaped viewport-name/`usedBy` matching. These are
-static potential route contexts, not proof that a `RouteNode` exists or that viewport activation has run.
+`ViewportCustomElement` and `ViewportAgent` candidate products point at potential `RouteContext` references; child route
+contexts point back to every statically compatible hosting candidate. These are static possibilities, not proof that a
+`RouteNode` exists or that viewport availability or activation has run.
 `Router._getRouteContext(...)` is pair-keyed by `(ViewportAgent | null, RouteConfigContext)`, so semantic-runtime no
 longer treats component definitions or route config contexts as singular route-context owners. Router-resource
-instruction materialization follows every modeled runtime context for a component template, and transition route trees
-are emitted only when the full recognized instruction chain resolves through `ViewportRequest -> ViewportAgent ->
-RouteContext` without an open seam. Without a first-class partial-tree product, prefixes of an unresolved chain should
-stay as open pressure rather than resolved-looking route trees.
-External pressure also caught a faithful-porting bug in parent-relative router resources: the framework's
-`RouteContext.createViewportInstructions(...)` climbs once per `../` before setting the context-changed flag. Setting
-that flag inside the loop stripped extra prefixes without climbing and pushed recognizer matching into a sibling
-configured context. Treat future router-resource normalization drift as framework-source pressure first.
+instruction materialization follows every modeled potential context for a component template, and transition route trees
+are emitted only when the full recognized instruction chain resolves through `ViewportRequest -> sole ViewportAgent
+candidate -> RouteContext` without an open seam. Without a first-class partial-tree product, prefixes of an unresolved
+chain should stay as open pressure rather than resolved-looking route trees.
+External pressure also caught a faithful-porting bug in parent-relative router resources. The normalized prefix owns
+both the fully stripped route-expression input and the requested parent traversal count; the context-aware lane spends
+that count while a parent exists and clamps excess traversal at the root. Re-looping over the raw value can leave an
+excess `../` for route-expression parsing or select the wrong configured context. Treat future router-resource
+normalization drift as framework-source pressure first.
 The first `RouteTree` materialization now mirrors the framework's lazy initial tree: a synthetic root `RouteTree` with
 one root `RouteNode` tied to the root route context, root route config, and effective router options. This is deliberately
 weaker than full navigation. The router-resource handoff layer now materializes static `load` and internal `href`
@@ -403,13 +406,14 @@ span cannot be rebased, the caller has lost the parser/source ownership chain an
 selection, suppressed-hole promotion, and strict/runtime projection pressure stay separate from boundary extraction.
 Unresolved globals and async/generator bodies in non-app-root resource libraries remain evaluator boundary pressure,
 not app authoring API pressure.
-The dialog configuration registry pressure also exposed a lower-level evaluator leak: configuration recognition was
-re-reading expressions through a fresh default evaluator, losing the Aurelia runtime host used during module evaluation.
-`StaticModuleEvaluationResult` now carries the policy/runtime host into `StaticEvaluationExpressionReader`, and dialog
-configuration chains preserve a framework registration kind through `.customize(...)`/`.withChild(...)`. AppTask factory
-calls are configuration-owned lifecycle products, not registry bodies for DI to spend. DI world construction now threads
-registered AppTask products into its lifecycle task list and closes the AppTask registry admission without executing the
-callback body. Remaining seams in that lane should mean evaluator/global-boundary pressure or a genuinely unrecognized
+The dialog configuration registry pressure exposed a lower-level evaluator leak: configuration recognition used to
+re-read expressions through a fresh evaluator and later through final module state. Configuration now projects retained
+invocation evidence from the original Aurelia runtime host, while dialog configuration chains preserve a framework
+registration kind through `.customize(...)`/`.withChild(...)`. AppTask factory calls are configuration-owned lifecycle
+products, and DI retains them only when their exact registry occurrence is spent. Source-created tasks keep their
+call-time key/callback evidence and captured environment without executing the lifecycle callback. Registry definitions
+likewise remain inventories until candidate-local evaluator execution reaches their register calls. Remaining seams in
+that lane should mean evaluator/global-boundary pressure, an unmatched registry invocation, or a genuinely unrecognized
 registry body.
 Public plugin pressure also clarified the registration/activation boundary for callback resolvers: a
 `Registration.callback(...)` or `Registration.cachedCallback(...)` call is a closed resolver admission once its key and
@@ -444,8 +448,8 @@ operation semantics such as select option domains, checked collection/map behavi
 writes, and lazy source-type reads. Inside that draft layer, direct binding, select, and checked observer collaborators
 depend on explicit TypeChecker/type support rather than on a catch-all materializer-as-service-object. `binding-value-channel-materializer.ts` owns kernel publication only: product
 handles, identities, claims, provenance, materialization records, and open seams. Keep that split intact; future
-observer semantics should move into the draft layer or into framework-shaped observer classes, not back into product
-publication.
+observer semantics should move into the draft layer or the `ObserverLocator` selection authority, not back into product
+publication or class-shaped observer instance shells.
 
 The data-flow layer now follows the same publication-vs-semantics split. `binding-data-flow-materializer.ts` still owns
 the `RuntimeBindingDataFlow` product records, claims, and open seams, while local collaborators own draft assembly,
@@ -469,6 +473,10 @@ controller and narrowing scopes can copy a view-model binding context while legi
 synthetic view, so value evaluation must be able to fall back from exact controller handles to an unambiguous
 definition/type match. If several call sites bind the same definition property, keep the value open until recursive
 rendering can select the concrete call context; do not collapse that ambiguity in router or diagnostics.
+That fallback is contextual, not instance truth. A consumer that owns a concrete hydrated controller must use the
+table's exact-controller read; otherwise one instance's bound property can masquerade as a sibling instance's value.
+Bound rows retain the parent resource's binding-expression scope projector so cross-resource reads do not borrow the
+consumer's scope-changing binding-behavior lifecycle.
 Host environment and external module reads are now explicit evaluator boundary values. The old object-level
 missing-property reason blurred host state with ordinary object fallbacks, and external package imports blurred
 dependency boundaries with missing lexical bindings. The durable rule is: boundary objects/values propagate through
@@ -558,10 +566,10 @@ shared message model.
 
 Resource-recognition performance pressure can be a proxy for lower-level TypeChecker provenance cost. A large-root
 profile showed `kernel-emission` dominating while named/syntax recognition and convergence were cheap; the root cause
-was checker type projection scanning all store addresses for every projected member declaration. `KernelStore` now owns
-a source-file-address suffix index via `readBestSourceFileAddressForFileName(...)`, so declaration provenance lookup is
-indexed and shared by every checker projection lane. If this pressure returns, profile below the resource-recognition
-label before tuning recognizers or weakening source provenance.
+was checker type projection scanning all store addresses for every projected member declaration. Boot ownership now
+provides the exact admitted address handle directly; the kernel suffix index remains candidate enumeration only and
+cannot authorize declaration provenance or inquiry selection. If this pressure returns, profile below the
+resource-recognition label before tuning recognizers or weakening source provenance.
 Checker-backed declaration provenance also needs to handle Program files that were not boot-admitted as app sources.
 `type-system/declaration-source.ts` owns that boundary: it first reuses admitted source-file addresses and otherwise
 materializes a Program-source file address for declaration navigation. Keep this path source/provenance-oriented only;
@@ -609,7 +617,7 @@ answer mismatches, cursor-info source coverage, focused selected-member coverage
 signals, compact LSP envelopes, value-domain gaps, and bucketed missing-input reasons without paths, source text, or candidate names. Use it with
 `SEMANTIC_RUNTIME_CURSOR_PRESSURE_ROOTS` for external roots when a question is about hovers/completion/navigation
 pressure rather than whole app topology. It now mirrors app pressure's project-discovery override and requests paged
-runtime-summary project rows explicitly, so package-tsconfig monorepo roots do not accidentally report zero cursor
+runtime-summary project rows explicitly, so project-marker monorepo roots do not accidentally report zero cursor
 pressure. Current sampled behavior is: generic expression scopes, binding-command names,
 resource names, bindable names, expression member owners, and parent repeat scopes are reachable; plain static platform
 attribute values are classified directly from HTML/syntax products and do not publish durable value-site products or
@@ -724,6 +732,10 @@ Binding assignment diagnostics distinguish TypeScript strictness from runtime no
 `astAssign` falls through for unsupported assignment target shapes outside the explicit throw cases, so
 `runtime-expression-unassignable` is authoring guidance (`binding-source-assignment-runtime-noop` plus
 `use-assignable-expression`) rather than a framework-grounded error.
+Framework-managed scope slots form a separate authoring-policy class. Repeat owns every repeat contextual, including
+the internally mutable `$index` and `$length`; their runtime descriptor shape is not evidence that template writeback
+should be allowed. Those writes report `binding-source-assignment-framework-managed`, not TypeScript strictness or a
+framework runtime no-op.
 Diagnostic rows now carry `diagnosticAuthority` and `frameworkErrorCode`. Weak-owner rows remain
 `semantic-authoring-policy`, while TypeScript strictness rows from binding assignment are `semantic-runtime-product`
 because data-flow has enough observer/value-channel/writeback/source assignability evidence to make the earlier static
@@ -751,7 +763,9 @@ strictness-gated from the rendering controller because Aurelia's non-strict bind
 throwing; nullish assignment uses the same gate because framework `astAssign` only throws in strict mode. Repeat destructuring diagnostics are deliberately not data-flow rows: `repeat.ts` spends
 `astAssign(...)` while creating/updating repeat scopes, so scope construction now publishes `RuntimeBindingScopeIssue`
 products for `ast_destruct_null` (`AUR0112`) when checker-backed binding-pattern projection can prove or warn about a
-non-object destructuring item or non-Array array-rest source. The Atlas runtime `ast*` frontier remains partial; leave
+nullish object-binding source or non-Array array-rest source. RC2 permits non-nullish primitive object-pattern sources;
+the static projection must not reject those merely because their checker type is not object-shaped. The Atlas runtime
+`ast*` frontier remains partial; leave
 the other runtime evaluator codes unclaimed until the matching expression, assignment, or scope-effect families and
 source spans are modeled. Source-authored `@astTrack` misuse is a sibling observation source-issue lane rather than a
 binding expression evaluator row: non-method decorator targets spend runtime `ast_track_decorator_not_a_method`
@@ -765,8 +779,9 @@ until their owning runtime state is modeled: withStore-after-register needs orde
 invalid `fromState` decorator usage needs plugin decorator-target recognition, missing store lookup needs store-name
 consumer analysis, and DevTools errors need host extension/dispatch lifecycle semantics.
 
-Observation runtime-effect lifecycle owns `stopping_a_stopped_effect` (`AUR0225`) through the framework-shaped
-`RuntimeEffect` model: first stop transitions, a second stop carries the exact framework code. Runtime
+Observation `RuntimeEffect` is an immutable source-call and dependency-collection plan, not a live `IEffect` instance.
+The `stopping_a_stopped_effect` (`AUR0225`) lifecycle remains unclaimed until a consumer requires effect identity and
+source-visible repeated `stop()` operations. Runtime
 `method_not_implemented` (`AUR0099`) usages in AST-evaluator mixins and connectable default methods stay intentionally
 unclaimed because semantic-runtime currently models concrete evaluator/observation products, not user-extensible
 framework mixin stubs.
@@ -797,8 +812,10 @@ owned; renderer named-resource misses stay in `RuntimeControllerIssue`, and expr
 misses stay in the binding-utils/type-system lane.
 Runtime-html repeat diagnostics now split across the modeled framework owners. `RepeatableHandlerResolver` uses built-in
 handlers for arrays, sets, maps, numbers, and nullish; semantic-runtime maps unsupported checker-visible repeat sources
-to `repeat_non_iterable` (`AUR0777`) through scope issues and leaves `IRepeatableHandler` extension points as future
-DI/configuration pressure. The `Repeat` constructor option checks are controller-owned now:
+to `repeat_non_iterable` (`AUR0777`) through scope issues. Registered `IRepeatableHandler` extensions are read through
+the active render container's canonical interface key: framework `ArrayLikeHandler` spends its numeric-length contract,
+while app handlers reuse DI provider activation and their checker-visible `iterate` signatures to constrain source
+admission without inventing an item type. The `Repeat` constructor option checks are controller-owned now:
 `repeat_invalid_key_binding_command` (`AUR0775`), `repeat_extraneous_binding` (`AUR0776`), and
 `repeat_invalid_contextual_binding_command` (`AUR0821`) publish `RuntimeControllerIssue` products while renderer
 emulation creates the template-controller frame. The rest of the repeat frontier stays explicit:
@@ -1105,11 +1122,13 @@ and detail registration. If scope pressure returns, decide whether the next boun
 scope-owner/link claims; do not move TypeChecker member reads back into the runtime scope materializer.
 
 Configuration emission now has the same split. `configuration-publication.ts` owns source/evidence/provenance records,
-configuration product envelopes, open seams, and configuration-owned claims. `aurelia-app-frame-materializer.ts` owns
-the runtime-shaped app admission frame: root container, `Aurelia` facade, app-root config, AppRoot, and component target
-convergence. `configuration-step-materializer.ts` owns per-step AppTask, option contribution, callback/key source, and
-registration handoff products. Keep `configuration-kernel-emitter.ts` focused on source-order sequence orchestration;
-if configuration pressure returns, first check whether sequence order, app admission, step materialization, and
+configuration product envelopes, open seams, and configuration-owned claims. `aurelia-application-materializer.ts` owns
+exact facade-construction and `.app(...)` products: implicit root containers, constructor-installed contextual providers,
+the `Aurelia` facade, per-operation app-root configs, AppRoots, and component targets. `configuration-step-materializer.ts`
+owns per-step AppTask, option contribution, callback/key source, and registration handoff products. Operation target
+claims are distinct from exact output claims, and DI spends only the target product; evaluator receiver reconstruction is
+not an alternate authority. Keep `configuration-kernel-emitter.ts` focused on source-order sequence orchestration. If
+configuration pressure returns, first check whether sequence order, app construction, step materialization, and
 registration handoff have started bleeding into each other again.
 Configuration issues now have a sibling publication path for known framework failures discovered while recognizing
 configuration/AppTask service customization. `configuration-issue-publication.ts` builds the source/evidence/product

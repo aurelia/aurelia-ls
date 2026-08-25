@@ -9,6 +9,11 @@ import {
   type KernelStore,
   type KernelStoreRecord,
 } from '../kernel/store.js';
+import {
+  KernelPublicationPlan,
+  publishProductDetails,
+  type KernelPublicationContext,
+} from '../kernel/publication.js';
 import { KernelVocabulary } from '../kernel/vocabulary.js';
 import { ProvenanceRecord } from '../kernel/provenance.js';
 import type { ConfigurationRecognitionProjectResult } from './configuration-recognition-project-pass.js';
@@ -63,6 +68,7 @@ export class ConfigurationOptionShapeIssueMaterializer {
 
   constructor(
     readonly store: KernelStore,
+    readonly kernelPublication: KernelPublicationContext,
   ) {
     this.publication = new ConfigurationKernelPublication(store);
   }
@@ -73,12 +79,13 @@ export class ConfigurationOptionShapeIssueMaterializer {
     const issues = invalidConfigurationOptionPaths(configuration)
       .map((contribution, index) => this.issueForContribution(configuration, contribution, index));
     const records = issues.flatMap((issue) => issue.records);
-    if (records.length > 0) {
-      this.store.commit(new KernelStoreBatch(records, `configuration-option-shape-issues:${configuration.project.projectKey}`));
-    }
-    for (const issue of issues) {
-      this.store.productDetails.add(ConfigurationProductDetails.Issue, issue.issue.productHandle, issue.issue);
-    }
+    this.kernelPublication.publish(new KernelPublicationPlan(
+      new KernelStoreBatch(
+        records,
+        `configuration-option-shape-issues:${configuration.project.projectKey}`,
+      ),
+      publishProductDetails(ConfigurationProductDetails.Issue, issues.map((issue) => issue.issue)),
+    ));
     return new ConfigurationOptionShapeIssueProjectResult(
       issues.map((issue) => issue.issue),
       records,
@@ -124,6 +131,8 @@ export class ConfigurationOptionShapeIssueMaterializer {
         sourceAddressHandle: issue.sourceAddressHandle,
         provenanceHandle,
         localName: issue.issueKind,
+        claimHandles: [],
+        openSeamHandles: [],
       }),
     ]);
   }

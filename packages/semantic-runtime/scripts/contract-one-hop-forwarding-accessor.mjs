@@ -28,6 +28,7 @@ const computedObserverSources = app.ask({
 }).value.rows;
 const bindingObservedDependencies = app.ask({
   kind: 'binding-observed-dependencies',
+  detail: 'handles',
   page: { size: 100 },
 }).value.rows;
 const bindingDataFlows = app.ask({
@@ -38,13 +39,13 @@ const bindingDataFlows = app.ask({
 const failures = [];
 const observedTemplateGetterReads = bindingObservedDependencies.filter((row) =>
   row.definitionName === 'one-hop-forwarding-accessor-app'
-  && row.dependencyKind === 'template-expression-read'
-  && row.observedMemberKind === 'accessor'
+  && row.occurrence.dependencyKind === 'template-expression-read'
+  && row.occurrence.observedMemberKind === 'accessor'
 );
 const directStateTemplateReads = bindingObservedDependencies.filter((row) =>
   row.definitionName === 'one-hop-forwarding-accessor-app'
-  && row.sourceName === 'state.selectedName'
-  && row.observedMemberKind === 'property'
+  && row.occurrence.sourceName === 'state.selectedName'
+  && row.occurrence.observedMemberKind === 'property'
 );
 const directStateDataFlows = bindingDataFlows.filter((row) =>
   row.definitionName === 'one-hop-forwarding-accessor-app'
@@ -61,6 +62,9 @@ const forwardingComputedSources = computedObserverSources.filter((row) =>
 
 if (observedTemplateGetterReads.length !== 2) {
   failures.push(`Expected exactly two template getter reads, received ${observedTemplateGetterReads.length}.`);
+}
+if (!observedTemplateGetterReads.every(hasNestedAccessUseTargetHandles)) {
+  failures.push('Detailed binding dependency rows should retain handles on their nested access-use targets.');
 }
 
 if (directStateTemplateReads.length !== 1 || directStateDataFlows.length !== 1) {
@@ -95,11 +99,19 @@ if (failures.length > 0) {
 
 function summaryObservedDependency(row) {
   return {
-    sourceName: row.sourceName,
-    sourceRootName: row.sourceRootName,
-    observedMemberKind: row.observedMemberKind,
-    observedMemberSourceState: row.observedMemberSourceState,
+    sourceName: row.occurrence.sourceName,
+    sourceRootName: row.occurrence.sourceRootName,
+    observedMemberKind: row.occurrence.observedMemberKind,
+    observedMemberSourceState: row.occurrence.observedMemberSourceState,
   };
+}
+
+function hasNestedAccessUseTargetHandles(row) {
+  return row.occurrence.accessUse?.targetLinks?.some((target) =>
+    target.authorityProductHandle != null
+    && target.targetIdentityHandle != null
+    && target.declarationSourceAddressHandle != null
+  ) ?? false;
 }
 
 function summaryDataFlow(row) {

@@ -20,11 +20,20 @@
       <span>${$parent.title}</span>
       <span>${$parent.titleLength()}</span>
       <span>${$this.item.label}</span>
+      <let row-title.bind="item.label" upper-row-title.bind="rowTitle.toUpperCase()" to-binding-context></let>
+      <let rolling-row.bind="item"></let>
+      <let rolling-row.bind="item.label"></let>
+      <span>${upperRowTitle}</span>
+      <span>${rollingRow.toUpperCase()}</span>
       <ul>
         <li repeat.for="child of item.children">
           <span>${child.label}</span>
           <span>${$parent.item.labelLength()}</span>
           <span>${$parent.item.label}</span>
+          <span>${$parent.rowTitle}</span>
+          <span>${$parent.upperRowTitle}</span>
+          <span>${$parent.rollingRow.toUpperCase()}</span>
+          <span>${$parent.$index.toFixed()}</span>
           <span>${$parent.$parent.title}</span>
           <span>${this.title}</span>
         </li>
@@ -38,4 +47,14 @@
       <dd>${$this.entry.label}</dd>
     </template>
   </dl>
+
+  <let title.bind="title.length"></let>
+  <span>${$this.title.toFixed()}</span>
+  <span>${acceptApp($this)}</span>
+  <ul>
+    <li repeat.for="shadowItem of items">
+      <span>${$parent.title.toFixed()}</span>
+      <span>${$parent.acceptApp($parent)}</span>
+    </li>
+  </ul>
 </template>

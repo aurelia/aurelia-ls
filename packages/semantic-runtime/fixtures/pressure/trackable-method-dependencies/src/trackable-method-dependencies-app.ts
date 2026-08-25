@@ -2,6 +2,8 @@ import {
   astTrack,
   computed,
 } from '@aurelia/runtime';
+import { customElement } from '@aurelia/runtime-html';
+import template from './trackable-method-dependencies-app.html';
 
 interface Product {
   readonly id: string;
@@ -9,6 +11,7 @@ interface Product {
   readonly tags: readonly string[];
 }
 
+@customElement({ name: 'trackable-method-dependencies-app', template })
 export class TrackableMethodDependenciesApp {
   products: Product[] = [
     { id: 'p1', name: 'Desk lamp', tags: ['featured', 'lighting'] },
@@ -32,6 +35,16 @@ export class TrackableMethodDependenciesApp {
 
   ordinaryCounter = {
     value: 3,
+  };
+
+  enabled = true;
+  mode: 'primary' | 'fallback' = 'primary';
+  control = {
+    primary: 'primary',
+    fallback: 'fallback',
+    after: 'after',
+    recovered: 'recovered',
+    nullish: null as string | null,
   };
 
   comparisonTarget = 'p1';
@@ -74,6 +87,65 @@ export class TrackableMethodDependenciesApp {
   @astTrack({ deps: undefined })
   nullishAstTrackLabel(): string {
     return this.nullishAstTrackCounter.value.toString();
+  }
+
+  @computed
+  switchLabel(): string {
+    switch (this.mode) {
+      case 'primary':
+        return this.control.primary;
+      default:
+        return this.control.fallback;
+    }
+  }
+
+  @computed
+  exceptionLabel(): string {
+    try {
+      if (this.enabled) {
+        return this.control.primary;
+      }
+      throw new Error('recover');
+    } catch {
+      return this.control.recovered;
+    }
+  }
+
+  @computed
+  continuationLabel(): string {
+    if (this.enabled) {
+      return this.control.primary;
+    }
+    return this.control.after;
+  }
+
+  @computed
+  shortCircuitAssignmentLabel(): string {
+    const state = {
+      value: this.control.nullish,
+    };
+    state.value ??= this.control.fallback;
+    return state.value;
+  }
+
+  @computed
+  loopLabel(): string {
+    let result = '';
+    for (let index = 0; index < this.products.length; index += 1) {
+      result = this.products[index]?.name ?? result;
+    }
+    return result;
+  }
+
+  @computed
+  doWhileLabel(): string {
+    let index = 0;
+    let result = '';
+    do {
+      result += this.products[index]?.name ?? '';
+      index += 1;
+    } while (index < 1);
+    return result;
   }
 
   ordinaryCounterLabel(): string {

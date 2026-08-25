@@ -16,7 +16,9 @@ export function appBuilderGeneratedFixtureDetailRequest(request) {
 
 export function appBuilderGeneratedFixturePublicResponseSnapshot(answer, normalizedRequest, fixtureRoot) {
   return normalizeFixtureRootValue({
-    outcome: answer.outcome,
+    result: answer.result,
+    selection: answer.selection,
+    coverage: answer.coverage,
     summary: answer.summary,
     value: {
       displayText: normalizeFixtureRootText(answer.value.displayText, fixtureRoot),

@@ -7,7 +7,6 @@ import type {
   BindableDefinition,
   BindableDefinitionReference,
 } from '../resources/bindable-definition.js';
-import type { FullResourceDefinition } from '../resources/resource-definition.js';
 import type { ResourceDefinitionKind } from '../resources/resource-kind.js';
 
 export const enum TemplateCompilerServiceKind {
@@ -52,14 +51,34 @@ export class TemplateBindableReference {
   ) {}
 }
 
-/** Resource definition visible to template compilation through DI/container lookup. */
+/** Resource selected from a compiler world without retaining its full definition or visibility catalog entry. */
+export class TemplateVisibleResourceReference {
+  constructor(
+    /** Author-facing resource taxonomy of the selected resource. */
+    readonly resourceKind: ResourceDefinitionKind,
+    /** Canonical runtime lookup name; the authored occurrence may have used an alias. */
+    readonly name: string,
+    /** Product handle for the visible resource model, when materialized. */
+    readonly resourceProductHandle: ProductHandle | null,
+    /** Identity handle for the visible resource model, when materialized. */
+    readonly resourceIdentityHandle: IdentityHandle | null,
+    /** Product handle for the full resource definition, when convergence has produced one. */
+    readonly definitionProductHandle: ProductHandle | null,
+    /** How the selected resource became visible to this compiler world. */
+    readonly visibilityKind: TemplateResourceVisibilityKind,
+    /** Source address for the registration, definition, import, or convention that made it visible. */
+    readonly sourceAddressHandle: AddressHandle | null,
+  ) {}
+}
+
+/** Resource member retained by a compiler context; exact DI/container availability belongs to scope lookup rows. */
 export class TemplateVisibleResource {
   constructor(
     /** Resource kind visible to the compiler. */
     readonly resourceKind: ResourceDefinitionKind,
-    /** Runtime lookup name such as element name, attribute name, converter name, or binding-command name. */
+    /** Canonical resource name; it is lookup-active only when a TemplateResourceScopeLookup names this member. */
     readonly name: string,
-    /** Other lookup names that resolve to the same resource product. */
+    /** Declared aliases; exact active alias ownership remains a TemplateResourceScopeLookup fact. */
     readonly aliases: readonly string[],
     /** Product handle for the visible resource model, which may be a header, full definition, or syntax executable. */
     readonly resourceProductHandle: ProductHandle | null,
@@ -67,13 +86,49 @@ export class TemplateVisibleResource {
     readonly resourceIdentityHandle: IdentityHandle | null,
     /** Product handle for the full resource definition, when convergence has produced one. */
     readonly definitionProductHandle: ProductHandle | null,
-    /** Full definition detail visible to compiler and inquiry consumers, when known. */
-    readonly definition: FullResourceDefinition | null,
     /** How this resource became visible to the compiler world. */
     readonly visibilityKind: TemplateResourceVisibilityKind,
     /** Source address for the registration, definition, import, or convention that made it visible. */
     readonly sourceAddressHandle: AddressHandle | null,
   ) {}
+
+  toReference(): TemplateVisibleResourceReference {
+    return new TemplateVisibleResourceReference(
+      this.resourceKind,
+      this.name,
+      this.resourceProductHandle,
+      this.resourceIdentityHandle,
+      this.definitionProductHandle,
+      this.visibilityKind,
+      this.sourceAddressHandle,
+    );
+  }
+}
+
+/** Exact semantic-and-witness equality for an ordered compiler-visible resource scope. */
+export function sameTemplateVisibleResourceSet(
+  left: readonly TemplateVisibleResource[],
+  right: readonly TemplateVisibleResource[],
+): boolean {
+  return left.length === right.length
+    && left.every((resource, index) => sameTemplateVisibleResource(resource, right[index] ?? null));
+}
+
+/** Exact semantic-and-witness equality for one compiler-visible catalog row. */
+export function sameTemplateVisibleResource(
+  left: TemplateVisibleResource,
+  right: TemplateVisibleResource | null,
+): boolean {
+  return right != null
+    && left.resourceKind === right.resourceKind
+    && left.name === right.name
+    && left.aliases.length === right.aliases.length
+    && left.aliases.every((alias, index) => alias === right.aliases[index])
+    && left.resourceProductHandle === right.resourceProductHandle
+    && left.resourceIdentityHandle === right.resourceIdentityHandle
+    && left.definitionProductHandle === right.definitionProductHandle
+    && left.visibilityKind === right.visibilityKind
+    && left.sourceAddressHandle === right.sourceAddressHandle;
 }
 
 /** Reference to a compiler service without retaining a runtime singleton instance. */

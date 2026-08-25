@@ -3,10 +3,17 @@ import type {
 } from '../configuration/app-analysis.js';
 import type {
   SemanticAppQuery,
+  SemanticObservedDependencyLocus,
   SemanticRuntimeAppQueryBatchRequest,
   SemanticAppQueryCatalogRequest,
+  SemanticRuntimePageInput,
 } from './contracts.js';
-import { semanticAppQueryCatalogShape } from './app-query-catalog.js';
+import { SemanticObservedDependencyLocusKind } from './contracts.js';
+import {
+  semanticAppQueryCatalogShape,
+  unsupportedSemanticAppQuerySelectorFields,
+} from './app-query-catalog.js';
+import { canonicalTypeSystemSourcePath } from '../type-system/source-file-path.js';
 
 export interface SemanticRuntimeRoutedAppQueryKeyPlan {
   readonly analysisDepth: SemanticAppAnalysisDepth;
@@ -35,6 +42,47 @@ export function semanticRuntimeSummaryKey(
   ].map((part) => queryKeyPart(part)).join('|');
 }
 
+export function semanticAuthoredSourceOwnershipKey(sourceFilePath: string): string {
+  return [
+    'authored-source-ownership',
+    sourceFilePath,
+  ].map(queryKeyPart).join('|');
+}
+
+export function semanticNativeProjectConfigurationsKey(
+  projectKey: string | null,
+  sourceFilePaths: readonly string[] | null,
+  page: SemanticRuntimePageInput | null | undefined,
+): string {
+  return `native-project-configurations|${queryKeyPart(JSON.stringify({
+    projectKey,
+    sourceFilePaths,
+    page: {
+      size: page?.size ?? null,
+      cursor: page?.cursor ?? null,
+    },
+  }))}`;
+}
+
+export function semanticProjectConfigurationDiagnosticsKey(
+  projectKey: string | null,
+  sourceFilePaths: readonly string[] | null,
+  page: SemanticRuntimePageInput | null | undefined,
+): string {
+  return `project-configuration-diagnostics|${queryKeyPart(JSON.stringify({
+    projectKey,
+    sourceFilePaths,
+    page: {
+      size: page?.size ?? null,
+      cursor: page?.cursor ?? null,
+    },
+  }))}`;
+}
+
+export function semanticProjectConfigurationEpochKey(projectKey: string, revision: string): string {
+  return `project-configuration:${queryKeyPart(projectKey)}:${queryKeyPart(revision)}`;
+}
+
 export function semanticRuntimeRoutedAppQueryKey(
   query: SemanticAppQuery,
   plan: SemanticRuntimeRoutedAppQueryKeyPlan,
@@ -50,13 +98,22 @@ export function semanticRuntimeRoutedAppQueryKey(
   ].join('|');
 }
 
+/** Identity for a caller request before unsupported selectors are normalized away. */
+export function semanticAppQueryRequestKey(query: SemanticAppQuery): string {
+  const queryKey = semanticAppQueryKey(query);
+  const unsupportedFields = unsupportedSemanticAppQuerySelectorFields(query);
+  return unsupportedFields.length === 0
+    ? queryKey
+    : `${queryKey}|unsupported:${unsupportedFields.map(queryKeyPart).join(',')}`;
+}
+
 export function semanticRuntimeRoutedAppQueryBatchKey(
   request: SemanticRuntimeAppQueryBatchRequest,
   plan: SemanticRuntimeRoutedAppQueryKeyPlan,
 ): string {
   return [
     'app-query-batch',
-    `queries:${request.queries.map((query, index) => `${index}:${semanticAppQueryKey(query)}`).join(',')}`,
+    `queries:${request.queries.map((query, index) => `${index}:${semanticAppQueryRequestKey(query)}`).join(',')}`,
     `analysis:${plan.analysisDepth}`,
     `authoring:${plan.includeAuthoringTemplates}`,
     `authoring-sources:${plan.authoringTemplateSourceFiles.length === 0
@@ -86,7 +143,7 @@ export function semanticRuntimeAppWorldFreeQueryBatchKey(
   return [
     'app-world-free-batch',
     projectKey,
-    `queries:${queries.map((query, index) => `${index}:${semanticAppQueryKey(query)}`).join(',')}`,
+    `queries:${queries.map((query, index) => `${index}:${semanticAppQueryRequestKey(query)}`).join(',')}`,
   ].map((part) => queryKeyPart(part)).join('|');
 }
 
@@ -99,12 +156,12 @@ export function semanticRuntimeStaticAppQueryKey(
   ].map((part) => queryKeyPart(part)).join('|');
 }
 
-export function semanticRuntimeStaticAppQueryBatchKey(
+export function semanticRuntimePreAppWorldQueryBatchKey(
   queries: readonly SemanticAppQuery[],
 ): string {
   return [
-    'runtime-static-batch',
-    `queries:${queries.map((query, index) => `${index}:${semanticAppQueryKey(query)}`).join(',')}`,
+    'pre-app-world-batch',
+    `queries:${queries.map((query, index) => `${index}:${semanticAppQueryRequestKey(query)}`).join(',')}`,
   ].map((part) => queryKeyPart(part)).join('|');
 }
 
@@ -115,7 +172,10 @@ export function semanticRuntimeRoutedAppQueryBatchLocusKey(
   const sourceLoci = [...new Set(queries
     .map((query) => {
       const shapedQuery = semanticAppQueryCatalogShape(query);
-      return shapedQuery.cursor?.filePath ?? shapedQuery.sourceFile?.filePath ?? null;
+      return shapedQuery.cursor?.filePath
+        ?? shapedQuery.sourceFile?.filePath
+        ?? observedDependencySourceFilePath(shapedQuery.observedDependencyLocus)
+        ?? null;
     })
     .filter((filePath): filePath is string => filePath != null && filePath.trim().length > 0)
     .map(normalizeQuerySourceFileKey))]
@@ -144,19 +204,50 @@ export function semanticAppQueryKey(query: SemanticAppQuery): string {
     shapedQuery.diagnosticProjection ?? 'default-diagnostics',
     shapedQuery.includeTypeSurfaces === true ? 'type-surfaces' : 'no-type-surfaces',
     shapedQuery.diagnosticPageSize ?? 'default-diagnostic-page',
+    shapedQuery.analysisLimitationPageSize ?? 'default-analysis-limitation-page',
     shapedQuery.openSeamPageSize ?? 'default-open-seam-page',
     shapedQuery.openSeamKindKey ?? 'all-open-seam-kinds',
     shapedQuery.openSeamReasonKind ?? 'all-open-seam-reasons',
     shapedQuery.sourceRole ?? 'all-source-roles',
+    shapedQuery.openSeamClusterKey ?? 'all-open-seam-clusters',
+    shapedQuery.openSeamSiteKey ?? 'all-open-seam-sites',
     shapedQuery.rowPageSize ?? 'default-row-page',
     shapedQuery.page?.size ?? 'all',
     shapedQuery.page?.cursor ?? 'start',
     shapedQuery.sourceFile?.filePath ?? 'no-source-file',
+    semanticObservedDependencyLocusKey(shapedQuery.observedDependencyLocus),
+    shapedQuery.includeDeclaration ?? 'default-include-declaration',
+    shapedQuery.newName ?? 'no-new-name',
+    shapedQuery.templateResourceScopeIdentityKey ?? 'no-template-resource-scope',
+    shapedQuery.resourceIdentityKey ?? 'no-resource-identity',
+    shapedQuery.frameworkCapability ?? 'all-framework-capabilities',
     shapedQuery.cursor == null
       ? 'no-cursor'
       : `${shapedQuery.cursor.filePath}:${shapedQuery.cursor.line}:${shapedQuery.cursor.character}:${shapedQuery.cursor.offset ?? 'no-offset'}`,
   ];
   return parts.map((part) => queryKeyPart(String(part))).join('|');
+}
+
+/** Page-stable identity excludes page size/cursor while retaining every semantic selector and projection choice. */
+export function semanticAppQueryPageScope(
+  projectKey: string,
+  rowUniverseEpochKey: string,
+  query: SemanticAppQuery,
+): {
+  readonly queryKey: string;
+  readonly epochKey: string;
+  readonly orderingKey: string;
+} {
+  const shapedQuery = semanticAppQueryCatalogShape(query);
+  const pageStableQuery = {
+    ...shapedQuery,
+    page: undefined,
+  };
+  return {
+    queryKey: `${projectKey}|${semanticAppQueryKey(pageStableQuery)}`,
+    epochKey: rowUniverseEpochKey,
+    orderingKey: String(shapedQuery.kind),
+  };
 }
 
 export function semanticAppQueryLocusKey(
@@ -180,16 +271,44 @@ export function semanticAppQueryLocusKey(
       .map((part) => queryKeyPart(String(part)))
       .join(':');
   }
+  const observedDependencyLocus = shapedQuery.observedDependencyLocus;
+  if (
+    observedDependencyLocus != null
+    && observedDependencyLocus.kind !== SemanticObservedDependencyLocusKind.Project
+  ) {
+    return [
+      'observed-dependency',
+      projectKey,
+      semanticObservedDependencyLocusKey(observedDependencyLocus),
+    ].map((part) => queryKeyPart(String(part))).join(':');
+  }
+  if (shapedQuery.openSeamSiteKey != null) {
+    return ['open-seam-site', projectKey, shapedQuery.openSeamSiteKey]
+      .map((part) => queryKeyPart(String(part)))
+      .join(':');
+  }
+  if (shapedQuery.openSeamClusterKey != null) {
+    return ['open-seam-cluster', projectKey, shapedQuery.openSeamClusterKey]
+      .map((part) => queryKeyPart(String(part)))
+      .join(':');
+  }
   return ['project', projectKey].map((part) => queryKeyPart(String(part))).join(':');
 }
 
 export function semanticAppQueryEpochKeys(
   projectKey: string,
+  projectInputRevision: string,
   query: SemanticAppQuery,
 ): readonly string[] {
   const shapedQuery = semanticAppQueryCatalogShape(query);
-  const sourceFilePath = shapedQuery.cursor?.filePath ?? shapedQuery.sourceFile?.filePath ?? null;
-  const keys = [semanticAppProjectEpochKey(projectKey)];
+  const sourceFilePath = shapedQuery.cursor?.filePath
+    ?? shapedQuery.sourceFile?.filePath
+    ?? observedDependencySourceFilePath(shapedQuery.observedDependencyLocus)
+    ?? null;
+  const keys = [
+    semanticAppProjectEpochKey(projectKey),
+    semanticAppProjectInputEpochKey(projectKey, projectInputRevision),
+  ];
   if (sourceFilePath != null) {
     keys.push(semanticAppSourceEpochKey(projectKey, sourceFilePath));
   }
@@ -199,22 +318,24 @@ export function semanticAppQueryEpochKeys(
 export function semanticRuntimeRoutedAppQueryEpochKeys(
   workspaceKey: string,
   projectKey: string,
+  projectInputRevision: string,
   query: SemanticAppQuery,
 ): readonly string[] {
   return [
     semanticRuntimeWorkspaceEpochKey(workspaceKey),
-    ...semanticAppQueryEpochKeys(projectKey, query),
+    ...semanticAppQueryEpochKeys(projectKey, projectInputRevision, query),
   ];
 }
 
 export function semanticRuntimeRoutedAppQueryBatchEpochKeys(
   workspaceKey: string,
   projectKey: string,
+  projectInputRevision: string,
   queries: readonly SemanticAppQuery[],
 ): readonly string[] {
   return [...new Set([
     semanticRuntimeWorkspaceEpochKey(workspaceKey),
-    ...queries.flatMap((query) => semanticAppQueryEpochKeys(projectKey, query)),
+    ...queries.flatMap((query) => semanticAppQueryEpochKeys(projectKey, projectInputRevision, query)),
   ])].sort();
 }
 
@@ -233,11 +354,47 @@ export function semanticAppProjectEpochKey(projectKey: string): string {
   return `project:${queryKeyPart(projectKey)}`;
 }
 
+export function semanticAppProjectInputEpochKey(projectKey: string, revision: string): string {
+  return `project-input:${queryKeyPart(projectKey)}:${queryKeyPart(revision)}`;
+}
+
 function normalizeQuerySourceFileKey(filePath: string): string {
-  return filePath.trim().replace(/\\/g, '/');
+  return canonicalTypeSystemSourcePath(filePath.trim());
+}
+
+function semanticObservedDependencyLocusKey(
+  locus: SemanticObservedDependencyLocus | null | undefined,
+): string {
+  if (locus == null || locus.kind === SemanticObservedDependencyLocusKind.Project) {
+    return 'observed-dependency:project';
+  }
+  switch (locus.kind) {
+    case SemanticObservedDependencyLocusKind.SourceFile:
+      return `observed-dependency:source-file:${normalizeQuerySourceFileKey(locus.sourceFile.filePath)}`;
+    case SemanticObservedDependencyLocusKind.Owner:
+      return `observed-dependency:owner:${locus.ownerKey}`;
+    case SemanticObservedDependencyLocusKind.Row:
+      return `observed-dependency:row:${locus.rowKey}`;
+    case SemanticObservedDependencyLocusKind.Cluster:
+      return `observed-dependency:cluster:${locus.clusterKey}`;
+  }
+}
+
+function observedDependencySourceFilePath(
+  locus: SemanticObservedDependencyLocus | null | undefined,
+): string | null {
+  return locus?.kind === SemanticObservedDependencyLocusKind.SourceFile
+    ? locus.sourceFile.filePath
+    : null;
 }
 
 /** Normalize one semantic-runtime query-key segment for cache and claim identity strings. */
 export function queryKeyPart(value: string): string {
-  return value.trim().replace(/\\/g, '/').replace(/[|,:\u0000]/g, '_');
+  // Escape the key grammar and escape marker injectively while keeping ordinary identity strings readable.
+  return value
+    .trim()
+    .replace(/\\/g, '/')
+    .replace(/[\u0000-\u001f%|,:]/g, (part) =>
+      `%${part.charCodeAt(0).toString(16).padStart(2, '0')}`
+    );
 }

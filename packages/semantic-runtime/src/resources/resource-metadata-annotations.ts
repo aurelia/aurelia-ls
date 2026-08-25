@@ -1,7 +1,12 @@
 import ts from 'typescript';
-import { readStaticStringValue } from '../evaluation/expression-reader.js';
+import {
+  authoredStringLiteralNode,
+  readStaticStringArrayEntries,
+  readStaticStringValue,
+} from '../evaluation/expression-reader.js';
 import { OpenSeamReasonKind } from '../kernel/open-seam.js';
 import { EvaluationValueKind } from '../evaluation/values.js';
+import { StaticCallableTarget } from '../evaluation/function-execution.js';
 import {
   CustomElementCaptureDefinition,
   CustomElementCaptureKind,
@@ -17,25 +22,30 @@ import {
 } from './resource-reference.js';
 import {
   ConvergenceOpen,
+  convergenceOpenForReadPressure,
   convergenceReasonKindsForRead,
   decoratorCallNamed,
   decoratorIdentifierNamed,
   memberName,
+  readStaticClassPropertyValue,
   targetReferenceForFunction,
 } from './resource-convergence-support.js';
+import { ResourceAliasObservation } from './resource-observation.js';
 
 export interface AliasAnnotationRead {
   /** Class-level `@alias(...)` values in framework annotation priority position. */
-  readonly aliases: readonly string[];
+  readonly aliases: readonly ResourceAliasObservation[];
   /** Alias decorators that exist but did not close to static string arguments. */
   readonly open: readonly ConvergenceOpen[];
 }
 
 export interface CustomElementMetadataAnnotationRead {
   /** `@alias(...)` values shared by Aurelia resource kinds. */
-  readonly aliases: readonly string[];
+  readonly aliases: readonly ResourceAliasObservation[];
   /** `@capture(...)` / `@capture()` metadata, when statically visible. */
   readonly capture: CustomElementCaptureDefinition | null;
+  /** Exact candidate-local closure retained while reading a capture predicate annotation. */
+  readonly captureCallableTarget: StaticCallableTarget | null;
   /** Source node for the capture annotation that supplied the current value. */
   readonly captureSourceNode: ts.Node | null;
   /** `@containerless` / `@containerless()` metadata, when present. */
@@ -59,7 +69,7 @@ export function readAliasMetadataAnnotations(
   if (targetClass == null) {
     return { aliases: [], open: [] };
   }
-  const aliases: string[] = [];
+  const aliases: ResourceAliasObservation[] = [];
   const open: ConvergenceOpen[] = [];
   for (const decorator of classDecorators(targetClass)) {
     const call = decoratorCallNamed(decorator, 'alias');
@@ -68,8 +78,9 @@ export function readAliasMetadataAnnotations(
     }
     for (const argument of call.arguments) {
       const read = context.expressionReader.evaluateExpression(argument);
-      const alias = read.value == null ? null : readStaticStringValue(read.value);
-      if (alias == null) {
+      const value = read.value;
+      const alias = value == null ? null : readStaticStringValue(value);
+      if (alias == null || value == null) {
         open.push(new ConvergenceOpen(
           '@alias(...) argument did not close to a static string.',
           argument,
@@ -77,10 +88,75 @@ export function readAliasMetadataAnnotations(
         ));
         continue;
       }
-      aliases.push(alias);
+      aliases.push(new ResourceAliasObservation(
+        alias,
+        authoredStringLiteralNode(value, value.node, argument),
+      ));
     }
   }
   return { aliases, open };
+}
+
+/** Read class-side alias metadata without discarding directly authored array-entry tokens. */
+export function readStaticAliasMetadata(
+  context: ResourceRecognitionContext,
+  targetClass: ts.ClassLikeDeclarationBase | null,
+): AliasAnnotationRead {
+  if (targetClass == null) {
+    return { aliases: [], open: [] };
+  }
+  const read = readStaticClassPropertyValue(context, targetClass, 'aliases');
+  if (read == null) {
+    return { aliases: [], open: [] };
+  }
+  if (read.value == null) {
+    return {
+      aliases: [],
+      open: [new ConvergenceOpen(
+        'Static resource aliases evaluation did not produce a value.',
+        read.node ?? targetClass,
+        convergenceReasonKindsForRead(read, [OpenSeamReasonKind.ResourceAnnotationOpen]),
+      )],
+    };
+  }
+  if (read.value.kind === EvaluationValueKind.Undefined || read.value.kind === EvaluationValueKind.Null) {
+    return {
+      aliases: [],
+      open: convergenceOpenForReadPressure('Static resource aliases evaluation remained open.', read),
+    };
+  }
+  const entries = readStaticStringArrayEntries(read.value, read.node);
+  return entries == null
+    ? {
+        aliases: [],
+        open: [new ConvergenceOpen(
+          'Static resource aliases did not close to a string array.',
+          read.node ?? targetClass,
+          convergenceReasonKindsForRead(read, [OpenSeamReasonKind.ResourceAnnotationOpen]),
+        )],
+      }
+    : {
+        aliases: entries.map((entry) => new ResourceAliasObservation(entry.value, entry.valueNode)),
+        open: [],
+      };
+}
+
+/** Merge framework-priority alias sources while preserving the winning authored token. */
+export function mergeResourceAliasObservations(
+  ...aliasLists: readonly (readonly ResourceAliasObservation[])[]
+): readonly ResourceAliasObservation[] {
+  const seen = new Set<string>();
+  const result: ResourceAliasObservation[] = [];
+  for (const aliases of aliasLists) {
+    for (const alias of aliases) {
+      if (seen.has(alias.name)) {
+        continue;
+      }
+      seen.add(alias.name);
+      result.push(alias);
+    }
+  }
+  return result;
 }
 
 export function readCustomElementMetadataAnnotations(
@@ -94,6 +170,7 @@ export function readCustomElementMetadataAnnotations(
   const aliases = readAliasMetadataAnnotations(context, targetClass);
   const open: ConvergenceOpen[] = [...aliases.open];
   let capture: CustomElementCaptureDefinition | null = null;
+  let captureCallableTarget: StaticCallableTarget | null = null;
   let captureSourceNode: ts.Node | null = null;
   let containerless: boolean | null = null;
   let containerlessSourceNode: ts.Node | null = null;
@@ -123,6 +200,7 @@ export function readCustomElementMetadataAnnotations(
     if (captureCall != null) {
       const captureRead = readCaptureAnnotation(context, captureCall);
       capture = captureRead.capture;
+      captureCallableTarget = captureRead.callableTarget;
       captureSourceNode = captureRead.sourceNode ?? decorator;
       if (captureRead.open != null) {
         open.push(captureRead.open);
@@ -133,6 +211,7 @@ export function readCustomElementMetadataAnnotations(
   return {
     aliases: aliases.aliases,
     capture,
+    captureCallableTarget,
     captureSourceNode,
     containerless,
     containerlessSourceNode,
@@ -147,6 +226,7 @@ function emptyCustomElementMetadataAnnotationRead(): CustomElementMetadataAnnota
   return {
     aliases: [],
     capture: null,
+    captureCallableTarget: null,
     captureSourceNode: null,
     containerless: null,
     containerlessSourceNode: null,
@@ -243,13 +323,18 @@ function readShadowDomAnnotation(
       open: null,
     };
   }
-  const mode = value.properties.get('mode')?.value;
+  const modeRead = context.expressionReader.readObjectProperty(argument, 'mode');
+  const mode = modeRead.value;
   const modeText = mode == null ? null : readStaticStringValue(mode);
+  const pressure = convergenceOpenForReadPressure(
+    '@useShadowDOM(...) options retained open evaluator pressure.',
+    modeRead,
+  )[0] ?? null;
   switch (modeText) {
     case 'open':
-      return { shadowOptions: new ShadowOptionsDefinition(ShadowRootMode.Open), sourceNode: argument, open: null };
+      return { shadowOptions: new ShadowOptionsDefinition(ShadowRootMode.Open), sourceNode: argument, open: pressure };
     case 'closed':
-      return { shadowOptions: new ShadowOptionsDefinition(ShadowRootMode.Closed), sourceNode: argument, open: null };
+      return { shadowOptions: new ShadowOptionsDefinition(ShadowRootMode.Closed), sourceNode: argument, open: pressure };
     default:
       return {
         shadowOptions: null,
@@ -257,7 +342,7 @@ function readShadowDomAnnotation(
         open: new ConvergenceOpen(
           '@useShadowDOM(...) options did not expose a static open/closed mode.',
           argument,
-          convergenceReasonKindsForRead(read, [OpenSeamReasonKind.ResourceAnnotationOpen]),
+          convergenceReasonKindsForRead(modeRead, [OpenSeamReasonKind.ResourceAnnotationOpen]),
         ),
       };
   }
@@ -268,6 +353,7 @@ function readCaptureAnnotation(
   call: ts.CallExpression,
 ): {
   readonly capture: CustomElementCaptureDefinition | null;
+  readonly callableTarget: StaticCallableTarget | null;
   readonly sourceNode: ts.Node | null;
   readonly open: ConvergenceOpen | null;
 } {
@@ -275,6 +361,7 @@ function readCaptureAnnotation(
   if (argument == null) {
     return {
       capture: new CustomElementCaptureDefinition(CustomElementCaptureKind.All),
+      callableTarget: null,
       sourceNode: call,
       open: null,
     };
@@ -287,13 +374,23 @@ function readCaptureAnnotation(
         CustomElementCaptureKind.Predicate,
         targetReferenceForFunction(value, null) satisfies ResourceTargetReference,
       ),
+      callableTarget: new StaticCallableTarget(
+        value,
+        context.evaluation.policy,
+        context.evaluation.runtimeHost,
+        read.openSeams,
+      ),
       sourceNode: argument,
-      open: null,
+      open: convergenceOpenForReadPressure(
+        '@capture(...) predicate retained open evaluator pressure.',
+        read,
+      )[0] ?? null,
     };
   }
   if (value == null || value.kind === EvaluationValueKind.Unknown || value.kind === EvaluationValueKind.BoundaryValue) {
     return {
       capture: new CustomElementCaptureDefinition(CustomElementCaptureKind.Open),
+      callableTarget: null,
       sourceNode: argument,
       open: new ConvergenceOpen(
         '@capture(...) predicate did not close to a static function or non-function value.',
@@ -304,6 +401,7 @@ function readCaptureAnnotation(
   }
   return {
     capture: new CustomElementCaptureDefinition(CustomElementCaptureKind.All),
+    callableTarget: null,
     sourceNode: argument,
     open: null,
   };

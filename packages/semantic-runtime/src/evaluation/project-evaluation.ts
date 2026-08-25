@@ -10,24 +10,57 @@ import {
   SourceFileRole,
   SourceLanguage,
 } from '../kernel/address.js';
-import type { KernelStore } from '../kernel/store.js';
-import type { StaticModuleEvaluationResult } from './evaluator.js';
+import type { KernelPublicationContext } from '../kernel/publication.js';
+import {
+  computationCommitCurrentnessError,
+  computationReadCurrentnessError,
+  ComputationCommitState,
+  ComputationReadValidationScope,
+  type ComputationGenerationAuthority,
+  type ComputationLifecycleRegistry,
+  type ComputationLocus,
+  type ComputationRead,
+  type ComputationReadValidation,
+} from '../kernel/computation-lifecycle.js';
+import type { ProductHandle } from '../kernel/handles.js';
+import type {
+  SemanticRuntimeProjectInputReadScope,
+} from '../kernel/project-input.js';
+import {
+  externalizeSourceFileRole,
+  inferSourceFileRole,
+} from '../kernel/source-classification.js';
+import type {
+  KernelStore,
+  KernelStoreDisposalContext,
+  KernelStoreSidecarIndex,
+} from '../kernel/store.js';
 import type { StaticEvaluationRuntimeHost } from './evaluator.js';
+import type { StaticModuleEvaluationResult } from './module-evaluation-result.js';
 import { EvaluationKernelEmitter } from './kernel-emitter.js';
 import type {
   EvaluationOpenSeamSource,
 } from './kernel-emitter.js';
 import {
-  buildEvaluationModuleGraph,
+  buildEvaluationModuleGraphForEntries,
   FileSystemEvaluationModuleSourceHost,
   type EvaluationModuleGraphBuildResult,
   type EvaluationModuleSourceHostProfile,
   type EvaluationModuleResolutionPolicy,
   type EvaluationModuleResolutionOpen,
 } from './module-host.js';
+import {
+  evaluationModuleKey,
+  type ResolvedEvaluationModuleOrigin,
+  ResolvedEvaluationModuleSourceScope,
+} from './package-origin.js';
 import { StaticModuleGraphEvaluator, type StaticModuleGraphEvaluationResult } from './module-evaluator.js';
 import type { StaticModuleExternalValueResolver } from './module-evaluator.js';
-import { normalizeModuleKey, type EvaluationModuleRecord } from './module-graph.js';
+import {
+  normalizeModuleKey,
+  type EvaluationModuleGraph,
+  type EvaluationModuleRecord,
+} from './module-graph.js';
 import type { EvaluationOpenSeam } from './seams.js';
 import {
   DefaultStaticEvaluationPolicy,
@@ -35,8 +68,12 @@ import {
 } from './policy.js';
 import {
   readStaticEvaluationAmbientGlobalDeclarations,
+  type StaticEvaluationAmbientGlobalDeclarations,
   withStaticEvaluationAmbientGlobals,
 } from './ambient-globals.js';
+import { StaticEvaluationSessionFork } from './evaluation-session.js';
+import { DefaultStaticEvaluationRuntimeHost } from './runtime-host.js';
+import type { EvaluationUnknownValue } from './values.js';
 
 export type EvaluatedProjectSource = StaticProjectEvaluationSourceResult & {
   readonly sourceFile: ts.SourceFile;
@@ -45,6 +82,7 @@ export type EvaluatedProjectSource = StaticProjectEvaluationSourceResult & {
 
 export type StaticProjectEvaluationPhaseName =
   | 'admission-index'
+  | 'ambient-globals'
   | 'module-graph'
   | 'module-evaluation'
   | 'result-publication';
@@ -55,7 +93,7 @@ export interface StaticProjectEvaluationPhaseTiming {
   readonly itemCount?: number;
 }
 
-export interface StaticProjectEvaluationProfile {
+export interface StaticProjectEvaluationPerformanceProfile {
   readonly totalMilliseconds: number;
   readonly phases: readonly StaticProjectEvaluationPhaseTiming[];
   readonly sourceHost: EvaluationModuleSourceHostProfile;
@@ -111,19 +149,53 @@ export class StaticProjectEvaluationSourceResult {
     readonly unresolvedModules: readonly EvaluationModuleResolutionOpen[],
     /** Compact reasons this source entered static project evaluation. */
     readonly origins: readonly StaticProjectEvaluationSourceOrigin[] = [],
+    /** Resolver-owned package identity; independent from authored project ownership and editability. */
+    readonly packageOrigin: ResolvedEvaluationModuleOrigin | null = null,
   ) {}
 }
 
 /** Static-evaluation result for one booted project frame. */
 export class StaticProjectEvaluationResult {
+  private projectFrame: ProjectBootFrame;
+  private readonly packageOriginsByModuleKey = new Map<string, ResolvedEvaluationModuleOrigin>();
+
   constructor(
     /** Project frame whose TS/JS source files were evaluated. */
-    readonly project: ProjectBootFrame,
+    project: ProjectBootFrame,
     /** Per-source static-evaluation results. */
     readonly sources: readonly StaticProjectEvaluationSourceResult[],
+    /** Module keys in the order their modeled execution completed, dependencies before their importing entry. */
+    readonly evaluationOrderModuleKeys: readonly string[],
     /** Timing profile for graph construction, evaluator execution, and result publication. */
-    readonly profile: StaticProjectEvaluationProfile,
-  ) {}
+    readonly profile: StaticProjectEvaluationPerformanceProfile,
+    /** Project-level import/export/cycle values whose module linkage remained open. */
+    readonly graphOpenValues: readonly EvaluationUnknownValue[] = [],
+    /** Exact project-input reads made while constructing this evaluator graph. */
+    private readonly inputReadScope: SemanticRuntimeProjectInputReadScope | null = null,
+    /** Typed upstream products consumed while constructing this evaluator graph. */
+    private readonly upstreamReads: readonly ComputationRead[] = [],
+  ) {
+    this.projectFrame = project;
+    for (const source of sources) {
+      if (source.packageOrigin == null) {
+        continue;
+      }
+      this.packageOriginsByModuleKey.set(
+        evaluationModuleKey(project.rootDir, source.moduleKey),
+        source.packageOrigin,
+      );
+      if (source.sourceFile != null) {
+        this.packageOriginsByModuleKey.set(
+          evaluationModuleKey(project.rootDir, source.sourceFile.fileName),
+          source.packageOrigin,
+        );
+      }
+    }
+  }
+
+  get project(): ProjectBootFrame {
+    return this.projectFrame;
+  }
 
   readEvaluatedSources(): readonly EvaluatedProjectSource[] {
     return this.sources.filter(isEvaluatedProjectSource);
@@ -132,6 +204,60 @@ export class StaticProjectEvaluationResult {
   readUnresolvedModules(): readonly EvaluationModuleResolutionOpen[] {
     return this.sources.flatMap((source) => source.unresolvedModules);
   }
+
+  /** Read exact package provenance for an evaluated module without changing authored source ownership. */
+  packageOriginForModuleKey(moduleKey: string): ResolvedEvaluationModuleOrigin | null {
+    return this.packageOriginsByModuleKey.get(evaluationModuleKey(this.projectFrame.rootDir, moduleKey)) ?? null;
+  }
+
+  readRegisteredInputs(): readonly ComputationRead[] {
+    return [
+      ...this.upstreamReads,
+      ...(this.inputReadScope?.readRegisteredInputs() ?? []),
+    ];
+  }
+
+  /** Rebind unchanged evaluator inputs to the current project generation without rebuilding evaluator values. */
+  tryRebaseCurrentInputGeneration(
+    project: ProjectBootFrame,
+    validationScope: ComputationReadValidationScope,
+  ): boolean {
+    if (
+      project.projectKey !== this.projectFrame.projectKey
+      || project.observedRevision !== this.projectFrame.observedRevision
+      || this.inputReadScope?.tryRebaseCurrentInScope(project.inputGeneration, validationScope) === false
+    ) {
+      return false;
+    }
+    this.projectFrame = project;
+    return true;
+  }
+
+  /** Fork mutable evaluator values and environments for one speculative follow-up analysis session. */
+  forkSession(): StaticProjectEvaluationResult {
+    const runtimeHost = this.readEvaluatedSources()[0]?.evaluation.runtimeHost
+      ?? DefaultStaticEvaluationRuntimeHost;
+    const session = new StaticEvaluationSessionFork(runtimeHost);
+    return new StaticProjectEvaluationResult(
+      this.project,
+      this.sources.map((source) => isEvaluatedProjectSource(source)
+        ? new StaticProjectEvaluationSourceResult(
+            source.admission,
+            source.moduleKey,
+            source.sourceFile,
+            session.forkModuleEvaluation(source.evaluation),
+            source.unresolvedModules,
+            source.origins,
+            source.packageOrigin,
+          )
+        : source),
+      this.evaluationOrderModuleKeys,
+      this.profile,
+      this.graphOpenValues.map((value) => session.forkValue(value)),
+      this.inputReadScope,
+      this.upstreamReads,
+    );
+  }
 }
 
 export class StaticProjectEvaluationOptions {
@@ -139,12 +265,709 @@ export class StaticProjectEvaluationOptions {
     /** Product-specific ownership hooks for source effects that are intentionally modeled by later passes. */
     readonly policy: StaticEvaluationPolicy = DefaultStaticEvaluationPolicy,
     /** Product-specific call intrinsics layered on top of generic ECMAScript evaluation. */
-    readonly runtimeHost: StaticEvaluationRuntimeHost = {},
+    readonly runtimeHost: StaticEvaluationRuntimeHost = DefaultStaticEvaluationRuntimeHost,
     /** Product-specific values for declaration/external imports that remain outside the local graph. */
     readonly externalValueResolver: StaticModuleExternalValueResolver | null = null,
     /** Module-source resolution completeness/performance policy for project-level graph construction. */
     readonly moduleResolutionPolicy?: EvaluationModuleResolutionPolicy,
+    /** Boot source roles admitted as graph roots for this evaluation pass. */
+    readonly admittedSourceRoles: readonly SourceFileRole[] = [SourceFileRole.AppSource],
   ) {}
+}
+
+/** Options plus profile-owned interpretation state prepared for one evaluation run. */
+export class StaticProjectEvaluationComputationPreparation<TContext> {
+  constructor(
+    readonly options: StaticProjectEvaluationOptions,
+    readonly context: TContext,
+  ) {}
+}
+
+/** Stable semantic profile for one family of project-evaluation computations. */
+export class StaticProjectEvaluationComputationProfile<TContext> implements ComputationRead {
+  readonly domain = 'static-project-evaluation-profile';
+  readonly readKey: string;
+  readonly observedRevision: string;
+
+  constructor(
+    readonly key: string,
+    readonly revision: string,
+    readonly summary: string,
+    private readonly prepareRun: () => StaticProjectEvaluationComputationPreparation<TContext>,
+  ) {
+    this.readKey = `static-project-evaluation-profile:${key}`;
+    this.observedRevision = revision;
+  }
+
+  prepare(): StaticProjectEvaluationComputationPreparation<TContext> {
+    return this.prepareRun();
+  }
+
+  validate(): ComputationReadValidation {
+    return {
+      isCurrent: true,
+      currentRevision: this.observedRevision,
+      changedFacets: [],
+    };
+  }
+
+  tryRebaseCurrent(): ComputationRead | null {
+    return this.validate().isCurrent
+      ? new StaticProjectEvaluationComputationProfile(
+          this.key,
+          this.revision,
+          this.summary,
+          this.prepareRun,
+        )
+      : null;
+  }
+}
+
+export const enum StaticProjectEvaluationAcquisitionKind {
+  /** A new project/profile generation was evaluated and committed. */
+  Computed = 'computed',
+  /** The current project/profile generation was reused without evaluator execution. */
+  Reused = 'reused',
+}
+
+/** One acquisition of a reusable project-evaluation generation. */
+export class StaticProjectEvaluationAccess<TContext> {
+  constructor(
+    readonly generation: StaticProjectEvaluationGeneration<TContext>,
+    readonly kind: StaticProjectEvaluationAcquisitionKind,
+    readonly milliseconds: number,
+    private readonly validationScope: ComputationReadValidationScope,
+  ) {}
+
+  readProfile(): StaticProjectEvaluationAcquisitionProfile {
+    return new StaticProjectEvaluationAcquisitionProfile(
+      this.generation.profileKey,
+      this.kind,
+      this.milliseconds,
+      this.generation.readConstructionProfile(this.validationScope).totalMilliseconds,
+    );
+  }
+
+  readBaseline(): StaticProjectEvaluationResult {
+    return this.generation.readBaseline(this.validationScope);
+  }
+
+  forkSession(): StaticProjectEvaluationResult {
+    return this.generation.forkSession(this.validationScope);
+  }
+
+  readBaselineContext(): TContext {
+    return this.generation.readBaselineContext(this.validationScope);
+  }
+}
+
+/** Per-consumer timing and reuse facts for one acquired evaluator generation. */
+export class StaticProjectEvaluationAcquisitionProfile {
+  constructor(
+    readonly profileKey: string,
+    readonly kind: StaticProjectEvaluationAcquisitionKind,
+    readonly milliseconds: number,
+    readonly constructionMilliseconds: number,
+  ) {}
+}
+
+/** Stable replacement locus for ambient declarations shared by every evaluator profile of one project. */
+class StaticEvaluationAmbientGlobalLocus implements ComputationLocus {
+  readonly kind = 'static-evaluation-ambient-globals';
+  readonly reconciliationKey: string;
+  readonly summary: string;
+
+  constructor(readonly projectKey: string) {
+    this.reconciliationKey = projectKey;
+    this.summary = `Static-evaluation ambient globals for ${projectKey}.`;
+  }
+}
+
+class StaticEvaluationAmbientGlobalAuthority {
+  private generation: StaticEvaluationAmbientGlobalGeneration | null = null;
+
+  constructor(readonly projectKey: string) {}
+
+  current(
+    project: ProjectBootFrame,
+    validationScope: ComputationReadValidationScope,
+  ): StaticEvaluationAmbientGlobalGeneration | null {
+    const generation = this.committedGeneration();
+    return generation?.tryRebaseFor(project, validationScope) === true ? generation : null;
+  }
+
+  /** Private committed incumbent, retained while exact inputs are stale so replacement remains atomic. */
+  committedGeneration(): StaticEvaluationAmbientGlobalGeneration | null {
+    if (this.generation != null && !this.isAdmitted(this.generation)) {
+      this.generation = null;
+    }
+    return this.generation;
+  }
+
+  accept(
+    authority: ComputationGenerationAuthority,
+    project: ProjectBootFrame,
+    declarations: StaticEvaluationAmbientGlobalDeclarations,
+    inputReadScope: SemanticRuntimeProjectInputReadScope,
+  ): StaticEvaluationAmbientGlobalGeneration {
+    const generation = new StaticEvaluationAmbientGlobalGeneration(
+      this,
+      authority,
+      project,
+      declarations,
+      inputReadScope,
+    );
+    this.generation = generation;
+    return generation;
+  }
+
+  isAdmitted(generation: StaticEvaluationAmbientGlobalGeneration): boolean {
+    return this.generation === generation
+      && generation.computationAuthority.isCurrent();
+  }
+
+  currentRevision(): string {
+    return this.committedGeneration()?.observedRevision ?? 'absent';
+  }
+}
+
+/** Current project/compiler ambient declaration set and the exact source reads that produced it. */
+class StaticEvaluationAmbientGlobalGeneration implements ComputationRead {
+  readonly domain = 'static-evaluation-ambient-globals';
+  readonly readKey: string;
+  readonly observedRevision: string;
+
+  constructor(
+    private readonly owner: StaticEvaluationAmbientGlobalAuthority,
+    readonly computationAuthority: ComputationGenerationAuthority,
+    private projectFrame: ProjectBootFrame,
+    private readonly declarations: StaticEvaluationAmbientGlobalDeclarations,
+    private readonly inputReadScope: SemanticRuntimeProjectInputReadScope,
+  ) {
+    this.readKey = `static-evaluation-ambient-globals:${projectFrame.projectKey}`;
+    this.observedRevision = `${projectFrame.observedRevision}:${computationAuthority.key}`;
+  }
+
+  get project(): ProjectBootFrame {
+    return this.projectFrame;
+  }
+
+  readDeclarations(scope?: ComputationReadValidationScope): StaticEvaluationAmbientGlobalDeclarations {
+    const validation = (scope ?? new ComputationReadValidationScope()).validate(this);
+    if (!validation.isCurrent) {
+      throw computationReadCurrentnessError(
+        this,
+        validation,
+        `Ambient-global generation ${this.readKey}@${this.observedRevision} is no longer current.`,
+      );
+    }
+    return this.declarations;
+  }
+
+  validate(scope?: ComputationReadValidationScope): ComputationReadValidation {
+    if (scope == null) {
+      return new ComputationReadValidationScope().validate(this);
+    }
+    const generationAdmitted = this.owner.isAdmitted(this);
+    const invalidInputs = generationAdmitted
+      ? [
+          ...this.project.readRegisteredInputs(),
+          ...this.inputReadScope.readRegisteredInputs(),
+        ]
+          .map((read) => scope.validate(read))
+          .filter((validation) => !validation.isCurrent)
+      : [];
+    const isCurrent = generationAdmitted && invalidInputs.length === 0;
+    return {
+      isCurrent,
+      currentRevision: isCurrent
+        ? this.observedRevision
+        : generationAdmitted
+          ? `${this.observedRevision}:inputs-changed`
+          : this.owner.currentRevision(),
+      changedFacets: isCurrent
+        ? []
+        : !generationAdmitted
+          ? ['generation']
+          : [...new Set(invalidInputs.flatMap((validation) => validation.changedFacets))],
+    };
+  }
+
+  tryRebaseCurrent(): ComputationRead | null {
+    return this.validate().isCurrent ? this : null;
+  }
+
+  readComputationDependencies() {
+    return [this.computationAuthority];
+  }
+
+  tryRebaseFor(
+    project: ProjectBootFrame,
+    validationScope: ComputationReadValidationScope,
+  ): boolean {
+    if (
+      project.projectKey !== this.projectFrame.projectKey
+      || project.observedRevision !== this.projectFrame.observedRevision
+      || !this.owner.isAdmitted(this)
+      || !project.readRegisteredInputs().every((read) => validationScope.validate(read).isCurrent)
+      || !this.inputReadScope.tryRebaseCurrentInScope(project.inputGeneration, validationScope)
+    ) {
+      return false;
+    }
+    this.projectFrame = project;
+    return validationScope.validate(this).isCurrent;
+  }
+
+  isCurrent(scope?: ComputationReadValidationScope): boolean {
+    return (scope ?? new ComputationReadValidationScope()).validate(this).isCurrent;
+  }
+}
+
+class StaticEvaluationAmbientGlobalAccess {
+  constructor(
+    readonly generation: StaticEvaluationAmbientGlobalGeneration,
+    readonly kind: StaticProjectEvaluationAcquisitionKind,
+    readonly milliseconds: number,
+    private readonly validationScope: ComputationReadValidationScope,
+  ) {}
+
+  readDeclarations(): StaticEvaluationAmbientGlobalDeclarations {
+    return this.generation.readDeclarations(this.validationScope);
+  }
+}
+
+/** Stable replacement locus for one project and evaluation-profile family. */
+export class StaticProjectEvaluationLocus implements ComputationLocus {
+  readonly kind = 'static-project-evaluation';
+  readonly reconciliationKey: string;
+  readonly summary: string;
+
+  constructor(
+    readonly projectKey: string,
+    readonly profileKey: string,
+  ) {
+    this.reconciliationKey = `${projectKey}\0${profileKey}`;
+    this.summary = `Static project evaluation for ${projectKey} using profile ${profileKey}.`;
+  }
+}
+
+class StaticProjectEvaluationAuthority {
+  private generation: StaticProjectEvaluationGeneration<unknown> | null = null;
+
+  constructor(
+    readonly projectKey: string,
+    readonly profileKey: string,
+  ) {}
+
+  current<TContext>(
+    project: ProjectBootFrame,
+    profile: StaticProjectEvaluationComputationProfile<TContext>,
+    validationScope: ComputationReadValidationScope,
+  ): StaticProjectEvaluationGeneration<TContext> | null {
+    const generation = this.committedGeneration();
+    return generation?.tryRebaseFor(project, profile, validationScope) === true
+      ? generation as StaticProjectEvaluationGeneration<TContext>
+      : null;
+  }
+
+  /** Private committed incumbent, retained while exact inputs are stale so replacement remains atomic. */
+  committedGeneration(): StaticProjectEvaluationGeneration<unknown> | null {
+    if (this.generation != null && !this.isAdmitted(this.generation)) {
+      this.generation = null;
+    }
+    return this.generation;
+  }
+
+  accept<TContext>(
+    authority: ComputationGenerationAuthority,
+    project: ProjectBootFrame,
+    profile: StaticProjectEvaluationComputationProfile<TContext>,
+    result: StaticProjectEvaluationResult,
+    context: TContext,
+  ): StaticProjectEvaluationGeneration<TContext> {
+    const generation = new StaticProjectEvaluationGeneration(
+      this,
+      authority,
+      project,
+      profile,
+      result,
+      context,
+    );
+    this.generation = generation;
+    return generation;
+  }
+
+  isAdmitted(generation: StaticProjectEvaluationGeneration<unknown>): boolean {
+    return this.generation === generation
+      && generation.computationAuthority.isCurrent();
+  }
+
+  currentRevision(): string {
+    return this.committedGeneration()?.observedRevision ?? 'absent';
+  }
+}
+
+/** Current reusable evaluator graph plus the exact computation read consumed by dependents. */
+export class StaticProjectEvaluationGeneration<TContext> implements ComputationRead {
+  readonly domain = 'static-project-evaluation-generation';
+  readonly readKey: string;
+  readonly observedRevision: string;
+  readonly profileKey: string;
+  readonly profileRevision: string;
+
+  constructor(
+    private readonly owner: StaticProjectEvaluationAuthority,
+    readonly computationAuthority: ComputationGenerationAuthority,
+    private projectFrame: ProjectBootFrame,
+    private readonly profile: StaticProjectEvaluationComputationProfile<TContext>,
+    private readonly baseline: StaticProjectEvaluationResult,
+    private readonly context: TContext,
+  ) {
+    this.profileKey = profile.key;
+    this.profileRevision = profile.revision;
+    this.readKey = `static-project-evaluation-generation:${projectFrame.projectKey}:${profile.key}`;
+    this.observedRevision = `${projectFrame.observedRevision}:${profile.revision}:${computationAuthority.key}`;
+  }
+
+  get project(): ProjectBootFrame {
+    return this.projectFrame;
+  }
+
+  isCurrent(scope?: ComputationReadValidationScope): boolean {
+    return (scope ?? new ComputationReadValidationScope()).validate(this).isCurrent;
+  }
+
+  readComputationDependencies() {
+    return [this.computationAuthority];
+  }
+
+  requireCurrent(scope?: ComputationReadValidationScope): void {
+    const validation = (scope ?? new ComputationReadValidationScope()).validate(this);
+    if (!validation.isCurrent) {
+      throw computationReadCurrentnessError(
+        this,
+        validation,
+        `Static project evaluation ${this.readKey}@${this.observedRevision} is no longer current.`,
+      );
+    }
+  }
+
+  /** Whether this semantic evaluator belongs to an equivalent boot topology and compiler-options frame. */
+  belongsToProject(project: ProjectBootFrame): boolean {
+    return this.project.projectKey === project.projectKey
+      && this.project.observedRevision === project.observedRevision;
+  }
+
+  /**
+   * Read the admitted evaluator graph without cloning it.
+   *
+   * This is only for consumers that inspect evaluator facts without executing evaluator functions or mutating values.
+   * Candidate analyses must use {@link forkSession}.
+   */
+  readBaseline(scope?: ComputationReadValidationScope): StaticProjectEvaluationResult {
+    this.requireCurrent(scope);
+    return this.baseline;
+  }
+
+  /** Fork one candidate-owned evaluator graph from the admitted reusable baseline. */
+  forkSession(scope?: ComputationReadValidationScope): StaticProjectEvaluationResult {
+    this.requireCurrent(scope);
+    return this.baseline.forkSession();
+  }
+
+  readConstructionProfile(scope?: ComputationReadValidationScope): StaticProjectEvaluationPerformanceProfile {
+    this.requireCurrent(scope);
+    return this.baseline.profile;
+  }
+
+  /** Read profile-owned interpretation state only alongside the admitted baseline graph it indexes. */
+  readBaselineContext(scope?: ComputationReadValidationScope): TContext {
+    this.requireCurrent(scope);
+    return this.context;
+  }
+
+  validate(scope?: ComputationReadValidationScope): ComputationReadValidation {
+    if (scope == null) {
+      return new ComputationReadValidationScope().validate(this);
+    }
+    const generationAdmitted = this.owner.isAdmitted(this);
+    const invalidInputs = generationAdmitted
+      ? [
+          ...this.project.readRegisteredInputs(),
+          this.profile,
+          ...this.baseline.readRegisteredInputs(),
+        ]
+          .map((read) => scope.validate(read))
+          .filter((validation) => !validation.isCurrent)
+      : [];
+    const isCurrent = generationAdmitted && invalidInputs.length === 0;
+    return {
+      isCurrent,
+      currentRevision: isCurrent
+        ? this.observedRevision
+        : generationAdmitted
+          ? `${this.observedRevision}:inputs-changed`
+          : this.owner.currentRevision(),
+      changedFacets: isCurrent
+        ? []
+        : !generationAdmitted
+          ? ['generation']
+          : [...new Set(invalidInputs.flatMap((validation) => validation.changedFacets))],
+    };
+  }
+
+  tryRebaseCurrent(): ComputationRead | null {
+    return this.validate().isCurrent ? this : null;
+  }
+
+  tryRebaseFor(
+    project: ProjectBootFrame,
+    profile: StaticProjectEvaluationComputationProfile<TContext>,
+    validationScope: ComputationReadValidationScope,
+  ): boolean {
+    if (
+      project.projectKey !== this.projectFrame.projectKey
+      || project.observedRevision !== this.projectFrame.observedRevision
+      || profile.key !== this.profileKey
+      || profile.revision !== this.profileRevision
+      || !this.owner.isAdmitted(this)
+      || !project.readRegisteredInputs().every((read) => validationScope.validate(read).isCurrent)
+      || !this.baseline.tryRebaseCurrentInputGeneration(project, validationScope)
+    ) {
+      return false;
+    }
+    this.projectFrame = project;
+    return validationScope.validate(this).isCurrent;
+  }
+}
+
+/** Owns one committed evaluator graph per project/profile locus. */
+export class StaticProjectEvaluationComputationService implements KernelStoreSidecarIndex {
+  private readonly authoritiesByLocus = new Map<string, StaticProjectEvaluationAuthority>();
+  private readonly ambientAuthoritiesByProject = new Map<string, StaticEvaluationAmbientGlobalAuthority>();
+  private readonly profilesByKey = new Map<string, StaticProjectEvaluationComputationProfile<unknown>>();
+  readonly key = 'static-project-evaluation-generations';
+  readonly summary = 'Current reusable static project-evaluation generations by project and semantic profile.';
+
+  constructor(
+    private readonly store: KernelStore,
+    private readonly lifecycle: ComputationLifecycleRegistry,
+  ) {
+    store.registerSidecarIndex(this);
+  }
+
+  readEntryCount(): number {
+    return [...this.authoritiesByLocus.values()]
+      .filter((authority) => authority.committedGeneration() != null).length;
+  }
+
+  dispose(_context: KernelStoreDisposalContext): void {
+    for (const [key, authority] of this.authoritiesByLocus) {
+      if (authority.committedGeneration() == null) {
+        this.authoritiesByLocus.delete(key);
+      }
+    }
+    for (const [key, authority] of this.ambientAuthoritiesByProject) {
+      if (authority.committedGeneration() == null) {
+        this.ambientAuthoritiesByProject.delete(key);
+      }
+    }
+  }
+
+  hasProductDetail(_productHandle: ProductHandle): boolean {
+    return false;
+  }
+
+  acquire<TContext>(
+    project: ProjectBootFrame,
+    profile: StaticProjectEvaluationComputationProfile<TContext>,
+    validationScope: ComputationReadValidationScope = new ComputationReadValidationScope(),
+  ): StaticProjectEvaluationAccess<TContext> {
+    project.requireCurrent();
+    this.requireProfileOwnership(profile);
+    const started = performance.now();
+    const authority = this.authorityFor(project.projectKey, profile.key);
+    const ambientAccess = this.acquireAmbientGlobals(project, validationScope);
+    const current = authority.current(project, profile, validationScope);
+    if (current != null) {
+      return new StaticProjectEvaluationAccess(
+        current,
+        StaticProjectEvaluationAcquisitionKind.Reused,
+        performance.now() - started,
+        validationScope,
+      );
+    }
+
+    const run = this.lifecycle.begin(new StaticProjectEvaluationLocus(project.projectKey, profile.key));
+    let finished = false;
+    try {
+      run.guardCurrent(project.inputGeneration.currentnessGuardKey, project.inputGeneration);
+      const preparation = profile.prepare();
+      const result = new StaticProjectEvaluationPass().evaluateAndEmit(
+        this.store,
+        project,
+        preparation.options,
+        run,
+        profile.readKey,
+        ambientAccess,
+        started,
+      );
+      run.observe(profile);
+      for (const read of project.readRegisteredInputs()) {
+        run.observe(read);
+      }
+      for (const read of result.readRegisteredInputs()) {
+        run.observe(read);
+      }
+      finished = true;
+      const commit = run.commit();
+      if (commit.state !== ComputationCommitState.Committed) {
+        throw computationCommitCurrentnessError(
+          commit,
+          `Static project evaluation ${project.projectKey}/${profile.key} was rejected as ${commit.state}.`,
+        );
+      }
+      const generation = authority.accept(
+        this.lifecycle.admitCommittedGeneration(
+          run.computationId,
+          run.runSequence,
+          'static-project-evaluation',
+        ),
+        project,
+        profile,
+        result,
+        preparation.context,
+      );
+      return new StaticProjectEvaluationAccess(
+        generation,
+        StaticProjectEvaluationAcquisitionKind.Computed,
+        performance.now() - started,
+        validationScope,
+      );
+    } catch (error) {
+      if (!finished) {
+        run.abort();
+      }
+      throw error;
+    }
+  }
+
+  retireAll(): number {
+    let retired = 0;
+    for (const authority of this.authoritiesByLocus.values()) {
+      const generation = authority.committedGeneration();
+      if (
+        generation != null
+        && this.lifecycle.retireCommittedGeneration(
+          generation.computationAuthority.computationId,
+          generation.computationAuthority.runSequence,
+        )
+      ) {
+        retired += 1;
+      }
+    }
+    for (const authority of this.ambientAuthoritiesByProject.values()) {
+      const generation = authority.committedGeneration();
+      if (generation != null) {
+        // The public count is profile-shaped; ambient declarations are one shared upstream compiler-world input.
+        this.lifecycle.retireCommittedGeneration(
+          generation.computationAuthority.computationId,
+          generation.computationAuthority.runSequence,
+        );
+      }
+    }
+    return retired;
+  }
+
+  private acquireAmbientGlobals(
+    project: ProjectBootFrame,
+    validationScope: ComputationReadValidationScope,
+  ): StaticEvaluationAmbientGlobalAccess {
+    const started = performance.now();
+    const authority = this.ambientAuthorityFor(project.projectKey);
+    const current = authority.current(project, validationScope);
+    if (current != null) {
+      return new StaticEvaluationAmbientGlobalAccess(
+        current,
+        StaticProjectEvaluationAcquisitionKind.Reused,
+        performance.now() - started,
+        validationScope,
+      );
+    }
+
+    const run = this.lifecycle.begin(new StaticEvaluationAmbientGlobalLocus(project.projectKey));
+    const inputReadScope = project.inputGeneration.createReadScope('static-evaluation-ambient-globals');
+    let finished = false;
+    try {
+      run.guardCurrent(project.inputGeneration.currentnessGuardKey, project.inputGeneration);
+      const declarations = readStaticEvaluationAmbientGlobalDeclarations(project, inputReadScope.host);
+      for (const read of project.readRegisteredInputs()) {
+        run.observe(read);
+      }
+      for (const read of inputReadScope.readRegisteredInputs()) {
+        run.observe(read);
+      }
+      finished = true;
+      const commit = run.commit();
+      if (commit.state !== ComputationCommitState.Committed) {
+        throw computationCommitCurrentnessError(
+          commit,
+          `Static-evaluation ambient globals for ${project.projectKey} were rejected as ${commit.state}.`,
+        );
+      }
+      const generation = authority.accept(
+        this.lifecycle.admitCommittedGeneration(
+          run.computationId,
+          run.runSequence,
+          'static-evaluation-ambient-globals',
+        ),
+        project,
+        declarations,
+        inputReadScope,
+      );
+      return new StaticEvaluationAmbientGlobalAccess(
+        generation,
+        StaticProjectEvaluationAcquisitionKind.Computed,
+        performance.now() - started,
+        validationScope,
+      );
+    } catch (error) {
+      if (!finished) {
+        run.abort();
+      }
+      throw error;
+    }
+  }
+
+  private authorityFor(projectKey: string, profileKey: string): StaticProjectEvaluationAuthority {
+    const key = `${projectKey}\0${profileKey}`;
+    let authority = this.authoritiesByLocus.get(key);
+    if (authority == null) {
+      authority = new StaticProjectEvaluationAuthority(projectKey, profileKey);
+      this.authoritiesByLocus.set(key, authority);
+    }
+    return authority;
+  }
+
+  private ambientAuthorityFor(projectKey: string): StaticEvaluationAmbientGlobalAuthority {
+    let authority = this.ambientAuthoritiesByProject.get(projectKey);
+    if (authority == null) {
+      authority = new StaticEvaluationAmbientGlobalAuthority(projectKey);
+      this.ambientAuthoritiesByProject.set(projectKey, authority);
+    }
+    return authority;
+  }
+
+  private requireProfileOwnership<TContext>(profile: StaticProjectEvaluationComputationProfile<TContext>): void {
+    const existing = this.profilesByKey.get(profile.key) ?? null;
+    if (existing != null && existing !== profile) {
+      throw new Error(
+        `Static project-evaluation profile '${profile.key}' has more than one in-process owner. `
+        + 'Reuse one profile object so its revision and preparation semantics cannot diverge behind the same key.',
+      );
+    }
+    this.profilesByKey.set(profile.key, profile);
+  }
 }
 
 /** Project-level static evaluation shared by Aurelia semantic passes. */
@@ -153,28 +976,56 @@ export class StaticProjectEvaluationPass {
     project: ProjectBootFrame,
     options: StaticProjectEvaluationOptions = new StaticProjectEvaluationOptions(),
   ): StaticProjectEvaluationResult {
-    return this.evaluateCore(project, null, options);
+    const started = performance.now();
+    return this.evaluateCore(
+      project,
+      null,
+      options,
+      project.inputGeneration.createReadScope('static-project-evaluation:standalone'),
+      null,
+      started,
+    );
   }
 
   evaluateAndEmit(
     store: KernelStore,
     project: ProjectBootFrame,
-    options: StaticProjectEvaluationOptions = new StaticProjectEvaluationOptions(),
+    options: StaticProjectEvaluationOptions,
+    publication: KernelPublicationContext,
+    readScopeKey = 'static-project-evaluation:publication',
+    ambientAccess: StaticEvaluationAmbientGlobalAccess | null = null,
+    started = performance.now(),
   ): StaticProjectEvaluationResult {
-    return this.evaluateCore(project, new EvaluationKernelEmitter(store), options);
+    return this.evaluateCore(
+      project,
+      new EvaluationKernelEmitter(store, publication),
+      options,
+      project.inputGeneration.createReadScope(readScopeKey),
+      ambientAccess,
+      started,
+    );
   }
 
   private evaluateCore(
     project: ProjectBootFrame,
     kernelEmitter: EvaluationKernelEmitter | null,
     options: StaticProjectEvaluationOptions,
+    inputReadScope: SemanticRuntimeProjectInputReadScope,
+    ambientAccess: StaticEvaluationAmbientGlobalAccess | null,
+    started: number,
   ): StaticProjectEvaluationResult {
-    return new StaticProjectEvaluationFrame(project, kernelEmitter, options).evaluate();
+    return new StaticProjectEvaluationFrame(
+      project,
+      kernelEmitter,
+      options,
+      inputReadScope,
+      ambientAccess,
+      started,
+    ).evaluate();
   }
 }
 
 class StaticProjectEvaluationFrame {
-  private readonly started = performance.now();
   private readonly phases: StaticProjectEvaluationPhaseTiming[] = [];
   private readonly host: FileSystemEvaluationModuleSourceHost;
   private readonly runtimeHost: StaticEvaluationRuntimeHost;
@@ -187,29 +1038,74 @@ class StaticProjectEvaluationFrame {
     private readonly project: ProjectBootFrame,
     private readonly kernelEmitter: EvaluationKernelEmitter | null,
     private readonly options: StaticProjectEvaluationOptions,
+    private readonly inputReadScope: SemanticRuntimeProjectInputReadScope,
+    private readonly ambientAccess: StaticEvaluationAmbientGlobalAccess | null,
+    private readonly started: number,
   ) {
     this.host = new FileSystemEvaluationModuleSourceHost(
       this.project.rootDir,
-      undefined,
+      this.inputReadScope.host,
+      this.project.compilerOptions.options,
       this.options.moduleResolutionPolicy,
+      this.project.authoredSources,
     );
-    this.runtimeHost = withStaticEvaluationAmbientGlobals(
-      this.options.runtimeHost,
-      readStaticEvaluationAmbientGlobalDeclarations(this.project, (moduleKey) => this.host.readSourceFile(moduleKey)),
-    );
+    const ambientGlobals = this.ambientAccess == null
+      ? measureStaticProjectEvaluationPhase(
+          this.phases,
+          'ambient-globals',
+          () => readStaticEvaluationAmbientGlobalDeclarations(this.project, this.inputReadScope.host),
+          (result) => result.readNameCount(),
+        )
+      : this.readAmbientGlobals();
+    this.runtimeHost = withStaticEvaluationAmbientGlobals(this.options.runtimeHost, ambientGlobals);
+  }
+
+  private readAmbientGlobals(): StaticEvaluationAmbientGlobalDeclarations {
+    const access = this.ambientAccess;
+    if (access == null) {
+      throw new Error('Static project evaluation has no admitted ambient-global generation.');
+    }
+    const declarations = access.readDeclarations();
+    this.phases.push({
+      name: 'ambient-globals',
+      milliseconds: access.milliseconds,
+      itemCount: declarations.readNameCount(),
+    });
+    return declarations;
   }
 
   evaluate(): StaticProjectEvaluationResult {
     this.indexProjectAdmissions();
-    for (const admission of this.project.sourceFiles) {
-      this.evaluateAdmission(admission);
-    }
-    return new StaticProjectEvaluationResult(this.project, this.sources, {
+    const entries = this.staticEvaluationEntries();
+    const entryModuleKeys = entries.map((entry) => entry.moduleKey);
+    const build = measureStaticProjectEvaluationPhase(
+      this.phases,
+      'module-graph',
+      () => buildEvaluationModuleGraphForEntries(entryModuleKeys, this.host),
+      (result) => result.graph.readModules().length,
+    );
+    const unresolvedByEntry = this.recordGraphOriginsAndUnresolvedModules(entryModuleKeys, build);
+    const graphEvaluation = measureStaticProjectEvaluationPhase(
+      this.phases,
+      'module-evaluation',
+      () => new StaticModuleGraphEvaluator(
+        build.graph,
+        this.options.policy,
+        this.runtimeHost,
+        this.options.externalValueResolver,
+      ).evaluateEntries(entryModuleKeys),
+      (result) => result.modules.size,
+    );
+    this.publishGraphResults(graphEvaluation, build.graph.readModules(), unresolvedByEntry);
+    this.publishMissingEntryResults(entries, build, unresolvedByEntry);
+    return new StaticProjectEvaluationResult(this.project, this.sources, [...graphEvaluation.modules.keys()], {
       totalMilliseconds: performance.now() - this.started,
       phases: this.phases,
       sourceHost: this.host.snapshotProfile(),
       sourceFiles: staticProjectEvaluationSourceFileStats(this.project.rootDir, this.sources),
-    });
+    }, graphEvaluation.openValues, this.inputReadScope, this.ambientAccess == null
+      ? []
+      : [this.ambientAccess.generation]);
   }
 
   private indexProjectAdmissions(): void {
@@ -225,73 +1121,26 @@ class StaticProjectEvaluationFrame {
     );
   }
 
-  private evaluateAdmission(admission: SourceFileAdmission): void {
-    if (!isStaticEvaluationAdmission(admission)) {
-      return;
-    }
-
-    const moduleKey = normalizeModuleKey(admission.path);
-    this.recordSourceOrigin(moduleKey, StaticProjectEvaluationSourceOriginKind.StaticEvaluationRoot, moduleKey);
-    if (this.sourceResultsByModuleKey.has(moduleKey)) {
-      return;
-    }
-    const build = measureStaticProjectEvaluationPhase(
-      this.phases,
-      'module-graph',
-      () => buildEvaluationModuleGraph(moduleKey, this.host),
-      (result) => result.graph.readModules().length,
-    );
-    const graphModules = build.graph.readModules();
-    const record = build.graph.readModule(moduleKey);
-    if (record == null) {
-      this.publishSourceResult(new StaticProjectEvaluationSourceResult(
-        admission,
-        moduleKey,
-        null,
-        null,
-        build.unresolvedModules,
-        this.originsForModule(moduleKey),
-      ));
-      return;
-    }
-
-    const graphEvaluation = measureStaticProjectEvaluationPhase(
-      this.phases,
-      'module-evaluation',
-      () => new StaticModuleGraphEvaluator(
-        build.graph,
-        this.options.policy,
-        this.runtimeHost,
-        this.options.externalValueResolver,
-      ).evaluate(moduleKey),
-      (result) => result.modules.size,
-    );
-    this.publishGraphResults(moduleKey, build, graphEvaluation, graphModules);
-
-    if (!this.sourceResultsByModuleKey.has(moduleKey)) {
-      this.publishSourceResult(new StaticProjectEvaluationSourceResult(
-        admission,
-        moduleKey,
-        record.sourceFile,
-        null,
-        build.unresolvedModules,
-        this.originsForModule(moduleKey),
-      ));
-    }
+  private staticEvaluationEntries(): readonly {
+    readonly admission: SourceFileAdmission;
+    readonly moduleKey: string;
+  }[] {
+    return this.project.sourceFiles
+      .filter((admission) => isStaticEvaluationAdmission(admission, this.options.admittedSourceRoles))
+      .map((admission) => ({ admission, moduleKey: normalizeModuleKey(admission.path) }));
   }
 
   private publishGraphResults(
-    entryModuleKey: string,
-    build: EvaluationModuleGraphBuildResult,
     graphEvaluation: StaticModuleGraphEvaluationResult,
     graphModules: readonly EvaluationModuleRecord[],
+    unresolvedByEntry: ReadonlyMap<string, readonly EvaluationModuleResolutionOpen[]>,
   ): void {
     measureStaticProjectEvaluationPhase(
       this.phases,
       'result-publication',
       () => {
         for (const graphRecord of graphModules) {
-          this.publishGraphRecord(entryModuleKey, build, graphEvaluation, graphRecord);
+          this.publishGraphRecord(graphEvaluation, graphRecord, unresolvedByEntry);
         }
       },
       () => graphModules.length,
@@ -299,22 +1148,11 @@ class StaticProjectEvaluationFrame {
   }
 
   private publishGraphRecord(
-    entryModuleKey: string,
-    build: EvaluationModuleGraphBuildResult,
     graphEvaluation: StaticModuleGraphEvaluationResult,
     graphRecord: EvaluationModuleRecord,
+    unresolvedByEntry: ReadonlyMap<string, readonly EvaluationModuleResolutionOpen[]>,
   ): void {
     const graphModuleKey = normalizeModuleKey(graphRecord.moduleKey);
-    if (graphModuleKey !== entryModuleKey) {
-      this.recordSourceOrigin(
-        graphModuleKey,
-        StaticProjectEvaluationSourceOriginKind.ModuleGraphDependency,
-        entryModuleKey,
-      );
-    }
-    if (this.sourceResultsByModuleKey.has(graphModuleKey)) {
-      return;
-    }
     const graphAdmission = this.graphRecordAdmission(graphModuleKey, graphRecord.sourceFile);
     if (graphAdmission == null) {
       return;
@@ -326,8 +1164,9 @@ class StaticProjectEvaluationFrame {
         graphModuleKey,
         graphRecord.sourceFile,
         null,
-        graphModuleKey === entryModuleKey ? build.unresolvedModules : [],
+        unresolvedByEntry.get(graphModuleKey) ?? [],
         this.originsForModule(graphModuleKey),
+        this.host.readPackageOrigin(graphModuleKey),
       ));
       return;
     }
@@ -335,7 +1174,13 @@ class StaticProjectEvaluationFrame {
     const kernelEmitter = this.kernelEmitter;
     if (kernelEmitter != null) {
       kernelEmitter.emitOpenSeams(evaluation, (seam) =>
-        resolveOpenSeamSource(kernelEmitter.store, this.project, this.admissionsByModuleKey, seam)
+        resolveOpenSeamSource(
+          kernelEmitter.store,
+          this.project,
+          this.admissionsByModuleKey,
+          seam,
+          this.host.readPackageOrigin(seam.sourceFile.fileName),
+        )
       );
     }
     this.publishSourceResult(new StaticProjectEvaluationSourceResult(
@@ -343,9 +1188,68 @@ class StaticProjectEvaluationFrame {
       graphModuleKey,
       graphRecord.sourceFile,
       evaluation,
-      graphModuleKey === entryModuleKey ? build.unresolvedModules : [],
+      unresolvedByEntry.get(graphModuleKey) ?? [],
       this.originsForModule(graphModuleKey),
+      this.host.readPackageOrigin(graphModuleKey),
     ));
+  }
+
+  private publishMissingEntryResults(
+    entries: readonly { readonly admission: SourceFileAdmission; readonly moduleKey: string }[],
+    build: EvaluationModuleGraphBuildResult,
+    unresolvedByEntry: ReadonlyMap<string, readonly EvaluationModuleResolutionOpen[]>,
+  ): void {
+    for (const entry of entries) {
+      if (this.sourceResultsByModuleKey.has(entry.moduleKey)) {
+        continue;
+      }
+      this.publishSourceResult(new StaticProjectEvaluationSourceResult(
+        entry.admission,
+        entry.moduleKey,
+        build.graph.readModule(entry.moduleKey)?.sourceFile ?? null,
+        null,
+        unresolvedByEntry.get(entry.moduleKey) ?? [],
+        this.originsForModule(entry.moduleKey),
+        this.host.readPackageOrigin(entry.moduleKey),
+      ));
+    }
+  }
+
+  private recordGraphOriginsAndUnresolvedModules(
+    entryModuleKeys: readonly string[],
+    build: EvaluationModuleGraphBuildResult,
+  ): ReadonlyMap<string, readonly EvaluationModuleResolutionOpen[]> {
+    const reachability = entryModuleKeys.map((entryModuleKey) => ({
+      entryModuleKey,
+      reachable: reachableEvaluationModuleKeys(build.graph, entryModuleKey),
+    }));
+    const unresolvedByEntry = new Map<string, EvaluationModuleResolutionOpen[]>(
+      entryModuleKeys.map((entryModuleKey) => [entryModuleKey, []]),
+    );
+    for (const { entryModuleKey, reachable } of reachability) {
+      this.recordSourceOrigin(
+        entryModuleKey,
+        StaticProjectEvaluationSourceOriginKind.StaticEvaluationRoot,
+        entryModuleKey,
+      );
+      for (const moduleKey of reachable) {
+        if (moduleKey !== entryModuleKey) {
+          this.recordSourceOrigin(
+            moduleKey,
+            StaticProjectEvaluationSourceOriginKind.ModuleGraphDependency,
+            entryModuleKey,
+          );
+        }
+      }
+    }
+    for (const unresolved of build.unresolvedModules) {
+      const fromModuleKey = normalizeModuleKey(unresolved.fromModuleKey);
+      const owner = reachability.find((entry) => entry.reachable.has(fromModuleKey)) ?? null;
+      if (owner != null) {
+        unresolvedByEntry.get(owner.entryModuleKey)!.push(unresolved);
+      }
+    }
+    return unresolvedByEntry;
   }
 
   private graphRecordAdmission(
@@ -359,7 +1263,12 @@ class StaticProjectEvaluationFrame {
     if (this.kernelEmitter == null) {
       return null;
     }
-    const admitted = linkedSourceAdmission(this.kernelEmitter.store, this.project, sourceFile);
+    const admitted = linkedSourceAdmission(
+      this.kernelEmitter.store,
+      this.project,
+      sourceFile,
+      this.host.readPackageOrigin(graphModuleKey),
+    );
     indexSourceAdmission(this.admissionsByModuleKey, this.project, admitted);
     this.admissionsByModuleKey.set(graphModuleKey, admitted);
     this.admissionsByModuleKey.set(normalizeModuleKey(sourceFile.fileName), admitted);
@@ -367,7 +1276,13 @@ class StaticProjectEvaluationFrame {
   }
 
   private publishSourceResult(source: StaticProjectEvaluationSourceResult): void {
-    this.sources.push(source);
+    const existing = this.sourceResultsByModuleKey.get(source.moduleKey) ?? null;
+    const index = existing == null ? -1 : this.sources.indexOf(existing);
+    if (index === -1) {
+      this.sources.push(source);
+    } else {
+      this.sources[index] = source;
+    }
     this.sourceResultsByModuleKey.set(source.moduleKey, source);
   }
 
@@ -412,6 +1327,7 @@ class StaticProjectEvaluationFrame {
       existing.evaluation,
       existing.unresolvedModules,
       this.originsForModule(moduleKey),
+      existing.packageOrigin,
     );
     const index = this.sources.indexOf(existing);
     if (index !== -1) {
@@ -419,6 +1335,45 @@ class StaticProjectEvaluationFrame {
     }
     this.sourceResultsByModuleKey.set(moduleKey, refreshed);
   }
+}
+
+function reachableEvaluationModuleKeys(
+  graph: EvaluationModuleGraph,
+  entryModuleKey: string,
+): ReadonlySet<string> {
+  const reachable = new Set<string>();
+  const visit = (moduleKey: string): void => {
+    const normalizedModuleKey = normalizeModuleKey(moduleKey);
+    if (reachable.has(normalizedModuleKey)) {
+      return;
+    }
+    reachable.add(normalizedModuleKey);
+    const record = graph.readModule(normalizedModuleKey);
+    if (record == null) {
+      return;
+    }
+    const moduleEdges = [
+      ...record.imports.map((entry) => ({
+        moduleSpecifier: entry.moduleSpecifier,
+        resolutionMode: entry.resolutionMode,
+      })),
+      ...record.exports.flatMap((entry) => entry.moduleSpecifier == null
+        ? []
+        : [{ moduleSpecifier: entry.moduleSpecifier, resolutionMode: entry.resolutionMode }]),
+    ];
+    for (const edge of moduleEdges) {
+      const linked = graph.readLinkedModule(
+        normalizedModuleKey,
+        edge.moduleSpecifier,
+        edge.resolutionMode,
+      );
+      if (linked != null) {
+        visit(linked);
+      }
+    }
+  };
+  visit(entryModuleKey);
+  return reachable;
 }
 
 function measureStaticProjectEvaluationPhase<TValue>(
@@ -442,6 +1397,7 @@ function resolveOpenSeamSource(
   project: ProjectBootFrame,
   admissionsByModuleKey: Map<string, SourceFileAdmission>,
   seam: EvaluationOpenSeam,
+  packageOrigin: ResolvedEvaluationModuleOrigin | null,
 ): EvaluationOpenSeamSource {
   const sourceFile = seam.sourceFile;
   const sourceModuleKey = normalizeModuleKey(sourceFile.fileName);
@@ -452,7 +1408,7 @@ function resolveOpenSeamSource(
       sourceFileAddressHandle: existing.addressHandle,
     };
   }
-  const admitted = linkedSourceAdmission(store, project, sourceFile);
+  const admitted = linkedSourceAdmission(store, project, sourceFile, packageOrigin);
   indexSourceAdmission(admissionsByModuleKey, project, admitted);
   admissionsByModuleKey.set(sourceModuleKey, admitted);
   return {
@@ -474,9 +1430,23 @@ function linkedSourceAdmission(
   store: KernelStore,
   project: ProjectBootFrame,
   sourceFile: ts.SourceFile,
+  packageOrigin: ResolvedEvaluationModuleOrigin | null,
 ): SourceFileAdmission {
+  // Source locations are project-lifetime identities. Import reachability and text stay evaluator-generation reads.
+  const physicalSourcePath = packageOrigin == null
+    ? sourceFile.fileName
+    : path.resolve(
+        packageOrigin.packageInstance.physicalRootDir,
+        packageOrigin.packageRelativePath,
+      );
+  const inferredRole = inferSourceFileRole(physicalSourcePath);
+  const authored = packageOrigin == null
+    ? project.authoredSources.contains(physicalSourcePath)
+    : packageOrigin.sourceScope === ResolvedEvaluationModuleSourceScope.AuthoredProject;
+  const role = authored ? inferredRole : externalizeSourceFileRole(inferredRole);
   return admitSourceFile(store, project.workspaceRootDir, project.rootDir, project.projectKey, {
     path: sourceFile.fileName,
+    role,
     note: 'Source file admitted as a static evaluation dependency.',
   });
 }
@@ -559,8 +1529,9 @@ export function isStaticEvaluationSource(language: SourceLanguage): boolean {
 
 export function isStaticEvaluationAdmission(
   admission: Pick<SourceFileAdmission, 'language' | 'role'>,
+  admittedSourceRoles: readonly SourceFileRole[] = [SourceFileRole.AppSource],
 ): boolean {
-  return isStaticEvaluationSource(admission.language) && admission.role === SourceFileRole.AppSource;
+  return isStaticEvaluationSource(admission.language) && admittedSourceRoles.includes(admission.role);
 }
 
 export function isEvaluatedProjectSource(

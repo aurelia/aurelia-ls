@@ -26,8 +26,7 @@ export class StateBackedForm {
       .ensure((request) => request.customerName)
       .required()
       .ensure((request) => request.email)
-      .required()
-      .email();
+      .required();
   }
 
   async submit(): Promise<void> {

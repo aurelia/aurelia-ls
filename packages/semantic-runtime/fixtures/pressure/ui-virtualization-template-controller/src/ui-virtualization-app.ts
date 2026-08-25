@@ -17,4 +17,9 @@ export class UiVirtualizationApp {
     new VirtualProduct('first', 'First product'),
     new VirtualProduct('second', 'Second product'),
   ];
+  readonly nullableProducts: readonly (VirtualProduct | null)[] = [
+    new VirtualProduct('nullable', 'Nullable product'),
+    null,
+  ];
+  readonly scalarProducts: readonly number[] = [1, 2];
 }

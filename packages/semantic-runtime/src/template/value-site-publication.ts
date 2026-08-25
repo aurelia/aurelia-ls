@@ -12,7 +12,7 @@ import {
   requireProductDetailEnvelope,
 } from '../kernel/product-details.js';
 import type {
-  KernelStore,
+  KernelStoreReadView,
   KernelStoreRecord,
 } from '../kernel/store.js';
 import { KernelVocabulary } from '../kernel/vocabulary.js';
@@ -21,7 +21,6 @@ import type { ExpressionParseContext } from '../expression/expression-parse-supp
 import type { ExpressionParseResult } from '../expression/parse-result-algebra.js';
 import type { AttributeClassification, AttributeSyntax } from './attribute-syntax.js';
 import type { BindingCommandExecutableReference } from './binding-command-reference.js';
-import type { TemplateExpressionParserService } from './compiler-world.js';
 import type { TemplateBindableReference } from './compiler-world-reference.js';
 import type {
   HtmlAttributeReference,
@@ -35,11 +34,18 @@ import {
 } from './value-site.js';
 import { runtimeExpressionParseContextForAddress } from './runtime-expression-source-address.js';
 
+/** Narrow parser operation required by value-site publication. */
+export interface TemplateValueSiteExpressionParser {
+  readonly productHandle: ProductHandle;
+  parse(expression: string, context?: ExpressionParseContext): ExpressionParseResult;
+  parse(expression: string, expressionType: ExpressionType, context?: ExpressionParseContext): ExpressionParseResult;
+}
+
 export class TemplateValueSitePublicationRequest {
   constructor(
     readonly siteLocal: string,
     readonly parseLocal: string | null,
-    readonly parser: TemplateExpressionParserService,
+    readonly parser: TemplateValueSiteExpressionParser,
     readonly provenanceHandle: ProvenanceHandle,
     readonly siteKind: TemplateValueSiteKind,
     readonly rawValue: string,
@@ -105,7 +111,7 @@ class ResolvedTemplateExpressionParseRequest {
 /** Publishes the shared ValueSite -> ExpressionParse record shape for compiler and runtime-owned template values. */
 export class TemplateValueSitePublisher {
   constructor(
-    readonly store: KernelStore,
+    readonly store: KernelStoreReadView,
   ) {}
 
   publish(request: TemplateValueSitePublicationRequest): TemplateValueSitePublication {

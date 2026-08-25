@@ -101,6 +101,14 @@ export const KernelOpenSeamKinds = {
       KernelVocabularySlot.OpenSeamKind,
       'Static evaluation reached a dynamic import or non-literal module edge that could not be linked statically.',
     ),
+
+    /** A source-oriented read could not select complete immutable evidence from reached invocation occurrences. */
+    InvocationSourceRead: defineVocabulary(
+      KernelVocabularyNamespace.Evaluation,
+      'invocation-source-read',
+      KernelVocabularySlot.OpenSeamKind,
+      'Static evaluation could not select complete immutable evidence for a source expression inside a reached invocation.',
+    ),
   },
   TypeSystem: {
     /** TypeChecker projection could not close the type or member surface. */
@@ -158,6 +166,14 @@ export const KernelOpenSeamKinds = {
       'open-definition-field',
       KernelVocabularySlot.OpenSeamKind,
       'Resource definition convergence saw metadata fields it cannot safely materialize yet.',
+    ),
+
+    /** Project tooling uses convention preprocessing, but its transform options or source scope stayed dynamic. */
+    OpenConventionTransformAdmission: defineVocabulary(
+      KernelVocabularyNamespace.Resource,
+      'open-convention-transform-admission',
+      KernelVocabularySlot.OpenSeamKind,
+      'Project tooling uses convention preprocessing, but its transform options or source scope could not be closed statically.',
     ),
   },
   Di: {
@@ -262,12 +278,26 @@ export const KernelOpenSeamKinds = {
     ),
   },
   Router: {
+    /** RouteConfig convergence retained pre-runtime facts but could not close all effective fields or contribution order. */
+    OpenRouteConfig: defineVocabulary(
+      KernelVocabularyNamespace.Router,
+      'open-route-config',
+      KernelVocabularySlot.OpenSeamKind,
+      'RouteConfig convergence retained the strongest static facts while one or more effective fields or contribution ordering remained open.',
+    ),
     /** Router instruction materialization could not close a NavigationInstruction or related option without guessing. */
     OpenInstruction: defineVocabulary(
       KernelVocabularyNamespace.Router,
       'open-instruction',
       KernelVocabularySlot.OpenSeamKind,
       'Router instruction materialization could not close a NavigationInstruction, params, context, or href classification without guessing.',
+    ),
+    /** Potential router topology retained a dynamic viewport value or non-singular presence boundary. */
+    OpenTopology: defineVocabulary(
+      KernelVocabularyNamespace.Router,
+      'open-topology',
+      KernelVocabularySlot.OpenSeamKind,
+      'Potential router topology retained an au-viewport value, presence, or multiplicity boundary without guessing live state.',
     ),
   },
   Compiler: {
@@ -296,8 +326,31 @@ export const KernelOpenSeamKinds = {
     ),
   },
   Template: {
+    /** App-owned template-controller lifecycle code did not expose one provable synthetic-view Scope handoff. */
+    OpenTemplateControllerScope: defineVocabulary(
+      KernelVocabularyNamespace.Template,
+      'open-template-controller-scope',
+      KernelVocabularySlot.OpenSeamKind,
+      'Template-controller lifecycle analysis retained child content while its synthetic-view Scope handoff remained open.',
+    ),
+
+    /** Runtime AuCompose retained candidate inputs but could not close the complete composition operation. */
+    OpenRuntimeComposition: defineVocabulary(
+      KernelVocabularyNamespace.Template,
+      'open-runtime-composition',
+      KernelVocabularySlot.OpenSeamKind,
+      'Runtime AuCompose retained candidate inputs while one input, component resolution, or child handoff remained open.',
+    ),
   },
   Binding: {
+    /** Controller hydration could not close bindable observer installation. */
+    OpenObserverSetup: defineVocabulary(
+      KernelVocabularyNamespace.Binding,
+      'open-observer-setup',
+      KernelVocabularySlot.OpenSeamKind,
+      'Controller hydration could not close bindable observer selection, requirements, or capabilities.',
+    ),
+
     /** Runtime binding target-side accessor or observer selection stayed open. */
     OpenTargetAccess: defineVocabulary(
       KernelVocabularyNamespace.Binding,

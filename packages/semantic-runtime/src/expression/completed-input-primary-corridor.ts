@@ -10,11 +10,12 @@ import {
   AccessGlobalExpression,
   AccessScopeExpression,
   AccessThisExpression,
+  AuthoredScopePath,
+  AuthoredScopePathKind,
   ArrayLiteralExpression,
   ObjectLiteralExpression,
   ParenExpression,
   PrimitiveLiteralExpression,
-  ScopeExpressionRootKind,
 } from './ast.js';
 import type {
   Identifier,
@@ -34,6 +35,7 @@ import { CompletedInputCompanionBuilder } from './completed-input-companion-buil
 import { CompletedInputParserState } from './completed-input-parser-state.js';
 import { CompletedInputTemplateCorridor } from './completed-input-template-corridor.js';
 import { ExpressionFrameworkErrorCode } from './framework-error-code.js';
+import type { SourceSpan } from './source-span.js';
 
 type ParsedPrimary = ParseOutcome<IsPrimary>;
 type ParsedArrayLiteralStep = ParseOutcome<ArrayLiteralStep>;
@@ -224,8 +226,13 @@ export class CompletedInputPrimaryCorridor {
     const first = this.state.peekToken();
     this.state.nextToken();
     const start = first.start;
+    const firstQualifierSpan = this.state.spanFromToken(first);
 
     if (first.type === TokenType.KeywordDollarThis) {
+      const authoredScopePath = new AuthoredScopePath(
+        AuthoredScopePathKind.CurrentBindingContext,
+        [firstQualifierSpan],
+      );
       const dot = this.state.peekToken();
       if (dot.type === TokenType.Dot) {
         this.state.nextToken();
@@ -237,7 +244,8 @@ export class CompletedInputPrimaryCorridor {
             dot,
             new AccessThisExpression(
               this.state.span(start, first.end),
-              0,
+              this.state.scopeDepth,
+              authoredScopePath,
             ),
           );
         }
@@ -246,18 +254,23 @@ export class CompletedInputPrimaryCorridor {
         return new AccessScopeExpression(
           this.state.span(start, nameTok.end),
           this.deps.identifierFromToken(nameTok),
-          0,
-          ScopeExpressionRootKind.CurrentBindingContext,
+          this.state.scopeDepth,
+          authoredScopePath,
         );
       }
 
       return new AccessThisExpression(
         this.state.span(start, first.end),
-        0,
+        this.state.scopeDepth,
+        authoredScopePath,
       );
     }
 
-    let ancestor = 1;
+    const qualifierSpans: SourceSpan[] = [firstQualifierSpan];
+    const authoredScopePath = (): AuthoredScopePath => new AuthoredScopePath(
+      AuthoredScopePathKind.AncestorBindingContext,
+      [...qualifierSpans],
+    );
 
     while (true) {
       const dot = this.state.peekToken();
@@ -275,7 +288,7 @@ export class CompletedInputPrimaryCorridor {
       const maybeParent = this.state.peekToken();
       if (maybeParent.type === TokenType.KeywordDollarParent) {
         this.state.nextToken();
-        ancestor++;
+        qualifierSpans.push(this.state.spanFromToken(maybeParent));
         continue;
       }
 
@@ -286,7 +299,8 @@ export class CompletedInputPrimaryCorridor {
           dot,
           new AccessThisExpression(
             this.state.span(start, dot.start),
-            ancestor,
+            this.state.scopeDepth + qualifierSpans.length,
+            authoredScopePath(),
           ),
         );
       }
@@ -295,14 +309,15 @@ export class CompletedInputPrimaryCorridor {
       return new AccessScopeExpression(
         this.state.span(start, maybeParent.end),
         this.deps.identifierFromToken(maybeParent),
-        ancestor,
-        ScopeExpressionRootKind.AncestorBindingContext,
+        this.state.scopeDepth + qualifierSpans.length,
+        authoredScopePath(),
       );
     }
 
     return new AccessThisExpression(
       this.state.span(start, this.state.consumedEnd || first.end),
-      ancestor,
+      this.state.scopeDepth + qualifierSpans.length,
+      authoredScopePath(),
     );
   }
 
@@ -505,6 +520,7 @@ export class CompletedInputPrimaryCorridor {
     const start = open.start;
 
     const keys: (number | string)[] = [];
+    const keySpans: SourceSpan[] = [];
     const values: IsAssign[] = [];
 
     const first = this.state.peekToken();
@@ -514,12 +530,13 @@ export class CompletedInputPrimaryCorridor {
       return new ObjectLiteralExpression(
         this.state.span(start, this.state.consumedEnd),
         keys,
+        keySpans,
         values,
       );
     }
 
     while (true) {
-      const step = this.parseObjectLiteralEntry(open, start, keys, values);
+      const step = this.parseObjectLiteralEntry(open, start, keys, keySpans, values);
       if (isParseFailure(step)) {
         return step;
       }
@@ -531,6 +548,7 @@ export class CompletedInputPrimaryCorridor {
     return new ObjectLiteralExpression(
       this.state.span(start, this.state.consumedEnd),
       keys,
+      keySpans,
       values,
     );
   }
@@ -539,6 +557,7 @@ export class CompletedInputPrimaryCorridor {
     open: Token,
     start: number,
     keys: (number | string)[],
+    keySpans: SourceSpan[],
     values: IsAssign[],
   ): ParsedObjectLiteralStep {
     const keyTok = this.state.peekToken();
@@ -553,7 +572,7 @@ export class CompletedInputPrimaryCorridor {
         ],
         ExpressionCompanionFrameKind.ObjectLiteral,
         this.state.span(start, this.state.consumedEnd || open.end),
-        this.state.prefixRefs.optional(this.state.prefixRefs.objectLiteral(start, keys, values)),
+        this.state.prefixRefs.optional(this.state.prefixRefs.objectLiteral(start, keys, keySpans, values)),
       );
     }
     if (keyTok.type === TokenType.CloseBrace) {
@@ -572,6 +591,7 @@ export class CompletedInputPrimaryCorridor {
     const key = keyTok.type === TokenType.NumericLiteral
       ? keyTok.value as number
       : String(keyTok.value);
+    const keySpan = this.state.spanFromToken(keyTok);
     const colon = this.state.peekToken();
     if (colon.type !== TokenType.Colon) {
       if (keyTok.type === TokenType.Identifier) {
@@ -580,26 +600,28 @@ export class CompletedInputPrimaryCorridor {
           return shorthand;
         }
         keys.push(key);
+        keySpans.push(keySpan);
         values.push(shorthand);
-        return this.parseObjectLiteralSeparator(start, keys, values);
+        return this.parseObjectLiteralSeparator(start, keys, keySpans, values);
       }
       return this.companionBuilder.missingObjectValueSeparatorFailure(
         "Expected ':' after object literal key",
         colon,
         keyTok,
         this.state.span(start, keyTok.end),
-        this.state.prefixRefs.optional(this.state.prefixRefs.objectLiteral(start, keys, values)),
+        this.state.prefixRefs.optional(this.state.prefixRefs.objectLiteral(start, keys, keySpans, values)),
       );
     }
     this.state.nextToken();
 
-    const value = this.parseObjectLiteralValue(colon, start, keys, values);
+    const value = this.parseObjectLiteralValue(colon, start, keys, keySpans, values);
     if (isParseFailure(value)) {
       return value;
     }
     keys.push(key);
+    keySpans.push(keySpan);
     values.push(value);
-    return this.parseObjectLiteralSeparator(start, keys, values);
+    return this.parseObjectLiteralSeparator(start, keys, keySpans, values);
   }
 
   private objectLiteralShorthandValue(token: Token): ParseOutcome<AccessScopeExpression | AccessGlobalExpression> {
@@ -623,7 +645,6 @@ export class CompletedInputPrimaryCorridor {
     return new AccessScopeExpression(
       this.state.spanFromToken(token),
       identifier,
-      0,
     );
   }
 
@@ -631,13 +652,14 @@ export class CompletedInputPrimaryCorridor {
     colon: Token,
     start: number,
     keys: readonly (number | string)[],
+    keySpans: readonly SourceSpan[],
     values: readonly IsAssign[],
   ): ParseOutcome<IsAssign> {
     const value = this.deps.parseAssignExpr();
     if (!isParseFailure(value)) {
       return value;
     }
-    const prefix = this.state.prefixRefs.optional(this.state.prefixRefs.objectLiteral(start, keys, values));
+    const prefix = this.state.prefixRefs.optional(this.state.prefixRefs.objectLiteral(start, keys, keySpans, values));
     if (isParseCompanionFailure(value)) {
       return this.companionBuilder.widenFailureToFrame(
         value,
@@ -658,6 +680,7 @@ export class CompletedInputPrimaryCorridor {
   private parseObjectLiteralSeparator(
     start: number,
     keys: readonly (number | string)[],
+    keySpans: readonly SourceSpan[],
     values: readonly IsAssign[],
   ): ParsedObjectLiteralStep {
     const sep = this.state.peekToken();
@@ -685,7 +708,7 @@ export class CompletedInputPrimaryCorridor {
         ],
         ExpressionCompanionFrameKind.ObjectLiteral,
         this.state.span(start, this.state.localEnd(values[values.length - 1]!)),
-        this.state.prefixRefs.optional(this.state.prefixRefs.objectLiteral(start, keys, values)),
+        this.state.prefixRefs.optional(this.state.prefixRefs.objectLiteral(start, keys, keySpans, values)),
       );
     }
     return this.state.failures.error("Expected ',' or '}' in object literal", sep);

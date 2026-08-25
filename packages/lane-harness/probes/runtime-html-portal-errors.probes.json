@@ -1,0 +1,14 @@
+{
+  "fixture": "packages/semantic-runtime/fixtures/pressure/runtime-html-portal-errors",
+  "lanes": {
+    "diagnostics": [
+      {
+        "id": "runtime-controller-portal-template",
+        "file": "src/runtime-html-portal-errors-app.html",
+        "verdict": "correct",
+        "reason": "The full document-diagnostic pull returns portal controller rows on the invalid position, empty target value, and strict flag that makes a missing target invalid; these are defensible authored repair loci for runtime checks with no native source span.",
+        "note": "NEW 2026-07-07. Runtime-html portal diagnostics for invalid position and strict target failures. VERDICT 2026-07-07: correct."
+      }
+    ]
+  }
+}

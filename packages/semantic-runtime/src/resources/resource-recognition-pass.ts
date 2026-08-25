@@ -1,7 +1,9 @@
 import { performance } from 'node:perf_hooks';
 
 import { AuthoredSourceTextCache } from '../kernel/authored-source-text.js';
+import type { SemanticRuntimeProjectInputHost } from '../kernel/project-input.js';
 import type { KernelStore } from '../kernel/store.js';
+import type { KernelPublicationContext } from '../kernel/publication.js';
 import { NamedResourceRecognizer } from './named-resource-recognizer.js';
 import type { ResourceRecognitionContext } from './resource-recognition-context.js';
 import {
@@ -51,11 +53,21 @@ export class ResourceRecognitionResult {
 export class ResourceRecognitionPass {
   private readonly namedResources = new NamedResourceRecognizer();
   private readonly syntaxResources = new SyntaxResourceRecognizer();
-  private readonly sourceTextCache = new AuthoredSourceTextCache('');
+  private readonly sourceTextCache: AuthoredSourceTextCache;
 
-  recognize(context: ResourceRecognitionContext): readonly ResourceRecognitionObservation[] {
+  constructor(
+    inputHost: SemanticRuntimeProjectInputHost,
+  ) {
+    this.sourceTextCache = new AuthoredSourceTextCache('', inputHost);
+  }
+
+  recognize(
+    context: ResourceRecognitionContext,
+    supplementalObservations: readonly ResourceRecognitionObservation[] = [],
+  ): readonly ResourceRecognitionObservation[] {
     return [
       ...this.namedResources.recognize(context),
+      ...supplementalObservations,
       ...this.syntaxResources.recognize(context),
     ];
   }
@@ -63,6 +75,8 @@ export class ResourceRecognitionPass {
   recognizeAndEmit(
     store: KernelStore,
     context: ResourceRecognitionContext,
+    publication: KernelPublicationContext,
+    supplementalObservations: readonly ResourceRecognitionObservation[] = [],
   ): ResourceRecognitionResult {
     const started = performance.now();
     const phases: ResourceRecognitionPhaseTiming[] = [];
@@ -74,14 +88,15 @@ export class ResourceRecognitionPass {
     );
     const observations = [
       ...namedObservations,
+      ...supplementalObservations,
       ...syntaxObservations,
     ];
     const emission = measureResourceRecognitionPhase(phases, 'kernel-emission', () =>
-      new ResourceRecognitionKernelEmitter(store).emit(context, observations)
+      new ResourceRecognitionKernelEmitter(store, publication).emit(context, observations)
     );
     phases.push(...emission.profile.phases);
     const convergence = measureResourceRecognitionPhase(phases, 'definition-convergence', () =>
-      new ResourceDefinitionConverger(store, this.sourceTextCache).converge(context, observations, emission)
+      new ResourceDefinitionConverger(store, this.sourceTextCache, publication).converge(context, observations, emission)
     );
     return new ResourceRecognitionResult(
       observations,

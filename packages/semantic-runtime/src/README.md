@@ -1,29 +1,42 @@
 # Aurelia Semantic Runtime
 
-This source tree is the Aurelia 2 semantic substrate for the language server, Atlas, IDE features, and future compiler or analysis work. Treat the Aurelia runtime as the semantic source of truth, and treat this package as the product model that makes that truth queryable.
+This tree implements the Aurelia project model used by the language server,
+MCP, Atlas, IDE features, and future analysis consumers. Aurelia's author-facing
+framework contract is the authority; this README maps the source layers that
+make it queryable.
 
-The package is intentionally architecture-first. Build durable substrate layers, then wire recognizers, materializers, and runtime emulators around those layers once the model has enough shape to avoid shims.
+Build behavior on the layer that owns the underlying fact. Uncertainty stays
+explicit through typed answer facts, evidence, and open seams.
 
-## Product Priorities
+## Product Focus
 
-Highest-value experiences include deep template autocomplete, go-to-definition from markup, reliable rename substrate, app maps, resource visibility, configuration tracing, DI explanations, and AI-assisted app building that can verify what it writes.
-
-Correctness and explanation quality matter before latency while the architecture is still settling. False positives are more expensive than explicit open seams.
+Current priorities are reliable template editing and refactoring, understandable
+project and resource behavior, and AI-assisted authoring grounded in Aurelia
+Patterns and verified against the real project. Current development prioritizes
+correctness and explanation quality while the architecture is settling.
 
 ## Runtime Grounding
 
-Aurelia runtime behavior is the grounding authority. Product models may be more granular than runtime classes when tooling needs separate provenance, identity, inquiry, or explanation boundaries, but they should not be less precise than runtime semantics.
+Aurelia's author-facing framework contract is the grounding authority. Start
+with framework documentation and tests. Use compiler and runtime evidence when a
+rule needs deeper grounding, then place it with the layer that logically owns
+it. Implementation shape alone does not define author-facing semantics.
+
+Product models may be more granular than runtime classes when tooling needs separate provenance, identity, inquiry, or explanation boundaries, but they should not be less precise than framework semantics. Tooling may enforce a stricter authoring rule when the framework is incidentally permissive only when that rule is well-grounded, low-noise, and actionable; otherwise preserve uncertainty as an open seam.
 
 Known semantic behavior exceptions should be called out directly. Attribute patterns and binding commands are the current example: runtime stores them through different mechanisms so attribute parsing can be fast, but the intended application semantics are a configured, app-global, effectively frozen syntax surface.
 
-Keep the runtime-emulation split visible. Module evaluation, configuration admission, registration spending, DI world construction, compiler-world formation, HTML and attribute parsing, instruction lowering, and compiled-template assembly can mostly follow evaluation-shaped Aurelia runtime construction. Activation-dependent answers cross into TypeChecker-backed speculative projection with explicit products, claims, provenance, and open seams.
+Keep the runtime-emulation split visible. Source-resolvable framework
+construction follows the evaluation-shaped layers in this tree.
+Activation-dependent answers use TypeChecker-backed projection with explicit
+products, claims, provenance, and open seams.
 
 ## Layer Map
 
 - `kernel`: hot normalized record store, handles, vocabulary, identities, addresses, claims, evidence, provenance, materialization, open seams, and auLink anchors.
 - `boot`: workspace, project, and source admission before Aurelia semantics are interpreted.
-- `application`: framework-normal app topology shared by analysis, fixtures, and future app-building.
-- `app-builder`: AI-first pattern algebra for compact app-building intent, domain slots, reference-domain separation, and eventual Aurelia source lowering.
+- `application`: framework-normal app topology shared by analysis, fixtures, and internal source planning.
+- `app-builder`: legacy/internal app-building research, source-lowering experiments, SourcePlan assembly, and fixture pressure.
 - `source-plan`: shared source artifact planning, text authority, source-pattern metadata, and project tooling envelopes.
 - `support-state`: shared promise-strength ladder used by app-builder, fixture verification, and API rows.
 - `fixture-verification`: row-backed expected-effect contracts for reopened fixtures and generated source plans.
@@ -31,6 +44,8 @@ Keep the runtime-emulation split visible. Module evaluation, configuration admis
 - `inquiry`: selectors, loci, answer envelopes, projection lanes, continuations, and consumer policy boundaries above the kernel.
 - `evaluation`: ECMAScript-shaped static module, expression, environment, value, and seam substrate.
 - `type-system`: TypeChecker projection substrate for synthetic expression and template-local member surfaces.
+- `runtime-expression`: owner-qualified runtime expression access occurrences, exact operation slots, target closure,
+  execution semantics, and source provenance before observation or consumer projection.
 - `observation`: TypeChecker-backed ObserverLocator lookup, observer/accessor value channels, and source/target data
   flow.
 - `resources`: resource recognition, resource definition models, definition contributions, and resource provenance before DI admission or template compilation.
@@ -46,11 +61,11 @@ Keep the runtime-emulation split visible. Module evaluation, configuration admis
 - `router`: router configuration, route config, route context, viewport instruction, and router-owned resource model anchors.
 - `api`: in-process app-opening and query facade over the product substrate.
 
-Template parser and compiler materializers should be built on these layers, not by reconnecting older runtime-shaped compiler models.
+Template parser and compiler materializers should build on these layers.
 
 ## Atlas And auLink
 
-Atlas is the live orientation and inspection layer over this package. `auLink` is deliberately narrower: it is only the framework-symbol bridge between local model classes and Aurelia runtime/compiler concepts.
+Atlas is the live orientation and inspection layer over this package. `auLink` is deliberately narrower: it is only the framework-symbol bridge between local model classes and Aurelia runtime/compiler concepts. A facetless link records unqualified correspondence without promising whole-target parity; a link with a named facet claims only that the product declaration models that semantic decision. Atlas must preserve authored facet text losslessly, exclude faceted links from whole-member comparison, and treat unqualified-link comparisons as review pressure rather than proof of parity.
 
 Do not put product taxonomy, pass roles, or model-surface classification into `auLink`; those belong in product models, vocabulary, claims, or Atlas source lenses when they are real obligations rather than bridge metadata.
 
@@ -65,7 +80,7 @@ watchpoints, and current shape:
 - [boot/README.md](./boot/README.md) owns project discovery, source admission, compiler options, and project-shape
   boundaries before Aurelia interpretation.
 - [application/README.md](./application/README.md) owns app topology.
-- [app-builder/README.md](./app-builder/README.md) owns the AI-first pattern algebra that should sit before authoring source generation.
+- [app-builder/README.md](./app-builder/README.md) owns the legacy/internal app-builder boundary and its relationship to Aurelia Patterns.
 - [source-plan/README.md](./source-plan/README.md) owns shared source artifact and project-tooling plan policy.
 - [support-state.ts](./support-state.ts) owns the shared promise-strength ladder used by product/API surfaces.
 - [fixture-verification/README.md](./fixture-verification/README.md) owns row-backed expected-effect verification.
@@ -83,6 +98,8 @@ watchpoints, and current shape:
   modeling, and evaluator issue publication.
 - [type-system/README.md](./type-system/README.md) owns TypeChecker-backed expression, scope, member, and type-surface
   projection.
+- [runtime-expression/README.md](./runtime-expression/README.md) owns expression access occurrences, operation slots,
+  target closure, execution semantics, and the observation-derivation boundary.
 - [observation/README.md](./observation/README.md) owns observer-locator, value-channel, and binding data-flow emulation
   boundaries.
 - [router/README.md](./router/README.md) owns route config, route expression, route context, route recognizer, and
@@ -100,6 +117,8 @@ watchpoints, and current shape:
 Queryable cross-package intent lives in [../../atlas/memory](../../atlas/memory/README.md). When a workbench note becomes durable enough that future Codex should find it by domain, path, symbol, or lens, add an Atlas memory record and keep the README/workbench as the explanatory backing.
 
 When text starts repeating across files, prefer linking to the owner and keeping only the local consequence.
+
+Inline comments own local invariants that would otherwise be lost beside the implementation. Git history is archaeological evidence rather than a current contract: when history recovers an intention that still survives scrutiny, promote it into the owning code, README, or queryable Atlas decision record.
 
 ## Rebuild Discipline
 

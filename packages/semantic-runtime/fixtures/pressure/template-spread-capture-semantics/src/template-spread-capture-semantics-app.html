@@ -1,0 +1,55 @@
+<template>
+  <spread-card ...$bindables='spreadState'></spread-card>
+  <spread-card ...$bindables='spreadContainer.details'></spread-card>
+  <spread-card ...$bindables="spreadState"></spread-card>
+  <spread-card ...$bindables="spreadState & missingSpreadBehavior"></spread-card>
+  <spread-card $bindables.spread="spreadState"></spread-card>
+  <spread-card ...$bindables="spreadState | spreadIdentity"></spread-card>
+  <spread-card ...$bindables="{ title: spreadState.title, count: spreadState.count, tone: spreadState.tone }"></spread-card>
+  <spread-card repeat.for="card of spreadCards" ...card></spread-card>
+  <spread-card ...$bindables='aliasShaped'></spread-card>
+  <spread-card ...$bindables='nullableSpread'></spread-card>
+  <spread-card ...$bindables='optionalSpread'></spread-card>
+  <spread-card ...$bindables='presentUndefinedSpread'></spread-card>
+  <spread-card ...$bindables='unionSpread'></spread-card>
+  <spread-card ...$bindables='dynamicSpread'></spread-card>
+  <spread-card ...$bindables='callableSpread'></spread-card>
+  <spread-card ...$bindables='broadFunctionSpread'></spread-card>
+  <spread-card ...$bindables='broadObjectSpread'></spread-card>
+  <spread-card ...$bindables='constructableSpread'></spread-card>
+  <spread-card ...$bindables='inheritedSpread'></spread-card>
+  <spread-card ...$bindables='primitiveSpread'></spread-card>
+  <no-capture-shell ...$bindables='noBindableSpread'></no-capture-shell>
+  <case-spread-card ...$bindables="caseSpreadState"></case-spread-card>
+
+  <spread-card ...$element="spreadState"></spread-card>
+  <spread-card $element.spread="spreadState"></spread-card>
+  <div ...$bindables="spreadState"></div>
+  <div ...$attrs></div>
+
+  <capture-shell
+    value.bind="capturedValue"
+    active.class="isActive"
+    click.trigger="handleCaptured($event)"
+    label.trigger="handleLabelEvent($event)"
+    data-note="clean-captured-note"
+    input-mark="receiver-local-mark">
+  </capture-shell>
+
+  <capture-shell
+    if.bind="showCapture"
+    label.bind="shellLabel"
+    label.trigger="handleLabelEvent($event)"
+    value.bind="capturedValue"
+    active.class="isActive"
+    click.trigger="handleCaptured($event)"
+    input-mark="captured-mark"
+    inner-gate.bind="showCapture"
+    slot="named"
+    data-note="captured-note">
+  </capture-shell>
+
+  <no-capture-shell value.bind="capturedValue"></no-capture-shell>
+  <filtered-capture-shell class="host-class" data-note="filtered-note"></filtered-capture-shell>
+  <nested-capture-shell value.bind="capturedValue | nestedIdentity" input-mark="nested-mark"></nested-capture-shell>
+</template>

@@ -9,10 +9,11 @@ import type {
 import { localKeyPart } from '../kernel/local-key.js';
 import { OpenSeamReasonKind } from '../kernel/open-seam.js';
 import {
+  KernelPublicationPlan,
   KernelStoreBatch,
-  type KernelStore,
-  type KernelStoreRecord,
-} from '../kernel/store.js';
+  type KernelPublicationContext,
+} from '../kernel/publication.js';
+import type { KernelStoreRecord } from '../kernel/store.js';
 import { KernelVocabulary } from '../kernel/vocabulary.js';
 import {
   RouteNodeModel,
@@ -21,15 +22,18 @@ import {
   RouterReference,
   RouteConfigKind,
   RouteContextModel,
+  RouterRealizationStageKind,
   RouteTreeModel,
   RouteParameterValueModel,
   RouterIssueKind,
   RouterIssueModel,
   RouterIssuePhase,
   ViewportAgentModel,
+  ViewportAgentCandidateResolutionKind,
   ViewportInstructionModel,
   ViewportInstructionTreeModel,
   ViewportRequestModel,
+  resolvedRouteableComponentName,
   type ConfigurableRouteModel,
   type EndpointModel,
   type RouteConfigContextModel,
@@ -59,6 +63,8 @@ const RESIDUE = ROUTE_RECOGNIZER_RESIDUE_PARAMETER;
 const enum OpenViewportResolutionKind {
   MissingComponentName = 'missing-component-name',
   NoAvailableViewportAgent = 'no-available-viewport-agent',
+  MultipleViewportAgentCandidates = 'multiple-viewport-agent-candidates',
+  OpenViewportAgentCandidates = 'open-viewport-agent-candidates',
   MissingRouteContextPair = 'missing-route-context-pair',
 }
 
@@ -79,7 +85,8 @@ interface TransitionRouteNodeSeed {
 
 interface ResolvedTransitionRouteNodeSeed extends TransitionRouteNodeSeed {
   readonly routeContext: RouteContextModel;
-  readonly viewportAgent: ViewportAgentModel | null;
+  readonly viewportAgentCandidate: ViewportAgentModel;
+  readonly viewportCandidateResolution: ViewportAgentCandidateResolutionKind.Sole;
   readonly viewportRequest: ViewportRequestModel | null;
 }
 
@@ -126,7 +133,6 @@ interface RouteNodeMaterializationFields extends Omit<RouteNodeModelFields, 'pro
 /** RouteTree products materialized for initial state and closed pre-activation transition compilation. */
 export class RouteTreeMaterializationProjectResult {
   constructor(
-    readonly project: ProjectBootFrame,
     readonly routeTrees: readonly RouteTreeModel[],
     readonly routeNodes: readonly RouteNodeModel[],
     readonly issues: readonly RouterIssueModel[],
@@ -148,7 +154,7 @@ export class RouteTreeMaterializationProjectResult {
 /** Materialize initial RouteTree roots plus static transition trees that can close before activation. */
 export class RouteTreeMaterializationProjectPass {
   materializeAndEmit(
-    store: KernelStore,
+    publication: KernelPublicationContext,
     project: ProjectBootFrame,
     routeConfigContexts: RouteConfigContextMaterializationProjectResult,
     routeRuntime: RouteRuntimeTopologyProjectResult,
@@ -158,7 +164,7 @@ export class RouteTreeMaterializationProjectPass {
     routerOptions: RouterOptionsMaterializationProjectResult | null,
   ): RouteTreeMaterializationProjectResult {
     const frame = new RouteTreeMaterializationFrame(
-      store,
+      publication,
       routeConfigContexts,
       routeRuntime,
       routeRecognizer,
@@ -168,11 +174,10 @@ export class RouteTreeMaterializationProjectPass {
     );
     const emissions = frame.materialize();
     const records = frame.readRecords(emissions);
-    if (records.length > 0) {
-      store.commit(new KernelStoreBatch(records, `router-route-tree:${project.projectKey}`));
-    }
+    publication.publish(new KernelPublicationPlan(
+      new KernelStoreBatch(records, `router-route-tree:${project.projectKey}`),
+    ));
     return new RouteTreeMaterializationProjectResult(
-      project,
       emissions.map((emission) => emission.routeTree),
       emissions.flatMap((emission) => emission.routeNodes),
       frame.readIssues(),
@@ -187,7 +192,7 @@ class RouteTreeMaterializationFrame {
   private readonly issues: RouterIssueModel[] = [];
 
   constructor(
-    private readonly store: KernelStore,
+    private readonly store: KernelPublicationContext,
     private readonly routeConfigContexts: RouteConfigContextMaterializationProjectResult,
     private readonly routeRuntime: RouteRuntimeTopologyProjectResult,
     private readonly routeRecognizer: RouteRecognizerMaterializationProjectResult,
@@ -275,7 +280,7 @@ class RouteTreeTransitionMaterializationFrame {
   private readonly redirectIssueRouteConfigIdentities: ReadonlySet<RouteConfigModel['identityHandle']>;
 
   constructor(
-    private readonly store: KernelStore,
+    private readonly store: KernelPublicationContext,
     private readonly routeConfigContexts: RouteConfigContextMaterializationProjectResult,
     private readonly routeRuntime: RouteRuntimeTopologyProjectResult,
     private readonly routeRecognizer: RouteRecognizerMaterializationProjectResult,
@@ -425,7 +430,6 @@ class RouteTreeTransitionMaterializationFrame {
       instructionTree,
       rootNode,
       childNodes,
-      this.routerOptions,
     );
 
     return {
@@ -492,12 +496,13 @@ class RouteTreeTransitionMaterializationFrame {
 }
 
 function initialRootRouteNode(
-  store: KernelStore,
+  store: KernelPublicationContext,
   nodeLocal: string,
   routeConfig: RouteConfigModel,
   routeContext: RouteContextModel,
 ): RouteNodeModel {
   return materializedRouteNode(store, nodeLocal, {
+    realizationStage: RouterRealizationStageKind.Potential,
     routeContext: routeContext.toReference(),
     routeConfig,
     parent: null,
@@ -512,6 +517,8 @@ function initialRootRouteNode(
     fragment: null,
     hasData: routeConfig.hasData,
     viewport: null,
+    viewportAgentCandidate: null,
+    viewportCandidateResolution: null,
     residueInstructionCount: 0,
     path: '',
     finalPath: '',
@@ -522,16 +529,17 @@ function initialRootRouteNode(
 }
 
 function initialRouteTree(
-  store: KernelStore,
+  store: KernelPublicationContext,
   treeLocal: string,
   routeContext: RouteContextModel,
   rootNode: RouteNodeModel,
   routerOptions: RouterOptionsMaterializationProjectResult | null,
 ): RouteTreeModel {
-  const effectiveRouterOptions = routerOptions?.readEffectiveRouterOptions() ?? null;
+  const effectiveRouterOptions = routerOptions?.readRouterOptionsForReference(routeContext.options) ?? null;
   return new RouteTreeModel(
     store.handles.product(treeLocal),
     store.handles.identity(treeLocal),
+    RouterRealizationStageKind.Potential,
     rootNode.toReference(),
     null,
     effectiveRouterOptions?.toReference() ?? null,
@@ -544,7 +552,7 @@ function initialRouteTree(
 }
 
 function initialRouteTreeRecords(
-  store: KernelStore,
+  store: KernelPublicationContext,
   treeLocal: string,
   nodeLocal: string,
   routeContext: RouteContextModel,
@@ -558,7 +566,7 @@ function initialRouteTreeRecords(
 }
 
 function initialRootRouteNodeRecords(
-  store: KernelStore,
+  store: KernelPublicationContext,
   local: string,
   routeContext: RouteContextModel,
   rootNode: RouteNodeModel,
@@ -580,7 +588,7 @@ function initialRootRouteNodeRecords(
 }
 
 function initialRouteTreeProductRecords(
-  store: KernelStore,
+  store: KernelPublicationContext,
   local: string,
   routeContext: RouteContextModel,
   routeTree: RouteTreeModel,
@@ -602,7 +610,7 @@ function initialRouteTreeProductRecords(
 }
 
 function materializedRouteNode(
-  store: KernelStore,
+  store: KernelPublicationContext,
   local: string,
   fields: RouteNodeMaterializationFields,
 ): RouteNodeModel {
@@ -610,6 +618,7 @@ function materializedRouteNode(
   return new RouteNodeModel({
     productHandle: store.handles.product(local),
     identityHandle: store.handles.identity(local),
+    realizationStage: fields.realizationStage,
     routeContext: fields.routeContext,
     config: routeConfig.toReference(),
     parent: fields.parent,
@@ -624,6 +633,8 @@ function materializedRouteNode(
     fragment: fields.fragment,
     hasData: fields.hasData,
     viewport: fields.viewport,
+    viewportAgentCandidate: fields.viewportAgentCandidate,
+    viewportCandidateResolution: fields.viewportCandidateResolution,
     residueInstructionCount: fields.residueInstructionCount,
     path: fields.path,
     finalPath: fields.finalPath,
@@ -634,7 +645,7 @@ function materializedRouteNode(
 }
 
 function transitionRootRouteNodeReference(
-  store: KernelStore,
+  store: KernelPublicationContext,
   rootLocal: string,
   instructionTree: ViewportInstructionTreeModel,
   routeContext: RouteContextModel,
@@ -649,7 +660,7 @@ function transitionRootRouteNodeReference(
 }
 
 function transitionRouteNodeSites(
-  store: KernelStore,
+  store: KernelPublicationContext,
   treeLocal: string,
   trees: readonly ResolvedTransitionRouteNodeTree[],
   parentIndexPath = '',
@@ -673,7 +684,7 @@ function transitionRouteNodeSites(
 }
 
 function transitionRouteNodeEmissions(
-  store: KernelStore,
+  store: KernelPublicationContext,
   instructionTree: ViewportInstructionTreeModel,
   rootReference: RouterReference,
   sites: readonly TransitionRouteNodeSite[],
@@ -693,7 +704,7 @@ function transitionRouteNodeEmissions(
 }
 
 function transitionRootRouteNode(
-  store: KernelStore,
+  store: KernelPublicationContext,
   rootLocal: string,
   instructionTree: ViewportInstructionTreeModel,
   routeContext: RouteContextModel,
@@ -701,6 +712,7 @@ function transitionRootRouteNode(
   childNodes: readonly TransitionRouteNodeEmission[],
 ): RouteNodeModel {
   return materializedRouteNode(store, rootLocal, {
+    realizationStage: RouterRealizationStageKind.Planned,
     routeContext: routeContext.toReference(),
     routeConfig,
     parent: null,
@@ -715,6 +727,8 @@ function transitionRootRouteNode(
     fragment: instructionTree.fragment,
     hasData: routeConfig.hasData,
     viewport: null,
+    viewportAgentCandidate: null,
+    viewportCandidateResolution: null,
     residueInstructionCount: 0,
     path: '',
     finalPath: '',
@@ -725,19 +739,19 @@ function transitionRootRouteNode(
 }
 
 function transitionRouteTree(
-  store: KernelStore,
+  store: KernelPublicationContext,
   treeLocal: string,
   instructionTree: ViewportInstructionTreeModel,
   rootNode: RouteNodeModel,
   childNodes: readonly TransitionRouteNodeEmission[],
-  routerOptions: RouterOptionsMaterializationProjectResult | null,
 ): RouteTreeModel {
   return new RouteTreeModel(
     store.handles.product(treeLocal),
     store.handles.identity(treeLocal),
+    RouterRealizationStageKind.Planned,
     rootNode.toReference(),
     instructionTree.toReference(),
-    routerOptions?.readEffectiveRouterOptions()?.toReference() ?? null,
+    instructionTree.options,
     flattenTransitionRouteNodeEmissions(childNodes).length + 1,
     instructionTree.queryParamCount,
     instructionTree.queryParams,
@@ -747,7 +761,7 @@ function transitionRouteTree(
 }
 
 function transitionRouteTreeRecords(
-  store: KernelStore,
+  store: KernelPublicationContext,
   treeLocal: string,
   rootLocal: string,
   routeContext: RouteContextModel,
@@ -763,7 +777,7 @@ function transitionRouteTreeRecords(
 }
 
 function transitionRootRouteNodeRecords(
-  store: KernelStore,
+  store: KernelPublicationContext,
   local: string,
   routeContext: RouteContextModel,
   rootNode: RouteNodeModel,
@@ -785,7 +799,7 @@ function transitionRootRouteNodeRecords(
 }
 
 function transitionChildRouteNodeRecords(
-  store: KernelStore,
+  store: KernelPublicationContext,
   childNodes: readonly TransitionRouteNodeEmission[],
 ): readonly KernelStoreRecord[] {
   return flattenTransitionRouteNodeEmissions(childNodes).flatMap((emission) =>
@@ -803,7 +817,7 @@ function flattenTransitionRouteNodeEmissions(
 }
 
 function transitionRouteTreeProductRecords(
-  store: KernelStore,
+  store: KernelPublicationContext,
   local: string,
   routeContext: RouteContextModel,
   instructionTree: ViewportInstructionTreeModel,
@@ -825,7 +839,7 @@ function transitionRouteTreeProductRecords(
 }
 
 function transitionRouteNode(
-  store: KernelStore,
+  store: KernelPublicationContext,
   local: string,
   instructionTree: ViewportInstructionTreeModel,
   seed: ResolvedTransitionRouteNodeSeed,
@@ -836,6 +850,7 @@ function transitionRouteNode(
   const viewport = seed.instruction?.viewport ?? seed.routeConfig.viewport ?? DEFAULT_VIEWPORT_NAME;
   const residueInstructionCount = seed.recognizedRoute.residue == null ? 0 : 1;
   return materializedRouteNode(store, local, {
+    realizationStage: RouterRealizationStageKind.Planned,
     routeContext: seed.routeContext.toReference(),
     routeConfig: seed.routeConfig,
     parent,
@@ -850,6 +865,8 @@ function transitionRouteNode(
     fragment: instructionTree.fragment,
     hasData: seed.routeConfig.hasData,
     viewport,
+    viewportAgentCandidate: seed.viewportAgentCandidate.toReference(),
+    viewportCandidateResolution: seed.viewportCandidateResolution,
     residueInstructionCount,
     path,
     finalPath: path,
@@ -866,7 +883,7 @@ function routeNodeParams(
 }
 
 function transitionRouteNodeRecords(
-  store: KernelStore,
+  store: KernelPublicationContext,
   local: string,
   node: RouteNodeModel,
 ): readonly KernelStoreRecord[] {
@@ -1107,7 +1124,7 @@ function resolveTransitionRouteNodeSeed(
   readonly seed: ResolvedTransitionRouteNodeSeed | null;
   readonly open: OpenViewportResolution | null;
 } {
-  const componentName = seed.routeConfig.component?.localName ?? null;
+  const componentName = resolvedRouteableComponentName(seed.routeConfig.component);
   if (componentName == null) {
     return {
       seed: null,
@@ -1124,8 +1141,8 @@ function resolveTransitionRouteNodeSeed(
     seed.instruction?.viewport ?? seed.routeConfig.viewport ?? DEFAULT_VIEWPORT_NAME,
     componentName,
   );
-  const viewportAgent = routeRuntime.resolveViewportAgent(parentRouteContext.identityHandle, viewportRequest);
-  if (viewportAgent == null) {
+  const resolution = routeRuntime.resolveViewportAgentCandidates(parentRouteContext.identityHandle, viewportRequest);
+  if (resolution.resolutionKind === ViewportAgentCandidateResolutionKind.None) {
     return {
       seed: null,
       open: {
@@ -1133,13 +1150,41 @@ function resolveTransitionRouteNodeSeed(
         parentRouteContext,
         seed,
         request: viewportRequest,
-        reason: 'parent RouteContext has no matching available ViewportAgent',
+        reason: 'parent RouteContext has no statically compatible ViewportAgent candidate',
       },
     };
   }
-  const routeContext = routeRuntime.routeContextForRouteConfigContextAndViewportAgent(
+  if (resolution.resolutionKind === ViewportAgentCandidateResolutionKind.Multiple) {
+    return {
+      seed: null,
+      open: {
+        kind: OpenViewportResolutionKind.MultipleViewportAgentCandidates,
+        parentRouteContext,
+        seed,
+        request: viewportRequest,
+        reason: `parent RouteContext has ${resolution.definiteCandidates.length} matching static ViewportAgent candidates`,
+      },
+    };
+  }
+  if (resolution.resolutionKind === ViewportAgentCandidateResolutionKind.Open) {
+    return {
+      seed: null,
+      open: {
+        kind: OpenViewportResolutionKind.OpenViewportAgentCandidates,
+        parentRouteContext,
+        seed,
+        request: viewportRequest,
+        reason: `parent RouteContext has ${resolution.openCandidates.length} runtime-dependent ViewportAgent candidate(s)`,
+      },
+    };
+  }
+  const viewportAgentCandidate = resolution.candidate;
+  if (viewportAgentCandidate == null) {
+    throw new Error(`Sole viewport candidate resolution for '${viewportRequest.viewportName}' did not retain its candidate.`);
+  }
+  const routeContext = routeRuntime.routeContextForRouteConfigContextAndViewportAgentCandidate(
     seed.routeConfigContext.identityHandle,
-    viewportAgent.identityHandle,
+    viewportAgentCandidate.identityHandle,
   );
   if (routeContext == null) {
     return {
@@ -1157,7 +1202,8 @@ function resolveTransitionRouteNodeSeed(
     seed: {
       ...seed,
       routeContext,
-      viewportAgent,
+      viewportAgentCandidate,
+      viewportCandidateResolution: ViewportAgentCandidateResolutionKind.Sole,
       viewportRequest,
     },
     open: null,
@@ -1165,7 +1211,7 @@ function resolveTransitionRouteNodeSeed(
 }
 
 function recordViewportResolutionFailure(
-  store: KernelStore,
+  store: KernelPublicationContext,
   open: OpenViewportResolution,
   issues: RouterIssueModel[],
   records: KernelStoreRecord[],
@@ -1179,7 +1225,7 @@ function recordViewportResolutionFailure(
 }
 
 function recordViewportResolutionOpenSeam(
-  store: KernelStore,
+  store: KernelPublicationContext,
   open: OpenViewportResolution,
   requestLabel: string,
   records: KernelStoreRecord[],
@@ -1206,7 +1252,7 @@ function viewportResolutionRequestLabel(open: OpenViewportResolution): string {
 }
 
 function recordNoAvailableViewportAgentIssue(
-  store: KernelStore,
+  store: KernelPublicationContext,
   open: OpenViewportResolution,
   requestLabel: string,
   issues: RouterIssueModel[],
@@ -1214,7 +1260,7 @@ function recordNoAvailableViewportAgentIssue(
 ): void {
   const sourceAddressHandle = open.seed.instruction?.sourceAddressHandle
     ?? open.seed.recognizedRoute.sourceAddressHandle
-    ?? open.seed.routeConfig.pathSourceAddressHandle
+    ?? open.seed.routeConfig.pathSourceAddressHandles[0]
     ?? open.seed.routeConfig.sourceAddressHandle;
   const local = `router-route-tree-issue:no-available-viewport-agent:${open.seed.recognizedRoute.identityHandle}:${localKeyPart(requestLabel)}`;
   const message = `Failed to resolve ${requestLabel} from RouteContext '${open.parentRouteContext.localName ?? open.parentRouteContext.identityHandle}'.`;
@@ -1236,6 +1282,7 @@ function recordNoAvailableViewportAgentIssue(
     open.seed.routeConfig.redirectTo,
     null,
     sourceAddressHandle,
+    [],
   );
   issues.push(issue);
   records.push(...routerIssueProductRecords(store, {
@@ -1249,7 +1296,7 @@ function recordNoAvailableViewportAgentIssue(
 }
 
 function recordRedirectMigrationIssue(
-  store: KernelStore,
+  store: KernelPublicationContext,
   recognizedRoute: RecognizedRouteModel,
   configurableRoute: ConfigurableRouteModel,
   routeConfig: RouteConfigModel,
@@ -1272,7 +1319,8 @@ function recordRedirectMigrationIssue(
 
   const sourceAddressHandle = unsupported.source === 'redirectTo'
     ? routeConfig.redirectToSourceAddressHandle ?? routeConfig.sourceAddressHandle
-    : routeConfig.pathSourceAddressHandle ?? routeConfig.sourceAddressHandle;
+    : routeConfig.pathSourceAddressHandles[routeConfig.paths.indexOf(configurableRoute.path)]
+      ?? routeConfig.sourceAddressHandle;
   const local = [
     'router-route-tree-issue',
     'redirect-migration',
@@ -1300,6 +1348,7 @@ function recordRedirectMigrationIssue(
     routeConfig.redirectTo,
     unsupported.unexpectedKind,
     sourceAddressHandle,
+    [],
   );
   issues.push(issue);
   records.push(...routerIssueProductRecords(store, {
@@ -1323,7 +1372,7 @@ function hasRecognizedRedirectTarget(
 }
 
 function recordRedirectTargetOpenSeam(
-  store: KernelStore,
+  store: KernelPublicationContext,
   recognizedRoute: RecognizedRouteModel,
   routeConfig: RouteConfigModel,
   records: KernelStoreRecord[],

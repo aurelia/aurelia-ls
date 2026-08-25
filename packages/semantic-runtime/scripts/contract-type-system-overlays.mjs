@@ -15,6 +15,9 @@ import {
 import {
   TypeSystemProjectBuilder,
 } from '../out/type-system/project.js';
+import { projectTypeSystemProgramSources } from '../out/type-system/program-source-authority.js';
+import { TypeSystemHotDetails } from '../out/type-system/product-details.js';
+import { checkerTypeMemberSourceAddressHandle } from '../out/type-system/checker-type-member-source.js';
 import {
   TypeSystemOverlaySourceBuilder,
 } from '../out/type-system/overlay.js';
@@ -34,15 +37,18 @@ import {
 } from '../out/template/template-type-system-overlay-prelude.js';
 import {
   AccessScopeExpression,
+  AuthoredScopePath,
+  AuthoredScopePathKind,
   CallScopeExpression,
   Identifier,
-  ScopeExpressionRootKind,
   ValueConverterExpression,
 } from '../out/expression/ast.js';
 import {
   SourceFileRef,
   SourceSpan,
 } from '../out/expression/source-span.js';
+import { KernelVocabulary } from '../out/kernel/vocabulary/index.js';
+import { nodeSemanticRuntimeProjectInputHost } from '../out/kernel/project-input.js';
 import {
   readTypeSystemProjectDiagnostics,
   readTypeSystemOverlayDiagnostics,
@@ -52,8 +58,9 @@ import {
 } from '../out/template/expression-parse-projection.js';
 import {
   bindingScopesForTemplateExpressionParse,
-  templateExpressionParsesForResource,
 } from '../out/template/template-expression-selection.js';
+import { resourceLocalEffectiveTemplateExpressionParses } from '../out/template/template-expression-selection.js';
+import { runtimeBoundControllerValueTableForTemplateResources } from '../out/observation/runtime-bound-controller-value.js';
 
 const packageRoot = path.resolve(fileURLToPath(new URL('..', import.meta.url)));
 const fixtureRoot = path.join(packageRoot, 'fixtures/pressure/typescript-project-diagnostics');
@@ -66,9 +73,13 @@ const runtimeAssignmentConverterFixtureRoot = path.join(packageRoot, 'fixtures/p
 const scopeAliasFixtureRoot = path.join(packageRoot, 'fixtures/pressure/template-overlay-scope-aliases');
 const valueConverterFixtureRoot = path.join(packageRoot, 'fixtures/pressure/template-overlay-value-converter');
 const boundControllerFixtureRoot = path.join(packageRoot, 'fixtures/pressure/template-overlay-bound-controller');
+const effectiveModeFixtureRoot = path.join(packageRoot, 'fixtures/pressure/observation-binding-lifecycle');
 const templateTypeErrorFixtureRoot = path.join(packageRoot, 'fixtures/pressure/template-overlay-type-errors');
 const stateSourceFixtureRoot = path.join(packageRoot, 'fixtures/pressure/template-overlay-state-binding-scope');
 const stateConditionBoundaryFixtureRoot = path.join(packageRoot, 'fixtures/pressure/template-controller-state-condition-boundary');
+const recursiveOwnershipFixtureRoot = path.join(packageRoot, 'fixtures/pressure/app-pattern-storefront');
+const scopePathFixtureRoot = path.join(packageRoot, 'fixtures/pressure/template-expression-resource-combinators');
+const letSourceFormFixtureRoot = path.join(packageRoot, 'fixtures/pressure/template-controller-scope-lab');
 const expectedOverlayExpressionKinds = [
   'Identifier',
   'BindingBehavior',
@@ -122,9 +133,9 @@ const expectedPreludeHelpers = [
     ],
   },
   {
-    key: 'event',
-    owner: 'listener-binding',
-    emittedNames: ['__au_event'],
+    key: 'binding-behavior',
+    owner: 'runtime-binding-behavior',
+    emittedNames: ['__au_binding_behavior_argument'],
   },
   {
     key: 'switch-case',
@@ -154,7 +165,7 @@ const runtime = await createSemanticRuntime({
 const app = await runtime.openApp({
   analysisDepth: 'runtime-topology',
 });
-const overlayTypeSystem = new TypeSystemProjectBuilder().build(
+const overlayTypeSystem = new TypeSystemProjectBuilder(projectTypeSystemProgramSources).build(
   app.project,
   app.emission.evaluation,
   {
@@ -162,7 +173,7 @@ const overlayTypeSystem = new TypeSystemProjectBuilder().build(
   },
 );
 
-const overlaySourceFile = overlayTypeSystem.readProgramSourceFileByPath(overlayFileName);
+const overlaySourceFile = overlayTypeSystem.readProgramSourceFileByHostPath(overlayFileName);
 const moduleSymbol = overlaySourceFile == null
   ? null
   : overlayTypeSystem.checker.getSymbolAtLocation(overlaySourceFile) ?? null;
@@ -175,7 +186,7 @@ const overlayExportType = overlayExport == null
   : overlayTypeSystem.checker.typeToString(
     overlayTypeSystem.checker.getTypeOfSymbolAtLocation(overlayExport, overlayDeclaration),
   );
-const overlayMetadata = overlayTypeSystem.readOverlaySourceByPath(overlayFileName);
+const overlayMetadata = overlayTypeSystem.readOverlaySourceByHostPath(overlayFileName);
 const overlayProgramMetadata = overlaySourceFile == null
   ? null
   : overlayTypeSystem.readOverlaySourceForProgramSourceFile(overlaySourceFile);
@@ -189,7 +200,7 @@ const projectDiagnostics = readTypeSystemProjectDiagnostics(overlayTypeSystem);
 const overlayDiagnostics = projectDiagnostics.filter((diagnostic) =>
   diagnostic.source?.fileName.replace(/\\/g, '/') === overlayFileName.replace(/\\/g, '/')
 );
-const clonedProgramRemap = readClonedProgramNodeRemap(overlayTypeSystem);
+const clonedProgramRemap = readClonedProgramNodeRemap(overlayTypeSystem, overlayFileName);
 const templateOverlay = await readTemplateOverlayProbe();
 const repeatOverlay = await readRepeatScopeOverlayProbe();
 const generatedTemplateOverlay = await readGeneratedTemplateScopeOverlayProbe();
@@ -201,8 +212,12 @@ const generatedScopeAliasOverlay = await readGeneratedScopeAliasOverlayProbe();
 const generatedValueConverterOverlay = await readGeneratedValueConverterOverlayProbe();
 const generatedValueConverterEvaluator = await readGeneratedValueConverterEvaluatorProbe();
 const generatedBoundControllerOverlay = await readGeneratedBoundControllerOverlayProbe();
+const generatedEffectiveModeOverlay = await readGeneratedEffectiveModeOverlayProbe();
 const generatedStateSourceOverlay = await readGeneratedStateSourceOverlayProbe();
 const generatedStateConditionBoundaryOverlay = await readGeneratedStateConditionBoundaryOverlayProbe();
+const resourceLocalOverlayOwnership = await readResourceLocalOverlayOwnershipProbe();
+const authoredScopePathOverlay = await readAuthoredScopePathOverlayProbe();
+const letSourceFormOverlay = await readLetSourceFormOverlayProbe();
 const publicTemplateOverlayDiagnostics = await readPublicTemplateOverlayDiagnosticProbe();
 const publicTemplateOverlayCursorDiagnostics = await readPublicTemplateOverlayCursorDiagnosticProbe();
 const overlayExpressionSupportKinds = new Set(templateTypeSystemOverlayExpressionSupportMatrix.map((row) => row.expressionKind));
@@ -279,6 +294,12 @@ if (overlayExpressionSupportByKind.get('Custom')?.owner !== 'translation-binding
 }
 if (overlayExpressionSupportByKind.get('ForOfStatement')?.owner !== 'repeat-template-controller') {
   failures.push('Expected ForOfStatement overlay support to point at the repeat template-controller owner.');
+}
+if (
+  overlayExpressionSupportByKind.get('Interpolation')?.owner !== 'interpolation-evaluation'
+  || overlayExpressionSupportByKind.get('Interpolation')?.supportKind !== 'runtime-expression-lowering'
+) {
+  failures.push('Expected interpolation overlay support to be owned by framework-equivalent runtime expression lowering.');
 }
 if (overlaySourceFile == null) {
   failures.push('Expected additional overlay source to be a Program-owned source file.');
@@ -376,6 +397,12 @@ if (generatedEventOverlay.expressionTypes.get('state.submitWithEvent($event)') !
 if (generatedEventOverlay.expressionTypes.get('state.submitWithButton($event.currentTarget)') !== 'boolean') {
   failures.push(`Expected generated listener-event overlay to type a currentTarget-refined listener call as boolean, observed ${generatedEventOverlay.expressionTypes.get('state.submitWithButton($event.currentTarget)') ?? 'missing'}.`);
 }
+if (generatedEventOverlay.expressionTypes.get('state.inspectCustomEvent($event)') !== 'boolean') {
+  failures.push(`Expected generated listener-event overlay to type an unknown-name event call as boolean, observed ${generatedEventOverlay.expressionTypes.get('state.inspectCustomEvent($event)') ?? 'missing'}.`);
+}
+if (generatedEventOverlay.generatedCustomEventUnknownTypeExpression !== true) {
+  failures.push('Expected generated listener-event overlay to consume the materialized CustomEvent<unknown> scope type.');
+}
 if (generatedEventOverlay.generatedGlobalEventMemberTypeExpression !== true) {
   failures.push('Expected generated listener-event overlay to spell DOM event member refinements through a stable global type expression.');
 }
@@ -427,6 +454,9 @@ for (const local of ['$displayData', '$activeRow']) {
   if (row.sourceAssignmentTargetSourcePath !== 'src/synthetic-writeback-local-app.html') {
     failures.push(`Expected runtime-assignment data flow for ${local} to route assignment target source to the template writeback local, observed ${row.sourceAssignmentTargetSourcePath ?? 'missing'}.`);
   }
+  if (row.sourceAssignmentOccurrenceSourcePath !== 'src/synthetic-writeback-local-app.html') {
+    failures.push(`Expected runtime-assignment data flow for ${local} to retain the authored write occurrence, observed ${row.sourceAssignmentOccurrenceSourcePath ?? 'missing'}.`);
+  }
 }
 if (generatedRuntimeAssignmentConverterOverlay.expressionTypes.get('$selectedId.toUpperCase()') !== 'string') {
   failures.push(`Expected converter-backed runtime-assignment overlay to type the synthetic local as the converter fromView result, observed $selectedId.toUpperCase()=${generatedRuntimeAssignmentConverterOverlay.expressionTypes.get('$selectedId.toUpperCase()') ?? 'missing'}.`);
@@ -457,7 +487,7 @@ if (converterWritebackRow == null) {
     failures.push(`Expected converter-backed runtime-assignment data flow to route assignment target source to the template writeback local, observed ${converterWritebackRow.sourceAssignmentTargetSourcePath ?? 'missing'}.`);
   }
 }
-if (generatedScopeAliasOverlay.expressionProbeCount !== 21 || generatedScopeAliasOverlay.skippedExpressionCount !== 0) {
+if (generatedScopeAliasOverlay.expressionProbeCount !== 36 || generatedScopeAliasOverlay.skippedExpressionCount !== 0) {
   failures.push(`Expected generated scope-alias overlay to cover current and parent scope aliases without skips, observed probes=${generatedScopeAliasOverlay.expressionProbeCount}, skipped=${generatedScopeAliasOverlay.skippedExpressionCount}.`);
 }
 if (generatedScopeAliasOverlay.expressionTypes.get('title.length > 0') !== 'boolean') {
@@ -490,8 +520,8 @@ if (generatedScopeAliasOverlay.expressionTypes.get('$parent.titleLength()') !== 
 if (generatedScopeAliasOverlay.expressionTypes.get('$index') !== 'number') {
   failures.push(`Expected generated scope-alias overlay to declare repeat override local $index as number, observed ${generatedScopeAliasOverlay.expressionTypes.get('$index') ?? 'missing'}.`);
 }
-if (generatedScopeAliasOverlay.expressionTypes.get('title') !== 'string') {
-  failures.push(`Expected generated scope-alias overlay to unwrap binding-behavior value expressions as title:string, observed ${generatedScopeAliasOverlay.expressionTypes.get('title') ?? 'missing'}.`);
+if (generatedScopeAliasOverlay.expressionTypes.get('title & oneTime') !== 'string') {
+  failures.push(`Expected generated scope-alias overlay to unwrap binding-behavior value expressions as title:string, observed ${generatedScopeAliasOverlay.expressionTypes.get('title & oneTime') ?? 'missing'}.`);
 }
 if (generatedScopeAliasOverlay.expressionTypes.get('item.label') !== 'string') {
   failures.push(`Expected generated scope-alias overlay to preserve repeat item member type, observed item.label=${generatedScopeAliasOverlay.expressionTypes.get('item.label') ?? 'missing'}.`);
@@ -511,6 +541,27 @@ if (generatedScopeAliasOverlay.expressionTypes.get('child.label') !== 'string') 
 if (generatedScopeAliasOverlay.expressionTypes.get('$parent.item.label') !== 'string') {
   failures.push(`Expected generated scope-alias overlay to preserve immediate parent binding-context type in nested repeats, observed $parent.item.label=${generatedScopeAliasOverlay.expressionTypes.get('$parent.item.label') ?? 'missing'}.`);
 }
+if (generatedScopeAliasOverlay.expressionTypes.get('$parent.rowTitle') !== 'string') {
+  failures.push(`Expected generated scope-alias overlay to preserve <let to-binding-context> additions on the nested repeat parent alias, observed $parent.rowTitle=${generatedScopeAliasOverlay.expressionTypes.get('$parent.rowTitle') ?? 'missing'}.`);
+}
+if (generatedScopeAliasOverlay.expressionTypes.get('rowTitle.toUpperCase()') !== 'string') {
+  failures.push(`Expected same-<let> sources to see prior to-binding-context targets, observed ${generatedScopeAliasOverlay.expressionTypes.get('rowTitle.toUpperCase()') ?? 'missing'}.`);
+}
+if (generatedScopeAliasOverlay.expressionTypes.get('upperRowTitle') !== 'string') {
+  failures.push(`Expected later template expressions to see the final same-<let> binding-context state, observed ${generatedScopeAliasOverlay.expressionTypes.get('upperRowTitle') ?? 'missing'}.`);
+}
+if (generatedScopeAliasOverlay.expressionTypes.get('rollingRow.toUpperCase()') !== 'string') {
+  failures.push(`Expected repeated override-context let targets to use the latest assigned type, observed ${generatedScopeAliasOverlay.expressionTypes.get('rollingRow.toUpperCase()') ?? 'missing'}.`);
+}
+if (generatedScopeAliasOverlay.expressionTypes.get('$parent.upperRowTitle') !== 'string') {
+  failures.push(`Expected nested named ancestor lookup to retain same-scope binding-context let additions, observed ${generatedScopeAliasOverlay.expressionTypes.get('$parent.upperRowTitle') ?? 'missing'}.`);
+}
+if (generatedScopeAliasOverlay.expressionTypes.get('$parent.rollingRow.toUpperCase()') !== 'string') {
+  failures.push(`Expected nested named ancestor lookup to use the latest override-context let value, observed ${generatedScopeAliasOverlay.expressionTypes.get('$parent.rollingRow.toUpperCase()') ?? 'missing'}.`);
+}
+if (generatedScopeAliasOverlay.expressionTypes.get('$parent.$index.toFixed()') !== 'string') {
+  failures.push(`Expected named ancestor lookup to include repeat override-context metadata, observed ${generatedScopeAliasOverlay.expressionTypes.get('$parent.$index.toFixed()') ?? 'missing'}.`);
+}
 if (generatedScopeAliasOverlay.expressionTypes.get('$parent.item.labelLength()') !== 'number') {
   failures.push(`Expected generated scope-alias overlay to preserve immediate parent binding-context member call types in nested repeats, observed $parent.item.labelLength()=${generatedScopeAliasOverlay.expressionTypes.get('$parent.item.labelLength()') ?? 'missing'}.`);
 }
@@ -520,11 +571,37 @@ if (!isStringLikeOverlayType(generatedScopeAliasOverlay.expressionTypes.get('$pa
 if (!isStringLikeOverlayType(generatedScopeAliasOverlay.expressionTypes.get('this.title'))) {
   failures.push(`Expected generated scope-alias overlay to preserve boundary this access through the resource view-model type, observed this.title=${generatedScopeAliasOverlay.expressionTypes.get('this.title') ?? 'missing'}.`);
 }
+if (generatedScopeAliasOverlay.expressionTypes.get('$this.title.toFixed()') !== 'string') {
+  failures.push(`Expected direct $this.title syntax to use framework ancestor-zero named lookup and prefer the override-context let value, observed ${generatedScopeAliasOverlay.expressionTypes.get('$this.title.toFixed()') ?? 'missing'}.`);
+}
+if (generatedScopeAliasOverlay.expressionTypes.get('acceptApp($this)') !== 'string') {
+  failures.push(`Expected bare $this to remain the current binding-context object when used as a call argument, observed ${generatedScopeAliasOverlay.expressionTypes.get('acceptApp($this)') ?? 'missing'}.`);
+}
+if (generatedScopeAliasOverlay.expressionTypes.get('$parent.title.toFixed()') !== 'string') {
+  failures.push(`Expected named ancestor lookup to prefer an override-context let target over the binding-context member, observed ${generatedScopeAliasOverlay.expressionTypes.get('$parent.title.toFixed()') ?? 'missing'}.`);
+}
+if (generatedScopeAliasOverlay.expressionTypes.get('$parent.acceptApp($parent)') !== 'string') {
+  failures.push(`Expected bare $parent arguments to remain binding-context-only while named ancestor calls use override-first lookup, observed ${generatedScopeAliasOverlay.expressionTypes.get('$parent.acceptApp($parent)') ?? 'missing'}.`);
+}
 if (generatedScopeAliasOverlay.overlayDiagnosticCount !== 0) {
   failures.push(`Expected generated scope-alias overlay to avoid name-resolution diagnostics for represented repeat override locals, observed ${generatedScopeAliasOverlay.overlayDiagnosticCount}.`);
 }
 if (generatedScopeAliasOverlay.nonSourceObservedDependencyCount !== 0) {
   failures.push(`Expected generated scope-alias fixture observed dependencies to stay source-backed after repeat BindingContext aliasing, observed non-source rows=${generatedScopeAliasOverlay.nonSourceObservedDependencyCount}.`);
+}
+if (
+  generatedScopeAliasOverlay.scopeStateTopology.derivedStateCount !== 8
+  || generatedScopeAliasOverlay.scopeStateTopology.effectUpdatedStateCount !== 5
+) {
+  failures.push(`Expected scope-alias pressure to materialize eight immutable same-Scope states including five runtime-effect updates, observed derived=${generatedScopeAliasOverlay.scopeStateTopology.derivedStateCount}, effect-updated=${generatedScopeAliasOverlay.scopeStateTopology.effectUpdatedStateCount}.`);
+}
+if (
+  generatedScopeAliasOverlay.scopeStateTopology.invalidDerivedStateCount !== 0
+  || generatedScopeAliasOverlay.scopeStateTopology.missingPredecessorClaimCount !== 0
+  || generatedScopeAliasOverlay.scopeStateTopology.missingEffectUpdateClaimCount !== 0
+  || generatedScopeAliasOverlay.scopeStateTopology.derivedStateCreateClaimCount !== 0
+) {
+  failures.push(`Expected immutable scope states to preserve runtime identity/topology and publish update rather than creation claims, observed ${JSON.stringify(generatedScopeAliasOverlay.scopeStateTopology)}.`);
 }
 if (generatedValueConverterOverlay.expressionProbeCount !== 10 || generatedValueConverterOverlay.skippedExpressionCount !== 0) {
   failures.push(`Expected generated value-converter overlay to cover interpolation, condition, and repeat expressions without skips, observed probes=${generatedValueConverterOverlay.expressionProbeCount}, skipped=${generatedValueConverterOverlay.skippedExpressionCount}.`);
@@ -553,10 +630,10 @@ if (!generatedChildSpliceOverlay.hasParentPrefixSegment || !generatedChildSplice
   failures.push('Expected generated child splice overlay to preserve parent source segments and child generated call parts.');
 }
 if (
-  nonStrictCurrentBindingCallProjection.kind !== TemplateTypeSystemOverlayExpressionProjectionKind.UnsupportedSyntax
-  || nonStrictCurrentBindingCallProjection.unsupportedKind !== TemplateTypeSystemOverlayExpressionUnsupportedKind.CurrentBindingContext
+  nonStrictCurrentBindingCallProjection.kind !== TemplateTypeSystemOverlayExpressionProjectionKind.Generated
+  || nonStrictCurrentBindingCallProjection.text !== 'titleLength?.()'
 ) {
-  failures.push(`Expected non-strict $this call-scope projection without aliases to stay unsupported by current-binding-context policy, observed kind=${nonStrictCurrentBindingCallProjection.kind}, unsupported=${nonStrictCurrentBindingCallProjection.unsupportedKind ?? 'missing'}.`);
+  failures.push(`Expected non-strict $this call-scope syntax to lower to framework ancestor-zero named lookup without needing a bare-$this alias, observed kind=${nonStrictCurrentBindingCallProjection.kind}, text=${nonStrictCurrentBindingCallProjection.text}.`);
 }
 if (generatedValueConverterOverlay.variableTypes.get('word') !== 'string') {
   failures.push(`Expected generated value-converter overlay repeat source to infer repeated word locals as string, observed ${generatedValueConverterOverlay.variableTypes.get('word') ?? 'missing'}.`);
@@ -573,6 +650,27 @@ if (generatedBoundControllerOverlay.expressionProbeCount !== 3 || generatedBound
 if (generatedBoundControllerOverlay.variableTypes.get('onAction') !== '(action: OverlayAction) => boolean') {
   failures.push(`Expected child root alias to use the parent-bound callback type, observed ${generatedBoundControllerOverlay.variableTypes.get('onAction') ?? 'missing'}.`);
 }
+if (generatedBoundControllerOverlay.onActionDefinitionWriterCount !== 2) {
+  failures.push(`Expected both callback-panel use sites to remain available to definition-context type projection, observed ${generatedBoundControllerOverlay.onActionDefinitionWriterCount}.`);
+}
+if (
+  generatedBoundControllerOverlay.bindingScopeMemberName !== 'onAction'
+  || generatedBoundControllerOverlay.bindingScopeMemberFile !== 'callback-panel.ts'
+  || !generatedBoundControllerOverlay.bindingScopeMemberSourceMatchesSlot
+  || generatedBoundControllerOverlay.bindingScopeTypeSourceMemberName != null
+  || generatedBoundControllerOverlay.bindingScopeTypeSourceMemberFile != null
+) {
+  failures.push(`Expected converter-backed onAction flow to preserve the child declaration without masquerading the pre-converter handleAction member as its current type source, observed declaration=${generatedBoundControllerOverlay.bindingScopeMemberName ?? 'missing'}@${generatedBoundControllerOverlay.bindingScopeMemberFile ?? 'missing'}, source-match=${generatedBoundControllerOverlay.bindingScopeMemberSourceMatchesSlot}, type-source=${generatedBoundControllerOverlay.bindingScopeTypeSourceMemberName ?? 'none'}@${generatedBoundControllerOverlay.bindingScopeTypeSourceMemberFile ?? 'none'}.`);
+}
+if (
+  generatedBoundControllerOverlay.actionsBindingScopeMemberName !== 'actions'
+  || generatedBoundControllerOverlay.actionsBindingScopeMemberFile !== 'callback-panel.ts'
+  || !generatedBoundControllerOverlay.actionsBindingScopeMemberSourceMatchesSlot
+  || generatedBoundControllerOverlay.actionsBindingScopeTypeSourceMemberName !== 'actions'
+  || generatedBoundControllerOverlay.actionsBindingScopeTypeSourceMemberFile !== 'bound-controller-state.ts'
+) {
+  failures.push(`Expected direct parent-bound actions flow to preserve the child declaration and record the parent actions member as current type source, observed declaration=${generatedBoundControllerOverlay.actionsBindingScopeMemberName ?? 'missing'}@${generatedBoundControllerOverlay.actionsBindingScopeMemberFile ?? 'missing'}, source-match=${generatedBoundControllerOverlay.actionsBindingScopeMemberSourceMatchesSlot}, type-source=${generatedBoundControllerOverlay.actionsBindingScopeTypeSourceMemberName ?? 'missing'}@${generatedBoundControllerOverlay.actionsBindingScopeTypeSourceMemberFile ?? 'missing'}.`);
+}
 if (generatedBoundControllerOverlay.expressionTypes.get('onAction(action)') !== 'boolean') {
   failures.push(`Expected child callback calls to type-check with the parent-bound argument type, observed ${generatedBoundControllerOverlay.expressionTypes.get('onAction(action)') ?? 'missing'}.`);
 }
@@ -581,6 +679,34 @@ if (generatedBoundControllerOverlay.overlayDiagnosticCodes.includes(2554)) {
 }
 if (generatedBoundControllerOverlay.overlayDiagnosticCount !== 0) {
   failures.push(`Expected generated bound-controller overlay to have no explicit overlay diagnostics for the represented callback binding, observed ${generatedBoundControllerOverlay.overlayDiagnosticCount}.`);
+}
+if (generatedEffectiveModeOverlay.authoredExpressions.includes('effectiveFromView & fromView')) {
+  failures.push('Expected effective fromView mode to suppress a source-read overlay even when the instruction was authored as to-view.');
+}
+if (!generatedEffectiveModeOverlay.authoredExpressions.includes('effectiveToView & toView')) {
+  failures.push('Expected effective toView mode to retain a source-read overlay even when the instruction was authored as from-view.');
+}
+if (!generatedEffectiveModeOverlay.authoredExpressions.includes('blockedFromView & fromView & missingBehavior')) {
+  failures.push('Expected an outer bind failure to preserve the authored to-view mode when the inner fromView behavior was not reached.');
+}
+for (const expression of [
+  'attributeFromView & fromView',
+  'attributeFromView | identityValue & fromView',
+]) {
+  if (!generatedEffectiveModeOverlay.authoredExpressions.includes(expression)) {
+    failures.push(`Expected runtime-inert attribute source '${expression}' to remain in the authoring overlay for symbol and type diagnostics.`);
+  }
+}
+for (const expression of [
+  'attributeTwoWay & twoWay',
+  'attributeInterpolationFromView & fromView',
+  'attributeInterpolationTwoWay & twoWay',
+  'contentFromView & fromView',
+  'contentTwoWay & twoWay',
+]) {
+  if (!generatedEffectiveModeOverlay.authoredExpressions.includes(expression)) {
+    failures.push(`Expected runtime-evaluated non-property source expression '${expression}' to retain its authoring overlay.`);
+  }
 }
 if (generatedStateSourceOverlay.expressionProbeCount !== 6 || generatedStateSourceOverlay.skippedExpressionCount !== 0) {
   failures.push(`Expected generated state-source overlay to cover state binding sources without skips, observed probes=${generatedStateSourceOverlay.expressionProbeCount}, skipped=${generatedStateSourceOverlay.skippedExpressionCount}.`);
@@ -621,8 +747,48 @@ if (!generatedStateConditionBoundaryOverlay.hasOrdinaryChildStateBoundaryDiagnos
 if (generatedStateConditionBoundaryOverlay.stateBoundChildType !== 'string') {
   failures.push(`Expected child binding that also uses & state to infer selectedTask.title as string, observed ${generatedStateConditionBoundaryOverlay.stateBoundChildType ?? 'missing'}.`);
 }
-if (publicTemplateOverlayDiagnostics.overlayRows !== 4) {
-  failures.push(`Expected public template diagnostics to surface only the non-duplicated TypeScript overlay row, observed ${publicTemplateOverlayDiagnostics.overlayRows}.`);
+if (!resourceLocalOverlayOwnership.parentFound || !resourceLocalOverlayOwnership.childFound) {
+  failures.push('Expected the recursive-ownership fixture to publish storefront-app and checkout-form resources.');
+}
+if (
+  resourceLocalOverlayOwnership.parentSkippedExpressionCount !== 0
+  || resourceLocalOverlayOwnership.childSkippedExpressionCount !== 0
+) {
+  failures.push(`Expected source-owned parent and child overlays to cover their expressions without skips, observed parent=${resourceLocalOverlayOwnership.parentSkippedExpressionCount}, child=${resourceLocalOverlayOwnership.childSkippedExpressionCount}.`);
+}
+if (resourceLocalOverlayOwnership.parentOwnsChildExpressions) {
+  failures.push('Expected a parent recursive aggregate render to exclude child-authored checkout expressions from the parent TypeScript overlay.');
+}
+if (!resourceLocalOverlayOwnership.childOwnsCheckoutExpressions) {
+  failures.push('Expected the checkout-form TypeScript overlay to retain its own captured email and postal-code expressions.');
+}
+if (!authoredScopePathOverlay.resourceFound || authoredScopePathOverlay.skippedExpressionCount !== 0) {
+  failures.push(`Expected authored $this scope paths inside arrow callbacks to remain overlay-representable, observed resource=${authoredScopePathOverlay.resourceFound}, skipped=${authoredScopePathOverlay.skippedExpressionCount}.`);
+}
+if (!authoredScopePathOverlay.currentArrowProjected || !authoredScopePathOverlay.nestedArrowProjected) {
+  failures.push('Expected authored $this inside single and nested arrow callbacks to resolve to the current template binding context.');
+}
+if (!letSourceFormOverlay.resourceFound || letSourceFormOverlay.interpolationSkipped) {
+  failures.push(`Expected interpolation-backed <let> source evaluation to remain overlay-representable, observed resource=${letSourceFormOverlay.resourceFound}, skipped=${letSourceFormOverlay.interpolationSkipped}.`);
+}
+if (!letSourceFormOverlay.frameworkStringAssembly) {
+  failures.push('Expected interpolation-backed <let> source evaluation to lower through framework-equivalent String assembly.');
+}
+if (
+  letSourceFormOverlay.selectedLabelType !== 'string'
+  || letSourceFormOverlay.literalLabelType !== '"literal"'
+  || letSourceFormOverlay.interpolatedLabelType !== 'string'
+) {
+  failures.push(`Expected bound, literal, and interpolation-backed <let> slots to preserve string, \"literal\", and string types, observed ${letSourceFormOverlay.selectedLabelType ?? 'missing'}, ${letSourceFormOverlay.literalLabelType ?? 'missing'}, ${letSourceFormOverlay.interpolatedLabelType ?? 'missing'}.`);
+}
+if (
+  letSourceFormOverlay.appTemplateControllerNameSkipped
+  || letSourceFormOverlay.appTemplateControllerNameType !== 'string'
+) {
+  failures.push(`Expected app-owned Scope.fromParent template-controller scope to replay through the shared value-scope overlay layer as name:string, observed skipped=${letSourceFormOverlay.appTemplateControllerNameSkipped}, type=${letSourceFormOverlay.appTemplateControllerNameType ?? 'missing'}.`);
+}
+if (publicTemplateOverlayDiagnostics.overlayRows !== 6) {
+  failures.push(`Expected public template diagnostics to retain all six admitted TypeScript overlay facts, observed ${publicTemplateOverlayDiagnostics.overlayRows}.`);
 }
 if (
   !publicTemplateOverlayDiagnostics.hasArgumentMismatch
@@ -632,8 +798,8 @@ if (
 ) {
   failures.push('Expected public template overlay diagnostics to keep TypeScript-native argument, arity, nullish, and unknown-repeat rows that semantic missing-member diagnostics do not already own.');
 }
-if (publicTemplateOverlayDiagnostics.hasRepeatMissingLabel || publicTemplateOverlayDiagnostics.hasNarrowedMissingStatus) {
-  failures.push('Expected public template overlay diagnostics to suppress missing-member rows already owned by semantic template diagnostics on the same authored span.');
+if (!publicTemplateOverlayDiagnostics.hasRepeatMissingLabel || !publicTemplateOverlayDiagnostics.hasNarrowedMissingStatus) {
+  failures.push('Expected public template diagnostics to retain missing-member checker evidence even when semantic diagnostics own presentation and repair for the same authored span.');
 }
 if (
   !publicTemplateOverlayCursorDiagnostics.hasArgumentMismatch
@@ -710,6 +876,9 @@ if (failures.length > 0) {
       ...generatedStateConditionBoundaryOverlay,
       expressionTypes: [...generatedStateConditionBoundaryOverlay.expressionTypes.entries()],
     },
+    resourceLocalOverlayOwnership,
+    authoredScopePathOverlay,
+    letSourceFormOverlay,
     publicTemplateOverlayDiagnostics,
     publicTemplateOverlayCursorDiagnostics,
   }, null, 2));
@@ -776,9 +945,11 @@ if (failures.length > 0) {
         expressionProbeCount: generatedEventOverlay.expressionProbeCount,
         skippedExpressionCount: generatedEventOverlay.skippedExpressionCount,
         generatedGlobalEventMemberTypeExpression: generatedEventOverlay.generatedGlobalEventMemberTypeExpression,
+        generatedCustomEventUnknownTypeExpression: generatedEventOverlay.generatedCustomEventUnknownTypeExpression,
         selectedExpressionTypes: {
           explicitEventCall: generatedEventOverlay.expressionTypes.get('state.submitWithEvent($event)'),
           refinedCurrentTargetCall: generatedEventOverlay.expressionTypes.get('state.submitWithButton($event.currentTarget)'),
+          customEventCall: generatedEventOverlay.expressionTypes.get('state.inspectCustomEvent($event)'),
         },
       },
       generatedRuntimeAssignmentOverlay: {
@@ -836,7 +1007,16 @@ if (failures.length > 0) {
           nestedParentCall: generatedScopeAliasOverlay.expressionTypes.get('$parent.item.labelLength()'),
           nestedGrandparentTitle: generatedScopeAliasOverlay.expressionTypes.get('$parent.$parent.title'),
           boundaryThisTitle: generatedScopeAliasOverlay.expressionTypes.get('this.title'),
+          sequentialLetSource: generatedScopeAliasOverlay.expressionTypes.get('rowTitle.toUpperCase()'),
+          latestOverrideLet: generatedScopeAliasOverlay.expressionTypes.get('rollingRow.toUpperCase()'),
+          parentOverrideLet: generatedScopeAliasOverlay.expressionTypes.get('$parent.rollingRow.toUpperCase()'),
+          parentRepeatIndex: generatedScopeAliasOverlay.expressionTypes.get('$parent.$index.toFixed()'),
+          currentNamedLookupThroughThisSyntax: generatedScopeAliasOverlay.expressionTypes.get('$this.title.toFixed()'),
+          bareCurrentBindingContextArgument: generatedScopeAliasOverlay.expressionTypes.get('acceptApp($this)'),
+          shadowedNamedParent: generatedScopeAliasOverlay.expressionTypes.get('$parent.title.toFixed()'),
+          bindingContextOnlyParentArgument: generatedScopeAliasOverlay.expressionTypes.get('$parent.acceptApp($parent)'),
         },
+        scopeStateTopology: generatedScopeAliasOverlay.scopeStateTopology,
         nonSourceObservedDependencyCount: generatedScopeAliasOverlay.nonSourceObservedDependencyCount,
         skippedSummaries: generatedScopeAliasOverlay.skippedSummaries,
       },
@@ -894,6 +1074,9 @@ if (failures.length > 0) {
         hasOrdinaryChildStateBoundaryDiagnostic: generatedStateConditionBoundaryOverlay.hasOrdinaryChildStateBoundaryDiagnostic,
         stateBoundChildType: generatedStateConditionBoundaryOverlay.stateBoundChildType,
       },
+      resourceLocalOverlayOwnership,
+      authoredScopePathOverlay,
+      letSourceFormOverlay,
       publicTemplateOverlayDiagnostics,
       publicTemplateOverlayCursorDiagnostics,
       projectDiagnosticRows: projectDiagnostics.length,
@@ -901,9 +1084,8 @@ if (failures.length > 0) {
   }, null, 2));
 }
 
-function readClonedProgramNodeRemap(typeSystem) {
-  const source = typeSystem.readProjectProgramSourceFiles()
-    .find((sourceFile) => sourceFile.statements.length > 0);
+function readClonedProgramNodeRemap(typeSystem, sourceFileName) {
+  const source = typeSystem.readProgramSourceFileByHostPath(sourceFileName);
   if (source == null) {
     return {
       remapped: false,
@@ -947,7 +1129,10 @@ async function readTemplateOverlayProbe() {
   });
   const htmlFileName = path.join(templateFixtureRoot, 'src/implicit-binding-expression-inference-app.html');
   const viewModelFileName = path.join(templateFixtureRoot, 'src/implicit-binding-expression-inference-app.ts');
-  const templateSourceAddress = runtime.workspace.store.readBestSourceFileAddressForFileName(htmlFileName);
+  const templateSourceIdentity = app.project.sourceOwnership.resolvePath(htmlFileName);
+  const templateSourceAddress = templateSourceIdentity.kind === 'resolved'
+    ? runtime.workspace.store.readAddress(templateSourceIdentity.source.admission.addressHandle)
+    : null;
   const htmlText = fs.readFileSync(htmlFileName, 'utf8');
   const sourceStart = htmlText.indexOf('value.bind');
   const overlayFileName = path.join(templateFixtureRoot, '.semantic-runtime', 'overlays', 'template-binding-probe.ts');
@@ -978,14 +1163,14 @@ async function readTemplateOverlayProbe() {
     })
     .append(';\n')
     .build();
-  const typeSystem = new TypeSystemProjectBuilder().build(
+  const typeSystem = new TypeSystemProjectBuilder(projectTypeSystemProgramSources).build(
     app.project,
     app.emission.evaluation,
     {
       overlaySources: [source],
     },
   );
-  const sourceFile = typeSystem.readProgramSourceFileByPath(overlayFileName);
+  const sourceFile = typeSystem.readProgramSourceFileByHostPath(overlayFileName);
   const moduleSymbol = sourceFile == null
     ? null
     : typeSystem.checker.getSymbolAtLocation(sourceFile) ?? null;
@@ -1023,7 +1208,10 @@ async function readRepeatScopeOverlayProbe() {
   });
   const htmlFileName = path.join(repeatFixtureRoot, 'src/repeat-keyed-iterables-app.html');
   const viewModelFileName = path.join(repeatFixtureRoot, 'src/repeat-keyed-iterables-app.ts');
-  const templateSourceAddress = runtime.workspace.store.readBestSourceFileAddressForFileName(htmlFileName);
+  const templateSourceIdentity = app.project.sourceOwnership.resolvePath(htmlFileName);
+  const templateSourceAddress = templateSourceIdentity.kind === 'resolved'
+    ? runtime.workspace.store.readAddress(templateSourceIdentity.source.admission.addressHandle)
+    : null;
   const htmlText = fs.readFileSync(htmlFileName, 'utf8');
   const crumbPathStart = htmlText.indexOf('crumb.path');
   const alertTitleStart = htmlText.indexOf('alert.title');
@@ -1071,7 +1259,7 @@ async function readRepeatScopeOverlayProbe() {
     })
     .append(';\n')
     .build();
-  const typeSystem = new TypeSystemProjectBuilder().build(
+  const typeSystem = new TypeSystemProjectBuilder(projectTypeSystemProgramSources).build(
     app.project,
     app.emission.evaluation,
     {
@@ -1111,7 +1299,7 @@ async function readGeneratedTemplateScopeOverlayProbe() {
       preciseDiagnosticMapped: false,
     };
   }
-  const emission = new TemplateTypeSystemOverlayBuilder(runtime.workspace.store, app.emission.typeSystem)
+  const emission = new TemplateTypeSystemOverlayBuilder(runtime.workspace.store, app.emission.project, app.emission.typeSystem)
     .build(resource, 'contract-repeat-template-overlay');
   const overlaySource = emission.overlaySource;
   if (overlaySource == null) {
@@ -1123,7 +1311,7 @@ async function readGeneratedTemplateScopeOverlayProbe() {
       preciseDiagnosticMapped: false,
     };
   }
-  const typeSystem = new TypeSystemProjectBuilder().build(
+  const typeSystem = new TypeSystemProjectBuilder(projectTypeSystemProgramSources).build(
     app.project,
     app.emission.evaluation,
     {
@@ -1133,7 +1321,7 @@ async function readGeneratedTemplateScopeOverlayProbe() {
   const diagnostics = readTypeSystemOverlayDiagnostics(typeSystem).filter((diagnostic) =>
     diagnostic.overlayOriginKey === overlaySource.originKey
   );
-  const expressionTypes = readOverlayVariableExpressionTypes(typeSystem, overlaySource.fileName);
+  const expressionTypes = readOverlayVariableExpressionTypes(typeSystem, overlaySource.fileName, emission.expressionProbes);
   const preciseDiagnosticMapped = generatedTemplateOverlayPreciseDiagnosticMapped(
     app,
     overlaySource,
@@ -1160,9 +1348,9 @@ async function readGeneratedLetScopeOverlayProbe() {
   let selected = null;
   let emission = null;
   for (const resource of app.emission.templates.resources) {
-    const candidate = new TemplateTypeSystemOverlayBuilder(runtime.workspace.store, app.emission.typeSystem)
+    const candidate = new TemplateTypeSystemOverlayBuilder(runtime.workspace.store, app.emission.project, app.emission.typeSystem)
       .build(resource, 'contract-let-template-overlay');
-    if (candidate.expressionProbes.some((probe) => probe.expressionText === 'state.readRequest(requestId)')) {
+    if (candidate.expressionProbes.some((probe) => probe.authoredExpressionText === 'state.readRequest(requestId)')) {
       selected = resource;
       emission = candidate;
       break;
@@ -1178,7 +1366,7 @@ async function readGeneratedLetScopeOverlayProbe() {
       overlayDiagnosticCount: 0,
     };
   }
-  const typeSystem = new TypeSystemProjectBuilder().build(
+  const typeSystem = new TypeSystemProjectBuilder(projectTypeSystemProgramSources).build(
     app.project,
     app.emission.evaluation,
     {
@@ -1192,7 +1380,7 @@ async function readGeneratedLetScopeOverlayProbe() {
     expressionProbeCount: emission.expressionProbes.length,
     skippedExpressionCount: emission.skippedExpressions.length,
     skippedReasons: emission.skippedExpressions.map((skip) => skip.reason),
-    expressionTypes: readOverlayVariableExpressionTypes(typeSystem, emission.overlaySource.fileName),
+    expressionTypes: readOverlayVariableExpressionTypes(typeSystem, emission.overlaySource.fileName, emission.expressionProbes),
     variableTypes: readOverlayVariableTypesByName(typeSystem, emission.overlaySource.fileName),
     overlayDiagnosticCount: diagnostics.length,
     generatedAnyHole: overlayTextHasGeneratedAnyHole(emission.overlaySource),
@@ -1217,7 +1405,7 @@ async function readGeneratedEventScopeOverlayProbe() {
       nonSourceObservedDependencyCount: 0,
     };
   }
-  const emission = new TemplateTypeSystemOverlayBuilder(runtime.workspace.store, app.emission.typeSystem)
+  const emission = new TemplateTypeSystemOverlayBuilder(runtime.workspace.store, app.emission.project, app.emission.typeSystem)
     .build(resource, 'contract-event-template-overlay');
   if (emission.overlaySource == null) {
     return {
@@ -1227,7 +1415,7 @@ async function readGeneratedEventScopeOverlayProbe() {
       overlayDiagnosticCount: 0,
     };
   }
-  const typeSystem = new TypeSystemProjectBuilder().build(
+  const typeSystem = new TypeSystemProjectBuilder(projectTypeSystemProgramSources).build(
     app.project,
     app.emission.evaluation,
     {
@@ -1240,10 +1428,11 @@ async function readGeneratedEventScopeOverlayProbe() {
   return {
     expressionProbeCount: emission.expressionProbes.length,
     skippedExpressionCount: emission.skippedExpressions.length,
-    expressionTypes: readOverlayVariableExpressionTypes(typeSystem, emission.overlaySource.fileName),
+    expressionTypes: readOverlayVariableExpressionTypes(typeSystem, emission.overlaySource.fileName, emission.expressionProbes),
     overlayDiagnosticCount: diagnostics.length,
     generatedAnyHole: overlayTextHasGeneratedAnyHole(emission.overlaySource),
     generatedGlobalEventMemberTypeExpression: emission.overlaySource.text.includes('currentTarget: HTMLButtonElement'),
+    generatedCustomEventUnknownTypeExpression: emission.overlaySource.text.includes('CustomEvent<unknown>'),
   };
 }
 
@@ -1257,11 +1446,11 @@ async function readGeneratedRuntimeAssignmentOverlayProbe() {
   });
   let emission = null;
   for (const resource of app.emission.templates.resources) {
-    const candidate = new TemplateTypeSystemOverlayBuilder(runtime.workspace.store, app.emission.typeSystem)
+    const candidate = new TemplateTypeSystemOverlayBuilder(runtime.workspace.store, app.emission.project, app.emission.typeSystem)
       .build(resource, 'contract-runtime-assignment-template-overlay');
     if (
-      candidate.expressionProbes.some((probe) => probe.expressionText === 'rows')
-      && candidate.expressionProbes.some((probe) => probe.expressionText === '$displayData')
+      candidate.expressionProbes.some((probe) => probe.authoredExpressionText === 'rows')
+      && candidate.expressionProbes.some((probe) => probe.authoredExpressionText === '$displayData')
     ) {
       emission = candidate;
       break;
@@ -1271,7 +1460,7 @@ async function readGeneratedRuntimeAssignmentOverlayProbe() {
     return {
       expressionProbeCount: emission?.expressionProbes.length ?? 0,
       skippedExpressionCount: emission?.skippedExpressions.length ?? 0,
-      copiedExpressions: emission?.expressionProbes.map((probe) => probe.expressionText) ?? [],
+      copiedExpressions: emission?.expressionProbes.map((probe) => probe.authoredExpressionText).filter((text) => text != null) ?? [],
       expressionTypes: new Map(),
       variableTypes: new Map(),
       generatedTypeIndexedAccess: false,
@@ -1279,7 +1468,7 @@ async function readGeneratedRuntimeAssignmentOverlayProbe() {
       runtimeAssignmentDataFlows: [],
     };
   }
-  const typeSystem = new TypeSystemProjectBuilder().build(
+  const typeSystem = new TypeSystemProjectBuilder(projectTypeSystemProgramSources).build(
     app.project,
     app.emission.evaluation,
     {
@@ -1292,8 +1481,8 @@ async function readGeneratedRuntimeAssignmentOverlayProbe() {
   return {
     expressionProbeCount: emission.expressionProbes.length,
     skippedExpressionCount: emission.skippedExpressions.length,
-    copiedExpressions: emission.expressionProbes.map((probe) => probe.expressionText),
-    expressionTypes: readOverlayVariableExpressionTypes(typeSystem, emission.overlaySource.fileName),
+    copiedExpressions: emission.expressionProbes.map((probe) => probe.authoredExpressionText).filter((text) => text != null),
+    expressionTypes: readOverlayVariableExpressionTypes(typeSystem, emission.overlaySource.fileName, emission.expressionProbes),
     variableTypes: readOverlayVariableTypesByName(typeSystem, emission.overlaySource.fileName),
     generatedTypeIndexedAccess: emission.overlaySource.text.includes('SyntheticTableCustomAttribute["activeRow"]'),
     overlayDiagnosticCount: diagnostics.length,
@@ -1312,6 +1501,7 @@ async function readGeneratedRuntimeAssignmentOverlayProbe() {
         direction: row.direction,
         sourceAssignmentKind: row.sourceAssignmentKind,
         sourceAssignmentTargetType: row.sourceAssignmentTargetType,
+        sourceAssignmentOccurrenceSourcePath: row.sourceAssignmentOccurrenceSource?.path ?? null,
         sourceAssignmentTargetSourcePath: row.sourceAssignmentTargetSource?.path ?? null,
         targetToSourceAssignable: row.targetToSourceAssignable,
       })),
@@ -1328,11 +1518,11 @@ async function readGeneratedRuntimeAssignmentConverterOverlayProbe() {
   });
   let emission = null;
   for (const resource of app.emission.templates.resources) {
-    const candidate = new TemplateTypeSystemOverlayBuilder(runtime.workspace.store, app.emission.typeSystem)
+    const candidate = new TemplateTypeSystemOverlayBuilder(runtime.workspace.store, app.emission.project, app.emission.typeSystem)
       .build(resource, 'contract-runtime-assignment-converter-template-overlay');
     if (
-      candidate.expressionProbes.some((probe) => probe.expressionText.includes('.toView(') && probe.expressionText.includes('$selectedId'))
-      && candidate.expressionProbes.some((probe) => probe.expressionText === '$selectedId.toUpperCase()')
+      candidate.expressionProbes.some((probe) => probe.overlayExpressionText.includes('.toView(') && probe.overlayExpressionText.includes('$selectedId'))
+      && candidate.expressionProbes.some((probe) => probe.authoredExpressionText === '$selectedId.toUpperCase()')
     ) {
       emission = candidate;
       break;
@@ -1342,7 +1532,7 @@ async function readGeneratedRuntimeAssignmentConverterOverlayProbe() {
     return {
       expressionProbeCount: emission?.expressionProbes.length ?? 0,
       skippedExpressionCount: emission?.skippedExpressions.length ?? 0,
-      copiedExpressions: emission?.expressionProbes.map((probe) => probe.expressionText) ?? [],
+      copiedExpressions: emission?.expressionProbes.map((probe) => probe.authoredExpressionText).filter((text) => text != null) ?? [],
       expressionTypes: new Map(),
       variableTypes: new Map(),
       generatedPrimitiveTypeExpression: false,
@@ -1351,7 +1541,7 @@ async function readGeneratedRuntimeAssignmentConverterOverlayProbe() {
       runtimeAssignmentDataFlows: [],
     };
   }
-  const typeSystem = new TypeSystemProjectBuilder().build(
+  const typeSystem = new TypeSystemProjectBuilder(projectTypeSystemProgramSources).build(
     app.project,
     app.emission.evaluation,
     {
@@ -1364,8 +1554,8 @@ async function readGeneratedRuntimeAssignmentConverterOverlayProbe() {
   return {
     expressionProbeCount: emission.expressionProbes.length,
     skippedExpressionCount: emission.skippedExpressions.length,
-    copiedExpressions: emission.expressionProbes.map((probe) => probe.expressionText),
-    expressionTypes: readOverlayVariableExpressionTypes(typeSystem, emission.overlaySource.fileName),
+    copiedExpressions: emission.expressionProbes.map((probe) => probe.authoredExpressionText).filter((text) => text != null),
+    expressionTypes: readOverlayVariableExpressionTypes(typeSystem, emission.overlaySource.fileName, emission.expressionProbes),
     variableTypes: readOverlayVariableTypesByName(typeSystem, emission.overlaySource.fileName),
     generatedPrimitiveTypeExpression: emission.overlaySource.text.includes('let $selectedId = undefined as unknown as string;'),
     generatedTargetMemberIndexedAccess: emission.overlaySource.text.includes('SyntheticPickerCustomAttribute["selectedRow"]'),
@@ -1404,9 +1594,10 @@ async function readGeneratedScopeAliasOverlayProbe() {
       skippedSummaries: [],
       expressionTypes: new Map(),
       overlayDiagnosticCount: 0,
+      scopeStateTopology: emptyScopeStateTopology(),
     };
   }
-  const emission = new TemplateTypeSystemOverlayBuilder(runtime.workspace.store, app.emission.typeSystem)
+  const emission = new TemplateTypeSystemOverlayBuilder(runtime.workspace.store, app.emission.project, app.emission.typeSystem)
     .build(resource, 'contract-scope-alias-template-overlay');
   if (emission.overlaySource == null) {
     return {
@@ -1416,9 +1607,10 @@ async function readGeneratedScopeAliasOverlayProbe() {
       expressionTypes: new Map(),
       overlayDiagnosticCount: 0,
       nonSourceObservedDependencyCount: nonSourceObservedDependencyCount(app),
+      scopeStateTopology: emptyScopeStateTopology(),
     };
   }
-  const typeSystem = new TypeSystemProjectBuilder().build(
+  const typeSystem = new TypeSystemProjectBuilder(projectTypeSystemProgramSources).build(
     app.project,
     app.emission.evaluation,
     {
@@ -1432,16 +1624,78 @@ async function readGeneratedScopeAliasOverlayProbe() {
     expressionProbeCount: emission.expressionProbes.length,
     skippedExpressionCount: emission.skippedExpressions.length,
     skippedSummaries: emission.skippedExpressions.map((skip) => skip.summary),
-    expressionTypes: readOverlayVariableExpressionTypes(typeSystem, emission.overlaySource.fileName),
+    expressionTypes: readOverlayVariableExpressionTypes(typeSystem, emission.overlaySource.fileName, emission.expressionProbes),
     overlayDiagnosticCount: diagnostics.length,
     nonSourceObservedDependencyCount: nonSourceObservedDependencyCount(app),
     generatedAnyHole: overlayTextHasGeneratedAnyHole(emission.overlaySource),
+    scopeStateTopology: readScopeStateTopology(runtime.workspace.store, resource),
+  };
+}
+
+function readScopeStateTopology(store, resource) {
+  const scopes = [
+    resource.runtimeAnalysis.scopes.rootScope,
+    ...resource.runtimeAnalysis.scopes.derivedScopes,
+  ];
+  const derivedStates = scopes.filter((scope) => scope.predecessor != null);
+  const effectUpdatedStates = derivedStates.filter((scope) =>
+    scope.scopeCreators.some((creator) => creator.creatorKind === 'runtime-binding-scope-effect')
+  );
+  const predecessorClaims = store.readClaimsForPredicate(
+    KernelVocabulary.Configuration.BindingScopeDerivedFromScope.key,
+  ).map((handle) => store.readClaim(handle)).filter((claim) => claim != null);
+  const updateClaims = store.readClaimsForPredicate(
+    KernelVocabulary.Binding.ScopeEffectUpdatesBindingScope.key,
+  ).map((handle) => store.readClaim(handle)).filter((claim) => claim != null);
+  const createClaims = store.readClaimsForPredicate(
+    KernelVocabulary.Binding.ScopeEffectCreatesBindingScope.key,
+  ).map((handle) => store.readClaim(handle)).filter((claim) => claim != null);
+  const effectUpdatedProducts = new Set(effectUpdatedStates.map((scope) => scope.productHandle));
+  return {
+    derivedStateCount: derivedStates.length,
+    effectUpdatedStateCount: effectUpdatedStates.length,
+    invalidDerivedStateCount: derivedStates.filter((scope) => {
+      const predecessor = scope.predecessor;
+      return predecessor == null
+        || scope.identityHandle !== predecessor.identityHandle
+        || scope.bindingContext.identityHandle !== predecessor.bindingContext.identityHandle
+        || scope.bindingContext.contextKind !== predecessor.bindingContext.contextKind
+        || scope.bindingContext.ownerProductHandle !== predecessor.bindingContext.ownerProductHandle
+        || scope.overrideContext.identityHandle !== predecessor.overrideContext.identityHandle
+        || scope.overrideContext.ownerProductHandle !== scope.productHandle
+        || scope.runtimeParent?.identityHandle !== predecessor.runtimeParent?.identityHandle
+        || scope.isBoundary !== predecessor.isBoundary
+        || scope.ownerKind !== predecessor.ownerKind;
+    }).length,
+    missingPredecessorClaimCount: derivedStates.filter((scope) =>
+      !predecessorClaims.some((claim) =>
+        claim.subjectHandle === scope.productHandle
+        && claim.objectHandle === scope.predecessor?.productHandle
+      )
+    ).length,
+    missingEffectUpdateClaimCount: effectUpdatedStates.filter((scope) =>
+      !updateClaims.some((claim) => claim.objectHandle === scope.productHandle)
+    ).length,
+    derivedStateCreateClaimCount: createClaims.filter((claim) =>
+      effectUpdatedProducts.has(claim.objectHandle)
+    ).length,
+  };
+}
+
+function emptyScopeStateTopology() {
+  return {
+    derivedStateCount: 0,
+    effectUpdatedStateCount: 0,
+    invalidDerivedStateCount: 0,
+    missingPredecessorClaimCount: 0,
+    missingEffectUpdateClaimCount: 0,
+    derivedStateCreateClaimCount: 0,
   };
 }
 
 function nonSourceObservedDependencyCount(app) {
   return app.bindingObservedDependencies({ size: 500 }).value.rows
-    .filter((row) => row.observedMemberSourceState !== 'source')
+    .filter((row) => row.occurrence.observedMemberSourceState !== 'source')
     .length;
 }
 
@@ -1468,7 +1722,7 @@ async function readGeneratedValueConverterOverlayProbe() {
       argumentMismatchHasSemanticProductHandle: false,
     };
   }
-  const emission = new TemplateTypeSystemOverlayBuilder(runtime.workspace.store, app.emission.typeSystem)
+  const emission = new TemplateTypeSystemOverlayBuilder(runtime.workspace.store, app.emission.project, app.emission.typeSystem)
     .build(resource, 'contract-value-converter-template-overlay');
   if (emission.overlaySource == null) {
     return {
@@ -1484,7 +1738,7 @@ async function readGeneratedValueConverterOverlayProbe() {
       argumentMismatchHasSemanticProductHandle: false,
     };
   }
-  const typeSystem = new TypeSystemProjectBuilder().build(
+  const typeSystem = new TypeSystemProjectBuilder(projectTypeSystemProgramSources).build(
     app.project,
     app.emission.evaluation,
     {
@@ -1502,7 +1756,7 @@ async function readGeneratedValueConverterOverlayProbe() {
   const argumentMismatch = diagnostics.find((diagnostic) =>
     diagnostic.diagnostic.code === 2345
   ) ?? null;
-  const expressionTypes = readOverlayVariableExpressionTypes(typeSystem, emission.overlaySource.fileName);
+  const expressionTypes = readOverlayVariableExpressionTypes(typeSystem, emission.overlaySource.fileName, emission.expressionProbes);
   return {
     expressionProbeCount: emission.expressionProbes.length,
     skippedExpressionCount: emission.skippedExpressions.length,
@@ -1532,7 +1786,7 @@ async function readGeneratedValueConverterEvaluatorProbe() {
   if (resource == null) {
     return { kind: 'missing-resource', display: null, openKind: null };
   }
-  const parse = templateExpressionParsesForResource(resource)
+  const parse = resourceLocalEffectiveTemplateExpressionParses(runtime.workspace.store, resource)
     .find((candidate) =>
       findValueConverterExpression(bindingExpressionAstForParse(candidate), 'dynamicContextualWord') != null
     ) ?? null;
@@ -1595,12 +1849,10 @@ function readGeneratedChildSpliceOverlayProbe() {
   const message = new AccessScopeExpression(
     new SourceSpan(messageStart, messageStart + 'message'.length, file),
     new Identifier(new SourceSpan(messageStart, messageStart + 'message'.length, file), 'message'),
-    0,
   );
   const minimumCount = new AccessScopeExpression(
     new SourceSpan(minimumCountStart, generatedChildEnd, file),
     new Identifier(new SourceSpan(minimumCountStart, generatedChildEnd, file), 'minimumCount'),
-    0,
   );
   const valueConverter = new ValueConverterExpression(
     new SourceSpan(messageStart, generatedChildEnd, file),
@@ -1615,7 +1867,10 @@ function readGeneratedChildSpliceOverlayProbe() {
     0,
     false,
   );
-  const projector = new TemplateTypeSystemOverlayExpressionProjector(valueConverterFixtureRoot);
+  const projector = new TemplateTypeSystemOverlayExpressionProjector(
+    valueConverterFixtureRoot,
+    nodeSemanticRuntimeProjectInputHost,
+  );
   const projection = projector.copyableExpression(call, {
     valueConverterCallSurface(expression, semanticProductHandle) {
       return {
@@ -1656,9 +1911,16 @@ function readNonStrictCurrentBindingCallProjectionProbe() {
     [],
     0,
     false,
-    ScopeExpressionRootKind.CurrentBindingContext,
+    new AuthoredScopePath(
+      AuthoredScopePathKind.CurrentBindingContext,
+      [new SourceSpan(0, '$this'.length, file)],
+    ),
   );
-  const projection = new TemplateTypeSystemOverlayExpressionProjector(scopeAliasFixtureRoot)
+  const projection = new TemplateTypeSystemOverlayExpressionProjector(scopeAliasFixtureRoot, {
+    readFile(fileName) {
+      return path.normalize(fileName) === path.normalize(file.path) ? titleLength : undefined;
+    },
+  })
     .copyableExpression(call, {
       strictBinding: false,
       valueConverterCallSurface() {
@@ -1681,11 +1943,13 @@ async function readGeneratedBoundControllerOverlayProbe() {
     analysisDepth: 'binding-observation',
   });
   let emission = null;
+  let selectedResource = null;
   for (const resource of app.emission.templates.resources) {
-    const candidate = new TemplateTypeSystemOverlayBuilder(runtime.workspace.store, app.emission.typeSystem)
+    const candidate = new TemplateTypeSystemOverlayBuilder(runtime.workspace.store, app.emission.project, app.emission.typeSystem)
       .build(resource, 'contract-bound-controller-template-overlay');
-    if (candidate.expressionProbes.some((probe) => probe.expressionText === 'onAction(action)')) {
+    if (candidate.expressionProbes.some((probe) => probe.authoredExpressionText === 'onAction(action)')) {
       emission = candidate;
+      selectedResource = resource;
       break;
     }
   }
@@ -1697,9 +1961,15 @@ async function readGeneratedBoundControllerOverlayProbe() {
       variableTypes: new Map(),
       overlayDiagnosticCount: 0,
       overlayDiagnosticCodes: [],
+      bindingScopeMemberName: null,
+      bindingScopeMemberFile: null,
+      bindingScopeMemberSourceMatchesSlot: false,
+      bindingScopeTypeSourceMemberName: null,
+      bindingScopeTypeSourceMemberFile: null,
+      onActionDefinitionWriterCount: 0,
     };
   }
-  const typeSystem = new TypeSystemProjectBuilder().build(
+  const typeSystem = new TypeSystemProjectBuilder(projectTypeSystemProgramSources).build(
     app.project,
     app.emission.evaluation,
     {
@@ -1709,14 +1979,70 @@ async function readGeneratedBoundControllerOverlayProbe() {
   const diagnostics = readTypeSystemOverlayDiagnostics(typeSystem).filter((diagnostic) =>
     diagnostic.overlayOriginKey === emission.overlaySource.originKey
   );
+  const bindingScopeMember = readCustomElementBindingScopeSlotMember(
+    runtime.workspace.store,
+    selectedResource,
+    'onAction',
+  );
+  const actionsBindingScopeMember = readCustomElementBindingScopeSlotMember(
+    runtime.workspace.store,
+    selectedResource,
+    'actions',
+  );
+  const boundControllerValues = runtimeBoundControllerValueTableForTemplateResources(
+    app.emission.templates.resources,
+  );
+  const onActionDefinitionWriterCount = selectedResource?.compilation.definition.productHandle == null
+    ? 0
+    : boundControllerValues.readAllDefinitionValues(
+        selectedResource.compilation.definition.productHandle,
+      ).filter((value) => value.propertyName === 'onAction').length;
   return {
     expressionProbeCount: emission.expressionProbes.length,
     skippedExpressionCount: emission.skippedExpressions.length,
-    expressionTypes: readOverlayVariableExpressionTypes(typeSystem, emission.overlaySource.fileName),
+    expressionTypes: readOverlayVariableExpressionTypes(typeSystem, emission.overlaySource.fileName, emission.expressionProbes),
     variableTypes: readOverlayVariableTypesByName(typeSystem, emission.overlaySource.fileName),
     overlayDiagnosticCount: diagnostics.length,
     overlayDiagnosticCodes: diagnostics.map((diagnostic) => diagnostic.diagnostic.code),
+    bindingScopeMemberName: bindingScopeMember.name,
+    bindingScopeMemberFile: bindingScopeMember.file,
+    bindingScopeMemberSourceMatchesSlot: bindingScopeMember.sourceMatchesSlot,
+    bindingScopeTypeSourceMemberName: bindingScopeMember.typeSourceName,
+    bindingScopeTypeSourceMemberFile: bindingScopeMember.typeSourceFile,
+    actionsBindingScopeMemberName: actionsBindingScopeMember.name,
+    actionsBindingScopeMemberFile: actionsBindingScopeMember.file,
+    actionsBindingScopeMemberSourceMatchesSlot: actionsBindingScopeMember.sourceMatchesSlot,
+    actionsBindingScopeTypeSourceMemberName: actionsBindingScopeMember.typeSourceName,
+    actionsBindingScopeTypeSourceMemberFile: actionsBindingScopeMember.typeSourceFile,
+    onActionDefinitionWriterCount,
     generatedAnyHole: overlayTextHasGeneratedAnyHole(emission.overlaySource),
+  };
+}
+
+async function readGeneratedEffectiveModeOverlayProbe() {
+  const runtime = await createSemanticRuntime({
+    workspaceRoot: effectiveModeFixtureRoot,
+    storeKey: 'type-system-generated-effective-mode-overlay-contract',
+  });
+  const app = await runtime.openApp({
+    analysisDepth: 'binding-observation',
+  });
+  const resource = app.emission.templates.resources.find((candidate) =>
+    candidate.compilation.definition.name === 'observation-binding-lifecycle-app'
+  ) ?? null;
+  if (resource == null) {
+    return {
+      authoredExpressions: [],
+      skippedExpressionCount: 0,
+    };
+  }
+  const emission = new TemplateTypeSystemOverlayBuilder(runtime.workspace.store, app.emission.project, app.emission.typeSystem)
+    .build(resource, 'contract-effective-mode-template-overlay');
+  return {
+    authoredExpressions: emission.expressionProbes
+      .map((probe) => probe.authoredExpressionText)
+      .filter((expression) => expression != null),
+    skippedExpressionCount: emission.skippedExpressions.length,
   };
 }
 
@@ -1740,7 +2066,7 @@ async function readGeneratedStateSourceOverlayProbe() {
       overlayDiagnosticCount: 0,
     };
   }
-  const emission = new TemplateTypeSystemOverlayBuilder(runtime.workspace.store, app.emission.typeSystem)
+  const emission = new TemplateTypeSystemOverlayBuilder(runtime.workspace.store, app.emission.project, app.emission.typeSystem)
     .build(resource, 'contract-state-source-template-overlay');
   if (emission.overlaySource == null) {
     return {
@@ -1753,7 +2079,7 @@ async function readGeneratedStateSourceOverlayProbe() {
       overlayDiagnosticCount: 0,
     };
   }
-  const typeSystem = new TypeSystemProjectBuilder().build(
+  const typeSystem = new TypeSystemProjectBuilder(projectTypeSystemProgramSources).build(
     app.project,
     app.emission.evaluation,
     {
@@ -1763,16 +2089,16 @@ async function readGeneratedStateSourceOverlayProbe() {
   const diagnostics = readTypeSystemOverlayDiagnostics(typeSystem).filter((diagnostic) =>
     diagnostic.overlayOriginKey === emission.overlaySource.originKey
   );
-  const expressionTypes = readOverlayVariableExpressionTypes(typeSystem, emission.overlaySource.fileName);
+  const expressionTypes = readOverlayVariableExpressionTypes(typeSystem, emission.overlaySource.fileName, emission.expressionProbes);
   return {
     expressionProbeCount: emission.expressionProbes.length,
     skippedExpressionCount: emission.skippedExpressions.length,
     expressionTypes,
     variableTypes: readOverlayVariableTypesByName(typeSystem, emission.overlaySource.fileName),
     selectedExpressionTypes: {
-      stateTitle: readExpressionTypeContaining(expressionTypes, 'return title;'),
-      namedStoreLabel: readExpressionTypeContaining(expressionTypes, 'return label;'),
-      stateCondition: readExpressionTypeContaining(expressionTypes, "return draft === '';"),
+      stateTitle: expressionTypes.get('title & state') ?? null,
+      namedStoreLabel: expressionTypes.get("label & state:'filters'") ?? null,
+      stateCondition: expressionTypes.get("draft === '' & state") ?? null,
     },
     bindingScopeTypes: {
       repeatedTask: readRepeatedBindingScopeSlotType(resource, 'task'),
@@ -1802,7 +2128,7 @@ async function readGeneratedStateConditionBoundaryOverlayProbe() {
       stateBoundChildType: null,
     };
   }
-  const emission = new TemplateTypeSystemOverlayBuilder(runtime.workspace.store, app.emission.typeSystem)
+  const emission = new TemplateTypeSystemOverlayBuilder(runtime.workspace.store, app.emission.project, app.emission.typeSystem)
     .build(resource, 'contract-state-condition-boundary-template-overlay');
   if (emission.overlaySource == null) {
     return {
@@ -1814,7 +2140,7 @@ async function readGeneratedStateConditionBoundaryOverlayProbe() {
       stateBoundChildType: null,
     };
   }
-  const typeSystem = new TypeSystemProjectBuilder().build(
+  const typeSystem = new TypeSystemProjectBuilder(projectTypeSystemProgramSources).build(
     app.project,
     app.emission.evaluation,
     {
@@ -1824,7 +2150,7 @@ async function readGeneratedStateConditionBoundaryOverlayProbe() {
   const diagnostics = readTypeSystemOverlayDiagnostics(typeSystem).filter((diagnostic) =>
     diagnostic.overlayOriginKey === emission.overlaySource.originKey
   );
-  const expressionTypes = readOverlayVariableExpressionTypes(typeSystem, emission.overlaySource.fileName);
+  const expressionTypes = readOverlayVariableExpressionTypes(typeSystem, emission.overlaySource.fileName, emission.expressionProbes);
   return {
     expressionProbeCount: emission.expressionProbes.length,
     skippedExpressionCount: emission.skippedExpressions.length,
@@ -1833,7 +2159,7 @@ async function readGeneratedStateConditionBoundaryOverlayProbe() {
     hasOrdinaryChildStateBoundaryDiagnostic: diagnostics.some((diagnostic) =>
       diagnostic.diagnostic.code === 2304 || diagnostic.diagnostic.code === 2339
     ),
-    stateBoundChildType: readExpressionTypeContaining(expressionTypes, 'return selectedTask.title;'),
+    stateBoundChildType: expressionTypes.get('selectedTask.title & state') ?? null,
     generatedAnyHole: overlayTextHasGeneratedAnyHole(emission.overlaySource),
   };
 }
@@ -1850,11 +2176,172 @@ function readRepeatedBindingScopeSlotType(resource, slotName) {
 function readCustomElementBindingScopeSlotType(resource, slotName) {
   const scope = resource.runtimeAnalysis.scopes.readScopes().find((candidate) =>
     candidate.ownerKind === 'custom-element-controller'
-    && candidate.parent != null
+    && candidate.runtimeParent != null
     && (candidate.bindingContext?.slots ?? []).some((slot) => slot.name === slotName)
   ) ?? null;
   const slot = (scope?.bindingContext?.slots ?? []).find((candidate) => candidate.name === slotName) ?? null;
   return slot?.targetType?.display ?? null;
+}
+
+function readCustomElementBindingScopeSlotMember(store, resource, slotName) {
+  const slots = resource?.runtimeAnalysis.scopes.readScopes().flatMap((candidate) =>
+    candidate.ownerKind === 'custom-element-controller'
+      ? (candidate.bindingContext?.slots ?? []).filter((slot) => slot.name === slotName)
+      : []
+  ) ?? [];
+  const slot = slots.find((candidate) => candidate.targetTypeSourceMemberHandle != null)
+    ?? slots[0]
+    ?? null;
+  const member = slot?.targetTypeMemberHandle == null
+    ? null
+    : store.hotDetails.read(TypeSystemHotDetails.TypeMember, slot.targetTypeMemberHandle);
+  const typeSourceMember = slot?.targetTypeSourceMemberHandle == null
+    ? null
+    : store.hotDetails.read(TypeSystemHotDetails.TypeMember, slot.targetTypeSourceMemberHandle);
+  return {
+    name: member?.name ?? null,
+    file: member?.carrier?.declarations[0] == null
+      ? null
+      : path.basename(member.carrier.declarations[0].getSourceFile().fileName),
+    sourceMatchesSlot: member != null
+      && checkerTypeMemberSourceAddressHandle(store, member) === slot?.sourceAddressHandle,
+    typeSourceName: typeSourceMember?.name ?? null,
+    typeSourceFile: typeSourceMember?.carrier?.declarations[0] == null
+      ? null
+      : path.basename(typeSourceMember.carrier.declarations[0].getSourceFile().fileName),
+  };
+}
+
+async function readResourceLocalOverlayOwnershipProbe() {
+  const runtime = await createSemanticRuntime({
+    workspaceRoot: recursiveOwnershipFixtureRoot,
+    storeKey: 'type-system-resource-local-overlay-ownership-contract',
+  });
+  const app = await runtime.openApp({
+    analysisDepth: 'binding-observation',
+  });
+  const parent = app.emission.templates.resources.find((resource) =>
+    resource.compilation.definition.name === 'storefront-app'
+  ) ?? null;
+  const child = app.emission.templates.resources.find((resource) =>
+    resource.compilation.definition.name === 'checkout-form'
+  ) ?? null;
+  const build = (resource, key) => resource == null
+    ? null
+    : new TemplateTypeSystemOverlayBuilder(runtime.workspace.store, app.emission.project, app.emission.typeSystem)
+        .build(resource, key);
+  const parentOverlay = build(parent, 'contract-resource-local-parent-overlay');
+  const childOverlay = build(child, 'contract-resource-local-child-overlay');
+  const childExpressionNames = new Set([
+    'state.checkout.email',
+    'state.checkout.postalCode',
+  ]);
+  const parentExpressions = parentOverlay?.expressionProbes.map((probe) => probe.authoredExpressionText) ?? [];
+  const childExpressions = childOverlay?.expressionProbes.map((probe) => probe.authoredExpressionText) ?? [];
+  return {
+    parentFound: parent != null,
+    childFound: child != null,
+    parentExpressionProbeCount: parentExpressions.length,
+    childExpressionProbeCount: childExpressions.length,
+    parentSkippedExpressionCount: parentOverlay?.skippedExpressions.length ?? 0,
+    childSkippedExpressionCount: childOverlay?.skippedExpressions.length ?? 0,
+    parentOwnsChildExpressions: parentExpressions.some((expression) => childExpressionNames.has(expression)),
+    childOwnsCheckoutExpressions: [...childExpressionNames].every((expression) => childExpressions.includes(expression)),
+  };
+}
+
+async function readAuthoredScopePathOverlayProbe() {
+  const { resource, emission } = await buildResourceOverlayFixture(
+    scopePathFixtureRoot,
+    'scope-path-gallery',
+    'contract-authored-scope-path-arrow-overlay',
+  );
+  const expressions = emission?.expressionProbes.map((probe) => probe.authoredExpressionText) ?? [];
+  const source = emission?.overlaySource?.text ?? '';
+  return {
+    resourceFound: resource != null,
+    skippedExpressionCount: emission?.skippedExpressions.length ?? 0,
+    currentArrowExpressionPresent: expressions.includes("groups.map(group => $this.heading).join(', ')"),
+    nestedArrowExpressionPresent: expressions.includes("groups.map(group => group.items.map(item => $this.heading).join(', ')).join('; ')"),
+    currentArrowProjected: source.includes("groups?.map?.(group => heading)?.join?.(', ')"),
+    nestedArrowProjected: source.includes("groups?.map?.(group => group?.items?.map?.(item => heading)?.join?.(', '))?.join?.('; ')"),
+  };
+}
+
+async function readLetSourceFormOverlayProbe() {
+  const { app, runtime, resource, emission } = await buildResourceOverlayFixture(
+    letSourceFormFixtureRoot,
+    'scope-lab-app',
+    'contract-let-source-form-overlay',
+  );
+  if (app == null || runtime == null || emission?.overlaySource == null) {
+    return {
+      resourceFound: resource != null,
+      interpolationSkipped: false,
+      frameworkStringAssembly: false,
+      selectedLabelType: null,
+      literalLabelType: null,
+      interpolatedLabelType: null,
+    };
+  }
+  const typeSystem = new TypeSystemProjectBuilder(projectTypeSystemProgramSources).build(
+    app.project,
+    app.emission.evaluation,
+    { overlaySources: [emission.overlaySource] },
+  );
+  const variableTypes = readOverlayVariableTypesByName(typeSystem, emission.overlaySource.fileName);
+  const htmlText = fs.readFileSync(path.join(letSourceFormFixtureRoot, 'src/scope-lab-app.html'), 'utf8');
+  const interpolationStart = htmlText.indexOf('${task.name}');
+  const appTemplateControllerStart = htmlText.indexOf('${name}', htmlText.indexOf('custom-scope-name'));
+  const appTemplateControllerNameStart = appTemplateControllerStart + 2;
+  const appTemplateControllerNameEnd = appTemplateControllerNameStart + 'name'.length;
+  const appTemplateControllerProbe = emission.expressionProbes.find((probe) =>
+    probe.authoredExpressionText === 'name'
+    && probe.sourceStart != null
+    && probe.sourceEnd != null
+    && probe.sourceStart <= appTemplateControllerNameStart
+    && probe.sourceEnd >= appTemplateControllerNameEnd
+  ) ?? null;
+  return {
+    resourceFound: resource != null,
+    interpolationSkipped: emission.skippedExpressions.some((skip) =>
+      skip.sourceStart === interpolationStart
+      && skip.sourceEnd === interpolationStart + '${task.name}'.length
+    ),
+    frameworkStringAssembly: emission.overlaySource.text.includes('globalThis.String(task.name)'),
+    selectedLabelType: variableTypes.get('selectedLabel') ?? null,
+    literalLabelType: variableTypes.get('literalLabel') ?? null,
+    interpolatedLabelType: variableTypes.get('interpolatedLabel') ?? null,
+    appTemplateControllerNameSkipped: emission.skippedExpressions.some((skip) =>
+      skip.sourceStart != null
+      && skip.sourceEnd != null
+      && skip.sourceStart <= appTemplateControllerNameStart
+      && skip.sourceEnd >= appTemplateControllerNameEnd
+    ),
+    appTemplateControllerNameType: appTemplateControllerProbe == null
+      ? null
+      : variableTypes.get(appTemplateControllerProbe.localName) ?? null,
+  };
+}
+
+async function buildResourceOverlayFixture(fixtureRoot, definitionName, originKey) {
+  const runtime = await createSemanticRuntime({
+    workspaceRoot: fixtureRoot,
+    storeKey: originKey,
+  });
+  const app = await runtime.openApp({ analysisDepth: 'binding-observation' });
+  const resource = app.emission.templates.resources.find((candidate) =>
+    candidate.compilation.definition.name === definitionName
+  ) ?? null;
+  return {
+    app,
+    runtime,
+    resource,
+    emission: resource == null
+      ? null
+      : new TemplateTypeSystemOverlayBuilder(runtime.workspace.store, app.emission.project, app.emission.typeSystem)
+          .build(resource, originKey),
+  };
 }
 
 async function readPublicTemplateOverlayDiagnosticProbe() {
@@ -2047,9 +2534,13 @@ function overlayTextHasGeneratedAnyHole(overlaySource) {
 function readOverlayVariableExpressionTypes(
   typeSystem,
   overlayFileName,
+  expressionProbes = [],
 ) {
-  const sourceFile = typeSystem.readProgramSourceFileByPath(overlayFileName);
+  const sourceFile = typeSystem.readProgramSourceFileByHostPath(overlayFileName);
   const rows = new Map();
+  const authoredExpressionByLocal = new Map(expressionProbes.flatMap((probe) =>
+    probe.authoredExpressionText == null ? [] : [[probe.localName, probe.authoredExpressionText]]
+  ));
   if (sourceFile == null) {
     return rows;
   }
@@ -2061,7 +2552,7 @@ function readOverlayVariableExpressionTypes(
       && node.initializer != null
     ) {
       rows.set(
-        node.initializer.getText(sourceFile),
+        authoredExpressionByLocal.get(node.name.text) ?? node.initializer.getText(sourceFile),
         typeSystem.checker.typeToString(typeSystem.checker.getTypeAtLocation(node.name)),
       );
     }
@@ -2084,7 +2575,7 @@ function readOverlayVariableTypesByName(
   typeSystem,
   overlayFileName,
 ) {
-  const sourceFile = typeSystem.readProgramSourceFileByPath(overlayFileName);
+  const sourceFile = typeSystem.readProgramSourceFileByHostPath(overlayFileName);
   const rows = new Map();
   if (sourceFile == null) {
     return rows;
@@ -2107,7 +2598,7 @@ function generatedTemplateOverlayPreciseDiagnosticMapped(
   overlaySource,
   expressionProbes,
 ) {
-  const probe = expressionProbes.find((candidate) => candidate.expressionText === 'crumb.path') ?? null;
+  const probe = expressionProbes.find((candidate) => candidate.authoredExpressionText === 'crumb.path') ?? null;
   if (probe == null || probe.sourceStart == null || probe.sourceEnd == null) {
     return false;
   }
@@ -2121,7 +2612,7 @@ function generatedTemplateOverlayPreciseDiagnosticMapped(
     originKey: `${overlaySource.originKey}:bad-member`,
     segments: overlaySource.segments,
   };
-  const typeSystem = new TypeSystemProjectBuilder().build(
+  const typeSystem = new TypeSystemProjectBuilder(projectTypeSystemProgramSources).build(
     app.project,
     app.emission.evaluation,
     {
@@ -2144,7 +2635,7 @@ function readOverlayExportType(
   overlayFileName,
   exportName,
 ) {
-  const sourceFile = typeSystem.readProgramSourceFileByPath(overlayFileName);
+  const sourceFile = typeSystem.readProgramSourceFileByHostPath(overlayFileName);
   const moduleSymbol = sourceFile == null
     ? null
     : typeSystem.checker.getSymbolAtLocation(sourceFile) ?? null;

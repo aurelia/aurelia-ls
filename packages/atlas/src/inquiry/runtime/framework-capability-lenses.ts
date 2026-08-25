@@ -15,7 +15,9 @@ import {
   EvidenceConfidence,
   EvidenceKind,
   EvidenceRole,
+  OpenSeamKind,
   type Evidence,
+  type OpenSeam,
 } from "../evidence.js";
 import type { Inquiry } from "../inquiry.js";
 import { LensId } from "../lens.js";
@@ -46,6 +48,7 @@ import { answerPluginArchitecture } from "./plugin-architecture-lenses.js";
 import { answerWorkspaceArchitecture } from "./workspace-architecture-lenses.js";
 import {
   enumerateFrameworkTerritoryConstructs,
+  FrameworkCoverageBasisClosure,
   frameworkCapabilityClusters,
   frameworkForwardCoverage,
   frameworkReverseCoverage,
@@ -456,7 +459,7 @@ export interface FrameworkCapabilitiesValue {
   readonly groundingRows?: readonly FrameworkCapabilityGroundingRow[];
   /** Source-derived concrete inventory constructs returned by the inventory projection. */
   readonly inventoryRows?: readonly FrameworkTerritoryConstruct[];
-  /** Per-family reverse-coverage rows (concrete constructs vs auLink mirror) from reverse-coverage. */
+  /** Per-family reverse-coverage rows (concrete constructs vs auLink correspondences) from reverse-coverage. */
   readonly reverseCoverageRows?: readonly FrameworkReverseCoverageFamily[];
   /** Per-family forward-coverage rows (concrete constructs grounded by a curated category) from coverage. */
   readonly coverageRows?: readonly FrameworkForwardCoverageFamily[];
@@ -1842,8 +1845,20 @@ export const FRAMEWORK_CAPABILITY_ROWS: readonly FrameworkCapabilityRow[] = [
     id: "ui-virtualization:admission",
     title: "UI virtualization plugin admission",
     domain: FrameworkCapabilityDomain.Plugin,
-    frameworkConcepts: ["@aurelia/ui-virtualization", "DefaultVirtualizationConfiguration", "virtual-repeat"],
-    userFacingForms: ["register DefaultVirtualizationConfiguration", "virtual-repeat.for"],
+    frameworkConcepts: [
+      "@aurelia/ui-virtualization",
+      "DefaultVirtualizationConfiguration",
+      "VirtualRepeatForAttributePattern",
+      "IterateBindingCommand",
+      "IterateBindingInstruction",
+      "IterateBindingRenderer",
+      "virtual-repeat",
+    ],
+    userFacingForms: [
+      "register DefaultVirtualizationConfiguration",
+      "virtual-repeat.for",
+      "virtual-repeat.for=\"item of items; gap: 10\"",
+    ],
     localities: [
       FrameworkCapabilityLocality.AppGlobal,
       FrameworkCapabilityLocality.PackageGlobalRegistration,
@@ -1870,15 +1885,15 @@ export const FRAMEWORK_CAPABILITY_ROWS: readonly FrameworkCapabilityRow[] = [
       ),
       capabilityRequirement(
         "resource:template-controller",
-        "virtual-repeat is a template-controller-shaped resource with synthetic view control-flow semantics.",
+        "virtual-repeat is a template-controller-shaped resource whose exact .for pattern lowers through the plugin-owned forof command and type-200 IterateBindingInstruction.",
       ),
     ],
     summary:
-      "@aurelia/ui-virtualization admits the virtual-repeat template controller plus the collection-strategy and DOM-renderer services it depends on.",
+      "@aurelia/ui-virtualization admits the exact virtual-repeat.for pattern, plugin-owned forof command/instruction renderer, virtual-repeat controller, and its collection-strategy and DOM-renderer services.",
     evidence: [
       lensEvidence(LensId.PluginArchitecture, "surfaces", "Plugin architecture lens grounds ui-virtualization resource and DI surfaces.", "DefaultVirtualizationConfiguration"),
-      lensEvidence(LensId.FrameworkAdmission, "relationships", "Admission lens should expose DefaultVirtualizationConfiguration's registered CollectionStrategyLocator, DefaultDomRenderer, and VirtualRepeat.", "DefaultVirtualizationConfiguration"),
-      docsEvidence("ui-virtualization", "UI virtualization docs/tests seed promoted virtual-repeat and scroller behavior forms."),
+      lensEvidence(LensId.FrameworkAdmission, "relationships", "Admission lens should expose DefaultVirtualizationConfiguration's registered CollectionStrategyLocator, DefaultDomRenderer, VirtualRepeatForAttributePattern, IterateBindingCommand, IterateBindingRenderer, and VirtualRepeat.", "DefaultVirtualizationConfiguration"),
+      docsEvidence("ui-virtualization", "UI virtualization source/tests ground the exact virtual-repeat.for syntax, semicolon options including non-negative static gap, and deeper scroller behavior."),
     ],
   }),
   capability({
@@ -1969,7 +1984,19 @@ const REVERSE_COVERAGE_ROW_FAMILY = new PagedRowFamily<FrameworkReverseCoverageF
   id: "framework.capabilities:reverse-coverage",
   rowLabel: "framework reverse-coverage family rows",
   evidenceForRow: (row) => reverseCoverageEvidence(row),
-  continuationsForPage: () => [],
+  continuationsForPage: (inquiry, _rows, nextOffset, limit) =>
+    nextOffset === undefined
+      ? []
+      : [
+          nextPageContinuation(
+            inquiry,
+            "framework.capabilities:reverse-coverage:next-page",
+            "Continue framework reverse-coverage family rows.",
+            nextOffset,
+            limit,
+            { priority: ContinuationPriority.Primary },
+          ),
+        ],
 });
 
 function inventoryEvidence(row: FrameworkTerritoryConstruct): readonly Evidence[] {
@@ -1993,11 +2020,34 @@ function reverseCoverageEvidence(row: FrameworkReverseCoverageFamily): readonly 
       kind: EvidenceKind.MaintenanceSignal,
       role: EvidenceRole.Support,
       confidence: EvidenceConfidence.Strong,
-      summary: `${row.family}: ${row.mirrored}/${row.total} mirrored`,
+      summary: `${row.family}: ${row.modeled}/${row.total} modeled (${row.unqualifiedModeled} unqualified, ${row.facetOnlyModeled} facet-only, ${row.unresolvedMappings} unresolved mapping)`,
       basis: CAPABILITY_BASIS,
       data: row,
     },
   ];
+}
+
+function reverseCoverageOpenSeam(
+  row: FrameworkReverseCoverageFamily,
+  evidence: Evidence | undefined,
+): OpenSeam | null {
+  if (
+    row.basisClosure === FrameworkCoverageBasisClosure.Complete
+    && row.mappingBasisClosure === FrameworkCoverageBasisClosure.Complete
+  ) {
+    return null;
+  }
+  return {
+    id: `framework.capability.reverse-coverage:${row.family}:partial-basis`,
+    kind: OpenSeamKind.InsufficientBasis,
+    summary:
+      `${row.family} reverse coverage is based on a partial `
+      + `framework inventory (${row.basisRowCount}/${row.basisTotalRows ?? "unknown"}) or `
+      + `auLink mapping page (${row.mappingBasisRowCount}/${row.mappingBasisTotalRows ?? "unknown"}).`,
+    evidence,
+    basis: CAPABILITY_BASIS,
+    data: row,
+  };
 }
 
 const COVERAGE_ROW_FAMILY = new PagedRowFamily<FrameworkForwardCoverageFamily>({
@@ -2247,6 +2297,13 @@ export function answerFrameworkCapabilities(
         ...rollup,
         reverseCoverageRows: page.rows,
       }),
+      openSeams: (page, _evidence, evidenceByRow) =>
+        page.rows.flatMap((row, index) => {
+          const seam = reverseCoverageOpenSeam(row, evidenceByRow[index]?.[0]);
+          return seam === null ? [] : [seam];
+        }),
+      outcome: (_page, openSeams) =>
+        openSeams.length === 0 ? OutcomeKind.Hit : OutcomeKind.Partial,
       summary: (page) =>
         `Returned ${page.rows.length} of ${reverseCoverageRows.length} framework reverse-coverage family rows.`,
     });

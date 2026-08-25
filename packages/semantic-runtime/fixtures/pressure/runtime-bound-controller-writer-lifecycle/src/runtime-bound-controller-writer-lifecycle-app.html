@@ -1,0 +1,21 @@
+<template>
+  <bound-writer-panel
+    value.bind="firstValue"
+    value.to-view="secondValue"
+    interpolated="before-${firstValue}-middle-${secondValue}-after"
+    converted.bind="firstValue | writerLabel"
+    blocked.bind="firstValue | missingWriterLabel"
+    from-view.from-view="fromViewSink"
+    one-time-then-live.one-time="firstValue"
+    one-time-then-live.to-view="secondValue"
+    live-then-one-time.to-view="firstValue"
+    live-then-one-time.one-time="secondValue"
+    one-time-only.one-time="firstValue"
+    one-time-only.bind="secondValue & oneTime"
+  ></bound-writer-panel>
+  <bound-writer-panel marker.bind="secondValue"></bound-writer-panel>
+  <bound-writer-panel
+    spread-fallback.bind="firstValue"
+    ...$bindables="spreadValues"
+  ></bound-writer-panel>
+</template>

@@ -1,6 +1,12 @@
-import type { AddressHandle } from '../kernel/handles.js';
+import type {
+  AddressHandle,
+  ProductHandle,
+} from '../kernel/handles.js';
 import type { CheckerTypeMemberKind } from '../type-system/type-shape.js';
-import type { RuntimeObservedDependencyKind } from './runtime-binding-observation.js';
+import type {
+  RuntimeObservedDependencyKind,
+  RuntimeObservedMemberSourceRoute,
+} from './runtime-observed-dependency.js';
 
 export interface RuntimeObservedDependencyDraft {
   readonly dependencyKind: RuntimeObservedDependencyKind;
@@ -12,27 +18,25 @@ export interface RuntimeObservedDependencyDraft {
   readonly methodName: string | null;
   readonly observedMemberKind?: CheckerTypeMemberKind | `${CheckerTypeMemberKind}` | null;
   readonly observedMemberSourceAddressHandle?: AddressHandle | null;
+  readonly observedMemberSourceRoute?: RuntimeObservedMemberSourceRoute | null;
+  /** Canonical source file that owns `spanStart` / `spanEnd`; null only for parser-local or generated rows. */
+  readonly sourceFileAddressHandle?: AddressHandle | null;
   readonly memberNameSpanStart?: number | null;
+  readonly memberNameSpanEnd?: number | null;
   readonly scopeLookupAncestor?: number | null;
   readonly spanStart: number | null;
   readonly spanEnd: number | null;
 }
 
-export function distinctRuntimeObservedDependencyDrafts<TDraft extends RuntimeObservedDependencyDraft>(
-  drafts: readonly TDraft[],
-): readonly TDraft[] {
-  const byKey = new Map<string, TDraft>();
-  for (const draft of drafts) {
-    const key = runtimeObservedDependencySemanticKey(draft);
-    const existing = byKey.get(key);
-    if (existing == null || runtimeObservedDependencyDraftIsMoreSpecific(draft, existing)) {
-      byKey.set(key, draft);
-    }
-  }
-  return [...byKey.values()].sort(compareRuntimeObservedDependencyDrafts);
+/** Observation effect paired with the exact owner-qualified access occurrence that induced it. */
+export interface RuntimeObservedDependencyAccessUseDraft extends RuntimeObservedDependencyDraft {
+  readonly accessUseProductHandle: ProductHandle;
+  /** Exact source already published for the inducing access; null only for source-less generated operations. */
+  readonly accessUseSourceAddressHandle: AddressHandle | null;
 }
 
-export function runtimeObservedDependencySemanticKey(
+/** Suppresses duplicate traversal of one source occurrence without coalescing separate authored reads. */
+export function runtimeObservedDependencyOccurrenceKey(
   draft: RuntimeObservedDependencyDraft,
 ): string {
   return [
@@ -43,6 +47,11 @@ export function runtimeObservedDependencySemanticKey(
     draft.memberName ?? '',
     draft.keyExpression ?? '',
     draft.methodName ?? '',
+    draft.sourceFileAddressHandle ?? '',
+    draft.memberNameSpanStart ?? '',
+    draft.memberNameSpanEnd ?? '',
+    draft.spanStart ?? '',
+    draft.spanEnd ?? '',
   ].join('|');
 }
 
@@ -56,45 +65,4 @@ export function runtimeObservedDependencyIdentityLocalName(
     draft.spanStart ?? index,
     draft.spanEnd ?? index,
   ].join(':');
-}
-
-function compareRuntimeObservedDependencyDrafts(
-  left: RuntimeObservedDependencyDraft,
-  right: RuntimeObservedDependencyDraft,
-): number {
-  return [
-    left.spanStart ?? -1,
-    left.dependencyKind,
-    left.sourceName ?? '',
-    left.sourceRootName ?? '',
-    left.methodName ?? '',
-    left.expressionKind,
-  ].join(':').localeCompare([
-    right.spanStart ?? -1,
-    right.dependencyKind,
-    right.sourceName ?? '',
-    right.sourceRootName ?? '',
-    right.methodName ?? '',
-    right.expressionKind,
-  ].join(':'));
-}
-
-function runtimeObservedDependencyDraftIsMoreSpecific(
-  candidate: RuntimeObservedDependencyDraft,
-  existing: RuntimeObservedDependencyDraft,
-): boolean {
-  return runtimeObservedDependencyProjectionWeight(candidate) > runtimeObservedDependencyProjectionWeight(existing);
-}
-
-function runtimeObservedDependencyProjectionWeight(
-  draft: RuntimeObservedDependencyDraft,
-): number {
-  return [
-    draft.observedMemberSourceAddressHandle,
-    draft.observedMemberKind,
-    draft.memberNameSpanStart,
-    draft.scopeLookupAncestor,
-    draft.spanStart,
-    draft.spanEnd,
-  ].filter((value) => value != null).length;
 }

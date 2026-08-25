@@ -1,3 +1,5 @@
+import { htmlAsciiLowercase } from './html-ascii.js';
+
 /** Standard HTML void elements that cannot own child content or end tags. */
 export enum HtmlVoidElementName {
   /** `area` image-map area element. */
@@ -50,5 +52,5 @@ export const HTML_VOID_ELEMENT_NAMES = [
 
 /** Return true when a tag name is an HTML void element. */
 export function isHtmlVoidElement(tagName: string): boolean {
-  return (HTML_VOID_ELEMENT_NAMES as readonly string[]).includes(tagName.toLowerCase());
+  return (HTML_VOID_ELEMENT_NAMES as readonly string[]).includes(htmlAsciiLowercase(tagName));
 }

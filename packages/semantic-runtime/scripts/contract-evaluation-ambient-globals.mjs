@@ -46,10 +46,18 @@ const dynamicMutationSites = app.ask({
   openSeamKindKey: 'evaluation.dynamic-mutation',
   page: { size: 20 },
 }).value;
+const dynamicLoopSites = app.ask({
+  kind: SemanticAppQueryKind.OpenSeamSites,
+  openSeamKindKey: 'evaluation.dynamic-loop',
+  page: { size: 20 },
+}).value;
 
 const failures = [];
 const unresolvedText = JSON.stringify(allUnresolved);
 const summaryText = JSON.stringify(summary);
+const deferredPromiseReactionSites = dynamicCallSites.rows.filter((row) =>
+  row.sampleSummary === 'Promise reaction callback requires deferred graph-isolated execution.'
+);
 
 if (unresolvedText.includes('__APP_VERSION__')) {
   failures.push('Expected project-local ambient declare const __APP_VERSION__ to resolve as a host boundary, not an unresolved identifier.');
@@ -69,11 +77,22 @@ if (!unresolvedText.includes('__MISSING_BUILD_VALUE__')) {
 if (allUnresolved.rows.length !== 1) {
   failures.push(`Expected exactly one unresolved-identifier seam after ambient globals are admitted, observed ${allUnresolved.rows.length}.`);
 }
-if (dynamicCallSites.totalOpenSeamSites !== 0 || dynamicCallSites.totalOpenSeamRows !== 0) {
-  failures.push(`Expected host/browser boundary calls to stay boundary values, observed ${dynamicCallSites.totalOpenSeamSites} dynamic-call sites covering ${dynamicCallSites.totalOpenSeamRows} raw rows.`);
+if (
+  dynamicCallSites.totalOpenSeamSites !== 1
+  || dynamicCallSites.totalOpenSeamRows !== 1
+  || deferredPromiseReactionSites.length !== 1
+) {
+  failures.push(`Expected only the deferred Promise reaction to remain a dynamic-call boundary, observed ${dynamicCallSites.totalOpenSeamSites} sites covering ${dynamicCallSites.totalOpenSeamRows} raw rows.`);
 }
 if (dynamicMutationSites.totalOpenSeamSites !== 0 || dynamicMutationSites.totalOpenSeamRows !== 0) {
   failures.push(`Expected host/browser boundary writes to stay boundary values, observed ${dynamicMutationSites.totalOpenSeamSites} dynamic-mutation sites covering ${dynamicMutationSites.totalOpenSeamRows} raw rows.`);
+}
+if (
+  dynamicLoopSites.totalOpenSeamSites !== 1
+  || dynamicLoopSites.totalOpenSeamRows !== 1
+  || dynamicLoopSites.rows[0]?.reasonKinds.includes('host-environment-value') !== true
+) {
+  failures.push(`Expected the host-backed adoptedStyleSheets spread to remain one host-environment dynamic-loop site, observed ${dynamicLoopSites.totalOpenSeamSites} sites covering ${dynamicLoopSites.totalOpenSeamRows} raw rows.`);
 }
 if (appSourceUnresolved.rows.length !== 1 || appSourceUnresolved.rows[0]?.source?.path.endsWith('src/app.ts') !== true) {
   failures.push('Expected sourceFile-filtered unresolved-identifier seams to point at src/app.ts.');
@@ -96,11 +115,21 @@ if (!summary.displayText.includes('src/app.ts') && !summaryText.includes('src/ap
 if (!/src\/app\.ts:\d+:\d+/u.test(summary.displayText)) {
   failures.push(`Expected open-seam-summary display to include a line/column source sample, observed: ${summary.displayText}`);
 }
-if (!overview.displayText.includes('Open seam samples:')) {
-  failures.push('Expected app overview display text to include compact open seam samples.');
+const overviewUnresolvedSite = overview.openSeams.value.rows.find((row) =>
+  row.seamKindKeys.includes('evaluation.unresolved-identifier')
+);
+if (
+  overview.openSeams.value.totalOpenSeamRows === 0
+  || overview.openSeams.value.totalOpenSeamSites === 0
+  || overviewUnresolvedSite?.source?.path.endsWith('src/app.ts') !== true
+) {
+  failures.push('Expected explicit openSeamPageSize to preserve the source-backed unresolved identifier in the typed overview audit child.');
 }
-if (!overview.displayText.includes('src/app.ts')) {
-  failures.push('Expected app overview open seam samples to include a concrete source file.');
+if (!overview.displayText.includes('no diagnostic rows or configured analysis limitations')) {
+  failures.push(`Expected evidence-only evaluator seams to remain outside normal overview pressure, observed: ${overview.displayText}`);
+}
+if (/raw derivation|Open seam samples|open seam site\(s\)|sourceRole=|appRoles=|evalOrigins=/u.test(overview.displayText)) {
+  failures.push(`Expected normal app overview text to keep the explicit raw seam audit quiet, observed: ${overview.displayText}`);
 }
 
 if (failures.length > 0) {
@@ -111,6 +140,7 @@ if (failures.length > 0) {
     appSourceUnresolved,
     dynamicCallSites,
     dynamicMutationSites,
+    dynamicLoopSites,
     summary,
     overviewDisplayText: overview.displayText,
   }, null, 2));
@@ -119,8 +149,9 @@ if (failures.length > 0) {
   console.log(JSON.stringify({
     ok: true,
     unresolvedIdentifierRows: allUnresolved.rows.length,
-    dynamicCallSites: dynamicCallSites.totalOpenSeamSites,
+    deferredPromiseReactionSites: deferredPromiseReactionSites.length,
     dynamicMutationSites: dynamicMutationSites.totalOpenSeamSites,
+    dynamicLoopSites: dynamicLoopSites.totalOpenSeamSites,
     summaryDisplayText: summary.displayText,
     overviewDisplayText: overview.displayText,
   }, null, 2));

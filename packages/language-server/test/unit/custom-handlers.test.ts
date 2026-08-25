@@ -1,11 +1,22 @@
+import path from "node:path";
+import { pathToFileURL } from "node:url";
 import { test, expect, describe, vi } from "vitest";
-import { canonicalDocumentUri } from "@aurelia-ls/compiler/program/paths.js";
+import { TextDocument } from "vscode-languageserver-textdocument";
 import {
-  handleGetOverlay,
-  handleGetMapping,
-  handleGetSsr,
-  handleDumpState,
-} from "@aurelia-ls/language-server/api";
+  handleRenameFromTs,
+  handleSourceOwnership,
+  handleWorkspaceStatus,
+} from "../../src/handlers/custom.js";
+import {
+  createContextTestOperation,
+  createTestOperation,
+  testAnalysisGeneration,
+} from "./test-request-guard.js";
+import { testWorkspaceDocumentUris } from "./test-document-uris.js";
+
+const defaultWorkspaceRoot = "/test/workspace";
+const defaultDocumentUris = testWorkspaceDocumentUris(defaultWorkspaceRoot);
+const defaultTemplateUri = defaultDocumentUris.uriForWorkspaceRelativePath("test.html")!;
 
 function createMockLogger() {
   return {
@@ -16,169 +27,713 @@ function createMockLogger() {
   };
 }
 
+function snapshot(
+  uri: string,
+  text: string,
+  version: number | null = null,
+  languageId = uri.endsWith(".ts") ? "typescript" : "html",
+) {
+  return {
+    uri,
+    languageId,
+    version,
+    text,
+  };
+}
+
 function createMockContext(overrides: Record<string, unknown> = {}) {
   const logger = createMockLogger();
-  const workspace = {
-    snapshot: vi.fn(() => ({ meta: { fingerprint: "test@1" } })),
-    getOverlay: vi.fn(),
-    getMapping: vi.fn(),
-    getQueryFacade: vi.fn(),
-    getCacheStats: vi.fn(() => ({})),
-    templates: [],
-    inlineTemplates: [],
-  };
+  const workspaceRoot = typeof overrides["workspaceRoot"] === "string"
+    ? overrides["workspaceRoot"]
+    : defaultWorkspaceRoot;
   return {
     logger,
     ensureProgramDocument: vi.fn(() => ({ offsetAt: vi.fn(() => 0) })),
-    workspace,
-    workspaceRoot: "/test/workspace",
+    lookupText: vi.fn(() => null),
+    lookupDocumentSnapshot: vi.fn(() => null),
+    workspaceRoot,
+    documentUris: testWorkspaceDocumentUris(workspaceRoot),
+    documents: {
+      all: vi.fn(() => []),
+    },
+    semanticRuntime: {
+      authoredSourceOwnership: vi.fn(() => Promise.resolve({
+        schemaVersion: "0.2",
+        result: "answered",
+        selection: "exact",
+        coverage: "complete",
+        summary: "one exact owner",
+        value: {
+          sourceFilePath: path.join(workspaceRoot, "src/app.ts"),
+          templateOwned: true,
+          owners: [{
+            projectKey: "app",
+            projectRootDir: workspaceRoot,
+            projectPath: "src/app.ts",
+            role: "app-source",
+          }],
+        },
+        page: null,
+      })),
+      nativeProjectConfigurations: vi.fn(() => Promise.resolve({
+        schemaVersion: "0.2",
+        result: "answered",
+        selection: "not-applicable",
+        coverage: "complete",
+        summary: "one exact native configuration",
+        value: {
+          displayText: "one exact native configuration",
+          rows: [{
+            projectKey: "app",
+            projectRootDir: "/test/workspace",
+            filePath: "/test/workspace/aurelia.project.json",
+            appliedExcludedSourceRootDirs: ["/test/workspace/golden"],
+            diagnosticCount: 0,
+          }],
+        },
+        page: null,
+      })),
+      appDiagnostics: vi.fn(() =>
+        Promise.resolve({
+          schemaVersion: "0.2",
+          result: "answered",
+          selection: "not-applicable",
+          coverage: "complete",
+          summary: "mock",
+          value: {
+            displayText: "mock",
+            typeScript: null,
+            rows: [],
+            presentation: {
+              rawRowCount: 0,
+              primaryCount: 0,
+              contextualCount: 0,
+              withheldCount: 0,
+              complete: true,
+              groups: [],
+              withheld: [],
+            },
+          },
+          page: null,
+        }),
+      ),
+      templateRenameFromTypeScript: vi.fn(() =>
+        Promise.resolve({
+          schemaVersion: "0.2",
+          result: "answered",
+          selection: "not-applicable",
+          coverage: "complete",
+          summary: "mock",
+          value: {
+            displayText: "mock",
+            status: "available",
+            reason: null,
+            selectedMemberName: "title",
+            placeholder: "title",
+            targetSource: null,
+            activeSource: null,
+            edits: [],
+            candidateRows: [],
+            templateReferenceCount: 0,
+            typeScriptReferenceCount: 0,
+          },
+          page: null,
+        }),
+      ),
+      workspaceSummary: vi.fn(() => Promise.resolve({
+        schemaVersion: "0.2",
+        result: "answered",
+        selection: "not-applicable",
+        coverage: "complete",
+        summary: "workspace summary",
+        value: {
+          workspaceRoot: "/test/workspace",
+          workspaceKey: "workspace",
+          displayText: "one app",
+          nativeProjectConfigurationCount: 1,
+          nativeProjectConfigurationDiagnosticCount: 0,
+          projectShapeCounts: [{ shapeKind: "aurelia-app", count: 1 }],
+          projectAnalysisCounts: [{ analysisKind: "app-world", count: 1 }],
+          defaultAppProjectKey: "app",
+          appCandidates: [],
+          projects: [],
+        },
+        page: null,
+      })),
+    },
     ...overrides,
   };
 }
 
-describe("handleGetOverlay", () => {
-  test("returns null when params is null", () => {
+describe("handleSourceOwnership", () => {
+  test("does not classify an app-source document as a template document", async () => {
     const ctx = createMockContext();
-    const result = handleGetOverlay(ctx as never, null);
-    expect(result).toBe(null);
+    const uri = ctx.documentUris.uriForWorkspaceRelativePath("src/app.ts")!;
+
+    const response = await handleSourceOwnership(ctx as never, { uri }, createContextTestOperation(ctx));
+
+    expect(response).toEqual({
+      fingerprint: testAnalysisGeneration.fingerprint,
+      sourceUri: ctx.documentUris.resolve(uri).uri,
+      answer: expect.objectContaining({
+        result: "answered",
+        selection: "exact",
+        coverage: "complete",
+      }),
+      templateOwned: false,
+      owners: [{
+        projectKey: "app",
+        rootUri: ctx.documentUris.uriForHostPath(defaultWorkspaceRoot),
+        projectPath: "src/app.ts",
+        role: "app-source",
+      }],
+    });
+    expect(response).not.toHaveProperty("sourceFilePath");
   });
 
-  test("returns null when params is undefined", () => {
+  test.each([
+    ["src/component.html", true],
+    ["src/unrelated.html", false],
+  ] as const)("derives exact ownership for %s from the bounded converged template set", async (projectPath, expected) => {
     const ctx = createMockContext();
-    const result = handleGetOverlay(ctx as never, undefined as never);
-    expect(result).toBe(null);
+    const uri = ctx.documentUris.uriForWorkspaceRelativePath(projectPath)!;
+    const operation = createTestOperation({
+      authoredSourceOwnership: vi.fn(async () => ({
+        schemaVersion: "0.2",
+        result: "answered",
+        selection: "exact",
+        coverage: "complete",
+        summary: "one exact owner",
+        value: {
+          sourceFilePath: path.join(defaultWorkspaceRoot, projectPath),
+          templateOwned: true,
+          owners: [{
+            projectKey: "app",
+            projectRootDir: defaultWorkspaceRoot,
+            projectPath,
+            role: "template",
+          }],
+        },
+        page: null,
+      })),
+      templateDocumentOwnership: vi.fn(async () => ({
+        schemaVersion: "0.2",
+        result: "answered",
+        selection: "not-applicable",
+        coverage: "complete",
+        summary: "one template document",
+        value: {
+          projectKey: "app",
+          rootDir: defaultWorkspaceRoot,
+          sources: [{
+            kind: "source-file",
+            label: "component template",
+            path: "src/component.html",
+          }],
+        },
+        page: null,
+      })),
+      appTopology: vi.fn(() => {
+        throw new Error("Source ownership must not materialize application topology.");
+      }),
+    });
+
+    const response = await handleSourceOwnership(ctx as never, { uri }, operation);
+
+    expect(response.templateOwned).toBe(expected);
+    expect(operation.templateDocumentOwnership).toHaveBeenCalledWith("app");
+    expect(operation.appTopology).not.toHaveBeenCalled();
   });
 
-  test("returns null when uri is missing from object params", () => {
+  test("checks every exact overlapping project owner without projecting topology", async () => {
     const ctx = createMockContext();
-    const result = handleGetOverlay(ctx as never, {});
-    expect(result).toBe(null);
+    const projectPath = "src/component.html";
+    const uri = ctx.documentUris.uriForWorkspaceRelativePath(projectPath)!;
+    const sourceFilePath = path.join(defaultWorkspaceRoot, projectPath);
+    const templateDocumentOwnership = vi.fn(async (projectKey: string) => ({
+      schemaVersion: "0.2" as const,
+      result: "answered" as const,
+      selection: "not-applicable" as const,
+      coverage: "complete" as const,
+      summary: `${projectKey} template documents`,
+      value: {
+        projectKey,
+        rootDir: defaultWorkspaceRoot,
+        sources: projectKey === "second"
+          ? [{ kind: "source-file", label: "component template", path: projectPath }]
+          : [{ kind: "source-file", label: "other template", path: "src/other.html" }],
+      },
+      page: null,
+    }));
+    const operation = createTestOperation({
+      authoredSourceOwnership: vi.fn(async () => ({
+        schemaVersion: "0.2",
+        result: "answered",
+        selection: "exact",
+        coverage: "complete",
+        summary: "two exact owners",
+        value: {
+          sourceFilePath,
+          templateOwned: true,
+          owners: ["first", "first", "second"].map((projectKey) => ({
+            projectKey,
+            projectRootDir: defaultWorkspaceRoot,
+            projectPath,
+            role: "template",
+          })),
+        },
+        page: null,
+      })),
+      templateDocumentOwnership,
+      appTopology: vi.fn(() => {
+        throw new Error("Source ownership must not materialize application topology.");
+      }),
+    });
+
+    const response = await handleSourceOwnership(ctx as never, { uri }, operation);
+
+    expect(response.templateOwned).toBe(true);
+    expect(templateDocumentOwnership.mock.calls).toEqual([["first"], ["second"]]);
+    expect(operation.appTopology).not.toHaveBeenCalled();
+  });
+});
+
+describe("handleWorkspaceStatus", () => {
+  test("returns the semantic-runtime summary envelope without reclassifying project shape", async () => {
+    const ctx = createMockContext();
+    const operation = createContextTestOperation(ctx);
+
+    const configUri = defaultDocumentUris.uriForHostPath("/test/workspace/aurelia.project.json");
+    const response = await handleWorkspaceStatus(ctx as never, {
+      nativeProjectConfigurationUris: [configUri],
+    }, operation);
+
+    expect(ctx.semanticRuntime.workspaceSummary).toHaveBeenCalledWith();
+    expect(ctx.semanticRuntime.nativeProjectConfigurations).toHaveBeenCalledWith([configUri]);
+    expect(response?.fingerprint).toBe(testAnalysisGeneration.fingerprint);
+    expect(response?.projectAnalysisCounts).toEqual([{ analysisKind: "app-world", count: 1 }]);
+    expect(response?.nativeProjectConfigurations.rows).toEqual([{
+      projectKey: "app",
+      projectRootUri: defaultDocumentUris.uriForHostPath("/test/workspace"),
+      sourceUri: defaultDocumentUris.uriForHostPath("/test/workspace/aurelia.project.json"),
+      appliedExcludedSourceRootUris: [defaultDocumentUris.uriForHostPath("/test/workspace/golden")],
+      diagnosticCount: 0,
+    }]);
+    expect(response?.answer.coverage).toBe("complete");
+    expect(response).not.toHaveProperty("value");
+  });
+});
+
+describe("handleRenameFromTs", () => {
+  const renameWorkspaceRoot = path.resolve("test-workspace");
+  const renameTypeScriptUri = pathToFileURL(path.join(renameWorkspaceRoot, "src/app.ts")).toString();
+
+  test("maps one validated TypeScript and Aurelia rename plan", async () => {
+    const tsDocument = TextDocument.create(
+      renameTypeScriptUri,
+      "typescript",
+      1,
+      "class App { title = ''; }",
+    );
+    const templateText = "<p>${title}</p>";
+    const ctx = createMockContext({
+      workspaceRoot: renameWorkspaceRoot,
+      ensureProgramDocument: vi.fn(() => tsDocument),
+      lookupText: vi.fn(() => templateText),
+      lookupDocumentSnapshot: vi.fn((uri: string) =>
+        uri.endsWith("/src/app.html")
+          ? snapshot(uri, templateText, 4, "html")
+          : null,
+      ),
+    });
+    ctx.semanticRuntime.templateRenameFromTypeScript.mockResolvedValue({
+      schemaVersion: "0.2",
+      result: "answered",
+      selection: "not-applicable",
+      coverage: "complete",
+      summary: "mock",
+      value: {
+        displayText: "mock",
+        status: "available",
+        reason: null,
+        selectedMemberName: "title",
+        placeholder: "title",
+        targetSource: {
+          kind: "source-span-address",
+          label: "src/app.ts@12..17",
+          path: "src/app.ts",
+          start: 12,
+          end: 17,
+        },
+        activeSource: {
+          kind: "source-span-address",
+          label: "src/app.ts@12..17",
+          path: "src/app.ts",
+          start: 12,
+          end: 17,
+        },
+        edits: [
+          {
+            editKind: "typescript-reference",
+            source: {
+              kind: "source-span-address",
+              label: "src/app.ts@12..17",
+              path: "src/app.ts",
+              start: 12,
+              end: 17,
+            },
+            oldText: "title",
+            newText: "heading",
+          },
+          {
+            editKind: "template-usage",
+            source: {
+              kind: "source-span-address",
+              label: "src/app.html@5..10",
+              path: "src/app.html",
+              start: 5,
+              end: 10,
+            },
+            oldText: "title",
+            newText: "heading",
+          },
+        ],
+        candidateRows: [],
+        templateReferenceCount: 1,
+        typeScriptReferenceCount: 1,
+      },
+      page: null,
+    });
+
+    const result = await handleRenameFromTs(
+      ctx as never,
+      {
+        uri: tsDocument.uri,
+        position: { line: 0, character: 12 },
+        newName: "heading",
+      },
+      createContextTestOperation(ctx),
+    );
+
+    expect(
+      ctx.semanticRuntime.templateRenameFromTypeScript,
+    ).toHaveBeenCalledWith(
+      tsDocument.uri,
+      { line: 0, character: 12 },
+      "heading",
+    );
+    expect(result).toMatchObject({
+      status: "success",
+      templateReferenceCount: 1,
+      typeScriptReferenceCount: 1,
+      candidateCount: 0,
+    });
+    if (result.status !== "success") {
+      throw new Error("Expected successful rename propagation.");
+    }
+    const changes = result.workspaceEdit.documentChanges ?? [];
+    expect(changes).toHaveLength(2);
+    expect(changes.find((change) =>
+      "textDocument" in change && change.textDocument.uri.endsWith("/src/app.ts")
+    )).toMatchObject({
+      textDocument: {
+        uri: expect.stringContaining("src/app.ts"),
+        version: 1,
+      },
+    });
+    const templateChange = changes.find((change) =>
+      "textDocument" in change && change.textDocument.uri.endsWith("/src/app.html")
+    );
+    expect(templateChange).toMatchObject({
+      textDocument: {
+        uri: expect.stringContaining("src/app.html"),
+        version: 4,
+      },
+    });
+    expect(templateChange != null && "edits" in templateChange ? templateChange.edits : []).toEqual([
+      {
+        range: {
+          start: { line: 0, character: 5 },
+          end: { line: 0, character: 10 },
+        },
+        newText: "heading",
+      },
+    ]);
   });
 
-  test("accepts string uri directly", () => {
-    const ctx = createMockContext();
-    ctx.workspace.getOverlay.mockReturnValue({ overlay: { path: "/test.ts", text: "code" }, mapping: { entries: [] }, calls: [] });
+  test("maps semantic-runtime preparation for a cross-domain symbol", async () => {
+    const tsDocument = TextDocument.create(
+      renameTypeScriptUri,
+      "typescript",
+      1,
+      "class App { title = ''; }",
+    );
+    const ctx = createMockContext({
+      workspaceRoot: renameWorkspaceRoot,
+      ensureProgramDocument: vi.fn(() => tsDocument),
+    });
+    ctx.semanticRuntime.templateRenameFromTypeScript.mockResolvedValue({
+      schemaVersion: "0.2",
+      result: "answered",
+      selection: "exact",
+      coverage: "complete",
+      summary: "available",
+      value: {
+        displayText: "available",
+        status: "available",
+        reason: null,
+        selectedMemberName: "title",
+        placeholder: "title",
+        targetSource: null,
+        activeSource: {
+          kind: "source-span-address",
+          label: "src/app.ts@12..17",
+          path: "src/app.ts",
+          start: 12,
+          end: 17,
+        },
+        edits: [],
+        candidateRows: [],
+        templateReferenceCount: 1,
+        typeScriptReferenceCount: 0,
+      },
+      page: null,
+    });
 
-    const result = handleGetOverlay(ctx as never, "file:///test.html");
+    const result = await handleRenameFromTs(
+      ctx as never,
+      { uri: tsDocument.uri, position: { line: 0, character: 13 } },
+      createContextTestOperation(ctx),
+    );
 
-    expect(ctx.ensureProgramDocument).toHaveBeenCalledWith("file:///test.html");
-    expect(ctx.workspace.getOverlay).toHaveBeenCalledWith(canonicalDocumentUri("file:///test.html").uri);
     expect(result).toEqual({
-      fingerprint: "test@1",
-      artifact: { overlay: { path: "/test.ts", text: "code" }, mapping: { entries: [] }, calls: [] },
+      status: "available",
+      range: {
+        start: { line: 0, character: 12 },
+        end: { line: 0, character: 17 },
+      },
+      placeholder: "title",
+      message: "available",
+      templateReferenceCount: 1,
+      typeScriptReferenceCount: 0,
+      candidateCount: 0,
+      candidates: [],
+    });
+    expect(ctx.semanticRuntime.templateRenameFromTypeScript).toHaveBeenCalledWith(
+      tsDocument.uri,
+      { line: 0, character: 13 },
+      null,
+    );
+  });
+
+  test("returns not-applicable when a TypeScript symbol has no Aurelia references", async () => {
+    const tsDocument = TextDocument.create(
+      renameTypeScriptUri,
+      "typescript",
+      1,
+      "class App { title = ''; }",
+    );
+    const ctx = createMockContext({
+      workspaceRoot: renameWorkspaceRoot,
+      ensureProgramDocument: vi.fn(() => tsDocument),
+    });
+    ctx.semanticRuntime.templateRenameFromTypeScript.mockResolvedValue({
+      schemaVersion: "0.2",
+      result: "answered",
+      selection: "not-applicable",
+      coverage: "complete",
+      summary: "not applicable",
+      value: {
+        displayText: "No proven Aurelia references.",
+        status: "not-available",
+        reason: "no-aurelia-references",
+        selectedMemberName: "title",
+        placeholder: "title",
+        targetSource: null,
+        activeSource: null,
+        edits: [],
+        candidateRows: [],
+        templateReferenceCount: 0,
+        typeScriptReferenceCount: 0,
+      },
+      page: null,
+    });
+
+    const result = await handleRenameFromTs(
+      ctx as never,
+      {
+        uri: tsDocument.uri,
+        position: { line: 0, character: 12 },
+        newName: "heading",
+      },
+      createContextTestOperation(ctx),
+    );
+
+    expect(result).toMatchObject({
+      status: "not-applicable",
+      reason: "no-aurelia-references",
+      templateReferenceCount: 0,
+      typeScriptReferenceCount: 0,
+      candidateCount: 0,
     });
   });
 
-  test("accepts uri in object params", () => {
-    const ctx = createMockContext();
-    ctx.workspace.getOverlay.mockReturnValue({ overlay: { path: "/test.ts", text: "code" }, mapping: { entries: [] }, calls: [] });
+  test("refuses candidate-bearing propagation with exact authored locations", async () => {
+    const tsDocument = TextDocument.create(
+      renameTypeScriptUri,
+      "typescript",
+      1,
+      "class App { title = ''; }",
+    );
+    const templateText = "<p>${title}</p>";
+    const ctx = createMockContext({
+      workspaceRoot: renameWorkspaceRoot,
+      ensureProgramDocument: vi.fn(() => tsDocument),
+      lookupText: vi.fn(() => templateText),
+    });
+    ctx.semanticRuntime.templateRenameFromTypeScript.mockResolvedValue({
+      schemaVersion: "0.2",
+      result: "answered",
+      selection: "exact",
+      coverage: "open",
+      summary: "unresolved candidates",
+      value: {
+        displayText: "Rename was refused because one same-name location is unresolved.",
+        status: "not-available",
+        reason: "unresolved-candidates",
+        selectedMemberName: "title",
+        placeholder: "title",
+        targetSource: null,
+        activeSource: {
+          kind: "source-span-address",
+          label: "src/app.ts@12..17",
+          path: "src/app.ts",
+          start: 12,
+          end: 17,
+        },
+        edits: [],
+        candidateRows: [{
+          referenceKind: "template-usage",
+          name: "title",
+          definitionName: "app",
+          bindingKind: "property",
+          dependencyKinds: [],
+          candidateReason: "target-open",
+          source: {
+            kind: "source-span-address",
+            label: "src/app.html@5..10",
+            path: "src/app.html",
+            start: 5,
+            end: 10,
+          },
+          targetSource: null,
+        }],
+        templateReferenceCount: 1,
+        typeScriptReferenceCount: 0,
+      },
+      page: null,
+    });
 
-    const result = handleGetOverlay(ctx as never, { uri: "file:///test.html" });
-
-    expect(ctx.workspace.getOverlay).toHaveBeenCalledWith(canonicalDocumentUri("file:///test.html").uri);
-    expect(result).not.toBe(null);
-  });
-
-  test("returns null when overlay not found", () => {
-    const ctx = createMockContext();
-    ctx.workspace.getOverlay.mockReturnValue(null);
-
-    const result = handleGetOverlay(ctx as never, { uri: "file:///missing.html" });
-
-    expect(result).toBe(null);
-  });
-
-  test("logs and returns null on error", () => {
-    const ctx = createMockContext();
-    ctx.workspace.getOverlay.mockImplementation(() => { throw new Error("overlay failed"); });
-
-    const result = handleGetOverlay(ctx as never, { uri: "file:///test.html" });
-
-    expect(result).toBe(null);
-    expect(ctx.logger.error).toHaveBeenCalledWith(expect.stringContaining("getOverlay"));
-    expect(ctx.logger.error).toHaveBeenCalledWith(expect.stringContaining("overlay failed"));
-  });
-});
-
-describe("handleGetMapping", () => {
-  test("returns null when uri is missing", () => {
-    const ctx = createMockContext();
-    const result = handleGetMapping(ctx as never, null);
-    expect(result).toBe(null);
-  });
-
-  test("returns null when document not found", () => {
-    const ctx = createMockContext();
-    ctx.ensureProgramDocument.mockReturnValue(null);
-
-    const result = handleGetMapping(ctx as never, { uri: "file:///missing.html" });
-
-    expect(result).toBe(null);
-  });
-
-  test("returns overlay path and mapping when available", () => {
-    const ctx = createMockContext();
-    ctx.workspace.getMapping.mockReturnValue({ entries: ["entry"] });
-    ctx.workspace.getOverlay.mockReturnValue({ overlay: { path: "/test.ts" }, mapping: { entries: [] }, calls: [] });
-
-    const result = handleGetMapping(ctx as never, { uri: "file:///test.html" });
-
-    expect(result).toEqual({ overlayPath: "/test.ts", mapping: { entries: ["entry"] } });
-  });
-
-  test("logs and returns null on error", () => {
-    const ctx = createMockContext();
-    ctx.workspace.getMapping.mockImplementation(() => { throw new Error("mapping error"); });
-
-    const result = handleGetMapping(ctx as never, { uri: "file:///test.html" });
-
-    expect(result).toBe(null);
-    expect(ctx.logger.error).toHaveBeenCalledWith(expect.stringContaining("getMapping"));
-  });
-});
-
-describe("handleGetSsr", () => {
-  test("returns null and logs info", () => {
-    const ctx = createMockContext();
-
-    const result = handleGetSsr(ctx as never, { uri: "file:///test.html" });
-
-    expect(result).toBe(null);
-    expect(ctx.logger.info).toHaveBeenCalledWith(expect.stringContaining("SSR not yet available"));
-  });
-
-  test("returns null when uri missing", () => {
-    const ctx = createMockContext();
-    const result = handleGetSsr(ctx as never, null);
-    expect(result).toBe(null);
-  });
-});
-
-describe("handleDumpState", () => {
-  test("returns server state summary", () => {
-    const ctx = createMockContext();
-    ctx.workspace.templates = [{}, {}];
-    ctx.workspace.inlineTemplates = [{}];
-
-    const result = handleDumpState(ctx as never);
+    const result = await handleRenameFromTs(
+      ctx as never,
+      {
+        uri: tsDocument.uri,
+        position: { line: 0, character: 12 },
+        newName: "heading",
+      },
+      createContextTestOperation(ctx),
+    );
 
     expect(result).toEqual({
-      workspaceRoot: "/test/workspace",
-      fingerprint: "test@1",
-      templateCount: 2,
-      inlineTemplateCount: 1,
-      programCache: {},
+      status: "refused",
+      reason: "unresolved-candidates",
+      message: "Rename was refused because one same-name location is unresolved.",
+      templateReferenceCount: 1,
+      typeScriptReferenceCount: 0,
+      candidateCount: 1,
+      candidates: [{
+        uri: expect.stringContaining("src/app.html"),
+        range: {
+          start: { line: 0, character: 5 },
+          end: { line: 0, character: 10 },
+        },
+        name: "title",
+        reason: "target-open",
+      }],
     });
   });
 
-  test("returns error object on failure", () => {
-    const ctx = createMockContext();
-    ctx.workspace.snapshot.mockImplementation(() => { throw new Error("workspace crashed"); });
+  test("returns blocked when any cross-domain edit fails old-text validation", async () => {
+    const tsDocument = TextDocument.create(
+      renameTypeScriptUri,
+      "typescript",
+      1,
+      "class App { title = ''; }",
+    );
+    const ctx = createMockContext({
+      workspaceRoot: renameWorkspaceRoot,
+      ensureProgramDocument: vi.fn(() => tsDocument),
+      lookupText: vi.fn(() => "<p>${stale}</p>"),
+      lookupDocumentSnapshot: vi.fn((uri: string) =>
+        uri.endsWith("/src/app.html")
+          ? snapshot(uri, "<p>${stale}</p>", 4, "html")
+          : null,
+      ),
+    });
+    ctx.semanticRuntime.templateRenameFromTypeScript.mockResolvedValue({
+      schemaVersion: "0.2",
+      result: "answered",
+      selection: "not-applicable",
+      coverage: "complete",
+      summary: "mock",
+      value: {
+        displayText: "mock",
+        status: "available",
+        reason: null,
+        selectedMemberName: "title",
+        placeholder: "title",
+        targetSource: null,
+        activeSource: null,
+        edits: [
+          {
+            editKind: "template-usage",
+            source: {
+              kind: "source-span-address",
+              label: "src/app.html@5..10",
+              path: "src/app.html",
+              start: 5,
+              end: 10,
+            },
+            oldText: "title",
+            newText: "heading",
+          },
+        ],
+        candidateRows: [],
+        templateReferenceCount: 1,
+        typeScriptReferenceCount: 0,
+      },
+      page: null,
+    });
 
-    const result = handleDumpState(ctx as never);
+    const result = await handleRenameFromTs(
+      ctx as never,
+      {
+        uri: tsDocument.uri,
+        position: { line: 0, character: 12 },
+        newName: "heading",
+      },
+      createContextTestOperation(ctx),
+    );
 
-    expect(result).toHaveProperty("error");
-    expect((result as { error: string }).error).toContain("workspace crashed");
-    expect(ctx.logger.error).toHaveBeenCalledWith(expect.stringContaining("dumpState"));
+    expect(result).toMatchObject({
+      status: "blocked",
+      reason: "mapping-failed",
+      templateReferenceCount: 1,
+      typeScriptReferenceCount: 0,
+      candidateCount: 0,
+    });
+    expect(result.status === "blocked" ? result.failures?.[0] : "").toContain(
+      'expected "title"',
+    );
   });
 });

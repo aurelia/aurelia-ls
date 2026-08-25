@@ -25,7 +25,7 @@ import type {
   AppBuilderLocalViewModelFieldObjectStateSourceModel,
 } from '../local-view-model-state-source.js';
 import type {
-  AppBuilderServiceCollectionFilterPredicateKind as AppBuilderServiceCollectionFilterPredicateKindValue,
+  AppBuilderServiceCollectionFilterPredicateKind,
 } from '../service-boundary-source.js';
 import type {
   SourcePlan,
@@ -40,13 +40,13 @@ import type {
   AppBuilderControlUseInventoryRow,
 } from './control-use-inventory.js';
 import type {
-  AppBuilderCollectionFeatureId as AppBuilderCollectionFeatureIdValue,
+  AppBuilderCollectionFeatureId,
 } from './collection.js';
 import type {
   AppBuilderCollectionTableColumnPayload,
 } from './collection-projection.js';
 import type {
-  AppBuilderEffectContractId as AppBuilderEffectContractIdValue,
+  AppBuilderEffectContractId,
 } from './effect.js';
 import {
   AppBuilderInputFacetId,
@@ -659,7 +659,7 @@ export interface AppBuilderSourceLoweringRouterBackedListDetailServiceCollection
   /** TypeScript parameter name accepted by the generated filter method. */
   readonly parameterName?: string | null;
   /** Filter predicate selected for the generated method; defaults to strict equality. */
-  readonly predicateKind?: AppBuilderServiceCollectionFilterPredicateKindValue | null;
+  readonly predicateKind?: AppBuilderServiceCollectionFilterPredicateKind | null;
 }
 
 /** Request for a generated update method on a router-backed list/detail service collection. */
@@ -709,7 +709,7 @@ export interface AppBuilderSourceLoweringRouterBackedListDetailServiceCollection
   /** TypeScript parameter name accepted by the generated filter method. */
   readonly parameterName: string;
   /** Filter predicate selected for the generated method. */
-  readonly predicateKind: AppBuilderServiceCollectionFilterPredicateKindValue;
+  readonly predicateKind: AppBuilderServiceCollectionFilterPredicateKind;
 }
 
 /** Selected generated update method on a router-backed list/detail service collection. */
@@ -837,7 +837,7 @@ export interface AppBuilderSourceLoweringComponentPairServiceCollectionFilterMet
   /** TypeScript parameter name accepted by the generated filter method. */
   readonly parameterName?: string | null;
   /** Filter predicate selected for the generated method; defaults to strict equality. */
-  readonly predicateKind?: AppBuilderServiceCollectionFilterPredicateKindValue | null;
+  readonly predicateKind?: AppBuilderServiceCollectionFilterPredicateKind | null;
 }
 
 /** Request for a generated create/write method on a component-pair service collection. */
@@ -913,7 +913,7 @@ export interface AppBuilderSourceLoweringSourcePlanIssue {
   /** Service class names involved in a support-file issue. */
   readonly serviceClassNames?: readonly string[];
   /** Collection feature ids involved in a collection query issue. */
-  readonly collectionFeatureIds?: readonly AppBuilderCollectionFeatureIdValue[];
+  readonly collectionFeatureIds?: readonly AppBuilderCollectionFeatureId[];
   /** Lower-level invocation issue when applicable. */
   readonly sourceLoweringInvocationIssue?: AppBuilderSourceLoweringInvocationIssue;
   /** Lower-level composition issue when applicable. */
@@ -941,7 +941,7 @@ export interface AppBuilderSourceLoweringAppShell {
   /** App-builder ontology rows exercised by this direct SourcePlan lowering. */
   readonly sourceLoweringTargetRefs: readonly AppBuilderOntologyRowRef[];
   /** Effect contracts associated with the AppShell target and SourcePlan preview boundary. */
-  readonly effectContractIds: readonly AppBuilderEffectContractIdValue[];
+  readonly effectContractIds: readonly AppBuilderEffectContractId[];
   /** Reopen effect kinds expected from this direct AppShell SourcePlan when complete. */
   readonly expectedEffectKinds: readonly ExpectedSemanticEffectKind[];
   /** Compact reopen witnesses expected from this direct AppShell SourcePlan when complete. */
@@ -971,7 +971,7 @@ export interface AppBuilderSourceLoweringApplicationAssembly {
   /** App-builder ontology rows exercised by this direct SourcePlan lowering. */
   readonly sourceLoweringTargetRefs: readonly AppBuilderOntologyRowRef[];
   /** Effect contracts associated with the ApplicationAssembly target and SourcePlan preview boundary. */
-  readonly effectContractIds: readonly AppBuilderEffectContractIdValue[];
+  readonly effectContractIds: readonly AppBuilderEffectContractId[];
   /** Reopen effect kinds expected from this direct ApplicationAssembly SourcePlan when complete. */
   readonly expectedEffectKinds: readonly ExpectedSemanticEffectKind[];
   /** Compact reopen witnesses expected from this direct ApplicationAssembly SourcePlan when complete. */
@@ -1035,7 +1035,7 @@ export interface AppBuilderSourceLoweringRouterBackedListDetail {
   /** App-builder ontology rows exercised by this direct SourcePlan lowering. */
   readonly sourceLoweringTargetRefs: readonly AppBuilderOntologyRowRef[];
   /** Effect contracts associated with the RouterBackedListDetail target and SourcePlan preview boundary. */
-  readonly effectContractIds: readonly AppBuilderEffectContractIdValue[];
+  readonly effectContractIds: readonly AppBuilderEffectContractId[];
   /** Reopen effect kinds expected from this direct router-backed SourcePlan when complete. */
   readonly expectedEffectKinds: readonly ExpectedSemanticEffectKind[];
   /** Compact reopen witnesses expected from this direct router-backed SourcePlan when complete. */
@@ -1067,7 +1067,7 @@ export interface AppBuilderSourceLoweringDiStateClass {
   /** App-builder ontology rows exercised by this direct SourcePlan lowering. */
   readonly sourceLoweringTargetRefs: readonly AppBuilderOntologyRowRef[];
   /** Effect contracts associated with the DiStateClass target and SourcePlan preview boundary. */
-  readonly effectContractIds: readonly AppBuilderEffectContractIdValue[];
+  readonly effectContractIds: readonly AppBuilderEffectContractId[];
   /** Reopen effect kinds expected from this direct DI state-class SourcePlan when complete. */
   readonly expectedEffectKinds: readonly ExpectedSemanticEffectKind[];
   /** Compact reopen witnesses expected from this direct DI state-class SourcePlan when complete. */
@@ -1107,7 +1107,7 @@ export interface AppBuilderSourceLoweringLocalViewModelState {
   /** App-builder ontology rows exercised by this direct SourcePlan lowering. */
   readonly sourceLoweringTargetRefs: readonly AppBuilderOntologyRowRef[];
   /** Effect contracts associated with the LocalViewModelState target and SourcePlan preview boundary. */
-  readonly effectContractIds: readonly AppBuilderEffectContractIdValue[];
+  readonly effectContractIds: readonly AppBuilderEffectContractId[];
   /** Reopen effect kinds expected from this direct local state SourcePlan when complete. */
   readonly expectedEffectKinds: readonly ExpectedSemanticEffectKind[];
   /** Compact reopen witnesses expected from this direct local state SourcePlan when complete. */
@@ -1145,7 +1145,7 @@ export interface AppBuilderSourceLoweringComponentPair {
   /** App-builder ontology rows exercised by this component-pair SourcePlan lowering. */
   readonly sourceLoweringTargetRefs: readonly AppBuilderOntologyRowRef[];
   /** Effect contracts associated with the nested ontology targets and SourcePlan preview boundary. */
-  readonly effectContractIds: readonly AppBuilderEffectContractIdValue[];
+  readonly effectContractIds: readonly AppBuilderEffectContractId[];
   /** Reopen effect kinds expected from this component-pair SourcePlan when complete. */
   readonly expectedEffectKinds: readonly ExpectedSemanticEffectKind[];
   /** Compact reopen witnesses expected from this component-pair SourcePlan when complete. */
@@ -1199,7 +1199,7 @@ export interface AppBuilderSourceLoweringSourcePlan {
   /** App-builder ontology rows exercised by the selected source lowering. */
   readonly sourceLoweringTargetRefs: readonly AppBuilderOntologyRowRef[];
   /** Effect contracts associated with the selected target and SourcePlan preview boundary. */
-  readonly effectContractIds: readonly AppBuilderEffectContractIdValue[];
+  readonly effectContractIds: readonly AppBuilderEffectContractId[];
   /** Reopen effect kinds expected from the selected full-app SourcePlan, if any. */
   readonly expectedEffectKinds: readonly ExpectedSemanticEffectKind[];
   /** Number of compact reopen witnesses expected from the selected full-app SourcePlan, if any. */

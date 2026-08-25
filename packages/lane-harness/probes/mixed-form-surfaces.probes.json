@@ -1,0 +1,122 @@
+{
+  "fixture": "packages/semantic-runtime/fixtures/pressure/mixed-form-surfaces",
+  "lanes": {
+    "rename": [
+      {
+        "id": "bindable-member-label",
+        "file": "src/components/loose-picklist.html",
+        "anchor": "${label}",
+        "at": "label",
+        "newName": "caption",
+        "verdict": "correct",
+        "reason": "",
+        "note": "The source-backed @bindable label renames the component template usage, the TS declaration, and the default bindable attribute name in ticket-editor.html. Parent-bound specialization proves option.label as TicketOption.label, so that distinct same-name member is excluded without making this answer partial."
+      },
+      {
+        "id": "parent-specialized-option-label",
+        "file": "src/components/loose-picklist.html",
+        "anchor": "${option.label || option}",
+        "at": "label",
+        "newName": "caption",
+        "verdict": "correct",
+        "reason": "",
+        "note": "The child bindable declares options as readonly unknown[], but the rendered parent binds TicketOption[] into it. Effective parent-bound specialization therefore resolves option.label to TicketOption.label and rename must edit exactly the template token and TypeScript declaration."
+      },
+      {
+        "id": "receiver-rename-shellTone-no-overlap",
+        "file": "src/app.html",
+        "anchor": "${shellTone}",
+        "at": "shellTone",
+        "newName": "theme",
+        "verdict": "correct",
+        "reason": "",
+        "note": "Regression probe for the owner-fallback masquerade (member-source-state-conflation). At the pre-fix HEAD, renaming shellTone produced FOUR edits including two OVERLAPPING template edits: the receiver token 512..521 AND the whole shellTone.label expression 512..527, which would have destroyed the .label member access - a confident-wrong workspace edit answered as available/complete. Correct = 3 edits: TS declaration, the class-interpolation usage, and the receiver token inside shellTone.label; the .label token must survive. VERDICT 2026-07-07: 3 clean edits, .label survives (${theme.label}). Root cause of the pre-fix corruption: the owner-fallback wrote the owner declaration into the member-source slot and the state rule granted source, so the shellTone.label row span-matched the shellTone declaration; fix introduced observedMemberSourceRoute (member-declaration vs owner-value) and the reference context requires member-declaration routes."
+      }
+    ],
+    "references": [
+      {
+        "id": "bindable-member-label",
+        "file": "src/components/loose-picklist.html",
+        "anchor": "${label}",
+        "at": "label",
+        "verdict": "correct",
+        "reason": "",
+        "note": "References enumerate the component template usage, TS declaration, and ticket-editor.html bindable attribute-name site. Parent-bound specialization proves the same-name option.label as a distinct TicketOption member, so the answer is complete."
+      },
+      {
+        "id": "parent-specialized-option-label",
+        "file": "src/components/loose-picklist.html",
+        "anchor": "${option.label || option}",
+        "at": "label",
+        "verdict": "correct",
+        "reason": "Returns the exact template occurrence and TicketOption.label declaration resolved through the parent's bound options value.",
+        "note": "Parent-bound specialization closes the child template's locally weak options declaration with the rendered TicketOption[] input."
+      }
+    ],
+    "diagnostics": [
+      {
+        "id": "app-template-weakMetadata-and-shellTone",
+        "file": "src/app.html",
+        "verdict": "correct",
+        "reason": "Correct as a file-level diagnostics baseline: `shellTone.label` is the sole visible Warning, with matching TS2339 checker evidence retained contextually. Broad index-signature uncertainty at `weakMetadata.source` is conserved in semantic evidence but withheld from standalone Problems.",
+        "note": "NEW 2026-07-07. Diagnostics lane pressure for the distinction between a proven missing member and open owner shape. The lack of a safe declaration edit does not lower the definite `shellTone.label` finding below Warning, while `weakMetadata.source` must not create a low-actionability Problem."
+      },
+      {
+        "id": "loose-picklist-parent-specialized-option-label",
+        "file": "src/components/loose-picklist.html",
+        "verdict": "correct",
+        "reason": "No diagnostic is correct: the rendered parent supplies TicketOption[] to the weakly declared child bindable, so option.label is proven in the effective child scope.",
+        "note": "Regression probe for parent-bound type specialization across a custom-element bindable. A local TS18046 here would mean diagnostics ignored the rendered input authority used by references, rename, and hover."
+      }
+    ],
+    "codeAction": [
+      {
+        "id": "weakMetadata-source-owner-type-no-viewmodel-edit",
+        "file": "src/app.html",
+        "anchor": "weakMetadata.source",
+        "at": "source",
+        "verdict": "correct",
+        "reason": "Broad index-signature uncertainty at `weakMetadata.source` produces no Problem, cursor diagnostic context, repair affordance, or Quick Fix.",
+        "note": "Regression canary for the pre-fix wrong action that inserted `source!: unknown;` into SupportDeskApp. The weak-owner fact remains available to semantic inspection without manufacturing an editor repair surface."
+      }
+    ],
+    "hover": [
+      {
+        "id": "bindable-member-label",
+        "file": "src/components/loose-picklist.html",
+        "anchor": "${label}",
+        "at": "label",
+        "verdict": "correct",
+        "reason": "",
+        "note": "Hover reports the ordinary `label: string` member identity; it must not fabricate a bindable section merely because the backing property is decorated."
+      },
+      {
+        "id": "parent-specialized-option-label",
+        "file": "src/components/loose-picklist.html",
+        "anchor": "${option.label || option}",
+        "at": "label",
+        "verdict": "correct",
+        "reason": "",
+        "note": "Hover should identify label through TicketOption after the parent's TicketOption[] value specializes the child's otherwise weak options bindable."
+      },
+      {
+        "id": "masked-member-shellTone-label",
+        "file": "src/app.html",
+        "anchor": "${shellTone.label}",
+        "at": "label",
+        "verdict": "correct",
+        "reason": "",
+        "note": "Hover presents exactly one authenticated missing-member diagnostic at `label`; it must not fabricate a member identity, owner shape, raw evidence dump, or uncertainty section."
+      },
+      {
+        "id": "weak-member-withheld-context",
+        "file": "src/app.html",
+        "anchor": "${weakMetadata.source}",
+        "at": "source",
+        "verdict": "correct",
+        "reason": "Hover keeps the proved `source: unknown` member identity while the weak-owner diagnostic presentation is validated and withheld from the card.",
+        "note": "B2 withheld-policy canary: the exact weak-owner row remains compact semantic evidence but produces no diagnostic or synthetic uncertainty status."
+      }
+    ]
+  }
+}

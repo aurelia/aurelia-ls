@@ -3,17 +3,21 @@ import ts from 'typescript';
 import {
   EvaluationBooleanValue,
   EvaluationBoundaryKind,
+  EvaluationObjectPropertyPresence,
   EvaluationValueKind,
   EvaluationNumberValue,
   EvaluationStringValue,
   EvaluationUndefined,
   EvaluationUndefinedValue,
-  evaluationValuesEqual,
   isEvaluationPrimitiveValue,
   readEvaluationPrimitive,
   readEvaluationTruthiness,
   type EvaluationValue,
 } from './values.js';
+import {
+  EvaluationValueRelationKind,
+  evaluationStrictEqualityDecision,
+} from './value-relation.js';
 
 export type StaticBinaryOperation =
   | '=='
@@ -58,14 +62,18 @@ export function evaluateStaticBinaryOperation(
   node: ts.Node | null,
 ): EvaluationValue | null {
   switch (operation) {
-    case '==':
-      return new EvaluationBooleanValue(evaluationValuesLooselyEqual(left, right), node);
+    case '==': {
+      const equal = evaluationValuesLooselyEqual(left, right);
+      return equal == null ? null : new EvaluationBooleanValue(equal, node);
+    }
     case '===':
-      return new EvaluationBooleanValue(evaluationValuesEqual(left, right), node);
-    case '!=':
-      return new EvaluationBooleanValue(!evaluationValuesLooselyEqual(left, right), node);
+      return evaluationBooleanForRelation(evaluationStrictEqualityDecision(left, right), false, node);
+    case '!=': {
+      const equal = evaluationValuesLooselyEqual(left, right);
+      return equal == null ? null : new EvaluationBooleanValue(!equal, node);
+    }
     case '!==':
-      return new EvaluationBooleanValue(!evaluationValuesEqual(left, right), node);
+      return evaluationBooleanForRelation(evaluationStrictEqualityDecision(left, right), true, node);
     case 'in':
       return evaluateStaticInOperation(left, right, node);
     case 'instanceof':
@@ -167,9 +175,14 @@ function evaluateStaticInOperation(
   }
   switch (right.kind) {
     case EvaluationValueKind.Object:
-      return right.properties.has(key)
-        ? new EvaluationBooleanValue(true, node)
-        : right.mayHaveUnknownProperties ? null : new EvaluationBooleanValue(false, node);
+      {
+        const property = right.properties.get(key);
+        return property?.presence === EvaluationObjectPropertyPresence.Conditional
+          ? null
+          : property != null
+            ? new EvaluationBooleanValue(true, node)
+            : right.mayHaveUnknownProperties ? null : new EvaluationBooleanValue(false, node);
+      }
     case EvaluationValueKind.Array:
       if (key === 'length') {
         return new EvaluationBooleanValue(true, node);
@@ -177,11 +190,13 @@ function evaluateStaticInOperation(
       if (!isArrayIndexKey(key)) {
         return null;
       }
-      return right.mayHaveUnknownElements || right.mayHaveUnknownOrder
+      return !right.hasExactElementPositions
         ? null
-        : new EvaluationBooleanValue(Number(key) >= 0 && Number(key) < right.elements.length, node);
+        : new EvaluationBooleanValue(right.elementAtRuntimeIndex(Number(key)) != null, node);
     case EvaluationValueKind.ModuleNamespace:
-      return new EvaluationBooleanValue(right.exports.has(key), node);
+      return right.exportEntries.has(key)
+        ? new EvaluationBooleanValue(true, node)
+        : right.mayHaveUnknownExports ? null : new EvaluationBooleanValue(false, node);
     case EvaluationValueKind.BoundaryObject:
     case EvaluationValueKind.BoundaryValue:
     case EvaluationValueKind.Instance:
@@ -213,9 +228,13 @@ function evaluateStaticInstanceOfOperation(
     case 'Array':
       return new EvaluationBooleanValue(left.kind === EvaluationValueKind.Array, node);
     case 'Map':
-      return new EvaluationBooleanValue(left.kind === EvaluationValueKind.Map, node);
+      return new EvaluationBooleanValue(left.kind === EvaluationValueKind.Map && !left.weak, node);
+    case 'WeakMap':
+      return new EvaluationBooleanValue(left.kind === EvaluationValueKind.Map && left.weak, node);
     case 'Set':
-      return new EvaluationBooleanValue(left.kind === EvaluationValueKind.Set, node);
+      return new EvaluationBooleanValue(left.kind === EvaluationValueKind.Set && !left.weak, node);
+    case 'WeakSet':
+      return new EvaluationBooleanValue(left.kind === EvaluationValueKind.Set && left.weak, node);
     case 'RegExp':
       return new EvaluationBooleanValue(left.kind === EvaluationValueKind.RegularExpression, node);
     case 'Date':
@@ -321,12 +340,13 @@ function evaluateStaticTypeOfValue(
     case EvaluationValueKind.Function:
     case EvaluationValueKind.Class:
       return new EvaluationStringValue('function', node);
+    case EvaluationValueKind.BoundaryObject:
+      return new EvaluationStringValue(operand.callable ? 'function' : 'object', node);
     case EvaluationValueKind.Null:
     case EvaluationValueKind.Array:
     case EvaluationValueKind.Set:
     case EvaluationValueKind.Map:
     case EvaluationValueKind.Object:
-    case EvaluationValueKind.BoundaryObject:
     case EvaluationValueKind.RegularExpression:
     case EvaluationValueKind.Date:
     case EvaluationValueKind.Instance:
@@ -342,7 +362,7 @@ function evaluateStaticTypeOfValue(
 function evaluationValuesLooselyEqual(
   left: EvaluationValue,
   right: EvaluationValue,
-): boolean {
+): boolean | null {
   if (left.kind === EvaluationValueKind.Null || left.kind === EvaluationValueKind.Undefined) {
     return right.kind === EvaluationValueKind.Null || right.kind === EvaluationValueKind.Undefined;
   }
@@ -361,7 +381,22 @@ function evaluationValuesLooselyEqual(
   if (left.kind === EvaluationValueKind.Number && right.kind === EvaluationValueKind.String) {
     return left.value === Number(right.value);
   }
-  return evaluationValuesEqual(left, right);
+  const decision = evaluationStrictEqualityDecision(left, right);
+  return decision === EvaluationValueRelationKind.Open
+    ? null
+    : decision === EvaluationValueRelationKind.Match;
+}
+
+function evaluationBooleanForRelation(
+  decision: EvaluationValueRelationKind,
+  negate: boolean,
+  node: ts.Node | null,
+): EvaluationBooleanValue | null {
+  if (decision === EvaluationValueRelationKind.Open) {
+    return null;
+  }
+  const equal = decision === EvaluationValueRelationKind.Match;
+  return new EvaluationBooleanValue(negate ? !equal : equal, node);
 }
 
 function staticBinaryOperationForToken(operator: ts.SyntaxKind): StaticBinaryOperation | null {

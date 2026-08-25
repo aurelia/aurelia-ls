@@ -1,0 +1,21 @@
+{
+  "fixture": "packages/semantic-runtime/fixtures/pressure/template-overlay-bound-controller",
+  "lanes": {
+    "diagnostics": [
+      {
+        "id": "overlay-bound-controller-host-template",
+        "file": "src/template-overlay-bound-controller-app.html",
+        "verdict": "correct",
+        "reason": "The full document-diagnostic pull is empty in the host template; parent-local converter and child-bound values do not leak false positives.",
+        "note": "UPDATED 2026-08-01. The child bindable explicitly declares the `(OverlayAction) => boolean` contract its template invokes, so this remains a clean bound-controller/converter projection control rather than relying on an accidentally inferred zero-argument function."
+      },
+      {
+        "id": "overlay-bound-controller-child-template",
+        "file": "src/callback-panel.html",
+        "verdict": "correct",
+        "reason": "The full document-diagnostic pull is empty; child-template overlay typing preserves `OverlayAction` locals and callable `onAction(action)`.",
+        "note": "NEW 2026-07-08. Diagnostics lane canary for child-template overlay typing from parent-bound values. VERDICT 2026-07-08: correct. `actions` yields `OverlayAction` locals and `onAction(action)` stays callable as a boolean-returning handler."
+      }
+    ]
+  }
+}

@@ -38,6 +38,8 @@ import {
 import type {
   KernelStore,
 } from '../kernel/store.js';
+import type { ProductDetailReadView } from '../kernel/product-details.js';
+import { RuntimeNodeObserverConfigFieldState } from '../template/runtime-binding.js';
 import {
   runtimeBindingPrimitiveValueAssignableToType,
   runtimeBindingStringPrimitiveDomain,
@@ -50,10 +52,11 @@ import {
   RuntimeBindingValueChannelCouplingKind,
   RuntimeBindingValueChannelKind,
 } from './runtime-binding-observation.js';
+import { RuntimeOperationRealization } from '../runtime-expression/runtime-operation.js';
 
 /** Type-system capability surface consumed by binding data-flow assignability policy. */
 export interface BindingDataFlowAssignabilityTypeAccess {
-  readonly store: KernelStore;
+  readonly publication: ProductDetailReadView;
   readTypeShape(reference: CheckerTypeReference | null): CheckerTypeShape | null;
   isRuntimeArrayInstanceType(reference: CheckerTypeReference | null): boolean;
   isRepeatSourceRuntimeAccepted(reference: CheckerTypeReference | null): boolean | null;
@@ -128,7 +131,7 @@ export class BindingDataFlowAssignabilityEvaluator {
     from: CheckerTypeReference | null,
     to: CheckerTypeReference | null,
   ): boolean | null {
-    return checkerTypeReferenceAssignable(this.typeAccess.store, from, to);
+    return checkerTypeReferenceAssignable(this.typeAccess.publication, from, to);
   }
 
   private isSourceAssignableToTarget(
@@ -136,9 +139,15 @@ export class BindingDataFlowAssignabilityEvaluator {
     targetType: CheckerTypeReference | null,
     valueChannel: RuntimeBindingValueChannel | null,
   ): boolean | null {
-    const observerSync = this.observerSourceToTargetRuntimeAcceptance(sourceType, targetType, valueChannel);
-    if (observerSync != null) {
-      return observerSync;
+    if (
+      valueChannel?.realization === RuntimeOperationRealization.Open
+      && this.typeAccess.readTypeShape(sourceType)?.shapeKind === CheckerTypeShapeKind.Unknown
+    ) {
+      return null;
+    }
+    const runtimeAcceptance = this.sourceToTargetRuntimeAcceptance(sourceType, targetType, valueChannel);
+    if (runtimeAcceptance != null) {
+      return runtimeAcceptance;
     }
     const valueDomain = valueChannel?.valueDomain ?? [];
     const primitiveValueDomain = this.primitiveValueDomain(valueChannel);
@@ -163,7 +172,7 @@ export class BindingDataFlowAssignabilityEvaluator {
     return this.isTypeAssignableToStringDomain(sourceType, valueDomain);
   }
 
-  private observerSourceToTargetRuntimeAcceptance(
+  private sourceToTargetRuntimeAcceptance(
     sourceType: CheckerTypeReference | null,
     targetType: CheckerTypeReference | null,
     valueChannel: RuntimeBindingValueChannel | null,
@@ -172,6 +181,19 @@ export class BindingDataFlowAssignabilityEvaluator {
       return null;
     }
     switch (valueChannel.channelKind) {
+      case RuntimeBindingValueChannelKind.TextContent:
+      case RuntimeBindingValueChannelKind.AttributeValue:
+      case RuntimeBindingValueChannelKind.ClassAttributeTokens:
+      case RuntimeBindingValueChannelKind.ClassToggle:
+      case RuntimeBindingValueChannelKind.StyleAttributeRules:
+      case RuntimeBindingValueChannelKind.StylePropertyValue:
+        // Runtime-html accepts arbitrary values here and applies truthiness, removal, or stringification itself.
+        return true;
+      case RuntimeBindingValueChannelKind.EventHandlerInvocation:
+        // ListenerBinding accepts any expression value and only invokes it when the runtime value is callable.
+        return true;
+      case RuntimeBindingValueChannelKind.ValueAttributeObserverProperty:
+        return this.isValueAttributeObserverSourceAccepted(sourceType, targetType, valueChannel);
       case RuntimeBindingValueChannelKind.CustomMatcherFunction:
         return this.typeAccess.isCallableBooleanFunction(sourceType, 2);
       case RuntimeBindingValueChannelKind.SelectSingleOptionValue:
@@ -185,6 +207,35 @@ export class BindingDataFlowAssignabilityEvaluator {
       default:
         return null;
     }
+  }
+
+  private isValueAttributeObserverSourceAccepted(
+    sourceType: CheckerTypeReference,
+    targetType: CheckerTypeReference | null,
+    valueChannel: RuntimeBindingValueChannel,
+  ): boolean | null {
+    const sourceCarrier = this.typeAccess.readTypeShape(sourceType)?.carrier ?? null;
+    const targetCarrier = this.typeAccess.readTypeShape(targetType)?.carrier ?? null;
+    if (sourceCarrier == null || targetCarrier == null || sourceCarrier.checker !== targetCarrier.checker) {
+      return null;
+    }
+    const nonNullishSource = sourceCarrier.checker.getNonNullableType(sourceCarrier.type);
+    if ((nonNullishSource.flags & ts.TypeFlags.Never) === 0
+      && !checkerRawTypeAssignable(sourceCarrier.checker, nonNullishSource, targetCarrier.type)) {
+      return false;
+    }
+    if (checkerTypeNullishPresence(sourceCarrier.checker, sourceCarrier.type) === CheckerTypeNullishPresence.None) {
+      return true;
+    }
+    if (valueChannel.nullishDefaultState === RuntimeNodeObserverConfigFieldState.Open
+      || valueChannel.nullishDefault == null) {
+      return null;
+    }
+    return runtimeBindingPrimitiveValueAssignableToType(
+      valueChannel.nullishDefault,
+      targetCarrier.checker,
+      targetCarrier.type,
+    );
   }
 
   private isSyntheticObjectAssignableToStringIndexedTarget(

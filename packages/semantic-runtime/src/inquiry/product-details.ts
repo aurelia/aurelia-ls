@@ -7,11 +7,13 @@ import type { ProductDetailEntry } from '../kernel/product-details.js';
 import type { KernelStore } from '../kernel/store.js';
 import {
   InquiryAnswer,
+  InquiryAnswerCoverage,
+  InquiryAnswerResult,
+  InquiryAnswerSelection,
   InquiryContinuation,
   InquiryContinuationKind,
   InquiryExpansion,
   InquiryExpansionKind,
-  InquiryOutcomeKind,
   InquiryProjection,
   InquiryProjectionKind,
 } from './answer.js';
@@ -55,40 +57,37 @@ export function answerProductDetail(
   const result = new ProductDetailResult(product, detailEntry);
   const claimHandles = productDetailClaimHandles(store, product);
 
-  return new InquiryAnswer(
-    productDetailOutcome(detailEntry),
+  return new InquiryAnswer({
+    result: InquiryAnswerResult.Answered,
+    selection: InquiryAnswerSelection.Exact,
+    coverage: detailEntry == null
+      ? InquiryAnswerCoverage.Open
+      : InquiryAnswerCoverage.Complete,
     locus,
-    productDetailSummary(product, detailEntry),
-    KernelExactBasis,
-    result,
-    [],
-    [product.provenanceHandle],
+    summary: productDetailSummary(product, detailEntry),
+    basis: KernelExactBasis,
+    value: result,
+    provenanceHandles: [product.provenanceHandle],
     claimHandles,
-    [],
-    productDetailContinuations(query, claimHandles),
-    null,
-    productDetailProjection(query, product, detailEntry),
-  );
+    continuations: productDetailContinuations(query, claimHandles),
+    projection: productDetailProjection(query, product, detailEntry),
+  });
 }
 
 function missingProductDetailAnswer(
   query: ProductDetailQuery,
   locus: KernelRecordInquiryLocus,
 ): InquiryAnswer<ProductDetailResult | null, ProductDetailQuery> {
-  return new InquiryAnswer(
-    InquiryOutcomeKind.Miss,
+  return new InquiryAnswer({
+    result: InquiryAnswerResult.Answered,
+    selection: InquiryAnswerSelection.Absent,
+    coverage: InquiryAnswerCoverage.Complete,
     locus,
-    'No materialized product exists for the selected handle.',
-    KernelExactBasis,
-    null,
-    [],
-    [],
-    [],
-    [],
-    [],
-    null,
-    query.projection,
-  );
+    summary: 'No materialized product exists for the selected handle.',
+    basis: KernelExactBasis,
+    value: null,
+    projection: query.projection,
+  });
 }
 
 function productDetailClaimHandles(
@@ -99,12 +98,6 @@ function productDetailClaimHandles(
     ...store.readClaimsForSubject(product.handle),
     ...store.readClaimsForObject(product.handle),
   ]);
-}
-
-function productDetailOutcome(
-  detailEntry: ProductDetailEntry<unknown> | null,
-): InquiryOutcomeKind {
-  return detailEntry == null ? InquiryOutcomeKind.Partial : InquiryOutcomeKind.Hit;
 }
 
 function productDetailSummary(

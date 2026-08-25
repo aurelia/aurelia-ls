@@ -1,13 +1,9 @@
 import {
-  existsSync,
-  readdirSync,
-} from 'node:fs';
-import {
   extname,
-  isAbsolute,
   join,
   relative,
 } from 'node:path';
+import type { SemanticRuntimeProjectInputHost } from '../kernel/project-input.js';
 import {
   inferSourceFileRole,
   inferSourceLanguage,
@@ -16,6 +12,7 @@ import {
   SourceDiscoveryResult,
   type BootSourceFileInput,
 } from './frames.js';
+import type { AuthoredSourceBoundary } from './source-boundary.js';
 
 const DEFAULT_SOURCE_EXTENSIONS = new Set([
   '.ts',
@@ -43,17 +40,16 @@ export interface SourceDiscoveryOptions {
   readonly extensions?: ReadonlySet<string>;
   /** Directory names to skip without interpreting config yet. */
   readonly excludedDirectories?: ReadonlySet<string>;
-  /** Absolute or root-relative subtrees to skip for this project frame. */
-  readonly excludedSubtrees?: ReadonlySet<string>;
   /** Optional maximum admitted source files before discovery stops. */
   readonly maxFiles?: number | null;
 }
 
 interface SourceDiscoveryFrame {
+  readonly host: SemanticRuntimeProjectInputHost;
   readonly rootDir: string;
+  readonly boundary: AuthoredSourceBoundary;
   readonly extensions: ReadonlySet<string>;
   readonly excludedDirectories: ReadonlySet<string>;
-  readonly excludedSubtrees: ReadonlySet<string>;
   readonly maxFiles: number | null;
   readonly admitted: BootSourceFileInput[];
   truncated: boolean;
@@ -61,19 +57,22 @@ interface SourceDiscoveryFrame {
 
 /** Filesystem source discovery used only to admit candidate inputs into the kernel. */
 export function discoverSourceFiles(
+  host: SemanticRuntimeProjectInputHost,
   rootDir: string,
+  boundary: AuthoredSourceBoundary,
   options: SourceDiscoveryOptions = {},
 ): SourceDiscoveryResult {
   const frame: SourceDiscoveryFrame = {
+    host,
     rootDir,
+    boundary,
     extensions: options.extensions ?? DEFAULT_SOURCE_EXTENSIONS,
     excludedDirectories: options.excludedDirectories ?? DEFAULT_EXCLUDED_DIRECTORIES,
-    excludedSubtrees: normalizeExcludedSubtrees(rootDir, options.excludedSubtrees ?? new Set()),
     maxFiles: options.maxFiles ?? null,
     admitted: [],
     truncated: false,
   };
-  if (!existsSync(rootDir)) {
+  if (!host.directoryExists(rootDir)) {
     return new SourceDiscoveryResult(rootDir, frame.admitted, false, false, frame.maxFiles);
   }
   visitSourceDiscoveryDirectory(frame, rootDir);
@@ -85,23 +84,24 @@ function visitSourceDiscoveryDirectory(frame: SourceDiscoveryFrame, directory: s
     return;
   }
 
-  const entries = readdirSync(directory, { withFileTypes: true })
-    .sort((left, right) => left.name.localeCompare(right.name));
+  const entries = [...frame.host.readDirectory(directory)]
+    .sort((left, right) => left.localeCompare(right));
 
-  for (const entry of entries) {
+  for (const entryName of entries) {
     if (sourceDiscoveryShouldStop(frame)) {
       return;
     }
-    if (entry.isDirectory()) {
-      visitChildSourceDirectory(frame, directory, entry.name);
-    } else if (entry.isFile()) {
-      admitSourceFileEntry(frame, directory, entry.name);
+    const entryPath = join(directory, entryName);
+    if (frame.host.directoryExists(entryPath)) {
+      visitChildSourceDirectory(frame, directory, entryName);
+    } else if (frame.host.fileExists(entryPath)) {
+      admitSourceFileEntry(frame, directory, entryName);
     }
   }
 }
 
 function sourceDiscoveryShouldStop(frame: SourceDiscoveryFrame, directory: string | null = null): boolean {
-  if (directory != null && frame.excludedSubtrees.has(normalizeCaseFoldedPath(directory))) {
+  if (directory != null && !frame.boundary.contains(directory)) {
     return true;
   }
   if (frame.maxFiles != null && frame.admitted.length >= frame.maxFiles) {
@@ -137,16 +137,4 @@ function admitSourceFileEntry(
     role: inferSourceFileRole(projectPath),
     note: 'Admitted by boot source discovery.',
   });
-}
-
-function normalizeExcludedSubtrees(rootDir: string, subtrees: ReadonlySet<string>): ReadonlySet<string> {
-  const result = new Set<string>();
-  for (const subtree of subtrees) {
-    result.add(normalizeCaseFoldedPath(isAbsolute(subtree) ? subtree : join(rootDir, subtree)));
-  }
-  return result;
-}
-
-function normalizeCaseFoldedPath(path: string): string {
-  return path.replace(/\\/g, '/').toLowerCase();
 }

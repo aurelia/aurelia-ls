@@ -79,6 +79,8 @@ export class ContainerResourceSlot {
     readonly resolverProductHandle: ProductHandle | null,
     /** Source address for the operation that produced this row. */
     readonly sourceAddressHandle: AddressHandle | null,
+    /** Best available source witness for this resource lookup key; registration-level fallback when key-local syntax is absent. */
+    readonly keySourceAddressHandle: AddressHandle | null,
     /** Field-level provenance for source facts that matter to explanation or ambiguity. */
     readonly fieldProvenance: readonly FieldProvenance<ContainerSlotField>[] = [],
   ) {}

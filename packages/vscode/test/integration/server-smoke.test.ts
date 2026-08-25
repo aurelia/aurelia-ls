@@ -11,17 +11,19 @@
 import { spawn, spawnSync, type ChildProcess } from "node:child_process";
 import { existsSync } from "node:fs";
 import path from "node:path";
+import { pathToFileURL } from "node:url";
+import { createMessageConnection } from "vscode-jsonrpc/node";
 import { test, expect, afterEach } from "vitest";
+import {
+  createWorkerCancellationStrategy,
+  createWorkerMessageTransports,
+} from "../../out/worker-transport.js";
 
 const VSCODE_PACKAGE_ROOT = path.resolve(import.meta.dirname, "../..");
 const SERVER_PATH = path.resolve(VSCODE_PACKAGE_ROOT, "dist/server/main.cjs");
 const BUNDLE_SCRIPT = path.resolve(VSCODE_PACKAGE_ROOT, "esbuild.mjs");
 
 function ensureBundledServer(): void {
-  if (existsSync(SERVER_PATH)) {
-    return;
-  }
-
   const result = spawnSync("node", [BUNDLE_SCRIPT], {
     cwd: VSCODE_PACKAGE_ROOT,
     stdio: "pipe",
@@ -59,7 +61,7 @@ function parseMessages(data: string): Array<{ id?: number; result?: unknown; err
   for (const part of parts) {
     if (part.trim()) {
       try {
-        messages.push(JSON.parse(part));
+        messages.push(JSON.parse(part) as { id?: number; result?: unknown; error?: unknown });
       } catch {
         // partial message, ignore
       }
@@ -77,7 +79,7 @@ afterEach(() => {
   }
 });
 
-test("bundled server starts and responds to initialize", async () => {
+test("bundled server initializes and confirms semantic workspace shape", async () => {
   ensureBundledServer();
 
   serverProcess = spawn("node", [SERVER_PATH, "--stdio"], {
@@ -95,11 +97,13 @@ test("bundled server starts and responds to initialize", async () => {
     errors.push(data.toString());
   });
 
+  const workspaceRoot = path.resolve(VSCODE_PACKAGE_ROOT, "../../fixtures/hello-world");
+
   // Send initialize request
   sendRequest(serverProcess, 1, "initialize", {
     processId: process.pid,
     capabilities: {},
-    rootUri: "file:///test-workspace",
+    rootUri: pathToFileURL(workspaceRoot).toString(),
   });
 
   // Wait for response
@@ -128,8 +132,17 @@ test("bundled server starts and responds to initialize", async () => {
   // Send initialized notification
   sendNotification(serverProcess, "initialized", {});
 
+  sendRequest(serverProcess, 2, "aurelia/workspaceStatus", null);
+  const statusResponse = await waitForResponse<{
+    projectAnalysisCounts?: Array<{ analysisKind: string; count: number }>;
+  }>(2, output, errors);
+  expect(statusResponse.error, "workspace status should not return an error").toBeUndefined();
+  expect(statusResponse.result?.projectAnalysisCounts).toContainEqual(
+    expect.objectContaining({ analysisKind: "app-world", count: 1 }),
+  );
+
   // Send shutdown request
-  sendRequest(serverProcess, 2, "shutdown", null);
+  sendRequest(serverProcess, 3, "shutdown", null);
 
   // Wait briefly for shutdown response
   await new Promise((resolve) => setTimeout(resolve, 100));
@@ -151,4 +164,69 @@ test("bundled server starts and responds to initialize", async () => {
   });
 
   expect(exitCode, "server should exit cleanly").toBe(0);
-}, 10000);
+}, 20000);
+
+test("bundled server initializes over Worker transport and exits cleanly", async () => {
+  ensureBundledServer();
+
+  const transports = createWorkerMessageTransports(SERVER_PATH);
+  const connection = createMessageConnection(
+    transports.reader,
+    transports.writer,
+    undefined,
+    { cancellationStrategy: createWorkerCancellationStrategy() },
+  );
+  connection.listen();
+
+  try {
+    const workspaceRoot = path.resolve(VSCODE_PACKAGE_ROOT, "../../fixtures/hello-world");
+    const initializeResult = await connection.sendRequest<{
+      capabilities?: unknown;
+    }>("initialize", {
+      processId: process.pid,
+      capabilities: {},
+      rootUri: pathToFileURL(workspaceRoot).toString(),
+    });
+
+    expect(initializeResult.capabilities, "server should return capabilities").toBeDefined();
+
+    await connection.sendNotification("initialized", {});
+
+    const status = await connection.sendRequest<{
+      projectAnalysisCounts?: Array<{ analysisKind: string; count: number }>;
+    }>("aurelia/workspaceStatus", null);
+    expect(status.projectAnalysisCounts).toContainEqual(
+      expect.objectContaining({ analysisKind: "app-world", count: 1 }),
+    );
+
+    await connection.sendRequest("shutdown", null);
+    await connection.sendNotification("exit");
+    const exitCode = await transports.exited;
+
+    expect(exitCode, "Worker server should exit cleanly").toBe(0);
+  } finally {
+    connection.end();
+    connection.dispose();
+    await transports.terminate();
+  }
+}, 20000);
+
+function waitForResponse<T>(
+  id: number,
+  output: string[],
+  errors: string[],
+): Promise<{ id?: number; result?: T; error?: unknown }> {
+  return new Promise((resolve, reject) => {
+    const timeout = setTimeout(() => {
+      reject(new Error(`Server did not respond to request ${id} within 10s. Errors: ${errors.join("")}`));
+    }, 10_000);
+    const check = () => {
+      const response = parseMessages(output.join("")).find((message) => message.id === id);
+      if (response == null) return;
+      clearTimeout(timeout);
+      resolve(response as { id?: number; result?: T; error?: unknown });
+    };
+    serverProcess!.stdout!.on("data", check);
+    check();
+  });
+}

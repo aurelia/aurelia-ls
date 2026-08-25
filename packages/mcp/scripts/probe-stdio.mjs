@@ -1,3 +1,4 @@
+import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
@@ -8,6 +9,7 @@ import {
 } from './pattern-sentinels.mjs';
 
 const packageRoot = path.resolve(fileURLToPath(new URL('..', import.meta.url)));
+const packageJson = JSON.parse(await fs.readFile(path.join(packageRoot, 'package.json'), 'utf8'));
 const minimalFixtureWorkspaceRoot = path.resolve(packageRoot, '../semantic-runtime/fixtures/pressure/app-pattern-minimal-app');
 const routedFixtureWorkspaceRoot = path.resolve(packageRoot, '../semantic-runtime/fixtures/pressure/app-pattern-routed-state-backed-form');
 const formFixtureWorkspaceRoot = path.resolve(packageRoot, '../semantic-runtime/fixtures/pressure/app-pattern-state-backed-form');
@@ -22,6 +24,12 @@ const client = new Client({ name: 'au-mcp-probe', version: '0.0.0' });
 try {
   await client.connect(transport);
 
+  const serverVersion = client.getServerVersion();
+  assert(
+    serverVersion?.version === packageJson.version,
+    `source server announces package version ${packageJson.version}`,
+  );
+
   const tools = await client.listTools();
   const toolNames = new Set(tools.tools.map((tool) => tool.name));
   const prompts = await client.listPrompts();
@@ -30,6 +38,7 @@ try {
   const resourceUris = new Set(resources.resources.map((resource) => resource.uri));
 
   assert(toolNames.has('aurelia_workspace_overview'), 'workspace overview tool is registered');
+  assert(toolNames.has('aurelia_project_configurations'), 'project configurations tool is registered');
   assert(toolNames.has('aurelia_app_overview'), 'app overview tool is registered');
   assert(toolNames.has('aurelia_app_query_catalog'), 'app query catalog tool is registered');
   assert(toolNames.has('aurelia_pattern_menu'), 'pattern menu tool is registered');
@@ -141,12 +150,19 @@ try {
   });
   assert(structuredValue(workspaceOverview) != null, 'workspace overview returned structured content');
 
+  const projectConfigurations = await client.callTool({
+    name: 'aurelia_project_configurations',
+    arguments: { workspaceRoot: minimalFixtureWorkspaceRoot, sourceFilePaths: [] },
+  });
+  assert(Array.isArray(structuredValue(projectConfigurations)?.rows), 'project configurations returned structured rows');
+
   const appOverview = await client.callTool({
     name: 'aurelia_app_overview',
     arguments: {
       workspaceRoot: routedFixtureWorkspaceRoot,
       analysisDepth: 'runtime-topology',
       diagnosticPageSize: 2,
+      analysisLimitationPageSize: 2,
       openSeamPageSize: 2,
     },
   });
@@ -206,6 +222,7 @@ try {
 
   console.log([
     'MCP stdio probe passed.',
+    `- server: ${serverVersion?.name}@${serverVersion?.version}`,
     `- tools: ${tools.tools.length}`,
     `- read-only tools: ${tools.tools.filter((tool) => tool.annotations?.readOnlyHint === true).length}`,
     `- prompts: ${prompts.prompts.length}`,

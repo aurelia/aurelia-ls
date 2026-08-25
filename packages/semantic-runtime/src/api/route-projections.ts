@@ -1,4 +1,6 @@
 import type { AureliaAppWorldProjectEmission } from '../configuration/app-world-project-pass.js';
+import type { AppRoot } from '../configuration/app-root.js';
+import type { ProductHandle } from '../kernel/handles.js';
 import type { KernelStore } from '../kernel/store.js';
 import type {
   ComponentAgentModel,
@@ -23,13 +25,20 @@ import type {
   TypedNavigationInstructionModel,
   ViewportAgentModel,
   ViewportCustomElementModel,
+  ViewportFieldState,
   ViewportInstructionModel,
   ViewportInstructionTreeModel,
+  ViewportValueField,
 } from '../router/model.js';
+import { resolvedRouteableComponentName } from '../router/model.js';
 import {
   describeAddress,
   type SemanticSourceReference,
 } from './source-reference.js';
+import {
+  routerIssueDiagnosticAuthority,
+  routerIssueDiagnosticRepairProjection,
+} from './router-diagnostic-policy.js';
 import type {
   SemanticRouteConfigComponentRow,
   SemanticRouteConfigReferenceRow,
@@ -65,14 +74,16 @@ import type {
   SemanticViewportInstructionTreeRow,
   SemanticViewportAgentRow,
 } from './contracts.js';
+import type { RouteConfigConvergenceLink } from '../router/route-config-convergence.js';
 
 export function readRouterOptionsRows(
   emission: AureliaAppWorldProjectEmission,
   store: KernelStore,
   handles: boolean,
 ): readonly SemanticRouterOptionsRow[] {
+  const appRootsByProduct = indexAppRootsByProduct(emission);
   return emission.routerOptions.readRouterOptions()
-    .map((options) => routerOptionsRow(emission, store, options, handles))
+    .map((options) => routerOptionsRow(emission, store, options, appRootsByProduct, handles))
     .sort((left, right) =>
       `${left.useEagerLoading}:${left.useUrlFragmentHash}:${left.source?.label ?? ''}`
         .localeCompare(`${right.useEagerLoading}:${right.useUrlFragmentHash}:${right.source?.label ?? ''}`)
@@ -84,11 +95,11 @@ export function readRouteConfigRows(
   store: KernelStore,
   handles: boolean,
 ): readonly SemanticRouteConfigRow[] {
-  return emission.routes.readRouteConfigs()
-    .map((routeConfig) => routeConfigRow(emission, store, routeConfig, handles))
+  return routeConfigLinkGroups(emission.routes.readLinks())
+    .map((links) => routeConfigRow(emission, store, links, handles))
     .sort((left, right) =>
-      `${left.routeKind}:${left.id ?? ''}:${left.paths.join('|')}:${left.source?.label ?? ''}`
-        .localeCompare(`${right.routeKind}:${right.id ?? ''}:${right.paths.join('|')}:${right.source?.label ?? ''}`)
+      `${left.routeKind}:${left.id ?? ''}:${left.originKind}:${left.effectKind}:${left.source?.label ?? ''}`
+        .localeCompare(`${right.routeKind}:${right.id ?? ''}:${right.originKind}:${right.effectKind}:${right.source?.label ?? ''}`)
     );
 }
 
@@ -97,8 +108,9 @@ export function readRouteContextRows(
   store: KernelStore,
   handles: boolean,
 ): readonly SemanticRouteContextRow[] {
+  const appRootsByProduct = indexAppRootsByProduct(emission);
   return emission.routeRuntimeTopology.readRouteContexts()
-    .map((routeContext) => routeContextRow(emission, store, routeContext, handles))
+    .map((routeContext) => routeContextRow(emission, store, routeContext, appRootsByProduct, handles))
     .sort((left, right) =>
       `${left.label ?? ''}:${left.parentLabel ?? ''}:${left.source?.label ?? ''}`
         .localeCompare(`${right.label ?? ''}:${right.parentLabel ?? ''}:${right.source?.label ?? ''}`)
@@ -261,17 +273,26 @@ export function readRouterIssueRows(
   store: KernelStore,
   handles: boolean,
 ): SemanticRouterIssuesResult['rows'] {
-  return [
-    ...emission.routes.readIssues(),
-    ...emission.routeInstructions.readIssues(),
-    ...emission.routeRecognition.readIssues(),
-    ...emission.routeTree.readIssues(),
-  ]
+  return readRouterIssues(emission)
     .map((issue) => routerIssueRow(emission, store, issue, handles))
     .sort((left, right) =>
       `${left.phase}:${left.issueKind}:${left.path ?? ''}:${left.source?.label ?? ''}`
         .localeCompare(`${right.phase}:${right.issueKind}:${right.path ?? ''}:${right.source?.label ?? ''}`)
     );
+}
+
+/** All product-owned router issues; route-recognizer issues remain a distinct lower-level query lane. */
+export function readRouterIssues(
+  emission: AureliaAppWorldProjectEmission,
+): readonly RouterIssueModel[] {
+  return [
+    ...emission.routerOptions.readIssues(),
+    ...emission.routes.readIssues(),
+    ...emission.routeContextParameterReads.readIssues(),
+    ...emission.routeInstructions.readIssues(),
+    ...emission.routeRecognition.readIssues(),
+    ...emission.routeTree.readIssues(),
+  ];
 }
 
 export function readRecognizedRouteRows(
@@ -339,10 +360,18 @@ function routerOptionsRow(
   emission: AureliaAppWorldProjectEmission,
   store: KernelStore,
   options: RouterOptionsModel,
+  appRootsByProduct: ReadonlyMap<ProductHandle, AppRoot>,
   handles: boolean,
 ): SemanticRouterOptionsRow {
+  const appRoot = options.appRoot.productHandle == null
+    ? null
+    : appRootsByProduct.get(options.appRoot.productHandle) ?? null;
   return {
     projectKey: emission.project.projectKey,
+    appRootComponentName: appRoot?.component?.localName ?? null,
+    appRootSource: describeAddress(store, options.appRoot.addressHandle),
+    registrationSource: describeAddress(store, options.registrationSourceAddressHandle),
+    configurationValueSource: describeAddress(store, options.configurationValueSourceAddressHandle),
     basePath: options.basePath,
     useUrlFragmentHash: options.useUrlFragmentHash,
     useHref: options.useHref,
@@ -357,6 +386,13 @@ function routerOptionsRow(
       handles: {
         productHandle: options.productHandle,
         identityHandle: options.identityHandle,
+        appRootProductHandle: options.appRoot.productHandle,
+        appRootIdentityHandle: options.appRoot.identityHandle,
+        containerProductHandle: options.container.productHandle,
+        containerIdentityHandle: options.container.identityHandle,
+        registrationProductHandle: options.registrationProductHandle,
+        registrationSourceAddressHandle: options.registrationSourceAddressHandle,
+        configurationValueSourceAddressHandle: options.configurationValueSourceAddressHandle,
         sourceAddressHandle: options.sourceAddressHandle,
       },
     } : {}),
@@ -366,16 +402,26 @@ function routerOptionsRow(
 function routeConfigRow(
   emission: AureliaAppWorldProjectEmission,
   store: KernelStore,
-  routeConfig: RouteConfigModel,
+  links: readonly RouteConfigConvergenceLink[],
   handles: boolean,
 ): SemanticRouteConfigRow {
+  const link = links[0]!;
+  const routeConfig = link.routeConfig;
+  const contribution = link.contribution;
+  const effectiveVariantCount = new Set(links.map((entry) => routeConfigEffectiveVariantKey(entry.routeConfig))).size;
   return {
     projectKey: emission.project.projectKey,
     routeKind: routeConfig.routeKind,
-    originKind: routeConfig.originKind,
-    valueKind: routeConfig.valueKind,
+    originKind: contribution.originKind,
+    valueKind: contribution.valueKind,
+    executionKind: contribution.executionKind,
+    effectKind: link.effectKind,
+    stage: routeConfig.stage,
+    closure: routeConfig.closure,
     id: routeConfig.id,
+    idSource: describeAddress(store, routeConfig.idSourceAddressHandle),
     paths: routeConfig.paths,
+    pathSources: routeConfig.pathSourceAddressHandles.map((handle) => describeAddress(store, handle)),
     title: routeConfig.title,
     component: routeableComponentRow(store, routeConfig.component, handles),
     redirectTo: routeConfig.redirectTo,
@@ -386,15 +432,60 @@ function routeConfigRow(
     childRouteCount: routeConfig.childRoutes.length,
     fallback: routeableComponentRow(store, routeConfig.fallback, handles),
     nav: routeConfig.nav,
-    source: describeAddress(store, routeConfig.sourceAddressHandle),
+    fieldStates: Object.fromEntries(routeConfig.fieldStates.map((state) => [state.field, state.stateKind])) as SemanticRouteConfigRow['fieldStates'],
+    openFields: routeConfig.openFields,
+    openFieldCount: routeConfig.openFields.length,
+    effectiveUseCount: links.length,
+    effectiveVariantCount,
+    effectiveFieldsStable: effectiveVariantCount === 1,
+    source: describeAddress(store, contribution.sourceAddressHandle),
     ...(handles ? {
       handles: {
         productHandle: routeConfig.productHandle,
         identityHandle: routeConfig.identityHandle,
-        sourceAddressHandle: routeConfig.sourceAddressHandle,
+        contributionProductHandle: contribution.productHandle,
+        contributionIdentityHandle: contribution.identityHandle,
+        sourceAddressHandle: contribution.sourceAddressHandle,
+        idSourceAddressHandle: routeConfig.idSourceAddressHandle,
+        pathSourceAddressHandles: routeConfig.pathSourceAddressHandles,
       },
     } : {}),
   };
+}
+
+function routeConfigLinkGroups(
+  links: readonly RouteConfigConvergenceLink[],
+): readonly (readonly RouteConfigConvergenceLink[])[] {
+  const groups = new Map<RouteConfigConvergenceLink['contribution']['identityHandle'], RouteConfigConvergenceLink[]>();
+  for (const link of links) {
+    groups.set(link.contribution.identityHandle, [
+      ...(groups.get(link.contribution.identityHandle) ?? []),
+      link,
+    ]);
+  }
+  return [...groups.values()];
+}
+
+function routeConfigEffectiveVariantKey(routeConfig: RouteConfigModel): string {
+  return JSON.stringify([
+    routeConfig.stage,
+    routeConfig.closure,
+    routeConfig.routeKind,
+    routeConfig.id,
+    routeConfig.paths,
+    routeConfig.title,
+    routeConfig.component?.resolvedIdentityHandle ?? routeConfig.component?.localName ?? null,
+    routeConfig.redirectTo,
+    routeConfig.caseSensitive,
+    routeConfig.transitionPlan,
+    routeConfig.viewport,
+    routeConfig.hasData,
+    routeConfig.childRoutes.length,
+    routeConfig.fallback?.resolvedIdentityHandle ?? routeConfig.fallback?.localName ?? null,
+    routeConfig.nav,
+    routeConfig.fieldStates.map((state) => [state.field, state.stateKind]),
+    routeConfig.openFields,
+  ]);
 }
 
 function typedNavigationInstructionRow(
@@ -405,6 +496,7 @@ function typedNavigationInstructionRow(
 ): SemanticTypedNavigationInstructionRow {
   return {
     projectKey: emission.project.projectKey,
+    closure: instruction.closure,
     instructionKind: instruction.instructionKind,
     value: instruction.value,
     component: routerProductReferenceRow(store, instruction.component),
@@ -430,6 +522,7 @@ function viewportInstructionRow(
 ): SemanticViewportInstructionRow {
   return {
     projectKey: emission.project.projectKey,
+    closure: instruction.closure,
     component: viewportInstructionComponentRow(store, instruction.component, typedInstructionsByIdentity),
     viewport: instruction.viewport,
     childCount: instruction.children.length,
@@ -462,6 +555,7 @@ function viewportInstructionTreeRow(
 ): SemanticViewportInstructionTreeRow {
   return {
     projectKey: emission.project.projectKey,
+    closure: instructionTree.closure,
     routeContext: instructionTree.routeContext == null
       ? null
       : {
@@ -502,6 +596,7 @@ function routeTreeRow(
 ): SemanticRouteTreeRow {
   return {
     projectKey: emission.project.projectKey,
+    realizationStage: routeTree.realizationStage,
     rootNodeLabel: routeTree.rootNode?.localName ?? null,
     instructionTree: routerProductReferenceRow(store, routeTree.instructionTree),
     hasOptions: routeTree.options != null,
@@ -539,6 +634,7 @@ function routeNodeRow(
   const aggregation = routeNodeParameterAggregation(routeNode, routeNodesByIdentity);
   return {
     projectKey: emission.project.projectKey,
+    realizationStage: routeNode.realizationStage,
     path: routeNode.path,
     finalPath: routeNode.finalPath,
     childCount: routeNode.children.length,
@@ -555,6 +651,8 @@ function routeNodeRow(
     fragment: routeNode.fragment,
     hasData: routeNode.hasData,
     viewport: routeNode.viewport,
+    viewportAgentCandidate: routerProductReferenceRow(store, routeNode.viewportAgentCandidate),
+    viewportCandidateResolution: routeNode.viewportCandidateResolution,
     residueInstructionCount: routeNode.residueInstructionCount,
     routeContext: {
       label: routeNode.routeContext.localName,
@@ -568,7 +666,7 @@ function routeNodeRow(
         source: describeAddress(store, routeNode.config.sourceAddressHandle),
       },
     parentLabel: routeNode.parent?.localName ?? null,
-    componentName: routeNode.component?.localName ?? null,
+    componentName: resolvedRouteableComponentName(routeNode.component),
     title: routeNode.title,
     source: describeAddress(store, routeNode.sourceAddressHandle),
     ...(handles ? {
@@ -587,6 +685,8 @@ function routeNodeRow(
         originalInstructionIdentityHandle: routeNode.originalInstruction?.identityHandle ?? null,
         recognizedRouteProductHandle: routeNode.recognizedRoute?.productHandle ?? null,
         recognizedRouteIdentityHandle: routeNode.recognizedRoute?.identityHandle ?? null,
+        viewportAgentCandidateProductHandle: routeNode.viewportAgentCandidate?.productHandle ?? null,
+        viewportAgentCandidateIdentityHandle: routeNode.viewportAgentCandidate?.identityHandle ?? null,
         sourceAddressHandle: routeNode.sourceAddressHandle,
       },
     } : {}),
@@ -597,10 +697,19 @@ function routeContextRow(
   emission: AureliaAppWorldProjectEmission,
   store: KernelStore,
   routeContext: RouteContextModel,
+  appRootsByProduct: ReadonlyMap<ProductHandle, AppRoot>,
   handles: boolean,
 ): SemanticRouteContextRow {
+  const options = emission.routerOptions.readRouterOptionsForReference(routeContext.options);
+  const appRoot = options?.appRoot.productHandle == null
+    ? null
+    : appRootsByProduct.get(options.appRoot.productHandle) ?? null;
   return {
     projectKey: emission.project.projectKey,
+    realizationStage: routeContext.realizationStage,
+    appRootComponentName: appRoot?.component?.localName ?? null,
+    activeClass: options?.activeClass ?? null,
+    useEagerLoading: options?.useEagerLoading ?? null,
     label: routeContext.localName,
     parentLabel: routeContext.parent?.localName ?? null,
     rootLabel: routeContext.root.localName,
@@ -609,7 +718,7 @@ function routeContextRow(
       source: describeAddress(store, routeContext.routeConfigContext?.sourceAddressHandle ?? null),
     },
     hasContainer: routeContext.container != null,
-    hasViewportAgent: routeContext.viewportAgent != null,
+    hasHostingViewportAgentCandidate: routeContext.hostingViewportAgentCandidate != null,
     source: describeAddress(store, routeContext.sourceAddressHandle),
     ...(handles ? {
       handles: {
@@ -621,12 +730,22 @@ function routeContextRow(
         routeConfigContextIdentityHandle: routeContext.routeConfigContext?.identityHandle ?? null,
         containerProductHandle: routeContext.container?.productHandle ?? null,
         containerIdentityHandle: routeContext.container?.identityHandle ?? null,
-        viewportAgentProductHandle: routeContext.viewportAgent?.productHandle ?? null,
-        viewportAgentIdentityHandle: routeContext.viewportAgent?.identityHandle ?? null,
+        routerOptionsProductHandle: routeContext.options?.productHandle ?? null,
+        routerOptionsIdentityHandle: routeContext.options?.identityHandle ?? null,
+        hostingViewportAgentCandidateProductHandle: routeContext.hostingViewportAgentCandidate?.productHandle ?? null,
+        hostingViewportAgentCandidateIdentityHandle: routeContext.hostingViewportAgentCandidate?.identityHandle ?? null,
         sourceAddressHandle: routeContext.sourceAddressHandle,
       },
     } : {}),
   };
+}
+
+function indexAppRootsByProduct(
+  emission: AureliaAppWorldProjectEmission,
+): ReadonlyMap<ProductHandle, AppRoot> {
+  return new Map(
+    emission.configuration.readConfiguration().appRoots.map((appRoot) => [appRoot.productHandle, appRoot]),
+  );
 }
 
 function routeContextParameterReadRow(
@@ -645,6 +764,8 @@ function routeContextParameterReadRow(
   return {
     projectKey: emission.project.projectKey,
     componentClassName: read.componentClassName,
+    ownershipKind: read.ownershipKind,
+    knownOwnerCount: read.knownOwnerCount,
     routeConfigCount: routeConfigs.length,
     routeConfigIds: routeConfigs.flatMap((routeConfig) => routeConfig.id == null ? [] : [routeConfig.id]),
     routeConfigPaths: routeConfigs.flatMap((routeConfig) => routeConfig.paths),
@@ -685,6 +806,8 @@ function routerViewportRow(
 ): SemanticRouterViewportRow {
   return {
     projectKey: emission.project.projectKey,
+    realizationStage: viewport.realizationStage,
+    presenceCardinality: viewport.presenceCardinality,
     name: viewport.name,
     routeContext: viewport.routeContext == null
       ? null
@@ -695,6 +818,18 @@ function routerViewportRow(
     usedBy: viewport.usedBy,
     defaultComponent: viewport.defaultComponent,
     fallback: viewport.fallback,
+    fieldStates: {
+      name: requiredViewportFieldState(viewport, 'name').stateKind,
+      usedBy: requiredViewportFieldState(viewport, 'usedBy').stateKind,
+      default: requiredViewportFieldState(viewport, 'default').stateKind,
+      fallback: requiredViewportFieldState(viewport, 'fallback').stateKind,
+    },
+    fieldSources: {
+      name: describeAddress(store, requiredViewportFieldState(viewport, 'name').sourceAddressHandle),
+      usedBy: describeAddress(store, requiredViewportFieldState(viewport, 'usedBy').sourceAddressHandle),
+      default: describeAddress(store, requiredViewportFieldState(viewport, 'default').sourceAddressHandle),
+      fallback: describeAddress(store, requiredViewportFieldState(viewport, 'fallback').sourceAddressHandle),
+    },
     source: describeAddress(store, viewport.sourceAddressHandle),
     ...(handles ? {
       handles: {
@@ -717,6 +852,8 @@ function viewportAgentRow(
 ): SemanticViewportAgentRow {
   return {
     projectKey: emission.project.projectKey,
+    realizationStage: agent.realizationStage,
+    presenceCardinality: agent.presenceCardinality,
     viewport: {
       name: agent.viewport.localName,
       source: describeAddress(store, agent.viewport.sourceAddressHandle),
@@ -752,12 +889,13 @@ function componentAgentRow(
 ): SemanticComponentAgentRow {
   return {
     projectKey: emission.project.projectKey,
+    realizationStage: agent.realizationStage,
     routeContext: {
       label: agent.routeContext.localName,
       source: describeAddress(store, agent.routeContext.sourceAddressHandle),
     },
     routeNode: routerProductReferenceRow(store, agent.routeNode)!,
-    viewportAgent: routerProductReferenceRow(store, agent.viewportAgent),
+    viewportAgentCandidate: routerProductReferenceRow(store, agent.viewportAgentCandidate),
     hasController: agent.controllerProductHandle != null,
     component: routeableComponentRow(store, agent.component, handles),
     source: describeAddress(store, agent.sourceAddressHandle),
@@ -769,8 +907,8 @@ function componentAgentRow(
         routeContextIdentityHandle: agent.routeContext.identityHandle,
         routeNodeProductHandle: agent.routeNode.productHandle,
         routeNodeIdentityHandle: agent.routeNode.identityHandle,
-        viewportAgentProductHandle: agent.viewportAgent?.productHandle ?? null,
-        viewportAgentIdentityHandle: agent.viewportAgent?.identityHandle ?? null,
+        viewportAgentCandidateProductHandle: agent.viewportAgentCandidate?.productHandle ?? null,
+        viewportAgentCandidateIdentityHandle: agent.viewportAgentCandidate?.identityHandle ?? null,
         controllerProductHandle: agent.controllerProductHandle,
         componentProductHandle: agent.component?.productHandle ?? null,
         componentIdentityHandle: agent.component?.identityHandle ?? null,
@@ -981,14 +1119,19 @@ function routerIssueRow(
   issue: RouterIssueModel,
   handles: boolean,
 ): SemanticRouterIssueRow {
+  const source = describeAddress(store, issue.sourceAddressHandle);
+  const repair = routerIssueDiagnosticRepairProjection(issue, source);
   return {
     projectKey: emission.project.projectKey,
     phase: issue.phase,
     issueKind: issue.issueKind,
-    diagnosticAuthority: issue.frameworkErrorCode == null ? 'semantic-runtime-product' : 'framework-error-code',
+    diagnosticAuthority: routerIssueDiagnosticAuthority(issue),
     frameworkErrorCode: issue.frameworkErrorCode,
     severity: issue.severity,
     message: issue.message,
+    missingInput: repair?.missingInput ?? null,
+    missingInputs: repair?.missingInputs ?? [],
+    suggestion: repair?.suggestion ?? null,
     property: issue.property,
     expected: issue.expected,
     actual: issue.actual,
@@ -998,7 +1141,11 @@ function routerIssueRow(
     unexpectedExpressionKind: issue.unexpectedExpressionKind,
     routeConfig: routeConfigReferenceRow(store, issue.routeConfig),
     recognizedRoute: routeRecognizerReferenceRow(store, issue.recognizedRoute),
-    source: describeAddress(store, issue.sourceAddressHandle),
+    source,
+    relatedInformation: issue.relatedInformation.map((related) => ({
+      message: related.message,
+      source: describeAddress(store, related.sourceAddressHandle),
+    })),
     ...(handles ? {
       handles: {
         productHandle: issue.productHandle,
@@ -1008,6 +1155,8 @@ function routerIssueRow(
         recognizedRouteProductHandle: issue.recognizedRoute?.productHandle ?? null,
         recognizedRouteIdentityHandle: issue.recognizedRoute?.identityHandle ?? null,
         sourceAddressHandle: issue.sourceAddressHandle,
+        relatedSourceAddressHandles: issue.relatedInformation
+          .flatMap((related) => related.sourceAddressHandle == null ? [] : [related.sourceAddressHandle]),
       },
     } : {}),
   };
@@ -1444,6 +1593,7 @@ function routeableComponentRow(
   return {
     componentKind: component.componentKind,
     name: component.localName,
+    resolvedName: component.resolvedName,
     resolved: component.resolvedProductHandle != null || component.resolvedIdentityHandle != null,
     source,
     ...(handles ? {
@@ -1456,4 +1606,15 @@ function routeableComponentRow(
       },
     } : {}),
   };
+}
+
+function requiredViewportFieldState(
+  viewport: ViewportCustomElementModel,
+  field: ViewportValueField,
+): ViewportFieldState {
+  const state = viewport.fieldStates.find((candidate) => candidate.field === field) ?? null;
+  if (state == null) {
+    throw new Error(`Router viewport '${viewport.identityHandle}' is missing ${field} field state.`);
+  }
+  return state;
 }

@@ -140,6 +140,7 @@ async function profileRoot({ root, rootIndex, depth, profile, iteration, repeatC
     appQueryClaimGraphs: [],
     queryRepeatCount,
     typeShapeDuplicates: [],
+    staticEvaluationAcquisitions: [],
     staticEvaluationPhases: [],
     staticEvaluationSources: null,
     resourceRecognitionPhases: [],
@@ -147,7 +148,6 @@ async function profileRoot({ root, rootIndex, depth, profile, iteration, repeatC
     typeSystemCompilerOptions: null,
     typeSystemPhases: [],
     typeSystemHostSourceFileCache: null,
-    projectCompilerOptionsCache: null,
     typeSystemDependencyCache: null,
     typeSystemDependencyCacheClear: null,
     typeSystemDependencyCacheAfterClear: null,
@@ -277,7 +277,6 @@ async function profileRoot({ root, rootIndex, depth, profile, iteration, repeatC
     includeTypeSystemDependencyEntries: includeTypeSystemDependencyCacheEntries,
     rowLimit: 8,
   }).value;
-  run.projectCompilerOptionsCache = cache.projectCompilerOptionsCache;
   run.typeSystemDependencyCache = cache.typeSystemDependencyCache;
   applyTypeSystemDependencyCacheClear(run, runtime);
   run.typeShapeDuplicates = captureKernelBreakdowns
@@ -335,7 +334,6 @@ async function profileRoutedQueries(run, runtime, appCandidate, depth, profile, 
   run.queryClaimGraph = cache.value.runtimeQueryClaimProfiles
     .find((entry) => entry.inquiryProfile === profile)?.queryClaims
     ?? null;
-  run.projectCompilerOptionsCache = cache.value.projectCompilerOptionsCache;
   run.typeSystemDependencyCache = cache.value.typeSystemDependencyCache;
   applyTypeSystemDependencyCacheClear(run, runtime);
   const kernelAfterQueries = runtime.workspace.store.readTelemetrySnapshot({
@@ -403,7 +401,6 @@ async function profileRoutedQueryBatch(run, runtime, appCandidate, depth, profil
   run.queryClaimGraph = cache.value.runtimeQueryClaimProfiles
     .find((entry) => entry.inquiryProfile === profile)?.queryClaims
     ?? null;
-  run.projectCompilerOptionsCache = cache.value.projectCompilerOptionsCache;
   run.typeSystemDependencyCache = cache.value.typeSystemDependencyCache;
   applyTypeSystemDependencyCacheClear(run, runtime);
   const kernelAfterQueries = runtime.workspace.store.readTelemetrySnapshot({
@@ -448,6 +445,13 @@ function recordAppProfile(run, profile) {
     return;
   }
   run.timings.push({ label: 'app.profile.total', milliseconds: profile.totalMilliseconds });
+  run.staticEvaluationAcquisitions = [...(profile.evaluationAcquisitions ?? [])];
+  for (const acquisition of run.staticEvaluationAcquisitions) {
+    run.timings.push({
+      label: `static-evaluation.acquire.${acquisition.profileKey}.${acquisition.kind}`,
+      milliseconds: acquisition.milliseconds,
+    });
+  }
   run.topPhases = [...(profile.phases ?? [])]
     .sort((left, right) => phaseSortMilliseconds(right) - phaseSortMilliseconds(left) || left.name.localeCompare(right.name))
     .slice(0, 8)
@@ -490,6 +494,12 @@ function recordRoutedAppProfileSummary(run, profile) {
     return;
   }
   run.timings.push({ label: 'app.profile.total', milliseconds: profile.totalMilliseconds });
+  run.staticEvaluationAcquisitions = [...(profile.staticEvaluationAcquisitions ?? [])].map((acquisition) => ({
+    profileKey: acquisition.profileKey,
+    kind: acquisition.acquisitionKind,
+    milliseconds: acquisition.acquisitionMilliseconds,
+    constructionMilliseconds: acquisition.constructionMilliseconds,
+  }));
   run.topPhases = routedPhaseSummaryRows(profile.topPhases);
   run.topPhaseMemory = routedPhaseMemoryRows(profile.topPhases);
   run.topPhaseKernel = routedPhaseKernelRows(profile.topPhases);
@@ -521,6 +531,12 @@ function recordRoutedAppWorldFreeProfileSummary(run, profile) {
     return;
   }
   run.timings.push({ label: 'app-world-free.profile.total', milliseconds: profile.totalMilliseconds });
+  run.staticEvaluationAcquisitions = [{
+    profileKey: 'aurelia-app',
+    kind: profile.acquisitionKind,
+    milliseconds: profile.acquisitionMilliseconds,
+    constructionMilliseconds: profile.totalMilliseconds,
+  }];
   run.staticEvaluationPhases = routedPhaseSummaryRows(profile.staticEvaluationPhases);
   run.staticEvaluationHost = profile.staticEvaluationHost ?? null;
   run.staticEvaluationSources = profile.staticEvaluationSources ?? null;
@@ -863,7 +879,9 @@ function measureQuery(app, query, queryIteration = 0) {
   return {
     label: queryLabel(query.kind, queryIteration),
     materializationPolicy,
-    outcome: answer.outcome,
+    result: answer.result,
+    selection: answer.selection,
+    coverage: answer.coverage,
     milliseconds,
     payloadBytes: payload.valueBytes,
     answerBytes: payload.answerBytes,
@@ -917,7 +935,9 @@ async function measureRoutedQuery(runtime, appCandidate, depth, profile, query, 
   return {
     label: queryLabel(query.kind, queryIteration),
     materializationPolicy,
-    outcome: answer.outcome,
+    result: answer.result,
+    selection: answer.selection,
+    coverage: answer.coverage,
     milliseconds,
     payloadBytes: payload.valueBytes,
     answerBytes: payload.answerBytes,
@@ -970,7 +990,9 @@ async function measureRoutedQueryBatch(runtime, appCandidate, depth, profile, qu
   return {
     label: queryLabel('app-query-batch', queryIteration),
     materializationPolicy,
-    outcome: answer.outcome,
+    result: answer.result,
+    selection: answer.selection,
+    coverage: answer.coverage,
     milliseconds,
     payloadBytes: payload.valueBytes,
     answerBytes: payload.answerBytes,
@@ -1200,6 +1222,10 @@ function createAggregate() {
       misses: 0,
       writes: 0,
       writeSourceTextCharacters: 0,
+      supersededRevisionEvictions: 0,
+      supersededRevisionEvictedSourceTextCharacters: 0,
+      capacityEvictions: 0,
+      capacityEvictedSourceTextCharacters: 0,
       bypasses: 0,
       cacheableNodeModuleReads: 0,
       cacheableExternalDeclarationReads: 0,
@@ -1217,16 +1243,6 @@ function createAggregate() {
       clearedDefaultLibrarySourceTextCharacters: 0,
       clearedExternalDeclarationEntries: 0,
       clearedExternalDeclarationSourceTextCharacters: 0,
-    },
-    projectCompilerOptionsCache: {
-      maxEntries: 0,
-      maxHits: 0,
-      maxMisses: 0,
-      maxWrites: 0,
-      maxClearOperations: 0,
-      maxClearedEntries: 0,
-      maxPathMappingCount: 0,
-      maxPathMappingTargetCount: 0,
     },
     typeSystemDependencyCache: createTypeSystemDependencyCacheAggregate(),
     typeSystemDependencyCacheClear: {
@@ -1289,6 +1305,8 @@ function createProgramSourceFileAggregate() {
 function createTypeSystemDependencyCacheAggregate() {
   return {
     maxEntries: 0,
+    entryLimit: 0,
+    sourceTextCharacterLimit: 0,
     maxDistinctCanonicalPaths: 0,
     maxDuplicateCanonicalPathEntries: 0,
     maxSourceTextCharacters: 0,
@@ -1297,6 +1315,10 @@ function createTypeSystemDependencyCacheAggregate() {
     maxMisses: 0,
     maxWrites: 0,
     maxWriteSourceTextCharacters: 0,
+    maxSupersededRevisionEvictions: 0,
+    maxSupersededRevisionEvictedSourceTextCharacters: 0,
+    maxCapacityEvictions: 0,
+    maxCapacityEvictedSourceTextCharacters: 0,
     maxNodeModuleEntries: 0,
     maxNodeModuleSourceTextCharacters: 0,
     maxDeclarationEntries: 0,
@@ -1342,7 +1364,7 @@ function createQueryClaimAggregate() {
     retainedQueryKeyCharacters: 0,
     retainedLocusKeyCharacters: 0,
     retainedEpochKeyCharacters: 0,
-    retainedOutcomeKeyCharacters: 0,
+    retainedReuseKeyCharacters: 0,
     budgetDisposedRecords: 0,
     budgetDisposedAnswerValues: 0,
     budgetDisposedAnswerBytes: 0,
@@ -1435,7 +1457,6 @@ function addToAggregate(aggregate, run, options = {}) {
   addTypeShapeDuplicates(aggregate.typeShapeDuplicates, run.typeShapeDuplicates);
   addStaticEvaluationHost(aggregate.staticEvaluationHost, run.staticEvaluationHost);
   addHostSourceFileCache(aggregate.typeSystemHostSourceFileCache, run.typeSystemHostSourceFileCache);
-  addProjectCompilerOptionsCache(aggregate.projectCompilerOptionsCache, run.projectCompilerOptionsCache);
   addTypeSystemDependencyCache(aggregate.typeSystemDependencyCache, run.typeSystemDependencyCache);
   addTypeSystemDependencyCacheClear(aggregate.typeSystemDependencyCacheClear, run.typeSystemDependencyCacheClear);
   addTypeSystemDependencyCache(aggregate.typeSystemDependencyCacheAfterClear, run.typeSystemDependencyCacheAfterClear);
@@ -1449,6 +1470,9 @@ function addToAggregate(aggregate, run, options = {}) {
     const current = aggregate.queries.get(key) ?? {
       label: queryResult.label,
       materializationPolicy: queryResult.materializationPolicy ?? 'unknown',
+      result: queryResult.result,
+      selection: queryResult.selection,
+      coverage: queryResult.coverage,
       count: 0,
       milliseconds: 0,
       payloadBytes: 0,
@@ -1499,7 +1523,13 @@ function aggregateGroupKey(run) {
 }
 
 function queryAggregateKey(queryResult) {
-  return `${queryResult.label}\0${queryResult.materializationPolicy ?? 'unknown'}`;
+  return [
+    queryResult.label,
+    queryResult.materializationPolicy ?? 'unknown',
+    queryResult.result,
+    queryResult.selection,
+    queryResult.coverage,
+  ].join('\0');
 }
 
 function addHostSourceFileCache(target, source) {
@@ -1511,6 +1541,10 @@ function addHostSourceFileCache(target, source) {
   target.misses += source.misses ?? 0;
   target.writes += source.writes ?? 0;
   target.writeSourceTextCharacters += source.writeSourceTextCharacters ?? 0;
+  target.supersededRevisionEvictions += source.supersededRevisionEvictions ?? 0;
+  target.supersededRevisionEvictedSourceTextCharacters += source.supersededRevisionEvictedSourceTextCharacters ?? 0;
+  target.capacityEvictions += source.capacityEvictions ?? 0;
+  target.capacityEvictedSourceTextCharacters += source.capacityEvictedSourceTextCharacters ?? 0;
   target.bypasses += source.bypasses ?? 0;
   target.cacheableNodeModuleReads += source.cacheableNodeModuleReads ?? 0;
   target.cacheableExternalDeclarationReads += source.cacheableExternalDeclarationReads ?? 0;
@@ -1535,6 +1569,8 @@ function addTypeSystemDependencyCache(target, source) {
     return;
   }
   target.maxEntries = Math.max(target.maxEntries, source.entries ?? 0);
+  target.entryLimit = Math.max(target.entryLimit, source.entryLimit ?? 0);
+  target.sourceTextCharacterLimit = Math.max(target.sourceTextCharacterLimit, source.sourceTextCharacterLimit ?? 0);
   target.maxDistinctCanonicalPaths = Math.max(target.maxDistinctCanonicalPaths, source.distinctCanonicalPaths ?? 0);
   target.maxDuplicateCanonicalPathEntries = Math.max(target.maxDuplicateCanonicalPathEntries, source.duplicateCanonicalPathEntries ?? 0);
   target.maxSourceTextCharacters = Math.max(target.maxSourceTextCharacters, source.sourceTextCharacters ?? 0);
@@ -1543,6 +1579,10 @@ function addTypeSystemDependencyCache(target, source) {
   target.maxMisses = Math.max(target.maxMisses, source.misses ?? 0);
   target.maxWrites = Math.max(target.maxWrites, source.writes ?? 0);
   target.maxWriteSourceTextCharacters = Math.max(target.maxWriteSourceTextCharacters, source.writeSourceTextCharacters ?? 0);
+  target.maxSupersededRevisionEvictions = Math.max(target.maxSupersededRevisionEvictions, source.supersededRevisionEvictions ?? 0);
+  target.maxSupersededRevisionEvictedSourceTextCharacters = Math.max(target.maxSupersededRevisionEvictedSourceTextCharacters, source.supersededRevisionEvictedSourceTextCharacters ?? 0);
+  target.maxCapacityEvictions = Math.max(target.maxCapacityEvictions, source.capacityEvictions ?? 0);
+  target.maxCapacityEvictedSourceTextCharacters = Math.max(target.maxCapacityEvictedSourceTextCharacters, source.capacityEvictedSourceTextCharacters ?? 0);
   target.maxNodeModuleEntries = Math.max(target.maxNodeModuleEntries, source.nodeModuleEntries ?? 0);
   target.maxNodeModuleSourceTextCharacters = Math.max(target.maxNodeModuleSourceTextCharacters, source.nodeModuleSourceTextCharacters ?? 0);
   target.maxDeclarationEntries = Math.max(target.maxDeclarationEntries, source.declarationEntries ?? 0);
@@ -1561,20 +1601,6 @@ function addTypeSystemDependencyCache(target, source) {
   target.maxClearedDefaultLibrarySourceTextCharacters = Math.max(target.maxClearedDefaultLibrarySourceTextCharacters ?? 0, source.clearedDefaultLibrarySourceTextCharacters ?? 0);
   target.maxClearedExternalDeclarationEntries = Math.max(target.maxClearedExternalDeclarationEntries ?? 0, source.clearedExternalDeclarationEntries ?? 0);
   target.maxClearedExternalDeclarationSourceTextCharacters = Math.max(target.maxClearedExternalDeclarationSourceTextCharacters ?? 0, source.clearedExternalDeclarationSourceTextCharacters ?? 0);
-}
-
-function addProjectCompilerOptionsCache(target, source) {
-  if (source == null) {
-    return;
-  }
-  target.maxEntries = Math.max(target.maxEntries, source.entries ?? 0);
-  target.maxHits = Math.max(target.maxHits, source.hits ?? 0);
-  target.maxMisses = Math.max(target.maxMisses, source.misses ?? 0);
-  target.maxWrites = Math.max(target.maxWrites, source.writes ?? 0);
-  target.maxClearOperations = Math.max(target.maxClearOperations, source.clearOperations ?? 0);
-  target.maxClearedEntries = Math.max(target.maxClearedEntries, source.clearedEntries ?? 0);
-  target.maxPathMappingCount = Math.max(target.maxPathMappingCount, source.pathMappingCount ?? 0);
-  target.maxPathMappingTargetCount = Math.max(target.maxPathMappingTargetCount, source.pathMappingTargetCount ?? 0);
 }
 
 function addTypeSystemDependencyCacheLargestEntries(target, entries) {
@@ -1885,7 +1911,7 @@ function addQueryClaims(target, queryClaims) {
   target.retainedQueryKeyCharacters += queryClaims.retainedQueryKeyCharacters ?? 0;
   target.retainedLocusKeyCharacters += queryClaims.retainedLocusKeyCharacters ?? 0;
   target.retainedEpochKeyCharacters += queryClaims.retainedEpochKeyCharacters ?? 0;
-  target.retainedOutcomeKeyCharacters += queryClaims.retainedOutcomeKeyCharacters ?? 0;
+  target.retainedReuseKeyCharacters += queryClaims.retainedReuseKeyCharacters ?? 0;
   target.budgetDisposedRecords += queryClaims.budgetDisposedRecords ?? 0;
   target.budgetDisposedAnswerValues += queryClaims.budgetDisposedAnswerValues ?? 0;
   target.budgetDisposedAnswerBytes += queryClaims.budgetDisposedAnswerBytes ?? 0;
@@ -2144,6 +2170,7 @@ function printRun(run) {
   printTimingRows('- phases', run.topPhases, 8);
   printPhaseMemoryRows('- phase heap', run.topPhaseMemory);
   printPhaseKernelRows('- phase kernel', run.topPhaseKernel);
+  printStaticEvaluationAcquisitions('- static-evaluation acquisitions', run.staticEvaluationAcquisitions);
   printTimingRows('- static-evaluation phases', run.staticEvaluationPhases, 8);
   printStaticEvaluationSources('- static-evaluation sources', run.staticEvaluationSources);
   printStaticEvaluationHost('- static-evaluation host', run.staticEvaluationHost);
@@ -2163,7 +2190,6 @@ function printRun(run) {
   printProgramSourceFileGroups('- type-system source file groups', run.typeSystemProgramSourceFileGroups, 12);
   printProgramNodeRemaps('- type-system program-node remaps', run.typeSystemProgramNodeRemaps);
   printHostSourceFileCache('- type-system host cache', run.typeSystemHostSourceFileCache);
-  printProjectCompilerOptionsCache('- project compiler-options cache', run.projectCompilerOptionsCache);
   printTypeSystemDependencyCache('- type-system dependency cache', run.typeSystemDependencyCache);
   printTypeSystemDependencyCacheClear('- type-system dependency cache clear', run.typeSystemDependencyCacheClear);
   printTypeSystemDependencyCache('- type-system dependency cache after clear', run.typeSystemDependencyCacheAfterClear);
@@ -2174,7 +2200,7 @@ function printRun(run) {
   for (const appQueryClaims of run.appQueryClaimGraphs) {
     console.log(formatQueryClaimGraph(`- app query claims[${appQueryClaims.inquiryProfile}]`, appQueryClaims.queryClaims));
   }
-  printTypeShapeDuplicateRows('- repeated type checker keys', run.typeShapeDuplicates);
+  printTypeShapeDuplicateRows('- repeated semantic type keys', run.typeShapeDuplicates);
   if (run.warnings.length > 0) {
     console.log(`- warnings: ${run.warnings.join('; ')}`);
   }
@@ -2189,8 +2215,8 @@ function formatQueryClaimGraph(label, queryClaims) {
     `roots=${queryClaims.rootRecords ?? queryClaims.records}/${queryClaims.childRecords ?? 0}, ` +
     `maxDepth=${queryClaims.maxDepth ?? 0}, ` +
     `deps=${queryClaims.retainedDependencyEdges ?? 0}/${queryClaims.distinctParentClaimIds ?? 0}, ` +
-    `indexes=q${queryClaims.distinctQueryKinds ?? 0}/l${queryClaims.distinctLocusKeys ?? 0}/e${queryClaims.distinctEpochKeys ?? 0}/m${queryClaims.distinctMaterializationPolicies ?? 0}/o${queryClaims.distinctOutcomeKeys ?? 0}, ` +
-    `keyChars=q${formatCharacterCount(queryClaims.retainedQueryKeyCharacters ?? 0)}/l${formatCharacterCount(queryClaims.retainedLocusKeyCharacters ?? 0)}/e${formatCharacterCount(queryClaims.retainedEpochKeyCharacters ?? 0)}/o${formatCharacterCount(queryClaims.retainedOutcomeKeyCharacters ?? 0)}, ` +
+    `indexes=q${queryClaims.distinctQueryKinds ?? 0}/l${queryClaims.distinctLocusKeys ?? 0}/e${queryClaims.distinctEpochKeys ?? 0}/m${queryClaims.distinctMaterializationPolicies ?? 0}/r${queryClaims.distinctReuseKeys ?? 0}, ` +
+    `keyChars=q${formatCharacterCount(queryClaims.retainedQueryKeyCharacters ?? 0)}/l${formatCharacterCount(queryClaims.retainedLocusKeyCharacters ?? 0)}/e${formatCharacterCount(queryClaims.retainedEpochKeyCharacters ?? 0)}/r${formatCharacterCount(queryClaims.retainedReuseKeyCharacters ?? 0)}, ` +
     `projectionOnly=${queryClaims.projectionOnly}, queryTypeProjection=${queryClaims.queryTypeProjection}, ` +
     `staticCatalog=${queryClaims.staticCatalog}, payload=${formatSemanticRuntimeBytes(queryClaims.approximatePayloadBytes)}, ` +
     `retainedAnswers=${queryClaims.retainedAnswerValues}/${formatSemanticRuntimeBytes(queryClaims.retainedAnswerBytes)}, ` +
@@ -2218,7 +2244,7 @@ function formatQueryClaimAggregate(label, queryClaims) {
     `retainedAnswers=${queryClaims.retainedAnswerValues}/${formatSemanticRuntimeBytes(queryClaims.retainedAnswerBytes)}, ` +
     `retainedAnswerHits=${queryClaims.retainedAnswerHits}, ` +
     `budgetDisposed=${queryClaims.budgetDisposedRecords}/${queryClaims.budgetDisposedAnswerValues} answers/${formatSemanticRuntimeBytes(queryClaims.budgetDisposedAnswerBytes)}, ` +
-    `keyChars=q${formatCharacterCount(queryClaims.retainedQueryKeyCharacters)}/l${formatCharacterCount(queryClaims.retainedLocusKeyCharacters)}/e${formatCharacterCount(queryClaims.retainedEpochKeyCharacters)}/o${formatCharacterCount(queryClaims.retainedOutcomeKeyCharacters)}, ` +
+    `keyChars=q${formatCharacterCount(queryClaims.retainedQueryKeyCharacters)}/l${formatCharacterCount(queryClaims.retainedLocusKeyCharacters)}/e${formatCharacterCount(queryClaims.retainedEpochKeyCharacters)}/r${formatCharacterCount(queryClaims.retainedReuseKeyCharacters)}, ` +
     `rootKernelDelta=${queryClaims.rootKernelRecordDelta}/${queryClaims.rootKernelProductDelta}/${queryClaims.rootKernelHotDetailDelta}, ` +
     `allKernelDelta=${queryClaims.allKernelRecordDelta}/${queryClaims.allKernelProductDelta}/${queryClaims.allKernelHotDetailDelta}, ` +
     `disposedKernel=${queryClaims.disposedKernelRecords}/${queryClaims.disposedProductDetails}/${queryClaims.disposedHotDetails}/${formatCharacterCount(queryClaims.disposedKernelHandleCharacters)}, ` +
@@ -2312,7 +2338,6 @@ function printAggregate(aggregate) {
   printProgramNodeRemaps('- type-system program-node remap totals', aggregate.typeSystemProgramNodeRemaps);
   printStaticEvaluationHost('- static-evaluation host totals', aggregate.staticEvaluationHost);
   printHostSourceFileCache('- type-system host cache totals', aggregate.typeSystemHostSourceFileCache);
-  printProjectCompilerOptionsCacheAggregate('- project compiler-options cache max', aggregate.projectCompilerOptionsCache);
   printTypeSystemDependencyCacheAggregate('- type-system dependency cache max', aggregate.typeSystemDependencyCache);
   printTypeSystemDependencyCacheClearAggregate('- type-system dependency cache clear totals', aggregate.typeSystemDependencyCacheClear);
   printTypeSystemDependencyCacheAggregate('- type-system dependency cache after clear max', aggregate.typeSystemDependencyCacheAfterClear);
@@ -2321,7 +2346,7 @@ function printAggregate(aggregate) {
   if (aggregate.appQueryClaims.createdRecords > 0) {
     console.log(formatQueryClaimAggregate('- app query claim totals', aggregate.appQueryClaims));
   }
-  printCountRows('- repeated type checker-key totals', countMapRows(aggregate.typeShapeDuplicates), 10);
+  printCountRows('- repeated semantic type-key totals', countMapRows(aggregate.typeShapeDuplicates), 10);
   if (aggregate.warnings.size > 0) {
     console.log('- warnings');
     for (const [warning, count] of sortedMapEntries(aggregate.warnings).slice(0, 10)) {
@@ -2471,7 +2496,10 @@ function sortedQueryAggregate(queries) {
     .map((value) => ({
       label: value.label,
       materializationPolicy: value.materializationPolicy,
-      outcome: `${value.count} run(s)`,
+      result: value.result,
+      selection: value.selection,
+      coverage: value.coverage,
+      sampleCount: value.count,
       milliseconds: value.milliseconds,
       payloadBytes: value.payloadBytes,
       answerBytes: value.answerBytes,
@@ -2517,6 +2545,17 @@ function printTimingRows(label, rows, limit) {
   console.log(`${label}: ${parts.join(', ')}`);
 }
 
+function printStaticEvaluationAcquisitions(label, rows) {
+  if (rows.length === 0) {
+    console.log(`${label}: none`);
+    return;
+  }
+  console.log(`${label}: ${rows.map((row) =>
+    `${row.profileKey}=${row.kind} ${row.milliseconds.toFixed(1)}ms `
+    + `(generation ${row.constructionMilliseconds.toFixed(1)}ms)`
+  ).join(', ')}`);
+}
+
 function phaseSortMilliseconds(row) {
   return row.exclusiveMilliseconds ?? row.milliseconds;
 }
@@ -2538,6 +2577,8 @@ function printHostSourceFileCache(label, cache) {
   console.log(
     `${label}: hits=${cache.hits ?? 0}, misses=${cache.misses ?? 0}, writes=${cache.writes ?? 0}, bypasses=${cache.bypasses ?? 0}, ` +
     `traffic(hitText=${formatCharacterCount(cache.hitSourceTextCharacters ?? 0)}, writeText=${formatCharacterCount(cache.writeSourceTextCharacters ?? 0)}), ` +
+    `evictions(revision=${cache.supersededRevisionEvictions ?? 0}/${formatCharacterCount(cache.supersededRevisionEvictedSourceTextCharacters ?? 0)}, ` +
+    `capacity=${cache.capacityEvictions ?? 0}/${formatCharacterCount(cache.capacityEvictedSourceTextCharacters ?? 0)}), ` +
     `cacheable(node_modules=${cache.cacheableNodeModuleReads ?? 0}, externalDecls=${cache.cacheableExternalDeclarationReads ?? 0}), ` +
     `bypass(fresh=${cache.bypassFreshSourceFileReads ?? 0}, project=${cache.bypassProjectSourceReads ?? 0}, external=${cache.bypassExternalSourceReads ?? 0}), ` +
     `clears=${cache.clearOperations ?? 0}/${cache.clearedEntries ?? 0}/${formatCharacterCount(cache.clearedSourceTextCharacters ?? 0)}, ` +
@@ -2546,25 +2587,17 @@ function printHostSourceFileCache(label, cache) {
   );
 }
 
-function printProjectCompilerOptionsCache(label, cache) {
-  if (cache == null) {
-    return;
-  }
-  console.log(
-    `${label}: entries=${cache.entries ?? 0}, hits=${cache.hits ?? 0}, misses=${cache.misses ?? 0}, ` +
-    `writes=${cache.writes ?? 0}, clears=${cache.clearOperations ?? 0}/${cache.clearedEntries ?? 0}, ` +
-    `paths=${cache.pathMappingCount ?? 0}/${cache.pathMappingTargetCount ?? 0}`,
-  );
-}
-
 function printTypeSystemDependencyCache(label, cache) {
   if (cache == null) {
     return;
   }
   console.log(
-    `${label}: entries=${cache.entries ?? 0}, sourceText=${formatCharacterCount(cache.sourceTextCharacters ?? 0)}, ` +
+    `${label}: entries=${cache.entries ?? 0}/${cache.entryLimit ?? 0}, ` +
+    `sourceText=${formatCharacterCount(cache.sourceTextCharacters ?? 0)}/${formatCharacterCount(cache.sourceTextCharacterLimit ?? 0)}, ` +
     `traffic(hits=${cache.hits ?? 0}/${formatCharacterCount(cache.hitSourceTextCharacters ?? 0)}, ` +
     `writes=${cache.writes ?? 0}/${formatCharacterCount(cache.writeSourceTextCharacters ?? 0)}), ` +
+    `evictions(revision=${cache.supersededRevisionEvictions ?? 0}/${formatCharacterCount(cache.supersededRevisionEvictedSourceTextCharacters ?? 0)}, ` +
+    `capacity=${cache.capacityEvictions ?? 0}/${formatCharacterCount(cache.capacityEvictedSourceTextCharacters ?? 0)}), ` +
     `nodeModules=${cache.nodeModuleEntries ?? 0}/${formatCharacterCount(cache.nodeModuleSourceTextCharacters ?? 0)}, ` +
     `declarations=${cache.declarationEntries ?? 0}/${formatCharacterCount(cache.declarationSourceTextCharacters ?? 0)}, ` +
     `defaultLibs=${cache.defaultLibraryEntries ?? 0}/${formatCharacterCount(cache.defaultLibrarySourceTextCharacters ?? 0)}, ` +
@@ -2613,25 +2646,17 @@ function printTypeSystemDependencyCacheClearAggregate(label, clear) {
   );
 }
 
-function printProjectCompilerOptionsCacheAggregate(label, cache) {
-  if (cache == null || cache.maxEntries === 0) {
-    return;
-  }
-  console.log(
-    `${label}: entries=${cache.maxEntries}, hits=${cache.maxHits}, misses=${cache.maxMisses}, ` +
-    `writes=${cache.maxWrites}, clears=${cache.maxClearOperations}/${cache.maxClearedEntries}, ` +
-    `paths=${cache.maxPathMappingCount}/${cache.maxPathMappingTargetCount}`,
-  );
-}
-
 function printTypeSystemDependencyCacheAggregate(label, cache) {
   if (cache == null || cache.maxEntries === 0) {
     return;
   }
   console.log(
-    `${label}: entries=${cache.maxEntries}, sourceText=${formatCharacterCount(cache.maxSourceTextCharacters)}, ` +
+    `${label}: entries=${cache.maxEntries}/${cache.entryLimit}, ` +
+    `sourceText=${formatCharacterCount(cache.maxSourceTextCharacters)}/${formatCharacterCount(cache.sourceTextCharacterLimit)}, ` +
     `traffic(hits=${cache.maxHits}/${formatCharacterCount(cache.maxHitSourceTextCharacters)}, ` +
     `writes=${cache.maxWrites}/${formatCharacterCount(cache.maxWriteSourceTextCharacters)}), ` +
+    `evictions(revision=${cache.maxSupersededRevisionEvictions}/${formatCharacterCount(cache.maxSupersededRevisionEvictedSourceTextCharacters)}, ` +
+    `capacity=${cache.maxCapacityEvictions}/${formatCharacterCount(cache.maxCapacityEvictedSourceTextCharacters)}), ` +
     `nodeModules=${cache.maxNodeModuleEntries}/${formatCharacterCount(cache.maxNodeModuleSourceTextCharacters)}, ` +
     `declarations=${cache.maxDeclarationEntries}/${formatCharacterCount(cache.maxDeclarationSourceTextCharacters)}, ` +
     `defaultLibs=${cache.maxDefaultLibraryEntries}/${formatCharacterCount(cache.maxDefaultLibrarySourceTextCharacters)}, ` +
@@ -2954,7 +2979,8 @@ function printQueryRows(label, rows) {
   const parts = rows
     .slice(0, 12)
     .map((row) =>
-      `${row.label}=${row.milliseconds.toFixed(1)}ms/${row.outcome}`
+      `${row.label}=${row.milliseconds.toFixed(1)}ms/${row.result}/${row.selection}/${row.coverage}`
+      + `/runs ${row.sampleCount}`
       + (row.materializationPolicy == null ? '' : `/policy ${row.materializationPolicy}`)
       + `/rows ${row.rowCount}/valueJson ${formatSemanticRuntimeBytes(row.payloadBytes)}`
       + `/answerJson ${formatSemanticRuntimeBytes(row.answerBytes ?? row.payloadBytes)}`
@@ -3021,10 +3047,10 @@ function topTypeShapeDuplicateRows(store, limit) {
     if (detail == null || typeof detail !== 'object') {
       continue;
     }
-    const checkerKey = String(detail.checkerKey ?? 'unknown');
-    const current = groups.get(checkerKey) ?? {
-      checkerKey,
-      display: String(detail.display ?? checkerKey),
+    const semanticKey = String(detail.semanticKey ?? 'unknown');
+    const current = groups.get(semanticKey) ?? {
+      semanticKey,
+      display: String(detail.display ?? semanticKey),
       shapeKind: String(detail.shapeKind ?? 'unknown'),
       origins: new Set(),
       sources: new Set(),
@@ -3033,14 +3059,14 @@ function topTypeShapeDuplicateRows(store, limit) {
     current.origins.add(String(detail.origin ?? 'unknown'));
     current.sources.add(String(detail.sourceAddressHandle ?? 'no-source'));
     current.count += 1;
-    groups.set(checkerKey, current);
+    groups.set(semanticKey, current);
   }
   return [...groups.values()]
     .filter((row) => row.count > 1)
     .sort((left, right) => right.count - left.count || left.display.localeCompare(right.display))
     .slice(0, limit)
     .map((row) => ({
-      checkerKey: row.checkerKey,
+      semanticKey: row.semanticKey,
       display: row.display,
       shapeKind: row.shapeKind,
       count: row.count,

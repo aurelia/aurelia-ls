@@ -1,0 +1,30 @@
+<template>
+  <nav>
+    <a load="main">Main</a>
+    <a load="open">Open</a>
+    <a load="filtered">Filtered</a>
+    <a load="bound">Bound viewport</a>
+    <a load="dynamic">Dynamic viewport</a>
+    <a load="dynamic-used-by">Dynamic used-by</a>
+    <a load="conditional">Conditional viewport</a>
+    <a load="shared">Shared viewport</a>
+    <a load="missing">Missing viewport</a>
+    <a load="unresolved">Unresolved routeable</a>
+    <a load="reports/detail/r-1">Report detail</a>
+  </nav>
+  <au-viewport name="main"></au-viewport>
+  <au-viewport name="side"></au-viewport>
+  <au-viewport name="filtered" used-by="filtered-route"></au-viewport>
+  <au-viewport name="blocked" used-by="other-route"></au-viewport>
+  <au-viewport
+    name.bind="boundViewportName"
+    used-by.bind="boundUsedBy"
+    default.bind="boundDefault"
+    fallback.bind="boundFallback"
+  ></au-viewport>
+  <au-viewport name.bind="dynamicViewportName" used-by="dynamic-route"></au-viewport>
+  <au-viewport name="dynamic-used-by" used-by.bind="dynamicUsedBy"></au-viewport>
+  <au-viewport if.bind="showConditionalViewport" name="conditional"></au-viewport>
+  <au-viewport name="shared"></au-viewport>
+  <au-viewport name="shared"></au-viewport>
+</template>

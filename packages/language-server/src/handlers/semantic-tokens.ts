@@ -1,44 +1,38 @@
 /**
  * Semantic tokens handler.
  *
- * The Semantic Workspace is the source of truth for token classification;
- * this adapter only maps workspace tokens into the LSP format.
+ * Semantic-runtime is the source of truth for token classification;
+ * this adapter only maps runtime token rows into the LSP format.
  */
-import type {
-  SemanticTokens,
-  SemanticTokensParams,
-  SemanticTokensLegend,
-} from "vscode-languageserver/node.js";
-import { canonicalDocumentUri } from "@aurelia-ls/compiler/program/paths.js";
+import {
+  LSPErrorCodes,
+  ResponseError,
+  type SemanticTokens,
+  type SemanticTokensParams,
+  type SemanticTokensLegend,
+} from "vscode-languageserver/node";
+import type { TextDocument } from "vscode-languageserver-textdocument";
+import {
+  SemanticRuntimeAnswerCoverage,
+  SemanticRuntimeAnswerResult,
+  SemanticRuntimeAnswerSelection,
+  SEMANTIC_TEMPLATE_SEMANTIC_TOKEN_MODIFIERS,
+  SEMANTIC_TEMPLATE_SEMANTIC_TOKEN_TYPES,
+  semanticExactSourceReference,
+  type SemanticRuntimeAnswer,
+  type SemanticTemplateSemanticTokensResult,
+  type SemanticTemplateSemanticTokenRow,
+} from "@aurelia-ls/semantic-runtime";
 import type { ServerContext } from "../context.js";
-import { WORKSPACE_TOKEN_MODIFIER_GAP_AWARE, WORKSPACE_TOKEN_MODIFIER_GAP_CONSERVATIVE, type WorkspaceToken } from "@aurelia-ls/semantic-workspace/types.js";
-export const TOKEN_TYPES = [
-  "aureliaElement",
-  "aureliaAttribute",
-  "aureliaBindable",
-  "aureliaController",
-  "aureliaCommand",
-  "aureliaConverter",
-  "aureliaBehavior",
-  "aureliaMetaElement",
-  "aureliaMetaAttribute",
-  "aureliaExpression",
-  "variable",
-  "property",
-  "function",
-  "keyword",
-  "string",
-] as const;
+import {
+  semanticSourceOffsetRangeForDocument,
+  semanticSourceReferenceMatchesDocument,
+} from "../mapping/source-locations.js";
+import type { SemanticRuntimeLspOperation } from "../runtime/semantic-runtime-session.js";
+import { isTemplateDocument } from "../utils/document-kind.js";
 
-export const TOKEN_MODIFIERS = [
-  "declaration",
-  "definition",
-  "defaultLibrary",
-  "deprecated",
-  "readonly",
-  WORKSPACE_TOKEN_MODIFIER_GAP_AWARE,
-  WORKSPACE_TOKEN_MODIFIER_GAP_CONSERVATIVE,
-] as const;
+export const TOKEN_TYPES = SEMANTIC_TEMPLATE_SEMANTIC_TOKEN_TYPES;
+export const TOKEN_MODIFIERS = SEMANTIC_TEMPLATE_SEMANTIC_TOKEN_MODIFIERS;
 
 export const SEMANTIC_TOKENS_LEGEND: SemanticTokensLegend = {
   tokenTypes: [...TOKEN_TYPES],
@@ -56,41 +50,66 @@ interface RawToken {
   modifiers: number;
 }
 
-export function handleSemanticTokensFull(
+export async function handleSemanticTokensFull(
   ctx: ServerContext,
   params: SemanticTokensParams,
-): SemanticTokens | null {
-  return ctx.trace.span("lsp.semanticTokens", () => {
-    try {
-      ctx.trace.setAttribute("lsp.semanticTokens.uri", params.textDocument.uri);
+  operation: SemanticRuntimeLspOperation,
+): Promise<SemanticTokens | null> {
+  const doc = operation.documents.ensureProgramDocument(params.textDocument.uri);
+  if (!doc) return null;
+  if (!isTemplateDocument(doc)) return null;
 
-      const doc = ctx.ensureProgramDocument(params.textDocument.uri);
-      if (!doc) return null;
+  const response = await operation.templateSemanticTokens(
+    doc,
+  );
+  assertCompleteSemanticTokensAnswer(response);
+  const tokens = response.value.rows;
+  if (tokens.length === 0) return null;
 
-      const canonical = canonicalDocumentUri(doc.uri);
-      const text = ctx.workspace.lookupText(canonical.uri) ?? doc.getText();
-      const tokens = ctx.workspace.query(canonical.uri).semanticTokens();
-      if (!tokens.length) return null;
-
-      const encoded = encodeTokens(tokens, text);
-      return encoded.length ? { data: encoded } : null;
-    } catch (e) {
-      const message = e instanceof Error ? e.stack ?? e.message : String(e);
-      ctx.logger.error(`[semanticTokens] failed for ${params.textDocument.uri}: ${message}`);
-      return null;
-    }
-  });
+  const encoded = encodeTokens(tokens, doc, ctx.documentUris);
+  return encoded.length ? { data: encoded } : null;
 }
 
-function encodeTokens(tokens: readonly WorkspaceToken[], text: string): number[] {
+export function encodeTokens(
+  tokens: readonly SemanticTemplateSemanticTokenRow[],
+  document: Pick<TextDocument, "uri" | "getText" | "positionAt">,
+  documentUris: ServerContext["documentUris"],
+): number[] {
   const raw: RawToken[] = [];
-  for (const token of tokens) {
-    const typeIndex = TYPE_INDEX.get(token.type);
-    if (typeIndex === undefined) continue;
-    const length = token.span.end - token.span.start;
-    if (length <= 0) continue;
-    const start = positionAtOffset(text, token.span.start);
-    const modifiers = encodeModifiers(token.modifiers);
+  for (const [rowIndex, token] of tokens.entries()) {
+    const typeIndex = TYPE_INDEX.get(token.tokenType);
+    if (typeIndex === undefined) {
+      throw semanticTokensRequestFailure(
+        `row ${rowIndex} uses unknown token type ${JSON.stringify(token.tokenType)}.`,
+      );
+    }
+    const modifiers = encodeModifiers(token.tokenModifiers, rowIndex);
+    const exactSource = semanticExactSourceReference(token.source);
+    if (exactSource == null) {
+      throw semanticTokensRequestFailure(`row ${rowIndex} has no exact authored source range.`);
+    }
+    if (!semanticSourceReferenceMatchesDocument(exactSource, documentUris, document.uri)) {
+      throw semanticTokensRequestFailure(`row ${rowIndex} does not target the requesting document.`);
+    }
+    const source = semanticSourceOffsetRangeForDocument(exactSource, document);
+    if (source == null) {
+      throw semanticTokensRequestFailure(
+        `row ${rowIndex} has no exact source range valid for the current document.`,
+      );
+    }
+    const length = source.end - source.start;
+    if (length <= 0) {
+      throw semanticTokensRequestFailure(
+        `row ${rowIndex} has a non-positive source range ${source.start}..${source.end}.`,
+      );
+    }
+    const start = document.positionAt(source.start);
+    const end = document.positionAt(source.end);
+    if (start.line !== end.line) {
+      throw semanticTokensRequestFailure(
+        `row ${rowIndex} spans multiple lines (${start.line}..${end.line}).`,
+      );
+    }
     raw.push({
       line: start.line,
       char: start.character,
@@ -101,6 +120,17 @@ function encodeTokens(tokens: readonly WorkspaceToken[], text: string): number[]
   }
 
   raw.sort((a, b) => a.line - b.line || a.char - b.char);
+
+  for (let index = 1; index < raw.length; index += 1) {
+    const previous = raw[index - 1]!;
+    const current = raw[index]!;
+    if (previous.line === current.line && current.char < previous.char + previous.length) {
+      throw semanticTokensRequestFailure(
+        `ranges overlap on line ${current.line}: `
+        + `${previous.char}..${previous.char + previous.length} and ${current.char}..${current.char + current.length}.`,
+      );
+    }
+  }
 
   const data: number[] = [];
   let prevLine = 0;
@@ -116,37 +146,38 @@ function encodeTokens(tokens: readonly WorkspaceToken[], text: string): number[]
   return data;
 }
 
-function encodeModifiers(modifiers?: readonly string[]): number {
-  if (!modifiers?.length) return 0;
+function encodeModifiers(modifiers: readonly string[], rowIndex: number): number {
+  if (modifiers.length === 0) return 0;
   let value = 0;
   for (const mod of modifiers) {
     const idx = MOD_INDEX.get(mod);
-    if (idx === undefined) continue;
+    if (idx === undefined) {
+      throw semanticTokensRequestFailure(
+        `row ${rowIndex} uses unknown token modifier ${JSON.stringify(mod)}.`,
+      );
+    }
     value |= 1 << idx;
   }
   return value;
 }
 
-function positionAtOffset(text: string, offset: number): { line: number; character: number } {
-  const length = text.length;
-  const clamped = Math.max(0, Math.min(offset, length));
-  const lineStarts = computeLineStarts(text);
-  let line = 0;
-  while (line + 1 < lineStarts.length && (lineStarts[line + 1] ?? Number.POSITIVE_INFINITY) <= clamped) {
-    line += 1;
+function assertCompleteSemanticTokensAnswer(
+  answer: SemanticRuntimeAnswer<SemanticTemplateSemanticTokensResult>,
+): void {
+  if (
+    answer.result !== SemanticRuntimeAnswerResult.Answered
+    || answer.selection !== SemanticRuntimeAnswerSelection.NotApplicable
+    || answer.coverage !== SemanticRuntimeAnswerCoverage.Complete
+  ) {
+    throw semanticTokensRequestFailure(
+      `semantic runtime returned result=${answer.result}; selection=${answer.selection}; coverage=${answer.coverage}.`,
+    );
   }
-  const lineStart = lineStarts[line] ?? 0;
-  return { line, character: clamped - lineStart };
 }
 
-function computeLineStarts(text: string): number[] {
-  const starts = [0];
-  for (let i = 0; i < text.length; i += 1) {
-    const ch = text.charCodeAt(i);
-    if (ch === 13 /* CR */ || ch === 10 /* LF */) {
-      if (ch === 13 /* CR */ && text.charCodeAt(i + 1) === 10 /* LF */) i += 1;
-      starts.push(i + 1);
-    }
-  }
-  return starts;
+function semanticTokensRequestFailure(detail: string): ResponseError<unknown> {
+  return new ResponseError(
+    LSPErrorCodes.RequestFailed,
+    `Aurelia semantic token mapping was blocked: ${detail}`,
+  );
 }

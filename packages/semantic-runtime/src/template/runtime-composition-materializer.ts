@@ -7,13 +7,18 @@ import {
   ContainerContextResolverSlotRequest,
   type ContainerChildMaterializationEmission,
 } from '../di/container-materializer.js';
+import { FrameworkIntrinsicDiKey } from '../di/framework-intrinsic-di-key.js';
 import type { Container } from '../di/container.js';
 import {
+  EvaluationPromiseSettlementKind,
   EvaluationStringValue,
   EvaluationValueKind,
+  closedEvaluationPromiseFulfillment,
   type EvaluationValue,
 } from '../evaluation/values.js';
-import { readDeclarationLocalName } from '../evaluation/ts-syntax.js';
+import {
+  openSeamReasonKindsForEvaluationValue,
+} from '../evaluation/boundary-open-reason.js';
 import { SemanticClaim } from '../kernel/claim.js';
 import {
   EvidenceKind,
@@ -24,6 +29,7 @@ import type {
   AddressHandle,
   EvidenceHandle,
   IdentityHandle,
+  OpenSeamHandle,
   ProductHandle,
   ProvenanceHandle,
 } from '../kernel/handles.js';
@@ -44,10 +50,16 @@ import {
   ProvenanceRecord,
 } from '../kernel/provenance.js';
 import {
-  KernelStoreBatch,
   type KernelStore,
   type KernelStoreRecord,
 } from '../kernel/store.js';
+import {
+  KernelPublicationPlan,
+  KernelStoreBatch,
+  publishProductDetails,
+  type KernelPublicationContext,
+} from '../kernel/publication.js';
+import type { ProductDetailReadView } from '../kernel/product-details.js';
 import {
   KernelVocabulary,
 } from '../kernel/vocabulary.js';
@@ -55,17 +67,18 @@ import {
   RuntimeBindingSourceValueEvaluator,
 } from '../observation/binding-source-value-evaluator.js';
 import {
-  RuntimeBindingSourceValueEvaluationKind,
-} from '../observation/binding-source-value-evaluation.js';
+  RuntimeBindingSourceValueEvaluation,
+  RuntimeBindingSourceValueEvaluationClosure,
+} from '../configuration/binding-source-value-evaluation.js';
+import {
+  projectRuntimeBindingSourceValuePressure,
+} from '../observation/binding-source-value-pressure.js';
 import {
   sourceValueContextForRuntimeBindingSourceExpressionProjection,
 } from '../observation/binding-source-value-evaluation-context.js';
 import {
   instructionScopeLookup,
 } from '../observation/runtime-binding-expression.js';
-import {
-  RuntimeBindingExpressionScopeProjector,
-} from '../observation/runtime-binding-expression-scope.js';
 import {
   RuntimeBindingSourceExpressionContextProjector,
   RuntimeBindingSourceExpressionProjectionKind,
@@ -76,9 +89,14 @@ import type { FullResourceDefinition } from '../resources/resource-definition.js
 import type { ResourceDefinitionIndex } from '../resources/resource-definition-index.js';
 import { ResourceDefinitionKind } from '../resources/resource-kind.js';
 import {
+  CheckerTypeShapeKind,
+  classifyCheckerTypeShape,
   type CheckerTypeReference,
   type CheckerTypeShape,
 } from '../type-system/type-shape.js';
+import type { CheckerTypeProjector } from '../type-system/checker-projector.js';
+import { CheckerAsyncTypeProjector } from '../type-system/checker-async-type-projector.js';
+import type { TypeSystemProject } from '../type-system/project.js';
 import {
   readCheckerTypeShape,
 } from '../type-system/checker-type-shape-access.js';
@@ -93,11 +111,14 @@ import {
 } from './instruction-ir.js';
 import {
   CompositionComponentResolutionKind,
+  CompositionComponentCandidateCoverageKind,
   CompositionActivationModelHandoff,
   CompositionContext,
   CompositionController,
-  CompositionInputFulfillmentKind,
+  CompositionInputConsumptionKind,
+  CompositionInputValueStateKind,
   CompositionModelResolutionKind,
+  CompositionRenderingContextKind,
   CompositionResolvedComponent,
 } from './runtime-composition.js';
 import {
@@ -110,8 +131,8 @@ import type { RuntimeControllerBindEmission } from './runtime-controller-bind-ma
 import {
   RuntimeControllerCreationKind,
   RuntimeControllerFrame,
-  RuntimeControllerLifecycleStage,
-  RuntimeControllerLifecycleStepKind,
+  RuntimeControllerAssemblyStage,
+  RuntimeControllerAssemblyStepKind,
 } from './runtime-controller.js';
 import { RuntimeControllerPublicationMaterializer } from './runtime-controller-publication.js';
 import { RuntimeRenderingSourceSet } from './runtime-rendering-source.js';
@@ -121,9 +142,9 @@ import {
   type CompositionModelEvaluation,
 } from './runtime-composition-activation.js';
 import type { RuntimeRenderingEmission } from './runtime-rendering-materializer.js';
+import type { RuntimeExpressionResourcePlan } from './runtime-expression-resource-plan.js';
 import type { TemplateRuntimeAnalysisProjectContext } from './template-runtime-analysis-context.js';
 import type { TemplateScopeConstructionEmission } from './template-controller-scope-materializer.js';
-import type { TemplateResourceScope } from './compiler-world.js';
 import {
   AU_COMPOSE_RESOURCE_NAME,
   AU_COMPOSE_TARGET_NAME,
@@ -134,15 +155,26 @@ export class RuntimeCompositionMaterializationRequest {
   constructor(
     readonly localKey: string,
     readonly runtimeRendering: RuntimeRenderingEmission,
+    readonly expressionResourcePlan: RuntimeExpressionResourcePlan,
     readonly controllerBind: RuntimeControllerBindEmission,
     readonly bindingDataFlow: RuntimeBindingDataFlowEmission,
     readonly scopes: TemplateScopeConstructionEmission,
     readonly expressionWorld: CheckerExpressionTypeWorld,
     readonly projectContext: TemplateRuntimeAnalysisProjectContext,
     readonly resourceDefinitions: ResourceDefinitionIndex | null,
-    readonly resourceScope: TemplateResourceScope | null,
+    readonly typeSystem: TypeSystemProject | null,
     readonly sourceValueEvaluator: RuntimeBindingSourceValueEvaluator | null,
   ) {}
+}
+
+function compositionConstructionContainer(
+  input: RuntimeCompositionMaterializationRequest,
+  controller: RuntimeControllerFrame,
+): Container | null {
+  const ownerProductHandle = controller.readConstructionHydrationContext()?.controller.productHandle ?? null;
+  return ownerProductHandle == null
+    ? null
+    : input.runtimeRendering.readController(ownerProductHandle)?.containerFrame ?? null;
 }
 
 export class RuntimeCompositionEmission {
@@ -175,12 +207,50 @@ interface AuComposeBindingSet {
   readonly composition: RuntimeBinding | null;
 }
 
-interface EvaluatedBinding extends CompositionModelEvaluation {
-  readonly binding: RuntimeBinding | null;
-  readonly value: EvaluationValue | null;
-  readonly sourceType: CheckerTypeReference | null;
-  readonly openReason: string | null;
-  readonly openReasonKinds: readonly OpenSeamReasonKind[];
+class EvaluatedBinding implements CompositionModelEvaluation {
+  constructor(
+    readonly binding: RuntimeBinding | null,
+    readonly evaluation: RuntimeBindingSourceValueEvaluation | null,
+    readonly sourceType: CheckerTypeReference | null,
+  ) {}
+
+  get value(): EvaluationValue | null {
+    return this.evaluation?.value ?? null;
+  }
+
+  get openReason(): string | null {
+    return this.evaluation?.openReason ?? null;
+  }
+
+  get openReasonKinds(): readonly OpenSeamReasonKind[] {
+    return this.evaluation?.openReasonKinds ?? [];
+  }
+
+  get isOpen(): boolean {
+    return this.evaluation?.closure === RuntimeBindingSourceValueEvaluationClosure.Open;
+  }
+}
+
+const enum RuntimeCompositionInputKind {
+  /** Alternate template input consumed by AuCompose view construction. */
+  Template = 'template',
+  /** Component identity input that alone qualifies a concrete composed child controller. */
+  Component = 'component',
+  /** Activation/update model handed to the selected component. */
+  Model = 'model',
+  /** Scope inheritance mode used by template-only composition. */
+  ScopeBehavior = 'scopeBehavior',
+  /** Host element name used by non-custom-element composition. */
+  Tag = 'tag',
+  /** Scheduling mode used when applying a completed composition. */
+  FlushMode = 'flushMode',
+}
+
+class CompositionInputPressure {
+  constructor(
+    readonly inputKind: RuntimeCompositionInputKind,
+    readonly seam: OpenSeam,
+  ) {}
 }
 
 interface StaticAuComposeInputs {
@@ -195,9 +265,24 @@ interface StaticAuComposeInputs {
 interface ComponentResolution {
   readonly candidates: readonly CompositionResolvedComponent[];
   readonly resolutionKind: CompositionComponentResolutionKind;
+  readonly candidateCoverageKind: CompositionComponentCandidateCoverageKind;
   readonly objectViewModelActivationHandoff: CompositionActivationModelHandoff | null;
   readonly openReason: string | null;
   readonly openReasonKinds: readonly OpenSeamReasonKind[];
+}
+
+class ComponentTypeResolution {
+  constructor(
+    readonly candidates: readonly CompositionResolvedComponent[],
+    readonly coverageKind: CompositionComponentCandidateCoverageKind,
+  ) {}
+}
+
+class ComponentTypeCandidateBasis {
+  constructor(
+    readonly types: readonly ts.Type[],
+    readonly exhaustive: boolean,
+  ) {}
 }
 
 class ComposedChildControllerHandoff {
@@ -226,25 +311,25 @@ export class RuntimeCompositionMaterializer {
 
   constructor(
     private readonly store: KernelStore,
+    private readonly publication: KernelPublicationContext,
   ) {
-    this.childContainerMaterializer = new ContainerChildMaterializer(store);
-    this.controllerPublication = new RuntimeControllerPublicationMaterializer(store);
+    this.childContainerMaterializer = new ContainerChildMaterializer(store, publication);
+    this.controllerPublication = new RuntimeControllerPublicationMaterializer(store, publication);
   }
 
   materialize(input: RuntimeCompositionMaterializationRequest): RuntimeCompositionEmission {
     const emission = this.recordsForCompositions(input);
-    if (emission.records.length > 0) {
-      this.store.commit(new KernelStoreBatch(emission.records, `runtime-composition:${input.localKey}`));
-    }
-    this.store.productDetails.addAll(TemplateProductDetails.CompositionContext, emission.contexts);
-    this.store.productDetails.addAll(TemplateProductDetails.CompositionController, emission.controllers);
-    for (const controller of emission.composedControllers) {
-      this.store.productDetails.add(
-        ConfigurationProductDetails.Controller,
-        controller.productHandle,
-        controller.toControllerProduct(),
-      );
-    }
+    this.publication.publish(new KernelPublicationPlan(
+      new KernelStoreBatch(emission.records, `runtime-composition:${input.localKey}`),
+      [
+        ...publishProductDetails(TemplateProductDetails.CompositionContext, emission.contexts),
+        ...publishProductDetails(TemplateProductDetails.CompositionController, emission.controllers),
+        ...publishProductDetails(
+          ConfigurationProductDetails.Controller,
+          emission.composedControllers.map((controller) => controller.toControllerProduct()),
+        ),
+      ],
+    ));
     return emission;
   }
 
@@ -258,11 +343,15 @@ export class RuntimeCompositionMaterializer {
     const records: KernelStoreRecord[] = [...source.records];
     const bindingsByProduct = new Map(input.runtimeRendering.bindings.map((binding) => [binding.productHandle, binding]));
     const scopesByInstruction = instructionScopeLookup(input.scopes.instructionScopes);
-    const bindingExpressionScopes = new RuntimeBindingExpressionScopeProjector(this.store, input.expressionWorld);
     const sourceExpressionContexts = new RuntimeBindingSourceExpressionContextProjector(
       input.runtimeRendering,
       scopesByInstruction,
-      bindingExpressionScopes,
+      input.scopes.bindingExpressionScopes,
+      input.expressionResourcePlan,
+    );
+    const asyncTypeProjector = new CheckerAsyncTypeProjector(
+      this.store,
+      input.expressionWorld.projector,
     );
 
     input.runtimeRendering.controllers.forEach((controller, index) => {
@@ -271,39 +360,120 @@ export class RuntimeCompositionMaterializer {
       }
       const local = `${input.localKey}:composition:${index}`;
       const bindings = auComposeBindings(input.controllerBind, controller, bindingsByProduct);
-      const staticInputs = staticAuComposeInputs(this.store, controller);
-      const template = this.evaluateBinding(input, bindings.template, sourceExpressionContexts, bindingExpressionScopes);
-      const component = this.evaluateBinding(input, bindings.component, sourceExpressionContexts, bindingExpressionScopes);
-      const model = this.evaluateModelInput(input, bindings.model, sourceExpressionContexts, bindingExpressionScopes, staticInputs.model);
-      const scopeBehavior = this.evaluateBinding(input, bindings.scopeBehavior, sourceExpressionContexts, bindingExpressionScopes);
-      const tag = this.evaluateBinding(input, bindings.tag, sourceExpressionContexts, bindingExpressionScopes);
-      const flushMode = this.evaluateBinding(input, bindings.flushMode, sourceExpressionContexts, bindingExpressionScopes);
-      const resolution = this.resolveComponent(local, input, controller, component, model, staticInputs);
-      const context = this.createContext(local, controller, bindings, template, component, model, scopeBehavior, tag, flushMode, staticInputs, source.provenanceHandle);
+      const staticInputs = staticAuComposeInputs(this.publication, controller);
+      const template = this.evaluateBinding(input, bindings.template, sourceExpressionContexts);
+      const component = this.evaluateBinding(input, bindings.component, sourceExpressionContexts);
+      const model = this.evaluateModelInput(input, bindings.model, sourceExpressionContexts, staticInputs.model);
+      const scopeBehavior = this.evaluateBinding(input, bindings.scopeBehavior, sourceExpressionContexts);
+      const tag = this.evaluateBinding(input, bindings.tag, sourceExpressionContexts);
+      const flushMode = this.evaluateBinding(input, bindings.flushMode, sourceExpressionContexts);
+      const templateInputType = awaitedCompositionInputType(
+        asyncTypeProjector,
+        template,
+        `${local}:template-awaited-type`,
+        controller.sourceAddressHandle,
+      );
+      const componentInputType = awaitedCompositionInputType(
+        asyncTypeProjector,
+        component,
+        `${local}:component-awaited-type`,
+        controller.sourceAddressHandle,
+      );
+      const evaluatedInputs = [
+        [RuntimeCompositionInputKind.Template, template],
+        [RuntimeCompositionInputKind.Component, component],
+        [RuntimeCompositionInputKind.Model, model],
+        [RuntimeCompositionInputKind.ScopeBehavior, scopeBehavior],
+        [RuntimeCompositionInputKind.Tag, tag],
+        [RuntimeCompositionInputKind.FlushMode, flushMode],
+      ] as const;
+      const componentResolution = this.resolveComponent(
+        local,
+        input,
+        controller,
+        component,
+        componentInputType,
+        model,
+        staticInputs,
+      );
+      const inputPressure = this.openCompositionInputSeams(
+        local,
+        input.sourceValueEvaluator,
+        evaluatedInputs,
+        componentResolution,
+        source,
+        records,
+      );
+      const context = this.createContext(
+        local,
+        controller,
+        bindings,
+        template,
+        templateInputType,
+        component,
+        componentInputType,
+        model,
+        scopeBehavior,
+        tag,
+        flushMode,
+        staticInputs,
+        source.provenanceHandle,
+      );
       const controllerHandoff = this.materializeComposedChildControllers(
         local,
         input,
         controller,
         context,
-        resolution,
+        componentResolution,
+        inputPressure.filter((pressure) => pressure.inputKind === RuntimeCompositionInputKind.Component),
         source,
         records,
         childContainers,
       );
-      const composition = this.createController(local, controller, context, controllerHandoff.resolution, model, source.provenanceHandle);
+      const resolutionPressure = this.openCompositionResolutionSeam(
+        local,
+        controllerHandoff.resolution,
+        component,
+        inputPressure,
+        context.sourceAddressHandle,
+        source,
+        records,
+      );
+      const compositionResolution = componentResolutionWithInputPressure(
+        controllerHandoff.resolution,
+        inputPressure,
+      );
+      const composition = this.createController(local, input, controller, context, compositionResolution, model, source.provenanceHandle);
+      const inputOpenSeamHandles = inputPressure.map((pressure) => pressure.seam.handle);
+      const controllerOpenSeamHandles = [
+        ...inputOpenSeamHandles,
+        ...(resolutionPressure == null ? [] : [resolutionPressure.handle]),
+      ];
 
       contexts.push(context);
       controllers.push(composition);
       composedControllers.push(...controllerHandoff.controllers);
-      const seam = controllerHandoff.resolution.openReason == null
-        ? null
-        : this.openCompositionSeam(local, controllerHandoff.resolution, context.sourceAddressHandle, source);
-      if (seam != null) {
-        openSeams.push(seam);
-        records.push(seam);
-      }
-      records.push(...recordsForCompositionContext(local, context, controller, source.provenanceHandle, this.store));
-      records.push(...recordsForCompositionController(local, composition, context, controller, source.provenanceHandle, this.store));
+      openSeams.push(
+        ...inputPressure.map((pressure) => pressure.seam),
+        ...(resolutionPressure == null ? [] : [resolutionPressure]),
+      );
+      records.push(...recordsForCompositionContext(
+        local,
+        context,
+        controller,
+        source.provenanceHandle,
+        inputOpenSeamHandles,
+        this.store,
+      ));
+      records.push(...recordsForCompositionController(
+        local,
+        composition,
+        context,
+        controller,
+        source.provenanceHandle,
+        controllerOpenSeamHandles,
+        this.store,
+      ));
     });
 
     return new RuntimeCompositionEmission(contexts, controllers, composedControllers, childContainers, openSeams, records);
@@ -314,7 +484,9 @@ export class RuntimeCompositionMaterializer {
     controller: RuntimeControllerFrame,
     bindings: AuComposeBindingSet,
     template: EvaluatedBinding,
+    templateInputType: CheckerTypeReference | null,
     component: EvaluatedBinding,
+    componentInputType: CheckerTypeReference | null,
     model: EvaluatedBinding,
     scopeBehavior: EvaluatedBinding,
     tag: EvaluatedBinding,
@@ -333,9 +505,23 @@ export class RuntimeCompositionMaterializer {
       staticInputs.template,
       staticInputs.component,
       staticInputs.model,
-      inputFulfillmentKind(template, staticInputs.template),
-      inputFulfillmentKind(component, staticInputs.component),
-      inputFulfillmentKind(model, staticInputs.model),
+      inputConsumptionKind(RuntimeCompositionInputKind.Template, template, staticInputs.template),
+      inputValueStateKind(template, staticInputs.template),
+      inputSettlementKind(template),
+      templateInputType,
+      resolvedTemplateValue(template, staticInputs.template),
+      inputConsumptionKind(RuntimeCompositionInputKind.Component, component, staticInputs.component),
+      inputValueStateKind(component, staticInputs.component),
+      inputSettlementKind(component),
+      componentInputType,
+      inputConsumptionKind(RuntimeCompositionInputKind.Model, model, staticInputs.model),
+      inputValueStateKind(model, staticInputs.model),
+      inputConsumptionKind(RuntimeCompositionInputKind.ScopeBehavior, scopeBehavior, staticInputs.scopeBehavior),
+      inputValueStateKind(scopeBehavior, staticInputs.scopeBehavior),
+      inputConsumptionKind(RuntimeCompositionInputKind.Tag, tag, staticInputs.tag),
+      inputValueStateKind(tag, staticInputs.tag),
+      inputConsumptionKind(RuntimeCompositionInputKind.FlushMode, flushMode, staticInputs.flushMode),
+      inputValueStateKind(flushMode, staticInputs.flushMode),
       bindings.template?.toReference() ?? null,
       bindings.component?.toReference() ?? null,
       bindings.model?.toReference() ?? null,
@@ -356,6 +542,7 @@ export class RuntimeCompositionMaterializer {
 
   private createController(
     local: string,
+    input: RuntimeCompositionMaterializationRequest,
     hostController: RuntimeControllerFrame,
     context: CompositionContext,
     resolution: ComponentResolution,
@@ -370,7 +557,9 @@ export class RuntimeCompositionMaterializer {
       context.toReference(),
       hostController.productHandle,
       hostController.parent?.productHandle ?? null,
+      compositionRenderingContextKind(input, hostController),
       resolution.resolutionKind,
+      resolution.candidateCoverageKind,
       modelResolutionKind(model),
       resolution.candidates,
       resolution.objectViewModelActivationHandoff,
@@ -386,12 +575,23 @@ export class RuntimeCompositionMaterializer {
     hostController: RuntimeControllerFrame,
     context: CompositionContext,
     resolution: ComponentResolution,
+    componentPressure: readonly CompositionInputPressure[],
     source: CompositionSourceSet,
     records: KernelStoreRecord[],
     childContainers: ContainerChildMaterializationEmission[],
   ): ComposedChildControllerHandoff {
     if (resolution.resolutionKind !== CompositionComponentResolutionKind.StaticValue
       || resolution.candidates.length !== 1) {
+      return new ComposedChildControllerHandoff(resolution, []);
+    }
+    if (componentPressure.length > 0) {
+      records.push(new MaterializationRecord(
+        this.store.handles.materialization(`${local}:composed-child-open`),
+        context.identityHandle,
+        [],
+        [],
+        componentPressure.map((pressure) => pressure.seam.handle),
+      ));
       return new ComposedChildControllerHandoff(resolution, []);
     }
 
@@ -501,15 +701,14 @@ export class RuntimeCompositionMaterializer {
   private materializeComposedChildContainer(
     frame: ComposedChildControllerMaterializationFrame,
   ): ContainerChildMaterializationEmission {
-    const childContainer = this.childContainerMaterializer.materializeChild(new ContainerChildMaterializationRequest(
-      `${frame.local}:container`,
-      frame.parentContainer,
-      frame.context.sourceAddressHandle,
-      `au-compose:${frame.definition.name}:container`,
-      composedCustomElementContextResolverSlots(frame.context.sourceAddressHandle),
-      null,
-      ContainerContextResolverRecordPolicy.PublishAll,
-    ));
+    const childContainer = this.childContainerMaterializer.materializeChild(new ContainerChildMaterializationRequest({
+      localKey: `${frame.local}:container`,
+      parent: frame.parentContainer,
+      sourceAddressHandle: frame.context.sourceAddressHandle,
+      localName: `au-compose:${frame.definition.name}:container`,
+      contextResolvers: composedCustomElementContextResolverSlots(frame.context.sourceAddressHandle),
+      contextResolverRecordPolicy: ContainerContextResolverRecordPolicy.ModelOnly,
+    }));
     return childContainer;
   }
 
@@ -542,21 +741,13 @@ export class RuntimeCompositionMaterializer {
     childContainer: ContainerChildMaterializationEmission,
     controller: RuntimeControllerFrame,
   ): void {
-    controller.recordLifecycleStep(
-      RuntimeControllerLifecycleStage.Hydration,
-      RuntimeControllerLifecycleStepKind.CreateChildContainer,
+    controller.recordAssemblyStep(
+      RuntimeControllerAssemblyStage.Hydration,
+      RuntimeControllerAssemblyStepKind.CreateChildContainer,
       childContainer.container.productHandle,
       childContainer.container.sourceAddressHandle,
       'AuCompose.compose created a child container for a closed custom-element composition branch.',
     );
-    frame.hostController.addChild(controller);
-    frame.records.push(new SemanticClaim(
-      this.store.handles.claim(`${frame.local}:host-has-composed-child`),
-      frame.hostController.productHandle,
-      KernelVocabulary.Configuration.ControllerHasChild.key,
-      controller.productHandle,
-      frame.source.provenanceHandle,
-    ));
     this.controllerPublication.recordController(
       `${frame.local}:runtime-controller`,
       controller,
@@ -572,77 +763,73 @@ export class RuntimeCompositionMaterializer {
     input: RuntimeCompositionMaterializationRequest,
     binding: RuntimeBinding | null,
     sourceExpressionContexts: RuntimeBindingSourceExpressionContextProjector,
-    bindingExpressionScopes: RuntimeBindingExpressionScopeProjector,
   ): EvaluatedBinding {
+    if (binding == null) {
+      return new EvaluatedBinding(null, null, null);
+    }
     if (!(binding instanceof PropertyBinding)) {
-      return {
+      return new EvaluatedBinding(
         binding,
-        value: null,
-        sourceType: null,
-        openReason: binding == null ? 'No binding was supplied.' : 'AuCompose composition input was not a PropertyBinding.',
-        openReasonKinds: [OpenSeamReasonKind.BindingSourceUnsupportedExpression],
-      };
+        RuntimeBindingSourceValueEvaluation.open(
+          'AuCompose composition input was not a PropertyBinding.',
+          [OpenSeamReasonKind.RuntimeCompositionInputOpen],
+        ),
+        null,
+      );
     }
     const flow = input.bindingDataFlow.readDataFlowsForBinding(binding.productHandle)[0] ?? null;
-    const expression = bindingExpressionAstForProduct(this.store, binding.expressionProductHandle);
+    const expression = bindingExpressionAstForProduct(this.publication, binding.expressionProductHandle);
     if (expression == null || input.sourceValueEvaluator == null) {
-      return {
+      return new EvaluatedBinding(
         binding,
-        value: null,
-        sourceType: flow?.sourceType ?? null,
-        openReason: 'AuCompose binding source could not be evaluated because expression or evaluator state is unavailable.',
-        openReasonKinds: [OpenSeamReasonKind.BindingSourceSlotNoStaticValue],
-      };
+        RuntimeBindingSourceValueEvaluation.open(
+          'AuCompose binding source could not be evaluated because expression or evaluator state is unavailable.',
+          [OpenSeamReasonKind.BindingSourceSlotNoStaticValue],
+        ),
+        flow?.sourceType ?? null,
+      );
     }
     const projection = sourceExpressionContexts.projectSource({
       binding,
+      expressionProductHandle: binding.expressionProductHandle,
+      expressionChainIndex: 0,
       expression,
       localKey: `${input.localKey}:runtime-composition:${binding.productHandle}:source-value`,
     });
     if (projection.kind === RuntimeBindingSourceExpressionProjectionKind.Open) {
-      return {
+      return new EvaluatedBinding(
         binding,
-        value: null,
-        sourceType: flow?.sourceType ?? null,
-        openReason: projection.openReason,
-        openReasonKinds: [OpenSeamReasonKind.BindingSourceSlotNoStaticValue],
-      };
+        RuntimeBindingSourceValueEvaluation.open(
+          projection.openReason,
+          [OpenSeamReasonKind.BindingSourceSlotNoStaticValue],
+        ),
+        flow?.sourceType ?? null,
+      );
     }
     const evaluated = input.sourceValueEvaluator.evaluate(
-      sourceValueContextForRuntimeBindingSourceExpressionProjection(
-        projection,
-        undefined,
-        input.resourceScope,
-      ),
+      sourceValueContextForRuntimeBindingSourceExpressionProjection(projection),
     );
-    return {
+    return new EvaluatedBinding(
       binding,
-      value: evaluated.value,
-      sourceType: flow?.sourceType ?? null,
-      openReason: evaluated.kind === RuntimeBindingSourceValueEvaluationKind.Open
-        ? evaluated.openReason
-        : null,
-      openReasonKinds: evaluated.openReasonKinds,
-    };
+      evaluated,
+      flow?.sourceType ?? null,
+    );
   }
 
   private evaluateModelInput(
     input: RuntimeCompositionMaterializationRequest,
     binding: RuntimeBinding | null,
     sourceExpressionContexts: RuntimeBindingSourceExpressionContextProjector,
-    bindingExpressionScopes: RuntimeBindingExpressionScopeProjector,
     staticModel: string | null,
   ): EvaluatedBinding {
     if (binding != null || staticModel == null) {
-      return this.evaluateBinding(input, binding, sourceExpressionContexts, bindingExpressionScopes);
+      return this.evaluateBinding(input, binding, sourceExpressionContexts);
     }
-    return {
-      binding: null,
-      value: new EvaluationStringValue(staticModel),
-      sourceType: null,
-      openReason: null,
-      openReasonKinds: [],
-    };
+    return new EvaluatedBinding(
+      null,
+      RuntimeBindingSourceValueEvaluation.value(new EvaluationStringValue(staticModel)),
+      null,
+    );
   }
 
   private resolveComponent(
@@ -650,6 +837,7 @@ export class RuntimeCompositionMaterializer {
     input: RuntimeCompositionMaterializationRequest,
     controller: RuntimeControllerFrame,
     component: EvaluatedBinding,
+    componentInputType: CheckerTypeReference | null,
     model: EvaluatedBinding,
     staticInputs: StaticAuComposeInputs,
   ): ComponentResolution {
@@ -657,6 +845,7 @@ export class RuntimeCompositionMaterializer {
       return {
         candidates: [],
         resolutionKind: CompositionComponentResolutionKind.TemplateOnly,
+        candidateCoverageKind: CompositionComponentCandidateCoverageKind.NotApplicable,
         objectViewModelActivationHandoff: null,
         openReason: null,
         openReasonKinds: [],
@@ -668,6 +857,7 @@ export class RuntimeCompositionMaterializer {
         return {
           candidates: staticCandidates,
           resolutionKind: CompositionComponentResolutionKind.StaticValue,
+          candidateCoverageKind: CompositionComponentCandidateCoverageKind.NotApplicable,
           objectViewModelActivationHandoff: null,
           openReason: null,
           openReasonKinds: [],
@@ -675,7 +865,22 @@ export class RuntimeCompositionMaterializer {
       }
       return {
         candidates: [],
-        resolutionKind: CompositionComponentResolutionKind.TemplateOnly,
+        resolutionKind: CompositionComponentResolutionKind.Open,
+        candidateCoverageKind: CompositionComponentCandidateCoverageKind.NotApplicable,
+        objectViewModelActivationHandoff: null,
+        openReason: `AuCompose component name '${staticInputs.component}' did not resolve to a visible custom-element definition.`,
+        openReasonKinds: [OpenSeamReasonKind.BindingSourceResourceOpen],
+      };
+    }
+    if (
+      !component.isOpen
+      && component.value?.kind === EvaluationValueKind.Promise
+      && component.value.settlement.kind === EvaluationPromiseSettlementKind.Rejected
+    ) {
+      return {
+        candidates: [],
+        resolutionKind: CompositionComponentResolutionKind.Rejected,
+        candidateCoverageKind: CompositionComponentCandidateCoverageKind.NotApplicable,
         objectViewModelActivationHandoff: null,
         openReason: null,
         openReasonKinds: [],
@@ -688,6 +893,7 @@ export class RuntimeCompositionMaterializer {
       return {
         candidates: valueCandidates,
         resolutionKind: CompositionComponentResolutionKind.StaticValue,
+        candidateCoverageKind: CompositionComponentCandidateCoverageKind.NotApplicable,
         objectViewModelActivationHandoff: null,
         openReason: null,
         openReasonKinds: [],
@@ -697,8 +903,9 @@ export class RuntimeCompositionMaterializer {
       return {
         candidates: [],
         resolutionKind: CompositionComponentResolutionKind.ObjectViewModel,
+        candidateCoverageKind: CompositionComponentCandidateCoverageKind.NotApplicable,
         objectViewModelActivationHandoff: activationModelHandoffForType(
-          this.store,
+          input.expressionWorld.projector,
           component.sourceType,
           model,
           `${local}:object-view-model-activation`,
@@ -710,19 +917,28 @@ export class RuntimeCompositionMaterializer {
         openReasonKinds: [],
       };
     }
-    const typeCandidates = this.resolveComponentType(input, component.sourceType, model);
-    if (typeCandidates.length > 0) {
+    const typeResolution = this.resolveComponentType(
+      input,
+      componentInputType,
+      model,
+    );
+    if (typeResolution.candidates.length > 0) {
+      const partial = typeResolution.coverageKind === CompositionComponentCandidateCoverageKind.Partial;
       return {
-        candidates: typeCandidates,
+        candidates: typeResolution.candidates,
         resolutionKind: CompositionComponentResolutionKind.TypeCandidate,
+        candidateCoverageKind: typeResolution.coverageKind,
         objectViewModelActivationHandoff: null,
-        openReason: null,
-        openReasonKinds: [],
+        openReason: partial
+          ? 'AuCompose retained useful TypeChecker component candidates without proving exhaustive coverage.'
+          : null,
+        openReasonKinds: partial ? [OpenSeamReasonKind.BindingSourceTypeOpen] : [],
       };
     }
     return {
       candidates: [],
       resolutionKind: CompositionComponentResolutionKind.Open,
+      candidateCoverageKind: typeResolution.coverageKind,
       objectViewModelActivationHandoff: null,
       openReason: component.openReason
         ?? 'AuCompose component input did not resolve to a custom-element definition candidate.',
@@ -743,15 +959,24 @@ export class RuntimeCompositionMaterializer {
       return [];
     }
     if (value.kind === EvaluationValueKind.Promise) {
-      return this.resolveComponentValue(input, controller, value.fulfilledValue, resolutionKind, model);
+      const fulfillment = closedEvaluationPromiseFulfillment(value);
+      return fulfillment == null
+        ? []
+        : this.resolveComponentValue(input, controller, fulfillment, resolutionKind, model);
     }
     if (value.kind === EvaluationValueKind.String) {
-      const slot = controller.parent?.containerFrame?.find('custom-element', value.value).resourceSlot ?? null;
+      const slot = compositionConstructionContainer(input, controller)?.find('custom-element', value.value).resourceSlot ?? null;
       const definition = input.resourceDefinitions.lookupByProduct(slot?.resourceProductHandle ?? null);
-      return resolvedComponentRows(this.store, input, [definition], resolutionKind, model);
+      return resolvedComponentRows(input.expressionWorld.projector, input, [definition], resolutionKind, model);
     }
     if (value.kind === EvaluationValueKind.Class || value.kind === EvaluationValueKind.Function) {
-      return resolvedComponentRows(this.store, input, [input.resourceDefinitions.lookupValue(value)], resolutionKind, model);
+      return resolvedComponentRows(
+        input.expressionWorld.projector,
+        input,
+        [input.resourceDefinitions.lookupValue(value)],
+        resolutionKind,
+        model,
+      );
     }
     if (value.kind === EvaluationValueKind.Object || value.kind === EvaluationValueKind.Instance || value.kind === EvaluationValueKind.BoundaryObject) {
       return [];
@@ -768,42 +993,175 @@ export class RuntimeCompositionMaterializer {
     if (input.resourceDefinitions == null) {
       return [];
     }
-    const slot = controller.parent?.containerFrame?.find('custom-element', componentName).resourceSlot ?? null;
+    const slot = compositionConstructionContainer(input, controller)?.find('custom-element', componentName).resourceSlot ?? null;
     const definition = input.resourceDefinitions.lookupByProduct(slot?.resourceProductHandle ?? null);
-    return resolvedComponentRows(this.store, input, [definition], CompositionComponentResolutionKind.StaticValue, model);
+    return resolvedComponentRows(
+      input.expressionWorld.projector,
+      input,
+      [definition],
+      CompositionComponentResolutionKind.StaticValue,
+      model,
+    );
   }
 
   private resolveComponentType(
     input: RuntimeCompositionMaterializationRequest,
-    sourceType: CheckerTypeReference | null,
+    componentInputType: CheckerTypeReference | null,
     model: EvaluatedBinding,
-  ): readonly CompositionResolvedComponent[] {
-    if (input.resourceDefinitions == null || sourceType?.productHandle == null) {
-      return [];
+  ): ComponentTypeResolution {
+    if (
+      input.resourceDefinitions == null
+      || input.typeSystem == null
+      || componentInputType?.productHandle == null
+    ) {
+      return new ComponentTypeResolution([], CompositionComponentCandidateCoverageKind.Open);
     }
-    const shape = readCheckerTypeShape(this.store, sourceType);
+    const shape = readCheckerTypeShape(input.expressionWorld.projector.publication, componentInputType);
     if (shape == null) {
-      return [];
+      return new ComponentTypeResolution([], CompositionComponentCandidateCoverageKind.Open);
     }
-    const definitions = candidateTypesForShape(shape)
-      .flatMap((type) => definitionsForType(input.resourceDefinitions!, type));
-    return resolvedComponentRows(this.store, input, definitions, CompositionComponentResolutionKind.TypeCandidate, model);
+    const candidateBasis = componentTypeCandidateBasisForShape(shape);
+    if (candidateBasis.types.length === 0) {
+      return new ComponentTypeResolution([], CompositionComponentCandidateCoverageKind.Open);
+    }
+    let coveredTypes = 0;
+    const definitions = candidateBasis.types.flatMap((type) => {
+      const candidates = definitionsForType(input.resourceDefinitions!, input.typeSystem!, type);
+      if (candidates.length > 0) {
+        coveredTypes += 1;
+      }
+      return candidates;
+    });
+    const candidates = resolvedComponentRows(
+      input.expressionWorld.projector,
+      input,
+      definitions,
+      CompositionComponentResolutionKind.TypeCandidate,
+      model,
+    );
+    const coverageKind = candidateBasis.exhaustive && coveredTypes === candidateBasis.types.length
+      ? CompositionComponentCandidateCoverageKind.Complete
+      : coveredTypes > 0
+        ? CompositionComponentCandidateCoverageKind.Partial
+        : CompositionComponentCandidateCoverageKind.Open;
+    return new ComponentTypeResolution(candidates, coverageKind);
   }
 
-  private openCompositionSeam(
+  private openCompositionInputSeams(
+    local: string,
+    sourceValueEvaluator: RuntimeBindingSourceValueEvaluator | null,
+    inputs: readonly (readonly [RuntimeCompositionInputKind, EvaluatedBinding])[],
+    componentResolution: ComponentResolution,
+    source: CompositionSourceSet,
+    records: KernelStoreRecord[],
+  ): readonly CompositionInputPressure[] {
+    const result: CompositionInputPressure[] = [];
+    for (const [inputKind, evaluated] of inputs) {
+      const openSettlementSummary = openAwaitedSettlementSummary(inputKind, evaluated);
+      if ((!evaluated.isOpen && openSettlementSummary == null) || evaluated.evaluation == null) {
+        continue;
+      }
+      if (
+        openSettlementSummary == null
+        && compositionInputPressureIsSatisfied(inputKind, evaluated, componentResolution)
+      ) {
+        continue;
+      }
+      const sourceAddressHandle = evaluated.binding?.sourceAddressHandle ?? null;
+      const pressure = projectRuntimeBindingSourceValuePressure(
+        this.publication,
+        sourceValueEvaluator,
+        [evaluated.evaluation],
+        sourceAddressHandle,
+        `${local}:input:${inputKind}:pressure`,
+      );
+      const pressureSummaries = [
+        pressure.summary,
+        openSettlementSummary,
+      ].filter((summary): summary is string => summary != null);
+      const summary = pressureSummaries.length === 0
+        ? `AuCompose '${inputKind}' input remained open.`
+        : `AuCompose '${inputKind}' input remained open: ${[...new Set(pressureSummaries)].join(' ')}`;
+      const settlementReasonKinds = openSettlementSummary == null
+        ? []
+        : uniqueOpenSeamReasonKinds([
+            OpenSeamReasonKind.AsyncExecutionValue,
+            ...openSeamReasonKindsForEvaluationValue(
+              evaluated.value?.kind === EvaluationValueKind.Promise
+                ? evaluated.value.settlement.evidence.value
+                : null,
+            ),
+          ]);
+      const seam = new OpenSeam(
+        this.store.handles.openSeam(`${local}:input:${inputKind}:open`),
+        KernelVocabulary.Template.OpenRuntimeComposition.key,
+        summary,
+        sourceAddressHandle,
+        source.evidenceHandle,
+        uniqueOpenSeamReasonKinds([
+          OpenSeamReasonKind.RuntimeCompositionInputOpen,
+          ...pressure.reasonKinds,
+          ...settlementReasonKinds,
+        ]),
+        [
+          {
+            reasonKind: OpenSeamReasonKind.RuntimeCompositionInputOpen,
+            summary,
+            addressHandle: sourceAddressHandle,
+            evidenceHandle: source.evidenceHandle,
+          },
+          ...(openSettlementSummary == null
+            ? []
+            : settlementReasonKinds.map((reasonKind) => ({
+                reasonKind,
+                summary: openSettlementSummary,
+                addressHandle: sourceAddressHandle,
+                evidenceHandle: source.evidenceHandle,
+              }))),
+          ...pressure.reasonSources,
+        ],
+      );
+      records.push(...pressure.records, seam);
+      result.push(new CompositionInputPressure(inputKind, seam));
+    }
+    return result;
+  }
+
+  private openCompositionResolutionSeam(
     local: string,
     resolution: ComponentResolution,
+    component: EvaluatedBinding,
+    inputPressure: readonly CompositionInputPressure[],
     sourceAddressHandle: AddressHandle | null,
     source: CompositionSourceSet,
-  ): OpenSeam {
-    return new OpenSeam(
-      this.store.handles.openSeam(`${local}:open`),
-      KernelVocabulary.Instruction.OpenInstruction.key,
-      resolution.openReason ?? 'AuCompose composition remains open.',
-      sourceAddressHandle,
+    records: KernelStoreRecord[],
+  ): OpenSeam | null {
+    if (
+      resolution.openReason == null
+      || inputPressure.some((pressure) => pressure.inputKind === RuntimeCompositionInputKind.Component)
+    ) {
+      return null;
+    }
+    const componentSourceAddressHandle = component.binding?.sourceAddressHandle ?? sourceAddressHandle;
+    const seam = new OpenSeam(
+      this.store.handles.openSeam(`${local}:component-resolution:open`),
+      KernelVocabulary.Template.OpenRuntimeComposition.key,
+      resolution.openReason,
+      componentSourceAddressHandle,
       source.evidenceHandle,
-      resolution.openReasonKinds,
+      uniqueOpenSeamReasonKinds([
+        OpenSeamReasonKind.RuntimeCompositionComponentResolutionOpen,
+        ...resolution.openReasonKinds,
+      ]),
+      [{
+        reasonKind: OpenSeamReasonKind.RuntimeCompositionComponentResolutionOpen,
+        summary: resolution.openReason,
+        addressHandle: componentSourceAddressHandle,
+        evidenceHandle: source.evidenceHandle,
+      }],
     );
+    records.push(seam);
+    return seam;
   }
 
   private recordsForSource(local: string): CompositionSourceSet {
@@ -870,18 +1228,18 @@ function bindingForTarget(
 }
 
 function staticAuComposeInputs(
-  store: KernelStore,
+  store: ProductDetailReadView,
   controller: RuntimeControllerFrame,
 ): StaticAuComposeInputs {
   const instruction = controller.instructionProductHandle == null
     ? null
-    : store.productDetails.read(TemplateProductDetails.Instruction, controller.instructionProductHandle);
+    : store.readProductDetail(TemplateProductDetails.Instruction, controller.instructionProductHandle);
   if (!(instruction instanceof HydrateElementInstruction)) {
     return emptyStaticAuComposeInputs();
   }
   const valuesByTarget = new Map<string, string>();
   for (const handle of instruction.bindableInstructionProductHandles) {
-    const child = store.productDetails.read(TemplateProductDetails.Instruction, handle);
+    const child = store.readProductDetail(TemplateProductDetails.Instruction, handle);
     if (child instanceof SetPropertyInstruction) {
       valuesByTarget.set(child.targetProperty, child.value);
     }
@@ -933,9 +1291,51 @@ function modelResolutionKind(model: EvaluatedBinding): CompositionModelResolutio
   return CompositionModelResolutionKind.Open;
 }
 
+function componentResolutionWithInputPressure(
+  resolution: ComponentResolution,
+  inputPressure: readonly CompositionInputPressure[],
+): ComponentResolution {
+  const summaries = [
+    resolution.openReason,
+    ...inputPressure.map((pressure) => pressure.seam.summary),
+  ].filter((summary): summary is string => summary != null);
+  if (summaries.length === 0) {
+    return resolution;
+  }
+  return {
+    ...resolution,
+    openReason: [...new Set(summaries)].join(' '),
+    openReasonKinds: [...new Set([
+      ...resolution.openReasonKinds,
+      ...inputPressure.flatMap((pressure) => pressure.seam.reasonKinds),
+    ])],
+  };
+}
+
+function compositionInputPressureIsSatisfied(
+  inputKind: RuntimeCompositionInputKind,
+  input: EvaluatedBinding,
+  componentResolution: ComponentResolution,
+): boolean {
+  if (
+    inputKind !== RuntimeCompositionInputKind.Component
+    || componentResolution.resolutionKind !== CompositionComponentResolutionKind.TypeCandidate
+    || componentResolution.candidateCoverageKind !== CompositionComponentCandidateCoverageKind.Complete
+    || input.openReasonKinds.length === 0
+  ) {
+    return false;
+  }
+  return input.openReasonKinds.every((reasonKind) =>
+    reasonKind === OpenSeamReasonKind.BindingSourceNeedsRuntimeValue
+    || reasonKind === OpenSeamReasonKind.BindingSourceSlotNoStaticValue
+    || reasonKind === OpenSeamReasonKind.BindingSourceMemberNoStaticValue
+  );
+}
+
 function valueIsObjectViewModelComponent(value: EvaluationValue): boolean {
   if (value.kind === EvaluationValueKind.Promise) {
-    return valueIsObjectViewModelComponent(value.fulfilledValue);
+    const fulfillment = closedEvaluationPromiseFulfillment(value);
+    return fulfillment != null && valueIsObjectViewModelComponent(fulfillment);
   }
   return value.kind === EvaluationValueKind.Object
     || value.kind === EvaluationValueKind.Instance
@@ -944,25 +1344,139 @@ function valueIsObjectViewModelComponent(value: EvaluationValue): boolean {
     || value.kind === EvaluationValueKind.Function;
 }
 
-function inputFulfillmentKind(
+function awaitedCompositionInputType(
+  projector: CheckerAsyncTypeProjector,
+  evaluated: EvaluatedBinding,
+  localKey: string,
+  fallbackSourceAddressHandle: AddressHandle | null,
+): CheckerTypeReference | null {
+  return evaluated.sourceType == null
+    ? null
+    : projector.awaitedTypeReference(
+        evaluated.sourceType,
+        localKey,
+        evaluated.binding?.sourceAddressHandle ?? fallbackSourceAddressHandle,
+      );
+}
+
+function openAwaitedSettlementSummary(
+  inputKind: RuntimeCompositionInputKind,
+  evaluated: EvaluatedBinding,
+): string | null {
+  if (
+    inputKind !== RuntimeCompositionInputKind.Template
+    && inputKind !== RuntimeCompositionInputKind.Component
+  ) {
+    return null;
+  }
+  if (
+    evaluated.value?.kind !== EvaluationValueKind.Promise
+    || evaluated.value.settlement.kind !== EvaluationPromiseSettlementKind.Open
+  ) {
+    return null;
+  }
+  const evidenceValue = evaluated.value.settlement.evidence.value;
+  return evidenceValue.kind === EvaluationValueKind.BoundaryValue
+    || evidenceValue.kind === EvaluationValueKind.BoundaryObject
+    ? evidenceValue.reason
+    : 'Promise settlement depends on asynchronous runtime execution.';
+}
+
+function inputSettlementKind(
+  evaluated: EvaluatedBinding,
+): EvaluationPromiseSettlementKind | null {
+  return evaluated.value?.kind === EvaluationValueKind.Promise
+    ? evaluated.value.settlement.kind
+    : null;
+}
+
+function resolvedTemplateValue(
   evaluated: EvaluatedBinding,
   staticValue: string | null,
-): CompositionInputFulfillmentKind {
+): string | null {
+  if (staticValue != null) {
+    return staticValue;
+  }
+  if (evaluated.isOpen) {
+    return null;
+  }
+  const value = evaluated.value?.kind === EvaluationValueKind.Promise
+    ? closedEvaluationPromiseFulfillment(evaluated.value)
+    : evaluated.value;
+  return value?.kind === EvaluationValueKind.String ? value.value : null;
+}
+
+function inputConsumptionKind(
+  inputKind: RuntimeCompositionInputKind,
+  evaluated: EvaluatedBinding,
+  staticValue: string | null,
+): CompositionInputConsumptionKind {
   if (evaluated.binding == null && evaluated.value == null && staticValue == null) {
-    return CompositionInputFulfillmentKind.Absent;
+    return CompositionInputConsumptionKind.Absent;
+  }
+  return inputKind === RuntimeCompositionInputKind.Template
+    || inputKind === RuntimeCompositionInputKind.Component
+    ? CompositionInputConsumptionKind.AwaitThenable
+    : CompositionInputConsumptionKind.Direct;
+}
+
+function inputValueStateKind(
+  evaluated: EvaluatedBinding,
+  staticValue: string | null,
+): CompositionInputValueStateKind {
+  if (evaluated.binding == null && evaluated.value == null && staticValue == null) {
+    return CompositionInputValueStateKind.Absent;
+  }
+  if (evaluated.isOpen) {
+    return CompositionInputValueStateKind.Open;
   }
   if (evaluated.value?.kind === EvaluationValueKind.Promise) {
-    return CompositionInputFulfillmentKind.Promise;
+    switch (evaluated.value.settlement.kind) {
+      case EvaluationPromiseSettlementKind.Fulfilled:
+        return closedEvaluationPromiseFulfillment(evaluated.value) == null
+          ? CompositionInputValueStateKind.Open
+          : CompositionInputValueStateKind.Fulfilled;
+      case EvaluationPromiseSettlementKind.Rejected:
+        return CompositionInputValueStateKind.Rejected;
+      case EvaluationPromiseSettlementKind.Open:
+        return CompositionInputValueStateKind.Open;
+    }
   }
-  if (evaluated.value != null || staticValue != null) {
-    return CompositionInputFulfillmentKind.Direct;
+  return evaluated.value != null || staticValue != null
+    ? CompositionInputValueStateKind.Closed
+    : CompositionInputValueStateKind.Open;
+}
+
+function uniqueOpenSeamReasonKinds(
+  values: readonly OpenSeamReasonKind[],
+): readonly OpenSeamReasonKind[] {
+  return [...new Set(values)];
+}
+
+function compositionRenderingContextKind(
+  input: RuntimeCompositionMaterializationRequest,
+  controller: RuntimeControllerFrame,
+): CompositionRenderingContextKind {
+  const instructionOwner = input.projectContext.readResourceForInstruction(
+    controller.instructionProductHandle,
+  );
+  if (instructionOwner == null) {
+    throw new Error(
+      `AuCompose controller '${controller.productHandle}' lost the compiler resource that owns instruction `
+      + `'${controller.instructionProductHandle ?? '(missing)'}'.`,
+    );
   }
-  if (evaluated.openReason != null) {
-    return CompositionInputFulfillmentKind.Open;
+  const ownerDefinition = instructionOwner.compilation.definition;
+  const ownerHandle = ownerDefinition.productHandle;
+  const analysisHandle = input.runtimeRendering.rootController.definitionProductHandle;
+  if (ownerHandle == null || analysisHandle == null) {
+    throw new Error(
+      `AuCompose controller '${controller.productHandle}' lost its instruction-owner or analysis-root definition identity.`,
+    );
   }
-  return evaluated.binding == null
-    ? CompositionInputFulfillmentKind.Absent
-    : CompositionInputFulfillmentKind.Open;
+  return ownerHandle === analysisHandle
+    ? CompositionRenderingContextKind.DefinitionResource
+    : CompositionRenderingContextKind.RecursiveResourceInstance;
 }
 
 function componentWithComposedController(
@@ -984,14 +1498,17 @@ function composedCustomElementContextResolverSlots(
   sourceAddressHandle: AddressHandle | null,
 ): readonly ContainerContextResolverSlotRequest[] {
   return [
-    'INode',
-    'IController',
-    'IInstruction',
-    'IRenderLocation',
-    'IViewFactory',
-    'IAuSlotsInfo',
-    'IHydrationContext',
-  ].map((name) => new ContainerContextResolverSlotRequest(name, sourceAddressHandle));
+    FrameworkIntrinsicDiKey.INode,
+    FrameworkIntrinsicDiKey.IController,
+    FrameworkIntrinsicDiKey.IInstruction,
+    FrameworkIntrinsicDiKey.IRenderLocation,
+    FrameworkIntrinsicDiKey.IViewFactory,
+    FrameworkIntrinsicDiKey.IAuSlotsInfo,
+    FrameworkIntrinsicDiKey.IHydrationContext,
+  ].map((name) => new ContainerContextResolverSlotRequest({
+    interfaceName: name,
+    sourceAddressHandle,
+  }));
 }
 
 function literalStringUnionInputValue<TValue extends string>(
@@ -1000,7 +1517,9 @@ function literalStringUnionInputValue<TValue extends string>(
   allowedValues: readonly TValue[],
   defaultValue: TValue,
 ): TValue | null {
-  const value = literalStringInputValue(evaluated, staticValue) ?? defaultValue;
+  const value = evaluated.binding == null
+    ? staticValue ?? defaultValue
+    : literalStringFromValue(evaluated.value);
   return value != null && allowedValues.includes(value as TValue) ? value as TValue : null;
 }
 
@@ -1014,14 +1533,11 @@ function literalStringFromValue(value: EvaluationValue | null): string | null {
   if (value?.kind === EvaluationValueKind.String) {
     return value.value;
   }
-  if (value?.kind === EvaluationValueKind.Promise) {
-    return literalStringFromValue(value.fulfilledValue);
-  }
   return null;
 }
 
 function resolvedComponentRows(
-  store: KernelStore,
+  projector: CheckerTypeProjector,
   input: RuntimeCompositionMaterializationRequest,
   definitions: readonly (FullResourceDefinition | null)[],
   resolutionKind: CompositionComponentResolutionKind,
@@ -1038,37 +1554,52 @@ function resolvedComponentRows(
       definition.productHandle,
       definition.name,
       definition.target.localName,
-      input.projectContext.readCompiledTemplateForDefinition(definition.productHandle),
+      input.projectContext.readResourceForDefinition(definition.productHandle)?.compiledTemplateProductHandle ?? null,
       null,
       resolutionKind,
-      activationModelHandoff(store, definition, model, `runtime-composition:${localKeyPart(definition.productHandle)}:activation:${index}`),
+      activationModelHandoff(
+        projector,
+        definition,
+        model,
+        `runtime-composition:${localKeyPart(definition.productHandle)}:activation:${index}`,
+      ),
     ));
   });
   return rows;
 }
 
-function candidateTypesForShape(shape: CheckerTypeShape): readonly ts.Type[] {
+function componentTypeCandidateBasisForShape(shape: CheckerTypeShape): ComponentTypeCandidateBasis {
   const carrier = shape.carrier;
   if (carrier == null) {
-    return [];
+    return new ComponentTypeCandidateBasis([], false);
   }
   const type = carrier.type;
-  return type.isUnion() ? type.types : [type];
+  const types = type.isUnion() ? type.types : [type];
+  return new ComponentTypeCandidateBasis(
+    types,
+    !type.isIntersection() && types.every(isExactNamedClassCandidateType),
+  );
+}
+
+function isExactNamedClassCandidateType(type: ts.Type): boolean {
+  return classifyCheckerTypeShape(type) === CheckerTypeShapeKind.Class;
 }
 
 function definitionsForType(
   resourceDefinitions: ResourceDefinitionIndex,
+  typeSystem: TypeSystemProject,
   type: ts.Type,
 ): readonly FullResourceDefinition[] {
   const definitions: FullResourceDefinition[] = [];
   for (const declaration of declarationCandidatesForType(type)) {
-    const definition = definitionForDeclaration(resourceDefinitions, declaration);
+    const definition = resourceDefinitions.lookupByTypeScriptDeclaration(typeSystem, declaration);
     if (definition != null) {
       definitions.push(definition);
     }
   }
   return definitions.filter((definition, index, all) =>
-    definition.productHandle != null
+    definition.type === ResourceDefinitionKind.CustomElement
+    && definition.productHandle != null
     && all.findIndex((candidate) => candidate.productHandle === definition.productHandle) === index
   );
 }
@@ -1082,24 +1613,12 @@ function declarationCandidatesForType(type: ts.Type): readonly ts.Declaration[] 
   return declarations.filter((declaration, index, all) => all.indexOf(declaration) === index);
 }
 
-function definitionForDeclaration(
-  resourceDefinitions: ResourceDefinitionIndex,
-  declaration: ts.Declaration,
-): FullResourceDefinition | null {
-  const localName = readDeclarationLocalName(declaration);
-  if (localName == null) {
-    return null;
-  }
-  const definition = resourceDefinitions.lookupByModuleLocal(declaration.getSourceFile().fileName, localName)
-    ?? resourceDefinitions.lookupByLocalName(localName);
-  return definition?.type === ResourceDefinitionKind.CustomElement ? definition : null;
-}
-
 function recordsForCompositionContext(
   local: string,
   context: CompositionContext,
   hostController: RuntimeControllerFrame,
   provenanceHandle: ProvenanceHandle,
+  openSeamHandles: readonly OpenSeamHandle[],
   store: KernelStore,
 ): readonly KernelStoreRecord[] {
   return [
@@ -1122,6 +1641,7 @@ function recordsForCompositionContext(
       context.identityHandle,
       [context.productHandle],
       [],
+      openSeamHandles,
     ),
   ];
 }
@@ -1132,6 +1652,7 @@ function recordsForCompositionController(
   context: CompositionContext,
   hostController: RuntimeControllerFrame,
   provenanceHandle: ProvenanceHandle,
+  openSeamHandles: readonly OpenSeamHandle[],
   store: KernelStore,
 ): readonly KernelStoreRecord[] {
   const claims = compositionControllerSemanticClaims(local, composition, context, hostController, provenanceHandle, store);
@@ -1155,6 +1676,7 @@ function recordsForCompositionController(
       composition.identityHandle,
       [composition.productHandle],
       claims.map((claim) => claim.handle),
+      openSeamHandles,
     ),
     ...claims,
   ];

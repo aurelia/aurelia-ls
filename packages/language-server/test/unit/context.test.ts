@@ -1,7 +1,9 @@
 import { describe, expect, test, vi } from "vitest";
+import path from "node:path";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { TextDocument } from "vscode-languageserver-textdocument";
-import { createServerContext } from "@aurelia-ls/language-server/api";
-import { canonicalDocumentUri } from "@aurelia-ls/compiler/program/paths.js";
+import { createServerContext } from "../../src/context.js";
+
 function createLogger() {
   return {
     log: vi.fn(),
@@ -12,66 +14,125 @@ function createLogger() {
 }
 
 describe("createServerContext", () => {
-  test("ensureProgramDocument only syncs live documents when version changes", () => {
-    const uri = "file:///app/component.html";
-    // ensureProgramDocument passes canonical.uri (normalized path) to workspace.update
-    const canonicalUri = canonicalDocumentUri(uri).uri;
-    let live = TextDocument.create(uri, "html", 1, "<template>${name}</template>");
+  test("finds synchronized open-document metadata without syncing a second workspace", () => {
+    const rootUri = pathToFileURL(path.resolve("test-workspace")).toString();
+    const uri = pathToFileURL(path.resolve("test-workspace/component.html")).toString();
+    const live = TextDocument.create(uri, "html", 1, "<template>${name}</template>");
     const documents = {
-      get: vi.fn((nextUri: string) => (nextUri === uri ? live : null)),
+      get: vi.fn((nextUri: string) => (nextUri === uri ? live : undefined)),
+      all: vi.fn(() => [live]),
     };
     const ctx = createServerContext({
       connection: {} as never,
       documents: documents as never,
       logger: createLogger(),
     });
-    const workspace = {
-      update: vi.fn(),
-      ensureFromFile: vi.fn(),
-      lookupText: vi.fn(() => null),
-    };
-    ctx.workspace = workspace as never;
+    ctx.configureWorkspace(rootUri);
 
-    ctx.ensureProgramDocument(uri);
-    ctx.ensureProgramDocument(uri);
-    expect(workspace.update).toHaveBeenCalledTimes(1);
-    expect(workspace.update).toHaveBeenLastCalledWith(canonicalUri, "<template>${name}</template>", 1);
-
-    live = TextDocument.create(uri, "html", 2, "<template>${firstName}</template>");
-    ctx.ensureProgramDocument(uri);
-    expect(workspace.update).toHaveBeenCalledTimes(2);
-    expect(workspace.update).toHaveBeenLastCalledWith(canonicalUri, "<template>${firstName}</template>", 2);
+    expect(ctx.openWorkspaceDocument(uri)).toEqual({
+      uri,
+      languageId: "html",
+      version: 1,
+    });
+    expect(ctx.openWorkspaceDocument(uri)).not.toHaveProperty("getText");
+    expect(ctx.openWorkspaceDocument(uri)).toEqual({
+      uri,
+      languageId: "html",
+      version: 1,
+    });
+    expect(documents.get).toHaveBeenCalledWith(uri);
   });
 
-  test("replacing workspace clears synced document version cache", () => {
-    const uri = "file:///app/component.html";
-    const live = TextDocument.create(uri, "html", 5, "<template>${name}</template>");
+  test("finds open-document metadata by canonical equivalent URI", () => {
+    const rootUri = pathToFileURL(path.resolve("test-workspace")).toString();
+    const uri = pathToFileURL(path.resolve("test-workspace/component.html")).toString();
+    const live = TextDocument.create(uri, "html", 1, "<template>${name}</template>");
     const documents = {
-      get: vi.fn((nextUri: string) => (nextUri === uri ? live : null)),
+      get: vi.fn(() => undefined),
+      all: vi.fn(() => [live]),
     };
     const ctx = createServerContext({
       connection: {} as never,
       documents: documents as never,
       logger: createLogger(),
     });
+    ctx.configureWorkspace(rootUri);
 
-    const workspaceA = {
-      update: vi.fn(),
-      ensureFromFile: vi.fn(),
-      lookupText: vi.fn(() => null),
+    expect(ctx.openWorkspaceDocument(uri)).toEqual({
+      uri,
+      languageId: "html",
+      version: 1,
+    });
+  });
+
+  test("keeps excluded synchronized text readable without granting authored document access", () => {
+    const rootUri = pathToFileURL(path.resolve("test-workspace")).toString();
+    const excludedRootUri = pathToFileURL(path.resolve("test-workspace/packages/disabled")).toString();
+    const uri = pathToFileURL(path.resolve("test-workspace/packages/disabled/component.html")).toString();
+    const live = TextDocument.create(uri, "html", 1, "<template>${name}</template>");
+    const documents = {
+      get: vi.fn(() => live),
+      all: vi.fn(() => [live]),
     };
-    const workspaceB = {
-      update: vi.fn(),
-      ensureFromFile: vi.fn(),
-      lookupText: vi.fn(() => null),
-    };
+    const ctx = createServerContext({
+      connection: {} as never,
+      documents: documents as never,
+      logger: createLogger(),
+    });
+    ctx.configureWorkspace(rootUri, [excludedRootUri]);
 
-    ctx.workspace = workspaceA as never;
-    ctx.ensureProgramDocument(uri);
-    expect(workspaceA.update).toHaveBeenCalledTimes(1);
+    expect(ctx.ownsDocument(uri)).toBe(false);
+    expect(ctx.openWorkspaceDocument(uri)).toEqual({
+      uri,
+      languageId: "html",
+      version: 1,
+    });
+    expect(ctx.documentUris.hostPath(uri)).toBe(path.resolve("test-workspace/packages/disabled/component.html"));
+  });
 
-    ctx.workspace = workspaceB as never;
-    ctx.ensureProgramDocument(uri);
-    expect(workspaceB.update).toHaveBeenCalledTimes(1);
+  test("rejects project-root hint URIs outside the configured workspace", () => {
+    const rootUri = pathToFileURL(path.resolve("test-workspace")).toString();
+    const outsideRootUri = pathToFileURL(path.resolve("other-workspace")).toString();
+    const ctx = createServerContext({
+      connection: {} as never,
+      documents: { get: vi.fn(), all: vi.fn(() => []) } as never,
+      logger: createLogger(),
+    });
+
+    expect(() => ctx.configureWorkspace(rootUri, [], [outsideRootUri]))
+      .toThrow(`Project root hint '${outsideRootUri}' is not inside workspace '${rootUri}'.`);
+  });
+
+  test("enables project-input cancellation checkpoints only when requested", async () => {
+    const fixtureRoot = path.resolve(
+      fileURLToPath(new URL("../..", import.meta.url)),
+      "../semantic-runtime/fixtures/pressure/app-pattern-minimal-app",
+    );
+
+    async function countCancellationPolls(enableCheckpoints: boolean): Promise<number> {
+      const ctx = createServerContext({
+        connection: {} as never,
+        documents: { get: vi.fn(), all: vi.fn(() => []) } as never,
+        logger: createLogger(),
+        enableProjectInputCancellationCheckpoints: enableCheckpoints,
+      });
+      ctx.configureWorkspace(pathToFileURL(fixtureRoot).toString());
+      let polls = 0;
+      await ctx.semanticRuntime.runRequest(
+        () => {
+          polls += 1;
+          return false;
+        },
+        (operation) => operation.workspaceSummary(),
+      );
+      await ctx.semanticRuntime.dispose();
+      return polls;
+    }
+
+    const defaultPolls = await countCancellationPolls(false);
+    const checkpointPolls = await countCancellationPolls(true);
+
+    expect(defaultPolls).toBeGreaterThan(0);
+    expect(checkpointPolls).toBeGreaterThan(defaultPolls);
   });
 });

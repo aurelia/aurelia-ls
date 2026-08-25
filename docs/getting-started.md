@@ -2,136 +2,174 @@
 
 ## Using the VS Code Extension
 
-The fastest way to use this project is through the VS Code extension:
+Install the Aurelia 2 extension from the Marketplace:
 
-```
+```text
 ext install AureliaEffect.aurelia-2
 ```
 
-Open any Aurelia 2 project (one with `aurelia` or `@aurelia/*` in its
-dependencies and a `tsconfig.json`) and the language server starts
-automatically. You should see the Aurelia status bar item appear with
-resource and template counts once analysis completes.
+Open a filesystem-backed Aurelia 2 project. In the default `auto` activation
+mode, dependency manifests, an exact `aurelia.project.json`, or an already-open
+Aurelia entry source provide candidate evidence. Semantic-runtime confirms the
+project shape before the extension retains the language-server session.
 
-Try these to verify it's working:
+Use these quick checks after activation:
 
-- **Hover** a custom element tag to see its bindable interface
-- **Ctrl+click** a tag name to jump to the component class
-- **Type `<`** inside a template to see element completions
-- Open the **Resource Explorer** in the sidebar to browse your project's resources
-- Press **Ctrl+Alt+A** to search resources by name
+- Hover a custom-element tag to see its resource identity and Aurelia kind.
+- Ctrl+click a supported tag, attribute, member, or route token to navigate to
+  source.
+- Type `<` inside a template to request element completions.
+- Open **Aurelia Resources** in Explorer to browse the admitted workspace roots'
+  resource inventory.
+- Run **Aurelia: Go to Resource...** to search admitted resource rows.
 
-Check the "Aurelia Language Server" output channel if anything isn't working.
+If discovery fails, use **Open Aurelia Output** from the view or affected
+project row. The client channel is **Aurelia LS (Client)**; each active root has
+an **Aurelia Language Server (`<workspace-folder-name>`)** channel.
 
-## Using the MCP Preview
+Set `aurelia.activationMode` per workspace folder for unusual layouts:
 
-The `@aurelia-ls/mcp` preview is a local, read-only MCP server for AI coding
-tools. It can inspect Aurelia workspaces, query TypeScript/Aurelia/template
-diagnostics, read router and open-seam surfaces, and return typed continuation
-hints.
+- `auto` uses candidate evidence followed by semantic project confirmation;
+- `on` explicitly keeps tooling active;
+- `off` excludes the folder and its complete subtree from Aurelia tooling.
 
-For trustworthy TypeScript diagnostics, install the preview tarball inside the
-project being analyzed:
+VS Code 0.5.0 supports VS Code 1.91+ and filesystem-backed local workspaces.
+Virtual workspaces are unsupported; remote development is outside the
+release-tested host envelope.
 
-```bash
-npm i -D https://github.com/aurelia/aurelia-ls/releases/download/mcp-v0.1.0-preview.1/aurelia-ls-mcp-0.1.0-preview.1.tgz
+### Optional project configuration
+
+Add `aurelia.project.json` at an exact project root when the project needs a
+durable authored-source exclusion or semantic finding presentation shared by
+the editor and MCP:
+
+```jsonc
+{
+  "version": 1,
+  "authoredSources": {
+    "excludedRoots": ["generated"]
+  },
+  "findings": {
+    "aurelia.analysis.dynamic-registration-spread": "warning"
+  }
+}
 ```
 
-Then configure your MCP client to run:
+The file is optional. See [Project Configuration](./project-configuration.md)
+for the complete V1 reference.
+
+### Optional native-diagnostic suppression
+
+Aurelia templates stay in VS Code's native `html` mode by default, including
+embedded CSS and JavaScript diagnostics. If those validators report false
+Problems for valid interpolation, set
+`aurelia.templateDiagnostics.suppressNative` to `true` for the affected
+workspace folder.
+
+Only exactly owned templates move into **Aurelia HTML** mode. This suppresses
+embedded CSS/JavaScript diagnostics, including legitimate findings, and may
+change native HTML editor behavior. Keep the default unless interpolation noise
+outweighs that loss, and preserve the disabled checks in project lint or build
+tooling.
+
+## Using the MCP Release
+
+`@aurelia-ls/mcp` is a local MCP server for source-grounded Aurelia analysis,
+curated Patterns, and bundled Aurelia docs. The MCP server makes no project-file
+writes; cache management changes only in-memory analysis state.
+
+The latest hosted release is 0.2.0. The source tree targets 0.3.0; see the
+[MCP package README](../packages/mcp/README.md) for that explicit boundary and
+the versioned protocol reference.
+
+To align MCP diagnostics with the project's TypeScript, install the hosted MCP
+release tarball inside the project being analyzed:
+
+```bash
+npm i -D https://github.com/aurelia/aurelia-ls/releases/download/mcp-v0.2.0/aurelia-ls-mcp-0.2.0.tgz
+```
+
+Configure the MCP client to launch the app-local package:
 
 ```bash
 node --max-old-space-size=8192 ./node_modules/@aurelia-ls/mcp/au-mcp.js
 ```
 
-Provider-specific config examples are in the
+Provider-specific examples are in the
 [MCP provider setup guides](../packages/mcp/docs/providers/README.md).
 
-For a quick smoke test, direct URL `npx` also works:
+After restarting the client, call `aurelia_app_query` with
+`queryKind=typescript-diagnostic-summary`. Project-local installation should
+report `relation=same-package`. The response tells you when the analyzer uses a
+different TypeScript package or cannot find the workspace installation.
 
-```bash
-npx -y https://github.com/aurelia/aurelia-ls/releases/download/mcp-v0.1.0-preview.1/aurelia-ls-mcp-0.1.0-preview.1.tgz
-```
+## Building From Source
 
-Project-local install is preferred for serious diagnostics because the analyzer
-can resolve the same TypeScript package as the workspace. Check
-`aurelia_app_overview` or `typescript-diagnostic-summary` after restarting the
-MCP client and prefer `relation=same-package`. Global or user-profile installs
-are convenient, but may report `different-version` when they resolve a different
-TypeScript package than the project.
+Requirements:
 
-## Prerequisites (for building from source)
-
-- Node.js 22.13+
-- pnpm 11.5+
-
-## Building from Source
+- Node >=22.13 <25
+- pnpm 11.5.2
+- Git submodules
 
 ```bash
 git clone --recurse-submodules https://github.com/aurelia/aurelia-ls.git
 cd aurelia-ls
-
-# Build aurelia-ls
 pnpm install
-pnpm run build
+pnpm bootstrap:aurelia
+pnpm build
 ```
 
-The project uses the Aurelia framework as a git submodule. The
-`overrides` in `pnpm-workspace.yaml` link directly to packages inside
-`aurelia/`, so the submodule must be initialized. The MCP and semantic-runtime
-preview paths do not require building the Aurelia submodule itself.
-
-> **Note:** The submodule setup is temporary while we work towards full
-> bi-directional compatibility with Aurelia.
+Workspace overrides link Aurelia framework packages from the `aurelia/`
+submodule. `pnpm bootstrap:aurelia` installs that linked workspace's dependency
+closure without running lifecycle scripts.
 
 ## Running Tests
 
+Run the root build and workspace Vitest suite:
+
 ```bash
-# Everything
 pnpm test
+```
 
-# IDE features (language server + semantic workspace)
-pnpm test:ide
+The current IDE release gates are separated by responsibility:
 
-# Feature matrix (cross-feature × cross-resource-kind)
-pnpm test:sem-matrix
+```bash
+# Semantic-runtime, conformance, and cross-surface assurance
+pnpm test:ide:assurance
 
-# Compiler stages
-pnpm test:compiler
-pnpm test:20-link
-pnpm test:30-bind
-pnpm test:40-typecheck
+# Language-server and VS Code suites
+pnpm test:language-server
+pnpm test:vscode
 
-# SSR
-pnpm test:ssr
+# Support and packaging contracts
+pnpm test:ide:support
+```
+
+`pnpm test:ide` builds the IDE packages and runs the language-server and VS Code
+suites. `test:ide:assurance` covers semantic-runtime, conformance, and lanes.
+The `test:sem-*` commands cover the retained semantic-workspace package.
+
+Real Extension Host acceptance is available through:
+
+```bash
+pnpm test:vscode:extension-host:release
 ```
 
 ## Developing the Extension Locally
 
-1. Open the project in VS Code
-2. Run `pnpm run build`
-3. Press F5 (or Run → Start Debugging)
-4. Select "Run Extension (with Hello World workspace)"
-5. A new VS Code window opens with the extension loaded
+1. Open the repository in VS Code.
+2. Press F5 or choose **Run → Start Debugging**.
+3. Select **Run Extension (with Hello World workspace)**.
 
-The launch configuration opens the `fixtures/hello-world` test project
-by default. Modify the args in `.vscode/launch.json` to test with a
-different project.
-
-To debug the language server, use the "Attach to Server" configuration
-after launching the extension.
-
-## Example Apps
-
-The `examples/` directory has demo apps for the build-time features:
-
-- **todo-app** — SSR with client hydration (`pnpm start`, then view
-  source to see pre-rendered HTML)
-- **router-app** — SSR with Aurelia router
-- **aot-build** — raw AOT compilation output (`node demo.mjs`)
+The pre-launch task builds and bundles the extension, then opens
+`fixtures/hello-world` in a new Extension Development Host. Change the launch
+arguments in `.vscode/launch.json` to use another project.
 
 ## Next Steps
 
-- Read the [Architecture](./architecture.md) overview
-- Check the [VS Code extension README](../packages/vscode/README.md)
-  for the full feature list
-- Explore the example apps in `examples/`
+- Read the [VS Code extension reference](../packages/vscode/README.md).
+- Read the [MCP package and protocol reference](../packages/mcp/README.md).
+- Review [Project Configuration V1](./project-configuration.md) before adding
+  `aurelia.project.json`.
+- Read the [Architecture](./architecture.md) overview for contributor-facing
+  ownership and data flow.

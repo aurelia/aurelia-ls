@@ -7,8 +7,13 @@ import {
 import { localKeyPart } from '../kernel/local-key.js';
 import { sourceSpanAddressForSite } from '../kernel/source-address.js';
 import {
-  KernelStore,
+  KernelPublicationPlan,
+  publishProductDetails,
+  type KernelPublicationContext,
+} from '../kernel/publication.js';
+import {
   KernelStoreBatch,
+  type KernelStore,
 } from '../kernel/store.js';
 import {
   StaticEvaluationExpressionReader,
@@ -68,6 +73,7 @@ export class ModuleLoaderIssueMaterializer {
 
   constructor(
     readonly store: KernelStore,
+    readonly publication: KernelPublicationContext,
   ) {
     this.issuePublisher = new EvaluationIssuePublisher(store);
   }
@@ -79,13 +85,13 @@ export class ModuleLoaderIssueMaterializer {
     const publications = evaluation.readEvaluatedSources()
       .flatMap((source) => this.publicationsForSource(project, source));
     const records = publications.flatMap((publication) => publication.records);
-    if (records.length > 0) {
-      this.store.commit(new KernelStoreBatch(records, `module-loader-issues:${project.projectKey}`));
-    }
-    this.store.productDetails.addAll(
-      EvaluationProductDetails.Issue,
-      publications.map((publication) => publication.issue),
-    );
+    this.publication.publish(new KernelPublicationPlan(
+      new KernelStoreBatch(records, `module-loader-issues:${project.projectKey}`),
+      publishProductDetails(
+        EvaluationProductDetails.Issue,
+        publications.map((publication) => publication.issue),
+      ),
+    ));
     return new ModuleLoaderIssueProjectResult(publications.map((publication) => publication.issue), records);
   }
 

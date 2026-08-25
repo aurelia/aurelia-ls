@@ -64,7 +64,7 @@ if (sourceState == null) {
 } else {
   assertIncludes(sourceState.dependencyKinds, 'template-expression-read', 'Source rollup should include template-expression-read.');
   assertIncludes(sourceState.bindingKinds, 'property', 'Source rollup should include property bindings.');
-  assertIncludes(sourceState.bindingKinds, 'listener', 'Source rollup should include listener bindings.');
+  assertExcludes(sourceState.bindingKinds, 'listener', 'Source rollup should exclude untracked listener evaluations.');
   assertIncludes(sourceState.sourceRootNames, 'state', 'Source rollup should include direct state root reads.');
   assertAtLeast(sourceState.sourceRootNameCount, sourceState.sourceRootNames.length, 'Source rollup should expose sourceRootNameCount.');
   assertAtLeast(sourceState.definitionCount, sourceState.definitionNames.length, 'Source rollup should expose definitionCount.');
@@ -118,6 +118,12 @@ if (failures.length > 0) {
 
 function assertIncludes(values, expected, message) {
   if (!values.includes(expected)) {
+    failures.push(message);
+  }
+}
+
+function assertExcludes(values, unexpected, message) {
+  if (values.includes(unexpected)) {
     failures.push(message);
   }
 }

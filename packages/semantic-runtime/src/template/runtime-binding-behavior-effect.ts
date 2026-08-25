@@ -1,11 +1,9 @@
 import ts from 'typescript';
-import type { KernelStore } from '../kernel/store.js';
+import type { ProductDetailReadView } from '../kernel/product-details.js';
 import { ResourceDefinitionKind } from '../resources/resource-kind.js';
 import { readCheckerTypeShapeByProductHandle } from '../type-system/checker-type-shape-access.js';
 import type { CheckerTypeMember, CheckerTypeShape } from '../type-system/type-shape.js';
-import type {
-  TemplateResourceScope,
-} from './compiler-world.js';
+import { readVisibleTemplateResourceDefinition } from './compiler-resource-lookup.js';
 import type { TemplateVisibleResource } from './compiler-world-reference.js';
 
 /** Static bind-time effects that can be read from a binding-behavior implementation body. */
@@ -21,23 +19,8 @@ export class RuntimeBindingBehaviorBindEffectReader {
   private readonly effectsByResource = new Map<string, RuntimeBindingBehaviorBindEffects>();
 
   constructor(
-    readonly store: KernelStore,
-    readonly resourceScope: TemplateResourceScope | null,
+    readonly store: ProductDetailReadView,
   ) {}
-
-  findResource(behaviorName: string): TemplateVisibleResource | null {
-    if (this.resourceScope == null) {
-      return null;
-    }
-    const lookup = behaviorName.toLowerCase();
-    return this.resourceScope.resources.find((resource) =>
-      resource.resourceKind === ResourceDefinitionKind.BindingBehavior
-      && (
-        resource.name.toLowerCase() === lookup
-        || resource.aliases.some((alias) => alias.toLowerCase() === lookup)
-      )
-    ) ?? null;
-  }
 
   readEffects(resource: TemplateVisibleResource | null): RuntimeBindingBehaviorBindEffects {
     if (resource == null) {
@@ -54,8 +37,8 @@ export class RuntimeBindingBehaviorBindEffectReader {
   }
 
   private effectsForResource(resource: TemplateVisibleResource): RuntimeBindingBehaviorBindEffects {
-    const definition = resource.definition;
-    if (definition?.type !== ResourceDefinitionKind.BindingBehavior) {
+    const definition = readVisibleTemplateResourceDefinition(this.store, resource);
+    if (definition == null || definition.type !== ResourceDefinitionKind.BindingBehavior) {
       return noBindingBehaviorBindEffects;
     }
     const targetType = readCheckerTypeShapeByProductHandle(this.store, definition.target.targetType?.productHandle);

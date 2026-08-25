@@ -23,10 +23,8 @@ import type {
 } from '../type-system/type-shape.js';
 import {
   projectRuntimeAssignmentValueConverterWriteback,
+  type RuntimeAssignmentValueConverterWritebackStage,
 } from '../type-system/value-converter-writeback.js';
-import type {
-  BindingScope,
-} from '../configuration/scope.js';
 import {
   checkerContextForRuntimeBindingSourceExpressionProjection,
   type RuntimeBindingSourceExpressionContextProjection,
@@ -38,10 +36,8 @@ import {
 import {
   type BindingDataFlowSourceWriteCapabilityProjector,
   type SourceWriteCapability,
-  runtimeAssignmentScopeSlotForAccessScope,
   sourceWriteCapabilityOpen,
   sourceWriteCapabilityRuntimeUnassignable,
-  sourceWriteCapabilityWritable,
 } from './binding-source-write-capability.js';
 
 /** Source descriptor facts used by binding data-flow before row publication. */
@@ -55,6 +51,7 @@ export type SourceExpressionInfo = {
   readonly targetToSourceValueTypeHint?: CheckerTypeReference | null;
   readonly targetToSourceValueTypeOpenReason?: string | null;
   readonly targetToSourceValueTypeOpenKind?: CheckerExpressionTypeOpenKind | null;
+  readonly valueConverterWritebackStages: readonly RuntimeAssignmentValueConverterWritebackStage[];
 };
 
 /** Projects authored binding-source expressions into data-flow source descriptors and writeback hints. */
@@ -72,15 +69,7 @@ export class BindingDataFlowSourceInfoProjector {
           RuntimeBindingDataFlowSourceAssignmentReasonKind.SourceUnresolved,
         )
         : null,
-    };
-  }
-
-  templateControllerAlias(alias: string, needsSourceWriteCapability: boolean): SourceExpressionInfo {
-    return {
-      sourceKind: RuntimeBindingDataFlowSourceKind.ScopeName,
-      sourceName: alias,
-      sourceRootName: alias,
-      sourceWriteCapability: needsSourceWriteCapability ? sourceWriteCapabilityWritable() : null,
+      valueConverterWritebackStages: [],
     };
   }
 
@@ -101,7 +90,7 @@ export class BindingDataFlowSourceInfoProjector {
         checkerContext,
         targetValueType,
       )
-      : {};
+      : { valueConverterWritebackStages: [] };
     return {
       sourceKind: bindingDataFlowSourceKindForRuntimeAssignmentTarget(unwrapped),
       sourceName: bindingDataFlowSourceNameForRuntimeAssignmentTarget(unwrapped),
@@ -109,7 +98,6 @@ export class BindingDataFlowSourceInfoProjector {
       sourceWriteCapability: needsSourceWriteCapability
         ? this.sourceWriteCapabilityForRuntimeAssignmentTarget(unwrapped, checkerContext, evaluator)
         : null,
-      ...runtimeAssignmentSourceTypeHint(unwrapped, needsSourceWriteCapability, checkerContext.scope),
       ...writeback,
     };
   }
@@ -151,6 +139,7 @@ export class BindingDataFlowSourceInfoProjector {
     | 'targetToSourceValueTypeHint'
     | 'targetToSourceValueTypeOpenReason'
     | 'targetToSourceValueTypeOpenKind'
+    | 'valueConverterWritebackStages'
   > {
     const writeback = projectRuntimeAssignmentValueConverterWriteback({
       expression,
@@ -159,7 +148,7 @@ export class BindingDataFlowSourceInfoProjector {
       targetValueType,
     });
     if (writeback == null) {
-      return {};
+      return { valueConverterWritebackStages: [] };
     }
 
     const targetEvaluation = evaluator.evaluate(checkerContext.child(
@@ -173,6 +162,9 @@ export class BindingDataFlowSourceInfoProjector {
       return {
         sourceAssignmentValueTypeHint,
         targetToSourceValueTypeHint: null,
+        targetToSourceValueTypeOpenReason: writeback.openReason,
+        targetToSourceValueTypeOpenKind: writeback.openKind,
+        valueConverterWritebackStages: writeback.stages,
       };
     }
 
@@ -182,12 +174,14 @@ export class BindingDataFlowSourceInfoProjector {
         targetToSourceValueTypeHint: null,
         targetToSourceValueTypeOpenReason: writeback.openReason,
         targetToSourceValueTypeOpenKind: writeback.openKind,
+        valueConverterWritebackStages: writeback.stages,
       };
     }
 
     return {
       sourceAssignmentValueTypeHint,
       targetToSourceValueTypeHint: writeback.targetToSourceValueType,
+      valueConverterWritebackStages: writeback.stages,
     };
   }
 }
@@ -221,22 +215,6 @@ function bindingDataFlowSourceRootNameForRuntimeAssignmentTarget(
   return expression.$kind === 'AccessThis' ? '$this' : expressionSourceRootName(expression);
 }
 
-function runtimeAssignmentSourceTypeHint(
-  expression: ExpressionAstNode,
-  needsSourceWriteCapability: boolean,
-  scope: BindingScope,
-): Pick<SourceExpressionInfo, 'sourceTypeHint'> | Record<string, never> {
-  if (expression.$kind !== 'AccessScope') {
-    return {};
-  }
-  const slot = needsSourceWriteCapability
-    ? runtimeAssignmentScopeSlotForAccessScope(expression, scope)
-    : null;
-  return {
-    sourceTypeHint: slot?.targetType ?? null,
-  };
-}
-
 /** Retargets a spread binding source descriptor to the concrete property being spread into. */
 export function spreadSourceInfo(
   base: SourceExpressionInfo,
@@ -252,5 +230,6 @@ export function spreadSourceInfo(
         'SpreadValueBinding source property assignment policy has not been projected from the spread source member.',
         RuntimeBindingDataFlowSourceAssignmentReasonKind.SpreadSourceMemberPolicyOpen,
       ),
+    valueConverterWritebackStages: base.valueConverterWritebackStages,
   };
 }

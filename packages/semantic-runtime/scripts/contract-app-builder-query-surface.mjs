@@ -134,7 +134,7 @@ import {
   ExpectedSemanticEffectObservationSurface,
   ExpectedSemanticEffectRouteProductKind,
   observedCountForExpectedSemanticEffect,
-  SemanticRuntimeAnswerOutcome,
+  SemanticRuntimeAnswerResult,
   SemanticAppQueryKind,
   SemanticRuntimeAppBuilderRequestField,
   SemanticRuntimeAppBuilderQueryKind,
@@ -536,7 +536,7 @@ const defaultTargetCatalogAnswer = answerSemanticRuntimeAppBuilderQuery({
   kind: SemanticRuntimeAppBuilderQueryKind.TargetCatalog,
   page: { size: 10 },
 });
-assert.equal(defaultTargetCatalogAnswer.outcome, SemanticRuntimeAnswerOutcome.Partial);
+assert.equal(defaultTargetCatalogAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.equal(
   defaultTargetCatalogAnswer.value.rows[0]?.targetRef.id,
   AppBuilderApplicationPatternId.AppShell,
@@ -644,7 +644,7 @@ assert.deepEqual(
 const ontologyAnswer = answerSemanticRuntimeAppBuilderQuery({
   kind: SemanticRuntimeAppBuilderQueryKind.OntologyCatalog,
 });
-assert.equal(ontologyAnswer.outcome, SemanticRuntimeAnswerOutcome.Hit);
+assert.equal(ontologyAnswer.result, SemanticRuntimeAnswerResult.Answered);
 const ontologyDetailAnswer = answerSemanticRuntimeAppBuilderQuery({
   kind: SemanticRuntimeAppBuilderQueryKind.OntologyCatalog,
   ontologyCatalog: {
@@ -652,7 +652,7 @@ const ontologyDetailAnswer = answerSemanticRuntimeAppBuilderQuery({
     includeRelations: true,
   },
 });
-assert.equal(ontologyDetailAnswer.outcome, SemanticRuntimeAnswerOutcome.Hit);
+assert.equal(ontologyDetailAnswer.result, SemanticRuntimeAnswerResult.Answered);
 const toBeDeterminedReasonAuthorityRowCount = APP_BUILDER_ONTOLOGY_ROW_DESCRIPTORS.filter((row) =>
   row.status.reasonAuthority === AppBuilderOntologyReasonAuthority.ToBeDetermined
 ).length;
@@ -1089,7 +1089,7 @@ const filteredOntologyAnswer = answerSemanticRuntimeAppBuilderQuery({
     includeRelations: true,
   },
 });
-assert.equal(filteredOntologyAnswer.outcome, SemanticRuntimeAnswerOutcome.Hit);
+assert.equal(filteredOntologyAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.deepEqual(
   filteredOntologyAnswer.value.domainSummaries.map((row) => row.domain),
   [AppBuilderOntologyDomain.Control],
@@ -1119,7 +1119,7 @@ const compactFilteredOntologyAnswer = answerSemanticRuntimeAppBuilderQuery({
     recommendationStatuses: [AppBuilderRecommendationStatus.Deferred],
   },
 });
-assert.equal(compactFilteredOntologyAnswer.outcome, SemanticRuntimeAnswerOutcome.Hit);
+assert.equal(compactFilteredOntologyAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.equal(
   compactFilteredOntologyAnswer.value.rowsIncluded,
   false,
@@ -1153,7 +1153,7 @@ const sourceLoweringFilterOntologyAnswer = answerSemanticRuntimeAppBuilderQuery(
     includeRelations: false,
   },
 });
-assert.equal(sourceLoweringFilterOntologyAnswer.outcome, SemanticRuntimeAnswerOutcome.Hit);
+assert.equal(sourceLoweringFilterOntologyAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.ok(
   sourceLoweringFilterOntologyAnswer.value.domainSummaries.reduce((sum, row) => sum + row.rowCount, 0) > 0,
   'Expected ontology-catalog callers to filter by sourceLoweringImplemented.',
@@ -1165,7 +1165,7 @@ const reasonAuthorityFilterOntologyAnswer = answerSemanticRuntimeAppBuilderQuery
     includeRelations: false,
   },
 });
-assert.equal(reasonAuthorityFilterOntologyAnswer.outcome, SemanticRuntimeAnswerOutcome.Hit);
+assert.equal(reasonAuthorityFilterOntologyAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.equal(
   reasonAuthorityFilterOntologyAnswer.value.domainSummaries.reduce((sum, row) => sum + row.rowCount, 0),
   toBeDeterminedReasonAuthorityRowCount,
@@ -1179,7 +1179,7 @@ assert.ok(
 const defaultReadinessAnswer = answerSemanticRuntimeAppBuilderQuery({
   kind: SemanticRuntimeAppBuilderQueryKind.InputReadiness,
 });
-assert.equal(defaultReadinessAnswer.outcome, SemanticRuntimeAnswerOutcome.Hit);
+assert.equal(defaultReadinessAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.equal(defaultReadinessAnswer.value.defaultTargetUsed, true);
 assert.equal(
   defaultReadinessAnswer.value.targets[0]?.targetRef.id,
@@ -1214,7 +1214,7 @@ const compactSelectorReadinessAnswer = answerSemanticRuntimeAppBuilderQuery({
     includeInputFacets: false,
   },
 });
-assert.equal(compactSelectorReadinessAnswer.outcome, SemanticRuntimeAnswerOutcome.Hit);
+assert.equal(compactSelectorReadinessAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.equal(compactSelectorReadinessAnswer.value.defaultTargetUsed, false);
 assert.equal(
   compactSelectorReadinessAnswer.value.targets[0]?.targetRef.domain,
@@ -1236,7 +1236,7 @@ const mismatchedSelectorReadinessAnswer = answerSemanticRuntimeAppBuilderQuery({
     }],
   },
 });
-assert.equal(mismatchedSelectorReadinessAnswer.outcome, SemanticRuntimeAnswerOutcome.Partial);
+assert.equal(mismatchedSelectorReadinessAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.equal(mismatchedSelectorReadinessAnswer.value.targets.length, 1);
 assert.ok(
   mismatchedSelectorReadinessAnswer.value.issues.some((issue) =>
@@ -1254,7 +1254,7 @@ const unknownSelectorReadinessAnswer = answerSemanticRuntimeAppBuilderQuery({
     }],
   },
 });
-assert.equal(unknownSelectorReadinessAnswer.outcome, SemanticRuntimeAnswerOutcome.Partial);
+assert.equal(unknownSelectorReadinessAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.equal(unknownSelectorReadinessAnswer.value.defaultTargetUsed, false);
 assert.equal(unknownSelectorReadinessAnswer.value.targets.length, 0);
 assert.ok(
@@ -1268,7 +1268,7 @@ assert.ok(
 const unscopedInputContractDetailAnswer = answerSemanticRuntimeAppBuilderQuery({
   kind: SemanticRuntimeAppBuilderQueryKind.InputContractDetail,
 });
-assert.equal(unscopedInputContractDetailAnswer.outcome, SemanticRuntimeAnswerOutcome.Hit);
+assert.equal(unscopedInputContractDetailAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.equal(
   unscopedInputContractDetailAnswer.value.payloadSchemasIncluded,
   false,
@@ -1330,7 +1330,7 @@ const domainInputDetailAnswer = answerSemanticRuntimeAppBuilderQuery({
     inputContractIds: [AppBuilderInputContractId.DomainModel],
   },
 });
-assert.equal(domainInputDetailAnswer.outcome, SemanticRuntimeAnswerOutcome.Hit);
+assert.equal(domainInputDetailAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.equal(domainInputDetailAnswer.value.rows.length, 1);
 assert.equal(domainInputDetailAnswer.value.rows[0]?.inputContract.id, AppBuilderInputContractId.DomainModel);
 const continuedDomainInputDetailAnswer = withSemanticRuntimeAppBuilderQueryContinuations({
@@ -1589,7 +1589,7 @@ const visualInputDetailAnswer = answerSemanticRuntimeAppBuilderQuery({
     inputContractIds: [AppBuilderInputContractId.VisualStyleInput],
   },
 });
-assert.equal(visualInputDetailAnswer.outcome, SemanticRuntimeAnswerOutcome.Hit);
+assert.equal(visualInputDetailAnswer.result, SemanticRuntimeAnswerResult.Answered);
 const visualClassHooksDetail = visualInputDetailAnswer.value.rows[0]?.inputFacets.find((row) =>
   row.facet.id === AppBuilderInputFacetId.VisualClassHooks
 );
@@ -1636,7 +1636,7 @@ const existingAppFactDetailAnswer = answerSemanticRuntimeAppBuilderQuery({
     inputContractIds: [AppBuilderInputContractId.ExistingAppFacts],
   },
 });
-assert.equal(existingAppFactDetailAnswer.outcome, SemanticRuntimeAnswerOutcome.Hit);
+assert.equal(existingAppFactDetailAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.ok(
   existingAppFactDetailAnswer.value.rows[0]?.inputFacets.every((row) =>
     row.payloadSchemaState === AppBuilderInputPayloadSchemaState.NotCallerPayload
@@ -1707,7 +1707,7 @@ const compactInputDetailAnswer = answerSemanticRuntimeAppBuilderQuery({
     includePayloadSchemas: false,
   },
 });
-assert.equal(compactInputDetailAnswer.outcome, SemanticRuntimeAnswerOutcome.Hit);
+assert.equal(compactInputDetailAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.equal(compactInputDetailAnswer.value.rows.length, 1);
 assert.equal(compactInputDetailAnswer.value.payloadSchemasIncluded, false);
 assert.equal(
@@ -1726,7 +1726,7 @@ const notCallerPayloadOnlyDetailAnswer = answerSemanticRuntimeAppBuilderQuery({
     payloadSchemaStates: [AppBuilderInputPayloadSchemaState.NotCallerPayload],
   },
 });
-assert.equal(notCallerPayloadOnlyDetailAnswer.outcome, SemanticRuntimeAnswerOutcome.Hit);
+assert.equal(notCallerPayloadOnlyDetailAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.deepEqual(
   notCallerPayloadOnlyDetailAnswer.value.rows.map((row) => row.inputContract.id),
   [AppBuilderInputContractId.ExistingAppFacts],
@@ -1738,7 +1738,7 @@ const seedInputDetailAnswer = answerSemanticRuntimeAppBuilderQuery({
     inputContractIds: [AppBuilderInputContractId.SeedData],
   },
 });
-assert.equal(seedInputDetailAnswer.outcome, SemanticRuntimeAnswerOutcome.Hit);
+assert.equal(seedInputDetailAnswer.result, SemanticRuntimeAnswerResult.Answered);
 const seedDensityPurposeDetail = seedInputDetailAnswer.value.rows[0]?.inputFacets.find((row) =>
   row.facet.id === AppBuilderInputFacetId.SeedDensityPurpose
 );
@@ -1799,7 +1799,7 @@ const aureliaPolicyInputDetailAnswer = answerSemanticRuntimeAppBuilderQuery({
     includeSourceLoweringValueSupport: true,
   },
 });
-assert.equal(aureliaPolicyInputDetailAnswer.outcome, SemanticRuntimeAnswerOutcome.Hit);
+assert.equal(aureliaPolicyInputDetailAnswer.result, SemanticRuntimeAnswerResult.Answered);
 const aureliaPluginPolicyDetail = aureliaPolicyInputDetailAnswer.value.rows[0]?.inputFacets.find((row) =>
   row.facet.id === AppBuilderInputFacetId.AureliaPluginPolicy
 );
@@ -1847,7 +1847,7 @@ const sourcePlacementDetailAnswer = answerSemanticRuntimeAppBuilderQuery({
     inputContractIds: [AppBuilderInputContractId.SourcePlacement],
   },
 });
-assert.equal(sourcePlacementDetailAnswer.outcome, SemanticRuntimeAnswerOutcome.Hit);
+assert.equal(sourcePlacementDetailAnswer.result, SemanticRuntimeAnswerResult.Answered);
 const sourceNamingDetail = sourcePlacementDetailAnswer.value.rows[0]?.inputFacets.find((row) =>
   row.facet.id === AppBuilderInputFacetId.SourceNaming
 );
@@ -1896,7 +1896,7 @@ const sourceNamingUndefinedOptionalPayloadAnswer = answerSemanticRuntimeAppBuild
     }],
   },
 });
-assert.equal(sourceNamingUndefinedOptionalPayloadAnswer.outcome, SemanticRuntimeAnswerOutcome.Hit);
+assert.equal(sourceNamingUndefinedOptionalPayloadAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.equal(
   sourceNamingUndefinedOptionalPayloadAnswer.value.invalidPayloadCount,
   0,
@@ -1946,7 +1946,7 @@ const collectionProjectionDetailAnswer = answerSemanticRuntimeAppBuilderQuery({
     inputContractIds: [AppBuilderInputContractId.CollectionProjection],
   },
 });
-assert.equal(collectionProjectionDetailAnswer.outcome, SemanticRuntimeAnswerOutcome.Hit);
+assert.equal(collectionProjectionDetailAnswer.result, SemanticRuntimeAnswerResult.Answered);
 const collectionDisplayRoleProperty = collectionProjectionDetailAnswer.value.rows[0]?.inputFacets
   .find((row) => row.facet.id === AppBuilderInputFacetId.CollectionDisplayFields)
   ?.payloadSchema?.items?.properties?.find((property) => property.name === 'role');
@@ -2040,7 +2040,7 @@ const collectionBrowseAffordanceDetailAnswer = answerSemanticRuntimeAppBuilderQu
     affordanceIds: [AppBuilderAffordanceId.CollectionBrowse],
   },
 });
-assert.equal(collectionBrowseAffordanceDetailAnswer.outcome, SemanticRuntimeAnswerOutcome.Hit);
+assert.equal(collectionBrowseAffordanceDetailAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.equal(collectionBrowseAffordanceDetailAnswer.value.rows.length, 1);
 assert.equal(
   collectionBrowseAffordanceDetailAnswer.value.rows[0]?.affordance.id,
@@ -2096,7 +2096,7 @@ const compactAffordanceDetailAnswer = answerSemanticRuntimeAppBuilderQuery({
     includeFollowUps: false,
   },
 });
-assert.equal(compactAffordanceDetailAnswer.outcome, SemanticRuntimeAnswerOutcome.Hit);
+assert.equal(compactAffordanceDetailAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.equal(compactAffordanceDetailAnswer.value.rows[0]?.inputReadiness, undefined);
 assert.equal(compactAffordanceDetailAnswer.value.rows[0]?.inputContractDetails, undefined);
 assert.equal(compactAffordanceDetailAnswer.value.rows[0]?.effectContracts, undefined);
@@ -2109,7 +2109,7 @@ const sourcePlanPreviewAffordanceDetailAnswer = answerSemanticRuntimeAppBuilderQ
     affordanceIds: [AppBuilderAffordanceId.SourcePlanPreview],
   },
 });
-assert.equal(sourcePlanPreviewAffordanceDetailAnswer.outcome, SemanticRuntimeAnswerOutcome.Hit);
+assert.equal(sourcePlanPreviewAffordanceDetailAnswer.result, SemanticRuntimeAnswerResult.Answered);
 const sourcePlanPreviewPlacementDependency = sourcePlanPreviewAffordanceDetailAnswer.value.rows[0]?.inputReadiness
   ?.inputDependencies.find((row) => row.inputContract.id === AppBuilderInputContractId.SourcePlacement);
 assert.deepEqual(
@@ -2127,7 +2127,7 @@ const createFormAffordanceDetailAnswer = answerSemanticRuntimeAppBuilderQuery({
     affordanceIds: [AppBuilderAffordanceId.CreateSubmitForm],
   },
 });
-assert.equal(createFormAffordanceDetailAnswer.outcome, SemanticRuntimeAnswerOutcome.Hit);
+assert.equal(createFormAffordanceDetailAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.equal(createFormAffordanceDetailAnswer.value.rows.length, 1);
 assert.equal(
   createFormAffordanceDetailAnswer.value.rows[0]?.affordance.id,
@@ -2179,7 +2179,7 @@ const collectionTablePatternDetailAnswer = answerSemanticRuntimeAppBuilderQuery(
     applicationPatternIds: [AppBuilderApplicationPatternId.CollectionTable],
   },
 });
-assert.equal(collectionTablePatternDetailAnswer.outcome, SemanticRuntimeAnswerOutcome.Hit);
+assert.equal(collectionTablePatternDetailAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.equal(collectionTablePatternDetailAnswer.value.rows.length, 1);
 assert.equal(
   collectionTablePatternDetailAnswer.value.rows[0]?.applicationPattern.id,
@@ -2298,7 +2298,7 @@ const nativeSubmitFormPatternDetailAnswer = answerSemanticRuntimeAppBuilderQuery
     applicationPatternIds: [AppBuilderApplicationPatternId.NativeSubmitForm],
   },
 });
-assert.equal(nativeSubmitFormPatternDetailAnswer.outcome, SemanticRuntimeAnswerOutcome.Hit);
+assert.equal(nativeSubmitFormPatternDetailAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.equal(nativeSubmitFormPatternDetailAnswer.value.rows.length, 1);
 assert.equal(
   nativeSubmitFormPatternDetailAnswer.value.rows[0]?.applicationPattern.id,
@@ -2374,7 +2374,7 @@ const toastNotificationPatternDetailAnswer = answerSemanticRuntimeAppBuilderQuer
     includeAffordances: true,
   },
 });
-assert.equal(toastNotificationPatternDetailAnswer.outcome, SemanticRuntimeAnswerOutcome.Hit);
+assert.equal(toastNotificationPatternDetailAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.equal(toastNotificationPatternDetailAnswer.value.rows.length, 1);
 assert.equal(
   toastNotificationPatternDetailAnswer.value.rows[0]?.applicationPattern.status.recommendationStatus,
@@ -2416,7 +2416,7 @@ const domainCommandActionPatternDetailAnswer = answerSemanticRuntimeAppBuilderQu
     applicationPatternIds: [AppBuilderApplicationPatternId.DomainCommandAction],
   },
 });
-assert.equal(domainCommandActionPatternDetailAnswer.outcome, SemanticRuntimeAnswerOutcome.Hit);
+assert.equal(domainCommandActionPatternDetailAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.equal(domainCommandActionPatternDetailAnswer.value.rows.length, 1);
 assert.ok(
   domainCommandActionPatternDetailAnswer.value.rows[0]?.applicationPattern.navigationShapeIds.includes(
@@ -2442,7 +2442,7 @@ const routeNavigationActionPatternDetailAnswer = answerSemanticRuntimeAppBuilder
     applicationPatternIds: [AppBuilderApplicationPatternId.RouteNavigationAction],
   },
 });
-assert.equal(routeNavigationActionPatternDetailAnswer.outcome, SemanticRuntimeAnswerOutcome.Hit);
+assert.equal(routeNavigationActionPatternDetailAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.equal(routeNavigationActionPatternDetailAnswer.value.rows.length, 1);
 assert.ok(
   routeNavigationActionPatternDetailAnswer.value.rows[0]?.applicationPattern.navigationShapeIds.includes(
@@ -2473,7 +2473,7 @@ const queryStringStatePatternDetailAnswer = answerSemanticRuntimeAppBuilderQuery
     includeAffordances: true,
   },
 });
-assert.equal(queryStringStatePatternDetailAnswer.outcome, SemanticRuntimeAnswerOutcome.Hit);
+assert.equal(queryStringStatePatternDetailAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.equal(queryStringStatePatternDetailAnswer.value.rows.length, 1);
 assert.equal(
   queryStringStatePatternDetailAnswer.value.rows[0]?.applicationPattern.status.recommendationStatus,
@@ -2525,7 +2525,7 @@ const remoteFetchIntegrationPatternDetailAnswer = answerSemanticRuntimeAppBuilde
     includeAffordances: true,
   },
 });
-assert.equal(remoteFetchIntegrationPatternDetailAnswer.outcome, SemanticRuntimeAnswerOutcome.Hit);
+assert.equal(remoteFetchIntegrationPatternDetailAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.equal(remoteFetchIntegrationPatternDetailAnswer.value.rows.length, 1);
 assert.equal(
   remoteFetchIntegrationPatternDetailAnswer.value.rows[0]?.applicationPattern.status.recommendationStatus,
@@ -2577,7 +2577,7 @@ const compactApplicationPatternDetailAnswer = answerSemanticRuntimeAppBuilderQue
     includeAffordances: false,
   },
 });
-assert.equal(compactApplicationPatternDetailAnswer.outcome, SemanticRuntimeAnswerOutcome.Hit);
+assert.equal(compactApplicationPatternDetailAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.equal(compactApplicationPatternDetailAnswer.value.rows[0]?.inputReadiness, undefined);
 assert.equal(compactApplicationPatternDetailAnswer.value.rows[0]?.inputContractDetails, undefined);
 assert.equal(compactApplicationPatternDetailAnswer.value.rows[0]?.collectionConcepts, undefined);
@@ -2595,7 +2595,7 @@ const tableColumnCollectionDetailAnswer = answerSemanticRuntimeAppBuilderQuery({
     collectionConceptIds: [AppBuilderCollectionConceptId.TableColumn],
   },
 });
-assert.equal(tableColumnCollectionDetailAnswer.outcome, SemanticRuntimeAnswerOutcome.Hit);
+assert.equal(tableColumnCollectionDetailAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.equal(tableColumnCollectionDetailAnswer.value.rows.length, 1);
 assert.equal(
   tableColumnCollectionDetailAnswer.value.rows[0]?.collectionConcept.id,
@@ -2676,7 +2676,7 @@ const compactCollectionConceptDetailAnswer = answerSemanticRuntimeAppBuilderQuer
     includeAffordances: false,
   },
 });
-assert.equal(compactCollectionConceptDetailAnswer.outcome, SemanticRuntimeAnswerOutcome.Hit);
+assert.equal(compactCollectionConceptDetailAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.equal(compactCollectionConceptDetailAnswer.value.rows[0]?.inputReadiness, undefined);
 assert.equal(compactCollectionConceptDetailAnswer.value.rows[0]?.inputContractDetails, undefined);
 assert.equal(compactCollectionConceptDetailAnswer.value.rows[0]?.applicationPatterns, undefined);
@@ -2693,7 +2693,7 @@ const nativeTextControlDetailAnswer = answerSemanticRuntimeAppBuilderQuery({
     controlPatternIds: [AppBuilderControlPatternId.NativeTextInput],
   },
 });
-assert.equal(nativeTextControlDetailAnswer.outcome, SemanticRuntimeAnswerOutcome.Hit);
+assert.equal(nativeTextControlDetailAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.equal(nativeTextControlDetailAnswer.value.rows.length, 1);
 assert.equal(
   nativeTextControlDetailAnswer.value.rows[0]?.controlPattern.id,
@@ -2742,7 +2742,7 @@ const sourceLowerableControlTargetCatalogAnswer = answerPagedSemanticRuntimeAppB
   },
   page: { size: 50 },
 });
-assert.equal(sourceLowerableControlTargetCatalogAnswer.outcome, SemanticRuntimeAnswerOutcome.Hit);
+assert.equal(sourceLowerableControlTargetCatalogAnswer.result, SemanticRuntimeAnswerResult.Answered);
 const sourceLowerableControlTargetRefs = APP_BUILDER_SOURCE_LOWERING_TARGET_ROWS
   .filter((row) => row.targetRef.kind === AppBuilderOntologyRowKind.ControlPattern)
   .map((row) => row.targetRef.id);
@@ -2774,7 +2774,7 @@ const exactRangeTargetCatalogAnswer = answerSemanticRuntimeAppBuilderQuery({
     }],
   },
 });
-assert.equal(exactRangeTargetCatalogAnswer.outcome, SemanticRuntimeAnswerOutcome.Hit);
+assert.equal(exactRangeTargetCatalogAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.deepEqual(
   exactRangeTargetCatalogAnswer.value.rows.map((row) => row.targetRef.id),
   [AppBuilderControlPatternId.NativeRangeInput],
@@ -2812,7 +2812,7 @@ const mixedExactTargetCatalogAnswer = answerSemanticRuntimeAppBuilderQuery({
     includeInputReadiness: false,
   },
 });
-assert.equal(mixedExactTargetCatalogAnswer.outcome, SemanticRuntimeAnswerOutcome.Hit);
+assert.equal(mixedExactTargetCatalogAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.deepEqual(
   mixedExactTargetCatalogAnswer.value.rows.map((row) => row.targetRef.id),
   [
@@ -2848,7 +2848,7 @@ const selectorRangeTargetCatalogAnswer = answerSemanticRuntimeAppBuilderQuery({
     includeInputReadiness: false,
   },
 });
-assert.equal(selectorRangeTargetCatalogAnswer.outcome, SemanticRuntimeAnswerOutcome.Hit);
+assert.equal(selectorRangeTargetCatalogAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.deepEqual(
   selectorRangeTargetCatalogAnswer.value.rows.map((row) => row.targetRef.id),
   [AppBuilderControlPatternId.NativeRangeInput],
@@ -2868,7 +2868,7 @@ const unknownSelectorTargetCatalogAnswer = answerSemanticRuntimeAppBuilderQuery(
     includeInputReadiness: false,
   },
 });
-assert.equal(unknownSelectorTargetCatalogAnswer.outcome, SemanticRuntimeAnswerOutcome.Partial);
+assert.equal(unknownSelectorTargetCatalogAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.equal(unknownSelectorTargetCatalogAnswer.value.rows.length, 0);
 assert.ok(
   unknownSelectorTargetCatalogAnswer.value.issues.some((issue) =>
@@ -2943,7 +2943,7 @@ const nativeSelectControlDetailAnswer = answerSemanticRuntimeAppBuilderQuery({
     includeAffordances: false,
   },
 });
-assert.equal(nativeSelectControlDetailAnswer.outcome, SemanticRuntimeAnswerOutcome.Hit);
+assert.equal(nativeSelectControlDetailAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.ok(
   nativeSelectControlDetailAnswer.value.rows.find((detail) =>
     detail.controlPattern.id === AppBuilderControlPatternId.NativeSingleSelect
@@ -2974,7 +2974,7 @@ const nativeSingleSelectInputDetailAnswer = answerSemanticRuntimeAppBuilderQuery
     includeAffordances: false,
   },
 });
-assert.equal(nativeSingleSelectInputDetailAnswer.outcome, SemanticRuntimeAnswerOutcome.Hit);
+assert.equal(nativeSingleSelectInputDetailAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.ok(
   nativeSingleSelectInputDetailAnswer.value.rows[0]?.inputContractDetails?.some((row) =>
     row.inputContract.id === AppBuilderInputContractId.DomainModel
@@ -3005,7 +3005,7 @@ const localWrapperControlDetailAnswer = answerSemanticRuntimeAppBuilderQuery({
     includeAffordances: false,
   },
 });
-assert.equal(localWrapperControlDetailAnswer.outcome, SemanticRuntimeAnswerOutcome.Hit);
+assert.equal(localWrapperControlDetailAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.ok(
   localWrapperControlDetailAnswer.value.rows.some((row) =>
     row.controlPattern.id === AppBuilderControlPatternId.FieldGroup
@@ -3030,7 +3030,7 @@ const compactControlPatternDetailAnswer = answerSemanticRuntimeAppBuilderQuery({
     includeAffordances: false,
   },
 });
-assert.equal(compactControlPatternDetailAnswer.outcome, SemanticRuntimeAnswerOutcome.Hit);
+assert.equal(compactControlPatternDetailAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.equal(compactControlPatternDetailAnswer.value.rows[0]?.inputReadiness, undefined);
 assert.equal(compactControlPatternDetailAnswer.value.rows[0]?.inputContractDetails, undefined);
 assert.equal(compactControlPatternDetailAnswer.value.rows[0]?.applicationPatterns, undefined);
@@ -3047,7 +3047,7 @@ const valueContractManifestDetailAnswer = answerSemanticRuntimeAppBuilderQuery({
     controlManifestIds: [AppBuilderControlManifestRowId.ValueContract],
   },
 });
-assert.equal(valueContractManifestDetailAnswer.outcome, SemanticRuntimeAnswerOutcome.Hit);
+assert.equal(valueContractManifestDetailAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.equal(valueContractManifestDetailAnswer.value.rows.length, 1);
 assert.equal(
   valueContractManifestDetailAnswer.value.rows[0]?.controlManifest.id,
@@ -3140,7 +3140,7 @@ const compactControlManifestDetailAnswer = answerSemanticRuntimeAppBuilderQuery(
     includeAffordances: false,
   },
 });
-assert.equal(compactControlManifestDetailAnswer.outcome, SemanticRuntimeAnswerOutcome.Hit);
+assert.equal(compactControlManifestDetailAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.equal(compactControlManifestDetailAnswer.value.rows[0]?.inputReadiness, undefined);
 assert.equal(compactControlManifestDetailAnswer.value.rows[0]?.inputContractDetails, undefined);
 assert.equal(compactControlManifestDetailAnswer.value.rows[0]?.applicationPatterns, undefined);
@@ -3171,7 +3171,7 @@ const sourcePlanEffectDetailAnswer = answerSemanticRuntimeAppBuilderQuery({
     ],
   },
 });
-assert.equal(sourcePlanEffectDetailAnswer.outcome, SemanticRuntimeAnswerOutcome.Hit);
+assert.equal(sourcePlanEffectDetailAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.equal(sourcePlanEffectDetailAnswer.value.rows.length, 1);
 assert.equal(
   sourcePlanEffectDetailAnswer.value.rows[0]?.effectContract.id,
@@ -3258,7 +3258,7 @@ const compactEffectDetailAnswer = answerSemanticRuntimeAppBuilderQuery({
     includeWitnessFields: false,
   },
 });
-assert.equal(compactEffectDetailAnswer.outcome, SemanticRuntimeAnswerOutcome.Hit);
+assert.equal(compactEffectDetailAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.equal(compactEffectDetailAnswer.value.rows[0]?.promisingAffordances, undefined);
 assert.ok(
   (compactEffectDetailAnswer.value.rows[0]?.witnessDescriptors?.length ?? 0) > 0,
@@ -3276,7 +3276,7 @@ const semanticRuntimeReopenEffectDetailAnswer = answerSemanticRuntimeAppBuilderQ
     effectContractIds: [AppBuilderEffectContractId.SemanticRuntimeReopen],
   },
 });
-assert.equal(semanticRuntimeReopenEffectDetailAnswer.outcome, SemanticRuntimeAnswerOutcome.Hit);
+assert.equal(semanticRuntimeReopenEffectDetailAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.equal(
   semanticRuntimeReopenEffectDetailAnswer.value.rows[0]?.effectContract.boundary,
   AppBuilderEffectBoundary.SemanticRuntimeReopen,
@@ -3312,7 +3312,7 @@ const compactSemanticRuntimeReopenEffectDetailAnswer = answerSemanticRuntimeAppB
     includeSemanticRuntimeQueryRows: false,
   },
 });
-assert.equal(compactSemanticRuntimeReopenEffectDetailAnswer.outcome, SemanticRuntimeAnswerOutcome.Hit);
+assert.equal(compactSemanticRuntimeReopenEffectDetailAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.equal(
   compactSemanticRuntimeReopenEffectDetailAnswer.value.rows[0]?.semanticEffectDescriptors,
   undefined,
@@ -3329,7 +3329,7 @@ const componentManifestPublicationEffectDetailAnswer = answerSemanticRuntimeAppB
     effectContractIds: [AppBuilderEffectContractId.ComponentManifestPublication],
   },
 });
-assert.equal(componentManifestPublicationEffectDetailAnswer.outcome, SemanticRuntimeAnswerOutcome.Hit);
+assert.equal(componentManifestPublicationEffectDetailAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.ok(
   componentManifestPublicationEffectDetailAnswer.value.rows[0]?.controlManifests?.some((row) =>
     row.id === AppBuilderControlManifestRowId.ComponentApiManifest
@@ -3357,7 +3357,7 @@ const compactComponentManifestPublicationEffectDetailAnswer = answerSemanticRunt
     includeControlManifestFieldDescriptors: false,
   },
 });
-assert.equal(compactComponentManifestPublicationEffectDetailAnswer.outcome, SemanticRuntimeAnswerOutcome.Hit);
+assert.equal(compactComponentManifestPublicationEffectDetailAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.equal(
   compactComponentManifestPublicationEffectDetailAnswer.value.rows[0]?.controlManifests,
   undefined,
@@ -3374,7 +3374,7 @@ const controlUseInventoryEffectDetailAnswer = answerSemanticRuntimeAppBuilderQue
     effectContractIds: [AppBuilderEffectContractId.ControlUseInventory],
   },
 });
-assert.equal(controlUseInventoryEffectDetailAnswer.outcome, SemanticRuntimeAnswerOutcome.Hit);
+assert.equal(controlUseInventoryEffectDetailAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.ok(
   controlUseInventoryEffectDetailAnswer.value.rows[0]?.controlManifests?.some((row) =>
     row.id === AppBuilderControlManifestRowId.ControlUseInventory
@@ -3414,7 +3414,7 @@ const structuralHooksStyleDetailAnswer = answerSemanticRuntimeAppBuilderQuery({
     visualPolicyIds: [AppBuilderVisualPolicyId.StructuralHooksOnly],
   },
 });
-assert.equal(structuralHooksStyleDetailAnswer.outcome, SemanticRuntimeAnswerOutcome.Hit);
+assert.equal(structuralHooksStyleDetailAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.equal(
   structuralHooksStyleDetailAnswer.value.stylingMechanismRows[0]?.stylingMechanism.id,
   AppBuilderStylingMechanismId.ClassBinding,
@@ -3495,7 +3495,7 @@ const generatedLocalDesignSystemStyleDetailAnswer = answerSemanticRuntimeAppBuil
     visualPolicyIds: [AppBuilderVisualPolicyId.GeneratedLocalDesignSystem],
   },
 });
-assert.equal(generatedLocalDesignSystemStyleDetailAnswer.outcome, SemanticRuntimeAnswerOutcome.Hit);
+assert.equal(generatedLocalDesignSystemStyleDetailAnswer.result, SemanticRuntimeAnswerResult.Answered);
 const generatedLocalDesignSystemVisualFacets = generatedLocalDesignSystemStyleDetailAnswer
   .value
   .visualPolicyRows[0]
@@ -3517,7 +3517,7 @@ const visualInputMissingStyleDetailAnswer = answerSemanticRuntimeAppBuilderQuery
     visualPolicyIds: [AppBuilderVisualPolicyId.VisualInputMissing],
   },
 });
-assert.equal(visualInputMissingStyleDetailAnswer.outcome, SemanticRuntimeAnswerOutcome.Hit);
+assert.equal(visualInputMissingStyleDetailAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.equal(
   visualInputMissingStyleDetailAnswer.value.visualPolicyRows[0]?.inputReadiness?.inputDependencies.length,
   0,
@@ -3544,7 +3544,7 @@ const compactStyleDetailAnswer = answerSemanticRuntimeAppBuilderQuery({
     includeAffordances: false,
   },
 });
-assert.equal(compactStyleDetailAnswer.outcome, SemanticRuntimeAnswerOutcome.Hit);
+assert.equal(compactStyleDetailAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.equal(compactStyleDetailAnswer.value.stylingMechanismRows[0]?.inputReadiness, undefined);
 assert.equal(compactStyleDetailAnswer.value.stylingMechanismRows[0]?.applicationPatterns, undefined);
 assert.equal(compactStyleDetailAnswer.value.stylingMechanismRows[0]?.controlPatterns, undefined);
@@ -3560,7 +3560,7 @@ assert.equal(compactStyleDetailAnswer.value.visualPolicyRows[0]?.affordances, un
 const unscopedAffordanceDetailAnswer = answerSemanticRuntimeAppBuilderQuery({
   kind: SemanticRuntimeAppBuilderQueryKind.AffordanceDetail,
 });
-assert.equal(unscopedAffordanceDetailAnswer.outcome, SemanticRuntimeAnswerOutcome.Hit);
+assert.equal(unscopedAffordanceDetailAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.equal(unscopedAffordanceDetailAnswer.value.inputReadinessIncluded, false);
 assert.equal(unscopedAffordanceDetailAnswer.value.inputContractDetailIncluded, false);
 assert.equal(unscopedAffordanceDetailAnswer.value.effectContractsIncluded, false);
@@ -3575,7 +3575,7 @@ assert.ok(
 const unscopedApplicationPatternDetailAnswer = answerSemanticRuntimeAppBuilderQuery({
   kind: SemanticRuntimeAppBuilderQueryKind.ApplicationPatternDetail,
 });
-assert.equal(unscopedApplicationPatternDetailAnswer.outcome, SemanticRuntimeAnswerOutcome.Hit);
+assert.equal(unscopedApplicationPatternDetailAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.equal(unscopedApplicationPatternDetailAnswer.value.inputReadinessIncluded, false);
 assert.equal(unscopedApplicationPatternDetailAnswer.value.inputContractDetailIncluded, false);
 assert.equal(unscopedApplicationPatternDetailAnswer.value.collectionConceptsIncluded, false);
@@ -3597,7 +3597,7 @@ assert.ok(
 const unscopedCollectionConceptDetailAnswer = answerSemanticRuntimeAppBuilderQuery({
   kind: SemanticRuntimeAppBuilderQueryKind.CollectionConceptDetail,
 });
-assert.equal(unscopedCollectionConceptDetailAnswer.outcome, SemanticRuntimeAnswerOutcome.Hit);
+assert.equal(unscopedCollectionConceptDetailAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.equal(unscopedCollectionConceptDetailAnswer.value.inputReadinessIncluded, false);
 assert.equal(unscopedCollectionConceptDetailAnswer.value.inputContractDetailIncluded, false);
 assert.equal(unscopedCollectionConceptDetailAnswer.value.applicationPatternsIncluded, false);
@@ -3616,7 +3616,7 @@ assert.ok(
 const unscopedControlPatternDetailAnswer = answerSemanticRuntimeAppBuilderQuery({
   kind: SemanticRuntimeAppBuilderQueryKind.ControlPatternDetail,
 });
-assert.equal(unscopedControlPatternDetailAnswer.outcome, SemanticRuntimeAnswerOutcome.Hit);
+assert.equal(unscopedControlPatternDetailAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.equal(unscopedControlPatternDetailAnswer.value.inputReadinessIncluded, false);
 assert.equal(unscopedControlPatternDetailAnswer.value.inputContractDetailIncluded, false);
 assert.equal(unscopedControlPatternDetailAnswer.value.applicationPatternsIncluded, false);
@@ -3635,7 +3635,7 @@ assert.ok(
 const unscopedControlManifestDetailAnswer = answerSemanticRuntimeAppBuilderQuery({
   kind: SemanticRuntimeAppBuilderQueryKind.ControlManifestDetail,
 });
-assert.equal(unscopedControlManifestDetailAnswer.outcome, SemanticRuntimeAnswerOutcome.Hit);
+assert.equal(unscopedControlManifestDetailAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.equal(unscopedControlManifestDetailAnswer.value.inputReadinessIncluded, false);
 assert.equal(unscopedControlManifestDetailAnswer.value.inputContractDetailIncluded, false);
 assert.equal(unscopedControlManifestDetailAnswer.value.applicationPatternsIncluded, false);
@@ -3667,7 +3667,7 @@ assert.deepEqual(
 const unscopedEffectContractDetailAnswer = answerSemanticRuntimeAppBuilderQuery({
   kind: SemanticRuntimeAppBuilderQueryKind.EffectContractDetail,
 });
-assert.equal(unscopedEffectContractDetailAnswer.outcome, SemanticRuntimeAnswerOutcome.Hit);
+assert.equal(unscopedEffectContractDetailAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.equal(unscopedEffectContractDetailAnswer.value.promisingAffordancesIncluded, false);
 assert.equal(unscopedEffectContractDetailAnswer.value.affordanceInputReadinessIncluded, false);
 assert.equal(unscopedEffectContractDetailAnswer.value.affordanceInputContractDetailIncluded, false);
@@ -3686,7 +3686,7 @@ assert.ok(
 const unscopedPolicyDetailAnswer = answerSemanticRuntimeAppBuilderQuery({
   kind: SemanticRuntimeAppBuilderQueryKind.PolicyDetail,
 });
-assert.equal(unscopedPolicyDetailAnswer.outcome, SemanticRuntimeAnswerOutcome.Hit);
+assert.equal(unscopedPolicyDetailAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.equal(unscopedPolicyDetailAnswer.value.inputReadinessIncluded, false);
 assert.equal(unscopedPolicyDetailAnswer.value.inputContractDetailIncluded, false);
 assert.equal(unscopedPolicyDetailAnswer.value.rows[0]?.inputReadiness, undefined);
@@ -3709,7 +3709,7 @@ assert.deepEqual(
 const unscopedStyleDetailAnswer = answerSemanticRuntimeAppBuilderQuery({
   kind: SemanticRuntimeAppBuilderQueryKind.StyleDetail,
 });
-assert.equal(unscopedStyleDetailAnswer.outcome, SemanticRuntimeAnswerOutcome.Hit);
+assert.equal(unscopedStyleDetailAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.equal(unscopedStyleDetailAnswer.value.inputReadinessIncluded, false);
 assert.equal(unscopedStyleDetailAnswer.value.inputContractDetailIncluded, false);
 assert.equal(unscopedStyleDetailAnswer.value.applicationPatternsIncluded, false);
@@ -3732,7 +3732,7 @@ const compactReadinessAnswer = answerSemanticRuntimeAppBuilderQuery({
     includeInputFacets: false,
   },
 });
-assert.equal(compactReadinessAnswer.outcome, SemanticRuntimeAnswerOutcome.Hit);
+assert.equal(compactReadinessAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.ok(
   compactReadinessAnswer.value.targets[0]?.inputDependencies.every((row) => row.inputFacets == null),
   'Expected input-readiness callers to suppress input facets for compact reads.',
@@ -3770,7 +3770,7 @@ const satisfiedReadinessAnswer = answerSemanticRuntimeAppBuilderQuery({
   kind: SemanticRuntimeAppBuilderQueryKind.InputReadiness,
   inputReadiness: satisfiedInputReadinessRequest,
 });
-assert.equal(satisfiedReadinessAnswer.outcome, SemanticRuntimeAnswerOutcome.Hit);
+assert.equal(satisfiedReadinessAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.equal(satisfiedReadinessAnswer.value.defaultTargetUsed, false);
 assert.equal(satisfiedReadinessAnswer.value.satisfiedCount, 3);
 assert.equal(satisfiedReadinessAnswer.value.missingRequiredCount, 0);
@@ -3790,7 +3790,7 @@ const detailedSatisfiedReadinessAnswer = answerSemanticRuntimeAppBuilderQuery({
     includeDecisionBundleExpansionRows: true,
   },
 });
-assert.equal(detailedSatisfiedReadinessAnswer.outcome, SemanticRuntimeAnswerOutcome.Hit);
+assert.equal(detailedSatisfiedReadinessAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.equal(
   detailedSatisfiedReadinessAnswer.value.decisionBundleExpansionRows?.length,
   2,
@@ -3833,7 +3833,7 @@ const targetScopedDecisionReadinessAnswer = answerSemanticRuntimeAppBuilderQuery
     includeDecisionBundleExpansionRows: true,
   },
 });
-assert.equal(targetScopedDecisionReadinessAnswer.outcome, SemanticRuntimeAnswerOutcome.Hit);
+assert.equal(targetScopedDecisionReadinessAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.equal(
   targetScopedDecisionReadinessAnswer.value.decisionBundleExpansionRows?.[0]?.targetRefs[0]?.id,
   AppBuilderControlPatternId.NativeTextInput,
@@ -3884,7 +3884,7 @@ const facetScopedReadinessAnswer = answerSemanticRuntimeAppBuilderQuery({
     }],
   },
 });
-assert.equal(facetScopedReadinessAnswer.outcome, SemanticRuntimeAnswerOutcome.Hit);
+assert.equal(facetScopedReadinessAnswer.result, SemanticRuntimeAnswerResult.Answered);
 const facetScopedDomainDependency = facetScopedReadinessAnswer.value.targets[0]?.inputDependencies.find((row) =>
   row.inputContract.id === AppBuilderInputContractId.DomainModel
 );
@@ -3928,7 +3928,7 @@ const invalidPayloadReadinessAnswer = answerSemanticRuntimeAppBuilderQuery({
     }],
   },
 });
-assert.equal(invalidPayloadReadinessAnswer.outcome, SemanticRuntimeAnswerOutcome.Partial);
+assert.equal(invalidPayloadReadinessAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.ok(
   invalidPayloadReadinessAnswer.value.issues.some((issue) =>
     issue.issueKind === AppBuilderInputReadinessIssueKind.InvalidSuppliedInputPayload
@@ -3964,7 +3964,7 @@ const rejectedReadinessAnswer = answerSemanticRuntimeAppBuilderQuery({
     }],
   },
 });
-assert.equal(rejectedReadinessAnswer.outcome, SemanticRuntimeAnswerOutcome.Partial);
+assert.equal(rejectedReadinessAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.equal(
   rejectedReadinessAnswer.value.issues[0]?.issueKind,
   AppBuilderInputReadinessIssueKind.UnsupportedInputSource,
@@ -3986,7 +3986,7 @@ const policyAxisReadinessAnswer = answerSemanticRuntimeAppBuilderQuery({
     }],
   },
 });
-assert.equal(policyAxisReadinessAnswer.outcome, SemanticRuntimeAnswerOutcome.Hit);
+assert.equal(policyAxisReadinessAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.equal(
   policyAxisReadinessAnswer.value.missingRequiredCount,
   1,
@@ -4004,7 +4004,7 @@ const areaNavigationPolicyDetailAnswer = answerSemanticRuntimeAppBuilderQuery({
     }],
   },
 });
-assert.equal(areaNavigationPolicyDetailAnswer.outcome, SemanticRuntimeAnswerOutcome.Hit);
+assert.equal(areaNavigationPolicyDetailAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.equal(areaNavigationPolicyDetailAnswer.value.rows.length, 1);
 assert.equal(
   areaNavigationPolicyDetailAnswer.value.rows[0]?.policyAxis.id,
@@ -4041,7 +4041,7 @@ const compactPolicyDetailAnswer = answerSemanticRuntimeAppBuilderQuery({
     includeInputContractDetail: false,
   },
 });
-assert.equal(compactPolicyDetailAnswer.outcome, SemanticRuntimeAnswerOutcome.Hit);
+assert.equal(compactPolicyDetailAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.equal(compactPolicyDetailAnswer.value.rows[0]?.inputReadiness, undefined);
 assert.equal(compactPolicyDetailAnswer.value.rows[0]?.inputContractDetails, undefined);
 
@@ -4049,7 +4049,7 @@ const recommendationPolicySummaryOnlyAnswer = answerSemanticRuntimeAppBuilderQue
   kind: SemanticRuntimeAppBuilderQueryKind.RecommendationPolicy,
   recommendationPolicy: {},
 });
-assert.equal(recommendationPolicySummaryOnlyAnswer.outcome, SemanticRuntimeAnswerOutcome.Hit);
+assert.equal(recommendationPolicySummaryOnlyAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.equal(
   recommendationPolicySummaryOnlyAnswer.value.rows.length,
   0,
@@ -4098,7 +4098,7 @@ const mixedRecommendationPolicyAnswer = answerSemanticRuntimeAppBuilderQuery({
     includeRows: true,
   },
 });
-assert.equal(mixedRecommendationPolicyAnswer.outcome, SemanticRuntimeAnswerOutcome.Hit);
+assert.equal(mixedRecommendationPolicyAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.deepEqual(
   mixedRecommendationPolicyAnswer.value.rows.map((row) => row.targetRef.id),
   [
@@ -4120,7 +4120,7 @@ const contextualRecommendationPolicyAnswer = answerSemanticRuntimeAppBuilderQuer
     evidenceKinds: [AppBuilderRecommendationEvidenceKind.SourceLoweringRegistry],
   },
 });
-assert.equal(contextualRecommendationPolicyAnswer.outcome, SemanticRuntimeAnswerOutcome.Hit);
+assert.equal(contextualRecommendationPolicyAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.ok(
   contextualRecommendationPolicyAnswer.value.rows.some((row) =>
     row.targetRef.kind === AppBuilderOntologyRowKind.ApplicationPattern
@@ -4162,7 +4162,7 @@ const stylingMechanismPolicyReadinessAnswer = answerSemanticRuntimeAppBuilderQue
     }],
   },
 });
-assert.equal(stylingMechanismPolicyReadinessAnswer.outcome, SemanticRuntimeAnswerOutcome.Hit);
+assert.equal(stylingMechanismPolicyReadinessAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.ok(
   stylingMechanismPolicyReadinessAnswer.value.targets[0]?.inputDependencies.some((row) =>
     row.inputContract.id === AppBuilderInputContractId.AureliaPolicy
@@ -4195,7 +4195,7 @@ const noDependencyReadinessAnswer = answerSemanticRuntimeAppBuilderQuery({
     ],
   },
 });
-assert.equal(noDependencyReadinessAnswer.outcome, SemanticRuntimeAnswerOutcome.Hit);
+assert.equal(noDependencyReadinessAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.equal(noDependencyReadinessAnswer.value.targets.length, 2);
 assert.equal(noDependencyReadinessAnswer.value.issues.length, 0);
 assert.ok(
@@ -4210,7 +4210,7 @@ const policyTargetCatalogAnswer = answerSemanticRuntimeAppBuilderQuery({
     includeInputDependencies: true,
   },
 });
-assert.equal(policyTargetCatalogAnswer.outcome, SemanticRuntimeAnswerOutcome.Hit);
+assert.equal(policyTargetCatalogAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.equal(policyTargetCatalogAnswer.value.inputReadinessIncluded, true);
 assert.equal(policyTargetCatalogAnswer.value.inputDependenciesIncluded, true);
 assert.equal(
@@ -4260,7 +4260,7 @@ const inputFacetTargetCatalogAnswer = answerSemanticRuntimeAppBuilderQuery({
     includeInputReadiness: true,
   },
 });
-assert.equal(inputFacetTargetCatalogAnswer.outcome, SemanticRuntimeAnswerOutcome.Hit);
+assert.equal(inputFacetTargetCatalogAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.equal(
   inputFacetTargetCatalogAnswer.value.rows.length,
   APP_BUILDER_INPUT_FACET_IDS.length,
@@ -4279,7 +4279,7 @@ const reasonAuthorityFilterTargetCatalogAnswer = answerSemanticRuntimeAppBuilder
     includeInputReadiness: false,
   },
 });
-assert.equal(reasonAuthorityFilterTargetCatalogAnswer.outcome, SemanticRuntimeAnswerOutcome.Hit);
+assert.equal(reasonAuthorityFilterTargetCatalogAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.equal(
   reasonAuthorityFilterTargetCatalogAnswer.value.rows.length,
   toBeDeterminedReasonAuthorityRowCount,
@@ -4304,7 +4304,7 @@ const compactTargetCatalogAnswer = answerSemanticRuntimeAppBuilderQuery({
   },
   page: { size: 2 },
 });
-assert.equal(compactTargetCatalogAnswer.outcome, SemanticRuntimeAnswerOutcome.Partial);
+assert.equal(compactTargetCatalogAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.equal(compactTargetCatalogAnswer.value.rows.length, 2);
 assert.equal(compactTargetCatalogAnswer.page?.totalRows, 11);
 assert.ok(
@@ -4322,7 +4322,7 @@ const compactSourceLoweringTargetCatalogAnswer = answerSemanticRuntimeAppBuilder
     includeInputReadiness: false,
   },
 });
-assert.equal(compactSourceLoweringTargetCatalogAnswer.outcome, SemanticRuntimeAnswerOutcome.Hit);
+assert.equal(compactSourceLoweringTargetCatalogAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.equal(
   compactSourceLoweringTargetCatalogAnswer.value.rows.some((row) => row.sourceLoweringRequestFields != null),
   false,
@@ -4358,7 +4358,7 @@ const controlPatternTargetCatalogAnswer = answerPagedSemanticRuntimeAppBuilderQu
     includeSourceLoweringRequestFields: true,
   },
 });
-assert.equal(controlPatternTargetCatalogAnswer.outcome, SemanticRuntimeAnswerOutcome.Hit);
+assert.equal(controlPatternTargetCatalogAnswer.result, SemanticRuntimeAnswerResult.Answered);
 const nativeTextInputTarget = controlPatternTargetCatalogAnswer.value.rows.find((row) =>
   row.targetRef.id === AppBuilderControlPatternId.NativeTextInput
 );
@@ -4428,7 +4428,7 @@ const domainCommandActionTargetCatalogAnswer = answerSemanticRuntimeAppBuilderQu
     includeSourceLoweringRequestFields: true,
   },
 });
-assert.equal(domainCommandActionTargetCatalogAnswer.outcome, SemanticRuntimeAnswerOutcome.Hit);
+assert.equal(domainCommandActionTargetCatalogAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.equal(
   domainCommandActionTargetCatalogAnswer.value.rows[0]?.status.sourceLoweringImplemented,
   true,
@@ -4467,7 +4467,7 @@ const asyncDataSourceTargetCatalogAnswer = answerSemanticRuntimeAppBuilderQuery(
     includeSourceLoweringRequestFields: true,
   },
 });
-assert.equal(asyncDataSourceTargetCatalogAnswer.outcome, SemanticRuntimeAnswerOutcome.Hit);
+assert.equal(asyncDataSourceTargetCatalogAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.deepEqual(
   targetInvocationRequestFieldPairs(asyncDataSourceTargetCatalogAnswer.value.rows[0]),
   [
@@ -4590,7 +4590,7 @@ const fragmentCompositionTargetCatalogAnswer = answerSemanticRuntimeAppBuilderQu
     includeSourceLoweringRequestFields: true,
   },
 });
-assert.equal(fragmentCompositionTargetCatalogAnswer.outcome, SemanticRuntimeAnswerOutcome.Hit);
+assert.equal(fragmentCompositionTargetCatalogAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.ok(
   fragmentCompositionTargetCatalogAnswer.value.rows.some((row) =>
     row.targetRef.kind === AppBuilderOntologyRowKind.ApplicationPattern
@@ -4713,7 +4713,7 @@ const sourcePlanPreviewTargetCatalogAnswer = answerPagedSemanticRuntimeAppBuilde
     includeSourceLoweringRequestFields: true,
   },
 });
-assert.equal(sourcePlanPreviewTargetCatalogAnswer.outcome, SemanticRuntimeAnswerOutcome.Hit);
+assert.equal(sourcePlanPreviewTargetCatalogAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.ok(
   sourcePlanPreviewTargetCatalogAnswer.value.rows.some((row) =>
     row.targetRef.kind === AppBuilderOntologyRowKind.ControlPattern
@@ -4796,7 +4796,7 @@ assert.deepEqual(
 const defaultSourceLoweringPreflightAnswer = answerSemanticRuntimeAppBuilderQuery({
   kind: SemanticRuntimeAppBuilderQueryKind.SourceLoweringPreflight,
 });
-assert.equal(defaultSourceLoweringPreflightAnswer.outcome, SemanticRuntimeAnswerOutcome.Hit);
+assert.equal(defaultSourceLoweringPreflightAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.equal(
   defaultSourceLoweringPreflightAnswer.value.defaultTargetReason,
   AppBuilderSourceLoweringPreflightDefaultTargetReason.SourceLoweringImplemented,
@@ -4913,7 +4913,7 @@ const compactDecisionBundlePreflightAnswer = answerSemanticRuntimeAppBuilderQuer
     decisionBundles: satisfiedInputReadinessRequest.decisionBundles,
   },
 });
-assert.equal(compactDecisionBundlePreflightAnswer.outcome, SemanticRuntimeAnswerOutcome.Hit);
+assert.equal(compactDecisionBundlePreflightAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.equal(compactDecisionBundlePreflightAnswer.value.suppliedInputCount, 3);
 assert.equal(compactDecisionBundlePreflightAnswer.value.explicitSuppliedInputCount, 1);
 assert.equal(compactDecisionBundlePreflightAnswer.value.decisionBundleCount, 1);
@@ -4932,7 +4932,7 @@ const detailedDecisionBundlePreflightAnswer = answerSemanticRuntimeAppBuilderQue
     includeDecisionBundleExpansionRows: true,
   },
 });
-assert.equal(detailedDecisionBundlePreflightAnswer.outcome, SemanticRuntimeAnswerOutcome.Hit);
+assert.equal(detailedDecisionBundlePreflightAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.equal(
   detailedDecisionBundlePreflightAnswer.value.decisionBundleExpansionRows?.length,
   2,
@@ -4974,7 +4974,7 @@ const targetScopedDecisionPreflightAnswer = answerSemanticRuntimeAppBuilderQuery
     }],
   },
 });
-assert.equal(targetScopedDecisionPreflightAnswer.outcome, SemanticRuntimeAnswerOutcome.Hit);
+assert.equal(targetScopedDecisionPreflightAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.equal(
   targetScopedDecisionPreflightAnswer.value.rows.find((row) =>
     row.targetRef.id === AppBuilderControlPatternId.NativeTextInput
@@ -5013,7 +5013,7 @@ const nativeTextPreflightAnswer = answerSemanticRuntimeAppBuilderQuery({
     }],
   },
 });
-assert.equal(nativeTextPreflightAnswer.outcome, SemanticRuntimeAnswerOutcome.Hit);
+assert.equal(nativeTextPreflightAnswer.result, SemanticRuntimeAnswerResult.Answered);
 const nativeTextPreflightRow = nativeTextPreflightAnswer.value.rows[0];
 assert.equal(
   nativeTextPreflightRow?.sourceLoweringAvailability,
@@ -5074,7 +5074,7 @@ const selectorNativeTextPreflightAnswer = answerSemanticRuntimeAppBuilderQuery({
     }],
   },
 });
-assert.equal(selectorNativeTextPreflightAnswer.outcome, SemanticRuntimeAnswerOutcome.Hit);
+assert.equal(selectorNativeTextPreflightAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.equal(selectorNativeTextPreflightAnswer.value.defaultTargetSetUsed, false);
 assert.equal(
   selectorNativeTextPreflightAnswer.value.rows[0]?.targetRef.domain,
@@ -5096,7 +5096,7 @@ const mismatchedSelectorPreflightAnswer = answerSemanticRuntimeAppBuilderQuery({
     }],
   },
 });
-assert.equal(mismatchedSelectorPreflightAnswer.outcome, SemanticRuntimeAnswerOutcome.Partial);
+assert.equal(mismatchedSelectorPreflightAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.equal(mismatchedSelectorPreflightAnswer.value.rows.length, 1);
 assert.ok(
   mismatchedSelectorPreflightAnswer.value.issues.some((issue) =>
@@ -5114,7 +5114,7 @@ const unknownSelectorPreflightAnswer = answerSemanticRuntimeAppBuilderQuery({
     }],
   },
 });
-assert.equal(unknownSelectorPreflightAnswer.outcome, SemanticRuntimeAnswerOutcome.Partial);
+assert.equal(unknownSelectorPreflightAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.equal(unknownSelectorPreflightAnswer.value.defaultTargetSetUsed, false);
 assert.equal(unknownSelectorPreflightAnswer.value.rows.length, 0);
 assert.ok(
@@ -5134,7 +5134,7 @@ const missingNativeTextInputPreflightAnswer = answerSemanticRuntimeAppBuilderQue
     }],
   },
 });
-assert.equal(missingNativeTextInputPreflightAnswer.outcome, SemanticRuntimeAnswerOutcome.Hit);
+assert.equal(missingNativeTextInputPreflightAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.equal(
   missingNativeTextInputPreflightAnswer.value.rows[0]?.inputGateState,
   AppBuilderSourceLoweringInputGateState.MissingRequiredInput,
@@ -5188,7 +5188,7 @@ const nativeRangeMissingConstraintPreflightAnswer = answerSemanticRuntimeAppBuil
     }],
   },
 });
-assert.equal(nativeRangeMissingConstraintPreflightAnswer.outcome, SemanticRuntimeAnswerOutcome.Partial);
+assert.equal(nativeRangeMissingConstraintPreflightAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.equal(
   nativeRangeMissingConstraintPreflightAnswer.value.rows[0]?.inputGateState,
   AppBuilderSourceLoweringInputGateState.Ready,
@@ -5272,7 +5272,7 @@ const nativeRangeReadyPreflightAnswer = answerSemanticRuntimeAppBuilderQuery({
     }],
   },
 });
-assert.equal(nativeRangeReadyPreflightAnswer.outcome, SemanticRuntimeAnswerOutcome.Hit);
+assert.equal(nativeRangeReadyPreflightAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.equal(
   nativeRangeReadyPreflightAnswer.value.rows[0]?.inputGateState,
   AppBuilderSourceLoweringInputGateState.Ready,
@@ -5326,7 +5326,7 @@ const nativeSingleSelectPreflightAnswer = answerSemanticRuntimeAppBuilderQuery({
     }],
   },
 });
-assert.equal(nativeSingleSelectPreflightAnswer.outcome, SemanticRuntimeAnswerOutcome.Hit);
+assert.equal(nativeSingleSelectPreflightAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.equal(
   nativeSingleSelectPreflightAnswer.value.rows[0]?.sourceLoweringAvailability,
   AppBuilderSourceLoweringAvailability.SourceLoweringImplemented,
@@ -5353,7 +5353,7 @@ const nativeButtonPreflightAnswer = answerSemanticRuntimeAppBuilderQuery({
     }],
   },
 });
-assert.equal(nativeButtonPreflightAnswer.outcome, SemanticRuntimeAnswerOutcome.Hit);
+assert.equal(nativeButtonPreflightAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.equal(
   nativeButtonPreflightAnswer.value.rows[0]?.sourceLoweringAvailability,
   AppBuilderSourceLoweringAvailability.SourceLoweringImplemented,
@@ -5375,7 +5375,7 @@ const inlineNativePolicyPreflightAnswer = answerSemanticRuntimeAppBuilderQuery({
     }],
   },
 });
-assert.equal(inlineNativePolicyPreflightAnswer.outcome, SemanticRuntimeAnswerOutcome.Hit);
+assert.equal(inlineNativePolicyPreflightAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.equal(
   inlineNativePolicyPreflightAnswer.value.rows[0]?.sourceLoweringAvailability,
   AppBuilderSourceLoweringAvailability.NotImplemented,
@@ -5424,7 +5424,7 @@ const nativeButtonReadyPreflightAnswer = answerSemanticRuntimeAppBuilderQuery({
     }],
   },
 });
-assert.equal(nativeButtonReadyPreflightAnswer.outcome, SemanticRuntimeAnswerOutcome.Hit);
+assert.equal(nativeButtonReadyPreflightAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.equal(
   nativeButtonReadyPreflightAnswer.value.rows[0]?.inputGateState,
   AppBuilderSourceLoweringInputGateState.Ready,
@@ -5457,7 +5457,7 @@ const formMessageReadyPreflightAnswer = answerSemanticRuntimeAppBuilderQuery({
     }],
   },
 });
-assert.equal(formMessageReadyPreflightAnswer.outcome, SemanticRuntimeAnswerOutcome.Hit);
+assert.equal(formMessageReadyPreflightAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.equal(
   formMessageReadyPreflightAnswer.value.rows[0]?.sourceLoweringAvailability,
   AppBuilderSourceLoweringAvailability.SourceLoweringImplemented,
@@ -5491,7 +5491,7 @@ const fieldGroupReadyPreflightAnswer = answerSemanticRuntimeAppBuilderQuery({
     }],
   },
 });
-assert.equal(fieldGroupReadyPreflightAnswer.outcome, SemanticRuntimeAnswerOutcome.Hit);
+assert.equal(fieldGroupReadyPreflightAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.equal(
   fieldGroupReadyPreflightAnswer.value.rows[0]?.sourceLoweringAvailability,
   AppBuilderSourceLoweringAvailability.SourceLoweringImplemented,
@@ -5564,7 +5564,7 @@ const appShellPreflightAnswer = answerSemanticRuntimeAppBuilderQuery({
     includeInputDependencies: true,
   },
 });
-assert.equal(appShellPreflightAnswer.outcome, SemanticRuntimeAnswerOutcome.Hit);
+assert.equal(appShellPreflightAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.equal(
   appShellPreflightAnswer.value.rows[0]?.sourceLoweringAvailability,
   AppBuilderSourceLoweringAvailability.SourceLoweringImplemented,
@@ -5713,7 +5713,7 @@ const routerBackedListDetailPreflightAnswer = answerSemanticRuntimeAppBuilderQue
     includeSourceLoweringRequestFields: true,
   },
 });
-assert.equal(routerBackedListDetailPreflightAnswer.outcome, SemanticRuntimeAnswerOutcome.Hit);
+assert.equal(routerBackedListDetailPreflightAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.equal(
   routerBackedListDetailPreflightAnswer.value.rows[0]?.sourceLoweringAvailability,
   AppBuilderSourceLoweringAvailability.SourceLoweringImplemented,
@@ -5761,7 +5761,7 @@ const routerBackedListDetailMissingIdentityKindPreflightAnswer = answerSemanticR
     includeInputDependencies: true,
   },
 });
-assert.equal(routerBackedListDetailMissingIdentityKindPreflightAnswer.outcome, SemanticRuntimeAnswerOutcome.Partial);
+assert.equal(routerBackedListDetailMissingIdentityKindPreflightAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.equal(
   routerBackedListDetailMissingIdentityKindPreflightAnswer.value.rows[0]?.canRequestSourceLowering,
   false,
@@ -5850,7 +5850,7 @@ const diStateClassPreflightAnswer = answerSemanticRuntimeAppBuilderQuery({
     includeSourceLoweringRequestFields: true,
   },
 });
-assert.equal(diStateClassPreflightAnswer.outcome, SemanticRuntimeAnswerOutcome.Hit);
+assert.equal(diStateClassPreflightAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.equal(
   diStateClassPreflightAnswer.value.rows[0]?.sourceLoweringAvailability,
   AppBuilderSourceLoweringAvailability.SourceLoweringImplemented,
@@ -5946,7 +5946,7 @@ const localViewModelStatePreflightAnswer = answerSemanticRuntimeAppBuilderQuery(
     includeSourceLoweringRequestFields: true,
   },
 });
-assert.equal(localViewModelStatePreflightAnswer.outcome, SemanticRuntimeAnswerOutcome.Hit);
+assert.equal(localViewModelStatePreflightAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.equal(
   localViewModelStatePreflightAnswer.value.rows[0]?.sourceLoweringAvailability,
   AppBuilderSourceLoweringAvailability.SourceLoweringImplemented,
@@ -5977,7 +5977,7 @@ const missingLocalViewModelStatePolicyPreflightAnswer = answerSemanticRuntimeApp
     includeInputDependencies: true,
   },
 });
-assert.equal(missingLocalViewModelStatePolicyPreflightAnswer.outcome, SemanticRuntimeAnswerOutcome.Hit);
+assert.equal(missingLocalViewModelStatePolicyPreflightAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.equal(
   missingLocalViewModelStatePolicyPreflightAnswer.value.rows[0]?.canRequestSourceLowering,
   false,
@@ -6107,7 +6107,7 @@ const collectionListPreflightAnswer = answerSemanticRuntimeAppBuilderQuery({
     includeSourceLoweringRequestFields: true,
   },
 });
-assert.equal(collectionListPreflightAnswer.outcome, SemanticRuntimeAnswerOutcome.Hit);
+assert.equal(collectionListPreflightAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.equal(
   collectionListPreflightAnswer.value.rows[0]?.sourceLoweringAvailability,
   AppBuilderSourceLoweringAvailability.SourceLoweringImplemented,
@@ -6140,7 +6140,7 @@ const collectionTablePreflightAnswer = answerSemanticRuntimeAppBuilderQuery({
     includeSourceLoweringRequestFields: true,
   },
 });
-assert.equal(collectionTablePreflightAnswer.outcome, SemanticRuntimeAnswerOutcome.Hit);
+assert.equal(collectionTablePreflightAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.equal(
   collectionTablePreflightAnswer.value.rows[0]?.sourceLoweringAvailability,
   AppBuilderSourceLoweringAvailability.SourceLoweringImplemented,
@@ -6195,7 +6195,7 @@ const collectionTableUnsupportedQueryPreflightAnswer = answerSemanticRuntimeAppB
     includeInputDependencies: true,
   },
 });
-assert.equal(collectionTableUnsupportedQueryPreflightAnswer.outcome, SemanticRuntimeAnswerOutcome.Partial);
+assert.equal(collectionTableUnsupportedQueryPreflightAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.equal(
   collectionTableUnsupportedQueryPreflightAnswer.value.rows[0]?.canRequestSourceLowering,
   false,
@@ -6253,7 +6253,7 @@ const collectionTableSortingWithoutColumnPreflightAnswer = answerSemanticRuntime
     }],
   },
 });
-assert.equal(collectionTableSortingWithoutColumnPreflightAnswer.outcome, SemanticRuntimeAnswerOutcome.Partial);
+assert.equal(collectionTableSortingWithoutColumnPreflightAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.ok(
   collectionTableSortingWithoutColumnPreflightAnswer.value.rows[0]?.targetRequirementIssues.some((issue) =>
     issue.issueKind === AppBuilderSourceLoweringPreflightIssueKind.TargetPayloadRequirement
@@ -6312,7 +6312,7 @@ const missingCollectionExpressionAnswer = answerSemanticRuntimeAppBuilderQuery({
     suppliedInputs: collectionProjectionSuppliedInputs,
   },
 });
-assert.equal(missingCollectionExpressionAnswer.outcome, SemanticRuntimeAnswerOutcome.Partial);
+assert.equal(missingCollectionExpressionAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.ok(
   missingCollectionExpressionAnswer.value.issues.some((issue) =>
     issue.issueKind === AppBuilderSourceLoweringCompositionIssueKind.MissingCollectionExpression
@@ -6354,7 +6354,7 @@ const collectionListCompositionAnswer = answerSemanticRuntimeAppBuilderQuery({
     emptyStateConditionExpression: 'tasks.length === 0',
   },
 });
-assert.equal(collectionListCompositionAnswer.outcome, SemanticRuntimeAnswerOutcome.Hit);
+assert.equal(collectionListCompositionAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.equal(collectionListCompositionAnswer.value.compositionKind, AppBuilderSourceLoweringCompositionKind.CollectionList);
 assert.equal(collectionListCompositionAnswer.value.collectionExpression, 'tasks');
 assert.equal(collectionListCompositionAnswer.value.itemLocalName, 'task');
@@ -6386,7 +6386,7 @@ const invalidCollectionEmptyConditionAnswer = answerSemanticRuntimeAppBuilderQue
     emptyStateConditionExpression: 'tasks.',
   },
 });
-assert.equal(invalidCollectionEmptyConditionAnswer.outcome, SemanticRuntimeAnswerOutcome.Partial);
+assert.equal(invalidCollectionEmptyConditionAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.ok(
   invalidCollectionEmptyConditionAnswer.value.issues.some((issue) =>
     issue.issueKind === AppBuilderSourceLoweringCompositionIssueKind.StructuralPartLoweringIssue
@@ -6402,7 +6402,7 @@ const collectionCardPreflightAnswer = answerSemanticRuntimeAppBuilderQuery({
     includeInputDependencies: true,
   },
 });
-assert.equal(collectionCardPreflightAnswer.outcome, SemanticRuntimeAnswerOutcome.Hit);
+assert.equal(collectionCardPreflightAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.equal(
   collectionCardPreflightAnswer.value.rows[0]?.sourceLoweringAvailability,
   AppBuilderSourceLoweringAvailability.SourceLoweringImplemented,
@@ -6447,7 +6447,7 @@ const collectionCardCompositionAnswer = answerSemanticRuntimeAppBuilderQuery({
     emptyStateConditionExpression: 'tasks.length === 0',
   },
 });
-assert.equal(collectionCardCompositionAnswer.outcome, SemanticRuntimeAnswerOutcome.Hit);
+assert.equal(collectionCardCompositionAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.equal(collectionCardCompositionAnswer.value.compositionKind, AppBuilderSourceLoweringCompositionKind.CollectionCard);
 assert.equal(collectionCardCompositionAnswer.value.selectedCollectionDisplayFields.length, 2);
 assert.match(
@@ -6480,7 +6480,7 @@ const collectionCardSourcePlanAnswer = answerSemanticRuntimeAppBuilderQuery({
     },
   },
 });
-assert.equal(collectionCardSourcePlanAnswer.outcome, SemanticRuntimeAnswerOutcome.Hit);
+assert.equal(collectionCardSourcePlanAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.equal(collectionCardSourcePlanAnswer.value.sourcePlan?.files[0]?.path, 'src/task-cards.html');
 assert.match(
   collectionCardSourcePlanAnswer.value.sourcePlan?.files[0]?.text?.text ?? '',
@@ -6513,7 +6513,7 @@ const collectionTableCompositionAnswer = answerSemanticRuntimeAppBuilderQuery({
     emptyStateConditionExpression: 'tasks.length === 0',
   },
 });
-assert.equal(collectionTableCompositionAnswer.outcome, SemanticRuntimeAnswerOutcome.Hit);
+assert.equal(collectionTableCompositionAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.equal(collectionTableCompositionAnswer.value.compositionKind, AppBuilderSourceLoweringCompositionKind.CollectionTable);
 assert.equal(collectionTableCompositionAnswer.value.selectedCollectionTableColumns.length, 2);
 assert.match(
@@ -6581,7 +6581,7 @@ const collectionTableActionCompositionAnswer = answerSemanticRuntimeAppBuilderQu
     itemLocalName: 'task',
   },
 });
-assert.equal(collectionTableActionCompositionAnswer.outcome, SemanticRuntimeAnswerOutcome.Hit);
+assert.equal(collectionTableActionCompositionAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.equal(collectionTableActionCompositionAnswer.value.selectedCollectionTableColumns.length, 2);
 const selectedActionColumn = collectionTableActionCompositionAnswer.value.selectedCollectionTableColumns.find((column) =>
   column.action?.name === 'complete'
@@ -6689,7 +6689,7 @@ const collectionTableRelationshipCompositionAnswer = answerSemanticRuntimeAppBui
     itemLocalName: 'task',
   },
 });
-assert.equal(collectionTableRelationshipCompositionAnswer.outcome, SemanticRuntimeAnswerOutcome.Hit);
+assert.equal(collectionTableRelationshipCompositionAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.equal(collectionTableRelationshipCompositionAnswer.value.selectedCollectionTableColumns.length, 2);
 const selectedRelationshipColumn = collectionTableRelationshipCompositionAnswer.value.selectedCollectionTableColumns.find((column) =>
   column.relationship?.name === 'checkpoints'
@@ -6729,7 +6729,7 @@ const sortableTableCompositionAnswer = answerSemanticRuntimeAppBuilderQuery({
     sortHandlerExpressions: [{ fieldName: 'title', handlerExpression: 'sortTitle()' }],
   },
 });
-assert.equal(sortableTableCompositionAnswer.outcome, SemanticRuntimeAnswerOutcome.Hit);
+assert.equal(sortableTableCompositionAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.equal(
   sortableTableCompositionAnswer.value.selectedCollectionTableColumns[0]?.sortHandlerExpression,
   'sortTitle()',
@@ -6781,7 +6781,7 @@ const missingSortableTableHandlerAnswer = answerSemanticRuntimeAppBuilderQuery({
     itemLocalName: 'task',
   },
 });
-assert.equal(missingSortableTableHandlerAnswer.outcome, SemanticRuntimeAnswerOutcome.Partial);
+assert.equal(missingSortableTableHandlerAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.ok(
   missingSortableTableHandlerAnswer.value.issues.some((issue) =>
     issue.issueKind === AppBuilderSourceLoweringCompositionIssueKind.MissingSortHandlerExpression
@@ -6811,7 +6811,7 @@ const invalidTableColumnAnswer = answerSemanticRuntimeAppBuilderQuery({
     itemLocalName: 'task',
   },
 });
-assert.equal(invalidTableColumnAnswer.outcome, SemanticRuntimeAnswerOutcome.Partial);
+assert.equal(invalidTableColumnAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.ok(
   invalidTableColumnAnswer.value.issues.some((issue) =>
     issue.issueKind === AppBuilderSourceLoweringCompositionIssueKind.InvalidCollectionTableColumn
@@ -6842,7 +6842,7 @@ const filterableTableColumnAnswer = answerSemanticRuntimeAppBuilderQuery({
     itemLocalName: 'task',
   },
 });
-assert.equal(filterableTableColumnAnswer.outcome, SemanticRuntimeAnswerOutcome.Partial);
+assert.equal(filterableTableColumnAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.ok(
   filterableTableColumnAnswer.value.issues.some((issue) =>
     issue.issueKind === AppBuilderSourceLoweringCompositionIssueKind.MissingFilterBindingExpression
@@ -6886,7 +6886,7 @@ const filterableTableColumnWithBindingAnswer = answerSemanticRuntimeAppBuilderQu
     }],
   },
 });
-assert.equal(filterableTableColumnWithBindingAnswer.outcome, SemanticRuntimeAnswerOutcome.Hit);
+assert.equal(filterableTableColumnWithBindingAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.ok(
   filterableTableColumnWithBindingAnswer.value.controlUseInventoryRows.some((row) =>
     row.controlPatternId === AppBuilderControlPatternId.NativeSearchInput
@@ -6915,7 +6915,7 @@ const missingPaginationPageSizeCompositionAnswer = answerSemanticRuntimeAppBuild
     itemLocalName: 'task',
   },
 });
-assert.equal(missingPaginationPageSizeCompositionAnswer.outcome, SemanticRuntimeAnswerOutcome.Partial);
+assert.equal(missingPaginationPageSizeCompositionAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.ok(
   missingPaginationPageSizeCompositionAnswer.value.issues.some((issue) =>
     issue.issueKind === AppBuilderSourceLoweringCompositionIssueKind.TargetRequirementIssue
@@ -6951,7 +6951,7 @@ const paginatedTableCompositionAnswer = answerSemanticRuntimeAppBuilderQuery({
     paginationNextButtonText: 'Next',
   },
 });
-assert.equal(paginatedTableCompositionAnswer.outcome, SemanticRuntimeAnswerOutcome.Hit);
+assert.equal(paginatedTableCompositionAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.match(
   paginatedTableCompositionAnswer.value.fragments.map((fragment) => fragment.text).join('\n'),
   /<nav aria-label="Pagination">[\s\S]*click\.trigger="previousTasksPage\(\)"[\s\S]*Page \$\{tasksPage\} of \$\{tasksPageCount\}[\s\S]*click\.trigger="nextTasksPage\(\)"[\s\S]*<\/nav>/,
@@ -6982,7 +6982,7 @@ const missingRowSelectionIdentityPreflightAnswer = answerSemanticRuntimeAppBuild
     }],
   },
 });
-assert.equal(missingRowSelectionIdentityPreflightAnswer.outcome, SemanticRuntimeAnswerOutcome.Partial);
+assert.equal(missingRowSelectionIdentityPreflightAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.ok(
   missingRowSelectionIdentityPreflightAnswer.value.rows[0]?.targetRequirementIssues.some((issue) =>
     issue.inputFacetId === AppBuilderInputFacetId.CollectionIdentityPolicy
@@ -7022,7 +7022,7 @@ const rowSelectionTableCompositionAnswer = answerSemanticRuntimeAppBuilderQuery(
     rowSelectionCheckboxLabelExpression: "'Select ' + task.title",
   },
 });
-assert.equal(rowSelectionTableCompositionAnswer.outcome, SemanticRuntimeAnswerOutcome.Hit);
+assert.equal(rowSelectionTableCompositionAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.match(
   rowSelectionTableCompositionAnswer.value.fragments.map((fragment) => fragment.text).join('\n'),
   /<th>Select<\/th>[\s\S]*<input type="checkbox" checked\.to-view="selectedTaskIds\.includes\(task\.id\)" change\.trigger="toggleTaskSelection\(task\)" aria-label\.bind="'Select ' \+ task\.title">/,
@@ -7059,7 +7059,7 @@ const missingBatchActionIdentityPreflightAnswer = answerSemanticRuntimeAppBuilde
     }],
   },
 });
-assert.equal(missingBatchActionIdentityPreflightAnswer.outcome, SemanticRuntimeAnswerOutcome.Partial);
+assert.equal(missingBatchActionIdentityPreflightAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.ok(
   missingBatchActionIdentityPreflightAnswer.value.rows[0]?.targetRequirementIssues.some((issue) =>
     issue.inputFacetId === AppBuilderInputFacetId.CollectionIdentityPolicy
@@ -7126,7 +7126,7 @@ const batchActionTableCompositionAnswer = answerSemanticRuntimeAppBuilderQuery({
     }],
   },
 });
-assert.equal(batchActionTableCompositionAnswer.outcome, SemanticRuntimeAnswerOutcome.Hit);
+assert.equal(batchActionTableCompositionAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.match(
   batchActionTableCompositionAnswer.value.fragments.map((fragment) => fragment.text).join('\n'),
   /<p if\.bind="tasks\.length === 0">No tasks<\/p>[\s\S]*<template else>[\s\S]*<div role="toolbar" aria-label="Batch actions">[\s\S]*<button type="button" click\.trigger="deleteSelectedTasks\(\)">Delete selected<\/button>[\s\S]*<table>/,
@@ -7160,7 +7160,7 @@ const collectionTableSourcePlanAnswer = answerSemanticRuntimeAppBuilderQuery({
     },
   },
 });
-assert.equal(collectionTableSourcePlanAnswer.outcome, SemanticRuntimeAnswerOutcome.Hit);
+assert.equal(collectionTableSourcePlanAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.equal(collectionTableSourcePlanAnswer.value.sourcePlan?.files[0]?.path, 'src/tasks.html');
 assert.match(
   collectionTableSourcePlanAnswer.value.sourcePlan?.files[0]?.text?.text ?? '',
@@ -7201,7 +7201,7 @@ const collectionTableActionSourcePlanAnswer = answerSemanticRuntimeAppBuilderQue
     },
   },
 });
-assert.equal(collectionTableActionSourcePlanAnswer.outcome, SemanticRuntimeAnswerOutcome.Hit);
+assert.equal(collectionTableActionSourcePlanAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.ok(
   collectionTableActionSourcePlanAnswer.value.sourcePlan?.files[0]?.contributions.some((contribution) =>
     contribution.origin?.kind === SourcePlanContributionOriginKind.AppBuilderSourceLoweringInvocation
@@ -7245,7 +7245,7 @@ const appSectionPreflightAnswer = answerSemanticRuntimeAppBuilderQuery({
     includeSourceLoweringRequestFields: true,
   },
 });
-assert.equal(appSectionPreflightAnswer.outcome, SemanticRuntimeAnswerOutcome.Hit);
+assert.equal(appSectionPreflightAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.equal(
   appSectionPreflightAnswer.value.rows[0]?.sourceLoweringAvailability,
   AppBuilderSourceLoweringAvailability.SourceLoweringImplemented,
@@ -7291,7 +7291,7 @@ const missingAppSectionChildrenAnswer = answerSemanticRuntimeAppBuilderQuery({
     suppliedInputs: appSectionSuppliedInputs,
   },
 });
-assert.equal(missingAppSectionChildrenAnswer.outcome, SemanticRuntimeAnswerOutcome.Partial);
+assert.equal(missingAppSectionChildrenAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.ok(
   missingAppSectionChildrenAnswer.value.issues.some((issue) =>
     issue.issueKind === AppBuilderSourceLoweringCompositionIssueKind.MissingSectionChildren
@@ -7321,7 +7321,7 @@ const appSectionCompositionAnswer = answerSemanticRuntimeAppBuilderQuery({
   kind: SemanticRuntimeAppBuilderQueryKind.SourceLoweringComposition,
   sourceLoweringComposition: appSectionCompositionRequest,
 });
-assert.equal(appSectionCompositionAnswer.outcome, SemanticRuntimeAnswerOutcome.Hit);
+assert.equal(appSectionCompositionAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.equal(appSectionCompositionAnswer.value.childCompositions.length, 2);
 assert.equal(appSectionCompositionAnswer.value.childContent.length, 2);
 assert.equal(appSectionCompositionAnswer.value.fragments.length, 1);
@@ -7386,7 +7386,7 @@ const appSectionMixedContentAnswer = answerSemanticRuntimeAppBuilderQuery({
   kind: SemanticRuntimeAppBuilderQueryKind.SourceLoweringComposition,
   sourceLoweringComposition: appSectionMixedContentRequest,
 });
-assert.equal(appSectionMixedContentAnswer.outcome, SemanticRuntimeAnswerOutcome.Hit);
+assert.equal(appSectionMixedContentAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.equal(appSectionMixedContentAnswer.value.childContent.length, 3);
 assert.equal(appSectionMixedContentAnswer.value.childCompositions.length, 2);
 assert.match(
@@ -7416,7 +7416,7 @@ const appSectionSourcePlanAnswer = answerSemanticRuntimeAppBuilderQuery({
     sourceLoweringComposition: appSectionCompositionRequest,
   },
 });
-assert.equal(appSectionSourcePlanAnswer.outcome, SemanticRuntimeAnswerOutcome.Hit);
+assert.equal(appSectionSourcePlanAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.equal(appSectionSourcePlanAnswer.value.sourcePlan?.files[0]?.path, 'src/task-section.html');
 assert.match(
   appSectionSourcePlanAnswer.value.sourcePlan?.files[0]?.text?.text ?? '',
@@ -7431,7 +7431,7 @@ const loadingEmptyErrorPreflightAnswer = answerSemanticRuntimeAppBuilderQuery({
     includeSourceLoweringRequestFields: true,
   },
 });
-assert.equal(loadingEmptyErrorPreflightAnswer.outcome, SemanticRuntimeAnswerOutcome.Hit);
+assert.equal(loadingEmptyErrorPreflightAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.equal(
   loadingEmptyErrorPreflightAnswer.value.rows[0]?.sourceLoweringAvailability,
   AppBuilderSourceLoweringAvailability.SourceLoweringImplemented,
@@ -7508,7 +7508,7 @@ const missingLoadingStateAnswer = answerSemanticRuntimeAppBuilderQuery({
     targetRef: loadingEmptyErrorTargetRef,
   },
 });
-assert.equal(missingLoadingStateAnswer.outcome, SemanticRuntimeAnswerOutcome.Partial);
+assert.equal(missingLoadingStateAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.ok(
   missingLoadingStateAnswer.value.issues.some((issue) =>
     issue.issueKind === AppBuilderSourceLoweringCompositionIssueKind.MissingPromiseExpression
@@ -7561,7 +7561,7 @@ const loadingEmptyErrorCompositionAnswer = answerSemanticRuntimeAppBuilderQuery(
     rejectedText: 'Could not load tasks',
   },
 });
-assert.equal(loadingEmptyErrorCompositionAnswer.outcome, SemanticRuntimeAnswerOutcome.Hit);
+assert.equal(loadingEmptyErrorCompositionAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.equal(
   loadingEmptyErrorCompositionAnswer.value.compositionKind,
   AppBuilderSourceLoweringCompositionKind.LoadingEmptyErrorState,
@@ -7607,7 +7607,7 @@ const loadingEmptyErrorSourcePlanAnswer = answerSemanticRuntimeAppBuilderQuery({
     },
   },
 });
-assert.equal(loadingEmptyErrorSourcePlanAnswer.outcome, SemanticRuntimeAnswerOutcome.Hit);
+assert.equal(loadingEmptyErrorSourcePlanAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.equal(loadingEmptyErrorSourcePlanAnswer.value.sourcePlan?.files[0]?.path, 'src/status.html');
 assert.match(
   loadingEmptyErrorSourcePlanAnswer.value.sourcePlan?.files[0]?.text?.text ?? '',
@@ -7623,7 +7623,7 @@ const nativeSubmitFormPreflightAnswer = answerSemanticRuntimeAppBuilderQuery({
     includeSourceLoweringRequestFields: true,
   },
 });
-assert.equal(nativeSubmitFormPreflightAnswer.outcome, SemanticRuntimeAnswerOutcome.Hit);
+assert.equal(nativeSubmitFormPreflightAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.equal(
   nativeSubmitFormPreflightAnswer.value.rows[0]?.sourceLoweringAvailability,
   AppBuilderSourceLoweringAvailability.SourceLoweringImplemented,
@@ -7697,7 +7697,7 @@ const nativeSubmitFormSingleInvocationAnswer = answerSemanticRuntimeAppBuilderQu
     suppliedInputs: nativeSubmitFormSuppliedInputs,
   },
 });
-assert.equal(nativeSubmitFormSingleInvocationAnswer.outcome, SemanticRuntimeAnswerOutcome.Partial);
+assert.equal(nativeSubmitFormSingleInvocationAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.ok(
   nativeSubmitFormSingleInvocationAnswer.value.issues.some((issue) =>
     issue.issueKind === AppBuilderSourceLoweringInvocationIssueKind.UnsupportedTargetKind
@@ -7728,7 +7728,7 @@ const missingFieldCompositionAnswer = answerSemanticRuntimeAppBuilderQuery({
     submitButtonText: 'Create',
   },
 });
-assert.equal(missingFieldCompositionAnswer.outcome, SemanticRuntimeAnswerOutcome.Partial);
+assert.equal(missingFieldCompositionAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.ok(
   missingFieldCompositionAnswer.value.issues.some((issue) =>
     issue.issueKind === AppBuilderSourceLoweringCompositionIssueKind.MissingFieldSelection
@@ -7765,7 +7765,7 @@ const unknownCompositionKindAnswer = answerSemanticRuntimeAppBuilderQuery({
     submitButtonText: 'Create',
   },
 });
-assert.equal(unknownCompositionKindAnswer.outcome, SemanticRuntimeAnswerOutcome.Partial);
+assert.equal(unknownCompositionKindAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.ok(
   unknownCompositionKindAnswer.value.issues.some((issue) =>
     issue.issueKind === AppBuilderSourceLoweringCompositionIssueKind.UnknownCompositionKind
@@ -7809,7 +7809,7 @@ const unknownScopedFieldInputCompositionAnswer = answerSemanticRuntimeAppBuilder
     submitButtonText: 'Create',
   },
 });
-assert.equal(unknownScopedFieldInputCompositionAnswer.outcome, SemanticRuntimeAnswerOutcome.Partial);
+assert.equal(unknownScopedFieldInputCompositionAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.ok(
   unknownScopedFieldInputCompositionAnswer.value.issues.some((issue) =>
     issue.issueKind === AppBuilderSourceLoweringCompositionIssueKind.UnknownFieldAccessibilityMessageField
@@ -7853,7 +7853,7 @@ const unmatchedSubmitButtonVisualHookCompositionAnswer = answerSemanticRuntimeAp
     submitButtonText: 'Create',
   },
 });
-assert.equal(unmatchedSubmitButtonVisualHookCompositionAnswer.outcome, SemanticRuntimeAnswerOutcome.Partial);
+assert.equal(unmatchedSubmitButtonVisualHookCompositionAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.ok(
   unmatchedSubmitButtonVisualHookCompositionAnswer.value.issues.some((issue) =>
     issue.issueKind === AppBuilderSourceLoweringCompositionIssueKind.UnmatchedSubmitButtonVisualHookAction
@@ -7875,7 +7875,7 @@ const compactNativeSubmitFormCompositionAnswer = answerSemanticRuntimeAppBuilder
     submitButtonText: 'Create',
   },
 });
-assert.equal(compactNativeSubmitFormCompositionAnswer.outcome, SemanticRuntimeAnswerOutcome.Hit);
+assert.equal(compactNativeSubmitFormCompositionAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.equal(
   compactNativeSubmitFormCompositionAnswer.value.preflightRow?.inputDependencies,
   undefined,
@@ -7900,7 +7900,7 @@ const nativeSubmitFormCompositionAnswer = answerSemanticRuntimeAppBuilderQuery({
     includePreflight: true,
   },
 });
-assert.equal(nativeSubmitFormCompositionAnswer.outcome, SemanticRuntimeAnswerOutcome.Hit);
+assert.equal(nativeSubmitFormCompositionAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.ok(
   nativeSubmitFormCompositionAnswer.value.preflightRow?.inputDependencies?.length > 0,
   'Expected includePreflight source-lowering composition rows to retain input-dependency detail.',
@@ -8062,7 +8062,7 @@ const missingPlacementSourcePlanAnswer = answerSemanticRuntimeAppBuilderQuery({
     },
   },
 });
-assert.equal(missingPlacementSourcePlanAnswer.outcome, SemanticRuntimeAnswerOutcome.Partial);
+assert.equal(missingPlacementSourcePlanAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.equal(missingPlacementSourcePlanAnswer.value.sourcePlan, null);
 assert.ok(
   missingPlacementSourcePlanAnswer.value.issues.some((issue) =>
@@ -8113,7 +8113,7 @@ const compactAppShellSourcePlanAnswer = answerSemanticRuntimeAppBuilderQuery({
     },
   },
 });
-assert.equal(compactAppShellSourcePlanAnswer.outcome, SemanticRuntimeAnswerOutcome.Hit);
+assert.equal(compactAppShellSourcePlanAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.equal(
   compactAppShellSourcePlanAnswer.value.sourcePlanWitnessRows,
   undefined,
@@ -8148,7 +8148,7 @@ const statePluginAppShellSourcePlanAnswer = answerSemanticRuntimeAppBuilderQuery
     },
   },
 });
-assert.equal(statePluginAppShellSourcePlanAnswer.outcome, SemanticRuntimeAnswerOutcome.Hit);
+assert.equal(statePluginAppShellSourcePlanAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.ok(
   statePluginAppShellSourcePlanAnswer.value.handoffNotes.some((row) =>
     row.kind === AppBuilderSourcePlanHandoffNoteKind.DeferredCapabilityHandoff
@@ -8207,7 +8207,7 @@ const appShellSourcePlanAnswer = answerSemanticRuntimeAppBuilderQuery({
     },
   },
 });
-assert.equal(appShellSourcePlanAnswer.outcome, SemanticRuntimeAnswerOutcome.Hit);
+assert.equal(appShellSourcePlanAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.equal(appShellSourcePlanAnswer.value.suppliedInputCount, 2);
 assert.equal(appShellSourcePlanAnswer.value.explicitSuppliedInputCount, 2);
 assert.equal(appShellSourcePlanAnswer.value.decisionBundleCount, 0);
@@ -8345,7 +8345,7 @@ const appShellDecisionBundleSourcePlanAnswer = answerSemanticRuntimeAppBuilderQu
     },
   },
 });
-assert.equal(appShellDecisionBundleSourcePlanAnswer.outcome, SemanticRuntimeAnswerOutcome.Hit);
+assert.equal(appShellDecisionBundleSourcePlanAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.equal(appShellDecisionBundleSourcePlanAnswer.value.rootDir, 'sample-app');
 assert.equal(appShellDecisionBundleSourcePlanAnswer.value.suppliedInputCount, 2);
 assert.equal(appShellDecisionBundleSourcePlanAnswer.value.explicitSuppliedInputCount, 0);
@@ -8376,7 +8376,7 @@ const routerBackedListDetailSourcePlanAnswer = answerSemanticRuntimeAppBuilderQu
     },
   },
 });
-assert.equal(routerBackedListDetailSourcePlanAnswer.outcome, SemanticRuntimeAnswerOutcome.Hit);
+assert.equal(routerBackedListDetailSourcePlanAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.equal(routerBackedListDetailSourcePlanAnswer.value.rootDir, 'sample-router-app');
 assert.equal(routerBackedListDetailSourcePlanAnswer.value.templatePath, null);
 assert.equal(routerBackedListDetailSourcePlanAnswer.value.sourceLoweringRouterBackedListDetail?.appName, 'Task Router');
@@ -8601,7 +8601,7 @@ const routerBackedListDetailStringIdentitySourcePlanAnswer = answerSemanticRunti
     },
   },
 });
-assert.equal(routerBackedListDetailStringIdentitySourcePlanAnswer.outcome, SemanticRuntimeAnswerOutcome.Hit);
+assert.equal(routerBackedListDetailStringIdentitySourcePlanAnswer.result, SemanticRuntimeAnswerResult.Answered);
 const stringIdentityStateSource = routerBackedListDetailStringIdentitySourcePlanAnswer.value.sourcePlan?.files
   .find((file) => file.path === 'src/note-item-browse-state.ts')?.text?.text ?? '';
 assert.match(
@@ -8641,7 +8641,7 @@ const routerBackedListDetailInvalidSeedSourcePlanAnswer = answerSemanticRuntimeA
     },
   },
 });
-assert.equal(routerBackedListDetailInvalidSeedSourcePlanAnswer.outcome, SemanticRuntimeAnswerOutcome.Partial);
+assert.equal(routerBackedListDetailInvalidSeedSourcePlanAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.equal(
   routerBackedListDetailInvalidSeedSourcePlanAnswer.value.sourcePlan,
   null,
@@ -8666,7 +8666,7 @@ const diStateClassSourcePlanAnswer = answerSemanticRuntimeAppBuilderQuery({
     },
   },
 });
-assert.equal(diStateClassSourcePlanAnswer.outcome, SemanticRuntimeAnswerOutcome.Hit);
+assert.equal(diStateClassSourcePlanAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.equal(diStateClassSourcePlanAnswer.value.rootDir, 'sample-state-app');
 assert.equal(diStateClassSourcePlanAnswer.value.templatePath, null);
 assert.equal(diStateClassSourcePlanAnswer.value.sourceTargetPath, 'src/task-state.ts');
@@ -8717,7 +8717,7 @@ const localViewModelStateSourcePlanAnswer = answerSemanticRuntimeAppBuilderQuery
     },
   },
 });
-assert.equal(localViewModelStateSourcePlanAnswer.outcome, SemanticRuntimeAnswerOutcome.Hit);
+assert.equal(localViewModelStateSourcePlanAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.equal(localViewModelStateSourcePlanAnswer.value.rootDir, 'sample-local-state-app');
 assert.equal(localViewModelStateSourcePlanAnswer.value.templatePath, null);
 assert.equal(localViewModelStateSourcePlanAnswer.value.sourceTargetPath, 'src/local-state.ts');
@@ -8766,7 +8766,7 @@ const missingLocalViewModelStatePolicySourcePlanAnswer = answerSemanticRuntimeAp
     },
   },
 });
-assert.equal(missingLocalViewModelStatePolicySourcePlanAnswer.outcome, SemanticRuntimeAnswerOutcome.Partial);
+assert.equal(missingLocalViewModelStatePolicySourcePlanAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.equal(
   missingLocalViewModelStatePolicySourcePlanAnswer.value.sourcePlan,
   null,
@@ -8808,7 +8808,7 @@ const inconsistentAppShellSourcePlanAnswer = answerSemanticRuntimeAppBuilderQuer
     },
   },
 });
-assert.equal(inconsistentAppShellSourcePlanAnswer.outcome, SemanticRuntimeAnswerOutcome.Partial);
+assert.equal(inconsistentAppShellSourcePlanAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.equal(inconsistentAppShellSourcePlanAnswer.value.sourcePlan, null);
 assert.ok(
   inconsistentAppShellSourcePlanAnswer.value.issues.some((issue) =>
@@ -8843,7 +8843,7 @@ const suppliedPlacementSourcePlanQuery = {
   },
 };
 const suppliedPlacementSourcePlanAnswer = answerSemanticRuntimeAppBuilderQuery(suppliedPlacementSourcePlanQuery);
-assert.equal(suppliedPlacementSourcePlanAnswer.outcome, SemanticRuntimeAnswerOutcome.Hit);
+assert.equal(suppliedPlacementSourcePlanAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.equal(suppliedPlacementSourcePlanAnswer.value.rootDir, 'sample-app');
 assert.equal(suppliedPlacementSourcePlanAnswer.value.templatePath, 'src/create-task.html');
 assert.equal(suppliedPlacementSourcePlanAnswer.value.sourcePlan?.files[0]?.path, 'src/create-task.html');
@@ -8881,7 +8881,7 @@ const conflictingPlacementSourcePlanAnswer = answerSemanticRuntimeAppBuilderQuer
     },
   },
 });
-assert.equal(conflictingPlacementSourcePlanAnswer.outcome, SemanticRuntimeAnswerOutcome.Partial);
+assert.equal(conflictingPlacementSourcePlanAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.equal(conflictingPlacementSourcePlanAnswer.value.sourcePlan, null);
 assert.ok(
   conflictingPlacementSourcePlanAnswer.value.issues.some((issue) =>
@@ -8909,7 +8909,7 @@ const nativeSubmitFormSourcePlanAnswer = answerSemanticRuntimeAppBuilderQuery({
     },
   },
 });
-assert.equal(nativeSubmitFormSourcePlanAnswer.outcome, SemanticRuntimeAnswerOutcome.Hit);
+assert.equal(nativeSubmitFormSourcePlanAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.equal(nativeSubmitFormSourcePlanAnswer.value.sourcePlan?.rootDir, 'sample-app');
 assert.equal(nativeSubmitFormSourcePlanAnswer.value.sourcePlan?.files.length, 1);
 assert.equal(nativeSubmitFormSourcePlanAnswer.value.sourcePlan?.files[0]?.path, 'src/create-task.html');
@@ -9004,7 +9004,7 @@ const visualNativeSubmitFormCompositionAnswer = answerSemanticRuntimeAppBuilderQ
     submitButtonText: 'Create',
   },
 });
-assert.equal(visualNativeSubmitFormCompositionAnswer.outcome, SemanticRuntimeAnswerOutcome.Hit);
+assert.equal(visualNativeSubmitFormCompositionAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.match(
   visualNativeSubmitFormCompositionAnswer.value.fragments[0]?.text ?? '',
   /<form submit\.trigger="create\(\)" class="form form--create">/,
@@ -9073,7 +9073,7 @@ const invalidPayloadPreflightAnswer = answerSemanticRuntimeAppBuilderQuery({
     }],
   },
 });
-assert.equal(invalidPayloadPreflightAnswer.outcome, SemanticRuntimeAnswerOutcome.Partial);
+assert.equal(invalidPayloadPreflightAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.equal(
   invalidPayloadPreflightAnswer.value.rows[0]?.inputGateState,
   AppBuilderSourceLoweringInputGateState.InvalidSuppliedPayload,
@@ -9117,7 +9117,7 @@ const invalidVisualHookPreflightAnswer = answerSemanticRuntimeAppBuilderQuery({
     }],
   },
 });
-assert.equal(invalidVisualHookPreflightAnswer.outcome, SemanticRuntimeAnswerOutcome.Partial);
+assert.equal(invalidVisualHookPreflightAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.equal(
   invalidVisualHookPreflightAnswer.value.rows[0]?.inputGateState,
   AppBuilderSourceLoweringInputGateState.InvalidSuppliedPayload,
@@ -9148,7 +9148,7 @@ const nativeTextSourceInvocationQuery = {
   },
 };
 const nativeTextSourceInvocationAnswer = answerSemanticRuntimeAppBuilderQuery(nativeTextSourceInvocationQuery);
-assert.equal(nativeTextSourceInvocationAnswer.outcome, SemanticRuntimeAnswerOutcome.Hit);
+assert.equal(nativeTextSourceInvocationAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.equal(
   nativeTextSourceInvocationAnswer.value.fieldSelectionState,
   AppBuilderSourceLoweringFieldSelectionState.SingleCompatibleField,
@@ -9201,7 +9201,7 @@ const targetScopedNativeTextSourceInvocationAnswer = answerSemanticRuntimeAppBui
     decisionBundles: [targetScopedNativeTextDecisionBundle],
   },
 });
-assert.equal(targetScopedNativeTextSourceInvocationAnswer.outcome, SemanticRuntimeAnswerOutcome.Hit);
+assert.equal(targetScopedNativeTextSourceInvocationAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.equal(
   targetScopedNativeTextSourceInvocationAnswer.value.fragments[0]?.text,
   '<input value.bind="title" aria-label="Title">',
@@ -9218,7 +9218,7 @@ const targetScopedNativeNumberSourceInvocationAnswer = answerSemanticRuntimeAppB
     decisionBundles: [targetScopedNativeTextDecisionBundle],
   },
 });
-assert.equal(targetScopedNativeNumberSourceInvocationAnswer.outcome, SemanticRuntimeAnswerOutcome.Partial);
+assert.equal(targetScopedNativeNumberSourceInvocationAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.equal(
   targetScopedNativeNumberSourceInvocationAnswer.value.preflightRow?.inputGateState,
   AppBuilderSourceLoweringInputGateState.MissingRequiredInput,
@@ -9286,7 +9286,7 @@ const nativeTextSourcePlanAnswer = answerSemanticRuntimeAppBuilderQuery({
     },
   },
 });
-assert.equal(nativeTextSourcePlanAnswer.outcome, SemanticRuntimeAnswerOutcome.Hit);
+assert.equal(nativeTextSourcePlanAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.match(
   nativeTextSourcePlanAnswer.value.sourcePlan?.files[0]?.text?.text ?? '',
   /<input value\.bind="title" aria-label="Title">/,
@@ -9321,7 +9321,7 @@ const nativeRangeMissingConstraintInvocationAnswer = answerSemanticRuntimeAppBui
     }],
   },
 });
-assert.equal(nativeRangeMissingConstraintInvocationAnswer.outcome, SemanticRuntimeAnswerOutcome.Partial);
+assert.equal(nativeRangeMissingConstraintInvocationAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.ok(
   nativeRangeMissingConstraintInvocationAnswer.value.issues.some((issue) =>
     issue.issueKind === AppBuilderSourceLoweringInvocationIssueKind.TargetRequirementIssue
@@ -9362,7 +9362,7 @@ const nativeRangeSelectedFieldMissingConstraintInvocationAnswer = answerSemantic
     }],
   },
 });
-assert.equal(nativeRangeSelectedFieldMissingConstraintInvocationAnswer.outcome, SemanticRuntimeAnswerOutcome.Partial);
+assert.equal(nativeRangeSelectedFieldMissingConstraintInvocationAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.ok(
   nativeRangeSelectedFieldMissingConstraintInvocationAnswer.value.issues.some((issue) =>
     issue.issueKind === AppBuilderSourceLoweringInvocationIssueKind.MissingNumericRangeConstraints
@@ -9397,7 +9397,7 @@ const nativeRangeSourceInvocationAnswer = answerSemanticRuntimeAppBuilderQuery({
     }],
   },
 });
-assert.equal(nativeRangeSourceInvocationAnswer.outcome, SemanticRuntimeAnswerOutcome.Hit);
+assert.equal(nativeRangeSourceInvocationAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.equal(
   nativeRangeSourceInvocationAnswer.value.fragments[0]?.text,
   '<input type="range" value-as-number.bind="progress" min="0" max="100" step="5" aria-label="Progress">',
@@ -9452,7 +9452,7 @@ const visualNativeTextSourceInvocationAnswer = answerSemanticRuntimeAppBuilderQu
     }, visualHookInput],
   },
 });
-assert.equal(visualNativeTextSourceInvocationAnswer.outcome, SemanticRuntimeAnswerOutcome.Hit);
+assert.equal(visualNativeTextSourceInvocationAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.equal(
   visualNativeTextSourceInvocationAnswer.value.fragments[0]?.text,
   '<input value.bind="title" class="field-control field-control--title" data-au-field="title" aria-label="Title">',
@@ -9501,7 +9501,7 @@ const nativeSingleSelectSourceInvocationAnswer = answerSemanticRuntimeAppBuilder
     }],
   },
 });
-assert.equal(nativeSingleSelectSourceInvocationAnswer.outcome, SemanticRuntimeAnswerOutcome.Hit);
+assert.equal(nativeSingleSelectSourceInvocationAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.equal(
   nativeSingleSelectSourceInvocationAnswer.value.fieldSelectionState,
   AppBuilderSourceLoweringFieldSelectionState.SingleCompatibleField,
@@ -9566,7 +9566,7 @@ const explicitChoiceSourceInvocationAnswer = answerSemanticRuntimeAppBuilderQuer
     }],
   },
 });
-assert.equal(explicitChoiceSourceInvocationAnswer.outcome, SemanticRuntimeAnswerOutcome.Hit);
+assert.equal(explicitChoiceSourceInvocationAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.equal(
   explicitChoiceSourceInvocationAnswer.value.fragments[0]?.text,
   '<select value.bind="draft.priority" aria-label="Priority">\n  <option repeat.for="choice of state.priorityOptions" value.bind="choice.id">${choice.label}</option>\n</select>',
@@ -9612,7 +9612,7 @@ const valueSetBackedChoiceSourceInvocationAnswer = answerSemanticRuntimeAppBuild
     }],
   },
 });
-assert.equal(valueSetBackedChoiceSourceInvocationAnswer.outcome, SemanticRuntimeAnswerOutcome.Hit);
+assert.equal(valueSetBackedChoiceSourceInvocationAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.equal(
   valueSetBackedChoiceSourceInvocationAnswer.value.valueDomainExpression,
   'priorityOptions',
@@ -9654,7 +9654,7 @@ const missingChoiceValueDomainInvocationAnswer = answerSemanticRuntimeAppBuilder
     }],
   },
 });
-assert.equal(missingChoiceValueDomainInvocationAnswer.outcome, SemanticRuntimeAnswerOutcome.Partial);
+assert.equal(missingChoiceValueDomainInvocationAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.ok(
   missingChoiceValueDomainInvocationAnswer.value.issues.some((issue) =>
     issue.issueKind === AppBuilderSourceLoweringInvocationIssueKind.MissingValueDomainExpression
@@ -9691,7 +9691,7 @@ const explicitBindingSourceInvocationAnswer = answerSemanticRuntimeAppBuilderQue
     }],
   },
 });
-assert.equal(explicitBindingSourceInvocationAnswer.outcome, SemanticRuntimeAnswerOutcome.Hit);
+assert.equal(explicitBindingSourceInvocationAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.equal(
   explicitBindingSourceInvocationAnswer.value.fieldSelectionState,
   AppBuilderSourceLoweringFieldSelectionState.ExplicitFieldName,
@@ -9739,7 +9739,7 @@ const ambiguousSourceInvocationAnswer = answerSemanticRuntimeAppBuilderQuery({
     }],
   },
 });
-assert.equal(ambiguousSourceInvocationAnswer.outcome, SemanticRuntimeAnswerOutcome.Partial);
+assert.equal(ambiguousSourceInvocationAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.equal(
   ambiguousSourceInvocationAnswer.value.fieldSelectionState,
   AppBuilderSourceLoweringFieldSelectionState.AmbiguousCompatibleField,
@@ -9780,7 +9780,7 @@ const domainCommandActionPreflightAnswer = answerSemanticRuntimeAppBuilderQuery(
     includeSourceLoweringRequestFields: true,
   },
 });
-assert.equal(domainCommandActionPreflightAnswer.outcome, SemanticRuntimeAnswerOutcome.Hit);
+assert.equal(domainCommandActionPreflightAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.equal(
   domainCommandActionPreflightAnswer.value.rows[0]?.canRequestSourceLowering,
   true,
@@ -9811,7 +9811,7 @@ const missingDomainCommandBodyAnswer = answerSemanticRuntimeAppBuilderQuery({
     actionName: 'save',
   },
 });
-assert.equal(missingDomainCommandBodyAnswer.outcome, SemanticRuntimeAnswerOutcome.Partial);
+assert.equal(missingDomainCommandBodyAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.ok(
   missingDomainCommandBodyAnswer.value.issues.some((issue) =>
     issue.issueKind === AppBuilderSourceLoweringInvocationIssueKind.MissingMethodBodyStatements
@@ -9854,7 +9854,7 @@ const routeNavigationActionPreflightAnswer = answerSemanticRuntimeAppBuilderQuer
     includeSourceLoweringRequestFields: true,
   },
 });
-assert.equal(routeNavigationActionPreflightAnswer.outcome, SemanticRuntimeAnswerOutcome.Hit);
+assert.equal(routeNavigationActionPreflightAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.equal(
   routeNavigationActionPreflightAnswer.value.rows[0]?.canRequestSourceLowering,
   true,
@@ -9884,7 +9884,7 @@ const routeNavigationInvocationAnswer = answerSemanticRuntimeAppBuilderQuery({
     linkText: 'Open task',
   },
 });
-assert.equal(routeNavigationInvocationAnswer.outcome, SemanticRuntimeAnswerOutcome.Hit);
+assert.equal(routeNavigationInvocationAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.equal(
   routeNavigationInvocationAnswer.value.selectedAction?.action.scope,
   AppBuilderDomainActionScope.Navigation,
@@ -9945,7 +9945,7 @@ const incompatibleRouteNavigationInvocationAnswer = answerSemanticRuntimeAppBuil
     linkText: 'Open task',
   },
 });
-assert.equal(incompatibleRouteNavigationInvocationAnswer.outcome, SemanticRuntimeAnswerOutcome.Partial);
+assert.equal(incompatibleRouteNavigationInvocationAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.ok(
   incompatibleRouteNavigationInvocationAnswer.value.issues.some((issue) =>
     issue.issueKind === AppBuilderSourceLoweringInvocationIssueKind.IncompatibleNavigationAction
@@ -10005,7 +10005,7 @@ const derivedCreateDomainCommandActionInvocationAnswer = answerSemanticRuntimeAp
     actionName: 'create',
   },
 });
-assert.equal(derivedCreateDomainCommandActionInvocationAnswer.outcome, SemanticRuntimeAnswerOutcome.Hit);
+assert.equal(derivedCreateDomainCommandActionInvocationAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.equal(
   derivedCreateDomainCommandActionInvocationAnswer.value.fragments[0]?.text,
   "create() {\n  const nextId = this.taskItems.length === 0 ? 1 : Math.max(...this.taskItems.map((taskItem) => taskItem.id)) + 1;\n  this.taskItems.push(new TaskItem(nextId, this.title, this.done));\n  this.title = '';\n  this.done = false;\n}",
@@ -10034,7 +10034,7 @@ const derivedCompleteDomainCommandActionInvocationAnswer = answerSemanticRuntime
     methodParameters: [{ name: 'taskItem', typeText: 'TaskItem' }],
   },
 });
-assert.equal(derivedCompleteDomainCommandActionInvocationAnswer.outcome, SemanticRuntimeAnswerOutcome.Hit);
+assert.equal(derivedCompleteDomainCommandActionInvocationAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.equal(
   derivedCompleteDomainCommandActionInvocationAnswer.value.fragments[0]?.text,
   'complete(taskItem: TaskItem) {\n  taskItem.done = true;\n}',
@@ -10049,7 +10049,7 @@ const domainCommandActionInvocationAnswer = answerSemanticRuntimeAppBuilderQuery
     methodBodyStatements: 'this.saved = true;',
   },
 });
-assert.equal(domainCommandActionInvocationAnswer.outcome, SemanticRuntimeAnswerOutcome.Hit);
+assert.equal(domainCommandActionInvocationAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.equal(
   domainCommandActionInvocationAnswer.value.actionSelectionState,
   AppBuilderSourceLoweringActionSelectionState.ExplicitActionName,
@@ -10090,7 +10090,7 @@ const parameterizedDomainCommandActionInvocationAnswer = answerSemanticRuntimeAp
     methodBodyStatements: 'this.saved = draft.valid;',
   },
 });
-assert.equal(parameterizedDomainCommandActionInvocationAnswer.outcome, SemanticRuntimeAnswerOutcome.Hit);
+assert.equal(parameterizedDomainCommandActionInvocationAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.deepEqual(
   parameterizedDomainCommandActionInvocationAnswer.value.methodParameters,
   [{ name: 'draft', typeText: 'TaskDraft' }],
@@ -10174,7 +10174,7 @@ const componentPairSourcePlanAnswer = answerSemanticRuntimeAppBuilderQuery({
     },
   },
 });
-assert.equal(componentPairSourcePlanAnswer.outcome, SemanticRuntimeAnswerOutcome.Hit);
+assert.equal(componentPairSourcePlanAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.equal(componentPairSourcePlanAnswer.value.sourceLoweringComponentPair?.componentPath, 'src/create-task.ts');
 assert.equal(componentPairSourcePlanAnswer.value.sourceLoweringComponentPair?.templatePath, 'src/create-task.html');
 assert.equal(componentPairSourcePlanAnswer.value.sourceLoweringComponentPair?.className, 'CreateTask');
@@ -10352,7 +10352,7 @@ const componentPairAppShellSourcePlanAnswer = answerSemanticRuntimeAppBuilderQue
     },
   },
 });
-assert.equal(componentPairAppShellSourcePlanAnswer.outcome, SemanticRuntimeAnswerOutcome.Hit);
+assert.equal(componentPairAppShellSourcePlanAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.equal(componentPairAppShellSourcePlanAnswer.value.sourceLoweringComponentPair?.appShell?.appName, 'Task Creator');
 assert.equal(componentPairAppShellSourcePlanAnswer.value.sourcePlan?.files.length, 3);
 assert.equal(componentPairAppShellSourcePlanAnswer.value.sourcePlan?.files[0]?.role, SourcePlanFileRole.Entrypoint);
@@ -10409,7 +10409,7 @@ const nativeButtonSourceInvocationAnswer = answerSemanticRuntimeAppBuilderQuery(
     }],
   },
 });
-assert.equal(nativeButtonSourceInvocationAnswer.outcome, SemanticRuntimeAnswerOutcome.Hit);
+assert.equal(nativeButtonSourceInvocationAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.equal(
   nativeButtonSourceInvocationAnswer.value.actionSelectionState,
   AppBuilderSourceLoweringActionSelectionState.SingleCompatibleAction,
@@ -10510,7 +10510,7 @@ const visualNativeButtonSourceInvocationAnswer = answerSemanticRuntimeAppBuilder
     }],
   },
 });
-assert.equal(visualNativeButtonSourceInvocationAnswer.outcome, SemanticRuntimeAnswerOutcome.Hit);
+assert.equal(visualNativeButtonSourceInvocationAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.equal(
   visualNativeButtonSourceInvocationAnswer.value.fragments[0]?.text,
   '<button type="button" click.trigger="save()" class="button button--primary">Save</button>',
@@ -10541,7 +10541,7 @@ const missingButtonTextSourceInvocationAnswer = answerSemanticRuntimeAppBuilderQ
     }],
   },
 });
-assert.equal(missingButtonTextSourceInvocationAnswer.outcome, SemanticRuntimeAnswerOutcome.Partial);
+assert.equal(missingButtonTextSourceInvocationAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.ok(
   missingButtonTextSourceInvocationAnswer.value.issues.some((issue) =>
     issue.issueKind === AppBuilderSourceLoweringInvocationIssueKind.MissingButtonText
@@ -10571,7 +10571,7 @@ const directButtonTextSourceInvocationAnswer = answerSemanticRuntimeAppBuilderQu
     }],
   },
 });
-assert.equal(directButtonTextSourceInvocationAnswer.outcome, SemanticRuntimeAnswerOutcome.Hit);
+assert.equal(directButtonTextSourceInvocationAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.equal(
   directButtonTextSourceInvocationAnswer.value.fragments[0]?.text,
   '<button type="button" click.trigger="save()">Save</button>',
@@ -10601,7 +10601,7 @@ const submitButtonSourceInvocationAnswer = answerSemanticRuntimeAppBuilderQuery(
     }],
   },
 });
-assert.equal(submitButtonSourceInvocationAnswer.outcome, SemanticRuntimeAnswerOutcome.Hit);
+assert.equal(submitButtonSourceInvocationAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.equal(
   submitButtonSourceInvocationAnswer.value.buttonType,
   AppBuilderSourceLoweringButtonType.Submit,
@@ -10636,7 +10636,7 @@ const unknownButtonTypeSourceInvocationAnswer = answerSemanticRuntimeAppBuilderQ
     }],
   },
 });
-assert.equal(unknownButtonTypeSourceInvocationAnswer.outcome, SemanticRuntimeAnswerOutcome.Partial);
+assert.equal(unknownButtonTypeSourceInvocationAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.equal(
   unknownButtonTypeSourceInvocationAnswer.value.buttonType,
   AppBuilderSourceLoweringButtonType.Button,
@@ -10671,7 +10671,7 @@ const formMessageSourceInvocationAnswer = answerSemanticRuntimeAppBuilderQuery({
     }],
   },
 });
-assert.equal(formMessageSourceInvocationAnswer.outcome, SemanticRuntimeAnswerOutcome.Hit);
+assert.equal(formMessageSourceInvocationAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.equal(
   formMessageSourceInvocationAnswer.value.messageKind,
   AppBuilderSourceLoweringMessageKind.Help,
@@ -10711,7 +10711,7 @@ const explicitErrorMessageInvocationAnswer = answerSemanticRuntimeAppBuilderQuer
     messageId: 'title-error',
   },
 });
-assert.equal(explicitErrorMessageInvocationAnswer.outcome, SemanticRuntimeAnswerOutcome.Hit);
+assert.equal(explicitErrorMessageInvocationAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.equal(
   explicitErrorMessageInvocationAnswer.value.messageSelectionState,
   AppBuilderSourceLoweringMessageSelectionState.ExplicitMessageKind,
@@ -10750,7 +10750,7 @@ const unknownMessageKindInvocationAnswer = answerSemanticRuntimeAppBuilderQuery(
     }],
   },
 });
-assert.equal(unknownMessageKindInvocationAnswer.outcome, SemanticRuntimeAnswerOutcome.Partial);
+assert.equal(unknownMessageKindInvocationAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.ok(
   unknownMessageKindInvocationAnswer.value.issues.some((issue) =>
     issue.issueKind === AppBuilderSourceLoweringInvocationIssueKind.UnknownRequestedMessageKind
@@ -10780,7 +10780,7 @@ const ambiguousFormMessageInvocationAnswer = answerSemanticRuntimeAppBuilderQuer
     }],
   },
 });
-assert.equal(ambiguousFormMessageInvocationAnswer.outcome, SemanticRuntimeAnswerOutcome.Partial);
+assert.equal(ambiguousFormMessageInvocationAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.equal(
   ambiguousFormMessageInvocationAnswer.value.messageSelectionState,
   AppBuilderSourceLoweringMessageSelectionState.AmbiguousPayloadMessage,
@@ -10827,7 +10827,7 @@ const fieldGroupSourceInvocationAnswer = answerSemanticRuntimeAppBuilderQuery({
     }],
   },
 });
-assert.equal(fieldGroupSourceInvocationAnswer.outcome, SemanticRuntimeAnswerOutcome.Hit);
+assert.equal(fieldGroupSourceInvocationAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.equal(
   fieldGroupSourceInvocationAnswer.value.innerControlPatternId,
   AppBuilderControlPatternId.NativeTextInput,
@@ -10956,7 +10956,7 @@ const unknownInnerControlPatternSourceInvocationAnswer = answerSemanticRuntimeAp
     }],
   },
 });
-assert.equal(unknownInnerControlPatternSourceInvocationAnswer.outcome, SemanticRuntimeAnswerOutcome.Partial);
+assert.equal(unknownInnerControlPatternSourceInvocationAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.ok(
   unknownInnerControlPatternSourceInvocationAnswer.value.issues.some((issue) =>
     issue.issueKind === AppBuilderSourceLoweringInvocationIssueKind.UnknownInnerControlPattern
@@ -11020,7 +11020,7 @@ const visualFieldGroupSourceInvocationAnswer = answerSemanticRuntimeAppBuilderQu
     }],
   },
 });
-assert.equal(visualFieldGroupSourceInvocationAnswer.outcome, SemanticRuntimeAnswerOutcome.Hit);
+assert.equal(visualFieldGroupSourceInvocationAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.equal(
   visualFieldGroupSourceInvocationAnswer.value.fragments[0]?.text,
   `<div class="field" data-au-field-group="title">
@@ -11055,7 +11055,7 @@ const directLabelFieldGroupSourceInvocationAnswer = answerSemanticRuntimeAppBuil
     }],
   },
 });
-assert.equal(directLabelFieldGroupSourceInvocationAnswer.outcome, SemanticRuntimeAnswerOutcome.Hit);
+assert.equal(directLabelFieldGroupSourceInvocationAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.equal(
   directLabelFieldGroupSourceInvocationAnswer.value.labelTextSource,
   AppBuilderSourceLoweringLabelTextSource.ExplicitRequest,
@@ -11110,7 +11110,7 @@ const choiceFieldGroupSourceInvocationAnswer = answerSemanticRuntimeAppBuilderQu
     }],
   },
 });
-assert.equal(choiceFieldGroupSourceInvocationAnswer.outcome, SemanticRuntimeAnswerOutcome.Hit);
+assert.equal(choiceFieldGroupSourceInvocationAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.equal(
   choiceFieldGroupSourceInvocationAnswer.value.innerControlPatternId,
   AppBuilderControlPatternId.NativeSingleSelect,
@@ -11269,7 +11269,7 @@ const readinessFilteredTargetCatalogAnswer = answerSemanticRuntimeAppBuilderQuer
     includeInputReadiness: false,
   },
 });
-assert.equal(readinessFilteredTargetCatalogAnswer.outcome, SemanticRuntimeAnswerOutcome.Hit);
+assert.equal(readinessFilteredTargetCatalogAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.equal(readinessFilteredTargetCatalogAnswer.value.rows.length, APP_BUILDER_POLICY_AXIS_IDS.length);
 assert.ok(
   readinessFilteredTargetCatalogAnswer.value.rows.every((row) => row.inputReadiness == null),
@@ -11279,13 +11279,13 @@ assert.ok(
 const missingInvocation = answerSemanticRuntimeAppBuilderQuery({
   kind: SemanticRuntimeAppBuilderQueryKind.PartSourceInvocation,
 });
-assert.equal(missingInvocation.outcome, SemanticRuntimeAnswerOutcome.Partial);
+assert.equal(missingInvocation.result, SemanticRuntimeAnswerResult.Invalid);
 assert.equal(missingInvocation.value.issues[0]?.issueKind, SemanticRuntimeAppBuilderQueryIssueKind.MissingPartSourceInvocation);
 
 const broadPartMenu = answerSemanticRuntimeAppBuilderQuery({
   kind: SemanticRuntimeAppBuilderQueryKind.PartMenu,
 });
-assert.equal(broadPartMenu.outcome, SemanticRuntimeAnswerOutcome.Hit);
+assert.equal(broadPartMenu.result, SemanticRuntimeAnswerResult.Answered);
 assert.equal(broadPartMenu.value.authoringTierPolicy.kind, AppBuilderPartAuthoringTierPolicyKind.DefaultPreferred);
 assert.deepEqual(broadPartMenu.value.authoringTiers, [AppBuilderPartAuthoringTier.Preferred]);
 assert.ok(broadPartMenu.value.parts.every((part) => part.authoringTier === AppBuilderPartAuthoringTier.Preferred));
@@ -11301,7 +11301,7 @@ const structuralShapePartMenu = answerSemanticRuntimeAppBuilderQuery({
     partKinds: [AppBuilderPartKind.StructuralPart],
   },
 });
-assert.equal(structuralShapePartMenu.outcome, SemanticRuntimeAnswerOutcome.Hit);
+assert.equal(structuralShapePartMenu.result, SemanticRuntimeAnswerResult.Answered);
 assert.deepEqual(structuralShapePartMenu.value.authoringTiers, [AppBuilderPartAuthoringTier.Preferred]);
 assert.equal(
   structuralShapePartMenu.value.parts.some((part) => part.id === AppBuilderStructuralPartId.Promise),
@@ -11319,7 +11319,7 @@ const bindingBehaviorShapePartMenu = answerSemanticRuntimeAppBuilderQuery({
     partKinds: [AppBuilderPartKind.BindingBehavior],
   },
 });
-assert.equal(bindingBehaviorShapePartMenu.outcome, SemanticRuntimeAnswerOutcome.Hit);
+assert.equal(bindingBehaviorShapePartMenu.result, SemanticRuntimeAnswerResult.Answered);
 assert.equal(bindingBehaviorShapePartMenu.value.parts.length, 0);
 assert.ok(
   bindingBehaviorShapePartMenu.value.authoringTierFilteredOutCount > 0,
@@ -11360,7 +11360,7 @@ const targetedAdvancedPartMenu = answerSemanticRuntimeAppBuilderQuery({
     partIds: [AppBuilderStructuralPartId.VirtualRepeat],
   },
 });
-assert.equal(targetedAdvancedPartMenu.outcome, SemanticRuntimeAnswerOutcome.Hit);
+assert.equal(targetedAdvancedPartMenu.result, SemanticRuntimeAnswerResult.Answered);
 assert.equal(targetedAdvancedPartMenu.value.authoringTierPolicy.kind, AppBuilderPartAuthoringTierPolicyKind.ExplicitCapabilityIntent);
 assert.equal(targetedAdvancedPartMenu.value.parts.length, 1);
 assert.equal(targetedAdvancedPartMenu.value.parts[0]?.authoringTier, AppBuilderPartAuthoringTier.Advanced);
@@ -11371,7 +11371,7 @@ const routerIntentPartMenu = answerSemanticRuntimeAppBuilderQuery({
     packageDependencies: ['@aurelia/router'],
   },
 });
-assert.equal(routerIntentPartMenu.outcome, SemanticRuntimeAnswerOutcome.Hit);
+assert.equal(routerIntentPartMenu.result, SemanticRuntimeAnswerResult.Answered);
 assert.equal(routerIntentPartMenu.value.authoringTierPolicy.kind, AppBuilderPartAuthoringTierPolicyKind.ExplicitCapabilityIntent);
 assert.ok(routerIntentPartMenu.value.parts.some((part) =>
   part.kind === AppBuilderPartKind.FrameworkComponent
@@ -11382,7 +11382,7 @@ assert.ok(routerIntentPartMenu.value.parts.some((part) =>
 const broadPreview = answerSemanticRuntimeAppBuilderQuery({
   kind: SemanticRuntimeAppBuilderQueryKind.PartSourceLoweringPreview,
 });
-assert.equal(broadPreview.outcome, SemanticRuntimeAnswerOutcome.Hit);
+assert.equal(broadPreview.result, SemanticRuntimeAnswerResult.Answered);
 assert.equal(broadPreview.value.authoringTierPolicy.kind, AppBuilderPartAuthoringTierPolicyKind.DefaultPreferred);
 assert.ok(broadPreview.value.rows.length > 0);
 assert.ok(broadPreview.value.rows.every((row) => row.authoringTier === AppBuilderPartAuthoringTier.Preferred));
@@ -11398,7 +11398,7 @@ const structuralShapePreview = answerSemanticRuntimeAppBuilderQuery({
     partKinds: [AppBuilderPartKind.StructuralPart],
   },
 });
-assert.equal(structuralShapePreview.outcome, SemanticRuntimeAnswerOutcome.Hit);
+assert.equal(structuralShapePreview.result, SemanticRuntimeAnswerResult.Answered);
 assert.equal(structuralShapePreview.value.authoringTierPolicy.kind, AppBuilderPartAuthoringTierPolicyKind.DefaultPreferred);
 assert.ok(structuralShapePreview.value.rows.every((row) => row.authoringTier === AppBuilderPartAuthoringTier.Preferred));
 assert.equal(
@@ -11425,7 +11425,7 @@ const stateDispatchAnswer = answerSemanticRuntimeAppBuilderQuery({
   kind: SemanticRuntimeAppBuilderQueryKind.PartSourceInvocation,
   partSourceInvocation: stateDispatchInvocation,
 });
-assert.equal(stateDispatchAnswer.outcome, SemanticRuntimeAnswerOutcome.Hit);
+assert.equal(stateDispatchAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.equal(stateDispatchAnswer.value.state, AppBuilderPartSourceLoweringState.Complete);
 assert.equal(stateDispatchAnswer.value.fragments.length, 1);
 const stateDispatchFragment = stateDispatchAnswer.value.fragments[0];
@@ -11452,7 +11452,7 @@ const previewAnswer = answerSemanticRuntimeAppBuilderQuery({
     includeSourceText: true,
   },
 });
-assert.equal(previewAnswer.outcome, SemanticRuntimeAnswerOutcome.Hit);
+assert.equal(previewAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.equal(previewAnswer.value.authoringTierPolicy.kind, AppBuilderPartAuthoringTierPolicyKind.ExplicitCapabilityIntent);
 assert.equal(previewAnswer.value.sourceTextIncluded, true);
 assert.equal(previewAnswer.value.issueCount, 0);
@@ -11466,7 +11466,7 @@ assert.ok(previewAnswer.value.rows.every((row) =>
 const integrityAnswer = answerSemanticRuntimeAppBuilderQuery({
   kind: SemanticRuntimeAppBuilderQueryKind.CatalogIntegrity,
 });
-assert.equal(integrityAnswer.outcome, SemanticRuntimeAnswerOutcome.Hit);
+assert.equal(integrityAnswer.result, SemanticRuntimeAnswerResult.Answered);
 assert.equal(integrityAnswer.value.issueCount, 0);
 assert.equal(integrityAnswer.value.sourceLoweringGalleryCoverageIssues.length, 0);
 assert.equal(integrityAnswer.value.statusAuditSummary.integrityIssueCount, 0);
@@ -11534,7 +11534,7 @@ function answerPagedSemanticRuntimeAppBuilderQuery(request, pageSize = request.p
       ...request,
       page: { ...(request.page ?? {}), size: pageSize, cursor },
     });
-    assert.notEqual(answer.outcome, SemanticRuntimeAnswerOutcome.Error);
+    assert.notEqual(answer.result, SemanticRuntimeAnswerResult.Failed);
     firstAnswer ??= answer;
     rows.push(...answer.value.rows);
     cursor = answer.page?.nextCursor ?? null;
@@ -11542,7 +11542,7 @@ function answerPagedSemanticRuntimeAppBuilderQuery(request, pageSize = request.p
   assert.ok(firstAnswer != null);
   return {
     ...firstAnswer,
-    outcome: SemanticRuntimeAnswerOutcome.Hit,
+    result: SemanticRuntimeAnswerResult.Answered,
     value: {
       ...firstAnswer.value,
       rows,

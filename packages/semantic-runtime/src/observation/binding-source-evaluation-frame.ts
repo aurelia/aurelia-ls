@@ -17,9 +17,12 @@ import {
   type EvaluationFunctionValue,
 } from '../evaluation/values.js';
 import type { Container } from '../di/container.js';
-import type { RuntimeBindingSourceActivationContext } from './binding-source-activation-context.js';
+import type {
+  DiProviderActivationSession,
+  DiProviderActivationView,
+} from '../di/provider-activation.js';
 import type { AddressHandle } from '../kernel/handles.js';
-import type { KernelStore } from '../kernel/store.js';
+import type { KernelStoreReadView } from '../kernel/store.js';
 import { sourceExpressionForSourceAddress } from '../type-system/source-address-expression.js';
 
 /**
@@ -32,12 +35,14 @@ import { sourceExpressionForSourceAddress } from '../type-system/source-address-
 export class RuntimeBindingSourceEvaluationFrame {
   private readonly sourcesByFileName = new Map<string, EvaluatedProjectSource>();
   private readonly evaluatorsByModuleKey = new Map<string, StaticEvaluator>();
+  private readonly activationSession: DiProviderActivationSession | null;
   private activeContainer: Container | null = null;
 
   constructor(
     evaluation: StaticProjectEvaluationResult,
-    private readonly activationContext: RuntimeBindingSourceActivationContext | null = null,
+    activationView: DiProviderActivationView | null = null,
   ) {
+    this.activationSession = activationView?.createSession() ?? null;
     for (const source of evaluation.sources) {
       if (!isEvaluatedProjectSource(source)) {
         continue;
@@ -117,10 +122,10 @@ export class RuntimeBindingSourceEvaluationFrame {
 
   /** Evaluates the TypeScript expression at an authored source address inside its original module environment. */
   evaluateSourceAddressExpression(
-    store: KernelStore,
+    kernel: KernelStoreReadView,
     sourceAddressHandle: AddressHandle,
   ): StaticExpressionEvaluationResult | null {
-    const expression = this.expressionForSourceAddress(store, sourceAddressHandle);
+    const expression = this.expressionForSourceAddress(kernel, sourceAddressHandle);
     if (expression == null) {
       return null;
     }
@@ -152,11 +157,11 @@ export class RuntimeBindingSourceEvaluationFrame {
   }
 
   private expressionForSourceAddress(
-    store: KernelStore,
+    kernel: KernelStoreReadView,
     sourceAddressHandle: AddressHandle,
   ): ts.Expression | null {
     return sourceExpressionForSourceAddress(
-      store,
+      kernel,
       sourceAddressHandle,
       (path) => this.sourcesByFileName.get(normalizeModuleKey(path))?.sourceFile ?? null,
     );
@@ -166,9 +171,9 @@ export class RuntimeBindingSourceEvaluationFrame {
     const moduleKey = normalizeModuleKey(source.moduleKey);
     let evaluator = this.evaluatorsByModuleKey.get(moduleKey);
     if (evaluator === undefined) {
-      const runtimeHost = this.activationContext == null
+      const runtimeHost = this.activationSession == null
         ? source.evaluation.runtimeHost
-        : this.activationContext.runtimeHostFor(source.evaluation.runtimeHost, () => this.activeContainer);
+        : this.activationSession.runtimeHostFor(source.evaluation.runtimeHost, () => this.activeContainer);
       evaluator = new StaticEvaluator(source.evaluation.policy, runtimeHost);
       this.evaluatorsByModuleKey.set(moduleKey, evaluator);
     }

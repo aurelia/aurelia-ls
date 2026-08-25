@@ -80,7 +80,7 @@ export const routeConfigsRouteQuery = {
 export const routeContextsRouteQuery = {
   queryKind: SemanticAppQueryKind.RouteContexts,
   routeProductKind: ExpectedSemanticEffectRouteProductKind.RouteContext,
-  answerRowLabel: 'runtime RouteContext row(s)',
+  answerRowLabel: 'potential RouteContext row(s)',
   readRows: readRouteContextRows,
 } satisfies SemanticRouteQueryDescriptor<SemanticRouteContextsResult>;
 
@@ -157,35 +157,35 @@ export const viewportInstructionTreesRouteQuery = {
 export const routeTreesRouteQuery = {
   queryKind: SemanticAppQueryKind.RouteTrees,
   routeProductKind: ExpectedSemanticEffectRouteProductKind.RouteTree,
-  answerRowLabel: 'RouteTree row(s)',
+  answerRowLabel: 'potential/planned RouteTree row(s)',
   readRows: readRouteTreeRows,
 } satisfies SemanticRouteQueryDescriptor<SemanticRouteTreesResult>;
 
 export const routeNodesRouteQuery = {
   queryKind: SemanticAppQueryKind.RouteNodes,
   routeProductKind: ExpectedSemanticEffectRouteProductKind.RouteNode,
-  answerRowLabel: 'RouteNode row(s)',
+  answerRowLabel: 'potential/planned RouteNode row(s)',
   readRows: readRouteNodeRows,
 } satisfies SemanticRouteQueryDescriptor<SemanticRouteNodesResult>;
 
 export const routerViewportsRouteQuery = {
   queryKind: SemanticAppQueryKind.RouterViewports,
   routeProductKind: ExpectedSemanticEffectRouteProductKind.RouterViewport,
-  answerRowLabel: 'router viewport row(s)',
+  answerRowLabel: 'potential router viewport row(s)',
   readRows: readRouterViewportRows,
 } satisfies SemanticRouteQueryDescriptor<SemanticRouterViewportsResult>;
 
 export const viewportAgentsRouteQuery = {
   queryKind: SemanticAppQueryKind.ViewportAgents,
   routeProductKind: ExpectedSemanticEffectRouteProductKind.ViewportAgent,
-  answerRowLabel: 'ViewportAgent row(s)',
+  answerRowLabel: 'potential ViewportAgent candidate row(s)',
   readRows: readViewportAgentRows,
 } satisfies SemanticRouteQueryDescriptor<SemanticViewportAgentsResult>;
 
 export const componentAgentsRouteQuery = {
   queryKind: SemanticAppQueryKind.ComponentAgents,
   routeProductKind: ExpectedSemanticEffectRouteProductKind.ComponentAgent,
-  answerRowLabel: 'ComponentAgent handoff row(s)',
+  answerRowLabel: 'planned ComponentAgent handoff row(s)',
   readRows: readComponentAgentRows,
 } satisfies SemanticRouteQueryDescriptor<SemanticComponentAgentsResult>;
 

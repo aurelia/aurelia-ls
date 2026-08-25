@@ -1,7 +1,10 @@
 import ts from 'typescript';
-import type { StaticEvaluationExpressionReader } from '../evaluation/expression-reader.js';
 import { normalizeModuleKey } from '../evaluation/module-graph.js';
-import { readDeclarationLocalName } from '../evaluation/ts-syntax.js';
+import {
+  readDeclarationLocalName,
+  unwrapExpression,
+} from '../evaluation/ts-syntax.js';
+import type { TypeSystemProject } from '../type-system/project.js';
 import {
   EvaluationValueKind,
   type EvaluationValue,
@@ -16,17 +19,37 @@ import {
   type ResourceDependencyReference,
 } from './resource-reference.js';
 import type { FullResourceDefinition } from './resource-definition.js';
-import { ResourceDefinitionKind } from './resource-kind.js';
+import {
+  ResourceDefinitionKind,
+  runtimeResourceKeyForKind,
+} from './resource-kind.js';
 import type { ResourceRecognitionProjectResult } from './resource-recognition-project-pass.js';
+import { assignedExpressionVariableDeclaration } from './resource-convergence-support.js';
 
 export class ResourceDefinitionIndexEntry {
   constructor(
     /** Module key that owns the declaration which produced the resource definition. */
     readonly moduleKey: string,
     /** Local declaration name in the owning module. */
-    readonly localName: string,
+    readonly localName: string | null,
+    /** Resource carrier expression that produced this definition, when one exists in admitted source. */
+    readonly sourceNode: ts.Node | null,
     /** Fully converged resource definition recognized for the declaration. */
     readonly definition: FullResourceDefinition,
+  ) {}
+}
+
+/** Recognized resource-only return effect retained even when full definition convergence stays open. */
+export class ResourceDefinitionEffectConstraint {
+  constructor(
+    /** Materialized definition-header product that proves this call result can only register a resource. */
+    readonly productHandle: ProductHandle,
+    readonly moduleKey: string,
+    readonly localName: string | null,
+    readonly sourceNode: ts.Node,
+    readonly resourceKind: ResourceDefinitionKind,
+    readonly resourceName: string | null,
+    readonly runtimeLookupKeys: readonly string[],
   ) {}
 }
 
@@ -36,32 +59,86 @@ export class ResourceDefinitionIndexEntry {
 export class ResourceDefinitionIndex {
   static fromProject(project: ResourceRecognitionProjectResult): ResourceDefinitionIndex {
     const entries: ResourceDefinitionIndexEntry[] = [];
+    const effectConstraints: ResourceDefinitionEffectConstraint[] = [];
+    const effectiveDefinitions = new Set(project.readDefinitions());
 
     for (const source of project.sources) {
       const moduleKey = normalizeModuleKey(source.moduleKey);
+      const observationByTargetAddress = new Map(
+        source.emission.definitions.flatMap((header) => {
+          const addressHandle = header.targetReference?.addressHandle ?? null;
+          const observation = source.observations[header.observationIndex] ?? null;
+          return addressHandle == null || observation == null
+            ? []
+            : [[addressHandle, observation] as const];
+        }),
+      );
+      for (const header of source.emission.definitions) {
+        const observation = source.observations[header.observationIndex] ?? null;
+        if (observation == null) continue;
+        effectConstraints.push(new ResourceDefinitionEffectConstraint(
+          header.productHandle,
+          moduleKey,
+          resourceCarrierResultLocalName(observation.sourceNode)
+            ?? header.targetReference?.localName
+            ?? null,
+          observation.sourceNode,
+          header.resourceKind,
+          header.primaryName,
+          header.lookupNames.flatMap((name) => {
+            const key = runtimeResourceKeyForKind(header.resourceKind, name);
+            return key == null ? [] : [key];
+          }),
+        ));
+      }
       for (const definition of source.convergence.definitions) {
-        if (definition.target.localName == null) {
+        if (!effectiveDefinitions.has(definition)) {
           continue;
         }
-        entries.push(new ResourceDefinitionIndexEntry(moduleKey, definition.target.localName, definition));
+        const observation = definition.target.addressHandle == null
+          ? null
+          : observationByTargetAddress.get(definition.target.addressHandle) ?? null;
+        entries.push(new ResourceDefinitionIndexEntry(
+          moduleKey,
+          definition.target.localName,
+          observation?.sourceNode ?? null,
+          definition,
+        ));
       }
     }
 
-    return new ResourceDefinitionIndex(entries);
+    return new ResourceDefinitionIndex(entries, effectConstraints);
   }
 
-  private readonly byModuleLocal = new Map<string, ResourceDefinitionIndexEntry>();
+  private readonly byModuleLocal = new Map<string, readonly ResourceDefinitionIndexEntry[]>();
   private readonly byProduct = new Map<ProductHandle, FullResourceDefinition>();
   private readonly byTargetIdentity = new Map<IdentityHandle, FullResourceDefinition>();
   private readonly byLocalName = new Map<string, readonly FullResourceDefinition[]>();
   private readonly byModule = new Map<string, readonly FullResourceDefinition[]>();
   private readonly byResourceName = new Map<string, readonly FullResourceDefinition[]>();
+  private readonly bySourceNode = new WeakMap<ts.Node, FullResourceDefinition>();
+  private readonly effectConstraintsByModuleLocal = new Map<string, readonly ResourceDefinitionEffectConstraint[]>();
+  private readonly effectConstraintBySourceNode = new WeakMap<ts.Node, ResourceDefinitionEffectConstraint>();
 
   constructor(
     readonly entries: readonly ResourceDefinitionIndexEntry[],
+    readonly effectConstraints: readonly ResourceDefinitionEffectConstraint[] = [],
   ) {
     for (const entry of entries) {
-      this.byModuleLocal.set(resourceDefinitionIndexKey(entry.moduleKey, entry.localName), entry);
+      if (entry.localName != null) {
+        const moduleLocalKey = resourceDefinitionIndexKey(entry.moduleKey, entry.localName);
+        this.byModuleLocal.set(moduleLocalKey, [
+          ...(this.byModuleLocal.get(moduleLocalKey) ?? []),
+          entry,
+        ]);
+        this.byLocalName.set(entry.localName, [
+          ...(this.byLocalName.get(entry.localName) ?? []),
+          entry.definition,
+        ]);
+      }
+      if (entry.sourceNode != null) {
+        this.bySourceNode.set(entry.sourceNode, entry.definition);
+      }
       this.byModule.set(entry.moduleKey, [
         ...(this.byModule.get(entry.moduleKey) ?? []),
         entry.definition,
@@ -72,10 +149,6 @@ export class ResourceDefinitionIndex {
       if (entry.definition.target.identityHandle != null) {
         this.byTargetIdentity.set(entry.definition.target.identityHandle, entry.definition);
       }
-      this.byLocalName.set(entry.localName, [
-        ...(this.byLocalName.get(entry.localName) ?? []),
-        entry.definition,
-      ]);
       for (const resourceName of readResourceDefinitionNames(entry.definition)) {
         const nameKey = resourceName.toLowerCase();
         this.byResourceName.set(nameKey, [
@@ -84,10 +157,68 @@ export class ResourceDefinitionIndex {
         ]);
       }
     }
+    for (const constraint of effectConstraints) {
+      if (constraint.localName != null) {
+        const key = resourceDefinitionIndexKey(constraint.moduleKey, constraint.localName);
+        this.effectConstraintsByModuleLocal.set(key, [
+          ...(this.effectConstraintsByModuleLocal.get(key) ?? []),
+          constraint,
+        ]);
+      }
+      this.effectConstraintBySourceNode.set(
+        ts.isExpression(constraint.sourceNode) ? unwrapExpression(constraint.sourceNode) : constraint.sourceNode,
+        constraint,
+      );
+    }
   }
 
   lookupByModuleLocal(moduleKey: string, localName: string): FullResourceDefinition | null {
-    return this.byModuleLocal.get(resourceDefinitionIndexKey(moduleKey, localName))?.definition ?? null;
+    const definitions = this.lookupAllByModuleLocal(moduleKey, localName);
+    return definitions.length === 1 ? definitions[0]! : null;
+  }
+
+  lookupAllByModuleLocal(moduleKey: string, localName: string): readonly FullResourceDefinition[] {
+    return (this.byModuleLocal.get(resourceDefinitionIndexKey(moduleKey, localName)) ?? [])
+      .map((entry) => entry.definition);
+  }
+
+  /** Resolve an authored TS expression through its alias-normalized declaration identity. */
+  lookupByTypeScriptExpression(
+    typeSystem: TypeSystemProject,
+    expression: ts.Expression,
+  ): FullResourceDefinition | null {
+    const symbol = typeSystem.readProgramAliasedSymbolAtLocation(unwrapExpression(expression));
+    if (symbol == null) {
+      return null;
+    }
+    const matching = new Set<FullResourceDefinition>();
+    for (const declaration of symbol.declarations ?? []) {
+      for (const definition of this.lookupAllByTypeScriptDeclaration(typeSystem, declaration)) {
+        matching.add(definition);
+      }
+    }
+    return matching.size === 1 ? matching.values().next().value ?? null : null;
+  }
+
+  /** Resolve a Program-owned declaration through the evaluator module identity shared by resource convergence. */
+  lookupByTypeScriptDeclaration(
+    typeSystem: TypeSystemProject,
+    declaration: ts.Declaration,
+  ): FullResourceDefinition | null {
+    const definitions = this.lookupAllByTypeScriptDeclaration(typeSystem, declaration);
+    return definitions.length === 1 ? definitions[0]! : null;
+  }
+
+  lookupAllByTypeScriptDeclaration(
+    typeSystem: TypeSystemProject,
+    declaration: ts.Declaration,
+  ): readonly FullResourceDefinition[] {
+    const localName = readDeclarationLocalName(declaration);
+    if (localName == null) {
+      return [];
+    }
+    const moduleKey = typeSystem.readModuleKeyForSourceFile(declaration.getSourceFile());
+    return moduleKey == null ? [] : this.lookupAllByModuleLocal(moduleKey, localName);
   }
 
   lookupByProduct(productHandle: ProductHandle | null): FullResourceDefinition | null {
@@ -219,13 +350,55 @@ export class ResourceDefinitionIndex {
     return this.lookupByModuleLocal(value.environment.moduleKey, localName);
   }
 
-  lookupExpression(
-    expression: ts.Expression,
-    reader: StaticEvaluationExpressionReader,
-  ): FullResourceDefinition | null {
-    const read = reader.evaluateExpression(expression);
-    return this.lookupValue(read.value);
+  lookupByCarrierNode(node: ts.Node | null): FullResourceDefinition | null {
+    const carrier = node != null && ts.isVariableDeclaration(node)
+      ? node.initializer ?? null
+      : node;
+    return carrier != null && ts.isExpression(carrier)
+      ? this.bySourceNode.get(unwrapExpression(carrier)) ?? null
+      : null;
   }
+
+  lookupEffectConstraintByModuleLocal(
+    moduleKey: string,
+    localName: string,
+  ): ResourceDefinitionEffectConstraint | null {
+    const matching = this.effectConstraintsByModuleLocal.get(resourceDefinitionIndexKey(moduleKey, localName)) ?? [];
+    return matching.length === 1 ? matching[0]! : null;
+  }
+
+  lookupEffectConstraintByTypeScriptExpression(
+    typeSystem: TypeSystemProject,
+    expression: ts.Expression,
+  ): ResourceDefinitionEffectConstraint | null {
+    const symbol = typeSystem.readProgramAliasedSymbolAtLocation(unwrapExpression(expression));
+    if (symbol == null) return null;
+    const matching = new Set<ResourceDefinitionEffectConstraint>();
+    for (const declaration of symbol.declarations ?? []) {
+      const localName = readDeclarationLocalName(declaration);
+      const moduleKey = typeSystem.readModuleKeyForSourceFile(declaration.getSourceFile());
+      if (localName == null || moduleKey == null) continue;
+      for (const constraint of this.effectConstraintsByModuleLocal.get(
+        resourceDefinitionIndexKey(moduleKey, localName),
+      ) ?? []) {
+        matching.add(constraint);
+      }
+    }
+    return matching.size === 1 ? matching.values().next().value ?? null : null;
+  }
+
+  lookupEffectConstraintByCarrierNode(node: ts.Node | null): ResourceDefinitionEffectConstraint | null {
+    if (node == null || !ts.isExpression(node)) return null;
+    return this.effectConstraintBySourceNode.get(unwrapExpression(node)) ?? null;
+  }
+
+}
+
+function resourceCarrierResultLocalName(node: ts.Node): string | null {
+  const declaration = assignedExpressionVariableDeclaration(node);
+  return declaration != null && ts.isIdentifier(declaration.name)
+    ? declaration.name.text
+    : null;
 }
 
 function resourceDefinitionIndexKey(moduleKey: string, localName: string): string {

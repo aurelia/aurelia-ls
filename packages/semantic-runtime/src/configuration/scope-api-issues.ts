@@ -29,6 +29,11 @@ import {
   type KernelStoreRecord,
 } from '../kernel/store.js';
 import {
+  KernelPublicationPlan,
+  publishProductDetails,
+  type KernelPublicationContext,
+} from '../kernel/publication.js';
+import {
   checkerDefinitelyNullishType,
 } from '../type-system/checker-related-types.js';
 import { checkerPropertySymbol } from '../type-system/checker-node-helpers.js';
@@ -97,6 +102,7 @@ export class ScopeApiIssueMaterializer {
 
   constructor(
     readonly store: KernelStore,
+    readonly publication: KernelPublicationContext,
   ) {
     this.issuePublisher = new ConfigurationIssuePublisher(store);
   }
@@ -108,10 +114,10 @@ export class ScopeApiIssueMaterializer {
     const issues = readScopeApiCallSites(project, typeSystem)
       .map((site, index) => this.issueForScopeApiCall(project, site, index));
     const records = issues.flatMap((issue) => issue.records);
-    if (records.length > 0) {
-      this.store.commit(new KernelStoreBatch(records, `scope-api-issues:${project.projectKey}`));
-    }
-    this.store.productDetails.addAll(ConfigurationProductDetails.Issue, issues.map((issue) => issue.issue));
+    this.publication.publish(new KernelPublicationPlan(
+      new KernelStoreBatch(records, `scope-api-issues:${project.projectKey}`),
+      publishProductDetails(ConfigurationProductDetails.Issue, issues.map((issue) => issue.issue)),
+    ));
     return new ScopeApiIssueProjectResult(
       issues.map((issue) => issue.issue),
       records,
@@ -154,7 +160,7 @@ function readScopeApiCallSites(
 ): readonly ScopeApiCallSite[] {
   const sourcePathByFileName = typeSystemSourcePathIndex(project, typeSystem);
   return project.sourceFiles.flatMap((source) => {
-    const sourceFile = typeSystem.readProgramSourceFileByPath(source.path);
+    const sourceFile = typeSystem.readProgramSourceFileByProjectPath(source.path);
     return sourceFile == null
       ? []
       : readSourceFileScopeApiCallSites(

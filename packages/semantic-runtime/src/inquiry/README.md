@@ -11,7 +11,7 @@ file, cursor, range, or known kernel handle and needs a truthful answer plus a n
 ## Responsibilities
 
 - Represent query loci such as workspace, project, source file, source cursor, source range, and kernel record.
-- Preserve outcomes such as hit, miss, ambiguous, open, partial, unsupported, and reroute.
+- Preserve execution result, locus selection, and semantic coverage as independent answer axes.
 - Carry answer basis, projection lanes, expansions, evidence handles, provenance handles, claim
   handles, open seams, page state, and continuations.
 - Resolve host selectors into the narrowest currently known inquiry locus.
@@ -53,13 +53,17 @@ materialization policy. This is
 where future lazy API answers should attach their derived outcomes before deciding whether hot details, public answer
 values, or query-produced products should be retained, invalidated, or disposed.
 Answer-local kernel retention is intentionally one policy knob, not separate product-detail and hot-detail flags:
-`KernelStore.mark()` / `disposeSince(...)` rolls records, product details, and hot details back as one coherent slice.
+`KernelStore.markLifetime()` / `disposeSince(...)` rolls answer-local records, product details, and hot details back as
+one coherent lifetime slice. Telemetry uses the separate mutation cursor from `markObservation()`.
 If a future profile needs to retain hot details without durable products, that requires a new kernel-side lifetime
 primitive rather than a misleading claim-graph switch.
 `QueryClaimGraph` exposes named disposal methods for the common lifecycle boundaries, plus a query-type-projection
 cleanup lane for the current TypeChecker-heavy diagnostic/completion pressure. Session profiles also carry explicit
 retained-record budgets so long-lived cursor/diagnostic/MCP adapters do not turn answer-shape telemetry into an
-unbounded cache. The budget prunes only answered or failed claim nodes; pending lazy claims remain materializable by
+unbounded cache. Record pruning follows an oldest-first topology frontier: it removes disposable dependent leaves before
+shared dependencies, updates dependent counts incrementally, and waits for an active parent to close when no lawful leaf
+exists. A callback-free transaction settle can therefore drain thousands of claims in log-linear rather than repeated-
+scan quadratic work. The budget prunes only answered or failed claim nodes; pending lazy claims remain materializable by
 the caller that created them.
 Discard-after-answer profiles still admit pending claims into the graph while the lazy answer closure is outstanding;
 the node is removed only after it resolves or fails. That keeps the graph as the actual storage owner for lazy answer
@@ -73,7 +77,7 @@ reuse before relying on broader app-query continuation contracts.
 answer-boundary graph, with retained-node storage kept inside `QueryClaimGraphStorage`. Keep new consumer trade-offs in
 the policy module so the graph does not become a bag of profile-specific cases.
 `QueryClaimGraphStorage` is the retained-node/index owner below `QueryClaimGraph`: it owns outcome, query-kind, locus,
-epoch, and materialization-policy buckets plus retention-budget candidate selection. The graph should keep answer
+epoch, and materialization-policy buckets plus exact retained-answer byte totals. The graph should keep answer
 materialization, profile policy, and disposal accounting, while storage should keep indexed outcome history. If a new
 transport or adapter wants to scan retained answers, add the needed graph-owned index or disposal policy there instead.
 Storage also owns retained-answer byte accounting and cheap retained-shape snapshots, so cache overview and telemetry
@@ -96,6 +100,11 @@ the batch is a root runtime claim and each child answer is a nested runtime clai
 materialization policy, and epoch keys, but no app-owned child claims are created. This is the preferred shape when a
 public client needs an orientation bundle, because the claim graph stores the answer outcome and disposal effect without
 making the transport layer decide whether to cache, reopen, or scan previous answers.
+Nested runtime/app answers publish through one synchronous `SemanticAnswerTransaction`. Fresh claims remain token-
+visible but externally hidden until the root exact receipt validates. Commit publishes every graph provisionally,
+settles each graph once in a callback-free apply phase, enters a terminal transaction state, and only then releases
+caller-owned leases. A failed publish withdraws every graph before release callbacks can observe or reenter it. No-token
+reads, reuse, disposal, snapshots, and retention budgets exclude indexed nodes whose provisional entry has not settled.
 Routed app disposal now runs inside the answer boundary via `disposeAnswerSideEffects`, so the runtime-level claim can
 record both the app-world kernel delta and the records reclaimed by app-cache policy. Keep future one-off transport
 cleanup in that boundary rather than in adapter-local `finally` blocks; otherwise telemetry will see materialization
@@ -118,7 +127,10 @@ answer policy, and the approximate payload is below the per-answer profile budge
 graph-level byte budget: when the budget is exceeded, the graph drops old DTO values but keeps the claim records,
 payload shape, nested composition, and disposal telemetry. Larger or semantic-stateful answers should keep their
 durable facts in the kernel and use claims for shape/effect telemetry rather than duplicating public DTOs.
-Nested query claims are dependency edges, not only trace rows. If a retained child query outcome is disposed by a
+Nested query claims are dependency edges, not only trace rows. `parentId` and `depth` preserve where a claim was created;
+they do not imply semantic ownership. `dependencyIds` record actual answer consumption when an active materializer reads
+a fresh, retained, provisional, or deferred lazy claim. A lazy claim may therefore retain creator provenance while its
+later reader owns the dependency edge. If a retained child query outcome is disposed by a
 source/project epoch, query-kind cleanup, materialization-policy cleanup, or retention budget, the graph also disposes
 retained ancestor answers that were composed from that child. This keeps summary, overview, batch, and orientation
 answers from outliving a nested answer they depended on while still allowing independent child answers to remain
@@ -135,6 +147,11 @@ bulk before deciding whether a small-answer cache hit is honest.
 Retained-answer hits still run answer-side disposal hooks. Reuse should avoid recomputation, not bypass explicit
 transport policy such as a later `dispose-app` routed query that must reclaim a currently cached app epoch before
 returning a previously shaped answer.
+Every retained hit also proves the current invocation, not only the historical DTO. The runtime composes request-local
+planning reads with the graph-owned historical lease in a temporary lease, validates or delegates that aggregate, and
+releases it without replacing the node's historical capability. This applies equally to committed hits, same-token
+provisional reuse, and rereads through an already-resolved lazy handle; otherwise a second invocation could silently lose
+the reads that selected its retained value.
 The answer boundary can also veto retained-answer reuse when materialization is itself the requested side effect. A
 `retain-app` routed query with no compatible cached app must reopen the app world even if a small previous answer DTO is
 available in the claim graph.
@@ -146,11 +163,13 @@ project-wide answers and sibling-file answers can depend on a changed resource, 
 This keeps file/cursor invalidation policy behind the claim graph instead of making every transport adapter scan
 retained answer history or understand public query keys.
 Runtime-level routed answers now use the same source-epoch discipline. `SemanticRuntime.answerAppQuery(...)` and
-`answerAppQueries(...)` canonicalize source-file loci to project-relative paths before they compute query keys, locus
-keys, and epoch keys, then `SemanticRuntime.disposeQueryClaims(...)` can prune both runtime-level routed claims and
+`answerAppQueries(...)` resolve exact source aliases, refuse ambiguity or mixed-project batches, and canonicalize
+admitted source-file loci to workspace-relative paths before they compute query keys, locus keys, and epoch keys. Then
+`SemanticRuntime.disposeQueryClaims(...)` can prune both runtime-level routed claims and
 cached-app claims for a project or source file. That method intentionally disposes only query outcomes; retained app
-products remain an app-epoch concern and should be reclaimed with `clearAnalysisCache()` when source edits require a
-new world.
+products remain an app-generation concern. Source/config events advance `SemanticRuntimeProjectInputAuthority`, which
+revokes the old app generation and causes the next request to replace it; `clearAnalysisCache()` is an explicit
+retention-control operation, not the correctness mechanism for ordinary source edits.
 Runtime disposal request handling now goes through a named query-claim disposal strategy before it reaches the graph.
 That strategy resolves the public scope, manual/project/source invalidation kind, canonical epoch keys, query-kind
 filters, materialization-policy filters, and profile filter in one place. The graph still owns matching and disposal;
@@ -162,10 +181,10 @@ materialization-policy mix. Public control-plane disposal should surface those s
 source-edit/session cleanup into one global count; otherwise adapters cannot tell whether they invalidated runtime-level
 routed answers, cached-app answers, or the wrong profile.
 Graph snapshots also report retained root/child counts, maximum nested answer depth, and the distinct query-kind, locus,
-epoch, materialization-policy, and outcome-key buckets held in the graph indexes. Those counts are the cheap x-ray for
+epoch, materialization-policy, and answer-reuse-key buckets held in the graph indexes. Those counts are the cheap x-ray for
 long-lived adapters: if source invalidation or projection cleanup looks wrong, first check whether the graph actually
 retained the expected epoch/locus/materialization buckets before adding adapter-local caches or scans.
-Snapshots also expose retained query/locus/epoch/outcome key character mass. Query keys are API identity, not durable
+Snapshots also expose retained query/locus/epoch/answer-reuse key character mass. Query keys are API identity, not durable
 semantic truth; if a broad orientation or authoring batch starts retaining large key strings, compact the query identity
 policy at this layer before adding transport-side caches or suppressing useful claims.
 
@@ -193,8 +212,15 @@ the boundary.
 ## Design Pressure
 
 Inquiry is where answer shape is separated from produced facts. Kernel records can preserve that a materializer was
-partial or blocked; an inquiry answer can expose the seams, continuations, source context, and graph handles needed by later
+open or blocked; an inquiry answer can expose the seams, continuations, source context, and graph handles needed by later
 presentation or policy layers without changing what the kernel facts mean.
+
+Every public and lower-level inquiry answer reports three independent axes. `result` says whether execution answered,
+was unsupported or invalid, or failed. `selection` says whether the requested locus was exact, absent, ambiguous,
+rerouted, or not applicable. `coverage` says whether the selected semantic basis is complete, open, deliberately
+truncated, or not applicable. Paging is transport state in `page` and never changes semantic coverage. A collection can
+be `answered/not-applicable/complete` while returning one bounded page, and a cursor answer can be
+`answered/exact/open` without pretending execution failed.
 
 Compiler and editor pressure comes from integrating HTML parsing, attribute classification, expression parsing, and
 instruction lowering. Those flows need to serve batch-like compiler questions and live IDE questions from the same
@@ -215,18 +241,25 @@ caller's possible next move (`orient`, `inspect`, `diagnose`, `repair`, `navigat
 so an answer with many truthful follow-ups can filter without pretending that intent changes the app fact being queried.
 Public app-query callers can pass `continuationIntents` as an answer-envelope filter; do not promote that filter into
 query identity, catalog defaults, cost policy, or app semantics.
+Apply response-envelope policy only after the last reusable query-claim boundary. Claims retain neutral continuation
+rows; `continuationIntents` filters them per response, while `diagnosticProjection` is projected onto diagnostic
+continuation targets when the current source query does not consume that field itself. If the current diagnostic query
+does consume it, it remains part of semantic query identity and materialization policy.
 `InquiryContinuationKind` is the canonical action vocabulary for continuations. Public app-query rows should keep app-query
 specificity in `targetQueryKind` and the shaped `targetQuery` instead of creating a parallel target-specific kind enum.
 
 Continuations should be evidence-gated, not confidence-scored. A continuation may say which intents it serves, which
-cost boundary it crosses, what source precision or coverage is available, and which blockers prevent it from being
-actionable. Avoid numeric confidence and ranking-as-truth; expose evidence state, coverage, source precision,
-staleness, and blockers so the caller can make a task-specific judgment.
+cost boundary it crosses, what source evidence its next move requires, which source facts are already available, and
+which blockers prevent it from being actionable. Avoid numeric confidence and ranking-as-truth; expose answer coverage,
+per-reference source facets, independent epoch dependencies, and blockers so the caller can make a task-specific
+judgment. Runtime-session, project-input, app-world, and source-input dependencies are a set of invalidation authorities,
+not an ordered staleness scale.
 
-Continuation `sourcePrecision` is a compact evidence summary, not a blanket editability claim. Repair-oriented
-diagnostic follow-ups must also inspect the individual source references they are based on: a related diagnostic family
-with one exact authored span and one carrier/external/generated source remains inspectable, but the repair intent must
-carry a blocker until every returned source needed by that repair lane is exact.
+Continuation `sourceRequirement` records what the intended move needs, while `sourceFacts` preserve every distinct
+reference and its independent authored, exact-span, carrier, generated, external, or unavailable facets. Do not collapse
+mixed references into one strongest precision. Repair-oriented follow-ups can remain inspectable when one reference is
+exact and another is carrier-only, generated, external, or unavailable, but must carry a blocker until every source the
+repair requires satisfies its declared requirement.
 
 App-query answers now share a catalog-aware continuation policy, and lower-level `InquiryContinuation` producers must
 attach `InquiryContinuationApplicability` so kernel-side follow-ups use the same intent/evidence vocabulary. Future work
@@ -266,6 +299,16 @@ expected-empty completion sites rather than missing finite domains. Remaining cu
 custom template-controller grammars still report bucketed value-domain gaps until their domain has a real candidate
 lane.
 
+Router `params` object-key completion is narrower than primary route-value completion. The router instruction pass
+retains candidate endpoint products by the exact `load` attribute after spending binding-command lowering, source-value
+evaluation, the owning route context, and eager endpoint selection. The cursor adapter follows the active commanded
+value site's kernel claims back to its `MultiBindingSegment`, then uses that segment's authored attribute handle to read
+the plan. Candidate assembly expands endpoint parameter models as `router-route-parameter` rows. This keeps plain,
+bound-literal, and state-reduced routes on the same path and preserves an open answer when route evaluation or one owning
+context stays open; inquiry must not infer the sibling route from raw segment text. Candidates are admitted only when
+the parser inspector proves an object-literal key locus. Value expressions and params variables keep ordinary scope
+completion, and already-authored keys are omitted unless the cursor is editing that key's exact token span.
+
 `templateCompletionQueryForCursor` is the cursor adapter over the horizontal compiler/runtime path. It consumes a
 materialized `TemplateResourceRuntimeAnalysisEmission`, picks the smallest HTML/value/scope products around the cursor,
 classifies the site, returns the same product-handle `TemplateCompletionQuery` used by the answer, and carries the
@@ -276,10 +319,10 @@ token from that same owner type without rescanning template source. Empty
 start-tag attribute positions, such as `<my-element |>` before an authored attribute product exists, are still
 classified from the materialized element and template-source span rather than by rescanning project source. That keeps
 cursor-sensitive editor/tooling entry points above the compiler products without creating a second completion path.
-The cursor adapter must use the resource's runtime-analysis expression world, not a fresh checker world, when it asks
-binding-owned source-expression context for the completion scope. State stores, binding-behavior lifecycle, and other
-runtime-discovered expression facts are already on that world; rebuilding it at cursor time makes completions diverge
-from overlays, diagnostics, and data-flow.
+The cursor adapter must use the resource's runtime-analysis expression world, or `freshInquiryGeneration()` from that
+world, when it asks binding-owned source-expression context for the completion scope. The latter creates a fresh
+evaluator/cache while preserving the same generation-bound publication and state stores. A bare independent checker
+world loses those runtime-discovered facts and makes completions diverge from overlays, diagnostics, and data-flow.
 File-level template diagnostics reuse the same cursor adapter for weak-member rows, so they must not override that
 world either. A diagnostic scan may cache authored source text and row de-duplication state, but expression owner
 typing should still spend the resource runtime-analysis world so `t.bind` evaluate-only, `t-params.bind` bind-time
@@ -304,7 +347,7 @@ while cursor-info can expose the strict authoring diagnostic signal.
 `pnpm --filter @aurelia-ls/semantic-runtime pressure:cursor-loci` is the current batch pressure view for this layer. It
 samples bounded template cursor loci, answers completion through the same cursor adapter, compares that substrate answer
 with the public `SemanticApp.ask({ kind: TemplateCompletions })` path, compares cursor site/value-site classification
-with `SemanticApp.ask({ kind: TemplateCursorInfo })`, and prints aggregate site kinds, outcomes, completion pressure
+with `SemanticApp.ask({ kind: TemplateCursorInfo })`, and prints aggregate site kinds, result/selection/coverage axes, completion pressure
 classes, value-site kinds, candidate lanes, public-API mismatches, cursor-info source coverage, hover/navigation
 targets, diagnostic signals, LSP envelopes, value-domain gaps, and bucketed missing-input reasons without paths, source
 text, or candidate names. Use it for LSP-shaped pressure before assuming a gap belongs to parsing, scope construction,
@@ -312,7 +355,7 @@ resource lookup, API wrapping, or domain-specific value completion. `SEMANTIC_RU
 path-delimited list of absolute or workspace-relative roots, so a single fixture or transient external checkout can be
 sampled without changing the script. The known `fixtures/pressure` collection root expands to
 their child fixture projects; `SEMANTIC_RUNTIME_CURSOR_PRESSURE_PROJECT_DISCOVERY` mirrors
-`SEMANTIC_RUNTIME_PRESSURE_PROJECT_DISCOVERY` for monorepo/package-tsconfig roots. The script requests paged runtime
+`SEMANTIC_RUNTIME_PRESSURE_PROJECT_DISCOVERY` for monorepo/project-marker roots. The script requests paged runtime
 summary rows explicitly, because `runtime.summary()` defaults to no project rows for large workspaces. Use
 `SEMANTIC_RUNTIME_CURSOR_PRESSURE_OUTPUT=aggregate` for broad collection pressure and
 `SEMANTIC_RUNTIME_CURSOR_PRESSURE_INPUT_LIMIT` for a cheap first canary. Diagnostic probes are scoped back to the
@@ -335,9 +378,10 @@ are compiled only when an authoring/LSP inquiry asks for those files. This keeps
 monorepo sampling from turning "all possible component templates" into an accidental app-world hydration claim.
 Cursor pressure deliberately separates missing semantic-runtime substrate from weak application typings. Completion
 answers still carry `expression-member-owner-type:any`, `index-signature-only`, and `no-members` as missing inputs so
-hover/completion callers can explain why member candidates are absent, but the pressure script classifies those rows as
-`weak-type:*` when the expression-member site has no candidates. Treat that as typing or value-shape pressure in the app
-or plugin surface unless a lower-level projection lost a concrete TypeChecker member.
+completion-pressure and explicit explanation consumers can inspect why member candidates are absent, but the pressure
+script classifies those rows as `weak-type:*` when the expression-member site has no candidates. Default hover does not
+translate these raw keys. Treat that as typing or value-shape pressure in the app or plugin surface unless a lower-level
+projection lost a concrete TypeChecker member.
 The public cursor-info API now turns those weak owner surfaces into diagnostic rows with coarse suggestion kinds. This
 keeps completion honest while giving future diagnostics/code actions enough structure to recommend stronger owner types
 or explicit properties. The diagnostic row carries the owner type projection origin and an action-target envelope, so
@@ -355,6 +399,11 @@ selection to be exact, but file/app loci now aggregate the same cursor-info diag
 `SemanticAppQueryKind.TemplateDiagnostics`. Use that batch answer when the product question is editor diagnostics, CI,
 or agent review over a whole template file; use cursor pressure when the question is whether a specific source offset
 selects the right semantic site.
+Source-backed slot declaration selection is stricter than source containment. Runtime-created slots may retain a broad
+instruction or expression source as causal provenance; `$event`, for example, uses the listener carrier but has no
+authored declaration token. Only a template-local slot source with `SourceSpanRole.Name` can activate declaration-site
+dispatch. This keeps synthetic contextual slots visible at their usage tokens without letting their carrier mask every
+neighboring member in hover, completion, diagnostics, references, or rename.
 Cursor-info also carries template compiler diagnostics at the active cursor offset. Some malformed or recovery-heavy
 source positions are not completion sites and may still classify as `unknown`, but they should surface the exact
 framework-code diagnostic and syntax-rewrite suggestion instead of becoming a silent completion miss.

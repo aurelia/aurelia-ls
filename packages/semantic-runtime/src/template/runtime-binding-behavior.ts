@@ -20,23 +20,47 @@ import type {
   RuntimeBindingReference,
   RuntimeBindingTargetAccessReference,
 } from './runtime-binding.js';
+import type { TemplateVisibleResourceReference } from './compiler-world-reference.js';
+import type {
+  RuntimeHtmlAstFrameworkErrorCode as RuntimeHtmlAstFrameworkErrorCodeValue,
+} from '../type-system/framework-error-code.js';
+import type { SourceSpan } from '../expression/source-span.js';
+import {
+  RuntimeExpressionResourceApplicationOrigin,
+  RuntimeExpressionResourceLifecycleEffects,
+} from './runtime-expression-resource.js';
+import type { RuntimeOperationReachability } from '../runtime-expression/runtime-operation.js';
 
 export const enum RuntimeBindingBehaviorApplicationPhase {
   Bind = 'bind',
+  Unbind = 'unbind',
 }
 
 export type RuntimeBindingBehaviorApplicationField =
   | 'binding'
+  | 'resource'
   | 'targetAccess'
   | 'phase'
+  | 'origin'
   | 'behaviorName'
   | 'argumentCount'
   | 'staticArgumentValues'
+  | 'expressionProductHandle'
+  | 'chainIndex'
+  | 'authoredChainDepth'
+  | 'runtimeChainDepth'
+  | 'bindReachability'
+  | 'phaseReachability'
+  | 'bindOrder'
+  | 'phaseOrder'
+  | 'lifecycleEffects'
+  | 'argumentSpans'
   | 'source';
 
 export class RuntimeBindingBehaviorApplicationReference {
   constructor(
     readonly behaviorName: string,
+    readonly resource: TemplateVisibleResourceReference | null,
     readonly productHandle: ProductHandle | null,
     readonly identityHandle: IdentityHandle | null,
     readonly addressHandle: AddressHandle | null,
@@ -51,11 +75,23 @@ export class RuntimeBindingBehaviorApplication {
     readonly productHandle: ProductHandle,
     readonly identityHandle: IdentityHandle,
     readonly binding: RuntimeBindingReference,
+    readonly resource: TemplateVisibleResourceReference | null,
     readonly targetAccess: RuntimeBindingTargetAccessReference | null,
     readonly phase: RuntimeBindingBehaviorApplicationPhase,
+    readonly origin: RuntimeExpressionResourceApplicationOrigin,
     readonly behaviorName: string,
     readonly argumentCount: number,
     readonly staticArgumentValues: readonly string[],
+    readonly expressionProductHandle: ProductHandle,
+    readonly chainIndex: number,
+    readonly authoredChainDepth: number,
+    readonly runtimeChainDepth: number,
+    readonly bindReachability: RuntimeOperationReachability,
+    readonly phaseReachability: RuntimeOperationReachability,
+    readonly bindOrder: number | null,
+    readonly phaseOrder: number | null,
+    readonly lifecycleEffects: RuntimeExpressionResourceLifecycleEffects,
+    readonly argumentSpans: readonly SourceSpan[],
     readonly sourceAddressHandle: AddressHandle | null,
     readonly fieldProvenance: readonly FieldProvenance<RuntimeBindingBehaviorApplicationField>[] = [],
   ) {}
@@ -63,6 +99,7 @@ export class RuntimeBindingBehaviorApplication {
   toReference(): RuntimeBindingBehaviorApplicationReference {
     return new RuntimeBindingBehaviorApplicationReference(
       this.behaviorName,
+      this.resource,
       this.productHandle,
       this.identityHandle,
       this.sourceAddressHandle,
@@ -75,6 +112,10 @@ export const enum RuntimeBindingBehaviorIssuePhase {
 }
 
 export const enum RuntimeBindingBehaviorIssueKind {
+  /** `astBind` could not resolve the authored behavior from the binding service locator. */
+  ResourceNotFound = 'resource-not-found',
+  /** `astBind` encountered the same behavior name twice on one binding expression. */
+  DuplicateApplication = 'duplicate-application',
   SelfInvalidUsage = 'self-invalid-usage',
   SignalInvalidUsage = 'signal-invalid-usage',
   SignalNoSignals = 'signal-no-signals',
@@ -94,7 +135,8 @@ export const enum RuntimeBindingBehaviorIssueKind {
 
 export type RuntimeBindingBehaviorFrameworkErrorCodeValue =
   | RuntimeHtmlBindingBehaviorFrameworkErrorCodeValue
-  | ValidationHtmlBindingBehaviorFrameworkErrorCodeValue;
+  | ValidationHtmlBindingBehaviorFrameworkErrorCodeValue
+  | RuntimeHtmlAstFrameworkErrorCodeValue;
 
 export type RuntimeBindingBehaviorIssueField =
   | 'application'

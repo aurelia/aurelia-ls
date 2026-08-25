@@ -141,7 +141,7 @@ export class CompletedInputArrowCorridor {
       identifier,
     );
 
-    const body = this.deps.parseAssignExpr();
+    const body = this.state.inArrowCallbackScope(() => this.deps.parseAssignExpr());
     if (isParseFailure(body)) {
       if (isParseCompanionFailure(body)) {
         return this.companionBuilder.widenArrowFunctionFailure(
@@ -492,7 +492,7 @@ export class CompletedInputArrowCorridor {
       );
     }
 
-    const body = this.deps.parseAssignExpr();
+    const body = this.state.inArrowCallbackScope(() => this.deps.parseAssignExpr());
     if (isParseFailure(body)) {
       if (isParseCompanionFailure(body)) {
         return this.companionBuilder.widenArrowFunctionFailure(

@@ -8,14 +8,20 @@ import {
 import type {
   ClaimHandle,
   IdentityHandle,
+  OpenSeamHandle,
   ProductHandle,
 } from '../kernel/handles.js';
 import {
-  KernelStoreBatch,
   type KernelStore,
   type KernelStoreRecord,
 } from '../kernel/store.js';
+import {
+  KernelPublicationPlan,
+  KernelStoreBatch,
+  type KernelPublicationContext,
+} from '../kernel/publication.js';
 import { projectModuleSourceNodeOrdinalLocalKey } from '../kernel/local-key.js';
+import type { OpenSeam } from '../kernel/open-seam.js';
 import {
   KernelVocabulary,
 } from '../kernel/vocabulary.js';
@@ -27,6 +33,7 @@ import {
 import {
   AppRoot,
 } from './app-root.js';
+
 import {
   AppTaskDefinition,
 } from './app-task.js';
@@ -47,16 +54,26 @@ import {
   ConfigurationClaimSet,
   ConfigurationKernelPublication,
   ConfigurationProductHandles,
-  ConfigurationSourceRecordSet as SourceRecordSet,
+  ConfigurationSourceRecordSet,
 } from './configuration-publication.js';
 import {
-  AureliaAppFrame,
-  AureliaAppFrameMaterializer,
-} from './aurelia-app-frame-materializer.js';
-import {
+  ConfigurationStepEmissionSet,
   ConfigurationStepMaterializer,
   ConfigurationStepReferenceSeed,
 } from './configuration-step-materializer.js';
+import {
+  ConfigurationEvaluationBindingFrame,
+  ConfigurationEvaluationBindings,
+} from './configuration-evaluation-bindings.js';
+
+/** Configuration uncertainty together with the app/container locus that can be affected by it. */
+export class ConfigurationOpenSeamScope {
+  constructor(
+    readonly seam: OpenSeam,
+    /** Every known receiving container; null means the configuration target itself stayed unresolved. */
+    readonly containerIdentityHandles: readonly IdentityHandle[] | null,
+  ) {}
+}
 
 /** Result of emitting configuration observations into the kernel. */
 export class ConfigurationKernelEmission {
@@ -77,7 +94,11 @@ export class ConfigurationKernelEmission {
     readonly optionContributions: readonly ConfigurationOptionContribution[],
     /** Registration admissions emitted while materializing configuration steps. */
     readonly registrationAdmissions: readonly RegistrationAdmissionProduct[],
-    /** Kernel records committed for configuration products and registration admissions by this emission. */
+    /** Open configuration recognition seams retained with their exact app/container scope. */
+    readonly openSeamScopes: readonly ConfigurationOpenSeamScope[],
+    /** Project-run links from evaluator facade/container identity to emitted configuration products. */
+    readonly evaluationBindings: ConfigurationEvaluationBindings,
+    /** Kernel records published for configuration products and registration admissions by this emission. */
     readonly records: readonly KernelStoreRecord[],
   ) {}
 }
@@ -92,6 +113,7 @@ interface ConfigurationSequenceEmission {
   readonly appTasks: readonly AppTaskDefinition[];
   readonly optionContributions: readonly ConfigurationOptionContribution[];
   readonly registrationAdmissions: readonly RegistrationAdmissionProduct[];
+  readonly openSeamScopes: readonly ConfigurationOpenSeamScope[];
 }
 
 class ConfigurationKernelEmissionFrame {
@@ -104,6 +126,7 @@ class ConfigurationKernelEmissionFrame {
   readonly appTasks: AppTaskDefinition[] = [];
   readonly optionContributions: ConfigurationOptionContribution[] = [];
   readonly registrationAdmissions: RegistrationAdmissionProduct[] = [];
+  readonly openSeamScopes: ConfigurationOpenSeamScope[] = [];
 
   recordSequence(emission: ConfigurationSequenceEmission): void {
     this.records.push(...emission.records);
@@ -115,9 +138,10 @@ class ConfigurationKernelEmissionFrame {
     this.appTasks.push(...emission.appTasks);
     this.optionContributions.push(...emission.optionContributions);
     this.registrationAdmissions.push(...emission.registrationAdmissions);
+    this.openSeamScopes.push(...emission.openSeamScopes);
   }
 
-  toEmission(): ConfigurationKernelEmission {
+  toEmission(evaluationBindings: ConfigurationEvaluationBindings): ConfigurationKernelEmission {
     return new ConfigurationKernelEmission(
       this.sequences,
       this.steps,
@@ -127,6 +151,8 @@ class ConfigurationKernelEmissionFrame {
       this.appTasks,
       this.optionContributions,
       this.registrationAdmissions,
+      this.openSeamScopes,
+      evaluationBindings,
       this.records,
     );
   }
@@ -139,19 +165,20 @@ class ConfigurationSequenceProductEmission {
   ) {}
 }
 
-/** Emits configuration observations into the durable kernel graph. */
+/** Emits configuration observations into the caller-owned kernel publication. */
 export class ConfigurationKernelEmitter {
   private readonly publication: ConfigurationKernelPublication;
-  private readonly appFrames: AureliaAppFrameMaterializer;
   private readonly steps: ConfigurationStepMaterializer;
 
   constructor(
-    /** Hot analysis store that receives configuration records. */
+    /** Hot analysis store used only for deterministic handle allocation. */
     readonly store: KernelStore,
+    /** Caller-owned app-generation publication. */
+    readonly kernelPublication: KernelPublicationContext,
+    readonly evaluationBindings: ConfigurationEvaluationBindingFrame,
   ) {
     this.publication = new ConfigurationKernelPublication(store);
-    this.appFrames = new AureliaAppFrameMaterializer(store, this.publication);
-    this.steps = new ConfigurationStepMaterializer(store, this.publication);
+    this.steps = new ConfigurationStepMaterializer(store, this.publication, kernelPublication, evaluationBindings);
   }
 
   emit(
@@ -159,6 +186,7 @@ export class ConfigurationKernelEmitter {
     observations: readonly ConfigurationSequenceObservation[],
     resources: ResourceDefinitionIndex | null = null,
   ): ConfigurationKernelEmission {
+    const bindingMark = this.evaluationBindings.mark();
     const frame = new ConfigurationKernelEmissionFrame();
 
     observations.forEach((observation, index) => {
@@ -167,10 +195,31 @@ export class ConfigurationKernelEmitter {
     });
 
     if (frame.records.length > 0) {
-      this.store.commit(new KernelStoreBatch(frame.records, `configuration:${context.moduleKey}`));
+      this.kernelPublication.publish(new KernelPublicationPlan(
+        new KernelStoreBatch(frame.records, `configuration:${context.moduleKey}`),
+      ));
     }
 
-    return frame.toEmission();
+    return frame.toEmission(this.evaluationBindings.readSince(bindingMark));
+  }
+
+  /** Emit one source-ordinal sequence while sharing evaluator identity with other project modules. */
+  emitSequence(
+    context: ConfigurationRecognitionContext,
+    observation: ConfigurationSequenceObservation,
+    ordinal: number,
+    resources: ResourceDefinitionIndex | null = null,
+  ): ConfigurationKernelEmission {
+    const bindingMark = this.evaluationBindings.mark();
+    const frame = new ConfigurationKernelEmissionFrame();
+    const emission = this.recordsForSequence(context, observation, ordinal, resources);
+    frame.recordSequence(emission);
+    if (frame.records.length > 0) {
+      this.kernelPublication.publish(new KernelPublicationPlan(
+        new KernelStoreBatch(frame.records, `configuration:${context.moduleKey}:${ordinal}`),
+      ));
+    }
+    return frame.toEmission(this.evaluationBindings.readSince(bindingMark));
   }
 
   private recordsForSequence(
@@ -198,37 +247,61 @@ export class ConfigurationKernelEmitter {
     );
     records.push(...source.records);
 
-    const appFrame = this.appFrames.materialize(context, observation, local, source.provenanceHandle, resources);
-    if (appFrame != null) {
-      records.push(...appFrame.records);
-    }
-
     const stepReferences = this.stepReferenceSeedsForSequence(local, observation);
-    const stepSet = this.steps.recordsForSequenceSteps(context, observation, local, stepReferences, appFrame, resources);
+    const stepSet = this.steps.recordsForSequenceSteps(context, observation, local, stepReferences, resources);
     records.push(...stepSet.records);
 
-    const sequenceEmission = this.recordsForSequenceProduct(observation, local, appFrame, stepReferences, source);
+    const openSeams = this.publication.recordsForOpenSeams(
+      context,
+      observation.openSeams,
+      `configuration-sequence:${local}`,
+    );
+    records.push(...openSeams.records);
+
+    const sequenceEmission = this.recordsForSequenceProduct(
+      observation,
+      local,
+      stepSet,
+      stepReferences,
+      source,
+      openSeams.handles,
+    );
     records.push(...sequenceEmission.records);
+    this.evaluationBindings.bindProductSource(
+      sequenceEmission.sequence.productHandle,
+      observation.sourceNode,
+    );
+    const preferredOpenSeamContainerIdentityHandle = stepSet.sequenceAppRoot?.container.identityHandle
+      ?? stepSet.sequenceAurelia?.container.identityHandle
+      ?? null;
+    const openSeamContainerIdentityHandles = preferredOpenSeamContainerIdentityHandle == null
+      ? knownContainerIdentityHandles(stepSet.containers)
+      : [preferredOpenSeamContainerIdentityHandle];
 
     return {
       records,
       sequence: sequenceEmission.sequence,
       steps: stepSet.steps,
-      aurelias: appFrame == null ? [] : [appFrame.aurelia],
-      appRoots: appFrame?.appRoot == null ? [] : [appFrame.appRoot],
-      containers: appFrame == null ? [] : [appFrame.container],
+      aurelias: stepSet.aurelias,
+      appRoots: stepSet.appRoots,
+      containers: stepSet.containers,
       appTasks: stepSet.appTasks,
       optionContributions: stepSet.optionContributions,
       registrationAdmissions: stepSet.registrationAdmissions,
+      openSeamScopes: openSeams.seams.map((seam) => new ConfigurationOpenSeamScope(
+        seam,
+        openSeamContainerIdentityHandles,
+      )),
     };
   }
 
   private recordsForSequenceProduct(
     observation: ConfigurationSequenceObservation,
     local: string,
-    appFrame: AureliaAppFrame | null,
+    stepSet: ConfigurationStepEmissionSet,
     stepReferences: readonly ConfigurationStepReferenceSeed[],
-    source: SourceRecordSet,
+    source: ConfigurationSourceRecordSet,
+    openSeamHandles: readonly OpenSeamHandle[],
   ): ConfigurationSequenceProductEmission {
     const handles = this.publication.configurationProductHandles(`configuration-sequence:${local}`);
     const sequenceClaims = this.publication.recordsForSequenceClaims(
@@ -241,21 +314,31 @@ export class ConfigurationKernelEmitter {
       observation,
       handles.productHandle,
       handles.identityHandle,
-      appFrame,
+      stepSet,
       stepReferences,
       source,
     );
-    return this.sequenceProductEmission(local, observation, appFrame, source, handles, sequenceClaims, sequence);
+    return this.sequenceProductEmission(
+      local,
+      observation,
+      stepSet,
+      source,
+      handles,
+      sequenceClaims,
+      sequence,
+      openSeamHandles,
+    );
   }
 
   private sequenceProductEmission(
     local: string,
     observation: ConfigurationSequenceObservation,
-    appFrame: AureliaAppFrame | null,
-    source: SourceRecordSet,
+    stepSet: ConfigurationStepEmissionSet,
+    source: ConfigurationSourceRecordSet,
     handles: ConfigurationProductHandles,
     sequenceClaims: ConfigurationClaimSet,
     sequence: ConfigurationSequence,
+    openSeamHandles: readonly OpenSeamHandle[],
   ): ConfigurationSequenceProductEmission {
     return new ConfigurationSequenceProductEmission(
       [
@@ -263,11 +346,12 @@ export class ConfigurationKernelEmitter {
         ...this.recordsForConfigurationSequenceProduct(
           local,
           observation,
-          appFrame,
+          stepSet,
           source,
           handles.productHandle,
           handles.identityHandle,
           sequenceClaims.handles,
+          openSeamHandles,
         ),
       ],
       sequence,
@@ -290,16 +374,16 @@ export class ConfigurationKernelEmitter {
     observation: ConfigurationSequenceObservation,
     productHandle: ProductHandle,
     identityHandle: IdentityHandle,
-    appFrame: AureliaAppFrame | null,
+    stepSet: ConfigurationStepEmissionSet,
     stepReferences: readonly ConfigurationStepReferenceSeed[],
-    source: SourceRecordSet,
+    source: ConfigurationSourceRecordSet,
   ): ConfigurationSequence {
     return new ConfigurationSequence(
       productHandle,
       identityHandle,
       observation.sequenceKind,
-      appFrame?.aurelia.toReference() ?? null,
-      appFrame?.appRoot?.toReference() ?? null,
+      stepSet.sequenceAurelia?.toReference() ?? null,
+      stepSet.sequenceAppRoot?.toReference() ?? null,
       stepReferences.map((step) => step.toReference()),
       source.addressHandle,
       [],
@@ -309,23 +393,30 @@ export class ConfigurationKernelEmitter {
   private recordsForConfigurationSequenceProduct(
     local: string,
     observation: ConfigurationSequenceObservation,
-    appFrame: AureliaAppFrame | null,
-    source: SourceRecordSet,
+    stepSet: ConfigurationStepEmissionSet,
+    source: ConfigurationSourceRecordSet,
     productHandle: ProductHandle,
     identityHandle: IdentityHandle,
     claimHandles: readonly ClaimHandle[],
+    openSeamHandles: readonly OpenSeamHandle[],
   ): readonly KernelStoreRecord[] {
     return this.publication.configurationProductRecords({
       local: `configuration-sequence:${local}`,
       productHandle,
       identityHandle,
       productKindKey: KernelVocabulary.Configuration.Sequence.key,
-      ownerHandle: appFrame?.aurelia.identityHandle ?? null,
+      ownerHandle: stepSet.sequenceAurelia?.identityHandle ?? null,
       sourceAddressHandle: source.addressHandle,
       provenanceHandle: source.provenanceHandle,
       localName: observation.localName,
       claimHandles,
+      openSeamHandles,
     });
   }
 
+}
+
+function knownContainerIdentityHandles(containers: readonly Container[]): readonly IdentityHandle[] | null {
+  const handles = [...new Set(containers.map((container) => container.identityHandle))];
+  return handles.length === 0 ? null : handles;
 }

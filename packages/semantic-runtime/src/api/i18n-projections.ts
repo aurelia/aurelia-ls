@@ -19,13 +19,9 @@ import {
 import {
   TemplateProductDetails,
 } from '../template/product-details.js';
-import { bindingExpressionAstForProduct } from '../template/expression-parse-product.js';
 import {
   TranslationBinding,
 } from '../template/runtime-binding.js';
-import {
-  collectRuntimeConnectableObservedDependencyDrafts,
-} from '../observation/connectable-observed-dependency.js';
 import type {
   SemanticI18nTranslationBindingRow,
   SemanticI18nTranslationBindingTargetRow,
@@ -76,7 +72,9 @@ export function readI18nTranslationBindingRows(
         const staticKeys = staticTargets.map((target) => target.key);
         const targetProperties = uniqueStrings(staticTargets.flatMap((target) => target.targetProperties));
         const targetKinds = uniqueStrings(staticTargets.flatMap((target) => target.targetKinds));
-        const parameterDependencies = parameterBindingObservedDependencies(store, group.parameterBindings);
+        const parameterDependencies = group.parameterBindings.flatMap((binding) =>
+          resource.runtimeAnalysis.bindingDataFlow.readObservedDependenciesForBinding(binding.productHandle)
+        );
         const issues = group.bindings.flatMap((binding) =>
           resource.runtimeAnalysis.i18nTranslationBinding.readIssuesForBinding(binding.productHandle)
         );
@@ -104,13 +102,13 @@ export function readI18nTranslationBindingRows(
           staticTargets,
           hasParameterBinding: group.parameterBindings.length > 0,
           parameterSourceNames: uniqueStrings(parameterDependencies.flatMap((dependency) =>
-            dependency.sourceName == null ? [] : [dependency.sourceName]
+            dependency.occurrence.sourceName == null ? [] : [dependency.occurrence.sourceName]
           )),
           parameterSourceRootNames: uniqueStrings(parameterDependencies.flatMap((dependency) =>
-            dependency.sourceRootName == null ? [] : [dependency.sourceRootName]
+            dependency.occurrence.sourceRootName == null ? [] : [dependency.occurrence.sourceRootName]
           )),
           parameterMemberNames: uniqueStrings(parameterDependencies.flatMap((dependency) =>
-            dependency.memberName == null ? [] : [dependency.memberName]
+            dependency.occurrence.memberName == null ? [] : [dependency.occurrence.memberName]
           )),
           issueCount: issues.length,
           frameworkErrorCodes: issues.flatMap((issue) =>
@@ -136,16 +134,6 @@ export function readI18nTranslationBindingRows(
 
 function effectiveKeyBinding(group: I18nTranslationBindingGroup): TranslationBinding | null {
   return group.keyBindings[group.keyBindings.length - 1] ?? null;
-}
-
-function parameterBindingObservedDependencies(
-  store: KernelStore,
-  bindings: readonly TranslationBinding[],
-) {
-  return bindings.flatMap((binding) => {
-    const ast = bindingExpressionAstForProduct(store, binding.expressionProductHandle);
-    return ast == null ? [] : collectRuntimeConnectableObservedDependencyDrafts(ast);
-  });
 }
 
 function staticI18nTranslationTargets(

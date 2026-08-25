@@ -7,17 +7,37 @@ import {
   type ContainerChildMaterializationPhaseName,
   type ContainerChildMaterializationEmission,
 } from '../di/container-materializer.js';
+import { FrameworkIntrinsicDiKey } from '../di/framework-intrinsic-di-key.js';
 import { ContainerLookupState } from '../di/container-lookup.js';
 import { DiKeyIdentityEmitter } from '../di/di-key-identity-emitter.js';
 import { DiResourceSlotPublicationMaterializer } from '../di/world-publication.js';
+import {
+  AuSlotsInfo,
+  AuSlotsInfoProjection,
+  AuSlotsInfoSourceKind,
+  RuntimeHydrationContext,
+} from '../configuration/controller.js';
+import { AppTaskSlot } from '../configuration/app-task.js';
+import { SemanticClaim } from '../kernel/claim.js';
 import type { AddressHandle, ProductHandle, ProvenanceHandle } from '../kernel/handles.js';
+import { ConfigurationIdentity } from '../kernel/identity.js';
+import {
+  MaterializationRecord,
+  MaterializedProduct,
+} from '../kernel/materialization.js';
 import {
   OpenSeam,
+  OpenSeamReasonKind,
+  type OpenSeamReasonSource,
 } from '../kernel/open-seam.js';
+import {
+  readFieldProvenance,
+} from '../kernel/provenance.js';
 import {
   type KernelStore,
   type KernelStoreRecord,
 } from '../kernel/store.js';
+import type { KernelPublicationContext } from '../kernel/publication.js';
 import {
   KernelVocabulary,
   type OpenSeamKindKey,
@@ -35,17 +55,27 @@ import {
 import type { FullResourceDefinition } from '../resources/resource-definition.js';
 import type { ResourceDefinitionIndex } from '../resources/resource-definition-index.js';
 import {
+  NamedResourceDefinitionContributionKind,
   ResourceDefinitionKind,
   runtimeResourceKeyForKind,
 } from '../resources/resource-kind.js';
 import {
-  ObserverLocator,
+  RegistrationValueKind,
+  RegistrationValueReference,
+} from '../registration/registration-reference.js';
+import {
   ObserverLocatorLookupRequest,
+  type ObserverLocator,
 } from '../observation/observer-locator.js';
 import { ResourceProductDetails } from '../resources/product-details.js';
 import type { TypeSystemProject } from '../type-system/project.js';
-import { TypeSystemProductDetails } from '../type-system/product-details.js';
-import { checkerPropertySymbol } from '../type-system/checker-node-helpers.js';
+import type { CheckerExpressionTypeWorld } from '../type-system/expression-type-world.js';
+import { RuntimeOperationReachability } from '../runtime-expression/runtime-operation.js';
+import {
+  CheckerRuntimeMemberPresence,
+  CheckerTypeShapeAccess,
+  readCheckerTypeShape,
+} from '../type-system/checker-type-shape-access.js';
 import { RuntimeHtmlControllerFrameworkErrorCode } from './framework-error-code.js';
 import {
   HydrateAttributeInstruction,
@@ -60,13 +90,16 @@ import {
   RuntimeControllerCreationKind,
   RuntimeControllerCreationRequest,
   RuntimeControllerFrame,
+  RuntimeControllerObserverSetup,
+  RuntimeControllerObserverSetupState,
   type RuntimeControllerInstruction,
-  RuntimeControllerLifecycleStage,
-  RuntimeControllerLifecycleStepKind,
+  RuntimeControllerAssemblyStage,
+  RuntimeControllerAssemblyStepKind,
 } from './runtime-controller.js';
 import {
   RuntimeBindingTargetAccessLookup,
   RuntimeBindingTargetKind,
+  RuntimeControllerObserverSetupOutcome,
 } from './runtime-binding.js';
 import {
   RuntimeRendererAllocation,
@@ -87,7 +120,7 @@ import {
   RuntimeControllerIssuePublisher,
 } from './runtime-controller-issue.js';
 import {
-  runtimeWatchersForDefinition,
+  runtimeWatcherMaterializationsForDefinition,
 } from './runtime-watcher-factory.js';
 import {
   directDependencyDefinitions,
@@ -135,16 +168,56 @@ const unmeasuredRuntimeControllerCreation: RuntimeControllerCreationMeasure = (_
 export class RuntimeControllerCreationMaterializer {
   private readonly childContainerMaterializer: ContainerChildMaterializer;
   private readonly controllerIssuePublisher: RuntimeControllerIssuePublisher;
-  private readonly observerLocator: ObserverLocator;
   private readonly resourceSlotPublication: DiResourceSlotPublicationMaterializer;
 
   constructor(
     private readonly store: KernelStore,
+    private readonly publication: KernelPublicationContext,
   ) {
-    this.childContainerMaterializer = new ContainerChildMaterializer(store);
+    this.childContainerMaterializer = new ContainerChildMaterializer(store, publication);
     this.controllerIssuePublisher = new RuntimeControllerIssuePublisher(store);
-    this.observerLocator = new ObserverLocator(store);
-    this.resourceSlotPublication = new DiResourceSlotPublicationMaterializer(store, new DiKeyIdentityEmitter(store));
+    this.resourceSlotPublication = new DiResourceSlotPublicationMaterializer(
+      store,
+      new DiKeyIdentityEmitter(publication),
+    );
+  }
+
+  createIntrinsicEmptyAuSlotsInfo(
+    localKey: string,
+    source: RuntimeRenderingSourceSet,
+    records: KernelStoreRecord[],
+  ): AuSlotsInfo {
+    const local = `${localKey}:au-slots-info:intrinsic-empty`;
+    const slotsInfo = new AuSlotsInfo(
+      this.store.handles.product(local),
+      this.store.handles.identity(local),
+      AuSlotsInfoSourceKind.IntrinsicEmpty,
+      [],
+      [],
+      null,
+    );
+    records.push(
+      new ConfigurationIdentity(
+        slotsInfo.identityHandle,
+        KernelVocabulary.Configuration.AuSlotsInfo.key,
+        null,
+        null,
+        FrameworkIntrinsicDiKey.IAuSlotsInfo,
+      ),
+      new MaterializedProduct(
+        slotsInfo.productHandle,
+        KernelVocabulary.Configuration.AuSlotsInfo.key,
+        slotsInfo.identityHandle,
+        null,
+        source.provenanceHandle,
+      ),
+      new MaterializationRecord(
+        this.store.handles.materialization(local),
+        slotsInfo.identityHandle,
+        [slotsInfo.productHandle],
+      ),
+    );
+    return slotsInfo;
   }
 
   createRootController(
@@ -152,20 +225,19 @@ export class RuntimeControllerCreationMaterializer {
     definition: CustomElementDefinition,
     rootContainer: Container,
     source: RuntimeRenderingSourceSet,
+    expressionWorld: CheckerExpressionTypeWorld,
     typeSystem: TypeSystemProject | null,
     projectKey: string | null,
     resourceDefinitions: ResourceDefinitionIndex | null,
     records: KernelStoreRecord[],
     childContainerEmissions: ContainerChildMaterializationEmission[],
   ): RuntimeControllerFrame {
-    const childContainer = this.childContainerMaterializer.materializeChild(new ContainerChildMaterializationRequest(
-      `${localKey}:controller:root-container`,
-      rootContainer,
-      definition.sourceAddressHandle,
-      'root-custom-element:container',
-      [],
-      null,
-    ));
+    const childContainer = this.childContainerMaterializer.materializeChild(new ContainerChildMaterializationRequest({
+      localKey: `${localKey}:controller:root-container`,
+      parent: rootContainer,
+      sourceAddressHandle: definition.sourceAddressHandle,
+      localName: 'root-custom-element:container',
+    }));
     records.push(...childContainer.records);
     childContainerEmissions.push(childContainer);
     const allocation = this.allocate(`${localKey}:controller:root`);
@@ -186,6 +258,15 @@ export class RuntimeControllerCreationMaterializer {
       definition.sourceAddressHandle,
       source.provenanceHandle,
     );
+    this.installOwnedHydrationContext(
+      `${localKey}:controller:root`,
+      frame,
+      null,
+      null,
+      childContainer,
+      source,
+      records,
+    );
     this.recordRootControllerHydration(frame, childContainer);
     this.recordControllerResourceDependencies(
       `${localKey}:controller:root-dependencies`,
@@ -196,20 +277,23 @@ export class RuntimeControllerCreationMaterializer {
       source.provenanceHandle,
       records,
     );
-    this.recordControllerWatchers(`${localKey}:controller:root`, frame, definition, typeSystem);
     return frame;
   }
 
   createChildController(
     creation: RuntimeControllerCreationRequest,
+    expressionWorld: CheckerExpressionTypeWorld,
     typeSystem: TypeSystemProject | null,
+    observerLocator: ObserverLocator,
     source: RuntimeRenderingSourceSet,
     records: KernelStoreRecord[],
     childContainerEmissions: ContainerChildMaterializationEmission[],
+    auSlotsInfos: AuSlotsInfo[],
+    intrinsicEmptyAuSlotsInfo: AuSlotsInfo,
     openSeams: OpenSeam[],
     controllerIssues: RuntimeControllerIssue[],
+    readController: (productHandle: ProductHandle) => RuntimeControllerFrame | null,
     measure: RuntimeControllerCreationMeasure = unmeasuredRuntimeControllerCreation,
-    contextResolverRecordPolicy: ContainerContextResolverRecordPolicy = ContainerContextResolverRecordPolicy.PublishAll,
     projectKey: string | null = null,
     resourceDefinitions: ResourceDefinitionIndex | null = null,
   ): RuntimeControllerFrame | null {
@@ -228,14 +312,34 @@ export class RuntimeControllerCreationMaterializer {
       return null;
     }
     const allocation = this.allocate(`${creation.local}:controller`);
+    const auSlotsInfo = this.materializeAuSlotsInfo(
+      creation,
+      source,
+      records,
+      auSlotsInfos,
+      intrinsicEmptyAuSlotsInfo,
+    );
     const childContainer = measure('child-container', () =>
-      this.materializeChildControllerContainer(creation, parentContainer, measure, contextResolverRecordPolicy)
+      this.materializeChildControllerContainer(
+        creation,
+        parentContainer,
+        auSlotsInfo,
+        measure,
+      )
     );
     records.push(...childContainer.records);
     childContainerEmissions.push(childContainer);
     const frame = measure('child-frame', () =>
       this.childControllerFrame(creation, allocation, definition, childContainer, source)
     );
+    frame.attachAuSlotsInfo(auSlotsInfo);
+    const inheritedHydrationContext = creation.parent.readHydrationContext();
+    if (inheritedHydrationContext != null) {
+      frame.attachConstructionHydrationContext(inheritedHydrationContext);
+      if (creation.creationKind !== RuntimeControllerCreationKind.CustomElement) {
+        frame.attachHydrationContext(inheritedHydrationContext);
+      }
+    }
     measure('controller-dependencies', () =>
       this.recordControllerResourceDependencies(
         `${creation.local}:controller-dependencies`,
@@ -247,18 +351,38 @@ export class RuntimeControllerCreationMaterializer {
         records,
       )
     );
-    measure('watcher-setup', () =>
-      this.recordControllerWatchers(`${creation.local}:controller`, frame, definition, typeSystem)
-    );
-    measure('child-hydration', () => this.recordChildControllerHydration(frame, childContainer));
-    measure('observer-setup', () =>
-      this.recordControllerObserverSetupIssues(frame, definition, typeSystem, source, records, controllerIssues)
-    );
     measure('activation-di-issues', () =>
       this.recordControllerActivationDiIssues(creation, frame, definition, source, records, controllerIssues)
     );
+    measure('child-hydration', () => {
+      if (creation.creationKind === RuntimeControllerCreationKind.CustomElement) {
+        this.installOwnedHydrationContext(
+          `${creation.local}:controller`,
+          frame,
+          creation.instruction,
+          inheritedHydrationContext,
+          childContainer,
+          source,
+          records,
+        );
+      }
+      this.recordChildControllerHydration(frame, childContainer);
+    });
+    measure('observer-setup', () =>
+      this.materializeControllerObserverSetup(
+        frame,
+        definition,
+        expressionWorld,
+        typeSystem,
+        observerLocator,
+        source,
+        records,
+        openSeams,
+        controllerIssues,
+      )
+    );
     measure('au-compose-static-input-issues', () =>
-      this.recordAuComposeStaticInputIssues(creation, frame, definition, source, records, controllerIssues)
+      this.recordAuComposeStaticInputIssues(creation, frame, definition, source, records, controllerIssues, readController)
     );
     measure('template-controller-construction-issues', () =>
       this.recordTemplateControllerConstructionIssues(creation, frame, source, records, controllerIssues)
@@ -270,17 +394,18 @@ export class RuntimeControllerCreationMaterializer {
   createSyntheticViewController(
     local: string,
     viewFactory: RuntimeViewFactoryMaterialization,
+    hydrationContext: RuntimeHydrationContext | null,
     source: RuntimeRenderingSourceSet,
   ): RuntimeControllerFrame {
     const allocation = this.allocate(`${local}:controller`);
-    const controller = viewFactory.templateController;
-    return new RuntimeControllerFrame(
+    const controller = viewFactory.ownerController;
+    const frame = new RuntimeControllerFrame(
       RuntimeControllerCreationKind.SyntheticView,
       allocation.productHandle,
       allocation.identityHandle,
       viewFactory.viewFactory.name == null ? 'synthetic-view' : `${viewFactory.viewFactory.name}:synthetic`,
       viewFactory.viewFactory.container,
-      controller.containerFrame,
+      viewFactory.container,
       null,
       null,
       null,
@@ -294,6 +419,11 @@ export class RuntimeControllerCreationMaterializer {
       viewFactory.instructionSequenceProductHandle,
       viewFactory.viewFactory.instructionProductHandle,
     );
+    if (hydrationContext != null) {
+      frame.attachHydrationContext(hydrationContext);
+    }
+    frame.finishObserverSetup(RuntimeControllerObserverSetupState.NotApplicable);
+    return frame;
   }
 
   private parentContainerForChildController(
@@ -306,14 +436,24 @@ export class RuntimeControllerCreationMaterializer {
     if (parentContainer != null) {
       return parentContainer;
     }
-    this.recordOpenSeam(
+    const seam = this.recordOpenSeam(
       `${creation.local}:open-controller-container`,
       `Renderer-created controller '${creation.creationKind}' needs runtime child-container materialization, but its parent controller did not carry a modeled container frame.`,
       creation.instruction.sourceAddressHandle,
       source,
       records,
       openSeams,
+      [OpenSeamReasonKind.RuntimeControllerContainerOpen],
       KernelVocabulary.Di.OpenChildContainer.key,
+    );
+    records.push(
+      new MaterializationRecord(
+        this.store.handles.materialization(`${creation.local}:controller-attempt`),
+        creation.instruction.identityHandle,
+        [],
+        [],
+        [seam.handle],
+      ),
     );
     return null;
   }
@@ -321,21 +461,176 @@ export class RuntimeControllerCreationMaterializer {
   private materializeChildControllerContainer(
     creation: ClosedRuntimeControllerCreationRequest,
     parentContainer: Container,
+    auSlotsInfo: AuSlotsInfo,
     measure: RuntimeControllerCreationMeasure,
-    contextResolverRecordPolicy: ContainerContextResolverRecordPolicy,
   ): ContainerChildMaterializationEmission {
     return this.childContainerMaterializer.materializeChild(
-      new ContainerChildMaterializationRequest(
-        `${creation.local}:container`,
-        parentContainer,
-        creation.instruction.sourceAddressHandle,
-        `${creation.creationKind}:container`,
-        contextResolverSlotsForController(creation),
-        null,
-        contextResolverRecordPolicy,
-      ),
+      new ContainerChildMaterializationRequest({
+        localKey: `${creation.local}:container`,
+        parent: parentContainer,
+        sourceAddressHandle: creation.instruction.sourceAddressHandle,
+        localName: `${creation.creationKind}:container`,
+        contextResolvers: contextResolverSlotsForController(creation, auSlotsInfo),
+        contextResolverRecordPolicy: ContainerContextResolverRecordPolicy.ModelOnly,
+      }),
       (name, read) => measure(`child-container:${name}`, read),
     );
+  }
+
+  private materializeAuSlotsInfo(
+    creation: ClosedRuntimeControllerCreationRequest,
+    source: RuntimeRenderingSourceSet,
+    records: KernelStoreRecord[],
+    auSlotsInfos: AuSlotsInfo[],
+    intrinsicEmptyAuSlotsInfo: AuSlotsInfo,
+  ): AuSlotsInfo {
+    if (!(creation.instruction instanceof HydrateElementInstruction)
+      || creation.instruction.projectionInstructionSequences.length === 0) {
+      return intrinsicEmptyAuSlotsInfo;
+    }
+    const local = `${creation.local}:au-slots-info`;
+    const instructionCreatesSlotsInfo = new SemanticClaim(
+      this.store.handles.claim(`${local}:instruction-creates-au-slots-info`),
+      creation.instruction.productHandle,
+      KernelVocabulary.Configuration.InstructionCreatesAuSlotsInfo.key,
+      this.store.handles.product(local),
+      source.provenanceHandle,
+    );
+    const slotsInfo = new AuSlotsInfo(
+      this.store.handles.product(local),
+      this.store.handles.identity(local),
+      AuSlotsInfoSourceKind.HydrateElementInstruction,
+      [...new Set(creation.instruction.projectionInstructionSequences.map((projection) =>
+        projection.slotName
+      ))],
+      creation.instruction.projectionInstructionSequences.map((projection) =>
+        new AuSlotsInfoProjection(
+          projection.slotName,
+          projection.instructionSequenceProductHandle,
+          projection.sourceAddressHandle,
+          projection.contributors.map((contributor) =>
+            contributor.slotNameSourceAddressHandle ?? contributor.node.addressHandle
+          ),
+        )
+      ),
+      creation.instruction.sourceAddressHandle,
+    );
+    records.push(
+      new ConfigurationIdentity(
+        slotsInfo.identityHandle,
+        KernelVocabulary.Configuration.AuSlotsInfo.key,
+        creation.instruction.identityHandle,
+        slotsInfo.sourceAddressHandle,
+        FrameworkIntrinsicDiKey.IAuSlotsInfo,
+      ),
+      new MaterializedProduct(
+        slotsInfo.productHandle,
+        KernelVocabulary.Configuration.AuSlotsInfo.key,
+        slotsInfo.identityHandle,
+        slotsInfo.sourceAddressHandle,
+        source.provenanceHandle,
+      ),
+      new MaterializationRecord(
+        this.store.handles.materialization(local),
+        slotsInfo.identityHandle,
+        [slotsInfo.productHandle],
+        [instructionCreatesSlotsInfo.handle],
+      ),
+      instructionCreatesSlotsInfo,
+    );
+    auSlotsInfos.push(slotsInfo);
+    return slotsInfo;
+  }
+
+  private installOwnedHydrationContext(
+    local: string,
+    frame: RuntimeControllerFrame,
+    instruction: RuntimeControllerInstruction | null,
+    parent: RuntimeHydrationContext | null,
+    childContainer: ContainerChildMaterializationEmission,
+    source: RuntimeRenderingSourceSet,
+    records: KernelStoreRecord[],
+  ): RuntimeHydrationContext {
+    const contextLocal = `${local}:hydration-context`;
+    const context = new RuntimeHydrationContext(
+      this.store.handles.product(contextLocal),
+      this.store.handles.identity(contextLocal),
+      frame.toReference(),
+      instruction?.productHandle ?? null,
+      parent,
+      instruction?.sourceAddressHandle ?? frame.sourceAddressHandle,
+    );
+    const claims = [
+      new SemanticClaim(
+        this.store.handles.claim(`${contextLocal}:uses-controller`),
+        context.productHandle,
+        KernelVocabulary.Configuration.HydrationContextUsesController.key,
+        frame.productHandle,
+        source.provenanceHandle,
+      ),
+      ...(instruction == null
+        ? []
+        : [new SemanticClaim(
+            this.store.handles.claim(`${contextLocal}:uses-instruction`),
+            context.productHandle,
+            KernelVocabulary.Configuration.HydrationContextUsesInstruction.key,
+            instruction.productHandle,
+            source.provenanceHandle,
+          )]),
+      ...(parent == null
+        ? []
+        : [new SemanticClaim(
+            this.store.handles.claim(`${contextLocal}:has-parent`),
+            context.productHandle,
+            KernelVocabulary.Configuration.HydrationContextHasParent.key,
+            parent.productHandle,
+            source.provenanceHandle,
+          )]),
+    ];
+    records.push(
+      new ConfigurationIdentity(
+        context.identityHandle,
+        KernelVocabulary.Configuration.HydrationContext.key,
+        parent?.identityHandle ?? null,
+        context.sourceAddressHandle,
+        FrameworkIntrinsicDiKey.IHydrationContext,
+      ),
+      new MaterializedProduct(
+        context.productHandle,
+        KernelVocabulary.Configuration.HydrationContext.key,
+        context.identityHandle,
+        context.sourceAddressHandle,
+        source.provenanceHandle,
+      ),
+      new MaterializationRecord(
+        this.store.handles.materialization(contextLocal),
+        context.identityHandle,
+        [context.productHandle],
+        claims.map((claim) => claim.handle),
+      ),
+      ...claims,
+    );
+    frame.attachHydrationContext(context);
+    const provider = this.childContainerMaterializer.installContextResolver(
+      childContainer,
+      `${local}:own-hydration-context`,
+      new ContainerContextResolverSlotRequest({
+        interfaceName: FrameworkIntrinsicDiKey.IHydrationContext,
+        sourceAddressHandle: context.sourceAddressHandle,
+        ownerIdentityHandle: context.identityHandle,
+        instance: new RegistrationValueReference(
+          RegistrationValueKind.Instance,
+          context.identityHandle,
+          context.productHandle,
+          context.sourceAddressHandle,
+          FrameworkIntrinsicDiKey.IHydrationContext,
+        ),
+      }),
+      source.provenanceHandle,
+      ContainerContextResolverRecordPolicy.ModelOnly,
+    );
+    records.push(...provider.records);
+    return context;
   }
 
   private childControllerFrame(
@@ -370,9 +665,9 @@ export class RuntimeControllerCreationMaterializer {
     frame: RuntimeControllerFrame,
     childContainer: ContainerChildMaterializationEmission,
   ): void {
-    frame.recordLifecycleStep(
-      RuntimeControllerLifecycleStage.Hydration,
-      RuntimeControllerLifecycleStepKind.CreateChildContainer,
+    frame.recordAssemblyStep(
+      RuntimeControllerAssemblyStage.Hydration,
+      RuntimeControllerAssemblyStepKind.CreateChildContainer,
       childContainer.container.productHandle,
       childContainer.container.sourceAddressHandle,
       'Renderer-created controller received a runtime child container and hydration context providers.',
@@ -383,9 +678,9 @@ export class RuntimeControllerCreationMaterializer {
     frame: RuntimeControllerFrame,
     childContainer: ContainerChildMaterializationEmission,
   ): void {
-    frame.recordLifecycleStep(
-      RuntimeControllerLifecycleStage.Hydration,
-      RuntimeControllerLifecycleStepKind.CreateChildContainer,
+    frame.recordAssemblyStep(
+      RuntimeControllerAssemblyStage.Hydration,
+      RuntimeControllerAssemblyStepKind.CreateChildContainer,
       childContainer.container.productHandle,
       childContainer.container.sourceAddressHandle,
       'AppRoot created a runtime child container for the root custom element controller.',
@@ -396,9 +691,20 @@ export class RuntimeControllerCreationMaterializer {
     local: string,
     frame: RuntimeControllerFrame,
     definition: CustomElementDefinition | CustomAttributeDefinition | null,
-    typeSystem: TypeSystemProject | null = null,
+    expressionWorld: CheckerExpressionTypeWorld,
+    typeSystem: TypeSystemProject | null,
+    reachability: RuntimeOperationReachability,
   ): void {
-    for (const watcher of runtimeWatchersForDefinition(this.store, local, frame, definition, typeSystem)) {
+    for (const watcher of runtimeWatcherMaterializationsForDefinition(
+      this.store,
+      this.publication,
+      local,
+      frame,
+      definition,
+      expressionWorld,
+      typeSystem,
+      reachability,
+    )) {
       frame.addWatcher(watcher);
     }
   }
@@ -427,6 +733,7 @@ export class RuntimeControllerCreationMaterializer {
           container,
           dependency,
           lookupName,
+          null,
           `${local}:${dependencyIndex}:${nameIndex}`,
           provenanceHandle,
           projectKey,
@@ -444,35 +751,95 @@ export class RuntimeControllerCreationMaterializer {
     if (registered === 0) {
       return;
     }
-    frame.recordLifecycleStep(
-      RuntimeControllerLifecycleStage.Hydration,
-      RuntimeControllerLifecycleStepKind.RegisterDependencies,
+    frame.recordAssemblyStep(
+      RuntimeControllerAssemblyStage.Hydration,
+      RuntimeControllerAssemblyStepKind.RegisterDependencies,
       definition.productHandle,
       definition.sourceAddressHandle,
       `Controller container registered ${registered} resource dependency slot(s).`,
     );
   }
 
-  recordControllerObserverSetupIssues(
+  materializeControllerObserverSetup(
     frame: RuntimeControllerFrame,
     definition: CustomElementDefinition | CustomAttributeDefinition | null,
+    expressionWorld: CheckerExpressionTypeWorld,
     typeSystem: TypeSystemProject | null,
+    observerLocator: ObserverLocator,
     source: RuntimeRenderingSourceSet,
     records: KernelStoreRecord[],
+    openSeams: OpenSeam[],
     controllerIssues: RuntimeControllerIssue[],
   ): void {
-    if (definition == null || typeSystem == null || definition.target.targetType == null) {
+    if (definition == null || definition.bindables.length === 0) {
+      frame.finishObserverSetup(RuntimeControllerObserverSetupState.NotApplicable);
       return;
     }
-    const hasTargetProperty = targetTypePropertyLookup(this.store, definition);
-    const hasAnyChangeCallback = hasTargetProperty('propertyChanged') || hasTargetProperty('propertiesChanged');
-    definition.bindables.forEach((bindable, index) => {
-      const requiresCoercer = bindableSetterRequiresCoercer(bindable);
-      const requiresCallback = hasAnyChangeCallback || hasTargetProperty(bindable.callback);
-      if (!requiresCoercer && !requiresCallback) {
-        return;
+
+    const targetShape = readCheckerTypeShape(this.publication, definition.target.targetType);
+    const compilerGeneratedLocalTemplate = definition instanceof CustomElementDefinition
+      && definition.contributions.some((contribution) =>
+        contribution.contributionKind === NamedResourceDefinitionContributionKind.LocalTemplate
+      );
+    const typeAccess = new CheckerTypeShapeAccess(this.store, expressionWorld.projector);
+    const runtimePresence = (
+      propertyName: string,
+      nonNullish: boolean,
+    ): boolean | null => {
+      if (targetShape == null) {
+        // The template compiler creates LocalDepType itself; no user-authored callback members can exist on it.
+        return compilerGeneratedLocalTemplate ? false : null;
       }
-      const lookup = this.observerLocator.getObserver(new ObserverLocatorLookupRequest(
+      const presence = nonNullish
+        ? typeAccess.runtimeNonNullishMemberPresence(
+            targetShape,
+            propertyName,
+            `${frame.productHandle}:observer-setup:callback:${propertyName}`,
+          )
+        : typeAccess.runtimeMemberPresence(
+            targetShape,
+            propertyName,
+            `${frame.productHandle}:observer-setup:callback:${propertyName}`,
+          );
+      switch (presence) {
+        case CheckerRuntimeMemberPresence.Present:
+          return true;
+        case CheckerRuntimeMemberPresence.Absent:
+          return false;
+        case CheckerRuntimeMemberPresence.Open:
+          return null;
+      }
+    };
+    const hasPropertyChanged = runtimePresence('propertyChanged', true);
+    const hasPropertiesChanged = runtimePresence('propertiesChanged', false);
+    let aggregateState = RuntimeControllerObserverSetupState.Complete;
+    let setupReachability = RuntimeOperationReachability.Reached;
+
+    for (let index = 0; index < definition.bindables.length; index++) {
+      const bindable = definition.bindables[index]!;
+      const requiresCoercer = bindableSetterRequiresCoercer(bindable);
+      const hasBindableCallback = runtimePresence(bindable.callback, false);
+      const requiresCallback = callbackRequirement(
+        hasBindableCallback,
+        hasPropertyChanged,
+        hasPropertiesChanged,
+      );
+      if (setupReachability === RuntimeOperationReachability.BlockedByOuterFailure) {
+        frame.recordObserverSetup(new RuntimeControllerObserverSetup(
+          bindable.name,
+          bindable.propertyTarget?.identityHandle ?? null,
+          null,
+          RuntimeControllerObserverSetupOutcome.NotReached,
+          requiresCoercer,
+          requiresCallback,
+          setupReachability,
+          bindable.sourceAddressHandle ?? definition.sourceAddressHandle,
+          observerSetupProvenanceHandles(bindable, source.provenanceHandle),
+          [],
+        ));
+        continue;
+      }
+      const lookup = observerLocator.getObserver(new ObserverLocatorLookupRequest(
         `${frame.productHandle}:observer-setup:${index}:${bindable.name}`,
         RuntimeBindingTargetAccessLookup.Observer,
         RuntimeBindingTargetKind.ControllerViewModel,
@@ -484,37 +851,87 @@ export class RuntimeControllerCreationMaterializer {
         bindable.sourceAddressHandle ?? definition.sourceAddressHandle,
         false,
         false,
+        observerSetupAppTaskBoundary(frame),
       ));
-      if (lookup.openReason != null) {
-        return;
+      const openReasons = observerSetupOpenReasons(
+        lookup.openReason,
+        lookup.supportsCoercer,
+        lookup.supportsCallback,
+        requiresCoercer,
+        requiresCallback,
+      );
+      let outcome = RuntimeControllerObserverSetupOutcome.Installed;
+      if (openReasons.length > 0) {
+        outcome = RuntimeControllerObserverSetupOutcome.Open;
+        aggregateState = RuntimeControllerObserverSetupState.Open;
+      } else if (requiresCoercer && lookup.supportsCoercer === false) {
+        outcome = RuntimeControllerObserverSetupOutcome.RejectedCoercer;
+        if (setupReachability === RuntimeOperationReachability.Reached) {
+          this.publishControllerObserverSetupIssue(
+            `${frame.productHandle}:controller-issue:observer-setup:${index}:coercer`,
+            frame,
+            source,
+            records,
+            controllerIssues,
+            RuntimeControllerIssueKind.ControllerPropertyNotCoercible,
+            `Observer for bindable property ${bindable.name} does not support coercion.`,
+            RuntimeHtmlControllerFrameworkErrorCode.ControllerPropertyNotCoercible,
+            bindable.sourceAddressHandle ?? definition.sourceAddressHandle,
+          );
+        }
+      } else if (requiresCallback && lookup.supportsCallback === false) {
+        outcome = RuntimeControllerObserverSetupOutcome.RejectedCallback;
+        if (setupReachability === RuntimeOperationReachability.Reached) {
+          this.publishControllerObserverSetupIssue(
+            `${frame.productHandle}:controller-issue:observer-setup:${index}:callback`,
+            frame,
+            source,
+            records,
+            controllerIssues,
+            RuntimeControllerIssueKind.ControllerPropertyNoChangeHandler,
+            `Observer for property ${bindable.name} does not support change handler.`,
+            RuntimeHtmlControllerFrameworkErrorCode.ControllerPropertyNoChangeHandler,
+            bindable.sourceAddressHandle ?? definition.sourceAddressHandle,
+          );
+        }
       }
-      if (requiresCoercer && !lookup.supportsCoercer) {
-        this.publishControllerObserverSetupIssue(
-          `${frame.productHandle}:controller-issue:observer-setup:${index}:coercer`,
-          frame,
-          source,
-          records,
-          controllerIssues,
-          RuntimeControllerIssueKind.ControllerPropertyNotCoercible,
-          `Observer for bindable property ${bindable.name} does not support coercion.`,
-          RuntimeHtmlControllerFrameworkErrorCode.ControllerPropertyNotCoercible,
-          bindable.sourceAddressHandle ?? definition.sourceAddressHandle,
-        );
+
+      const setupSourceAddressHandle = bindable.sourceAddressHandle ?? definition.sourceAddressHandle;
+      const openSeam = outcome === RuntimeControllerObserverSetupOutcome.Open
+        ? controllerObserverSetupOpenSeam(
+            this.store,
+            `${frame.productHandle}:observer-setup:${index}:${bindable.name}:open`,
+            bindable.name,
+            setupSourceAddressHandle,
+            source.evidenceHandle,
+            openReasons,
+          )
+        : null;
+      if (openSeam != null) {
+        records.push(openSeam);
+        openSeams.push(openSeam);
       }
-      if (requiresCallback && !lookup.supportsCallback) {
-        this.publishControllerObserverSetupIssue(
-          `${frame.productHandle}:controller-issue:observer-setup:${index}:callback`,
-          frame,
-          source,
-          records,
-          controllerIssues,
-          RuntimeControllerIssueKind.ControllerPropertyNoChangeHandler,
-          `Observer for property ${bindable.name} does not support change handler.`,
-          RuntimeHtmlControllerFrameworkErrorCode.ControllerPropertyNoChangeHandler,
-          bindable.sourceAddressHandle ?? definition.sourceAddressHandle,
-        );
+      frame.recordObserverSetup(new RuntimeControllerObserverSetup(
+        bindable.name,
+        bindable.propertyTarget?.identityHandle ?? null,
+        lookup,
+        outcome,
+        requiresCoercer,
+        requiresCallback,
+        setupReachability,
+        setupSourceAddressHandle,
+        observerSetupProvenanceHandles(bindable, source.provenanceHandle),
+        openSeam == null ? [] : [openSeam.handle],
+      ));
+      if (outcome === RuntimeControllerObserverSetupOutcome.RejectedCoercer
+        || outcome === RuntimeControllerObserverSetupOutcome.RejectedCallback) {
+        aggregateState = RuntimeControllerObserverSetupState.Failed;
+        setupReachability = RuntimeOperationReachability.BlockedByOuterFailure;
+      } else if (outcome === RuntimeControllerObserverSetupOutcome.Open) {
+        setupReachability = RuntimeOperationReachability.Open;
       }
-    });
+    }
+    frame.finishObserverSetup(aggregateState);
   }
 
   private publishControllerObserverSetupIssue(
@@ -555,7 +972,7 @@ export class RuntimeControllerCreationMaterializer {
     if (creation.creationKind === RuntimeControllerCreationKind.TemplateController) {
       return;
     }
-    const sites = readControllerActivationViewFactoryResolveSites(this.store, definition);
+    const sites = readControllerActivationViewFactoryResolveSites(this.publication, definition);
     sites.forEach((site, index) => {
       const publication = this.controllerIssuePublisher.publish(
         `${creation.local}:controller-issue:view-factory-provider:${index}`,
@@ -597,7 +1014,7 @@ export class RuntimeControllerCreationMaterializer {
     }
 
     iterator.tailInstructionProductHandles.forEach((handle, index) => {
-      const tail = this.store.productDetails.read(TemplateProductDetails.Instruction, handle);
+      const tail = this.publication.readProductDetail(TemplateProductDetails.Instruction, handle);
       if (!(tail instanceof MultiAttrInstruction)) {
         return;
       }
@@ -633,7 +1050,7 @@ export class RuntimeControllerCreationMaterializer {
       || creation.instruction.controllerName !== 'portal') {
       return;
     }
-    const instructions = staticSetPropertyInstructions(this.store, creation.instruction.bindingInstructionProductHandles);
+    const instructions = staticSetPropertyInstructions(this.publication, creation.instruction.bindingInstructionProductHandles);
     portalTemplateControllerActivationIssues(instructions).forEach((issue, index) => {
       const publication = this.controllerIssuePublisher.publish(
         `${creation.local}:controller-issue:portal-activation:${index}:${issue.kind}`,
@@ -749,6 +1166,7 @@ export class RuntimeControllerCreationMaterializer {
     source: RuntimeRenderingSourceSet,
     records: KernelStoreRecord[],
     controllerIssues: RuntimeControllerIssue[],
+    readController: (productHandle: ProductHandle) => RuntimeControllerFrame | null,
   ): void {
     if (!(definition instanceof CustomElementDefinition)
       || definition.name !== AU_COMPOSE_RESOURCE_NAME
@@ -757,7 +1175,7 @@ export class RuntimeControllerCreationMaterializer {
     }
 
     creation.instruction.bindableInstructionProductHandles.forEach((handle, index) => {
-      const instruction = this.store.productDetails.read(TemplateProductDetails.Instruction, handle);
+      const instruction = this.publication.readProductDetail(TemplateProductDetails.Instruction, handle);
       if (!(instruction instanceof SetPropertyInstruction)) {
         return;
       }
@@ -778,6 +1196,7 @@ export class RuntimeControllerCreationMaterializer {
         source,
         records,
         controllerIssues,
+        readController,
       );
     });
   }
@@ -819,8 +1238,9 @@ export class RuntimeControllerCreationMaterializer {
     source: RuntimeRenderingSourceSet,
     records: KernelStoreRecord[],
     controllerIssues: RuntimeControllerIssue[],
+    readController: (productHandle: ProductHandle) => RuntimeControllerFrame | null,
   ): void {
-    const issue = auComposeComponentLookupIssue(creation, instruction);
+    const issue = auComposeComponentLookupIssue(frame, instruction, readController);
     if (issue == null) {
       return;
     }
@@ -834,7 +1254,7 @@ export class RuntimeControllerCreationMaterializer {
       issue.kind,
       issue.message,
       issue.frameworkErrorCode,
-      instruction.sourceAddressHandle ?? creation.instruction.sourceAddressHandle,
+      instruction.sourceAddressHandle ?? frame.sourceAddressHandle,
     );
     records.push(...publication.records);
     controllerIssues.push(publication.issue);
@@ -870,7 +1290,7 @@ export class RuntimeControllerCreationMaterializer {
     instruction: HydrateTemplateControllerInstruction,
   ): IteratorBindingInstruction | null {
     for (const handle of instruction.bindingInstructionProductHandles) {
-      const candidate = this.store.productDetails.read(TemplateProductDetails.Instruction, handle);
+      const candidate = this.publication.readProductDetail(TemplateProductDetails.Instruction, handle);
       if (candidate instanceof IteratorBindingInstruction) {
         return candidate;
       }
@@ -885,7 +1305,7 @@ export class RuntimeControllerCreationMaterializer {
     if (productHandle == null) {
       return null;
     }
-    const definition = this.store.productDetails.read(ResourceProductDetails.Definition, productHandle);
+    const definition = this.publication.readProductDetail(ResourceProductDetails.Definition, productHandle);
     if (definition instanceof CustomElementDefinition || definition instanceof CustomAttributeDefinition) {
       return definition;
     }
@@ -906,17 +1326,20 @@ export class RuntimeControllerCreationMaterializer {
     source: RuntimeRenderingSourceSet,
     records: KernelStoreRecord[],
     openSeams: OpenSeam[],
+    reasonKinds: readonly OpenSeamReasonKind[],
     seamKindKey: OpenSeamKindKey = KernelVocabulary.Instruction.OpenInstruction.key,
-  ): void {
+  ): OpenSeam {
     const seam = new OpenSeam(
       this.store.handles.openSeam(local),
       seamKindKey,
       summary,
       addressHandle,
       source.evidenceHandle,
+      reasonKinds,
     );
     openSeams.push(seam);
     records.push(seam);
+    return seam;
   }
 }
 
@@ -956,7 +1379,7 @@ function rendererResourceLookupIssue(
   if (instruction instanceof HydrateAttributeInstruction) {
     return {
       kind: RuntimeControllerIssueKind.AttributeResourceNotFound,
-      message: `Attribute "${instruction.attributeName}" is not registered in the rendering controller container.`,
+      message: `Attribute "${instruction.resourceLookupName}" is not registered in the rendering controller container.`,
       frameworkErrorCode: RuntimeHtmlControllerFrameworkErrorCode.AttributeResourceNotFound,
     };
   }
@@ -1140,11 +1563,11 @@ function portalTemplateControllerActivationIssues(
 }
 
 function staticSetPropertyInstructions(
-  store: KernelStore,
+  publication: KernelPublicationContext,
   handles: readonly ProductHandle[],
 ): readonly SetPropertyInstruction[] {
   return handles
-    .map((handle) => store.productDetails.read(TemplateProductDetails.Instruction, handle))
+    .map((handle) => publication.readProductDetail(TemplateProductDetails.Instruction, handle))
     .filter((instruction): instruction is SetPropertyInstruction => instruction instanceof SetPropertyInstruction);
 }
 
@@ -1182,8 +1605,9 @@ function auComposeBindableSetIssue(
 }
 
 function auComposeComponentLookupIssue(
-  creation: ClosedRuntimeControllerCreationRequest,
+  controller: RuntimeControllerFrame,
   instruction: SetPropertyInstruction,
+  readController: (productHandle: ProductHandle) => RuntimeControllerFrame | null,
 ): {
   readonly kind: RuntimeControllerIssueKind;
   readonly message: string;
@@ -1193,13 +1617,15 @@ function auComposeComponentLookupIssue(
     return null;
   }
 
-  const lookup = creation.parent.containerFrame?.find('custom-element', instruction.value) ?? null;
+  const hydrationControllerHandle = controller.readConstructionHydrationContext()?.controller.productHandle ?? null;
+  const hydrationController = hydrationControllerHandle == null ? null : readController(hydrationControllerHandle);
+  const lookup = hydrationController?.containerFrame?.find('custom-element', instruction.value) ?? null;
   if (lookup?.state === ContainerLookupState.Hit) {
     return null;
   }
   return {
     kind: RuntimeControllerIssueKind.AuComposeComponentNameNotFound,
-    message: `No au-compose custom element named "${instruction.value}" is registered in the parent hydration context container.`,
+    message: `No au-compose custom element named "${instruction.value}" is registered in the construction hydration context container.`,
     frameworkErrorCode: RuntimeHtmlControllerFrameworkErrorCode.AuComposeComponentNameNotFound,
   };
 }
@@ -1213,33 +1639,128 @@ function resourceLookupNames(
   return [definition.name, ...definition.aliases.map((alias) => alias.name)];
 }
 
-function bindableSetterRequiresCoercer(bindable: BindableDefinition): boolean {
-  return bindable.set.kind === BindableSetterKind.Function
-    || bindable.set.kind === BindableSetterKind.TypeCoercion;
+function bindableSetterRequiresCoercer(bindable: BindableDefinition): boolean | null {
+  switch (bindable.set.kind) {
+    case BindableSetterKind.Default:
+      return false;
+    case BindableSetterKind.Function:
+    case BindableSetterKind.TypeCoercion:
+      return true;
+    case BindableSetterKind.Open:
+      return null;
+  }
 }
 
-function targetTypePropertyLookup(
-  store: KernelStore,
-  definition: CustomElementDefinition | CustomAttributeDefinition,
-): (propertyName: string) => boolean {
-  const productHandle = definition.target.targetType?.productHandle ?? null;
-  if (productHandle == null) {
-    return () => false;
+function observerSetupAppTaskBoundary(
+  frame: RuntimeControllerFrame,
+): AppTaskSlot {
+  if (frame.parent == null) {
+    return AppTaskSlot.Creating;
   }
-  const carrier = store.productDetails.read(TypeSystemProductDetails.TypeShape, productHandle)?.carrier ?? null;
-  if (carrier == null) {
-    return () => false;
-  }
-  const cache = new Map<string, boolean>();
-  return (propertyName) => {
-    const cached = cache.get(propertyName);
-    if (cached != null) {
-      return cached;
+  let ancestor: RuntimeControllerFrame | null = frame;
+  while (ancestor != null) {
+    if (ancestor.creationKind === RuntimeControllerCreationKind.SyntheticView) {
+      return AppTaskSlot.Activating;
     }
-    const exists = checkerPropertySymbol(carrier.checker, carrier.type, propertyName) != null;
-    cache.set(propertyName, exists);
-    return exists;
-  };
+    ancestor = ancestor.parent;
+  }
+  return frame.parent.parent == null
+    ? AppTaskSlot.Hydrating
+    : AppTaskSlot.Hydrated;
+}
+
+function callbackRequirement(
+  hasBindableCallback: boolean | null,
+  hasPropertyChanged: boolean | null,
+  hasPropertiesChanged: boolean | null,
+): boolean | null {
+  if (hasBindableCallback === true || hasPropertyChanged === true || hasPropertiesChanged === true) {
+    return true;
+  }
+  return hasBindableCallback === false && hasPropertyChanged === false && hasPropertiesChanged === false
+    ? false
+    : null;
+}
+
+interface ObserverSetupOpenReason {
+  readonly reasonKind: OpenSeamReasonKind;
+  readonly summary: string;
+}
+
+function observerSetupOpenReasons(
+  lookupOpenReason: string | null,
+  supportsCoercer: boolean | null,
+  supportsCallback: boolean | null,
+  requiresCoercer: boolean | null,
+  requiresCallback: boolean | null,
+): readonly ObserverSetupOpenReason[] {
+  const reasons: ObserverSetupOpenReason[] = [];
+  if (lookupOpenReason != null) {
+    reasons.push({
+      reasonKind: OpenSeamReasonKind.BindingObserverSelectionOpen,
+      summary: lookupOpenReason,
+    });
+  }
+  if (requiresCoercer == null) {
+    reasons.push({
+      reasonKind: OpenSeamReasonKind.BindingObserverRequirementOpen,
+      summary: 'Bindable setter metadata did not close whether observer coercion is required.',
+    });
+  } else if (requiresCoercer && lookupOpenReason == null && supportsCoercer == null) {
+    reasons.push({
+      reasonKind: OpenSeamReasonKind.BindingObserverCapabilityOpen,
+      summary: 'The selected observer did not prove whether it supports the required coercer.',
+    });
+  }
+  if (requiresCallback == null) {
+    reasons.push({
+      reasonKind: OpenSeamReasonKind.BindingObserverRequirementOpen,
+      summary: 'Bindable callback and controller callback members did not close whether change notification is required.',
+    });
+  } else if (requiresCallback && lookupOpenReason == null && supportsCallback == null) {
+    reasons.push({
+      reasonKind: OpenSeamReasonKind.BindingObserverCapabilityOpen,
+      summary: 'The selected observer did not prove whether it supports the required change callback.',
+    });
+  }
+  return reasons;
+}
+
+function controllerObserverSetupOpenSeam(
+  store: KernelStore,
+  local: string,
+  bindableName: string,
+  sourceAddressHandle: AddressHandle | null,
+  evidenceHandle: RuntimeRenderingSourceSet['evidenceHandle'],
+  reasons: readonly ObserverSetupOpenReason[],
+): OpenSeam {
+  const reasonSources: OpenSeamReasonSource[] = reasons.map((reason) => ({
+    reasonKind: reason.reasonKind,
+    summary: reason.summary,
+    addressHandle: sourceAddressHandle,
+    evidenceHandle,
+  }));
+  return new OpenSeam(
+    store.handles.openSeam(local),
+    KernelVocabulary.Binding.OpenObserverSetup.key,
+    `Controller observer setup for bindable '${bindableName}' remained open: ${reasons.map((reason) => reason.summary).join(' ')}`,
+    sourceAddressHandle,
+    evidenceHandle,
+    [...new Set(reasons.map((reason) => reason.reasonKind))].sort(),
+    reasonSources,
+  );
+}
+
+function observerSetupProvenanceHandles(
+  bindable: BindableDefinition,
+  ownerProvenanceHandle: ProvenanceHandle,
+): readonly ProvenanceHandle[] {
+  return [...new Set([
+    ownerProvenanceHandle,
+    readFieldProvenance(bindable.fieldProvenance, 'name'),
+    readFieldProvenance(bindable.fieldProvenance, 'set'),
+    readFieldProvenance(bindable.fieldProvenance, 'callback'),
+  ].filter((handle): handle is ProvenanceHandle => handle != null))];
 }
 
 function isClosedControllerCreationRequest(
@@ -1249,21 +1770,63 @@ function isClosedControllerCreationRequest(
 }
 
 function contextResolverSlotsForController(
-  creation: RuntimeControllerCreationRequest,
+  creation: ClosedRuntimeControllerCreationRequest,
+  auSlotsInfo: AuSlotsInfo,
 ): readonly ContainerContextResolverSlotRequest[] {
-  const common = [
-    'INode',
-    'IController',
-    'IInstruction',
-    'IRenderLocation',
-    'IViewFactory',
-    'IAuSlotsInfo',
-  ];
-  const names = creation.creationKind === RuntimeControllerCreationKind.CustomElement
-    ? [...common, 'IHydrationContext']
-    : common;
-  return names.map((name) => new ContainerContextResolverSlotRequest(
-    name,
-    creation.instruction?.sourceAddressHandle ?? null,
-  ));
+  return [
+    FrameworkIntrinsicDiKey.INode,
+    FrameworkIntrinsicDiKey.IController,
+    FrameworkIntrinsicDiKey.IInstruction,
+    FrameworkIntrinsicDiKey.IRenderLocation,
+    FrameworkIntrinsicDiKey.IViewFactory,
+    FrameworkIntrinsicDiKey.IAuSlotsInfo,
+  ].map((name) => {
+    const sourceAddressHandle = creation.instruction.sourceAddressHandle;
+    switch (name) {
+      case FrameworkIntrinsicDiKey.IController:
+        return new ContainerContextResolverSlotRequest({
+          interfaceName: name,
+          sourceAddressHandle,
+          ownerIdentityHandle: creation.parent.identityHandle,
+          instance: new RegistrationValueReference(
+            RegistrationValueKind.Instance,
+            creation.parent.identityHandle,
+            creation.parent.productHandle,
+            creation.parent.sourceAddressHandle,
+            FrameworkIntrinsicDiKey.IController,
+          ),
+        });
+      case FrameworkIntrinsicDiKey.IInstruction:
+        return new ContainerContextResolverSlotRequest({
+          interfaceName: name,
+          sourceAddressHandle,
+          ownerIdentityHandle: creation.instruction.identityHandle,
+          instance: new RegistrationValueReference(
+            RegistrationValueKind.Instance,
+            creation.instruction.identityHandle,
+            creation.instruction.productHandle,
+            creation.instruction.sourceAddressHandle,
+            FrameworkIntrinsicDiKey.IInstruction,
+          ),
+        });
+      case FrameworkIntrinsicDiKey.IAuSlotsInfo:
+        return new ContainerContextResolverSlotRequest({
+          interfaceName: name,
+          sourceAddressHandle,
+          ownerIdentityHandle: auSlotsInfo.identityHandle,
+          instance: new RegistrationValueReference(
+            RegistrationValueKind.Instance,
+            auSlotsInfo.identityHandle,
+            auSlotsInfo.productHandle,
+            auSlotsInfo.sourceAddressHandle,
+            FrameworkIntrinsicDiKey.IAuSlotsInfo,
+          ),
+        });
+      default:
+        return new ContainerContextResolverSlotRequest({
+          interfaceName: name,
+          sourceAddressHandle,
+        });
+    }
+  });
 }

@@ -39,6 +39,7 @@ export function appBuilderBuiltInSyntaxDependency(
       return null;
     case BuiltInSyntaxPackage.I18n:
     case BuiltInSyntaxPackage.State:
+    case BuiltInSyntaxPackage.UiVirtualization:
       return builtInSyntaxPackageModuleSpecifier(ref.packageId);
   }
 }

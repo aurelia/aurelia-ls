@@ -11,6 +11,7 @@ import {
   BindingScopeLookupKind,
   type BindingContextSlot,
 } from '../configuration/scope.js';
+import { bindingContextSlotTargetTypeSourceMember } from '../configuration/binding-scope-slot-projector.js';
 import type {
   AddressHandle,
 } from '../kernel/handles.js';
@@ -29,7 +30,7 @@ import {
   checkerTypeMemberReachableIdentityHandle,
   sameCheckerTypeReference,
 } from './type-shape.js';
-import { TypeSystemHotDetails, TypeSystemProductDetails } from './product-details.js';
+import { TypeSystemProductDetails } from './product-details.js';
 import { checkerNullishType } from './checker-related-types.js';
 import {
   checkerPrimitiveLiteralType,
@@ -37,10 +38,11 @@ import {
   type CheckerPrimitiveName,
 } from './checker-primitive-types.js';
 import { checkerTypeMemberSourceAddressHandle } from './checker-type-member-source.js';
-import { readOrProjectCheckerTypeMembers } from './checker-type-member-surface.js';
+import { readOrProjectCheckerTypeMembersInProjection } from './checker-type-member-surface.js';
+import type { ProductDetailReadView } from '../kernel/product-details.js';
 import { readCheckerTypeShape } from './checker-type-shape-access.js';
 import { checkerRawTypeAssignable } from './checker-type-assignability.js';
-import { checkerUnionTypeOrNever as checkerUnionType } from './checker-type-union.js';
+import { checkerUnionTypeOrNever } from './checker-type-union.js';
 import { checkerPropertySymbol, checkerSymbolValueType } from './checker-node-helpers.js';
 import { checkerConstructReturnTypeUnion } from './checker-signature-parameters.js';
 
@@ -217,7 +219,7 @@ export class CheckerExpressionScopeNarrower {
     const narrowedSlot = bindingContextSlotWithTargetType(
       slot.name,
       slot.targetIdentityHandle,
-      slot.targetProductHandle,
+      slot.targetTypeMemberHandle,
       narrowedType,
       slot.sourceAddressHandle ?? sourceAddressHandle,
       slot,
@@ -248,7 +250,7 @@ export class CheckerExpressionScopeNarrower {
         narrowSlot: (targetType, sourceAddressHandle) => bindingContextSlotWithTargetType(
           slot.name,
           slot.targetIdentityHandle,
-          slot.targetProductHandle,
+          slot.targetTypeMemberHandle,
           targetType,
           slot.sourceAddressHandle ?? sourceAddressHandle,
           slot,
@@ -509,7 +511,7 @@ export class CheckerExpressionScopeNarrower {
     }
     return this.projectType(
       carrier,
-      checkerUnionType(carrier.checker, selected),
+      checkerUnionTypeOrNever(carrier.checker, selected),
       localKey,
       sourceAddressHandle,
     );
@@ -554,15 +556,19 @@ export class CheckerExpressionScopeNarrower {
     return new BindingContextSlotDraft(
       slot.name,
       slot.targetIdentityHandle,
-      slot.targetProductHandle,
+      slot.targetTypeMemberHandle,
       ownerType,
       slot.sourceAddressHandle,
       slot.fieldProvenance,
-      slot.staticValue,
+      slot.staticValueEvaluation,
       [
         ...slot.memberTypes.filter((candidate) => candidate.name !== memberName),
         memberRefinement,
       ],
+      slot.assignmentAccessKind,
+      ownerType != null && slot.targetType != null && sameCheckerTypeReference(ownerType, slot.targetType)
+        ? slot.targetTypeSourceMemberHandle
+        : null,
     );
   }
 
@@ -593,7 +599,7 @@ export class CheckerExpressionScopeNarrower {
 
     return this.projectType(
       ownerCarrier,
-      checkerUnionType(ownerCarrier.checker, selected),
+      checkerUnionTypeOrNever(ownerCarrier.checker, selected),
       localKey,
       sourceAddressHandle,
     );
@@ -608,9 +614,7 @@ export class CheckerExpressionScopeNarrower {
       return reference;
     }
 
-    const member = slot.targetProductHandle == null
-      ? null
-      : this.store.hotDetails.read(TypeSystemHotDetails.TypeMember, slot.targetProductHandle);
+    const member = bindingContextSlotTargetTypeSourceMember(this.projector.publication, slot);
     if (member?.carrier?.valueType == null) {
       return reference;
     }
@@ -622,7 +626,7 @@ export class CheckerExpressionScopeNarrower {
       type: member.carrier.valueType,
       origin: CheckerTypeProjectionOrigin.TypeChecker,
       sourceNode,
-      sourceAddressHandle: slot.sourceAddressHandle ?? checkerTypeMemberSourceAddressHandle(this.store, member),
+      sourceAddressHandle: slot.sourceAddressHandle ?? checkerTypeMemberSourceAddressHandle(this.projector.publication, member),
       ownerIdentityHandle: checkerTypeMemberReachableIdentityHandle(member),
       display: reference.display ?? member.valueType?.display ?? null,
     } satisfies CheckerTypeProjectionRequest).toReference();
@@ -640,11 +644,11 @@ export class CheckerExpressionScopeNarrower {
     const ownerReference = slot.targetType == null
       ? null
       : this.ensureProjectedSlotType(slot, slot.targetType, `${localKey}:owner`);
-    const ownerShape = readCheckerTypeShape(this.store, ownerReference);
+    const ownerShape = readCheckerTypeShape(this.projector.publication, ownerReference);
     if (ownerShape == null) {
       return null;
     }
-    const member = readOrProjectCheckerTypeMembers(this.store, ownerShape, `${localKey}:members`)
+    const member = readOrProjectCheckerTypeMembersInProjection(this.projector, ownerShape, `${localKey}:members`)
       .find((candidate) => candidate.name === memberName) ?? null;
     if (member?.valueType != null) {
       if (member.valueType.productHandle != null || member.carrier?.valueType == null) {
@@ -656,7 +660,7 @@ export class CheckerExpressionScopeNarrower {
         type: member.carrier.valueType,
         origin: CheckerTypeProjectionOrigin.TypeChecker,
         sourceNode: member.carrier.declarations[0] ?? null,
-        sourceAddressHandle: member.sourceAddressHandle ?? slot.sourceAddressHandle ?? checkerTypeMemberSourceAddressHandle(this.store, member),
+        sourceAddressHandle: member.sourceAddressHandle ?? slot.sourceAddressHandle ?? checkerTypeMemberSourceAddressHandle(this.projector.publication, member),
         ownerIdentityHandle: checkerTypeMemberReachableIdentityHandle(member),
         display: member.carrier.checker.typeToString(member.carrier.valueType),
       } satisfies CheckerTypeProjectionRequest).toReference();
@@ -670,7 +674,7 @@ export class CheckerExpressionScopeNarrower {
       type: member.carrier.valueType,
       origin: CheckerTypeProjectionOrigin.TypeChecker,
       sourceNode: member.carrier.declarations[0] ?? null,
-      sourceAddressHandle: member.sourceAddressHandle ?? slot.sourceAddressHandle ?? checkerTypeMemberSourceAddressHandle(this.store, member),
+      sourceAddressHandle: member.sourceAddressHandle ?? slot.sourceAddressHandle ?? checkerTypeMemberSourceAddressHandle(this.projector.publication, member),
       ownerIdentityHandle: checkerTypeMemberReachableIdentityHandle(member),
       display: member.carrier.checker.typeToString(member.carrier.valueType),
     } satisfies CheckerTypeProjectionRequest).toReference();
@@ -708,19 +712,19 @@ export class CheckerExpressionScopeNarrower {
     sourceAddressHandle: AddressHandle | null,
   ): CheckerTypeReference | null {
     const sourceCarrier = this.carrierForReference(source);
-    const includeCarriers = sameCheckerCarriers(this.store, includeTypes, sourceCarrier?.checker ?? null);
+    const includeCarriers = sameCheckerCarriers(this.projector.publication, includeTypes, sourceCarrier?.checker ?? null);
     if (sourceCarrier == null || includeCarriers == null) {
       return null;
     }
 
-    const includeType = checkerUnionType(sourceCarrier.checker, includeCarriers.map((carrier) => carrier.type));
+    const includeType = checkerUnionTypeOrNever(sourceCarrier.checker, includeCarriers.map((carrier) => carrier.type));
     const selected = equalityIncludedTypes(sourceCarrier.checker, sourceCarrier.type, includeType);
     if (selected.length === 0) {
       return null;
     }
     return this.projectType(
       sourceCarrier,
-      checkerUnionType(sourceCarrier.checker, selected),
+      checkerUnionTypeOrNever(sourceCarrier.checker, selected),
       localKey,
       sourceAddressHandle,
     );
@@ -733,7 +737,7 @@ export class CheckerExpressionScopeNarrower {
     sourceAddressHandle: AddressHandle | null,
   ): CheckerTypeReference | null {
     const sourceCarrier = this.carrierForReference(source);
-    const excludeCarriers = sameCheckerCarriers(this.store, excludeTypes, sourceCarrier?.checker ?? null);
+    const excludeCarriers = sameCheckerCarriers(this.projector.publication, excludeTypes, sourceCarrier?.checker ?? null);
     if (sourceCarrier == null || excludeCarriers == null) {
       return null;
     }
@@ -742,11 +746,11 @@ export class CheckerExpressionScopeNarrower {
     if (sourceParts.length === 1 && !sourceCarrier.type.isUnion()) {
       return source;
     }
-    const excludeType = checkerUnionType(sourceCarrier.checker, excludeCarriers.map((carrier) => carrier.type));
+    const excludeType = checkerUnionTypeOrNever(sourceCarrier.checker, excludeCarriers.map((carrier) => carrier.type));
     const retained = sourceParts.filter((part) => !typeOverlaps(sourceCarrier.checker, part, excludeType));
     return this.projectType(
       sourceCarrier,
-      checkerUnionType(sourceCarrier.checker, retained),
+      checkerUnionTypeOrNever(sourceCarrier.checker, retained),
       localKey,
       sourceAddressHandle,
     );
@@ -856,7 +860,8 @@ export class CheckerExpressionScopeNarrower {
     if (reference.productHandle == null) {
       return null;
     }
-    const carrier = this.store.productDetails.read(TypeSystemProductDetails.TypeShape, reference.productHandle)?.carrier ?? null;
+    const carrier = this.projector.publication
+      .readProductDetail(TypeSystemProductDetails.TypeShape, reference.productHandle)?.carrier ?? null;
     if (carrier == null) {
       return null;
     }
@@ -1080,7 +1085,7 @@ function booleanKind(
 function bindingContextSlotWithTargetType(
   name: string,
   targetIdentityHandle: BindingContextSlot['targetIdentityHandle'],
-  targetProductHandle: BindingContextSlot['targetProductHandle'],
+  targetTypeMemberHandle: BindingContextSlot['targetTypeMemberHandle'],
   targetType: CheckerTypeReference,
   sourceAddressHandle: AddressHandle | null,
   source: BindingContextSlot,
@@ -1088,24 +1093,28 @@ function bindingContextSlotWithTargetType(
   return new BindingContextSlotDraft(
     name,
     targetIdentityHandle,
-    targetProductHandle,
+    targetTypeMemberHandle,
     targetType,
     sourceAddressHandle,
     source.fieldProvenance,
-    source.staticValue,
+    source.staticValueEvaluation,
     source.memberTypes,
+    source.assignmentAccessKind,
+    source.targetType != null && sameCheckerTypeReference(targetType, source.targetType)
+      ? source.targetTypeSourceMemberHandle
+      : null,
   );
 }
 
 function sameCheckerCarriers(
-  store: KernelStore,
+  store: ProductDetailReadView,
   references: readonly CheckerTypeReference[],
   checker: ts.TypeChecker | null,
 ): readonly CheckerTypeCarrierInput[] | null {
   const carriers = references.map((reference) => {
     const carrier = reference.productHandle == null
       ? null
-      : store.productDetails.read(TypeSystemProductDetails.TypeShape, reference.productHandle)?.carrier ?? null;
+      : store.readProductDetail(TypeSystemProductDetails.TypeShape, reference.productHandle)?.carrier ?? null;
     return carrier == null
       ? null
       : {

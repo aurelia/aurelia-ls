@@ -5,10 +5,11 @@ import type {
   SemanticRuntimeAppQueryRequest,
   SemanticRuntimeAnalysisCacheClearRequest,
   SemanticRuntimeAnalysisCacheOverviewRequest,
-  SemanticRuntimeOptions,
+  SemanticNativeProjectConfigurationsRequest,
   SemanticRuntimePageInput,
   SemanticRuntimeSourceCursorInput,
   SemanticRuntimeSourceFileInput,
+  SemanticWorkspaceDescriptor,
 } from '@aurelia-ls/semantic-runtime';
 
 declare const __AURELIA_MCP_SERVER_VERSION__: string | undefined;
@@ -16,10 +17,11 @@ declare const __AURELIA_MCP_SERVER_VERSION__: string | undefined;
 export const AURELIA_MCP_SERVER_NAME = 'au-mcp' as const;
 export const AURELIA_MCP_SERVER_VERSION = typeof __AURELIA_MCP_SERVER_VERSION__ === 'string'
   ? __AURELIA_MCP_SERVER_VERSION__
-  : '0.1.0';
+  : '0.3.0';
 
 export const aureliaMcpToolNames = {
   workspaceOverview: 'aurelia_workspace_overview',
+  projectConfigurations: 'aurelia_project_configurations',
   analysisCacheOverview: 'aurelia_analysis_cache_overview',
   clearAnalysisCache: 'aurelia_clear_analysis_cache',
   appQueryCatalog: 'aurelia_app_query_catalog',
@@ -39,17 +41,25 @@ export const aureliaMcpToolNames = {
   templateDiagnostics: 'aurelia_template_diagnostics',
 } as const;
 
-export interface AureliaMcpWorkspaceInput extends SemanticRuntimeOptions {
+export interface AureliaMcpWorkspaceInput {
   readonly workspaceRoot: string;
+  /** Existing project roots known by the caller and interpreted by shared semantic-runtime discovery. */
+  readonly projectRootHints?: readonly string[] | null;
+  /** Hard authored-source/workspace boundaries shared with IDE and future AOT consumers. */
+  readonly excludedWorkspaceRoots?: readonly string[] | null;
 }
 
-export interface AureliaMcpOpenAppInput extends AureliaMcpWorkspaceInput, OpenSemanticAppOptions {
+export interface AureliaMcpOpenAppInput
+  extends AureliaMcpWorkspaceInput, Omit<OpenSemanticAppOptions, 'telemetry'> {
   readonly appRetention?: SemanticRuntimeAppQueryRequest['appRetention'];
   readonly continuationIntents?: SemanticRuntimeAppQueryRequest['continuationIntents'];
 }
 
-export interface AureliaMcpPagedInput {
+export interface AureliaMcpPageInput {
   readonly page?: SemanticRuntimePageInput | null;
+}
+
+export interface AureliaMcpDetailInput {
   readonly detail?: SemanticAppQuery['detail'] | null;
 }
 
@@ -57,11 +67,19 @@ export interface AureliaMcpWorkspaceOverviewInput extends AureliaMcpWorkspaceInp
   readonly projectPage?: SemanticRuntimePageInput | null;
 }
 
+export interface AureliaMcpProjectConfigurationsInput extends AureliaMcpWorkspaceInput {
+  /** Select configuration inventory (default) or exact runtime-static diagnostic rows. */
+  readonly view?: 'configurations' | 'diagnostics' | null;
+  readonly projectKey?: SemanticNativeProjectConfigurationsRequest['projectKey'];
+  readonly sourceFilePaths?: SemanticNativeProjectConfigurationsRequest['sourceFilePaths'];
+  readonly page?: SemanticNativeProjectConfigurationsRequest['page'];
+}
+
+/** Exact semantic workspace selector for cache-control tools; omit the whole selector to address every session. */
+export type AureliaMcpCacheWorkspaceSelector = AureliaMcpWorkspaceInput;
+
 export interface AureliaMcpAnalysisCacheOverviewInput {
-  readonly workspaceRoot?: string | null;
-  readonly storeKey?: string | null;
-  readonly projectDiscovery?: SemanticRuntimeOptions['projectDiscovery'] | null;
-  readonly projects?: SemanticRuntimeOptions['projects'] | null;
+  readonly workspace?: AureliaMcpCacheWorkspaceSelector | null;
   readonly includeKernelBreakdowns?: SemanticRuntimeAnalysisCacheOverviewRequest['includeKernelBreakdowns'];
   readonly includeDetailDensity?: SemanticRuntimeAnalysisCacheOverviewRequest['includeDetailDensity'];
   readonly includeQueryClaimRows?: SemanticRuntimeAnalysisCacheOverviewRequest['includeQueryClaimRows'];
@@ -69,16 +87,11 @@ export interface AureliaMcpAnalysisCacheOverviewInput {
 }
 
 export interface AureliaMcpClearAnalysisCacheInput {
-  readonly workspaceRoot?: string | null;
-  readonly storeKey?: string | null;
-  readonly projectDiscovery?: SemanticRuntimeOptions['projectDiscovery'] | null;
-  readonly projects?: SemanticRuntimeOptions['projects'] | null;
+  readonly workspace?: AureliaMcpCacheWorkspaceSelector | null;
   readonly typeSystemDependencyCacheClearPolicy?: SemanticRuntimeAnalysisCacheClearRequest['typeSystemDependencyCacheClearPolicy'];
 }
 
 export interface AureliaMcpAppQueryCatalogInput {
-  /** Optional host cwd hint for local clients that want all responses to carry a workspace label. */
-  readonly workspaceRoot?: string | null;
   /** Optional query group filter such as `router`, `template`, or `binding`. */
   readonly group?: string | null;
   /** Optional exact query kind filter. */
@@ -113,14 +126,27 @@ export interface AureliaMcpDocsFetchInput {
   readonly maxChars?: number | null;
 }
 
-export interface AureliaMcpAppQueryInput extends AureliaMcpOpenAppInput, AureliaMcpPagedInput {
+export interface AureliaMcpAppQueryInput extends AureliaMcpOpenAppInput, AureliaMcpPageInput, AureliaMcpDetailInput {
   readonly queryKind: SemanticAppQuery['kind'];
   readonly cursor?: SemanticRuntimeSourceCursorInput | null;
+  readonly resourceIdentityKey?: SemanticAppQuery['resourceIdentityKey'];
+  readonly templateResourceScopeIdentityKey?: SemanticAppQuery['templateResourceScopeIdentityKey'];
+  readonly frameworkCapability?: SemanticAppQuery['frameworkCapability'];
   readonly sourceFile?: SemanticRuntimeSourceFileInput | null;
   readonly diagnosticProjection?: SemanticAppQuery['diagnosticProjection'];
+  readonly includeTypeSurfaces?: SemanticAppQuery['includeTypeSurfaces'];
+  readonly diagnosticPageSize?: SemanticAppQuery['diagnosticPageSize'];
+  readonly analysisLimitationPageSize?: SemanticAppQuery['analysisLimitationPageSize'];
+  readonly openSeamPageSize?: SemanticAppQuery['openSeamPageSize'];
   readonly openSeamKindKey?: SemanticAppQuery['openSeamKindKey'];
   readonly openSeamReasonKind?: SemanticAppQuery['openSeamReasonKind'];
   readonly sourceRole?: SemanticAppQuery['sourceRole'];
+  readonly openSeamClusterKey?: SemanticAppQuery['openSeamClusterKey'];
+  readonly openSeamSiteKey?: SemanticAppQuery['openSeamSiteKey'];
+  readonly observedDependencyLocus?: SemanticAppQuery['observedDependencyLocus'];
+  readonly rowPageSize?: SemanticAppQuery['rowPageSize'];
+  readonly includeDeclaration?: SemanticAppQuery['includeDeclaration'];
+  readonly newName?: SemanticAppQuery['newName'];
 }
 
 export interface AureliaMcpAppQueryBatchInput extends AureliaMcpOpenAppInput {
@@ -131,6 +157,7 @@ export interface AureliaMcpAppQueryBatchInput extends AureliaMcpOpenAppInput {
 
 export interface AureliaMcpAppOverviewInput extends AureliaMcpOpenAppInput {
   readonly diagnosticPageSize?: number | null;
+  readonly analysisLimitationPageSize?: number | null;
   readonly openSeamPageSize?: number | null;
 }
 
@@ -139,21 +166,23 @@ export interface AureliaMcpRouterOverviewInput extends AureliaMcpOpenAppInput {
   readonly detail?: SemanticAppQuery['detail'] | null;
 }
 
-export interface AureliaMcpAppDiagnosticsInput extends AureliaMcpOpenAppInput, AureliaMcpPagedInput {
+export interface AureliaMcpAppDiagnosticsInput extends AureliaMcpOpenAppInput, AureliaMcpPageInput, AureliaMcpDetailInput {
   readonly sourceFile?: SemanticRuntimeSourceFileInput | null;
   readonly diagnosticProjection?: SemanticAppQuery['diagnosticProjection'];
 }
 
 export interface AureliaMcpDiagnosticOverviewInput extends AureliaMcpAppDiagnosticsInput {}
 
-export interface AureliaMcpOpenSeamOverviewInput extends AureliaMcpOpenAppInput, AureliaMcpPagedInput {
+export interface AureliaMcpOpenSeamOverviewInput extends AureliaMcpOpenAppInput, AureliaMcpPageInput {
   readonly sourceFile?: SemanticRuntimeSourceFileInput | null;
   readonly openSeamKindKey?: SemanticAppQuery['openSeamKindKey'];
   readonly openSeamReasonKind?: SemanticAppQuery['openSeamReasonKind'];
   readonly sourceRole?: SemanticAppQuery['sourceRole'];
+  readonly openSeamClusterKey?: SemanticAppQuery['openSeamClusterKey'];
+  readonly openSeamSiteKey?: SemanticAppQuery['openSeamSiteKey'];
 }
 
-export interface AureliaMcpTemplateCursorInput extends AureliaMcpWorkspaceInput, AureliaMcpPagedInput {
+export interface AureliaMcpTemplateCursorInput extends AureliaMcpWorkspaceInput, AureliaMcpDetailInput {
   readonly cursor: SemanticRuntimeSourceCursorInput;
   readonly projectKey?: string | null;
   readonly analysisDepth?: OpenSemanticAppOptions['analysisDepth'] | null;
@@ -163,7 +192,9 @@ export interface AureliaMcpTemplateCursorInput extends AureliaMcpWorkspaceInput,
   readonly appRetention?: SemanticRuntimeAppQueryRequest['appRetention'];
 }
 
-export interface AureliaMcpTemplateDiagnosticsInput extends AureliaMcpWorkspaceInput, AureliaMcpPagedInput {
+export interface AureliaMcpTemplateCompletionsInput extends AureliaMcpTemplateCursorInput, AureliaMcpPageInput {}
+
+export interface AureliaMcpTemplateDiagnosticsInput extends AureliaMcpWorkspaceInput, AureliaMcpPageInput, AureliaMcpDetailInput {
   readonly sourceFile?: SemanticRuntimeSourceFileInput | null;
   readonly diagnosticProjection?: SemanticAppQuery['diagnosticProjection'];
   readonly projectKey?: string | null;
@@ -178,5 +209,7 @@ export interface AureliaMcpResponse<TValue> {
   readonly tool: string;
   readonly generatedAt: string;
   readonly workspaceRoot: string | null;
+  /** Exact shared semantic source-world input used by this call; null for static or all-session tools. */
+  readonly workspaceDescriptor: SemanticWorkspaceDescriptor | null;
   readonly value: TValue;
 }

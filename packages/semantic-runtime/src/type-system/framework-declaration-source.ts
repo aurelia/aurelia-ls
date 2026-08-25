@@ -53,6 +53,39 @@ export function typeMatchesFrameworkDeclarationSource(
     || symbolMatchesFrameworkDeclarationSource(apparent.aliasSymbol, checker, sourcePathByFileName, spec);
 }
 
+/** Match a checker type or an explicitly declared heritage type against a framework-owned declaration. */
+export function typeOrHeritageMatchesFrameworkDeclarationSource(
+  type: ts.Type | null | undefined,
+  checker: ts.TypeChecker,
+  sourcePathByFileName: FrameworkDeclarationSourcePathIndex,
+  spec: FrameworkDeclarationSourceSpec,
+  seen: Set<ts.Type> = new Set(),
+): boolean {
+  if (type == null || seen.has(type)) {
+    return false;
+  }
+  seen.add(type);
+  if (typeMatchesFrameworkDeclarationSource(type, checker, sourcePathByFileName, spec)) {
+    return true;
+  }
+  const apparent = checker.getApparentType(type);
+  const declarations = uniqueDeclarations([
+    ...(type.symbol?.declarations ?? []),
+    ...(type.aliasSymbol?.declarations ?? []),
+    ...(apparent.symbol?.declarations ?? []),
+    ...(apparent.aliasSymbol?.declarations ?? []),
+  ]);
+  return declarations.some((declaration) => heritageTypesForDeclaration(declaration).some((heritageType) =>
+    typeOrHeritageMatchesFrameworkDeclarationSource(
+      checker.getTypeAtLocation(heritageType),
+      checker,
+      sourcePathByFileName,
+      spec,
+      seen,
+    )
+  ));
+}
+
 export function declarationMatchesFrameworkSource(
   declaration: ts.Declaration,
   sourcePathByFileName: FrameworkDeclarationSourcePathIndex,
@@ -90,4 +123,23 @@ function pathContainsNodeModulePackage(
   const packageRoot = `/node_modules/${packageName}`;
   return normalized.endsWith(packageRoot)
     || normalized.includes(`${packageRoot}/`);
+}
+
+function heritageTypesForDeclaration(
+  declaration: ts.Declaration,
+): readonly ts.ExpressionWithTypeArguments[] {
+  if (
+    !ts.isClassDeclaration(declaration)
+    && !ts.isClassExpression(declaration)
+    && !ts.isInterfaceDeclaration(declaration)
+  ) {
+    return [];
+  }
+  return declaration.heritageClauses?.flatMap((clause) => clause.types) ?? [];
+}
+
+function uniqueDeclarations(
+  declarations: readonly ts.Declaration[],
+): readonly ts.Declaration[] {
+  return [...new Set(declarations)];
 }

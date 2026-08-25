@@ -1,4 +1,5 @@
-import { AureliaResourceIdentityKind } from '../kernel/identity.js';
+import type ts from 'typescript';
+import { AureliaResourceDeclarationKind } from '../kernel/identity.js';
 import {
   BindingBehaviorDefinitionHeader,
   BindingCommandDefinitionHeader,
@@ -12,41 +13,45 @@ import {
   ResourceDefinitionKind,
   type NamedResourceDefinitionKind,
 } from './resource-kind.js';
-import type { ResourceTargetObservation } from './resource-observation-primitives.js';
+import type {
+  ResourceAliasObservation,
+  ResourceTargetObservation,
+} from './resource-observation-primitives.js';
 
 interface NamedResourceKindDescriptor {
-  readonly identityKind: AureliaResourceIdentityKind;
+  readonly declarationKind: AureliaResourceDeclarationKind;
   createHeader(
     target: ResourceTargetObservation | null,
     name: string | null,
-    aliases: readonly string[],
+    aliases: readonly ResourceAliasObservation[],
+    nameSourceNode: ts.Node | null,
   ): NamedResourceDefinitionHeader;
 }
 
 const NamedResourceKindDescriptors: Readonly<Record<NamedResourceDefinitionKind, NamedResourceKindDescriptor>> = {
   [ResourceDefinitionKind.CustomElement]: {
-    identityKind: AureliaResourceIdentityKind.CustomElement,
-    createHeader: (target, name, aliases) => new CustomElementDefinitionHeader(target, name, aliases),
+    declarationKind: AureliaResourceDeclarationKind.CustomElement,
+    createHeader: (target, name, aliases, nameSourceNode) => new CustomElementDefinitionHeader(target, name, aliases, nameSourceNode),
   },
   [ResourceDefinitionKind.CustomAttribute]: {
-    identityKind: AureliaResourceIdentityKind.CustomAttribute,
-    createHeader: (target, name, aliases) => new CustomAttributeDefinitionHeader(target, name, aliases),
+    declarationKind: AureliaResourceDeclarationKind.CustomAttribute,
+    createHeader: (target, name, aliases, nameSourceNode) => new CustomAttributeDefinitionHeader(target, name, aliases, nameSourceNode),
   },
   [ResourceDefinitionKind.TemplateController]: {
-    identityKind: AureliaResourceIdentityKind.TemplateController,
-    createHeader: (target, name, aliases) => new TemplateControllerDefinitionHeader(target, name, aliases),
+    declarationKind: AureliaResourceDeclarationKind.TemplateController,
+    createHeader: (target, name, aliases, nameSourceNode) => new TemplateControllerDefinitionHeader(target, name, aliases, nameSourceNode),
   },
   [ResourceDefinitionKind.ValueConverter]: {
-    identityKind: AureliaResourceIdentityKind.ValueConverter,
-    createHeader: (target, name, aliases) => new ValueConverterDefinitionHeader(target, name, aliases),
+    declarationKind: AureliaResourceDeclarationKind.ValueConverter,
+    createHeader: (target, name, aliases, nameSourceNode) => new ValueConverterDefinitionHeader(target, name, aliases, nameSourceNode),
   },
   [ResourceDefinitionKind.BindingBehavior]: {
-    identityKind: AureliaResourceIdentityKind.BindingBehavior,
-    createHeader: (target, name, aliases) => new BindingBehaviorDefinitionHeader(target, name, aliases),
+    declarationKind: AureliaResourceDeclarationKind.BindingBehavior,
+    createHeader: (target, name, aliases, nameSourceNode) => new BindingBehaviorDefinitionHeader(target, name, aliases, nameSourceNode),
   },
   [ResourceDefinitionKind.BindingCommand]: {
-    identityKind: AureliaResourceIdentityKind.BindingCommand,
-    createHeader: (target, name, aliases) => new BindingCommandDefinitionHeader(target, name, aliases),
+    declarationKind: AureliaResourceDeclarationKind.BindingCommand,
+    createHeader: (target, name, aliases, nameSourceNode) => new BindingCommandDefinitionHeader(target, name, aliases, nameSourceNode),
   },
 };
 
@@ -54,13 +59,14 @@ export function createNamedResourceDefinitionHeader(
   resourceKind: NamedResourceDefinitionKind,
   target: ResourceTargetObservation | null,
   name: string | null,
-  aliases: readonly string[],
+  aliases: readonly ResourceAliasObservation[],
+  nameSourceNode: ts.Node | null = null,
 ): NamedResourceDefinitionHeader {
-  return NamedResourceKindDescriptors[resourceKind].createHeader(target, name, aliases);
+  return NamedResourceKindDescriptors[resourceKind].createHeader(target, name, aliases, nameSourceNode);
 }
 
-export function toAureliaResourceIdentityKind(
+export function toAureliaResourceDeclarationKind(
   kind: NamedResourceDefinitionKind,
-): AureliaResourceIdentityKind {
-  return NamedResourceKindDescriptors[kind].identityKind;
+): AureliaResourceDeclarationKind {
+  return NamedResourceKindDescriptors[kind].declarationKind;
 }

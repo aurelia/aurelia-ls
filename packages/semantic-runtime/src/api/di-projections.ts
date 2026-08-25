@@ -101,6 +101,7 @@ function diIssueRow(
         stepKind: issue.subject.stepKind,
         admissionKind: issue.subject.admissionKind,
         strategy: issue.subject.strategy,
+        failureKind: issue.subject.failureKind,
       }
       : null,
     source: describeAddress(store, issue.sourceAddressHandle),

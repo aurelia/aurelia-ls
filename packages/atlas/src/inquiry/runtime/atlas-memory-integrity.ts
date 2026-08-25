@@ -7,6 +7,7 @@ import type { SourceProject } from "../../source/index.js";
 import type { ProductArchitectureClassSurfaceRow } from "./product-architecture-analysis.js";
 import {
   type AtlasMemoryAuLinkAnchor,
+  type AtlasMemoryDocAnchor,
   type AtlasMemoryRecord,
   type AtlasMemoryScriptAnchor,
   type AtlasMemoryStorageIssue,
@@ -111,8 +112,42 @@ function anchorIntegrityIssues(
         summary: `Memory record ${record.id} points at ${anchor.symbolName} in ${anchor.filePath}, but the source project did not find that declaration there.`,
       });
     }
+    if (anchor.kind === "doc") {
+      issues.push(...docAnchorHeadingIssues(sourceProject, record, anchor, index));
+    }
     return issues;
   });
+}
+
+function docAnchorHeadingIssues(
+  sourceProject: SourceProject,
+  record: AtlasMemoryRecord,
+  anchor: AtlasMemoryDocAnchor,
+  index: number,
+): readonly AtlasMemoryStorageIssue[] {
+  if (anchor.heading === undefined) {
+    return [];
+  }
+  let text: string;
+  try {
+    text = readFileSync(path.join(sourceProject.repoRoot, anchor.path), "utf8");
+  } catch {
+    // Missing paths are already reported by the path-existence check above.
+    return [];
+  }
+  const wanted = anchor.heading.trim().toLowerCase();
+  const found = text.split(/\r?\n/u).some((line) => {
+    const match = /^#{1,6} +(.*)$/u.exec(line);
+    return match?.[1] !== undefined && match[1].trim().toLowerCase() === wanted;
+  });
+  return found
+    ? []
+    : [
+      {
+        id: `atlas.memory:record:${record.id}:anchor:${index}:missing-doc-heading`,
+        summary: `Memory record ${record.id} cites heading '${anchor.heading}' in ${anchor.path}, but no markdown heading with that text exists there; update the heading or drop it.`,
+      },
+    ];
 }
 
 function auLinkAnchorIntegrityIssues(

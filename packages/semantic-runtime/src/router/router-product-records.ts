@@ -1,12 +1,13 @@
 import {
-  EvidenceKind,
   EvidenceRecord,
-  EvidenceRole,
 } from '../kernel/evidence.js';
+import type { EvidenceKind, EvidenceRole } from '../kernel/evidence.js';
 import type {
   AddressHandle,
   EvidenceHandle,
   IdentityHandle,
+  ClaimHandle,
+  OpenSeamHandle,
   ProductHandle,
   ProvenanceHandle,
 } from '../kernel/handles.js';
@@ -19,7 +20,7 @@ import {
 import { OpenSeam, type OpenSeamReasonKind, type OpenSeamReasonSource } from '../kernel/open-seam.js';
 import { ProvenanceRecord } from '../kernel/provenance.js';
 import type {
-  KernelStore,
+  KernelStoreReadView,
   KernelStoreRecord,
 } from '../kernel/store.js';
 import type { OpenSeamKindKey, ProductKindKey } from '../kernel/vocabulary.js';
@@ -32,6 +33,8 @@ export interface RouterIdentityProductRecordSpec {
   readonly ownerHandle: IdentityHandle | null;
   readonly materializationOwnerHandle?: MaterializationOwnerHandle;
   readonly materializationProductHandles?: readonly ProductHandle[];
+  readonly materializationClaimHandles?: readonly ClaimHandle[];
+  readonly materializationOpenSeamHandles?: readonly OpenSeamHandle[];
   readonly sourceAddressHandle: AddressHandle | null;
   readonly localName: string | null;
   readonly provenanceHandle: ProvenanceHandle;
@@ -42,6 +45,8 @@ export interface RouterProductRecordSpec extends RouterIdentityProductRecordSpec
   readonly evidenceKind: EvidenceKind;
   readonly evidenceRoles: readonly EvidenceRole[];
   readonly evidenceSummary: string;
+  /** Evidence already owned by exact causal input products and aggregated into this product provenance. */
+  readonly additionalProvenanceEvidenceHandles?: readonly EvidenceHandle[];
 }
 
 export interface RouterOpenSeamRecordSpec {
@@ -62,28 +67,28 @@ export interface RouterOpenSeamRecordEmission {
 }
 
 export function routerProductRecords(
-  store: KernelStore,
+  store: KernelStoreReadView,
   spec: RouterProductRecordSpec,
 ): readonly KernelStoreRecord[] {
   return evidenceBackedProductRecords(store, spec, routerIdentity(spec));
 }
 
 export function routerIdentityProductRecords(
-  store: KernelStore,
+  store: KernelStoreReadView,
   spec: RouterIdentityProductRecordSpec,
 ): readonly KernelStoreRecord[] {
   return productEnvelopeRecords(store, spec, routerIdentity(spec));
 }
 
 export function routeRecognizerProductRecords(
-  store: KernelStore,
+  store: KernelStoreReadView,
   spec: RouterProductRecordSpec,
 ): readonly KernelStoreRecord[] {
   return evidenceBackedProductRecords(store, spec, routeRecognizerIdentity(spec));
 }
 
 function evidenceBackedProductRecords(
-  store: KernelStore,
+  store: KernelStoreReadView,
   spec: RouterProductRecordSpec,
   identity: SemanticIdentity,
 ): readonly KernelStoreRecord[] {
@@ -95,13 +100,18 @@ function evidenceBackedProductRecords(
       spec.evidenceSummary,
       spec.sourceAddressHandle,
     ),
-    new ProvenanceRecord(spec.provenanceHandle, [spec.evidenceHandle]),
+    new ProvenanceRecord(spec.provenanceHandle, [
+      ...new Set([
+        spec.evidenceHandle,
+        ...(spec.additionalProvenanceEvidenceHandles ?? []),
+      ]),
+    ]),
     ...productEnvelopeRecords(store, spec, identity),
   ];
 }
 
 function productEnvelopeRecords(
-  store: KernelStore,
+  store: KernelStoreReadView,
   spec: RouterIdentityProductRecordSpec,
   identity: SemanticIdentity,
 ): readonly KernelStoreRecord[] {
@@ -118,8 +128,8 @@ function productEnvelopeRecords(
       store.handles.materialization(spec.local),
       spec.materializationOwnerHandle ?? spec.ownerHandle ?? spec.identityHandle,
       spec.materializationProductHandles ?? [spec.productHandle],
-      [],
-      [],
+      spec.materializationClaimHandles ?? [],
+      spec.materializationOpenSeamHandles ?? [],
     ),
   ];
 }
@@ -149,7 +159,7 @@ function routeRecognizerIdentity(
 }
 
 export function routerOpenSeamRecords(
-  store: KernelStore,
+  store: KernelStoreReadView,
   spec: RouterOpenSeamRecordSpec,
 ): RouterOpenSeamRecordEmission {
   const evidenceHandle = store.handles.evidence(spec.local);

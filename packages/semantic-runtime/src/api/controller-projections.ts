@@ -19,17 +19,25 @@ import { ResourceProductDetails } from '../resources/product-details.js';
 import {
   BuiltInTemplateControllerFlowKind,
   type BuiltInTemplateControllerSemantics,
-  frameworkTemplateControllerSemanticsForName,
+  frameworkTemplateControllerSemanticsForController,
 } from '../template/template-controller-semantics.js';
 import { CustomAttributeDefinition } from '../resources/custom-attribute-definition.js';
 import { CustomElementDefinition } from '../resources/custom-element-definition.js';
 import type { FullResourceDefinition } from '../resources/resource-definition.js';
 import { describeAddress } from './source-reference.js';
+import {
+  filterObservedDependencyRows,
+  observedDependencyOccurrenceRow,
+  observedDependencyOwnerRow,
+  observedDependencyRowKey,
+} from './observed-dependency-projections.js';
+import { RuntimeExpressionAccessOwnerKind } from '../runtime-expression/runtime-expression-access-use.js';
 import type {
   SemanticRuntimeControllerHydrationHandoffKind,
   SemanticRuntimeControllerChildViewRenderingState,
-  SemanticRuntimeControllerLifecycleStepRow,
+  SemanticRuntimeControllerAssemblyStepRow,
   SemanticRuntimeControllerRow,
+  SemanticObservedDependencyLocus,
   SemanticRuntimeWatcherObservedDependencyRow,
   SemanticRuntimeWatcherRow,
   SemanticRuntimeTemplateControllerLinkKind,
@@ -107,20 +115,11 @@ export function readRuntimeWatcherRows(
   handles: boolean,
 ): readonly SemanticRuntimeWatcherRow[] {
   const context = runtimeControllerProjectionContext(emission, store, handles);
-  const resourcesByDefinition = runtimeTemplateResourcesByDefinition(emission.templates.resources);
-  return [
-    ...emission.templates.resources.flatMap((resource) =>
-      [
-        ...resource.runtimeAnalysis.runtimeRendering.controllers,
-        ...resource.runtimeAnalysis.runtimeComposition.composedControllers,
-      ].flatMap((controller) =>
-        runtimeWatcherRowsForController(resource.compilation.definition.name, controller, context)
-      )
-    ),
-    ...emission.routeComponentAgents.readControllers().flatMap((controller) =>
-      runtimeWatcherRowsForController(renderingDefinitionNameForController(controller, resourcesByDefinition), controller, context)
-    ),
-  ].sort((left, right) =>
+  return runtimeWatcherProjectionControllers(emission)
+    .flatMap(({ renderingDefinitionName, controller }) =>
+      runtimeWatcherRowsForController(renderingDefinitionName, controller, context)
+    )
+    .sort((left, right) =>
     `${left.renderingDefinitionName}:${left.controllerName}:${left.watchIndex}:${left.watcherKind}`
       .localeCompare(`${right.renderingDefinitionName}:${right.controllerName}:${right.watchIndex}:${right.watcherKind}`)
   );
@@ -131,25 +130,45 @@ export function readRuntimeWatcherObservedDependencyRows(
   emission: AureliaAppWorldProjectEmission,
   store: KernelStore,
   handles: boolean,
+  locus?: SemanticObservedDependencyLocus | null,
 ): readonly SemanticRuntimeWatcherObservedDependencyRow[] {
   const context = runtimeControllerProjectionContext(emission, store, handles);
+  const rows = runtimeWatcherProjectionControllers(emission)
+    .flatMap(({ renderingDefinitionName, controller }) =>
+      runtimeWatcherObservedDependencyRowsForController(renderingDefinitionName, controller, context)
+    )
+    .sort((left, right) =>
+      `${left.renderingDefinitionName}:${left.controllerName}:${left.watchIndex}:${left.occurrence.dependencyKind}:${left.occurrence.memberName ?? ''}`
+        .localeCompare(`${right.renderingDefinitionName}:${right.controllerName}:${right.watchIndex}:${right.occurrence.dependencyKind}:${right.occurrence.memberName ?? ''}`)
+    );
+  return filterObservedDependencyRows(rows, locus);
+}
+
+export interface RuntimeWatcherProjectionController {
+  readonly renderingDefinitionName: string;
+  readonly controller: RuntimeControllerFrame;
+}
+
+/** Shared controller traversal for every public watcher-owned projection. */
+export function runtimeWatcherProjectionControllers(
+  emission: AureliaAppWorldProjectEmission,
+): readonly RuntimeWatcherProjectionController[] {
   const resourcesByDefinition = runtimeTemplateResourcesByDefinition(emission.templates.resources);
   return [
     ...emission.templates.resources.flatMap((resource) =>
       [
         ...resource.runtimeAnalysis.runtimeRendering.controllers,
         ...resource.runtimeAnalysis.runtimeComposition.composedControllers,
-      ].flatMap((controller) =>
-        runtimeWatcherObservedDependencyRowsForController(resource.compilation.definition.name, controller, context)
-      )
+      ].map((controller) => ({
+        renderingDefinitionName: resource.compilation.definition.name,
+        controller,
+      }))
     ),
-    ...emission.routeComponentAgents.readControllers().flatMap((controller) =>
-      runtimeWatcherObservedDependencyRowsForController(renderingDefinitionNameForController(controller, resourcesByDefinition), controller, context)
-    ),
-  ].sort((left, right) =>
-    `${left.renderingDefinitionName}:${left.controllerName}:${left.watchIndex}:${left.dependencyKind}:${left.memberName ?? ''}`
-      .localeCompare(`${right.renderingDefinitionName}:${right.controllerName}:${right.watchIndex}:${right.dependencyKind}:${right.memberName ?? ''}`)
-  );
+    ...emission.routeComponentAgents.readControllers().map((controller) => ({
+      renderingDefinitionName: renderingDefinitionNameForController(controller, resourcesByDefinition),
+      controller,
+    })),
+  ];
 }
 
 function runtimeControllerProjectionContext(
@@ -214,13 +233,14 @@ function runtimeControllerRow(
   context: RuntimeControllerProjectionContext,
 ): SemanticRuntimeControllerRow {
   const state = runtimeControllerProjectionState(controller, context);
-  const controllerProduct = controller.toControllerProduct();
   return {
     renderingDefinitionName,
     controllerName: controller.name,
-    controllerPhase: controllerProduct.phase,
     creationKind: controller.creationKind,
-    controllerReadiness: controller.readReadinessKind(),
+    assemblyProgress: controller.readAssemblyProgressKind(),
+    realizedReadiness: controller.readRealizedReadinessKind(),
+    observerSetupState: controller.readObserverSetupState(),
+    bindReachability: controller.readBindReachability(),
     ...runtimeControllerDefinitionRowFields(state),
     ...runtimeControllerTreeRowFields(controller, state),
     ...runtimeControllerViewFactoryRowFields(state),
@@ -228,7 +248,7 @@ function runtimeControllerRow(
     childViewRenderingState: childViewRenderingState(controller, state.viewFactory, state.syntheticView),
     hydrationHandoffKind: state.handoffKind,
     compiledTemplateDefinitionName: state.compiledTemplateInfo?.definitionName ?? null,
-    ...runtimeControllerLifecycleRowFields(controller, context),
+    ...runtimeControllerAssemblyRowFields(controller, context),
     ...runtimeControllerRowHandles(controller, state, context),
   };
 }
@@ -296,35 +316,37 @@ function runtimeWatcherObservedDependencyRowsForController(
 ): readonly SemanticRuntimeWatcherObservedDependencyRow[] {
   const state = runtimeControllerProjectionState(controller, context);
   return controller.readWatchers().flatMap((watcher) =>
-    watcher.observedDependencies.map((dependency) => ({
-      renderingDefinitionName,
-      controllerName: controller.name,
-      definitionName: definitionName(state.controllerDefinition),
-      definitionClassName: definitionClassName(state.controllerDefinition),
-      watcherKind: watcher.watcherKind,
-      watchIndex: watcher.watchIndex,
-      dependencyKind: dependency.dependencyKind,
-      expressionKind: dependency.expressionKind,
-      sourceName: dependency.sourceName,
-      sourceRootName: dependency.sourceRootName,
-      memberName: dependency.memberName,
-      keyExpression: dependency.keyExpression,
-      methodName: dependency.methodName,
-      observedMemberKind: dependency.observedMemberKind,
-      observedMemberSource: describeAddress(context.store, dependency.observedMemberSourceAddressHandle),
-      spanStart: dependency.spanStart,
-      spanEnd: dependency.spanEnd,
-      source: describeAddress(context.store, dependency.sourceAddressHandle),
-      ...(context.handles ? {
-        handles: {
-          watcherProductHandle: watcher.productHandle,
-          observedDependencyProductHandle: dependency.productHandle,
-          observedDependencyIdentityHandle: dependency.identityHandle,
-          observedMemberSourceAddressHandle: dependency.observedMemberSourceAddressHandle,
-          sourceAddressHandle: dependency.sourceAddressHandle,
-        },
-      } : {}),
-    }))
+    watcher.observedDependencies.map((dependency) => {
+      const owner = observedDependencyOwnerRow(context.store, {
+        kind: RuntimeExpressionAccessOwnerKind.RuntimeWatcher,
+        productHandle: watcher.productHandle,
+        identityHandle: watcher.identityHandle,
+        sourceAddressHandle: watcher.sourceAddressHandle,
+      }, context.handles);
+      const occurrence = observedDependencyOccurrenceRow(
+        context.store,
+        dependency.occurrence,
+        context.handles,
+      );
+      return {
+        renderingDefinitionName,
+        controllerName: controller.name,
+        definitionName: definitionName(state.controllerDefinition),
+        definitionClassName: definitionClassName(state.controllerDefinition),
+        watcherKind: watcher.watcherKind,
+        watchIndex: watcher.watchIndex,
+        rowKey: observedDependencyRowKey(owner, dependency.identityHandle),
+        owner,
+        occurrence,
+        ...(context.handles ? {
+          handles: {
+            watcherProductHandle: watcher.productHandle,
+            observedDependencyProductHandle: dependency.productHandle,
+            observedDependencyIdentityHandle: dependency.identityHandle,
+          },
+        } : {}),
+      };
+    })
   );
 }
 
@@ -375,12 +397,12 @@ function runtimeControllerTemplateControllerRowFields(
   };
 }
 
-function runtimeControllerLifecycleRowFields(
+function runtimeControllerAssemblyRowFields(
   controller: RuntimeControllerFrame,
   context: RuntimeControllerProjectionContext,
-): Pick<SemanticRuntimeControllerRow, 'lifecycleSteps' | 'source'> {
+): Pick<SemanticRuntimeControllerRow, 'assemblySteps' | 'source'> {
   return {
-    lifecycleSteps: controllerLifecycleStepRows(controller, context.store, context.handles),
+    assemblySteps: controllerAssemblyStepRows(controller, context.store, context.handles),
     source: describeAddress(context.store, controller.sourceAddressHandle),
   };
 }
@@ -393,11 +415,11 @@ function runtimeControllerProjectionState(
   const compiledTemplate = context.indexes.compiledTemplateByController.get(controller.productHandle) ?? null;
   const instructionSequence = context.indexes.instructionSequenceByController.get(controller.productHandle) ?? null;
   const viewFactory = viewFactoryForController(controller, context.indexes);
-  const templateControllerSemantics = semanticsForController(controller);
+  const templateControllerSemantics = semanticsForController(controller, context.store);
   const templateControllerLink = context.indexes.templateControllerLinkByController.get(controller.productHandle) ?? null;
   const viewFactoryDefinition = definitionLinkForViewFactory(viewFactory, context.indexes);
   return {
-    controllerDefinition: definitionForController(context.emission, controller),
+    controllerDefinition: definitionForController(context.store, controller),
     instruction,
     compiledTemplate,
     instructionSequence,
@@ -434,11 +456,15 @@ function viewFactoryForController(
 
 function semanticsForController(
   controller: RuntimeControllerFrame,
+  store: KernelStore,
 ): BuiltInTemplateControllerSemantics | null {
-  const templateControllerName = templateControllerNameForSemantics(controller);
-  return templateControllerName == null
-    ? null
-    : frameworkTemplateControllerSemanticsForName(templateControllerName);
+  const semanticOwner = controller.creationKind === RuntimeControllerCreationKind.SyntheticView
+    ? controller.parent
+    : controller;
+  return frameworkTemplateControllerSemanticsForController(
+    store,
+    semanticOwner,
+  );
 }
 
 function definitionLinkForViewFactory(
@@ -499,6 +525,10 @@ function runtimeControllerRowHandles(
       definitionProductHandle: controller.definitionProductHandle,
       instructionProductHandle: controller.instructionProductHandle,
       instructionIdentityHandle: controller.instructionIdentityHandle,
+      constructionHydrationContextProductHandle:
+        controller.readConstructionHydrationContext()?.productHandle ?? null,
+      hydrationContextProductHandle: controller.readHydrationContext()?.productHandle ?? null,
+      auSlotsInfoProductHandle: controller.readAuSlotsInfo()?.productHandle ?? null,
       bindingScopeProductHandle: state.scope?.productHandle ?? null,
       compiledTemplateProductHandle: state.compiledTemplate?.productHandle ?? null,
       compiledTemplateClaimHandle: state.compiledTemplate?.claimHandle ?? null,
@@ -527,26 +557,14 @@ function runtimeControllerRowSortKey(row: SemanticRuntimeControllerRow): string 
   return `${row.renderingDefinitionName}:${row.parentControllerName ?? ''}:${row.controllerName ?? ''}:${row.creationKind}`;
 }
 
-function controllerLifecycleStepRows(
+function controllerAssemblyStepRows(
   controller: RuntimeControllerFrame,
   store: KernelStore,
   handles: boolean,
-): readonly SemanticRuntimeControllerLifecycleStepRow[] {
-  const steps = controller.readLifecycleSteps();
-  const rows: SemanticRuntimeControllerLifecycleStepRow[] = [];
-  for (const step of steps) {
-    const previous = rows[rows.length - 1] ?? null;
-    if (previous != null && previous.stage === step.stage && previous.stepKind === step.stepKind) {
-      rows[rows.length - 1] = {
-        ...previous,
-        count: previous.count + 1,
-        summary: `${previous.count + 1} consecutive ${step.stepKind} step(s).`,
-      };
-      continue;
-    }
-    rows.push({
+): readonly SemanticRuntimeControllerAssemblyStepRow[] {
+  return controller.readAssemblySteps()
+    .map((step): SemanticRuntimeControllerAssemblyStepRow => ({
       order: step.order,
-      count: 1,
       stage: step.stage,
       stepKind: step.stepKind,
       summary: step.summary,
@@ -557,9 +575,7 @@ function controllerLifecycleStepRows(
           sourceAddressHandle: step.sourceAddressHandle,
         },
       } : {}),
-    });
-  }
-  return rows;
+    }));
 }
 
 function compiledTemplateInfoByProductHandle(
@@ -665,10 +681,12 @@ function inverseProductClaimLinks(
 }
 
 function definitionForController(
-  emission: AureliaAppWorldProjectEmission,
+  store: KernelStore,
   controller: RuntimeControllerFrame,
 ): FullResourceDefinition | null {
-  return emission.resourceIndex.lookupByProduct(controller.definitionProductHandle);
+  return controller.definitionProductHandle == null
+    ? null
+    : store.productDetails.read(ResourceProductDetails.Definition, controller.definitionProductHandle);
 }
 
 function definitionName(definition: FullResourceDefinition | null): string | null {
@@ -681,15 +699,6 @@ function definitionClassName(definition: FullResourceDefinition | null): string 
   return definition instanceof CustomElementDefinition || definition instanceof CustomAttributeDefinition
     ? definition.target.localName
     : null;
-}
-
-function templateControllerNameForSemantics(
-  controller: RuntimeControllerFrame,
-): string | null {
-  if (controller.creationKind === RuntimeControllerCreationKind.SyntheticView) {
-    return controller.parent?.name ?? null;
-  }
-  return controller.name;
 }
 
 function childViewRenderingState(

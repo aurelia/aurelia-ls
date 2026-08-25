@@ -4,12 +4,24 @@ import {
   type SourceFileAddress,
   type SemanticAddress,
 } from './address.js';
-import type { AddressHandle, IdentityHandle } from './handles.js';
-import type { SemanticIdentity } from './identity.js';
+import {
+  EvidenceKind,
+  EvidenceRecord,
+  type EvidenceRole,
+} from './evidence.js';
 import type {
-  KernelStore,
+  AddressHandle,
+  EvidenceHandle,
+  IdentityHandle,
+  ProvenanceHandle,
+} from './handles.js';
+import type { SemanticIdentity } from './identity.js';
+import { ProvenanceRecord } from './provenance.js';
+import type {
+  KernelStoreReadView,
   KernelStoreRecord,
 } from './store.js';
+import { canonicalTypeSystemSourcePath } from '../type-system/source-file-path.js';
 
 export type SourceAnchorHandle = AddressHandle | IdentityHandle;
 export type SourceAnchorRecord = SemanticAddress | SemanticIdentity;
@@ -27,9 +39,22 @@ export interface SourcePathSpanSite {
 }
 
 export class SourceSpanAddressPublication {
+  readonly records: readonly KernelStoreRecord[];
+
   constructor(
     readonly handle: AddressHandle,
+    readonly address: SourceSpanAddress,
+  ) {
+    this.records = [address];
+  }
+}
+
+export class SourceSpanEvidencePublication {
+  constructor(
     readonly records: readonly KernelStoreRecord[],
+    readonly addressHandle: AddressHandle,
+    readonly evidenceHandle: EvidenceHandle,
+    readonly provenanceHandle: ProvenanceHandle,
   ) {}
 }
 
@@ -45,7 +70,7 @@ export function sourcePathSpanLookupKey(site: SourcePathSpanSite): string {
 
 /** Materialize an exact source span when the caller already has the boot-admitted source-file handle. */
 export function sourceSpanAddressForSite(
-  store: KernelStore,
+  store: KernelStoreReadView,
   localKey: string,
   site: SourceSpanSite,
   role: SourceSpanRole = SourceSpanRole.Primary,
@@ -53,15 +78,43 @@ export function sourceSpanAddressForSite(
   const handle = store.handles.address(`${localKey}:source`);
   return new SourceSpanAddressPublication(
     handle,
+    new SourceSpanAddress(
+      handle,
+      site.sourceFileAddressHandle,
+      site.start,
+      site.end,
+      role,
+    ),
+  );
+}
+
+/** Publish an exact authored span together with the witness used by durable field provenance. */
+export function sourceSpanEvidenceForSite(
+  store: KernelStoreReadView,
+  localKey: string,
+  site: SourceSpanSite,
+  role: SourceSpanRole,
+  evidenceRoles: readonly EvidenceRole[],
+  summary: string,
+): SourceSpanEvidencePublication {
+  const source = sourceSpanAddressForSite(store, localKey, site, role);
+  const evidenceHandle = store.handles.evidence(localKey);
+  const provenanceHandle = store.handles.provenance(localKey);
+  return new SourceSpanEvidencePublication(
     [
-      new SourceSpanAddress(
-        handle,
-        site.sourceFileAddressHandle,
-        site.start,
-        site.end,
-        role,
+      ...source.records,
+      new EvidenceRecord(
+        evidenceHandle,
+        EvidenceKind.SourceObservation,
+        evidenceRoles,
+        summary,
+        source.handle,
       ),
+      new ProvenanceRecord(provenanceHandle, [evidenceHandle]),
     ],
+    source.handle,
+    evidenceHandle,
+    provenanceHandle,
   );
 }
 
@@ -113,6 +166,7 @@ export function isSemanticIdentityRecord(record: KernelStoreRecord): record is S
     case 'fetch-client-identity':
     case 'dialog-identity':
     case 'compiler-identity':
+    case 'runtime-expression-identity':
     case 'template-identity':
     case 'template-node-identity':
     case 'binding-identity':
@@ -124,35 +178,22 @@ export function isSemanticIdentityRecord(record: KernelStoreRecord): record is S
   }
 }
 
-/** Match a host-facing file path against a source-file address path. */
-export function sourceFilePathMatches(address: SourceFileAddress, filePath: string): boolean {
-  return sourcePathMatchesFileName(address.path, filePath);
+/** Candidate-only path-tail relation for staged address enumeration; never authorizes source identity. */
+export function sourceFilePathMayMatchFileName(address: SourceFileAddress, filePath: string): boolean {
+  return sourcePathMayMatchFileName(address.path, filePath);
 }
 
-/** Match two host/source path spellings after normalizing path separators. */
-export function sourcePathMatchesFileName(sourcePath: string, fileName: string): boolean {
-  const normalizedSourcePath = normalizeHostPath(sourcePath);
-  const normalizedFileName = normalizeHostPath(fileName);
+/** Candidate-only path-tail relation after separator normalization; callers must resolve ambiguity separately. */
+export function sourcePathMayMatchFileName(sourcePath: string, fileName: string): boolean {
+  const normalizedSourcePath = canonicalTypeSystemSourcePath(sourcePath);
+  const normalizedFileName = canonicalTypeSystemSourcePath(fileName);
   return normalizedSourcePath === normalizedFileName
     || normalizedSourcePath.endsWith(`/${normalizedFileName}`)
     || normalizedFileName.endsWith(`/${normalizedSourcePath}`);
 }
 
-export function sourceFileAddressHandlesForFileNames(
-  store: KernelStore,
-  fileNames: readonly string[],
-): ReadonlySet<AddressHandle> {
-  const handles = new Set<AddressHandle>();
-  for (const fileName of fileNames) {
-    for (const address of store.readSourceFileAddressesByFileName(fileName)) {
-      handles.add(address.handle);
-    }
-  }
-  return handles;
-}
-
 export function addressBelongsToSourceFiles(
-  store: KernelStore,
+  store: KernelStoreReadView,
   addressHandle: AddressHandle,
   sourceFileHandles: ReadonlySet<AddressHandle>,
 ): boolean {
@@ -172,28 +213,28 @@ interface AuthoredSourceAddressSeen {
 
 /** Narrow a kernel address to an exact source span, following template/generated anchors when possible. */
 export function sourceSpanAddressForAddress(
-  store: KernelStore,
+  store: KernelStoreReadView,
   addressHandle: AddressHandle | null,
 ): SourceSpanAddress | null {
   return authoredSourceAddressForAddress(store, addressHandle)?.sourceSpan ?? null;
 }
 
 export function sourceFileHandleForAddress(
-  store: KernelStore,
+  store: KernelStoreReadView,
   addressHandle: AddressHandle | null,
 ): AddressHandle | null {
   return sourceFileAddressForAddress(store, addressHandle)?.handle ?? null;
 }
 
 export function sourceFileAddressForAddress(
-  store: KernelStore,
+  store: KernelStoreReadView,
   addressHandle: AddressHandle | null,
 ): SourceFileAddress | null {
   return authoredSourceAddressForAddress(store, addressHandle)?.sourceFile ?? null;
 }
 
 function authoredSourceAddressForAddress(
-  store: KernelStore,
+  store: KernelStoreReadView,
   addressHandle: AddressHandle | null,
   seen: AuthoredSourceAddressSeen = createAuthoredSourceAddressSeen(),
 ): AuthoredSourceAddress | null {
@@ -202,16 +243,16 @@ function authoredSourceAddressForAddress(
   }
   seen.addresses.add(addressHandle);
 
-  const address = store.readAddress(addressHandle);
-  if (address == null) {
+  const record = store.read(addressHandle);
+  if (record == null || !isSemanticAddressRecord(record)) {
     return null;
   }
-  return authoredSourceAddressForStoredAddress(store, address, seen);
+  return authoredSourceAddressForStoredAddress(store, record, seen);
 }
 
 /** Follow an address or identity handle to the closest authored source anchor when one exists. */
 export function authoredSourceAddressForAnchorHandle(
-  store: KernelStore,
+  store: KernelStoreReadView,
   handle: SourceAnchorHandle | null,
 ): AuthoredSourceAddress | null {
   return authoredSourceAddressForAnchor(store, handle, createAuthoredSourceAddressSeen());
@@ -219,7 +260,7 @@ export function authoredSourceAddressForAnchorHandle(
 
 /** Read an address-or-identity anchor through the store record index and validate the expected record family. */
 export function readSourceAnchorRecord(
-  store: KernelStore,
+  store: KernelStoreReadView,
   handle: SourceAnchorHandle | null,
 ): SourceAnchorRecord | null {
   if (handle == null) {
@@ -237,7 +278,7 @@ function createAuthoredSourceAddressSeen(): AuthoredSourceAddressSeen {
 }
 
 function authoredSourceAddressForAnchor(
-  store: KernelStore,
+  store: KernelStoreReadView,
   handle: SourceAnchorHandle | null,
   seen: AuthoredSourceAddressSeen,
 ): AuthoredSourceAddress | null {
@@ -256,7 +297,7 @@ function authoredSourceAddressForAnchor(
 }
 
 function authoredSourceAddressForStoredAddress(
-  store: KernelStore,
+  store: KernelStoreReadView,
   address: SemanticAddress,
   seen: AuthoredSourceAddressSeen,
 ): AuthoredSourceAddress | null {
@@ -282,7 +323,7 @@ function authoredSourceAddressForStoredAddress(
 }
 
 function authoredSourceAddressForIdentity(
-  store: KernelStore,
+  store: KernelStoreReadView,
   identity: SemanticIdentity,
   seen: AuthoredSourceAddressSeen,
 ): AuthoredSourceAddress | null {
@@ -313,7 +354,19 @@ function identityDirectSourceAddressHandles(identity: SemanticIdentity): readonl
     case 'aurelia-attribute-pattern-identity':
       return compactAddressHandles(identity.definitionAddressHandle);
     case 'di-key-identity':
-      return compactAddressHandles(identity.keyAddressHandle);
+      switch (identity.keyKind) {
+        case 'object':
+          return compactAddressHandles(identity.creationAddressHandle);
+        case 'unknown':
+        case 'constructable':
+        case 'interface':
+        case 'symbol':
+        case 'string':
+        case 'primitive':
+        case 'resource':
+        case 'resolver-key':
+          return compactAddressHandles(identity.keyAddressHandle);
+      }
     case 'container-identity':
     case 'di-product-identity':
     case 'registration-identity':
@@ -329,6 +382,7 @@ function identityDirectSourceAddressHandles(identity: SemanticIdentity): readonl
     case 'validation-identity':
     case 'fetch-client-identity':
     case 'dialog-identity':
+    case 'runtime-expression-identity':
     case 'type-system-identity':
       return compactAddressHandles(identity.sourceAddressHandle);
     case 'compiler-identity':
@@ -360,6 +414,8 @@ function identityOwnerAnchorHandles(identity: SemanticIdentity): readonly Source
           return compactAnchorHandles(identity.innerKeyHandle);
         case 'unknown':
         case 'string':
+        case 'object':
+        case 'primitive':
           return [];
       }
     case 'di-product-identity':
@@ -375,6 +431,7 @@ function identityOwnerAnchorHandles(identity: SemanticIdentity): readonly Source
     case 'validation-identity':
     case 'fetch-client-identity':
     case 'dialog-identity':
+    case 'runtime-expression-identity':
     case 'compiler-identity':
     case 'template-identity':
     case 'type-system-identity':

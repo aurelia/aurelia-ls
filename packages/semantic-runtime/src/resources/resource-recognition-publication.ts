@@ -21,7 +21,6 @@ import type {
 import {
   AureliaAttributePatternIdentity,
   AureliaResourceIdentity,
-  TypeScriptDeclarationIdentity,
 } from '../kernel/identity.js';
 import { localKeyPart } from '../kernel/local-key.js';
 import {
@@ -31,12 +30,18 @@ import type {
   KernelStore,
   KernelStoreRecord,
 } from '../kernel/store.js';
+import type { KernelPublicationContext } from '../kernel/publication.js';
 import { KernelVocabulary } from '../kernel/vocabulary.js';
 import {
   CheckerTypeMemberProjectionPolicy,
   CheckerTypeProjector,
   type CheckerTypeProjectionRequest,
 } from '../type-system/checker-projector.js';
+import {
+  appendDeclarationSourceRecords,
+  sourceSpanForCheckerDeclaration,
+  type DeclarationSourcePublication,
+} from '../type-system/declaration-source.js';
 import type { TypeSystemProject } from '../type-system/project.js';
 import {
   CheckerTypeProjectionOrigin,
@@ -48,23 +53,29 @@ import {
 } from './resource-definition.js';
 import type { ResourceRecognitionContext } from './resource-recognition-context.js';
 import type { ResourceRecognitionEmissionPhaseName } from './resource-recognition-kernel-emitter.js';
-import {
-  type AttributePatternObservation,
-  type ResourceTargetObservation,
+import type {
+  AttributePatternObservation,
+  ResourceAliasObservation,
+  ResourceTargetObservation,
   ResourceRecognitionObservation,
   ResourceRecognitionOpen,
 } from './resource-observation.js';
 import {
   type NamedResourceDefinitionKind,
 } from './resource-kind.js';
-import { toAureliaResourceIdentityKind } from './named-resource-kind.js';
+import { toAureliaResourceDeclarationKind } from './named-resource-kind.js';
 import { ResourceTargetReference } from './resource-reference.js';
+import {
+  sourceSpanAddressForNode,
+  sourceSpanRangeForNode,
+} from './resource-source-address.js';
 
 class ResourceIdentityPublication {
   constructor(
     readonly records: readonly KernelStoreRecord[],
     readonly identityHandle: IdentityHandle,
     readonly claimHandle: ClaimHandle,
+    readonly sourceAddressHandle: AddressHandle | null,
   ) {}
 }
 
@@ -73,6 +84,7 @@ export class ResourceIdentityPublicationSet {
     readonly records: readonly KernelStoreRecord[],
     readonly primaryIdentityHandle: IdentityHandle | null,
     readonly claimHandles: readonly ClaimHandle[],
+    readonly lookupNameSourceAddressHandles: readonly (AddressHandle | null)[],
   ) {}
 }
 
@@ -98,8 +110,11 @@ type ResourceRecognitionPublicationPhaseRecorder = <TValue>(
 
 /** Publishes target, resource-identity, alias, pattern, and open-seam records for recognized resource carriers. */
 export class ResourceRecognitionPublicationSupport {
+  private readonly stagedRecordHandles = new Set<string>();
+
   constructor(
     readonly store: KernelStore,
+    private readonly publication: KernelPublicationContext,
     readonly recordPhase: ResourceRecognitionPublicationPhaseRecorder = (_name, read) => read(),
   ) {}
 
@@ -113,14 +128,49 @@ export class ResourceRecognitionPublicationSupport {
       return new ResourceTargetPublication([], null, null);
     }
 
-    const addressHandle = this.store.handles.address(`resource-target:${local}`);
-    const identityHandle = this.targetIdentityHandle(target, local);
-    const targetReference = this.targetReferenceForObservation(context, target, local, addressHandle, identityHandle);
+    const declarationIdentity = this.targetDeclarationIdentity(context, target);
+    const targetSource = declarationIdentity == null
+      ? sourceSpanAddressForNode(
+          this.store,
+          context,
+          target.node,
+          `resource-target:${local}`,
+          SourceSpanRole.Name,
+        )
+      : null;
+    const declarationSource = sourceSpanAddressForNode(
+      this.store,
+      context,
+      target.declarationNode,
+      `resource-target-declaration:${local}`,
+      SourceSpanRole.Range,
+    );
+    const records = [
+      ...(targetSource?.records ?? []),
+      ...(declarationSource?.records ?? []),
+    ];
+    const addressHandle = declarationIdentity?.address.handle
+      ?? targetSource?.addressHandle
+      ?? null;
+    const identityHandle = declarationIdentity?.identity.handle ?? null;
+    const moduleKey = this.targetModuleKey(context, target);
+    const targetReference = this.targetReferenceForObservation(
+      context,
+      target,
+      local,
+      addressHandle,
+      declarationSource?.addressHandle ?? null,
+      identityHandle,
+      moduleKey,
+    );
+    appendDeclarationSourceRecords(
+      this.publication,
+      records,
+      declarationIdentity,
+      this.stagedRecordHandles,
+    );
     return new ResourceTargetPublication(
-      [
-        this.targetAddress(context, target, addressHandle),
-        ...this.recordsForTargetIdentity(context, target, addressHandle, identityHandle),
-      ],
+      records,
       targetReference,
       identityHandle,
     );
@@ -137,7 +187,7 @@ export class ResourceRecognitionPublicationSupport {
   ): ResourceIdentityPublicationSet {
     const definition = observation.definition;
     if (definition == null) {
-      return new ResourceIdentityPublicationSet([], null, []);
+      return new ResourceIdentityPublicationSet([], null, [], []);
     }
     if (definition instanceof AttributePatternDefinitionHeader) {
       return this.recordsForAttributePatternIdentities(
@@ -176,33 +226,59 @@ export class ResourceRecognitionPublicationSupport {
         start: seam.node.getStart(context.sourceFile),
         end: seam.node.end,
         evidenceRoles: [EvidenceRole.Diagnostic],
-        includeProvenanceRecord: true,
+        reasonKinds: seam.reasonKinds,
       })),
     );
     return new ResourceOpenSeamPublicationSet(result.records, result.handles);
   }
 
-  private targetIdentityHandle(
+  private targetDeclarationIdentity(
+    context: ResourceRecognitionContext,
     target: ResourceTargetObservation,
-    local: string,
-  ): IdentityHandle | null {
-    return target.localName == null || !target.isDeclaration
+  ): DeclarationSourcePublication | null {
+    if (context.typeSystem == null || target.localName == null || target.declarationNode == null) {
+      return null;
+    }
+    const symbol = context.typeSystem.readProgramAliasedSymbolAtLocation(target.node);
+    if (symbol == null) {
+      return null;
+    }
+    const declarations = symbol.declarations
+      ?? (symbol.valueDeclaration == null ? [] : [symbol.valueDeclaration]);
+    return sourceSpanForCheckerDeclaration(
+      this.publication,
+      context.typeSystem.checker,
+      symbol,
+      declarations,
+      SourceSpanRole.Name,
+    );
+  }
+
+  private targetModuleKey(
+    context: ResourceRecognitionContext,
+    target: ResourceTargetObservation,
+  ): string | null {
+    return target.declarationNode == null
       ? null
-      : this.store.handles.identity(`resource-target:${local}`);
+      : context.readAdmittedNodeContext(target.declarationNode)?.moduleKey ?? null;
   }
 
   private targetReferenceForObservation(
     context: ResourceRecognitionContext,
     target: ResourceTargetObservation,
     local: string,
-    addressHandle: AddressHandle,
+    addressHandle: AddressHandle | null,
+    declarationSourceAddressHandle: AddressHandle | null,
     identityHandle: IdentityHandle | null,
+    moduleKey: string | null,
   ): ResourceTargetReference {
     return new ResourceTargetReference(
       identityHandle,
       addressHandle,
       target.localName,
       this.targetTypeReference(context, target, local, addressHandle, identityHandle),
+      moduleKey,
+      declarationSourceAddressHandle,
     );
   }
 
@@ -210,7 +286,7 @@ export class ResourceRecognitionPublicationSupport {
     context: ResourceRecognitionContext,
     target: ResourceTargetObservation,
     local: string,
-    addressHandle: AddressHandle,
+    addressHandle: AddressHandle | null,
     identityHandle: IdentityHandle | null,
   ): CheckerTypeReference | null {
     return this.recordPhase('kernel-emission:target-type-projection', () =>
@@ -218,6 +294,7 @@ export class ResourceRecognitionPublicationSupport {
         ? null
         : projectTargetType(
           this.store,
+          this.publication,
           context.typeSystem,
           target.node,
           local,
@@ -226,39 +303,6 @@ export class ResourceRecognitionPublicationSupport {
           target.localName,
         )
     );
-  }
-
-  private targetAddress(
-    context: ResourceRecognitionContext,
-    target: ResourceTargetObservation,
-    addressHandle: AddressHandle,
-  ): SourceSpanAddress {
-    return new SourceSpanAddress(
-      addressHandle,
-      context.sourceFileAddressHandle,
-      target.node.getStart(context.sourceFile),
-      target.node.end,
-      SourceSpanRole.Name,
-    );
-  }
-
-  private recordsForTargetIdentity(
-    context: ResourceRecognitionContext,
-    target: ResourceTargetObservation,
-    addressHandle: AddressHandle,
-    identityHandle: IdentityHandle | null,
-  ): readonly TypeScriptDeclarationIdentity[] {
-    return identityHandle == null
-      ? []
-      : [
-        new TypeScriptDeclarationIdentity(
-          identityHandle,
-          context.moduleKey,
-          null,
-          target.localName,
-          addressHandle,
-        ),
-      ];
   }
 
   private recordsForNamedResourceIdentities(
@@ -271,6 +315,7 @@ export class ResourceRecognitionPublicationSupport {
   ): ResourceIdentityPublicationSet {
     const records: KernelStoreRecord[] = [];
     const claimHandles: ClaimHandle[] = [];
+    const sourceAddressHandles: (AddressHandle | null)[] = [];
     let primaryIdentityHandle: IdentityHandle | null = null;
     const resourceKind = definition.type;
     const primaryNames = primaryResourceNames(definition);
@@ -286,6 +331,7 @@ export class ResourceRecognitionPublicationSupport {
       );
       primaryIdentityHandle ??= publication.identityHandle;
       claimHandles.push(publication.claimHandle);
+      sourceAddressHandles.push(publication.sourceAddressHandle);
       records.push(...publication.records);
 
       if (nameIndex === 0 && name != null) {
@@ -298,6 +344,7 @@ export class ResourceRecognitionPublicationSupport {
           provenanceHandle,
         );
         claimHandles.push(...aliases.claimHandles);
+        sourceAddressHandles.push(...aliases.sourceAddressHandles);
         records.push(...aliases.records);
       }
     });
@@ -318,7 +365,7 @@ export class ResourceRecognitionPublicationSupport {
       records.push(...publication.records);
     }
 
-    return new ResourceIdentityPublicationSet(records, primaryIdentityHandle, claimHandles);
+    return new ResourceIdentityPublicationSet(records, primaryIdentityHandle, claimHandles, sourceAddressHandles);
   }
 
   private publishNamedResourceIdentity(
@@ -337,7 +384,7 @@ export class ResourceRecognitionPublicationSupport {
       [
         new AureliaResourceIdentity(
           identityHandle,
-          toAureliaResourceIdentityKind(resourceKind),
+          toAureliaResourceDeclarationKind(resourceKind),
           name,
           declarationIdentityHandle,
         ),
@@ -351,6 +398,7 @@ export class ResourceRecognitionPublicationSupport {
       ],
       identityHandle,
       claimHandle,
+      null,
     );
   }
 
@@ -365,6 +413,7 @@ export class ResourceRecognitionPublicationSupport {
   ): ResourceIdentityPublicationSet {
     const records: KernelStoreRecord[] = [];
     const claimHandles: ClaimHandle[] = [];
+    const sourceAddressHandles: (AddressHandle | null)[] = [];
     let primaryIdentityHandle: IdentityHandle | null = null;
     definition.patterns.forEach((pattern, patternIndex) => {
       const publication = this.publishAttributePatternIdentity(
@@ -378,6 +427,7 @@ export class ResourceRecognitionPublicationSupport {
       );
       primaryIdentityHandle ??= publication.identityHandle;
       claimHandles.push(publication.claimHandle);
+      sourceAddressHandles.push(publication.sourceAddressHandle);
       records.push(...publication.records);
     });
 
@@ -385,6 +435,7 @@ export class ResourceRecognitionPublicationSupport {
       records,
       definition.patterns.length === 1 ? primaryIdentityHandle : null,
       claimHandles,
+      sourceAddressHandles,
     );
   }
 
@@ -413,6 +464,7 @@ export class ResourceRecognitionPublicationSupport {
       ),
       identityHandle,
       claimHandle,
+      addressHandle,
     );
   }
 
@@ -426,12 +478,16 @@ export class ResourceRecognitionPublicationSupport {
     declarationIdentityHandle: IdentityHandle | null,
     provenanceHandle: ProvenanceHandle,
   ): readonly KernelStoreRecord[] {
+    const span = sourceSpanRangeForNode(context.sourceFile, pattern.node);
+    if (span == null) {
+      throw new Error('Attribute-pattern source node did not produce a valid authored span.');
+    }
     return [
       new SourceSpanAddress(
         addressHandle,
         context.sourceFileAddressHandle,
-        pattern.node.getStart(context.sourceFile),
-        pattern.node.end,
+        span.start,
+        span.end,
         SourceSpanRole.Value,
       ),
       new AureliaAttributePatternIdentity(
@@ -452,7 +508,7 @@ export class ResourceRecognitionPublicationSupport {
   }
 
   private recordsForAliases(
-    aliases: readonly string[],
+    aliases: readonly ResourceAliasObservation[],
     resourceKind: NamedResourceDefinitionKind,
     local: string,
     canonicalIdentityHandle: IdentityHandle,
@@ -461,23 +517,26 @@ export class ResourceRecognitionPublicationSupport {
   ): {
     readonly records: readonly KernelStoreRecord[];
     readonly claimHandles: readonly ClaimHandle[];
+    readonly sourceAddressHandles: readonly (AddressHandle | null)[];
   } {
     const records: KernelStoreRecord[] = [];
     const claimHandles: ClaimHandle[] = [];
+    const sourceAddressHandles: (AddressHandle | null)[] = [];
     aliases.forEach((alias, aliasIndex) => {
       const publication = this.publishResourceAliasIdentity(
         local,
         resourceKind,
-        alias,
+        alias.name,
         aliasIndex,
         canonicalIdentityHandle,
         declarationIdentityHandle,
         provenanceHandle,
       );
       claimHandles.push(publication.claimHandle);
+      sourceAddressHandles.push(publication.sourceAddressHandle);
       records.push(...publication.records);
     });
-    return { records, claimHandles };
+    return { records, claimHandles, sourceAddressHandles };
   }
 
   private publishResourceAliasIdentity(
@@ -496,7 +555,7 @@ export class ResourceRecognitionPublicationSupport {
       [
         new AureliaResourceIdentity(
           aliasIdentityHandle,
-          toAureliaResourceIdentityKind(resourceKind),
+          toAureliaResourceDeclarationKind(resourceKind),
           alias,
           declarationIdentityHandle,
         ),
@@ -510,6 +569,7 @@ export class ResourceRecognitionPublicationSupport {
       ],
       aliasIdentityHandle,
       aliasClaimHandle,
+      null,
     );
   }
 }
@@ -540,23 +600,28 @@ function resourceIdentityLocalKey(
 
 function projectTargetType(
   store: KernelStore,
+  publication: KernelPublicationContext,
   typeSystem: TypeSystemProject,
   node: ts.Node,
   local: string,
-  sourceAddressHandle: AddressHandle,
+  sourceAddressHandle: AddressHandle | null,
   ownerIdentityHandle: IdentityHandle | null,
   display: string | null,
 ): CheckerTypeReference | null {
-  const type = typeSystem.readRuntimeTargetType(node);
+  const programNode = typeSystem.readProgramNode(node);
+  if (programNode == null) {
+    return null;
+  }
+  const type = typeSystem.readRuntimeTargetType(programNode);
   if (type == null) {
     return null;
   }
-  const typeShape = new CheckerTypeProjector(store).ensureProjection({
+  const typeShape = new CheckerTypeProjector(store, publication).ensureProjection({
     localKey: `resource-target:${local}:runtime-type`,
     checker: typeSystem.checker,
     type,
     origin: CheckerTypeProjectionOrigin.TypeChecker,
-    sourceNode: node,
+    sourceNode: programNode,
     sourceAddressHandle,
     ownerIdentityHandle,
     display,

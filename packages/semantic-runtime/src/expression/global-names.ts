@@ -1,4 +1,5 @@
-export const enum AureliaExpressionGlobalName {
+/** ECMAScript host globals whose identity the static evaluator models. */
+export const enum StaticEvaluationGlobalName {
   /** Numeric infinity global admitted by Aurelia's expression parser. */
   Infinity = 'Infinity',
   /** Numeric not-a-number global admitted by Aurelia's expression parser. */
@@ -29,6 +30,8 @@ export const enum AureliaExpressionGlobalName {
   Date = 'Date',
   /** Map constructor namespace admitted as an unobserved global. */
   Map = 'Map',
+  /** WeakMap constructor namespace modeled for TypeScript static evaluation. */
+  WeakMap = 'WeakMap',
   /** Number constructor namespace admitted as an unobserved global. */
   Number = 'Number',
   /** Object constructor namespace admitted as an unobserved global. */
@@ -37,6 +40,8 @@ export const enum AureliaExpressionGlobalName {
   RegExp = 'RegExp',
   /** Set constructor namespace admitted as an unobserved global. */
   Set = 'Set',
+  /** WeakSet constructor namespace modeled for TypeScript static evaluation. */
+  WeakSet = 'WeakSet',
   /** String constructor namespace admitted as an unobserved global. */
   String = 'String',
   /** JSON namespace admitted as an unobserved global. */
@@ -45,37 +50,84 @@ export const enum AureliaExpressionGlobalName {
   Math = 'Math',
   /** Intl namespace admitted as an unobserved global. */
   Intl = 'Intl',
+  /** Promise constructor namespace modeled for TypeScript static evaluation. */
+  Promise = 'Promise',
 }
 
-export const aureliaExpressionGlobalNames: readonly AureliaExpressionGlobalName[] = [
-  AureliaExpressionGlobalName.Infinity,
-  AureliaExpressionGlobalName.NaN,
-  AureliaExpressionGlobalName.IsFinite,
-  AureliaExpressionGlobalName.IsNaN,
-  AureliaExpressionGlobalName.ParseFloat,
-  AureliaExpressionGlobalName.ParseInt,
-  AureliaExpressionGlobalName.DecodeURI,
-  AureliaExpressionGlobalName.DecodeURIComponent,
-  AureliaExpressionGlobalName.EncodeURI,
-  AureliaExpressionGlobalName.EncodeURIComponent,
-  AureliaExpressionGlobalName.Array,
-  AureliaExpressionGlobalName.BigInt,
-  AureliaExpressionGlobalName.Boolean,
-  AureliaExpressionGlobalName.Date,
-  AureliaExpressionGlobalName.Map,
-  AureliaExpressionGlobalName.Number,
-  AureliaExpressionGlobalName.Object,
-  AureliaExpressionGlobalName.RegExp,
-  AureliaExpressionGlobalName.Set,
-  AureliaExpressionGlobalName.String,
-  AureliaExpressionGlobalName.JSON,
-  AureliaExpressionGlobalName.Math,
-  AureliaExpressionGlobalName.Intl,
+/** Exact AccessGlobal allowlist mirrored from Aurelia's expression parser. */
+export const aureliaExpressionGlobalNames: readonly StaticEvaluationGlobalName[] = [
+  StaticEvaluationGlobalName.Infinity,
+  StaticEvaluationGlobalName.NaN,
+  StaticEvaluationGlobalName.IsFinite,
+  StaticEvaluationGlobalName.IsNaN,
+  StaticEvaluationGlobalName.ParseFloat,
+  StaticEvaluationGlobalName.ParseInt,
+  StaticEvaluationGlobalName.DecodeURI,
+  StaticEvaluationGlobalName.DecodeURIComponent,
+  StaticEvaluationGlobalName.EncodeURI,
+  StaticEvaluationGlobalName.EncodeURIComponent,
+  StaticEvaluationGlobalName.Array,
+  StaticEvaluationGlobalName.BigInt,
+  StaticEvaluationGlobalName.Boolean,
+  StaticEvaluationGlobalName.Date,
+  StaticEvaluationGlobalName.Map,
+  StaticEvaluationGlobalName.Number,
+  StaticEvaluationGlobalName.Object,
+  StaticEvaluationGlobalName.RegExp,
+  StaticEvaluationGlobalName.Set,
+  StaticEvaluationGlobalName.String,
+  StaticEvaluationGlobalName.JSON,
+  StaticEvaluationGlobalName.Math,
+  StaticEvaluationGlobalName.Intl,
+];
+
+export const staticEvaluationGlobalNames: readonly StaticEvaluationGlobalName[] = [
+  ...aureliaExpressionGlobalNames,
+  StaticEvaluationGlobalName.WeakMap,
+  StaticEvaluationGlobalName.WeakSet,
+  StaticEvaluationGlobalName.Promise,
+];
+
+/** Modeled global identities whose ECMAScript `typeof` result is `function`. */
+export const staticEvaluationCallableGlobalNames: readonly StaticEvaluationGlobalName[] = [
+  StaticEvaluationGlobalName.IsFinite,
+  StaticEvaluationGlobalName.IsNaN,
+  StaticEvaluationGlobalName.ParseFloat,
+  StaticEvaluationGlobalName.ParseInt,
+  StaticEvaluationGlobalName.DecodeURI,
+  StaticEvaluationGlobalName.DecodeURIComponent,
+  StaticEvaluationGlobalName.EncodeURI,
+  StaticEvaluationGlobalName.EncodeURIComponent,
+  StaticEvaluationGlobalName.Array,
+  StaticEvaluationGlobalName.BigInt,
+  StaticEvaluationGlobalName.Boolean,
+  StaticEvaluationGlobalName.Date,
+  StaticEvaluationGlobalName.Map,
+  StaticEvaluationGlobalName.WeakMap,
+  StaticEvaluationGlobalName.Number,
+  StaticEvaluationGlobalName.Object,
+  StaticEvaluationGlobalName.Promise,
+  StaticEvaluationGlobalName.RegExp,
+  StaticEvaluationGlobalName.Set,
+  StaticEvaluationGlobalName.WeakSet,
+  StaticEvaluationGlobalName.String,
 ];
 
 const aureliaExpressionGlobalNameSet: ReadonlySet<string> = new Set(aureliaExpressionGlobalNames);
+const staticEvaluationGlobalNameSet: ReadonlySet<string> = new Set(staticEvaluationGlobalNames);
+const staticEvaluationCallableGlobalNameSet: ReadonlySet<string> = new Set(staticEvaluationCallableGlobalNames);
 
 /** Returns whether the identifier is admitted as AccessGlobal by Aurelia expression parsing. */
 export function isAureliaExpressionGlobalName(name: string): boolean {
   return aureliaExpressionGlobalNameSet.has(name);
+}
+
+/** Returns whether static evaluation has a modeled identity for this ECMAScript global. */
+export function isStaticEvaluationGlobalName(name: string): boolean {
+  return staticEvaluationGlobalNameSet.has(name);
+}
+
+/** Returns whether the modeled global identity is callable at runtime. */
+export function isStaticEvaluationCallableGlobalName(name: string): boolean {
+  return staticEvaluationCallableGlobalNameSet.has(name);
 }

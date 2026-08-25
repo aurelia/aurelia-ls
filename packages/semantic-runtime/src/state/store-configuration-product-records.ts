@@ -1,4 +1,5 @@
 import type { ConfigurationOptionValueKind } from '../configuration/configuration-option.js';
+import type { ContainerReference } from '../di/container-reference.js';
 import type { CheckerTypeReference } from '../type-system/type-shape.js';
 import {
   EvidenceKind,
@@ -18,7 +19,10 @@ import {
   MaterializationRecord,
   MaterializedProduct,
 } from '../kernel/materialization.js';
-import { ProvenanceRecord } from '../kernel/provenance.js';
+import {
+  type FieldProvenance,
+  ProvenanceRecord,
+} from '../kernel/provenance.js';
 import type {
   KernelStore,
   KernelStoreRecord,
@@ -26,11 +30,20 @@ import type {
 import { KernelVocabulary } from '../kernel/vocabulary.js';
 import {
   StateStoreConfiguration,
+  type StateStoreConfigurationField,
   type StateStoreOptionsOrHandlerKind,
 } from './model.js';
 
 export interface StateStoreConfigurationProductSeed {
   readonly projectKey: string;
+  readonly container: ContainerReference;
+  readonly registrationProductHandle: ProductHandle;
+  readonly registrationAdmissionProductHandle: ProductHandle;
+  readonly registrationIdentityHandle: IdentityHandle;
+  readonly registrationSourceAddressHandle: AddressHandle | null;
+  readonly configurationStepProductHandle: ProductHandle;
+  readonly configurationStepIdentityHandle: IdentityHandle;
+  readonly configurationValueSourceAddressHandle: AddressHandle | null;
   readonly ownerIdentityHandle: IdentityHandle;
   readonly name: string | null;
   readonly isDefault: boolean;
@@ -43,6 +56,8 @@ export interface StateStoreConfigurationProductSeed {
   readonly initialStateType: CheckerTypeReference | null;
   readonly optionsOrHandlerSourceAddressHandle: AddressHandle | null;
   readonly actionHandlerSourceAddressHandles: readonly AddressHandle[];
+  readonly fieldProvenance: readonly FieldProvenance<StateStoreConfigurationField>[];
+  readonly fieldProvenanceRecords: readonly ProvenanceRecord[];
 }
 
 export interface StateStoreConfigurationProductEmission {
@@ -61,9 +76,8 @@ interface StateStoreConfigurationProductHandles {
 export function stateStoreConfigurationProductEmission(
   store: KernelStore,
   seed: StateStoreConfigurationProductSeed,
-  index: number,
 ): StateStoreConfigurationProductEmission {
-  const handles = stateStoreConfigurationProductHandles(store, seed, index);
+  const handles = stateStoreConfigurationProductHandles(store, seed);
   const configuration = stateStoreConfigurationModel(seed, handles);
   return {
     store: configuration,
@@ -74,12 +88,12 @@ export function stateStoreConfigurationProductEmission(
 function stateStoreConfigurationProductHandles(
   store: KernelStore,
   seed: StateStoreConfigurationProductSeed,
-  index: number,
 ): StateStoreConfigurationProductHandles {
   const local = [
     'state-store-configuration',
     localKeyPart(seed.projectKey),
-    `${index}`,
+    localKeyPart(seed.registrationIdentityHandle),
+    localKeyPart(seed.configurationStepIdentityHandle),
     localKeyPart(seed.name ?? 'open'),
   ].join(':');
   return {
@@ -98,6 +112,13 @@ function stateStoreConfigurationModel(
   return new StateStoreConfiguration(
     handles.productHandle,
     handles.identityHandle,
+    seed.container,
+    seed.registrationProductHandle,
+    seed.registrationAdmissionProductHandle,
+    seed.registrationSourceAddressHandle,
+    seed.configurationStepProductHandle,
+    seed.configurationStepIdentityHandle,
+    seed.configurationValueSourceAddressHandle,
     seed.name,
     seed.isDefault,
     seed.initialStateKind,
@@ -109,6 +130,7 @@ function stateStoreConfigurationModel(
     seed.initialStateType,
     seed.optionsOrHandlerSourceAddressHandle,
     seed.actionHandlerSourceAddressHandles,
+    seed.fieldProvenance,
   );
 }
 
@@ -118,6 +140,7 @@ function stateStoreConfigurationRecords(
   handles: StateStoreConfigurationProductHandles,
 ): readonly KernelStoreRecord[] {
   return [
+    ...seed.fieldProvenanceRecords,
     stateStoreConfigurationEvidence(seed, handles),
     new ProvenanceRecord(handles.provenanceHandle, [handles.evidenceHandle]),
     stateStoreConfigurationIdentity(seed, handles),

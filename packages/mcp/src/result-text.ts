@@ -112,6 +112,10 @@ function semanticAnswerDisplayText(value: unknown): string | null {
     return null;
   }
   const lines: string[] = [];
+  const answerState = semanticAnswerStateText(value);
+  if (answerState != null) {
+    lines.push(answerState);
+  }
   if (isRecord(value.value) && typeof value.value.displayText === 'string') {
     lines.push(value.value.displayText);
   } else {
@@ -143,6 +147,20 @@ function semanticAnswerDisplayText(value: unknown): string | null {
   return lines.length === 0 ? null : lines.join('\n');
 }
 
+function semanticAnswerStateText(value: Record<string, unknown>): string | null {
+  const states: string[] = [];
+  if (typeof value.result === 'string' && value.result !== 'answered') {
+    states.push(`result=${value.result}`);
+  }
+  if (typeof value.selection === 'string' && value.selection !== 'exact' && value.selection !== 'not-applicable') {
+    states.push(`selection=${value.selection}`);
+  }
+  if (typeof value.coverage === 'string' && value.coverage !== 'complete') {
+    states.push(`coverage=${value.coverage}`);
+  }
+  return states.length === 0 ? null : `Answer state: ${states.join('; ')}.`;
+}
+
 function semanticAnswerAnalysisDepthText(value: unknown): string | null {
   return typeof value === 'string' && value.length > 0
     ? `Analysis depth used: ${value}.`
@@ -169,7 +187,7 @@ function semanticAnswerPageText(value: unknown): string | null {
   const byteClamped = value.byteClamped === true
     && typeof value.estimatedRowsJsonBytes === 'number'
     && typeof value.maxRowsJsonBytes === 'number'
-    ? ` Row payload budget stopped this page at ~${value.estimatedRowsJsonBytes} JSON byte(s) of max ${value.maxRowsJsonBytes}.`
+    ? ` Row payload target stopped this page at ~${value.estimatedRowsJsonBytes} JSON byte(s) against target ${value.maxRowsJsonBytes}.`
     : '';
   if (returned == null && size == null && nextCursor == null) {
     const text = `${clamped}${byteClamped}`;
@@ -197,7 +215,8 @@ function semanticAnswerRowPreview(value: unknown): string | null {
     return null;
   }
   const remaining = value.rows.length - rows.length;
-  return `Rows: ${rows.join(' | ')}${remaining > 0 ? ` | +${remaining} more in structuredContent` : ''}.`;
+  const preview = `${rows.join(' | ')}${remaining > 0 ? ` | +${remaining} more in structuredContent` : ''}`;
+  return `Rows: ${preview}${/[.!?]$/u.test(preview) ? '' : '.'}`;
 }
 
 const ROW_PREVIEW_KEYS = [
@@ -206,6 +225,7 @@ const ROW_PREVIEW_KEYS = [
   'label',
   'queryKind',
   'kind',
+  'diagnosticKind',
   'siteKind',
   'demandKind',
   'requiredCapability',
@@ -216,6 +236,7 @@ const ROW_PREVIEW_KEYS = [
   'recommendedModuleName',
   'blockingOpenSeamCount',
   'seamKindKey',
+  'seamKindKeys',
   'domain',
   'severity',
   'name',
@@ -230,8 +251,11 @@ const ROW_PREVIEW_KEYS = [
   'filePath',
   'rawRowCount',
   'variantCount',
-  'attemptKinds',
   'boundaryKinds',
+  'pressureKind',
+  'pressureKinds',
+  'affectedMaterializationCount',
+  'affectedProductCount',
   'reasonKinds',
   'expression',
   'sourceExpression',
@@ -346,6 +370,10 @@ function compactRowFieldValue(value: unknown): string | null {
     const start = typeof value.start === 'number' ? `@${value.start}` : '';
     return `${value.path}${start}`;
   }
+  if (typeof value.filePath === 'string') {
+    const start = typeof value.start === 'number' ? `@${value.start}` : '';
+    return `${value.filePath}${start}`;
+  }
   return null;
 }
 
@@ -417,13 +445,68 @@ function compactContinuationText(row: Record<string, unknown>): string {
   const intents = Array.isArray(row.intents)
     ? row.intents.filter((value): value is string => typeof value === 'string').join(',')
     : '';
-  const evidence = isRecord(row.evidence)
-    ? [row.evidence.evidenceState, row.evidence.coverage, row.evidence.sourcePrecision]
-      .filter((value): value is string => typeof value === 'string' && value.length > 0)
-      .join('/')
-    : '';
+  const evidence = compactContinuationEvidenceText(row.evidence);
   const blockers = Array.isArray(row.blockers) && row.blockers.length > 0
     ? ` blocked=${row.blockers.length}`
     : '';
   return `${target}${intents.length > 0 ? ` [${intents}]` : ''}${evidence.length > 0 ? ` (${evidence})` : ''}${blockers}`;
+}
+
+function compactContinuationEvidenceText(value: unknown): string {
+  if (!isRecord(value)) {
+    return '';
+  }
+  const sourceRequirement = typeof value.sourceRequirement === 'string' && value.sourceRequirement.length > 0
+    ? `source: ${value.sourceRequirement}`
+    : '';
+  const sourceFacts = Array.isArray(value.sourceFacts)
+    ? value.sourceFacts
+      .filter(isRecord)
+      .map(compactContinuationSourceFactText)
+      .filter((text): text is string => text != null)
+    : [];
+  const preview = sourceFacts.slice(0, 2);
+  const remaining = sourceFacts.length - preview.length;
+  const facts = preview.length === 0
+    ? ''
+    : `${preview.join(', ')}${remaining > 0 ? `, +${remaining} more` : ''}`;
+  const epochDependencies = Array.isArray(value.epochDependencies)
+    ? value.epochDependencies.filter((dependency): dependency is string =>
+      typeof dependency === 'string' && dependency.length > 0
+    )
+    : [];
+  const epochs = epochDependencies.length === 0
+    ? ''
+    : `epochs: ${epochDependencies.join('+')}`;
+  return [sourceRequirement, facts, epochs].filter((text) => text.length > 0).join('; ');
+}
+
+function compactContinuationSourceFactText(fact: Record<string, unknown>): string | null {
+  const facets = Array.isArray(fact.facets)
+    ? fact.facets.filter((value): value is string => typeof value === 'string' && value.length > 0)
+    : [];
+  if (facets.length === 0) {
+    return null;
+  }
+  const source = isRecord(fact.source)
+    ? compactContinuationSourceLabel(fact.source)
+    : null;
+  const count = typeof fact.count === 'number' && fact.count > 1
+    ? ` x${fact.count}`
+    : '';
+  return `${source == null ? '' : `${source} `}[${facets.join('+')}]${count}`;
+}
+
+function compactContinuationSourceLabel(source: Record<string, unknown>): string | null {
+  const label = typeof source.label === 'string'
+    ? source.label
+    : typeof source.path === 'string'
+      ? source.path
+      : null;
+  if (label == null || label.length === 0) {
+    return null;
+  }
+  return label.length <= 80
+    ? label
+    : compactPathLikeField(label, 80);
 }

@@ -1,795 +1,1420 @@
 /**
- * Custom Aurelia request handlers: aurelia/getOverlay, aurelia/getMapping, etc.
+ * Custom Aurelia request handlers for VS Code-facing semantic-runtime facades.
  *
- * Each handler is wrapped in try/catch to prevent exceptions from destabilizing
- * the LSP connection. Errors are logged and graceful fallbacks are returned.
+ * Query handlers preserve semantic-runtime answer evidence. The shared LSP
+ * request boundary keeps cancellation, staleness, and operational failure
+ * distinct from normal semantic absence and refusal.
  */
-import type { Position } from "vscode-languageserver/node.js";
-import { canonicalDocumentUri } from "@aurelia-ls/compiler/program/paths.js";
-import { computeBuiltinDiscrepancies } from "@aurelia-ls/compiler/convergence/convert.js";
-import type {
-  DiagnosticActionability,
-  DiagnosticCategory,
-  DiagnosticImpact,
-  DiagnosticStatus,
-  DiagnosticSurface,
-} from "@aurelia-ls/compiler/diagnostics/types.js";
-import type { DiagnosticSeverity, DiagnosticStage } from "@aurelia-ls/compiler/model/diagnostics.js";
-import type { SourceSpan } from "@aurelia-ls/compiler/model/span.js";
-import type {
-  Bindable,
-  BuiltinDiscrepancy,
-  DeclarationForm,
-  ResourceCatalog,
-  ResourceCollections,
-  ResourceGapSummary,
-  ResourceGraph,
-  ResourceOrigin,
-} from "@aurelia-ls/compiler/schema/types.js";
-import type { WorkspaceDiagnostic, WorkspaceDiagnostics } from "@aurelia-ls/semantic-workspace/types.js";
+import type { CancellationToken } from "vscode-languageserver/node";
+import {
+  canonicalTypeSystemPath,
+  frameworkRegistrationCapabilityFromString,
+  semanticTemplateDocumentOwnershipOwnsSource,
+} from "@aurelia-ls/semantic-runtime";
 import type { ServerContext } from "../context.js";
-import { buildCapabilities, buildCapabilitiesFallback, type CapabilitiesResponse } from "../capabilities.js";
-import { mapSemanticWorkspaceEdit } from "../mapping/lsp-types.js";
-import { handleCodeLens } from "./code-lens.js";
+import type {
+  AnalysisLimitationsResponse,
+  AttributeInterpretationExplanationAnswerTransport,
+  AttributeInterpretationExplanationContender,
+  AttributeInterpretationExplanationParams,
+  AttributeInterpretationExplanationRefusalKind,
+  AttributeInterpretationExplanationResponse,
+  BindingUncertaintyExplanationAnswerTransport,
+  BindingUncertaintyExplanationContender,
+  BindingUncertaintyExplanationParams,
+  BindingUncertaintyExplanationRefusalKind,
+  BindingUncertaintyExplanationResponse,
+  DocumentUriParams,
+  FrameworkCapabilityExplanationParams,
+  FrameworkCapabilityExplanationAnswerTransport,
+  FrameworkCapabilityExplanationContender,
+  FrameworkCapabilityExplanationRefusalKind,
+  FrameworkCapabilityExplanationResponse,
+  RelatedFileCandidate,
+  RelatedFilesResponse,
+  RenameCandidateLocation,
+  RenameFromTsParams,
+  RenameFromTsResponse,
+  ResourceInventoryParams,
+  ResourceInventoryResponse,
+  ResourceAvailabilityExplanationAnswerTransport,
+  ResourceAvailabilityExplanationContender,
+  ResourceAvailabilityExplanationParams,
+  ResourceAvailabilityExplanationRefusalKind,
+  ResourceAvailabilityExplanationResponse,
+  SourceOwnershipParams,
+  SourceOwnershipResponse,
+  TemplateResourceAvailabilityParams,
+  TemplateResourceAvailabilityResponse,
+  WorkspaceStatusResponse,
+  WorkspaceStatusParams,
+} from "../protocol.js";
+import {
+  AureliaProtocolRequest,
+  attributeInterpretationExplanationRefusal,
+  bindingUncertaintyExplanationRefusal,
+  frameworkCapabilityExplanationRefusal,
+  resourceAvailabilityExplanationRefusal,
+} from "../protocol.js";
+import {
+  mapAttributeInterpretationExplanation,
+  mapAttributeInterpretationExplanationAnswer,
+  mapAttributeInterpretationExplanationContender,
+} from "../mapping/attribute-interpretation-explanation.js";
+import {
+  mapBindingUncertaintyExplanation,
+  mapBindingUncertaintyExplanationAnswer,
+  mapBindingUncertaintyExplanationContender,
+} from "../mapping/binding-uncertainty-explanation.js";
+import {
+  mapFrameworkCapabilityExplanation,
+  mapFrameworkCapabilityExplanationAnswer,
+  mapFrameworkCapabilityExplanationContender,
+} from "../mapping/framework-capability-explanation.js";
+import {
+  mapResourceAvailabilityExplanation,
+  mapResourceAvailabilityExplanationAnswer,
+  mapResourceAvailabilityExplanationContender,
+} from "../mapping/resource-availability-explanation.js";
+import {
+  mapAnalysisLimitationEffectivePolicy,
+  mapAnalysisLimitationItem,
+} from "../mapping/analysis-limitations.js";
+import {
+  mapSemanticRuntimeTemplateRenameCandidates,
+  mapSemanticRuntimeTemplatePrepareRename,
+  mapSemanticRuntimeTemplateRenameEdit,
+} from "../mapping/lsp-types.js";
+import {
+  mapResourceInventoryItem,
+  mapResourceProject,
+  mapRuntimeAnswer,
+  mapTemplateResourceAvailabilityItem,
+  mapTemplateResourceScopeCandidate,
+} from "../mapping/resource-discovery.js";
+import {
+  semanticSourceReferenceFilePath,
+} from "../mapping/source-locations.js";
+import {
+  runSemanticRuntimeDocumentRequest,
+  runSemanticRuntimeRequest,
+  type SemanticRuntimeDocumentAdmissionFailure,
+} from "./request-guard.js";
+import {
+  isSemanticRuntimeLspRequestAborted,
+  type SemanticRuntimeLspOperation,
+} from "../runtime/semantic-runtime-session.js";
 
-type MaybeUriParam = { uri?: string } | string | null;
+export type {
+  AnalysisLimitationsResponse,
+  AttributeInterpretationExplanationParams,
+  AttributeInterpretationExplanationResponse,
+  BindingUncertaintyExplanationParams,
+  BindingUncertaintyExplanationResponse,
+  FrameworkCapabilityExplanationParams,
+  FrameworkCapabilityExplanationResponse,
+  RenameFromTsParams,
+  RenameFromTsResponse,
+  ResourceInventoryParams,
+  ResourceInventoryResponse,
+  ResourceAvailabilityExplanationParams,
+  ResourceAvailabilityExplanationResponse,
+  SourceOwnershipParams,
+  SourceOwnershipResponse,
+  TemplateResourceAvailabilityParams,
+  TemplateResourceAvailabilityResponse,
+} from "../protocol.js";
 
-type DiagnosticsSnapshotRelated = {
-  code?: string;
-  message: string;
-  span?: SourceSpan;
-};
-
-type DiagnosticsSnapshotIssue = {
-  kind: string;
-  message: string;
-  code?: string;
-  rawCode?: string;
-  field?: string;
-};
-
-type DiagnosticsSnapshotItem = {
-  code: string;
-  message: string;
-  severity?: DiagnosticSeverity;
-  impact?: DiagnosticImpact;
-  actionability?: DiagnosticActionability;
-  category?: DiagnosticCategory;
-  status?: DiagnosticStatus;
-  stage?: DiagnosticStage;
-  source?: string;
-  uri?: string;
-  span?: SourceSpan;
-  data?: Readonly<Record<string, unknown>>;
-  related?: readonly DiagnosticsSnapshotRelated[];
-  surfaces?: readonly DiagnosticSurface[];
-  suppressed?: boolean;
-  suppressionReason?: string;
-  issues?: readonly DiagnosticsSnapshotIssue[];
-};
-
-type DiagnosticsSnapshotBundle = {
-  bySurface: Record<string, readonly DiagnosticsSnapshotItem[]>;
-  suppressed: readonly DiagnosticsSnapshotItem[];
-};
-
-type DiagnosticsSnapshotResponse = {
-  uri: string;
-  fingerprint: string;
-  diagnostics: DiagnosticsSnapshotBundle;
-};
-
-function uriFromParam(params: MaybeUriParam): string | undefined {
-  if (typeof params === "string") return params;
-  if (params && typeof params === "object" && typeof params.uri === "string") return params.uri;
-  return undefined;
-}
-
-function formatError(e: unknown): string {
-  if (e instanceof Error) return e.stack ?? e.message;
-  return String(e);
-}
-
-function toSnapshotRelated(diag: WorkspaceDiagnostic): DiagnosticsSnapshotRelated[] | undefined {
-  if (!diag.related?.length) return undefined;
-  return diag.related.map((entry) => ({
-    code: entry.code,
-    message: entry.message,
-    span: entry.span ?? undefined,
-  }));
-}
-
-function toSnapshotItem(diag: WorkspaceDiagnostic): DiagnosticsSnapshotItem {
-  return {
-    code: diag.code,
-    message: diag.message,
-    severity: diag.severity,
-    impact: diag.impact,
-    actionability: diag.actionability,
-    category: diag.spec.category,
-    status: diag.spec.status,
-    stage: diag.stage,
-    source: diag.source,
-    uri: diag.uri,
-    span: diag.span ?? undefined,
-    data: diag.data,
-    related: toSnapshotRelated(diag),
-    surfaces: diag.spec.surfaces,
-    suppressed: diag.suppressed,
-    suppressionReason: diag.suppressionReason,
-    issues: diag.issues,
-  };
-}
-
-function serializeDiagnosticsSnapshot(diagnostics: WorkspaceDiagnostics): DiagnosticsSnapshotBundle {
-  const bySurface: Record<string, readonly DiagnosticsSnapshotItem[]> = {};
-  const entries = Array.from(diagnostics.bySurface.entries()).sort(([a], [b]) => a.localeCompare(b));
-  for (const [surface, items] of entries) {
-    bySurface[surface] = items.map(toSnapshotItem);
-  }
-  return {
-    bySurface,
-    suppressed: diagnostics.suppressed.map(toSnapshotItem),
-  };
-}
-
-export function handleGetOverlay(ctx: ServerContext, params: MaybeUriParam) {
-  try {
-    const uri = uriFromParam(params);
-    ctx.logger.log(`RPC aurelia/getOverlay params=${JSON.stringify(params)}`);
-    if (!uri) return null;
-    const canonical = canonicalDocumentUri(uri);
-    ctx.ensureProgramDocument(uri);
-    const artifact = ctx.workspace.getOverlay(canonical.uri);
-    return artifact
-      ? { fingerprint: ctx.workspace.snapshot().meta.fingerprint, artifact }
-      : null;
-  } catch (e) {
-    ctx.logger.error(`[getOverlay] failed: ${formatError(e)}`);
-    return null;
-  }
-}
-
-export function handleGetMapping(ctx: ServerContext, params: MaybeUriParam) {
-  try {
-    const uri = uriFromParam(params);
-    if (!uri) return null;
-    const canonical = canonicalDocumentUri(uri);
-    const doc = ctx.ensureProgramDocument(uri);
-    if (!doc) return null;
-    const mapping = ctx.workspace.getMapping(canonical.uri);
-    if (!mapping) return null;
-    const overlay = ctx.workspace.getOverlay(canonical.uri);
-    return { overlayPath: overlay.overlay.path, mapping };
-  } catch (e) {
-    ctx.logger.error(`[getMapping] failed: ${formatError(e)}`);
-    return null;
-  }
-}
-
-export function handleQueryAtPosition(ctx: ServerContext, params: { uri: string; position: Position }) {
-  try {
-    const uri = params?.uri;
-    if (!uri || !params.position) return null;
-    const doc = ctx.ensureProgramDocument(uri);
-    if (!doc) return null;
-    const canonical = canonicalDocumentUri(uri);
-    const query = ctx.workspace.getQueryFacade(canonical.uri);
-    if (!query) return null;
-    const offset = doc.offsetAt(params.position);
-    return {
-      expr: query.exprAt(offset),
-      node: query.nodeAt(offset),
-      controller: query.controllerAt(offset),
-      bindables: query.nodeAt(offset) ? query.bindablesFor(query.nodeAt(offset)!) : null,
-      mappingSize: ctx.workspace.getMapping(canonical.uri)?.entries.length ?? 0,
-    };
-  } catch (e) {
-    ctx.logger.error(`[queryAtPosition] failed for ${params?.uri}: ${formatError(e)}`);
-    return null;
-  }
-}
-
-export function handleGetSsr(ctx: ServerContext, params: MaybeUriParam) {
-  const uri = uriFromParam(params);
-  if (!uri) return null;
-  ctx.logger.info(`aurelia/getSsr: SSR not yet available for ${uri}`);
-  return null;
-}
-
-export function handleGetDiagnostics(
+export async function handleAttributeInterpretationExplanation(
   ctx: ServerContext,
-  params: MaybeUriParam,
-): DiagnosticsSnapshotResponse | null {
-  try {
-    const uri = uriFromParam(params);
-    if (!uri) return null;
-    const canonical = canonicalDocumentUri(uri);
-    ctx.ensureProgramDocument(uri);
-    const diagnostics = serializeDiagnosticsSnapshot(ctx.workspace.diagnostics(canonical.uri));
-    const fingerprint = ctx.workspace.snapshot().meta.fingerprint;
-    return { uri: canonical.uri, fingerprint, diagnostics };
-  } catch (e) {
-    ctx.logger.error(`[getDiagnostics] failed: ${formatError(e)}`);
-    return null;
+  params: AttributeInterpretationExplanationParams,
+  operation: SemanticRuntimeLspOperation,
+): Promise<AttributeInterpretationExplanationResponse> {
+  if (!attributeInterpretationExplanationParamsAreValid(params)) {
+    throw new Error(
+      "Attribute interpretation explanation requires an exact document URI, version, attribute-name range, project key, and range-start cursor.",
+    );
   }
+  const fingerprint = operation.generation.fingerprint;
+  const document = operation.documents.ensureProgramDocument(params.uri);
+  if (document == null) {
+    return refusedAttributeInterpretationExplanation(
+      fingerprint,
+      null,
+      null,
+      "documentUnavailable",
+    );
+  }
+  if (document.version !== params.documentVersion) {
+    return refusedAttributeInterpretationExplanation(
+      fingerprint,
+      document.version,
+      null,
+      "documentVersionMismatch",
+    );
+  }
+
+  const answer = await operation.attributeInterpretationExplanation(
+    params.projectKey,
+    document.uri,
+    params.position,
+  );
+  const mappingContext = {
+    documentUris: ctx.documentUris,
+    lookupText: (uri: string) => operation.documents.lookupText(uri),
+  };
+  const answerTransport = mapAttributeInterpretationExplanationAnswer(answer, mappingContext);
+  if (`${answer.result}` !== "answered") {
+    return refusedAttributeInterpretationExplanation(
+      fingerprint,
+      document.version,
+      answerTransport,
+      "semanticAnswerUnavailable",
+    );
+  }
+  const contenders = answer.value.contenders.map((contender) =>
+    mapAttributeInterpretationExplanationContender(contender, mappingContext)
+  );
+  if (`${answer.selection}` === "absent") {
+    return refusedAttributeInterpretationExplanation(
+      fingerprint,
+      document.version,
+      answerTransport,
+      "subjectAbsent",
+      contenders,
+    );
+  }
+  if (`${answer.selection}` === "ambiguous") {
+    return refusedAttributeInterpretationExplanation(
+      fingerprint,
+      document.version,
+      answerTransport,
+      "subjectAmbiguous",
+      contenders,
+    );
+  }
+  if (`${answer.selection}` !== "exact" || answer.value.explanation == null) {
+    return refusedAttributeInterpretationExplanation(
+      fingerprint,
+      document.version,
+      answerTransport,
+      "subjectMismatch",
+      contenders,
+    );
+  }
+
+  const explanation = mapAttributeInterpretationExplanation(
+    answer.value.explanation,
+    mappingContext,
+  );
+  if (explanation.subject.nameSource.state !== "available") {
+    return refusedAttributeInterpretationExplanation(
+      fingerprint,
+      document.version,
+      answerTransport,
+      "subjectSourceUnavailable",
+      contenders,
+    );
+  }
+  if (
+    answer.value.projectKey !== params.projectKey
+    || explanation.subject.projectKey !== params.projectKey
+    || !ctx.documentUris.sameDocument(
+      explanation.subject.nameSource.location.uri,
+      document.uri,
+    )
+    || !protocolRangesEqual(explanation.subject.nameSource.location.range, params.range)
+    || params.position.line !== params.range.start.line
+    || params.position.character !== params.range.start.character
+  ) {
+    return refusedAttributeInterpretationExplanation(
+      fingerprint,
+      document.version,
+      answerTransport,
+      "subjectMismatch",
+      contenders,
+    );
+  }
+  return {
+    fingerprint,
+    documentVersion: document.version,
+    answer: answerTransport,
+    result: { status: "explained", explanation, contenders },
+  };
 }
 
-export function handleDumpState(ctx: ServerContext) {
-  try {
-    return {
-      workspaceRoot: ctx.workspaceRoot,
-      fingerprint: ctx.workspace.snapshot().meta.fingerprint,
-      templateCount: ctx.workspace.templates.length,
-      inlineTemplateCount: ctx.workspace.inlineTemplates.length,
-      programCache: ctx.workspace.getCacheStats(),
-    };
-  } catch (e) {
-    ctx.logger.error(`[dumpState] failed: ${formatError(e)}`);
-    return { error: formatError(e) };
+export async function handleResourceAvailabilityExplanation(
+  ctx: ServerContext,
+  params: ResourceAvailabilityExplanationParams,
+  operation: SemanticRuntimeLspOperation,
+): Promise<ResourceAvailabilityExplanationResponse> {
+  if (!resourceAvailabilityExplanationParamsAreValid(params)) {
+    throw new Error(
+      "Resource availability explanation requires an exact document URI, version, project, resource identity, optional scope identity, and template cursor.",
+    );
   }
+  const fingerprint = operation.generation.fingerprint;
+  const document = operation.documents.ensureProgramDocument(params.uri);
+  if (document == null) {
+    return refusedResourceAvailabilityExplanation(
+      fingerprint,
+      null,
+      null,
+      "documentUnavailable",
+    );
+  }
+  if (document.version !== params.documentVersion) {
+    return refusedResourceAvailabilityExplanation(
+      fingerprint,
+      document.version,
+      null,
+      "documentVersionMismatch",
+    );
+  }
+
+  const answer = await operation.resourceAvailabilityExplanation(
+    params.projectKey,
+    document.uri,
+    params.position,
+    params.resourceIdentityKey,
+    params.templateResourceScopeIdentityKey ?? null,
+  );
+  const mappingContext = {
+    documentUris: ctx.documentUris,
+    lookupText: (uri: string) => operation.documents.lookupText(uri),
+  };
+  const answerTransport = mapResourceAvailabilityExplanationAnswer(answer, mappingContext);
+  if (`${answer.result}` !== "answered") {
+    return refusedResourceAvailabilityExplanation(
+      fingerprint,
+      document.version,
+      answerTransport,
+      "semanticAnswerUnavailable",
+    );
+  }
+  const contenders = answer.value.contenders.map((contender) =>
+    mapResourceAvailabilityExplanationContender(contender, mappingContext)
+  );
+  if (`${answer.selection}` === "absent") {
+    return refusedResourceAvailabilityExplanation(
+      fingerprint,
+      document.version,
+      answerTransport,
+      "subjectAbsent",
+      contenders,
+    );
+  }
+  if (`${answer.selection}` === "ambiguous") {
+    return refusedResourceAvailabilityExplanation(
+      fingerprint,
+      document.version,
+      answerTransport,
+      "subjectAmbiguous",
+      contenders,
+    );
+  }
+  if (`${answer.selection}` !== "exact" || answer.value.explanation == null) {
+    return refusedResourceAvailabilityExplanation(
+      fingerprint,
+      document.version,
+      answerTransport,
+      "subjectMismatch",
+      contenders,
+    );
+  }
+
+  const explanation = mapResourceAvailabilityExplanation(answer.value.explanation, mappingContext);
+  const templateSourceTarget = explanation.subject.template.source;
+  if (templateSourceTarget.state !== "available") {
+    return refusedResourceAvailabilityExplanation(
+      fingerprint,
+      document.version,
+      answerTransport,
+      "templateSourceUnavailable",
+      contenders,
+    );
+  }
+  const subject = explanation.subject;
+  const templateSource = templateSourceTarget.location;
+  if (
+    answer.value.projectKey !== params.projectKey
+    || subject.projectKey !== params.projectKey
+    || subject.resource.projectKey !== params.projectKey
+    || subject.resourceIdentityKey !== params.resourceIdentityKey
+    || subject.resource.identityKey !== params.resourceIdentityKey
+    || (
+      params.templateResourceScopeIdentityKey != null
+      && subject.template.scopeIdentityKey !== params.templateResourceScopeIdentityKey
+    )
+    || !ctx.documentUris.sameDocument(templateSource.uri, document.uri)
+    || !protocolRangeContainsPosition(templateSource.range, params.position)
+  ) {
+    return refusedResourceAvailabilityExplanation(
+      fingerprint,
+      document.version,
+      answerTransport,
+      "subjectMismatch",
+      contenders,
+    );
+  }
+  return {
+    fingerprint,
+    documentVersion: document.version,
+    answer: answerTransport,
+    result: { status: "explained", explanation, contenders },
+  };
 }
 
-export type ResourceExplorerBindable = {
-  name: string;
-  attribute?: string;
-  mode?: string;
-  primary?: boolean;
-  type?: string;
-};
+export async function handleBindingUncertaintyExplanation(
+  ctx: ServerContext,
+  params: BindingUncertaintyExplanationParams,
+  operation: SemanticRuntimeLspOperation,
+): Promise<BindingUncertaintyExplanationResponse> {
+  if (!bindingUncertaintyExplanationParamsAreValid(params)) {
+    throw new Error(
+      "Binding uncertainty explanation requires an exact document URI, version, binding range, project key, and contained cursor.",
+    );
+  }
+  const fingerprint = operation.generation.fingerprint;
+  const document = operation.documents.ensureProgramDocument(params.uri);
+  if (document == null) {
+    return refusedBindingUncertaintyExplanation(
+      fingerprint,
+      null,
+      null,
+      "documentUnavailable",
+    );
+  }
+  if (document.version !== params.documentVersion) {
+    return refusedBindingUncertaintyExplanation(
+      fingerprint,
+      document.version,
+      null,
+      "documentVersionMismatch",
+    );
+  }
 
-export type ResourceScope = "global" | "local" | "orphan";
+  const answer = await operation.bindingUncertaintyExplanation(
+    params.projectKey,
+    document.uri,
+    params.position,
+  );
+  const mappingContext = {
+    documentUris: ctx.documentUris,
+    lookupText: (uri: string) => operation.documents.lookupText(uri),
+  };
+  const answerTransport = mapBindingUncertaintyExplanationAnswer(answer, mappingContext);
+  if (`${answer.result}` !== "answered") {
+    return refusedBindingUncertaintyExplanation(
+      fingerprint,
+      document.version,
+      answerTransport,
+      "semanticAnswerUnavailable",
+    );
+  }
+  const contenders = answer.value.contenders.map((contender) =>
+    mapBindingUncertaintyExplanationContender(contender, mappingContext)
+  );
+  if (`${answer.selection}` === "absent") {
+    return refusedBindingUncertaintyExplanation(
+      fingerprint,
+      document.version,
+      answerTransport,
+      "subjectAbsent",
+      contenders,
+    );
+  }
+  if (`${answer.selection}` === "ambiguous") {
+    return refusedBindingUncertaintyExplanation(
+      fingerprint,
+      document.version,
+      answerTransport,
+      "subjectAmbiguous",
+      contenders,
+    );
+  }
+  if (`${answer.selection}` !== "exact" || answer.value.explanation == null) {
+    return refusedBindingUncertaintyExplanation(
+      fingerprint,
+      document.version,
+      answerTransport,
+      "subjectMismatch",
+      contenders,
+    );
+  }
 
-export type ResourceExplorerItem = {
-  name: string;
-  kind: string;
-  className?: string;
-  file?: string;
-  package?: string;
-  bindableCount: number;
-  bindables: ResourceExplorerBindable[];
-  gapCount: number;
-  gapIntrinsicCount: number;
-  origin?: ResourceOrigin;
-  scope: ResourceScope;
-  scopeOwner?: string;
-  declarationForm?: string;
-  staleness?: { fieldsFromAnalysis: number; membersNotInSemantics: number };
-};
+  const explanation = mapBindingUncertaintyExplanation(answer.value.explanation, mappingContext);
+  if (explanation.subject.source.state !== "available") {
+    return refusedBindingUncertaintyExplanation(
+      fingerprint,
+      document.version,
+      answerTransport,
+      "subjectSourceUnavailable",
+      contenders,
+    );
+  }
+  if (
+    answer.value.projectKey !== params.projectKey
+    || explanation.subject.projectKey !== params.projectKey
+    || !ctx.documentUris.sameDocument(explanation.subject.source.location.uri, document.uri)
+    || !protocolRangesEqual(explanation.subject.source.location.range, params.range)
+    || !protocolRangeContainsPosition(params.range, params.position)
+  ) {
+    return refusedBindingUncertaintyExplanation(
+      fingerprint,
+      document.version,
+      answerTransport,
+      "subjectMismatch",
+      contenders,
+    );
+  }
+  return {
+    fingerprint,
+    documentVersion: document.version,
+    answer: answerTransport,
+    result: { status: "explained", explanation, contenders },
+  };
+}
 
-export type ResourceExplorerResponse = {
-  fingerprint: string;
-  resources: ResourceExplorerItem[];
-  templateCount: number;
-  inlineTemplateCount: number;
-};
+export async function handleFrameworkCapabilityExplanation(
+  ctx: ServerContext,
+  params: FrameworkCapabilityExplanationParams,
+  operation: SemanticRuntimeLspOperation,
+): Promise<FrameworkCapabilityExplanationResponse> {
+  if (!frameworkCapabilityExplanationParamsAreValid(params)) {
+    throw new Error(
+      "Framework capability explanation requires an exact document URI, version, diagnostic range, project key, and capability.",
+    );
+  }
+  const fingerprint = operation.generation.fingerprint;
+  const document = operation.documents.ensureProgramDocument(params.uri);
+  if (document == null) {
+    return refusedFrameworkCapabilityExplanation(
+      fingerprint,
+      null,
+      null,
+      "documentUnavailable",
+    );
+  }
+  if (document.version !== params.documentVersion) {
+    return refusedFrameworkCapabilityExplanation(
+      fingerprint,
+      document.version,
+      null,
+      "documentVersionMismatch",
+    );
+  }
 
-export function handleGetResources(ctx: ServerContext): ResourceExplorerResponse {
-  try {
-    // Ensure the index is current without a full reload.  reloadProject()
-    // clears the discovery cache and forces a full re-extraction, which is
-    // too expensive for a query that may be called on every workspace-changed
-    // event.  refresh() is sufficient: it rebuilds incrementally if the
-    // project version has changed, and is a no-op if already current.
-    ctx.workspace.refresh({ force: false });
-    const snapshot = ctx.workspace.snapshot();
-    const catalog = snapshot.catalog;
-    const semantics = snapshot.semantics;
-    const graph = snapshot.resourceGraph;
+  const frameworkCapability = frameworkRegistrationCapabilityFromString(params.frameworkCapability);
+  if (frameworkCapability == null) {
+    return refusedFrameworkCapabilityExplanation(
+      fingerprint,
+      document.version,
+      null,
+      "invalidFrameworkCapability",
+    );
+  }
 
-    // Build scope index from ResourceGraph
-    const { index: scopeIndex, allScoped } = buildScopeIndex(graph);
+  const answer = await operation.frameworkCapabilityExplanation(
+    params.projectKey,
+    document.uri,
+    params.position,
+    frameworkCapability,
+  );
+  const mappingContext = {
+    documentUris: ctx.documentUris,
+    lookupText: (uri: string) => operation.documents.lookupText(uri),
+  };
+  const answerTransport = mapFrameworkCapabilityExplanationAnswer(answer, mappingContext);
+  if (`${answer.result}` !== "answered") {
+    return refusedFrameworkCapabilityExplanation(
+      fingerprint,
+      document.version,
+      answerTransport,
+      "semanticAnswerUnavailable",
+    );
+  }
+  const contenders = answer.value.contenders.map((contender) =>
+    mapFrameworkCapabilityExplanationContender(contender, mappingContext)
+  );
+  if (`${answer.selection}` === "absent") {
+    return refusedFrameworkCapabilityExplanation(
+      fingerprint,
+      document.version,
+      answerTransport,
+      "subjectAbsent",
+      contenders,
+    );
+  }
+  if (`${answer.selection}` === "ambiguous") {
+    return refusedFrameworkCapabilityExplanation(
+      fingerprint,
+      document.version,
+      answerTransport,
+      "subjectAmbiguous",
+      contenders,
+    );
+  }
+  if (`${answer.selection}` !== "exact" || answer.value.explanation == null) {
+    return refusedFrameworkCapabilityExplanation(
+      fingerprint,
+      document.version,
+      answerTransport,
+      "subjectMismatch",
+      contenders,
+    );
+  }
 
-    // Compute builtin staleness (encoding vs analysis discrepancies)
-    let discrepancies: Map<string, BuiltinDiscrepancy> | null = null;
+  const explanation = mapFrameworkCapabilityExplanation(answer.value.explanation, mappingContext);
+  if (explanation.subject.source.state !== "available") {
+    return refusedFrameworkCapabilityExplanation(
+      fingerprint,
+      document.version,
+      answerTransport,
+      "subjectSourceUnavailable",
+      contenders,
+    );
+  }
+  if (
+    explanation.subject.projectKey !== params.projectKey
+    || explanation.subject.requiredCapability !== params.frameworkCapability
+    || !ctx.documentUris.sameDocument(explanation.subject.source.location.uri, document.uri)
+    || !protocolRangesEqual(explanation.subject.source.location.range, params.range)
+  ) {
+    return refusedFrameworkCapabilityExplanation(
+      fingerprint,
+      document.version,
+      answerTransport,
+      "subjectMismatch",
+      contenders,
+    );
+  }
+  return {
+    fingerprint,
+    documentVersion: document.version,
+    answer: answerTransport,
+    result: { status: "explained", explanation, contenders },
+  };
+}
+
+export async function handleAnalysisLimitations(
+  ctx: ServerContext,
+  operation: SemanticRuntimeLspOperation,
+): Promise<AnalysisLimitationsResponse> {
+  const generation = operation.generation;
+  const summary = await operation.workspaceSummary();
+  const mappingContext = {
+    documentUris: ctx.documentUris,
+    lookupText: (uri: string) => operation.documents.lookupText(uri),
+  };
+  const projects: AnalysisLimitationsResponse["projects"][number][] = [];
+  for (const candidate of summary.value.appCandidates) {
     try {
-      discrepancies = computeBuiltinDiscrepancies(semantics);
-    } catch { /* may fail if semantics shape is unexpected */ }
-
-    const collections = catalog.resources;
-    const resources: ResourceExplorerItem[] = [];
-
-    // Walk elements
-    for (const [name, res] of Object.entries(collections.elements)) {
-      resources.push(mapCatalogResource(name, "custom-element", res, catalog, scopeIndex, allScoped, discrepancies));
-    }
-    // Walk attributes — skip template controllers (they appear in controllers too)
-    for (const [name, res] of Object.entries(collections.attributes)) {
-      if (res.isTemplateController) continue;
-      resources.push(mapCatalogResource(name, "custom-attribute", res, catalog, scopeIndex, allScoped, discrepancies));
-    }
-    // Walk controllers — ControllerConfig lacks origin/declarationForm/gaps/package,
-    // so merge from the corresponding AttrRes entry (which always exists for TCs).
-    const seenControllers = new Set<string>();
-    for (const [name, controllerRes] of Object.entries(collections.controllers)) {
-      if (seenControllers.has(name)) continue;
-      seenControllers.add(name);
-      const attrRes = collections.attributes[name];
-      const merged = attrRes ? { ...controllerRes, origin: attrRes.origin, declarationForm: attrRes.declarationForm, gaps: attrRes.gaps, package: attrRes.package, className: attrRes.className ?? controllerRes.className, file: attrRes.file ?? controllerRes.file, bindables: attrRes.bindables } : controllerRes;
-      resources.push(mapCatalogResource(name, "template-controller", merged, catalog, scopeIndex, allScoped, discrepancies));
-    }
-    // Pick up any TCs that are only in attributes (not in controllers)
-    for (const [name, res] of Object.entries(collections.attributes)) {
-      if (!res.isTemplateController) continue;
-      if (seenControllers.has(name)) continue;
-      resources.push(mapCatalogResource(name, "template-controller", res, catalog, scopeIndex, allScoped, discrepancies));
-    }
-    // Walk value converters
-    for (const [name, res] of Object.entries(collections.valueConverters)) {
-      resources.push(mapCatalogResource(name, "value-converter", res, catalog, scopeIndex, allScoped, discrepancies));
-    }
-    // Walk binding behaviors
-    for (const [name, res] of Object.entries(collections.bindingBehaviors)) {
-      resources.push(mapCatalogResource(name, "binding-behavior", res, catalog, scopeIndex, allScoped, discrepancies));
-    }
-
-    // Sort by kind, then alphabetically — origin-based grouping is the consumer's concern
-    const kindOrder = ["custom-element", "template-controller", "custom-attribute", "value-converter", "binding-behavior"];
-    resources.sort((a, b) => {
-      const ka = kindOrder.indexOf(a.kind);
-      const kb = kindOrder.indexOf(b.kind);
-      if (ka !== kb) return ka - kb;
-      return a.name.localeCompare(b.name);
-    });
-
-    return {
-      fingerprint: snapshot.meta.fingerprint,
-      resources,
-      templateCount: ctx.workspace.templates.length,
-      inlineTemplateCount: ctx.workspace.inlineTemplates.length,
-    };
-  } catch (e) {
-    ctx.logger.error(`[getResources] failed: ${formatError(e)}`);
-    return { fingerprint: "", resources: [], templateCount: 0, inlineTemplateCount: 0 };
-  }
-}
-
-type ScopeEntry = { scope: ResourceScope; scopeOwner?: string };
-type ScopeIndexResult = { index: Map<string, ScopeEntry>; allScoped: Set<string> };
-
-/**
- * Build an index of resource name → scope info from the ResourceGraph.
- *
- * Resource visibility is two-level (L1 scope-resolution): local container
- * then root container. A resource in the root scope is visible everywhere.
- * A resource is only "local" if it appears in a non-root scope AND is NOT
- * in the root scope. Resources in both root and local scopes are global —
- * the local copy is a pre-seeded duplicate, not an independent registration.
- *
- * Also returns `allScoped` — the set of ALL resource names that appear in
- * at least one scope. Resources in the catalog but NOT in this set are
- * orphans (discovered by analysis but not registered in any container).
- */
-function buildScopeIndex(
-  graph: ResourceGraph | undefined | null,
-): ScopeIndexResult {
-  const index = new Map<string, ScopeEntry>();
-  const allScoped = new Set<string>();
-  if (!graph) return { index, allScoped };
-
-  const categories = ["elements", "attributes", "controllers", "valueConverters", "bindingBehaviors"] as const;
-
-  // Collect root scope resources — these are global everywhere
-  const rootResources = new Set<string>();
-  const rootScope = graph.scopes[graph.root];
-  if (rootScope?.resources) {
-    for (const category of categories) {
-      const records = rootScope.resources[category];
-      if (!records) continue;
-      for (const name of Object.keys(records)) {
-        rootResources.add(name);
-        allScoped.add(name);
+      const answer = await operation.analysisLimitations(candidate.projectKey);
+      if (answer.value.projectKey !== candidate.projectKey) {
+        throw new Error(
+          `Analysis limitations returned project '${answer.value.projectKey}' for requested project '${candidate.projectKey}'.`,
+        );
       }
-    }
-  }
-
-  // Walk non-root scopes — only mark resources as local if they're NOT in root
-  for (const [scopeId, scope] of Object.entries(graph.scopes)) {
-    if (scopeId === graph.root) continue;
-
-    const resources = scope.resources;
-    if (!resources) continue;
-    const owner = scope.label ?? scopeId;
-
-    for (const category of categories) {
-      const records = resources[category];
-      if (!records) continue;
-      for (const name of Object.keys(records)) {
-        allScoped.add(name);
-        if (rootResources.has(name)) continue;
-        index.set(name, { scope: "local" as ResourceScope, scopeOwner: owner });
-      }
-    }
-  }
-  return { index, allScoped };
-}
-
-type FlatResourceLike = {
-  className?: string;
-  file?: string;
-  package?: string;
-  origin?: ResourceOrigin;
-  declarationForm?: DeclarationForm;
-  gaps?: ResourceGapSummary;
-  bindables?: Readonly<Record<string, Bindable>>;
-};
-
-function mapCatalogResource(
-  name: string,
-  kind: string,
-  res: FlatResourceLike,
-  catalog: ResourceCatalog,
-  scopeIndex: Map<string, ScopeEntry>,
-  allScoped: Set<string>,
-  discrepancies: Map<string, BuiltinDiscrepancy> | null,
-): ResourceExplorerItem {
-  const bindables: ResourceExplorerBindable[] = [];
-  if (res.bindables) {
-    for (const [, b] of Object.entries(res.bindables)) {
-      bindables.push({
-        name: b.name,
-        attribute: b.attribute,
-        mode: b.mode,
-        primary: b.primary,
-        type: b.type?.kind === "ts" ? b.type.name : b.type?.kind,
+      projects.push({
+        status: "ready",
+        projectKey: candidate.projectKey,
+        answer: mapRuntimeAnswer(answer),
+        policyFile: {
+          uri: ctx.documentUris.uriForHostPath(answer.value.policyFile.filePath),
+          exists: answer.value.policyFile.exists,
+        },
+        effectivePolicies: answer.value.effectivePolicies.map((policy) =>
+          mapAnalysisLimitationEffectivePolicy(policy, mappingContext)
+        ),
+        candidateCount: answer.value.candidateCount,
+        suppressedCandidateCount: answer.value.suppressedCandidateCount,
+        rows: answer.value.rows.map((row) => mapAnalysisLimitationItem(row, mappingContext)),
+      });
+    } catch (error) {
+      if (isSemanticRuntimeLspRequestAborted(error)) throw error;
+      projects.push({
+        status: "error",
+        projectKey: candidate.projectKey,
+        message: requestErrorMessage(error),
       });
     }
   }
-
-  // Use direct gaps when available, fall back to catalog cross-reference
-  const gapTotal = res.gaps?.total ?? 0;
-  const gapIntrinsic = res.gaps?.intrinsic ?? 0;
-  const fallbackGapCount = gapTotal > 0 ? gapTotal : (() => {
-    const gapKey = `${kind}:${name}`;
-    const catalogGaps = catalog.gapsByResource?.[gapKey] ?? [];
-    return Array.isArray(catalogGaps) ? catalogGaps.length : 0;
-  })();
-
-  const scopeEntry = scopeIndex.get(name);
-  // Three-way scope: local (non-root only), global (in root), orphan (not in any scope)
-  const scope: ResourceScope = scopeEntry
-    ? "local"
-    : allScoped.has(name) ? "global" : "orphan";
-
-  const item: ResourceExplorerItem = {
-    name,
-    kind,
-    className: res.className,
-    file: res.file,
-    package: res.package,
-    bindableCount: bindables.length,
-    bindables,
-    gapCount: fallbackGapCount,
-    gapIntrinsicCount: gapIntrinsic,
-    origin: res.origin,
-    scope,
-    scopeOwner: scopeEntry?.scopeOwner,
-    declarationForm: res.declarationForm,
-  };
-
-  // Attach staleness for builtin resources
-  if ((res.origin === "builtin" || res.origin === "config") && discrepancies) {
-    const disc = discrepancies.get(name);
-    if (disc) {
-      item.staleness = {
-        fieldsFromAnalysis: disc.fieldsFromAnalysis.length,
-        membersNotInSemantics: disc.membersNotInSemantics.length,
-      };
-    }
-  }
-
-  return item;
+  return { fingerprint: generation.fingerprint, projects };
 }
 
-export type InspectEntityResponse = {
-  uri: string;
-  entityKind: string;
-  confidence: {
-    resource: string;
-    type: string;
-    scope: string;
-    expression: string;
-    composite: string;
-  };
-  expressionLabel?: string;
-  exprId?: string | number;
-  nodeId?: string | number;
-  detail: Record<string, unknown>;
-} | null;
-
-export function handleInspectEntity(
+export async function handleSourceOwnership(
   ctx: ServerContext,
-  params: { uri: string; position: Position },
-): InspectEntityResponse {
-  try {
-    const uri = params?.uri;
-    if (!uri || !params.position) return null;
-    const doc = ctx.ensureProgramDocument(uri);
-    if (!doc) return null;
-    const canonical = canonicalDocumentUri(uri);
-    const result = ctx.workspace.query(canonical.uri).inspect(params.position);
-    if (!result) return null;
+  params: SourceOwnershipParams,
+  operation: SemanticRuntimeLspOperation,
+): Promise<SourceOwnershipResponse> {
+  if (!params?.uri) {
+    throw new Error("Source ownership requires a document URI.");
+  }
+  const generation = operation.generation;
+  const answer = await operation.authoredSourceOwnership(params.uri);
+  const sourceFilePath = ctx.documentUris.authoredHostPath(params.uri);
+  // Runtime template-edit ownership intentionally includes script-side inline-template carriers. The document-language
+  // protocol is narrower: only converged external/HTML template sources may opt an HTML document into Aurelia mode.
+  const templateOwned = sourceFilePath == null
+    ? false
+    : await authoredTemplateDocumentOwned(ctx, operation, sourceFilePath, answer.value.owners);
+  return {
+    fingerprint: generation.fingerprint,
+    sourceUri: ctx.documentUris.resolve(params.uri).uri,
+    answer: mapRuntimeAnswer(answer),
+    templateOwned,
+    owners: answer.value.owners.map((owner) => ({
+      projectKey: owner.projectKey,
+      rootUri: ctx.documentUris.uriForHostPath(owner.projectRootDir),
+      projectPath: owner.projectPath,
+      role: owner.role,
+    })),
+  };
+}
 
-    const resolution = result.resolution;
-    const entity = resolution.entity;
+async function authoredTemplateDocumentOwned(
+  ctx: ServerContext,
+  operation: SemanticRuntimeLspOperation,
+  sourceFilePath: string,
+  owners: readonly { readonly projectKey: string; readonly role: string }[],
+): Promise<boolean> {
+  const templateProjectKeys = [...new Set(
+    owners
+      .filter((owner) => owner.role === "template")
+      .map((owner) => owner.projectKey),
+  )].sort();
+  if (templateProjectKeys.length === 0) {
+    return false;
+  }
 
-    // Extract key fields from the entity for display
-    const detail: Record<string, unknown> = { kind: entity.kind };
-    if ("name" in entity) detail.name = (entity as { name: string }).name;
-    if ("view" in entity) {
-      const view = entity.view as { name?: string; kind?: string; className?: string };
-      detail.resourceName = view?.name;
-      detail.resourceKind = view?.kind;
-      detail.className = view?.className;
+  const requested = canonicalTypeSystemPath(sourceFilePath);
+  for (const projectKey of templateProjectKeys) {
+    // The converged ownership set belongs to the project generation, not the requested document. One retained bounded
+    // answer can therefore recheck every open HTML document in the project without materializing application topology.
+    const ownership = await operation.templateDocumentOwnership(projectKey);
+    if (semanticTemplateDocumentOwnershipOwnsSource(ownership.value, (source) => {
+      const candidate = semanticSourceReferenceFilePath(source, ctx.documentUris);
+      return candidate != null && canonicalTypeSystemPath(candidate) === requested;
+    })) {
+      return true;
     }
-    if ("bindable" in entity) {
-      const b = entity.bindable as { property?: string; attribute?: { value?: string } };
-      detail.bindableProperty = b?.property;
-    }
-    if ("symbol" in entity) {
-      const sym = entity.symbol as { kind?: string; name?: string; type?: string };
-      detail.symbolKind = sym?.kind;
-      detail.symbolName = sym?.name;
-      detail.symbolType = sym?.type;
-    }
+  }
+  return false;
+}
 
+export async function handleResourceInventory(
+  ctx: ServerContext,
+  params: ResourceInventoryParams | null | undefined,
+  operation: SemanticRuntimeLspOperation,
+): Promise<ResourceInventoryResponse> {
+  const generation = operation.generation;
+  const summary = await operation.workspaceSummary();
+  const mappingContext = {
+    documentUris: ctx.documentUris,
+    lookupText: (uri: string) => operation.documents.lookupText(uri),
+  };
+  const projects: ResourceInventoryResponse["projects"][number][] = [];
+  for (const candidate of summary.value.appCandidates) {
+    const project = mapResourceProject(candidate, ctx.documentUris);
+    try {
+      const answer = await operation.resourceInventory(
+        candidate.projectKey,
+        params?.includeTypeSurfaces === true,
+      );
+      projects.push({
+        status: "ready",
+        project,
+        answer: mapRuntimeAnswer(answer),
+        typeSurfacesIncluded: answer.value.typeSurfacesIncluded,
+        resources: answer.value.rows.map((row) => mapResourceInventoryItem(row, mappingContext)),
+        completeness: answer.value.completeness,
+      });
+    } catch (error) {
+      if (isSemanticRuntimeLspRequestAborted(error)) throw error;
+      projects.push({ status: "error", project, message: requestErrorMessage(error) });
+    }
+  }
+  return { fingerprint: generation.fingerprint, projects };
+}
+
+export async function handleTemplateResourceAvailability(
+  ctx: ServerContext,
+  params: TemplateResourceAvailabilityParams,
+  operation: SemanticRuntimeLspOperation,
+): Promise<TemplateResourceAvailabilityResponse> {
+  if (!params?.uri || params.position == null) {
+    throw new Error("Template resource availability requires a document URI and cursor position.");
+  }
+  const generation = operation.generation;
+  const document = operation.documents.ensureProgramDocument(params.uri);
+  const fingerprint = generation.fingerprint;
+  if (document == null) {
+    return { fingerprint, projectSelection: { status: "absent", candidates: [] } };
+  }
+  const summary = await operation.workspaceSummary();
+  const owners = await operation.projectsOwningDocument(document, summary.value.appCandidates);
+  const candidates = owners.map((owner) => mapResourceProject(owner, ctx.documentUris));
+  const selectedOwner = params.projectKey == null
+    ? owners.length === 1 ? owners[0]! : null
+    : owners.find((owner) => owner.projectKey === params.projectKey) ?? null;
+  if (selectedOwner == null) {
     return {
-      uri: result.uri,
-      entityKind: entity.kind,
-      confidence: {
-        resource: resolution.confidence.resource,
-        type: resolution.confidence.type,
-        scope: resolution.confidence.scope,
-        expression: resolution.confidence.expression,
-        composite: resolution.compositeConfidence,
+      fingerprint,
+      projectSelection: {
+        status: params.projectKey == null && owners.length > 1 ? "ambiguous" : "absent",
+        candidates,
       },
-      expressionLabel: resolution.expressionLabel,
-      exprId: resolution.exprId,
-      nodeId: resolution.nodeId,
-      detail,
     };
-  } catch (e) {
-    ctx.logger.error(`[inspectEntity] failed for ${params?.uri}: ${formatError(e)}`);
-    return null;
   }
+
+  const answer = await operation.templateResourceAvailability(
+    selectedOwner.projectKey,
+    document.uri,
+    params.position,
+    params.templateResourceScopeIdentityKey ?? null,
+  );
+  const mappingContext = {
+    documentUris: ctx.documentUris,
+    lookupText: (uri: string) => operation.documents.lookupText(uri),
+  };
+  return {
+    fingerprint,
+    projectSelection: {
+      status: "exact",
+      project: mapResourceProject(selectedOwner, ctx.documentUris),
+      answer: mapRuntimeAnswer(answer),
+      selectedTemplate: answer.value.selectedTemplate == null
+        ? null
+        : mapTemplateResourceScopeCandidate(answer.value.selectedTemplate, mappingContext),
+      templateCandidates: answer.value.candidates.map((candidate) =>
+        mapTemplateResourceScopeCandidate(candidate, mappingContext)
+      ),
+      resources: answer.value.rows.map((row) => mapTemplateResourceAvailabilityItem(row, mappingContext)),
+      completeness: answer.value.completeness,
+    },
+  };
 }
 
-export type ScopeResourceItem = {
-  name: string;
-  kind: string;
-  origin?: ResourceOrigin;
-  className?: string;
-  file?: string;
-  package?: string;
-  bindableCount: number;
-  scope: "global" | "local";
-};
-
-export type ScopeResourcesResponse = {
-  scopeId: string;
-  scopeLabel?: string;
-  resources: ScopeResourceItem[];
-} | null;
-
-export function handleGetScopeResources(
+export async function handleWorkspaceStatus(
   ctx: ServerContext,
-  params: { uri: string },
-): ScopeResourcesResponse {
-  try {
-    const uri = params?.uri;
-    if (!uri) return null;
-    const canonical = canonicalDocumentUri(uri);
-    ctx.ensureProgramDocument(uri);
-
-    const snapshot = ctx.workspace.snapshot();
-    const graph = snapshot.resourceGraph;
-    if (!graph) return null;
-
-    // Find the scope for this template
-    const templateInfo = ctx.workspace.templates.find(
-      (t) => canonicalDocumentUri(t.templatePath).uri === canonical.uri,
-    ) ?? ctx.workspace.inlineTemplates.find(
-      (t) => canonicalDocumentUri(t.componentPath).uri === canonical.uri,
-    );
-
-    const scopeId = templateInfo?.scopeId ?? graph.root;
-    const scope = graph.scopes[scopeId];
-    const rootScope = graph.scopes[graph.root];
-
-    const resources: ScopeResourceItem[] = [];
-    const seen = new Set<string>();
-
-    // Collect resources from both local scope and root scope (two-level lookup)
-    const collectFromScope = (scopeResources: Partial<ResourceCollections> | undefined, scopeType: "local" | "global") => {
-      if (!scopeResources) return;
-      const categories = [
-        ["elements", "custom-element"],
-        ["attributes", "custom-attribute"],
-        ["controllers", "template-controller"],
-        ["valueConverters", "value-converter"],
-        ["bindingBehaviors", "binding-behavior"],
-      ] as const;
-
-      for (const [category, kind] of categories) {
-        const entries = scopeResources[category as keyof typeof scopeResources];
-        if (!entries || typeof entries !== "object") continue;
-        for (const [name, res] of Object.entries(entries as Record<string, any>)) {
-          const key = `${kind}:${name}`;
-          if (seen.has(key)) continue;
-          seen.add(key);
-          resources.push({
-            name,
-            kind,
-            origin: res.origin,
-            className: res.className,
-            file: res.file,
-            package: res.package,
-            bindableCount: res.bindables ? Object.keys(res.bindables).length : res.props ? Object.keys(res.props).length : 0,
-            scope: scopeType,
-          });
-        }
-      }
-    };
-
-    // Local scope first (if different from root)
-    if (scopeId !== graph.root && scope) {
-      collectFromScope(scope.resources, "local");
-    }
-    // Then root scope (global)
-    if (rootScope) {
-      collectFromScope(rootScope.resources, "global");
-    }
-
-    return {
-      scopeId,
-      scopeLabel: scope?.label,
-      resources,
-    };
-  } catch (e) {
-    ctx.logger.error(`[getScopeResources] failed: ${formatError(e)}`);
-    return null;
-  }
-}
-
-export function handleCapabilities(ctx: ServerContext): CapabilitiesResponse {
-  try {
-    return buildCapabilities(ctx);
-  } catch (e) {
-    ctx.logger.error(`[capabilities] failed: ${formatError(e)}`);
-    return buildCapabilitiesFallback();
-  }
+  params: WorkspaceStatusParams | null | undefined,
+  operation: SemanticRuntimeLspOperation,
+): Promise<WorkspaceStatusResponse | null> {
+  const generation = operation.generation;
+  const answer = await operation.workspaceSummary();
+  const nativeProjectConfigurations = await operation.nativeProjectConfigurations(
+    params?.nativeProjectConfigurationUris ?? [],
+  );
+  return {
+    fingerprint: generation.fingerprint,
+    answer: mapRuntimeAnswer(answer),
+    projectAnalysisCounts: answer.value.projectAnalysisCounts,
+    nativeProjectConfigurations: {
+      answer: mapRuntimeAnswer(nativeProjectConfigurations),
+      rows: nativeProjectConfigurations.value.rows.map((configuration) => ({
+        projectKey: configuration.projectKey,
+        projectRootUri: ctx.documentUris.uriForHostPath(configuration.projectRootDir),
+        sourceUri: ctx.documentUris.uriForHostPath(configuration.filePath),
+        appliedExcludedSourceRootUris: configuration.appliedExcludedSourceRootDirs.map((rootDir) =>
+          ctx.documentUris.uriForHostPath(rootDir)
+        ),
+        diagnosticCount: configuration.diagnosticCount,
+      })),
+    },
+  };
 }
 
 // ============================================================================
 // TS-side rename → template propagation
 // ============================================================================
 
-export type RenameFromTsParams = {
-  uri: string;
-  position: Position;
-  newName: string;
-};
-
-export type RenameFromTsResponse = {
-  /** Template-side edits only (TS edits come from the built-in TS rename). */
-  changes: Record<string, { range: { start: Position; end: Position }; newText: string }[]>;
-} | null;
-
-export function handleRenameFromTs(
+export async function handleRenameFromTs(
   ctx: ServerContext,
   params: RenameFromTsParams,
-): RenameFromTsResponse {
-  try {
-    if (!params?.uri || !params.position || !params.newName) return null;
-
-    const canonical = canonicalDocumentUri(params.uri);
-
-    // tryExpressionMemberRename lives on SemanticWorkspaceEngine (implementation),
-    // not on the SemanticWorkspace interface. Runtime check guards the cast.
-    const engine = ctx.workspace as any;
-    if (typeof engine.tryExpressionMemberRename !== "function") {
-      ctx.logger.warn(`[renameFromTs] tryExpressionMemberRename not available on workspace`);
-      return null;
-    }
-
-    const result = engine.tryExpressionMemberRename({
-      uri: canonical.uri,
-      position: params.position,
-      newName: params.newName,
-    }) as import("@aurelia-ls/semantic-workspace/types.js").WorkspaceRefactorResult | null;
-
-    if (!result || !("edit" in result)) {
-      ctx.logger.info(`[renameFromTs] no cross-domain edits for ${canonical.path}`);
-      return null;
-    }
-
-    // Filter to template-only edits (TS edits are handled by VS Code's built-in TS rename)
-    const templateEdits = result.edit.edits.filter(
-      (e) => String(e.uri).endsWith(".html"),
-    );
-    if (!templateEdits.length) return null;
-
-    // Convert workspace edits to LSP format (span offsets → line/character ranges)
-    const lookupText = (uri: any) => ctx.lookupText(uri);
-    const mapped = mapSemanticWorkspaceEdit({ edits: templateEdits }, lookupText);
-    if (!mapped?.changes) {
-      ctx.logger.warn(`[renameFromTs] span→range conversion failed for ${templateEdits.length} edits`);
-      return null;
-    }
-
-    const changes = mapped.changes as Record<string, { range: { start: Position; end: Position }; newText: string }[]>;
-    const fileCount = Object.keys(changes).length;
-
-    if (fileCount > 0) {
-      ctx.logger.info(`[renameFromTs] propagating to ${fileCount} template(s)`);
-    }
-    return fileCount ? { changes } : null;
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
-    const stack = e instanceof Error ? e.stack : undefined;
-    ctx.logger.error(`[renameFromTs] ${msg}${stack ? `\n${stack}` : ""}`);
-    return null;
+  operation: SemanticRuntimeLspOperation,
+): Promise<RenameFromTsResponse> {
+  if (!params?.uri || !params.position || (params.newName != null && typeof params.newName !== "string")) {
+    return renameFromTsBlocked("invalid-request", "Aurelia cross-domain rename requires a URI and position, with an optional new name.");
   }
+
+  const sourcePath = ctx.documentUris.authoredHostPath(params.uri);
+  const doc = sourcePath == null ? null : operation.documents.ensureProgramDocument(params.uri);
+  if (doc == null || sourcePath == null) {
+    return renameFromTsBlocked("document-unavailable", "Aurelia cross-domain rename could not read the TypeScript document.");
+  }
+  const answer = await operation.templateRenameFromTypeScript(
+    doc.uri,
+    params.position,
+    params.newName ?? null,
+  );
+  const templateReferenceCount = answer.value.templateReferenceCount;
+  const typeScriptReferenceCount = answer.value.typeScriptReferenceCount;
+  const candidateCount = answer.value.candidateRows.length;
+  const candidateMapping = mapSemanticRuntimeTemplateRenameCandidates(
+    answer,
+    (uri) => operation.documents.lookupText(uri),
+    {
+      documentUris: ctx.documentUris,
+      originDocument: doc,
+    },
+  );
+  const candidates = candidateMapping.value;
+  if (candidateMapping.failures.length > 0) {
+    return renameFromTsBlocked(
+      "candidate-mapping-failed",
+      `Aurelia could not preserve every unresolved rename candidate: ${candidateMapping.failures.join(" ")}`,
+      candidateMapping.failures,
+      templateReferenceCount,
+      typeScriptReferenceCount,
+      candidateCount,
+      candidates,
+    );
+  }
+  if (answer.value.status !== "available") {
+    const reason = answer.value.reason ?? answer.value.status;
+    const message = answer.value.displayText || answer.summary;
+    operation.deferEffect({
+      kind: "log",
+      level: "info",
+      message: `[renameFromTs] cross-domain rename declined for ${sourcePath}: ${reason}`,
+    });
+    if (reason === "no-aurelia-references" || reason === "no-source-backed-member") {
+      return {
+        status: "not-applicable",
+        reason,
+        message,
+        templateReferenceCount,
+        typeScriptReferenceCount,
+        candidateCount,
+        candidates,
+      };
+    }
+    if (answer.value.status === "invalid-name") {
+      return {
+        status: "refused",
+        reason,
+        message,
+        templateReferenceCount,
+        typeScriptReferenceCount,
+        candidateCount,
+        candidates,
+      };
+    }
+    if (reason === "unresolved-candidates") {
+      return {
+        status: "refused",
+        reason,
+        message,
+        templateReferenceCount,
+        typeScriptReferenceCount,
+        candidateCount,
+        candidates,
+      };
+    }
+    return renameFromTsBlocked(
+      reason,
+      message,
+      undefined,
+      templateReferenceCount,
+      typeScriptReferenceCount,
+      candidateCount,
+      candidates,
+    );
+  }
+
+  if (params.newName == null) {
+    const prepared = mapSemanticRuntimeTemplatePrepareRename(answer, {
+      documentUris: ctx.documentUris,
+      originDocument: doc,
+    });
+    if (prepared == null) {
+      return renameFromTsBlocked(
+        "prepare-mapping-failed",
+        "Aurelia cross-domain rename could not map the selected TypeScript token.",
+        undefined,
+        templateReferenceCount,
+        typeScriptReferenceCount,
+        candidateCount,
+        candidates,
+      );
+    }
+    return {
+      status: "available",
+      ...prepared,
+      message: answer.value.displayText || answer.summary,
+      templateReferenceCount,
+      typeScriptReferenceCount,
+      candidateCount,
+      candidates,
+    };
+  }
+  if (answer.value.edits.length === 0) {
+    return renameFromTsBlocked(
+      "empty-edit-plan",
+      `Aurelia claimed a cross-domain rename for ${sourcePath} but produced no edits.`,
+      undefined,
+      templateReferenceCount,
+      typeScriptReferenceCount,
+      candidateCount,
+      candidates,
+    );
+  }
+  const mapping = mapSemanticRuntimeTemplateRenameEdit(answer, (uri) => operation.documents.lookupDocumentSnapshot(uri), {
+    documentUris: ctx.documentUris,
+    originDocument: doc,
+  });
+  if (mapping.edit == null) {
+    operation.deferEffect({
+      kind: "log",
+      level: "warn",
+      message: `[renameFromTs] cross-domain edit mapping was blocked: ${mapping.failures.join(" ")}`,
+    });
+    return renameFromTsBlocked(
+      "mapping-failed",
+      `Aurelia cross-domain rename was blocked: ${mapping.failures.join(" ")}`,
+      mapping.failures,
+      templateReferenceCount,
+      typeScriptReferenceCount,
+      candidateCount,
+      candidates,
+    );
+  }
+
+  const fileCount = new Set((mapping.edit.documentChanges ?? [])
+    .filter((change) => "textDocument" in change)
+    .map((change) => change.textDocument.uri)).size;
+
+  if (fileCount > 0) {
+    operation.deferEffect({
+      kind: "log",
+      level: "info",
+      message: `[renameFromTs] prepared ${fileCount} file(s), ${typeScriptReferenceCount} TypeScript and ${templateReferenceCount} Aurelia reference(s)`,
+    });
+  }
+  return fileCount
+    ? {
+      status: "success",
+      workspaceEdit: mapping.edit,
+      message: answer.value.displayText || answer.summary,
+      templateReferenceCount,
+      typeScriptReferenceCount,
+      candidateCount,
+      candidates,
+    }
+    : {
+      status: "blocked",
+      reason: "empty-workspace-edit",
+      message: "Aurelia cross-domain rename produced no mappable file edits.",
+      templateReferenceCount,
+      typeScriptReferenceCount,
+      candidateCount,
+      candidates,
+    };
 }
 
-export function handleGetRelatedFile(
+function renameFromTsBlocked(
+  reason: string,
+  message: string,
+  failures?: readonly string[],
+  templateReferenceCount?: number,
+  typeScriptReferenceCount?: number,
+  candidateCount?: number,
+  candidates?: readonly RenameCandidateLocation[],
+): RenameFromTsResponse {
+  return {
+    status: "blocked",
+    reason,
+    message,
+    ...(failures == null ? {} : { failures }),
+    ...(templateReferenceCount == null ? {} : { templateReferenceCount }),
+    ...(typeScriptReferenceCount == null ? {} : { typeScriptReferenceCount }),
+    ...(candidateCount == null ? {} : { candidateCount }),
+    ...(candidates == null ? {} : { candidates }),
+  };
+}
+
+export async function handleGetRelatedFiles(
   ctx: ServerContext,
-  params: { uri: string },
-): { uri: string; kind: "template" | "component" } | null {
-  try {
-    const uri = params?.uri;
-    if (!uri) return null;
-    const canonical = canonicalDocumentUri(uri);
-
-    // Check if this is a template → find its component
-    const asTemplate = ctx.workspace.templates.find(
-      (t) => canonicalDocumentUri(t.templatePath).uri === canonical.uri,
-    );
-    if (asTemplate) {
-      return { uri: canonicalDocumentUri(asTemplate.componentPath).uri, kind: "component" };
+  params: DocumentUriParams,
+  operation: SemanticRuntimeLspOperation,
+): Promise<RelatedFilesResponse> {
+  const uri = params?.uri;
+  if (!uri) return [];
+  const filePath = ctx.documentUris.authoredHostPath(uri);
+  if (filePath == null) return [];
+  const topology = await operation.appTopology({ sourceFilePath: filePath });
+  const requested = canonicalTypeSystemPath(filePath);
+  const candidates: RelatedFileCandidate[] = [];
+  for (const component of topology.value.components) {
+    const componentFile = semanticSourceReferenceFilePath(component.source, ctx.documentUris);
+    const templateFile = semanticSourceReferenceFilePath(component.template?.source ?? null, ctx.documentUris);
+    if (componentFile == null || templateFile == null) {
+      continue;
     }
-
-    // Check if this is a component → find its template
-    const asComponent = ctx.workspace.templates.find(
-      (t) => canonicalDocumentUri(t.componentPath).uri === canonical.uri,
-    );
-    if (asComponent) {
-      return { uri: canonicalDocumentUri(asComponent.templatePath).uri, kind: "template" };
+    if (canonicalTypeSystemPath(componentFile) === canonicalTypeSystemPath(templateFile)) {
+      continue;
     }
-
-    // Check inline templates (component file IS the template)
-    const asInline = ctx.workspace.inlineTemplates.find(
-      (t) => canonicalDocumentUri(t.componentPath).uri === canonical.uri,
-    );
-    if (asInline) {
-      // Inline template — no separate file to navigate to
-      return null;
+    if (canonicalTypeSystemPath(templateFile) === requested) {
+      candidates.push({
+        uri: ctx.documentUris.uriForHostPath(componentFile),
+        role: "component-source",
+        elementName: component.elementName,
+        className: component.className,
+      });
     }
-
-    return null;
-  } catch (e) {
-    ctx.logger.error(`[getRelatedFile] failed: ${formatError(e)}`);
-    return null;
+    if (canonicalTypeSystemPath(componentFile) === requested) {
+      candidates.push({
+        uri: ctx.documentUris.uriForHostPath(templateFile),
+        role: "component-template",
+        elementName: component.elementName,
+        className: component.className,
+      });
+    }
   }
+  return candidates.sort((left, right) =>
+    left.uri.localeCompare(right.uri)
+    || left.elementName.localeCompare(right.elementName)
+    || (left.className ?? "").localeCompare(right.className ?? "")
+  );
 }
 
 /**
  * Registers all custom Aurelia request handlers on the connection.
  */
 export function registerCustomHandlers(ctx: ServerContext): void {
-  ctx.connection.onRequest("aurelia/getOverlay", (params: MaybeUriParam) => handleGetOverlay(ctx, params));
-  ctx.connection.onRequest("aurelia/getMapping", (params: MaybeUriParam) => handleGetMapping(ctx, params));
-  ctx.connection.onRequest("aurelia/queryAtPosition", (params: { uri: string; position: Position }) => handleQueryAtPosition(ctx, params));
-  ctx.connection.onRequest("aurelia/getSsr", (params: MaybeUriParam) => handleGetSsr(ctx, params));
-  ctx.connection.onRequest("aurelia/getDiagnostics", (params: MaybeUriParam) => handleGetDiagnostics(ctx, params));
-  ctx.connection.onRequest("aurelia/dumpState", () => handleDumpState(ctx));
-  ctx.connection.onRequest("aurelia/getResources", () => handleGetResources(ctx));
-  ctx.connection.onRequest("aurelia/inspectEntity", (params: { uri: string; position: Position }) => handleInspectEntity(ctx, params));
-  ctx.connection.onRequest("aurelia/getScopeResources", (params: { uri: string }) => handleGetScopeResources(ctx, params));
-  ctx.connection.onRequest("aurelia/getCodeLens", (params: { uri: string }) =>
-    handleCodeLens(ctx, { textDocument: { uri: params.uri } }),
+  ctx.connection.onRequest(AureliaProtocolRequest.AnalysisLimitations, (_params: unknown, token: CancellationToken) =>
+    request(ctx, "analysisLimitations", token, undefined,
+      (guard) => handleAnalysisLimitations(ctx, guard)));
+  ctx.connection.onRequest(AureliaProtocolRequest.SourceOwnership, (params: SourceOwnershipParams, token: CancellationToken) =>
+    request(ctx, "sourceOwnership", token, params?.uri,
+      (guard) => handleSourceOwnership(ctx, params, guard)));
+  ctx.connection.onRequest(
+    AureliaProtocolRequest.AttributeInterpretationExplanation,
+    (params: AttributeInterpretationExplanationParams, token: CancellationToken) =>
+      documentRequest(ctx, "attributeInterpretationExplanation", token, params.uri,
+        (operation): AttributeInterpretationExplanationResponse => {
+          const document = operation.documents.ensureProgramDocument(params.uri);
+          return refusedAttributeInterpretationExplanation(
+            operation.generation.fingerprint,
+            document?.version ?? null,
+            null,
+            "sourceNotAuthored",
+          );
+        },
+        (guard) => handleAttributeInterpretationExplanation(ctx, params, guard)),
   );
-  ctx.connection.onRequest("aurelia/getRelatedFile", (params: { uri: string }) => handleGetRelatedFile(ctx, params));
-  ctx.connection.onRequest("aurelia/capabilities", () => handleCapabilities(ctx));
-  ctx.connection.onRequest("aurelia/renameFromTs", (params: RenameFromTsParams) => handleRenameFromTs(ctx, params));
+  ctx.connection.onRequest(
+    AureliaProtocolRequest.BindingUncertaintyExplanation,
+    (params: BindingUncertaintyExplanationParams, token: CancellationToken) =>
+      documentRequest(ctx, "bindingUncertaintyExplanation", token, params.uri,
+        (operation): BindingUncertaintyExplanationResponse => {
+          const document = operation.documents.ensureProgramDocument(params.uri);
+          return refusedBindingUncertaintyExplanation(
+            operation.generation.fingerprint,
+            document?.version ?? null,
+            null,
+            "sourceNotAuthored",
+          );
+        },
+        (guard) => handleBindingUncertaintyExplanation(ctx, params, guard)),
+  );
+  ctx.connection.onRequest(
+    AureliaProtocolRequest.FrameworkCapabilityExplanation,
+    (params: FrameworkCapabilityExplanationParams, token: CancellationToken) =>
+      documentRequest(ctx, "frameworkCapabilityExplanation", token, params.uri,
+        (operation): FrameworkCapabilityExplanationResponse => {
+          const document = operation.documents.ensureProgramDocument(params.uri);
+          return refusedFrameworkCapabilityExplanation(
+            operation.generation.fingerprint,
+            document?.version ?? null,
+            null,
+            "sourceNotAuthored",
+          );
+        },
+        (guard) => handleFrameworkCapabilityExplanation(ctx, params, guard)),
+  );
+  ctx.connection.onRequest(AureliaProtocolRequest.ResourceInventory, (params: ResourceInventoryParams, token: CancellationToken) =>
+    request(ctx, "resourceInventory", token, undefined,
+      (guard) => handleResourceInventory(ctx, params, guard)));
+  ctx.connection.onRequest(
+    AureliaProtocolRequest.ResourceAvailabilityExplanation,
+    (params: ResourceAvailabilityExplanationParams, token: CancellationToken) =>
+      documentRequest(ctx, "resourceAvailabilityExplanation", token, params.uri,
+        (operation): ResourceAvailabilityExplanationResponse => {
+          const document = operation.documents.ensureProgramDocument(params.uri);
+          return refusedResourceAvailabilityExplanation(
+            operation.generation.fingerprint,
+            document?.version ?? null,
+            null,
+            "sourceNotAuthored",
+          );
+        },
+        (guard) => handleResourceAvailabilityExplanation(ctx, params, guard)),
+  );
+  ctx.connection.onRequest(
+    AureliaProtocolRequest.TemplateResourceAvailability,
+    (params: TemplateResourceAvailabilityParams, token: CancellationToken) =>
+      documentRequest(ctx, "templateResourceAvailability", token, params.uri,
+        (operation): TemplateResourceAvailabilityResponse => ({
+          fingerprint: operation.generation.fingerprint,
+          projectSelection: { status: "absent", candidates: [] },
+        }),
+        (guard) => handleTemplateResourceAvailability(ctx, params, guard)),
+  );
+  ctx.connection.onRequest(AureliaProtocolRequest.RelatedFiles, (params: DocumentUriParams, token: CancellationToken) =>
+    documentRequest(ctx, "getRelatedFiles", token, params.uri,
+      () => [],
+      (guard) => handleGetRelatedFiles(ctx, params, guard),
+      { requireExactProjectOwner: true }));
+  ctx.connection.onRequest(AureliaProtocolRequest.WorkspaceStatus, (params: WorkspaceStatusParams, token: CancellationToken) =>
+    request(ctx, "workspaceStatus", token, undefined,
+      (guard) => handleWorkspaceStatus(ctx, params, guard)));
+  ctx.connection.onRequest(AureliaProtocolRequest.RenameFromTypeScript, (params: RenameFromTsParams, token: CancellationToken) =>
+    documentRequest(ctx, "renameFromTs", token, params.uri,
+      (_operation, failure): RenameFromTsResponse => ({
+        status: "not-applicable",
+        reason: failure === "ambiguous" ? "source-project-ambiguous" : "source-not-authored",
+        message: failure === "ambiguous"
+          ? "Aurelia cross-domain rename is unavailable because this source belongs to multiple projects."
+          : "Aurelia cross-domain rename is unavailable because this source is not authored by the project.",
+        templateReferenceCount: 0,
+        typeScriptReferenceCount: 0,
+        candidateCount: 0,
+        candidates: [],
+      }),
+      (guard) => handleRenameFromTs(ctx, params, guard),
+      { requireExactProjectOwner: true }));
+}
+
+function refusedAttributeInterpretationExplanation(
+  fingerprint: string,
+  documentVersion: number | null,
+  answer: AttributeInterpretationExplanationAnswerTransport | null,
+  kind: AttributeInterpretationExplanationRefusalKind,
+  contenders: readonly AttributeInterpretationExplanationContender[] = [],
+): AttributeInterpretationExplanationResponse {
+  return {
+    fingerprint,
+    documentVersion,
+    answer,
+    result: {
+      status: "refused",
+      refusal: attributeInterpretationExplanationRefusal(kind),
+      contenders,
+    },
+  };
+}
+
+function refusedBindingUncertaintyExplanation(
+  fingerprint: string,
+  documentVersion: number | null,
+  answer: BindingUncertaintyExplanationAnswerTransport | null,
+  kind: BindingUncertaintyExplanationRefusalKind,
+  contenders: readonly BindingUncertaintyExplanationContender[] = [],
+): BindingUncertaintyExplanationResponse {
+  return {
+    fingerprint,
+    documentVersion,
+    answer,
+    result: {
+      status: "refused",
+      refusal: bindingUncertaintyExplanationRefusal(kind),
+      contenders,
+    },
+  };
+}
+
+function refusedFrameworkCapabilityExplanation(
+  fingerprint: string,
+  documentVersion: number | null,
+  answer: FrameworkCapabilityExplanationAnswerTransport | null,
+  kind: FrameworkCapabilityExplanationRefusalKind,
+  contenders: readonly FrameworkCapabilityExplanationContender[] = [],
+): FrameworkCapabilityExplanationResponse {
+  return {
+    fingerprint,
+    documentVersion,
+    answer,
+    result: {
+      status: "refused",
+      refusal: frameworkCapabilityExplanationRefusal(kind),
+      contenders,
+    },
+  };
+}
+
+function refusedResourceAvailabilityExplanation(
+  fingerprint: string,
+  documentVersion: number | null,
+  answer: ResourceAvailabilityExplanationAnswerTransport | null,
+  kind: ResourceAvailabilityExplanationRefusalKind,
+  contenders: readonly ResourceAvailabilityExplanationContender[] = [],
+): ResourceAvailabilityExplanationResponse {
+  return {
+    fingerprint,
+    documentVersion,
+    answer,
+    result: {
+      status: "refused",
+      refusal: resourceAvailabilityExplanationRefusal(kind),
+      contenders,
+    },
+  };
+}
+
+function bindingUncertaintyExplanationParamsAreValid(
+  params: BindingUncertaintyExplanationParams | null | undefined,
+): params is BindingUncertaintyExplanationParams {
+  return params != null
+    && typeof params.uri === "string"
+    && params.uri.length > 0
+    && Number.isSafeInteger(params.documentVersion)
+    && params.documentVersion >= 0
+    && typeof params.projectKey === "string"
+    && params.projectKey.length > 0
+    && protocolPositionIsValid(params.position)
+    && protocolRangeIsValid(params.range)
+    && protocolRangeContainsPosition(params.range, params.position);
+}
+
+function attributeInterpretationExplanationParamsAreValid(
+  params: AttributeInterpretationExplanationParams | null | undefined,
+): params is AttributeInterpretationExplanationParams {
+  return params != null
+    && typeof params.uri === "string"
+    && params.uri.length > 0
+    && Number.isSafeInteger(params.documentVersion)
+    && params.documentVersion >= 0
+    && typeof params.projectKey === "string"
+    && params.projectKey.length > 0
+    && protocolPositionIsValid(params.position)
+    && protocolRangeIsValid(params.range)
+    && params.position.line === params.range.start.line
+    && params.position.character === params.range.start.character;
+}
+
+function frameworkCapabilityExplanationParamsAreValid(
+  params: FrameworkCapabilityExplanationParams | null | undefined,
+): params is FrameworkCapabilityExplanationParams {
+  return params != null
+    && typeof params.uri === "string"
+    && params.uri.length > 0
+    && Number.isSafeInteger(params.documentVersion)
+    && params.documentVersion >= 0
+    && typeof params.projectKey === "string"
+    && params.projectKey.length > 0
+    && typeof params.frameworkCapability === "string"
+    && params.frameworkCapability.length > 0
+    && protocolPositionIsValid(params.position)
+    && protocolRangeIsValid(params.range)
+    && params.position.line === params.range.start.line
+    && params.position.character === params.range.start.character;
+}
+
+function resourceAvailabilityExplanationParamsAreValid(
+  params: ResourceAvailabilityExplanationParams | null | undefined,
+): params is ResourceAvailabilityExplanationParams {
+  return params != null
+    && typeof params.uri === "string"
+    && params.uri.length > 0
+    && Number.isSafeInteger(params.documentVersion)
+    && params.documentVersion >= 0
+    && typeof params.projectKey === "string"
+    && params.projectKey.length > 0
+    && typeof params.resourceIdentityKey === "string"
+    && params.resourceIdentityKey.length > 0
+    && (
+      params.templateResourceScopeIdentityKey === undefined
+      || (
+        typeof params.templateResourceScopeIdentityKey === "string"
+        && params.templateResourceScopeIdentityKey.length > 0
+      )
+    )
+    && protocolPositionIsValid(params.position);
+}
+
+function protocolPositionIsValid(position: unknown): position is { readonly line: number; readonly character: number } {
+  if (position == null || typeof position !== "object" || Array.isArray(position)) return false;
+  const candidate = position as Record<string, unknown>;
+  return Number.isSafeInteger(candidate["line"])
+    && (candidate["line"] as number) >= 0
+    && Number.isSafeInteger(candidate["character"])
+    && (candidate["character"] as number) >= 0;
+}
+
+function protocolRangeIsValid(range: unknown): range is {
+  readonly start: { readonly line: number; readonly character: number };
+  readonly end: { readonly line: number; readonly character: number };
+} {
+  if (range == null || typeof range !== "object" || Array.isArray(range)) return false;
+  const candidate = range as Record<string, unknown>;
+  if (!protocolPositionIsValid(candidate["start"]) || !protocolPositionIsValid(candidate["end"])) return false;
+  return candidate["end"].line > candidate["start"].line
+    || (
+      candidate["end"].line === candidate["start"].line
+      && candidate["end"].character >= candidate["start"].character
+    );
+}
+
+function protocolRangesEqual(
+  left: { readonly start: { readonly line: number; readonly character: number }; readonly end: { readonly line: number; readonly character: number } },
+  right: { readonly start: { readonly line: number; readonly character: number }; readonly end: { readonly line: number; readonly character: number } },
+): boolean {
+  return left.start.line === right.start.line
+    && left.start.character === right.start.character
+    && left.end.line === right.end.line
+    && left.end.character === right.end.character;
+}
+
+function protocolRangeContainsPosition(
+  range: { readonly start: { readonly line: number; readonly character: number }; readonly end: { readonly line: number; readonly character: number } },
+  position: { readonly line: number; readonly character: number },
+): boolean {
+  return compareProtocolPositions(position, range.start) >= 0
+    && compareProtocolPositions(position, range.end) <= 0;
+}
+
+function compareProtocolPositions(
+  left: { readonly line: number; readonly character: number },
+  right: { readonly line: number; readonly character: number },
+): number {
+  return left.line - right.line || left.character - right.character;
+}
+
+function documentRequest<T>(
+  ctx: ServerContext,
+  feature: string,
+  token: CancellationToken,
+  uri: string,
+  whenUnavailable: (
+    operation: SemanticRuntimeLspOperation,
+    failure: SemanticRuntimeDocumentAdmissionFailure,
+  ) => T | Promise<T>,
+  handler: (operation: SemanticRuntimeLspOperation) => T | Promise<T>,
+  options: { readonly requireExactProjectOwner?: boolean } = {},
+): Promise<T> {
+  return runSemanticRuntimeDocumentRequest(
+    ctx,
+    feature,
+    token,
+    uri,
+    whenUnavailable,
+    handler,
+    options,
+  );
+}
+
+function request<T>(
+  ctx: ServerContext,
+  feature: string,
+  token: CancellationToken,
+  uri: string | undefined,
+  handler: (operation: SemanticRuntimeLspOperation) => T | Promise<T>,
+): Promise<T> {
+  return runSemanticRuntimeRequest(ctx, feature, token, handler, uri);
+}
+
+function requestErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }

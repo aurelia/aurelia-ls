@@ -11,6 +11,18 @@
     <p>${notBookOnly(currentItem)}</p>
   </section>
 
+  <section if.bind="secondaryItem.kind === 'book'">
+    <p>${bookOnly(secondaryItem)}</p>
+  </section>
+  <section else>
+    <section if.bind="secondaryItem.kind === 'service'">
+      <p>${serviceOnly(secondaryItem)}</p>
+    </section>
+    <section else>
+      <p>${archivedOnly(secondaryItem)}</p>
+    </section>
+  </section>
+
   <section if.bind="typeof currentPrimitive === 'string'">
     <p>${stringOnly(currentPrimitive)}</p>
   </section>
@@ -40,11 +52,22 @@
   <dl>
     <template repeat.for="arrayProduct of products">
       <dt>${arrayProduct.label}</dt>
+      <dd>${$index}:${$odd}:${$even}:${$first}:${$middle}:${$last}:${$length}:${$previous?.label ?? 'none'}</dd>
     </template>
 
     <template repeat.for="[key, product] of productEntries">
       <dt>${key}</dt>
-      <dd>${product.label} ${product.labelLength()} ${$index} ${$length}</dd>
+      <dd>${product.label} ${product.labelLength()} ${$index} ${$length} ${$previous?.[1].label ?? 'none'}</dd>
+    </template>
+
+    <template repeat.for="[tripleKey, , tripleProduct] of productTriples; key.bind: tripleProduct.id">
+      <dt>${tripleKey}</dt>
+      <dd>${tripleProduct.label} ${$previous?.[2].label ?? 'none'}</dd>
+    </template>
+
+    <template repeat.for="[contextualEnabled, contextualProduct] of productEntries; contextual.bind: contextualEnabled">
+      <dt>${contextualEnabled.toUpperCase()}</dt>
+      <dd>${contextualProduct.label}</dd>
     </template>
 
     <template repeat.for="setProduct of productSet">
@@ -54,12 +77,76 @@
     <template repeat.for="repeatIndex of repeatCount">
       <dd>${repeatIndex.toFixed()}</dd>
     </template>
+
+    <template repeat.for="nullableProduct of nullableProducts">
+      <dd>${nullableProduct.label}</dd>
+    </template>
+
+    <template repeat.for="contextlessProduct of products; contextual: false">
+      <dd>${typeof $previous}:${contextlessProduct.label}</dd>
+    </template>
+
+    <template repeat.for="productGroup of nestedProducts">
+      <div repeat.for="nestedProduct of productGroup">
+        ${nestedProduct.label}:${$previous?.label ?? 'none'}:${$parent.$previous?.[0].label ?? 'none'}
+      </div>
+    </template>
   </dl>
+
+  <section repeat.for="scopedProduct of products" with.bind="scopedProduct">
+    <span>${label}</span>
+    <span>${$parent.scopedProduct.label}</span>
+    <span>${$parent.$parent.portalMessage}</span>
+  </section>
+
+  <section repeat.for="availableProduct of products" if.bind="availableProduct.label.length > 0">
+    <span>${availableProduct.label} ${$this.availableProduct.label} ${this.portalMessage}</span>
+  </section>
 
   <section promise.resolve="productPromise">
     <p pending>${statusMessage}</p>
-    <p then="resolved">${resolved.label} ${resolved.labelLength()}</p>
+    <p then="resolved">${resolved.label} ${resolved.labelLength()} ${$parent.resolved?.label}</p>
     <p catch="reason">${formatReason(reason)}</p>
+  </section>
+
+  <section promise.resolve="productPromise">
+    <let carrier-result.bind="selectedProduct" carrier-reason.bind="null"></let>
+    <p then="carrierResult">${carrierResult?.label}</p>
+    <p catch="carrierReason">${formatReason(carrierReason)}</p>
+  </section>
+
+  <section promise.resolve="productPromise">
+    <p then="resolvedProduct">${resolvedProduct?.label} ${$parent.resolvedProduct?.label}</p>
+    <p catch="$parent.rejectedReason">${formatReason($parent.rejectedReason)}</p>
+  </section>
+
+  <section promise.resolve="productPromise">
+    <p then>${statusMessage}</p>
+  </section>
+
+  <section with.bind="{ id: 'inline', label: 'Inline product' }">
+    <span>${id}:${label}</span>
+  </section>
+
+  <let filtered-products.bind="products.filter(product => product.label.length > 0)" current-mode.bind="mode"></let>
+  <section repeat.for="filteredProduct of filteredProducts">
+    <span>${filteredProduct.label}</span>
+  </section>
+  <section if.bind="filteredProducts.length > 0">
+    <span>${filteredProducts[0].label}</span>
+  </section>
+  <template switch.bind="currentMode">
+    <span case="list">${listOnly(currentMode)}</span>
+    <span case="detail">${detailOnly(currentMode)}</span>
+    <span default-case>${otherOnly(currentMode)}</span>
+  </template>
+
+  <section with.bind="absentProduct">
+    <span>${statusMessage}</span>
+  </section>
+
+  <section if.bind="maybeProduct">
+    <div with.bind="maybeProduct">${label}</div>
   </section>
 
   <template switch.bind="mode">
@@ -79,7 +166,15 @@
     <p default-case>${otherOnly(fallMode)}</p>
   </template>
 
+  <template switch.bind="overlapMode">
+    <p case="value.bind: ['a', 'b']; fall-through: true">${overlapMode}</p>
+    <p case="value.bind: ['b', 'c']; fall-through: true">${overlapMode}</p>
+    <p case="d">${overlapMode}</p>
+    <p default-case>${overlapMode}</p>
+  </template>
+
   <template portal="target: body">
     <p>${portalMessage}</p>
   </template>
+
 </template>

@@ -10,11 +10,18 @@ import {
 } from '../kernel/evidence.js';
 import type { AddressHandle } from '../kernel/handles.js';
 import { ProvenanceRecord } from '../kernel/provenance.js';
+import {
+  sourceSpanEvidenceForSite,
+  type SourceSpanEvidencePublication,
+} from '../kernel/source-address.js';
 import type {
   KernelStore,
   KernelStoreRecord,
 } from '../kernel/store.js';
-import { unwrapExpression } from '../evaluation/ts-syntax.js';
+import {
+  authoredPropertyNameSpan,
+  unwrapExpression,
+} from '../evaluation/ts-syntax.js';
 import {
   TemplateSourceOffsetMap,
 } from './custom-element-definition.js';
@@ -143,6 +150,41 @@ export function sourceSpanAddressForNode(
   );
 }
 
+export function sourceSpanEvidenceForNode(
+  store: KernelStore,
+  context: ResourceRecognitionContext,
+  node: ts.Node | null,
+  local: string,
+  role: SourceSpanRole,
+  evidenceRoles: readonly EvidenceRole[] = [EvidenceRole.Declaration],
+  summary = 'Authored resource metadata source span.',
+): SourceSpanEvidencePublication | null {
+  if (node == null) {
+    return null;
+  }
+  const sourceFile = node.getSourceFile();
+  const sourceFileAddressHandle = sourceFileAddressHandleForNode(context, node);
+  if (sourceFileAddressHandle == null) {
+    return null;
+  }
+  const span = sourceSpanRangeForNode(sourceFile, node);
+  if (span == null) {
+    return null;
+  }
+  return sourceSpanEvidenceForSite(
+    store,
+    local,
+    {
+      sourceFileAddressHandle,
+      start: span.start,
+      end: span.end,
+    },
+    role,
+    evidenceRoles,
+    summary,
+  );
+}
+
 export function sourceFileAddressHandleForNode(
   context: ResourceRecognitionContext,
   node: ts.Node,
@@ -154,20 +196,7 @@ export function sourceSpanRangeForNode(
   sourceFile: ts.SourceFile,
   node: ts.Node | null,
 ): SourceSpanRange | null {
-  if (node == null) {
-    return null;
-  }
-  const sourceNode = sourceAddressNode(node);
-  let start = sourceNode.getStart(sourceFile);
-  let end = sourceNode.end;
-  if (ts.isStringLiteralLike(sourceNode) || ts.isNoSubstitutionTemplateLiteral(sourceNode)) {
-    start += 1;
-    end -= 1;
-  }
-  if (end < start) {
-    return null;
-  }
-  return { start, end };
+  return node == null ? null : authoredPropertyNameSpan(sourceFile, node);
 }
 
 function inlineTemplateStringExpression(
@@ -345,19 +374,4 @@ function readUnicodeEscape(
   return /^[0-9a-fA-F]{4}$/.test(text)
     ? { decoded: String.fromCharCode(parseInt(text, 16)), rawLength: 6 }
     : null;
-}
-
-function sourceAddressNode(node: ts.Node): ts.Node {
-  if (
-    (ts.isPropertyAssignment(node)
-      || ts.isShorthandPropertyAssignment(node)
-      || ts.isMethodDeclaration(node)
-      || ts.isPropertyDeclaration(node)
-      || ts.isGetAccessorDeclaration(node)
-      || ts.isSetAccessorDeclaration(node))
-    && node.name != null
-  ) {
-    return node.name;
-  }
-  return node;
 }

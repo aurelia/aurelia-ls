@@ -12,6 +12,11 @@ import {
   ProvenanceRecord,
 } from '../kernel/provenance.js';
 import {
+  KernelPublicationPlan,
+  publishProductDetails,
+  type KernelPublicationContext,
+} from '../kernel/publication.js';
+import {
   KernelStoreBatch,
   type KernelStore,
   type KernelStoreRecord,
@@ -22,9 +27,6 @@ import {
 import {
   CheckerExpressionTypeEvaluationResultKind,
 } from '../type-system/expression-type-evaluation.js';
-import type {
-  CheckerExpressionTypeEvaluator,
-} from '../type-system/expression-type-evaluator.js';
 import type {
   CheckerExpressionTypeWorld,
 } from '../type-system/expression-type-world.js';
@@ -39,9 +41,6 @@ import {
   type CheckerTypeReference,
 } from '../type-system/type-shape.js';
 import { bindingExpressionAstForProduct } from '../template/expression-parse-product.js';
-import type {
-  TemplateResourceScope,
-} from '../template/compiler-world.js';
 import {
   TemplateProductDetails,
 } from '../template/product-details.js';
@@ -51,6 +50,7 @@ import {
 import type {
   RuntimeRenderingEmission,
 } from '../template/runtime-rendering-materializer.js';
+import type { RuntimeExpressionResourcePlan } from '../template/runtime-expression-resource-plan.js';
 import {
   RuntimeBindingIssue,
   RuntimeBindingIssueKind,
@@ -65,9 +65,7 @@ import {
   type RuntimeInstructionScopeLookup,
 } from '../observation/runtime-binding-expression.js';
 import {
-  RuntimeBindingExpressionScopeProjector,
-} from '../observation/runtime-binding-expression-scope.js';
-import {
+  aggregateRuntimeBindingSourceExpressionChainIndex,
   checkerContextForRuntimeBindingSourceExpressionProjection,
   RuntimeBindingSourceExpressionContextProjector,
   RuntimeBindingSourceExpressionProjectionKind,
@@ -84,8 +82,8 @@ export class I18nTranslationBindingIssueMaterializationRequest {
   constructor(
     readonly localKey: string,
     readonly runtimeRendering: RuntimeRenderingEmission,
+    readonly expressionResourcePlan: RuntimeExpressionResourcePlan,
     readonly scopes: TemplateScopeConstructionEmission,
-    readonly resourceScope: TemplateResourceScope | null,
     readonly expressionWorld: CheckerExpressionTypeWorld,
   ) {}
 }
@@ -127,7 +125,7 @@ class I18nTranslationBindingIssueSourceSet {
 
 interface TranslationBindingIssueContext {
   readonly runtimeRendering: RuntimeRenderingEmission;
-  readonly evaluator: CheckerExpressionTypeEvaluator;
+  readonly expressionWorld: CheckerExpressionTypeWorld;
   readonly instructionScopes: RuntimeInstructionScopeLookup;
   readonly sourceExpressionContexts: RuntimeBindingSourceExpressionContextProjector;
 }
@@ -138,18 +136,17 @@ export class I18nTranslationBindingIssueMaterializer {
 
   constructor(
     readonly store: KernelStore,
+    readonly publication: KernelPublicationContext,
   ) {
     this.publisher = new RuntimeBindingIssuePublisher(store);
   }
 
   materialize(input: I18nTranslationBindingIssueMaterializationRequest): I18nTranslationBindingIssueEmission {
     const emission = this.recordsForTranslationBindingIssues(input);
-    if (emission.records.length > 0) {
-      this.store.commit(new KernelStoreBatch(emission.records, `i18n-translation-binding:${input.localKey}`));
-    }
-    for (const issue of emission.issues) {
-      this.store.productDetails.add(TemplateProductDetails.RuntimeBindingIssue, issue.productHandle, issue);
-    }
+    this.publication.publish(new KernelPublicationPlan(
+      new KernelStoreBatch(emission.records, `i18n-translation-binding:${input.localKey}`),
+      publishProductDetails(TemplateProductDetails.RuntimeBindingIssue, emission.issues),
+    ));
     return emission;
   }
 
@@ -160,15 +157,15 @@ export class I18nTranslationBindingIssueMaterializer {
     const records: KernelStoreRecord[] = [...source.records];
     const issues: RuntimeBindingIssue[] = [];
     const instructionScopes = instructionScopeLookup(input.scopes.instructionScopes);
-    const bindingExpressionScopes = new RuntimeBindingExpressionScopeProjector(this.store, input.expressionWorld);
     const context: TranslationBindingIssueContext = {
       runtimeRendering: input.runtimeRendering,
-      evaluator: input.expressionWorld.evaluator(input.resourceScope),
+      expressionWorld: input.expressionWorld,
       instructionScopes,
       sourceExpressionContexts: new RuntimeBindingSourceExpressionContextProjector(
         input.runtimeRendering,
         instructionScopes,
-        bindingExpressionScopes,
+        input.scopes.bindingExpressionScopes,
+        input.expressionResourcePlan,
       ),
     };
 
@@ -268,13 +265,15 @@ export class I18nTranslationBindingIssueMaterializer {
     if (expressionProductHandle == null) {
       return false;
     }
-    const ast = bindingExpressionAstForProduct(this.store, expressionProductHandle);
+    const ast = bindingExpressionAstForProduct(this.publication, expressionProductHandle);
     const scope = context.instructionScopes.scopeForBinding(context.runtimeRendering, binding);
     if (ast == null || scope == null) {
       return false;
     }
     const projection = context.sourceExpressionContexts.projectSource({
       binding,
+      expressionProductHandle,
+      expressionChainIndex: aggregateRuntimeBindingSourceExpressionChainIndex(ast),
       expression: ast,
       localKey: checkerExpressionTypeLocalKey(scope.productHandle, binding.productHandle, expressionProductHandle),
       sourceScope: scope,
@@ -282,7 +281,8 @@ export class I18nTranslationBindingIssueMaterializer {
     if (projection.kind === RuntimeBindingSourceExpressionProjectionKind.Open) {
       return false;
     }
-    const evaluation = context.evaluator.evaluate(
+    const renderContext = context.runtimeRendering.requireRenderContextForBinding(binding.productHandle);
+    const evaluation = context.expressionWorld.evaluator(renderContext.resourceScope).evaluate(
       checkerContextForRuntimeBindingSourceExpressionProjection(projection, true),
     );
     return evaluation.kind === CheckerExpressionTypeEvaluationResultKind.Type
@@ -296,7 +296,7 @@ export class I18nTranslationBindingIssueMaterializer {
     }
     const shape = typeReference.productHandle == null
       ? null
-      : this.store.productDetails.read(TypeSystemProductDetails.TypeShape, typeReference.productHandle);
+      : this.publication.readProductDetail(TypeSystemProductDetails.TypeShape, typeReference.productHandle);
     const carrier = shape?.carrier ?? null;
     if (carrier == null) {
       return typeReference.shapeKind === CheckerTypeShapeKind.Primitive

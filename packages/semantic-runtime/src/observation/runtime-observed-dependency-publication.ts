@@ -19,23 +19,18 @@ import {
   KernelVocabulary,
 } from '../kernel/vocabulary.js';
 import {
-  sourceAddressRecordsForRuntimeExpressionBounds,
-  type RuntimeExpressionSourceAddress,
-} from '../template/runtime-expression-source-address.js';
-import {
   runtimeObservedDependencyIdentityLocalName,
-  type RuntimeObservedDependencyDraft,
 } from './runtime-observed-dependency-draft.js';
+import type { RuntimeObservedDependencyOccurrence } from './runtime-observed-dependency.js';
 
-export interface RuntimeObservedDependencyProduct extends RuntimeObservedDependencyDraft {
+export interface RuntimeObservedDependencyProduct {
   readonly productHandle: ProductHandle;
   readonly identityHandle: IdentityHandle;
-  readonly sourceAddressHandle: AddressHandle | null;
+  readonly occurrence: RuntimeObservedDependencyOccurrence;
 }
 
 export interface RuntimeObservedDependencyPublicationOwner {
   readonly identityHandle: IdentityHandle | null;
-  readonly sourceAddressHandle: AddressHandle | null;
 }
 
 export interface RuntimeObservedDependencyPublicationClaim {
@@ -55,7 +50,6 @@ export interface RuntimeObservedDependencyPublicationInput {
 }
 
 interface RuntimeObservedDependencyPublicationFrame {
-  readonly dependencySource: RuntimeExpressionSourceAddress;
   readonly claims: readonly SemanticClaim[];
 }
 
@@ -70,13 +64,6 @@ export function runtimeObservedDependencyRecords(
 function runtimeObservedDependencyPublicationFrame(
   input: RuntimeObservedDependencyPublicationInput,
 ): RuntimeObservedDependencyPublicationFrame {
-  const dependencySource = sourceAddressRecordsForRuntimeExpressionBounds(
-    input.store,
-    input.dependency.sourceAddressHandle,
-    input.owner.sourceAddressHandle,
-    input.dependency.spanStart,
-    input.dependency.spanEnd,
-  );
   const claims = input.claims.map((claim) => new SemanticClaim(
     input.store.handles.claim(`${input.local}:${claim.localName}`),
     claim.subjectProductHandle,
@@ -84,7 +71,7 @@ function runtimeObservedDependencyPublicationFrame(
     input.dependency.productHandle,
     input.provenanceHandle,
   ));
-  return { dependencySource, claims };
+  return { claims };
 }
 
 function runtimeObservedDependencyKernelRecords(
@@ -92,19 +79,18 @@ function runtimeObservedDependencyKernelRecords(
   frame: RuntimeObservedDependencyPublicationFrame,
 ): readonly KernelStoreRecord[] {
   return [
-    ...frame.dependencySource.records,
     new CompilerIdentity(
       input.dependency.identityHandle,
       KernelVocabulary.Binding.ObservedDependency.key,
       input.owner.identityHandle,
-      frame.dependencySource.handle,
-      runtimeObservedDependencyIdentityLocalName(input.dependency, input.index),
+      input.dependency.occurrence.sourceAddressHandle,
+      runtimeObservedDependencyIdentityLocalName(input.dependency.occurrence, input.index),
     ),
     new MaterializedProduct(
       input.dependency.productHandle,
       KernelVocabulary.Binding.ObservedDependency.key,
       input.dependency.identityHandle,
-      frame.dependencySource.handle,
+      input.dependency.occurrence.sourceAddressHandle,
       input.provenanceHandle,
     ),
     ...frame.claims,

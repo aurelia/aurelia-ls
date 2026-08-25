@@ -100,11 +100,16 @@ export function filterMemoryRows(
   );
   const exactQueryFiltered = query === undefined
     ? structurallyFiltered
-    : structurallyFiltered.filter((row) => queryMatches(query, memorySearchText(row)));
+    : structurallyFiltered.filter((row) => queryMatches(query, memoryQuerySearchText(row)));
+  // Hidden records stay retrievable through structural filters and identity-field queries, but
+  // they must not ride weak-adjacency query expansion into unrelated result sets.
+  const adjacencyCandidates = structurallyFiltered.filter((row) =>
+    memoryRowNextActionPolicy(row) !== "hidden",
+  );
   const filtered = query === undefined
     ? exactQueryFiltered
     : memoryQueryExpandedRows(
-      structurallyFiltered,
+      adjacencyCandidates,
       exactQueryFiltered,
       query,
       memorySearchText,
@@ -330,6 +335,16 @@ function memorySearchText(row: AtlasMemoryRecordRow): readonly string[] {
     ...(row.record.anchors ?? []).map(atlasMemoryAnchorSearchText),
     ...row.liveChecks.flatMap(liveCheckSearchText),
   ];
+}
+
+/**
+ * Hidden records answer free-text queries only through identity fields; a large hidden body
+ * (guidance, rationale, anchors) must not make the record match unrelated queries.
+ */
+function memoryQuerySearchText(row: AtlasMemoryRecordRow): readonly string[] {
+  return memoryRowNextActionPolicy(row) === "hidden"
+    ? [row.id, row.kind, row.record.summary, ...row.domains]
+    : memorySearchText(row);
 }
 
 function rankMemoryRowsForInquiry(

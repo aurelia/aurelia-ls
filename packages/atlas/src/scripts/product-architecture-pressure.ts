@@ -3,6 +3,11 @@ import { performance } from "node:perf_hooks";
 import { countEntriesBy, groupBy } from "../collections.js";
 import { LensId } from "../inquiry/lens.js";
 import { RepoRootLocus } from "../inquiry/locus.js";
+import {
+  productArchitectureFieldProvenanceLabel,
+  productArchitectureOwnerLabel,
+  productArchitectureSameHandleFanOutGroups,
+} from "../inquiry/runtime/product-architecture-field-provenance-pressure.js";
 import { createApi } from "../session/index.js";
 import {
   answerValue,
@@ -132,6 +137,10 @@ interface ProductArchitecturePressureValue {
     readonly fieldNameExpression: string | null;
     readonly fieldNameLiteral: string | null;
     readonly provenanceExpression: string | null;
+    readonly provenanceExpressionOrigin:
+      | "exclusive-callback-switch-remap"
+      | "callback-parameter"
+      | "other";
     readonly filePath: string;
     readonly ownerFunctionName: string | null;
     readonly source?: SourceRef;
@@ -357,7 +366,7 @@ const kernelRecordOwnerGroups = kernelRecordOwnerPressureRows(kernelRecordRows);
 const kernelBatchOwnerGroups = kernelBatchOwnerPressureRows(kernelBatchRows);
 const fieldProvenanceFieldGroups = countEntriesBy(
   fieldProvenanceRows,
-  fieldProvenanceFieldLabel,
+  productArchitectureFieldProvenanceLabel,
 );
 const fieldProvenanceFileGroups = fieldProvenanceFilePressureRows(fieldProvenanceRows);
 const fieldProvenanceOwnerGroups = fieldProvenanceOwnerPressureRows(fieldProvenanceRows);
@@ -546,7 +555,7 @@ if (detail) {
       row.evidenceKindExpression ??
       "(no visible vocabulary expression)";
     console.log(
-      `- ${row.recordKind} via ${row.className ?? row.constructionKind} in ${kernelOwnerLabel(row)} at ${sourceLabel(row)}; vocabulary ${vocabulary}`,
+      `- ${row.recordKind} via ${row.className ?? row.constructionKind} in ${productArchitectureOwnerLabel(row)} at ${sourceLabel(row)}; vocabulary ${vocabulary}`,
     );
   }
   console.log("batch source samples");
@@ -557,7 +566,7 @@ if (detail) {
       ? "uncommitted construction"
       : `committed through ${row.commitReceiverExpression}`;
     console.log(
-      `- ${label} in ${kernelOwnerLabel(row)} at ${sourceLabel(row)}; ${receiver}; records ${row.recordsExpression ?? "(unknown records expression)"}`,
+      `- ${label} in ${productArchitectureOwnerLabel(row)} at ${sourceLabel(row)}; ${receiver}; records ${row.recordsExpression ?? "(unknown records expression)"}`,
     );
   }
 }
@@ -606,7 +615,7 @@ if (detail) {
   printEmptyRows(fieldProvenanceRows);
   for (const row of fieldProvenanceRows.slice(0, structureDisplayRows)) {
     console.log(
-      `- ${fieldProvenanceFieldLabel(row)} via ${row.constructionKind}/${row.fieldNameOrigin} in ${kernelOwnerLabel(row)} at ${sourceLabel(row)}; handle ${row.provenanceExpression ?? "(unknown provenance expression)"}`,
+      `- ${productArchitectureFieldProvenanceLabel(row)} via ${row.constructionKind}/${row.fieldNameOrigin} in ${productArchitectureOwnerLabel(row)} at ${sourceLabel(row)}; handle ${row.provenanceExpression ?? "(unknown provenance expression)"}`,
     );
   }
 }
@@ -916,7 +925,7 @@ function kernelRecordFilePressureRows(
 function kernelRecordOwnerPressureRows(
   rows: readonly NonNullable<ProductArchitecturePressureValue["kernelRecordConstructions"]>[number][],
 ): readonly KernelRecordOwnerPressureRow[] {
-  return [...groupBy(rows, kernelOwnerLabel)]
+  return [...groupBy(rows, productArchitectureOwnerLabel)]
     .map(([owner, group]) => ({
       owner,
       count: group.length,
@@ -956,7 +965,7 @@ function kernelBatchFilePressureRows(
 function kernelBatchOwnerPressureRows(
   rows: readonly NonNullable<ProductArchitecturePressureValue["kernelRecordBatches"]>[number][],
 ): readonly KernelBatchOwnerPressureRow[] {
-  return [...groupBy(rows, kernelOwnerLabel)]
+  return [...groupBy(rows, productArchitectureOwnerLabel)]
     .map(([owner, group]) => ({
       owner,
       count: group.length,
@@ -980,7 +989,7 @@ function fieldProvenanceFilePressureRows(
     .map(([filePath, group]) => ({
       filePath,
       count: group.length,
-      fields: compactCountSummary(group, fieldProvenanceFieldLabel),
+      fields: compactCountSummary(group, productArchitectureFieldProvenanceLabel),
       provenanceExpressions: compactCountSummary(
         group,
         (row) => row.provenanceExpression ?? "(unknown provenance expression)",
@@ -996,11 +1005,11 @@ function fieldProvenanceFilePressureRows(
 function fieldProvenanceOwnerPressureRows(
   rows: readonly NonNullable<ProductArchitecturePressureValue["fieldProvenanceConstructions"]>[number][],
 ): readonly FieldProvenanceOwnerPressureRow[] {
-  return [...groupBy(rows, kernelOwnerLabel)]
+  return [...groupBy(rows, productArchitectureOwnerLabel)]
     .map(([owner, group]) => ({
       owner,
       count: group.length,
-      fields: compactCountSummary(group, fieldProvenanceFieldLabel),
+      fields: compactCountSummary(group, productArchitectureFieldProvenanceLabel),
       provenanceExpressions: compactCountSummary(
         group,
         (row) => row.provenanceExpression ?? "(unknown provenance expression)",
@@ -1016,38 +1025,14 @@ function fieldProvenanceOwnerPressureRows(
 function fieldProvenanceFanOutPressureRows(
   rows: readonly NonNullable<ProductArchitecturePressureValue["fieldProvenanceConstructions"]>[number][],
 ): readonly FieldProvenanceFanOutPressureRow[] {
-  return [...groupBy(rows, (row) =>
-    `${kernelOwnerLabel(row)}\u0000${row.provenanceExpression ?? "(unknown provenance expression)"}`
-  )]
-    .map(([, group]) => {
-      const first = group[0]!;
-      const fieldCount = new Set(group.map(fieldProvenanceFieldLabel)).size;
-      return {
-        owner: kernelOwnerLabel(first),
-        provenanceExpression: first.provenanceExpression ?? "(unknown provenance expression)",
-        count: group.length,
-        fieldCount,
-        fields: compactCountSummary(group, fieldProvenanceFieldLabel),
-        firstSource: sourceLabel(first),
-      };
-    })
-    .filter((row) => row.count >= 4 && row.fieldCount >= 2)
-    .sort((left, right) =>
-      right.count - left.count ||
-      right.fieldCount - left.fieldCount ||
-      left.owner.localeCompare(right.owner) ||
-      left.provenanceExpression.localeCompare(right.provenanceExpression),
-    );
-}
-
-function kernelOwnerLabel(row: { readonly filePath: string; readonly ownerFunctionName: string | null }): string {
-  return `${row.filePath} :: ${row.ownerFunctionName ?? "(module top level)"}`;
-}
-
-function fieldProvenanceFieldLabel(
-  row: NonNullable<ProductArchitecturePressureValue["fieldProvenanceConstructions"]>[number],
-): string {
-  return row.fieldNameLiteral ?? row.fieldNameExpression ?? "(dynamic field name)";
+  return productArchitectureSameHandleFanOutGroups(rows).map((group) => ({
+    owner: group.owner,
+    provenanceExpression: group.provenanceExpression,
+    count: group.rows.length,
+    fieldCount: group.fieldCount,
+    fields: compactCountSummary(group.rows, productArchitectureFieldProvenanceLabel),
+    firstSource: sourceLabel(group.rows[0]!),
+  }));
 }
 
 function classRoleLabel(

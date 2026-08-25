@@ -1,6 +1,6 @@
 <h1 t="dashboard.title"></h1>
 <p t.bind="titleKey"></p>
-<button click.dispatch:main="dispatch()">Dispatch</button>
+<button click.dispatch:main="{ type: 'queue' }">Dispatch</button>
 
 <button load="orders">Orders</button>
 <au-viewport></au-viewport>
@@ -14,5 +14,7 @@
 </validation-container>
 
 <p>${titleKey | t}</p>
+<p textcontent.bind="titleKey & t"></p>
 <input value.bind="displayName & validate">
-<section textcontent.bind="dashboardState & state"></section>
+<input type="checkbox" checked.bind="ready & state">
+<output>${queued & state:'main'}</output>

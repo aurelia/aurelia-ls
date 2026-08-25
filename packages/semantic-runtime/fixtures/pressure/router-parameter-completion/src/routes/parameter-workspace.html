@@ -1,0 +1,16 @@
+<nav>
+  <a load="route: product-detail; params.bind: { productId: 'coffee' }">Filled alias</a>
+  <a load="route: product-detail; params.bind: { productId: 'coffee',  }">Next key</a>
+  <a load="route: product-detail; params.bind:{ }">Empty alias</a>
+  <a load="route: localized-detail; params.bind: { }">Optional parameter</a>
+  <a load="route: files; params.bind: { }">Star parameter</a>
+  <a load="route.bind: 'product-detail'; params.bind: { }">Bound literal route</a>
+  <a load="route.bind: productRoute; params.bind: { }">Reduced state route</a>
+  <a load="route: product-detail; params.bind: routeParams">Bound params value</a>
+  <a load="route: product-detail; params.bind: { productId: selectedRoute }">Parameter value expression</a>
+  <a load="route: product-detail; params.bind: { productId: { nested: selectedRoute } }">Nested parameter value</a>
+  <a load="route: product-detail; params.bind: { productId: {  ">Incomplete nested parameter value</a>
+  <a load="route: product-detail; context.bind: alternateContext; params.bind: { }">Open context route</a>
+  <a load="route.bind: selectedRoute; params.bind: { }">Open route</a>
+</nav>
+<au-viewport></au-viewport>

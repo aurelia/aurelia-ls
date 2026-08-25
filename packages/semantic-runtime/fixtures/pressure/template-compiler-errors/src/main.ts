@@ -3,23 +3,17 @@ import {
   TemplateCompilerErrorsApp,
   TemplateProbeCustomAttribute,
 } from './template-compiler-errors-app';
-import { SurrogateInvalidAttribute } from './surrogate-invalid-attribute';
-import { SurrogateTemplateProbe } from './surrogate-template-probe';
-import { LocalBindableProbe } from './local-bindable-probe';
-import { LocalNestedProbe } from './local-nested-probe';
-import { LocalOnlyProbe } from './local-only-probe';
-import { LocalRootProbe } from './local-root-probe';
+import './local-bindable-probe';
+import './local-nested-probe';
+import './local-only-probe';
+import './local-root-probe';
+import './surrogate-invalid-attribute';
+import './surrogate-template-probe';
 
 new Aurelia()
   .register(
     StandardConfiguration,
     TemplateProbeCustomAttribute,
-    SurrogateInvalidAttribute,
-    SurrogateTemplateProbe,
-    LocalBindableProbe,
-    LocalNestedProbe,
-    LocalOnlyProbe,
-    LocalRootProbe,
   )
   .app({
     host: document.body,

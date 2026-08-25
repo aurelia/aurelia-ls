@@ -435,6 +435,32 @@ export class Foo {
       assertSuccess(ts, diags);
     });
 
+    it(`template controller - repeat object binding alias - pass`, async () => {
+      const { ts, diags } = await compileFromEntry({
+        html: `<template repeat.for="{ x: label } of prop">\${label.toUpperCase()}</template>`,
+        markupFile: "view.html",
+        isJs: lang.isJs,
+        entrySource: entryForObjectArray(lang.isJs, /*withX*/ true),
+        preludeText: PRELUDE_TS,
+        exprParser, attrParser,
+        overlayBaseName: nextBase(lang.langKey, "obj-binding-alias-pass"),
+      });
+      assertSuccess(ts, diags);
+    });
+
+    it(`template controller - repeat object binding alias - fail`, async () => {
+      const { ts, diags } = await compileFromEntry({
+        html: `<template repeat.for="{ x: label } of prop">\${label.toFixed()}</template>`,
+        markupFile: "view.html",
+        isJs: lang.isJs,
+        entrySource: entryForObjectArray(lang.isJs, /*withX*/ true),
+        preludeText: PRELUDE_TS,
+        exprParser, attrParser,
+        overlayBaseName: nextBase(lang.langKey, "obj-binding-alias-fail"),
+      });
+      assertFailure(ts, diags, [/Property 'toFixed' does not exist on type 'string'/]);
+    });
+
     it(`template controller - repeat object[] - fail`, async () => {
       const { ts, diags } = await compileFromEntry({
         html: `<template repeat.for="item of prop">\${item.x.toLowerCase()}</template>`,

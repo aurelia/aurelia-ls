@@ -4,7 +4,6 @@ import type {
   AccessMemberExpression,
   CallMemberExpression,
   ExpressionAstNode,
-  IsAssign,
 } from '../expression/ast.js';
 import type { AddressHandle } from '../kernel/handles.js';
 import {
@@ -15,6 +14,12 @@ import {
   CheckerTypeShapeAccess,
   CheckerTypeShapeMemberValueAccessKind,
 } from './checker-type-shape-access.js';
+import {
+  CheckerExpressionAccessTarget,
+  CheckerExpressionAccessTargetResolution,
+  checkerExpressionAccessTargetResolutionForMemberAccess,
+  literalPropertyKeyForExpression,
+} from './expression-access-target.js';
 import {
   type CheckerExpressionTypeEvaluation,
   CheckerExpressionTypeEvaluationResultKind,
@@ -155,7 +160,7 @@ export class CheckerExpressionAccessProjector {
     ownerSourceAddressHandle: AddressHandle | null,
     localKey: string,
   ): CheckerExpressionTypeEvaluation {
-    const literalKey = literalPropertyKey(expression.key);
+    const literalKey = literalPropertyKeyForExpression(expression.key);
     if (literalKey != null) {
       const literalMember = this.evaluateMemberOnType(
         expression,
@@ -303,6 +308,75 @@ export class CheckerExpressionAccessProjector {
       `Member '${memberName}' does not carry a value type that can be projected.`,
       access.valueReference,
     );
+  }
+
+  /** Resolve one named member against the same lazy/eager member substrate used by expression evaluation. */
+  resolveMemberTarget(
+    ownerType: CheckerTypeShape,
+    memberName: string,
+    localKey: string,
+  ): CheckerExpressionAccessTargetResolution {
+    return this.targetResolutionForMemberAccess(
+      ownerType,
+      this.typeAccess.memberValueAccess(ownerType, memberName, localKey),
+    );
+  }
+
+  /** Resolve literal, finite, and index-signature keyed targets without collapsing finite alternatives. */
+  resolveKeyedTarget(
+    expression: AccessKeyedExpression,
+    context: CheckerExpressionTypeEvaluationContext,
+    ownerType: CheckerTypeShape,
+  ): CheckerExpressionAccessTargetResolution {
+    const localKey = `${context.projectionLocalKey()}:access-target:keyed`;
+    const literalKey = literalPropertyKeyForExpression(expression.key);
+    if (literalKey != null) {
+      return this.resolveMemberTarget(ownerType, literalKey, `${localKey}:literal:${literalKey}`);
+    }
+    const key = this.host.evaluateNode(context.child(expression.key, 'access-target-key'));
+    if (key.kind === CheckerExpressionTypeEvaluationResultKind.Open) {
+      return CheckerExpressionAccessTargetResolution.open();
+    }
+    const finite = this.typeAccess.finiteKeyedMemberValueAccesses(
+      ownerType,
+      key.typeShape,
+      `${localKey}:finite`,
+    );
+    if (finite != null) {
+      const targets = finite.flatMap((access) => {
+        const resolution = this.targetResolutionForMemberAccess(ownerType, access);
+        return resolution.targets;
+      });
+      return targets.length === finite.length
+        ? CheckerExpressionAccessTargetResolution.finite(targets)
+        : CheckerExpressionAccessTargetResolution.open();
+    }
+    const indexedValue = this.typeAccess.indexedValueReferenceForKeyType(ownerType, key.typeShape);
+    const indexSignatureValue = indexedValue == null
+      ? this.typeAccess.indexSignatureValueType(
+          ownerType,
+          key.typeShape,
+          `${localKey}:index-signature`,
+          context.sourceAddressHandle,
+        )
+      : null;
+    if (indexedValue != null || indexSignatureValue != null) {
+      return CheckerExpressionAccessTargetResolution.indexed(new CheckerExpressionAccessTarget(
+        ownerType.productHandle,
+        ownerType.identityHandle,
+        null,
+        null,
+        ownerType.declarationSourceAddressHandle ?? ownerType.sourceAddressHandle,
+      ));
+    }
+    return CheckerExpressionAccessTargetResolution.missing();
+  }
+
+  private targetResolutionForMemberAccess(
+    ownerType: CheckerTypeShape,
+    access: ReturnType<CheckerTypeShapeAccess['memberValueAccess']>,
+  ): CheckerExpressionAccessTargetResolution {
+    return checkerExpressionAccessTargetResolutionForMemberAccess(this.typeAccess, ownerType, access);
   }
 
   private evaluateSlotMemberRefinement(
@@ -521,14 +595,4 @@ function accessScopeOwnerSlot(
     return null;
   }
   return scope.lookup(expression.object.name.name, expression.object.ancestor).slot;
-}
-
-function literalPropertyKey(expression: IsAssign): string | null {
-  if (expression.$kind !== 'PrimitiveLiteral') {
-    return null;
-  }
-  if (typeof expression.value === 'string' || typeof expression.value === 'number') {
-    return String(expression.value);
-  }
-  return null;
 }

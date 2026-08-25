@@ -21,11 +21,22 @@ export function readStateStoreRows(
       initialStateKind: stateStore.initialStateKind,
       optionsOrHandlerKind: stateStore.optionsOrHandlerKind,
       actionHandlerCount: stateStore.actionHandlerCount,
+      containerSource: describeAddress(store, stateStore.container.addressHandle),
+      registrationSource: describeAddress(store, stateStore.registrationSourceAddressHandle),
+      configurationValueSource: describeAddress(store, stateStore.configurationValueSourceAddressHandle),
       source: describeAddress(store, stateStore.sourceAddressHandle),
       ...(handles ? {
         handles: {
           productHandle: stateStore.productHandle,
           identityHandle: stateStore.identityHandle,
+          containerProductHandle: stateStore.container.productHandle,
+          containerIdentityHandle: stateStore.container.identityHandle,
+          registrationProductHandle: stateStore.registrationProductHandle,
+          registrationAdmissionProductHandle: stateStore.registrationAdmissionProductHandle,
+          registrationSourceAddressHandle: stateStore.registrationSourceAddressHandle,
+          configurationStepProductHandle: stateStore.configurationStepProductHandle,
+          configurationStepIdentityHandle: stateStore.configurationStepIdentityHandle,
+          configurationValueSourceAddressHandle: stateStore.configurationValueSourceAddressHandle,
           sourceAddressHandle: stateStore.sourceAddressHandle,
           nameSourceAddressHandle: stateStore.nameSourceAddressHandle,
           initialStateSourceAddressHandle: stateStore.initialStateSourceAddressHandle,
@@ -41,7 +52,7 @@ export function readStateStoreRows(
     );
 }
 
-/** Project @fromState-created StateGetterBinding products into stable API rows. */
+/** Project source-level @fromState binding definitions into stable API rows. */
 export function readStateGetterBindingRows(
   emission: AureliaAppWorldProjectEmission,
   store: KernelStore,

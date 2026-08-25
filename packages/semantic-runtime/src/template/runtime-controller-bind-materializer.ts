@@ -1,8 +1,17 @@
 import type { SemanticClaim } from '../kernel/claim.js';
 import type {
   ProductHandle,
+  ProvenanceHandle,
 } from '../kernel/handles.js';
-import { OpenSeam } from '../kernel/open-seam.js';
+import {
+  OpenSeam,
+  OpenSeamReasonKind,
+} from '../kernel/open-seam.js';
+import {
+  KernelPublicationPlan,
+  publishProductDetails,
+  type KernelPublicationContext,
+} from '../kernel/publication.js';
 import {
   KernelStoreBatch,
   type KernelStore,
@@ -12,17 +21,16 @@ import {
   KernelVocabulary,
 } from '../kernel/vocabulary.js';
 import {
-  NodeObserverLocatorConfiguration,
   ObserverLocator,
+  ObserverLocatorConfiguration,
   ObserverLocatorLookupRequest,
   ObserverLocatorLookupResult,
 } from '../observation/observer-locator.js';
 import { instructionScopeLookup } from '../observation/runtime-binding-expression.js';
 import { CustomElementDefinition } from '../resources/custom-element-definition.js';
 import { ResourceProductDetails } from '../resources/product-details.js';
-import type { TemplateResourceScope } from './compiler-world.js';
 import type { TypeSystemProject } from '../type-system/project.js';
-import type { StateStoreConfiguration } from '../state/model.js';
+import type { CheckerExpressionTypeWorld } from '../type-system/expression-type-world.js';
 import {
   configuredStateStoreForName,
 } from '../state/state-store-identity.js';
@@ -38,7 +46,9 @@ import {
   type RuntimeBindingBindHost,
   RuntimeBindingBindContext,
   RuntimeBindingTargetAccess,
+  RuntimeBindingTargetAccessAuthority,
   RuntimeBindingTargetAccessLookup,
+  RuntimeBindingTargetObserverCacheDisposition,
   RuntimeBindingTarget,
   type RuntimeBindingTargetAccessRequest,
   RuntimeBindingTargetOperation,
@@ -48,15 +58,13 @@ import {
   type RuntimeBindingSourceOperationRequest,
   RuntimeBindingSourceOperationKind,
   RuntimeBindingTargetKind,
+  SpreadBinding,
   SpreadValueBinding,
   StateDispatchBinding,
 } from './runtime-binding.js';
 import type {
   RuntimeRenderingEmission,
 } from './runtime-rendering-materializer.js';
-import type {
-  RuntimeBindingRenderContext,
-} from './runtime-rendered-instruction-recorder.js';
 import type {
   RuntimeControllerBindHost,
   RuntimeControllerFrame,
@@ -71,25 +79,37 @@ import {
   RuntimeControllerBindPublisher,
   type RuntimeControllerBindSourceSet,
 } from './runtime-controller-bind-publication.js';
+import type { RuntimeExpressionResourcePlan } from './runtime-expression-resource-plan.js';
 import {
-  effectivePropertyBindingMode,
-} from './runtime-binding-mode-behavior.js';
+  runtimeBindingAccessTarget,
+  runtimeBindingTargetController,
+} from './runtime-binding-target-resolution.js';
+import {
+  RuntimeBindingIssueKind,
+  RuntimeBindingIssuePhase,
+  RuntimeBindingIssuePublisher,
+  type RuntimeBindingIssue,
+} from './runtime-binding-issue.js';
+import { RuntimeHtmlBindingFrameworkErrorCode } from './framework-error-code.js';
+import { RuntimeOperationReachability } from '../runtime-expression/runtime-operation.js';
 
 export interface RuntimeControllerBindMaterializationRequest {
   /** Store-local key shared with the template compilation pass. */
   readonly localKey: string;
   /** Runtime bindings and render contexts produced by renderer dispatch. */
   readonly runtimeRendering: RuntimeRenderingEmission;
+  /** Reached binding-behavior effects visible before PropertyBinding selects its target access. */
+  readonly expressionResourcePlan: RuntimeExpressionResourcePlan;
   /** Checker-backed scopes available to binding.bind source observation. */
   readonly scopes: TemplateScopeConstructionEmission;
   /** Current TypeChecker epoch used by ObserverLocator lookup, when available. */
   readonly typeSystem: TypeSystemProject | null;
-  /** Compiler resource scope visible when binding.bind executes binding behaviors. */
-  readonly resourceScope: TemplateResourceScope | null;
-  /** App-authored NodeObserverLocator service state visible to this runtime binding analysis. */
-  readonly nodeObserverLocatorConfiguration?: NodeObserverLocatorConfiguration | null;
-  /** App-authored @aurelia/state store configurations visible to binding-source operation analysis. */
-  readonly stateStores?: readonly StateStoreConfiguration[] | null;
+  /** Runtime-analysis expression world whose projector owns this generation's checker facts. */
+  readonly expressionWorld: CheckerExpressionTypeWorld;
+  /** App-authored ObserverLocator service state visible to this runtime binding analysis. */
+  readonly observerLocatorConfiguration: ObserverLocatorConfiguration;
+  /** Whether this standalone analysis root is proven to be the app root in its compiler world. */
+  readonly isAppRootDefinition: boolean;
 }
 
 export class RuntimeControllerBindEmission {
@@ -106,6 +126,8 @@ export class RuntimeControllerBindEmission {
     readonly sourceOperations: readonly RuntimeBindingSourceOperation[],
     /** Open Controller.bind pressures that should remain visible to inquiry. */
     readonly openSeams: readonly OpenSeam[],
+    /** Framework-runtime issues discovered while bindings execute their bind lifecycle. */
+    readonly bindingIssues: readonly RuntimeBindingIssue[],
     /** Kernel records emitted for target products, provenance, and claims. */
     readonly records: readonly KernelStoreRecord[],
   ) {
@@ -163,6 +185,7 @@ class RuntimeControllerBindMaterializationHost implements RuntimeControllerBindH
   constructor(
     private readonly materializer: RuntimeControllerBindMaterializer,
     private readonly input: RuntimeControllerBindMaterializationRequest,
+    private readonly observerLocator: ObserverLocator,
     private readonly source: RuntimeControllerBindSourceSet,
     private readonly records: KernelStoreRecord[],
     private readonly claims: SemanticClaim[],
@@ -170,31 +193,42 @@ class RuntimeControllerBindMaterializationHost implements RuntimeControllerBindH
     private readonly targetOperations: RuntimeBindingTargetOperation[],
     private readonly sourceOperations: RuntimeBindingSourceOperation[],
     private readonly openSeams: OpenSeam[],
+    private readonly bindingIssues: RuntimeBindingIssue[],
   ) {}
 
   inputForBinding(
     controller: RuntimeControllerFrame,
     binding: RuntimeBinding,
-    index: number,
-  ): RuntimeBindingBindContext {
-    const renderContext = this.input.runtimeRendering.readRenderContextForBinding(binding.productHandle);
-    const targetController = targetControllerForContext(renderContext);
+  ): RuntimeBindingBindContext | null {
+    if (this.input.isAppRootDefinition
+      && binding instanceof SpreadBinding
+      && this.materializer.spreadBindingHasNoParentScope(controller, this.input.scopes)) {
+      this.materializer.recordMissingSpreadScope(
+        `${this.input.localKey}:controller:${controller.productHandle}:binding:${binding.productHandle}`,
+        binding,
+        this.source,
+        this.records,
+        this.bindingIssues,
+      );
+      return null;
+    }
+    const renderContext = this.input.runtimeRendering.requireRenderContextForBinding(binding.productHandle);
+    const targetController = runtimeBindingTargetController(this.input.runtimeRendering, binding);
     this.targetControllerByBinding.set(binding.productHandle, targetController);
-    const local = renderContext?.local
-      ?? `${this.input.localKey}:controller:${controller.productHandle}:binding:${index}`;
     return new RuntimeBindingBindContext(
-      `${local}:binding:${binding.productHandle}`,
+      `${renderContext.local}:binding:${binding.productHandle}`,
       this,
       binding instanceof SpreadValueBinding
         ? this.materializer.spreadValueTargetProperties(targetController)
-        : [],
-      (propertyBinding) => effectivePropertyBindingMode(this.materializer.store, propertyBinding, this.input.resourceScope),
+        : null,
+      (propertyBinding) => this.input.expressionResourcePlan.effectivePropertyBindingMode(propertyBinding),
     );
   }
 
   materializeTargetAccess(request: RuntimeBindingTargetAccessRequest): RuntimeBindingTargetAccess {
     return this.materializer.materializeTargetAccess(
       this.input,
+      this.observerLocator,
       request,
       this.targetControllerByBinding.get(request.binding.productHandle) ?? null,
       this.source,
@@ -221,6 +255,7 @@ class RuntimeControllerBindMaterializationHost implements RuntimeControllerBindH
   materializeSourceOperation(request: RuntimeBindingSourceOperationRequest): RuntimeBindingSourceOperation {
     return this.materializer.materializeSourceOperation(
       this.input,
+      this.observerLocator,
       request,
       this.targetControllerByBinding.get(request.binding.productHandle) ?? null,
       this.source,
@@ -234,48 +269,46 @@ class RuntimeControllerBindMaterializationHost implements RuntimeControllerBindH
 
 /** Materializes Controller.bind target-access products after renderer dispatch has created runtime bindings. */
 export class RuntimeControllerBindMaterializer {
-  private observerLocator: ObserverLocator;
   private readonly publisher: RuntimeControllerBindPublisher;
+  private readonly bindingIssuePublisher: RuntimeBindingIssuePublisher;
 
   constructor(
     /** Hot analysis store that receives controller bind-time products. */
     readonly store: KernelStore,
+    readonly publication: KernelPublicationContext,
   ) {
-    this.observerLocator = new ObserverLocator(store);
-    this.publisher = new RuntimeControllerBindPublisher(store);
+    this.publisher = new RuntimeControllerBindPublisher(publication);
+    this.bindingIssuePublisher = new RuntimeBindingIssuePublisher(store);
   }
 
   materialize(input: RuntimeControllerBindMaterializationRequest): RuntimeControllerBindEmission {
-    this.observerLocator = new ObserverLocator(
+    const observerLocator = new ObserverLocator(
       this.store,
-      input.nodeObserverLocatorConfiguration ?? NodeObserverLocatorConfiguration.empty,
+      input.expressionWorld.projector,
+      input.observerLocatorConfiguration,
     );
-    const emission = this.recordsForControllerBind(input);
-    if (emission.records.length > 0) {
-      this.store.commit(new KernelStoreBatch(emission.records, `runtime-controller-bind:${input.localKey}`));
-    }
-    this.registerProductDetails(emission);
+    const emission = this.recordsForControllerBind(input, observerLocator);
+    this.publication.publish(new KernelPublicationPlan(
+      new KernelStoreBatch(emission.records, `runtime-controller-bind:${input.localKey}`),
+      [
+        ...publishProductDetails(TemplateProductDetails.RuntimeBindingTargetAccess, emission.targetAccesses),
+        ...publishProductDetails(TemplateProductDetails.RuntimeBindingTargetOperation, emission.targetOperations),
+        ...publishProductDetails(TemplateProductDetails.RuntimeBindingSourceOperation, emission.sourceOperations),
+        ...publishProductDetails(TemplateProductDetails.RuntimeBindingIssue, emission.bindingIssues),
+      ],
+    ));
     return emission;
   }
 
-  private registerProductDetails(emission: RuntimeControllerBindEmission): void {
-    for (const access of emission.targetAccesses) {
-      this.store.productDetails.add(TemplateProductDetails.RuntimeBindingTargetAccess, access.productHandle, access);
-    }
-    for (const operation of emission.targetOperations) {
-      this.store.productDetails.add(TemplateProductDetails.RuntimeBindingTargetOperation, operation.productHandle, operation);
-    }
-    for (const operation of emission.sourceOperations) {
-      this.store.productDetails.add(TemplateProductDetails.RuntimeBindingSourceOperation, operation.productHandle, operation);
-    }
-  }
-
-  private resolveTargetAccess(input: ObserverLocatorLookupRequest): ObserverLocatorLookupResult {
+  private resolveTargetAccess(
+    observerLocator: ObserverLocator,
+    input: ObserverLocatorLookupRequest,
+  ): ObserverLocatorLookupResult {
     switch (input.lookup) {
       case RuntimeBindingTargetAccessLookup.Accessor:
-        return this.observerLocator.getAccessor(input);
+        return observerLocator.getAccessor(input);
       case RuntimeBindingTargetAccessLookup.Observer:
-        return this.observerLocator.getObserver(input);
+        return observerLocator.getObserver(input);
       case RuntimeBindingTargetAccessLookup.Open:
         return ObserverLocatorLookupResult.open(
           input,
@@ -284,18 +317,23 @@ export class RuntimeControllerBindMaterializer {
     }
   }
 
-  private recordsForControllerBind(input: RuntimeControllerBindMaterializationRequest): RuntimeControllerBindEmission {
+  private recordsForControllerBind(
+    input: RuntimeControllerBindMaterializationRequest,
+    observerLocator: ObserverLocator,
+  ): RuntimeControllerBindEmission {
     const records: KernelStoreRecord[] = [];
     const targetAccesses: RuntimeBindingTargetAccess[] = [];
     const targetOperations: RuntimeBindingTargetOperation[] = [];
     const sourceOperations: RuntimeBindingSourceOperation[] = [];
     const openSeams: OpenSeam[] = [];
+    const bindingIssues: RuntimeBindingIssue[] = [];
     const claims: SemanticClaim[] = [];
     const source = this.publisher.recordsForSource(input.localKey);
     records.push(...source.records);
     const host = new RuntimeControllerBindMaterializationHost(
       this,
       input,
+      observerLocator,
       source,
       records,
       claims,
@@ -303,6 +341,7 @@ export class RuntimeControllerBindMaterializer {
       targetOperations,
       sourceOperations,
       openSeams,
+      bindingIssues,
     );
 
     for (const controller of input.runtimeRendering.controllers) {
@@ -313,11 +352,53 @@ export class RuntimeControllerBindMaterializer {
     }
 
     records.push(...claims);
-    return new RuntimeControllerBindEmission(targetAccesses, targetOperations, sourceOperations, openSeams, records);
+    return new RuntimeControllerBindEmission(
+      targetAccesses,
+      targetOperations,
+      sourceOperations,
+      openSeams,
+      bindingIssues,
+      records,
+    );
+  }
+
+  spreadBindingHasNoParentScope(
+    controller: RuntimeControllerFrame,
+    scopes: TemplateScopeConstructionEmission,
+  ): boolean {
+    const scopeProductHandle = controller.readScopeReference()?.productHandle ?? null;
+    if (scopeProductHandle == null) {
+      return false;
+    }
+    const scope = scopes.readScopes().find((candidate) => candidate.productHandle === scopeProductHandle) ?? null;
+    return scope != null && scope.runtimeParent == null;
+  }
+
+  recordMissingSpreadScope(
+    local: string,
+    binding: SpreadBinding,
+    source: RuntimeControllerBindSourceSet,
+    records: KernelStoreRecord[],
+    bindingIssues: RuntimeBindingIssue[],
+  ): void {
+    const publication = this.bindingIssuePublisher.publish(
+      `${local}:issue:no-spread-scope-context`,
+      binding.toReference(),
+      binding.identityHandle,
+      source.provenanceHandle,
+      RuntimeBindingIssuePhase.SpreadBind,
+      RuntimeBindingIssueKind.SpreadScopeContextMissing,
+      'SpreadBinding.bind requires the hydration-context controller scope to have a parent scope.',
+      RuntimeHtmlBindingFrameworkErrorCode.NoSpreadScopeContextFound,
+      binding.sourceAddressHandle,
+    );
+    records.push(...publication.records);
+    bindingIssues.push(publication.issue);
   }
 
   materializeTargetAccess(
     input: RuntimeControllerBindMaterializationRequest,
+    observerLocator: ObserverLocator,
     request: RuntimeBindingTargetAccessRequest,
     targetController: RuntimeControllerFrame | null,
     source: RuntimeControllerBindSourceSet,
@@ -326,22 +407,85 @@ export class RuntimeControllerBindMaterializer {
     targetAccesses: RuntimeBindingTargetAccess[],
     openSeams: OpenSeam[],
   ): RuntimeBindingTargetAccess {
-    const target = this.targetAccessTarget(request.binding, targetController);
-    const lookup = this.resolveTargetAccess(this.targetAccessLookupRequest(input, request, target));
-    const publication = this.publisher.targetAccessPublication(`${request.localKey}:target-access`, request, target, lookup, source);
-    if (lookup.openReason != null) {
-      this.publisher.recordOpenSeam(
-        `${publication.local}:open`,
+    const target = runtimeBindingAccessTarget(this.publication, request.binding, targetController);
+    const ordinaryLookup = this.resolveTargetAccess(
+      observerLocator,
+      this.targetAccessLookupRequest(input, request, target),
+    );
+    const setup = targetController?.readObserverSetup(request.targetProperty) ?? null;
+    const setupLookup = setup == null
+      ? ordinaryLookup
+      : (
+          setup.lookup != null
+          && (
+            setup.lookup.observerCacheDisposition === RuntimeBindingTargetObserverCacheDisposition.Cached
+            || setup.lookup.observerCacheDisposition === RuntimeBindingTargetObserverCacheDisposition.Open
+          )
+            ? setup.lookup
+            : ordinaryLookup
+        ).forControllerSetupAccess(
+          request.lookup,
+          setup.outcome,
+          setup.provenanceHandles,
+        );
+    const rendererLookup = request.binding instanceof PropertyBinding
+      && request.binding.rendererTargetObserverStrategy != null
+      && target.targetKind === RuntimeBindingTargetKind.Node
+      ? setupLookup.withTargetObserver(
+        request.binding.rendererTargetObserverStrategy,
+        [],
+        RuntimeBindingTargetAccessAuthority.RuntimeRendererImplementation,
+        this.productProvenanceHandles(request.binding.renderer.productHandle),
+      )
+      : setupLookup;
+    const targetObserver = input.expressionResourcePlan.readTargetObserverOverride(request.binding.productHandle);
+    const lookup = targetObserver == null
+      ? rendererLookup
+      : rendererLookup.withTargetObserver(
+        targetObserver.strategy,
+        targetObserver.eventNames,
+        RuntimeBindingTargetAccessAuthority.BindingBehavior,
+        targetObserver.provenanceHandles,
+      );
+    const local = `${request.localKey}:target-access`;
+    const setupOpenSeamHandles = setup?.openSeamHandles ?? [];
+    const openSeam = lookup.openReason == null || setupOpenSeamHandles.length > 0
+      ? null
+      : this.publisher.recordOpenSeam(
+        `${local}:open`,
         lookup.openReason,
         request.binding.sourceAddressHandle,
         source,
         records,
         openSeams,
         KernelVocabulary.Binding.OpenTargetAccess.key,
+        [OpenSeamReasonKind.BindingObserverSelectionOpen],
       );
-    }
+    const openSeamHandles = [...new Set([
+      ...setupOpenSeamHandles,
+      ...(openSeam == null ? [] : [openSeam.handle]),
+    ])].sort();
+    const publication = this.publisher.targetAccessPublication(
+      local,
+      request,
+      target,
+      lookup,
+      this.bindingOperationReachability(input, request.binding),
+      source,
+      openSeamHandles,
+    );
     publication.appendTo(records, claims, targetAccesses);
     return publication.product;
+  }
+
+  private productProvenanceHandles(
+    productHandle: ProductHandle | null,
+  ): readonly ProvenanceHandle[] {
+    if (productHandle == null) {
+      return [];
+    }
+    const product = this.publication.read(productHandle);
+    return product?.kind === 'materialized-product' ? [product.provenanceHandle] : [];
   }
 
   materializeTargetOperation(
@@ -363,24 +507,38 @@ export class RuntimeControllerBindMaterializer {
     const operationKind = openReason == null
       ? request.operationKind
       : RuntimeBindingTargetOperationKind.Open;
-    const publication = this.publisher.targetOperationPublication(`${request.localKey}:target-operation`, request, target, operationKind, openReason, source);
-    if (openReason != null) {
-      this.publisher.recordOpenSeam(
-        `${publication.local}:open`,
+    const local = `${request.localKey}:target-operation`;
+    const openSeam = openReason == null
+      ? null
+      : this.publisher.recordOpenSeam(
+        `${local}:open`,
         openReason,
         request.binding.sourceAddressHandle,
         source,
         records,
         openSeams,
         KernelVocabulary.Binding.OpenTargetOperation.key,
+        [request.binding instanceof LetBinding
+          ? OpenSeamReasonKind.BindingScopeOpen
+          : OpenSeamReasonKind.BindingTargetProductMissing],
       );
-    }
+    const publication = this.publisher.targetOperationPublication(
+      local,
+      request,
+      target,
+      operationKind,
+      openReason,
+      this.bindingOperationReachability(input, request.binding),
+      source,
+      openSeam == null ? [] : [openSeam.handle],
+    );
     publication.appendTo(records, claims, targetOperations);
     return publication.product;
   }
 
   materializeSourceOperation(
     input: RuntimeControllerBindMaterializationRequest,
+    observerLocator: ObserverLocator,
     request: RuntimeBindingSourceOperationRequest,
     targetController: RuntimeControllerFrame | null,
     source: RuntimeControllerBindSourceSet,
@@ -389,25 +547,49 @@ export class RuntimeControllerBindMaterializer {
     sourceOperations: RuntimeBindingSourceOperation[],
     openSeams: OpenSeam[],
   ): RuntimeBindingSourceOperation {
-    const target = this.sourceOperationTarget(input, request.binding, request.targetName, targetController);
+    const target = this.sourceOperationTarget(
+      input,
+      observerLocator,
+      request.binding,
+      request.targetName,
+      targetController,
+    );
     const openReason = target.openReason;
     const operationKind = openReason == null
       ? request.operationKind
       : RuntimeBindingSourceOperationKind.Open;
-    const publication = this.publisher.sourceOperationPublication(`${request.localKey}:source-operation`, request, target, operationKind, openReason, source);
-    if (openReason != null) {
-      this.publisher.recordOpenSeam(
-        `${publication.local}:open`,
+    const local = `${request.localKey}:source-operation`;
+    const openSeam = openReason == null
+      ? null
+      : this.publisher.recordOpenSeam(
+        `${local}:open`,
         openReason,
         request.binding.sourceAddressHandle,
         source,
         records,
         openSeams,
         KernelVocabulary.Binding.OpenSourceOperation.key,
+        [OpenSeamReasonKind.BindingSourceAssignmentOpen],
       );
-    }
+    const publication = this.publisher.sourceOperationPublication(
+      local,
+      request,
+      target,
+      operationKind,
+      openReason,
+      this.bindingOperationReachability(input, request.binding),
+      source,
+      openSeam == null ? [] : [openSeam.handle],
+    );
     publication.appendTo(records, claims, sourceOperations);
     return publication.product;
+  }
+
+  private bindingOperationReachability(
+    input: RuntimeControllerBindMaterializationRequest,
+    binding: RuntimeBinding,
+  ): RuntimeOperationReachability {
+    return input.expressionResourcePlan.readSourceEvaluationReachability(binding.productHandle);
   }
 
   private targetAccessLookupRequest(
@@ -430,57 +612,15 @@ export class RuntimeControllerBindMaterializer {
 
   spreadValueTargetProperties(
     targetController: RuntimeControllerFrame | null,
-  ): readonly string[] {
+  ): readonly string[] | null {
     const definitionProductHandle = targetController?.definitionProductHandle ?? null;
     if (definitionProductHandle == null) {
-      return [];
+      return null;
     }
-    const definition = this.store.productDetails.read(ResourceProductDetails.Definition, definitionProductHandle);
+    const definition = this.publication.readProductDetail(ResourceProductDetails.Definition, definitionProductHandle);
     return definition instanceof CustomElementDefinition
       ? definition.bindables.map((bindable) => bindable.name)
-      : [];
-  }
-
-  targetAccessTarget(
-    binding: RuntimeBinding,
-    targetController: RuntimeControllerFrame | null,
-  ): RuntimeBindingTarget {
-    // Runtime renderer getTarget(...) uses a controller view-model when renderer dispatch supplied a target controller.
-    // Otherwise the binding target is the authored host node, even when the tag name is dash-cased.
-    if ((binding instanceof PropertyBinding
-      || binding instanceof InterpolationBinding
-      || binding instanceof SpreadValueBinding)
-      && targetController != null) {
-      return new RuntimeBindingTarget(
-        RuntimeBindingTargetKind.ControllerViewModel,
-        null,
-        targetController.productHandle,
-        targetController.viewModel?.targetType ?? null,
-        null,
-        null,
-      );
-    }
-
-    const element = this.htmlElementFor(binding.node);
-    if (element == null) {
-      return new RuntimeBindingTarget(
-        RuntimeBindingTargetKind.Unknown,
-        null,
-        null,
-        null,
-        null,
-        null,
-      );
-    }
-
-    return new RuntimeBindingTarget(
-      RuntimeBindingTargetKind.Node,
-      binding.node,
-      null,
-      null,
-      element.tagName,
-      element.namespace,
-    );
+      : null;
   }
 
   targetOperationTarget(
@@ -546,12 +686,19 @@ export class RuntimeControllerBindMaterializer {
 
   sourceOperationTarget(
     input: RuntimeControllerBindMaterializationRequest,
+    observerLocator: ObserverLocator,
     binding: RuntimeBinding,
     refTargetName: string,
     targetController: RuntimeControllerFrame | null,
   ): RuntimeBindingSourceOperationTarget {
     if (binding instanceof StateDispatchBinding) {
-      const configuredStore = configuredStateStoreForName(input.stateStores ?? [], binding.storeName);
+      const renderContext = input.runtimeRendering.requireRenderContextForBinding(binding.productHandle);
+      const configuredStore = configuredStateStoreForName(
+        input.expressionWorld.stateStoreSelectionForContainer(
+          renderContext.requireActiveContainer(),
+        ).stores,
+        binding.storeName,
+      );
       return new RuntimeBindingSourceOperationTarget(
         RuntimeBindingTargetKind.StateStore,
         null,
@@ -569,7 +716,7 @@ export class RuntimeControllerBindMaterializer {
 
     switch (refTargetName) {
       case 'element':
-        return this.refElementTarget(input, binding);
+        return this.refElementTarget(input, observerLocator, binding);
       case 'controller':
         return this.refControllerTarget(input, binding, targetController);
       case 'view':
@@ -583,13 +730,14 @@ export class RuntimeControllerBindMaterializer {
 
   private refElementTarget(
     input: RuntimeControllerBindMaterializationRequest,
+    observerLocator: ObserverLocator,
     binding: RefBinding,
   ): RuntimeBindingSourceOperationTarget {
     const element = this.htmlElementFor(binding.node);
     if (element == null) {
       return RuntimeBindingSourceOperationTarget.open('RefBinding element target did not carry a closed authored HTMLElement target.');
     }
-    const targetType = this.observerLocator.getAccessor(new ObserverLocatorLookupRequest(
+    const targetType = observerLocator.getAccessor(new ObserverLocatorLookupRequest(
       `${input.localKey}:ref:${binding.productHandle}:element-target-type`,
       RuntimeBindingTargetAccessLookup.Accessor,
       RuntimeBindingTargetKind.Node,
@@ -683,7 +831,10 @@ export class RuntimeControllerBindMaterializer {
       if (controller.instructionProductHandle == null) {
         continue;
       }
-      const instruction = this.store.productDetails.read(TemplateProductDetails.Instruction, controller.instructionProductHandle);
+      const instruction = this.publication.readProductDetail(
+        TemplateProductDetails.Instruction,
+        controller.instructionProductHandle,
+      );
       if (!(instruction instanceof HydrateElementInstruction)) {
         continue;
       }
@@ -706,11 +857,14 @@ export class RuntimeControllerBindMaterializer {
       if (controller.instructionProductHandle == null) {
         continue;
       }
-      const instruction = this.store.productDetails.read(TemplateProductDetails.Instruction, controller.instructionProductHandle);
+      const instruction = this.publication.readProductDetail(
+        TemplateProductDetails.Instruction,
+        controller.instructionProductHandle,
+      );
       if (!(instruction instanceof HydrateAttributeInstruction)) {
         continue;
       }
-      if (sameNode(instruction.node, binding.node) && instruction.attributeName === attributeName) {
+      if (sameNode(instruction.node, binding.node) && instruction.resourceName === attributeName) {
         return controller;
       }
     }
@@ -721,7 +875,7 @@ export class RuntimeControllerBindMaterializer {
     if (reference?.productHandle == null) {
       return null;
     }
-    const node = this.store.productDetails.read(TemplateProductDetails.HtmlNode, reference.productHandle);
+    const node = this.publication.readProductDetail(TemplateProductDetails.HtmlNode, reference.productHandle);
     return node instanceof HtmlElement ? node : null;
   }
 
@@ -729,19 +883,10 @@ export class RuntimeControllerBindMaterializer {
     if (reference?.productHandle == null) {
       return null;
     }
-    const node = this.store.productDetails.read(TemplateProductDetails.HtmlNode, reference.productHandle);
+    const node = this.publication.readProductDetail(TemplateProductDetails.HtmlNode, reference.productHandle);
     return node instanceof HtmlElement || node instanceof HtmlText ? node : null;
   }
 
-}
-
-function targetControllerForContext(
-  context: RuntimeBindingRenderContext | null,
-): RuntimeControllerFrame | null {
-  if (context == null || context.targetController.productHandle === context.renderingController.productHandle) {
-    return null;
-  }
-  return context.targetController;
 }
 
 function sameNode(

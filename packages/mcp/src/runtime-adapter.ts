@@ -1,15 +1,25 @@
 import process from 'node:process';
 import {
+  readSemanticAppQueryCatalog,
   semanticAppQueryCatalogRow,
   SemanticAppQueryKind,
+  type ManagedSemanticWorkspaceOperationContext,
   type SemanticAppQuery,
   type SemanticRuntimeAppQueryRequest,
   type SemanticRuntimeAnalysisCacheClearRequest,
-  type SemanticRuntimeAnalysisCacheOverviewRequest,
   type SemanticRuntimeAnswer,
-  type SemanticRuntimeOptions,
+  type SemanticNativeProjectConfigurationsResult,
+  type SemanticProjectConfigurationDiagnosticsResult,
+  type SemanticRuntimePagePolicy,
+  type SemanticRuntimeSessionAnalysisCacheOverviewRequest,
+  type SemanticWorkspaceDescriptor,
 } from '@aurelia-ls/semantic-runtime';
-import { SemanticRuntimeSessionRegistry, normalizeRuntimeOptions } from './session-registry.js';
+import {
+  SemanticRuntimeSessionRegistry,
+  type SemanticRuntimeSessionRegistryOptions,
+  type SemanticRuntimeSessionRegistryClearResult,
+  type SemanticRuntimeSessionRegistryOverview,
+} from './session-registry.js';
 import {
   aureliaMcpToolNames,
   type AureliaMcpAnalysisCacheOverviewInput,
@@ -22,170 +32,265 @@ import {
   type AureliaMcpDiagnosticOverviewInput,
   type AureliaMcpOpenAppInput,
   type AureliaMcpOpenSeamOverviewInput,
+  type AureliaMcpProjectConfigurationsInput,
   type AureliaMcpResponse,
   type AureliaMcpRouterOverviewInput,
+  type AureliaMcpTemplateCompletionsInput,
   type AureliaMcpTemplateCursorInput,
   type AureliaMcpTemplateDiagnosticsInput,
   type AureliaMcpWorkspaceOverviewInput,
 } from './tool-contracts.js';
+
+const MCP_PAGE_POLICY: SemanticRuntimePagePolicy = {
+  maxSize: 200,
+  maxRowsJsonBytes: 64 * 1024,
+};
+
+export type AureliaMcpResponseProjector<TValue, TResult> = (
+  response: AureliaMcpResponse<TValue>,
+) => TResult | PromiseLike<TResult>;
+
+/** Default direct-adapter projection: portable JSON only, with process-private answer capabilities removed. */
+export function projectDetachedAureliaMcpResponse<TValue>(
+  response: AureliaMcpResponse<TValue>,
+): AureliaMcpResponse<TValue> {
+  const serialized = JSON.stringify(response);
+  if (serialized === undefined) {
+    throw new TypeError('Aurelia MCP responses must be JSON-serializable values.');
+  }
+  return JSON.parse(serialized) as AureliaMcpResponse<TValue>;
+}
 
 export class AureliaMcpSemanticRuntimeAdapter {
   constructor(
     private readonly sessions = new SemanticRuntimeSessionRegistry(),
   ) {}
 
-  async workspaceOverview(input: AureliaMcpWorkspaceOverviewInput): Promise<AureliaMcpResponse<SemanticRuntimeAnswer<unknown>>> {
-    const runtime = await this.sessions.runtime(runtimeOptions(input));
-    return toolResponse(aureliaMcpToolNames.workspaceOverview, input, runtime.summary({
+  async workspaceOverview<TResult>(
+    input: AureliaMcpWorkspaceOverviewInput,
+    project: AureliaMcpResponseProjector<SemanticRuntimeAnswer<unknown>, TResult>,
+  ): Promise<TResult> {
+    return this.answerWorkspace(aureliaMcpToolNames.workspaceOverview, input, (context) => context.runtime.summary({
       projectPage: input.projectPage ?? undefined,
-    }));
+      pagePolicy: MCP_PAGE_POLICY,
+    }), project);
   }
 
-  async analysisCacheOverview(input: AureliaMcpAnalysisCacheOverviewInput): Promise<AureliaMcpResponse<unknown>> {
-    return toolResponse(
-      aureliaMcpToolNames.analysisCacheOverview,
+  async projectConfigurations<TResult>(
+    input: AureliaMcpProjectConfigurationsInput,
+    project: AureliaMcpResponseProjector<SemanticRuntimeAnswer<
+      SemanticNativeProjectConfigurationsResult | SemanticProjectConfigurationDiagnosticsResult
+    >, TResult>,
+  ): Promise<TResult> {
+    const request = {
+      projectKey: input.projectKey ?? undefined,
+      sourceFilePaths: input.sourceFilePaths ?? undefined,
+      page: input.page ?? undefined,
+      pagePolicy: MCP_PAGE_POLICY,
+      inquiryProfile: 'mcp-orientation' as const,
+    };
+    return this.answerWorkspace(
+      aureliaMcpToolNames.projectConfigurations,
       input,
-      input.workspaceRoot == null
-        ? await this.sessions.overview(undefined, cacheOverviewRequest(input))
-        : await this.sessions.overview({
-          workspaceRoot: input.workspaceRoot,
-          storeKey: input.storeKey ?? undefined,
-          projects: input.projects ?? undefined,
-          projectDiscovery: input.projectDiscovery ?? undefined,
-        }, cacheOverviewRequest(input)),
+      (context) => input.view === 'diagnostics'
+        ? context.runtime.projectConfigurationDiagnostics(request)
+        : context.runtime.nativeProjectConfigurations(request),
+      project,
     );
   }
 
-  async clearAnalysisCache(input: AureliaMcpClearAnalysisCacheInput): Promise<AureliaMcpResponse<unknown>> {
-    const cleared = input.workspaceRoot == null
-      ? await this.sessions.clearAnalysisCache(undefined, cacheClearRequest(input))
-      : await this.sessions.clearAnalysisCache({
-        workspaceRoot: input.workspaceRoot,
-        storeKey: input.storeKey ?? undefined,
-        projects: input.projects ?? undefined,
-        projectDiscovery: input.projectDiscovery ?? undefined,
-      }, cacheClearRequest(input));
-    return toolResponse(aureliaMcpToolNames.clearAnalysisCache, input, cleared);
-  }
-
-  async appQueryCatalog(input: AureliaMcpAppQueryCatalogInput): Promise<AureliaMcpResponse<SemanticRuntimeAnswer<unknown>>> {
-    const runtime = await this.sessions.runtime(runtimeOptions(input));
-    return toolResponse(
-      aureliaMcpToolNames.appQueryCatalog,
-      input,
-      runtime.appQueryCatalog({
-        group: input.group,
-        queryKind: input.queryKind,
-        inquiryProfile: 'mcp-orientation',
-      }),
+  async analysisCacheOverview<TResult>(
+    input: AureliaMcpAnalysisCacheOverviewInput,
+    project: AureliaMcpResponseProjector<SemanticRuntimeSessionRegistryOverview, TResult>,
+  ): Promise<TResult> {
+    return this.sessions.overview(
+      input.workspace == null ? undefined : runtimeOptions(input.workspace),
+      cacheOverviewRequest(input),
+      (overview, descriptor) => project(projectDetachedAureliaMcpResponse(
+        toolResponse(aureliaMcpToolNames.analysisCacheOverview, descriptor, overview),
+      )),
     );
   }
 
-  async appQuery(input: AureliaMcpAppQueryInput): Promise<AureliaMcpResponse<SemanticRuntimeAnswer<unknown>>> {
+  async clearAnalysisCache<TResult>(
+    input: AureliaMcpClearAnalysisCacheInput,
+    project: AureliaMcpResponseProjector<SemanticRuntimeSessionRegistryClearResult, TResult>,
+  ): Promise<TResult> {
+    return this.sessions.clearAnalysisCache(
+      input.workspace == null ? undefined : runtimeOptions(input.workspace),
+      cacheClearRequest(input),
+      (cleared, descriptor) => project(projectDetachedAureliaMcpResponse(
+        toolResponse(aureliaMcpToolNames.clearAnalysisCache, descriptor, cleared),
+      )),
+    );
+  }
+
+  appQueryCatalog(input: AureliaMcpAppQueryCatalogInput): Promise<AureliaMcpResponse<SemanticRuntimeAnswer<unknown>>> {
+    return Promise.resolve(projectDetachedAureliaMcpResponse(
+      toolResponse(
+        aureliaMcpToolNames.appQueryCatalog,
+        null,
+        readSemanticAppQueryCatalog({
+          group: input.group,
+          queryKind: input.queryKind,
+        }),
+      ),
+    ));
+  }
+
+  async appQuery<TResult>(
+    input: AureliaMcpAppQueryInput,
+    project: AureliaMcpResponseProjector<SemanticRuntimeAnswer<unknown>, TResult>,
+  ): Promise<TResult> {
     return this.answerAppQuery(aureliaMcpToolNames.appQuery, input, {
       kind: input.queryKind,
       page: input.page ?? undefined,
       detail: input.detail ?? undefined,
       cursor: input.cursor ?? undefined,
+      resourceIdentityKey: input.resourceIdentityKey ?? undefined,
+      templateResourceScopeIdentityKey: input.templateResourceScopeIdentityKey ?? undefined,
+      frameworkCapability: input.frameworkCapability ?? undefined,
       sourceFile: normalizedSourceFileInput(input.sourceFile, 'sourceFile'),
       diagnosticProjection: input.diagnosticProjection ?? undefined,
+      includeTypeSurfaces: input.includeTypeSurfaces ?? undefined,
+      diagnosticPageSize: input.diagnosticPageSize ?? undefined,
+      analysisLimitationPageSize: input.analysisLimitationPageSize ?? undefined,
+      openSeamPageSize: input.openSeamPageSize ?? undefined,
       openSeamKindKey: input.openSeamKindKey ?? undefined,
       openSeamReasonKind: input.openSeamReasonKind ?? undefined,
       sourceRole: input.sourceRole ?? undefined,
-    });
+      openSeamClusterKey: input.openSeamClusterKey ?? undefined,
+      openSeamSiteKey: input.openSeamSiteKey ?? undefined,
+      observedDependencyLocus: input.observedDependencyLocus ?? undefined,
+      rowPageSize: input.rowPageSize ?? undefined,
+      includeDeclaration: input.includeDeclaration ?? undefined,
+      newName: input.newName ?? undefined,
+    }, project);
   }
 
-  async appQueryBatch(input: AureliaMcpAppQueryBatchInput): Promise<AureliaMcpResponse<SemanticRuntimeAnswer<unknown>>> {
-    const runtime = await this.sessions.runtime(runtimeOptions(input));
-    const answer = await runtime.answerAppQueries({
-      projectKey: input.projectKey ?? undefined,
-      sourceFilePath: input.sourceFilePath ?? undefined,
-      analysisDepth: input.analysisDepth ?? undefined,
-      includeAuthoringTemplates: input.includeAuthoringTemplates ?? undefined,
-      authoringTemplateSourceFiles: input.authoringTemplateSourceFiles ?? undefined,
-      authoringTemplateLimit: input.authoringTemplateLimit ?? undefined,
-      telemetry: input.telemetry ?? undefined,
-      appRetention: input.appRetention ?? 'dispose-app',
-      includeAppProfile: input.includeAppProfile ?? undefined,
-      includeAppQueryClaimProfiles: input.includeAppQueryClaimProfiles ?? undefined,
-      inquiryProfile: 'mcp-orientation',
-      queries: queriesWithSourceFilePathSelector(
-        continuationFilteredQueries(input.queries, input.continuationIntents),
-        input.sourceFilePath,
-      ),
-    });
-    return toolResponse(aureliaMcpToolNames.appQueryBatch, input, answer);
+  async appQueryBatch<TResult>(
+    input: AureliaMcpAppQueryBatchInput,
+    project: AureliaMcpResponseProjector<SemanticRuntimeAnswer<unknown>, TResult>,
+  ): Promise<TResult> {
+    return this.answerWorkspace(
+      aureliaMcpToolNames.appQueryBatch,
+      input,
+      (context) => context.runtime.answerAppQueries({
+        projectKey: input.projectKey ?? undefined,
+        sourceFilePath: input.sourceFilePath ?? undefined,
+        analysisDepth: input.analysisDepth ?? undefined,
+        includeAuthoringTemplates: input.includeAuthoringTemplates ?? undefined,
+        authoringTemplateSourceFiles: input.authoringTemplateSourceFiles ?? undefined,
+        authoringTemplateLimit: input.authoringTemplateLimit ?? undefined,
+        ...(input.appRetention == null ? {} : { appRetention: input.appRetention }),
+        includeAppProfile: input.includeAppProfile ?? undefined,
+        includeAppQueryClaimProfiles: input.includeAppQueryClaimProfiles ?? undefined,
+        pagePolicy: MCP_PAGE_POLICY,
+        inquiryProfile: 'mcp-orientation',
+        queries: queriesWithSourceFilePathSelector(
+          continuationFilteredQueries(input.queries, input.continuationIntents),
+          input.sourceFilePath,
+        ),
+      }),
+      project,
+    );
   }
 
-  async appOverview(input: AureliaMcpAppOverviewInput): Promise<AureliaMcpResponse<unknown>> {
+  async appOverview<TResult>(
+    input: AureliaMcpAppOverviewInput,
+    project: AureliaMcpResponseProjector<SemanticRuntimeAnswer<unknown>, TResult>,
+  ): Promise<TResult> {
     return this.answerAppQuery(aureliaMcpToolNames.appOverview, input, {
       kind: SemanticAppQueryKind.AppOverview,
       diagnosticPageSize: input.diagnosticPageSize,
+      analysisLimitationPageSize: input.analysisLimitationPageSize,
       openSeamPageSize: input.openSeamPageSize,
-    });
+    }, project);
   }
 
-  async routerOverview(input: AureliaMcpRouterOverviewInput): Promise<AureliaMcpResponse<unknown>> {
+  async routerOverview<TResult>(
+    input: AureliaMcpRouterOverviewInput,
+    project: AureliaMcpResponseProjector<SemanticRuntimeAnswer<unknown>, TResult>,
+  ): Promise<TResult> {
     return this.answerAppQuery(aureliaMcpToolNames.routerOverview, input, {
       kind: SemanticAppQueryKind.RouterOverview,
       rowPageSize: input.rowPageSize,
       detail: input.detail ?? undefined,
-    });
+    }, project);
   }
 
-  async appDiagnostics(input: AureliaMcpAppDiagnosticsInput): Promise<AureliaMcpResponse<SemanticRuntimeAnswer<unknown>>> {
+  async appDiagnostics<TResult>(
+    input: AureliaMcpAppDiagnosticsInput,
+    project: AureliaMcpResponseProjector<SemanticRuntimeAnswer<unknown>, TResult>,
+  ): Promise<TResult> {
     return this.answerAppQuery(aureliaMcpToolNames.appDiagnostics, input, {
       kind: SemanticAppQueryKind.AppDiagnostics,
       page: input.page ?? undefined,
       detail: input.detail ?? undefined,
       sourceFile: normalizedSourceFileInput(input.sourceFile, 'sourceFile'),
       diagnosticProjection: input.diagnosticProjection ?? undefined,
-    });
+    }, project);
   }
 
-  async diagnosticOverview(input: AureliaMcpDiagnosticOverviewInput): Promise<AureliaMcpResponse<SemanticRuntimeAnswer<unknown>>> {
+  async diagnosticOverview<TResult>(
+    input: AureliaMcpDiagnosticOverviewInput,
+    project: AureliaMcpResponseProjector<SemanticRuntimeAnswer<unknown>, TResult>,
+  ): Promise<TResult> {
     return this.answerAppQuery(aureliaMcpToolNames.diagnosticOverview, input, {
       kind: SemanticAppQueryKind.AppDiagnosticSummary,
       page: input.page ?? { size: 20 },
       detail: input.detail ?? undefined,
       sourceFile: input.sourceFile ?? undefined,
       diagnosticProjection: input.diagnosticProjection ?? undefined,
-    });
+    }, project);
   }
 
-  async openSeamOverview(input: AureliaMcpOpenSeamOverviewInput): Promise<AureliaMcpResponse<SemanticRuntimeAnswer<unknown>>> {
+  async openSeamOverview<TResult>(
+    input: AureliaMcpOpenSeamOverviewInput,
+    project: AureliaMcpResponseProjector<SemanticRuntimeAnswer<unknown>, TResult>,
+  ): Promise<TResult> {
     return this.answerAppQuery(aureliaMcpToolNames.openSeamOverview, input, {
       kind: SemanticAppQueryKind.OpenSeamSites,
       page: input.page ?? { size: 20 },
-      detail: input.detail ?? undefined,
       sourceFile: normalizedSourceFileInput(input.sourceFile, 'sourceFile')
         ?? normalizedSourceFilePathInput(input.sourceFilePath),
       openSeamKindKey: input.openSeamKindKey ?? undefined,
       openSeamReasonKind: input.openSeamReasonKind ?? undefined,
       sourceRole: input.sourceRole ?? undefined,
-    });
+      openSeamClusterKey: input.openSeamClusterKey ?? undefined,
+      openSeamSiteKey: input.openSeamSiteKey ?? undefined,
+    }, project);
   }
 
-  async templateCursorInfo(input: AureliaMcpTemplateCursorInput): Promise<AureliaMcpResponse<SemanticRuntimeAnswer<unknown>>> {
+  async templateCursorInfo<TResult>(
+    input: AureliaMcpTemplateCursorInput,
+    project: AureliaMcpResponseProjector<SemanticRuntimeAnswer<unknown>, TResult>,
+  ): Promise<TResult> {
     return this.answerAppQuery(aureliaMcpToolNames.templateCursorInfo, input, {
       kind: SemanticAppQueryKind.TemplateCursorInfo,
       cursor: input.cursor,
       analysisDepth: input.analysisDepth ?? semanticAppQueryCatalogRow(SemanticAppQueryKind.TemplateCursorInfo).minimumAnalysisDepth,
       detail: input.detail ?? undefined,
-    });
+    }, project);
   }
 
-  async templateCompletions(input: AureliaMcpTemplateCursorInput): Promise<AureliaMcpResponse<SemanticRuntimeAnswer<unknown>>> {
+  async templateCompletions<TResult>(
+    input: AureliaMcpTemplateCompletionsInput,
+    project: AureliaMcpResponseProjector<SemanticRuntimeAnswer<unknown>, TResult>,
+  ): Promise<TResult> {
     return this.answerAppQuery(aureliaMcpToolNames.templateCompletions, input, {
       kind: SemanticAppQueryKind.TemplateCompletions,
       cursor: input.cursor,
       analysisDepth: input.analysisDepth ?? semanticAppQueryCatalogRow(SemanticAppQueryKind.TemplateCompletions).minimumAnalysisDepth,
       page: input.page ?? undefined,
       detail: input.detail ?? undefined,
-    });
+    }, project);
   }
 
-  async templateDiagnostics(input: AureliaMcpTemplateDiagnosticsInput): Promise<AureliaMcpResponse<SemanticRuntimeAnswer<unknown>>> {
+  async templateDiagnostics<TResult>(
+    input: AureliaMcpTemplateDiagnosticsInput,
+    project: AureliaMcpResponseProjector<SemanticRuntimeAnswer<unknown>, TResult>,
+  ): Promise<TResult> {
     return this.answerAppQuery(aureliaMcpToolNames.templateDiagnostics, input, {
       kind: SemanticAppQueryKind.TemplateDiagnostics,
       sourceFile: normalizedSourceFileInput(input.sourceFile, 'sourceFile'),
@@ -193,29 +298,49 @@ export class AureliaMcpSemanticRuntimeAdapter {
       page: input.page ?? undefined,
       detail: input.detail ?? undefined,
       diagnosticProjection: input.diagnosticProjection ?? undefined,
-    });
+    }, project);
   }
 
-  private async answerAppQuery(
+  dispose(): Promise<void> {
+    return this.sessions.disposeAll();
+  }
+
+  private async answerAppQuery<TResult>(
     toolName: string,
     input: AureliaMcpOpenAppInput,
     query: SemanticAppQuery & Pick<SemanticRuntimeAppQueryRequest, 'analysisDepth'>,
-  ): Promise<AureliaMcpResponse<SemanticRuntimeAnswer<unknown>>> {
-    const runtime = await this.sessions.runtime(runtimeOptions(input));
-    const queryWithSelectors = queryWithSourceFilePathSelector(query, input.sourceFilePath);
-    const answer = await runtime.answerAppQuery({
-      ...queryWithSelectors,
-      projectKey: input.projectKey ?? undefined,
-      sourceFilePath: input.sourceFilePath ?? undefined,
-      analysisDepth: queryWithSelectors.analysisDepth ?? input.analysisDepth ?? semanticAppQueryCatalogRow(queryWithSelectors.kind as SemanticAppQueryKind).minimumAnalysisDepth,
-      includeAuthoringTemplates: input.includeAuthoringTemplates ?? undefined,
-      authoringTemplateSourceFiles: input.authoringTemplateSourceFiles ?? undefined,
-      authoringTemplateLimit: input.authoringTemplateLimit ?? undefined,
-      continuationIntents: queryWithSelectors.continuationIntents ?? input.continuationIntents ?? undefined,
-      inquiryProfile: 'mcp-orientation',
-      appRetention: input.appRetention ?? 'dispose-app',
+    project: AureliaMcpResponseProjector<SemanticRuntimeAnswer<unknown>, TResult>,
+  ): Promise<TResult> {
+    return this.answerWorkspace(toolName, input, (context) => {
+      const queryWithSelectors = queryWithSourceFilePathSelector(query, input.sourceFilePath);
+      return context.runtime.answerAppQuery({
+        ...queryWithSelectors,
+        projectKey: input.projectKey ?? undefined,
+        sourceFilePath: input.sourceFilePath ?? undefined,
+        analysisDepth: queryWithSelectors.analysisDepth ?? input.analysisDepth ?? semanticAppQueryCatalogRow(queryWithSelectors.kind).minimumAnalysisDepth,
+        includeAuthoringTemplates: input.includeAuthoringTemplates ?? undefined,
+        authoringTemplateSourceFiles: input.authoringTemplateSourceFiles ?? undefined,
+        authoringTemplateLimit: input.authoringTemplateLimit ?? undefined,
+        continuationIntents: queryWithSelectors.continuationIntents ?? input.continuationIntents ?? undefined,
+        inquiryProfile: 'mcp-orientation',
+        ...(input.appRetention == null ? {} : { appRetention: input.appRetention }),
+        pagePolicy: MCP_PAGE_POLICY,
+      });
+    }, project);
+  }
+
+  private answerWorkspace<TValue, TResult>(
+    toolName: string,
+    input: RuntimeOptionsInput,
+    answer: (
+      context: ManagedSemanticWorkspaceOperationContext,
+    ) => SemanticRuntimeAnswer<TValue> | PromiseLike<SemanticRuntimeAnswer<TValue>>,
+    project: AureliaMcpResponseProjector<SemanticRuntimeAnswer<TValue>, TResult>,
+  ): Promise<TResult> {
+    return this.sessions.run(runtimeOptions(input), async (context, descriptor) => {
+      const answered = await answer(context);
+      return project(projectDetachedAureliaMcpResponse(toolResponse(toolName, descriptor, answered)));
     });
-    return toolResponse(toolName, input, answer);
   }
 }
 
@@ -257,23 +382,21 @@ function queryWithSourceFilePathSelector<TQuery extends SemanticAppQuery>(
 
 interface RuntimeOptionsInput {
   readonly workspaceRoot?: string | null;
-  readonly storeKey?: string | null;
-  readonly projects?: SemanticRuntimeOptions['projects'] | null;
-  readonly projectDiscovery?: SemanticRuntimeOptions['projectDiscovery'] | null;
+  readonly projectRootHints?: readonly string[] | null;
+  readonly excludedWorkspaceRoots?: readonly string[] | null;
 }
 
-function runtimeOptions(input: RuntimeOptionsInput): SemanticRuntimeOptions {
-  return normalizeRuntimeOptions({
+function runtimeOptions(input: RuntimeOptionsInput): SemanticRuntimeSessionRegistryOptions {
+  return {
     workspaceRoot: input.workspaceRoot ?? process.cwd(),
-    storeKey: input.storeKey ?? undefined,
-    projects: input.projects ?? undefined,
-    projectDiscovery: input.projectDiscovery ?? undefined,
-  });
+    projectRootHints: input.projectRootHints ?? undefined,
+    excludedWorkspaceRoots: input.excludedWorkspaceRoots ?? undefined,
+  };
 }
 
 function cacheOverviewRequest(
   input: AureliaMcpAnalysisCacheOverviewInput,
-): SemanticRuntimeAnalysisCacheOverviewRequest {
+): SemanticRuntimeSessionAnalysisCacheOverviewRequest {
   return {
     includeKernelBreakdowns: input.includeKernelBreakdowns ?? undefined,
     includeDetailDensity: input.includeDetailDensity ?? undefined,
@@ -319,13 +442,14 @@ function isPlainRecord(value: unknown): value is Record<string, unknown> {
 
 function toolResponse<TValue>(
   tool: string,
-  input: { readonly workspaceRoot?: string | null },
+  workspaceDescriptor: SemanticWorkspaceDescriptor | null,
   value: TValue,
 ): AureliaMcpResponse<TValue> {
   return {
     tool,
     generatedAt: new Date().toISOString(),
-    workspaceRoot: input.workspaceRoot == null ? null : normalizeRuntimeOptions({ workspaceRoot: input.workspaceRoot }).workspaceRoot,
+    workspaceRoot: workspaceDescriptor?.workspaceRoot ?? null,
+    workspaceDescriptor,
     value,
   };
 }

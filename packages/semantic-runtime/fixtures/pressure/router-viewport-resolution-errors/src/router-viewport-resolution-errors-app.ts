@@ -1,5 +1,7 @@
 import { route } from '@aurelia/router';
+import { customElement } from '@aurelia/runtime-html';
 import { SideOnlyRoute } from './routes/side-only-route';
+import template from './router-viewport-resolution-errors-app.html';
 
 @route({
   title: 'Router Viewport Resolution Errors Pressure',
@@ -12,4 +14,5 @@ import { SideOnlyRoute } from './routes/side-only-route';
     },
   ],
 })
+@customElement({ name: 'router-viewport-resolution-errors-app', template })
 export class RouterViewportResolutionErrorsApp {}

@@ -550,6 +550,8 @@ export class InterpolationActiveHoleCompanion {
   constructor(
     readonly holeIndex: number,
     readonly holeSpan: SourceSpan,
+    /** Exact parser failure or insertion locus within the active hole. */
+    readonly primarySpan: SourceSpan | null,
     readonly boundaryState: InterpolationHoleBoundaryState,
     readonly frontierKind: ExpressionFrontierKind,
     readonly expectedContinuationClasses: readonly ExpressionExpectedContinuationClass[],

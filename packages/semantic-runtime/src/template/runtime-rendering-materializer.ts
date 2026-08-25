@@ -1,13 +1,16 @@
-import { SemanticClaim } from '../kernel/claim.js';
+import { type SemanticClaim } from '../kernel/claim.js';
 import type { Container } from '../di/container.js';
 import {
-  ContainerContextResolverRecordPolicy,
+  ContainerChildMaterializationRequest,
+  ContainerChildMaterializer,
   type ContainerChildMaterializationEmission,
+  ContainerContextResolverSlotRequest,
 } from '../di/container-materializer.js';
 import type {
   ContainerResolverSlot,
   ContainerSelfResolverSlot,
 } from '../di/container-slot.js';
+import { FrameworkIntrinsicDiKey } from '../di/framework-intrinsic-di-key.js';
 import {
   EvidenceKind,
   EvidenceRecord,
@@ -19,24 +22,39 @@ import {
 } from '../kernel/open-seam.js';
 import type {
   AddressHandle,
-  EvidenceHandle,
   ProductHandle,
-  ProvenanceHandle,
 } from '../kernel/handles.js';
+import {
+  MaterializationRecord,
+  type MaterializationOwnerHandle,
+} from '../kernel/materialization.js';
 import {
   ConfigurationProductDetails,
 } from '../configuration/product-details.js';
 import {
-  ViewFactory,
+  type AuSlotsInfo,
+  type RuntimeHydrationContext,
+  type ViewFactory,
 } from '../configuration/controller.js';
+import {
+  RegistrationValueKind,
+  RegistrationValueReference,
+} from '../registration/registration-reference.js';
 import {
   ProvenanceRecord,
 } from '../kernel/provenance.js';
 import {
-  KernelStoreBatch,
   type KernelStore,
   type KernelStoreRecord,
 } from '../kernel/store.js';
+import {
+  KernelDetailAdmission,
+  type KernelPublicationContext,
+  KernelPublicationPlan,
+  KernelStoreBatch,
+  publishProductDetail,
+  publishProductDetails,
+} from '../kernel/publication.js';
 import {
   KernelVocabulary,
   type OpenSeamKindKey,
@@ -46,7 +64,7 @@ import type { AttributeSyntaxParseEmission } from './attribute-syntax-materializ
 import {
   type RuntimeBinding,
   type RuntimeBindingScopeEffect,
-  RuntimeTargetOperation,
+  type RuntimeTargetOperation,
 } from './runtime-binding.js';
 import type { RuntimeWatcher } from './runtime-watcher.js';
 import {
@@ -55,54 +73,81 @@ import {
 import type { TemplateCompilerWorldEmission } from './compiler-world-materializer.js';
 import {
   type TemplateRenderingRunHost,
-  TemplateRenderingRunResult,
+  type TemplateRenderingRunResult,
   type TemplateRenderingRunRequest,
   type TemplateRenderingTargetPlan,
 } from './compiler-world.js';
 import { TemplateProductDetails } from './product-details.js';
 import { ObservationProductDetails } from '../observation/product-details.js';
+import { RuntimeExpressionProductDetails } from '../runtime-expression/product-details.js';
 import {
   RuntimeControllerCreationKind,
-  RuntimeControllerFrame,
-  RuntimeControllerLifecycleStage,
-  RuntimeControllerLifecycleStepKind,
+  type RuntimeControllerFrame,
+  RuntimeControllerAssemblyStage,
+  RuntimeControllerAssemblyStepKind,
+  finalizeRuntimeControllerBindReachability,
 } from './runtime-controller.js';
+import {
+  RuntimeOperationReachability,
+} from '../runtime-expression/runtime-operation.js';
+import {
+  CustomAttributeDefinition,
+} from '../resources/custom-attribute-definition.js';
 import {
   CustomElementDefinition,
 } from '../resources/custom-element-definition.js';
 import { ResourceProductDetails } from '../resources/product-details.js';
 import {
+  HydrateElementInstruction,
+  type HydrateElementProjectionInstructionSequence,
   HydrateTemplateControllerInstruction,
-  AttributeBindingInstruction,
-  PropertyBindingInstruction,
-  TemplateBindingMode,
+  IteratorBindingInstruction,
+  MultiAttrInstruction,
   type TemplateInstruction,
   type TemplateInstructionSequence,
 } from './instruction-ir.js';
 import {
-  TemplateExpressionParse,
-  TemplateValueSite,
+  type TemplateExpressionParse,
+  type TemplateValueSite,
 } from './value-site.js';
 import { RuntimeRenderingSourceSet } from './runtime-rendering-source.js';
 import {
-  RuntimeBindingRenderContext,
+  RuntimeBindingInstructionEnvironment,
+  type RuntimeBindingRenderContext,
   RuntimeRenderedInstructionRecorder,
 } from './runtime-rendered-instruction-recorder.js';
-import type { TemplateRuntimeAnalysisProjectContext } from './template-runtime-analysis-context.js';
+import type {
+  TemplateRuntimeAnalysisProjectContext,
+} from './template-runtime-analysis-context.js';
 import type { ResourceDefinitionIndex } from '../resources/resource-definition-index.js';
 import type { TypeSystemProject } from '../type-system/project.js';
+import type {
+  ComputedObserverSourceProjectResult,
+} from '../observation/computed-observer-source.js';
+import type { CheckerExpressionTypeWorld } from '../type-system/expression-type-world.js';
+import { ObserverLocator } from '../observation/observer-locator.js';
 import {
   syntheticViewTargetInputs,
 } from './runtime-synthetic-view-targets.js';
+import { expressionProductHandlesForRuntimeBinding } from './runtime-binding-expression-products.js';
 import {
-  RuntimeViewFactoryMaterialization,
+  type RuntimeViewFactoryMaterialization,
   RuntimeViewFactoryMaterializer,
 } from './runtime-view-factory-materializer.js';
+import {
+  RuntimeContentProjectionClosureKind,
+  RuntimeContentProjectionSelectionKind,
+  RuntimeContentProjectionView,
+} from './runtime-content-projection.js';
 import { RuntimeControllerPublicationMaterializer } from './runtime-controller-publication.js';
 import { RuntimeControllerCreationMaterializer } from './runtime-controller-creation-materializer.js';
-import { RuntimeSpreadBindingCreator } from './runtime-spread-binding-creator.js';
+import {
+  type RuntimeDynamicInstructionContext,
+  RuntimeSpreadBindingCreator,
+} from './runtime-spread-binding-creator.js';
 import type { RuntimeControllerIssue } from './runtime-controller-issue.js';
 import type { RuntimeBindingIssue } from './runtime-binding-issue.js';
+import type { TemplateCompilerIssue } from './compiler-issue.js';
 import {
   RuntimeRendererIssuePublisher,
   type RuntimeRendererIssue,
@@ -127,11 +172,12 @@ type RuntimeRenderingFinePhaseName =
   | 'spend-render-results'
   | 'record-open-instructions'
   | 'record-rendered-instructions'
+  | 'finalize-controller-bind-reachability'
+  | 'record-controller-watchers'
   | 'record-rendered-controllers'
   | 'claim-finalization'
   | 'emission'
   | 'commit-records'
-  | 'product-details'
   | `render-dispatch:${string}`
   | `controller-creation:${string}`;
 
@@ -154,19 +200,27 @@ export interface RuntimeRenderingMaterializationRequest {
   readonly resourceDefinitions: ResourceDefinitionIndex | null;
   /** Current TypeChecker epoch available to controller hydration observer setup, when available. */
   readonly typeSystem: TypeSystemProject | null;
-  /** Whether framework contextual resolver slots should be published as kernel records during rendering. */
-  readonly contextResolverRecordPolicy: ContainerContextResolverRecordPolicy;
+  /** Computed getter sources available to exact controller observer selection. */
+  readonly computedObserverSources: ComputedObserverSourceProjectResult | null;
+  /** Shared checker projection/cache world for this complete app-analysis generation. */
+  readonly expressionWorld: CheckerExpressionTypeWorld;
   /** Optional fine-grained telemetry sink owned by the surrounding inquiry profile. */
   readonly profiling?: SemanticRuntimePhaseSink | null;
 }
 
 export class RuntimeRenderingEmission {
   private readonly bindingsByInstruction = new Map<ProductHandle, RuntimeBinding[]>();
+  private readonly bindingsByExpressionProduct = new Map<ProductHandle, RuntimeBinding[]>();
+  private readonly expressionProductsByBinding = new Map<ProductHandle, readonly ProductHandle[]>();
   private readonly bindingsByProduct = new Map<ProductHandle, RuntimeBinding>();
   private readonly effectsByOwner = new Map<ProductHandle, RuntimeBindingScopeEffect[]>();
   private readonly renderContextsByBinding = new Map<ProductHandle, RuntimeBindingRenderContext>();
   private readonly controllersByInstruction = new Map<ProductHandle, RuntimeControllerFrame[]>();
-  private readonly syntheticControllersByTemplateControllerInstruction = new Map<ProductHandle, RuntimeControllerFrame[]>();
+  private readonly syntheticControllersByOwnerInstruction = new Map<ProductHandle, RuntimeControllerFrame[]>();
+  private readonly contentProjectionViewsByOutletController = new Map<ProductHandle, RuntimeContentProjectionView[]>();
+  private readonly dynamicInstructionContextsByProduct = new Map<ProductHandle, RuntimeDynamicInstructionContext>();
+  private readonly dynamicInstructionOriginSyntaxByProduct = new Map<ProductHandle, ProductHandle>();
+  private readonly controllersByProduct = new Map<ProductHandle, RuntimeControllerFrame>();
 
   constructor(
     /** Root custom-element controller that invoked the render pass. */
@@ -183,10 +237,16 @@ export class RuntimeRenderingEmission {
     readonly scopeEffects: readonly RuntimeBindingScopeEffect[],
     /** Runtime IViewFactory values created for template-controller embedded views. */
     readonly viewFactories: readonly ViewFactory[],
+    /** Runtime IAuSlotsInfo values installed for custom-element instructions with provider content. */
+    readonly auSlotsInfos: readonly AuSlotsInfo[],
+    /** Runtime IHydrationContext values installed by custom-element controllers. */
+    readonly hydrationContexts: readonly RuntimeHydrationContext[],
     /** Generated embedded custom-element definitions carried by runtime IViewFactory values. */
     readonly embeddedDefinitions: readonly CustomElementDefinition[],
     /** Binding render contexts needed by later binding.bind materialization. */
     readonly bindingRenderContexts: readonly RuntimeBindingRenderContext[],
+    /** Expression products evaluated in each exact rendered binding environment. */
+    bindingExpressionProductHandles: ReadonlyMap<ProductHandle, readonly ProductHandle[]>,
     /** Runtime child containers materialized while renderers created child controllers. */
     readonly childContainers: readonly Container[],
     /** Framework-runtime issues discovered while constructing or hydrating controllers. */
@@ -195,18 +255,24 @@ export class RuntimeRenderingEmission {
     readonly rendererIssues: readonly RuntimeRendererIssue[],
     /** Framework-runtime issues discovered while modeled runtime bindings execute their own lifecycle. */
     readonly bindingIssues: readonly RuntimeBindingIssue[],
+    /** Template-compiler issues discovered while dynamic captured attributes are compiled. */
+    readonly compilerIssues: readonly TemplateCompilerIssue[],
     /** Built-in IContainer self resolver rows installed on runtime child containers. */
     readonly childSelfResolverSlots: readonly ContainerSelfResolverSlot[],
     /** Hydration-context resolver slots installed on runtime child containers. */
     readonly childContextResolverSlots: readonly ContainerResolverSlot[],
     /** Instructions allocated during runtime TemplateCompiler.compileSpread emulation. */
     readonly dynamicInstructions: readonly TemplateInstruction[],
+    /** Exact hydration contexts used to compile each runtime-created instruction. */
+    readonly dynamicInstructionContexts: readonly RuntimeDynamicInstructionContext[],
     /** Value sites allocated during runtime TemplateCompiler.compileSpread emulation. */
     readonly dynamicValueSites: readonly TemplateValueSite[],
     /** Expression parses allocated during runtime TemplateCompiler.compileSpread emulation. */
     readonly dynamicExpressionParses: readonly TemplateExpressionParse[],
     /** Open renderer-loop pressures that should remain visible to inquiry. */
     readonly openSeams: readonly OpenSeam[],
+    /** Statically reachable AuSlot projection/fallback/empty view relations. */
+    readonly contentProjectionViews: readonly RuntimeContentProjectionView[],
     /** Kernel records emitted for binding products, effect products, provenance, and claims. */
     readonly records: readonly KernelStoreRecord[],
   ) {
@@ -214,6 +280,16 @@ export class RuntimeRenderingEmission {
       const instructionBindings = this.bindingsByInstruction.get(binding.instructionProductHandle) ?? [];
       instructionBindings.push(binding);
       this.bindingsByInstruction.set(binding.instructionProductHandle, instructionBindings);
+      const expressionProductHandles = bindingExpressionProductHandles.get(binding.productHandle);
+      if (expressionProductHandles == null) {
+        throw new Error(`Runtime binding '${binding.productHandle}' has no expression-environment relation.`);
+      }
+      this.expressionProductsByBinding.set(binding.productHandle, expressionProductHandles);
+      for (const expressionProductHandle of expressionProductHandles) {
+        const expressionBindings = this.bindingsByExpressionProduct.get(expressionProductHandle) ?? [];
+        expressionBindings.push(binding);
+        this.bindingsByExpressionProduct.set(expressionProductHandle, expressionBindings);
+      }
       this.bindingsByProduct.set(binding.productHandle, binding);
     }
     for (const effect of scopeEffects) {
@@ -228,6 +304,7 @@ export class RuntimeRenderingEmission {
       this.renderContextsByBinding.set(context.binding.productHandle, context);
     }
     for (const controller of controllers) {
+      this.controllersByProduct.set(controller.productHandle, controller);
       if (controller.instructionProductHandle != null) {
         const controllersForInstruction = this.controllersByInstruction.get(controller.instructionProductHandle) ?? [];
         controllersForInstruction.push(controller);
@@ -235,12 +312,39 @@ export class RuntimeRenderingEmission {
       }
       if (controller.creationKind === RuntimeControllerCreationKind.SyntheticView
         && controller.syntheticOwnerInstructionProductHandle != null) {
-        const controllers = this.syntheticControllersByTemplateControllerInstruction.get(
+        const controllers = this.syntheticControllersByOwnerInstruction.get(
           controller.syntheticOwnerInstructionProductHandle,
         ) ?? [];
         controllers.push(controller);
-        this.syntheticControllersByTemplateControllerInstruction.set(controller.syntheticOwnerInstructionProductHandle, controllers);
+        this.syntheticControllersByOwnerInstruction.set(controller.syntheticOwnerInstructionProductHandle, controllers);
       }
+    }
+    for (const view of contentProjectionViews) {
+      const views = this.contentProjectionViewsByOutletController.get(view.outletController.productHandle) ?? [];
+      views.push(view);
+      this.contentProjectionViewsByOutletController.set(view.outletController.productHandle, views);
+    }
+    for (const context of dynamicInstructionContexts) {
+      this.dynamicInstructionContextsByProduct.set(context.instructionProductHandle, context);
+    }
+    for (const record of records) {
+      if (
+        record.kind !== 'semantic-claim'
+        || record.predicateKey
+          !== KernelVocabulary.Instruction.DynamicInstructionOriginatesFromCapturedAttributeSyntax.key
+      ) {
+        continue;
+      }
+      const existing = this.dynamicInstructionOriginSyntaxByProduct.get(record.subjectHandle as ProductHandle);
+      if (existing != null && existing !== record.objectHandle) {
+        throw new Error(
+          `Runtime-created instruction '${record.subjectHandle}' has conflicting captured attribute origins.`,
+        );
+      }
+      this.dynamicInstructionOriginSyntaxByProduct.set(
+        record.subjectHandle as ProductHandle,
+        record.objectHandle as ProductHandle,
+      );
     }
   }
 
@@ -249,9 +353,14 @@ export class RuntimeRenderingEmission {
     return this.bindingsByInstruction.get(productHandle) ?? [];
   }
 
-  readBindingForInstruction(productHandle: ProductHandle): RuntimeBinding | null {
-    const bindings = this.readBindingsForInstruction(productHandle);
-    return bindings.length === 1 ? bindings[0]! : null;
+  /** Returns runtime bindings whose exact render environment evaluates one expression product. */
+  readBindingsForExpressionProduct(productHandle: ProductHandle): readonly RuntimeBinding[] {
+    return this.bindingsByExpressionProduct.get(productHandle) ?? [];
+  }
+
+  /** Returns expression products evaluated in one exact rendered binding environment. */
+  readExpressionProductsForBinding(productHandle: ProductHandle): readonly ProductHandle[] {
+    return this.expressionProductsByBinding.get(productHandle) ?? [];
   }
 
   /** Returns the materialized runtime binding for a binding product handle. */
@@ -267,8 +376,34 @@ export class RuntimeRenderingEmission {
     return this.renderContextsByBinding.get(productHandle) ?? null;
   }
 
-  readControllerForInstruction(productHandle: ProductHandle): RuntimeControllerFrame | null {
-    return this.readControllersForInstruction(productHandle)[0] ?? null;
+  requireRenderContextForBinding(productHandle: ProductHandle): RuntimeBindingRenderContext {
+    const context = this.readRenderContextForBinding(productHandle);
+    if (context == null) {
+      throw new Error(`Runtime binding '${productHandle}' has no owning render context.`);
+    }
+    return context;
+  }
+
+  /** Lifecycle reachability shared by bindings created in one eager view activation region. */
+  readBindingBindReachability(bindingProductHandle: ProductHandle): RuntimeOperationReachability {
+    const context = this.readRenderContextForBinding(bindingProductHandle);
+    return context == null
+      ? RuntimeOperationReachability.Open
+      : context.renderingController.readBindReachability();
+  }
+
+  /** Aggregate bind reachability for one controller's nearest eager activation region. */
+  readControllerBindReachability(controllerProductHandle: ProductHandle): RuntimeOperationReachability {
+    return this.readController(controllerProductHandle)?.readBindReachability()
+      ?? RuntimeOperationReachability.Open;
+  }
+
+  readController(productHandle: ProductHandle): RuntimeControllerFrame | null {
+    return this.controllersByProduct.get(productHandle) ?? null;
+  }
+
+  readControllers(): readonly RuntimeControllerFrame[] {
+    return [...this.controllersByProduct.values()];
   }
 
   readControllerForInstructionUnderParent(
@@ -276,7 +411,8 @@ export class RuntimeRenderingEmission {
     parent: RuntimeControllerFrame | null,
   ): RuntimeControllerFrame | null {
     if (parent == null) {
-      return this.readControllerForInstruction(productHandle);
+      const controllers = this.readControllersForInstruction(productHandle);
+      return controllers.length === 1 ? controllers[0]! : null;
     }
     return this.readControllersForInstruction(productHandle).find((controller) =>
       controller.parent?.productHandle === parent.productHandle
@@ -287,25 +423,48 @@ export class RuntimeRenderingEmission {
     return this.controllersByInstruction.get(productHandle) ?? [];
   }
 
-  readSyntheticControllerForTemplateControllerInstruction(productHandle: ProductHandle): RuntimeControllerFrame | null {
-    return this.readSyntheticControllersForTemplateControllerInstruction(productHandle)[0] ?? null;
+  readSyntheticControllerForOwnerInstruction(productHandle: ProductHandle): RuntimeControllerFrame | null {
+    return this.readSyntheticControllersForOwnerInstruction(productHandle)[0] ?? null;
   }
 
-  readSyntheticControllerForTemplateControllerUnderOwner(
+  readSyntheticControllerForOwnerInstructionUnderController(
     productHandle: ProductHandle,
     owner: RuntimeControllerFrame | null,
   ): RuntimeControllerFrame | null {
     if (owner == null) {
-      return this.readSyntheticControllerForTemplateControllerInstruction(productHandle);
+      return this.readSyntheticControllerForOwnerInstruction(productHandle);
     }
-    return this.readSyntheticControllersForTemplateControllerInstruction(productHandle).find((controller) =>
+    return this.readSyntheticControllersForOwnerInstruction(productHandle).find((controller) =>
       controller.parent?.productHandle === owner.productHandle
     ) ?? null;
   }
 
-  readSyntheticControllersForTemplateControllerInstruction(productHandle: ProductHandle): readonly RuntimeControllerFrame[] {
-    return this.syntheticControllersByTemplateControllerInstruction.get(productHandle) ?? [];
+  readSyntheticControllersForOwnerInstruction(productHandle: ProductHandle): readonly RuntimeControllerFrame[] {
+    return this.syntheticControllersByOwnerInstruction.get(productHandle) ?? [];
   }
+
+  readContentProjectionViewsForOutletController(
+    productHandle: ProductHandle,
+  ): readonly RuntimeContentProjectionView[] {
+    return this.contentProjectionViewsByOutletController.get(productHandle) ?? [];
+  }
+
+  readDynamicInstructionContext(productHandle: ProductHandle): RuntimeDynamicInstructionContext | null {
+    return this.dynamicInstructionContextsByProduct.get(productHandle) ?? null;
+  }
+
+  /** Exact authored AttrSyntax whose runtime compile produced this dynamic instruction. */
+  readDynamicInstructionOriginSyntaxProductHandle(productHandle: ProductHandle): ProductHandle | null {
+    return this.dynamicInstructionOriginSyntaxByProduct.get(productHandle) ?? null;
+  }
+}
+
+class RuntimeEmbeddedViewRendering {
+  constructor(
+    readonly viewFactory: RuntimeViewFactoryMaterialization,
+    readonly syntheticController: RuntimeControllerFrame,
+    readonly recursiveResult: TemplateRenderingRunResult | null,
+  ) {}
 }
 
 class RuntimeRenderingMaterializationState {
@@ -314,25 +473,52 @@ class RuntimeRenderingMaterializationState {
   readonly targetOperations: RuntimeTargetOperation[] = [];
   readonly scopeEffects: RuntimeBindingScopeEffect[] = [];
   readonly viewFactories: ViewFactory[] = [];
+  readonly auSlotsInfos: AuSlotsInfo[] = [];
   readonly embeddedDefinitions: CustomElementDefinition[] = [];
   readonly bindingRenderContexts: RuntimeBindingRenderContext[] = [];
   readonly childContainerEmissions: ContainerChildMaterializationEmission[] = [];
   readonly controllerIssues: RuntimeControllerIssue[] = [];
   readonly rendererIssues: RuntimeRendererIssue[] = [];
   readonly bindingIssues: RuntimeBindingIssue[] = [];
+  readonly compilerIssues: TemplateCompilerIssue[] = [];
   readonly dynamicInstructions: TemplateInstruction[] = [];
+  readonly dynamicInstructionContexts: RuntimeDynamicInstructionContext[] = [];
   readonly dynamicValueSites: TemplateValueSite[] = [];
   readonly dynamicExpressionParses: TemplateExpressionParse[] = [];
   readonly openSeams: OpenSeam[] = [];
+  readonly contentProjectionViews: RuntimeContentProjectionView[] = [];
   readonly claims: SemanticClaim[] = [];
   readonly viewFactoryByController = new Map<ProductHandle, RuntimeViewFactoryMaterialization>();
+  readonly embeddedDefinitionByInstructionSequence = new Map<ProductHandle, CustomElementDefinition>();
+  private readonly controllersByProduct = new Map<ProductHandle, RuntimeControllerFrame>();
 
   constructor(
     readonly input: RuntimeRenderingMaterializationRequest,
     readonly source: RuntimeRenderingSourceSet,
     readonly rootController: RuntimeControllerFrame,
+    readonly observerLocator: ObserverLocator,
+    readonly intrinsicEmptyAuSlotsInfo: AuSlotsInfo,
   ) {
     this.records.push(...source.records);
+    this.auSlotsInfos.push(intrinsicEmptyAuSlotsInfo);
+    this.registerController(rootController);
+  }
+
+  registerController(controller: RuntimeControllerFrame): RuntimeControllerFrame {
+    const existing = this.controllersByProduct.get(controller.productHandle);
+    if (existing != null && existing !== controller) {
+      throw new Error(`Runtime controller '${controller.productHandle}' was allocated more than once.`);
+    }
+    this.controllersByProduct.set(controller.productHandle, controller);
+    return controller;
+  }
+
+  readController(productHandle: ProductHandle): RuntimeControllerFrame | null {
+    return this.controllersByProduct.get(productHandle) ?? null;
+  }
+
+  readControllers(): readonly RuntimeControllerFrame[] {
+    return [...this.controllersByProduct.values()];
   }
 
   childContainers(): readonly Container[] {
@@ -353,6 +539,7 @@ export class RuntimeRenderingMaterializer {
   private readonly controllerCreation: RuntimeControllerCreationMaterializer;
   private readonly renderedInstructionRecorder: RuntimeRenderedInstructionRecorder;
   private readonly viewFactoryMaterializer: RuntimeViewFactoryMaterializer;
+  private readonly childContainerMaterializer: ContainerChildMaterializer;
   private readonly controllerPublication: RuntimeControllerPublicationMaterializer;
   private readonly spreadBindingCreator: RuntimeSpreadBindingCreator;
   private readonly rendererIssuePublisher: RuntimeRendererIssuePublisher;
@@ -360,63 +547,87 @@ export class RuntimeRenderingMaterializer {
   constructor(
     /** Hot analysis store that receives runtime binding products. */
     readonly store: KernelStore,
+    /** Immediate or staged publication shared by the complete app-analysis generation. */
+    readonly publication: KernelPublicationContext,
   ) {
-    this.controllerCreation = new RuntimeControllerCreationMaterializer(store);
+    this.controllerCreation = new RuntimeControllerCreationMaterializer(store, publication);
     this.renderedInstructionRecorder = new RuntimeRenderedInstructionRecorder(store);
-    this.viewFactoryMaterializer = new RuntimeViewFactoryMaterializer(store);
-    this.controllerPublication = new RuntimeControllerPublicationMaterializer(store);
-    this.spreadBindingCreator = new RuntimeSpreadBindingCreator(store);
+    this.viewFactoryMaterializer = new RuntimeViewFactoryMaterializer(store, publication);
+    this.childContainerMaterializer = new ContainerChildMaterializer(store, publication);
+    this.controllerPublication = new RuntimeControllerPublicationMaterializer(store, publication);
+    this.spreadBindingCreator = new RuntimeSpreadBindingCreator(store, publication);
     this.rendererIssuePublisher = new RuntimeRendererIssuePublisher(store);
   }
 
   materialize(input: RuntimeRenderingMaterializationRequest): RuntimeRenderingEmission {
     const emission = this.recordsForRendering(input);
-    this.measure(input, 'commit-records', () => {
-      if (emission.records.length > 0) {
-        this.store.commit(new KernelStoreBatch(emission.records, `runtime-rendering:${input.localKey}`));
-      }
-    });
-    this.measure(input, 'product-details', () => this.registerProductDetails(emission));
+    this.measure(input, 'commit-records', () => this.publishEmission(input, emission));
     return emission;
   }
 
-  private registerProductDetails(emission: RuntimeRenderingEmission): void {
-    this.store.productDetails.addAll(
-      ConfigurationProductDetails.Controller,
-      emission.controllers.map((controller) => controller.toControllerProduct()),
-    );
-    this.store.productDetails.addAll(TemplateProductDetails.RuntimeBinding, emission.bindings);
-    this.store.productDetails.addAll(TemplateProductDetails.RuntimeWatcher, emission.watchers);
-    this.store.productDetails.addAll(
-      ObservationProductDetails.RuntimeWatcherObservedDependency,
-      emission.watchers.flatMap((watcher) => watcher.observedDependencies),
-    );
-    this.store.productDetails.addAll(TemplateProductDetails.RuntimeBindingTargetOperation, emission.targetOperations);
-    this.store.productDetails.addAll(TemplateProductDetails.RuntimeBindingScopeEffect, emission.scopeEffects);
-    this.store.productDetails.addAll(TemplateProductDetails.RuntimeControllerIssue, emission.controllerIssues);
-    this.store.productDetails.addAll(TemplateProductDetails.RuntimeRendererIssue, emission.rendererIssues);
-    this.store.productDetails.addAll(TemplateProductDetails.RuntimeBindingIssue, emission.bindingIssues);
-    this.store.productDetails.addAll(ConfigurationProductDetails.ViewFactory, emission.viewFactories);
-    for (const definition of emission.embeddedDefinitions) {
-      if (definition.productHandle != null) {
-        this.store.productDetails.add(ResourceProductDetails.Definition, definition.productHandle, definition);
-      }
-    }
-    this.store.productDetails.addAllIfAbsent(TemplateProductDetails.Instruction, emission.dynamicInstructions);
-    this.store.productDetails.addAll(TemplateProductDetails.ValueSite, emission.dynamicValueSites);
-    this.store.productDetails.addAll(TemplateProductDetails.ExpressionParse, emission.dynamicExpressionParses);
+  private publishEmission(
+    input: RuntimeRenderingMaterializationRequest,
+    emission: RuntimeRenderingEmission,
+  ): void {
+    this.publication.publish(new KernelPublicationPlan(
+      new KernelStoreBatch(emission.records, `runtime-rendering:${input.localKey}`),
+      [
+        ...publishProductDetails(TemplateProductDetails.RuntimeBinding, emission.bindings),
+        ...publishProductDetails(TemplateProductDetails.RuntimeWatcher, emission.watchers),
+        ...publishProductDetails(
+          RuntimeExpressionProductDetails.AccessUse,
+          emission.watchers.flatMap((watcher) => watcher.accessUses),
+        ),
+        ...publishProductDetails(
+          ObservationProductDetails.RuntimeWatcherObservedDependency,
+          emission.watchers.flatMap((watcher) => watcher.observedDependencies),
+        ),
+        ...publishProductDetails(TemplateProductDetails.RuntimeBindingTargetOperation, emission.targetOperations),
+        ...publishProductDetails(TemplateProductDetails.RuntimeBindingScopeEffect, emission.scopeEffects),
+        ...publishProductDetails(TemplateProductDetails.RuntimeControllerIssue, emission.controllerIssues),
+        ...publishProductDetails(TemplateProductDetails.RuntimeRendererIssue, emission.rendererIssues),
+        ...publishProductDetails(TemplateProductDetails.RuntimeBindingIssue, emission.bindingIssues),
+        ...publishProductDetails(TemplateProductDetails.CompilerIssue, emission.compilerIssues),
+        ...publishProductDetails(ConfigurationProductDetails.ViewFactory, emission.viewFactories),
+        ...publishProductDetails(ConfigurationProductDetails.AuSlotsInfo, emission.auSlotsInfos),
+        ...publishProductDetails(ConfigurationProductDetails.HydrationContext, emission.hydrationContexts),
+        ...emission.embeddedDefinitions.flatMap((definition) => definition.productHandle == null
+          ? []
+          : [publishProductDetail(ResourceProductDetails.Definition, definition.productHandle, definition)]
+        ),
+        ...publishProductDetails(
+          TemplateProductDetails.Instruction,
+          emission.dynamicInstructions,
+          KernelDetailAdmission.IfAbsent,
+        ),
+        ...publishProductDetails(TemplateProductDetails.ValueSite, emission.dynamicValueSites),
+        ...publishProductDetails(TemplateProductDetails.ExpressionParse, emission.dynamicExpressionParses),
+      ],
+    ));
   }
 
   private recordsForRendering(input: RuntimeRenderingMaterializationRequest): RuntimeRenderingEmission {
     const source = this.measure(input, 'source-records', () => this.recordsForSource(input.localKey));
+    const observerLocator = new ObserverLocator(
+      this.store,
+      input.expressionWorld.projector,
+      input.compilerWorld.world.observerLocatorConfiguration,
+      input.computedObserverSources,
+    );
     const rootDependencyRecords: KernelStoreRecord[] = [];
     const rootChildContainers: ContainerChildMaterializationEmission[] = [];
+    const intrinsicEmptyAuSlotsInfo = this.controllerCreation.createIntrinsicEmptyAuSlotsInfo(
+      input.localKey,
+      source,
+      rootDependencyRecords,
+    );
     const rootController = this.measure(input, 'root-controller', () =>
       this.controllerCreation.createRootController(
         input.localKey,
         input.definition,
         input.compilerWorld.container,
         source,
+        input.expressionWorld,
         input.typeSystem,
         input.projectKey,
         input.resourceDefinitions,
@@ -424,16 +635,25 @@ export class RuntimeRenderingMaterializer {
         rootChildContainers,
       )
     );
-    const state = new RuntimeRenderingMaterializationState(input, source, rootController);
+    const state = new RuntimeRenderingMaterializationState(
+      input,
+      source,
+      rootController,
+      observerLocator,
+      intrinsicEmptyAuSlotsInfo,
+    );
     state.records.push(...rootDependencyRecords);
     state.childContainerEmissions.push(...rootChildContainers);
     this.measure(input, 'controller-observer-setup', () =>
-      this.controllerCreation.recordControllerObserverSetupIssues(
+      this.controllerCreation.materializeControllerObserverSetup(
         rootController,
         input.definition,
+        input.expressionWorld,
         input.typeSystem,
+        state.observerLocator,
         source,
         state.records,
+        state.openSeams,
         state.controllerIssues,
       )
     );
@@ -466,9 +686,9 @@ export class RuntimeRenderingMaterializer {
       )
     );
 
-    state.rootController.recordLifecycleStep(
-      RuntimeControllerLifecycleStage.Rendering,
-      RuntimeControllerLifecycleStepKind.RenderInstructions,
+    state.rootController.recordAssemblyStep(
+      RuntimeControllerAssemblyStage.Rendering,
+      RuntimeControllerAssemblyStepKind.RenderInstructions,
       state.input.compiledTemplate.compiledTemplate.productHandle,
       state.input.compiledTemplate.compiledTemplate.sourceAddressHandle,
       'Rendering.render dispatched the root compiled-template instruction rows.',
@@ -477,6 +697,7 @@ export class RuntimeRenderingMaterializer {
       state.input.compilerWorld.rendering.render({
         localKey: state.input.localKey,
         compiledTemplate: state.input.compiledTemplate.compiledTemplate,
+        resourceScope: state.input.compilerWorld.resourceScope,
         targets: renderTargets,
         instructions: state.input.compiledTemplate.instructions,
         rootController: state.rootController,
@@ -492,35 +713,76 @@ export class RuntimeRenderingMaterializer {
     renderResults: readonly TemplateRenderingRunResult[],
   ): readonly RuntimeControllerFrame[] {
     return this.measure(state.input, 'spend-render-results', () => {
-      const renderedInstructions = renderResults.flatMap((result) => result.renderedInstructions);
       const openInstructions = renderResults.flatMap((result) => result.openInstructions);
-      const controllers = uniqueRuntimeControllers(renderResults.flatMap((result) => result.controllers));
+      const controllers = uniqueRuntimeControllers([
+        ...renderResults.flatMap((result) => result.controllers),
+        ...state.readControllers(),
+      ]);
       const controllerBindingClaimHandles = this.controllerPublication.controllerBindingClaimHandles(state.input.localKey, controllers);
+      const instructionEnvironments = this.bindingInstructionEnvironments(state);
 
       this.measure(state.input, 'record-open-instructions', () =>
         this.recordOpenInstructions(state, openInstructions)
       );
 
-      this.measure(state.input, 'record-rendered-instructions', () =>
-        this.renderedInstructionRecorder.recordRenderedInstructions(
-          renderedInstructions,
-          state.source,
-          state.records,
-          state.claims,
-          state.targetOperations,
-          state.scopeEffects,
-          state.bindingRenderContexts,
-          state.bindings,
-          state.openSeams,
-          controllerBindingClaimHandles,
-        )
-      );
+      this.measure(state.input, 'record-rendered-instructions', () => {
+        for (const result of renderResults) {
+          this.renderedInstructionRecorder.recordRenderedInstructions(
+            result.renderedInstructions,
+            state.source,
+            state.records,
+            state.claims,
+            state.targetOperations,
+            state.scopeEffects,
+            state.bindingRenderContexts,
+            state.bindings,
+            state.openSeams,
+            controllerBindingClaimHandles,
+            result.resourceScope,
+            instructionEnvironments,
+          );
+        }
+      });
 
+      this.measure(state.input, 'finalize-controller-bind-reachability', () =>
+        finalizeRuntimeControllerBindReachability(controllers)
+      );
+      this.measure(state.input, 'record-controller-watchers', () =>
+        this.recordControllerWatchers(state, controllers)
+      );
       this.measure(state.input, 'record-rendered-controllers', () =>
         this.recordRenderedControllers(state, controllers)
       );
       return controllers;
     });
+  }
+
+  private bindingInstructionEnvironments(
+    state: RuntimeRenderingMaterializationState,
+  ): ReadonlyMap<ProductHandle, RuntimeBindingInstructionEnvironment> {
+    const environments = new Map<ProductHandle, RuntimeBindingInstructionEnvironment>();
+    for (const context of state.dynamicInstructionContexts) {
+      const sourceControllerProductHandle = context.hydrationContext.controller.productHandle;
+      const sourceController = sourceControllerProductHandle == null
+        ? null
+        : state.readController(sourceControllerProductHandle);
+      const resource = state.input.projectContext.readResourceForDefinition(
+        context.requestorDefinitionProductHandle,
+      );
+      if (sourceController == null || resource == null) {
+        throw new Error(
+          `Runtime-created instruction '${context.instructionProductHandle}' lost its compiler or hydration context.`,
+        );
+      }
+      environments.set(
+        context.instructionProductHandle,
+        new RuntimeBindingInstructionEnvironment(
+          sourceController,
+          resource.compilerWorld.resourceScope,
+        ),
+      );
+    }
+    return environments;
   }
 
   private measure<TValue>(
@@ -535,7 +797,7 @@ export class RuntimeRenderingMaterializer {
     return measureSemanticRuntimePhase(
       profiling.phases,
       `runtime-rendering:${name}`,
-      this.store,
+      profiling.kernel,
       profiling.telemetry,
       read,
     );
@@ -548,13 +810,14 @@ export class RuntimeRenderingMaterializer {
     for (const open of openInstructions) {
       this.recordOpenSeam(
         open.local,
+        open.ownerHandle,
         open.summary,
         open.addressHandle,
         state.source,
         state.records,
         state.openSeams,
-        KernelVocabulary.Instruction.OpenInstruction.key,
         open.reasonKinds,
+        KernelVocabulary.Instruction.OpenInstruction.key,
       );
     }
   }
@@ -576,6 +839,32 @@ export class RuntimeRenderingMaterializer {
     }
   }
 
+  private recordControllerWatchers(
+    state: RuntimeRenderingMaterializationState,
+    controllers: readonly RuntimeControllerFrame[],
+  ): void {
+    for (const controller of controllers) {
+      const definition = controller.definitionProductHandle == null
+        ? null
+        : this.publication.readProductDetail(
+            ResourceProductDetails.Definition,
+            controller.definitionProductHandle,
+          );
+      if (!(definition instanceof CustomElementDefinition)
+        && !(definition instanceof CustomAttributeDefinition)) {
+        continue;
+      }
+      this.controllerCreation.recordControllerWatchers(
+        `${state.input.localKey}:controller:${controller.productHandle}`,
+        controller,
+        definition,
+        state.input.expressionWorld,
+        state.input.typeSystem,
+        controller.readBindReachability(),
+      );
+    }
+  }
+
   private emissionForState(
     state: RuntimeRenderingMaterializationState,
     controllers: readonly RuntimeControllerFrame[],
@@ -588,20 +877,56 @@ export class RuntimeRenderingMaterializer {
       state.targetOperations,
       state.scopeEffects,
       state.viewFactories,
+      state.auSlotsInfos,
+      uniqueRuntimeHydrationContexts([
+        state.rootController,
+        ...controllers,
+      ].flatMap((controller) => {
+        const context = controller.readHydrationContext();
+        return context == null ? [] : [context];
+      })),
       state.embeddedDefinitions,
       state.bindingRenderContexts,
+      this.bindingExpressionProductHandles(state),
       state.childContainers(),
       state.controllerIssues,
       state.rendererIssues,
       state.bindingIssues,
+      state.compilerIssues,
       state.childSelfResolverSlots(),
       state.childContextResolverSlots(),
       state.dynamicInstructions,
+      state.dynamicInstructionContexts,
       state.dynamicValueSites,
       state.dynamicExpressionParses,
       state.openSeams,
+      state.contentProjectionViews,
       state.records,
     );
+  }
+
+  private bindingExpressionProductHandles(
+    state: RuntimeRenderingMaterializationState,
+  ): ReadonlyMap<ProductHandle, readonly ProductHandle[]> {
+    const dynamicInstructions = new Map(
+      state.dynamicInstructions.map((instruction) => [instruction.productHandle, instruction]),
+    );
+    const readInstruction = (productHandle: ProductHandle): TemplateInstruction | null =>
+      dynamicInstructions.get(productHandle)
+        ?? state.input.projectContext.readInstruction(productHandle);
+    return new Map(state.bindings.map((binding) => {
+      const handles = new Set(expressionProductHandlesForRuntimeBinding(binding));
+      const instruction = readInstruction(binding.instructionProductHandle);
+      if (instruction instanceof IteratorBindingInstruction) {
+        for (const tailHandle of instruction.tailInstructionProductHandles) {
+          const tail = readInstruction(tailHandle);
+          if (tail instanceof MultiAttrInstruction && tail.expressionProductHandle != null) {
+            handles.add(tail.expressionProductHandle);
+          }
+        }
+      }
+      return [binding.productHandle, [...handles]] as const;
+    }));
   }
 
   private renderTargetInputs(
@@ -634,11 +959,13 @@ export class RuntimeRenderingMaterializer {
       if (sequence == null) {
         this.recordOpenSeam(
           `${localKey}:target:${index}:missing-instruction-sequence`,
+          target.identityHandle,
           `Compiled render target '${target.productHandle}' points at an instruction sequence that is not available to runtime Rendering.`,
           target.sourceAddressHandle,
           source,
           records,
           openSeams,
+          [OpenSeamReasonKind.RuntimeRenderingProductMissing],
         );
         return;
       }
@@ -651,11 +978,13 @@ export class RuntimeRenderingMaterializer {
       if (instructions.length !== sequence.instructions.length) {
         this.recordOpenSeam(
           `${localKey}:target:${index}:missing-instructions`,
+          sequence.identityHandle,
           `Compiled instruction sequence '${sequence.productHandle}' contains instruction references that could not be hydrated for runtime Rendering.`,
           sequence.sourceAddressHandle,
           source,
           records,
           openSeams,
+          [OpenSeamReasonKind.RuntimeRenderingProductMissing],
         );
       }
       targets.push({ target, sequence, instructions });
@@ -671,36 +1000,54 @@ export class RuntimeRenderingMaterializer {
     const queue = [...initialRenderResult.controllers];
     const expandedTemplateControllers = new Set<ProductHandle>();
     const expandedCustomElementControllers = new Set<ProductHandle>();
+    const expandedContentProjectionControllers = new Set<ProductHandle>();
 
     while (queue.length > 0) {
       const controller = queue.shift()!;
-      let result: TemplateRenderingRunResult | null = null;
+      const recursiveResults: TemplateRenderingRunResult[] = [];
       if (controller.creationKind === RuntimeControllerCreationKind.TemplateController
         && controller.instructionProductHandle != null
         && !expandedTemplateControllers.has(controller.productHandle)) {
         expandedTemplateControllers.add(controller.productHandle);
-        result = this.renderSyntheticViewForTemplateController(
+        const result = this.renderSyntheticViewForTemplateController(
           `${state.input.localKey}:controller:${controller.productHandle}:synthetic-view`,
           state,
           controller,
         );
+        if (result != null) {
+          recursiveResults.push(result);
+        }
       }
-      if (result == null
-        && isRecursiveRenderableCustomElementController(controller)
+      if (isRecursiveRenderableCustomElementController(controller)
         && !expandedCustomElementControllers.has(controller.productHandle)) {
         expandedCustomElementControllers.add(controller.productHandle);
-        result = this.renderCustomElementViewForController(
+        const result = this.renderCustomElementViewForController(
           `${state.input.localKey}:controller:${controller.productHandle}:custom-element-view`,
           state,
           controller,
         );
+        if (result != null) {
+          recursiveResults.push(result);
+        }
       }
-
-      if (result == null) {
-        continue;
+      if (this.auSlotInstructionForController(state, controller) != null
+        && !expandedContentProjectionControllers.has(controller.productHandle)) {
+        expandedContentProjectionControllers.add(controller.productHandle);
+        const result = this.renderContentProjectionForAuSlot(
+          `${state.input.localKey}:controller:${controller.productHandle}:content-projection`,
+          state,
+          controller,
+        );
+        if (result != null) {
+          recursiveResults.push(result);
+        }
       }
-      results.push(result);
-      queue.push(...result.controllers);
+      for (const recursiveResult of recursiveResults) {
+        results.push(recursiveResult);
+        queue.push(...recursiveResult.controllers.filter((candidate) =>
+          candidate.productHandle !== recursiveResult.rootController.productHandle
+        ));
+      }
     }
 
     return results;
@@ -718,12 +1065,13 @@ export class RuntimeRenderingMaterializer {
       return null;
     }
 
-    const compiledTemplate = state.input.projectContext.readCompiledTemplateEmissionForDefinition(
+    const resource = state.input.projectContext.readResourceForDefinition(
       controller.definitionProductHandle,
     );
-    if (compiledTemplate == null) {
+    if (resource == null) {
       return null;
     }
+    const compiledTemplate = resource.compiledTemplateEmission;
 
     const targetInputs = this.measure(state.input, 'custom-element-target-inputs', () =>
       this.renderTargetInputsForCompiledTemplate(
@@ -738,17 +1086,18 @@ export class RuntimeRenderingMaterializer {
       return null;
     }
 
-    controller.recordLifecycleStep(
-      RuntimeControllerLifecycleStage.Rendering,
-      RuntimeControllerLifecycleStepKind.RenderInstructions,
+    controller.recordAssemblyStep(
+      RuntimeControllerAssemblyStage.Rendering,
+      RuntimeControllerAssemblyStepKind.RenderInstructions,
       compiledTemplate.compiledTemplate.productHandle,
       compiledTemplate.compiledTemplate.sourceAddressHandle,
       'Rendering.render dispatched the child custom-element compiled-template instruction rows.',
     );
-    return this.measure(state.input, 'custom-element-render-dispatch', () =>
-      state.input.compilerWorld.rendering.render({
+    const result = this.measure(state.input, 'custom-element-render-dispatch', () =>
+      resource.compilerWorld.rendering.render({
         localKey: `${state.input.localKey}:custom-element-view:${controller.productHandle}`,
         compiledTemplate: compiledTemplate.compiledTemplate,
+        resourceScope: resource.compilerWorld.resourceScope,
         targets: targetInputs,
         instructions: this.instructionsForControllerView(state, compiledTemplate),
         rootController: controller,
@@ -757,6 +1106,291 @@ export class RuntimeRenderingMaterializer {
         renderSurrogate: true,
       } satisfies TemplateRenderingRunRequest)
     );
+    return result;
+  }
+
+  private renderContentProjectionForAuSlot(
+    local: string,
+    state: RuntimeRenderingMaterializationState,
+    outletController: RuntimeControllerFrame,
+  ): TemplateRenderingRunResult | null {
+    const outletInstruction = this.auSlotInstructionForController(state, outletController);
+    if (outletInstruction == null) {
+      return null;
+    }
+    const constructionHydrationContext = outletController.readConstructionHydrationContext();
+    const providerInstruction = this.instructionForHydrationContext(state, constructionHydrationContext);
+    const slotName = outletInstruction.auSlotProcessContent!.name;
+    const selected = providerInstruction?.projectionInstructionSequences.find((projection) =>
+      projection.slotName === slotName
+    ) ?? null;
+    const fallback = selected == null
+      ? outletInstruction.projectionInstructionSequences.find((projection) =>
+          projection.slotName === 'default'
+        ) ?? null
+      : null;
+    const projection = selected ?? fallback;
+    const selectionKind = selected != null
+      ? RuntimeContentProjectionSelectionKind.Projected
+      : fallback != null
+        ? RuntimeContentProjectionSelectionKind.Fallback
+        : RuntimeContentProjectionSelectionKind.Empty;
+    const receivingController = this.controllerForHydrationContext(
+      state,
+      constructionHydrationContext,
+    );
+    const factoryHydrationContext = selected == null
+      ? constructionHydrationContext
+      : constructionHydrationContext?.parent ?? null;
+    const declaringController = selected != null
+      ? this.controllerForHydrationContext(state, factoryHydrationContext)
+      : receivingController;
+    const slotsInfo = receivingController?.readAuSlotsInfo() ?? null;
+    if (projection == null) {
+      state.contentProjectionViews.push(new RuntimeContentProjectionView(
+        selectionKind,
+        RuntimeContentProjectionClosureKind.Complete,
+        slotName,
+        outletInstruction,
+        outletController,
+        providerInstruction,
+        null,
+        null,
+        declaringController,
+        receivingController,
+        null,
+        null,
+        null,
+        factoryHydrationContext,
+        slotsInfo,
+        outletInstruction.sourceAddressHandle,
+      ));
+      return null;
+    }
+
+    const sequence = state.input.projectContext.readInstructionSequence(
+      projection.instructionSequenceProductHandle,
+    );
+    if (sequence == null) {
+      this.recordOpenSeam(
+        `${local}:missing-projection-sequence`,
+        outletController.identityHandle,
+        `AuSlot '${slotName}' selected instruction sequence '${projection.instructionSequenceProductHandle}', but its compiler product is unavailable to recursive Rendering.render emulation.`,
+        projection.sourceAddressHandle,
+        state.source,
+        state.records,
+        state.openSeams,
+        [OpenSeamReasonKind.RuntimeRenderingProductMissing],
+      );
+      state.contentProjectionViews.push(new RuntimeContentProjectionView(
+        selectionKind,
+        RuntimeContentProjectionClosureKind.Open,
+        slotName,
+        outletInstruction,
+        outletController,
+        providerInstruction,
+        projection,
+        null,
+        declaringController,
+        receivingController,
+        null,
+        null,
+        null,
+        factoryHydrationContext,
+        slotsInfo,
+        projection.sourceAddressHandle,
+      ));
+      return null;
+    }
+
+    const factoryContainer = this.materializeContentProjectionContainer(
+      local,
+      state,
+      selectionKind,
+      receivingController,
+      declaringController,
+      factoryHydrationContext,
+      projection.sourceAddressHandle,
+    );
+    if (factoryContainer == null) {
+      state.contentProjectionViews.push(new RuntimeContentProjectionView(
+        selectionKind,
+        RuntimeContentProjectionClosureKind.Open,
+        slotName,
+        outletInstruction,
+        outletController,
+        providerInstruction,
+        projection,
+        sequence,
+        declaringController,
+        receivingController,
+        null,
+        null,
+        null,
+        factoryHydrationContext,
+        slotsInfo,
+        projection.sourceAddressHandle,
+      ));
+      return null;
+    }
+    const embedded = this.renderEmbeddedView(
+      local,
+      state,
+      outletController,
+      factoryContainer,
+      sequence,
+      factoryHydrationContext,
+    );
+    state.contentProjectionViews.push(new RuntimeContentProjectionView(
+      selectionKind,
+      embedded.recursiveResult == null
+        ? RuntimeContentProjectionClosureKind.Open
+        : RuntimeContentProjectionClosureKind.Complete,
+      slotName,
+      outletInstruction,
+      outletController,
+      providerInstruction,
+      projection,
+      sequence,
+      declaringController,
+      receivingController,
+      embedded.viewFactory.viewFactory,
+      embedded.syntheticController,
+      factoryContainer,
+      factoryHydrationContext,
+      slotsInfo,
+      projection.sourceAddressHandle,
+    ));
+    return embedded.recursiveResult;
+  }
+
+  private materializeContentProjectionContainer(
+    local: string,
+    state: RuntimeRenderingMaterializationState,
+    selectionKind: RuntimeContentProjectionSelectionKind,
+    receivingController: RuntimeControllerFrame | null,
+    declaringController: RuntimeControllerFrame | null,
+    factoryHydrationContext: RuntimeHydrationContext | null,
+    sourceAddressHandle: AddressHandle | null,
+  ): Container | null {
+    const receivingContainer = receivingController?.containerFrame ?? null;
+    if (receivingContainer == null) {
+      this.recordOpenSeam(
+        `${local}:missing-receiving-container`,
+        receivingController?.identityHandle ?? state.rootController.identityHandle,
+        'AuSlot view-factory construction needs the receiving controller container, but no runtime container frame was modeled.',
+        sourceAddressHandle,
+        state.source,
+        state.records,
+        state.openSeams,
+        [OpenSeamReasonKind.RuntimeRenderingContextOpen],
+        KernelVocabulary.Di.OpenChildContainer.key,
+      );
+      return null;
+    }
+
+    const projected = selectionKind === RuntimeContentProjectionSelectionKind.Projected;
+    const declaringContainer = projected
+      ? declaringController?.containerFrame ?? null
+      : null;
+    if (projected && declaringContainer == null) {
+      this.recordOpenSeam(
+        `${local}:missing-declaring-container`,
+        declaringController?.identityHandle ?? state.rootController.identityHandle,
+        'Projected AuSlot content needs the declaring controller resource container, but no runtime container frame was modeled.',
+        sourceAddressHandle,
+        state.source,
+        state.records,
+        state.openSeams,
+        [OpenSeamReasonKind.RuntimeRenderingContextOpen],
+        KernelVocabulary.Di.OpenChildContainer.key,
+      );
+      return null;
+    }
+    if (projected && factoryHydrationContext == null) {
+      this.recordOpenSeam(
+        `${local}:missing-declaring-hydration-context`,
+        declaringController?.identityHandle ?? state.rootController.identityHandle,
+        'Projected AuSlot content needs the declaring controller hydration context, but no runtime context value was modeled.',
+        sourceAddressHandle,
+        state.source,
+        state.records,
+        state.openSeams,
+        [OpenSeamReasonKind.RuntimeRenderingContextOpen],
+      );
+      return null;
+    }
+
+    const child = this.childContainerMaterializer.materializeChild(
+      new ContainerChildMaterializationRequest({
+        localKey: `${local}:factory-container`,
+        parent: receivingContainer,
+        sourceAddressHandle,
+        localName: `${selectionKind}:au-slot-view-factory-container`,
+        contextResolvers: projected
+          ? [new ContainerContextResolverSlotRequest({
+              interfaceName: FrameworkIntrinsicDiKey.IHydrationContext,
+              sourceAddressHandle,
+              ownerIdentityHandle: factoryHydrationContext!.identityHandle,
+              instance: new RegistrationValueReference(
+                RegistrationValueKind.Instance,
+                factoryHydrationContext!.identityHandle,
+                factoryHydrationContext!.productHandle,
+                factoryHydrationContext!.sourceAddressHandle,
+                FrameworkIntrinsicDiKey.IHydrationContext,
+              ),
+            })]
+          : [],
+        configuration: projected
+          ? null
+          : {
+              inheritParentResources: true,
+              sourceAddressHandle,
+            },
+        resourceImportSource: declaringContainer,
+      }),
+    );
+    state.records.push(...child.records);
+    state.childContainerEmissions.push(child);
+    return child.container;
+  }
+
+  private instructionForHydrationContext(
+    state: RuntimeRenderingMaterializationState,
+    context: RuntimeHydrationContext | null,
+  ): HydrateElementInstruction | null {
+    const productHandle = context?.instructionProductHandle ?? null;
+    if (productHandle == null) {
+      return null;
+    }
+    const instruction = state.input.projectContext.readInstruction(productHandle)
+      ?? this.publication.readProductDetail(TemplateProductDetails.Instruction, productHandle);
+    return instruction instanceof HydrateElementInstruction ? instruction : null;
+  }
+
+  private controllerForHydrationContext(
+    state: RuntimeRenderingMaterializationState,
+    context: RuntimeHydrationContext | null,
+  ): RuntimeControllerFrame | null {
+    const productHandle = context?.controller.productHandle ?? null;
+    return productHandle == null ? null : state.readController(productHandle);
+  }
+
+  private auSlotInstructionForController(
+    state: RuntimeRenderingMaterializationState,
+    controller: RuntimeControllerFrame,
+  ): HydrateElementInstruction | null {
+    const instruction = state.input.projectContext.readInstruction(controller.instructionProductHandle)
+      ?? (controller.instructionProductHandle == null
+        ? null
+        : this.publication.readProductDetail(
+            TemplateProductDetails.Instruction,
+            controller.instructionProductHandle,
+          ));
+    return instruction instanceof HydrateElementInstruction
+      && instruction.auSlotProcessContent != null
+      ? instruction
+      : null;
   }
 
   private hasRecursiveCustomElementDefinitionAncestor(
@@ -786,27 +1420,82 @@ export class RuntimeRenderingMaterializer {
     if (sequence == null) {
       return null;
     }
-
-    const viewFactory = this.viewFactoryMaterializer.ensureForTemplateController(
-      `${local}:view-factory`,
+    const factoryContainer = controller.containerFrame;
+    if (factoryContainer == null) {
+      this.recordOpenSeam(
+        `${local}:missing-view-factory-container`,
+        controller.identityHandle,
+        `Template-controller '${controller.name ?? '(anonymous)'}' has no modeled container for IViewFactory construction.`,
+        controller.sourceAddressHandle,
+        state.source,
+        state.records,
+        state.openSeams,
+        [OpenSeamReasonKind.RuntimeRenderingContextOpen],
+        KernelVocabulary.Di.OpenChildContainer.key,
+      );
+      return null;
+    }
+    return this.renderEmbeddedView(
+      local,
+      state,
       controller,
+      factoryContainer,
+      sequence,
+      controller.readHydrationContext(),
+    ).recursiveResult;
+  }
+
+  private renderEmbeddedView(
+    local: string,
+    state: RuntimeRenderingMaterializationState,
+    ownerController: RuntimeControllerFrame,
+    factoryContainer: Container,
+    sequence: TemplateInstructionSequence,
+    hydrationContext: RuntimeHydrationContext | null,
+  ): RuntimeEmbeddedViewRendering {
+    const viewFactory = this.viewFactoryMaterializer.ensureForController(
+      `${local}:view-factory`,
+      `${state.input.localKey}:embedded-view-definition:${sequence.productHandle}`,
+      ownerController,
+      factoryContainer,
       sequence.productHandle,
       state.source,
       state.records,
       state.viewFactories,
       state.embeddedDefinitions,
       state.viewFactoryByController,
+      state.embeddedDefinitionByInstructionSequence,
     );
-    const syntheticController = this.controllerCreation.createSyntheticViewController(local, viewFactory, state.source);
-    controller.recordLifecycleStep(
-      RuntimeControllerLifecycleStage.Hydration,
-      RuntimeControllerLifecycleStepKind.CreateSyntheticView,
+    const syntheticController = this.controllerCreation.createSyntheticViewController(
+      local,
+      viewFactory,
+      hydrationContext,
+      state.source,
+    );
+    state.registerController(syntheticController);
+    ownerController.recordAssemblyStep(
+      RuntimeControllerAssemblyStage.Hydration,
+      RuntimeControllerAssemblyStepKind.CreateSyntheticView,
       syntheticController.productHandle,
       syntheticController.sourceAddressHandle,
       'IViewFactory.create produced an aggregate synthetic-view controller for nested instruction analysis.',
     );
-    const ownerCompiledTemplate = this.compiledTemplateForControllerView(state, controller);
-    const instructions = this.instructionsForControllerView(state, ownerCompiledTemplate);
+    const resource = state.input.projectContext.readResourceForInstructionSequence(sequence.productHandle);
+    if (resource == null) {
+      this.recordOpenSeam(
+        `${local}:missing-sequence-resource`,
+        ownerController.identityHandle,
+        `Embedded instruction sequence '${sequence.productHandle}' has no owning compiler world for recursive Rendering.render emulation.`,
+        sequence.sourceAddressHandle,
+        state.source,
+        state.records,
+        state.openSeams,
+        [OpenSeamReasonKind.RuntimeRenderingProductMissing],
+      );
+      return new RuntimeEmbeddedViewRendering(viewFactory, syntheticController, null);
+    }
+    const compiledTemplate = resource.compiledTemplateEmission;
+    const instructions = this.instructionsForControllerView(state, compiledTemplate);
     const targetInputs = this.measure(state.input, 'synthetic-view-target-inputs', () =>
       this.syntheticViewRenderingTargetInputs(
         local,
@@ -818,20 +1507,21 @@ export class RuntimeRenderingMaterializer {
       )
     );
     if (targetInputs.length === 0 && sequence.instructions.length > 0) {
-      return null;
+      return new RuntimeEmbeddedViewRendering(viewFactory, syntheticController, null);
     }
 
-    syntheticController.recordLifecycleStep(
-      RuntimeControllerLifecycleStage.Rendering,
-      RuntimeControllerLifecycleStepKind.RenderInstructions,
+    syntheticController.recordAssemblyStep(
+      RuntimeControllerAssemblyStage.Rendering,
+      RuntimeControllerAssemblyStepKind.RenderInstructions,
       sequence.productHandle,
       sequence.sourceAddressHandle,
       'Rendering.render dispatched synthetic-view child instruction rows.',
     );
-    return this.measure(state.input, 'synthetic-view-render-dispatch', () =>
-      state.input.compilerWorld.rendering.render({
+    const result = this.measure(state.input, 'synthetic-view-render-dispatch', () =>
+      resource.compilerWorld.rendering.render({
         localKey: `${state.input.localKey}:synthetic-view:${syntheticController.productHandle}`,
-        compiledTemplate: ownerCompiledTemplate.compiledTemplate,
+        compiledTemplate: compiledTemplate.compiledTemplate,
+        resourceScope: resource.compilerWorld.resourceScope,
         targets: targetInputs,
         instructions,
         rootController: syntheticController,
@@ -840,23 +1530,11 @@ export class RuntimeRenderingMaterializer {
         renderSurrogate: false,
       } satisfies TemplateRenderingRunRequest)
     );
-  }
-
-  private compiledTemplateForControllerView(
-    state: RuntimeRenderingMaterializationState,
-    controller: RuntimeControllerFrame,
-  ): CompiledTemplateEmission {
-    let current: RuntimeControllerFrame | null = controller;
-    while (current != null) {
-      const compiledTemplate = state.input.projectContext.readCompiledTemplateEmissionForDefinition(
-        current.definitionProductHandle,
-      );
-      if (compiledTemplate != null) {
-        return compiledTemplate;
-      }
-      current = current.parent;
-    }
-    return state.input.compiledTemplate;
+    return new RuntimeEmbeddedViewRendering(
+      viewFactory,
+      syntheticController,
+      result,
+    );
   }
 
   private instructionsForControllerView(
@@ -874,19 +1552,29 @@ export class RuntimeRenderingMaterializer {
   ): TemplateRenderingRunHost {
     return {
       allocate: (allocationLocal) => this.allocate(allocationLocal),
-      createChildController: (creation) => this.controllerCreation.createChildController(
-        creation,
-        state.input.typeSystem,
-        state.source,
-        state.records,
-        state.childContainerEmissions,
-        state.openSeams,
-        state.controllerIssues,
-        (name, read) => this.measure(state.input, `controller-creation:${name}`, read),
-        state.input.contextResolverRecordPolicy,
-        state.input.projectKey,
-        state.input.resourceDefinitions,
-      ),
+      createChildController: (creation) => {
+        const controller = this.controllerCreation.createChildController(
+          creation,
+          state.input.expressionWorld,
+          state.input.typeSystem,
+          state.observerLocator,
+          state.source,
+          state.records,
+          state.childContainerEmissions,
+          state.auSlotsInfos,
+          state.intrinsicEmptyAuSlotsInfo,
+          state.openSeams,
+          state.controllerIssues,
+          (productHandle) => state.readController(productHandle),
+          (name, read) => this.measure(state.input, `controller-creation:${name}`, read),
+          state.input.projectKey,
+          state.input.resourceDefinitions,
+        );
+        if (controller == null) {
+          return null;
+        }
+        return state.registerController(controller);
+      },
       compileSpread: (spread) => this.spreadBindingCreator.create(spread, state),
       measureRenderingPhase: (name, read) => this.measure(state.input, name as RuntimeRenderingFinePhaseName, read),
       recordRendererIssue: (local, renderer, instruction, phase, issueKind, message, frameworkErrorCode, sourceAddressHandle) => {
@@ -917,13 +1605,13 @@ export class RuntimeRenderingMaterializer {
     if (instructionProductHandle == null) {
       return null;
     }
-    const instruction = this.store.productDetails.read(TemplateProductDetails.Instruction, instructionProductHandle);
+    const instruction = this.publication.readProductDetail(TemplateProductDetails.Instruction, instructionProductHandle);
     if (!(instruction instanceof HydrateTemplateControllerInstruction)
       || instruction.childInstructionSequenceProductHandle == null) {
       return null;
     }
 
-    const sequence = this.store.productDetails.read(
+    const sequence = this.publication.readProductDetail(
       TemplateProductDetails.InstructionSequence,
       instruction.childInstructionSequenceProductHandle,
     );
@@ -933,11 +1621,13 @@ export class RuntimeRenderingMaterializer {
 
     this.recordOpenSeam(
       `${local}:missing-child-sequence`,
+      controller.identityHandle,
       `Template-controller '${controller.name ?? '(anonymous)'} has a child-view instruction sequence handle, but the sequence detail is not available for synthetic Rendering.render emulation.`,
       controller.sourceAddressHandle,
       state.source,
       state.records,
       state.openSeams,
+      [OpenSeamReasonKind.RuntimeRenderingProductMissing],
     );
     return null;
   }
@@ -987,11 +1677,13 @@ export class RuntimeRenderingMaterializer {
     if (instructions.length !== sequence.instructions.length) {
       this.recordOpenSeam(
         `${local}:missing-instructions`,
+        sequence.identityHandle,
         `Compiled instruction sequence '${sequence.productHandle}' contains instruction references that could not be hydrated for runtime Rendering.`,
         sequence.sourceAddressHandle,
         source,
         records,
         openSeams,
+        [OpenSeamReasonKind.RuntimeRenderingProductMissing],
       );
     }
     return instructions;
@@ -1006,13 +1698,14 @@ export class RuntimeRenderingMaterializer {
 
   private recordOpenSeam(
     local: string,
+    ownerHandle: MaterializationOwnerHandle,
     summary: string,
     addressHandle: AddressHandle | null,
     source: RuntimeRenderingSourceSet,
     records: KernelStoreRecord[],
     openSeams: OpenSeam[],
+    reasonKinds: readonly OpenSeamReasonKind[],
     seamKindKey: OpenSeamKindKey = KernelVocabulary.Instruction.OpenInstruction.key,
-    reasonKinds: readonly OpenSeamReasonKind[] = [],
   ): void {
     const seam = new OpenSeam(
       this.store.handles.openSeam(local),
@@ -1023,7 +1716,16 @@ export class RuntimeRenderingMaterializer {
       reasonKinds,
     );
     openSeams.push(seam);
-    records.push(seam);
+    records.push(
+      seam,
+      new MaterializationRecord(
+        this.store.handles.materialization(local),
+        ownerHandle,
+        [],
+        [],
+        [seam.handle],
+      ),
+    );
   }
 
   private recordsForSource(local: string): RuntimeRenderingSourceSet {
@@ -1064,6 +1766,7 @@ function uniqueRuntimeControllers(
   return result;
 }
 
+
 function uniqueRuntimeWatchers(
   watchers: readonly RuntimeWatcher[],
 ): readonly RuntimeWatcher[] {
@@ -1075,6 +1778,21 @@ function uniqueRuntimeWatchers(
     }
     seen.add(watcher.productHandle);
     result.push(watcher);
+  }
+  return result;
+}
+
+function uniqueRuntimeHydrationContexts(
+  contexts: readonly RuntimeHydrationContext[],
+): readonly RuntimeHydrationContext[] {
+  const seen = new Set<ProductHandle>();
+  const result: RuntimeHydrationContext[] = [];
+  for (const context of contexts) {
+    if (seen.has(context.productHandle)) {
+      continue;
+    }
+    seen.add(context.productHandle);
+    result.push(context);
   }
   return result;
 }

@@ -1,0 +1,27 @@
+<template>
+  <p class="missing-conditional-colon" title.bind="condition ? label"></p>
+  <template class="empty-iterator" repeat.for=""></template>
+  <template class="missing-iterator-iterable" repeat.for="item of"></template>
+  <p class="missing-converter-name">${label |}</p>
+  <p class="invalid-converter-name">${label | 1}</p>
+  <p class="missing-behavior-name">${label &}</p>
+  <p class="invalid-behavior-name">${label & 1}</p>
+  <p class="unterminated-interpolation" title="before ${label"></p>
+  <template class="array-pattern-default" repeat.for="[entry = label] of items"></template>
+  <template class="array-pattern-rest" repeat.for="[...rest] of items"></template>
+  <template class="array-pattern-nested" repeat.for="[[entry]] of items"></template>
+  <button class="spread-expression" click.trigger="...items"></button>
+  <button class="invalid-assignment-target" click.trigger="1 = label"></button>
+  <button class="optional-assignment-target" click.trigger="maybeItem?.label = label"></button>
+  <button class="stray-of" click.trigger="label of items"></button>
+  <button class="dynamic-import" click.trigger="import('module')"></button>
+  <button class="optional-tagged-template" click.trigger="maybeItem?.`label`"></button>
+  <p class="unterminated-string" title.bind="'label"></p>
+  <p class="unterminated-template" title.bind="`label"></p>
+  <p class="missing-call-close" title.bind="format(label"></p>
+  <p class="unexpected-character" title.bind="#"></p>
+  <button class="arrow-default-parameter" click.trigger="(entry = label) => entry"></button>
+  <button class="arrow-destructured-parameter" click.trigger="([entry]) => entry"></button>
+  <button class="arrow-rest-not-last" click.trigger="(...entries, entry) => entry"></button>
+  <button class="arrow-block-body" click.trigger="entry => { entry }"></button>
+</template>

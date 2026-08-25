@@ -1,6 +1,14 @@
 import type { OpenSeamReasonKind } from '../kernel/open-seam.js';
+import type {
+  AddressHandle,
+  HotDetailHandle,
+  IdentityHandle,
+} from '../kernel/handles.js';
 import type { CheckerExpressionTypeEvaluator } from '../type-system/expression-type-evaluator.js';
-import type { CheckerTypeReference } from '../type-system/type-shape.js';
+import type {
+  CheckerTypeMemberKind,
+  CheckerTypeReference,
+} from '../type-system/type-shape.js';
 import type { RuntimeRenderingEmission } from '../template/runtime-rendering-materializer.js';
 import type { RuntimeControllerBindEmission } from '../template/runtime-controller-bind-materializer.js';
 import type { TypeSystemProject } from '../type-system/project.js';
@@ -13,6 +21,7 @@ import type {
   RuntimeBindingValueChannelCouplingKind,
   RuntimeBindingPrimitiveValue,
 } from './runtime-binding-observation.js';
+import type { RuntimeOperationRealization } from '../runtime-expression/runtime-operation.js';
 
 export type { RuntimeValueChannelBinding } from './runtime-binding-expression.js';
 
@@ -27,6 +36,20 @@ export type RuntimeBindingValueChannelDraft = {
   readonly observerCouplings?: readonly RuntimeBindingValueChannelCouplingKind[];
   readonly openReason: string | null;
   readonly openReasonKinds?: readonly OpenSeamReasonKind[];
+};
+
+export type RuntimeBindingValueChannelDraftResult = {
+  readonly draft: RuntimeBindingValueChannelDraft;
+  readonly realization: RuntimeOperationRealization;
+  /** Upstream product owner whose cited seam caused this open draft, or null for channel-local pressure. */
+  readonly openReasonOwnerIdentityHandle: IdentityHandle | null;
+  /** Object type tested by a guarded source-member read. */
+  readonly admittedSourceOwnerType: CheckerTypeReference | null;
+  readonly admittedSourceValueType: CheckerTypeReference | null;
+  readonly admittedSourceMemberKind: CheckerTypeMemberKind | `${CheckerTypeMemberKind}` | null;
+  /** Exact projected member retained before the guarded-access result is compressed into a value channel. */
+  readonly admittedSourceMemberHandle: HotDetailHandle | null;
+  readonly admittedSourceMemberSourceAddressHandle: AddressHandle | null;
 };
 
 export interface BindingValueChannelDraftContext {

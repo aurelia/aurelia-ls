@@ -41,7 +41,7 @@
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-05-12"
+      "updatedAt": "2026-07-19"
     },
     {
       "id": "frontier:configuration-option-shape-issues",
@@ -202,12 +202,13 @@
         "world-construction",
         "kernel-publication"
       ],
-      "summary": "ConfigurationKernelEmitter is the source-order configuration sequence emitter that coordinates app-frame and per-step materialization.",
-      "rationale": "The emitter owns the configuration sequence boundary and batch commit, but should remain thin over publication, app-frame admission, and per-step products. Its size is a watchpoint for sequence orchestration growing back into app-root or registration emulation.",
+      "summary": "ConfigurationKernelEmitter is the source-order configuration sequence emitter that coordinates application-operation and per-step materialization.",
+      "rationale": "The emitter owns the configuration sequence boundary and batch commit, but should remain thin over publication, exact application construction, and per-step products. Its size is a watchpoint for sequence orchestration growing back into app-root or registration emulation.",
       "guidance": [
-        "Start here when sequence ordering, sequence products, app-frame coordination, or configuration batch emission changes.",
+        "Start here when sequence ordering, sequence products, application-operation coordination, or configuration batch emission changes.",
         "Keep per-step product creation in ConfigurationStepMaterializer and record envelopes in ConfigurationKernelPublication.",
-        "If new app admission facts appear, check AureliaAppFrameMaterializer before adding logic directly to the emitter."
+        "A reached invocation-preparation boundary is sequence-level uncertainty, not an executed step. Attach its open seam to the exact evaluator-owned facade/container sequence and scope downstream demand through that sequence identity; never fabricate registration admission from receiver or argument preparation alone.",
+        "If new app construction or root-operation facts appear, check AureliaApplicationMaterializer before adding logic directly to the emitter."
       ],
       "anchors": [
         {
@@ -220,7 +221,7 @@
         {
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/configuration/README.md",
-          "summary": "Configuration sequence, app-frame, and step materialization split."
+          "summary": "Configuration sequence, application-operation, and step materialization split."
         }
       ],
       "liveChecks": [
@@ -233,7 +234,7 @@
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-05-12"
+      "updatedAt": "2026-07-20"
     },
     {
       "id": "frontier:binding-scope-semantic-model",
@@ -243,15 +244,22 @@
         "configuration",
         "binding",
         "scope",
-        "type-system"
+        "type-system",
+        "provenance",
+        "runtime-assignment"
       ],
       "summary": "BindingScope, BindingContext, and OverrideContext are framework-shaped semantic models for runtime Scope lookup and template-visible names.",
-      "rationale": "Binding scope sits between controller activation, template locals, expression lookup, and TypeChecker projection. It is intentionally modeled as a runtime concept with auLink anchors rather than as a TypeScript lexical scope or answer-local completion helper.",
+      "rationale": "Binding scope sits between controller activation, template locals, expression lookup, runtime assignment, and TypeChecker projection. It is intentionally modeled as a runtime concept with auLink anchors rather than as a TypeScript lexical scope or answer-local completion helper. Runtime ancestry, immutable state history, declaration identity, current value type, and author assignment authority are distinct axes on this model.",
       "guidance": [
         "Start here when expression lookup, `$parent`, `$this`, template locals, repeat locals, or branch-local scope overlays change.",
         "Keep runtime binding scope distinct from compiler resource scope and template-controller flow scope.",
         "Use Scope product details for inquiry instead of peeking into controller construction or compiler-world internals.",
         "Use BindingScope.lookup/locate/locateThis/locateBoundary for runtime name, `$this`, and boundary lookup; TypeChecker and source-value consumers should not carry their own parent-scope traversal loops.",
+        "Consumers that project ownership must retain BindingScope.locate(...).scope together with the selected slot. Do not collapse a located lookup to the slot and later substitute the active child scope as its owner.",
+        "Keep BindingScope.runtimeParent for Aurelia `$parent`/fallback traversal and BindingScope.predecessor for prior immutable states of the same runtime Scope identity. A state transition must not become a synthetic runtime ancestor.",
+        "Promise settlement and target-to-source binding writes use the generic runtime-assignment transition: lookup the assignment input state, update the selected context lane, then publish the post-write state for later reads. Do not create controller-specific result-local scope models.",
+        "BindingContextSlot.targetIdentityHandle/sourceAddressHandle own declaration identity and source; targetTypeMemberHandle reaches the declaration member detail; targetType is the current runtime value type; targetTypeSourceMemberHandle is an optional direct member carrier for spelling that type. Do not overwrite declaration identity with a value-flow member.",
+        "BindingContextSlot.assignmentAccessKind is template-author authority, not JavaScript descriptor shape. Repeat contextuals are framework-managed read-only for authors, including internally mutable `$index` and `$length`.",
         "Direct authored Scope.create/fromParent/getContext nullish-argument failures are configuration-owned source/API issues; do not model them as rendered binding lookup fallbacks.",
         "Scope API issue spans should carry the boot-admitted source-file handle through sourceSiteForNode/sourceSpanAddressForSite. Do not fall back to filename re-resolution for this scanner-owned path.",
         "Scope API issue products should publish through ConfigurationIssuePublisher after the scanner-owned source span is created."
@@ -263,6 +271,18 @@
           "symbolName": "BindingScope",
           "line": 280,
           "summary": "Runtime Scope semantic model."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/configuration/scope.ts",
+          "symbolName": "BindingContextSlot",
+          "summary": "Runtime scope slot with separate declaration identity, current type source, and author assignment authority."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/observation/binding-source-write-capability.ts",
+          "symbolName": "runtimeAssignmentInputScopeForAccessScope",
+          "summary": "Selects assignment input state without confusing immutable predecessor history with runtime ancestry."
         },
         {
           "kind": "source",
@@ -329,7 +349,7 @@
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-05-15"
+      "updatedAt": "2026-07-18"
     },
     {
       "id": "frontier:app-world-resource-visibility",
@@ -391,28 +411,33 @@
         "observation",
         "auLink"
       ],
-      "summary": "AppTask-time mutations of framework services must materialize as compiler-world and observer-locator service state.",
-      "rationale": "Framework corpus form pressure exposed AppTask callbacks that call IAttrMapper.useTwoWay(...) and NodeObserverLocator.useConfig(...). These are not fixture quirks: Aurelia applications can customize framework services during configuration, so semantic-runtime needs a durable recognition and threading layer rather than built-in-only AttrMapper/ObserverLocator instances.",
+      "summary": "AppTask-time mutations of framework services must materialize as container-scoped compiler-world, observer-locator, and listener-authoring state.",
+      "rationale": "Framework corpus pressure exposed AppTask callbacks that call IAttrMapper.useTwoWay(...), NodeObserverLocator.useConfig(...), and mutate IKeyMapping. These are not fixture quirks: Aurelia applications can customize framework services during configuration, so semantic-runtime needs a durable recognition and threading layer rather than built-in-only service instances.",
       "guidance": [
-        "Start here when AppTask callbacks mutate IAttrMapper, NodeObserverLocator, or adjacent framework services.",
-        "Direct or evaluated AppTask registry values must keep their AppTask observation attached; do not let the synthetic registry object erase the lifecycle callback.",
-        "AppTask factory calls are registry value creation, not standalone app configuration effects; registration admission is the boundary that should materialize the AppTask product.",
+        "Start here when AppTask callbacks mutate IAttrMapper, NodeObserverLocator, IKeyMapping, or adjacent framework services.",
+        "Evaluator-created AppTask registry values must retain occurrence-local slot, key, callback, and captured-environment evidence through value forks; do not reconstruct the callback from source or final module state.",
+        "AppTask factory calls are registry value creation, not standalone app configuration effects. Framework-service customization may consume only RegisteredAppTask rows actually spent by DI, in registration order; an unregistered declaration has no app-world effect.",
+        "Select framework-service AppTasks per app-root container using the nearest IAppTask registration cohort; independent roots must not consume one project-global customization snapshot.",
         "Keep service customizations framework-shaped and auLink-grounded; do not push one-off rules into compiler or binding materializers.",
         "Only treat an AppTask callback parameter as a container when the AppTask key is IContainer. Direct service keys such as NodeObserverLocator and IAttrMapper bind the parameter to that service, while no-key tasks and arbitrary DI keys must not become container locals just because their callback body calls .get(...).",
-        "Configuration recognition should identify service calls, while observation-owned helpers such as nodeObserverNodeConfigsFromUseConfigCall decode NodeObserverLocator config/accessor entries.",
+        "The framework-service execution host identifies only calls reached by evaluator control flow. Configuration and observation decoders consume immutable invocation evidence; they must not replay callback source or rebuild alias maps.",
         "Duplicate NodeObserverLocator config/global config mappings are configuration-owned diagnostics: publish ConfigurationIssue products with exact runtime-html AUR0653 authority and keep the rest of the valid service state available to compiler-world observer lookup.",
         "Configuration customization owns duplicate NodeObserverLocator mappings (AUR0653) and the allowDirtyCheck service-state handoff. The sibling node_observer_strategy_not_found code (AUR0652) is spent by observation target-access diagnostics only when observer lookup models the exact dirty-check-disabled framework path; host-node controller codes remain outside this frontier.",
         "NodeObserverLocator.useConfig(...) service state is spent only when template/runtime binding semantics ask for an observer. Plain to-view .bind host-node access may still close through getAccessor/ElementPropertyAccessor unless an accessor override exists; two-way/from-view paths reach the configured observer.",
+        "IKeyMapping mutations execute through the same evaluator-owned AppTask callback path. Preserve exact known meta/key membership and authored key sources, but keep dynamic computed membership open and never claim arbitrary IModifiedEventHandlerCreator modifier vocabularies are enumerable.",
+        "AttrMapper useMapping/useGlobalMapping/useTwoWay keys are exact app-authored runtime keys. Project the template node and attribute through runtime-dom-name before lookup; never case-fold the app configuration into aliases that the framework would not spend.",
+        "AttrMapper useTwoWay retains a stable callable slot in compiler-service state and the original evaluator closure in candidate-local execution bindings. Compiler-world lookup executes the current target through evaluateStaticCallableTruthiness with browser-normalized node/attribute inputs and a narrowly modeled Element.hasAttribute operation; open DOM access, pressure, abrupt completion, or mutation keeps the mode open rather than widening the predicate.",
         "Attach ConfigurationIssue product details only after the issue kernel records are committed; sidecar details without materialized products are invalid.",
-        "When recognition needs more expression closure, improve StaticEvaluator or the expression reader before adding ad hoc callback parsing."
+        "Execute each DI-spent framework-service AppTask in an isolated evaluator fork under PathProvenEffects. Dead branches contribute no mutation; runtime-dependent branches remain explicit pressure; arbitrary lifecycle and async continuation execution stay outside this frontier.",
+        "Use evaluation-owned executeStaticFunctionEffects for side-effectful retained functions so registry and AppTask consumers cannot diverge on branch semantics. The domain host still owns exact arguments, callable operations, and projection.",
+        "When execution needs more expression closure, improve StaticEvaluator or the shared invocation-evidence reader before adding ad hoc callback parsing."
       ],
       "anchors": [
         {
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/configuration/framework-service-customization.ts",
           "symbolName": "FrameworkServiceCustomizationRecognitionPass",
-          "line": 77,
-          "summary": "Recognizes AppTask service mutation calls into explicit service state."
+          "summary": "Executes spent framework-service AppTasks and projects reached invocation evidence into explicit service state."
         },
         {
           "kind": "source",
@@ -421,16 +446,40 @@
           "summary": "Pass-local draft with real lifetime for customized AttrMapper/NodeObserverLocator state and configuration issue publication."
         },
         {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/di/world-construction.ts",
+          "symbolName": "RegisteredAppTask",
+          "summary": "DI-spending evidence that joins an AppTask product to its exact evaluator occurrence."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/evaluation/function-execution.ts",
+          "symbolName": "evaluateStaticCallableTruthiness",
+          "summary": "Shared isolated truthiness boundary used by retained framework policy predicates."
+        },
+        {
           "kind": "auLink",
           "linkId": "runtime-html:AttrMapper",
           "symbolName": "TemplateAttributeMapperService",
           "summary": "Compiler-world AttrMapper service that consumes recognized customization state."
         },
         {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/template/runtime-dom-name.ts",
+          "symbolName": "runtimeNodeName",
+          "summary": "Shared authored-to-browser DOM name projection consumed by AttrMapper, NodeObserverLocator, and TypeScript DOM lookup."
+        },
+        {
           "kind": "auLink",
           "linkId": "runtime-html:NodeObserverLocator",
           "symbolName": "NodeObserverLocator",
           "summary": "Observer service that consumes recognized node observer customization state."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/template/runtime-event-modifier.ts",
+          "symbolName": "RuntimeKeyMappingConfiguration",
+          "summary": "App-effective key-mapping vocabulary and exact app-authored source witnesses carried by compiler worlds."
         },
         {
           "kind": "source",
@@ -456,6 +505,16 @@
           "summary": "Focused contract for AppTask NodeObserverLocator service customization, duplicate AUR0653 issues, and observer-lookup consumption of valid custom config."
         },
         {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/test/app-task-execution.test.ts",
+          "summary": "Adversarial witness for spent-only AppTasks, repeated factory occurrences, callback captures, helper aliases, branch reachability, runtime pressure, and registration order."
+        },
+        {
+          "kind": "script",
+          "command": "pnpm --filter @aurelia-ls/semantic-runtime contract:semantic-conformance -- --id template-native-target-precedence",
+          "summary": "AttrMapper exact-key, DOM-name, native-mode, SVG-type, inlay, edit-refusal, and retained predicate-execution evidence."
+        },
+        {
           "kind": "lens",
           "lensId": "bridge.aulink",
           "projection": "mirror",
@@ -470,6 +529,11 @@
           "kind": "source-declaration-exists",
           "filePath": "packages/semantic-runtime/src/configuration/framework-service-customization.ts",
           "symbolName": "FrameworkServiceCustomizationRecognitionPass"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/evaluation/function-execution.ts",
+          "symbolName": "evaluateStaticCallableTruthiness"
         },
         {
           "kind": "product-large-class",
@@ -503,10 +567,15 @@
           "kind": "source-declaration-exists",
           "filePath": "packages/semantic-runtime/src/configuration/framework-error-code.ts",
           "symbolName": "ConfigurationFrameworkErrorCode"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/template/runtime-dom-name.ts",
+          "symbolName": "runtimeNodeName"
         }
       ],
       "createdAt": "2026-05-13",
-      "updatedAt": "2026-05-18"
+      "updatedAt": "2026-07-24"
     },
     {
       "id": "frontier:aurelia-app-world-composer",
@@ -561,6 +630,94 @@
       ],
       "createdAt": "2026-05-14",
       "updatedAt": "2026-05-14"
+    },
+    {
+      "id": "decision:aurelia-facade-container-evaluation-identity",
+      "kind": "decision",
+      "domains": [
+        "configuration",
+        "semantic-runtime",
+        "evaluation",
+        "di",
+        "application"
+      ],
+      "summary": "Aurelia facades and authored containers retain exact evaluator identity through app-world materialization.",
+      "rationale": "Aurelia adopts the exact container passed to its constructor, child containers preserve parent lookup semantics, and separate quick-start static calls create separate app instances. Receiver spelling and source containment cannot prove those runtime identities. Static evaluation now carries immutable facade/container identities across aliases and modules; one project binding frame maps them to kernel products, and configuration materialization orders identity prerequisites without changing the published source sequence order.",
+      "guidance": [
+        "Use AureliaFacadeEvaluation and AureliaContainerEvaluation as candidate-local identity evidence; do not regroup app/container flows by receiver name or containing source file.",
+        "Use ConfigurationEvaluationBindingFrame as the sole project-run evaluator-to-product bridge. Do not retain evaluator objects in durable kernel records or rebuild a parallel name map downstream.",
+        "Materialize authored root and parent containers before child containers, registrations, and app admissions, while preserving authored/evaluator order in the published configuration products.",
+        "Implicit runtime-html and browser quick-start facades own distinct default containers; separate static Aurelia.register/app calls remain separate unless one evaluated facade chain proves shared identity.",
+        "Container construction owns exactly one IContainer self resolver. DI world construction consumes it and must not republish a backup self-resolver path.",
+        "AUR0768 same/ancestor-container facade reuse is execution-order-sensitive. Publish it only when ordered lifecycle evidence proves the offending construction, not from parent depth or final world state alone."
+      ],
+      "anchors": [
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/configuration/aurelia-evaluation-runtime.ts",
+          "symbolName": "AureliaFacadeEvaluation",
+          "summary": "Evaluator identity for one Aurelia facade and its exact selected container."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/configuration/aurelia-evaluation-runtime.ts",
+          "symbolName": "AureliaContainerEvaluation",
+          "summary": "Evaluator identity for authored root/child and implicit facade containers."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/configuration/configuration-evaluation-bindings.ts",
+          "symbolName": "ConfigurationEvaluationBindingFrame",
+          "summary": "Project-run evaluator identity to emitted product bridge."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/configuration/configuration-recognition-project-pass.ts",
+          "symbolName": "ConfigurationRecognitionProjectPass",
+          "summary": "Project-wide recognition and dependency-ranked materialization coordinator."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/configuration/aurelia-application-materializer.ts",
+          "symbolName": "AureliaApplicationMaterializer",
+          "summary": "Consumes exact facade/container identity at the creating operation and publishes per-app root products."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/di/container-materializer.ts",
+          "symbolName": "ContainerRootMaterializer",
+          "summary": "Constructor-owned root-container and self-resolver publication."
+        },
+        {
+          "kind": "fixture",
+          "path": "packages/semantic-runtime/fixtures/pressure/di-authored-app-containers",
+          "summary": "Root, child, imported, function-returned, implicit, open, and static app identity pressure."
+        },
+        {
+          "kind": "doc",
+          "path": "packages/semantic-runtime/src/configuration/README.md",
+          "summary": "Configuration evaluator identity, operation target, and exact product-ownership doctrine."
+        }
+      ],
+      "liveChecks": [
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/configuration/aurelia-evaluation-runtime.ts",
+          "symbolName": "AureliaFacadeEvaluation"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/configuration/configuration-evaluation-bindings.ts",
+          "symbolName": "ConfigurationEvaluationBindingFrame"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/configuration/configuration-recognition-project-pass.ts",
+          "symbolName": "ConfigurationRecognitionProjectPass"
+        }
+      ],
+      "createdAt": "2026-07-19",
+      "updatedAt": "2026-07-19"
     }
   ]
 }

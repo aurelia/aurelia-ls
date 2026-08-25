@@ -21,12 +21,16 @@ import type { CheckerTypeReference } from '../type-system/type-shape.js';
 export const enum RuntimeBindingScopeIssuePhase {
   IteratorSourceProjection = 'iterator-source-projection',
   IteratorLocalProjection = 'iterator-local-projection',
+  TemplateControllerValueScope = 'template-controller-value-scope',
 }
 
 export const enum RuntimeBindingScopeIssueKind {
   RepeatNonIterable = 'repeat-non-iterable',
+  UnsupportedRepeatDeclaration = 'unsupported-repeat-declaration',
   DestructuringNonObject = 'destructuring-non-object',
+  RepeatObjectBindingNullish = 'repeat-object-binding-nullish',
   ArrayRestNonArray = 'array-rest-non-array',
+  WithNullBindingContext = 'with-null-binding-context',
 }
 
 export const enum RuntimeBindingScopeIssueCertainty {
@@ -34,15 +38,20 @@ export const enum RuntimeBindingScopeIssueCertainty {
   Possible = 'possible',
 }
 
-/** Runtime binding scope issue discovered while a scope effect is spent into a modeled Scope. */
+export type RuntimeBindingScopeIssueOwnerProductKindKey =
+  | typeof KernelVocabulary.Binding.ScopeEffect.key
+  | typeof KernelVocabulary.Instruction.Instruction.key;
+
+/** Runtime issue discovered while an instruction or scope effect is spent into a modeled Scope. */
 export class RuntimeBindingScopeIssue {
   readonly productKindKey: ProductKindKey = KernelVocabulary.Binding.ScopeIssue.key;
 
   constructor(
     readonly productHandle: ProductHandle,
     readonly identityHandle: IdentityHandle,
-    readonly ownerScopeEffectProductHandle: ProductHandle,
-    readonly ownerScopeEffectIdentityHandle: IdentityHandle,
+    readonly ownerProductKindKey: RuntimeBindingScopeIssueOwnerProductKindKey,
+    readonly ownerProductHandle: ProductHandle,
+    readonly ownerIdentityHandle: IdentityHandle,
     readonly phase: RuntimeBindingScopeIssuePhase,
     readonly issueKind: RuntimeBindingScopeIssueKind,
     readonly certainty: RuntimeBindingScopeIssueCertainty,
@@ -69,8 +78,9 @@ export class RuntimeBindingScopeIssuePublisher {
 
   publish(
     local: string,
-    ownerScopeEffectProductHandle: ProductHandle,
-    ownerScopeEffectIdentityHandle: IdentityHandle,
+    ownerProductKindKey: RuntimeBindingScopeIssueOwnerProductKindKey,
+    ownerProductHandle: ProductHandle,
+    ownerIdentityHandle: IdentityHandle,
     phase: RuntimeBindingScopeIssuePhase,
     issueKind: RuntimeBindingScopeIssueKind,
     certainty: RuntimeBindingScopeIssueCertainty,
@@ -85,8 +95,9 @@ export class RuntimeBindingScopeIssuePublisher {
     const issue = new RuntimeBindingScopeIssue(
       productHandle,
       identityHandle,
-      ownerScopeEffectProductHandle,
-      ownerScopeEffectIdentityHandle,
+      ownerProductKindKey,
+      ownerProductHandle,
+      ownerIdentityHandle,
       phase,
       issueKind,
       certainty,
@@ -112,13 +123,13 @@ export class RuntimeBindingScopeIssuePublisher {
         [EvidenceRole.Diagnostic, EvidenceRole.Scope],
         issue.message,
         issue.sourceAddressHandle,
-        issue.ownerScopeEffectIdentityHandle,
+        issue.ownerIdentityHandle,
       ),
       new ProvenanceRecord(provenanceHandle, [evidenceHandle]),
       new CompilerIdentity(
         issue.identityHandle,
         KernelVocabulary.Binding.ScopeIssue.key,
-        issue.ownerScopeEffectIdentityHandle,
+        issue.ownerIdentityHandle,
         issue.sourceAddressHandle,
         `${issue.phase}:${issue.issueKind}:${issue.certainty}`,
       ),

@@ -1,6 +1,7 @@
 import ts from 'typescript';
 import type {
   AddressHandle,
+  HotDetailHandle,
   IdentityHandle,
   ProductHandle,
 } from '../kernel/handles.js';
@@ -192,8 +193,8 @@ export class CheckerTypeCarrier {
 /**
  * Current TypeChecker carrier for a projected member.
  *
- * Like `CheckerTypeCarrier`, this is hot current-run state. Durable relationships live in product handles, identity
- * handles, claims, and provenance.
+ * Like `CheckerTypeCarrier`, this is hot current-run state. Durable relationships live on the owning type-shape
+ * product, declaration identities, claims, and provenance.
  */
 export class CheckerTypeMemberCarrier {
   constructor(
@@ -215,8 +216,8 @@ export class CheckerTypeReference {
     readonly productHandle: ProductHandle | null,
     /** Identity handle for this type projection, when one exists. */
     readonly identityHandle: IdentityHandle | null,
-    /** Type-system key used to reconnect to hot details in the current analysis epoch. */
-    readonly checkerKey: string | null,
+    /** Stable semantic key for an unmaterialized type or a projected type-shape product. */
+    readonly semanticKey: string | null,
     /** Display string for traces and candidate labels. */
     readonly display: string | null,
     /** Broad shape kind, when known. */
@@ -238,7 +239,7 @@ export function checkerTypeReferenceWithSource(
   return new CheckerTypeReference(
     reference.productHandle,
     reference.identityHandle,
-    reference.checkerKey,
+    reference.semanticKey,
     reference.display,
     reference.shapeKind,
     reference.origin,
@@ -253,8 +254,8 @@ export function sameCheckerTypeReference(
   if (left.productHandle != null && right.productHandle != null && left.productHandle === right.productHandle) {
     return true;
   }
-  if (left.checkerKey != null && right.checkerKey != null) {
-    return left.checkerKey === right.checkerKey && left.display === right.display;
+  if (left.semanticKey != null && right.semanticKey != null) {
+    return left.semanticKey === right.semanticKey && left.display === right.display;
   }
   if (left.display == null || left.display !== right.display || left.shapeKind !== right.shapeKind) {
     return false;
@@ -273,8 +274,8 @@ export function sameCheckerTypeReference(
 /** Type-system member detail visible to template/expression inquiry. */
 export class CheckerTypeMember {
   constructor(
-    /** Hot detail handle for this member projection; usually not a durable kernel product. */
-    readonly productHandle: ProductHandle,
+    /** Store-local handle for this product-owned member detail. */
+    readonly detailHandle: HotDetailHandle,
     /** Runtime/authored member name. */
     readonly name: string,
     /** Broad member lane from checker declarations and symbol flags. */
@@ -306,9 +307,8 @@ export class CheckerTypeMember {
 /**
  * Durable identity reached through a checker member.
  *
- * Type members are hot details rather than durable kernel products. Their own follow-up handle is product-shaped, but
- * they should not invent a kernel identity record just to parent value-type projections. Prefer the declaration
- * identity when TypeScript supplied one; otherwise fall back to the owning type shape identity.
+ * Type members are product-owned hot details rather than durable kernel products. Prefer the declaration identity when
+ * TypeScript supplied one; otherwise fall back to the owning type-shape identity.
  */
 export function checkerTypeMemberReachableIdentityHandle(
   member: CheckerTypeMember,
@@ -319,8 +319,8 @@ export function checkerTypeMemberReachableIdentityHandle(
 /** Type-system type detail visible to template/expression inquiry. */
 export class CheckerTypeShape {
   constructor(
-    /** Type-system key for this projection in the current analysis epoch. */
-    readonly checkerKey: string,
+    /** Stable semantic key for this projected type shape. */
+    readonly semanticKey: string,
     /** Broad shape lane. */
     readonly shapeKind: CheckerTypeShapeKind,
     /** How this projection was produced. */
@@ -366,7 +366,7 @@ export class CheckerTypeShape {
     return new CheckerTypeReference(
       this.productHandle,
       this.identityHandle,
-      this.checkerKey,
+      this.semanticKey,
       this.display,
       this.shapeKind,
       this.origin,

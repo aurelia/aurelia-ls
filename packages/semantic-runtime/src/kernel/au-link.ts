@@ -17,9 +17,11 @@ export type AuLinkFacet =
   | 'value-converter-semantics'
   | 'template-controller-semantics'
   | 'validation-controller-semantics'
-  | 'router-runtime-model';
+  | 'router-runtime-model'
+  | 'observer-selection-semantics';
 
 export interface AuLinkOptions {
+  /** Exact bounded semantic decision; absence leaves correspondence breadth unqualified. */
   readonly facet?: AuLinkFacet;
 }
 
@@ -42,7 +44,6 @@ export function auLink(id: 'kernel:ModuleItem'): ClassDecorator;
 export function auLink(id: 'runtime:Scope'): ClassDecorator;
 export function auLink(id: 'runtime:BindingContext'): ClassDecorator;
 export function auLink(id: 'runtime:IOverrideContext'): ClassDecorator;
-export function auLink(id: 'runtime:IEffect'): ClassDecorator;
 export function auLink(id: 'runtime:IObserverLocator'): ClassDecorator;
 export function auLink(id: 'runtime:ObserverLocator'): ClassDecorator;
 export function auLink(id: 'runtime:PropertyAccessor'): ClassDecorator;
@@ -67,6 +68,7 @@ export function auLink(id: 'runtime-html:IComponentController'): ClassDecorator;
 export function auLink(id: 'runtime-html:IHydratableController'): ClassDecorator;
 export function auLink(id: 'runtime-html:ISyntheticView'): ClassDecorator;
 export function auLink(id: 'runtime-html:IViewFactory'): ClassDecorator;
+export function auLink(id: 'runtime-html:IAuSlotsInfo'): ClassDecorator;
 export function auLink(id: 'runtime-html:ICustomAttributeController'): ClassDecorator;
 export function auLink(id: 'runtime-html:IDryCustomElementController'): ClassDecorator;
 export function auLink(id: 'runtime-html:IContextualCustomElementController'): ClassDecorator;
@@ -299,6 +301,9 @@ export function auLink(id: 'router:HrefCustomAttribute'): ClassDecorator;
 export function auLink(id: 'router:LoadCustomAttribute'): ClassDecorator;
 export function auLink(id: 'router:ViewportCustomElement'): ClassDecorator;
 export function auLink(id: 'ui-virtualization:VirtualRepeat'): ClassDecorator;
+export function auLink(id: 'ui-virtualization:VirtualRepeatForAttributePattern'): ClassDecorator;
+export function auLink(id: 'ui-virtualization:IterateBindingCommand'): ClassDecorator;
+export function auLink(id: 'ui-virtualization:IterateBindingInstruction'): ClassDecorator;
 export function auLink(id: 'route-recognizer:RouteRecognizer'): ClassDecorator;
 export function auLink(id: 'route-recognizer:ConfigurableRoute'): ClassDecorator;
 export function auLink(id: 'route-recognizer:Endpoint'): ClassDecorator;

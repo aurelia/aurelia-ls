@@ -4,7 +4,8 @@ import type { AureliaAppWorldProjectEmission } from '../configuration/app-world-
 import type { ConfigurationKernelEmission } from '../configuration/configuration-kernel-emitter.js';
 import type { ConfigurationStep } from '../configuration/configuration-sequence.js';
 import { ConfigurationProductDetails } from '../configuration/product-details.js';
-import type { SourceFileAdmission } from '../boot/frames.js';
+import type { ProjectBootFrame, SourceFileAdmission } from '../boot/frames.js';
+import { semanticSourceReferenceHostPath } from '../boot/source-ownership.js';
 import type { AddressHandle, IdentityHandle, ProductHandle } from '../kernel/handles.js';
 import type { KernelStore } from '../kernel/store.js';
 import {
@@ -22,7 +23,7 @@ import {
   type ApplicationStyleSourceKind,
   type ApplicationSupportSourceRole,
 } from '../application/index.js';
-import { BindableBindingMode } from '../resources/bindable-definition.js';
+import type { BindableBindingMode } from '../resources/bindable-definition.js';
 import { CustomElementDefinition } from '../resources/custom-element-definition.js';
 import type { ResourceDependencyReferenceKind } from '../resources/resource-reference.js';
 import {
@@ -47,12 +48,11 @@ import {
   typeSystemSourcePathIndex,
 } from '../type-system/source-path-index.js';
 import type { TemplateCompilerWorldEmission } from '../template/compiler-world-materializer.js';
-import type {
-  RouteConfigModel,
-  RouteConfigOriginKind,
-  RouteConfigValueKind,
+import {
+  resolvedRouteableComponentName,
+  type RouteConfigModel,
 } from '../router/model.js';
-import { projectBindableTypeSurface } from './bindable-type-projection.js';
+import { emptyBindableTypeSurface, projectBindableTypeSurface } from './bindable-projection.js';
 import {
   readBindingObservedDependencyRows,
   readBindingTargetAccessRows,
@@ -67,7 +67,7 @@ import {
   resourceLocalBindingTargetOperations,
   resourceLocalBindingValueChannels,
   resourceLocalRuntimeBindings,
-} from './runtime-resource-ownership.js';
+} from '../template/runtime-resource-ownership.js';
 import { readRuntimeControllerRows } from './controller-projections.js';
 import type {
   SemanticBindingDataFlowRow,
@@ -247,9 +247,12 @@ export interface SemanticApplicationRouteRow {
   readonly id: string | null;
   readonly paths: readonly string[];
   readonly routeKind: string;
-  readonly originKind: RouteConfigOriginKind | `${RouteConfigOriginKind}`;
-  readonly valueKind: RouteConfigValueKind | `${RouteConfigValueKind}`;
+  readonly stage: string;
+  readonly closure: string;
+  /** Authored class, alias, or resource spelling. */
   readonly componentName: string | null;
+  /** Custom-element registration name after routeable resolution. */
+  readonly resolvedComponentName: string | null;
   readonly viewport: string | null;
   readonly childRouteCount: number;
   readonly source: SemanticSourceReference | null;
@@ -352,6 +355,81 @@ export interface SemanticApplicationTopologyResult {
   readonly stateCompositions: readonly SemanticApplicationStateCompositionRow[];
   readonly styles: readonly SemanticApplicationStyleAsset[];
   readonly routes: readonly SemanticApplicationRouteRow[];
+}
+
+/**
+ * Exact source paths retained as templates by converged custom-element definitions.
+ *
+ * This is the bounded ownership projection of application topology's `component-template` file-role lane. Transport
+ * callers can intersect it with boot-authored HTML ownership when deciding whether a document enters template mode.
+ */
+export interface SemanticTemplateDocumentOwnershipResult {
+  readonly projectKey: string;
+  readonly rootDir: string;
+  readonly sources: readonly SemanticSourceReference[];
+}
+
+/** Test one exact authored document against a bounded template-document ownership answer. */
+export function semanticTemplateDocumentOwnershipOwnsSource(
+  ownership: SemanticTemplateDocumentOwnershipResult,
+  matchesSource: (source: SemanticSourceReference) => boolean,
+): boolean {
+  return ownership.sources.some(matchesSource);
+}
+
+/**
+ * Read the complete converged component-template source set without projecting the rest of application topology.
+ *
+ * Keep this in exact parity with `applicationFileRows`: both consume the same converged definition template address,
+ * retain its file path, collapse the public carrier to its immediate anchor, deduplicate by stored path, and sort by
+ * that path. Unrelated admitted HTML never enters the set because no converged definition retains it as its template.
+ */
+export function readSemanticTemplateDocumentOwnership(
+  store: KernelStore,
+  emission: AureliaAppWorldProjectEmission,
+): SemanticTemplateDocumentOwnershipResult {
+  const sources = new Map<string, SemanticSourceReference>();
+  for (const definition of uniqueCustomElementDefinitions(emission)) {
+    const compilation = templateCompilationsForDefinition(emission, definition)[0] ?? null;
+    const source = describeAddress(
+      store,
+      compilation?.compilation.definition.template?.addressHandle
+        ?? definition.template?.addressHandle
+        ?? null,
+    );
+    if (source?.path == null) {
+      continue;
+    }
+    if (!sources.has(source.path)) {
+      sources.set(source.path, source.anchor ?? source);
+    }
+  }
+  return {
+    projectKey: emission.project.projectKey,
+    rootDir: emission.project.rootDir,
+    sources: [...sources.entries()]
+      .sort(([left], [right]) => left < right ? -1 : left > right ? 1 : 0)
+      .map(([, source]) => source),
+  };
+}
+
+/**
+ * Test one exact authored document against the external/HTML template sources retained by converged custom elements.
+ *
+ * Boot admission alone is deliberately insufficient here: an ordinary HTML file can belong to the same project
+ * without being an Aurelia template. The topology file index only assigns `component-template` after resource
+ * recognition and definition convergence retained a template source address. Callers own host/URI normalization and
+ * supply the exact source predicate so this semantic boundary remains transport-independent.
+ */
+export function semanticApplicationTopologyOwnsTemplateDocument(
+  topology: SemanticApplicationTopologyResult,
+  matchesSource: (source: SemanticSourceReference) => boolean,
+): boolean {
+  return topology.files.some((file) =>
+    file.roles.includes('component-template')
+    && file.source != null
+    && matchesSource(file.source)
+  );
 }
 
 export interface SemanticApplicationTopologySummaryResult {
@@ -1061,14 +1139,10 @@ function projectSourcePathForAddress(
   if (source?.path == null) {
     return null;
   }
-  const normalizedPath = normalizeApplicationPath(source.path);
-  for (const admission of emission.project.sourceFiles) {
-    const candidate = normalizeApplicationPath(admission.path);
-    if (normalizedPath === candidate || normalizedPath.endsWith(`/${candidate}`)) {
-      return admission.path;
-    }
-  }
-  return null;
+  const hostPath = semanticSourceReferenceHostPath(emission.project.workspaceRootDir, source);
+  if (hostPath == null) return null;
+  const resolution = emission.project.sourceOwnership.resolvePath(hostPath);
+  return resolution.kind === 'resolved' ? resolution.source.projectPath : null;
 }
 
 function applicationComponentReference(
@@ -1091,8 +1165,13 @@ function applicationComponentReference(
     roles: componentRoleRowsForDefinition(componentRoles, definition),
     bindables: definition.bindables.map((bindable) => {
       const typeSurface = includeTypeSurfaces
-        ? projectBindableTypeSurface(store, definition.target, bindable)
-        : nullBindableTypeSurface();
+        ? projectBindableTypeSurface(
+            store,
+            emission.templates.expressionWorld.projector,
+            bindable,
+            definition.target,
+          )
+        : emptyBindableTypeSurface();
       return {
         name: bindable.name,
         attribute: bindable.attribute,
@@ -1139,17 +1218,6 @@ function applicationComponentReference(
   };
 }
 
-function nullBindableTypeSurface() {
-  return {
-    valueType: null,
-    valueTypeShapeKind: null,
-    effectiveValueTypeShapeKind: null,
-    valueTypeHasCallSignature: null,
-    valueTypeHasMembers: null,
-    valueTypeIsWeak: null,
-  };
-}
-
 function applicationTemplateAsset(
   store: KernelStore,
   emission: AureliaAppWorldProjectEmission,
@@ -1164,11 +1232,7 @@ function applicationTemplateAsset(
   const compilationOpenSeams = compilation == null
     ? null
     : compilation.compilation.compiledTemplate.openSeams.length
-      + compilation.runtimeAnalysis.runtimeRendering.openSeams.length
-      + compilation.runtimeAnalysis.controllerBind.openSeams.length
-      + compilation.runtimeAnalysis.bindingValueChannel.openSeams.length
-      + compilation.runtimeAnalysis.bindingDataFlow.openSeams.length
-      + compilation.runtimeAnalysis.runtimeComposition.openSeams.length;
+      + compilation.runtimeAnalysis.readOpenSeams().length;
   const targetOperations = compilation == null
     ? []
     : resourceLocalBindingTargetOperations(store, compilation);
@@ -1339,9 +1403,10 @@ function applicationRouteRow(
     id: routeConfig.id,
     paths: routeConfig.paths,
     routeKind: routeConfig.routeKind,
-    originKind: routeConfig.originKind,
-    valueKind: routeConfig.valueKind,
+    stage: routeConfig.stage,
+    closure: routeConfig.closure,
     componentName: routeConfig.component?.localName ?? null,
+    resolvedComponentName: resolvedRouteableComponentName(routeConfig.component),
     viewport: routeConfig.viewport,
     childRouteCount: routeConfig.childRoutes.length,
     source: describeAddress(store, routeConfig.sourceAddressHandle),
@@ -1433,7 +1498,8 @@ function applicationServiceInteractionRows(
     return {
       operationKind: site.operationKind,
       consumerPath: site.sourcePath,
-      consumerRole: applicationInteractionConsumerRole(sourceRoleByPath, site.sourcePath) ?? supportSourceRoleForPath(site.sourcePath),
+      consumerRole: applicationInteractionConsumerRole(sourceRoleByPath, emission.project, site.sourcePath)
+        ?? supportSourceRoleForPath(site.sourcePath),
       consumerClassName: site.consumerClassName,
       consumerMemberName: site.consumerMemberName,
       targetSourcePath: site.targetSourcePath,
@@ -1689,7 +1755,10 @@ function dataFlowRootSlotMatchesSourcePath(
   const scope = store.productDetails.read(ConfigurationProductDetails.BindingScope, scopeProductHandle);
   const slot = scope?.locate(sourceRootName).slot ?? null;
   const slotSourcePath = projectSourcePathForAddress(store, emission, slot?.sourceAddressHandle ?? null);
-  return slotSourcePath != null && applicationPathsReferToSameSource(slotSourcePath, sourcePath);
+  const sourceResolution = emission.project.sourceOwnership.resolveProjectPath(sourcePath);
+  return slotSourcePath != null
+    && sourceResolution.kind === 'resolved'
+    && slotSourcePath === sourceResolution.source.projectPath;
 }
 
 function applicationServiceInteractionBindingRowsForDataFlow(
@@ -1794,10 +1863,11 @@ function uniqueServiceInteractionObservedRootMemberNames(
   const memberNames: string[] = [];
   const prefix = `${sourceRootName}.`;
   for (const dependency of observedDependencies) {
-    if (dependency.sourceRootName !== sourceRootName || dependency.sourceName?.startsWith(prefix) !== true) {
+    const sourceName = dependency.occurrence.sourceName;
+    if (dependency.occurrence.sourceRootName !== sourceRootName || sourceName?.startsWith(prefix) !== true) {
       continue;
     }
-    const memberName = dependency.sourceName.slice(prefix.length).split(/[.[(]/u)[0] ?? '';
+    const memberName = sourceName.slice(prefix.length).split(/[.[(]/u)[0] ?? '';
     if (memberName.length > 0 && !memberNames.includes(memberName)) {
       memberNames.push(memberName);
     }
@@ -1875,20 +1945,13 @@ export function semanticApplicationComponentMemberKey(className: string, memberN
 
 function applicationInteractionConsumerRole(
   roleByPath: ReadonlyMap<string, ApplicationFileRole>,
+  project: ProjectBootFrame,
   sourcePath: string,
 ): ApplicationFileRole | null {
-  const normalizedSource = normalizeApplicationPath(sourcePath);
-  const exact = roleByPath.get(normalizedSource) ?? null;
-  if (exact != null) {
-    return exact;
-  }
-  const sourceSuffix = `/${normalizedSource}`;
-  for (const [candidate, role] of roleByPath) {
-    if (candidate.endsWith(sourceSuffix)) {
-      return role;
-    }
-  }
-  return null;
+  const resolution = project.sourceOwnership.resolveProjectPath(sourcePath);
+  return resolution.kind === 'resolved'
+    ? roleByPath.get(resolution.source.projectPath) ?? null
+    : null;
 }
 
 function applicationInteractionConsumerRoleByPath(
@@ -1898,35 +1961,11 @@ function applicationInteractionConsumerRoleByPath(
   const roleByPath = new Map<string, ApplicationFileRole>();
   for (const component of components) {
     if (component.source?.path != null) {
-      for (const path of applicationSourceLookupPaths(component.source.path, emission.project.rootDir)) {
-        roleByPath.set(path, 'component-source');
-      }
+      const resolution = emission.project.sourceOwnership.resolveWorkspacePath(component.source.path);
+      if (resolution.kind === 'resolved') roleByPath.set(resolution.source.projectPath, 'component-source');
     }
   }
   return roleByPath;
-}
-
-function applicationSourceLookupPaths(
-  sourcePath: string,
-  projectRoot: string,
-): readonly string[] {
-  const normalizedSource = normalizeApplicationPath(sourcePath);
-  const normalizedRoot = normalizeApplicationPath(projectRoot);
-  const rootPrefix = `${normalizedRoot}/`;
-  if (normalizedSource.startsWith(rootPrefix)) {
-    return [normalizedSource, normalizedSource.slice(rootPrefix.length)];
-  }
-  return [normalizedSource];
-}
-
-function normalizeApplicationPath(path: string): string {
-  return path.replaceAll('\\', '/').replace(/^\.\//u, '');
-}
-
-function applicationPathsReferToSameSource(leftPath: string, rightPath: string): boolean {
-  const left = normalizeApplicationPath(leftPath);
-  const right = normalizeApplicationPath(rightPath);
-  return left === right || left.endsWith(`/${right}`) || right.endsWith(`/${left}`);
 }
 
 function applicationStateCompositionRows(
@@ -1979,7 +2018,7 @@ function stateSourceClassDeclarations(
       .map((service) => `${service.sourcePath}\0${service.className}`),
   );
   return emission.project.sourceFiles.flatMap((source) => {
-    const sourceFile = emission.typeSystem.readProgramSourceFileByPath(source.path);
+    const sourceFile = emission.typeSystem.readProgramSourceFileByProjectPath(source.path);
     return sourceFile == null
       ? []
       : topLevelNamedClasses(source, sourceFile)

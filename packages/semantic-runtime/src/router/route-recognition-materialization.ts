@@ -5,10 +5,11 @@ import {
 } from '../kernel/evidence.js';
 import type { IdentityHandle } from '../kernel/handles.js';
 import {
+  KernelPublicationPlan,
   KernelStoreBatch,
-  type KernelStore,
-  type KernelStoreRecord,
-} from '../kernel/store.js';
+  type KernelPublicationContext,
+} from '../kernel/publication.js';
+import type { KernelStoreRecord } from '../kernel/store.js';
 import { KernelVocabulary } from '../kernel/vocabulary.js';
 import { localKeyPart } from '../kernel/local-key.js';
 import {
@@ -19,9 +20,12 @@ import {
   RouterIssueKind,
   RouterIssueModel,
   RouterIssuePhase,
+  RouterClosureKind,
   RouteParameterValueModel,
   RouteRecognizerStateKind,
+  ViewportAgentCandidateResolutionKind,
   ViewportRequestModel,
+  resolvedRouteableComponentName,
   type ConfigurableRouteModel,
   type EndpointModel,
   type RouteConfigModel,
@@ -108,7 +112,6 @@ interface ChildRecognitionContext {
 /** RecognizedRoute products from static ViewportInstruction paths, before RouteNode transition compilation. */
 export class RouteRecognitionMaterializationProjectResult {
   constructor(
-    readonly project: ProjectBootFrame,
     readonly recognizedRoutes: readonly RecognizedRouteModel[],
     readonly issues: readonly RouterIssueModel[],
   ) {}
@@ -125,7 +128,7 @@ export class RouteRecognitionMaterializationProjectResult {
 /** Walk route-recognizer state graphs for static ViewportInstruction path strings. */
 export class RouteRecognitionMaterializationProjectPass {
   materializeAndEmit(
-    store: KernelStore,
+    publication: KernelPublicationContext,
     project: ProjectBootFrame,
     routeConfigContexts: RouteConfigContextMaterializationProjectResult,
     routeRuntime: RouteRuntimeTopologyProjectResult,
@@ -135,24 +138,26 @@ export class RouteRecognitionMaterializationProjectPass {
     const indexes = routeRecognitionIndexes(routeConfigContexts, routeRuntime, routeRecognizer, routeInstructions);
 
     const emissions = routeInstructions.readViewportInstructionTrees().flatMap((tree) =>
-      this.materializeInstructionTreeRecognitions(store, tree, indexes)
+      this.materializeInstructionTreeRecognitions(publication, tree, indexes)
     );
     const records = emissions.flatMap((emission) => emission.records);
-    if (records.length > 0) {
-      store.commit(new KernelStoreBatch(records, `router-recognition:${project.projectKey}`));
-    }
+    publication.publish(new KernelPublicationPlan(
+      new KernelStoreBatch(records, `router-recognition:${project.projectKey}`),
+    ));
     return new RouteRecognitionMaterializationProjectResult(
-      project,
       emissions.flatMap((emission) => emission.recognizedRoutes),
       emissions.flatMap((emission) => emission.issues),
     );
   }
 
   private materializeInstructionTreeRecognitions(
-    store: KernelStore,
+    store: KernelPublicationContext,
     tree: ViewportInstructionTreeModel,
     indexes: RouteRecognitionIndexes,
   ): readonly RouteRecognitionEmission[] {
+    if (tree.closure === RouterClosureKind.Open) {
+      return [];
+    }
     const routeContext = routeContextForInstructionTree(tree, indexes.routeContextsByIdentity);
     const routeConfigContext = routeConfigContextForRouteContext(routeContext, indexes.routeConfigContextsByIdentity);
     const routeConfig = routeConfigForRouteConfigContext(routeConfigContext, indexes.routeConfigsByIdentity);
@@ -186,7 +191,7 @@ export class RouteRecognitionMaterializationProjectPass {
   }
 
   private materializeViewportInstructionRecognitions(
-    store: KernelStore,
+    store: KernelPublicationContext,
     tree: ViewportInstructionTreeModel,
     indexes: RouteRecognitionIndexes,
     routeContext: RouteContextModel | null,
@@ -235,7 +240,7 @@ export class RouteRecognitionMaterializationProjectPass {
   }
 
   private materializeRecognizedRoutes(
-    store: KernelStore,
+    store: KernelPublicationContext,
     graph: RecognizerGraph,
     tree: ViewportInstructionTreeModel,
     viewportInstruction: ViewportInstructionModel,
@@ -281,7 +286,7 @@ export class RouteRecognitionMaterializationProjectPass {
   }
 
   private materializeResidueChildRecognitions(
-    store: KernelStore,
+    store: KernelPublicationContext,
     tree: ViewportInstructionTreeModel,
     indexes: RouteRecognitionIndexes,
     parentRouteContext: RouteContextModel | null,
@@ -326,7 +331,7 @@ export class RouteRecognitionMaterializationProjectPass {
   }
 
   private noFallbackEmission(
-    store: KernelStore,
+    store: KernelPublicationContext,
     routeConfigContext: RouteConfigContextModel,
     routeConfig: RouteConfigModel,
     viewportInstruction: ViewportInstructionModel,
@@ -361,6 +366,7 @@ export class RouteRecognitionMaterializationProjectPass {
       null,
       null,
       viewportInstruction.sourceAddressHandle,
+      [],
     );
     return [{
       records: routerIssueProductRecords(store, {
@@ -378,7 +384,7 @@ export class RouteRecognitionMaterializationProjectPass {
 }
 
 function unknownRedirectIssueRecords(
-  store: KernelStore,
+  store: KernelPublicationContext,
   tree: ViewportInstructionTreeModel,
   viewportInstruction: ViewportInstructionModel,
   draft: RedirectExpansionIssueDraft,
@@ -397,7 +403,7 @@ function unknownRedirectIssueRecords(
 }
 
 function unknownRedirectIssueModel(
-  store: KernelStore,
+  store: KernelPublicationContext,
   tree: ViewportInstructionTreeModel,
   viewportInstruction: ViewportInstructionModel,
   draft: RedirectExpansionIssueDraft,
@@ -427,6 +433,7 @@ function unknownRedirectIssueModel(
     draft.redirectPath,
     null,
     sourceAddressHandle,
+    [],
   );
 }
 
@@ -566,18 +573,23 @@ function childRecognitionContextFor(
     return null;
   }
 
-  const componentName = routeConfig?.component?.localName ?? null;
+  const componentName = resolvedRouteableComponentName(routeConfig?.component ?? null);
   const viewportName = viewportInstruction.viewport ?? routeConfig?.viewport ?? DEFAULT_VIEWPORT_NAME;
-  const viewportAgent = componentName == null
+  const viewportResolution = componentName == null
     ? null
-    : indexes.routeRuntime.resolveViewportAgent(
+    : indexes.routeRuntime.resolveViewportAgentCandidates(
       parentRouteContext?.identityHandle ?? null,
       new ViewportRequestModel(viewportName, componentName),
     );
-  const childRouteContext = indexes.routeRuntime.routeContextForRouteConfigContextAndViewportAgent(
-    childRouteConfigContext.identityHandle,
-    viewportAgent?.identityHandle ?? null,
-  );
+  const viewportAgentCandidate = viewportResolution?.resolutionKind === ViewportAgentCandidateResolutionKind.Sole
+    ? viewportResolution.candidate
+    : null;
+  const childRouteContext = viewportAgentCandidate == null
+    ? null
+    : indexes.routeRuntime.routeContextForRouteConfigContextAndViewportAgentCandidate(
+        childRouteConfigContext.identityHandle,
+        viewportAgentCandidate.identityHandle,
+      );
   return {
     routeContext: childRouteContext,
     routeConfigContext: childRouteConfigContext,
@@ -1198,7 +1210,7 @@ function satisfiesPattern(pattern: string | null, value: string): boolean {
 }
 
 function recognizedRouteModel(
-  store: KernelStore,
+  store: KernelPublicationContext,
   graph: RecognizerGraph,
   tree: ViewportInstructionTreeModel,
   viewportInstruction: ViewportInstructionModel,
@@ -1240,7 +1252,7 @@ function routeParameterValues(
 }
 
 function recognizedRouteRecords(
-  store: KernelStore,
+  store: KernelPublicationContext,
   graph: RecognizerGraph,
   tree: ViewportInstructionTreeModel,
   viewportInstruction: ViewportInstructionModel,

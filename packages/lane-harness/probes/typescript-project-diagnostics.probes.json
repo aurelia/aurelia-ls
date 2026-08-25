@@ -1,0 +1,21 @@
+{
+  "fixture": "packages/semantic-runtime/fixtures/pressure/typescript-project-diagnostics",
+  "lanes": {
+    "diagnostics": [
+      {
+        "id": "typescript-state-source-file",
+        "file": "src/typescript-project-diagnostics-state.ts",
+        "verdict": "correct",
+        "reason": "The full document-diagnostic pull returns the ordinary TypeScript TS2322 and TS2769 diagnostics with TypeScript domain/authority, exact spans, and blocking severity.",
+        "note": "VERDICT 2026-07-07. This checks that semantic-runtime's shared TypeSystemProject diagnostics reach the standard document-diagnostic pull without leaking excluded or overlay files."
+      },
+      {
+        "id": "typescript-related-information-cross-file",
+        "file": "src/typescript-related-information.ts",
+        "verdict": "correct",
+        "reason": "The full document-diagnostic pull returns the primary TypeScript diagnostic in the edited file and preserves TypeScript relatedInformation pointing at the required property declaration in a different project file.",
+        "note": "NEW 2026-07-07. Cross-file related-information canary for the AppDiagnostics and LSP mapping boundary. Correct means the raw app row preserves TypeScript's related information, LSP emits a related location for diagnostic-contract.ts, and the harness resolves the related span text from that related file."
+      }
+    ]
+  }
+}

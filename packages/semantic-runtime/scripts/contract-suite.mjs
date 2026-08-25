@@ -14,15 +14,26 @@ const contractSuites = [
   ], 'contract-evaluation-module-graph.mjs', 'Runtime-shaped module graph erases type-only imports/re-exports while preserving value import/export edges.'),
   contract('evaluation', 'fast', [
     'evaluation',
+    'module-graph',
+    'publication',
+    'provenance',
+  ], 'contract-project-evaluation-publication.mjs', 'A graph dependency later admitted as a root replaces its placeholder while retaining both source origins.'),
+  contract('evaluation', 'fast', [
+    'evaluation',
     'mcp',
     'source-address',
   ], 'contract-evaluation-ambient-globals.mjs', 'Project-local ambient global declarations resolve as host boundaries while open-seam filters expose unresolved identifier source samples.'),
   contract('evaluation', 'fast', [
     'evaluation',
+    'host-boundary',
+    'ambient-declarations',
+  ], 'contract-evaluation-ambient-declarations.mjs', 'Source-local ambient value declarations remain host boundaries while ordinary uninitialized locals retain JavaScript undefined semantics.'),
+  contract('evaluation', 'fast', [
+    'evaluation',
     'api',
     'mcp',
     'open-seams',
-  ], 'contract-open-seam-interpretation.mjs', 'Controlled open-seam vocabulary keys carry public attempt and boundary interpretation.'),
+  ], 'contract-open-seam-causality.mjs', 'Typed open-seam reasons own boundary classification while materialization edges expose propagated product pressure without cloned seams.'),
   contract('evaluation', 'fast', [
     'evaluation',
     'api',
@@ -30,6 +41,13 @@ const contractSuites = [
     'open-seams',
     'source-address',
   ], 'contract-open-seam-sites.mjs', 'Repeated evaluator derivations collapse into unique authored open-seam sites with raw-row counts.'),
+  contract('findings', 'fast', [
+    'findings',
+    'policy',
+    'api',
+    'open-seams',
+    'diagnostics',
+  ], 'contract-analysis-limitations.mjs', 'Adjudicated authored product-pressure sites project to configured analysis limitations while raw seams remain conserved audit evidence.'),
   contract('evaluation', 'fast', [
     'evaluation',
     'api',
@@ -61,6 +79,11 @@ const contractSuites = [
   ], 'contract-evaluation-import-meta-boundary.mjs', 'import.meta.env reduces to host-environment boundaries while dependency-array spreads keep known entries imprecisely.'),
   contract('evaluation', 'fast', [
     'evaluation',
+    'object-literal',
+    'epistemics',
+  ], 'contract-evaluation-object-property-state.mjs', 'Unknown object writes open earlier property values while later explicit writes remain closed through spread and Object.assign.'),
+  contract('evaluation', 'fast', [
+    'evaluation',
     'package-source',
     'resources',
     'open-seams',
@@ -77,6 +100,19 @@ const contractSuites = [
     'bindables',
     'open-seams',
   ], 'contract-resource-bindable-boundary-config.mjs', 'Open bindable configuration spreads publish resource reason kinds while avoiding fabricated mode/setter certainty.'),
+  contract('resources', 'fast', [
+    'resources',
+    'api',
+    'mcp',
+    'configuration',
+    'open-seams',
+    'source-address',
+  ], 'contract-resource-availability-explanation.mjs', 'Exact canonical-name resource explanations preserve scope selection, winner/loser causality, configuration facts, and bounded uncertainty.'),
+  contract('configuration', 'fast', [
+    'configuration',
+    'evaluation',
+    'open-seams',
+  ], 'contract-configuration-open-seam-reasons.mjs', 'Configuration-owned seams preserve machine-readable evaluator causes through customization projections.'),
   contract('evaluation', 'fast', [
     'evaluation',
     'class',
@@ -97,6 +133,13 @@ const contractSuites = [
   contract('observation', 'fast', [
     'observation',
     'observer-locator',
+    'controller',
+    'bindable',
+    'configuration',
+  ], 'contract-controller-observer-setup.mjs', 'Controller bindable observer setup, capability reachability, and ordered object-adapter selection.'),
+  contract('observation', 'fast', [
+    'observation',
+    'observer-locator',
     'configuration',
   ], 'contract-node-observer-service-customization.mjs', 'NodeObserverLocator service customization and accessor/observer split.'),
   contract('observation', 'fast', [
@@ -114,6 +157,15 @@ const contractSuites = [
     'effect',
     'source-address',
   ], 'contract-runtime-effect-observation.mjs', 'Source-level Observation.watch/run effects and observed-dependency rows.'),
+  contract('observation', 'fast', [
+    'observation',
+    'binding',
+    'watcher',
+    'effect',
+    'source-address',
+    'provenance',
+    'api',
+  ], 'contract-observed-dependency-conservation.mjs', 'Binding, watcher, effect, and computed-observer projections conserve shared dependency identity, ownership, source, and provenance facts.'),
   contract('observation', 'fast', [
     'observation',
     'proxy-observation',
@@ -171,6 +223,13 @@ const contractSuites = [
   contract('observation', 'fast', [
     'observation',
     'binding',
+    'value-converter',
+    'template',
+    'mcp',
+  ], 'contract-value-converter-applications.mjs', 'Runtime value-converter application rows expose positive source-linked converter usage facts.'),
+  contract('observation', 'fast', [
+    'observation',
+    'binding',
     'callback',
     'template',
   ], 'contract-binding-source-arrow-callbacks.mjs', 'Binding-source value reduction evaluates Aurelia arrow callbacks with Scope.fromParent-shaped parameter scopes.'),
@@ -181,6 +240,20 @@ const contractSuites = [
     'diagnostics',
     'type-system',
   ], 'contract-binding-data-flow-summary.mjs', 'Compact binding data-flow summary issue rollups.'),
+  contract('observation', 'fast', [
+    'observation',
+    'binding',
+    'explain',
+    'diagnostics',
+    'mcp',
+  ], 'contract-binding-uncertainty-explanation.mjs', 'Cursor-selected property binding explanations conserve proved flow facts and typed causal uncertainty.'),
+  contract('template', 'fast', [
+    'template',
+    'compiler',
+    'explain',
+    'authoring',
+    'mcp',
+  ], 'contract-attribute-interpretation-explanation.mjs', 'Exact authored attribute-name explanations conserve compiler syntax, classification, lowering, effects, issues, and bounded uncertainty without omission inference.'),
   contract('observation', 'fast', [
     'observation',
     'binding',
@@ -198,6 +271,24 @@ const contractSuites = [
     'runtime-boundary',
     'template',
   ], 'contract-runtime-composition-bound-controller.mjs', 'AuCompose component/model values through parent-to-child bindable flow and static method this binding.'),
+  contract('composition', 'fast', [
+    'composition',
+    'au-compose',
+    'controller',
+    'topology',
+  ], 'contract-runtime-composition-controller-ownership.mjs', 'Composition-owned controllers retain their activation parent without publishing renderer-owned child admission.'),
+  contract('composition', 'fast', [
+    'composition',
+    'au-compose',
+    'type-system',
+    'evaluation',
+  ], 'contract-runtime-composition-input-semantics.mjs', 'AuCompose distinguishes thenable-aware inputs from direct inputs while retaining fulfilled, rejected, and open value state.'),
+  contract('composition', 'fast', [
+    'composition',
+    'au-compose',
+    'open-seams',
+    'provenance',
+  ], 'contract-runtime-composition-open-pressure.mjs', 'AuCompose retains independent input pressure, useful component candidates, and refused-child causal materializations.'),
   contract('template', 'fast', [
     'template',
     'rendering',
@@ -291,7 +382,15 @@ const contractSuites = [
     'kernel',
     'query-claim',
     'lifetime',
-  ], 'contract-type-projection-lifetime.mjs', 'TypeChecker projection sidecar indexes prune with kernel product-detail disposal.'),
+  ], 'contract-type-projection-lifetime.mjs', 'Canonical TypeChecker projections follow kernel lifetime and Program epochs.'),
+  contract('api', 'fast', [
+    'api',
+    'incrementality',
+    'kernel',
+    'lsp',
+    'project-input',
+    'source-text',
+  ], 'contract-project-input-authority.mjs', 'A long-lived runtime advances one project-input generation across open-document edits while resource metadata keeps precise source-backed diagnostics.'),
   contract('type-system', 'fast', [
     'type-system',
     'checker',
@@ -349,6 +448,13 @@ const contractSuites = [
     'api',
     'performance',
   ], 'contract-query-claim-graph.mjs', 'Query-claim graph laziness, retained-answer reuse, failure handling, budgets, and indexed disposal policy.'),
+  contract('inquiry', 'fast', [
+    'inquiry',
+    'api',
+    'paging',
+    'query-claim',
+    'mcp',
+  ], 'contract-public-answer-pagination.mjs', 'Public answer quality stays independent from scoped transport paging, response budgets, and retained-claim reuse.'),
   contract('app-builder', 'fast', [
     'app-builder',
     'api',
@@ -393,6 +499,18 @@ const contractSuites = [
   ], 'contract-template-completion-member-metadata.mjs', 'Template completion candidates expose checker member kind, visibility, readonly/optional flags, and Aurelia hook categories.'),
   contract('template', 'fast', [
     'template',
+    'rename',
+    'type-system',
+    'lsp',
+  ], 'contract-template-rename-from-typescript.mjs', 'TypeScript-initiated member rename produces source-linked template-side edit rows through semantic-runtime.'),
+  contract('template', 'fast', [
+    'template',
+    'references',
+    'rename',
+    'type-system',
+  ], 'contract-typescript-related-member-closure.mjs', 'Template-origin references and rename spend TypeScript related-symbol families across interfaces, inheritance, accessors, overloads, contextual properties, and native-library refusal.'),
+  contract('template', 'fast', [
+    'template',
     'completion',
     'callback',
     'type-system',
@@ -407,7 +525,9 @@ const contractSuites = [
     'controller',
     'type-system',
     'overlay',
-  ], 'contract-template-controller-built-ins.mjs', 'Built-in template-controller flow rows and overlay scope replay for if/else, repeat, with, promise, switch, and portal.'),
+  ], 'contract-template-controller-built-ins.mjs', 'Built-in template-controller flow rows and overlay scope replay for if/else, repeat, with, promise, switch, and portal.', {
+    routeAliases: ['type-system.template-controller-built-ins'],
+  }),
   contract('expression', 'fast', [
     'expression',
     'type-system',
@@ -428,6 +548,12 @@ const contractSuites = [
     'binding',
     'observation',
   ], 'contract-router-active-link-state.mjs', 'Router activeClass and load.active from-view state semantics.'),
+  contract('router', 'fast', [
+    'router',
+    'template',
+    'definition',
+    'source',
+  ], 'contract-template-route-definition.mjs', 'Template route paths and eager route ids retain exact RouteConfig definition targets.'),
   contract('app-pattern.policy', 'fast', [
     'app-pattern',
     'observation',

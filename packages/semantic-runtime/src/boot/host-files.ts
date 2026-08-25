@@ -1,10 +1,6 @@
-import {
-  existsSync,
-  readdirSync,
-  readFileSync,
-  statSync,
-} from 'node:fs';
 import path from 'node:path';
+import type { SemanticRuntimeProjectInputHost } from '../kernel/project-input.js';
+import { canonicalTypeSystemPath } from '../type-system/source-file-path.js';
 
 export interface BootPackageManifest {
   readonly [key: string]: unknown;
@@ -16,31 +12,24 @@ export interface BootPackageManifest {
   readonly optionalDependencies?: unknown;
 }
 
-const packageManifestCache = new Map<string, BootPackageManifest | null>();
-
-export function readPackageManifest(packageRoot: string): BootPackageManifest | null {
-  const normalizedRoot = normalizePosixPath(path.resolve(packageRoot));
-  const cached = packageManifestCache.get(normalizedRoot);
-  if (cached !== undefined) {
-    return cached;
-  }
+export function readPackageManifest(
+  host: SemanticRuntimeProjectInputHost,
+  packageRoot: string,
+): BootPackageManifest | null {
   const manifestPath = path.join(packageRoot, 'package.json');
-  if (!existsSync(manifestPath)) {
-    packageManifestCache.set(normalizedRoot, null);
+  if (!host.fileExists(manifestPath)) {
     return null;
   }
   try {
-    const parsed = JSON.parse(readFileSync(manifestPath, 'utf8')) as BootPackageManifest;
-    packageManifestCache.set(normalizedRoot, parsed);
-    return parsed;
+    const text = host.readFile(manifestPath);
+    return text == null ? null : JSON.parse(text) as BootPackageManifest;
   } catch {
-    packageManifestCache.set(normalizedRoot, null);
     return null;
   }
 }
 
-export function readPackageName(packageRoot: string): string | null {
-  const manifest = readPackageManifest(packageRoot);
+export function readPackageName(host: SemanticRuntimeProjectInputHost, packageRoot: string): string | null {
+  const manifest = readPackageManifest(host, packageRoot);
   return typeof manifest?.name === 'string' && manifest.name.length > 0
     ? manifest.name
     : null;
@@ -108,24 +97,16 @@ function globPatternToRegExp(pattern: string): RegExp {
   return new RegExp(`^${body}$`);
 }
 
-export function hasPackageManifest(directory: string): boolean {
-  return existsSync(path.join(directory, 'package.json'));
+export function hasPackageManifest(host: SemanticRuntimeProjectInputHost, directory: string): boolean {
+  return host.fileExists(path.join(directory, 'package.json'));
 }
 
-export function safeReadDirectory(directory: string): readonly string[] {
-  try {
-    return readdirSync(directory).sort((left, right) => left.localeCompare(right));
-  } catch {
-    return [];
-  }
+export function safeReadDirectory(host: SemanticRuntimeProjectInputHost, directory: string): readonly string[] {
+  return host.readDirectory(directory);
 }
 
-export function safeIsDirectory(directory: string): boolean {
-  try {
-    return statSync(directory).isDirectory();
-  } catch {
-    return false;
-  }
+export function safeIsDirectory(host: SemanticRuntimeProjectInputHost, directory: string): boolean {
+  return host.directoryExists(directory);
 }
 
 export function normalizePosixPath(fileName: string): string {
@@ -133,7 +114,7 @@ export function normalizePosixPath(fileName: string): string {
 }
 
 export function sameHostPath(left: string, right: string): boolean {
-  return normalizePosixPath(path.resolve(left)).toLowerCase() === normalizePosixPath(path.resolve(right)).toLowerCase();
+  return canonicalTypeSystemPath(left) === canonicalTypeSystemPath(right);
 }
 
 export function isHostPathWithin(fileName: string, rootDir: string): boolean {

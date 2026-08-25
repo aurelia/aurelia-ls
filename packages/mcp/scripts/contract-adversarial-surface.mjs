@@ -1,7 +1,10 @@
 import { spawn } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { AureliaMcpSemanticRuntimeAdapter } from '../out/runtime-adapter.js';
+import {
+  AureliaMcpSemanticRuntimeAdapter,
+  projectDetachedAureliaMcpResponse,
+} from '../out/runtime-adapter.js';
 import {
   expectedPatternCatalogCount,
   patternReleaseSentinels,
@@ -11,7 +14,13 @@ const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../
 const serverPath = path.join(repoRoot, 'packages/mcp/out/server.js');
 const fixtureRoot = path.join(repoRoot, 'packages/semantic-runtime/fixtures/pressure/app-pattern-state-backed-form');
 const openSeamSitesFixtureRoot = path.join(repoRoot, 'packages/semantic-runtime/fixtures/pressure/evaluation-open-seam-sites');
+const frameworkCapabilityFixtureRoot = path.join(repoRoot, 'packages/semantic-runtime/fixtures/pressure/unregistered-plugin-resources');
+const bindingUncertaintyFixtureRoot = path.join(repoRoot, 'packages/semantic-runtime/fixtures/pressure/select-multiple-binding-order');
+const attributeInterpretationFixtureRoot = path.join(repoRoot, 'packages/semantic-runtime/fixtures/pressure/binding-uncertainty-explanation');
+const attributeInterpretationOpenFixtureRoot = path.join(repoRoot, 'packages/semantic-runtime/fixtures/pressure/resource-registration-effective-definitions');
 const typescriptDiagnosticsFixtureRoot = path.join(repoRoot, 'packages/semantic-runtime/fixtures/pressure/typescript-project-diagnostics');
+const projectConfigurationFixtureRoot = path.join(repoRoot, 'playground/issue-tracker');
+const projectConfigurationDiagnosticsFixtureRoot = path.join(repoRoot, 'packages/mcp/fixtures/project-configuration-diagnostics');
 
 const child = spawn(process.execPath, [serverPath], {
   cwd: repoRoot,
@@ -52,14 +61,22 @@ try {
   await verifyOrientationResource();
   await verifyToolSurfaceBudget();
   await verifyToolInputSchemaDescriptions();
+  await verifyNativeProjectConfigurations();
   await verifyPatternFollowUpHints();
   await verifyBundledDocsTools();
   await verifyStrictTopLevelEnvelope();
+  await verifyStrictCuratedSelectors();
   await verifyPageClampAndTextPreview();
+  await verifyObservedDependencyLocus();
+  await verifyFrameworkCapabilityExplanation();
+  await verifyBindingUncertaintyExplanation();
+  await verifyAttributeInterpretationExplanation();
   await verifyWorkspaceOverviewContinuations();
   await verifyAnalysisDepthEnvelope();
+  await verifyProfileDrivenRetention();
   await verifySourceFilePathUnsupportedPreflight();
   await verifyAnalysisCacheClearVocabulary();
+  await verifyCacheWorkspaceDescriptorIdentity();
   await verifyDiagnosticTextPreviewIdentity();
   await verifyOpenSeamSitesPreview();
   await verifyCursorVocabulary();
@@ -90,6 +107,7 @@ async function initialize() {
 function verifyServerInstructions(response) {
   const instructions = response.result?.instructions;
   expect(typeof instructions === 'string' && instructions.includes('aurelia_workspace_overview'), 'Initialize response should include Aurelia MCP orientation instructions.');
+  expect(instructions.includes('aurelia_project_configurations'), 'Initialize response should expose the native project-configuration query when configuration state matters.');
   expect(instructions.includes('aurelia_pattern_menu'), 'Initialize response should mention the Aurelia pattern menu for app-building examples.');
   expect(instructions.includes('support.followUp'), 'Initialize response should mention pattern follow-up hints.');
   expect(instructions.includes('aurelia_docs_search'), 'Initialize response should mention bundled docs search.');
@@ -108,26 +126,38 @@ async function verifyOrientationResource() {
   const read = await call('resources/read', { uri: 'aurelia://semantic-runtime/orientation' });
   const text = read.result?.contents?.[0]?.text;
   expect(typeof text === 'string' && text.includes('## Golden Path'), 'Orientation resource should provide the full golden path.');
+  expect(text.includes('aurelia_project_configurations'), 'Orientation resource should expose the native project-configuration query when configuration state matters.');
   expect(text.includes('aurelia_app_query_catalog'), 'Orientation resource should teach catalog-first query selection.');
   expect(text.includes('aurelia_pattern_example'), 'Orientation resource should teach pattern example fetch for source guidance.');
   expect(text.includes('support.followUp'), 'Orientation resource should teach semantic-runtime follow-up hints from pattern examples.');
   expect(text.includes('aurelia_docs_search'), 'Orientation resource should teach docs search before docs fetch.');
   expect(text.includes('no web requests'), 'Orientation resource should describe bundled docs as offline/local.');
   expect(!text.includes('aurelia_app_builder'), 'Orientation resource should not advertise retired app-builder tools.');
-  expect(text.includes('sourceFile') && text.includes('outcome=unsupported'), 'Orientation resource should teach honest source-file selector rejection.');
+  expect(text.includes('sourceFile') && text.includes('result=unsupported'), 'Orientation resource should teach honest source-file selector rejection.');
   expect(!containsLocalPathOrScratchReference(text), 'Orientation resource should stay app-agnostic.');
 }
 
 async function verifyToolSurfaceBudget() {
   const response = await call('tools/list', {});
   const text = JSON.stringify(response.result);
-  expect(Buffer.byteLength(text, 'utf8') < 80_000, 'tools/list should stay below the described-schema budget.');
-  expect(response.result?.tools?.length === 18, 'tools/list should advertise the expected public tool count.');
+  const surfaceBytes = Buffer.byteLength(text, 'utf8');
+  const largestTools = [...(response.result?.tools ?? [])]
+    .map((tool) => ({ name: tool.name, bytes: Buffer.byteLength(JSON.stringify(tool), 'utf8') }))
+    .sort((left, right) => right.bytes - left.bytes)
+    .slice(0, 4)
+    .map((tool) => `${tool.name}=${tool.bytes}`)
+    .join(', ');
+  expect(
+    surfaceBytes < 70_000,
+    `tools/list should stay below the fixed 19-tool schema budget; observed ${surfaceBytes} bytes; largest tools: ${largestTools}.`,
+  );
+  expect(response.result?.tools?.length === 19, 'tools/list should advertise the expected public tool count.');
   const toolNames = new Set((response.result?.tools ?? []).map((tool) => tool.name));
   expect(toolNames.has('aurelia_pattern_menu'), 'tools/list should advertise aurelia_pattern_menu.');
   expect(toolNames.has('aurelia_pattern_example'), 'tools/list should advertise aurelia_pattern_example.');
   expect(toolNames.has('aurelia_docs_search'), 'tools/list should advertise aurelia_docs_search.');
   expect(toolNames.has('aurelia_docs_fetch'), 'tools/list should advertise aurelia_docs_fetch.');
+  expect(toolNames.has('aurelia_project_configurations'), 'tools/list should advertise aurelia_project_configurations.');
   expect(!toolNames.has('aurelia_app_builder_catalog'), 'tools/list should not advertise retired app-builder catalog.');
   expect(!toolNames.has('aurelia_app_builder_query'), 'tools/list should not advertise retired app-builder query.');
   expect(!text.includes('sourceLowering') && !text.includes('targetCatalog') && !text.includes('inputReadiness'), 'tools/list should not expose old app-builder request vocabulary.');
@@ -141,8 +171,97 @@ async function verifyToolInputSchemaDescriptions() {
     expect(missing.length === 0, `Tool ${tool.name} has undescribed input schema field(s): ${missing.join(', ')}`);
   }
   const appQuery = tools.find((tool) => tool.name === 'aurelia_app_query');
+  const workspaceProperties = appQuery?.inputSchema?.properties ?? {};
+  expect('projectRootHints' in workspaceProperties, 'Workspace tools should expose shared semantic project-root hints.');
+  expect('excludedWorkspaceRoots' in workspaceProperties, 'Workspace tools should expose shared authored-source exclusions.');
+  expect(!('projects' in workspaceProperties), 'Ordinary MCP tools should not repeat synthetic explicit-project boot inputs.');
+  expect(!('storeKey' in workspaceProperties), 'Ordinary MCP tools should not expose runtime-only store namespaces.');
+  expect(!('projectDiscovery' in workspaceProperties), 'Ordinary MCP tools should use shared project-marker discovery rather than consumer policy switches.');
   expect(JSON.stringify(appQuery?.inputSchema).includes('Check supportsSourceFile'), 'sourceFile schema description should point callers to supportsSourceFile.');
-  expect(JSON.stringify(appQuery?.inputSchema).includes('outcome=unsupported'), 'sourceFilePath schema description should promise honest unsupported answers.');
+  expect(JSON.stringify(appQuery?.inputSchema).includes('result=unsupported'), 'sourceFilePath schema description should promise honest unsupported answers.');
+  expect(JSON.stringify(appQuery?.inputSchema).includes('observedDependencyLocus'), 'Generic app-query schema should expose family-owned observed-dependency loci.');
+  expect('frameworkCapability' in workspaceProperties, 'Generic app-query schema should expose the closed framework-capability explanation selector.');
+  expect('resourceIdentityKey' in workspaceProperties, 'Generic app-query schema should expose the exact resource-identity explanation selector.');
+  expect('templateResourceScopeIdentityKey' in workspaceProperties, 'Generic app-query schema should expose the exact template-resource-scope selector.');
+  expect(
+    JSON.stringify(workspaceProperties.frameworkCapability).includes('capability-demand rows and diagnostic continuations'),
+    'Framework-capability selector should direct callers to engine-owned selector values without duplicating the vocabulary in every tool schema.',
+  );
+  const openSeamOverview = tools.find((tool) => tool.name === 'aurelia_open_seam_overview');
+  expect(openSeamOverview?.description?.includes('unique authored source site'), 'Open-seam overview should describe its authored-site-first projection.');
+  expect(!('detail' in (openSeamOverview?.inputSchema?.properties ?? {})), 'Open-seam overview should not advertise unsupported detail.');
+  expect('page' in (openSeamOverview?.inputSchema?.properties ?? {}), 'Open-seam overview should retain its supported page selector.');
+  const cursorInfo = tools.find((tool) => tool.name === 'aurelia_template_cursor_info');
+  expect(!('page' in (cursorInfo?.inputSchema?.properties ?? {})), 'Template cursor info should not advertise unsupported paging.');
+  expect('detail' in (cursorInfo?.inputSchema?.properties ?? {}), 'Template cursor info should retain its supported detail selector.');
+  const completions = tools.find((tool) => tool.name === 'aurelia_template_completions');
+  expect('page' in (completions?.inputSchema?.properties ?? {}), 'Template completions should retain its supported page selector.');
+  expect('detail' in (completions?.inputSchema?.properties ?? {}), 'Template completions should retain its supported detail selector.');
+  const projectConfigurations = tools.find((tool) => tool.name === 'aurelia_project_configurations');
+  const configurationProperties = projectConfigurations?.inputSchema?.properties ?? {};
+  expect('projectKey' in configurationProperties, 'Project configurations should expose the exact projectKey selector.');
+  expect('sourceFilePaths' in configurationProperties, 'Project configurations should expose exact sourceFilePaths selection.');
+  expect(!('sourceFilePath' in configurationProperties), 'Project configurations should not collapse its exact path set into a singular selector.');
+  expect('page' in configurationProperties, 'Project configurations should expose runtime paging.');
+  const cacheOverview = tools.find((tool) => tool.name === 'aurelia_analysis_cache_overview');
+  const cacheProperties = cacheOverview?.inputSchema?.properties ?? {};
+  expect('workspace' in cacheProperties, 'Cache overview should expose one exact nested semantic workspace selector.');
+  expect(!('workspaceRoot' in cacheProperties) && !('projectRootHints' in cacheProperties), 'Cache overview should not expose a partial top-level workspace selector.');
+  const appQueryCatalog = tools.find((tool) => tool.name === 'aurelia_app_query_catalog');
+  expect(!('workspaceRoot' in (appQueryCatalog?.inputSchema?.properties ?? {})), 'Static app-query catalog should not open or label a workspace session.');
+  expect(!('telemetry' in workspaceProperties), 'Ordinary MCP app queries should not expose runtime profiling controls.');
+}
+
+async function verifyNativeProjectConfigurations() {
+  const all = await callTool('aurelia_project_configurations', {
+    workspaceRoot: projectConfigurationFixtureRoot,
+  });
+  const allAnswer = all.result?.structuredContent?.value;
+  const rows = allAnswer?.value?.rows;
+  expect(allAnswer?.result === 'answered', 'Native project configurations should return an answered semantic-runtime result.');
+  expect(Array.isArray(rows) && rows.length === 1, 'Omitted sourceFilePaths should select the fixture native configuration.');
+  expect(path.resolve(rows[0]?.filePath ?? '') === path.resolve(projectConfigurationFixtureRoot, 'aurelia.project.json'), 'Native project configurations should preserve the exact runtime-owned config path.');
+  expect(rows[0]?.appliedExcludedSourceRootDirs?.some((rootDir) => path.basename(rootDir) === 'golden'), 'Native project configurations should pass through the runtime-owned applied exclusion.');
+  expect(rows[0]?.diagnosticCount === 0, 'Native project configurations should pass through the runtime-owned diagnostic count.');
+
+  const exact = await callTool('aurelia_project_configurations', {
+    workspaceRoot: projectConfigurationFixtureRoot,
+    projectKey: rows[0]?.projectKey,
+    sourceFilePaths: ['aurelia.project.json'],
+    page: { size: 1_000 },
+  });
+  expect(exact.result?.structuredContent?.value?.value?.rows?.length === 1, 'Exact project/path selectors should preserve the matching native configuration.');
+  expect(exact.result?.structuredContent?.value?.page?.size === 200, 'Project configuration paging should honor the MCP transport clamp.');
+
+  const none = await callTool('aurelia_project_configurations', {
+    workspaceRoot: projectConfigurationFixtureRoot,
+    sourceFilePaths: [],
+  });
+  expect(none.result?.structuredContent?.value?.value?.rows?.length === 0, 'An explicit empty sourceFilePaths list should select no configurations.');
+
+  const diagnostics = await callTool('aurelia_project_configurations', {
+    workspaceRoot: projectConfigurationDiagnosticsFixtureRoot,
+    view: 'diagnostics',
+    sourceFilePaths: ['aurelia.project.json'],
+    page: { size: 10 },
+  });
+  const diagnosticAnswer = diagnostics.result?.structuredContent?.value;
+  const diagnosticRows = diagnosticAnswer?.value?.rows;
+  expect(diagnosticAnswer?.result === 'answered', 'Native configuration diagnostics should remain app-world-free in a config-only workspace.');
+  expect(diagnosticRows?.length === 1, 'Diagnostic view should expose the exact native configuration diagnostic row rather than only its count.');
+  expect(diagnosticRows?.[0]?.diagnosticKind === 'aurelia-project-config-unknown-property', 'Diagnostic view should preserve semantic-runtime diagnostic vocabulary.');
+  expect(diagnosticRows?.[0]?.message?.includes("property 'unexpected'"), 'Diagnostic view should preserve the actionable semantic-runtime message.');
+  expect(path.resolve(diagnosticRows?.[0]?.source?.filePath ?? '') === path.resolve(projectConfigurationDiagnosticsFixtureRoot, 'aurelia.project.json'), 'Diagnostic view should preserve the exact config source path.');
+  expect(typeof diagnosticRows?.[0]?.source?.start === 'number' && diagnosticRows[0].source.end > diagnosticRows[0].source.start, 'Diagnostic view should preserve the exact repair span.');
+  expect(resultText(diagnostics).includes('aurelia-project-config-unknown-property'), 'Diagnostic text preview should make the exact diagnostic kind visible without inspecting raw JSON.');
+  expect(!resultText(diagnostics).includes("property 'unexpected'.."), 'Diagnostic text preview should not duplicate terminal punctuation from runtime-owned messages.');
+
+  const noDiagnostics = await callTool('aurelia_project_configurations', {
+    workspaceRoot: projectConfigurationDiagnosticsFixtureRoot,
+    view: 'diagnostics',
+    sourceFilePaths: [],
+  });
+  expect(noDiagnostics.result?.structuredContent?.value?.value?.rows?.length === 0, 'Diagnostic view should preserve explicit empty path selection.');
 }
 
 async function verifyPatternFollowUpHints() {
@@ -252,6 +371,23 @@ async function verifyStrictTopLevelEnvelope() {
   expect(text.includes('pageSize'), 'Strict-envelope validation should name the unknown top-level key.');
 }
 
+async function verifyStrictCuratedSelectors() {
+  const cursorInfo = await callTool('aurelia_template_cursor_info', {
+    workspaceRoot: fixtureRoot,
+    cursor: { filePath: 'src/app.html', line: 0, character: 0 },
+    page: { size: 1 },
+  });
+  expect(cursorInfo.result?.isError === true, 'Template cursor info should reject unsupported page input at its curated schema boundary.');
+  expect(resultText(cursorInfo).includes('page'), 'Template cursor page rejection should name the unsupported selector.');
+
+  const openSeams = await callTool('aurelia_open_seam_overview', {
+    workspaceRoot: openSeamSitesFixtureRoot,
+    detail: 'handles',
+  });
+  expect(openSeams.result?.isError === true, 'Open-seam overview should reject unsupported detail input at its curated schema boundary.');
+  expect(resultText(openSeams).includes('detail'), 'Open-seam detail rejection should name the unsupported selector.');
+}
+
 async function verifyPageClampAndTextPreview() {
   const response = await callTool('aurelia_app_query', {
     workspaceRoot: fixtureRoot,
@@ -268,8 +404,359 @@ async function verifyPageClampAndTextPreview() {
   expect(page?.estimatedRowsJsonBytes <= page?.maxRowsJsonBytes, 'Byte-clamped page should report an estimated row payload within the public budget.');
   const text = resultText(response);
   expect(text.includes('Clamped requested size 100000 to max 200'), 'Text content should mention page-size clamping.');
-  expect(text.includes('Row payload budget stopped this page'), 'Text content should mention byte-budget pagination.');
+  expect(text.includes('Row payload target stopped this page'), 'Text content should mention byte-target pagination.');
   expect(text.includes('Rows:'), 'Text content should include a bounded row preview for row answers.');
+}
+
+async function verifyObservedDependencyLocus() {
+  const first = await callTool('aurelia_app_query', {
+    workspaceRoot: fixtureRoot,
+    queryKind: 'binding-observed-dependencies',
+    page: { size: 1 },
+  });
+  const firstRow = first.result?.structuredContent?.value?.value?.rows?.[0];
+  expect(typeof firstRow?.rowKey === 'string', 'Observed-dependency rows should expose an answer-local row key.');
+  if (typeof firstRow?.rowKey !== 'string') {
+    return;
+  }
+  const selected = await callTool('aurelia_app_query', {
+    workspaceRoot: fixtureRoot,
+    queryKind: 'binding-observed-dependencies',
+    observedDependencyLocus: {
+      kind: 'row',
+      rowKey: firstRow.rowKey,
+    },
+    page: { size: 10 },
+  });
+  const selectedRows = selected.result?.structuredContent?.value?.value?.rows;
+  expect(
+    Array.isArray(selectedRows)
+      && selectedRows.length === 1
+      && selectedRows[0]?.rowKey === firstRow.rowKey,
+    'MCP should preserve an observed-dependency row locus through strict schema validation and adapter projection.',
+  );
+}
+
+async function verifyFrameworkCapabilityExplanation() {
+  const input = {
+    workspaceRoot: frameworkCapabilityFixtureRoot,
+    queryKind: 'framework-capability-explanation',
+    cursor: {
+      filePath: 'src/unregistered-plugin-resources-app.html',
+      line: 0,
+      character: 8,
+      offset: 8,
+    },
+    frameworkCapability: 'router.default-resources',
+  };
+  const response = await callTool('aurelia_app_query', input);
+  const answer = response.result?.structuredContent?.value;
+  expect(response.result?.isError !== true, 'Generic MCP app-query should admit a valid closed framework-capability selector.');
+  expect(answer?.result === 'answered', 'Framework-capability explanation should retain the semantic answer envelope through MCP.');
+  expect(answer?.selection === 'exact', 'Framework-capability explanation should retain exact cursor selection through MCP.');
+  expect(
+    answer?.value?.explanation?.subject?.requiredCapability === 'router.default-resources',
+    'MCP should preserve the exact explained capability subject.',
+  );
+  expect(
+    answer?.value?.explanation?.conclusion?.kind === 'not-admitted',
+    'MCP should preserve the engine-owned not-admitted conclusion.',
+  );
+  expect(
+    Array.isArray(answer?.value?.explanation?.nextSteps)
+      && answer.value.explanation.nextSteps.length <= 3,
+    'MCP should preserve the bounded engine-owned explanation actions.',
+  );
+
+  const invalid = await callTool('aurelia_app_query', {
+    ...input,
+    frameworkCapability: 'router.not-a-capability',
+  });
+  expect(invalid.result?.isError === true, 'MCP should reject unknown framework capabilities at its closed schema boundary.');
+  expect(resultText(invalid).includes('frameworkCapability'), 'Unknown capability rejection should name the invalid selector.');
+}
+
+async function verifyBindingUncertaintyExplanation() {
+  const openQuery = {
+    kind: 'binding-uncertainty-explanation',
+    cursor: {
+      filePath: 'src/select-multiple-binding-order-app.html',
+      line: 15,
+      character: 20,
+      offset: 538,
+    },
+  };
+  const open = await callTool('aurelia_app_query', {
+    workspaceRoot: bindingUncertaintyFixtureRoot,
+    queryKind: openQuery.kind,
+    cursor: openQuery.cursor,
+  });
+  const openAnswer = open.result?.structuredContent?.value;
+  expect(open.result?.isError !== true, 'Generic MCP app-query should admit a cursor-selected binding uncertainty explanation.');
+  expect(openAnswer?.result === 'answered', 'Binding uncertainty should retain the semantic answer envelope through MCP.');
+  expect(openAnswer?.selection === 'exact', 'Binding uncertainty should retain exact cursor selection through MCP.');
+  expect(openAnswer?.value?.explanation?.uncertainty?.state === 'open', 'The nullable multi-select binding should retain its engine-owned open uncertainty.');
+  expect(openAnswer?.value?.explanation?.subject?.bindingKind === 'property', 'MCP should preserve the exact PropertyBinding subject.');
+  expect(
+    Array.isArray(openAnswer?.value?.explanation?.evidence?.lanes)
+      && openAnswer.value.explanation.evidence.lanes.length > 0,
+    'MCP should preserve the typed binding data-flow evidence lanes.',
+  );
+  expect(
+    Array.isArray(openAnswer?.value?.explanation?.nextSteps)
+      && openAnswer.value.explanation.nextSteps.length <= 3,
+    'MCP should preserve the bounded engine-owned binding explanation actions.',
+  );
+
+  const closedCursor = {
+    filePath: 'src/select-multiple-binding-order-app.html',
+    line: 0,
+    character: 20,
+    offset: 20,
+  };
+  const closed = await callTool('aurelia_app_query', {
+    workspaceRoot: bindingUncertaintyFixtureRoot,
+    queryKind: 'binding-uncertainty-explanation',
+    cursor: closedCursor,
+  });
+  const closedAnswer = closed.result?.structuredContent?.value;
+  expect(closedAnswer?.selection === 'exact', 'A fully proved binding should remain an exact semantic subject.');
+  expect(closedAnswer?.value?.explanation?.uncertainty?.state === 'closed', 'A fully proved binding should not manufacture uncertainty.');
+  expect(closedAnswer?.value?.explanation?.conclusion?.kind === 'flow-proved', 'A fully proved binding should retain the engine-owned proved conclusion.');
+
+  const absent = await callTool('aurelia_app_query', {
+    workspaceRoot: bindingUncertaintyFixtureRoot,
+    queryKind: 'binding-uncertainty-explanation',
+    cursor: {
+      filePath: 'src/select-multiple-binding-order-app.html',
+      line: 14,
+      character: 0,
+    },
+  });
+  expect(absent.result?.structuredContent?.value?.selection === 'absent', 'A non-binding locus should fail closed as an absent subject.');
+
+  const batch = await callTool('aurelia_app_query_batch', {
+    workspaceRoot: bindingUncertaintyFixtureRoot,
+    queries: [openQuery, {
+      kind: 'binding-uncertainty-explanation',
+      cursor: closedCursor,
+    }],
+  });
+  const batchRows = batch.result?.structuredContent?.value?.value?.rows;
+  expect(
+    Array.isArray(batchRows)
+      && batchRows.length === 2
+      && batchRows[0]?.answer?.selection === 'exact'
+      && batchRows[1]?.answer?.selection === 'exact',
+    'Generic MCP batch queries should preserve both open and proved binding explanation envelopes.',
+  );
+
+  const unsupportedSelector = await callTool('aurelia_app_query', {
+    workspaceRoot: bindingUncertaintyFixtureRoot,
+    queryKind: 'binding-uncertainty-explanation',
+    cursor: openQuery.cursor,
+    frameworkCapability: 'router.default-resources',
+  });
+  expect(
+    unsupportedSelector.result?.structuredContent?.value?.result === 'unsupported',
+    'Binding uncertainty should reject an unrelated framework-capability selector instead of silently ignoring it.',
+  );
+}
+
+async function verifyAttributeInterpretationExplanation() {
+  const exactQuery = {
+    kind: 'attribute-interpretation-explanation',
+    cursor: {
+      filePath: 'src/exact-app.html',
+      line: 9,
+      character: 12,
+    },
+  };
+  const exact = await callTool('aurelia_app_query', {
+    workspaceRoot: attributeInterpretationFixtureRoot,
+    queryKind: exactQuery.kind,
+    cursor: exactQuery.cursor,
+  });
+  const exactAnswer = exact.result?.structuredContent?.value;
+  expect(exact.result?.isError !== true, 'Generic MCP app-query should admit a cursor-selected attribute interpretation explanation.');
+  expect(exactAnswer?.result === 'answered', 'Attribute interpretation should retain the semantic answer envelope through MCP.');
+  expect(exactAnswer?.selection === 'exact', 'Attribute interpretation should retain exact attribute-name selection through MCP.');
+  expect(exactAnswer?.value?.explanation?.subject?.rawName === 'click.trigger', 'MCP should preserve the exact authored attribute-name subject.');
+  expect(exactAnswer?.value?.explanation?.conclusion?.kind !== 'plain-attribute', 'An Aurelia binding command should preserve an Aurelia-shaped engine conclusion.');
+  expect(exactAnswer?.value?.explanation?.currentness?.authority === 'answer-analysis-basis', 'MCP should preserve engine-owned answer currentness.');
+  expect(
+    Array.isArray(exactAnswer?.value?.explanation?.nextSteps)
+      && exactAnswer.value.explanation.nextSteps.length <= 3,
+    'MCP should preserve the bounded engine-owned attribute explanation actions.',
+  );
+
+  const plainCursor = {
+    filePath: 'src/exact-app.html',
+    line: 3,
+    character: 5,
+  };
+  const plain = await callTool('aurelia_app_query', {
+    workspaceRoot: attributeInterpretationFixtureRoot,
+    queryKind: 'attribute-interpretation-explanation',
+    cursor: plainCursor,
+  });
+  const plainAnswer = plain.result?.structuredContent?.value;
+  expect(plainAnswer?.selection === 'exact', 'A plain authored attribute should remain an exact semantic subject rather than disappear.');
+  expect(plainAnswer?.value?.explanation?.subject?.rawName === 'href', 'Plain-attribute truth should remain attached to the exact authored name.');
+  expect(plainAnswer?.value?.explanation?.conclusion?.kind === 'plain-attribute', 'Generic MCP should preserve the engine-owned plain-attribute conclusion without inventing Aurelia work.');
+
+  const absent = await callTool('aurelia_app_query', {
+    workspaceRoot: attributeInterpretationFixtureRoot,
+    queryKind: 'attribute-interpretation-explanation',
+    cursor: {
+      filePath: 'src/exact-app.html',
+      line: 9,
+      character: 27,
+    },
+  });
+  expect(absent.result?.structuredContent?.value?.selection === 'absent', 'A non-attribute-name locus should fail closed as an absent subject.');
+
+  const ambiguous = await callTool('aurelia_app_query', {
+    workspaceRoot: attributeInterpretationFixtureRoot,
+    queryKind: 'attribute-interpretation-explanation',
+    cursor: {
+      filePath: 'src/shared-app.html',
+      line: 0,
+      character: 12,
+    },
+  });
+  const ambiguousAnswer = ambiguous.result?.structuredContent?.value;
+  expect(ambiguousAnswer?.selection === 'ambiguous', 'Equal minimal compilation contexts should remain ambiguous through generic MCP.');
+  expect(
+    Array.isArray(ambiguousAnswer?.value?.contenders)
+      && ambiguousAnswer.value.contenders.length === 2
+      && ambiguousAnswer.value.explanation == null,
+    'Generic MCP should preserve both attribute contenders without choosing one.',
+  );
+
+  const batch = await callTool('aurelia_app_query_batch', {
+    workspaceRoot: attributeInterpretationFixtureRoot,
+    queries: [exactQuery, {
+      kind: 'attribute-interpretation-explanation',
+      cursor: plainCursor,
+    }],
+  });
+  const batchRows = batch.result?.structuredContent?.value?.value?.rows;
+  expect(
+    Array.isArray(batchRows)
+      && batchRows.length === 2
+      && batchRows[0]?.answer?.selection === 'exact'
+      && batchRows[1]?.answer?.selection === 'exact',
+    'Generic MCP batch queries should preserve both Aurelia-shaped and plain attribute explanation envelopes.',
+  );
+
+  const unsupportedSelector = await callTool('aurelia_app_query', {
+    workspaceRoot: attributeInterpretationFixtureRoot,
+    queryKind: 'attribute-interpretation-explanation',
+    cursor: exactQuery.cursor,
+    frameworkCapability: 'router.default-resources',
+  });
+  expect(
+    unsupportedSelector.result?.structuredContent?.value?.result === 'unsupported',
+    'Attribute interpretation should reject an unrelated framework-capability selector instead of silently ignoring it.',
+  );
+
+  const missingCursor = await callTool('aurelia_app_query', {
+    workspaceRoot: attributeInterpretationFixtureRoot,
+    queryKind: 'attribute-interpretation-explanation',
+  });
+  const missingCursorAnswer = missingCursor.result?.structuredContent?.value;
+  expect(missingCursor.result?.isError !== true, 'A missing semantic cursor should remain an ordinary fail-closed answer, not a transport failure.');
+  expect(
+    missingCursorAnswer?.result === 'answered'
+      && missingCursorAnswer?.selection === 'absent'
+      && missingCursorAnswer?.value?.explanation == null,
+    'Attribute interpretation should preserve the engine-owned absent answer when no cursor is supplied.',
+  );
+
+  const malformedCursor = await callTool('aurelia_app_query', {
+    workspaceRoot: attributeInterpretationFixtureRoot,
+    queryKind: 'attribute-interpretation-explanation',
+    cursor: {
+      filePath: 'src/exact-app.html',
+      line: -1,
+      character: 0,
+    },
+  });
+  expect(malformedCursor.result?.isError === true, 'A malformed attribute cursor should be rejected at the generic MCP schema boundary.');
+  expect(resultText(malformedCursor).includes('cursor'), 'Malformed cursor rejection should name the invalid cursor carrier.');
+
+  const open = await callTool('aurelia_app_query', {
+    workspaceRoot: attributeInterpretationOpenFixtureRoot,
+    queryKind: 'attribute-interpretation-explanation',
+    cursor: {
+      filePath: 'src/effective-definitions-app.html',
+      line: 21,
+      character: 15,
+    },
+  });
+  const openAnswer = open.result?.structuredContent?.value;
+  expect(openAnswer?.selection === 'exact', 'An executable but unmodeled binding command should remain an exact attribute subject.');
+  expect(
+    openAnswer?.coverage === 'open'
+      && openAnswer?.value?.explanation?.conclusion?.kind === 'open'
+      && openAnswer?.value?.explanation?.uncertainty?.state === 'open',
+    'Generic MCP should preserve the engine-owned open attribute interpretation envelope.',
+  );
+  expect(
+    openAnswer?.value?.explanation?.uncertainty?.reasons?.includes('binding-command-lowering-open')
+      && openAnswer?.value?.explanation?.evidence?.lowerings?.some((row) => row.commandName === 'shared' && row.state === 'open')
+      && openAnswer?.value?.explanation?.evidence?.blockers?.some((row) => row.kind === 'open-lowering'),
+    'Generic MCP should retain open-lowering evidence without inventing a successful resolution chain.',
+  );
+
+  const truncatedAnswer = {
+    schemaVersion: '0.2',
+    result: 'answered',
+    selection: 'exact',
+    coverage: 'truncated',
+    summary: 'Aurelia compiled this attribute, but source discovery was truncated.',
+    analysisBasis: { sourceWorldRevision: 'semantic-source-world:mcp-truncated-contract' },
+    value: {
+      displayText: 'Aurelia compiled this attribute, but source discovery was truncated.',
+      projectKey: 'attribute-interpretation-explanation-truncated',
+      explanation: {
+        subject: { rawName: 'click.trigger' },
+        conclusion: { kind: 'instruction-backed' },
+        uncertainty: {
+          state: 'truncated',
+          reasons: ['source-discovery-truncated'],
+          explanation: 'Source discovery was truncated.',
+        },
+        currentness: { authority: 'answer-analysis-basis' },
+        nextSteps: [],
+      },
+      contenders: [],
+    },
+    page: null,
+  };
+  const serializationProbeSessions = {
+    run: async (_options, operation) => operation({
+      runtime: {
+        answerAppQuery: async (query) => {
+          expect(query.kind === 'attribute-interpretation-explanation', 'Generic MCP should route the attribute explanation query kind unchanged.');
+          return truncatedAnswer;
+        },
+      },
+    }, null),
+  };
+  const serializationProbe = new AureliaMcpSemanticRuntimeAdapter(serializationProbeSessions);
+  const projected = await serializationProbe.appQuery({
+    workspaceRoot: attributeInterpretationFixtureRoot,
+    queryKind: 'attribute-interpretation-explanation',
+    cursor: exactQuery.cursor,
+  }, projectDetachedAureliaMcpResponse);
+  expect(projected.value?.coverage === 'truncated', 'Generic MCP should preserve a truncated attribute answer envelope.');
+  expect(
+    projected.value?.value?.explanation?.uncertainty?.state === 'truncated'
+      && projected.value?.value?.explanation?.uncertainty?.reasons?.includes('source-discovery-truncated'),
+    'Generic MCP detachment should preserve typed truncated uncertainty without weakening it to an inferred success.',
+  );
 }
 
 async function verifyWorkspaceOverviewContinuations() {
@@ -293,13 +780,45 @@ async function verifyAnalysisDepthEnvelope() {
   expect(resultText(response).includes('Analysis depth used: binding-observation'), 'Text preview should expose answer analysis depth.');
 }
 
+async function verifyProfileDrivenRetention() {
+  const automatic = await callTool('aurelia_app_query', {
+    workspaceRoot: fixtureRoot,
+    queryKind: 'resource-definitions',
+    detail: 'handles',
+    page: { size: 1 },
+  });
+  expect(automatic.result?.isError !== true, 'Omitted appRetention should let semantic-runtime select retention for handle-bearing answers.');
+  expect(automatic.result?.structuredContent?.value?.result === 'answered', 'Profile-retained handle detail should return an answered semantic result.');
+
+  const automaticBatch = await callTool('aurelia_app_query_batch', {
+    workspaceRoot: fixtureRoot,
+    queries: [{
+      kind: 'resource-definitions',
+      detail: 'handles',
+      page: { size: 1 },
+    }],
+  });
+  expect(automaticBatch.result?.isError !== true, 'Omitted batch appRetention should also let semantic-runtime select retention for handle-bearing answers.');
+  expect(automaticBatch.result?.structuredContent?.value?.result === 'answered', 'Profile-retained handle detail should answer through the batch adapter path.');
+
+  const incompatible = await callTool('aurelia_app_query', {
+    workspaceRoot: fixtureRoot,
+    queryKind: 'resource-definitions',
+    detail: 'handles',
+    appRetention: 'dispose-app',
+    page: { size: 1 },
+  });
+  expect(incompatible.result?.isError === true, 'Explicit dispose-app should remain incompatible with handle-bearing answers.');
+  expect(resultText(incompatible).includes("detail='handles'"), 'Explicit retention incompatibility should explain the handle-detail constraint.');
+}
+
 async function verifySourceFilePathUnsupportedPreflight() {
   const response = await callTool('aurelia_app_overview', {
     workspaceRoot: fixtureRoot,
     sourceFilePath: 'src/app.ts',
   });
   const answer = response.result?.structuredContent?.value;
-  expect(answer?.outcome === 'unsupported', 'sourceFilePath on an unsupported query family should return outcome=unsupported.');
+  expect(answer?.result === 'unsupported', 'sourceFilePath on an unsupported query family should return result=unsupported.');
   expect(answer?.value?.unsupportedFields?.includes('sourceFile'), 'Unsupported sourceFilePath should be normalized into the runtime sourceFile selector preflight.');
   expect(resultText(response).includes('does not support sourceFile'), 'Unsupported sourceFilePath text should explain that the query cannot honor file scoping.');
 }
@@ -310,14 +829,14 @@ async function verifyAnalysisCacheClearVocabulary() {
     appRetention: 'retain-app',
   });
   const overviewBefore = await callTool('aurelia_analysis_cache_overview', {
-    workspaceRoot: fixtureRoot,
+    workspace: { workspaceRoot: fixtureRoot },
   });
   const beforeValue = overviewBefore.result?.structuredContent?.value;
-  const beforeSession = beforeValue?.sessions?.find((session) => session.workspaceRoot === fixtureRoot);
+  const beforeSession = beforeValue?.sessions?.find((session) => session.workspaceDescriptor?.workspaceRoot === fixtureRoot);
   expect(beforeSession?.analysisCache?.value?.cachedAppCount >= 1, 'Retained app overview should create at least one cached app epoch for cache-clear testing.');
 
   const cleared = await callTool('aurelia_clear_analysis_cache', {
-    workspaceRoot: fixtureRoot,
+    workspace: { workspaceRoot: fixtureRoot },
   });
   const clearValue = cleared.result?.structuredContent?.value;
   expect(clearValue?.remainingCachedApps === 0, 'Cache clear should report zero remaining app epochs for the selected fixture session.');
@@ -328,11 +847,70 @@ async function verifyAnalysisCacheClearVocabulary() {
   expect(clearText.includes('preserve policy keeps warm TypeScript dependency/lib source files'), 'Cache-clear text should explain the default dependency cache policy.');
 
   const overviewAfter = await callTool('aurelia_analysis_cache_overview', {
-    workspaceRoot: fixtureRoot,
+    workspace: { workspaceRoot: fixtureRoot },
   });
   const afterValue = overviewAfter.result?.structuredContent?.value;
-  const afterSession = afterValue?.sessions?.find((session) => session.workspaceRoot === fixtureRoot);
+  const afterSession = afterValue?.sessions?.find((session) => session.workspaceDescriptor?.workspaceRoot === fixtureRoot);
   expect(afterSession?.analysisCache?.value?.cachedAppCount === 0, 'Analysis-cache overview should agree that selected app epochs were cleared.');
+}
+
+async function verifyCacheWorkspaceDescriptorIdentity() {
+  const invalidSelector = await callTool('aurelia_analysis_cache_overview', {
+    workspace: { projectRootHints: [fixtureRoot] },
+  });
+  expect(invalidSelector.result?.isError === true, 'A cache boundary selector without workspaceRoot should be rejected rather than interpreted against process cwd.');
+
+  await callTool('aurelia_app_overview', {
+    workspaceRoot: fixtureRoot,
+    appRetention: 'retain-app',
+  });
+  const hintedApp = await callTool('aurelia_app_overview', {
+    workspaceRoot: fixtureRoot,
+    projectRootHints: [fixtureRoot],
+    appRetention: 'retain-app',
+  });
+  const hintedAppDescriptor = hintedApp.result?.structuredContent?.workspaceDescriptor;
+  expect(hintedAppDescriptor?.workspaceRoot === fixtureRoot, 'Workspace-scoped responses should return the exact normalized shared descriptor.');
+  expect(hintedAppDescriptor?.projectTopology?.kind === 'discover', 'Ordinary MCP responses should identify shared discovery topology.');
+  expect(hintedAppDescriptor?.projectTopology?.projectRootHints?.length === 1, 'Workspace responses should preserve root hints so callers can reuse the exact source-world boundary.');
+
+  const allBeforeCatalog = await callTool('aurelia_analysis_cache_overview', {});
+  const beforeCatalogValue = allBeforeCatalog.result?.structuredContent?.value;
+  const catalog = await callTool('aurelia_app_query_catalog', { group: 'template' });
+  expect(catalog.result?.isError !== true, 'Static app-query catalog should answer without a workspace session.');
+  expect(catalog.result?.structuredContent?.workspaceRoot == null, 'Static app-query catalog should not claim a workspace label.');
+  expect(catalog.result?.structuredContent?.workspaceDescriptor == null, 'Static app-query catalog should not claim a semantic workspace descriptor.');
+  const allAfterCatalog = await callTool('aurelia_analysis_cache_overview', {});
+  expect(
+    allAfterCatalog.result?.structuredContent?.value?.totalSessions === beforeCatalogValue?.totalSessions,
+    'Static app-query catalog should not create a hidden default-descriptor runtime session.',
+  );
+
+  const defaultOverview = await callTool('aurelia_analysis_cache_overview', {
+    workspace: { workspaceRoot: fixtureRoot },
+  });
+  const defaultValue = defaultOverview.result?.structuredContent?.value;
+  expect(defaultOverview.result?.structuredContent?.workspaceDescriptor?.projectTopology?.projectRootHints?.length === 0, 'Exact cache selectors should return their shared descriptor at the response boundary.');
+  expect(defaultValue?.matchingSessions === 1, 'Default cache selector should identify one exact semantic workspace descriptor.');
+  expect(defaultValue?.sessions?.[0]?.workspaceDescriptor?.projectTopology?.projectRootHints?.length === 0, 'Default cache session summary should expose its empty hint set through the shared descriptor.');
+
+  const hintedOverview = await callTool('aurelia_analysis_cache_overview', {
+    workspace: { workspaceRoot: fixtureRoot, projectRootHints: [fixtureRoot] },
+  });
+  const hintedValue = hintedOverview.result?.structuredContent?.value;
+  expect(hintedValue?.matchingSessions === 1, 'Hinted cache selector should identify one exact semantic workspace descriptor.');
+  expect(hintedValue?.sessions?.[0]?.workspaceDescriptor?.projectTopology?.projectRootHints?.length === 1, 'Hinted cache session summary should preserve its shared root-hint fact.');
+
+  await callTool('aurelia_clear_analysis_cache', {
+    workspace: { workspaceRoot: fixtureRoot },
+  });
+  const hintedAfterDefaultClear = await callTool('aurelia_analysis_cache_overview', {
+    workspace: { workspaceRoot: fixtureRoot, projectRootHints: [fixtureRoot] },
+  });
+  expect(
+    hintedAfterDefaultClear.result?.structuredContent?.value?.sessions?.[0]?.analysisCache?.value?.cachedAppCount >= 1,
+    'Clearing one descriptor must not cross-clear a session whose shared root-hint boundary differs.',
+  );
 }
 
 async function verifyDiagnosticTextPreviewIdentity() {
@@ -370,19 +948,21 @@ async function verifyCursorVocabulary() {
     page: { size: 3 },
   });
   const nextCursor = first.result?.structuredContent?.value?.page?.nextCursor;
-  expect(nextCursor === 'after:2', 'Newly emitted row cursors should use the after:<row-index> vocabulary.');
+  expect(typeof nextCursor === 'string' && nextCursor.length > 0, 'Row pages should expose an opaque continuation cursor.');
   const second = await callTool('aurelia_app_query', {
     workspaceRoot: fixtureRoot,
     queryKind: 'source-files',
     page: { size: 3, cursor: nextCursor },
   });
-  expect(second.result?.structuredContent?.value?.page?.cursor === 'after:2', 'Next-page calls should echo the opaque cursor they consumed.');
+  expect(second.result?.structuredContent?.value?.page?.cursor === nextCursor, 'Next-page calls should echo the opaque cursor they consumed.');
   const legacy = await callTool('aurelia_app_query', {
     workspaceRoot: fixtureRoot,
     queryKind: 'source-files',
     page: { size: 3, cursor: 'offset:2' },
   });
-  expect(legacy.result?.structuredContent?.value?.page?.returnedRows === 3, 'Legacy offset cursors should remain accepted for compatibility.');
+  const legacyAnswer = legacy.result?.structuredContent?.value;
+  expect(legacyAnswer?.result === 'invalid', 'Legacy offset cursors should be rejected instead of being replayed against an unscoped result.');
+  expect(legacyAnswer?.page?.cursorProblem?.kind === 'malformed', 'Legacy offset rejection should expose a structured cursor problem.');
 }
 
 async function verifyMissingWorkspaceRoot() {
@@ -429,11 +1009,13 @@ async function verifyDirectAdapterSourceFileGuard() {
     await adapter.templateDiagnostics({
       workspaceRoot: fixtureRoot,
       sourceFile: 'src/app.html',
-    });
+    }, projectDetachedAureliaMcpResponse);
   } catch (error) {
     expect(error instanceof Error, 'Direct adapter sourceFile guard should throw an Error.');
     expect(error.message.includes('sourceFile must be an object'), 'Direct adapter sourceFile guard should explain the expected object shape.');
     return;
+  } finally {
+    await adapter.dispose();
   }
   throw new Error('Direct adapter accepted a string sourceFile unexpectedly.');
 }

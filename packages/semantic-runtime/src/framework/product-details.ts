@@ -1,17 +1,48 @@
+import {
+  kernelProductDetailReference,
+  kernelRecordReferences,
+  mergeKernelDetailReferences,
+} from '../kernel/detail-references.js';
 import { defineProductDetailSlot } from '../kernel/product-details.js';
-import { KernelVocabulary } from '../kernel/vocabulary.js';
-import type { FrameworkCapabilityDemand } from './capability-demand.js';
-import type { FrameworkServiceRoot } from './service-root.js';
+import { ResourceDetailDescriptors } from '../resources/detail-descriptors.js';
+import { TemplateDetailDescriptors } from '../template/detail-descriptors.js';
+import { FrameworkDetailDescriptors } from './detail-descriptors.js';
 
 export const FrameworkProductDetails = {
-  ServiceRoot: defineProductDetailSlot<FrameworkServiceRoot>(
-    KernelVocabulary.Framework.ServiceRoot.key,
-    'framework.service-root',
-    'Source-backed framework service or container root with evidence basis and provenance.',
+  ServiceRoot: defineProductDetailSlot(
+    FrameworkDetailDescriptors.ServiceRoot,
+    (root) => mergeKernelDetailReferences(
+      kernelRecordReferences(
+        root.serviceKeyIdentityHandle,
+        root.evidenceSourceAddressHandle,
+        root.ownerIdentityHandle,
+        root.ownerProductHandle,
+      ),
+    ),
   ),
-  CapabilityDemand: defineProductDetailSlot<FrameworkCapabilityDemand>(
-    KernelVocabulary.Framework.CapabilityDemand.key,
-    'framework.capability-demand',
-    'Authored framework capability demand joined to admission and availability evidence.',
+  CapabilityDemand: defineProductDetailSlot(
+    FrameworkDetailDescriptors.CapabilityDemand,
+    (demand) => mergeKernelDetailReferences(
+      kernelRecordReferences(
+        ...demand.blockingOpenSeamHandles,
+        demand.ownerIdentityHandle,
+        demand.templateSourceAddressHandle,
+        demand.resourceDefinitionProductHandle,
+        demand.analysisContextProductHandle,
+        ...demand.admissionSourceAddressHandles,
+        ...demand.configurationSourceAddressHandles,
+      ),
+      kernelRecordReferences(
+        ...demand.packageEvidence.map((evidence) => evidence.sourceAddressHandle),
+      ),
+      [kernelProductDetailReference(
+        ResourceDetailDescriptors.Definition,
+        demand.resourceDefinitionProductHandle,
+      )],
+      [kernelProductDetailReference(
+        TemplateDetailDescriptors.World,
+        demand.analysisContextProductHandle,
+      )],
+    ),
   ),
 } as const;

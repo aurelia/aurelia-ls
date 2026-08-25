@@ -5,6 +5,8 @@ import type {
 } from '../kernel/handles.js';
 import { auLink } from '../kernel/au-link.js';
 import type { ConfigurationOptionValueKind } from '../configuration/configuration-option.js';
+import type { ContainerReference } from '../di/container-reference.js';
+import type { FieldProvenance } from '../kernel/provenance.js';
 import type { CheckerTypeReference } from '../type-system/type-shape.js';
 
 export type StateStoreOptionsOrHandlerKind =
@@ -18,19 +20,47 @@ export const enum StateGetterBindingStoreResolutionKind {
   DefaultStore = 'default-store',
   /** The decorator targets a literal named store through IStoreRegistry.getStore(...). */
   NamedStore = 'named-store',
+  /** The source definition is visible in more than one or an otherwise open IStoreRegistry world. */
+  OpenStoreVisibility = 'open-store-visibility',
   /** The decorator uses a runtime-dependent store-name expression that cannot be resolved statically. */
   DynamicStoreName = 'dynamic-store-name',
   /** The decorator names a store that is not configured in the current app world. */
   MissingStore = 'missing-store',
 }
 
-/** One @aurelia/state store configuration admitted before AppTask execution creates the runtime Store. */
+export type StateStoreConfigurationField =
+  | 'container'
+  | 'registration'
+  | 'registrationAdmission'
+  | 'configurationStep'
+  | 'configurationValue'
+  | 'name'
+  | 'initialState'
+  | 'optionsOrHandler'
+  | 'actionHandlers'
+  | 'source';
+
+/** One applied @aurelia/state store configuration before AppTask execution creates the runtime Store. */
 export class StateStoreConfiguration {
   constructor(
     /** Product handle for the materialized store-configuration envelope. */
     readonly productHandle: ProductHandle,
     /** Identity for this configured store. */
     readonly identityHandle: IdentityHandle,
+    /** Container whose IStoreRegistry receives the store during the creating AppTask. */
+    readonly container: ContainerReference,
+    /** DI registration operation that applies the configuration object to this container. */
+    readonly registrationProductHandle: ProductHandle,
+    /** Registration admission spent by the concrete DI operation. */
+    readonly registrationAdmissionProductHandle: ProductHandle,
+    /** Source address for the registration operation. */
+    readonly registrationSourceAddressHandle: AddressHandle | null,
+    /** Builder step that defines this default or named store. */
+    readonly configurationStepProductHandle: ProductHandle,
+    /** Identity of the builder step that defines this default or named store. */
+    readonly configurationStepIdentityHandle: IdentityHandle,
+    /** Source address of the configuration object admitted by the registration. */
+    readonly configurationValueSourceAddressHandle: AddressHandle | null,
     /** Store name, with `default` reserved for StateDefaultConfiguration.init(...). */
     readonly name: string | null,
     /** True when this is the default store that will register the IStore alias during AppTask execution. */
@@ -53,10 +83,17 @@ export class StateStoreConfiguration {
     readonly optionsOrHandlerSourceAddressHandle: AddressHandle | null,
     /** Source addresses for callback arguments classified as action handlers. */
     readonly actionHandlerSourceAddressHandles: readonly AddressHandle[] = [],
+    /** Field-level provenance for application ownership and authored configuration facts. */
+    readonly fieldProvenance: readonly FieldProvenance<StateStoreConfigurationField>[] = [],
   ) {}
 }
 
-/** Controller-added StateGetterBinding created by @fromState(...) for a field or setter target. */
+/**
+ * Source-backed @fromState(...) binding definition.
+ *
+ * Aurelia's lifecycle hooks create one runtime StateGetterBinding per compatible hydrated controller. That applied
+ * controller product is deliberately not represented by this source-level row yet.
+ */
 @auLink('state:StateGetterBinding')
 export class StateGetterBinding {
   constructor(
@@ -88,7 +125,7 @@ export class StateGetterBinding {
     readonly selectorReturnType: CheckerTypeReference | null,
     /** Static TypeScript type of the decorated target field/setter when the TypeChecker can project it. */
     readonly targetMemberType: CheckerTypeReference | null,
-    /** Explanation for dynamic or missing store/type handoff; null means the modeled source binding is closed. */
+    /** Explanation for dynamic, open-visibility, missing-store, or type handoff; null means this source row is closed. */
     readonly openReason: string | null,
   ) {}
 }

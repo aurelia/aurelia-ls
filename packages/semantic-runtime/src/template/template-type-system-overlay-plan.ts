@@ -1,6 +1,8 @@
 import type { AddressHandle, ProductHandle } from '../kernel/handles.js';
+import { BindingContextSlotAssignmentAccessKind } from '../configuration/scope.js';
 import { isJavaScriptIdentifierName } from '../javascript/identifier.js';
 import { TypeSystemOverlaySourceBuilder } from '../type-system/overlay.js';
+import { LetBindingTargetContext } from './runtime-binding.js';
 
 export interface TemplateTypeSystemOverlaySourceSlice {
   readonly text: string;
@@ -29,33 +31,54 @@ export type TemplateTypeSystemOverlayScopeLayer =
   | TemplateTypeSystemOverlayRepeatLayer
   | TemplateTypeSystemOverlayBindingContextLayer
   | TemplateTypeSystemOverlayTypedBindingContextLayer
+  | TemplateTypeSystemOverlayReusedBindingContextLayer
   | TemplateTypeSystemOverlayContextSlotLayer
   | TemplateTypeSystemOverlayLetLayer
   | TemplateTypeSystemOverlayConditionLayer
   | TemplateTypeSystemOverlaySwitchCaseLayer
   | TemplateTypeSystemOverlayEventLayer
-  | TemplateTypeSystemOverlayPromiseResultLayer
   | TemplateTypeSystemOverlayRuntimeAssignmentLayer;
 
 export interface TemplateTypeSystemOverlayRepeatLayer {
   readonly kind: 'repeat';
   readonly declaration: TemplateTypeSystemOverlaySourceSlice;
   readonly iterable: readonly TemplateTypeSystemOverlayExpressionPart[];
+  readonly elementProjection: TemplateTypeSystemOverlayRepeatElementProjection | null;
+  readonly previousKind: 'element-or-undefined' | 'undefined' | 'unknown';
+  readonly previousAssignmentAccessKind: BindingContextSlotAssignmentAccessKind | null;
   readonly currentAliasExpression: string | null;
   readonly parentAlias: TemplateTypeSystemOverlayScopeAlias | null;
 }
 
+export type TemplateTypeSystemOverlayRepeatElementProjection =
+  | {
+      /** Scope construction retained an exact element type for this identifier declaration. */
+      readonly kind: 'exact';
+      readonly typeExpression: string;
+    }
+  | {
+      /** A runtime handler admits the source, but tooling cannot prove the handler's emitted item type. */
+      readonly kind: 'open';
+    };
+
 export interface TemplateTypeSystemOverlayScopeAlias {
-  readonly name: string;
-  readonly expression: string;
-  readonly parentExpression: string | null;
+  /** Bare `$parent` / `AccessThis` reads expose only the runtime binding context. */
+  readonly bindingContextExpression: string;
+  /** Named ancestor lookup is override-context-first at the selected runtime Scope. */
+  readonly namedLookupExpression: string;
+  readonly parentBindingContextExpression: string | null;
+  readonly parentNamedLookupExpression: string | null;
 }
 
 interface TemplateTypeSystemOverlayCapturedScopeAlias {
-  readonly alias: TemplateTypeSystemOverlayScopeAlias;
-  readonly expressionLocal: string;
-  readonly parentExpressionLocal: string | null;
+  readonly bindingContextLocal: string;
+  readonly namedLookupLocal: string;
+  readonly parentBindingContextLocal: string | null;
+  readonly parentNamedLookupLocal: string | null;
 }
+
+/** Generated identifier used when authored `AccessScope` / `CallScope` selects an ancestor by name. */
+export const TEMPLATE_TYPE_SYSTEM_OVERLAY_PARENT_NAMED_LOOKUP_ALIAS = '__au_parent_lookup';
 
 export interface TemplateTypeSystemOverlayBindingContextLayer {
   readonly kind: 'binding-context';
@@ -69,6 +92,13 @@ export interface TemplateTypeSystemOverlayTypedBindingContextLayer {
   readonly kind: 'typed-binding-context';
   readonly locals: readonly TemplateTypeSystemOverlayRuntimeAssignmentLocal[];
   readonly parentAlias?: TemplateTypeSystemOverlayScopeAlias | null;
+}
+
+/** Runtime Scope hop that retains the current binding context but introduces a fresh override context. */
+export interface TemplateTypeSystemOverlayReusedBindingContextLayer {
+  readonly kind: 'reused-binding-context';
+  readonly locals: readonly TemplateTypeSystemOverlayContextSlotLocal[];
+  readonly parentAlias: TemplateTypeSystemOverlayScopeAlias | null;
 }
 
 export interface TemplateTypeSystemOverlayLetLayer {
@@ -85,6 +115,7 @@ export interface TemplateTypeSystemOverlayContextSlotLocal {
   readonly name: string;
   readonly valueKind: TemplateTypeSystemOverlayContextSlotValueKind;
   readonly typeExpression: string | null;
+  readonly assignmentAccessKind: BindingContextSlotAssignmentAccessKind | null;
 }
 
 export type TemplateTypeSystemOverlayContextSlotValueKind =
@@ -95,6 +126,7 @@ export type TemplateTypeSystemOverlayContextSlotValueKind =
 export interface TemplateTypeSystemOverlayLetEffect {
   readonly target: string;
   readonly expression: readonly TemplateTypeSystemOverlayExpressionPart[];
+  readonly targetContext: LetBindingTargetContext;
 }
 
 export interface TemplateTypeSystemOverlayConditionLayer {
@@ -114,7 +146,7 @@ export interface TemplateTypeSystemOverlaySwitchCaseLayer {
 
 export interface TemplateTypeSystemOverlayEventLayer {
   readonly kind: 'event';
-  readonly eventName: string;
+  readonly typeExpression: string | null;
   readonly memberTypes: readonly TemplateTypeSystemOverlayEventMemberType[];
 }
 
@@ -126,13 +158,7 @@ export interface TemplateTypeSystemOverlayEventMemberType {
 export interface TemplateTypeSystemOverlayRuntimeAssignmentLayer {
   readonly kind: 'runtime-assignment';
   readonly locals: readonly TemplateTypeSystemOverlayRuntimeAssignmentLocal[];
-}
-
-export interface TemplateTypeSystemOverlayPromiseResultLayer {
-  readonly kind: 'promise-result';
-  readonly promise: readonly TemplateTypeSystemOverlayExpressionPart[];
-  readonly resultKind: 'fulfilled' | 'rejected';
-  readonly locals: readonly string[];
+  readonly bindingContextLocalNames: readonly string[];
 }
 
 export interface TemplateTypeSystemOverlayRuntimeAssignmentLocal {
@@ -183,6 +209,9 @@ class TemplateTypeSystemOverlayScopeBlockWriter {
       case 'typed-binding-context':
         this.appendTypedBindingContextLayer(layer);
         return;
+      case 'reused-binding-context':
+        this.appendReusedBindingContextLayer(layer);
+        return;
       case 'condition':
         this.appendConditionLayer(layer);
         return;
@@ -194,9 +223,6 @@ class TemplateTypeSystemOverlayScopeBlockWriter {
         return;
       case 'event':
         this.appendEventLayer(layer);
-        return;
-      case 'promise-result':
-        this.appendPromiseResultLayer(layer);
         return;
       case 'runtime-assignment':
         this.appendRuntimeAssignmentLayer(layer);
@@ -210,12 +236,29 @@ class TemplateTypeSystemOverlayScopeBlockWriter {
   private appendRepeatLayer(layer: TemplateTypeSystemOverlayRepeatLayer): void {
     const indent = this.indent;
     const capturedParent = this.captureParentAlias(layer.parentAlias, indent);
-    this.builder.append(`${indent}for (const ${layer.declaration.text} of __au_repeat(`);
+    const valuesLocal = `__au_repeat_values_${this.depth}`;
+    this.builder.append(`${indent}const ${valuesLocal} = __au_repeat(`);
     appendTemplateTypeSystemOverlayExpressionParts(this.builder, layer.iterable, `repeat source for ${layer.declaration.text}`);
-    this.builder.append(')) {\n');
+    this.builder.append(')');
+    if (layer.elementProjection != null) {
+      const elementType = layer.elementProjection.kind === 'exact'
+        ? layer.elementProjection.typeExpression
+        : 'any';
+      // Scope construction owns repeat-handler admission. Replaying its answer avoids a second built-in-only
+      // inference island; `any` is diagnostic containment for an explicitly open app handler.
+      this.builder.append(` as unknown as Iterable<${elementType}>`);
+    }
+    this.builder.append(';\n');
+    this.builder.append(`${indent}for (const ${layer.declaration.text} of ${valuesLocal}) {\n`);
     this.depth += 1;
     const nestedIndent = this.indent;
     this.appendCapturedParentAlias(capturedParent, nestedIndent);
+    this.builder.appendLine(repeatPreviousDeclaration(
+      layer.previousKind,
+      layer.previousAssignmentAccessKind,
+      valuesLocal,
+      nestedIndent,
+    ));
     if (layer.currentAliasExpression != null) {
       this.builder.appendLine(`${nestedIndent}const $this = ${layer.currentAliasExpression};`);
     }
@@ -255,18 +298,27 @@ class TemplateTypeSystemOverlayScopeBlockWriter {
     if (alias == null) {
       return null;
     }
-    const expressionLocal = `__au_parent_${this.depth}`;
-    const parentExpressionLocal = alias.parentExpression == null
+    const bindingContextLocal = `__au_parent_${this.depth}`;
+    const namedLookupLocal = `__au_parent_lookup_${this.depth}`;
+    const parentBindingContextLocal = alias.parentBindingContextExpression == null
       ? null
       : `__au_parent_${this.depth}_parent`;
-    this.builder.appendLine(`${indent}const ${expressionLocal} = ${alias.expression};`);
-    if (parentExpressionLocal != null && alias.parentExpression != null) {
-      this.builder.appendLine(`${indent}const ${parentExpressionLocal} = ${alias.parentExpression};`);
+    const parentNamedLookupLocal = alias.parentNamedLookupExpression == null
+      ? null
+      : `__au_parent_lookup_${this.depth}_parent`;
+    this.builder.appendLine(`${indent}const ${bindingContextLocal} = ${alias.bindingContextExpression};`);
+    this.builder.appendLine(`${indent}const ${namedLookupLocal} = ${alias.namedLookupExpression};`);
+    if (parentBindingContextLocal != null && alias.parentBindingContextExpression != null) {
+      this.builder.appendLine(`${indent}const ${parentBindingContextLocal} = ${alias.parentBindingContextExpression};`);
+    }
+    if (parentNamedLookupLocal != null && alias.parentNamedLookupExpression != null) {
+      this.builder.appendLine(`${indent}const ${parentNamedLookupLocal} = ${alias.parentNamedLookupExpression};`);
     }
     return {
-      alias,
-      expressionLocal,
-      parentExpressionLocal,
+      bindingContextLocal,
+      namedLookupLocal,
+      parentBindingContextLocal,
+      parentNamedLookupLocal,
     };
   }
 
@@ -277,9 +329,12 @@ class TemplateTypeSystemOverlayScopeBlockWriter {
     if (captured == null) {
       return;
     }
-    this.builder.appendLine(captured.parentExpressionLocal == null
-      ? `${indent}const ${captured.alias.name} = ${captured.expressionLocal};`
-      : `${indent}const ${captured.alias.name} = ${captured.expressionLocal} as typeof ${captured.expressionLocal} & { readonly $parent: typeof ${captured.parentExpressionLocal} };`);
+    this.builder.appendLine(captured.parentBindingContextLocal == null
+      ? `${indent}const $parent = ${captured.bindingContextLocal};`
+      : `${indent}const $parent = ${captured.bindingContextLocal} as typeof ${captured.bindingContextLocal} & { readonly $parent: typeof ${captured.parentBindingContextLocal} };`);
+    this.builder.appendLine(captured.parentNamedLookupLocal == null
+      ? `${indent}const ${TEMPLATE_TYPE_SYSTEM_OVERLAY_PARENT_NAMED_LOOKUP_ALIAS} = ${captured.namedLookupLocal};`
+      : `${indent}const ${TEMPLATE_TYPE_SYSTEM_OVERLAY_PARENT_NAMED_LOOKUP_ALIAS} = ${captured.namedLookupLocal} as typeof ${captured.namedLookupLocal} & { readonly $parent: typeof ${captured.parentNamedLookupLocal} };`);
   }
 
   private appendTypedBindingContextLayer(layer: TemplateTypeSystemOverlayTypedBindingContextLayer): void {
@@ -297,6 +352,18 @@ class TemplateTypeSystemOverlayScopeBlockWriter {
     this.builder.appendLine(layer.locals.length === 0
       ? `${nestedIndent}const $this = {};`
       : `${nestedIndent}const $this = { ${layer.locals.map((local) => local.name).join(', ')} };`);
+  }
+
+  private appendReusedBindingContextLayer(
+    layer: TemplateTypeSystemOverlayReusedBindingContextLayer,
+  ): void {
+    const indent = this.indent;
+    const capturedParent = this.captureParentAlias(layer.parentAlias, indent);
+    this.builder.append(`${indent}{\n`);
+    this.depth += 1;
+    const nestedIndent = this.indent;
+    this.appendCapturedParentAlias(capturedParent, nestedIndent);
+    this.appendContextSlotDeclarations(layer.locals, nestedIndent);
   }
 
   private appendConditionLayer(layer: TemplateTypeSystemOverlayConditionLayer): void {
@@ -389,16 +456,23 @@ class TemplateTypeSystemOverlayScopeBlockWriter {
   }
 
   private appendContextSlotLayer(layer: TemplateTypeSystemOverlayContextSlotLayer): void {
-    const indent = this.indent;
-    for (const local of layer.locals) {
+    this.appendContextSlotDeclarations(layer.locals, this.indent);
+  }
+
+  private appendContextSlotDeclarations(
+    locals: readonly TemplateTypeSystemOverlayContextSlotLocal[],
+    indent: string,
+  ): void {
+    for (const local of locals) {
+      const declarationKeyword = contextSlotDeclarationKeyword(local.assignmentAccessKind);
       this.builder.appendLine(local.typeExpression == null
-        ? `${indent}let ${local.name} = ${contextSlotLocalInitializer(local.valueKind)};`
-        : `${indent}let ${local.name} = undefined as unknown as ${local.typeExpression};`);
+        ? `${indent}${declarationKeyword} ${local.name} = ${contextSlotLocalInitializer(local.valueKind)};`
+        : `${indent}${declarationKeyword} ${local.name} = undefined as unknown as ${local.typeExpression};`);
     }
   }
 
   private appendEventLayer(layer: TemplateTypeSystemOverlayEventLayer): void {
-    this.builder.append(`${this.indent}const $event = undefined as unknown as __au_event<${templateTypeSystemOverlayQuotedStringLiteral(layer.eventName)}>`);
+    this.builder.append(`${this.indent}const $event = undefined as unknown as ${layer.typeExpression ?? 'unknown'}`);
     if (layer.memberTypes.length > 0) {
       this.builder.append(' & { ');
       layer.memberTypes.forEach((member, index) => {
@@ -409,37 +483,55 @@ class TemplateTypeSystemOverlayScopeBlockWriter {
     this.builder.append(';\n');
   }
 
-  private appendPromiseResultLayer(layer: TemplateTypeSystemOverlayPromiseResultLayer): void {
-    this.builder.append(`${this.indent}{\n`);
-    this.depth += 1;
-    const nestedIndent = this.indent;
-    const promiseLocal = `__au_promise_${this.depth}`;
-    this.builder.append(`${nestedIndent}const ${promiseLocal} = `);
-    appendTemplateTypeSystemOverlayExpressionParts(this.builder, layer.promise, 'promise source');
-    this.builder.append(';\n');
-    for (const local of layer.locals) {
-      this.builder.appendLine(`${nestedIndent}const ${local} = undefined as unknown as ${promiseResultLocalType(layer.resultKind, promiseLocal)};`);
-    }
-    if (layer.locals.length > 0) {
-      this.builder.appendLine(`${nestedIndent}const $this = { ${layer.locals.join(', ')} };`);
-    }
-  }
-
   private appendRuntimeAssignmentLayer(layer: TemplateTypeSystemOverlayRuntimeAssignmentLayer): void {
+    const outerIndent = this.indent;
+    const previousContextLocal = layer.bindingContextLocalNames.length === 0
+      ? null
+      : `__au_assignment_context_${this.depth}`;
+    if (previousContextLocal != null) {
+      this.builder.appendLine(`${outerIndent}const ${previousContextLocal} = $this;`);
+    }
+    this.builder.append(`${outerIndent}{\n`);
+    this.depth += 1;
     const indent = this.indent;
     for (const local of layer.locals) {
       this.builder.appendLine(local.typeExpression == null
         ? `${indent}let ${local.name} = undefined as unknown;`
         : `${indent}let ${local.name} = undefined as unknown as ${local.typeExpression};`);
     }
+    if (previousContextLocal != null) {
+      const additionType = `{ ${layer.bindingContextLocalNames
+        .map((name) => `readonly ${name}: typeof ${name}`)
+        .join('; ')} }`;
+      this.builder.appendLine(
+        `${indent}const $this = ${previousContextLocal} as unknown as Omit<typeof ${previousContextLocal}, keyof ${additionType}> & ${additionType};`,
+      );
+    }
   }
 
   private appendLetLayer(layer: TemplateTypeSystemOverlayLetLayer): void {
-    const indent = this.indent;
     for (const effect of layer.effects) {
-      this.builder.append(`${indent}const ${effect.target} = `);
+      const indent = this.indent;
+      const valueLocal = `__au_let_value_${this.depth}`;
+      const previousContextLocal = effect.targetContext === LetBindingTargetContext.BindingContext
+        ? `__au_let_context_${this.depth}`
+        : null;
+      this.builder.append(`${indent}const ${valueLocal} = `);
       appendTemplateTypeSystemOverlayExpressionParts(this.builder, effect.expression, `let source for ${effect.target}`);
       this.builder.append(';\n');
+      if (previousContextLocal != null) {
+        this.builder.appendLine(`${indent}const ${previousContextLocal} = $this;`);
+      }
+      this.builder.append(`${indent}{\n`);
+      this.depth += 1;
+      const nestedIndent = this.indent;
+      this.builder.appendLine(`${nestedIndent}const ${effect.target} = ${valueLocal};`);
+      if (previousContextLocal != null) {
+        const additionType = `{ readonly ${effect.target}: typeof ${effect.target} }`;
+        this.builder.appendLine(
+          `${nestedIndent}const $this = ${previousContextLocal} as unknown as Omit<typeof ${previousContextLocal}, keyof ${additionType}> & ${additionType};`,
+        );
+      }
     }
   }
 }
@@ -484,11 +576,27 @@ function contextSlotLocalInitializer(valueKind: TemplateTypeSystemOverlayContext
   }
 }
 
-function promiseResultLocalType(
-  resultKind: TemplateTypeSystemOverlayPromiseResultLayer['resultKind'],
-  promiseLocal: string,
+function repeatPreviousDeclaration(
+  kind: TemplateTypeSystemOverlayRepeatLayer['previousKind'],
+  assignmentAccessKind: BindingContextSlotAssignmentAccessKind | null,
+  valuesLocal: string,
+  indent: string,
 ): string {
-  return resultKind === 'fulfilled'
-    ? `Awaited<typeof ${promiseLocal}>`
-    : 'unknown';
+  const declarationKeyword = contextSlotDeclarationKeyword(assignmentAccessKind);
+  switch (kind) {
+    case 'element-or-undefined':
+      return `${indent}${declarationKeyword} $previous = undefined as (typeof ${valuesLocal} extends Iterable<infer T> ? T : never) | undefined;`;
+    case 'undefined':
+      return `${indent}${declarationKeyword} $previous = undefined;`;
+    case 'unknown':
+      return `${indent}${declarationKeyword} $previous = undefined as unknown;`;
+  }
+}
+
+function contextSlotDeclarationKeyword(
+  assignmentAccessKind: BindingContextSlotAssignmentAccessKind | null,
+): 'const' | 'let' {
+  return assignmentAccessKind === BindingContextSlotAssignmentAccessKind.FrameworkManagedReadOnly
+    ? 'const'
+    : 'let';
 }

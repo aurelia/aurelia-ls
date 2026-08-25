@@ -1,15 +1,22 @@
 import type { SemanticSupportState } from '../support-state.js';
 import type { BootProjectDiscoveryMode, BootProjectInput } from '../boot/frames.js';
+import type { ProjectRootAdmissionOrigin } from '../boot/project-root-admission.js';
+import type {
+  AureliaProjectConfigurationVersion,
+  SemanticExistingProjectConfigurationApplicationState,
+  SemanticProjectConfigurationDiagnostic,
+} from '../boot/project-configuration.js';
 import type { ApplicationFileRole } from '../application/topology.js';
 import type { SourceFileRole } from '../kernel/address.js';
+import type { SemanticRuntimeProjectInputAuthority } from '../kernel/project-input.js';
 import type {
-  DiagnosticActionChangeDomain,
-  DiagnosticActionEvidenceKind,
-  DiagnosticActionKind,
-  DiagnosticActionPlanKind,
-  DiagnosticActionPlanReadiness,
-  DiagnosticActionRuntimeBoundaryKind,
-  DiagnosticActionRuntimeIntentKind,
+  DiagnosticRepairAffordance,
+  DiagnosticSuggestion,
+  DiagnosticSuggestionActionKind,
+  DiagnosticSuggestionActionTarget,
+  DiagnosticSuggestionActionTargetKind,
+  DiagnosticSuggestionKind,
+  DiagnosticSuggestionValueTypeSource,
 } from '../diagnostic-action/action.js';
 import type {
   SemanticProjectAnalysisKind,
@@ -23,9 +30,16 @@ import type {
   ExpressionExpectedContinuationClass,
   ExpressionFrontierKind,
 } from '../expression/parse-result-algebra.js';
+import {
+  InquiryAnswerCoverage,
+  InquiryAnswerResult,
+  InquiryAnswerSelection,
+} from '../inquiry/answer.js';
 import type {
   TemplateCompletionCandidateKind,
   TemplateCompletionCandidateSourceKind,
+  TemplateCompletionDomainKind,
+  TemplateCompletionScopeRole,
   TemplateCompletionSiteKind,
 } from '../inquiry/template-completion.js';
 import type { SemanticAppAnalysisDepth } from '../configuration/app-analysis.js';
@@ -45,12 +59,10 @@ import type {
 } from '../telemetry/kernel-density.js';
 import type { SemanticRuntimeInquiryProfile } from '../telemetry/inquiry-profile.js';
 import type {
+  InquiryContinuationEpochDependencyValue,
   InquiryContinuationCostValue,
   InquiryContinuationIntentValue,
-  InquiryEvidenceCoverageValue,
-  InquiryEvidenceStalenessValue,
-  InquiryEvidenceStateValue,
-  InquirySourcePrecisionValue,
+  InquirySourceRequirementValue,
 } from '../inquiry/continuation-intent.js';
 import type {
   InquiryContinuationKindValue,
@@ -61,9 +73,10 @@ import type {
 } from '../telemetry/memory.js';
 import type { SemanticRuntimeTelemetryOptions } from '../telemetry/options.js';
 import type { CheckerExpressionTypeEvaluationCacheStats } from '../type-system/expression-type-evaluation.js';
+import type { TypeSystemProjectAcquisitionKind } from '../type-system/project-computation.js';
 import type { TypeSystemTypeScriptVersionRelation } from '../type-system/typescript-environment.js';
 import type { ConfigurationOptionValueKind } from '../configuration/configuration-option.js';
-import type { ControllerPhase } from '../configuration/controller.js';
+import type { AppTaskSlot } from '../configuration/app-task.js';
 import type {
   StateIssueKind,
   StateIssuePhase,
@@ -116,13 +129,17 @@ import type {
   EvaluationIssueSubjectKind,
 } from '../evaluation/evaluation-issue.js';
 import type {
+  StaticProjectEvaluationAcquisitionKind,
   StaticProjectEvaluationSourceOriginKind,
   StaticProjectEvaluationSourceFileStats,
 } from '../evaluation/project-evaluation.js';
 import type {
   EvaluationModuleSourceHostProfile,
 } from '../evaluation/module-host.js';
-import type { EvaluationValueKind } from '../evaluation/values.js';
+import type {
+  EvaluationPromiseSettlementKind,
+  EvaluationValueKind,
+} from '../evaluation/values.js';
 import type {
   DiResolveActiveContainerExpectation,
   DiResolveEnclosingMemberKind,
@@ -131,13 +148,25 @@ import type {
 import type {
   AddressHandle,
   ClaimHandle,
+  HotDetailHandle,
   IdentityHandle,
   OpenSeamHandle,
   ProductHandle,
 } from '../kernel/handles.js';
-import type { OpenSeam } from '../kernel/open-seam.js';
-import type { OpenSeamReasonKind } from '../kernel/open-seam.js';
-import type { ResourceDefinitionKind } from '../resources/resource-kind.js';
+import type {
+  OpenSeam,
+  OpenSeamBoundaryKind,
+  OpenSeamReasonKind,
+} from '../kernel/open-seam.js';
+import type {
+  SemanticProjectFindingEffectivePolicy,
+  SemanticProjectFindingRuleId,
+} from '../findings/analysis-limitation-policy.js';
+import type {
+  MaterializationRecord,
+  MaterializedProduct,
+} from '../kernel/materialization.js';
+import { ResourceDefinitionKind } from '../resources/resource-kind.js';
 import type { ResourceDependencyReferenceKind } from '../resources/resource-reference.js';
 import type {
   BindableBindingMode,
@@ -160,10 +189,20 @@ import type {
   ResourceIssuePhase,
 } from '../resources/resource-issue.js';
 import type { TemplateResourceVisibilityKind } from '../template/compiler-world-reference.js';
-import type { TemplateInstructionKind } from '../template/instruction-ir.js';
+import type {
+  AttributeClassificationKind,
+  AttributeSyntaxKind,
+} from '../template/attribute-syntax.js';
+import type { HtmlNamespaceKind } from '../template/html-ir.js';
+import type { BindingCommandLoweringState } from '../template/binding-command-execution.js';
+import type {
+  TemplateBindingMode,
+  TemplateInstructionKind,
+  TemplateListenerStrategy,
+} from '../template/instruction-ir.js';
 import type {
   RuntimeBindingDataFlowDirection,
-  RuntimeObservedDependencyKind,
+  RuntimeBindingSourceEvaluationKind,
   RuntimeBindingDataFlowSourceAssignmentKind,
   RuntimeBindingDataFlowSourceAssignmentReasonKind,
   RuntimeBindingDataFlowSourceKind,
@@ -173,10 +212,35 @@ import type {
   RuntimeBindingValueChannelAuthority,
   RuntimeBindingValueChannelCouplingKind,
   RuntimeBindingValueChannelKind,
+  RuntimeBindingValueChannelTargetMutationKind,
 } from '../observation/runtime-binding-observation.js';
+import type {
+  RuntimeObservedDependencyKind,
+  RuntimeObservedMemberSourceRoute,
+  RuntimeObservedMemberSourceState,
+} from '../observation/runtime-observed-dependency.js';
+import type {
+  RuntimeOperationRealization,
+  RuntimeOperationReachability,
+} from '../runtime-expression/runtime-operation.js';
+import type {
+  RuntimeExpressionAccessCoverage,
+  RuntimeExpressionAccessForm,
+  RuntimeExpressionAccessOrigin,
+  RuntimeExpressionAccessOwnerKind,
+  RuntimeExpressionAccessPhase,
+  RuntimeExpressionAccessRole,
+  RuntimeExpressionAccessTargetResolution,
+  RuntimeExpressionAccessTracking,
+  RuntimeExpressionExecutionMaximum,
+  RuntimeExpressionExecutionMinimum,
+  RuntimeExpressionExecutionQualifierKind,
+  RuntimeExpressionOperationKind,
+} from '../runtime-expression/runtime-expression-access-use.js';
 import type {
   ObservationIssueKind,
   ObservationIssuePhase,
+  ObservationIssueRelatedSourceKind,
 } from '../observation/observation-issue.js';
 import type {
   ComputedObservationDependencyMode,
@@ -200,20 +264,49 @@ import type {
   RuntimeBindingTargetAccessAuthority,
   RuntimeBindingTargetAccessLookup,
   RuntimeBindingTargetAccessStrategy,
+  RuntimeBindingTargetObserverCacheDisposition,
+  RuntimeControllerObserverSetupOutcome,
   RuntimeBindingTargetKind,
   RuntimeBindingTargetTypeSource,
+  RuntimeNodeObserverConfigFieldState,
+  RuntimeNodeObserverKind,
   RuntimeBindingTargetOperationAuthority,
   RuntimeBindingTargetOperationKind,
   RuntimeTargetOperationOwnerKind,
 } from '../template/runtime-binding.js';
 import type {
   RuntimeBindingBehaviorApplicationPhase,
+  RuntimeBindingBehaviorIssuePhase,
 } from '../template/runtime-binding-behavior.js';
 import type {
+  RuntimeValueConverterApplicationPhase,
+  RuntimeValueConverterIssuePhase,
+} from '../template/runtime-value-converter.js';
+import type { RuntimeValueConverterWritebackStageState } from '../type-system/value-converter-writeback.js';
+import type {
+  RuntimeExpressionResourceApplicationOrigin,
+  RuntimeExpressionResourceLifecycleEffectKind,
+  RuntimeExpressionResourceValueState,
+} from '../template/runtime-expression-resource.js';
+import type { RuntimeBindingIssuePhase } from '../template/runtime-binding-issue.js';
+import type { RuntimeBindingScopeIssuePhase } from '../template/runtime-binding-scope-issue.js';
+import type { RuntimeControllerIssuePhase } from '../template/runtime-controller-issue.js';
+import type { RuntimeRendererIssuePhase } from '../template/runtime-renderer-issue.js';
+import type {
+  TemplateCompilerIssueKind,
+  TemplateCompilerIssuePhase,
+  TemplateCompilerIssueSeverity,
+} from '../template/compiler-issue.js';
+import type {
+  CompiledNativeSlotNameKind,
+  CompiledTemplateState,
+} from '../template/compiled-template.js';
+import type {
   RuntimeControllerCreationKind,
-  RuntimeControllerLifecycleStage,
-  RuntimeControllerLifecycleStepKind,
+  RuntimeControllerAssemblyStage,
+  RuntimeControllerAssemblyStepKind,
   RuntimeControllerReadinessKind,
+  RuntimeControllerObserverSetupState,
 } from '../template/runtime-controller.js';
 import type {
   RuntimeWatcherDependencyEvaluationKind,
@@ -222,10 +315,18 @@ import type {
 import type {
   CompositionActivateMethodKind,
   CompositionActivationModelHandoffKind,
+  CompositionComponentCandidateCoverageKind,
   CompositionComponentResolutionKind,
-  CompositionInputFulfillmentKind,
+  CompositionInputConsumptionKind,
+  CompositionInputValueStateKind,
   CompositionModelResolutionKind,
+  CompositionRenderingContextKind,
 } from '../template/runtime-composition.js';
+import type {
+  RuntimeContentProjectionClosureKind,
+  RuntimeContentProjectionSelectionKind,
+} from '../template/runtime-content-projection.js';
+import type { AuSlotsInfoSourceKind } from '../configuration/controller.js';
 import type { RuntimeRendererKind } from '../template/runtime-renderer-reference.js';
 import type {
   TemplateExpressionParseState,
@@ -241,6 +342,7 @@ import type {
 import type {
   CheckerTypeMemberKind,
   CheckerTypeMemberVisibilityKind,
+  CheckerTypeProjectionOrigin,
   CheckerTypeShapeKind,
 } from '../type-system/type-shape.js';
 import type { ExpressionParseResultKind } from '../expression/parse-result-algebra.js';
@@ -251,9 +353,16 @@ import type {
 import type {
   NavigationInstructionKind,
   RouteableComponentKind,
+  RouterClosureKind,
+  RouteConfigContributionEffectKind,
+  RouteConfigExecutionKind,
+  RouteConfigFieldStateKind,
   RouteConfigKind,
   RouteConfigOriginKind,
+  RouteConfigStageKind,
+  RouteConfigValueField,
   RouteConfigValueKind,
+  RouteContextParameterReadOwnershipKind,
   RouteRecognizerIssueKind,
   RouteRecognizerModelKind,
   RouteRecognizerSegmentKind,
@@ -262,8 +371,15 @@ import type {
   RouterIssuePhase,
   RouterIssueSeverity,
   RouterModelKind,
+  RouterNavigationTargetKind,
+  RouterRealizationStageKind,
+  ViewportAgentCandidateResolutionKind,
+  ViewportFieldStateKind,
 } from '../router/model.js';
-import type { SemanticSourceReference } from './source-reference.js';
+import type {
+  SemanticContinuationSourceFact,
+  SemanticSourceReference,
+} from './source-reference.js';
 import type {
   SemanticRuntimeAppBuilderQueryKind,
   SemanticRuntimeAppBuilderQueryRequest,
@@ -281,34 +397,19 @@ import type {
   AppBuilderControlUseActionChannelKind,
 } from '../app-builder/ontology/control-use-inventory.js';
 
-export const SEMANTIC_RUNTIME_API_VERSION = '0.1' as const;
+export const SEMANTIC_RUNTIME_API_VERSION = '0.2' as const;
+export const SEMANTIC_RUNTIME_ANALYSIS_BASIS_SCHEMA_VERSION = 'semantic-analysis-basis/1' as const;
 
 export const SEMANTIC_PROJECT_DISCOVERY_MODES = [
   'single-root',
-  'package-tsconfig',
+  'project-markers',
 ] as const;
 
-export const enum SemanticRuntimeAnswerOutcome {
-  Hit = 'hit',
-  Miss = 'miss',
-  Partial = 'partial',
-  Unsupported = 'unsupported',
-}
-
-export const enum SemanticRuntimeAnswerClosure {
-  /** Answer is complete for the requested query envelope and no answer-local paging or open state remains. */
-  Complete = 'complete',
-  /** Answer is truncated by public paging; follow `page.nextCursor` to continue the same query. */
-  Paged = 'paged',
-  /** Answer is intentionally partial because some required semantic fact stayed open. */
-  Open = 'open',
-  /** Answer is intentionally partial because the request matched multiple possible semantic loci. */
-  Ambiguous = 'ambiguous',
-  /** Answer is intentionally partial because another query or locus should be used instead. */
-  Reroute = 'reroute',
-  /** Answer cannot be produced by this query family or runtime boundary. */
-  Unsupported = 'unsupported',
-}
+export {
+  InquiryAnswerCoverage as SemanticRuntimeAnswerCoverage,
+  InquiryAnswerResult as SemanticRuntimeAnswerResult,
+  InquiryAnswerSelection as SemanticRuntimeAnswerSelection,
+};
 
 export const SEMANTIC_APP_RETENTION_POLICIES = [
   'profile-default',
@@ -343,6 +444,7 @@ export const enum SemanticAppQueryKind {
   OpenSeams = 'open-seams',
   OpenSeamSummary = 'open-seam-summary',
   OpenSeamSites = 'open-seam-sites',
+  AnalysisLimitations = 'analysis-limitations',
   AppDiagnostics = 'app-diagnostics',
   AppDiagnosticSummary = 'app-diagnostic-summary',
   TypeScriptDiagnostics = 'typescript-diagnostics',
@@ -358,6 +460,7 @@ export const enum SemanticAppQueryKind {
   RuntimeEffectObservedDependencies = 'runtime-effect-observed-dependencies',
   ProxyObservableEscapes = 'proxy-observable-escapes',
   AppTopology = 'app-topology',
+  TemplateDocumentOwnership = 'template-document-ownership',
   StateStores = 'state-stores',
   StateGetterBindings = 'state-getter-bindings',
   StateIssues = 'state-issues',
@@ -367,6 +470,7 @@ export const enum SemanticAppQueryKind {
   FetchClientIssues = 'fetch-client-issues',
   DialogIssues = 'dialog-issues',
   FrameworkCapabilityDemands = 'framework-capability-demands',
+  FrameworkCapabilityExplanation = 'framework-capability-explanation',
   RouterOverview = 'router-overview',
   RouterOptions = 'router-options',
   Routes = 'routes',
@@ -386,25 +490,40 @@ export const enum SemanticAppQueryKind {
   RouterViewports = 'router-viewports',
   ViewportAgents = 'viewport-agents',
   ComponentAgents = 'component-agents',
+  ResourceInventory = 'resource-inventory',
   ResourceDefinitions = 'resource-definitions',
   ResourceIssues = 'resource-issues',
   ResourceVisibility = 'resource-visibility',
+  TemplateResourceAvailability = 'template-resource-availability',
+  ResourceAvailabilityExplanation = 'resource-availability-explanation',
   TemplateCompilations = 'template-compilations',
+  AttributeInterpretationExplanation = 'attribute-interpretation-explanation',
   TemplateCompletions = 'template-completions',
   TemplateCursorInfo = 'template-cursor-info',
+  TemplateReferences = 'template-references',
+  TemplateRename = 'template-rename',
+  TemplateRenameFromTypeScript = 'template-rename-from-typescript',
+  TemplateCodeActions = 'template-code-actions',
+  TemplateSemanticTokens = 'template-semantic-tokens',
+  TemplateFoldingRanges = 'template-folding-ranges',
+  TemplateInlayHints = 'template-inlay-hints',
   TemplateDiagnostics = 'template-diagnostics',
   RuntimeControllers = 'runtime-controllers',
   RuntimeWatchers = 'runtime-watchers',
   RuntimeWatcherObservedDependencies = 'runtime-watcher-observed-dependencies',
   RuntimeCompositions = 'runtime-compositions',
+  TemplateContentProjections = 'template-content-projections',
   BindingTargetAccesses = 'binding-target-accesses',
   TargetOperations = 'target-operations',
   BindingTargetOperations = 'binding-target-operations',
   BindingSourceOperations = 'binding-source-operations',
   BindingBehaviorApplications = 'binding-behavior-applications',
+  ValueConverterApplications = 'value-converter-applications',
   BindingValueChannels = 'binding-value-channels',
   BindingValueChannelSummary = 'binding-value-channel-summary',
+  RuntimeExpressionAccessUses = 'runtime-expression-access-uses',
   BindingDataFlows = 'binding-data-flows',
+  BindingUncertaintyExplanation = 'binding-uncertainty-explanation',
   BindingDataFlowSummary = 'binding-data-flow-summary',
   ControlUseInventory = 'control-use-inventory',
   BindingObservedDependencySummary = 'binding-observed-dependency-summary',
@@ -419,6 +538,7 @@ export const SEMANTIC_APP_QUERY_KINDS = [
   SemanticAppQueryKind.OpenSeams,
   SemanticAppQueryKind.OpenSeamSummary,
   SemanticAppQueryKind.OpenSeamSites,
+  SemanticAppQueryKind.AnalysisLimitations,
   SemanticAppQueryKind.AppDiagnostics,
   SemanticAppQueryKind.AppDiagnosticSummary,
   SemanticAppQueryKind.TypeScriptDiagnostics,
@@ -434,6 +554,7 @@ export const SEMANTIC_APP_QUERY_KINDS = [
   SemanticAppQueryKind.RuntimeEffectObservedDependencies,
   SemanticAppQueryKind.ProxyObservableEscapes,
   SemanticAppQueryKind.AppTopology,
+  SemanticAppQueryKind.TemplateDocumentOwnership,
   SemanticAppQueryKind.StateStores,
   SemanticAppQueryKind.StateGetterBindings,
   SemanticAppQueryKind.StateIssues,
@@ -443,6 +564,7 @@ export const SEMANTIC_APP_QUERY_KINDS = [
   SemanticAppQueryKind.FetchClientIssues,
   SemanticAppQueryKind.DialogIssues,
   SemanticAppQueryKind.FrameworkCapabilityDemands,
+  SemanticAppQueryKind.FrameworkCapabilityExplanation,
   SemanticAppQueryKind.RouterOverview,
   SemanticAppQueryKind.RouterOptions,
   SemanticAppQueryKind.Routes,
@@ -462,25 +584,40 @@ export const SEMANTIC_APP_QUERY_KINDS = [
   SemanticAppQueryKind.RouterViewports,
   SemanticAppQueryKind.ViewportAgents,
   SemanticAppQueryKind.ComponentAgents,
+  SemanticAppQueryKind.ResourceInventory,
   SemanticAppQueryKind.ResourceDefinitions,
   SemanticAppQueryKind.ResourceIssues,
   SemanticAppQueryKind.ResourceVisibility,
+  SemanticAppQueryKind.TemplateResourceAvailability,
+  SemanticAppQueryKind.ResourceAvailabilityExplanation,
   SemanticAppQueryKind.TemplateCompilations,
+  SemanticAppQueryKind.AttributeInterpretationExplanation,
   SemanticAppQueryKind.TemplateCompletions,
   SemanticAppQueryKind.TemplateCursorInfo,
+  SemanticAppQueryKind.TemplateReferences,
+  SemanticAppQueryKind.TemplateRename,
+  SemanticAppQueryKind.TemplateRenameFromTypeScript,
+  SemanticAppQueryKind.TemplateCodeActions,
+  SemanticAppQueryKind.TemplateSemanticTokens,
+  SemanticAppQueryKind.TemplateFoldingRanges,
+  SemanticAppQueryKind.TemplateInlayHints,
   SemanticAppQueryKind.TemplateDiagnostics,
   SemanticAppQueryKind.RuntimeControllers,
   SemanticAppQueryKind.RuntimeWatchers,
   SemanticAppQueryKind.RuntimeWatcherObservedDependencies,
   SemanticAppQueryKind.RuntimeCompositions,
+  SemanticAppQueryKind.TemplateContentProjections,
   SemanticAppQueryKind.BindingTargetAccesses,
   SemanticAppQueryKind.TargetOperations,
   SemanticAppQueryKind.BindingTargetOperations,
   SemanticAppQueryKind.BindingSourceOperations,
   SemanticAppQueryKind.BindingBehaviorApplications,
+  SemanticAppQueryKind.ValueConverterApplications,
   SemanticAppQueryKind.BindingValueChannels,
   SemanticAppQueryKind.BindingValueChannelSummary,
+  SemanticAppQueryKind.RuntimeExpressionAccessUses,
   SemanticAppQueryKind.BindingDataFlows,
+  SemanticAppQueryKind.BindingUncertaintyExplanation,
   SemanticAppQueryKind.BindingDataFlowSummary,
   SemanticAppQueryKind.ControlUseInventory,
   SemanticAppQueryKind.BindingObservedDependencySummary,
@@ -490,7 +627,7 @@ export const SEMANTIC_APP_QUERY_KINDS = [
 export const enum SemanticRuntimeDetail {
   /** Default API projection: readable rows with compact navigation labels. */
   Compact = 'compact',
-  /** Include opaque kernel handles for exact in-process follow-up navigation. */
+  /** Include opaque handles and retain their owning app generation for exact in-process follow-up navigation. */
   Handles = 'handles',
 }
 
@@ -516,6 +653,7 @@ export interface SemanticRuntimeProjectInput {
   readonly projectKey?: string;
   readonly sourceFiles?: BootProjectInput['sourceFiles'];
   readonly sourceDiscoveryOptions?: BootProjectInput['sourceDiscoveryOptions'];
+  readonly excludedSourceRoots?: BootProjectInput['excludedSourceRoots'];
 }
 
 export interface SemanticRuntimeOptions {
@@ -527,12 +665,91 @@ export interface SemanticRuntimeOptions {
   readonly projects?: readonly SemanticRuntimeProjectInput[];
   /** Project discovery strategy used when projects are omitted. */
   readonly projectDiscovery?: BootProjectDiscoveryMode | `${BootProjectDiscoveryMode}`;
+  /**
+   * Workspace-relative or absolute existing project roots known by the host.
+   * When projects are omitted, semantic-runtime merges these roots into automatic discovery.
+   */
+  readonly projectRootHints?: readonly string[];
+  /** Workspace-relative or absolute descendant roots excluded from authored project/source membership. */
+  readonly excludedWorkspaceRoots?: readonly string[];
+  /** Sole authority for captured project source/config generations. */
+  readonly projectInputAuthority?: SemanticRuntimeProjectInputAuthority;
+}
+
+/** Exact host source whose boot-authored ownership should be projected without opening an app world. */
+export interface SemanticAuthoredSourceOwnershipRequest {
+  readonly sourceFilePath: string;
+  /** Inquiry profile that owns this runtime-static answer claim. */
+  readonly inquiryProfile?: SemanticRuntimeInquiryProfile | `${SemanticRuntimeInquiryProfile}` | null;
+}
+
+export interface SemanticAuthoredSourceOwner {
+  readonly projectKey: string;
+  readonly projectRootDir: string;
+  readonly projectPath: string;
+  readonly role: SourceFileRole | `${SourceFileRole}`;
+}
+
+export interface SemanticAuthoredSourceOwnershipResult {
+  readonly sourceFilePath: string;
+  /** True when at least one exact owner admits this source through the template-edit boundary. */
+  readonly templateOwned: boolean;
+  readonly owners: readonly SemanticAuthoredSourceOwner[];
+}
+
+/** Select native project-configuration diagnostics without requiring an Aurelia app candidate. */
+export interface SemanticProjectConfigurationDiagnosticsRequest {
+  readonly projectKey?: string | null;
+  /** Exact host paths, absolute or workspace-relative. Omit for all configurations; an empty list selects none. */
+  readonly sourceFilePaths?: readonly string[] | null;
+  readonly page?: SemanticRuntimePageInput | null;
+  /** Optional transport-owned row-page ceilings; excluded from semantic query identity. */
+  readonly pagePolicy?: SemanticRuntimePagePolicy | null;
+  /** Inquiry profile that owns this runtime-static answer claim. */
+  readonly inquiryProfile?: SemanticRuntimeInquiryProfile | `${SemanticRuntimeInquiryProfile}` | null;
+}
+
+export interface SemanticProjectConfigurationDiagnosticsResult {
+  readonly rows: readonly SemanticProjectConfigurationDiagnostic[];
+}
+
+/** Select exact native project-configuration products without opening an Aurelia app world. */
+export interface SemanticNativeProjectConfigurationsRequest {
+  readonly projectKey?: string | null;
+  /** Exact host paths, absolute or workspace-relative. Omit for all existing configurations; an empty list selects none. */
+  readonly sourceFilePaths?: readonly string[] | null;
+  readonly page?: SemanticRuntimePageInput | null;
+  /** Optional transport-owned row-page ceilings; excluded from semantic query identity. */
+  readonly pagePolicy?: SemanticRuntimePagePolicy | null;
+  /** Inquiry profile that owns this runtime-static answer claim. */
+  readonly inquiryProfile?: SemanticRuntimeInquiryProfile | `${SemanticRuntimeInquiryProfile}` | null;
+}
+
+export interface SemanticNativeProjectConfigurationRow {
+  readonly projectKey: string;
+  readonly projectRootDir: string;
+  readonly filePath: string;
+  /** Accepted native format version; null when the existing file's version is missing, ambiguous, or unsupported. */
+  readonly acceptedVersion: AureliaProjectConfigurationVersion | null;
+  readonly applicationState: SemanticExistingProjectConfigurationApplicationState;
+  /** Complete normalized native exclusions that survived validation and currently contribute to authored-source membership. */
+  readonly appliedExcludedSourceRootDirs: readonly string[];
+  /** Complete known finding policy after configured overrides and deterministic defaults are composed. */
+  readonly effectiveFindingPolicies: readonly SemanticProjectFindingEffectivePolicy[];
+  readonly diagnosticCount: number;
+}
+
+export interface SemanticNativeProjectConfigurationsResult {
+  readonly displayText: string;
+  readonly rows: readonly SemanticNativeProjectConfigurationRow[];
 }
 
 export interface SemanticRuntimeSummaryRequest {
   /** Page over project rows; defaults to 0 so counts and app candidates can serve as a low-token first read. */
   readonly projectPage?: SemanticRuntimePageInput | null;
-  /** Inquiry profile that owns this summary answer outcome; defaults to the runtime's unclassified exploration lane. */
+  /** Optional transport-owned row-page ceilings; excluded from semantic query identity. */
+  readonly pagePolicy?: SemanticRuntimePagePolicy | null;
+  /** Inquiry profile that owns this summary answer claim; defaults to the runtime's unclassified exploration lane. */
   readonly inquiryProfile?: SemanticRuntimeInquiryProfile | `${SemanticRuntimeInquiryProfile}` | null;
 }
 
@@ -555,12 +772,31 @@ export interface OpenSemanticAppOptions {
 
 export interface SemanticAppOverviewRequest {
   readonly diagnosticPageSize?: number | null;
+  readonly analysisLimitationPageSize?: number | null;
   readonly openSeamPageSize?: number | null;
 }
 
 export interface SemanticRuntimePageInput {
+  /** Non-negative safe integer. Zero requests rollup/page metadata without selecting rows. */
   readonly size?: number;
+  /** Opaque cursor returned by the same query shape and row-universe generation. */
   readonly cursor?: string | null;
+}
+
+/**
+ * Transport-owned bounds applied while semantic-runtime selects one deterministic row page.
+ *
+ * Semantic-runtime itself does not impose MCP-sized ceilings. IDE, MCP, and future AOT callers may choose different
+ * response budgets without changing semantic answer meaning.
+ */
+export interface SemanticRuntimePagePolicy {
+  /** Positive safe-integer row ceiling; null leaves the caller's requested size unbounded. */
+  readonly maxSize?: number | null;
+  /**
+   * Positive safe-integer estimated row-JSON target; null disables byte-budget clamping.
+   * The first selected row is returned even when it alone exceeds this target so a continuation can make progress.
+   */
+  readonly maxRowsJsonBytes?: number | null;
 }
 
 export interface SemanticRouterOverviewRequest {
@@ -569,16 +805,14 @@ export interface SemanticRouterOverviewRequest {
   readonly detail?: SemanticRuntimeDetail | `${SemanticRuntimeDetail}` | null;
 }
 
-/** Public DTO for the evidence obligations behind a suggested continuation. */
+/** Public DTO for facts and source obligations known before following a suggested continuation. */
 export interface SemanticContinuationEvidenceGate {
-  /** Evidence authority state required before trusting the continuation. */
-  readonly evidenceState?: InquiryEvidenceStateValue;
-  /** Completeness posture for the selected source/app locus. */
-  readonly coverage?: InquiryEvidenceCoverageValue;
-  /** Source precision available for navigation, explanation, or future edits. */
-  readonly sourcePrecision?: InquirySourcePrecisionValue;
-  /** Source or project epoch sensitivity for reusing the continuation. */
-  readonly staleness?: InquiryEvidenceStalenessValue;
+  /** Source evidence required by the intended move; the followed answer reports its own semantic coverage. */
+  readonly sourceRequirement: InquirySourceRequirementValue;
+  /** Relevant source facts already carried by the current answer, preserving mixed facets independently. */
+  readonly sourceFacts: readonly SemanticContinuationSourceFact[];
+  /** Generation authorities whose change can invalidate or reshape the continuation target. */
+  readonly epochDependencies: readonly InquiryContinuationEpochDependencyValue[];
 }
 
 /** Public continuation row for MCP/IDE callers that need typed next moves instead of prose hints. */
@@ -605,6 +839,40 @@ export interface SemanticRuntimeContinuationRow {
   readonly blockers: readonly string[];
 }
 
+export const enum SemanticObservedDependencyLocusKind {
+  /** Keep every dependency occurrence in the selected project. */
+  Project = 'project',
+  /** Keep occurrences whose authored source or anchor belongs to one source file. */
+  SourceFile = 'source-file',
+  /** Keep occurrences owned by one owner key returned from a dependency row. */
+  Owner = 'owner',
+  /** Select one dependency row key returned from a dependency row. */
+  Row = 'row',
+  /** Select one summary cluster key returned from a binding dependency summary row. */
+  Cluster = 'cluster',
+}
+
+export type SemanticObservedDependencyLocus =
+  | {
+    readonly kind: SemanticObservedDependencyLocusKind.Project;
+  }
+  | {
+    readonly kind: SemanticObservedDependencyLocusKind.SourceFile;
+    readonly sourceFile: SemanticRuntimeSourceFileInput;
+  }
+  | {
+    readonly kind: SemanticObservedDependencyLocusKind.Owner;
+    readonly ownerKey: string;
+  }
+  | {
+    readonly kind: SemanticObservedDependencyLocusKind.Row;
+    readonly rowKey: string;
+  }
+  | {
+    readonly kind: SemanticObservedDependencyLocusKind.Cluster;
+    readonly clusterKey: string;
+  };
+
 export interface SemanticAppQuery {
   readonly kind: SemanticAppQueryKind | `${SemanticAppQueryKind}`;
   readonly page?: SemanticRuntimePageInput;
@@ -621,11 +889,13 @@ export interface SemanticAppQuery {
    * worth the CPU/memory trade-off.
    */
   readonly diagnosticProjection?: SemanticDiagnosticProjectionPolicy | `${SemanticDiagnosticProjectionPolicy}` | null;
-  /** Include query-local TypeChecker value type surfaces for overview/topology rows that default to summary-first. */
+  /** Include query-local TypeChecker value type surfaces for query kinds that advertise `supportsTypeSurfaces`. */
   readonly includeTypeSurfaces?: boolean | null;
   /** AppOverview diagnostic-cluster page size; defaults to the compact overview budget. */
   readonly diagnosticPageSize?: number | null;
-  /** AppOverview open-seam-cluster page size; defaults to the compact overview budget. */
+  /** AppOverview configured analysis-limitation page size; defaults to the compact overview budget. */
+  readonly analysisLimitationPageSize?: number | null;
+  /** AppOverview raw open-seam audit page size; defaults to zero. */
   readonly openSeamPageSize?: number | null;
   /** Open-seam query filter by exact seam kind key, such as `evaluation.unresolved-identifier`. */
   readonly openSeamKindKey?: OpenSeam['seamKindKey'] | string | null;
@@ -633,12 +903,28 @@ export interface SemanticAppQuery {
   readonly openSeamReasonKind?: OpenSeamReasonKind | `${OpenSeamReasonKind}` | string | null;
   /** Open-seam query filter by source admission role, such as `app-source` or `tooling-script`. */
   readonly sourceRole?: SourceFileRole | `${SourceFileRole}` | string | null;
+  /** Exact cluster key returned by an open-seam summary row. */
+  readonly openSeamClusterKey?: string | null;
+  /** Exact authored-site key returned by an open-seam raw/site row. */
+  readonly openSeamSiteKey?: string | null;
   /** RouterOverview samples several independent route row families; defaults to zero sample rows. */
   readonly rowPageSize?: number | null;
   /** Source cursor used by cursor-scoped authoring queries such as template completions. */
   readonly cursor?: SemanticRuntimeSourceCursorInput | null;
+  /** Exact compiler-resource scope selected from a prior template-resource-availability answer. */
+  readonly templateResourceScopeIdentityKey?: string | null;
+  /** Exact top-level resource identity selected from a prior resource-inventory answer. */
+  readonly resourceIdentityKey?: string | null;
+  /** Exact framework capability selected at a cursor when more than one demand shares the authored locus. */
+  readonly frameworkCapability?: FrameworkRegistrationCapability | `${FrameworkRegistrationCapability}` | null;
   /** Source file used by file-scoped authoring queries such as template diagnostics. */
   readonly sourceFile?: SemanticRuntimeSourceFileInput | null;
+  /** Include the declaration/source target when a cursor-scoped references query supports it. */
+  readonly includeDeclaration?: boolean | null;
+  /** New member/resource name for edit-planning queries; omitted when a caller only wants prepare/preflight data. */
+  readonly newName?: string | null;
+  /** Family-owned locus for observed-dependency row and summary queries. */
+  readonly observedDependencyLocus?: SemanticObservedDependencyLocus | null;
 }
 
 export interface SemanticRuntimeAppQueryRequest extends SemanticAppQuery {
@@ -656,7 +942,7 @@ export interface SemanticRuntimeAppQueryRequest extends SemanticAppQuery {
   readonly authoringTemplateLimit?: number | null;
   /** Optional profiling controls; inquiryProfile on the query remains the product-facing consumer lane. */
   readonly telemetry?: SemanticRuntimeTelemetryOptions | null;
-  /** Override profile-default app-epoch retention for this routed query. */
+  /** Override profile-default app-epoch retention; `dispose-app` is incompatible with app-world handle detail. */
   readonly appRetention?: SemanticAppRetentionPolicy | null;
   /**
    * Clear the process-local TypeScript dependency SourceFile cache at this answer boundary.
@@ -666,6 +952,8 @@ export interface SemanticRuntimeAppQueryRequest extends SemanticAppQuery {
    * The clear is recorded on the runtime-level query claim beside any app-epoch disposal.
    */
   readonly typeSystemDependencyCacheClearPolicy?: SemanticTypeSystemDependencyCacheClearPolicy | null;
+  /** Optional transport-owned row-page ceilings; excluded from semantic query identity. */
+  readonly pagePolicy?: SemanticRuntimePagePolicy | null;
 }
 
 export interface SemanticRuntimeAppQueryBatchRequest {
@@ -685,7 +973,7 @@ export interface SemanticRuntimeAppQueryBatchRequest {
   readonly inquiryProfile?: SemanticRuntimeInquiryProfile | `${SemanticRuntimeInquiryProfile}` | null;
   /** Optional profiling controls; inquiryProfile on the batch remains the product-facing consumer lane. */
   readonly telemetry?: SemanticRuntimeTelemetryOptions | null;
-  /** Override profile-default app-epoch retention for this routed batch. */
+  /** Override profile-default app-epoch retention; `dispose-app` is incompatible with app-world handle detail. */
   readonly appRetention?: SemanticAppRetentionPolicy | null;
   /**
    * Include the app construction profile in the public batch value.
@@ -709,6 +997,8 @@ export interface SemanticRuntimeAppQueryBatchRequest {
    * both app-world and TypeScript dependency cache disposal in the same query claim.
    */
   readonly typeSystemDependencyCacheClearPolicy?: SemanticTypeSystemDependencyCacheClearPolicy | null;
+  /** Optional transport-owned row-page ceilings applied to every child query. */
+  readonly pagePolicy?: SemanticRuntimePagePolicy | null;
   readonly queries: readonly SemanticAppQuery[];
 }
 
@@ -781,9 +1071,15 @@ export interface SemanticAppQueryCatalogRow {
   readonly supportsPaging: boolean;
   readonly supportsDetail: boolean;
   readonly supportsSourceFile: boolean;
+  /** Accepted observed-dependency loci; empty when this query does not own that selector family. */
+  readonly observedDependencyLocusKinds: readonly (
+    SemanticObservedDependencyLocusKind | `${SemanticObservedDependencyLocusKind}`
+  )[];
   /** Whether open-seam queries accept seam kind, reason kind, and source-role filters. */
   readonly supportsOpenSeamFilters: boolean;
   readonly supportsDiagnosticProjection: boolean;
+  /** Whether `includeTypeSurfaces` can opt this query into answer-time TypeChecker surface projection. */
+  readonly supportsTypeSurfaces: boolean;
   /** Whether `continuationIntents` can narrow returned continuation rows without changing query identity. */
   readonly supportsContinuationIntentFilter: boolean;
   readonly requiresCursor: boolean;
@@ -837,10 +1133,19 @@ export interface SemanticTemplateDiagnosticsQuery {
 
 export interface SemanticRuntimeAnswer<TValue> {
   readonly schemaVersion: typeof SEMANTIC_RUNTIME_API_VERSION;
-  readonly outcome: SemanticRuntimeAnswerOutcome;
-  readonly closure: SemanticRuntimeAnswerClosure;
+  /** Whether execution produced an answer, independently from selection, coverage, and paging. */
+  readonly result: InquiryAnswerResult;
+  /** Cursor/locus selection state, independent of semantic coverage and transport paging. */
+  readonly selection: InquiryAnswerSelection;
+  /** Completeness of the semantic basis, independent of whether the row payload is paged. */
+  readonly coverage: InquiryAnswerCoverage;
   readonly summary: string;
   readonly value: TValue;
+  /**
+   * Portable semantic basis for this exact answer. Executable currentness witnesses remain process-private.
+   * Static catalog answers that consume no workspace authority may omit it.
+   */
+  readonly analysisBasis?: SemanticRuntimeAnalysisBasis;
   readonly page?: SemanticRuntimePageResult | null;
   /** App-world depth that actually answered this query; absent for runtime-static/project-frame answers. */
   readonly analysisDepth?: SemanticAppAnalysisDepth | `${SemanticAppAnalysisDepth}` | null;
@@ -850,11 +1155,61 @@ export interface SemanticRuntimeAnswer<TValue> {
   readonly profile?: SemanticRuntimeAnswerProfile | null;
 }
 
+/** Portable identity of the source world and exact semantic inputs consumed by one completed answer. */
+export interface SemanticRuntimeAnalysisBasis {
+  readonly schemaVersion: typeof SEMANTIC_RUNTIME_ANALYSIS_BASIS_SCHEMA_VERSION;
+  readonly runtimeApiVersion: typeof SEMANTIC_RUNTIME_API_VERSION;
+  /** Descriptor-derived logical workspace identity; never a kernel-store or runtime-incarnation key. */
+  readonly semanticWorkspaceKey: string;
+  /** Portable resolved project/source-admission plan revision. */
+  readonly sourceWorldRevision: string;
+  /** Portable digest of exact project-input leaves and immutable semantic environment facts. */
+  readonly semanticModelRevision: string;
+  /** Portable digest joining the source-world and semantic-model revisions. */
+  readonly revision: string;
+}
+
 export interface SemanticRuntimeAnswerProfile {
   readonly appWorldFreeProfile?: SemanticRuntimeAppWorldFreeProfileSummary | null;
+  /**
+   * Retrospective synchronous routed-answer boundary timings, emitted only when the routed request explicitly enables
+   * telemetry and returns an answer successfully. Thrown cancellation, currentness, and failure paths expose no profile.
+   *
+   * The preflight-complete marker identifies the only current candidate location for a future observation/abort check;
+   * profiling does not perform that check or yield. A future yielding implementation must rerun or freshly validate
+   * preflight before opening the answer transaction. Planning may already populate the immutable project-shape cache,
+   * so aborting at this location is not a promise that no internal cache was warmed.
+   */
+  readonly routedAnswer?: SemanticRuntimeRoutedAnswerProfile | null;
+}
+
+export type SemanticRuntimeRoutedAnswerCheckpointName =
+  | 'entry'
+  | 'preflight-complete'
+  | 'answer-transaction-complete';
+
+export interface SemanticRuntimeRoutedAnswerCheckpoint {
+  readonly name: SemanticRuntimeRoutedAnswerCheckpointName;
+  /** Monotonic elapsed time from routed-answer entry; portable answers never expose a process clock origin. */
+  readonly elapsedMilliseconds: number;
+}
+
+export interface SemanticRuntimeRoutedAnswerProfile {
+  readonly checkpoints: readonly SemanticRuntimeRoutedAnswerCheckpoint[];
+  readonly preflightMilliseconds: number;
+  /** Includes retained-claim validation or materialization plus the synchronous answer transaction commit. */
+  readonly answerTransactionMilliseconds: number;
+  readonly totalMilliseconds: number;
+  /** Largest span between the profiled candidate boundaries; the current call remains synchronous end to end. */
+  readonly longestUninterruptedMilliseconds: number;
 }
 
 export interface SemanticRuntimeAppWorldFreeProfileSummary {
+  /** Whether this query constructed the project/profile evaluator generation or reused its incumbent. */
+  readonly acquisitionKind: StaticProjectEvaluationAcquisitionKind;
+  /** Time spent acquiring the reusable evaluation generation for this answer. */
+  readonly acquisitionMilliseconds: number;
+  /** Original construction cost of the admitted evaluation generation, not current query latency. */
   readonly totalMilliseconds: number;
   readonly staticEvaluationPhases: readonly SemanticRuntimePhaseTimingSummary[];
   readonly staticEvaluationHost: EvaluationModuleSourceHostProfile;
@@ -862,7 +1217,7 @@ export interface SemanticRuntimeAppWorldFreeProfileSummary {
 }
 
 export interface SemanticRuntimePageResult {
-  /** Applied page size after semantic-runtime public safety clamps. */
+  /** Applied page size after caller/transport policy. */
   readonly size: number;
   /** Caller-supplied cursor, if any. */
   readonly cursor: string | null;
@@ -870,33 +1225,50 @@ export interface SemanticRuntimePageResult {
   readonly nextCursor: string | null;
   readonly returnedRows: number;
   readonly totalRows: number;
-  /** Caller-requested size when semantic-runtime had to clamp the public page size. */
+  /** True when this page reaches the end of the deterministic ordered row set. */
+  readonly exhausted: boolean;
+  /** Typed rejection when the supplied cursor does not belong to this query, epoch, or ordering contract. */
+  readonly cursorProblem?: SemanticRuntimePageCursorProblem;
+  /** Caller-requested size when transport policy had to clamp it. */
   readonly requestedSize?: number;
-  /** Maximum public page size used when semantic-runtime had to clamp the request. */
+  /** Maximum page size supplied by transport policy. */
   readonly maxSize?: number;
   /** True when size is smaller than the caller-requested page size. */
   readonly clamped?: boolean;
   /** Estimated UTF-8 JSON bytes for the returned row array. */
   readonly estimatedRowsJsonBytes?: number;
-  /** Maximum estimated row JSON bytes used when this page stopped before `size` by payload budget. */
+  /** Target estimated row JSON bytes supplied by transport policy; one first oversized row may exceed it. */
   readonly maxRowsJsonBytes?: number;
-  /** True when row selection stopped before `size` because the public row payload budget was reached. */
+  /** True when row selection stopped before `size` because the transport row payload target was reached. */
   readonly byteClamped?: boolean;
 }
 
+export const enum SemanticRuntimePageCursorProblemKind {
+  Malformed = 'malformed',
+  QueryMismatch = 'query-mismatch',
+  Stale = 'stale',
+  OrderingMismatch = 'ordering-mismatch',
+  OffsetOutOfRange = 'offset-out-of-range',
+}
+
+export interface SemanticRuntimePageCursorProblem {
+  readonly kind: SemanticRuntimePageCursorProblemKind;
+  readonly message: string;
+}
+
 export interface SemanticRuntimeSourceCursorInput {
-  /** Host-facing source path, absolute or relative to the opened project root. */
+  /** Host-facing source path: absolute, workspace-relative, or project-relative; ambiguous relative aliases are refused. */
   readonly filePath: string;
   /** Zero-based source line. */
   readonly line: number;
   /** Zero-based source character. */
   readonly character: number;
-  /** Optional zero-based source offset; callers with an editor document should usually supply this. */
+  /** Optional zero-based source offset; queries resolve it from line/character when omitted. */
   readonly offset?: number | null;
 }
 
 export interface SemanticRuntimeSourceFileInput {
-  /** Host-facing source path, absolute or relative to the opened project root. */
+  /** Host-facing source path: absolute, workspace-relative, or project-relative; ambiguous relative aliases are refused. */
   readonly filePath: string;
 }
 
@@ -918,8 +1290,12 @@ export type SemanticQueryClaimInvalidationKind = typeof SEMANTIC_QUERY_CLAIM_INV
 
 export interface SemanticRuntimeSummary {
   readonly workspaceRoot: string;
+  /** Descriptor-derived semantic workspace identity; never a store namespace or runtime incarnation. */
   readonly workspaceKey: string;
   readonly displayText: string;
+  /** Existing native configuration files read at exact discovered project roots. */
+  readonly nativeProjectConfigurationCount: number;
+  readonly nativeProjectConfigurationDiagnosticCount: number;
   readonly projectShapeCounts: readonly SemanticProjectShapeCount[];
   readonly projectAnalysisCounts: readonly SemanticProjectAnalysisCount[];
   readonly defaultAppProjectKey: string | null;
@@ -927,51 +1303,48 @@ export interface SemanticRuntimeSummary {
   readonly projects: readonly SemanticProjectSummary[];
 }
 
-export interface SemanticRuntimeAnalysisCacheOverviewRequest {
+/** Retention controls that are meaningful for one runtime/session overview. */
+export interface SemanticRuntimeSessionAnalysisCacheOverviewRequest {
   /** Include top kernel-density breakdown rows; defaults to false for low-token cache checks. */
   readonly includeKernelBreakdowns?: boolean | null;
   /** Include opt-in shallow product-detail and hot-detail density rows; requires kernel breakdowns. */
   readonly includeDetailDensity?: boolean | null;
   /** Include recent retained query-claim records for each runtime/app graph; defaults to false. */
   readonly includeQueryClaimRows?: boolean | null;
-  /** Include largest retained TypeScript dependency source-file cache entries; defaults to false. */
-  readonly includeTypeSystemDependencyEntries?: boolean | null;
   /** Cap high-cardinality breakdown rows; defaults to 8. */
   readonly rowLimit?: number | null;
 }
 
-export interface SemanticRuntimeAnalysisCacheOverviewResult {
+/** Legacy combined session and process overview request. */
+export interface SemanticRuntimeAnalysisCacheOverviewRequest
+  extends SemanticRuntimeSessionAnalysisCacheOverviewRequest {
+  /** Include largest retained TypeScript dependency source-file cache entries; defaults to false. */
+  readonly includeTypeSystemDependencyEntries?: boolean | null;
+}
+
+/** Retention owned by one runtime/session, excluding process-owned caches and process memory. */
+export interface SemanticRuntimeSessionAnalysisCacheOverviewResult {
   readonly displayText: string;
   readonly cachedAppCount: number;
+  readonly typeSystemProjectCount: number;
   readonly cachedApps: readonly SemanticRuntimeCachedAppSummary[];
   readonly runtimeQueryClaimProfiles: readonly SemanticRuntimeCachedAppQueryClaimProfileSummary[];
-  readonly projectCompilerOptionsCache: SemanticRuntimeProjectCompilerOptionsCacheSummary;
-  readonly typeSystemDependencyCache: SemanticRuntimeTypeSystemDependencyCacheSummary;
-  readonly processMemory: SemanticRuntimeMemorySample;
   readonly workspaceKernel: SemanticRuntimeKernelCountSnapshot | SemanticRuntimeKernelDensitySnapshot;
   readonly retention: SemanticRuntimeCacheRetentionSummary;
   readonly summary: string;
 }
 
-export interface SemanticRuntimeProjectCompilerOptionsCacheSummary {
-  readonly entries: number;
-  readonly hits: number;
-  readonly misses: number;
-  readonly writes: number;
-  readonly clearOperations: number;
-  readonly clearedEntries: number;
-  readonly pathMappingCount: number;
-  readonly pathMappingTargetCount: number;
-  readonly configDiagnosticCount: number;
-  readonly configRootFileCount: number;
-  readonly cacheScope: 'process';
-  readonly counterScope: 'process-lifetime';
-  readonly cachedValuePolicy: 'compiler-options-by-project-root';
-  readonly summary: string;
+/** Legacy combined view of one runtime/session plus process-owned retention and memory. */
+export interface SemanticRuntimeAnalysisCacheOverviewResult
+  extends SemanticRuntimeSessionAnalysisCacheOverviewResult {
+  readonly typeSystemDependencyCache: SemanticRuntimeTypeSystemDependencyCacheSummary;
+  readonly processMemory: SemanticRuntimeMemorySample;
 }
 
 export interface SemanticRuntimeTypeSystemDependencyCacheSummary {
   readonly entries: number;
+  readonly entryLimit: number;
+  readonly sourceTextCharacterLimit: number;
   readonly distinctCanonicalPaths: number;
   readonly duplicateCanonicalPathEntries: number;
   readonly sourceTextCharacters: number;
@@ -990,6 +1363,10 @@ export interface SemanticRuntimeTypeSystemDependencyCacheSummary {
   readonly misses: number;
   readonly writes: number;
   readonly writeSourceTextCharacters: number;
+  readonly supersededRevisionEvictions: number;
+  readonly supersededRevisionEvictedSourceTextCharacters: number;
+  readonly capacityEvictions: number;
+  readonly capacityEvictedSourceTextCharacters: number;
   readonly bypasses: number;
   readonly cacheableNodeModuleReads: number;
   readonly cacheableExternalDeclarationReads: number;
@@ -1029,6 +1406,17 @@ export interface SemanticRuntimeTypeSystemDependencyCacheEntrySummary {
   readonly isDeclarationFile: boolean;
 }
 
+/** Process-owned TypeScript dependency SourceFile cache overview, independent of any workspace session. */
+export interface SemanticRuntimeProcessTypeSystemCacheOverviewRequest {
+  readonly includeTypeSystemDependencyEntries?: boolean | null;
+  readonly rowLimit?: number | null;
+}
+
+/** Process-owned TypeScript dependency SourceFile cache clear, independent of any workspace session. */
+export interface SemanticRuntimeProcessTypeSystemCacheClearRequest {
+  readonly typeSystemDependencyCacheClearPolicy?: SemanticTypeSystemDependencyCacheClearPolicy | null;
+}
+
 export interface SemanticRuntimeAnalysisCacheClearRequest {
   /**
    * Clear part of the process-local TypeSystemProject compiler-host source-file cache for dependency/lib files.
@@ -1040,15 +1428,31 @@ export interface SemanticRuntimeAnalysisCacheClearRequest {
   readonly typeSystemDependencyCacheClearPolicy?: SemanticTypeSystemDependencyCacheClearPolicy | null;
 }
 
-export interface SemanticRuntimeAnalysisCacheClearResult {
+/** Session-local clear currently has no policy knobs; pass `{}` to keep projection positional and explicit. */
+export type SemanticRuntimeSessionAnalysisCacheClearRequest = Readonly<Record<string, never>>;
+
+/** Cache state reclaimed from one runtime/session, excluding process-owned caches. */
+export interface SemanticRuntimeSessionAnalysisCacheClearResult {
   readonly displayText: string;
-  readonly typeSystemDependencyCacheClearPolicy: SemanticTypeSystemDependencyCacheClearPolicy;
   readonly disposedCachedApps: number;
+  readonly disposedStaticProjectEvaluations: number;
+  readonly disposedTypeSystemProjects: number;
   readonly disposedQueryClaimRecords: number;
   readonly disposedKernelRecords: number;
   readonly disposedProductDetails: number;
   readonly disposedHotDetails: number;
   readonly disposedKernelHandleCharacters: number;
+  readonly remainingCachedApps: number;
+  readonly remainingStaticProjectEvaluations: number;
+  readonly remainingTypeSystemProjects: number;
+  readonly workspaceKernel: SemanticRuntimeKernelCountSnapshot;
+  readonly summary: string;
+}
+
+/** Legacy combined clear result for one runtime/session plus the process-owned dependency cache. */
+export interface SemanticRuntimeAnalysisCacheClearResult
+  extends SemanticRuntimeSessionAnalysisCacheClearResult {
+  readonly typeSystemDependencyCacheClearPolicy: SemanticTypeSystemDependencyCacheClearPolicy;
   readonly clearedTypeSystemDependencySourceFiles: number;
   readonly clearedTypeSystemDependencySourceTextCharacters: number;
   readonly clearedTypeSystemDependencyNodeModuleSourceFiles: number;
@@ -1059,8 +1463,23 @@ export interface SemanticRuntimeAnalysisCacheClearResult {
   readonly clearedTypeSystemDependencyDefaultLibrarySourceTextCharacters: number;
   readonly clearedTypeSystemDependencyExternalDeclarationSourceFiles: number;
   readonly clearedTypeSystemDependencyExternalDeclarationSourceTextCharacters: number;
-  readonly remainingCachedApps: number;
-  readonly workspaceKernel: SemanticRuntimeKernelCountSnapshot;
+}
+
+/** Process-owned TypeScript dependency SourceFile cache clear, independent of any workspace session. */
+export interface SemanticRuntimeProcessTypeSystemCacheClearResult {
+  readonly displayText: string;
+  readonly typeSystemDependencyCacheClearPolicy: SemanticTypeSystemDependencyCacheClearPolicy;
+  readonly clearedTypeSystemDependencySourceFiles: number;
+  readonly clearedTypeSystemDependencySourceTextCharacters: number;
+  readonly clearedTypeSystemDependencyNodeModuleSourceFiles: number;
+  readonly clearedTypeSystemDependencyNodeModuleSourceTextCharacters: number;
+  readonly clearedTypeSystemDependencyDeclarationSourceFiles: number;
+  readonly clearedTypeSystemDependencyDeclarationSourceTextCharacters: number;
+  readonly clearedTypeSystemDependencyDefaultLibrarySourceFiles: number;
+  readonly clearedTypeSystemDependencyDefaultLibrarySourceTextCharacters: number;
+  readonly clearedTypeSystemDependencyExternalDeclarationSourceFiles: number;
+  readonly clearedTypeSystemDependencyExternalDeclarationSourceTextCharacters: number;
+  readonly remainingTypeSystemDependencySourceFiles: number;
   readonly summary: string;
 }
 
@@ -1069,12 +1488,12 @@ export interface SemanticRuntimeQueryClaimDisposeRequest {
    * Claim graph group to prune. `all` covers runtime-level routed/static answers and retained cached-app graphs.
    *
    * This does not dispose app-world kernel products; use `clearAnalysisCache()` when a source edit makes an opened app
-   * epoch stale. This request only clears answer-outcome storage near the public API boundary.
+   * epoch stale. This request only clears retained answer storage near the public API boundary.
    */
   readonly scope?: SemanticQueryClaimDisposalScope | null;
   /** Optional project filter; omitted means every retained query-claim graph in the selected scope. */
   readonly projectKey?: string | null;
-  /** Optional source-file epoch filter, absolute or relative to the owning project root. */
+  /** Optional source-file epoch filter using exact absolute, workspace-relative, or project-relative identity. */
   readonly sourceFilePath?: string | null;
   /** Optional source-file epoch filter using the same shape as source-scoped app queries. */
   readonly sourceFile?: SemanticRuntimeSourceFileInput | null;
@@ -1126,6 +1545,8 @@ export interface SemanticRuntimeCachedAppProfileSummary {
   readonly totalMilliseconds: number;
   readonly phaseCount: number;
   readonly topPhases: readonly SemanticRuntimePhaseTimingSummary[];
+  readonly staticEvaluationAcquisitions: readonly SemanticRuntimeStaticProjectEvaluationAcquisitionSummary[];
+  readonly typeSystemAcquisition: SemanticRuntimeTypeSystemProjectAcquisitionSummary;
   readonly staticEvaluationPhases: readonly SemanticRuntimePhaseTimingSummary[];
   readonly staticEvaluationHost: EvaluationModuleSourceHostProfile;
   readonly staticEvaluationSources: StaticProjectEvaluationSourceFileStats;
@@ -1142,6 +1563,19 @@ export interface SemanticRuntimeCachedAppProfileSummary {
   readonly programRootFileGroups: readonly SemanticRuntimeTypeSystemProgramSourceFileGroupStats[];
   readonly programSourceFileGroups: readonly SemanticRuntimeTypeSystemProgramSourceFileGroupStats[];
   readonly programNodeRemaps: SemanticRuntimeTypeSystemProgramNodeRemapStats;
+}
+
+export interface SemanticRuntimeStaticProjectEvaluationAcquisitionSummary {
+  readonly profileKey: string;
+  readonly acquisitionKind: StaticProjectEvaluationAcquisitionKind;
+  readonly acquisitionMilliseconds: number;
+  readonly constructionMilliseconds: number;
+}
+
+export interface SemanticRuntimeTypeSystemProjectAcquisitionSummary {
+  readonly acquisitionKind: TypeSystemProjectAcquisitionKind;
+  readonly acquisitionMilliseconds: number;
+  readonly constructionMilliseconds: number;
 }
 
 export interface SemanticRuntimeCachedAppQueryClaimProfileSummary {
@@ -1237,6 +1671,10 @@ export interface SemanticRuntimeTypeSystemHostSourceFileCacheStats {
   readonly misses: number;
   readonly writes: number;
   readonly writeSourceTextCharacters: number;
+  readonly supersededRevisionEvictions: number;
+  readonly supersededRevisionEvictedSourceTextCharacters: number;
+  readonly capacityEvictions: number;
+  readonly capacityEvictedSourceTextCharacters: number;
   readonly bypasses: number;
   readonly cacheableNodeModuleReads: number;
   readonly cacheableExternalDeclarationReads: number;
@@ -1281,6 +1719,9 @@ export interface SemanticAppOverviewResult {
   readonly summary: SemanticRuntimeAnswer<SemanticAppSummary>;
   readonly topology: SemanticRuntimeAnswer<SemanticAppOverviewCollectionSummary>;
   readonly diagnostics: SemanticRuntimeAnswer<SemanticAppDiagnosticSummaryResult>;
+  /** Configured, adjudicated authored limitations used by normal product orientation. */
+  readonly analysisLimitations: SemanticRuntimeAnswer<SemanticAnalysisLimitationsResult>;
+  /** Conserved raw seam audit data; normal overview text does not promote its counts or samples. */
   readonly openSeams: SemanticRuntimeAnswer<SemanticOpenSeamSitesResult>;
 }
 
@@ -1342,14 +1783,22 @@ export interface SemanticProjectCandidateSummary {
 export interface SemanticProjectSummary {
   readonly projectKey: string;
   readonly rootDir: string;
+  /** Complete boot-owned cause set for why this project frame exists. */
+  readonly admissionOrigins: readonly ProjectRootAdmissionOrigin[];
   readonly sourceFiles: number;
   readonly sourceRoles: readonly SemanticSourceRoleCount[];
+  readonly nativeProjectConfiguration: SemanticProjectNativeConfigurationSummary | null;
   readonly hasAureliaAppEntrypointSignal: boolean;
   readonly shapeKind: SemanticProjectShapeKind | `${SemanticProjectShapeKind}`;
   readonly analysisKind: SemanticProjectAnalysisKind | `${SemanticProjectAnalysisKind}`;
   readonly aureliaDependencyScopes: readonly SemanticProjectAureliaDependencyScopeCount[];
   readonly aureliaSourceSignals: readonly SemanticProjectAureliaSourceSignalCount[];
   readonly shapeReasons: readonly SemanticProjectShapeReasonCount[];
+}
+
+export interface SemanticProjectNativeConfigurationSummary {
+  readonly filePath: string;
+  readonly diagnosticCount: number;
 }
 
 export interface SemanticSourceRoleCount {
@@ -1478,12 +1927,19 @@ export interface SemanticUnresolvedModulesResult {
 }
 
 export interface SemanticOpenSeamRow {
+  /** Opaque answer-local seam identity; raw kernel handles remain detail-only. */
+  readonly seamKey: string;
+  /** Stable authored-location key when exact source exists; otherwise stable only within this answer. */
+  readonly siteKey: string;
   readonly seamKindKey: OpenSeam['seamKindKey'];
   readonly summary: string;
-  readonly attempt: SemanticOpenSeamAttempt;
-  readonly boundary: SemanticOpenSeamBoundary;
+  readonly boundaryKinds: readonly (OpenSeamBoundaryKind | `${OpenSeamBoundaryKind}`)[];
   readonly reasonKinds: readonly (OpenSeamReasonKind | `${OpenSeamReasonKind}`)[];
   readonly reasonSources: readonly SemanticOpenSeamReasonSource[];
+  readonly pressureKind: SemanticOpenSeamPressureKind | `${SemanticOpenSeamPressureKind}`;
+  readonly affectedMaterializationCount: number;
+  readonly affectedProductCount: number;
+  readonly impacts: readonly SemanticOpenSeamMaterializationImpactRow[];
   readonly source: SemanticSourceReference | null;
   readonly sourceRange: SemanticSourceRange | null;
   readonly sourceRole: SourceFileRole | `${SourceFileRole}` | string | null;
@@ -1493,54 +1949,56 @@ export interface SemanticOpenSeamRow {
   };
 }
 
-export const enum SemanticOpenSeamAttemptKind {
-  /** Static module evaluation tried to reduce source enough for Aurelia recognition without executing the app. */
-  StaticModuleEvaluation = 'static-module-evaluation',
-  /** Resource recognition tried to close authored custom-element, custom-attribute, value-converter, binding-behavior, or template-controller metadata. */
-  ResourceRecognition = 'resource-recognition',
-  /** Registration recognition tried to classify DI/resource registration source expressions. */
-  RegistrationRecognition = 'registration-recognition',
-  /** Configuration recognition tried to close app/plugin configuration contributions. */
-  ConfigurationRecognition = 'configuration-recognition',
-  /** DI world construction tried to spend recognized registrations into container effects. */
-  DiWorldConstruction = 'di-world-construction',
-  /** Framework service-root recognition tried to promote source service/container evidence into root products. */
-  FrameworkServiceRootRecognition = 'framework-service-root-recognition',
-  /** Router analysis tried to materialize route, viewport, instruction, or recognition state. */
-  RouterMaterialization = 'router-materialization',
-  /** Template compilation or rendering analysis tried to lower HTML/compiler products into runtime semantics. */
-  TemplateCompilationRendering = 'template-compilation-rendering',
-  /** Runtime binding analysis tried to close target access, value channel, source operation, or data flow. */
-  BindingRuntimeAnalysis = 'binding-runtime-analysis',
-  /** TypeChecker projection tried to close a type/member surface without guessing. */
-  TypeCheckerProjection = 'type-checker-projection',
-  /** A semantic product pass reached a boundary that is not yet classified more narrowly. */
-  SemanticProductMaterialization = 'semantic-product-materialization',
+export const enum SemanticOpenSeamPressureKind {
+  /** The seam is retained as unresolved evidence but no product materialization cites it. */
+  EvidenceOnly = 'evidence-only',
+  /** One or more materializations explicitly cite the seam as unresolved product pressure. */
+  ProductPressure = 'product-pressure',
 }
 
-export const enum SemanticOpenSeamBoundaryKind {
-  /** A value or fact needed by static analysis was absent from the current modeled environment. */
-  StaticEnvironmentGap = 'static-environment-gap',
-  /** Closing the fact would require executing user/runtime behavior that semantic-runtime should not guess. */
-  RuntimeExecutionBoundary = 'runtime-execution-boundary',
-  /** The source construct is legal, but this substrate has not modeled its semantics yet. */
-  UnsupportedSubstrate = 'unsupported-substrate',
-  /** Analysis stopped at an explicit recursion, statement, or budget guardrail. */
-  AnalysisGuardrail = 'analysis-guardrail',
-  /** A TypeChecker-backed projection could not close a type/member surface without guessing. */
-  TypeCheckerProjectionBoundary = 'type-checker-projection-boundary',
-  /** Framework-shaped materialization reached a legal but still-open semantic boundary. */
-  FrameworkSemanticBoundary = 'framework-semantic-boundary',
+export const enum SemanticOpenSeamMaterializationOutcome {
+  /** The constrained materialization produced no product. */
+  OpenWithoutProduct = 'open-without-product',
+  /** The constrained materialization retained one or more partial products. */
+  OpenWithProduct = 'open-with-product',
 }
 
-export interface SemanticOpenSeamAttempt {
-  readonly kind: SemanticOpenSeamAttemptKind | `${SemanticOpenSeamAttemptKind}`;
-  readonly summary: string;
+export interface SemanticOpenSeamMaterializedProductRow {
+  /** Answer-local product key used to conserve impact counts without exposing kernel handles. */
+  readonly productKey: string;
+  readonly productKindKey: MaterializedProduct['productKindKey'];
+  readonly source: SemanticSourceReference | null;
+  readonly handles?: {
+    readonly productHandle: MaterializedProduct['handle'];
+    readonly identityHandle: MaterializedProduct['identityHandle'];
+    readonly addressHandle: MaterializedProduct['addressHandle'];
+  };
 }
 
-export interface SemanticOpenSeamBoundary {
-  readonly kind: SemanticOpenSeamBoundaryKind | `${SemanticOpenSeamBoundaryKind}`;
-  readonly summary: string;
+export interface SemanticOpenSeamMaterializationOwnerRow {
+  /** Opaque answer-local identity shared by impacts with the same materialization owner. */
+  readonly ownerKey: string;
+  /** Kernel record discriminator retained without exposing the underlying handle. */
+  readonly recordKind: string;
+  /** Compact semantic label derived from the owning address or identity record. */
+  readonly label: string;
+  /** Best authored source or identity reference available for the owner. */
+  readonly source: SemanticSourceReference | null;
+  readonly handles?: {
+    readonly ownerHandle: MaterializationRecord['ownerHandle'];
+  };
+}
+
+export interface SemanticOpenSeamMaterializationImpactRow {
+  /** Answer-local materialization key used to conserve impact counts without exposing kernel handles. */
+  readonly impactKey: string;
+  readonly outcome: SemanticOpenSeamMaterializationOutcome | `${SemanticOpenSeamMaterializationOutcome}`;
+  readonly owner: SemanticOpenSeamMaterializationOwnerRow;
+  readonly products: readonly SemanticOpenSeamMaterializedProductRow[];
+  readonly handles?: {
+    readonly materializationHandle: MaterializationRecord['handle'];
+    readonly ownerHandle: MaterializationRecord['ownerHandle'];
+  };
 }
 
 export interface SemanticOpenSeamReasonSource {
@@ -1560,12 +2018,21 @@ export interface SemanticOpenSeamsResult {
 }
 
 export interface SemanticOpenSeamSummaryRow {
+  /** Stable causal cluster identity formed from seam kind and typed reason signature. */
+  readonly clusterKey: string;
   readonly seamKindKey: OpenSeam['seamKindKey'];
-  readonly attempt: SemanticOpenSeamAttempt;
-  readonly boundary: SemanticOpenSeamBoundary;
+  readonly boundaryKinds: readonly (OpenSeamBoundaryKind | `${OpenSeamBoundaryKind}`)[];
+  readonly boundaryCounts: readonly SemanticRuntimeCountRow[];
+  readonly pressureKinds: readonly (SemanticOpenSeamPressureKind | `${SemanticOpenSeamPressureKind}`)[];
+  readonly pressureCounts: readonly SemanticRuntimeCountRow[];
   readonly reasonKinds: readonly (OpenSeamReasonKind | `${OpenSeamReasonKind}`)[];
+  readonly reasonCounts: readonly SemanticRuntimeCountRow[];
   readonly count: number;
+  readonly evidenceOnlyRowCount: number;
+  readonly productPressureRowCount: number;
   readonly uniqueSiteCount: number;
+  readonly affectedMaterializationCount: number;
+  readonly affectedProductCount: number;
   readonly sourceFileCount: number;
   readonly sourceRoles: readonly SemanticSourceRoleCount[];
   readonly sampleSummary: string;
@@ -1600,10 +2067,15 @@ export interface SemanticSourceRange {
 }
 
 export interface SemanticOpenSeamSiteVariantRow {
-  readonly attempt: SemanticOpenSeamAttempt;
-  readonly boundary: SemanticOpenSeamBoundary;
+  readonly seamKindKey: OpenSeam['seamKindKey'];
+  readonly boundaryKinds: readonly (OpenSeamBoundaryKind | `${OpenSeamBoundaryKind}`)[];
+  readonly pressureKinds: readonly (SemanticOpenSeamPressureKind | `${SemanticOpenSeamPressureKind}`)[];
   readonly reasonKinds: readonly (OpenSeamReasonKind | `${OpenSeamReasonKind}`)[];
   readonly rawRowCount: number;
+  readonly evidenceOnlyRowCount: number;
+  readonly productPressureRowCount: number;
+  readonly affectedMaterializationCount: number;
+  readonly affectedProductCount: number;
   readonly sampleSummary: string;
 }
 
@@ -1619,7 +2091,7 @@ export interface SemanticOpenSeamStaticEvaluationOriginRow {
 export interface SemanticOpenSeamSiteRow {
   /** Stable answer-local key for one authored seam site; not a durable kernel identity. */
   readonly siteKey: string;
-  readonly seamKindKey: OpenSeam['seamKindKey'];
+  readonly seamKindKeys: readonly OpenSeam['seamKindKey'][];
   readonly source: SemanticSourceReference | null;
   readonly sourceRole: SourceFileRole | `${SourceFileRole}` | string | null;
   readonly applicationFileRoles: readonly (ApplicationFileRole | `${ApplicationFileRole}`)[];
@@ -1627,9 +2099,14 @@ export interface SemanticOpenSeamSiteRow {
   readonly sourceRange: SemanticSourceRange | null;
   readonly rawRowCount: number;
   readonly variantCount: number;
-  readonly attemptKinds: readonly (SemanticOpenSeamAttemptKind | `${SemanticOpenSeamAttemptKind}`)[];
-  readonly boundaryKinds: readonly (SemanticOpenSeamBoundaryKind | `${SemanticOpenSeamBoundaryKind}`)[];
+  readonly boundaryKinds: readonly (OpenSeamBoundaryKind | `${OpenSeamBoundaryKind}`)[];
+  readonly boundaryCounts: readonly SemanticRuntimeCountRow[];
+  readonly pressureKinds: readonly (SemanticOpenSeamPressureKind | `${SemanticOpenSeamPressureKind}`)[];
+  readonly pressureCounts: readonly SemanticRuntimeCountRow[];
   readonly reasonKinds: readonly (OpenSeamReasonKind | `${OpenSeamReasonKind}`)[];
+  readonly reasonCounts: readonly SemanticRuntimeCountRow[];
+  readonly affectedMaterializationCount: number;
+  readonly affectedProductCount: number;
   readonly sampleSummary: string;
   readonly variantSamples: readonly SemanticOpenSeamSiteVariantRow[];
 }
@@ -1639,6 +2116,77 @@ export interface SemanticOpenSeamSitesResult {
   readonly totalOpenSeamSites: number;
   readonly displayText: string;
   readonly rows: readonly SemanticOpenSeamSiteRow[];
+}
+
+/** Public authority for an adjudicated limitation rule, independent from configured presentation. */
+export const enum SemanticAnalysisLimitationAuthority {
+  SemanticRuntimeRule = 'semantic-runtime-rule',
+}
+
+/** Typed reason that made one otherwise useful semantic product remain incomplete. */
+export interface SemanticAnalysisLimitationReason {
+  readonly summary: string;
+  readonly seamKindKeys: readonly OpenSeam['seamKindKey'][];
+  readonly boundaryKinds: readonly (OpenSeamBoundaryKind | `${OpenSeamBoundaryKind}`)[];
+  readonly reasonKinds: readonly (OpenSeamReasonKind | `${OpenSeamReasonKind}`)[];
+}
+
+/** One materialization edge retained for exact seam drill-down without exposing kernel handles. */
+export interface SemanticAnalysisLimitationMaterializationEvidence {
+  readonly impactKey: string;
+  readonly outcome: SemanticOpenSeamMaterializationOutcome | `${SemanticOpenSeamMaterializationOutcome}`;
+  readonly ownerKey: string;
+  readonly productKeys: readonly string[];
+  readonly productKindKeys: readonly MaterializedProduct['productKindKey'][];
+}
+
+/** One affected product named by kind so consumers can explain what knowledge is incomplete. */
+export interface SemanticAnalysisLimitationProductEvidence {
+  readonly productKey: string;
+  readonly productKindKey: MaterializedProduct['productKindKey'];
+  readonly source: SemanticSourceReference | null;
+}
+
+/** Exact causal evidence conserved behind one unique authored limitation site. */
+export interface SemanticAnalysisLimitationEvidence {
+  readonly openSeamSiteKey: string;
+  readonly seamKeys: readonly string[];
+  readonly materializations: readonly SemanticAnalysisLimitationMaterializationEvidence[];
+  readonly products: readonly SemanticAnalysisLimitationProductEvidence[];
+}
+
+/** Neutral analysis-limitation finding; configured disposition is presentation policy, not semantic severity. */
+export interface SemanticAnalysisLimitationRow {
+  /** Stable rule plus exact authored-source identity; independent from answer paging and row order. */
+  readonly findingKey: string;
+  readonly ruleId: SemanticProjectFindingRuleId;
+  readonly authority: SemanticAnalysisLimitationAuthority | `${SemanticAnalysisLimitationAuthority}`;
+  readonly title: string;
+  readonly explanation: string;
+  readonly action: string;
+  readonly reason: SemanticAnalysisLimitationReason;
+  readonly source: SemanticSourceReference;
+  readonly sourceRange: SemanticSourceRange;
+  /** The affected semantic knowledge is open even though this collection query enumerated its basis completely. */
+  readonly currentCoverage: InquiryAnswerCoverage.Open;
+  readonly evidence: SemanticAnalysisLimitationEvidence;
+  readonly effectivePolicy: SemanticProjectFindingEffectivePolicy;
+}
+
+export interface SemanticAnalysisLimitationsResult {
+  readonly projectKey: string;
+  /** Exact native policy input, including the conventional path when the file does not exist yet. */
+  readonly policyFile: {
+    readonly filePath: string;
+    readonly exists: boolean;
+  };
+  /** Effective trace for every admitted rule, including rules with no candidates or disposition=off. */
+  readonly effectivePolicies: readonly SemanticProjectFindingEffectivePolicy[];
+  /** Unique rule-plus-authored-site candidates before configured off suppression. */
+  readonly candidateCount: number;
+  readonly suppressedCandidateCount: number;
+  readonly displayText: string;
+  readonly rows: readonly SemanticAnalysisLimitationRow[];
 }
 
 export interface SemanticEvaluationIssueRow {
@@ -1665,12 +2213,15 @@ export interface SemanticEvaluationIssuesResult {
   readonly rows: readonly SemanticEvaluationIssueRow[];
 }
 
-export interface SemanticResourceDefinitionBindableRow {
+export interface SemanticBindableDefinitionRow {
   readonly name: string;
   readonly attribute: string;
   readonly callback: string;
   readonly mode: BindableBindingMode | `${BindableBindingMode}`;
   readonly setterKind: BindableSetterKind | `${BindableSetterKind}`;
+  readonly setterTargetName: string | null;
+  /** Explicit nullish-coercion policy; null means absent or inapplicable. */
+  readonly nullable: boolean | null;
   readonly valueType: string | null;
   readonly valueTypeShapeKind: CheckerTypeShapeKind | `${CheckerTypeShapeKind}` | null;
   readonly effectiveValueTypeShapeKind: CheckerTypeShapeKind | `${CheckerTypeShapeKind}` | null;
@@ -1678,7 +2229,19 @@ export interface SemanticResourceDefinitionBindableRow {
   readonly valueTypeHasMembers: boolean | null;
   readonly valueTypeIsWeak: boolean | null;
   readonly source: SemanticSourceReference | null;
+  readonly nameSource: SemanticSourceReference | null;
+  readonly attributeSource: SemanticSourceReference | null;
+  readonly propertySource: SemanticSourceReference | null;
+  readonly callbackSource: SemanticSourceReference | null;
+  readonly callbackTargetSource: SemanticSourceReference | null;
+  readonly modeSource: SemanticSourceReference | null;
+  readonly setSource: SemanticSourceReference | null;
+  readonly setterTargetSource: SemanticSourceReference | null;
+  readonly typeSource: SemanticSourceReference | null;
+  readonly nullableSource: SemanticSourceReference | null;
 }
+
+export type SemanticResourceDefinitionBindableRow = SemanticBindableDefinitionRow;
 
 export interface SemanticResourceDefinitionWatchRow {
   readonly expressionKind: WatchExpressionKind | `${WatchExpressionKind}`;
@@ -1701,7 +2264,9 @@ export interface SemanticResourceIssueRow {
   readonly severity: SemanticTemplateCursorDiagnosticSeverity;
   readonly message: string;
   readonly source: SemanticSourceReference | null;
+  readonly relatedInformation: readonly SemanticDiagnosticRelatedInformation[];
   readonly resource: {
+    /** Author-facing resource taxonomy; use `registrationResourceKindFor` for framework registration-key joins. */
     readonly resourceKind: ResourceDefinitionKind | `${ResourceDefinitionKind}` | null;
     readonly name: string | null;
     readonly key: string | null;
@@ -1712,6 +2277,7 @@ export interface SemanticResourceIssueRow {
     readonly identityHandle: IdentityHandle;
     readonly ownerDefinitionIdentityHandle: IdentityHandle | null;
     readonly sourceAddressHandle: AddressHandle | null;
+    readonly relatedSourceAddressHandles: readonly AddressHandle[];
   };
 }
 
@@ -1735,6 +2301,11 @@ export interface SemanticResourceDefinitionPatternRow {
   readonly source: SemanticSourceReference | null;
 }
 
+export interface SemanticResourceDefinitionAliasRow {
+  readonly name: string;
+  readonly source: SemanticSourceReference | null;
+}
+
 export type SemanticResourceDeclarationMode =
   /** Resource metadata came from an Aurelia decorator. */
   | 'decorator'
@@ -1746,15 +2317,18 @@ export type SemanticResourceDeclarationMode =
   | 'factory-call'
   /** Resource metadata came from the currently modeled conventions plugin rules. */
   | 'convention'
+  /** Resource metadata came from a compiler-local `<template as-custom-element>`. */
+  | 'local-template'
   /** Resource metadata came from a generic header whose more precise carrier is not preserved. */
   | 'header';
 
 export interface SemanticResourceDefinitionRow {
   readonly projectKey: string;
+  /** Author-facing resource taxonomy; use `registrationResourceKindFor` for framework registration-key joins. */
   readonly resourceKind: ResourceDefinitionKind;
   readonly declarationModes: readonly SemanticResourceDeclarationMode[];
   readonly name: string | null;
-  readonly aliases: readonly string[];
+  readonly aliases: readonly SemanticResourceDefinitionAliasRow[];
   readonly key: string | null;
   readonly targetName: string | null;
   readonly captureKind: CustomElementCaptureKind | `${CustomElementCaptureKind}` | null;
@@ -1766,24 +2340,343 @@ export interface SemanticResourceDefinitionRow {
   readonly isTemplateController: boolean | null;
   readonly containerStrategy: CustomAttributeContainerStrategy | `${CustomAttributeContainerStrategy}` | null;
   readonly defaultProperty: string | null;
+  readonly noMultiBindings: boolean | null;
   readonly containerless: boolean | null;
   readonly shadowMode: ShadowRootMode | `${ShadowRootMode}` | null;
   readonly hasSlots: boolean | null;
   readonly needsCompile: boolean | null;
   readonly patterns: readonly SemanticResourceDefinitionPatternRow[];
   readonly source: SemanticSourceReference | null;
+  readonly nameSource: SemanticSourceReference | null;
+  /** Exact target/name token used for navigation and edits. */
   readonly targetSource: SemanticSourceReference | null;
+  /** Full authored target declaration used by hierarchy and outline consumers. */
+  readonly targetDeclarationSource: SemanticSourceReference | null;
   readonly handles?: {
     readonly definitionProductHandle: ProductHandle | null;
     readonly identityHandle: IdentityHandle | null;
     readonly targetIdentityHandle: IdentityHandle | null;
     readonly sourceAddressHandle: AddressHandle | null;
+    readonly nameSourceAddressHandle: AddressHandle | null;
     readonly targetAddressHandle: AddressHandle | null;
+    readonly targetDeclarationSourceAddressHandle: AddressHandle | null;
   };
 }
 
 export interface SemanticResourceDefinitionsResult {
   readonly rows: readonly SemanticResourceDefinitionRow[];
+}
+
+/** Runtime/template resource kinds presented through resource discovery. Compiler syntax has a separate ownership lane. */
+export const SEMANTIC_RESOURCE_INVENTORY_KINDS = [
+  ResourceDefinitionKind.CustomElement,
+  ResourceDefinitionKind.CustomAttribute,
+  ResourceDefinitionKind.TemplateController,
+  ResourceDefinitionKind.ValueConverter,
+  ResourceDefinitionKind.BindingBehavior,
+] as const;
+
+export type SemanticResourceInventoryKind = typeof SEMANTIC_RESOURCE_INVENTORY_KINDS[number];
+
+export const enum SemanticResourceInventoryMetadataState {
+  /** A converged definition with authored/runtime metadata is available. */
+  FullDefinition = 'full-definition',
+  /** A named resource header is known, but no full definition was materialized. */
+  HeaderOnly = 'header-only',
+  /** Only an effective compiler/DI visibility row is known. */
+  VisibilityOnly = 'visibility-only',
+}
+
+export const enum SemanticResourceInventoryOriginKind {
+  /** Resource declaration belongs to the selected authored project boundary. */
+  Project = 'project',
+  /** Resource declaration belongs to another package with authoritative package ownership. */
+  Package = 'package',
+  /** Resource is supplied by a modeled Aurelia framework/plugin catalog. */
+  Framework = 'framework',
+  /** Resource declaration is outside the authored project without authoritative package ownership. */
+  External = 'external',
+  /** No declaration ownership could be proved. */
+  Unknown = 'unknown',
+}
+
+/** Closed provenance for modeled Aurelia resource catalogs. Null for resources outside a modeled catalog. */
+export const enum SemanticResourceInventoryCatalogOwnerKind {
+  /** Resources owned by Aurelia's core runtime-html catalog. */
+  CoreFramework = 'core-framework',
+  /** Resources owned by an officially modeled Aurelia plugin catalog. */
+  OfficialPlugin = 'official-plugin',
+}
+
+export const enum SemanticResourceInventoryLocalityKind {
+  /** Ordinary project/package/framework resource definition. */
+  Project = 'project',
+  /** Compiler-local `<template as-custom-element>` definition. */
+  LocalTemplate = 'local-template',
+}
+
+export const enum SemanticResourceNavigationUnavailableReason {
+  /** No exact authored public-name or implementation token is retained. */
+  NoAuthoredSource = 'no-authored-source',
+  /** The retained source is external/catalog metadata without a host-navigable path. */
+  ExternalCatalog = 'external-catalog',
+}
+
+export const enum SemanticResourceInventoryNavigationRole {
+  /** Exact authored public resource-name token. */
+  PublicName = 'public-name',
+  /** Exact implementation token used when no authored public name exists. */
+  Implementation = 'implementation',
+  /** Exact authored bindable property name. */
+  BindableName = 'bindable-name',
+  /** Exact authored bindable attribute name used when the property name is unavailable. */
+  BindableAttribute = 'bindable-attribute',
+  /** Exact implementation property token used when authored bindable metadata is unavailable. */
+  BindableProperty = 'bindable-property',
+  /** Broader bindable declaration source used only as the final authored fallback. */
+  BindableDeclaration = 'bindable-declaration',
+}
+
+export interface SemanticResourceInventoryOrigin {
+  readonly kind: SemanticResourceInventoryOriginKind | `${SemanticResourceInventoryOriginKind}`;
+  readonly projectKey: string | null;
+  readonly packageName: string | null;
+  readonly moduleKey: string | null;
+  readonly catalogGroup: string | null;
+  /** Core/plugin ownership for modeled Aurelia catalogs; null exactly when `kind` is not `framework`. */
+  readonly catalogOwnerKind:
+    | SemanticResourceInventoryCatalogOwnerKind
+    | `${SemanticResourceInventoryCatalogOwnerKind}`
+    | null;
+}
+
+export interface SemanticResourceInventorySources {
+  /** Exact authored public resource-name token, when one exists. */
+  readonly publicName: SemanticSourceReference | null;
+  /** Full declaration/carrier source for outline and explanation. */
+  readonly declaration: SemanticSourceReference | null;
+  /** Exact implementation/target token when distinct from the public name. */
+  readonly implementation: SemanticSourceReference | null;
+  /** Authoritative default navigation target: public name first, otherwise the exact implementation token. */
+  readonly navigation: SemanticSourceReference | null;
+  /** Semantic role of the selected navigation source; null exactly when navigation is unavailable. */
+  readonly navigationRole:
+    | SemanticResourceInventoryNavigationRole
+    | `${SemanticResourceInventoryNavigationRole}`
+    | null;
+  readonly navigationUnavailableReason:
+    | SemanticResourceNavigationUnavailableReason
+    | `${SemanticResourceNavigationUnavailableReason}`
+    | null;
+}
+
+export interface SemanticResourceInventoryAliasRow extends SemanticResourceDefinitionAliasRow {
+  readonly identityKey: string;
+  readonly registrationKey: string | null;
+}
+
+export interface SemanticResourceInventoryBindableRow extends SemanticResourceDefinitionBindableRow {
+  readonly identityKey: string;
+  readonly primary: boolean;
+  /** Authoritative authored token for the bindable child in discovery presentations. */
+  readonly navigationSource: SemanticSourceReference | null;
+  /** Semantic role of the selected bindable navigation source. */
+  readonly navigationRole:
+    | SemanticResourceInventoryNavigationRole
+    | `${SemanticResourceInventoryNavigationRole}`
+    | null;
+}
+
+export interface SemanticResourceInventoryLocality {
+  readonly kind: SemanticResourceInventoryLocalityKind | `${SemanticResourceInventoryLocalityKind}`;
+  readonly ownerIdentityKey: string | null;
+  readonly ownerName: string | null;
+  readonly ownerSource: SemanticSourceReference | null;
+}
+
+export interface SemanticResourceInventoryRow {
+  /**
+   * Opaque deterministic projection of semantic owner identity; never a store-local kernel handle.
+   * A unique TypeScript declaration owner keeps its name-insensitive base identity. Lower-authority rows sharing that
+   * owner and registration kind receive deterministic variants; competing full definitions are invalid.
+   */
+  readonly identityKey: string;
+  readonly projectKey: string;
+  readonly resourceKind: SemanticResourceInventoryKind;
+  readonly name: string;
+  readonly registrationKey: string | null;
+  readonly aliases: readonly SemanticResourceInventoryAliasRow[];
+  readonly bindables: readonly SemanticResourceInventoryBindableRow[];
+  readonly declarationModes: readonly SemanticResourceDeclarationMode[];
+  readonly metadataState: SemanticResourceInventoryMetadataState | `${SemanticResourceInventoryMetadataState}`;
+  readonly origin: SemanticResourceInventoryOrigin;
+  readonly locality: SemanticResourceInventoryLocality;
+  readonly sources: SemanticResourceInventorySources;
+}
+
+export interface SemanticResourceInventoryCompleteness {
+  readonly fullDefinitions: number;
+  readonly headerOnly: number;
+  readonly visibilityOnly: number;
+  readonly localTemplates: number;
+  readonly excludedCompilerSyntax: number;
+  readonly unnamedDefinitions: number;
+  readonly unresolvedModules: number;
+  readonly openVisibility: number;
+}
+
+export interface SemanticResourceInventoryResult {
+  readonly displayText: string;
+  readonly projectKey: string;
+  readonly projectRoot: string;
+  /** Whether bindable rows include the opt-in TypeChecker value-type projection. */
+  readonly typeSurfacesIncluded: boolean;
+  readonly rows: readonly SemanticResourceInventoryRow[];
+  readonly completeness: SemanticResourceInventoryCompleteness;
+}
+
+export const enum SemanticTemplateResourceAvailabilityState {
+  /** The selected compiler scope proves this resource is effective. */
+  Available = 'available',
+  /** Visibility was requested but its container/admission path remains open. */
+  Open = 'open',
+}
+
+export interface SemanticTemplateResourceScopeCandidate {
+  readonly templateIdentityKey: string;
+  readonly scopeIdentityKey: string;
+  readonly definitionName: string;
+  readonly compilationLane: 'app-runtime' | 'authoring';
+  readonly source: SemanticSourceReference | null;
+}
+
+export interface SemanticTemplateResourceAvailabilityRow {
+  readonly resource: SemanticResourceInventoryRow;
+  readonly state: SemanticTemplateResourceAvailabilityState | `${SemanticTemplateResourceAvailabilityState}`;
+  readonly visibilityKind: TemplateResourceVisibilityKind | `${TemplateResourceVisibilityKind}`;
+  /** Registration/configuration/dependency source that made this resource visible in the selected scope. */
+  readonly availabilitySource: SemanticSourceReference | null;
+}
+
+export interface SemanticTemplateResourceAvailabilityResult {
+  readonly displayText: string;
+  readonly projectKey: string;
+  readonly projectRoot: string;
+  /** Whether resource bindable rows include the opt-in TypeChecker value-type projection. */
+  readonly typeSurfacesIncluded: boolean;
+  readonly selectedTemplate: SemanticTemplateResourceScopeCandidate | null;
+  readonly candidates: readonly SemanticTemplateResourceScopeCandidate[];
+  readonly rows: readonly SemanticTemplateResourceAvailabilityRow[];
+  readonly completeness: SemanticResourceInventoryCompleteness;
+}
+
+export type SemanticResourceAvailabilityExplanationConclusionKind =
+  | 'available'
+  | 'shadowed'
+  | 'configured-out'
+  | 'not-admitted'
+  | 'admission-unknown';
+
+/** One exact top-level resource interpreted through its canonical runtime lookup key in one compiler scope. */
+export interface SemanticResourceAvailabilityExplanationSubject {
+  /** Structural identity used to reprove that a fresh answer still describes the same resource/template pair. */
+  readonly subjectKey: string;
+  readonly projectKey: string;
+  readonly resourceIdentityKey: string;
+  readonly resourceKind: SemanticResourceInventoryKind;
+  readonly name: string;
+  /** V1 deliberately explains only the canonical resource name, never an alias child from inventory metadata. */
+  readonly lookupKind: 'canonical-name';
+  readonly registrationKey: string;
+  readonly resource: SemanticResourceInventoryRow;
+  readonly template: SemanticTemplateResourceScopeCandidate;
+}
+
+export interface SemanticResourceAvailabilityExplanationConclusion {
+  readonly kind: SemanticResourceAvailabilityExplanationConclusionKind;
+  readonly title: string;
+  readonly explanation: string;
+  readonly action: string;
+}
+
+export interface SemanticResourceAvailabilityExplanationExclusionEvidence {
+  readonly reason: 'duplicate-product' | 'lookup-key-conflict';
+  readonly lookupKeys: readonly string[];
+  readonly contenderLane: 'local' | 'parent';
+  readonly contenderSource: SemanticSourceReference | null;
+  readonly winnerSource: SemanticSourceReference | null;
+}
+
+export interface SemanticResourceAvailabilityExplanationConfigurationEvidence {
+  readonly state: 'excluded' | 'open' | 'not-indicated';
+  readonly requiredCapability: FrameworkRegistrationCapability | `${FrameworkRegistrationCapability}` | null;
+  readonly sources: readonly SemanticSourceReference[];
+}
+
+export interface SemanticResourceAvailabilityExplanationBlocker {
+  readonly kind: 'open-seam';
+  readonly seamKindKey: string;
+  readonly summary: string;
+  readonly reasonKinds: readonly (OpenSeamReasonKind | `${OpenSeamReasonKind}`)[];
+  readonly boundaryKinds: readonly (OpenSeamBoundaryKind | `${OpenSeamBoundaryKind}`)[];
+  readonly sources: readonly SemanticSourceReference[];
+}
+
+export interface SemanticResourceAvailabilityExplanationEvidence {
+  /** Effective canonical-key winner; equal to the subject resource when the requested resource is available. */
+  readonly effectiveResource: SemanticResourceInventoryRow | null;
+  readonly availabilitySource: SemanticSourceReference | null;
+  readonly exclusion: SemanticResourceAvailabilityExplanationExclusionEvidence | null;
+  readonly configuration: SemanticResourceAvailabilityExplanationConfigurationEvidence;
+  readonly blockers: readonly SemanticResourceAvailabilityExplanationBlocker[];
+}
+
+export type SemanticResourceAvailabilityExplanationUncertaintyReason =
+  | 'registration-admission-open'
+  | 'configuration-membership-open'
+  | 'component-scope-lineage-open'
+  | 'blocking-open-seam'
+  | 'unresolved-modules'
+  | 'source-discovery-truncated';
+
+export interface SemanticResourceAvailabilityExplanationUncertainty {
+  readonly state: 'closed' | 'open' | 'truncated';
+  readonly reasons: readonly SemanticResourceAvailabilityExplanationUncertaintyReason[];
+  readonly explanation: string;
+}
+
+export interface SemanticResourceAvailabilityExplanationCurrentness {
+  readonly authority: 'answer-analysis-basis';
+  readonly explanation: string;
+}
+
+export interface SemanticResourceAvailabilityExplanationNextStep {
+  readonly kind: 'inspect-source' | 'inspect-query' | 'requery';
+  readonly label: string;
+  readonly source: SemanticSourceReference | null;
+  readonly relatedQueryKind: SemanticAppQueryKind | `${SemanticAppQueryKind}` | null;
+  readonly targetQuery: SemanticAppQuery | null;
+}
+
+export interface SemanticResourceAvailabilityExplanation {
+  readonly subject: SemanticResourceAvailabilityExplanationSubject;
+  readonly conclusion: SemanticResourceAvailabilityExplanationConclusion;
+  readonly evidence: SemanticResourceAvailabilityExplanationEvidence;
+  readonly uncertainty: SemanticResourceAvailabilityExplanationUncertainty;
+  readonly currentness: SemanticResourceAvailabilityExplanationCurrentness;
+  readonly nextSteps: readonly SemanticResourceAvailabilityExplanationNextStep[];
+}
+
+export interface SemanticResourceAvailabilityExplanationContender {
+  readonly subject: SemanticResourceAvailabilityExplanationSubject;
+  readonly conclusionKind: SemanticResourceAvailabilityExplanationConclusionKind;
+}
+
+export interface SemanticResourceAvailabilityExplanationResult {
+  readonly displayText: string;
+  readonly projectKey: string;
+  readonly explanation: SemanticResourceAvailabilityExplanation | null;
+  readonly contenders: readonly SemanticResourceAvailabilityExplanationContender[];
 }
 
 export interface SemanticResourceIssuesResult {
@@ -1871,6 +2764,7 @@ export interface SemanticDiIssueRow {
     readonly stepKind: string;
     readonly admissionKind: string;
     readonly strategy: string;
+    readonly failureKind: import('../di/di-issue.js').DiRegistryApplicationFailureKind | null;
   } | null;
   readonly source: SemanticSourceReference | null;
   readonly handles?: {
@@ -1898,7 +2792,7 @@ export interface SemanticObservationIssueRow {
   readonly message: string;
   readonly subjectName: string | null;
   readonly source: SemanticSourceReference | null;
-  readonly relatedSources: readonly SemanticSourceReference[];
+  readonly relatedInformation: readonly SemanticDiagnosticRelatedInformation[];
   readonly suggestion: SemanticTemplateCursorSuggestionRow | null;
   readonly handles?: {
     readonly productHandle: ProductHandle;
@@ -1957,26 +2851,59 @@ export interface SemanticComputedObserverSourcesResult {
   readonly rows: readonly SemanticComputedObserverSourceRow[];
 }
 
+/** Compact owner reference shared by every observed-dependency family. */
+export interface SemanticObservedDependencyOwnerRow {
+  /** Answer-local owner key suitable for focused follow-up queries in the same app epoch. */
+  readonly ownerKey: string;
+  readonly kind: RuntimeExpressionAccessOwnerKind | `${RuntimeExpressionAccessOwnerKind}`;
+  readonly source: SemanticSourceReference | null;
+  readonly handles?: {
+    readonly productHandle: ProductHandle | null;
+    readonly identityHandle: IdentityHandle | null;
+    readonly sourceAddressHandle: AddressHandle | null;
+  };
+}
+
+/** Lossless public projection of one owner-qualified observed read occurrence. */
+export interface SemanticObservedDependencyOccurrenceRow {
+  readonly dependencyKind: RuntimeObservedDependencyKind | `${RuntimeObservedDependencyKind}`;
+  readonly expressionKind: string;
+  readonly sourceName: string | null;
+  readonly sourceRootName: string | null;
+  readonly memberName: string | null;
+  readonly keyExpression: string | null;
+  readonly methodName: string | null;
+  readonly accessUse: SemanticRuntimeExpressionAccessUseOccurrenceRow;
+  readonly observedMemberKind: CheckerTypeMemberKind | `${CheckerTypeMemberKind}` | null;
+  readonly observedMemberSource: SemanticSourceReference | null;
+  readonly observedMemberSourceState: SemanticObservedMemberSourceState;
+  readonly observedMemberSourceRoute: SemanticObservedMemberSourceRoute | null;
+  readonly scopeLookupAncestor: number | null;
+  readonly spanStart: number | null;
+  readonly spanEnd: number | null;
+  /** Authored token for the observed value carrier; it can differ from the inducing operation token. */
+  readonly memberTokenSource: SemanticSourceReference | null;
+  readonly source: SemanticSourceReference | null;
+  readonly handles?: {
+    readonly accessUseProductHandle: ProductHandle;
+    readonly observedMemberSourceAddressHandle: AddressHandle | null;
+    readonly sourceFileAddressHandle: AddressHandle | null;
+    readonly sourceAddressHandle: AddressHandle | null;
+  };
+}
+
 export interface SemanticComputedObserverObservedDependencyRow {
   readonly projectKey: string;
   readonly observerKind: ComputedObserverRuntimeKind | `${ComputedObserverRuntimeKind}`;
   readonly className: string | null;
   readonly memberName: string | null;
-  readonly dependencyKind: RuntimeObservedDependencyKind | `${RuntimeObservedDependencyKind}`;
-  readonly expressionKind: string;
-  readonly sourceName: string | null;
-  readonly sourceRootName: string | null;
-  readonly dependencyMemberName: string | null;
-  readonly keyExpression: string | null;
-  readonly methodName: string | null;
-  readonly spanStart: number | null;
-  readonly spanEnd: number | null;
-  readonly source: SemanticSourceReference | null;
+  readonly rowKey: string;
+  readonly owner: SemanticObservedDependencyOwnerRow;
+  readonly occurrence: SemanticObservedDependencyOccurrenceRow;
   readonly handles?: {
     readonly computedObserverProductHandle: ProductHandle | null;
     readonly observedDependencyProductHandle: ProductHandle;
     readonly observedDependencyIdentityHandle: IdentityHandle;
-    readonly sourceAddressHandle: AddressHandle | null;
   };
 }
 
@@ -2007,24 +2934,13 @@ export interface SemanticRuntimeEffectObservedDependencyRow {
   readonly effectKind: RuntimeEffectKind | `${RuntimeEffectKind}`;
   readonly dependencyEvaluationKind: RuntimeEffectDependencyEvaluationKind | `${RuntimeEffectDependencyEvaluationKind}`;
   readonly immediate: boolean | null;
-  readonly dependencyKind: RuntimeObservedDependencyKind | `${RuntimeObservedDependencyKind}`;
-  readonly expressionKind: string;
-  readonly sourceName: string | null;
-  readonly sourceRootName: string | null;
-  readonly memberName: string | null;
-  readonly keyExpression: string | null;
-  readonly methodName: string | null;
-  readonly observedMemberKind: CheckerTypeMemberKind | `${CheckerTypeMemberKind}` | null;
-  readonly observedMemberSource: SemanticSourceReference | null;
-  readonly spanStart: number | null;
-  readonly spanEnd: number | null;
-  readonly source: SemanticSourceReference | null;
+  readonly rowKey: string;
+  readonly owner: SemanticObservedDependencyOwnerRow;
+  readonly occurrence: SemanticObservedDependencyOccurrenceRow;
   readonly handles?: {
     readonly effectProductHandle: ProductHandle | null;
     readonly observedDependencyProductHandle: ProductHandle;
     readonly observedDependencyIdentityHandle: IdentityHandle;
-    readonly observedMemberSourceAddressHandle: AddressHandle | null;
-    readonly sourceAddressHandle: AddressHandle | null;
   };
 }
 
@@ -2050,6 +2966,7 @@ export interface SemanticProxyObservableEscapesResult {
 }
 
 export type SemanticAppDiagnosticDomain =
+  | 'analysis'
   | 'typescript'
   | 'evaluation'
   | 'configuration'
@@ -2065,41 +2982,226 @@ export type SemanticAppDiagnosticDomain =
   | 'router'
   | 'route-recognizer';
 
+/** Closed lifecycle phases projected through template diagnostics. */
+export type SemanticTemplateDiagnosticPhase =
+  | TypeSystemDiagnosticPhase
+  | TemplateCompilerIssuePhase
+  | `${TemplateCompilerIssuePhase}`
+  | RuntimeControllerIssuePhase
+  | `${RuntimeControllerIssuePhase}`
+  | RuntimeRendererIssuePhase
+  | `${RuntimeRendererIssuePhase}`
+  | RuntimeBindingIssuePhase
+  | `${RuntimeBindingIssuePhase}`
+  | RuntimeBindingBehaviorIssuePhase
+  | `${RuntimeBindingBehaviorIssuePhase}`
+  | RuntimeValueConverterIssuePhase
+  | `${RuntimeValueConverterIssuePhase}`
+  | RuntimeBindingScopeIssuePhase
+  | `${RuntimeBindingScopeIssuePhase}`
+  | RouterIssuePhase
+  | `${RouterIssuePhase}`;
+
+/** Domain-local diagnostic lifecycle phase; interpret together with `diagnosticDomain`. */
+export type SemanticAppDiagnosticPhase =
+  | SemanticTemplateDiagnosticPhase
+  | EvaluationIssuePhase
+  | `${EvaluationIssuePhase}`
+  | ConfigurationIssuePhase
+  | `${ConfigurationIssuePhase}`
+  | DiIssuePhase
+  | `${DiIssuePhase}`
+  | ObservationIssuePhase
+  | `${ObservationIssuePhase}`
+  | ResourceIssuePhase
+  | `${ResourceIssuePhase}`
+  | StateIssuePhase
+  | `${StateIssuePhase}`
+  | ValidationIssuePhase
+  | `${ValidationIssuePhase}`
+  | FetchClientIssuePhase
+  | `${FetchClientIssuePhase}`
+  | DialogIssuePhase
+  | `${DialogIssuePhase}`;
+
+/** Closed subject vocabulary projected by normalized diagnostics; interpret domain-local members with `diagnosticDomain`. */
+export type SemanticDiagnosticSubjectKind =
+  | 'template-syntax'
+  | 'template-member-access'
+  | 'template-member-call'
+  | 'template-expression'
+  | 'observation-member'
+  | EvaluationIssueSubjectKind
+  | `${EvaluationIssueSubjectKind}`
+  | DiIssueSubjectKind
+  | `${DiIssueSubjectKind}`
+  | ResourceDefinitionKind
+  | `${ResourceDefinitionKind}`;
+
+export interface SemanticDiagnosticSubject {
+  readonly subjectKind: SemanticDiagnosticSubjectKind;
+  readonly subjectName: string | null;
+  readonly source: SemanticSourceReference | null;
+}
+
+/** TypeScript's extensible numeric diagnostic namespace, serialized in the same form as `tsc`. */
+export type SemanticTypeScriptDiagnosticKind = `TS${number}`;
+
+/** Closed semantic-runtime diagnostic kinds plus TypeScript's explicitly patterned namespace. */
+export type SemanticAppDiagnosticKind =
+  | SemanticProjectFindingRuleId
+  | `${SemanticProjectFindingRuleId}`
+  | SemanticTypeScriptDiagnosticKind
+  | SemanticTemplateCursorDiagnosticKind
+  | EvaluationIssueKind
+  | `${EvaluationIssueKind}`
+  | ConfigurationIssueKind
+  | `${ConfigurationIssueKind}`
+  | DiIssueKind
+  | `${DiIssueKind}`
+  | ObservationIssueKind
+  | `${ObservationIssueKind}`
+  | ResourceIssueKind
+  | `${ResourceIssueKind}`
+  | StateIssueKind
+  | `${StateIssueKind}`
+  | ValidationIssueKind
+  | `${ValidationIssueKind}`
+  | FetchClientIssueKind
+  | `${FetchClientIssueKind}`
+  | DialogIssueKind
+  | `${DialogIssueKind}`
+  | RouterIssueKind
+  | `${RouterIssueKind}`
+  | RouteRecognizerIssueKind
+  | `${RouteRecognizerIssueKind}`;
+
+/** Product-grounded relationship from one diagnostic fact to another. */
+export const enum SemanticDiagnosticRelationKind {
+  /** Both diagnostics describe the same modeled operation through different authorities. */
+  SameOperationEvidence = 'same-operation-evidence',
+  /** This diagnostic is an analysis consequence of the related diagnostic fact. */
+  DerivedConsequence = 'derived-consequence',
+}
+
+/** Exact semantic edge retained independently from any user-facing presentation policy. */
+export interface SemanticDiagnosticRelation {
+  readonly relationKind: SemanticDiagnosticRelationKind | `${SemanticDiagnosticRelationKind}`;
+  /** Identity of the diagnostic fact to which this row is related. */
+  readonly relatedDiagnosticIdentityHandle: IdentityHandle;
+}
+
+export interface SemanticDiagnosticRelatedInformation {
+  readonly message: string;
+  readonly source: SemanticSourceReference | null;
+  /** Semantic relationship to the owning diagnostic when the producer has a typed relation vocabulary. */
+  readonly relationKind?: ObservationIssueRelatedSourceKind | `${ObservationIssueRelatedSourceKind}` | null;
+  /** Diagnostic code carried by a related diagnostic, distinct from `relationKind`. */
+  readonly code?: string | null;
+  readonly sourceRole?: SourceFileRole | `${SourceFileRole}` | null;
+}
+
 export interface SemanticAppDiagnosticRow {
   readonly projectKey: string;
   readonly diagnosticDomain: SemanticAppDiagnosticDomain;
-  readonly diagnosticKind: string;
-  readonly diagnosticAuthority: SemanticTemplateCursorDiagnosticAuthority | 'semantic-runtime-product' | 'typescript';
+  /** Null only when the owning diagnostic product does not currently publish a phase. */
+  readonly phase: SemanticAppDiagnosticPhase | null;
+  readonly diagnosticKind: SemanticAppDiagnosticKind;
+  readonly diagnosticAuthority: SemanticTemplateCursorDiagnosticAuthority | 'semantic-runtime-product' | 'semantic-authoring-policy' | 'typescript';
+  /** TypeScript checker code retained structurally for direct and template-overlay diagnostics. */
+  readonly typeScriptDiagnosticCode?: number;
   readonly frameworkErrorCode: string | null;
-  readonly frameworkRawErrorAuthority?: string | null;
+  readonly frameworkRawErrorAuthority: string | null;
   readonly severity: SemanticTemplateCursorDiagnosticSeverity;
   readonly summary: string;
-  readonly missingInput?: string | null;
-  readonly missingInputs?: readonly string[];
+  readonly missingInput: string | null;
+  readonly missingInputs: readonly string[];
   readonly source: SemanticSourceReference | null;
-  readonly suggestion?: SemanticTemplateCursorSuggestionRow | null;
+  readonly subject: SemanticDiagnosticSubject | null;
+  /**
+   * Always-on answer-local semantic identity used by diagnostic relations, independent from optional detail handles.
+   * Null when the row is not backed by one uniquely identified semantic product; not durable across app generations.
+   */
+  readonly diagnosticIdentityHandle: IdentityHandle | null;
+  readonly diagnosticRelations?: readonly SemanticDiagnosticRelation[];
+  readonly relatedInformation: readonly SemanticDiagnosticRelatedInformation[];
+  readonly suggestion: SemanticTemplateCursorSuggestionRow | null;
   /** Boot-admitted source role when the diagnostic can be tied back to an authored project file. */
-  readonly sourceRole?: SourceFileRole | `${SourceFileRole}` | null;
+  readonly sourceRole: SourceFileRole | `${SourceFileRole}` | null;
   readonly relatedQueryKind: SemanticAppQueryKind | `${SemanticAppQueryKind}`;
   readonly handles?: {
-    readonly productHandle: ProductHandle;
-    readonly identityHandle: IdentityHandle;
+    readonly productHandle: ProductHandle | null;
+    readonly identityHandle: IdentityHandle | null;
     readonly ownerIdentityHandle: IdentityHandle | null;
     readonly sourceAddressHandle: AddressHandle | null;
-    readonly templateSourceAddressHandle?: AddressHandle | null;
-    readonly resourceDefinitionProductHandle?: ProductHandle | null;
+    readonly relatedSourceAddressHandles: readonly AddressHandle[];
+    readonly templateSourceAddressHandle: AddressHandle | null;
+    readonly resourceDefinitionProductHandle: ProductHandle | null;
+    /** Generated-overlay origin facts; null together for diagnostics produced directly from authored products. */
+    readonly overlayOriginKey: string | null;
+    readonly overlayFileName: string | null;
+    readonly overlaySegmentLabel: string | null;
   };
+}
+
+export type SemanticDiagnosticPresentationRole =
+  | 'primary'
+  | 'contextual';
+
+export type SemanticDiagnosticPresentationRelation =
+  | 'same-subject'
+  | 'semantic-explanation'
+  | 'checker-evidence'
+  | 'derived-consequence'
+  | 'runtime-consequence';
+
+export interface SemanticDiagnosticPresentationRow {
+  readonly rowId: string;
+  readonly rowIndex: number;
+  readonly role: SemanticDiagnosticPresentationRole;
+  readonly relation: SemanticDiagnosticPresentationRelation | null;
+}
+
+export interface SemanticDiagnosticPresentationGroup {
+  readonly groupKey: string;
+  readonly subject: SemanticDiagnosticSubject | null;
+  readonly primary: SemanticDiagnosticPresentationRow;
+  readonly related: readonly SemanticDiagnosticPresentationRow[];
+  readonly rawRowCount: number;
+  readonly primarySeverity: SemanticTemplateCursorDiagnosticSeverity;
+  readonly maxRawSeverity: SemanticTemplateCursorDiagnosticSeverity;
+}
+
+export type SemanticDiagnosticPresentationWithheldReason =
+  | 'context-only-weak-owner';
+
+/** Answer-local reference to a raw diagnostic fact intentionally withheld from user-facing primary groups. */
+export interface SemanticDiagnosticPresentationWithheldRow {
+  readonly rowId: string;
+  readonly rowIndex: number;
+  readonly reason: SemanticDiagnosticPresentationWithheldReason;
+}
+
+export interface SemanticDiagnosticPresentationResult {
+  readonly rawRowCount: number;
+  readonly primaryCount: number;
+  readonly contextualCount: number;
+  readonly withheldCount: number;
+  readonly complete: boolean;
+  readonly groups: readonly SemanticDiagnosticPresentationGroup[];
+  readonly withheld: readonly SemanticDiagnosticPresentationWithheldRow[];
 }
 
 export interface SemanticAppDiagnosticsResult {
   readonly displayText: string;
   readonly typeScript: SemanticRuntimeTypeSystemTypeScriptEnvironmentSummary | null;
   readonly rows: readonly SemanticAppDiagnosticRow[];
+  readonly presentation?: SemanticDiagnosticPresentationResult;
 }
 
 export interface SemanticAppDiagnosticSummaryRow {
   readonly diagnosticDomain: SemanticAppDiagnosticDomain;
-  readonly diagnosticKind: string;
+  readonly diagnosticKind: SemanticAppDiagnosticKind;
   readonly diagnosticAuthority: SemanticAppDiagnosticRow['diagnosticAuthority'];
   readonly frameworkErrorCode: string | null;
   readonly severity: SemanticTemplateCursorDiagnosticSeverity;
@@ -2133,7 +3235,7 @@ export interface SemanticTypeScriptDiagnosticRow {
   readonly phase: TypeSystemDiagnosticPhase;
   readonly category: TypeSystemDiagnosticCategory;
   readonly code: number;
-  readonly diagnosticKind: string;
+  readonly diagnosticKind: SemanticTypeScriptDiagnosticKind;
   readonly severity: SemanticTemplateCursorDiagnosticSeverity;
   readonly message: string;
   readonly typescriptSource: string | null;
@@ -2153,7 +3255,7 @@ export interface SemanticTypeScriptDiagnosticSummaryRow {
   readonly phase: TypeSystemDiagnosticPhase;
   readonly category: TypeSystemDiagnosticCategory;
   readonly code: number;
-  readonly diagnosticKind: string;
+  readonly diagnosticKind: SemanticTypeScriptDiagnosticKind;
   readonly severity: SemanticTemplateCursorDiagnosticSeverity;
   readonly typescriptSource: string | null;
   readonly count: number;
@@ -2183,10 +3285,21 @@ export interface SemanticStateStoreRow {
   readonly initialStateKind: ConfigurationOptionValueKind | `${ConfigurationOptionValueKind}` | null;
   readonly optionsOrHandlerKind: SemanticStateStoreOptionsOrHandlerKind;
   readonly actionHandlerCount: number;
+  readonly containerSource: SemanticSourceReference | null;
+  readonly registrationSource: SemanticSourceReference | null;
+  readonly configurationValueSource: SemanticSourceReference | null;
   readonly source: SemanticSourceReference | null;
   readonly handles?: {
     readonly productHandle: ProductHandle;
     readonly identityHandle: IdentityHandle;
+    readonly containerProductHandle: ProductHandle | null;
+    readonly containerIdentityHandle: IdentityHandle | null;
+    readonly registrationProductHandle: ProductHandle;
+    readonly registrationAdmissionProductHandle: ProductHandle;
+    readonly registrationSourceAddressHandle: AddressHandle | null;
+    readonly configurationStepProductHandle: ProductHandle;
+    readonly configurationStepIdentityHandle: IdentityHandle;
+    readonly configurationValueSourceAddressHandle: AddressHandle | null;
     readonly sourceAddressHandle: AddressHandle | null;
     readonly nameSourceAddressHandle: AddressHandle | null;
     readonly initialStateSourceAddressHandle: AddressHandle | null;
@@ -2200,6 +3313,7 @@ export interface SemanticStateStoresResult {
 }
 
 export interface SemanticStateGetterBindingRow {
+  /** Source-level decorator projection; applied controller ownership is not represented by this row yet. */
   readonly projectKey: string;
   readonly targetKind: string;
   readonly targetName: string | null;
@@ -2396,6 +3510,7 @@ export interface SemanticDialogIssuesResult {
 export type SemanticFrameworkCapabilityDemandActionability =
   | 'registered'
   | 'missing-registration'
+  | 'configuration-excludes-surface'
   | 'registration-status-unknown'
   | 'provider-visible-chain-unproven';
 
@@ -2425,6 +3540,9 @@ export interface SemanticFrameworkCapabilityDemandRow {
   readonly authoredName: string;
   readonly source: SemanticSourceReference | null;
   readonly templateSource: SemanticSourceReference | null;
+  readonly admissionSources: readonly SemanticSourceReference[];
+  readonly configurationSources: readonly SemanticSourceReference[];
+  readonly blockingOpenSeamSources: readonly SemanticSourceReference[];
   readonly blockingOpenSeamCount: number;
   readonly relatedQueryKind: SemanticAppQueryKind | `${SemanticAppQueryKind}`;
   readonly summary: string;
@@ -2435,6 +3553,9 @@ export interface SemanticFrameworkCapabilityDemandRow {
     readonly sourceAddressHandle: AddressHandle | null;
     readonly templateSourceAddressHandle: AddressHandle | null;
     readonly resourceDefinitionProductHandle: ProductHandle | null;
+    readonly analysisContextProductHandle: ProductHandle | null;
+    readonly admissionSourceAddressHandles: readonly AddressHandle[];
+    readonly configurationSourceAddressHandles: readonly AddressHandle[];
     readonly blockingOpenSeamHandles: readonly OpenSeamHandle[];
   };
 }
@@ -2444,9 +3565,117 @@ export interface SemanticFrameworkCapabilityDemandsResult {
   readonly rows: readonly SemanticFrameworkCapabilityDemandRow[];
 }
 
+export type SemanticFrameworkCapabilityExplanationConclusionKind =
+  | 'available'
+  | 'configured-out'
+  | 'not-admitted'
+  | 'admission-unknown'
+  | 'provider-chain-unproven';
+
+export interface SemanticFrameworkCapabilityExplanationSubject {
+  readonly projectKey: string;
+  readonly authoredName: string;
+  readonly siteKind: FrameworkCapabilityDemandSiteKind | `${FrameworkCapabilityDemandSiteKind}`;
+  readonly demandKind: FrameworkCapabilityDemandKind | `${FrameworkCapabilityDemandKind}`;
+  readonly requiredCapability: FrameworkRegistrationCapability | `${FrameworkRegistrationCapability}`;
+  readonly source: SemanticSourceReference;
+  readonly templateSource: SemanticSourceReference | null;
+}
+
+export interface SemanticFrameworkCapabilityExplanationConclusion {
+  readonly kind: SemanticFrameworkCapabilityExplanationConclusionKind;
+  readonly title: string;
+  readonly explanation: string;
+  readonly action: string;
+}
+
+export interface SemanticFrameworkCapabilityExplanationAdmissionEvidence {
+  readonly state: FrameworkCapabilityAdmissionState | `${FrameworkCapabilityAdmissionState}`;
+  readonly requiredRegistrationKinds: readonly (FrameworkRegistrationKind | `${FrameworkRegistrationKind}`)[];
+  readonly sources: readonly SemanticSourceReference[];
+}
+
+export interface SemanticFrameworkCapabilityExplanationConfigurationEvidence {
+  readonly state: 'excluded' | 'open' | 'not-indicated';
+  readonly sources: readonly SemanticSourceReference[];
+}
+
+export interface SemanticFrameworkCapabilityExplanationPackageEvidence {
+  readonly availabilityState: FrameworkCapabilityAvailabilityState | `${FrameworkCapabilityAvailabilityState}`;
+  readonly candidateModuleNames: readonly string[];
+  readonly recommendedModuleName: string | null;
+  readonly evidence: readonly SemanticFrameworkCapabilityPackageEvidenceRow[];
+}
+
+export interface SemanticFrameworkCapabilityExplanationBlocker {
+  readonly kind: 'open-seam';
+  readonly seamKindKey: string;
+  readonly summary: string;
+  readonly reasonKinds: readonly (OpenSeamReasonKind | `${OpenSeamReasonKind}`)[];
+  readonly boundaryKinds: readonly (OpenSeamBoundaryKind | `${OpenSeamBoundaryKind}`)[];
+  readonly sources: readonly SemanticSourceReference[];
+}
+
+export interface SemanticFrameworkCapabilityExplanationEvidence {
+  readonly admission: SemanticFrameworkCapabilityExplanationAdmissionEvidence;
+  readonly configuration: SemanticFrameworkCapabilityExplanationConfigurationEvidence;
+  readonly package: SemanticFrameworkCapabilityExplanationPackageEvidence;
+  readonly blockers: readonly SemanticFrameworkCapabilityExplanationBlocker[];
+}
+
+export type SemanticFrameworkCapabilityExplanationUncertaintyReason =
+  | 'admission-status-unknown'
+  | 'provider-chain-unproven'
+  | 'blocking-open-seam'
+  | 'source-discovery-truncated'
+  | 'configuration-source-unavailable';
+
+export interface SemanticFrameworkCapabilityExplanationUncertainty {
+  readonly state: 'closed' | 'open' | 'truncated';
+  readonly reasons: readonly SemanticFrameworkCapabilityExplanationUncertaintyReason[];
+  readonly explanation: string;
+}
+
+export interface SemanticFrameworkCapabilityExplanationCurrentness {
+  readonly authority: 'answer-analysis-basis';
+  readonly explanation: string;
+}
+
+export interface SemanticFrameworkCapabilityExplanationNextStep {
+  readonly kind: 'inspect-source' | 'inspect-query' | 'requery';
+  readonly label: string;
+  readonly source: SemanticSourceReference | null;
+  readonly relatedQueryKind: SemanticAppQueryKind | `${SemanticAppQueryKind}` | null;
+  readonly targetQuery: SemanticAppQuery | null;
+}
+
+export interface SemanticFrameworkCapabilityExplanation {
+  readonly subject: SemanticFrameworkCapabilityExplanationSubject;
+  readonly conclusion: SemanticFrameworkCapabilityExplanationConclusion;
+  readonly evidence: SemanticFrameworkCapabilityExplanationEvidence;
+  readonly uncertainty: SemanticFrameworkCapabilityExplanationUncertainty;
+  readonly currentness: SemanticFrameworkCapabilityExplanationCurrentness;
+  readonly nextSteps: readonly SemanticFrameworkCapabilityExplanationNextStep[];
+}
+
+export interface SemanticFrameworkCapabilityExplanationContender {
+  readonly subject: SemanticFrameworkCapabilityExplanationSubject;
+  readonly conclusionKind: SemanticFrameworkCapabilityExplanationConclusionKind;
+}
+
+export interface SemanticFrameworkCapabilityExplanationResult {
+  readonly displayText: string;
+  readonly projectKey: string;
+  readonly explanation: SemanticFrameworkCapabilityExplanation | null;
+  readonly contenders: readonly SemanticFrameworkCapabilityExplanationContender[];
+}
+
 export interface SemanticRouteConfigComponentRow {
   readonly componentKind: RouteableComponentKind | `${RouteableComponentKind}`;
+  /** Authored class, alias, or resource spelling. */
   readonly name: string | null;
+  /** Custom-element registration name after routeable resolution. */
+  readonly resolvedName: string | null;
   readonly resolved: boolean;
   readonly source: SemanticSourceReference | null;
   readonly handles?: {
@@ -2460,6 +3689,10 @@ export interface SemanticRouteConfigComponentRow {
 
 export interface SemanticRouterOptionsRow {
   readonly projectKey: string;
+  readonly appRootComponentName: string | null;
+  readonly appRootSource: SemanticSourceReference | null;
+  readonly registrationSource: SemanticSourceReference | null;
+  readonly configurationValueSource: SemanticSourceReference | null;
   readonly basePath: string | null;
   readonly useUrlFragmentHash: boolean | null;
   readonly useHref: boolean | null;
@@ -2473,6 +3706,13 @@ export interface SemanticRouterOptionsRow {
   readonly handles?: {
     readonly productHandle: ProductHandle;
     readonly identityHandle: IdentityHandle;
+    readonly appRootProductHandle: ProductHandle | null;
+    readonly appRootIdentityHandle: IdentityHandle | null;
+    readonly containerProductHandle: ProductHandle | null;
+    readonly containerIdentityHandle: IdentityHandle | null;
+    readonly registrationProductHandle: ProductHandle;
+    readonly registrationSourceAddressHandle: AddressHandle | null;
+    readonly configurationValueSourceAddressHandle: AddressHandle | null;
     readonly sourceAddressHandle: AddressHandle | null;
   };
 }
@@ -2483,11 +3723,21 @@ export interface SemanticRouterOptionsResult {
 
 export interface SemanticRouteConfigRow {
   readonly projectKey: string;
+  /** Contribution/source-form facts for this one authored route-config input. */
   readonly routeKind: RouteConfigKind | `${RouteConfigKind}`;
   readonly originKind: RouteConfigOriginKind | `${RouteConfigOriginKind}`;
   readonly valueKind: RouteConfigValueKind | `${RouteConfigValueKind}`;
+  readonly executionKind: RouteConfigExecutionKind | `${RouteConfigExecutionKind}`;
+  readonly effectKind: RouteConfigContributionEffectKind | `${RouteConfigContributionEffectKind}`;
+  /** Framework-shaped facts joined from the associated definition or per-use applied RouteConfig. */
+  readonly stage: RouteConfigStageKind | `${RouteConfigStageKind}`;
+  readonly closure: RouterClosureKind | `${RouterClosureKind}`;
   readonly id: string | null;
+  /** Exact authored id token, or the path token from which the framework derives the id. */
+  readonly idSource: SemanticSourceReference | null;
   readonly paths: readonly string[];
+  /** Exact authored path tokens in `paths` order. */
+  readonly pathSources: readonly (SemanticSourceReference | null)[];
   readonly title: string | null;
   readonly component: SemanticRouteConfigComponentRow | null;
   readonly redirectTo: string | null;
@@ -2498,11 +3748,22 @@ export interface SemanticRouteConfigRow {
   readonly childRouteCount: number;
   readonly fallback: SemanticRouteConfigComponentRow | null;
   readonly nav: boolean | null;
+  readonly fieldStates: Readonly<Record<RouteConfigValueField, RouteConfigFieldStateKind | `${RouteConfigFieldStateKind}`>>;
+  readonly openFields: readonly RouteConfigValueField[];
+  readonly openFieldCount: number;
+  /** Cardinality and stability of the contribution-to-effective join; the source row itself is never duplicated per use. */
+  readonly effectiveUseCount: number;
+  readonly effectiveVariantCount: number;
+  readonly effectiveFieldsStable: boolean;
   readonly source: SemanticSourceReference | null;
   readonly handles?: {
     readonly productHandle: ProductHandle;
     readonly identityHandle: IdentityHandle;
+    readonly contributionProductHandle: ProductHandle;
+    readonly contributionIdentityHandle: IdentityHandle;
     readonly sourceAddressHandle: AddressHandle | null;
+    readonly idSourceAddressHandle: AddressHandle | null;
+    readonly pathSourceAddressHandles: readonly (AddressHandle | null)[];
   };
 }
 
@@ -2512,6 +3773,10 @@ export interface SemanticRouteConfigsResult {
 
 export interface SemanticRouteContextRow {
   readonly projectKey: string;
+  readonly realizationStage: RouterRealizationStageKind | `${RouterRealizationStageKind}`;
+  readonly appRootComponentName: string | null;
+  readonly activeClass: string | null;
+  readonly useEagerLoading: boolean | null;
   readonly label: string | null;
   readonly parentLabel: string | null;
   readonly rootLabel: string | null;
@@ -2520,7 +3785,7 @@ export interface SemanticRouteContextRow {
     readonly source: SemanticSourceReference | null;
   };
   readonly hasContainer: boolean;
-  readonly hasViewportAgent: boolean;
+  readonly hasHostingViewportAgentCandidate: boolean;
   readonly source: SemanticSourceReference | null;
   readonly handles?: {
     readonly productHandle: ProductHandle;
@@ -2531,8 +3796,10 @@ export interface SemanticRouteContextRow {
     readonly routeConfigContextIdentityHandle: IdentityHandle | null;
     readonly containerProductHandle: ProductHandle | null;
     readonly containerIdentityHandle: IdentityHandle | null;
-    readonly viewportAgentProductHandle: ProductHandle | null;
-    readonly viewportAgentIdentityHandle: IdentityHandle | null;
+    readonly routerOptionsProductHandle: ProductHandle | null;
+    readonly routerOptionsIdentityHandle: IdentityHandle | null;
+    readonly hostingViewportAgentCandidateProductHandle: ProductHandle | null;
+    readonly hostingViewportAgentCandidateIdentityHandle: IdentityHandle | null;
     readonly sourceAddressHandle: AddressHandle | null;
   };
 }
@@ -2544,6 +3811,8 @@ export interface SemanticRouteContextsResult {
 export interface SemanticRouteContextParameterReadRow {
   readonly projectKey: string;
   readonly componentClassName: string | null;
+  readonly ownershipKind: RouteContextParameterReadOwnershipKind | `${RouteContextParameterReadOwnershipKind}`;
+  readonly knownOwnerCount: number;
   readonly routeConfigCount: number;
   readonly routeConfigIds: readonly string[];
   readonly routeConfigPaths: readonly string[];
@@ -2577,14 +3846,28 @@ export interface SemanticRouteContextParameterReadsResult {
 
 export interface SemanticRouterViewportRow {
   readonly projectKey: string;
-  readonly name: string;
+  readonly realizationStage: RouterRealizationStageKind | `${RouterRealizationStageKind}`;
+  readonly presenceCardinality: BuiltInTemplateControllerChildViewCardinality | `${BuiltInTemplateControllerChildViewCardinality}`;
+  readonly name: string | null;
   readonly routeContext: {
     readonly label: string | null;
     readonly source: SemanticSourceReference | null;
   } | null;
-  readonly usedBy: readonly string[];
+  readonly usedBy: readonly string[] | null;
   readonly defaultComponent: string | null;
   readonly fallback: string | null;
+  readonly fieldStates: {
+    readonly name: ViewportFieldStateKind | `${ViewportFieldStateKind}`;
+    readonly usedBy: ViewportFieldStateKind | `${ViewportFieldStateKind}`;
+    readonly default: ViewportFieldStateKind | `${ViewportFieldStateKind}`;
+    readonly fallback: ViewportFieldStateKind | `${ViewportFieldStateKind}`;
+  };
+  readonly fieldSources: {
+    readonly name: SemanticSourceReference | null;
+    readonly usedBy: SemanticSourceReference | null;
+    readonly default: SemanticSourceReference | null;
+    readonly fallback: SemanticSourceReference | null;
+  };
   readonly source: SemanticSourceReference | null;
   readonly handles?: {
     readonly productHandle: ProductHandle;
@@ -2602,6 +3885,8 @@ export interface SemanticRouterViewportsResult {
 
 export interface SemanticViewportAgentRow {
   readonly projectKey: string;
+  readonly realizationStage: RouterRealizationStageKind | `${RouterRealizationStageKind}`;
+  readonly presenceCardinality: BuiltInTemplateControllerChildViewCardinality | `${BuiltInTemplateControllerChildViewCardinality}`;
   readonly viewport: {
     readonly name: string | null;
     readonly source: SemanticSourceReference | null;
@@ -2630,12 +3915,13 @@ export interface SemanticViewportAgentsResult {
 
 export interface SemanticComponentAgentRow {
   readonly projectKey: string;
+  readonly realizationStage: RouterRealizationStageKind | `${RouterRealizationStageKind}`;
   readonly routeContext: {
     readonly label: string | null;
     readonly source: SemanticSourceReference | null;
   };
   readonly routeNode: SemanticRouterProductReferenceRow;
-  readonly viewportAgent: SemanticRouterProductReferenceRow | null;
+  readonly viewportAgentCandidate: SemanticRouterProductReferenceRow | null;
   readonly hasController: boolean;
   readonly component: SemanticRouteConfigComponentRow | null;
   readonly source: SemanticSourceReference | null;
@@ -2646,8 +3932,8 @@ export interface SemanticComponentAgentRow {
     readonly routeContextIdentityHandle: IdentityHandle | null;
     readonly routeNodeProductHandle: ProductHandle | null;
     readonly routeNodeIdentityHandle: IdentityHandle | null;
-    readonly viewportAgentProductHandle: ProductHandle | null;
-    readonly viewportAgentIdentityHandle: IdentityHandle | null;
+    readonly viewportAgentCandidateProductHandle: ProductHandle | null;
+    readonly viewportAgentCandidateIdentityHandle: IdentityHandle | null;
     readonly controllerProductHandle: ProductHandle | null;
     readonly componentProductHandle: ProductHandle | null;
     readonly componentIdentityHandle: IdentityHandle | null;
@@ -2681,6 +3967,7 @@ export interface SemanticRouteConfigReferenceRow {
 
 export interface SemanticTypedNavigationInstructionRow {
   readonly projectKey: string;
+  readonly closure: RouterClosureKind | `${RouterClosureKind}`;
   readonly instructionKind: NavigationInstructionKind | `${NavigationInstructionKind}`;
   readonly value: string | null;
   readonly component: SemanticRouterProductReferenceRow | null;
@@ -2705,6 +3992,7 @@ export interface SemanticViewportInstructionComponentRow extends SemanticRouterP
 
 export interface SemanticViewportInstructionRow {
   readonly projectKey: string;
+  readonly closure: RouterClosureKind | `${RouterClosureKind}`;
   readonly component: SemanticViewportInstructionComponentRow | null;
   readonly viewport: string | null;
   readonly childCount: number;
@@ -2732,6 +4020,7 @@ export interface SemanticViewportInstructionsResult {
 
 export interface SemanticViewportInstructionTreeRow {
   readonly projectKey: string;
+  readonly closure: RouterClosureKind | `${RouterClosureKind}`;
   readonly routeContext: {
     readonly label: string | null;
     readonly source: SemanticSourceReference | null;
@@ -2764,6 +4053,7 @@ export interface SemanticViewportInstructionTreesResult {
 
 export interface SemanticRouteTreeRow {
   readonly projectKey: string;
+  readonly realizationStage: RouterRealizationStageKind | `${RouterRealizationStageKind}`;
   readonly rootNodeLabel: string | null;
   readonly instructionTree: SemanticRouterProductReferenceRow | null;
   readonly hasOptions: boolean;
@@ -2793,6 +4083,7 @@ export interface SemanticRouteTreesResult {
 
 export interface SemanticRouteNodeRow {
   readonly projectKey: string;
+  readonly realizationStage: RouterRealizationStageKind | `${RouterRealizationStageKind}`;
   readonly path: string;
   readonly finalPath: string;
   readonly childCount: number;
@@ -2829,6 +4120,8 @@ export interface SemanticRouteNodeRow {
   readonly fragment: string | null;
   readonly hasData: boolean | null;
   readonly viewport: string | null;
+  readonly viewportAgentCandidate: SemanticRouterProductReferenceRow | null;
+  readonly viewportCandidateResolution: ViewportAgentCandidateResolutionKind | `${ViewportAgentCandidateResolutionKind}` | null;
   readonly residueInstructionCount: number;
   readonly routeContext: {
     readonly label: string | null;
@@ -2858,6 +4151,8 @@ export interface SemanticRouteNodeRow {
     readonly originalInstructionIdentityHandle: IdentityHandle | null;
     readonly recognizedRouteProductHandle: ProductHandle | null;
     readonly recognizedRouteIdentityHandle: IdentityHandle | null;
+    readonly viewportAgentCandidateProductHandle: ProductHandle | null;
+    readonly viewportAgentCandidateIdentityHandle: IdentityHandle | null;
     readonly sourceAddressHandle: AddressHandle | null;
   };
 }
@@ -3036,10 +4331,13 @@ export interface SemanticRouterIssueRow {
   readonly projectKey: string;
   readonly phase: RouterIssuePhase | `${RouterIssuePhase}`;
   readonly issueKind: RouterIssueKind | `${RouterIssueKind}`;
-  readonly diagnosticAuthority: 'framework-error-code' | 'semantic-runtime-product';
+  readonly diagnosticAuthority: 'framework-error-code' | 'framework-runtime-behavior' | 'semantic-runtime-product' | 'semantic-authoring-policy';
   readonly frameworkErrorCode: string | null;
   readonly severity: RouterIssueSeverity;
   readonly message: string;
+  readonly missingInput: string | null;
+  readonly missingInputs: readonly string[];
+  readonly suggestion: SemanticTemplateCursorSuggestionRow | null;
   readonly property: string | null;
   readonly expected: string | null;
   readonly actual: string | null;
@@ -3050,6 +4348,7 @@ export interface SemanticRouterIssueRow {
   readonly routeConfig: SemanticRouteConfigReferenceRow | null;
   readonly recognizedRoute: SemanticRouteRecognizerReferenceRow | null;
   readonly source: SemanticSourceReference | null;
+  readonly relatedInformation: readonly SemanticDiagnosticRelatedInformation[];
   readonly handles?: {
     readonly productHandle: ProductHandle;
     readonly identityHandle: IdentityHandle;
@@ -3058,6 +4357,7 @@ export interface SemanticRouterIssueRow {
     readonly recognizedRouteProductHandle: ProductHandle | null;
     readonly recognizedRouteIdentityHandle: IdentityHandle | null;
     readonly sourceAddressHandle: AddressHandle | null;
+    readonly relatedSourceAddressHandles: readonly AddressHandle[];
   };
 }
 
@@ -3160,6 +4460,7 @@ export interface SemanticRecognizedRoutesResult {
 
 export interface SemanticResourceVisibilityRow {
   readonly compilerWorld: string;
+  /** Author-facing resource taxonomy; use `registrationResourceKindFor` for framework registration-key joins. */
   readonly resourceKind: ResourceDefinitionKind;
   readonly name: string;
   readonly aliases: readonly string[];
@@ -3168,6 +4469,7 @@ export interface SemanticResourceVisibilityRow {
   readonly handles?: {
     readonly compilerWorldProductHandle: ProductHandle;
     readonly resourceProductHandle: ProductHandle | null;
+    readonly resourceIdentityHandle: IdentityHandle | null;
     readonly definitionProductHandle: ProductHandle | null;
     readonly sourceAddressHandle: AddressHandle | null;
   };
@@ -3193,6 +4495,10 @@ export interface SemanticTemplateCompilationRow {
   readonly bindingCommandLowerings: number;
   readonly instructions: number;
   readonly renderTargets: number;
+  readonly compiledTemplateState: CompiledTemplateState | `${CompiledTemplateState}`;
+  readonly compiledTemplateHasSlots: boolean;
+  readonly compiledTemplateNeedsCompile: false | null;
+  readonly contentProjectionSequences: number;
   readonly runtimeControllers: number;
   readonly runtimeChildContainers: number;
   readonly runtimeChildContextResolverSlots: number;
@@ -3219,6 +4525,181 @@ export interface SemanticTemplateCompilationResult {
   readonly rows: readonly SemanticTemplateCompilationRow[];
 }
 
+export type SemanticAttributeInterpretationExplanationConclusionKind =
+  | 'instruction-backed'
+  | 'captured'
+  | 'compiler-control'
+  | 'plain-attribute'
+  | 'invalid'
+  | 'open';
+
+/** One cursor-selected top-level authored HTML attribute, independent from store-local handles. */
+export interface SemanticAttributeInterpretationExplanationSubject {
+  /** Structural identity used to reprove that a fresh answer still describes the same authored attribute. */
+  readonly subjectKey: string;
+  readonly projectKey: string;
+  readonly definitionName: string;
+  readonly compilationLane: SemanticTemplateCompilationRow['compilationLane'];
+  readonly rawName: string;
+  /** Full authored HTML attribute carrier. */
+  readonly source: SemanticSourceReference;
+  /** Exact top-level authored attribute-name span; this is the cursor and consumer reproof authority. */
+  readonly nameSource: SemanticSourceReference;
+  readonly valueSource: SemanticSourceReference | null;
+  readonly templateSource: SemanticSourceReference | null;
+}
+
+export interface SemanticAttributeInterpretationExplanationConclusion {
+  readonly kind: SemanticAttributeInterpretationExplanationConclusionKind;
+  readonly title: string;
+  readonly explanation: string;
+  readonly action: string;
+}
+
+export interface SemanticAttributeInterpretationExplanationSyntaxEvidence {
+  readonly syntaxKind: AttributeSyntaxKind | `${AttributeSyntaxKind}`;
+  readonly target: string;
+  readonly command: string | null;
+  readonly parts: readonly string[];
+  readonly pattern: string | null;
+  readonly nameSource: SemanticSourceReference;
+  readonly targetSource: SemanticSourceReference | null;
+  readonly commandSource: SemanticSourceReference | null;
+}
+
+export interface SemanticAttributeInterpretationExplanationClassificationEvidence {
+  readonly classificationKind: AttributeClassificationKind | `${AttributeClassificationKind}`;
+  readonly resourceKind: ResourceDefinitionKind | `${ResourceDefinitionKind}` | null;
+  readonly resourceName: string | null;
+  readonly bindableName: string | null;
+  readonly bindableAttribute: string | null;
+  readonly bindingCommandName: string | null;
+  readonly openReason: string | null;
+}
+
+export interface SemanticAttributeInterpretationExplanationValueSiteEvidence {
+  readonly siteKind: TemplateValueSiteKind | `${TemplateValueSiteKind}`;
+  readonly rawValue: string;
+  readonly entryFamily: string | null;
+  readonly parseState: TemplateExpressionParseState | `${TemplateExpressionParseState}` | null;
+  readonly resultKind: ExpressionParseResultKind | `${ExpressionParseResultKind}` | null;
+  readonly source: SemanticSourceReference | null;
+}
+
+export type SemanticAttributeInterpretationExplanationEffectKind =
+  | 'hydrate-element'
+  | 'hydrate-attribute'
+  | 'control-view'
+  | 'bind-property'
+  | 'interpolate'
+  | 'listen'
+  | 'iterate'
+  | 'assign-reference'
+  | 'bind-let'
+  | 'set-property'
+  | 'set-attribute'
+  | 'set-class'
+  | 'set-style'
+  | 'bind-style'
+  | 'bind-attribute'
+  | 'spread-bindings'
+  | 'spread-value'
+  | 'translate'
+  | 'bind-state'
+  | 'dispatch-state';
+
+export interface SemanticAttributeInterpretationExplanationEffect {
+  readonly kind: SemanticAttributeInterpretationExplanationEffectKind;
+  readonly instructionKind: TemplateInstructionKind | `${TemplateInstructionKind}`;
+  readonly summary: string;
+  readonly source: SemanticSourceReference | null;
+}
+
+export interface SemanticAttributeInterpretationExplanationLoweringEvidence {
+  readonly commandName: string;
+  readonly state: BindingCommandLoweringState | `${BindingCommandLoweringState}`;
+  readonly message: string | null;
+  readonly frameworkErrorCode: string | null;
+  /** Indexes into `evidence.effects`. */
+  readonly effectIndexes: readonly number[];
+  readonly source: SemanticSourceReference | null;
+}
+
+export interface SemanticAttributeInterpretationExplanationIssueEvidence {
+  readonly phase: TemplateCompilerIssuePhase | `${TemplateCompilerIssuePhase}`;
+  readonly issueKind: TemplateCompilerIssueKind | `${TemplateCompilerIssueKind}`;
+  readonly severity: TemplateCompilerIssueSeverity;
+  readonly message: string;
+  readonly frameworkErrorCode: string | null;
+  readonly source: SemanticSourceReference | null;
+  readonly relatedSources: readonly SemanticSourceReference[];
+}
+
+export interface SemanticAttributeInterpretationExplanationBlocker {
+  readonly kind: 'open-classification' | 'open-lowering' | 'open-seam';
+  readonly summary: string;
+  readonly reasonKinds: readonly (OpenSeamReasonKind | `${OpenSeamReasonKind}`)[];
+  readonly boundaryKinds: readonly (OpenSeamBoundaryKind | `${OpenSeamBoundaryKind}`)[];
+  readonly sources: readonly SemanticSourceReference[];
+}
+
+export interface SemanticAttributeInterpretationExplanationEvidence {
+  readonly syntax: SemanticAttributeInterpretationExplanationSyntaxEvidence;
+  readonly classification: SemanticAttributeInterpretationExplanationClassificationEvidence | null;
+  readonly valueSites: readonly SemanticAttributeInterpretationExplanationValueSiteEvidence[];
+  readonly lowerings: readonly SemanticAttributeInterpretationExplanationLoweringEvidence[];
+  readonly effects: readonly SemanticAttributeInterpretationExplanationEffect[];
+  readonly issues: readonly SemanticAttributeInterpretationExplanationIssueEvidence[];
+  readonly blockers: readonly SemanticAttributeInterpretationExplanationBlocker[];
+}
+
+export type SemanticAttributeInterpretationExplanationUncertaintyReason =
+  | 'attribute-syntax-open'
+  | 'attribute-classification-open'
+  | 'binding-command-lowering-open'
+  | 'compiler-open-seam'
+  | 'source-discovery-truncated';
+
+export interface SemanticAttributeInterpretationExplanationUncertainty {
+  readonly state: 'closed' | 'open' | 'truncated';
+  readonly reasons: readonly SemanticAttributeInterpretationExplanationUncertaintyReason[];
+  readonly explanation: string;
+}
+
+export interface SemanticAttributeInterpretationExplanationCurrentness {
+  readonly authority: 'answer-analysis-basis';
+  readonly explanation: string;
+}
+
+export interface SemanticAttributeInterpretationExplanationNextStep {
+  readonly kind: 'inspect-source' | 'inspect-query' | 'requery';
+  readonly label: string;
+  readonly source: SemanticSourceReference | null;
+  readonly relatedQueryKind: SemanticAppQueryKind | `${SemanticAppQueryKind}` | null;
+  readonly targetQuery: SemanticAppQuery | null;
+}
+
+export interface SemanticAttributeInterpretationExplanation {
+  readonly subject: SemanticAttributeInterpretationExplanationSubject;
+  readonly conclusion: SemanticAttributeInterpretationExplanationConclusion;
+  readonly evidence: SemanticAttributeInterpretationExplanationEvidence;
+  readonly uncertainty: SemanticAttributeInterpretationExplanationUncertainty;
+  readonly currentness: SemanticAttributeInterpretationExplanationCurrentness;
+  readonly nextSteps: readonly SemanticAttributeInterpretationExplanationNextStep[];
+}
+
+export interface SemanticAttributeInterpretationExplanationContender {
+  readonly subject: SemanticAttributeInterpretationExplanationSubject;
+  readonly conclusionKind: SemanticAttributeInterpretationExplanationConclusionKind;
+}
+
+export interface SemanticAttributeInterpretationExplanationResult {
+  readonly displayText: string;
+  readonly projectKey: string;
+  readonly explanation: SemanticAttributeInterpretationExplanation | null;
+  readonly contenders: readonly SemanticAttributeInterpretationExplanationContender[];
+}
+
 export interface SemanticTemplateCompletionCandidateRow {
   readonly candidateKind: TemplateCompletionCandidateKind | `${TemplateCompletionCandidateKind}`;
   readonly name: string;
@@ -3229,7 +4710,11 @@ export interface SemanticTemplateCompletionCandidateRow {
   readonly memberVisibility: CheckerTypeMemberVisibilityKind | `${CheckerTypeMemberVisibilityKind}` | null;
   readonly memberIsOptional: boolean | null;
   readonly memberIsReadonly: boolean | null;
+  /** True only when every current checker declaration marks the member deprecated. */
+  readonly memberIsDeprecated: boolean | null;
   readonly aureliaHookKind: SemanticTemplateCompletionAureliaHookKind | `${SemanticTemplateCompletionAureliaHookKind}` | null;
+  /** Complete authored edit plan; consumers must not substitute label insertion when this cannot be mapped. */
+  readonly edit: SemanticTemplateCompletionEditRow;
   readonly handles?: {
     readonly productHandle: ProductHandle | null;
     readonly identityHandle: IdentityHandle | null;
@@ -3237,13 +4722,20 @@ export interface SemanticTemplateCompletionCandidateRow {
   };
 }
 
+export interface SemanticTemplateCompletionEditRow {
+  /** Exact authored token to replace, or a zero-width authored cursor for insertion. */
+  readonly source: SemanticSourceReference;
+  /** Candidate-specific text to insert; it may intentionally differ from the display name. */
+  readonly newText: string;
+}
+
 export const enum SemanticTemplateCompletionAureliaHookKind {
-  /** Member name matches a custom-element/controller lifecycle hook such as attached or binding. */
+  /** Callable custom-element view-model member discovered by Controller as a component lifecycle hook. */
   ComponentLifecycle = 'component-lifecycle',
-  /** Member name matches a router viewport/component hook such as canLoad or load. */
+  /** Callable member on a proven routed view model discovered during router transition lifecycle. */
   RouterLifecycle = 'router-lifecycle',
-  /** Member name matches an app-task phase hook such as hydrating or activated. */
-  AppTaskLifecycle = 'app-task-lifecycle',
+  /** Member is the routed component's dynamic route-configuration hook. */
+  RouterConfiguration = 'router-configuration',
 }
 
 export interface SemanticTemplateCompletionFrontierRow {
@@ -3254,6 +4746,7 @@ export interface SemanticTemplateCompletionFrontierRow {
 export interface SemanticTemplateCompletionResult {
   readonly displayText: string;
   readonly siteKind: TemplateCompletionSiteKind | `${TemplateCompletionSiteKind}`;
+  readonly domainKind: TemplateCompletionDomainKind | `${TemplateCompletionDomainKind}` | null;
   readonly candidates: readonly SemanticTemplateCompletionCandidateRow[];
   readonly expressionFrontier: SemanticTemplateCompletionFrontierRow | null;
   readonly missingInputs: readonly string[];
@@ -3266,15 +4759,26 @@ export interface SemanticTemplateCompletionResult {
 export interface SemanticTemplateCursorHtmlRow {
   readonly nodeKind: string | null;
   readonly tagName: string | null;
+  /** Browser/runtime namespace for the authored element under the cursor. */
+  readonly namespace: HtmlNamespaceKind | `${HtmlNamespaceKind}` | null;
   readonly attributeName: string | null;
   readonly attributeValue: string | null;
   readonly source: SemanticSourceReference | null;
+  /** Exact authored opening-tag name source, distinct from the full element carrier. */
+  readonly tagNameSource: SemanticSourceReference | null;
+  /** Exact authored closing-tag name source when a matching close tag exists. */
+  readonly closingTagNameSource: SemanticSourceReference | null;
   readonly attributeSource: SemanticSourceReference | null;
+  /** Exact authored attribute value span; null for genuinely valueless syntax. */
+  readonly attributeValueSource: SemanticSourceReference | null;
   readonly handles?: {
     readonly nodeProductHandle: ProductHandle | null;
     readonly attributeProductHandle: ProductHandle | null;
     readonly nodeSourceAddressHandle: AddressHandle | null;
+    readonly tagNameSourceAddressHandle: AddressHandle | null;
+    readonly closingTagNameSourceAddressHandle: AddressHandle | null;
     readonly attributeSourceAddressHandle: AddressHandle | null;
+    readonly attributeValueSourceAddressHandle: AddressHandle | null;
   };
 }
 
@@ -3294,27 +4798,100 @@ export interface SemanticTemplateCursorValueSiteRow {
 }
 
 export interface SemanticTemplateCursorDefinitionRow {
+  /** Author-facing resource taxonomy; use `registrationResourceKindFor` for framework registration-key joins. */
   readonly resourceKind: ResourceDefinitionKind | `${ResourceDefinitionKind}`;
   readonly name: string | null;
+  /** Public name selected at the cursor; differs from `name` when an alias was authored. */
+  readonly matchedName: string | null;
+  /** Exact authored spelling selected at this cursor when it can be recovered from the owning HTML/expression carrier. */
+  readonly authoredMatchedName: string | null;
+  /** Browser/compiler-normalized lookup spelling for the selected authored use. */
+  readonly runtimeMatchedName: string | null;
   readonly targetName: string | null;
   readonly source: SemanticSourceReference | null;
+  readonly nameSource: SemanticSourceReference | null;
+  readonly matchedNameSource: SemanticSourceReference | null;
+  readonly targetSource: SemanticSourceReference | null;
   readonly handles?: {
     readonly definitionProductHandle: ProductHandle | null;
     readonly identityHandle: IdentityHandle | null;
     readonly sourceAddressHandle: AddressHandle | null;
+    readonly nameSourceAddressHandle: AddressHandle | null;
+    readonly matchedNameSourceAddressHandle: AddressHandle | null;
+    readonly targetAddressHandle: AddressHandle | null;
   };
 }
 
-export interface SemanticTemplateCursorBindableRow {
-  readonly name: string;
-  readonly attribute: string;
-  readonly mode: BindableBindingMode | `${BindableBindingMode}`;
+export type SemanticTemplateUsageEffectiveBindingMode =
+  | 'oneTime'
+  | 'toView'
+  | 'fromView'
+  | 'twoWay';
+
+/** Authority that proved how one exact bindable usage behaves after runtime binding-mode planning. */
+export enum SemanticTemplateBindableUsageModeAuthority {
+  ExplicitCommand = 'explicit-command',
+  BindingBehavior = 'binding-behavior',
+  BindableDefault = 'bindable-default',
+  FrameworkFallback = 'framework-fallback',
+  Interpolation = 'interpolation',
+  PlainLiteral = 'plain-literal',
+  Open = 'open',
+}
+
+export interface SemanticTemplateCursorBindableRow extends SemanticBindableDefinitionRow {
   readonly ownerDefinitionProductHandle: ProductHandle | null;
-  readonly source: SemanticSourceReference | null;
+  /** Mode this exact usage has when its binding activates after modeled mode behaviors; not proof evaluation occurred. */
+  readonly usageEffectiveMode: SemanticTemplateUsageEffectiveBindingMode | null;
+  /** Exact authority for the usage mode; null when the cursor selects only bindable declaration metadata. */
+  readonly usageModeAuthority: SemanticTemplateBindableUsageModeAuthority | `${SemanticTemplateBindableUsageModeAuthority}` | null;
+  /** Runtime-normalized binding-command name; authored spelling remains available through HTML/source carriers. */
+  readonly usageModeCommand: string | null;
+  /** Exact compiler grammar lane that owns this usage. */
+  readonly usageModeLocus: 'attribute' | 'attribute-pattern' | 'multi-binding' | null;
+  /** Compact presentation lane proved from exact resource/bindable ownership. */
+  readonly usagePresentationKind: 'bindable-attribute' | 'resource-primary' | null;
+  /** Exact binding-command executable kind selected by the compiler world. */
+  readonly usageModeCommandKind: 'built-in' | 'custom' | 'opaque' | 'open' | null;
+  /** Exact authored syntax evidence selecting the runtime command, including `:` for shorthand pattern syntax. */
+  readonly usageModeCommandSource: SemanticSourceReference | null;
+  /** Exact authored target token selecting the bindable directly or through a custom-attribute primary value. */
+  readonly usageModeTargetSource: SemanticSourceReference | null;
+  /** Exact source that selected or explains the usage mode authority. */
+  readonly usageModeSource: SemanticSourceReference | null;
+  /** Honest reason a usage mode could not be closed; non-null only with `usageModeAuthority: 'open'`. */
+  readonly usageModeOpenReason: string | null;
   readonly handles?: {
     readonly ownerDefinitionProductHandle: ProductHandle | null;
     readonly sourceAddressHandle: AddressHandle | null;
+    readonly nameSourceAddressHandle: AddressHandle | null;
+    readonly attributeSourceAddressHandle: AddressHandle | null;
+    readonly propertyTargetIdentityHandle: IdentityHandle | null;
+    readonly propertyTargetAddressHandle: AddressHandle | null;
+    readonly callbackSourceAddressHandle: AddressHandle | null;
+    readonly callbackTargetIdentityHandle: IdentityHandle | null;
+    readonly callbackTargetAddressHandle: AddressHandle | null;
+    readonly modeSourceAddressHandle: AddressHandle | null;
+    readonly setSourceAddressHandle: AddressHandle | null;
+    readonly setterTargetIdentityHandle: IdentityHandle | null;
+    readonly setterTargetAddressHandle: AddressHandle | null;
+    readonly typeSourceAddressHandle: AddressHandle | null;
+    readonly nullableSourceAddressHandle: AddressHandle | null;
   };
+}
+
+export type SemanticTemplateCursorScopeRole =
+  TemplateCompletionScopeRole | `${TemplateCompletionScopeRole}`;
+
+/** Bounded source-authored plaintext carried by one exact checker member. */
+export interface SemanticTemplateCursorMemberTextRow {
+  readonly format: 'plaintext';
+  readonly text: string;
+  readonly isTruncated: boolean;
+  /** Total contributing JSDoc nodes before the bounded exact-source list. */
+  readonly sourceCount: number;
+  /** Exact available source ranges, capped upstream independently from text clipping. */
+  readonly sources: readonly SemanticSourceReference[];
 }
 
 export interface SemanticTemplateCursorMemberRow {
@@ -3323,13 +4900,86 @@ export interface SemanticTemplateCursorMemberRow {
   readonly typeDisplay: string | null;
   readonly isOptional: boolean;
   readonly isReadonly: boolean;
+  /** TypeScript accessibility for an ordinary checker member; null for template locals and synthetic fallbacks. */
+  readonly visibilityKind: CheckerTypeMemberVisibilityKind | `${CheckerTypeMemberVisibilityKind}` | null;
+  /** All-declarations deprecation result for an ordinary checker member; null when no checker member owns the row. */
+  readonly isDeprecated: boolean | null;
+  /** Unambiguous symbol main-comment prose; overload/accessor declaration groups deliberately remain null. */
+  readonly documentation: SemanticTemplateCursorMemberTextRow | null;
+  /** Shared nonempty `@deprecated` reason only when every current declaration agrees exactly. */
+  readonly deprecationReason: SemanticTemplateCursorMemberTextRow | null;
+  /** Author-facing role proved for this exact scope slot; null for ordinary members and unproved cases. */
+  readonly scopeRole: SemanticTemplateCursorScopeRole | null;
+  /** Authored source that introduced this name into the active template scope. */
   readonly source: SemanticSourceReference | null;
+  /** TypeScript member declaration reached by the slot identity, when distinct from its scope source. */
+  readonly declarationSource: SemanticSourceReference | null;
   readonly handles?: {
-    readonly productHandle: ProductHandle;
+    /** Durable type-shape, binding-scope, or expression-parse product that owns this member surface. */
+    readonly ownerProductHandle: ProductHandle | null;
+    /** Lightweight member-detail handle used for exact in-process follow-up reads. */
+    readonly detailHandle: HotDetailHandle | null;
     readonly declarationIdentityHandle: IdentityHandle | null;
     readonly ownerTypeIdentityHandle: IdentityHandle | null;
     readonly reachableIdentityHandle: IdentityHandle | null;
     readonly sourceAddressHandle: AddressHandle | null;
+    readonly declarationSourceAddressHandle: AddressHandle | null;
+  };
+}
+
+/** Exact or explicitly open checker signature selection for one authored named call occurrence. */
+export interface SemanticTemplateCursorCallRow {
+  readonly status: 'exact' | 'open';
+  readonly callKind: 'scope' | 'member' | 'global' | 'function' | 'construct';
+  readonly optionalChain: boolean;
+  /** Whether the callee is a method member or a callable property/accessor value. */
+  readonly presentationKind: 'method' | 'callable-value' | null;
+  /** Runtime/member name kept separate so presenters never parse the checker signature tail. */
+  readonly signatureName: string;
+  /** Instantiated checker signature beginning with generic/parameter syntax; null when selection stays open. */
+  readonly signatureTail: string | null;
+  /** True when the exact checker signature exceeded the bounded transport surface. */
+  readonly signatureIsTruncated: boolean;
+  readonly candidateCount: number;
+  /** Zero-based selected checker candidate; null when selection remains open. */
+  readonly selectedCandidateIndex: number | null;
+  readonly genericParameterCount: number | null;
+  readonly signatureProvenance: 'declaration' | 'synthesized' | null;
+  /** Exact authored callee name token, not the whole call. */
+  readonly source: SemanticSourceReference;
+  /** Exact authored full call expression. */
+  readonly callSource: SemanticSourceReference;
+  /** Exact resolved signature declaration name/source when closed. */
+  readonly declarationSource: SemanticSourceReference | null;
+  readonly documentation: SemanticTemplateCursorMemberTextRow | null;
+  readonly isDeprecated: boolean | null;
+  readonly deprecationReason: SemanticTemplateCursorMemberTextRow | null;
+  readonly openReason: string | null;
+}
+
+/** Exact authored `$this` / `$parent` qualifier selected by the cursor and its best checker projection. */
+export interface SemanticTemplateCursorExpressionRow {
+  readonly expressionKind: 'AccessThis';
+  /** Authored `$parent` count through the selected qualifier, with zero for `$this`. */
+  readonly authoredScopeAncestor: number;
+  /** Runtime Scope lookup depth for this exact qualifier prefix after parser lowering. */
+  readonly scopeLookupAncestor: number;
+  readonly typeDisplay: string | null;
+  readonly typeShapeKind: CheckerTypeShapeKind | `${CheckerTypeShapeKind}` | null;
+  readonly typeOrigin: CheckerTypeProjectionOrigin | `${CheckerTypeProjectionOrigin}` | null;
+  readonly openKind: CheckerExpressionTypeOpenKind | `${CheckerExpressionTypeOpenKind}` | null;
+  readonly openReason: string | null;
+  /** Exact authored token selected by the cursor. */
+  readonly source: SemanticSourceReference;
+  /** Source route that produced the type, when narrower than the reusable type product. */
+  readonly typeSource: SemanticSourceReference | null;
+  /** Best TypeScript declaration source for the projected type. */
+  readonly typeDeclarationSource: SemanticSourceReference | null;
+  readonly handles?: {
+    readonly typeProductHandle: ProductHandle | null;
+    readonly typeIdentityHandle: IdentityHandle | null;
+    readonly typeSourceAddressHandle: AddressHandle | null;
+    readonly typeDeclarationSourceAddressHandle: AddressHandle | null;
   };
 }
 
@@ -3345,18 +4995,24 @@ export type SemanticTemplateCursorDiagnosticKind =
   | 'template-expression-typescript-diagnostic'
   | 'expression-runtime-evaluation-error'
   | 'expression-parse-error'
+  | 'html-syntax-recovery'
   | 'template-compiler-error'
   | 'framework-capability-not-registered'
+  | 'framework-capability-configured-out'
   | 'runtime-controller-framework-error'
   | 'runtime-renderer-framework-error'
   | 'runtime-binding-framework-error'
   | 'runtime-binding-behavior-framework-error'
   | 'runtime-value-converter-framework-error'
   | 'runtime-binding-scope-framework-error'
+  | 'unsupported-repeat-declaration'
+  | 'template-controller-null-binding-context'
   | 'router-framework-error'
   | 'binding-target-access-framework-error'
   | 'binding-source-assignment-strictness'
+  | 'binding-source-assignment-framework-managed'
   | 'binding-source-assignment-runtime-noop'
+  | 'binding-target-assignment-strictness'
   | 'binding-source-runtime-branch-open';
 
 export type SemanticTemplateCursorDiagnosticAuthority =
@@ -3367,88 +5023,35 @@ export type SemanticTemplateCursorDiagnosticAuthority =
   | 'framework-error-code';
 
 export type SemanticTemplateCursorSuggestionKind =
-  | 'use-callable-expression'
-  | 'register-resource'
-  | 'register-di-service'
-  | 'remove-duplicate-binding-behavior'
-  | 'guard-nullish-expression'
-  | 'avoid-observed-increment'
-  | 'resolve-runtime-boundary'
-  | 'use-repeatable-source'
-  | 'use-safe-destructuring-source'
-  | 'fix-expression-syntax'
-  | 'fix-template-syntax'
-  | 'register-framework-capability'
-  | 'fix-router-instruction'
-  | 'declare-explicit-member'
-  | 'declare-assignable-member'
-  | 'declare-scope-slot-type'
-  | 'replace-any-owner'
-  | 'align-assignment-type'
-  | 'make-source-writable'
-  | 'use-assignable-expression'
-  | 'make-method-trackable'
-  | 'configure-node-observer'
-  | 'inspect-owner-type';
+  DiagnosticSuggestionKind | `${DiagnosticSuggestionKind}`;
 
 export type SemanticTemplateCursorSuggestionActionKind =
-  | 'register-resource'
-  | 'register-service'
-  | 'declare-runtime-boundary'
-  | 'declare-member'
-  | 'declare-scope-slot'
-  | 'replace-owner-type'
-  | 'change-member-type'
-  | 'change-member-mutability'
-  | 'configure-observer'
-  | 'rewrite-expression'
-  | 'rewrite-template-syntax'
-  | 'register-framework-capability'
-  | 'inspect-owner-type';
+  DiagnosticSuggestionActionKind | `${DiagnosticSuggestionActionKind}`;
 
 export type SemanticTemplateCursorSuggestionValueTypeSource =
-  | 'selected-member'
-  | 'binding-target'
-  | 'assignment-target';
+  DiagnosticSuggestionValueTypeSource | `${DiagnosticSuggestionValueTypeSource}`;
 
 export type SemanticTemplateCursorSuggestionActionTargetKind =
-  | 'resource'
-  | 'service'
-  | 'runtime-boundary'
-  | 'observer-config'
-  | 'framework-capability'
-  | 'owner-type'
-  | 'scope-slot'
-  | 'expression'
-  | 'template-syntax';
+  DiagnosticSuggestionActionTargetKind | `${DiagnosticSuggestionActionTargetKind}`;
 
-export interface SemanticTemplateCursorSuggestionActionTargetRow {
-  readonly targetKind: SemanticTemplateCursorSuggestionActionTargetKind;
-  readonly source: SemanticSourceReference | null;
-  readonly memberName: string | null;
-  readonly typeDisplay: string | null;
-}
+export type SemanticTemplateCursorSuggestionActionTargetRow =
+  DiagnosticSuggestionActionTarget<SemanticSourceReference>;
 
-export interface SemanticTemplateCursorSuggestionRow {
-  readonly suggestionKind: SemanticTemplateCursorSuggestionKind;
-  readonly actionKind: SemanticTemplateCursorSuggestionActionKind;
-  readonly actionTarget: SemanticTemplateCursorSuggestionActionTargetRow | null;
-  readonly summary: string;
-  readonly targetMemberName: string | null;
-  readonly ownerTypeDisplay: string | null;
-  readonly valueTypeDisplay: string | null;
-  readonly valueTypeSource: SemanticTemplateCursorSuggestionValueTypeSource | null;
-}
+export type SemanticTemplateCursorSuggestionRow =
+  DiagnosticSuggestion<SemanticSourceReference>;
 
 export interface SemanticTemplateCursorDiagnosticRow {
   readonly diagnosticKind: SemanticTemplateCursorDiagnosticKind;
   readonly diagnosticAuthority: SemanticTemplateCursorDiagnosticAuthority;
+  /** TypeScript checker code when this diagnostic was projected from a generated template overlay. */
+  readonly typeScriptDiagnosticCode?: number;
   readonly frameworkErrorCode: string | null;
   readonly severity: SemanticTemplateCursorDiagnosticSeverity;
   readonly summary: string;
   readonly missingInput: string | null;
   readonly missingInputs: readonly string[];
   readonly source: SemanticSourceReference | null;
+  readonly relatedInformation?: readonly SemanticDiagnosticRelatedInformation[];
   readonly selectedMemberName: string | null;
   readonly ownerTypeDisplay: string | null;
   readonly ownerTypeShapeKind: string | null;
@@ -3457,8 +5060,12 @@ export interface SemanticTemplateCursorDiagnosticRow {
 }
 
 export interface SemanticTemplateDiagnosticRow extends SemanticTemplateCursorDiagnosticRow {
+  readonly phase: SemanticTemplateDiagnosticPhase | null;
   readonly siteKind: TemplateCompletionSiteKind | `${TemplateCompletionSiteKind}`;
   readonly valueSiteKind: TemplateValueSiteKind | `${TemplateValueSiteKind}` | null;
+  readonly subject?: SemanticDiagnosticSubject | null;
+  readonly diagnosticIdentityHandle: IdentityHandle | null;
+  readonly diagnosticRelations?: readonly SemanticDiagnosticRelation[];
   readonly template: {
     readonly compilationLane: SemanticTemplateCompilationRow['compilationLane'] | null;
     readonly source: SemanticSourceReference | null;
@@ -3466,6 +5073,8 @@ export interface SemanticTemplateDiagnosticRow extends SemanticTemplateCursorDia
   readonly handles?: {
     readonly sourceAddressHandle: AddressHandle | null;
     readonly semanticProductHandle: ProductHandle | null;
+    readonly semanticIdentityHandle: IdentityHandle | null;
+    /** Generated-overlay origin facts; null together for diagnostics produced directly from authored products. */
     readonly overlayOriginKey: string | null;
     readonly overlayFileName: string | null;
     readonly overlaySegmentLabel: string | null;
@@ -3477,9 +5086,383 @@ export interface SemanticTemplateDiagnosticsResult {
   readonly rows: readonly SemanticTemplateDiagnosticRow[];
 }
 
+export enum SemanticTemplateInlayHintKind {
+  BindingModeResolution = 'binding-mode-resolution',
+}
+
+export interface SemanticTemplateInlayHintRow {
+  readonly hintKind: SemanticTemplateInlayHintKind | `${SemanticTemplateInlayHintKind}`;
+  readonly definitionName: string;
+  readonly bindingKind: RuntimeBindingKind | `${RuntimeBindingKind}`;
+  readonly targetProperty: string;
+  readonly authoredMode: TemplateBindingMode | `${TemplateBindingMode}`;
+  readonly effectiveMode: TemplateBindingMode | `${TemplateBindingMode}`;
+  readonly effectiveModeLabel: string;
+  /** Exact authored insertion anchor, normally the binding attribute name span. */
+  readonly source: SemanticSourceReference | null;
+  /** Broader authored attribute span when different from the insertion anchor. */
+  readonly attributeSource: SemanticSourceReference | null;
+  /** Runtime binding source span used for explanation and lower-level follow-up queries. */
+  readonly bindingSource: SemanticSourceReference | null;
+  readonly handles?: {
+    readonly bindingProductHandle: ProductHandle | null;
+    readonly instructionProductHandle: ProductHandle | null;
+    readonly attributeProductHandle: ProductHandle | null;
+    readonly sourceAddressHandle: AddressHandle | null;
+    readonly attributeSourceAddressHandle: AddressHandle | null;
+    readonly bindingSourceAddressHandle: AddressHandle | null;
+  };
+}
+
+export interface SemanticTemplateInlayHintsResult {
+  readonly displayText: string;
+  readonly rows: readonly SemanticTemplateInlayHintRow[];
+}
+
+export enum SemanticTemplateReferenceKind {
+  Declaration = 'declaration',
+  TemplateUsage = 'template-usage',
+  /** Authored resource-use token such as a custom-element tag or custom-attribute name. */
+  ResourceUsage = 'resource-usage',
+  /** Authored bindable attribute-name token such as `item` in `item.bind`. */
+  BindableAttribute = 'bindable-attribute',
+  /** Non-declaration TypeScript identifier usage of the selected symbol. */
+  TypeScriptUsage = 'typescript-usage',
+}
+
+export enum SemanticTemplateResourceUsageKind {
+  ElementTag = 'element-tag',
+  AttributeTarget = 'attribute-target',
+  AsElementValue = 'as-element-value',
+  ExpressionName = 'expression-name',
+  BindingCommandName = 'binding-command-name',
+  AttributePatternLiteral = 'attribute-pattern-literal',
+  /** Named `.ref` target resolved to a same-node custom element or custom attribute controller. */
+  RefTarget = 'ref-target',
+}
+
+export enum SemanticTemplateResourceDeclarationKind {
+  PrimaryName = 'primary-name',
+  AliasName = 'alias-name',
+  PatternName = 'pattern-name',
+}
+
+export enum SemanticTemplateBindableAttributeSourceKind {
+  /** Usage follows the framework default mapping from property name to attribute name. */
+  DefaultDerived = 'default-derived',
+  /** Usage targets an explicitly authored bindable `attribute` alias. */
+  ExplicitAlias = 'explicit-alias',
+  /** Usage targets a runtime-synthesized default custom-attribute bindable. */
+  ImplicitDefault = 'implicit-default',
+}
+
+export enum SemanticTemplateBindableDeclarationKind {
+  /** Authored metadata that names the TypeScript property exposed as a bindable. */
+  PropertyName = 'property-name',
+  /** Authored public attribute alias, distinct from the backing property name. */
+  AttributeAlias = 'attribute-alias',
+}
+
+/** Why a same-spelled authored occurrence cannot yet join a proven reference/rename family. */
+export enum SemanticTemplateReferenceCandidateReason {
+  /** Available scope/type facts do not close the occurrence target. */
+  TargetOpen = 'target-open',
+  /** The occurrence is governed only by an index signature, not one property identity. */
+  IndexSignatureTarget = 'index-signature-target',
+}
+
+export interface SemanticTemplateReferenceRow {
+  readonly referenceKind: SemanticTemplateReferenceKind | `${SemanticTemplateReferenceKind}`;
+  readonly name: string;
+  readonly definitionName: string | null;
+  readonly bindingKind: RuntimeBindingKind | `${RuntimeBindingKind}` | null;
+  /** Distinct runtime observation kinds spending this authored occurrence; empty when no operation observes it. */
+  readonly dependencyKinds: readonly (RuntimeObservedDependencyKind | `${RuntimeObservedDependencyKind}`)[];
+  /** Authored resource syntax form, present on resource-usage rows. */
+  readonly resourceUsageKind?: SemanticTemplateResourceUsageKind | `${SemanticTemplateResourceUsageKind}` | null;
+  /** Public-name declaration form, present on resource declaration rows. */
+  readonly resourceDeclarationKind?: SemanticTemplateResourceDeclarationKind | `${SemanticTemplateResourceDeclarationKind}` | null;
+  /** Bindable metadata form, present when a declaration row is not the TypeScript property itself. */
+  readonly bindableDeclarationKind?: SemanticTemplateBindableDeclarationKind | `${SemanticTemplateBindableDeclarationKind}` | null;
+  readonly bindableAttributeSourceKind?: SemanticTemplateBindableAttributeSourceKind | `${SemanticTemplateBindableAttributeSourceKind}` | null;
+  /** Present only for an unproven same-name candidate row. */
+  readonly candidateReason?: SemanticTemplateReferenceCandidateReason | `${SemanticTemplateReferenceCandidateReason}` | null;
+  /** Exact source span for the returned reference/declaration. */
+  readonly source: SemanticSourceReference | null;
+  /** Declaration/member source that all returned template usages resolve to. */
+  readonly targetSource: SemanticSourceReference | null;
+  readonly handles?: {
+    /** Every runtime operation spending this binding-context resolution. */
+    readonly accessUseProductHandles: readonly ProductHandle[];
+    /** Parse-owned authored token retained even when Aurelia executes no runtime operation. */
+    readonly accessOccurrenceHandle: HotDetailHandle | null;
+    /** Binding-context target interpretation shared by zero or more runtime operations. */
+    readonly accessResolutionHandle: HotDetailHandle | null;
+    /** Every observation edge derived from the runtime operations above. */
+    readonly observedDependencyProductHandles: readonly ProductHandle[];
+    readonly expressionProductHandle: ProductHandle | null;
+    readonly bindingProductHandle: ProductHandle | null;
+    readonly sourceAddressHandle: AddressHandle | null;
+    readonly targetSourceAddressHandle: AddressHandle | null;
+  };
+}
+
+export interface SemanticTemplateReferencesResult {
+  readonly displayText: string;
+  readonly selectedMemberName: string | null;
+  readonly targetSource: SemanticSourceReference | null;
+  readonly rows: readonly SemanticTemplateReferenceRow[];
+  /**
+   * Same-name template usages whose relationship to the selected symbol could not be proven
+   * (weak/dynamic/keyed owners). They are never mixed into `rows`; a non-empty list makes the
+   * answer closure `open` so clients know the enumeration is honest but not exhaustive.
+   */
+  readonly candidateRows: readonly SemanticTemplateReferenceRow[];
+}
+
+export enum SemanticTemplateRenameStatus {
+  Available = 'available',
+  NotAvailable = 'not-available',
+  InvalidName = 'invalid-name',
+}
+
+export enum SemanticTemplateRenameUnavailableReason {
+  NoSourceBackedMember = 'no-source-backed-member',
+  NoAureliaReferences = 'no-aurelia-references',
+  CursorNotOnRenameableReference = 'cursor-not-on-renameable-reference',
+  TypeScriptSymbolUnavailable = 'typescript-symbol-unavailable',
+  TypeScriptRenameNotAllowed = 'typescript-rename-not-allowed',
+  TypeScriptRelatedSourceNotEditable = 'typescript-related-source-not-editable',
+  SourceNotEditable = 'source-not-editable',
+  InvalidNewName = 'invalid-new-name',
+  ResourceNameHasNoAuthoredSource = 'resource-name-has-no-authored-source',
+  UnsupportedResourceKind = 'unsupported-resource-kind',
+  /** Exact same-name authored locations remain, but their target identity cannot be proven. */
+  UnresolvedCandidates = 'unresolved-candidates',
+}
+
+export enum SemanticTemplateRenameEditKind {
+  TypeScriptReference = 'typescript-reference',
+  TemplateUsage = 'template-usage',
+  TemplateLocalDeclaration = 'template-local-declaration',
+  TemplateLocalUsage = 'template-local-usage',
+  /** Authored bindable metadata that names a distinct TypeScript property target. */
+  BindablePropertyDeclaration = 'bindable-property-declaration',
+  BindableAttribute = 'bindable-attribute',
+  BindableAttributeAliasDeclaration = 'bindable-attribute-alias-declaration',
+  ResourceNameDeclaration = 'resource-name-declaration',
+  ResourceAliasDeclaration = 'resource-alias-declaration',
+  ResourceElementTag = 'resource-element-tag',
+  ResourceAttributeTarget = 'resource-attribute-target',
+  ResourceAsElementValue = 'resource-as-element-value',
+  ResourceExpressionName = 'resource-expression-name',
+  ResourceRefTarget = 'resource-ref-target',
+}
+
+export interface SemanticTemplateRenameEditRow {
+  readonly editKind: SemanticTemplateRenameEditKind | `${SemanticTemplateRenameEditKind}`;
+  readonly source: SemanticSourceReference | null;
+  readonly oldText: string | null;
+  readonly newText: string;
+}
+
+export interface SemanticTemplateRenameResult {
+  readonly displayText: string;
+  readonly status: SemanticTemplateRenameStatus | `${SemanticTemplateRenameStatus}`;
+  readonly reason: SemanticTemplateRenameUnavailableReason | `${SemanticTemplateRenameUnavailableReason}` | null;
+  readonly selectedMemberName: string | null;
+  readonly placeholder: string | null;
+  readonly targetSource: SemanticSourceReference | null;
+  /** Exact source token under the initiating cursor, used by LSP prepareRename. */
+  readonly activeSource: SemanticSourceReference | null;
+  readonly edits: readonly SemanticTemplateRenameEditRow[];
+  /**
+   * Same-name template usages that could not be proven to reference the renamed symbol. A non-empty
+   * list makes rename unavailable with `unresolved-candidates`; no partial edit plan is returned.
+   * Every row retains its exact authored location and semantic refusal reason.
+   */
+  readonly candidateRows: readonly SemanticTemplateReferenceRow[];
+  readonly templateReferenceCount: number;
+  readonly typeScriptReferenceCount: number;
+}
+
+export enum SemanticTemplateCodeActionEditKind {
+  DeclareViewModelMember = 'declare-view-model-member',
+  RegisterFrameworkCapability = 'register-framework-capability',
+}
+
+export interface SemanticTemplateCodeActionEditRow {
+  readonly editKind: SemanticTemplateCodeActionEditKind | `${SemanticTemplateCodeActionEditKind}`;
+  readonly source: SemanticSourceReference;
+  readonly oldText: string;
+  readonly newText: string;
+}
+
+export type SemanticTemplateCodeActionEdits = readonly [
+  SemanticTemplateCodeActionEditRow,
+  ...SemanticTemplateCodeActionEditRow[],
+];
+
+export type SemanticTemplateCodeActionDiagnostics = readonly [
+  SemanticTemplateDiagnosticRow,
+  ...SemanticTemplateDiagnosticRow[],
+];
+
+export interface SemanticTemplateCodeActionRow {
+  readonly title: string;
+  readonly kind: 'quickfix';
+  /** Source diagnostic facts this plan addresses; equivalent-plan dedupe merges rather than discards this evidence. */
+  readonly diagnostics: SemanticTemplateCodeActionDiagnostics;
+  /** Diagnostic-stage repair classification. Plan availability is proven by the non-empty `edits` tuple below. */
+  readonly repair: DiagnosticRepairAffordance;
+  readonly edits: SemanticTemplateCodeActionEdits;
+  readonly isPreferred: boolean;
+}
+
+export interface SemanticTemplateCodeActionsResult {
+  readonly displayText: string;
+  readonly rows: readonly SemanticTemplateCodeActionRow[];
+}
+
+export const SEMANTIC_TEMPLATE_SEMANTIC_TOKEN_TYPES = [
+  'aureliaElement',
+  'aureliaAttribute',
+  'aureliaBindable',
+  'aureliaController',
+  'aureliaCommand',
+  'aureliaConverter',
+  'aureliaBehavior',
+  'aureliaMetaElement',
+  'aureliaEvent',
+  'aureliaModifier',
+  'aureliaExpression',
+  'variable',
+  'property',
+  'function',
+  'keyword',
+] as const;
+
+export type SemanticTemplateSemanticTokenType = typeof SEMANTIC_TEMPLATE_SEMANTIC_TOKEN_TYPES[number];
+
+export const SEMANTIC_TEMPLATE_SEMANTIC_TOKEN_MODIFIERS = [
+  'declaration',
+  'definition',
+  'defaultLibrary',
+  'deprecated',
+] as const;
+
+export type SemanticTemplateSemanticTokenModifier =
+  typeof SEMANTIC_TEMPLATE_SEMANTIC_TOKEN_MODIFIERS[number];
+
+export interface SemanticTemplateSemanticTokenRow {
+  readonly tokenType: SemanticTemplateSemanticTokenType;
+  readonly tokenModifiers: readonly SemanticTemplateSemanticTokenModifier[];
+  readonly definitionName: string | null;
+  /** Exact source span for the token. */
+  readonly source: SemanticSourceReference | null;
+  readonly handles?: {
+    readonly semanticProductHandle: ProductHandle | null;
+    readonly sourceAddressHandle: AddressHandle | null;
+  };
+}
+
+export interface SemanticTemplateSemanticTokensResult {
+  readonly displayText: string;
+  readonly rows: readonly SemanticTemplateSemanticTokenRow[];
+}
+
+export enum SemanticTemplateFoldingRangeKind {
+  Element = 'element',
+}
+
+export interface SemanticTemplateFoldingRangeRow {
+  readonly foldKind: SemanticTemplateFoldingRangeKind | `${SemanticTemplateFoldingRangeKind}`;
+  readonly definitionName: string;
+  readonly tagName: string;
+  readonly childCount: number;
+  readonly selfClosing: boolean;
+  /** Exact authored source span for the foldable template region. */
+  readonly source: SemanticSourceReference | null;
+  readonly handles?: {
+    readonly elementProductHandle: ProductHandle | null;
+    readonly sourceAddressHandle: AddressHandle | null;
+  };
+}
+
+export interface SemanticTemplateFoldingRangesResult {
+  readonly displayText: string;
+  readonly rows: readonly SemanticTemplateFoldingRangeRow[];
+}
+
+export interface SemanticTemplateCursorRouteTargetRow {
+  readonly targetKind: RouterNavigationTargetKind | `${RouterNavigationTargetKind}`;
+  /** Authored route id or configured path selected by the navigation syntax. */
+  readonly matchedName: string;
+  readonly routeConfigId: string | null;
+  /** Enclosing RouteConfig declaration carrier. */
+  readonly source: SemanticSourceReference | null;
+  /** Exact authored route id/path token selected by go-to-definition. */
+  readonly targetSource: SemanticSourceReference | null;
+  readonly handles?: {
+    readonly routeConfigProductHandle: ProductHandle;
+    readonly routeConfigIdentityHandle: IdentityHandle;
+    readonly configurableRouteProductHandle: ProductHandle | null;
+    readonly endpointProductHandle: ProductHandle | null;
+    readonly recognizedRouteProductHandle: ProductHandle | null;
+    readonly sourceAddressHandle: AddressHandle | null;
+    readonly targetSourceAddressHandle: AddressHandle;
+  };
+}
+
+export type SemanticTemplateCursorDiagnosticPresentation =
+  | {
+    readonly kind: 'presented';
+    /** Number of compact raw rows retained in `SemanticTemplateCursorInfoResult.diagnostics`. */
+    readonly rawRowCount: number;
+    /** One presenter-selected group with every row index rebased into the compact raw rows. */
+    readonly group: SemanticDiagnosticPresentationGroup;
+  }
+  | {
+    readonly kind: 'withheld';
+    /** Number of compact raw rows retained in `SemanticTemplateCursorInfoResult.diagnostics`. */
+    readonly rawRowCount: number;
+    /** One presenter-withheld row with its index rebased into the compact raw rows. */
+    readonly withheld: SemanticDiagnosticPresentationWithheldRow;
+  };
+
+export type SemanticTemplateCursorUncertaintyCategory =
+  | 'type-information-incomplete'
+  | 'resource-availability-incomplete'
+  | 'dynamic-route-target'
+  | 'route-configuration-ambiguous'
+  | 'route-information-incomplete';
+
+export type SemanticTemplateCursorUncertaintyAffectedDomain =
+  | 'member'
+  | 'binding-context'
+  | 'bindable'
+  | 'resource'
+  | 'route';
+
+export type SemanticTemplateCursorUncertaintyAffectedLocus =
+  | 'selected-member'
+  | 'selected-expression'
+  | 'selected-bindable'
+  | 'selected-resource'
+  | 'route-target';
+
+/** Stable author-facing uncertainty translated from exact semantic pressure at the displayed cursor locus. */
+export interface SemanticTemplateCursorUncertainty {
+  readonly category: SemanticTemplateCursorUncertaintyCategory;
+  readonly affectedDomain: SemanticTemplateCursorUncertaintyAffectedDomain;
+  readonly affectedLocus: SemanticTemplateCursorUncertaintyAffectedLocus;
+}
+
 export interface SemanticTemplateCursorInfoResult {
   readonly displayText: string;
   readonly siteKind: TemplateCompletionSiteKind | `${TemplateCompletionSiteKind}`;
+  /** Exact authored token selected by the cursor, or null when the cursor is between semantic tokens. */
+  readonly activeSource: SemanticSourceReference | null;
   readonly expressionFrontier: SemanticTemplateCompletionFrontierRow | null;
   readonly missingInputs: readonly string[];
   readonly template: {
@@ -3490,8 +5473,15 @@ export interface SemanticTemplateCursorInfoResult {
   readonly valueSite: SemanticTemplateCursorValueSiteRow | null;
   readonly selectedDefinition: SemanticTemplateCursorDefinitionRow | null;
   readonly selectedBindable: SemanticTemplateCursorBindableRow | null;
+  readonly selectedRouteTarget: SemanticTemplateCursorRouteTargetRow | null;
   readonly selectedMemberName: string | null;
   readonly selectedMember: SemanticTemplateCursorMemberRow | null;
+  /** Exact selected call signature; null for member-value/property hovers and unnamed call targets. */
+  readonly selectedCall: SemanticTemplateCursorCallRow | null;
+  /** Typed presentation for one exact authored `$this` / `$parent` binding-context qualifier. */
+  readonly selectedExpression: SemanticTemplateCursorExpressionRow | null;
+  /** Stable uncertainty only when exact semantic pressure materially affects a displayed cursor answer. */
+  readonly uncertainty: SemanticTemplateCursorUncertainty | null;
   readonly memberOwnerType: {
     readonly display: string | null;
     readonly shapeKind: string | null;
@@ -3508,6 +5498,12 @@ export interface SemanticTemplateCursorInfoResult {
     };
   } | null;
   readonly diagnostics: readonly SemanticTemplateCursorDiagnosticRow[];
+  /** Stage 6A admission/presentation outcome for the selected compact cursor diagnostic rows. */
+  readonly diagnosticPresentation: SemanticTemplateCursorDiagnosticPresentation | null;
+  readonly handles?: {
+    /** Null for parser-span expression tokens, which intentionally avoid one kernel address per token. */
+    readonly activeSourceAddressHandle: AddressHandle | null;
+  };
 }
 
 export type SemanticRuntimeControllerHydrationHandoffKind =
@@ -3527,11 +5523,10 @@ export type SemanticRuntimeTemplateControllerLinkKind =
   | 'promise-branch-to-promise'
   | 'switch-case-to-switch';
 
-export interface SemanticRuntimeControllerLifecycleStepRow {
+export interface SemanticRuntimeControllerAssemblyStepRow {
   readonly order: number;
-  readonly count: number;
-  readonly stage: RuntimeControllerLifecycleStage | `${RuntimeControllerLifecycleStage}`;
-  readonly stepKind: RuntimeControllerLifecycleStepKind | `${RuntimeControllerLifecycleStepKind}`;
+  readonly stage: RuntimeControllerAssemblyStage | `${RuntimeControllerAssemblyStage}`;
+  readonly stepKind: RuntimeControllerAssemblyStepKind | `${RuntimeControllerAssemblyStepKind}`;
   readonly summary: string;
   readonly source: SemanticSourceReference | null;
   readonly handles?: {
@@ -3543,9 +5538,13 @@ export interface SemanticRuntimeControllerLifecycleStepRow {
 export interface SemanticRuntimeControllerRow {
   readonly renderingDefinitionName: string;
   readonly controllerName: string | null;
-  readonly controllerPhase: ControllerPhase | `${ControllerPhase}`;
   readonly creationKind: RuntimeControllerCreationKind | `${RuntimeControllerCreationKind}`;
-  readonly controllerReadiness: RuntimeControllerReadinessKind | `${RuntimeControllerReadinessKind}`;
+  /** Furthest phase explored by counterfactual controller assembly, even when runtime reachability is open. */
+  readonly assemblyProgress: RuntimeControllerReadinessKind | `${RuntimeControllerReadinessKind}`;
+  /** Furthest phase whose runtime reachability is causally closed, or null when activation remains open/blocked. */
+  readonly realizedReadiness: RuntimeControllerReadinessKind | `${RuntimeControllerReadinessKind}` | null;
+  readonly observerSetupState: RuntimeControllerObserverSetupState | `${RuntimeControllerObserverSetupState}`;
+  readonly bindReachability: RuntimeOperationReachability | `${RuntimeOperationReachability}`;
   readonly definitionKind: ResourceDefinitionKind | `${ResourceDefinitionKind}` | null;
   readonly definitionName: string | null;
   readonly definitionClassName: string | null;
@@ -3565,7 +5564,7 @@ export interface SemanticRuntimeControllerRow {
   readonly childViewRenderingState: SemanticRuntimeControllerChildViewRenderingState;
   readonly hydrationHandoffKind: SemanticRuntimeControllerHydrationHandoffKind;
   readonly compiledTemplateDefinitionName: string | null;
-  readonly lifecycleSteps: readonly SemanticRuntimeControllerLifecycleStepRow[];
+  readonly assemblySteps: readonly SemanticRuntimeControllerAssemblyStepRow[];
   readonly source: SemanticSourceReference | null;
   readonly handles?: {
     readonly controllerProductHandle: ProductHandle;
@@ -3574,6 +5573,9 @@ export interface SemanticRuntimeControllerRow {
     readonly definitionProductHandle: ProductHandle | null;
     readonly instructionProductHandle: ProductHandle | null;
     readonly instructionIdentityHandle: IdentityHandle | null;
+    readonly constructionHydrationContextProductHandle: ProductHandle | null;
+    readonly hydrationContextProductHandle: ProductHandle | null;
+    readonly auSlotsInfoProductHandle: ProductHandle | null;
     readonly bindingScopeProductHandle: ProductHandle | null;
     readonly compiledTemplateProductHandle: ProductHandle | null;
     readonly compiledTemplateClaimHandle: ClaimHandle | null;
@@ -3631,24 +5633,13 @@ export interface SemanticRuntimeWatcherObservedDependencyRow {
   readonly definitionClassName: string | null;
   readonly watcherKind: RuntimeWatcherKind | `${RuntimeWatcherKind}`;
   readonly watchIndex: number;
-  readonly dependencyKind: RuntimeObservedDependencyKind | `${RuntimeObservedDependencyKind}`;
-  readonly expressionKind: string;
-  readonly sourceName: string | null;
-  readonly sourceRootName: string | null;
-  readonly memberName: string | null;
-  readonly keyExpression: string | null;
-  readonly methodName: string | null;
-  readonly observedMemberKind: CheckerTypeMemberKind | `${CheckerTypeMemberKind}` | null;
-  readonly observedMemberSource: SemanticSourceReference | null;
-  readonly spanStart: number | null;
-  readonly spanEnd: number | null;
-  readonly source: SemanticSourceReference | null;
+  readonly rowKey: string;
+  readonly owner: SemanticObservedDependencyOwnerRow;
+  readonly occurrence: SemanticObservedDependencyOccurrenceRow;
   readonly handles?: {
     readonly watcherProductHandle: ProductHandle | null;
     readonly observedDependencyProductHandle: ProductHandle;
     readonly observedDependencyIdentityHandle: IdentityHandle;
-    readonly observedMemberSourceAddressHandle: AddressHandle | null;
-    readonly sourceAddressHandle: AddressHandle | null;
   };
 }
 
@@ -3674,13 +5665,32 @@ export interface SemanticRuntimeCompositionRow {
   readonly hasTemplateInput: boolean;
   readonly hasComponentInput: boolean;
   readonly staticComponentName: string | null;
-  readonly templateInputFulfillmentKind: CompositionInputFulfillmentKind | `${CompositionInputFulfillmentKind}`;
-  readonly componentInputFulfillmentKind: CompositionInputFulfillmentKind | `${CompositionInputFulfillmentKind}`;
-  readonly modelInputFulfillmentKind: CompositionInputFulfillmentKind | `${CompositionInputFulfillmentKind}`;
+  readonly templateInputConsumptionKind: CompositionInputConsumptionKind | `${CompositionInputConsumptionKind}`;
+  readonly templateInputValueStateKind: CompositionInputValueStateKind | `${CompositionInputValueStateKind}`;
+  readonly templateInputSettlementKind: EvaluationPromiseSettlementKind | `${EvaluationPromiseSettlementKind}` | null;
+  /** Awaited TypeChecker type consumed by AuCompose for a bound template input. */
+  readonly templateInputType: string | null;
+  /** Loaded template string when static evaluation closes the framework-awaited input. */
+  readonly resolvedTemplate: string | null;
+  readonly componentInputConsumptionKind: CompositionInputConsumptionKind | `${CompositionInputConsumptionKind}`;
+  readonly componentInputValueStateKind: CompositionInputValueStateKind | `${CompositionInputValueStateKind}`;
+  readonly componentInputSettlementKind: EvaluationPromiseSettlementKind | `${EvaluationPromiseSettlementKind}` | null;
+  /** Awaited TypeChecker type consumed by AuCompose for a bound component input. */
+  readonly componentInputType: string | null;
+  readonly modelInputConsumptionKind: CompositionInputConsumptionKind | `${CompositionInputConsumptionKind}`;
+  readonly modelInputValueStateKind: CompositionInputValueStateKind | `${CompositionInputValueStateKind}`;
+  readonly scopeBehaviorInputConsumptionKind: CompositionInputConsumptionKind | `${CompositionInputConsumptionKind}`;
+  readonly scopeBehaviorInputValueStateKind: CompositionInputValueStateKind | `${CompositionInputValueStateKind}`;
+  readonly tagInputConsumptionKind: CompositionInputConsumptionKind | `${CompositionInputConsumptionKind}`;
+  readonly tagInputValueStateKind: CompositionInputValueStateKind | `${CompositionInputValueStateKind}`;
+  readonly flushModeInputConsumptionKind: CompositionInputConsumptionKind | `${CompositionInputConsumptionKind}`;
+  readonly flushModeInputValueStateKind: CompositionInputValueStateKind | `${CompositionInputValueStateKind}`;
   readonly hasTemplateBinding: boolean;
   readonly hasCompositionBinding: boolean;
   readonly hasComposingBinding: boolean;
   readonly componentResolutionKind: CompositionComponentResolutionKind | `${CompositionComponentResolutionKind}`;
+  /** Whether TypeChecker-derived component candidates exhaust a finite exact named-class basis. */
+  readonly componentCandidateCoverageKind: CompositionComponentCandidateCoverageKind | `${CompositionComponentCandidateCoverageKind}`;
   readonly modelResolutionKind: CompositionModelResolutionKind | `${CompositionModelResolutionKind}`;
   readonly resolvedComponentCount: number;
   readonly resolvedComponentNames: readonly string[];
@@ -3696,6 +5706,10 @@ export interface SemanticRuntimeCompositionRow {
   readonly composedChildControllerCount: number;
   readonly composedChildControllerNames: readonly string[];
   readonly composedChildControllerCreationKinds: readonly (RuntimeControllerCreationKind | `${RuntimeControllerCreationKind}`)[];
+  /** Child DI containers created for the composed controllers in this row. */
+  readonly composedChildContainerCount: number;
+  /** Contextual providers installed while hydrating those composed child controllers. */
+  readonly composedChildContextResolverSlotCount: number;
   /** Activation handoffs for resolved custom-element candidates and object-view-model branches. */
   readonly activationHandoffs: readonly SemanticRuntimeCompositionActivationHandoffRow[];
   readonly activationHandoffKinds: readonly (CompositionActivationModelHandoffKind | `${CompositionActivationModelHandoffKind}`)[];
@@ -3713,7 +5727,9 @@ export interface SemanticRuntimeCompositionRow {
     readonly parentControllerProductHandle: ProductHandle | null;
     readonly instructionProductHandle: ProductHandle | null;
     readonly templateBindingProductHandle: ProductHandle | null;
+    readonly templateInputTypeProductHandle: ProductHandle | null;
     readonly componentBindingProductHandle: ProductHandle | null;
+    readonly componentInputTypeProductHandle: ProductHandle | null;
     readonly modelBindingProductHandle: ProductHandle | null;
     readonly scopeBehaviorBindingProductHandle: ProductHandle | null;
     readonly tagBindingProductHandle: ProductHandle | null;
@@ -3725,8 +5741,7 @@ export interface SemanticRuntimeCompositionRow {
 }
 
 export type SemanticRuntimeCompositionRenderingContextKind =
-  | 'definition-resource'
-  | 'recursive-resource-instance';
+  CompositionRenderingContextKind | `${CompositionRenderingContextKind}`;
 
 export type SemanticRuntimeCompositionCandidateAnalysisState =
   | 'none'
@@ -3753,6 +5768,89 @@ export interface SemanticRuntimeCompositionResult {
   readonly rows: readonly SemanticRuntimeCompositionRow[];
 }
 
+export const enum SemanticTemplateContentProjectionSurfaceKind {
+  /** Compiler-owned provider sequence attached to a custom-element use. */
+  ProviderSequence = 'provider-sequence',
+  /** Runtime AuSlot selected, fallback, or empty view relation. */
+  AuSlotView = 'au-slot-view',
+  /** Compiler-reachable native Shadow DOM slot outlet. */
+  NativeSlotOutlet = 'native-slot-outlet',
+}
+
+export interface SemanticTemplateContentProjectionProviderRow {
+  readonly surfaceKind: SemanticTemplateContentProjectionSurfaceKind.ProviderSequence;
+  readonly renderingDefinitionName: string;
+  readonly receivingElementName: string;
+  readonly slotName: string;
+  readonly providerProjectedSlotNames: readonly string[];
+  readonly contributorCount: number;
+  readonly explicitContributorCount: number;
+  readonly instructionCount: number;
+  readonly source: SemanticSourceReference | null;
+  readonly handles?: {
+    readonly providerInstructionProductHandle: ProductHandle;
+    readonly instructionSequenceProductHandle: ProductHandle;
+    readonly sourceAddressHandle: AddressHandle | null;
+  };
+}
+
+export interface SemanticTemplateContentProjectionViewRow {
+  readonly surfaceKind: SemanticTemplateContentProjectionSurfaceKind.AuSlotView;
+  readonly renderingDefinitionName: string;
+  readonly slotName: string;
+  readonly selectionKind: RuntimeContentProjectionSelectionKind | `${RuntimeContentProjectionSelectionKind}`;
+  readonly closureKind: RuntimeContentProjectionClosureKind | `${RuntimeContentProjectionClosureKind}`;
+  /** Null only when the controller is not constructed through a renderer contextual-provider path. */
+  readonly auSlotsInfoSourceKind: AuSlotsInfoSourceKind | `${AuSlotsInfoSourceKind}` | null;
+  readonly providerProjectedSlotNames: readonly string[];
+  readonly declaringControllerName: string | null;
+  readonly receivingControllerName: string | null;
+  readonly outletControllerName: string | null;
+  readonly instructionCount: number;
+  readonly hasViewFactory: boolean;
+  readonly hasSyntheticController: boolean;
+  readonly factoryContainerDepth: number | null;
+  readonly factoryContainerResourceCount: number | null;
+  readonly source: SemanticSourceReference | null;
+  readonly handles?: {
+    readonly outletInstructionProductHandle: ProductHandle;
+    readonly providerInstructionProductHandle: ProductHandle | null;
+    readonly instructionSequenceProductHandle: ProductHandle | null;
+    readonly declaringControllerProductHandle: ProductHandle | null;
+    readonly receivingControllerProductHandle: ProductHandle | null;
+    readonly outletControllerProductHandle: ProductHandle;
+    readonly viewFactoryProductHandle: ProductHandle | null;
+    readonly embeddedDefinitionProductHandle: ProductHandle | null;
+    readonly syntheticControllerProductHandle: ProductHandle | null;
+    readonly factoryContainerProductHandle: ProductHandle | null;
+    readonly factoryHydrationContextProductHandle: ProductHandle | null;
+    readonly slotsInfoProductHandle: ProductHandle | null;
+    readonly sourceAddressHandle: AddressHandle | null;
+  };
+}
+
+export interface SemanticTemplateContentProjectionNativeOutletRow {
+  readonly surfaceKind: SemanticTemplateContentProjectionSurfaceKind.NativeSlotOutlet;
+  readonly renderingDefinitionName: string;
+  readonly nameKind: CompiledNativeSlotNameKind | `${CompiledNativeSlotNameKind}`;
+  readonly slotName: string | null;
+  readonly source: SemanticSourceReference | null;
+  readonly handles?: {
+    readonly nodeProductHandle: ProductHandle | null;
+    readonly nameSourceAddressHandle: AddressHandle | null;
+    readonly sourceAddressHandle: AddressHandle | null;
+  };
+}
+
+export type SemanticTemplateContentProjectionRow =
+  | SemanticTemplateContentProjectionProviderRow
+  | SemanticTemplateContentProjectionViewRow
+  | SemanticTemplateContentProjectionNativeOutletRow;
+
+export interface SemanticTemplateContentProjectionResult {
+  readonly rows: readonly SemanticTemplateContentProjectionRow[];
+}
+
 export interface SemanticBindingTargetAccessRow {
   readonly definitionName: string;
   readonly bindingKind: RuntimeBindingKind | `${RuntimeBindingKind}`;
@@ -3760,13 +5858,26 @@ export interface SemanticBindingTargetAccessRow {
   readonly targetKind: RuntimeBindingTargetKind | `${RuntimeBindingTargetKind}`;
   readonly targetProperty: string;
   readonly strategy: RuntimeBindingTargetAccessStrategy | `${RuntimeBindingTargetAccessStrategy}`;
-  readonly eventNames: readonly string[];
+  readonly fallbackStrategy: RuntimeBindingTargetAccessStrategy | `${RuntimeBindingTargetAccessStrategy}` | null;
+  readonly observerCacheDisposition:
+    | RuntimeBindingTargetObserverCacheDisposition
+    | `${RuntimeBindingTargetObserverCacheDisposition}`;
+  readonly supportsCallback: boolean | null;
+  readonly supportsCoercer: boolean | null;
+  readonly observerSource: SemanticSourceReference | null;
+  readonly objectObservationAdapters: readonly SemanticObjectObservationAdapterRow[];
+  readonly controllerObserverSetupOutcome:
+    | RuntimeControllerObserverSetupOutcome
+    | `${RuntimeControllerObserverSetupOutcome}`
+    | null;
+  readonly bindReachability: RuntimeOperationReachability | `${RuntimeOperationReachability}`;
+  readonly nodeObserverConfig: SemanticNodeObserverConfig | null;
   readonly targetType: string | null;
   readonly targetTypeSource: RuntimeBindingTargetTypeSource | `${RuntimeBindingTargetTypeSource}` | null;
   readonly propertyType: string | null;
   readonly propertyExists: boolean | null;
   readonly isWritable: boolean | null;
-  readonly isObservable: boolean;
+  readonly isObservable: boolean | null;
   readonly authority: RuntimeBindingTargetAccessAuthority | `${RuntimeBindingTargetAccessAuthority}`;
   readonly openReason: string | null;
   readonly frameworkErrorCode: string | null;
@@ -3777,8 +5888,34 @@ export interface SemanticBindingTargetAccessRow {
     readonly targetAccessProductHandle: ProductHandle;
     readonly targetTypeProductHandle: ProductHandle | null;
     readonly propertyTypeProductHandle: ProductHandle | null;
+    readonly observerSourceProductHandle: ProductHandle | null;
+    readonly observerSourceIdentityHandle: IdentityHandle | null;
+    readonly observerSourceAddressHandle: AddressHandle | null;
     readonly sourceAddressHandle: AddressHandle | null;
   };
+}
+
+export interface SemanticObjectObservationAdapterRow {
+  readonly order: number;
+  readonly adapterName: string | null;
+  readonly appTaskSlot: AppTaskSlot | `${AppTaskSlot}`;
+  readonly source: SemanticSourceReference | null;
+  readonly sourceAddressHandle?: AddressHandle | null;
+}
+
+export interface SemanticNodeObserverConfig {
+  readonly observerKind: RuntimeNodeObserverKind | `${RuntimeNodeObserverKind}`;
+  readonly observerConstructorName: string | null;
+  readonly eventNames: readonly string[];
+  readonly readonlyValue: boolean | null;
+  readonly defaultValue: string | number | boolean | null | undefined;
+  readonly fieldStates: {
+    readonly type: RuntimeNodeObserverConfigFieldState | `${RuntimeNodeObserverConfigFieldState}`;
+    readonly events: RuntimeNodeObserverConfigFieldState | `${RuntimeNodeObserverConfigFieldState}`;
+    readonly readonly: RuntimeNodeObserverConfigFieldState | `${RuntimeNodeObserverConfigFieldState}`;
+    readonly default: RuntimeNodeObserverConfigFieldState | `${RuntimeNodeObserverConfigFieldState}`;
+  };
+  readonly openReason: string | null;
 }
 
 export interface SemanticBindingTargetAccessResult {
@@ -3796,6 +5933,12 @@ export interface SemanticTargetOperationRow {
   readonly staticValue: string | null;
   readonly operationKind: RuntimeBindingTargetOperationKind | `${RuntimeBindingTargetOperationKind}`;
   readonly affectedNames: readonly string[];
+  readonly reachability: RuntimeOperationReachability | `${RuntimeOperationReachability}`;
+  /** Listener registration strategy when this operation comes from a ListenerBinding. */
+  readonly listenerStrategy: TemplateListenerStrategy | `${TemplateListenerStrategy}` | null;
+  /** Authored listener modifier when one was lowered with the event registration. */
+  readonly eventModifier: string | null;
+  readonly eventModifierSource: SemanticSourceReference | null;
   readonly authority: RuntimeBindingTargetOperationAuthority | `${RuntimeBindingTargetOperationAuthority}`;
   readonly openReason: string | null;
   readonly source: SemanticSourceReference | null;
@@ -3805,6 +5948,7 @@ export interface SemanticTargetOperationRow {
     readonly instructionProductHandle: ProductHandle | null;
     readonly targetOperationProductHandle: ProductHandle;
     readonly sourceAddressHandle: AddressHandle | null;
+    readonly eventModifierSourceAddressHandle: AddressHandle | null;
   };
 }
 
@@ -3823,6 +5967,7 @@ export interface SemanticBindingSourceOperationRow {
   readonly targetName: string;
   readonly targetType: string | null;
   readonly operationKind: RuntimeBindingSourceOperationKind | `${RuntimeBindingSourceOperationKind}`;
+  readonly reachability: RuntimeOperationReachability | `${RuntimeOperationReachability}`;
   readonly authority: RuntimeBindingSourceOperationAuthority | `${RuntimeBindingSourceOperationAuthority}`;
   readonly openReason: string | null;
   readonly source: SemanticSourceReference | null;
@@ -3839,18 +5984,75 @@ export interface SemanticBindingSourceOperationResult {
   readonly rows: readonly SemanticBindingSourceOperationRow[];
 }
 
+/** Compiler-world resource identity retained by an authored template occurrence. */
+export interface SemanticTemplateResourceReferenceRow {
+  /** Author-facing resource taxonomy; use `registrationResourceKindFor` for framework registration-key joins. */
+  readonly resourceKind: ResourceDefinitionKind | `${ResourceDefinitionKind}`;
+  /** Canonical runtime lookup name; the authored occurrence name remains on its owning row. */
+  readonly name: string;
+  readonly visibilityKind: TemplateResourceVisibilityKind | `${TemplateResourceVisibilityKind}`;
+  /** Registration, definition, import, or convention source that made the resource visible. */
+  readonly source: SemanticSourceReference | null;
+  readonly handles?: {
+    readonly resourceProductHandle: ProductHandle | null;
+    readonly resourceIdentityHandle: IdentityHandle | null;
+    readonly definitionProductHandle: ProductHandle | null;
+    readonly sourceAddressHandle: AddressHandle | null;
+  };
+}
+
+export interface SemanticExpressionResourceSignalRow {
+  readonly name: string;
+  readonly source: SemanticSourceReference | null;
+  readonly handles?: {
+    readonly sourceAddressHandle: AddressHandle | null;
+  };
+}
+
+export interface SemanticExpressionResourceLifecycleEffectsRow {
+  readonly effectKinds: readonly (
+    RuntimeExpressionResourceLifecycleEffectKind | `${RuntimeExpressionResourceLifecycleEffectKind}`
+  )[];
+  readonly signalState: RuntimeExpressionResourceValueState | `${RuntimeExpressionResourceValueState}`;
+  readonly signals: readonly SemanticExpressionResourceSignalRow[];
+  readonly rateLimitDelayMilliseconds: number | null;
+  readonly rateLimitDelayState: RuntimeExpressionResourceValueState | `${RuntimeExpressionResourceValueState}` | null;
+  readonly configurationSource: SemanticSourceReference | null;
+  readonly openReason: string | null;
+  readonly openReasonKinds: readonly (OpenSeamReasonKind | `${OpenSeamReasonKind}`)[];
+  readonly handles?: {
+    readonly configurationSourceAddressHandle: AddressHandle | null;
+  };
+}
+
 export interface SemanticBindingBehaviorApplicationRow {
   readonly definitionName: string;
   readonly bindingKind: RuntimeBindingKind | `${RuntimeBindingKind}`;
   readonly behaviorName: string;
+  readonly resource: SemanticTemplateResourceReferenceRow | null;
   readonly phase: RuntimeBindingBehaviorApplicationPhase | `${RuntimeBindingBehaviorApplicationPhase}`;
+  readonly origin: RuntimeExpressionResourceApplicationOrigin | `${RuntimeExpressionResourceApplicationOrigin}`;
   readonly argumentCount: number;
   readonly staticArgumentValues: readonly string[];
+  /** Interpolation-hole identity; zero for ordinary binding expressions. */
+  readonly chainIndex: number;
+  /** Depth in the authored expression-resource chain. */
+  readonly authoredChainDepth: number;
+  /** Depth in the effective runtime chain after reached behavior projections. */
+  readonly runtimeChainDepth: number;
+  readonly bindReachability: RuntimeOperationReachability | `${RuntimeOperationReachability}`;
+  readonly phaseReachability: RuntimeOperationReachability | `${RuntimeOperationReachability}`;
+  readonly bindOrder: number | null;
+  /** Nominal execution order within this binding-behavior lifecycle phase. */
+  readonly phaseOrder: number | null;
+  readonly lifecycleEffects: SemanticExpressionResourceLifecycleEffectsRow;
+  readonly argumentSources: readonly (SemanticSourceReference | null)[];
   readonly targetKind: RuntimeBindingTargetKind | `${RuntimeBindingTargetKind}` | null;
   readonly targetProperty: string | null;
   readonly source: SemanticSourceReference | null;
   readonly handles?: {
     readonly bindingProductHandle: ProductHandle | null;
+    readonly expressionProductHandle: ProductHandle;
     readonly bindingBehaviorApplicationProductHandle: ProductHandle;
     readonly targetAccessProductHandle: ProductHandle | null;
     readonly sourceAddressHandle: AddressHandle | null;
@@ -3859,6 +6061,40 @@ export interface SemanticBindingBehaviorApplicationRow {
 
 export interface SemanticBindingBehaviorApplicationResult {
   readonly rows: readonly SemanticBindingBehaviorApplicationRow[];
+}
+
+export interface SemanticValueConverterApplicationRow {
+  readonly definitionName: string;
+  readonly bindingKind: RuntimeBindingKind | `${RuntimeBindingKind}`;
+  readonly converterName: string;
+  readonly resource: SemanticTemplateResourceReferenceRow | null;
+  readonly phase: RuntimeValueConverterApplicationPhase | `${RuntimeValueConverterApplicationPhase}`;
+  readonly origin: RuntimeExpressionResourceApplicationOrigin | `${RuntimeExpressionResourceApplicationOrigin}`;
+  readonly argumentCount: number;
+  /** Interpolation-hole identity; zero for ordinary binding expressions. */
+  readonly chainIndex: number;
+  /** Depth in the authored expression-resource chain, or null for a bind-time projection. */
+  readonly authoredChainDepth: number | null;
+  /** Depth in the effective runtime chain after reached behavior projections. */
+  readonly runtimeChainDepth: number;
+  readonly bindReachability: RuntimeOperationReachability | `${RuntimeOperationReachability}`;
+  readonly phaseReachability: RuntimeOperationReachability | `${RuntimeOperationReachability}`;
+  readonly bindOrder: number | null;
+  /** Nominal execution order within this converter phase. */
+  readonly phaseOrder: number | null;
+  readonly lifecycleEffects: SemanticExpressionResourceLifecycleEffectsRow;
+  readonly argumentSources: readonly (SemanticSourceReference | null)[];
+  readonly source: SemanticSourceReference | null;
+  readonly handles?: {
+    readonly bindingProductHandle: ProductHandle | null;
+    readonly expressionProductHandle: ProductHandle;
+    readonly valueConverterApplicationProductHandle: ProductHandle;
+    readonly sourceAddressHandle: AddressHandle | null;
+  };
+}
+
+export interface SemanticValueConverterApplicationResult {
+  readonly rows: readonly SemanticValueConverterApplicationRow[];
 }
 
 export interface SemanticBindingValueChannelRow {
@@ -3870,8 +6106,16 @@ export interface SemanticBindingValueChannelRow {
   readonly sourceOperationKind: RuntimeBindingSourceOperationKind | `${RuntimeBindingSourceOperationKind}` | null;
   readonly channelKind: RuntimeBindingValueChannelKind | `${RuntimeBindingValueChannelKind}`;
   readonly authority: RuntimeBindingValueChannelAuthority | `${RuntimeBindingValueChannelAuthority}`;
+  readonly targetMutationKind: RuntimeBindingValueChannelTargetMutationKind | `${RuntimeBindingValueChannelTargetMutationKind}`;
+  readonly nullishDefault: RuntimeBindingPrimitiveValue | null;
+  readonly nullishDefaultState: RuntimeNodeObserverConfigFieldState | `${RuntimeNodeObserverConfigFieldState}` | null;
   readonly rawTargetPropertyType: string | null;
   readonly runtimeValueType: string | null;
+  readonly realization: RuntimeOperationRealization | `${RuntimeOperationRealization}`;
+  readonly bindReachability: RuntimeOperationReachability | `${RuntimeOperationReachability}`;
+  readonly admittedSourceValueType: string | null;
+  readonly admittedSourceMemberKind: CheckerTypeMemberKind | `${CheckerTypeMemberKind}` | null;
+  readonly admittedSourceMemberSource: SemanticSourceReference | null;
   readonly valueDomain: readonly string[];
   readonly primitiveValueDomain: readonly RuntimeBindingPrimitiveValue[];
   readonly primitiveValueDomainKinds: readonly (RuntimeBindingPrimitiveValueKind | `${RuntimeBindingPrimitiveValueKind}`)[];
@@ -3890,6 +6134,8 @@ export interface SemanticBindingValueChannelRow {
     readonly sourceOperationProductHandle: ProductHandle | null;
     readonly rawTargetPropertyTypeProductHandle: ProductHandle | null;
     readonly runtimeValueTypeProductHandle: ProductHandle | null;
+    readonly admittedSourceValueTypeProductHandle: ProductHandle | null;
+    readonly admittedSourceMemberSourceAddressHandle: AddressHandle | null;
     readonly sourceAddressHandle: AddressHandle | null;
   };
 }
@@ -3975,6 +6221,8 @@ export interface SemanticBindingValueChannelSummaryRow {
   readonly channelKind: RuntimeBindingValueChannelKind | `${RuntimeBindingValueChannelKind}`;
   readonly targetKind: RuntimeBindingTargetKind | `${RuntimeBindingTargetKind}` | null;
   readonly targetProperty: string | null;
+  readonly targetMutationKind: RuntimeBindingValueChannelTargetMutationKind | `${RuntimeBindingValueChannelTargetMutationKind}`;
+  readonly realization: RuntimeOperationRealization | `${RuntimeOperationRealization}`;
   readonly count: number;
   readonly bindingKinds: readonly (RuntimeBindingKind | `${RuntimeBindingKind}`)[];
   readonly authorities: readonly (RuntimeBindingValueChannelAuthority | `${RuntimeBindingValueChannelAuthority}`)[];
@@ -4010,11 +6258,118 @@ export interface SemanticBindingValueChannelSummaryResult {
   readonly observerCouplings: readonly SemanticBindingValueChannelCouplingSummaryRow[];
 }
 
+export interface SemanticBindingDataFlowValueConverterWritebackStageRow {
+  readonly converterName: string;
+  /** Outer-to-inner structural order used by Aurelia `astAssign`. */
+  readonly stageIndex: number;
+  readonly origin: RuntimeExpressionResourceApplicationOrigin | `${RuntimeExpressionResourceApplicationOrigin}`;
+  readonly runtimeChainDepth: number;
+  /** Runtime execution order; null when converter invocation is blocked. */
+  readonly phaseOrder: number | null;
+  readonly phaseReachability: RuntimeOperationReachability | `${RuntimeOperationReachability}`;
+  readonly projectionState: RuntimeValueConverterWritebackStageState | `${RuntimeValueConverterWritebackStageState}`;
+  /** Best-known checker input; `input-open` stages may carry a partial prior output. */
+  readonly inputType: string | null;
+  readonly inputTypeSource: SemanticSourceReference | null;
+  /** Closed output for `type`, partial output for `open`, and null for `input-open`. */
+  readonly outputType: string | null;
+  readonly outputTypeSource: SemanticSourceReference | null;
+  readonly openReason: string | null;
+  readonly openKind: CheckerExpressionTypeOpenKind | `${CheckerExpressionTypeOpenKind}` | null;
+  readonly source: SemanticSourceReference | null;
+  readonly handles?: {
+    readonly valueConverterApplicationProductHandle: ProductHandle | null;
+    readonly inputTypeProductHandle: ProductHandle | null;
+    readonly outputTypeProductHandle: ProductHandle | null;
+    readonly sourceAddressHandle: AddressHandle | null;
+  };
+}
+
+export interface SemanticRuntimeExpressionExecutionQualifierRow {
+  readonly kind: RuntimeExpressionExecutionQualifierKind | `${RuntimeExpressionExecutionQualifierKind}`;
+  readonly operationName: string | null;
+  readonly source: SemanticSourceReference | null;
+  readonly sourceAddressHandle?: AddressHandle | null;
+}
+
+export interface SemanticRuntimeExpressionAccessTargetRow {
+  readonly declarationSource: SemanticSourceReference | null;
+  readonly authorityProductHandle?: ProductHandle | null;
+  readonly targetIdentityHandle?: IdentityHandle | null;
+  readonly targetTypeMemberHandle?: HotDetailHandle | null;
+  readonly targetTypeSourceMemberHandle?: HotDetailHandle | null;
+  readonly declarationSourceAddressHandle?: AddressHandle | null;
+}
+
+/** Operation, control-flow, and closure facts shared by access-use and observed-dependency queries. */
+export interface SemanticRuntimeExpressionAccessUseSummaryRow {
+  readonly operationKind: RuntimeExpressionOperationKind | `${RuntimeExpressionOperationKind}`;
+  readonly operationIndex: number | null;
+  readonly origin: RuntimeExpressionAccessOrigin | `${RuntimeExpressionAccessOrigin}`;
+  readonly authored: boolean;
+  readonly accessForm: RuntimeExpressionAccessForm | `${RuntimeExpressionAccessForm}`;
+  readonly role: RuntimeExpressionAccessRole | `${RuntimeExpressionAccessRole}`;
+  readonly phase: RuntimeExpressionAccessPhase | `${RuntimeExpressionAccessPhase}`;
+  readonly tracking: RuntimeExpressionAccessTracking | `${RuntimeExpressionAccessTracking}`;
+  readonly realization: RuntimeOperationRealization | `${RuntimeOperationRealization}`;
+  readonly reachability: RuntimeOperationReachability | `${RuntimeOperationReachability}`;
+  /** Explicit ancestor argument used by Aurelia Scope lookup after parser lowering. */
+  readonly scopeLookupAncestor: number | null;
+  /** Authored `$parent` count, with zero for explicit `$this`; null when no qualifier was authored. */
+  readonly authoredScopeAncestor: number | null;
+  /** Lexical arrow-callback nesting, which is not generally additive with `scopeLookupAncestor`. */
+  readonly callbackScopeDepth: number | null;
+  /** Whether the occurrence is rooted in an expression-local callback parameter. */
+  readonly lexicalLocal: boolean;
+  readonly targetResolution: RuntimeExpressionAccessTargetResolution | `${RuntimeExpressionAccessTargetResolution}`;
+  readonly targetCount: number;
+  readonly executionQualifiers: readonly SemanticRuntimeExpressionExecutionQualifierRow[];
+  readonly minimumExecutions: RuntimeExpressionExecutionMinimum | `${RuntimeExpressionExecutionMinimum}`;
+  readonly maximumExecutions: RuntimeExpressionExecutionMaximum | `${RuntimeExpressionExecutionMaximum}`;
+  readonly coverage: RuntimeExpressionAccessCoverage | `${RuntimeExpressionAccessCoverage}`;
+  readonly coverageReason: string | null;
+}
+
+/** Source and target facts shared wherever one exact access occurrence is projected. */
+export interface SemanticRuntimeExpressionAccessUseOccurrenceRow
+  extends SemanticRuntimeExpressionAccessUseSummaryRow {
+  readonly targetLinks: readonly SemanticRuntimeExpressionAccessTargetRow[];
+  readonly source: SemanticSourceReference | null;
+  readonly nameSource: SemanticSourceReference | null;
+}
+
+/** Public, lossless projection of one owner-qualified runtime expression access occurrence. */
+export interface SemanticRuntimeExpressionAccessUseRow extends SemanticRuntimeExpressionAccessUseOccurrenceRow {
+  readonly definitionName: string | null;
+  readonly ownerKind: RuntimeExpressionAccessOwnerKind | `${RuntimeExpressionAccessOwnerKind}`;
+  readonly handles?: {
+    readonly accessUseProductHandle: ProductHandle;
+    readonly accessUseIdentityHandle: IdentityHandle;
+    readonly ownerProductHandle: ProductHandle;
+    readonly operationProductHandle: ProductHandle | null;
+    readonly expressionProductHandle: ProductHandle | null;
+    readonly scopeProductHandle: ProductHandle | null;
+    readonly accessOccurrenceHandle: HotDetailHandle | null;
+    readonly accessResolutionHandle: HotDetailHandle | null;
+    readonly sourceAddressHandle: AddressHandle | null;
+    readonly nameSourceAddressHandle: AddressHandle | null;
+  };
+}
+
+export interface SemanticRuntimeExpressionAccessUseResult {
+  readonly rows: readonly SemanticRuntimeExpressionAccessUseRow[];
+}
+
 export interface SemanticBindingDataFlowRow {
   readonly definitionName: string;
   readonly bindingKind: RuntimeBindingKind | `${RuntimeBindingKind}`;
   readonly direction: RuntimeBindingDataFlowDirection | `${RuntimeBindingDataFlowDirection}`;
+  readonly realization: RuntimeOperationRealization | `${RuntimeOperationRealization}`;
+  readonly sourceEvaluationKind: RuntimeBindingSourceEvaluationKind | `${RuntimeBindingSourceEvaluationKind}`;
+  readonly sourceEvaluationReachability: RuntimeOperationReachability | `${RuntimeOperationReachability}`;
+  readonly targetMutationKind: RuntimeBindingValueChannelTargetMutationKind | `${RuntimeBindingValueChannelTargetMutationKind}`;
   readonly strictBinding: boolean | null;
+  readonly accessUseCount: number;
   readonly expressionParseState: TemplateExpressionParseState | `${TemplateExpressionParseState}` | null;
   readonly expressionParseResultKind: ExpressionParseResultKind | `${ExpressionParseResultKind}` | null;
   readonly valueSiteKind: TemplateValueSiteKind | `${TemplateValueSiteKind}` | null;
@@ -4025,6 +6380,8 @@ export interface SemanticBindingDataFlowRow {
   readonly sourceTypeOpenReason: string | null;
   readonly sourceTypeOpenKind: CheckerExpressionTypeOpenKind | `${CheckerExpressionTypeOpenKind}` | null;
   readonly sourceAssignmentTargetType: string | null;
+  /** Exact authored token that receives a target-to-source write. */
+  readonly sourceAssignmentOccurrenceSource: SemanticSourceReference | null;
   readonly sourceAssignmentTargetSource: SemanticSourceReference | null;
   readonly targetKind: RuntimeBindingTargetKind | `${RuntimeBindingTargetKind}` | null;
   readonly targetProperty: string | null;
@@ -4032,6 +6389,10 @@ export interface SemanticBindingDataFlowRow {
   readonly sourceOperationKind: RuntimeBindingSourceOperationKind | `${RuntimeBindingSourceOperationKind}` | null;
   readonly targetPropertyType: string | null;
   readonly targetValueType: string | null;
+  readonly targetToSourceValueType: string | null;
+  readonly targetToSourceValueTypeOpenReason: string | null;
+  readonly targetToSourceValueTypeOpenKind: CheckerExpressionTypeOpenKind | `${CheckerExpressionTypeOpenKind}` | null;
+  readonly valueConverterWritebackStages: readonly SemanticBindingDataFlowValueConverterWritebackStageRow[];
   readonly valueChannelKind: RuntimeBindingValueChannelKind | `${RuntimeBindingValueChannelKind}` | null;
   readonly sourceWritable: boolean | null;
   readonly sourceAssignmentKind: RuntimeBindingDataFlowSourceAssignmentKind | `${RuntimeBindingDataFlowSourceAssignmentKind}` | null;
@@ -4043,10 +6404,14 @@ export interface SemanticBindingDataFlowRow {
   readonly targetToSourceTypeMismatchKinds: readonly (RuntimeBindingDataFlowTypeMismatchKind | `${RuntimeBindingDataFlowTypeMismatchKind}`)[];
   readonly frameworkErrorCode: string | null;
   readonly openReason: string | null;
+  /** Authored expression value evaluated or assigned by this binding edge. */
+  readonly expressionSource: SemanticSourceReference | null;
+  /** Authored binding carrier that owns the runtime edge. */
   readonly source: SemanticSourceReference | null;
   readonly handles?: {
     readonly bindingProductHandle: ProductHandle | null;
     readonly dataFlowProductHandle: ProductHandle;
+    readonly accessUseProductHandles: readonly ProductHandle[];
     readonly targetAccessProductHandle: ProductHandle | null;
     readonly targetOperationProductHandle: ProductHandle | null;
     readonly sourceOperationProductHandle: ProductHandle | null;
@@ -4058,12 +6423,114 @@ export interface SemanticBindingDataFlowRow {
     readonly sourceAssignmentTargetSourceAddressHandle: AddressHandle | null;
     readonly targetPropertyTypeProductHandle: ProductHandle | null;
     readonly targetValueTypeProductHandle: ProductHandle | null;
+    readonly targetToSourceValueTypeProductHandle: ProductHandle | null;
     readonly sourceAddressHandle: AddressHandle | null;
   };
 }
 
 export interface SemanticBindingDataFlowResult {
   readonly rows: readonly SemanticBindingDataFlowRow[];
+}
+
+export type SemanticBindingUncertaintyExplanationConclusionKind =
+  | 'flow-proved'
+  | 'flow-partially-proved'
+  | 'flow-blocked';
+
+/** One cursor-selected template-authored PropertyBinding, independent from store-local handles. */
+export interface SemanticBindingUncertaintyExplanationSubject {
+  /** Structural identity used to reprove that a fresh answer still describes the same authored binding. */
+  readonly subjectKey: string;
+  readonly projectKey: string;
+  readonly definitionName: string;
+  readonly compilationLane: SemanticTemplateCompilationRow['compilationLane'];
+  readonly bindingKind: RuntimeBindingKind | `${RuntimeBindingKind}`;
+  /** Authored binding carrier that owns every returned data-flow lane. */
+  readonly source: SemanticSourceReference;
+  /** Authored expression evaluated or assigned by the binding, when separately addressable. */
+  readonly expressionSource: SemanticSourceReference | null;
+  readonly templateSource: SemanticSourceReference | null;
+  readonly targetProperties: readonly string[];
+}
+
+export interface SemanticBindingUncertaintyExplanationConclusion {
+  readonly kind: SemanticBindingUncertaintyExplanationConclusionKind;
+  readonly title: string;
+  readonly explanation: string;
+  readonly action: string;
+}
+
+/** Typed causal blocker retained by one or more data-flow materializations for the selected binding. */
+export interface SemanticBindingUncertaintyExplanationBlocker {
+  readonly kind: 'open-seam';
+  readonly seamKindKey: string;
+  readonly summary: string;
+  readonly reasonKinds: readonly (OpenSeamReasonKind | `${OpenSeamReasonKind}`)[];
+  readonly boundaryKinds: readonly (OpenSeamBoundaryKind | `${OpenSeamBoundaryKind}`)[];
+  /** Indexes into `evidence.lanes`; one upstream seam can constrain more than one lane. */
+  readonly laneIndexes: readonly number[];
+  readonly sources: readonly SemanticSourceReference[];
+}
+
+export interface SemanticBindingUncertaintyExplanationEvidence {
+  /** Canonical public projections of every data-flow lane owned by the selected binding. */
+  readonly lanes: readonly SemanticBindingDataFlowRow[];
+  readonly blockers: readonly SemanticBindingUncertaintyExplanationBlocker[];
+}
+
+export type SemanticBindingUncertaintyExplanationUncertaintyReason =
+  | 'binding-direction-open'
+  | 'source-evaluation-open'
+  | 'target-realization-open'
+  | 'source-type-open'
+  | 'source-assignment-open'
+  | 'target-to-source-value-open'
+  | 'value-converter-writeback-open'
+  | 'source-to-target-assignability-open'
+  | 'target-to-source-assignability-open'
+  | 'data-flow-open'
+  | 'blocking-open-seam'
+  | 'source-discovery-truncated';
+
+export interface SemanticBindingUncertaintyExplanationUncertainty {
+  readonly state: 'closed' | 'open' | 'truncated';
+  readonly reasons: readonly SemanticBindingUncertaintyExplanationUncertaintyReason[];
+  readonly explanation: string;
+}
+
+/** Human-readable pointer to the answer envelope that owns freshness and revision authority. */
+export interface SemanticBindingUncertaintyExplanationCurrentness {
+  readonly authority: 'answer-analysis-basis';
+  readonly explanation: string;
+}
+
+export interface SemanticBindingUncertaintyExplanationNextStep {
+  readonly kind: 'inspect-source' | 'inspect-query' | 'requery';
+  readonly label: string;
+  readonly source: SemanticSourceReference | null;
+  readonly relatedQueryKind: SemanticAppQueryKind | `${SemanticAppQueryKind}` | null;
+  readonly targetQuery: SemanticAppQuery | null;
+}
+
+export interface SemanticBindingUncertaintyExplanation {
+  readonly subject: SemanticBindingUncertaintyExplanationSubject;
+  readonly conclusion: SemanticBindingUncertaintyExplanationConclusion;
+  readonly evidence: SemanticBindingUncertaintyExplanationEvidence;
+  readonly uncertainty: SemanticBindingUncertaintyExplanationUncertainty;
+  readonly currentness: SemanticBindingUncertaintyExplanationCurrentness;
+  readonly nextSteps: readonly SemanticBindingUncertaintyExplanationNextStep[];
+}
+
+export interface SemanticBindingUncertaintyExplanationContender {
+  readonly subject: SemanticBindingUncertaintyExplanationSubject;
+  readonly conclusionKind: SemanticBindingUncertaintyExplanationConclusionKind;
+}
+
+export interface SemanticBindingUncertaintyExplanationResult {
+  readonly displayText: string;
+  readonly projectKey: string;
+  readonly explanation: SemanticBindingUncertaintyExplanation | null;
+  readonly contenders: readonly SemanticBindingUncertaintyExplanationContender[];
 }
 
 export interface SemanticNullableBooleanCountRow {
@@ -4074,6 +6541,10 @@ export interface SemanticNullableBooleanCountRow {
 
 export interface SemanticBindingDataFlowSummaryRow {
   readonly direction: RuntimeBindingDataFlowDirection | `${RuntimeBindingDataFlowDirection}`;
+  readonly realization: RuntimeOperationRealization | `${RuntimeOperationRealization}`;
+  readonly sourceEvaluationKind: RuntimeBindingSourceEvaluationKind | `${RuntimeBindingSourceEvaluationKind}`;
+  readonly sourceEvaluationReachability: RuntimeOperationReachability | `${RuntimeOperationReachability}`;
+  readonly targetMutationKind: RuntimeBindingValueChannelTargetMutationKind | `${RuntimeBindingValueChannelTargetMutationKind}`;
   readonly targetKind: RuntimeBindingTargetKind | `${RuntimeBindingTargetKind}` | null;
   readonly targetProperty: string | null;
   readonly valueChannelKind: RuntimeBindingValueChannelKind | `${RuntimeBindingValueChannelKind}` | null;
@@ -4153,36 +6624,30 @@ export interface SemanticBindingDataFlowSummaryResult {
 }
 
 export type SemanticObservedMemberSourceState =
-  | 'source'
-  | 'temporary-value'
-  | 'runtime-scope-name'
-  | 'scope-open'
-  | 'open';
+  RuntimeObservedMemberSourceState | `${RuntimeObservedMemberSourceState}`;
+
+/**
+ * Provenance of `observedMemberSource`: `member-declaration` is the observed member's own
+ * declaration; `owner-value` is the owner/root declaration carried as a best-effort navigation aid
+ * for weak, dynamic, keyed, or index-signature-shaped owners and must not be treated as member proof.
+ */
+export type SemanticObservedMemberSourceRoute =
+  RuntimeObservedMemberSourceRoute | `${RuntimeObservedMemberSourceRoute}`;
 
 export interface SemanticBindingObservedDependencyRow {
   readonly definitionName: string;
   readonly bindingKind: RuntimeBindingKind | `${RuntimeBindingKind}`;
-  readonly dependencyKind: RuntimeObservedDependencyKind | `${RuntimeObservedDependencyKind}`;
-  readonly expressionKind: string;
-  readonly sourceName: string | null;
-  readonly sourceRootName: string | null;
-  readonly memberName: string | null;
-  readonly keyExpression: string | null;
-  readonly methodName: string | null;
-  readonly observedMemberKind: CheckerTypeMemberKind | `${CheckerTypeMemberKind}` | null;
-  readonly observedMemberSource: SemanticSourceReference | null;
-  readonly observedMemberSourceState: SemanticObservedMemberSourceState;
-  readonly spanStart: number | null;
-  readonly spanEnd: number | null;
-  readonly source: SemanticSourceReference | null;
+  readonly realization: RuntimeOperationRealization | `${RuntimeOperationRealization}`;
+  readonly rowKey: string;
+  readonly owner: SemanticObservedDependencyOwnerRow;
+  readonly occurrence: SemanticObservedDependencyOccurrenceRow;
   readonly handles?: {
     readonly bindingProductHandle: ProductHandle | null;
     readonly dataFlowProductHandle: ProductHandle;
     readonly observedDependencyProductHandle: ProductHandle;
+    readonly observedDependencyIdentityHandle: IdentityHandle;
     readonly expressionProductHandle: ProductHandle | null;
     readonly bindingScopeProductHandle: ProductHandle | null;
-    readonly observedMemberSourceAddressHandle: AddressHandle | null;
-    readonly sourceAddressHandle: AddressHandle | null;
   };
 }
 
@@ -4191,8 +6656,11 @@ export interface SemanticBindingObservedDependencyResult {
 }
 
 export interface SemanticBindingObservedDependencySummaryRow {
+  /** Answer-local key for selecting this exact summary cluster in the same app epoch. */
+  readonly clusterKey: string;
   readonly dependencyKind: RuntimeObservedDependencyKind | `${RuntimeObservedDependencyKind}`;
   readonly bindingKind: RuntimeBindingKind | `${RuntimeBindingKind}`;
+  readonly realization: RuntimeOperationRealization | `${RuntimeOperationRealization}`;
   readonly observedMemberSourceState: SemanticObservedMemberSourceState;
   readonly observedMemberKind: CheckerTypeMemberKind | `${CheckerTypeMemberKind}` | null;
   readonly sourceRootName: string | null;

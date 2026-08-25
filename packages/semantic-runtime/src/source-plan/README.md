@@ -1,7 +1,7 @@
 # Source Plan
 
-`source-plan` owns neutral source artifact planning: source text, file edit envelopes, source-pattern metadata,
-parameter schemas, and project-tooling files that a host may apply after a policy decision.
+`source-plan` owns neutral source artifact planning: source text, file edit envelopes, existing-source operations,
+source-pattern metadata, parameter schemas, and project-tooling files that a host may apply after a policy decision.
 
 It is shared by app-builder, future diagnostic/edit planning, and fixture materialization. It must not grow
 app-builder-specific domain fixtures or verification assertions; those belong in app-builder, fixture verification, or
@@ -19,16 +19,18 @@ source lowerer creates multiple files under one root, policy, and text-authority
 lifetime; it keeps `SourcePlanFile` / `SourcePlanText` construction out of
 concrete generators without becoming a caller-specific wrapper.
 
-`SourcePlanContribution` is the file-local ledger for generated source facts
-that existed before final text assembly. It currently carries TypeScript import
+`SourcePlanContribution` is the file-local ledger for generated or planned source
+facts that existed before final text placement. It currently carries TypeScript import
 requirements and source fragments, with app-builder part invocation origins
 preserved when a fragment came from a reusable lowering callback, app-builder
 source-lowering invocation origins preserved when one exact ontology target
 emitted a generated fragment, app-builder source-lowering composition origins
 preserved when a multi-fragment target such as Native Submit Form produced a
-top-level wrapper, and framework configuration admission
-origins preserved when an entrypoint import or registration came from
-router/state/i18n/validation/virtualization admission. Preview/API rows can use
+top-level wrapper, framework configuration admission origins preserved when an
+entrypoint import or registration came from router/state/i18n/validation/virtualization
+admission, and framework registration admission origins preserved when an IDE
+repair planner admits a known framework capability such as router resources or
+runtime-html shorthand syntax. Preview/API rows can use
 that ledger to answer "which framework/app-builder source mechanism produced
 this file?" without reparsing the generated text.
 
@@ -44,6 +46,19 @@ files: pass body text, base import requirements, and origin-bearing source
 contributions there so import rendering and the contribution ledger stay in
 sync. Do not ask callers to format imports once source fragments have already
 published import requirements.
+`typescript-source-operation.ts` owns the existing TypeScript source-operation
+planner for exact, old-text-validated edits. It can add missing value imports to
+an existing import clause or import block, and it can insert an Aurelia
+`.register(...)` call immediately before a proven app-root `.app(...)` step.
+Existing registration suppression is scoped to that app-root receiver chain, not
+the whole file, so multiple app roots can each receive the capability admission
+they are missing.
+IDE code actions should spend this planner when they need import/configuration
+chain edits instead of reformatting TypeScript inside the LSP adapter or a
+diagnostic lane.
+The source-operation rows are plan ingredients, not diagnostic affordances. A public code-action row proves plan
+availability by carrying a non-empty edit tuple; a diagnostic-stage repair classification must not claim plan state or
+collapse a multi-edit import/configuration change into a synthetic `single-edit` label.
 `configuredAureliaEntrypointFile(...)` spends the same import lane for the
 default Aurelia import, the root component import, and framework/plugin
 configuration imports; entrypoint imports and registration expressions may also
@@ -77,6 +92,15 @@ and registration contributions carry `AureliaConfigurationAdmissionKind` through
 `SourcePlanContributionOriginKind.AureliaConfigurationAdmission`, so generated
 entrypoint previews can explain which framework admission produced a package
 import or registration without needing source-text parsing.
+`AureliaFrameworkRegistrationAdmissionSource` is the same idea for existing app
+source repairs that begin from a `framework.capability-demand`: it chooses a
+closed framework registration kind, value import, and registration expression
+from the registration manifest. It intentionally refuses state-store
+configuration and AppTask admissions until a caller supplies the project-specific
+state model or lifecycle intent needed to make those edits honest.
+The source-plan barrel re-exports the framework registration capability/kind
+enums because callers that ask for an admission source need the same vocabulary
+without importing through registration internals.
 
 `SourcePatternParameter` is the source-plan vocabulary for caller-supplied
 adaptation values such as route path identity. Source-applicable parameters must

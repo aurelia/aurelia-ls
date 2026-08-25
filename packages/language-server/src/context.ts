@@ -1,11 +1,21 @@
-import type { Connection, TextDocuments } from "vscode-languageserver/node.js";
-import { TextDocument } from "vscode-languageserver-textdocument";
-import { canonicalDocumentUri } from "@aurelia-ls/compiler/program/paths.js";
-import type { DocumentUri } from "@aurelia-ls/compiler/program/primitives.js";
-import { createConsoleExporter } from "@aurelia-ls/compiler/shared/trace-exporters.js";
-import { NOOP_TRACE, createTrace, type CompileTrace } from "@aurelia-ls/compiler/shared/trace.js";
-import type { SemanticWorkspaceEngine } from "@aurelia-ls/semantic-workspace/engine.js";
+import type { Connection, TextDocuments } from "vscode-languageserver/node";
+import type { TextDocument } from "vscode-languageserver-textdocument";
+import { NodeSemanticRuntimeProjectInputHost } from "@aurelia-ls/semantic-runtime";
 import type { Logger } from "./services/types.js";
+import { OpenDocumentSourceTextOverlay } from "./runtime/open-document-source-text-overlay.js";
+import {
+  checkpointSemanticRuntimeLspOperation,
+  SemanticRuntimeLspSession,
+  type SemanticRuntimeLspOpenDocumentMetadata,
+} from "./runtime/semantic-runtime-session.js";
+import {
+  WorkspaceDocumentUris,
+  type DocumentUri,
+} from "./utils/document-uri.js";
+import type {
+  ProjectConfigurationParserDiagnosticsOwner,
+  TypeScriptProgramDiagnosticsOwner,
+} from "./protocol.js";
 
 /**
  * Shared server context passed to all handlers.
@@ -15,88 +25,135 @@ export interface ServerContext {
   readonly connection: Connection;
   readonly documents: TextDocuments<TextDocument>;
   readonly logger: Logger;
-  readonly trace: CompileTrace;
+  readonly semanticRuntime: SemanticRuntimeLspSession;
+  readonly clientSupport: ServerClientSupport;
+  readonly documentUris: WorkspaceDocumentUris;
 
-  workspaceRoot: string | null;
-  workspace: SemanticWorkspaceEngine;
+  readonly workspaceRoot: string | null;
+  /** Client can preserve CodeAction.data and lazily resolve the edit property. */
+  clientSupportsCodeActionResolveEdit: boolean;
+  /** Owner of native configuration parser diagnostics for this transport. */
+  projectConfigurationParserDiagnostics: ProjectConfigurationParserDiagnosticsOwner;
+  /** Owner of ordinary TypeScript Program diagnostics for this transport. */
+  typeScriptProgramDiagnostics: TypeScriptProgramDiagnosticsOwner;
 
-  ensureProgramDocument(uri: string): TextDocument | null;
-  lookupText(uri: DocumentUri): string | null;
+  configureWorkspace(
+    rootUri: DocumentUri,
+    excludedRootUris?: readonly DocumentUri[],
+    projectRootHintUris?: readonly DocumentUri[],
+  ): void;
+
+  ownsDocument(uri: DocumentUri): boolean;
+  /**
+   * Find synchronized open-document metadata anywhere in the coarse workspace,
+   * including hard-excluded dependency roots. Semantic handlers must read text
+   * through their operation-owned document facade instead of this lifecycle helper.
+   */
+  openWorkspaceDocument(uri: DocumentUri): SemanticRuntimeLspOpenDocumentMetadata | null;
+  /** Read the current filesystem value without applying synchronized editor overlays. */
+  readWorkspaceHostFile(filePath: string): string | undefined;
+}
+
+export interface ServerClientSupport {
+  configurationPull: boolean;
+  configurationChangeRegistration: boolean;
+  inlayHintRefresh: boolean;
+  semanticTokensRefresh: boolean;
+  diagnosticRefresh: boolean;
 }
 
 export interface ServerContextInit {
   connection: Connection;
   documents: TextDocuments<TextDocument>;
   logger: Logger;
+  /** Enable host-read cancellation polling for transports that can update tokens while JavaScript is busy. */
+  enableProjectInputCancellationCheckpoints?: boolean;
 }
 
 export function createServerContext(init: ServerContextInit): ServerContext {
   const { connection, documents, logger } = init;
 
-  const traceEnabled = process.env["AURELIA_TRACE"] === "1" ||
-                       process.env["AURELIA_TRACE"] === "true" ||
-                       process.env["AURELIA_LS_TRACE"] === "1" ||
-                       process.env["AURELIA_LS_TRACE"] === "true";
-
-  const trace: CompileTrace = traceEnabled
-    ? createTrace({
-        name: "language-server",
-        exporter: createConsoleExporter({
-          minDuration: 1_000_000n, // 1ms minimum
-          logEvents: false, // Too noisy for LSP
-          prefix: "[aurelia-ls-trace]",
-        }),
-      })
-    : NOOP_TRACE;
-
-  if (traceEnabled) {
-    logger.info("[trace] Tracing enabled via AURELIA_TRACE environment variable");
-  }
-
-  let workspaceRoot: string | null = null;
-  let workspace: SemanticWorkspaceEngine;
-  const syncedDocumentVersions = new Map<DocumentUri, number>();
-
-  function ensureProgramDocument(uri: string): TextDocument | null {
-    const live = documents.get(uri);
-    const canonical = canonicalDocumentUri(uri);
-    if (live) {
-      const lastSyncedVersion = syncedDocumentVersions.get(canonical.uri);
-      if (lastSyncedVersion !== live.version) {
-        workspace.update(canonical.uri, live.getText(), live.version);
-        syncedDocumentVersions.set(canonical.uri, live.version);
+  const documentUris = new WorkspaceDocumentUris();
+  const sourceTextOverlay = new OpenDocumentSourceTextOverlay(documents, documentUris);
+  const workspaceHost = new NodeSemanticRuntimeProjectInputHost();
+  const semanticRuntime = new SemanticRuntimeLspSession({
+    documentUris,
+    projectInputHost: new NodeSemanticRuntimeProjectInputHost(
+      sourceTextOverlay,
+      init.enableProjectInputCancellationCheckpoints
+        ? checkpointSemanticRuntimeLspOperation
+        : null,
+    ),
+    projectInputCurrentnessPolicy: sourceTextOverlay,
+    openDocumentMetadata: (uri) => openWorkspaceDocument(uri),
+    publishEffect: (effect) => {
+      switch (effect.kind) {
+        case "log":
+          logger[effect.level](effect.message);
+          return;
+        case "show-message":
+          return connection.sendNotification("window/showMessage", {
+            type: effect.type,
+            message: effect.message,
+          });
       }
-      return live;
-    }
+    },
+  });
+  const clientSupport: ServerClientSupport = {
+    configurationPull: false,
+    configurationChangeRegistration: false,
+    inlayHintRefresh: false,
+    semanticTokensRefresh: false,
+    diagnosticRefresh: false,
+  };
 
-    const snap = workspace.ensureFromFile(canonical.uri);
-    if (!snap) return null;
-    syncedDocumentVersions.delete(canonical.uri);
-    return TextDocument.create(uri, "html", 0, snap.text);
+  function openWorkspaceDocument(
+    uri: DocumentUri,
+  ): SemanticRuntimeLspOpenDocumentMetadata | null {
+    if (documentUris.workspaceHostPath(uri) == null) {
+      return null;
+    }
+    const document = sourceTextOverlay.openDocument(uri);
+    return document == null ? null : openDocumentMetadata(document);
   }
 
-  function lookupText(uri: DocumentUri): string | null {
-    return workspace.lookupText(uri);
+  function openDocumentMetadata(
+    document: TextDocument,
+  ): SemanticRuntimeLspOpenDocumentMetadata {
+    return {
+      uri: document.uri,
+      languageId: document.languageId,
+      version: document.version,
+    };
   }
 
   return {
     connection,
     documents,
     logger,
-    trace,
+    semanticRuntime,
+    clientSupport,
+    documentUris,
 
-    get workspaceRoot() { return workspaceRoot; },
-    set workspaceRoot(v) { workspaceRoot = v; },
-
-    get workspace() { return workspace; },
-    set workspace(v) {
-      workspace = v;
-      syncedDocumentVersions.clear();
+    get workspaceRoot() { return documentUris.workspaceRoot; },
+    configureWorkspace(rootUri, excludedRootUris = [], projectRootHintUris = []) {
+      documentUris.configure(rootUri, excludedRootUris);
+      sourceTextOverlay.reindexOpenDocuments();
+      const projectRootHints = projectRootHintUris.map((uri) => {
+        const hostPath = documentUris.workspaceHostPath(uri);
+        if (hostPath == null) {
+          throw new Error(`Project root hint '${uri}' is not inside workspace '${rootUri}'.`);
+        }
+        return hostPath;
+      });
+      semanticRuntime.configureWorkspace(projectRootHints);
     },
+    clientSupportsCodeActionResolveEdit: false,
+    projectConfigurationParserDiagnostics: "semantic-runtime",
+    typeScriptProgramDiagnostics: "semantic-runtime",
 
-    ensureProgramDocument,
-    lookupText,
+    ownsDocument: (uri) => documentUris.ownsDocument(uri),
+    openWorkspaceDocument,
+    readWorkspaceHostFile: (filePath) => workspaceHost.readFile(filePath),
   };
 }
-
-export { canonicalDocumentUri } from "@aurelia-ls/compiler/program/paths.js";

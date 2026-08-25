@@ -16,13 +16,20 @@ import {
 import {
   MaterializationRecord,
   MaterializedProduct,
+  materializationOpenSeamHandlesForOwners,
 } from '../kernel/materialization.js';
 import {
   OpenSeam,
+  OpenSeamReasonKind,
 } from '../kernel/open-seam.js';
 import {
   ProvenanceRecord,
 } from '../kernel/provenance.js';
+import {
+  KernelPublicationPlan,
+  publishProductDetails,
+  type KernelPublicationContext,
+} from '../kernel/publication.js';
 import {
   KernelStoreBatch,
   type KernelStore,
@@ -37,11 +44,11 @@ import {
 import {
   type CheckerExpressionTypeWorld,
 } from '../type-system/expression-type-world.js';
-import {
-  CheckerTypeProjector,
-} from '../type-system/checker-projector.js';
 import { ObservationProductDetails } from './product-details.js';
 import {
+  RuntimeBindingTargetAccessStrategy,
+  RuntimeBindingTargetOperationKind,
+  RuntimeNodeObserverConfigFieldState,
   SpreadValueBinding,
   type RuntimeBinding,
   type RuntimeBindingSourceOperation,
@@ -50,10 +57,15 @@ import {
 } from '../template/runtime-binding.js';
 import {
   RuntimeBindingValueChannel,
+  RuntimeBindingValueChannelTargetMutationKind,
 } from './runtime-binding-observation.js';
+import {
+  RuntimeOperationReachability,
+} from '../runtime-expression/runtime-operation.js';
+import { runtimeBindingPrimitiveValueFromExpressionValue } from './runtime-binding-primitive-value.js';
 import type { RuntimeRenderingEmission } from '../template/runtime-rendering-materializer.js';
+import type { RuntimeExpressionResourcePlan } from '../template/runtime-expression-resource-plan.js';
 import type { RuntimeControllerBindEmission } from '../template/runtime-controller-bind-materializer.js';
-import type { TemplateResourceScope } from '../template/compiler-world.js';
 import type { TypeSystemProject } from '../type-system/project.js';
 import type {
   TemplateScopeConstructionEmission,
@@ -63,15 +75,12 @@ import {
   isRuntimeValueChannelBinding,
 } from './runtime-binding-expression.js';
 import {
-  RuntimeBindingExpressionScopeProjector,
-} from './runtime-binding-expression-scope.js';
-import {
   RuntimeBindingSourceExpressionContextProjector,
 } from './runtime-binding-source-expression-context.js';
 import {
   RuntimeBindingValueChannelDraftMaterializer,
   type BindingValueChannelDraftContext,
-  type RuntimeBindingValueChannelDraft,
+  type RuntimeBindingValueChannelDraftResult,
   type RuntimeValueChannelBinding,
 } from './binding-value-channel-drafts.js';
 
@@ -81,12 +90,12 @@ export class RuntimeBindingValueChannelMaterializationRequest {
     readonly localKey: string,
     /** Runtime binding products produced by renderer dispatch. */
     readonly runtimeBindings: RuntimeRenderingEmission,
+    /** Reached expression-resource effects that determine runtime source projection. */
+    readonly expressionResourcePlan: RuntimeExpressionResourcePlan,
     /** Controller.bind target-side products produced by binding-owned target setup. */
     readonly controllerBind: RuntimeControllerBindEmission,
     /** Runtime Scope applications visible to instruction-owned expressions. */
     readonly scopes: TemplateScopeConstructionEmission,
-    /** Compiler resource scope visible to expression semantics such as value converters. */
-    readonly resourceScope: TemplateResourceScope | null = null,
     /** Runtime-analysis expression world shared by scope, value-channel, and data-flow phases. */
     readonly expressionWorld: CheckerExpressionTypeWorld,
     /** Current TypeChecker epoch used by listener event maps and checker-backed value-channel refinements. */
@@ -138,9 +147,10 @@ interface BindingValueChannelRecordEmission {
 interface BindingValueChannelOpenSeamEmission {
   readonly records: readonly KernelStoreRecord[];
   readonly openSeams: readonly OpenSeam[];
+  readonly openSeamHandles: readonly OpenSeam['handle'][];
 }
 
-type ValueChannelDraft = RuntimeBindingValueChannelDraft;
+type ValueChannelDraftResult = RuntimeBindingValueChannelDraftResult;
 
 type BindingValueChannelContext = BindingValueChannelDraftContext;
 
@@ -153,30 +163,19 @@ type ValueChannelTarget = {
 
 /** Materializes the value shape that sits between target-side runtime behavior and binding data flow. */
 export class RuntimeBindingValueChannelMaterializer {
-  private readonly typeProjector: CheckerTypeProjector;
-  private readonly channelDrafts: RuntimeBindingValueChannelDraftMaterializer;
-
   constructor(
     /** Hot analysis store that receives binding value-channel products. */
     readonly store: KernelStore,
-  ) {
-    this.typeProjector = new CheckerTypeProjector(store);
-    this.channelDrafts = new RuntimeBindingValueChannelDraftMaterializer(store, this.typeProjector);
-  }
+    readonly publication: KernelPublicationContext,
+  ) {}
 
   materialize(input: RuntimeBindingValueChannelMaterializationRequest): RuntimeBindingValueChannelEmission {
     const emission = this.recordsForValueChannels(input);
-    if (emission.records.length > 0) {
-      this.store.commit(new KernelStoreBatch(emission.records, `binding-value-channel:${input.localKey}`));
-    }
-    this.registerProductDetails(emission);
+    this.publication.publish(new KernelPublicationPlan(
+      new KernelStoreBatch(emission.records, `binding-value-channel:${input.localKey}`),
+      publishProductDetails(ObservationProductDetails.RuntimeBindingValueChannel, emission.valueChannels),
+    ));
     return emission;
-  }
-
-  private registerProductDetails(emission: RuntimeBindingValueChannelEmission): void {
-    for (const valueChannel of emission.valueChannels) {
-      this.store.productDetails.add(ObservationProductDetails.RuntimeBindingValueChannel, valueChannel.productHandle, valueChannel);
-    }
   }
 
   private recordsForValueChannels(input: RuntimeBindingValueChannelMaterializationRequest): RuntimeBindingValueChannelEmission {
@@ -186,23 +185,28 @@ export class RuntimeBindingValueChannelMaterializer {
     const source = this.recordsForSource(input.localKey);
     records.push(...source.records);
     const instructionScopes = instructionScopeLookup(input.scopes.instructionScopes);
-    const evaluator = input.expressionWorld.evaluator(input.resourceScope);
-    const bindingExpressionScopes = new RuntimeBindingExpressionScopeProjector(this.store, input.expressionWorld);
+    const bindingExpressionScopes = input.scopes.bindingExpressionScopes;
     const sourceExpressionContexts = new RuntimeBindingSourceExpressionContextProjector(
       input.runtimeBindings,
       instructionScopes,
       bindingExpressionScopes,
+      input.expressionResourcePlan,
+    );
+    const channelDrafts = new RuntimeBindingValueChannelDraftMaterializer(
+      this.store,
+      input.expressionWorld.projector,
     );
 
     input.runtimeBindings.bindings.forEach((binding, index) => {
-      for (const emission of this.recordsForBindingValueChannels(input, source, {
+      const renderContext = input.runtimeBindings.requireRenderContextForBinding(binding.productHandle);
+      for (const emission of this.recordsForBindingValueChannels(input, channelDrafts, source, {
         input: {
           runtimeBindings: input.runtimeBindings,
           controllerBind: input.controllerBind,
         },
         instructionScopes,
         sourceExpressionContexts,
-        evaluator,
+        evaluator: input.expressionWorld.evaluator(renderContext.resourceScope),
         typeSystem: input.typeSystem,
       }, binding, index)) {
         records.push(...emission.records);
@@ -216,6 +220,7 @@ export class RuntimeBindingValueChannelMaterializer {
 
   private recordsForBindingValueChannels(
     input: RuntimeBindingValueChannelMaterializationRequest,
+    channelDrafts: RuntimeBindingValueChannelDraftMaterializer,
     source: BindingValueChannelSourceSet,
     context: BindingValueChannelContext,
     binding: RuntimeBinding,
@@ -228,21 +233,31 @@ export class RuntimeBindingValueChannelMaterializer {
     const targetOperations = input.controllerBind.readTargetOperationsForBinding(binding.productHandle);
     const sourceOperations = input.controllerBind.readSourceOperationsForBinding(binding.productHandle);
     const targets = valueChannelTargetsForBinding(binding, targetAccesses, targetOperations, sourceOperations);
-    return targets.map((target) =>
-      this.recordsForValueChannel(input, source, context, binding, bindingIndex, target)
-    );
+    return targets.flatMap((target) => {
+      const emission = this.recordsForValueChannel(
+        input,
+        channelDrafts,
+        source,
+        context,
+        binding,
+        bindingIndex,
+        target,
+      );
+      return emission == null ? [] : [emission];
+    });
   }
 
   private recordsForValueChannel(
     input: RuntimeBindingValueChannelMaterializationRequest,
+    channelDrafts: RuntimeBindingValueChannelDraftMaterializer,
     source: BindingValueChannelSourceSet,
     context: BindingValueChannelContext,
     binding: RuntimeValueChannelBinding,
     bindingIndex: number,
     target: ValueChannelTarget,
-  ): BindingValueChannelRecordEmission {
+  ): BindingValueChannelRecordEmission | null {
     const local = `${input.localKey}:binding:${bindingIndex}:${binding.productHandle}:value-channel${target.localSuffix}`;
-    const draft = this.channelDrafts.valueChannelDraftForBinding(
+    const result = channelDrafts.valueChannelDraftForBinding(
       local,
       binding,
       target.targetAccess,
@@ -250,15 +265,34 @@ export class RuntimeBindingValueChannelMaterializer {
       target.sourceOperation,
       context,
     );
-    const valueChannel = this.valueChannelForTarget(local, binding, target, draft);
+    if (result == null) {
+      return null;
+    }
+    const valueChannel = this.valueChannelForTarget(input, local, binding, target, result);
     const claim = this.valueChannelClaim(local, binding, valueChannel, source);
-    const open = this.openSeamForValueChannel(local, valueChannel, binding, source);
+    const upstreamOpenSeamHandles = materializationOpenSeamHandlesForOwners(
+      this.publication,
+      [
+        target.targetAccess?.identityHandle,
+        target.targetOperation?.identityHandle,
+        target.sourceOperation?.identityHandle,
+        result.openReasonOwnerIdentityHandle,
+      ].filter((handle): handle is NonNullable<typeof handle> => handle != null),
+    );
+    const open = this.openSeamForValueChannel(
+      local,
+      valueChannel,
+      binding,
+      source,
+      upstreamOpenSeamHandles,
+      result.openReasonOwnerIdentityHandle,
+    );
     return {
       valueChannel,
       openSeams: open.openSeams,
       records: [
         ...open.records,
-        ...this.valueChannelRecords(local, binding, target, valueChannel, claim, open.openSeams, source),
+        ...this.valueChannelRecords(local, binding, target, valueChannel, claim, open.openSeamHandles, source),
       ],
     };
   }
@@ -283,9 +317,19 @@ export class RuntimeBindingValueChannelMaterializer {
     valueChannel: RuntimeBindingValueChannel,
     binding: RuntimeValueChannelBinding,
     source: BindingValueChannelSourceSet,
+    upstreamOpenSeamHandles: readonly OpenSeam['handle'][],
+    openReasonOwnerIdentityHandle: RuntimeBindingValueChannelDraftResult['openReasonOwnerIdentityHandle'],
   ): BindingValueChannelOpenSeamEmission {
     if (valueChannel.openReason == null) {
-      return { records: [], openSeams: [] };
+      return { records: [], openSeams: [], openSeamHandles: upstreamOpenSeamHandles };
+    }
+    if (openReasonOwnerIdentityHandle != null) {
+      if (upstreamOpenSeamHandles.length === 0) {
+        throw new Error(
+          `Open value-channel draft cites upstream owner '${openReasonOwnerIdentityHandle}' without a causal open seam.`,
+        );
+      }
+      return { records: [], openSeams: [], openSeamHandles: upstreamOpenSeamHandles };
     }
     const seam = new OpenSeam(
       this.store.handles.openSeam(`${local}:open-value-channel`),
@@ -293,17 +337,27 @@ export class RuntimeBindingValueChannelMaterializer {
       valueChannel.openReason,
       binding.sourceAddressHandle,
       source.evidenceHandle,
-      valueChannel.openReasonKinds,
+      valueChannel.openReasonKinds.length === 0
+        ? [OpenSeamReasonKind.BindingValueChannelSemanticsOpen]
+        : valueChannel.openReasonKinds,
     );
-    return { records: [seam], openSeams: [seam] };
+    return {
+      records: [seam],
+      openSeams: [seam],
+      openSeamHandles: [...upstreamOpenSeamHandles, seam.handle].sort(),
+    };
   }
 
   private valueChannelForTarget(
+    input: RuntimeBindingValueChannelMaterializationRequest,
     local: string,
     binding: RuntimeValueChannelBinding,
     target: ValueChannelTarget,
-    draft: ValueChannelDraft,
+    result: ValueChannelDraftResult,
   ): RuntimeBindingValueChannel {
+    const draft = result.draft;
+    const targetMutationKind = valueChannelTargetMutationKind(target);
+    const nullishDefault = valueAttributeNullishDefault(target.targetAccess);
     return new RuntimeBindingValueChannel(
       this.store.handles.product(local),
       this.store.handles.identity(local),
@@ -313,8 +367,18 @@ export class RuntimeBindingValueChannelMaterializer {
       target.sourceOperation?.toReference() ?? null,
       draft.channelKind,
       draft.authority,
+      targetMutationKind,
+      nullishDefault.value,
+      nullishDefault.state,
       target.targetAccess?.propertyType ?? null,
       draft.runtimeValueType,
+      result.realization,
+      this.bindingOperationReachability(input, binding),
+      result.admittedSourceOwnerType,
+      result.admittedSourceValueType,
+      result.admittedSourceMemberKind,
+      result.admittedSourceMemberHandle,
+      result.admittedSourceMemberSourceAddressHandle,
       draft.valueDomain,
       draft.primitiveValueDomain ?? [],
       draft.isCollection,
@@ -326,13 +390,20 @@ export class RuntimeBindingValueChannelMaterializer {
     );
   }
 
+  private bindingOperationReachability(
+    input: RuntimeBindingValueChannelMaterializationRequest,
+    binding: RuntimeValueChannelBinding,
+  ): RuntimeOperationReachability {
+    return input.expressionResourcePlan.readSourceEvaluationReachability(binding.productHandle);
+  }
+
   private valueChannelRecords(
     local: string,
     binding: RuntimeValueChannelBinding,
     target: ValueChannelTarget,
     valueChannel: RuntimeBindingValueChannel,
     claim: SemanticClaim,
-    openSeams: readonly OpenSeam[],
+    openSeamHandles: readonly OpenSeam['handle'][],
     source: BindingValueChannelSourceSet,
   ): readonly KernelStoreRecord[] {
     return [
@@ -356,7 +427,7 @@ export class RuntimeBindingValueChannelMaterializer {
         valueChannel.identityHandle,
         [valueChannel.productHandle],
         [claim.handle],
-        openSeams.map((seam) => seam.handle),
+        openSeamHandles,
       ),
     ];
   }
@@ -384,13 +455,64 @@ export class RuntimeBindingValueChannelMaterializer {
   }
 }
 
+function valueChannelTargetMutationKind(
+  target: ValueChannelTarget,
+): RuntimeBindingValueChannelTargetMutationKind {
+  const targetAccess = target.targetAccess;
+  if (targetAccess != null) {
+    if (targetAccess.strategy === RuntimeBindingTargetAccessStrategy.ValueAttributeObserver) {
+      const config = targetAccess.nodeObserverConfig;
+      if (config == null || config.fieldState('readonly') === RuntimeNodeObserverConfigFieldState.Open) {
+        return RuntimeBindingValueChannelTargetMutationKind.Open;
+      }
+      return config.readonlyValue === true
+        ? RuntimeBindingValueChannelTargetMutationKind.SuppressesTargetWrite
+        : RuntimeBindingValueChannelTargetMutationKind.WritesTarget;
+    }
+    return targetAccess.strategy === RuntimeBindingTargetAccessStrategy.CustomNodeObserver
+      || targetAccess.strategy === RuntimeBindingTargetAccessStrategy.Unknown
+      ? RuntimeBindingValueChannelTargetMutationKind.Open
+      : RuntimeBindingValueChannelTargetMutationKind.WritesTarget;
+  }
+  if (target.targetOperation != null) {
+    return target.targetOperation.operationKind === RuntimeBindingTargetOperationKind.EventListenerAdd
+      ? RuntimeBindingValueChannelTargetMutationKind.NoTargetWrite
+      : RuntimeBindingValueChannelTargetMutationKind.WritesTarget;
+  }
+  return target.sourceOperation != null
+    ? RuntimeBindingValueChannelTargetMutationKind.NoTargetWrite
+    : RuntimeBindingValueChannelTargetMutationKind.Open;
+}
+
+function valueAttributeNullishDefault(
+  targetAccess: RuntimeBindingTargetAccess | null,
+): {
+  readonly value: RuntimeBindingValueChannel['nullishDefault'];
+  readonly state: RuntimeBindingValueChannel['nullishDefaultState'];
+} {
+  if (targetAccess?.strategy !== RuntimeBindingTargetAccessStrategy.ValueAttributeObserver) {
+    return { value: null, state: null };
+  }
+  const config = targetAccess.nodeObserverConfig;
+  if (config == null) {
+    return { value: null, state: RuntimeNodeObserverConfigFieldState.Open };
+  }
+  const state = config.fieldState('default');
+  return {
+    value: state === RuntimeNodeObserverConfigFieldState.Open
+      ? null
+      : runtimeBindingPrimitiveValueFromExpressionValue(config.defaultValue),
+    state,
+  };
+}
+
 function valueChannelTargetsForBinding(
   binding: RuntimeValueChannelBinding,
   targetAccesses: readonly RuntimeBindingTargetAccess[],
   targetOperations: readonly RuntimeBindingTargetOperation[],
   sourceOperations: readonly RuntimeBindingSourceOperation[],
 ): readonly ValueChannelTarget[] {
-  if (binding instanceof SpreadValueBinding && targetAccesses.length > 0) {
+  if (binding instanceof SpreadValueBinding) {
     return targetAccesses.map((targetAccess, index) => ({
       localSuffix: `:${index}:${targetAccess.targetProperty}`,
       targetAccess,

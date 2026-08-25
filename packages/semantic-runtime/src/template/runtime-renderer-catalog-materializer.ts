@@ -31,13 +31,18 @@ import {
   type KernelStore,
   type KernelStoreRecord,
 } from '../kernel/store.js';
+import type { FrameworkSupportCatalogs } from '../framework/framework-support-authority.js';
+import {
+  KernelDetailAdmission,
+  KernelPublicationPlan,
+  publishProductDetail,
+  type KernelPublicationContext,
+  type KernelProductDetailPublication,
+} from '../kernel/publication.js';
 import { catalogGroupLocalKey } from '../kernel/local-key.js';
 import { KernelVocabulary } from '../kernel/vocabulary.js';
 import type { ConfigurationKernelEmission } from '../configuration/configuration-kernel-emitter.js';
-import {
-  frameworkRegistrationKindForAdmission,
-  type RegistrationAdmissionProduct,
-} from '../registration/registration-admission.js';
+import type { RegistrationAdmissionProduct } from '../registration/registration-admission.js';
 import { FrameworkRegistrationKind } from '../registration/registration-reference.js';
 import {
   FrameworkRegistrationCapability,
@@ -133,8 +138,10 @@ class BuiltInRuntimeRendererHandles {
 /** Materializes framework-owned runtime renderer catalogs before compiler-world visibility is decided. */
 export class BuiltInRuntimeRendererCatalogMaterializer {
   constructor(
-    /** Hot analysis store that receives built-in renderer records. */
+    /** Store used for deterministic renderer handles. */
     readonly store: KernelStore,
+    /** Immediate or staged owner of renderer records and rich details. */
+    private readonly publication: KernelPublicationContext,
   ) {}
 
   materialize(catalogInputs: readonly BuiltInRuntimeRendererCatalogInput[]): BuiltInRuntimeRendererCatalogEmission {
@@ -144,33 +151,38 @@ export class BuiltInRuntimeRendererCatalogMaterializer {
 
     for (const input of catalogInputs) {
       const emission = this.recordsForCatalog(input);
-      if (this.store.readProduct(emission.catalog.productHandle) == null) {
+      if (this.publication.read(emission.catalog.productHandle) == null) {
         records.push(...emission.records);
       }
       catalogs.push(emission.catalog);
       renderers.push(...emission.renderers);
     }
 
-    if (records.length > 0) {
-      this.store.commit(new KernelStoreBatch(records, 'built-in-runtime-renderer-catalogs'));
-    }
-
     const emission = new BuiltInRuntimeRendererCatalogEmission(catalogs, renderers, records);
-    this.registerProductDetails(emission);
+    this.publication.publish(new KernelPublicationPlan(
+      new KernelStoreBatch(records, 'built-in-runtime-renderer-catalogs'),
+      this.productDetailPublications(emission),
+    ));
     return emission;
   }
 
-  private registerProductDetails(emission: BuiltInRuntimeRendererCatalogEmission): void {
-    for (const catalog of emission.catalogs) {
-      this.store.productDetails.addIfAbsent(TemplateProductDetails.BuiltInRuntimeRendererCatalog, catalog.productHandle, catalog);
-    }
-    for (const renderer of emission.renderers) {
-      this.store.productDetails.addIfAbsent(
+  private productDetailPublications(
+    emission: BuiltInRuntimeRendererCatalogEmission,
+  ): readonly KernelProductDetailPublication<unknown>[] {
+    return [
+      ...emission.catalogs.map((catalog) => publishProductDetail(
+        TemplateProductDetails.BuiltInRuntimeRendererCatalog,
+        catalog.productHandle,
+        catalog,
+        KernelDetailAdmission.IfAbsent,
+      )),
+      ...emission.renderers.map((renderer) => publishProductDetail(
         TemplateProductDetails.RuntimeRenderer,
         renderer.renderer.productHandle!,
         renderer.renderer,
-      );
-    }
+        KernelDetailAdmission.IfAbsent,
+      )),
+    ];
   }
 
   private recordsForCatalog(input: BuiltInRuntimeRendererCatalogInput): {
@@ -383,21 +395,27 @@ export class BuiltInRuntimeRendererCatalogMaterializer {
 
 /** Selects framework-owned runtime renderers admitted by known framework registrations. */
 export class ConfiguredBuiltInRuntimeRendererCatalogMaterializer {
-  private readonly catalogMaterializer: BuiltInRuntimeRendererCatalogMaterializer;
-
   constructor(
-    /** Hot analysis store that receives configured renderer-catalog selection records. */
+    /** Store used for deterministic configured-selection handles. */
     readonly store: KernelStore,
-  ) {
-    this.catalogMaterializer = new BuiltInRuntimeRendererCatalogMaterializer(store);
-  }
+    /** App generation that owns configured renderer selections. */
+    private readonly publication: KernelPublicationContext,
+    /** Stable owner of checker-independent renderer catalogs. */
+    private readonly support: FrameworkSupportCatalogs,
+  ) {}
 
   materialize(configuration: ConfigurationKernelEmission): ConfiguredBuiltInRuntimeRendererCatalogEmission {
     const selectionRequests = readConfiguredRuntimeRendererCatalogRequests(configuration);
     const catalogEmission = this.catalogEmissionForRequests(selectionRequests);
     const selectionEmission = this.selectionEmissionForRequests(selectionRequests, catalogEmission);
-    this.commitSelectionRecords(selectionEmission.records);
-    this.registerSelectionDetails(selectionEmission.selections);
+    this.publication.publish(new KernelPublicationPlan(
+      new KernelStoreBatch(selectionEmission.records, 'configured-built-in-runtime-renderer-catalogs'),
+      selectionEmission.selections.map((selection) => publishProductDetail(
+        TemplateProductDetails.ConfiguredBuiltInRuntimeRendererCatalogSelection,
+        selection.productHandle,
+        selection,
+      )),
+    ));
 
     return new ConfiguredBuiltInRuntimeRendererCatalogEmission(
       catalogEmission,
@@ -413,7 +431,7 @@ export class ConfiguredBuiltInRuntimeRendererCatalogMaterializer {
       selectionRequests.flatMap((request) => request.catalogInputs),
       runtimeRendererCatalogInputKey,
     );
-    return this.catalogMaterializer.materialize(catalogInputs);
+    return this.support.materializeRendererCatalogs(catalogInputs);
   }
 
   private selectionEmissionForRequests(
@@ -432,7 +450,7 @@ export class ConfiguredBuiltInRuntimeRendererCatalogMaterializer {
         continue;
       }
       const emission = this.recordsForSelection(request.admission, request.frameworkKind, catalogs);
-      if (this.store.readProduct(emission.selection.productHandle) == null) {
+      if (this.publication.read(emission.selection.productHandle) == null) {
         records.push(...emission.records);
       }
       selections.push(emission.selection);
@@ -447,22 +465,6 @@ export class ConfiguredBuiltInRuntimeRendererCatalogMaterializer {
     return request.catalogInputs
       .map((catalogInput) => catalogsByKey.get(runtimeRendererCatalogInputKey(catalogInput)) ?? null)
       .filter((catalog): catalog is BuiltInRuntimeRendererCatalog => catalog != null);
-  }
-
-  private commitSelectionRecords(records: readonly KernelStoreRecord[]): void {
-    if (records.length > 0) {
-      this.store.commit(new KernelStoreBatch(records, 'configured-built-in-runtime-renderer-catalogs'));
-    }
-  }
-
-  private registerSelectionDetails(selections: readonly ConfiguredBuiltInRuntimeRendererCatalogSelection[]): void {
-    for (const selection of selections) {
-      this.store.productDetails.addIfAbsent(
-        TemplateProductDetails.ConfiguredBuiltInRuntimeRendererCatalogSelection,
-        selection.productHandle,
-        selection,
-      );
-    }
   }
 
   private recordsForSelection(
@@ -597,7 +599,7 @@ function readConfiguredRuntimeRendererCatalogRequests(
 ): readonly ConfiguredRuntimeRendererCatalogRequest[] {
   const requests: ConfiguredRuntimeRendererCatalogRequest[] = [];
   for (const admission of configuration.registrationAdmissions) {
-    const frameworkKind = frameworkRegistrationKindForAdmission(admission);
+    const frameworkKind = configuration.evaluationBindings.frameworkRegistrationKindForAdmissionEvidence(admission);
     if (frameworkKind == null) {
       continue;
     }
@@ -694,6 +696,12 @@ function runtimeRendererCatalogSummaryForFrameworkKind(frameworkKind: FrameworkR
       return 'ValidationConfiguration admitted validation services but no runtime renderers.';
     case FrameworkRegistrationKind.ValidationHtmlConfiguration:
       return 'ValidationHtmlConfiguration admitted validation resources and services but no runtime renderers.';
+    case FrameworkRegistrationKind.ValidationI18nConfiguration:
+      return 'ValidationI18nConfiguration admitted localized validation services and resources but no runtime renderers.';
+    case FrameworkRegistrationKind.LoggerConfiguration:
+      return 'LoggerConfiguration admitted logging services but no runtime renderers.';
+    case FrameworkRegistrationKind.StyleConfiguration:
+      return 'StyleConfiguration admitted a shadow-DOM style lifecycle task but no runtime renderers.';
     case FrameworkRegistrationKind.RouterConfiguration:
       return 'RouterConfiguration admitted no runtime renderers in the current catalog.';
     case FrameworkRegistrationKind.RouterDefaultComponents:
@@ -714,6 +722,8 @@ function runtimeRendererCatalogSummaryForFrameworkKind(frameworkKind: FrameworkR
       return 'RuntimeHtml DefaultBindingLanguage spread does not admit runtime renderers.';
     case FrameworkRegistrationKind.RuntimeHtmlDefaultResources:
       return 'RuntimeHtml DefaultResources spread does not admit runtime renderers.';
+    case FrameworkRegistrationKind.RuntimeHtmlArrayLikeHandler:
+      return 'RuntimeHtml ArrayLikeHandler admitted a DI repeat-handler effect but no runtime renderers.';
     case FrameworkRegistrationKind.AppTask:
       return 'AppTask registry does not admit runtime renderer catalogs.';
   }

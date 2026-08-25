@@ -14,6 +14,15 @@ import {
   DiContainerApiMethodKind,
 } from '../di/container-api-recognition.js';
 import {
+  DiKeyExpressionIdentityRequest,
+  DiKeyIdentityEmitter,
+} from '../di/di-key-identity-emitter.js';
+import {
+  DiClassDependencyPositionState,
+  DiClassDependencyProjectView,
+  DiClassDependencySlotState,
+} from '../di/class-dependency-plan.js';
+import {
   readAureliaResolverWrapperCall,
 } from '../di/resolver-wrapper-recognition.js';
 import {
@@ -34,7 +43,12 @@ import {
 import { OpenSeamReasonKind } from '../kernel/open-seam.js';
 import { ProvenanceRecord } from '../kernel/provenance.js';
 import {
-  recordsForSourceOpenSeams,
+  KernelPublicationPlan,
+  publishProductDetails,
+  type KernelPublicationContext,
+} from '../kernel/publication.js';
+import {
+  recordsForSourceOpenMaterializations,
   type SourceOpenSeamInput,
 } from '../kernel/source-open-seam.js';
 import {
@@ -47,6 +61,10 @@ import {
 } from '../kernel/store.js';
 import { KernelVocabulary } from '../kernel/vocabulary.js';
 import type { TypeSystemProject } from '../type-system/project.js';
+import {
+  sourceSpanForCheckerNode,
+} from '../type-system/declaration-source.js';
+import { SourceSpanRole } from '../kernel/address.js';
 import {
   symbolForExpression,
 } from '../type-system/checker-node-helpers.js';
@@ -76,6 +94,12 @@ interface FrameworkServiceDescriptor {
   readonly directConstructors: ReadonlySet<string>;
 }
 
+interface FrameworkServiceKeyReference {
+  readonly exportName: string;
+  /** Runtime registration key consulted by the service root, excluding resolver wrappers around that key. */
+  readonly identityExpression: ts.Expression;
+}
+
 interface FrameworkServiceRootSite {
   readonly sourcePath: string;
   readonly sourceFileAddressHandle: ProjectBootFrame['sourceFiles'][number]['addressHandle'];
@@ -86,6 +110,7 @@ interface FrameworkServiceRootSite {
   readonly rootKind: FrameworkServiceRootKind;
   readonly serviceFamily: string | null;
   readonly serviceKeyName: string;
+  readonly serviceKeyExpression: ts.Expression | null;
   readonly basis: FrameworkServiceRootBasis;
   readonly symbol: ts.Symbol | null;
   readonly ownerIdentityHandle: IdentityHandle | null;
@@ -111,40 +136,48 @@ export class FrameworkServiceRootMaterializationResult extends FrameworkServiceR
 }
 
 export class FrameworkServiceRootMaterializer {
+  private readonly keyIdentities: DiKeyIdentityEmitter;
+
   constructor(
     readonly store: KernelStore,
-  ) {}
+    readonly publication: KernelPublicationContext,
+  ) {
+    this.keyIdentities = new DiKeyIdentityEmitter(publication);
+  }
 
   materializeAndEmit(
     project: ProjectBootFrame,
     typeSystem: TypeSystemProject,
     sourceApiRoots: AureliaSourceApiRootFacts,
+    classDependencies: DiClassDependencyProjectView,
   ): FrameworkServiceRootMaterializationResult {
     const containerPublications = uniqueRootSites(readFrameworkContainerRootSites(project, typeSystem, sourceApiRoots))
-      .map((site) => this.publishRoot(project, site));
+      .map((site) => this.publishRoot(project, typeSystem, site));
     const containerFacts = rootFactsForPublications(containerPublications);
     const rootsWithContainers = sourceApiRoots.withFrameworkServiceRootProducts(containerFacts);
     const servicePublications = uniqueRootSites(readFrameworkServiceRootSites(project, typeSystem, rootsWithContainers))
-      .map((site) => this.publishRoot(project, site));
-    const candidateSeams = recordsForSourceOpenSeams(
+      .map((site) => this.publishRoot(project, typeSystem, site));
+    const candidateSeams = recordsForSourceOpenMaterializations(
       this.store,
-      cappedCandidateSeamsBySource(readFrameworkServiceRootCandidateSeams(project, typeSystem, rootsWithContainers)),
+      cappedCandidateSeamsBySource(readFrameworkServiceRootCandidateSeams(
+        project,
+        typeSystem,
+        rootsWithContainers,
+        classDependencies,
+      )),
     );
     const allPublications = [...containerPublications, ...servicePublications];
     const records = [
       ...allPublications.flatMap((publication) => publication.records),
       ...candidateSeams.records,
     ];
-    if (records.length > 0) {
-      this.store.commit(new KernelStoreBatch(records, `framework-service-roots:${project.projectKey}`));
-    }
-    for (const publication of allPublications) {
-      this.store.productDetails.add(
+    this.publication.publish(new KernelPublicationPlan(
+      new KernelStoreBatch(records, `framework-service-roots:${project.projectKey}`),
+      publishProductDetails(
         FrameworkProductDetails.ServiceRoot,
-        publication.root.productHandle,
-        publication.root,
-      );
-    }
+        allPublications.map((publication) => publication.root),
+      ),
+    ));
     const enrichedRoots = sourceApiRoots.withFrameworkServiceRootProducts(rootFactsForPublications(allPublications));
     return new FrameworkServiceRootMaterializationResult(
       allPublications.map((publication) => publication.root),
@@ -155,6 +188,7 @@ export class FrameworkServiceRootMaterializer {
 
   private publishRoot(
     project: ProjectBootFrame,
+    typeSystem: TypeSystemProject,
     site: FrameworkServiceRootSite,
   ): FrameworkServiceRootPublication {
     const local = serviceRootLocalKey(project.projectKey, site);
@@ -170,6 +204,39 @@ export class FrameworkServiceRootMaterializer {
     const provenanceHandle = this.store.handles.provenance(local);
     const productHandle = this.store.handles.product(local);
     const identityHandle = this.store.handles.identity(local);
+    const programServiceKeyExpression = site.serviceKeyExpression == null
+      ? null
+      : typeSystem.readProgramExpression(site.serviceKeyExpression);
+    const keySource = programServiceKeyExpression == null
+      ? null
+      : sourceSpanForCheckerNode(
+          this.publication,
+          typeSystem.checker,
+          `${local}:service-key`,
+          programServiceKeyExpression,
+          SourceSpanRole.Value,
+        );
+    const records: KernelStoreRecord[] = [
+      ...source.records,
+      ...(evidenceSource === source ? [] : evidenceSource.records),
+      ...(keySource?.records ?? []),
+    ];
+    const keyIdentity = site.serviceKeyExpression == null || keySource == null
+      ? null
+      : this.keyIdentities.emitExpressionKeyIdentity(
+          records,
+          this.publication,
+          new DiKeyExpressionIdentityRequest(
+            project.projectKey,
+            site.serviceKeyExpression,
+            site.serviceKeyName,
+            null,
+            null,
+            typeSystem,
+            this.store.handles.identity(`${local}:service-key:fallback`),
+            keySource.address.handle,
+          ),
+        );
     const root = new FrameworkServiceRoot(
       productHandle,
       identityHandle,
@@ -177,6 +244,7 @@ export class FrameworkServiceRootMaterializer {
       site.rootKind,
       site.serviceFamily,
       site.serviceKeyName,
+      keyIdentity?.identityHandle ?? null,
       site.basis,
       site.sourcePath,
       site.start,
@@ -188,9 +256,7 @@ export class FrameworkServiceRootMaterializer {
       site.ownerIdentityHandle,
       site.ownerProductHandle,
     );
-    const records = [
-      ...source.records,
-      ...(evidenceSource === source ? [] : evidenceSource.records),
+    records.push(
       new EvidenceRecord(
         evidenceHandle,
         evidenceKindForBasis(site.basis),
@@ -218,7 +284,7 @@ export class FrameworkServiceRootMaterializer {
         identityHandle,
         [productHandle],
       ),
-    ];
+    );
     return new FrameworkServiceRootPublication(root, records, site.symbol);
   }
 }
@@ -244,8 +310,6 @@ const FRAMEWORK_SERVICE_DESCRIPTORS: readonly FrameworkServiceDescriptor[] = [
   },
 ];
 
-const AURELIA_INJECT_MODULES = new Set(['aurelia', '@aurelia/kernel']);
-const AURELIA_INJECT_EXPORTS = new Set(['inject']);
 const MAX_SERVICE_ROOT_CANDIDATE_SEAMS_PER_FILE = 8;
 
 function readFrameworkContainerRootSites(
@@ -254,7 +318,7 @@ function readFrameworkContainerRootSites(
   sourceApiRoots: AureliaSourceApiRootFacts,
 ): readonly FrameworkServiceRootSite[] {
   return project.sourceFiles.flatMap((source) => {
-    const sourceFile = typeSystem.readProgramSourceFileByPath(source.path);
+    const sourceFile = typeSystem.readProgramSourceFileByProjectPath(source.path);
     if (sourceFile == null) {
       return [];
     }
@@ -275,6 +339,7 @@ function readFrameworkContainerRootSites(
           rootKind: FrameworkServiceRootKind.Container,
           serviceFamily: null,
           serviceKeyName: 'IContainer',
+          serviceKeyExpression: callbackRoot.keyExpression,
           basis: FrameworkServiceRootBasis.AppTaskDeclaredKey,
           symbol: callbackRoot.symbol,
           ownerIdentityHandle: null,
@@ -304,9 +369,10 @@ function readFrameworkServiceRootCandidateSeams(
   project: ProjectBootFrame,
   typeSystem: TypeSystemProject,
   sourceApiRoots: AureliaSourceApiRootFacts,
+  classDependencies: DiClassDependencyProjectView,
 ): readonly SourceOpenSeamInput[] {
   return project.sourceFiles.flatMap((source) => {
-    const sourceFile = typeSystem.readProgramSourceFileByPath(source.path);
+    const sourceFile = typeSystem.readProgramSourceFileByProjectPath(source.path);
     if (sourceFile == null) {
       return [];
     }
@@ -314,7 +380,6 @@ function readFrameworkServiceRootCandidateSeams(
       descriptor.serviceFamily,
       readSourceImportBindings(sourceFile, descriptor.moduleSpecifiers, descriptor.exports),
     ]));
-    const injectBindings = readSourceImportBindings(sourceFile, AURELIA_INJECT_MODULES, AURELIA_INJECT_EXPORTS);
     const seams: SourceOpenSeamInput[] = [];
     const visit = (node: ts.Node): void => {
       if (ts.isCallExpression(node)) {
@@ -322,7 +387,13 @@ function readFrameworkServiceRootCandidateSeams(
         pushNullable(seams, containerApiCandidateSeam(source, sourceFile, typeSystem, sourceApiRoots, serviceBindings, node));
       }
       if (ts.isClassDeclaration(node)) {
-        seams.push(...classicInjectionCandidateSeams(source, sourceFile, serviceBindings, injectBindings, node));
+        seams.push(...classDependencyCandidateSeams(
+          source,
+          sourceFile,
+          serviceBindings,
+          node,
+          classDependencies,
+        ));
       }
       ts.forEachChild(node, visit);
     };
@@ -407,7 +478,7 @@ function containerApiCandidateSeam(
     if (bindings == null) {
       continue;
     }
-    const serviceKeyName = readResolverWrappedServiceKeyName(typeSystem.checker, first, bindings, descriptor.exports);
+    const serviceKeyName = readResolverWrappedServiceKeyName(typeSystem, first, bindings, descriptor.exports);
     if (serviceKeyName == null) {
       continue;
     }
@@ -422,88 +493,66 @@ function containerApiCandidateSeam(
 }
 
 function readResolverWrappedServiceKeyName(
-  checker: ts.TypeChecker,
+  typeSystem: TypeSystemProject,
   expression: ts.Expression,
   bindings: SourceImportBindings,
   allowedExports: ReadonlySet<string>,
 ): string | null {
-  const wrapper = readAureliaResolverWrapperCall(checker, expression);
+  const wrapper = readAureliaResolverWrapperCall(typeSystem, expression);
   if (wrapper?.innerExpression == null) {
     return null;
   }
   return readServiceKeyNameFromExpression(wrapper.innerExpression, bindings, allowedExports);
 }
 
-function classicInjectionCandidateSeams(
+function classDependencyCandidateSeams(
   source: ProjectBootFrame['sourceFiles'][number],
   sourceFile: ts.SourceFile,
   bindingsByFamily: ReadonlyMap<string, SourceImportBindings>,
-  injectBindings: SourceImportBindings,
   node: ts.ClassDeclaration,
+  classDependencies: DiClassDependencyProjectView,
 ): readonly SourceOpenSeamInput[] {
-  const seams: SourceOpenSeamInput[] = [];
-  for (const member of node.members) {
-    if (!memberIsStaticInjectMetadata(member)) {
-      continue;
-    }
-    for (const array of staticInjectArrayExpressions(member)) {
-      for (const element of array.elements) {
-        if (!ts.isSpreadElement(element) && expressionReferencesAnyFrameworkService(element, bindingsByFamily)) {
-          seams.push(candidateSeamForNode(
-            source,
-            sourceFile,
-            element,
-            'Classic static inject metadata names a framework service key; constructor parameter ownership is not modeled as a positive source service root yet.',
-          ));
-        }
-      }
-    }
+  const plan = classDependencies.readForDeclaration(node);
+  if (plan == null) {
+    return [];
   }
-  for (const decorator of ts.canHaveDecorators(node) ? ts.getDecorators(node) ?? [] : []) {
-    const expression = unwrapExpression(decorator.expression);
-    if (!ts.isCallExpression(expression) || readImportedExportName(expression.expression, injectBindings, AURELIA_INJECT_EXPORTS) == null) {
-      continue;
-    }
-    for (const argument of expression.arguments) {
-      if (!ts.isSpreadElement(argument) && expressionReferencesAnyFrameworkService(argument, bindingsByFamily)) {
-        seams.push(candidateSeamForNode(
+  const seams: SourceOpenSeamInput[] = [];
+  if (plan.positionState === DiClassDependencyPositionState.Open) {
+    return sourceImportsAnyFrameworkService(bindingsByFamily)
+      ? [candidateSeamForNode(
           source,
           sourceFile,
-          argument,
-          'Classic @inject(...) metadata names a framework service key; constructor parameter ownership is not modeled as a positive source service root yet.',
-        ));
-      }
+          node.name ?? node,
+          'Aurelia class dependency metadata stayed open while this source imports a modeled framework service; constructor parameter ownership cannot be classified as a positive service root.',
+        )]
+      : [];
+  }
+  if (plan.positionState !== DiClassDependencyPositionState.Exact) {
+    return [];
+  }
+  for (const dependency of plan.slots) {
+    if (
+      dependency.state === DiClassDependencySlotState.Present
+      && dependency.lookupKeyExpression != null
+      && expressionReferencesAnyFrameworkService(dependency.lookupKeyExpression, bindingsByFamily)
+    ) {
+      seams.push(candidateSeamForNode(
+        source,
+        sourceFile,
+        dependency.lookupKeyExpression,
+        'Aurelia class dependency metadata names a framework service key; constructor parameter ownership is not modeled as a positive source service root yet.',
+      ));
     }
   }
   return seams;
 }
 
-function memberIsStaticInjectMetadata(
-  member: ts.ClassElement,
-): member is ts.PropertyDeclaration | ts.GetAccessorDeclaration {
-  return (
-    ts.isPropertyDeclaration(member)
-    || ts.isGetAccessorDeclaration(member)
-  ) && propertyNameIs(member.name, 'inject') && isStaticMember(member);
-}
-
-function staticInjectArrayExpressions(
-  member: ts.PropertyDeclaration | ts.GetAccessorDeclaration,
-): readonly ts.ArrayLiteralExpression[] {
-  if (ts.isPropertyDeclaration(member)) {
-    const initializer = member.initializer == null ? null : unwrapExpression(member.initializer);
-    return initializer != null && ts.isArrayLiteralExpression(initializer) ? [initializer] : [];
-  }
-  const body = member.body;
-  if (body == null) {
-    return [];
-  }
-  const returns = body.statements.filter(ts.isReturnStatement);
-  if (returns.length !== 1 || returns[0]?.expression == null) {
-    return [];
-  }
-  const expression = unwrapExpression(returns[0].expression);
-  return ts.isArrayLiteralExpression(expression) ? [expression] : [];
+function sourceImportsAnyFrameworkService(
+  bindingsByFamily: ReadonlyMap<string, SourceImportBindings>,
+): boolean {
+  return [...bindingsByFamily.values()].some((bindings) =>
+    bindings.locals.size > 0 || bindings.namespaces.size > 0
+  );
 }
 
 function expressionReferencesResolveNamedSymbol(
@@ -581,7 +630,6 @@ function candidateSeamForNode(
     end: node.getEnd(),
     evidenceRoles: [EvidenceRole.Usage, EvidenceRole.Diagnostic],
     reasonKinds: [OpenSeamReasonKind.FrameworkServiceRootCandidateOpen],
-    includeProvenanceRecord: true,
   };
 }
 
@@ -647,7 +695,7 @@ function readFrameworkServiceRootSites(
   sourceApiRoots: AureliaSourceApiRootFacts,
 ): readonly FrameworkServiceRootSite[] {
   return project.sourceFiles.flatMap((source) => {
-    const sourceFile = typeSystem.readProgramSourceFileByPath(source.path);
+    const sourceFile = typeSystem.readProgramSourceFileByProjectPath(source.path);
     if (sourceFile == null) {
       return [];
     }
@@ -678,6 +726,7 @@ function readFrameworkServiceRootSites(
           rootKind: FrameworkServiceRootKind.Service,
           serviceFamily: descriptor.serviceFamily,
           serviceKeyName: keyName,
+          serviceKeyExpression: callbackRoot.keyExpression,
           basis: FrameworkServiceRootBasis.AppTaskDeclaredKey,
           symbol: callbackRoot.symbol,
           ownerIdentityHandle: null,
@@ -724,16 +773,20 @@ function containerDeclarationRootSite(
   if (basis == null) {
     return null;
   }
+  const evidence = node.initializer == null ? name : unwrapExpression(node.initializer);
   return {
     sourcePath: source.path,
     sourceFileAddressHandle: source.addressHandle,
     start: name.getStart(sourceFile),
     end: name.end,
-    evidenceStart: name.getStart(sourceFile),
-    evidenceEnd: name.end,
+    evidenceStart: evidence.getStart(sourceFile),
+    evidenceEnd: evidence.end,
     rootKind: FrameworkServiceRootKind.Container,
     serviceFamily: null,
     serviceKeyName: 'IContainer',
+    serviceKeyExpression: basis === FrameworkServiceRootBasis.DiActivationBacked
+      ? directDiKeyExpression(node.initializer ?? null)
+      : null,
     basis,
     symbol: sourceRootSymbolForPropertyName(typeSystem, name),
     ownerIdentityHandle: null,
@@ -803,6 +856,7 @@ function serviceDeclarationRootSite(
         rootKind: FrameworkServiceRootKind.Service,
         serviceFamily: descriptor.serviceFamily,
         serviceKeyName: typeName,
+        serviceKeyExpression: null,
         basis: FrameworkServiceRootBasis.FrameworkTypeAnnotation,
         symbol: sourceRootSymbolForPropertyName(typeSystem, name),
         ownerIdentityHandle: null,
@@ -854,10 +908,10 @@ function serviceCallRootSite(
     }
     if (callIsProvidedByAureliaResolveActivation(sourceApiRoots, source.path, sourceFile, call)) {
       const first = call.arguments[0] ?? null;
-      const keyName = first == null || ts.isSpreadElement(first)
+      const key = first == null || ts.isSpreadElement(first)
         ? null
-        : readServiceKeyNameFromExpression(first, bindings, descriptor.exports);
-      if (keyName != null) {
+        : readServiceKeyReferenceFromExpression(first, bindings, descriptor.exports);
+      if (key != null) {
         return {
           sourcePath: source.path,
           sourceFileAddressHandle: source.addressHandle,
@@ -867,7 +921,8 @@ function serviceCallRootSite(
           evidenceEnd: call.end,
           rootKind: FrameworkServiceRootKind.Service,
           serviceFamily: descriptor.serviceFamily,
-          serviceKeyName: keyName,
+          serviceKeyName: key.exportName,
+          serviceKeyExpression: key.identityExpression,
           basis: FrameworkServiceRootBasis.DiActivationBacked,
           symbol,
           ownerIdentityHandle: null,
@@ -880,10 +935,10 @@ function serviceCallRootSite(
       || callIsAureliaContainerGetCall(sourceApiRoots, source.path, sourceFile, call)
     ) {
       const first = call.arguments[0] ?? null;
-      const keyName = first == null || ts.isSpreadElement(first)
+      const key = first == null || ts.isSpreadElement(first)
         ? null
-        : readServiceKeyNameFromExpression(first, bindings, descriptor.exports);
-      if (keyName != null) {
+        : readServiceKeyReferenceFromExpression(first, bindings, descriptor.exports);
+      if (key != null) {
         const callee = unwrapExpression(call.expression);
         const receiver = ts.isPropertyAccessExpression(callee)
           ? callee.expression
@@ -900,7 +955,8 @@ function serviceCallRootSite(
           evidenceEnd: call.end,
           rootKind: FrameworkServiceRootKind.Service,
           serviceFamily: descriptor.serviceFamily,
-          serviceKeyName: keyName,
+          serviceKeyName: key.exportName,
+          serviceKeyExpression: key.identityExpression,
           basis: FrameworkServiceRootBasis.ContainerGetBacked,
           symbol,
           ownerIdentityHandle: containerRoot?.identityHandle ?? null,
@@ -939,6 +995,7 @@ function serviceConstructorRootSite(
       rootKind: FrameworkServiceRootKind.Service,
       serviceFamily: descriptor.serviceFamily,
       serviceKeyName: keyName,
+      serviceKeyExpression: null,
       basis: FrameworkServiceRootBasis.DirectConstructor,
       symbol,
       ownerIdentityHandle: null,
@@ -948,15 +1005,15 @@ function serviceConstructorRootSite(
   return null;
 }
 
-function readServiceKeyNameFromExpression(
+function readServiceKeyReferenceFromExpression(
   expression: ts.Expression,
   bindings: SourceImportBindings,
   allowedExports: ReadonlySet<string>,
-): string | null {
+): FrameworkServiceKeyReference | null {
   const current = unwrapExpression(expression);
   const direct = readImportedExportName(current, bindings, allowedExports);
   if (direct != null) {
-    return direct;
+    return { exportName: direct, identityExpression: current };
   }
   if (ts.isCallExpression(current)) {
     const callee = unwrapExpression(current.expression);
@@ -964,10 +1021,27 @@ function readServiceKeyNameFromExpression(
       return null;
     }
     if (callee.name.text === 'child') {
-      return readImportedExportName(callee.expression, bindings, allowedExports);
+      const exportName = readImportedExportName(callee.expression, bindings, allowedExports);
+      return exportName == null
+        ? null
+        : { exportName, identityExpression: callee.expression };
     }
   }
   return null;
+}
+
+function readServiceKeyNameFromExpression(
+  expression: ts.Expression,
+  bindings: SourceImportBindings,
+  allowedExports: ReadonlySet<string>,
+): string | null {
+  return readServiceKeyReferenceFromExpression(expression, bindings, allowedExports)?.exportName ?? null;
+}
+
+function directDiKeyExpression(expression: ts.Expression | null): ts.Expression | null {
+  const current = expression == null ? null : unwrapExpression(expression);
+  const first = current != null && ts.isCallExpression(current) ? current.arguments[0] ?? null : null;
+  return first == null || ts.isSpreadElement(first) ? null : first;
 }
 
 function readImportedTypeExportName(
@@ -1082,23 +1156,6 @@ function isSourceRootPropertyName(
   name: ts.Identifier | ts.PropertyName,
 ): name is ts.Identifier | ts.StringLiteralLike | ts.NumericLiteral {
   return ts.isIdentifier(name) || ts.isStringLiteralLike(name) || ts.isNumericLiteral(name);
-}
-
-function propertyNameIs(
-  name: ts.PropertyName,
-  expected: string,
-): boolean {
-  return (
-    ts.isIdentifier(name)
-    || ts.isStringLiteralLike(name)
-    || ts.isNumericLiteral(name)
-  ) && name.text === expected;
-}
-
-function isStaticMember(
-  node: ts.ClassElement,
-): boolean {
-  return (ts.getCombinedModifierFlags(node) & ts.ModifierFlags.Static) !== 0;
 }
 
 function expressionIsDirectDeclarationInitializer(

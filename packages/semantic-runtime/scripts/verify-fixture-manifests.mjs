@@ -11,7 +11,7 @@ import {
   ExpectedSemanticEffectFilter,
   FixtureVerificationRequest,
   SemanticAppQueryKind,
-  SemanticRuntimeAnswerOutcome,
+  SemanticRuntimeAnswerResult,
   answerSemanticRuntimeAppBuilderQuery,
   createSemanticRuntime,
   readFixtureVerificationSnapshot,
@@ -185,11 +185,11 @@ function verifyControlUseInventoryRows(manifest, app) {
     kind: SemanticAppQueryKind.ControlUseInventory,
     page: { size: 1000 },
   });
-  if (answer.outcome !== 'hit') {
+  if (answer.result !== SemanticRuntimeAnswerResult.Answered) {
     const failure = {
       outcome: 'failed',
       effectKind: 'control-use-inventory',
-      summary: `Control-use inventory query failed with outcome '${answer.outcome}'.`,
+      summary: `Control-use inventory query failed with result '${answer.result}'.`,
     };
     return {
       expectedRows: expectedRows.length,
@@ -251,7 +251,7 @@ async function verifyGeneratedAppBuilderIdempotency(rootDir, manifest) {
   const detailedAnswer = answerSemanticRuntimeAppBuilderQuery(
     appBuilderGeneratedFixtureDetailRequest(materializedRequest),
   );
-  if (answer.outcome !== SemanticRuntimeAnswerOutcome.Hit || answer.value.sourcePlan == null) {
+  if (answer.result !== SemanticRuntimeAnswerResult.Answered || answer.value.sourcePlan == null) {
     const failure = {
       outcome: 'failed',
       effectKind: 'generated-app-builder-idempotency',
@@ -273,7 +273,7 @@ async function verifyGeneratedAppBuilderIdempotency(rootDir, manifest) {
       failures: [failure],
     };
   }
-  if (detailedAnswer.outcome !== SemanticRuntimeAnswerOutcome.Hit || detailedAnswer.value.sourcePlan == null) {
+  if (detailedAnswer.result !== SemanticRuntimeAnswerResult.Answered || detailedAnswer.value.sourcePlan == null) {
     const failure = {
       outcome: 'failed',
       effectKind: 'generated-app-builder-idempotency',

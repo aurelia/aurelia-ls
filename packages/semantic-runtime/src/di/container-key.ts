@@ -2,6 +2,7 @@ import type {
   AddressHandle,
   IdentityHandle,
 } from '../kernel/handles.js';
+import { DiKeyIdentityKind } from '../kernel/identity.js';
 import {
   RegistrationValueKind,
   type RegistrationKeyReference,
@@ -97,7 +98,34 @@ function keyKindForRegistrationKey(
   if (key.localName != null && intrinsicTypeNames.has(key.localName)) {
     return ContainerLookupKeyKind.IntrinsicConstructable;
   }
-  return ContainerLookupKeyKind.Unknown;
+  return containerLookupKeyKindForIdentityKind(key.keyKind);
+}
+
+/** Map canonical DI identity vocabulary to the runtime container branch it selects. */
+export function containerLookupKeyKindForIdentityKind(
+  keyKind: DiKeyIdentityKind | null,
+): ContainerLookupKeyKind {
+  switch (keyKind) {
+    case DiKeyIdentityKind.Constructable:
+      return ContainerLookupKeyKind.Constructable;
+    case DiKeyIdentityKind.Interface:
+      return ContainerLookupKeyKind.Interface;
+    case DiKeyIdentityKind.String:
+      return ContainerLookupKeyKind.String;
+    case DiKeyIdentityKind.Symbol:
+      return ContainerLookupKeyKind.Symbol;
+    case DiKeyIdentityKind.Object:
+      return ContainerLookupKeyKind.Object;
+    case DiKeyIdentityKind.Primitive:
+      return ContainerLookupKeyKind.Primitive;
+    case DiKeyIdentityKind.Resource:
+      return ContainerLookupKeyKind.Resource;
+    case DiKeyIdentityKind.ResolverKey:
+      return ContainerLookupKeyKind.Resolver;
+    case DiKeyIdentityKind.Unknown:
+    case null:
+      return ContainerLookupKeyKind.Unknown;
+  }
 }
 
 function keyKindForRegistrationValue(
@@ -117,13 +145,15 @@ function keyKindForRegistrationValue(
     case RegistrationValueKind.Resolver:
       return ContainerLookupKeyKind.Resolver;
     case RegistrationValueKind.ResourceDefinition:
+    case RegistrationValueKind.ResourceDefinitionConstraint:
       return ContainerLookupKeyKind.Resource;
+    case RegistrationValueKind.AliasTarget:
+      return containerLookupKeyKindForIdentityKind(value.keyKind);
     case RegistrationValueKind.Instance:
     case RegistrationValueKind.Callback:
     case RegistrationValueKind.CachedCallback:
-    case RegistrationValueKind.AliasTarget:
     case RegistrationValueKind.Factory:
-    case RegistrationValueKind.ObjectMap:
+    case RegistrationValueKind.RecursiveCarrier:
     case RegistrationValueKind.Unknown:
       return ContainerLookupKeyKind.Unknown;
   }

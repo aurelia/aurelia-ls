@@ -6,12 +6,8 @@ import {
   DiagnosticActionKind,
   DiagnosticActionPlanKind,
   DiagnosticActionPlanReadiness,
-  DiagnosticActionTargetSourceCoverage,
   SemanticAppQueryKind,
-  diagnosticActionChangeDomainForPlan,
-  diagnosticActionKindForDiagnosticSuggestion,
-  diagnosticActionPlanKindForAction,
-  diagnosticActionPlanReadinessForCluster,
+  diagnosticRepairAffordanceForSuggestion,
 } from '../out/index.js';
 import { FrameworkProductDetails } from '../out/framework/product-details.js';
 import { KernelVocabulary } from '../out/kernel/vocabulary.js';
@@ -202,24 +198,7 @@ function providedDiKeyInterfaceNames(store) {
 }
 
 function readDiagnosticActionProbe(suggestion) {
-  const actionKind = diagnosticActionKindForDiagnosticSuggestion(suggestion?.suggestionKind ?? null);
-  const planKind = diagnosticActionPlanKindForAction(
-    actionKind,
-    suggestion?.actionKind ?? null,
-    suggestion?.actionTarget?.targetKind ?? null,
-  );
-  return {
-    actionKind,
-    planKind,
-    changeDomain: diagnosticActionChangeDomainForPlan(planKind),
-    readiness: diagnosticActionPlanReadinessForCluster(
-      planKind,
-      suggestion?.actionTarget?.source == null
-        ? DiagnosticActionTargetSourceCoverage.None
-        : DiagnosticActionTargetSourceCoverage.All,
-      [],
-    ),
-  };
+  return diagnosticRepairAffordanceForSuggestion(suggestion);
 }
 
 function productHandleLocalSuffixes(products) {

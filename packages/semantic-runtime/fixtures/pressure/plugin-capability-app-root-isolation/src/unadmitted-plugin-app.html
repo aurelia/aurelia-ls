@@ -1,0 +1,17 @@
+<template>
+  <h1 t="dashboard.title"></h1>
+  <p t.bind="titleKey"></p>
+
+  <ul>
+    <li virtual-repeat.for="entry of entries">Unavailable</li>
+  </ul>
+
+  <validation-container>
+    <input value.bind="displayName & validate">
+    <div validation-errors.bind="errors"></div>
+  </validation-container>
+
+  <input value.state="ready">
+  <button click.dispatch="{ type: 'save' }">Save</button>
+  <output>${ready & state}</output>
+</template>

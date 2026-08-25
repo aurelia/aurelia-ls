@@ -1,43 +1,57 @@
-import { AttributeParserMachine, AttributeParserService } from './attribute-syntax.js';
+import {
+  AttributeParserMachine,
+  AttributeParserService,
+  type AttributePatternExecutable,
+  type CompiledAttributePattern,
+} from './attribute-syntax.js';
 import {
   BindingCommandResolverService,
   type BindingCommandExecutable,
 } from './binding-command-execution.js';
 import {
-  TemplateCompilerIssue,
+  type TemplateCompilerIssue,
   TemplateCompilerIssueKind,
   TemplateCompilerIssuePhase,
+  TemplateCompilerIssueRelatedInformation,
   type TemplateCompilerIssueSeverity,
 } from './compiler-issue.js';
 import {
   TemplateCompilerIssuePublisher,
 } from './compiler-issue-publication.js';
-import type { NodeObserverLocatorConfiguration } from '../observation/observer-locator.js';
+import {
+  ObserverLocatorConfiguration,
+} from '../observation/observer-locator.js';
 import { AttributeMapperConfiguration } from './attribute-mapper.js';
+import { RuntimeKeyMappingConfiguration } from './runtime-event-modifier.js';
 import {
   TemplateCompilerService,
   TemplateCompilerWorld,
-  TemplateCompilerWorldKind,
+  type TemplateCompilerWorldKind,
   TemplateAttributeMapperService,
   TemplateExpressionParserService,
   TemplateRenderingService,
   TemplateResourceResolverService,
   TemplateResourceScope,
+  type TemplateResourceScopeBlockedLookup,
+  type TemplateResourceScopeExclusion,
+  type TemplateResourceScopeLookup,
+  type TemplateResourceScopeReference,
 } from './compiler-world.js';
 import {
+  sameTemplateVisibleResourceSet,
   type TemplateCompilerServiceReference,
-  TemplateResourceVisibilityKind,
+  type TemplateResourceVisibilityKind,
   TemplateVisibleResource,
 } from './compiler-world-reference.js';
 import type {
-  BuiltInAttributePatternEmission,
-  BuiltInBindingCommandEmission,
-} from './built-in-syntax-catalog-materializer.js';
+  CompilerAttributePatternResource,
+  CompilerBindingCommandResource,
+} from './syntax-resource-materializer.js';
 import type { BuiltInRuntimeRendererEmission } from './runtime-renderer-catalog-materializer.js';
 import {
   TemplateCompilerFrameworkErrorCode,
 } from './framework-error-code.js';
-import type { AppRoot } from '../configuration/app-root.js';
+import type { AppRootReference } from '../configuration/app-root.js';
 import type { Container } from '../di/container.js';
 import { SemanticClaim } from '../kernel/claim.js';
 import {
@@ -61,9 +75,15 @@ import {
 import {
   ProvenanceRecord,
 } from '../kernel/provenance.js';
+import type { ProductDetailSlot } from '../kernel/product-details.js';
+import {
+  KernelPublicationPlan,
+  publishProductDetail,
+  type KernelPublicationContext,
+} from '../kernel/publication.js';
 import {
   KernelStoreBatch,
-  type KernelStore,
+  type KernelStoreReadView,
   type KernelStoreRecord,
 } from '../kernel/store.js';
 import {
@@ -73,6 +93,8 @@ import {
 import { ResourceDefinitionKind } from '../resources/resource-kind.js';
 import type { AttributePatternDefinitionEntry } from '../resources/attribute-pattern-definition.js';
 import { TemplateProductDetails } from './product-details.js';
+import { mergeVisibleResourceScopeResolution } from './resource-scope-builder.js';
+import type { StaticCallableExecutionBindings } from '../evaluation/function-execution.js';
 
 export class TemplateCompilerWorldConstructionRequest {
   constructor(
@@ -83,23 +105,50 @@ export class TemplateCompilerWorldConstructionRequest {
     /** Container whose DI/resource state feeds this compiler world. */
     readonly container: Container,
     /** AppRoot that owns this compiler world, if known. */
-    readonly appRoot: AppRoot | null,
-    /** Non-syntax resources already selected as visible to this compiler world. */
+    readonly appRoot: AppRootReference | null,
+    /** Compiler-context resource membership; exact runtime availability is carried separately by resourceLookups. */
     readonly resources: readonly TemplateVisibleResource[],
     /** Attribute-pattern executables selected as visible to this compiler world. */
-    readonly attributePatterns: readonly BuiltInAttributePatternEmission[],
+    readonly attributePatterns: readonly CompilerAttributePatternResource[],
     /** Binding-command executables selected as visible to this compiler world. */
-    readonly bindingCommands: readonly BuiltInBindingCommandEmission[],
+    readonly bindingCommands: readonly CompilerBindingCommandResource[],
     /** Runtime renderers selected as visible to Rendering in this compiler world. */
     readonly runtimeRenderers: readonly BuiltInRuntimeRendererEmission[],
     /** How the selected syntax executables became visible to this compiler world. */
     readonly syntaxVisibilityKind: TemplateResourceVisibilityKind,
     /** Address of the app/root/component boundary that owns this world. */
     readonly sourceAddressHandle: AddressHandle | null,
+    /** Current app-analysis callable authority used by executable compiler policy slots. */
+    readonly callableBindings: StaticCallableExecutionBindings,
     /** App-authored AttrMapper service state visible to this compiler world. */
     readonly attributeMapperConfiguration: AttributeMapperConfiguration = AttributeMapperConfiguration.empty,
-    /** App-authored NodeObserverLocator service state visible to runtime binding analysis for this world. */
-    readonly nodeObserverLocatorConfiguration: NodeObserverLocatorConfiguration | null = null,
+    /** App-authored ObserverLocator and NodeObserverLocator state visible to runtime binding analysis. */
+    readonly observerLocatorConfiguration: ObserverLocatorConfiguration = ObserverLocatorConfiguration.empty,
+    /** App-effective IKeyMapping state visible to listener runtime analysis and authoring. */
+    readonly runtimeKeyMappingConfiguration: RuntimeKeyMappingConfiguration =
+      RuntimeKeyMappingConfiguration.frameworkDefault,
+    /** Losing resource contenders retained by the scope-selection pass. */
+    readonly resourceExclusions: readonly TemplateResourceScopeExclusion[] = [],
+    /** Parent resource scope when this world is derived. */
+    readonly parentResourceScope: TemplateResourceScopeReference | null = null,
+    /** Exact runtime lookup-key ownership selected for this world. */
+    readonly resourceLookups: readonly TemplateResourceScopeLookup[] = [],
+    /** Occupied runtime resource keys with no statically usable target. */
+    readonly blockedResourceLookups: readonly TemplateResourceScopeBlockedLookup[] = [],
+  ) {}
+}
+
+/** Inputs for a component compiler world that inherits semantic services from an admitted parent world. */
+export class TemplateCompilerWorldDerivationRequest {
+  constructor(
+    readonly localKey: string,
+    readonly worldKind: TemplateCompilerWorldKind,
+    readonly parent: TemplateCompilerWorldEmission,
+    readonly preferredResources: readonly TemplateVisibleResource[],
+    readonly syntaxVisibilityKind: TemplateResourceVisibilityKind,
+    readonly sourceAddressHandle: AddressHandle | null,
+    /** Additional compiler-context members retained without becoming lookup-key contenders. Parent members persist. */
+    readonly retainedContextResources: readonly TemplateVisibleResource[] | null = null,
   ) {}
 }
 
@@ -112,18 +161,47 @@ export class TemplateCompilerWorldEmission {
     readonly resourceResolver: TemplateResourceResolverService,
     readonly expressionParser: TemplateExpressionParserService,
     readonly attributeMapper: TemplateAttributeMapperService,
-    readonly nodeObserverLocatorConfiguration: NodeObserverLocatorConfiguration | null,
     readonly rendering: TemplateRenderingService,
     readonly attributeParser: AttributeParserService,
     readonly attributeParserMachine: AttributeParserMachine,
     readonly bindingCommandResolver: BindingCommandResolverService,
-    readonly attributePatterns: readonly BuiltInAttributePatternEmission[],
-    readonly bindingCommands: readonly BuiltInBindingCommandEmission[],
+    readonly attributePatterns: readonly CompilerAttributePatternResource[],
+    readonly bindingCommands: readonly CompilerBindingCommandResource[],
     readonly runtimeRenderers: readonly BuiltInRuntimeRendererEmission[],
+    readonly callableBindings: StaticCallableExecutionBindings,
     readonly issues: readonly TemplateCompilerIssue[],
     readonly syntaxResources: readonly TemplateVisibleResource[],
     readonly records: readonly KernelStoreRecord[],
   ) {}
+
+  /** Preserve immutable compiler products while attaching the current generation's live DI container frame. */
+  forContainerGeneration(
+    container: Container,
+    callableBindings: StaticCallableExecutionBindings,
+  ): TemplateCompilerWorldEmission {
+    return container === this.container && callableBindings === this.callableBindings
+      ? this
+      : new TemplateCompilerWorldEmission(
+          container,
+          this.world,
+          this.resourceScope,
+          this.templateCompiler,
+          this.resourceResolver,
+          this.expressionParser,
+          this.attributeMapper,
+          this.rendering,
+          this.attributeParser,
+          this.attributeParserMachine,
+          this.bindingCommandResolver,
+          this.attributePatterns,
+          this.bindingCommands,
+          this.runtimeRenderers,
+          callableBindings,
+          this.issues,
+          this.syntaxResources,
+          this.records,
+        );
+  }
 }
 
 class CompilerWorldSourceSet {
@@ -152,7 +230,7 @@ class CompilerWorldIssueSet {
   readonly records: KernelStoreRecord[] = [];
 
   constructor(
-    store: KernelStore,
+    store: KernelStoreReadView,
     private readonly localKey: string,
     private readonly provenanceHandle: ProvenanceHandle,
   ) {
@@ -168,6 +246,7 @@ class CompilerWorldIssueSet {
     frameworkErrorCode: string,
     sourceAddressHandle: AddressHandle | null,
     severity: TemplateCompilerIssueSeverity = 'error',
+    relatedInformation: readonly TemplateCompilerIssueRelatedInformation[] = [],
   ): void {
     const publication = this.publisher.publish(
       `compiler-world:${this.localKey}:issue:${local}`,
@@ -179,6 +258,7 @@ class CompilerWorldIssueSet {
       frameworkErrorCode,
       sourceAddressHandle,
       severity,
+      relatedInformation,
     );
     this.issues.push(publication.issue);
     this.records.push(...publication.records);
@@ -255,7 +335,6 @@ class CompilerWorldProducts {
       this.resourceResolver,
       this.expressionParser,
       this.attributeMapper,
-      input.nodeObserverLocatorConfiguration,
       this.rendering,
       this.attributeParser,
       this.attributeParserMachine,
@@ -263,6 +342,7 @@ class CompilerWorldProducts {
       input.attributePatterns,
       input.bindingCommands,
       input.runtimeRenderers,
+      input.callableBindings,
       this.issues,
       this.syntaxResources,
       [...records, ...this.issueRecords],
@@ -270,79 +350,180 @@ class CompilerWorldProducts {
   }
 }
 
+class CompilerWorldAttributeParserProducts {
+  constructor(
+    readonly machine: AttributeParserMachine,
+    readonly service: AttributeParserService,
+  ) {}
+}
+
 /** Materializes the compiler-facing world once visibility has already been selected. */
 export class TemplateCompilerWorldMaterializer {
   constructor(
-    /** Hot analysis store that receives compiler-world records. */
-    readonly store: KernelStore,
+    /** Required immediate or staged publication boundary for compiler-world products. */
+    readonly store: KernelPublicationContext,
   ) {}
 
   construct(input: TemplateCompilerWorldConstructionRequest): TemplateCompilerWorldEmission {
-    const emission = this.recordsForWorld(input);
-    if (emission.records.length > 0) {
-      this.store.commit(new KernelStoreBatch(emission.records, `template-compiler-world:${input.localKey}`));
+    return this.publish(input.localKey, this.project(input));
+  }
+
+  /** Construct a derived world while registering the exact parent products whose values it inherits. */
+  constructDerived(input: TemplateCompilerWorldDerivationRequest): TemplateCompilerWorldEmission {
+    const construction = this.constructionRequestForDerivation(input);
+    if (construction == null) {
+      return input.parent;
     }
-    this.registerProductDetails(emission);
+    this.observeDerivationInputs(input.parent);
+    return this.construct(construction);
+  }
+
+  /** Build the same immutable world without publishing it, for validation against a current parent authority. */
+  project(input: TemplateCompilerWorldConstructionRequest): TemplateCompilerWorldEmission {
+    return this.recordsForWorld(input);
+  }
+
+  /** Project the current derived-world candidate without registering reads or publishing products. */
+  projectDerived(input: TemplateCompilerWorldDerivationRequest): TemplateCompilerWorldEmission {
+    const construction = this.constructionRequestForDerivation(input);
+    return construction == null ? input.parent : this.project(construction);
+  }
+
+  /** Publish an already-projected compiler world under the caller's current computation child. */
+  publish(
+    localKey: string,
+    emission: TemplateCompilerWorldEmission,
+  ): TemplateCompilerWorldEmission {
+    this.store.publish(this.publicationFor(localKey, emission));
     return emission;
   }
 
-  private registerProductDetails(emission: TemplateCompilerWorldEmission): void {
-    this.store.productDetails.add(TemplateProductDetails.World, emission.world.productHandle, emission.world);
-    this.store.productDetails.add(TemplateProductDetails.ResourceScope, emission.resourceScope.productHandle, emission.resourceScope);
-    this.registerCompilerServiceProductDetails(emission);
-    this.registerAttributeParserProductDetails(emission);
+  private constructionRequestForDerivation(
+    input: TemplateCompilerWorldDerivationRequest,
+  ): TemplateCompilerWorldConstructionRequest | null {
+    const parent = input.parent;
+    const resolution = mergeVisibleResourceScopeResolution(
+      input.preferredResources,
+      parent.resourceScope.resources,
+      parent.resourceScope.exclusions,
+      parent.resourceScope.lookups,
+      parent.resourceScope.blockedLookups,
+      input.retainedContextResources,
+    );
+    const hasNewExclusions = resolution.exclusions.length !== parent.resourceScope.exclusions.length
+      || resolution.exclusions.some((exclusion, index) =>
+        exclusion !== parent.resourceScope.exclusions[index]
+      );
+    const hasNewLookups = resolution.lookups.length !== parent.resourceScope.lookups.length
+      || resolution.lookups.some((lookup, index) => lookup !== parent.resourceScope.lookups[index]);
+    const hasNewBlockedLookups = resolution.blockedLookups.length !== parent.resourceScope.blockedLookups.length
+      || resolution.blockedLookups.some((lookup, index) => lookup !== parent.resourceScope.blockedLookups[index]);
+    if (
+      sameTemplateVisibleResourceSet(resolution.resources, parent.resourceScope.resources)
+      && !hasNewExclusions
+      && !hasNewLookups
+      && !hasNewBlockedLookups
+    ) {
+      return null;
+    }
+    return new TemplateCompilerWorldConstructionRequest(
+      input.localKey,
+      input.worldKind,
+      parent.container,
+      parent.world.appRoot,
+      resolution.resources,
+      parent.attributePatterns,
+      parent.bindingCommands,
+      parent.runtimeRenderers,
+      input.syntaxVisibilityKind,
+      input.sourceAddressHandle,
+      parent.callableBindings,
+      parent.attributeMapper.configuration,
+      parent.world.observerLocatorConfiguration,
+      parent.world.runtimeKeyMappingConfiguration,
+      resolution.exclusions,
+      parent.resourceScope.toReference(),
+      resolution.lookups,
+      resolution.blockedLookups,
+    );
   }
 
-  private registerCompilerServiceProductDetails(emission: TemplateCompilerWorldEmission): void {
-    this.store.productDetails.add(
-      TemplateProductDetails.TemplateCompilerService,
-      emission.templateCompiler.productHandle,
-      emission.templateCompiler,
-    );
-    this.store.productDetails.add(
-      TemplateProductDetails.ResourceResolverService,
-      emission.resourceResolver.productHandle,
-      emission.resourceResolver,
-    );
-    this.store.productDetails.add(
-      TemplateProductDetails.ExpressionParserService,
-      emission.expressionParser.productHandle,
-      emission.expressionParser,
-    );
-    this.store.productDetails.add(
-      TemplateProductDetails.AttributeMapperService,
-      emission.attributeMapper.productHandle,
-      emission.attributeMapper,
-    );
-    this.store.productDetails.add(
-      TemplateProductDetails.RenderingService,
-      emission.rendering.productHandle,
-      emission.rendering,
-    );
-    for (const issue of emission.issues) {
-      this.store.productDetails.add(
-        TemplateProductDetails.CompilerIssue,
-        issue.productHandle,
-        issue,
-      );
+  private observeDerivationInputs(parent: TemplateCompilerWorldEmission): void {
+    this.requireDerivationInput(TemplateProductDetails.World, parent.world.productHandle);
+    this.requireDerivationInput(TemplateProductDetails.ResourceScope, parent.resourceScope.productHandle);
+    this.requireDerivationInput(TemplateProductDetails.AttributeParserService, parent.attributeParser.productHandle);
+    this.requireDerivationInput(TemplateProductDetails.AttributeParserMachine, parent.attributeParserMachine.productHandle);
+    this.requireDerivationInput(TemplateProductDetails.BindingCommandResolver, parent.bindingCommandResolver.productHandle);
+    this.requireDerivationInput(TemplateProductDetails.AttributeMapperService, parent.attributeMapper.productHandle);
+    this.requireDerivationInput(TemplateProductDetails.RenderingService, parent.rendering.productHandle);
+  }
+
+  private requireDerivationInput<TDetail>(
+    slot: ProductDetailSlot<TDetail>,
+    productHandle: ProductHandle,
+  ): void {
+    if (this.store.readProductDetail(slot, productHandle) == null) {
+      throw new Error(`Derived compiler world input ${slot.detailKind} is unavailable for ${productHandle}.`);
     }
   }
 
-  private registerAttributeParserProductDetails(emission: TemplateCompilerWorldEmission): void {
-    this.store.productDetails.add(
-      TemplateProductDetails.AttributeParserService,
-      emission.attributeParser.productHandle,
-      emission.attributeParser,
-    );
-    this.store.productDetails.add(
-      TemplateProductDetails.AttributeParserMachine,
-      emission.attributeParserMachine.productHandle,
-      emission.attributeParserMachine,
-    );
-    this.store.productDetails.add(
-      TemplateProductDetails.BindingCommandResolver,
-      emission.bindingCommandResolver.productHandle,
-      emission.bindingCommandResolver,
+  private publicationFor(
+    localKey: string,
+    emission: TemplateCompilerWorldEmission,
+  ): KernelPublicationPlan {
+    return new KernelPublicationPlan(
+      new KernelStoreBatch(emission.records, `template-compiler-world:${localKey}`),
+      [
+        publishProductDetail(TemplateProductDetails.World, emission.world.productHandle, emission.world),
+        publishProductDetail(
+          TemplateProductDetails.ResourceScope,
+          emission.resourceScope.productHandle,
+          emission.resourceScope,
+        ),
+        publishProductDetail(
+          TemplateProductDetails.TemplateCompilerService,
+          emission.templateCompiler.productHandle,
+          emission.templateCompiler,
+        ),
+        publishProductDetail(
+          TemplateProductDetails.ResourceResolverService,
+          emission.resourceResolver.productHandle,
+          emission.resourceResolver,
+        ),
+        publishProductDetail(
+          TemplateProductDetails.ExpressionParserService,
+          emission.expressionParser.productHandle,
+          emission.expressionParser,
+        ),
+        publishProductDetail(
+          TemplateProductDetails.AttributeMapperService,
+          emission.attributeMapper.productHandle,
+          emission.attributeMapper,
+        ),
+        publishProductDetail(
+          TemplateProductDetails.RenderingService,
+          emission.rendering.productHandle,
+          emission.rendering,
+        ),
+        publishProductDetail(
+          TemplateProductDetails.AttributeParserService,
+          emission.attributeParser.productHandle,
+          emission.attributeParser,
+        ),
+        publishProductDetail(
+          TemplateProductDetails.AttributeParserMachine,
+          emission.attributeParserMachine.productHandle,
+          emission.attributeParserMachine,
+        ),
+        publishProductDetail(
+          TemplateProductDetails.BindingCommandResolver,
+          emission.bindingCommandResolver.productHandle,
+          emission.bindingCommandResolver,
+        ),
+        ...emission.issues.map((issue) =>
+          publishProductDetail(TemplateProductDetails.CompilerIssue, issue.productHandle, issue)
+        ),
+      ],
     );
   }
 
@@ -409,15 +590,15 @@ export class TemplateCompilerWorldMaterializer {
   ): CompilerWorldProducts {
     const syntaxResources = syntaxResourcesForInput(input);
     const resourceScope = this.resourceScopeForWorld(input, handles, source, syntaxResources);
-    const attributeParserMachine = this.attributeParserMachineForWorld(handles, source);
     const issues = new CompilerWorldIssueSet(this.store, input.localKey, source.provenanceHandle);
-    const attributeParser = this.attributeParserForWorld(
+    const attributeParserProducts = this.attributeParserProductsForWorld(
       input,
       handles,
       source,
-      attributeParserMachine,
       issues,
     );
+    const attributeParser = attributeParserProducts.service;
+    const attributeParserMachine = attributeParserProducts.machine;
     const bindingCommandResolver = this.bindingCommandResolverForWorld(input, handles, source, issues);
     const templateCompiler = this.templateCompilerServiceForWorld(input, handles, source);
     const resourceResolver = this.resourceResolverForWorld(input, handles, source);
@@ -473,59 +654,76 @@ export class TemplateCompilerWorldMaterializer {
       syntaxResources,
       source.addressHandle,
       [],
+      input.resourceExclusions,
+      input.parentResourceScope,
+      input.resourceLookups,
+      input.blockedResourceLookups,
     );
   }
 
-  private attributeParserMachineForWorld(
-    handles: CompilerWorldHandleSet,
-    source: CompilerWorldSourceSet,
-  ): AttributeParserMachine {
-    return new AttributeParserMachine(
-      handles.machineProductHandle,
-      handles.machineIdentityHandle,
-      [],
-      [],
-      source.addressHandle,
-      [],
-    );
-  }
-
-  private attributeParserForWorld(
+  private attributeParserProductsForWorld(
     input: TemplateCompilerWorldConstructionRequest,
     handles: CompilerWorldHandleSet,
     source: CompilerWorldSourceSet,
-    attributeParserMachine: AttributeParserMachine,
     issues: CompilerWorldIssueSet,
-  ): AttributeParserService {
-    const attributeParser = new AttributeParserService(
-      handles.attributeParserProductHandle,
-      handles.attributeParserIdentityHandle,
-      [],
-      attributeParserMachine,
-      source.addressHandle,
-      [],
-    );
-    const registeredPatterns = new Set<string>();
+  ): CompilerWorldAttributeParserProducts {
+    const registeredPatterns = new Map<string, RegisteredAttributePattern>();
+    const patternExecutables: AttributePatternExecutable[] = [];
+    const compiledPatterns: CompiledAttributePattern[] = [];
     input.attributePatterns.forEach((pattern, index) => {
-      const duplicate = firstDuplicateAttributePattern(pattern.executable.patterns, registeredPatterns);
+      const duplicate = firstDuplicateAttributePattern(pattern, registeredPatterns);
       if (duplicate != null) {
+        const occupiedSourceAddressHandle = registeredAttributePatternSource(duplicate.occupied);
         issues.publish(
           `attribute-pattern-duplicate:${index}`,
-          attributeParser.identityHandle,
+          handles.attributeParserIdentityHandle,
           TemplateCompilerIssuePhase.CompilerWorld,
           TemplateCompilerIssueKind.AttributePatternDuplicate,
-          `AttributeParser.registerPattern cannot register duplicate attribute pattern "${duplicate.pattern}".`,
+          `AttributeParser.registerPattern cannot register duplicate attribute pattern "${duplicate.incoming.pattern}".`,
           TemplateCompilerFrameworkErrorCode.AttributePatternDuplicate,
-          duplicate.addressHandle ?? pattern.executable.sourceAddressHandle,
+          pattern.registrationSourceAddressHandle
+            ?? duplicate.incoming.addressHandle
+            ?? pattern.executable.sourceAddressHandle,
+          'error',
+          occupiedSourceAddressHandle == null
+            ? []
+            : [new TemplateCompilerIssueRelatedInformation(
+              `Attribute pattern "${duplicate.incoming.pattern}" was first registered here.`,
+              occupiedSourceAddressHandle,
+            )],
         );
         return;
       }
       for (const entry of pattern.executable.patterns) {
-        registeredPatterns.add(entry.pattern);
+        registeredPatterns.set(entry.pattern, new RegisteredAttributePattern(
+          entry,
+          pattern.registrationSourceAddressHandle,
+          pattern.executable.sourceAddressHandle,
+        ));
       }
-      attributeParser.registerPattern(pattern.executable, pattern.compiledPatterns);
+      if (!patternExecutables.some((candidate) => candidate.productHandle === pattern.executable.productHandle)) {
+        patternExecutables.push(pattern.executable);
+      }
+      compiledPatterns.push(...pattern.compiledPatterns);
     });
-    return attributeParser;
+    const machine = new AttributeParserMachine(
+      handles.machineProductHandle,
+      handles.machineIdentityHandle,
+      compiledPatterns,
+      source.addressHandle,
+      [],
+    );
+    return new CompilerWorldAttributeParserProducts(
+      machine,
+      new AttributeParserService(
+        handles.attributeParserProductHandle,
+        handles.attributeParserIdentityHandle,
+        patternExecutables,
+        machine,
+        source.addressHandle,
+        [],
+      ),
+    );
   }
 
   private bindingCommandResolverForWorld(
@@ -572,6 +770,8 @@ export class TemplateCompilerWorldMaterializer {
       handles.resourceResolverIdentityHandle,
       input.container.toReference(),
       input.resources,
+      input.resourceLookups,
+      input.blockedResourceLookups,
       source.addressHandle,
       [],
     );
@@ -632,9 +832,11 @@ export class TemplateCompilerWorldMaterializer {
       handles.worldProductHandle,
       handles.worldIdentityHandle,
       input.worldKind,
-      input.appRoot?.toReference() ?? null,
+      input.appRoot,
       input.container.toReference(),
       resourceScope.productHandle,
+      input.observerLocatorConfiguration,
+      input.runtimeKeyMappingConfiguration,
       services,
       source.addressHandle,
       [],
@@ -863,22 +1065,50 @@ export class TemplateCompilerWorldMaterializer {
   }
 }
 
+class RegisteredAttributePattern {
+  constructor(
+    readonly entry: AttributePatternDefinitionEntry,
+    readonly registrationSourceAddressHandle: AddressHandle | null,
+    readonly executableSourceAddressHandle: AddressHandle | null,
+  ) {}
+}
+
+class DuplicateAttributePattern {
+  constructor(
+    readonly incoming: AttributePatternDefinitionEntry,
+    readonly occupied: RegisteredAttributePattern,
+  ) {}
+}
+
 function firstDuplicateAttributePattern(
-  entries: readonly AttributePatternDefinitionEntry[],
-  registeredPatterns: ReadonlySet<string>,
-): AttributePatternDefinitionEntry | null {
-  const localPatterns = new Set<string>();
-  for (const entry of entries) {
-    if (registeredPatterns.has(entry.pattern) || localPatterns.has(entry.pattern)) {
-      return entry;
+  resource: CompilerAttributePatternResource,
+  registeredPatterns: ReadonlyMap<string, RegisteredAttributePattern>,
+): DuplicateAttributePattern | null {
+  const localPatterns = new Map<string, RegisteredAttributePattern>();
+  for (const entry of resource.executable.patterns) {
+    const occupied = registeredPatterns.get(entry.pattern) ?? localPatterns.get(entry.pattern) ?? null;
+    if (occupied != null) {
+      return new DuplicateAttributePattern(entry, occupied);
     }
-    localPatterns.add(entry.pattern);
+    localPatterns.set(entry.pattern, new RegisteredAttributePattern(
+      entry,
+      resource.registrationSourceAddressHandle,
+      resource.executable.sourceAddressHandle,
+    ));
   }
   return null;
 }
 
+function registeredAttributePatternSource(
+  pattern: RegisteredAttributePattern,
+): AddressHandle | null {
+  return pattern.registrationSourceAddressHandle
+    ?? pattern.entry.addressHandle
+    ?? pattern.executableSourceAddressHandle;
+}
+
 function bindingCommandsWithRegistrationIssues(
-  emissions: readonly BuiltInBindingCommandEmission[],
+  emissions: readonly CompilerBindingCommandResource[],
   ownerIdentityHandle: IdentityHandle,
   issues: CompilerWorldIssueSet,
 ): readonly BindingCommandExecutable[] {
@@ -920,47 +1150,53 @@ function bindingCommandKeyFor(
 function syntaxResourcesForInput(
   input: TemplateCompilerWorldConstructionRequest,
 ): readonly TemplateVisibleResource[] {
+  const definitionProducts = new Set(input.resources.flatMap((resource) =>
+    resource.definitionProductHandle == null ? [] : [resource.definitionProductHandle]
+  ));
   return [
     ...input.attributePatterns.map((pattern) =>
       visibleAttributePattern(pattern, input.syntaxVisibilityKind)
     ),
-    ...input.bindingCommands.map((command) =>
-      visibleBindingCommand(command, input.syntaxVisibilityKind)
+    ...input.bindingCommands.flatMap((command) =>
+      command.executable.definitionProductHandle != null
+        && definitionProducts.has(command.executable.definitionProductHandle)
+        ? []
+        : [visibleBindingCommand(command, input.syntaxVisibilityKind)]
     ),
   ];
 }
 
 function visibleAttributePattern(
-  emission: BuiltInAttributePatternEmission,
+  emission: CompilerAttributePatternResource,
   visibilityKind: TemplateResourceVisibilityKind,
 ): TemplateVisibleResource {
   return new TemplateVisibleResource(
     ResourceDefinitionKind.AttributePattern,
-    emission.handler.targetName,
+    emission.definition?.target.localName
+      ?? emission.executable.target?.localName
+      ?? 'attribute-pattern',
     [],
     emission.executable.productHandle,
     emission.executable.identityHandle,
-    null,
-    null,
+    emission.executable.definitionProductHandle,
     visibilityKind,
-    emission.executable.sourceAddressHandle,
+    emission.registrationSourceAddressHandle ?? emission.executable.sourceAddressHandle,
   );
 }
 
 function visibleBindingCommand(
-  emission: BuiltInBindingCommandEmission,
+  emission: CompilerBindingCommandResource,
   visibilityKind: TemplateResourceVisibilityKind,
 ): TemplateVisibleResource {
   return new TemplateVisibleResource(
     ResourceDefinitionKind.BindingCommand,
-    emission.handler.name,
-    emission.handler.aliases,
+    emission.executable.name,
+    emission.executable.aliases,
     emission.executable.productHandle,
     emission.executable.identityHandle,
-    null,
-    null,
+    emission.executable.definitionProductHandle,
     visibilityKind,
-    emission.executable.sourceAddressHandle,
+    emission.registrationSourceAddressHandle ?? emission.executable.sourceAddressHandle,
   );
 }
 

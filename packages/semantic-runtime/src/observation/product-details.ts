@@ -1,22 +1,198 @@
+import { bindingScopeReferenceKernelReferences } from '../configuration/structural-references.js';
+import {
+  kernelHotDetailReference,
+  kernelProductDetailReference,
+  kernelRecordReferences,
+  mergeKernelDetailReferences,
+  type KernelDetailReferenceClosure,
+} from '../kernel/detail-references.js';
 import { defineProductDetailSlot } from '../kernel/product-details.js';
-import { KernelVocabulary } from '../kernel/vocabulary.js';
+import { RuntimeExpressionDetailDescriptors } from '../runtime-expression/detail-descriptors.js';
+import type { TemplateVisibleResourceReference } from '../template/compiler-world-reference.js';
+import { TemplateDetailDescriptors } from '../template/detail-descriptors.js';
+import {
+  runtimeBindingReferenceReferences,
+  runtimeBindingSourceOperationReferenceReferences,
+  runtimeBindingTargetAccessReferenceReferences,
+  runtimeBindingTargetOperationReferenceReferences,
+  runtimeValueConverterApplicationReferenceReferences,
+  runtimeWatcherReferenceReferences,
+} from '../template/structural-references.js';
+import { checkerTypeReferenceKernelReferences } from '../type-system/structural-references.js';
+import { TypeSystemHotDetailDescriptors } from '../type-system/detail-descriptors.js';
 import type {
-  RuntimeBindingDataFlow,
+  RuntimeBindingDataFlowValueConverterWritebackStage,
   RuntimeBindingObservedDependency,
-  RuntimeBindingValueChannel,
 } from './runtime-binding-observation.js';
-import type { RuntimeWatcherObservedDependency } from './runtime-watcher-observation.js';
-import type { ObservationIssue } from './observation-issue.js';
-import type { ComputedObservationDefinition } from './computed-observation.js';
-import type {
-  ComputedObserverObservedDependency,
-  ComputedObserverSource,
-} from './computed-observer-source.js';
-import type {
-  RuntimeEffect,
-  RuntimeEffectObservedDependency,
-} from './runtime-effect.js';
-import type { ProxyObservableEscape } from './proxy-observable-escape.js';
+import type { ComputedObserverObservedDependency, ComputedObserverSource } from './computed-observer-source.js';
+import type { RuntimeEffect, RuntimeEffectObservedDependency } from './runtime-effect.js';
+import type { RuntimeObservedDependencyOccurrence } from './runtime-observed-dependency.js';
+import { ObservationDetailDescriptors } from './detail-descriptors.js';
+import {
+  computedObserverSourceReferenceReferences,
+  runtimeBindingValueChannelReferenceReferences,
+  runtimeEffectReferenceReferences,
+} from './structural-references.js';
+
+function runtimeExpressionAccessUseRecords(
+  productHandle: RuntimeObservedDependencyOccurrence['accessUseProductHandle'],
+): KernelDetailReferenceClosure {
+  return mergeKernelDetailReferences(
+    kernelRecordReferences(productHandle),
+    [kernelProductDetailReference(
+      RuntimeExpressionDetailDescriptors.AccessUse,
+      productHandle,
+    )],
+  );
+}
+
+function visibleResourceReferenceRecords(
+  reference: TemplateVisibleResourceReference | null,
+): KernelDetailReferenceClosure {
+  return reference == null
+    ? mergeKernelDetailReferences()
+    : mergeKernelDetailReferences(
+        kernelRecordReferences(
+          reference.resourceProductHandle,
+          reference.resourceIdentityHandle,
+          reference.definitionProductHandle,
+          reference.sourceAddressHandle,
+        ),
+      );
+}
+
+function valueConverterWritebackStageRecords(
+  stage: RuntimeBindingDataFlowValueConverterWritebackStage,
+): KernelDetailReferenceClosure {
+  return mergeKernelDetailReferences(
+    runtimeValueConverterApplicationReferenceReferences(stage.application),
+    visibleResourceReferenceRecords(stage.application.resource),
+    checkerTypeReferenceKernelReferences(stage.inputType),
+    checkerTypeReferenceKernelReferences(stage.outputType),
+    kernelRecordReferences(stage.sourceAddressHandle),
+  );
+}
+
+function computedObserverDependencyRecords(
+  dependency: ComputedObserverObservedDependency,
+  includeObserverBackReference: boolean,
+): KernelDetailReferenceClosure {
+  return mergeKernelDetailReferences(
+    includeObserverBackReference
+      ? computedObserverSourceReferenceReferences(dependency.computedObserver)
+      : kernelRecordReferences(),
+    runtimeExpressionAccessUseRecords(dependency.occurrence.accessUseProductHandle),
+    kernelRecordReferences(
+      dependency.occurrence.observedMemberSourceAddressHandle,
+      dependency.occurrence.sourceFileAddressHandle,
+      dependency.occurrence.sourceAddressHandle,
+    ),
+  );
+}
+
+function runtimeEffectDependencyRecords(
+  dependency: RuntimeEffectObservedDependency,
+  includeEffectBackReference: boolean,
+): KernelDetailReferenceClosure {
+  return mergeKernelDetailReferences(
+    includeEffectBackReference
+      ? runtimeEffectReferenceReferences(dependency.effect)
+      : kernelRecordReferences(),
+    runtimeExpressionAccessUseRecords(dependency.occurrence.accessUseProductHandle),
+    kernelRecordReferences(
+      dependency.occurrence.observedMemberSourceAddressHandle,
+      dependency.occurrence.sourceFileAddressHandle,
+      dependency.occurrence.sourceAddressHandle,
+    ),
+  );
+}
+
+function runtimeBindingObservedDependencyReferences(
+  dependency: RuntimeBindingObservedDependency,
+): KernelDetailReferenceClosure {
+  return mergeKernelDetailReferences(
+    runtimeBindingReferenceReferences(dependency.binding),
+    runtimeExpressionAccessUseRecords(dependency.occurrence.accessUseProductHandle),
+    kernelRecordReferences(
+      dependency.dataFlowProductHandle,
+      dependency.expressionProductHandle,
+      dependency.occurrence.observedMemberSourceAddressHandle,
+      dependency.occurrence.sourceFileAddressHandle,
+      dependency.occurrence.sourceAddressHandle,
+    ),
+    [kernelProductDetailReference(
+      ObservationDetailDescriptors.RuntimeBindingDataFlow,
+      dependency.dataFlowProductHandle,
+    )],
+    [kernelProductDetailReference(
+      TemplateDetailDescriptors.ExpressionParse,
+      dependency.expressionProductHandle,
+    )],
+    bindingScopeReferenceKernelReferences(dependency.bindingScope),
+  );
+}
+
+function computedObserverSourceReferences(
+  observer: ComputedObserverSource,
+): KernelDetailReferenceClosure {
+  return mergeKernelDetailReferences(
+    ...observer.accessUses.map((accessUse) => mergeKernelDetailReferences(
+      kernelRecordReferences(
+        accessUse.productHandle,
+        accessUse.identityHandle,
+        accessUse.sourceAddressHandle,
+        accessUse.nameSourceAddressHandle,
+      ),
+      [kernelProductDetailReference(
+        RuntimeExpressionDetailDescriptors.AccessUse,
+        accessUse.productHandle,
+      )],
+    )),
+    ...observer.observedDependencies.map((dependency) => mergeKernelDetailReferences(
+      kernelRecordReferences(
+        dependency.productHandle,
+        dependency.identityHandle,
+        dependency.occurrence.sourceAddressHandle,
+      ),
+      [kernelProductDetailReference(
+        ObservationDetailDescriptors.ComputedObserverObservedDependency,
+        dependency.productHandle,
+      )],
+      computedObserverDependencyRecords(dependency, false),
+    )),
+  );
+}
+
+function runtimeEffectReferences(
+  effect: RuntimeEffect,
+): KernelDetailReferenceClosure {
+  return mergeKernelDetailReferences(
+    ...effect.accessUses.map((accessUse) => mergeKernelDetailReferences(
+      kernelRecordReferences(
+        accessUse.productHandle,
+        accessUse.identityHandle,
+        accessUse.sourceAddressHandle,
+        accessUse.nameSourceAddressHandle,
+      ),
+      [kernelProductDetailReference(
+        RuntimeExpressionDetailDescriptors.AccessUse,
+        accessUse.productHandle,
+      )],
+    )),
+    ...effect.observedDependencies.map((dependency) => mergeKernelDetailReferences(
+      kernelRecordReferences(
+        dependency.productHandle,
+        dependency.identityHandle,
+        dependency.occurrence.sourceAddressHandle,
+      ),
+      [kernelProductDetailReference(
+        ObservationDetailDescriptors.RuntimeEffectObservedDependency,
+        dependency.productHandle,
+      )],
+      runtimeEffectDependencyRecords(dependency, false),
+    )),
+  );
+}
 
 /**
  * Typed detail slots for observer, value-channel, and binding data-flow products.
@@ -26,59 +202,99 @@ import type { ProxyObservableEscape } from './proxy-observable-escape.js';
  * broader template product-detail surface.
  */
 export const ObservationProductDetails = {
-  Issue: defineProductDetailSlot<ObservationIssue>(
-    KernelVocabulary.Observation.Issue.key,
-    'observation.issue',
-    'Source-backed observation issue detail.',
+  Issue: defineProductDetailSlot(
+    ObservationDetailDescriptors.Issue,
+    (issue) => mergeKernelDetailReferences(
+      kernelRecordReferences(...issue.relatedSources.map((source) => source.addressHandle)),
+    ),
   ),
-  RuntimeBindingValueChannel: defineProductDetailSlot<RuntimeBindingValueChannel>(
-    KernelVocabulary.Binding.ValueChannel.key,
-    'binding.value-channel',
-    'Runtime binding observer/accessor value-channel detail consumed by data-flow emulation.',
+  RuntimeBindingValueChannel: defineProductDetailSlot(
+    ObservationDetailDescriptors.RuntimeBindingValueChannel,
+    (channel) => mergeKernelDetailReferences(
+      runtimeBindingReferenceReferences(channel.binding),
+      runtimeBindingTargetAccessReferenceReferences(channel.targetAccess),
+      runtimeBindingTargetOperationReferenceReferences(channel.targetOperation),
+      runtimeBindingSourceOperationReferenceReferences(channel.sourceOperation),
+      checkerTypeReferenceKernelReferences(channel.rawTargetPropertyType),
+      checkerTypeReferenceKernelReferences(channel.runtimeValueType),
+      checkerTypeReferenceKernelReferences(channel.admittedSourceOwnerType),
+      checkerTypeReferenceKernelReferences(channel.admittedSourceValueType),
+      [kernelHotDetailReference(
+        TypeSystemHotDetailDescriptors.TypeMember,
+        channel.admittedSourceMemberHandle,
+      )],
+      kernelRecordReferences(channel.admittedSourceMemberSourceAddressHandle),
+    ),
   ),
-  RuntimeBindingDataFlow: defineProductDetailSlot<RuntimeBindingDataFlow>(
-    KernelVocabulary.Binding.DataFlow.key,
-    'binding.data-flow',
-    'Runtime binding data-flow detail connecting source expression scope lookup to target observation facts.',
+  RuntimeBindingDataFlow: defineProductDetailSlot(
+    ObservationDetailDescriptors.RuntimeBindingDataFlow,
+    (dataFlow) => mergeKernelDetailReferences(
+      runtimeBindingReferenceReferences(dataFlow.binding),
+      ...dataFlow.accessUseProductHandles.map(runtimeExpressionAccessUseRecords),
+      runtimeBindingTargetAccessReferenceReferences(dataFlow.targetAccess),
+      runtimeBindingTargetOperationReferenceReferences(dataFlow.targetOperation),
+      runtimeBindingSourceOperationReferenceReferences(dataFlow.sourceOperation),
+      runtimeBindingValueChannelReferenceReferences(dataFlow.valueChannel),
+      kernelRecordReferences(
+        dataFlow.expressionProductHandle,
+        dataFlow.sourceAssignmentTargetSourceAddressHandle,
+      ),
+      [kernelProductDetailReference(
+        TemplateDetailDescriptors.ExpressionParse,
+        dataFlow.expressionProductHandle,
+      )],
+      bindingScopeReferenceKernelReferences(dataFlow.bindingScope),
+      checkerTypeReferenceKernelReferences(dataFlow.sourceType),
+      checkerTypeReferenceKernelReferences(dataFlow.sourceAssignmentTargetType),
+      checkerTypeReferenceKernelReferences(dataFlow.targetPropertyType),
+      checkerTypeReferenceKernelReferences(dataFlow.targetValueType),
+      checkerTypeReferenceKernelReferences(dataFlow.targetToSourceValueType),
+      ...dataFlow.valueConverterWritebackStages.map(valueConverterWritebackStageRecords),
+    ),
   ),
-  RuntimeBindingObservedDependency: defineProductDetailSlot<RuntimeBindingObservedDependency>(
-    KernelVocabulary.Binding.ObservedDependency.key,
-    'binding.observed-dependency',
-    'Runtime binding source-side dependency read collected through template connectable observation.',
+  RuntimeBindingObservedDependency: defineProductDetailSlot(
+    ObservationDetailDescriptors.RuntimeBindingObservedDependency,
+    runtimeBindingObservedDependencyReferences,
   ),
-  RuntimeWatcherObservedDependency: defineProductDetailSlot<RuntimeWatcherObservedDependency>(
-    KernelVocabulary.Binding.ObservedDependency.key,
-    'binding.runtime-watcher-observed-dependency',
-    'Runtime watcher dependency read collected through controller-owned watcher execution.',
+  RuntimeWatcherObservedDependency: defineProductDetailSlot(
+    ObservationDetailDescriptors.RuntimeWatcherObservedDependency,
+    (dependency) => mergeKernelDetailReferences(
+      runtimeWatcherReferenceReferences(dependency.watcher),
+      runtimeExpressionAccessUseRecords(dependency.occurrence.accessUseProductHandle),
+      kernelRecordReferences(
+        dependency.expressionProductHandle,
+        dependency.occurrence.observedMemberSourceAddressHandle,
+        dependency.occurrence.sourceFileAddressHandle,
+        dependency.occurrence.sourceAddressHandle,
+      ),
+      [kernelProductDetailReference(
+        TemplateDetailDescriptors.ExpressionParse,
+        dependency.expressionProductHandle,
+      )],
+    ),
   ),
-  ComputedObserverSource: defineProductDetailSlot<ComputedObserverSource>(
-    KernelVocabulary.Observation.SourceObserver.key,
-    'observation.computed-observer-source',
-    'Source-backed ComputedObserver or ControlledComputedObserver selection for an authored getter.',
+  ComputedObserverSource: defineProductDetailSlot(
+    ObservationDetailDescriptors.ComputedObserverSource,
+    computedObserverSourceReferences,
   ),
-  ComputedObserverObservedDependency: defineProductDetailSlot<ComputedObserverObservedDependency>(
-    KernelVocabulary.Binding.ObservedDependency.key,
-    'observation.computed-observer-observed-dependency',
-    'Source-backed computed-observer dependency read collected by getter or explicit dependency execution.',
+  ComputedObserverObservedDependency: defineProductDetailSlot(
+    ObservationDetailDescriptors.ComputedObserverObservedDependency,
+    (dependency) => computedObserverDependencyRecords(dependency, true),
   ),
-  ComputedObservationDefinition: defineProductDetailSlot<ComputedObservationDefinition>(
-    KernelVocabulary.Observation.ComputedDefinition.key,
-    'observation.computed-definition',
-    'Source-backed @computed getter or method dependency declaration.',
+  ComputedObservationDefinition: defineProductDetailSlot(
+    ObservationDetailDescriptors.ComputedObservationDefinition,
+    () => mergeKernelDetailReferences(),
   ),
-  RuntimeEffect: defineProductDetailSlot<RuntimeEffect>(
-    KernelVocabulary.Observation.RuntimeEffect.key,
-    'observation.runtime-effect',
-    'Source-level IEffect created by Observation.watch(...) or Observation.run(...).',
+  RuntimeEffect: defineProductDetailSlot(
+    ObservationDetailDescriptors.RuntimeEffect,
+    runtimeEffectReferences,
   ),
-  RuntimeEffectObservedDependency: defineProductDetailSlot<RuntimeEffectObservedDependency>(
-    KernelVocabulary.Binding.ObservedDependency.key,
-    'observation.runtime-effect-observed-dependency',
-    'Source-level Observation.watch/run dependency read collected by expression, function-key, or RunEffect execution.',
+  RuntimeEffectObservedDependency: defineProductDetailSlot(
+    ObservationDetailDescriptors.RuntimeEffectObservedDependency,
+    (dependency) => runtimeEffectDependencyRecords(dependency, true),
   ),
-  ProxyObservableEscape: defineProductDetailSlot<ProxyObservableEscape>(
-    KernelVocabulary.Observation.ProxyObservableEscape.key,
-    'observation.proxy-observable-escape',
-    'Source-level ProxyObservable.getRaw(...) or ProxyObservable.unwrap(...) escape call.',
+  ProxyObservableEscape: defineProductDetailSlot(
+    ObservationDetailDescriptors.ProxyObservableEscape,
+    () => mergeKernelDetailReferences(),
   ),
 } as const;

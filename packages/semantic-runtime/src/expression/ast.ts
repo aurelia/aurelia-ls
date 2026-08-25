@@ -152,7 +152,10 @@ export class AccessThisExpression extends ExpressionNodeBase {
 
   constructor(
     span: SourceSpan,
+    /** Runtime Scope depth after accounting for nested Aurelia arrow callbacks. */
     readonly ancestor: number,
+    /** Exact authored `$this` / `$parent` tokens; absent on synthetic ASTs. */
+    readonly authoredScopePath: AuthoredScopePath | null = null,
   ) {
     super(span);
   }
@@ -163,13 +166,31 @@ export class AccessBoundaryExpression extends ExpressionNodeBase {
   readonly $kind = 'AccessBoundary' as const;
 }
 
-export enum ScopeExpressionRootKind {
-  /** Ordinary scope lookup, such as `title`. */
-  BindingContext = 'binding-context',
-  /** Authored `$this.member` or `$this.method()` before parser lowering. */
+export const enum AuthoredScopePathKind {
+  /** The path starts at the current binding context through one authored `$this` qualifier. */
   CurrentBindingContext = 'current-binding-context',
-  /** Authored `$parent.member` / `$parent.$parent.member` before parser lowering. */
+  /** The path selects an exact ancestor through one or more authored `$parent` qualifiers. */
   AncestorBindingContext = 'ancestor-binding-context',
+}
+
+/** Exact parser-local source provenance for an authored `$this` or `$parent` path. */
+export class AuthoredScopePath {
+  constructor(
+    readonly pathKind: AuthoredScopePathKind,
+    readonly qualifierSpans: readonly SourceSpan[],
+    readonly optionalAccessSpan: SourceSpan | null = null,
+  ) {
+    if (
+      qualifierSpans.length === 0
+      || (pathKind === AuthoredScopePathKind.CurrentBindingContext && qualifierSpans.length !== 1)
+    ) {
+      throw new Error(`Invalid authored scope path '${pathKind}' with ${qualifierSpans.length} qualifier(s).`);
+    }
+  }
+
+  withOptionalAccess(span: SourceSpan): AuthoredScopePath {
+    return new AuthoredScopePath(this.pathKind, this.qualifierSpans, span);
+  }
 }
 
 @auLink('expression-parser:AccessScopeExpression')
@@ -179,8 +200,11 @@ export class AccessScopeExpression extends ExpressionNodeBase {
   constructor(
     span: SourceSpan,
     readonly name: Identifier,
-    readonly ancestor: number,
-    readonly rootKind: ScopeExpressionRootKind = ScopeExpressionRootKind.BindingContext,
+    /** Runtime Scope depth; independent from the number of authored qualifiers. */
+    readonly ancestor: number = 0,
+    readonly authoredScopePath: AuthoredScopePath | null = null,
+    /** Intended optional explicit-ancestor lookup semantics retained ahead of the framework parser fix. */
+    readonly optional: boolean = false,
   ) {
     super(span);
   }
@@ -256,18 +280,22 @@ export class CallScopeExpression extends ExpressionNodeBase {
     span: SourceSpan,
     readonly name: Identifier,
     readonly args: IsAssign[],
+    /** Runtime Scope depth; independent from the number of authored qualifiers. */
     readonly ancestor: number,
+    /** Optional callee call (`name?.()`). */
     readonly optional: boolean,
-    readonly rootKind: ScopeExpressionRootKind = ScopeExpressionRootKind.BindingContext,
+    readonly authoredScopePath: AuthoredScopePath | null = null,
+    /** Optional explicit-ancestor owner lookup (`$parent?.name()`). */
+    readonly optionalAccess: boolean = false,
   ) {
     super(span);
   }
 }
 
-export function scopeExpressionUsesCurrentBindingContextRoot(
+export function scopeExpressionWasAuthoredFromCurrentBindingContext(
   expression: AccessScopeExpression | CallScopeExpression,
 ): boolean {
-  return expression.rootKind === ScopeExpressionRootKind.CurrentBindingContext;
+  return expression.authoredScopePath?.pathKind === AuthoredScopePathKind.CurrentBindingContext;
 }
 
 @auLink('expression-parser:CallMemberExpression')
@@ -372,6 +400,7 @@ export class ObjectLiteralExpression extends ExpressionNodeBase {
   constructor(
     span: SourceSpan,
     readonly keys: (number | string)[],
+    readonly keySpans: SourceSpan[],
     readonly values: IsAssign[],
   ) {
     super(span);
@@ -560,6 +589,32 @@ export type IsLeftHandSide =
   | AccessMemberExpression
   | AccessKeyedExpression
   | TaggedTemplateExpression;
+
+/** Whether a left-hand-side tree contains an optional access or call segment. */
+export function expressionHasOptionalChain(expression: IsLeftHandSide): boolean {
+  switch (expression.$kind) {
+    case 'AccessScope':
+      return expression.optional;
+    case 'AccessMember':
+      return expression.optional || expressionHasOptionalChain(expression.object);
+    case 'AccessKeyed':
+      return expression.optional || expressionHasOptionalChain(expression.object);
+    case 'CallScope':
+      return expression.optionalAccess || expression.optional;
+    case 'CallFunction':
+      return expression.optional || expressionHasOptionalChain(expression.func);
+    case 'CallMember':
+      return expression.optionalMember
+        || expression.optionalCall
+        || expressionHasOptionalChain(expression.object);
+    case 'TaggedTemplate':
+      return expressionHasOptionalChain(expression.func);
+    case 'New':
+      return expressionHasOptionalChain(expression.func);
+    default:
+      return false;
+  }
+}
 
 export type IsUnary = IsLeftHandSide | UnaryExpression;
 export type IsBinary = IsUnary | BinaryExpression;

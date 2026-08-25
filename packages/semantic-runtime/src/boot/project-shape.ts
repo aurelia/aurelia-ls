@@ -101,7 +101,7 @@ const AURELIA_FACADE_MODULES = new Set([
 export function readSemanticProjectShape(project: ProjectBootFrame): SemanticProjectShape {
   const dependencyScopes = [
     ...aureliaDependencyScopes(
-      readPackageManifest(project.rootDir),
+      readPackageManifest(project.inputGeneration.host, project.rootDir),
       SemanticProjectAureliaDependencyOrigin.ProjectManifest,
     ),
     ...workspaceAureliaDependencyScopes(project),
@@ -250,7 +250,7 @@ function nearestWorkspaceManifestForProject(
   let current = path.dirname(projectRoot);
 
   while (isSameOrDescendantPath(workspaceRoot, current)) {
-    const manifest = readPackageManifest(current);
+    const manifest = readPackageManifest(project.inputGeneration.host, current);
     if (manifest != null && manifestWorkspacesIncludeProject(manifest, current, projectRoot)) {
       return manifest;
     }
@@ -269,7 +269,7 @@ function isSameOrDescendantPath(parent: string, child: string): boolean {
 
 function aureliaSourceSignals(project: ProjectBootFrame): readonly SemanticProjectAureliaSourceSignalCount[] {
   const counts = new Map<SemanticProjectAureliaSourceSignalKind, number>();
-  const sourceText = new AuthoredSourceTextCache(project.rootDir);
+  const sourceText = new AuthoredSourceTextCache(project.rootDir, project.inputGeneration.host);
   for (const source of project.sourceFiles) {
     if (source.role !== SourceFileRole.AppSource) {
       continue;

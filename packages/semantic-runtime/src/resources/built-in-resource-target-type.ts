@@ -4,6 +4,7 @@ import type {
 } from '../kernel/handles.js';
 import { localKeyPart } from '../kernel/local-key.js';
 import type { KernelStore } from '../kernel/store.js';
+import type { KernelPublicationContext } from '../kernel/publication.js';
 import {
   CheckerTypeMemberProjectionPolicy,
   CheckerTypeProjector,
@@ -27,8 +28,9 @@ export class BuiltInResourceTargetTypeProjector {
   constructor(
     store: KernelStore,
     readonly typeSystem: TypeSystemProject,
+    publication: KernelPublicationContext,
   ) {
-    this.projector = new CheckerTypeProjector(store);
+    this.projector = new CheckerTypeProjector(store, publication);
   }
 
   targetTypeReference(

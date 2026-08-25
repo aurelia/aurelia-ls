@@ -3,46 +3,84 @@ import ts from 'typescript';
 import {
   unwrapExpression,
 } from '../evaluation/ts-syntax.js';
+import { DiResolverKeyKind } from '../kernel/identity.js';
 import { symbolForExpression } from '../type-system/checker-node-helpers.js';
+import type { TypeSystemProject } from '../type-system/project.js';
 
-export const AURELIA_RESOLVER_WRAPPER_KINDS = [
-  'all',
-  'lazy',
-  'optional',
-  'factory',
-  'own',
-  'resource',
-  'optionalResource',
-  'allResources',
-  'newInstanceForScope',
-  'newInstanceOf',
-] as const;
+export const AURELIA_RESOLVER_KEY_KIND_BY_EXPORT = {
+  lazy: DiResolverKeyKind.Lazy,
+  all: DiResolverKeyKind.All,
+  last: DiResolverKeyKind.Last,
+  optional: DiResolverKeyKind.Optional,
+  factory: DiResolverKeyKind.Factory,
+  own: DiResolverKeyKind.Own,
+  resource: DiResolverKeyKind.Resource,
+  optionalResource: DiResolverKeyKind.OptionalResource,
+  allResources: DiResolverKeyKind.AllResources,
+  newInstanceOf: DiResolverKeyKind.NewInstanceOf,
+  newInstanceForScope: DiResolverKeyKind.NewInstanceForScope,
+  ignore: DiResolverKeyKind.Ignore,
+} as const;
+
+export type DiAureliaResolverExportName = keyof typeof AURELIA_RESOLVER_KEY_KIND_BY_EXPORT;
 
 export type DiAureliaResolverWrapperKind =
-  typeof AURELIA_RESOLVER_WRAPPER_KINDS[number];
+  Exclude<DiAureliaResolverExportName, 'ignore'>;
+
+export const AURELIA_RESOLVER_WRAPPER_KINDS = Object.freeze(
+  Object.keys(AURELIA_RESOLVER_KEY_KIND_BY_EXPORT)
+    .filter((name): name is DiAureliaResolverWrapperKind => name !== 'ignore'),
+);
 
 const AURELIA_RESOLVER_WRAPPER_KIND_SET = new Set<string>(AURELIA_RESOLVER_WRAPPER_KINDS);
 
+export function aureliaResolverKeyKindForExportName(
+  name: string,
+): DiResolverKeyKind | null {
+  return Object.hasOwn(AURELIA_RESOLVER_KEY_KIND_BY_EXPORT, name)
+    ? AURELIA_RESOLVER_KEY_KIND_BY_EXPORT[name as DiAureliaResolverExportName]
+    : null;
+}
+
+export function aureliaResolverKeyKindForWrapper(
+  kind: DiAureliaResolverWrapperKind,
+): DiResolverKeyKind {
+  return AURELIA_RESOLVER_KEY_KIND_BY_EXPORT[kind];
+}
+
 export interface DiAureliaResolverWrapperCall {
+  readonly call: ts.CallExpression;
   readonly wrapperKind: DiAureliaResolverWrapperKind;
   readonly innerExpression: ts.Expression | null;
+  readonly argumentExpressions: readonly ts.Expression[];
+  readonly hasSpreadArgument: boolean;
 }
 
 export function readAureliaResolverWrapperCall(
-  checker: ts.TypeChecker,
+  typeSystem: TypeSystemProject,
   expression: ts.Expression,
 ): DiAureliaResolverWrapperCall | null {
-  const current = unwrapExpression(expression);
+  const programExpression = typeSystem.readProgramExpression(expression);
+  const current = programExpression == null ? null : unwrapExpression(programExpression);
+  if (current == null) {
+    return null;
+  }
   if (!ts.isCallExpression(current)) {
     return null;
   }
-  const wrapperKind = aureliaResolverWrapperKindForCallee(checker, unwrapExpression(current.expression));
+  const wrapperKind = aureliaResolverWrapperKindForCallee(
+    typeSystem.checker,
+    unwrapExpression(current.expression),
+  );
   if (wrapperKind == null) {
     return null;
   }
   return {
+    call: current,
     wrapperKind,
     innerExpression: current.arguments[0] ?? null,
+    argumentExpressions: current.arguments.filter((argument): argument is ts.Expression => !ts.isSpreadElement(argument)),
+    hasSpreadArgument: current.arguments.some(ts.isSpreadElement),
   };
 }
 
@@ -56,11 +94,33 @@ function aureliaResolverWrapperKindForCallee(
       ? expression
       : null;
   if (name == null || !isAureliaResolverWrapperKind(name.text)) {
-    return null;
+    const exportedName = symbolForExpression(checker, name ?? expression)?.getName() ?? null;
+    if (exportedName == null || !isAureliaResolverWrapperKind(exportedName)) {
+      return null;
+    }
+    return (symbolForExpression(checker, name ?? expression)?.declarations ?? [])
+      .some(isAureliaResolverWrapperDeclaration)
+      ? exportedName
+      : null;
   }
   return (symbolForExpression(checker, name)?.declarations ?? []).some(isAureliaResolverWrapperDeclaration)
     ? name.text
     : null;
+}
+
+/** Whether an expression is Aurelia's built-in resolver that intentionally injects `undefined`. */
+export function isAureliaIgnoreResolverExpression(
+  typeSystem: TypeSystemProject,
+  expression: ts.Expression,
+): boolean {
+  const programExpression = typeSystem.readProgramExpression(expression);
+  const current = programExpression == null ? null : unwrapExpression(programExpression);
+  if (current == null) {
+    return false;
+  }
+  const symbol = symbolForExpression(typeSystem.checker, current);
+  return symbol?.getName() === 'ignore'
+    && (symbol.declarations ?? []).some(isAureliaResolverWrapperDeclaration);
 }
 
 function isAureliaResolverWrapperKind(

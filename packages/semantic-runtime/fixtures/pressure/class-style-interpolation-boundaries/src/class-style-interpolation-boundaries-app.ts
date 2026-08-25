@@ -16,4 +16,13 @@ export class ClassStyleInterpolationBoundariesApp {
   readonly featured = true;
   readonly hidden = false;
   readonly tone: ProductTone = 'calm';
+  readonly progress = 37;
+  readonly offset = 4;
+  readonly imageUrl = '/assets/progress.svg';
+  readonly itemId = 'item-1';
+  readonly styleRules = { color: this.accentColor, width: `${this.progress}%` };
+  readonly widthStyle = `${this.progress}%`;
+  readonly viewWidth = 100;
+  readonly viewHeight = 16;
+  readonly iconHref = '#progress-marker';
 }

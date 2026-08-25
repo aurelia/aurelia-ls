@@ -10,7 +10,6 @@ import {
 import type {
   AddressHandle,
   EvidenceHandle,
-  IdentityHandle,
   ProductHandle,
   ProvenanceHandle,
 } from '../kernel/handles.js';
@@ -26,10 +25,15 @@ import {
   ProvenanceRecord,
 } from '../kernel/provenance.js';
 import {
-  KernelStoreBatch,
   type KernelStore,
   type KernelStoreRecord,
 } from '../kernel/store.js';
+import {
+  KernelPublicationPlan,
+  publishProductDetail,
+  type KernelPublicationContext,
+} from '../kernel/publication.js';
+import { KernelStoreBatch } from '../kernel/store.js';
 import { projectModuleSourceNodeOrdinalLocalKey } from '../kernel/local-key.js';
 import { KernelVocabulary } from '../kernel/vocabulary.js';
 import type { ResourceRecognitionContext } from './resource-recognition-context.js';
@@ -38,17 +42,18 @@ import {
   type ResourceDefinitionHeader,
 } from './resource-definition.js';
 import { ResourceDefinitionHeaderEmission } from './resource-definition-header-emission.js';
-import {
-  ResourceRecognitionObservation,
-} from './resource-observation.js';
-import { ResourceTargetReference } from './resource-reference.js';
+import type { ResourceRecognitionObservation } from './resource-observation.js';
+import type { ResourceTargetReference } from './resource-reference.js';
 import { ResourceProductDetails } from './product-details.js';
 import {
+  ResourceRecognitionPublicationSupport,
+} from './resource-recognition-publication.js';
+import type {
   ResourceIdentityPublicationSet,
   ResourceOpenSeamPublicationSet,
-  ResourceRecognitionPublicationSupport,
   ResourceTargetPublication,
 } from './resource-recognition-publication.js';
+import { ResourceCarrierKind } from './resource-kind.js';
 
 export type ResourceRecognitionEmissionPhaseName =
   | 'kernel-emission:observation-records'
@@ -57,7 +62,7 @@ export type ResourceRecognitionEmissionPhaseName =
   | 'kernel-emission:resource-identity-records'
   | 'kernel-emission:open-seam-records'
   | 'kernel-emission:definition-product-records'
-  | 'kernel-emission:batch-commit'
+  | 'kernel-emission:batch-publication'
   | 'kernel-emission:definition-header-details';
 
 export interface ResourceRecognitionEmissionPhaseTiming {
@@ -109,8 +114,10 @@ interface ResourceObservationParts {
 /** Emits source observations from resource recognition into the durable kernel graph. */
 export class ResourceRecognitionKernelEmitter {
   constructor(
-    /** Hot analysis store that receives resource-recognition records. */
+    /** Store that owns stable handles and committed upstream records. */
     readonly store: KernelStore,
+    /** Immediate or staged owner of the complete recognition publication. */
+    private readonly publication: KernelPublicationContext,
   ) {}
 
   emit(
@@ -121,6 +128,7 @@ export class ResourceRecognitionKernelEmitter {
     const phases: ResourceRecognitionEmissionPhaseTiming[] = [];
     const publication = new ResourceRecognitionPublicationSupport(
       this.store,
+      this.publication,
       (name, read) => measureResourceRecognitionEmissionPhase(phases, name, read),
     );
     const records: KernelStoreRecord[] = [];
@@ -134,20 +142,23 @@ export class ResourceRecognitionKernelEmitter {
         }
       });
     });
-    if (records.length === 0) {
-      return new ResourceRecognitionKernelEmission(definitions, records, {
-        totalMilliseconds: performance.now() - started,
-        phases,
-      });
-    }
-    measureResourceRecognitionEmissionPhase(phases, 'kernel-emission:batch-commit', () => {
-      this.store.commit(new KernelStoreBatch(records, `resource-recognition:${context.moduleKey}`));
-    });
-    measureResourceRecognitionEmissionPhase(phases, 'kernel-emission:definition-header-details', () => {
-      for (const definition of definitions) {
-        this.store.productDetails.add(ResourceProductDetails.DefinitionHeader, definition.productHandle, definition);
-      }
-    });
+    const plan = measureResourceRecognitionEmissionPhase(
+      phases,
+      'kernel-emission:definition-header-details',
+      () => new KernelPublicationPlan(
+        new KernelStoreBatch(records, `resource-recognition:${context.moduleKey}`),
+        definitions.map((definition) => publishProductDetail(
+          ResourceProductDetails.DefinitionHeader,
+          definition.productHandle,
+          definition,
+        )),
+      ),
+    );
+    measureResourceRecognitionEmissionPhase(
+      phases,
+      'kernel-emission:batch-publication',
+      () => this.publication.publish(plan),
+    );
     return new ResourceRecognitionKernelEmission(definitions, records, {
       totalMilliseconds: performance.now() - started,
       phases,
@@ -239,6 +250,7 @@ export class ResourceRecognitionKernelEmitter {
     const sourceAddressHandle = this.store.handles.address(`resource-source:${local}`);
     const evidenceHandle = this.store.handles.evidence(`resource-observation:${local}`);
     const provenanceHandle = this.store.handles.provenance(`resource-observation:${local}`);
+    const convention = observation.carrierKind === ResourceCarrierKind.Convention;
     return new ResourceObservationSourceSet(
       [
         new SourceSpanAddress(
@@ -250,14 +262,16 @@ export class ResourceRecognitionKernelEmitter {
         ),
         new EvidenceRecord(
           evidenceHandle,
-          EvidenceKind.SourceObservation,
-          [EvidenceRole.Declaration],
+          convention ? EvidenceKind.Convention : EvidenceKind.SourceObservation,
+          convention
+            ? [EvidenceRole.Declaration, EvidenceRole.TransformOutput]
+            : [EvidenceRole.Declaration],
           `${observation.carrierKind} recognized ${observation.definition?.type ?? 'an open resource kind'}.`,
           sourceAddressHandle,
         ),
         new ProvenanceRecord(
           provenanceHandle,
-          [evidenceHandle],
+          [evidenceHandle, ...observation.supportingEvidenceHandles],
         ),
       ],
       sourceAddressHandle,
@@ -308,7 +322,10 @@ export class ResourceRecognitionKernelEmitter {
         index,
         targetReference,
         observation.definition.type,
+        primaryNameForDefinition(observation.definition),
+        aliasNamesForDefinition(observation.definition),
         lookupNamesForDefinition(observation.definition),
+        resourceIdentities.lookupNameSourceAddressHandles,
         resourceIdentities.claimHandles,
       ), new MaterializedProduct(
         productHandle,
@@ -341,8 +358,17 @@ function lookupNamesForDefinition(
   if (definition instanceof AttributePatternDefinitionHeader) {
     return definition.patterns.map((pattern) => pattern.pattern);
   }
-  return [
-    definition.name,
-    ...definition.aliases,
-  ].filter((name): name is string => name != null);
+  return definition.name == null
+    ? []
+    : [definition.name, ...definition.aliases.map((alias) => alias.name)];
+}
+
+function primaryNameForDefinition(definition: ResourceDefinitionHeader): string | null {
+  return definition instanceof AttributePatternDefinitionHeader ? null : definition.name;
+}
+
+function aliasNamesForDefinition(definition: ResourceDefinitionHeader): readonly string[] {
+  return definition instanceof AttributePatternDefinitionHeader
+    ? []
+    : definition.aliases.map((alias) => alias.name);
 }

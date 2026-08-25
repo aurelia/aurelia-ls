@@ -1,6 +1,6 @@
 import type { ProductHandle } from '../kernel/handles.js';
 import { localKeyPart } from '../kernel/local-key.js';
-import type { KernelStore } from '../kernel/store.js';
+import type { ProductDetailReadView } from '../kernel/product-details.js';
 import {
   CheckerTypeMemberProjectionPolicy,
   CheckerTypeProjector,
@@ -27,29 +27,24 @@ export const enum CheckerStrictTrueComparisonKind {
   MaybeTrue = 'maybe-true',
 }
 
-/**
- * Read an enumerable member surface, projecting it only when an answer actually needs members.
- *
- * Flow-oriented type projections may intentionally keep members lazy. Completion and cursor-info answers can pay the
- * eager member cost at the API edge, where query-claim retention/disposal policy can account for the trade-off.
- */
-export function readOrProjectCheckerTypeMembers(
-  store: KernelStore,
+/** Read an enumerable member surface without escaping the active checker projection generation. */
+export function readOrProjectCheckerTypeMembersInProjection(
+  projector: CheckerTypeProjector,
   typeShape: CheckerTypeShape,
   localKeySeed: ProductHandle | string,
 ): readonly CheckerTypeMember[] {
-  const localKey = localKeyPart(localKeySeed);
   if (typeShape.members.length > 0) {
-    return withSyntheticRuntimeArrayMembers(store, typeShape, typeShape.members, localKey);
+    return withSyntheticRuntimeArrayMembers(projector, typeShape, typeShape.members);
   }
-  const projected = projectCheckerTypeMemberSurface(store, typeShape, localKeySeed);
+  const projected = projectCheckerTypeMemberSurfaceInProjection(projector, typeShape, localKeySeed);
   return projected == null
-    ? withSyntheticRuntimeArrayMembers(store, typeShape, [], localKey)
-    : withSyntheticRuntimeArrayMembers(store, projected, projected.members, localKey);
+    ? withSyntheticRuntimeArrayMembers(projector, typeShape, [])
+    : withSyntheticRuntimeArrayMembers(projector, projected, projected.members);
 }
 
-export function projectCheckerTypeMemberSurface(
-  store: KernelStore,
+/** Project an enumerable member surface through the active checker generation. */
+export function projectCheckerTypeMemberSurfaceInProjection(
+  projector: CheckerTypeProjector,
   typeShape: CheckerTypeShape,
   localKeySeed: ProductHandle | string,
 ): CheckerTypeShape | null {
@@ -57,40 +52,36 @@ export function projectCheckerTypeMemberSurface(
   if (carrier == null) {
     return null;
   }
-  const localKey = `query-member-surface:${localKeyPart(localKeySeed)}`;
-  const projectedProductHandle = store.handles.product(`type-shape:${localKey}`);
-  const existing = store.productDetails.read(TypeSystemProductDetails.TypeShape, projectedProductHandle);
-  if (existing != null) {
-    return existing;
-  }
-  return new CheckerTypeProjector(store).project({
+  const memberType = carrier.checker.getNonNullableType(carrier.type);
+  const localKey = `query-member-surface:${localKeyPart(localKeySeed)}${memberType === carrier.type ? '' : ':non-nullish'}`;
+  return projector.ensureProjection({
     localKey,
     checker: carrier.checker,
-    type: carrier.type,
+    type: memberType,
     origin: typeShape.origin,
     sourceNode: carrier.declarations[0] ?? null,
     sourceAddressHandle: typeShape.sourceAddressHandle,
     ownerIdentityHandle: typeShape.identityHandle,
-    display: typeShape.display,
+    display: carrier.checker.typeToString(memberType),
     memberProjection: CheckerTypeMemberProjectionPolicy.Eager,
-  }).typeShape;
+  });
 }
 
 function withSyntheticRuntimeArrayMembers(
-  store: KernelStore,
+  projector: CheckerTypeProjector,
   typeShape: CheckerTypeShape,
   members: readonly CheckerTypeMember[],
-  localKey: string,
 ): readonly CheckerTypeMember[] {
-  const syntheticMembers = syntheticRuntimeArrayTypeMembers(store, typeShape, localKey);
+  const syntheticMembers = syntheticRuntimeArrayTypeMembers(projector.publication.handles, typeShape);
   if (syntheticMembers.length === 0) {
     return members;
   }
   const existingNames = new Set(members.map((member) => member.name));
   const missingSyntheticMembers = syntheticMembers.filter((member) => !existingNames.has(member.name));
-  return missingSyntheticMembers.length === 0
+  const combined = missingSyntheticMembers.length === 0
     ? members
     : [...members, ...missingSyntheticMembers];
+  return projector.ensureOwnedMembers(typeShape, combined);
 }
 
 /**
@@ -100,7 +91,7 @@ function withSyntheticRuntimeArrayMembers(
  * as value-converter `withContext` need to distinguish "missing is false" from "the value may become true".
  */
 export function checkerMemberStrictTrueComparisonKind(
-  store: KernelStore,
+  store: ProductDetailReadView,
   member: CheckerTypeMember | null,
 ): CheckerStrictTrueComparisonKind {
   if (member == null) {
@@ -112,7 +103,7 @@ export function checkerMemberStrictTrueComparisonKind(
   }
   const shape = reference.productHandle == null
     ? null
-    : store.productDetails.read(TypeSystemProductDetails.TypeShape, reference.productHandle);
+    : store.readProductDetail(TypeSystemProductDetails.TypeShape, reference.productHandle);
   const display = shape?.display ?? reference.display;
   if (display === 'true') {
     return CheckerStrictTrueComparisonKind.DefinitelyTrue;

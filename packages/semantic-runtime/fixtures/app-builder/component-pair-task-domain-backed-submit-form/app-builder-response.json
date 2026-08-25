@@ -1,5 +1,7 @@
 {
-  "outcome": "hit",
+  "result": "answered",
+  "selection": "not-applicable",
+  "coverage": "complete",
   "summary": "Previewed app-builder ontology SourcePlan with 3 file(s) and 0 issue(s).",
   "value": {
     "displayText": "App-builder SourcePlan preview: root=., template=src/task-domain-backed-submit-form.html, target=src/task-domain-backed-submit-form.ts, source=component-pair, files=3, witnesses=27, controlUses=3, expectedEffects=13, handoffNotes=3, decisionBundles=1, issues=0.",
@@ -276,19 +278,19 @@
         "dependencies": [
           {
             "specifier": "@aurelia/runtime-html",
-            "versionRange": "^2.0.0-rc.1",
+            "versionRange": "^2.0.0-rc.2",
             "scope": "dependency",
             "kind": "source-plan-package-dependency"
           },
           {
             "specifier": "aurelia",
-            "versionRange": "^2.0.0-rc.1",
+            "versionRange": "^2.0.0-rc.2",
             "scope": "dependency",
             "kind": "source-plan-package-dependency"
           },
           {
             "specifier": "@aurelia/vite-plugin",
-            "versionRange": "^2.0.0-rc.1",
+            "versionRange": "^2.0.0-rc.2",
             "scope": "devDependency",
             "kind": "source-plan-package-dependency"
           },

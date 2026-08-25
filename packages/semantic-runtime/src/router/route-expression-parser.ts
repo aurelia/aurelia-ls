@@ -8,6 +8,8 @@ export type ParsedRouteExpressionKind =
 
 export interface ParsedRouteExpression {
   readonly isAbsolute: boolean;
+  /** Character length of the route-expression path before query and fragment syntax. */
+  readonly pathLength: number;
   readonly root: ParsedCompositeSegmentExpressionOrHigher;
   readonly instructions: readonly ParsedViewportInstruction[];
   readonly queryParamCount: number;
@@ -166,6 +168,7 @@ export function parseRouteExpression(value: string): ParsedRouteExpression {
     const root = emptySegmentExpression();
     return {
       isAbsolute: false,
+      pathLength: url.path.length,
       root,
       instructions: instructionsForRouteExpression(root),
       queryParamCount: url.queryParamCount,
@@ -180,6 +183,7 @@ export function parseRouteExpression(value: string): ParsedRouteExpression {
     const root = emptySegmentExpression();
     return {
       isAbsolute,
+      pathLength: url.path.length,
       root,
       instructions: instructionsForRouteExpression(root),
       queryParamCount: url.queryParamCount,
@@ -191,6 +195,7 @@ export function parseRouteExpression(value: string): ParsedRouteExpression {
   state.ensureDone();
   return {
     isAbsolute,
+    pathLength: url.path.length,
     root,
     instructions: instructionsForRouteExpression(root),
     queryParamCount: url.queryParamCount,

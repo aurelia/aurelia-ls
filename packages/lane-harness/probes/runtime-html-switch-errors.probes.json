@@ -1,0 +1,14 @@
+{
+  "fixture": "packages/semantic-runtime/fixtures/pressure/runtime-html-switch-errors",
+  "lanes": {
+    "diagnostics": [
+      {
+        "id": "runtime-controller-switch-template",
+        "file": "src/runtime-html-switch-errors-app.html",
+        "verdict": "correct",
+        "reason": "The full document-diagnostic pull returns AUR0815 on the orphan `case` attribute and AUR0816 on the duplicate `default-case` token, both matching Aurelia controller semantics.",
+        "note": "NEW 2026-07-07. Runtime-html controller diagnostics for orphan case and duplicate default-case. VERDICT 2026-07-07: correct."
+      }
+    ]
+  }
+}

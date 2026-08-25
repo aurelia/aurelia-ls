@@ -8,12 +8,17 @@ import {
   AppBuilderControlManifestRowId,
   AppBuilderEffectContractId,
   SemanticAppQueryKind,
+  SemanticObservedDependencyLocusKind,
   SemanticRuntimeAppBuilderQueryKind,
-  SemanticRuntimeAnswerOutcome,
-  filterSemanticAppQueryContinuations,
+  SemanticRuntimeAnswerCoverage,
+  SemanticRuntimeAnswerResult,
+  SemanticRuntimeAnswerSelection,
+  projectSemanticAppQueryContinuations,
+  semanticContinuationSourceFacts,
   semanticAppQueryCatalogShape,
   semanticAppQueryCatalogRow,
   semanticAppQueryMaterializationPolicy,
+  semanticSourceReferencesInAnswerRows,
   withSemanticAppQueryContinuations,
 } from '../out/index.js';
 import {
@@ -34,13 +39,20 @@ const failures = [];
 const followQueryContinuationKind = 'follow-query';
 const continuationIntentValues = new Set(INQUIRY_CONTINUATION_INTENTS);
 const continuationCostValues = new Set(['free', 'projection-only', 'query-type-projection', 'app-world', 'deep']);
-const evidenceStateValues = new Set(['not-required', 'source-backed', 'type-projected', 'inferred', 'open']);
-const evidenceCoverageValues = new Set(['complete-for-locus', 'partial-known-gaps', 'sampled', 'unknown']);
-const sourcePrecisionValues = new Set(['not-required', 'exact-authored-span', 'carrier-span', 'generated-anchor', 'external']);
-const evidenceStalenessValues = new Set(['current-epoch', 'source-epoch-sensitive', 'project-epoch-sensitive', 'unknown']);
+const sourceRequirementValues = new Set(['not-required', 'authored-source', 'exact-authored-span']);
+const epochDependencyValues = new Set(['runtime-session', 'project-input', 'app-world', 'source-input']);
+const sourceFacetValues = new Set([
+  'authored-source',
+  'exact-authored-span',
+  'carrier-span',
+  'generated',
+  'external',
+  'unavailable',
+]);
 verifyCatalogWideContinuationCoverage();
 verifyCatalogShapeAndIdentityNormalization();
 verifyContinuationTargetQueryShapes();
+verifyObservedDependencyLocusContinuations();
 verifyContinuationIntentFiltering();
 verifyAnswerSourceReferenceCollector();
 await verifyDiagnosticRelatedQueryContinuations();
@@ -61,7 +73,9 @@ console.log('contract ok: public app-query continuations are typed, followable, 
 function verifyCatalogWideContinuationCoverage() {
   const answer = {
     schemaVersion: SEMANTIC_RUNTIME_API_VERSION,
-    outcome: SemanticRuntimeAnswerOutcome.Hit,
+    result: SemanticRuntimeAnswerResult.Answered,
+    selection: SemanticRuntimeAnswerSelection.NotApplicable,
+    coverage: SemanticRuntimeAnswerCoverage.Complete,
     summary: 'contract fake answer',
     value: {},
     page: {
@@ -125,8 +139,12 @@ function verifyCatalogWideContinuationCoverage() {
   );
   const nextPage = paged.continuations?.find((row) => row.kind === 'next-page');
   expect(nextPage?.targetQuery?.page?.cursor === 'offset:0', 'next-page continuation should carry the next cursor in targetQuery.');
-  expect(nextPage?.evidence?.coverage === 'partial-known-gaps', 'next-page continuation should report partial coverage because paging is not a complete-locus proof.');
-  expect(nextPage?.evidence?.staleness === 'project-epoch-sensitive', 'next-page continuation should use query/catalog staleness instead of pretending paged project rows are current-epoch stable.');
+  expect(nextPage?.evidence?.sourceRequirement === 'not-required', 'project-wide next-page continuation should not invent a source requirement.');
+  expect(nextPage?.evidence?.sourceFacts?.length === 0, 'next-page continuation should not reinterpret transport paging as semantic source evidence.');
+  expect(
+    JSON.stringify(nextPage?.evidence?.epochDependencies) === JSON.stringify(['project-input']),
+    'Project-frame paging should identify project input as its invalidation authority.',
+  );
 
   const projectPagedWithExtraLocus = withSemanticAppQueryContinuations(
     {
@@ -149,7 +167,7 @@ function verifyCatalogWideContinuationCoverage() {
   const projectExtraLocusNextPage = projectPagedWithExtraLocus.continuations?.find((row) => row.kind === 'next-page');
   expect(projectExtraLocusNextPage?.targetQuery?.cursor == null, 'Continuation target queries should not preserve unsupported cursor fields for project-frame row families.');
   expect(projectExtraLocusNextPage?.targetQuery?.sourceFile == null, 'Continuation target queries should not preserve unsupported sourceFile fields for project-frame row families.');
-  expect(projectExtraLocusNextPage?.evidence?.staleness === 'project-epoch-sensitive', 'Unsupported source/cursor fields should not make project-frame next-page continuations source-epoch-sensitive.');
+  expect(projectExtraLocusNextPage?.evidence?.sourceRequirement === 'not-required', 'Unsupported source/cursor fields should not create source requirements for project-frame paging.');
 
   const sourcePaged = withSemanticAppQueryContinuations(
     { kind: SemanticAppQueryKind.TemplateDiagnostics, sourceFile: { filePath: 'src/app.html' }, page: { size: 1 } },
@@ -165,7 +183,11 @@ function verifyCatalogWideContinuationCoverage() {
     },
   );
   const sourceNextPage = sourcePaged.continuations?.find((row) => row.kind === 'next-page');
-  expect(sourceNextPage?.evidence?.staleness === 'source-epoch-sensitive', 'next-page continuation should become source-epoch-sensitive when the paged query has a source-file locus.');
+  expect(sourceNextPage?.evidence?.sourceRequirement === 'authored-source', 'source-scoped paging should preserve the authored-source requirement without predicting target coverage.');
+  expect(
+    JSON.stringify(sourceNextPage?.evidence?.epochDependencies) === JSON.stringify(['project-input', 'app-world', 'source-input']),
+    'Source-scoped app-world paging should preserve project, app-world, and source-input epoch dependencies independently.',
+  );
 
   const sourcePagedFromCursor = withSemanticAppQueryContinuations(
     { kind: SemanticAppQueryKind.TemplateDiagnostics, cursor: { filePath: 'src/app.html', line: 0, character: 0 }, page: { size: 1 } },
@@ -189,9 +211,13 @@ function verifyCatalogWideContinuationCoverage() {
     answer,
   );
   const appOverview = summary.continuations?.find((row) => row.targetQueryKind === SemanticAppQueryKind.AppOverview);
-  expect(appOverview?.evidence?.coverage === 'partial-known-gaps', 'overview continuations should report partial-known-gaps rather than unknown coverage.');
+  expect(appOverview?.evidence?.sourceRequirement === 'not-required', 'project overview continuations should not invent a source requirement.');
+  expect(
+    JSON.stringify(appOverview?.evidence?.epochDependencies) === JSON.stringify(['project-input', 'app-world']),
+    'App-world continuations should identify both project-input and app-world generation dependencies.',
+  );
   const projectDiagnosticSummary = summary.continuations?.find((row) => row.targetQueryKind === SemanticAppQueryKind.AppDiagnosticSummary);
-  expect(projectDiagnosticSummary?.evidence?.staleness === 'project-epoch-sensitive', 'Project-wide continuations to source-capable query families should stay project-epoch-sensitive until the target query has a source locus.');
+  expect(projectDiagnosticSummary?.evidence?.sourceRequirement === 'not-required', 'A source-capable target should not require source evidence until a source locus is selected.');
 
   const availableProductSummary = withSemanticAppQueryContinuations(
     { kind: SemanticAppQueryKind.Summary, diagnosticProjection: 'available-products' },
@@ -224,6 +250,10 @@ function verifyCatalogWideContinuationCoverage() {
     componentManifestContinuation?.cost === 'free',
     'Resource-definition to app-builder manifest detail should be a free ontology-read-model continuation, not an app-world query.',
   );
+  expect(
+    JSON.stringify(componentManifestContinuation?.evidence?.epochDependencies) === JSON.stringify(['runtime-session']),
+    'App-builder ontology continuations should identify the booted runtime session as their generation authority.',
+  );
   const componentManifestEffectContinuation = resourceDefinitionFollowUps.continuations?.find((row) =>
     row.targetAppBuilderQueryKind === SemanticRuntimeAppBuilderQueryKind.EffectContractDetail
   );
@@ -237,8 +267,7 @@ function verifyCatalogWideContinuationCoverage() {
     answer,
   );
   const cursorInfo = completionFollowUp.continuations?.find((row) => row.targetQueryKind === SemanticAppQueryKind.TemplateCursorInfo);
-  expect(cursorInfo?.evidence?.coverage === 'complete-for-locus', 'non-paged cursor-locus continuations should report complete-for-locus coverage.');
-  expect(cursorInfo?.evidence?.staleness === 'source-epoch-sensitive', 'Cursor-locus continuations should report source-epoch sensitivity because the target query carries an exact source cursor.');
+  expect(cursorInfo?.evidence?.sourceRequirement === 'exact-authored-span', 'Cursor-locus continuations should require an exact authored span without predicting target coverage.');
 
   const cursorPaged = withSemanticAppQueryContinuations(
     {
@@ -271,6 +300,7 @@ function verifyCatalogShapeAndIdentityNormalization() {
     diagnosticProjection: 'type-projection',
     includeTypeSurfaces: true,
     diagnosticPageSize: 3,
+    analysisLimitationPageSize: 2,
     openSeamPageSize: 4,
     rowPageSize: 6,
     cursor: { filePath: 'src/app.html', line: 0, character: 0 },
@@ -287,11 +317,47 @@ function verifyCatalogShapeAndIdentityNormalization() {
     'App-query identity should be computed from the catalog-shaped query rather than unsupported caller fields.',
   );
   expect(
+    semanticAppQueryKey({
+      kind: SemanticAppQueryKind.OpenSeams,
+      openSeamClusterKey: 'evaluation\u0000missing-static-value',
+    }) !== semanticAppQueryKey({
+      kind: SemanticAppQueryKind.OpenSeams,
+      openSeamClusterKey: 'evaluation_missing-static-value',
+    }),
+    'App-query identity must preserve separator and NUL distinctions in answer-local selector keys.',
+  );
+  const referenceCursor = { filePath: 'src/app.html', line: 0, character: 1 };
+  expect(
+    semanticAppQueryKey({
+      kind: SemanticAppQueryKind.TemplateReferences,
+      cursor: referenceCursor,
+      includeDeclaration: true,
+    }) !== semanticAppQueryKey({
+      kind: SemanticAppQueryKind.TemplateReferences,
+      cursor: referenceCursor,
+      includeDeclaration: false,
+    }),
+    'Template-reference identity must preserve declaration-inclusion policy.',
+  );
+  expect(
+    semanticAppQueryKey({
+      kind: SemanticAppQueryKind.TemplateRename,
+      cursor: referenceCursor,
+      newName: 'alpha',
+    }) !== semanticAppQueryKey({
+      kind: SemanticAppQueryKind.TemplateRename,
+      cursor: referenceCursor,
+      newName: 'beta',
+    }),
+    'Template-rename identity must preserve the requested replacement name.',
+  );
+  expect(
     semanticAppQueryLocusKey('contract-project', noisyProjectQuery) === 'project:contract-project',
     'App-query locus keys should ignore unsupported source/cursor fields.',
   );
   expect(
-    JSON.stringify(semanticAppQueryEpochKeys('contract-project', noisyProjectQuery)) === JSON.stringify(['project:contract-project']),
+    JSON.stringify(semanticAppQueryEpochKeys('contract-project', 'input-1', noisyProjectQuery))
+      === JSON.stringify(['project:contract-project', 'project-input:contract-project:input-1']),
     'App-query epoch keys should ignore unsupported source/cursor fields.',
   );
   expect(
@@ -357,7 +423,9 @@ function verifyCatalogShapeAndIdentityNormalization() {
 function verifyContinuationTargetQueryShapes() {
   const answer = {
     schemaVersion: SEMANTIC_RUNTIME_API_VERSION,
-    outcome: SemanticRuntimeAnswerOutcome.Hit,
+    result: SemanticRuntimeAnswerResult.Answered,
+    selection: SemanticRuntimeAnswerSelection.NotApplicable,
+    coverage: SemanticRuntimeAnswerCoverage.Complete,
     summary: 'contract fake shape answer',
     value: { rows: [] },
     page: {
@@ -376,6 +444,7 @@ function verifyContinuationTargetQueryShapes() {
         detail: 'handles',
         diagnosticProjection: 'type-projection',
         diagnosticPageSize: 3,
+        analysisLimitationPageSize: 2,
         openSeamPageSize: 4,
         rowPageSize: 5,
         cursor: { filePath: 'src/app.html', line: 0, character: 0 },
@@ -415,6 +484,10 @@ function verifyContinuationTargetQueryShapes() {
         `${kind} -> ${targetQuery.kind} should not carry diagnosticPageSize outside app-overview.`,
       );
       expect(
+        targetQuery.analysisLimitationPageSize == null || targetQuery.kind === SemanticAppQueryKind.AppOverview,
+        `${kind} -> ${targetQuery.kind} should not carry analysisLimitationPageSize outside app-overview.`,
+      );
+      expect(
         targetQuery.openSeamPageSize == null || targetQuery.kind === SemanticAppQueryKind.AppOverview,
         `${kind} -> ${targetQuery.kind} should not carry openSeamPageSize outside app-overview.`,
       );
@@ -426,6 +499,85 @@ function verifyContinuationTargetQueryShapes() {
   }
 }
 
+function verifyObservedDependencyLocusContinuations() {
+  const answer = {
+    schemaVersion: SEMANTIC_RUNTIME_API_VERSION,
+    result: SemanticRuntimeAnswerResult.Answered,
+    selection: SemanticRuntimeAnswerSelection.NotApplicable,
+    coverage: SemanticRuntimeAnswerCoverage.Complete,
+    summary: 'contract fake dependency answer',
+    value: { rows: [] },
+    page: {
+      size: 10,
+      cursor: null,
+      nextCursor: null,
+      returnedRows: 0,
+      totalRows: 0,
+    },
+  };
+  const clusterLocus = {
+    kind: SemanticObservedDependencyLocusKind.Cluster,
+    clusterKey: 'member:catalog-state:items',
+  };
+  const clusteredSummary = withSemanticAppQueryContinuations(
+    {
+      kind: SemanticAppQueryKind.BindingObservedDependencySummary,
+      observedDependencyLocus: clusterLocus,
+    },
+    answer,
+  );
+  const clusteredRows = clusteredSummary.continuations?.find((row) =>
+    row.targetQueryKind === SemanticAppQueryKind.BindingObservedDependencies
+  );
+  expect(
+    JSON.stringify(clusteredRows?.targetQuery?.observedDependencyLocus) === JSON.stringify(clusterLocus),
+    'Binding dependency summary-to-row continuations should preserve the selected cluster locus exactly.',
+  );
+
+  const ownerLocus = {
+    kind: SemanticObservedDependencyLocusKind.Owner,
+    ownerKey: 'binding:template:42',
+  };
+  const ownerRows = withSemanticAppQueryContinuations(
+    {
+      kind: SemanticAppQueryKind.BindingObservedDependencies,
+      observedDependencyLocus: ownerLocus,
+    },
+    answer,
+  );
+  const ownerSummary = ownerRows.continuations?.find((row) =>
+    row.targetQueryKind === SemanticAppQueryKind.BindingObservedDependencySummary
+  );
+  expect(
+    JSON.stringify(ownerSummary?.targetQuery?.observedDependencyLocus) === JSON.stringify(ownerLocus),
+    'Binding dependency row-to-summary continuations should preserve the selected owner locus exactly.',
+  );
+
+  const sourceLocus = {
+    kind: SemanticObservedDependencyLocusKind.SourceFile,
+    sourceFile: { filePath: 'src/catalog.html' },
+  };
+  const effectRows = withSemanticAppQueryContinuations(
+    {
+      kind: SemanticAppQueryKind.RuntimeEffectObservedDependencies,
+      observedDependencyLocus: sourceLocus,
+    },
+    answer,
+  );
+  const effectSummary = effectRows.continuations?.find((row) =>
+    row.targetQueryKind === SemanticAppQueryKind.BindingObservedDependencySummary
+  );
+  expect(
+    JSON.stringify(effectSummary?.targetQuery?.observedDependencyLocus) === JSON.stringify(sourceLocus),
+    'Cross-family observed-dependency continuations should preserve an authored source-file locus.',
+  );
+  expect(
+    semanticAppQueryCatalogRow(SemanticAppQueryKind.BindingObservedDependencies)
+      .observedDependencyLocusKinds.includes(SemanticObservedDependencyLocusKind.Cluster),
+    'Binding dependency row queries should advertise cluster loci so a summary drill-down remains followable.',
+  );
+}
+
 function expectContinuationRowVocabulary(continuation, context) {
   expect(typeof continuation.kind === 'string' && continuation.kind.length > 0, `${context} continuation kind should be a non-empty string.`);
   expect(Array.isArray(continuation.intents), `${context} continuation intents should be an array.`);
@@ -435,10 +587,34 @@ function expectContinuationRowVocabulary(continuation, context) {
   expect(continuationCostValues.has(continuation.cost), `${context} continuation cost should be a known value, got ${JSON.stringify(continuation.cost)}.`);
   expect(continuation.evidence != null && typeof continuation.evidence === 'object' && !Array.isArray(continuation.evidence), `${context} continuation evidence should be an object.`);
   if (continuation.evidence != null && typeof continuation.evidence === 'object') {
-    expect(evidenceStateValues.has(continuation.evidence.evidenceState), `${context} continuation evidenceState should be a known value, got ${JSON.stringify(continuation.evidence.evidenceState)}.`);
-    expect(evidenceCoverageValues.has(continuation.evidence.coverage), `${context} continuation coverage should be a known value, got ${JSON.stringify(continuation.evidence.coverage)}.`);
-    expect(sourcePrecisionValues.has(continuation.evidence.sourcePrecision), `${context} continuation sourcePrecision should be a known value, got ${JSON.stringify(continuation.evidence.sourcePrecision)}.`);
-    expect(evidenceStalenessValues.has(continuation.evidence.staleness), `${context} continuation staleness should be a known value, got ${JSON.stringify(continuation.evidence.staleness)}.`);
+    expect(
+      sourceRequirementValues.has(continuation.evidence.sourceRequirement),
+      `${context} continuation sourceRequirement should be a known value, got ${JSON.stringify(continuation.evidence.sourceRequirement)}.`,
+    );
+    expect(Array.isArray(continuation.evidence.sourceFacts), `${context} continuation sourceFacts should be an array.`);
+    expect(Array.isArray(continuation.evidence.epochDependencies), `${context} continuation epochDependencies should be an array.`);
+    for (const dependency of continuation.evidence.epochDependencies ?? []) {
+      expect(
+        epochDependencyValues.has(dependency),
+        `${context} continuation epoch dependency should be a known value, got ${JSON.stringify(dependency)}.`,
+      );
+    }
+    for (const [index, fact] of (continuation.evidence.sourceFacts ?? []).entries()) {
+      expect(fact != null && typeof fact === 'object' && !Array.isArray(fact), `${context} source fact ${index} should be an object.`);
+      expect(Number.isInteger(fact?.count) && fact.count > 0, `${context} source fact ${index} should carry a positive integer count.`);
+      expect(Array.isArray(fact?.facets) && fact.facets.length > 0, `${context} source fact ${index} should carry at least one facet.`);
+      for (const facet of fact?.facets ?? []) {
+        expect(sourceFacetValues.has(facet), `${context} source fact ${index} should use a known facet, got ${JSON.stringify(facet)}.`);
+      }
+      expect(
+        fact?.source == null || (
+          typeof fact.source === 'object'
+          && typeof fact.source.kind === 'string'
+          && typeof fact.source.label === 'string'
+        ),
+        `${context} source fact ${index} should carry a public source reference or null.`,
+      );
+    }
   }
   expect(Array.isArray(continuation.blockers), `${context} continuation blockers should be an array.`);
   for (const blocker of continuation.blockers ?? []) {
@@ -451,7 +627,9 @@ function verifyContinuationIntentFiltering() {
     { kind: SemanticAppQueryKind.Summary },
     {
       schemaVersion: SEMANTIC_RUNTIME_API_VERSION,
-      outcome: SemanticRuntimeAnswerOutcome.Hit,
+      result: SemanticRuntimeAnswerResult.Answered,
+      selection: SemanticRuntimeAnswerSelection.NotApplicable,
+      coverage: SemanticRuntimeAnswerCoverage.Complete,
       summary: 'contract fake summary answer',
       value: {},
       page: {
@@ -463,7 +641,7 @@ function verifyContinuationIntentFiltering() {
       },
     },
   );
-  const filtered = filterSemanticAppQueryContinuations(
+  const filtered = projectSemanticAppQueryContinuations(
     { continuationIntents: ['diagnose'] },
     full,
   );
@@ -482,12 +660,14 @@ function verifyContinuationIntentFiltering() {
     { kind: SemanticAppQueryKind.ResourceDefinitions },
     {
       schemaVersion: SEMANTIC_RUNTIME_API_VERSION,
-      outcome: SemanticRuntimeAnswerOutcome.Hit,
+      result: SemanticRuntimeAnswerResult.Answered,
+      selection: SemanticRuntimeAnswerSelection.NotApplicable,
+      coverage: SemanticRuntimeAnswerCoverage.Complete,
       summary: 'contract fake resource answer',
       value: {},
     },
   );
-  const resourceFiltered = filterSemanticAppQueryContinuations(
+  const resourceFiltered = projectSemanticAppQueryContinuations(
     { continuationIntents: ['inspect'] },
     resourceFull,
   );
@@ -509,139 +689,37 @@ function verifyAnswerSourceReferenceCollector() {
     end: 20,
     role: 'primary',
   };
-  const result = withSemanticAppQueryContinuations(
-    { kind: SemanticAppQueryKind.BindingDataFlows, page: { size: 1 } },
-    {
-      schemaVersion: SEMANTIC_RUNTIME_API_VERSION,
-      outcome: SemanticRuntimeAnswerOutcome.Hit,
-      summary: 'contract fake binding answer',
-      value: {
-        rows: [
-          {
-            observedMemberSource: source,
-          },
-        ],
-      },
-      page: {
-        size: 1,
-        cursor: null,
-        nextCursor: null,
-        returnedRows: 1,
-        totalRows: 1,
-      },
-    },
-  );
-  const continuation = result.continuations?.find((row) =>
-    row.targetQueryKind === SemanticAppQueryKind.BindingDataFlowSummary
-  );
-  expect(
-    continuation?.evidence?.sourcePrecision === 'exact-authored-span',
-    'Continuation evidence should discover source references in public row fields beyond the literal name "source".',
-  );
-
-  const externalResult = withSemanticAppQueryContinuations(
-    { kind: SemanticAppQueryKind.BindingDataFlows, page: { size: 1 } },
-    {
-      schemaVersion: SEMANTIC_RUNTIME_API_VERSION,
-      outcome: SemanticRuntimeAnswerOutcome.Hit,
-      summary: 'contract fake external binding answer',
-      value: {
-        rows: [
-          {
-            targetSource: {
-              kind: 'typescript-node',
-              label: 'node_modules/pkg/index.d.ts@1..5',
-              path: 'node_modules/pkg/index.d.ts',
-              start: 1,
-              end: 5,
-            },
-          },
-        ],
-      },
-      page: {
-        size: 1,
-        cursor: null,
-        nextCursor: null,
-        returnedRows: 1,
-        totalRows: 1,
-      },
-    },
-  );
-  const externalContinuation = externalResult.continuations?.find((row) =>
-    row.targetQueryKind === SemanticAppQueryKind.BindingDataFlowSummary
-  );
-  expect(
-    externalContinuation?.evidence?.sourcePrecision === 'external',
-    'Continuation evidence should report external source precision for dependency/default-library references instead of treating them as authored spans.',
-  );
-
-  const anchoredTemplateResult = withSemanticAppQueryContinuations(
-    { kind: SemanticAppQueryKind.BindingDataFlows, page: { size: 1 } },
-    {
-      schemaVersion: SEMANTIC_RUNTIME_API_VERSION,
-      outcome: SemanticRuntimeAnswerOutcome.Hit,
-      summary: 'contract fake template-address binding answer',
-      value: {
-        rows: [
-          {
-            source: {
-              kind: 'template-address',
-              label: 'template:contract',
-              anchor: source,
-            },
-          },
-        ],
-      },
-      page: {
-        size: 1,
-        cursor: null,
-        nextCursor: null,
-        returnedRows: 1,
-        totalRows: 1,
-      },
-    },
-  );
-  const anchoredTemplateContinuation = anchoredTemplateResult.continuations?.find((row) =>
-    row.targetQueryKind === SemanticAppQueryKind.BindingDataFlowSummary
-  );
-  expect(
-    anchoredTemplateContinuation?.evidence?.sourcePrecision === 'exact-authored-span',
-    'Continuation evidence should follow source-reference anchors for template/source carriers before falling back to carrier precision.',
-  );
-
-  const generatedResult = withSemanticAppQueryContinuations(
-    { kind: SemanticAppQueryKind.BindingDataFlows, page: { size: 1 } },
-    {
-      schemaVersion: SEMANTIC_RUNTIME_API_VERSION,
-      outcome: SemanticRuntimeAnswerOutcome.Hit,
-      summary: 'contract fake generated binding answer',
-      value: {
-        rows: [
-          {
-            source: {
-              kind: 'generated-address',
-              label: 'generated overlay',
-              anchor: source,
-            },
-          },
-        ],
-      },
-      page: {
-        size: 1,
-        cursor: null,
-        nextCursor: null,
-        returnedRows: 1,
-        totalRows: 1,
-      },
-    },
-  );
-  const generatedContinuation = generatedResult.continuations?.find((row) =>
-    row.targetQueryKind === SemanticAppQueryKind.BindingDataFlowSummary
-  );
-  expect(
-    generatedContinuation?.evidence?.sourcePrecision === 'generated-anchor',
-    'Continuation evidence should keep generated-address precision even when the generated source carries an authored anchor.',
-  );
+  const external = {
+    kind: 'typescript-node',
+    label: 'node_modules/pkg/index.d.ts@1..5',
+    path: 'node_modules/pkg/index.d.ts',
+    start: 1,
+    end: 5,
+  };
+  const anchoredTemplate = {
+    kind: 'template-address',
+    label: 'template:contract',
+    anchor: source,
+  };
+  const generated = {
+    kind: 'generated-address',
+    label: 'generated overlay',
+    anchor: source,
+  };
+  const collected = semanticSourceReferencesInAnswerRows({
+    rows: [{
+      observedMemberSource: source,
+      targetSource: external,
+      source: anchoredTemplate,
+      suggestion: { actionTarget: { source: generated } },
+    }],
+  });
+  const facts = semanticContinuationSourceFacts(collected);
+  expect(collected.length === 4, 'Bounded public-row traversal should discover every source-bearing carrier in the synthetic answer.');
+  expectSourceFactFacets(facts, source.label, ['authored-source', 'exact-authored-span'], 'exact authored source');
+  expectSourceFactFacets(facts, external.label, ['external'], 'external TypeScript source');
+  expectSourceFactFacets(facts, anchoredTemplate.label, ['authored-source', 'exact-authored-span'], 'anchored template source');
+  expectSourceFactFacets(facts, generated.label, ['authored-source', 'exact-authored-span', 'generated'], 'generated source with authored anchor');
 }
 
 async function verifyDiagnosticRelatedQueryContinuations() {
@@ -659,9 +737,11 @@ async function verifyDiagnosticRelatedQueryContinuations() {
     && row.targetQueryKind === SemanticAppQueryKind.DiIssues
   );
   expect(related != null, 'AppDiagnostics should expose diagnostic-row continuations to related issue products.');
-  expect(related?.evidence?.evidenceState === 'source-backed', 'Related diagnostic continuation should be source-backed.');
-  expect(related?.evidence?.sourcePrecision === 'exact-authored-span', 'Related diagnostic continuation should keep exact authored source precision when rows have spans.');
-  expect(related?.evidence?.staleness === 'source-epoch-sensitive', 'Related diagnostic continuation should be source-epoch-sensitive when evidence has authored spans.');
+  expect(related?.evidence?.sourceRequirement === 'exact-authored-span', 'Repair-oriented diagnostic continuations should require exact authored spans.');
+  expect(
+    related?.evidence?.sourceFacts?.every((fact) => fact.facets.includes('exact-authored-span')) === true,
+    'Related diagnostic continuations should retain each exact authored source fact independently.',
+  );
   expect(related?.intents?.includes('repair'), 'Related diagnostic continuation with exact source-backed rows should be repair-intent eligible.');
   expect((related?.blockers ?? []).length === 0, 'Related diagnostic continuation with exact source-backed rows should not report repair blockers.');
 }
@@ -683,7 +763,9 @@ function verifyMixedRelatedDiagnosticRepairBlockers() {
     { kind: SemanticAppQueryKind.AppDiagnostics, page: { size: 10 } },
     {
       schemaVersion: SEMANTIC_RUNTIME_API_VERSION,
-      outcome: SemanticRuntimeAnswerOutcome.Hit,
+      result: SemanticRuntimeAnswerResult.Answered,
+      selection: SemanticRuntimeAnswerSelection.NotApplicable,
+      coverage: SemanticRuntimeAnswerCoverage.Complete,
       summary: 'contract fake mixed related diagnostics',
       value: {
         rows: [
@@ -753,8 +835,8 @@ async function verifyAppDiagnosticRelatedFamilyCoverage() {
     expectContinuationEvidence(answer, SemanticAppQueryKind.AppDiagnostics, {
       continuationKind: followQueryContinuationKind,
       target,
-      state: 'source-backed',
-      sourcePrecision: 'exact-authored-span',
+      sourceRequirement: 'exact-authored-span',
+      sourceFacets: ['exact-authored-span'],
       intents: ['repair'],
       blockerCount: 0,
     }, `app diagnostic family ${label}`);
@@ -850,19 +932,19 @@ async function verifyTemplateRepairPrecisionContinuations() {
   );
   expectContinuationEvidence(answer, SemanticAppQueryKind.TemplateDiagnostics, {
     target: SemanticAppQueryKind.AppDiagnostics,
-    state: 'type-projected',
-    sourcePrecision: 'exact-authored-span',
+    sourceFacets: ['exact-authored-span'],
     notIntents: ['repair'],
   }, 'template repair precision');
   expectContinuationEvidence(answer, SemanticAppQueryKind.TemplateDiagnostics, {
     target: SemanticAppQueryKind.BindingDataFlowSummary,
-    state: 'type-projected',
-    sourcePrecision: 'exact-authored-span',
+    sourceRequirement: 'not-required',
+    sourceFactCount: 0,
     notIntents: ['repair'],
   }, 'template repair precision');
   expectContinuationEvidence(answer, SemanticAppQueryKind.TemplateDiagnostics, {
     target: SemanticAppQueryKind.ResourceDefinitions,
-    sourcePrecision: 'exact-authored-span',
+    sourceRequirement: 'not-required',
+    sourceFactCount: 0,
     notIntents: ['repair'],
   }, 'template repair precision');
 }
@@ -884,8 +966,8 @@ async function verifyFamilySpecificContinuationCanaries() {
           minRows: 1,
           targets: [SemanticAppQueryKind.TypeScriptDiagnosticSummary, SemanticAppQueryKind.AppDiagnostics],
           evidence: [
-            { target: SemanticAppQueryKind.TypeScriptDiagnosticSummary, state: 'type-projected' },
-            { target: SemanticAppQueryKind.AppDiagnostics, state: 'type-projected', notIntents: ['repair'] },
+            { target: SemanticAppQueryKind.TypeScriptDiagnosticSummary, sourceRequirement: 'not-required', sourceFactCount: 0 },
+            { target: SemanticAppQueryKind.AppDiagnostics, sourceRequirement: 'not-required', sourceFactCount: 0, notIntents: ['repair'] },
           ],
         },
         {
@@ -897,7 +979,14 @@ async function verifyFamilySpecificContinuationCanaries() {
           queryKind: SemanticAppQueryKind.AppDiagnostics,
           minRows: 1,
           targets: [SemanticAppQueryKind.TypeScriptDiagnostics],
-          evidence: [{ continuationKind: followQueryContinuationKind, target: SemanticAppQueryKind.TypeScriptDiagnostics, state: 'source-backed', sourcePrecision: 'exact-authored-span', intents: ['repair'], blockerCount: 0 }],
+          evidence: [{
+            continuationKind: followQueryContinuationKind,
+            target: SemanticAppQueryKind.TypeScriptDiagnostics,
+            sourceRequirement: 'exact-authored-span',
+            sourceFacets: ['exact-authored-span'],
+            intents: ['repair'],
+            blockerCount: 0,
+          }],
         },
       ],
     },
@@ -906,6 +995,7 @@ async function verifyFamilySpecificContinuationCanaries() {
       workspaceRoot: path.join(pressureRoot, 'router-dynamic-pattern'),
       queries: [
         { kind: SemanticAppQueryKind.OpenSeams, page: { size: 5 } },
+        { kind: SemanticAppQueryKind.OpenSeamSites, page: { size: 5 } },
         { kind: SemanticAppQueryKind.OpenSeamSummary, page: { size: 5 } },
       ],
       expectations: [
@@ -913,13 +1003,19 @@ async function verifyFamilySpecificContinuationCanaries() {
           queryKind: SemanticAppQueryKind.OpenSeams,
           minRows: 1,
           targets: [SemanticAppQueryKind.OpenSeamSummary],
-          evidence: [{ target: SemanticAppQueryKind.OpenSeamSummary, state: 'open', sourcePrecision: 'exact-authored-span' }],
+          evidence: [{ target: SemanticAppQueryKind.OpenSeamSummary, sourceRequirement: 'not-required', minSourceFactCount: 1, sourceFacets: ['exact-authored-span'] }],
+        },
+        {
+          queryKind: SemanticAppQueryKind.OpenSeamSites,
+          minRows: 1,
+          targets: [SemanticAppQueryKind.OpenSeams, SemanticAppQueryKind.OpenSeamSummary],
+          evidence: [{ target: SemanticAppQueryKind.OpenSeams, sourceRequirement: 'not-required', minSourceFactCount: 1, sourceFacets: ['exact-authored-span'] }],
         },
         {
           queryKind: SemanticAppQueryKind.OpenSeamSummary,
           minRows: 1,
           targets: [SemanticAppQueryKind.OpenSeams],
-          evidence: [{ target: SemanticAppQueryKind.OpenSeams, state: 'open' }],
+          evidence: [{ target: SemanticAppQueryKind.OpenSeams, sourceRequirement: 'not-required', minSourceFactCount: 1, sourceFacets: ['exact-authored-span'] }],
         },
       ],
     },
@@ -944,7 +1040,7 @@ async function verifyFamilySpecificContinuationCanaries() {
           queryKind: SemanticAppQueryKind.AppDiagnostics,
           minRows: 1,
           targets: [SemanticAppQueryKind.ConfigurationIssues],
-          evidence: [{ target: SemanticAppQueryKind.ConfigurationIssues, state: 'source-backed', sourcePrecision: 'exact-authored-span', intents: ['repair'], blockerCount: 0 }],
+          evidence: [{ target: SemanticAppQueryKind.ConfigurationIssues, sourceRequirement: 'exact-authored-span', sourceFacets: ['exact-authored-span'], intents: ['repair'], blockerCount: 0 }],
         },
         { queryKind: SemanticAppQueryKind.AppOverview, targets: [SemanticAppQueryKind.AppTopology, SemanticAppQueryKind.AppDiagnosticSummary, SemanticAppQueryKind.OpenSeamSummary, SemanticAppQueryKind.RouterOverview] },
         { queryKind: SemanticAppQueryKind.AppTopology, targets: [SemanticAppQueryKind.AppOverview, SemanticAppQueryKind.ResourceDefinitions, SemanticAppQueryKind.BindingDataFlowSummary] },
@@ -964,7 +1060,7 @@ async function verifyFamilySpecificContinuationCanaries() {
           queryKind: SemanticAppQueryKind.AppDiagnostics,
           minRows: 1,
           targets: [SemanticAppQueryKind.TypeScriptDiagnostics, SemanticAppQueryKind.TemplateDiagnostics, SemanticAppQueryKind.DiIssues],
-          evidence: [{ target: SemanticAppQueryKind.DiIssues, state: 'source-backed', sourcePrecision: 'exact-authored-span', intents: ['repair'], blockerCount: 0 }],
+          evidence: [{ target: SemanticAppQueryKind.DiIssues, sourceRequirement: 'exact-authored-span', sourceFacets: ['exact-authored-span'], intents: ['repair'], blockerCount: 0 }],
         },
         {
           queryKind: SemanticAppQueryKind.AppDiagnosticSummary,
@@ -978,7 +1074,7 @@ async function verifyFamilySpecificContinuationCanaries() {
       workspaceRoot: path.join(pressureRoot, 'resource-definition-api-errors'),
       queries: [
         { kind: SemanticAppQueryKind.ResourceDefinitions, page: { size: 5 } },
-        { kind: SemanticAppQueryKind.ResourceIssues, page: { size: 5 } },
+        { kind: SemanticAppQueryKind.ResourceIssues, page: { size: 20 } },
         { kind: SemanticAppQueryKind.ResourceVisibility, page: { size: 5 } },
         { kind: SemanticAppQueryKind.AppDiagnostics, page: { size: 5 } },
       ],
@@ -995,15 +1091,16 @@ async function verifyFamilySpecificContinuationCanaries() {
         {
           queryKind: SemanticAppQueryKind.ResourceIssues,
           minRows: 1,
+          exactRows: 5,
           targets: [SemanticAppQueryKind.ResourceDefinitions, SemanticAppQueryKind.AppDiagnosticSummary],
-          evidence: [{ target: SemanticAppQueryKind.ResourceDefinitions, sourcePrecision: 'exact-authored-span' }],
+          evidence: [{ target: SemanticAppQueryKind.ResourceDefinitions, sourceRequirement: 'not-required', sourceFactCount: 0 }],
         },
         { queryKind: SemanticAppQueryKind.ResourceVisibility, minRows: 1, targets: [SemanticAppQueryKind.ResourceDefinitions, SemanticAppQueryKind.TemplateCompilations] },
         {
           queryKind: SemanticAppQueryKind.AppDiagnostics,
           minRows: 1,
           targets: [SemanticAppQueryKind.ResourceIssues],
-          evidence: [{ target: SemanticAppQueryKind.ResourceIssues, state: 'source-backed', sourcePrecision: 'exact-authored-span', intents: ['repair'], blockerCount: 0 }],
+          evidence: [{ target: SemanticAppQueryKind.ResourceIssues, sourceRequirement: 'exact-authored-span', sourceFacets: ['exact-authored-span'], intents: ['repair'], blockerCount: 0 }],
         },
       ],
     },
@@ -1021,7 +1118,7 @@ async function verifyFamilySpecificContinuationCanaries() {
           minRows: 1,
           targets: [SemanticAppQueryKind.RuntimeEffectObservedDependencies, SemanticAppQueryKind.ObservationIssues],
           evidence: [
-            { continuationKind: followQueryContinuationKind, target: SemanticAppQueryKind.RuntimeEffectObservedDependencies, sourcePrecision: 'exact-authored-span' },
+            { continuationKind: followQueryContinuationKind, target: SemanticAppQueryKind.RuntimeEffectObservedDependencies, sourceRequirement: 'not-required', sourceFactCount: 0 },
             { continuationKind: followQueryContinuationKind, target: SemanticAppQueryKind.ObservationIssues },
           ],
         },
@@ -1056,7 +1153,7 @@ async function verifyFamilySpecificContinuationCanaries() {
           queryKind: SemanticAppQueryKind.BindingDataFlows,
           minRows: 1,
           targets: [SemanticAppQueryKind.BindingDataFlowSummary],
-          evidence: [{ target: SemanticAppQueryKind.BindingDataFlowSummary, sourcePrecision: 'exact-authored-span' }],
+          evidence: [{ target: SemanticAppQueryKind.BindingDataFlowSummary, sourceRequirement: 'not-required', sourceFactCount: 0 }],
         },
       ],
     },
@@ -1074,8 +1171,8 @@ async function verifyFamilySpecificContinuationCanaries() {
           minRows: 1,
           targets: [SemanticAppQueryKind.BindingValueChannels, SemanticAppQueryKind.BindingDataFlows],
           evidence: [
-            { target: SemanticAppQueryKind.BindingValueChannels, state: 'type-projected', sourcePrecision: 'exact-authored-span' },
-            { target: SemanticAppQueryKind.BindingDataFlows, state: 'type-projected', sourcePrecision: 'exact-authored-span' },
+            { target: SemanticAppQueryKind.BindingValueChannels, sourceRequirement: 'not-required', sourceFactCount: 0 },
+            { target: SemanticAppQueryKind.BindingDataFlows, sourceRequirement: 'not-required', sourceFactCount: 0 },
           ],
         },
         {
@@ -1160,7 +1257,7 @@ async function verifyFamilySpecificContinuationCanaries() {
           queryKind: SemanticAppQueryKind.AppDiagnostics,
           minRows: 1,
           targets: [SemanticAppQueryKind.FetchClientIssues],
-          evidence: [{ target: SemanticAppQueryKind.FetchClientIssues, state: 'source-backed', sourcePrecision: 'exact-authored-span', intents: ['repair'], blockerCount: 0 }],
+          evidence: [{ target: SemanticAppQueryKind.FetchClientIssues, sourceRequirement: 'exact-authored-span', sourceFacets: ['exact-authored-span'], intents: ['repair'], blockerCount: 0 }],
         },
       ],
     },
@@ -1177,7 +1274,7 @@ async function verifyFamilySpecificContinuationCanaries() {
           queryKind: SemanticAppQueryKind.AppDiagnostics,
           minRows: 1,
           targets: [SemanticAppQueryKind.ValidationIssues],
-          evidence: [{ target: SemanticAppQueryKind.ValidationIssues, state: 'source-backed', sourcePrecision: 'exact-authored-span', intents: ['repair'], blockerCount: 0 }],
+          evidence: [{ target: SemanticAppQueryKind.ValidationIssues, sourceRequirement: 'exact-authored-span', sourceFacets: ['exact-authored-span'], intents: ['repair'], blockerCount: 0 }],
         },
       ],
     },
@@ -1194,7 +1291,7 @@ async function verifyFamilySpecificContinuationCanaries() {
           queryKind: SemanticAppQueryKind.AppDiagnostics,
           minRows: 1,
           targets: [SemanticAppQueryKind.DialogIssues],
-          evidence: [{ target: SemanticAppQueryKind.DialogIssues, state: 'source-backed', sourcePrecision: 'exact-authored-span', intents: ['repair'], blockerCount: 0 }],
+          evidence: [{ target: SemanticAppQueryKind.DialogIssues, sourceRequirement: 'exact-authored-span', sourceFacets: ['exact-authored-span'], intents: ['repair'], blockerCount: 0 }],
         },
       ],
     },
@@ -1218,6 +1315,10 @@ async function verifyFamilySpecificContinuationCanaries() {
       if (expectation.minRows != null) {
         const rowCount = row.answer.value?.rows?.length ?? 0;
         expect(rowCount >= expectation.minRows, `${canary.label}: ${expectation.queryKind} should return at least ${expectation.minRows} row(s), returned ${rowCount}.`);
+      }
+      if (expectation.exactRows != null) {
+        const rowCount = row.answer.value?.rows?.length ?? 0;
+        expect(rowCount === expectation.exactRows, `${canary.label}: ${expectation.queryKind} should return exactly ${expectation.exactRows} row(s), returned ${rowCount}.`);
       }
       expectContinuationTargets(row.answer, expectation.queryKind, expectation.targets, canary.label);
       for (const evidenceExpectation of expectation.evidence ?? []) {
@@ -1249,6 +1350,152 @@ async function verifyContinuationTargetQueriesEnterClaimGraph() {
     projectedDiagnosticContinuation?.cost === 'app-world',
     'Routed app-query continuations should compute cost from the shaped target query materialization policy.',
   );
+  const summaryWithTypeProjection = await runtime.answerAppQuery({
+    kind: SemanticAppQueryKind.Summary,
+    diagnosticProjection: 'type-projection',
+    inquiryProfile: 'exploration',
+    appRetention: 'retain-app',
+  });
+  const typeProjectedDiagnosticContinuation = summaryWithTypeProjection.continuations?.find((row) =>
+    row.targetQueryKind === SemanticAppQueryKind.AppDiagnosticSummary
+  );
+  expect(
+    typeProjectedDiagnosticContinuation?.targetQuery?.diagnosticProjection === 'type-projection',
+    'A retained source claim must project the current response diagnostic policy instead of replaying the first policy.',
+  );
+  expect(
+    typeProjectedDiagnosticContinuation?.cost === 'query-type-projection',
+    'Continuation cost should be recomputed after projecting a type-checking diagnostic target policy.',
+  );
+  const summaryWithAvailableProductsAgain = await runtime.answerAppQuery({
+    kind: SemanticAppQueryKind.Summary,
+    diagnosticProjection: 'available-products',
+    inquiryProfile: 'exploration',
+    appRetention: 'retain-app',
+  });
+  expect(
+    summaryWithAvailableProductsAgain.continuations?.find((row) =>
+      row.targetQueryKind === SemanticAppQueryKind.AppDiagnosticSummary
+    )?.targetQuery?.diagnosticProjection === 'available-products',
+    'Response projection should remain reversible across repeated reads of one retained semantic claim.',
+  );
+
+  const diagnoseFilteredSummary = await runtime.answerAppQuery({
+    kind: SemanticAppQueryKind.Summary,
+    continuationIntents: ['diagnose'],
+    inquiryProfile: 'exploration',
+    appRetention: 'retain-app',
+  });
+  const inspectFilteredSummary = await runtime.answerAppQuery({
+    kind: SemanticAppQueryKind.Summary,
+    continuationIntents: ['inspect'],
+    inquiryProfile: 'exploration',
+    appRetention: 'retain-app',
+  });
+  expect(
+    diagnoseFilteredSummary.continuations?.some((row) =>
+      row.targetQueryKind === SemanticAppQueryKind.AppDiagnosticSummary
+    ) === true,
+    'A diagnose envelope should retain the summary diagnostic continuation.',
+  );
+  expect(
+    diagnoseFilteredSummary.continuations?.some((row) =>
+      row.targetQueryKind === SemanticAppQueryKind.AppOverview
+    ) === false,
+    'A diagnose envelope should not retain inspect-only summary continuations.',
+  );
+  expect(
+    inspectFilteredSummary.continuations?.some((row) =>
+      row.targetQueryKind === SemanticAppQueryKind.AppOverview
+    ) === true,
+    'An inspect envelope should retain the summary overview continuation after the diagnose claim read.',
+  );
+  expect(
+    inspectFilteredSummary.continuations?.some((row) =>
+      row.targetQueryKind === SemanticAppQueryKind.AppDiagnosticSummary
+    ) === false,
+    'An inspect envelope should not replay the diagnose filter retained by an earlier request.',
+  );
+
+  const diagnoseBatch = await runtime.answerAppQueries({
+    inquiryProfile: 'exploration',
+    appRetention: 'retain-app',
+    queries: [{
+      kind: SemanticAppQueryKind.Summary,
+      continuationIntents: ['diagnose'],
+    }],
+  });
+  const inspectBatch = await runtime.answerAppQueries({
+    inquiryProfile: 'exploration',
+    appRetention: 'retain-app',
+    queries: [{
+      kind: SemanticAppQueryKind.Summary,
+      continuationIntents: ['inspect'],
+    }],
+  });
+  const diagnoseBatchContinuations = diagnoseBatch.value.rows[0]?.answer.continuations ?? [];
+  const inspectBatchContinuations = inspectBatch.value.rows[0]?.answer.continuations ?? [];
+  expect(
+    diagnoseBatchContinuations.some((row) => row.targetQueryKind === SemanticAppQueryKind.AppDiagnosticSummary)
+      && !diagnoseBatchContinuations.some((row) => row.targetQueryKind === SemanticAppQueryKind.AppOverview),
+    'A reusable batch claim should project diagnose policy only into the diagnose response.',
+  );
+  expect(
+    inspectBatchContinuations.some((row) => row.targetQueryKind === SemanticAppQueryKind.AppOverview)
+      && !inspectBatchContinuations.some((row) => row.targetQueryKind === SemanticAppQueryKind.AppDiagnosticSummary),
+    'A reusable batch claim should project inspect policy only into the later inspect response.',
+  );
+
+  const coldPolicyRuntime = await createSemanticRuntime({
+    workspaceRoot: path.join(packageRoot, 'fixtures/pressure/router-dynamic-pattern'),
+    storeKey: 'contract-app-query-continuations-cold-response-policy',
+  });
+  await coldPolicyRuntime.answerAppQuery({
+    kind: SemanticAppQueryKind.Summary,
+    continuationIntents: ['diagnose'],
+    inquiryProfile: 'exploration',
+    appRetention: 'retain-app',
+  });
+  const unfilteredAfterDiagnose = await coldPolicyRuntime.answerAppQuery({
+    kind: SemanticAppQueryKind.Summary,
+    inquiryProfile: 'exploration',
+    appRetention: 'retain-app',
+  });
+  expect(
+    unfilteredAfterDiagnose.continuations?.some((row) =>
+      row.targetQueryKind === SemanticAppQueryKind.AppOverview
+    ) === true,
+    'An unfiltered response should recover inspect continuations when the retained claim was first read through a diagnose filter.',
+  );
+  expect(
+    (unfilteredAfterDiagnose.continuations ?? []).every((row) =>
+      row.targetQuery?.continuationIntents == null
+      && row.targetAppBuilderQuery?.continuationIntents == null
+    ),
+    'Neutral retained continuations must not preserve the first caller response-intent filter.',
+  );
+  await coldPolicyRuntime.answerAppQueries({
+    inquiryProfile: 'exploration',
+    appRetention: 'retain-app',
+    queries: [{
+      kind: SemanticAppQueryKind.Summary,
+      continuationIntents: ['diagnose'],
+    }],
+  });
+  const unfilteredBatchAfterDiagnose = await coldPolicyRuntime.answerAppQueries({
+    inquiryProfile: 'exploration',
+    appRetention: 'retain-app',
+    queries: [{
+      kind: SemanticAppQueryKind.Summary,
+    }],
+  });
+  expect(
+    (unfilteredBatchAfterDiagnose.value.rows[0]?.answer.continuations ?? []).every((row) =>
+      row.targetQuery?.continuationIntents == null
+      && row.targetAppBuilderQuery?.continuationIntents == null
+    ),
+    'A neutral retained batch claim must not preserve the first child response-intent filter.',
+  );
 
   const firstAnswer = await runtime.answerAppQuery({
     kind: SemanticAppQueryKind.OpenSeams,
@@ -1269,7 +1516,10 @@ async function verifyContinuationTargetQueriesEnterClaimGraph() {
     inquiryProfile: 'exploration',
     appRetention: 'retain-app',
   });
-  expect(followedAnswer.outcome === SemanticRuntimeAnswerOutcome.Hit, 'Following a targetQuery should use the normal public app-query answer path.');
+  expect(
+    followedAnswer.result === SemanticRuntimeAnswerResult.Answered,
+    'Following a targetQuery should use the normal public app-query answer path without conflating paging with result.',
+  );
   expect(followedAnswer.value?.rows?.length >= 1, 'Following a targetQuery should return the expected continuation target rows.');
 
   const intentFilteredAnswer = await runtime.answerAppQuery({
@@ -1357,11 +1607,32 @@ function expectContinuationEvidence(answer, queryKind, expectation, label) {
   if (continuation == null) {
     return;
   }
-  if (expectation.state != null) {
-    expect(continuation.evidence?.evidenceState === expectation.state, `${label}: ${queryKind} -> ${expectation.target} should have evidence state ${expectation.state}, got ${continuation.evidence?.evidenceState}.`);
+  if (expectation.sourceRequirement != null) {
+    expect(
+      continuation.evidence?.sourceRequirement === expectation.sourceRequirement,
+      `${label}: ${queryKind} -> ${expectation.target} should require ${expectation.sourceRequirement}, got ${continuation.evidence?.sourceRequirement}.`,
+    );
   }
-  if (expectation.sourcePrecision != null) {
-    expect(continuation.evidence?.sourcePrecision === expectation.sourcePrecision, `${label}: ${queryKind} -> ${expectation.target} should have source precision ${expectation.sourcePrecision}, got ${continuation.evidence?.sourcePrecision}.`);
+  if (expectation.sourceFactCount != null) {
+    expect(
+      (continuation.evidence?.sourceFacts ?? []).length === expectation.sourceFactCount,
+      `${label}: ${queryKind} -> ${expectation.target} should carry ${expectation.sourceFactCount} distinct source fact(s), got ${(continuation.evidence?.sourceFacts ?? []).length}.`,
+    );
+  }
+  if (expectation.minSourceFactCount != null) {
+    expect(
+      (continuation.evidence?.sourceFacts ?? []).length >= expectation.minSourceFactCount,
+      `${label}: ${queryKind} -> ${expectation.target} should carry at least ${expectation.minSourceFactCount} distinct source fact(s), got ${(continuation.evidence?.sourceFacts ?? []).length}.`,
+    );
+  }
+  if (expectation.sourceFacets != null) {
+    const actualFacets = continuationSourceFacetSet(continuation);
+    for (const facet of expectation.sourceFacets) {
+      expect(
+        actualFacets.has(facet),
+        `${label}: ${queryKind} -> ${expectation.target} should preserve source facet ${facet}, got ${JSON.stringify([...actualFacets].sort())}.`,
+      );
+    }
   }
   for (const intent of expectation.intents ?? []) {
     expect(continuation.intents?.includes(intent), `${label}: ${queryKind} -> ${expectation.target} should include intent ${intent}.`);
@@ -1375,10 +1646,20 @@ function expectContinuationEvidence(answer, queryKind, expectation, label) {
 }
 
 function continuationMatchesEvidenceExpectation(row, expectation) {
-  if (expectation.state != null && row.evidence?.evidenceState !== expectation.state) {
+  if (
+    expectation.sourceRequirement != null
+    && row.evidence?.sourceRequirement !== expectation.sourceRequirement
+  ) {
     return false;
   }
-  if (expectation.sourcePrecision != null && row.evidence?.sourcePrecision !== expectation.sourcePrecision) {
+  if (
+    expectation.sourceFactCount != null
+    && (row.evidence?.sourceFacts ?? []).length !== expectation.sourceFactCount
+  ) {
+    return false;
+  }
+  const actualFacets = continuationSourceFacetSet(row);
+  if ((expectation.sourceFacets ?? []).some((facet) => !actualFacets.has(facet))) {
     return false;
   }
   for (const intent of expectation.intents ?? []) {
@@ -1395,6 +1676,19 @@ function continuationMatchesEvidenceExpectation(row, expectation) {
     return false;
   }
   return true;
+}
+
+function continuationSourceFacetSet(continuation) {
+  return new Set((continuation.evidence?.sourceFacts ?? []).flatMap((fact) => fact.facets ?? []));
+}
+
+function expectSourceFactFacets(facts, sourceLabel, expectedFacets, label) {
+  const fact = facts.find((candidate) => candidate.source?.label === sourceLabel);
+  expect(fact != null, `${label} should survive as a distinct continuation source fact.`);
+  expect(
+    JSON.stringify(fact?.facets ?? []) === JSON.stringify([...expectedFacets].sort()),
+    `${label} should preserve independent facets ${JSON.stringify([...expectedFacets].sort())}, got ${JSON.stringify(fact?.facets ?? [])}.`,
+  );
 }
 
 function expect(condition, message) {

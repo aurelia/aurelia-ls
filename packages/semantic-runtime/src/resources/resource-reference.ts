@@ -30,6 +30,8 @@ export class ResourceTargetReference {
     readonly localName: string | null,
     readonly targetType: CheckerTypeReference | null = null,
     readonly moduleKey: string | null = null,
+    /** Full authored declaration carrier for outline/hierarchy consumers, distinct from the exact target token. */
+    readonly declarationSourceAddressHandle: AddressHandle | null = null,
   ) {}
 }
 

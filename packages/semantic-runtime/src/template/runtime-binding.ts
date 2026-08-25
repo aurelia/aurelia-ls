@@ -4,8 +4,11 @@ import type {
   AddressHandle,
   IdentityHandle,
   ProductHandle,
+  ProvenanceHandle,
 } from '../kernel/handles.js';
+import type { AppTaskSlot } from '../configuration/app-task.js';
 import type { FieldProvenance } from '../kernel/provenance.js';
+import type { ExpressionPrimitiveLiteralValue } from '../expression/ast.js';
 import type {
   BindingKindKey,
 } from '../kernel/vocabulary.js';
@@ -17,6 +20,7 @@ import type {
   TemplateListenerStrategy,
 } from './instruction-ir.js';
 import type { RuntimeRendererReference } from './runtime-renderer-reference.js';
+import type { RuntimeOperationReachability } from '../runtime-expression/runtime-operation.js';
 
 export const enum RuntimeBindingKind {
   Property = 'property',
@@ -53,13 +57,16 @@ export const enum RuntimeBindingTargetAccessLookup {
 export const enum RuntimeBindingTargetAccessStrategy {
   PropertyAccessor = 'property-accessor',
   SetterObserver = 'setter-observer',
+  ObservableSetterNotifier = 'observable-setter-notifier',
   ComputedObserver = 'computed-observer',
+  ControlledComputedObserver = 'controlled-computed-observer',
   CollectionLengthObserver = 'collection-length-observer',
   CollectionSizeObserver = 'collection-size-observer',
   ArrayIndexObserver = 'array-index-observer',
   ValueAttributeObserver = 'value-attribute-observer',
   CheckedObserver = 'checked-observer',
   SelectValueObserver = 'select-value-observer',
+  CustomNodeObserver = 'custom-node-observer',
   ElementPropertyAccessor = 'element-property-accessor',
   AttributeNSAccessor = 'attribute-ns-accessor',
   DataAttributeAccessor = 'data-attribute-accessor',
@@ -73,8 +80,201 @@ export const enum RuntimeBindingTargetAccessAuthority {
   FrameworkConfig = 'framework-config',
   TypeChecker = 'type-checker',
   FrameworkConfigAndTypeChecker = 'framework-config-and-type-checker',
+  RuntimeRendererImplementation = 'runtime-renderer-implementation',
+  BindingBehavior = 'binding-behavior',
   FrameworkErrorCode = 'framework-error-code',
   Open = 'open',
+}
+
+/** Whether an ObserverLocator selection survives as the target object's cached observer. */
+export const enum RuntimeBindingTargetObserverCacheDisposition {
+  /** The selected observer is retained in the target's observer lookup. */
+  Cached = 'cached',
+  /** The selected observer explicitly opts out of target-object caching. */
+  NotCached = 'not-cached',
+  /** The access path does not create or consult an observer cache entry. */
+  NotApplicable = 'not-applicable',
+  /** Runtime-only adapter or descriptor behavior prevents a static cache ruling. */
+  Open = 'open',
+}
+
+/** Result of installing one bindable observer during controller hydration. */
+export const enum RuntimeControllerObserverSetupOutcome {
+  /** Observer selection completed and controller setup admitted the bindable. */
+  Installed = 'installed',
+  /** Runtime-only selection or capability behavior prevents a closed setup result. */
+  Open = 'open',
+  /** The selected observer cannot install the bindable coercer. */
+  RejectedCoercer = 'rejected-coercer',
+  /** The selected observer cannot install the bindable change callback. */
+  RejectedCallback = 'rejected-callback',
+  /** Framework hydration stopped at an earlier bindable, so this setup was not attempted. */
+  NotReached = 'not-reached',
+}
+
+/** Ordered app-authored object-observation adapter visible to one ObserverLocator. */
+export class RuntimeObjectObservationAdapterReference {
+  constructor(
+    readonly order: number,
+    readonly adapterName: string | null,
+    readonly appTaskSlot: AppTaskSlot,
+    readonly sourceAddressHandle: AddressHandle | null,
+    readonly provenanceHandle: ProvenanceHandle | null,
+  ) {}
+}
+
+/** Distinct witness lanes that contributed to one final target-access selection. */
+export class RuntimeBindingTargetAccessProvenance {
+  static readonly none = new RuntimeBindingTargetAccessProvenance();
+
+  readonly observerSource: readonly ProvenanceHandle[];
+  readonly objectObservationAdapters: readonly ProvenanceHandle[];
+  readonly controllerObserverSetup: readonly ProvenanceHandle[];
+  readonly targetObserverOverride: readonly ProvenanceHandle[];
+
+  constructor(
+    observerSource: readonly ProvenanceHandle[] = [],
+    objectObservationAdapters: readonly ProvenanceHandle[] = [],
+    controllerObserverSetup: readonly ProvenanceHandle[] = [],
+    targetObserverOverride: readonly ProvenanceHandle[] = [],
+  ) {
+    this.observerSource = uniqueProvenanceHandles(observerSource);
+    this.objectObservationAdapters = uniqueProvenanceHandles(objectObservationAdapters);
+    this.controllerObserverSetup = uniqueProvenanceHandles(controllerObserverSetup);
+    this.targetObserverOverride = uniqueProvenanceHandles(targetObserverOverride);
+  }
+
+  /** Preserve ordinary selection causes while recording the controller-setup decision separately. */
+  withControllerObserverSetup(
+    provenanceHandles: readonly ProvenanceHandle[],
+  ): RuntimeBindingTargetAccessProvenance {
+    return new RuntimeBindingTargetAccessProvenance(
+      this.observerSource,
+      this.objectObservationAdapters,
+      provenanceHandles,
+      this.targetObserverOverride,
+    );
+  }
+
+  /** A renderer or binding behavior replaces the ordinary observer-selection authority. */
+  replacedByTargetObserver(
+    provenanceHandles: readonly ProvenanceHandle[] = [],
+  ): RuntimeBindingTargetAccessProvenance {
+    return new RuntimeBindingTargetAccessProvenance([], [], [], provenanceHandles);
+  }
+
+  /** Causes that choose strategy/fallback/cache; controller setup only explains its own outcome field. */
+  selectionDecisionHandles(): readonly ProvenanceHandle[] {
+    return uniqueProvenanceHandles([
+      ...this.observerSource,
+      ...this.objectObservationAdapters,
+      ...this.targetObserverOverride,
+    ]);
+  }
+
+  /** Complete causal set retained by the final target-access product. */
+  allHandles(): readonly ProvenanceHandle[] {
+    return uniqueProvenanceHandles([
+      ...this.observerSource,
+      ...this.objectObservationAdapters,
+      ...this.controllerObserverSetup,
+      ...this.targetObserverOverride,
+    ]);
+  }
+}
+
+function uniqueProvenanceHandles(
+  handles: readonly ProvenanceHandle[],
+): readonly ProvenanceHandle[] {
+  return [...new Set(handles)].sort();
+}
+
+/** Observer constructor selected by one framework NodeObserverLocator configuration. */
+export const enum RuntimeNodeObserverKind {
+  /** Framework default observer used when a node config omits `type`. */
+  ValueAttribute = 'value-attribute',
+  /** Framework checked/model observer. */
+  Checked = 'checked',
+  /** Framework select value observer. */
+  Select = 'select',
+  /** App-supplied observer constructor whose transport semantics are not framework-owned. */
+  Custom = 'custom',
+  /** Observer constructor depends on a value static evaluation could not close. */
+  Open = 'open',
+}
+
+export const RUNTIME_NODE_OBSERVER_CONFIG_FIELDS = [
+  'type',
+  'events',
+  'readonly',
+  'default',
+] as const;
+
+export type RuntimeNodeObserverConfigField = typeof RUNTIME_NODE_OBSERVER_CONFIG_FIELDS[number];
+
+/** Epistemic state of one NodeObserverLocator configuration field. */
+export const enum RuntimeNodeObserverConfigFieldState {
+  /** Field is provably absent and framework fallback behavior applies. */
+  Absent = 'absent',
+  /** Field value is statically closed. */
+  Closed = 'closed',
+  /** Field may be present or its value could not be reduced without guessing. */
+  Open = 'open',
+}
+
+/**
+ * Effective node-observer configuration selected for one property.
+ *
+ * Field states keep absence distinct from an explicit `undefined` and from an unclosed object spread. That distinction
+ * controls constructor selection, event observation, target-write suppression, and nullish defaulting independently.
+ */
+export class RuntimeNodeObserverConfig {
+  static open(reason: string): RuntimeNodeObserverConfig {
+    return new RuntimeNodeObserverConfig(
+      RuntimeNodeObserverKind.Open,
+      null,
+      [],
+      null,
+      undefined,
+      {
+        type: RuntimeNodeObserverConfigFieldState.Open,
+        events: RuntimeNodeObserverConfigFieldState.Open,
+        readonly: RuntimeNodeObserverConfigFieldState.Open,
+        default: RuntimeNodeObserverConfigFieldState.Open,
+      },
+      reason,
+    );
+  }
+
+  constructor(
+    readonly observerKind: RuntimeNodeObserverKind,
+    readonly observerConstructorName: string | null,
+    readonly eventNames: readonly string[],
+    readonly readonlyValue: boolean | null,
+    readonly defaultValue: ExpressionPrimitiveLiteralValue,
+    readonly fieldStates: Readonly<Record<RuntimeNodeObserverConfigField, RuntimeNodeObserverConfigFieldState>>,
+    readonly openReason: string | null,
+  ) {}
+
+  fieldState(field: RuntimeNodeObserverConfigField): RuntimeNodeObserverConfigFieldState {
+    return this.fieldStates[field];
+  }
+
+  withEventNames(
+    eventNames: readonly string[],
+    state: RuntimeNodeObserverConfigFieldState,
+    openReason: string | null,
+  ): RuntimeNodeObserverConfig {
+    return new RuntimeNodeObserverConfig(
+      this.observerKind,
+      this.observerConstructorName,
+      eventNames,
+      this.readonlyValue,
+      this.defaultValue,
+      { ...this.fieldStates, events: state },
+      openReason ?? this.openReason,
+    );
+  }
 }
 
 export const enum RuntimeBindingTargetTypeSource {
@@ -146,6 +346,7 @@ export type RuntimeBindingField =
   | 'listenerStrategy'
   | 'eventModifier'
   | 'bindingKind'
+  | 'rendererTargetObserver'
   | 'isParameterContext'
   | 'scopeEffects'
   | 'source';
@@ -158,7 +359,15 @@ export type RuntimeBindingTargetAccessField =
   | 'targetController'
   | 'targetProperty'
   | 'strategy'
-  | 'events'
+  | 'fallbackStrategy'
+  | 'observerCacheDisposition'
+  | 'supportsCallback'
+  | 'supportsCoercer'
+  | 'observerSource'
+  | 'objectObservationAdapters'
+  | 'controllerObserverSetup'
+  | 'bindReachability'
+  | 'nodeObserverConfig'
   | 'targetType'
   | 'targetTypeSource'
   | 'propertyType'
@@ -183,6 +392,7 @@ export type RuntimeBindingTargetOperationField =
   | 'value'
   | 'operationKind'
   | 'affectedNames'
+  | 'reachability'
   | 'authority'
   | 'openReason'
   | 'source';
@@ -196,6 +406,7 @@ export type RuntimeBindingSourceOperationField =
   | 'targetName'
   | 'targetType'
   | 'operationKind'
+  | 'reachability'
   | 'authority'
   | 'openReason'
   | 'source';
@@ -204,8 +415,10 @@ export type RuntimeBindingScopeEffectField =
   | 'binding'
   | 'ownerInstruction'
   | 'target'
+  | 'value'
   | 'targetContext'
   | 'localNames'
+  | 'objectBindingSourceKeys'
   | 'iterable'
   | 'templateController'
   | 'source';
@@ -305,8 +518,11 @@ export class LetBindingScopeEffect {
     readonly ownerInstructionProductHandle: ProductHandle,
     readonly target: string,
     readonly expressionProductHandle: ProductHandle | null,
+    /** Framework-compiled primitive string source when no expression product exists. */
+    readonly literalValue: string | null,
     readonly targetContext: LetBindingTargetContext,
     readonly sourceAddressHandle: AddressHandle | null,
+    readonly targetSourceAddressHandle: AddressHandle | null = null,
     readonly fieldProvenance: readonly FieldProvenance<RuntimeBindingScopeEffectField>[] = [],
   ) {}
 
@@ -330,6 +546,8 @@ export class IteratorBindingScopeEffect {
     readonly binding: RuntimeBindingReference,
     readonly ownerInstructionProductHandle: ProductHandle,
     readonly localNames: readonly string[],
+    /** One-way reactive Repeat property projections aligned with `localNames`. */
+    readonly objectBindingSourceKeys: readonly (string | number)[],
     readonly iterableExpressionProductHandle: ProductHandle | null,
     readonly templateControllerName: string | null,
     readonly sourceAddressHandle: AddressHandle | null,
@@ -416,7 +634,8 @@ export class RuntimeBindingBindContext {
   constructor(
     readonly localKey: string,
     readonly host: RuntimeBindingBindHost,
-    readonly spreadValueTargetProperties: readonly string[] = [],
+    /** Closed bindable candidates for spread-value binding, or null when target resolution stayed open. */
+    readonly spreadValueTargetProperties: readonly string[] | null = null,
     readonly propertyBindingMode: (binding: PropertyBinding) => TemplateBindingMode = (binding) => binding.bindingMode,
   ) {}
 
@@ -454,6 +673,7 @@ export class RuntimeBindingBindContext {
     targetProperty: string,
     operationKind: RuntimeBindingTargetOperationKind,
     affectedNames: readonly string[],
+    sourceAddressHandle: AddressHandle | null,
   ): RuntimeBindingBindContribution {
     const targetOperation = this.host.materializeTargetOperation(new RuntimeBindingTargetOperationRequest(
       this.localKey,
@@ -462,7 +682,7 @@ export class RuntimeBindingBindContext {
       targetProperty,
       operationKind,
       affectedNames,
-      binding.sourceAddressHandle,
+      sourceAddressHandle,
     ));
     return targetOperation == null
       ? RuntimeBindingBindContribution.none()
@@ -473,13 +693,14 @@ export class RuntimeBindingBindContext {
     binding: RuntimeBinding,
     targetName: string,
     operationKind: RuntimeBindingSourceOperationKind,
+    sourceAddressHandle: AddressHandle | null,
   ): RuntimeBindingBindContribution {
     const sourceOperation = this.host.materializeSourceOperation(new RuntimeBindingSourceOperationRequest(
       this.localKey,
       binding,
       targetName,
       operationKind,
-      binding.sourceAddressHandle,
+      sourceAddressHandle,
     ));
     return sourceOperation == null
       ? RuntimeBindingBindContribution.none()
@@ -524,18 +745,33 @@ export class RuntimeBindingTargetAccess {
     readonly targetControllerProductHandle: ProductHandle | null,
     readonly targetProperty: string,
     readonly strategy: RuntimeBindingTargetAccessStrategy,
-    readonly eventNames: readonly string[],
+    /** Framework fallback when ordered app adapters make the actual observer selection runtime-dependent. */
+    readonly fallbackStrategy: RuntimeBindingTargetAccessStrategy | null,
+    readonly observerCacheDisposition: RuntimeBindingTargetObserverCacheDisposition,
+    readonly supportsCallback: boolean | null,
+    readonly supportsCoercer: boolean | null,
+    /** Source observer product selected for a computed getter, when one was proven. */
+    readonly observerSourceProductHandle: ProductHandle | null,
+    readonly observerSourceIdentityHandle: IdentityHandle | null,
+    readonly observerSourceAddressHandle: AddressHandle | null,
+    readonly objectObservationAdapters: readonly RuntimeObjectObservationAdapterReference[],
+    /** Outcome of controller hydration setup reused by this access, when the target is a bindable controller member. */
+    readonly controllerObserverSetupOutcome: RuntimeControllerObserverSetupOutcome | null,
+    readonly bindReachability: RuntimeOperationReachability,
+    readonly nodeObserverConfig: RuntimeNodeObserverConfig | null,
     readonly targetType: CheckerTypeReference | null,
     readonly targetTypeSource: RuntimeBindingTargetTypeSource | null,
     readonly propertyType: CheckerTypeReference | null,
     readonly propertyExists: boolean | null,
     readonly isWritable: boolean | null,
-    readonly isObservable: boolean,
+    readonly isObservable: boolean | null,
     readonly authority: RuntimeBindingTargetAccessAuthority,
     readonly openReason: string | null,
     readonly frameworkErrorCode: string | null,
     readonly diagnosticReason: string | null,
     readonly sourceAddressHandle: AddressHandle | null,
+    /** Typed causal witnesses retained independently from field-specific explanations. */
+    readonly selectionProvenance: RuntimeBindingTargetAccessProvenance = RuntimeBindingTargetAccessProvenance.none,
     readonly fieldProvenance: readonly FieldProvenance<RuntimeBindingTargetAccessField>[] = [],
   ) {}
 
@@ -568,6 +804,7 @@ export class RuntimeTargetOperation {
     readonly value: string | null,
     readonly operationKind: RuntimeBindingTargetOperationKind,
     readonly affectedNames: readonly string[],
+    readonly reachability: RuntimeOperationReachability,
     readonly authority: RuntimeBindingTargetOperationAuthority,
     readonly openReason: string | null,
     readonly sourceAddressHandle: AddressHandle | null,
@@ -603,6 +840,7 @@ export class RuntimeSourceOperation {
     readonly targetName: string,
     readonly targetType: CheckerTypeReference | null,
     readonly operationKind: RuntimeBindingSourceOperationKind,
+    readonly reachability: RuntimeOperationReachability,
     readonly authority: RuntimeBindingSourceOperationAuthority,
     readonly openReason: string | null,
     readonly sourceAddressHandle: AddressHandle | null,
@@ -639,6 +877,8 @@ export class PropertyBinding {
     readonly target: string,
     readonly expressionProductHandle: ProductHandle | null,
     readonly bindingMode: TemplateBindingMode,
+    /** Target observer supplied by PropertyBindingRenderer before bind, such as the class accessor override. */
+    readonly rendererTargetObserverStrategy: RuntimeBindingTargetAccessStrategy | null,
     readonly semanticBindingKindKey: BindingKindKey,
     readonly command: BindingCommandExecutableReference | null,
     readonly scopeEffects: readonly RuntimeBindingScopeEffectReference[],
@@ -703,6 +943,7 @@ export class AttributeBinding {
       this.target,
       targetOperation.kind,
       targetOperation.affectedNames,
+      this.sourceAddressHandle,
     );
   }
 }
@@ -721,9 +962,12 @@ export class LetBinding {
     readonly attribute: HtmlAttributeReference,
     readonly target: string,
     readonly expressionProductHandle: ProductHandle | null,
+    /** Framework-compiled primitive string source when no expression product exists. */
+    readonly literalValue: string | null,
     readonly targetContext: LetBindingTargetContext,
     readonly scopeEffects: readonly RuntimeBindingScopeEffectReference[],
     readonly sourceAddressHandle: AddressHandle | null,
+    readonly targetSourceAddressHandle: AddressHandle | null = null,
     readonly fieldProvenance: readonly FieldProvenance<RuntimeBindingField>[] = [],
   ) {}
 
@@ -742,6 +986,7 @@ export class LetBinding {
       this.target,
       RuntimeBindingTargetOperationKind.PropertySet,
       [this.target],
+      this.targetSourceAddressHandle ?? this.sourceAddressHandle,
     );
   }
 }
@@ -759,9 +1004,11 @@ export class ListenerBinding {
     readonly node: HtmlNodeReference,
     readonly attribute: HtmlAttributeReference,
     readonly eventName: string,
+    readonly eventNameSourceAddressHandle: AddressHandle | null,
     readonly expressionProductHandle: ProductHandle | null,
     readonly strategy: TemplateListenerStrategy,
     readonly eventModifier: string | null,
+    readonly eventModifierSourceAddressHandle: AddressHandle | null,
     readonly command: BindingCommandExecutableReference | null,
     readonly scopeEffects: readonly RuntimeBindingScopeEffectReference[],
     readonly sourceAddressHandle: AddressHandle | null,
@@ -787,6 +1034,7 @@ export class ListenerBinding {
       this.eventName,
       RuntimeBindingTargetOperationKind.EventListenerAdd,
       this.eventModifier == null ? [this.eventName] : [this.eventName, this.eventModifier],
+      this.eventNameSourceAddressHandle ?? this.sourceAddressHandle,
     );
   }
 }
@@ -840,6 +1088,7 @@ export class RefBinding {
     readonly node: HtmlNodeReference,
     readonly attribute: HtmlAttributeReference,
     readonly target: string,
+    readonly targetSourceAddressHandle: AddressHandle | null,
     readonly expressionProductHandle: ProductHandle | null,
     readonly scopeEffects: readonly RuntimeBindingScopeEffectReference[],
     readonly sourceAddressHandle: AddressHandle | null,
@@ -863,6 +1112,7 @@ export class RefBinding {
       this,
       this.target,
       RuntimeBindingSourceOperationKind.RefAssignTarget,
+      this.targetSourceAddressHandle ?? this.sourceAddressHandle,
     );
   }
 }
@@ -900,6 +1150,7 @@ export class ContentBinding {
       this.target,
       RuntimeBindingTargetOperationKind.TextContentSet,
       [this.target],
+      this.sourceAddressHandle,
     );
   }
 }
@@ -967,7 +1218,7 @@ export class SpreadValueBinding {
   }
 
   bind(input: RuntimeBindingBindContext): RuntimeBindingBindContribution {
-    if (this.target === '$bindables' && input.spreadValueTargetProperties.length > 0) {
+    if (this.target === '$bindables' && input.spreadValueTargetProperties != null) {
       const targetAccesses = input.spreadValueTargetProperties.flatMap((targetProperty, index) =>
         input.targetAccess(
           this,
@@ -1026,6 +1277,7 @@ export class StateBinding {
     readonly target: string,
     readonly rawExpression: string,
     readonly storeName: string | null,
+    readonly storeNameSourceAddressHandle: AddressHandle | null,
     readonly expressionProductHandle: ProductHandle | null,
     readonly scopeEffects: readonly RuntimeBindingScopeEffectReference[],
     readonly sourceAddressHandle: AddressHandle | null,
@@ -1064,6 +1316,7 @@ export class StateDispatchBinding {
     readonly eventName: string,
     readonly rawExpression: string,
     readonly storeName: string | null,
+    readonly storeNameSourceAddressHandle: AddressHandle | null,
     readonly expressionProductHandle: ProductHandle | null,
     readonly scopeEffects: readonly RuntimeBindingScopeEffectReference[],
     readonly sourceAddressHandle: AddressHandle | null,
@@ -1089,11 +1342,13 @@ export class StateDispatchBinding {
       this.eventName,
       RuntimeBindingTargetOperationKind.EventListenerAdd,
       [this.eventName],
+      this.sourceAddressHandle,
     );
     const dispatchAction = input.sourceOperation(
       this,
       this.storeName ?? 'default',
       RuntimeBindingSourceOperationKind.StateDispatchAction,
+      this.sourceAddressHandle,
     );
     return new RuntimeBindingBindContribution(
       [

@@ -1,0 +1,33 @@
+<template>
+  <input data-case="reached-mode" value.to-view="message & twoWay">
+  <input data-case="invalid-outer-blocks-mode" value.to-view="message & twoWay & self">
+  <input data-case="missing-outer-blocks-mode" value.to-view="message & twoWay & missingBehavior">
+  <input data-case="effective-from-view" value.to-view="effectiveFromView & fromView">
+  <input data-case="effective-to-view" value.from-view="effectiveToView & toView">
+  <input data-case="blocked-from-view" value.to-view="blockedFromView & fromView & missingBehavior">
+  <div data-case="attribute-from-view" data-lifecycle.attr="attributeFromView & fromView"></div>
+  <div data-case="converted-attribute-from-view" data-converted-lifecycle.attr="attributeFromView | identityValue & fromView"></div>
+  <div data-case="attribute-two-way" data-lifecycle.attr="attributeTwoWay & twoWay"></div>
+  <div data-case="attribute-interpolation-from-view" title="${attributeInterpolationFromView & fromView}"></div>
+  <div data-case="attribute-interpolation-two-way" title="${attributeInterpolationTwoWay & twoWay}"></div>
+  <p data-case="content-from-view">${contentFromView & fromView}</p>
+  <p data-case="content-two-way">${contentTwoWay & twoWay}</p>
+
+  <input data-case="mode-before-update-trigger" value.to-view="message & updateTrigger:'blur' & twoWay">
+  <input data-case="update-trigger-before-mode" value.to-view="message & twoWay & updateTrigger:'blur'">
+  <input data-case="dynamic-update-trigger" value.to-view="message & updateTrigger:eventName & twoWay">
+  <input data-case="attr-observer" value.to-view="message & attr">
+
+  <button data-case="listener-self" click.trigger="handleClick($event) & self">Self</button>
+  <p data-case="static-signals">${message & signal:'refresh':'theme'}</p>
+  <p data-case="dynamic-signal">${message & signal:eventName}</p>
+  <input data-case="debounce-default" value.bind="message & debounce">
+  <input data-case="debounce-explicit" value.bind="message & debounce:350:['search','refresh']">
+  <input data-case="throttle-explicit" value.bind="message & throttle:125:'flush'">
+  <input data-case="rate-limit-open" value.bind="message & debounce:rateLimitDelay:['known',eventName]">
+
+  <lifecycle-value-target value.to-view="reachedChildValue & twoWay"></lifecycle-value-target>
+  <p>${reachedChildValue}</p>
+  <lifecycle-value-target value.to-view="blockedChildValue & twoWay & self"></lifecycle-value-target>
+  <p>${blockedChildValue}</p>
+</template>

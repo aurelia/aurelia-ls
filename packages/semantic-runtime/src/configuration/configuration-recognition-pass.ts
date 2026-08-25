@@ -1,4 +1,5 @@
 import type { KernelStore } from '../kernel/store.js';
+import type { KernelPublicationContext } from '../kernel/publication.js';
 import {
   ConfigurationKernelEmission,
   ConfigurationKernelEmitter,
@@ -7,13 +8,14 @@ import type { ConfigurationSequenceObservation } from './configuration-observati
 import type { ConfigurationRecognitionContext } from './configuration-recognition-context.js';
 import { ConfigurationRecognizer } from './configuration-recognizer.js';
 import type { ResourceDefinitionIndex } from '../resources/resource-definition-index.js';
+import { ConfigurationEvaluationBindingFrame } from './configuration-evaluation-bindings.js';
 
 /** Result of configuration recognition over one source module. */
 export class ConfigurationRecognitionResult {
   constructor(
     /** Source observations recognized before kernel emission. */
     readonly observations: readonly ConfigurationSequenceObservation[],
-    /** Kernel emission result carrying typed products and committed records. */
+    /** Kernel emission result carrying typed products and published records. */
     readonly emission: ConfigurationKernelEmission,
   ) {}
 }
@@ -28,11 +30,16 @@ export class ConfigurationRecognitionPass {
 
   recognizeAndEmit(
     store: KernelStore,
+    publication: KernelPublicationContext,
     context: ConfigurationRecognitionContext,
-    resources: ResourceDefinitionIndex | null = null,
+    resources: ResourceDefinitionIndex | null,
   ): ConfigurationRecognitionResult {
     const observations = this.recognize(context);
-    const emission = new ConfigurationKernelEmitter(store).emit(context, observations, resources);
+    const emission = new ConfigurationKernelEmitter(
+      store,
+      publication,
+      new ConfigurationEvaluationBindingFrame(),
+    ).emit(context, observations, resources);
     return new ConfigurationRecognitionResult(observations, emission);
   }
 }

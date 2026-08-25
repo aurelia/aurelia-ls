@@ -14,15 +14,6 @@
         "${workspaceFolder}/packages/language-server/out/**/*.js"
       ],
       "preLaunchTask": "build:vscode-extension"
-    },
-    {
-      "name": "Attach to Server",
-      "type": "node",
-      "request": "attach",
-      "port": 9229,
-      "restart": true,
-      "protocol": "inspector",
-      "skipFiles": ["<node_internals>/**"]
     }
   ]
 }

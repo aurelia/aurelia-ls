@@ -7,8 +7,13 @@ import {
 import type { AddressHandle } from '../kernel/handles.js';
 import { localKeyPart } from '../kernel/local-key.js';
 import {
-  KernelStore,
+  KernelPublicationPlan,
+  publishProductDetails,
+  type KernelPublicationContext,
+} from '../kernel/publication.js';
+import {
   KernelStoreBatch,
+  type KernelStore,
 } from '../kernel/store.js';
 import {
   sourceSpanAddressForSite,
@@ -78,6 +83,7 @@ export class FrameworkApiIssueMaterializer {
 
   constructor(
     readonly store: KernelStore,
+    readonly publication: KernelPublicationContext,
   ) {
     this.issuePublisher = new EvaluationIssuePublisher(store);
   }
@@ -87,16 +93,19 @@ export class FrameworkApiIssueMaterializer {
     typeSystem: TypeSystemProject,
   ): FrameworkApiIssueProjectResult {
     const publications = project.sourceFiles.flatMap((source) => {
-      const sourceFile = typeSystem.readProgramSourceFileByPath(source.path);
+      const sourceFile = typeSystem.readProgramSourceFileByProjectPath(source.path);
       return sourceFile == null
         ? []
         : this.publicationsForSource(project, source.path, source.addressHandle, sourceFile, typeSystem);
     });
     const records = publications.flatMap((publication) => publication.records);
-    if (records.length > 0) {
-      this.store.commit(new KernelStoreBatch(records, `framework-api-issues:${project.projectKey}`));
-    }
-    this.store.productDetails.addAll(EvaluationProductDetails.Issue, publications.map((publication) => publication.issue));
+    this.publication.publish(new KernelPublicationPlan(
+      new KernelStoreBatch(records, `framework-api-issues:${project.projectKey}`),
+      publishProductDetails(
+        EvaluationProductDetails.Issue,
+        publications.map((publication) => publication.issue),
+      ),
+    ));
     return new FrameworkApiIssueProjectResult(publications.map((publication) => publication.issue), records);
   }
 

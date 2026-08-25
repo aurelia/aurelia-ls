@@ -5,6 +5,7 @@ import { i18nTranslationBindingGroups } from '../i18n/translation-binding-groups
 import type { KernelStore } from '../kernel/store.js';
 import type { TemplateCompilerWorldEmission } from '../template/compiler-world-materializer.js';
 import { readAppOpenSeams } from './open-seam-projections.js';
+import { readRouterIssues } from './route-projections.js';
 import type { SemanticAppSummary, SemanticSourceRoleCount } from './contracts.js';
 import {
   resourceLocalBindingBehaviorApplications,
@@ -15,7 +16,7 @@ import {
   resourceLocalBindingTargetOperations,
   resourceLocalBindingValueChannels,
   resourceLocalRuntimeBindings,
-} from './runtime-resource-ownership.js';
+} from '../template/runtime-resource-ownership.js';
 
 type TemplateResourceEmission = AureliaAppWorldProjectEmission['templates']['resources'][number];
 
@@ -181,7 +182,7 @@ function routerSummaryCounts(emission: AureliaAppWorldProjectEmission): AppSumma
     routeEndpoints: emission.routeRecognizer.readEndpoints().length,
     routeRecognizerStates: emission.routeRecognizer.readStates().length,
     routeRecognizerIssues: emission.routeRecognizer.readIssues().length,
-    routerIssues: emission.routes.readIssues().length + emission.routeInstructions.readIssues().length + emission.routeRecognition.readIssues().length + emission.routeTree.readIssues().length,
+    routerIssues: readRouterIssues(emission).length,
     recognizedRoutes: emission.routeRecognition.readRecognizedRoutes().length,
     typedNavigationInstructions: emission.routeInstructions.readTypedNavigationInstructions().length,
     viewportInstructions: emission.routeInstructions.readViewportInstructions().length,
@@ -231,15 +232,15 @@ function diSummaryCounts(
   return {
     containers: diWorld.containers.length,
     runtimeChildContainers: sumTemplates(templates, (resource) =>
-      resource.runtimeAnalysis.runtimeRendering.childContainers.length
+      resource.runtimeAnalysis.readRuntimeChildContainers().length
     ),
     resolverSlots: diWorld.resolverSlots.length,
     diResolveCallSites: readDiResolveCallSites(emission.project, emission.typeSystem).length,
     runtimeChildContextResolverSlots: sumTemplates(templates, (resource) =>
-      resource.runtimeAnalysis.runtimeRendering.childContextResolverSlots.length
+      resource.runtimeAnalysis.readRuntimeChildContextResolverSlots().length
     ),
     runtimeControllers: sumTemplates(templates, (resource) =>
-      resource.runtimeAnalysis.runtimeRendering.controllers.length
+      resource.runtimeAnalysis.readRuntimeControllers().length
     ) + emission.routeComponentAgents.readControllers().length,
     resourceSlots: diWorld.resourceSlots.length,
     diIssues: diWorld.issues.length,

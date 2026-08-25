@@ -32,7 +32,7 @@
         "Route Array method classification through aureliaArrayMethodSemanticsFor before changing type projection, source-value reduction, or connectable observation. The descriptor keeps framework collection observation, native callback execution, and synthetic Array type projection separate but visibly joined.",
         "Array method coverage exposes whether callback body return shape drives synthetic Array type projection. `callback-body-type-independent` methods need callback scope construction but must not recursively reduce arbitrary callback body expressions to prove the whole-call type; `callback-body-drives-type` methods such as map/flatMap/reduce genuinely need callback return projection.",
         "CheckerExpressionArrayMethodProjector.evaluateMemberCall is currently an intentional descriptor-driven dispatch surface. Do not split it merely to satisfy large-function pressure; split only when a real reusable policy emerges across type projection, source-value reduction, observation, or overlay.",
-        "Synthetic Array method existence belongs in synthetic-array-type-surface/readOrProjectCheckerTypeMembers, not in completion or diagnostic policy. The member surface may prove method presence without a fake declaration/value type while CheckerExpressionArrayMethodProjector still owns call result typing.",
+        "Synthetic Array method existence belongs in synthetic-array-type-surface/readOrProjectCheckerTypeMembersInProjection, not in completion or diagnostic policy. The member surface may prove method presence without a fake declaration/value type while CheckerExpressionArrayMethodProjector still owns call result typing.",
         "Keep Array method tables honest about authority: framework autoObserveArrayMethods is the exact collection-observe list, while aureliaArrayMethodSemanticsFor exposes the product-recognized native-method set whose callback closures execute Aurelia ArrowFunction bodies under astEvaluate. If modern native callback methods are absent from framework observation, record that as Aurelia framework update pressure rather than permanent semantic-runtime observation policy.",
         "Use `pnpm --filter @aurelia-ls/atlas expression:coverage -- --projection=collection-methods --detail` when Array method pressure crosses checker projection, source-value reduction, static evaluator host prototype boundaries, astEvaluate collection reads, or ProxyObservable wrapping. Flags such as `modern-array-framework-observation-gap`, `descriptor-without-static-host-boundary`, `type-visible-source-value-open`, `source-value-mutating-receiver-open`, and `source-value-unmodeled-host-array-open` are boundary signals, not automatic semantic-runtime implementation orders.",
         "Modern non-mutating Array copy methods `toSpliced(...)` and `with(...)` close through shared evaluator array-value operations in both StaticEvaluator intrinsics and RuntimeBindingSourceArrayMethodEvaluator. Mutating receiver methods remain source-value-open for rendered bindings unless a future product consumer proves a safe mutation-state model is needed.",
@@ -53,7 +53,7 @@
         "CheckerExpressionTypeEvaluationCache can retain evaluations across query-answer boundaries, so CheckerExpressionTypeEvaluator must validate cached TypeShape product details before reuse. A stale cache entry should be reprojected through the evaluator, not handled later as a completion/diagnostic `type-shape-detail` fallback.",
         "CheckerExpressionTypeEvaluator also appends expression kind/span to the projection local key before entering expression-kind handlers. This keeps TypeChecker product identity aligned with cache source isolation, because CheckerTypeProjector can reuse by local projection handle before deeper checker identity.",
         "TemplateCompilationProjectPass shares one CheckerExpressionTypeWorld across resource runtime-analysis frames in a project compilation; per-resource profiles use cache-marker deltas so pressure output does not double-count the shared cache.",
-        "Optional and non-strict nullish member/keyed/call reads should project undefined through the evaluator. Unknown strictness should remain open so diagnostics do not claim framework runtime codes prematurely.",
+        "Optional and non-strict nullish member/keyed/call reads should project undefined through the evaluator. Omitted or closed-nullish custom-element strict metadata becomes the renderer-effective false value during resource convergence; genuinely open strict metadata remains null/open so diagnostics do not claim framework runtime codes prematurely.",
         "Keyed access must check definitely-nullish owners before literal-key member projection; otherwise `foo?.['bar']` and strict nullish keyed reads degrade into missing-member pressure instead of runtime-shaped nullish semantics.",
         "`fixtures/pressure/dynamic-keyed-validation` keeps finite repeat-local keyed writes and nested keyed writes covered through validation-html bindings; treat future failures there as expression/binding-flow pressure before weakening validation semantics.",
         "`fixtures/pressure/contextual-call-argument-completion` keeps cursor owner typing covered inside callback arguments for view-model method calls, TypeChecker-visible collection methods, object literal options, array literal elements, and conditional callback branches. If that fixture regresses, inspect CheckerExpressionCallProjector's contextual argument query plus CheckerExpressionTypeEvaluator/CheckerExpressionMemberOwnerProjector contextual descent before adding completion-local callback logic.",
@@ -64,7 +64,7 @@
         "Template completion and file/app diagnostic probes should receive or create a CheckerExpressionTypeWorld; keep TemplateCompletionQuery product-handle-shaped and pass hot evaluator lifetime through cursor-context construction.",
         "Top-level template completion metadata should come from BindingContextSlot target handles plus TypeMember hot details, while member-access completions such as `$this.` still need the shared CheckerExpressionMemberOwnerProjector path. Keep those pressures distinct so scope-candidate fixes do not hide owner-projection gaps.",
         "`$this.` awaiting-member-name completion is covered by falling back to the parser frontier owner when no completed binding AST exists. Future `$this` or `$parent` completion failures that mention missing `expression-member-owner` or `member-owner-type` are expression/context selection pressure; reuse the existing member-owner projector and runtime binding source-context selection before touching the public completion row mapper.",
-        "Use SEMANTIC_RUNTIME_CURSOR_PRESSURE_ROOTS with absolute or workspace-relative roots when cursor pressure should target one fixture, a fixture collection root, or a clean-room checkout. Use SEMANTIC_RUNTIME_CURSOR_PRESSURE_PROJECT_DISCOVERY=package-tsconfig for monorepo/package roots. Treat a non-Aurelia result from a known fixture as root-resolution pressure before inferring semantic-runtime shape policy drift.",
+        "Use SEMANTIC_RUNTIME_CURSOR_PRESSURE_ROOTS with absolute or workspace-relative roots when cursor pressure should target one fixture, a fixture collection root, or a clean-room checkout. Use SEMANTIC_RUNTIME_CURSOR_PRESSURE_PROJECT_DISCOVERY=project-markers for monorepo/package roots. Treat a non-Aurelia result from a known fixture as root-resolution pressure before inferring semantic-runtime shape policy drift.",
         "Use SEMANTIC_RUNTIME_CURSOR_PRESSURE_OUTPUT=aggregate when sampling fixture collections. Diagnostic-probe loci must remain scoped to the compiled resource's own source spans before direct/public API comparison; otherwise same-file multi-template diagnostics can masquerade as template-resource selection failures.",
         "When cursor pressure is dominated by weak expression-member owner types such as any or index-signature-only, treat that as diagnostic and repair-planning pressure. Do not invent completion candidates for weak owners; preserve the owner-type action target so a future fix can strengthen the source type or declare an explicit member.",
         "Cursor-info should surface template compiler diagnostics even when the cursor site is not a completion site. Unknown completion sites inside recovery/error spans are acceptable only when the LSP envelope still carries exact framework-code diagnostics and syntax-rewrite suggestions.",
@@ -98,8 +98,8 @@
         {
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/evaluation/global-intrinsics.ts",
-          "symbolName": "evaluateAureliaExpressionGlobalCall",
-          "summary": "Shared value-level host-global intrinsic substrate used beside TypeChecker global projection."
+          "symbolName": "evaluateStaticGlobalCall",
+          "summary": "Shared static-global intrinsic substrate used beside TypeChecker global projection; Aurelia expressions consume its parser-admitted subset."
         },
         {
           "kind": "source",
@@ -321,10 +321,17 @@
         {
           "kind": "source-file-exists",
           "filePath": "packages/semantic-runtime/fixtures/pressure/contextual-call-argument-completion/src/contextual-call-argument-completion-app.html"
+        },
+        {
+          "kind": "product-large-class",
+          "className": "CheckerExpressionTypeWorld",
+          "filePath": "packages/semantic-runtime/src/type-system/expression-type-world.ts",
+          "minLineCount": 80,
+          "minMethodCount": 5
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-05-25"
+      "updatedAt": "2026-07-26"
     },
     {
       "id": "frontier:completed-input-companion-builder",

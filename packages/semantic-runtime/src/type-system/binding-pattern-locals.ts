@@ -32,6 +32,7 @@ export class CheckerBindingPatternLocalType {
 
 export const enum CheckerBindingPatternRuntimeIssueKind {
   DestructuringNonObject = 'destructuring-non-object',
+  RepeatObjectBindingNullish = 'repeat-object-binding-nullish',
   ArrayRestNonArray = 'array-rest-non-array',
 }
 
@@ -42,7 +43,7 @@ export const enum CheckerBindingPatternRuntimeIssueCertainty {
 
 export class CheckerBindingPatternRuntimeIssue {
   constructor(
-    /** Runtime astAssign failure modeled from Aurelia's destructuring assignment path. */
+    /** Runtime failure modeled from Aurelia's binding-pattern projection path. */
     readonly issueKind: CheckerBindingPatternRuntimeIssueKind,
     /** Whether all known runtime values fail, or only some union constituents fail. */
     readonly certainty: CheckerBindingPatternRuntimeIssueCertainty,
@@ -179,7 +180,7 @@ export class CheckerBindingPatternLocalTypeProjector {
   ): CheckerBindingPatternLocalProjection {
     const locals: CheckerBindingPatternLocalType[] = [];
     const runtimeIssues: CheckerBindingPatternRuntimeIssue[] = [
-      ...destructuringSourceIssuesForPattern(pattern, sourceType),
+      ...repeatObjectBindingSourceIssues(pattern, sourceType),
     ];
     pattern.properties.forEach((property, index) => {
       const propertyKey = String(property.key);
@@ -228,6 +229,58 @@ function destructuringSourceIssuesForPattern(
         : `Aurelia astAssign can reject ${sourceType?.display ?? 'this value'} when a non-object constituent reaches this destructuring source.`,
     ),
   ];
+}
+
+function repeatObjectBindingSourceIssues(
+  pattern: ObjectBindingPattern,
+  sourceType: CheckerTypeShape | null,
+): readonly CheckerBindingPatternRuntimeIssue[] {
+  const certainty = nullishObjectBindingSourceCertainty(sourceType);
+  if (certainty == null) {
+    return [];
+  }
+  return [
+    new CheckerBindingPatternRuntimeIssue(
+      CheckerBindingPatternRuntimeIssueKind.RepeatObjectBindingNullish,
+      certainty,
+      pattern.$kind,
+      sourceType?.toReference() ?? null,
+      pattern.span,
+      certainty === CheckerBindingPatternRuntimeIssueCertainty.Definite
+        ? `Aurelia Repeat will reject ${sourceType?.display ?? 'this value'} as a nullish object-binding source.`
+        : `Aurelia Repeat can reject ${sourceType?.display ?? 'this value'} when a nullish constituent reaches this object-binding source.`,
+    ),
+  ];
+}
+
+function nullishObjectBindingSourceCertainty(
+  sourceType: CheckerTypeShape | null,
+): CheckerBindingPatternRuntimeIssueCertainty | null {
+  const checker = sourceType?.carrier?.checker ?? null;
+  const carrierType = sourceType?.carrier?.type ?? null;
+  if (checker == null || carrierType == null) {
+    return null;
+  }
+
+  const parts = carrierType.isUnion() ? carrierType.types : [carrierType];
+  let nullish = 0;
+  let compatible = 0;
+  let open = 0;
+  for (const part of parts) {
+    if (checkerNullishType(checker, part)) {
+      nullish += 1;
+    } else if (isWeakCheckerType(part)) {
+      open += 1;
+    } else {
+      compatible += 1;
+    }
+  }
+  if (nullish === 0) {
+    return null;
+  }
+  return compatible === 0 && open === 0
+    ? CheckerBindingPatternRuntimeIssueCertainty.Definite
+    : CheckerBindingPatternRuntimeIssueCertainty.Possible;
 }
 
 function arrayRestSourceIssues(

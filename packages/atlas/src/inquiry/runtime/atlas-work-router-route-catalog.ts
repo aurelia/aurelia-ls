@@ -6993,7 +6993,7 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
         symbolName: "RuntimeEffect",
         role: "primary",
         summary:
-          "Source-level IEffect model for direct Observation.watch(...) and Observation.run(...) effects, distinct from resource watchers and template bindings.",
+          "Immutable construction-site plan for direct Observation.watch(...) and Observation.run(...) calls, distinct from resource watchers and template bindings.",
       },
       {
         kind: "source",
@@ -7455,7 +7455,7 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       "Do not turn ID binding into universal truth; direct object binding can be appropriate when the domain model and view model are intentionally close.",
       "Do not use ProxyObservable as a reason to add view-model forwarding getters for ordinary state.member template reads.",
       "Keep observed-dependency rows product-owned: binding data-flow owns source-to-target binding reads; computed-observation definitions own source declarations; ComputedObserverSource owns getter source-observer availability/projection; RuntimeEffect owns direct Observation.watch/run source-call reads; runtime watchers own controller watcher admission; ExpressionWatcher owns string-expression watcher reads; ComputedWatcher owns first ProxyObservable dependency reads; binding-owned trackable method calls own @computed/@astTrack method dependency rows.",
-      "Do not collapse source-level Observation.watch/run effects into resource @watch metadata or renderer-owned binding rows; they are source-call IEffect products.",
+      "Do not collapse source-level Observation.watch/run plans into resource @watch metadata or renderer-owned binding rows; they are source-call construction plans, not live IEffect instances.",
       "Controlled-computed deep rows are source-observer-owned TypeChecker projections of observeDeep, not live object graph traversal and not binding-owned template reads.",
       "Observed-dependency rows should dedupe repeated reads by semantic dependency identity rather than parser span; preserve source spans as evidence, not as row identity.",
       "When TypeChecker receiver facts are available, collection-call proxy rows should be array/map/set-shaped. String and plain object methods are property-read pressure, not collection dependency rows.",
@@ -9152,8 +9152,8 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       "readProgramSymbolAtLocation",
       "readProgramAliasedSymbolAtLocation",
       "readProgramTypeOfSymbolAtLocation",
-      "readProgramSourceFileByPath",
-      "readProgramSourceFileRole",
+      "readProgramSourceFileByHostPath",
+      "readProgramSourceFileRoleByHostPath",
       "checkerPropertySymbol",
       "checkerSymbolValueType",
       "checker getTypeAtLocation remap",
@@ -9317,7 +9317,7 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       {
         kind: "source",
         filePath: "packages/semantic-runtime/src/type-system/project.ts",
-        symbolName: "TypeSystemProject.readProgramSourceFileRole",
+        symbolName: "TypeSystemProject.readProgramSourceFileRoleByHostPath",
         role: "supporting",
         summary:
           "Program-owned source-role classifier for TypeScript diagnostics and future repair/edit planning.",
@@ -11475,7 +11475,7 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       "admitted-chain-unproven",
       "admission-unknown",
       "container-chain",
-      "DiProductIdentity.containerHandle",
+      "typed DI world container slots",
       "source service admission chain",
       "framework.open-service-root-candidate",
       "unregistered shorthand syntax",
@@ -11556,9 +11556,9 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       "DialogConfigurationClassic factory wrapper",
       "DialogConfigurationClassic namespace import",
       "framework registration external import wrapper",
-      "frameworkRegistrationExternalImportValue",
+      "aureliaFrameworkExternalImportValue",
       "frameworkRegistrationExportEntriesForModule",
-      "frameworkRegistrationKindSupportsChainMethod",
+      "dialogConfigurationValue",
       "DialogConfiguration withChild",
       "child dialog configuration",
       "dialog child resolver",
@@ -11621,9 +11621,9 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       },
       {
         query:
-          "source service admission chain DiProductIdentity.containerHandle di.provides-key admitted-chain-unproven",
+          "source service admission chain typed DI world container slots admitted-chain-unproven",
         summary:
-          "Source-service capability admission should use the DI container-chain helper over existing product identity and provides-key facts, not world-global provider checks or new membership predicates.",
+          "Source-service capability admission should use the DI container-chain helper over exact world-construction containers and slots, not whole-kernel reconstruction or world-global provider checks.",
       },
       {
         query: "custom configuration bundle",
@@ -11834,7 +11834,7 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       {
         kind: "source",
         filePath: "packages/semantic-runtime/src/configuration/aurelia-evaluation-runtime.ts",
-        symbolName: "frameworkRegistrationExternalImportValue",
+        symbolName: "aureliaFrameworkExternalImportValue",
         role: "supporting",
         summary:
           "Maps named and namespace framework imports to evaluator-local framework-registration objects without generic DI seam suppression.",
@@ -11962,7 +11962,7 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
         symbolName: "DiContainerChainFacts",
         role: "primary",
         summary:
-          "Read-only DI chain helper that joins DiProductIdentity.containerHandle with di.provides-key for provider visibility without new membership vocabulary.",
+          "Read-only DI chain helper over exact world-construction and runtime child containers for chain-local provider visibility.",
       },
       {
         kind: "source",
@@ -13691,7 +13691,7 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       "dialog_child_settings_not_found",
       "di.open-registry-body dialog",
       "framework registration external import wrapper",
-      "frameworkRegistrationExternalImportValue",
+      "aureliaFrameworkExternalImportValue",
       "frameworkRegistrationExportEntriesForModule",
     ],
     queryCanaries: [
@@ -13712,7 +13712,7 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       },
       {
         query:
-          "DialogConfigurationClassic const wrapper factory wrapper namespace import frameworkRegistrationExternalImportValue",
+          "DialogConfigurationClassic const wrapper factory wrapper namespace import aureliaFrameworkExternalImportValue",
         summary:
           "Dialog configuration wrappers should route through evaluator external-import framework registration synthesis before dialog diagnostics or DI seam policy changes.",
       },
@@ -13736,11 +13736,11 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       },
       {
         kind: "source",
-        filePath: "packages/semantic-runtime/src/registration/framework-registration-manifest.ts",
-        symbolName: "frameworkRegistrationKindSupportsChainMethod",
+        filePath: "packages/semantic-runtime/src/configuration/aurelia-evaluation-runtime.ts",
+        symbolName: "dialogConfigurationValue",
         role: "supporting",
         summary:
-          "Framework registration chain-method predicate that admits DialogConfiguration.withChild.",
+          "Evaluator-owned DialogConfiguration value transition that preserves customize and withChild runtime identity.",
       },
       {
         kind: "source",
@@ -13753,7 +13753,7 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       {
         kind: "source",
         filePath: "packages/semantic-runtime/src/configuration/aurelia-evaluation-runtime.ts",
-        symbolName: "frameworkRegistrationExternalImportValue",
+        symbolName: "aureliaFrameworkExternalImportValue",
         role: "supporting",
         summary:
           "Evaluator import synthesis for framework-registration values used by const/factory wrapper dialog configuration forms.",

@@ -5,6 +5,12 @@ import {
   EvidenceRole,
 } from '../kernel/evidence.js';
 import type { ProductHandle, ProvenanceHandle } from '../kernel/handles.js';
+import { SourceSpanRole } from '../kernel/address.js';
+import {
+  sourceSpanAddressForAddress,
+  sourceSpanAddressForSite,
+  type SourceSpanAddressPublication,
+} from '../kernel/source-address.js';
 import {
   MaterializationRecord,
 } from '../kernel/materialization.js';
@@ -13,9 +19,13 @@ import {
 } from '../kernel/provenance.js';
 import {
   KernelStoreBatch,
-  type KernelStore,
   type KernelStoreRecord,
 } from '../kernel/store.js';
+import {
+  type KernelPublicationContext,
+  KernelPublicationPlan,
+  publishProductDetails,
+} from '../kernel/publication.js';
 import type { ExpressionType } from '../expression/ast.js';
 import { hasInterpolationStart } from '../expression/expression-boundary-scanner.js';
 import { CustomAttributeDefinition } from '../resources/custom-attribute-definition.js';
@@ -30,7 +40,7 @@ import type { AttributeSyntaxParseEmission } from './attribute-syntax-materializ
 import type {
   TemplateBindableReference,
 } from './compiler-world-reference.js';
-import type { TemplateCompilerWorldEmission } from './compiler-world-materializer.js';
+import type { TemplateCompilerReadView } from './compiler-read-view.js';
 import type { TemplateCompilationUnit } from './compilation-unit.js';
 import {
   HtmlAttribute,
@@ -47,6 +57,7 @@ import {
   TemplateValueSitePublisher,
 } from './value-site-publication.js';
 import { TemplateProductDetails } from './product-details.js';
+import { runtimeExpressionParseContextForSourceSpanAddress } from './runtime-expression-source-address.js';
 
 export interface TemplateValueSiteRequest {
   /** Store-local key for this value-site pass. */
@@ -59,8 +70,8 @@ export interface TemplateValueSiteRequest {
   readonly attributeSyntax: AttributeSyntaxParseEmission;
   /** Runtime-shaped attribute classifications that decide attribute-value ownership. */
   readonly attributeClassification: AttributeClassificationEmission;
-  /** Compiler world that supplies the expression parser service and future command execution context. */
-  readonly compilerWorld: TemplateCompilerWorldEmission;
+  /** Required compiler read surface for expression-parser access. */
+  readonly compilerReads: TemplateCompilerReadView;
 }
 
 export class TemplateValueSiteEmission {
@@ -108,18 +119,20 @@ export class TemplateValueSiteMaterializer {
 
   constructor(
     /** Hot analysis store that receives value-site records. */
-    readonly store: KernelStore,
+    readonly store: KernelPublicationContext,
   ) {
     this.valueSitePublisher = new TemplateValueSitePublisher(store);
   }
 
   materialize(input: TemplateValueSiteRequest): TemplateValueSiteEmission {
     const emission = this.recordsForValueSites(input);
-    if (emission.records.length > 0) {
-      this.store.commit(new KernelStoreBatch(emission.records, `template-value-site:${input.localKey}`));
-    }
-    this.store.productDetails.addAll(TemplateProductDetails.ValueSite, emission.sites);
-    this.store.productDetails.addAll(TemplateProductDetails.ExpressionParse, emission.parses);
+    this.store.publish(new KernelPublicationPlan(
+      new KernelStoreBatch(emission.records, `template-value-site:${input.localKey}`),
+      [
+        ...publishProductDetails(TemplateProductDetails.ValueSite, emission.sites),
+        ...publishProductDetails(TemplateProductDetails.ExpressionParse, emission.parses),
+      ],
+    ));
     return emission;
   }
 
@@ -131,7 +144,12 @@ export class TemplateValueSiteMaterializer {
     const claims: SemanticClaim[] = [];
     const pendingSites = [
       ...textValueSites(input.html),
-      ...attributeValueSites(input.html, input.attributeSyntax, input.attributeClassification),
+      ...attributeValueSites(
+        input.html,
+        input.attributeSyntax,
+        input.attributeClassification,
+        input.compilerReads,
+      ),
     ];
 
     pendingSites.forEach((pending, index) => {
@@ -164,10 +182,11 @@ export class TemplateValueSiteMaterializer {
     index: number,
   ): ValueSiteMaterializationEmission {
     const siteLocal = `template-value-site:${input.localKey}:${index}`;
+    const expressionSource = this.expressionSourceForPendingSite(siteLocal, pending);
     const publication = this.valueSitePublisher.publish(new TemplateValueSitePublicationRequest(
       siteLocal,
       pending.entryFamily == null ? null : `template-expression-parse:${input.localKey}:${index}`,
-      input.compilerWorld.expressionParser,
+      input.compilerReads,
       source.provenanceHandle,
       pending.siteKind,
       pending.rawValue,
@@ -178,18 +197,43 @@ export class TemplateValueSiteMaterializer {
       pending.classification,
       pending.bindingCommand,
       pending.bindable,
-      pending.sourceAddressHandle,
+      expressionSource?.handle ?? pending.sourceAddressHandle,
       input.compilationUnit.identityHandle,
       pending.siteKind,
       valueSiteSubject(pending),
       (result) => `${pending.siteKind}:${result.kind}`,
+      expressionSource == null
+        ? null
+        : runtimeExpressionParseContextForSourceSpanAddress(this.store, expressionSource.address) ?? null,
     ));
     return new ValueSiteMaterializationEmission(
       publication.site,
       publication.parse,
       publication.claims,
-      publication.records,
+      [...(expressionSource?.records ?? []), ...publication.records],
     );
+  }
+
+  private expressionSourceForPendingSite(
+    siteLocal: string,
+    pending: PendingValueSite,
+  ): SourceSpanAddressPublication | null {
+    const syntax = pending.syntax;
+    if (pending.siteKind !== TemplateValueSiteKind.SpreadValue
+      || syntax == null
+      || syntax.target === '...$bindables') {
+      return null;
+    }
+    const targetSource = sourceSpanAddressForAddress(this.store, syntax.targetSourceAddressHandle);
+    const expression = spreadValueExpression(syntax);
+    if (targetSource == null || !syntax.target.startsWith('...') || expression.length === 0) {
+      return null;
+    }
+    return sourceSpanAddressForSite(this.store, `${siteLocal}:spread-expression`, {
+      sourceFileAddressHandle: targetSource.fileHandle,
+      start: targetSource.start + 3,
+      end: targetSource.start + 3 + expression.length,
+    }, SourceSpanRole.Value);
   }
 
   private recordsForSource(input: TemplateValueSiteRequest): TemplateValueSiteSourceSet {
@@ -247,6 +291,7 @@ function attributeValueSites(
   html: HtmlParseEmission,
   syntaxEmission: AttributeSyntaxParseEmission,
   classificationEmission: AttributeClassificationEmission,
+  compilerReads: TemplateCompilerReadView,
 ): readonly PendingValueSite[] {
   const attributesByProduct = new Map(html.attributes.map((attribute) => [attribute.productHandle, attribute]));
   const syntaxByProduct = new Map(syntaxEmission.syntaxes.map((syntax) => [syntax.productHandle, syntax]));
@@ -264,7 +309,7 @@ function attributeValueSites(
     if (attribute == null) {
       continue;
     }
-    const site = siteForAttributeClassification(classification, syntax, attribute);
+    const site = siteForAttributeClassification(classification, syntax, attribute, compilerReads);
     if (site != null) {
       sites.push(site);
     }
@@ -276,6 +321,7 @@ function siteForAttributeClassification(
   classification: AttributeClassification,
   syntax: AttributeSyntax,
   attribute: HtmlAttribute,
+  compilerReads: TemplateCompilerReadView,
 ): PendingValueSite | null {
   if (classification.bindingCommand != null) {
     return new PendingValueSite(
@@ -304,7 +350,7 @@ function siteForAttributeClassification(
       );
     case AttributeClassificationKind.CustomAttribute:
     case AttributeClassificationKind.TemplateController:
-      return customAttributeOrTemplateControllerSite(classification, syntax, attribute);
+      return customAttributeOrTemplateControllerSite(classification, syntax, attribute, compilerReads);
     case AttributeClassificationKind.Captured:
       return interpolationAttributeSite(
         TemplateValueSiteKind.CapturedValue,
@@ -313,7 +359,7 @@ function siteForAttributeClassification(
         attribute,
       );
     case AttributeClassificationKind.Spread:
-      if (syntax.target.toLowerCase() === '...$attrs') {
+      if (syntax.target === '...$attrs') {
         return null;
       }
       return new PendingValueSite(
@@ -380,8 +426,9 @@ function customAttributeOrTemplateControllerSite(
   classification: AttributeClassification,
   syntax: AttributeSyntax,
   attribute: HtmlAttribute,
+  compilerReads: TemplateCompilerReadView,
 ): PendingValueSite {
-  const definition = classification.resource?.definition ?? null;
+  const definition = compilerReads.currentDefinition(classification.resource);
   const isMultiBinding = definition instanceof CustomAttributeDefinition
     && !definition.noMultiBindings
     && hasInlineBindings(syntax.rawValue);
@@ -412,7 +459,7 @@ function customAttributeOrTemplateControllerSite(
 function spreadValueExpression(
   syntax: AttributeSyntax,
 ): string {
-  return syntax.target.toLowerCase() === '...$bindables'
+  return syntax.target === '...$bindables'
     ? syntax.rawValue
     : syntax.target.slice(3);
 }

@@ -1,4 +1,9 @@
 import ts from 'typescript';
+import {
+  readImportedExportName,
+  readSourceImportBindings,
+  type SourceImportBindings,
+} from '../evaluation/import-bindings.js';
 import { isNestedExecutionBoundary } from '../evaluation/ts-syntax.js';
 import {
   SourceSpanAddress,
@@ -6,12 +11,14 @@ import {
 } from '../kernel/address.js';
 import type { AddressHandle } from '../kernel/handles.js';
 import type {
-  KernelStore,
   KernelStoreRecord,
 } from '../kernel/store.js';
+import type { KernelPublicationContext } from '../kernel/publication.js';
 import { localKeyPart } from '../kernel/local-key.js';
+import {
+  sourceFileAddressForAddress,
+} from '../kernel/source-address.js';
 import { TypeSystemProductDetails } from '../type-system/product-details.js';
-import { admittedSourceFileAddressHandleForCheckerNode } from '../type-system/declaration-source.js';
 import type { CustomAttributeDefinition } from '../resources/custom-attribute-definition.js';
 import type { CustomElementDefinition } from '../resources/custom-element-definition.js';
 
@@ -25,23 +32,17 @@ const VIEW_FACTORY_MODULES = new Set([
   '@aurelia/runtime-html',
 ]);
 
+const RESOLVE_EXPORTS = new Set(['resolve']);
+const VIEW_FACTORY_EXPORTS = new Set(['IViewFactory']);
+
 export interface RuntimeControllerActivationDiSite {
   readonly sourceAddressHandle: AddressHandle;
   readonly records: readonly KernelStoreRecord[];
 }
 
-interface ImportBindings {
-  readonly resolveIdentifiers: ReadonlySet<string>;
-  readonly resolveNamespaces: ReadonlySet<string>;
-  readonly viewFactoryIdentifiers: ReadonlySet<string>;
-  readonly viewFactoryNamespaces: ReadonlySet<string>;
-}
-
-class MutableImportBindings implements ImportBindings {
-  readonly resolveIdentifiers = new Set<string>();
-  readonly resolveNamespaces = new Set<string>();
-  readonly viewFactoryIdentifiers = new Set<string>();
-  readonly viewFactoryNamespaces = new Set<string>();
+export interface ControllerActivationImportBindings {
+  readonly resolve: SourceImportBindings;
+  readonly viewFactory: SourceImportBindings;
 }
 
 /**
@@ -52,55 +53,64 @@ class MutableImportBindings implements ImportBindings {
  * controller kind.
  */
 export function readControllerActivationViewFactoryResolveSites(
-  store: KernelStore,
+  publication: KernelPublicationContext,
   definition: CustomElementDefinition | CustomAttributeDefinition,
 ): readonly RuntimeControllerActivationDiSite[] {
   const targetTypeProductHandle = definition.target.targetType?.productHandle ?? null;
   const shape = targetTypeProductHandle == null
     ? null
-    : store.productDetails.read(TypeSystemProductDetails.TypeShape, targetTypeProductHandle);
+    : publication.readProductDetail(TypeSystemProductDetails.TypeShape, targetTypeProductHandle);
   if (shape?.carrier == null) {
+    return [];
+  }
+  const definitionSourceFile = sourceFileAddressForAddress(
+    publication,
+    definition.target.declarationSourceAddressHandle ?? definition.target.addressHandle,
+  );
+  if (definitionSourceFile == null) {
     return [];
   }
   return shape.carrier.declarations.flatMap((declaration) =>
     ts.isClassDeclaration(declaration)
-      ? readClassActivationViewFactoryResolveSites(store, definition.name, declaration)
+      ? readClassActivationViewFactoryResolveSites(
+        publication,
+        definitionSourceFile.handle,
+        definition.name,
+        declaration,
+      )
       : []
   );
 }
 
 function readClassActivationViewFactoryResolveSites(
-  store: KernelStore,
+  publication: KernelPublicationContext,
+  sourceFileAddressHandle: AddressHandle,
   definitionName: string,
   declaration: ts.ClassDeclaration,
 ): readonly RuntimeControllerActivationDiSite[] {
   const sourceFile = declaration.getSourceFile();
-  const sourceFileAddressHandle = admittedSourceFileAddressHandleForCheckerNode(store, declaration);
-  if (sourceFileAddressHandle == null) {
-    return [];
-  }
-  const bindings = readImportBindings(sourceFile);
+  const bindings = readControllerActivationImportBindings(sourceFile);
   const sites: RuntimeControllerActivationDiSite[] = [];
   for (const member of declaration.members) {
     if (isStaticClassElement(member)) {
       continue;
     }
     if (ts.isPropertyDeclaration(member) && member.initializer != null) {
-      visitActivationNode(store, sourceFileAddressHandle, sourceFile, bindings, definitionName, member.initializer, sites);
+      visitActivationNode(publication, sourceFileAddressHandle, sourceFile, bindings, definitionName, member.initializer, sites);
       continue;
     }
     if (ts.isConstructorDeclaration(member) && member.body != null) {
-      visitActivationNode(store, sourceFileAddressHandle, sourceFile, bindings, definitionName, member.body, sites);
+      visitActivationNode(publication, sourceFileAddressHandle, sourceFile, bindings, definitionName, member.body, sites);
     }
   }
   return sites;
 }
 
 function visitActivationNode(
-  store: KernelStore,
+  publication: KernelPublicationContext,
   sourceFileAddressHandle: AddressHandle,
   sourceFile: ts.SourceFile,
-  bindings: ImportBindings,
+  bindings: ControllerActivationImportBindings,
   definitionName: string,
   node: ts.Node,
   sites: RuntimeControllerActivationDiSite[],
@@ -109,84 +119,34 @@ function visitActivationNode(
     return;
   }
   if (ts.isCallExpression(node) && isResolveIViewFactoryCall(node, bindings)) {
-    sites.push(sourceSiteForNode(store, sourceFileAddressHandle, sourceFile, definitionName, node));
+    sites.push(sourceSiteForNode(publication, sourceFileAddressHandle, sourceFile, definitionName, node));
   }
   ts.forEachChild(node, (child) =>
-    visitActivationNode(store, sourceFileAddressHandle, sourceFile, bindings, definitionName, child, sites)
+    visitActivationNode(publication, sourceFileAddressHandle, sourceFile, bindings, definitionName, child, sites)
   );
 }
 
-function readImportBindings(sourceFile: ts.SourceFile): ImportBindings {
-  const bindings = new MutableImportBindings();
-  for (const statement of sourceFile.statements) {
-    if (!ts.isImportDeclaration(statement) || !ts.isStringLiteralLike(statement.moduleSpecifier)) {
-      continue;
-    }
-    const moduleSpecifier = statement.moduleSpecifier.text;
-    const namedBindings = statement.importClause?.namedBindings ?? null;
-    if (namedBindings == null) {
-      continue;
-    }
-    if (ts.isNamespaceImport(namedBindings)) {
-      if (RESOLVE_MODULES.has(moduleSpecifier)) {
-        bindings.resolveNamespaces.add(namedBindings.name.text);
-      }
-      if (VIEW_FACTORY_MODULES.has(moduleSpecifier)) {
-        bindings.viewFactoryNamespaces.add(namedBindings.name.text);
-      }
-      continue;
-    }
-    for (const element of namedBindings.elements) {
-      const importedName = element.propertyName?.text ?? element.name.text;
-      if (importedName === 'resolve' && RESOLVE_MODULES.has(moduleSpecifier)) {
-        bindings.resolveIdentifiers.add(element.name.text);
-      }
-      if (importedName === 'IViewFactory' && VIEW_FACTORY_MODULES.has(moduleSpecifier)) {
-        bindings.viewFactoryIdentifiers.add(element.name.text);
-      }
-    }
-  }
-  return bindings;
+export function readControllerActivationImportBindings(
+  sourceFile: ts.SourceFile,
+): ControllerActivationImportBindings {
+  return {
+    resolve: readSourceImportBindings(sourceFile, RESOLVE_MODULES, RESOLVE_EXPORTS),
+    viewFactory: readSourceImportBindings(sourceFile, VIEW_FACTORY_MODULES, VIEW_FACTORY_EXPORTS),
+  };
 }
 
-function isResolveIViewFactoryCall(
+export function isResolveIViewFactoryCall(
   node: ts.CallExpression,
-  bindings: ImportBindings,
+  bindings: ControllerActivationImportBindings,
 ): boolean {
   const key = node.arguments[0] ?? null;
-  return isResolveExpression(node.expression, bindings)
+  return readImportedExportName(node.expression, bindings.resolve, RESOLVE_EXPORTS) === 'resolve'
     && key != null
-    && isIViewFactoryExpression(key, bindings);
-}
-
-function isResolveExpression(
-  expression: ts.Expression,
-  bindings: ImportBindings,
-): boolean {
-  if (ts.isIdentifier(expression)) {
-    return bindings.resolveIdentifiers.has(expression.text);
-  }
-  return ts.isPropertyAccessExpression(expression)
-    && expression.name.text === 'resolve'
-    && ts.isIdentifier(expression.expression)
-    && bindings.resolveNamespaces.has(expression.expression.text);
-}
-
-function isIViewFactoryExpression(
-  expression: ts.Expression,
-  bindings: ImportBindings,
-): boolean {
-  if (ts.isIdentifier(expression)) {
-    return bindings.viewFactoryIdentifiers.has(expression.text);
-  }
-  return ts.isPropertyAccessExpression(expression)
-    && expression.name.text === 'IViewFactory'
-    && ts.isIdentifier(expression.expression)
-    && bindings.viewFactoryNamespaces.has(expression.expression.text);
+    && readImportedExportName(key, bindings.viewFactory, VIEW_FACTORY_EXPORTS) === 'IViewFactory';
 }
 
 function sourceSiteForNode(
-  store: KernelStore,
+  publication: KernelPublicationContext,
   sourceFileAddressHandle: AddressHandle,
   sourceFile: ts.SourceFile,
   definitionName: string,
@@ -194,7 +154,7 @@ function sourceSiteForNode(
 ): RuntimeControllerActivationDiSite {
   const start = node.getStart(sourceFile);
   const end = node.end;
-  const handle = store.handles.address([
+  const handle = publication.handles.address([
     'runtime-controller-activation-di',
     localKeyPart(definitionName),
     localKeyPart(sourceFile.fileName),

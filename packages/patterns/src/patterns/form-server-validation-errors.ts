@@ -114,8 +114,7 @@ export class ProfileForm {
       .ensure('name')
         .required()
       .ensure('email')
-        .required()
-        .email();
+        .required();
   }
 
   async save(): Promise<void> {

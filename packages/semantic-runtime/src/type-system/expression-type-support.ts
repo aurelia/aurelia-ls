@@ -1,8 +1,8 @@
 import ts from 'typescript';
 import type { BindingContextSlot, BindingScope } from '../configuration/scope.js';
+import { bindingContextSlotTargetTypeSourceMember } from '../configuration/binding-scope-slot-projector.js';
 import type { ExpressionAstNode } from '../expression/ast.js';
 import type { AddressHandle } from '../kernel/handles.js';
-import type { KernelStore } from '../kernel/store.js';
 import {
   type CheckerTypeProjectionRequest,
   CheckerTypeMemberProjectionPolicy,
@@ -25,7 +25,7 @@ import {
   CheckerExpressionTypeSynthesizer,
   commonTypeReference,
 } from './expression-type-synthesis.js';
-import { TypeSystemHotDetails, TypeSystemProductDetails } from './product-details.js';
+import { TypeSystemProductDetails } from './product-details.js';
 import { checkerTypeMemberSourceAddressHandle } from './checker-type-member-source.js';
 import {
   CheckerTypeProjectionOrigin,
@@ -56,6 +56,8 @@ export interface CheckerExpressionTypeProjectionOptions {
    * memory/CPU trade-off for every consumer.
    */
   readonly memberProjection?: CheckerTypeMemberProjectionPolicy;
+  /** Semantic origin when framework projection, rather than the checker alone, determines certainty. */
+  readonly origin?: CheckerTypeProjectionOrigin;
 }
 
 /**
@@ -67,14 +69,13 @@ export interface CheckerExpressionTypeProjectionOptions {
  */
 export class CheckerExpressionTypeSupport {
   constructor(
-    readonly store: KernelStore,
     readonly projector: CheckerTypeProjector,
     readonly typeAccess: CheckerTypeShapeAccess,
     readonly synthesis: CheckerExpressionTypeSynthesizer,
   ) {}
 
   typeShapeForReference(reference: CheckerTypeReference | null): CheckerTypeShape | null {
-    return readCheckerTypeShape(this.store, reference);
+    return reference == null ? null : this.typeAccess.resolveReference(reference);
   }
 
   findChecker(scope: BindingScope): ts.TypeChecker | null {
@@ -98,7 +99,7 @@ export class CheckerExpressionTypeSupport {
           return slotChecker;
         }
       }
-      current = current.parent;
+      current = current.runtimeParent;
     }
     return null;
   }
@@ -126,9 +127,7 @@ export class CheckerExpressionTypeSupport {
       return checkerTypeReferenceWithSource(reference, reference.sourceAddressHandle ?? slot.sourceAddressHandle);
     }
 
-    const member = slot.targetProductHandle == null
-      ? null
-      : this.store.hotDetails.read(TypeSystemHotDetails.TypeMember, slot.targetProductHandle);
+    const member = bindingContextSlotTargetTypeSourceMember(this.projector.publication, slot);
     if (member?.carrier?.valueType == null) {
       return reference;
     }
@@ -136,7 +135,7 @@ export class CheckerExpressionTypeSupport {
     const sourceNode = member.carrier.declarations[0] ?? null;
     const sourceAddressHandle = reference.sourceAddressHandle
       ?? slot.sourceAddressHandle
-      ?? checkerTypeMemberSourceAddressHandle(this.store, member);
+      ?? checkerTypeMemberSourceAddressHandle(this.projector.publication, member);
     const projected = this.projector.ensureProjection({
       localKey: `${localKey}:projected-type`,
       checker: member.carrier.checker,
@@ -237,7 +236,7 @@ export class CheckerExpressionTypeSupport {
       return alternatives[0]!;
     }
 
-    const checkerBackedUnion = checkerBackedUnionTypeForReferences(this.store, references);
+    const checkerBackedUnion = checkerBackedUnionTypeForReferences(this.projector.publication, references);
     if (checkerBackedUnion != null) {
       const typeShape = this.projector.ensureProjection({
         localKey: `${localKey}:checker-union`,
@@ -311,7 +310,7 @@ export class CheckerExpressionTypeSupport {
       localKey,
       checker,
       type,
-      origin: CheckerTypeProjectionOrigin.TypeChecker,
+      origin: options.origin ?? CheckerTypeProjectionOrigin.TypeChecker,
       sourceAddressHandle,
       display: checker.typeToString(type),
       memberProjection: options.memberProjection ?? CheckerTypeMemberProjectionPolicy.Eager,

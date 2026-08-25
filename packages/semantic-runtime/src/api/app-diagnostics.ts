@@ -1,11 +1,13 @@
-import {
-  sourcePathMatchesFileName,
-} from '../kernel/source-address.js';
 import { SourceFileRole } from '../kernel/address.js';
-import type { SourceFileAdmission } from '../boot/frames.js';
+import { externalizeSourceFileRole } from '../kernel/source-classification.js';
+import type { ProjectBootFrame } from '../boot/frames.js';
+import { semanticSourceReferenceHostPath } from '../boot/source-ownership.js';
+import { DiIssueSubjectKind } from '../di/di-issue.js';
 import type {
+  SemanticAppDiagnosticPhase,
   SemanticAppDiagnosticRow,
   SemanticAppDiagnosticSummaryRow,
+  SemanticAnalysisLimitationRow,
   SemanticAppQuery,
   SemanticAppQueryKind,
   SemanticConfigurationIssueRow,
@@ -28,8 +30,7 @@ import {
 } from './source-reference.js';
 
 export function appDiagnosticRows(
-  sources: readonly SourceFileAdmission[],
-  projectKey: string,
+  project: ProjectBootFrame,
   query: SemanticAppQuery,
   typeScriptRows: readonly SemanticTypeScriptDiagnosticRow[],
   evaluationRows: readonly SemanticEvaluationIssueRow[],
@@ -45,7 +46,9 @@ export function appDiagnosticRows(
   dialogRows: readonly SemanticDialogIssueRow[],
   routerRows: readonly SemanticRouterIssueRow[],
   routeRows: readonly SemanticRouteRecognizerIssueRow[],
+  analysisLimitationRows: readonly SemanticAnalysisLimitationRow[],
 ): readonly SemanticAppDiagnosticRow[] {
+  const projectKey = project.projectKey;
   const sourceFilePath = query.sourceFile?.filePath ?? null;
   return [
     ...typeScriptRows
@@ -53,47 +56,84 @@ export function appDiagnosticRows(
       .map((row) => typeScriptAppDiagnosticRow(row)),
     ...evaluationRows
       .filter((row) => diagnosticSourceMatches(row.source, sourceFilePath))
-      .map((row) => appDiagnosticRowWithSourceRole(evaluationAppDiagnosticRow(row), projectKey, sources)),
+      .map((row) => appDiagnosticRowWithSourceRole(evaluationAppDiagnosticRow(row), project)),
     ...configurationRows
       .filter((row) => diagnosticSourceMatches(row.source, sourceFilePath))
-      .map((row) => appDiagnosticRowWithSourceRole(configurationAppDiagnosticRow(row), projectKey, sources)),
+      .map((row) => appDiagnosticRowWithSourceRole(configurationAppDiagnosticRow(row), project)),
     ...diRows
       .filter((row) => diagnosticSourceMatches(row.source, sourceFilePath))
-      .map((row) => appDiagnosticRowWithSourceRole(diAppDiagnosticRow(row), projectKey, sources)),
+      .map((row) => appDiagnosticRowWithSourceRole(diAppDiagnosticRow(row), project)),
     ...observationRows
       .filter((row) => diagnosticSourceMatches(row.source, sourceFilePath))
-      .map((row) => appDiagnosticRowWithSourceRole(observationAppDiagnosticRow(row), projectKey, sources)),
+      .map((row) => appDiagnosticRowWithSourceRole(observationAppDiagnosticRow(row), project)),
     ...templateRows
+      .filter((row) => diagnosticSourceMatches(row.source, sourceFilePath))
       .filter(templateDiagnosticContributesToAppDiagnostics)
-      .map((row) => appDiagnosticRowWithSourceRole(templateAppDiagnosticRow(projectKey, row), projectKey, sources)),
+      .map((row) => appDiagnosticRowWithSourceRole(templateAppDiagnosticRow(projectKey, row), project)),
     ...frameworkRows
       .filter((row) => diagnosticSourceMatches(row.source, sourceFilePath))
-      .map((row) => appDiagnosticRowWithSourceRole(row, projectKey, sources)),
+      .map((row) => appDiagnosticRowWithSourceRole(row, project)),
     ...resourceRows
       .filter((row) => diagnosticSourceMatches(row.source, sourceFilePath))
-      .map((row) => appDiagnosticRowWithSourceRole(resourceAppDiagnosticRow(row), projectKey, sources)),
+      .map((row) => appDiagnosticRowWithSourceRole(resourceAppDiagnosticRow(row), project)),
     ...stateRows
       .filter((row) => diagnosticSourceMatches(row.source, sourceFilePath))
-      .map((row) => appDiagnosticRowWithSourceRole(stateAppDiagnosticRow(row), projectKey, sources)),
+      .map((row) => appDiagnosticRowWithSourceRole(stateAppDiagnosticRow(row), project)),
     ...validationRows
       .filter((row) => diagnosticSourceMatches(row.source, sourceFilePath))
-      .map((row) => appDiagnosticRowWithSourceRole(validationAppDiagnosticRow(row), projectKey, sources)),
+      .map((row) => appDiagnosticRowWithSourceRole(validationAppDiagnosticRow(row), project)),
     ...fetchClientRows
       .filter((row) => diagnosticSourceMatches(row.source, sourceFilePath))
-      .map((row) => appDiagnosticRowWithSourceRole(fetchClientAppDiagnosticRow(row), projectKey, sources)),
+      .map((row) => appDiagnosticRowWithSourceRole(fetchClientAppDiagnosticRow(row), project)),
     ...dialogRows
       .filter((row) => diagnosticSourceMatches(row.source, sourceFilePath))
-      .map((row) => appDiagnosticRowWithSourceRole(dialogAppDiagnosticRow(row), projectKey, sources)),
+      .map((row) => appDiagnosticRowWithSourceRole(dialogAppDiagnosticRow(row), project)),
     ...routerRows
       .filter((row) => diagnosticSourceMatches(row.source, sourceFilePath))
-      .map((row) => appDiagnosticRowWithSourceRole(routerAppDiagnosticRow(row), projectKey, sources)),
+      .map((row) => appDiagnosticRowWithSourceRole(routerAppDiagnosticRow(row), project)),
     ...routeRows
       .filter((row) => diagnosticSourceMatches(row.source, sourceFilePath))
-      .map((row) => appDiagnosticRowWithSourceRole(routeAppDiagnosticRow(row), projectKey, sources)),
+      .map((row) => appDiagnosticRowWithSourceRole(routeAppDiagnosticRow(row), project)),
+    ...analysisLimitationRows
+      .filter((row) => row.effectivePolicy.disposition !== 'off')
+      .filter((row) => diagnosticSourceMatches(row.source, sourceFilePath))
+      .map((row) => appDiagnosticRowWithSourceRole(
+        analysisLimitationAppDiagnosticRow(projectKey, row),
+        project,
+      )),
   ].sort((left, right) =>
     `${left.source?.path ?? ''}:${left.source?.start ?? 0}:${left.diagnosticDomain}:${left.diagnosticKind}`
       .localeCompare(`${right.source?.path ?? ''}:${right.source?.start ?? 0}:${right.diagnosticDomain}:${right.diagnosticKind}`)
       );
+}
+
+function analysisLimitationAppDiagnosticRow(
+  projectKey: string,
+  row: SemanticAnalysisLimitationRow,
+): SemanticAppDiagnosticRow {
+  if (row.effectivePolicy.disposition === 'off') {
+    throw new Error(`Suppressed analysis limitation '${row.findingKey}' cannot enter app diagnostics.`);
+  }
+  return {
+    projectKey,
+    diagnosticDomain: 'analysis',
+    phase: null,
+    diagnosticKind: row.ruleId,
+    diagnosticAuthority: 'semantic-authoring-policy',
+    frameworkErrorCode: null,
+    frameworkRawErrorAuthority: null,
+    severity: row.effectivePolicy.disposition,
+    summary: `${row.title}. ${row.explanation} ${row.action}`,
+    missingInput: null,
+    missingInputs: [],
+    source: row.source,
+    subject: null,
+    diagnosticIdentityHandle: null,
+    relatedInformation: [],
+    suggestion: null,
+    sourceRole: null,
+    relatedQueryKind: 'analysis-limitations' satisfies `${SemanticAppQueryKind}`,
+  };
 }
 
 export function appDiagnosticSummaryRows(
@@ -155,7 +195,7 @@ export function appDiagnosticSummaryRows(
 
 interface DiagnosticSummaryCluster {
   readonly diagnosticDomain: SemanticAppDiagnosticRow['diagnosticDomain'];
-  readonly diagnosticKind: string;
+  readonly diagnosticKind: SemanticAppDiagnosticRow['diagnosticKind'];
   readonly diagnosticAuthority: SemanticAppDiagnosticRow['diagnosticAuthority'];
   readonly frameworkErrorCode: string | null;
   readonly severity: SemanticAppDiagnosticRow['severity'];
@@ -178,7 +218,8 @@ function diagnosticSummaryKey(row: SemanticAppDiagnosticRow): string {
   ].join('\0');
 }
 
-function templateDiagnosticContributesToAppDiagnostics(
+/** Shared admission boundary for template facts entering app-level diagnostic presentation. */
+export function templateDiagnosticContributesToAppDiagnostics(
   row: SemanticTemplateDiagnosticRow,
 ): boolean {
   return row.diagnosticKind !== 'router-framework-error';
@@ -190,12 +231,26 @@ function typeScriptAppDiagnosticRow(
   return {
     projectKey: row.projectKey,
     diagnosticDomain: 'typescript',
+    phase: row.phase,
     diagnosticKind: row.diagnosticKind,
     diagnosticAuthority: 'typescript',
+    typeScriptDiagnosticCode: row.code,
     frameworkErrorCode: null,
+    frameworkRawErrorAuthority: null,
     severity: row.severity,
     summary: row.message,
+    missingInput: null,
+    missingInputs: [],
     source: row.source,
+    subject: null,
+    diagnosticIdentityHandle: null,
+    relatedInformation: row.relatedInformation.map((related) => ({
+      code: `TS${related.code}`,
+      message: related.message,
+      source: related.source,
+      sourceRole: related.sourceRole,
+    })),
+    suggestion: null,
     sourceRole: row.sourceRole,
     relatedQueryKind: 'typescript-diagnostics' satisfies `${SemanticAppQueryKind}`,
   };
@@ -211,219 +266,306 @@ function appDiagnosticSourceRoleCounts(
 
 function appDiagnosticRowWithSourceRole(
   row: SemanticAppDiagnosticRow,
-  projectKey: string,
-  sources: readonly SourceFileAdmission[],
+  project: ProjectBootFrame,
 ): SemanticAppDiagnosticRow {
   if (row.sourceRole != null) {
     return row;
   }
-  const sourceRole = sourceRoleForDiagnosticReference(projectKey, sources, row.source);
+  const sourceRole = sourceRoleForDiagnosticReference(project, row.source);
   return sourceRole == null ? row : { ...row, sourceRole };
 }
 
 function sourceRoleForDiagnosticReference(
-  projectKey: string,
-  sources: readonly SourceFileAdmission[],
+  project: ProjectBootFrame,
   source: SemanticSourceReference | null,
 ): SemanticAppDiagnosticRow['sourceRole'] {
   if (source == null) {
     return null;
   }
-  if (source.path != null) {
-    const path = source.path;
-    const admission = sources.find((candidate) => sourcePathMatchesFileName(candidate.path, path)) ?? null;
-    if (admission != null) {
-      return admission.role;
-    }
+  if (source.sourceWorkspaceKey != null && source.sourceWorkspaceKey !== project.projectKey) {
+    return externalizeSourceFileRole(source.sourceFileRole ?? SourceFileRole.Unknown);
   }
-  if (source.sourceWorkspaceKey != null && source.sourceWorkspaceKey !== projectKey) {
-    return source.sourceFileRole === SourceFileRole.Declaration || source.sourceFileRole === SourceFileRole.Generated
-      ? source.sourceFileRole
-      : SourceFileRole.ExternalSource;
+  if (
+    source.sourceFileRole === SourceFileRole.ExternalSource
+    || source.sourceFileRole === SourceFileRole.Generated
+  ) {
+    return source.sourceFileRole;
+  }
+  const hostPath = semanticSourceReferenceHostPath(project.workspaceRootDir, source);
+  if (hostPath != null) {
+    const admission = project.sourceOwnership.admissionForHostPath(hostPath);
+    if (admission != null) return admission.role;
   }
   if (source.sourceFileRole != null) {
     return source.sourceFileRole;
   }
-  return sourceRoleForDiagnosticReference(projectKey, sources, source.anchor ?? null);
+  return sourceRoleForDiagnosticReference(project, source.anchor ?? null);
+}
+
+type AppDiagnosticHandles = NonNullable<SemanticAppDiagnosticRow['handles']>;
+
+interface OwnedIssueDiagnosticRow {
+  readonly projectKey: string;
+  readonly phase: SemanticAppDiagnosticPhase;
+  readonly issueKind: SemanticAppDiagnosticRow['diagnosticKind'];
+  readonly diagnosticAuthority: SemanticAppDiagnosticRow['diagnosticAuthority'];
+  readonly frameworkErrorCode: string | null;
+  readonly severity: SemanticAppDiagnosticRow['severity'];
+  readonly message: string;
+  readonly source: SemanticSourceReference | null;
+  readonly handles?: {
+    readonly productHandle: AppDiagnosticHandles['productHandle'];
+    readonly identityHandle: AppDiagnosticHandles['identityHandle'];
+    readonly sourceAddressHandle: AppDiagnosticHandles['sourceAddressHandle'];
+  };
+}
+
+interface OwnedIssueDiagnosticFacets {
+  readonly frameworkRawErrorAuthority?: string | null;
+  readonly missingInput?: string | null;
+  readonly missingInputs?: readonly string[];
+  readonly subject?: SemanticAppDiagnosticRow['subject'];
+  readonly relatedInformation?: SemanticAppDiagnosticRow['relatedInformation'];
+  readonly suggestion?: SemanticAppDiagnosticRow['suggestion'];
+  readonly ownerIdentityHandle?: AppDiagnosticHandles['ownerIdentityHandle'];
+  readonly relatedSourceAddressHandles?: AppDiagnosticHandles['relatedSourceAddressHandles'];
+}
+
+function ownedIssueAppDiagnosticRow(
+  row: OwnedIssueDiagnosticRow,
+  diagnosticDomain: SemanticAppDiagnosticRow['diagnosticDomain'],
+  relatedQueryKind: SemanticAppQueryKind | `${SemanticAppQueryKind}`,
+  facets: OwnedIssueDiagnosticFacets = {},
+): SemanticAppDiagnosticRow {
+  return {
+    projectKey: row.projectKey,
+    diagnosticDomain,
+    phase: row.phase,
+    diagnosticKind: row.issueKind,
+    diagnosticAuthority: row.diagnosticAuthority,
+    frameworkErrorCode: row.frameworkErrorCode,
+    frameworkRawErrorAuthority: facets.frameworkRawErrorAuthority ?? null,
+    severity: row.severity,
+    summary: row.message,
+    missingInput: facets.missingInput ?? null,
+    missingInputs: facets.missingInputs ?? [],
+    source: row.source,
+    subject: facets.subject ?? null,
+    diagnosticIdentityHandle: null,
+    relatedInformation: facets.relatedInformation ?? [],
+    suggestion: facets.suggestion ?? null,
+    sourceRole: null,
+    relatedQueryKind,
+    ...appDiagnosticHandles(
+      row.handles,
+      facets.ownerIdentityHandle ?? null,
+      facets.relatedSourceAddressHandles ?? [],
+    ),
+  };
+}
+
+function appDiagnosticHandles(
+  handles: OwnedIssueDiagnosticRow['handles'],
+  ownerIdentityHandle: AppDiagnosticHandles['ownerIdentityHandle'],
+  relatedSourceAddressHandles: AppDiagnosticHandles['relatedSourceAddressHandles'],
+  overlayOrigin: Pick<AppDiagnosticHandles, 'overlayOriginKey' | 'overlayFileName' | 'overlaySegmentLabel'> | null = null,
+): { readonly handles?: AppDiagnosticHandles } {
+  if (handles == null) {
+    return {};
+  }
+  return {
+    handles: {
+      productHandle: handles.productHandle,
+      identityHandle: handles.identityHandle,
+      ownerIdentityHandle,
+      sourceAddressHandle: handles.sourceAddressHandle,
+      relatedSourceAddressHandles,
+      templateSourceAddressHandle: null,
+      resourceDefinitionProductHandle: null,
+      overlayOriginKey: overlayOrigin?.overlayOriginKey ?? null,
+      overlayFileName: overlayOrigin?.overlayFileName ?? null,
+      overlaySegmentLabel: overlayOrigin?.overlaySegmentLabel ?? null,
+    },
+  };
 }
 
 function evaluationAppDiagnosticRow(
   row: SemanticEvaluationIssueRow,
 ): SemanticAppDiagnosticRow {
-  return {
-    projectKey: row.projectKey,
-    diagnosticDomain: 'evaluation',
-    diagnosticKind: row.issueKind,
-    diagnosticAuthority: row.diagnosticAuthority,
-    frameworkErrorCode: row.frameworkErrorCode,
+  return ownedIssueAppDiagnosticRow(row, 'evaluation', 'evaluation-issues', {
     frameworkRawErrorAuthority: row.frameworkRawErrorAuthority,
-    severity: row.severity,
-    summary: row.message,
-    source: row.source,
-    relatedQueryKind: 'evaluation-issues' satisfies `${SemanticAppQueryKind}`,
-  };
+    subject: {
+      subjectKind: row.subjectKind,
+      subjectName: null,
+      source: row.source,
+    },
+  });
 }
 
 function configurationAppDiagnosticRow(
   row: SemanticConfigurationIssueRow,
 ): SemanticAppDiagnosticRow {
-  return {
-    projectKey: row.projectKey,
-    diagnosticDomain: 'configuration',
-    diagnosticKind: row.issueKind,
-    diagnosticAuthority: row.diagnosticAuthority,
-    frameworkErrorCode: row.frameworkErrorCode,
-    severity: row.severity,
-    summary: row.message,
-    source: row.source,
-    relatedQueryKind: 'configuration-issues' satisfies `${SemanticAppQueryKind}`,
-  };
+  return ownedIssueAppDiagnosticRow(row, 'configuration', 'configuration-issues');
 }
 
 function diAppDiagnosticRow(
   row: SemanticDiIssueRow,
 ): SemanticAppDiagnosticRow {
-  return {
-    projectKey: row.projectKey,
-    diagnosticDomain: 'di',
-    diagnosticKind: row.issueKind,
-    diagnosticAuthority: row.diagnosticAuthority,
-    frameworkErrorCode: row.frameworkErrorCode,
-    severity: row.severity,
-    summary: row.message,
-    source: row.source,
-    relatedQueryKind: 'di-issues' satisfies `${SemanticAppQueryKind}`,
-  };
+  return ownedIssueAppDiagnosticRow(row, 'di', 'di-issues', {
+    subject: {
+      subjectKind: row.subjectKind,
+      subjectName: diDiagnosticSubjectName(row),
+      source: row.source,
+    },
+  });
+}
+
+function diDiagnosticSubjectName(
+  row: SemanticDiIssueRow,
+): string | null {
+  switch (row.subjectKind) {
+    case DiIssueSubjectKind.ResourceSlot:
+      return row.resourceKey;
+    case DiIssueSubjectKind.ResolveCall:
+      return row.resolveCall?.keyExpressionText ?? null;
+    case DiIssueSubjectKind.InjectDecorator:
+      return row.injectDecorator?.targetName ?? null;
+    case DiIssueSubjectKind.ContainerApiCall:
+      return row.containerApiCall?.wrappedKeyName
+        ?? row.containerApiCall?.keyExpressionText
+        ?? null;
+    case DiIssueSubjectKind.DependencyCycle:
+      return row.dependencyCycle?.entryKeyName ?? null;
+    case DiIssueSubjectKind.RegistrationCascade:
+      return null;
+  }
+  return null;
 }
 
 function observationAppDiagnosticRow(
   row: SemanticObservationIssueRow,
 ): SemanticAppDiagnosticRow {
-  return {
-    projectKey: row.projectKey,
-    diagnosticDomain: 'observation',
-    diagnosticKind: row.issueKind,
-    diagnosticAuthority: row.diagnosticAuthority,
-    frameworkErrorCode: row.frameworkErrorCode,
-    severity: row.severity,
-    summary: row.message,
-    source: row.source,
-    relatedQueryKind: 'observation-issues' satisfies `${SemanticAppQueryKind}`,
-  };
+  return ownedIssueAppDiagnosticRow(row, 'observation', 'observation-issues', {
+    subject: row.subjectName == null
+      ? null
+      : {
+        subjectKind: 'observation-member',
+        subjectName: row.subjectName,
+        source: row.source,
+      },
+    suggestion: row.suggestion,
+    relatedInformation: row.relatedInformation,
+    relatedSourceAddressHandles: row.handles?.relatedSourceAddressHandles ?? [],
+  });
 }
 
-function templateAppDiagnosticRow(
+/** Shared normalization of one admitted template diagnostic into the app presentation vocabulary. */
+export function templateAppDiagnosticRow(
   projectKey: string,
   row: SemanticTemplateDiagnosticRow,
 ): SemanticAppDiagnosticRow {
   return {
     projectKey,
     diagnosticDomain: 'template',
+    phase: row.phase,
     diagnosticKind: row.diagnosticKind,
     diagnosticAuthority: row.diagnosticAuthority,
+    ...(row.typeScriptDiagnosticCode == null
+      ? {}
+      : { typeScriptDiagnosticCode: row.typeScriptDiagnosticCode }),
     frameworkErrorCode: row.frameworkErrorCode,
+    frameworkRawErrorAuthority: null,
     severity: row.severity,
     summary: row.summary,
+    missingInput: row.missingInput,
+    missingInputs: row.missingInputs,
     source: row.source,
+    subject: row.subject ?? null,
+    diagnosticIdentityHandle: row.diagnosticIdentityHandle,
+    ...(row.diagnosticRelations == null ? {} : { diagnosticRelations: row.diagnosticRelations }),
+    relatedInformation: row.relatedInformation ?? [],
+    suggestion: row.suggestion,
+    sourceRole: null,
     relatedQueryKind: 'template-diagnostics' satisfies `${SemanticAppQueryKind}`,
+    ...appDiagnosticHandles(
+      row.handles == null
+        ? undefined
+        : {
+          productHandle: row.handles.semanticProductHandle,
+          identityHandle: row.handles.semanticIdentityHandle,
+          sourceAddressHandle: row.handles.sourceAddressHandle,
+        },
+      null,
+      [],
+      {
+        overlayOriginKey: row.handles?.overlayOriginKey ?? null,
+        overlayFileName: row.handles?.overlayFileName ?? null,
+        overlaySegmentLabel: row.handles?.overlaySegmentLabel ?? null,
+      },
+    ),
   };
 }
 
 function resourceAppDiagnosticRow(
   row: SemanticResourceIssueRow,
 ): SemanticAppDiagnosticRow {
-  return {
-    projectKey: row.projectKey,
-    diagnosticDomain: 'resource',
-    diagnosticKind: row.issueKind,
-    diagnosticAuthority: row.diagnosticAuthority,
-    frameworkErrorCode: row.frameworkErrorCode,
-    severity: row.severity,
-    summary: row.message,
-    source: row.source,
-    relatedQueryKind: 'resource-issues' satisfies `${SemanticAppQueryKind}`,
-  };
+  return ownedIssueAppDiagnosticRow(row, 'resource', 'resource-issues', {
+    subject: row.resource.resourceKind == null
+      ? null
+      : {
+        subjectKind: row.resource.resourceKind,
+        subjectName: row.resource.name ?? row.resource.key,
+        source: row.source ?? row.resource.source,
+      },
+    relatedInformation: row.relatedInformation,
+    ownerIdentityHandle: row.handles?.ownerDefinitionIdentityHandle ?? null,
+    relatedSourceAddressHandles: row.handles?.relatedSourceAddressHandles ?? [],
+  });
 }
 
 function stateAppDiagnosticRow(
   row: SemanticStateIssueRow,
 ): SemanticAppDiagnosticRow {
-  return {
-    projectKey: row.projectKey,
-    diagnosticDomain: 'state',
-    diagnosticKind: row.issueKind,
-    diagnosticAuthority: row.diagnosticAuthority,
-    frameworkErrorCode: row.frameworkErrorCode,
+  return ownedIssueAppDiagnosticRow(row, 'state', 'state-issues', {
     frameworkRawErrorAuthority: row.frameworkRawErrorAuthority,
-    severity: row.severity,
-    summary: row.message,
-    source: row.source,
-    relatedQueryKind: 'state-issues' satisfies `${SemanticAppQueryKind}`,
-  };
+    ownerIdentityHandle: row.handles?.ownerIdentityHandle ?? null,
+  });
 }
 
 function validationAppDiagnosticRow(
   row: SemanticValidationIssueRow,
 ): SemanticAppDiagnosticRow {
-  return {
-    projectKey: row.projectKey,
-    diagnosticDomain: 'validation',
-    diagnosticKind: row.issueKind,
-    diagnosticAuthority: row.diagnosticAuthority,
-    frameworkErrorCode: row.frameworkErrorCode,
-    severity: row.severity,
-    summary: row.message,
-    source: row.source,
-    relatedQueryKind: 'validation-issues' satisfies `${SemanticAppQueryKind}`,
-  };
+  return ownedIssueAppDiagnosticRow(row, 'validation', 'validation-issues', {
+    ownerIdentityHandle: row.handles?.ownerIdentityHandle ?? null,
+  });
 }
 
 function fetchClientAppDiagnosticRow(
   row: SemanticFetchClientIssueRow,
 ): SemanticAppDiagnosticRow {
-  return {
-    projectKey: row.projectKey,
-    diagnosticDomain: 'fetch-client',
-    diagnosticKind: row.issueKind,
-    diagnosticAuthority: row.diagnosticAuthority,
-    frameworkErrorCode: row.frameworkErrorCode,
-    severity: row.severity,
-    summary: row.message,
-    source: row.source,
-    relatedQueryKind: 'fetch-client-issues' satisfies `${SemanticAppQueryKind}`,
-  };
+  return ownedIssueAppDiagnosticRow(row, 'fetch-client', 'fetch-client-issues', {
+    ownerIdentityHandle: row.handles?.ownerIdentityHandle ?? null,
+  });
 }
 
 function dialogAppDiagnosticRow(
   row: SemanticDialogIssueRow,
 ): SemanticAppDiagnosticRow {
-  return {
-    projectKey: row.projectKey,
-    diagnosticDomain: 'dialog',
-    diagnosticKind: row.issueKind,
-    diagnosticAuthority: row.diagnosticAuthority,
-    frameworkErrorCode: row.frameworkErrorCode,
-    severity: row.severity,
-    summary: row.message,
-    source: row.source,
-    relatedQueryKind: 'dialog-issues' satisfies `${SemanticAppQueryKind}`,
-  };
+  return ownedIssueAppDiagnosticRow(row, 'dialog', 'dialog-issues', {
+    ownerIdentityHandle: row.handles?.ownerIdentityHandle ?? null,
+  });
 }
 
-function routerAppDiagnosticRow(
+export function routerAppDiagnosticRow(
   row: SemanticRouterIssueRow,
 ): SemanticAppDiagnosticRow {
-  return {
-    projectKey: row.projectKey,
-    diagnosticDomain: 'router',
-    diagnosticKind: row.issueKind,
-    diagnosticAuthority: row.diagnosticAuthority,
-    frameworkErrorCode: row.frameworkErrorCode,
-    severity: row.severity,
-    summary: row.message,
-    source: row.source,
-    relatedQueryKind: 'router-issues' satisfies `${SemanticAppQueryKind}`,
-  };
+  return ownedIssueAppDiagnosticRow(row, 'router', 'router-issues', {
+    missingInput: row.missingInput,
+    missingInputs: row.missingInputs,
+    suggestion: row.suggestion,
+    relatedInformation: row.relatedInformation,
+    relatedSourceAddressHandles: row.handles?.relatedSourceAddressHandles ?? [],
+  });
 }
 
 function routeAppDiagnosticRow(
@@ -432,14 +574,23 @@ function routeAppDiagnosticRow(
   return {
     projectKey: row.projectKey,
     diagnosticDomain: 'route-recognizer',
+    phase: null,
     diagnosticKind: row.issueKind,
     diagnosticAuthority: row.diagnosticAuthority,
     frameworkErrorCode: row.frameworkErrorCode,
     frameworkRawErrorAuthority: row.frameworkRawErrorAuthority,
     severity: 'error',
     summary: row.message,
+    missingInput: null,
+    missingInputs: [],
     source: row.source,
+    subject: null,
+    diagnosticIdentityHandle: null,
+    relatedInformation: [],
+    suggestion: null,
+    sourceRole: null,
     relatedQueryKind: 'route-recognizer-issues' satisfies `${SemanticAppQueryKind}`,
+    ...appDiagnosticHandles(row.handles, null, []),
   };
 }
 

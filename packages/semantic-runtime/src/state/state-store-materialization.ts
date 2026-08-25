@@ -1,21 +1,48 @@
-import ts from 'typescript';
 import {
   ConfigurationOptionContributionKind,
   ConfigurationOptionValueKind,
   type ConfigurationOptionContribution,
 } from '../configuration/configuration-option.js';
+import {
+  configurationOptionContributionsForAdmission,
+  configurationValueSourceAddressHandleForAdmission,
+} from '../configuration/configuration-option-ownership.js';
 import type { ConfigurationRecognitionProjectResult } from '../configuration/configuration-recognition-project-pass.js';
-import { ConfigurationStepKind } from '../configuration/configuration-sequence.js';
-import type { AddressHandle } from '../kernel/handles.js';
+import {
+  ConfigurationStepKind,
+  type ConfigurationStep,
+} from '../configuration/configuration-sequence.js';
+import type { ContainerRegistrationOperation } from '../di/container-registration.js';
+import type { DiWorldConstructionEmission } from '../di/world-construction.js';
+import type {
+  AddressHandle,
+  ProductHandle,
+  ProvenanceHandle,
+} from '../kernel/handles.js';
+import {
+  KernelPublicationPlan,
+  publishProductDetails,
+  type KernelPublicationContext,
+} from '../kernel/publication.js';
+import { sourceSpanAddressForAddress } from '../kernel/source-address.js';
 import {
   KernelStoreBatch,
   type KernelStore,
 } from '../kernel/store.js';
+import { MaterializedProduct } from '../kernel/materialization.js';
+import {
+  aggregateFieldProvenance,
+  compactFieldProvenance,
+  FieldProvenance,
+  ProvenanceRecord,
+  readFieldProvenance,
+} from '../kernel/provenance.js';
 import { FrameworkRegistrationKind } from '../registration/registration-reference.js';
+import { frameworkRegistrationKindForOperation } from '../di/container-registration.js';
 import {
   CheckerTypeProjector,
 } from '../type-system/checker-projector.js';
-import { sourceExpressionForSourceAddress } from '../type-system/source-address-expression.js';
+import { smallestExpressionForSpan } from '../type-system/source-address-expression.js';
 import type { TypeSystemProject } from '../type-system/project.js';
 import {
   CheckerTypeProjectionOrigin,
@@ -27,7 +54,7 @@ import {
   stateStoreConfigurationProductEmission,
   type StateStoreConfigurationProductSeed,
 } from './store-configuration-product-records.js';
-import { StateGetterBinding, StateStoreConfiguration } from './model.js';
+import type { StateGetterBinding, StateStoreConfiguration } from './model.js';
 import { DEFAULT_STATE_STORE_NAME } from './state-store-identity.js';
 import {
   StateIssueKind,
@@ -38,14 +65,15 @@ import {
   StateIssuePublisher,
   type StateIssuePublication,
 } from './state-issue-publication.js';
+import { StateStoreVisibility } from './state-store-visibility.js';
 
 /** State products recovered from @aurelia/state configuration and source-level API usage. */
 export class StateProjectResult {
   constructor(
-    readonly configuration: ConfigurationRecognitionProjectResult,
     readonly stores: readonly StateStoreConfiguration[],
     readonly getterBindings: readonly StateGetterBinding[],
     readonly issues: readonly StateIssue[],
+    readonly storeVisibility: StateStoreVisibility,
   ) {}
 
   readStores(): readonly StateStoreConfiguration[] {
@@ -59,6 +87,10 @@ export class StateProjectResult {
   readIssues(): readonly StateIssue[] {
     return this.issues;
   }
+
+  readStoreVisibility(): StateStoreVisibility {
+    return this.storeVisibility;
+  }
 }
 
 /** Materialize @aurelia/state store configuration before framework AppTasks create Store instances. */
@@ -66,32 +98,45 @@ export class StateStoreConfigurationMaterializationProjectPass {
   materializeAndEmit(
     store: KernelStore,
     configuration: ConfigurationRecognitionProjectResult,
-    typeSystem: TypeSystemProject | null = null,
+    diWorld: DiWorldConstructionEmission,
+    typeSystem: TypeSystemProject | null,
+    publication: KernelPublicationContext,
   ): StateProjectResult {
-    const seeds = readStateStoreConfigurationSeeds(store, configuration, typeSystem);
+    const seeds = readStateStoreConfigurationSeeds(
+      store,
+      publication,
+      configuration,
+      diWorld,
+      typeSystem,
+    );
     const issuePublications = stateIssuePublications(store, seeds);
     const validSeeds = seeds.filter((seed) => !stateStoreSeedIsReservedDefaultWithStore(seed));
-    const emissions = validSeeds.map((seed, index) =>
-      stateStoreConfigurationProductEmission(store, seed, index)
+    const emissions = validSeeds.map((seed) =>
+      stateStoreConfigurationProductEmission(store, seed)
     );
     const records = [
       ...emissions.flatMap((emission) => emission.records),
       ...issuePublications.flatMap((publication) => publication.records),
     ];
-    if (records.length > 0) {
-      store.commit(new KernelStoreBatch(records, `state-store-configuration:${configuration.project.projectKey}`));
-    }
-    for (const emission of emissions) {
-      store.productDetails.add(StateProductDetails.StoreConfiguration, emission.store.productHandle, emission.store);
-    }
-    for (const publication of issuePublications) {
-      store.productDetails.add(StateProductDetails.Issue, publication.issue.productHandle, publication.issue);
-    }
+    publication.publish(new KernelPublicationPlan(
+      new KernelStoreBatch(records, `state-store-configuration:${configuration.project.projectKey}`),
+      [
+        ...publishProductDetails(
+          StateProductDetails.StoreConfiguration,
+          emissions.map((emission) => emission.store),
+        ),
+        ...publishProductDetails(
+          StateProductDetails.Issue,
+          issuePublications.map((publication) => publication.issue),
+        ),
+      ],
+    ));
+    const stores = emissions.map((emission) => emission.store);
     return new StateProjectResult(
-      configuration,
-      emissions.map((emission) => emission.store),
+      stores,
       [],
       issuePublications.map((publication) => publication.issue),
+      StateStoreVisibility.fromDiWorld(stores, diWorld),
     );
   }
 }
@@ -132,14 +177,18 @@ function duplicateStoreNameIssuePublications(
   seeds: readonly StateStoreConfigurationProductSeed[],
 ): readonly StateIssuePublication[] {
   const publications: StateIssuePublication[] = [];
-  const firstSeedByName = new Map<string, StateStoreConfigurationProductSeed>();
+  const firstSeedByRegistryAndName = new Map<string, StateStoreConfigurationProductSeed>();
   for (const seed of seeds) {
     if (stateStoreSeedIsReservedDefaultWithStore(seed) || seed.name == null) {
       continue;
     }
-    const existing = firstSeedByName.get(seed.name);
+    const registryKey = [
+      seed.container.identityHandle ?? seed.container.productHandle ?? 'open-container',
+      seed.name,
+    ].join(':');
+    const existing = firstSeedByRegistryAndName.get(registryKey);
     if (existing == null) {
-      firstSeedByName.set(seed.name, seed);
+      firstSeedByRegistryAndName.set(registryKey, seed);
       continue;
     }
     publications.push(
@@ -166,35 +215,51 @@ function stateStoreSeedIsReservedDefaultWithStore(
 
 function readStateStoreConfigurationSeeds(
   store: KernelStore,
+  publication: KernelPublicationContext,
   configuration: ConfigurationRecognitionProjectResult,
+  diWorld: DiWorldConstructionEmission,
   typeSystem: TypeSystemProject | null,
 ): readonly StateStoreConfigurationProductSeed[] {
   const emission = configuration.readConfiguration();
-  const contributionsByProductHandle = new Map(
-    emission.optionContributions.map((contribution) => [contribution.productHandle, contribution]),
-  );
   const seeds: StateStoreConfigurationProductSeed[] = [];
-  for (const step of emission.steps) {
-    if (step.stepKind !== ConfigurationStepKind.BuilderMutation) {
+  for (const operation of diWorld.registrationOperations) {
+    const admission = operation.admission;
+    if (
+      frameworkRegistrationKindForOperation(operation)
+        !== FrameworkRegistrationKind.StateDefaultConfiguration
+    ) {
       continue;
     }
-    const contributions = step.producedProductHandles
-      .map((handle) => contributionsByProductHandle.get(handle) ?? null)
-      .filter((contribution): contribution is ConfigurationOptionContribution =>
-        contribution != null
-        && contribution.contributionKind === ConfigurationOptionContributionKind.BuilderArgument
-        && contribution.configurationKind === FrameworkRegistrationKind.StateDefaultConfiguration
-      );
-    const seed = stateStoreConfigurationSeedForBuilderStep(
-      store,
-      configuration.project.projectKey,
-      step,
-      contributions,
-      seeds.length,
-      typeSystem,
+    const contributions = configurationOptionContributionsForAdmission(
+      emission,
+      admission,
     );
-    if (seed != null) {
-      seeds.push(seed);
+    const contributionsByProductHandle = new Map(
+      contributions.map((contribution) => [contribution.productHandle, contribution]),
+    );
+    for (const step of emission.steps) {
+      if (step.stepKind !== ConfigurationStepKind.BuilderMutation) {
+        continue;
+      }
+      const stepContributions = step.producedProductHandles
+        .map((handle) => contributionsByProductHandle.get(handle) ?? null)
+        .filter((contribution): contribution is ConfigurationOptionContribution =>
+          contribution != null
+          && contribution.contributionKind === ConfigurationOptionContributionKind.BuilderArgument
+          && contribution.configurationKind === FrameworkRegistrationKind.StateDefaultConfiguration
+        );
+      const seed = stateStoreConfigurationSeedForBuilderStep(
+        store,
+        publication,
+        configuration.project.projectKey,
+        operation,
+        step,
+        stepContributions,
+        typeSystem,
+      );
+      if (seed != null) {
+        seeds.push(seed);
+      }
     }
   }
   return seeds;
@@ -202,18 +267,35 @@ function readStateStoreConfigurationSeeds(
 
 function stateStoreConfigurationSeedForBuilderStep(
   store: KernelStore,
+  publication: KernelPublicationContext,
   projectKey: string,
-  step: { readonly identityHandle: StateStoreConfigurationProductSeed['ownerIdentityHandle']; readonly sourceAddressHandle: AddressHandle | null },
+  operation: ContainerRegistrationOperation,
+  step: ConfigurationStep,
   contributions: readonly ConfigurationOptionContribution[],
-  storeIndex: number,
   typeSystem: TypeSystemProject | null,
 ): StateStoreConfigurationProductSeed | null {
   const methodName = stateStoreBuilderMethodName(contributions);
   if (methodName === 'init') {
-    return stateStoreConfigurationSeedForInit(store, projectKey, step, contributions, storeIndex, typeSystem);
+    return stateStoreConfigurationSeedForInit(
+      store,
+      publication,
+      projectKey,
+      operation,
+      step,
+      contributions,
+      typeSystem,
+    );
   }
   if (methodName === 'withStore') {
-    return stateStoreConfigurationSeedForWithStore(store, projectKey, step, contributions, storeIndex, typeSystem);
+    return stateStoreConfigurationSeedForWithStore(
+      store,
+      publication,
+      projectKey,
+      operation,
+      step,
+      contributions,
+      typeSystem,
+    );
   }
   return null;
 }
@@ -230,75 +312,142 @@ function stateStoreBuilderMethodName(
 
 function stateStoreConfigurationSeedForInit(
   store: KernelStore,
+  publication: KernelPublicationContext,
   projectKey: string,
-  step: { readonly identityHandle: StateStoreConfigurationProductSeed['ownerIdentityHandle']; readonly sourceAddressHandle: AddressHandle | null },
+  operation: ContainerRegistrationOperation,
+  step: ConfigurationStep,
   contributions: readonly ConfigurationOptionContribution[],
-  storeIndex: number,
   typeSystem: TypeSystemProject | null,
 ): StateStoreConfigurationProductSeed {
   const argument = argumentsByIndex(contributions);
   const initialState = argument.get(0) ?? null;
-  const optionsOrHandler = optionsOrHandlerFor(argument.get(1) ?? null);
+  const optionsOrHandlerContribution = argument.get(1) ?? null;
+  const optionsOrHandler = optionsOrHandlerFor(optionsOrHandlerContribution);
+  const actionHandlers = actionHandlerContributions(argument, optionsOrHandler);
+  const local = `state-store-configuration:${projectKey}:${operation.identityHandle}:${step.identityHandle}:${DEFAULT_STATE_STORE_NAME}`;
+  const provenance = stateStoreConfigurationFieldProvenance(
+    publication,
+    operation,
+    step,
+    null,
+    initialState,
+    optionsOrHandlerContribution,
+    actionHandlers,
+    local,
+  );
   return {
     projectKey,
-    ownerIdentityHandle: step.identityHandle,
+    ...stateStoreApplicationSeed(operation, step),
     name: DEFAULT_STATE_STORE_NAME,
     isDefault: true,
     initialStateKind: initialState?.value.valueKind ?? null,
     optionsOrHandlerKind: optionsOrHandler.kind,
-    actionHandlerCount: actionHandlerSourceAddressHandles(argument, optionsOrHandler).length,
+    actionHandlerCount: actionHandlers.length,
     sourceAddressHandle: step.sourceAddressHandle,
     nameSourceAddressHandle: null,
     initialStateSourceAddressHandle: initialState?.value.addressHandle ?? null,
     initialStateType: stateStoreInitialStateType(
       store,
+      publication,
       typeSystem,
       initialState,
-      `state-store-configuration:${projectKey}:${storeIndex}:${DEFAULT_STATE_STORE_NAME}`,
+      local,
     ),
     optionsOrHandlerSourceAddressHandle: optionsOrHandler.sourceAddressHandle,
-    actionHandlerSourceAddressHandles: actionHandlerSourceAddressHandles(argument, optionsOrHandler),
+    actionHandlerSourceAddressHandles: actionHandlers
+      .map((contribution) => contribution.value.addressHandle)
+      .filter((handle): handle is AddressHandle => handle != null),
+    fieldProvenance: provenance.fieldProvenance,
+    fieldProvenanceRecords: provenance.records,
   };
 }
 
 function stateStoreConfigurationSeedForWithStore(
   store: KernelStore,
+  publication: KernelPublicationContext,
   projectKey: string,
-  step: { readonly identityHandle: StateStoreConfigurationProductSeed['ownerIdentityHandle']; readonly sourceAddressHandle: AddressHandle | null },
+  operation: ContainerRegistrationOperation,
+  step: ConfigurationStep,
   contributions: readonly ConfigurationOptionContribution[],
-  storeIndex: number,
   typeSystem: TypeSystemProject | null,
 ): StateStoreConfigurationProductSeed {
   const argument = argumentsByIndex(contributions);
   const name = argument.get(0) ?? null;
   const initialState = argument.get(1) ?? null;
-  const optionsOrHandler = optionsOrHandlerFor(argument.get(2) ?? null);
+  const optionsOrHandlerContribution = argument.get(2) ?? null;
+  const optionsOrHandler = optionsOrHandlerFor(optionsOrHandlerContribution);
+  const actionHandlers = actionHandlerContributions(argument, optionsOrHandler);
+  const storeName = name?.value.valueKind === ConfigurationOptionValueKind.String ? name.value.value : null;
+  const local = `state-store-configuration:${projectKey}:${operation.identityHandle}:${step.identityHandle}:${storeName ?? 'named'}`;
+  const provenance = stateStoreConfigurationFieldProvenance(
+    publication,
+    operation,
+    step,
+    name,
+    initialState,
+    optionsOrHandlerContribution,
+    actionHandlers,
+    local,
+  );
   return {
     projectKey,
-    ownerIdentityHandle: step.identityHandle,
-    name: name?.value.valueKind === ConfigurationOptionValueKind.String ? name.value.value : null,
+    ...stateStoreApplicationSeed(operation, step),
+    name: storeName,
     isDefault: false,
     initialStateKind: initialState?.value.valueKind ?? null,
     optionsOrHandlerKind: optionsOrHandler.kind,
-    actionHandlerCount: actionHandlerSourceAddressHandles(argument, optionsOrHandler).length,
+    actionHandlerCount: actionHandlers.length,
     sourceAddressHandle: step.sourceAddressHandle,
     nameSourceAddressHandle: name?.value.addressHandle ?? null,
     initialStateSourceAddressHandle: initialState?.value.addressHandle ?? null,
     initialStateType: stateStoreInitialStateType(
       store,
+      publication,
       typeSystem,
       initialState,
-      `state-store-configuration:${projectKey}:${storeIndex}:${
-        name?.value.valueKind === ConfigurationOptionValueKind.String ? name.value.value : 'named'
-      }`,
+      local,
     ),
     optionsOrHandlerSourceAddressHandle: optionsOrHandler.sourceAddressHandle,
-    actionHandlerSourceAddressHandles: actionHandlerSourceAddressHandles(argument, optionsOrHandler),
+    actionHandlerSourceAddressHandles: actionHandlers
+      .map((contribution) => contribution.value.addressHandle)
+      .filter((handle): handle is AddressHandle => handle != null),
+    fieldProvenance: provenance.fieldProvenance,
+    fieldProvenanceRecords: provenance.records,
+  };
+}
+
+function stateStoreApplicationSeed(
+  operation: ContainerRegistrationOperation,
+  step: ConfigurationStep,
+): Pick<
+  StateStoreConfigurationProductSeed,
+  | 'container'
+  | 'registrationProductHandle'
+  | 'registrationAdmissionProductHandle'
+  | 'registrationIdentityHandle'
+  | 'registrationSourceAddressHandle'
+  | 'configurationStepProductHandle'
+  | 'configurationStepIdentityHandle'
+  | 'configurationValueSourceAddressHandle'
+  | 'ownerIdentityHandle'
+> {
+  const admission = operation.admission;
+  return {
+    container: operation.container,
+    registrationProductHandle: operation.productHandle,
+    registrationAdmissionProductHandle: admission.productHandle,
+    registrationIdentityHandle: operation.identityHandle,
+    registrationSourceAddressHandle: admission.sourceAddressHandle ?? operation.sourceAddressHandle,
+    configurationStepProductHandle: step.productHandle,
+    configurationStepIdentityHandle: step.identityHandle,
+    configurationValueSourceAddressHandle: configurationValueSourceAddressHandleForAdmission(admission),
+    ownerIdentityHandle: operation.identityHandle,
   };
 }
 
 function stateStoreInitialStateType(
   store: KernelStore,
+  publication: KernelPublicationContext,
   typeSystem: TypeSystemProject | null,
   contribution: ConfigurationOptionContribution | null,
   localKey: string,
@@ -306,11 +455,14 @@ function stateStoreInitialStateType(
   if (typeSystem == null || contribution?.value.addressHandle == null) {
     return null;
   }
-  const node = sourceExpressionForSourceAddress(
-    store,
-    contribution.value.addressHandle,
-    (path) => typeSystem.readProgramSourceFileByPath(path),
-  );
+  const sourceSpan = sourceSpanAddressForAddress(publication, contribution.value.addressHandle);
+  const sourceFileAddress = sourceSpan == null ? null : publication.read(sourceSpan.fileHandle);
+  const sourceFile = sourceFileAddress?.kind === 'source-file-address'
+    ? typeSystem.readProgramSourceFileForAddress(sourceFileAddress)
+    : null;
+  const node = sourceFile == null || sourceSpan == null
+    ? null
+    : smallestExpressionForSpan(sourceFile, sourceSpan.start, sourceSpan.end);
   if (node == null) {
     return null;
   }
@@ -319,7 +471,7 @@ function stateStoreInitialStateType(
   if (type == null) {
     return null;
   }
-  return new CheckerTypeProjector(store).ensureProjection({
+  return new CheckerTypeProjector(store, publication).ensureProjection({
     localKey: `${localKey}:initial-state-type`,
     checker,
     type,
@@ -360,10 +512,10 @@ function optionsOrHandlerFor(
   }
 }
 
-function actionHandlerSourceAddressHandles(
+function actionHandlerContributions(
   argument: ReadonlyMap<number, ConfigurationOptionContribution>,
   optionsOrHandler: ReturnType<typeof optionsOrHandlerFor>,
-): readonly AddressHandle[] {
+): readonly ConfigurationOptionContribution[] {
   const handlerStartIndex = optionsOrHandler.handlerStartIndex;
   if (handlerStartIndex == null) {
     return [];
@@ -373,11 +525,87 @@ function actionHandlerSourceAddressHandles(
       index >= handlerStartIndex && contribution.value.valueKind === ConfigurationOptionValueKind.Callback
     )
     .sort(([left], [right]) => left - right)
-    .map(([, contribution]) => contribution.value.addressHandle)
-    .filter((handle): handle is AddressHandle => handle != null);
+    .map(([, contribution]) => contribution);
 }
 
 function argumentIndex(contribution: ConfigurationOptionContribution): number {
   const index = Number.parseInt(contribution.optionPath[1] ?? '', 10);
   return Number.isInteger(index) ? index : 0;
+}
+
+interface StateStoreConfigurationFieldProvenanceEmission {
+  readonly fieldProvenance: StateStoreConfigurationProductSeed['fieldProvenance'];
+  readonly records: readonly ProvenanceRecord[];
+}
+
+function stateStoreConfigurationFieldProvenance(
+  publication: KernelPublicationContext,
+  operation: ContainerRegistrationOperation,
+  step: ConfigurationStep,
+  name: ConfigurationOptionContribution | null,
+  initialState: ConfigurationOptionContribution | null,
+  optionsOrHandler: ConfigurationOptionContribution | null,
+  actionHandlers: readonly ConfigurationOptionContribution[],
+  local: string,
+): StateStoreConfigurationFieldProvenanceEmission {
+  const admission = operation.admission;
+  const containerProvenance = operation.container.productHandle == null
+    ? null
+    : productProvenanceHandle(publication, operation.container.productHandle);
+  const registrationProvenance = productProvenanceHandle(publication, operation.productHandle);
+  const registrationAdmissionProvenance = productProvenanceHandle(publication, admission.productHandle);
+  const stepProvenance = productProvenanceHandle(publication, step.productHandle);
+  const configurationValueProvenance = readFieldProvenance(admission.fieldProvenance, 'registeredValue')
+    ?? productProvenanceHandle(publication, admission.productHandle);
+  const actionHandlerProvenance = aggregateFieldProvenance(
+    'actionHandlers',
+    actionHandlers.flatMap((handler) => {
+      const handle = contributionProvenanceHandle(publication, handler);
+      return handle == null ? [] : [handle];
+    }),
+    publication.handles.provenance(`${local}:field:action-handlers`),
+    (handle) => {
+      const record = publication.read(handle);
+      return record instanceof ProvenanceRecord ? record : null;
+    },
+  );
+  return {
+    fieldProvenance: compactFieldProvenance([
+      fieldProvenance('container', containerProvenance),
+      fieldProvenance('registration', registrationProvenance),
+      fieldProvenance('registrationAdmission', registrationAdmissionProvenance),
+      fieldProvenance('configurationStep', stepProvenance),
+      fieldProvenance('configurationValue', configurationValueProvenance),
+      fieldProvenance('name', contributionProvenanceHandle(publication, name)),
+      fieldProvenance('initialState', contributionProvenanceHandle(publication, initialState)),
+      fieldProvenance('optionsOrHandler', contributionProvenanceHandle(publication, optionsOrHandler)),
+      actionHandlerProvenance.fieldProvenance,
+      fieldProvenance('source', stepProvenance),
+    ]),
+    records: actionHandlerProvenance.records,
+  };
+}
+
+function contributionProvenanceHandle(
+  publication: KernelPublicationContext,
+  contribution: ConfigurationOptionContribution | null,
+): ProvenanceHandle | null {
+  return contribution == null
+    ? null
+    : productProvenanceHandle(publication, contribution.productHandle);
+}
+
+function productProvenanceHandle(
+  publication: KernelPublicationContext,
+  productHandle: ProductHandle,
+): ProvenanceHandle | null {
+  const record = publication.read(productHandle);
+  return record instanceof MaterializedProduct ? record.provenanceHandle : null;
+}
+
+function fieldProvenance(
+  field: StateStoreConfigurationProductSeed['fieldProvenance'][number]['field'],
+  provenanceHandle: StateStoreConfigurationProductSeed['fieldProvenance'][number]['provenanceHandle'] | null,
+) {
+  return provenanceHandle == null ? null : new FieldProvenance(field, provenanceHandle);
 }

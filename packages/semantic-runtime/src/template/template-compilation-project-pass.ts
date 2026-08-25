@@ -1,5 +1,6 @@
 import { performance } from 'node:perf_hooks';
 
+import type { ProjectBootFrame } from '../boot/frames.js';
 import type { AureliaAppWorldEmission } from '../configuration/app-world-composer.js';
 import {
   DEFAULT_SEMANTIC_APP_ANALYSIS_DEPTH,
@@ -18,28 +19,52 @@ import {
   type SemanticRuntimePhaseTiming,
 } from '../telemetry/phase.js';
 import type { RouteConfigContextMaterializationProjectResult } from '../router/route-context-materialization.js';
-import type { RouteableComponentReference } from '../router/model.js';
 import type {
   AddressHandle,
+  IdentityHandle,
   ProductHandle,
 } from '../kernel/handles.js';
-import { addressBelongsToSourceFiles, sourceFileAddressHandlesForFileNames } from '../kernel/source-address.js';
 import {
   CustomElementDefinition,
+  type CustomElementTemplateDefinition,
   CustomElementTemplateKind,
 } from '../resources/custom-element-definition.js';
-import type { FullResourceDefinition } from '../resources/resource-definition.js';
 import type { ResourceDefinitionIndex } from '../resources/resource-definition-index.js';
 import { ResourceDefinitionKind } from '../resources/resource-kind.js';
-import type { KernelStore } from '../kernel/store.js';
+import type { KernelStore, KernelTelemetryReadView } from '../kernel/store.js';
+import { sourceFileAddressHostPath } from '../boot/source-ownership.js';
+import { sourceFileAddressForAddress } from '../kernel/source-address.js';
+import { sourceTextContentRevision } from '../kernel/source-text-revision.js';
+import { SemanticRuntimeAnalysisCurrentnessError } from '../kernel/analysis-currentness.js';
+import {
+  SemanticRuntimeProjectInputReadKind,
+  semanticRuntimeProjectInputFileReadKey,
+} from '../kernel/project-input.js';
+import type { FrameworkSupportCatalogs } from '../framework/framework-support-authority.js';
+import type { GenerationAuthority } from '../kernel/generation-authority.js';
+import type {
+  ComputationChildCarry,
+  ComputationRead,
+  ComputationReadRebaseContext,
+  ComputationReadRebaser,
+  ComputationRun,
+} from '../kernel/computation-lifecycle.js';
 import type { TypeSystemProject } from '../type-system/project.js';
 import { CheckerExpressionTypeWorld } from '../type-system/expression-type-world.js';
+import { CheckerTypeProjector } from '../type-system/checker-projector.js';
 import type { StaticProjectEvaluationResult } from '../evaluation/project-evaluation.js';
+import {
+  DiProviderActivationView,
+  noDiProviderActivationValues,
+} from '../di/provider-activation.js';
 import {
   runtimeBoundControllerValueTableForTemplateResources,
   type RuntimeBoundControllerValueTable,
 } from '../observation/runtime-bound-controller-value.js';
-import type { StateStoreConfiguration } from '../state/model.js';
+import type {
+  ComputedObserverSourceProjectResult,
+} from '../observation/computed-observer-source.js';
+import { StateStoreVisibility } from '../state/state-store-visibility.js';
 import {
   AttributeClassificationMaterializer,
   type AttributeClassificationEmission,
@@ -50,14 +75,17 @@ import {
   type AttributeSyntaxParseEmission,
   type AttributeSyntaxParseRequest,
 } from './attribute-syntax-materializer.js';
+import type { AttributeSyntax } from './attribute-syntax.js';
 import {
-  TemplateCompilerWorldConstructionRequest,
-  TemplateCompilerWorldEmission,
+  TemplateCompilerWorldDerivationRequest,
+  type TemplateCompilerWorldEmission,
   TemplateCompilerWorldMaterializer,
 } from './compiler-world-materializer.js';
 import {
   TemplateCompilerCompileRequest,
+  TemplateCompilerCompileState,
   TemplateCompilerWorldKind,
+  templateCompilerCompileState,
   type TemplateCompilerCompileHost,
   type TemplateCompilerService,
 } from './compiler-world.js';
@@ -109,16 +137,47 @@ import {
 } from './template-runtime-analysis-context.js';
 import {
   directDependencyDefinitions,
-  mergeVisibleResourceScopes,
   visibleResourceForDefinition,
 } from './resource-scope-builder.js';
-import { TemplateAuthoringCompilerWorldMaterializer } from './template-authoring-world.js';
+import {
+  LocalTemplateDefinitionMaterializer,
+  type LocalTemplateDefinitionMaterialization,
+} from './local-template-definition-materializer.js';
+import {
+  TemplateCompilerReadObservation,
+  TemplateCompilerReadView,
+  TemplateCompilerWorldAuthority,
+} from './compiler-read-view.js';
+import {
+  TemplateCompilationCohortKind,
+  TemplateCompilationLocus,
+  type TemplateCompilationCohortProjectPlan,
+  type TemplateCompilationCohortPlan,
+  type TemplateCompilationOwnerPlan,
+  encodeTemplateCompilationKeyParts,
+} from './template-compilation-cohort.js';
+import {
+  TemplateCompilationCohortPlanner,
+  TemplateCompilationCohortPlanningPhase,
+  TemplateCompilationCohortPlanningRequest,
+} from './template-compilation-cohort-planner.js';
 
 /** Front-door template products produced for one compiler-visible custom element definition. */
 export class TemplateResourceCompilationEmission {
+  /** Top-level and secondary AttrSyntax products in compiler publication order. */
+  readonly authoredAttributeSyntaxes: readonly AttributeSyntax[];
+
   constructor(
     /** Store-local key shared by this resource's compiler and runtime phases. */
     readonly localKey: string,
+    /** Top-level authored family retained across recursive local-template compilation. */
+    readonly familyOwnerHandle: IdentityHandle | ProductHandle,
+    /** Root compiler-world product that owns this runtime-analysis cohort. */
+    readonly analysisContextProductHandle: ProductHandle,
+    /** App-root component definition for this cohort; null when authoring/runtime ownership is not proven. */
+    readonly appRootDefinitionProductHandle: ProductHandle | null,
+    /** Compiler world supplied before this definition's compiler-local resources are introduced. */
+    readonly parentCompilerWorld: TemplateCompilerWorldEmission,
     /** Compiler world that supplied resources, syntax handlers, and runtime-shaped compiler services. */
     readonly compilerWorld: TemplateCompilerWorldEmission,
     /** Custom element definition whose authored template was admitted. */
@@ -137,6 +196,69 @@ export class TemplateResourceCompilationEmission {
     readonly bindingCommandLowering: BindingCommandLoweringEmission,
     /** Compiled template handoff: render targets, instruction rows, and visible compiler gaps. */
     readonly compiledTemplate: CompiledTemplateEmission,
+    /** Complete compiler-scope read set observed while producing this front door. */
+    readonly registeredReads: readonly ComputationRead[],
+  ) {
+    this.authoredAttributeSyntaxes = [
+      ...attributeSyntax.syntaxes,
+      ...bindingCommandLowering.attributeSyntaxes,
+    ];
+  }
+
+  /** Retain compiler products while rebasing the generation-bound authorities consumed downstream. */
+  forGeneration(
+    parentCompilerWorld: TemplateCompilerWorldEmission,
+    compilerWorld: TemplateCompilerWorldEmission,
+    definition: CustomElementDefinition,
+    registeredReads: readonly ComputationRead[],
+  ): TemplateResourceCompilationEmission {
+    return new TemplateResourceCompilationEmission(
+      this.localKey,
+      this.familyOwnerHandle,
+      this.analysisContextProductHandle,
+      this.appRootDefinitionProductHandle,
+      parentCompilerWorld,
+      compilerWorld,
+      definition,
+      this.unit,
+      this.html,
+      this.attributeSyntax,
+      this.attributeClassification,
+      this.valueSites,
+      this.bindingCommandLowering,
+      this.compiledTemplate,
+      registeredReads,
+    );
+  }
+}
+
+/** Complete compiler-front-door input for one template occurrence in one compiler cohort. */
+export class TemplateResourceCompilationRequest {
+  constructor(
+    readonly localKey: string,
+    readonly familyOwnerHandle: IdentityHandle | ProductHandle,
+    readonly analysisContextProductHandle: ProductHandle,
+    readonly appRootDefinitionProductHandle: ProductHandle | null,
+    readonly parentCompilerWorld: TemplateCompilerWorldEmission,
+    readonly compilerWorld: TemplateCompilerWorldEmission,
+    readonly definition: CustomElementDefinition,
+    readonly template: CustomElementTemplateDefinition,
+    readonly compilerReads: TemplateCompilerReadView,
+    readonly localElementNames: readonly string[] = [],
+    readonly dependencyIdentityHandles: readonly IdentityHandle[] = [],
+  ) {}
+}
+
+/** Recursive template-family front door rooted at one admitted custom-element template. */
+export class TemplateResourceFamilyCompilationRequest {
+  constructor(
+    readonly localKey: string,
+    readonly familyOwnerHandle: IdentityHandle | ProductHandle,
+    readonly analysisContextProductHandle: ProductHandle,
+    readonly appRootDefinitionProductHandle: ProductHandle | null,
+    readonly compilerWorldAuthority: TemplateCompilerWorldAuthority,
+    readonly definition: CustomElementDefinition,
+    readonly template: CustomElementTemplateDefinition,
   ) {}
 }
 
@@ -148,13 +270,40 @@ export class TemplateResourceRuntimeAnalysisEmission {
     /** Runtime/checker analysis downstream of compiled-template row assembly. */
     readonly runtimeAnalysis: TemplateRuntimeAnalysisEmission,
   ) {}
+
+  /** Preserve runtime/checker products while adopting the current front-door and expression-world authorities. */
+  forGeneration(
+    compilation: TemplateResourceCompilationEmission,
+    expressionWorld: CheckerExpressionTypeWorld,
+  ): TemplateResourceRuntimeAnalysisEmission {
+    return new TemplateResourceRuntimeAnalysisEmission(
+      compilation,
+      this.runtimeAnalysis.forExpressionWorld(expressionWorld),
+    );
+  }
+
+  /** Reuse retained semantic products under current front-door authorities without replaying runtime analysis. */
+  forCarriedGeneration(
+    compilation: TemplateResourceCompilationEmission,
+    expressionWorld: CheckerExpressionTypeWorld,
+  ): TemplateResourceRuntimeAnalysisEmission {
+    return new TemplateResourceRuntimeAnalysisEmission(
+      compilation,
+      this.runtimeAnalysis.forCarriedExpressionWorld(expressionWorld),
+    );
+  }
+
+  /** Preserve the analyzed products while replacing their closed run-bound expression world. */
+  forCommittedGeneration(expressionWorld: CheckerExpressionTypeWorld): TemplateResourceRuntimeAnalysisEmission {
+    return this.forGeneration(this.compilation, expressionWorld);
+  }
 }
 
 export type TemplateCompilationProjectPhaseName =
-  | 'component-compiler-world'
-  | 'authoring-compiler-world'
+  | TemplateCompilationCohortPlanningPhase
   | 'compilation-unit'
   | 'html-parse'
+  | 'local-template-definitions'
   | 'attribute-syntax'
   | 'attribute-classification'
   | 'value-sites'
@@ -172,19 +321,241 @@ export interface TemplateCompilationProjectProfile {
 export interface TemplateCompilationProjectOptions {
   readonly runtimeAnalysisDepth?: SemanticAppAnalysisDepth | `${SemanticAppAnalysisDepth}`;
   readonly evaluation?: StaticProjectEvaluationResult | null;
-  readonly stateStores?: readonly StateStoreConfiguration[];
+  /** Pre-template state visibility authority; omitted only when the standalone compiler has no state project. */
+  readonly stateStoreVisibility?: StateStoreVisibility;
   readonly includeAuthoringTemplates?: boolean;
   readonly authoringTemplateSourceFiles?: readonly string[];
   readonly authoringTemplateLimit?: number | null;
   readonly projectKey?: string;
   readonly telemetry?: SemanticRuntimeTelemetryOptions | null;
+  /** Pre-template computed-source authority available to controller observer setup. */
+  readonly computedObserverSources?: ComputedObserverSourceProjectResult | null;
+}
+
+/** Immutable pre-template plan shared by family compilation and post-template runtime analysis. */
+export class TemplateCompilationProjectPlan {
+  constructor(
+    readonly appWorld: AureliaAppWorldEmission,
+    readonly cohortPlan: TemplateCompilationCohortProjectPlan,
+    /** State registry definitions and DI ownership fixed for this planned compiler generation. */
+    readonly stateStoreVisibility: StateStoreVisibility,
+    readonly authoringTemplateSourceFiles: readonly string[],
+    readonly authoringTemplateLimit: number | null,
+    readonly telemetry: NormalizedSemanticRuntimeTelemetryOptions,
+    readonly profile: TemplateCompilationProjectProfile,
+  ) {}
+}
+
+/** Complete recursive compiler-front-door values before project-wide runtime/checker analysis. */
+export class TemplateCompilationFamilyFrontDoorEmission {
+  readonly cohortKeys: readonly string[];
+  readonly appCompilations: readonly TemplateResourceCompilationEmission[];
+  readonly authoringCompilations: readonly TemplateResourceCompilationEmission[];
+
+  constructor(
+    readonly ownerHandle: IdentityHandle | ProductHandle,
+    cohortKeys: readonly string[],
+    appCompilations: readonly TemplateResourceCompilationEmission[],
+    authoringCompilations: readonly TemplateResourceCompilationEmission[],
+  ) {
+    this.cohortKeys = Object.freeze([...cohortKeys]);
+    this.appCompilations = Object.freeze([...appCompilations]);
+    this.authoringCompilations = Object.freeze([...authoringCompilations]);
+  }
+
+  matches(owner: TemplateCompilationOwnerPlan): boolean {
+    const cohortKeys = owner.cohorts.map((cohort) => cohort.key);
+    return owner.ownerHandle === this.ownerHandle
+      && cohortKeys.length === this.cohortKeys.length
+      && cohortKeys.every((key, index) => key === this.cohortKeys[index]);
+  }
+}
+
+/** Candidate-local bridge from a retained family closure to current compiler-world and read authorities. */
+class TemplateCompilationFamilyCarryRebaser {
+  private readonly worldsByScope = new Map<IdentityHandle, TemplateCompilerWorldEmission>();
+  private readonly containersByIdentity = new Map<IdentityHandle, TemplateCompilerWorldEmission['container']>();
+  private readonly callableBindingsByContainerIdentity = new Map<
+    IdentityHandle,
+    TemplateCompilerWorldEmission['callableBindings']
+  >();
+  private readonly readRebasersByScope = new Map<
+    IdentityHandle,
+    (read: TemplateCompilerReadObservation) => TemplateCompilerReadObservation | null
+  >();
+
+  constructor(
+    private readonly owner: TemplateCompilationOwnerPlan,
+    private readonly previous: TemplateCompilationFamilyFrontDoorEmission,
+    private readonly project: ProjectBootFrame | null,
+  ) {
+    for (const cohort of owner.cohorts) {
+      const world = cohort.parentCompilerWorld;
+      this.containersByIdentity.set(world.container.identityHandle, world.container);
+      this.callableBindingsByContainerIdentity.set(world.container.identityHandle, world.callableBindings);
+      this.worldsByScope.set(world.resourceScope.identityHandle, world);
+    }
+    for (const compilation of [...previous.appCompilations, ...previous.authoringCompilations]) {
+      this.rebaseWorld(compilation.parentCompilerWorld);
+      this.rebaseWorld(compilation.compilerWorld);
+    }
+  }
+
+  readonly rebaseRead = (
+    read: ComputationRead,
+    context: ComputationReadRebaseContext,
+  ): ComputationRead | null | undefined => {
+    const projectInput = this.project?.inputGeneration.rebaseComputationRead(read);
+    if (projectInput !== undefined) {
+      return projectInput;
+    }
+    if (!(read instanceof TemplateCompilerReadObservation)) {
+      return undefined;
+    }
+    const world = this.worldsByScope.get(read.compilerScopeIdentityHandle) ?? null;
+    if (world == null) {
+      return null;
+    }
+    let rebase = this.readRebasersByScope.get(read.compilerScopeIdentityHandle);
+    if (rebase == null) {
+      rebase = TemplateCompilerReadObservation.createRebaser(
+        context,
+        TemplateCompilerWorldAuthority.fixed(world),
+      );
+      this.readRebasersByScope.set(read.compilerScopeIdentityHandle, rebase);
+    }
+    return rebase(read);
+  };
+
+  rebase(carry: ComputationChildCarry): TemplateCompilationFamilyFrontDoorEmission {
+    return new TemplateCompilationFamilyFrontDoorEmission(
+      this.owner.ownerHandle,
+      this.owner.cohorts.map((cohort) => cohort.key),
+      this.previous.appCompilations.map((compilation) => this.rebaseCompilation(compilation, carry)),
+      this.previous.authoringCompilations.map((compilation) => this.rebaseCompilation(compilation, carry)),
+    );
+  }
+
+  private rebaseCompilation(
+    compilation: TemplateResourceCompilationEmission,
+    carry: ComputationChildCarry,
+  ): TemplateResourceCompilationEmission {
+    const parentCompilerWorld = this.rebaseWorld(compilation.parentCompilerWorld);
+    const compilerWorld = this.rebaseWorld(compilation.compilerWorld);
+    if (parentCompilerWorld == null || compilerWorld == null) {
+      throw new Error(`Carried template family ${this.owner.ownerHandle} lost its current compiler-world container.`);
+    }
+    return compilation.forGeneration(
+      parentCompilerWorld,
+      compilerWorld,
+      compilation.definition,
+      compilation.registeredReads.map((read) => carry.readFor(read)),
+    );
+  }
+
+  private rebaseWorld(previous: TemplateCompilerWorldEmission): TemplateCompilerWorldEmission | null {
+    const scopeIdentityHandle = previous.resourceScope.identityHandle;
+    const current = this.worldsByScope.get(scopeIdentityHandle) ?? null;
+    if (current != null) {
+      return current;
+    }
+    const container = this.containersByIdentity.get(previous.container.identityHandle) ?? null;
+    if (container == null) {
+      return null;
+    }
+    const callableBindings = this.callableBindingsByContainerIdentity.get(container.identityHandle) ?? null;
+    if (callableBindings == null) {
+      return null;
+    }
+    const rebased = previous.forContainerGeneration(container, callableBindings);
+    this.worldsByScope.set(scopeIdentityHandle, rebased);
+    return rebased;
+  }
+}
+
+/** Complete recursive compiler-front-door values before project-wide runtime/checker analysis. */
+export class TemplateCompilationFrontDoorEmission {
+  readonly families: readonly TemplateCompilationFamilyFrontDoorEmission[];
+  readonly appCompilations: readonly TemplateResourceCompilationEmission[];
+  readonly authoringCompilations: readonly TemplateResourceCompilationEmission[];
+  private readonly familiesByOwnerHandle: ReadonlyMap<IdentityHandle | ProductHandle, TemplateCompilationFamilyFrontDoorEmission>;
+  private readonly membershipRevision: string;
+
+  constructor(
+    readonly plan: TemplateCompilationProjectPlan,
+    families: readonly TemplateCompilationFamilyFrontDoorEmission[],
+    readonly profile: TemplateCompilationProjectProfile,
+  ) {
+    this.families = Object.freeze([...families]);
+    this.appCompilations = Object.freeze(families.flatMap((family) => family.appCompilations));
+    this.authoringCompilations = Object.freeze(families.flatMap((family) => family.authoringCompilations));
+    this.familiesByOwnerHandle = new Map(families.map((family) => [family.ownerHandle, family]));
+    this.membershipRevision = templateFrontDoorMembershipRevision(families);
+    if (this.familiesByOwnerHandle.size !== families.length) {
+      throw new Error('Template front-door emission contains duplicate family owners.');
+    }
+  }
+
+  familyForOwner(
+    ownerHandle: IdentityHandle | ProductHandle,
+  ): TemplateCompilationFamilyFrontDoorEmission | null {
+    return this.familiesByOwnerHandle.get(ownerHandle) ?? null;
+  }
+
+  hasSameMembershipAs(other: TemplateCompilationFrontDoorEmission): boolean {
+    return this.membershipRevision === other.membershipRevision;
+  }
+}
+
+/** Rebase candidate-owned compiler reads through the current complete front-door compiler scopes. */
+export function templateCompilerReadRebaserForFrontDoor(
+  frontDoor: TemplateCompilationFrontDoorEmission,
+  project: ProjectBootFrame,
+): ComputationReadRebaser {
+  const worldsByScope = new Map(uniqueCompilerWorlds([
+    ...frontDoor.plan.appWorld.compilerWorlds,
+    ...frontDoor.appCompilations.flatMap((compilation) => [
+      compilation.parentCompilerWorld,
+      compilation.compilerWorld,
+    ]),
+    ...frontDoor.authoringCompilations.flatMap((compilation) => [
+      compilation.parentCompilerWorld,
+      compilation.compilerWorld,
+    ]),
+  ]).map((world) => [world.resourceScope.identityHandle, world]));
+  const rebasers = new Map<
+    IdentityHandle,
+    (read: TemplateCompilerReadObservation) => TemplateCompilerReadObservation | null
+  >();
+  return (read, context) => {
+    const projectInput = project.inputGeneration.rebaseComputationRead(read);
+    if (projectInput !== undefined) {
+      return projectInput;
+    }
+    if (!(read instanceof TemplateCompilerReadObservation)) {
+      return undefined;
+    }
+    const world = worldsByScope.get(read.compilerScopeIdentityHandle) ?? null;
+    if (world == null) {
+      return null;
+    }
+    let rebase = rebasers.get(read.compilerScopeIdentityHandle);
+    if (rebase == null) {
+      rebase = TemplateCompilerReadObservation.createRebaser(
+        context,
+        TemplateCompilerWorldAuthority.fixed(world),
+      );
+      rebasers.set(read.compilerScopeIdentityHandle, rebase);
+    }
+    return rebase(read);
+  };
 }
 
 class TemplateCompilationPhaseRecorder {
   readonly phases: TemplateCompilationProjectPhaseTiming[] = [];
 
   constructor(
-    private readonly store: KernelStore,
+    private readonly kernel: KernelTelemetryReadView,
     readonly telemetry: NormalizedSemanticRuntimeTelemetryOptions,
   ) {}
 
@@ -192,34 +563,60 @@ class TemplateCompilationPhaseRecorder {
     name: TemplateCompilationProjectPhaseName,
     read: () => TValue,
   ): TValue {
-    return measureSemanticRuntimePhase(this.phases, name, this.store, this.telemetry, read);
+    return measureSemanticRuntimePhase(this.phases, name, this.kernel, this.telemetry, read);
   }
 }
 
 /** Template compilation-front-door result for one app-world composition. */
 export class TemplateCompilationProjectEmission {
+  get appWorld(): AureliaAppWorldEmission {
+    return this.frontDoor.plan.appWorld;
+  }
+
+  get cohortPlan(): TemplateCompilationCohortProjectPlan {
+    return this.frontDoor.plan.cohortPlan;
+  }
+
+  get authoringTemplateSourceFiles(): readonly string[] {
+    return this.frontDoor.plan.authoringTemplateSourceFiles;
+  }
+
+  get authoringTemplateLimit(): number | null {
+    return this.frontDoor.plan.authoringTemplateLimit;
+  }
+
   get compilerWorlds(): readonly TemplateCompilerWorldEmission[] {
     return uniqueCompilerWorlds([
-      ...this.appWorld.compilerWorlds,
+      ...this.cohortPlan.appRootCompilerWorlds,
       ...this.resources.map((resource) => resource.compilation.compilerWorld),
       ...this.authoringResources.map((resource) => resource.compilation.compilerWorld),
     ]);
   }
 
   constructor(
-    /** App-world composition that supplied compiler worlds. */
-    readonly appWorld: AureliaAppWorldEmission,
+    /** Plan plus complete recursive compiler-front-door values consumed by runtime/checker analysis. */
+    readonly frontDoor: TemplateCompilationFrontDoorEmission,
     /** App/runtime visible template compilation plus runtime/checker analysis emissions. */
     readonly resources: readonly TemplateResourceRuntimeAnalysisEmission[],
     /** Opt-in standalone resource-library template emissions for authoring/LSP inquiries. */
     readonly authoringResources: readonly TemplateResourceRuntimeAnalysisEmission[],
-    /** Source files selected for standalone authoring compilation; empty means project-wide selection. */
-    readonly authoringTemplateSourceFiles: readonly string[],
-    /** Maximum standalone authoring templates requested for this emission; null means unbounded. */
-    readonly authoringTemplateLimit: number | null,
+    /** Checker-expression generation shared by every resource and app-level follow-up in this project emission. */
+    readonly expressionWorld: CheckerExpressionTypeWorld,
     /** Nested timing profile for template front-door and runtime-analysis pressure. */
     readonly profile: TemplateCompilationProjectProfile,
   ) {}
+
+  /** Replace a run-bound expression world with a fresh store-backed world after this generation commits. */
+  forCommittedGeneration(authority: GenerationAuthority): TemplateCompilationProjectEmission {
+    const expressionWorld = this.expressionWorld.forCommittedGeneration(authority);
+    return new TemplateCompilationProjectEmission(
+      this.frontDoor,
+      this.resources.map((resource) => resource.forCommittedGeneration(expressionWorld)),
+      this.authoringResources.map((resource) => resource.forCommittedGeneration(expressionWorld)),
+      expressionWorld,
+      this.profile,
+    );
+  }
 }
 
 /**
@@ -233,9 +630,10 @@ export class TemplateCompilationProjectEmission {
  */
 export class TemplateCompilationProjectPass {
   private readonly compilerWorldMaterializer: TemplateCompilerWorldMaterializer;
-  private readonly authoringCompilerWorldMaterializer: TemplateAuthoringCompilerWorldMaterializer;
+  private readonly cohortPlanner: TemplateCompilationCohortPlanner;
   private readonly unitMaterializer: TemplateCompilationUnitMaterializer;
   private readonly htmlParser: HtmlParseMaterializer;
+  private readonly localTemplateDefinitions: LocalTemplateDefinitionMaterializer;
   private readonly attributeSyntax: AttributeSyntaxMaterializer;
   private readonly attributeClassification: AttributeClassificationMaterializer;
   private readonly valueSites: TemplateValueSiteMaterializer;
@@ -246,17 +644,22 @@ export class TemplateCompilationProjectPass {
   constructor(
     /** Hot analysis store shared by child materializers. */
     readonly store: KernelStore,
+    /** Publication context shared by the compiler-front-door phases. */
+    readonly publication: ComputationRun,
+    /** Stable framework support borrowed by standalone authoring compiler worlds. */
+    readonly support: FrameworkSupportCatalogs,
   ) {
-    this.compilerWorldMaterializer = new TemplateCompilerWorldMaterializer(store);
-    this.authoringCompilerWorldMaterializer = new TemplateAuthoringCompilerWorldMaterializer(store);
-    this.unitMaterializer = new TemplateCompilationUnitMaterializer(store);
-    this.htmlParser = new HtmlParseMaterializer(store);
-    this.attributeSyntax = new AttributeSyntaxMaterializer(store);
-    this.attributeClassification = new AttributeClassificationMaterializer(store);
-    this.valueSites = new TemplateValueSiteMaterializer(store);
-    this.bindingCommandLowering = new BindingCommandLoweringMaterializer(store);
-    this.compiledTemplate = new CompiledTemplateMaterializer(store);
-    this.runtimeAnalysis = new TemplateRuntimeAnalysisMaterializer(store);
+    this.compilerWorldMaterializer = new TemplateCompilerWorldMaterializer(publication);
+    this.cohortPlanner = new TemplateCompilationCohortPlanner(store, publication, support);
+    this.unitMaterializer = new TemplateCompilationUnitMaterializer(publication);
+    this.htmlParser = new HtmlParseMaterializer(publication);
+    this.localTemplateDefinitions = new LocalTemplateDefinitionMaterializer(publication);
+    this.attributeSyntax = new AttributeSyntaxMaterializer(publication);
+    this.attributeClassification = new AttributeClassificationMaterializer(publication);
+    this.valueSites = new TemplateValueSiteMaterializer(publication);
+    this.bindingCommandLowering = new BindingCommandLoweringMaterializer(publication);
+    this.compiledTemplate = new CompiledTemplateMaterializer(publication);
+    this.runtimeAnalysis = new TemplateRuntimeAnalysisMaterializer(store, publication);
   }
 
   compile(
@@ -266,298 +669,654 @@ export class TemplateCompilationProjectPass {
     routeContexts: RouteConfigContextMaterializationProjectResult | null = null,
     options: TemplateCompilationProjectOptions = {},
   ): TemplateCompilationProjectEmission {
+    const plan = this.plan(appWorld, typeSystem, resourceDefinitions, routeContexts, options);
+    const frontDoor = this.compileFrontDoors(plan);
+    return this.analyzeFrontDoors(frontDoor, typeSystem, resourceDefinitions, options);
+  }
+
+  /** Plan the complete stable owner/cohort set before entering any authored family child. */
+  plan(
+    appWorld: AureliaAppWorldEmission,
+    typeSystem: TypeSystemProject | null = null,
+    resourceDefinitions: ResourceDefinitionIndex | null = null,
+    routeContexts: RouteConfigContextMaterializationProjectResult | null = null,
+    options: TemplateCompilationProjectOptions = {},
+  ): TemplateCompilationProjectPlan {
     const started = performance.now();
-    const phaseRecorder = new TemplateCompilationPhaseRecorder(
-      this.store,
-      normalizeSemanticRuntimeTelemetryOptions(
-        options.telemetry,
-        DEFAULT_SEMANTIC_RUNTIME_INQUIRY_PROFILE,
-      ),
+    const telemetry = normalizeSemanticRuntimeTelemetryOptions(
+      options.telemetry,
+      DEFAULT_SEMANTIC_RUNTIME_INQUIRY_PROFILE,
     );
-    const runtimeAnalysisDepth = options.runtimeAnalysisDepth ?? DEFAULT_SEMANTIC_APP_ANALYSIS_DEPTH;
+    const phases = new TemplateCompilationPhaseRecorder(this.publication, telemetry);
     const authoringTemplateLimit = normalizedAuthoringTemplateLimit(options.authoringTemplateLimit);
     const authoringTemplateSourceFiles = normalizedAuthoringTemplateSourceFiles(options.authoringTemplateSourceFiles);
-    const appCompilations = this.compileAppWorldResources(
+    const projectKey = options.projectKey ?? 'project';
+    const cohortPlan = this.cohortPlanner.plan(new TemplateCompilationCohortPlanningRequest(
+      projectKey,
       appWorld,
       typeSystem,
       resourceDefinitions,
       routeContexts,
-      phaseRecorder,
+      options.includeAuthoringTemplates === true,
+      authoringTemplateSourceFiles,
+      authoringTemplateLimit,
+      phases,
+    ));
+    return new TemplateCompilationProjectPlan(
+      appWorld,
+      cohortPlan,
+      options.stateStoreVisibility ?? StateStoreVisibility.empty(),
+      authoringTemplateSourceFiles,
+      authoringTemplateLimit,
+      telemetry,
+      templateCompilationProfile(started, phases.phases),
     );
-    const authoringCompilations = options.includeAuthoringTemplates === true
-      ? this.compileAuthoringResources(
-        options.projectKey ?? 'project',
-        resourceDefinitions,
-        typeSystem,
-        appCompilations,
-        authoringTemplateSourceFiles,
-        authoringTemplateLimit,
-        phaseRecorder,
-      )
-      : [];
-    const projectContext = templateRuntimeAnalysisProjectContext([
-      ...appCompilations,
-      ...authoringCompilations,
-    ]);
+  }
+
+  /** Compile every recursive family under its existing stable child locus. */
+  compileFrontDoors(
+    plan: TemplateCompilationProjectPlan,
+    project: ProjectBootFrame | null = null,
+    previous: TemplateCompilationFrontDoorEmission | null = null,
+  ): TemplateCompilationFrontDoorEmission {
+    const started = performance.now();
+    const phases = new TemplateCompilationPhaseRecorder(this.publication, plan.telemetry);
+    const families = this.activatePlannedFamilies(
+      plan.cohortPlan,
+      phases,
+      project,
+      previous,
+    );
+    return new TemplateCompilationFrontDoorEmission(
+      plan,
+      families,
+      mergeTemplateCompilationProfiles(plan.profile, templateCompilationProfile(started, phases.phases)),
+    );
+  }
+
+  /** Materialize the shared runtime/checker graph from already compiled family front doors. */
+  analyzeFrontDoors(
+    frontDoor: TemplateCompilationFrontDoorEmission,
+    typeSystem: TypeSystemProject | null = null,
+    resourceDefinitions: ResourceDefinitionIndex | null = null,
+    options: TemplateCompilationProjectOptions = {},
+  ): TemplateCompilationProjectEmission {
+    const started = performance.now();
+    const evaluation = options.evaluation?.forkSession() ?? null;
+    const sourceValueActivationView = evaluation == null || typeSystem == null
+      ? null
+      : new DiProviderActivationView(
+          this.publication,
+          evaluation,
+          typeSystem,
+          frontDoor.plan.appWorld.configuration,
+          frontDoor.plan.appWorld.diWorld,
+          noDiProviderActivationValues,
+        );
+    const phaseRecorder = new TemplateCompilationPhaseRecorder(this.publication, frontDoor.plan.telemetry);
+    const runtimeAnalysisDepth = options.runtimeAnalysisDepth ?? DEFAULT_SEMANTIC_APP_ANALYSIS_DEPTH;
+    const stateStoreVisibility = frontDoor.plan.stateStoreVisibility
+      .withContainers(templateCompilerWorldContainers(frontDoor));
     const expressionWorld = new CheckerExpressionTypeWorld(
       this.store,
+      new CheckerTypeProjector(this.store, this.publication),
       undefined,
-      undefined,
-      options.stateStores ?? [],
+      stateStoreVisibility,
     );
     const resources = this.analyzeCompiledResources(
-      appCompilations,
-      projectContext,
+      frontDoor.appCompilations,
       options.projectKey ?? null,
-      options.evaluation ?? null,
+      evaluation,
       typeSystem,
+      sourceValueActivationView,
       resourceDefinitions,
+      options.computedObserverSources ?? null,
       runtimeAnalysisDepth,
       expressionWorld,
       phaseRecorder,
     );
     const authoringResources = this.analyzeCompiledResources(
-      authoringCompilations,
-      projectContext,
+      frontDoor.authoringCompilations,
       options.projectKey ?? null,
-      options.evaluation ?? null,
+      evaluation,
       typeSystem,
+      sourceValueActivationView,
       resourceDefinitions,
+      options.computedObserverSources ?? null,
       runtimeAnalysisDepth,
       expressionWorld,
       phaseRecorder,
     );
 
-    const profile: TemplateCompilationProjectProfile = {
-      totalMilliseconds: performance.now() - started,
-      phases: phaseRecorder.phases,
-    };
-
     return new TemplateCompilationProjectEmission(
-      appWorld,
+      frontDoor,
       resources,
       authoringResources,
-      authoringTemplateSourceFiles,
-      authoringTemplateLimit,
-      profile,
+      expressionWorld,
+      mergeTemplateCompilationProfiles(
+        frontDoor.profile,
+        templateCompilationProfile(started, phaseRecorder.phases),
+      ),
     );
   }
 
-  private compileAppWorldResources(
-    appWorld: AureliaAppWorldEmission,
-    typeSystem: TypeSystemProject | null,
-    resourceDefinitions: ResourceDefinitionIndex | null,
-    routeContexts: RouteConfigContextMaterializationProjectResult | null,
-    phases: TemplateCompilationPhaseRecorder,
-  ): readonly TemplateResourceCompilationEmission[] {
-    const appCompilations: TemplateResourceCompilationEmission[] = [];
-
-    appWorld.compilerWorlds.forEach((compilerWorld, worldIndex) => {
-      const tasks = [
-        ...initialCompilationTasks(compilerWorld),
-        ...routeableCompilationTasks(compilerWorld, routeContexts, resourceDefinitions),
-      ];
-      const seen = new Set<string>();
-
-      for (let resourceIndex = 0; resourceIndex < tasks.length; resourceIndex += 1) {
-        const task = tasks[resourceIndex]!;
-        const definition = task.visibleResource.definition;
-        if (!(definition instanceof CustomElementDefinition)) {
-          continue;
-        }
-        const compilationKey = templateResourceCompilationKey(definition);
-        if (seen.has(compilationKey)) {
-          continue;
-        }
-        seen.add(compilationKey);
-
-        const localKey = templateResourceCompilationLocalKey(worldIndex, resourceIndex, definition);
-        const compilationWorld = phases.measure(
-          'component-compiler-world',
-          () => this.compilerWorldForDefinition(
-            task.compilerWorld,
-            definition,
-            localKey,
-            resourceDefinitions,
-          ),
-        );
-        const result = compilationWorld.templateCompiler.compile(
-          new TemplateCompilerCompileRequest(localKey, definition),
-          new ProjectTemplateCompilerHost(this, compilationWorld, typeSystem, phases),
-        );
-        if (result.output != null) {
-          appCompilations.push(result.output);
-        }
-
-        for (const dependency of directDependencyDefinitions(definition, resourceDefinitions)) {
-          const visibleResource = visibleResourceForDefinition(
-            dependency,
-            TemplateResourceVisibilityKind.Local,
-            dependency.sourceAddressHandle ?? definition.sourceAddressHandle,
-          );
-          if (visibleResource == null) {
-            continue;
-          }
-          tasks.push(new TemplateCompilationTask(compilationWorld, visibleResource));
-        }
-      }
-    });
-    return appCompilations;
-  }
-
-  private compileAuthoringResources(
-    projectKey: string,
-    resourceDefinitions: ResourceDefinitionIndex | null,
-    typeSystem: TypeSystemProject | null,
-    appCompilations: readonly TemplateResourceCompilationEmission[],
-    authoringTemplateSourceFiles: readonly string[],
-    authoringTemplateLimit: number | null,
-    phases: TemplateCompilationPhaseRecorder,
-  ): readonly TemplateResourceCompilationEmission[] {
-    if (resourceDefinitions == null || authoringTemplateLimit === 0) {
-      return [];
+  /** Rebind one lifecycle-carried runtime-analysis graph to the current equivalent front door. */
+  rebaseAnalyzedFrontDoors(
+    frontDoor: TemplateCompilationFrontDoorEmission,
+    previous: TemplateCompilationProjectEmission,
+    options: TemplateCompilationProjectOptions = {},
+  ): TemplateCompilationProjectEmission | null {
+    const runtimeAnalysisDepth = options.runtimeAnalysisDepth ?? DEFAULT_SEMANTIC_APP_ANALYSIS_DEPTH;
+    if (
+      !frontDoor.hasSameMembershipAs(previous.frontDoor)
+      || [...previous.resources, ...previous.authoringResources].some(
+        (resource) => resource.runtimeAnalysis.analysisDepth !== runtimeAnalysisDepth,
+      )
+    ) {
+      return null;
     }
-    const definitions = resourceDefinitions.entries.map((entry) => entry.definition);
-    const selectedDefinitions = selectAuthoringTemplateDefinitions(
+    const stateStoreVisibility = frontDoor.plan.stateStoreVisibility
+      .withContainers(templateCompilerWorldContainers(frontDoor));
+    const expressionWorld = new CheckerExpressionTypeWorld(
       this.store,
-      definitions,
-      appCompilations,
-      authoringTemplateSourceFiles,
-      authoringTemplateLimit,
+      new CheckerTypeProjector(this.store, this.publication),
+      undefined,
+      stateStoreVisibility,
     );
-    if (selectedDefinitions.length === 0) {
-      return [];
-    }
-    const compilerWorld = phases.measure(
-      'authoring-compiler-world',
-      () => this.authoringCompilerWorldMaterializer.construct({
-        projectKey,
-        resourceDefinitions: definitions,
-        typeSystem,
-      }),
+    const resources = rebaseRuntimeAnalysisResources(
+      frontDoor.appCompilations,
+      previous.resources,
+      expressionWorld,
     );
-    if (compilerWorld == null) {
-      return [];
+    const authoringResources = rebaseRuntimeAnalysisResources(
+      frontDoor.authoringCompilations,
+      previous.authoringResources,
+      expressionWorld,
+    );
+    if (resources == null || authoringResources == null) {
+      return null;
     }
-    const compilations: TemplateResourceCompilationEmission[] = [];
-    let resourceIndex = 0;
-    for (const definition of selectedDefinitions) {
-      const localKey = templateResourceAuthoringCompilationLocalKey(resourceIndex, definition);
-      const result = compilerWorld.templateCompiler.compile(
-        new TemplateCompilerCompileRequest(localKey, definition),
-        new ProjectTemplateCompilerHost(this, compilerWorld, typeSystem, phases),
-      );
-      if (result.output != null) {
-        compilations.push(result.output);
+    return new TemplateCompilationProjectEmission(
+      frontDoor,
+      resources,
+      authoringResources,
+      expressionWorld,
+      frontDoor.profile,
+    );
+  }
+
+  /** Activate the flat family layer in plan order: carry an exact prior closure or compile that owner afresh. */
+  private activatePlannedFamilies(
+    plan: TemplateCompilationCohortProjectPlan,
+    phases: TemplateCompilationPhaseRecorder,
+    project: ProjectBootFrame | null,
+    previous: TemplateCompilationFrontDoorEmission | null,
+  ): readonly TemplateCompilationFamilyFrontDoorEmission[] {
+    const families: TemplateCompilationFamilyFrontDoorEmission[] = [];
+    for (const owner of plan.ownerPlans) {
+      if (
+        owner.cohorts.length === 0
+        || templateCompilerCompileState(owner.definition) !== TemplateCompilerCompileState.Compiled
+      ) {
+        continue;
       }
-      resourceIndex++;
+      const locus = new TemplateCompilationLocus(plan.projectKey, owner.ownerHandle);
+      const previousFamily = previous?.familyForOwner(owner.ownerHandle) ?? null;
+      const familyRebaser = previousFamily == null
+        ? null
+        : new TemplateCompilationFamilyCarryRebaser(owner, previousFamily, project);
+      if (previousFamily?.matches(owner) === true && familyRebaser != null) {
+        const carry = this.publication.tryCarryChild(locus, familyRebaser.rebaseRead);
+        if (carry != null) {
+          families.push(familyRebaser.rebase(carry));
+          continue;
+        }
+      }
+      const app: TemplateResourceCompilationEmission[] = [];
+      const authoring: TemplateResourceCompilationEmission[] = [];
+      this.publication.withChild(locus, () => {
+        const compileOwner = (): void => {
+          if (project != null) {
+            this.requireCurrentTemplateSource(project, owner);
+          }
+          for (const cohort of owner.cohorts) {
+            const localKey = templateResourceCompilationLocalKey(plan.projectKey, owner, cohort);
+            const result = cohort.parentCompilerWorld.templateCompiler.compile(
+              new TemplateCompilerCompileRequest(localKey, owner.definition),
+              new ProjectTemplateCompilerHost(
+                this,
+                owner.ownerHandle,
+                TemplateCompilerWorldAuthority.fixed(cohort.parentCompilerWorld),
+                cohort.analysisContextProductHandle,
+                cohort.appRootDefinitionProductHandle,
+                phases,
+              ),
+            );
+            if (result.output != null) {
+              const target = cohort.kind === TemplateCompilationCohortKind.App ? app : authoring;
+              target.push(...result.output);
+            }
+          }
+        };
+        if (project == null) {
+          compileOwner();
+          return;
+        }
+        const inputReads = project.inputGeneration.createReadScope(
+          `template-family:${encodeTemplateCompilationKeyParts([plan.projectKey, owner.ownerHandle])}`,
+        );
+        project.inputGeneration.withReadScope(inputReads, compileOwner);
+        for (const read of inputReads.readRegisteredInputs()) {
+          this.publication.observe(read);
+        }
+      });
+      families.push(new TemplateCompilationFamilyFrontDoorEmission(
+        owner.ownerHandle,
+        owner.cohorts.map((cohort) => cohort.key),
+        app,
+        authoring,
+      ));
     }
-    return compilations;
+    return families;
+  }
+
+  private requireCurrentTemplateSource(
+    project: ProjectBootFrame,
+    owner: TemplateCompilationOwnerPlan,
+  ): void {
+    const template = owner.definition.template;
+    const sourceAddressHandle = template?.addressHandle ?? null;
+    if (template == null) {
+      throw new Error(`Template owner ${owner.definition.name} has no template definition.`);
+    }
+    if (sourceAddressHandle == null) {
+      if (template.kind === CustomElementTemplateKind.Open) {
+        return;
+      }
+      throw new Error(
+        `Template owner ${owner.definition.name} has no exact authored source revision `
+        + `(kind=${template?.kind ?? 'absent'}, address=${sourceAddressHandle ?? 'absent'}, `
+        + `contributions=${owner.definition.contributions.map((entry) => entry.contributionKind).join(',') || 'none'}).`,
+      );
+    }
+    const sourceFile = sourceFileAddressForAddress(this.publication, sourceAddressHandle);
+    if (sourceFile == null) {
+      throw new Error(`Template owner ${owner.definition.name} has no authored source-file address.`);
+    }
+    const sourceHostPath = sourceFileAddressHostPath(project.workspaceRootDir, sourceFile);
+    if (template.authoredSourceRevision == null) {
+      if (!project.inputGeneration.host.fileExists(sourceHostPath)) {
+        return;
+      }
+      if (project.inputGeneration.host.readFile(sourceHostPath) == null) {
+        throw new SemanticRuntimeAnalysisCurrentnessError({
+          message: `Template source ${sourceHostPath} exists but its text is unavailable.`,
+          reason: 'computation-inputs-changed',
+          changedReadKeys: [semanticRuntimeProjectInputFileReadKey(
+            SemanticRuntimeProjectInputReadKind.FileExistence,
+            sourceHostPath,
+          )],
+          changedFacets: ['file-existence'],
+        });
+      }
+      throw new SemanticRuntimeAnalysisCurrentnessError({
+        message: `Template source ${sourceFile.path} became available after an open definition was admitted.`,
+        reason: 'computation-inputs-changed',
+        changedReadKeys: [semanticRuntimeProjectInputFileReadKey(
+          SemanticRuntimeProjectInputReadKind.FileExistence,
+          sourceHostPath,
+        )],
+        changedFacets: ['file-existence'],
+      });
+    }
+    if (!project.inputGeneration.host.fileExists(sourceHostPath)) {
+      throw new SemanticRuntimeAnalysisCurrentnessError({
+        message: `Template source ${sourceFile.path} is absent from its exact authored source path.`,
+        reason: 'computation-inputs-changed',
+        changedReadKeys: [semanticRuntimeProjectInputFileReadKey(
+        SemanticRuntimeProjectInputReadKind.FileExistence,
+          sourceHostPath,
+        )],
+        changedFacets: ['file-existence'],
+      });
+    }
+    const sourceText = project.inputGeneration.host.readFile(sourceHostPath);
+    if (sourceText == null) {
+      throw new SemanticRuntimeAnalysisCurrentnessError({
+        message: `Template source ${sourceHostPath} exists but its text is unavailable.`,
+        reason: 'computation-inputs-changed',
+        changedReadKeys: [semanticRuntimeProjectInputFileReadKey(
+          SemanticRuntimeProjectInputReadKind.FileContent,
+          sourceHostPath,
+        )],
+        changedFacets: ['file-content'],
+      });
+    }
+    if (sourceTextContentRevision(sourceText) !== template.authoredSourceRevision) {
+      throw new SemanticRuntimeAnalysisCurrentnessError({
+        message: `Template source ${sourceFile.path} changed after its definition was admitted.`,
+        reason: 'computation-inputs-changed',
+        changedReadKeys: [semanticRuntimeProjectInputFileReadKey(
+          SemanticRuntimeProjectInputReadKind.FileContent,
+          sourceHostPath,
+        )],
+        changedFacets: ['file-content'],
+      });
+    }
   }
 
   private analyzeCompiledResources(
     compilations: readonly TemplateResourceCompilationEmission[],
-    projectContext: TemplateRuntimeAnalysisProjectContext,
     projectKey: string | null,
     evaluation: StaticProjectEvaluationResult | null,
     typeSystem: TypeSystemProject | null,
+    sourceValueActivationView: DiProviderActivationView | null,
     resourceDefinitions: ResourceDefinitionIndex | null,
+    computedObserverSources: ComputedObserverSourceProjectResult | null,
     runtimeAnalysisDepth: SemanticAppAnalysisDepth | `${SemanticAppAnalysisDepth}`,
     expressionWorld: CheckerExpressionTypeWorld,
     phases: TemplateCompilationPhaseRecorder,
   ): readonly TemplateResourceRuntimeAnalysisEmission[] {
     const resources: TemplateResourceRuntimeAnalysisEmission[] = [];
-    for (const group of runtimeAnalysisScheduleGroups(compilations, resourceDefinitions)) {
-      const boundControllerValues = runtimeBoundControllerValueTableForTemplateResources(this.store, resources);
-      const groupResources = group.map((compilation) =>
-        new TemplateResourceRuntimeAnalysisEmission(
-          compilation,
-          phases.measure(
-            'runtime-analysis',
-            () => this.analyzeResource(
-              compilation,
-              projectContext,
-              projectKey,
-              evaluation,
-              typeSystem,
-              resourceDefinitions,
-              runtimeAnalysisDepth,
-              expressionWorld,
-              phases.telemetry,
-              boundControllerValues,
+    for (const cohort of runtimeAnalysisCohorts(compilations)) {
+      const projectContext = templateRuntimeAnalysisProjectContext(this.publication, cohort);
+      // Current definition details own both scheduling and analysis. The project context spends every exact compiler
+      // product at this boundary and serves the same registered resource to recursive runtime consumers.
+      const currentCohort = cohort.map((compilation) => projectContext.requireCompilation(compilation));
+      const cohortResources: TemplateResourceRuntimeAnalysisEmission[] = [];
+      for (const group of runtimeAnalysisScheduleGroups(currentCohort, resourceDefinitions)) {
+        const boundControllerValues = runtimeBoundControllerValueTableForTemplateResources(
+          cohortResources,
+        );
+        const groupResources = group.map((compilation) =>
+          new TemplateResourceRuntimeAnalysisEmission(
+            compilation,
+            phases.measure(
+              'runtime-analysis',
+              () => this.analyzeResource(
+                compilation,
+                projectContext,
+                projectKey,
+                evaluation,
+                typeSystem,
+                sourceValueActivationView,
+                resourceDefinitions,
+                computedObserverSources,
+                runtimeAnalysisDepth,
+                expressionWorld,
+                phases.telemetry,
+                boundControllerValues,
+              ),
             ),
-          ),
-        )
-      );
-      resources.push(...groupResources);
+          )
+        );
+        cohortResources.push(...groupResources);
+      }
+      resources.push(...cohortResources);
     }
     return resources;
   }
 
-  private compilerWorldForDefinition(
-    parentCompilerWorld: TemplateCompilerWorldEmission,
-    definition: CustomElementDefinition,
+  private compilerWorldForLocalDefinitions(
+    parentCompilerWorldAuthority: TemplateCompilerWorldAuthority,
+    materialization: LocalTemplateDefinitionMaterialization,
     localKey: string,
-    resourceDefinitions: ResourceDefinitionIndex | null,
-  ): TemplateCompilerWorldEmission {
-    const localDependencies = directDependencyDefinitions(definition, resourceDefinitions)
-      .map((dependency) =>
+    sourceAddressHandle: AddressHandle | null,
+  ): TemplateCompilerWorldSelection {
+    const localResources = materialization.definitions
+      .map((definition) =>
         visibleResourceForDefinition(
-          dependency,
+          definition,
           TemplateResourceVisibilityKind.Local,
-          dependency.sourceAddressHandle ?? definition.sourceAddressHandle,
+          definition.sourceAddressHandle ?? sourceAddressHandle,
         )
       )
       .filter((resource): resource is TemplateVisibleResource => resource != null);
-
-    if (localDependencies.length === 0) {
-      return parentCompilerWorld;
-    }
-
-    const resources = mergeVisibleResourceScopes(
-      localDependencies,
-      parentCompilerWorld.resourceScope.resources,
+    const parentCompilerWorld = parentCompilerWorldAuthority.current();
+    const compilerWorld = this.compilerWorldWithPreferredResources(
+      parentCompilerWorld,
+      localResources,
+      `${localKey}:local-template-world`,
+      sourceAddressHandle,
     );
-    if (sameResourceScope(resources, parentCompilerWorld.resourceScope.resources)) {
-      return parentCompilerWorld;
+    if (compilerWorld === parentCompilerWorld) {
+      return new TemplateCompilerWorldSelection(parentCompilerWorld, parentCompilerWorldAuthority);
     }
-
-    return this.compilerWorldMaterializer.construct(new TemplateCompilerWorldConstructionRequest(
-      `${localKey}:component-world`,
-      TemplateCompilerWorldKind.Component,
-      parentCompilerWorld.container,
-      null,
-      resources,
-      parentCompilerWorld.attributePatterns,
-      parentCompilerWorld.bindingCommands,
-      parentCompilerWorld.runtimeRenderers,
-      TemplateResourceVisibilityKind.Configured,
-      definition.sourceAddressHandle,
-      parentCompilerWorld.attributeMapper.configuration,
-      parentCompilerWorld.nodeObserverLocatorConfiguration,
-    ));
+    return new TemplateCompilerWorldSelection(
+      compilerWorld,
+      new TemplateCompilerWorldAuthority(
+        `template-compiler-world:${localKey}:local-template-world`,
+        () => this.projectCompilerWorldWithPreferredResources(
+          parentCompilerWorldAuthority.current(),
+          localResources,
+          `${localKey}:local-template-world`,
+          sourceAddressHandle,
+        ),
+      ),
+    );
   }
 
-  compileResource(
-    compilerWorld: TemplateCompilerWorldEmission,
-    definition: CustomElementDefinition,
+  private compilerWorldWithPreferredResources(
+    parentCompilerWorld: TemplateCompilerWorldEmission,
+    preferredResources: readonly TemplateVisibleResource[],
     localKey: string,
-    typeSystem: TypeSystemProject | null,
+    sourceAddressHandle: AddressHandle | null,
+  ): TemplateCompilerWorldEmission {
+    const request = this.compilerWorldDerivationRequest(
+      parentCompilerWorld,
+      preferredResources,
+      localKey,
+      sourceAddressHandle,
+    );
+    return this.compilerWorldMaterializer.constructDerived(request);
+  }
+
+  private projectCompilerWorldWithPreferredResources(
+    parentCompilerWorld: TemplateCompilerWorldEmission,
+    preferredResources: readonly TemplateVisibleResource[],
+    localKey: string,
+    sourceAddressHandle: AddressHandle | null,
+  ): TemplateCompilerWorldEmission {
+    const request = this.compilerWorldDerivationRequest(
+      parentCompilerWorld,
+      preferredResources,
+      localKey,
+      sourceAddressHandle,
+    );
+    return this.compilerWorldMaterializer.projectDerived(request);
+  }
+
+  private compilerWorldDerivationRequest(
+    parentCompilerWorld: TemplateCompilerWorldEmission,
+    preferredResources: readonly TemplateVisibleResource[],
+    localKey: string,
+    sourceAddressHandle: AddressHandle | null,
+  ): TemplateCompilerWorldDerivationRequest {
+    return new TemplateCompilerWorldDerivationRequest(
+      localKey,
+      TemplateCompilerWorldKind.Component,
+      parentCompilerWorld,
+      preferredResources,
+      TemplateResourceVisibilityKind.Configured,
+      sourceAddressHandle,
+    );
+  }
+
+  compileResourceTree(
+    compilerWorldAuthority: TemplateCompilerWorldAuthority,
+    familyOwnerHandle: IdentityHandle | ProductHandle,
+    analysisContextProductHandle: ProductHandle,
+    appRootDefinitionProductHandle: ProductHandle | null,
+    definition: CustomElementDefinition,
+    template: CustomElementTemplateDefinition,
+    localKey: string,
+    phases: TemplateCompilationPhaseRecorder,
+  ): readonly TemplateResourceCompilationEmission[] {
+    const localDefinitions = phases.measure(
+      'local-template-definitions',
+      () => this.localTemplateDefinitions.materialize(localKey, definition, template),
+    );
+    const parentCompilerWorld = compilerWorldAuthority.current();
+    const activeCompilerWorld = localDefinitions.definitions.length === 0
+      ? new TemplateCompilerWorldSelection(parentCompilerWorld, compilerWorldAuthority)
+      : phases.measure(
+        TemplateCompilationCohortPlanningPhase.ComponentCompilerWorld,
+        () => this.compilerWorldForLocalDefinitions(
+          compilerWorldAuthority,
+          localDefinitions,
+          localKey,
+          template.addressHandle ?? definition.sourceAddressHandle,
+        ),
+      );
+    const localElementNames = localDefinitions.definitions.map((localDefinition) => localDefinition.name);
+    const dependencyIdentityHandles = localDefinitions.definitions
+      .map((localDefinition) => localDefinition.identityHandle)
+      .filter((identityHandle): identityHandle is IdentityHandle => identityHandle != null);
+    const ownerTemplate = localDefinitions.ownerTemplate;
+    const owner = ownerTemplate == null
+      ? null
+      : this.compileResource(
+        new TemplateResourceCompilationRequest(
+          localKey,
+          familyOwnerHandle,
+          analysisContextProductHandle,
+          appRootDefinitionProductHandle,
+          parentCompilerWorld,
+          activeCompilerWorld.world,
+          definition,
+          ownerTemplate,
+          new TemplateCompilerReadView(
+            this.publication.domainReadProjection,
+            activeCompilerWorld.authority,
+          ),
+          localElementNames,
+          dependencyIdentityHandles,
+        ),
+        phases,
+      );
+    const compilations: TemplateResourceCompilationEmission[] = owner == null ? [] : [owner];
+    for (let index = 0; index < localDefinitions.definitions.length; index++) {
+      const localDefinition = localDefinitions.definitions[index]!;
+      const childLocalKey = `${localKey}:local-template:${localDefinition.name}`;
+      const result = activeCompilerWorld.world.templateCompiler.compile(
+        new TemplateCompilerCompileRequest(childLocalKey, localDefinition),
+        new ProjectTemplateCompilerHost(
+          this,
+          familyOwnerHandle,
+          activeCompilerWorld.authority,
+          analysisContextProductHandle,
+          appRootDefinitionProductHandle,
+          phases,
+        ),
+      );
+      if (result.output != null) {
+        compilations.push(...result.output);
+      }
+    }
+    return compilations;
+  }
+
+  compileResourceFamilyFrontDoor(
+    request: TemplateResourceFamilyCompilationRequest,
+    telemetry: SemanticRuntimeTelemetryOptions | null = null,
+  ): readonly TemplateResourceCompilationEmission[] {
+    return this.compileResourceTree(
+      request.compilerWorldAuthority,
+      request.familyOwnerHandle,
+      request.analysisContextProductHandle,
+      request.appRootDefinitionProductHandle,
+      request.definition,
+      request.template,
+      request.localKey,
+      new TemplateCompilationPhaseRecorder(
+        this.publication,
+        normalizeSemanticRuntimeTelemetryOptions(
+          telemetry,
+          DEFAULT_SEMANTIC_RUNTIME_INQUIRY_PROFILE,
+        ),
+      ),
+    );
+  }
+
+  compileResourceFrontDoor(
+    request: TemplateResourceCompilationRequest,
+    telemetry: SemanticRuntimeTelemetryOptions | null = null,
+  ): TemplateResourceCompilationEmission | null {
+    return this.compileResource(
+      request,
+      new TemplateCompilationPhaseRecorder(
+        this.publication,
+        normalizeSemanticRuntimeTelemetryOptions(
+          telemetry,
+          DEFAULT_SEMANTIC_RUNTIME_INQUIRY_PROFILE,
+        ),
+      ),
+    );
+  }
+
+  private compileResource(
+    request: TemplateResourceCompilationRequest,
     phases: TemplateCompilationPhaseRecorder,
   ): TemplateResourceCompilationEmission | null {
-    const sourceKind = templateSourceKind(definition);
+    const {
+      compilerWorld,
+      parentCompilerWorld,
+      analysisContextProductHandle,
+      appRootDefinitionProductHandle,
+      definition,
+      localKey,
+      familyOwnerHandle,
+      template,
+      compilerReads,
+      localElementNames,
+      dependencyIdentityHandles,
+    } = request;
+    const sourceKind = templateSourceKind(template);
     if (sourceKind == null) {
       return null;
     }
 
-    const unit = this.constructCompilationUnit(localKey, compilerWorld, definition, sourceKind, phases);
+    const unit = this.constructCompilationUnit(
+      localKey,
+      compilerWorld,
+      definition,
+      template,
+      sourceKind,
+      localElementNames,
+      dependencyIdentityHandles,
+      phases,
+    );
     const html = this.parseHtml(localKey, unit, phases);
-    const attributeSyntax = this.parseAttributeSyntax(localKey, compilerWorld, unit, html, phases);
-    const attributeClassification = this.classifyAttributes(localKey, compilerWorld, unit, html, attributeSyntax, phases);
-    const valueSites = this.materializeValueSites(localKey, compilerWorld, unit, html, attributeSyntax, attributeClassification, phases);
+    const attributeSyntax = this.parseAttributeSyntax(
+      localKey,
+      compilerWorld,
+      compilerReads,
+      unit,
+      html,
+      phases,
+    );
+    const attributeClassification = this.classifyAttributes(
+      localKey,
+      compilerWorld,
+      compilerReads,
+      unit,
+      html,
+      attributeSyntax,
+      phases,
+    );
+    const valueSites = this.materializeValueSites(
+      localKey,
+      compilerReads,
+      unit,
+      html,
+      attributeSyntax,
+      attributeClassification,
+      phases,
+    );
     const bindingCommandLowering = this.lowerBindingCommands(
       localKey,
       compilerWorld,
+      compilerReads,
       unit,
       html,
       attributeSyntax,
@@ -568,6 +1327,8 @@ export class TemplateCompilationProjectPass {
     const compiledTemplate = this.materializeCompiledTemplate(
       localKey,
       compilerWorld,
+      compilerReads,
+      definition,
       unit,
       html,
       attributeSyntax,
@@ -576,8 +1337,12 @@ export class TemplateCompilationProjectPass {
       bindingCommandLowering,
       phases,
     );
-    return new TemplateResourceCompilationEmission(
+    const emission = new TemplateResourceCompilationEmission(
       localKey,
+      familyOwnerHandle,
+      analysisContextProductHandle,
+      appRootDefinitionProductHandle,
+      parentCompilerWorld,
       compilerWorld,
       definition,
       unit,
@@ -587,17 +1352,25 @@ export class TemplateCompilationProjectPass {
       valueSites,
       bindingCommandLowering,
       compiledTemplate,
+      compilerReads.readAll(),
     );
+    for (const read of emission.registeredReads) {
+      this.publication.observe(read);
+    }
+    return emission;
   }
 
   private constructCompilationUnit(
     localKey: string,
     compilerWorld: TemplateCompilerWorldEmission,
     definition: CustomElementDefinition,
+    template: CustomElementTemplateDefinition,
     sourceKind: TemplateSourceKind,
+    localElementNames: readonly string[],
+    dependencyIdentityHandles: readonly IdentityHandle[],
     phases: TemplateCompilationPhaseRecorder,
   ): TemplateCompilationUnitEmission {
-    const sourceAddressHandle = definition.template?.addressHandle ?? definition.sourceAddressHandle;
+    const sourceAddressHandle = template.addressHandle ?? definition.sourceAddressHandle;
     return phases.measure('compilation-unit', () =>
       this.unitMaterializer.construct(new TemplateCompilationUnitConstructionRequest(
         localKey,
@@ -605,9 +1378,11 @@ export class TemplateCompilationProjectPass {
         compilerWorld,
         this.templateSourceOwner(definition),
         sourceKind,
-        definition.template?.markup ?? null,
+        template.markup,
         sourceAddressHandle,
-        definition.template?.sourceMap ?? null,
+        template.sourceMap,
+        localElementNames,
+        dependencyIdentityHandles,
       ))
     );
   }
@@ -640,6 +1415,7 @@ export class TemplateCompilationProjectPass {
   private parseAttributeSyntax(
     localKey: string,
     compilerWorld: TemplateCompilerWorldEmission,
+    compilerReads: TemplateCompilerReadView,
     unit: TemplateCompilationUnitEmission,
     html: HtmlParseEmission,
     phases: TemplateCompilationPhaseRecorder,
@@ -650,6 +1426,7 @@ export class TemplateCompilationProjectPass {
         compilationUnit: unit.compilationUnit,
         html,
         compilerWorld,
+        compilerReads,
       } satisfies AttributeSyntaxParseRequest)
     );
   }
@@ -657,6 +1434,7 @@ export class TemplateCompilationProjectPass {
   private classifyAttributes(
     localKey: string,
     compilerWorld: TemplateCompilerWorldEmission,
+    compilerReads: TemplateCompilerReadView,
     unit: TemplateCompilationUnitEmission,
     html: HtmlParseEmission,
     attributeSyntax: AttributeSyntaxParseEmission,
@@ -669,13 +1447,14 @@ export class TemplateCompilationProjectPass {
         html,
         attributeSyntax,
         compilerWorld,
+        compilerReads,
       } satisfies AttributeClassificationRequest)
     );
   }
 
   private materializeValueSites(
     localKey: string,
-    compilerWorld: TemplateCompilerWorldEmission,
+    compilerReads: TemplateCompilerReadView,
     unit: TemplateCompilationUnitEmission,
     html: HtmlParseEmission,
     attributeSyntax: AttributeSyntaxParseEmission,
@@ -689,7 +1468,7 @@ export class TemplateCompilationProjectPass {
         html,
         attributeSyntax,
         attributeClassification,
-        compilerWorld,
+        compilerReads,
       } satisfies TemplateValueSiteRequest)
     );
   }
@@ -697,6 +1476,7 @@ export class TemplateCompilationProjectPass {
   private lowerBindingCommands(
     localKey: string,
     compilerWorld: TemplateCompilerWorldEmission,
+    compilerReads: TemplateCompilerReadView,
     unit: TemplateCompilationUnitEmission,
     html: HtmlParseEmission,
     attributeSyntax: AttributeSyntaxParseEmission,
@@ -713,6 +1493,7 @@ export class TemplateCompilationProjectPass {
         attributeClassification,
         valueSites,
         compilerWorld,
+        compilerReads,
       } satisfies BindingCommandLoweringRequest)
     );
   }
@@ -720,6 +1501,8 @@ export class TemplateCompilationProjectPass {
   private materializeCompiledTemplate(
     localKey: string,
     compilerWorld: TemplateCompilerWorldEmission,
+    compilerReads: TemplateCompilerReadView,
+    definition: CustomElementDefinition,
     unit: TemplateCompilationUnitEmission,
     html: HtmlParseEmission,
     attributeSyntax: AttributeSyntaxParseEmission,
@@ -738,6 +1521,8 @@ export class TemplateCompilationProjectPass {
         valueSites,
         bindingCommandLowering,
         compilerWorld,
+        compilerReads,
+        definition,
       } satisfies CompiledTemplateMaterializationRequest)
     );
   }
@@ -748,7 +1533,9 @@ export class TemplateCompilationProjectPass {
     projectKey: string | null,
     evaluation: StaticProjectEvaluationResult | null,
     typeSystem: TypeSystemProject | null,
+    sourceValueActivationView: DiProviderActivationView | null,
     resourceDefinitions: ResourceDefinitionIndex | null,
+    computedObserverSources: ComputedObserverSourceProjectResult | null,
     analysisDepth: SemanticAppAnalysisDepth | `${SemanticAppAnalysisDepth}` = DEFAULT_SEMANTIC_APP_ANALYSIS_DEPTH,
     expressionWorld: CheckerExpressionTypeWorld | null = null,
     telemetry: SemanticRuntimeTelemetryOptions | null = null,
@@ -758,13 +1545,16 @@ export class TemplateCompilationProjectPass {
       compilation.localKey,
       projectKey,
       compilation.definition,
+      compilation.appRootDefinitionProductHandle,
       compilation.compiledTemplate,
       compilation.attributeSyntax,
       compilation.compilerWorld,
       projectContext,
       evaluation,
       typeSystem,
+      sourceValueActivationView,
       resourceDefinitions,
+      computedObserverSources,
       analysisDepth,
       expressionWorld,
       telemetry,
@@ -773,93 +1563,57 @@ export class TemplateCompilationProjectPass {
   }
 }
 
-class ProjectTemplateCompilerHost implements TemplateCompilerCompileHost<TemplateResourceCompilationEmission | null> {
+function templateCompilerWorldContainers(
+  frontDoor: TemplateCompilationFrontDoorEmission,
+): readonly TemplateCompilerWorldEmission['container'][] {
+  return [...new Map([
+    ...frontDoor.plan.appWorld.diWorld.containers,
+    ...[
+      ...frontDoor.appCompilations,
+      ...frontDoor.authoringCompilations,
+    ].flatMap((compilation) => [
+      compilation.parentCompilerWorld.container,
+      compilation.compilerWorld.container,
+    ]),
+  ].map((container) => [container.identityHandle, container])).values()];
+}
+
+class TemplateCompilerWorldSelection {
+  constructor(
+    readonly world: TemplateCompilerWorldEmission,
+    readonly authority: TemplateCompilerWorldAuthority,
+  ) {}
+}
+
+class ProjectTemplateCompilerHost implements TemplateCompilerCompileHost<readonly TemplateResourceCompilationEmission[]> {
   constructor(
     private readonly pass: TemplateCompilationProjectPass,
-    private readonly compilerWorld: TemplateCompilerWorldEmission,
-    private readonly typeSystem: TypeSystemProject | null,
+    private readonly familyOwnerHandle: IdentityHandle | ProductHandle,
+    private readonly compilerWorldAuthority: TemplateCompilerWorldAuthority,
+    private readonly analysisContextProductHandle: ProductHandle,
+    private readonly appRootDefinitionProductHandle: ProductHandle | null,
     private readonly phases: TemplateCompilationPhaseRecorder,
   ) {}
 
   compile(
     request: TemplateCompilerCompileRequest,
     _compiler: TemplateCompilerService,
-  ): TemplateResourceCompilationEmission | null {
-    return this.pass.compileResource(
-      this.compilerWorld,
+  ): readonly TemplateResourceCompilationEmission[] {
+    const template = request.definition.template;
+    if (template == null) {
+      throw new Error(`TemplateCompiler admitted ${request.definition.name} without a template.`);
+    }
+    return this.pass.compileResourceTree(
+      this.compilerWorldAuthority,
+      this.familyOwnerHandle,
+      this.analysisContextProductHandle,
+      this.appRootDefinitionProductHandle,
       request.definition,
+      template,
       request.localKey,
-      this.typeSystem,
       this.phases,
     );
   }
-}
-
-class TemplateCompilationTask {
-  constructor(
-    readonly compilerWorld: TemplateCompilerWorldEmission,
-    readonly visibleResource: TemplateVisibleResource,
-  ) {}
-}
-
-function initialCompilationTasks(
-  compilerWorld: TemplateCompilerWorldEmission,
-): TemplateCompilationTask[] {
-  return compilerWorld.resourceScope.resources.map((visibleResource) =>
-    new TemplateCompilationTask(compilerWorld, visibleResource)
-  );
-}
-
-function routeableCompilationTasks(
-  compilerWorld: TemplateCompilerWorldEmission,
-  routeContexts: RouteConfigContextMaterializationProjectResult | null,
-  resourceDefinitions: ResourceDefinitionIndex | null,
-): TemplateCompilationTask[] {
-  if (routeContexts == null || resourceDefinitions == null) {
-    return [];
-  }
-  const tasks: TemplateCompilationTask[] = [];
-  const seen = new Set<string>();
-  for (const routeConfig of routeContexts.readRouteConfigs()) {
-    for (const routeable of [routeConfig.component, routeConfig.fallback]) {
-      const visibleResource = visibleRouteableResource(routeable, resourceDefinitions);
-      const productHandle = visibleResource?.resourceProductHandle ?? null;
-      if (visibleResource == null || productHandle == null || seen.has(productHandle)) {
-        continue;
-      }
-      seen.add(productHandle);
-      tasks.push(new TemplateCompilationTask(compilerWorld, visibleResource));
-    }
-  }
-  return tasks;
-}
-
-function visibleRouteableResource(
-  routeable: RouteableComponentReference | null,
-  resourceDefinitions: ResourceDefinitionIndex,
-): TemplateVisibleResource | null {
-  const definition = resourceDefinitions.lookupByProduct(routeable?.resolvedProductHandle ?? null);
-  if (!(definition instanceof CustomElementDefinition)) {
-    return null;
-  }
-  return visibleResourceForDefinition(
-    definition,
-    TemplateResourceVisibilityKind.Routeable,
-    routeable?.sourceAddressHandle ?? definition.sourceAddressHandle,
-  );
-}
-
-function sameResourceScope(
-  left: readonly TemplateVisibleResource[],
-  right: readonly TemplateVisibleResource[],
-): boolean {
-  return left.length === right.length
-    && left.every((resource, index) =>
-      resource.resourceProductHandle === right[index]?.resourceProductHandle
-      && resource.definitionProductHandle === right[index]?.definitionProductHandle
-      && resource.resourceKind === right[index]?.resourceKind
-      && resource.name === right[index]?.name
-    );
 }
 
 function uniqueCompilerWorlds(
@@ -877,8 +1631,63 @@ function uniqueCompilerWorlds(
   return result;
 }
 
-function templateSourceKind(definition: CustomElementDefinition): TemplateSourceKind | null {
-  const template = definition.template;
+function templateFrontDoorMembershipRevision(
+  families: readonly TemplateCompilationFamilyFrontDoorEmission[],
+): string {
+  return JSON.stringify(families.map((family) => [
+    family.ownerHandle,
+    family.cohortKeys,
+    family.appCompilations.map(templateCompilationMembership),
+    family.authoringCompilations.map(templateCompilationMembership),
+  ]));
+}
+
+function templateCompilationMembership(
+  compilation: TemplateResourceCompilationEmission,
+): readonly (string | null)[] {
+  return [
+    compilation.localKey,
+    compilation.familyOwnerHandle,
+    compilation.analysisContextProductHandle,
+    compilation.appRootDefinitionProductHandle,
+    compilation.definition.productHandle,
+    compilation.definition.key,
+    compilation.definition.name,
+    compilation.parentCompilerWorld.resourceScope.identityHandle,
+    compilation.compilerWorld.resourceScope.identityHandle,
+    compilation.unit.compilationUnit.productHandle,
+    compilation.compiledTemplate.compiledTemplate.productHandle,
+  ];
+}
+
+function rebaseRuntimeAnalysisResources(
+  compilations: readonly TemplateResourceCompilationEmission[],
+  previous: readonly TemplateResourceRuntimeAnalysisEmission[],
+  expressionWorld: CheckerExpressionTypeWorld,
+): readonly TemplateResourceRuntimeAnalysisEmission[] | null {
+  if (compilations.length !== previous.length) {
+    return null;
+  }
+  const compilationsByLocalKey = new Map<string, TemplateResourceCompilationEmission>();
+  for (const compilation of compilations) {
+    if (compilationsByLocalKey.has(compilation.localKey)) {
+      return null;
+    }
+    compilationsByLocalKey.set(compilation.localKey, compilation);
+  }
+  const rebased: TemplateResourceRuntimeAnalysisEmission[] = [];
+  for (const resource of previous) {
+    const compilation = compilationsByLocalKey.get(resource.compilation.localKey) ?? null;
+    if (compilation == null) {
+      return null;
+    }
+    compilationsByLocalKey.delete(compilation.localKey);
+    rebased.push(resource.forCarriedGeneration(compilation, expressionWorld));
+  }
+  return compilationsByLocalKey.size === 0 ? rebased : null;
+}
+
+function templateSourceKind(template: CustomElementTemplateDefinition | null): TemplateSourceKind | null {
   if (template == null) {
     return null;
   }
@@ -899,6 +1708,18 @@ function templateResourceCompilationKey(
   definition: CustomElementDefinition,
 ): string {
   return definition.productHandle ?? `${definition.key}:${definition.name}`;
+}
+
+function runtimeAnalysisCohorts(
+  compilations: readonly TemplateResourceCompilationEmission[],
+): readonly (readonly TemplateResourceCompilationEmission[])[] {
+  const cohortsByContext = new Map<ProductHandle, TemplateResourceCompilationEmission[]>();
+  for (const compilation of compilations) {
+    const cohort = cohortsByContext.get(compilation.analysisContextProductHandle) ?? [];
+    cohort.push(compilation);
+    cohortsByContext.set(compilation.analysisContextProductHandle, cohort);
+  }
+  return [...cohortsByContext.values()];
 }
 
 function runtimeAnalysisScheduleGroups(
@@ -1096,89 +1917,46 @@ function originalIndexForKey(
   return originalIndexByKey.get(key) ?? Number.MAX_SAFE_INTEGER;
 }
 
-function selectAuthoringTemplateDefinitions(
-  store: KernelStore,
-  definitions: readonly FullResourceDefinition[],
-  appCompilations: readonly TemplateResourceCompilationEmission[],
-  authoringTemplateSourceFiles: readonly string[],
-  authoringTemplateLimit: number | null,
-): readonly CustomElementDefinition[] {
-  const sourceFileHandles = authoringTemplateSourceFiles.length === 0
-    ? null
-    : sourceFileAddressHandlesForFileNames(store, authoringTemplateSourceFiles);
-  const seen = new Set(appCompilations.map((compilation) => templateResourceCompilationKey(compilation.definition)));
-  const selected: CustomElementDefinition[] = [];
-  for (const definition of definitions) {
-    if (authoringTemplateLimit != null && selected.length >= authoringTemplateLimit) {
-      break;
-    }
-    if (!(definition instanceof CustomElementDefinition)) {
-      continue;
-    }
-    if (sourceFileHandles != null && !definitionBelongsToAuthoringSourceFile(store, definition, sourceFileHandles)) {
-      continue;
-    }
-    const compilationKey = templateResourceCompilationKey(definition);
-    if (seen.has(compilationKey)) {
-      continue;
-    }
-    seen.add(compilationKey);
-    selected.push(definition);
-  }
-  return selected;
-}
-
-function definitionBelongsToAuthoringSourceFile(
-  store: KernelStore,
-  definition: CustomElementDefinition,
-  sourceFileHandles: ReadonlySet<AddressHandle>,
-): boolean {
-  const sourceAddresses = [
-    definition.template?.addressHandle ?? null,
-    definition.sourceAddressHandle,
-    definition.target.addressHandle,
-  ];
-  return sourceAddresses.some((handle) =>
-    handle != null && addressBelongsToSourceFiles(store, handle, sourceFileHandles)
+function templateRuntimeAnalysisProjectContext(
+  publication: ComputationRun,
+  compilations: readonly TemplateResourceCompilationEmission[],
+): TemplateRuntimeAnalysisProjectContext {
+  return new TemplateRuntimeAnalysisProjectContext(
+    publication,
+    compilations.map((compilation) => new TemplateRuntimeAnalysisResource(compilation)),
   );
 }
 
-function templateRuntimeAnalysisProjectContext(
-    compilations: readonly TemplateResourceCompilationEmission[],
-  ): TemplateRuntimeAnalysisProjectContext {
-    return new TemplateRuntimeAnalysisProjectContext(compilations.flatMap((compilation) =>
-      compilation.definition.productHandle == null
-        ? []
-        : [new TemplateRuntimeAnalysisResource(
-          compilation.definition.productHandle,
-          compilation.compiledTemplate.compiledTemplate.productHandle,
-          compilation.compiledTemplate,
-        )]
-    ));
-  }
-
 function templateResourceCompilationLocalKey(
-  worldIndex: number,
-  resourceIndex: number,
-  definition: CustomElementDefinition,
+  projectKey: string,
+  owner: TemplateCompilationOwnerPlan,
+  cohort: TemplateCompilationCohortPlan,
 ): string {
-  return [
-    'component-template',
-    String(worldIndex),
-    String(resourceIndex),
-    definition.productHandle ?? definition.key,
-  ].join(':');
+  return `component-template:${encodeTemplateCompilationKeyParts([
+    projectKey,
+    owner.ownerHandle,
+    cohort.key,
+  ])}`;
 }
 
-function templateResourceAuthoringCompilationLocalKey(
-  resourceIndex: number,
-  definition: CustomElementDefinition,
-): string {
-  return [
-    'authoring-template',
-    String(resourceIndex),
-    definition.productHandle ?? definition.key,
-  ].join(':');
+function templateCompilationProfile(
+  started: number,
+  phases: readonly TemplateCompilationProjectPhaseTiming[],
+): TemplateCompilationProjectProfile {
+  return {
+    totalMilliseconds: performance.now() - started,
+    phases,
+  };
+}
+
+function mergeTemplateCompilationProfiles(
+  left: TemplateCompilationProjectProfile,
+  right: TemplateCompilationProjectProfile,
+): TemplateCompilationProjectProfile {
+  return {
+    totalMilliseconds: left.totalMilliseconds + right.totalMilliseconds,
+    phases: [...left.phases, ...right.phases],
+  };
 }
 
 function normalizedAuthoringTemplateLimit(value: number | null | undefined): number | null {

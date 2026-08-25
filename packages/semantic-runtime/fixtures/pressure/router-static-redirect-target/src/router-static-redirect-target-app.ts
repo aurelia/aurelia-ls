@@ -1,5 +1,7 @@
 import { route } from '@aurelia/router';
+import { customElement } from '@aurelia/runtime-html';
 import { TargetRoute } from './routes/target-route';
+import template from './router-static-redirect-target-app.html';
 
 @route({
   title: 'Router Static Redirect Target Pressure',
@@ -16,4 +18,5 @@ import { TargetRoute } from './routes/target-route';
     },
   ],
 })
+@customElement({ name: 'router-static-redirect-target-app', template })
 export class RouterStaticRedirectTargetApp {}

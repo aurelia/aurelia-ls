@@ -36,6 +36,8 @@ export const enum FrameworkCapabilityDemandKind {
 
 export const enum FrameworkCapabilityAdmissionState {
   Admitted = 'admitted',
+  /** The owning registration is present, but its closed configuration excludes this particular surface. */
+  ConfiguredOut = 'configured-out',
   AdmittedChainUnproven = 'admitted-chain-unproven',
   AdmissionUnknown = 'admission-unknown',
   NotAdmitted = 'not-admitted',
@@ -92,6 +94,12 @@ export class FrameworkCapabilityDemand {
     readonly ownerIdentityHandle: IdentityHandle | null,
     readonly templateSourceAddressHandle: AddressHandle | null,
     readonly resourceDefinitionProductHandle: ProductHandle | null,
+    /** Root compiler-world product that owns this template demand; null for source-only service demands. */
+    readonly analysisContextProductHandle: ProductHandle | null,
+    /** Registration admissions that make this capability visible to the consulting app/compiler world. */
+    readonly admissionSourceAddressHandles: readonly AddressHandle[] = [],
+    /** Configuration values that exclude this surface from an otherwise admitted provider. */
+    readonly configurationSourceAddressHandles: readonly AddressHandle[] = [],
   ) {}
 
   get isAdmitted(): boolean {

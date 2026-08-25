@@ -6,9 +6,10 @@ import {
 import type { ProductHandle } from '../kernel/handles.js';
 import type { KernelStore } from '../kernel/store.js';
 import {
-  RuntimeBindingDataFlow,
+  type RuntimeBindingDataFlow,
   RuntimeBindingDataFlowSourceAssignmentKind,
   RuntimeBindingDataFlowSourceAssignmentReasonKind,
+  RuntimeBindingDataFlowTypeMismatchKind,
   RuntimeBindingValueChannelKind,
 } from '../observation/runtime-binding-observation.js';
 import { bindingDataFlowDirectionIncludesSourceToTarget } from '../observation/binding-data-flow-direction.js';
@@ -17,7 +18,7 @@ import {
   runtimeAssignmentTargetAstForProduct,
 } from '../template/expression-parse-product.js';
 import {
-  RuntimeBindingScopeIssue,
+  type RuntimeBindingScopeIssue,
   RuntimeBindingScopeIssueCertainty,
   RuntimeBindingScopeIssueKind,
 } from '../template/runtime-binding-scope-issue.js';
@@ -29,8 +30,12 @@ import {
   type RuntimeBindingBehaviorIssue,
   RuntimeBindingBehaviorIssueKind,
 } from '../template/runtime-binding-behavior.js';
-import type { RuntimeValueConverterIssue } from '../template/runtime-value-converter.js';
+import {
+  type RuntimeValueConverterIssue,
+  RuntimeValueConverterIssueKind,
+} from '../template/runtime-value-converter.js';
 import type { RuntimeBindingTargetAccess } from '../template/runtime-binding.js';
+import { HtmlRecoveryKind } from '../template/html-ir.js';
 import {
   type RuntimeControllerIssue,
   RuntimeControllerIssueKind,
@@ -42,14 +47,12 @@ import {
 import { TypeSystemProductDetails } from '../type-system/product-details.js';
 import {
   CheckerTypeMemberKind,
-  type CheckerTypeShape,
   CheckerTypeShapeKind,
 } from '../type-system/type-shape.js';
-import { checkerTypeShapeNullishUnionHasValueProperty } from '../type-system/checker-type-shape-access.js';
 import {
   RuntimeAstFrameworkErrorCode,
-  RuntimeHtmlAstFrameworkErrorCode as RuntimeHtmlAstFrameworkErrorCodes,
-  type RuntimeHtmlAstFrameworkErrorCode,
+  RuntimeHtmlAstFrameworkErrorCode,
+
 } from '../type-system/framework-error-code.js';
 import {
   RuntimeHtmlObservationFrameworkErrorCode,
@@ -57,6 +60,11 @@ import {
 } from '../observation/framework-error-code.js';
 import type { RouterIssueModel } from '../router/model.js';
 import {
+  routerIssueDiagnosticAuthority,
+  routerIssueDiagnosticRepairProjection,
+} from './router-diagnostic-policy.js';
+import {
+  FrameworkCapabilityAdmissionState,
   FrameworkCapabilityAvailabilityState,
   FrameworkCapabilityDemandKind,
   FrameworkCapabilityDemandSiteKind,
@@ -89,6 +97,7 @@ export function cursorDiagnosticRows(
   missingInputs: readonly string[],
   selectedMemberName: string | null,
   selectedMember: SemanticTemplateCursorMemberRow | null,
+  selectedScopeSlotResolved: boolean,
   memberOwnerType: SemanticTemplateCursorInfoResult['memberOwnerType'],
   memberOwnerTypeProductHandle: TemplateCompletionCursorContext['query']['memberOwnerTypeProductHandle'],
   memberOwnerTypeOpenSubject: CheckerExpressionTypeOpenSubject | null,
@@ -102,6 +111,9 @@ export function cursorDiagnosticRows(
 
   const ownerType = readOwnerType(store, memberOwnerTypeProductHandle);
   if (ownerType == null) {
+    if (selectedScopeSlotResolved) {
+      return [];
+    }
     return missingOwnerTypeDiagnostic(
       store,
       missingInputs,
@@ -136,9 +148,6 @@ export function cursorDiagnosticRows(
     )];
   }
   if (selectedMember == null) {
-    if (checkerTypeShapeNullishUnionHasValueProperty(ownerType, selectedMemberName)) {
-      return [];
-    }
     return [missingMemberDiagnostic(
       source,
       selectedMemberName,
@@ -159,6 +168,8 @@ export function bindingSourceAssignmentDiagnosticKind(
       return 'binding-source-assignment-strictness';
     case RuntimeBindingDataFlowSourceAssignmentKind.RuntimeUnassignable:
       return 'binding-source-assignment-runtime-noop';
+    case RuntimeBindingDataFlowSourceAssignmentKind.FrameworkManagedReadOnly:
+      return 'binding-source-assignment-framework-managed';
     default:
       return null;
   }
@@ -182,6 +193,7 @@ export function bindingSourceAssignmentDiagnostic(
   const primaryReasonKind = reasonKinds[0]
     ?? RuntimeBindingDataFlowSourceAssignmentReasonKind.SourceUnresolved;
   const runtimeNoop = diagnosticKind === 'binding-source-assignment-runtime-noop';
+  const frameworkManaged = diagnosticKind === 'binding-source-assignment-framework-managed';
   const frameworkErrorCode = bindingSourceAssignmentFrameworkErrorCode(reasonKinds);
   const frameworkRuntimeError = frameworkErrorCode != null;
   const ownerType = dataFlow.sourceAssignmentTargetType ?? dataFlow.sourceType ?? null;
@@ -198,6 +210,7 @@ export function bindingSourceAssignmentDiagnostic(
     ownerSource,
     reasonKinds,
     runtimeNoop,
+    frameworkManaged,
     valueTypeDisplay,
   );
 
@@ -205,12 +218,14 @@ export function bindingSourceAssignmentDiagnostic(
     diagnosticKind,
     diagnosticAuthority: frameworkRuntimeError
       ? 'framework-error-code'
+      : frameworkManaged
+      ? 'semantic-authoring-policy'
       : runtimeNoop
       ? 'framework-runtime-behavior'
       : 'semantic-runtime-product',
     frameworkErrorCode,
     severity: frameworkRuntimeError ? 'error' : 'warning',
-    summary: bindingSourceAssignmentSummary(dataFlow, runtimeNoop),
+    summary: bindingSourceAssignmentSummary(dataFlow, runtimeNoop, frameworkManaged),
     missingInput: `binding-source-assignment:${primaryReasonKind}`,
     missingInputs: reasonKinds.map((reasonKind) => `binding-source-assignment:${reasonKind}`),
     source,
@@ -263,12 +278,12 @@ export function bindingDataFlowFrameworkErrorDiagnostic(
     frameworkErrorCode,
     severity: 'error',
     summary: selectArrayOnSingleSelect
-      ? `Aurelia SelectValueObserver ${frameworkErrorCode} rejects an array-valued source update on a non-multiple <select>.`
+      ? 'An array-valued source cannot update a non-multiple <select>.'
       : readonlyCollectionSize
-        ? `Aurelia CollectionSizeObserver ${frameworkErrorCode} rejects writes to Map/Set size.`
+        ? 'Map/Set size is read-only.'
         : readonlyComputedProperty
-          ? `Aurelia ComputedObserver ${frameworkErrorCode} rejects writes to a getter-only target property.`
-      : `Aurelia runtime binding ${frameworkErrorCode} rejects this binding data flow.`,
+          ? 'A getter-only target property is read-only.'
+          : 'The runtime cannot apply this binding data flow.',
     missingInput: `binding-data-flow:${frameworkErrorCode}`,
     missingInputs: [`binding-data-flow:${frameworkErrorCode}`],
     source,
@@ -348,6 +363,10 @@ export function bindingDataFlowDiagnostics(
   source: NonNullable<SemanticTemplateDiagnosticRow['source']>,
 ): readonly SemanticTemplateCursorDiagnosticRow[] {
   const diagnostics: SemanticTemplateCursorDiagnosticRow[] = [];
+  const targetAssignmentDiagnostic = bindingTargetAssignmentDiagnostic(dataFlow, source);
+  if (targetAssignmentDiagnostic != null) {
+    diagnostics.push(targetAssignmentDiagnostic);
+  }
   const assignmentDiagnosticKind = bindingSourceAssignmentDiagnosticKind(dataFlow.sourceAssignmentKind);
   if (assignmentDiagnosticKind != null) {
     diagnostics.push(bindingSourceAssignmentDiagnostic(
@@ -371,6 +390,53 @@ export function bindingDataFlowDiagnostics(
     diagnostics.push(openDiagnostic);
   }
   return diagnostics;
+}
+
+function bindingTargetAssignmentDiagnostic(
+  dataFlow: RuntimeBindingDataFlow,
+  source: NonNullable<SemanticTemplateDiagnosticRow['source']>,
+): SemanticTemplateCursorDiagnosticRow | null {
+  if (!bindingDataFlowDirectionIncludesSourceToTarget(dataFlow.direction)
+    || dataFlow.sourceToTargetAssignable !== false) {
+    return null;
+  }
+  const nullish = dataFlow.sourceToTargetTypeMismatchKinds.includes(
+    RuntimeBindingDataFlowTypeMismatchKind.SourceNullishToRequiredTarget,
+  );
+  const sourceTypeDisplay = dataFlow.sourceType?.display ?? null;
+  const targetTypeDisplay = dataFlow.targetValueType?.display ?? dataFlow.targetPropertyType?.display ?? null;
+  const targetProperty = dataFlow.targetAccess?.targetProperty ?? 'unknown';
+  const missingInput = nullish
+    ? 'binding-target-assignment:source-nullish-to-required-target'
+    : 'binding-target-assignment:source-to-target-type-mismatch';
+  return {
+    diagnosticKind: 'binding-target-assignment-strictness',
+    diagnosticAuthority: 'semantic-runtime-product',
+    frameworkErrorCode: null,
+    severity: 'warning',
+    summary: nullish
+      ? `Binding source type ${sourceTypeDisplay ?? 'unknown'} may be nullish, but target '${targetProperty}' requires ${targetTypeDisplay ?? 'a non-nullish value'}.`
+      : `Binding source type ${sourceTypeDisplay ?? 'unknown'} is not assignable to target '${targetProperty}' of type ${targetTypeDisplay ?? 'unknown'}.`,
+    missingInput,
+    missingInputs: [missingInput],
+    source,
+    selectedMemberName: dataFlow.sourceName,
+    ownerTypeDisplay: sourceTypeDisplay,
+    ownerTypeShapeKind: dataFlow.sourceType?.shapeKind ?? null,
+    ownerTypeOrigin: dataFlow.sourceType?.origin ?? null,
+    suggestion: {
+      suggestionKind: nullish ? 'guard-nullish-expression' : 'align-assignment-type',
+      actionKind: 'rewrite-expression',
+      actionTarget: suggestionActionTarget('expression', source, dataFlow.sourceName, targetTypeDisplay),
+      summary: nullish
+        ? 'Guard or default the nullable source before binding it to this required target.'
+        : 'Convert or retarget the binding expression so its value satisfies the target contract.',
+      targetMemberName: dataFlow.sourceName,
+      ownerTypeDisplay: sourceTypeDisplay,
+      valueTypeDisplay: targetTypeDisplay,
+      valueTypeSource: targetTypeDisplay == null ? null : 'binding-target',
+    },
+  };
 }
 
 export function bindingDataFlowDiagnosticSource(
@@ -410,11 +476,11 @@ function runtimeAstFrameworkErrorCodeForDataFlow(
     case CheckerExpressionTypeOpenKind.HostContextNotFound:
       return RuntimeAstFrameworkErrorCode.AstHostNotFound;
     case CheckerExpressionTypeOpenKind.MissingValueConverterResource:
-      return RuntimeHtmlAstFrameworkErrorCodes.AstConverterNotFound;
+      return RuntimeHtmlAstFrameworkErrorCode.AstConverterNotFound;
     case CheckerExpressionTypeOpenKind.MissingBindingBehaviorResource:
-      return RuntimeHtmlAstFrameworkErrorCodes.AstBehaviorNotFound;
+      return RuntimeHtmlAstFrameworkErrorCode.AstBehaviorNotFound;
     case CheckerExpressionTypeOpenKind.DuplicateBindingBehavior:
-      return RuntimeHtmlAstFrameworkErrorCodes.AstBehaviorDuplicated;
+      return RuntimeHtmlAstFrameworkErrorCode.AstBehaviorDuplicated;
     case CheckerExpressionTypeOpenKind.NullishMemberAccess:
       return dataFlow.strictBinding === true ? RuntimeAstFrameworkErrorCode.AstNullishMemberAccess : null;
     case CheckerExpressionTypeOpenKind.NullishKeyedAccess:
@@ -575,9 +641,7 @@ export function expressionParseErrorDiagnostic(
       : 'framework-error-code',
     frameworkErrorCode,
     severity: 'error',
-    summary: frameworkErrorCode == null
-      ? `The expression parser rejected this template expression: ${message}.`
-      : `Aurelia expression parser ${frameworkErrorCode} rejects this template expression: ${message}.`,
+    summary: diagnosticSentence(message),
     missingInput: frameworkErrorCode == null
       ? 'expression-parse:unmapped'
       : `expression-parse:${frameworkErrorCode}`,
@@ -604,6 +668,87 @@ export function expressionParseErrorDiagnostic(
   };
 }
 
+/** Actionable Aurelia-owned authored-markup recovery in either supported template language mode. */
+export function htmlRecoveryDiagnostic(
+  recoveryKind: HtmlRecoveryKind,
+  message: string,
+  source: NonNullable<SemanticTemplateDiagnosticRow['source']>,
+): SemanticTemplateCursorDiagnosticRow {
+  return {
+    diagnosticKind: 'html-syntax-recovery',
+    diagnosticAuthority: 'semantic-authoring-policy',
+    frameworkErrorCode: null,
+    severity: htmlRecoveryDiagnosticSeverity(recoveryKind),
+    summary: diagnosticSentence(message),
+    missingInput: `html-recovery:${recoveryKind}`,
+    missingInputs: [`html-recovery:${recoveryKind}`],
+    source,
+    selectedMemberName: null,
+    ownerTypeDisplay: null,
+    ownerTypeShapeKind: null,
+    ownerTypeOrigin: null,
+    suggestion: {
+      suggestionKind: 'fix-template-syntax',
+      actionKind: 'rewrite-template-syntax',
+      actionTarget: suggestionActionTarget('template-syntax', source, null, null),
+      summary: htmlRecoverySuggestion(recoveryKind),
+      targetMemberName: null,
+      ownerTypeDisplay: null,
+      valueTypeDisplay: null,
+      valueTypeSource: null,
+    },
+  };
+}
+
+function htmlRecoveryDiagnosticSeverity(
+  recoveryKind: HtmlRecoveryKind,
+): SemanticTemplateCursorDiagnosticRow['severity'] {
+  switch (recoveryKind) {
+    case HtmlRecoveryKind.MissingEndTag:
+    case HtmlRecoveryKind.DuplicateAttribute:
+    case HtmlRecoveryKind.MalformedComment:
+    case HtmlRecoveryKind.NonVoidSelfClosing:
+      return 'warning';
+    default:
+      return 'error';
+  }
+}
+
+function htmlRecoverySuggestion(recoveryKind: HtmlRecoveryKind): string {
+  switch (recoveryKind) {
+    case HtmlRecoveryKind.MissingEndTag:
+      return 'Close the element explicitly so the browser and Aurelia compiler receive the intended tree.';
+    case HtmlRecoveryKind.UnexpectedEndTag:
+      return 'Remove the closing tag or make it match the currently open element.';
+    case HtmlRecoveryKind.UnterminatedStartTag:
+      return 'Close the start tag with > before authoring child content.';
+    case HtmlRecoveryKind.UnterminatedEndTag:
+      return 'Close the end tag with >.';
+    case HtmlRecoveryKind.NonVoidSelfClosing:
+      return 'Use an explicit closing tag for non-void HTML elements so following siblings keep their intended parent.';
+    case HtmlRecoveryKind.UnterminatedAttribute:
+      return 'Close the quoted attribute value before authoring later attributes or child markup.';
+    case HtmlRecoveryKind.MissingAttributeValue:
+      return 'Add an attribute value after =, or remove = for a boolean attribute.';
+    case HtmlRecoveryKind.InvalidAttribute:
+      return 'Give the attribute a valid authored name.';
+    case HtmlRecoveryKind.UnterminatedComment:
+      return 'Close the HTML comment with --> so later template content remains visible.';
+    case HtmlRecoveryKind.MalformedComment:
+      return 'Use <!-- ... --> for a well-formed HTML comment.';
+    case HtmlRecoveryKind.UnterminatedCdata:
+      return 'Close the foreign-content CDATA section with ]]>.';
+    case HtmlRecoveryKind.DuplicateAttribute:
+      return 'Remove or merge the duplicate attribute; the browser keeps only one value.';
+    case HtmlRecoveryKind.InvalidDoctype:
+      return 'Close or rewrite the declaration so it has one valid > delimiter.';
+    case HtmlRecoveryKind.NestingLimitExceeded:
+      return 'Reduce element nesting or extract nested markup into a child component so the template stays within the supported analysis depth.';
+    default:
+      return 'Rewrite the malformed markup so browser parsing has one unambiguous result.';
+  }
+}
+
 export function templateCompilerErrorDiagnostic(
   message: string,
   frameworkErrorCode: string | null,
@@ -617,9 +762,7 @@ export function templateCompilerErrorDiagnostic(
       : 'framework-error-code',
     frameworkErrorCode,
     severity,
-    summary: frameworkErrorCode == null
-      ? `The template compiler rejected this template syntax: ${message}.`
-      : `Aurelia template compiler ${frameworkErrorCode} rejects this template syntax: ${message}.`,
+    summary: templateCompilerDiagnosticSentence(message),
     missingInput: frameworkErrorCode == null
       ? 'template-compiler:unmapped'
       : `template-compiler:${frameworkErrorCode}`,
@@ -649,12 +792,48 @@ export function templateCompilerErrorDiagnostic(
 export function frameworkCapabilityDemandDiagnostic(
   demand: FrameworkCapabilityDemand,
   source: NonNullable<SemanticTemplateDiagnosticRow['source']>,
+  configurationSources: readonly NonNullable<SemanticTemplateDiagnosticRow['source']>[] = [],
 ): SemanticTemplateCursorDiagnosticRow {
   const capabilityLabel = frameworkCapabilityDemandLabel(demand);
   const moduleName = demand.recommendedModuleName ?? demand.candidateModuleNames[0] ?? null;
   const availabilitySummary = demand.availabilityState === FrameworkCapabilityAvailabilityState.EvidenceFound
     ? `Availability evidence was found for ${moduleName ?? 'a candidate package'}.`
     : 'No local manifest or import evidence was found for a package that provides this capability.';
+  if (demand.admissionState === FrameworkCapabilityAdmissionState.ConfiguredOut) {
+    return {
+      diagnosticKind: 'framework-capability-configured-out',
+      diagnosticAuthority: 'semantic-authoring-policy',
+      frameworkErrorCode: null,
+      severity: 'error',
+      summary: `${frameworkCapabilityDemandSiteLabel(demand)} "${demand.authoredName}" uses ${capabilityLabel}, but the admitted app configuration excludes that surface.`,
+      missingInput: demand.requiredCapability,
+      missingInputs: [demand.requiredCapability],
+      source,
+      relatedInformation: configurationSources.map((configurationSource) => ({
+        message: 'This configuration excludes the demanded framework surface.',
+        source: configurationSource,
+      })),
+      selectedMemberName: demand.authoredName,
+      ownerTypeDisplay: null,
+      ownerTypeShapeKind: null,
+      ownerTypeOrigin: null,
+      suggestion: {
+        suggestionKind: 'configure-framework-capability',
+        actionKind: 'configure-framework-capability',
+        actionTarget: suggestionActionTarget(
+          'framework-capability',
+          configurationSources.length === 1 ? configurationSources[0]! : null,
+          demand.requiredCapability,
+          moduleName,
+        ),
+        summary: frameworkCapabilityConfigurationSuggestion(demand),
+        targetMemberName: demand.requiredCapability,
+        ownerTypeDisplay: null,
+        valueTypeDisplay: moduleName,
+        valueTypeSource: null,
+      },
+    };
+  }
   return {
     diagnosticKind: 'framework-capability-not-registered',
     diagnosticAuthority: 'semantic-authoring-policy',
@@ -696,7 +875,7 @@ export function runtimeControllerIssueDiagnostic(
     diagnosticAuthority: 'framework-error-code',
     frameworkErrorCode: issue.frameworkErrorCode,
     severity: 'error',
-    summary: `Aurelia runtime controller ${issue.frameworkErrorCode ?? ''} rejects this controller input: ${issue.message}.`,
+    summary: diagnosticSentence(issue.message),
     missingInput: issue.frameworkErrorCode == null
       ? `runtime-controller:${issue.issueKind}`
       : `runtime-controller:${issue.frameworkErrorCode}`,
@@ -771,7 +950,7 @@ export function runtimeBindingIssueDiagnostic(
     diagnosticAuthority: 'framework-error-code',
     frameworkErrorCode: issue.frameworkErrorCode,
     severity: 'error',
-    summary: `Aurelia runtime binding ${issue.frameworkErrorCode ?? ''} rejects this binding input: ${issue.message}.`,
+    summary: diagnosticSentence(issue.message),
     missingInput: issue.frameworkErrorCode == null
       ? `runtime-binding:${issue.issueKind}`
       : `runtime-binding:${issue.frameworkErrorCode}`,
@@ -817,13 +996,14 @@ function runtimeBindingIssueSuggestion(issue: RuntimeBindingIssue): string {
 export function runtimeRendererIssueDiagnostic(
   issue: RuntimeRendererIssue,
   source: NonNullable<SemanticTemplateDiagnosticRow['source']>,
+  selectedMemberName: string | null,
 ): SemanticTemplateCursorDiagnosticRow {
   return {
     diagnosticKind: 'runtime-renderer-framework-error',
     diagnosticAuthority: 'framework-error-code',
     frameworkErrorCode: issue.frameworkErrorCode,
     severity: 'error',
-    summary: `Aurelia runtime renderer ${issue.frameworkErrorCode ?? ''} rejects this instruction input: ${issue.message}.`,
+    summary: diagnosticSentence(issue.message),
     missingInput: issue.frameworkErrorCode == null
       ? `runtime-renderer:${issue.issueKind}`
       : `runtime-renderer:${issue.frameworkErrorCode}`,
@@ -833,16 +1013,16 @@ export function runtimeRendererIssueDiagnostic(
         : `runtime-renderer:${issue.frameworkErrorCode}`,
     ],
     source,
-    selectedMemberName: null,
+    selectedMemberName,
     ownerTypeDisplay: null,
     ownerTypeShapeKind: null,
     ownerTypeOrigin: null,
     suggestion: {
       suggestionKind: 'fix-template-syntax',
       actionKind: 'rewrite-template-syntax',
-      actionTarget: suggestionActionTarget('template-syntax', source, null, null),
+      actionTarget: suggestionActionTarget('template-syntax', source, selectedMemberName, null),
       summary: runtimeRendererIssueSuggestion(issue),
-      targetMemberName: null,
+      targetMemberName: selectedMemberName,
       ownerTypeDisplay: null,
       valueTypeDisplay: null,
       valueTypeSource: null,
@@ -871,13 +1051,21 @@ export function runtimeBindingBehaviorIssueDiagnostic(
   issue: RuntimeBindingBehaviorIssue,
   source: NonNullable<SemanticTemplateDiagnosticRow['source']>,
 ): SemanticTemplateCursorDiagnosticRow {
-  const suggestion = runtimeBindingBehaviorIssueSuggestion(issue);
+  const selectedMemberName = issue.issueKind === RuntimeBindingBehaviorIssueKind.ResourceNotFound
+    || issue.issueKind === RuntimeBindingBehaviorIssueKind.DuplicateApplication
+    ? issue.application.behaviorName
+    : null;
+  const expressionSuggestion = issue.frameworkErrorCode === RuntimeHtmlAstFrameworkErrorCode.AstBehaviorNotFound
+    || issue.frameworkErrorCode === RuntimeHtmlAstFrameworkErrorCode.AstBehaviorDuplicated
+    ? expressionRuntimeEvaluationSuggestion(issue.frameworkErrorCode, source, selectedMemberName)
+    : null;
+  const suggestion = expressionSuggestion?.summary ?? runtimeBindingBehaviorIssueSuggestion(issue);
   return {
     diagnosticKind: 'runtime-binding-behavior-framework-error',
     diagnosticAuthority: 'framework-error-code',
     frameworkErrorCode: issue.frameworkErrorCode,
     severity: 'error',
-    summary: `Aurelia runtime binding behavior ${issue.frameworkErrorCode ?? ''} rejects this binding: ${issue.message}.`,
+    summary: diagnosticSentence(issue.message),
     missingInput: issue.frameworkErrorCode == null
       ? `runtime-binding-behavior:${issue.issueKind}`
       : `runtime-binding-behavior:${issue.frameworkErrorCode}`,
@@ -887,16 +1075,17 @@ export function runtimeBindingBehaviorIssueDiagnostic(
         : `runtime-binding-behavior:${issue.frameworkErrorCode}`,
     ],
     source,
-    selectedMemberName: null,
+    selectedMemberName,
     ownerTypeDisplay: null,
     ownerTypeShapeKind: null,
     ownerTypeOrigin: null,
     suggestion: {
-      suggestionKind: 'fix-template-syntax',
-      actionKind: 'rewrite-template-syntax',
-      actionTarget: suggestionActionTarget('template-syntax', source, null, null),
+      suggestionKind: expressionSuggestion?.suggestionKind ?? 'fix-template-syntax',
+      actionKind: expressionSuggestion?.actionKind ?? 'rewrite-template-syntax',
+      actionTarget: expressionSuggestion?.actionTarget
+        ?? suggestionActionTarget('template-syntax', source, null, null),
       summary: suggestion,
-      targetMemberName: null,
+      targetMemberName: selectedMemberName,
       ownerTypeDisplay: null,
       valueTypeDisplay: null,
       valueTypeSource: null,
@@ -906,6 +1095,10 @@ export function runtimeBindingBehaviorIssueDiagnostic(
 
 function runtimeBindingBehaviorIssueSuggestion(issue: RuntimeBindingBehaviorIssue): string {
   switch (issue.issueKind) {
+    case RuntimeBindingBehaviorIssueKind.ResourceNotFound:
+      return 'Register or import a binding behavior with this name into the compiler resource scope.';
+    case RuntimeBindingBehaviorIssueKind.DuplicateApplication:
+      return 'Remove the duplicate binding behavior application or combine its arguments into one application.';
     case RuntimeBindingBehaviorIssueKind.BindingAlreadyHasRateLimited:
       return 'Keep only one rate-limiting behavior on this binding, or combine the behavior arguments into one rate limiter.';
     case RuntimeBindingBehaviorIssueKind.BindingAlreadyHasTargetSubscriber:
@@ -939,25 +1132,33 @@ export function runtimeValueConverterIssueDiagnostic(
   issue: RuntimeValueConverterIssue,
   source: NonNullable<SemanticTemplateDiagnosticRow['source']>,
 ): SemanticTemplateCursorDiagnosticRow {
+  const selectedMemberName = issue.issueKind === RuntimeValueConverterIssueKind.ResourceNotFound
+    ? issue.application.converterName
+    : null;
+  const expressionSuggestion = issue.frameworkErrorCode === RuntimeHtmlAstFrameworkErrorCode.AstConverterNotFound
+    ? expressionRuntimeEvaluationSuggestion(issue.frameworkErrorCode, source, selectedMemberName)
+    : null;
   return {
     diagnosticKind: 'runtime-value-converter-framework-error',
     diagnosticAuthority: 'framework-error-code',
     frameworkErrorCode: issue.frameworkErrorCode,
     severity: 'error',
-    summary: `Aurelia runtime value converter ${issue.frameworkErrorCode} rejects this binding: ${issue.message}.`,
+    summary: diagnosticSentence(issue.message),
     missingInput: `runtime-value-converter:${issue.frameworkErrorCode}`,
     missingInputs: [`runtime-value-converter:${issue.frameworkErrorCode}`],
     source,
-    selectedMemberName: null,
+    selectedMemberName,
     ownerTypeDisplay: null,
     ownerTypeShapeKind: null,
     ownerTypeOrigin: null,
     suggestion: {
-      suggestionKind: 'register-di-service',
-      actionKind: 'register-service',
-      actionTarget: suggestionActionTarget('service', source, 'ISanitizer', null),
-      summary: 'Register an app ISanitizer implementation before using the built-in sanitize value converter.',
-      targetMemberName: 'ISanitizer',
+      suggestionKind: expressionSuggestion?.suggestionKind ?? 'register-di-service',
+      actionKind: expressionSuggestion?.actionKind ?? 'register-service',
+      actionTarget: expressionSuggestion?.actionTarget
+        ?? suggestionActionTarget('service', source, 'ISanitizer', null),
+      summary: expressionSuggestion?.summary
+        ?? 'Register an app ISanitizer implementation before using the built-in sanitize value converter.',
+      targetMemberName: expressionSuggestion == null ? 'ISanitizer' : selectedMemberName,
       ownerTypeDisplay: null,
       valueTypeDisplay: null,
       valueTypeSource: null,
@@ -977,7 +1178,7 @@ export function expressionRuntimeEvaluationErrorDiagnostic(
     diagnosticAuthority: 'framework-error-code',
     frameworkErrorCode,
     severity: 'error',
-    summary: `Aurelia runtime astEvaluate ${frameworkErrorCode} rejects this template expression: ${message}.`,
+    summary: diagnosticSentence(message),
     missingInput: `runtime-ast:${frameworkErrorCode}`,
     missingInputs: [`runtime-ast:${frameworkErrorCode}`],
     source,
@@ -1071,21 +1272,21 @@ function expressionRuntimeEvaluationSuggestion(
         actionTarget: suggestionActionTarget('runtime-boundary', source, '$host', null),
         summary: 'Use $host only in a template scope that supplies the Aurelia host context, such as an au-slot boundary.',
       };
-    case RuntimeHtmlAstFrameworkErrorCodes.AstConverterNotFound:
+    case RuntimeHtmlAstFrameworkErrorCode.AstConverterNotFound:
       return {
         suggestionKind: 'register-resource',
         actionKind: 'register-resource',
         actionTarget: suggestionActionTarget('resource', source, selectedMemberName, 'value-converter'),
         summary: 'Register or import a value converter with this name into the compiler resource scope.',
       };
-    case RuntimeHtmlAstFrameworkErrorCodes.AstBehaviorNotFound:
+    case RuntimeHtmlAstFrameworkErrorCode.AstBehaviorNotFound:
       return {
         suggestionKind: 'register-resource',
         actionKind: 'register-resource',
         actionTarget: suggestionActionTarget('resource', source, selectedMemberName, 'binding-behavior'),
         summary: 'Register or import a binding behavior with this name into the compiler resource scope.',
       };
-    case RuntimeHtmlAstFrameworkErrorCodes.AstBehaviorDuplicated:
+    case RuntimeHtmlAstFrameworkErrorCode.AstBehaviorDuplicated:
       return {
         suggestionKind: 'remove-duplicate-binding-behavior',
         actionKind: 'rewrite-expression',
@@ -1124,14 +1325,19 @@ export function runtimeBindingScopeIssueDiagnostic(
   if (issue.issueKind === RuntimeBindingScopeIssueKind.RepeatNonIterable) {
     return repeatNonIterableDiagnostic(issue, source);
   }
+  if (issue.issueKind === RuntimeBindingScopeIssueKind.UnsupportedRepeatDeclaration) {
+    return unsupportedRepeatDeclarationDiagnostic(issue, source);
+  }
+  if (issue.issueKind === RuntimeBindingScopeIssueKind.WithNullBindingContext) {
+    return withNullBindingContextDiagnostic(issue, source);
+  }
+  const destructuringSuggestion = runtimeBindingScopeIssueDestructuringSuggestion(issue.issueKind);
   return {
     diagnosticKind: 'runtime-binding-scope-framework-error',
     diagnosticAuthority: 'framework-error-code',
     frameworkErrorCode: issue.frameworkErrorCode,
     severity: issue.certainty === RuntimeBindingScopeIssueCertainty.Definite ? 'error' : 'warning',
-    summary: issue.certainty === RuntimeBindingScopeIssueCertainty.Definite
-      ? `Aurelia runtime astAssign ${issue.frameworkErrorCode ?? ''} rejects this repeat destructuring source: ${issue.message}.`
-      : `Aurelia runtime astAssign ${issue.frameworkErrorCode ?? ''} may reject this repeat destructuring source: ${issue.message}.`,
+    summary: diagnosticSentence(issue.message),
     missingInput: issue.frameworkErrorCode == null
       ? `runtime-binding-scope:${issue.issueKind}`
       : `runtime-binding-scope:${issue.frameworkErrorCode}`,
@@ -1146,10 +1352,98 @@ export function runtimeBindingScopeIssueDiagnostic(
     ownerTypeShapeKind: issue.sourceType?.shapeKind ?? null,
     ownerTypeOrigin: issue.sourceType?.origin ?? null,
     suggestion: {
-      suggestionKind: 'use-safe-destructuring-source',
+      suggestionKind: destructuringSuggestion.suggestionKind,
       actionKind: 'rewrite-expression',
       actionTarget: suggestionActionTarget('expression', source, null, issue.sourceType?.display ?? null),
-      summary: 'Ensure the repeat item source is object-shaped before destructuring, or guard the repeat with template control flow.',
+      summary: destructuringSuggestion.summary,
+      targetMemberName: null,
+      ownerTypeDisplay: issue.sourceType?.display ?? null,
+      valueTypeDisplay: null,
+      valueTypeSource: null,
+    },
+  };
+}
+
+function runtimeBindingScopeIssueDestructuringSuggestion(
+  issueKind: RuntimeBindingScopeIssueKind,
+): {
+  readonly suggestionKind: 'guard-nullish-expression' | 'use-safe-destructuring-source';
+  readonly summary: string;
+} {
+  switch (issueKind) {
+    case RuntimeBindingScopeIssueKind.RepeatObjectBindingNullish:
+      return {
+        suggestionKind: 'guard-nullish-expression',
+        summary: 'Guard or narrow nullish repeat items before projecting object-pattern locals.',
+      };
+    case RuntimeBindingScopeIssueKind.ArrayRestNonArray:
+      return {
+        suggestionKind: 'use-safe-destructuring-source',
+        summary: 'Use an Array-valued repeat item before applying an array rest declaration, or guard the repeat with template control flow.',
+      };
+    default:
+      return {
+        suggestionKind: 'use-safe-destructuring-source',
+        summary: 'Ensure the repeat item is compatible with the object or array declaration before destructuring, or guard the repeat with template control flow.',
+      };
+  }
+}
+
+function unsupportedRepeatDeclarationDiagnostic(
+  issue: RuntimeBindingScopeIssue,
+  source: NonNullable<SemanticTemplateDiagnosticRow['source']>,
+): SemanticTemplateCursorDiagnosticRow {
+  return {
+    diagnosticKind: 'unsupported-repeat-declaration',
+    diagnosticAuthority: 'framework-runtime-behavior',
+    frameworkErrorCode: null,
+    severity: 'error',
+    summary: diagnosticSentence(issue.message),
+    missingInput: 'virtual-repeat-declaration:binding-pattern-runtime-unsupported',
+    missingInputs: ['virtual-repeat-declaration:binding-pattern-runtime-unsupported'],
+    source,
+    selectedMemberName: null,
+    ownerTypeDisplay: null,
+    ownerTypeShapeKind: null,
+    ownerTypeOrigin: null,
+    suggestion: {
+      suggestionKind: 'fix-template-syntax',
+      actionKind: 'rewrite-template-syntax',
+      actionTarget: suggestionActionTarget('template-syntax', source, null, null),
+      summary: 'Use one virtual-repeat local and access the repeated value through that local.',
+      targetMemberName: null,
+      ownerTypeDisplay: null,
+      valueTypeDisplay: null,
+      valueTypeSource: null,
+    },
+  };
+}
+
+function withNullBindingContextDiagnostic(
+  issue: RuntimeBindingScopeIssue,
+  source: NonNullable<SemanticTemplateDiagnosticRow['source']>,
+): SemanticTemplateCursorDiagnosticRow {
+  const definite = issue.certainty === RuntimeBindingScopeIssueCertainty.Definite;
+  return {
+    diagnosticKind: 'template-controller-null-binding-context',
+    diagnosticAuthority: 'framework-runtime-behavior',
+    frameworkErrorCode: null,
+    severity: definite ? 'error' : 'warning',
+    summary: definite
+      ? 'Aurelia with receives null as its child binding context; ordinary scope lookup will throw before reaching the parent scope.'
+      : 'Aurelia with can receive null as its child binding context; ordinary scope lookup will then throw before reaching the parent scope.',
+    missingInput: 'with-binding-context:reachable-null',
+    missingInputs: ['with-binding-context:reachable-null'],
+    source,
+    selectedMemberName: null,
+    ownerTypeDisplay: issue.sourceType?.display ?? null,
+    ownerTypeShapeKind: issue.sourceType?.shapeKind ?? null,
+    ownerTypeOrigin: issue.sourceType?.origin ?? null,
+    suggestion: {
+      suggestionKind: 'guard-nullish-expression',
+      actionKind: 'rewrite-expression',
+      actionTarget: suggestionActionTarget('expression', source, null, issue.sourceType?.display ?? null),
+      summary: 'Guard or narrow the value before entering with; unlike undefined, null is not replaced with an empty binding context.',
       targetMemberName: null,
       ownerTypeDisplay: issue.sourceType?.display ?? null,
       valueTypeDisplay: null,
@@ -1162,29 +1456,21 @@ export function routerIssueDiagnostic(
   issue: RouterIssueModel,
   source: NonNullable<SemanticTemplateDiagnosticRow['source']>,
 ): SemanticTemplateCursorDiagnosticRow {
+  const repair = routerIssueDiagnosticRepairProjection(issue, source);
   return {
     diagnosticKind: 'router-framework-error',
-    diagnosticAuthority: issue.frameworkErrorCode == null ? 'framework-runtime-behavior' : 'framework-error-code',
+    diagnosticAuthority: routerIssueDiagnosticAuthority(issue),
     frameworkErrorCode: issue.frameworkErrorCode,
     severity: issue.severity,
-    summary: issue.message,
-    missingInput: `router:${issue.issueKind}`,
-    missingInputs: [`router:${issue.issueKind}`],
+    summary: diagnosticSentence(issue.message),
+    missingInput: repair?.missingInput ?? null,
+    missingInputs: repair?.missingInputs ?? [],
     source,
     selectedMemberName: null,
     ownerTypeDisplay: null,
     ownerTypeShapeKind: null,
     ownerTypeOrigin: null,
-    suggestion: {
-      suggestionKind: 'fix-router-instruction',
-      actionKind: 'rewrite-expression',
-      actionTarget: suggestionActionTarget('expression', source, null, issue.expected),
-      summary: 'Rewrite the router instruction to a route string, routeable component, or viewport instruction that the router can materialize.',
-      targetMemberName: null,
-      ownerTypeDisplay: null,
-      valueTypeDisplay: issue.expected,
-      valueTypeSource: null,
-    },
+    suggestion: repair?.suggestion ?? null,
   };
 }
 
@@ -1197,9 +1483,7 @@ function repeatNonIterableDiagnostic(
     diagnosticAuthority: 'framework-error-code',
     frameworkErrorCode: issue.frameworkErrorCode,
     severity: issue.certainty === RuntimeBindingScopeIssueCertainty.Definite ? 'error' : 'warning',
-    summary: issue.certainty === RuntimeBindingScopeIssueCertainty.Definite
-      ? `Aurelia runtime repeat ${issue.frameworkErrorCode ?? ''} rejects this repeat source: ${issue.message}.`
-      : `Aurelia runtime repeat ${issue.frameworkErrorCode ?? ''} may reject this repeat source unless an app IRepeatableHandler handles it: ${issue.message}.`,
+    summary: diagnosticSentence(issue.message),
     missingInput: issue.frameworkErrorCode == null
       ? `runtime-repeat:${issue.issueKind}`
       : `runtime-repeat:${issue.frameworkErrorCode}`,
@@ -1238,8 +1522,9 @@ export function bindingTargetAccessFrameworkErrorDiagnostic(
     diagnosticAuthority: 'framework-error-code',
     frameworkErrorCode: targetAccess.frameworkErrorCode,
     severity: 'error',
-    summary: targetAccess.diagnosticReason
-      ?? `Aurelia runtime ${targetAccess.frameworkErrorCode} rejects this binding target observer lookup.`,
+    summary: targetAccess.diagnosticReason == null
+      ? 'The runtime could not resolve a target observer for this binding target.'
+      : diagnosticSentence(targetAccess.diagnosticReason),
     missingInput: `binding-target-access:${targetAccess.frameworkErrorCode}`,
     missingInputs: [`binding-target-access:${targetAccess.frameworkErrorCode}`],
     source,
@@ -1290,8 +1575,18 @@ function bindingSourceAssignmentSuggestion(
   ownerSource: SemanticSourceReference | null,
   reasonKinds: readonly RuntimeBindingDataFlowSourceAssignmentReasonKind[],
   runtimeNoop: boolean,
+  frameworkManaged: boolean,
   valueTypeDisplay: string | null,
 ): BindingSourceAssignmentSuggestionPolicy {
+  if (frameworkManaged) {
+    return {
+      suggestionKind: 'use-assignable-expression',
+      actionKind: 'rewrite-expression',
+      actionTarget: suggestionActionTarget('expression', source, dataFlow.sourceName, null),
+      summary: 'Bind writeback to an app-owned writable member instead of Aurelia-managed contextual state.',
+      valueTypeSource: null,
+    };
+  }
   if (runtimeNoop) {
     if (reasonKinds.includes(RuntimeBindingDataFlowSourceAssignmentReasonKind.NullishAssignment)) {
       return {
@@ -1552,8 +1847,8 @@ function missingMemberDiagnostic(
     diagnosticKind: 'missing-expression-member',
     diagnosticAuthority: 'semantic-authoring-policy',
     frameworkErrorCode: null,
-    severity: declareMember ? 'warning' : 'information',
-    summary: 'The selected member is not projected on the owner type, so semantic tooling cannot validate or navigate it.',
+    severity: 'warning',
+    summary: `Member "${selectedMemberName}" is not projected on the owner type, so semantic tooling cannot validate or navigate it.`,
     missingInput: 'expression-member:selected-member-missing',
     missingInputs: ['expression-member:selected-member-missing'],
     source,
@@ -1602,9 +1897,12 @@ function noMembersOwnerTypeIsWeak(ownerTypeShapeKind: CheckerTypeShapeKind): boo
 function bindingSourceAssignmentSummary(
   dataFlow: RuntimeBindingDataFlow,
   runtimeNoop: boolean,
+  frameworkManaged: boolean,
 ): string {
   return dataFlow.sourceAssignmentReason
-    ?? (runtimeNoop
+    ?? (frameworkManaged
+      ? 'The binding source is framework-managed contextual state and is not an author-owned assignment target.'
+      : runtimeNoop
       ? 'Aurelia runtime assignment does not update the binding source for this expression shape.'
       : 'Binding assignment is accepted by Aurelia runtime semantics, but TypeScript cannot prove the source write.');
 }
@@ -1762,13 +2060,55 @@ function frameworkCapabilityRegistrationSuggestion(
     case FrameworkCapabilityDemandKind.ValidationServiceResolvers:
     case FrameworkCapabilityDemandKind.RouterDefaultResources:
     case FrameworkCapabilityDemandKind.UiVirtualizationDefaultResources:
-    case FrameworkCapabilityDemandKind.StateDefaultResources:
-    case FrameworkCapabilityDemandKind.StateBindingSyntax:
     case FrameworkCapabilityDemandKind.DialogServiceResolvers:
       return moduleName == null
         ? `Register ${registrationName} with the app container.`
         : `Register ${registrationName} from ${moduleName} with the app container.`;
+    case FrameworkCapabilityDemandKind.StateDefaultResources:
+    case FrameworkCapabilityDemandKind.StateBindingSyntax:
+      return moduleName == null
+        ? 'Initialize StateDefaultConfiguration with app state, then register the returned configuration with the app container.'
+        : `Initialize StateDefaultConfiguration from ${moduleName} with app state, then register the returned configuration with the app container.`;
   }
+}
+
+function frameworkCapabilityConfigurationSuggestion(
+  demand: FrameworkCapabilityDemand,
+): string {
+  switch (demand.demandKind) {
+    case FrameworkCapabilityDemandKind.I18nTranslationSyntax:
+      return `Include "${demand.authoredName.replace(/\.bind$/u, '')}" in I18nConfiguration.translationAttributeAliases.`;
+    case FrameworkCapabilityDemandKind.ValidationHtmlDefaultResources:
+      if (demand.authoredName === 'validation-errors.bind' || demand.authoredName === 'validation-errors') {
+        return 'Enable ValidationHtmlConfiguration.UseSubscriberCustomAttribute.';
+      }
+      if (demand.authoredName === 'validation-container') {
+        return 'Provide a non-empty ValidationHtmlConfiguration.SubscriberCustomElementTemplate.';
+      }
+      return 'Enable the demanded validation-html resource in ValidationHtmlConfiguration.';
+    default:
+      return `Change the admitted framework configuration so it includes "${demand.authoredName}".`;
+  }
+}
+
+function templateCompilerDiagnosticSentence(message: string): string {
+  const detail = message.trim()
+    .replace(/^Template compilation error:\s*/u, '')
+    .replace(/^Template compilation error in\s+/u, 'In ');
+  return diagnosticSentence(detail.length === 0
+    ? detail
+    : `${detail[0]!.toUpperCase()}${detail.slice(1)}`);
+}
+
+function diagnosticSentence(message: string): string {
+  const trimmed = message.trim();
+  if (trimmed.length === 0) {
+    return 'The diagnostic producer did not provide a message.';
+  }
+  const withoutTrailingPeriods = trimmed.replace(/\.+$/u, '');
+  return /[!?]$/u.test(withoutTrailingPeriods)
+    ? withoutTrailingPeriods
+    : `${withoutTrailingPeriods}.`;
 }
 
 function suggestionActionTarget(

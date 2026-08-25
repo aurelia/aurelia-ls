@@ -1,56 +1,107 @@
 import type { BindingScope } from '../configuration/scope.js';
 import type { HydrateTemplateControllerInstruction } from './instruction-ir.js';
+import type { RuntimeControllerFrame } from './runtime-controller.js';
 
-export interface TemplateControllerPromiseState {
-  readonly instruction: HydrateTemplateControllerInstruction;
-  readonly valueScope: BindingScope;
+/** One concrete template-controller application retained across sibling flow traversal. */
+export class TemplateControllerFlowApplication {
+  constructor(
+    readonly instruction: HydrateTemplateControllerInstruction,
+    readonly controller: RuntimeControllerFrame | null,
+  ) {}
 }
 
-export const enum TemplateControllerPromiseResultKind {
+export class TemplateControllerPromiseState {
+  constructor(
+    readonly application: TemplateControllerFlowApplication,
+    readonly valueScope: BindingScope,
+  ) {}
+}
+
+export const enum TemplateControllerPromiseSettlementKind {
   Fulfilled = 'fulfilled',
   Rejected = 'rejected',
 }
 
 export class TemplateControllerFlowState {
-  private readonly previousIfByParentScope = new Map<string, HydrateTemplateControllerInstruction>();
-  private readonly promiseByChildScope = new Map<string, TemplateControllerPromiseState>();
-  private readonly switchByChildScope = new Map<string, HydrateTemplateControllerInstruction>();
+  private readonly previousIfByParentScope = new Map<string, TemplateControllerFlowApplication>();
+  private readonly promiseByChildScopeState = new Map<string, TemplateControllerPromiseState>();
+  private readonly switchByChildScopeState = new Map<string, TemplateControllerFlowApplication>();
 
-  rememberIf(parent: BindingScope, instruction: HydrateTemplateControllerInstruction): void {
-    this.previousIfByParentScope.set(parent.productHandle, instruction);
+  rememberIf(
+    parent: BindingScope,
+    instruction: HydrateTemplateControllerInstruction,
+    controller: RuntimeControllerFrame | null,
+  ): void {
+    this.previousIfByParentScope.set(
+      parent.productHandle,
+      new TemplateControllerFlowApplication(instruction, controller),
+    );
   }
 
-  consumeIf(parent: BindingScope): HydrateTemplateControllerInstruction | null {
-    const instruction = this.previousIfByParentScope.get(parent.productHandle) ?? null;
+  consumeIf(parent: BindingScope): TemplateControllerFlowApplication | null {
+    const application = this.previousIfByParentScope.get(parent.productHandle) ?? null;
     this.previousIfByParentScope.delete(parent.productHandle);
-    return instruction;
+    return application;
   }
 
   clearBranch(parent: BindingScope): void {
     this.previousIfByParentScope.delete(parent.productHandle);
   }
 
-  rememberPromise(childScope: BindingScope, instruction: HydrateTemplateControllerInstruction, valueScope: BindingScope): void {
-    this.promiseByChildScope.set(childScope.productHandle, { instruction, valueScope });
+  rememberPromise(
+    childScope: BindingScope,
+    instruction: HydrateTemplateControllerInstruction,
+    controller: RuntimeControllerFrame | null,
+    valueScope: BindingScope,
+  ): void {
+    this.promiseByChildScopeState.set(
+      childScope.productHandle,
+      new TemplateControllerPromiseState(
+        new TemplateControllerFlowApplication(instruction, controller),
+        valueScope,
+      ),
+    );
   }
 
   readPromise(childScope: BindingScope): TemplateControllerPromiseState | null {
-    return this.promiseByChildScope.get(childScope.productHandle) ?? null;
+    return readFlowStateThroughPredecessors(this.promiseByChildScopeState, childScope);
   }
 
   forgetPromise(childScope: BindingScope): void {
-    this.promiseByChildScope.delete(childScope.productHandle);
+    this.promiseByChildScopeState.delete(childScope.productHandle);
   }
 
-  rememberSwitch(childScope: BindingScope, instruction: HydrateTemplateControllerInstruction): void {
-    this.switchByChildScope.set(childScope.productHandle, instruction);
+  rememberSwitch(
+    childScope: BindingScope,
+    instruction: HydrateTemplateControllerInstruction,
+    controller: RuntimeControllerFrame | null,
+  ): void {
+    this.switchByChildScopeState.set(
+      childScope.productHandle,
+      new TemplateControllerFlowApplication(instruction, controller),
+    );
   }
 
-  readSwitch(childScope: BindingScope): HydrateTemplateControllerInstruction | null {
-    return this.switchByChildScope.get(childScope.productHandle) ?? null;
+  readSwitch(childScope: BindingScope): TemplateControllerFlowApplication | null {
+    return readFlowStateThroughPredecessors(this.switchByChildScopeState, childScope);
   }
 
   forgetSwitch(childScope: BindingScope): void {
-    this.switchByChildScope.delete(childScope.productHandle);
+    this.switchByChildScopeState.delete(childScope.productHandle);
   }
+}
+
+function readFlowStateThroughPredecessors<T>(
+  states: ReadonlyMap<string, T>,
+  scope: BindingScope,
+): T | null {
+  let current: BindingScope | null = scope;
+  while (current != null) {
+    const state = states.get(current.productHandle);
+    if (state != null) {
+      return state;
+    }
+    current = current.predecessor;
+  }
+  return null;
 }

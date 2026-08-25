@@ -1,269 +1,142 @@
 import type {
-  DiagnosticActionability,
-  DiagnosticCategory,
-  DiagnosticImpact,
-  DiagnosticStage,
-  DiagnosticStatus,
-  DiagnosticSurface,
-} from "@aurelia-ls/compiler/diagnostics/types.js";
-import type { DiagnosticSeverity } from "@aurelia-ls/compiler/model/diagnostics.js";
-import type { SourceSpan } from "@aurelia-ls/compiler/model/span.js";
+  AnalysisLimitationItem,
+  AnalysisLimitationsResponse,
+  AnalysisChangedPayload,
+  AttributeInterpretationExplanationParams,
+  AttributeInterpretationExplanationResponse,
+  BindingUncertaintyExplanationParams,
+  BindingUncertaintyExplanationResponse,
+  FrameworkCapabilityExplanationParams,
+  FrameworkCapabilityExplanationResponse,
+  ProtocolRange,
+  ProtocolWorkspaceEdit,
+  RelatedFileCandidate,
+  RelatedFilesResponse,
+  RenameFromTsResponse,
+  ResourceInventoryItem,
+  ResourceInventoryResponse,
+  ResourceAvailabilityExplanationParams,
+  ResourceAvailabilityExplanationResponse,
+  SourceOwnershipOwner,
+  SourceOwnershipResponse,
+  TemplateResourceAvailabilityResponse,
+} from "@aurelia-ls/language-server/protocol";
 
-export type OverlayReadyPayload = {
-  uri?: string;
-  overlayPath?: string;
-  calls?: number;
-  overlayLen?: number;
-  diags?: number;
-  meta?: unknown;
-  coverage?: {
-    totalPositions?: number;
-    fullyAnalyzed?: number;
-    partiallyAnalyzed?: number;
-    emittedCount?: number;
-    suppressedCount?: number;
-  };
+export type {
+  AnalysisLimitationItem,
+  AnalysisLimitationsResponse,
+  AnalysisChangedPayload,
+  AttributeInterpretationExplanationParams,
+  AttributeInterpretationExplanationResponse,
+  BindingUncertaintyExplanationParams,
+  BindingUncertaintyExplanationResponse,
+  FrameworkCapabilityExplanationParams,
+  FrameworkCapabilityExplanationResponse,
+  ProtocolRange,
+  ProtocolWorkspaceEdit,
+  RelatedFileCandidate,
+  RelatedFilesResponse,
+  RenameFromTsResponse,
+  ResourceInventoryItem,
+  ResourceAvailabilityExplanationParams,
+  ResourceAvailabilityExplanationResponse,
+  SourceOwnershipOwner,
+  SourceOwnershipResponse,
 };
 
-export type DiagnosticsSpan = SourceSpan;
+export interface AureliaWorkspaceIdentity {
+  readonly key: string;
+  readonly name: string;
+  readonly uri: string;
+}
 
-export type DiagnosticsSnapshotIssue = {
-  kind: string;
-  message: string;
-  code?: string;
-  rawCode?: string;
-  field?: string;
+/** Client-local enrichment added while routing a server notification. */
+export type WorkspaceNotificationPayload<T> = T & {
+  readonly workspace: AureliaWorkspaceIdentity;
 };
 
-export type DiagnosticsSnapshotRelated = {
-  code?: string;
-  message: string;
-  span?: DiagnosticsSpan;
+export type ResourceInventoryWorkspaceSnapshot = AureliaWorkspaceIdentity & (
+  | {
+      readonly status: "ready";
+      readonly response: ResourceInventoryResponse;
+    }
+  | {
+      readonly status: "error";
+      readonly error: string;
+    }
+);
+
+/** Session snapshots remain separate because their fingerprints are not globally comparable. */
+export interface ResourceInventorySnapshot {
+  readonly workspaces: readonly ResourceInventoryWorkspaceSnapshot[];
+}
+
+export type AnalysisLimitationsWorkspaceSnapshot = AureliaWorkspaceIdentity & (
+  | {
+      readonly status: "ready";
+      readonly response: AnalysisLimitationsResponse;
+    }
+  | {
+      readonly status: "error";
+      readonly error: string;
+    }
+);
+
+/** Session answers remain separate until a consumer proves an exact inventory-generation join. */
+export interface AnalysisLimitationsSnapshot {
+  readonly workspaces: readonly AnalysisLimitationsWorkspaceSnapshot[];
+}
+
+export type TemplateResourceAvailabilitySnapshot = TemplateResourceAvailabilityResponse & {
+  readonly workspace: AureliaWorkspaceIdentity;
 };
 
-export type DiagnosticsSnapshotItem = {
-  code: string;
-  message: string;
-  severity?: DiagnosticSeverity;
-  impact?: DiagnosticImpact;
-  actionability?: DiagnosticActionability;
-  category?: DiagnosticCategory;
-  status?: DiagnosticStatus;
-  stage?: DiagnosticStage;
-  source?: string;
-  uri?: string;
-  span?: DiagnosticsSpan;
-  data?: Readonly<Record<string, unknown>>;
-  related?: readonly DiagnosticsSnapshotRelated[];
-  surfaces?: readonly DiagnosticSurface[];
-  suppressed?: boolean;
-  suppressionReason?: string;
-  issues?: readonly DiagnosticsSnapshotIssue[];
+export type SourceOwnershipSnapshot = SourceOwnershipResponse & {
+  readonly workspace: AureliaWorkspaceIdentity;
 };
 
-export type DiagnosticsSnapshotBundle = {
-  bySurface: Record<string, readonly DiagnosticsSnapshotItem[]>;
-  suppressed: readonly DiagnosticsSnapshotItem[];
+/** Fail closed while a client/server upgrade can briefly straddle protocol generations. */
+export function sourceOwnershipTemplateOwned(ownership: SourceOwnershipSnapshot): boolean {
+  return ownership.templateOwned === true;
+}
+
+export type FrameworkCapabilityExplanationSnapshot = FrameworkCapabilityExplanationResponse & {
+  readonly workspace: AureliaWorkspaceIdentity;
 };
 
-export type DiagnosticsSnapshotResponse = {
-  uri?: string;
-  fingerprint?: string;
-  diagnostics: DiagnosticsSnapshotBundle;
+export type AttributeInterpretationExplanationSnapshot = AttributeInterpretationExplanationResponse & {
+  readonly workspace: AureliaWorkspaceIdentity;
 };
 
-export interface MappingSpan {
-  start: number;
-  end: number;
-}
-
-export interface MappingEntry {
-  exprId?: string;
-  overlaySpan?: MappingSpan | null;
-  htmlSpan?: MappingSpan | null;
-}
-
-export interface OverlayCallSite {
-  exprId: string;
-  overlayStart: number;
-  overlayEnd: number;
-  htmlSpan: MappingSpan;
-}
-
-export interface OverlaySnapshot {
-  path: string;
-  text: string;
-  baseName?: string;
-}
-
-export interface OverlayBuildArtifactShape {
-  overlay: OverlaySnapshot;
-  mapping?: { entries?: readonly MappingEntry[] };
-  calls?: readonly OverlayCallSite[];
-}
-
-export interface OverlayResponse {
-  fingerprint?: string;
-  artifact?: OverlayBuildArtifactShape | null;
-  overlay?: OverlayBuildArtifactShape | null;
-}
-
-export interface MappingResponse {
-  overlayPath: string;
-  mapping: { entries: readonly MappingEntry[] };
-}
-
-export interface TemplateInfoResponse {
-  expr?: { exprId?: string | number | null } | null;
-  node?: { kind?: string | null } | null;
-  controller?: { kind?: string | null } | null;
-  bindables?: readonly unknown[] | null;
-  mappingSize?: number;
-}
-
-export interface SsrArtifactShape {
-  html: { text: string; path: string };
-  manifest: { text: string; path: string };
-}
-
-export interface SsrResponse {
-  fingerprint?: string;
-  artifact?: SsrArtifactShape | null;
-  ssr?: SsrArtifactShape | null;
-}
-
-export interface ResourceExplorerBindable {
-  name: string;
-  attribute?: string;
-  mode?: string;
-  primary?: boolean;
-  type?: string;
-}
-
-export type ResourceScope = "global" | "local" | "orphan";
-
-export interface ResourceExplorerItem {
-  name: string;
-  kind: string;
-  className?: string;
-  file?: string;
-  package?: string;
-  bindableCount: number;
-  bindables: ResourceExplorerBindable[];
-  gapCount: number;
-  gapIntrinsicCount: number;
-  origin?: string;
-  scope: ResourceScope;
-  scopeOwner?: string;
-  declarationForm?: string;
-  staleness?: { fieldsFromAnalysis: number; membersNotInSemantics: number };
-}
-
-export interface InspectEntityResponse {
-  uri: string;
-  entityKind: string;
-  confidence: {
-    resource: string;
-    type: string;
-    scope: string;
-    expression: string;
-    composite: string;
-  };
-  expressionLabel?: string;
-  exprId?: string | number;
-  nodeId?: string | number;
-  detail: Record<string, unknown>;
-}
-
-export interface ResourceExplorerResponse {
-  fingerprint?: string;
-  resources: ResourceExplorerItem[];
-  templateCount: number;
-  inlineTemplateCount: number;
-}
-
-export interface CapabilitiesResponse {
-  schema?: "aurelia.capabilities/1";
-  server?: {
-    version?: string;
-    workspaceVersion?: string;
-  };
-  contracts?: {
-    query?: { version?: string };
-    refactor?: { version?: string };
-    diagnostics?: { version?: string; taxonomy?: string };
-    semanticTokens?: { version?: string; legendHash?: string };
-    presentation?: { version?: string };
-    mapping?: { version?: string };
-  };
-  workspace?: {
-    meta?: {
-      fingerprint?: string;
-      configHash?: string;
-      docCount?: number;
-    };
-    artifacts?: {
-      semantics?: boolean;
-      catalog?: boolean;
-      syntax?: boolean;
-      resourceGraph?: boolean;
-      provenance?: boolean;
-      semanticSnapshot?: boolean;
-      apiSurface?: boolean;
-      featureUsage?: boolean;
-      registrationPlan?: boolean;
-    };
-    indexes?: {
-      resourceIndex?: boolean;
-      symbolGraph?: boolean;
-      usageIndex?: boolean;
-      scopeIndex?: boolean;
-      templateIndex?: boolean;
-    };
-  };
-  lsp?: {
-    optional?: {
-      documentSymbol?: boolean;
-      workspaceSymbol?: boolean;
-      documentHighlight?: boolean;
-      selectionRange?: boolean;
-      linkedEditingRange?: boolean;
-      foldingRange?: boolean;
-      inlayHint?: boolean;
-      codeLens?: boolean;
-      documentLink?: boolean;
-      callHierarchy?: boolean;
-      documentColor?: boolean;
-      semanticTokensDelta?: boolean;
-    };
-  };
-  custom?: {
-    overlay?: boolean;
-    mapping?: boolean;
-    queryAtPosition?: boolean;
-    ssr?: boolean;
-    diagnostics?: boolean;
-    dumpState?: boolean;
-  };
-  notifications?: {
-    overlayReady?: boolean;
-    workspaceChanged?: boolean;
-  };
-}
-
-export type ScopeResourceItem = {
-  name: string;
-  kind: string;
-  origin: string;
-  className?: string;
-  file?: string;
-  package?: string;
-  bindableCount: number;
-  scope: "global" | "local";
+export type BindingUncertaintyExplanationSnapshot = BindingUncertaintyExplanationResponse & {
+  readonly workspace: AureliaWorkspaceIdentity;
 };
 
-export type ScopeResourcesResponse = {
-  scopeId: string;
-  scopeLabel?: string;
-  resources: ScopeResourceItem[];
+export type ResourceAvailabilityExplanationSnapshot = ResourceAvailabilityExplanationResponse & {
+  readonly workspace: AureliaWorkspaceIdentity;
 };
+
+/** Exact Resource Explorer identity used to seed one active-template explanation. */
+export interface ResourceAvailabilityExplanationSubjectRequest {
+  readonly workspaceKey: string;
+  readonly projectKey: string;
+  readonly resourceIdentityKey: string;
+}
+
+export type ResourceNavigationRole = "resource" | "implementation" | "alias" | "bindable";
+
+export type ResourceNavigationPlacement = "preview" | "beside";
+export type ResourceNavigationCurrentness = "identity-current" | "strict-snapshot";
+
+/** Stable identity used to re-resolve a current location before every navigation. */
+export interface ResourceNavigationRequest {
+  readonly workspaceKey: string;
+  readonly fingerprint: string;
+  readonly projectKey: string;
+  readonly resourceIdentityKey: string;
+  readonly role: ResourceNavigationRole;
+  readonly childIdentityKey?: string;
+  readonly placement?: ResourceNavigationPlacement;
+  /** Active-template availability requires the exact snapshot it just proved. */
+  readonly currentness?: ResourceNavigationCurrentness;
+}

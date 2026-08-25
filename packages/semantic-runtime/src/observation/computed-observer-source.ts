@@ -2,12 +2,13 @@ import type {
   AddressHandle,
   IdentityHandle,
   ProductHandle,
+  ProvenanceHandle,
 } from '../kernel/handles.js';
-import type { FieldProvenance } from '../kernel/provenance.js';
 import {
   ComputedObservationDependencyMode,
 } from './computed-observation.js';
-import type { RuntimeObservedDependencyKind } from './runtime-binding-observation.js';
+import type { RuntimeExpressionAccessUse } from '../runtime-expression/runtime-expression-access-use.js';
+import type { RuntimeObservedDependencyOccurrence } from './runtime-observed-dependency.js';
 
 export const enum ComputedObserverRuntimeKind {
   ComputedObserver = 'computed-observer',
@@ -20,31 +21,6 @@ export const enum ComputedObserverSourceTriggerKind {
   /** A decorated getter supplied an ObservableGetter.getObserver hook. */
   GetterOwnedObserver = 'getter-owned-observer',
 }
-
-export type ComputedObserverSourceField =
-  | 'observerKind'
-  | 'triggerKind'
-  | 'className'
-  | 'memberName'
-  | 'dependencyMode'
-  | 'dependencyKeys'
-  | 'dependencyFunctionCount'
-  | 'flush'
-  | 'deep'
-  | 'observedDependencies'
-  | 'source';
-
-export type ComputedObserverObservedDependencyField =
-  | 'computedObserver'
-  | 'dependencyKind'
-  | 'expressionKind'
-  | 'sourceName'
-  | 'sourceRootName'
-  | 'memberName'
-  | 'keyExpression'
-  | 'methodName'
-  | 'span'
-  | 'source';
 
 export class ComputedObserverSourceReference {
   constructor(
@@ -73,14 +49,17 @@ export class ComputedObserverSource {
     readonly triggerKind: ComputedObserverSourceTriggerKind,
     readonly className: string | null,
     readonly memberName: string | null,
+    /** Exact checker declaration identity for the getter member, when projected. */
+    readonly memberDeclarationIdentityHandle: IdentityHandle | null,
     readonly dependencyMode: ComputedObservationDependencyMode,
     readonly dependencyKeys: readonly string[],
     readonly dependencyFunctionCount: number,
     readonly flush: 'sync' | 'async',
     readonly deep: boolean | null,
+    readonly accessUses: readonly RuntimeExpressionAccessUse[],
     readonly observedDependencies: readonly ComputedObserverObservedDependency[],
     readonly sourceAddressHandle: AddressHandle | null,
-    readonly fieldProvenance: readonly FieldProvenance<ComputedObserverSourceField>[] = [],
+    readonly provenanceHandle: ProvenanceHandle | null = null,
   ) {}
 
   toReference(): ComputedObserverSourceReference {
@@ -99,30 +78,40 @@ export class ComputedObserverObservedDependency {
     readonly productHandle: ProductHandle,
     readonly identityHandle: IdentityHandle,
     readonly computedObserver: ComputedObserverSourceReference,
-    readonly dependencyKind: RuntimeObservedDependencyKind,
-    readonly expressionKind: string,
-    readonly sourceName: string | null,
-    readonly sourceRootName: string | null,
-    readonly memberName: string | null,
-    readonly keyExpression: string | null,
-    readonly methodName: string | null,
-    readonly spanStart: number | null,
-    readonly spanEnd: number | null,
-    readonly sourceAddressHandle: AddressHandle | null,
-    readonly fieldProvenance: readonly FieldProvenance<ComputedObserverObservedDependencyField>[] = [],
+    readonly occurrence: RuntimeObservedDependencyOccurrence,
   ) {}
 }
 
 export class ComputedObserverSourceProjectResult {
+  private readonly computedObserversByMemberDeclaration: ReadonlyMap<IdentityHandle, ComputedObserverSource>;
+
   constructor(
     readonly computedObservers: readonly ComputedObserverSource[],
-  ) {}
+  ) {
+    this.computedObserversByMemberDeclaration = new Map(
+      computedObservers.flatMap((observer) =>
+        observer.memberDeclarationIdentityHandle == null
+          ? []
+          : [[observer.memberDeclarationIdentityHandle, observer] as const]
+      ),
+    );
+  }
 
   readComputedObservers(): readonly ComputedObserverSource[] {
     return this.computedObservers;
   }
 
+  readComputedObserverForMember(
+    memberDeclarationIdentityHandle: IdentityHandle,
+  ): ComputedObserverSource | null {
+    return this.computedObserversByMemberDeclaration.get(memberDeclarationIdentityHandle) ?? null;
+  }
+
   readObservedDependencies(): readonly ComputedObserverObservedDependency[] {
     return this.computedObservers.flatMap((observer) => observer.observedDependencies);
+  }
+
+  readAccessUses(): readonly RuntimeExpressionAccessUse[] {
+    return this.computedObservers.flatMap((observer) => observer.accessUses);
   }
 }

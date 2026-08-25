@@ -1,0 +1,6 @@
+<template>
+  <output>${shadowChildOnly & state}</output>
+  <output>${shadowChildSessionOnly & state:'child-session'}</output>
+  <output>${shadowParentSessionOnly & state:'parent-session'}</output>
+  <output textcontent.state:parent-session="shadowParentSessionOnly"></output>
+</template>

@@ -1,6 +1,10 @@
 import { route } from '@aurelia/router';
+import { customElement } from '@aurelia/runtime-html';
+import { routeInstructionDefaults } from 'router-pressure-vendor-links';
 import { ProductDetailsRoute } from './routes/product-details-route';
 import { ProductsRoute } from './routes/products-route';
+import { RouteLink } from './route-link';
+import template from './router-pattern-app.html';
 
 class SenchaRouteInstruction {
   readonly component = ProductsRoute;
@@ -24,6 +28,7 @@ class SenchaRouteInstruction {
     },
   ],
 })
+@customElement({ name: 'router-pattern-app', template, dependencies: [RouteLink] })
 export class RouterPatternApp {
   readonly productsRoute = ProductsRoute;
   readonly productDetailsRoute = ProductDetailsRoute;
@@ -96,4 +101,17 @@ export class RouterPatternApp {
       ],
     },
   ];
+  readonly pressuredInstruction = {
+    ...routeInstructionDefaults,
+    component: ProductsRoute,
+    params: {},
+    viewport: null,
+    children: [
+      {
+        component: ProductDetailsRoute,
+        params: { productId: 'pressured' },
+        viewport: 'details',
+      },
+    ],
+  };
 }

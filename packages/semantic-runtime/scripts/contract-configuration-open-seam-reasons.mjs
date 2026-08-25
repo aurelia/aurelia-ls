@@ -25,10 +25,14 @@ const sites = app.ask({
 const reasonSite = sites.rows.find((row) =>
   row.reasonKinds.includes('static-evaluation-identifier-not-in-environment')
 );
+const attributeMapperSite = sites.rows.find((row) =>
+  row.reasonKinds.includes('host-environment-value')
+  && row.sourceRange?.start?.line === 18
+);
 
 const failures = [
   reasonSite == null
-    ? `Expected configuration option seam to preserve evaluator unresolved-identifier reason, observed ${JSON.stringify(sites.rows.map((row) => ({ seamKindKey: row.seamKindKey, reasonKinds: row.reasonKinds, sampleSummary: row.sampleSummary })))}.`
+    ? `Expected configuration option seam to preserve evaluator unresolved-identifier reason, observed ${JSON.stringify(sites.rows.map((row) => ({ seamKindKeys: row.seamKindKeys, reasonKinds: row.reasonKinds, sampleSummary: row.sampleSummary })))}.`
     : null,
   reasonSite?.source?.path?.endsWith('src/main.ts') === true
     ? null
@@ -36,6 +40,9 @@ const failures = [
   reasonSite?.sourceRange?.start?.line != null
     ? null
     : `Expected reason-preserving seam to expose source range, observed ${JSON.stringify(reasonSite?.sourceRange)}.`,
+  attributeMapperSite == null
+    ? `Expected the attribute-mapper domain seam to retain its host-environment evaluator cause, observed ${JSON.stringify(sites.rows.map((row) => ({ reasonKinds: row.reasonKinds, sampleSummary: row.sampleSummary })))}.`
+    : null,
 ].filter(Boolean);
 
 if (failures.length > 0) {
@@ -49,10 +56,15 @@ if (failures.length > 0) {
   console.log(JSON.stringify({
     ok: true,
     reasonSite: {
-      seamKindKey: reasonSite.seamKindKey,
+      seamKindKeys: reasonSite.seamKindKeys,
       reasonKinds: reasonSite.reasonKinds,
       source: reasonSite.source?.label,
       sourceRange: reasonSite.sourceRange,
+    },
+    attributeMapperSite: {
+      reasonKinds: attributeMapperSite.reasonKinds,
+      source: attributeMapperSite.source?.label,
+      sampleSummary: attributeMapperSite.sampleSummary,
     },
   }, null, 2));
 }

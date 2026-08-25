@@ -5,7 +5,8 @@ import { fileURLToPath } from 'node:url';
 import ts from 'typescript';
 import {
   PUBLIC_SOURCE_REFERENCE_CARRIER_KEYS,
-  semanticSourcePrecisionForReferences,
+  semanticContinuationSourceFacts,
+  semanticSourceFacetsForReference,
   semanticSourceReferencesInAnswerRows,
 } from '../out/api/source-reference.js';
 
@@ -33,50 +34,91 @@ for (const declaration of interfaces.values()) {
 
 assert.deepEqual(missing, [], `Public source-reference carrier keys are missing:\n${missing.join('\n')}`);
 assert.deepEqual(unreachable, [], `Public source-reference runtime collector cannot reach:\n${unreachable.join('\n')}`);
-verifySourcePrecisionHelper();
+verifySourceFacetConservation();
 
 console.log(JSON.stringify({
   ok: true,
   carrierKeys: [...PUBLIC_SOURCE_REFERENCE_CARRIER_KEYS].sort(),
 }, null, 2));
 
-function verifySourcePrecisionHelper() {
-  assert.equal(
-    semanticSourcePrecisionForReferences([
-      { kind: 'source-file-address', label: 'src/app.ts', path: 'src/app.ts' },
-      { kind: 'source-span-address', label: 'src/app.ts@1..2', path: 'src/app.ts', start: 1, end: 2 },
-    ]),
-    'exact-authored-span',
-    'Source precision should strengthen carrier spans to exact authored spans.',
+function verifySourceFacetConservation() {
+  assertFacets(
+    { kind: 'source-file-address', label: 'src/app.ts', path: 'src/app.ts' },
+    ['authored-source', 'carrier-span'],
+    'A source-file carrier should remain authored without claiming an exact span.',
   );
-  assert.equal(
-    semanticSourcePrecisionForReferences([
-      {
-        kind: 'template-node-address',
-        label: 'src/app.html@1..2',
-        anchor: { kind: 'source-span-address', label: 'src/app.html@1..2', path: 'src/app.html', start: 1, end: 2 },
-      },
-    ]),
-    'exact-authored-span',
-    'Source precision should follow authored anchors for template/source carriers.',
+  assertFacets(
+    {
+      kind: 'template-node-address',
+      label: 'src/app.html@1..2',
+      anchor: { kind: 'source-span-address', label: 'src/app.html@1..2', path: 'src/app.html', start: 1, end: 2 },
+    },
+    ['authored-source', 'exact-authored-span'],
+    'Template/source carriers should retain their exact authored anchor facets.',
   );
-  assert.equal(
-    semanticSourcePrecisionForReferences([
-      {
-        kind: 'generated-address',
-        label: 'generated:overlay',
-        anchor: { kind: 'source-span-address', label: 'src/app.html@1..2', path: 'src/app.html', start: 1, end: 2 },
-      },
-    ]),
-    'generated-anchor',
-    'Generated references should remain visibly generated even when they carry an authored anchor.',
+  const generated = {
+    kind: 'generated-address',
+    label: 'generated:overlay',
+    anchor: { kind: 'source-span-address', label: 'src/app.html@1..2', path: 'src/app.html', start: 1, end: 2 },
+  };
+  assertFacets(
+    generated,
+    ['authored-source', 'exact-authored-span', 'generated'],
+    'Generated references should retain both generation and authored-anchor facets.',
   );
+  const external = {
+    kind: 'source-span-address',
+    label: 'node_modules/pkg/index.d.ts@1..2',
+    path: 'node_modules/pkg/index.d.ts',
+    start: 1,
+    end: 2,
+  };
+  assertFacets(
+    external,
+    ['external'],
+    'Dependency and default-library references should remain external.',
+  );
+
+  const facts = semanticContinuationSourceFacts([generated, external, generated]);
+  assert.equal(facts.length, 2, 'Distinct source facts should not collapse generated and external references.');
   assert.equal(
-    semanticSourcePrecisionForReferences([
-      { kind: 'source-span-address', label: 'node_modules/pkg/index.d.ts@1..2', path: 'node_modules/pkg/index.d.ts', start: 1, end: 2 },
-    ]),
-    'external',
-    'Dependency and default-library references should not look like editable authored spans.',
+    facts.find((fact) => fact.source?.label === generated.label)?.count,
+    2,
+    'Repeated source facts should retain cardinality.',
+  );
+
+  const workspaceSources = semanticContinuationSourceFacts([
+    {
+      kind: 'source-span-address',
+      label: 'src/app.ts@1..2',
+      path: 'src/app.ts',
+      start: 1,
+      end: 2,
+      sourceWorkspaceKey: 'workspace-a',
+      sourceFileRole: 'app-source',
+    },
+    {
+      kind: 'source-span-address',
+      label: 'src/app.ts@1..2',
+      path: 'src/app.ts',
+      start: 1,
+      end: 2,
+      sourceWorkspaceKey: 'workspace-b',
+      sourceFileRole: 'test-source',
+    },
+  ]);
+  assert.equal(
+    workspaceSources.length,
+    2,
+    'Equal paths and spans from different workspaces or file roles must remain distinct source facts.',
+  );
+}
+
+function assertFacets(source, expected, message) {
+  assert.deepEqual(
+    [...semanticSourceFacetsForReference(source)].sort(),
+    [...expected].sort(),
+    message,
   );
 }
 

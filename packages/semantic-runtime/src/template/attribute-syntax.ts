@@ -76,11 +76,18 @@ export const enum AttributePatternTokenKind {
 
 export type AttributeSyntaxField =
   | 'rawName'
+  | 'runtimeRawName'
+  | 'nameSource'
   | 'rawValue'
   | 'target'
+  | 'targetSource'
   | 'command'
+  | 'commandSource'
   | 'parts'
+  | 'patternParts'
   | 'pattern'
+  | 'compiledPattern'
+  | 'patternLiterals'
   | 'source';
 
 export type AttributePatternExecutableField =
@@ -97,7 +104,6 @@ export type AttributeParserServiceField =
 
 export type AttributeParserMachineField =
   | 'compiledPatterns'
-  | 'cache'
   | 'source';
 
 export type AttributeClassificationField =
@@ -106,7 +112,6 @@ export type AttributeClassificationField =
   | 'resource'
   | 'bindingCommand'
   | 'bindable'
-  | 'instructions'
   | 'source';
 
 const AttributeSyntaxDetailKind = 'template.attribute-syntax';
@@ -131,6 +136,34 @@ export class AttributePatternToken {
     readonly tokenKind: AttributePatternTokenKind,
     /** Literal value for literal tokens; null for dynamic PART tokens. */
     readonly value: string | null,
+  ) {}
+}
+
+/** Relative authored occurrence of one literal token selected by an attribute-pattern match. */
+export class AttributePatternLiteralOccurrence {
+  constructor(
+    readonly tokenIndex: number,
+    readonly value: string,
+    readonly start: number,
+    readonly end: number,
+  ) {}
+}
+
+/** Relative authored occurrence of one interpreted pattern part. */
+export class AttributePatternPartOccurrence {
+  constructor(
+    readonly partIndex: number,
+    readonly value: string,
+    readonly start: number,
+    readonly end: number,
+  ) {}
+}
+
+export class AttributePatternMatch {
+  constructor(
+    readonly parts: readonly string[],
+    readonly partOccurrences: readonly AttributePatternPartOccurrence[],
+    readonly literalOccurrences: readonly AttributePatternLiteralOccurrence[],
   ) {}
 }
 
@@ -205,26 +238,55 @@ export function matchAttributePatternTokens(
   tokens: readonly AttributePatternToken[],
   symbols: readonly string[],
 ): readonly string[] | null {
+  return matchAttributePattern(input, tokens, symbols)?.parts ?? null;
+}
+
+function matchAttributePattern(
+  input: string,
+  tokens: readonly AttributePatternToken[],
+  symbols: readonly string[],
+): AttributePatternMatch | null {
   const parts: string[] = [];
+  const partOccurrences: AttributePatternPartOccurrence[] = [];
+  const literalOccurrences: AttributePatternLiteralOccurrence[] = [];
   const symbolSet = new Set(symbols);
   let pos = 0;
   let currentPart = '';
+  let currentPartStart: number | null = null;
 
-  for (const token of tokens) {
+  const appendPartText = (value: string, start: number): void => {
+    if (currentPartStart == null) {
+      currentPartStart = start;
+    }
+    currentPart += value;
+  };
+  const flushPart = (end: number): void => {
+    if (currentPartStart == null || currentPart.length === 0) {
+      return;
+    }
+    const partIndex = parts.length;
+    parts.push(currentPart);
+    partOccurrences.push(new AttributePatternPartOccurrence(partIndex, currentPart, currentPartStart, end));
+    currentPart = '';
+    currentPartStart = null;
+  };
+
+  for (const [tokenIndex, token] of tokens.entries()) {
     if (token.tokenKind === AttributePatternTokenKind.Literal) {
       const value = token.value ?? '';
       if (!input.startsWith(value, pos)) {
         return null;
       }
+      if (value.length > 0) {
+        literalOccurrences.push(new AttributePatternLiteralOccurrence(tokenIndex, value, pos, pos + value.length));
+      }
 
-      for (const ch of value) {
+      for (let index = 0; index < value.length; index++) {
+        const ch = value[index]!;
         if (symbolSet.has(ch)) {
-          if (currentPart.length > 0) {
-            parts.push(currentPart);
-            currentPart = '';
-          }
+          flushPart(pos + index);
         } else {
-          currentPart += ch;
+          appendPartText(ch, pos + index);
         }
       }
       pos += value.length;
@@ -236,14 +298,12 @@ export function matchAttributePatternTokens(
       if (pos === start) {
         return null;
       }
-      currentPart += input.slice(start, pos);
+      appendPartText(input.slice(start, pos), start);
     }
   }
 
-  if (currentPart.length > 0) {
-    parts.push(currentPart);
-  }
-  return pos === input.length ? parts : null;
+  flushPart(pos);
+  return pos === input.length ? new AttributePatternMatch(parts, partOccurrences, literalOccurrences) : null;
 }
 
 /** Runtime CompiledPattern model used by SyntaxInterpreter. */
@@ -271,12 +331,16 @@ export class CompiledAttributePattern {
   tryMatch(input: string): readonly string[] | null {
     return matchAttributePatternTokens(input, this.tokens, this.symbols);
   }
+
+  match(input: string): AttributePatternMatch | null {
+    return matchAttributePattern(input, this.tokens, this.symbols);
+  }
 }
 
-/** Cached result of interpreting one raw attribute name. */
+/** Immutable result of interpreting one raw attribute name against a compiled pattern set. */
 export class AttributePatternInterpretation {
   constructor(
-    /** Raw attribute name used as the cache key. */
+    /** Raw attribute name that was interpreted. */
     readonly rawName: string,
     /** Matched pattern string, or null when the name stays plain. */
     readonly pattern: string | null,
@@ -284,6 +348,10 @@ export class AttributePatternInterpretation {
     readonly parts: readonly string[],
     /** Compiled pattern product that won the match, when any pattern matched. */
     readonly compiledPatternProductHandle: ProductHandle | null,
+    /** Relative literal-token occurrences retained from the winning match. */
+    readonly literalOccurrences: readonly AttributePatternLiteralOccurrence[] = [],
+    /** Relative interpreted-part occurrences retained from the winning match. */
+    readonly partOccurrences: readonly AttributePatternPartOccurrence[] = [],
   ) {}
 }
 
@@ -292,17 +360,17 @@ export function interpretCompiledAttributePatterns(
   compiledPatterns: readonly CompiledAttributePattern[],
 ): AttributePatternInterpretation {
   let bestPattern: CompiledAttributePattern | null = null;
-  let bestParts: readonly string[] | null = null;
+  let bestMatch: AttributePatternMatch | null = null;
 
   for (const pattern of compiledPatterns) {
-    const parts = pattern.tryMatch(rawName);
-    if (parts == null) {
+    const match = pattern.match(rawName);
+    if (match == null) {
       continue;
     }
 
     if (bestPattern == null || isBetterAttributePatternScore(pattern.score, bestPattern.score)) {
       bestPattern = pattern;
-      bestParts = parts;
+      bestMatch = match;
     }
   }
 
@@ -311,8 +379,10 @@ export function interpretCompiledAttributePatterns(
     : new AttributePatternInterpretation(
       rawName,
       bestPattern.definition.pattern,
-      bestParts ?? [],
+      bestMatch?.parts ?? [],
       bestPattern.productHandle,
+      bestMatch?.literalOccurrences ?? [],
+      bestMatch?.partOccurrences ?? [],
     );
 }
 
@@ -421,8 +491,7 @@ export class AttributeParserParseResult {
 /** Runtime SyntaxInterpreter model that turns registered pattern definitions into an attribute-name matcher. */
 @auLink('template-compiler:SyntaxInterpreter')
 export class AttributeParserMachine {
-  private readonly _cache = new Map<string, AttributePatternInterpretation>();
-  private readonly _compiledPatterns: CompiledAttributePattern[] = [];
+  private readonly _compiledPatterns: readonly CompiledAttributePattern[];
 
   constructor(
     /** Product handle for the materialized-product envelope that represents this parser machine. */
@@ -431,17 +500,12 @@ export class AttributeParserMachine {
     readonly identityHandle: IdentityHandle,
     /** Compiled patterns in the order registered with the parser. */
     compiledPatterns: readonly CompiledAttributePattern[],
-    /** Cached interpretations for already-seen raw names. */
-    cachedInterpretations: readonly AttributePatternInterpretation[],
     /** Source address for the parser machine owner or registration boundary. */
     readonly sourceAddressHandle: AddressHandle | null,
     /** Field-level provenance for source facts that matter to explanation or ambiguity. */
     readonly fieldProvenance: readonly FieldProvenance<AttributeParserMachineField>[] = [],
   ) {
-    this._compiledPatterns.push(...compiledPatterns);
-    for (const interpretation of cachedInterpretations) {
-      this._cache.set(interpretation.rawName, interpretation);
-    }
+    this._compiledPatterns = [...compiledPatterns];
   }
 
   /** Compiled patterns in runtime registration order. */
@@ -454,31 +518,9 @@ export class AttributeParserMachine {
     return this._compiledPatterns.map((pattern) => pattern.productHandle);
   }
 
-  /** Cached interpretations for already-seen raw names. */
-  get cachedInterpretations(): readonly AttributePatternInterpretation[] {
-    return this.readCachedInterpretations();
-  }
-
-  /** Runtime `SyntaxInterpreter.interpret(name)` shape with live cache behavior. */
+  /** Runtime `SyntaxInterpreter.interpret(name)` shape over the immutable compiler-world registration set. */
   interpret(rawName: string): AttributePatternInterpretation {
-    const cached = this._cache.get(rawName);
-    if (cached != null) {
-      return cached;
-    }
-    const interpretation = interpretCompiledAttributePatterns(rawName, this._compiledPatterns);
-    this._cache.set(rawName, interpretation);
-    return interpretation;
-  }
-
-  /** Runtime SyntaxInterpreter registration shape used by IAttributeParser.registerPattern. */
-  registerPatterns(compiledPatterns: readonly CompiledAttributePattern[]): void {
-    this._compiledPatterns.push(...compiledPatterns);
-    this._cache.clear();
-  }
-
-  /** Snapshot the current live interpretation cache for answer envelopes or later kernel emission. */
-  readCachedInterpretations(): readonly AttributePatternInterpretation[] {
-    return [...this._cache.values()];
+    return interpretCompiledAttributePatterns(rawName, this._compiledPatterns);
   }
 }
 
@@ -495,16 +537,30 @@ export class AttributeSyntax {
     readonly syntaxKind: AttributeSyntaxKind,
     /** Raw authored attribute name. */
     readonly rawName: string,
+    /** Browser/runtime attribute name passed to the Aurelia attribute parser. */
+    readonly runtimeRawName: string,
+    /** Exact authored source for the raw syntax name. */
+    readonly nameSourceAddressHandle: AddressHandle | null,
     /** Raw authored attribute value, before expression parsing. */
     readonly rawValue: string,
     /** Attribute parser target part such as `value` in `value.bind`. */
     readonly target: string,
+    /** Exact authored source for the target part. */
+    readonly targetSourceAddressHandle: AddressHandle | null,
     /** Binding command part such as `bind` in `value.bind`, if present. */
     readonly command: string | null,
+    /** Exact authored source for the binding-command part. */
+    readonly commandSourceAddressHandle: AddressHandle | null,
     /** Additional pattern parts in runtime order. */
     readonly parts: readonly string[],
+    /** Exact authored occurrences of every interpreted pattern part. */
+    readonly patternParts: readonly AttributePatternPartReference[],
     /** Attribute pattern definition entry that matched this syntax, when known. */
     readonly pattern: AttributePatternDefinitionEntry | null,
+    /** Winning compiled pattern selected by the parser, when one matched. */
+    readonly compiledPatternProductHandle: ProductHandle | null,
+    /** Exact authored non-symbol literal tokens that identify the matched pattern. */
+    readonly patternLiterals: readonly AttributePatternLiteralReference[],
     /** Source attribute reference that produced this syntax. */
     readonly attribute: HtmlAttributeReference,
     /** Field-level provenance for source facts that matter to explanation or ambiguity. */
@@ -525,6 +581,22 @@ export class AttributeSyntax {
   get sourceAddressHandle(): AddressHandle | null {
     return productDetailAddressHandle(this, AttributeSyntaxDetailKind);
   }
+}
+
+export class AttributePatternLiteralReference {
+  constructor(
+    readonly tokenIndex: number,
+    readonly value: string,
+    readonly sourceAddressHandle: AddressHandle,
+  ) {}
+}
+
+export class AttributePatternPartReference {
+  constructor(
+    readonly partIndex: number,
+    readonly value: string,
+    readonly sourceAddressHandle: AddressHandle,
+  ) {}
 }
 
 /** Executable attribute-pattern handler visible to IAttributeParser. */
@@ -553,7 +625,7 @@ export class AttributePatternExecutable {
 /** Runtime IAttributeParser model, including the pattern handlers visible through DI. */
 @auLink('template-compiler:IAttributeParser')
 export class AttributeParserService {
-  private readonly _patternExecutables: AttributePatternExecutable[] = [];
+  private readonly _patternExecutables: readonly AttributePatternExecutable[];
 
   constructor(
     /** Product handle for the materialized-product envelope that represents this parser service. */
@@ -569,7 +641,7 @@ export class AttributeParserService {
     /** Field-level provenance for source facts that matter to explanation or ambiguity. */
     readonly fieldProvenance: readonly FieldProvenance<AttributeParserServiceField>[] = [],
   ) {
-    this._patternExecutables.push(...patternExecutables);
+    this._patternExecutables = [...patternExecutables];
   }
 
   /** Pattern handlers visible to this parser service. */
@@ -590,17 +662,6 @@ export class AttributeParserService {
   /** Interpret a raw attribute name through the visible SyntaxInterpreter machine. */
   interpret(rawName: string): AttributePatternInterpretation | null {
     return this.machine?.interpret(rawName) ?? null;
-  }
-
-  /** Runtime `IAttributeParser.registerPattern(patterns, Type)` shape over materialized pattern products. */
-  registerPattern(
-    executable: AttributePatternExecutable,
-    compiledPatterns: readonly CompiledAttributePattern[],
-  ): void {
-    if (!this._patternExecutables.some((pattern) => pattern.productHandle === executable.productHandle)) {
-      this._patternExecutables.push(executable);
-    }
-    this.machine?.registerPatterns(compiledPatterns);
   }
 
   /** Runtime `IAttributeParser.parse(name, value)` shape with handler execution delegated to a product host. */
@@ -712,10 +773,10 @@ export class AttributeClassification {
     readonly bindingCommand: BindingCommandExecutableReference | null,
     /** Bindable selected by classification, if any. */
     readonly bindable: TemplateBindableReference | null,
-    /** Instruction products produced downstream from this classification. */
-    readonly instructionProductHandles: readonly ProductHandle[],
     /** Field-level provenance for source facts that matter to explanation or ambiguity. */
     readonly fieldProvenance: readonly FieldProvenance<AttributeClassificationField>[] = [],
+    /** Exact unresolved lowering reason when classification could not close without guessing. */
+    readonly openReason: string | null = null,
   ) {}
 
   /** Product handle for the materialized-product envelope that represents this classification. */

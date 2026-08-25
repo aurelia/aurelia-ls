@@ -24,7 +24,9 @@
         "Member @bindable(...) invocation follows runtime-html's property-decorator default-config path for known primitive/nullish/string arguments; keep the bindable and only leave an open seam for unknown or object-like values that may carry runtime config properties.",
         "Class-level @bindable(...) runs through ClassBindableDecoratorFrame: string or object-with-static-string-name closes to a bindable, while bare/nullish/name-less configurations publish the framework-backed class-decorator configuration issues instead of becoming silent open seams.",
         "Resource metadata annotations live in resource-metadata-annotations.ts: shared @alias(...) annotation values feed all named resources, while custom-element @containerless, @useShadowDOM(...), @capture(...), and member @children/@slotted registry dependencies feed full-definition convergence before definition-object and static class fallbacks.",
+        "Function-valued custom-element capture metadata keeps durable ResourceTargetReference identity and StaticCallableSlot addresses separate from candidate-local StaticCallableTarget closures. Resource recognition emits exact execution bindings, compiler worlds re-authorize them under the current evaluation generation, and compiler reads compare predicate outcomes; both definition-object and @capture(...) forms use the same boundary.",
         "Inherited metadata nodes belong to their declaring source file. Use ResourceRecognitionContextIndex/readNodeContext so imported decorator configuration is evaluated in the declaring module environment instead of the subclass module environment.",
+        "Build-generated package resource identity must remain class-specific and evidence-gated. PackageResourceBuildBridgeMaterializer accepts only an exact condition-selected runtime graph, an imported generated metadata namespace applied by a mapped decorator-helper call, matching source-map content, a closed metadata surface, and matching shipped HTML; missing or conflicting evidence leaves the package on its existing open path.",
         "Resource source spans should use sourceFileAddressHandleForNode/readAdmittedNodeContext over contexts admitted by the resource-recognition pass. Do not re-resolve node source file names through KernelStore from resource convergence helpers.",
         "Resource dependency uncertainty should carry resource-specific reason kinds through ConvergenceOpen and recordsForSourceOpenSeam. Vite-style `import.meta.env` optional dependency spreads should keep known dependency entries while reporting `resource-definition-dependencies-open`, not evaluator unsupported-expression noise.",
         "Do not drop resource convergence open seams merely because the node cannot be mapped to an authored source-file span. Publish an addressless `resource.open-definition-field` seam with evidence and reason kinds so public open-seam rows can report the unresolved fact as unlocated rather than silently losing it."
@@ -90,8 +92,20 @@
         },
         {
           "kind": "source",
+          "filePath": "packages/semantic-runtime/src/evaluation/function-execution.ts",
+          "symbolName": "StaticCallableExecutionBindings",
+          "summary": "Candidate-local evaluator authority resolving durable capture predicate slots."
+        },
+        {
+          "kind": "source",
           "filePath": "packages/semantic-runtime/src/resources/resource-recognition-kernel-emitter.ts",
           "summary": "Header publication stage before convergence."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/resources/package-resource-build-bridge.ts",
+          "symbolName": "PackageResourceBuildBridgeMaterializer",
+          "summary": "Exact package build/source bridge for generated custom-element convention admissions."
         },
         {
           "kind": "lens",
@@ -121,10 +135,17 @@
           "filePath": "packages/semantic-runtime/src/resources/bindable-convergence.ts",
           "minLineCount": 90,
           "minMethodCount": 4
+        },
+        {
+          "kind": "product-large-class",
+          "className": "PackageResourceBuildBridgeMaterializer",
+          "filePath": "packages/semantic-runtime/src/resources/package-resource-build-bridge.ts",
+          "minLineCount": 100,
+          "minMethodCount": 1
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-05-15"
+      "updatedAt": "2026-08-24"
     },
     {
       "id": "frontier:resource-metadata-diagnostics",
@@ -244,6 +265,7 @@
       "guidance": [
         "Start here when resource recognition needs target identities, TypeChecker-backed target types, resource identities, aliases, attribute-pattern identities, or recognition open seams.",
         "Keep carrier recognizers and field readers out of kernel publication; use the emitter and publication support as the boundary.",
+        "Keep resource metadata carrier, exact target token, and full target declaration as distinct source loci. Publish target nodes through their owning ResourceRecognitionContext so cross-module define calls never combine declaration offsets with the recognizing module's source-file address.",
         "Resource target type projection should stay lazy over members. Recognition publishes the target type reference and checker carrier; member enumeration belongs to expression access, diagnostics, completions, or authoring answers that explicitly need it.",
         "Do not treat a recognized definition header as compiler-visible full metadata; converge it through ResourceDefinitionConverger when metadata matters."
       ],
@@ -285,7 +307,7 @@
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-05-19"
+      "updatedAt": "2026-07-13"
     },
     {
       "id": "frontier:built-in-resource-catalog-materializer",
@@ -302,6 +324,7 @@
       "guidance": [
         "Start here when framework built-ins, configured resource catalogs, i18n/state/runtime-html/validation-html resource visibility, or built-in full definitions are involved.",
         "Keep catalog grouping and configured catalog selection distinct from per-resource publication and built-in full-definition construction.",
+        "Keep the selected built-in catalog header in TemplateVisibleResource.resourceProductHandle and the converged full definition in definitionProductHandle. Built-in identity consumers must read the selected header directly; never reconstruct catalog origin from a definition by scanning convergence claims, because that loses compiler visibility and app-shadowing authority.",
         "ValidationHtmlConfiguration admits a default validation-html catalog with ValidateBindingBehavior, ValidationErrorsCustomAttribute, and ValidationContainerCustomElement; option-sensitive subscriber toggles are still a future customization frontier.",
         "Atlas resource convergence now sees nested framework definition calls such as CustomElement.define({ ...defaultContainerDefinition, template }, ValidationContainerCustomElement); use the convergence lens before assuming framework resources must be decorator/static-$au carriers.",
         "Use `framework:resources -- --projection=convergence` and framework.discovery bundle rows before assuming StandardConfiguration is the only source of built-in resource visibility."
@@ -327,6 +350,12 @@
           "symbolName": "BuiltInResourcePublicationMaterializer",
           "line": 151,
           "summary": "Per-resource built-in publication companion."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/template/compiler-resource-lookup.ts",
+          "symbolName": "readBuiltInVisibleTemplateResource",
+          "summary": "Reads built-in identity from the compiler-selected catalog header without rebuilding lineage."
         },
         {
           "kind": "doc",
@@ -364,7 +393,7 @@
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-05-12"
+      "updatedAt": "2026-07-22"
     },
     {
       "id": "frontier:resource-recognition-project-pass",
@@ -374,14 +403,17 @@
         "resources",
         "evaluation",
         "type-system",
-        "world-construction"
+        "world-construction",
+        "configuration",
+        "tooling"
       ],
-      "summary": "ResourceRecognitionProjectPass remains the project-level orchestration boundary for shared evaluation, linked source admission, source resource recognition, and full-definition convergence.",
-      "rationale": "Resource recognition should not grow its own import resolver or one-source-only pass when external apps and plugins pull resources through linked source modules and assets. This project pass is the orchestration boundary from boot/evaluation into source recognition and convergence.",
+      "summary": "ResourceRecognitionProjectPass remains the project-level orchestration boundary for shared evaluation, linked source and transform admission, source resource recognition, and full-definition convergence.",
+      "rationale": "Resource recognition should not grow its own import resolver, build-tool inference, or one-source-only pass when external apps and plugins pull resources through linked source modules, assets, and admitted transforms. This project pass is the orchestration boundary from boot/evaluation/tooling facts into source recognition and convergence.",
       "guidance": [
-        "Start here when project-level resource recognition, linked source admission, unresolved module carry-through, recognition profiling, or TypeChecker handoff changes.",
+        "Start here when project-level resource recognition, linked source admission, build-transform admission, unresolved module carry-through, recognition profiling, or TypeChecker handoff changes.",
         "Keep source-level recognizers and convergence materializers below this pass; this class should orchestrate them rather than learn carrier-specific resource logic.",
-        "Resource recognition depends on the shared project evaluator executing local side-effect imports. If a source file is admitted but its decorators are invisible, inspect `StaticModuleGraphEvaluator.evaluateSideEffectImport` before adding a resource-local import walk.",
+        "Resource recognition depends on the shared project evaluator executing local side-effect imports. If a source file is admitted but its decorators are invisible, inspect StaticModuleGraphEvaluator.evaluateSideEffectImport before adding a resource-local import walk.",
+        "Convention-derived resources require source-specific transform evidence. Read supported build-tool configuration before recognition and publish an open admission seam when the transform cannot be closed; do not let recognizers infer project-global convention activation.",
         "If imported templates lose exact provenance, inspect this pass and the shared evaluation source admissions before adding template-layer fallbacks.",
         "When convergence follows AST nodes into linked modules, thread ResourceRecognitionContextIndex and ask readNodeContext for the owning source context before evaluating expressions or source spans."
       ],
@@ -390,13 +422,19 @@
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/resources/resource-recognition-project-pass.ts",
           "symbolName": "ResourceRecognitionProjectPass",
-          "line": 96,
-          "summary": "Project-level resource recognition pass."
+          "line": 200,
+          "summary": "Project-level resource recognition and transform-admission pass."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/resources/resource-convention-transform-admission.ts",
+          "symbolName": "ResourceConventionTransformAdmissionMaterializer",
+          "summary": "Project tooling reader orchestrated before convention recognition."
         },
         {
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/resources/README.md",
-          "summary": "Project-level resource recognition and linked-source guidance."
+          "summary": "Project-level recognition, linked-source, and transform-admission guidance."
         }
       ],
       "liveChecks": [
@@ -404,10 +442,17 @@
           "kind": "source-declaration-exists",
           "filePath": "packages/semantic-runtime/src/resources/resource-recognition-project-pass.ts",
           "symbolName": "ResourceRecognitionProjectPass"
+        },
+        {
+          "kind": "product-large-class",
+          "className": "ResourceRecognitionProjectPass",
+          "filePath": "packages/semantic-runtime/src/resources/resource-recognition-project-pass.ts",
+          "minLineCount": 80,
+          "minMethodCount": 3
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-05-15"
+      "updatedAt": "2026-07-11"
     },
     {
       "id": "frontier:resource-definition-index",
@@ -425,6 +470,10 @@
         "Start here when a materializer needs to resolve a resource from product handle, target identity, module/local name, dependency reference, resource name, or evaluated class/function value.",
         "Resource-name lookup includes primary resource names and converged alias names; use it for template/compiler-world lookup instead of rebuilding consumer-local alias maps.",
         "Router string routeables should use ResourceDefinitionIndex custom-element-only lookup and dependency-scoped custom-element lookup so parent component dependencies can disambiguate same-named resources without router-local maps.",
+        "For an authored TypeScript expression, remap the node into the current Program, resolve aliases to declarations, and spend each declaration source file's module key plus local name. Never treat an imported identifier as a declaration in the consumer module or build a consumer-local symbol map.",
+        "Resource target identity is canonical TypeScript declaration identity. Keep carrier occurrences and checker type-shape identity separate; effective-definition joins use registration kind plus target declaration identity, never type-shape identity.",
+        "ResourceRecognitionProjectResult.definitionSelections owns framework-effective carrier precedence and retains superseded definitions as evidence. Active consumers use readDefinitions() rather than reselecting or indexing every carrier.",
+        "Configuration registration enrichment must try the authored TypeScript expression lookup before evaluator carrier/value fallbacks so generated CustomElement.define(...) results and imported aliases retain declaration ownership.",
         "Keep ambiguous local-name/resource-name lookups explicit; do not pick a definition by name when multiple definitions are visible.",
         "If a new lookup path appears, add it to the index rather than adding local resource-definition maps inside DI, configuration, or template code."
       ],
@@ -435,6 +484,18 @@
           "symbolName": "ResourceDefinitionIndex",
           "line": 32,
           "summary": "Converged resource definition lookup index."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/resources/resource-recognition-publication.ts",
+          "symbolName": "ResourceRecognitionPublicationSupport",
+          "summary": "Publishes canonical target declaration identity separately from carrier evidence and checker type projections."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/resources/resource-recognition-project-pass.ts",
+          "symbolName": "EffectiveResourceDefinitionSelection",
+          "summary": "Project-level effective definition and superseded carrier authority."
         },
         {
           "kind": "source",
@@ -452,7 +513,7 @@
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-05-15"
+      "updatedAt": "2026-07-22"
     },
     {
       "id": "frontier:resource-definition-api-issues",
@@ -567,6 +628,264 @@
       ],
       "createdAt": "2026-05-15",
       "updatedAt": "2026-05-15"
+    },
+    {
+      "id": "decision:resource-registration-identity-vs-taxonomy",
+      "kind": "decision",
+      "domains": [
+        "semantic-runtime",
+        "resources",
+        "template",
+        "ide"
+      ],
+      "summary": "Template controllers use custom-attribute registration identity and template-controller taxonomy.",
+      "rationale": "Aurelia registers template controllers in the custom-attribute key space and branches on isTemplateController after attribute resolution. Semantic-runtime should mirror that framework model: public/editor rows may present template-controller as author-facing taxonomy, but resource joins, duplicate detection, dependency/container spending, and rename/reference declaration-to-usage matching must use registration identity.",
+      "guidance": [
+        "Use registrationResourceKindFor(...) for framework registration-key joins; TemplateController maps to CustomAttribute and AttributePattern maps to null.",
+        "Use taxonomyResourceKindForDefinition(...) when presenting converged definitions to authors or editor surfaces; CustomAttributeDefinition with isTemplateController=true presents as TemplateController.",
+        "Do not make ResourceDefinitionConverger emit a separate full TemplateControllerDefinition merely to align usage and declaration kinds; the full runtime definition remains a CustomAttributeDefinition with isTemplateController=true.",
+        "Runtime keys are not taxonomy carriers: au:resource:custom-attribute:<name> can only prove custom-attribute registration identity unless a full definition or configured resource row supplies the template-controller flag.",
+        "Keep source form separate from both axes: @templateController(...), @customAttribute({ isTemplateController: true }), static $au, define calls, and conventions are declaration/provenance forms, not registration key spaces."
+      ],
+      "anchors": [
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/resources/resource-kind.ts",
+          "symbolName": "registrationResourceKindFor",
+          "summary": "Registration identity derivation for framework key-space joins."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/resources/resource-definition.ts",
+          "symbolName": "taxonomyResourceKindForDefinition",
+          "summary": "Author-facing taxonomy projection for converged resource definitions."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/api/app-template-queries.ts",
+          "summary": "Template reference and rename resource joins use registration identity while retaining taxonomy surfaces."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/api/template-completion.ts",
+          "summary": "Template cursor definition rows present taxonomy for hover and resource dispatch."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/resources/resource-definition-converger.ts",
+          "symbolName": "ResourceDefinitionConverger",
+          "summary": "Converges template-controller source forms into custom-attribute definitions with isTemplateController."
+        },
+        {
+          "kind": "source",
+          "filePath": "aurelia/packages/runtime-html/src/resources/custom-attribute.ts",
+          "summary": "Framework custom-attribute definition and templateController sugar use the custom-attribute type/key space."
+        },
+        {
+          "kind": "source",
+          "filePath": "aurelia/packages/template-compiler/src/template-compiler.ts",
+          "summary": "Framework compiler resolves custom attributes first and branches on isTemplateController."
+        },
+        {
+          "kind": "script",
+          "command": "pnpm --filter @aurelia-ls/semantic-runtime contract:template-rename",
+          "summary": "Contract covers app-owned template-controller rename and source-form/name-source equivalence."
+        }
+      ],
+      "liveChecks": [
+        {
+          "kind": "source-file-exists",
+          "filePath": "packages/semantic-runtime/src/resources/resource-kind.ts"
+        },
+        {
+          "kind": "source-file-exists",
+          "filePath": "packages/semantic-runtime/src/resources/resource-definition.ts"
+        },
+        {
+          "kind": "source-file-exists",
+          "filePath": "packages/semantic-runtime/src/api/app-template-queries.ts"
+        },
+        {
+          "kind": "source-file-exists",
+          "filePath": "packages/semantic-runtime/scripts/contract-template-rename.mjs"
+        }
+      ],
+      "createdAt": "2026-07-07",
+      "updatedAt": "2026-07-07"
+    },
+    {
+      "id": "decision:bindable-property-identity-vs-attribute-alias",
+      "kind": "decision",
+      "domains": [
+        "semantic-runtime",
+        "resources",
+        "template",
+        "ide",
+        "references",
+        "rename"
+      ],
+      "summary": "Bindable property identity and public attribute aliases are separate rename/reference surfaces.",
+      "rationale": "Aurelia bindable metadata has distinct configuration, TypeScript-symbol, callback, and public template-name surfaces. The runtime property name identifies the backing view-model field, while an optional attribute value is an independently authored public contract. References preserve all declarations and usages; property rename updates the property plus metadata and default-derived spellings but retains explicit aliases; alias rename remains a separate template-attribute operation.",
+      "guidance": [
+        "Preserve field-specific metadata provenance for name, attribute, callback, mode, and set; keep propertyTarget and callbackTarget as separate TypeChecker-backed relations rather than treating a metadata token as the implementation declaration.",
+        "Publish authored metadata spans through the shared address/evidence/provenance helper so source handles and fieldProvenance name the same witnesses.",
+        "Template cursor members may have a scope-introduction source distinct from their reached TypeScript declaration source. Definition prefers the declaration; references and rename retain both.",
+        "Property references enumerate explicit-alias usages because they read or write the property, but property rename skips explicit aliases. Default-derived attribute spellings continue to derive from bindableAttributeNameForProperty(newName).",
+        "TypeScript-origin property propagation includes distinct bindable metadata names and default-derived template spellings while leaving explicit aliases stable.",
+        "Only default-derived nameChanged callbacks follow a property rename. Spend the converged callbackTarget and the shared TypeScript symbol enumerator; an explicitly authored callback name is an independent contract.",
+        "Observed dependency rows for a resolved scope member use the reached checker member declaration before slot provenance. Static bindable metadata remains a separate declaration row instead of masquerading as the observed symbol.",
+        "Alias references and alias rename use the bindable attribute source as their target and never acquire TypeScript reference edits.",
+        "Inline custom-attribute multi-binding aliases spend MultiBindingSegment.targetSourceAddressHandle for the segment target token; do not fall back to the enclosing value or primary bindable."
+      ],
+      "anchors": [
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/resources/bindable-definition.ts",
+          "symbolName": "BindableDefinition",
+          "summary": "Carries metadata field sources plus backing property and callback targets."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/resources/bindable-convergence.ts",
+          "summary": "Converges field provenance and TypeChecker-backed member targets once at the resource boundary."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/observation/observed-dependency-member-source.ts",
+          "symbolName": "observedScopeNameProjectionForDependency",
+          "summary": "Keeps reached member declarations distinct from slot provenance in observation rows."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/api/app-template-queries.ts",
+          "summary": "Builds shared references and rename closure from canonical property targets plus metadata declarations."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/resources/resource-source-address.ts",
+          "symbolName": "sourceSpanEvidenceForNode",
+          "summary": "Publishes authored TypeScript source spans as address, evidence, and provenance records together."
+        },
+        {
+          "kind": "script",
+          "command": "node packages/semantic-runtime/scripts/contract-semantic-conformance.mjs --capability bindable-reference-context --capability bindable-rename --capability bindable-contract-model",
+          "summary": "Covers declaration forms, owner isolation, metadata/property closure, callback propagation, and exact field sources."
+        }
+      ],
+      "liveChecks": [
+        {
+          "kind": "source-file-exists",
+          "filePath": "packages/semantic-runtime/src/resources/bindable-definition.ts"
+        },
+        {
+          "kind": "source-file-exists",
+          "filePath": "packages/semantic-runtime/src/api/app-template-queries.ts"
+        },
+        {
+          "kind": "source-file-exists",
+          "filePath": "packages/semantic-runtime/src/observation/observed-dependency-member-source.ts"
+        }
+      ],
+      "createdAt": "2026-07-08",
+      "updatedAt": "2026-07-12"
+    },
+    {
+      "id": "decision:resource-convention-transform-admission",
+      "kind": "decision",
+      "domains": [
+        "semantic-runtime",
+        "resources",
+        "configuration",
+        "tooling",
+        "provenance"
+      ],
+      "summary": "Convention-derived resources require source-backed build-transform admission rather than class/file-shape inference.",
+      "rationale": "Aurelia conventions are implemented by build-tool preprocessing that emits resource metadata before runtime registration. A convention-shaped source class is therefore not itself proof of a resource. Semantic-runtime must admit the transform from project tooling, preserve that evidence per matching source, and remain open when configuration cannot be closed statically.",
+      "guidance": [
+        "Do not recognize convention resources from class/file shape alone; ResourceRecognitionProjectPass must supply source-specific transform evidence.",
+        "Read tooling configuration through the shared StaticProjectEvaluationPass with tooling-config roots and narrow host intrinsics; do not build a resource-local AST closure evaluator.",
+        "Carry Vite and Aurelia plugin factory identity through StaticModuleExternalValueResolver and the CommonJS require host boundary; do not reconstruct import identity from local syntax inside the resource adapter.",
+        "Use evaluator executedCallExpressions for plugin-call evidence; syntax-only scans must not turn uninvoked helpers or dead branches into transform admission or open seams.",
+        "Supported static Vite configuration reads @aurelia/vite-plugin admission, enableConventions, and include/exclude source filters through the same evaluator path for ESM imports/exports and CommonJS require/module.exports. Missing tooling or explicit false means the convention resource is absent.",
+        "Dynamic plugin lists, options, or filter expressions publish resource.open-convention-transform-admission instead of minting confident resource definitions.",
+        "Convention admission seams preserve evaluator boundary reason kinds such as host-environment-value instead of replacing known provenance with feature-not-yet-modeled.",
+        "Convention recognition provenance retains the tooling transform evidence and paired-template admission. A derived public resource name remains non-editable until an authored name token exists.",
+        "Webpack-loader, Gulp, Parcel, and ts-jest invoke the same preprocessor through different configuration carriers. Add explicit admission readers and pressure fixtures before claiming those carriers are covered; do not restore a project-global convention fallback.",
+        "Static Vite filters use the same @rollup/pluginutils/createFilter implementation as the framework plugin. Non-static filter values remain open rather than being approximated as closed."
+      ],
+      "anchors": [
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/resources/resource-convention-transform-admission.ts",
+          "symbolName": "ResourceConventionTransformAdmissionMaterializer",
+          "summary": "Reads supported Vite configuration and publishes source-specific transform evidence or open seams."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/resources/resource-convention-transform-admission.ts",
+          "symbolName": "ResourceConventionToolingEvaluationContext",
+          "summary": "Profile-owned Vite/Aurelia tooling interpretation context and runtime-host metadata authority."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/resources/resource-recognition-project-pass.ts",
+          "symbolName": "ResourceRecognitionProjectPass",
+          "summary": "Orchestrates transform admission before source recognition."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/evaluation/project-evaluation.ts",
+          "symbolName": "StaticProjectEvaluationPass",
+          "summary": "Owns project/module closure for app and explicitly admitted tooling roots."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/resources/named-resource-recognizer.ts",
+          "symbolName": "recognizeConventions",
+          "summary": "Requires admitted transform evidence before publishing convention observations."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/resources/README.md",
+          "summary": "Owning doctrine for convention-transform admission and its build-adapter boundary."
+        },
+        {
+          "kind": "source",
+          "filePath": "aurelia/packages-tooling/plugin-conventions/src/options.ts",
+          "symbolName": "preprocessOptions",
+          "summary": "Framework tooling defaults conventions on only inside an active preprocessing pipeline."
+        },
+        {
+          "kind": "source",
+          "filePath": "aurelia/packages-tooling/plugin-conventions/src/preprocess-resource.ts",
+          "symbolName": "preprocessResource",
+          "summary": "Framework tooling emits resource metadata from convention-shaped source."
+        },
+        {
+          "kind": "source",
+          "filePath": "aurelia/packages-tooling/vite-plugin/src/index.ts",
+          "summary": "Aurelia Vite plugin owns preprocessing and source-filter admission."
+        }
+      ],
+      "liveChecks": [
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/resources/resource-convention-transform-admission.ts",
+          "symbolName": "ResourceConventionTransformAdmissionMaterializer"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/resources/resource-convention-transform-admission.ts",
+          "symbolName": "ResourceConventionToolingEvaluationContext"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/resources/named-resource-recognizer.ts",
+          "symbolName": "recognizeConventions"
+        }
+      ],
+      "createdAt": "2026-07-11",
+      "updatedAt": "2026-07-11"
     }
   ]
 }

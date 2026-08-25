@@ -1,0 +1,41 @@
+<template>
+  <profile-card
+    title.bind="titleText"
+    display-label.bind="aliasLabel"
+    selected-id.two-way="selectedId"
+    count.bind="count"
+    quantity.bind="quantity"
+    strict-quantity.bind="strictQuantity"
+    normalized-label.bind="normalizedLabel"
+    stringified-label.bind="stringifiedLabel"
+    summary.bind="summaryText"
+    action.bind="handleAction">
+  </profile-card>
+
+  <profile-card title="Literal title" display-label="Literal public label"></profile-card>
+
+  <section display-hint="message.bind: statusMessage; display-label.bind: aliasLabel; tone.bind: accentTone"></section>
+  <section display-hint="message.one-time: statusMessage"></section>
+  <section display-hint="message: Literal status; tone: ${accentTone}"></section>
+  <section display-hint.bind="statusMessage"></section>
+  <section :two-way-state="twoWayValue"></section>
+  <section display-hint.bind="statusMessage ? accentTone : aliasLabel"></section>
+
+  <section active-state.bind="isActive"></section>
+  <section implicit-state.bind="implicitValue"></section>
+  <section two-way-state.bind="twoWayValue"></section>
+  <section raw-hint="message.bind: statusMessage; tone.bind: accentTone"></section>
+
+  <static-card display-headline.bind="headline" subtitle.bind="subtitle"></static-card>
+  <inherited-badge shared.bind="inheritedShared" own.bind="inheritedOwn"></inherited-badge>
+  <inherited-static-badge base-static.bind="inheritedStatic"></inherited-static-badge>
+  <nearest-static-badge own-static.bind="ownStatic"></nearest-static-badge>
+  <bindable-precedence-card
+    definition-value.bind="precedenceValue"
+    inherited-only.bind="precedenceInherited"
+    static-only.bind="precedenceStatic"
+    definition-only.bind="precedenceDefinition">
+  </bindable-precedence-card>
+  <class-bindable-card external-value.bind="externalValue"></class-bindable-card>
+  <record-card status-text.bind="recordStatus"></record-card>
+</template>

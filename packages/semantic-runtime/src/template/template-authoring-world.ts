@@ -4,18 +4,26 @@ import { EvidenceKind, EvidenceRecord, EvidenceRole } from '../kernel/evidence.j
 import type { AddressHandle, EvidenceHandle, ProvenanceHandle } from '../kernel/handles.js';
 import { MaterializationRecord, MaterializedProduct } from '../kernel/materialization.js';
 import { ProvenanceRecord } from '../kernel/provenance.js';
-import { KernelStoreBatch, type KernelStore, type KernelStoreRecord } from '../kernel/store.js';
+import {
+  KernelPublicationPlan,
+  KernelStoreBatch,
+  type KernelPublicationContext,
+} from '../kernel/publication.js';
+import type { KernelStore, KernelStoreRecord } from '../kernel/store.js';
 import { KernelVocabulary } from '../kernel/vocabulary.js';
 import {
-  BuiltInResourceCatalogMaterializer,
+  BuiltInResourceTargetProjectionMaterializer,
   type BuiltInResourceEmission,
 } from '../resources/built-in-resource-catalog-materializer.js';
 import { RuntimeHtmlBuiltInResourceCatalogs } from '../resources/built-in-resources.js';
 import type { FullResourceDefinition } from '../resources/resource-definition.js';
 import type { TypeSystemProject } from '../type-system/project.js';
-import { BuiltInSyntaxCatalogMaterializer } from './built-in-syntax-catalog-materializer.js';
 import { RuntimeHtmlBuiltInSyntaxCatalogs } from './built-in-syntax.js';
-import { TemplateCompilerWorldKind } from './compiler-world.js';
+import {
+  TemplateCompilerWorldKind,
+  TemplateResourceScopeLane,
+  TemplateResourceScopeLookup,
+} from './compiler-world.js';
 import {
   TemplateResourceVisibilityKind,
   TemplateVisibleResource,
@@ -25,9 +33,15 @@ import {
   TemplateCompilerWorldMaterializer,
   type TemplateCompilerWorldEmission,
 } from './compiler-world-materializer.js';
-import { visibleResourceForDefinition } from './resource-scope-builder.js';
-import { BuiltInRuntimeRendererCatalogMaterializer } from './runtime-renderer-catalog-materializer.js';
-import { RuntimeHtmlDefaultRenderers, RuntimeRendererGroup, RuntimeRendererPackage } from './runtime-renderer.js';
+import {
+  visibleResourceForDefinition,
+  visibleResourceLookupKeys,
+} from './resource-scope-builder.js';
+import { RuntimeRendererCatalogs } from './runtime-renderer-catalog-materializer.js';
+import type { FrameworkSupportCatalogs } from '../framework/framework-support-authority.js';
+import {
+  type StaticCallableExecutionBindings,
+} from '../evaluation/function-execution.js';
 
 interface AuthoringContainerSourceSet {
   readonly records: readonly KernelStoreRecord[];
@@ -43,6 +57,8 @@ export interface TemplateAuthoringCompilerWorldRequest {
   readonly resourceDefinitions: readonly FullResourceDefinition[];
   /** TypeChecker epoch used to project framework-owned built-in target types. */
   readonly typeSystem: TypeSystemProject | null;
+  /** Candidate-local resource predicate closures available to authoring-only compilation. */
+  readonly callableBindings: StaticCallableExecutionBindings;
 }
 
 /**
@@ -54,11 +70,18 @@ export interface TemplateAuthoringCompilerWorldRequest {
  */
 export class TemplateAuthoringCompilerWorldMaterializer {
   private readonly compilerWorldMaterializer: TemplateCompilerWorldMaterializer;
+  private readonly builtInResourceTargets: BuiltInResourceTargetProjectionMaterializer;
 
   constructor(
+    /** Store that owns the already-current framework support catalogs. */
     readonly store: KernelStore,
+    /** Transaction that owns the standalone authoring container and compiler world. */
+    private readonly publication: KernelPublicationContext,
+    /** Stable framework catalogs borrowed by the authoring compiler world. */
+    private readonly support: FrameworkSupportCatalogs,
   ) {
-    this.compilerWorldMaterializer = new TemplateCompilerWorldMaterializer(store);
+    this.compilerWorldMaterializer = new TemplateCompilerWorldMaterializer(publication);
+    this.builtInResourceTargets = new BuiltInResourceTargetProjectionMaterializer(store, publication);
   }
 
   construct(request: TemplateAuthoringCompilerWorldRequest): TemplateCompilerWorldEmission | null {
@@ -70,47 +93,53 @@ export class TemplateAuthoringCompilerWorldMaterializer {
     const container = this.authoringContainer(request.projectKey, sourceAddressHandle);
     const containerRecords = this.recordsForAuthoringContainer(request.projectKey, container, sourceAddressHandle);
     if (containerRecords.length > 0) {
-      this.store.commit(new KernelStoreBatch(containerRecords, `template-authoring-container:${request.projectKey}`));
+      this.publication.publish(new KernelPublicationPlan(
+        new KernelStoreBatch(containerRecords, `template-authoring-container:${request.projectKey}`),
+      ));
     }
     const syntax = this.materializeAuthoringSyntax();
     const builtInResources = this.materializeAuthoringBuiltInResources(request.typeSystem);
     const renderers = this.materializeAuthoringRenderers();
+    const visibleResources = [
+      ...visibleBuiltInResources(builtInResources.resources),
+      ...resources,
+    ];
     return this.compilerWorldMaterializer.construct(new TemplateCompilerWorldConstructionRequest(
       `authoring:${request.projectKey}`,
       TemplateCompilerWorldKind.Component,
       container,
       null,
-      [
-        ...visibleBuiltInResources(builtInResources.resources),
-        ...resources,
-      ],
+      visibleResources,
       syntax.attributePatterns,
       syntax.bindingCommands,
       renderers.renderers,
       TemplateResourceVisibilityKind.Configured,
       sourceAddressHandle,
+      request.callableBindings,
+      undefined,
+      undefined,
+      undefined,
+      [],
+      null,
+      authoringResourceLookups(visibleResources),
     ));
   }
 
-  private materializeAuthoringSyntax(): ReturnType<BuiltInSyntaxCatalogMaterializer['materialize']> {
-    return new BuiltInSyntaxCatalogMaterializer(this.store).materialize(Object.values(RuntimeHtmlBuiltInSyntaxCatalogs));
+  private materializeAuthoringSyntax() {
+    return this.support.materializeSyntaxCatalogs(Object.values(RuntimeHtmlBuiltInSyntaxCatalogs));
   }
 
   private materializeAuthoringBuiltInResources(
     typeSystem: TypeSystemProject | null,
-  ): ReturnType<BuiltInResourceCatalogMaterializer['materialize']> {
-    return new BuiltInResourceCatalogMaterializer(this.store).materialize(
-      Object.values(RuntimeHtmlBuiltInResourceCatalogs),
+  ) {
+    return this.builtInResourceTargets.project(
+      this.support.materializeResourceCatalogs(Object.values(RuntimeHtmlBuiltInResourceCatalogs)),
       typeSystem,
     );
   }
 
-  private materializeAuthoringRenderers(): ReturnType<BuiltInRuntimeRendererCatalogMaterializer['materialize']> {
-    return new BuiltInRuntimeRendererCatalogMaterializer(this.store).materialize([{
-      packageId: RuntimeRendererPackage.RuntimeHtml,
-      group: RuntimeRendererGroup.RuntimeHtmlDefaultRenderers,
-      renderers: RuntimeHtmlDefaultRenderers,
-    }]);
+  private materializeAuthoringRenderers() {
+    return this.support.materializeRendererCatalogs([RuntimeRendererCatalogs.RuntimeHtmlDefaultRenderers]);
   }
 
   private authoringContainer(
@@ -132,7 +161,7 @@ export class TemplateAuthoringCompilerWorldMaterializer {
     container: Container,
     sourceAddressHandle: AddressHandle | null,
   ): readonly KernelStoreRecord[] {
-    if (this.store.readProduct(container.productHandle) != null) {
+    if (this.publication.read(container.productHandle) != null) {
       return [];
     }
     const local = `di-container:template-authoring:${projectKey}`;
@@ -201,6 +230,26 @@ export class TemplateAuthoringCompilerWorldMaterializer {
   }
 }
 
+/** Authoring-only worlds have no runtime registration pass, so their intentionally broad resource policy supplies rows. */
+function authoringResourceLookups(
+  resources: readonly TemplateVisibleResource[],
+): readonly TemplateResourceScopeLookup[] {
+  const byKey = new Map<string, TemplateResourceScopeLookup>();
+  for (const resource of resources) {
+    for (const lookupKey of visibleResourceLookupKeys(resource)) {
+      if (!byKey.has(lookupKey)) {
+        byKey.set(lookupKey, new TemplateResourceScopeLookup(
+          lookupKey,
+          resource,
+          TemplateResourceScopeLane.Local,
+          resource.sourceAddressHandle,
+        ));
+      }
+    }
+  }
+  return [...byKey.values()];
+}
+
 function visibleAuthoringResources(
   definitions: readonly FullResourceDefinition[],
 ): readonly TemplateVisibleResource[] {
@@ -227,7 +276,6 @@ function visibleBuiltInResources(
       resource.productHandle,
       resource.identityHandle,
       emission.definition?.productHandle ?? null,
-      emission.definition,
       TemplateResourceVisibilityKind.Configured,
       resource.sourceAddressHandle,
     )];

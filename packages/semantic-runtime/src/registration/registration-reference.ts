@@ -3,6 +3,8 @@ import type {
   IdentityHandle,
   ProductHandle,
 } from '../kernel/handles.js';
+import type { DiKeyIdentityKind } from '../kernel/identity.js';
+import type { ResourceDefinitionKind } from '../resources/resource-kind.js';
 
 export const enum RegistrationValueKind {
   /** Use when a registration value expression was observed but not classified. */
@@ -23,12 +25,14 @@ export const enum RegistrationValueKind {
   Factory = 'factory',
   /** Aurelia resource definition value admitted through container registration. */
   ResourceDefinition = 'resource-definition',
+  /** Resource define-call result whose kind/name are known from a header but whose full target remains open. */
+  ResourceDefinitionConstraint = 'resource-definition-constraint',
   /** Static `$au` resource class admitted through container registration. */
   StaticResourceType = 'static-resource-type',
   /** IRegistry-compatible object or class with a register method. */
   Registry = 'registry',
-  /** Object-map value whose own object/function properties are recursively admitted. */
-  ObjectMap = 'object-map',
+  /** Array, object, or module-map value whose object/function members are recursively admitted. */
+  RecursiveCarrier = 'recursive-carrier',
   /** Plain class admitted by the container's fallback self-registration branch. */
   PlainClass = 'plain-class',
   /** Framework-owned registration group admitted through a recognized spread. */
@@ -36,7 +40,7 @@ export const enum RegistrationValueKind {
 }
 
 export const enum FrameworkRegistrationKind {
-  /** Runtime registry shape is known to be an AppTask admission. */
+  /** Registry returned by one `AppTask.<slot>(...)` factory call. */
   AppTask = 'app-task',
   /** RuntimeHtml StandardConfiguration registry. */
   StandardConfiguration = 'standard-configuration',
@@ -46,15 +50,21 @@ export const enum FrameworkRegistrationKind {
   ValidationConfiguration = 'validation-configuration',
   /** Validation HTML configuration registry. */
   ValidationHtmlConfiguration = 'validation-html-configuration',
+  /** Validation i18n configuration registry, including localized provider defaults. */
+  ValidationI18nConfiguration = 'validation-i18n-configuration',
+  /** Registry returned by `LoggerConfiguration.create(...)`. */
+  LoggerConfiguration = 'logger-configuration',
+  /** AppTask registry returned by `StyleConfiguration.shadowDOM(...)`. */
+  StyleConfiguration = 'style-configuration',
   /** Router plugin configuration registry. */
   RouterConfiguration = 'router-configuration',
   /** Router DefaultComponents registration group. */
   RouterDefaultComponents = 'router.default-components',
   /** Router DefaultResources registration group. */
   RouterDefaultResources = 'router.default-resources',
-  /** State plugin default configuration registry. */
+  /** Registry returned by `StateDefaultConfiguration.init(...)`, including later `withStore(...)` mutations. */
   StateDefaultConfiguration = 'state-default-configuration',
-  /** Dialog plugin configuration registry. */
+  /** Dialog plugin configuration registry, including empty, standard, classic, and custom factory forms. */
   DialogConfiguration = 'dialog-configuration',
   /** UI virtualization plugin configuration registry. */
   UiVirtualizationDefaultConfiguration = 'ui-virtualization.default-configuration',
@@ -68,6 +78,8 @@ export const enum FrameworkRegistrationKind {
   RuntimeHtmlDefaultBindingLanguage = 'runtime-html.default-binding-language',
   /** RuntimeHtml DefaultResources registration group. */
   RuntimeHtmlDefaultResources = 'runtime-html.default-resources',
+  /** RuntimeHtml ArrayLikeHandler registry for the IRepeatableHandler extension point. */
+  RuntimeHtmlArrayLikeHandler = 'runtime-html.array-like-handler',
   /** RuntimeHtml DefaultRenderers registration group. */
   RuntimeHtmlDefaultRenderers = 'runtime-html.default-renderers',
 }
@@ -102,6 +114,8 @@ export class RegistrationKeyReference {
     readonly addressHandle: AddressHandle | null,
     /** Local name or literal preview for traces when the identity is still open. */
     readonly localName: string | null,
+    /** Proven runtime key shape retained for later container branching without reclassification. */
+    readonly keyKind: DiKeyIdentityKind | null,
   ) {}
 }
 
@@ -122,5 +136,11 @@ export class RegistrationValueReference {
     readonly frameworkKind: FrameworkRegistrationKind | null = null,
     /** Known registry-body semantics, when an IRegistry value was produced by a framework registry factory. */
     readonly registryBody: RegistryBodyReference | null = null,
+    /** Runtime key shape when this value itself denotes a DI key, notably an alias target. */
+    readonly keyKind: DiKeyIdentityKind | null = null,
+    /** Possible canonical runtime resource keys retained by a resource-only definition-header constraint. */
+    readonly resourceLookupKeys: readonly string[] = [],
+    /** Resource registration kind retained when dynamic naming prevents an exact canonical key. */
+    readonly resourceKind: ResourceDefinitionKind | null = null,
   ) {}
 }

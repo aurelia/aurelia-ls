@@ -4,7 +4,16 @@ import {
   CheckerTypeShapeKind,
   type CheckerTypeShape,
 } from './type-shape.js';
+import {
+  checkerPropertySymbol,
+  checkerSymbolValueType,
+} from './checker-node-helpers.js';
+import { checkerRawTypeAssignable } from './checker-type-assignability.js';
 import { checkerUnionType } from './checker-type-union.js';
+import {
+  isDefaultLibrarySourceFile,
+  normalizeTypeSystemPath,
+} from './source-file-path.js';
 
 export interface CheckerIndexedValueType {
   readonly keyKind: CheckerIndexedAccessKeyKind;
@@ -17,7 +26,41 @@ export interface CheckerRepeatableElementTypeInfo {
   readonly unsupportedConstituents: number;
   readonly openConstituents: number;
   readonly nullishConstituents: number;
+  /** Constituents admitted only by an app-defined handler whose item projection remains unknown. */
+  readonly handlerOpenConstituents: number;
 }
+
+export const enum CheckerRepeatableHandlerCapability {
+  /** No app-registered repeat handler can widen the built-in source categories. */
+  None = 0,
+  /** Aurelia's ArrayLikeHandler admits object values with numeric length. */
+  ArrayLike = 1 << 0,
+  /** At least one app-defined handler participates in repeat-source admission. */
+  Custom = 1 << 1,
+}
+
+/** Checker-visible upper bound declared by one app-owned `IRepeatableHandler` implementation. */
+export class CheckerRepeatableHandlerContract {
+  constructor(
+    /** Value type accepted by the handler's `iterate` method, or null when the declaration stayed open. */
+    readonly sourceType: ts.Type | null,
+    /** Item type supplied to the handler's callback, or null when the declaration stayed open. */
+    readonly elementType: ts.Type | null,
+  ) {}
+}
+
+/** Handler set reached through the active render container's `all(IRepeatableHandler)` lookup. */
+export class CheckerRepeatableHandlerAdmission {
+  constructor(
+    readonly capabilities: CheckerRepeatableHandlerCapability,
+    readonly customContracts: readonly CheckerRepeatableHandlerContract[],
+  ) {}
+}
+
+export const NoCheckerRepeatableHandlerAdmission = new CheckerRepeatableHandlerAdmission(
+  CheckerRepeatableHandlerCapability.None,
+  [],
+);
 
 export const enum CheckerTypeNullishPresence {
   /** No visible checker constituent can produce `null`, `undefined`, or `void`. */
@@ -26,6 +69,32 @@ export const enum CheckerTypeNullishPresence {
   Maybe = 'maybe',
   /** Every visible checker constituent is nullish at runtime. */
   Definitely = 'definitely',
+}
+
+/**
+ * Static admission for a runtime branch shaped as
+ * `typeof value === 'object' && value !== null && propertyName in value`.
+ */
+export const enum CheckerRuntimeObjectMemberAdmissionKind {
+  /** No visible runtime constituent can pass both the object and property-presence guards. */
+  Impossible = 0,
+  /** Every visible runtime constituent passes both guards and exposes the member value type. */
+  Guaranteed = 1,
+  /** Some visible constituents or optional/indexed states pass the guards and some do not. */
+  Conditional = 2,
+  /** Weak or broad checker evidence cannot close whether the guarded member exists. */
+  Open = 3,
+}
+
+/** TypeChecker result for a runtime object/member admission guard. */
+export class CheckerRuntimeObjectMemberAdmission {
+  constructor(
+    readonly kind: CheckerRuntimeObjectMemberAdmissionKind,
+    /** Value type on the branch where the property-presence guard succeeds. */
+    readonly valueType: ts.Type | null,
+    /** Exact member symbol shared by every admitted runtime lane, when one can be proven. */
+    readonly memberSymbol: ts.Symbol | null,
+  ) {}
 }
 
 const repeatableElementInfoByChecker = new WeakMap<ts.TypeChecker, WeakMap<ts.Type, CheckerRepeatableElementTypeInfo>>();
@@ -58,6 +127,28 @@ export function checkerNumberIndexValueType(
   type: ts.Type,
 ): ts.Type | null {
   return checkerIndexValueType(checker, type, ts.IndexKind.Number);
+}
+
+/** Read a fixed tuple position without collapsing it to the tuple's numeric index union. */
+export function checkerTupleElementType(
+  checker: ts.TypeChecker,
+  type: ts.Type,
+  index: number,
+): ts.Type | null {
+  if (!checker.isTupleType(type)) {
+    return null;
+  }
+  const reference = type as ts.TupleTypeReference;
+  const arguments_ = checker.getTypeArguments(reference);
+  if (index < reference.target.fixedLength) {
+    return arguments_[index] ?? null;
+  }
+  const variableIndex = reference.target.elementFlags.findIndex((flag) =>
+    (flag & ts.ElementFlags.Variable) !== 0
+  );
+  return variableIndex === reference.target.elementFlags.length - 1
+    ? arguments_[variableIndex] ?? null
+    : null;
 }
 
 export function checkerIndexedValueType(
@@ -142,6 +233,74 @@ export function checkerRepeatableElementTypeInfo(
   return info;
 }
 
+/**
+ * Classify a repeat source after spending the handlers admitted by the active DI environment.
+ *
+ * The built-in relation remains independently cached because handler capabilities are request-context policy, not
+ * properties of a TypeChecker type. Custom handlers turn otherwise rejected constituents into honest open
+ * constituents; ArrayLikeHandler can retain the numeric index element type.
+ */
+export function checkerRepeatableElementTypeInfoForHandlerAdmission(
+  checker: ts.TypeChecker,
+  type: ts.Type,
+  admission: CheckerRepeatableHandlerAdmission,
+): CheckerRepeatableElementTypeInfo {
+  if (admission.capabilities === CheckerRepeatableHandlerCapability.None) {
+    return checkerRepeatableElementTypeInfo(checker, type);
+  }
+  if (type.isUnion()) {
+    return unionRepeatableElementTypeInfo(
+      checker,
+      type.types,
+      (constituent) => checkerRepeatableElementTypeInfoForHandlerAdmission(
+        checker,
+        constituent,
+        admission,
+      ),
+    );
+  }
+  if ((type.flags & ts.TypeFlags.TypeParameter) !== 0) {
+    const constraint = checker.getBaseConstraintOfType(type);
+    if (constraint != null && constraint !== type) {
+      return checkerRepeatableElementTypeInfoForHandlerAdmission(checker, constraint, admission);
+    }
+  }
+
+  const builtIn = checkerRepeatableElementTypeInfo(checker, type);
+  if (builtIn.unsupportedConstituents === 0) {
+    return builtIn;
+  }
+
+  if ((admission.capabilities & CheckerRepeatableHandlerCapability.ArrayLike) !== 0) {
+    const arrayLike = checkerArrayLikeAdmission(checker, type);
+    if (arrayLike.admitted) {
+      return repeatableElementInfo(
+        arrayLike.elementType ?? checker.getUnknownType(),
+        1,
+        0,
+        0,
+        0,
+        arrayLike.elementType == null ? 1 : 0,
+      );
+    }
+  }
+
+  const custom = checkerCustomRepeatableHandlerElementType(checker, type, admission.customContracts);
+  if (custom.matched) {
+    return repeatableElementInfo(
+      custom.elementType ?? checker.getUnknownType(),
+      0,
+      0,
+      1,
+      0,
+      1,
+    );
+  }
+  return custom.open
+    ? repeatableElementInfo(checker.getUnknownType(), 0, 1, 1, 0, 1)
+    : builtIn;
+}
+
 function computeCheckerRepeatableElementTypeInfo(
   checker: ts.TypeChecker,
   type: ts.Type,
@@ -151,15 +310,15 @@ function computeCheckerRepeatableElementTypeInfo(
   }
 
   if (checkerNullishType(checker, type)) {
-    return repeatableElementInfo(null, 0, 0, 0, 1);
+    return repeatableElementInfo(null, 0, 0, 0, 1, 0);
   }
 
   if ((type.flags & ts.TypeFlags.Any) !== 0) {
-    return repeatableElementInfo(checker.getAnyType(), 0, 0, 1, 0);
+    return repeatableElementInfo(checker.getAnyType(), 0, 0, 1, 0, 0);
   }
 
   if ((type.flags & ts.TypeFlags.Unknown) !== 0) {
-    return repeatableElementInfo(checker.getUnknownType(), 0, 0, 1, 0);
+    return repeatableElementInfo(checker.getUnknownType(), 0, 0, 1, 0, 0);
   }
 
   if ((type.flags & ts.TypeFlags.TypeParameter) !== 0) {
@@ -167,17 +326,17 @@ function computeCheckerRepeatableElementTypeInfo(
     if (constraint != null && constraint !== type) {
       return checkerRepeatableElementTypeInfo(checker, constraint);
     }
-    return repeatableElementInfo(checker.getUnknownType(), 0, 0, 1, 0);
+    return repeatableElementInfo(checker.getUnknownType(), 0, 0, 1, 0, 0);
   }
 
   if ((type.flags & ts.TypeFlags.Never) !== 0) {
-    return repeatableElementInfo(null, 0, 0, 1, 0);
+    return repeatableElementInfo(null, 0, 0, 1, 0, 0);
   }
 
   const elementType = checkerDefaultRepeatableElementType(checker, type);
   return elementType == null
-    ? repeatableElementInfo(null, 0, 1, 0, 0)
-    : repeatableElementInfo(elementType, 1, 0, 0, 0);
+    ? repeatableElementInfo(null, 0, 1, 0, 0, 0)
+    : repeatableElementInfo(elementType, 1, 0, 0, 0, 0);
 }
 
 function repeatableElementTypeInfoCache(
@@ -255,24 +414,48 @@ export function checkerTypeNullishPresence(
   checker: ts.TypeChecker | null,
   type: ts.Type,
 ): CheckerTypeNullishPresence {
+  return checkerTypePresence(checker, type, checkerNullishType);
+}
+
+/** Classifies `null` reachability separately from `undefined`/`void` for framework APIs that distinguish them. */
+export function checkerTypeNullPresence(
+  checker: ts.TypeChecker | null,
+  type: ts.Type,
+): CheckerTypeNullishPresence {
+  return checkerTypePresence(checker, type, checkerNullType);
+}
+
+function checkerTypePresence(
+  checker: ts.TypeChecker | null,
+  type: ts.Type,
+  matches: (checker: ts.TypeChecker | null, type: ts.Type) => boolean,
+): CheckerTypeNullishPresence {
   if (type.isUnion()) {
-    let sawNullish = false;
+    let sawMatch = false;
     let sawValue = false;
     for (const constituent of type.types) {
-      const presence = checkerTypeNullishPresence(checker, constituent);
-      sawNullish ||= presence !== CheckerTypeNullishPresence.None;
+      const presence = checkerTypePresence(checker, constituent, matches);
+      sawMatch ||= presence !== CheckerTypeNullishPresence.None;
       sawValue ||= presence !== CheckerTypeNullishPresence.Definitely;
     }
-    if (sawNullish && sawValue) {
+    if (sawMatch && sawValue) {
       return CheckerTypeNullishPresence.Maybe;
     }
-    return sawNullish
+    return sawMatch
       ? CheckerTypeNullishPresence.Definitely
       : CheckerTypeNullishPresence.None;
   }
-  return checkerNullishType(checker, type)
+  return matches(checker, type)
     ? CheckerTypeNullishPresence.Definitely
     : CheckerTypeNullishPresence.None;
+}
+
+function checkerNullType(
+  checker: ts.TypeChecker | null,
+  type: ts.Type,
+): boolean {
+  return (type.getFlags() & ts.TypeFlags.Null) !== 0
+    || checker?.typeToString(type) === 'null';
 }
 
 export function checkerTypeShapeIsDefinitelyNullish(
@@ -299,6 +482,109 @@ export function checkerTypeShapeNullishPresence(
     : CheckerTypeNullishPresence.None;
 }
 
+/**
+ * Classify a property read performed only after Aurelia's object and `in` guards succeed.
+ *
+ * Unlike ordinary TypeScript member access, union constituents that do not expose the property are rejected runtime
+ * lanes rather than missing-member errors. Optional and index-signature properties remain conditional because their
+ * type surfaces do not prove that the key exists on the current object.
+ */
+export function checkerRuntimeObjectMemberAdmission(
+  checker: ts.TypeChecker,
+  type: ts.Type,
+  propertyName: string,
+  fallbackLocation: ts.Node | null = null,
+): CheckerRuntimeObjectMemberAdmission {
+  if (type.isUnion()) {
+    return unionRuntimeObjectMemberAdmission(
+      checker,
+      type.types.map((constituent) =>
+        checkerRuntimeObjectMemberAdmission(checker, constituent, propertyName, fallbackLocation)
+      ),
+    );
+  }
+
+  if ((type.flags & ts.TypeFlags.TypeParameter) !== 0) {
+    const constraint = checker.getBaseConstraintOfType(type);
+    return constraint == null || constraint === type
+      ? openRuntimeObjectMemberAdmission(checker)
+      : checkerRuntimeObjectMemberAdmission(checker, constraint, propertyName, fallbackLocation);
+  }
+
+  if ((type.flags & ts.TypeFlags.Any) !== 0) {
+    return new CheckerRuntimeObjectMemberAdmission(
+      CheckerRuntimeObjectMemberAdmissionKind.Open,
+      checker.getAnyType(),
+      null,
+    );
+  }
+  if ((type.flags & (ts.TypeFlags.Unknown | ts.TypeFlags.NonPrimitive)) !== 0) {
+    return openRuntimeObjectMemberAdmission(checker);
+  }
+  if ((type.flags & ts.TypeFlags.Never) !== 0 || checkerNullishType(checker, type)) {
+    return impossibleRuntimeObjectMemberAdmission();
+  }
+  if (checkerTypeIsDefinitelyRuntimeFunction(type)) {
+    return impossibleRuntimeObjectMemberAdmission();
+  }
+  if (checkerTypeIsDefaultLibraryObjectInterface(type)) {
+    return openRuntimeObjectMemberAdmission(checker);
+  }
+  if (
+    (type.flags & ts.TypeFlags.Object) === 0
+  ) {
+    return impossibleRuntimeObjectMemberAdmission();
+  }
+
+  const symbol = checkerPropertySymbol(checker, type, propertyName);
+  if (symbol != null) {
+    return new CheckerRuntimeObjectMemberAdmission(
+      (symbol.flags & ts.SymbolFlags.Optional) !== 0
+        ? CheckerRuntimeObjectMemberAdmissionKind.Conditional
+        : CheckerRuntimeObjectMemberAdmissionKind.Guaranteed,
+      checkerSymbolValueType(checker, symbol, fallbackLocation) ?? checker.getUnknownType(),
+      symbol,
+    );
+  }
+
+  const stringIndex = checker.getIndexInfoOfType(type, ts.IndexKind.String)
+    ?? checker.getIndexInfoOfType(checker.getApparentType(type), ts.IndexKind.String)
+    ?? null;
+  if (stringIndex != null) {
+    return new CheckerRuntimeObjectMemberAdmission(
+      CheckerRuntimeObjectMemberAdmissionKind.Conditional,
+      stringIndex.type,
+      null,
+    );
+  }
+
+  // TypeScript object types are structural lower bounds, not sealed runtime shapes. A value assignable to
+  // `{ title: string }` may still carry an undeclared `count` key, so absence from the checker surface cannot reject
+  // the framework's `key in value` branch.
+  return openRuntimeObjectMemberAdmission(checker);
+}
+
+/** True when every runtime value represented by this checker type has JavaScript function identity. */
+export function checkerTypeIsDefinitelyRuntimeFunction(type: ts.Type): boolean {
+  return type.getCallSignatures().length > 0
+    || type.getConstructSignatures().length > 0
+    || checkerTypeIsDefaultLibraryFunctionInterface(type);
+}
+
+/** True for TypeScript's broad standard-library function interfaces, which do not expose concrete signatures. */
+export function checkerTypeIsDefaultLibraryFunctionInterface(type: ts.Type): boolean {
+  return checkerTypeIsDefaultLibraryNamedInterface(type, [
+    'Function',
+    'CallableFunction',
+    'NewableFunction',
+  ]);
+}
+
+/** True for TypeScript's broad `Object` interface, whose values may still be primitive at runtime. */
+export function checkerTypeIsDefaultLibraryObjectInterface(type: ts.Type): boolean {
+  return checkerTypeIsDefaultLibraryNamedInterface(type, ['Object']);
+}
+
 /** Match a checker type or its apparent type against exported/interface-style names and generic display names. */
 export function checkerTypeHasAnyName(
   checker: ts.TypeChecker,
@@ -319,6 +605,84 @@ export function checkerTypeHasAnyName(
   ];
   return candidates.some((candidate) =>
     candidate != null && names.some((name) => candidate === name || candidate.startsWith(`${name}<`))
+  );
+}
+
+function unionRuntimeObjectMemberAdmission(
+  checker: ts.TypeChecker,
+  admissions: readonly CheckerRuntimeObjectMemberAdmission[],
+): CheckerRuntimeObjectMemberAdmission {
+  const possible = admissions.filter((admission) =>
+    admission.kind !== CheckerRuntimeObjectMemberAdmissionKind.Impossible
+  );
+  if (possible.length === 0) {
+    return impossibleRuntimeObjectMemberAdmission();
+  }
+
+  const valueTypes = possible
+    .map((admission) => admission.valueType)
+    .filter((type): type is ts.Type => type != null);
+  const valueType = valueTypes.length === 0
+    ? null
+    : valueTypes.length === 1
+      ? valueTypes[0]!
+      : checkerUnionType(checker, valueTypes) ?? checker.getUnknownType();
+  if (possible.some((admission) => admission.kind === CheckerRuntimeObjectMemberAdmissionKind.Open)) {
+    return new CheckerRuntimeObjectMemberAdmission(
+      CheckerRuntimeObjectMemberAdmissionKind.Open,
+      valueType ?? checker.getUnknownType(),
+      commonRuntimeObjectMemberSymbol(possible),
+    );
+  }
+  return new CheckerRuntimeObjectMemberAdmission(
+    possible.length === admissions.length
+      && possible.every((admission) => admission.kind === CheckerRuntimeObjectMemberAdmissionKind.Guaranteed)
+      ? CheckerRuntimeObjectMemberAdmissionKind.Guaranteed
+      : CheckerRuntimeObjectMemberAdmissionKind.Conditional,
+    valueType,
+    commonRuntimeObjectMemberSymbol(possible),
+  );
+}
+
+function openRuntimeObjectMemberAdmission(
+  checker: ts.TypeChecker,
+): CheckerRuntimeObjectMemberAdmission {
+  return new CheckerRuntimeObjectMemberAdmission(
+    CheckerRuntimeObjectMemberAdmissionKind.Open,
+    checker.getUnknownType(),
+    null,
+  );
+}
+
+function impossibleRuntimeObjectMemberAdmission(): CheckerRuntimeObjectMemberAdmission {
+  return new CheckerRuntimeObjectMemberAdmission(
+    CheckerRuntimeObjectMemberAdmissionKind.Impossible,
+    null,
+    null,
+  );
+}
+
+function commonRuntimeObjectMemberSymbol(
+  admissions: readonly CheckerRuntimeObjectMemberAdmission[],
+): ts.Symbol | null {
+  const first = admissions[0]?.memberSymbol ?? null;
+  return first != null && admissions.every((admission) =>
+    admission.memberSymbol === first
+  )
+    ? first
+    : null;
+}
+
+function checkerTypeIsDefaultLibraryNamedInterface(
+  type: ts.Type,
+  names: readonly string[],
+): boolean {
+  const symbols = [type.aliasSymbol, type.symbol].filter((symbol): symbol is ts.Symbol => symbol != null);
+  return symbols.some((symbol) =>
+    names.includes(symbol.getName())
+    && (symbol.declarations ?? []).some((declaration) =>
+      isDefaultLibrarySourceFile(normalizeTypeSystemPath(declaration.getSourceFile().fileName))
+    )
   );
 }
 
@@ -366,8 +730,10 @@ function checkerIndexInfoOfType(
 function unionRepeatableElementTypeInfo(
   checker: ts.TypeChecker,
   types: readonly ts.Type[],
+  read: (type: ts.Type) => CheckerRepeatableElementTypeInfo = (type) =>
+    checkerRepeatableElementTypeInfo(checker, type),
 ): CheckerRepeatableElementTypeInfo {
-  const infos = types.map((type) => checkerRepeatableElementTypeInfo(checker, type));
+  const infos = types.map(read);
   const elementTypes = infos
     .map((info) => info.elementType)
     .filter((type): type is ts.Type => type != null);
@@ -379,7 +745,50 @@ function unionRepeatableElementTypeInfo(
     sumRepeatableInfo(infos, 'unsupportedConstituents'),
     sumRepeatableInfo(infos, 'openConstituents'),
     sumRepeatableInfo(infos, 'nullishConstituents'),
+    sumRepeatableInfo(infos, 'handlerOpenConstituents'),
   );
+}
+
+function checkerArrayLikeAdmission(
+  checker: ts.TypeChecker,
+  type: ts.Type,
+): { readonly admitted: boolean; readonly elementType: ts.Type | null } {
+  if ((type.flags & ts.TypeFlags.Object) === 0) {
+    return { admitted: false, elementType: null };
+  }
+  const elementType = checkerNumberIndexValueType(checker, type);
+  const length = checkerPropertySymbol(checker, type, 'length');
+  const lengthType = length == null ? null : checkerSymbolValueType(checker, length);
+  return {
+    admitted: lengthType != null && checkerRawTypeAssignable(checker, lengthType, checker.getNumberType()),
+    elementType,
+  };
+}
+
+function checkerCustomRepeatableHandlerElementType(
+  checker: ts.TypeChecker,
+  sourceType: ts.Type,
+  contracts: readonly CheckerRepeatableHandlerContract[],
+): { readonly matched: boolean; readonly open: boolean; readonly elementType: ts.Type | null } {
+  const exactContracts = contracts.filter((contract) => contract.sourceType != null);
+  const matched = exactContracts.filter((contract) =>
+    checkerRawTypeAssignable(checker, sourceType, contract.sourceType!)
+  );
+  if (matched.length > 0) {
+    return {
+      matched: true,
+      open: false,
+      elementType: commonOrUnionRelatedType(
+        checker,
+        matched.map((contract) => contract.elementType ?? checker.getUnknownType()),
+      ),
+    };
+  }
+  return {
+    matched: false,
+    open: contracts.length > exactContracts.length,
+    elementType: null,
+  };
 }
 
 function checkerDefaultRepeatableElementType(
@@ -415,6 +824,7 @@ function repeatableElementInfo(
   unsupportedConstituents: number,
   openConstituents: number,
   nullishConstituents: number,
+  handlerOpenConstituents: number,
 ): CheckerRepeatableElementTypeInfo {
   return {
     elementType,
@@ -422,6 +832,7 @@ function repeatableElementInfo(
     unsupportedConstituents,
     openConstituents,
     nullishConstituents,
+    handlerOpenConstituents,
   };
 }
 

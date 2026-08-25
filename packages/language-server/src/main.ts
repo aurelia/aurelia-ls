@@ -10,16 +10,20 @@
  * - handlers/custom.ts   - Custom Aurelia request handlers
  * - handlers/lifecycle.ts - Lifecycle and document event handlers
  */
-import { createConnection, ProposedFeatures, TextDocuments } from "vscode-languageserver/node.js";
+import { parentPort } from "node:worker_threads";
+import { TextDocuments } from "vscode-languageserver/node";
 import { TextDocument } from "vscode-languageserver-textdocument";
 import { createServerContext } from "./context.js";
 import type { Logger } from "./services/types.js";
 import { registerFeatureHandlers } from "./handlers/features.js";
 import { registerCustomHandlers } from "./handlers/custom.js";
 import { registerLifecycleHandlers } from "./handlers/lifecycle.js";
+import { registerDiagnosticHandlers } from "./handlers/diagnostics.js";
+import { createLanguageServerConnection } from "./transport.js";
 
 // Create LSP connection and document store
-const connection = createConnection(ProposedFeatures.all);
+const workerMode = parentPort != null;
+const connection = createLanguageServerConnection(parentPort);
 const documents = new TextDocuments(TextDocument);
 
 // Create logger that writes to LSP connection console
@@ -35,10 +39,12 @@ const ctx = createServerContext({
   connection,
   documents,
   logger,
+  enableProjectInputCancellationCheckpoints: workerMode,
 });
 
 // Register all handlers
 registerLifecycleHandlers(ctx);
+registerDiagnosticHandlers(ctx);
 registerFeatureHandlers(ctx);
 registerCustomHandlers(ctx);
 

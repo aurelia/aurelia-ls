@@ -1,0 +1,5 @@
+{
+  "$schema": "./schema.semantic-conformance-known-gaps.v1.json",
+  "schemaVersion": "semantic-conformance-known-gaps.v1",
+  "knownGaps": []
+}

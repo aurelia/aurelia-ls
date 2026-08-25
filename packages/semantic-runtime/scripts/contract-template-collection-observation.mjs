@@ -8,7 +8,7 @@ import {
   readFixtureVerificationSnapshot,
   verifyFixtureEffects,
 } from '../out/index.js';
-import { exactSourceSpanFailures } from './contract-source-span-assertions.mjs';
+import { exactObservedDependencySourceSpanFailures } from './contract-source-span-assertions.mjs';
 
 const packageRoot = path.resolve(fileURLToPath(new URL('..', import.meta.url)));
 const fixtureRoot = path.join(packageRoot, 'fixtures/pressure/template-collection-observation');
@@ -405,22 +405,24 @@ const verification = verifyFixtureEffects(
 const failures = verification.effectResults
   .filter((result) => result.outcome !== 'satisfied')
   .map((result) => result.summary);
-failures.push(...exactSourceSpanFailures(snapshot.bindingObservedDependencies, [
+failures.push(...exactObservedDependencySourceSpanFailures(snapshot.bindingObservedDependencies, [
   {
     summary: 'Template sort collection dependency should publish its own expression source span, not the enclosing binding value.',
     path: 'src/template-collection-observation-app.html',
-    sourceName: 'products',
-    methodName: 'sort',
+    occurrence: {
+      sourceName: 'products',
+      methodName: 'sort',
+    },
   },
   {
     summary: 'Template sort left comparator dependency should publish the exact left.id source span.',
     path: 'src/template-collection-observation-app.html',
-    sourceName: 'left.id',
+    occurrence: { sourceName: 'left.id' },
   },
   {
     summary: 'Template sort right comparator dependency should publish the exact right.id source span.',
     path: 'src/template-collection-observation-app.html',
-    sourceName: 'right.id',
+    occurrence: { sourceName: 'right.id' },
   },
 ]));
 

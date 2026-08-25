@@ -2,7 +2,9 @@ import {
   customAttribute,
   customElement,
 } from '@aurelia/runtime-html';
+import template from './runtime-html-ref-renderer-errors-app.html';
 
+@customElement({ name: 'runtime-html-ref-renderer-errors-app', template })
 export class RuntimeHtmlRefRendererErrorsApp {
   elementRef: HTMLElement | null = null;
   legacyView: unknown = null;

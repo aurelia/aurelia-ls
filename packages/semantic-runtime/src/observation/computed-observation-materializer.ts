@@ -3,8 +3,13 @@ import {
 } from '../kernel/evidence.js';
 import { localKeyPart } from '../kernel/local-key.js';
 import {
-  KernelStore,
+  KernelPublicationPlan,
+  publishProductDetails,
+  type KernelPublicationContext,
+} from '../kernel/publication.js';
+import {
   KernelStoreBatch,
+  type KernelStore,
   type KernelStoreRecord,
 } from '../kernel/store.js';
 import { KernelVocabulary } from '../kernel/vocabulary.js';
@@ -32,6 +37,7 @@ export class ComputedObservationDefinitionPublication {
 export class ComputedObservationMaterializer {
   constructor(
     readonly store: KernelStore,
+    readonly publication: KernelPublicationContext,
   ) {}
 
   materialize(
@@ -42,16 +48,13 @@ export class ComputedObservationMaterializer {
       .map((site, index) => this.publicationForSite(project, site, index));
 
     const records = publications.flatMap((publication) => publication.records);
-    if (records.length > 0) {
-      this.store.commit(new KernelStoreBatch(records, 'computed-observation-definitions'));
-    }
-    for (const publication of publications) {
-      this.store.productDetails.add(
+    this.publication.publish(new KernelPublicationPlan(
+      new KernelStoreBatch(records, 'computed-observation-definitions'),
+      publishProductDetails(
         ObservationProductDetails.ComputedObservationDefinition,
-        publication.definition.productHandle,
-        publication.definition,
-      );
-    }
+        publications.map((publication) => publication.definition),
+      ),
+    ));
 
     return new ComputedObservationProjectResult(publications.map((publication) => publication.definition));
   }
@@ -84,7 +87,6 @@ export class ComputedObservationMaterializer {
       site.flush,
       site.deep,
       product.sourceAddressHandle,
-      [],
     );
     return new ComputedObservationDefinitionPublication(definition, product.records);
   }

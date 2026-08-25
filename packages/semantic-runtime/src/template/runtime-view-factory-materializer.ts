@@ -5,7 +5,7 @@ import type {
 } from '../kernel/handles.js';
 import {
   AureliaResourceIdentity,
-  AureliaResourceIdentityKind,
+  AureliaResourceDeclarationKind,
   ConfigurationIdentity,
 } from '../kernel/identity.js';
 import {
@@ -16,12 +16,14 @@ import type {
   KernelStore,
   KernelStoreRecord,
 } from '../kernel/store.js';
+import type { KernelPublicationContext } from '../kernel/publication.js';
 import {
   KernelVocabulary,
 } from '../kernel/vocabulary.js';
 import {
   ViewFactory,
 } from '../configuration/controller.js';
+import type { Container } from '../di/container.js';
 import {
   CustomElementDefinition,
   CustomElementCaptureDefinition,
@@ -42,8 +44,8 @@ import {
 } from './runtime-renderer.js';
 import {
   RuntimeControllerFrame,
-  RuntimeControllerLifecycleStage,
-  RuntimeControllerLifecycleStepKind,
+  RuntimeControllerAssemblyStage,
+  RuntimeControllerAssemblyStepKind,
 } from './runtime-controller.js';
 import type {
   TemplateInstructionSequence,
@@ -55,7 +57,8 @@ import type {
 
 export class RuntimeViewFactoryMaterialization {
   constructor(
-    readonly templateController: RuntimeControllerFrame,
+    readonly ownerController: RuntimeControllerFrame,
+    readonly container: Container,
     readonly viewFactory: ViewFactory,
     readonly definition: CustomElementDefinition,
     readonly instructionSequenceProductHandle: ProductHandle,
@@ -84,30 +87,43 @@ class RuntimeEmbeddedViewDefinitionShape {
 export class RuntimeViewFactoryMaterializer {
   constructor(
     readonly store: KernelStore,
+    private readonly publication: KernelPublicationContext,
   ) {}
 
-  ensureForTemplateController(
+  ensureForController(
     local: string,
+    definitionLocal: string,
     controller: RuntimeControllerFrame,
+    factoryContainer: Container,
     instructionSequenceProductHandle: ProductHandle,
     source: RuntimeRenderingSourceSet,
     records: KernelStoreRecord[],
     viewFactories: ViewFactory[],
     embeddedDefinitions: CustomElementDefinition[],
     viewFactoryByController: Map<ProductHandle, RuntimeViewFactoryMaterialization>,
+    embeddedDefinitionByInstructionSequence: Map<ProductHandle, CustomElementDefinition>,
   ): RuntimeViewFactoryMaterialization {
     const existing = viewFactoryByController.get(controller.productHandle) ?? null;
     if (existing != null) {
+      if (existing.instructionSequenceProductHandle !== instructionSequenceProductHandle) {
+        throw new Error(
+          `Runtime controller '${controller.productHandle}' cannot own view factories for both `
+          + `'${existing.instructionSequenceProductHandle}' and '${instructionSequenceProductHandle}'.`,
+        );
+      }
       return existing;
     }
     const viewFactory = this.recordViewFactory(
       local,
+      definitionLocal,
       controller,
+      factoryContainer,
       instructionSequenceProductHandle,
       source,
       records,
       viewFactories,
       embeddedDefinitions,
+      embeddedDefinitionByInstructionSequence,
     );
     viewFactoryByController.set(controller.productHandle, viewFactory);
     return viewFactory;
@@ -115,22 +131,32 @@ export class RuntimeViewFactoryMaterializer {
 
   private recordViewFactory(
     local: string,
+    definitionLocal: string,
     controller: RuntimeControllerFrame,
+    factoryContainer: Container,
     instructionSequenceProductHandle: ProductHandle,
     source: RuntimeRenderingSourceSet,
     records: KernelStoreRecord[],
     viewFactories: ViewFactory[],
     embeddedDefinitions: CustomElementDefinition[],
+    embeddedDefinitionByInstructionSequence: Map<ProductHandle, CustomElementDefinition>,
   ): RuntimeViewFactoryMaterialization {
-    const definition = this.recordEmbeddedViewDefinition(
-      `${local}:definition`,
+    const definition = this.ensureEmbeddedViewDefinition(
+      definitionLocal,
       controller,
       instructionSequenceProductHandle,
       source,
       records,
       embeddedDefinitions,
+      embeddedDefinitionByInstructionSequence,
     );
-    const viewFactory = this.createViewFactory(local, controller, definition, instructionSequenceProductHandle);
+    const viewFactory = this.createViewFactory(
+      local,
+      controller,
+      factoryContainer,
+      definition,
+      instructionSequenceProductHandle,
+    );
     this.recordViewFactoryLifecycle(controller, viewFactory);
     const claims = this.claimsForViewFactory(local, controller, viewFactory, definition, instructionSequenceProductHandle, source);
     viewFactories.push(viewFactory);
@@ -139,6 +165,7 @@ export class RuntimeViewFactoryMaterializer {
     );
     return new RuntimeViewFactoryMaterialization(
       controller,
+      factoryContainer,
       viewFactory,
       definition,
       instructionSequenceProductHandle,
@@ -149,6 +176,7 @@ export class RuntimeViewFactoryMaterializer {
   private createViewFactory(
     local: string,
     controller: RuntimeControllerFrame,
+    factoryContainer: Container,
     definition: CustomElementDefinition,
     instructionSequenceProductHandle: ProductHandle,
   ): ViewFactory {
@@ -157,7 +185,7 @@ export class RuntimeViewFactoryMaterializer {
       allocation.productHandle,
       allocation.identityHandle,
       definition.name,
-      controller.container,
+      factoryContainer.toReference(),
       definition.productHandle,
       controller.instructionProductHandle,
       instructionSequenceProductHandle,
@@ -170,12 +198,12 @@ export class RuntimeViewFactoryMaterializer {
     controller: RuntimeControllerFrame,
     viewFactory: ViewFactory,
   ): void {
-    controller.recordLifecycleStep(
-      RuntimeControllerLifecycleStage.Hydration,
-      RuntimeControllerLifecycleStepKind.CreateViewFactory,
+    controller.recordAssemblyStep(
+      RuntimeControllerAssemblyStage.Hydration,
+      RuntimeControllerAssemblyStepKind.CreateViewFactory,
       viewFactory.productHandle,
       viewFactory.sourceAddressHandle,
-      'Rendering.getViewFactory materialized the template-controller view factory.',
+      'Rendering.getViewFactory materialized the controller-owned view factory.',
     );
   }
 
@@ -288,15 +316,21 @@ export class RuntimeViewFactoryMaterializer {
     ];
   }
 
-  private recordEmbeddedViewDefinition(
+  private ensureEmbeddedViewDefinition(
     local: string,
     controller: RuntimeControllerFrame,
     instructionSequenceProductHandle: ProductHandle,
     source: RuntimeRenderingSourceSet,
     records: KernelStoreRecord[],
     embeddedDefinitions: CustomElementDefinition[],
+    embeddedDefinitionByInstructionSequence: Map<ProductHandle, CustomElementDefinition>,
   ): CustomElementDefinition {
+    const existing = embeddedDefinitionByInstructionSequence.get(instructionSequenceProductHandle) ?? null;
+    if (existing != null) {
+      return existing;
+    }
     const publication = this.publishEmbeddedViewDefinition(local, controller, instructionSequenceProductHandle);
+    embeddedDefinitionByInstructionSequence.set(instructionSequenceProductHandle, publication.definition);
     embeddedDefinitions.push(publication.definition);
     records.push(
       ...this.recordsForEmbeddedViewDefinitionProduct(local, publication, controller, source),
@@ -310,11 +344,11 @@ export class RuntimeViewFactoryMaterializer {
     instructionSequenceProductHandle: ProductHandle,
   ): RuntimeEmbeddedViewDefinitionPublication {
     const allocation = this.allocate(local);
-    const name = generatedEmbeddedViewName(controller);
-    const sequence = this.store.productDetails.read(
+    const sequence = this.publication.readProductDetail(
       TemplateProductDetails.InstructionSequence,
       instructionSequenceProductHandle,
     );
+    const name = generatedEmbeddedViewName(instructionSequenceProductHandle);
     return new RuntimeEmbeddedViewDefinitionPublication(
       allocation,
       this.createEmbeddedViewDefinition(allocation, name, controller, sequence),
@@ -331,7 +365,7 @@ export class RuntimeViewFactoryMaterializer {
     return new CustomElementDefinition(
       allocation.productHandle,
       allocation.identityHandle,
-      controller.sourceAddressHandle,
+      shape.template.addressHandle,
       shape.target,
       name,
       [],
@@ -360,14 +394,15 @@ export class RuntimeViewFactoryMaterializer {
     controller: RuntimeControllerFrame,
     sequence: TemplateInstructionSequence | null,
   ): RuntimeEmbeddedViewDefinitionShape {
+    const sourceAddressHandle = sequence?.sourceAddressHandle ?? controller.sourceAddressHandle;
     return new RuntimeEmbeddedViewDefinitionShape(
-      new ResourceTargetReference(null, controller.sourceAddressHandle, name, null),
+      new ResourceTargetReference(null, sourceAddressHandle, name, null),
       runtimeResourceKeyForKind(ResourceDefinitionKind.CustomElement, name)!,
       new CustomElementCaptureDefinition(CustomElementCaptureKind.None),
       new CustomElementTemplateDefinition(
         CustomElementTemplateKind.DomNode,
         null,
-        sequence?.sourceAddressHandle ?? controller.sourceAddressHandle,
+        sourceAddressHandle,
         null,
       ),
       instructionReferencesForEmbeddedView(sequence),
@@ -380,10 +415,12 @@ export class RuntimeViewFactoryMaterializer {
     controller: RuntimeControllerFrame,
     source: RuntimeRenderingSourceSet,
   ): readonly KernelStoreRecord[] {
+    const sourceAddressHandle = publication.definition.template?.addressHandle
+      ?? controller.sourceAddressHandle;
     return [
       new AureliaResourceIdentity(
         publication.allocation.identityHandle,
-        AureliaResourceIdentityKind.CustomElement,
+        AureliaResourceDeclarationKind.CustomElement,
         publication.definition.name,
         null,
       ),
@@ -391,7 +428,7 @@ export class RuntimeViewFactoryMaterializer {
         publication.allocation.productHandle,
         KernelVocabulary.Resource.Definition.key,
         publication.allocation.identityHandle,
-        controller.sourceAddressHandle,
+        sourceAddressHandle,
         source.provenanceHandle,
       ),
       new MaterializationRecord(
@@ -419,10 +456,9 @@ function instructionReferencesForEmbeddedView(
 }
 
 function generatedEmbeddedViewName(
-  controller: RuntimeControllerFrame,
+  instructionSequenceProductHandle: ProductHandle,
 ): string {
-  const seed = controller.instructionProductHandle ?? controller.productHandle;
-  return `anonymous-${stableShortHash(seed)}`;
+  return `anonymous-${stableShortHash(instructionSequenceProductHandle)}`;
 }
 
 function stableShortHash(value: string): string {

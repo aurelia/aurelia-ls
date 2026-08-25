@@ -52,6 +52,14 @@ export type TemplateCompilerIssueField =
   | 'frameworkErrorCode'
   | 'source';
 
+/** A second authored locus needed to explain a template-compiler issue. */
+export class TemplateCompilerIssueRelatedInformation {
+  constructor(
+    readonly message: string,
+    readonly sourceAddressHandle: AddressHandle,
+  ) {}
+}
+
 /** Source-backed compiler failure that corresponds to a framework template-compiler boundary. */
 export class TemplateCompilerIssue {
   constructor(
@@ -73,5 +81,7 @@ export class TemplateCompilerIssue {
     readonly fieldProvenance: readonly FieldProvenance<TemplateCompilerIssueField>[] = [],
     /** Diagnostic severity implied by the modeled framework path. */
     readonly severity: TemplateCompilerIssueSeverity = 'error',
+    /** Other authored loci that explain this issue, such as the occupied side of a duplicate registration. */
+    readonly relatedInformation: readonly TemplateCompilerIssueRelatedInformation[] = [],
   ) {}
 }

@@ -1,38 +1,10 @@
-import { auLink } from '../kernel/au-link.js';
 import type {
   AddressHandle,
   IdentityHandle,
   ProductHandle,
 } from '../kernel/handles.js';
-import type { FieldProvenance } from '../kernel/provenance.js';
-import {
-  RuntimeObservationFrameworkErrorCode,
-  type RuntimeObservationFrameworkErrorCode as RuntimeObservationFrameworkErrorCodeValue,
-} from './framework-error-code.js';
-import type { RuntimeObservedDependencyKind } from './runtime-binding-observation.js';
-import type { CheckerTypeMemberKind } from '../type-system/type-shape.js';
-
-export type RuntimeEffectField =
-  | 'effectKind'
-  | 'dependencyEvaluationKind'
-  | 'immediate'
-  | 'observedDependencies'
-  | 'stopped'
-  | 'source';
-
-export type RuntimeEffectObservedDependencyField =
-  | 'effect'
-  | 'dependencyKind'
-  | 'expressionKind'
-  | 'sourceName'
-  | 'sourceRootName'
-  | 'memberName'
-  | 'keyExpression'
-  | 'methodName'
-  | 'observedMemberKind'
-  | 'observedMemberSource'
-  | 'span'
-  | 'source';
+import type { RuntimeExpressionAccessUse } from '../runtime-expression/runtime-expression-access-use.js';
+import type { RuntimeObservedDependencyOccurrence } from './runtime-observed-dependency.js';
 
 export const enum RuntimeEffectKind {
   /** Direct IObservation.watch(...) effect. */
@@ -52,101 +24,51 @@ export const enum RuntimeEffectDependencyEvaluationKind {
   Open = 'open',
 }
 
-export const enum RuntimeEffectStopKind {
-  /** First stop transitions the effect into the stopped state. */
-  Stopped = 'stopped',
-  /** Runtime rejects stopping an already stopped effect. */
-  StoppingStoppedEffect = 'stopping-stopped-effect',
-}
-
-export class RuntimeEffectStopResult {
-  readonly kind = 'runtime-effect-stop-result' as const;
-
-  constructor(
-    /** Runtime branch selected by `IEffect.stop()`. */
-    readonly stopKind: RuntimeEffectStopKind,
-    /** Effect that received the stop call. */
-    readonly effect: RuntimeEffect,
-  ) {}
-
-  get frameworkErrorCode(): RuntimeObservationFrameworkErrorCodeValue | null {
-    return this.stopKind === RuntimeEffectStopKind.StoppingStoppedEffect
-      ? RuntimeObservationFrameworkErrorCode.StoppingStoppedEffect
-      : null;
-  }
-}
-
 export class RuntimeEffectReference {
   constructor(
-    /** Direct effect shape represented by this reference. */
+    /** Direct effect shape represented by this construction plan. */
     readonly effectKind: RuntimeEffectKind,
     /** Dependency-evaluation handoff selected by the framework call. */
     readonly dependencyEvaluationKind: RuntimeEffectDependencyEvaluationKind,
     /** Product handle for the materialized effect product, when publication owns one. */
     readonly productHandle: ProductHandle | null,
-    /** Identity for this modeled effect. */
+    /** Identity for this modeled construction plan. */
     readonly identityHandle: IdentityHandle | null,
-    /** Source address for the call that produced this effect. */
+    /** Source address for the call represented by this plan. */
     readonly addressHandle: AddressHandle | null,
   ) {}
 }
 
-/** Dependency read projected from a source-level Observation.watch(...) or Observation.run(...) effect. */
+/** Dependency read projected from a source-level Observation.watch(...) or Observation.run(...) construction plan. */
 export class RuntimeEffectObservedDependency {
   constructor(
     readonly productHandle: ProductHandle,
     readonly identityHandle: IdentityHandle,
     readonly effect: RuntimeEffectReference,
-    readonly dependencyKind: RuntimeObservedDependencyKind,
-    readonly expressionKind: string,
-    readonly sourceName: string | null,
-    readonly sourceRootName: string | null,
-    readonly memberName: string | null,
-    readonly keyExpression: string | null,
-    readonly methodName: string | null,
-    readonly observedMemberKind: CheckerTypeMemberKind | `${CheckerTypeMemberKind}` | null,
-    readonly observedMemberSourceAddressHandle: AddressHandle | null,
-    readonly spanStart: number | null,
-    readonly spanEnd: number | null,
-    readonly sourceAddressHandle: AddressHandle | null,
-    readonly fieldProvenance: readonly FieldProvenance<RuntimeEffectObservedDependencyField>[] = [],
+    readonly occurrence: RuntimeObservedDependencyOccurrence,
   ) {}
 }
 
-/**
- * Runtime-shaped `IEffect`. It models the lifecycle branch shared by Observation.watch effects and RunEffect:
- * `run()` after stop is a no-op, but a second `stop()` reaches `stopping_a_stopped_effect`.
- */
-@auLink('runtime:IEffect')
+/** Immutable construction-site plan for one direct `Observation.watch(...)` or `Observation.run(...)` call. */
 export class RuntimeEffect {
-  private stopped = false;
-
   constructor(
-    /** Direct effect shape represented by this instance. */
+    /** Direct effect shape represented by this construction plan. */
     readonly effectKind: RuntimeEffectKind,
     /** Dependency-evaluation handoff selected by the framework call. */
     readonly dependencyEvaluationKind: RuntimeEffectDependencyEvaluationKind,
     /** Product handle for the materialized effect product, when publication owns one. */
     readonly productHandle: ProductHandle | null,
-    /** Identity for this modeled effect. */
+    /** Identity for this modeled construction plan. */
     readonly identityHandle: IdentityHandle | null,
     /** Whether the source call closed the immediate option statically; null means open. */
     readonly immediate: boolean | null,
+    /** Authored accesses paired with the exact source effect operation that spends them. */
+    readonly accessUses: readonly RuntimeExpressionAccessUse[],
     /** Dependency reads collected for this effect's observer path. */
     readonly observedDependencies: readonly RuntimeEffectObservedDependency[],
-    /** Source address for the watch/effect declaration or runtime setup that produced this effect. */
+    /** Source address for the watch/run call represented by this plan. */
     readonly sourceAddressHandle: AddressHandle | null,
-    /** Field-level provenance for effect lifecycle state. */
-    readonly fieldProvenance: readonly FieldProvenance<RuntimeEffectField>[] = [],
   ) {}
-
-  get isStopped(): boolean {
-    return this.stopped;
-  }
-
-  run(): void {
-    return;
-  }
 
   toReference(): RuntimeEffectReference {
     return new RuntimeEffectReference(
@@ -158,13 +80,6 @@ export class RuntimeEffect {
     );
   }
 
-  stop(): RuntimeEffectStopResult {
-    if (this.stopped) {
-      return new RuntimeEffectStopResult(RuntimeEffectStopKind.StoppingStoppedEffect, this);
-    }
-    this.stopped = true;
-    return new RuntimeEffectStopResult(RuntimeEffectStopKind.Stopped, this);
-  }
 }
 
 export class RuntimeEffectProjectResult {
@@ -178,5 +93,9 @@ export class RuntimeEffectProjectResult {
 
   readObservedDependencies(): readonly RuntimeEffectObservedDependency[] {
     return this.effects.flatMap((effect) => effect.observedDependencies);
+  }
+
+  readAccessUses(): readonly RuntimeExpressionAccessUse[] {
+    return this.effects.flatMap((effect) => effect.accessUses);
   }
 }

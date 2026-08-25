@@ -1,0 +1,19 @@
+<template>
+  <plain-observer-target value.bind="message"></plain-observer-target>
+  <plain-observer-target value.to-view="message"></plain-observer-target>
+  <plain-observer-target value.two-way="message"></plain-observer-target>
+
+  <getter-observer-target value.bind="message"></getter-observer-target>
+  <getter-observer-target value.from-view="message"></getter-observer-target>
+
+  <observable-observer-target value.bind="message"></observable-observer-target>
+  <class-observable-observer-target value.bind="message"></class-observable-observer-target>
+  <declared-callback-observer-target value.bind="message"></declared-callback-observer-target>
+  <null-property-changed-observer-target value.bind="message"></null-property-changed-observer-target>
+  <computed-observer-target
+    automatic.bind="message"
+    disabled.bind="message"
+    explicit.bind="message"
+    stacked.bind="message">
+  </computed-observer-target>
+</template>

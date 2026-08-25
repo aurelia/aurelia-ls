@@ -1,10 +1,10 @@
 import type { BindingScopeReference } from '../configuration/scope.js';
 import type {
   AddressHandle,
+  HotDetailHandle,
   IdentityHandle,
   ProductHandle,
 } from '../kernel/handles.js';
-import type { FieldProvenance } from '../kernel/provenance.js';
 import type {
   CheckerTypeMemberKind,
   CheckerTypeReference,
@@ -14,13 +14,26 @@ import type {
   RuntimeBindingSourceOperationReference,
   RuntimeBindingTargetAccessReference,
   RuntimeBindingTargetOperationReference,
+  RuntimeNodeObserverConfigFieldState,
 } from '../template/runtime-binding.js';
 import type { OpenSeamReasonKind } from '../kernel/open-seam.js';
 import type { CheckerExpressionTypeOpenKind } from '../type-system/expression-type-evaluation.js';
+import type { RuntimeValueConverterWritebackStageState } from '../type-system/value-converter-writeback.js';
+import type {
+  RuntimeExpressionResourceApplicationOrigin,
+} from '../template/runtime-expression-resource.js';
+import type {
+  RuntimeOperationRealization,
+  RuntimeOperationReachability,
+} from '../runtime-expression/runtime-operation.js';
+import type { RuntimeValueConverterApplicationReference } from '../template/runtime-value-converter.js';
 import type { ObservationFrameworkErrorCode } from './framework-error-code.js';
+import type { RuntimeObservedDependencyOccurrence } from './runtime-observed-dependency.js';
 
 export const enum RuntimeBindingValueChannelKind {
   RawProperty = 'raw-property',
+  /** Property transport governed by ValueAttributeObserver nullish/default and readonly policy. */
+  ValueAttributeObserverProperty = 'value-attribute-observer-property',
   RefTarget = 'ref-target',
   ScopeSlot = 'scope-slot',
   TextContent = 'text-content',
@@ -58,6 +71,7 @@ export const enum RuntimeBindingValueChannelKind {
 /** Stable value list for runtime binding value-channel transport and catalog projections. */
 export const RUNTIME_BINDING_VALUE_CHANNEL_KINDS = [
   RuntimeBindingValueChannelKind.RawProperty,
+  RuntimeBindingValueChannelKind.ValueAttributeObserverProperty,
   RuntimeBindingValueChannelKind.RefTarget,
   RuntimeBindingValueChannelKind.ScopeSlot,
   RuntimeBindingValueChannelKind.TextContent,
@@ -100,6 +114,18 @@ export const enum RuntimeBindingValueChannelAuthority {
   BindingExpression = 'binding-expression',
   BindingExpressionAndTypeChecker = 'binding-expression-and-type-checker',
   ObserverSemantics = 'observer-semantics',
+  Open = 'open',
+}
+
+/** Source-value mutation policy selected by the target-side runtime transport. */
+export const enum RuntimeBindingValueChannelTargetMutationKind {
+  /** The selected accessor or observer writes source values into its target. */
+  WritesTarget = 'writes-target',
+  /** The selected observer accepts source updates but deliberately suppresses its target write. */
+  SuppressesTargetWrite = 'suppresses-target-write',
+  /** This channel does not transport source values into a target property. */
+  NoTargetWrite = 'no-target-write',
+  /** App-owned or unclosed observer behavior prevents a truthful target-mutation claim. */
   Open = 'open',
 }
 
@@ -158,6 +184,20 @@ export const enum RuntimeBindingDataFlowDirection {
   Open = 'open',
 }
 
+/** Runtime `astEvaluate` lifecycle for the binding source expression. */
+export const enum RuntimeBindingSourceEvaluationKind {
+  /** Source reads are collected by the binding's active connectable. */
+  ConnectableRead = 'connectable-read',
+  /** Source is evaluated without dependency collection, such as an event handler or one-time binding. */
+  UntrackedRead = 'untracked-read',
+  /** Source syntax is used as an assignment target rather than evaluated for a value during binding. */
+  AssignmentOnly = 'assignment-only',
+  /** The binding retains authored source syntax but performs neither source evaluation nor assignment. */
+  NotEvaluated = 'not-evaluated',
+  /** The binding lifecycle did not prove how the source expression is evaluated. */
+  Open = 'open',
+}
+
 export const enum RuntimeBindingDataFlowSourceKind {
   ScopeName = 'scope-name',
   Member = 'member',
@@ -167,20 +207,11 @@ export const enum RuntimeBindingDataFlowSourceKind {
   Open = 'open',
 }
 
-export const enum RuntimeObservedDependencyKind {
-  TemplateExpressionRead = 'template-expression-read',
-  TemplateCollectionRead = 'template-collection-read',
-  ProxyPropertyRead = 'proxy-property-read',
-  ProxyCollectionRead = 'proxy-collection-read',
-  ObservablePropertyRead = 'observable-property-read',
-  DeepPropertyRead = 'deep-property-read',
-  DeepCollectionRead = 'deep-collection-read',
-}
-
 export const enum RuntimeBindingDataFlowSourceAssignmentKind {
   RuntimeAssignable = 'runtime-assignable',
   RuntimeAssignableWithTypeScriptStrictness = 'runtime-assignable-with-typescript-strictness',
   RuntimeUnassignable = 'runtime-unassignable',
+  FrameworkManagedReadOnly = 'framework-managed-read-only',
   Open = 'open',
 }
 
@@ -190,6 +221,7 @@ export const enum RuntimeBindingDataFlowSourceAssignmentReasonKind {
   ScopeSlotMissingTypeCheckerMember = 'scope-slot-missing-typechecker-member',
   ScopeSlotTypeCheckerMemberUnavailable = 'scope-slot-typechecker-member-unavailable',
   ScopeSlotRuntimeOnly = 'scope-slot-runtime-only',
+  ScopeSlotFrameworkManaged = 'scope-slot-framework-managed',
   OwnerTypeOpen = 'owner-type-open',
   /** Key expression type could not be projected far enough to prove keyed source write policy. */
   KeyTypeOpen = 'key-type-open',
@@ -209,82 +241,6 @@ export const enum RuntimeBindingDataFlowTypeMismatchKind {
   SourceNullishToRequiredTarget = 'source-nullish-to-required-target',
   TargetNullishToRequiredSource = 'target-nullish-to-required-source',
 }
-
-export type RuntimeBindingDataFlowField =
-  | 'binding'
-  | 'targetAccess'
-  | 'targetOperation'
-  | 'sourceOperation'
-  | 'valueChannel'
-  | 'expression'
-  | 'scope'
-  | 'direction'
-  | 'strictBinding'
-  | 'sourceKind'
-  | 'sourceName'
-  | 'sourceRootName'
-  | 'sourceType'
-  | 'sourceTypeOpenReason'
-  | 'sourceTypeOpenKind'
-  | 'sourceAssignmentTargetType'
-  | 'sourceAssignmentTargetSource'
-  | 'targetPropertyType'
-  | 'targetValueType'
-  | 'sourceWritable'
-  | 'sourceAssignmentKind'
-  | 'sourceAssignmentReason'
-  | 'sourceAssignmentReasonKinds'
-  | 'sourceToTargetAssignable'
-  | 'targetToSourceAssignable'
-  | 'sourceToTargetTypeMismatchKinds'
-  | 'targetToSourceTypeMismatchKinds'
-  | 'observedDependencies'
-  | 'frameworkErrorCode'
-  | 'openReason'
-  | 'source';
-
-export type RuntimeBindingObservedDependencyField =
-  | 'binding'
-  | 'dataFlow'
-  | 'expression'
-  | 'dependencyKind'
-  | 'expressionKind'
-  | 'sourceName'
-  | 'sourceRootName'
-  | 'memberName'
-  | 'keyExpression'
-  | 'methodName'
-  | 'observedMemberKind'
-  | 'observedMemberSource'
-  | 'observedMemberSourceState'
-  | 'span'
-  | 'source';
-
-export const enum RuntimeObservedMemberSourceState {
-  Source = 'source',
-  TemporaryValue = 'temporary-value',
-  RuntimeScopeName = 'runtime-scope-name',
-  ScopeOpen = 'scope-open',
-  Open = 'open',
-}
-
-export type RuntimeBindingValueChannelField =
-  | 'binding'
-  | 'targetAccess'
-  | 'targetOperation'
-  | 'sourceOperation'
-  | 'channelKind'
-  | 'authority'
-  | 'rawTargetPropertyType'
-  | 'runtimeValueType'
-  | 'valueDomain'
-  | 'primitiveValueDomain'
-  | 'isCollection'
-  | 'usesCustomMatcher'
-  | 'observerCouplings'
-  | 'openReason'
-  | 'openReasonKinds'
-  | 'source';
 
 /** Reference to a runtime value channel without expanding checker facts. */
 export class RuntimeBindingValueChannelReference {
@@ -309,20 +265,9 @@ export class RuntimeBindingObservedDependency {
     readonly dataFlowProductHandle: ProductHandle,
     readonly expressionProductHandle: ProductHandle | null,
     readonly bindingScope: BindingScopeReference | null,
-    readonly dependencyKind: RuntimeObservedDependencyKind,
-    readonly expressionKind: string,
-    readonly sourceName: string | null,
-    readonly sourceRootName: string | null,
-    readonly memberName: string | null,
-    readonly keyExpression: string | null,
-    readonly methodName: string | null,
-    readonly observedMemberKind: CheckerTypeMemberKind | `${CheckerTypeMemberKind}` | null,
-    readonly observedMemberSourceAddressHandle: AddressHandle | null,
-    readonly observedMemberSourceState: RuntimeObservedMemberSourceState,
-    readonly spanStart: number | null,
-    readonly spanEnd: number | null,
-    readonly sourceAddressHandle: AddressHandle | null,
-    readonly fieldProvenance: readonly FieldProvenance<RuntimeBindingObservedDependencyField>[] = [],
+    /** Whether dependency collection is direct or belongs to a guarded runtime-created inner binding. */
+    readonly realization: RuntimeOperationRealization,
+    readonly occurrence: RuntimeObservedDependencyOccurrence,
   ) {}
 }
 
@@ -343,8 +288,25 @@ export class RuntimeBindingValueChannel {
     readonly sourceOperation: RuntimeBindingSourceOperationReference | null,
     readonly channelKind: RuntimeBindingValueChannelKind,
     readonly authority: RuntimeBindingValueChannelAuthority,
+    readonly targetMutationKind: RuntimeBindingValueChannelTargetMutationKind,
+    readonly nullishDefault: RuntimeBindingPrimitiveValue | null,
+    readonly nullishDefaultState: RuntimeNodeObserverConfigFieldState | null,
     readonly rawTargetPropertyType: CheckerTypeReference | null,
     readonly runtimeValueType: CheckerTypeReference | null,
+    /** Whether this channel exists directly or only after a runtime object/member guard succeeds. */
+    readonly realization: RuntimeOperationRealization,
+    /** Whether controller setup and expression-resource binding reach this value transport. */
+    readonly bindReachability: RuntimeOperationReachability,
+    /** Object type tested by a guarded source-member read; null for direct channels. */
+    readonly admittedSourceOwnerType: CheckerTypeReference | null,
+    /** Source member value on the successful guard branch; null for direct channels. */
+    readonly admittedSourceValueType: CheckerTypeReference | null,
+    /** Member kind shared by every admitted runtime lane, when one can be proven. */
+    readonly admittedSourceMemberKind: CheckerTypeMemberKind | `${CheckerTypeMemberKind}` | null,
+    /** Exact projected member shared by every admitted runtime lane, when one can be proven. */
+    readonly admittedSourceMemberHandle: HotDetailHandle | null,
+    /** Declaration source shared by every admitted runtime lane, when one can be proven. */
+    readonly admittedSourceMemberSourceAddressHandle: AddressHandle | null,
     readonly valueDomain: readonly string[],
     readonly primitiveValueDomain: readonly RuntimeBindingPrimitiveValue[],
     readonly isCollection: boolean | null,
@@ -353,7 +315,6 @@ export class RuntimeBindingValueChannel {
     readonly openReason: string | null,
     readonly openReasonKinds: readonly OpenSeamReasonKind[],
     readonly sourceAddressHandle: AddressHandle | null,
-    readonly fieldProvenance: readonly FieldProvenance<RuntimeBindingValueChannelField>[] = [],
   ) {}
 
   toReference(): RuntimeBindingValueChannelReference {
@@ -366,12 +327,38 @@ export class RuntimeBindingValueChannel {
   }
 }
 
+/** One target-specific TypeChecker projection of a value-converter `fromView` application. */
+export class RuntimeBindingDataFlowValueConverterWritebackStage {
+  constructor(
+    readonly converterName: string,
+    /** Outer-to-inner structural order used by Aurelia `astAssign`. */
+    readonly stageIndex: number,
+    /** Runtime application identity for the same converter occurrence and from-view phase. */
+    readonly application: RuntimeValueConverterApplicationReference,
+    readonly origin: RuntimeExpressionResourceApplicationOrigin,
+    readonly runtimeChainDepth: number,
+    /** Runtime execution order; null when converter invocation is blocked. */
+    readonly phaseOrder: number | null,
+    readonly phaseReachability: RuntimeOperationReachability,
+    readonly projectionState: RuntimeValueConverterWritebackStageState,
+    /** Best-known checker input; `input-open` stages may carry a partial prior output. */
+    readonly inputType: CheckerTypeReference | null,
+    /** Closed output for `type`, partial output for `open`, and null for `input-open`. */
+    readonly outputType: CheckerTypeReference | null,
+    readonly openReason: string | null,
+    readonly openKind: CheckerExpressionTypeOpenKind | null,
+    readonly sourceAddressHandle: AddressHandle | null,
+  ) {}
+}
+
 /** Runtime binding source/target data-flow edge computed from Scope lookup plus target-side facts. */
 export class RuntimeBindingDataFlow {
   constructor(
     readonly productHandle: ProductHandle,
     readonly identityHandle: IdentityHandle,
     readonly binding: RuntimeBindingReference,
+    /** Owner-qualified source and value-converter accesses spent by this flow edge. */
+    readonly accessUseProductHandles: readonly ProductHandle[],
     readonly targetAccess: RuntimeBindingTargetAccessReference | null,
     readonly targetOperation: RuntimeBindingTargetOperationReference | null,
     readonly sourceOperation: RuntimeBindingSourceOperationReference | null,
@@ -379,6 +366,12 @@ export class RuntimeBindingDataFlow {
     readonly expressionProductHandle: ProductHandle | null,
     readonly bindingScope: BindingScopeReference | null,
     readonly direction: RuntimeBindingDataFlowDirection,
+    /** Whether this edge is direct or depends on runtime creation of a guarded inner binding. */
+    readonly realization: RuntimeOperationRealization,
+    readonly sourceEvaluationKind: RuntimeBindingSourceEvaluationKind,
+    /** Whether expression-resource `astBind(...)` completed far enough for source evaluation to run. */
+    readonly sourceEvaluationReachability: RuntimeOperationReachability,
+    readonly targetMutationKind: RuntimeBindingValueChannelTargetMutationKind,
     readonly strictBinding: boolean | null,
     readonly sourceKind: RuntimeBindingDataFlowSourceKind,
     readonly sourceName: string | null,
@@ -390,6 +383,11 @@ export class RuntimeBindingDataFlow {
     readonly sourceAssignmentTargetSourceAddressHandle: AddressHandle | null,
     readonly targetPropertyType: CheckerTypeReference | null,
     readonly targetValueType: CheckerTypeReference | null,
+    /** Final value handed to the unwrapped assignment target after every projected `fromView` stage. */
+    readonly targetToSourceValueType: CheckerTypeReference | null,
+    readonly targetToSourceValueTypeOpenReason: string | null,
+    readonly targetToSourceValueTypeOpenKind: CheckerExpressionTypeOpenKind | null,
+    readonly valueConverterWritebackStages: readonly RuntimeBindingDataFlowValueConverterWritebackStage[],
     readonly sourceWritable: boolean | null,
     readonly sourceAssignmentKind: RuntimeBindingDataFlowSourceAssignmentKind | null,
     readonly sourceAssignmentReason: string | null,
@@ -401,6 +399,5 @@ export class RuntimeBindingDataFlow {
     readonly frameworkErrorCode: ObservationFrameworkErrorCode | null,
     readonly openReason: string | null,
     readonly sourceAddressHandle: AddressHandle | null,
-    readonly fieldProvenance: readonly FieldProvenance<RuntimeBindingDataFlowField>[] = [],
   ) {}
 }

@@ -31,6 +31,11 @@ import type {
 } from '../kernel/handles.js';
 import { issuePublicationWithRecords } from '../kernel/issue-publication.js';
 import { localKeyPart } from '../kernel/local-key.js';
+import {
+  KernelPublicationPlan,
+  publishProductDetails,
+  type KernelPublicationContext,
+} from '../kernel/publication.js';
 import { sourceSpanAddressForSite, type SourceSpanSite } from '../kernel/source-address.js';
 import {
   KernelStore,
@@ -157,6 +162,7 @@ export class DialogSourceIssueMaterializer {
 
   constructor(
     readonly store: KernelStore,
+    readonly publication: KernelPublicationContext,
   ) {
     this.publisher = new DialogIssuePublisher(store);
   }
@@ -170,12 +176,13 @@ export class DialogSourceIssueMaterializer {
     const publications = distinctDialogIssueSites(sites)
       .map((site, index) => this.publicationForSite(project, site, index));
     const records = publications.flatMap((publication) => publication.records);
-    if (records.length > 0) {
-      this.store.commit(new KernelStoreBatch(records, `dialog-source-issues:${project.projectKey}`));
-    }
-    for (const publication of publications) {
-      this.store.productDetails.add(DialogProductDetails.Issue, publication.issue.productHandle, publication.issue);
-    }
+    this.publication.publish(new KernelPublicationPlan(
+      new KernelStoreBatch(records, `dialog-source-issues:${project.projectKey}`),
+      publishProductDetails(
+        DialogProductDetails.Issue,
+        publications.map((publication) => publication.issue),
+      ),
+    ));
     return new DialogSourceIssueProjectResult(
       publications.map((publication) => publication.issue),
       records,
@@ -210,7 +217,7 @@ function readDialogIssueSourceSites(
 ): readonly DialogIssueSourceSite[] {
   const sourcePathByFileName = typeSystemSourcePathIndex(project, typeSystem);
   const reads = project.sourceFiles.flatMap((source): DialogSourceRead[] => {
-    const sourceFile = typeSystem.readProgramSourceFileByPath(source.path);
+    const sourceFile = typeSystem.readProgramSourceFileByProjectPath(source.path);
     if (sourceFile == null) {
       return [];
     }

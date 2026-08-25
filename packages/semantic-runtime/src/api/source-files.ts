@@ -1,6 +1,6 @@
 import type { ProjectBootFrame } from '../boot/frames.js';
 import {
-  SemanticRuntimeAnswerOutcome,
+  SemanticRuntimeAnswerResult,
   SemanticRuntimeDetail,
   type SemanticRuntimeAnswer,
   type SemanticRuntimePageInput,
@@ -9,6 +9,7 @@ import {
 } from './contracts.js';
 import {
   answer,
+  COMPLETE_COLLECTION_ANSWER_OPTIONS,
   includeHandles,
   pageRows,
 } from './answer-helpers.js';
@@ -31,12 +32,12 @@ export function readSemanticSourceFiles(
     .sort((left, right) => left.path.localeCompare(right.path));
   const paged = pageRows(rows, page);
   return answer(
-    SemanticRuntimeAnswerOutcome.Hit,
+    SemanticRuntimeAnswerResult.Answered,
     `Read ${paged.rows.length} of ${rows.length} admitted source file(s) for '${project.projectKey}'.`,
     {
       rows: paged.rows,
       totalRows: rows.length,
     },
-    paged.page,
+    { ...COMPLETE_COLLECTION_ANSWER_OPTIONS, page: paged.page },
   );
 }

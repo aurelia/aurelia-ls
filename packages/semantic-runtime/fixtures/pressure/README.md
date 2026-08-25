@@ -1,15 +1,14 @@
 # Pressure Fixtures
 
-This folder is for analyzer pressure fixtures, including hand-authored edge cases and migrated app-pattern fixtures that
-should remain as semantic contracts rather than app-builder recipes.
+This folder is a mixed corpus of realistic analyzer cases from several
+development eras. Fixture verification, conformance, lane, and focused
+contracts reuse it; fixture count is not a coverage metric.
 
-Use these fixtures to preserve shapes that real Aurelia projects may contain, including weak type surfaces, mixed state
-ownership, callback bindables, object bindables on non-leaf components, dynamic form controls, and partially inconsistent
-template conventions.
-
-Pressure fixtures can be mixed or non-recommendation, but they should still be realistic app code rather than artificial
-parser torture cases. Future recommendable generation belongs in app-builder source-lowering APIs; this folder keeps
-pressure evidence and app-builder pressure fixtures, not reusable generated-code authority.
+Use these fixtures to preserve real project shapes and edge cases, including
+weak types, mixed state ownership, dynamic controls, and unusual component
+contracts. Migrated app-pattern fixtures stay semantic contracts. Public
+recommendations live in `packages/patterns`; this folder owns internal analyzer
+and app-builder pressure.
 
 ## Fixtures
 
@@ -133,6 +132,13 @@ pressure evidence and app-builder pressure fixtures, not reusable generated-code
   surfaces.
   `pnpm --filter @aurelia-ls/semantic-runtime contract:binding-data-flow-summary` is the focused semantic contract for
   these issue rollups.
+- `binding-uncertainty-explanation` captures the bounded cursor-selected explanation slice for template-authored
+  property bindings: a closed healthy flow, closed readonly/TypeScript-strictness and nullish-assignability negatives,
+  nullable multi-select writeback with a typed causal blocker, shared-template ambiguity across two app worlds, an
+  absent locus, and an excluded listener binding. It exists so IDE/MCP consumers receive one engine-authored statement
+  of what Aurelia can prove and what blocks stronger certainty without joining raw rows or choosing an app world.
+  `pnpm --filter @aurelia-ls/semantic-runtime contract:binding-uncertainty-explanation` is the focused semantic contract
+  for selection, catalog/preflight policy, continuations, currentness, and generic JSON transport.
 - `di-resource-duplicates` captures two source-registered runtime-html resources with the same custom-element name. It
   preserves the runtime-html definition registrar duplicate warning (`element_existed` / `AUR0153`) as a
   resource-registration issue without making recommendable generators emit colliding resource names. Kernel
@@ -235,12 +241,24 @@ pressure evidence and app-builder pressure fixtures, not reusable generated-code
   string child routeable when multiple custom elements share the same resource name. It preserves Aurelia's
   `resolveCustomElementDefinition(...)` dependency-scope lookup before root-container fallback without teaching
   recommendable generators to create duplicate custom-element names.
+- `router-route-config-identity` captures route config declaration forms and routeable identity lanes in one routed
+  app: `@route(...)` object and path shorthand, `Route.configure(...)`, class static route metadata, class routeable
+  children, string routeables, valid lazy imports, redirects, fallback components, aliases, and child route configs. It
+  preserves route-config/source-product pressure without making generated apps prefer every supported authoring form.
 - `router-route-parameter-aggregation` captures nested routed components where parent and child route configs both use
   the same `:id` parameter name. It preserves `IRouteContext.getRouteParameters()` child-first/parent-first aggregation
   pressure, append/by-route strategy projection, recursive residual-route recognition, nested `RouteNode` /
   `ComponentAgent` projection, closed static query parameter inclusion with duplicate query keys, fragment propagation,
   and active route-node parameter value projection without making recommendable generators prefer ambiguous
   repeated parameter names.
+- `router-parameter-completion` isolates router-resource authoring pressure before navigation can close. A routed
+  workspace supplies multi-path aliases with different parameter sets, optional and star parameters, filled and empty
+  `params.bind` object literals, later key slots, params variables, value positions, and complete/incomplete nested
+  object values, plus bound-literal and state-reduced route values, a context override, and a dynamic route binding.
+  Completion must spend the selected route context and
+  endpoint requirements even when missing params prevent `ViewportInstructionTree` or `RecognizedRoute` publication;
+  context-replaced and dynamic routes remain open instead of receiving app-wide parameter names, while non-key loci
+  retain ordinary expression completion.
 - `repeat-keyed-iterables` captures nested `repeat.for` locals whose iterable comes from nullable arrays and finite
   keyed records such as `Record<'one' | 'two', Item[]>`. It preserves the TypeChecker handoff needed for public plugin
   and app templates where a repeat local indexes a mapped record before a deeper child repeat reads item members.
@@ -257,8 +275,9 @@ pressure evidence and app-builder pressure fixtures, not reusable generated-code
   already selected a framework observer: source-to-target binding into a getter-only computed target (`AUR0221`) and a
   Map/Set `size` observer (`AUR0220`). It preserves the data-flow distinction between target observer selection and
   write-time framework failure without making recommendable generators create readonly bindable targets. The same fixture
-  now includes a setter-only target to prove that only getter descriptors enter the computed-observer branch; setter-only
-  accessors remain runtime `SetterObserver` targets. It also carries a small SVG namespace-attribute target-access case:
+  now includes a setter-only target to prove that Aurelia's accessor-descriptor branch includes descriptors with only a
+  setter, selecting `ComputedObserver` rather than the ordinary data-property `SetterObserver`. It also carries a small
+  SVG namespace-attribute target-access case:
   Aurelia's `xlink:*`/selected `xml:*` namespace table must route through `AttributeNSAccessor`, while SVG XML attributes
   outside that table remain generic SVG/data attributes. The plain `href.bind` case proves the accessor-time attr lane
   uses the framework `DataAttributeAccessor` mirror rather than an invented attribute-accessor strategy.
@@ -269,6 +288,16 @@ pressure evidence and app-builder pressure fixtures, not reusable generated-code
   built-in/global mappings (`AUR0653`) and a valid custom host-node observer configuration. The valid mapping is consumed
   by an observer-forcing binding mode so the fixture preserves the framework split between `getAccessor(...)` and
   `getObserver(...)` instead of pretending `useConfig(...)` rewrites every host-node property accessor.
+- `observer-setup-selection` captures controller hydration's eager `getObserver(...)` call for every bindable and the
+  later binding access that either reuses that cache or remains blocked. It covers fields, concrete accessors, field-
+  and class-form `@observable`, automatic/disabled/explicit/stacked `@computed`, function-dependency openness,
+  declaration-only and nullish callback members, coercer/callback rejection, later not-reached bindables, and synthetic
+  view failure isolation. `contract:controller-observer-setup` keeps selection, setup outcome, source identity,
+  provenance-bearing public rows, and operation reachability aligned.
+- `object-observation-adapters` captures app-scoped `IObserverLocator.addAdapter(...)` through both direct AppTask
+  injection and `IContainer.get(...)`. Registrations are deliberately interleaved across lifecycle slots: framework
+  execution order is slot order plus registration order within each slot, child-controller setup sees only adapters
+  installed by its hydration boundary, and an independent app root receives none of them.
 - `select-multiple-binding-order` mirrors Aurelia runtime-html select observer tests where `multiple.bind="true"` can
   appear before, between, or after other bound attributes. It pressure-tests the value-channel handoff from bound
   `multiple` evidence into single, multiple, and dynamic `SelectValueObserver` modes, including a dynamic source that
@@ -359,7 +388,10 @@ pressure evidence and app-builder pressure fixtures, not reusable generated-code
 - `validation-rule-source-errors` captures source-authored validation rule mistakes: a `PropertyRule` modifier before
   any rule has been added, an accessor function that `parsePropertyName` cannot reduce, a group rule result that names
   a property outside the group, and default model-based rules with an unsupported rule key and an empty property name.
-  It preserves validation `AUR4101`, `AUR4102`, `AUR4105`, `AUR4106`, and `AUR4108` pressure without making recommendable generators emit invalid validation DSL inputs.
+  It also keeps one `.email().when(...)` compatibility canary: `email` is deprecated but still adds a rule, so it must
+  not make the following modifier look like `AUR4101`. The fixture preserves validation `AUR4101`, `AUR4102`,
+  `AUR4105`, `AUR4106`, and `AUR4108` pressure without making recommendable generators emit invalid or deprecated
+  validation DSL inputs.
 - `fetch-client-config-errors` captures closed @aurelia/fetch-client configuration mistakes: invalid
   `HttpClient.configure(...)` input and callback returns, `Headers` defaults, duplicate or non-tail retry interceptors,
   and invalid retry strategies/intervals. It preserves fetch-client `AUR5001`, `AUR5002`, `AUR5003`, `AUR5004`,

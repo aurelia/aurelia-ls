@@ -790,6 +790,8 @@ export interface BadExpression {
   text?: string;
   /** Human-readable parser message (optional). */
   message?: string;
+  /** Framework parser error code mirrored when this rejection matches Aurelia exactly. */
+  frameworkErrorCode?: string;
   /** Optional provenance for diagnostics (parse failures, etc.). */
   origin?: Origin | Provenance | null;
   /**

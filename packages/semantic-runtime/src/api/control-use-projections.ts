@@ -51,11 +51,12 @@ import {
   resourceLocalBindingTargetAccesses,
   resourceLocalBindingTargetOperations,
   resourceLocalBindingValueChannels,
-} from './runtime-resource-ownership.js';
+} from '../template/runtime-resource-ownership.js';
 import { describeAddress } from './source-reference.js';
 
 const VALUE_CONTROL_CHANNEL_KINDS = new Set<RuntimeBindingValueChannelKind>([
   RuntimeBindingValueChannelKind.RawProperty,
+  RuntimeBindingValueChannelKind.ValueAttributeObserverProperty,
   RuntimeBindingValueChannelKind.CheckedBoolean,
   RuntimeBindingValueChannelKind.CheckedRadioValue,
   RuntimeBindingValueChannelKind.CheckedCollectionMembership,

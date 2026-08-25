@@ -13,13 +13,13 @@
       "summary": "StateProjectResult owns @aurelia/state builder flow, source decorator issues, store lookup issues, and exact raw Error authority rows.",
       "rationale": "@aurelia/state is plugin-backed framework state, not an ordinary DI state class. Its store configuration starts in StateDefaultConfiguration builder chains, then the framework creating AppTask creates Store instances and registers them with IStoreRegistry. Raw framework Error sites should be modeled with StateIssue products and exact StateRawErrorAuthority links only when semantic-runtime owns the corresponding phase; live DevTools host/lifecycle errors remain intentionally unclaimed.",
       "guidance": [
-        "Use StateStores for valid StateDefaultConfiguration.init(...) and .withStore(...) builder facts before AppTask execution.",
-        "StateStoreConfiguration carries the TypeChecker-projected initial-state argument type so & state binding behavior can evaluate against store.getState() without executing the store, and retains the initial-state source address for static source-value reads of configured initial state.",
+        "Use StateStores for project-wide definition enumeration of valid StateDefaultConfiguration.init(...) and .withStore(...) builder facts before AppTask execution. Use StateStoreVisibility for effective container-local membership.",
+        "StateStoreConfiguration retains admitted registration/container ownership and carries the TypeChecker-projected initial-state argument type so & state binding behavior can evaluate against store.getState() without executing the store. It also retains the initial-state source address for static source-value reads.",
         "StateBindingScopeProjector mirrors createStateBindingScope(state, scope): boundary scope, parent is the original template scope, binding context comes from the configured store state type, and dynamic store-name arguments stay open. Binding behaviors use it as an evaluator handoff; state/dispatch commands publish the prepared scope as their instruction expression scope.",
         "RuntimeBindingExpressionScopeProjector spends the same state binding-behavior handoff for binding data-flow and observed dependencies: astBind lets StateBindingBehavior call binding.useScope(...), while astEvaluate later unwraps binding behaviors and evaluates the inner expression against that effective scope. Interpolation holes use the same handoff because runtime-html binds each hole through InterpolationPartBinding before evaluating it.",
         "RuntimeBindingSourceValueEvaluator reads StateBinding scope slots through the configured initial-state source expression when a static source-value consumer needs an actual value; this is initial-state reduction, not action/lifecycle emulation.",
         "Use StateIssues for builder/store-registry raw Error rows: withStore after registration, reserved default store names, duplicate store registration, missing named-store lookup, and invalid @fromState(...) target contexts.",
-        "FromStateDecoratorBindingSite is the valid decorator source handoff for positive StateGetterBinding materialization. StateGetterBindingMaterializationProjectPass spends it into state-getter-bindings rows with store resolution, selector return type, and target member type projection.",
+        "FromStateDecoratorBindingSite is the valid decorator source handoff for source-level state-getter-bindings rows with store resolution, selector return type, and target member type projection. Applied controller-local StateGetterBinding instances are a separate remaining bridge.",
         "State store lookup issues are post-template because state/dispatch binding commands and & state:'name' binding behaviors are visible only after template runtime products and expression parses exist.",
         ".state and .dispatch commands are full value-site/data-flow surfaces: StateBinding exposes store-state reads into target access/value-channel flow, and StateDispatchBinding exposes event listener target operations plus state-dispatch-action source operations/value channels.",
         "State-dispatch payload expressions reuse template listener event-scope typing: $event.currentTarget is refined from the authored host element, and native value-bearing form controls refine $event.target through the same DOM tag-name-map substrate as observer lookup.",
@@ -71,13 +71,13 @@
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/state/state-getter-binding-materialization.ts",
           "symbolName": "StateGetterBindingMaterializationProjectPass",
-          "summary": "Materializes positive StateGetterBinding products from @fromState decorator sites with store and TypeChecker projection."
+          "summary": "Materializes source-level @fromState definition rows with honest store visibility and TypeChecker projection."
         },
         {
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/api/state-projections.ts",
           "symbolName": "readStateGetterBindingRows",
-          "summary": "Public state-getter-bindings API projection for @fromState-created StateGetterBinding products."
+          "summary": "Public state-getter-bindings API projection for source-level @fromState definitions."
         },
         {
           "kind": "source",
@@ -105,6 +105,13 @@
           "kind": "source-declaration-exists",
           "filePath": "packages/semantic-runtime/src/state/state-binding-scope.ts",
           "symbolName": "StateBindingScopeProjector"
+        },
+        {
+          "kind": "product-large-class",
+          "className": "StateBindingScopeProjector",
+          "filePath": "packages/semantic-runtime/src/state/state-binding-scope.ts",
+          "minLineCount": 80,
+          "minMethodCount": 2
         },
         {
           "kind": "source-declaration-exists",
@@ -150,7 +157,101 @@
         }
       ],
       "createdAt": "2026-05-14",
-      "updatedAt": "2026-05-30"
+      "updatedAt": "2026-07-25"
+    },
+    {
+      "id": "frontier:state-store-container-ownership",
+      "kind": "pressure-frontier",
+      "domains": [
+        "semantic-runtime",
+        "state",
+        "configuration",
+        "di",
+        "type-system",
+        "runtime-lifecycle",
+        "api"
+      ],
+      "summary": "State store definitions now retain admitted registration-container ownership and one DI-backed visibility projection selects stores for compiler and controller consumers; only per-controller @fromState application remains open.",
+      "rationale": "The ownership gate confirmed that the necessary model already existed in configuration evaluator lineage, admitted registration operations, DI resolver-owner lookup, compiler resource scopes, and runtime controller containers. The former state path dropped those joins, scanned mutable builder steps project-wide, grouped duplicate names project-wide, and fed one store pool to every consumer. Reconnecting the existing carriers eliminated sibling-root leakage, preserved inheritance and shadowing, and made custom registries honestly open. No new configuration-origin field or state execution emulator was needed. Authored @fromState sites remain source definitions because recognition does not yet attach them to declaring resource definitions; a shared definition now stays open across multiple registry worlds instead of selecting an arbitrary store.",
+      "guidance": [
+        "Treat project-wide StateStores as definition enumeration, never as effective visibility. Container admission, nearest-provider inheritance, and shadowing determine the stores visible to a compiler scope or runtime controller.",
+        "Join mutable fluent configuration options to admissions through stable EvaluationObjectValue lineage. Progressively wider builder-call source spans are evidence carriers, not configuration identity.",
+        "Use StateStoreVisibility as the one derived nearest-provider IStoreRegistry selection for expression worlds, state binding scopes, state/dispatch commands, & state, and missing-store diagnostics.",
+        "Preserve projected TypeScript mutability on state scopes. The framework permits state-scope writes, but explicitly readonly TypeScript members remain readonly to tooling.",
+        "Application-owned IStoreRegistry providers make unknown membership open. Do not execute custom registries or turn unknown names into confident missing-store diagnostics.",
+        "The state-getter-bindings query currently exposes source definitions. Re-enter per-controller application only for a concrete product need: attach definitions to declaring custom-element/custom-attribute resources, apply beside RuntimeWatcher per RuntimeControllerFrame, preserve hydrating versus created ownership, and resolve through controller.container.",
+        "Reducers, effects, middleware, subscriptions, dispatch execution, custom-registry execution, and asynchronous lifecycle scheduling remain outside this frontier."
+      ],
+      "nextActionPolicy": "when-touched",
+      "anchors": [
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/state/state-store-materialization.ts",
+          "symbolName": "StateStoreConfigurationMaterializationProjectPass",
+          "summary": "Materializes store definitions from admitted registration operations and retains registration/container ownership."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/configuration/configuration-option-ownership.ts",
+          "symbolName": "configurationOptionContributionsForAdmission",
+          "summary": "Canonical mutable-configuration admission join through evaluator lineage."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/state/state-store-visibility.ts",
+          "symbolName": "StateStoreVisibility",
+          "summary": "Derived nearest-provider registry selection for compiler and runtime-controller containers."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/state/state-getter-binding-materialization.ts",
+          "symbolName": "StateGetterBindingMaterializationProjectPass",
+          "summary": "Source-level @fromState definition projection; multi-world registry selection remains explicitly open."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/state/store-lookup-issues.ts",
+          "symbolName": "StateStoreLookupIssueMaterializer",
+          "summary": "Container-local missing-store diagnostics with exact command and behavior argument sources."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/template/runtime-controller.ts",
+          "symbolName": "RuntimeControllerFrame",
+          "summary": "Future applied owner for controller-local StateGetterBinding products."
+        }
+      ],
+      "liveChecks": [
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/state/state-store-materialization.ts",
+          "symbolName": "StateStoreConfigurationMaterializationProjectPass"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/state/state-store-visibility.ts",
+          "symbolName": "StateStoreVisibility"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/state/state-getter-binding-materialization.ts",
+          "symbolName": "StateGetterBindingMaterializationProjectPass"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/template/runtime-controller.ts",
+          "symbolName": "RuntimeControllerFrame"
+        },
+        {
+          "kind": "product-large-class",
+          "className": "StateStoreVisibility",
+          "filePath": "packages/semantic-runtime/src/state/state-store-visibility.ts",
+          "minLineCount": 80,
+          "minMethodCount": 5
+        }
+      ],
+      "createdAt": "2026-07-25",
+      "updatedAt": "2026-07-26"
     }
   ]
 }

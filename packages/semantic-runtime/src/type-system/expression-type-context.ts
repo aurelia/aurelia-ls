@@ -216,7 +216,7 @@ function contextualEvaluationLocalKey(
   if (contextualType == null) {
     return localKey;
   }
-  const contextKey = contextualType.checkerKey
+  const contextKey = contextualType.semanticKey
     ?? contextualType.productHandle
     ?? contextualType.display
     ?? contextualType.shapeKind;

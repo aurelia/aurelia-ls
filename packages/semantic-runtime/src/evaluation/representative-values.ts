@@ -1,5 +1,6 @@
 import {
   EvaluationArrayElement,
+  EvaluationArrayShape,
   EvaluationArrayUncertaintyKind,
   EvaluationArrayValue,
   EvaluationBoundaryKind,
@@ -8,14 +9,15 @@ import {
   EvaluationBooleanValue,
   EvaluationNumberValue,
   EvaluationObjectProperty,
+  EvaluationObjectPropertyState,
   EvaluationStringPatternHole,
   EvaluationStringPatternValue,
   EvaluationStringValue,
   EvaluationValueKind,
-  evaluationValuesEqual,
   mergeEvaluationArrayUncertainties,
   type EvaluationValue,
 } from './values.js';
+import { evaluationValuesStrictlyEqual } from './value-relation.js';
 
 /**
  * Summarize several possible evaluator values into one conservative representative.
@@ -23,7 +25,7 @@ import {
  * This is used when semantic-runtime intentionally does not materialize every runtime instance, such as repeated
  * template views or speculative branches with a dynamic condition. The result must stay safe: exact values are kept
  * only when every lane agrees, string-like lanes become a dynamic string pattern, object lanes keep only common
- * properties, arrays keep common prefix elements plus compact membership uncertainty, and unrelated lanes fall back
+ * properties, arrays keep common runtime slots plus compact membership uncertainty, and unrelated lanes fall back
  * to a binding-scope boundary value.
  */
 export function representativeEvaluationValues(
@@ -55,7 +57,7 @@ export function representativeEvaluationValues(
     return representativeArrayValue(arrayValues, path, sourceLabel, sourceBoundaryKind);
   }
   return new EvaluationBoundaryValue(
-    EvaluationBoundaryKind.BindingScope,
+    sourceBoundaryKind ?? EvaluationBoundaryKind.BindingScope,
     sourceLabel == null ? path : `${path}:${sourceLabel}`,
     values[0]?.node ?? null,
   );
@@ -74,7 +76,7 @@ function exactSamePrimitive(
         ? new EvaluationBooleanValue(first.value, first.node)
         : null;
     case EvaluationValueKind.Number:
-      return values.every((value) => value.kind === first.kind && value.value === first.value)
+      return values.every((value) => value.kind === first.kind && Object.is(value.value, first.value))
         ? new EvaluationNumberValue(first.value, first.node)
         : null;
     case EvaluationValueKind.String:
@@ -130,8 +132,6 @@ function stringLikeRange(
         prefix: value.parts[0] ?? '',
         suffix: value.parts[value.parts.length - 1] ?? '',
       };
-    case EvaluationValueKind.BoundaryValue:
-      return { prefix: '', suffix: '' };
     default:
       return null;
   }
@@ -147,15 +147,19 @@ function representativeObjectValue(
   for (const name of commonPropertyNames(propertyMaps)) {
     const values = propertyMaps.map((propertyMap) => propertyMap.get(name)!.value);
     const propertyValue = representativeEvaluationValues(values, `${path}.${name}`, sourceLabel, sourceBoundaryKind)
-      ?? new EvaluationBoundaryValue(EvaluationBoundaryKind.BindingScope, `${path}.${name}`, propertyMaps[0]?.get(name)?.node ?? null);
+      ?? new EvaluationBoundaryValue(
+        sourceBoundaryKind ?? EvaluationBoundaryKind.BindingScope,
+        `${path}.${name}`,
+        propertyMaps[0]?.get(name)?.node ?? null,
+      );
     const node = propertyMaps[0]?.get(name)?.node ?? values[0]?.node ?? null;
     if (node == null) {
       continue;
     }
-    properties.set(name, new EvaluationObjectProperty(name, propertyValue, node));
+    properties.set(name, new EvaluationObjectProperty(name, propertyValue, node, EvaluationObjectPropertyState.Closed));
   }
   return new EvaluationBoundaryObjectValue(
-    EvaluationBoundaryKind.BindingScope,
+    sourceBoundaryKind ?? EvaluationBoundaryKind.BindingScope,
     sourceLabel == null ? path : `${path}:${sourceLabel}`,
     properties,
     null,
@@ -169,30 +173,57 @@ function representativeArrayValue(
   sourceBoundaryKind: EvaluationBoundaryKind | null,
 ): EvaluationArrayValue {
   const elements: EvaluationArrayElement[] = [];
-  const shortest = Math.min(...values.map((value) => value.elements.length));
-  for (let index = 0; index < shortest; index += 1) {
-    const first = values[0]!.elements[index]!;
-    if (!values.every((value) => evaluationValuesEqual(value.elements[index]!.value, first.value))) {
-      break;
+  const firstValue = values[0]!;
+  if (values.every((value) => value.hasExactElementPositions)) {
+    for (const first of firstValue.elements) {
+      const runtimeIndex = first.runtimeIndex!;
+      const matching = values.map((value) => value.elementAtRuntimeIndex(runtimeIndex));
+      if (
+        matching.some((element) => element == null)
+        || !matching.every((element) => evaluationValuesStrictlyEqual(element!.value, first.value))
+      ) {
+        continue;
+      }
+      elements.push(new EvaluationArrayElement(
+        first.value,
+        first.expression,
+        matching.flatMap((element) => element!.openSeams),
+        runtimeIndex,
+      ));
     }
-    elements.push(new EvaluationArrayElement(first.value, first.expression));
   }
-  const mayHaveUnknownElements = values.some((value) => value.mayHaveUnknownElements)
-    || values.some((value) => value.elements.length !== elements.length);
+  const exactLengths = values.map((value) => value.exactLength);
+  const exactLength = exactLengths[0] != null && exactLengths.every((value) => value === exactLengths[0])
+    ? exactLengths[0]
+    : null;
+  const commonMembership = exactLength != null
+    && values.every((value) => value.hasExactElementPositions)
+    && values.every((value) => value.elements.length === firstValue.elements.length)
+    && firstValue.elements.every((first) => values.every((value) => {
+      const element = value.elementAtRuntimeIndex(first.runtimeIndex!);
+      return element != null && evaluationValuesStrictlyEqual(element.value, first.value);
+    }));
+  const mayHaveUnknownElements = !commonMembership;
   const mayHaveUnknownOrder = values.some((value) => value.mayHaveUnknownOrder);
   return new EvaluationArrayValue(
     elements,
-    mayHaveUnknownElements,
     values[0]?.node ?? null,
-    mayHaveUnknownOrder,
-    mergeEvaluationArrayUncertainties(...values, mayHaveUnknownElements
-        ? [{
-            kind: EvaluationArrayUncertaintyKind.ConditionalBranch,
-            node: values[0]?.node ?? null,
-            boundaryKind: sourceBoundaryKind ?? undefined,
-            boundaryPath: sourceLabel ?? path,
-          }]
-      : []),
+    EvaluationArrayShape.from({
+      exactLength,
+      hasExactElements: !mayHaveUnknownElements,
+      hasExactOrder: !mayHaveUnknownOrder,
+      uncertainties: mergeEvaluationArrayUncertainties(...values, mayHaveUnknownElements
+          ? [{
+              kind: EvaluationArrayUncertaintyKind.ConditionalBranch,
+              node: values[0]?.node ?? null,
+              boundaryKind: sourceBoundaryKind ?? undefined,
+              boundaryPath: sourceLabel ?? path,
+            }]
+        : []),
+      extentOpenSeams: values.flatMap((value) => value.extentOpenSeams),
+      elementOpenSeams: values.flatMap((value) => value.elementOpenSeams),
+      orderOpenSeams: values.flatMap((value) => value.orderOpenSeams),
+    }),
   );
 }
 

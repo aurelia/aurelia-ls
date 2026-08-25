@@ -2,143 +2,260 @@
  * LSP lifecycle handlers: initialize, document events, configuration changes
  */
 import {
+  isSemanticRuntimeAnalysisCurrentnessError,
+  ManagedSemanticWorkspaceOperationStaleError,
+  SemanticSourceWorldCurrentnessKind,
+} from "@aurelia-ls/semantic-runtime";
+import {
+  CodeActionKind,
   TextDocumentSyncKind,
   FileChangeType,
+  DidChangeConfigurationNotification,
+  ErrorCodes,
+  ResponseError,
   type InitializeParams,
   type InitializeResult,
   type DidChangeWatchedFilesParams,
   type FileEvent,
-} from "vscode-languageserver/node.js";
-import type { TextDocument } from "vscode-languageserver-textdocument";
-import { URI } from "vscode-uri";
+} from "vscode-languageserver/node";
 import path from "node:path";
-import { canonicalDocumentUri } from "@aurelia-ls/compiler/program/paths.js";
-import { createSemanticWorkspace } from "@aurelia-ls/semantic-workspace/engine.js";
 import type { ServerContext } from "../context.js";
-import { mapWorkspaceDiagnostics, type LookupTextFn } from "../mapping/lsp-types.js";
+import { AureliaProtocolNotification } from "../protocol.js";
+import type {
+  AnalysisChangedPayload,
+  AureliaInitializeOptions,
+} from "../protocol.js";
+import { isAnalyzedSourceDocumentUri } from "../utils/document-kind.js";
+import {
+  isSemanticRuntimeLspRequestAborted,
+  type SemanticRuntimeLspGeneration,
+} from "../runtime/semantic-runtime-session.js";
 import { SEMANTIC_TOKENS_LEGEND } from "./semantic-tokens.js";
 
-/** Debounce delay for document changes (ms). Waits for typing to pause before processing. */
-const DOCUMENT_CHANGE_DEBOUNCE_MS = 300;
+/** Quiet period before publishing workspace-wide derived analysis. */
+const ANALYSIS_REFRESH_DEBOUNCE_MS = 300;
 
-/** Tracks pending debounced refresh operations per document URI */
-const pendingRefreshes = new Map<string, ReturnType<typeof setTimeout>>();
+interface LifecycleRefreshState {
+  readonly tasks: Set<Promise<unknown>>;
+  readonly openDocumentEffectiveValues: Map<string, { readonly text: string | undefined }>;
+  readonly pendingAnalysisChangedSourceUris: Map<string, string>;
+  lifecycleRegistered: boolean;
+  pendingAnalysisRefresh: ReturnType<typeof setTimeout> | null;
+  pendingAnalysisChangeKind: AnalysisChangedPayload["changeKind"] | null;
+  shutdown: Promise<void> | null;
+}
 
-function hasSourceFileStructuralChange(changes: readonly FileEvent[]): boolean {
+const lifecycleRefreshStates = new WeakMap<ServerContext, LifecycleRefreshState>();
+
+function sourceFileStructuralChangePaths(
+  ctx: ServerContext,
+  changes: readonly FileEvent[],
+): readonly string[] {
+  const filePaths: string[] = [];
   for (const change of changes) {
     if (change.type !== FileChangeType.Created && change.type !== FileChangeType.Deleted) continue;
-    const fsPath = URI.parse(change.uri).fsPath;
-    if (fsPath.endsWith(".ts") || fsPath.endsWith(".js")) return true;
+    if (!isAnalyzedSourceDocumentUri(change.uri)) continue;
+    const filePath = ctx.documentUris.workspaceHostPath(change.uri);
+    if (filePath != null) filePaths.push(filePath);
   }
-  return false;
+  return filePaths;
 }
 
-function shouldReloadForFileChange(changes: readonly FileEvent[]): boolean {
+function closedAnalyzedSourceContentPaths(
+  ctx: ServerContext,
+  changes: readonly FileEvent[],
+): readonly string[] {
+  const filePaths: string[] = [];
   for (const change of changes) {
-    const fsPath = URI.parse(change.uri).fsPath;
-    const base = path.basename(fsPath).toLowerCase();
-    if (base === "tsconfig.json") return true;
-    if (base === "jsconfig.json") return true;
-    if (base.startsWith("tsconfig.") && base.endsWith(".json")) return true;
+    if (change.type !== FileChangeType.Changed) continue;
+    if (!isAnalyzedSourceDocumentUri(change.uri)) continue;
+    // Open-document text is already authoritative through didChange. Replaying
+    // the ensuing filesystem save would invalidate the same source generation
+    // twice and enqueue a second all-document diagnostics wave.
+    if (ctx.openWorkspaceDocument(change.uri) != null) continue;
+    const filePath = ctx.documentUris.workspaceHostPath(change.uri);
+    if (filePath == null || isProjectTopologyConfigurationPath(filePath)) continue;
+    filePaths.push(filePath);
   }
-  return false;
+  return filePaths;
 }
 
-async function reloadProjectConfiguration(ctx: ServerContext, reason: string): Promise<void> {
-  if (!ctx.workspace) return;
-  ctx.workspace.configureProject({ workspaceRoot: ctx.workspaceRoot });
-  ctx.logger.info(`[workspace] tsconfig reload (${reason}; fingerprint=${ctx.workspace.snapshot().meta.fingerprint})`);
-  await refreshAllOpenDocuments(ctx, "change");
-}
-
-async function refreshAllOpenDocuments(
+function projectTopologyConfigurationChangePaths(
   ctx: ServerContext,
-  reason: "open" | "change",
-  options?: { skipSync?: boolean }
-): Promise<void> {
-  const openDocs = ctx.documents.all();
-  for (const doc of openDocs) {
-    await refreshDocument(ctx, doc, reason, options);
+  changes: readonly FileEvent[],
+): readonly string[] {
+  const filePaths: string[] = [];
+  for (const change of changes) {
+    if (change.type !== FileChangeType.Created && change.type !== FileChangeType.Deleted) continue;
+    const hostPath = ctx.documentUris.workspaceHostPath(change.uri);
+    if (hostPath == null) continue;
+    if (!isProjectTopologyConfigurationPath(hostPath)) continue;
+    filePaths.push(hostPath);
   }
+  return filePaths;
 }
 
-export async function refreshDocument(
+function projectConfigurationValueChangePaths(
   ctx: ServerContext,
-  doc: TextDocument,
-  reason: "open" | "change",
-  _options?: { skipSync?: boolean }
-): Promise<void> {
-  try {
-    const canonical = canonicalDocumentUri(doc.uri);
-    if (reason === "open") {
-      ctx.workspace.open(canonical.uri, doc.getText(), doc.version);
-    } else {
-      ctx.workspace.update(canonical.uri, doc.getText(), doc.version);
+  changes: readonly FileEvent[],
+): readonly string[] {
+  const filePaths: string[] = [];
+  for (const change of changes) {
+    if (change.type !== FileChangeType.Changed) continue;
+    const hostPath = ctx.documentUris.workspaceHostPath(change.uri);
+    if (hostPath == null || !isProjectTopologyConfigurationPath(hostPath)) continue;
+    // Synchronized open text is already the project-input authority. Replaying
+    // the filesystem save would invalidate the same exact value twice.
+    if (ctx.openWorkspaceDocument(change.uri) != null) continue;
+    filePaths.push(hostPath);
+  }
+  return filePaths;
+}
+
+function isProjectTopologyConfigurationPath(filePath: string): boolean {
+  const base = path.basename(filePath).toLowerCase();
+  // Project shape reads dependency scope and workspace membership from package
+  // and TypeScript manifests. Native Aurelia configuration contributes authored
+  // membership directly, so every authority transition for these files is topology.
+  return base === "package.json"
+    || base === "jsconfig.json"
+    || base === "tsconfig.json"
+    || (base.startsWith("tsconfig.") && base.endsWith(".json"))
+    || base === "aurelia.project.json";
+}
+
+function recordProjectTopologyChanged(
+  ctx: ServerContext,
+  reason: string,
+  filePaths: readonly string[],
+): void {
+  ctx.semanticRuntime.recordProjectTopologyChanged(filePaths);
+  ctx.logger.info(`[workspace] semantic-runtime invalidated (${reason})`);
+  scheduleAnalysisRefresh(ctx, reason, "topology");
+}
+
+function recordSourceTextChanged(
+  ctx: ServerContext,
+  reason: string,
+  filePaths: readonly string[],
+): void {
+  ctx.semanticRuntime.recordSourceTextChanged(filePaths);
+  ctx.logger.log(`${reason}: semantic-runtime source generation advanced for ${filePaths.length} file(s)`);
+  scheduleAnalysisRefresh(
+    ctx,
+    reason,
+    "source-text",
+    filePaths.map((filePath) => ctx.documentUris.uriForHostPath(filePath)),
+  );
+}
+
+function recordProjectConfigurationChanged(
+  ctx: ServerContext,
+  reason: string,
+  filePaths: readonly string[],
+): void {
+  ctx.semanticRuntime.recordProjectConfigurationChanged(filePaths);
+  ctx.logger.log(`${reason}: semantic-runtime configuration value advanced for ${filePaths.length} file(s)`);
+  // Configuration remains topology-significant to host presentation (ownership/context may change), while the shared
+  // source-world receipt—not the LSP ingress classifier—decides whether this exact value changed source membership.
+  scheduleAnalysisRefresh(ctx, reason, "topology");
+}
+
+function scheduleAnalysisRefresh(
+  ctx: ServerContext,
+  reason: string,
+  changeKind: AnalysisChangedPayload["changeKind"],
+  changedSourceUris: readonly string[] = [],
+): void {
+  const state = lifecycleRefreshState(ctx);
+  if (state.shutdown != null) return;
+  if (changeKind === "source-text") {
+    for (const uri of changedSourceUris) {
+      state.pendingAnalysisChangedSourceUris.set(ctx.documentUris.key(uri), uri);
     }
-
-    const lookupText: LookupTextFn = (uri) => ctx.lookupText(uri);
-
-    const diagnostics = ctx.workspace.diagnostics(canonical.uri);
-    const lspDiagnostics = mapWorkspaceDiagnostics(canonical.uri, diagnostics, lookupText);
-    await ctx.connection.sendDiagnostics({ uri: doc.uri, diagnostics: lspDiagnostics });
-
-    let overlay: ReturnType<ServerContext["workspace"]["getOverlay"]> | null = null;
-    let compilation: ReturnType<ServerContext["workspace"]["getCompilation"]> | null = null;
-    try {
-      overlay = ctx.workspace.getOverlay(canonical.uri);
-      compilation = ctx.workspace.getCompilation(canonical.uri);
-    } catch {}
-
-    await ctx.connection.sendNotification("aurelia/overlayReady", {
-      uri: doc.uri,
-      overlayPath: overlay?.overlay.path,
-      calls: overlay?.calls.length ?? 0,
-      overlayLen: overlay?.overlay.text.length ?? 0,
-      diags: lspDiagnostics.length,
-      meta: compilation?.meta,
-    });
-  } catch (e: unknown) {
-    const message = e instanceof Error ? e.stack ?? e.message : String(e);
-    ctx.logger.error(`refreshDocument failed: ${message}`);
   }
+  state.pendingAnalysisChangeKind = dominantAnalysisChangeKind(
+    state.pendingAnalysisChangeKind,
+    changeKind,
+  );
+  if (state.pendingAnalysisRefresh != null) {
+    clearTimeout(state.pendingAnalysisRefresh);
+  }
+  state.pendingAnalysisRefresh = setTimeout(() => {
+    state.pendingAnalysisRefresh = null;
+    const settledChangeKind = state.pendingAnalysisChangeKind ?? changeKind;
+    const settledChangedSourceUris = [...state.pendingAnalysisChangedSourceUris.values()]
+      .sort((left, right) => left < right ? -1 : left > right ? 1 : 0);
+    state.pendingAnalysisChangeKind = null;
+    state.pendingAnalysisChangedSourceUris.clear();
+    ctx.logger.log(`[workspace] processing settled analysis (${reason})`);
+    runLifecycleTask(ctx, "workspace analysis refresh", () =>
+      notifyAnalysisChanged(ctx, settledChangeKind, settledChangedSourceUris));
+  }, ANALYSIS_REFRESH_DEBOUNCE_MS);
+}
+
+/**
+ * Converge every client-owned semantic view when an ordinary request is the
+ * first observer of source-world movement outside the synchronized event set.
+ *
+ * Request-generation staleness is already owned by an editor/watcher event and
+ * must not create a duplicate wave. Managed source-world and answer-proof
+ * currentness failures are different: without this handoff the individual
+ * request fails safely, but no AnalysisChanged notification tells the other
+ * providers and custom host caches to re-prove their state.
+ */
+export function scheduleAnalysisRefreshForRequestCurrentness(
+  ctx: ServerContext,
+  error: unknown,
+): boolean {
+  if (!lifecycleRefreshState(ctx).lifecycleRegistered) return false;
+  const managedStale = managedOperationStaleCause(error);
+  const analysisCurrentness = isSemanticRuntimeLspRequestAborted(error)
+    && isSemanticRuntimeAnalysisCurrentnessError(error.cause);
+  if (managedStale == null && !analysisCurrentness) return false;
+  scheduleAnalysisRefresh(
+    ctx,
+    "request-discovered semantic currentness",
+    managedStale?.currentnessKind === SemanticSourceWorldCurrentnessKind.FreshBootRequired
+      ? "topology"
+      : "source-text",
+  );
+  return true;
+}
+
+function dominantAnalysisChangeKind(
+  current: AnalysisChangedPayload["changeKind"] | null,
+  incoming: AnalysisChangedPayload["changeKind"],
+): AnalysisChangedPayload["changeKind"] {
+  return current === "topology" || incoming === "topology" ? "topology" : "source-text";
 }
 
 export function handleInitialize(ctx: ServerContext, params: InitializeParams): InitializeResult {
-  ctx.workspaceRoot = params.rootUri ? URI.parse(params.rootUri).fsPath : null;
-  ctx.logger.info(`initialize: root=${ctx.workspaceRoot ?? "<cwd>"}`);
-  const stripSourcedNodes = process.env["AURELIA_RESOLUTION_STRIP_SOURCED_NODES"] === "1";
-  ctx.workspace = createSemanticWorkspace({
-    logger: ctx.logger,
-    workspaceRoot: ctx.workspaceRoot,
-    discovery: {
-      stripSourcedNodes,
-    },
-  });
-
-  // Subscribe to workspace-level semantic changes (third-party scan,
-  // TS project version bump, config reload). Forward as LSP notifications
-  // so VS Code features can react to knowledge changes.
-  ctx.workspace.onDidChangeSemantics((event) => {
-    ctx.logger.info(`[workspace] semantics changed: domains=[${event.domains.join(",")}] fingerprint=${event.fingerprint}`);
-    void ctx.connection.sendNotification("aurelia/workspaceChanged", {
-      fingerprint: event.fingerprint,
-      domains: event.domains,
-    });
-    // Use standard LSP refresh for cross-file effects on standard features
-    if (event.domains.includes("diagnostics") || event.domains.includes("types")) {
-      void ctx.connection.sendRequest("workspace/diagnostics/refresh").catch(() => {});
-    }
-    if (event.domains.includes("resources") || event.domains.includes("scopes")) {
-      void ctx.connection.sendRequest("workspace/semanticTokens/refresh").catch(() => {});
-    }
-    // Refresh open documents so they pick up the changed semantics
-    void refreshAllOpenDocuments(ctx, "change");
-  });
-
-  // Fire-and-forget: async npm analysis discovers third-party Aurelia packages.
-  void ctx.workspace.initThirdParty().then(() => {
-    ctx.logger.info("[workspace] Third-party init complete");
-  });
+  const rootUri = initializeRootUri(ctx, params);
+  const options = initializeOptions(params.initializationOptions);
+  try {
+    ctx.configureWorkspace(
+      rootUri,
+      options.excludedWorkspaceRootUris,
+      options.projectRootHintUris,
+    );
+  } catch (error) {
+    throw new ResponseError(
+      ErrorCodes.InvalidParams,
+      error instanceof Error ? error.message : String(error),
+    );
+  }
+  ctx.clientSupportsCodeActionResolveEdit = params.capabilities.textDocument?.codeAction?.dataSupport === true
+    && params.capabilities.textDocument.codeAction.resolveSupport?.properties.includes("edit") === true;
+  ctx.projectConfigurationParserDiagnostics = options.projectConfigurationParserDiagnostics ?? "semantic-runtime";
+  ctx.typeScriptProgramDiagnostics = options.typeScriptProgramDiagnostics ?? "semantic-runtime";
+  ctx.clientSupport.configurationPull = params.capabilities.workspace?.configuration === true;
+  ctx.clientSupport.configurationChangeRegistration =
+    params.capabilities.workspace?.didChangeConfiguration?.dynamicRegistration === true;
+  ctx.clientSupport.inlayHintRefresh = params.capabilities.workspace?.inlayHint?.refreshSupport === true;
+  ctx.clientSupport.semanticTokensRefresh = params.capabilities.workspace?.semanticTokens?.refreshSupport === true;
+  ctx.clientSupport.diagnosticRefresh = params.capabilities.workspace?.diagnostics?.refreshSupport === true;
+  ctx.logger.info(`initialize: root=${rootUri}`);
 
   return {
     capabilities: {
@@ -146,89 +263,450 @@ export function handleInitialize(ctx: ServerContext, params: InitializeParams): 
       completionProvider: { triggerCharacters: ["<", " ", ".", ":", "@", "$", "{"] },
       hoverProvider: true,
       definitionProvider: { workDoneProgress: false },
+      documentHighlightProvider: true,
       referencesProvider: true,
       renameProvider: { prepareProvider: true },
-      codeActionProvider: true,
+      codeActionProvider: {
+        codeActionKinds: [CodeActionKind.QuickFix],
+        resolveProvider: true,
+      },
+      documentSymbolProvider: true,
+      workspaceSymbolProvider: true,
+      selectionRangeProvider: true,
+      linkedEditingRangeProvider: true,
+      foldingRangeProvider: true,
       inlayHintProvider: true,
       semanticTokensProvider: {
         legend: SEMANTIC_TOKENS_LEGEND,
         full: true,
       },
-      // Post-PR-19 feature stubs — uncomment when workspace adds support:
-      // documentSymbolProvider: true,
-      // codeLensProvider: { resolveProvider: false },
-      // inlayHintProvider: { resolveProvider: false },
-      // codeActionProvider: { resolveProvider: true },
+      diagnosticProvider: {
+        identifier: "aurelia",
+        interFileDependencies: true,
+        workspaceDiagnostics: false,
+      },
     },
   };
+}
+
+function initializeOptions(value: unknown): AureliaInitializeOptions {
+  if (value == null) {
+    return {
+      excludedWorkspaceRootUris: [],
+      projectRootHintUris: [],
+      projectConfigurationParserDiagnostics: "semantic-runtime",
+      typeScriptProgramDiagnostics: "semantic-runtime",
+    };
+  }
+  if (typeof value !== "object" || Array.isArray(value)) {
+    throw new ResponseError(ErrorCodes.InvalidParams, "Aurelia initialization options must be an object.");
+  }
+  const options = value as Record<string, unknown>;
+  return {
+    excludedWorkspaceRootUris: initializeUriArrayOption(options, "excludedWorkspaceRootUris"),
+    projectRootHintUris: initializeUriArrayOption(options, "projectRootHintUris"),
+    projectConfigurationParserDiagnostics: initializeProjectConfigurationParserDiagnosticsOption(options),
+    typeScriptProgramDiagnostics: initializeTypeScriptProgramDiagnosticsOption(options),
+  };
+}
+
+function initializeTypeScriptProgramDiagnosticsOption(
+  options: Readonly<Record<string, unknown>>,
+): NonNullable<AureliaInitializeOptions["typeScriptProgramDiagnostics"]> {
+  const value = options["typeScriptProgramDiagnostics"];
+  if (value == null) return "semantic-runtime";
+  if (value === "semantic-runtime" || value === "client") return value;
+  throw new ResponseError(
+    ErrorCodes.InvalidParams,
+    "Aurelia typeScriptProgramDiagnostics must be 'semantic-runtime' or 'client'.",
+  );
+}
+
+function initializeProjectConfigurationParserDiagnosticsOption(
+  options: Readonly<Record<string, unknown>>,
+): NonNullable<AureliaInitializeOptions["projectConfigurationParserDiagnostics"]> {
+  const value = options["projectConfigurationParserDiagnostics"];
+  if (value == null) return "semantic-runtime";
+  if (value === "semantic-runtime" || value === "client") return value;
+  throw new ResponseError(
+    ErrorCodes.InvalidParams,
+    "Aurelia projectConfigurationParserDiagnostics must be 'semantic-runtime' or 'client'.",
+  );
+}
+
+function initializeUriArrayOption(
+  options: Readonly<Record<string, unknown>>,
+  key: "excludedWorkspaceRootUris" | "projectRootHintUris",
+): readonly string[] {
+  const value = options[key];
+  if (value == null) return [];
+  if (!Array.isArray(value) || !value.every((entry): entry is string => typeof entry === "string")) {
+    throw new ResponseError(
+      ErrorCodes.InvalidParams,
+      `Aurelia ${key} must be an array of document URI strings.`,
+    );
+  }
+  return value;
+}
+
+function initializeRootUri(ctx: ServerContext, params: InitializeParams): string {
+  const rootUri = params.rootUri
+    ?? params.workspaceFolders?.[0]?.uri
+    ?? (params.rootPath == null ? null : ctx.documentUris.uriForHostPath(params.rootPath));
+  if (rootUri == null) {
+    throw new ResponseError(
+      ErrorCodes.InvalidParams,
+      "Aurelia language server requires a filesystem-backed workspace root.",
+    );
+  }
+  return rootUri;
+}
+
+function tracksSynchronizedDocumentValue(uri: string, filePath: string): boolean {
+  return isProjectTopologyConfigurationPath(filePath) || isAnalyzedSourceDocumentUri(uri);
+}
+
+function editorComparableWorkspaceHostText(
+  ctx: ServerContext,
+  filePath: string,
+): string | undefined {
+  const text = ctx.readWorkspaceHostFile(filePath);
+  // VS Code consumes the UTF-8 BOM as file encoding metadata and omits it from
+  // TextDocument.getText(). Normalize only the host side: a BOM authored in the
+  // editor buffer remains a real text change instead of being erased here.
+  return text?.startsWith("\uFEFF") === true ? text.slice(1) : text;
+}
+
+function rememberOpenDocumentHostValue(
+  ctx: ServerContext,
+  uri: string,
+  filePath: string,
+): void {
+  lifecycleRefreshState(ctx).openDocumentEffectiveValues.set(
+    ctx.documentUris.key(uri),
+    { text: editorComparableWorkspaceHostText(ctx, filePath) },
+  );
+}
+
+function synchronizedDocumentValueChanged(
+  ctx: ServerContext,
+  uri: string,
+  filePath: string,
+  text: string,
+): boolean {
+  const state = lifecycleRefreshState(ctx);
+  const key = ctx.documentUris.key(uri);
+  const previous = state.openDocumentEffectiveValues.get(key)
+    ?? { text: editorComparableWorkspaceHostText(ctx, filePath) };
+  state.openDocumentEffectiveValues.set(key, { text });
+  return previous.text !== text;
+}
+
+function closedDocumentValueChanged(
+  ctx: ServerContext,
+  uri: string,
+  filePath: string,
+  synchronizedText: string,
+): boolean {
+  const state = lifecycleRefreshState(ctx);
+  const key = ctx.documentUris.key(uri);
+  const previous = state.openDocumentEffectiveValues.get(key)?.text ?? synchronizedText;
+  state.openDocumentEffectiveValues.delete(key);
+  return previous !== editorComparableWorkspaceHostText(ctx, filePath);
 }
 
 /**
  * Registers all lifecycle handlers on the connection and documents.
  */
 export function registerLifecycleHandlers(ctx: ServerContext): void {
+  lifecycleRefreshState(ctx).lifecycleRegistered = true;
   ctx.connection.onInitialize((params) => handleInitialize(ctx, params));
+  ctx.connection.onShutdown(() => shutdownLifecycle(ctx));
+
+  ctx.connection.onInitialized(() => {
+    runLifecycleTask(ctx, "configuration registration", () => registerInlayHintConfigurationChanges(ctx));
+  });
 
   ctx.documents.onDidOpen((e) => {
+    const filePath = ctx.documentUris.workspaceHostPath(e.document.uri);
+    if (filePath == null || !tracksSynchronizedDocumentValue(e.document.uri, filePath)) return;
+    const state = lifecycleRefreshState(ctx);
+    if (state.shutdown != null) return;
+    rememberOpenDocumentHostValue(ctx, e.document.uri, filePath);
     ctx.logger.log(`didOpen ${e.document.uri}`);
-    void refreshDocument(ctx, e.document, "open");
   });
 
   ctx.connection.onDidChangeConfiguration(() => {
-    ctx.logger.log("didChangeConfiguration: reloading tsconfig and project index");
-    void reloadProjectConfiguration(ctx, "configuration change");
+    if (!ctx.clientSupport.inlayHintRefresh) return;
+    requestClientRefresh(ctx, "inlay hints", () =>
+      ctx.connection.languages.inlayHint.refresh());
   });
 
   ctx.connection.onDidChangeWatchedFiles((e: DidChangeWatchedFilesParams) => {
     if (!e.changes?.length) return;
+    const changes = e.changes.filter((change) => ctx.documentUris.workspaceHostPath(change.uri) != null);
+    if (changes.length === 0) return;
 
-    if (shouldReloadForFileChange(e.changes)) {
-      ctx.logger.log("didChangeWatchedFiles: tsconfig/jsconfig changed, reloading project");
-      void reloadProjectConfiguration(ctx, "watched files");
+    const structuralPaths = [...new Set([
+      ...projectTopologyConfigurationChangePaths(ctx, changes),
+      // Source create/delete is deliberately a broad structural event. Semantic-runtime owns whether the refreshed
+      // source world admits it; coarse watcher eligibility never grants authored ownership by itself.
+      ...sourceFileStructuralChangePaths(ctx, changes),
+    ])];
+    if (structuralPaths.length > 0) {
+      ctx.logger.log("didChangeWatchedFiles: structural workspace input changed, reloading project");
+      recordProjectTopologyChanged(ctx, "watched files", structuralPaths);
       return;
     }
 
-    // TS/JS file created or deleted — full reload to pick up new root files
-    // and clear incremental discovery cache.
-    if (hasSourceFileStructuralChange(e.changes)) {
-      ctx.logger.log("didChangeWatchedFiles: source file created/deleted, reloading project");
-      ctx.workspace.reloadProject();
+    const configurationFilePaths = projectConfigurationValueChangePaths(ctx, changes);
+    if (configurationFilePaths.length > 0) {
+      ctx.logger.log("didChangeWatchedFiles: project configuration value changed");
+      recordProjectConfigurationChanged(ctx, "watched files", configurationFilePaths);
+    }
+
+    const changedFilePaths = closedAnalyzedSourceContentPaths(ctx, changes);
+    if (changedFilePaths.length > 0) {
+      ctx.logger.log("didChangeWatchedFiles: analyzed source content changed");
+      recordSourceTextChanged(ctx, "watched files", changedFilePaths);
     }
   });
 
   ctx.documents.onDidChangeContent((e) => {
     const uri = e.document.uri;
-    ctx.logger.log(`didChange ${uri} (debouncing)`);
-
-    // Cancel any pending refresh for this document
-    const existing = pendingRefreshes.get(uri);
-    if (existing) {
-      clearTimeout(existing);
+    const filePath = ctx.documentUris.workspaceHostPath(uri);
+    if (filePath == null) return;
+    const state = lifecycleRefreshState(ctx);
+    if (state.shutdown != null) return;
+    // TextDocuments emits this event for both didOpen and didChange. It is the
+    // single point where the synchronized client text becomes authoritative.
+    ctx.logger.log(`document text synchronized ${uri}@${e.document.version}`);
+    if (!tracksSynchronizedDocumentValue(uri, filePath)) return;
+    if (!synchronizedDocumentValueChanged(ctx, uri, filePath, e.document.getText())) {
+      ctx.logger.log(`document text synchronization retained host value ${uri}`);
+      return;
     }
-
-    // Schedule new refresh after debounce period
-    // This ensures we only process after typing pauses, not on every keystroke
-    const timeout = setTimeout(() => {
-      pendingRefreshes.delete(uri);
-      ctx.logger.log(`didChange ${uri} (processing after debounce)`);
-      void refreshDocument(ctx, e.document, "change");
-    }, DOCUMENT_CHANGE_DEBOUNCE_MS);
-
-    pendingRefreshes.set(uri, timeout);
+    if (isProjectTopologyConfigurationPath(filePath)) {
+      recordProjectConfigurationChanged(ctx, "project configuration text synchronization", [filePath]);
+      return;
+    }
+    recordSourceTextChanged(ctx, "document text synchronization", [filePath]);
   });
 
   ctx.documents.onDidClose((e) => {
-    ctx.logger.log(`didClose ${e.document.uri}`);
+    const uri = e.document.uri;
+    const filePath = ctx.documentUris.workspaceHostPath(uri);
+    if (filePath == null) return;
+    ctx.logger.log(`didClose ${uri}`);
 
-    // Cancel any pending refresh for this document
-    const pending = pendingRefreshes.get(e.document.uri);
-    if (pending) {
-      clearTimeout(pending);
-      pendingRefreshes.delete(e.document.uri);
+    const state = lifecycleRefreshState(ctx);
+    if (state.shutdown != null) return;
+    // Closing returns source-text authority to the workspace host. Diagnostic
+    // pull owns editor collection cleanup; invalidate only when that authority
+    // transfer actually changes the effective file value.
+    if (!tracksSynchronizedDocumentValue(uri, filePath)) return;
+    if (!closedDocumentValueChanged(ctx, uri, filePath, e.document.getText())) {
+      ctx.logger.log(`document close retained host value ${uri}`);
+      return;
     }
-
-    const canonical = canonicalDocumentUri(e.document.uri);
-    ctx.workspace.close(canonical.uri);
-    void ctx.connection.sendDiagnostics({ uri: e.document.uri, diagnostics: [] });
+    if (isProjectTopologyConfigurationPath(filePath)) {
+      recordProjectConfigurationChanged(ctx, "project configuration close", [filePath]);
+      return;
+    }
+    recordSourceTextChanged(ctx, "document close", [filePath]);
   });
+}
+
+async function registerInlayHintConfigurationChanges(ctx: ServerContext): Promise<void> {
+  if (!ctx.clientSupport.configurationChangeRegistration) return;
+  // vscode-languageclient's configurationSection push is deprecated. Register only the
+  // invalidation signal, then pull the effective value for each document URI on request.
+  await ctx.connection.client.register(DidChangeConfigurationNotification.type, {
+    section: "aurelia.inlayHints",
+  });
+}
+
+async function notifyAnalysisChanged(
+  ctx: ServerContext,
+  changeKind: AnalysisChangedPayload["changeKind"],
+  changedSourceUris: readonly string[],
+): Promise<void> {
+  if (lifecycleRefreshState(ctx).shutdown != null) return;
+  let generation: SemanticRuntimeLspGeneration;
+  try {
+    generation = await ctx.semanticRuntime.runRequest(
+      null,
+      (operation) => operation.generation,
+    );
+  } catch (error) {
+    if (lifecycleRefreshState(ctx).shutdown != null) return;
+    if (!isSettledAnalysisStale(error)) throw error;
+    // A pull can discover source-world movement which did not arrive through the
+    // editor event stream. Retry from a new managed ingress instead of publishing
+    // or logging a generation which failed egress currentness.
+    scheduleAnalysisRefresh(
+      ctx,
+      "managed analysis currentness retry",
+      retryAnalysisChangeKind(error, changeKind),
+      changedSourceUris,
+    );
+    return;
+  }
+  if (lifecycleRefreshState(ctx).shutdown != null) return;
+  const analysisChanged: AnalysisChangedPayload = changeKind === "source-text"
+    ? {
+        fingerprint: generation.fingerprint,
+        changeKind,
+        changedSourceUris,
+      }
+    : {
+        fingerprint: generation.fingerprint,
+        changeKind,
+      };
+  await ctx.connection.sendNotification(AureliaProtocolNotification.AnalysisChanged, analysisChanged);
+  if (lifecycleRefreshState(ctx).shutdown != null) return;
+  // This is the single post-change diagnostic scheduler. The client deliberately
+  // disables pull-on-change: starting a speculative pull before this semantic
+  // generation settles would race this refresh and repeat the same expensive
+  // analysis. One source can invalidate diagnostics owned by any visible file,
+  // so the standard workspace refresh remains project-wide.
+  if (ctx.clientSupport.diagnosticRefresh) {
+    requestClientRefresh(ctx, "diagnostics", () =>
+      ctx.connection.languages.diagnostics.refresh());
+  }
+  if (ctx.clientSupport.inlayHintRefresh) {
+    requestClientRefresh(ctx, "inlay hints", () =>
+      ctx.connection.languages.inlayHint.refresh());
+  }
+  if (ctx.clientSupport.semanticTokensRefresh) {
+    requestClientRefresh(ctx, "semantic tokens", () =>
+      ctx.connection.languages.semanticTokens.refresh());
+  }
+}
+
+function isSettledAnalysisStale(error: unknown): boolean {
+  return error instanceof ManagedSemanticWorkspaceOperationStaleError
+    || (isSemanticRuntimeLspRequestAborted(error) && error.reason === "stale");
+}
+
+function retryAnalysisChangeKind(
+  error: unknown,
+  fallback: AnalysisChangedPayload["changeKind"],
+): AnalysisChangedPayload["changeKind"] {
+  const managedStale = managedOperationStaleCause(error);
+  return managedStale?.currentnessKind === SemanticSourceWorldCurrentnessKind.FreshBootRequired
+    ? "topology"
+    : fallback;
+}
+
+function managedOperationStaleCause(
+  error: unknown,
+): ManagedSemanticWorkspaceOperationStaleError | null {
+  if (error instanceof ManagedSemanticWorkspaceOperationStaleError) return error;
+  if (isSemanticRuntimeLspRequestAborted(error)
+      && error.cause instanceof ManagedSemanticWorkspaceOperationStaleError) {
+    return error.cause;
+  }
+  return null;
+}
+
+/**
+ * LSP refresh methods are server-to-client requests despite their command-like API.
+ * Their response only acknowledges client scheduling; it is not semantic work. Joining
+ * that response to the shutdown drain deadlocks when a client waits for `shutdown`
+ * while retiring the providers that would answer the refresh request.
+ */
+function requestClientRefresh(
+  ctx: ServerContext,
+  label: string,
+  request: () => Promise<void>,
+): void {
+  void Promise.resolve().then(request).catch((error: unknown) => {
+    if (lifecycleRefreshState(ctx).shutdown != null) return;
+    const message = error instanceof Error ? error.stack ?? error.message : String(error);
+    ctx.logger.warn(`[workspace] ${label} refresh request failed: ${message}`);
+  });
+}
+
+export function shutdownLifecycle(ctx: ServerContext): Promise<void> {
+  const state = lifecycleRefreshState(ctx);
+  if (state.shutdown != null) {
+    return state.shutdown;
+  }
+  const shutdown = Promise.resolve().then(() => {
+    if (state.pendingAnalysisRefresh != null) {
+      clearTimeout(state.pendingAnalysisRefresh);
+      state.pendingAnalysisRefresh = null;
+    }
+    state.pendingAnalysisChangeKind = null;
+    state.pendingAnalysisChangedSourceUris.clear();
+    state.openDocumentEffectiveValues.clear();
+    ctx.semanticRuntime.invalidateRequests();
+
+    // LSP shutdown retires this dedicated server process. Waiting for obsolete
+    // requests here deadlocks with clients that wait for the shutdown response
+    // before cancelling providers and their in-flight requests. Revoke guards,
+    // answer shutdown, and retain task settlement only as deferred cleanup for
+    // hosts that do not immediately follow with the standard `exit` notification.
+    const tasks = [...state.tasks];
+    void Promise.allSettled(tasks)
+      .then(() => ctx.semanticRuntime.dispose())
+      .catch((error: unknown) => {
+        const message = error instanceof Error ? error.stack ?? error.message : String(error);
+        ctx.logger.error(`semantic session retirement failed: ${message}`);
+      });
+  });
+  state.shutdown = shutdown;
+  return shutdown;
+}
+
+function runLifecycleTask(
+  ctx: ServerContext,
+  label: string,
+  operation: () => Promise<void>,
+): void {
+  if (lifecycleRefreshState(ctx).shutdown != null) return;
+  void runServerOperation(ctx, operation).then(
+    () => undefined,
+    (error: unknown) => {
+      const message = error instanceof Error ? error.stack ?? error.message : String(error);
+      ctx.logger.error(`${label} failed: ${message}`);
+    },
+  );
+}
+
+/** Own one foreground or background operation until it settles so shutdown can drain it. */
+export async function runServerOperation<T>(
+  ctx: ServerContext,
+  operation: () => T | Promise<T>,
+): Promise<T> {
+  const state = lifecycleRefreshState(ctx);
+  if (state.shutdown != null) {
+    throw new Error("Aurelia language server is shutting down.");
+  }
+  const task = Promise.resolve().then(operation);
+  state.tasks.add(task);
+  try {
+    return await task;
+  } finally {
+    state.tasks.delete(task);
+  }
+}
+
+function lifecycleRefreshState(ctx: ServerContext): LifecycleRefreshState {
+  const existing = lifecycleRefreshStates.get(ctx);
+  if (existing != null) {
+    return existing;
+  }
+  const state: LifecycleRefreshState = {
+    tasks: new Set(),
+    openDocumentEffectiveValues: new Map(),
+    pendingAnalysisChangedSourceUris: new Map(),
+    lifecycleRegistered: false,
+    pendingAnalysisRefresh: null,
+    pendingAnalysisChangeKind: null,
+    shutdown: null,
+  };
+  lifecycleRefreshStates.set(ctx, state);
+  return state;
 }

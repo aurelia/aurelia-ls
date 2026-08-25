@@ -16,12 +16,13 @@ import {
   diffSemanticRuntimeMemorySamples,
   readSemanticRuntimeMemorySample,
 } from './memory.js';
-import type { KernelStore } from '../kernel/store.js';
+import type { KernelTelemetryReadView } from '../kernel/store.js';
 import type { NormalizedSemanticRuntimeTelemetryOptions } from './options.js';
 
 export interface SemanticRuntimePhaseSink {
   readonly phases: SemanticRuntimePhaseTiming<string>[];
   readonly telemetry: NormalizedSemanticRuntimeTelemetryOptions;
+  readonly kernel: KernelTelemetryReadView;
 }
 
 export interface SemanticRuntimePhaseMemoryProfile {
@@ -64,7 +65,7 @@ const phaseStacks = new WeakMap<SemanticRuntimePhaseTiming<string>[], SemanticRu
 export function measureSemanticRuntimePhase<TName extends string, TValue>(
   phases: SemanticRuntimePhaseTiming<TName>[],
   name: TName,
-  store: KernelStore,
+  kernel: KernelTelemetryReadView,
   telemetry: NormalizedSemanticRuntimeTelemetryOptions,
   read: () => TValue,
 ): TValue {
@@ -74,12 +75,10 @@ export function measureSemanticRuntimePhase<TName extends string, TValue>(
     ? readSemanticRuntimeMemorySample()
     : null;
   const kernelMarker = telemetry.capturePhaseKernelBreakdowns || telemetry.capturePhaseDetailDensity
-    ? store.mark()
+    ? kernel.markObservation()
     : null;
   const kernelBefore = telemetry.capturePhaseKernel
-    ? store.readTelemetrySnapshot({
-      includeBreakdowns: false,
-    }) as SemanticRuntimeKernelCountSnapshot
+    ? kernel.readKernelCountSnapshot()
     : null;
   stack.push(frame);
   const started = performance.now();
@@ -89,16 +88,14 @@ export function measureSemanticRuntimePhase<TName extends string, TValue>(
       ? readSemanticRuntimeMemorySample()
       : null;
     const kernelAfter = telemetry.capturePhaseKernel
-      ? store.readTelemetrySnapshot({
-        includeBreakdowns: false,
-      }) as SemanticRuntimeKernelCountSnapshot
+      ? kernel.readKernelCountSnapshot()
       : null;
     const density = kernelMarker == null || !telemetry.capturePhaseKernelBreakdowns
       ? null
-      : store.readDensitySince(kernelMarker);
+      : kernel.readDensitySince(kernelMarker);
     const detailDensity = kernelMarker == null || !telemetry.capturePhaseDetailDensity
       ? null
-      : store.readDetailDensitySince(kernelMarker);
+      : kernel.readDetailDensitySince(kernelMarker);
     const milliseconds = performance.now() - started;
     stack.pop();
     const parent = stack[stack.length - 1] ?? null;

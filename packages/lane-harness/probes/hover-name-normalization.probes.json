@@ -1,0 +1,79 @@
+{
+  "fixture": "packages/semantic-runtime/fixtures/pressure/hover-name-normalization",
+  "lanes": {
+    "hover": [
+      {
+        "id": "mixed-case-custom-element-opening",
+        "file": "src/hover-name-normalization-app.html",
+        "anchor": "<PRODUCT-CARD>",
+        "at": "PRODUCT-CARD",
+        "verdict": "correct",
+        "reason": "Hover authenticates the browser-normalized product-card resource while preserving the exact authored opening-tag spelling.",
+        "note": "Slice 1 representative HTML custom-element identity witness."
+      },
+      {
+        "id": "mixed-case-custom-element-closing",
+        "file": "src/hover-name-normalization-app.html",
+        "anchor": "</PrOdUcT-CaRd>",
+        "at": "PrOdUcT-CaRd",
+        "verdict": "correct",
+        "reason": "Hover authenticates the closing tag through the same runtime resource name while displaying the independently authored closing spelling.",
+        "note": "The semantic carrier intentionally does not copy opening-tag text into the closing locus."
+      },
+      {
+        "id": "mixed-case-custom-attribute",
+        "file": "src/hover-name-normalization-app.html",
+        "anchor": "<div FOCUS>",
+        "at": "FOCUS",
+        "verdict": "correct",
+        "reason": "The browser-normalized focus alias selects focus-ring, while hover keeps the authored attribute token as the primary identity.",
+        "note": "Representative custom-attribute alias and authored/runtime spelling split."
+      },
+      {
+        "id": "mixed-case-binding-command",
+        "file": "src/hover-name-normalization-app.html",
+        "anchor": "VALUE.BIND=\"title\"",
+        "at": "BIND",
+        "verdict": "correct",
+        "reason": "The top-level HTML attribute is browser-normalized before exact binding-command lookup, while hover displays the authored command suffix.",
+        "note": "Inline multi-binding command names remain a separate case-sensitive value-language boundary."
+      },
+      {
+        "id": "svg-adjusted-custom-attribute",
+        "file": "src/hover-name-normalization-app.html",
+        "anchor": "<svg VIEWBOX=\"0 0 1 1\">",
+        "at": "VIEWBOX",
+        "verdict": "correct",
+        "reason": "The HTML parser's SVG adjustment selects the exact runtime custom-attribute name viewBox without losing the authored VIEWBOX spelling.",
+        "note": "Plain SVG adjusted names differ from compound VIEWBOX.BIND, which browser-normalizes as a whole attribute name."
+      },
+      {
+        "id": "case-sensitive-value-converter-alias",
+        "file": "src/hover-name-normalization-app.html",
+        "anchor": "title | FormatName",
+        "at": "FormatName",
+        "verdict": "correct",
+        "reason": "Expression resource names are not HTML attributes: the exact case-sensitive alias FormatName is retained and identified as an alias of formatName.",
+        "note": "Guards against leaking HTML case folding into the expression language."
+      },
+      {
+        "id": "case-sensitive-binding-behavior-alias",
+        "file": "src/hover-name-normalization-app.html",
+        "anchor": "title & TrackEdit",
+        "at": "TrackEdit",
+        "verdict": "correct",
+        "reason": "The exact case-sensitive TrackEdit alias selects trackEdit and remains the displayed authored identity.",
+        "note": "Companion expression-resource boundary to the value-converter witness."
+      },
+      {
+        "id": "attribute-pattern-intentional-null",
+        "file": "src/hover-name-normalization-app.html",
+        "anchor": "PROMISE.RESOLVE=\"productPromise\"",
+        "at": "RESOLVE",
+        "verdict": "correct",
+        "reason": "The exact mixed-case literal can select the registered promise attribute pattern below the API boundary, but a literal is not a designed public pattern identity card, so hover remains null.",
+        "note": "Pins the explicit Slice 1 product ruling rather than accidental mapper absence."
+      }
+    ]
+  }
+}

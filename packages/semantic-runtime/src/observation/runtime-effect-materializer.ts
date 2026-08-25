@@ -6,6 +6,11 @@ import {
   isAureliaContainerReceiver,
 } from '../di/container-api-recognition.js';
 import {
+  DiClassDependencyPositionState,
+  DiClassDependencyProjectView,
+  DiClassDependencySlotState,
+} from '../di/class-dependency-plan.js';
+import {
   readImportedExportName,
   readSourceImportBindings,
   typeNodeReferencesImportedExport,
@@ -15,6 +20,8 @@ import {
   isNestedExecutionBoundary,
   readObjectPropertyExpression,
   sourceSiteForNode,
+  TypeScriptAccessMode,
+  typescriptAccessModeForExpression,
   typescriptExpressionSourceRootName,
   unwrapExpression,
 } from '../evaluation/ts-syntax.js';
@@ -24,38 +31,79 @@ import {
   SourceFileRef,
   sourceSpanFromBounds,
 } from '../expression/source-span.js';
+import type { ExpressionAstNode } from '../expression/ast.js';
 import { EvidenceRole } from '../kernel/evidence.js';
 import type {
   AddressHandle,
   ProvenanceHandle,
 } from '../kernel/handles.js';
 import { localKeyPart } from '../kernel/local-key.js';
+import {
+  KernelPublicationPlan,
+  publishProductDetail,
+  publishProductDetails,
+  type KernelPublicationContext,
+} from '../kernel/publication.js';
 import type { SourceSpanSite } from '../kernel/source-address.js';
 import {
-  KernelStore,
   KernelStoreBatch,
+  type KernelStore,
   type KernelStoreRecord,
 } from '../kernel/store.js';
 import { KernelVocabulary } from '../kernel/vocabulary.js';
 import type { TypeSystemProject } from '../type-system/project.js';
+import type { CheckerExpressionTypeWorld } from '../type-system/expression-type-world.js';
 import { typeSystemSourcePathIndex } from '../type-system/source-path-index.js';
+import { ensureSourceFileAddressForCheckerNode } from '../type-system/declaration-source.js';
+import {
+  RuntimeExpressionAccessOwnerKind,
+  RuntimeExpressionAccessPhase,
+  RuntimeExpressionAccessTargetResolution,
+  RuntimeExpressionAccessTracking,
+  RuntimeExpressionOperationKind,
+} from '../runtime-expression/runtime-expression-access-use.js';
+import {
+  RuntimeOperationRealization,
+  RuntimeOperationReachability,
+} from '../runtime-expression/runtime-operation.js';
+import {
+  publishRuntimeSourceAccessUses,
+  type RuntimeSourceAccessUsePublication,
+  type RuntimeSourceAccessUseDraft,
+} from '../runtime-expression/source-access-use-publication.js';
+import {
+  collectRuntimeTemplateAccessUseDrafts,
+} from '../runtime-expression/template-access-use-collector.js';
+import {
+  collectRuntimeTypeScriptAccessUseDrafts,
+} from '../runtime-expression/typescript-access-use-collector.js';
+import {
+  RuntimeRootExpressionAccessTargetProjector,
+} from '../runtime-expression/checker-access-target-projection.js';
+import { RuntimeExpressionProductDetails } from '../runtime-expression/product-details.js';
 import {
   collectRuntimeConnectableObservedDependencyDrafts,
 } from './connectable-observed-dependency.js';
 import {
   observedMemberSourceFields,
   observedMemberSourceForCheckerSymbol,
+  runtimeObservedDependencyOccurrence,
 } from './observed-dependency-member-source.js';
 import { ObservationProductDetails } from './product-details.js';
 import { ProxyObservable } from './proxy-observable-dependency.js';
 import {
-  distinctRuntimeObservedDependencyDrafts,
-  runtimeObservedDependencySemanticKey,
+  type RuntimeObservedDependencyAccessUseDraft,
   type RuntimeObservedDependencyDraft,
 } from './runtime-observed-dependency-draft.js';
-import { RuntimeObservedDependencyKind } from './runtime-binding-observation.js';
+import {
+  observedDependencyAccessUseDrafts,
+} from './runtime-observed-dependency-access-use.js';
+import { RuntimeObservedDependencyKind } from './runtime-observed-dependency.js';
 import { sourceObservationProductRecords } from './source-observation-product-publication.js';
 import { sourceObservedDependencyRecords } from './source-observed-dependency-publication.js';
+import {
+  symbolHasObservableDecorator,
+} from './observable-decorator-recognition.js';
 import {
   RuntimeEffect,
   RuntimeEffectDependencyEvaluationKind,
@@ -82,10 +130,6 @@ const OBSERVATION_EXPORTS = new Set([
 
 const OBSERVATION_SERVICE_EXPORTS = new Set([
   'IObservation',
-]);
-
-const OBSERVATION_INJECT_EXPORTS = new Set([
-  'inject',
 ]);
 
 const OBSERVATION_RESOLVE_EXPORTS = new Set([
@@ -131,42 +175,54 @@ interface RuntimeEffectObservedDependencyPublication {
   readonly records: readonly KernelStoreRecord[];
 }
 
+interface RuntimeEffectOperationSource {
+  readonly expression: ExpressionAstNode | null;
+  readonly observedDependencyOccurrences: readonly RuntimeObservedDependencyDraft[];
+  readonly rootType: ts.Type | null;
+  readonly rootSourceNode: ts.Node | null;
+}
+
 /** Materializes direct source-level Observation.watch(...) effects and their observed dependencies. */
 export class RuntimeEffectMaterializer {
   constructor(
     readonly store: KernelStore,
+    readonly publication: KernelPublicationContext,
   ) {}
 
   materialize(
     project: ProjectBootFrame,
     typeSystem: TypeSystemProject,
+    expressionWorld: CheckerExpressionTypeWorld,
+    classDependencies: DiClassDependencyProjectView,
   ): RuntimeEffectProjectResult {
-    const publications = readRuntimeEffectSourceSites(project, typeSystem)
-      .map((site, index) => this.publicationForSite(project, typeSystem, site, index));
+    const publications = readRuntimeEffectSourceSites(project, typeSystem, classDependencies)
+      .map((site, index) => this.publicationForSite(project, typeSystem, expressionWorld, site, index));
     const records = publications.flatMap((publication) => publication.records);
-    if (records.length > 0) {
-      this.store.commit(new KernelStoreBatch(records, `runtime-effects:${project.projectKey}`));
-    }
-    for (const publication of publications) {
-      this.store.productDetails.add(
-        ObservationProductDetails.RuntimeEffect,
-        publication.effect.productHandle!,
-        publication.effect,
-      );
-      for (const dependency of publication.effect.observedDependencies) {
-        this.store.productDetails.add(
+    this.publication.publish(new KernelPublicationPlan(
+      new KernelStoreBatch(records, `runtime-effects:${project.projectKey}`),
+      [
+        ...publications.map((publication) => publishProductDetail(
+          ObservationProductDetails.RuntimeEffect,
+          publication.effect.productHandle!,
+          publication.effect,
+        )),
+        ...publishProductDetails(
           ObservationProductDetails.RuntimeEffectObservedDependency,
-          dependency.productHandle,
-          dependency,
-        );
-      }
-    }
+          publications.flatMap((publication) => publication.effect.observedDependencies),
+        ),
+        ...publishProductDetails(
+          RuntimeExpressionProductDetails.AccessUse,
+          publications.flatMap((publication) => publication.effect.accessUses),
+        ),
+      ],
+    ));
     return new RuntimeEffectProjectResult(publications.map((publication) => publication.effect));
   }
 
   private publicationForSite(
     project: ProjectBootFrame,
     typeSystem: TypeSystemProject,
+    expressionWorld: CheckerExpressionTypeWorld,
     site: RuntimeEffectSourceSite,
     index: number,
   ): RuntimeEffectPublication {
@@ -188,12 +244,30 @@ export class RuntimeEffectMaterializer {
       product.identityHandle,
       product.sourceAddressHandle,
     );
-    const dependencies = runtimeEffectObservedDependenciesForSite(
+    const operationSource = runtimeEffectOperationSourceForSite(
       this.store,
-      `${local}:observed-dependency`,
+      this.publication,
+      site,
+      typeSystem,
+    );
+    const accessUses = runtimeEffectAccessUsesForSite(
+      this.store,
+      this.publication,
+      `${local}:operation`,
       site,
       effectReference,
       typeSystem,
+      expressionWorld,
+      operationSource,
+      product.provenanceHandle,
+    );
+    const dependencies = runtimeEffectObservedDependenciesForDrafts(
+      this.store,
+      this.publication,
+      `${local}:observed-dependency`,
+      effectReference,
+      operationSource.observedDependencyOccurrences,
+      accessUses.publications,
       product.provenanceHandle,
     );
     const effect = new RuntimeEffect(
@@ -202,14 +276,15 @@ export class RuntimeEffectMaterializer {
       product.productHandle,
       product.identityHandle,
       site.immediate,
+      accessUses.accessUses,
       dependencies.map((dependency) => dependency.detail),
       product.sourceAddressHandle,
-      [],
     );
     return {
       effect,
       records: [
         ...product.records,
+        ...accessUses.records,
         ...dependencies.flatMap((dependency) => dependency.records),
       ],
     };
@@ -219,10 +294,11 @@ export class RuntimeEffectMaterializer {
 function readRuntimeEffectSourceSites(
   project: ProjectBootFrame,
   typeSystem: TypeSystemProject,
+  classDependencies: DiClassDependencyProjectView,
 ): readonly RuntimeEffectSourceSite[] {
   const sourcePathByFileName = typeSystemSourcePathIndex(project, typeSystem);
   return project.sourceFiles.flatMap((source) => {
-    const sourceFile = typeSystem.readProgramSourceFileByPath(source.path);
+    const sourceFile = typeSystem.readProgramSourceFileByProjectPath(source.path);
     if (sourceFile == null) {
       return [];
     }
@@ -235,7 +311,13 @@ function readRuntimeEffectSourceSites(
       sourceFile,
       bindings,
       sourcePathByFileName,
-      roots: readObservationRoots(sourceFile, bindings, typeSystem, sourcePathByFileName),
+      roots: readObservationRoots(
+        sourceFile,
+        bindings,
+        typeSystem,
+        sourcePathByFileName,
+        classDependencies,
+      ),
       sites: [],
     };
     visitRuntimeEffectSourceNode(context, sourceFile);
@@ -259,6 +341,7 @@ function readObservationRoots(
   bindings: SourceImportBindings,
   typeSystem: TypeSystemProject,
   sourcePathByFileName: ReadonlyMap<string, string>,
+  classDependencies: DiClassDependencyProjectView,
 ): ObservationRootSet {
   const locals = new Set<string>();
   const instanceMembers = new Set<string>();
@@ -279,7 +362,10 @@ function readObservationRoots(
         instanceMembers.add(name);
       }
     } else if (ts.isParameter(node) && ts.isIdentifier(node.name)) {
-      if (nodeIsObservationTyped(node, bindings) || parameterIsInjectedObservation(node, bindings)) {
+      if (
+        nodeIsObservationTyped(node, bindings)
+        || parameterIsInjectedObservation(node, bindings, classDependencies)
+      ) {
         locals.add(node.name.text);
         if (parameterIsParameterProperty(node)) {
           instanceMembers.add(node.name.text);
@@ -442,6 +528,7 @@ function expressionReferencesObservationKey(
 function parameterIsInjectedObservation(
   parameter: ts.ParameterDeclaration,
   bindings: SourceImportBindings,
+  classDependencies: DiClassDependencyProjectView,
 ): boolean {
   if (!ts.isConstructorDeclaration(parameter.parent)) {
     return false;
@@ -452,25 +539,16 @@ function parameterIsInjectedObservation(
   if (parameterIndex < 0 || !ts.isClassLike(classNode)) {
     return false;
   }
-  const injectArguments = classInjectArguments(classNode, bindings);
-  return injectArguments[parameterIndex] != null
-    && expressionReferencesObservationKey(injectArguments[parameterIndex]!, bindings);
-}
-
-function classInjectArguments(
-  classNode: ts.ClassLikeDeclaration,
-  bindings: SourceImportBindings,
-): readonly ts.Expression[] {
-  const injectDecorator = (ts.getDecorators(classNode) ?? []).find((decorator) => {
-    const expression = unwrapExpression(decorator.expression);
-    return ts.isCallExpression(expression)
-      && readImportedExportName(expression.expression, bindings, OBSERVATION_INJECT_EXPORTS) === 'inject';
-  });
-  if (injectDecorator == null) {
-    return [];
+  const plan = classDependencies.readForDeclaration(classNode);
+  const dependency = plan?.positionState === DiClassDependencyPositionState.Exact
+    ? plan.slots[parameterIndex] ?? null
+    : null;
+  if (dependency?.state !== DiClassDependencySlotState.Present) {
+    return false;
   }
-  const expression = unwrapExpression(injectDecorator.expression);
-  return ts.isCallExpression(expression) ? [...expression.arguments] : [];
+  return dependency.lookupKeyExpression == null
+    ? false
+    : expressionReferencesObservationKey(dependency.lookupKeyExpression, bindings);
 }
 
 function propertyNameForInstanceMember(
@@ -519,31 +597,39 @@ function watchImmediateOption(
   return null;
 }
 
-function runtimeEffectObservedDependenciesForSite(
+function runtimeEffectObservedDependenciesForDrafts(
   store: KernelStore,
+  publication: KernelPublicationContext,
   local: string,
-  site: RuntimeEffectSourceSite,
   effect: RuntimeEffectReference,
-  typeSystem: TypeSystemProject,
+  drafts: readonly RuntimeObservedDependencyDraft[],
+  accessPublications: RuntimeSourceAccessUsePublication['publications'],
   provenanceHandle: ProvenanceHandle,
 ): readonly RuntimeEffectObservedDependencyPublication[] {
-  const drafts = observedDependencyDraftsForEffectSite(store, site, typeSystem);
-  return distinctRuntimeObservedDependencyDrafts(drafts).map((draft, index) =>
-    runtimeEffectObservedDependencyForDraft(store, `${local}:${index}`, site, effect, draft, index, provenanceHandle)
+  return observedDependencyAccessUseDrafts(publication, drafts, accessPublications).map((draft, index) =>
+    runtimeEffectObservedDependencyForDraft(
+      store,
+      publication,
+      `${local}:${index}`,
+      effect,
+      draft,
+      index,
+      provenanceHandle,
+    )
   );
 }
 
-function observedDependencyDraftsForEffectSite(
+function runtimeEffectOperationSourceForSite(
   store: KernelStore,
+  publication: KernelPublicationContext,
   site: RuntimeEffectSourceSite,
   typeSystem: TypeSystemProject,
-): readonly RuntimeObservedDependencyDraft[] {
+): RuntimeEffectOperationSource {
   if (site.expression != null) {
-    const expressionText = site.expression.text;
     const contentStart = site.expression.getStart(site.sourceFile) + 1;
     const contentEnd = site.expression.end - 1;
     const result = observationEffectExpressionParser.parse(
-      expressionText,
+      site.expression.text,
       'IsProperty',
       {
         baseSpan: sourceSpanFromBounds(
@@ -553,29 +639,132 @@ function observedDependencyDraftsForEffectSite(
         ),
       },
     );
-    return result.kind === ExpressionParseResultKind.ExpressionSuccess
+    const expression = result.kind === ExpressionParseResultKind.ExpressionSuccess
       || result.kind === ExpressionParseResultKind.EmptyExpressionSuccess
-      ? collectRuntimeConnectableObservedDependencyDrafts(result.ast)
-      : [];
+      ? result.ast
+      : null;
+    const ownerExpression = site.call.arguments[0] ?? null;
+    const ownerType = ownerExpression == null
+      ? null
+      : typeSystem.readProgramTypeAtLocation(ownerExpression);
+    const observedDependencyOccurrences = expression == null
+      ? []
+      : collectRuntimeConnectableObservedDependencyDrafts(expression).map((draft) => ({
+          ...draft,
+          sourceFileAddressHandle: site.sourceFileAddressHandle,
+        }));
+    return {
+      expression,
+      observedDependencyOccurrences,
+      rootType: ownerType,
+      rootSourceNode: ownerExpression,
+    };
   }
   if (site.getter != null) {
-    return ProxyObservable.collectObservedDependencyDrafts(
-      site.getter,
-      ProxyObservable.typeContextForTypeSystem(typeSystem, store),
-    );
+    return {
+      expression: null,
+      rootType: null,
+      rootSourceNode: null,
+      observedDependencyOccurrences: ProxyObservable.collectObservedDependencyOccurrenceDrafts(
+        site.getter,
+        ProxyObservable.typeContextForTypeSystem(typeSystem, store, publication),
+      ),
+    };
   }
-  return site.runFunction == null
-    ? []
-    : collectRunEffectObservedDependencyDrafts(store, site.runFunction, typeSystem);
+  return {
+    expression: null,
+    rootType: null,
+    rootSourceNode: null,
+    observedDependencyOccurrences: site.runFunction == null
+      ? []
+      : collectRunEffectObservedDependencyOccurrenceDrafts(publication, site.runFunction, typeSystem),
+  };
 }
 
-function collectRunEffectObservedDependencyDrafts(
+function runtimeEffectAccessUsesForSite(
   store: KernelStore,
+  publication: KernelPublicationContext,
+  local: string,
+  site: RuntimeEffectSourceSite,
+  effect: RuntimeEffectReference,
+  typeSystem: TypeSystemProject,
+  expressionWorld: CheckerExpressionTypeWorld,
+  operationSource: RuntimeEffectOperationSource,
+  provenanceHandle: ProvenanceHandle,
+) {
+  const operationKind = site.expression != null
+    ? RuntimeExpressionOperationKind.EffectExpression
+    : site.getter != null
+      ? RuntimeExpressionOperationKind.EffectGetter
+      : RuntimeExpressionOperationKind.EffectRunCallback;
+  const targetProjector = RuntimeRootExpressionAccessTargetProjector.forCheckerType({
+    store,
+    expressionWorld,
+    typeSystem,
+    rootType: operationSource.rootType,
+    sourceNode: operationSource.rootSourceNode,
+    localKey: `${local}:expression-target`,
+  });
+  const drafts: readonly RuntimeSourceAccessUseDraft[] = operationSource.expression == null
+    ? site.getter != null || site.runFunction != null
+      ? collectRuntimeTypeScriptAccessUseDrafts({
+          declaration: site.getter ?? site.runFunction!,
+          typeSystem,
+          store,
+          publication,
+          trackedDependencies: operationSource.observedDependencyOccurrences,
+        })
+      : []
+    : collectRuntimeTemplateAccessUseDrafts({
+        expression: operationSource.expression,
+      }).map((draft) => runtimeSourceAccessDraftForExpression(
+        draft,
+        targetProjector,
+      ));
+  return publishRuntimeSourceAccessUses({
+    store,
+    publication,
+    local,
+    ownerKind: RuntimeExpressionAccessOwnerKind.SourceEffectPlan,
+    ownerProductHandle: effect.productHandle!,
+    ownerIdentityHandle: effect.identityHandle!,
+    ownerSourceAddressHandle: effect.addressHandle,
+    operationKind,
+    operationIndex: null,
+    phase: RuntimeExpressionAccessPhase.EffectEvaluation,
+    realization: RuntimeOperationRealization.Direct,
+    reachability: RuntimeOperationReachability.Open,
+    provenanceHandle,
+    claimPredicateKey: KernelVocabulary.RuntimeExpression.SourceEffectPlanUsesAccessUse.key,
+    drafts,
+  });
+}
+
+function runtimeSourceAccessDraftForExpression(
+  draft: ReturnType<typeof collectRuntimeTemplateAccessUseDrafts>[number],
+  targetProjector: RuntimeRootExpressionAccessTargetProjector | null,
+): RuntimeSourceAccessUseDraft {
+  const target = targetProjector?.project(draft.expression) ?? null;
+  return {
+    ...draft,
+    tracking: RuntimeExpressionAccessTracking.Connectable,
+    targetResolution: target?.resolution ?? RuntimeExpressionAccessTargetResolution.Open,
+    targetLinks: target?.links ?? [],
+  };
+}
+
+function collectRunEffectObservedDependencyOccurrenceDrafts(
+  publication: KernelPublicationContext,
   declaration: ts.FunctionLikeDeclaration,
   typeSystem: TypeSystemProject,
 ): readonly RuntimeObservedDependencyDraft[] {
   const sourceFile = declaration.getSourceFile();
-  const rows = new Map<string, RuntimeObservedDependencyDraft>();
+  const sourceFileAddressHandle = ensureSourceFileAddressForCheckerNode(
+    publication,
+    typeSystem.checker,
+    sourceFile,
+  ).handle;
+  const rows: RuntimeObservedDependencyDraft[] = [];
   const visit = (node: ts.Node | null): void => {
     if (node == null) {
       return;
@@ -583,26 +772,29 @@ function collectRunEffectObservedDependencyDrafts(
     if (node !== declaration && isNestedExecutionBoundary(node)) {
       return;
     }
-    if (ts.isPropertyAccessExpression(node)) {
-      const draft = observablePropertyReadDraft(store, node, typeSystem);
+    if (
+      ts.isPropertyAccessExpression(node)
+      && typescriptAccessModeForExpression(node) !== TypeScriptAccessMode.Write
+    ) {
+      const draft = observablePropertyReadDraft(publication, node, typeSystem);
       if (draft != null) {
-        rows.set(runtimeObservedDependencySemanticKey(draft), draft);
+        rows.push(draft);
       }
     }
     ts.forEachChild(node, visit);
   };
   visit(declaration.body ?? null);
-  return [...rows.values()].sort((left, right) =>
+  return rows.sort((left, right) =>
     `${left.spanStart ?? -1}:${left.sourceName ?? ''}`.localeCompare(`${right.spanStart ?? -1}:${right.sourceName ?? ''}`)
   );
 
   function observablePropertyReadDraft(
-    store: KernelStore,
+    publication: KernelPublicationContext,
     expression: ts.PropertyAccessExpression,
     typeSystem: TypeSystemProject,
   ): RuntimeObservedDependencyDraft | null {
     const symbol = typeSystem.readProgramSymbolAtLocation(expression.name);
-    if (!symbolHasObservableGetterDecorator(symbol)) {
+    if (!symbolHasObservableDecorator(symbol)) {
       return null;
     }
     return {
@@ -613,57 +805,42 @@ function collectRunEffectObservedDependencyDrafts(
       memberName: expression.name.text,
       keyExpression: null,
       methodName: null,
-      ...observedMemberSourceFields(observedMemberSourceForCheckerSymbol(store, symbol)),
+      ...observedMemberSourceFields(observedMemberSourceForCheckerSymbol(
+        publication,
+        typeSystem.checker,
+        symbol,
+      )),
+      sourceFileAddressHandle,
+      memberNameSpanStart: expression.name.getStart(sourceFile),
+      memberNameSpanEnd: expression.name.end,
       spanStart: expression.getStart(sourceFile),
       spanEnd: expression.end,
     };
   }
 }
 
-function symbolHasObservableGetterDecorator(
-  symbol: ts.Symbol | null | undefined,
-): boolean {
-  return (symbol?.declarations ?? []).some(declarationHasObservableGetterDecorator);
-}
-
-function declarationHasObservableGetterDecorator(
-  declaration: ts.Declaration,
-): boolean {
-  if (!ts.canHaveDecorators(declaration)) {
-    return false;
-  }
-  return (ts.getDecorators(declaration) ?? []).some((decorator) => {
-    const expression = unwrapExpression(decorator.expression);
-    const callee = ts.isCallExpression(expression)
-      ? expression.expression
-      : expression;
-    return readImportedExportName(
-      callee,
-      readSourceImportBindings(declaration.getSourceFile(), OBSERVATION_MODULES, OBSERVATION_EXPORTS),
-      true,
-    ) === 'observable';
-  });
-}
-
 function runtimeEffectObservedDependencyForDraft(
   store: KernelStore,
+  publicationContext: KernelPublicationContext,
   local: string,
-  site: RuntimeEffectSourceSite,
   effect: RuntimeEffectReference,
-  draft: RuntimeObservedDependencyDraft,
+  draft: RuntimeObservedDependencyAccessUseDraft,
   index: number,
   provenanceHandle: ProvenanceHandle,
 ): RuntimeEffectObservedDependencyPublication {
+  const occurrence = runtimeObservedDependencyOccurrence({
+    dependency: draft,
+    scope: null,
+  });
   const publication = sourceObservedDependencyRecords({
     store,
     local,
-    sourceFileAddressHandle: site.sourceFileAddressHandle,
     owner: {
       productHandle: effect.productHandle!,
       identityHandle: effect.identityHandle,
       addressHandle: effect.addressHandle,
     },
-    draft,
+    occurrence,
     index,
     provenanceHandle,
     claimPredicateKey: KernelVocabulary.Observation.RuntimeEffectUsesObservedDependency.key,
@@ -673,19 +850,7 @@ function runtimeEffectObservedDependencyForDraft(
     publication.productHandle,
     publication.identityHandle,
     effect,
-    draft.dependencyKind,
-    draft.expressionKind,
-    draft.sourceName,
-    draft.sourceRootName,
-    draft.memberName,
-    draft.keyExpression,
-    draft.methodName,
-    draft.observedMemberKind ?? null,
-    draft.observedMemberSourceAddressHandle ?? null,
-    draft.spanStart,
-    draft.spanEnd,
-    publication.sourceAddressHandle,
-    [],
+    occurrence,
   );
   return {
     detail,

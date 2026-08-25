@@ -12,6 +12,24 @@ import type { ProductKindKey } from './vocabulary.js';
 /** Owner of a materialization pass, such as a resource identity or source/template address. */
 export type MaterializationOwnerHandle = IdentityHandle | AddressHandle;
 
+/** Minimal read boundary for following unresolved pressure through materialization ownership. */
+export interface MaterializationOwnerOpenSeamReadView {
+  readMaterializationsByOwner(ownerHandle: MaterializationOwnerHandle): readonly MaterializationRecord[];
+}
+
+/** Read the distinct open seams constraining one or more materialization owners. */
+export function materializationOpenSeamHandlesForOwners(
+  store: MaterializationOwnerOpenSeamReadView,
+  ownerHandles: readonly MaterializationOwnerHandle[],
+): readonly OpenSeamHandle[] {
+  return [...new Set(
+    ownerHandles.flatMap((ownerHandle) =>
+      store.readMaterializationsByOwner(ownerHandle)
+        .flatMap((materialization) => materialization.openSeamHandles)
+    ),
+  )].sort();
+}
+
 /**
  * Concrete product envelope produced by a materialization phase.
  *
@@ -36,6 +54,33 @@ export class MaterializedProduct {
     /** Provenance handle explaining why this product exists. */
     readonly provenanceHandle: ProvenanceHandle,
   ) {}
+}
+
+/** Whether two product envelopes carry the same domain identity independently of witness movement. */
+export function sameMaterializedProductValue(
+  left: MaterializedProduct,
+  right: MaterializedProduct,
+): boolean {
+  return left.productKindKey === right.productKindKey
+    && left.identityHandle === right.identityHandle;
+}
+
+/** Whether two product envelopes point at the same source and provenance witnesses. */
+export function sameMaterializedProductWitness(
+  left: MaterializedProduct,
+  right: MaterializedProduct,
+): boolean {
+  return left.addressHandle === right.addressHandle
+    && left.provenanceHandle === right.provenanceHandle;
+}
+
+/** Whether a committed detail may expose either envelope without losing candidate-local truth. */
+export function sameMaterializedProductEnvelope(
+  left: MaterializedProduct,
+  right: MaterializedProduct,
+): boolean {
+  return sameMaterializedProductValue(left, right)
+    && sameMaterializedProductWitness(left, right);
 }
 
 /** Result of one materialization phase, including products and unresolved pressure. */

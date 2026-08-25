@@ -1,143 +1,745 @@
-import type { LanguageClient } from "vscode-languageclient/node.js";
+import type { CancellationToken, Disposable, WorkspaceEdit } from "vscode";
+import { LSPErrorCodes } from "vscode-languageserver-protocol";
+import {
+  AureliaProtocolNotification,
+  AureliaProtocolRequest,
+  type AnalysisLimitationsResponse,
+  type AttributeInterpretationExplanationParams,
+  type AttributeInterpretationExplanationResponse,
+  type BindingUncertaintyExplanationParams,
+  type BindingUncertaintyExplanationResponse,
+  type FrameworkCapabilityExplanationParams,
+  type FrameworkCapabilityExplanationResponse,
+  type ResourceAvailabilityExplanationParams,
+  type ResourceAvailabilityExplanationResponse,
+  type ResourceInventoryParams,
+  type ResourceInventoryResponse,
+  type SourceOwnershipResponse,
+  type TemplateResourceAvailabilityResponse,
+} from "@aurelia-ls/language-server/protocol";
+import type { AureliaLanguageClient, AureliaLanguageClientSession } from "../client-core.js";
 import type { ClientLogger } from "../log.js";
-import type { DebugChannel, ObservabilityService, TraceService } from "./observability.js";
+import {
+  createResourceDiscoveryHostControl,
+  type ResourceDiscoveryHostControl,
+  type ResourceDiscoveryHostFault,
+  type ResourceDiscoveryHostRequest,
+} from "../resource-discovery-host-control.js";
 import type {
-  CapabilitiesResponse,
-  DiagnosticsSnapshotResponse,
-  MappingResponse,
-  OverlayReadyPayload,
-  OverlayResponse,
-  SsrResponse,
-  TemplateInfoResponse,
+  AnalysisLimitationsSnapshot,
+  AttributeInterpretationExplanationSnapshot,
+  BindingUncertaintyExplanationSnapshot,
+  FrameworkCapabilityExplanationSnapshot,
+  ProtocolWorkspaceEdit,
+  RelatedFilesResponse,
+  RenameFromTsResponse,
+  ResourceInventorySnapshot,
+  ResourceAvailabilityExplanationSnapshot,
+  SourceOwnershipSnapshot,
+  TemplateResourceAvailabilitySnapshot,
+  AnalysisChangedPayload,
+  WorkspaceNotificationPayload,
 } from "../types.js";
 
-export class LspFacade {
-  #client: LanguageClient;
+type NotificationHandler = (payload: unknown) => void;
+type RequestRetryPolicy = "none" | "read-currentness";
+
+const READ_CURRENTNESS_RETRY_LIMIT = 2;
+
+export interface ResourceInventoryOptions {
+  readonly workspaceKey?: string;
+  readonly includeTypeSurfaces?: boolean;
+}
+
+export interface AnalysisLimitationsOptions {
+  readonly workspaceKey?: string;
+}
+
+/** Routes custom LSP traffic across the active workspace-owned client sessions. */
+export class LspFacade implements Disposable {
+  #clients: AureliaLanguageClient;
   #logger: ClientLogger;
-  #trace: TraceService;
-  #debug: DebugChannel;
-  #notifications: Array<{ method: string; handler: (payload: unknown) => void }> = [];
+  #notificationHandlers = new Map<string, Set<NotificationHandler>>();
+  #rawNotificationSubscriptions: Disposable[] = [];
+  #sessionSubscription: Disposable;
+  #resourceDiscoveryHostControl: ResourceDiscoveryHostControl | undefined;
+  #disposed = false;
 
-  constructor(client: LanguageClient, observability: ObservabilityService) {
-    this.#client = client;
-    this.#logger = observability.logger;
-    this.#trace = observability.trace;
-    this.#debug = observability.debug.channel("lsp");
-  }
-
-  get raw(): LanguageClient {
-    return this.#client;
-  }
-
-  setClient(client: LanguageClient): void {
-    this.#client = client;
-    for (const { method, handler } of this.#notifications) {
-      this.#client.onNotification(method, handler);
-    }
-  }
-
-  onNotification<T>(method: string, handler: (payload: T) => void): void {
-    this.#notifications.push({ method, handler: handler as (payload: unknown) => void });
-    this.#client.onNotification(method, handler);
-  }
-
-  sendRequest<T>(method: string, params?: unknown): Promise<T> {
-    return this.#trace.spanAsync(`lsp.${method}`, async () => {
-      this.#debug("request", { method });
-      this.#logger.info(`[lsp] → ${method}`);
-      this.#trace.setAttribute("lsp.method", method);
-      this.#trace.setAttribute("lsp.hasParams", Boolean(params));
-      try {
-        const result = await this.#client.sendRequest<T>(method, params);
-        this.#debug("response", { method });
-        this.#logger.info(`[lsp] ← ${method} ok`);
-        return result;
-      } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        this.#debug("error", { method, message });
-        this.#logger.info(`[lsp] ← ${method} ERROR: ${message}`);
-        throw err;
-      }
+  constructor(clients: AureliaLanguageClient, logger: ClientLogger) {
+    this.#clients = clients;
+    this.#logger = logger.child("lsp");
+    this.#sessionSubscription = clients.onDidChangeSessions(() => this.#rebindNotifications());
+    this.#resourceDiscoveryHostControl = createResourceDiscoveryHostControl({
+      admittedWorkspaceKeys: () => this.#clients.sessions.map((session) => session.workspace.key),
     });
   }
 
-  async getOverlay(uri: string): Promise<OverlayResponse | null> {
-    return this.sendRequest<OverlayResponse | null>("aurelia/getOverlay", { uri });
-  }
-
-  async getMapping(uri: string): Promise<MappingResponse | null> {
-    return this.sendRequest<MappingResponse | null>("aurelia/getMapping", { uri });
-  }
-
-  async getSsr(uri: string): Promise<SsrResponse | null> {
-    return this.sendRequest<SsrResponse | null>("aurelia/getSsr", { uri });
-  }
-
-  async getDiagnostics(uri: string): Promise<DiagnosticsSnapshotResponse | null> {
-    return this.sendRequest<DiagnosticsSnapshotResponse | null>("aurelia/getDiagnostics", { uri });
-  }
-
-  async queryAtPosition(uri: string, position: { line: number; character: number }): Promise<TemplateInfoResponse | null> {
-    return this.sendRequest<TemplateInfoResponse | null>("aurelia/queryAtPosition", { uri, position });
-  }
-
-  async dumpState(): Promise<unknown> {
-    return this.sendRequest<unknown>("aurelia/dumpState");
-  }
-
-  async inspectEntity(uri: string, position: { line: number; character: number }): Promise<import("../types.js").InspectEntityResponse | null> {
+  dispose(): void {
+    if (this.#disposed) return;
+    this.#disposed = true;
     try {
-      return await this.sendRequest<import("../types.js").InspectEntityResponse | null>("aurelia/inspectEntity", { uri, position });
+      this.#sessionSubscription.dispose();
+    } catch (error) {
+      this.#logger.warn("session-subscription.dispose.failed", undefined, error);
+    }
+    this.#disposeRawNotifications();
+    this.#notificationHandlers.clear();
+    this.#resourceDiscoveryHostControl?.dispose();
+    this.#resourceDiscoveryHostControl = undefined;
+  }
+
+  onNotification<T>(
+    method: string,
+    handler: (payload: WorkspaceNotificationPayload<T>) => void,
+  ): Disposable {
+    let handlers = this.#notificationHandlers.get(method);
+    if (handlers == null) {
+      handlers = new Set();
+      this.#notificationHandlers.set(method, handlers);
+    }
+    handlers.add(handler as NotificationHandler);
+    this.#rebindNotifications();
+    return {
+      dispose: () => {
+        const current = this.#notificationHandlers.get(method);
+        current?.delete(handler as NotificationHandler);
+        if (current?.size === 0) {
+          this.#notificationHandlers.delete(method);
+          this.#rebindNotifications();
+        }
+      },
+    };
+  }
+
+  async getResourceInventory(
+    options: ResourceInventoryOptions = {},
+    token?: CancellationToken,
+  ): Promise<ResourceInventorySnapshot | null> {
+    const sessions = options.workspaceKey == null
+      ? this.#clients.sessions
+      : this.#clients.sessions.filter((session) => session.workspace.key === options.workspaceKey);
+    if (sessions.length === 0) return null;
+    const controlRequest: ResourceDiscoveryHostRequest = {
+      operation: "inventory",
+      workspaceKeys: sessions.map((session) => session.workspace.key),
+      includeTypeSurfaces: options.includeTypeSurfaces === true,
+    };
+    const beforeControl = this.#resourceDiscoveryHostControl;
+    const controlOrdinal = beforeControl == null
+      ? 0
+      : await beforeControl.beforeDispatch(controlRequest, token);
+    this.#assertSessionCohortCurrent(sessions, options.workspaceKey);
+    const params: ResourceInventoryParams = options.includeTypeSurfaces === true
+      ? { includeTypeSurfaces: true }
+      : {};
+    const rows = await Promise.all(sessions.map(async (session) => {
+      try {
+        const response = await this.#sendRequest<ResourceInventoryResponse>(
+          session,
+          AureliaProtocolRequest.ResourceInventory,
+          params,
+          token,
+          "read-currentness",
+        );
+        return { ...session.workspace, status: "ready" as const, response };
+      } catch (err) {
+        if (err instanceof StaleLanguageClientSessionError) throw err;
+        return { ...session.workspace, status: "error" as const, error: errorMessage(err) };
+      }
+    }));
+    this.#assertSessionCohortCurrent(sessions, options.workspaceKey);
+    let snapshot: ResourceInventorySnapshot = { workspaces: rows };
+    const afterControl = this.#resourceDiscoveryHostControl;
+    if (afterControl != null) {
+      afterControl.noteInventory(snapshot.workspaces);
+      snapshot = await afterControl.afterResponse(
+        controlRequest,
+        controlOrdinal,
+        resourceInventoryFingerprint(snapshot, options.workspaceKey),
+        snapshot,
+        applyResourceInventoryHostFault,
+        token,
+      );
+      this.#assertSessionCohortCurrent(sessions, options.workspaceKey);
+    }
+    this.#logResourceInventoryIssues(snapshot.workspaces);
+    return snapshot;
+  }
+
+  async getAnalysisLimitations(
+    options: AnalysisLimitationsOptions = {},
+    token?: CancellationToken,
+  ): Promise<AnalysisLimitationsSnapshot | null> {
+    const sessions = options.workspaceKey == null
+      ? this.#clients.sessions
+      : this.#clients.sessions.filter((session) => session.workspace.key === options.workspaceKey);
+    if (sessions.length === 0) return null;
+    const workspaces = await Promise.all(sessions.map(async (session) => {
+      try {
+        const response = await this.#sendRequest<AnalysisLimitationsResponse>(
+          session,
+          AureliaProtocolRequest.AnalysisLimitations,
+          undefined,
+          token,
+          "read-currentness",
+        );
+        return { ...session.workspace, status: "ready" as const, response };
+      } catch (error) {
+        if (error instanceof StaleLanguageClientSessionError) throw error;
+        return { ...session.workspace, status: "error" as const, error: errorMessage(error) };
+      }
+    }));
+    this.#assertSessionCohortCurrent(sessions, options.workspaceKey);
+    const snapshot: AnalysisLimitationsSnapshot = { workspaces };
+    this.#logAnalysisLimitationIssues(snapshot);
+    return snapshot;
+  }
+
+  async getTemplateResourceAvailability(
+    uri: string,
+    position: { readonly line: number; readonly character: number },
+    projectKey?: string,
+    templateResourceScopeIdentityKey?: string,
+    token?: CancellationToken,
+  ): Promise<TemplateResourceAvailabilitySnapshot | null> {
+    const session = this.#sessionForUri(uri);
+    if (session == null) return null;
+    const controlRequest: ResourceDiscoveryHostRequest = {
+      operation: "availability",
+      workspaceKeys: [session.workspace.key],
+      ...(projectKey == null ? {} : { projectKey }),
+    };
+    const beforeControl = this.#resourceDiscoveryHostControl;
+    const controlOrdinal = beforeControl == null
+      ? 0
+      : await beforeControl.beforeDispatch(controlRequest, token);
+    this.#assertSessionCurrent(session);
+    let response = await this.#sendRequest<TemplateResourceAvailabilityResponse>(
+      session,
+      AureliaProtocolRequest.TemplateResourceAvailability,
+      {
+        uri,
+        position: protocolPosition(position),
+        ...(projectKey == null ? {} : { projectKey }),
+        ...(templateResourceScopeIdentityKey == null ? {} : { templateResourceScopeIdentityKey }),
+      },
+      token,
+    );
+    const afterControl = this.#resourceDiscoveryHostControl;
+    if (afterControl != null) {
+      afterControl.noteAvailability(session.workspace.key, response.projectSelection);
+      response = await afterControl.afterResponse(
+        controlRequest,
+        controlOrdinal,
+        response.fingerprint,
+        response,
+        (value) => ({ applied: false, value }),
+        token,
+      );
+      this.#assertSessionCurrent(session);
+    }
+    this.#logTemplateAvailabilityIssues(response, session.workspace.key);
+    return { ...response, workspace: session.workspace };
+  }
+
+  async getFrameworkCapabilityExplanation(
+    params: FrameworkCapabilityExplanationParams,
+    token?: CancellationToken,
+  ): Promise<FrameworkCapabilityExplanationSnapshot | null> {
+    const session = this.#sessionForUri(params.uri);
+    if (session == null) return null;
+    const response = await this.#sendRequest<FrameworkCapabilityExplanationResponse>(
+      session,
+      AureliaProtocolRequest.FrameworkCapabilityExplanation,
+      params,
+      token,
+      "read-currentness",
+    );
+    return { ...response, workspace: session.workspace };
+  }
+
+  async getAttributeInterpretationExplanation(
+    params: AttributeInterpretationExplanationParams,
+    token?: CancellationToken,
+  ): Promise<AttributeInterpretationExplanationSnapshot | null> {
+    const session = this.#sessionForUri(params.uri);
+    if (session == null) return null;
+    const response = await this.#sendRequest<AttributeInterpretationExplanationResponse>(
+      session,
+      AureliaProtocolRequest.AttributeInterpretationExplanation,
+      params,
+      token,
+      "read-currentness",
+    );
+    return { ...response, workspace: session.workspace };
+  }
+
+  async getBindingUncertaintyExplanation(
+    params: BindingUncertaintyExplanationParams,
+    token?: CancellationToken,
+  ): Promise<BindingUncertaintyExplanationSnapshot | null> {
+    const session = this.#sessionForUri(params.uri);
+    if (session == null) return null;
+    const response = await this.#sendRequest<BindingUncertaintyExplanationResponse>(
+      session,
+      AureliaProtocolRequest.BindingUncertaintyExplanation,
+      params,
+      token,
+      "read-currentness",
+    );
+    return { ...response, workspace: session.workspace };
+  }
+
+  async getResourceAvailabilityExplanation(
+    workspaceKey: string,
+    params: ResourceAvailabilityExplanationParams,
+    token?: CancellationToken,
+  ): Promise<ResourceAvailabilityExplanationSnapshot | null> {
+    const session = this.#clients.sessions.find((candidate) => candidate.workspace.key === workspaceKey);
+    const sourceSession = this.#sessionForUri(params.uri);
+    if (session == null || sourceSession !== session) return null;
+    const response = await this.#sendRequest<ResourceAvailabilityExplanationResponse>(
+      session,
+      AureliaProtocolRequest.ResourceAvailabilityExplanation,
+      params,
+      token,
+      "read-currentness",
+    );
+    return { ...response, workspace: session.workspace };
+  }
+
+  async getRelatedFiles(uri: string): Promise<RelatedFilesResponse> {
+    const session = this.#sessionForUri(uri);
+    if (session == null) return [];
+    return this.#sendRequest<RelatedFilesResponse>(
+      session,
+      AureliaProtocolRequest.RelatedFiles,
+      { uri },
+      undefined,
+      "read-currentness",
+    );
+  }
+
+  async getSourceOwnership(
+    uri: string,
+    token?: CancellationToken,
+  ): Promise<SourceOwnershipSnapshot | null> {
+    const session = this.#sessionForUri(uri);
+    if (session == null) return null;
+    const response = await this.#sendRequest<SourceOwnershipResponse>(
+      session,
+      AureliaProtocolRequest.SourceOwnership,
+      { uri },
+      token,
+      "read-currentness",
+    );
+    const normalized: SourceOwnershipSnapshot = {
+      ...response,
+      templateOwned: response.templateOwned === true,
+      workspace: session.workspace,
+    };
+    return normalized;
+  }
+
+  async renameFromTs(
+    uri: string,
+    position: { line: number; character: number },
+    newName: string | undefined,
+    token?: CancellationToken,
+  ): Promise<RenameFromTsResponse> {
+    const session = this.#sessionForUri(uri);
+    if (session == null) {
+      return {
+        status: "blocked",
+        reason: "workspace-unowned",
+        message: "No active Aurelia workspace owns this TypeScript document.",
+      };
+    }
+    try {
+      const response = await this.#sendRequest<RenameFromTsResponse | null>(
+        session,
+        AureliaProtocolRequest.RenameFromTypeScript,
+        { uri, position: protocolPosition(position), ...(newName == null ? {} : { newName }) },
+        token,
+      );
+      return response ?? {
+        status: "blocked",
+        reason: "empty-response",
+        message: "Aurelia cross-domain rename returned no status.",
+      };
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      this.#logger.warn("inspectEntity.request.failed", { message });
-      return null;
+      const message = errorMessage(err);
+      this.#logger.warn("renameFromTs.request.failed", { message });
+      return {
+        status: "blocked",
+        reason: "request-failed",
+        message: `Aurelia cross-domain rename request failed: ${message}`,
+      };
     }
   }
 
-  async getResources(): Promise<import("../types.js").ResourceExplorerResponse | null> {
+  async convertWorkspaceEdit(
+    session: AureliaLanguageClientSession,
+    workspaceEdit: ProtocolWorkspaceEdit,
+    token: CancellationToken,
+  ): Promise<WorkspaceEdit | undefined> {
+    this.#assertSessionCurrent(session);
+    const edit = await session.client.protocol2CodeConverter.asWorkspaceEdit(workspaceEdit, token);
+    this.#assertSessionCurrent(session);
+    return edit;
+  }
+
+  onAnalysisChanged(
+    handler: (payload: WorkspaceNotificationPayload<AnalysisChangedPayload>) => void,
+  ): Disposable {
+    return this.onNotification(AureliaProtocolNotification.AnalysisChanged, handler);
+  }
+
+  #sessionForUri(uri: string): AureliaLanguageClientSession | undefined {
+    return this.#clients.sessionForUri(uri);
+  }
+
+  #logResourceInventoryIssues(workspaces: ResourceInventorySnapshot["workspaces"]): void {
+    for (const workspace of workspaces) {
+      if (workspace.status === "error") {
+        // #sendRequest already recorded the transport exception with workspace
+        // context before it was conserved as an error row.
+        continue;
+      }
+      for (const project of workspace.response.projects) {
+        if (project.status === "error") {
+          this.#logger.warn("resource-inventory.project.issue", {
+            workspace: workspace.key,
+            project: project.project.projectKey,
+            status: project.status,
+            message: project.message,
+          });
+          continue;
+        }
+        if (
+          project.answer.result === "answered"
+          && project.answer.coverage === "complete"
+          && !resourceCompletenessHasIssue(project.completeness)
+        ) {
+          continue;
+        }
+        this.#logger.warn("resource-inventory.project.issue", {
+          workspace: workspace.key,
+          project: project.project.projectKey,
+          result: project.answer.result,
+          coverage: project.answer.coverage,
+          summary: project.answer.summary,
+          completeness: project.completeness,
+        });
+      }
+    }
+  }
+
+  #logAnalysisLimitationIssues(snapshot: AnalysisLimitationsSnapshot): void {
+    for (const workspace of snapshot.workspaces) {
+      if (workspace.status === "error") continue;
+      for (const project of workspace.response.projects) {
+        if (project.status === "error") {
+          this.#logger.warn("analysis-limitations.project.issue", {
+            workspace: workspace.key,
+            project: project.projectKey,
+            message: project.message,
+          });
+          continue;
+        }
+        if (project.answer.result === "answered") continue;
+        this.#logger.warn("analysis-limitations.project.issue", {
+          workspace: workspace.key,
+          project: project.projectKey,
+          result: project.answer.result,
+          coverage: project.answer.coverage,
+          summary: project.answer.summary,
+        });
+      }
+    }
+  }
+
+  #logTemplateAvailabilityIssues(
+    response: TemplateResourceAvailabilityResponse,
+    workspaceKey: string,
+  ): void {
+    const selection = response.projectSelection;
+    if (selection.status !== "exact") return;
+    if (
+      selection.answer.result === "answered"
+      && selection.answer.coverage === "complete"
+      && !resourceCompletenessHasIssue(selection.completeness)
+    ) {
+      return;
+    }
+    this.#logger.warn("template-resource-availability.issue", {
+      workspace: workspaceKey,
+      project: selection.project.projectKey,
+      result: selection.answer.result,
+      coverage: selection.answer.coverage,
+      summary: selection.answer.summary,
+      completeness: selection.completeness,
+    });
+  }
+
+  async #sendRequest<T>(
+    session: AureliaLanguageClientSession,
+    method: string,
+    params?: unknown,
+    token?: CancellationToken,
+    retryPolicy: RequestRetryPolicy = "none",
+  ): Promise<T> {
+    for (let attempt = 0; ; attempt += 1) {
+      this.#assertSessionCurrent(session);
+      const started = performance.now();
+      this.#logger.debug("request", {
+        method,
+        workspace: session.workspace.uri,
+        hasParams: params != null,
+        attempt: attempt + 1,
+      });
+      try {
+        const result = await session.client.sendRequest<T>(method, params, token);
+        this.#assertSessionCurrent(session);
+        this.#logger.debug("response", {
+          method,
+          workspace: session.workspace.uri,
+          durationMs: Math.round((performance.now() - started) * 10) / 10,
+          attempt: attempt + 1,
+        });
+        return result;
+      } catch (error) {
+        if (!this.#sessionIsCurrent(session)) {
+          throw new StaleLanguageClientSessionError(session, method);
+        }
+        if (
+          retryPolicy === "read-currentness"
+          && attempt < READ_CURRENTNESS_RETRY_LIMIT
+          && !token?.isCancellationRequested
+          && isContentModifiedError(error)
+        ) {
+          this.#logger.debug("request.retry", {
+            method,
+            workspace: session.workspace.uri,
+            attempt: attempt + 2,
+            reason: "content-modified",
+          });
+          continue;
+        }
+        this.#logger.warn("request.failed", {
+          method,
+          workspace: session.workspace.uri,
+          durationMs: Math.round((performance.now() - started) * 10) / 10,
+          attempt: attempt + 1,
+        }, error);
+        throw error;
+      }
+    }
+  }
+
+  #sessionIsCurrent(session: AureliaLanguageClientSession): boolean {
+    return this.#clients.sessions.some((candidate) =>
+      candidate.workspace.key === session.workspace.key
+      && candidate.client === session.client
+      && candidate.incarnation === session.incarnation
+    );
+  }
+
+  #assertSessionCurrent(session: AureliaLanguageClientSession): void {
+    if (!this.#sessionIsCurrent(session)) {
+      throw new StaleLanguageClientSessionError(session);
+    }
+  }
+
+  #assertSessionCohortCurrent(
+    expected: readonly AureliaLanguageClientSession[],
+    workspaceKey: string | undefined,
+  ): void {
+    const current = workspaceKey == null
+      ? this.#clients.sessions
+      : this.#clients.sessions.filter((session) => session.workspace.key === workspaceKey);
+    if (
+      current.length !== expected.length
+      || expected.some((session) => !current.some((candidate) =>
+        candidate.workspace.key === session.workspace.key
+        && candidate.client === session.client
+        && candidate.incarnation === session.incarnation
+      ))
+    ) {
+      throw new StaleLanguageClientSessionError(expected[0]);
+    }
+  }
+
+  #rebindNotifications(): void {
+    this.#disposeRawNotifications();
+    if (this.#disposed) return;
+    for (const session of this.#clients.sessions) {
+      for (const [method, handlers] of this.#notificationHandlers) {
+        if (handlers.size === 0) continue;
+        this.#rawNotificationSubscriptions.push(session.client.onNotification(method, (payload: unknown) => {
+          if (!this.#sessionIsCurrent(session)) return;
+          if (method === AureliaProtocolNotification.AnalysisChanged) {
+            if (!isAnalysisChangedPayload(payload)) return;
+            if (payload.changeKind === "topology") {
+              void this.#dispatchSettledTopologyNotification(method, payload, session);
+              return;
+            }
+          }
+          const enriched = workspaceNotificationPayload(payload, session);
+          for (const handler of [...(this.#notificationHandlers.get(method) ?? [])]) {
+            handler(enriched);
+          }
+        }));
+      }
+    }
+  }
+
+  async #dispatchSettledTopologyNotification(
+    method: string,
+    payload: AnalysisChangedPayload,
+    observedSession: AureliaLanguageClientSession,
+  ): Promise<void> {
     try {
-      return await this.sendRequest<import("../types.js").ResourceExplorerResponse | null>("aurelia/getResources");
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      this.#logger.warn("resources.request.failed", { message });
-      return null;
+      const retained = await this.#clients.reconfirmSessionTopology(observedSession, payload);
+      if (!retained || this.#disposed) return;
+      const current = this.#clients.sessions.find((session) =>
+        session.workspace.key === observedSession.workspace.key
+        && session.client === observedSession.client
+      );
+      if (current == null) return;
+      const enriched = workspaceNotificationPayload(payload, current);
+      for (const handler of [...(this.#notificationHandlers.get(method) ?? [])]) {
+        handler(enriched);
+      }
+    } catch (error) {
+      this.#logger.warn("topology-reconfirmation.failed", {
+        workspace: observedSession.workspace.uri,
+        fingerprint: payload.fingerprint,
+      }, error);
     }
   }
 
-  async getCapabilities(): Promise<CapabilitiesResponse | null> {
-    try {
-      return await this.sendRequest<CapabilitiesResponse | null>("aurelia/capabilities");
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      this.#logger.warn("capabilities.request.failed", { message });
-      return null;
+  #disposeRawNotifications(): void {
+    for (const subscription of this.#rawNotificationSubscriptions.splice(0)) {
+      try {
+        subscription.dispose();
+      } catch (error) {
+        this.#logger.warn("raw-notification.dispose.failed", undefined, error);
+      }
     }
   }
+}
 
-  onOverlayReady(handler: (payload: OverlayReadyPayload) => void): void {
-    this.onNotification("aurelia/overlayReady", handler);
+function resourceInventoryFingerprint(
+  snapshot: ResourceInventorySnapshot,
+  workspaceKey: string | undefined,
+): string | null {
+  if (workspaceKey == null) {
+    if (snapshot.workspaces.length !== 1) return null;
+    const [workspace] = snapshot.workspaces;
+    return workspace?.status === "ready" ? workspace.response.fingerprint : null;
   }
+  const fingerprints = snapshot.workspaces.flatMap((workspace) =>
+    workspace.status === "ready" && workspace.key === workspaceKey
+      ? [workspace.response.fingerprint]
+      : []
+  );
+  return fingerprints.length === 1 ? fingerprints[0]! : null;
+}
 
-  async getScopeResources(uri: string): Promise<import("../types.js").ScopeResourcesResponse | null> {
-    try {
-      return await this.sendRequest<import("../types.js").ScopeResourcesResponse | null>("aurelia/getScopeResources", { uri });
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      this.#logger.warn("scopeResources.request.failed", { message });
-      return null;
+function applyResourceInventoryHostFault(
+  snapshot: ResourceInventorySnapshot,
+  fault: ResourceDiscoveryHostFault,
+): { readonly applied: boolean; readonly value: ResourceInventorySnapshot } {
+  let applied = false;
+  const message = `Resource discovery host control ${fault.stableCode}.`;
+  const workspaces = snapshot.workspaces.map((workspace) => {
+    if (fault.effect === "newest-error-once") {
+      if (workspace.key !== fault.workspaceKey || workspace.status !== "ready") return workspace;
+      applied = true;
+      return {
+        key: workspace.key,
+        name: workspace.name,
+        uri: workspace.uri,
+        status: "error" as const,
+        error: message,
+      };
     }
-  }
+    if (workspace.status !== "ready") return workspace;
+    if (fault.effect === "project-error-once" && workspace.key !== fault.workspaceKey) return workspace;
+    const projects = workspace.response.projects.map((project) => {
+      if (project.status !== "ready") return project;
+      if (fault.effect === "project-error-once" && project.project.projectKey !== fault.projectKey) return project;
+      applied = true;
+      return {
+        status: "error" as const,
+        project: project.project,
+        message,
+      };
+    });
+    return { ...workspace, response: { ...workspace.response, projects } };
+  });
+  return { applied, value: { workspaces } };
+}
 
-  async getRelatedFile(uri: string): Promise<{ uri: string; kind: "template" | "component" } | null> {
-    try {
-      return await this.sendRequest<{ uri: string; kind: "template" | "component" } | null>("aurelia/getRelatedFile", { uri });
-    } catch {
-      return null;
-    }
-  }
+function protocolPosition(position: { readonly line: number; readonly character: number }): {
+  readonly line: number;
+  readonly character: number;
+} {
+  return { line: position.line, character: position.character };
+}
 
-  onWorkspaceChanged(handler: (payload: { fingerprint: string; domains: string[] }) => void): void {
-    this.onNotification("aurelia/workspaceChanged", handler);
+function resourceCompletenessHasIssue(completeness: {
+  readonly unnamedDefinitions: number;
+  readonly unresolvedModules: number;
+  readonly openVisibility: number;
+}): boolean {
+  return completeness.unnamedDefinitions > 0
+    || completeness.unresolvedModules > 0
+    || completeness.openVisibility > 0;
+}
+
+function isAnalysisChangedPayload(value: unknown): value is AnalysisChangedPayload {
+  if (value == null || typeof value !== "object" || Array.isArray(value)) return false;
+  const payload = value as Record<string, unknown>;
+  if (typeof payload["fingerprint"] !== "string") return false;
+  if (payload["changeKind"] === "topology") return true;
+  return payload["changeKind"] === "source-text"
+    && Array.isArray(payload["changedSourceUris"])
+    && payload["changedSourceUris"].every((uri): uri is string => typeof uri === "string");
+}
+
+function workspaceNotificationPayload(
+  payload: unknown,
+  session: AureliaLanguageClientSession,
+): unknown {
+  if (payload != null && typeof payload === "object" && !Array.isArray(payload)) {
+    return { ...(payload as Record<string, unknown>), workspace: session.workspace };
   }
+  return { value: payload, workspace: session.workspace };
+}
+
+class StaleLanguageClientSessionError extends Error {
+  constructor(session?: AureliaLanguageClientSession, method?: string) {
+    super(
+      `Aurelia workspace session changed${method == null ? "" : ` during ${method}`}`
+      + `${session == null ? "" : ` for ${session.workspace.uri}`}; retry the operation.`,
+    );
+    this.name = "StaleLanguageClientSessionError";
+  }
+}
+
+function isContentModifiedError(error: unknown): boolean {
+  try {
+    return error != null
+      && typeof error === "object"
+      && "code" in error
+      && error.code === LSPErrorCodes.ContentModified;
+  } catch {
+    return false;
+  }
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }

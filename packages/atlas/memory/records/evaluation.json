@@ -14,6 +14,11 @@
       "guidance": [
         "Prefer extending evaluator capabilities and open-seam modeling over adding feature-local evaluator shortcuts.",
         "StaticEvaluationExpressionReader should keep one evaluator per reader, matching RuntimeBindingSourceEvaluationFrame's per-source evaluator lifetime, so guardrails and seam checkpoints do not reset for every follow-up property, target, or expression probe.",
+        "StaticEvaluationExpressionReader is not an isolation boundary. A speculative or replaceable analysis owner should call StaticProjectEvaluationResult.forkSession() once and share that graph-preserving session across all of its readers; forking per reader destroys authored alias identity and breaks cross-reader joins.",
+        "StaticModuleEvaluationExpressionReader and StaticInvocationEvidenceExpressionReader are evidence projections, not follow-up evaluators. A source expression with no retained occurrence returns invocation-source-read pressure and must never fall back to StaticEvaluationExpressionReader against final module state; source-only declaration inventories may close syntax-owned literals while keeping nonliteral fields open.",
+        "StaticEvaluationSessionFork must clone every mutable evaluator carrier, captured environment, and completion while preserving aliases and cycles, including Promise back-edges and class/instance knots. Runtime-host call/new results are adopted into the active session realm so host-installed aliases and call-frame closures remain exact; metadata transfer must fork any mutable child values held outside the generic value graph. Template compilation inside a complete app-analysis candidate and later binding/router value evaluation use separate explicit sessions so rejected work cannot mutate the admitted project graph or leak mutable evaluator state across lifecycle phases.",
+        "Domain consumers that intentionally spend retained function effects must use executeStaticFunctionEffects, which preserves policy/guardrails while forcing PathProvenEffects. Callers still own candidate-local session forks, exact arguments, runtime-host operations, and domain projection; this helper is not a lifecycle scheduler.",
+        "Policy predicates that need a boolean decision use evaluateStaticCallableTruthiness over a candidate-local StaticCallableTarget. Durable products retain StaticCallableSlot values, current app analysis resolves them through generation-checked StaticCallableExecutionBindings, and compiler reads compare the observed truthiness rather than evaluator identity.",
         "When a gap appears, also check whether Atlas needs better flow or capability projection to expose the evaluator route.",
         "Use `framework:evaluator` for targeted framework evaluator effects, open seams, and module summaries before expanding semantic-runtime evaluator/world-construction support.",
         "`framework:evaluator --memberName=...` narrows the traced root; `--calleeName=...` only filters returned effects. Use memberName when checking whether one framework method closes without open seams.",
@@ -39,14 +44,26 @@
         "The evaluator module graph is runtime-shaped. Type-only imports and type-only re-exports should be erased before graph evaluation so TypeScript-only cycles do not become artificial runtime import cycles during DI/source-value activation.",
         "CommonJS carrier semantics belong in evaluation/commonjs.ts. StaticEvaluator materializes authored exports/module carriers there and StaticModuleGraphEvaluator reads export/require values through the same substrate.",
         "Class and function value execution belong in evaluation/class-values.ts and evaluation/function-values.ts. Keep class lifecycle and call-frame construction there while preserving StaticEvaluator as the owner of recursion, guardrails, and open seams.",
-        "Aurelia runtime-host intrinsics may ask StaticIntrinsicEvaluationHost for generic class instantiation, but product-specific calls such as ambient resolve(ClassKey) should stay at the host boundary and only close in activation-like frames with `this`; `evaluateAureliaResolveCall(...)` owns that narrow path through `aureliaResolveDirectKey(...)` and `evaluateAureliaResolveDirectClassKey(...)`. Registered/interface DI keys join through RuntimeBindingSourceActivationContext.resolveCallFrame(...) and active-container resolver lookup when a modeled container is available, not through the generic evaluator.",
+        "EvaluationValueEvidence is the canonical value-bearing edge payload. Lexical bindings, call and intrinsic-callback arguments/results, array and Set elements, return and throw completions, ESM/CommonJS linkage, and namespace exports must retain exact edge pressure; module audit evidence remains complete while causal pressure is consumed into and replayed from those carriers. Predicate, reducer, comparator, index, property-name, and mutation decisions must never execute a retained candidate.",
+        "Retaining an already-audited seam on an array shape, property, or other child carrier is not a new evaluator encounter. Do not replay it into the audit stream during carrier construction; replay causal pressure when a later read spends that carrier.",
+        "EvaluationArrayShape keeps runtime extent, exact present-element/hole positions, and order independent. Authored elisions are exact holes; unresolved spreads can open extent/positions, while sort can open order without opening extent. Object enumeration projects those axes from EvaluationEnumerableOwnEntries with causal membership/order seams instead of rebuilding arrays from booleans.",
+        "EvaluationKeyedCollectionShape keeps exact size, membership, and iteration order independent. Set elements carry value/identity evidence and Map entries carry key/value evidence independently; presence state and tombstones preserve conditional writes, delete, clear, overwrite position, and live iteration. SameValueZero lookup and mutation belong in keyed-collection-operations.ts, while weak capability stays orthogonal to membership precision.",
+        "EvaluationPromiseValue owns fulfilled, rejected, or open settlement evidence without claiming scheduling. Promise.resolve, Promise.reject, dynamic imports, async-function boundaries, session forks, and downstream loaders spend that one vocabulary. Consumers may unwrap only closed fulfillment; absent or definitely non-callable reactions preserve the selected settlement, while callable reactions remain open until evaluator-owned graph-isolated execution lanes exist.",
+        "Evaluator value relations belong in evaluation/value-relation.ts. Strict equality, SameValue, and SameValueZero share one tri-state decision vocabulary; object identity follows evaluator-local lineage across session forks and repeated module-namespace projections, never source paths, friendly names, or structural shape. Open host-boundary identity must remain open rather than becoming a false miss.",
+        "Built-in iterable semantics belong in evaluation/iterator-projection.ts. Drained projections serve spread and constructor consumers; live iterators serve loops and callback consumers that can mutate the source. Preserve Array holes as yielded undefined, String code-point order, keyed collection row-log order, and independent Map pair evidence instead of reusing own-property enumeration or snapshotting every iterator.",
+        "EvaluationArgumentList is the positional call-phase product. It evaluates authored arguments left-to-right, expands closed Array/Set/Map/String iterators, and keeps unclosed arity/order separate from pressure on exact slots. A spread whose continuation stays open stops later effects from becoming definite; conditional continuation needs its own future carrier. Local calls, global intrinsics, and array intrinsics consume the list; syntax-only module recognition must not substitute for value evaluation.",
+        "Aurelia expression-global admission and TypeScript-shaped static-evaluator global identity are related but distinct vocabularies. expression/global-names.ts owns the exact Aurelia subset plus the broader StaticEvaluationGlobalName set needed for WeakMap, WeakSet, Promise, and future evaluator-only globals; never widen parser admission merely to make a static intrinsic reachable. Boundary objects retain callable capability and keyed carriers retain weak capability, so typeof, instanceof, and host tags spend value identity rather than source spelling or a lossy shared value kind.",
+        "Retained evaluator candidates are projection evidence, not executable values. They must not choose branches, invoke getters or functions, or participate in scalar operations. Binding-source consumers may address an open aggregate only when its pressure is wholly owned by the aggregate shape and canonical member readers can select an exact child.",
+        "Global intrinsic dispatch must admit the direct callee or namespace receiver path before evaluating arguments. Eager probe-time argument evaluation duplicates calls, seams, and abrupt completion before ordinary local-function dispatch.",
+        "Aurelia's runtime host gives imported ambient resolve(...) an exact evaluator function identity but leaves the generic call open because resolution requires an active container. DiProviderActivationSession claims that evaluated identity when a concrete requestor is active; do not restore source-import scans or a second direct-class-key host path. RuntimeBindingSourceEvaluationFrame binds one activation session to the active modeled container rather than maintaining a second binding-source DI resolver.",
         "Browser ambient globals such as document, window, self, customElements, and console are Aurelia host-runtime boundary values during app admission. Keep them in aureliaStaticEvaluationRuntimeHost so app setup expressions remain host-dependent boundaries instead of unresolved-identifier seams, and keep ordinary host-boundary method calls/property writes such as animation-frame, storage, keyboard event, WebGL, and AudioContext usage as boundary propagation rather than generic dynamic-call/dynamic-mutation seam sites.",
         "Effective TypeScript lib ambient value declarations and project-local `.d.ts` ambient `declare const/let/var` globals, including `declare global` module declarations, are host-environment boundary values for static evaluation. Keep this in StaticProjectEvaluationPass via ambient-globals.ts so browser/stdlib names and Vite/build-time injected variables stop producing unresolved-identifier seams without pretending their literal values are statically known.",
         "`import.meta` is a host-environment boundary object. `import.meta.env.*` should be legal evaluator syntax that carries host/bundler dependency forward to consumers such as resource convergence without becoming an evaluator unsupported-expression seam.",
         "Evaluator open-seam reason kinds are producer-owned. `EvaluationOpenSeam` now carries compact producer reason kinds through `EvaluationKernelEmitter` into kernel open seams for core evaluator lanes such as missing identifiers, unsupported loops, and unsupported compound assignments; expand producer threading at the seam creation point rather than parsing summaries or stamping broad display heuristics.",
         "Primitive operator value algebra belongs in evaluation/operators.ts instead of bottom-of-evaluator helper islands. Loose == and != must model primitive/nullish ECMAScript equality instead of aliasing strict equality; this keeps common guards such as value == null aligned across StaticEvaluator and binding-source value reads.",
         "Relational operator reduction should close the deterministic numeric and string comparison lanes shared by StaticEvaluator and binding-source source-value callbacks. Leave mixed coercion or host-object comparison open until a consumer proves that broader ECMAScript coercion subset is needed.",
-        "Representative evaluator values belong in evaluation/representative-values.ts. Repeated views and speculative conditionals should share the same conservative summary policy: unanimous exact values stay exact, string-like branches become string patterns, common object fields survive, and unrelated lanes become binding-scope boundaries."
+        "Representative evaluator values belong in evaluation/representative-values.ts. Repeated views and speculative conditionals should share the same conservative summary policy: unanimous exact values stay exact, string-like branches become string patterns, common object fields survive, and unrelated lanes become binding-scope boundaries.",
+        "EvaluationObjectProperty carries per-property final-write state. Unknown computed writes, unresolved spreads, and unsupported members open earlier retained properties; later exact writes close their own key. Object literals, Object.assign, spread forwarding, and property readers must preserve and spend that order instead of treating object-wide unknown-property state as an effective value."
       ],
       "anchors": [
         {
@@ -55,6 +72,18 @@
           "symbolName": "StaticEvaluator",
           "line": 168,
           "summary": "Static ECMAScript evaluator implementation."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/evaluation/function-execution.ts",
+          "symbolName": "executeStaticFunctionEffects",
+          "summary": "Canonical path-proven retained-function effect boundary for domain-owned execution hosts."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/evaluation/function-execution.ts",
+          "symbolName": "evaluateStaticCallableTruthiness",
+          "summary": "Graph-isolated effect-free truthiness boundary for retained policy predicates."
         },
         {
           "kind": "source",
@@ -83,6 +112,72 @@
         },
         {
           "kind": "source",
+          "filePath": "packages/semantic-runtime/src/evaluation/value-pressure.ts",
+          "symbolName": "EvaluationValueEvidence",
+          "summary": "Canonical best-known value plus causal edge-pressure carrier."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/evaluation/argument-list.ts",
+          "symbolName": "EvaluationArgumentList",
+          "summary": "Canonical positional argument expansion with slot-level causal evidence."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/evaluation/array-callback-values.ts",
+          "symbolName": "EvaluationArrayCallbackRead",
+          "summary": "Host-neutral evidence-bearing callback and array-method decision algebra."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/evaluation/values.ts",
+          "symbolName": "EvaluationArrayShape",
+          "summary": "Independent extent, exact present-position, and order closure with causal axis seams."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/evaluation/values.ts",
+          "symbolName": "EvaluationKeyedCollectionShape",
+          "summary": "Independent keyed-collection size, membership, and iteration-order closure with causal axis seams."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/evaluation/keyed-collection-operations.ts",
+          "symbolName": "evaluationMapLookup",
+          "summary": "Shared SameValueZero lookup and mutation algebra for evidence-bearing Set and Map carriers."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/evaluation/values.ts",
+          "symbolName": "EvaluationPromiseSettlement",
+          "summary": "Promise settlement selection and exact value/reason evidence without scheduling claims."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/evaluation/value-relation.ts",
+          "symbolName": "evaluationStrictEqualityDecision",
+          "summary": "Tri-state ECMAScript value relations and evaluator-local runtime identity lineage."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/evaluation/iterator-projection.ts",
+          "symbolName": "EvaluationBuiltinIterator",
+          "summary": "Shared drained and live built-in iterable authority for arrays, strings, sets, and maps."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/evaluation/enumerable-own-properties.ts",
+          "symbolName": "EvaluationEnumerableOwnEntries",
+          "summary": "Canonical enumerable membership/order product and result-array shape projection."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/configuration/binding-source-value-evaluation.ts",
+          "symbolName": "RuntimeBindingSourceOpenValueUse",
+          "summary": "Binding-source distinction between projection-only candidates and addressable open aggregate carriers."
+        },
+        {
+          "kind": "source",
           "filePath": "packages/semantic-runtime/src/evaluation/operators.ts",
           "summary": "Pure primitive operator value algebra for the static evaluator."
         },
@@ -99,8 +194,31 @@
         },
         {
           "kind": "source",
+          "filePath": "packages/semantic-runtime/src/evaluation/values.ts",
+          "symbolName": "EvaluationObjectPropertyState",
+          "summary": "Per-property certainty for the effective final object write."
+        },
+        {
+          "kind": "script",
+          "command": "node packages/semantic-runtime/scripts/contract-evaluation-object-property-state.mjs",
+          "summary": "Contract for unknown-spread ordering, Object.assign forwarding, and property-read certainty."
+        },
+        {
+          "kind": "source",
           "filePath": "packages/semantic-runtime/src/evaluation/expression-reader.ts",
           "summary": "Expression-reading helper adjacent to evaluator expansion."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/expression/global-names.ts",
+          "symbolName": "StaticEvaluationGlobalName",
+          "summary": "Static evaluator global vocabulary and its exact Aurelia expression-parser subset."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/evaluation/evaluation-session.ts",
+          "symbolName": "StaticEvaluationSessionFork",
+          "summary": "Graph-preserving mutable analysis-session fork and runtime-host isolation boundary."
         },
         {
           "kind": "source",
@@ -161,31 +279,29 @@
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/configuration/aurelia-evaluation-runtime.ts",
           "symbolName": "evaluateAureliaResolveCall",
-          "summary": "Host-bound ambient resolve(...) evaluator path for activation-like direct class-key calls."
+          "summary": "Generic Aurelia host boundary that keeps ambient resolve(...) open until DI supplies an active container."
         },
         {
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/configuration/aurelia-evaluation-runtime.ts",
-          "symbolName": "aureliaResolveDirectKey",
-          "summary": "Direct-key admission for evaluator-local ambient resolve(...), leaving wrappers and non-direct key shapes open."
+          "symbolName": "isAureliaResolveEvaluationFunction",
+          "summary": "Exact evaluated identity predicate for Aurelia's imported ambient resolve API."
         },
         {
           "kind": "source",
-          "filePath": "packages/semantic-runtime/src/configuration/aurelia-evaluation-runtime.ts",
-          "symbolName": "evaluateAureliaResolveDirectClassKey",
-          "summary": "Evaluator-local class-key instantiation path for direct ambient resolve(ClassKey)."
+          "filePath": "packages/semantic-runtime/src/di/provider-activation.ts",
+          "symbolName": "internalRuntimeHost",
+          "summary": "Container-bound DI activation host that spends the evaluated resolve identity."
         },
         {
           "kind": "source",
-          "filePath": "packages/semantic-runtime/src/observation/binding-source-activation-context.ts",
-          "symbolName": "RuntimeBindingSourceActivationContext",
-          "summary": "Binding-source DI activation context for registered/interface resolve(...) keys when a modeled active container is available."
+          "filePath": "packages/semantic-runtime/src/di/provider-activation.ts",
+          "summary": "Shared DI provider/default/lifetime/activation authority used by binding-source reads and diagnostics."
         },
         {
           "kind": "source",
-          "filePath": "packages/semantic-runtime/src/observation/binding-source-activation-context.ts",
-          "symbolName": "RuntimeBindingSourceActivationContext.resolveCallFrame",
-          "summary": "Binding-source activation resolve(...) frame for registered/interface key admission before active-container resolver lookup."
+          "filePath": "packages/semantic-runtime/src/observation/binding-source-evaluation-frame.ts",
+          "summary": "Binding-source evaluator frame that binds a candidate-local DI activation session to the active container."
         },
         {
           "kind": "source",
@@ -244,10 +360,38 @@
       "liveChecks": [
         {
           "kind": "product-large-class",
+          "className": "EvaluationArrayShape",
+          "filePath": "packages/semantic-runtime/src/evaluation/values.ts",
+          "minLineCount": 80,
+          "minMethodCount": 4
+        },
+        {
+          "kind": "product-large-class",
+          "className": "EvaluationKeyedCollectionShape",
+          "filePath": "packages/semantic-runtime/src/evaluation/values.ts",
+          "minLineCount": 60,
+          "minMethodCount": 3
+        },
+        {
+          "kind": "product-large-class",
+          "className": "EvaluationBuiltinIterator",
+          "filePath": "packages/semantic-runtime/src/evaluation/iterator-projection.ts",
+          "minLineCount": 100,
+          "minMethodCount": 4
+        },
+        {
+          "kind": "product-large-class",
           "className": "StaticEvaluator",
           "filePath": "packages/semantic-runtime/src/evaluation/evaluator.ts",
           "minLineCount": 80,
           "minMethodCount": 20
+        },
+        {
+          "kind": "product-large-class",
+          "className": "StaticEvaluationSessionFork",
+          "filePath": "packages/semantic-runtime/src/evaluation/evaluation-session.ts",
+          "minLineCount": 200,
+          "minMethodCount": 10
         },
         {
           "kind": "source-file-exists",
@@ -275,7 +419,7 @@
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-06-10"
+      "updatedAt": "2026-07-24"
     },
     {
       "id": "frontier:static-module-graph-evaluator",
@@ -294,7 +438,10 @@
         "Use `contract:evaluation-module-graph` when changing import/export admission, especially around `import type`, type-only export declarations, mixed value/type specifiers, and runtime TypeScript declarations such as enums.",
         "Local side-effect imports are module execution edges. If resource/configuration/router pressure sees an admitted source file but no evaluated products from it, check `evaluateSideEffectImport` before adding feature-local discovery.",
         "Keep Aurelia-specific ownership in evaluation policy, runtimeHost, or downstream recognizers; the module graph evaluator should stay ECMAScript-shaped.",
-        "If external app analysis loses product-specific intrinsics during follow-up expression reads, check that callers reuse this graph result and runtime host."
+        "If external app analysis loses product-specific intrinsics during follow-up expression reads, check that callers reuse this graph result and runtime host.",
+        "Import entries retain the exact local binding node and canonical exported name. Aliased named imports and shorthand object properties should consume that evaluator identity instead of adding consumer-local spelling or alias resolution.",
+        "Module namespaces retain export identity, ECMAScript key order, ambiguity, cycles, and mayHaveUnknownExports. Structural consumers must preserve known exports plus that residual closure fact instead of rebuilding a flat export map.",
+        "Import, re-export, namespace, CommonJS export, and require edges carry EvaluationValueEvidence rather than naked values. Preserve live binding pressure independently from export identity so a best-known candidate cannot become executable merely by crossing a module boundary."
       ],
       "anchors": [
         {
@@ -341,7 +488,7 @@
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-05-23"
+      "updatedAt": "2026-07-19"
     },
     {
       "id": "frontier:evaluation-module-source-host",
@@ -361,6 +508,7 @@
         "Module graph performance should be read through the source-host profile first: source reads/parses, TypeScript module resolution, path probes, declaration-source cache, package-policy cache, and cached file-system probes are separate trade-off lanes.",
         "Use StaticProjectEvaluationProfile source-file composition before changing package-source admission. The profile distinguishes project, node_modules, external, TS/JS, asset, evaluated, open, and source-text buckets so a large graph can be attributed before refactoring.",
         "Source-shipped package entrypoint admission is a product/app-analysis policy, not the generic evaluator default. Aurelia project evaluation may let bare package imports reach TypeScript/source admission when a package manifest points at authored source such as `src/index.ts`; opaque built package entrypoints should remain external-module boundaries with public reason-coded seams.",
+        "When a package resolves declarations back to shipped source, retain every condition-specific declaration/source/runtime link as candidate-local package provenance. Select runtime output through an independent TypeScript resolution with a separate cache and the original resolution mode; do not derive runtime paths from declaration layout or collapse import/require occurrences into one package-global target.",
         "Direct path probes are allowed for asset/query-shaped imports such as JSON/HTML/CSS and query-bearing specifiers. Ordinary TS/JS relative imports should let TypeScript choose source/declaration semantics first. The measured post-TypeScript path-probe retry is a deliberate `EvaluationModuleResolutionPolicy` fallback for relative specifiers whose local authored source or asset shape TypeScript did not close; read `postTsProbe`, `pathProbeBefore/After`, before/after probe milliseconds, `resolvedByPathProbeBefore/After`, and the specifier-shape counters before changing it.",
         "Keep path-probe candidate policy semantic, not exhaustive. Explicit supported asset/source extensions are exact candidates and should not expand into `specifier.ext/index.*`; emitted JavaScript extensions can map back to TypeScript source siblings; extensionless specifiers expand through supported evaluation-module extensions and index files.",
         "When TypeScript has already resolved a non-declaration module to an evaluation-module path, do not re-probe file existence before admitting it. Existence checks belong in candidate path probes or TypeScript's resolver, not in a duplicate post-resolution guard.",
@@ -387,6 +535,18 @@
           "summary": "Watchpoints for package and module-source resolution."
         },
         {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/evaluation/package-origin.ts",
+          "symbolName": "ResolvedEvaluationModuleBuildLink",
+          "summary": "Plural occurrence-specific declaration/source/runtime package build links."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/project-analysis/project-module-resolution.ts",
+          "symbolName": "ProjectModuleResolver.resolvePackageRuntimeModuleName",
+          "summary": "Separate-cache TypeScript resolution for the condition-selected JavaScript package target."
+        },
+        {
           "kind": "script",
           "command": "pnpm --filter @aurelia-ls/semantic-runtime contract:external-package-source-admission",
           "summary": "Contract proving app-world analysis admits source-shipped package entrypoints while opaque built packages stay reason-coded external-module boundaries."
@@ -409,7 +569,7 @@
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-06-10"
+      "updatedAt": "2026-08-24"
     },
     {
       "id": "frontier:static-project-evaluation-frame",
@@ -418,75 +578,114 @@
         "semantic-runtime",
         "evaluation",
         "boot",
-        "world-construction"
+        "world-construction",
+        "incrementality"
       ],
-      "summary": "StaticProjectEvaluationFrame owns the per-run project evaluation lifetime behind the shared StaticProjectEvaluationPass facade.",
-      "rationale": "Resource, configuration, DI, template, and type-system work need one shared evaluation envelope over app sources and linked source dependencies. StaticProjectEvaluationPass should stay a small public entry point; StaticProjectEvaluationFrame owns the per-run admission index, module source host, graph evaluation, result publication, and profile assembly. Project-level evaluation should remain evaluator substrate and kernel open-seam emission, not an Aurelia recognizer.",
+      "summary": "Static project evaluation is one typed reusable computation per project/profile, with a shared compiler-world ambient input and explicit candidate session forks.",
+      "rationale": "Resource, configuration, DI, template, and type-system work need one admitted evaluation envelope over app sources and linked dependencies. StaticProjectEvaluationComputationService owns one graph/value/runtime-host identity domain per project/profile and StaticProjectEvaluationFrame remains its per-run worker. The admitted result is a read-only-by-ownership baseline; mutating consumers fork a graph-preserving session. TypeScript-lib and project .d.ts ambient declarations are profile-independent compiler facts and therefore have one upstream typed generation with exact source reads. Project-level evaluation remains evaluator substrate and kernel open-seam emission, not an Aurelia recognizer or a hidden source-discovery authority.",
       "guidance": [
-        "Start at StaticProjectEvaluationFrame when app-source admission, linked source admission, unresolved module capture, phase timing, module-source-host profiling, or evaluator open-seam emission changes.",
-        "Keep StaticProjectEvaluationPass as a small facade over the per-run frame unless a new public evaluation mode needs a distinct entry point.",
+        "Start at StaticProjectEvaluationComputationService and StaticProjectEvaluationFrame when app-source admission, linked source admission, exact evaluator reads, phase timing, module-source-host profiling, or evaluator open-seam emission changes.",
+        "Keep StaticProjectEvaluationPass as the standalone facade. Production and app-world-free consumers acquire the typed project/profile generation instead of constructing alternate evaluator graphs.",
+        "One evaluation generation owns one module graph, value identity domain, and canonical runtime host across all admitted roots. Do not recreate graph or host wrappers per source root or module.",
+        "Treat the admitted result as the baseline. Inspection-only consumers may read it; every replaceable or speculative analysis owner takes one forkSession() and shares that session across its evaluator-backed readers.",
+        "Runtime-host metadata transfer must preserve aliases and cycles. Fork foreign or canonical host-returned values; adopt only values proven to belong to the candidate session graph.",
+        "Keep ambient TypeScript-lib and admitted project-declaration globals in the shared project/compiler computation. App and Vite profiles observe the same generation rather than rescanning the same compiler world.",
+        "On an event-only project-input advance, rebase ambient and profile evaluator read scopes through the target generation's shared captured host and advance the admitted result's current ProjectBootFrame. Preserve the evaluator value graph only after exact semantic inputs match; do not carry an earlier validation result across acquisition and final publication.",
         "Keep source roles authoritative: tests, declarations, templates, styles, manifests, tooling scripts, and tooling configs should not enter app-world static evaluation by accident.",
-        "Keep checker/project inclusion separate from Aurelia app-world evaluation eligibility. Top-level TS/JS tooling scripts, including `.mjs`, are `tooling-script` sources: they remain visible to ordinary TypeScript diagnostics without producing app-world static evaluation seams. Do not force them through `app-source` merely to keep checker visibility.",
-        "Use the source composition profile to separate app-authored sources from linked source-shipped packages before deciding whether a broad evaluated-source count is an admission bug or legitimate framework/plugin pressure.",
-        "Static project evaluation source results carry compact source-origin contributions. Preserve both `static-evaluation-root` and `module-graph-dependency` when a source is directly discovered as app-source and also reached through startup/import graph evaluation.",
-        "Public open-seam context should consume those source origins query-time instead of adding durable kernel records or MCP-local source-origin guesses.",
-        "If a downstream materializer needs another evaluation loop, inspect whether it should consume StaticProjectEvaluationResult instead."
+        "Keep checker/project inclusion separate from Aurelia app-world evaluation eligibility. Top-level tooling scripts remain visible to TypeScript diagnostics without producing app-world evaluation seams.",
+        "Preserve every unique static-evaluation origin, including several module-graph-dependency roots for one source. Never compact origin rows by kind because entryModuleKey and entrySourcePath are causal provenance.",
+        "Public open-seam context should consume source origins query-time instead of adding durable kernel records or MCP-local source-origin guesses.",
+        "Intern graph-discovered physical source locations through the project-qualified source-admission authority. Evaluator generations own reachability and exact existence/text/resolution reads, not the lifetime of source-file address records.",
+        "Boot source admission remains upstream. A new unimported template or resource requires source-admission producer work; do not hide that gap with evaluator-local filesystem rescans.",
+        "Do not add module/SCC caches until exact manifests, repeated-edit measurements, semantic equality, and deterministic activation prove the split is useful."
       ],
       "anchors": [
         {
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/evaluation/project-evaluation.ts",
-          "symbolName": "StaticProjectEvaluationPass",
-          "summary": "Public project-level static evaluation facade."
+          "symbolName": "StaticProjectEvaluationComputationService",
+          "summary": "Typed reusable evaluation-generation owner by project and semantic profile."
         },
         {
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/evaluation/project-evaluation.ts",
-          "symbolName": "StaticProjectEvaluationSourceOrigin",
-          "summary": "Compact in-memory source-origin contribution row for direct static-evaluation roots and module graph dependencies."
+          "symbolName": "StaticProjectEvaluationGeneration",
+          "summary": "Admitted baseline, profile context, exact transitive read, and candidate session-fork boundary."
         },
         {
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/evaluation/project-evaluation.ts",
           "symbolName": "StaticProjectEvaluationFrame",
-          "summary": "Per-run project evaluation work frame and profile assembly owner."
+          "summary": "Per-run graph construction, evaluation, provenance, publication, and profile assembly owner."
         },
         {
           "kind": "source",
-          "filePath": "packages/semantic-runtime/src/kernel/source-classification.ts",
-          "symbolName": "inferSourceFileRole",
-          "summary": "Boot source-role classifier that separates top-level tooling scripts from app-world sources."
+          "filePath": "packages/semantic-runtime/src/evaluation/project-evaluation.ts",
+          "symbolName": "StaticProjectEvaluationSourceOrigin",
+          "summary": "Causal root/dependency origin row; several rows of one kind may be valid when entry roots differ."
         },
         {
           "kind": "source",
-          "filePath": "packages/semantic-runtime/src/kernel/source-classification.ts",
-          "symbolName": "isToolingScriptPath",
-          "summary": "Top-level scripts/tools/tooling TS/JS/.mjs classifier for diagnostics-visible tooling scripts that should not enter app-world evaluation."
+          "filePath": "packages/semantic-runtime/src/evaluation/ambient-globals.ts",
+          "symbolName": "StaticEvaluationAmbientGlobalDeclarations",
+          "summary": "Shared compiler-lib and project-declaration ambient value-name product."
         },
         {
           "kind": "source",
-          "filePath": "packages/semantic-runtime/src/kernel/address.ts",
-          "symbolName": "SourceFileRole",
-          "summary": "Source-role enum containing ToolingScript for build or maintenance scripts that need checker diagnostics but not app-world evaluation."
+          "filePath": "packages/semantic-runtime/src/evaluation/evaluation-session.ts",
+          "symbolName": "StaticEvaluationSessionFork",
+          "summary": "Graph-preserving candidate fork with canonical host ownership and cycle-aware metadata transfer."
         },
         {
           "kind": "source",
-          "filePath": "packages/semantic-runtime/src/type-system/project.ts",
-          "symbolName": "TypeSystemProject.readProgramSourceFileRole",
-          "summary": "Checker-owned source role bridge that should remain compatible with future project-inclusion versus app-world-evaluation split."
+          "filePath": "packages/semantic-runtime/src/evaluation/module-evaluator.ts",
+          "symbolName": "StaticModuleGraphEvaluator",
+          "summary": "One shared module/value/runtime-host identity domain for all graph entries."
         },
         {
-          "kind": "script",
-          "command": "pnpm --filter @aurelia-ls/semantic-runtime contract:evaluation-tooling-script-source-role",
-          "summary": "Contract proving top-level tooling scripts, including `.mjs`, keep TypeScript diagnostics while staying out of app-world open-seam sites."
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/kernel/project-input.ts",
+          "symbolName": "SemanticRuntimeProjectInputReadScope",
+          "summary": "Consumer-local exact positive and negative host-read manifest."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/boot/boot-workspace.ts",
+          "symbolName": "admitSourceFile",
+          "summary": "Project-qualified stable source identity shared by boot and graph-discovered imported locations."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/boot/source-discovery.ts",
+          "symbolName": "discoverSourceFiles",
+          "summary": "Boot-owned source admission boundary that is not yet rediscovered across input generations."
         },
         {
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/evaluation/README.md",
-          "summary": "Project-level evaluation envelope notes."
+          "summary": "Project evaluation, session ownership, ambient computation, and exact-read doctrine."
+        },
+        {
+          "kind": "script",
+          "command": "node packages/semantic-runtime/scripts/contract-project-evaluation-publication.mjs",
+          "summary": "Contract proving one published source result retains every causal dependency/root origin."
         }
       ],
       "liveChecks": [
+        {
+          "kind": "product-large-class",
+          "className": "StaticProjectEvaluationComputationService",
+          "filePath": "packages/semantic-runtime/src/evaluation/project-evaluation.ts",
+          "minLineCount": 80,
+          "minMethodCount": 3
+        },
+        {
+          "kind": "product-large-class",
+          "className": "StaticProjectEvaluationGeneration",
+          "filePath": "packages/semantic-runtime/src/evaluation/project-evaluation.ts",
+          "minLineCount": 40,
+          "minMethodCount": 2
+        },
         {
           "kind": "product-large-class",
           "className": "StaticProjectEvaluationFrame",
@@ -496,7 +695,7 @@
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-06-10"
+      "updatedAt": "2026-07-22"
     },
     {
       "id": "frontier:evaluation-module-loader",
@@ -512,10 +711,11 @@
       "guidance": [
         "Start here when `aliasedResourcesRegistry(...)`, `IModuleLoader.load(...)`, or analyzed module export pressure appears.",
         "Keep direct-input versus promise-fulfillment behavior aligned with `kernel:ModuleLoader`: direct primitive/function/nullish inputs reject, promise nullish fulfillments reject, and non-null non-object promise fulfillments analyze to an empty module.",
+        "Module item filtering follows JavaScript `typeof`: retain every definitely non-null object/function export, omit closed primitives, and keep item membership/order open when entry pressure or an unresolved value category could change the filtered set. Consumers must spend both per-item and aggregate pressure before claiming closure.",
         "ModuleLoaderIssueMaterializer scans evaluated project sources, so issue source spans must use the EvaluatedProjectSource admission handle rather than re-resolving the source file by name.",
         "Use EvaluationIssuePublisher for evaluation diagnostics so issue evidence, provenance, identity, and materialized-product records stay behind the shared kernel issue-publication primitive.",
         "Do not suppress `di.open-registry-body` for aliased registries with a shim; the honest next layer is resource-export and registry-body materialization from analyzed module items.",
-        "RegistryBodyReference now distinguishes framework-owned IRegistry body shape from framework-registration bundles; `aliasedResourcesRegistry(...)` closes only when module input and alias parameters are statically interpreted.",
+        "RegistryBodyReference distinguishes framework-owned IRegistry body shape from framework-registration bundles; `aliasedResourcesRegistry(...)` closes only when module membership/order and alias parameters are statically interpreted. Preserve known module items plus residual openness through AnalyzedModule rather than dropping either side.",
         "Generated body admissions currently materialize resource-definition module items with ResourceDefinition.register(container, alias) lookup-name overrides; non-resource module items remain explicit registration strategy pressure."
       ],
       "anchors": [
@@ -587,7 +787,7 @@
         }
       ],
       "createdAt": "2026-05-13",
-      "updatedAt": "2026-05-15"
+      "updatedAt": "2026-07-22"
     },
     {
       "id": "frontier:evaluation-framework-api-issues",
@@ -680,6 +880,7 @@
       "guidance": [
         "Start here when lexical binding state, assignment mutability, CommonJS carriers, function-call frames, or branch clones change.",
         "Keep evaluator-local binding cells out of durable kernel records unless a specific fact earns a product identity.",
+        "Function and class evaluator values capture the concrete ModuleEnvironmentRecord used by the evaluator. Do not reintroduce a structural environment-reference abstraction without a second implementation and fork semantics for it.",
         "Do not replace environment lookup with ad hoc maps inside expression or module evaluators."
       ],
       "anchors": [
@@ -713,7 +914,170 @@
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-05-12"
+      "updatedAt": "2026-07-17"
+    },
+    {
+      "id": "decision:static-invocation-evidence-and-value-graph",
+      "kind": "decision",
+      "domains": [
+        "semantic-runtime",
+        "evaluation",
+        "configuration",
+        "di",
+        "provenance"
+      ],
+      "summary": "Static invocation semantics retain one evaluated reference and argument phase, distinguish reached occurrences from preparation boundaries, and keep mutable values inside explicit graph ownership.",
+      "rationale": "The old evaluator dispatched through several syntax probes and retained cloned call environments, so receiver and arguments could execute repeatedly, later readers replayed source against stale state, and short-circuited or argument-blocked calls masqueraded as executed. StaticInvocationFrame now owns one live preparation and immutable invocation evaluations retain exact edge evidence afterward. StaticEvaluationValueGraph makes evaluator-produced ownership and runtime-host reconciliation explicit instead of inferring a realm from captured environments.",
+      "guidance": [
+        "Resolve the callee reference, receiver/this, computed property key, and one EvaluationArgumentList before any runtime-host or intrinsic dispatcher decides applicability. Dispatch from evaluated value identity, not source spelling or import rescans.",
+        "StaticInvocationOccurrence means the ECMAScript invocation operation was reached. StaticInvocationPreparationBoundary retains evaluated receiver and authored argument evidence when an open argument list blocks that operation; it must not enter the derived invocations view or publish definite callee effects.",
+        "Keep authored arguments separate from expanded runtime positions. Spread-source provenance belongs to EvaluationAuthoredArgument while local functions and intrinsics consume exact positional evidence.",
+        "StaticModuleEvaluationExpressionReader spends immutable invocation edges and completions. Missing or repeated evidence returns evaluation.invocation-source-read; never recover old values by replaying an invocation AST against the final module environment.",
+        "Use StaticEvaluationValueGraph.retainProduced for evaluator-created mutable values and reconcileEnvironmentAfterExternal after a runtime host may insert foreign values into an owned environment. These are opposite lifecycle crossings and must not collapse into environment-owner inference.",
+        "Configuration method ownership joins on the evaluated receiver. A fluent result is downstream of invocation and therefore cannot identify a register/app operation whose argument preparation remained open."
+      ],
+      "nextActionPolicy": "when-touched",
+      "anchors": [
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/evaluation/invocation.ts",
+          "symbolName": "StaticInvocationFrame",
+          "summary": "Transient single-owner invocation preparation passed to runtime hosts and intrinsics."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/evaluation/invocation.ts",
+          "symbolName": "StaticInvocationOccurrence",
+          "summary": "Immutable evidence and completion for an invocation operation that was actually reached."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/evaluation/invocation.ts",
+          "symbolName": "StaticInvocationPreparationBoundary",
+          "summary": "Pre-invocation evidence retained when argument-list control remains open."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/evaluation/expression-reader.ts",
+          "symbolName": "StaticModuleEvaluationExpressionReader",
+          "summary": "Immutable invocation-edge reader with explicit ambiguity and missing-evidence seams."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/evaluation/evaluation-graph.ts",
+          "symbolName": "StaticEvaluationValueGraph",
+          "summary": "Explicit mutable-value and environment ownership capability."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/configuration/configuration-recognizer.ts",
+          "symbolName": "aureliaFacadeEvaluationForCallReceiver",
+          "summary": "Receiver-identity join for fluent Aurelia operations, including blocked open-spread preparations."
+        },
+        {
+          "kind": "script",
+          "command": "pnpm exec vitest run packages/semantic-runtime/test/evaluation-invocation-semantics.test.ts",
+          "summary": "Focused one-time evaluation, optional-chain, receiver, spread, completion, and no-replay conformance tests."
+        },
+        {
+          "kind": "script",
+          "command": "pnpm --filter @aurelia-ls/semantic-runtime contract:service-root-admission-chain",
+          "summary": "Contract proving open registration spreads retain app-local uncertainty without cross-root suppression."
+        }
+      ],
+      "liveChecks": [
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/evaluation/invocation.ts",
+          "symbolName": "StaticInvocationFrame"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/evaluation/invocation.ts",
+          "symbolName": "StaticInvocationPreparationBoundary"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/evaluation/evaluation-graph.ts",
+          "symbolName": "StaticEvaluationValueGraph"
+        }
+      ],
+      "createdAt": "2026-07-20",
+      "updatedAt": "2026-07-20"
+    },
+    {
+      "id": "decision:evaluator-abrupt-completion-boundary",
+      "kind": "decision",
+      "domains": [
+        "semantic-runtime",
+        "evaluation",
+        "di",
+        "binding",
+        "resources",
+        "kernel",
+        "provenance"
+      ],
+      "summary": "Modeled ECMAScript abrupt completion remains exact through value-shaped semantic consumers and becomes a typed compact reason only at kernel publication.",
+      "rationale": "Local function and constructor throws were previously flattened into unknown values, which allowed impossible later effects and fabricated instances. StaticEvaluator now tunnels abrupt completion through recursive value APIs, restores it at statement boundaries, and exposes it explicitly on direct reads. DI activation, binding-source evaluation, and resource convergence retain that exact completion while making semantic decisions. Hot kernel seams deliberately retain authored evidence plus static-evaluation-abrupt-completion instead of keeping arbitrary evaluator-local thrown object graphs.",
+      "guidance": [
+        "Treat statement completion as the evaluator's control-flow authority; do not convert a modeled throw into EvaluationUnknownValue.",
+        "A value-shaped evaluator host that encounters abrupt completion must call StaticIntrinsicEvaluationHost.raise so enclosing try/catch/finally semantics remain authoritative.",
+        "Direct readers and semantic consumers must carry nullable value plus abruptCompletion until their own result boundary. Return an existing structured open result instead of reconstructing it from prose and reason arrays.",
+        "At kernel publication, preserve authored source/evidence and OpenSeamReasonKind.StaticEvaluationAbruptCompletion. Do not retain the evaluator-local thrown value graph in hot kernel records.",
+        "A thrown configuration operation is a reached failure, not generic runtime openness. Ordered configuration execution must suppress impossible outputs and dependent fluent operations rather than minting a failed-facade sentinel."
+      ],
+      "nextActionPolicy": "when-touched",
+      "anchors": [
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/evaluation/completion.ts",
+          "symbolName": "EvaluationAbruptCompletion",
+          "summary": "Authoritative abrupt completion union and internal propagation signal."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/evaluation/evaluator.ts",
+          "symbolName": "StaticExpressionEvaluationResult",
+          "summary": "Direct-read result exposing normal value or exact abrupt completion."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/di/provider-activation.ts",
+          "symbolName": "DiProviderActivationResult",
+          "summary": "DI activation result retaining evaluator completion across provider and registry execution."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/configuration/binding-source-value-evaluation.ts",
+          "symbolName": "RuntimeBindingSourceValueEvaluation",
+          "summary": "Binding-source result retaining exact completion and compact open-reason classification."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/evaluation/boundary-open-reason.ts",
+          "symbolName": "openSeamReasonKindsForEvaluationAbruptCompletion",
+          "summary": "Intentional compression bridge from exact evaluator completion to kernel reason vocabulary."
+        },
+        {
+          "kind": "script",
+          "command": "pnpm exec vitest run packages/semantic-runtime/test/evaluation-abrupt-completion.test.ts",
+          "summary": "Focused contracts for catch flow, module termination, constructor failure, runtime hosts, session forks, binding reads, and resource convergence classification."
+        }
+      ],
+      "liveChecks": [
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/evaluation/completion.ts",
+          "symbolName": "EvaluationAbruptCompletion"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/evaluation/evaluator.ts",
+          "symbolName": "StaticExpressionEvaluationResult"
+        }
+      ],
+      "createdAt": "2026-07-19",
+      "updatedAt": "2026-07-19"
     }
   ]
 }

@@ -1,23 +1,40 @@
 import ts from 'typescript';
 import {
+  evaluationAbruptCompletionSummary,
+  type EvaluationAbruptCompletion,
+} from '../evaluation/completion.js';
+import {
+  openSeamReasonKindsForEvaluationRead,
+  openSeamReasonKindsForEvaluationPressure,
+} from '../evaluation/boundary-open-reason.js';
+import {
   hasStaticModifier,
   readCallCalleeText,
   readPropertyName,
   unwrapExpression,
 } from '../evaluation/ts-syntax.js';
 import {
-  readStaticStringArrayValue,
+  closedStaticValueMemberValue,
+  readStaticOwnProperty,
+  readStaticValueProperty,
+} from '../evaluation/property-access.js';
+import {
+  authoredStringLiteralNode,
+  readStaticStringArrayEntries,
   readStaticStringValue,
   type StaticEvaluationExpressionReader,
 } from '../evaluation/expression-reader.js';
 import type { EvaluationOpenSeam } from '../evaluation/seams.js';
+import type { OpenSeamReasonKind } from '../kernel/open-seam.js';
 import {
   type EvaluationArrayElement,
   type EvaluationArrayValue,
+  type EvaluationObjectValue,
   EvaluationValueKind,
 } from '../evaluation/values.js';
 import {
   AttributePatternObservation,
+  ResourceAliasObservation,
 } from './resource-observation.js';
 import {
   ResourceDefinitionKind,
@@ -44,12 +61,16 @@ export const RESOURCE_DEFINE_RECEIVER_KIND = new Map<string, ResourceDefinitionK
 
 export class ResourceFieldRead<TValue> {
   constructor(
-    /** Value that closed, or null when the field stayed open. */
+    /** Statically visible value, which may coexist with retained open pressure. */
     readonly value: TValue | null,
     /** Source node that best explains this field read. */
     readonly node: ts.Node | null,
-    /** Explanation used when the field did not close. */
-    readonly openSummary: string | null = null,
+    /** Explanation used when the field stayed wholly or partially open. */
+    readonly openSummary: string | null,
+    /** Machine-readable evaluator causes retained when the field did not close. */
+    readonly openReasonKinds: readonly OpenSeamReasonKind[],
+    /** Exact authored value token, when this field closed from a directly editable literal. */
+    readonly valueNode: ts.Node | null,
   ) {}
 }
 
@@ -109,7 +130,9 @@ export function readResourceKindField(
     return new ResourceFieldRead<ResourceDefinitionKind>(
       null,
       value.node,
-      summaryWithEvaluationSeams('Resource definition did not expose a static type field.', value.openSeams),
+      summaryWithEvaluationRead('Resource definition did not expose a static type field.', value),
+      openSeamReasonKindsForEvaluationRead(value),
+      null,
     );
   }
   const raw = readStaticStringValue(value.value);
@@ -117,7 +140,9 @@ export function readResourceKindField(
     return new ResourceFieldRead<ResourceDefinitionKind>(
       null,
       value.node,
-      summaryWithEvaluationSeams('Resource definition type field did not close to a known string.', value.openSeams),
+      summaryWithEvaluationRead('Resource definition type field did not close to a known string.', value),
+      openSeamReasonKindsForEvaluationRead(value),
+      null,
     );
   }
   const kind = readResourceKindFromRuntimeTypeName(raw);
@@ -125,9 +150,17 @@ export function readResourceKindField(
     ? new ResourceFieldRead<ResourceDefinitionKind>(
       null,
       value.node,
-      summaryWithEvaluationSeams(`Resource definition type '${raw}' is not recognized by this resource reader.`, value.openSeams),
+      summaryWithEvaluationRead(`Resource definition type '${raw}' is not recognized by this resource reader.`, value),
+      openSeamReasonKindsForEvaluationRead(value),
+      null,
     )
-    : new ResourceFieldRead(kind, value.node);
+    : resourceFieldReadWithEvaluationPressure(
+        kind,
+        value.node,
+        null,
+        'Resource definition type evaluation remained open.',
+        value,
+      );
 }
 
 export function readResourceNameField(
@@ -136,7 +169,7 @@ export function readResourceNameField(
 ): ResourceFieldRead<string> {
   const current = unwrapExpression(expression);
   if (ts.isStringLiteral(current) || ts.isNoSubstitutionTemplateLiteral(current)) {
-    return new ResourceFieldRead(current.text, current);
+    return new ResourceFieldRead(current.text, current, null, [], current);
   }
 
   const value = reader.readObjectProperty(expression, 'name');
@@ -144,7 +177,9 @@ export function readResourceNameField(
     return new ResourceFieldRead<string>(
       null,
       value.node,
-      summaryWithEvaluationSeams('Resource definition did not expose a static name field.', value.openSeams),
+      summaryWithEvaluationRead('Resource definition did not expose a static name field.', value),
+      openSeamReasonKindsForEvaluationRead(value),
+      null,
     );
   }
   const name = readStaticStringValue(value.value);
@@ -152,36 +187,105 @@ export function readResourceNameField(
     ? new ResourceFieldRead<string>(
       null,
       value.node,
-      summaryWithEvaluationSeams('Resource definition name did not close to a static string.', value.openSeams),
+      summaryWithEvaluationRead('Resource definition name did not close to a static string.', value),
+      openSeamReasonKindsForEvaluationRead(value),
+      null,
     )
-    : new ResourceFieldRead(name, value.node);
+    : resourceFieldReadWithEvaluationPressure(
+        name,
+        value.node,
+        authoredStringLiteralNode(value.value, value.value.node, value.node),
+        'Resource definition name evaluation remained open.',
+        value,
+      );
 }
 
 export function readResourceAliasesField(
   expression: ts.Expression,
   reader: StaticEvaluationExpressionReader,
-): ResourceFieldRead<readonly string[]> {
+): ResourceFieldRead<readonly ResourceAliasObservation[]> {
   const value = reader.readObjectProperty(expression, 'aliases');
   if (value.value == null) {
-    return new ResourceFieldRead([], value.node);
+    const reasonKinds = openSeamReasonKindsForEvaluationRead(value);
+    return reasonKinds.length === 0
+      ? new ResourceFieldRead([], value.node, null, [], null)
+      : new ResourceFieldRead<readonly ResourceAliasObservation[]>(
+          [],
+          value.node,
+          summaryWithEvaluationRead('Resource aliases field did not produce a value.', value),
+          reasonKinds,
+          null,
+        );
   }
-  const aliases = readStaticStringArrayValue(value.value);
-  if (aliases == null) {
+  if (value.value.kind === EvaluationValueKind.Undefined || value.value.kind === EvaluationValueKind.Null) {
+    return resourceFieldReadWithEvaluationPressure(
+      [],
+      value.node,
+      null,
+      'Resource aliases evaluation remained open.',
+      value,
+    );
+  }
+  const entries = readStaticStringArrayEntries(value.value, value.node);
+  if (entries == null) {
     return new ResourceFieldRead(
       [],
       value.node,
-      summaryWithEvaluationSeams('Resource aliases field did not close to a static string array.', value.openSeams),
+      summaryWithEvaluationRead('Resource aliases field did not close to a static string array.', value),
+      openSeamReasonKindsForEvaluationRead(value),
+      null,
     );
   }
-  return new ResourceFieldRead(aliases, value.node);
+  return resourceFieldReadWithEvaluationPressure(
+    entries.map((entry) => new ResourceAliasObservation(entry.value, entry.valueNode)),
+    value.node,
+    null,
+    'Resource aliases evaluation remained open.',
+    value,
+  );
 }
 
 export function readTemplateControllerFlag(
   expression: ts.Expression,
   reader: StaticEvaluationExpressionReader,
-): boolean {
-  const value = reader.readObjectProperty(expression, 'isTemplateController').value;
-  return value?.kind === EvaluationValueKind.Boolean && value.value === true;
+): ResourceFieldRead<boolean> {
+  const read = reader.readObjectProperty(expression, 'isTemplateController');
+  if (read.value == null) {
+    const reasonKinds = openSeamReasonKindsForEvaluationRead(read);
+    return reasonKinds.length === 0
+      ? new ResourceFieldRead(false, read.node, null, [], null)
+      : new ResourceFieldRead<boolean>(
+          null,
+          read.node,
+          summaryWithEvaluationRead('Resource template-controller flag did not produce a value.', read),
+          reasonKinds,
+          null,
+        );
+  }
+  if (read.value.kind === EvaluationValueKind.Undefined || read.value.kind === EvaluationValueKind.Null) {
+    return resourceFieldReadWithEvaluationPressure(
+      false,
+      read.node,
+      null,
+      'Resource template-controller flag evaluation remained open.',
+      read,
+    );
+  }
+  return read.value.kind === EvaluationValueKind.Boolean
+    ? resourceFieldReadWithEvaluationPressure(
+        read.value.value,
+        read.node,
+        null,
+        'Resource template-controller flag evaluation remained open.',
+        read,
+      )
+    : new ResourceFieldRead<boolean>(
+        null,
+        read.node,
+        summaryWithEvaluationRead('Resource template-controller flag did not close to a boolean.', read),
+        openSeamReasonKindsForEvaluationRead(read),
+        null,
+      );
 }
 
 export function readAttributePatternEntries(
@@ -194,23 +298,28 @@ export function readAttributePatternEntries(
     return new ResourceFieldRead(
       [],
       expression,
-      summaryWithEvaluationSeams('AttributePattern.create(...) pattern source did not close to an array.', result.openSeams),
+      summaryWithEvaluationPressure(
+        'AttributePattern.create(...) pattern source did not close to an array.',
+        result.openSeams,
+        result.abruptCompletion,
+      ),
+      openSeamReasonKindsForEvaluationRead(result),
+      null,
     );
   }
 
-  const entries = readAttributePatternArray(value, expression, reader);
-  return attributePatternEntriesFieldRead(entries, expression, result.openSeams);
+  const entries = readAttributePatternArray(value, expression);
+  return attributePatternEntriesFieldRead(entries, expression, result.openSeams, result.abruptCompletion);
 }
 
 function readAttributePatternArray(
   value: EvaluationArrayValue,
   sourceExpression: ts.Expression,
-  reader: StaticEvaluationExpressionReader,
 ): AttributePatternEntriesRead {
   const patterns: AttributePatternObservation[] = [];
   let open = value.mayHaveUnknownElements || value.mayHaveUnknownOrder;
   for (const element of value.elements) {
-    const entry = readAttributePatternArrayElement(element, sourceExpression, reader);
+    const entry = readAttributePatternArrayElement(element, sourceExpression);
     open ||= entry.open;
     if (entry.pattern == null) {
       continue;
@@ -223,43 +332,78 @@ function readAttributePatternArray(
 function readAttributePatternArrayElement(
   element: EvaluationArrayElement,
   sourceExpression: ts.Expression,
-  reader: StaticEvaluationExpressionReader,
 ): AttributePatternEntryRead {
   if (element.value.kind !== EvaluationValueKind.Object) {
     return { pattern: null, open: true };
   }
 
-  const pattern = reader.readObjectStringProperty(element.value, 'pattern');
-  const symbols = reader.readObjectStringProperty(element.value, 'symbols');
-  if (pattern?.value == null || symbols?.value == null) {
+  const pattern = attributePatternObservationFromObject(
+    element.value,
+    element.expression ?? sourceExpression,
+  );
+  if (pattern == null) {
     return { pattern: null, open: true };
   }
 
   return {
-    pattern: new AttributePatternObservation(
-      pattern.value,
-      symbols.value,
-      pattern.node ?? element.expression ?? sourceExpression,
-    ),
+    pattern,
     open: false,
   };
+}
+
+function attributePatternObservationFromObject(
+  value: EvaluationObjectValue,
+  sourceExpression: ts.Expression,
+): AttributePatternObservation | null {
+  const patternRead = readStaticValueProperty(value, 'pattern', sourceExpression);
+  const symbolsRead = readStaticValueProperty(value, 'symbols', sourceExpression);
+  const patternValue = closedStaticValueMemberValue(patternRead);
+  const symbolsValue = closedStaticValueMemberValue(symbolsRead);
+  if (patternValue == null || symbolsValue == null) {
+    return null;
+  }
+  const pattern = readStaticStringValue(patternValue);
+  const symbols = readStaticStringValue(symbolsValue);
+  if (pattern == null || symbols == null) {
+    return null;
+  }
+  const patternProperty = readStaticOwnProperty(value, 'pattern');
+  return new AttributePatternObservation(
+    pattern,
+    symbols,
+    authoredStringLiteralNode(
+      patternValue,
+      patternValue.node,
+      patternProperty?.node ?? sourceExpression,
+    ) ?? patternProperty?.node ?? sourceExpression,
+  );
 }
 
 function attributePatternEntriesFieldRead(
   entries: AttributePatternEntriesRead,
   expression: ts.Expression,
   openSeams: readonly EvaluationOpenSeam[],
+  abruptCompletion: EvaluationAbruptCompletion | null,
 ): ResourceFieldRead<readonly AttributePatternObservation[]> {
   return entries.open
     ? new ResourceFieldRead(
       entries.patterns,
       expression,
-      summaryWithEvaluationSeams(
+      summaryWithEvaluationPressure(
         'AttributePattern.create(...) pattern source has statically visible entries plus open entries.',
         openSeams,
+        abruptCompletion,
       ),
+      openSeamReasonKindsForEvaluationPressure(openSeams, abruptCompletion),
+      null,
     )
-    : new ResourceFieldRead(entries.patterns, expression);
+    : resourceFieldReadWithEvaluationPressure(
+        entries.patterns,
+        expression,
+        null,
+        'AttributePattern.create(...) pattern source evaluation remained open.',
+        { openSeams, abruptCompletion },
+      );
 }
 
 export function readAttributePatternEntry(
@@ -272,24 +416,30 @@ export function readAttributePatternEntry(
     return new ResourceFieldRead<AttributePatternObservation>(
       null,
       expression,
-      summaryWithEvaluationSeams('Attribute pattern definition did not close to an object.', result.openSeams),
+      summaryWithEvaluationRead('Attribute pattern definition did not close to an object.', result),
+      openSeamReasonKindsForEvaluationRead(result),
+      null,
     );
   }
-  const pattern = reader.readObjectStringProperty(value, 'pattern');
-  const symbols = reader.readObjectStringProperty(value, 'symbols');
-  if (pattern?.value == null || symbols?.value == null) {
+  const pattern = attributePatternObservationFromObject(value, expression);
+  if (pattern == null) {
     return new ResourceFieldRead<AttributePatternObservation>(
       null,
       expression,
-      summaryWithEvaluationSeams(
+      summaryWithEvaluationRead(
         'Attribute pattern definition did not close to static pattern and symbols fields.',
-        result.openSeams,
+        result,
       ),
+      openSeamReasonKindsForEvaluationRead(result),
+      null,
     );
   }
-  return new ResourceFieldRead(
-    new AttributePatternObservation(pattern.value, symbols.value, pattern.node ?? expression),
+  return resourceFieldReadWithEvaluationPressure(
+    pattern,
     expression,
+    null,
+    'Attribute pattern definition evaluation remained open.',
+    result,
   );
 }
 
@@ -316,12 +466,47 @@ export function isAttributePatternCreateCall(
   return readCallCalleeText(expression.expression)?.split('.').at(-1) === 'AttributePattern';
 }
 
-function summaryWithEvaluationSeams(
+function summaryWithEvaluationRead(
+  summary: string,
+  read: {
+    readonly openSeams: readonly EvaluationOpenSeam[];
+    readonly abruptCompletion: EvaluationAbruptCompletion | null;
+  },
+): string {
+  return summaryWithEvaluationPressure(summary, read.openSeams, read.abruptCompletion);
+}
+
+function resourceFieldReadWithEvaluationPressure<TValue>(
+  value: TValue,
+  node: ts.Node | null,
+  valueNode: ts.Node | null,
+  summary: string,
+  read: {
+    readonly openSeams: readonly EvaluationOpenSeam[];
+    readonly abruptCompletion: EvaluationAbruptCompletion | null;
+  },
+): ResourceFieldRead<TValue> {
+  const reasonKinds = openSeamReasonKindsForEvaluationPressure(read.openSeams, read.abruptCompletion);
+  return new ResourceFieldRead(
+    value,
+    node,
+    reasonKinds.length === 0 ? null : summaryWithEvaluationRead(summary, read),
+    reasonKinds,
+    valueNode,
+  );
+}
+
+function summaryWithEvaluationPressure(
   summary: string,
   openSeams: readonly EvaluationOpenSeam[],
+  abruptCompletion: EvaluationAbruptCompletion | null,
 ): string {
-  if (openSeams.length === 0) {
+  const details = [
+    ...openSeams.map((seam) => seam.summary),
+    ...(abruptCompletion == null ? [] : [evaluationAbruptCompletionSummary(abruptCompletion)]),
+  ];
+  if (details.length === 0) {
     return summary;
   }
-  return `${summary} Evaluation opened: ${openSeams.map((seam) => seam.summary).join(' ')}`;
+  return `${summary} Evaluation opened: ${details.join(' ')}`;
 }

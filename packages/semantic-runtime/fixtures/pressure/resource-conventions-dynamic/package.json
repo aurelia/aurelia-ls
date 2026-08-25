@@ -1,0 +1,13 @@
+{
+  "name": "resource-conventions-dynamic",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "aurelia": "^2.0.0-rc.2"
+  },
+  "devDependencies": {
+    "@aurelia/vite-plugin": "^2.0.0-rc.2",
+    "typescript": "^6.0.3",
+    "vite": "^7.0.0"
+  }
+}

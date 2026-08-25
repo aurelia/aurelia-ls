@@ -5,7 +5,7 @@ import { readTextFileOrNull } from "../../source/index.js";
 /** Source baseline for the curated framework.router descriptor maps. */
 export const FRAMEWORK_ROUTER_SOURCE_BASELINE = {
   sourceRoot: "aurelia",
-  aureliaCommit: "df25c70f86355288b0ba1da7da5112bd30b25d1a",
+  aureliaCommit: "4ff60906593bdedc9f9dc6003606ba138df87f0e",
   routerPackageRoots: [
     "aurelia/packages/router/src",
     "aurelia/packages/route-recognizer/src",

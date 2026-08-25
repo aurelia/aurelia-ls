@@ -1,0 +1,7 @@
+<template>
+  <input value.bind="outerMessage">
+  <section if.bind="showDetails">
+    <fatal-observer-target length.bind="count" after.bind="innerMessage"></fatal-observer-target>
+    <input value.bind="innerMessage">
+  </section>
+</template>

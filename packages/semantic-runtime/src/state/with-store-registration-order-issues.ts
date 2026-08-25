@@ -11,6 +11,11 @@ import {
 } from '../evaluation/ts-syntax.js';
 import type { AddressHandle } from '../kernel/handles.js';
 import { issuePublicationWithRecords } from '../kernel/issue-publication.js';
+import {
+  KernelPublicationPlan,
+  publishProductDetails,
+  type KernelPublicationContext,
+} from '../kernel/publication.js';
 import { sourceSpanAddressForSite } from '../kernel/source-address.js';
 import {
   KernelStore,
@@ -55,6 +60,7 @@ export class WithStoreAfterRegistrationIssueMaterializer {
 
   constructor(
     readonly store: KernelStore,
+    readonly publication: KernelPublicationContext,
   ) {
     this.publisher = new StateIssuePublisher(store);
   }
@@ -66,12 +72,13 @@ export class WithStoreAfterRegistrationIssueMaterializer {
     const publications = readWithStoreAfterRegistrationSites(project, typeSystem)
       .map((site, index) => this.publicationForSite(project, site, index));
     const records = publications.flatMap((publication) => publication.records);
-    if (records.length > 0) {
-      this.store.commit(new KernelStoreBatch(records, `with-store-after-registration-issues:${project.projectKey}`));
-    }
-    for (const publication of publications) {
-      this.store.productDetails.add(StateProductDetails.Issue, publication.issue.productHandle, publication.issue);
-    }
+    this.publication.publish(new KernelPublicationPlan(
+      new KernelStoreBatch(records, `with-store-after-registration-issues:${project.projectKey}`),
+      publishProductDetails(
+        StateProductDetails.Issue,
+        publications.map((publication) => publication.issue),
+      ),
+    ));
     return new StateSourceIssueProjectResult(
       publications.map((publication) => publication.issue),
       records,
@@ -104,7 +111,7 @@ function readWithStoreAfterRegistrationSites(
   typeSystem: TypeSystemProject,
 ): readonly WithStoreAfterRegistrationSite[] {
   return project.sourceFiles.flatMap((source) => {
-    const sourceFile = typeSystem.readProgramSourceFileByPath(source.path);
+    const sourceFile = typeSystem.readProgramSourceFileByProjectPath(source.path);
     return sourceFile == null
       ? []
       : readSourceFileWithStoreAfterRegistrationSites(source.path, source.addressHandle, sourceFile);

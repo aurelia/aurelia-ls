@@ -3,7 +3,7 @@ import {
   SourceSpanRole,
   TemplateNodeAddress,
 } from '../kernel/address.js';
-import { SemanticClaim, claimsForProduct } from '../kernel/claim.js';
+import { SemanticClaim } from '../kernel/claim.js';
 import {
   EvidenceKind,
   EvidenceRecord,
@@ -28,21 +28,36 @@ import {
   requireProductDetailEnvelope,
 } from '../kernel/product-details.js';
 import {
+  compactFieldProvenance,
+  FieldProvenance,
   ProvenanceRecord,
 } from '../kernel/provenance.js';
 import {
+  sourceSpanAddressForSite,
+  sourceSpanEvidenceForSite,
+  type SourceSpanSite,
+  type SourceSpanEvidencePublication,
+} from '../kernel/source-address.js';
+import {
   KernelStoreBatch,
-  type KernelStore,
+  type KernelStoreReadView,
   type KernelStoreRecord,
 } from '../kernel/store.js';
 import {
+  type KernelPublicationContext,
+  KernelPublicationPlan,
+  publishProductDetail,
+  publishProductDetails,
+} from '../kernel/publication.js';
+import {
   KernelVocabulary,
 } from '../kernel/vocabulary.js';
-import {
+import type {
   TemplateCompilationUnit,
   TemplateSource,
 } from './compilation-unit.js';
 import { isHtmlVoidElement } from './html-elements.js';
+import { htmlAsciiLowercase } from './html-ascii.js';
 import {
   HtmlAttribute,
   HtmlComment,
@@ -59,7 +74,7 @@ import {
   HtmlText,
 } from './html-ir.js';
 import {
-  TemplateParseContext,
+  type TemplateParseContext,
   TemplateRecoveryPolicy,
 } from './parse-context.js';
 import { TemplateProductDetails } from './product-details.js';
@@ -93,7 +108,7 @@ class HtmlParseSourceSet {
   ) {}
 }
 
-class ParsedHtmlAttributeDraft {
+export class ParsedHtmlAttributeDraft {
   constructor(
     readonly rawName: string,
     readonly rawValue: string,
@@ -107,7 +122,7 @@ class ParsedHtmlAttributeDraft {
   ) {}
 }
 
-class ParsedHtmlNodeDraft {
+export class ParsedHtmlNodeDraft {
   constructor(
     readonly nodeKind: HtmlIrNodeKind,
     readonly start: number,
@@ -120,17 +135,44 @@ class ParsedHtmlNodeDraft {
     readonly selfClosing: boolean,
     readonly text: string | null,
     readonly recoveries: readonly HtmlRecoveryDraft[],
+    readonly tagNames: ParsedHtmlElementTagNamesDraft | null = null,
   ) {}
 }
 
-class ParsedHtmlDocumentDraft {
+export class ParsedHtmlElementTagNamesDraft {
+  constructor(
+    readonly openingStart: number,
+    readonly openingEnd: number,
+    readonly closingStart: number | null,
+    readonly closingEnd: number | null,
+  ) {}
+}
+
+class ParsedHtmlEndTagDraft {
+  constructor(
+    readonly name: string,
+    readonly start: number,
+    readonly end: number,
+    readonly terminated: boolean,
+    readonly recoveries: readonly HtmlRecoveryDraft[],
+  ) {}
+}
+
+class ParsedHtmlNodeSequenceDraft {
+  constructor(
+    readonly nodes: readonly ParsedHtmlNodeDraft[],
+    readonly closingTag: ParsedHtmlEndTagDraft | null,
+  ) {}
+}
+
+export class ParsedHtmlDocumentDraft {
   constructor(
     readonly rootNodes: readonly ParsedHtmlNodeDraft[],
     readonly recoveries: readonly HtmlRecoveryDraft[],
   ) {}
 }
 
-class HtmlRecoveryDraft {
+export class HtmlRecoveryDraft {
   constructor(
     readonly recoveryKind: HtmlRecoveryKind,
     readonly summary: string,
@@ -150,7 +192,7 @@ class HtmlMaterializationState {
     readonly localKey: string,
     readonly templateSource: TemplateSource,
     readonly source: HtmlParseSourceSet,
-    readonly store: KernelStore,
+    readonly store: KernelStoreReadView,
   ) {}
 }
 
@@ -173,7 +215,9 @@ class HtmlAttributeMaterializationFrame {
     readonly identityHandle: IdentityHandle,
     readonly sourceAddressHandle: AddressHandle | null,
     readonly nameAddressHandle: AddressHandle | null,
+    readonly nameProvenanceHandle: ProvenanceHandle | null,
     readonly valueAddressHandle: AddressHandle | null,
+    readonly valueProvenanceHandle: ProvenanceHandle | null,
     readonly recoveries: readonly HtmlRecovery[],
   ) {}
 }
@@ -191,24 +235,23 @@ export class HtmlParseMaterializer {
 
   constructor(
     /** Hot analysis store that receives HTML IR records. */
-    readonly store: KernelStore,
+    readonly store: KernelPublicationContext,
   ) {
     this.treeMaterializer = new HtmlParseTreeMaterializer(store);
   }
 
   parse(input: HtmlParseRequest): HtmlParseEmission {
     const emission = this.recordsForParse(input);
-    if (emission.records.length > 0) {
-      this.store.commit(new KernelStoreBatch(emission.records, `html-parse:${input.localKey}`));
-    }
-    this.registerProductDetails(emission);
+    this.store.publish(new KernelPublicationPlan(
+      new KernelStoreBatch(emission.records, `html-parse:${input.localKey}`),
+      [
+        publishProductDetail(TemplateProductDetails.HtmlDocument, emission.document.productHandle, emission.document),
+        ...publishProductDetails(TemplateProductDetails.HtmlNode, emission.nodes),
+        ...publishProductDetails(TemplateProductDetails.HtmlAttribute, emission.attributes),
+        ...publishProductDetails(TemplateProductDetails.HtmlRecovery, emission.recoveries),
+      ],
+    ));
     return emission;
-  }
-
-  private registerProductDetails(emission: HtmlParseEmission): void {
-    this.store.productDetails.add(TemplateProductDetails.HtmlDocument, emission.document.productHandle, emission.document);
-    this.store.productDetails.addAll(TemplateProductDetails.HtmlNode, emission.nodes);
-    this.store.productDetails.addAll(TemplateProductDetails.HtmlAttribute, emission.attributes);
   }
 
   private recordsForParse(input: HtmlParseRequest): HtmlParseEmission {
@@ -219,7 +262,11 @@ export class HtmlParseMaterializer {
     const draft = this.parseDocumentDraft(input);
     const handles = this.documentHandles(input);
     const rootNodes = this.treeMaterializer.materializeRootNodes(input, state, draft.rootNodes, handles.productHandle);
-    const documentRecoveries = this.treeMaterializer.materializeDocumentRecoveries(state, draft);
+    const documentRecoveries = this.treeMaterializer.materializeDocumentRecoveries(
+      state,
+      draft,
+      handles.identityHandle,
+    );
     state.recoveries.push(...documentRecoveries);
 
     const document = this.createDocument(handles, source, rootNodes, documentRecoveries);
@@ -243,7 +290,7 @@ export class HtmlParseMaterializer {
         [new HtmlRecoveryDraft(HtmlRecoveryKind.Open, 'Template source did not carry closed markup text.', 0, 0)],
       );
     }
-    return new HtmlScanner(input.templateSource.markup, input.parseContext.recoveryPolicy).parseDocument();
+    return parseHtmlDocumentDraft(input.templateSource.markup, input.parseContext.recoveryPolicy);
   }
 
   private documentHandles(input: HtmlParseRequest): HtmlDocumentHandles {
@@ -332,9 +379,20 @@ export class HtmlParseMaterializer {
   }
 }
 
+/** Parse source-shaped HTML without allocating kernel products so compiler orchestration can plan source views. */
+export function parseHtmlDocumentDraft(
+  markup: string,
+  recoveryPolicy: TemplateRecoveryPolicy,
+): ParsedHtmlDocumentDraft {
+  return new HtmlScanner(markup, recoveryPolicy).parseDocument();
+}
+
+/** Maximum authored element ancestry retained by the parser and every recursive compiler consumer. */
+export const MAX_HTML_ELEMENT_NESTING_DEPTH = 128;
+
 class HtmlParseTreeMaterializer {
   constructor(
-    private readonly store: KernelStore,
+    private readonly store: KernelStoreReadView,
   ) {}
 
   materializeRootNodes(
@@ -349,9 +407,10 @@ class HtmlParseTreeMaterializer {
   materializeDocumentRecoveries(
     state: HtmlMaterializationState,
     draft: ParsedHtmlDocumentDraft,
+    ownerIdentityHandle: IdentityHandle,
   ): readonly HtmlRecovery[] {
     return draft.recoveries.map((recovery, index) =>
-      this.materializeRecovery(state, recovery, `document-recovery:${index}`)
+      this.materializeRecovery(state, recovery, `document-recovery:${index}`, ownerIdentityHandle)
     );
   }
 
@@ -375,15 +434,17 @@ class HtmlParseTreeMaterializer {
     const pathKey = draft.path.join('.');
     const local = `html-node:${input.localKey}:${pathKey}`;
     const sourceAddressHandle = this.sourceSpanAddress(state, `${local}:source`, draft.start, draft.end, SourceSpanRole.Range);
+    const productHandle = this.store.handles.product(local);
+    const identityHandle = this.store.handles.identity(local);
     const recoveries = draft.recoveries.map((recovery, index) =>
-      this.materializeRecovery(state, recovery, `${local}:recovery:${index}`)
+      this.materializeRecovery(state, recovery, `${local}:recovery:${index}`, identityHandle)
     );
     state.recoveries.push(...recoveries);
     return new HtmlNodeMaterializationFrame(
       local,
       pathKey,
-      this.store.handles.product(local),
-      this.store.handles.identity(local),
+      productHandle,
+      identityHandle,
       sourceAddressHandle,
       this.templateNodeAddress(state, `${local}:node`, draft.path, sourceAddressHandle),
       recoveries,
@@ -410,6 +471,7 @@ class HtmlParseTreeMaterializer {
       default:
         return this.bindHtmlNodeProduct(new HtmlText(
           draft.text ?? '',
+          frame.recoveries,
           [],
         ), state, frame);
     }
@@ -425,14 +487,41 @@ class HtmlParseTreeMaterializer {
       this.materializeAttribute(input, state, attribute, frame.productHandle, frame.identityHandle, `${frame.pathKey}:attr:${index}`)
     );
     const children = draft.children.map((child) => this.materializeNode(input, state, child, frame.productHandle));
+    const tagNameSource = draft.tagNames == null
+      ? null
+      : this.sourceSpanEvidence(
+          state,
+          `${frame.local}:tag-name`,
+          draft.tagNames.openingStart,
+          draft.tagNames.openingEnd,
+          SourceSpanRole.Name,
+          'Authored HTML opening-tag name.',
+        );
+    const closingTagNameSource = draft.tagNames?.closingStart == null || draft.tagNames.closingEnd == null
+      ? null
+      : this.sourceSpanEvidence(
+          state,
+          `${frame.local}:closing-tag-name`,
+          draft.tagNames.closingStart,
+          draft.tagNames.closingEnd,
+          SourceSpanRole.Name,
+          'Authored HTML closing-tag name.',
+        );
     return this.bindHtmlNodeProduct(new HtmlElement(
       draft.tagName ?? '',
       draft.namespace,
       attributes,
       children,
       draft.selfClosing,
+      tagNameSource?.addressHandle ?? null,
+      closingTagNameSource?.addressHandle ?? null,
       frame.recoveries,
-      [],
+      compactFieldProvenance([
+        tagNameSource == null ? null : new FieldProvenance('tagName', tagNameSource.provenanceHandle),
+        closingTagNameSource == null
+          ? null
+          : new FieldProvenance('closingTagName', closingTagNameSource.provenanceHandle),
+      ]),
     ), state, frame);
   }
 
@@ -511,19 +600,39 @@ class HtmlParseTreeMaterializer {
     pathKey: string,
   ): HtmlAttributeMaterializationFrame {
     const local = `html-attribute:${input.localKey}:${pathKey}`;
+    const productHandle = this.store.handles.product(local);
+    const identityHandle = this.store.handles.identity(local);
     const recoveries = draft.recoveries.map((recovery, index) =>
-      this.materializeRecovery(state, recovery, `${local}:recovery:${index}`)
+      this.materializeRecovery(state, recovery, `${local}:recovery:${index}`, identityHandle)
     );
     state.recoveries.push(...recoveries);
+    const nameSource = this.sourceSpanEvidence(
+      state,
+      `${local}:name`,
+      draft.nameStart,
+      draft.nameEnd,
+      SourceSpanRole.Name,
+      'Authored HTML attribute name.',
+    );
+    const valueSource = draft.valueStart == null || draft.valueEnd == null
+      ? null
+      : this.sourceSpanEvidence(
+          state,
+          `${local}:value`,
+          draft.valueStart,
+          draft.valueEnd,
+          SourceSpanRole.Value,
+          'Authored HTML attribute value.',
+        );
     return new HtmlAttributeMaterializationFrame(
       local,
-      this.store.handles.product(local),
-      this.store.handles.identity(local),
+      productHandle,
+      identityHandle,
       this.sourceSpanAddress(state, `${local}:source`, draft.start, draft.end, SourceSpanRole.Range),
-      this.sourceSpanAddress(state, `${local}:name`, draft.nameStart, draft.nameEnd, SourceSpanRole.Name),
-      draft.valueStart == null || draft.valueEnd == null
-        ? null
-        : this.sourceSpanAddress(state, `${local}:value`, draft.valueStart, draft.valueEnd, SourceSpanRole.Value),
+      nameSource?.addressHandle ?? null,
+      nameSource?.provenanceHandle ?? null,
+      valueSource?.addressHandle ?? null,
+      valueSource?.provenanceHandle ?? null,
       recoveries,
     );
   }
@@ -539,7 +648,14 @@ class HtmlParseTreeMaterializer {
       frame.nameAddressHandle,
       frame.valueAddressHandle,
       frame.recoveries,
-      [],
+      compactFieldProvenance([
+        frame.nameProvenanceHandle == null
+          ? null
+          : new FieldProvenance('name', frame.nameProvenanceHandle),
+        frame.valueProvenanceHandle == null
+          ? null
+          : new FieldProvenance('value', frame.valueProvenanceHandle),
+      ]),
     ), new MaterializedProduct(
       frame.productHandle,
       KernelVocabulary.Template.HtmlAttribute.key,
@@ -590,14 +706,34 @@ class HtmlParseTreeMaterializer {
     state: HtmlMaterializationState,
     draft: HtmlRecoveryDraft,
     local: string,
+    ownerIdentityHandle: IdentityHandle,
   ): HtmlRecovery {
     const addressHandle = this.sourceSpanAddress(state, `html-recovery:${state.localKey}:${local}`, draft.start, draft.end, SourceSpanRole.Range);
-    return new HtmlRecovery(
+    const productHandle = this.store.handles.product(`html-recovery:${state.localKey}:${local}`);
+    const identityHandle = this.store.handles.identity(`html-recovery:${state.localKey}:${local}`);
+    const recovery = bindProductDetailEnvelope(new HtmlRecovery(
       draft.recoveryKind,
       draft.summary,
       addressHandle,
       state.source.provenanceHandle,
+    ), new MaterializedProduct(
+      productHandle,
+      KernelVocabulary.Template.HtmlRecovery.key,
+      identityHandle,
+      addressHandle,
+      state.source.provenanceHandle,
+    ));
+    state.records.push(
+      new CompilerIdentity(
+        identityHandle,
+        KernelVocabulary.Template.HtmlRecovery.key,
+        ownerIdentityHandle,
+        addressHandle,
+        draft.recoveryKind,
+      ),
+      requireProductDetailEnvelope(recovery, 'template.html-recovery'),
     );
+    return recovery;
   }
 
   private sourceSpanAddress(
@@ -607,10 +743,44 @@ class HtmlParseTreeMaterializer {
     end: number,
     role: SourceSpanRole,
   ): AddressHandle | null {
+    const site = this.sourceSpanSite(state, start, end);
+    if (site == null) return null;
+    const publication = sourceSpanAddressForSite(this.store, local, site, role);
+    state.records.push(...publication.records);
+    return publication.handle;
+  }
+
+  private sourceSpanEvidence(
+    state: HtmlMaterializationState,
+    local: string,
+    start: number,
+    end: number,
+    role: SourceSpanRole,
+    summary: string,
+  ): SourceSpanEvidencePublication | null {
+    const site = this.sourceSpanSite(state, start, end);
+    if (site == null) return null;
+    const publication = sourceSpanEvidenceForSite(
+      this.store,
+      local,
+      site,
+      role,
+      [EvidenceRole.TransformInput],
+      summary,
+    );
+    state.records.push(...publication.records);
+    return publication;
+  }
+
+  private sourceSpanSite(
+    state: HtmlMaterializationState,
+    start: number,
+    end: number,
+  ): SourceSpanSite | null {
     if (state.source.sourceAddressHandle == null) {
       return null;
     }
-    const sourceAddress = this.store.readAddress(state.source.sourceAddressHandle);
+    const sourceAddress = this.store.read(state.source.sourceAddressHandle);
     if (!(sourceAddress instanceof SourceSpanAddress)) {
       return null;
     }
@@ -620,15 +790,11 @@ class HtmlParseTreeMaterializer {
     }
     const sourceStart = mapped?.start ?? sourceAddress.start + start;
     const sourceEnd = mapped?.end ?? sourceAddress.start + end;
-    const handle = this.store.handles.address(local);
-    state.records.push(new SourceSpanAddress(
-      handle,
-      sourceAddress.fileHandle,
-      sourceStart,
-      sourceEnd,
-      role,
-    ));
-    return handle;
+    return {
+      sourceFileAddressHandle: sourceAddress.fileHandle,
+      start: sourceStart,
+      end: sourceEnd,
+    };
   }
 
   private templateNodeAddress(
@@ -675,6 +841,7 @@ function mapTemplateSourceSpan(
 class HtmlScanner {
   private pos = 0;
   private readonly recoveries: HtmlRecoveryDraft[] = [];
+  private nestingLimitReached = false;
 
   constructor(
     private readonly text: string,
@@ -682,33 +849,55 @@ class HtmlScanner {
   ) {}
 
   parseDocument(): ParsedHtmlDocumentDraft {
-    const rootNodes = this.parseNodes(null, HtmlNamespaceKind.Html, []);
-    return new ParsedHtmlDocumentDraft(rootNodes, this.recoveries);
+    const root = this.parseNodes(null, HtmlNamespaceKind.Html, [], [], []);
+    return new ParsedHtmlDocumentDraft(root.nodes, this.recoveries);
   }
 
   private parseNodes(
     parentTag: string | null,
     namespace: HtmlNamespaceKind,
+    parentAttributes: readonly ParsedHtmlAttributeDraft[],
+    ancestorTags: readonly string[],
     pathPrefix: readonly number[],
-  ): ParsedHtmlNodeDraft[] {
+  ): ParsedHtmlNodeSequenceDraft {
     const nodes: ParsedHtmlNodeDraft[] = [];
     while (!this.eof()) {
       if (this.startsWith('</')) {
         const endStart = this.pos;
-        const tag = this.readEndTag();
-        if (parentTag != null && tag.toLowerCase() === parentTag.toLowerCase()) {
-          return nodes;
+        const pendingName = this.peekEndTagName();
+        if (
+          parentTag != null
+          && htmlAsciiLowercase(pendingName) !== htmlAsciiLowercase(parentTag)
+          && ancestorTags.some((ancestor) => htmlAsciiLowercase(ancestor) === htmlAsciiLowercase(pendingName))
+        ) {
+          // Leave an ancestor's closing tag for the owning parse frame. Consuming
+          // it here makes every ancestor look unclosed and creates a diagnostic cascade.
+          return new ParsedHtmlNodeSequenceDraft(nodes, null);
         }
-        this.recoveries.push(new HtmlRecoveryDraft(
-          HtmlRecoveryKind.UnexpectedEndTag,
-          `Unexpected closing tag ${tag.length === 0 ? '</>' : `</${tag}>`}.`,
-          endStart,
-          this.pos,
-        ));
-        if (this.recoveryPolicy === TemplateRecoveryPolicy.Strict && parentTag != null) {
-          return nodes;
+        const tag = this.readEndTag();
+        if (parentTag != null && htmlAsciiLowercase(tag.name) === htmlAsciiLowercase(parentTag)) {
+          return new ParsedHtmlNodeSequenceDraft(nodes, tag);
+        }
+        this.recoveries.push(...tag.recoveries);
+        if (tag.terminated) {
+          this.recoveries.push(new HtmlRecoveryDraft(
+            this.recoveryPolicy === TemplateRecoveryPolicy.Frontier
+              ? HtmlRecoveryKind.Open
+              : HtmlRecoveryKind.UnexpectedEndTag,
+            `Unexpected closing tag ${tag.name.length === 0 ? '</>' : `</${tag.name}>`}.`,
+            tag.name.length === 0 ? endStart : tag.start,
+            tag.name.length === 0 ? this.pos : tag.end,
+          ));
         }
         continue;
+      }
+
+      if (
+        this.startsStartTag()
+        && pathPrefix.length >= MAX_HTML_ELEMENT_NESTING_DEPTH
+      ) {
+        this.stopAtNestingLimit();
+        return new ParsedHtmlNodeSequenceDraft(nodes, null);
       }
 
       const path = [...pathPrefix, nodes.length];
@@ -716,24 +905,28 @@ class HtmlScanner {
         nodes.push(this.parseComment(path));
         continue;
       }
+      if (namespace !== HtmlNamespaceKind.Html && this.startsWith('<![CDATA[')) {
+        nodes.push(this.parseCdata(namespace, path));
+        continue;
+      }
       if (this.startsWith('<!')) {
         nodes.push(this.parseDoctype(path));
         continue;
       }
-      if (this.peek() === '<') {
-        const element = this.parseElement(namespace, path);
+      if (this.startsStartTag()) {
+        const element = this.parseElement(parentTag, namespace, parentAttributes, ancestorTags, path);
         nodes.push(element);
         continue;
       }
       nodes.push(this.parseText(path));
     }
 
-    return nodes;
+    return new ParsedHtmlNodeSequenceDraft(nodes, null);
   }
 
   private parseText(path: readonly number[]): ParsedHtmlNodeDraft {
     const start = this.pos;
-    while (!this.eof() && this.peek() !== '<') {
+    while (!this.eof() && !this.startsMarkupToken()) {
       this.pos++;
     }
     return new ParsedHtmlNodeDraft(
@@ -754,7 +947,41 @@ class HtmlScanner {
   private parseComment(path: readonly number[]): ParsedHtmlNodeDraft {
     const start = this.pos;
     this.pos += 4;
-    const end = this.text.indexOf('-->', this.pos);
+    const abruptLength = this.peek() === '>'
+      ? 1
+      : this.startsWith('->')
+        ? 2
+        : 0;
+    if (abruptLength > 0) {
+      const end = this.pos + abruptLength;
+      const recovery = new HtmlRecoveryDraft(
+        HtmlRecoveryKind.MalformedComment,
+        'Malformed empty HTML comment closing delimiter.',
+        start,
+        end,
+      );
+      this.pos = end;
+      return new ParsedHtmlNodeDraft(
+        HtmlIrNodeKind.Comment,
+        start,
+        end,
+        path,
+        null,
+        HtmlNamespaceKind.Html,
+        [],
+        [],
+        false,
+        '',
+        [recovery],
+      );
+    }
+    const ordinaryEnd = this.text.indexOf('-->', this.pos);
+    const malformedEnd = this.text.indexOf('--!>', this.pos);
+    const end = ordinaryEnd < 0
+      ? malformedEnd
+      : malformedEnd < 0
+        ? ordinaryEnd
+        : Math.min(ordinaryEnd, malformedEnd);
     if (end < 0) {
       const value = this.text.slice(this.pos);
       const recovery = new HtmlRecoveryDraft(
@@ -780,7 +1007,8 @@ class HtmlScanner {
     }
 
     const value = this.text.slice(this.pos, end);
-    this.pos = end + 3;
+    const malformed = end === malformedEnd;
+    this.pos = end + (malformed ? 4 : 3);
     return new ParsedHtmlNodeDraft(
       HtmlIrNodeKind.Comment,
       start,
@@ -792,7 +1020,45 @@ class HtmlScanner {
       [],
       false,
       value,
+      malformed
+        ? [new HtmlRecoveryDraft(
+            HtmlRecoveryKind.MalformedComment,
+            'Malformed HTML comment closing delimiter; use -->.',
+            end,
+            this.pos,
+          )]
+        : [],
+    );
+  }
+
+  private parseCdata(namespace: HtmlNamespaceKind, path: readonly number[]): ParsedHtmlNodeDraft {
+    const declarationStart = this.pos;
+    this.pos += '<![CDATA['.length;
+    const contentStart = this.pos;
+    const close = this.text.indexOf(']]>', contentStart);
+    const contentEnd = close < 0 ? this.text.length : close;
+    const value = this.text.slice(contentStart, contentEnd);
+    const recoveries = close < 0
+      ? [new HtmlRecoveryDraft(
+          HtmlRecoveryKind.UnterminatedCdata,
+          'Unterminated foreign-content CDATA section.',
+          declarationStart,
+          this.text.length,
+        )]
+      : [];
+    this.pos = close < 0 ? this.text.length : close + ']]>'.length;
+    return new ParsedHtmlNodeDraft(
+      HtmlIrNodeKind.Text,
+      contentStart,
+      contentEnd,
+      path,
+      null,
+      namespace,
       [],
+      [],
+      false,
+      value,
+      recoveries,
     );
   }
 
@@ -810,7 +1076,13 @@ class HtmlScanner {
     return new ParsedHtmlNodeDraft(HtmlIrNodeKind.Doctype, start, this.pos, path, null, HtmlNamespaceKind.Html, [], [], false, raw || null, []);
   }
 
-  private parseElement(parentNamespace: HtmlNamespaceKind, path: readonly number[]): ParsedHtmlNodeDraft {
+  private parseElement(
+    parentTag: string | null,
+    parentNamespace: HtmlNamespaceKind,
+    parentAttributes: readonly ParsedHtmlAttributeDraft[],
+    ancestorTags: readonly string[],
+    path: readonly number[],
+  ): ParsedHtmlNodeDraft {
     const start = this.pos;
     this.pos++;
     const tagStart = this.pos;
@@ -820,24 +1092,41 @@ class HtmlScanner {
       return new ParsedHtmlNodeDraft(HtmlIrNodeKind.Text, start, this.pos, path, null, HtmlNamespaceKind.Html, [], [], false, '<', [recovery]);
     }
 
-    const namespace = namespaceForElement(tagName, parentNamespace);
+    const namespace = namespaceForElement(tagName, parentTag, parentNamespace, parentAttributes);
     const attributes: ParsedHtmlAttributeDraft[] = [];
     const recoveries: HtmlRecoveryDraft[] = [];
     const seenAttributes = new Set<string>();
     let selfClosing = false;
+    let startTagTerminated = false;
     while (!this.eof()) {
       this.skipWhitespace();
+      if (this.eof()) {
+        // The loop condition is evaluated before whitespace. Re-check here so a trailing space cannot become a
+        // phantom attribute with an out-of-document recovery range.
+        break;
+      }
       if (this.startsWith('/>')) {
-        selfClosing = true;
+        selfClosing = namespace !== HtmlNamespaceKind.Html || isHtmlVoidElement(tagName);
+        startTagTerminated = true;
         this.pos += 2;
+        if (!selfClosing) {
+          recoveries.push(new HtmlRecoveryDraft(
+            HtmlRecoveryKind.NonVoidSelfClosing,
+            `Self-closing syntax is ignored for non-void HTML element <${tagName}>.`,
+            Math.max(start, this.pos - 2),
+            this.pos,
+          ));
+        }
         break;
       }
       if (this.peek() === '>') {
+        startTagTerminated = true;
         this.pos++;
         break;
       }
       const attribute = this.parseAttribute();
-      if (seenAttributes.has(attribute.rawName)) {
+      const attributeKey = htmlAsciiLowercase(attribute.rawName);
+      if (seenAttributes.has(attributeKey)) {
         attributes.push(new ParsedHtmlAttributeDraft(
           attribute.rawName,
           attribute.rawValue,
@@ -853,17 +1142,46 @@ class HtmlScanner {
           ],
         ));
       } else {
-        seenAttributes.add(attribute.rawName);
+        seenAttributes.add(attributeKey);
         attributes.push(attribute);
       }
     }
+    if (!startTagTerminated) {
+      recoveries.push(new HtmlRecoveryDraft(
+        HtmlRecoveryKind.UnterminatedStartTag,
+        `Unterminated start tag <${tagName}>.`,
+        start,
+        this.pos,
+      ));
+    }
 
-    const children = selfClosing || isHtmlVoidElement(tagName)
-      ? []
-      : this.parseNodes(tagName, namespace, path);
+    const htmlVoidElement = namespace === HtmlNamespaceKind.Html && isHtmlVoidElement(tagName);
+    const childSequence = selfClosing || htmlVoidElement
+      ? new ParsedHtmlNodeSequenceDraft([], null)
+      : namespace === HtmlNamespaceKind.Html && isHtmlRawTextElement(tagName)
+        ? this.parseRawTextElement(tagName, namespace, path)
+        : this.parseNodes(
+            tagName,
+            namespace,
+            attributes,
+            parentTag == null ? ancestorTags : [...ancestorTags, parentTag],
+            path,
+          );
+    const children = childSequence.nodes;
     const end = this.pos;
-    if (!selfClosing && !isHtmlVoidElement(tagName) && this.eof() && !this.endsWithEndTag(tagName)) {
-      recoveries.push(new HtmlRecoveryDraft(HtmlRecoveryKind.MissingEndTag, `Missing closing tag </${tagName}>.`, tagStart, end));
+    recoveries.push(...(childSequence.closingTag?.recoveries ?? []));
+    if (
+      !selfClosing
+      && !htmlVoidElement
+      && childSequence.closingTag == null
+      && !this.nestingLimitReached
+    ) {
+      recoveries.push(new HtmlRecoveryDraft(
+        HtmlRecoveryKind.MissingEndTag,
+        `Missing closing tag </${tagName}>.`,
+        tagStart,
+        tagStart + tagName.length,
+      ));
     }
 
     return new ParsedHtmlNodeDraft(
@@ -878,7 +1196,73 @@ class HtmlScanner {
       selfClosing,
       null,
       recoveries,
+      new ParsedHtmlElementTagNamesDraft(
+        tagStart,
+        tagStart + tagName.length,
+        childSequence.closingTag?.start ?? null,
+        childSequence.closingTag?.end ?? null,
+      ),
     );
+  }
+
+  private stopAtNestingLimit(): void {
+    this.pos++;
+    const nameStart = this.pos;
+    const tagName = this.readName();
+    const nameEnd = this.pos;
+    this.recoveries.push(new HtmlRecoveryDraft(
+      HtmlRecoveryKind.NestingLimitExceeded,
+      `HTML element nesting exceeds the supported maximum of ${MAX_HTML_ELEMENT_NESTING_DEPTH} levels at <${tagName}>; remaining template markup was not analyzed.`,
+      nameStart,
+      nameEnd,
+    ));
+    this.nestingLimitReached = true;
+    this.pos = this.text.length;
+  }
+
+  private parseRawTextElement(
+    tagName: string,
+    namespace: HtmlNamespaceKind,
+    path: readonly number[],
+  ): ParsedHtmlNodeSequenceDraft {
+    const start = this.pos;
+    const closingStart = this.findRawTextEndTag(tagName);
+    const end = closingStart < 0 ? this.text.length : closingStart;
+    const nodes = end === start
+      ? []
+      : [new ParsedHtmlNodeDraft(
+          HtmlIrNodeKind.Text,
+          start,
+          end,
+          [...path, 0],
+          null,
+          namespace,
+          [],
+          [],
+          false,
+          this.text.slice(start, end),
+          [],
+        )];
+    this.pos = end;
+    if (closingStart < 0) {
+      return new ParsedHtmlNodeSequenceDraft(nodes, null);
+    }
+    const closingTag = this.readEndTag();
+    return new ParsedHtmlNodeSequenceDraft(nodes, closingTag);
+  }
+
+  private findRawTextEndTag(tagName: string): number {
+    const lowerText = this.text.toLowerCase();
+    const needle = `</${tagName.toLowerCase()}`;
+    let candidate = lowerText.indexOf(needle, this.pos);
+    while (candidate >= 0) {
+      const delimiter = this.text[candidate + needle.length] ?? '';
+      if (delimiter === '' || delimiter === '>' || delimiter === '/' || isHtmlSpaceCharacter(delimiter)) {
+        return candidate;
+      }
+      candidate = lowerText.indexOf(needle, candidate + needle.length);
+    }
+    return -1;
   }
 
   private parseAttribute(): ParsedHtmlAttributeDraft {
@@ -889,16 +1273,48 @@ class HtmlScanner {
     if (rawName.length === 0) {
       this.pos++;
       return new ParsedHtmlAttributeDraft('', '', start, this.pos, nameStart, nameEnd, null, null, [
-        new HtmlRecoveryDraft(HtmlRecoveryKind.Open, 'Expected an attribute name.', start, this.pos),
+        new HtmlRecoveryDraft(HtmlRecoveryKind.InvalidAttribute, 'Expected an attribute name.', start, this.pos),
       ]);
     }
+    const invalidNameOffset = invalidHtmlAttributeNameCharacterOffset(rawName);
+    const nameRecoveries = invalidNameOffset < 0
+      ? []
+      : [new HtmlRecoveryDraft(
+          HtmlRecoveryKind.InvalidAttribute,
+          `Invalid character in attribute name ${rawName}.`,
+          nameStart + invalidNameOffset,
+          nameStart + invalidNameOffset + 1,
+        )];
 
     this.skipWhitespace();
     if (this.peek() !== '=') {
-      return new ParsedHtmlAttributeDraft(rawName, '', start, this.pos, nameStart, nameEnd, null, null, []);
+      return new ParsedHtmlAttributeDraft(
+        rawName,
+        '',
+        start,
+        this.pos,
+        nameStart,
+        nameEnd,
+        null,
+        null,
+        nameRecoveries,
+      );
     }
+    const equalsStart = this.pos;
     this.pos++;
     this.skipWhitespace();
+
+    if (this.eof() || this.peek() === '>' || this.startsWith('/>')) {
+      return new ParsedHtmlAttributeDraft(rawName, '', start, this.pos, nameStart, nameEnd, null, null, [
+        ...nameRecoveries,
+        new HtmlRecoveryDraft(
+          HtmlRecoveryKind.MissingAttributeValue,
+          `Missing value for attribute ${rawName}.`,
+          equalsStart,
+          Math.min(this.text.length, equalsStart + 1),
+        ),
+      ]);
+    }
 
     if (this.peek() === '"' || this.peek() === "'") {
       const quote = this.peek();
@@ -911,10 +1327,26 @@ class HtmlScanner {
       const rawValue = this.text.slice(valueStart, valueEnd);
       if (this.peek() === quote) {
         this.pos++;
-        return new ParsedHtmlAttributeDraft(rawName, rawValue, start, this.pos, nameStart, nameEnd, valueStart, valueEnd, []);
+        return new ParsedHtmlAttributeDraft(
+          rawName,
+          rawValue,
+          start,
+          this.pos,
+          nameStart,
+          nameEnd,
+          valueStart,
+          valueEnd,
+          nameRecoveries,
+        );
       }
       return new ParsedHtmlAttributeDraft(rawName, rawValue, start, this.pos, nameStart, nameEnd, valueStart, valueEnd, [
-        new HtmlRecoveryDraft(HtmlRecoveryKind.UnterminatedAttribute, `Unterminated value for attribute ${rawName}.`, valueStart, valueEnd),
+        ...nameRecoveries,
+        new HtmlRecoveryDraft(
+          HtmlRecoveryKind.UnterminatedAttribute,
+          `Unterminated value for attribute ${rawName}.`,
+          Math.max(start, valueStart - 1),
+          valueEnd,
+        ),
       ]);
     }
 
@@ -932,21 +1364,47 @@ class HtmlScanner {
       nameEnd,
       valueStart,
       valueEnd,
-      [],
+      nameRecoveries,
     );
   }
 
-  private readEndTag(): string {
+  private readEndTag(): ParsedHtmlEndTagDraft {
+    const start = this.pos;
     this.pos += 2;
     this.skipWhitespace();
-    const tag = this.readName();
+    const nameStart = this.pos;
+    const name = this.readName();
+    const nameEnd = this.pos;
     while (!this.eof() && this.peek() !== '>') {
       this.pos++;
     }
-    if (this.peek() === '>') {
+    const terminated = this.peek() === '>';
+    if (terminated) {
       this.pos++;
     }
-    return tag;
+    return new ParsedHtmlEndTagDraft(
+      name,
+      nameStart,
+      nameEnd,
+      terminated,
+      terminated
+        ? []
+        : [new HtmlRecoveryDraft(
+            HtmlRecoveryKind.UnterminatedEndTag,
+            name.length === 0
+              ? 'Unterminated closing tag; expected a tag name and >.'
+              : `Unterminated closing tag </${name}>.`,
+            start,
+            this.pos,
+          )],
+    );
+  }
+
+  private peekEndTagName(): string {
+    const current = this.pos;
+    const tag = this.readEndTag();
+    this.pos = current;
+    return tag.name;
   }
 
   private readName(): string {
@@ -967,8 +1425,19 @@ class HtmlScanner {
     return this.text.startsWith(value, this.pos);
   }
 
-  private endsWithEndTag(tagName: string): boolean {
-    return this.text.slice(0, this.pos).toLowerCase().endsWith(`</${tagName.toLowerCase()}>`);
+  private startsEndTag(): boolean {
+    return this.startsWith('</') && isHtmlTagNameStart(this.text[this.pos + 2] ?? '');
+  }
+
+  private startsStartTag(): boolean {
+    return this.peek() === '<' && isHtmlTagNameStart(this.text[this.pos + 1] ?? '');
+  }
+
+  private startsMarkupToken(): boolean {
+    return this.startsWith('<!--')
+      || this.startsWith('<!')
+      || this.startsWith('</')
+      || this.startsStartTag();
   }
 
   private peek(): string {
@@ -980,15 +1449,88 @@ class HtmlScanner {
   }
 }
 
-function namespaceForElement(tagName: string, parentNamespace: HtmlNamespaceKind): HtmlNamespaceKind {
-  const lower = tagName.toLowerCase();
-  if (lower === 'svg') {
+function namespaceForElement(
+  tagName: string,
+  parentTag: string | null,
+  parentNamespace: HtmlNamespaceKind,
+  parentAttributes: readonly ParsedHtmlAttributeDraft[],
+): HtmlNamespaceKind {
+  // This source-shaped scanner preserves well-nested foreign-content namespace transitions. Browser recovery that
+  // reparents malformed HTML breakout tags belongs to a future tree-builder recovery layer, not namespace inference.
+  const childName = htmlAsciiLowercase(tagName);
+  if (!parsesChildInHtmlNamespace(childName, parentTag, parentNamespace, parentAttributes)) {
+    if (
+      parentNamespace === HtmlNamespaceKind.Math
+      && (parentTag == null ? null : htmlAsciiLowercase(parentTag)) === 'annotation-xml'
+      && childName === 'svg'
+    ) {
+      return HtmlNamespaceKind.Svg;
+    }
+    return parentNamespace;
+  }
+
+  if (childName === 'svg') {
     return HtmlNamespaceKind.Svg;
   }
-  if (lower === 'math') {
+  if (childName === 'math') {
     return HtmlNamespaceKind.Math;
   }
-  return parentNamespace;
+  return HtmlNamespaceKind.Html;
+}
+
+function parsesChildInHtmlNamespace(
+  childName: string,
+  parentTag: string | null,
+  parentNamespace: HtmlNamespaceKind,
+  parentAttributes: readonly ParsedHtmlAttributeDraft[],
+): boolean {
+  if (parentNamespace === HtmlNamespaceKind.Html) {
+    return true;
+  }
+
+  const parentName = parentTag == null ? '' : htmlAsciiLowercase(parentTag);
+  if (
+    parentNamespace === HtmlNamespaceKind.Svg
+    && (parentName === 'foreignobject' || parentName === 'desc' || parentName === 'title')
+  ) {
+    return true;
+  }
+
+  if (parentNamespace !== HtmlNamespaceKind.Math) {
+    return false;
+  }
+
+  if (
+    (parentName === 'mi' || parentName === 'mo' || parentName === 'mn' || parentName === 'ms' || parentName === 'mtext')
+    && childName !== 'mglyph'
+    && childName !== 'malignmark'
+  ) {
+    return true;
+  }
+
+  if (parentName !== 'annotation-xml') {
+    return false;
+  }
+  const encoding = parentAttributes.find((attribute) => htmlAsciiLowercase(attribute.rawName) === 'encoding')?.rawValue;
+  return encoding != null
+    && isHtmlIntegrationEncoding(encoding);
+}
+
+function isHtmlIntegrationEncoding(rawValue: string): boolean {
+  const decoded = rawValue.replace(
+    /&#(?:[xX]([0-9a-fA-F]+)|([0-9]+));?|&(sol|plus);/gu,
+    (reference, hexadecimal: string | undefined, decimal: string | undefined, named: string | undefined) => {
+      if (named != null) {
+        return named === 'sol' ? '/' : '+';
+      }
+      const codePoint = Number.parseInt(hexadecimal ?? decimal ?? '', hexadecimal == null ? 10 : 16);
+      return Number.isSafeInteger(codePoint) && codePoint >= 0 && codePoint <= 0x10_FFFF
+        ? String.fromCodePoint(codePoint)
+        : reference;
+    },
+  );
+  const normalized = htmlAsciiLowercase(decoded);
+  return normalized === 'text/html' || normalized === 'application/xhtml+xml';
 }
 
 function isNameCharacter(value: string): boolean {
@@ -997,6 +1539,42 @@ function isNameCharacter(value: string): boolean {
     && value !== '/'
     && value !== '>'
     && value !== '=';
+}
+
+function isHtmlTagNameStart(value: string): boolean {
+  return (value >= 'A' && value <= 'Z') || (value >= 'a' && value <= 'z');
+}
+
+function invalidHtmlAttributeNameCharacterOffset(value: string): number {
+  for (let index = 0; index < value.length; index += 1) {
+    const character = value[index]!;
+    if (
+      character === '<'
+      || character === '"'
+      || character === "'"
+      || character === '`'
+      || character === '\0'
+    ) {
+      return index;
+    }
+  }
+  return -1;
+}
+
+function isHtmlRawTextElement(tagName: string): boolean {
+  switch (htmlAsciiLowercase(tagName)) {
+    case 'script':
+    case 'style':
+    case 'title':
+    case 'textarea':
+    case 'xmp':
+    case 'iframe':
+    case 'noembed':
+    case 'noframes':
+      return true;
+    default:
+      return false;
+  }
 }
 
 function isHtmlSpaceCharacter(value: string): boolean {
@@ -1011,6 +1589,7 @@ function htmlParseMaterializedProductHandles(
     document.productHandle,
     ...state.nodes.map((node) => node.productHandle),
     ...state.attributes.map((attribute) => attribute.productHandle),
+    ...state.recoveries.map((recovery) => recovery.productHandle),
   ];
 }
 

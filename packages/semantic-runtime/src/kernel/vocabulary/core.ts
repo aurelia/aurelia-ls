@@ -137,6 +137,8 @@ export const enum KernelVocabularyNamespace {
   Compiler = 'compiler',
   /** Vocabulary about template references and scope. */
   Template = 'template',
+  /** Vocabulary about source-backed expression operations after runtime ownership and scope pairing. */
+  RuntimeExpression = 'runtime-expression',
   /** Vocabulary about binding expression or binding instruction behavior. */
   Binding = 'binding',
   /** Vocabulary about rendering instructions produced by lowering. */

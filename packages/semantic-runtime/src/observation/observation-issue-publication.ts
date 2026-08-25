@@ -25,6 +25,7 @@ import {
 } from '../kernel/vocabulary.js';
 import {
   ObservationIssue,
+  type ObservationIssueRelatedSource,
   type ObservationIssueKind,
   type ObservationIssuePhase,
 } from './observation-issue.js';
@@ -51,7 +52,7 @@ export class ObservationIssuePublisher {
     message: string,
     frameworkErrorCode: ObservationFrameworkErrorCode | null,
     sourceAddressHandle: AddressHandle | null,
-    relatedSourceAddressHandles: readonly AddressHandle[] = [],
+    relatedSources: readonly ObservationIssueRelatedSource[] = [],
     subjectName: string | null = null,
   ): ObservationIssuePublication {
     const productHandle = this.store.handles.product(local);
@@ -71,9 +72,8 @@ export class ObservationIssuePublisher {
       message,
       frameworkErrorCode,
       sourceAddressHandle,
-      relatedSourceAddressHandles,
+      relatedSources,
       subjectName,
-      [],
     );
     return new ObservationIssuePublication(
       issue,

@@ -2,6 +2,7 @@ import path from 'node:path';
 import ts from 'typescript';
 import type { SourceFileAdmission } from '../boot/frames.js';
 import { AuthoredSourceTextCache } from '../kernel/authored-source-text.js';
+import { sourceTextContentRevision } from '../kernel/source-text-revision.js';
 import {
   SourceSpanRole,
 } from '../kernel/address.js';
@@ -12,6 +13,7 @@ import {
   EvidenceRole,
 } from '../kernel/evidence.js';
 import type {
+  AddressHandle,
   ClaimHandle,
   EvidenceHandle,
   IdentityHandle,
@@ -35,6 +37,11 @@ import {
   type KernelStoreRecord,
 } from '../kernel/store.js';
 import {
+  KernelPublicationPlan,
+  publishProductDetail,
+  type KernelPublicationContext,
+} from '../kernel/publication.js';
+import {
   OpenSeam,
   OpenSeamReasonKind,
 } from '../kernel/open-seam.js';
@@ -43,6 +50,16 @@ import {
 } from '../kernel/source-open-seam.js';
 import { KernelVocabulary } from '../kernel/vocabulary.js';
 import { readStaticStringValue } from '../evaluation/expression-reader.js';
+import {
+  StaticCallableExecutionBinding,
+  StaticCallableExecutionBindings,
+  StaticCallableSlot,
+  StaticCallableTarget,
+} from '../evaluation/function-execution.js';
+import {
+  closedStaticValueMemberValue,
+  readStaticValueProperty,
+} from '../evaluation/property-access.js';
 import {
   hasStaticModifier,
   readDeclarationLocalName,
@@ -105,6 +122,7 @@ import {
 } from './resource-convention.js';
 import {
   type ResourceRecognitionObservation,
+  type ResourceAliasObservation,
   type ResourceTargetObservation,
   resourceTargetClassLikeNode,
 } from './resource-observation.js';
@@ -115,14 +133,16 @@ import {
   namedResourceContributionKindForCarrier,
   runtimeResourceKeyForKind,
 } from './resource-kind.js';
-import { toAureliaResourceIdentityKind } from './named-resource-kind.js';
+import { toAureliaResourceDeclarationKind } from './named-resource-kind.js';
 import {
   readHtmlTemplateMetadata,
   type HtmlTemplateMetadataImport,
 } from './html-template-metadata.js';
 import {
+  mergeResourceAliasObservations,
   readAliasMetadataAnnotations,
   readCustomElementMetadataAnnotations,
+  readStaticAliasMetadata,
 } from './resource-metadata-annotations.js';
 import type { ResourceDefinitionHeaderEmission } from './resource-definition-header-emission.js';
 import type { ResourceRecognitionKernelEmission } from './resource-recognition-kernel-emitter.js';
@@ -142,27 +162,29 @@ import {
   externalTemplateSourceAddress,
   sourceFileAddressHandleForNode,
   sourceSpanAddressForNode,
+  sourceSpanEvidenceForNode,
   sourceSpanRangeForNode,
   templateCarrierExpression,
   templateMarkupSourceAddress,
 } from './resource-source-address.js';
 import {
   ConvergenceOpen,
+  ConvergenceScalarRead,
   appendConvergenceOpen,
   convergenceOpenForNode,
   convergenceOpenForRead,
+  convergenceOpenForRejectedReadShape,
+  convergenceOpenForReadPressure,
   decoratorCallNamed,
   decoratorIdentifierNamed,
   dependencyReferenceForFunction,
   memberName,
   memberNameNode,
-  mergeAliases,
   nullableConvergenceOpenForNode,
   openIfPresent,
   readBooleanField,
   readFieldValue,
   readObjectProperty,
-  readStaticStringArrayClassProperty,
   readStringField,
   targetReferenceForFunction,
 } from './resource-convergence-support.js';
@@ -195,6 +217,8 @@ export class ResourceDefinitionConvergenceEmission {
     readonly issues: readonly ResourceIssue[],
     /** Kernel records committed by this convergence pass. */
     readonly records: readonly KernelStoreRecord[],
+    /** Candidate-local executable closures addressed by stable slots in converged definitions. */
+    readonly callableBindings: StaticCallableExecutionBindings,
   ) {}
 }
 
@@ -203,6 +227,7 @@ class ResourceDefinitionConvergenceProduct {
     readonly records: readonly KernelStoreRecord[],
     readonly definition: FullResourceDefinition | null,
     readonly issues: readonly ResourceIssue[] = [],
+    readonly callableBindings: readonly StaticCallableExecutionBinding[] = [],
   ) {}
 }
 
@@ -212,6 +237,7 @@ class ConvergedResourceDefinition {
     readonly open: readonly ConvergenceOpen[],
     readonly records: readonly KernelStoreRecord[] = [],
     readonly issues: readonly ResourceIssue[] = [],
+    readonly callableBindings: readonly StaticCallableExecutionBinding[] = [],
   ) {}
 }
 
@@ -227,6 +253,7 @@ class ProcessContentRead {
     readonly target: ResourceTargetReference | null,
     readonly records: readonly KernelStoreRecord[] = [],
     readonly issues: readonly ResourceIssue[] = [],
+    readonly open: readonly ConvergenceOpen[] = [],
   ) {}
 }
 
@@ -234,6 +261,7 @@ class ResourceIssueRead {
   constructor(
     readonly records: readonly KernelStoreRecord[] = [],
     readonly issues: readonly ResourceIssue[] = [],
+    readonly open: readonly ConvergenceOpen[] = [],
   ) {}
 }
 
@@ -242,6 +270,29 @@ class TemplateDefinitionRead {
     readonly template: CustomElementTemplateDefinition,
     readonly records: readonly KernelStoreRecord[] = [],
     readonly dependencies: ResourceDependenciesRead = new ResourceDependenciesRead([], []),
+    readonly open: readonly ConvergenceOpen[] = [],
+  ) {}
+}
+
+class CustomElementCaptureRead {
+  constructor(
+    readonly capture: CustomElementCaptureDefinition,
+    readonly callableBinding: StaticCallableExecutionBinding | null,
+    readonly open: readonly ConvergenceOpen[],
+  ) {}
+}
+
+class ShadowOptionsRead {
+  constructor(
+    readonly options: ShadowOptionsDefinition | null,
+    readonly open: readonly ConvergenceOpen[],
+  ) {}
+}
+
+class ResourceTargetFieldRead {
+  constructor(
+    readonly target: ResourceTargetReference | null,
+    readonly open: readonly ConvergenceOpen[],
   ) {}
 }
 
@@ -266,6 +317,13 @@ class ResourceAliasClaimEmission {
   ) {}
 }
 
+class ResourceAliasMaterialization {
+  constructor(
+    readonly definitions: readonly ResourceAliasDefinition[],
+    readonly records: readonly KernelStoreRecord[],
+  ) {}
+}
+
 type AliasableResourceDefinitionHeader =
   | CustomElementDefinitionHeader
   | CustomAttributeDefinitionHeader
@@ -278,8 +336,10 @@ interface CustomElementConvergenceFacts {
   readonly target: ResourceTargetReference;
   readonly name: string;
   readonly aliasDefinitions: readonly ResourceAliasDefinition[];
+  readonly aliasRecords: readonly KernelStoreRecord[];
   readonly key: string;
   readonly capture: CustomElementCaptureDefinition;
+  readonly callableBindings: readonly StaticCallableExecutionBinding[];
   readonly template: TemplateDefinitionRead;
   readonly dependencies: ResourceDependenciesRead;
   readonly bindables: BindableRead;
@@ -308,8 +368,10 @@ class CustomElementConvergenceFrame {
     private readonly definition: CustomElementDefinitionHeader,
     private readonly observation: ResourceRecognitionObservation,
     private readonly header: ResourceDefinitionHeaderEmission,
+    private readonly productHandle: ProductHandle,
     private readonly provenanceHandle: ProvenanceHandle,
     private readonly sourceTextCache: AuthoredSourceTextCache,
+    private readonly publication: KernelPublicationContext,
   ) {
     this.targetClass = resourceTargetClassLikeNode(definition.target);
     this.definitionExpression = expressionNode(observation.definitionNode);
@@ -325,36 +387,89 @@ class CustomElementConvergenceFrame {
       return null;
     }
 
-    const bindables = this.readBindables();
+    const bindables = this.readBindables(target);
     const watches = this.readWatches();
-    const aliases = mergeAliases(
+    const staticAliases = readStaticAliasMetadata(this.context, this.targetClass);
+    const aliases = mergeResourceAliasObservations(
       this.annotations.aliases,
       this.definition.aliases,
-      readStaticStringArrayClassProperty(this.context, this.targetClass, 'aliases'),
+      staticAliases.aliases,
     );
-    const capture = this.annotations.capture
-      ?? readCustomElementCapture(this.context, this.definitionExpression, this.targetClass);
+    const captureSlot = new StaticCallableSlot(`resource-definition:${this.productHandle}:capture`);
+    const captureRead = this.annotations.capture == null
+      ? readCustomElementCapture(this.context, this.definitionExpression, this.targetClass, captureSlot)
+      : captureReadForAnnotation(
+          this.annotations.capture,
+          this.annotations.captureCallableTarget,
+          captureSlot,
+        );
+    const capture = captureRead.capture;
     const template = this.readTemplate();
     const dependencies = this.readDependencies(template);
+    const containerlessRead = this.annotations.containerless == null
+      ? readBooleanField(
+          this.context,
+          this.definitionExpression,
+          this.targetClass,
+          'containerless',
+          'Custom element containerless metadata did not close to a boolean.',
+        )
+      : new ConvergenceScalarRead<boolean>(null, [], null);
     const containerless = this.annotations.containerless
-      ?? readBooleanField(this.context, this.definitionExpression, this.targetClass, 'containerless')
+      ?? containerlessRead.value
       ?? false;
-    const shadowOptions = this.annotations.shadowOptions
-      ?? readShadowOptions(this.context, this.definitionExpression, this.targetClass);
-    const hasSlots = readBooleanField(this.context, this.definitionExpression, this.targetClass, 'hasSlots') ?? false;
+    const shadowOptionsRead = this.annotations.shadowOptions == null
+      ? readShadowOptions(this.context, this.definitionExpression, this.targetClass)
+      : new ShadowOptionsRead(this.annotations.shadowOptions, []);
+    const shadowOptions = shadowOptionsRead.options;
+    const hasSlotsRead = readBooleanField(
+      this.context,
+      this.definitionExpression,
+      this.targetClass,
+      'hasSlots',
+      'Custom element hasSlots metadata did not close to a boolean.',
+    );
+    const enhanceRead = readBooleanField(
+      this.context,
+      this.definitionExpression,
+      this.targetClass,
+      'enhance',
+      'Custom element enhance metadata did not close to a boolean.',
+    );
+    const needsCompileRead = readBooleanField(
+      this.context,
+      this.definitionExpression,
+      this.targetClass,
+      'needsCompile',
+      'Custom element needsCompile metadata did not close to a boolean.',
+    );
+    const strictRead = readBooleanField(
+      this.context,
+      this.definitionExpression,
+      this.targetClass,
+      'strict',
+      'Custom element strict metadata did not close to a boolean.',
+    );
+    const strict = strictRead.value ?? (strictRead.open.length === 0 ? false : null);
+    const hasSlots = hasSlotsRead.value ?? false;
     const controllerIssue = this.readControllerIssue(containerless, shadowOptions, hasSlots);
     const processContent = this.readProcessContent();
     const decoratorIssues = this.readDecoratorIssues();
-    const aliasDefinitions = aliases.map((alias) =>
-      new ResourceAliasDefinition(alias, this.header.sourceAddressHandle, this.provenanceHandle)
+    const aliasMaterialization = materializeResourceAliases(
+      this.store,
+      this.context,
+      `${this.localPrefix}:alias`,
+      aliases,
     );
 
     return {
       target,
       name,
-      aliasDefinitions,
+      aliasDefinitions: aliasMaterialization.definitions,
+      aliasRecords: aliasMaterialization.records,
       key,
       capture,
+      callableBindings: captureRead.callableBinding == null ? [] : [captureRead.callableBinding],
       template,
       dependencies,
       bindables,
@@ -362,9 +477,9 @@ class CustomElementConvergenceFrame {
       containerless,
       shadowOptions,
       hasSlots,
-      enhance: readBooleanField(this.context, this.definitionExpression, this.targetClass, 'enhance') ?? false,
-      needsCompile: readBooleanField(this.context, this.definitionExpression, this.targetClass, 'needsCompile') ?? true,
-      strict: readBooleanField(this.context, this.definitionExpression, this.targetClass, 'strict'),
+      enhance: enhanceRead.value ?? false,
+      needsCompile: needsCompileRead.value ?? true,
+      strict,
       processContent: processContent.target,
       issueRecords: [
         ...(controllerIssue?.records ?? []),
@@ -378,19 +493,34 @@ class CustomElementConvergenceFrame {
         ...decoratorIssues.issues,
         ...(controllerIssue == null ? [] : [controllerIssue.issue]),
       ],
-      open: this.readOpen(bindables, watches, dependencies),
+      open: this.readOpen(
+        bindables,
+        watches,
+        dependencies,
+        staticAliases.open,
+        [
+          ...captureRead.open,
+          ...template.open,
+          ...shadowOptionsRead.open,
+          ...processContent.open,
+          ...decoratorIssues.open,
+          ...[containerlessRead, hasSlotsRead, enhanceRead, needsCompileRead, strictRead].flatMap((read) => read.open),
+        ],
+      ),
     };
   }
 
-  private readBindables(): BindableRead {
+  private readBindables(target: ResourceTargetReference): BindableRead {
     return readBindables(
       this.store,
       this.context,
       this.local('bindable'),
       this.definitionExpression,
       this.targetClass,
+      target,
       this.header.primaryIdentityHandle,
       this.provenanceHandle,
+      this.publication,
     );
   }
 
@@ -452,14 +582,15 @@ class CustomElementConvergenceFrame {
   private readProcessContent(): ProcessContentRead {
     const target = readTargetField(this.context, this.definitionExpression, this.targetClass, 'processContent');
     if (this.targetClass == null) {
-      return new ProcessContentRead(target);
+      return new ProcessContentRead(target.target, [], [], target.open);
     }
-    const classDecorators = this.readClassProcessContentDecorators(target);
+    const classDecorators = this.readClassProcessContentDecorators(target.target);
     const memberDecorators = this.readMemberProcessContentDecorators(classDecorators.target);
     return new ProcessContentRead(
       memberDecorators.target,
       [...classDecorators.records, ...memberDecorators.records],
       [...classDecorators.issues, ...memberDecorators.issues],
+      [...target.open, ...classDecorators.open, ...memberDecorators.open],
     );
   }
 
@@ -471,6 +602,7 @@ class CustomElementConvergenceFrame {
     }
     const records: KernelStoreRecord[] = [];
     const issues: ResourceIssue[] = [];
+    const open: ConvergenceOpen[] = [];
     let target = initialTarget;
     for (const [index, decorator] of (ts.canHaveDecorators(this.targetClass) ? ts.getDecorators(this.targetClass) ?? [] : []).entries()) {
       const call = decoratorCallNamed(decorator, 'processContent');
@@ -501,6 +633,7 @@ class CustomElementConvergenceFrame {
         records.push(...hook.records);
         continue;
       }
+      open.push(...hook.open);
       if (hook.issueNode != null) {
         const issue = this.publishInvalidProcessContentHook(
           `class:${index}`,
@@ -512,7 +645,7 @@ class CustomElementConvergenceFrame {
         issues.push(issue.issue);
       }
     }
-    return new ProcessContentRead(target, records, issues);
+    return new ProcessContentRead(target, records, issues, open);
   }
 
   private readMemberProcessContentDecorators(
@@ -595,9 +728,13 @@ class CustomElementConvergenceFrame {
     bindables: BindableRead,
     watches: WatchRead,
     dependencies: ResourceDependenciesRead,
+    aliasOpen: readonly ConvergenceOpen[],
+    scalarOpen: readonly ConvergenceOpen[],
   ): readonly ConvergenceOpen[] {
     return [
       ...this.annotations.open,
+      ...aliasOpen,
+      ...scalarOpen,
       ...bindables.open,
       ...watches.open,
       ...dependencies.open,
@@ -609,6 +746,32 @@ class CustomElementConvergenceFrame {
   private local(segment: string): string {
     return `${this.localPrefix}:${segment}`;
   }
+}
+
+function materializeResourceAliases(
+  store: KernelStore,
+  context: ResourceRecognitionContext,
+  local: string,
+  aliases: readonly ResourceAliasObservation[],
+): ResourceAliasMaterialization {
+  const definitions: ResourceAliasDefinition[] = [];
+  const records: KernelStoreRecord[] = [];
+  aliases.forEach((alias, index) => {
+    const source = sourceSpanEvidenceForNode(
+      store,
+      context,
+      alias.node,
+      `${local}:${index}`,
+      SourceSpanRole.Name,
+    );
+    definitions.push(new ResourceAliasDefinition(
+      alias.name,
+      source?.addressHandle ?? null,
+      source?.provenanceHandle ?? null,
+    ));
+    records.push(...(source?.records ?? []));
+  });
+  return new ResourceAliasMaterialization(definitions, records);
 }
 
 function emptyResourceAliasClaims(): ResourceAliasClaimsEmission {
@@ -638,10 +801,10 @@ function aliasesForDefinition(
 }
 
 function newAliasNames(
-  headerAliases: readonly string[],
+  headerAliases: readonly ResourceAliasObservation[],
   aliases: readonly ResourceAliasDefinition[],
 ): readonly string[] {
-  const seenHeaderAliases = new Set(headerAliases);
+  const seenHeaderAliases = new Set(headerAliases.map((alias) => alias.name));
   return aliases
     .map((alias) => alias.name)
     .filter((alias) => !seenHeaderAliases.has(alias));
@@ -650,9 +813,11 @@ function newAliasNames(
 /** Turns recognized resource headers and source metadata into compiler-consumable definition products. */
 export class ResourceDefinitionConverger {
   constructor(
-    /** Hot analysis store that receives converged resource definition records. */
+    /** Store that owns stable handles and committed upstream records. */
     readonly store: KernelStore,
-    private readonly sourceTextCache = new AuthoredSourceTextCache(''),
+    private readonly sourceTextCache: AuthoredSourceTextCache,
+    /** Immediate or staged owner of the complete convergence publication. */
+    private readonly publication: KernelPublicationContext,
   ) {}
 
   converge(
@@ -663,6 +828,7 @@ export class ResourceDefinitionConverger {
     const records: KernelStoreRecord[] = [];
     const definitions: FullResourceDefinition[] = [];
     const issues: ResourceIssue[] = [];
+    const callableBindings: StaticCallableExecutionBinding[] = [];
 
     for (const header of headerEmission.definitions) {
       const observation = observations[header.observationIndex] ?? null;
@@ -672,24 +838,28 @@ export class ResourceDefinitionConverger {
       const product = this.recordsForDefinition(context, observation, header);
       records.push(...product.records);
       issues.push(...product.issues);
+      callableBindings.push(...product.callableBindings);
       if (product.definition != null) {
         definitions.push(product.definition);
       }
     }
 
-    if (records.length > 0) {
-      this.store.commit(new KernelStoreBatch(records, `resource-definition-convergence:${context.moduleKey}`));
-    }
-    for (const definition of definitions) {
-      if (definition.productHandle != null) {
-        this.store.productDetails.add(ResourceProductDetails.Definition, definition.productHandle, definition);
-      }
-    }
-    for (const issue of issues) {
-      this.store.productDetails.add(ResourceProductDetails.Issue, issue.productHandle, issue);
-    }
+    this.publication.publish(new KernelPublicationPlan(
+      new KernelStoreBatch(records, `resource-definition-convergence:${context.moduleKey}`),
+      [
+        ...definitions.flatMap((definition) => definition.productHandle == null
+          ? []
+          : [publishProductDetail(ResourceProductDetails.Definition, definition.productHandle, definition)]),
+        ...issues.map((issue) => publishProductDetail(ResourceProductDetails.Issue, issue.productHandle, issue)),
+      ],
+    ));
 
-    return new ResourceDefinitionConvergenceEmission(definitions, issues, records);
+    return new ResourceDefinitionConvergenceEmission(
+      definitions,
+      issues,
+      records,
+      new StaticCallableExecutionBindings(callableBindings),
+    );
   }
 
   private recordsForDefinition(
@@ -701,7 +871,7 @@ export class ResourceDefinitionConverger {
       return new ResourceDefinitionConvergenceProduct([], null);
     }
     const definitionProductHandle = this.store.handles.product(`resource-definition-converged:${header.localKey}`);
-    if (this.store.readProduct(definitionProductHandle) != null) {
+    if (this.publication.read(definitionProductHandle) != null) {
       return new ResourceDefinitionConvergenceProduct([], null);
     }
 
@@ -735,7 +905,12 @@ export class ResourceDefinitionConverger {
         ...aliasClaims.claimHandles,
       ], openSeams.handles),
     ];
-    return new ResourceDefinitionConvergenceProduct(records, definition, converged.issues);
+    return new ResourceDefinitionConvergenceProduct(
+      records,
+      definition,
+      converged.issues,
+      converged.callableBindings,
+    );
   }
 
   private convergenceClaimForDefinition(
@@ -801,7 +976,8 @@ export class ResourceDefinitionConverger {
   }
 
   private evidenceHandlesForProvenance(provenanceHandle: ProvenanceHandle): readonly EvidenceHandle[] {
-    return this.store.readProvenance(provenanceHandle)?.evidenceHandles ?? [];
+    const provenance = this.publication.read(provenanceHandle);
+    return provenance instanceof ProvenanceRecord ? provenance.evidenceHandles : [];
   }
 
   private convergeDefinition(
@@ -844,23 +1020,29 @@ export class ResourceDefinitionConverger {
       definition,
       observation,
       header,
+      productHandle,
       provenanceHandle,
       this.sourceTextCache,
+      this.publication,
     ).read();
     if (facts == null) {
       return null;
     }
 
+    const nameSource = this.nameSourceForDefinition(context, definition, header);
     return new ConvergedResourceDefinition(
-      this.createCustomElementDefinition(productHandle, header, observation, facts),
+      this.createCustomElementDefinition(productHandle, header, observation, facts, nameSource?.addressHandle ?? null),
       facts.open,
       [
+        ...(nameSource?.records ?? []),
+        ...facts.aliasRecords,
         ...facts.template.records,
         ...facts.bindables.records,
         ...facts.watches.records,
         ...facts.issueRecords,
       ],
       facts.issues,
+      facts.callableBindings,
     );
   }
 
@@ -869,6 +1051,7 @@ export class ResourceDefinitionConverger {
     header: ResourceDefinitionHeaderEmission,
     observation: ResourceRecognitionObservation,
     facts: CustomElementConvergenceFacts,
+    nameSourceAddressHandle: AddressHandle | null,
   ): CustomElementDefinition {
     return new CustomElementDefinition(
       productHandle,
@@ -894,6 +1077,8 @@ export class ResourceDefinitionConverger {
       facts.strict,
       facts.processContent,
       [this.customElementContribution(observation, facts)],
+      [],
+      nameSourceAddressHandle,
     );
   }
 
@@ -943,14 +1128,17 @@ export class ResourceDefinitionConverger {
     const targetClass = resourceTargetClassLikeNode(definition.target);
     const definitionExpression = expressionNode(observation.definitionNode);
     const annotations = readAliasMetadataAnnotations(context, targetClass);
+    const staticAliases = readStaticAliasMetadata(context, targetClass);
     const bindables = readBindables(
       this.store,
       context,
       `resource-definition-converged:${header.localKey}:bindable`,
       definitionExpression,
       targetClass,
+      target,
       header.primaryIdentityHandle,
       provenanceHandle,
+      this.publication,
     );
     const watches = readWatches(
       this.store,
@@ -962,20 +1150,58 @@ export class ResourceDefinitionConverger {
       provenanceHandle,
       WatchDefinitionObjectWatchesPolicy.Ignore,
     );
-    const aliases = mergeAliases(annotations.aliases, definition.aliases, readStaticStringArrayClassProperty(context, targetClass, 'aliases'));
+    const aliases = materializeResourceAliases(
+      this.store,
+      context,
+      `resource-definition-converged:${header.localKey}:alias`,
+      mergeResourceAliasObservations(
+        annotations.aliases,
+        definition.aliases,
+        staticAliases.aliases,
+      ),
+    );
+    const isTemplateControllerRead = definition.type === ResourceDefinitionKind.TemplateController
+      ? new ConvergenceScalarRead<boolean>(true, [], null)
+      : readBooleanField(
+          context,
+          definitionExpression,
+          targetClass,
+          'isTemplateController',
+          'Custom attribute isTemplateController metadata did not close to a boolean.',
+        );
+    const noMultiBindingsRead = readBooleanField(
+      context,
+      definitionExpression,
+      targetClass,
+      'noMultiBindings',
+      'Custom attribute noMultiBindings metadata did not close to a boolean.',
+    );
+    const defaultPropertyRead = readStringField(
+      context,
+      definitionExpression,
+      targetClass,
+      'defaultProperty',
+      'Custom attribute defaultProperty metadata did not close to a string.',
+    );
+    const containerStrategyRead = readContainerStrategy(context, definitionExpression, targetClass);
     const isTemplateController = definition.type === ResourceDefinitionKind.TemplateController
-      || readBooleanField(context, definitionExpression, targetClass, 'isTemplateController') === true;
-    const noMultiBindings = readBooleanField(context, definitionExpression, targetClass, 'noMultiBindings') ?? false;
-    const defaultProperty = readStringField(context, definitionExpression, targetClass, 'defaultProperty') ?? 'value';
-    const containerStrategy = readContainerStrategy(context, definitionExpression, targetClass);
+      || isTemplateControllerRead.value === true;
+    const noMultiBindings = noMultiBindingsRead.value ?? false;
+    const defaultProperty = defaultPropertyRead.value ?? 'value';
+    const containerStrategy = containerStrategyRead.value ?? CustomAttributeContainerStrategy.Reuse;
     const dependencies = readResourceDependencies(context, definitionExpression, targetClass);
     const open = [
       ...annotations.open,
+      ...staticAliases.open,
       ...bindables.open,
       ...watches.open,
       ...dependencies.open,
+      ...isTemplateControllerRead.open,
+      ...noMultiBindingsRead.open,
+      ...defaultPropertyRead.open,
+      ...containerStrategyRead.open,
     ];
-    const aliasDefinitions = aliases.map((alias) => new ResourceAliasDefinition(alias, header.sourceAddressHandle, provenanceHandle));
+    const nameSource = this.nameSourceForDefinition(context, definition, header);
     return new ConvergedResourceDefinition(
       new CustomAttributeDefinition(
         productHandle,
@@ -983,7 +1209,7 @@ export class ResourceDefinitionConverger {
         header.sourceAddressHandle,
         target,
         name,
-        aliasDefinitions,
+        aliases.definitions,
         key,
         isTemplateController,
         bindables.bindables,
@@ -997,7 +1223,7 @@ export class ResourceDefinitionConverger {
             namedResourceContributionKindForCarrier(observation.carrierKind),
             target,
             name,
-            aliasDefinitions,
+            aliases.definitions,
             key,
             isTemplateController,
             bindables.contributions,
@@ -1008,9 +1234,11 @@ export class ResourceDefinitionConverger {
             defaultProperty,
           ),
         ],
+        [],
+        nameSource?.addressHandle ?? null,
       ),
       open,
-      [...bindables.records, ...watches.records],
+      [...(nameSource?.records ?? []), ...aliases.records, ...bindables.records, ...watches.records],
       [...bindables.issues, ...watches.issues],
     );
   }
@@ -1040,8 +1268,18 @@ export class ResourceDefinitionConverger {
 
     const targetClass = resourceTargetClassLikeNode(definition.target);
     const annotations = readAliasMetadataAnnotations(context, targetClass);
-    const aliasNames = mergeAliases(annotations.aliases, definition.aliases, readStaticStringArrayClassProperty(context, targetClass, 'aliases'));
-    const aliases = aliasNames.map((alias) => new ResourceAliasDefinition(alias, header.sourceAddressHandle, provenanceHandle));
+    const staticAliases = readStaticAliasMetadata(context, targetClass);
+    const aliases = materializeResourceAliases(
+      this.store,
+      context,
+      `resource-definition-converged:${header.localKey}:alias`,
+      mergeResourceAliasObservations(
+        annotations.aliases,
+        definition.aliases,
+        staticAliases.aliases,
+      ),
+    );
+    const nameSource = this.nameSourceForDefinition(context, definition, header);
     switch (definition.type) {
       case ResourceDefinitionKind.ValueConverter: {
         return new ConvergedResourceDefinition(
@@ -1051,11 +1289,14 @@ export class ResourceDefinitionConverger {
             header.sourceAddressHandle,
             target,
             name,
-            aliases,
+            aliases.definitions,
             key,
-            [new ValueConverterDefinitionContribution(namedResourceContributionKindForCarrier(observation.carrierKind), target, name, aliases, key)],
+            [new ValueConverterDefinitionContribution(namedResourceContributionKindForCarrier(observation.carrierKind), target, name, aliases.definitions, key)],
+            [],
+            nameSource?.addressHandle ?? null,
           ),
-          annotations.open,
+          [...annotations.open, ...staticAliases.open],
+          [...(nameSource?.records ?? []), ...aliases.records],
         );
       }
       case ResourceDefinitionKind.BindingBehavior: {
@@ -1066,11 +1307,14 @@ export class ResourceDefinitionConverger {
             header.sourceAddressHandle,
             target,
             name,
-            aliases,
+            aliases.definitions,
             key,
-            [new BindingBehaviorDefinitionContribution(namedResourceContributionKindForCarrier(observation.carrierKind), target, name, aliases, key)],
+            [new BindingBehaviorDefinitionContribution(namedResourceContributionKindForCarrier(observation.carrierKind), target, name, aliases.definitions, key)],
+            [],
+            nameSource?.addressHandle ?? null,
           ),
-          annotations.open,
+          [...annotations.open, ...staticAliases.open],
+          [...(nameSource?.records ?? []), ...aliases.records],
         );
       }
       case ResourceDefinitionKind.BindingCommand: {
@@ -1081,11 +1325,14 @@ export class ResourceDefinitionConverger {
             header.sourceAddressHandle,
             target,
             name,
-            aliases,
+            aliases.definitions,
             key,
-            [new BindingCommandDefinitionContribution(namedResourceContributionKindForCarrier(observation.carrierKind), target, name, aliases, key)],
+            [new BindingCommandDefinitionContribution(namedResourceContributionKindForCarrier(observation.carrierKind), target, name, aliases.definitions, key)],
+            [],
+            nameSource?.addressHandle ?? null,
           ),
-          annotations.open,
+          [...annotations.open, ...staticAliases.open],
+          [...(nameSource?.records ?? []), ...aliases.records],
         );
       }
       default:
@@ -1105,10 +1352,10 @@ export class ResourceDefinitionConverger {
       return null;
     }
 
-    const entries = definition.patterns.map((pattern) => new AttributePatternDefinitionEntry(
+    const entries = definition.patterns.map((pattern, index) => new AttributePatternDefinitionEntry(
       pattern.pattern,
       pattern.symbols,
-      header.sourceAddressHandle,
+      header.lookupNameSourceAddressHandles[index] ?? null,
       provenanceHandle,
     ));
     return new ConvergedResourceDefinition(
@@ -1150,6 +1397,20 @@ export class ResourceDefinitionConverger {
     );
   }
 
+  private nameSourceForDefinition(
+    context: ResourceRecognitionContext,
+    definition: NamedResourceDefinitionHeader,
+    header: ResourceDefinitionHeaderEmission,
+  ): ReturnType<typeof sourceSpanAddressForNode> {
+    return sourceSpanAddressForNode(
+      this.store,
+      context,
+      definition.nameSourceNode,
+      `resource-definition-converged:${header.localKey}:name`,
+      SourceSpanRole.Name,
+    );
+  }
+
   private recordsForNewAliasClaim(
     alias: string,
     index: number,
@@ -1164,7 +1425,7 @@ export class ResourceDefinitionConverger {
       [
         new AureliaResourceIdentity(
           aliasIdentityHandle,
-          toAureliaResourceIdentityKind(headerDefinition.type),
+          toAureliaResourceDeclarationKind(headerDefinition.type),
           alias,
           header.targetReference?.identityHandle ?? null,
         ),
@@ -1271,22 +1532,93 @@ function readCustomElementCapture(
   context: ResourceRecognitionContext,
   definitionExpression: ts.Expression | null,
   targetClass: ts.ClassLikeDeclarationBase | null,
-): CustomElementCaptureDefinition {
+  predicateSlot: StaticCallableSlot,
+): CustomElementCaptureRead {
   const read = readFieldValue(context, definitionExpression, targetClass, 'capture');
-  const value = read?.value;
-  if (value == null || (value.kind === EvaluationValueKind.Boolean && !value.value)) {
-    return new CustomElementCaptureDefinition(CustomElementCaptureKind.None);
-  }
-  if (value.kind === EvaluationValueKind.Boolean && value.value) {
-    return new CustomElementCaptureDefinition(CustomElementCaptureKind.All);
-  }
-  if (value.kind === EvaluationValueKind.Function) {
-    return new CustomElementCaptureDefinition(
-      CustomElementCaptureKind.Predicate,
-      targetReferenceForFunction(value, null),
+  if (read == null) {
+    return new CustomElementCaptureRead(
+      new CustomElementCaptureDefinition(CustomElementCaptureKind.None),
+      null,
+      [],
     );
   }
-  return new CustomElementCaptureDefinition(CustomElementCaptureKind.Open);
+  const value = read?.value;
+  if (value == null) {
+    return new CustomElementCaptureRead(
+      new CustomElementCaptureDefinition(CustomElementCaptureKind.Open),
+      null,
+      convergenceOpenForRejectedReadShape(
+        'Custom element capture metadata evaluation did not produce a value.',
+        read,
+        [OpenSeamReasonKind.ResourceDefinitionFieldOpen],
+      ),
+    );
+  }
+  if (value.kind === EvaluationValueKind.Undefined
+    || value.kind === EvaluationValueKind.Null
+    || (value.kind === EvaluationValueKind.Boolean && !value.value)) {
+    return new CustomElementCaptureRead(
+      new CustomElementCaptureDefinition(CustomElementCaptureKind.None),
+      null,
+      convergenceOpenForReadPressure('Custom element capture metadata evaluation remained open.', read),
+    );
+  }
+  if (value.kind === EvaluationValueKind.Boolean && value.value) {
+    return new CustomElementCaptureRead(
+      new CustomElementCaptureDefinition(CustomElementCaptureKind.All),
+      null,
+      convergenceOpenForReadPressure('Custom element capture metadata evaluation remained open.', read),
+    );
+  }
+  if (value.kind === EvaluationValueKind.Function) {
+    return new CustomElementCaptureRead(
+      new CustomElementCaptureDefinition(
+        CustomElementCaptureKind.Predicate,
+        targetReferenceForFunction(value, null),
+        predicateSlot,
+      ),
+      new StaticCallableExecutionBinding(
+        predicateSlot,
+        new StaticCallableTarget(
+          value,
+          context.evaluation.policy,
+          context.evaluation.runtimeHost,
+          read.openSeams,
+        ),
+      ),
+      convergenceOpenForReadPressure('Custom element capture metadata evaluation remained open.', read),
+    );
+  }
+  return new CustomElementCaptureRead(
+    new CustomElementCaptureDefinition(CustomElementCaptureKind.Open),
+    null,
+    convergenceOpenForRejectedReadShape(
+      'Custom element capture metadata did not close to a boolean or predicate.',
+      read,
+      [OpenSeamReasonKind.ResourceDefinitionFieldOpen],
+    ),
+  );
+}
+
+function captureReadForAnnotation(
+  capture: CustomElementCaptureDefinition,
+  callableTarget: StaticCallableTarget | null,
+  predicateSlot: StaticCallableSlot,
+): CustomElementCaptureRead {
+  if (capture.kind !== CustomElementCaptureKind.Predicate) {
+    return new CustomElementCaptureRead(capture, null, []);
+  }
+  return new CustomElementCaptureRead(
+    new CustomElementCaptureDefinition(
+      CustomElementCaptureKind.Predicate,
+      capture.predicateTarget,
+      predicateSlot,
+    ),
+    callableTarget == null
+      ? null
+      : new StaticCallableExecutionBinding(predicateSlot, callableTarget),
+    [],
+  );
 }
 
 function readCustomElementTemplate(
@@ -1307,6 +1639,18 @@ function readCustomElementTemplate(
   }
 
   const value = read?.value;
+  if (read != null && value == null) {
+    return new TemplateDefinitionRead(
+      new CustomElementTemplateDefinition(CustomElementTemplateKind.Open),
+      [],
+      new ResourceDependenciesRead([], []),
+      convergenceOpenForRejectedReadShape(
+        'Custom element template metadata evaluation did not produce a value.',
+        read,
+        [OpenSeamReasonKind.ResourceDefinitionFieldOpen],
+      ),
+    );
+  }
   if (value == null || value.kind === EvaluationValueKind.Null || value.kind === EvaluationValueKind.Undefined) {
     const conventional = readConventionalHtmlTemplate(store, context, targetClass, observation, local, sourceTextCache);
     if (conventional != null) {
@@ -1324,11 +1668,23 @@ function readCustomElementTemplate(
         value.value,
         source?.addressHandle ?? null,
         source?.sourceMap ?? null,
+        sourceTextContentRevision(context.sourceFile.text),
       ),
       source?.records ?? [],
+      new ResourceDependenciesRead([], []),
+      convergenceOpenForReadPressure('Custom element template metadata evaluation remained open.', read),
     );
   }
-  return new TemplateDefinitionRead(new CustomElementTemplateDefinition(CustomElementTemplateKind.Open));
+  return new TemplateDefinitionRead(
+    new CustomElementTemplateDefinition(CustomElementTemplateKind.Open),
+    [],
+    new ResourceDependenciesRead([], []),
+    convergenceOpenForRejectedReadShape(
+      'Custom element template metadata did not close to markup or an imported template.',
+      read,
+      [OpenSeamReasonKind.ResourceDefinitionFieldOpen],
+    ),
+  );
 }
 
 function readConventionalHtmlTemplate(
@@ -1354,10 +1710,19 @@ function readConventionalHtmlTemplate(
     return null;
   }
   const absolutePath = path.resolve(context.projectRootDir ?? path.dirname(context.sourceFile.fileName), admission.path);
-  const rawMarkup = sourceTextCache.read(absolutePath)?.text ?? null;
-  if (rawMarkup == null) {
-    return null;
+  const authoredSource = sourceTextCache.read(absolutePath);
+  if (authoredSource == null) {
+    const source = externalTemplateSourceAddress(store, admission.addressHandle, 0, local);
+    return new TemplateDefinitionRead(
+      new CustomElementTemplateDefinition(
+        CustomElementTemplateKind.Open,
+        null,
+        source.addressHandle,
+      ),
+      source.records,
+    );
   }
+  const rawMarkup = authoredSource.text;
   const metadata = readHtmlTemplateMetadata(rawMarkup);
   const source = externalTemplateSourceAddress(store, admission.addressHandle, rawMarkup.length, local, metadata.sourceMap);
   return new TemplateDefinitionRead(
@@ -1366,6 +1731,7 @@ function readConventionalHtmlTemplate(
       metadata.markup,
       source.addressHandle,
       source.sourceMap,
+      authoredSource.contentRevision,
     ),
     source.records,
     readHtmlTemplateDependencies(context, admission.path, metadata.imports),
@@ -1396,10 +1762,19 @@ function readImportedHtmlTemplate(
   if (admission == null) {
     return null;
   }
-  const rawMarkup = sourceTextCache.read(absolutePath)?.text ?? null;
-  if (rawMarkup == null) {
-    return null;
+  const authoredSource = sourceTextCache.read(absolutePath);
+  if (authoredSource == null) {
+    const source = externalTemplateSourceAddress(store, admission.addressHandle, 0, local);
+    return new TemplateDefinitionRead(
+      new CustomElementTemplateDefinition(
+        CustomElementTemplateKind.Open,
+        null,
+        source.addressHandle,
+      ),
+      source.records,
+    );
   }
+  const rawMarkup = authoredSource.text;
   const metadata = readHtmlTemplateMetadata(rawMarkup);
   const source = externalTemplateSourceAddress(store, admission.addressHandle, rawMarkup.length, local, metadata.sourceMap);
   return new TemplateDefinitionRead(
@@ -1408,6 +1783,7 @@ function readImportedHtmlTemplate(
       metadata.markup,
       source.addressHandle,
       source.sourceMap,
+      authoredSource.contentRevision,
     ),
     source.records,
     readHtmlTemplateDependencies(context, admission.path, metadata.imports),
@@ -1474,20 +1850,61 @@ function readShadowOptions(
   context: ResourceRecognitionContext,
   definitionExpression: ts.Expression | null,
   targetClass: ts.ClassLikeDeclarationBase | null,
-): ShadowOptionsDefinition | null {
-  const value = readFieldValue(context, definitionExpression, targetClass, 'shadowOptions')?.value;
-  if (value?.kind !== EvaluationValueKind.Object) {
-    return null;
+): ShadowOptionsRead {
+  const read = readFieldValue(context, definitionExpression, targetClass, 'shadowOptions');
+  if (read == null) {
+    return new ShadowOptionsRead(null, []);
   }
-  const mode = value.properties.get('mode')?.value;
-  const modeText = mode == null ? null : readStaticStringValue(mode);
+  const value = read.value;
+  if (value == null) {
+    return new ShadowOptionsRead(
+      null,
+      convergenceOpenForRejectedReadShape(
+        'Custom element shadowOptions evaluation did not produce a value.',
+        read,
+        [OpenSeamReasonKind.ResourceDefinitionFieldOpen],
+      ),
+    );
+  }
+  if (value.kind === EvaluationValueKind.Undefined || value.kind === EvaluationValueKind.Null) {
+    return new ShadowOptionsRead(
+      null,
+      convergenceOpenForReadPressure('Custom element shadowOptions evaluation remained open.', read),
+    );
+  }
+  if (value?.kind !== EvaluationValueKind.Object) {
+    return new ShadowOptionsRead(
+      null,
+      convergenceOpenForRejectedReadShape(
+        'Custom element shadowOptions did not close to an object.',
+        read,
+        [OpenSeamReasonKind.ResourceDefinitionFieldOpen],
+      ),
+    );
+  }
+  const mode = readStaticValueProperty(value, 'mode', read.node);
+  const modeValue = closedStaticValueMemberValue(mode);
+  const modeText = modeValue == null ? null : readStaticStringValue(modeValue);
   switch (modeText) {
     case 'open':
-      return new ShadowOptionsDefinition(ShadowRootMode.Open);
+      return new ShadowOptionsRead(
+        new ShadowOptionsDefinition(ShadowRootMode.Open),
+        convergenceOpenForReadPressure('Custom element shadowOptions evaluation remained open.', read),
+      );
     case 'closed':
-      return new ShadowOptionsDefinition(ShadowRootMode.Closed);
+      return new ShadowOptionsRead(
+        new ShadowOptionsDefinition(ShadowRootMode.Closed),
+        convergenceOpenForReadPressure('Custom element shadowOptions evaluation remained open.', read),
+      );
     default:
-      return null;
+      return new ShadowOptionsRead(
+        null,
+        convergenceOpenForRejectedReadShape(
+          'Custom element shadowOptions mode did not close to open or closed.',
+          read,
+          [OpenSeamReasonKind.ResourceDefinitionFieldOpen],
+        ),
+      );
   }
 }
 
@@ -1528,6 +1945,7 @@ function readCustomElementControllerNoShadowOnContainerlessIssue(
     'Containerless custom elements cannot request Shadow DOM or slot projection.',
     ResourceFrameworkErrorCode.ControllerNoShadowOnContainerless,
     source?.addressHandle ?? null,
+    [],
   );
   return new ResourceIssuePublication(
     publication.issue,
@@ -1548,6 +1966,7 @@ function readCustomElementDecoratorIssues(
   }
   const records: KernelStoreRecord[] = [];
   const issues: ResourceIssue[] = [];
+  const open: ConvergenceOpen[] = [];
 
   for (const [decoratorIndex, decorator] of (ts.canHaveDecorators(targetClass) ? ts.getDecorators(targetClass) ?? [] : []).entries()) {
     if (!isSlottedDecorator(decorator)) {
@@ -1574,7 +1993,10 @@ function readCustomElementDecoratorIssues(
     const decorators = ts.canHaveDecorators(member) ? ts.getDecorators(member) ?? [] : [];
     for (const [decoratorIndex, decorator] of decorators.entries()) {
       const childrenQuery = readChildrenDecoratorQuery(context, decorator);
-      if (childrenQuery != null && /[\s>]/.test(childrenQuery.query)) {
+      if (childrenQuery != null) {
+        open.push(...childrenQuery.open);
+      }
+      if (childrenQuery?.query != null && /[\s>]/.test(childrenQuery.query)) {
         const publication = publishResourceIssue(
           store,
           context,
@@ -1612,13 +2034,21 @@ function readCustomElementDecoratorIssues(
     }
   }
 
-  return new ResourceIssueRead(records, issues);
+  return new ResourceIssueRead(records, issues, open);
+}
+
+class ChildrenDecoratorQueryRead {
+  constructor(
+    readonly query: string | null,
+    readonly sourceNode: ts.Node,
+    readonly open: readonly ConvergenceOpen[],
+  ) {}
 }
 
 function readChildrenDecoratorQuery(
   context: ResourceRecognitionContext,
   decorator: ts.Decorator,
-): { readonly query: string; readonly sourceNode: ts.Node } | null {
+): ChildrenDecoratorQueryRead | null {
   const call = decoratorCallNamed(decorator, 'children');
   if (call == null) {
     return null;
@@ -1630,9 +2060,22 @@ function readChildrenDecoratorQuery(
   const queryRead = readObjectProperty(context.expressionReader, argument, 'query')
     ?? context.expressionReader.evaluateExpression(argument);
   const query = queryRead.value == null ? null : readStaticStringValue(queryRead.value);
+  const sourceNode = queryRead.node ?? argument;
   return query == null
-    ? null
-    : { query, sourceNode: queryRead.node ?? argument };
+    ? new ChildrenDecoratorQueryRead(
+        null,
+        sourceNode,
+        convergenceOpenForRejectedReadShape(
+          'Children query metadata did not close to a string.',
+          queryRead,
+          [OpenSeamReasonKind.ResourceDefinitionFieldOpen],
+        ),
+      )
+    : new ChildrenDecoratorQueryRead(
+        query,
+        sourceNode,
+        convergenceOpenForReadPressure('Children query metadata evaluation remained open.', queryRead),
+      );
 }
 
 function readProcessContentHookArgument(
@@ -1641,25 +2084,49 @@ function readProcessContentHookArgument(
   local: string,
   targetClass: ts.ClassLikeDeclarationBase,
   argument: ts.Expression,
-): { readonly target: ResourceTargetReference | null; readonly records: readonly KernelStoreRecord[]; readonly issueNode: ts.Node | null } {
+): {
+  readonly target: ResourceTargetReference | null;
+  readonly records: readonly KernelStoreRecord[];
+  readonly issueNode: ts.Node | null;
+  readonly open: readonly ConvergenceOpen[];
+} {
   const read = context.expressionReader.evaluateExpression(argument);
   const value = read.value;
   if (value?.kind === EvaluationValueKind.Function) {
     const source = sourceSpanAddressForNode(store, context, argument, `${local}:source`, SourceSpanRole.Value);
-    return { target: targetReferenceForFunction(value, source?.addressHandle ?? null), records: source?.records ?? [], issueNode: null };
+    return {
+      target: targetReferenceForFunction(value, source?.addressHandle ?? null),
+      records: source?.records ?? [],
+      issueNode: null,
+      open: convergenceOpenForReadPressure('Process-content hook evaluation remained open.', read),
+    };
   }
   if (value?.kind === EvaluationValueKind.String) {
     const member = readStaticMethod(targetClass, value.value);
     if (member == null) {
-      return { target: null, records: [], issueNode: argument };
+      return { target: null, records: [], issueNode: argument, open: [] };
     }
     const source = sourceSpanAddressForNode(store, context, memberNameNode(member) ?? member, `${local}:source`, SourceSpanRole.Name);
-    return { target: new ResourceTargetReference(null, source?.addressHandle ?? null, value.value), records: source?.records ?? [], issueNode: null };
+    return {
+      target: new ResourceTargetReference(null, source?.addressHandle ?? null, value.value),
+      records: source?.records ?? [],
+      issueNode: null,
+      open: convergenceOpenForReadPressure('Process-content hook evaluation remained open.', read),
+    };
   }
   if (value == null || value.kind === EvaluationValueKind.Unknown || value.kind === EvaluationValueKind.BoundaryValue) {
-    return { target: null, records: [], issueNode: null };
+    return {
+      target: null,
+      records: [],
+      issueNode: null,
+      open: convergenceOpenForRejectedReadShape(
+        'Process-content hook did not close to a function or method name.',
+        read,
+        [OpenSeamReasonKind.ResourceDefinitionFieldOpen],
+      ),
+    };
   }
-  return { target: null, records: [], issueNode: argument };
+  return { target: null, records: [], issueNode: argument, open: [] };
 }
 
 function readStaticMethod(
@@ -1679,12 +2146,31 @@ function readTargetField(
   definitionExpression: ts.Expression | null,
   targetClass: ts.ClassLikeDeclarationBase | null,
   fieldName: string,
-): ResourceTargetReference | null {
-  const value = readFieldValue(context, definitionExpression, targetClass, fieldName)?.value;
-  if (value?.kind !== EvaluationValueKind.Function && value?.kind !== EvaluationValueKind.Class) {
-    return null;
+): ResourceTargetFieldRead {
+  const read = readFieldValue(context, definitionExpression, targetClass, fieldName);
+  if (read == null) {
+    return new ResourceTargetFieldRead(null, []);
   }
-  return targetReferenceForFunction(value, null);
+  const value = read.value;
+  if (value?.kind !== EvaluationValueKind.Function && value?.kind !== EvaluationValueKind.Class) {
+    return value?.kind === EvaluationValueKind.Undefined || value?.kind === EvaluationValueKind.Null
+      ? new ResourceTargetFieldRead(
+          null,
+          convergenceOpenForReadPressure(`Resource ${fieldName} evaluation remained open.`, read),
+        )
+      : new ResourceTargetFieldRead(
+          null,
+          convergenceOpenForRejectedReadShape(
+            `Resource ${fieldName} did not close to a function or class.`,
+            read,
+            [OpenSeamReasonKind.ResourceDefinitionTargetOpen],
+          ),
+        );
+  }
+  return new ResourceTargetFieldRead(
+    targetReferenceForFunction(value, null),
+    convergenceOpenForReadPressure(`Resource ${fieldName} evaluation remained open.`, read),
+  );
 }
 
 function readResourceDependencies(
@@ -1693,10 +2179,25 @@ function readResourceDependencies(
   targetClass: ts.ClassLikeDeclarationBase | null,
 ): ResourceDependenciesRead {
   const read = readFieldValue(context, definitionExpression, targetClass, 'dependencies');
-  if (read == null || read.value == null
-    || read.value.kind === EvaluationValueKind.Undefined
-    || read.value.kind === EvaluationValueKind.Null) {
+  if (read == null) {
     return new ResourceDependenciesRead([], []);
+  }
+  if (read.value == null) {
+    return new ResourceDependenciesRead(
+      [],
+      convergenceOpenForRead(
+        'Resource dependencies evaluation did not produce a value.',
+        read,
+        [OpenSeamReasonKind.ResourceDefinitionDependenciesOpen],
+      ),
+    );
+  }
+  if (read.value.kind === EvaluationValueKind.Undefined
+    || read.value.kind === EvaluationValueKind.Null) {
+    return new ResourceDependenciesRead(
+      [],
+      convergenceOpenForReadPressure('Resource dependencies evaluation remained open.', read),
+    );
   }
   const value = read.value;
   if (value.kind !== EvaluationValueKind.Array) {
@@ -1711,7 +2212,9 @@ function readResourceDependencies(
   }
 
   const dependencies: ResourceDependencyReference[] = [];
-  const open: ConvergenceOpen[] = [];
+  const open: ConvergenceOpen[] = [
+    ...convergenceOpenForReadPressure('Resource dependencies evaluation remained open.', read),
+  ];
   for (const element of value.elements) {
     if (
       element.value.kind !== EvaluationValueKind.Class
@@ -1934,13 +2437,34 @@ function readContainerStrategy(
   context: ResourceRecognitionContext,
   definitionExpression: ts.Expression | null,
   targetClass: ts.ClassLikeDeclarationBase | null,
-): CustomAttributeContainerStrategy {
-  switch (readStringField(context, definitionExpression, targetClass, 'containerStrategy')) {
+): ConvergenceScalarRead<CustomAttributeContainerStrategy> {
+  const read = readStringField(
+    context,
+    definitionExpression,
+    targetClass,
+    'containerStrategy',
+    'Custom attribute containerStrategy metadata did not close to a string.',
+  );
+  switch (read.value) {
     case 'new':
-      return CustomAttributeContainerStrategy.New;
+      return new ConvergenceScalarRead(CustomAttributeContainerStrategy.New, read.open, read.sourceNode);
     case 'reuse':
+      return new ConvergenceScalarRead(CustomAttributeContainerStrategy.Reuse, read.open, read.sourceNode);
+    case null:
+      return new ConvergenceScalarRead(CustomAttributeContainerStrategy.Reuse, read.open, read.sourceNode);
     default:
-      return CustomAttributeContainerStrategy.Reuse;
+      return new ConvergenceScalarRead(
+        CustomAttributeContainerStrategy.Reuse,
+        [
+          ...read.open,
+          ...convergenceOpenForNode(
+            `Custom attribute containerStrategy '${read.value}' is not recognized.`,
+            read.sourceNode,
+            [],
+          ),
+        ],
+        read.sourceNode,
+      );
   }
 }
 
@@ -1969,6 +2493,7 @@ function publishResourceIssue(
     message,
     frameworkErrorCode,
     source?.addressHandle ?? null,
+    [],
   );
   return new ResourceIssuePublication(
     publication.issue,

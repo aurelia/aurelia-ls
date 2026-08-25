@@ -2,12 +2,15 @@ import { SemanticClaim } from '../kernel/claim.js';
 import type { ProductHandle } from '../kernel/handles.js';
 import { InstructionIdentity } from '../kernel/identity.js';
 import { MaterializedProduct } from '../kernel/materialization.js';
+import { OpenSeamReasonKind } from '../kernel/open-seam.js';
 import type { KernelStore, KernelStoreRecord } from '../kernel/store.js';
+import type { KernelPublicationContext } from '../kernel/publication.js';
 import { KernelVocabulary } from '../kernel/vocabulary.js';
 import { CustomAttributeDefinition } from '../resources/custom-attribute-definition.js';
 import { CustomElementDefinition } from '../resources/custom-element-definition.js';
 import { ResourceProductDetails } from '../resources/product-details.js';
 import type { ExpressionType } from '../expression/ast.js';
+import type { SourceSpan } from '../expression/source-span.js';
 import { ExpressionParseResultKind } from '../expression/parse-result-algebra.js';
 import { camelCaseAttributeName } from './attribute-mapper.js';
 import type { AttributeSyntax } from './attribute-syntax.js';
@@ -15,7 +18,9 @@ import {
   BindingCommandBuildInfo,
   BindingCommandInstructionAllocation,
   BindingCommandIteratorParse,
+  BindingCommandLoweringState,
   BindingCommandTailSyntax,
+  type BindingCommandBuildResult,
   type BindingCommandBuildContext,
   type BindingCommandExecutable,
 } from './binding-command-execution.js';
@@ -27,7 +32,8 @@ import {
   type TemplateCompilerService,
 } from './compiler-world.js';
 import type { TemplateBindableReference } from './compiler-world-reference.js';
-import { HtmlElement, type HtmlNodeReference } from './html-ir.js';
+import { readVisibleTemplateResourceDefinition } from './compiler-resource-lookup.js';
+import { HtmlAttribute, HtmlElement, type HtmlNodeReference } from './html-ir.js';
 import { templateElementLookupNameFromAttributes } from './special-attribute-source.js';
 import {
   HydrateAttributeInstruction,
@@ -58,6 +64,7 @@ import {
   TemplateCompilerFrameworkErrorCode,
 } from './framework-error-code.js';
 import {
+  type TemplateCompilerIssue,
   TemplateCompilerIssueKind,
   TemplateCompilerIssuePhase,
 } from './compiler-issue.js';
@@ -73,28 +80,35 @@ import type { RuntimeBindingIssue } from './runtime-binding-issue.js';
 import type {
   SpreadBinding,
 } from './runtime-binding.js';
+import type { CompilerBindingCommandResource } from './syntax-resource-materializer.js';
 
 export class RuntimeTemplateCompilerSpreadCompileHost implements TemplateCompilerSpreadCompileHost {
   private readonly valueSitePublisher: TemplateValueSitePublisher;
   private readonly compilerIssuePublisher: TemplateCompilerIssuePublisher;
+  private readonly stagedRecords: KernelStoreRecord[] = [];
+  private readonly stagedInstructions: TemplateInstruction[] = [];
+  private readonly stagedValueSites: TemplateValueSite[] = [];
+  private readonly stagedExpressionParses: TemplateExpressionParse[] = [];
   private instructionIndex = 0;
   private expressionIndex = 0;
 
   constructor(
     private readonly store: KernelStore,
+    private readonly publication: KernelPublicationContext,
     private readonly world: TemplateCompilerWorldEmission,
     private readonly source: RuntimeRenderingSourceSet,
     private readonly bindingIssuePublisher: RuntimeBindingIssuePublisher,
     private readonly bindingOwner: SpreadBinding,
     private readonly records: KernelStoreRecord[],
     private readonly bindingIssues: RuntimeBindingIssue[],
+    private readonly compilerIssues: TemplateCompilerIssue[],
     private readonly dynamicInstructions: TemplateInstruction[],
     private readonly dynamicValueSites: TemplateValueSite[],
     private readonly dynamicExpressionParses: TemplateExpressionParse[],
     private readonly capturedAttributeContextInstructionProductHandle: ProductHandle,
     private readonly capturedAttributeContextControllerProductHandle: ProductHandle,
   ) {
-    this.valueSitePublisher = new TemplateValueSitePublisher(store);
+    this.valueSitePublisher = new TemplateValueSitePublisher(publication);
     this.compilerIssuePublisher = new TemplateCompilerIssuePublisher(store);
   }
 
@@ -107,6 +121,7 @@ export class RuntimeTemplateCompilerSpreadCompileHost implements TemplateCompile
       return TemplateCompilerSpreadCompileResult.open(
         request,
         'TemplateCompiler.compileSpread could not hydrate the target HTMLElement for captured attribute compilation.',
+        [OpenSeamReasonKind.FeatureNotYetModeled],
       );
     }
 
@@ -115,12 +130,13 @@ export class RuntimeTemplateCompilerSpreadCompileHost implements TemplateCompile
     const createdInstructions: TemplateInstruction[] = [];
     for (const syntax of request.capturedSyntaxes) {
       const compiled = this.compileCapturedSyntax(request, syntax, targetNode, targetDefinition);
-      if (typeof compiled === 'string') {
-        return TemplateCompilerSpreadCompileResult.open(request, compiled);
+      if (compiled instanceof TemplateCompilerSpreadCompileResult) {
+        return compiled;
       }
       rootInstructions.push(...compiled.rootInstructions);
       createdInstructions.push(...compiled.createdInstructions);
     }
+    this.commitStagedOutputs();
     return TemplateCompilerSpreadCompileResult.compiled(
       request,
       rootInstructions,
@@ -133,8 +149,8 @@ export class RuntimeTemplateCompilerSpreadCompileHost implements TemplateCompile
     syntax: AttributeSyntax,
     targetNode: HtmlElement,
     targetDefinition: CustomElementDefinition | null,
-  ): SpreadCompileInstructionSet | string {
-    const target = syntax.target.toLowerCase();
+  ): SpreadCompileInstructionSet | TemplateCompilerSpreadCompileResult {
+    const target = syntax.target;
     if (target === '...$attrs') {
       const instruction = this.createInstruction(request, syntax, TemplateInstructionKind.SpreadTransferedBinding, 'spread-transfered-binding',
         (allocation) => new SpreadTransferedBindingInstruction(
@@ -158,26 +174,30 @@ export class RuntimeTemplateCompilerSpreadCompileHost implements TemplateCompile
         const inner = command == null
           ? instructionSet([this.bindableValueInstruction(request, syntax, targetNode, bindable.definition.name)])
           : this.commandInstructions(request, syntax, targetNode, bindable, targetDefinition.productHandle, command);
-        if (typeof inner === 'string') {
+        if (inner instanceof TemplateCompilerSpreadCompileResult) {
           return inner;
         }
         return this.wrapSpreadElementPropInstructions(request, syntax, targetNode, inner.rootInstructions);
       }
     }
 
-    const attributeResolution = this.world.resourceResolver.attr(target);
-    const attributeDefinition = attributeResolution?.definition instanceof CustomAttributeDefinition
-      ? attributeResolution.definition
+    const attributeResource = this.world.resourceResolver.attr(target);
+    const currentAttributeDefinition = readVisibleTemplateResourceDefinition(this.publication, attributeResource);
+    const attributeDefinition = currentAttributeDefinition instanceof CustomAttributeDefinition
+      ? currentAttributeDefinition
       : null;
     if (attributeDefinition != null) {
       if (attributeDefinition.isTemplateController) {
         this.publishSpreadTemplateControllerIssue(request, syntax, target, targetNode);
-        return `SpreadBinding.addChild does not allow captured template controller '${target}' to be spread onto '${targetNode.tagName}'.`;
+        return TemplateCompilerSpreadCompileResult.invalid(
+          request,
+          `SpreadBinding.addChild does not allow captured template controller '${target}' to be spread onto '${targetNode.tagName}'.`,
+        );
       }
       const props = command == null
         ? instructionSet([this.customAttributeValueInstruction(request, syntax, targetNode, attributeDefinition.defaultProperty)])
         : this.commandInstructions(request, syntax, targetNode, null, attributeDefinition.productHandle, command);
-      if (typeof props === 'string') {
+      if (props instanceof TemplateCompilerSpreadCompileResult) {
         return props;
       }
       const instruction = this.createInstruction(request, syntax, TemplateInstructionKind.HydrateAttribute, 'hydrate-attribute',
@@ -187,7 +207,9 @@ export class RuntimeTemplateCompilerSpreadCompileHost implements TemplateCompile
           targetNode.toReference(),
           syntax.attribute,
           target,
-          this.world.templateCompiler.resolveResources ? attributeDefinition.productHandle : null,
+          this.world.templateCompiler.resolveResources
+            ? attributeResource?.toReference() ?? null
+            : null,
           props.rootInstructions.map((prop) => prop.productHandle),
           syntax.sourceAddressHandle,
         ));
@@ -211,7 +233,14 @@ export class RuntimeTemplateCompilerSpreadCompileHost implements TemplateCompile
     bindable: TemplateBindableReference | null,
     definitionProductHandle: ProductHandle | null,
     command: SpreadCommandMatch,
-  ): SpreadCompileInstructionSet | string {
+  ): SpreadCompileInstructionSet | TemplateCompilerSpreadCompileResult {
+    if (command.handler == null) {
+      return TemplateCompilerSpreadCompileResult.open(
+        request,
+        `TemplateCompiler.compileSpread reached binding command '${command.executable.name}' whose executable body is not modeled.`,
+        [OpenSeamReasonKind.FeatureNotYetModeled],
+      );
+    }
     const context = new RuntimeSpreadCommandBuildContext(
       this.world,
       request,
@@ -230,11 +259,31 @@ export class RuntimeTemplateCompilerSpreadCompileHost implements TemplateCompile
       bindable?.reference.ownerDefinitionProductHandle ?? null,
       definitionProductHandle,
       syntax.sourceAddressHandle,
-      syntax.sourceAddressHandle,
+      this.expressionSourceAddressHandle(syntax),
     );
-    const build = command.handler.build(info, context);
-    if (build.state !== 'complete') {
-      return build.message ?? `TemplateCompiler.compileSpread could not lower captured binding command '${syntax.command ?? '(unknown)'}'.`;
+    let build: BindingCommandBuildResult;
+    try {
+      build = command.handler.build(info, context);
+    } catch (error) {
+      return TemplateCompilerSpreadCompileResult.open(
+        request,
+        error instanceof Error ? error.message : String(error),
+        [OpenSeamReasonKind.FeatureNotYetModeled],
+      );
+    }
+    if (build.state === BindingCommandLoweringState.Invalid) {
+      this.publishBindingCommandIssue(request, syntax, build);
+      return TemplateCompilerSpreadCompileResult.invalid(
+        request,
+        build.message ?? `TemplateCompiler.compileSpread rejected captured binding command '${syntax.command ?? '(unknown)'}'.`,
+      );
+    }
+    if (build.state !== BindingCommandLoweringState.Complete) {
+      return TemplateCompilerSpreadCompileResult.open(
+        request,
+        build.message ?? `TemplateCompiler.compileSpread could not lower captured binding command '${syntax.command ?? '(unknown)'}'.`,
+        [OpenSeamReasonKind.FeatureNotYetModeled],
+      );
     }
     for (const instruction of build.instructions) {
       this.registerInstructionDetail(request, instruction, syntax);
@@ -409,12 +458,30 @@ export class RuntimeTemplateCompilerSpreadCompileHost implements TemplateCompile
     );
     this.records.push(...compilerIssue.records);
     this.records.push(...publication.records);
-    this.store.productDetails.add(
-      TemplateProductDetails.CompilerIssue,
-      compilerIssue.issue.productHandle,
-      compilerIssue.issue,
-    );
+    this.compilerIssues.push(compilerIssue.issue);
     this.bindingIssues.push(publication.issue);
+  }
+
+  private publishBindingCommandIssue(
+    request: TemplateCompilerSpreadCompileRequest,
+    syntax: AttributeSyntax,
+    result: BindingCommandBuildResult,
+  ): void {
+    if (result.message == null) {
+      return;
+    }
+    const publication = this.compilerIssuePublisher.publish(
+      `${request.localKey}:issue:binding-command:${syntax.productHandle}`,
+      this.world.templateCompiler.identityHandle,
+      this.source.provenanceHandle,
+      TemplateCompilerIssuePhase.SpreadCompile,
+      result.issueKind ?? TemplateCompilerIssueKind.BindingCommandBuildInvalid,
+      result.message,
+      result.frameworkErrorCode,
+      syntax.sourceAddressHandle,
+    );
+    this.records.push(...publication.records);
+    this.compilerIssues.push(publication.issue);
   }
 
   allocateInstruction(
@@ -428,7 +495,7 @@ export class RuntimeTemplateCompilerSpreadCompileHost implements TemplateCompile
       this.store.handles.product(instructionLocal),
       this.store.handles.identity(instructionLocal),
     );
-    this.records.push(
+    this.stagedRecords.push(
       new InstructionIdentity(
         allocation.identityHandle,
         request.spreadInstruction.identityHandle,
@@ -482,7 +549,7 @@ export class RuntimeTemplateCompilerSpreadCompileHost implements TemplateCompile
       null,
       command?.toReference() ?? null,
       bindable,
-      syntax.sourceAddressHandle,
+      this.expressionSourceAddressHandle(syntax),
       syntax.identityHandle,
       `spread:${entryFamily}`,
       null,
@@ -491,9 +558,9 @@ export class RuntimeTemplateCompilerSpreadCompileHost implements TemplateCompile
     if (publication.parse == null) {
       throw new Error('Spread-compiled expression parsing must publish an expression parse.');
     }
-    this.records.push(...publication.records);
-    this.dynamicValueSites.push(publication.site);
-    this.dynamicExpressionParses.push(publication.parse);
+    this.stagedRecords.push(...publication.records);
+    this.stagedValueSites.push(publication.site);
+    this.stagedExpressionParses.push(publication.parse);
     return publication.parse;
   }
 
@@ -502,23 +569,26 @@ export class RuntimeTemplateCompilerSpreadCompileHost implements TemplateCompile
     instruction: TemplateInstruction,
     syntax: AttributeSyntax,
   ): void {
-    if (!this.dynamicInstructions.some((candidate) => candidate.productHandle === instruction.productHandle)) {
-      this.dynamicInstructions.push(instruction);
-      this.records.push(new SemanticClaim(
+    if (
+      !this.dynamicInstructions.some((candidate) => candidate.productHandle === instruction.productHandle)
+      && !this.stagedInstructions.some((candidate) => candidate.productHandle === instruction.productHandle)
+    ) {
+      this.stagedInstructions.push(instruction);
+      this.stagedRecords.push(new SemanticClaim(
         this.store.handles.claim(`${request.localKey}:spread-compile:instruction-origin:${instruction.productHandle}:${syntax.productHandle}`),
         instruction.productHandle,
         KernelVocabulary.Instruction.DynamicInstructionOriginatesFromCapturedAttributeSyntax.key,
         syntax.productHandle,
         this.source.provenanceHandle,
       ));
-      this.records.push(new SemanticClaim(
+      this.stagedRecords.push(new SemanticClaim(
         this.store.handles.claim(`${request.localKey}:spread-compile:instruction-context-instruction:${instruction.productHandle}:${this.capturedAttributeContextInstructionProductHandle}`),
         instruction.productHandle,
         KernelVocabulary.Instruction.DynamicInstructionUsesCapturedAttributeContextInstruction.key,
         this.capturedAttributeContextInstructionProductHandle,
         this.source.provenanceHandle,
       ));
-      this.records.push(new SemanticClaim(
+      this.stagedRecords.push(new SemanticClaim(
         this.store.handles.claim(`${request.localKey}:spread-compile:instruction-context-controller:${instruction.productHandle}:${this.capturedAttributeContextControllerProductHandle}`),
         instruction.productHandle,
         KernelVocabulary.Instruction.DynamicInstructionUsesCapturedAttributeContextController.key,
@@ -526,6 +596,22 @@ export class RuntimeTemplateCompilerSpreadCompileHost implements TemplateCompile
         this.source.provenanceHandle,
       ));
     }
+  }
+
+  private commitStagedOutputs(): void {
+    this.records.push(...this.stagedRecords);
+    this.dynamicInstructions.push(...this.stagedInstructions);
+    this.dynamicValueSites.push(...this.stagedValueSites);
+    this.dynamicExpressionParses.push(...this.stagedExpressionParses);
+  }
+
+  private expressionSourceAddressHandle(syntax: AttributeSyntax) {
+    const attribute = syntax.attribute.productHandle == null
+      ? null
+      : this.publication.readProductDetail(TemplateProductDetails.HtmlAttribute, syntax.attribute.productHandle);
+    return attribute instanceof HtmlAttribute
+      ? attribute.valueAddressHandle ?? attribute.sourceAddressHandle
+      : syntax.sourceAddressHandle;
   }
 
   private commandMatch(syntax: AttributeSyntax): SpreadCommandMatch | null {
@@ -547,7 +633,7 @@ export class RuntimeTemplateCompilerSpreadCompileHost implements TemplateCompile
     if (productHandle == null) {
       return null;
     }
-    const node = this.store.productDetails.read(TemplateProductDetails.HtmlNode, productHandle);
+    const node = this.publication.readProductDetail(TemplateProductDetails.HtmlNode, productHandle);
     return node instanceof HtmlElement ? node : null;
   }
 
@@ -556,32 +642,31 @@ export class RuntimeTemplateCompilerSpreadCompileHost implements TemplateCompile
     targetNode: HtmlElement,
   ): CustomElementDefinition | null {
     if (request.targetDefinitionProductHandle != null) {
-      const definition = this.store.productDetails.read(ResourceProductDetails.Definition, request.targetDefinitionProductHandle);
+      const definition = this.publication.readProductDetail(
+        ResourceProductDetails.Definition,
+        request.targetDefinitionProductHandle,
+      );
       return definition instanceof CustomElementDefinition ? definition : null;
     }
-    const resolution = this.world.resourceResolver.el(this.elementLookupName(targetNode));
-    return resolution?.definition instanceof CustomElementDefinition ? resolution.definition : null;
+    const resource = this.world.resourceResolver.el(this.elementLookupName(targetNode));
+    const definition = readVisibleTemplateResourceDefinition(this.publication, resource);
+    return definition instanceof CustomElementDefinition ? definition : null;
   }
 
   private elementLookupName(targetNode: HtmlElement): string {
     const attributes = targetNode.attributes
       .map((attribute) => attribute.productHandle == null
         ? null
-        : this.store.productDetails.read(TemplateProductDetails.HtmlAttribute, attribute.productHandle))
+        : this.publication.readProductDetail(TemplateProductDetails.HtmlAttribute, attribute.productHandle))
       .filter((attribute): attribute is NonNullable<typeof attribute> => attribute != null);
-    return templateElementLookupNameFromAttributes(targetNode.tagName, attributes);
+    return templateElementLookupNameFromAttributes(targetNode.tagName, attributes, targetNode.namespace);
   }
 
 }
 
 interface SpreadCommandMatch {
   readonly executable: BindingCommandExecutable;
-  readonly handler: {
-    build(
-      info: BindingCommandBuildInfo,
-      context: BindingCommandBuildContext,
-    ): { readonly state: string; readonly instructions: readonly TemplateInstruction[]; readonly message: string | null };
-  };
+  readonly handler: CompilerBindingCommandResource['handler'];
 }
 
 interface SpreadCompileInstructionSet {
@@ -612,7 +697,7 @@ class RuntimeSpreadCommandBuildContext implements BindingCommandBuildContext {
     return this.host.allocateInstruction(this.request, this.syntax, kind, local);
   }
 
-  parsePropertyExpression(expression: string, _info: BindingCommandBuildInfo): ProductHandle | null {
+  parsePropertyExpression(expression: string, _info: BindingCommandBuildInfo, _sourceSpan: SourceSpan | null): ProductHandle | null {
     return this.host.publishExpressionParse(this.request, this.syntax, this.targetNode, expression, 'IsProperty', this.command, this.bindable).productHandle;
   }
 
@@ -622,7 +707,7 @@ class RuntimeSpreadCommandBuildContext implements BindingCommandBuildContext {
 
   parseIteratorExpression(expression: string, _info: BindingCommandBuildInfo): BindingCommandIteratorParse {
     const parse = this.host.publishExpressionParse(this.request, this.syntax, this.targetNode, expression, 'IsIterator', this.command, this.bindable);
-    return new BindingCommandIteratorParse(parse.productHandle, [], null);
+    return new BindingCommandIteratorParse(parse.productHandle, [], [], null, null);
   }
 
   parseAttributeSyntax(_rawName: string, _rawValue: string, _info: BindingCommandBuildInfo): BindingCommandTailSyntax | null {
@@ -633,7 +718,11 @@ class RuntimeSpreadCommandBuildContext implements BindingCommandBuildContext {
     return this.world.attributeMapper.map(this.targetNode, attr);
   }
 
-  isTwoWay(_node: HtmlNodeReference, attr: string): boolean {
-    return this.world.attributeMapper.isTwoWay(this.targetNode, attr);
+  isTwoWay(_node: HtmlNodeReference, attr: string): boolean | null {
+    return this.world.attributeMapper.isTwoWay(
+      this.targetNode,
+      attr,
+      this.world.callableBindings,
+    );
   }
 }

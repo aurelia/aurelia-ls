@@ -12,86 +12,142 @@
  * - `effectiveMode === 'default'` → no hint (unresolved, nothing useful to show)
  */
 import {
-  InlayHint,
   InlayHintKind,
+  LSPErrorCodes,
+  ResponseError,
+  type InlayHint,
   type InlayHintParams,
-} from "vscode-languageserver/node.js";
-import { canonicalDocumentUri } from "@aurelia-ls/compiler/program/paths.js";
+} from "vscode-languageserver/node";
+import {
+  SemanticRuntimeAnswerCoverage,
+  SemanticRuntimeAnswerResult,
+  SemanticRuntimeAnswerSelection,
+  SemanticTemplateInlayHintKind,
+  semanticExactSourceReference,
+  type SemanticRuntimeAnswer,
+  type SemanticTemplateInlayHintsResult,
+  type SemanticTemplateInlayHintRow,
+} from "@aurelia-ls/semantic-runtime";
 import type { ServerContext } from "../context.js";
+import {
+  semanticSourceOffsetRangeForDocument,
+  semanticSourceReferenceMatchesDocument,
+} from "../mapping/source-locations.js";
+import type { SemanticRuntimeLspOperation } from "../runtime/semantic-runtime-session.js";
+import { isTemplateDocument } from "../utils/document-kind.js";
 
-const BINDING_MODE_LABELS: Record<string, string> = {
-  toView: "toView",
-  twoWay: "twoWay",
-  fromView: "fromView",
-  oneTime: "oneTime",
-};
-
-export function handleInlayHints(
+export async function handleInlayHints(
   ctx: ServerContext,
   params: InlayHintParams,
-): InlayHint[] | null {
+  operation: SemanticRuntimeLspOperation,
+): Promise<InlayHint[] | null> {
+  const uri = params.textDocument.uri;
+  const doc = operation.documents.ensureProgramDocument(uri);
+  if (!doc) return null;
+  if (!isTemplateDocument(doc)) return null;
+
+  const answer = await operation.templateInlayHints(doc);
+  assertCompleteInlayHintAnswer(answer);
+  const hints = answer.value.rows
+    .map((row) => mapSemanticRuntimeTemplateInlayHint(row, doc, params, ctx))
+    .filter((hint): hint is InlayHint => hint != null);
+
+  return hints.length > 0 ? hints : null;
+}
+
+/** Pull resource-scoped presentation policy before admitting managed semantic work. */
+export async function bindingModeInlayHintsEnabled(
+  ctx: ServerContext,
+  uri: string,
+): Promise<boolean> {
+  if (!ctx.clientSupport.configurationPull) return false;
   try {
-    const uri = params.textDocument.uri;
-    const doc = ctx.ensureProgramDocument(uri);
-    if (!doc) return null;
+    const value = await ctx.connection.workspace.getConfiguration({
+      scopeUri: uri,
+      section: "aurelia.inlayHints.bindingMode",
+    }) as unknown;
+    return value === true;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    ctx.logger.warn(`[inlayHints] resource configuration unavailable for ${uri}: ${message}`);
+    return false;
+  }
+}
 
-    const canonical = canonicalDocumentUri(uri);
-    const compilation = ctx.workspace.getCompilation(canonical.uri);
-    if (!compilation) return null;
-
-    const hints: InlayHint[] = [];
-
-    // Walk linked instructions for property bindings with resolved modes.
-    //
-    // The mode provenance chain: attribute syntax (pattern + command) →
-    // IR mode (authored, may be 'default') → linked effectiveMode (resolved
-    // from target bindable, native prop defaults, or two-way defaults).
-    //
-    // A hint is shown when the system resolved a mode that the developer
-    // didn't explicitly author — i.e., when mode !== effectiveMode. This
-    // works for all syntax: standard commands (.bind), custom commands,
-    // pattern-based shorthand (:value), and any future extensible syntax.
-    for (const template of compilation.linked.templates) {
-      for (const row of template.rows) {
-        for (const instr of row.instructions) {
-          if (instr.kind !== "propertyBinding") continue;
-
-          // Skip unresolved default — nothing useful to show
-          if (instr.effectiveMode === "default") continue;
-
-          // The core check: if the authored mode already matches the
-          // effective mode, the developer's intent is explicit (via an
-          // explicit command like .two-way, a custom command with a
-          // declared mode, or a pattern override like :value). No hint.
-          if (instr.mode === instr.effectiveMode) continue;
-
-          const label = BINDING_MODE_LABELS[instr.effectiveMode];
-          if (!label) continue;
-
-          // Position after the attribute name span (e.g., after "value.bind")
-          const span = instr.nameLoc ?? instr.loc;
-          if (!span || typeof span.end !== "number") continue;
-
-          const pos = doc.positionAt(span.end);
-
-          // Only include hints within the requested range
-          if (pos.line < params.range.start.line || pos.line > params.range.end.line) continue;
-
-          hints.push({
-            position: pos,
-            label: `: ${label}`,
-            kind: InlayHintKind.Type,
-            paddingLeft: false,
-            paddingRight: true,
-          });
-        }
-      }
-    }
-
-    return hints.length > 0 ? hints : null;
-  } catch (e) {
-    const message = e instanceof Error ? e.stack ?? e.message : String(e);
-    ctx.logger.error(`[inlayHints] failed for ${params.textDocument.uri}: ${message}`);
+function mapSemanticRuntimeTemplateInlayHint(
+  row: SemanticTemplateInlayHintRow,
+  doc: {
+    readonly uri: string;
+    readonly getText: () => string;
+    readonly positionAt: (offset: number) => { line: number; character: number };
+  },
+  params: InlayHintParams,
+  ctx: ServerContext,
+): InlayHint | null {
+  switch (row.hintKind) {
+    case SemanticTemplateInlayHintKind.BindingModeResolution:
+      break;
+    default:
+      throw inlayHintRequestFailure(
+        `semantic row uses unsupported hint kind ${JSON.stringify(row.hintKind)}.`,
+      );
+  }
+  const exactSource = semanticExactSourceReference(row.source);
+  if (exactSource == null) {
+    throw inlayHintRequestFailure("semantic row has no exact authored insertion anchor.");
+  }
+  if (!semanticSourceReferenceMatchesDocument(exactSource, ctx.documentUris, doc.uri)) {
+    throw inlayHintRequestFailure("semantic row does not target the requesting document.");
+  }
+  const source = semanticSourceOffsetRangeForDocument(exactSource, doc);
+  if (source == null) {
+    throw inlayHintRequestFailure("semantic row insertion anchor is outside the current document text.");
+  }
+  const position = doc.positionAt(source.end);
+  if (!positionIsWithinRange(position, params.range)) {
     return null;
   }
+  return {
+    position,
+    label: `: ${row.effectiveModeLabel}`,
+    kind: InlayHintKind.Type,
+    paddingLeft: false,
+    paddingRight: true,
+  };
+}
+
+function assertCompleteInlayHintAnswer(
+  answer: SemanticRuntimeAnswer<SemanticTemplateInlayHintsResult>,
+): void {
+  if (
+    answer.result !== SemanticRuntimeAnswerResult.Answered
+    || answer.selection !== SemanticRuntimeAnswerSelection.NotApplicable
+    || answer.coverage !== SemanticRuntimeAnswerCoverage.Complete
+  ) {
+    throw inlayHintRequestFailure(
+      `semantic runtime returned result=${answer.result}; selection=${answer.selection}; coverage=${answer.coverage}.`,
+    );
+  }
+}
+
+function inlayHintRequestFailure(detail: string): ResponseError<unknown> {
+  return new ResponseError(
+    LSPErrorCodes.RequestFailed,
+    `Aurelia inlay hint mapping was blocked: ${detail}`,
+  );
+}
+
+function positionIsWithinRange(
+  position: { readonly line: number; readonly character: number },
+  range: InlayHintParams["range"],
+): boolean {
+  return comparePositions(position, range.start) >= 0
+    && comparePositions(position, range.end) < 0;
+}
+
+function comparePositions(
+  left: { readonly line: number; readonly character: number },
+  right: { readonly line: number; readonly character: number },
+): number {
+  return left.line - right.line || left.character - right.character;
 }

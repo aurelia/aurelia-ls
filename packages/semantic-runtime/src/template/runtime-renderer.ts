@@ -7,16 +7,16 @@ import type {
   ProvenanceHandle,
 } from '../kernel/handles.js';
 import type { FieldProvenance } from '../kernel/provenance.js';
-import type { OpenSeamReasonKind } from '../kernel/open-seam.js';
+import { OpenSeamReasonKind } from '../kernel/open-seam.js';
 import {
   KernelVocabulary,
 } from '../kernel/vocabulary.js';
 import type { FrameworkRegistrationKind } from '../registration/registration-reference.js';
+import type { RuntimeHydrationContext } from '../configuration/controller.js';
 import {
   TemplateRenderTarget,
   TemplateRenderTargetKind,
 } from './compiled-template.js';
-import type { HtmlNodeReference } from './html-ir.js';
 import {
   AttributeBindingInstruction,
   DispatchBindingInstruction,
@@ -29,6 +29,7 @@ import {
   LetBindingInstruction,
   ListenerBindingInstruction,
   MultiAttrInstruction,
+  nestedInstructionProductHandlesForInstructions,
   PropertyBindingInstruction,
   RefBindingInstruction,
   SetAttributeInstruction,
@@ -61,6 +62,7 @@ import {
   RuntimeBindingReference,
   RuntimeBindingKind,
   RuntimeBindingScopeEffectKind,
+  RuntimeBindingTargetAccessStrategy,
   RuntimeBindingTargetKind,
   RuntimeBindingTargetOperationAuthority,
   RuntimeBindingTargetOperationKind,
@@ -75,9 +77,14 @@ import {
   RuntimeTargetOperationOwnerKind,
 } from './runtime-binding.js';
 import {
+  hasSameNodeCustomAttributeHydration,
+  hasSameNodeCustomElementHydration,
+} from './runtime-ref-target.js';
+import {
   RuntimeControllerCreationRequest,
   RuntimeControllerCreationKind,
   RuntimeControllerFrame,
+  runtimeControllerCurrentRenderingReachability,
 } from './runtime-controller.js';
 import {
   RuntimeRendererKind,
@@ -192,6 +199,8 @@ export const enum RuntimeRendererSpreadCompileState {
   Compiled = 'compiled',
   /** Captured-attribute compilation is recognized but not fully materialized. */
   Open = 'open',
+  /** Captured-attribute compilation reached a closed framework refusal already published as an issue. */
+  Invalid = 'invalid',
 }
 
 export interface RuntimeRendererSpreadCompileRequest {
@@ -200,7 +209,7 @@ export interface RuntimeRendererSpreadCompileRequest {
   readonly binding: SpreadBinding;
   readonly target: TemplateRenderTarget;
   readonly targetController: RuntimeControllerFrame;
-  readonly hydrationContextController: RuntimeControllerFrame | null;
+  readonly hydrationContext: RuntimeHydrationContext | null;
 }
 
 export class RuntimeRendererSpreadCompileResult {
@@ -241,6 +250,17 @@ export class RuntimeRendererSpreadCompileResult {
     );
   }
 
+  static invalid(summary: string, addressHandle: AddressHandle | null): RuntimeRendererSpreadCompileResult {
+    return new RuntimeRendererSpreadCompileResult(
+      RuntimeRendererSpreadCompileState.Invalid,
+      [],
+      [],
+      summary,
+      addressHandle,
+      [],
+    );
+  }
+
   static compiled(
     instructions: readonly TemplateInstruction[],
     createdInstructions: readonly TemplateInstruction[],
@@ -268,9 +288,10 @@ export interface RuntimeRenderingRun {
 
   recordOpenInstruction(
     local: string,
+    ownerHandle: IdentityHandle,
     summary: string,
     addressHandle: AddressHandle | null,
-    reasonKinds?: readonly OpenSeamReasonKind[],
+    reasonKinds: readonly OpenSeamReasonKind[],
   ): void;
 
   recordRendererIssue(
@@ -296,7 +317,7 @@ export interface RuntimeRenderingRun {
     targetController: RuntimeControllerFrame,
     target: TemplateRenderTarget,
     bindingOwner?: RuntimeBinding | null,
-    hydrationContextController?: RuntimeControllerFrame | null,
+    hydrationContext?: RuntimeHydrationContext | null,
     targetInstructions?: readonly TemplateInstruction[],
   ): void;
 }
@@ -311,7 +332,7 @@ export class RuntimeRendererInvocation {
     readonly targetController: RuntimeControllerFrame,
     readonly target: TemplateRenderTarget,
     readonly run: RuntimeRenderingRun,
-    readonly hydrationContextController: RuntimeControllerFrame | null = targetController,
+    readonly hydrationContext: RuntimeHydrationContext | null = targetController.readHydrationContext(),
     readonly targetInstructions: readonly TemplateInstruction[] = [],
   ) {}
 
@@ -351,7 +372,7 @@ export class RuntimeRendererInvocation {
       binding,
       target: this.target,
       targetController: this.targetController,
-      hydrationContextController: this.hydrationContextController,
+      hydrationContext: this.hydrationContext,
     });
   }
 
@@ -359,9 +380,15 @@ export class RuntimeRendererInvocation {
     localSuffix: string,
     summary: string,
     addressHandle: AddressHandle | null,
-    reasonKinds: readonly OpenSeamReasonKind[] = [],
+    reasonKinds: readonly OpenSeamReasonKind[],
   ): void {
-    this.run.recordOpenInstruction(`${this.local}:${localSuffix}`, summary, addressHandle, reasonKinds);
+    this.run.recordOpenInstruction(
+      `${this.local}:${localSuffix}`,
+      this.instruction.identityHandle,
+      summary,
+      addressHandle,
+      reasonKinds,
+    );
   }
 
   recordRendererIssue(
@@ -410,7 +437,7 @@ export class RuntimeRendererInvocation {
       targetController,
       this.target,
       null,
-      this.hydrationContextController,
+      this.hydrationContext,
       this.targetInstructions,
     );
   }
@@ -421,9 +448,9 @@ export class RuntimeRendererInvocation {
     bindingOwner: RuntimeBinding,
   ): void {
     instructions.forEach((instruction, index) => {
-      const contextController = instruction instanceof SpreadTransferedBindingInstruction
-        ? this.hydrationContextController?.parent ?? null
-        : this.hydrationContextController;
+      const hydrationContext = instruction instanceof SpreadTransferedBindingInstruction
+        ? this.hydrationContext?.parent ?? null
+        : this.hydrationContext;
       this.run.renderInstruction(
         `${this.local}:${localSuffix}:${index}`,
         instruction,
@@ -432,7 +459,7 @@ export class RuntimeRendererInvocation {
         this.targetController,
         this.target,
         bindingOwner,
-        contextController,
+        hydrationContext,
         instructions,
       );
     });
@@ -452,7 +479,7 @@ export class RuntimeRendererInvocation {
       this.targetController,
       this.target,
       this.run,
-      this.hydrationContextController,
+      this.hydrationContext,
       this.targetInstructions,
     );
   }
@@ -651,14 +678,12 @@ function renderOwnedBindingInstructions(
   owner: RuntimeRendererInstructionOwner,
   childController: RuntimeControllerFrame,
 ): void {
-  const iteratorTailHandles = new Set(handles.flatMap((handle) => {
-    const instruction = input.readInstruction(handle);
-    return instruction instanceof IteratorBindingInstruction
-      ? instruction.tailInstructionProductHandles
-      : [];
-  }));
+  const instructions = handles
+    .map((handle) => input.readInstruction(handle))
+    .filter((instruction): instruction is TemplateInstruction => instruction != null);
+  const nestedInstructionHandles = new Set(nestedInstructionProductHandlesForInstructions(instructions));
   handles.forEach((handle, index) => {
-    if (iteratorTailHandles.has(handle)) {
+    if (nestedInstructionHandles.has(handle)) {
       return;
     }
     input.renderNestedInstructionByHandle(handle, `${localPrefix}:${index}`, owner, childController);
@@ -1368,6 +1393,7 @@ function renderRendererTargetOperation(
     value,
     openReason == null ? operationKind : RuntimeBindingTargetOperationKind.Open,
     affectedNames,
+    runtimeControllerCurrentRenderingReachability(input.renderingController),
     openReason == null
       ? RuntimeBindingTargetOperationAuthority.RuntimeRendererImplementation
       : RuntimeBindingTargetOperationAuthority.Open,
@@ -1408,6 +1434,7 @@ function renderPropertyRuntimeBinding(input: RuntimeRendererInvocation): Runtime
       new RuntimeBindingReference(RuntimeBindingKind.Property, allocation.productHandle, allocation.identityHandle, instruction.sourceAddressHandle),
       input.owner?.productHandle ?? instruction.productHandle,
       instruction.localNames,
+      instruction.objectBindingSourceKeys,
       instruction.iterableExpressionProductHandle,
       input.owner?.templateControllerName ?? null,
       instruction.sourceAddressHandle,
@@ -1431,6 +1458,9 @@ function renderPropertyRuntimeBinding(input: RuntimeRendererInvocation): Runtime
         : instruction instanceof StylePropertyBindingInstruction
           ? TemplateBindingMode.ToView
           : instruction.bindingMode,
+      instruction.targetProperty === 'class'
+        ? RuntimeBindingTargetAccessStrategy.ClassAttributeAccessor
+        : null,
       semanticBindingKindKey,
       instruction instanceof PropertyBindingInstruction ? instruction.command : null,
       effect == null ? [] : [effect.toReference()],
@@ -1451,6 +1481,7 @@ function consumeIteratorTailInstructions(
         `iterator-tail:${index}:missing`,
         `Iterator binding tail instruction '${handle}' could not be hydrated for runtime Rendering.`,
         instruction.sourceAddressHandle,
+        [OpenSeamReasonKind.RuntimeRenderingProductMissing],
       );
       return;
     }
@@ -1460,6 +1491,7 @@ function consumeIteratorTailInstructions(
         `iterator-tail:${index}:unexpected`,
         `Iterator binding tail instruction '${handle}' was not a MultiAttrInstruction.`,
         tail.sourceAddressHandle,
+        [OpenSeamReasonKind.RuntimeRenderingProductMissing],
       );
     }
   });
@@ -1501,8 +1533,10 @@ function renderLetRuntimeBinding(input: RuntimeRendererInvocation): RuntimeRende
     input.owner?.productHandle ?? instruction.productHandle,
     instruction.target,
     instruction.expressionProductHandle,
+    instruction.literalValue,
     targetContext,
     instruction.sourceAddressHandle,
+    instruction.targetSourceAddressHandle,
   );
   return new RuntimeRendererRenderResult(
     new LetBinding(
@@ -1514,9 +1548,11 @@ function renderLetRuntimeBinding(input: RuntimeRendererInvocation): RuntimeRende
       instruction.attribute,
       instruction.target,
       instruction.expressionProductHandle,
+      instruction.literalValue,
       targetContext,
       [effect.toReference()],
       instruction.sourceAddressHandle,
+      instruction.targetSourceAddressHandle,
     ),
     [effect],
   );
@@ -1536,9 +1572,11 @@ function renderListenerRuntimeBinding(input: RuntimeRendererInvocation): Runtime
     instruction.node,
     instruction.attribute,
     instruction.eventName,
+    instruction.eventNameSourceAddressHandle,
     instruction.expressionProductHandle,
     instruction.strategy,
     instruction.eventModifier,
+    instruction.eventModifierSourceAddressHandle,
     instruction.command,
     [],
     instruction.sourceAddressHandle,
@@ -1577,7 +1615,7 @@ function renderRefRuntimeBinding(input: RuntimeRendererInvocation): RuntimeRende
       targetIssue.issueKind,
       targetIssue.message,
       targetIssue.frameworkErrorCode,
-      instruction.sourceAddressHandle,
+      instruction.targetSourceAddressHandle ?? instruction.sourceAddressHandle,
     );
     return RuntimeRendererRenderResult.none();
   }
@@ -1590,6 +1628,7 @@ function renderRefRuntimeBinding(input: RuntimeRendererInvocation): RuntimeRende
     instruction.node,
     instruction.attribute,
     instruction.target,
+    instruction.targetSourceAddressHandle,
     instruction.expressionProductHandle,
     [],
     instruction.sourceAddressHandle,
@@ -1619,7 +1658,7 @@ function refTargetIssue(
       };
     case 'controller':
     case 'component': {
-      return hasSameNodeCustomElementController(input, instruction.node)
+      return hasSameNodeCustomElementHydration(input.targetInstructions, instruction.node)
         ? null
         : {
           localSuffix: 'ref-host-not-custom-element',
@@ -1637,10 +1676,10 @@ function namedRefTargetIssue(
   input: RuntimeRendererInvocation,
   instruction: RefBindingInstruction,
 ): RefTargetIssue | null {
-  if (hasSameNodeCustomAttributeController(input, instruction.node, instruction.target)) {
+  if (hasSameNodeCustomAttributeHydration(input.targetInstructions, instruction.node, instruction.target)) {
     return null;
   }
-  if (!hasSameNodeCustomElementController(input, instruction.node)) {
+  if (!hasSameNodeCustomElementHydration(input.targetInstructions, instruction.node)) {
     return {
       localSuffix: 'named-ref-host-not-custom-element',
       issueKind: RuntimeRendererIssueKind.NamedRefHostIsNotCustomElement,
@@ -1648,7 +1687,7 @@ function namedRefTargetIssue(
       frameworkErrorCode: RuntimeHtmlRendererFrameworkErrorCode.NodeIsNotHost2,
     };
   }
-  return hasSameNodeCustomElementController(input, instruction.node, instruction.target)
+  return hasSameNodeCustomElementHydration(input.targetInstructions, instruction.node, instruction.target)
     ? null
     : {
       localSuffix: 'ref-target-not-found',
@@ -1656,42 +1695,6 @@ function namedRefTargetIssue(
       message: `Ref target '${instruction.target}' was not found amongst the target API.`,
       frameworkErrorCode: RuntimeHtmlRendererFrameworkErrorCode.RefNotFound,
     };
-}
-
-function hasSameNodeCustomAttributeController(
-  input: RuntimeRendererInvocation,
-  refHost: HtmlNodeReference,
-  attributeName: string,
-): boolean {
-  return input.targetInstructions.some((instruction) =>
-    instruction instanceof HydrateAttributeInstruction
-    && instruction.attributeName === attributeName
-    && instruction.definitionProductHandle != null
-    && sameHtmlNodeReference(instruction.node, refHost)
-  );
-}
-
-function hasSameNodeCustomElementController(
-  input: RuntimeRendererInvocation,
-  refHost: HtmlNodeReference,
-  elementName: string | null = null,
-): boolean {
-  return input.targetInstructions.some((instruction) =>
-    instruction instanceof HydrateElementInstruction
-    && (elementName == null || instruction.elementName === elementName)
-    && instruction.definitionProductHandle != null
-    && sameHtmlNodeReference(instruction.node, refHost)
-  );
-}
-
-function sameHtmlNodeReference(left: HtmlNodeReference, right: HtmlNodeReference): boolean {
-  if (left.productHandle != null && right.productHandle != null) {
-    return left.productHandle === right.productHandle;
-  }
-  if (left.identityHandle != null && right.identityHandle != null) {
-    return left.identityHandle === right.identityHandle;
-  }
-  return left === right;
 }
 
 function renderContentRuntimeBinding(input: RuntimeRendererInvocation): RuntimeRendererRenderResult {
@@ -1749,7 +1752,7 @@ function renderSpreadValueRuntimeBinding(input: RuntimeRendererInvocation): Runt
       RuntimeRendererIssueKind.SpreadingInvalidTarget,
       `Invalid spread target ${instruction.target}.`,
       RuntimeHtmlRendererFrameworkErrorCode.SpreadingInvalidTarget,
-      instruction.sourceAddressHandle,
+      instruction.targetSourceAddressHandle ?? instruction.sourceAddressHandle,
     );
     return RuntimeRendererRenderResult.none();
   }
@@ -1810,6 +1813,7 @@ function renderStateRuntimeBinding(input: RuntimeRendererInvocation): RuntimeRen
     instruction.target,
     instruction.rawExpression,
     instruction.storeName,
+    instruction.storeNameSourceAddressHandle,
     instruction.expressionProductHandle,
     [],
     instruction.sourceAddressHandle,
@@ -1832,6 +1836,7 @@ function renderDispatchRuntimeBinding(input: RuntimeRendererInvocation): Runtime
     instruction.eventName,
     instruction.rawExpression,
     instruction.storeName,
+    instruction.storeNameSourceAddressHandle,
     instruction.expressionProductHandle,
     [],
     instruction.sourceAddressHandle,

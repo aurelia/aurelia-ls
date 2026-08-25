@@ -68,6 +68,9 @@ const sourceDemandProducts = capabilityDemands.filter((demand) =>
 );
 const dialogOwnerRows = dialogIssues.rows.filter((row) => row.handles?.ownerIdentityHandle != null);
 const candidateSummaries = candidateSeams.map((seam) => seam.summary);
+const classDependencyCandidateSummaries = candidateSummaries.filter((summary) =>
+  summary.includes('Aurelia class dependency metadata names a framework service key')
+);
 
 if (mainDiActivationDialogRoots.length !== 1) {
   failures.push(`Expected exactly one main-file DI-activation IDialogService root for the direct aliased resolve call, observed ${mainDiActivationDialogRoots.length}.`);
@@ -93,11 +96,8 @@ if (!candidateSummaries.some((summary) => summary.includes('resolve(lazy(IDialog
 if (!candidateSummaries.some((summary) => summary.includes('resolve(optional(IDialogService))') && summary.includes('resolver wrapper'))) {
   failures.push('Expected a candidate seam for resolve(optional(IDialogService)).');
 }
-if (!candidateSummaries.some((summary) => summary.includes('Classic static inject metadata'))) {
-  failures.push('Expected a candidate seam for classic static getter inject metadata.');
-}
-if (!candidateSummaries.some((summary) => summary.includes('Classic @inject(...) metadata'))) {
-  failures.push('Expected a candidate seam for classic @inject(...) metadata.');
+if (classDependencyCandidateSummaries.length !== 2) {
+  failures.push(`Expected canonical class-dependency candidate seams for the static inject and @inject forms, observed ${classDependencyCandidateSummaries.length}.`);
 }
 if (providedDiKeyNames.has('IDialogService')) {
   failures.push('StandardConfiguration-only app should not publish a Di.ProvidesKey claim for IDialogService.');

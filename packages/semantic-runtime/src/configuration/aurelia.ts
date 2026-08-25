@@ -6,13 +6,11 @@ import type {
 } from '../kernel/handles.js';
 import type { FieldProvenance } from '../kernel/provenance.js';
 import type { ContainerReference } from '../di/container-reference.js';
-import type { AppRootReference } from './app-root.js';
+import type { InstanceProvider } from '../di/instance-provider.js';
 
 export type AureliaField =
   | 'container'
   | 'rootProvider'
-  | 'pendingRoot'
-  | 'activeRoot'
   | 'source';
 
 /** Reference to a modeled Aurelia runtime facade without retaining a live runtime object. */
@@ -44,12 +42,8 @@ export class Aurelia {
     readonly identityHandle: IdentityHandle,
     /** Root container owned by the facade constructor path. */
     readonly container: ContainerReference,
-    /** Product handle for the IAppRoot provider row registered by the constructor path, when modeled. */
-    readonly rootProviderProductHandle: ProductHandle | null,
-    /** App root produced by `.app(...)` but not necessarily started. */
-    readonly pendingRoot: AppRootReference | null,
-    /** Root that has been prepared by start-like analysis, if that later pass runs. */
-    readonly activeRoot: AppRootReference | null,
+    /** Shared IAppRoot provider installed by construction and prepared by each AppRoot constructor. */
+    readonly rootProvider: InstanceProvider,
     /** Source address for the constructor or static app admission expression. */
     readonly sourceAddressHandle: AddressHandle | null,
     /** Field-level provenance for source facts that matter to explanation or ambiguity. */

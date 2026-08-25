@@ -1,23 +1,39 @@
 import ts from 'typescript';
+import { ComputationLifecycleRegistry } from '../out/kernel/computation-lifecycle.js';
 import { KernelStore } from '../out/kernel/store.js';
 import { CheckerTypeProjector } from '../out/type-system/checker-projector.js';
+import { readOrProjectCheckerTypeMembersInProjection } from '../out/type-system/checker-type-member-surface.js';
+import {
+  CheckerDeclarationSourceContext,
+  registerCheckerDeclarationSourceContext,
+  registerIsolatedCheckerDeclarationSourceContext,
+} from '../out/type-system/declaration-source.js';
+import { TypeSystemProgramSourceAuthority } from '../out/type-system/program-source-authority.js';
+import { TypeSystemHotDetails, TypeSystemProductDetails } from '../out/type-system/product-details.js';
+import {
+  CheckerIndexedAccessKeyKind,
+  CheckerTypeProjectionOrigin,
+  CheckerTypeShapeKind,
+} from '../out/type-system/type-shape.js';
 
 const failures = [];
 
-verifyTypeShapeIndexPrunesWithKernelDisposal();
+verifyCanonicalProjectionFollowsKernelLifetime();
+verifyFreshCheckerCarriersReplaceAtStableSemanticHandles();
+verifySyntheticArrayMembersAreOwnedHotDetails();
 
 if (failures.length > 0) {
   console.error(failures.join('\n'));
   process.exit(1);
 }
 
-console.log('contract ok: TypeChecker projection indexes mirror kernel product-detail lifetime.');
+console.log('contract ok: TypeChecker semantic identity is stable while Program-local carriers refresh atomically.');
 
-function verifyTypeShapeIndexPrunesWithKernelDisposal() {
+function verifyCanonicalProjectionFollowsKernelLifetime() {
   const fixture = createCheckerFixture();
   const store = new KernelStore('contract-type-projection-lifetime');
-  const projector = new CheckerTypeProjector(store);
-  const marker = store.mark();
+  const projector = new CheckerTypeProjector(store, store);
+  const marker = store.markLifetime();
   const first = projector.ensureProjection({
     localKey: 'foo',
     checker: fixture.checker,
@@ -25,14 +41,20 @@ function verifyTypeShapeIndexPrunesWithKernelDisposal() {
     sourceNode: fixture.sourceNode,
   });
 
-  expect(typeShapeIndexEntryCount(store) === 1, 'Type-shape sidecar index should record the projected checker shape.');
   expect(store.productDetails.size === 1, 'Type projection should attach one product detail.');
+
+  const sameEpochOtherSite = projector.ensureProjection({
+    localKey: 'bar',
+    checker: fixture.checker,
+    type: fixture.type,
+    sourceNode: fixture.sourceNode,
+  });
+  expect(sameEpochOtherSite === first, 'Equivalent projections inside one checker epoch should converge canonically.');
 
   const disposal = store.disposeSince(marker);
   expect(disposal.productDetails === 1, 'Disposing the answer-local marker should remove the projected type detail.');
   expect(disposal.hotDetails === 2, 'Disposing the answer-local marker should remove hot member details for the projected type.');
   expect(store.productDetails.size === 0, 'Product details should be empty after marker disposal.');
-  expect(typeShapeIndexEntryCount(store) === 0, 'Type-shape sidecar index should prune disposed product-detail handles.');
 
   const second = projector.ensureProjection({
     localKey: 'foo',
@@ -43,12 +65,125 @@ function verifyTypeShapeIndexPrunesWithKernelDisposal() {
   expect(second !== first, 'Reprojecting after disposal should materialize a fresh type detail, not reuse a stale object.');
   expect(second.productHandle === first.productHandle, 'Reprojecting the same local key should reuse the stable product handle after disposal.');
   expect(store.productDetails.size === 1, 'Fresh projection should attach a new product detail after disposal.');
-  expect(typeShapeIndexEntryCount(store) === 1, 'Fresh projection should repopulate the sidecar index after disposal.');
 }
 
-function createCheckerFixture() {
+function verifyFreshCheckerCarriersReplaceAtStableSemanticHandles() {
+  const store = new KernelStore('contract-type-projection-epochs');
+  const lifecycle = new ComputationLifecycleRegistry(store);
+  const programSources = new TypeSystemProgramSourceAuthority(
+    store,
+    lifecycle,
+    'contract-type-projection-epochs',
+  );
+  const firstFixture = createCheckerFixture(
+    'export interface Foo { bar: string; baz: number; }',
+    programSources,
+  );
+  const secondFixture = createCheckerFixture(
+    'export interface Foo { bar: string; baz: number; }',
+    programSources,
+  );
+  const firstRun = lifecycle.begin(typeProjectionLocus());
+  const first = new CheckerTypeProjector(store, firstRun).ensureProjection({
+    localKey: 'same-site',
+    checker: firstFixture.checker,
+    type: firstFixture.type,
+    sourceNode: firstFixture.sourceNode,
+  });
+  expect(firstRun.commit().state === 'committed', 'First checker projection should commit.');
+
+  expectThrows(
+    () => new CheckerTypeProjector(store, store).ensureProjection({
+      localKey: 'same-site',
+      checker: secondFixture.checker,
+      type: secondFixture.type,
+      sourceNode: secondFixture.sourceNode,
+    }),
+    'different TypeChecker epoch',
+    'A foreign computation must not borrow a stale Program-local carrier.',
+  );
+
+  const secondRun = lifecycle.begin(typeProjectionLocus());
+  const second = new CheckerTypeProjector(store, secondRun).ensureProjection({
+    localKey: 'same-site',
+    checker: secondFixture.checker,
+    type: secondFixture.type,
+    sourceNode: secondFixture.sourceNode,
+  });
+
+  expect(first !== second, 'Distinct TypeChecker epochs must not reuse one hot type-shape object.');
+  expect(first.productHandle === second.productHandle, 'One logical type should retain its product handle across Programs.');
+  expect(first.identityHandle === second.identityHandle, 'One logical type should retain its identity handle across Programs.');
+  expect(first.semanticKey === second.semanticKey, 'One logical type should retain its project-scoped semantic key.');
+  expect(first.carrier?.checker === firstFixture.checker, 'First projection must retain the first checker carrier.');
+  expect(second.carrier?.checker === secondFixture.checker, 'Second projection must retain the second checker carrier.');
+  expect(secondRun.commit().state === 'committed', 'Fresh Program carrier replacement should commit atomically.');
+  expect(
+    store.productDetails.read(TypeSystemProductDetails.TypeShape, second.productHandle) === second,
+    'The stable type-shape handle should resolve to the fresh Program carrier after replacement.',
+  );
+}
+
+function typeProjectionLocus() {
+  return {
+    kind: 'type-projection-contract',
+    reconciliationKey: 'project:contract-type-projection-lifetime|owner:foo',
+    summary: 'Foo type projection lifetime',
+  };
+}
+
+function verifySyntheticArrayMembersAreOwnedHotDetails() {
+  const store = new KernelStore('contract-synthetic-array-member-ownership');
+  const projector = new CheckerTypeProjector(store, store);
+  const element = projector.ensureSyntheticProjection({
+    localKey: 'synthetic-array-element',
+    shapeKind: CheckerTypeShapeKind.Primitive,
+    display: 'string',
+    members: [],
+    origin: CheckerTypeProjectionOrigin.SyntheticExpressionType,
+  });
+  const array = projector.ensureSyntheticProjection({
+    localKey: 'synthetic-array',
+    shapeKind: CheckerTypeShapeKind.Object,
+    display: 'string[]',
+    members: [],
+    indexedValueType: element.toReference(),
+    indexedAccessKeyKind: CheckerIndexedAccessKeyKind.Number,
+    iteratedValueType: element.toReference(),
+    origin: CheckerTypeProjectionOrigin.SyntheticExpressionType,
+  });
+
+  const members = readOrProjectCheckerTypeMembersInProjection(projector, array, array.productHandle);
+  const repeatedMembers = readOrProjectCheckerTypeMembersInProjection(projector, array, 'another-caller-local-key');
+  expect(members.length > 0, 'Synthetic Array member enumeration should expose the runtime Array surface.');
+  expect(
+    repeatedMembers.map((member) => member.detailHandle).join('\n')
+      === members.map((member) => member.detailHandle).join('\n'),
+    'Synthetic Array member handles should derive from owner shape and member name, not caller-local seeds.',
+  );
+  expect(
+    store.hotDetails.readEntries().filter((entry) => entry.slot === TypeSystemHotDetails.TypeMember).length
+      === members.length,
+    'Repeated enumeration of one synthetic Array owner should not duplicate its member hot details.',
+  );
+  for (const member of members) {
+    const entry = store.hotDetails.readEntry(member.detailHandle);
+    expect(
+      store.hotDetails.read(TypeSystemHotDetails.TypeMember, member.detailHandle) === member,
+      `Synthetic Array member ${member.name} should be admitted to the TypeMember hot-detail slot.`,
+    );
+    expect(
+      entry?.ownerProductHandle === array.productHandle,
+      `Synthetic Array member ${member.name} should be owned by its Array type-shape product.`,
+    );
+  }
+}
+
+function createCheckerFixture(
+  sourceText = 'export interface Foo { bar: string; baz: number; }',
+  programSources = null,
+) {
   const fileName = 'contract-type-projection.ts';
-  const sourceText = 'export interface Foo { bar: string; baz: number; }';
   const sourceFile = ts.createSourceFile(fileName, sourceText, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
   const compilerOptions = {
     module: ts.ModuleKind.ESNext,
@@ -72,6 +207,18 @@ function createCheckerFixture() {
   };
   const program = ts.createProgram([fileName], compilerOptions, host);
   const checker = program.getTypeChecker();
+  if (programSources == null) {
+    registerIsolatedCheckerDeclarationSourceContext(checker, 'contract-type-projection-lifetime');
+  } else {
+    registerCheckerDeclarationSourceContext(
+      checker,
+      new CheckerDeclarationSourceContext(
+        'contract-type-projection-lifetime',
+        programSources,
+        new Set(),
+      ),
+    );
+  }
   const programSourceFile = program.getSourceFile(fileName);
   const declaration = programSourceFile?.statements.find(ts.isInterfaceDeclaration) ?? null;
   const symbol = declaration == null ? null : checker.getSymbolAtLocation(declaration.name);
@@ -85,15 +232,19 @@ function createCheckerFixture() {
   };
 }
 
-function typeShapeIndexEntryCount(store) {
-  const row = store.readTelemetrySnapshot({ includeBreakdowns: true }).sidecarIndexes.find((candidate) =>
-    candidate.key === 'type-system.checker-type-shape-index'
-  );
-  return row?.entries ?? 0;
-}
-
 function expect(condition, message) {
   if (!condition) {
     failures.push(message);
+  }
+}
+
+function expectThrows(action, expectedMessage, message) {
+  try {
+    action();
+    failures.push(message);
+  } catch (error) {
+    if (!(error instanceof Error) || !error.message.includes(expectedMessage)) {
+      failures.push(`${message} Received ${error instanceof Error ? error.message : String(error)}`);
+    }
   }
 }

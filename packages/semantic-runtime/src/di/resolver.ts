@@ -8,6 +8,9 @@ import type { FieldProvenance } from '../kernel/provenance.js';
 import {
   RegistrationStrategy,
 } from '../registration/registration-admission.js';
+import {
+  RegistrationValueKind,
+} from '../registration/registration-reference.js';
 import type {
   RegistrationKeyReference,
   RegistrationValueReference,
@@ -47,6 +50,24 @@ export const enum ResolverStrategy {
   alias = 5,
 }
 
+/** Narrow a runtime strategy carrier to Aurelia's closed ResolverStrategy vocabulary. */
+export function isConcreteResolverStrategy(
+  strategy: ResolverStrategy | number | null,
+): strategy is ResolverStrategy {
+  switch (strategy) {
+    case ResolverStrategy.instance:
+    case ResolverStrategy.singleton:
+    case ResolverStrategy.transient:
+    case ResolverStrategy.callback:
+    case ResolverStrategy.array:
+    case ResolverStrategy.alias:
+      return true;
+    case null:
+    default:
+      return false;
+  }
+}
+
 export const enum ResolverResolutionKind {
   /** Resolver returns a modeled value directly. */
   Instance = 'instance',
@@ -64,8 +85,6 @@ export const enum ResolverResolutionKind {
   Array = 'array',
   /** Resolver state is not yet precise enough to model the runtime branch. */
   Open = 'open',
-  /** Singleton resolution re-entered while already resolving. */
-  Cyclic = 'cyclic',
   /** Resolver carried a strategy value outside Aurelia's ResolverStrategy enum. */
   InvalidStrategy = 'invalid-strategy',
 }
@@ -92,8 +111,6 @@ export class ResolverResolution {
 
   get frameworkErrorCode(): DiFrameworkErrorCodeValue | null {
     switch (this.resolutionKind) {
-      case ResolverResolutionKind.Cyclic:
-        return DiFrameworkErrorCode.CyclicDependency;
       case ResolverResolutionKind.InvalidStrategy:
         return DiFrameworkErrorCode.InvalidResolverStrategy;
       case ResolverResolutionKind.Instance:
@@ -118,9 +135,6 @@ export class Resolver {
   _key: RegistrationKeyReference;
   _strategy: ResolverStrategy | number | null;
   _state: RegistrationValueReference | null;
-
-  private _resolving = false;
-  private _cachedFactory: ContainerFactoryLookup | null = null;
 
   constructor(
     /** Product handle for the kernel materialized-product envelope that represents this resolver. */
@@ -169,27 +183,13 @@ export class Resolver {
           null,
         );
       case ResolverStrategy.singleton:
-        if (this._resolving) {
-          return new ResolverResolution(
-            ResolverResolutionKind.Cyclic,
-            this,
-            handler,
-            requestor,
-            this._state,
-            null,
-            null,
-          );
-        }
-        this._resolving = true;
-        this._cachedFactory = this.getFactory(handler);
-        this._resolving = false;
         return new ResolverResolution(
           ResolverResolutionKind.SingletonFactory,
           this,
           handler,
           requestor,
           this._state,
-          this._cachedFactory,
+          this.getFactory(handler),
           null,
         );
       case ResolverStrategy.transient:
@@ -204,7 +204,9 @@ export class Resolver {
         );
       case ResolverStrategy.callback:
         return new ResolverResolution(
-          ResolverResolutionKind.Callback,
+          this._state?.valueKind === RegistrationValueKind.CachedCallback
+            ? ResolverResolutionKind.CachedCallback
+            : ResolverResolutionKind.Callback,
           this,
           handler,
           requestor,
@@ -262,7 +264,7 @@ export class Resolver {
       case ResolverStrategy.transient:
         return factoryLookupForRegistrationValue(container, this._state);
       case ResolverStrategy.instance:
-        return this._cachedFactory;
+        return null;
       default:
         return null;
     }
@@ -291,7 +293,7 @@ export function resolverStrategyForRegistrationStrategy(
     case RegistrationStrategy.Registry:
     case RegistrationStrategy.Resource:
     case RegistrationStrategy.PlainClassSelf:
-    case RegistrationStrategy.ObjectMap:
+    case RegistrationStrategy.RecursiveCarrier:
     case RegistrationStrategy.Resolver:
     case RegistrationStrategy.Factory:
     case RegistrationStrategy.FrameworkGroup:

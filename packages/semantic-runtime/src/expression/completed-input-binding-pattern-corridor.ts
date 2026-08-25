@@ -170,7 +170,7 @@ export class CompletedInputBindingPatternCorridor {
     const start = open.start;
 
     const elements: BindingPattern[] = [];
-    let rest: BindingPattern | null = null;
+    const rest: BindingPattern | null = null;
 
     while (true) {
       const t = this.state.peekToken();
@@ -204,21 +204,20 @@ export class CompletedInputBindingPatternCorridor {
       }
 
       if (t.type === TokenType.Ellipsis) {
-        if (rest) {
-          return this.state.failures.error('Only one rest element is allowed in an array pattern', t);
-        }
-
-        const parsedRest = this.parseArrayBindingRest(start, elements, rest);
-        if (isParseFailure(parsedRest)) {
-          return parsedRest;
-        }
-        rest = parsedRest;
-        break;
+        return this.state.failures.error(
+          'Array repeat declarations support identifiers and holes only',
+          t,
+          ExpressionFrameworkErrorCode.ParseUnexpectedTokenDestructuring,
+        );
       }
 
-      const element = this.parseArrayBindingElement(start, elements, rest);
+      const element = this.parseBindingIdentifier();
       if (isParseFailure(element)) {
-        return element;
+        return this.state.failures.error(
+          'Array repeat declarations support identifiers and holes only',
+          t,
+          ExpressionFrameworkErrorCode.ParseUnexpectedTokenDestructuring,
+        );
       }
       elements.push(element);
 
@@ -236,79 +235,6 @@ export class CompletedInputBindingPatternCorridor {
       elements,
       rest,
     );
-  }
-
-  private parseArrayBindingRest(
-    start: number,
-    elements: readonly BindingPattern[],
-    rest: BindingPattern | null,
-  ): ParsedBindingPattern {
-    const ellipsis = this.state.nextToken();
-    const parsedRest = this.parseBindingPatternBase(
-      ExpressionFrameworkErrorCode.ParseUnexpectedTokenDestructuring,
-    );
-    if (isParseFailure(parsedRest)) {
-      if (isParseCompanionFailure(parsedRest)) {
-        return this.companionBuilder.widenFailureToFrame(
-          parsedRest,
-          ExpressionCompanionFrameKind.IteratorDeclaration,
-          this.state.span(start, this.state.failurePreservedEnd(parsedRest)),
-          this.state.prefixRefs.optional(this.state.prefixRefs.arrayBindingPattern(start, elements, rest)),
-        );
-      }
-
-      return this.companionBuilder.missingBindingDeclarationFailure(
-        parsedRest,
-        ellipsis,
-        this.state.span(start, ellipsis.end),
-        this.state.prefixRefs.optional(this.state.prefixRefs.arrayBindingPattern(start, elements, rest)),
-      );
-    }
-
-    const afterRest = this.state.peekToken();
-    if (afterRest.type === TokenType.Comma) {
-      return this.state.failures.error('Rest element must be in the last position of an array pattern', afterRest);
-    }
-    if (afterRest.type === TokenType.CloseBracket) {
-      this.closeArrayBindingPattern();
-      return parsedRest;
-    }
-    if (afterRest.type === TokenType.EOF || afterRest.type === TokenType.KeywordOf) {
-      return this.companionBuilder.missingClosingDelimiterFailure(
-        "Expected ']' after array pattern rest element",
-        afterRest,
-        ExpressionCompanionFrameKind.IteratorDeclaration,
-        ExpressionExpectedContinuationClass.CloseBracket,
-        this.state.span(start, this.state.localEnd(parsedRest)),
-        this.state.prefixRefs.optional(this.state.prefixRefs.arrayBindingPattern(start, elements, parsedRest)),
-      );
-    }
-    return this.state.failures.error(
-      "Expected ']' after array pattern rest element",
-      afterRest,
-      ExpressionFrameworkErrorCode.ParseUnexpectedTokenDestructuring,
-    );
-  }
-
-  private parseArrayBindingElement(
-    start: number,
-    elements: readonly BindingPattern[],
-    rest: BindingPattern | null,
-  ): ParsedBindingPattern {
-    const element = this.parseBindingPatternWithOptionalDefault(
-      ExpressionFrameworkErrorCode.ParseUnexpectedTokenDestructuring,
-    );
-    if (!isParseFailure(element)) {
-      return element;
-    }
-    return isParseCompanionFailure(element)
-      ? this.companionBuilder.widenFailureToFrame(
-          element,
-          ExpressionCompanionFrameKind.IteratorDeclaration,
-          this.state.span(start, this.state.failurePreservedEnd(element)),
-          this.state.prefixRefs.optional(this.state.prefixRefs.arrayBindingPattern(start, elements, rest)),
-        )
-      : element;
   }
 
   private parseArrayBindingSeparator(
@@ -387,16 +313,11 @@ export class CompletedInputBindingPatternCorridor {
       }
 
       if (t.type === TokenType.Ellipsis) {
-        if (rest) {
-          return this.state.failures.error('Only one rest element is allowed in an object pattern', t);
-        }
-
-        const parsedRest = this.parseObjectBindingRest(start, properties, rest);
-        if (isParseFailure(parsedRest)) {
-          return parsedRest;
-        }
-        rest = parsedRest;
-        break;
+        return this.state.failures.error(
+          'Object binding pattern rest is not supported',
+          t,
+          ExpressionFrameworkErrorCode.ParseInvalidIdentifierObjectLiteralKey,
+        );
       }
 
       const property = this.parseObjectBindingProperty(start, properties, rest);
@@ -418,52 +339,6 @@ export class CompletedInputBindingPatternCorridor {
       properties,
       rest,
     );
-  }
-
-  private parseObjectBindingRest(
-    start: number,
-    properties: readonly ObjectBindingPatternProperty[],
-    rest: BindingPattern | null,
-  ): ParsedBindingPattern {
-    const ellipsis = this.state.nextToken();
-    const parsedRest = this.parseBindingPatternBase();
-    if (isParseFailure(parsedRest)) {
-      if (isParseCompanionFailure(parsedRest)) {
-        return this.companionBuilder.widenFailureToFrame(
-          parsedRest,
-          ExpressionCompanionFrameKind.IteratorDeclaration,
-          this.state.span(start, this.state.failurePreservedEnd(parsedRest)),
-          this.state.prefixRefs.optional(this.state.prefixRefs.objectBindingPattern(start, properties, rest)),
-        );
-      }
-
-      return this.companionBuilder.missingBindingDeclarationFailure(
-        parsedRest,
-        ellipsis,
-        this.state.span(start, ellipsis.end),
-        this.state.prefixRefs.optional(this.state.prefixRefs.objectBindingPattern(start, properties, rest)),
-      );
-    }
-
-    const afterRest = this.state.peekToken();
-    if (afterRest.type === TokenType.Comma) {
-      return this.state.failures.error('Rest element must be in the last position of an object pattern', afterRest);
-    }
-    if (afterRest.type === TokenType.CloseBrace) {
-      this.closeObjectBindingPattern();
-      return parsedRest;
-    }
-    if (afterRest.type === TokenType.EOF || afterRest.type === TokenType.KeywordOf) {
-      return this.companionBuilder.missingClosingDelimiterFailure(
-        "Expected '}' after object pattern rest element",
-        afterRest,
-        ExpressionCompanionFrameKind.IteratorDeclaration,
-        ExpressionExpectedContinuationClass.CloseBrace,
-        this.state.span(start, this.state.localEnd(parsedRest)),
-        this.state.prefixRefs.optional(this.state.prefixRefs.objectBindingPattern(start, properties, parsedRest)),
-      );
-    }
-    return this.state.failures.error("Expected '}' after object pattern rest element", afterRest);
   }
 
   private parseObjectBindingProperty(
@@ -581,7 +456,13 @@ export class CompletedInputBindingPatternCorridor {
       );
     }
 
-    return this.state.failures.error("Expected ',' or '}' in object binding pattern", sep);
+    return this.state.failures.error(
+      "Expected ',' or '}' in object binding pattern",
+      sep,
+      isUnsupportedObjectBindingExpressionContinuation(sep.type)
+        ? ExpressionFrameworkErrorCode.ParseUnsupportedObjectBindingPattern
+        : ExpressionFrameworkErrorCode.ParseMissingExpectedToken,
+    );
   }
 
   private closeObjectBindingPattern(): void {
@@ -593,5 +474,45 @@ export class CompletedInputBindingPatternCorridor {
     return token.type === TokenType.Identifier
       || token.type === TokenType.StringLiteral
       || token.type === TokenType.NumericLiteral;
+  }
+}
+
+function isUnsupportedObjectBindingExpressionContinuation(tokenType: TokenType): boolean {
+  switch (tokenType) {
+    case TokenType.Dot:
+    case TokenType.QuestionDot:
+    case TokenType.OpenBracket:
+    case TokenType.OpenParen:
+    case TokenType.Backtick:
+    case TokenType.Question:
+    case TokenType.Plus:
+    case TokenType.Minus:
+    case TokenType.Asterisk:
+    case TokenType.Slash:
+    case TokenType.Percent:
+    case TokenType.StarStar:
+    case TokenType.AmpersandAmpersand:
+    case TokenType.BarBar:
+    case TokenType.QuestionQuestion:
+    case TokenType.LessThan:
+    case TokenType.LessThanOrEqual:
+    case TokenType.GreaterThan:
+    case TokenType.GreaterThanOrEqual:
+    case TokenType.EqualsEquals:
+    case TokenType.EqualsEqualsEquals:
+    case TokenType.ExclamationEquals:
+    case TokenType.ExclamationEqualsEquals:
+    case TokenType.KeywordIn:
+    case TokenType.KeywordInstanceof:
+    case TokenType.PlusEquals:
+    case TokenType.MinusEquals:
+    case TokenType.AsteriskEquals:
+    case TokenType.SlashEquals:
+    case TokenType.PlusPlus:
+    case TokenType.MinusMinus:
+    case TokenType.EqualsGreaterThan:
+      return true;
+    default:
+      return false;
   }
 }

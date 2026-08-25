@@ -77,5 +77,7 @@ export class CustomAttributeDefinition {
     readonly defaultProperty: string,
     readonly contributions: readonly CustomAttributeDefinitionContribution[] = [],
     readonly fieldProvenance: readonly FieldProvenance<CustomAttributeDefinitionField>[] = [],
+    /** Exact address for the authored public resource-name token, when the declaration has one. */
+    readonly nameSourceAddressHandle: AddressHandle | null = null,
   ) {}
 }

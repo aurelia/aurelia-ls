@@ -3,7 +3,7 @@ import {
   isRuntimeExpressionBinding,
   type RuntimeExpressionBinding,
 } from '../observation/runtime-binding-expression.js';
-import type { KernelStore } from '../kernel/store.js';
+import type { ProductDetailReadView } from '../kernel/product-details.js';
 import type { RuntimeControllerFrame } from './runtime-controller.js';
 import type { RuntimeRenderingEmission } from './runtime-rendering-materializer.js';
 import {
@@ -17,7 +17,7 @@ import {
  * Finds the runtime expression binding that supplies a template-controller value property in one render context.
  */
 export function templateControllerRuntimeValueBinding(
-  store: KernelStore,
+  store: ProductDetailReadView,
   runtimeRendering: RuntimeRenderingEmission,
   instruction: HydrateTemplateControllerInstruction,
   controller: RuntimeControllerFrame | null,
@@ -26,8 +26,11 @@ export function templateControllerRuntimeValueBinding(
   if (expressionProductHandle == null) {
     return null;
   }
-  const bindings = (controller?.readBindings() ?? runtimeRendering.readBindingsForInstruction(instruction.productHandle))
+  const bindings = runtimeRendering.readBindingsForExpressionProduct(expressionProductHandle)
     .filter(isRuntimeExpressionBinding)
-    .filter((binding) => expressionProductHandleForBinding(binding) === expressionProductHandle);
+    .filter((binding) => expressionProductHandleForBinding(binding) === expressionProductHandle)
+    .filter((binding) => controller == null
+      || runtimeRendering.requireRenderContextForBinding(binding.productHandle).targetController.productHandle
+        === controller.productHandle);
   return bindings.length === 1 ? bindings[0]! : null;
 }

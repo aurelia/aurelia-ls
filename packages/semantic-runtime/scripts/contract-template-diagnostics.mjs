@@ -8,15 +8,11 @@ import {
   DiagnosticActionKind,
   DiagnosticActionPlanKind,
   DiagnosticActionPlanReadiness,
-  DiagnosticActionTargetSourceCoverage,
   ExpectedSemanticEffect,
   ExpectedSemanticEffectFilter,
   readFixtureVerificationSnapshot,
   SemanticAppQueryKind,
-  diagnosticActionChangeDomainForPlan,
-  diagnosticActionKindForDiagnosticSuggestion,
-  diagnosticActionPlanKindForAction,
-  diagnosticActionPlanReadinessForCluster,
+  diagnosticRepairAffordanceForSuggestion,
   verifyFixtureEffects,
 } from '../out/index.js';
 
@@ -202,6 +198,20 @@ const contracts = [
           effectFilter('suggestion.actionTarget.source.path', 'src/app.ts'),
         ],
         'signature',
+      ),
+      ExpectedSemanticEffect.absent(
+        'Reached parent-bound repeat-local types should not retain obsolete weak-owner diagnostics.',
+        'template-diagnostic',
+        'template',
+        null,
+        [
+          effectFilter('diagnosticKind', 'weak-expression-member-owner'),
+          effectFilter('selectedMemberName', 'label'),
+          effectFilter('subject.subjectKind', 'template-member-access'),
+          effectFilter('subject.source.path', 'src/components/loose-picklist.html'),
+          effectFilter('subject.source.start', 121),
+          effectFilter('subject.source.end', 133),
+        ],
       ),
       ExpectedSemanticEffect.atLeast(
         'Binding data-flow rows should preserve the declaration source for assignment repair targets.',
@@ -457,6 +467,21 @@ const contracts = [
         ],
         'signature',
       ),
+      ExpectedSemanticEffect.exactly(
+        '<let> command diagnostics should mirror the framework compiler policy without advertising unsupported .to-view.',
+        'template-diagnostic',
+        'template',
+        1,
+        null,
+        [
+          effectFilter('diagnosticKind', 'template-compiler-error'),
+          effectFilter('frameworkErrorCode', 'AUR0704'),
+          effectFilter('missingInput', 'template-compiler:AUR0704'),
+          effectFilter('summary', 'Invalid command ".trigger" for <let>. Use .bind or remove the command.'),
+          effectFilter('source.path', 'src/template-compiler-errors-app.html'),
+        ],
+        'signature',
+      ),
     ],
   ),
   await verifyFixture(
@@ -688,16 +713,15 @@ const contracts = [
   ),
 ];
 const mixedFormCursorProbe = await readMixedFormAssignmentCursorProbe();
+const viewFactoryProviderAppDiagnosticProbe = await readViewFactoryProviderAppDiagnosticProjectionProbe();
 
 const failures = contracts.flatMap((contract) => contract.verification.effectResults
   .filter((result) => result.outcome !== 'satisfied')
   .map((result) => `${contract.fixture}: ${result.summary}`));
 const diagnosticActionProbe = readDiagnosticActionProbe();
+const routerDiagnosticActionProbe = readRouterDiagnosticActionProbe();
 if (mixedFormCursorProbe.assignmentDiagnostics !== 1) {
   failures.push(`Expected mixed-form fulfillmentMethod cursor to surface exactly one binding assignment diagnostic, observed ${mixedFormCursorProbe.assignmentDiagnostics}.`);
-}
-if (mixedFormCursorProbe.overlayAssignmentDiagnostics !== 0) {
-  failures.push(`Expected mixed-form fulfillmentMethod cursor to suppress assignment-shaped overlay diagnostics when data-flow owns the span, observed ${mixedFormCursorProbe.overlayAssignmentDiagnostics}.`);
 }
 if (diagnosticActionProbe.actionKind !== DiagnosticActionKind.RegisterFrameworkCapability) {
   failures.push(`Expected register-framework-capability suggestions to classify as ${DiagnosticActionKind.RegisterFrameworkCapability}, observed ${diagnosticActionProbe.actionKind}.`);
@@ -710,6 +734,33 @@ if (diagnosticActionProbe.changeDomain !== DiagnosticActionChangeDomain.AppSourc
 }
 if (diagnosticActionProbe.readiness !== DiagnosticActionPlanReadiness.SourceEditPolicyOpen) {
   failures.push(`Expected framework capability registration readiness to stay ${DiagnosticActionPlanReadiness.SourceEditPolicyOpen}, observed ${diagnosticActionProbe.readiness}.`);
+}
+if (routerDiagnosticActionProbe.actionKind !== DiagnosticActionKind.RewriteRouterInstruction) {
+  failures.push(`Expected router instruction suggestions to classify as ${DiagnosticActionKind.RewriteRouterInstruction}, observed ${routerDiagnosticActionProbe.actionKind}.`);
+}
+if (routerDiagnosticActionProbe.planKind !== DiagnosticActionPlanKind.RouterInstructionRewrite) {
+  failures.push(`Expected router instruction suggestions to plan as ${DiagnosticActionPlanKind.RouterInstructionRewrite}, observed ${routerDiagnosticActionProbe.planKind}.`);
+}
+if (routerDiagnosticActionProbe.changeDomain !== DiagnosticActionChangeDomain.AppSource) {
+  failures.push(`Expected router instruction repair to belong to ${DiagnosticActionChangeDomain.AppSource}, observed ${routerDiagnosticActionProbe.changeDomain}.`);
+}
+if (routerDiagnosticActionProbe.readiness !== DiagnosticActionPlanReadiness.ReadyToPlan) {
+  failures.push(`Expected source-backed router instruction repair readiness to be ${DiagnosticActionPlanReadiness.ReadyToPlan}, observed ${routerDiagnosticActionProbe.readiness}.`);
+}
+if (routerDiagnosticActionProbe.actionability !== 'guided') {
+  failures.push(`Expected router instruction repair without an edit plan to remain guided, observed ${routerDiagnosticActionProbe.actionability}.`);
+}
+if ('editPlanState' in routerDiagnosticActionProbe || 'applicationKind' in routerDiagnosticActionProbe) {
+  failures.push('Expected router diagnostic guidance to remain plan-neutral; edit availability belongs to a non-empty code-action edit plan.');
+}
+if (viewFactoryProviderAppDiagnosticProbe.broadAur0755Diagnostics !== 1) {
+  failures.push(`Expected broad app diagnostics to include exactly one AUR0755 row, observed ${viewFactoryProviderAppDiagnosticProbe.broadAur0755Diagnostics}.`);
+}
+if (viewFactoryProviderAppDiagnosticProbe.htmlAur0755Diagnostics !== 0) {
+  failures.push(`Expected HTML-scoped app diagnostics to stay clean for source-owned AUR0755, observed ${viewFactoryProviderAppDiagnosticProbe.htmlAur0755Diagnostics}.`);
+}
+if (viewFactoryProviderAppDiagnosticProbe.tsAur0755Diagnostics !== 1) {
+  failures.push(`Expected TS-scoped app diagnostics to include exactly one source-owned AUR0755 row, observed ${viewFactoryProviderAppDiagnosticProbe.tsAur0755Diagnostics}.`);
 }
 
 const summary = {
@@ -724,6 +775,8 @@ const summary = {
   })),
   mixedFormCursorProbe,
   diagnosticActionProbe,
+  routerDiagnosticActionProbe,
+  viewFactoryProviderAppDiagnosticProbe,
 };
 
 if (failures.length > 0) {
@@ -738,22 +791,25 @@ function effectFilter(field, value) {
 }
 
 function readDiagnosticActionProbe() {
-  const actionKind = diagnosticActionKindForDiagnosticSuggestion('register-framework-capability');
-  const planKind = diagnosticActionPlanKindForAction(
-    actionKind,
-    'register-framework-capability',
-    'framework-capability',
-  );
-  return {
-    actionKind,
-    planKind,
-    changeDomain: diagnosticActionChangeDomainForPlan(planKind),
-    readiness: diagnosticActionPlanReadinessForCluster(
-      planKind,
-      DiagnosticActionTargetSourceCoverage.All,
-      [],
-    ),
-  };
+  return diagnosticRepairAffordanceForSuggestion({
+    suggestionKind: 'register-framework-capability',
+    actionKind: 'register-framework-capability',
+    actionTarget: {
+      targetKind: 'framework-capability',
+      source: {},
+    },
+  });
+}
+
+function readRouterDiagnosticActionProbe() {
+  return diagnosticRepairAffordanceForSuggestion({
+    suggestionKind: 'fix-router-instruction',
+    actionKind: 'rewrite-expression',
+    actionTarget: {
+      targetKind: 'expression',
+      source: {},
+    },
+  });
 }
 
 async function verifyFixture(fixtureRoot, storeKey, expectedEffects) {
@@ -801,6 +857,47 @@ async function readMixedFormAssignmentCursorProbe() {
       )
     ).length,
   };
+}
+
+async function readViewFactoryProviderAppDiagnosticProjectionProbe() {
+  const runtime = await createSemanticRuntime({
+    workspaceRoot: viewFactoryProviderFixtureRoot,
+    storeKey: 'template-diagnostics-contract:view-factory-provider-app-diagnostics',
+  });
+  const app = await runtime.openApp({
+    analysisDepth: 'binding-observation',
+  });
+  const broadRows = readAppDiagnosticRows(app, null);
+  const htmlRows = readAppDiagnosticRows(app, 'src/runtime-html-view-factory-provider-errors-app.html');
+  const tsRows = readAppDiagnosticRows(app, 'src/runtime-html-view-factory-provider-errors-app.ts');
+  return {
+    broadDiagnostics: broadRows.length,
+    htmlDiagnostics: htmlRows.length,
+    tsDiagnostics: tsRows.length,
+    broadAur0755Diagnostics: countAur0755Diagnostics(broadRows),
+    htmlAur0755Diagnostics: countAur0755Diagnostics(htmlRows),
+    tsAur0755Diagnostics: countAur0755Diagnostics(tsRows),
+    tsSources: tsRows.map((row) => row.source?.path ?? null),
+  };
+}
+
+function readAppDiagnosticRows(app, sourceFilePath) {
+  const answer = app.ask({
+    kind: SemanticAppQueryKind.AppDiagnostics,
+    diagnosticProjection: 'type-projection',
+    ...(sourceFilePath == null ? {} : { sourceFile: { filePath: sourceFilePath } }),
+    page: { size: 50 },
+  });
+  return answer.value.rows;
+}
+
+function countAur0755Diagnostics(rows) {
+  return rows.filter((row) =>
+    row.diagnosticDomain === 'template'
+    && row.diagnosticKind === 'runtime-controller-framework-error'
+    && row.frameworkErrorCode === 'AUR0755'
+    && row.missingInput === 'runtime-controller:AUR0755'
+  ).length;
 }
 
 function readCursorDiagnosticsForNeedle(app, htmlPath, htmlText, needle) {

@@ -5,6 +5,7 @@ import type {
   ProductHandle,
 } from '../kernel/handles.js';
 import type { ExpressionType } from '../expression/ast.js';
+import { sourceSpanFromBounds } from '../expression/source-span.js';
 import type { FieldProvenance } from '../kernel/provenance.js';
 import type { FrameworkRegistrationKind } from '../registration/registration-reference.js';
 import { AttributePatternDefinitionEntry } from '../resources/attribute-pattern-definition.js';
@@ -31,6 +32,7 @@ import { TemplateCompilerIssueKind } from './compiler-issue.js';
 import {
   AttributeBindingInstruction,
   DispatchBindingInstruction,
+  IterateBindingInstruction,
   IteratorBindingInstruction,
   ListenerBindingInstruction,
   MultiAttrInstruction,
@@ -46,6 +48,7 @@ import {
   TranslationParametersBindingInstruction,
 } from './instruction-ir.js';
 import { authoredTemplateAttributeText } from './authored-template-source.js';
+import { parseInlineMultiBindingSegments } from './multi-binding-segments.js';
 
 const bindingCommandKey = (name: string): string => `au:resource:binding-command:${name}`;
 
@@ -109,6 +112,74 @@ function targetForIteratorBinding(info: BindingCommandBuildInfo): string {
     : info.bindable.name;
 }
 
+function buildIteratorBinding(
+  command: { readonly name: BuiltInBindingCommandName },
+  info: BindingCommandBuildInfo,
+  context: BindingCommandBuildContext,
+): BindingCommandBuildResult {
+  const iterator = context.parseIteratorExpression(info.syntax.rawValue, info);
+  const instructions: (MultiAttrInstruction | IteratorBindingInstruction)[] = [];
+  const tailInstructionProductHandles: ProductHandle[] = [];
+  const rawTailText = iterator.rawTailText;
+
+  if (rawTailText != null && rawTailText !== '') {
+    for (const segment of parseInlineMultiBindingSegments(rawTailText)) {
+      const index = segment.segmentIndex;
+      const rawName = segment.rawName.trim();
+      const rawValue = segment.rawValue.trimEnd();
+      const tailSyntax = context.parseAttributeSyntax(rawName, rawValue, info);
+      if (tailSyntax == null) {
+        continue;
+      }
+
+      const valueSpan = iterator.tailSpan == null
+        ? null
+        : sourceSpanFromBounds(
+            iterator.tailSpan.start + segment.valueStart,
+            iterator.tailSpan.start + segment.valueStart + rawValue.length,
+            iterator.tailSpan.file ?? null,
+          );
+      const expressionProductHandle = tailSyntax.command === 'bind'
+        && (tailSyntax.target === 'key' || tailSyntax.target === 'contextual')
+        ? context.parsePropertyExpression(rawValue, info, valueSpan)
+        : null;
+
+      const allocation = allocateInstruction(context, info, TemplateInstructionKind.MultiAttr, `${command.name}:tail:${index}`);
+      tailInstructionProductHandles.push(allocation.productHandle);
+      instructions.push(new MultiAttrInstruction(
+        allocation.productHandle,
+        allocation.identityHandle,
+        info.node,
+        info.attribute,
+        tailSyntax.target,
+        tailSyntax.command,
+        rawValue,
+        expressionProductHandle,
+        instructionSource(info),
+      ));
+    }
+  }
+
+  const allocation = allocateInstruction(context, info, TemplateInstructionKind.IteratorBinding, command.name);
+  const instructionArgs = [
+    allocation.productHandle,
+    allocation.identityHandle,
+    info.node,
+    info.attribute,
+    targetForIteratorBinding(info),
+    iterator.localNames,
+    iterator.objectBindingSourceKeys,
+    iterator.expressionProductHandle,
+    tailInstructionProductHandles,
+    instructionSource(info),
+  ] as const;
+  instructions.push(command.name === BuiltInBindingCommandName.ForOf
+    ? new IterateBindingInstruction(...instructionArgs)
+    : new IteratorBindingInstruction(...instructionArgs));
+
+  return BindingCommandBuildResult.complete(instructions);
+}
+
 function modeFromBindable(mode: BindableBindingMode | null | undefined): TemplateBindingMode {
   switch (mode) {
     case BindableBindingMode.OneTime:
@@ -142,7 +213,7 @@ function buildFixedPropertyBinding(
       info.node,
       info.attribute,
       target,
-      context.parsePropertyExpression(expression, info),
+      context.parsePropertyExpression(expression, info, null),
       mode,
       bindingCommandReference(command),
       instructionSource(info),
@@ -156,9 +227,15 @@ function buildDefaultPropertyBinding(
   context: BindingCommandBuildContext,
 ): BindingCommandBuildResult {
   const expression = expressionValueOrTargetCamelCase(info);
-  const plainMode = context.isTwoWay(info.node, info.syntax.target)
-    ? TemplateBindingMode.TwoWay
-    : TemplateBindingMode.ToView;
+  const isTwoWay = info.bindable == null
+    ? context.isTwoWay(info.node, info.syntax.target)
+    : false;
+  if (isTwoWay == null) {
+    return BindingCommandBuildResult.open(
+      `IAttrMapper.isTwoWay('${info.syntax.target}') retained open predicate execution.`,
+    );
+  }
+  const plainMode = isTwoWay ? TemplateBindingMode.TwoWay : TemplateBindingMode.ToView;
   const mode = info.bindable == null
     ? plainMode
     : modeFromBindable(info.bindable.mode);
@@ -172,7 +249,7 @@ function buildDefaultPropertyBinding(
       info.node,
       info.attribute,
       target,
-      context.parsePropertyExpression(expression, info),
+      context.parsePropertyExpression(expression, info, null),
       mode,
       bindingCommandReference(command),
       instructionSource(info),
@@ -197,7 +274,7 @@ function buildAttributeBinding(
       info.attribute,
       attr,
       target,
-      context.parsePropertyExpression(expression, info),
+      context.parsePropertyExpression(expression, info, null),
       instructionSource(info),
     ),
   ]);
@@ -212,6 +289,8 @@ export const enum BuiltInSyntaxPackage {
   I18n = 'i18n',
   /** State plugin package. */
   State = 'state',
+  /** UI virtualization plugin package. */
+  UiVirtualization = 'ui-virtualization',
 }
 
 export const enum BuiltInSyntaxGroup {
@@ -227,6 +306,8 @@ export const enum BuiltInSyntaxGroup {
   I18nTranslationSyntax = 'i18n-translation-syntax',
   /** State plugin syntax resources. */
   StateSyntax = 'state-syntax',
+  /** UI virtualization plugin iterator syntax resources. */
+  UiVirtualizationSyntax = 'ui-virtualization-syntax',
 }
 
 /** Stable names of framework-owned binding commands known to semantic-runtime. */
@@ -243,6 +324,8 @@ export enum BuiltInBindingCommandName {
   TwoWay = 'two-way',
   /** Iterator binding command used by repeat-like template controllers (`target.for`). */
   For = 'for',
+  /** UI virtualization iterator binding command selected by `virtual-repeat.for`. */
+  ForOf = 'forof',
   /** Reference binding command (`ref` / `target.ref`). */
   Ref = 'ref',
   /** DOM event trigger command (`event.trigger`). */
@@ -291,13 +374,15 @@ export enum BuiltInBindingCommandTargetName {
   Matcher = 'matcher',
   /** Repeat template-controller target for `repeat.for` iterator bindings. */
   Repeat = 'repeat',
+  /** UI virtualization template-controller target for `virtual-repeat.for`. */
+  VirtualRepeat = 'virtual-repeat',
 }
 
 export type BuiltInSyntaxCatalogField =
   | 'attributePatterns'
   | 'bindingCommands'
   | 'package'
-  | 'variant'
+  | 'variantKey'
   | 'group'
   | 'source';
 
@@ -373,6 +458,9 @@ export function builtInBindingCommandAttributeName(
 ): string {
   if (commandName === BuiltInBindingCommandName.Ref && (targetName.length === 0 || targetName === BuiltInBindingCommandTargetName.Element)) {
     return BuiltInBindingCommandName.Ref;
+  }
+  if (commandName === BuiltInBindingCommandName.ForOf) {
+    return `${targetName}.${BuiltInBindingCommandName.For}`;
   }
   if (
     commandName === BuiltInBindingCommandName.Translation
@@ -719,6 +807,30 @@ export class StateAttributePattern {
   }
 }
 
+@auLink('ui-virtualization:VirtualRepeatForAttributePattern')
+export class VirtualRepeatForAttributePattern {
+  readonly packageId = BuiltInSyntaxPackage.UiVirtualization;
+  readonly group = BuiltInSyntaxGroup.UiVirtualizationSyntax;
+  readonly targetName = 'VirtualRepeatForAttributePattern';
+  readonly patterns = [new AttributePatternDefinitionEntry('virtual-repeat.for', '.-')] as const;
+  readonly executionKind = AttributePatternExecutionKind.BuiltIn;
+
+  constructor(
+    readonly productHandle: ProductHandle | null = null,
+    readonly identityHandle: IdentityHandle | null = null,
+    readonly sourceAddressHandle: AddressHandle | null = null,
+    readonly fieldProvenance: readonly FieldProvenance<BuiltInAttributePatternField>[] = [],
+  ) {}
+
+  'virtual-repeat.for'(
+    rawName: string,
+    rawValue: string,
+    _parts: readonly string[],
+  ): AttributePatternExecutionResult {
+    return attributePatternResult(rawName, rawValue, 'virtual-repeat', BuiltInBindingCommandName.ForOf);
+  }
+}
+
 @auLink('template-compiler:DefaultBindingCommand')
 export class DefaultBindingCommand {
   readonly packageId = BuiltInSyntaxPackage.TemplateCompiler;
@@ -865,57 +977,32 @@ export class ForBindingCommand {
   ) {}
 
   build(info: BindingCommandBuildInfo, context: BindingCommandBuildContext): BindingCommandBuildResult {
-    const iterator = context.parseIteratorExpression(info.syntax.rawValue, info);
-    const instructions: (MultiAttrInstruction | IteratorBindingInstruction)[] = [];
-    const tailInstructionProductHandles: ProductHandle[] = [];
-    const rawTailText = iterator.rawTailText;
+    return buildIteratorBinding(this, info, context);
+  }
+}
 
-    if (rawTailText != null && rawTailText !== '') {
-      const tailParts = rawTailText.split(';');
-      for (let index = 0; index < tailParts.length; index += 1) {
-        const tailPart = tailParts[index]!;
-        const colonIndex = tailPart.indexOf(':');
-        if (colonIndex < 0) {
-          continue;
-        }
+@auLink('ui-virtualization:IterateBindingCommand')
+export class IterateBindingCommand {
+  readonly packageId = BuiltInSyntaxPackage.UiVirtualization;
+  readonly group = BuiltInSyntaxGroup.UiVirtualizationSyntax;
+  readonly targetName = 'IterateBindingCommand';
+  readonly name = BuiltInBindingCommandName.ForOf;
+  readonly aliases = [] as const;
+  readonly key = bindingCommandKey(this.name);
+  readonly ignoreAttr = false;
+  readonly producedInstructionKinds = [TemplateInstructionKind.IteratorBinding, TemplateInstructionKind.MultiAttr] as const;
+  readonly producedInstructionTypeNames = ['IterateBindingInstruction'] as const;
+  readonly executionKind = BindingCommandExecutionKind.BuiltIn;
 
-        const rawName = tailPart.slice(0, colonIndex).trim();
-        const rawValue = tailPart.slice(colonIndex + 1).trim();
-        const tailSyntax = context.parseAttributeSyntax(rawName, rawValue, info);
-        if (tailSyntax == null) {
-          continue;
-        }
+  constructor(
+    readonly productHandle: ProductHandle | null = null,
+    readonly identityHandle: IdentityHandle | null = null,
+    readonly sourceAddressHandle: AddressHandle | null = null,
+    readonly fieldProvenance: readonly FieldProvenance<BuiltInBindingCommandField>[] = [],
+  ) {}
 
-        const allocation = allocateInstruction(context, info, TemplateInstructionKind.MultiAttr, `${this.name}:tail:${index}`);
-        tailInstructionProductHandles.push(allocation.productHandle);
-        instructions.push(new MultiAttrInstruction(
-          allocation.productHandle,
-          allocation.identityHandle,
-          info.node,
-          info.attribute,
-          tailSyntax.target,
-          tailSyntax.command,
-          rawValue,
-          null,
-          instructionSource(info),
-        ));
-      }
-    }
-
-    const allocation = allocateInstruction(context, info, TemplateInstructionKind.IteratorBinding, this.name);
-    instructions.push(new IteratorBindingInstruction(
-      allocation.productHandle,
-      allocation.identityHandle,
-      info.node,
-      info.attribute,
-      targetForIteratorBinding(info),
-      iterator.localNames,
-      iterator.expressionProductHandle,
-      tailInstructionProductHandles,
-      instructionSource(info),
-    ));
-
-    return BindingCommandBuildResult.complete(instructions);
+  build(info: BindingCommandBuildInfo, context: BindingCommandBuildContext): BindingCommandBuildResult {
+    return buildIteratorBinding(this, info, context);
   }
 }
 
@@ -948,7 +1035,8 @@ export class RefBindingCommand {
         info.node,
         info.attribute,
         info.syntax.target,
-        context.parsePropertyExpression(info.syntax.rawValue, info),
+        info.syntax.targetSourceAddressHandle ?? info.syntax.commandSourceAddressHandle,
+        context.parsePropertyExpression(info.syntax.rawValue, info, null),
         instructionSource(info),
       ),
     ]);
@@ -984,9 +1072,11 @@ export class TriggerBindingCommand {
         info.node,
         info.attribute,
         info.syntax.target,
+        info.syntax.targetSourceAddressHandle,
         context.parseFunctionExpression(info.syntax.rawValue, info),
         TemplateListenerStrategy.Trigger,
         info.syntax.parts[2] ?? null,
+        info.syntax.patternParts.find((part) => part.partIndex === 2)?.sourceAddressHandle ?? null,
         bindingCommandReference(this),
         instructionSource(info),
       ),
@@ -1023,9 +1113,11 @@ export class CaptureBindingCommand {
         info.node,
         info.attribute,
         info.syntax.target,
+        info.syntax.targetSourceAddressHandle,
         context.parseFunctionExpression(info.syntax.rawValue, info),
         TemplateListenerStrategy.Capture,
         info.syntax.parts[2] ?? null,
+        info.syntax.patternParts.find((part) => part.partIndex === 2)?.sourceAddressHandle ?? null,
         bindingCommandReference(this),
         instructionSource(info),
       ),
@@ -1157,8 +1249,9 @@ export class SpreadValueBindingCommand {
         info.attribute,
         info.syntax.target as '$bindables' | '$element',
         info.syntax.rawValue,
-        context.parsePropertyExpression(info.syntax.rawValue, info),
-        instructionSource(info),
+        context.parsePropertyExpression(info.syntax.rawValue, info, null),
+        info.syntax.targetSourceAddressHandle,
+        info.expressionSourceAddressHandle ?? instructionSource(info),
       ),
     ]);
   }
@@ -1228,7 +1321,7 @@ export class TranslationBindBindingCommand {
         allocation.identityHandle,
         info.node,
         info.attribute,
-        context.parsePropertyExpression(info.syntax.rawValue, info),
+        context.parsePropertyExpression(info.syntax.rawValue, info, null),
         targetForPropertyBinding(info, context),
         instructionSource(info),
       ),
@@ -1264,7 +1357,7 @@ export class TranslationParametersBindingCommand {
         allocation.identityHandle,
         info.node,
         info.attribute,
-        context.parsePropertyExpression(info.syntax.rawValue, info),
+        context.parsePropertyExpression(info.syntax.rawValue, info, null),
         targetForPropertyBinding(info, context),
         instructionSource(info),
       ),
@@ -1304,6 +1397,7 @@ export class StateBindingCommand {
         expression,
         targetForPropertyBinding(info, context),
         info.syntax.parts[0] ?? null,
+        info.syntax.patternParts.find((part) => part.partIndex === 2)?.sourceAddressHandle ?? null,
         context.parseFunctionExpression(expression, info),
         instructionSource(info),
       ),
@@ -1342,7 +1436,8 @@ export class DispatchBindingCommand {
         info.syntax.target,
         info.syntax.rawValue,
         info.syntax.parts[0] ?? null,
-        context.parsePropertyExpression(info.syntax.rawValue, info),
+        info.syntax.patternParts.find((part) => part.partIndex === 2)?.sourceAddressHandle ?? null,
+        context.parsePropertyExpression(info.syntax.rawValue, info, null),
         instructionSource(info),
       ),
     ]);
@@ -1361,7 +1456,8 @@ export type BuiltInAttributePattern =
   | I18nTranslationAttributePattern
   | I18nTranslationBindAttributePattern
   | TranslationParametersAttributePattern
-  | StateAttributePattern;
+  | StateAttributePattern
+  | VirtualRepeatForAttributePattern;
 
 export function executeBuiltInAttributePattern(
   handler: BuiltInAttributePattern,
@@ -1405,6 +1501,10 @@ export function executeBuiltInAttributePattern(
       return handler instanceof StateAttributePattern ? handler['PART.state:PART'](rawName, rawValue, parts) : null;
     case 'PART.dispatch:PART':
       return handler instanceof StateAttributePattern ? handler['PART.dispatch:PART'](rawName, rawValue, parts) : null;
+    case 'virtual-repeat.for':
+      return handler instanceof VirtualRepeatForAttributePattern
+        ? handler['virtual-repeat.for'](rawName, rawValue, parts)
+        : null;
     default:
       if (handler instanceof I18nTranslationAttributePattern) {
         return handler.execute(pattern, rawName, rawValue, parts);
@@ -1424,6 +1524,7 @@ export function allBuiltInAttributePatterns(): readonly BuiltInAttributePattern[
     ...RuntimeHtmlPromiseAttributePatterns,
     ...I18nDefaultAttributePatterns,
     ...StateDefaultAttributePatterns,
+    ...UiVirtualizationDefaultAttributePatterns,
   ];
 }
 
@@ -1494,6 +1595,7 @@ export type BuiltInBindingCommand =
   | ToViewBindingCommand
   | TwoWayBindingCommand
   | ForBindingCommand
+  | IterateBindingCommand
   | RefBindingCommand
   | TriggerBindingCommand
   | CaptureBindingCommand
@@ -1517,7 +1619,7 @@ export function builtInBindingCommandExpressionEntryFamily(
   if (command instanceof TriggerBindingCommand || command instanceof CaptureBindingCommand || command instanceof StateBindingCommand) {
     return BuiltInBindingCommandExpressionEntryFamily.Function;
   }
-  if (command instanceof ForBindingCommand) {
+  if (command instanceof ForBindingCommand || command instanceof IterateBindingCommand) {
     return BuiltInBindingCommandExpressionEntryFamily.Iterator;
   }
   return BuiltInBindingCommandExpressionEntryFamily.Property;
@@ -1637,6 +1739,14 @@ export const StateDefaultBindingCommands = [
   new DispatchBindingCommand(),
 ] as const;
 
+export const UiVirtualizationDefaultAttributePatterns = [
+  new VirtualRepeatForAttributePattern(),
+] as const;
+
+export const UiVirtualizationDefaultBindingCommands = [
+  new IterateBindingCommand(),
+] as const;
+
 export const RuntimeHtmlBuiltInSyntaxCatalogs = {
   DefaultBindingSyntax: {
     packageId: BuiltInSyntaxPackage.RuntimeHtml,
@@ -1677,6 +1787,12 @@ export const ExtensionBuiltInSyntaxCatalogs = {
     attributePatterns: StateDefaultAttributePatterns,
     bindingCommands: StateDefaultBindingCommands,
   },
+  UiVirtualizationSyntax: {
+    packageId: BuiltInSyntaxPackage.UiVirtualization,
+    group: BuiltInSyntaxGroup.UiVirtualizationSyntax,
+    attributePatterns: UiVirtualizationDefaultAttributePatterns,
+    bindingCommands: UiVirtualizationDefaultBindingCommands,
+  },
 } as const;
 
 /** Public package module that owns a built-in syntax package. */
@@ -1692,6 +1808,8 @@ export function builtInSyntaxPackageModuleSpecifier(
       return '@aurelia/i18n';
     case BuiltInSyntaxPackage.State:
       return '@aurelia/state';
+    case BuiltInSyntaxPackage.UiVirtualization:
+      return '@aurelia/ui-virtualization';
   }
 }
 
@@ -1701,6 +1819,7 @@ export function allBuiltInBindingCommands(): readonly BuiltInBindingCommand[] {
     ...RuntimeHtmlDefaultBindingCommands,
     ...I18nDefaultBindingCommands,
     ...StateDefaultBindingCommands,
+    ...UiVirtualizationDefaultBindingCommands,
   ];
 }
 

@@ -21,10 +21,9 @@ const dataFlows = app.ask({
   kind: 'binding-data-flows',
   page: { size: 100 },
 }).value.rows;
-const observedDependencies = app.ask({
-  kind: 'binding-observed-dependencies',
-  page: { size: 200 },
-}).value.rows;
+const observedDependencies = collectPagedRows((page) =>
+  app.bindingObservedDependencies(page)
+);
 const templateDiagnostics = app.ask({
   kind: 'template-diagnostics',
   page: { size: 100 },
@@ -43,8 +42,14 @@ const validateBehaviors = bindingBehaviors.filter((row) =>
   && row.targetKind === 'node'
   && row.targetProperty === 'value'
 );
-if (validateBehaviors.length !== 3) {
-  failures.push(`Expected 3 validate binding-behavior applications; observed ${validateBehaviors.length}.`);
+if (validateBehaviors.length !== 6) {
+  failures.push(`Expected 6 validate binding-behavior lifecycle applications; observed ${validateBehaviors.length}.`);
+}
+for (const phase of ['bind', 'unbind']) {
+  const phaseRows = validateBehaviors.filter((row) => row.phase === phase);
+  if (phaseRows.length !== 3) {
+    failures.push(`Expected 3 validate ${phase} applications; observed ${phaseRows.length}.`);
+  }
 }
 
 for (const sourceName of [
@@ -67,6 +72,7 @@ const summary = {
   fixture: 'dynamic-keyed-validation',
   validateBehaviors: validateBehaviors.map((row) => ({
     targetProperty: row.targetProperty,
+    phase: row.phase,
     argumentCount: row.argumentCount,
     source: row.source?.label ?? null,
   })),
@@ -84,13 +90,13 @@ const summary = {
       openReason: row.openReason,
     })),
   keyedObservedDependencies: observedDependencies
-    .filter((row) => row.sourceName?.startsWith('person[') === true)
+    .filter((row) => row.occurrence.sourceName?.startsWith('person[') === true)
     .map((row) => ({
-      sourceName: row.sourceName,
-      expressionKind: row.expressionKind,
-      keyExpression: row.keyExpression,
-      observedMemberSourceState: row.observedMemberSourceState,
-      source: row.source?.label ?? null,
+      sourceName: row.occurrence.sourceName,
+      expressionKind: row.occurrence.expressionKind,
+      keyExpression: row.occurrence.keyExpression,
+      observedMemberSourceState: row.occurrence.observedMemberSourceState,
+      source: row.occurrence.source?.label ?? null,
     })),
   diagnostics: templateDiagnostics.length,
   validationIssues: validationIssues.length,
@@ -122,7 +128,7 @@ function expectKeyedDataFlow(message, sourceName) {
     targetKind: 'node',
     targetProperty: 'value',
     targetValueType: 'string',
-    valueChannelKind: 'raw-property',
+    valueChannelKind: 'value-attribute-observer-property',
     sourceWritable: true,
     sourceAssignmentKind: 'runtime-assignable',
     sourceAssignmentTargetSourcePath: 'src/dynamic-keyed-validation-app.ts',
@@ -147,17 +153,28 @@ function expectKeyedDataFlow(message, sourceName) {
 function expectObservedDependency(message, sourceName) {
   const row = observedDependencies.find((candidate) =>
     candidate.definitionName === 'dynamic-keyed-validation-app'
-    && candidate.sourceName === sourceName
-    && candidate.expressionKind === 'AccessKeyed'
+    && candidate.occurrence.sourceName === sourceName
+    && candidate.occurrence.expressionKind === 'AccessKeyed'
   );
   if (row == null) {
     failures.push(`${message}: missing binding-observed-dependency row.`);
     return;
   }
-  if (row.sourceRootName !== 'person') {
-    failures.push(`${message}: expected sourceRootName=person, observed ${JSON.stringify(row.sourceRootName)}.`);
+  if (row.occurrence.sourceRootName !== 'person') {
+    failures.push(`${message}: expected sourceRootName=person, observed ${JSON.stringify(row.occurrence.sourceRootName)}.`);
   }
-  if (row.observedMemberSourceState !== 'source') {
-    failures.push(`${message}: expected observedMemberSourceState=source, observed ${JSON.stringify(row.observedMemberSourceState)}.`);
+  if (row.occurrence.observedMemberSourceState !== 'source') {
+    failures.push(`${message}: expected observedMemberSourceState=source, observed ${JSON.stringify(row.occurrence.observedMemberSourceState)}.`);
   }
+}
+
+function collectPagedRows(readPage) {
+  const rows = [];
+  let cursor = null;
+  do {
+    const answer = readPage({ size: 200, cursor });
+    rows.push(...answer.value.rows);
+    cursor = answer.page?.nextCursor ?? null;
+  } while (cursor != null);
+  return rows;
 }

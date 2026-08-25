@@ -59,41 +59,60 @@
         "route-config",
         "routeable-component"
       ],
-      "summary": "RouteConfigKernelEmitter is the route-config convergence frontier for route config products, routeable components, validation issues, fallback components, child routes, field provenance, and kernel records.",
-      "rationale": "External app pressure often starts from authored route arrays or decorators, but product semantics need the route-config model before route tree, route context, viewport, or route-recognizer layers can consume it. Keep this emitter explicit so RouteableComponent can become a convergeable thing rather than an app-shape heuristic, and so router validation failures are source-backed before normalized route facts flow downstream.",
+      "summary": "RouteConfigKernelEmitter publishes source contributions and validation evidence; RouteConfigConvergenceProjectPass owns effective definition and applied-use products.",
+      "rationale": "Authored route arrays, decorators, static defaults, configure calls, and hooks need exact source products before effective framework semantics can be computed. Recognition and convergence are now deliberately separate: the emitter preserves source form and issues, while one downstream pass spends resource identity and execution evidence through _create and _applyChildRouteConfig semantics.",
       "guidance": [
-        "Start here when authored route configs, child routes, component/fallback values, RouteableComponent products, or route-config and child-route configuration diagnostics need better provenance or type handling.",
-        "Spend router validation codes only for statically closed values matching validation.ts: rtInvalidConfigProperty / AUR3554 for invalid property values and rtInvalidConfig / AUR3555 for null config objects. Weak/external route config values should stay open instead of becoming guessed diagnostics.",
+        "Start in RouteConfigKernelEmitter for authored contribution, routeable component/fallback, child-route, validation, source-address, or field-provenance problems. Start in RouteConfigConvergenceProjectPass for winner selection, framework defaults, repeated-use identity, parent inheritance, openness, or effective consumer behavior.",
+        "Do not restore the old hybrid RouteConfig product or let route-context, recognizer, topology, completion, or API consumers reconstruct _create/_applyChildRouteConfig precedence.",
+        "Spend router validation codes only for statically closed values matching validation.ts: rtInvalidConfigProperty / AUR3554 for invalid property values and rtInvalidConfig / AUR3555 for null config objects. Weak or external values stay open.",
         "Route object vocabulary is validation authority too: unknown ordinary route-config keys spend rtUnknownConfigProperty / AUR3556, while redirect route objects only allow path and redirectTo and spend rtUnknownRedirectConfigProperty / AUR3557 for everything else.",
-        "Spend RouteConfigContext._configureChildRoutes authority for source-backed child route objects whose component is a lazy import and whose path property is absent: rcNoPathLazyImport / AUR3173 belongs here, not in route-tree materialization.",
-        "Spend RouteContext._resolveLazy invalid-import authority only for definitely invalid lazy-import fulfillments: rcInvalidLazyImport / AUR3175 is exact when a closed module has no resource definition, no partial custom-element-definition name, and no class/function export that a stronger resource-recognition pass might later identify.",
-        "String routeable component resolution consumes ResourceDefinitionIndex custom-element names, aliases, and dependency-scoped custom-element lookup. `router-contextual-string-routeable` keeps the parent component dependencies disambiguation canary alive, while `router-route-config-validation-errors` keeps the no-known-component AUR3552 canary alive.",
-        "The remaining string routeable frontier is full RouteConfigContext resource visibility: root-container registrations, imported view resources, inline templates, and no-context string/lazy-import guards such as AUR3551/AUR3553. If an imported routeable component source is present but invisible to the resource index, inspect shared static-evaluation side-effect import execution before adding router-local scanning.",
-        "RouteConfig rows now carry separate origin and value-shape dimensions. Use originKind to distinguish @route, Route.configure, class static defaults, and child-route sources; use valueKind to distinguish object/path/routeable/static-default/open shapes. Authoring navigation taste should expose origin-shaped values separately from static/dynamic value-shape readings instead of inferring policy from route existence.",
-        "Generated route-config/decorator source should route through router-owned source serializers such as `route-configuration-source.ts`; app-builder can select route-shell compositions, but the source syntax for `@route(...)` and route object literals belongs with router semantics.",
-        "Preserve framework property paths such as `routes[0].path` and source ranges on validation issues; these are diagnostics and future repair anchors, not only pressure counts.",
-        "Keep route-config convergence separate from route-tree transition and route-recognizer state graph semantics.",
+        "Spend RouteConfigContext._configureChildRoutes authority for source-backed child route objects whose component is a lazy import and whose path property is absent: rcNoPathLazyImport / AUR3173 belongs in recognition, not route-tree materialization.",
+        "Spend RouteContext._resolveLazy invalid-import authority only for definitely invalid lazy-import fulfillments. If imported source is present but the resource is invisible, inspect shared project-evaluation publication and resource admission before adding router-local scanning.",
+        "Literal lazy routeables spend the evaluator's retained dynamic-import link, shared `ModuleLoader` item/pressure semantics, and canonical resource identity. Preserve the framework distinction between a Promise of a module namespace and `import(...).then(module => module.Export)`; only pure property/element selectors may be projected without executing arbitrary declarative callbacks.",
+        "String routeable resolution consumes ResourceDefinitionIndex names, aliases, and dependency-scoped lookup. Keep unresolved strings referential/open instead of inventing component identities.",
+        "Origin kind and value kind belong to contributions. Stage, closure, normalized fields, and open fields belong to effective products and reach the public Routes row only through the contribution/effective join.",
+        "RouteContextParameterReadMaterializer resolves an enclosing class through its module-local custom-element definition and joins effective route configs by resource target identity. Class names are presentation facts only; same-named routeables in different modules must remain isolated.",
+        "A getRouteParameters call inherited from a shared base class can have multiple routed owners. RouteContextParameterReadMaterializer inverts the existing TypeSystem prototype chain over routed resource identities, publishes one read row per known owner with direct/inherited/unmatched ownership and known-owner cardinality, and never unions descendant parameter domains. Multiple proven routed owners publish one semantic-authoring-policy RouterIssue at the base call with concrete route sources as related information; a single inherited owner remains warning-free.",
+        "Keep route-config convergence separate from route-tree transition, route-context topology, and route-recognizer state graph semantics.",
         "Use framework.router route-config, routeable-component, route-context, and viewport-agent projections before changing product router behavior."
       ],
+      "nextActionPolicy": "when-touched",
       "anchors": [
         {
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/router/route-config-recognition.ts",
           "symbolName": "RouteConfigKernelEmitter",
-          "line": 270,
-          "summary": "Route config kernel emitter."
+          "summary": "Route-config source contribution and validation emitter."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/configuration/app-world-project-pass.ts",
+          "symbolName": "AureliaAppWorldProjectConstructionFrame",
+          "summary": "Tracked app-world phase owner for contribution recognition, effective convergence, and topology ordering."
         },
         {
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/router/route-configuration-source.ts",
           "symbolName": "routerRouteDecoratorSourceText",
-          "summary": "Product-free router source serializer for generated route decorator object-literal configs."
+          "summary": "Product-free router source serializer for generated route decorator configs."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/router/route-context-parameter-read-materialization.ts",
+          "symbolName": "RouteContextParameterReadMaterializer",
+          "summary": "Source-backed route-parameter reads joined to effective route configs through resource target identity."
         },
         {
           "kind": "lens",
           "lensId": "framework.router",
           "projection": "relationships",
           "summary": "Framework router relationship grounding lane."
+        },
+        {
+          "kind": "doc",
+          "path": "packages/semantic-runtime/src/router/README.md",
+          "heading": "Responsibilities",
+          "summary": "Current recognition/convergence ownership contract."
         }
       ],
       "liveChecks": [
@@ -103,10 +122,17 @@
           "filePath": "packages/semantic-runtime/src/router/route-config-recognition.ts",
           "minLineCount": 250,
           "minMethodCount": 8
+        },
+        {
+          "kind": "product-large-class",
+          "className": "RouteConfigConvergenceFrame",
+          "filePath": "packages/semantic-runtime/src/router/route-config-convergence.ts",
+          "minLineCount": 450,
+          "minMethodCount": 8
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-05-15"
+      "updatedAt": "2026-07-22"
     },
     {
       "id": "frontier:route-recognizer-state-graph-builder",
@@ -177,31 +203,42 @@
         "route-tree",
         "controller"
       ],
-      "summary": "RouteTreeTransitionMaterializationFrame is a live pressure point for route tree transition semantics, redirect migration diagnostics, and route-node handoff.",
-      "rationale": "Route tree work overlaps controller semantics, viewport agents, routeable components, recursive rendering, and framework-thrown router errors. It should be tracked as a first-class frontier rather than inferred from broad router notes.",
+      "summary": "RouteTreeTransitionMaterializationFrame owns planned pre-activation route trees, redirect diagnostics, and sole-candidate route-node handoff.",
+      "rationale": "Route tree work overlaps controller semantics, viewport-agent candidates, routeable components, recursive rendering, and framework-thrown router errors. Planned products are stronger than potential topology but do not prove live availability, guards, scheduling, activation, or successful navigation.",
       "guidance": [
-        "Check framework.router route-tree, viewport-agent, and relationship rows before changing product route-tree materialization.",
-        "RouteableComponent should be treated as a convergeable thing like CustomElement when component discovery is in scope.",
+        "Check framework.router route-tree, ViewportAgent, and relationship rows before changing planned route-tree materialization.",
+        "RouteableComponent is a converged framework concept: preserve authored spelling and resolved custom-element name, and spend the resolved name for viewport compatibility.",
         "Keep au-viewport semantics explicit when route rendering or recursive hydration is involved.",
         "RouteTree redirect-parameter migration accepts only Segment / slash-scoped Segment RouteExpression chains. Sibling composites and grouped expressions belong in RouterIssue rows with exact router exprUnexpectedKind / AUR3502 authority, not route-recognizer rows or generic open seams.",
         "Closed static redirect targets must carry redirectSourceRouteConfig from RouteRecognizer expansion into RouteTree compilation. Use that exact edge to suppress generic redirect-target open seams only when the redirect target was actually re-recognized.",
         "Unknown static redirect targets belong to instrUnknownRedirect / AUR3402 RouterIssue rows from redirect expansion, not to generic redirect-target open seams.",
-        "Residual parent-route matches should not stop at the parent residual parameter. RouteRecognitionMaterializationProjectPass follows the residual child ViewportInstruction through the resolved child RouteConfigContext so RouteTreeTransitionMaterializationFrame can materialize nested child RouteNode and ComponentAgent products under the parent route context.",
-        "A closed ViewportRequest with no matching available ViewportAgent is an exact router issue with rcNoAvailableVpa / AUR3174 authority, not a route-tree open seam. Do not publish a partial transition tree for that chain, and keep genuinely missing request/context handoffs as open seams."
+        "Residual parent-route matches should follow the residual child ViewportInstruction through the resolved child RouteConfigContext so nested child RouteNode and ComponentAgent products remain visible under the parent route context.",
+        "Resolve ViewportRequest through none/sole/multiple/open candidate semantics. None with no statically compatible candidate is exact rcNoAvailableVpa/AUR3174 evidence; multiple/open are seams. Never publish a partial transition tree or call a sole static candidate selected/live."
       ],
       "anchors": [
         {
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/router/route-tree-materialization.ts",
           "symbolName": "RouteTreeTransitionMaterializationFrame",
-          "line": 331,
-          "summary": "Route tree transition materialization frame."
+          "summary": "Planned route tree transition materialization frame."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/router/route-runtime-topology.ts",
+          "symbolName": "ViewportAgentCandidateResolution",
+          "summary": "Static viewport candidate resolution consumed by planned transitions."
         },
         {
           "kind": "lens",
           "lensId": "framework.router",
           "projection": "relationships",
           "summary": "Framework router relationship rows."
+        },
+        {
+          "kind": "doc",
+          "path": "packages/semantic-runtime/src/router/README.md",
+          "heading": "Responsibilities",
+          "summary": "Potential/planned boundary, exact viewport failure, and open candidate contract."
         }
       ],
       "liveChecks": [
@@ -221,7 +258,7 @@
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-05-15"
+      "updatedAt": "2026-07-11"
     },
     {
       "id": "frontier:route-config-context-materialization-project-pass",
@@ -232,26 +269,31 @@
         "route-config",
         "route-context"
       ],
-      "summary": "RouteConfigContextMaterializationProjectPass materializes RouteConfigContext topology and owned RouteRecognizer instances from route configs.",
-      "rationale": "Route contexts sit between authored route configs, recognizer ownership, eager-loading policy, and later runtime topology. Keep this layer explicit instead of folding route-context construction into recognizer or route-tree passes.",
+      "summary": "RouteConfigContextMaterializationProjectPass materializes static configured-route topology and owned RouteRecognizer instances from effective route configs.",
+      "rationale": "RouteConfigContext is configured-route/recognizer ownership, distinct from both authored/effective RouteConfig convergence and later potential RouteContext/ViewportAgent topology. Keeping this layer explicit prevents configured routes from masquerading as navigated contexts.",
       "guidance": [
-        "Start here when route-config roots, child context trees, eager-loading recognizer ownership, or RouteConfigContext products change.",
-        "Keep RouteConfigContext materialization separate from authored route-config convergence and runtime RouteContext/ViewportAgent topology.",
-        "Use framework.router route-context and route-tree rows before changing context ownership semantics."
+        "Start here when effective route-config roots, child configured-context trees, eager-loading recognizer ownership, or RouteConfigContext products change.",
+        "Keep RouteConfigContext materialization separate from authored/effective route-config convergence and potential RouteContext/ViewportAgent-candidate topology.",
+        "Use framework.router RouteConfigContext, RouteContext, and route-tree relationship rows before changing configured-context ownership semantics."
       ],
       "anchors": [
         {
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/router/route-context-materialization.ts",
           "symbolName": "RouteConfigContextMaterializationProjectPass",
-          "line": 133,
-          "summary": "RouteConfigContext materialization project pass."
+          "summary": "Configured-route context and recognizer ownership pass."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/router/route-config-convergence.ts",
+          "symbolName": "RouteConfigConvergenceProjectPass",
+          "summary": "Upstream effective RouteConfig authority consumed by configured-context materialization."
         },
         {
           "kind": "lens",
           "lensId": "framework.router",
           "projection": "relationships",
-          "summary": "Framework router relationship rows for route-context semantics."
+          "summary": "Framework router relationship rows for configured and potential route-context semantics."
         }
       ],
       "liveChecks": [
@@ -264,7 +306,7 @@
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-05-12"
+      "updatedAt": "2026-07-11"
     },
     {
       "id": "frontier:route-runtime-topology",
@@ -276,36 +318,55 @@
         "viewport",
         "controller"
       ],
-      "summary": "RouteRuntimeTopologyProjectPass and RouteRuntimeTopologyFrame materialize RouteContext, au-viewport, ViewportCustomElement, ViewportAgent, and route child-container topology.",
-      "rationale": "The user called out au-viewport and ViewportAgent as first-class router semantics. This topology lane is the bridge from static template rendering/controller products into route runtime context products before navigation or activation.",
+      "summary": "RouteRuntimeTopologyProjectPass materializes potential RouteContext, au-viewport, ViewportAgent-candidate, presence, and field-closure topology.",
+      "rationale": "Static rendering/controller products can prove potential router topology before navigation, but live viewport registration and availability remain runtime state. This frontier owns that bridge without manufacturing selected agents or active route trees.",
       "guidance": [
-        "Start here when work touches au-viewport, ViewportAgent, RouteContext, route child containers, or static router/rendering topology.",
-        "Keep runtime topology separate from route-config contexts, route instruction parsing, recognition, and route-tree transition materialization.",
-        "Use framework.router viewport-agent and framework.rendering controller rows before changing route rendering semantics."
+        "Start here when work touches au-viewport, ViewportAgent candidates, RouteContext, route child containers, viewport field closure, or static router/rendering topology.",
+        "Keep potential topology separate from effective route-config contexts, route instruction parsing, recognition, planned route-tree materialization, and live navigation state.",
+        "Use framework.router ViewportAgent/RouteContext relationships and framework.rendering controller rows before changing route rendering semantics.",
+        "Spend RuntimeBoundControllerValueTable and RuntimeBindingSourceValueEvaluator for bound viewport inputs. Concrete viewport controllers require exact-controller reads; do not reconstruct expressions or borrow contextual definition fallback.",
+        "Preserve template-controller child-view cardinality and none/sole/multiple/open candidate resolution. Only a sole static candidate can cross into a planned transition."
       ],
       "anchors": [
         {
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/router/route-runtime-topology.ts",
           "symbolName": "RouteRuntimeTopologyProjectPass",
-          "line": 174,
-          "summary": "Route runtime topology project pass."
+          "summary": "Potential router topology project pass."
         },
         {
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/router/route-runtime-topology.ts",
           "symbolName": "RouteRuntimeTopologyFrame",
-          "line": 219,
-          "summary": "Route runtime topology work frame."
+          "summary": "Potential RouteContext and viewport work frame."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/observation/runtime-bound-controller-value.ts",
+          "symbolName": "RuntimeBoundControllerValueTable",
+          "summary": "Bound viewport value authority, including exact-controller reads."
         },
         {
           "kind": "lens",
           "lensId": "framework.router",
           "projection": "relationships",
           "summary": "Framework router viewport-agent and route-context relationship rows."
+        },
+        {
+          "kind": "doc",
+          "path": "packages/semantic-runtime/src/router/README.md",
+          "heading": "Responsibilities",
+          "summary": "Current potential topology and candidate-resolution contract."
         }
       ],
       "liveChecks": [
+        {
+          "kind": "product-large-class",
+          "className": "RouteRuntimeTopologyProjectResult",
+          "filePath": "packages/semantic-runtime/src/router/route-runtime-topology.ts",
+          "minLineCount": 90,
+          "minMethodCount": 6
+        },
         {
           "kind": "product-large-class",
           "className": "RouteRuntimeTopologyFrame",
@@ -315,7 +376,7 @@
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-05-12"
+      "updatedAt": "2026-07-11"
     },
     {
       "id": "frontier:route-instruction-materialization-project-pass",
@@ -342,6 +403,8 @@
         "Closed primitive router-resource values that cannot be route strings, routeable components, or viewport instructions are TypedNavigationInstruction creation issues with instrInvalid / AUR3400 authority. Do not spend this code on classes/functions/promises that are valid framework routeable lanes but currently under-modeled.",
         "Object-form router resource values belong to RouteConfigContext eager path generation before they re-enter the RouteExpression instruction-tree lane. Missing required params for RouteConfig/class components are RouterIssue rows with exact AUR3166 authority; string route ids are framework non-throwing and should not spend that code. Closed instruction children recurse through the generated component RouteConfigContext and preserve child viewport suffixes before lowering back into the static instruction-tree lane.",
         "Inline load multi-bindings with `route` plus object-shaped `params` follow LoadCustomAttribute's component+params branch, not plain RouteExpression parsing. Route-only strings remain RouteExpression input; route+params becomes an eager instruction before static path recognition. Binding-scope param values may use dynamic placeholders when the parameter key is static, but never reuse the route id as the parameter value. Treat `context.bind` as a route-context replacement boundary and keep it open until semantic-runtime models that owning context.",
+        "Endpoint selection and parameter substitution are separate phases of eager path generation. RouteInstructionMaterializationProjectPass evaluates each load route value once, selects candidate endpoints before missing params can block path generation, and retains RouteParameterEndpointPlan rows by exact authored HTML-attribute product handle for completion consumers.",
+        "Route-parameter completion must consume the retained endpoint plan and Endpoint typed details. Do not reparse a sibling route segment, repeat source-value evaluation, or pool parameter names from app-wide route configs; dynamic or context-open routes keep the completion answer open.",
         "Object-form router resource values may arrive as syntactic object literals or equivalent binding-source values such as state/getter-owned instruction arrays. Keep those reads in RuntimeBindingSourceValueEvaluator and consume the closed object here instead of adding router-local expression shortcuts.",
         "`routerSourceExpressionEvaluationFrame(...)` is the route-instruction bridge from a rendered router-resource site into RuntimeBindingSourceValueEvaluationContext or an explicit open source-value row. It now spends `projectRuntimeBindingSourceValueContextInScope(...)` with the rendered binding table and binding-expression scope projector; if this starts growing, improve source-value projection/context primitives rather than reintroducing router-local expression evaluation or a router-owned source-expression projector.",
         "`route-instruction-source.ts` is the source companion for router resource attributes. Source producers should use it for `load` and `href` so generated simple and inline multi-binding forms stay aligned with LoadCustomAttribute and HrefCustomAttribute instead of becoming app-builder-local string templates.",
@@ -351,7 +414,7 @@
         "String-pattern route expressions may arrive from interpolation, template literals, evaluator-local methods, or direct binary `+` concatenation with binding-scope holes. Consume the shared EvaluationStringPatternValue lane and keep the authored static-prefix rule in the binding-source evaluator, not in router-specific AST shortcuts.",
         "Repeated state-backed href canaries should close through binding-source representative values, evaluator loose nullish equality, and recognizer matching when the static prefix survives. If exact per-item field correlation is needed later, model that as value-flow substrate pressure rather than href-specific lookup logic.",
         "Use `route-expression-parser.ts` when framework semantics branch on RouteExpression node kind. It exposes the expression tree, lowered viewport instructions, and source-backed parser failures for exprUnexpectedSegment / AUR3500 and exprNotDone / AUR3501; do not reparse route strings with ad hoc split logic.",
-        "Router issue products remain owned by the router lane even when their source is a template value. API template diagnostics and cursor-info may project `router-framework-error` rows for LSP loci, while AppDiagnostics de-duplicates those projected rows and reads the owning RouterIssues lane.",
+        "Router issue products remain owned by the router lane even when their source is a template value. API template diagnostics and cursor-info may project `router-framework-error` rows for LSP loci, while AppDiagnostics de-duplicates those projected rows and reads the owning RouterIssues lane. Both projections consume `routerIssueDiagnosticRepairProjection(...)`; only source-role-proven template instruction issues receive `fix-router-instruction` guidance, and the absence of an edit plan remains explicit.",
         "Route-instruction issue provenance should prefer the parser expression source or HTML attribute value address over the broader custom-attribute carrier. A broad carrier span is a fallback evidence address, not a rename/edit locus, once value provenance is available."
       ],
       "anchors": [
@@ -376,9 +439,21 @@
         },
         {
           "kind": "source",
+          "filePath": "packages/semantic-runtime/src/router/route-instruction-materialization.ts",
+          "symbolName": "RouteParameterEndpointPlan",
+          "summary": "Pre-substitution endpoint selection retained by exact router-resource attribute identity for authoring queries."
+        },
+        {
+          "kind": "source",
           "filePath": "packages/semantic-runtime/src/router/route-instruction-source.ts",
           "symbolName": "routerLoadAttributeSourceText",
           "summary": "Product-free source serializer for router load/href custom-attribute forms."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/api/router-diagnostic-policy.ts",
+          "symbolName": "routerIssueDiagnosticRepairProjection",
+          "summary": "Shared API repair projection for template-authored router instruction issue products."
         },
         {
           "kind": "lens",
@@ -404,7 +479,7 @@
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-05-23"
+      "updatedAt": "2026-07-11"
     },
     {
       "id": "frontier:route-recognition-materialization-project-pass",
@@ -562,6 +637,331 @@
       ],
       "createdAt": "2026-05-12",
       "updatedAt": "2026-05-15"
+    },
+    {
+      "id": "decision:route-config-contribution-effective-applied-split",
+      "kind": "decision",
+      "domains": [
+        "semantic-runtime",
+        "router",
+        "route-config",
+        "provenance"
+      ],
+      "summary": "RouteConfig source contributions converge once into definition and per-use applied products.",
+      "rationale": "Aurelia first creates class-level RouteConfig metadata through RouteConfig._create, then clones or overlays it per child use through _applyChildRouteConfig. Authored occurrence, class definition, and applied use therefore have different identities, execution evidence, and closure rules; one hybrid product forced topology and API consumers to reconstruct framework precedence locally.",
+      "guidance": [
+        "RouteConfigContributionModel owns authored origin, value shape, execution evidence, exact source addresses, field state, and field provenance. It is evidence for convergence, not an effective route config.",
+        "RouteConfigModel means a framework-shaped effective product. Definition-stage identity is owned by the target custom-element identity; applied-stage identity is owned by the parent effective config plus the authored child use.",
+        "RouteConfigConvergenceProjectPass is the only owner of _create and _applyChildRouteConfig precedence, framework defaults, convention-derived path/id, parent transition/fallback inheritance, repeated-use cloning, and route-config openness. Topology, recognizer, route tree, completion, and API code consume its output without local reconstruction.",
+        "Only positively executed Route.configure calls may become winners. Same-module execution order selects the final call; cross-module calls without a proven global order and conditionally unproven calls remain named open evidence rather than using source-file order.",
+        "Executed Route.configure contributions read occurrence-local invocation evidence. Unproven source sites may close syntax-owned literals but never replay against final module state. Declarative component references join through ResourceDefinitionIndex: locals use module/local identity, while imports use Program-remapped alias-resolved declaration-module identity.",
+        "Instance getRouteConfig declarations preserve the pre-hook effective facts and open every field the runtime hook may override. Do not execute the hook or flatten the whole definition to unknown.",
+        "Recursive child application is finite in the static product graph: stop at the repeated authored contribution and publish router-route-config-recursive-application on children instead of silently omitting the recursion or constructing an infinite use tree.",
+        "The public Routes query remains one row per source contribution and joins effective fields through contribution-to-config links. Use effectiveUseCount, effectiveVariantCount, and effectiveFieldsStable when one source contribution influences multiple applied products.",
+        "Project evaluation must replace a graph-dependency placeholder when the same module is later evaluated as a root, retaining both origin rows. A source-result map entry with evaluation=null is not a completed evaluation and must not hide lazy route resource exports."
+      ],
+      "anchors": [
+        {
+          "kind": "source",
+          "filePath": "aurelia/packages/router/src/route.ts",
+          "symbolName": "RouteConfig",
+          "summary": "Framework authority for RouteConfig._create, _applyChildRouteConfig, dynamic-hook application, and per-use cloning."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/router/model.ts",
+          "symbolName": "RouteConfigContributionModel",
+          "summary": "Source contribution product vocabulary."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/configuration/app-world-project-pass.ts",
+          "symbolName": "AureliaAppWorldProjectConstructionFrame",
+          "summary": "App-world phase owner that runs route contribution recognition before effective convergence and topology."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/router/route-config-recognition.ts",
+          "symbolName": "RouteConfigRecognitionProjectPass",
+          "summary": "Source contribution recognition and execution-evidence publication."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/evaluation/project-evaluation.ts",
+          "symbolName": "StaticProjectEvaluationPass",
+          "summary": "One-result-per-module evaluation publication and origin retention."
+        },
+        {
+          "kind": "doc",
+          "path": "packages/semantic-runtime/src/router/README.md",
+          "heading": "Responsibilities",
+          "summary": "Owning router contract for contribution, definition, and applied RouteConfig stages."
+        },
+        {
+          "kind": "script",
+          "command": "pnpm --filter @aurelia-ls/semantic-runtime contract:semantic-conformance -- --id router-route-config-and-routeable-identity",
+          "summary": "RouteConfig source/effective/applied conformance pressure."
+        },
+        {
+          "kind": "script",
+          "command": "node packages/semantic-runtime/scripts/contract-project-evaluation-publication.mjs",
+          "summary": "Graph-placeholder replacement and dual-origin regression contract."
+        }
+      ],
+      "liveChecks": [
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/router/model.ts",
+          "symbolName": "RouteConfigContributionModel"
+        },
+        {
+          "kind": "product-large-class",
+          "className": "RouteConfigConvergenceFrame",
+          "filePath": "packages/semantic-runtime/src/router/route-config-convergence.ts",
+          "minLineCount": 450,
+          "minMethodCount": 8
+        }
+      ],
+      "createdAt": "2026-07-11",
+      "updatedAt": "2026-07-11"
+    },
+    {
+      "id": "decision:router-realization-stage-and-viewport-candidate-honesty",
+      "kind": "decision",
+      "domains": [
+        "semantic-runtime",
+        "router",
+        "route-context",
+        "viewport",
+        "observation",
+        "open-seam"
+      ],
+      "summary": "Static router topology distinguishes potential products from sole-candidate plans and never claims live navigation state.",
+      "rationale": "Aurelia resolves navigation against registered ViewportAgent instances and checks live availability before name and usedBy compatibility. Static template analysis can prove potential topology and sometimes a sole compatible candidate, but cannot prove registration order, availability, guards, scheduling, or activation. Flattening those stages created false selected agents, false AUR3174 issues, and bound viewport values rewritten as defaults.",
+      "guidance": [
+        "Use RouterRealizationStageKind as an orthogonal axis: RouteContext, au-viewport, and ViewportAgent rows are potential; pre-activation RouteTree, RouteNode, and ComponentAgent rows are planned; no current producer may emit live.",
+        "Potential viewport presence spends the existing template-controller child-view cardinality. Optional, many, or open presence remains potential and publishes open topology evidence rather than being treated as one live registration.",
+        "Viewport name, usedBy, default, and fallback retain independent defaulted, closed, referential, or open state plus exact authored sources. Open bound values must not be rewritten as absent framework defaults.",
+        "RuntimeBoundControllerValueTable retains exact-controller and definition-context writer rows without selecting a winner. RuntimeBindingSourceValueEvaluator applies presence guards and owns steady-state versus initial-settlement selection; viewport defaults spend evaluateInitialBoundControllerPropertyValue because render order determines only initial settlement.",
+        "Bound-controller rows carry their source resource's RuntimeBindingExpressionScopeProjector. Evaluate parent-to-child values with the row-owned projector rather than borrowing a consumer's binding-behavior lifecycle across resources.",
+        "Viewport matching compares usedBy with the resolved custom-element registration name, while routeable products and public rows preserve authored spelling separately for navigation and explanation. If resolution did not close, keep the resolved name null/open; never borrow the authored class or string label as registration identity.",
+        "Candidate resolution is none, sole, multiple, or open. Only sole may seed planned route products. None may publish exact rcNoAvailableVpa/AUR3174 when no statically compatible candidate exists; multiple/open publish a seam and no partial plan.",
+        "Do not call a sole static candidate selected or available. Live ViewportAgent._isAvailable, transition guards, scheduling, activation, and current route-tree state remain outside the current semantic-runtime claim."
+      ],
+      "anchors": [
+        {
+          "kind": "source",
+          "filePath": "aurelia/packages/router/src/viewport-agent.ts",
+          "summary": "Framework authority for live availability, viewport-name matching, and usedBy matching."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/router/model.ts",
+          "symbolName": "RouterRealizationStageKind",
+          "summary": "Potential/planned/live and viewport closure/candidate vocabulary."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/router/route-runtime-topology.ts",
+          "symbolName": "RouteRuntimeTopologyProjectPass",
+          "summary": "Potential RouteContext, viewport, field-closure, presence, and candidate materialization."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/observation/runtime-bound-controller-value.ts",
+          "symbolName": "RuntimeBoundControllerValueTable",
+          "summary": "Steady-state, initial-settlement, all-writer, and contextual definition/type bound-value authority."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/router/route-tree-materialization.ts",
+          "symbolName": "RouteTreeTransitionMaterializationFrame",
+          "summary": "Sole-candidate planned route-tree boundary and open/none outcomes."
+        },
+        {
+          "kind": "doc",
+          "path": "packages/semantic-runtime/src/router/README.md",
+          "heading": "Responsibilities",
+          "summary": "Owning router contract for potential topology and planned transitions."
+        },
+        {
+          "kind": "script",
+          "command": "node packages/semantic-runtime/scripts/contract-semantic-conformance.mjs --fixture fixtures/pressure/router-routecontext-topology-lab",
+          "summary": "Realization stage, bound viewport field, candidate plurality, openness, and exact failure pressure."
+        }
+      ],
+      "liveChecks": [
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/router/model.ts",
+          "symbolName": "RouterRealizationStageKind"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/observation/runtime-bound-controller-value.ts",
+          "symbolName": "RuntimeBoundControllerValueTable"
+        }
+      ],
+      "createdAt": "2026-07-11",
+      "updatedAt": "2026-07-29"
+    },
+    {
+      "id": "decision:framework-view-model-hook-ownership",
+      "kind": "decision",
+      "domains": [
+        "semantic-runtime",
+        "template",
+        "router",
+        "type-system",
+        "ide"
+      ],
+      "summary": "Classify callable framework hooks from the owning Aurelia role, never from global member-name sets.",
+      "rationale": "The former completion path classified every checker member from three global spelling sets. It produced false router and AppTask facts, retained removed names, omitted current names, and disagreed with the framework's role-specific dispatch. The checker, binding-scope, controller, RouteConfig, and framework-declaration products already carried the missing ownership evidence; the repair reconnects those products instead of introducing another hook registry.",
+      "guidance": [
+        "Template completion may read an available ambient BindingScope at member sites as classification evidence without offering binding-scope candidates there or requiring scope evidence from owner types projected through another lane. Dependency admission and candidate projection are separate decisions.",
+        "Checker type equality is not component-instance proof: self-typed nested and optional-chained values stay ordinary. Expression-member hook facts require a direct $this, $parent, or boundary this receiver resolved through BindingScope.",
+        "Member-owner inspection spends the parser's MemberName continuation class. AwaitingChainSegment retains valid receivers for optional-chain and $parent scope-path frontiers and must not be discarded by frontier-enum matching.",
+        "Component lifecycle facts require a callable checker member on a custom-element controller binding context and use the executable runtime-html Controller vocabulary owned by component-lifecycle-source.ts.",
+        "Router hook facts additionally require an effective RouteConfig targeting the owner or explicit/inherited framework IRouteViewModel heritage. Route configuration proves duck-typed owners; framework heritage is independent declaration evidence.",
+        "Keep getRouteConfig in router configuration and canLoad/loading/loaded/canUnload/unloading in router transition lifecycle. Preserve the product that proves owner role in the inquiry answer.",
+        "AppTask phases are registration slots, not view-model hooks. Removed or legacy names such as define, load, unload, detached, and unbound must not enter completion classification without executable framework evidence.",
+        "Exact hook signature compatibility is a future diagnostic and presentation question. It must not replace role ownership because the runtime discovers and invokes callable members by role and name."
+      ],
+      "nextActionPolicy": "when-touched",
+      "anchors": [
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/inquiry/template-completion.ts",
+          "symbolName": "aureliaHookKindForMember",
+          "summary": "Completion join over callable member, component owner, routed owner, and retained basis products."
+        },
+        {
+          "kind": "doc",
+          "path": "packages/semantic-runtime/src/router/README.md",
+          "heading": "Responsibilities",
+          "summary": "Owning router contract for routed view-model role evidence and hook categories."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/template/component-lifecycle-source.ts",
+          "symbolName": "componentLifecycleHookName",
+          "summary": "Executable runtime-html Controller lifecycle vocabulary."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/type-system/framework-declaration-source.ts",
+          "symbolName": "typeOrHeritageMatchesFrameworkDeclarationSource",
+          "summary": "Shared framework declaration and recursive heritage proof."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/expression/parse-result-inspection.ts",
+          "symbolName": "ExpressionParseResultInspector",
+          "summary": "Member receiver recovery from parser continuation algebra across ordinary, optional-chain, and scope-path frontiers."
+        },
+        {
+          "kind": "script",
+          "command": "node packages/semantic-runtime/scripts/contract-semantic-conformance.mjs --fixture fixtures/pressure/router-lifecycle-hook-vocabulary",
+          "summary": "Contrastive configured, declared, inherited, nested, ordinary, stale, and AppTask-name pressure."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/atlas/src/inquiry/runtime/framework-router-relationships.ts",
+          "symbolName": "routerRelationshipsFromFlowRows",
+          "summary": "Framework router relationship projection distinguishing configuration and lifecycle surfaces."
+        }
+      ],
+      "liveChecks": [
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/api/contracts.ts",
+          "symbolName": "SemanticTemplateCompletionAureliaHookKind"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/template/component-lifecycle-source.ts",
+          "symbolName": "componentLifecycleHookName"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/inquiry/template-completion.ts",
+          "symbolName": "aureliaHookKindForMember"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/expression/parse-result-inspection.ts",
+          "symbolName": "ExpressionParseResultInspector"
+        }
+      ],
+      "createdAt": "2026-07-11",
+      "updatedAt": "2026-07-11"
+    },
+    {
+      "id": "decision:router-options-rooted-registration-ownership",
+      "kind": "decision",
+      "domains": [
+        "router",
+        "configuration",
+        "di",
+        "diagnostics"
+      ],
+      "summary": "Effective RouterOptions belong to concrete RouterConfiguration DI registration uses per AppRoot; duplicate rooted registration is one causal AUR3168 error with no topology winner.",
+      "rationale": "Configuration source values are definitions and may be unregistered or reused. ContainerRegistrationOperation already records the exact admission use and receiving container, while AppRoot is the runtime ownership boundary consumed by route topology. Spending those existing products removes the project-global first-options-row island and preserves definition/use provenance. The framework's RouteContext.setRoot rejects an ancestor-visible existing IRouteContext, so a definitely executed second registration in one modeled app root is incoherent even though lower-level registration emits additional resource warnings first.",
+      "guidance": [
+        "Derive effective RouterOptions from DI registration spending, never from configuration sequence order or the first recognized customize call.",
+        "Retain the configuration-value definition source separately from each registration-use source. One reused value may yield several rooted options products; an unregistered value yields none.",
+        "When one modeled AppRoot has several definitely executed RouterConfiguration operations, publish AUR3168 on each operation after the first, relate the first operation, and do not build RouterOptions or route topology for that root.",
+        "Keep same-source AUR0153/AUR0154 duplicate router built-in resource rows as raw evidence, but present them as runtime consequences under the causal AUR3168 diagnostic on IDE surfaces.",
+        "Use readRouterIssues(...) as the owning enumeration for RouterIssues rows, app summary counts, and cursor diagnostic projection; do not hand-assemble producer lists in each consumer.",
+        "App admission still synthesizes root containers and does not spend an explicit new Aurelia(container) argument or authored createChild topology. Common-parent versus forked multi-root analysis belongs in configuration/DI; do not approximate it with router-local source containment or sequence ordering."
+      ],
+      "nextActionPolicy": "when-touched",
+      "anchors": [
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/router/router-options-materialization.ts",
+          "symbolName": "RouterOptionsMaterializationProjectPass",
+          "summary": "Consumes rooted DI registration uses, folds option definitions, and publishes duplicate-registration issues."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/configuration/configuration-option.ts",
+          "symbolName": "ConfigurationOptionContribution",
+          "summary": "Carries option/value provenance plus the source of the configuration value receiving the contribution."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/router/route-context-materialization.ts",
+          "symbolName": "RouteConfigContextMaterializationProjectPass",
+          "summary": "Builds configured-route topology per AppRoot and rooted RouterOptions reference."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/api/route-projections.ts",
+          "symbolName": "readRouterIssues",
+          "summary": "Shared product-owned router issue enumeration used by query, summary, and cursor-diagnostic consumers."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/api/diagnostic-presentation.ts",
+          "symbolName": "appDiagnosticPresentation",
+          "summary": "Groups duplicate router built-in registrations as contextual consequences of AUR3168."
+        },
+        {
+          "kind": "doc",
+          "path": "packages/semantic-runtime/src/router/README.md",
+          "heading": "Responsibilities",
+          "summary": "Stable root-owned RouterOptions and duplicate-registration contract."
+        },
+        {
+          "kind": "lens",
+          "lensId": "framework.router",
+          "projection": "relationships",
+          "summary": "Framework RouteContext, RouterConfiguration, AppTask, and container relationship evidence."
+        }
+      ],
+      "createdAt": "2026-07-12",
+      "updatedAt": "2026-07-12"
     }
   ]
 }

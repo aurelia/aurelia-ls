@@ -2,7 +2,7 @@
   "schemaVersion": "semantic-fixture-verification.v1",
   "fixtureRole": "app-builder-generated-app-contract",
   "fixtureId": "component-pair-task-domain-backed-submit-form",
-  "ok": true,
+  "ok": false,
   "expectedEffects": 13,
   "effectResults": [
     {
@@ -46,9 +46,9 @@
       "summary": "Component-pair app shell SourcePlan should hydrate its root component. Observed 1 matching semantic fact(s)."
     },
     {
-      "outcome": "satisfied",
+      "outcome": "failed",
       "effectKind": "open-seam-closure",
-      "summary": "Component-pair app shell SourcePlan should have no open semantic seams. Observed 0 matching semantic fact(s)."
+      "summary": "Component-pair app shell SourcePlan should have no open semantic seams. Observed 1 matching semantic fact(s)."
     },
     {
       "outcome": "satisfied",
@@ -56,9 +56,9 @@
       "summary": "Domain-backed submit form SourcePlan should expose a getter-backed readiness observer. Observed 1 matching semantic fact(s)."
     },
     {
-      "outcome": "satisfied",
+      "outcome": "failed",
       "effectKind": "computed-observer-observed-dependency",
-      "summary": "Domain-backed submit form SourcePlan should track 'title' as a readiness dependency. Observed 1 matching semantic fact(s)."
+      "summary": "Domain-backed submit form SourcePlan should track 'title' as a readiness dependency. Observed 0 matching semantic fact(s)."
     },
     {
       "outcome": "satisfied",
@@ -188,7 +188,7 @@
       "outcome": "satisfied",
       "rowFamily": "appBuilderResponse",
       "rowCount": null,
-      "jsonLength": 7751,
+      "jsonLength": 7806,
       "summary": "Generated app-builder contract row family 'appBuilderResponse' matches the stored request output."
     },
     {
@@ -282,5 +282,16 @@
       "summary": "Generated app-builder contract row family 'sourcePlanWitnessRows' matches the stored request output."
     }
   ],
-  "failures": []
+  "failures": [
+    {
+      "outcome": "failed",
+      "effectKind": "open-seam-closure",
+      "summary": "Component-pair app shell SourcePlan should have no open semantic seams. Observed 1 matching semantic fact(s)."
+    },
+    {
+      "outcome": "failed",
+      "effectKind": "computed-observer-observed-dependency",
+      "summary": "Domain-backed submit form SourcePlan should track 'title' as a readiness dependency. Observed 0 matching semantic fact(s)."
+    }
+  ]
 }

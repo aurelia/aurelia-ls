@@ -4,17 +4,33 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   createSemanticRuntime,
+  NodeSemanticRuntimeProjectInputHost,
+  SemanticRuntimeProjectInputAuthority,
   SemanticAppQueryKind,
 } from '../out/index.js';
 
 const packageRoot = path.resolve(fileURLToPath(new URL('..', import.meta.url)));
 const fixtureRoot = path.join(packageRoot, 'fixtures/pressure/template-completion-member-metadata');
 const templatePath = path.join(fixtureRoot, 'src/app.html');
-const templateText = fs.readFileSync(templatePath, 'utf8');
+const originalTemplateText = fs.readFileSync(templatePath, 'utf8');
+const templateText = originalTemplateText
+  .replace('${}', '${title}')
+  .replace(
+    '</template>',
+    '  <div repeat.for="item of [title]"><div repeat.for="other of [item]">${item}:${other}</div></div>\n</template>',
+  );
 
 const runtime = await createSemanticRuntime({
   workspaceRoot: fixtureRoot,
   storeKey: 'contract:template-completion-member-metadata',
+  projectInputAuthority: new SemanticRuntimeProjectInputAuthority(new NodeSemanticRuntimeProjectInputHost({
+    readFile(fileName) {
+      return samePath(fileName, templatePath) ? templateText : undefined;
+    },
+    fileExists(fileName) {
+      return samePath(fileName, templatePath) ? true : undefined;
+    },
+  })),
 });
 const app = await runtime.openApp({
   analysisDepth: 'binding-observation',
@@ -29,6 +45,25 @@ const thisMemberCompletion = app.ask({
   kind: SemanticAppQueryKind.TemplateCompletions,
   cursor: cursorAfter('${$this.'),
   page: { size: 60 },
+});
+const titleCursorInfo = app.ask({
+  kind: SemanticAppQueryKind.TemplateCursorInfo,
+  cursor: cursorInside('${title}', 'title', 1),
+});
+const outerItemDeclaration = app.ask({
+  kind: SemanticAppQueryKind.TemplateCursorInfo,
+  detail: 'handles',
+  cursor: cursorInside('repeat.for="item of [title]"', 'item', 1),
+});
+const ancestorItemUsage = app.ask({
+  kind: SemanticAppQueryKind.TemplateCursorInfo,
+  detail: 'handles',
+  cursor: cursorInside('${item}', 'item', 1),
+});
+const innerOtherUsage = app.ask({
+  kind: SemanticAppQueryKind.TemplateCursorInfo,
+  detail: 'handles',
+  cursor: cursorInside('${other}', 'other', 1),
 });
 
 const byName = new Map(completion.value.candidates.map((candidate) => [candidate.name, candidate]));
@@ -62,7 +97,7 @@ assertMember('detached', {
   memberKind: 'method',
   memberVisibility: 'public',
   memberIsReadonly: false,
-  aureliaHookKind: 'component-lifecycle',
+  aureliaHookKind: null,
 });
 assertMember('applyDarkTheme', {
   memberKind: 'method',
@@ -91,6 +126,26 @@ assertThisMember('attached', {
   memberIsReadonly: false,
   aureliaHookKind: 'component-lifecycle',
 });
+assert.equal(titleCursorInfo.value.selectedMemberName, 'title');
+assert.equal(titleCursorInfo.value.selectedMember?.memberKind, 'property');
+assert.equal(titleCursorInfo.value.selectedMember?.typeDisplay, 'string');
+assert.equal(titleCursorInfo.value.selectedMember?.source?.role, 'name');
+assert.equal(
+  titleCursorInfo.value.selectedMember?.source?.path?.replace(/\\/g, '/'),
+  'src/app.ts',
+);
+assert.equal(typeof titleCursorInfo.value.selectedMember?.source?.start, 'number');
+assert.equal(typeof titleCursorInfo.value.selectedMember?.source?.end, 'number');
+assert.equal(
+  ancestorItemUsage.value.selectedMember?.handles?.ownerProductHandle,
+  outerItemDeclaration.value.selectedMember?.handles?.ownerProductHandle,
+  'An ancestor runtime slot usage should retain the scope that owns its declaration.',
+);
+assert.notEqual(
+  ancestorItemUsage.value.selectedMember?.handles?.ownerProductHandle,
+  innerOtherUsage.value.selectedMember?.handles?.ownerProductHandle,
+  'An ancestor runtime slot should not masquerade as a child-scope slot.',
+);
 
 console.log(JSON.stringify({
   ok: true,
@@ -112,6 +167,7 @@ console.log(JSON.stringify({
         memberKind: candidate?.memberKind ?? null,
         memberVisibility: candidate?.memberVisibility ?? null,
         memberIsReadonly: candidate?.memberIsReadonly ?? null,
+        memberIsDeprecated: candidate?.memberIsDeprecated ?? null,
         aureliaHookKind: candidate?.aureliaHookKind ?? null,
       };
     }),
@@ -125,9 +181,16 @@ console.log(JSON.stringify({
         memberKind: candidate?.memberKind ?? null,
         memberVisibility: candidate?.memberVisibility ?? null,
         memberIsReadonly: candidate?.memberIsReadonly ?? null,
+        memberIsDeprecated: candidate?.memberIsDeprecated ?? null,
         aureliaHookKind: candidate?.aureliaHookKind ?? null,
       };
     }),
+    cursorInfo: {
+      selectedMemberName: titleCursorInfo.value.selectedMemberName,
+      selectedMemberKind: titleCursorInfo.value.selectedMember?.memberKind ?? null,
+      selectedMemberType: titleCursorInfo.value.selectedMember?.typeDisplay ?? null,
+      selectedMemberSource: titleCursorInfo.value.selectedMember?.source ?? null,
+    },
   },
 }, null, 2));
 
@@ -145,6 +208,27 @@ function cursorAfter(marker) {
   };
 }
 
+function cursorInside(marker, needle, delta = 0) {
+  const markerOffset = templateText.indexOf(marker);
+  assert.notEqual(markerOffset, -1, `Expected marker: ${marker}`);
+  const needleOffset = templateText.indexOf(needle, markerOffset);
+  assert.notEqual(needleOffset, -1, `Expected needle ${needle} in marker ${marker}.`);
+  const offset = needleOffset + delta;
+  const before = templateText.slice(0, offset);
+  const lines = before.split(/\r?\n/u);
+  return {
+    filePath: 'src/app.html',
+    line: lines.length - 1,
+    character: lines[lines.length - 1].length,
+    offset,
+  };
+}
+
+function samePath(left, right) {
+  return path.resolve(left).replace(/\\/g, '/').toLowerCase()
+    === path.resolve(right).replace(/\\/g, '/').toLowerCase();
+}
+
 function assertMember(name, expected) {
   const candidate = byName.get(name);
   assert.ok(candidate, `Expected completion candidate ${name}.`);
@@ -158,6 +242,11 @@ function assertThisMember(name, expected) {
 }
 
 function assertExpectedMember(candidate, name, expected) {
+  assert.equal(
+    candidate.memberIsDeprecated,
+    false,
+    `Expected ${name}.memberIsDeprecated to be false, observed ${candidate.memberIsDeprecated ?? 'null'}.`,
+  );
   for (const [key, value] of Object.entries(expected)) {
     assert.equal(
       candidate[key],

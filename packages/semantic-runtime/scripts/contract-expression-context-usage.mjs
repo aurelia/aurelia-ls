@@ -11,6 +11,7 @@ const scriptsRoot = path.join(packageRoot, 'scripts');
 const contextClassName = 'CheckerExpressionTypeEvaluationContext';
 const knownScopeContextHelper = `${contextClassName}.knownScope`;
 const runtimeProjectionContextHelper = 'checkerContextForRuntimeBindingSourceExpressionProjection';
+const bindingBehaviorArgumentContextHelper = 'checkerContextForRuntimeBindingBehaviorArguments';
 const sourceValueContextClassName = 'RuntimeBindingSourceValueEvaluationContext';
 const sourceValueKnownScopeHelper = `${sourceValueContextClassName}.knownScope`;
 const sourceValueProjectionContextHelper = 'sourceValueContextForRuntimeBindingSourceExpressionProjection';
@@ -26,12 +27,18 @@ const allowedDirectContextConstructors = new Set([
 
 const allowedKnownScopeContextCalls = new Set([
   'packages/semantic-runtime/src/observation/runtime-binding-source-expression-context.ts#checkerContextForRuntimeBindingSourceExpressionProjection',
+  'packages/semantic-runtime/src/observation/runtime-binding-source-expression-context.ts#checkerContextForRuntimeBindingBehaviorArguments',
+  // Source-level watch/effect/computed expressions own a framework-grounded Scope.create(context) model.
+  'packages/semantic-runtime/src/runtime-expression/checker-access-target-projection.ts#RuntimeRootExpressionAccessTargetProjector.project',
   'packages/semantic-runtime/src/inquiry/template-completion.ts#memberOwnerEvaluationContextForCursorExpression',
   'packages/semantic-runtime/src/template/template-scope-type-projector.ts#TemplateScopeTypeProjector.evaluationContextForRuntimeBinding',
 ]);
 
 const allowedSourceValueKnownScopeCalls = new Set([
   'packages/semantic-runtime/src/observation/binding-source-value-evaluation-context.ts#projectRuntimeBindingSourceValueContextInScope',
+  // Bound-controller rows admit only reached bindings and retain the exact parent Scope; candidate evaluation owns
+  // the root recursion context before projecting that row's resource and binding-behavior lifecycle.
+  'packages/semantic-runtime/src/observation/binding-source-value-evaluator.ts#RuntimeBindingSourceValueEvaluator.evaluateBoundControllerPropertyCandidate',
   'packages/semantic-runtime/src/router/route-instruction-materialization.ts#routerSourceExpressionEvaluationFrame',
 ]);
 
@@ -44,6 +51,7 @@ const allowedSourceValueProjectionCalls = new Set([
 const constructorRows = [];
 const knownScopeRows = [];
 const runtimeProjectionRows = [];
+const bindingBehaviorArgumentContextRows = [];
 const sourceValueKnownScopeRows = [];
 const sourceValueProjectionRows = [];
 const violations = [];
@@ -87,7 +95,7 @@ for (const row of sourceValueProjectionRows) {
 assert.deepEqual(
   violations,
   [],
-  `${contextClassName} and ${sourceValueContextClassName} creation must stay in documented context/fallback owners. Rendered binding, overlay, diagnostics, i18n, router, and observation consumers should usually enter through ${runtimeProjectionContextHelper} or ${sourceValueProjectionContextHelper}; non-rendered exact-scope fallbacks should enter through ${knownScopeContextHelper} or ${sourceValueKnownScopeHelper} only where the caller owns the modeled Scope:\n${violations.join('\n')}`,
+  `${contextClassName} and ${sourceValueContextClassName} creation must stay in documented context/fallback owners. Rendered binding, overlay, diagnostics, i18n, router, and observation consumers should usually enter through ${runtimeProjectionContextHelper}, ${bindingBehaviorArgumentContextHelper}, or ${sourceValueProjectionContextHelper}; non-rendered exact-scope fallbacks should enter through ${knownScopeContextHelper} or ${sourceValueKnownScopeHelper} only where the caller owns the modeled Scope:\n${violations.join('\n')}`,
 );
 
 console.log(JSON.stringify({
@@ -96,6 +104,8 @@ console.log(JSON.stringify({
   knownScopeContextCalls: knownScopeRows,
   runtimeProjectionContextCalls: runtimeProjectionRows.length,
   runtimeProjectionContextOwners: [...new Set(runtimeProjectionRows.map((row) => `${row.file}#${row.owner}`))].sort(),
+  bindingBehaviorArgumentContextCalls: bindingBehaviorArgumentContextRows.length,
+  bindingBehaviorArgumentContextOwners: [...new Set(bindingBehaviorArgumentContextRows.map((row) => `${row.file}#${row.owner}`))].sort(),
   sourceValueKnownScopeContextCalls: sourceValueKnownScopeRows,
   sourceValueProjectionContextCalls: sourceValueProjectionRows.length,
   sourceValueProjectionContextOwners: [...new Set(sourceValueProjectionRows.map((row) => `${row.file}#${row.owner}`))].sort(),
@@ -110,6 +120,9 @@ function visit(sourceFile, node) {
   }
   if (ts.isCallExpression(node) && node.expression.getText(sourceFile) === runtimeProjectionContextHelper) {
     runtimeProjectionRows.push(rowForNode(sourceFile, node, ownerName(node)));
+  }
+  if (ts.isCallExpression(node) && node.expression.getText(sourceFile) === bindingBehaviorArgumentContextHelper) {
+    bindingBehaviorArgumentContextRows.push(rowForNode(sourceFile, node, ownerName(node)));
   }
   if (ts.isCallExpression(node) && node.expression.getText(sourceFile) === sourceValueKnownScopeHelper) {
     sourceValueKnownScopeRows.push(rowForNode(sourceFile, node, ownerName(node)));

@@ -1,6 +1,8 @@
 import { route } from '@aurelia/router';
+import { customElement } from '@aurelia/runtime-html';
 import { InvalidPathRoute } from './routes/invalid-path-route';
 import { NullConfigRoute } from './routes/null-config-route';
+import template from './router-route-config-validation-errors-app.html';
 
 @route({
   title: 'Router Route Config Validation Errors Pressure',
@@ -34,4 +36,5 @@ import { NullConfigRoute } from './routes/null-config-route';
     NullConfigRoute,
   ],
 })
+@customElement({ name: 'router-route-config-validation-errors-app', template })
 export class RouterRouteConfigValidationErrorsApp {}

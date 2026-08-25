@@ -9,6 +9,7 @@ import type {
   RegistrationKeyReference,
   RegistrationValueReference,
 } from './registration-reference.js';
+import type { RegistrationCarrierKind } from './registration-observation.js';
 
 export const enum RegistrationAdmissionKind {
   /** Admission produced by a `Registration.*` factory call. */
@@ -27,8 +28,10 @@ export const enum RegistrationAdmissionKind {
   StaticResource = 'static-resource',
   /** Admission produced by an ordinary class fallback self-registration. */
   PlainClassFallback = 'plain-class-fallback',
-  /** Admission produced by one value inside an object-map registration. */
-  ObjectMapEntry = 'object-map-entry',
+  /** Admission produced by one value inside an array, object, or module-map registration carrier. */
+  RecursiveCarrierEntry = 'recursive-carrier-entry',
+  /** Admission produced when a ParameterizedRegistry fallback passes an object parameter to Container.register. */
+  ParameterizedRegistryParameter = 'parameterized-registry-parameter',
 }
 
 export const enum RegistrationStrategy {
@@ -50,12 +53,12 @@ export const enum RegistrationStrategy {
   Defer = 'defer',
   /** Admit an IRegistry-compatible value that will register itself. */
   Registry = 'registry',
-  /** Register a resource key and aliases for a resource definition or static `$au` type. */
+  /** Invoke a converged resource's registration semantics; most publish keys, while syntax resources mutate compiler services. */
   Resource = 'resource',
   /** Register a plain class as itself. */
   PlainClassSelf = 'plain-class-self',
-  /** Recursively admit object/function values from an object map. */
-  ObjectMap = 'object-map',
+  /** Recursively admit object/function values from an array, object, or module-map carrier. */
+  RecursiveCarrier = 'recursive-carrier',
   /** Register an explicit resolver object. */
   Resolver = 'resolver',
   /** Runtime array resolver that preserves multiple resolver rows for the same key. */
@@ -76,6 +79,7 @@ export const enum RegistrationKeyRole {
 }
 
 export type RegistrationAdmissionField =
+  | 'carrierKind'
   | 'admissionKind'
   | 'strategy'
   | 'keyRole'
@@ -115,6 +119,8 @@ export class OpenRegistrationAdmission {
     readonly productHandle: ProductHandle,
     /** Registration identity for this admission event. */
     readonly identityHandle: IdentityHandle,
+    /** Source carrier lane that produced this admission. */
+    readonly carrierKind: RegistrationCarrierKind,
     /** Source lane that admitted this registration. */
     readonly admissionKind: RegistrationAdmissionKind,
     /** Best-known strategy, including `unknown` when recognition could not classify it. */
@@ -141,6 +147,8 @@ export class ResolverRegistrationAdmission {
     readonly productHandle: ProductHandle,
     /** Registration identity for this admission event. */
     readonly identityHandle: IdentityHandle,
+    /** Source carrier lane that produced this admission. */
+    readonly carrierKind: RegistrationCarrierKind,
     /** Source lane that admitted this registration. */
     readonly admissionKind: RegistrationAdmissionKind,
     /** Runtime registration strategy represented by this admission. */
@@ -174,7 +182,7 @@ export function isResolverRegistrationStrategy(strategy: RegistrationStrategy): 
     case RegistrationStrategy.Registry:
     case RegistrationStrategy.Resource:
     case RegistrationStrategy.PlainClassSelf:
-    case RegistrationStrategy.ObjectMap:
+    case RegistrationStrategy.RecursiveCarrier:
     case RegistrationStrategy.Factory:
     case RegistrationStrategy.FrameworkGroup:
       return false;
@@ -190,6 +198,8 @@ export class ParameterizedRegistryAdmission {
     readonly productHandle: ProductHandle,
     /** Registration identity for this registry-producing admission event. */
     readonly identityHandle: IdentityHandle,
+    /** Source carrier lane that produced this admission. */
+    readonly carrierKind: RegistrationCarrierKind,
     /** Source lane that admitted this registry. */
     readonly admissionKind: RegistrationAdmissionKind,
     /** Key used to look up an existing registry before falling back to parameter registration. */
@@ -212,6 +222,8 @@ export class RegistryRegistrationAdmission {
     readonly productHandle: ProductHandle,
     /** Registration identity for this registry admission event. */
     readonly identityHandle: IdentityHandle,
+    /** Source carrier lane that produced this admission. */
+    readonly carrierKind: RegistrationCarrierKind,
     /** Source lane that admitted this registry. */
     readonly admissionKind: RegistrationAdmissionKind,
     /** Registry value that will later be analyzed or invoked abstractly by DI world construction. */
@@ -224,7 +236,9 @@ export class RegistryRegistrationAdmission {
 }
 
 /**
- * Admission for a converged Aurelia resource definition before it is spent into runtime resource-key rows.
+ * Admission for a converged Aurelia resource definition or a definition-header-constrained resource-only result before
+ * its kind-specific registration effects are spent. Constraint values retain possible runtime keys but may not resolve
+ * to a full definition product; DI keeps those slots open instead of treating the admission as an arbitrary registry.
  */
 export class ResourceRegistrationAdmission {
   constructor(
@@ -232,6 +246,8 @@ export class ResourceRegistrationAdmission {
     readonly productHandle: ProductHandle,
     /** Registration identity for this resource admission event. */
     readonly identityHandle: IdentityHandle,
+    /** Source carrier lane that produced this admission. */
+    readonly carrierKind: RegistrationCarrierKind,
     /** Source lane that admitted this resource. */
     readonly admissionKind: RegistrationAdmissionKind,
     /** Source-level value that carried the resource class or definition. */
@@ -254,6 +270,8 @@ export class FrameworkRegistrationAdmission {
     readonly productHandle: ProductHandle,
     /** Registration identity for this framework admission event. */
     readonly identityHandle: IdentityHandle,
+    /** Source carrier lane that produced this admission. */
+    readonly carrierKind: RegistrationCarrierKind,
     /** Source lane that admitted this framework registration group. */
     readonly admissionKind: RegistrationAdmissionKind,
     /** Known framework registration group or effect package recognized from source. */

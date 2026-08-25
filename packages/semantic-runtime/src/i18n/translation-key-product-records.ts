@@ -61,7 +61,7 @@ export function i18nTranslationKeyProductEmission(
   projectKey: string,
   seed: I18nTranslationKeyProductSeed,
   index: number,
-  sourceTextCache?: AuthoredSourceTextCache,
+  sourceTextCache: AuthoredSourceTextCache,
 ): I18nTranslationKeyProductEmission {
   const handles = translationKeyProductHandles(store, projectKey, seed, index);
   const key = translationKeyModel(seed, handles);
@@ -107,7 +107,7 @@ function translationKeyRecords(
   store: KernelStore,
   seed: I18nTranslationKeyProductSeed,
   handles: I18nTranslationKeyProductHandles,
-  sourceTextCache?: AuthoredSourceTextCache,
+  sourceTextCache: AuthoredSourceTextCache,
 ): readonly KernelStoreRecord[] {
   return [
     translationKeySourceAddress(seed, handles, sourceTextCache),
@@ -122,7 +122,7 @@ function translationKeyRecords(
 function translationKeySourceAddress(
   seed: I18nTranslationKeyProductSeed,
   handles: I18nTranslationKeyProductHandles,
-  sourceTextCache?: AuthoredSourceTextCache,
+  sourceTextCache: AuthoredSourceTextCache,
 ): SourceSpanAddress {
   const sourceSpan = translationKeySourceSpan(seed, sourceTextCache);
   return new SourceSpanAddress(
@@ -186,7 +186,7 @@ function translationKeyMaterialization(
 
 function translationKeySourceSpan(
   seed: I18nTranslationKeyProductSeed,
-  sourceTextCache?: AuthoredSourceTextCache,
+  sourceTextCache: AuthoredSourceTextCache,
 ): { readonly start: number; readonly end: number } {
   return authoredAssetModuleSpanForNode(seed.sourceFile, seed.sourceNode, sourceTextCache) ?? {
     start: seed.sourceNode.getStart(seed.sourceFile),

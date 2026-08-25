@@ -167,6 +167,47 @@ export class CheckerExpressionCallProjector {
     );
   }
 
+  /** Projects every call argument's contextual parameter type after overload selection and generic inference. */
+  contextualCallArgumentTypes(
+    calleeType: CheckerTypeShape,
+    args: readonly CheckerExpressionCallArgument[],
+    context: CheckerExpressionTypeEvaluationContext,
+    localKey: string,
+    sourceAddressHandle: AddressHandle | null = null,
+  ): readonly (CheckerTypeReference | null)[] | null {
+    const type = calleeType.carrier?.type ?? null;
+    const checker = calleeType.carrier?.checker ?? null;
+    if (type == null || checker == null) {
+      return null;
+    }
+    const signatures = checkerCallableContextSignatures(checker, type);
+    if (signatures.length === 0) {
+      return null;
+    }
+    const candidates = this.selectSignatureCandidates(checker, signatures, args, context, localKey);
+    return args.map((_, argumentIndex) => {
+      const parameterTypes = candidates
+        .map((candidate) => this.parameterTypeReference(
+          checker,
+          candidate.signature,
+          candidate.signatureIndex,
+          argumentIndex,
+          `${localKey}:signature:${candidate.signatureIndex}:arg:${argumentIndex}:contextual`,
+          sourceAddressHandle,
+          candidate.inferences,
+        ))
+        .filter((reference): reference is CheckerTypeReference => reference != null);
+      return parameterTypes.length === 0
+        ? null
+        : this.commonOrUnionTypeReference(
+            parameterTypes,
+            candidates.length,
+            `${localKey}:arg:${argumentIndex}:contextual`,
+            sourceAddressHandle,
+          );
+    });
+  }
+
   contextualCallArgumentParameterTypes(
     calleeType: CheckerTypeShape,
     signatureArgumentIndex: number,

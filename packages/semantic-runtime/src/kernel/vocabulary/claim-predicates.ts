@@ -35,17 +35,6 @@ export const KernelClaimPredicates = {
   Evaluation: {
   },
   TypeSystem: {
-
-    /** A type projection exposes a member projection. */
-    TypeShapeHasMember: defineClaimPredicate(
-      KernelVocabularyNamespace.TypeSystem,
-      'type-shape-has-member',
-      'A type-system type projection exposes a member projection.',
-      claimSignature(
-        productEndpoint(KernelProductKinds.TypeSystem.TypeShape),
-        productEndpoint(KernelProductKinds.TypeSystem.TypeMember),
-      ),
-    ),
   },
   Resource: {
 
@@ -110,22 +99,48 @@ export const KernelClaimPredicates = {
       ),
     ),
 
-    /** A container accepts a registration admission for later resolver/resource/factory effects. */
-    AcceptsRegistration: defineClaimPredicate(
+    /** A container registration operation applies one exact registration admission. */
+    AppliesRegistration: defineClaimPredicate(
       KernelVocabularyNamespace.Di,
-      'accepts-registration',
-      'A container accepts a registration admission for later resolver, resource, or factory effects.',
+      'applies-registration',
+      'A container registration operation applies one exact registration admission.',
       claimSignature(
-        productEndpoint(KernelProductKinds.Di.Container),
+        productEndpoint(KernelProductKinds.Di.ContainerRegistration),
         registrationAdmissionEndpoint(),
       ),
     ),
 
-    /** A DI operation produced a container-owned product while spending registration or lookup pressure. */
+    /** A container registration operation applies one reusable runtime registration value. */
+    UsesRegistrationValue: defineClaimPredicate(
+      KernelVocabularyNamespace.Di,
+      'uses-registration-value',
+      'A container registration operation applies one reusable runtime registration value.',
+      claimSignature(
+        productEndpoint(KernelProductKinds.Di.ContainerRegistration),
+        productEndpoint(
+          KernelProductKinds.Di.Resolver,
+          KernelProductKinds.Di.Registry,
+          KernelProductKinds.Di.ParameterizedRegistry,
+        ),
+      ),
+    ),
+
+    /** A reached registration operation conditionally admitted another registration product. */
+    AdmitsRegistration: defineClaimPredicate(
+      KernelVocabularyNamespace.Di,
+      'admits-registration',
+      'A reached registration operation conditionally admitted another registration product.',
+      claimSignature(
+        productEndpoint(KernelProductKinds.Di.ContainerRegistration),
+        registrationAdmissionEndpoint(),
+      ),
+    ),
+
+    /** A DI container or operation produced one container-owned product. */
     ProducesProduct: defineClaimPredicate(
       KernelVocabularyNamespace.Di,
       'produces-product',
-      'A DI operation produced a container-owned product while spending registration or lookup pressure.',
+      'A DI container or operation produced one container-owned product.',
       claimSignature(
         productEndpoint(
           KernelProductKinds.Di.Container,
@@ -141,11 +156,36 @@ export const KernelClaimPredicates = {
           KernelProductKinds.Di.ResourceSlot,
           KernelProductKinds.Di.Issue,
           KernelProductKinds.Di.FactorySlot,
+          KernelProductKinds.Di.ContainerRegistration,
         ),
+      ),
+    ),
+
+    /** A child-owned resource slot copied one exact source-container resource slot. */
+    ResourceSlotImportedFrom: defineClaimPredicate(
+      KernelVocabularyNamespace.Di,
+      'resource-slot-imported-from',
+      'A child-owned runtime resource slot was copied from one exact source-container resource slot.',
+      claimSignature(
+        productEndpoint(KernelProductKinds.Di.ResourceSlot),
+        productEndpoint(KernelProductKinds.Di.ResourceSlot),
       ),
     ),
   },
   Framework: {
+    /** One authored framework capability demand is realized by an exact runtime expression-resource application. */
+    CapabilityDemandHasExpressionResourceApplication: defineClaimPredicate(
+      KernelVocabularyNamespace.Framework,
+      'capability-demand-has-expression-resource-application',
+      'An authored framework capability demand is realized by one exact runtime expression-resource application.',
+      claimSignature(
+        productEndpoint(KernelProductKinds.Framework.CapabilityDemand),
+        productEndpoint(
+          KernelProductKinds.Binding.BehaviorApplication,
+          KernelProductKinds.Binding.ValueConverterApplication,
+        ),
+      ),
+    ),
 
     /** A source-backed framework service root resolves or requests one DI key identity. */
     RootResolvesDiKey: defineClaimPredicate(
@@ -166,6 +206,29 @@ export const KernelClaimPredicates = {
       claimSignature(
         productEndpoint(KernelProductKinds.Framework.ServiceRoot),
         productEndpoint(KernelProductKinds.Framework.ServiceRoot),
+      ),
+    ),
+
+    /** A source-backed container root denotes one modeled DI container. */
+    ContainerRootDenotesContainer: defineClaimPredicate(
+      KernelVocabularyNamespace.Framework,
+      'container-root-denotes-container',
+      'A source-backed framework container root denotes one modeled DI container.',
+      claimSignature(
+        productEndpoint(KernelProductKinds.Framework.ServiceRoot),
+        productEndpoint(KernelProductKinds.Di.Container),
+      ),
+    ),
+  },
+  Router: {
+    /** A source-backed route-config contribution converges into an effective definition or per-use applied config. */
+    ConvergesToRouteConfig: defineClaimPredicate(
+      KernelVocabularyNamespace.Router,
+      'converges-to-route-config',
+      'A source-backed route-config contribution converges into an effective class definition or per-use applied RouteConfig.',
+      claimSignature(
+        productEndpoint(KernelProductKinds.Router.RouteConfigContribution),
+        productEndpoint(KernelProductKinds.Router.RouteConfig),
       ),
     ),
   },
@@ -200,11 +263,25 @@ export const KernelClaimPredicates = {
       ),
     ),
 
-    /** A configuration step produced or selected a product that later passes can consume. */
+    /** A configuration step acts on one already-selected or newly-created runtime product. */
+    TargetsProduct: defineClaimPredicate(
+      KernelVocabularyNamespace.Configuration,
+      'targets-product',
+      'A configuration step acts on one exact runtime product.',
+      claimSignature(
+        productEndpoint(KernelProductKinds.Configuration.Step),
+        productEndpoint(
+          KernelProductKinds.Configuration.Aurelia,
+          KernelProductKinds.Di.Container,
+        ),
+      ),
+    ),
+
+    /** A configuration step created a product at this exact operation. */
     ProducesProduct: defineClaimPredicate(
       KernelVocabularyNamespace.Configuration,
       'produces-product',
-      'A configuration step produced or selected a product that later passes can consume.',
+      'A configuration step created a product at this exact operation.',
       claimSignature(
         productEndpoint(KernelProductKinds.Configuration.Step),
         productEndpoint(
@@ -220,6 +297,8 @@ export const KernelClaimPredicates = {
           KernelProductKinds.Configuration.OptionContribution,
           KernelProductKinds.Configuration.AppTask,
           KernelProductKinds.Di.Container,
+          KernelProductKinds.Di.Resolver,
+          KernelProductKinds.Di.ResolverSlot,
         ),
       ),
     ),
@@ -276,6 +355,72 @@ export const KernelClaimPredicates = {
       claimSignature(
         productEndpoint(KernelProductKinds.Configuration.Controller),
         productEndpoint(KernelProductKinds.Configuration.BindingScope),
+      ),
+    ),
+
+    /** A modeled controller resolves one runtime IHydrationContext through its effective container. */
+    ControllerUsesHydrationContext: defineClaimPredicate(
+      KernelVocabularyNamespace.Configuration,
+      'controller-uses-hydration-context',
+      'A modeled controller resolves one runtime IHydrationContext through its effective container.',
+      claimSignature(
+        productEndpoint(KernelProductKinds.Configuration.Controller),
+        productEndpoint(KernelProductKinds.Configuration.HydrationContext),
+      ),
+    ),
+
+    /** A renderer-created view model was constructed while one inherited IHydrationContext was visible. */
+    ControllerConstructedWithHydrationContext: defineClaimPredicate(
+      KernelVocabularyNamespace.Configuration,
+      'controller-constructed-with-hydration-context',
+      'A renderer-created view model was constructed while one inherited runtime IHydrationContext was visible.',
+      claimSignature(
+        productEndpoint(KernelProductKinds.Configuration.Controller),
+        productEndpoint(KernelProductKinds.Configuration.HydrationContext),
+      ),
+    ),
+
+    /** A modeled controller receives one runtime IAuSlotsInfo value before view-model construction. */
+    ControllerUsesAuSlotsInfo: defineClaimPredicate(
+      KernelVocabularyNamespace.Configuration,
+      'controller-uses-au-slots-info',
+      'A modeled renderer-created controller receives one runtime IAuSlotsInfo value before view-model construction.',
+      claimSignature(
+        productEndpoint(KernelProductKinds.Configuration.Controller),
+        productEndpoint(KernelProductKinds.Configuration.AuSlotsInfo),
+      ),
+    ),
+
+    /** A runtime IHydrationContext names the custom-element controller whose view it hydrates. */
+    HydrationContextUsesController: defineClaimPredicate(
+      KernelVocabularyNamespace.Configuration,
+      'hydration-context-uses-controller',
+      'A runtime IHydrationContext names the custom-element controller whose view it hydrates.',
+      claimSignature(
+        productEndpoint(KernelProductKinds.Configuration.HydrationContext),
+        productEndpoint(KernelProductKinds.Configuration.Controller),
+      ),
+    ),
+
+    /** A runtime IHydrationContext retains the custom-element hydration instruction supplied to Controller.$el. */
+    HydrationContextUsesInstruction: defineClaimPredicate(
+      KernelVocabularyNamespace.Configuration,
+      'hydration-context-uses-instruction',
+      'A runtime IHydrationContext retains the custom-element hydration instruction supplied to Controller.$el.',
+      claimSignature(
+        productEndpoint(KernelProductKinds.Configuration.HydrationContext),
+        productEndpoint(KernelProductKinds.Instruction.Instruction),
+      ),
+    ),
+
+    /** A runtime IHydrationContext retains the context inherited before Controller.$el installs its own value. */
+    HydrationContextHasParent: defineClaimPredicate(
+      KernelVocabularyNamespace.Configuration,
+      'hydration-context-has-parent',
+      'A runtime IHydrationContext retains the context inherited before Controller.$el installs its own value.',
+      claimSignature(
+        productEndpoint(KernelProductKinds.Configuration.HydrationContext),
+        productEndpoint(KernelProductKinds.Configuration.HydrationContext),
       ),
     ),
 
@@ -400,6 +545,17 @@ export const KernelClaimPredicates = {
       ),
     ),
 
+    /** A hydrate-element instruction created a per-use runtime IAuSlotsInfo projection value. */
+    InstructionCreatesAuSlotsInfo: defineClaimPredicate(
+      KernelVocabularyNamespace.Configuration,
+      'instruction-creates-au-slots-info',
+      'A hydrate-element instruction created a per-use runtime IAuSlotsInfo value from its projection map.',
+      claimSignature(
+        productEndpoint(KernelProductKinds.Instruction.Instruction),
+        productEndpoint(KernelProductKinds.Configuration.AuSlotsInfo),
+      ),
+    ),
+
     /** A runtime IViewFactory creates synthetic views from a nested instruction sequence. */
     ViewFactoryUsesInstructionSequence: defineClaimPredicate(
       KernelVocabularyNamespace.Configuration,
@@ -460,6 +616,17 @@ export const KernelClaimPredicates = {
       KernelVocabularyNamespace.Configuration,
       'binding-scope-has-parent',
       'A runtime binding Scope has an ordinary parent-scope edge used by $parent and fallback lookup.',
+      claimSignature(
+        productEndpoint(KernelProductKinds.Configuration.BindingScope),
+        productEndpoint(KernelProductKinds.Configuration.BindingScope),
+      ),
+    ),
+
+    /** One immutable product state was derived from an earlier state of the same runtime Scope. */
+    BindingScopeDerivedFromScope: defineClaimPredicate(
+      KernelVocabularyNamespace.Configuration,
+      'binding-scope-derived-from-scope',
+      'One immutable binding Scope product state was derived from an earlier state of the same runtime Scope identity.',
       claimSignature(
         productEndpoint(KernelProductKinds.Configuration.BindingScope),
         productEndpoint(KernelProductKinds.Configuration.BindingScope),
@@ -1173,9 +1340,19 @@ export const KernelClaimPredicates = {
         productEndpoint(KernelProductKinds.Configuration.BindingScope),
       ),
     ),
+
+    /** A binding scope effect updated the contexts of an existing modeled runtime Scope. */
+    ScopeEffectUpdatesBindingScope: defineClaimPredicate(
+      KernelVocabularyNamespace.Binding,
+      'scope-effect-updates-binding-scope',
+      'A binding scope effect updated an existing runtime Scope context and produced a new immutable Scope product state.',
+      claimSignature(
+        productEndpoint(KernelProductKinds.Binding.ScopeEffect),
+        productEndpoint(KernelProductKinds.Configuration.BindingScope),
+      ),
+    ),
   },
   Observation: {
-
     /** A source-backed observer exposes a dependency read collected by its execution path. */
     SourceObserverUsesObservedDependency: defineClaimPredicate(
       KernelVocabularyNamespace.Observation,
@@ -1187,14 +1364,70 @@ export const KernelClaimPredicates = {
       ),
     ),
 
-    /** A source-level IEffect exposes a dependency read collected by its observer path. */
+    /** A source-call observation plan exposes a dependency read projected from its observer path. */
     RuntimeEffectUsesObservedDependency: defineClaimPredicate(
       KernelVocabularyNamespace.Observation,
       'runtime-effect-uses-observed-dependency',
-      'A source-level IEffect exposes a dependency read collected by Observation.watch(...) execution.',
+      'An Observation.watch(...) or Observation.run(...) construction-site plan exposes a projected dependency read.',
       claimSignature(
         productEndpoint(KernelProductKinds.Observation.RuntimeEffect),
         productEndpoint(KernelProductKinds.Binding.ObservedDependency),
+      ),
+    ),
+  },
+  RuntimeExpression: {
+    /** A rendered runtime binding owns one source-backed expression access use. */
+    RuntimeBindingUsesAccessUse: defineClaimPredicate(
+      KernelVocabularyNamespace.RuntimeExpression,
+      'runtime-binding-uses-access-use',
+      'A rendered runtime binding owns one source-backed expression access use in an exact operation slot.',
+      claimSignature(
+        productEndpoint(KernelProductKinds.Binding.RuntimeBinding),
+        productEndpoint(KernelProductKinds.RuntimeExpression.AccessUse),
+      ),
+    ),
+
+    /** A controller-owned runtime watcher owns one expression access use. */
+    RuntimeWatcherUsesAccessUse: defineClaimPredicate(
+      KernelVocabularyNamespace.RuntimeExpression,
+      'runtime-watcher-uses-access-use',
+      'A controller-owned runtime watcher owns one source-backed expression access use.',
+      claimSignature(
+        productEndpoint(KernelProductKinds.Binding.RuntimeWatcher),
+        productEndpoint(KernelProductKinds.RuntimeExpression.AccessUse),
+      ),
+    ),
+
+    /** A source-backed computed observer owns one expression access use. */
+    SourceObserverUsesAccessUse: defineClaimPredicate(
+      KernelVocabularyNamespace.RuntimeExpression,
+      'source-observer-uses-access-use',
+      'A source-backed computed or controlled-computed observer owns one source-backed expression access use.',
+      claimSignature(
+        productEndpoint(KernelProductKinds.Observation.SourceObserver),
+        productEndpoint(KernelProductKinds.RuntimeExpression.AccessUse),
+      ),
+    ),
+
+    /** A source-level Observation.watch/run construction plan owns one expression access use. */
+    SourceEffectPlanUsesAccessUse: defineClaimPredicate(
+      KernelVocabularyNamespace.RuntimeExpression,
+      'source-effect-plan-uses-access-use',
+      'A source-level Observation.watch/run construction plan owns one source-backed expression access use.',
+      claimSignature(
+        productEndpoint(KernelProductKinds.Observation.RuntimeEffect),
+        productEndpoint(KernelProductKinds.RuntimeExpression.AccessUse),
+      ),
+    ),
+
+    /** A binding data-flow edge spends one access use during source evaluation or assignment. */
+    DataFlowUsesAccessUse: defineClaimPredicate(
+      KernelVocabularyNamespace.RuntimeExpression,
+      'data-flow-uses-access-use',
+      'A runtime binding data-flow edge spends one owner-qualified access use during source evaluation or assignment.',
+      claimSignature(
+        productEndpoint(KernelProductKinds.Binding.DataFlow),
+        productEndpoint(KernelProductKinds.RuntimeExpression.AccessUse),
       ),
     ),
   },

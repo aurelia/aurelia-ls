@@ -4,6 +4,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
+import { serializeAureliaMcpError } from '../tool-errors.js';
 
 const packageRoot = path.resolve(fileURLToPath(new URL('../..', import.meta.url)));
 const rawArgs = process.argv.slice(2);
@@ -32,7 +33,7 @@ try {
     ? `${JSON.stringify(result, null, 2)}\n`
     : `${promptText(result)}\n`);
 } catch (error) {
-  process.stderr.write(`${JSON.stringify({ error: serializeError(error) }, null, 2)}\n`);
+  process.stderr.write(`${JSON.stringify({ error: serializeAureliaMcpError(error) }, null, 2)}\n`);
   process.exitCode = 1;
 } finally {
   await client.close();
@@ -165,8 +166,15 @@ function parseJsonInput(value: string): Record<string, string> {
   }
   const input: Record<string, string> = {};
   for (const [key, rawValue] of Object.entries(parsed)) {
-    if (rawValue != null) {
+    if (typeof rawValue === 'string') {
+      input[key] = rawValue;
+    } else if (typeof rawValue === 'number' || typeof rawValue === 'boolean') {
       input[key] = String(rawValue);
+    } else if (rawValue != null) {
+      const serialized = JSON.stringify(rawValue);
+      if (serialized !== undefined) {
+        input[key] = serialized;
+      }
     }
   }
   return input;
@@ -174,17 +182,4 @@ function parseJsonInput(value: string): Record<string, string> {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value != null && typeof value === 'object' && !Array.isArray(value);
-}
-
-function serializeError(error: unknown): { name: string; message: string } {
-  if (error instanceof Error) {
-    return {
-      name: error.name,
-      message: error.message,
-    };
-  }
-  return {
-    name: 'Error',
-    message: String(error),
-  };
 }

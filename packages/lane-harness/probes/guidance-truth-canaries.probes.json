@@ -1,0 +1,36 @@
+{
+  "fixture": "packages/semantic-runtime/fixtures/pressure/guidance-truth-canaries",
+  "lanes": {
+    "codeAction": [
+      {
+        "id": "missing-root-member-titel",
+        "file": "src/guidance-truth-canary-app.html",
+        "anchor": "${titel}",
+        "at": "titel",
+        "expectedOldTexts": [""],
+        "verdict": "correct",
+        "reason": "A missing root-scope template member can be repaired by adding an exact insertion to the owning view-model class; the action is edit-backed and safe as a single quick fix.",
+        "note": "Positive canary for declare-view-model-member. The snapshot should show one quickfix with its source diagnostic evidence, a non-empty old-text-validated edit plan, and an in-memory diff adding titel!: unknown; to GuidanceTruthCanaryApp."
+      },
+      {
+        "id": "unsupported-global-console",
+        "file": "src/guidance-truth-canary-app.html",
+        "anchor": "console.log(title)",
+        "at": "console",
+        "verdict": "correct",
+        "reason": "The diagnostic has rewrite/runtime-boundary guidance, but no exact safe source edit exists; codeAction should return no quickfix rather than inventing one.",
+        "note": "Negative canary for suggestions that remain repair intent only. Diagnostics may be guided, but TemplateCodeActions should be edit-backed only."
+      },
+      {
+        "id": "overlapping-ghost-local",
+        "file": "src/guidance-truth-canary-app.html",
+        "anchor": "$ghostLocal",
+        "at": "$ghostLocal",
+        "expectedOldTexts": [""],
+        "verdict": "correct",
+        "reason": "The cursor has overlapping missing-member and assignment diagnostics, but the only safe edit-backed action is the root member declaration; equivalent diagnostics must not produce duplicate or conflicting edits.",
+        "note": "Overlap canary. Correct behavior is either one edit-backed declaration action tied to the root missing member, or no action if the planner cannot prove the root-member surface; multiple duplicate/conflicting actions would be wrong."
+      }
+    ]
+  }
+}

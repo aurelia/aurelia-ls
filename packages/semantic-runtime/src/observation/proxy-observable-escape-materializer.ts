@@ -16,10 +16,15 @@ import type {
   AddressHandle,
 } from '../kernel/handles.js';
 import { localKeyPart } from '../kernel/local-key.js';
+import {
+  KernelPublicationPlan,
+  publishProductDetails,
+  type KernelPublicationContext,
+} from '../kernel/publication.js';
 import type { SourceSpanSite } from '../kernel/source-address.js';
 import {
-  KernelStore,
   KernelStoreBatch,
+  type KernelStore,
   type KernelStoreRecord,
 } from '../kernel/store.js';
 import { KernelVocabulary } from '../kernel/vocabulary.js';
@@ -58,6 +63,7 @@ interface ProxyObservableEscapePublication {
 export class ProxyObservableEscapeMaterializer {
   constructor(
     readonly store: KernelStore,
+    readonly publication: KernelPublicationContext,
   ) {}
 
   materialize(
@@ -67,16 +73,13 @@ export class ProxyObservableEscapeMaterializer {
     const publications = readProxyObservableEscapeSites(project, typeSystem)
       .map((site, index) => this.publicationForSite(project, site, index));
     const records = publications.flatMap((publication) => publication.records);
-    if (records.length > 0) {
-      this.store.commit(new KernelStoreBatch(records, `proxy-observable-escapes:${project.projectKey}`));
-    }
-    for (const publication of publications) {
-      this.store.productDetails.add(
+    this.publication.publish(new KernelPublicationPlan(
+      new KernelStoreBatch(records, `proxy-observable-escapes:${project.projectKey}`),
+      publishProductDetails(
         ObservationProductDetails.ProxyObservableEscape,
-        publication.escape.productHandle,
-        publication.escape,
-      );
-    }
+        publications.map((publication) => publication.escape),
+      ),
+    ));
     return new ProxyObservableEscapeProjectResult(publications.map((publication) => publication.escape));
   }
 
@@ -117,7 +120,7 @@ function readProxyObservableEscapeSites(
   typeSystem: TypeSystemProject,
 ): readonly ProxyObservableEscapeSite[] {
   return project.sourceFiles.flatMap((source) => {
-    const sourceFile = typeSystem.readProgramSourceFileByPath(source.path);
+    const sourceFile = typeSystem.readProgramSourceFileByProjectPath(source.path);
     if (sourceFile == null) {
       return [];
     }

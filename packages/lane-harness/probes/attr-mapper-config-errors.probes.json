@@ -1,0 +1,14 @@
+{
+  "fixture": "packages/semantic-runtime/fixtures/pressure/attr-mapper-config-errors",
+  "lanes": {
+    "diagnostics": [
+      {
+        "id": "attr-mapper-main-source",
+        "file": "src/main.ts",
+        "verdict": "correct",
+        "reason": "The full document-diagnostic pull returns the three duplicate AttrMapper mapping rows on the exact duplicate registration calls.",
+        "note": "NEW 2026-07-07. Configuration diagnostics for duplicate AttrMapper mappings. VERDICT 2026-07-07: correct."
+      }
+    ]
+  }
+}

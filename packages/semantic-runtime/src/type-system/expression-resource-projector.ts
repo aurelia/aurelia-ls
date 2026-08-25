@@ -13,7 +13,10 @@ import type { BindingBehaviorDefinition } from '../resources/binding-behavior-de
 import { ResourceDefinitionKind } from '../resources/resource-kind.js';
 import type { ValueConverterDefinition } from '../resources/value-converter-definition.js';
 import type { TemplateResourceScope } from '../template/compiler-world.js';
-import { findVisibleTemplateResource } from '../template/compiler-resource-lookup.js';
+import {
+  findVisibleTemplateResource,
+  readVisibleTemplateResourceDefinition,
+} from '../template/compiler-resource-lookup.js';
 import {
   STATE_BINDING_BEHAVIOR_NAME,
   type StateBindingScopeProjector,
@@ -24,6 +27,10 @@ import {
   type CheckerExpressionCallArgument,
   CheckerExpressionCallProjector,
 } from './expression-call-projector.js';
+import {
+  BINDING_BEHAVIOR_BIND_METHOD,
+  BINDING_BEHAVIOR_FRAMEWORK_ARGUMENT_COUNT,
+} from './binding-behavior-call-surface.js';
 import {
   CheckerStrictTrueComparisonKind,
 } from './checker-type-member-surface.js';
@@ -47,6 +54,7 @@ import {
 import { CheckerExpressionTypeSupport } from './expression-type-support.js';
 import {
   CheckerTypeMemberKind,
+  type CheckerTypeReference,
   type CheckerTypeShape,
 } from './type-shape.js';
 
@@ -276,6 +284,71 @@ export class CheckerExpressionResourceProjector {
     return inner;
   }
 
+  contextualBindingBehaviorArgumentTypes(
+    expression: BindingBehaviorExpression,
+    context: CheckerExpressionTypeEvaluationContext,
+  ): readonly (CheckerTypeReference | null)[] | null {
+    const method = this.bindingBehaviorBindMethod(expression, context);
+    if (method?.kind !== CheckerExpressionTypeEvaluationResultKind.Type) {
+      return null;
+    }
+    const localKey = `${context.projectionLocalKey()}:behavior:${expression.name.name}:bind`;
+    const unknown = this.support.synthesis.unknownTypeReference(`${localKey}:framework-argument`, context.sourceAddressHandle);
+    const unknownEvaluation = this.support.resolveReference(
+      expression,
+      unknown,
+      `${localKey}:framework-argument`,
+      CheckerExpressionTypeOpenKind.MissingChecker,
+      'Binding-behavior framework argument type could not be hydrated.',
+    );
+    const args: CheckerExpressionCallArgument[] = [
+      ...Array.from({ length: BINDING_BEHAVIOR_FRAMEWORK_ARGUMENT_COUNT }, (_, index) => ({
+        expression,
+        localSuffix: `${localKey}:framework-argument:${index}`,
+        precomputedEvaluation: unknownEvaluation,
+      })),
+      ...checkerExpressionCallArguments(expression.args, `${localKey}:authored-argument`),
+    ];
+    return this.calls.contextualCallArgumentTypes(
+      method.typeShape,
+      args,
+      context,
+      localKey,
+      method.sourceAddressHandle,
+    )?.slice(BINDING_BEHAVIOR_FRAMEWORK_ARGUMENT_COUNT) ?? null;
+  }
+
+  private bindingBehaviorBindMethod(
+    expression: BindingBehaviorExpression,
+    context: CheckerExpressionTypeEvaluationContext,
+  ): CheckerExpressionTypeEvaluation | null {
+    const definition = this.findBindingBehaviorDefinition(expression.name.name);
+    if (definition?.target.targetType == null) {
+      return null;
+    }
+    const localKey = `${context.projectionLocalKey()}:behavior:${expression.name.name}`;
+    const behaviorType = this.support.resolveReference(
+      expression,
+      definition.target.targetType,
+      `${localKey}:target`,
+      CheckerExpressionTypeOpenKind.MissingChecker,
+      `Binding behavior '${definition.name}' target type could not be hydrated.`,
+    );
+    if (behaviorType.kind === CheckerExpressionTypeEvaluationResultKind.Open) {
+      return behaviorType;
+    }
+    const method = this.access.evaluateMemberOnType(
+      expression,
+      behaviorType.typeShape,
+      BINDING_BEHAVIOR_BIND_METHOD,
+      `${localKey}:bind`,
+    );
+    return method.kind === CheckerExpressionTypeEvaluationResultKind.Open
+      && method.openKind === CheckerExpressionTypeOpenKind.MissingMember
+      ? null
+      : method;
+  }
+
   private evaluateBindingBehaviorValueConverterProjection(
     expression: BindingBehaviorExpression,
     inner: CheckerExpressionTypeEvaluation,
@@ -310,7 +383,7 @@ export class CheckerExpressionResourceProjector {
         `Binding behavior '${expression.name.name}' is applied more than once in this expression.`,
       );
     }
-    const stateScope = this.stateScopes.scopeForBindingBehavior(
+    const stateScope = this.stateScopes.scopeForSpeculativeBindingBehavior(
       expression,
       context.scope,
       `${localKey}:behavior:${expression.name.name}`,
@@ -362,7 +435,7 @@ export class CheckerExpressionResourceProjector {
     converterType: CheckerTypeShape,
     localKey: string,
   ): CheckerStrictTrueComparisonKind {
-    return valueConverterWithContextComparisonKind(this.support.store, converterType, localKey);
+    return valueConverterWithContextComparisonKind(this.support.projector, converterType, localKey);
   }
 
   private valueConverterCallerContext(
@@ -397,7 +470,7 @@ export class CheckerExpressionResourceProjector {
 
   private findValueConverterDefinition(name: string): ValueConverterDefinition | null {
     const resource = this.findVisibleResource(ResourceDefinitionKind.ValueConverter, name);
-    const definition = resource?.definition ?? null;
+    const definition = readVisibleTemplateResourceDefinition(this.support.projector.publication, resource);
     return definition?.type === ResourceDefinitionKind.ValueConverter
       ? definition
       : null;
@@ -405,7 +478,7 @@ export class CheckerExpressionResourceProjector {
 
   private findBindingBehaviorDefinition(name: string): BindingBehaviorDefinition | null {
     const resource = this.findVisibleResource(ResourceDefinitionKind.BindingBehavior, name);
-    const definition = resource?.definition ?? null;
+    const definition = readVisibleTemplateResourceDefinition(this.support.projector.publication, resource);
     return definition?.type === ResourceDefinitionKind.BindingBehavior
       ? definition
       : null;
@@ -452,7 +525,11 @@ export class CheckerExpressionResourceProjector {
     primitive: 'string' | 'number',
   ): boolean {
     return input.kind === CheckerExpressionTypeEvaluationResultKind.Type
-      && checkerTypeReferenceAssignableToPrimitiveType(this.support.store, input.typeReference, primitive) === true;
+      && checkerTypeReferenceAssignableToPrimitiveType(
+        this.support.projector.publication,
+        input.typeReference,
+        primitive,
+      ) === true;
   }
 
   private inputDisplayDefinitely(

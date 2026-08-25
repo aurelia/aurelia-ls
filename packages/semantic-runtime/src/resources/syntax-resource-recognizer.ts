@@ -1,5 +1,10 @@
 import ts from 'typescript';
-import { readClassTarget } from '../evaluation/expression-reader.js';
+import { evaluationAbruptCompletionSummary } from '../evaluation/completion.js';
+import {
+  EvaluationTargetResolutionKind,
+  readClassTarget,
+} from '../evaluation/expression-reader.js';
+import { OpenSeamReasonKind } from '../kernel/open-seam.js';
 import { KernelVocabulary } from '../kernel/vocabulary.js';
 import type { ResourceRecognitionContext } from './resource-recognition-context.js';
 import { AttributePatternDefinitionHeader } from './resource-definition.js';
@@ -27,12 +32,13 @@ export class SyntaxResourceRecognizer {
 function recognizeAttributePatterns(
   context: ResourceRecognitionContext,
 ): readonly ResourceRecognitionObservation[] {
+  const reachedCalls = new Set(context.evaluation.invocations.map((invocation) => invocation.node).filter(ts.isCallExpression));
   const observations: ResourceRecognitionObservation[] = [];
   const visit = (node: ts.Node): void => {
     if (ts.isClassDeclaration(node) || ts.isClassExpression(node)) {
       observations.push(...recognizeAttributePatternDecorators(context, node));
     }
-    if (ts.isCallExpression(node) && isAttributePatternCreateCall(node)) {
+    if (ts.isCallExpression(node) && reachedCalls.has(node) && isAttributePatternCreateCall(node)) {
       observations.push(recognizeAttributePatternCreate(context, node));
     }
     ts.forEachChild(node, visit);
@@ -58,24 +64,36 @@ function recognizeAttributePatternDecorators(
     const expression = decorator.expression;
     const call = ts.isCallExpression(expression) ? expression : null;
     const target = readClassTarget(classNode);
-    const patterns = call == null
+    const patternReads = call == null
       ? []
-      : call.arguments.flatMap((argument) => {
-        const read = readAttributePatternEntry(argument, context.expressionReader);
-        return read.value == null ? [] : [read.value];
-      });
+      : call.arguments.map((argument) => readAttributePatternEntry(argument, context.expressionReader));
+    const patterns = patternReads.flatMap((read) => read.value == null ? [] : [read.value]);
     const openSeams: ResourceRecognitionOpen[] = [];
 
-    if (call == null || call.arguments.length === 0 || patterns.length !== call.arguments.length) {
+    if (call == null || call.arguments.length === 0) {
       openSeams.push(new ResourceRecognitionOpen(
         KernelVocabulary.Resource.OpenPatternExpression.key,
         'Attribute pattern decorator did not expose only static pattern entries.',
         call ?? decorator,
+        [OpenSeamReasonKind.ResourceAnnotationOpen],
       ));
     }
+    patternReads.forEach((read, index) => {
+      if (read.value != null && read.openSummary == null) {
+        return;
+      }
+      openSeams.push(new ResourceRecognitionOpen(
+        KernelVocabulary.Resource.OpenPatternExpression.key,
+        read.openSummary ?? 'Attribute pattern decorator entry did not close.',
+        read.node ?? call?.arguments[index] ?? decorator,
+        read.openReasonKinds.length > 0
+          ? read.openReasonKinds
+          : [OpenSeamReasonKind.ResourceAnnotationOpen],
+      ));
+    });
 
     const definition = new AttributePatternDefinitionHeader(
-      new ResourceTargetObservation(target.localName, target.node, target.isDeclaration),
+      new ResourceTargetObservation(target.localName, target.node, target.declarationNode),
       patterns,
     );
     observations.push(new ResourceRecognitionObservation(
@@ -109,21 +127,49 @@ function recognizeAttributePatternCreate(
       KernelVocabulary.Resource.OpenPatternExpression.key,
       patterns?.openSummary ?? 'AttributePattern.create(...) did not expose static pattern entries.',
       patterns?.node ?? patternExpression ?? call,
+      patterns?.openReasonKinds.length
+        ? patterns.openReasonKinds
+        : [OpenSeamReasonKind.ResourceAnnotationOpen],
     ));
   } else if (patterns.openSummary != null) {
-    openSeams.push(new ResourceRecognitionOpen(KernelVocabulary.Resource.OpenPatternExpression.key, patterns.openSummary, patterns.node ?? patternExpression));
+    openSeams.push(new ResourceRecognitionOpen(
+      KernelVocabulary.Resource.OpenPatternExpression.key,
+      patterns.openSummary,
+      patterns.node ?? patternExpression,
+      patterns.openReasonKinds,
+    ));
   }
 
-  if (target == null || target.localName == null) {
+  if (
+    target == null
+    || target.resolutionKind !== EvaluationTargetResolutionKind.ResolvedDeclaration
+    || target.localName == null
+  ) {
     openSeams.push(new ResourceRecognitionOpen(
       KernelVocabulary.Resource.OpenTargetExpression.key,
       'AttributePattern.create(...) did not expose a statically named pattern target.',
       targetExpression ?? call,
+      target?.openReasonKinds.length
+        ? target.openReasonKinds
+        : [OpenSeamReasonKind.ResourceDefinitionTargetOpen],
+    ));
+  } else if (target.openReasonKinds.length > 0) {
+    const details = [
+      ...target.openSeams.map((seam) => seam.summary),
+      ...(target.abruptCompletion == null ? [] : [evaluationAbruptCompletionSummary(target.abruptCompletion)]),
+    ];
+    openSeams.push(new ResourceRecognitionOpen(
+      KernelVocabulary.Resource.OpenTargetExpression.key,
+      `AttributePattern.create(...) target evaluation remained open. ${details.join(' ')}`.trim(),
+      target.node,
+      target.openReasonKinds,
     ));
   }
 
   const definition = new AttributePatternDefinitionHeader(
-    target == null ? null : new ResourceTargetObservation(target.localName, target.node, target.isDeclaration),
+    target?.resolutionKind === EvaluationTargetResolutionKind.ResolvedDeclaration
+      ? new ResourceTargetObservation(target.localName, target.node, target.declarationNode)
+      : null,
     patterns?.value ?? [],
   );
   return new ResourceRecognitionObservation(

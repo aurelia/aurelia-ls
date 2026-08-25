@@ -6,6 +6,7 @@ import type {
 } from '../kernel/handles.js';
 import type { FieldProvenance } from '../kernel/provenance.js';
 import type { BindingCommandExecutableReference } from './binding-command-reference.js';
+import type { TemplateVisibleResourceReference } from './compiler-world-reference.js';
 import type { HtmlAttributeReference, HtmlNodeReference } from './html-ir.js';
 
 export const enum TemplateInstructionKind {
@@ -107,6 +108,26 @@ export class TemplateInstructionSequence {
   ) {}
 }
 
+/** Known output of runtime-html `AuSlot.processContent` stored in the hydrate-element instruction data field. */
+export class AuSlotProcessContentInstructionData {
+  constructor(
+    /** Static outlet name selected by `AuSlot`; absence is lowered to the framework `default` name. */
+    readonly name: string,
+    /** Exact authored `name` value span, or null when the framework supplied `default`. */
+    readonly nameSourceAddressHandle: AddressHandle | null,
+  ) {}
+}
+
+/** One authored child that contributed to a custom-element projection definition. */
+export class HydrateElementProjectionContributor {
+  constructor(
+    /** Authored direct child extracted into this projection definition. */
+    readonly node: HtmlNodeReference,
+    /** Exact `[au-slot]` value span, or null for inferred default projection membership. */
+    readonly slotNameSourceAddressHandle: AddressHandle | null,
+  ) {}
+}
+
 /** Lowered custom-element hydration instruction. */
 @auLink('template-compiler:HydrateElementInstruction')
 export class HydrateElementInstruction {
@@ -116,16 +137,26 @@ export class HydrateElementInstruction {
     readonly productHandle: ProductHandle,
     readonly identityHandle: IdentityHandle,
     readonly node: HtmlNodeReference,
+    /** Canonical custom-element definition name used by runtime controller identity. */
     readonly elementName: string,
-    readonly definitionProductHandle: ProductHandle | null,
+    /** Effective compiler lookup name authored by the template, including aliases and `as-element`. */
+    readonly resourceLookupName: string,
+    /** Compiler-visible resource selected for this instruction, including header and full-definition identity. */
+    readonly resource: TemplateVisibleResourceReference | null,
     readonly childInstructionSequenceProductHandle: ProductHandle | null,
     readonly projectionInstructionSequences: readonly HydrateElementProjectionInstructionSequence[],
+    /** Known framework `processContent` data; null for ordinary or open custom-element hooks. */
+    readonly auSlotProcessContent: AuSlotProcessContentInstructionData | null,
     readonly bindableInstructionProductHandles: readonly ProductHandle[],
     readonly captureSyntaxProductHandles: readonly ProductHandle[],
     readonly containerless: boolean,
     readonly sourceAddressHandle: AddressHandle | null,
     readonly fieldProvenance: readonly FieldProvenance<TemplateInstructionField>[] = [],
   ) {}
+
+  get definitionProductHandle(): ProductHandle | null {
+    return this.resource?.definitionProductHandle ?? null;
+  }
 }
 
 /** Projection definition compiled from child content of one custom-element usage. */
@@ -135,6 +166,8 @@ export class HydrateElementProjectionInstructionSequence {
     readonly slotName: string,
     /** Instruction sequence for the compiled projection template. */
     readonly instructionSequenceProductHandle: ProductHandle,
+    /** All authored direct children aggregated into this definition, in source order. */
+    readonly contributors: readonly HydrateElementProjectionContributor[],
     /** Source address for the projected child content that produced the sequence. */
     readonly sourceAddressHandle: AddressHandle | null,
   ) {}
@@ -150,12 +183,23 @@ export class HydrateAttributeInstruction {
     readonly identityHandle: IdentityHandle,
     readonly node: HtmlNodeReference,
     readonly attribute: HtmlAttributeReference,
-    readonly attributeName: string,
-    readonly definitionProductHandle: ProductHandle | null,
+    /** Effective compiler lookup name authored by the template, including aliases. */
+    readonly resourceLookupName: string,
+    /** Compiler-visible resource selected for this instruction, including header and full-definition identity. */
+    readonly resource: TemplateVisibleResourceReference | null,
     readonly bindingInstructionProductHandles: readonly ProductHandle[],
     readonly sourceAddressHandle: AddressHandle | null,
     readonly fieldProvenance: readonly FieldProvenance<TemplateInstructionField>[] = [],
   ) {}
+
+  get definitionProductHandle(): ProductHandle | null {
+    return this.resource?.definitionProductHandle ?? null;
+  }
+
+  /** Canonical custom-attribute definition name used by runtime controller and ref identity. */
+  get resourceName(): string {
+    return this.resource?.name ?? this.resourceLookupName;
+  }
 }
 
 /** Lowered template-controller instruction that owns a nested template sequence. */
@@ -169,12 +213,17 @@ export class HydrateTemplateControllerInstruction {
     readonly node: HtmlNodeReference,
     readonly attribute: HtmlAttributeReference,
     readonly controllerName: string,
-    readonly definitionProductHandle: ProductHandle | null,
+    /** Compiler-visible resource selected for this instruction, including header and full-definition identity. */
+    readonly resource: TemplateVisibleResourceReference | null,
     readonly childInstructionSequenceProductHandle: ProductHandle | null,
     readonly bindingInstructionProductHandles: readonly ProductHandle[],
     readonly sourceAddressHandle: AddressHandle | null,
     readonly fieldProvenance: readonly FieldProvenance<TemplateInstructionField>[] = [],
   ) {}
+
+  get definitionProductHandle(): ProductHandle | null {
+    return this.resource?.definitionProductHandle ?? null;
+  }
 }
 
 /** Lowered property binding instruction produced by bindable or command lowering. */
@@ -224,9 +273,11 @@ export class ListenerBindingInstruction {
     readonly node: HtmlNodeReference,
     readonly attribute: HtmlAttributeReference,
     readonly eventName: string,
+    readonly eventNameSourceAddressHandle: AddressHandle | null,
     readonly expressionProductHandle: ProductHandle | null,
     readonly strategy: TemplateListenerStrategy,
     readonly eventModifier: string | null,
+    readonly eventModifierSourceAddressHandle: AddressHandle | null,
     readonly command: BindingCommandExecutableReference | null,
     readonly sourceAddressHandle: AddressHandle | null,
     readonly fieldProvenance: readonly FieldProvenance<TemplateInstructionField>[] = [],
@@ -245,11 +296,19 @@ export class IteratorBindingInstruction {
     readonly attribute: HtmlAttributeReference,
     readonly targetProperty: string,
     readonly localNames: readonly string[],
+    /** Object-pattern source keys aligned with `localNames`; empty for non-object declarations. */
+    readonly objectBindingSourceKeys: readonly (string | number)[],
     readonly iterableExpressionProductHandle: ProductHandle | null,
     readonly tailInstructionProductHandles: readonly ProductHandle[],
     readonly sourceAddressHandle: AddressHandle | null,
     readonly fieldProvenance: readonly FieldProvenance<TemplateInstructionField>[] = [],
   ) {}
+}
+
+/** Plugin-owned type-200 iterator instruction, carried through the shared iterator semantic abstraction. */
+@auLink('ui-virtualization:IterateBindingInstruction')
+export class IterateBindingInstruction extends IteratorBindingInstruction {
+  readonly frameworkInstructionType = 200 as const;
 }
 
 /** Lowered ref instruction. */
@@ -263,6 +322,7 @@ export class RefBindingInstruction {
     readonly node: HtmlNodeReference,
     readonly attribute: HtmlAttributeReference,
     readonly target: string,
+    readonly targetSourceAddressHandle: AddressHandle | null,
     readonly expressionProductHandle: ProductHandle | null,
     readonly sourceAddressHandle: AddressHandle | null,
     readonly fieldProvenance: readonly FieldProvenance<TemplateInstructionField>[] = [],
@@ -281,7 +341,10 @@ export class LetBindingInstruction {
     readonly attribute: HtmlAttributeReference,
     readonly target: string,
     readonly expressionProductHandle: ProductHandle | null,
+    /** Framework compiler `PrimitiveLiteralExpression` value when an unbound let attribute has no interpolation. */
+    readonly literalValue: string | null,
     readonly sourceAddressHandle: AddressHandle | null,
+    readonly targetSourceAddressHandle: AddressHandle | null = null,
     readonly fieldProvenance: readonly FieldProvenance<TemplateInstructionField>[] = [],
   ) {}
 }
@@ -481,6 +544,7 @@ export class SpreadValueBindingInstruction {
     readonly target: '$bindables' | '$element',
     readonly value: string,
     readonly expressionProductHandle: ProductHandle | null,
+    readonly targetSourceAddressHandle: AddressHandle | null,
     readonly sourceAddressHandle: AddressHandle | null,
     readonly fieldProvenance: readonly FieldProvenance<TemplateInstructionField>[] = [],
   ) {}
@@ -550,6 +614,7 @@ export class StateBindingInstruction {
     readonly rawExpression: string,
     readonly target: string,
     readonly storeName: string | null,
+    readonly storeNameSourceAddressHandle: AddressHandle | null,
     readonly expressionProductHandle: ProductHandle | null,
     readonly sourceAddressHandle: AddressHandle | null,
     readonly fieldProvenance: readonly FieldProvenance<TemplateInstructionField>[] = [],
@@ -569,6 +634,7 @@ export class DispatchBindingInstruction {
     readonly eventName: string,
     readonly rawExpression: string,
     readonly storeName: string | null,
+    readonly storeNameSourceAddressHandle: AddressHandle | null,
     readonly expressionProductHandle: ProductHandle | null,
     readonly sourceAddressHandle: AddressHandle | null,
     readonly fieldProvenance: readonly FieldProvenance<TemplateInstructionField>[] = [],
@@ -622,12 +688,13 @@ export function expressionProductHandlesForInstruction(
       return productHandleArray(instruction.expressionProductHandle);
     case TemplateInstructionKind.IteratorBinding:
       return productHandleArray(instruction.iterableExpressionProductHandle);
+    case TemplateInstructionKind.MultiAttr:
+      return productHandleArray(instruction.expressionProductHandle);
     case TemplateInstructionKind.Interpolation:
       return instruction.expressionProductHandles;
     case TemplateInstructionKind.HydrateElement:
     case TemplateInstructionKind.HydrateAttribute:
     case TemplateInstructionKind.HydrateTemplateController:
-    case TemplateInstructionKind.MultiAttr:
     case TemplateInstructionKind.SetProperty:
     case TemplateInstructionKind.SetAttribute:
     case TemplateInstructionKind.SetClassAttribute:
@@ -638,6 +705,17 @@ export function expressionProductHandlesForInstruction(
     case TemplateInstructionKind.TranslationBinding:
       return [];
   }
+}
+
+/** Instruction products owned by another lowered instruction rather than dispatched as siblings. */
+export function nestedInstructionProductHandlesForInstructions(
+  instructions: readonly TemplateInstruction[],
+): readonly ProductHandle[] {
+  return instructions.flatMap((instruction) =>
+    instruction instanceof IteratorBindingInstruction
+      ? instruction.tailInstructionProductHandles
+      : []
+  );
 }
 
 function productHandleArray(handle: ProductHandle | null): readonly ProductHandle[] {

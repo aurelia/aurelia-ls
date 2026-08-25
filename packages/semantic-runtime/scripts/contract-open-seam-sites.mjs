@@ -4,7 +4,10 @@ import {
   createSemanticRuntime,
   SemanticAppQueryKind,
 } from '../out/index.js';
-import { openSeamSiteRows } from '../out/api/open-seam-projections.js';
+import {
+  openSeamSiteKey,
+  openSeamSiteRows,
+} from '../out/api/open-seam-projections.js';
 
 const packageRoot = path.resolve(fileURLToPath(new URL('..', import.meta.url)));
 const fixtureRoot = path.join(packageRoot, 'fixtures/pressure/evaluation-open-seam-sites');
@@ -32,6 +35,31 @@ const summary = app.ask({
   openSeamKindKey: 'evaluation.unresolved-identifier',
   page: { size: 20 },
 }).value;
+const rawRollup = app.ask({
+  kind: SemanticAppQueryKind.OpenSeams,
+  openSeamKindKey: 'evaluation.unresolved-identifier',
+  page: { size: 0 },
+}).value;
+const siteRollup = app.ask({
+  kind: SemanticAppQueryKind.OpenSeamSites,
+  openSeamKindKey: 'evaluation.unresolved-identifier',
+  page: { size: 0 },
+}).value;
+const summaryRollup = app.ask({
+  kind: SemanticAppQueryKind.OpenSeamSummary,
+  openSeamKindKey: 'evaluation.unresolved-identifier',
+  page: { size: 0 },
+}).value;
+const selectedClusterRawAnswer = app.ask({
+  kind: SemanticAppQueryKind.OpenSeams,
+  openSeamClusterKey: summary.rows[0]?.clusterKey,
+  page: { size: 20 },
+});
+const selectedSiteRawAnswer = app.ask({
+  kind: SemanticAppQueryKind.OpenSeams,
+  openSeamSiteKey: sites.rows[0]?.siteKey,
+  page: { size: 20 },
+});
 const filteredBySourceRoleAnswer = app.ask({
   kind: SemanticAppQueryKind.OpenSeamSites,
   openSeamKindKey: 'evaluation.unresolved-identifier',
@@ -68,6 +96,15 @@ const authoredFirstCanarySites = openSeamSiteRows([
     end: 20,
   })),
   syntheticOpenSeamRow({
+    summary: 'External product-pressure wording must not split the causal variant',
+    sourceRole: 'external-source',
+    path: 'node_modules/pkg/index.ts',
+    start: 10,
+    end: 20,
+    pressureKind: 'product-pressure',
+    impacts: [{ impactKey: 'impact:synthetic', products: [{ productKey: 'product:synthetic' }] }],
+  }),
+  syntheticOpenSeamRow({
     summary: 'Authored single seam',
     sourceRole: 'app-source',
     path: 'src/app.ts',
@@ -75,6 +112,8 @@ const authoredFirstCanarySites = openSeamSiteRows([
     end: 40,
   }),
 ]);
+const workspaceSiteKeyA = openSeamSiteKey(syntheticSource('workspace-a', 'src/app.ts', 1, 2, 'app-source'), 'seam:a');
+const workspaceSiteKeyB = openSeamSiteKey(syntheticSource('workspace-b', 'src/app.ts', 1, 2, 'app-source'), 'seam:b');
 
 const failures = [];
 if (raw.rows.length !== 6) {
@@ -138,6 +177,38 @@ if (summary.totalOpenSeamRows !== raw.rows.length || summary.totalOpenSeamSites 
 if (summary.rows[0]?.uniqueSiteCount !== sites.totalOpenSeamSites) {
   failures.push(`Expected open-seam-summary to expose uniqueSiteCount=${sites.totalOpenSeamSites}, observed ${summary.rows[0]?.uniqueSiteCount}.`);
 }
+for (const [label, rollup] of [
+  ['raw', rawRollup],
+  ['site', siteRollup],
+  ['summary', summaryRollup],
+]) {
+  if (rollup.rows.length !== 0) {
+    failures.push(`Expected ${label} size-zero rollup to return no rows, observed ${rollup.rows.length}.`);
+  }
+  if (/^(?:Seam|Boundary|Pressure|Source) kinds?: none\.$/mu.test(rollup.displayText)) {
+    failures.push(`Expected ${label} size-zero rollup to preserve global dimensions instead of reporting none: ${rollup.displayText}`);
+  }
+  if (!rollup.displayText.includes('app-source')) {
+    failures.push(`Expected ${label} size-zero rollup to preserve app-source coverage: ${rollup.displayText}`);
+  }
+}
+if (selectedClusterRawAnswer.value.rows.length !== raw.rows.length) {
+  failures.push(`Expected summary cluster selector to recover all ${raw.rows.length} raw rows, observed ${selectedClusterRawAnswer.value.rows.length}.`);
+}
+if (!selectedClusterRawAnswer.continuations.every((continuation) =>
+  continuation.targetQuery == null || continuation.targetQuery.openSeamClusterKey === summary.rows[0]?.clusterKey
+)) {
+  failures.push(`Expected cluster-selected continuations to preserve ${summary.rows[0]?.clusterKey}.`);
+}
+if (selectedSiteRawAnswer.value.rows.length !== sites.rows[0]?.rawRowCount
+  || !selectedSiteRawAnswer.value.rows.every((row) => row.siteKey === sites.rows[0]?.siteKey)) {
+  failures.push(`Expected site selector to recover exactly the first authored site's raw rows.`);
+}
+if (!selectedSiteRawAnswer.continuations.every((continuation) =>
+  continuation.targetQuery == null || continuation.targetQuery.openSeamSiteKey === sites.rows[0]?.siteKey
+)) {
+  failures.push(`Expected site-selected continuations to preserve ${sites.rows[0]?.siteKey}.`);
+}
 if (summary.rows[0]?.sourceRoles[0]?.role !== 'app-source' || summary.rows[0]?.sourceRoles[0]?.count !== raw.rows.length) {
   failures.push(`Expected open-seam-summary to roll up sourceRole=app-source x${raw.rows.length}, observed ${JSON.stringify(summary.rows[0]?.sourceRoles)}.`);
 }
@@ -183,6 +254,11 @@ if (!filteredByReasonAnswer.continuations.every((continuation) =>
 if (!sites.displayText.includes('unique authored site(s)') || !sites.displayText.includes('raw=3')) {
   failures.push(`Expected open-seam-sites display text to explain site/raw counts, observed: ${sites.displayText}`);
 }
+if (!sites.displayText.includes('Boundary kinds: static-environment-gap=6')
+  || !sites.displayText.includes('Pressure kinds: evidence-only=6')
+  || !sites.displayText.includes('Reason kinds: static-evaluation-identifier-not-in-environment=6')) {
+  failures.push(`Expected open-seam-sites display text to conserve raw causal counts, observed: ${sites.displayText}`);
+}
 if (!sites.displayText.includes('Source roles: app-source=2') || !sites.displayText.includes('sourceRole=app-source')) {
   failures.push(`Expected open-seam-sites display text to include source-role evidence, observed: ${sites.displayText}`);
 }
@@ -192,20 +268,17 @@ if (!sites.displayText.includes('Application roles: component-source=2') || !sit
 if (!sites.displayText.includes('Static evaluation origins: module-graph-dependency=2, static-evaluation-root=2') || !sites.displayText.includes('evalOrigins=module-graph-dependency, static-evaluation-root')) {
   failures.push(`Expected open-seam-sites display text to include static evaluation origin evidence, observed: ${sites.displayText}`);
 }
-if (!overview.displayText.includes('open seam site(s)') || !overview.displayText.includes('raw derivation row(s)')) {
-  failures.push(`Expected app overview display text to distinguish seam sites from raw derivation rows, observed: ${overview.displayText}`);
+if (overview.openSeams.value.rows.length === 0 || overview.openSeams.value.totalOpenSeamRows === 0) {
+  failures.push('Expected explicit openSeamPageSize to preserve raw seam audit rows in the typed overview child.');
 }
-if (!overview.displayText.includes('src/app.ts:4:48') || !overview.displayText.includes('src/app.ts:5:48')) {
-  failures.push(`Expected app overview display text to include line/column seam samples, observed: ${overview.displayText}`);
+if (overview.analysisLimitations.value.candidateCount !== 0 || overview.analysisLimitations.value.rows.length !== 0) {
+  failures.push(`Expected evidence-only evaluator seams to remain outside configured analysis limitations, observed ${JSON.stringify(overview.analysisLimitations.value)}.`);
 }
-if (!overview.displayText.includes('Open seam sample source roles: app-source x6') || !overview.displayText.includes('sourceRole=app-source')) {
-  failures.push(`Expected app overview display text to include seam source-role evidence, observed: ${overview.displayText}`);
+if (!overview.displayText.includes('no diagnostic rows or configured analysis limitations')) {
+  failures.push(`Expected normal app overview pressure to lead with configured findings, observed: ${overview.displayText}`);
 }
-if (!overview.displayText.includes('Open seam sample application roles: component-source x6') || !overview.displayText.includes('appRoles=component-source')) {
-  failures.push(`Expected app overview display text to include seam application-role evidence, observed: ${overview.displayText}`);
-}
-if (!overview.displayText.includes('Open seam sample static evaluation origins: module-graph-dependency x6, static-evaluation-root x6') || !overview.displayText.includes('evalOrigins=module-graph-dependency+static-evaluation-root')) {
-  failures.push(`Expected app overview display text to include static evaluation origin evidence, observed: ${overview.displayText}`);
+if (/raw derivation|Open seam samples|open seam site\(s\)|src\/app\.ts:4:48|sourceRole=app-source|appRoles=component-source|evalOrigins=/u.test(overview.displayText)) {
+  failures.push(`Expected normal app overview text to keep raw seam audit counts and samples quiet, observed: ${overview.displayText}`);
 }
 const aliasQueryKinds = new Set(openSeamCatalogAlias.rows.map((row) => row.queryKind));
 for (const queryKind of [
@@ -220,8 +293,24 @@ for (const queryKind of [
 if (openSeamCatalogAlias.rows.some((row) => !row.supportsOpenSeamFilters)) {
   failures.push(`Expected group=open-seams alias to return only open-seam filter-capable rows, observed ${JSON.stringify(openSeamCatalogAlias.rows)}.`);
 }
+const rawCatalog = openSeamCatalogAlias.rows.find((row) => row.queryKind === SemanticAppQueryKind.OpenSeams);
+const summaryCatalog = openSeamCatalogAlias.rows.find((row) => row.queryKind === SemanticAppQueryKind.OpenSeamSummary);
+const sitesCatalog = openSeamCatalogAlias.rows.find((row) => row.queryKind === SemanticAppQueryKind.OpenSeamSites);
+if (rawCatalog?.supportsDetail !== true || summaryCatalog?.supportsDetail !== false || sitesCatalog?.supportsDetail !== false) {
+  failures.push(`Expected only raw open seams to advertise handle detail, observed ${JSON.stringify({ rawCatalog, summaryCatalog, sitesCatalog })}.`);
+}
 if (authoredFirstCanarySites[0]?.sourceRole !== 'app-source') {
   failures.push(`Expected authored open-seam sites to sort before larger external clusters, observed ${JSON.stringify(authoredFirstCanarySites.map((row) => ({ role: row.sourceRole, rawRowCount: row.rawRowCount, source: row.source?.label })))}`);
+}
+const repeatedExternalSite = authoredFirstCanarySites.find((row) => row.sourceRole === 'external-source');
+if (repeatedExternalSite?.rawRowCount !== 6
+  || repeatedExternalSite.variantCount !== 1
+  || !repeatedExternalSite.pressureKinds.includes('evidence-only')
+  || !repeatedExternalSite.pressureKinds.includes('product-pressure')) {
+  failures.push(`Expected prose and pressure changes to remain one typed causal variant while preserving pressure counts, observed ${JSON.stringify(repeatedExternalSite)}.`);
+}
+if (workspaceSiteKeyA === workspaceSiteKeyB) {
+  failures.push(`Expected source workspace identity to participate in exact authored-site keys.`);
 }
 
 if (failures.length > 0) {
@@ -241,7 +330,7 @@ if (failures.length > 0) {
     rawRows: raw.rows.length,
     rawDisplayText: raw.displayText,
     siteRows: sites.rows.map((row) => ({
-      seamKindKey: row.seamKindKey,
+      seamKindKeys: row.seamKindKeys,
       rawRowCount: row.rawRowCount,
       sourceRole: row.sourceRole,
       applicationFileRoles: row.applicationFileRoles,
@@ -258,23 +347,41 @@ function countOccurrences(text, needle) {
   return text.split(needle).length - 1;
 }
 
-function syntheticOpenSeamRow({ summary, sourceRole, path: sourcePath, start, end }) {
+function syntheticOpenSeamRow({
+  summary,
+  sourceRole,
+  path: sourcePath,
+  start,
+  end,
+  pressureKind = 'evidence-only',
+  impacts = [],
+}) {
+  const source = syntheticSource('synthetic-workspace', sourcePath, start, end, sourceRole);
+  const seamKey = `seam:${summary}`;
   return {
+    seam: null,
+    seamKey,
+    siteKey: openSeamSiteKey(source, seamKey),
     seamKindKey: 'evaluation.dynamic-call',
     summary,
-    attempt: { kind: 'static-module-evaluation', summary: 'Synthetic static evaluation canary.' },
-    boundary: { kind: 'runtime-execution-boundary', summary: 'Synthetic runtime boundary canary.' },
+    boundaryKinds: ['runtime-execution-boundary'],
     reasonKinds: ['static-evaluation-dynamic-call'],
     reasonSources: [],
-    source: {
-      kind: 'source-span-address',
-      label: `${sourcePath}@${start}..${end}`,
-      path: sourcePath,
-      start,
-      end,
-      sourceFileRole: sourceRole,
-    },
-    sourceRange: null,
+    pressureKind,
+    impacts,
+    source,
     sourceRole,
+  };
+}
+
+function syntheticSource(sourceWorkspaceKey, sourcePath, start, end, sourceRole) {
+  return {
+    kind: 'source-span-address',
+    label: `${sourcePath}@${start}..${end}`,
+    path: sourcePath,
+    start,
+    end,
+    sourceWorkspaceKey,
+    sourceFileRole: sourceRole,
   };
 }

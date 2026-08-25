@@ -23,14 +23,6 @@ export const KernelProductKinds = {
       KernelVocabularySlot.ProductKind,
       'Type-system projection of a TypeScript, template, or expression type for inquiry.',
     ),
-
-    /** Product kind for one member visible on a type-system type projection. */
-    TypeMember: defineVocabulary(
-      KernelVocabularyNamespace.TypeSystem,
-      'type-member',
-      KernelVocabularySlot.ProductKind,
-      'Type-system projection of one property, method, accessor, call, construct, or index member.',
-    ),
   },
   Resource: {
 
@@ -239,12 +231,28 @@ export const KernelProductKinds = {
       'A framework-runtime issue discovered while constructing, hydrating, or activating a modeled controller.',
     ),
 
+    /** Product kind for runtime IHydrationContext values installed by custom-element controllers. */
+    HydrationContext: defineVocabulary(
+      KernelVocabularyNamespace.Configuration,
+      'hydration-context',
+      KernelVocabularySlot.ProductKind,
+      'A modeled runtime IHydrationContext connecting one custom-element controller, its hydration instruction, and its parent context.',
+    ),
+
     /** Product kind for a runtime IViewFactory value that can create synthetic child views. */
     ViewFactory: defineVocabulary(
       KernelVocabularyNamespace.Configuration,
       'view-factory',
       KernelVocabularySlot.ProductKind,
       'A modeled runtime IViewFactory value that can create synthetic child views from a nested instruction sequence.',
+    ),
+
+    /** Product kind for runtime IAuSlotsInfo projected-name values installed during custom-element hydration. */
+    AuSlotsInfo: defineVocabulary(
+      KernelVocabularyNamespace.Configuration,
+      'au-slots-info',
+      KernelVocabularySlot.ProductKind,
+      'A modeled runtime IAuSlotsInfo value retaining the unique provider-authored names available to a custom element.',
     ),
 
     /** Product kind for runtime Scope objects used by controller activation and binding lookup. */
@@ -355,12 +363,20 @@ export const KernelProductKinds = {
       'RouterOptions after RouterConfiguration defaults and recognized customize option contributions converge.',
     ),
 
-    /** Product kind for a source-backed router route configuration before recognizer population. */
+    /** Product kind for one authored or statically observed input to RouteConfig convergence. */
+    RouteConfigContribution: defineVocabulary(
+      KernelVocabularyNamespace.Router,
+      'route-config-contribution',
+      KernelVocabularySlot.ProductKind,
+      'One source-backed route decorator, Route.configure call, static field set, child-route use, or dynamic hook declaration.',
+    ),
+
+    /** Product kind for an effective class definition or per-use child RouteConfig. */
     RouteConfig: defineVocabulary(
       KernelVocabularyNamespace.Router,
       'route-config',
       KernelVocabularySlot.ProductKind,
-      'A source-backed router route configuration before route-context and route-recognizer materialization.',
+      'An effective framework-shaped RouteConfig after class definition or child-use convergence.',
     ),
 
     /** Product kind for a runtime-shaped RouteConfigContext over one normalized RouteConfig. */
@@ -371,12 +387,12 @@ export const KernelProductKinds = {
       'A runtime-shaped RouteConfigContext that owns parent/root topology, child route processing, and a route recognizer.',
     ),
 
-    /** Product kind for a runtime RouteContext over one route config context and component/container boundary. */
+    /** Product kind for a potential RouteContext over one route config context and component/container boundary. */
     RouteContext: defineVocabulary(
       KernelVocabularyNamespace.Router,
       'route-context',
       KernelVocabularySlot.ProductKind,
-      'A runtime RouteContext that connects a RouteConfigContext to parent/root context, DI container, and hosting viewport agent.',
+      'A potential RouteContext that connects a RouteConfigContext to parent/root context, DI container, and hosting viewport-agent candidate.',
     ),
 
     /** Product kind for a source-backed RouteContext.getRouteParameters(...) call correlated with route path params. */
@@ -395,12 +411,12 @@ export const KernelProductKinds = {
       'A router RouteableComponent input converged from string, class, resource definition, promise, or navigation strategy source.',
     ),
 
-    /** Product kind for the runtime au-viewport custom element instance semantics. */
+    /** Product kind for potential au-viewport custom-element semantics. */
     Viewport: defineVocabulary(
       KernelVocabularyNamespace.Router,
       'viewport',
       KernelVocabularySlot.ProductKind,
-      'A runtime au-viewport instance with name, usedBy, default, fallback, and owning route context semantics.',
+      'A potential au-viewport with field closure, presence cardinality, and owning route-context semantics before live registration.',
     ),
 
     /** Product kind for a ViewportAgent attached to an au-viewport and route context. */
@@ -408,7 +424,7 @@ export const KernelProductKinds = {
       KernelVocabularyNamespace.Router,
       'viewport-agent',
       KernelVocabularySlot.ProductKind,
-      'A ViewportAgent that mediates routed component controller activation for one au-viewport.',
+      'A potential ViewportAgent candidate corresponding to one statically materialized au-viewport.',
     ),
 
     /** Product kind for a ComponentAgent created for a routed component. */
@@ -416,7 +432,7 @@ export const KernelProductKinds = {
       KernelVocabularyNamespace.Router,
       'component-agent',
       KernelVocabularySlot.ProductKind,
-      'A ComponentAgent that joins a routed component controller, route node, route context, and viewport agent.',
+      'A planned ComponentAgent handoff joining a routed controller, route node, route context, and viewport-agent candidate before activation.',
     ),
 
     /** Product kind for a RouteNode in the router's route tree. */
@@ -424,7 +440,7 @@ export const KernelProductKinds = {
       KernelVocabularyNamespace.Router,
       'route-node',
       KernelVocabularySlot.ProductKind,
-      'A RouteNode that joins a RouteContext to realized or synthetic route-tree state.',
+      'A potential synthetic root or planned pre-activation RouteNode with an explicit realization stage.',
     ),
 
     /** Product kind for the router's RouteTree state container. */
@@ -432,7 +448,7 @@ export const KernelProductKinds = {
       KernelVocabularyNamespace.Router,
       'route-tree',
       KernelVocabularySlot.ProductKind,
-      'A RouteTree that owns the current root RouteNode and later transition-compiled child nodes.',
+      'A potential synthetic root or planned pre-activation RouteTree with an explicit realization stage.',
     ),
 
     /** Product kind for a source-backed router runtime issue. */
@@ -484,12 +500,12 @@ export const KernelProductKinds = {
       KernelVocabularySlot.ProductKind,
       'One @aurelia/state store configuration admitted from StateDefaultConfiguration builder calls before AppTask execution.',
     ),
-    /** Product kind for one StateGetterBinding created by @fromState(...) lifecycle hooks. */
+    /** Product kind for one @fromState(...) source definition that lifecycle hooks apply per controller. */
     GetterBinding: defineVocabulary(
       KernelVocabularyNamespace.State,
       'getter-binding',
       KernelVocabularySlot.ProductKind,
-      'One @aurelia/state StateGetterBinding created by @fromState(...) for a field or setter target.',
+      'One @fromState(...) source definition for controller-local @aurelia/state StateGetterBinding application.',
     ),
     /** Product kind for a source-backed @aurelia/state configuration or store-registry issue. */
     Issue: defineVocabulary(
@@ -551,12 +567,12 @@ export const KernelProductKinds = {
       'A source-backed observer selected by ObserverLocator source-side semantics, such as ComputedObserver or ControlledComputedObserver for an authored getter.',
     ),
 
-    /** Product kind for a source-level IEffect produced by Aurelia observation APIs. */
+    /** Product kind for an immutable source-call plan for Aurelia observation APIs. */
     RuntimeEffect: defineVocabulary(
       KernelVocabularyNamespace.Observation,
       'runtime-effect',
       KernelVocabularySlot.ProductKind,
-      'A source-level IEffect produced by Observation.watch(...) or Observation.run(...).',
+      'An immutable construction-site plan for a direct Observation.watch(...) or Observation.run(...) call.',
     ),
 
     /** Product kind for source-level ProxyObservable raw/unwrap escape calls. */
@@ -836,6 +852,14 @@ export const KernelProductKinds = {
       'Authored HTML attribute before attribute-pattern parsing.',
     ),
 
+    /** Product kind for one exact HTML parser recovery fact. */
+    HtmlRecovery: defineVocabulary(
+      KernelVocabularyNamespace.Template,
+      'html-recovery',
+      KernelVocabularySlot.ProductKind,
+      'One exact authored HTML parser recovery fact before diagnostic policy.',
+    ),
+
     /** Product kind for a compiled template after DOM pass-through and instruction-row assembly. */
     CompiledTemplate: defineVocabulary(
       KernelVocabularyNamespace.Template,
@@ -882,6 +906,15 @@ export const KernelProductKinds = {
       'expression-parse',
       KernelVocabularySlot.ProductKind,
       'Expression parser publication for one parser-owned authored template value site.',
+    ),
+  },
+  RuntimeExpression: {
+    /** Product kind for one expression access paired with the runtime operation that spends it. */
+    AccessUse: defineVocabulary(
+      KernelVocabularyNamespace.RuntimeExpression,
+      'access-use',
+      KernelVocabularySlot.ProductKind,
+      'Source-backed expression access paired with its exact runtime owner, operation slot, phase, tracking policy, and semantic coverage.',
     ),
   },
   Binding: {

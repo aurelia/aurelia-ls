@@ -1,0 +1,56 @@
+{
+  "fixture": "packages/semantic-runtime/fixtures/pressure/template-compiler-errors",
+  "lanes": {
+    "diagnostics": [
+      {
+        "id": "compiler-main-template-errors",
+        "file": "src/template-compiler-errors-app.html",
+        "verdict": "correct",
+        "reason": "The full document-diagnostic pull returns the expected compiler rows with framework-code authority; AUR0707 points at the offending segment target `missing`, and the independent boolean-to-string assignment warning correctly points at `enabled`.",
+        "note": "NEW 2026-07-07. File-level compiler diagnostics covering reserved spread/bindables syntax, invalid class binding syntax, au-slot/slot misuse, non-bindable attribute segment, invalid <let> command, and removed Aurelia 1 binding commands. VERDICT 2026-07-07: flipped partially wrong -> correct after multi-binding segments gained a target source address and AUR0707 spent that address. UPDATED 2026-07-12: source-to-target assignment policy adds the correct boolean-to-string warning without changing compiler-row authority or the projected item set."
+      },
+      {
+        "id": "compiler-local-bindable-errors",
+        "file": "src/local-bindable-probe.html",
+        "verdict": "correct",
+        "reason": "The full document-diagnostic pull returns all six local-element compiler errors with framework-code authority and precise authored spans.",
+        "note": "NEW 2026-07-07. Local-element bindable compiler diagnostics, including duplicate/missing bindable names and invalid local element placement. VERDICT 2026-07-12: flipped wrong -> correct after source-locus app-cache admission began requiring the requested authoring template and the fixture gained explicit resource metadata."
+      },
+      {
+        "id": "compiler-local-nested-error",
+        "file": "src/local-nested-probe.html",
+        "verdict": "correct",
+        "reason": "The full document-diagnostic pull returns AUR0709 on the complete nested local-template declaration with framework-code authority.",
+        "note": "NEW 2026-07-07. Local element nested below the root template should surface AUR0709 on the authored template locus. VERDICT 2026-07-12: flipped wrong -> correct after source-locus app-cache admission began requiring the requested authoring template and the fixture gained explicit resource metadata."
+      },
+      {
+        "id": "compiler-local-only-error",
+        "file": "src/local-only-probe.html",
+        "verdict": "correct",
+        "reason": "The full document-diagnostic pull returns AUR0708 on the complete local-only root template with framework-code authority.",
+        "note": "NEW 2026-07-07. Local-only root template should surface AUR0708 on the owning template file. VERDICT 2026-07-12: flipped wrong -> correct after source-locus app-cache admission began requiring the requested authoring template and the fixture gained explicit resource metadata."
+      },
+      {
+        "id": "compiler-local-root-error",
+        "file": "src/local-root-probe.html",
+        "verdict": "correct",
+        "reason": "The full document-diagnostic pull returns AUR0701 on the authored `as-custom-element` attribute with framework-code authority.",
+        "note": "NEW 2026-07-07. Root local-template misuse should surface AUR0701 with an exact authored span. VERDICT 2026-07-12: flipped wrong -> correct after source-locus app-cache admission began requiring the requested authoring template and the fixture gained explicit resource metadata."
+      },
+      {
+        "id": "compiler-surrogate-invalid-attribute-error",
+        "file": "src/surrogate-invalid-attribute.html",
+        "verdict": "correct",
+        "reason": "The full document-diagnostic pull returns AUR0702 on the invalid surrogate `id` attribute with framework-code authority.",
+        "note": "NEW 2026-07-07. Surrogate invalid attribute should surface AUR0702 on the surrogate template file. VERDICT 2026-07-12: flipped wrong -> correct after source-locus app-cache admission began requiring the requested authoring template and the fixture gained explicit resource metadata."
+      },
+      {
+        "id": "compiler-surrogate-template-controller-error",
+        "file": "src/surrogate-template-probe.html",
+        "verdict": "correct",
+        "reason": "The full document-diagnostic pull returns AUR0703 on the invalid surrogate template-controller target `if` with framework-code authority.",
+        "note": "NEW 2026-07-07. Surrogate template-controller misuse should surface AUR0703 on the surrogate template file. VERDICT 2026-07-12: flipped wrong -> correct after source-locus app-cache admission began requiring the requested authoring template and the fixture gained explicit resource metadata."
+      }
+    ]
+  }
+}

@@ -1,0 +1,27 @@
+<au-compose
+  component.bind="closedComponent"
+  template.bind="externalTemplate"
+  model.bind="externalModel"
+  scope-behavior.bind="externalScopeBehavior"
+  tag.bind="externalTag"
+  flush-mode.bind="externalFlushMode">
+</au-compose>
+
+<au-compose
+  component.bind="pressuredComponent"
+  model.bind="closedModel">
+</au-compose>
+
+<au-compose
+  component.bind="partialComponent"
+  model.bind="closedModel">
+</au-compose>
+
+<au-compose
+  component.bind="awaitedPressureWidget"
+  model.bind="closedModel">
+</au-compose>
+<au-compose
+  component.bind="broadPressureWidget"
+  model.bind="closedModel">
+</au-compose>

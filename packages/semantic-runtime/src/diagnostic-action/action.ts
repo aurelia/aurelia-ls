@@ -1,12 +1,139 @@
-import { OpenSeamReasonKind } from '../kernel/open-seam.js';
-import { uniqueStrings } from '../kernel/collections.js';
-
 /**
  * Diagnostics-to-action ontology.
  *
- * Diagnostic actions are not source edits. They are the typed handoff between observed diagnostics/open seams and
- * later planners that can inspect, strengthen, rewrite, or defer a source change.
+ * Diagnostic actions are not source edits. They are the typed handoff between source diagnostics and later planners
+ * that can inspect, strengthen, rewrite, or defer a source change.
  */
+
+export enum DiagnosticSuggestionKind {
+  /** Replace or retarget an expression whose selected value is not callable. */
+  UseCallableExpression = 'use-callable-expression',
+  /** Admit a missing Aurelia resource into the compiler-visible resource scope. */
+  RegisterResource = 'register-resource',
+  /** Register a DI service required by the modeled framework operation. */
+  RegisterDiService = 'register-di-service',
+  /** Remove a repeated binding behavior that Aurelia rejects on one expression. */
+  RemoveDuplicateBindingBehavior = 'remove-duplicate-binding-behavior',
+  /** Guard or narrow a nullish expression before strict Aurelia evaluation. */
+  GuardNullishExpression = 'guard-nullish-expression',
+  /** Replace an observed increment whose assignment semantics are unsafe or misleading. */
+  AvoidObservedIncrement = 'avoid-observed-increment',
+  /** Make a runtime-dependent value boundary explicit or intentionally leave it dynamic. */
+  ResolveRuntimeBoundary = 'resolve-runtime-boundary',
+  /** Replace a repeat source with a value Aurelia can iterate. */
+  UseRepeatableSource = 'use-repeatable-source',
+  /** Replace a destructuring source with one safe for the authored binding pattern. */
+  UseSafeDestructuringSource = 'use-safe-destructuring-source',
+  /** Repair expression grammar rejected before semantic evaluation. */
+  FixExpressionSyntax = 'fix-expression-syntax',
+  /** Repair authored template syntax rejected by the Aurelia compiler. */
+  FixTemplateSyntax = 'fix-template-syntax',
+  /** Register a framework or plugin capability already demanded by authored syntax. */
+  RegisterFrameworkCapability = 'register-framework-capability',
+  /** Re-enable a framework/plugin surface excluded by otherwise-admitted app configuration. */
+  ConfigureFrameworkCapability = 'configure-framework-capability',
+  /** Repair a template-authored router instruction without inventing a destination. */
+  FixRouterInstruction = 'fix-router-instruction',
+  /** Declare a missing source member when its owner and insertion target are provable. */
+  DeclareExplicitMember = 'declare-explicit-member',
+  /** Declare a missing member that must accept observer writeback. */
+  DeclareAssignableMember = 'declare-assignable-member',
+  /** Give a framework-created template scope slot a source-visible type. */
+  DeclareScopeSlotType = 'declare-scope-slot-type',
+  /** Replace an `any` owner with a source-visible type surface. */
+  ReplaceAnyOwner = 'replace-any-owner',
+  /** Align a source member type with the value Aurelia assigns to it. */
+  AlignAssignmentType = 'align-assignment-type',
+  /** Make an observer writeback target writable or choose a writable target. */
+  MakeSourceWritable = 'make-source-writable',
+  /** Replace an expression that Aurelia cannot assign through. */
+  UseAssignableExpression = 'use-assignable-expression',
+  /** Make method dependencies explicit when an ordinary template call cannot observe its body. */
+  MakeMethodTrackable = 'make-method-trackable',
+  /** Configure the node observer strategy required by a binding target. */
+  ConfigureNodeObserver = 'configure-node-observer',
+  /** Inspect an owner type before claiming a safe source mutation. */
+  InspectOwnerType = 'inspect-owner-type',
+}
+
+export enum DiagnosticSuggestionActionKind {
+  /** Change app resource registration or visibility. */
+  RegisterResource = 'register-resource',
+  /** Change app DI registration. */
+  RegisterService = 'register-service',
+  /** Declare source or policy for a value that remains runtime-dependent. */
+  DeclareRuntimeBoundary = 'declare-runtime-boundary',
+  /** Add a source-visible member to a proven owner. */
+  DeclareMember = 'declare-member',
+  /** Add type information for a framework-created scope slot. */
+  DeclareScopeSlot = 'declare-scope-slot',
+  /** Strengthen or replace the type of an expression owner. */
+  ReplaceOwnerType = 'replace-owner-type',
+  /** Change a member type to satisfy value transport. */
+  ChangeMemberType = 'change-member-type',
+  /** Change member writability to satisfy observer assignment. */
+  ChangeMemberMutability = 'change-member-mutability',
+  /** Change observation metadata or observer configuration. */
+  ConfigureObserver = 'configure-observer',
+  /** Rewrite an authored Aurelia expression. */
+  RewriteExpression = 'rewrite-expression',
+  /** Rewrite authored template structure or attribute syntax. */
+  RewriteTemplateSyntax = 'rewrite-template-syntax',
+  /** Change framework or plugin capability admission in app configuration. */
+  RegisterFrameworkCapability = 'register-framework-capability',
+  /** Change options on an admitted framework or plugin configuration. */
+  ConfigureFrameworkCapability = 'configure-framework-capability',
+  /** Inspect type facts before selecting a mutating action. */
+  InspectOwnerType = 'inspect-owner-type',
+}
+
+export enum DiagnosticSuggestionValueTypeSource {
+  /** The suggested value type came from the member selected at the diagnostic locus. */
+  SelectedMember = 'selected-member',
+  /** The suggested value type came from the binding target channel. */
+  BindingTarget = 'binding-target',
+  /** The suggested value type came from the source assignment target. */
+  AssignmentTarget = 'assignment-target',
+}
+
+export enum DiagnosticSuggestionActionTargetKind {
+  /** An Aurelia resource definition or registration surface. */
+  Resource = 'resource',
+  /** A DI service registration or declaration surface. */
+  Service = 'service',
+  /** A value boundary that cannot be closed without runtime or author intent. */
+  RuntimeBoundary = 'runtime-boundary',
+  /** Observation metadata or node-observer configuration. */
+  ObserverConfig = 'observer-config',
+  /** Framework or plugin capability admission in app configuration. */
+  FrameworkCapability = 'framework-capability',
+  /** The source-visible type that owns an expression member. */
+  OwnerType = 'owner-type',
+  /** A framework-created name in Aurelia template scope. */
+  ScopeSlot = 'scope-slot',
+  /** An authored Aurelia expression span. */
+  Expression = 'expression',
+  /** Authored template structure or attribute syntax. */
+  TemplateSyntax = 'template-syntax',
+}
+
+export interface DiagnosticSuggestionActionTarget<TSource = unknown> {
+  readonly targetKind: DiagnosticSuggestionActionTargetKind | `${DiagnosticSuggestionActionTargetKind}`;
+  readonly source: TSource | null;
+  readonly memberName: string | null;
+  readonly typeDisplay: string | null;
+}
+
+export interface DiagnosticSuggestion<TSource = unknown> {
+  readonly suggestionKind: DiagnosticSuggestionKind | `${DiagnosticSuggestionKind}`;
+  readonly actionKind: DiagnosticSuggestionActionKind | `${DiagnosticSuggestionActionKind}`;
+  readonly actionTarget: DiagnosticSuggestionActionTarget<TSource> | null;
+  readonly summary: string;
+  readonly targetMemberName: string | null;
+  readonly ownerTypeDisplay: string | null;
+  readonly valueTypeDisplay: string | null;
+  readonly valueTypeSource: DiagnosticSuggestionValueTypeSource | `${DiagnosticSuggestionValueTypeSource}` | null;
+}
 
 export enum DiagnosticActionKind {
   /** Declare a missing member on an existing owner type or view-model surface. */
@@ -15,31 +142,30 @@ export enum DiagnosticActionKind {
   DeclareScopeSlotType = 'declare-scope-slot-type',
   /** Replace an `any`/unknown/broad owner with a named surface that template tooling can inspect. */
   StrengthenOwnerType = 'strengthen-owner-type',
-  /** Rewrite a binding source expression whose runtime assignment semantics are no-op or too weak to author safely. */
-  RewriteBindingSource = 'rewrite-binding-source',
+  /** Rewrite an authored template expression whose syntax or runtime semantics are unsafe or unsupported. */
+  RewriteExpression = 'rewrite-expression',
   /** Rewrite authored template syntax that the Aurelia parser or template compiler rejects. */
   RewriteTemplateSyntax = 'rewrite-template-syntax',
+  /** Repair a template-authored router instruction without claiming that a validated edit plan exists. */
+  RewriteRouterInstruction = 'rewrite-router-instruction',
   /** Align the source member/slot type with the value that the binding observer writes back. */
   AlignAssignmentType = 'align-assignment-type',
   /** Make a target-to-source binding source writable, or point the binding at a writable source. */
   MakeSourceWritable = 'make-source-writable',
-  /** Inspect an owner/source type before choosing whether the app source or semantic substrate should change. */
+  /** Inspect an owner/source type before choosing whether app source or runtime policy should change. */
   InspectTypeSurface = 'inspect-type-surface',
-  /** Inspect an open semantic seam before claiming an app-source repair is available. */
-  InspectOpenSeam = 'inspect-open-seam',
+  /** Register or import an Aurelia resource into the compiler-visible app scope. */
+  RegisterResource = 'register-resource',
+  /** Register an app DI service required by an Aurelia runtime feature. */
+  RegisterService = 'register-service',
+  /** Configure observation behavior or make a source member explicitly trackable. */
+  ConfigureObserver = 'configure-observer',
   /** Resolve a runtime-dependent boundary by adding explicit source/configuration or by leaving it intentionally open. */
   ResolveRuntimeBoundary = 'resolve-runtime-boundary',
   /** Register a framework/plugin capability that authored template syntax or resources already demand. */
   RegisterFrameworkCapability = 'register-framework-capability',
-  /** Improve semantic-runtime substrate because the app shape appears legitimate but the emulator cannot model it yet. */
-  ExtendSemanticSubstrate = 'extend-semantic-substrate',
-}
-
-export enum DiagnosticActionEvidenceKind {
-  /** Action pressure came from a template diagnostic row. */
-  TemplateDiagnostic = 'template-diagnostic',
-  /** Action pressure came from an open semantic seam. */
-  OpenSeam = 'open-seam',
+  /** Change an admitted framework/plugin configuration so the demanded surface is available. */
+  ConfigureFrameworkCapability = 'configure-framework-capability',
 }
 
 export enum DiagnosticActionPlanKind {
@@ -53,6 +179,8 @@ export enum DiagnosticActionPlanKind {
   TemplateExpressionRewrite = 'template-expression-rewrite',
   /** Rewrite authored template syntax rejected by Aurelia parser/compiler semantics. */
   TemplateSyntaxRewrite = 'template-syntax-rewrite',
+  /** Rewrite or retarget a template-authored router instruction. */
+  RouterInstructionRewrite = 'router-instruction-rewrite',
   /** Change a source member/slot type so observer writeback is TypeScript-assignable. */
   SourceAssignmentTypeAlignment = 'source-assignment-type-alignment',
   /** Change source mutability or choose a writable binding source for observer writeback. */
@@ -61,8 +189,14 @@ export enum DiagnosticActionPlanKind {
   RuntimeBoundaryDeclaration = 'runtime-boundary-declaration',
   /** Register an Aurelia framework/plugin configuration or registration group in app source. */
   FrameworkCapabilityRegistration = 'framework-capability-registration',
-  /** Improve semantic-runtime/Atlas substrate because the app shape appears legitimate but is not modeled yet. */
-  SemanticSubstrateExtension = 'semantic-substrate-extension',
+  /** Change options on an already-admitted Aurelia framework/plugin configuration. */
+  FrameworkCapabilityConfiguration = 'framework-capability-configuration',
+  /** Register or import an Aurelia resource into an app/compiler resource scope. */
+  ResourceRegistration = 'resource-registration',
+  /** Register an app-owned DI service needed by a framework feature. */
+  ServiceRegistration = 'service-registration',
+  /** Configure observation or annotate/restructure a member so its dependencies are trackable. */
+  ObservationConfiguration = 'observation-configuration',
   /** Inspect the source/type/runtime context before choosing app-source or substrate work. */
   ManualInspection = 'manual-inspection',
 }
@@ -70,190 +204,170 @@ export enum DiagnosticActionPlanKind {
 export enum DiagnosticActionChangeDomain {
   /** The likely work belongs in user-authored app/package source. */
   AppSource = 'app-source',
-  /** The likely work belongs in semantic-runtime, Atlas, or framework-grounding substrate. */
-  SemanticRuntimeSubstrate = 'semantic-runtime-substrate',
   /** The likely work is a product/user decision around static treatment of runtime values. */
   RuntimePolicy = 'runtime-policy',
-  /** The cluster is not ready to name a change domain without more inspection. */
+  /** The diagnostic does not yet prove which change domain owns the repair. */
   Inspection = 'inspection',
 }
 
 export enum DiagnosticActionPlanReadiness {
-  /** The cluster is specific enough to feed a future edit planner once that planner exists. */
+  /** The diagnostic suggestion is specific enough to feed a future edit planner once that planner exists. */
   ReadyToPlan = 'ready-to-plan',
   /** Source-edit placement/formatting/import policy is still the blocker, not semantic understanding. */
   SourceEditPolicyOpen = 'source-edit-policy-open',
-  /** Some rows have a concrete action-target source and some do not. */
-  TargetSourcePartial = 'target-source-partial',
-  /** The cluster targets app source, but no action-target source is available yet. */
+  /** The suggestion targets app source, but no action-target source is available yet. */
   TargetSourceMissing = 'target-source-missing',
   /** A runtime-dependent boundary needs user/product intent before the product should suggest an edit. */
   RuntimeIntentRequired = 'runtime-intent-required',
-  /** The app shape points at missing semantic-runtime/Atlas substrate before app-source repair is honest. */
-  SubstrateWorkRequired = 'substrate-work-required',
-  /** The cluster only promises inspection until the source/type context is understood. */
+  /** The suggestion only promises inspection until the source/type context is understood. */
   InspectionRequired = 'inspection-required',
 }
 
-export enum DiagnosticActionRuntimeBoundaryKind {
-  /** The value is supplied by the host environment rather than authored source. */
-  HostEnvironment = 'host-environment',
-  /** The value crosses an external module boundary that the current source program cannot inspect. */
-  ExternalModule = 'external-module',
-  /** The value is produced by async execution that static app-world construction does not run. */
-  AsyncExecution = 'async-execution',
-  /** A binding source expression needs live runtime state to produce a concrete value. */
-  BindingSourceValue = 'binding-source-value',
-  /** A binding source slot exists at runtime but has no statically projected value. */
-  BindingSourceSlot = 'binding-source-slot',
-  /** A binding source member exists only as a runtime member read, not a static value. */
-  BindingSourceMember = 'binding-source-member',
-  /** A binding source expression shape is outside the static value reader's modeled expression set. */
-  BindingSourceExpression = 'binding-source-expression',
-  /** A binding source expression has a checker-visible type surface that remains open. */
-  BindingSourceType = 'binding-source-type',
-  /** A binding source expression depends on a missing/ambiguous Aurelia resource such as a converter or behavior. */
-  BindingSourceResource = 'binding-source-resource',
-  /** Select observer modeling could not close the target element or observer value carrier. */
-  SelectTarget = 'select-target',
-  /** Select observer modeling could not close an option's value/model product. */
-  SelectOptionValue = 'select-option-value',
-  /** Select observer modeling could not close the option value domain. */
-  SelectOptionDomain = 'select-option-domain',
-  /** Select observer modeling could not statically decide the select's multiple-value behavior. */
-  SelectMultipleState = 'select-multiple-state',
-  /** Router instruction materialization lacks the route context needed to resolve navigation. */
-  RouterContext = 'router-context',
-  /** Router instruction materialization needs a statically enumerable target value. */
-  RouterStaticInstruction = 'router-static-instruction',
-  /** Router href materialization cannot decide whether the href is external or router-owned. */
-  RouterHrefClassification = 'router-href-classification',
-  /** Router href click handling is disabled by host element state while href value generation remains active. */
-  RouterHrefClickInterception = 'router-href-click-interception',
-  /** Router instruction materialization did not receive a usable navigation value. */
-  RouterInstructionValue = 'router-instruction-value',
-  /** Router instruction parsing failed before a navigation product could be formed. */
-  RouterInstructionSyntax = 'router-instruction-syntax',
-  /** Router viewport resolution cannot close the target viewport/agent edge. */
-  RouterViewport = 'router-viewport',
-  /** Router redirect materialization cannot close the redirect target. */
-  RouterRedirect = 'router-redirect',
-}
-
-export enum DiagnosticActionRuntimeIntentKind {
-  /** Add or point at a source-visible contract for host-provided values. */
-  DeclareHostContract = 'declare-host-contract',
-  /** Add or point at a source-visible contract for external module values. */
-  DeclareImportContract = 'declare-import-contract',
-  /** Add an explicit async/loading boundary instead of treating the value as static. */
-  DeclareAsyncBoundary = 'declare-async-boundary',
-  /** Strengthen the source/type surface so binding values are visible without executing runtime state. */
-  StrengthenBindingSource = 'strengthen-binding-source',
-  /** Register or disambiguate the Aurelia resource used by a binding source expression. */
-  RegisterBindingResource = 'register-binding-resource',
-  /** Rewrite an expression into a modeled binding expression shape. */
-  RewriteBindingExpression = 'rewrite-binding-expression',
-  /** Strengthen select value/option/domain typing or admit that the live DOM state remains dynamic. */
-  StrengthenSelectDomain = 'strengthen-select-domain',
-  /** Declare or select the route context used to interpret a navigation instruction. */
-  DeclareRouterContext = 'declare-router-context',
-  /** Declare a static route/navigation target or typed pattern that the route recognizer can enumerate. */
-  DeclareStaticNavigationTarget = 'declare-static-navigation-target',
-  /** Decide whether a dynamic href is external-link intent, internal-router intent, or intentionally runtime-only. */
-  ChooseRouterHrefOwnership = 'choose-router-href-ownership',
-  /** Mark a router-managed href as native/external when the app intends ordinary browser navigation. */
-  DeclareExternalHref = 'declare-external-href',
-  /** Rewrite malformed or unsupported router instruction syntax. */
-  FixRouterInstructionSyntax = 'fix-router-instruction-syntax',
-  /** Declare the viewport or viewport-agent target that owns a routed component activation. */
-  DeclareViewportTarget = 'declare-viewport-target',
-  /** Declare a redirect target or leave it intentionally runtime-dependent. */
-  DeclareRedirectTarget = 'declare-redirect-target',
-}
-
 export enum DiagnosticActionTargetSourceCoverage {
-  /** Every row in the cluster has an action-target source. */
+  /** The suggestion has an action-target source. */
   All = 'all',
-  /** Some rows in the cluster have an action-target source. */
-  Some = 'some',
-  /** No row in the cluster has an action-target source. */
+  /** The suggestion has no action-target source. */
   None = 'none',
-  /** The cluster does not need an app-source edit target. */
+  /** No suggestion exists, so action-target coverage does not apply. */
   NotApplicable = 'not-applicable',
 }
 
-export function diagnosticActionKindForDiagnosticSuggestion(
-  suggestionKind: string | null | undefined,
+export enum DiagnosticRepairActionability {
+  /** The diagnostic can name a concrete repair direction without claiming an edit exists. */
+  Guided = 'guided',
+  /** The diagnostic requires developer inspection before a repair direction is honest. */
+  Manual = 'manual',
+}
+
+export interface DiagnosticRepairAffordance {
+  readonly actionKind: DiagnosticActionKind | `${DiagnosticActionKind}`;
+  readonly planKind: DiagnosticActionPlanKind | `${DiagnosticActionPlanKind}`;
+  readonly changeDomain: DiagnosticActionChangeDomain | `${DiagnosticActionChangeDomain}`;
+  readonly readiness: DiagnosticActionPlanReadiness | `${DiagnosticActionPlanReadiness}`;
+  readonly targetSourceCoverage: DiagnosticActionTargetSourceCoverage | `${DiagnosticActionTargetSourceCoverage}`;
+  readonly actionability: DiagnosticRepairActionability | `${DiagnosticRepairActionability}`;
+}
+
+export function diagnosticRepairAffordanceForSuggestion(
+  suggestion: DiagnosticSuggestion<unknown> | null | undefined,
+): DiagnosticRepairAffordance | null {
+  if (suggestion == null) {
+    return null;
+  }
+  const actionKind = diagnosticActionKindForSuggestion(suggestion);
+  const planKind = diagnosticActionPlanKindForAction(
+    actionKind,
+    suggestion?.actionTarget?.targetKind ?? null,
+  );
+  const targetSourceCoverage = diagnosticActionTargetSourceCoverageForSuggestion(suggestion);
+  const changeDomain = diagnosticActionChangeDomainForPlan(planKind);
+  const readiness = diagnosticActionPlanReadinessForAffordance(
+    planKind,
+    targetSourceCoverage,
+  );
+  return {
+    actionKind,
+    planKind,
+    changeDomain,
+    readiness,
+    targetSourceCoverage,
+    actionability: diagnosticRepairActionabilityForAffordance(
+      changeDomain,
+      readiness,
+    ),
+  };
+}
+
+export function diagnosticActionTargetSourceCoverageForSuggestion(
+  suggestion: DiagnosticSuggestion<unknown> | null | undefined,
+): DiagnosticActionTargetSourceCoverage {
+  if (suggestion == null) {
+    return DiagnosticActionTargetSourceCoverage.NotApplicable;
+  }
+  return suggestion.actionTarget?.source == null
+    ? DiagnosticActionTargetSourceCoverage.None
+    : DiagnosticActionTargetSourceCoverage.All;
+}
+
+function diagnosticRepairActionabilityForAffordance(
+  changeDomain: DiagnosticActionChangeDomain | `${DiagnosticActionChangeDomain}`,
+  readiness: DiagnosticActionPlanReadiness | `${DiagnosticActionPlanReadiness}`,
+): DiagnosticRepairActionability {
+  if (
+    changeDomain === DiagnosticActionChangeDomain.Inspection
+    || readiness === DiagnosticActionPlanReadiness.InspectionRequired
+  ) {
+    return DiagnosticRepairActionability.Manual;
+  }
+  return DiagnosticRepairActionability.Guided;
+}
+
+function diagnosticActionKindForSuggestion(
+  suggestion: DiagnosticSuggestion<unknown> | null | undefined,
 ): DiagnosticActionKind {
-  switch (suggestionKind) {
-    case 'fix-expression-syntax':
-    case 'fix-template-syntax':
-      return DiagnosticActionKind.RewriteTemplateSyntax;
-    case 'declare-explicit-member':
-    case 'declare-assignable-member':
+  if (suggestion == null) {
+    throw new Error('A diagnostic without a suggestion has no repair action kind.');
+  }
+  const actionKind = suggestion.actionKind;
+  switch (actionKind) {
+    case DiagnosticSuggestionActionKind.DeclareMember:
       return DiagnosticActionKind.DeclareMissingMember;
-    case 'declare-scope-slot-type':
+    case DiagnosticSuggestionActionKind.DeclareScopeSlot:
       return DiagnosticActionKind.DeclareScopeSlotType;
-    case 'align-assignment-type':
+    case DiagnosticSuggestionActionKind.ChangeMemberType:
       return DiagnosticActionKind.AlignAssignmentType;
-    case 'make-source-writable':
+    case DiagnosticSuggestionActionKind.ChangeMemberMutability:
       return DiagnosticActionKind.MakeSourceWritable;
-    case 'replace-any-owner':
+    case DiagnosticSuggestionActionKind.ReplaceOwnerType:
       return DiagnosticActionKind.StrengthenOwnerType;
-    case 'register-resource':
-    case 'resolve-runtime-boundary':
-    case 'configure-node-observer':
-    case 'make-method-trackable':
+    case DiagnosticSuggestionActionKind.RegisterResource:
+      return DiagnosticActionKind.RegisterResource;
+    case DiagnosticSuggestionActionKind.RegisterService:
+      return DiagnosticActionKind.RegisterService;
+    case DiagnosticSuggestionActionKind.ConfigureObserver:
+      return DiagnosticActionKind.ConfigureObserver;
+    case DiagnosticSuggestionActionKind.DeclareRuntimeBoundary:
       return DiagnosticActionKind.ResolveRuntimeBoundary;
-    case 'register-framework-capability':
+    case DiagnosticSuggestionActionKind.RegisterFrameworkCapability:
       return DiagnosticActionKind.RegisterFrameworkCapability;
-    case 'remove-duplicate-binding-behavior':
-    case 'use-assignable-expression':
-      return DiagnosticActionKind.RewriteBindingSource;
-    case 'inspect-owner-type':
-    default:
+    case DiagnosticSuggestionActionKind.ConfigureFrameworkCapability:
+      return DiagnosticActionKind.ConfigureFrameworkCapability;
+    case DiagnosticSuggestionActionKind.RewriteExpression:
+      return suggestion?.suggestionKind === DiagnosticSuggestionKind.FixRouterInstruction
+        ? DiagnosticActionKind.RewriteRouterInstruction
+        : DiagnosticActionKind.RewriteExpression;
+    case DiagnosticSuggestionActionKind.RewriteTemplateSyntax:
+      return DiagnosticActionKind.RewriteTemplateSyntax;
+    case DiagnosticSuggestionActionKind.InspectOwnerType:
       return DiagnosticActionKind.InspectTypeSurface;
+    default:
+      return assertUnreachableSuggestionAction(actionKind);
   }
 }
 
-export function diagnosticActionKindForOpenSeamReasons(
-  reasonKinds: readonly (OpenSeamReasonKind | `${OpenSeamReasonKind}`)[],
-): DiagnosticActionKind {
-  if (reasonKinds.some((reasonKind) =>
-    reasonKind === OpenSeamReasonKind.BindingSourceUnsupportedExpression
-  )) {
-    return DiagnosticActionKind.RewriteBindingSource;
-  }
-  if (diagnosticActionRuntimeBoundaryKindsForOpenSeamReasons(reasonKinds).length > 0
-    || diagnosticActionRuntimeIntentKindsForOpenSeamReasons(reasonKinds).length > 0) {
-    return DiagnosticActionKind.ResolveRuntimeBoundary;
-  }
-  if (reasonKinds.length > 0) {
-    return DiagnosticActionKind.ExtendSemanticSubstrate;
-  }
-  return DiagnosticActionKind.InspectOpenSeam;
+function assertUnreachableSuggestionAction(value: never): never {
+  throw new Error(`Unsupported diagnostic suggestion action kind: ${String(value)}`);
 }
 
-export function diagnosticActionPlanKindForAction(
+function diagnosticActionPlanKindForAction(
   diagnosticActionKind: DiagnosticActionKind | `${DiagnosticActionKind}`,
-  suggestionActionKind: string | null,
-  actionTargetKind: string | null,
+  actionTargetKind: DiagnosticSuggestionActionTargetKind | `${DiagnosticSuggestionActionTargetKind}` | null,
 ): DiagnosticActionPlanKind {
   switch (diagnosticActionKind) {
     case DiagnosticActionKind.DeclareMissingMember:
-      return actionTargetKind === 'scope-slot'
+      return actionTargetKind === DiagnosticSuggestionActionTargetKind.ScopeSlot
         ? DiagnosticActionPlanKind.TemplateScopeSlotTyping
         : DiagnosticActionPlanKind.SourceMemberDeclaration;
     case DiagnosticActionKind.DeclareScopeSlotType:
       return DiagnosticActionPlanKind.TemplateScopeSlotTyping;
     case DiagnosticActionKind.StrengthenOwnerType:
       return DiagnosticActionPlanKind.SourceOwnerTypeStrengthening;
-    case DiagnosticActionKind.RewriteBindingSource:
-      return suggestionActionKind === 'rewrite-expression'
-        ? DiagnosticActionPlanKind.TemplateExpressionRewrite
-        : DiagnosticActionPlanKind.ManualInspection;
+    case DiagnosticActionKind.RewriteExpression:
+      return DiagnosticActionPlanKind.TemplateExpressionRewrite;
     case DiagnosticActionKind.RewriteTemplateSyntax:
       return DiagnosticActionPlanKind.TemplateSyntaxRewrite;
+    case DiagnosticActionKind.RewriteRouterInstruction:
+      return DiagnosticActionPlanKind.RouterInstructionRewrite;
     case DiagnosticActionKind.AlignAssignmentType:
       return DiagnosticActionPlanKind.SourceAssignmentTypeAlignment;
     case DiagnosticActionKind.MakeSourceWritable:
@@ -262,12 +376,18 @@ export function diagnosticActionPlanKindForAction(
       return DiagnosticActionPlanKind.RuntimeBoundaryDeclaration;
     case DiagnosticActionKind.RegisterFrameworkCapability:
       return DiagnosticActionPlanKind.FrameworkCapabilityRegistration;
-    case DiagnosticActionKind.ExtendSemanticSubstrate:
-      return DiagnosticActionPlanKind.SemanticSubstrateExtension;
+    case DiagnosticActionKind.ConfigureFrameworkCapability:
+      return DiagnosticActionPlanKind.FrameworkCapabilityConfiguration;
+    case DiagnosticActionKind.RegisterResource:
+      return DiagnosticActionPlanKind.ResourceRegistration;
+    case DiagnosticActionKind.RegisterService:
+      return DiagnosticActionPlanKind.ServiceRegistration;
+    case DiagnosticActionKind.ConfigureObserver:
+      return DiagnosticActionPlanKind.ObservationConfiguration;
     case DiagnosticActionKind.InspectTypeSurface:
-    case DiagnosticActionKind.InspectOpenSeam:
-    default:
       return DiagnosticActionPlanKind.ManualInspection;
+    default:
+      return assertUnreachableDiagnosticActionKind(diagnosticActionKind);
   }
 }
 
@@ -280,28 +400,29 @@ export function diagnosticActionChangeDomainForPlan(
     case DiagnosticActionPlanKind.TemplateScopeSlotTyping:
     case DiagnosticActionPlanKind.TemplateExpressionRewrite:
     case DiagnosticActionPlanKind.TemplateSyntaxRewrite:
+    case DiagnosticActionPlanKind.RouterInstructionRewrite:
     case DiagnosticActionPlanKind.SourceAssignmentTypeAlignment:
     case DiagnosticActionPlanKind.SourceWriteabilityAlignment:
     case DiagnosticActionPlanKind.FrameworkCapabilityRegistration:
+    case DiagnosticActionPlanKind.FrameworkCapabilityConfiguration:
+    case DiagnosticActionPlanKind.ResourceRegistration:
+    case DiagnosticActionPlanKind.ServiceRegistration:
+    case DiagnosticActionPlanKind.ObservationConfiguration:
       return DiagnosticActionChangeDomain.AppSource;
     case DiagnosticActionPlanKind.RuntimeBoundaryDeclaration:
       return DiagnosticActionChangeDomain.RuntimePolicy;
-    case DiagnosticActionPlanKind.SemanticSubstrateExtension:
-      return DiagnosticActionChangeDomain.SemanticRuntimeSubstrate;
     case DiagnosticActionPlanKind.ManualInspection:
-    default:
       return DiagnosticActionChangeDomain.Inspection;
+    default:
+      return assertUnreachableDiagnosticActionPlanKind(planKind);
   }
 }
 
-export function diagnosticActionPlanReadinessForCluster(
+function diagnosticActionPlanReadinessForAffordance(
   planKind: DiagnosticActionPlanKind | `${DiagnosticActionPlanKind}`,
   actionTargetSourceCoverage: DiagnosticActionTargetSourceCoverage,
-  openReasonKinds: readonly string[],
 ): DiagnosticActionPlanReadiness {
   switch (diagnosticActionChangeDomainForPlan(planKind)) {
-    case DiagnosticActionChangeDomain.SemanticRuntimeSubstrate:
-      return DiagnosticActionPlanReadiness.SubstrateWorkRequired;
     case DiagnosticActionChangeDomain.RuntimePolicy:
       return DiagnosticActionPlanReadiness.RuntimeIntentRequired;
     case DiagnosticActionChangeDomain.Inspection:
@@ -312,7 +433,7 @@ export function diagnosticActionPlanReadinessForCluster(
 
   if (
     planKind === DiagnosticActionPlanKind.FrameworkCapabilityRegistration
-    && openReasonKinds.length === 0
+    || planKind === DiagnosticActionPlanKind.FrameworkCapabilityConfiguration
   ) {
     return DiagnosticActionPlanReadiness.SourceEditPolicyOpen;
   }
@@ -323,122 +444,13 @@ export function diagnosticActionPlanReadinessForCluster(
   ) {
     return DiagnosticActionPlanReadiness.TargetSourceMissing;
   }
-  if (actionTargetSourceCoverage === DiagnosticActionTargetSourceCoverage.Some) {
-    return DiagnosticActionPlanReadiness.TargetSourcePartial;
-  }
-  return openReasonKinds.includes('source-edit-policy-open')
-    ? DiagnosticActionPlanReadiness.SourceEditPolicyOpen
-    : DiagnosticActionPlanReadiness.ReadyToPlan;
+  return DiagnosticActionPlanReadiness.ReadyToPlan;
 }
 
-export function diagnosticActionRuntimeBoundaryKindsForOpenSeamReasons(
-  reasonKinds: readonly (OpenSeamReasonKind | `${OpenSeamReasonKind}`)[],
-): readonly DiagnosticActionRuntimeBoundaryKind[] {
-  return uniqueStrings(reasonKinds.flatMap((reasonKind) => runtimeBoundaryKindsForOpenSeamReason(reasonKind)), 'sorted');
+function assertUnreachableDiagnosticActionKind(value: never): never {
+  throw new Error(`Unsupported diagnostic action kind: ${String(value)}`);
 }
 
-export function diagnosticActionRuntimeIntentKindsForOpenSeamReasons(
-  reasonKinds: readonly (OpenSeamReasonKind | `${OpenSeamReasonKind}`)[],
-): readonly DiagnosticActionRuntimeIntentKind[] {
-  return uniqueStrings(reasonKinds.flatMap((reasonKind) => runtimeIntentKindsForOpenSeamReason(reasonKind)), 'sorted');
-}
-
-function runtimeBoundaryKindsForOpenSeamReason(
-  reasonKind: OpenSeamReasonKind | `${OpenSeamReasonKind}`,
-): readonly DiagnosticActionRuntimeBoundaryKind[] {
-  switch (reasonKind) {
-    case OpenSeamReasonKind.HostEnvironmentValue:
-      return [DiagnosticActionRuntimeBoundaryKind.HostEnvironment];
-    case OpenSeamReasonKind.ExternalModuleValue:
-      return [DiagnosticActionRuntimeBoundaryKind.ExternalModule];
-    case OpenSeamReasonKind.AsyncExecutionValue:
-      return [DiagnosticActionRuntimeBoundaryKind.AsyncExecution];
-    case OpenSeamReasonKind.BindingSourceNeedsRuntimeValue:
-      return [DiagnosticActionRuntimeBoundaryKind.BindingSourceValue];
-    case OpenSeamReasonKind.BindingSourceSlotNoStaticValue:
-      return [DiagnosticActionRuntimeBoundaryKind.BindingSourceSlot];
-    case OpenSeamReasonKind.BindingSourceMemberNoStaticValue:
-      return [DiagnosticActionRuntimeBoundaryKind.BindingSourceMember];
-    case OpenSeamReasonKind.BindingSourceUnsupportedExpression:
-      return [DiagnosticActionRuntimeBoundaryKind.BindingSourceExpression];
-    case OpenSeamReasonKind.BindingSourceTypeOpen:
-      return [DiagnosticActionRuntimeBoundaryKind.BindingSourceType];
-    case OpenSeamReasonKind.BindingSourceResourceOpen:
-      return [DiagnosticActionRuntimeBoundaryKind.BindingSourceResource];
-    case OpenSeamReasonKind.BindingValueChannelSelectTargetOpen:
-      return [DiagnosticActionRuntimeBoundaryKind.SelectTarget];
-    case OpenSeamReasonKind.BindingValueChannelSelectOptionValueOpen:
-      return [DiagnosticActionRuntimeBoundaryKind.SelectOptionValue];
-    case OpenSeamReasonKind.BindingValueChannelSelectOptionDomainOpen:
-      return [DiagnosticActionRuntimeBoundaryKind.SelectOptionDomain];
-    case OpenSeamReasonKind.BindingValueChannelSelectMultipleSourceOpen:
-    case OpenSeamReasonKind.BindingValueChannelDynamicSelectMultiple:
-      return [DiagnosticActionRuntimeBoundaryKind.SelectMultipleState];
-    case OpenSeamReasonKind.RouterInstructionNeedsRouteContext:
-      return [DiagnosticActionRuntimeBoundaryKind.RouterContext];
-    case OpenSeamReasonKind.RouterInstructionNeedsStaticValue:
-      return [DiagnosticActionRuntimeBoundaryKind.RouterStaticInstruction];
-    case OpenSeamReasonKind.RouterHrefExternalityOpen:
-      return [DiagnosticActionRuntimeBoundaryKind.RouterHrefClassification];
-    case OpenSeamReasonKind.RouterHrefClickInterceptionDisabled:
-    case OpenSeamReasonKind.RouterHrefClickInterceptionTargetOpen:
-      return [DiagnosticActionRuntimeBoundaryKind.RouterHrefClickInterception];
-    case OpenSeamReasonKind.RouterInstructionMissingValue:
-      return [DiagnosticActionRuntimeBoundaryKind.RouterInstructionValue];
-    case OpenSeamReasonKind.RouterInstructionParseFailure:
-      return [DiagnosticActionRuntimeBoundaryKind.RouterInstructionSyntax];
-    case OpenSeamReasonKind.RouterViewportResolutionOpen:
-      return [DiagnosticActionRuntimeBoundaryKind.RouterViewport];
-    case OpenSeamReasonKind.RouterRedirectTargetOpen:
-      return [DiagnosticActionRuntimeBoundaryKind.RouterRedirect];
-    default:
-      return [];
-  }
-}
-
-function runtimeIntentKindsForOpenSeamReason(
-  reasonKind: OpenSeamReasonKind | `${OpenSeamReasonKind}`,
-): readonly DiagnosticActionRuntimeIntentKind[] {
-  switch (reasonKind) {
-    case OpenSeamReasonKind.HostEnvironmentValue:
-      return [DiagnosticActionRuntimeIntentKind.DeclareHostContract];
-    case OpenSeamReasonKind.ExternalModuleValue:
-      return [DiagnosticActionRuntimeIntentKind.DeclareImportContract];
-    case OpenSeamReasonKind.AsyncExecutionValue:
-      return [DiagnosticActionRuntimeIntentKind.DeclareAsyncBoundary];
-    case OpenSeamReasonKind.BindingSourceNeedsRuntimeValue:
-    case OpenSeamReasonKind.BindingSourceSlotNoStaticValue:
-    case OpenSeamReasonKind.BindingSourceMemberNoStaticValue:
-    case OpenSeamReasonKind.BindingSourceTypeOpen:
-      return [DiagnosticActionRuntimeIntentKind.StrengthenBindingSource];
-    case OpenSeamReasonKind.BindingSourceResourceOpen:
-      return [DiagnosticActionRuntimeIntentKind.RegisterBindingResource];
-    case OpenSeamReasonKind.BindingSourceUnsupportedExpression:
-      return [DiagnosticActionRuntimeIntentKind.RewriteBindingExpression];
-    case OpenSeamReasonKind.BindingValueChannelSelectTargetOpen:
-    case OpenSeamReasonKind.BindingValueChannelSelectOptionValueOpen:
-    case OpenSeamReasonKind.BindingValueChannelSelectOptionDomainOpen:
-    case OpenSeamReasonKind.BindingValueChannelSelectMultipleSourceOpen:
-    case OpenSeamReasonKind.BindingValueChannelDynamicSelectMultiple:
-      return [DiagnosticActionRuntimeIntentKind.StrengthenSelectDomain];
-    case OpenSeamReasonKind.RouterInstructionNeedsRouteContext:
-      return [DiagnosticActionRuntimeIntentKind.DeclareRouterContext];
-    case OpenSeamReasonKind.RouterInstructionNeedsStaticValue:
-    case OpenSeamReasonKind.RouterInstructionMissingValue:
-      return [DiagnosticActionRuntimeIntentKind.DeclareStaticNavigationTarget];
-    case OpenSeamReasonKind.RouterHrefExternalityOpen:
-      return [DiagnosticActionRuntimeIntentKind.ChooseRouterHrefOwnership];
-    case OpenSeamReasonKind.RouterHrefClickInterceptionDisabled:
-      return [DiagnosticActionRuntimeIntentKind.DeclareExternalHref];
-    case OpenSeamReasonKind.RouterHrefClickInterceptionTargetOpen:
-      return [DiagnosticActionRuntimeIntentKind.DeclareHostContract];
-    case OpenSeamReasonKind.RouterInstructionParseFailure:
-      return [DiagnosticActionRuntimeIntentKind.FixRouterInstructionSyntax];
-    case OpenSeamReasonKind.RouterViewportResolutionOpen:
-      return [DiagnosticActionRuntimeIntentKind.DeclareViewportTarget];
-    case OpenSeamReasonKind.RouterRedirectTargetOpen:
-      return [DiagnosticActionRuntimeIntentKind.DeclareRedirectTarget];
-    default:
-      return [];
-  }
+function assertUnreachableDiagnosticActionPlanKind(value: never): never {
+  throw new Error(`Unsupported diagnostic action plan kind: ${String(value)}`);
 }

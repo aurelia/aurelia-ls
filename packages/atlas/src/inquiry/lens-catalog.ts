@@ -1357,7 +1357,7 @@ export const LensCatalog: readonly LensSpec[] = [
     family: LensFamily.Bridge,
     stage: LensStage.Implemented,
     summary:
-      "Read narrow product-to-framework anchors declared through auLink.",
+      "Read product-to-framework unqualified-correspondence and semantic-facet anchors declared through auLink.",
     supportedLoci: [
       LocusKind.Repo,
       LocusKind.RepoArea,
@@ -1372,7 +1372,7 @@ export const LensCatalog: readonly LensSpec[] = [
     ],
     projections: [
       { id: "summary", summary: "auLink rollup." },
-      { id: "anchors", summary: "Product class to framework symbol anchors." },
+      { id: "anchors", summary: "Product declaration to framework symbol anchors with exact facet identity." },
       {
         id: "targets",
         summary: "Framework-side declaration resolution for auLink ids.",
@@ -1381,7 +1381,7 @@ export const LensCatalog: readonly LensSpec[] = [
       {
         id: "mirror",
         summary:
-          "Compact auLink rows joined to framework semantic role evidence and emulation obligations.",
+          "Compact auLink mapping rows distinguishing unqualified correspondences from semantic facets and joining framework role evidence and emulation obligations.",
       },
       {
         id: "role-evidence",
@@ -1396,17 +1396,17 @@ export const LensCatalog: readonly LensSpec[] = [
       {
         id: "usage-comparison",
         summary:
-          "Compare Aurelia-side framework API usage with semantic-runtime usage of the auLink mirror targets.",
+          "Compare Aurelia-side framework API usage with semantic-runtime usage for unqualified correspondence links; this is review pressure, not a parity claim.",
       },
       {
         id: "member-surface",
         summary:
-          "Compare framework target member declarations with semantic-runtime mirror member declarations before interpreting usage.",
+          "Compare framework target and semantic-runtime member declarations for unqualified correspondence links; named facets are intentionally excluded.",
       },
       {
         id: "usage-members",
         summary:
-          "Member-level usage comparison rows between auLink framework targets and semantic-runtime mirror targets.",
+          "Member-level usage comparison rows for unqualified auLink correspondences.",
       },
       {
         id: "usage-sites",
@@ -1441,6 +1441,18 @@ export const LensCatalog: readonly LensSpec[] = [
         role: ParameterRole.Filter,
         summary:
           "Filter framework target resolution by resolved, ambiguous, unresolved, or package-unadmitted.",
+      },
+      {
+        id: "facet",
+        role: ParameterRole.Filter,
+        summary:
+          "Filter placements by exact authored semantic facet; unqualified facetless correspondences do not match.",
+      },
+      {
+        id: "facetState",
+        role: ParameterRole.Filter,
+        summary:
+          "Filter placements by exact facet state: unqualified, exact, or unresolved.",
       },
       {
         id: "roleFamily",
@@ -3687,6 +3699,12 @@ export const LensCatalog: readonly LensSpec[] = [
         summary: "Filter signed claims by framework phase.",
       },
       {
+        id: "facet",
+        role: ParameterRole.Filter,
+        summary:
+          "Filter auLink bridge claims by exact semantic facet; unqualified correspondence claims carry no facet.",
+      },
+      {
         id: "query",
         role: ParameterRole.Filter,
         summary:
@@ -3791,7 +3809,7 @@ export const LensCatalog: readonly LensSpec[] = [
       {
         id: "reverse-coverage",
         summary:
-          "Per-family reverse coverage: which source-derived constructs are mirrored by a semantic-runtime auLink anchor, kind-aware and non-hiding.",
+          "Per-family reverse coverage: which source-derived constructs have unqualified or semantic-facet auLink modeling, kind-aware and non-hiding.",
       },
     ],
     parameters: [
