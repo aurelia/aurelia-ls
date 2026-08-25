@@ -2,7 +2,7 @@
   "name": "@aurelia-ls/aot",
   "version": "0.1.0",
   "private": true,
-  "description": "Aurelia AOT compiler and lowering-parity harness over semantic-runtime",
+  "description": "Aurelia AOT assurance and artifact projection over semantic-runtime",
   "type": "module",
   "main": "./out/index.js",
   "types": "./out/index.d.ts",

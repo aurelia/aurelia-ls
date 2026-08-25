@@ -1,15 +1,19 @@
 # @aurelia-ls/aot
 
-Clean-slate Aurelia AOT compiler package over `@aurelia-ls/semantic-runtime`.
+Clean-slate Aurelia AOT assurance and artifact-projection package over `@aurelia-ls/semantic-runtime`.
 
-The first implementation chapter is normalized compiled-definition parity with Aurelia's real JIT
-`ITemplateCompiler`. This package will later own residual policy, ordered registration planning, emission, source maps,
-and build integration. Reusable Aurelia/application semantics, causal open seams, provenance, and negative closure stay
-in their owning semantic-runtime layers.
+The current program chapter is broad compiler conservation against Aurelia's real JIT `ITemplateCompiler` and the
+framework compiler/runtime corpus. It is not an emitted-code vertical or a narrow normalized-parity milestone. The
+corpus must span browser-effective structure, built-in lowering, transformed effects, definition values, diagnostics,
+extension effects, provenance, and distinct closure claims before artifact projection begins.
 
-The package deliberately has no public compiler API yet. Compiled-definition parity is the current characterization
-lane; it does not predetermine whether the first proven public boundary is a compiler/session, decision plan, or narrow
-generation-bound projection. Do not expose private app-emission orchestration or freeze a wire format prematurely.
+Reusable Aurelia/application semantics, compiler-effect outcomes, consumer-neutral framework definition values,
+causal open seams, provenance, and negative closure stay in semantic-runtime. This package will select target
+guarantees and later own residual policy, ordered registration/import planning, JavaScript serialization, generated
+source maps, artifact realization, and build integration.
+
+The package deliberately has no public compiler API yet. Do not expose private app-emission orchestration, freeze a
+wire format, or mirror semantic-runtime's expression/compiler rules merely to make this package larger.
 
 Current commands:
 
@@ -20,16 +24,22 @@ pnpm --filter @aurelia-ls/aot test
 pnpm --filter @aurelia-ls/aot oracle:jit -- --query=property-binding
 ```
 
-The real corpus will not become one Vitest test per compiler case. `oracle:jit` is the first bespoke batched runner: it
+The real corpus will not become one Vitest test per compiler case. `oracle:jit` is a bespoke batched runner: it
 uses one process-lifetime JSDOM/browser platform (required by the framework's markup cache), creates fresh root/child
-framework DI containers per case, registers definition dependencies in the child compilation container, reports aggregate and
-slow-case timing, bounds failure output, and supports query/id/tag filters, stable shards, repetition, fail-fast, list,
-and JSON modes. This keeps large corpus iteration cheap and makes external process sharding possible without sharing
-mutable compiler containers.
+framework DI containers per case, registers definition dependencies in the child compilation container, reports
+aggregate and slow-case timing, bounds failure output, and supports query/id/tag filters, stable shards, repetition,
+fail-fast, list, and JSON modes. This keeps large corpus iteration cheap and makes external process sharding possible
+without sharing mutable compiler containers.
 
-Vitest is reserved for a small number of harness invariants. The initial contract proves that the isolated container
+Vitest is reserved for a small number of harness invariants. The current four-case registry proves that the isolated container
 boots the actual framework `StandardConfiguration`, resolves the real `ITemplateCompiler`, and compiles an explicit
-custom-element definition. It is the first executable oracle boundary, not the normalized comparator itself.
+custom-element definition. It proves harness mechanics, not corpus breadth or semantic conservation.
+
+The current imperative `BatchCase.run(context)` shape is provisional: input construction, oracle execution, and
+assertion are entangled. Keep the batching lifecycle, filtering, and process-sharding mechanics, but replace the case
+contract before corpus mining with runner-neutral worlds, framework provenance, semantic obligation ids, focused
+invariants, comparison lanes, contrasts, and explicit effect/closure posture. Freeze further receipt/CLI elaboration
+until that breadth exists; throughput and receipt hashes are hygiene, not success metrics.
 
 Examples:
 
@@ -43,8 +53,9 @@ Machine consumers should build once and invoke the Node runner directly (or use 
 stdout contains exactly one JSON receipt. Case bodies run sequentially; process shards are the parallelism boundary.
 An outer CI timeout guards synchronous compiler hangs without paying one subprocess per case.
 
-An active case is gating: it passes or fails. Deferred semantic families stay outside the active registry until their
-normalization/closure contract exists; the runner does not convert mismatches into expected failures or local bailouts.
+An active case is gating: it passes or fails. The durable corpus must also expose an audit ledger for not-yet-reconciled
+obligations so absent semantic families cannot disappear outside the registry. The runner does not convert mismatches
+or open effects into expected failures or local bailouts.
 Every ordinary case uses an explicit definition name and fresh definition/template input. Anonymous generated-name
 behavior and other framework module-global state require a separately controlled characterization lane before they can
 join an order-independent batch.
@@ -68,16 +79,17 @@ syntax/resources, provider order, and resource-resolution canaries reachable wit
 Before production compiler modules grow, move this tooling into a separate build boundary so core source cannot acquire
 an accidental JSDOM, `StandardConfiguration`, or JIT dependency.
 
-Do not depend on the retiring `compiler`, `semantic-workspace`, `ssr`, `ssg`, `transform`, `vite-plugin`, or
-`integration-harness` packages. Verified browser, bundler, or process mechanics may be extracted later without
-inheriting their semantic contracts, wire formats, or snapshots.
+The predecessor compiler, semantic-workspace, SSR, SSG, transform, Vite-plugin, and integration-harness packages were
+removed at `6dc45b640`. Historical evidence is available at
+`ab95afe6658f7e9526c6d15409bd122e0b85bc25`; never restore a dependency on their semantic contracts, wire formats, or
+snapshots.
 
 ## Build-tool boundary
 
-The compiler core and parity harness are bundler-neutral. They do not depend on Vite or treat the existing conventions
-plugin as semantic authority. The greenfield production integration may later be a thin latest-Vite adapter, an Aurelia-
-repo-owned wrapper, a standalone adapter, or a two-lane choice between the established conventions plugin and an
-experimental AOT-plus-conventions plugin.
+The AOT artifact layer and conservation harness are bundler-neutral. They do not depend on Vite or treat the existing
+conventions plugin as semantic authority. The greenfield production integration may later be a thin latest-Vite
+adapter, an Aurelia-repo-owned wrapper, a standalone adapter, or a two-lane choice between the established conventions
+plugin and an experimental AOT-plus-conventions plugin.
 
 If two lanes remain supported, semantic-runtime must model which transform provider and convention dialect is admitted,
 including ordering, options, source maps, and open configuration, so IDE and MCP analyze the same effective build world.

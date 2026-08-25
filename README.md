@@ -69,8 +69,10 @@ Responsibilities around the shared model are divided as follows:
   editor presentation.
 - MCP adapts the model for AI clients and adds Aurelia Patterns plus bundled
   Aurelia docs.
-- AOT consumes generation-safe semantic products and owns parity, residual
-  policy, emission, source maps, and build integration.
+- AOT consumes generation-safe semantic products and owns target guarantees,
+  residual policy, artifact serialization, generated source maps, and build
+  integration. Consumer-neutral Aurelia/compiler facts remain in
+  semantic-runtime.
 
 Analysis is bounded to static, source-resolvable behavior. Dynamic boundaries
 stay visible in answer coverage and explanations; runtime execution is outside
