@@ -149,8 +149,6 @@ touches most framework surfaces; it is not the ontology.
 - Before choosing Atlas maintenance work, run
   `pnpm --filter @aurelia-ls/atlas pressure:self`; before choosing semantic-runtime cleanup pressure, run
   `pnpm --filter @aurelia-ls/atlas pressure:product-architecture`.
-  For the compact cross-cutting handoff, read
-  [../../workbench/agent-handoff.md](../../workbench/agent-handoff.md).
 1. Re-run `bridge.aulink` usage comparison after the semantic-runtime TemplateCompilerService refactor.
    Inspect `usage-comparison`, `member-surface`, and `usage-consumers` for `TemplateCompiler`, `IAttributeParser`,
    `IBindingCommandResolver`, `Rendering`, and `Container`.

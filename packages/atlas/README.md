@@ -122,8 +122,6 @@ framework ontology. Re-run it with
 
 ## Fast Agent Lanes
 
-For a compact current handoff, read [workbench/agent-handoff.md](workbench/agent-handoff.md) after `orient`.
-
 - Start broad work with `pnpm --filter @aurelia-ls/atlas orient`; it is the compact live map of lenses, projections,
   terrain, source footing, first moves, shortcut scripts, and compact follow-up docs. Use `orient:json` only when a
   tool needs the full machine-readable orientation payload.

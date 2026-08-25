@@ -10,9 +10,8 @@ pnpm --filter @aurelia-ls/atlas orient
 
 Atlas is the live self-description layer for the repo and should be treated as the first read before broad product or architecture work.
 The default orientation output is compact; use `pnpm --filter @aurelia-ls/atlas orient:json` only when a tool needs the full request-shaped payload.
-Read `packages/atlas/workbench/agent-handoff.md` after orient when starting a broad or resumed session.
 
-For a focused task with a current tracker, domain note, or explicit entry files, do not expand context through broad orientation or the agent handoff. Use targeted Atlas memory, framework corpus, flow, or pressure query when a concrete semantic question needs grounding. Atlas is navigation and queryable memory, not a substitute for reading the owning code, framework evidence, and current contracts.
+For a focused task with a current tracker, domain note, or explicit entry files, do not expand context through broad orientation. Use targeted Atlas memory, framework corpus, flow, or pressure query when a concrete semantic question needs grounding. Atlas is navigation and queryable memory, not a substitute for reading the owning code, framework evidence, and current contracts.
 
 Useful Atlas follow-up commands:
 

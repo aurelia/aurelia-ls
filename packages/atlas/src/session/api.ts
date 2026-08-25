@@ -323,12 +323,6 @@ function orientationDocs(): readonly OrientationDocumentGuide[] {
         "Repo-level agent policy: Atlas-first workflow, semantic-runtime ownership, external checkout boundary, and commit style.",
     },
     {
-      id: "atlas.agent-handoff",
-      path: "packages/atlas/workbench/agent-handoff.md",
-      summary:
-        "Compact post-orient handoff for future sessions: fast lanes, product architecture costs, mapping policy, and current pressure pointers.",
-    },
-    {
       id: "atlas.readme",
       path: "packages/atlas/README.md",
       summary:

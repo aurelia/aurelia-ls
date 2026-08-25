@@ -577,12 +577,6 @@
       ],
       "anchors": [
         {
-          "kind": "doc",
-          "path": "packages/atlas/workbench/agent-handoff.md",
-          "heading": "Decision Provenance",
-          "summary": "Atlas pressure/self checks are navigation aids, not lint scoreboard rules."
-        },
-        {
           "kind": "lens",
           "lensId": "atlas.self",
           "projection": "function-wrappers",
@@ -616,10 +610,6 @@
           "kind": "source-declaration-exists",
           "filePath": "packages/atlas/src/inquiry/runtime/self-source-surface-lenses.ts",
           "symbolName": "answerSelfFunctionWrappersProjection"
-        },
-        {
-          "kind": "source-file-exists",
-          "filePath": "packages/atlas/workbench/agent-handoff.md"
         }
       ],
       "createdAt": "2026-05-13",

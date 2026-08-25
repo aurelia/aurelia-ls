@@ -86,49 +86,6 @@
       "updatedAt": "2026-05-12"
     },
     {
-      "id": "doc:agent-handoff-fast-local-lanes",
-      "kind": "doc-shard",
-      "domains": [
-        "atlas",
-        "orientation",
-        "agent-handoff",
-        "workflow"
-      ],
-      "summary": "Agent handoff is the compact post-orient index of Atlas commands and when to use each lane.",
-      "rationale": "Future sessions should not rediscover the available Atlas handles by scanning package scripts or old workbench prose. This shard makes the handoff document findable from memory queries.",
-      "guidance": [
-        "Run orient first, then memory, then the pressure/profile lane that matches the current domain.",
-        "Prefer Atlas lanes over au-mcp or ad hoc repo mapping.",
-        "When a lane feels too expensive or too noisy, improve Atlas rather than storing a manual workaround in markdown."
-      ],
-      "anchors": [
-        {
-          "kind": "doc",
-          "path": "packages/atlas/workbench/agent-handoff.md",
-          "heading": "Fast Local Lanes",
-          "summary": "Compact Atlas command map."
-        },
-        {
-          "kind": "script",
-          "command": "pnpm --filter @aurelia-ls/atlas orient",
-          "summary": "Initial compact orientation lane."
-        },
-        {
-          "kind": "script",
-          "command": "pnpm --filter @aurelia-ls/atlas memory",
-          "summary": "Durable memory lane."
-        }
-      ],
-      "liveChecks": [
-        {
-          "kind": "source-file-exists",
-          "filePath": "packages/atlas/workbench/agent-handoff.md"
-        }
-      ],
-      "createdAt": "2026-05-12",
-      "updatedAt": "2026-05-12"
-    },
-    {
       "id": "decision:mcp-comes-after-public-product-api",
       "kind": "decision",
       "domains": [
@@ -152,11 +109,6 @@
           "path": "packages/atlas/workbench/product-specific-pressures.md",
           "heading": "MCP Packaging",
           "summary": "MCP packaging pressure and public API framing."
-        },
-        {
-          "kind": "doc",
-          "path": "packages/atlas/workbench/agent-handoff.md",
-          "summary": "Atlas-first internal development posture (the handoff's former Autonomous Loop Posture section; the doc has since been restructured)."
         },
         {
           "kind": "doc",
@@ -250,12 +202,6 @@
           "lensId": "ts.source",
           "projection": "text",
           "summary": "Exact source text inspection for corpus docs/tests ranges, including files outside the TypeScript Program."
-        },
-        {
-          "kind": "doc",
-          "path": "packages/atlas/workbench/agent-handoff.md",
-          "heading": "Fast Local Lanes",
-          "summary": "Current Atlas corpus pressure script orientation."
         },
         {
           "kind": "doc",
