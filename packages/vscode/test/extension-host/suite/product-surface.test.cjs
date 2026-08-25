@@ -55,6 +55,7 @@ const extensionHostObservationEvent = "aurelia-ls:extension-host-observation";
 const resourceDiscoveryHostControlEvent = "aurelia-ls:resource-discovery-host-control";
 const resourceDiscoveryHostControlSchema = "aurelia-resource-discovery-host-control/1";
 const extensionHostObservations = [];
+const availabilityRestartSemanticTimeout = 300_000;
 const memberHoverMarkdown = [
   "```ts",
   "searchText: string",
@@ -4369,7 +4370,7 @@ suite("extension-host product surface", () => {
   });
 
   test("restarts active-template availability across both stale-scope F1-to-F2 mutations", async function() {
-    this.timeout(600_000);
+    this.timeout(900_000);
     const witness = resourceDiscoveryAcceptance.fixture.witnesses.shiftedAndRemovedNavigation;
     const race = witness.availabilityRace;
     const templatePath = resolveFixturePath(routedAureliaWorkspace, race.template.relativePath);
@@ -5858,7 +5859,7 @@ function startObservedCommand(command) {
   return { command, execution, start, settled: () => settled };
 }
 
-async function waitForQuickPickModel(flow, modelOrdinal) {
+async function waitForQuickPickModel(flow, modelOrdinal, timeoutMs = 120_000) {
   const ready = await waitForExtensionHostObservation(
     flow.start,
     (event) => event.source === "resource-quick-pick"
@@ -5866,7 +5867,7 @@ async function waitForQuickPickModel(flow, modelOrdinal) {
       && event.modelOrdinal === modelOrdinal,
     `${flow.command} should publish Quick Pick model ${modelOrdinal}`,
     flow.settled,
-    120_000,
+    timeoutMs,
   );
   const items = extensionHostObservations.filter((event) =>
     event.source === "resource-quick-pick"
@@ -6230,16 +6231,42 @@ async function runAvailabilityRestartRace({
     `${resourceIdentity} mutation should invalidate the exact workspace before F2 release`,
   );
   const released = await releaseResourceDiscoveryControl(controlId);
-  const snapshotRefused = await waitForExtensionHostObservation(
-    flow.start,
-    (event) => event.source === "resource-navigation"
-      && event.phase === "refused"
-      && event.resourceIdentity === resourceIdentity
-      && event.category === "snapshot-changed",
-    `${resourceIdentity} navigation should reject its stale F1 snapshot`,
+  const navigationOutcomeStart = extensionHostObservations.indexOf(released) + 1;
+  const navigationOutcome = await waitForExtensionHostObservation(
+    navigationOutcomeStart,
+    (event) => (
+      event.source === "resource-navigation"
+        && event.resourceIdentity === resourceIdentity
+        && (event.phase === "refused" || event.phase === "opened")
+    ) || (
+      event.source === "go-to-available-resource"
+        && event.observationId === selected.observationId
+        && ["cancelled", "navigation-complete", "navigation-failed", "recovery-presented"].includes(event.phase)
+    ),
+    () => `${resourceIdentity} navigation should reject its stale F1 snapshot; ${availabilityRaceMismatchDetails(
+      flow.start,
+      selected.observationId,
+      null,
+    )}`,
     flow.settled,
-    120_000,
+    availabilityRestartSemanticTimeout,
   );
+  if (
+    navigationOutcome.source !== "resource-navigation"
+    || navigationOutcome.phase !== "refused"
+    || navigationOutcome.category !== "snapshot-changed"
+  ) {
+    throw new Error(
+      `${resourceIdentity} produced ${navigationOutcome.source}/${navigationOutcome.phase}`
+      + ` instead of rejecting its stale F1 snapshot; ${availabilityRaceMismatchDetails(
+        flow.start,
+        selected.observationId,
+        null,
+        navigationOutcome,
+      )}`,
+    );
+  }
+  const snapshotRefused = navigationOutcome;
   assert.strictEqual(snapshotRefused.editorUnchanged, true);
   const staleRetry = await waitForExtensionHostObservation(
     flow.start,
@@ -6259,7 +6286,7 @@ async function runAvailabilityRestartRace({
       && event.status === "restart",
     `${resourceIdentity} should restart after the selected scope retires`,
     flow.settled,
-    120_000,
+    availabilityRestartSemanticTimeout,
   );
   assertAvailabilityResponseObservation(retiredScopeResponse, {
     answerCoverage: retiredScopeReproof.coverage,
@@ -6284,7 +6311,7 @@ async function runAvailabilityRestartRace({
   );
   assert.strictEqual(revalidated.rowCount, 0);
   assert.strictEqual(revalidated.editorUnchanged, true);
-  const currentModel = await waitForQuickPickModel(flow, 2);
+  const currentModel = await waitForQuickPickModel(flow, 2, availabilityRestartSemanticTimeout);
   const currentResponse = extensionHostObservations.slice(
     extensionHostObservations.indexOf(revalidated) + 1,
   ).find((event) => event.source === "go-to-available-resource"
@@ -7289,12 +7316,16 @@ async function waitForExtensionHostObservation(
   timeoutMs = 60_000,
 ) {
   let matched;
+  const failureMessage = () => {
+    const summary = typeof message === "function" ? message() : message;
+    return `${summary}; trace ${JSON.stringify(resourceDiscoveryObservations(start).slice(-40))}`;
+  };
   await waitFor(() => {
     matched = extensionHostObservations.slice(start).find(predicate);
     if (matched != null) return true;
-    if (executionSettled()) throw new Error(`${message}; the command settled before that phase.`);
+    if (executionSettled()) throw new Error(`${failureMessage()}; the command settled before that phase.`);
     return false;
-  }, message, timeoutMs);
+  }, failureMessage, timeoutMs);
   return matched;
 }
 

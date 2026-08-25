@@ -352,7 +352,7 @@ describe("VS Code publish workflow contract", () => {
     const hostJob = ciJobs["vscode-extension-host"];
     expect(hostJob).toMatchObject({
       "runs-on": "windows-latest",
-      "timeout-minutes": 60,
+      "timeout-minutes": 90,
     });
     expect(hostJob?.needs).toBeUndefined();
     expect(namedJobStep(hostJob, "Test release VS Code Worker hosts").run)

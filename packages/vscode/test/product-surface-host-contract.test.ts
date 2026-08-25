@@ -492,7 +492,17 @@ describe("Extension Host product-surface contracts", () => {
     expect(start).toBeGreaterThanOrEqual(0);
     expect(end).toBeGreaterThan(start);
     const journey = source.slice(start, end);
+    const waitStart = source.indexOf("async function waitForExtensionHostObservation(");
+    const waitEnd = source.indexOf("\nfunction assertAuthoredResourceDocument(", waitStart);
+    expect(waitStart).toBeGreaterThanOrEqual(0);
+    expect(waitEnd).toBeGreaterThan(waitStart);
+    const waitHelper = source.slice(waitStart, waitEnd);
 
+    expect(journey).toContain("this.timeout(900_000)");
+    expect(source).toContain("const availabilityRestartSemanticTimeout = 300_000;");
+    expect(source).toContain("navigationOutcomeStart");
+    expect(waitHelper).toContain('typeof message === "function"');
+    expect(waitHelper).toContain("resourceDiscoveryObservations(start).slice(-40)");
     expect(journey).toContain("Both declarations are restored and saved above");
     expect(journey).toContain("routedInvalidations");
     expect(journey).toContain("treePublications");
