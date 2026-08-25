@@ -462,7 +462,9 @@ describe("Extension Host product-surface contracts", () => {
     const followingTestStart = source.indexOf("test(", ambiguityStart + 1);
     expect(followingTestStart).toBeGreaterThan(ambiguityStart);
     const ambiguityJourney = source.slice(ambiguityStart, followingTestStart);
-    expect(ambiguityJourney).toMatch(/this\.timeout\(420_000\)/u);
+    expect(ambiguityJourney).toMatch(/this\.timeout\(600_000\)/u);
+    expect(source).toContain("const availabilityAmbiguityColdSemanticTimeout = 300_000;");
+    expect(ambiguityJourney).toContain("availabilityAmbiguityColdSemanticTimeout");
     expect(ambiguityJourney).toContain('"unadmitted-plugin-app.html"');
     expect(ambiguityJourney).toContain('setTextDocumentLanguage(churnControl, "plaintext")');
     expect(ambiguityJourney).toContain('setTextDocumentLanguage(churnControl, "html")');

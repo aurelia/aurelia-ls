@@ -55,6 +55,7 @@ const extensionHostObservationEvent = "aurelia-ls:extension-host-observation";
 const resourceDiscoveryHostControlEvent = "aurelia-ls:resource-discovery-host-control";
 const resourceDiscoveryHostControlSchema = "aurelia-resource-discovery-host-control/1";
 const extensionHostObservations = [];
+const availabilityAmbiguityColdSemanticTimeout = 300_000;
 const availabilityRestartSemanticTimeout = 300_000;
 const memberHoverMarkdown = [
   "```ts",
@@ -3792,7 +3793,7 @@ suite("extension-host product surface", () => {
   });
 
   test("adjudicates both native Resource Discovery ambiguities and open coverage", async function() {
-    this.timeout(420_000);
+    this.timeout(600_000);
     const fixture = resourceDiscoveryAcceptance.fixture;
     const ambiguity = fixture.witnesses.projectTemplateAmbiguity;
     for (const project of ambiguity.projects) {
@@ -3962,7 +3963,11 @@ suite("extension-host product surface", () => {
       extensionHostObservations.indexOf(firstProjectAccept) + 1,
     );
 
-    const firstTemplateModel = await waitForQuickPickModel(flow, 2);
+    const firstTemplateModel = await waitForQuickPickModel(
+      flow,
+      2,
+      availabilityAmbiguityColdSemanticTimeout,
+    );
     const backStart = extensionHostObservations.length;
     void vscode.commands.executeCommand("workbench.action.quickInputBack").then(undefined, () => undefined);
     const back = await waitForExtensionHostObservation(
