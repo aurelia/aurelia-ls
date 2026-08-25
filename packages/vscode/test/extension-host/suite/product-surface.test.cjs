@@ -5186,7 +5186,7 @@ async function authenticateResourceDiscoveryAcceptanceInputs(extension) {
     requestedVersion === "stable" ? "current-stable" : "minimum",
   );
 
-  authenticateHostFixtureCorpus(fixture, routedAureliaWorkspace, extension.extensionPath);
+  authenticateHostFixtureCorpus(fixture, routedAureliaWorkspace);
 
   const staticContractModuleUrl = pathToFileURL(path.join(
     extension.extensionPath,
@@ -5255,7 +5255,7 @@ async function reauthenticateResourceDiscoveryAcceptanceCorpus() {
     sha256Bytes(readRegularHostFile(acceptance.descriptorPath, "restored semantic workspace descriptor")),
     acceptance.descriptorSha256,
   );
-  authenticateHostFixtureCorpus(acceptance.fixture, routedAureliaWorkspace, acceptance.extensionPath);
+  authenticateHostFixtureCorpus(acceptance.fixture, routedAureliaWorkspace);
   const staticContractModuleUrl = pathToFileURL(path.join(
     acceptance.extensionPath,
     "scripts",
@@ -5533,7 +5533,7 @@ function readRegularHostFile(filePath, label) {
   return readFileSync(filePath);
 }
 
-function authenticateHostFixtureCorpus(fixture, workspaceRoot, extensionPath) {
+function authenticateHostFixtureCorpus(fixture, workspaceRoot) {
   assert(Array.isArray(fixture.files) && fixture.files.length > 0);
   assert(Array.isArray(fixture.links));
   for (const receipt of fixture.files) {
@@ -5574,13 +5574,6 @@ function authenticateHostFixtureCorpus(fixture, workspaceRoot, extensionPath) {
       `Fixture link package manifest changed for ${receipt.relativePath}.`,
     );
   }
-  const rootDependencyLink = path.join(workspaceRoot, "node_modules");
-  assert(lstatSync(rootDependencyLink).isSymbolicLink(), "The approved root node_modules path must remain symbolic.");
-  assert.strictEqual(
-    normalize(realpathSync(rootDependencyLink)),
-    normalize(realpathSync(path.resolve(extensionPath, "..", "semantic-runtime", "node_modules"))),
-    "The approved root node_modules target changed.",
-  );
 }
 
 function parseHostJson(bytes, label) {

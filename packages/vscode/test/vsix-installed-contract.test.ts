@@ -5,6 +5,7 @@ import {
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  realpathSync,
   rmSync,
   symlinkSync,
   unlinkSync,
@@ -827,28 +828,27 @@ describe("installed VSIX release gate", () => {
     }
   });
 
-  test("revalidates the copied workspace dependency link against the exact semantic-runtime root", async () => {
+  test("revalidates copied workspace package links against the exact semantic-runtime packages", async () => {
     const gate = await loadGate();
     const root = contractRoot(gate, "dependency-link-");
     const workspace = path.join(root, "w");
     mkdirSync(workspace);
     writeFileSync(path.join(workspace, "package.json"), "{\"private\":true}\n");
-    const linkPath = path.join(workspace, "node_modules");
-    symlinkSync(gate.dependencyRoot, linkPath, process.platform === "win32" ? "junction" : "dir");
-    try {
-      expect(gate.validateWorkspaceDependenciesAfterHost(workspace)).toMatchObject({ status: "passed" });
-    } finally {
-      unlinkSync(linkPath);
+    const nodeModulesPath = path.join(workspace, "node_modules");
+    mkdirSync(path.join(nodeModulesPath, "@aurelia"), { recursive: true });
+    for (const specifier of ["aurelia", "@aurelia/router"]) {
+      const packageLinkPath = path.join(nodeModulesPath, ...specifier.split("/"));
+      const sourcePackageRoot = realpathSync(path.join(gate.dependencyRoot, ...specifier.split("/")));
+      symlinkSync(sourcePackageRoot, packageLinkPath, process.platform === "win32" ? "junction" : "dir");
     }
+    expect(gate.validateWorkspaceDependenciesAfterHost(workspace)).toMatchObject({ status: "passed" });
 
-    const wrongTarget = path.join(root, "wrong-node-modules");
+    const changedLinkPath = path.join(nodeModulesPath, "aurelia");
+    unlinkSync(changedLinkPath);
+    const wrongTarget = path.join(root, "wrong-aurelia-package");
     mkdirSync(wrongTarget);
-    symlinkSync(wrongTarget, linkPath, process.platform === "win32" ? "junction" : "dir");
-    try {
-      expect(() => gate.validateWorkspaceDependenciesAfterHost(workspace)).toThrow(/target changed/u);
-    } finally {
-      unlinkSync(linkPath);
-    }
+    symlinkSync(wrongTarget, changedLinkPath, process.platform === "win32" ? "junction" : "dir");
+    expect(() => gate.validateWorkspaceDependenciesAfterHost(workspace)).toThrow(/target changed/u);
   });
 
   test("uses real driver-context Test evidence and never reads a nonexistent Extension mode", () => {

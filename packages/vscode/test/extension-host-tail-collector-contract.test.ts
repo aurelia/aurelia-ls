@@ -6,6 +6,7 @@ import {
   readFileSync,
   realpathSync,
   rmSync,
+  symlinkSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -379,16 +380,56 @@ describe("Extension Host tail collector", () => {
 
     expect(evidence).toMatchObject({
       status: "passed",
-      strategy: process.platform === "win32" ? "junction" : "directory-symbolic-link",
-      linkPath: path.join(realpathSync(workspace.workspaceRoot), "node_modules"),
-      linkTarget: realpathSync(dependencyRoot),
-      resolvedLinkTarget: realpathSync(dependencyRoot),
+      strategy: process.platform === "win32"
+        ? "direct-package-junctions"
+        : "direct-package-directory-symbolic-links",
+      nodeModulesPath: path.join(realpathSync(workspace.workspaceRoot), "node_modules"),
+      dependencyRoot: realpathSync(dependencyRoot),
       resolvedModules: [
-        { specifier: "aurelia", resolvedRealPath: expect.any(String) },
-        { specifier: "@aurelia/router", resolvedRealPath: expect.any(String) },
+        {
+          specifier: "aurelia",
+          packageLinkPath: expect.any(String),
+          sourcePackageRoot: expect.any(String),
+          resolvedLinkTarget: expect.any(String),
+          resolvedRealPath: expect.any(String),
+        },
+        {
+          specifier: "@aurelia/router",
+          packageLinkPath: expect.any(String),
+          sourcePackageRoot: expect.any(String),
+          resolvedLinkTarget: expect.any(String),
+          resolvedRealPath: expect.any(String),
+        },
       ],
     });
-    expect(lstatSync(evidence.linkPath).isSymbolicLink()).toBe(true);
+    expect(lstatSync(evidence.nodeModulesPath).isDirectory()).toBe(true);
+    expect(lstatSync(evidence.nodeModulesPath).isSymbolicLink()).toBe(false);
+    expect(evidence.resolvedModules.every((module: { packageLinkPath: string }) =>
+      lstatSync(module.packageLinkPath).isSymbolicLink()
+    )).toBe(true);
+  });
+
+  test("relinks relative dependency entries to canonical package roots", async () => {
+    const collector = await loadCollector();
+    const plan = collector.parseCollectorArguments(["--cohort=relative-dependency-link", "--smoke"]);
+    const root = temporaryRoot("aurelia-host-tail-relative-dependency-link-");
+    const workspace = createBareWorkspace(collector, plan.rows[0]!, path.join(root, "out"));
+    const dependencyRoot = createRelativeLinkDependencyRoot(root, ["aurelia", "@aurelia/router"]);
+
+    const evidence = collector.prepareWorkspaceDependencies(workspace, {
+      dependencyRoot,
+      expectedDependencyRoot: dependencyRoot,
+    });
+
+    expect(evidence.resolvedModules).toHaveLength(2);
+    for (const module of evidence.resolvedModules) {
+      expect(module.sourcePackageRoot).toBe(realpathSync(path.join(
+        dependencyRoot,
+        ...module.specifier.split("/"),
+      )));
+      expect(module.resolvedLinkTarget).toBe(module.sourcePackageRoot);
+      expect(lstatSync(module.packageLinkPath).isSymbolicLink()).toBe(true);
+    }
   });
 
   test("fails closed for a missing or unresolvable copied-workspace dependency target", async () => {
@@ -415,7 +456,7 @@ describe("Extension Host tail collector", () => {
     expect(() => collector.prepareWorkspaceDependencies(unresolvedWorkspace, {
       dependencyRoot: unresolvedRoot,
       expectedDependencyRoot: unresolvedRoot,
-    })).toThrow(/could not resolve required module @aurelia\/router/u);
+    })).toThrow(/workspace dependency package @aurelia\/router/u);
   });
 
   test("rejects unsafe or pre-existing copied-workspace link layouts", async () => {
@@ -527,7 +568,7 @@ describe("Extension Host tail collector", () => {
     expect(summary.method.hostLocalReviewGuards).toEqual(collector.hostLocalReviewGuards);
     expect(summary.method.workspaceDependencyPolicy).toMatchObject({
       requiredModules: ["aurelia", "@aurelia/router"],
-      strategy: "junction on Windows; directory symbolic link on other hosts",
+      strategy: "direct package junctions on Windows; direct package directory symbolic links on other hosts",
     });
     expect(summary.method).toMatchObject({
       activation: "shipping-workspaceContains-eager-activation",
@@ -626,7 +667,9 @@ describe("Extension Host tail collector", () => {
       sampleId: "s01",
       workspaceDependencies: {
         status: "passed",
-        strategy: process.platform === "win32" ? "junction" : "directory-symbolic-link",
+        strategy: process.platform === "win32"
+          ? "direct-package-junctions"
+          : "direct-package-directory-symbolic-links",
         resolvedModules: [
           { specifier: "aurelia" },
           { specifier: "@aurelia/router" },
@@ -1337,6 +1380,11 @@ function fakeHarness(
 ) {
   const downloads: string[] = [];
   const launches: LaunchRecord[] = [];
+  const dependencyRoot = createMockDependencyRoot(
+    outputRoot,
+    ["aurelia", "@aurelia/router"],
+    "fake-workspace-dependencies",
+  );
   let activeLaunches = 0;
   let maximumConcurrentLaunches = 0;
   const frozenInputs = frozenInputContract();
@@ -1351,7 +1399,8 @@ function fakeHarness(
     }),
     captureFrozenInputs: async () => structuredClone(frozenInputs),
     captureEnvironment: async () => ({ fixture: "contract" }),
-    prepareWorkspace: (row: AcquisitionRow) => prepareFakeWorkspace(collector, row, outputRoot),
+    prepareWorkspace: (row: AcquisitionRow) =>
+      prepareFakeWorkspace(collector, row, outputRoot, dependencyRoot),
     electron: {
       ProgressReportStage: { ResolvedVersion: "resolvedVersion" },
       downloadAndUnzipVSCode: async ({ version, reporter }: Record<string, any>) => {
@@ -1463,6 +1512,11 @@ function prepareFakeWorkspace(
   collector: CollectorModule,
   row: AcquisitionRow,
   outputRoot: string,
+  dependencyRoot = createMockDependencyRoot(
+    outputRoot,
+    ["aurelia", "@aurelia/router"],
+    "fake-workspace-dependencies",
+  ),
 ): Record<string, any> {
   const workspace = collector.sampleWorkspacePaths(row, outputRoot);
   const { sampleRoot, workspaceRoot, userDataDirectory, extensionsDirectory } = workspace;
@@ -1473,7 +1527,10 @@ function prepareFakeWorkspace(
   writeFileSync(workspace.testWorkspace, "{}\n");
   return {
     ...workspace,
-    workspaceDependencies: collector.prepareWorkspaceDependencies(workspace),
+    workspaceDependencies: collector.prepareWorkspaceDependencies(workspace, {
+      dependencyRoot,
+      expectedDependencyRoot: dependencyRoot,
+    }),
   };
 }
 
@@ -1505,6 +1562,30 @@ function createMockDependencyRoot(
       main: "index.cjs",
     })}\n`);
     writeFileSync(path.join(packageRoot, "index.cjs"), "module.exports = {};\n");
+  }
+  return dependencyRoot;
+}
+
+function createRelativeLinkDependencyRoot(
+  root: string,
+  specifiers: readonly string[],
+): string {
+  const dependencyOwner = path.join(root, "relative-dependency-owner");
+  const dependencyRoot = path.join(dependencyOwner, "node_modules");
+  const packageStore = path.join(root, "relative-package-store");
+  mkdirSync(dependencyRoot, { recursive: true });
+  writeFileSync(path.join(dependencyOwner, "package.json"), "{}\n");
+  for (const specifier of specifiers) {
+    const packageRoot = path.join(packageStore, ...specifier.split("/"));
+    mkdirSync(packageRoot, { recursive: true });
+    writeFileSync(path.join(packageRoot, "package.json"), `${JSON.stringify({
+      name: specifier,
+      main: "index.cjs",
+    })}\n`);
+    writeFileSync(path.join(packageRoot, "index.cjs"), "module.exports = {};\n");
+    const dependencyLink = path.join(dependencyRoot, ...specifier.split("/"));
+    mkdirSync(path.dirname(dependencyLink), { recursive: true });
+    symlinkSync(path.relative(path.dirname(dependencyLink), packageRoot), dependencyLink, "dir");
   }
   return dependencyRoot;
 }

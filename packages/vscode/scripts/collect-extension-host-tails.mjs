@@ -1533,8 +1533,8 @@ export function buildCohortSummary(input) {
       workspaceDependencyPolicy: {
         source: semanticRuntimeNodeModules,
         requiredModules: requiredWorkspaceModules,
-        strategy: "junction on Windows; directory symbolic link on other hosts",
-        validation: "resolved sample/workspace containment, exact resolved link target, and copied-workspace module identity before launch",
+        strategy: "direct package junctions on Windows; direct package directory symbolic links on other hosts",
+        validation: "resolved sample/workspace containment, canonical package link targets, and copied-workspace module identity before launch",
       },
       windowsClientLogPathBudget: input.pathBudget,
       percentilePolicy: "nearest-rank p95 only for authoritative n=20 rows; n=5 and smoke omit percentiles",
@@ -1793,32 +1793,106 @@ export function prepareWorkspaceDependencies(workspace, options = {}) {
     );
   }
 
-  const linkPath = path.join(workspaceRootResolved, "node_modules");
-  assertInside(workspaceRootResolved, linkPath);
-  if (existsSync(linkPath)) {
-    throw new Error(`Refusing pre-existing copied-workspace dependency path: ${linkPath}`);
+  const nodeModulesPath = path.join(workspaceRootResolved, "node_modules");
+  assertInside(workspaceRootResolved, nodeModulesPath);
+  if (existsSync(nodeModulesPath)) {
+    throw new Error(`Refusing pre-existing copied-workspace dependency path: ${nodeModulesPath}`);
   }
-  const strategy = platform === "win32" ? "junction" : "directory-symbolic-link";
-  symlinkSync(
-    dependencyRootResolved,
-    linkPath,
-    platform === "win32" ? "junction" : "dir",
-  );
-  const linkStat = lstatSync(linkPath);
-  if (!linkStat.isSymbolicLink()) {
-    throw new Error(`Copied-workspace dependency path is not a link: ${linkPath}`);
-  }
-  const resolvedLinkTarget = resolveExistingPath(linkPath, "copied-workspace dependency link");
-  if (!samePath(resolvedLinkTarget, dependencyRootResolved)) {
-    throw new Error(
-      `Copied-workspace dependency link resolved to ${resolvedLinkTarget}; `
-        + `expected exactly ${dependencyRootResolved}.`,
+  mkdirSync(nodeModulesPath);
+  for (const specifier of requiredWorkspaceModules) {
+    const sourcePackageRoot = resolveExistingPath(
+      path.join(dependencyRootResolved, ...specifier.split("/")),
+      `workspace dependency package ${specifier}`,
+    );
+    if (!lstatSync(sourcePackageRoot).isDirectory()) {
+      throw new Error(`Workspace dependency package is not a directory: ${sourcePackageRoot}`);
+    }
+    const packageLinkPath = path.join(nodeModulesPath, ...specifier.split("/"));
+    assertInside(nodeModulesPath, packageLinkPath);
+    mkdirSync(path.dirname(packageLinkPath), { recursive: true });
+    symlinkSync(
+      sourcePackageRoot,
+      packageLinkPath,
+      platform === "win32" ? "junction" : "dir",
     );
   }
 
+  return validateWorkspaceDependencies(workspaceRootResolved, {
+    platform,
+    dependencyRoot: dependencyRootResolved,
+    expectedDependencyRoot: expectedDependencyRootResolved,
+  });
+}
+
+export function validateWorkspaceDependencies(workspaceRoot, options = {}) {
+  const platform = options.platform ?? process.platform;
+  const dependencyRoot = options.dependencyRoot ?? semanticRuntimeNodeModules;
+  const expectedDependencyRoot = options.expectedDependencyRoot ?? semanticRuntimeNodeModules;
+  const workspaceRootResolved = resolveExistingPath(workspaceRoot, "copied workspace root");
+  const dependencyRootResolved = resolveExistingPath(
+    dependencyRoot,
+    "workspace dependency target",
+  );
+  const expectedDependencyRootResolved = resolveExistingPath(
+    expectedDependencyRoot,
+    "expected workspace dependency target",
+  );
+  if (!samePath(dependencyRootResolved, expectedDependencyRootResolved)) {
+    throw new Error(
+      `Workspace dependency target resolved to ${dependencyRootResolved}; `
+        + `expected exactly ${expectedDependencyRootResolved}.`,
+    );
+  }
+
+  const nodeModulesPath = path.join(workspaceRootResolved, "node_modules");
+  assertInside(workspaceRootResolved, nodeModulesPath);
+  const nodeModulesStat = lstatSync(nodeModulesPath);
+  if (!nodeModulesStat.isDirectory() || nodeModulesStat.isSymbolicLink()) {
+    throw new Error(`Copied-workspace node_modules must be a real directory: ${nodeModulesPath}`);
+  }
+  const expectedRootEntries = new Set();
+  const expectedScopeEntries = new Map();
+  for (const specifier of requiredWorkspaceModules) {
+    const [rootEntry, scopedEntry] = specifier.split("/");
+    expectedRootEntries.add(rootEntry);
+    if (scopedEntry != null) {
+      const entries = expectedScopeEntries.get(rootEntry) ?? [];
+      entries.push(scopedEntry);
+      expectedScopeEntries.set(rootEntry, entries);
+    }
+  }
+  assertExactDirectoryEntries(nodeModulesPath, [...expectedRootEntries], "copied-workspace node_modules");
+  for (const [scope, entries] of expectedScopeEntries) {
+    const scopePath = path.join(nodeModulesPath, scope);
+    const scopeStat = lstatSync(scopePath);
+    if (!scopeStat.isDirectory() || scopeStat.isSymbolicLink()) {
+      throw new Error(`Copied-workspace dependency scope must be a real directory: ${scopePath}`);
+    }
+    assertExactDirectoryEntries(scopePath, entries, `copied-workspace dependency scope ${scope}`);
+  }
   const workspaceRequire = createRequire(path.join(workspaceRootResolved, "package.json"));
   const targetRequire = createRequire(path.join(path.dirname(dependencyRootResolved), "package.json"));
   const resolvedModules = requiredWorkspaceModules.map((specifier) => {
+    const sourcePackageRoot = resolveExistingPath(
+      path.join(dependencyRootResolved, ...specifier.split("/")),
+      `workspace dependency package ${specifier}`,
+    );
+    const packageLinkPath = path.join(nodeModulesPath, ...specifier.split("/"));
+    assertInside(nodeModulesPath, packageLinkPath);
+    const packageLinkStat = lstatSync(packageLinkPath);
+    if (!packageLinkStat.isSymbolicLink()) {
+      throw new Error(`Copied-workspace dependency package is not a link: ${packageLinkPath}`);
+    }
+    const resolvedLinkTarget = resolveExistingPath(
+      packageLinkPath,
+      `copied-workspace dependency package ${specifier}`,
+    );
+    if (!samePath(resolvedLinkTarget, sourcePackageRoot)) {
+      throw new Error(
+        `Copied-workspace dependency package ${specifier} target changed to ${resolvedLinkTarget}; `
+          + `expected exactly ${sourcePackageRoot}.`,
+      );
+    }
     let resolvedPath;
     let expectedResolvedPath;
     try {
@@ -1853,18 +1927,30 @@ export function prepareWorkspaceDependencies(workspace, options = {}) {
     }
     return Object.freeze({
       specifier,
+      packageLinkPath,
+      sourcePackageRoot,
+      resolvedLinkTarget,
       resolvedPath,
       resolvedRealPath,
     });
   });
   return Object.freeze({
     status: "passed",
-    strategy,
-    linkPath,
-    linkTarget: dependencyRootResolved,
-    resolvedLinkTarget,
+    strategy: platform === "win32"
+      ? "direct-package-junctions"
+      : "direct-package-directory-symbolic-links",
+    nodeModulesPath,
+    dependencyRoot: dependencyRootResolved,
     resolvedModules: Object.freeze(resolvedModules),
   });
+}
+
+function assertExactDirectoryEntries(directory, expectedEntries, label) {
+  const actual = readdirSync(directory).sort((left, right) => left.localeCompare(right));
+  const expected = [...expectedEntries].sort((left, right) => left.localeCompare(right));
+  if (JSON.stringify(actual) !== JSON.stringify(expected)) {
+    throw new Error(`${label} entries changed; expected ${JSON.stringify(expected)}, received ${JSON.stringify(actual)}.`);
+  }
 }
 
 function prepareSampleWorkspace(row, outputRoot) {

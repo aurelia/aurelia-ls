@@ -1046,8 +1046,11 @@ describe("Extension Host support runner", () => {
         transport: "worker",
         workspaceRoot: resolve(setup.workspaceRoot),
         descriptorRelativePath: "semantic-workspace.json",
-        links: [],
       });
+      expect(rendered.links.map((link: { relativePath: string }) => link.relativePath)).toEqual([
+        "node_modules/@aurelia/router",
+        "node_modules/aurelia",
+      ]);
       expect(rendered.files.map((file: { relativePath: string }) => file.relativePath)).toEqual([
         "package.json",
         "src/app.ts",
@@ -1281,6 +1284,8 @@ describe("Extension Host support runner", () => {
       expect(rendered.links.map((link: { relativePath: string }) => link.relativePath)).toEqual([
         "host-corpus/package-origin/app/node_modules/@acme/linked-resource-kit",
         "host-corpus/package-origin/app/node_modules/@aurelia/runtime-html",
+        "node_modules/@aurelia/router",
+        "node_modules/aurelia",
       ]);
       expect(rendered.links.every((link: { kind: string }) => (
         link.kind === (process.platform === "win32" ? "junction" : "directory-symbolic-link")
@@ -1355,7 +1360,12 @@ describe("Extension Host support runner", () => {
         file.relativePath.startsWith("host-corpus/package-origin/")
           || file.relativePath.startsWith("host-corpus/page-drain/")
       ))).toBe(false);
-      expect(minimumRendered.links).toEqual([]);
+      expect(minimumRendered.links.map(
+        (link: { relativePath: string }) => link.relativePath,
+      )).toEqual([
+        "node_modules/@aurelia/router",
+        "node_modules/aurelia",
+      ]);
     } finally {
       assertContractTempPath(root);
       rmSync(root, { recursive: true, force: true });
@@ -1455,8 +1465,15 @@ describe("Extension Host support runner", () => {
       )).toEqual([
         "host-corpus/package-origin/app/node_modules/@acme/linked-resource-kit",
         "host-corpus/package-origin/app/node_modules/@aurelia/runtime-html",
+        "node_modules/@aurelia/router",
+        "node_modules/aurelia",
       ]);
-      expect(minimum.rendered.links).toEqual([]);
+      expect(minimum.rendered.links.map(
+        (link: { relativePath: string }) => link.relativePath,
+      )).toEqual([
+        "node_modules/@aurelia/router",
+        "node_modules/aurelia",
+      ]);
 
       const currentHostAlpha = current.descriptor.projectTopology.projects[0].sourceInput.files;
       const minimumHostAlpha = minimum.descriptor.projectTopology.projects[0].sourceInput.files;

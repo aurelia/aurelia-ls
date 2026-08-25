@@ -29,6 +29,7 @@ import {
   prepareWorkspaceDependencies,
   readClientLogEvidence,
   readExtensionHostLogEvidence,
+  validateWorkspaceDependencies,
 } from "./collect-extension-host-tails.mjs";
 
 export { sha256 };
@@ -499,28 +500,9 @@ export function snapshotRegularTree(root, options = {}) {
 }
 
 export function validateWorkspaceDependenciesAfterHost(workspaceRoot) {
-  const linkPath = path.join(workspaceRoot, "node_modules");
-  const linkInfo = lstatSync(linkPath);
-  if (!linkInfo.isSymbolicLink()) throw new Error("Installed workspace node_modules is no longer the required link.");
-  const resolvedTarget = realpathSync(linkPath);
-  if (!samePath(resolvedTarget, realpathSync(dependencyRoot))) {
-    throw new Error("Installed workspace node_modules target changed during host acceptance.");
-  }
-  const workspaceRequire = createRequire(path.join(workspaceRoot, "package.json"));
-  const dependencyRequire = createRequire(path.join(path.dirname(dependencyRoot), "package.json"));
-  const modules = ["aurelia", "@aurelia/router"].map((specifier) => {
-    const resolved = realpathSync(workspaceRequire.resolve(specifier));
-    const expected = realpathSync(dependencyRequire.resolve(specifier));
-    if (!samePath(resolved, expected)) {
-      throw new Error(`Installed workspace module ${specifier} changed identity after host acceptance.`);
-    }
-    return Object.freeze({ specifier, resolvedPath: resolved, expectedPath: expected, equal: true });
-  });
-  return Object.freeze({
-    status: "passed",
-    linkPath,
-    linkTarget: resolvedTarget,
-    modules: Object.freeze(modules),
+  return validateWorkspaceDependencies(workspaceRoot, {
+    dependencyRoot,
+    expectedDependencyRoot: dependencyRoot,
   });
 }
 

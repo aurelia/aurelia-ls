@@ -42,6 +42,7 @@ const extensionDevelopmentPath = resolve(__dirname, "..");
 const extensionTestsPath = join(extensionDevelopmentPath, "test", "extension-host", "suite", "index.cjs");
 const sourceWorkspace = join(repoRoot, "fixtures", "hello-world");
 const semanticRuntimeDependencies = join(repoRoot, "packages", "semantic-runtime", "node_modules");
+const rootWorkspaceDependencySpecifiers = Object.freeze(["aurelia", "@aurelia/router"]);
 const disposableTempBoundary = join(repoRoot, ".temp");
 const tempRoot = join(repoRoot, ".temp", "vscode-extension-host");
 const resourceDiscoveryFixtureManifest = join(
@@ -667,7 +668,15 @@ export function materializeResourceDiscoveryHostWorkspace({
     materializedFiles,
     lane.versionLane,
   );
-  linkDirectoryExactly(semanticRuntimeDependencies, join(workspaceRoot, "node_modules"));
+  for (const specifier of rootWorkspaceDependencySpecifiers) {
+    const target = realpathSync(join(semanticRuntimeDependencies, ...specifier.split("/")));
+    materializedLinks.push(materializePackageLink({
+      destination: ".",
+      relativePath: `node_modules/${specifier}`,
+      target,
+      workspaceRoot,
+    }));
+  }
 
   const descriptor = semanticWorkspaceDescriptor(sourceManifest, workspaceRoot, lane.versionLane);
   const descriptorPath = join(workspaceRoot, productSupportEvidenceNames.descriptor);
@@ -831,7 +840,7 @@ function validatePlannedResourceDiscoveryLane({
     return Object.freeze({
       versionLane: lane.versionLane,
       fileCount: fixture.files.length,
-      linkCount: fixture.links.length + 1,
+      linkCount: fixture.links.length,
     });
   } finally {
     if (optionalLstat(validationRoot) != null) {
@@ -7224,27 +7233,7 @@ export function authenticateRenderedCorpus(fixture, workspaceRoot) {
       `rendered fixture link '${link.relativePath}' packageManifestSha256`,
     );
   }
-  authenticateRootDependencyLink(workspaceRoot);
   authenticateExactWorkspaceEntries(fixture, workspaceRoot);
-}
-
-function authenticateRootDependencyLink(workspaceRoot) {
-  const linkPath = join(workspaceRoot, "node_modules");
-  assertNoSymbolicPathComponents(
-    workspaceRoot,
-    linkPath,
-    true,
-    "approved root dependency link",
-  );
-  const link = lstatSync(linkPath);
-  if (!link.isSymbolicLink()) {
-    throw new Error("The approved root node_modules dependency path is no longer symbolic.");
-  }
-  requireSamePath(
-    realpathSync(linkPath),
-    realpathSync(semanticRuntimeDependencies),
-    "approved root dependency link target",
-  );
 }
 
 function authenticateExactWorkspaceEntries(fixture, workspaceRoot) {
@@ -7255,10 +7244,7 @@ function authenticateExactWorkspaceEntries(fixture, workspaceRoot) {
     productSupportEvidenceNames.ledger,
     productSupportEvidenceNames.report,
   ]);
-  const expectedLinks = new Set([
-    ...fixture.links.map((link) => link.relativePath),
-    "node_modules",
-  ]);
+  const expectedLinks = new Set(fixture.links.map((link) => link.relativePath));
   for (const pathValue of expectedFiles) {
     if (expectedLinks.has(pathValue)) {
       throw new Error(`Authenticated workspace path is both a file and link: ${pathValue}`);
@@ -7493,7 +7479,13 @@ function approvedMaterializationLinkLeaves(cleanupRoot, workspaceRoot, versionLa
   if (workspaceRoot == null) return [];
   const relativeWorkspace = relative(resolve(cleanupRoot), resolve(workspaceRoot)).split(sep).join("/");
   requireSafeRelativePath(relativeWorkspace, "materialized workspace cleanup path", false);
-  const workspaceLinks = ["node_modules"];
+  const workspaceLinks = [
+    // Accept one stale pre-direct-link workspace during disposable cleanup. New materializations authenticate only
+    // the two package leaves below, and this path is still confined to the exact .temp shard workspace.
+    "node_modules",
+    "node_modules/aurelia",
+    "node_modules/@aurelia/router",
+  ];
   if (versionLane === "current-stable") {
     workspaceLinks.push(
       "host-corpus/package-origin/app/node_modules/@acme/linked-resource-kit",
