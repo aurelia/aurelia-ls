@@ -21,8 +21,17 @@ Current commands:
 pnpm --filter @aurelia-ls/aot build
 pnpm --filter @aurelia-ls/aot typecheck:test
 pnpm --filter @aurelia-ls/aot test
+pnpm --filter @aurelia-ls/aot oracle:browser
 pnpm --filter @aurelia-ls/aot oracle:jit -- --query=property-binding
 ```
+
+`oracle:browser` is a separate 17-case batched Chromium contract and is intentionally absent from the default fast
+Vitest path. It launches Chromium once, parses the complete case registry through `HTMLTemplateElement.innerHTML`, and compares
+both serialization and a namespace-aware structural normal form with semantic-runtime's pinned browser-template draft.
+Its receipt records the Chromium version, semantic-runtime parse5 authority profile, and exact case-registry digest.
+The current customizable-select row is a declared version-scoped divergence: Chromium admits its button and
+`selectedcontent` subtree while parse5 8.0.1 still uses legacy in-select parsing. The oracle fails if that divergence
+changes or disappears until the case is deliberately reviewed and converted to equivalence.
 
 The real corpus will not become one Vitest test per compiler case. `oracle:jit` is a bespoke batched runner: it
 uses one process-lifetime JSDOM/browser platform (required by the framework's markup cache), creates fresh root/child
@@ -52,6 +61,7 @@ shows unwitnessed, open, and not-yet-claimed rows; it does not project a coverag
 Examples:
 
 ```powershell
+node packages/aot/scripts/run-browser-tree-oracle.mjs --json
 pnpm --filter @aurelia-ls/aot oracle:jit -- --list
 pnpm --filter @aurelia-ls/aot oracle:jit:built -- --audit
 pnpm --filter @aurelia-ls/aot oracle:jit:built -- --tag=binding --repeat=20 --timing

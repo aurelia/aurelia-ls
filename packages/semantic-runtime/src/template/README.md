@@ -139,6 +139,13 @@ classification, expression parsing, and instruction lowering converge on the sam
   while slot decisions own semantic reuse. Object identity is neither currentness nor semantic equality.
 - `html-ir.ts` models authored HTML before Aurelia syntax interpretation. It preserves source addresses and recovery
   observations without performing resource lookup.
+- `browser-template-draft.ts`, `browser-template-parser.ts`, and `browser-template-selection.ts` provide the first product-free, run-local
+  browser-effective template boundary. The parse5 adapter is pinned to an explicit HTML-template fragment context with
+  scripting disabled, retains effective structure plus raw UTF-16 source locations, and leaves implied or unresolved
+  location associations explicit. Carrier selection separately reproduces the framework's current string-input wrapper
+  rule, including discarded immediate-sibling effects. The parse5 AST never enters semantic products, and the helper is available only through the explicit
+  `@aurelia-ls/semantic-runtime/browser-template` subpath so ordinary IDE/MCP imports do not load the parser. This is a
+  characterized candidate input boundary, not yet a durable kernel product or the production compiler traversal.
 - `runtime-dom-name.ts` projects authored tag and attribute spelling into the browser DOM names consumed by framework
   services and TypeScript DOM maps. HTML names normalize to their DOM casing; SVG element/attribute adjustments come
   from the browser-owned HTML foreign-content table, independently of Aurelia's SVGAnalyzer capability vocabulary.
