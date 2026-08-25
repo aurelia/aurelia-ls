@@ -3,7 +3,8 @@ import { BatchCaseRegistry } from "./batch-case-registry.js";
 import { batchFailure, executeWithCapturedConsole, failureCharacterCount } from "./batch-case-execution.js";
 import { BatchCaseAggregate, StageTimingAccumulator } from "./batch-timing.js";
 import type {
-  BatchCase,
+  BatchCaseDescriptor,
+  BatchCaseExecutor,
   BatchCasePlan,
   BatchFailure,
   BatchRunOptions,
@@ -11,8 +12,9 @@ import type {
 } from "./batch-contracts.js";
 
 export type {
-  BatchCase,
+  BatchCaseDescriptor,
   BatchCaseExecution,
+  BatchCaseExecutor,
   BatchCaseOutcome,
   BatchCasePlan,
   BatchCaseResult,
@@ -25,14 +27,16 @@ export type {
 } from "./batch-contracts.js";
 
 /** Validated registry plus sequential execution owner for one batched harness family. */
-export class BatchRunner<TContext> {
-  readonly #registry: BatchCaseRegistry<TContext>;
+export class BatchRunner<TCase extends BatchCaseDescriptor, TContext> {
+  readonly #registry: BatchCaseRegistry<TCase>;
+  readonly #execute: BatchCaseExecutor<TCase, TContext>;
 
-  public constructor(cases: readonly BatchCase<TContext>[]) {
+  public constructor(cases: readonly TCase[], execute: BatchCaseExecutor<TCase, TContext>) {
     this.#registry = new BatchCaseRegistry(cases);
+    this.#execute = execute;
   }
 
-  public plan(options: BatchRunOptions = {}): BatchCasePlan<TContext> {
+  public plan(options: BatchRunOptions = {}): BatchCasePlan<TCase> {
     return this.#registry.plan(options);
   }
 
@@ -89,7 +93,7 @@ export class BatchRunner<TContext> {
           phase: "start",
         });
         const startedAt = performance.now();
-        const captured = await executeWithCapturedConsole(() => candidate.run(context), logLimit);
+        const captured = await executeWithCapturedConsole(() => this.#execute(candidate, context), logLimit);
         const durationMs = performance.now() - startedAt;
         ++executionCount;
         const aggregate = aggregates.get(candidate.id)!;
@@ -151,7 +155,7 @@ export class BatchRunner<TContext> {
   }
 }
 
-function emptyBatchResult<TContext>(plan: BatchCasePlan<TContext>): BatchRunResult {
+function emptyBatchResult<TCase extends BatchCaseDescriptor>(plan: BatchCasePlan<TCase>): BatchRunResult {
   return {
     discoveredCaseCount: plan.discoveredCaseCount,
     eligibleCaseCount: plan.eligible.length,

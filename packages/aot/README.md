@@ -31,31 +31,38 @@ aggregate and slow-case timing, bounds failure output, and supports query/id/tag
 fail-fast, list, and JSON modes. This keeps large corpus iteration cheap and makes external process sharding possible
 without sharing mutable compiler containers.
 
-Vitest is reserved for a small number of harness invariants. The current four-case registry proves that the isolated container
-boots the actual framework `StandardConfiguration`, resolves the real `ITemplateCompiler`, and compiles an explicit
-custom-element definition. It proves harness mechanics, not corpus breadth or semantic conservation.
+Vitest is reserved for harness and contract invariants. The current six-case JIT registry characterizes compile-entry
+bypass, a compiler diagnostic, static markup, property/listener bindings, and text interpolation. It proves the
+framework-JIT lane mechanics, not semantic-runtime equivalence or corpus breadth.
 
-The current imperative `BatchCase.run(context)` shape is provisional: input construction, oracle execution, and
-assertion are entangled. Keep the batching lifecycle, filtering, and process-sharding mechanics, but replace the case
-contract before corpus mining with runner-neutral worlds, framework provenance, semantic obligation ids, focused
-invariants, comparison lanes, contrasts, and explicit effect/closure posture. Freeze further receipt/CLI elaboration
-until that breadth exists; throughput and receipt hashes are hygiene, not success metrics.
+Cases are declarative `aurelia-ls/compiler-case/v1` records. They carry pinned source/test provenance, semantic
+obligation witnesses, a runner-neutral compiler/resource world, explicit setup references and registration placement,
+focused invariants, oracle lanes, contrasts, extension effects, and multidimensional closure claims. The generic batch
+engine receives an executor separately; case records contain no `run(...)` callback. Named executable setups have a
+neutral versioned factory/description plus independent lane materializers, fresh values, canonical witnesses, and
+reverse-order disposal.
+
+The source-reviewed obligation catalog currently names 218 independent compiler burdens across entry, browser tree,
+extensions, nodes, elements, attributes, commands, custom attributes, controllers, projection, local elements, let,
+capture/spread, surrogates, ordering, definitions, wire fields, diagnostics, and interactions. The audit deliberately
+shows unwitnessed, open, and not-yet-claimed rows; it does not project a coverage percentage.
 
 Examples:
 
 ```powershell
 pnpm --filter @aurelia-ls/aot oracle:jit -- --list
+pnpm --filter @aurelia-ls/aot oracle:jit:built -- --audit
 pnpm --filter @aurelia-ls/aot oracle:jit:built -- --tag=binding --repeat=20 --timing
 node packages/aot/scripts/run-jit-oracle.mjs --shard=1/4 --json
 ```
 
 Machine consumers should build once and invoke the Node runner directly (or use a silent package-script invocation) so
-stdout contains exactly one JSON receipt. Case bodies run sequentially; process shards are the parallelism boundary.
+stdout contains exactly one JSON receipt. Case executions run sequentially; process shards are the parallelism boundary.
 An outer CI timeout guards synchronous compiler hangs without paying one subprocess per case.
 
-An active case is gating: it passes or fails. The durable corpus must also expose an audit ledger for not-yet-reconciled
-obligations so absent semantic families cannot disappear outside the registry. The runner does not convert mismatches
-or open effects into expected failures or local bailouts.
+An active JIT characterization passes or fails. The obligation ledger keeps absent semantic families visible outside
+the executable registry. The runner does not convert mismatches or open effects into expected failures or local
+bailouts, and it rejects equivalence/closed claims until a multi-lane coordinator can actually prove them.
 Every ordinary case uses an explicit definition name and fresh definition/template input. Anonymous generated-name
 behavior and other framework module-global state require a separately controlled characterization lane before they can
 join an order-independent batch.
@@ -71,9 +78,10 @@ Filters must match at least one case before sharding. A valid stable shard may t
 successful zero-execution receipt without creating JSDOM or looping through repeats. Selected case count multiplied by
 repeat is guarded by an explicit execution budget.
 
-One compile request can choose `resolveResources`, ordered root registrations before or after
-`StandardConfiguration`, local compilation registrations, and definition dependencies. This keeps hooks, custom
-syntax/resources, provider order, and resource-resolution canaries reachable without sharing a mutable container.
+One declared world can select compile or compileSpread, debug/resource representation, exact root-before/root-after/
+compilation-local/definition-dependency placement, DOM inputs, and named resources or effects without hiding the whole
+world inside an imperative fixture. Case and obligation authority remains pinned to the framework revision; the JIT
+runner refuses to relabel cases when the submodule moves without review.
 
 `src/testing` is package-private and absent from `exports`; it may use JSDOM and the JIT compiler for characterization.
 Before production compiler modules grow, move this tooling into a separate build boundary so core source cannot acquire

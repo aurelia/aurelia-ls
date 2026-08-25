@@ -1,5 +1,5 @@
 import { format } from "node:util";
-import type { BatchCase, BatchCaseExecution, BatchFailure } from "./batch-contracts.js";
+import type { BatchCaseDescriptor, BatchCaseExecution, BatchFailure } from "./batch-contracts.js";
 
 /** Result of one case body with synchronous console output captured. */
 export interface CapturedCaseExecution {
@@ -65,8 +65,8 @@ export async function executeWithCapturedConsole(
 }
 
 /** Project one bounded failure detail under the remaining aggregate character budget. */
-export function batchFailure<TContext>(
-  candidate: BatchCase<TContext>,
+export function batchFailure(
+  candidate: BatchCaseDescriptor,
   iteration: number,
   durationMs: number,
   execution: CapturedCaseExecution,

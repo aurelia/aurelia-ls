@@ -1,5 +1,4 @@
 import { execFileSync } from "node:child_process";
-import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { mkdir, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
@@ -7,16 +6,30 @@ import { performance } from "node:perf_hooks";
 import { parseArgs } from "node:util";
 import { fileURLToPath } from "node:url";
 import { BatchRunner } from "../out/testing/batch-runner.js";
+import { CompilerCaseCatalog } from "../out/testing/compiler-case-catalog.js";
+import {
+  compilerCaseRegistryFingerprint,
+  compilerObligationCatalogFingerprint,
+} from "../out/testing/compiler-case-fingerprint.js";
+import {
+  JitCompilerCaseExecutor,
+  validateJitCharacterizationCases,
+} from "../out/testing/jit-compiler-case-executor.js";
 import { createJitCompilerOracle } from "../out/testing/jit-compiler-oracle.js";
 import { JIT_ORACLE_CASES } from "../out/testing/jit-oracle-cases.js";
+import {
+  JIT_ORACLE_SETUP_FACTORIES,
+  JIT_ORACLE_SETUP_MATERIALIZERS,
+} from "../out/testing/jit-oracle-setups.js";
+import { COMPILER_OBLIGATION_CATALOG } from "../out/testing/compiler-obligation-catalog.js";
 
 const JIT_ORACLE_RECEIPT_VERSION = "aurelia-ls/aot-jit-oracle-run/v1";
 const JIT_ORACLE_CASE_LIST_VERSION = "aurelia-ls/aot-jit-oracle-cases/v1";
+const JIT_ORACLE_OBLIGATION_AUDIT_VERSION = "aurelia-ls/aot-compiler-obligation-audit/v1";
 const JIT_ORACLE_ERROR_VERSION = "aurelia-ls/aot-jit-oracle-error/v1";
 const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const workspaceRoot = resolve(packageRoot, "../..");
 const frameworkRoot = resolve(workspaceRoot, "aurelia");
-const batchRunner = new BatchRunner(JIT_ORACLE_CASES);
 
 try {
   await main();
@@ -39,6 +52,7 @@ async function main() {
       slowest: { type: "string", default: "10" },
       "fail-fast": { type: "boolean", default: false },
       list: { type: "boolean", default: false },
+      audit: { type: "boolean", default: false },
       timing: { type: "boolean", default: false },
       verbose: { type: "boolean", default: false },
       json: { type: "boolean", default: false },
@@ -53,6 +67,30 @@ async function main() {
   if (values.help) {
     process.stdout.write(helpText());
     return;
+  }
+
+  const { compilerCaseCatalog, batchRunner } = createHarness();
+
+  const authorityBefore = buildAuthorityIdentity();
+  const catalogAuthorityProblem = compilerCatalogAuthorityProblem(authorityBefore.framework.revision);
+  const obligationFingerprint = compilerObligationCatalogFingerprint(COMPILER_OBLIGATION_CATALOG);
+  if (values.audit) {
+    await publishReceipt({
+      schemaVersion: JIT_ORACLE_OBLIGATION_AUDIT_VERSION,
+      environment: authorityBefore,
+      catalogAuthority: {
+        matched: catalogAuthorityProblem == null,
+        problem: catalogAuthorityProblem,
+      },
+      obligationCatalog: {
+        fingerprint: obligationFingerprint,
+        ...compilerCaseCatalog.obligationAudit,
+      },
+    }, values);
+    return;
+  }
+  if (catalogAuthorityProblem != null) {
+    throw new Error(catalogAuthorityProblem);
   }
 
   const shard = parseShard(values.shard);
@@ -88,13 +126,16 @@ async function main() {
       eligibleCaseCount: plan.eligible.length,
       selectedCaseCount: selected.length,
       cases: selected.map(({ id, family, tags, requirement }) => ({ id, family, tags, requirement })),
+      obligationCatalog: compactObligationAudit(compilerCaseCatalog, obligationFingerprint),
     };
     await publishReceipt(receipt, values);
     return;
   }
 
-  const authorityBefore = buildAuthorityIdentity();
-  const registryFingerprint = caseRegistryFingerprint(JIT_ORACLE_CASES);
+  const registryFingerprint = compilerCaseRegistryFingerprint(
+    JIT_ORACLE_CASES,
+    JIT_ORACLE_SETUP_FACTORIES,
+  );
   const setupStartedAt = performance.now();
   const oracle = selected.length === 0 ? undefined : createJitCompilerOracle();
   const sharedSetupMs = performance.now() - setupStartedAt;
@@ -133,6 +174,7 @@ async function main() {
         count: JIT_ORACLE_CASES.length,
         fingerprint: registryFingerprint,
       },
+      obligationCatalog: compactObligationAudit(compilerCaseCatalog, obligationFingerprint),
       sharedSetupMs,
       result,
     };
@@ -155,6 +197,26 @@ async function publishReceipt(receipt, values, slowestLimit = 10) {
   if (values.json) {
     json ??= `${JSON.stringify(receipt)}\n`;
     process.stdout.write(json);
+    return;
+  }
+
+  if (receipt.schemaVersion === JIT_ORACLE_OBLIGATION_AUDIT_VERSION) {
+    const audit = receipt.obligationCatalog;
+    process.stdout.write(
+      `AOT compiler obligation audit: total=${audit.obligationCount} witnessed=${audit.witnessedCount} `
+        + `unwitnessed=${audit.unwitnessedCount} not-claimed=${audit.notClaimedCount} `
+        + `open=${audit.openCount} closed=${audit.closedCount}\n`,
+    );
+    for (const family of audit.families) {
+      process.stdout.write(
+        `- ${family.family}: total=${family.obligationCount} witnessed=${family.witnessedCount} `
+          + `unwitnessed=${family.unwitnessedCount} open=${family.openCount} closed=${family.closedCount}\n`,
+      );
+    }
+    process.stdout.write("Unwitnessed obligations:\n");
+    for (const row of audit.rows.filter((candidate) => candidate.state === "unwitnessed")) {
+      process.stdout.write(`- ${row.id}: ${row.requirement}\n`);
+    }
     return;
   }
 
@@ -220,6 +282,60 @@ function printRunReceipt(receipt, values, slowestLimit) {
       }
     }
   }
+}
+
+function createHarness() {
+  const compilerCaseCatalog = new CompilerCaseCatalog(
+    JIT_ORACLE_CASES,
+    JIT_ORACLE_SETUP_FACTORIES,
+    COMPILER_OBLIGATION_CATALOG,
+  );
+  validateJitCharacterizationCases(compilerCaseCatalog.cases);
+  const jitCaseExecutor = new JitCompilerCaseExecutor(
+    JIT_ORACLE_SETUP_FACTORIES,
+    JIT_ORACLE_SETUP_MATERIALIZERS,
+  );
+  const batchRunner = new BatchRunner(
+    compilerCaseCatalog.cases,
+    (candidate, oracle) => {
+      if (oracle == null) {
+        throw new Error(`JIT oracle context is absent while executing ${candidate.id}.`);
+      }
+      return jitCaseExecutor.execute(candidate, oracle);
+    },
+  );
+  return { compilerCaseCatalog, batchRunner };
+}
+
+function compactObligationAudit(compilerCaseCatalog, fingerprint) {
+  const audit = compilerCaseCatalog.obligationAudit;
+  return {
+    fingerprint,
+    obligationCount: audit.obligationCount,
+    witnessedCount: audit.witnessedCount,
+    unwitnessedCount: audit.unwitnessedCount,
+    notClaimedCount: audit.notClaimedCount,
+    openCount: audit.openCount,
+    closedCount: audit.closedCount,
+  };
+}
+
+function compilerCatalogAuthorityProblem(frameworkRevision) {
+  if (frameworkRevision == null) {
+    return "Cannot verify compiler corpus authority because the Aurelia submodule revision is unavailable.";
+  }
+  const declared = new Set([
+    ...JIT_ORACLE_CASES.flatMap((candidate) => candidate.provenance
+      .filter((authority) => authority.repository === "aurelia")
+      .map((authority) => authority.revision)),
+    ...COMPILER_OBLIGATION_CATALOG.flatMap((obligation) => obligation.authorities
+      .filter((authority) => authority.repository === "aurelia")
+      .map((authority) => authority.revision)),
+  ]);
+  const mismatches = [...declared].filter((revision) => revision !== frameworkRevision);
+  return mismatches.length === 0
+    ? null
+    : `Compiler corpus authority is pinned to ${mismatches.join(", ")}, but the Aurelia submodule is ${frameworkRevision}.`;
 }
 
 function parsePositiveInteger(value, name) {
@@ -301,23 +417,6 @@ function frameworkVersion() {
   return packageVersion(resolve(frameworkRoot, "packages/template-compiler"));
 }
 
-function caseRegistryFingerprint(cases) {
-  const hash = createHash("sha256");
-  for (const candidate of cases) {
-    hash.update(candidate.id);
-    hash.update("\0");
-    hash.update(candidate.family);
-    hash.update("\0");
-    hash.update(candidate.tags.join("\0"));
-    hash.update("\0");
-    hash.update(candidate.requirement);
-    hash.update("\0");
-    hash.update(candidate.run.toString());
-    hash.update("\0");
-  }
-  return `sha256:${hash.digest("hex")}`;
-}
-
 function reportInfrastructureFailure(error) {
   const errorName = error instanceof Error ? error.name : "ThrownValue";
   const message = error instanceof Error ? error.message : String(error);
@@ -348,6 +447,7 @@ function helpText() {
     + `  --max-executions <n>   Bound selected cases × repeat (default 100000).\n`
     + `  --fail-fast            Stop after the first failure.\n`
     + `  --list                 List selected case metadata without creating JSDOM.\n`
+    + `  --audit                Print the source-reviewed obligation and witness ledger.\n`
     + `  --timing               Print stage distributions and slowest cases.\n`
     + `  --slowest <n>          Number of slow cases printed with --timing.\n`
     + `  --verbose              Write per-case progress to stderr.\n`

@@ -54,6 +54,34 @@ describe("AOT JIT oracle CLI", () => {
     expect(receipt.schemaVersion).toBe("aurelia-ls/aot-jit-oracle-error/v1");
     expect(receipt.outcome).toBe("infrastructure-failure");
   });
+
+  it("reports the unreconciled obligation ledger without running compiler cases", () => {
+    const result = runCli("--json", "--audit");
+
+    expect(result.status).toBe(0);
+    expect(result.stderr).toBe("");
+    const receipt = JSON.parse(result.stdout) as {
+      schemaVersion: string;
+      catalogAuthority: { matched: boolean; problem: string | null };
+      obligationCatalog: {
+        obligationCount: number;
+        witnessedCount: number;
+        unwitnessedCount: number;
+        closedCount: number;
+        rows: Array<{ id: string; state: string }>;
+      };
+    };
+    expect(receipt.schemaVersion).toBe("aurelia-ls/aot-compiler-obligation-audit/v1");
+    expect(receipt.catalogAuthority).toEqual({ matched: true, problem: null });
+    expect(receipt.obligationCatalog.obligationCount).toBeGreaterThan(200);
+    expect(receipt.obligationCatalog.witnessedCount).toBeGreaterThan(0);
+    expect(receipt.obligationCatalog.unwitnessedCount).toBeGreaterThan(0);
+    expect(receipt.obligationCatalog.closedCount).toBe(0);
+    expect(receipt.obligationCatalog.rows).toContainEqual(expect.objectContaining({
+      id: "compiler.browser-tree.authored-lineage",
+      state: "unwitnessed",
+    }));
+  });
 });
 
 interface JitOracleReceipt {

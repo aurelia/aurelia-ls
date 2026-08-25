@@ -1,27 +1,23 @@
 import { describe, expect, it } from "vitest";
-import { BatchRunner, type BatchCase } from "../src/testing/batch-runner.js";
+import { BatchRunner, type BatchCaseDescriptor } from "../src/testing/batch-runner.js";
+
+interface TestBatchCase extends BatchCaseDescriptor {
+  readonly operation: string;
+  readonly failure?: string;
+}
 
 describe("AOT batched harness", () => {
-  it("filters and repeats cases without registering one test per execution", async () => {
+  it("keeps case data separate from execution while filtering and repeating", async () => {
     const visits: string[] = [];
-    const cases: readonly BatchCase<string[]>[] = [
-      {
-        id: "alpha.binding",
-        family: "binding",
-        tags: ["binding"],
-        requirement: "Alpha runs.",
-        run: (context) => { context.push("alpha"); },
-      },
-      {
-        id: "beta.static",
-        family: "static",
-        tags: ["static"],
-        requirement: "Beta runs.",
-        run: (context) => { context.push("beta"); },
-      },
+    const cases: readonly TestBatchCase[] = [
+      testCase("alpha.binding", "binding", "binding", "alpha"),
+      testCase("beta.static", "static", "static", "beta"),
     ];
+    const runner = new BatchRunner(cases, (candidate, context: string[]) => {
+      context.push(candidate.operation);
+    });
 
-    const result = await new BatchRunner(cases).run(visits, { families: new Set(["binding"]), repeat: 3 });
+    const result = await runner.run(visits, { families: new Set(["binding"]), repeat: 3 });
 
     expect(visits).toEqual(["alpha", "alpha", "alpha"]);
     expect(result.selectedCaseCount).toBe(1);
@@ -31,13 +27,13 @@ describe("AOT batched harness", () => {
   });
 
   it("uses stable shards and bounds retained failures", async () => {
-    const cases: readonly BatchCase<void>[] = [
+    const cases: readonly TestBatchCase[] = [
       failingCase("case.one", "one"),
       failingCase("case.two", "two"),
       failingCase("case.three", "three"),
     ];
     const shard = { index: 0, count: 2 } as const;
-    const runner = new BatchRunner(cases);
+    const runner = new BatchRunner(cases, executeTestCase);
     const selectedIds = runner.plan({ shard }).selected.map((candidate) => candidate.id);
 
     expect(runner.plan({ shard }).selected.map((candidate) => candidate.id)).toEqual(selectedIds);
@@ -50,15 +46,9 @@ describe("AOT batched harness", () => {
   });
 
   it("fails preflight for unknown filters and empty selections", async () => {
-    const cases: readonly BatchCase<void>[] = [{
-      id: "known.case",
-      family: "known",
-      tags: ["known"],
-      requirement: "The known case runs.",
-      run: () => {},
-    }];
+    const cases: readonly TestBatchCase[] = [testCase("known.case", "known", "known", "known")];
+    const runner = new BatchRunner(cases, executeTestCase);
 
-    const runner = new BatchRunner(cases);
     expect(() => runner.plan({ families: new Set(["missing"]) })).toThrow("Unknown batch family");
     await expect(runner.run(undefined, { idPatterns: ["missing"] })).rejects.toThrow(
       "matched zero cases",
@@ -67,14 +57,8 @@ describe("AOT batched harness", () => {
   });
 
   it("accepts an empty stable shard when pre-shard filters matched", async () => {
-    const cases: readonly BatchCase<void>[] = [{
-      id: "shard.case",
-      family: "shard",
-      tags: ["shard"],
-      requirement: "A valid shard may receive no cases.",
-      run: () => {},
-    }];
-    const runner = new BatchRunner(cases);
+    const cases: readonly TestBatchCase[] = [testCase("shard.case", "shard", "shard", "shard")];
+    const runner = new BatchRunner(cases, executeTestCase);
     const emptyShard = Array.from({ length: 8 }, (_, index) => ({ index, count: 8 } as const))
       .find((shard) => runner.plan({ shard }).selected.length === 0);
     expect(emptyShard).toBeDefined();
@@ -90,30 +74,38 @@ describe("AOT batched harness", () => {
     expect(result.failedCount).toBe(0);
   });
 
-  it("bounds planned executions before running a case", async () => {
-    const cases: readonly BatchCase<void>[] = [{
-      id: "budget.case",
-      family: "budget",
-      tags: ["budget"],
-      requirement: "Execution count is bounded.",
-      run: () => {},
-    }];
+  it("bounds planned executions before invoking the executor", async () => {
+    const cases: readonly TestBatchCase[] = [testCase("budget.case", "budget", "budget", "budget")];
+    let executions = 0;
+    const runner = new BatchRunner(cases, () => { ++executions; });
 
-    await expect(new BatchRunner(cases).run(undefined, { repeat: 3, executionLimit: 2 })).rejects.toThrow(
+    await expect(runner.run(undefined, { repeat: 3, executionLimit: 2 })).rejects.toThrow(
       "exceeding the limit",
     );
+    expect(executions).toBe(0);
   });
 });
 
-function failingCase(id: string, message: string): BatchCase<void> {
+function testCase(id: string, family: string, tag: string, operation: string): TestBatchCase {
   return {
     id,
-    family: "failure",
-    tags: ["failure"],
-    requirement: `${id} fails for the harness contract.`,
-    run: () => {
-      console.warn(`before ${id}`);
-      throw new Error(message);
-    },
+    family,
+    tags: [tag],
+    requirement: `${id} exercises the generic batch executor boundary.`,
+    operation,
   };
+}
+
+function failingCase(id: string, message: string): TestBatchCase {
+  return {
+    ...testCase(id, "failure", "failure", "fail"),
+    failure: message,
+  };
+}
+
+function executeTestCase(candidate: TestBatchCase): void {
+  if (candidate.failure != null) {
+    console.warn(`before ${candidate.id}`);
+    throw new Error(candidate.failure);
+  }
 }

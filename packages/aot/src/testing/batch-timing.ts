@@ -1,19 +1,19 @@
 import type {
-  BatchCase,
+  BatchCaseDescriptor,
   BatchCaseOutcome,
   BatchCaseResult,
   BatchTimingDistribution,
 } from "./batch-contracts.js";
 
 /** Mutable timing owner for one case across repeat executions. */
-export class BatchCaseAggregate<TContext> {
-  readonly #candidate: BatchCase<TContext>;
+export class BatchCaseAggregate {
+  readonly #candidate: BatchCaseDescriptor;
   readonly #durations: number[] = [];
   readonly #stages = new StageTimingAccumulator();
   #passedCount = 0;
   #failedCount = 0;
 
-  public constructor(candidate: BatchCase<TContext>) {
+  public constructor(candidate: BatchCaseDescriptor) {
     this.#candidate = candidate;
   }
 

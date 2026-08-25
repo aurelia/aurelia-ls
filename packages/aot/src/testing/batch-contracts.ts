@@ -3,14 +3,19 @@ export interface BatchCaseExecution {
   readonly stages?: Readonly<Record<string, number>>;
 }
 
-/** One independently attributable case executed by a batched harness. */
-export interface BatchCase<TContext> {
+/** Searchable identity shared by every case dialect executed by the batch engine. */
+export interface BatchCaseDescriptor {
   readonly id: string;
   readonly family: string;
   readonly tags: readonly string[];
   readonly requirement: string;
-  run(context: TContext): void | BatchCaseExecution | Promise<void | BatchCaseExecution>;
 }
+
+/** Execution adapter that keeps a case dialect independent from harness/oracle mechanics. */
+export type BatchCaseExecutor<TCase extends BatchCaseDescriptor, TContext> = (
+  candidate: TCase,
+  context: TContext,
+) => void | BatchCaseExecution | Promise<void | BatchCaseExecution>;
 
 /** Stable zero-based shard selection for separate runner processes. */
 export interface BatchShard {
@@ -99,8 +104,8 @@ export interface BatchRunResult {
 }
 
 /** Deterministic preflight result before the expensive shared context is created. */
-export interface BatchCasePlan<TContext> {
+export interface BatchCasePlan<TCase extends BatchCaseDescriptor> {
   readonly discoveredCaseCount: number;
-  readonly eligible: readonly BatchCase<TContext>[];
-  readonly selected: readonly BatchCase<TContext>[];
+  readonly eligible: readonly TCase[];
+  readonly selected: readonly TCase[];
 }

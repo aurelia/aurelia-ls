@@ -1,19 +1,19 @@
-import type { BatchCase, BatchCasePlan, BatchRunOptions, BatchShard } from "./batch-contracts.js";
+import type { BatchCaseDescriptor, BatchCasePlan, BatchRunOptions, BatchShard } from "./batch-contracts.js";
 
 /** Validated deterministic case registry and selection authority for one runner. */
-export class BatchCaseRegistry<TContext> {
-  readonly #cases: readonly BatchCase<TContext>[];
+export class BatchCaseRegistry<TCase extends BatchCaseDescriptor> {
+  readonly #cases: readonly TCase[];
   readonly #families: ReadonlySet<string>;
   readonly #tags: ReadonlySet<string>;
 
-  public constructor(cases: readonly BatchCase<TContext>[]) {
+  public constructor(cases: readonly TCase[]) {
     validateCases(cases);
     this.#cases = [...cases].sort((left, right) => left.id.localeCompare(right.id));
     this.#families = new Set(this.#cases.map((candidate) => candidate.family));
     this.#tags = new Set(this.#cases.flatMap((candidate) => [...candidate.tags]));
   }
 
-  public plan(options: BatchRunOptions = {}): BatchCasePlan<TContext> {
+  public plan(options: BatchRunOptions = {}): BatchCasePlan<TCase> {
     this.#validateFilters(options);
     const queryTokens = normalizedQueryTokens(options.query);
     const idPatterns = normalizedIdPatterns(options.idPatterns);
@@ -71,7 +71,7 @@ export class BatchCaseRegistry<TContext> {
   }
 }
 
-function validateCases<TContext>(cases: readonly BatchCase<TContext>[]): void {
+function validateCases(cases: readonly BatchCaseDescriptor[]): void {
   const ids = new Set<string>();
   for (const candidate of cases) {
     if (!isCanonicalToken(candidate.id) || !isCanonicalToken(candidate.family)) {
