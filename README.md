@@ -83,16 +83,11 @@ the model.
 | `aurelia-2` | VS Code extension | Current product |
 | `@aurelia-ls/mcp` | Local MCP server | Current product; GitHub tarball distribution |
 | `@aurelia-ls/semantic-runtime` | Shared semantic authority | Current internal substrate |
-| `@aurelia-ls/aot` | Greenfield AOT compiler and lowering-parity harness | New internal scaffold; normalized parity first |
+| `@aurelia-ls/aot` | Greenfield AOT assurance and artifact projection | Internal research scaffold |
 | `@aurelia-ls/language-server` | LSP lifecycle and protocol adapter | Current internal VS Code path |
 | `@aurelia-ls/patterns` | Curated Patterns and Aurelia docs snapshot support | Current internal MCP content |
 | `@aurelia-ls/atlas` | Repository/framework navigation and architecture memory | Internal maintainer tooling |
 | `@aurelia-ls/lane-harness` | Cross-surface language-server acceptance | Internal assurance tooling |
-| `@aurelia-ls/integration-harness` | Compiler/build integration fixtures | Internal assurance tooling |
-| `@aurelia-ls/compiler` | Earlier template compiler pipeline | Retained legacy/internal package |
-| `@aurelia-ls/semantic-workspace` | Earlier semantic workspace engine | Retained legacy/internal package |
-| `@aurelia-ls/transform`, `@aurelia-ls/vite-plugin` | Build-time/AOT packages | Retained outside the current VS Code/MCP release lines |
-| `@aurelia-ls/ssr`, `@aurelia-ls/ssg` | Rendering packages | Retained outside the current VS Code/MCP release lines |
 
 ## Build From Source
 

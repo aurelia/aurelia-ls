@@ -19,7 +19,7 @@ const bindingUncertaintyFixtureRoot = path.join(repoRoot, 'packages/semantic-run
 const attributeInterpretationFixtureRoot = path.join(repoRoot, 'packages/semantic-runtime/fixtures/pressure/binding-uncertainty-explanation');
 const attributeInterpretationOpenFixtureRoot = path.join(repoRoot, 'packages/semantic-runtime/fixtures/pressure/resource-registration-effective-definitions');
 const typescriptDiagnosticsFixtureRoot = path.join(repoRoot, 'packages/semantic-runtime/fixtures/pressure/typescript-project-diagnostics');
-const projectConfigurationFixtureRoot = path.join(repoRoot, 'playground/issue-tracker');
+const projectConfigurationFixtureRoot = path.join(repoRoot, 'packages/mcp/fixtures/project-configuration-valid');
 const projectConfigurationDiagnosticsFixtureRoot = path.join(repoRoot, 'packages/mcp/fixtures/project-configuration-diagnostics');
 
 const child = spawn(process.execPath, [serverPath], {

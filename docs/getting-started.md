@@ -146,7 +146,6 @@ pnpm test:ide:support
 
 `pnpm test:ide` builds the IDE packages and runs the language-server and VS Code
 suites. `test:ide:assurance` covers semantic-runtime, conformance, and lanes.
-The `test:sem-*` commands cover the retained semantic-workspace package.
 
 Real Extension Host acceptance is available through:
 

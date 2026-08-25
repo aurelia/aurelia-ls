@@ -1,17 +1,10 @@
 {
   "files": [],
   "references": [
-    { "path": "packages/compiler" },
-    { "path": "packages/transform" },
-    { "path": "packages/ssr" },
-    { "path": "packages/ssg" },
-    { "path": "packages/vite-plugin" },
-    { "path": "packages/language-server" },
-    { "path": "packages/vscode" },
-    { "path": "packages/integration-harness" },
-    { "path": "packages/semantic-workspace" },
     { "path": "packages/semantic-runtime" },
     { "path": "packages/aot" },
+    { "path": "packages/language-server" },
+    { "path": "packages/vscode" },
     { "path": "packages/patterns" },
     { "path": "packages/mcp" },
     { "path": "packages/atlas" }

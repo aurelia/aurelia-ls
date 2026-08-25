@@ -6,10 +6,6 @@ export const enum RepoAreaId {
   SemanticRuntime = "semantic-runtime",
   /** The Aurelia framework submodule. */
   AureliaFramework = "aurelia-framework",
-  /** Older packages that should stay out of the active semantic surface for now. */
-  LegacyLsPackages = "legacy-ls-packages",
-  /** Example applications and app fixtures. */
-  Examples = "examples",
   /** External Aurelia plugins checkout. */
   AureliaPlugins = "aurelia-plugins",
 }
@@ -22,10 +18,6 @@ export const enum RepoAreaKind {
   Framework = "framework",
   /** Atlas code and contracts live here. */
   Atlas = "atlas",
-  /** Older repo package whose semantics are deliberately deferred. */
-  LegacyPackage = "legacy-package",
-  /** Example app or fixture area. */
-  Example = "example",
   /** Build, script, or repository tooling area. */
   Tooling = "tooling",
   /** Documentation area. */
@@ -96,31 +88,6 @@ export const RepoTerrain: readonly RepoArea[] = [
     ownership: RepoAreaOwnership.Submodule,
     root: "aurelia",
     summary: "Aurelia framework source used as the semantic reference for DI, resources, rendering, compilation, and runtime contracts.",
-  },
-  {
-    id: RepoAreaId.LegacyLsPackages,
-    kind: RepoAreaKind.LegacyPackage,
-    status: RepoAreaStatus.Deferred,
-    ownership: RepoAreaOwnership.InRepo,
-    root: "packages",
-    summary: "Older compiler, language-server, transform, vscode, semantic-workspace, and integration packages. Keep out of product-semantic reads until intentionally revived.",
-    packageIds: [
-      "compiler",
-      "language-server",
-      "transform",
-      "vite-plugin",
-      "vscode",
-      "semantic-workspace",
-      "integration-harness",
-    ],
-  },
-  {
-    id: RepoAreaId.Examples,
-    kind: RepoAreaKind.Example,
-    status: RepoAreaStatus.Deferred,
-    ownership: RepoAreaOwnership.InRepo,
-    root: "examples",
-    summary: "Example applications. Useful later as behavioral fixtures, but not part of the current semantic substrate.",
   },
   {
     id: RepoAreaId.AureliaPlugins,

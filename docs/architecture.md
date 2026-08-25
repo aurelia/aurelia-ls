@@ -41,9 +41,8 @@ own host lifecycle and presentation.
 | `@aurelia-ls/patterns` | Curated authoring examples and the packaged Aurelia documentation snapshot |
 | `@aurelia-ls/atlas` | Internal repository/framework navigation, queryable architecture memory, and maintenance lenses |
 
-The lane and integration harnesses are assurance infrastructure. Compiler,
-semantic-workspace, and the build-time packages are discussed under
-[Retained and legacy packages](#retained-and-legacy-packages).
+The lane harness is cross-surface assurance infrastructure. AOT is an emerging
+consumer of semantic-runtime rather than a parallel semantic authority.
 
 ## How semantic rules are grounded
 
@@ -279,17 +278,13 @@ This boundary is product behavior. An open answer can still contain useful exact
 identity, source, or type facts; consumers should preserve those facts while
 showing the specific limitation.
 
-## Retained and legacy packages
+## Retired predecessor packages
 
-`@aurelia-ls/compiler` and `@aurelia-ls/semantic-workspace` describe the earlier
-language-tooling architecture. They remain in the repository for bounded legacy
-and internal uses, but neither is the current feature authority for the language
-server, VS Code, or MCP.
-
-`@aurelia-ls/transform` and `@aurelia-ls/vite-plugin` are retained build-time
-packages outside the current VS Code and MCP release lines.
-`@aurelia-ls/ssr` and `@aurelia-ls/ssg` are retained rendering packages on that
-same independent package line.
+The earlier compiler, semantic-workspace, transform, Vite, SSR, SSG, and
+integration-harness packages were removed rather than used as the foundation of
+the greenfield AOT line. Their history remains available for requirement mining,
+but their models, wire formats, snapshots, and build adapters are not current
+authority.
 
 App-builder is legacy/internal semantic-runtime substrate for research,
 source-lowering experiments, and fixture pressure. The public MCP authoring path

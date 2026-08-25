@@ -1,8 +1,5 @@
 packages:
   - "packages/*"
-  - "examples/*"
-  - "playground"
-  - "playground/*"
 
 allowBuilds:
   '@vscode/vsce-sign': false

@@ -1038,7 +1038,7 @@
         },
         {
           "kind": "source",
-          "filePath": "packages/semantic-runtime/src/template/built-in-syntax.ts",
+          "filePath": "packages/semantic-runtime/src/template/binding-command-target.ts",
           "symbolName": "BuiltInBindingCommandTargetName",
           "summary": "Common authored target names used with framework-owned binding commands; app-builder controls and binding parts spend this template-syntax vocabulary instead of declaring local target-name enums."
         },
@@ -1824,7 +1824,7 @@
         },
         {
           "kind": "source-declaration-exists",
-          "filePath": "packages/semantic-runtime/src/template/built-in-syntax.ts",
+          "filePath": "packages/semantic-runtime/src/template/binding-command-target.ts",
           "symbolName": "BuiltInBindingCommandTargetName"
         },
         {

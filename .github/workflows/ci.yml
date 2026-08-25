@@ -15,7 +15,6 @@ concurrency:
 
 jobs:
   # CI covers semantic-runtime, the Language Server and VS Code products, bounded host support, and MCP release confidence.
-  # Legacy compiler/semantic-workspace/SSR/SSG/Vite/playground lanes are parked until they target semantic-runtime.
   semantic-runtime:
     name: IDE Semantic Assurance
     runs-on: ubuntu-latest

@@ -14,6 +14,13 @@ VS Code 0.5.0 and MCP 0.3.0 are the two product artifacts in this release.
 `@aurelia-ls/semantic-runtime` is their shared internal substrate; the language
 server is the internal VS Code protocol adapter.
 
+### Retired predecessor packages
+
+- Removed the earlier compiler, semantic-workspace, transform, Vite-plugin,
+  SSR, SSG, and integration-harness package line, along with its obsolete
+  examples, playgrounds, generated fixtures, and root scripts. Git history
+  remains the provenance source for deliberately mined requirements.
+
 ### Shared semantic authority and source identity
 
 - Semantic-runtime provides the shared project model used by the language

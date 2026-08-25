@@ -344,11 +344,6 @@ describe("VS Code publish workflow contract", () => {
     expect(automaticCommands).not.toContain("pnpm build");
     expect(automaticCommands).not.toContain("pnpm -w build");
     expect(automaticCommands).not.toContain("pnpm test");
-    expect(automaticRunText).not.toContain("test:compiler");
-    expect(automaticRunText).not.toContain("packages/compiler/test");
-    expect(automaticRunText).not.toContain("test:sem-");
-    expect(automaticRunText).not.toContain("packages/semantic-workspace/test");
-
     const hostJob = ciJobs["vscode-extension-host"];
     expect(hostJob).toMatchObject({
       "runs-on": "windows-latest",
