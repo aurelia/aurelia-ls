@@ -12,14 +12,12 @@ coding agent.
 
 | Surface | Version | Status |
 |---|---:|---|
-| [GitHub tarball](https://github.com/aurelia/aurelia-ls/releases/tag/mcp-v0.2.0) | 0.2.0 | Latest published release |
-| [Source protocol reference](./docs/reference-v0.3.0.md) | 0.3.0 | Current source and next release target |
+| [GitHub tarball](https://github.com/aurelia/aurelia-ls/releases/tag/mcp-v0.3.0) | 0.3.0 | Latest published release |
+| [Protocol reference](./docs/reference-v0.3.0.md) | 0.3.0 | Current protocol |
 
-The install commands and provider guides use the hosted 0.2.0 asset until the
-0.3.0 tag and tarball are published. The
-[0.3.0 release notes](./release-notes/mcp-v0.3.0.md) describe the source delta;
-the [0.2.0 notes](./release-notes/mcp-v0.2.0.md) remain the reference for the
-published package.
+The [0.3.0 release notes](./release-notes/mcp-v0.3.0.md) describe the client
+migration from 0.2.0. The [0.2.0 notes](./release-notes/mcp-v0.2.0.md) remain
+available for the historical release.
 
 ## Install The Published Release
 
@@ -27,7 +25,7 @@ For diagnostics that should agree with project-local `tsc`, install the
 tarball as a dev dependency in the Aurelia app:
 
 ```powershell
-npm i -D https://github.com/aurelia/aurelia-ls/releases/download/mcp-v0.2.0/aurelia-ls-mcp-0.2.0.tgz
+npm i -D https://github.com/aurelia/aurelia-ls/releases/download/mcp-v0.3.0/aurelia-ls-mcp-0.3.0.tgz
 ```
 
 Configure the MCP client to launch the app-local package:
@@ -42,7 +40,7 @@ Provider-specific configuration is available for
 For a quick trial:
 
 ```powershell
-npx -y https://github.com/aurelia/aurelia-ls/releases/download/mcp-v0.2.0/aurelia-ls-mcp-0.2.0.tgz
+npx -y https://github.com/aurelia/aurelia-ls/releases/download/mcp-v0.3.0/aurelia-ls-mcp-0.3.0.tgz
 ```
 
 Direct URL `npx` runs in a temporary package-manager context. A project-local

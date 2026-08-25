@@ -35,15 +35,14 @@ clients. It includes diagnostics, resource and route analysis, curated Aurelia
 Patterns, and bundled Aurelia docs. The MCP server makes no project-file writes;
 cache management changes only in-memory analysis state.
 
-The latest hosted tarball is MCP 0.2.0. The source tree targets 0.3.0; its
-[package README](packages/mcp/README.md) explains the difference and links the
-versioned protocol reference.
+The latest hosted tarball is MCP 0.3.0. Its
+[package README](packages/mcp/README.md) links the versioned protocol reference.
 
 To keep MCP diagnostics aligned with the project's TypeScript, install the
 hosted release inside the Aurelia app:
 
 ```bash
-npm i -D https://github.com/aurelia/aurelia-ls/releases/download/mcp-v0.2.0/aurelia-ls-mcp-0.2.0.tgz
+npm i -D https://github.com/aurelia/aurelia-ls/releases/download/mcp-v0.3.0/aurelia-ls-mcp-0.3.0.tgz
 ```
 
 Then configure the MCP client to run:
@@ -53,7 +52,7 @@ node --max-old-space-size=8192 ./node_modules/@aurelia-ls/mcp/au-mcp.js
 ```
 
 See the [provider setup guides](packages/mcp/docs/providers/README.md) and the
-published [MCP 0.2.0 release notes](packages/mcp/release-notes/mcp-v0.2.0.md).
+published [MCP 0.3.0 release notes](packages/mcp/release-notes/mcp-v0.3.0.md).
 
 ## Shared Semantic Runtime
 

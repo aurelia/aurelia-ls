@@ -8,7 +8,7 @@ preserve the repository's earlier package line.
 
 ---
 
-## Unreleased
+## VS Code 0.5.0 and MCP 0.3.0 (2026-08-25)
 
 VS Code 0.5.0 and MCP 0.3.0 are the two product artifacts in this release.
 `@aurelia-ls/semantic-runtime` is their shared internal substrate; the language

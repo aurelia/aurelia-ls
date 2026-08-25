@@ -7,7 +7,7 @@ import {
 } from './pattern-sentinels.mjs';
 
 const sourceReleaseVersion = '0.3.0';
-const publishedReleaseVersion = '0.2.0';
+const publishedReleaseVersion = '0.3.0';
 const historicalReleaseVersion = '0.2.0';
 const packageRoot = path.resolve(fileURLToPath(new URL('..', import.meta.url)));
 const workspaceRoot = path.resolve(packageRoot, '../..');

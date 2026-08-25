@@ -4,7 +4,7 @@ Install the MCP release tarball inside the Aurelia app before configuring any MC
 client:
 
 ```bash
-npm i -D https://github.com/aurelia/aurelia-ls/releases/download/mcp-v0.2.0/aurelia-ls-mcp-0.2.0.tgz
+npm i -D https://github.com/aurelia/aurelia-ls/releases/download/mcp-v0.3.0/aurelia-ls-mcp-0.3.0.tgz
 ```
 
 The recommended launch command is always the app-local package:
