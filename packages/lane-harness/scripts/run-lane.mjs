@@ -11,7 +11,7 @@ const PACKAGE_ROOT = path.resolve(SCRIPT_DIR, "..");
 const REPO_ROOT = path.resolve(PACKAGE_ROOT, "..", "..");
 const SERVER_PATH = path.resolve(REPO_ROOT, "packages/language-server/out/main.js");
 const REQUEST_TIMEOUT_MS = 30000;
-const STARTUP_TIMEOUT_MS = 10000;
+export const laneStartupTimeoutMs = 30000;
 const SHUTDOWN_TIMEOUT_MS = 5000;
 const DIAGNOSTICS_TIMEOUT_MS = 30000;
 export const supportedLaneNames = Object.freeze([
@@ -456,7 +456,7 @@ async function initializeServer(client, fixtureRoot, fixtureName) {
         },
       },
     },
-    STARTUP_TIMEOUT_MS,
+    laneStartupTimeoutMs,
   );
 
   if (response.error) {

@@ -13,6 +13,7 @@ import {
   laneDetectionPlanReceipt,
   parseLaneDetectionArguments,
 } from "../scripts/detect-lanes.mjs";
+import { laneStartupTimeoutMs } from "../scripts/run-lane.mjs";
 
 const temporaryRoots: string[] = [];
 const spawnedProcessRoots: number[] = [];
@@ -25,6 +26,10 @@ afterEach(async () => {
 });
 
 describe("aggregate lane detection", () => {
+  test("allows a loaded release runner thirty seconds for each fresh language-server startup", () => {
+    expect(laneStartupTimeoutMs).toBe(30_000);
+  });
+
   test("discovers one exact deterministic pair for every declared lane and snapshot", async () => {
     const fixture = await createFixture({
       alpha: {
