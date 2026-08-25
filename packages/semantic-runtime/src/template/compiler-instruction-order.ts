@@ -11,6 +11,12 @@ import {
   PropertyBindingInstruction,
   type TemplateInstruction,
 } from './instruction-ir.js';
+import {
+  isNativeInputCheckedInitializationPredecessor,
+  isNativeInputCheckedType,
+  nativeInputCheckedBindingSemantics,
+  nativeSelectValueBindingSemantics,
+} from './native-form-control-semantics.js';
 import { runtimeNodeName } from './runtime-dom-name.js';
 
 /** Preserve the framework compiler's observer-sensitive native instruction order after authored lowering. */
@@ -24,16 +30,18 @@ export function orderCompilerInstructionsForElement(
   }
 
   switch (runtimeNodeName(node.tagName, node.namespace)) {
-    case 'INPUT': {
+    case nativeInputCheckedBindingSemantics.nodeName: {
       const type = htmlAttributeValue(owner, 'type')?.toLowerCase() ?? 'text';
-      if (type !== 'checkbox' && type !== 'radio') {
+      if (!isNativeInputCheckedType(type)) {
         return instructions;
       }
       return reorderInputInstructions(instructions);
     }
-    case 'SELECT':
-      return hasHtmlAttribute(owner, 'multiple')
-        || instructions.some((instruction) => runtimeInstructionTarget(instruction) === 'multiple')
+    case nativeSelectValueBindingSemantics.nodeName:
+      return hasHtmlAttribute(owner, nativeSelectValueBindingSemantics.multipleTarget)
+        || instructions.some((instruction) =>
+          runtimeInstructionTarget(instruction) === nativeSelectValueBindingSemantics.multipleTarget
+        )
         ? reorderSelectInstructions(instructions)
         : instructions;
     default:
@@ -48,17 +56,16 @@ function reorderInputInstructions(
   let checkedIndex: number | undefined;
   let found = 0;
   for (let index = 0; index < instructions.length && found < 3; index++) {
-    switch (runtimeInstructionTarget(instructions[index]!)) {
-      case 'model':
-      case 'value':
-      case 'matcher':
-        modelOrValueOrMatcherIndex = index;
-        found++;
-        break;
-      case 'checked':
-        checkedIndex = index;
-        found++;
-        break;
+    const target = runtimeInstructionTarget(instructions[index]!);
+    if (
+      target != null
+      && isNativeInputCheckedInitializationPredecessor(target)
+    ) {
+      modelOrValueOrMatcherIndex = index;
+      found++;
+    } else if (target === nativeInputCheckedBindingSemantics.checkedTarget) {
+      checkedIndex = index;
+      found++;
     }
   }
   if (
@@ -78,15 +85,13 @@ function reorderSelectInstructions(
   let multipleIndex = 0;
   let found = 0;
   for (let index = 0; index < instructions.length && found < 2; index++) {
-    switch (runtimeInstructionTarget(instructions[index]!)) {
-      case 'multiple':
-        multipleIndex = index;
-        found++;
-        break;
-      case 'value':
-        valueIndex = index;
-        found++;
-        break;
+    const target = runtimeInstructionTarget(instructions[index]!);
+    if (target === nativeSelectValueBindingSemantics.multipleTarget) {
+      multipleIndex = index;
+      found++;
+    } else if (target === nativeSelectValueBindingSemantics.valueTarget) {
+      valueIndex = index;
+      found++;
     }
   }
   return found === 2 && valueIndex < multipleIndex

@@ -2,6 +2,7 @@ import ts from 'typescript';
 import { uniqueStrings } from '../kernel/collections.js';
 import { OpenSeamReasonKind } from '../kernel/open-seam.js';
 import { HtmlElement, normalizeHtmlTagName } from '../template/html-ir.js';
+import { nativeSelectValueBindingSemantics } from '../template/native-form-control-semantics.js';
 import {
   PropertyBinding,
   type RuntimeBindingTargetAccess,
@@ -58,7 +59,7 @@ export class SelectValueObserverChannelDrafts {
     context: BindingValueChannelDraftContext,
   ): RuntimeBindingValueChannelDraft {
     const select = this.owner.htmlElementFor(targetAccess.targetNode);
-    if (select == null || normalizeHtmlTagName(select.tagName) !== 'SELECT') {
+    if (select == null || normalizeHtmlTagName(select.tagName) !== nativeSelectValueBindingSemantics.nodeName) {
       return {
         channelKind: RuntimeBindingValueChannelKind.Open,
         authority: RuntimeBindingValueChannelAuthority.Open,
@@ -213,7 +214,11 @@ export class SelectValueObserverChannelDrafts {
     select: HtmlElement,
     context: BindingValueChannelDraftContext,
   ): SelectMultipleMode {
-    const binding = this.owner.propertyBindingForNodeTarget(select, context.input, ['multiple']);
+    const binding = this.owner.propertyBindingForNodeTarget(
+      select,
+      context.input,
+      [nativeSelectValueBindingSemantics.multipleTarget],
+    );
     if (binding != null) {
       const literal = this.bindingBooleanLiteral(binding, context);
       if (literal != null) {
@@ -226,7 +231,9 @@ export class SelectValueObserverChannelDrafts {
       };
     }
     return {
-      kind: this.owner.hasAttribute(select, 'multiple') ? 'multiple' : 'single',
+      kind: this.owner.hasAttribute(select, nativeSelectValueBindingSemantics.multipleTarget)
+        ? 'multiple'
+        : 'single',
     };
   }
 

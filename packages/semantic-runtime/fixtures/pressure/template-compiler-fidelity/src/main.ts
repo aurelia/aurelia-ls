@@ -40,6 +40,9 @@ class TemplateCompilerFidelityApp {
   selection: string[] = [];
   multiple = true;
   checked = false;
+  disabled = false;
+  model: unknown = null;
+  matcher = (left: unknown, right: unknown): boolean => left === right;
   value = '';
   first = '';
   second = '';

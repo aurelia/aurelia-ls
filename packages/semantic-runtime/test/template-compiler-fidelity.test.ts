@@ -57,20 +57,29 @@ describe('template compiler fidelity', () => {
     expect(containerlessTarget?.targetKind).toBe(TemplateRenderTargetKind.RenderLocation);
 
     const nodes = new Map(compilation.html.nodes.map((node) => [node.productHandle, node]));
-    const targetOrders = new Map(compiled.renderTargets.flatMap((target) => {
+    const targetOrders = compiled.renderTargets.flatMap((target) => {
       const node = target.htmlNode?.productHandle == null ? null : nodes.get(target.htmlNode.productHandle) ?? null;
       if (!(node instanceof HtmlElement)) {
         return [];
       }
-      return [[
-        node.tagName.toLowerCase(),
-        instructionsForTarget(compiled.instructions, compiled.instructionSequences, target.instructionSequenceProductHandle)
+      return [{
+        tagName: node.tagName.toLowerCase(),
+        targets: instructionsForTarget(
+          compiled.instructions,
+          compiled.instructionSequences,
+          target.instructionSequenceProductHandle,
+        )
           .map(runtimeInstructionTarget)
-          .filter((target): target is string => target != null),
-      ] as const];
-    }));
-    expect(targetOrders.get('select')).toEqual(['multiple', 'value']);
-    expect(targetOrders.get('input')).toEqual(['value', 'checked']);
+          .filter((instructionTarget): instructionTarget is string => instructionTarget != null),
+      }];
+    });
+    expect(targetOrders).toEqual(expect.arrayContaining([
+      { tagName: 'select', targets: ['multiple', 'value'] },
+      { tagName: 'input', targets: ['value', 'checked'] },
+      { tagName: 'input', targets: ['model', 'checked'] },
+      { tagName: 'input', targets: ['matcher', 'checked'] },
+      { tagName: 'input', targets: ['model', 'disabled', 'checked'] },
+    ]));
   }, 30_000);
 });
 

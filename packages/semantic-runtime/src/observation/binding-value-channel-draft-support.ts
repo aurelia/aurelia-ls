@@ -30,6 +30,11 @@ import {
 } from '../template/template-controller-semantics.js';
 import type { ProductDetailReadView } from '../kernel/product-details.js';
 import type { RuntimeControllerFrame } from '../template/runtime-controller.js';
+import {
+  nativeFormControlMatcherTarget,
+  nativeInputCheckedBindingSemantics,
+  nativeSelectValueBindingSemantics,
+} from '../template/native-form-control-semantics.js';
 import { CheckerAsyncTypeProjector } from '../type-system/checker-async-type-projector.js';
 import type { RuntimeRenderingEmission } from '../template/runtime-rendering-materializer.js';
 import {
@@ -583,19 +588,29 @@ export class RuntimeBindingValueChannelDraftSupport {
     input: HtmlElement,
     context: BindingValueChannelDraftContext,
   ): BindingValueExpression {
-    const modelBinding = this.propertyBindingForNodeTarget(input, context.input, ['model']);
+    const modelBinding = this.propertyBindingForNodeTarget(
+      input,
+      context.input,
+      [nativeInputCheckedBindingSemantics.modelTarget],
+    );
     if (modelBinding != null) {
       return this.bindingValueExpression(`${local}:element-model`, modelBinding, context);
     }
-    const model = this.attributeValue(input, 'model');
+    const model = this.attributeValue(input, nativeInputCheckedBindingSemantics.modelTarget);
     if (model != null) {
       return staticStringValue(model);
     }
-    const valueBinding = this.propertyBindingForNodeTarget(input, context.input, ['value']);
+    const valueBinding = this.propertyBindingForNodeTarget(
+      input,
+      context.input,
+      [nativeInputCheckedBindingSemantics.valueTarget],
+    );
     if (valueBinding != null) {
       return this.domValueBindingExpression(`${local}:element-value`, valueBinding, context, '');
     }
-    return staticStringValue(this.attributeValue(input, 'value') ?? 'on');
+    return staticStringValue(
+      this.attributeValue(input, nativeInputCheckedBindingSemantics.valueTarget) ?? 'on',
+    );
   }
 
   optionRuntimeValue(
@@ -603,15 +618,23 @@ export class RuntimeBindingValueChannelDraftSupport {
     option: HtmlElement,
     context: BindingValueChannelDraftContext,
   ): BindingValueExpression {
-    const modelBinding = this.propertyBindingForNodeTarget(option, context.input, ['model']);
+    const modelBinding = this.propertyBindingForNodeTarget(
+      option,
+      context.input,
+      [nativeSelectValueBindingSemantics.optionModelTarget],
+    );
     if (modelBinding != null) {
       return this.bindingValueExpression(`${local}:element-model`, modelBinding, context);
     }
-    const model = this.attributeValue(option, 'model');
+    const model = this.attributeValue(option, nativeSelectValueBindingSemantics.optionModelTarget);
     if (model != null) {
       return staticStringValue(model);
     }
-    const valueBinding = this.propertyBindingForNodeTarget(option, context.input, ['value']);
+    const valueBinding = this.propertyBindingForNodeTarget(
+      option,
+      context.input,
+      [nativeSelectValueBindingSemantics.optionValueTarget],
+    );
     if (valueBinding != null) {
       return this.domValueBindingExpression(`${local}:element-value`, valueBinding, context, null);
     }
@@ -780,7 +803,11 @@ export class RuntimeBindingValueChannelDraftSupport {
     node: HtmlElement,
     context: BindingValueChannelDraftContext,
   ): boolean {
-    return this.propertyBindingForNodeTarget(node, context.input, ['matcher']) != null;
+    return this.propertyBindingForNodeTarget(
+      node,
+      context.input,
+      [nativeFormControlMatcherTarget],
+    ) != null;
   }
 
   templateControllerSemanticsForTargetAccess(
@@ -907,7 +934,8 @@ export class RuntimeBindingValueChannelDraftSupport {
   }
 
   private optionStaticValue(option: HtmlElement): string {
-    return this.attributeValue(option, 'value') ?? this.textContent(option).trim();
+    return this.attributeValue(option, nativeSelectValueBindingSemantics.optionValueTarget)
+      ?? this.textContent(option).trim();
   }
 
   private textContent(element: HtmlElement): string {

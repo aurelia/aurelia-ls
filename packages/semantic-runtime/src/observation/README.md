@@ -673,7 +673,9 @@ Select and checked observers are modeled in three layers. `observer-locator.ts` 
 `binding-value-channel-drafts.ts` owns the value
 channel they imply, and `binding-value-channel-materializer.ts` publishes the resulting product records. That split
 matters because the observers select the accessor branch, but the actual value domain depends on authored option/input
-nodes plus TypeChecker-visible source facts. The current value-channel model
+nodes plus TypeChecker-visible source facts. Shared native input/select target roles and compiler initialization
+dependencies live in `template/native-form-control-semantics.ts`; observation consumes that profile instead of owning a
+second model/value/matcher/multiple target table. The current value-channel model
 closes the single-select option domain from static `option.value`, static `option.model`, or expression-backed
 `option.model`/`option.value` bindings. `model.bind` mirrors Aurelia's framework-owned arbitrary-value slot and
 preserves primitive or object identity; `value.bind` mirrors the DOM value property path and therefore transports

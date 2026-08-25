@@ -293,7 +293,9 @@ classification, expression parsing, and instruction lowering converge on the sam
   hook execution is modeled.
 - `compiler-instruction-order.ts` owns the framework's observer-sensitive native row order: model/value/matcher precede
   checked for checkbox/radio inputs, and multiple precedes value for multi-selects. Keep that semantic order beside
-  compiled instruction assembly instead of reconstructing it in renderer or value-channel consumers. Root
+  compiled instruction assembly instead of reconstructing it in renderer or value-channel consumers.
+  `native-form-control-semantics.ts` owns the shared input/select target roles and initialization dependencies consumed
+  by both compiled ordering and checked/select value-channel analysis. Root
   containerless custom-element rows are render-location targets at this boundary. Exact nested target ownership remains
   part of the transformed-template work; downstream synthetic-view grouping must not permanently reinterpret those
   rows from instruction adjacency.

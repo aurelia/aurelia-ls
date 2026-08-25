@@ -1,6 +1,7 @@
 import type { HtmlElement } from '../template/html-ir.js';
 import type { CheckerTypeReference } from '../type-system/type-shape.js';
 import { normalizeHtmlTagName } from '../template/html-ir.js';
+import { nativeInputCheckedBindingSemantics } from '../template/native-form-control-semantics.js';
 import {
   PropertyBinding,
   type RuntimeBindingTargetAccess,
@@ -33,7 +34,7 @@ export class CheckedObserverChannelDrafts {
     context: BindingValueChannelDraftContext,
   ): RuntimeBindingValueChannelDraft {
     const input = this.owner.htmlElementFor(targetAccess.targetNode);
-    if (input == null || normalizeHtmlTagName(input.tagName) !== 'INPUT') {
+    if (input == null || normalizeHtmlTagName(input.tagName) !== nativeInputCheckedBindingSemantics.nodeName) {
       return {
         channelKind: RuntimeBindingValueChannelKind.Open,
         authority: RuntimeBindingValueChannelAuthority.Open,
@@ -48,9 +49,9 @@ export class CheckedObserverChannelDrafts {
     const usesCustomMatcher = this.owner.hasCustomMatcherBinding(input, context);
     const type = (this.owner.attributeValue(input, 'type') ?? 'text').toLowerCase();
     switch (type) {
-      case 'radio':
+      case nativeInputCheckedBindingSemantics.inputTypes[1]:
         return this.checkedRadioValueChannelDraft(local, binding, targetAccess, input, context, usesCustomMatcher);
-      case 'checkbox':
+      case nativeInputCheckedBindingSemantics.inputTypes[0]:
         return this.checkedCheckboxValueChannelDraft(local, binding, targetAccess, readSourceType, input, context, usesCustomMatcher);
       default:
         return {
