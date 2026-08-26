@@ -110,7 +110,7 @@ async function main() {
       caseCount: cases.length,
       matchedEquivalentCount: equivalentCases.length,
       declaredExpectedDivergenceCount: BROWSER_TREE_ORACLE_CASES.filter(
-        (candidate) => candidate.expectation.kind === "expected-divergence",
+        (candidate) => candidate.oracles.claims.some((claim) => claim.kind === "expected-divergence"),
       ).length,
       matchedExpectedDivergenceCount: expectedDivergences.length,
       failedCount: failedCases.length,

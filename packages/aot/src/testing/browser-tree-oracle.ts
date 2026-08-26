@@ -4,6 +4,11 @@ import {
   parseBrowserTemplateFragmentDraft,
 } from "@aurelia-ls/semantic-runtime/browser-template";
 import { canonicalCompilerJson } from "./compiler-canonical-data.js";
+import type {
+  CompilerFocusedInvariant,
+  CompilerInvariantSelector,
+  CompilerOracleLaneId,
+} from "./compiler-case.js";
 import type { BrowserTreeOracleCase } from "./browser-tree-oracle-cases.js";
 
 export interface BrowserTreeStructureAttribute {
@@ -54,10 +59,10 @@ export interface BrowserTreeOracleAuthorityVersions {
 
 export interface BrowserTreeCaseEvaluation {
   readonly id: string;
-  readonly expectation: BrowserTreeOracleCase["expectation"]["kind"];
+  readonly expectation: "equivalent" | "expected-divergence";
   readonly outcome: BrowserTreeCaseOutcome;
   readonly declaredDivergence: {
-    readonly reasonCode: "customizable-select-parser-support";
+    readonly reasonCode: string;
     readonly reason: string;
     readonly authorityVersions: BrowserTreeOracleAuthorityVersions;
   } | null;
@@ -119,68 +124,49 @@ export function evaluateBrowserTreeCase(
   const structureEqual = chromiumStructureDigest === semanticStructureDigest
     && canonicalCompilerJson(chromium.structure) === canonicalCompilerJson(semanticRuntime.structure);
   const problems: string[] = [];
+  const claim = browserComparisonClaim(candidate);
 
-  switch (candidate.expectation.kind) {
+  switch (claim.kind) {
     case "equivalent":
-      if (chromium.serialized !== candidate.expectation.serialization) {
-        problems.push(
-          `Chromium serialization changed: expected ${quoted(candidate.expectation.serialization)}, received ${quoted(chromium.serialized)}.`,
-        );
-      }
-      if (semanticRuntime.serialized !== candidate.expectation.serialization) {
-        problems.push(
-          `Semantic-runtime serialization changed: expected ${quoted(candidate.expectation.serialization)}, received ${quoted(semanticRuntime.serialized)}.`,
-        );
-      }
       if (!structureEqual) {
         problems.push("Chromium and semantic-runtime structural normal forms differ.");
       }
       break;
-    case "expected-divergence":
-      if (authorityVersions.chromium !== candidate.expectation.authorityVersions.chromium) {
+    case "expected-divergence": {
+      const expectedAuthorities = browserDivergenceAuthorityVersions(candidate.id, claim.authorityVersions);
+      if (authorityVersions.chromium !== expectedAuthorities.chromium) {
         problems.push(
-          `Expected-divergence Chromium authority changed: expected ${candidate.expectation.authorityVersions.chromium}, received ${authorityVersions.chromium}.`,
+          `Expected-divergence Chromium authority changed: expected ${expectedAuthorities.chromium}, received ${authorityVersions.chromium}.`,
         );
       }
-      if (
-        authorityVersions.semanticRuntimeParser
-        !== candidate.expectation.authorityVersions.semanticRuntimeParser
-      ) {
+      if (authorityVersions.semanticRuntimeParser !== expectedAuthorities.semanticRuntimeParser) {
         problems.push(
-          `Expected-divergence semantic parser authority changed: expected ${candidate.expectation.authorityVersions.semanticRuntimeParser}, received ${authorityVersions.semanticRuntimeParser}.`,
+          `Expected-divergence semantic parser authority changed: expected ${expectedAuthorities.semanticRuntimeParser}, received ${authorityVersions.semanticRuntimeParser}.`,
         );
       }
-      if (chromium.serialized !== candidate.expectation.chromiumSerialization) {
-        problems.push(
-          `Chromium expected-divergence serialization changed: expected ${quoted(candidate.expectation.chromiumSerialization)}, received ${quoted(chromium.serialized)}.`,
-        );
-      }
-      if (semanticRuntime.serialized !== candidate.expectation.semanticRuntimeSerialization) {
-        problems.push(
-          `Semantic-runtime expected-divergence serialization changed: expected ${quoted(candidate.expectation.semanticRuntimeSerialization)}, received ${quoted(semanticRuntime.serialized)}.`,
-        );
-      }
-      if (serializationEqual || structureEqual) {
+      if (structureEqual) {
         problems.push(
           "The declared customizable-select divergence disappeared; review the authority versions and convert this case to equivalence instead of silently passing it.",
         );
       }
       break;
+    }
   }
+  problems.push(...browserInvariantProblems(candidate.invariants, chromium, semanticRuntime));
 
   return {
     id: candidate.id,
-    expectation: candidate.expectation.kind,
+    expectation: claim.kind,
     outcome: problems.length > 0
       ? "failed"
-      : candidate.expectation.kind === "equivalent"
+      : claim.kind === "equivalent"
         ? "matched-equivalence"
         : "matched-expected-divergence",
-    declaredDivergence: candidate.expectation.kind === "expected-divergence"
+    declaredDivergence: claim.kind === "expected-divergence"
       ? {
-          reasonCode: candidate.expectation.reasonCode,
-          reason: candidate.expectation.reason,
-          authorityVersions: candidate.expectation.authorityVersions,
+          reasonCode: claim.reasonCode,
+          reason: claim.reason,
+          authorityVersions: browserDivergenceAuthorityVersions(candidate.id, claim.authorityVersions),
         }
       : null,
     serializationEqual,
@@ -197,12 +183,100 @@ export function evaluateBrowserTreeCase(
   };
 }
 
+function browserComparisonClaim(candidate: BrowserTreeOracleCase): BrowserTreeOracleCase["oracles"]["claims"][number] {
+  if (candidate.oracles.claims.length !== 1) {
+    throw new Error(`Browser-tree case ${candidate.id} requires exactly one comparison claim.`);
+  }
+  return candidate.oracles.claims[0]!;
+}
+
+function browserDivergenceAuthorityVersions(
+  caseId: string,
+  versions: Readonly<Record<string, string>>,
+): BrowserTreeOracleAuthorityVersions {
+  const chromium = versions.chromium;
+  const semanticRuntimeParser = versions.semanticRuntimeParser;
+  if (chromium == null || semanticRuntimeParser == null) {
+    throw new Error(`Browser-tree case ${caseId} has incomplete expected-divergence authorities.`);
+  }
+  return { chromium, semanticRuntimeParser };
+}
+
+function browserInvariantProblems(
+  invariants: readonly CompilerFocusedInvariant[],
+  chromium: BrowserTreeObservation,
+  semanticRuntime: BrowserTreeObservation,
+): readonly string[] {
+  const problems: string[] = [];
+  for (const invariant of invariants) {
+    for (const lane of invariant.lanes) {
+      const observation = browserObservationForLane(lane, chromium, semanticRuntime);
+      const selected = browserInvariantValue(invariant.selector, observation);
+      switch (invariant.assertion.kind) {
+        case "equal":
+          if (
+            selected === browserMissingValue
+            || canonicalCompilerJson(selected) !== canonicalCompilerJson(invariant.assertion.expected)
+          ) {
+            problems.push(`Focused invariant ${invariant.id} failed in ${lane}.`);
+          }
+          break;
+        case "includes":
+          if (typeof selected !== "string" || !selected.includes(invariant.assertion.expected)) {
+            problems.push(`Focused invariant ${invariant.id} failed in ${lane}.`);
+          }
+          break;
+      }
+    }
+  }
+  return problems;
+}
+
+function browserObservationForLane(
+  lane: CompilerOracleLaneId,
+  chromium: BrowserTreeObservation,
+  semanticRuntime: BrowserTreeObservation,
+): BrowserTreeObservation {
+  switch (lane) {
+    case "chromium-parser":
+      return chromium;
+    case "semantic-runtime":
+      return semanticRuntime;
+    default:
+      throw new Error(`Browser-tree invariant cannot read ${lane}.`);
+  }
+}
+
+const browserMissingValue = Symbol("browser-missing-value");
+
+function browserInvariantValue(
+  selector: CompilerInvariantSelector,
+  observation: BrowserTreeObservation,
+): unknown {
+  switch (selector.kind) {
+    case "browser-serialization":
+      return observation.serialized;
+    case "browser-tree-path": {
+      let value: unknown = observation.structure;
+      for (const segment of selector.path) {
+        if (value == null || typeof value !== "object") {
+          return browserMissingValue;
+        }
+        const descriptor = Object.getOwnPropertyDescriptor(value, String(segment));
+        if (descriptor == null || !("value" in descriptor)) {
+          return browserMissingValue;
+        }
+        value = descriptor.value;
+      }
+      return value;
+    }
+    default:
+      throw new Error(`Browser-tree observation cannot read selector ${selector.kind}.`);
+  }
+}
+
 function structureDigest(structure: readonly BrowserTreeStructureNode[]): string {
   const hash = createHash("sha256");
   hash.update(canonicalCompilerJson(structure));
   return `sha256:${hash.digest("hex")}`;
-}
-
-function quoted(value: string): string {
-  return JSON.stringify(value);
 }

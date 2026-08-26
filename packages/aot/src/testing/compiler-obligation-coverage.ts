@@ -1,4 +1,8 @@
-import type { CompilerCase, CompilerObligationWitnessRole } from "./compiler-case.js";
+import type {
+  CompilerConservationCase,
+  CompilerObligationWitness,
+  CompilerObligationWitnessRole,
+} from "./compiler-case.js";
 import type {
   CompilerObligationAuditDisposition,
   CompilerObligationCatalogEntry,
@@ -7,8 +11,16 @@ import type {
 
 export interface CompilerObligationCaseWitness {
   readonly caseId: string;
+  readonly evidenceKind: "compiler-world" | "validated-evidence";
   readonly role: CompilerObligationWitnessRole;
   readonly summary: string;
+  readonly closureEvidence: CompilerObligationWitness["closureEvidence"] | null;
+}
+
+/** Successful claim ids from an authority/currentness-validated execution receipt. */
+export interface CompilerEvaluatedCaseEvidence {
+  readonly caseId: string;
+  readonly satisfiedClaimIds: readonly string[];
 }
 
 export type CompilerObligationCoverageState =
@@ -50,7 +62,8 @@ export interface CompilerObligationCoverageAudit {
 
 export function auditCompilerObligationCoverage(
   obligations: readonly CompilerObligationCatalogEntry[],
-  cases: readonly CompilerCase[],
+  cases: readonly CompilerConservationCase[],
+  evaluatedEvidence: readonly CompilerEvaluatedCaseEvidence[] = [],
 ): CompilerObligationCoverageAudit {
   const obligationById = new Map(obligations.map((obligation) => [obligation.id, obligation]));
   if (obligationById.size !== obligations.length) {
@@ -59,6 +72,10 @@ export function auditCompilerObligationCoverage(
 
   const witnessesByObligation = new Map<string, CompilerObligationCaseWitness[]>();
   const caseById = new Map(cases.map((candidate) => [candidate.id, candidate]));
+  const evaluatedByCase = new Map(evaluatedEvidence.map((candidate) => [candidate.caseId, candidate]));
+  if (evaluatedByCase.size !== evaluatedEvidence.length) {
+    throw new Error("Evaluated compiler evidence case ids must be unique.");
+  }
   for (const candidate of cases) {
     for (const witness of candidate.obligations) {
       if (!obligationById.has(witness.id)) {
@@ -66,8 +83,10 @@ export function auditCompilerObligationCoverage(
       }
       const row = {
         caseId: candidate.id,
+        evidenceKind: candidate.caseKind === "compiler-world" ? "compiler-world" as const : "validated-evidence" as const,
         role: witness.role,
         summary: witness.summary,
+        closureEvidence: witness.closureEvidence ?? null,
       };
       const existing = witnessesByObligation.get(witness.id);
       if (existing == null) {
@@ -86,7 +105,7 @@ export function auditCompilerObligationCoverage(
         id: obligation.id,
         family: obligation.family,
         requirement: obligation.requirement,
-        state: coverageState(obligation, witnesses, caseById),
+        state: coverageState(obligation, witnesses, caseById, evaluatedByCase),
         disposition: obligation.disposition,
         witnesses,
       };
@@ -122,7 +141,8 @@ export function auditCompilerObligationCoverage(
 function coverageState(
   obligation: CompilerObligationCatalogEntry,
   witnesses: readonly CompilerObligationCaseWitness[],
-  caseById: ReadonlyMap<string, CompilerCase>,
+  caseById: ReadonlyMap<string, CompilerConservationCase>,
+  evaluatedByCase: ReadonlyMap<string, CompilerEvaluatedCaseEvidence>,
 ): CompilerObligationCoverageState {
   if (witnesses.length === 0) {
     return "unwitnessed";
@@ -133,20 +153,34 @@ function coverageState(
     case "open":
       return "witnessed-open";
     case "closed":
-      return witnesses.some((witness) => caseHasClosedEvidence(caseById.get(witness.caseId)))
+      return witnesses.some((witness) => caseHasClosedEvidence(
+        caseById.get(witness.caseId),
+        witness,
+        evaluatedByCase.get(witness.caseId),
+      ))
         ? "witnessed-closed"
         : "witnessed-not-claimed";
   }
 }
 
-function caseHasClosedEvidence(candidate: CompilerCase | undefined): boolean {
-  if (candidate == null) {
+function caseHasClosedEvidence(
+  candidate: CompilerConservationCase | undefined,
+  witness: CompilerObligationCaseWitness,
+  evaluated: CompilerEvaluatedCaseEvidence | undefined,
+): boolean {
+  const evidence = witness.closureEvidence;
+  if (candidate == null || evaluated == null || evidence == null || evidence.claimIds.length === 0) {
     return false;
   }
-  const claimIds = new Set(candidate.oracles.claims.map((claim) => claim.id));
-  return candidate.closure.some((closure) =>
-    closure.state === "closed"
-    && (closure.evidenceClaimIds?.length ?? 0) > 0
-    && closure.evidenceClaimIds!.every((claimId) => claimIds.has(claimId))
-  );
+  const equivalenceClaimIds = new Set(candidate.oracles.claims
+    .filter((claim) => claim.kind === "equivalent")
+    .map((claim) => claim.id));
+  const satisfiedClaimIds = new Set(evaluated.satisfiedClaimIds);
+  const closure = candidate.closure.find((row) => row.dimension === evidence.dimension);
+  return closure?.state === "closed"
+    && evidence.claimIds.every((claimId) =>
+      equivalenceClaimIds.has(claimId)
+      && closure.evidenceClaimIds?.includes(claimId) === true
+      && satisfiedClaimIds.has(claimId)
+    );
 }

@@ -29,6 +29,8 @@ pnpm --filter @aurelia-ls/aot oracle:jit -- --query=property-binding
 Vitest path. It launches Chromium once, parses the complete case registry through `HTMLTemplateElement.innerHTML`, and compares
 both serialization and a namespace-aware structural normal form with semantic-runtime's pinned browser-template draft.
 Its receipt records the Chromium version, semantic-runtime parse5 authority profile, and exact case-registry digest.
+The rows use the same conservation-case base, provenance, obligations, effects, claims, invariants, and closure language
+as compiler worlds, so their evidence feeds the canonical obligation audit without pretending to be JIT-executable.
 The current customizable-select row is a declared version-scoped divergence: Chromium admits its button and
 `selectedcontent` subtree while parse5 8.0.1 still uses legacy in-select parsing. The oracle fails if that divergence
 changes or disappears until the case is deliberately reviewed and converted to equivalence.
@@ -40,11 +42,12 @@ aggregate and slow-case timing, bounds failure output, and supports query/id/tag
 fail-fast, list, and JSON modes. This keeps large corpus iteration cheap and makes external process sharding possible
 without sharing mutable compiler containers.
 
-Vitest is reserved for harness and contract invariants. The current 42-case JIT registry spans compile-entry bypass,
+Vitest is reserved for harness and contract invariants. The current 46-case JIT registry spans compile-entry bypass,
 diagnostics, static/debug markup, bindings/interpolation/let, slots/projection, surrogates, compileSpread, resource
 precedence, capture/spread/ref, native form ordering, generated controller interactions, hooks, processContent, and
-nested template controllers. It remains a first breadth seed, not semantic-runtime equivalence or completed corpus
-coverage.
+nested template controllers. Four browser/compiler interactions additionally fix fostered target order, paragraph
+controller topology, duplicate-binding elision, and current comment-shield carrier behavior. They remain JIT-only
+consequences until the multi-lane coordinator joins browser structure to compiled output.
 
 Cases are declarative `aurelia-ls/compiler-case/v1` records. They carry pinned source/test provenance, semantic
 obligation witnesses, a runner-neutral compiler/resource world, explicit setup references and registration placement,
@@ -53,10 +56,13 @@ engine receives an executor separately; case records contain no `run(...)` callb
 neutral versioned factory/description plus independent lane materializers, fresh values, canonical witnesses, and
 reverse-order disposal.
 
-The source-reviewed obligation catalog currently names 218 independent compiler burdens across entry, browser tree,
+The source-reviewed obligation catalog currently names 223 independent compiler burdens across entry, browser tree,
 extensions, nodes, elements, attributes, commands, custom attributes, controllers, projection, local elements, let,
 capture/spread, surrogates, ordering, definitions, wire fields, diagnostics, and interactions. The audit deliberately
-shows unwitnessed, open, and not-yet-claimed rows; it does not project a coverage percentage.
+shows unwitnessed, open, and not-yet-claimed rows; it does not project a coverage percentage. The inert template-fragment
+context is the first closure-ready catalog obligation, but the static audit keeps it `witnessed-not-claimed` until a
+coordinator supplies a successful authority-validated execution receipt. Browser recovery remains open because the
+known Chromium/parse5 select divergence and authored/compiler lineage are not yet resolved.
 
 Examples:
 

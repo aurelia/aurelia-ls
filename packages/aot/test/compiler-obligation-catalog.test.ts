@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -8,9 +9,13 @@ import {
   type CompilerObligationFamily,
 } from "../src/testing/compiler-obligation-audit.js";
 import { COMPILER_OBLIGATION_CATALOG } from "../src/testing/compiler-obligation-catalog.js";
+import { JIT_ORACLE_CASES } from "../src/testing/jit-oracle-case-registry.js";
+import { BROWSER_TREE_ORACLE_CASES } from "../src/testing/browser-tree-oracle-cases.js";
 
 const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
 const aureliaRoot = resolve(repositoryRoot, "aurelia");
+const workspaceAuthoritySource = new Map<string, string>();
+const frameworkAuthoritySources = new Map<string, string>();
 
 describe("compiler obligation catalog", () => {
   it("uses one stable semantic identity per obligation", () => {
@@ -47,34 +52,54 @@ describe("compiler obligation catalog", () => {
     expect([...actualFamilies].sort()).toEqual([...COMPILER_OBLIGATION_FAMILIES].sort());
   });
 
-  it("anchors authorities to canonical files at the pinned framework revision", () => {
+  it("anchors catalog and case authorities to canonical files at their pinned revisions", () => {
     const roles = new Set<string>();
 
-    for (const obligation of COMPILER_OBLIGATION_CATALOG) {
-      expect(obligation.authorities.length, obligation.id).toBeGreaterThan(0);
-      for (const authority of obligation.authorities) {
+    const owners = [
+      ...COMPILER_OBLIGATION_CATALOG.map((obligation) => ({
+        id: obligation.id,
+        authorities: obligation.authorities,
+      })),
+      ...JIT_ORACLE_CASES.map((candidate) => ({ id: candidate.id, authorities: candidate.provenance })),
+      ...BROWSER_TREE_ORACLE_CASES.map((candidate) => ({ id: candidate.id, authorities: candidate.provenance })),
+    ];
+    for (const owner of owners) {
+      expect(owner.authorities.length, owner.id).toBeGreaterThan(0);
+      for (const authority of owner.authorities) {
         roles.add(authority.role);
-        expect(authority.repository, obligation.id).toBe("aurelia");
-        expect(authority.revision, obligation.id).toBe(COMPILER_CORPUS_FRAMEWORK_REVISION);
-        expect(authority.filePath, obligation.id).toMatch(/^(?:packages|scripts)\//u);
-        expect(authority.filePath, obligation.id).not.toMatch(/\\|(?:^|\/)\.\.(?:\/|$)/u);
-        expect(authority.startLine, obligation.id).toBeGreaterThan(0);
-        expect(authority.endLine ?? authority.startLine, obligation.id).toBeGreaterThanOrEqual(
+        if (authority.repository === "aurelia") {
+          expect(authority.revision, owner.id).toBe(COMPILER_CORPUS_FRAMEWORK_REVISION);
+        } else {
+          expect(authority.revision, owner.id).toMatch(/^[0-9a-f]{40}$/u);
+        }
+        expect(authority.filePath, owner.id).toMatch(/^(?:packages|scripts)\//u);
+        expect(authority.filePath, owner.id).not.toMatch(/\\|(?:^|\/)\.\.(?:\/|$)/u);
+        expect(authority.startLine, owner.id).toBeGreaterThan(0);
+        expect(authority.endLine ?? authority.startLine, owner.id).toBeGreaterThanOrEqual(
           authority.startLine,
         );
-        expect(authority.summary.trim().length, obligation.id).toBeGreaterThan(0);
-        expect(existsSync(resolve(aureliaRoot, authority.filePath)), authority.filePath).toBe(true);
-        const lineCount = readFileSync(resolve(aureliaRoot, authority.filePath), "utf8").split(/\r?\n/u).length;
-        expect(authority.endLine ?? authority.startLine, `${obligation.id}: ${authority.filePath}`).toBeLessThanOrEqual(
+        expect(authority.summary.trim().length, owner.id).toBeGreaterThan(0);
+        const source = authority.repository === "aurelia"
+          ? frameworkAuthoritySource(authority.filePath)
+          : historicalWorkspaceAuthoritySource(authority.revision, authority.filePath);
+        const lineCount = source.split(/\r?\n/u).length;
+        expect(authority.endLine ?? authority.startLine, `${owner.id}: ${authority.filePath}`).toBeLessThanOrEqual(
           lineCount,
         );
       }
     }
 
-    expect(roles).toEqual(new Set(["behavior", "implementation", "runtime-consequence"]));
+    expect(roles).toEqual(new Set([
+      "behavior",
+      "history",
+      "implementation",
+      "regression",
+      "runtime-consequence",
+    ]));
   });
 
-  it("records independent initial axes without implying conservation closure", () => {
+  it("records independent axes and names the only explicitly closed obligation", () => {
+    const closed: string[] = [];
     for (const obligation of COMPILER_OBLIGATION_CATALOG) {
       const audit = obligation.disposition;
       expect(audit.source, obligation.id).not.toBe("unreviewed");
@@ -82,9 +107,40 @@ describe("compiler obligation catalog", () => {
       expect(audit.semanticRuntime.length, obligation.id).toBeGreaterThan(0);
       expect(audit.effect.length, obligation.id).toBeGreaterThan(0);
       expect(audit.policy.length, obligation.id).toBeGreaterThan(0);
-      expect(audit.closure.state, obligation.id).not.toBe("closed");
       expect(audit.closure.reason.trim().length, obligation.id).toBeGreaterThan(0);
-      expect(audit.gaps.length, obligation.id).toBeGreaterThan(0);
+      if (audit.closure.state === "closed") {
+        closed.push(obligation.id);
+        expect(audit.gaps, obligation.id).toEqual([]);
+      } else {
+        expect(audit.gaps.length, obligation.id).toBeGreaterThan(0);
+      }
     }
+    expect(closed).toEqual(["compiler.browser-tree.fragment-context"]);
   });
 });
+
+function frameworkAuthoritySource(filePath: string): string {
+  const existing = frameworkAuthoritySources.get(filePath);
+  if (existing != null) {
+    return existing;
+  }
+  const fullPath = resolve(aureliaRoot, filePath);
+  expect(existsSync(fullPath), filePath).toBe(true);
+  const source = readFileSync(fullPath, "utf8");
+  frameworkAuthoritySources.set(filePath, source);
+  return source;
+}
+
+function historicalWorkspaceAuthoritySource(revision: string, filePath: string): string {
+  const key = `${revision}:${filePath}`;
+  const existing = workspaceAuthoritySource.get(key);
+  if (existing != null) {
+    return existing;
+  }
+  const source = execFileSync("git", ["-C", repositoryRoot, "show", key], {
+    encoding: "utf8",
+    windowsHide: true,
+  });
+  workspaceAuthoritySource.set(key, source);
+  return source;
+}

@@ -64,6 +64,7 @@ describe("AOT JIT oracle CLI", () => {
       schemaVersion: string;
       catalogAuthority: { matched: boolean; problem: string | null };
       obligationCatalog: {
+        evidenceFingerprint: string;
         obligationCount: number;
         witnessedCount: number;
         unwitnessedCount: number;
@@ -74,9 +75,14 @@ describe("AOT JIT oracle CLI", () => {
     expect(receipt.schemaVersion).toBe("aurelia-ls/aot-compiler-obligation-audit/v1");
     expect(receipt.catalogAuthority).toEqual({ matched: true, problem: null });
     expect(receipt.obligationCatalog.obligationCount).toBeGreaterThan(200);
+    expect(receipt.obligationCatalog.evidenceFingerprint).toMatch(/^sha256:[0-9a-f]{64}$/u);
     expect(receipt.obligationCatalog.witnessedCount).toBeGreaterThan(0);
     expect(receipt.obligationCatalog.unwitnessedCount).toBeGreaterThan(0);
     expect(receipt.obligationCatalog.closedCount).toBe(0);
+    expect(receipt.obligationCatalog.rows).toContainEqual(expect.objectContaining({
+      id: "compiler.browser-tree.fragment-context",
+      state: "witnessed-not-claimed",
+    }));
     expect(receipt.obligationCatalog.rows).toContainEqual(expect.objectContaining({
       id: "compiler.browser-tree.authored-lineage",
       state: "unwitnessed",

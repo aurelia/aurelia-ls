@@ -1,6 +1,7 @@
 import {
   COMPILER_CASE_SCHEMA_VERSION,
   type CompilerCase,
+  type CompilerConservationCase,
   type CompilerElementDefinition,
   type CompilerOracleLaneId,
   type CompilerSetupFactory,
@@ -16,6 +17,8 @@ import {
 /** Validated descriptors. Construction runs neutral setup validation/description, never lane materialization or an oracle realm. */
 export class CompilerCaseCatalog {
   readonly cases: readonly CompilerCase[];
+  readonly evidenceCases: readonly CompilerConservationCase[];
+  readonly conservationCases: readonly CompilerConservationCase[];
   readonly setupFactories: readonly CompilerSetupFactory[];
   readonly obligations: readonly CompilerObligationCatalogEntry[];
   readonly obligationAudit: CompilerObligationCoverageAudit;
@@ -25,18 +28,171 @@ export class CompilerCaseCatalog {
     setupFactories: readonly CompilerSetupFactory[],
     obligations: readonly CompilerObligationCatalogEntry[],
     comparatorIds: readonly string[] = [],
+    evidenceCases: readonly CompilerConservationCase[] = [],
   ) {
     requireUnique(comparatorIds, "Compiler comparator");
     for (const comparatorId of comparatorIds) {
       requireCanonicalToken(comparatorId, "compiler comparator id");
     }
     validateSetupManifests(setupFactories);
-    const obligationAudit = auditCompilerObligationCoverage(obligations, cases);
-    validateCompilerCases(cases, setupFactories, new Set(comparatorIds));
+    const conservationCases = [...cases, ...evidenceCases];
+    validateCompilerConservationCases(conservationCases, new Set(comparatorIds));
+    const obligationAudit = auditCompilerObligationCoverage(obligations, conservationCases);
+    validateCompilerCases(cases, setupFactories);
     this.cases = cases;
+    this.evidenceCases = evidenceCases;
+    this.conservationCases = conservationCases;
     this.setupFactories = setupFactories;
     this.obligations = obligations;
     this.obligationAudit = obligationAudit;
+  }
+}
+
+/** Validate shared conservation evidence without requiring an executable compiler world. */
+export function validateCompilerConservationCases(
+  cases: readonly CompilerConservationCase[],
+  comparatorIds: ReadonlySet<string>,
+): void {
+  const caseIds = new Set(cases.map((candidate) => candidate.id));
+  if (caseIds.size !== cases.length) {
+    throw new Error("Compiler conservation case ids must be unique.");
+  }
+  for (const candidate of cases) {
+    if (candidate.caseKind !== "compiler-world" && candidate.caseKind !== "browser-tree") {
+      throw new Error(`Compiler conservation case ${candidate.id} has an unsupported case kind.`);
+    }
+    requireCanonicalToken(candidate.id, "compiler conservation case id");
+    requireCanonicalToken(candidate.family, `compiler conservation case ${candidate.id} family`);
+    if (candidate.requirement.trim().length === 0) {
+      throw new Error(`Compiler conservation case ${candidate.id} must declare a requirement.`);
+    }
+    if (candidate.tags.length === 0) {
+      throw new Error(`Compiler conservation case ${candidate.id} must declare at least one tag.`);
+    }
+    requireUnique(candidate.tags, `Compiler conservation case ${candidate.id} tag`);
+    for (const tag of candidate.tags) {
+      requireCanonicalToken(tag, `compiler conservation case ${candidate.id} tag`);
+    }
+    if (candidate.schemaVersion !== COMPILER_CASE_SCHEMA_VERSION) {
+      throw new Error(`Compiler conservation case ${candidate.id} has an unsupported schema.`);
+    }
+    if (candidate.provenance.length === 0) {
+      throw new Error(`Compiler conservation case ${candidate.id} must cite source authority.`);
+    }
+    for (const authority of candidate.provenance) {
+      if (authority.startLine < 1 || (authority.endLine != null && authority.endLine < authority.startLine)) {
+        throw new Error(`Compiler conservation case ${candidate.id} has an invalid authority range for ${authority.filePath}.`);
+      }
+      if (authority.filePath.length === 0 || authority.filePath.startsWith("/") || authority.filePath.includes("..")) {
+        throw new Error(`Compiler conservation case ${candidate.id} authority paths must be repository-relative.`);
+      }
+    }
+
+    requireUnique(candidate.obligations.map((row) => row.id), `Compiler conservation case ${candidate.id} obligation`);
+    requireUnique(candidate.effects.map((row) => row.id), `Compiler conservation case ${candidate.id} effect`);
+    requireUnique(candidate.closure.map((row) => row.dimension), `Compiler conservation case ${candidate.id} closure dimension`);
+    requireUnique(candidate.invariants.map((row) => row.id), `Compiler conservation case ${candidate.id} invariant`);
+    requireUnique(candidate.oracles.lanes.map((row) => row.id), `Compiler conservation case ${candidate.id} oracle lane`);
+    requireUnique(candidate.oracles.claims.map((row) => row.id), `Compiler conservation case ${candidate.id} oracle claim`);
+
+    const effectIds = new Set(candidate.effects.map((row) => row.id));
+    const claimById = new Map(candidate.oracles.claims.map((row) => [row.id, row]));
+    for (const closure of candidate.closure) {
+      if (closure.state === "closed" && (closure.evidenceClaimIds?.length ?? 0) === 0) {
+        throw new Error(`Compiler conservation case ${candidate.id} closes ${closure.dimension} without an oracle claim.`);
+      }
+      for (const claimId of closure.evidenceClaimIds ?? []) {
+        const claim = claimById.get(claimId);
+        if (claim == null) {
+          throw new Error(`Compiler conservation case ${candidate.id} closure references unknown claim ${claimId}.`);
+        }
+        if (closure.state === "closed" && claim.kind !== "equivalent") {
+          throw new Error(`Compiler conservation case ${candidate.id} closes ${closure.dimension} with non-equivalence claim ${claimId}.`);
+        }
+      }
+      if (closure.state === "open" && (closure.blockerEffectIds?.length ?? 0) === 0) {
+        throw new Error(`Compiler conservation case ${candidate.id} opens ${closure.dimension} without a blocker effect.`);
+      }
+      for (const effectId of closure.blockerEffectIds ?? []) {
+        if (!effectIds.has(effectId)) {
+          throw new Error(`Compiler conservation case ${candidate.id} closure references unknown effect ${effectId}.`);
+        }
+      }
+    }
+
+    const laneById = new Map(candidate.oracles.lanes.map((lane) => [lane.id, lane]));
+    const laneIds = new Set(laneById.keys());
+    for (const claim of candidate.oracles.claims) {
+      requireLane(candidate.id, laneIds, claim.left.lane);
+      requireLane(candidate.id, laneIds, claim.right.lane);
+      if (claim.left.lane === claim.right.lane) {
+        throw new Error(`Compiler conservation case ${candidate.id} claim ${claim.id} cannot compare one lane with itself.`);
+      }
+      if (laneById.get(claim.left.lane)!.expectedProduct !== claim.left.product) {
+        throw new Error(`Compiler conservation case ${candidate.id} claim ${claim.id} left product does not match its lane.`);
+      }
+      if (laneById.get(claim.right.lane)!.expectedProduct !== claim.right.product) {
+        throw new Error(`Compiler conservation case ${candidate.id} claim ${claim.id} right product does not match its lane.`);
+      }
+      if (!comparatorIds.has(claim.comparator)) {
+        throw new Error(`Compiler conservation case ${candidate.id} claim ${claim.id} references unknown comparator ${claim.comparator}.`);
+      }
+      if (claim.kind === "expected-divergence") {
+        requireCanonicalToken(claim.reasonCode, `compiler conservation case ${candidate.id} divergence reason`);
+        if (claim.reason.trim().length === 0 || Object.keys(claim.authorityVersions).length === 0) {
+          throw new Error(`Compiler conservation case ${candidate.id} claim ${claim.id} has incomplete divergence authority.`);
+        }
+        assertCompilerCaseData(claim.authorityVersions, `${candidate.id}/${claim.id}/authority-versions`);
+      }
+    }
+    for (const witness of candidate.obligations) {
+      const evidence = witness.closureEvidence;
+      if (evidence == null) {
+        continue;
+      }
+      if (evidence.claimIds.length === 0) {
+        throw new Error(
+          `Compiler conservation case ${candidate.id} obligation ${witness.id} has empty closure evidence.`,
+        );
+      }
+      requireUnique(
+        evidence.claimIds,
+        `Compiler conservation case ${candidate.id} obligation ${witness.id} closure claim`,
+      );
+      const closure = candidate.closure.find((row) => row.dimension === evidence.dimension);
+      if (closure?.state !== "closed") {
+        throw new Error(
+          `Compiler conservation case ${candidate.id} obligation ${witness.id} references a non-closed ${evidence.dimension} dimension.`,
+        );
+      }
+      for (const claimId of evidence.claimIds) {
+        const claim = claimById.get(claimId);
+        if (claim?.kind !== "equivalent" || !closure.evidenceClaimIds?.includes(claimId)) {
+          throw new Error(
+            `Compiler conservation case ${candidate.id} obligation ${witness.id} closure evidence does not match equivalence claim ${claimId}.`,
+          );
+        }
+      }
+    }
+    for (const invariant of candidate.invariants) {
+      requireCanonicalToken(invariant.id, `compiler conservation case ${candidate.id} invariant id`);
+      validateSelectorCoordinates(candidate.id, invariant.id, invariant.selector);
+      if (invariant.lanes.length === 0) {
+        throw new Error(`Compiler conservation case ${candidate.id} invariant ${invariant.id} has no oracle lane.`);
+      }
+      for (const lane of invariant.lanes) {
+        requireLane(candidate.id, laneIds, lane);
+        validateSelectorProduct(candidate.id, invariant.id, invariant.selector.kind, laneById.get(lane)!.expectedProduct);
+      }
+      if (invariant.assertion.kind === "equal") {
+        assertCompilerCaseData(invariant.assertion.expected, `${candidate.id}/${invariant.id}`);
+      }
+    }
+    for (const lane of candidate.oracles.lanes) {
+      if (!candidate.invariants.some((invariant) => invariant.lanes.includes(lane.id))) {
+        throw new Error(`Compiler conservation case ${candidate.id} oracle lane ${lane.id} has no focused invariant.`);
+      }
+    }
   }
 }
 
@@ -65,110 +221,15 @@ function validateSetupManifests(manifests: readonly CompilerSetupFactory[]): voi
 function validateCompilerCases(
   cases: readonly CompilerCase[],
   manifests: readonly CompilerSetupFactory[],
-  comparatorIds: ReadonlySet<string>,
 ): void {
   const caseIds = new Set(cases.map((candidate) => candidate.id));
-  if (caseIds.size !== cases.length) {
-    throw new Error("Compiler case ids must be unique.");
-  }
   const manifestById = new Map(manifests.map((manifest) => [manifest.factoryId, manifest]));
   for (const candidate of cases) {
-    requireCanonicalToken(candidate.id, "compiler case id");
-    requireCanonicalToken(candidate.family, `compiler case ${candidate.id} family`);
-    if (candidate.requirement.trim().length === 0) {
-      throw new Error(`Compiler case ${candidate.id} must declare a requirement.`);
+    if (candidate.caseKind !== "compiler-world") {
+      throw new Error(`Executable compiler case ${candidate.id} must declare caseKind='compiler-world'.`);
     }
-    if (candidate.tags.length === 0) {
-      throw new Error(`Compiler case ${candidate.id} must declare at least one tag.`);
-    }
-    requireUnique(candidate.tags, `Compiler case ${candidate.id} tag`);
-    for (const tag of candidate.tags) {
-      requireCanonicalToken(tag, `compiler case ${candidate.id} tag`);
-    }
-    const schemaVersion: unknown = candidate.schemaVersion;
-    if (schemaVersion !== COMPILER_CASE_SCHEMA_VERSION) {
-      throw new Error(`Compiler case ${candidate.id} has an unsupported schema.`);
-    }
-    if (candidate.provenance.length === 0) {
-      throw new Error(`Compiler case ${candidate.id} must cite source authority.`);
-    }
-    for (const authority of candidate.provenance) {
-      if (authority.startLine < 1 || (authority.endLine != null && authority.endLine < authority.startLine)) {
-        throw new Error(`Compiler case ${candidate.id} has an invalid authority range for ${authority.filePath}.`);
-      }
-      if (authority.filePath.length === 0 || authority.filePath.startsWith("/") || authority.filePath.includes("..")) {
-        throw new Error(`Compiler case ${candidate.id} authority paths must be repository-relative.`);
-      }
-    }
-
-    requireUnique(candidate.obligations.map((row) => row.id), `Compiler case ${candidate.id} obligation`);
-    requireUnique(candidate.effects.map((row) => row.id), `Compiler case ${candidate.id} effect`);
-    requireUnique(candidate.closure.map((row) => row.dimension), `Compiler case ${candidate.id} closure dimension`);
-    requireUnique(candidate.invariants.map((row) => row.id), `Compiler case ${candidate.id} invariant`);
     requireUnique(candidate.world.setups.map((row) => row.symbol), `Compiler case ${candidate.id} setup symbol`);
-    requireUnique(candidate.oracles.lanes.map((row) => row.id), `Compiler case ${candidate.id} oracle lane`);
-    requireUnique(candidate.oracles.claims.map((row) => row.id), `Compiler case ${candidate.id} oracle claim`);
-
-    const effectIds = new Set(candidate.effects.map((row) => row.id));
-    const claimIds = new Set(candidate.oracles.claims.map((row) => row.id));
-    for (const closure of candidate.closure) {
-      if (closure.state === "closed" && (closure.evidenceClaimIds?.length ?? 0) === 0) {
-        throw new Error(`Compiler case ${candidate.id} closes ${closure.dimension} without an oracle claim.`);
-      }
-      for (const claimId of closure.evidenceClaimIds ?? []) {
-        if (!claimIds.has(claimId)) {
-          throw new Error(`Compiler case ${candidate.id} closure references unknown claim ${claimId}.`);
-        }
-      }
-      if (closure.state === "open" && (closure.blockerEffectIds?.length ?? 0) === 0) {
-        throw new Error(`Compiler case ${candidate.id} opens ${closure.dimension} without a blocker effect.`);
-      }
-      for (const effectId of closure.blockerEffectIds ?? []) {
-        if (!effectIds.has(effectId)) {
-          throw new Error(`Compiler case ${candidate.id} closure references unknown effect ${effectId}.`);
-        }
-      }
-    }
-
-    const laneById = new Map(candidate.oracles.lanes.map((lane) => [lane.id, lane]));
-    const laneIds = new Set(laneById.keys());
-    for (const claim of candidate.oracles.claims) {
-      requireLane(candidate.id, laneIds, claim.left.lane);
-      requireLane(candidate.id, laneIds, claim.right.lane);
-      if (claim.left.lane === claim.right.lane) {
-        throw new Error(`Compiler case ${candidate.id} claim ${claim.id} cannot compare one lane with itself.`);
-      }
-      if (laneById.get(claim.left.lane)!.expectedProduct !== claim.left.product) {
-        throw new Error(`Compiler case ${candidate.id} claim ${claim.id} left product does not match its lane.`);
-      }
-      if (laneById.get(claim.right.lane)!.expectedProduct !== claim.right.product) {
-        throw new Error(`Compiler case ${candidate.id} claim ${claim.id} right product does not match its lane.`);
-      }
-      if (!comparatorIds.has(claim.comparator)) {
-        throw new Error(`Compiler case ${candidate.id} claim ${claim.id} references unknown comparator ${claim.comparator}.`);
-      }
-    }
-    for (const invariant of candidate.invariants) {
-      requireCanonicalToken(invariant.id, `compiler case ${candidate.id} invariant id`);
-      validateSelectorCoordinates(candidate.id, invariant.id, invariant.selector);
-      if (invariant.lanes.length === 0) {
-        throw new Error(`Compiler case ${candidate.id} invariant ${invariant.id} has no oracle lane.`);
-      }
-      for (const lane of invariant.lanes) {
-        requireLane(candidate.id, laneIds, lane);
-        validateSelectorProduct(candidate.id, invariant.id, invariant.selector.kind, laneById.get(lane)!.expectedProduct);
-      }
-      if (invariant.assertion.kind === "equal") {
-        assertCompilerCaseData(invariant.assertion.expected, `${candidate.id}/${invariant.id}`);
-      }
-    }
-
-    const jitLane = laneById.get("framework-jit");
-    for (const lane of candidate.oracles.lanes) {
-      if (!candidate.invariants.some((invariant) => invariant.lanes.includes(lane.id))) {
-        throw new Error(`Compiler case ${candidate.id} oracle lane ${lane.id} has no focused invariant.`);
-      }
-    }
+    const jitLane = candidate.oracles.lanes.find((lane) => lane.id === "framework-jit");
     if (jitLane?.expectedProduct === "compiler-error") {
       const errorCodeInvariants = candidate.invariants.filter((invariant) =>
         invariant.lanes.includes("framework-jit")
@@ -235,7 +296,7 @@ function validateCompilerCases(
 function validateSelectorCoordinates(
   caseId: string,
   invariantId: string,
-  selector: CompilerCase["invariants"][number]["selector"],
+  selector: CompilerConservationCase["invariants"][number]["selector"],
 ): void {
   const indexes: number[] = [];
   if ("row" in selector) indexes.push(selector.row);
@@ -243,7 +304,7 @@ function validateSelectorCoordinates(
   if (indexes.some((index) => !Number.isSafeInteger(index) || index < 0)) {
     throw new Error(`Compiler case ${caseId} invariant ${invariantId} has an invalid product index.`);
   }
-  if (selector.kind === "instruction-path") {
+  if (selector.kind === "instruction-path" || selector.kind === "browser-tree-path") {
     if (selector.path.length === 0) {
       throw new Error(`Compiler case ${caseId} invariant ${invariantId} has an empty instruction path.`);
     }
@@ -360,10 +421,12 @@ function validateOperationProduct(candidate: CompilerCase): void {
 function validateSelectorProduct(
   caseId: string,
   invariantId: string,
-  selector: CompilerCase["invariants"][number]["selector"]["kind"],
-  product: CompilerCase["oracles"]["lanes"][number]["expectedProduct"],
+  selector: CompilerConservationCase["invariants"][number]["selector"]["kind"],
+  product: CompilerConservationCase["oracles"]["lanes"][number]["expectedProduct"],
 ): void {
-  const compatible: readonly string[] = selector.startsWith("compiler-error-")
+  const compatible: readonly string[] = selector.startsWith("browser-")
+    ? ["browser-tree"]
+    : selector.startsWith("compiler-error-")
     ? ["compiler-error"]
     : selector.startsWith("spread-instruction-")
       ? ["spread-instructions"]

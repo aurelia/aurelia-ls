@@ -49,6 +49,11 @@ export interface CompilerObligationWitness {
   readonly id: CompilerObligationId;
   readonly role: CompilerObligationWitnessRole;
   readonly summary: string;
+  /** Exact closed dimension/claims this witness may satisfy once an evaluated receipt proves them. */
+  readonly closureEvidence?: {
+    readonly dimension: CompilerClosureDimension;
+    readonly claimIds: readonly string[];
+  };
 }
 
 export interface CompilerWorldRef {
@@ -156,6 +161,7 @@ export interface CompilerWorld {
 }
 
 export type CompilerEffectKind =
+  | "browser-tree-construction"
   | "browser-recovery"
   | "template-compiler-hook"
   | "process-content"
@@ -228,9 +234,23 @@ export interface CompilerEquivalenceClaim {
   readonly comparator: string;
 }
 
+export interface CompilerExpectedDivergenceClaim {
+  readonly id: string;
+  readonly description: string;
+  readonly kind: "expected-divergence";
+  readonly left: CompilerProductRef;
+  readonly right: CompilerProductRef;
+  readonly comparator: string;
+  readonly reasonCode: string;
+  readonly reason: string;
+  readonly authorityVersions: { readonly [authority: string]: string };
+}
+
+export type CompilerOracleClaim = CompilerEquivalenceClaim | CompilerExpectedDivergenceClaim;
+
 export interface CompilerOraclePlan {
   readonly lanes: readonly CompilerOracleLane[];
-  readonly claims: readonly CompilerEquivalenceClaim[];
+  readonly claims: readonly CompilerOracleClaim[];
 }
 
 export type CompilerInvariantSelector =
@@ -252,7 +272,12 @@ export type CompilerInvariantSelector =
   | { readonly kind: "spread-instruction-count" }
   | { readonly kind: "spread-instruction-field"; readonly instruction: number; readonly field: string }
   | { readonly kind: "compiler-error-code" }
-  | { readonly kind: "compiler-error-message" };
+  | { readonly kind: "compiler-error-message" }
+  | { readonly kind: "browser-serialization" }
+  | {
+      readonly kind: "browser-tree-path";
+      readonly path: readonly (string | number)[];
+    };
 
 export type CompilerInvariantAssertion =
   | { readonly kind: "equal"; readonly expected: CompilerCaseData }
@@ -274,17 +299,25 @@ export interface CompilerCaseContrast {
   readonly difference: string;
 }
 
-/** Declarative compiler-conservation case. Oracle execution lives outside this record. */
-export interface CompilerCase extends BatchCaseDescriptor {
+export type CompilerConservationCaseKind = "compiler-world" | "browser-tree";
+
+/** Evidence shared by executable compiler worlds and independent conservation oracles. */
+export interface CompilerConservationCase extends BatchCaseDescriptor {
+  readonly caseKind: CompilerConservationCaseKind;
   readonly schemaVersion: typeof COMPILER_CASE_SCHEMA_VERSION;
   readonly provenance: readonly CompilerAuthorityReference[];
   readonly obligations: readonly CompilerObligationWitness[];
-  readonly world: CompilerWorld;
   readonly effects: readonly CompilerEffectPosture[];
   readonly closure: readonly CompilerClosureClaim[];
   readonly oracles: CompilerOraclePlan;
   readonly invariants: readonly CompilerFocusedInvariant[];
   readonly contrasts: readonly CompilerCaseContrast[];
+}
+
+/** Declarative executable compiler-world case. Oracle execution lives outside this record. */
+export interface CompilerCase extends CompilerConservationCase {
+  readonly caseKind: "compiler-world";
+  readonly world: CompilerWorld;
 }
 
 /** Honest JIT-only posture before semantic-runtime and browser comparison lanes exist. */

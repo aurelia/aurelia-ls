@@ -8,6 +8,12 @@ import { fileURLToPath } from "node:url";
 import { BatchRunner } from "../out/testing/batch-runner.js";
 import { CompilerCaseCatalog } from "../out/testing/compiler-case-catalog.js";
 import {
+  BROWSER_TREE_ORACLE_CASES,
+  BROWSER_TREE_ORACLE_COMPARATOR_ID,
+  browserTreeOracleCaseDigest,
+  validateBrowserTreeOracleCases,
+} from "../out/testing/browser-tree-oracle-cases.js";
+import {
   compilerCaseRegistryFingerprint,
   compilerObligationCatalogFingerprint,
 } from "../out/testing/compiler-case-fingerprint.js";
@@ -73,8 +79,12 @@ async function main() {
   const { compilerCaseCatalog, batchRunner } = createHarness();
 
   const authorityBefore = buildAuthorityIdentity();
-  const catalogAuthorityProblem = compilerCatalogAuthorityProblem(authorityBefore.framework.revision);
+  const catalogAuthorityProblem = compilerCatalogAuthorityProblem(
+    authorityBefore,
+    compilerCaseCatalog.conservationCases,
+  );
   const obligationFingerprint = compilerObligationCatalogFingerprint(COMPILER_OBLIGATION_CATALOG);
+  const evidenceFingerprint = browserTreeOracleCaseDigest(BROWSER_TREE_ORACLE_CASES);
   if (values.audit) {
     await publishReceipt({
       schemaVersion: JIT_ORACLE_OBLIGATION_AUDIT_VERSION,
@@ -85,6 +95,7 @@ async function main() {
       },
       obligationCatalog: {
         fingerprint: obligationFingerprint,
+        evidenceFingerprint,
         ...compilerCaseCatalog.obligationAudit,
       },
     }, values);
@@ -127,7 +138,11 @@ async function main() {
       eligibleCaseCount: plan.eligible.length,
       selectedCaseCount: selected.length,
       cases: selected.map(({ id, family, tags, requirement }) => ({ id, family, tags, requirement })),
-      obligationCatalog: compactObligationAudit(compilerCaseCatalog, obligationFingerprint),
+      obligationCatalog: compactObligationAudit(
+        compilerCaseCatalog,
+        obligationFingerprint,
+        evidenceFingerprint,
+      ),
     };
     await publishReceipt(receipt, values);
     return;
@@ -175,7 +190,11 @@ async function main() {
         count: JIT_ORACLE_CASES.length,
         fingerprint: registryFingerprint,
       },
-      obligationCatalog: compactObligationAudit(compilerCaseCatalog, obligationFingerprint),
+      obligationCatalog: compactObligationAudit(
+        compilerCaseCatalog,
+        obligationFingerprint,
+        evidenceFingerprint,
+      ),
       sharedSetupMs,
       result,
     };
@@ -286,10 +305,13 @@ function printRunReceipt(receipt, values, slowestLimit) {
 }
 
 function createHarness() {
+  validateBrowserTreeOracleCases(BROWSER_TREE_ORACLE_CASES);
   const compilerCaseCatalog = new CompilerCaseCatalog(
     JIT_ORACLE_CASES,
     JIT_ORACLE_SETUP_FACTORIES,
     COMPILER_OBLIGATION_CATALOG,
+    [BROWSER_TREE_ORACLE_COMPARATOR_ID],
+    BROWSER_TREE_ORACLE_CASES,
   );
   validateJitCharacterizationCases(compilerCaseCatalog.cases);
   const jitCaseExecutor = new JitCompilerCaseExecutor(
@@ -309,10 +331,11 @@ function createHarness() {
   return { compilerCaseCatalog, batchRunner };
 }
 
-function compactObligationAudit(compilerCaseCatalog, fingerprint) {
+function compactObligationAudit(compilerCaseCatalog, fingerprint, evidenceFingerprint) {
   const audit = compilerCaseCatalog.obligationAudit;
   return {
     fingerprint,
+    evidenceFingerprint,
     obligationCount: audit.obligationCount,
     witnessedCount: audit.witnessedCount,
     unwitnessedCount: audit.unwitnessedCount,
@@ -322,22 +345,21 @@ function compactObligationAudit(compilerCaseCatalog, fingerprint) {
   };
 }
 
-function compilerCatalogAuthorityProblem(frameworkRevision) {
+function compilerCatalogAuthorityProblem(environment, conservationCases) {
+  // Aurelia authorities describe the live compiler under test. Workspace authorities are committed historical
+  // evidence for the harness itself and intentionally remain valid after later workspace commits.
+  const frameworkRevision = environment.framework.revision;
   if (frameworkRevision == null) {
-    return "Cannot verify compiler corpus authority because the Aurelia submodule revision is unavailable.";
+    return "Cannot verify aurelia compiler authority because its revision is unavailable.";
   }
-  const declared = new Set([
-    ...JIT_ORACLE_CASES.flatMap((candidate) => candidate.provenance
-      .filter((authority) => authority.repository === "aurelia")
-      .map((authority) => authority.revision)),
-    ...COMPILER_OBLIGATION_CATALOG.flatMap((obligation) => obligation.authorities
-      .filter((authority) => authority.repository === "aurelia")
-      .map((authority) => authority.revision)),
-  ]);
-  const mismatches = [...declared].filter((revision) => revision !== frameworkRevision);
+  const declaredFrameworkRevisions = new Set([
+    ...conservationCases.flatMap((candidate) => candidate.provenance),
+    ...COMPILER_OBLIGATION_CATALOG.flatMap((obligation) => obligation.authorities),
+  ].filter((authority) => authority.repository === "aurelia").map((authority) => authority.revision));
+  const mismatches = [...declaredFrameworkRevisions].filter((revision) => revision !== frameworkRevision);
   return mismatches.length === 0
     ? null
-    : `Compiler corpus authority is pinned to ${mismatches.join(", ")}, but the Aurelia submodule is ${frameworkRevision}.`;
+    : `Aurelia compiler authority is pinned to ${mismatches.join(", ")}, but the submodule is ${frameworkRevision}.`;
 }
 
 function parsePositiveInteger(value, name) {

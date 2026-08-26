@@ -6,6 +6,7 @@ import {
   type CompilerCase,
   type CompilerCaseContrast,
   type CompilerCaseData,
+  type CompilerEffectPosture,
   type CompilerFocusedInvariant,
   type CompilerObligationWitness,
   type CompilerOracleExpectedProduct,
@@ -24,12 +25,14 @@ export interface JitCharacterizationCaseInput {
     CompilerOracleExpectedProduct,
     "compiled-definition" | "unchanged-definition" | "compiler-error" | "spread-instructions"
   >;
+  readonly effects?: readonly CompilerEffectPosture[];
   readonly invariants: readonly CompilerFocusedInvariant[];
   readonly contrasts: readonly CompilerCaseContrast[];
 }
 
 export function jitCharacterizationCase(input: JitCharacterizationCaseInput): CompilerCase {
   return {
+    caseKind: "compiler-world",
     schemaVersion: COMPILER_CASE_SCHEMA_VERSION,
     id: input.id,
     family: input.family,
@@ -38,7 +41,7 @@ export function jitCharacterizationCase(input: JitCharacterizationCaseInput): Co
     provenance: input.provenance,
     obligations: input.obligations,
     world: input.world,
-    effects: [],
+    effects: input.effects ?? [],
     closure: BASELINE_CHARACTERIZATION_CLOSURE,
     oracles: {
       lanes: [{ id: "framework-jit", expectedProduct: input.expectedProduct ?? "compiled-definition" }],

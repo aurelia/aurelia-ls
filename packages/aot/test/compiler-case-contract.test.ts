@@ -1,11 +1,17 @@
 import { describe, expect, it } from "vitest";
 import { CompilerCaseCatalog } from "../src/testing/compiler-case-catalog.js";
+import {
+  BROWSER_TREE_ORACLE_CASES,
+  BROWSER_TREE_ORACLE_COMPARATOR_ID,
+  validateBrowserTreeOracleCases,
+} from "../src/testing/browser-tree-oracle-cases.js";
 import { assertCompilerCaseData } from "../src/testing/compiler-canonical-data.js";
 import { compilerCaseSearchTerms } from "../src/testing/compiler-case-search.js";
 import { compilerCaseRegistryFingerprint } from "../src/testing/compiler-case-fingerprint.js";
 import { BatchRunner } from "../src/testing/batch-runner.js";
 import type { CompilerCase, CompilerSetupFactory } from "../src/testing/compiler-case.js";
 import { COMPILER_OBLIGATION_CATALOG } from "../src/testing/compiler-obligation-catalog.js";
+import { auditCompilerObligationCoverage } from "../src/testing/compiler-obligation-coverage.js";
 import { JIT_ORACLE_CASES } from "../src/testing/jit-oracle-case-registry.js";
 import { JIT_ORACLE_SETUP_FACTORIES } from "../src/testing/jit-oracle-setups.js";
 
@@ -13,7 +19,7 @@ describe("compiler case contract", () => {
   it("admits JIT characterizations without equivalence or false closed claims", () => {
     const catalog = caseCatalog(JIT_ORACLE_CASES);
 
-    expect(catalog.cases).toHaveLength(42);
+    expect(catalog.cases).toHaveLength(46);
     expect(catalog.cases.every((candidate) => candidate.oracles.claims.length === 0)).toBe(true);
     expect(catalog.cases.every((candidate) => candidate.closure.every((claim) => claim.state !== "closed")))
       .toBe(true);
@@ -38,6 +44,54 @@ describe("compiler case contract", () => {
       state: "unwitnessed",
       witnesses: [],
     });
+  });
+
+  it("admits validated browser evidence into obligation coverage without making it a JIT world", () => {
+    validateBrowserTreeOracleCases(BROWSER_TREE_ORACLE_CASES);
+    const catalog = new CompilerCaseCatalog(
+      JIT_ORACLE_CASES,
+      JIT_ORACLE_SETUP_FACTORIES,
+      COMPILER_OBLIGATION_CATALOG,
+      [BROWSER_TREE_ORACLE_COMPARATOR_ID],
+      BROWSER_TREE_ORACLE_CASES,
+    );
+
+    expect(catalog.cases).toHaveLength(JIT_ORACLE_CASES.length);
+    expect(catalog.evidenceCases).toHaveLength(17);
+    expect(catalog.conservationCases).toHaveLength(JIT_ORACLE_CASES.length + BROWSER_TREE_ORACLE_CASES.length);
+    expect(catalog.cases.every((candidate) => candidate.caseKind === "compiler-world")).toBe(true);
+    expect(catalog.evidenceCases.every((candidate) => candidate.caseKind === "browser-tree")).toBe(true);
+    expect(catalog.evidenceCases.every((candidate) => !("world" in candidate))).toBe(true);
+    const browserFragmentContext = catalog.obligationAudit.rows.find((row) =>
+      row.id === "compiler.browser-tree.fragment-context"
+    );
+    expect(browserFragmentContext?.state).toBe("witnessed-not-claimed");
+    expect(browserFragmentContext?.witnesses).toHaveLength(17);
+    expect(catalog.obligationAudit.rows.find((row) =>
+      row.id === "compiler.browser-tree.fragment-context"
+    )?.witnesses.every((witness) => witness.evidenceKind === "validated-evidence")).toBe(true);
+    expect(catalog.obligationAudit.rows.find((row) =>
+      row.id === "compiler.browser-tree.root-wrapper"
+    )?.witnesses.some((witness) => witness.evidenceKind === "validated-evidence")).toBe(false);
+    expect(catalog.obligationAudit.rows.find((row) =>
+      row.id === "compiler.browser-tree.authored-lineage"
+    )?.witnesses.some((witness) => witness.evidenceKind === "validated-evidence")).toBe(false);
+    expect(catalog.obligationAudit.rows.find((row) =>
+      row.id === "compiler.browser-tree.compiler-lineage"
+    )?.witnesses.some((witness) => witness.evidenceKind === "validated-evidence")).toBe(false);
+
+    const evaluatedCase = BROWSER_TREE_ORACLE_CASES.find((candidate) =>
+      candidate.oracles.claims.some((claim) => claim.kind === "equivalent")
+    )!;
+    const claim = evaluatedCase.oracles.claims.find((candidate) => candidate.kind === "equivalent")!;
+    const evaluatedAudit = auditCompilerObligationCoverage(
+      COMPILER_OBLIGATION_CATALOG,
+      catalog.conservationCases,
+      [{ caseId: evaluatedCase.id, satisfiedClaimIds: [claim.id] }],
+    );
+    expect(evaluatedAudit.rows.find((row) =>
+      row.id === "compiler.browser-tree.fragment-context"
+    )?.state).toBe("witnessed-closed");
   });
 
   it("fingerprints canonical descriptors independent of registry order", () => {

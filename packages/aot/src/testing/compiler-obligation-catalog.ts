@@ -45,6 +45,11 @@ const generatedIfElseSuite = "packages/__tests__/src/3-runtime-html/generated/st
 const generatedIfElseDoubleSuite = "packages/__tests__/src/3-runtime-html/generated/static.if-else.double.spec.ts";
 const generatedRepeatSuite = "packages/__tests__/src/3-runtime-html/generated/static.if-else.repeat.spec.ts";
 const generatedRepeatDoubleSuite = "packages/__tests__/src/3-runtime-html/generated/static.if-else.repeat.double.spec.ts";
+const templateFactorySuite = "packages/__tests__/src/3-runtime-html/template-element-factory.spec.ts";
+const browserSubstrateRevision = "b1a646c7bef0c2e6a4b3578ebb601ed8b01d8546";
+const browserOracleCasesSource = "packages/aot/src/testing/browser-tree-oracle-cases.ts";
+const browserDraftSuite = "packages/semantic-runtime/test/browser-template-draft.test.ts";
+const browserSelectionSource = "packages/semantic-runtime/src/template/browser-template-selection.ts";
 
 const exactUnqueried = disposition(
   "reviewed",
@@ -121,6 +126,61 @@ const missingBrowserSubstrate = disposition(
   "open",
   "Browser-effective structure and authored/compiler lineage are not shared semantic-runtime products yet.",
   ["browser-lineage", "projection-shape"],
+);
+
+const browserFragmentContextConserved = disposition(
+  "reviewed",
+  "exact-product",
+  "matched",
+  "statically-modeled",
+  "required",
+  "closed",
+  "The pinned semantic parser and Chromium oracle construct the same inert HTML-template fragment context.",
+  [],
+);
+
+const browserRecoveryProfileOpen = disposition(
+  "reviewed",
+  "exact-product",
+  "mismatch",
+  "statically-modeled",
+  "required",
+  "open",
+  "The browser batch conserves the admitted recovery matrix except for one explicit Chromium/parse5 customizable-select divergence; durable lineage is still absent.",
+  ["browser-lineage", "projection-shape", "policy"],
+);
+
+const browserInteractionUncoordinated = disposition(
+  "reviewed",
+  "focused-field",
+  "unqueried",
+  "unknown",
+  "required",
+  "not-claimed",
+  "Independent browser evidence and a focused JIT product exist, but no multi-lane receipt joins them.",
+  ["browser-lineage", "cross-lane-unqueried"],
+);
+
+const authoredDispositionOpen = disposition(
+  "reviewed",
+  "focused-field",
+  "projection-gap",
+  "unknown",
+  "required",
+  "open",
+  "The draft retains effective locations and parser issues, but does not yet disposition every authored carrier through browser recovery.",
+  ["browser-lineage", "dropped-connection", "projection-shape"],
+);
+
+const commentShieldPolicyOpen = disposition(
+  "ambiguous",
+  "focused-field",
+  "matched",
+  "statically-modeled",
+  "maintainer-decision",
+  "open",
+  "Semantic-runtime mirrors the current immediate-sibling rule, but its comment-shield behavior is not yet accepted as intended framework policy.",
+  ["framework-contract", "policy", "cross-lane-unqueried"],
 );
 
 const projectionGap = disposition(
@@ -201,6 +261,41 @@ const browserTreeAuthorities = [
   runtime(renderingSource, 116, 166, "Rendering clones or adopts the compiled effective template tree."),
 ];
 
+const authoredDispositionAuthorities = [
+  workspaceBehavior(browserDraftSuite, 96, 126, "Paragraph closure and foster parenting retain effective locations while exposing implied and merged-source pressure."),
+  workspaceBehavior(browserDraftSuite, 227, 246, "Duplicate-attribute parsing retains the survivor and parser issue but not a complete dropped-attribute join."),
+  workspaceBehavior(browserOracleCasesSource, 54, 85, "Chromium fixes paragraph and foster-parenting effective structures."),
+  workspaceBehavior(browserOracleCasesSource, 146, 154, "Chromium fixes first-wins duplicate-attribute behavior."),
+];
+
+const fosterInteractionAuthorities = [
+  implementation(templateFactorySource, 28, 50, "TemplateElementFactory.createTemplate", "String input is browser-materialized before JIT traversal."),
+  implementation(templateCompilerSource, 369, 681, "TemplateCompiler._compileNode/_compileElement", "The JIT walks the effective tree and publishes rows in document order."),
+  behavior(directCompilerSuite, 589, 615, "Generic direct cases establish document-order target rows without foster-parenting pressure."),
+  workspaceBehavior(browserOracleCasesSource, 65, 85, "Chromium fixes foster-parented element and merged-text order."),
+];
+
+const paragraphInteractionAuthorities = [
+  implementation(templateFactorySource, 28, 50, "TemplateElementFactory.createTemplate", "The platform closes paragraphs before compiler traversal."),
+  implementation(templateCompilerSource, 557, 645, "TemplateCompiler._compileElement", "Effective controller hosts become parent rows and nested definitions."),
+  behavior(directCompilerSuite, 1263, 1640, "Direct cases establish controller topology without paragraph-recovery pressure."),
+  workspaceBehavior(browserOracleCasesSource, 54, 62, "Chromium fixes the paragraph, div, trailing text, and empty paragraph roots."),
+];
+
+const duplicateBindingInteractionAuthorities = [
+  implementation(templateFactorySource, 28, 50, "TemplateElementFactory.createTemplate", "Platform parsing drops case-folded duplicate attributes before classification."),
+  implementation(templateCompilerSource, 754, 979, "TemplateCompiler._classifyAttributes", "The JIT lowers the effective surviving binding attribute."),
+  behavior(directCompilerSuite, 227, 358, "Direct cases establish ordinary binding lowering without duplicate-elision pressure."),
+  workspaceBehavior(browserOracleCasesSource, 146, 154, "Chromium fixes first-wins case-folded duplicate attributes."),
+];
+
+const commentShieldInteractionAuthorities = [
+  implementation(templateFactorySource, 28, 95, "TemplateElementFactory.createTemplate/needsWrapping", "Carrier selection checks only immediate text siblings around the first template element."),
+  behavior(templateFactorySuite, 14, 47, "Framework behavior covers ordinary single and multiple wrapper candidates, but not comment shielding."),
+  workspaceImplementation(browserSelectionSource, 42, 75, "selectBrowserTemplateCompilerCarrier", "Semantic-runtime mirrors the current rule and explicitly retains discarded siblings."),
+  workspaceBehavior(browserDraftSuite, 339, 382, "Focused behavior fixes selected-template and discarded-node outcomes for comment shielding."),
+];
+
 const extensionAuthorities = [
   implementation(templateCompilerSource, 126, 134, "TemplateCompiler.compile", "Compiler hooks run before local-element extraction and node compilation."),
   implementation(templateCompilerSource, 498, 505, "TemplateCompiler._compileElement", "processContent receives the live element, platform, and instruction metadata record."),
@@ -235,13 +330,38 @@ export const COMPILER_OBLIGATION_CATALOG: readonly CompilerObligationCatalogEntr
     ["compiler.entry.resource-representation", "resolveResources selects definition-valued or name-valued resource fields intentionally."],
     ["compiler.entry.dom-authority", "Compilation rejects worlds without a usable DOM platform."],
   ]),
+  entry(
+    "browser-tree",
+    "compiler.browser-tree.fragment-context",
+    "HTML is parsed in the same template-fragment context as the browser JIT.",
+    browserTreeAuthorities,
+    browserFragmentContextConserved,
+  ),
+  entry(
+    "browser-tree",
+    "compiler.browser-tree.root-wrapper",
+    "A sole meaningful root template is unwrapped while other roots remain wrapped.",
+    commentShieldInteractionAuthorities,
+    commentShieldPolicyOpen,
+  ),
+  entry(
+    "browser-tree",
+    "compiler.browser-tree.recovery",
+    "Browser repair, implied nodes, namespaces, attributes, and text normalization are conserved.",
+    browserTreeAuthorities,
+    browserRecoveryProfileOpen,
+  ),
   ...group("browser-tree", browserTreeAuthorities, missingBrowserSubstrate, [
-    ["compiler.browser-tree.fragment-context", "HTML is parsed in the same template-fragment context as the browser JIT."],
-    ["compiler.browser-tree.root-wrapper", "A sole meaningful root template is unwrapped while other roots remain wrapped."],
-    ["compiler.browser-tree.recovery", "Browser repair, implied nodes, namespaces, attributes, and text normalization are conserved."],
     ["compiler.browser-tree.authored-lineage", "Every browser-effective node retains honest authored provenance or an implied-node cause."],
     ["compiler.browser-tree.compiler-lineage", "Compiler moves, removals, wrappers, and markers retain browser and authored ancestry."],
   ]),
+  entry(
+    "browser-tree",
+    "compiler.browser-tree.authored-disposition",
+    "Every authored node and attribute is retained, adjusted, merged, reconstructed, or assigned an explicit browser-drop cause.",
+    authoredDispositionAuthorities,
+    authoredDispositionOpen,
+  ),
   ...group("extension", extensionAuthorities, openBuildEffect, [
     ["compiler.extension.hooks", "All admitted TemplateCompilerHooks run with framework resource scope and order."],
     ["compiler.extension.process-content", "processContent DOM mutations, return value, this binding, and metadata effects are conserved."],
@@ -678,6 +798,26 @@ export const COMPILER_OBLIGATION_CATALOG: readonly CompilerObligationCatalogEntr
     ["compiler.diagnostic.recursion-warning", "A direct self-resource instruction produces the exact development warning."],
   ]),
   ...group("interaction", [
+    ...fosterInteractionAuthorities,
+  ], browserInteractionUncoordinated, [
+    ["compiler.interaction.browser-foster-target-order", "Foster-parented bound targets produce JIT rows in browser-effective rather than authored token order."],
+  ]),
+  ...group("interaction", [
+    ...paragraphInteractionAuthorities,
+  ], browserInteractionUncoordinated, [
+    ["compiler.interaction.browser-paragraph-controller-topology", "Paragraph auto-close determines whether syntactically nested controller hosts compile as siblings."],
+  ]),
+  ...group("interaction", [
+    ...duplicateBindingInteractionAuthorities,
+  ], browserInteractionUncoordinated, [
+    ["compiler.interaction.browser-duplicate-binding-elision", "Case-folded duplicate binding attributes lower only the first browser-effective survivor."],
+  ]),
+  ...group("interaction", [
+    ...commentShieldInteractionAuthorities,
+  ], commentShieldPolicyOpen, [
+    ["compiler.interaction.browser-carrier-comment-shield", "Immediate comments can shield meaningful text from TemplateElementFactory wrapper selection and cause those siblings to be discarded."],
+  ]),
+  ...group("interaction", [
     implementation(generatedCompilerSource, 164, 325, "generateTests inputs", "Host, text, if/else, and repeat axes in the nominal generator."),
     implementation(generatedCompilerSource, 372, 1091, "generateTests", "Generated nesting, sibling, ordering, empty, and duplicate variants."),
     behavior(generatedStaticSuite, 1, 129, "Checked-in static runtime cases."),
@@ -876,6 +1016,43 @@ function runtime(
     startLine,
     endLine,
     symbolName: filePath,
+    summary,
+  };
+}
+
+function workspaceImplementation(
+  filePath: string,
+  startLine: number,
+  endLine: number,
+  symbolName: string,
+  summary: string,
+): CompilerAuthorityReference {
+  return {
+    repository: "aurelia-ls2",
+    revision: browserSubstrateRevision,
+    role: "implementation",
+    filePath,
+    startLine,
+    endLine,
+    symbolName,
+    summary,
+  };
+}
+
+function workspaceBehavior(
+  filePath: string,
+  startLine: number,
+  endLine: number,
+  summary: string,
+): CompilerAuthorityReference {
+  return {
+    repository: "aurelia-ls2",
+    revision: browserSubstrateRevision,
+    role: "behavior",
+    filePath,
+    startLine,
+    endLine,
+    suiteName: filePath,
     summary,
   };
 }
