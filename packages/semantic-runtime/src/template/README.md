@@ -154,15 +154,24 @@ classification, expression parsing, and instruction lowering converge on the sam
   authored recovery policy, parser authority, and planner schemas. The helper is product-free and exported only through
   the explicit browser-template subpath; the materializer spends it into structural and derivation products.
 - `template-structure.ts` and `template-structure-derivation.ts` define the durable, parse5-independent structural
-  vocabulary behind that boundary: immutable browser-effective tree/node/attribute records and ordered
-  many-input/many-output derivations. Cardinality carries merge, reconstruction, drop, and implied/generated facts;
-  there is no exclusive origin enum or second provenance graph. The detail slots own semantic-versus-witness comparison,
-  and unresolved authored/effective partitioning uses the typed structure-correspondence seam.
+  vocabulary behind that boundary: parallel immutable browser-effective and compiler-transformed tree/node/attribute
+  records plus ordered many-input/many-output derivations. Cardinality carries merge, reconstruction, drop, and
+  implied/generated facts; there is no exclusive origin enum or second provenance graph. The detail slots own
+  semantic-versus-witness comparison, and unresolved authored/effective partitioning uses the typed
+  structure-correspondence seam.
 - `browser-effective-template-materializer.ts` spends the opt-in authored draft bindings, browser draft, carrier
   selection, and correspondence plan into one atomic kernel publication. It materializes every structural occurrence,
   an explicit generated or selected compiler carrier, ordered tree-builder/factory derivation hyperedges, and typed
   seams for every unresolved partition. Parser envelopes remain witness data; authored addresses enter only through
   retained authored HTML product bindings. This is not yet wired into the production compiler front door.
+- `template-compiler-occurrence.ts` imports only the browser-effective compiler-carrier graph into a fresh mutable
+  execution forest. Stable occurrence keys are independent of live paths; private edge collections and forest-owned
+  move/detach operations preserve coherent root, child, template-content, and attribute ownership while the complete
+  historical inventory remains available for later structural derivations. Input-origin indexes are one-to-many so
+  future cloning does not collapse occurrence identity. Nullable input origins reserve the required shape for future
+  compiler-generated structure, but no generated occurrence may be admitted until it also carries an exact semantic
+  cause, output role, and ordinal. Scalar text/comment/attribute values remain read-only until their mutation can travel
+  through the ordered compiler-effect owner rather than bypassing provenance.
 - `template-source-coordinate.ts` is the shared decoded-template range boundary used by authored HTML materialization and
   future exact structural correspondence. It validates offset-map shape and maps only a caller-proved contiguous range;
   parse5 token envelopes must never be passed through it merely because they are non-null.

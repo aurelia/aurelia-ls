@@ -1,77 +1,37 @@
 import { describe, expect, test } from 'vitest';
 
-import {
-  SourceFileAddress,
-  SourceFileRole,
-  SourceLanguage,
-  SourceSpanAddress,
-  SourceSpanRole,
-  TemplateAddress,
-  TemplateNodeAddress,
-} from '../src/kernel/address.js';
+import { TemplateNodeAddress } from '../src/kernel/address.js';
 import { SemanticClaim } from '../src/kernel/claim.js';
-import { ComputationLifecycleRegistry } from '../src/kernel/computation-lifecycle.js';
-import { EvidenceKind, EvidenceRecord, EvidenceRole } from '../src/kernel/evidence.js';
-import { TemplateIdentity, TemplateNodeIdentity, TemplatePhase } from '../src/kernel/identity.js';
-import { MaterializationRecord, MaterializedProduct } from '../src/kernel/materialization.js';
+import { TemplateNodeIdentity } from '../src/kernel/identity.js';
+import { MaterializationRecord } from '../src/kernel/materialization.js';
 import { OpenSeamReasonKind } from '../src/kernel/open-seam.js';
-import { bindProductDetailEnvelope, requireProductDetailEnvelope } from '../src/kernel/product-details.js';
-import { ProvenanceRecord } from '../src/kernel/provenance.js';
-import { KernelPublicationPlan, publishProductDetail } from '../src/kernel/publication.js';
-import { KernelStore, KernelStoreBatch } from '../src/kernel/store.js';
 import { KernelVocabulary } from '../src/kernel/vocabulary.js';
-import {
-  BrowserEffectiveTemplateMaterializer,
-  type BrowserEffectiveTemplateEmission,
-} from '../src/template/browser-effective-template-materializer.js';
-import { parseBrowserTemplateFragmentDraft } from '../src/template/browser-template-parser.js';
-import { selectBrowserTemplateCompilerCarrier } from '../src/template/browser-template-selection.js';
-import {
-  TemplateCompilationUnitKind,
-  TemplateSource,
-  TemplateSourceKind,
-} from '../src/template/compilation-unit.js';
-import { HtmlParseMaterializer } from '../src/template/html-parse-materializer.js';
 import { HtmlIrNodeKind } from '../src/template/html-ir.js';
-import {
-  TemplateFrontierKind,
-  TemplateParseConsumer,
-  TemplateParseContext,
-  TemplateParseFrontier,
-  TemplateRecoveryPolicy,
-} from '../src/template/parse-context.js';
 import { TemplateProductDetails } from '../src/template/product-details.js';
 import { BrowserEffectiveTemplateElement } from '../src/template/template-structure.js';
 import { TemplateStructureDerivationAuthority } from '../src/template/template-structure-derivation.js';
+import { BrowserEffectiveTemplateFixture } from './browser-effective-template-fixture.js';
 
 describe('browser-effective template materializer', () => {
   test('publishes browser structure, factory carriers, derivation hyperedges, and correspondence seams in one batch', () => {
-    const store = new KernelStore('browser-effective-template-materializer');
-    const lifecycle = new ComputationLifecycleRegistry(store);
-    const run = lifecycle.begin({
-      kind: 'browser-effective-template-materializer-test',
-      reconciliationKey: 'batch',
-      summary: 'Browser-effective structural materializer batch.',
-    });
+    const fixture = new BrowserEffectiveTemplateFixture('browser-effective-template-materializer');
+    const run = fixture.run;
 
     try {
-      const unretainedSource = publishTemplateSource(run, 'unretained', '<div></div>');
-      const unretainedHtml = parseAuthoredHtml(run, 'unretained', unretainedSource, false);
+      const { html: unretainedHtml } = fixture.parseAuthored('unretained', '<div></div>', false);
       expect(unretainedHtml.draft).toBeNull();
       expect(unretainedHtml.nodeDraftBindings).toEqual([]);
       expect(unretainedHtml.attributeDraftBindings).toEqual([]);
 
-      const recovered = materializeCase(
-        run,
+      const recovered = fixture.materialize(
         'recovered',
         '<!DOCTYPE html><p>a<div title.bind="x" TITLE.BIND="y">b</div>c</p>'
           + '<b><i title.bind="z">one</b>two</i>',
-      );
-      const selected = materializeCase(
-        run,
+      ).emission;
+      const selected = fixture.materialize(
         'selected',
         'x<!--c--><template><div title.bind="inside">y</div></template><!--d-->z',
-      );
+      ).emission;
 
       expect(recovered.tree.compilerCarrier).toEqual(expect.objectContaining({ nodeKind: 'element' }));
       const generatedCarrier = recovered.nodes.find((node): node is BrowserEffectiveTemplateElement =>
@@ -173,104 +133,7 @@ describe('browser-effective template materializer', () => {
       expect(recovered.records.filter((record) => record.kind === 'semantic-claim').length)
         .toBeGreaterThan(recovered.nodes.length);
     } finally {
-      run.abort();
+      fixture.dispose();
     }
   });
 });
-
-function materializeCase(
-  run: ReturnType<ComputationLifecycleRegistry['begin']>,
-  key: string,
-  markup: string,
-): BrowserEffectiveTemplateEmission {
-  const source = publishTemplateSource(run, key, markup);
-  const authoredHtml = parseAuthoredHtml(run, key, source, true);
-  if (authoredHtml.draft == null) throw new Error('Test requested retained authored bindings.');
-  const browser = parseBrowserTemplateFragmentDraft(markup);
-  const carrierSelection = selectBrowserTemplateCompilerCarrier(browser.fragment);
-  return new BrowserEffectiveTemplateMaterializer(run).materialize({
-    localKey: `browser-materializer:${key}`,
-    sourceRevision: `test:${key}`,
-    templateSource: source,
-    authoredHtml,
-    browser,
-    carrierSelection,
-  });
-}
-
-function parseAuthoredHtml(
-  run: ReturnType<ComputationLifecycleRegistry['begin']>,
-  key: string,
-  source: TemplateSource,
-  retainDraftBindings: boolean,
-) {
-  const parseContext = new TemplateParseContext(
-    run.handles.product(`parse-context:${key}`),
-    TemplateParseConsumer.Compilation,
-    TemplateRecoveryPolicy.Recover,
-    new TemplateParseFrontier(TemplateFrontierKind.None, null, null),
-    source.sourceAddressHandle,
-    [],
-  );
-  return new HtmlParseMaterializer(run).parse({
-    localKey: `browser-materializer:${key}:authored`,
-    templateSource: source,
-    compilationUnit: {
-      unitKind: TemplateCompilationUnitKind.CustomElement,
-    },
-    parseContext,
-    retainDraftBindings,
-  });
-}
-
-function publishTemplateSource(
-  run: ReturnType<ComputationLifecycleRegistry['begin']>,
-  key: string,
-  markup: string,
-): TemplateSource {
-  const fileHandle = run.handles.address(`source-file:${key}`);
-  const sourceHandle = run.handles.address(`source-span:${key}`);
-  const templateHandle = run.handles.address(`template:${key}`);
-  const productHandle = run.handles.product(`template-source:${key}`);
-  const identityHandle = run.handles.identity(`template-source:${key}`);
-  const evidenceHandle = run.handles.evidence(`template-source:${key}`);
-  const provenanceHandle = run.handles.provenance(`template-source:${key}`);
-  const source = bindProductDetailEnvelope(new TemplateSource(
-    productHandle,
-    identityHandle,
-    TemplateSourceKind.Markup,
-    TemplatePhase.Authored,
-    null,
-    markup,
-    null,
-    templateHandle,
-    sourceHandle,
-    [],
-  ), new MaterializedProduct(
-    productHandle,
-    KernelVocabulary.Template.Source.key,
-    identityHandle,
-    sourceHandle,
-    provenanceHandle,
-  ));
-  run.publish(new KernelPublicationPlan(
-    new KernelStoreBatch([
-      new SourceFileAddress(fileHandle, 'test', `src/${key}.html`, SourceLanguage.Html, SourceFileRole.Template),
-      new SourceSpanAddress(sourceHandle, fileHandle, 0, markup.length, SourceSpanRole.Range),
-      new TemplateAddress(templateHandle, `template:${key}`, null, sourceHandle),
-      new EvidenceRecord(
-        evidenceHandle,
-        EvidenceKind.SourceObservation,
-        [EvidenceRole.Admission, EvidenceRole.TransformInput],
-        'Test template source.',
-        sourceHandle,
-        identityHandle,
-      ),
-      new ProvenanceRecord(provenanceHandle, [evidenceHandle]),
-      new TemplateIdentity(identityHandle, null, TemplatePhase.Authored, templateHandle),
-      requireProductDetailEnvelope(source, 'template.source'),
-    ], `template-source:${key}`),
-    [publishProductDetail(TemplateProductDetails.Source, source.productHandle, source)],
-  ));
-  return source;
-}
