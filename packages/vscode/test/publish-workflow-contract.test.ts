@@ -2,242 +2,237 @@ import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { describe, expect, test } from "vitest";
 
-interface WorkflowStep {
-  readonly "continue-on-error"?: boolean;
-  readonly id?: string;
+interface Step {
   readonly name?: string;
+  readonly id?: string;
   readonly uses?: string;
   readonly if?: string;
   readonly run?: string;
-  readonly env?: Readonly<Record<string, string>>;
-  readonly with?: Readonly<Record<string, unknown>>;
+  readonly env?: Record<string, string>;
+  readonly with?: Record<string, unknown>;
+  readonly "continue-on-error"?: boolean;
 }
 
-interface WorkflowJob {
+interface Job {
   readonly name?: string;
-  readonly needs?: unknown;
+  readonly needs?: string | string[];
+  readonly permissions?: Record<string, string>;
+  readonly outputs?: Record<string, string>;
   readonly "runs-on"?: string;
   readonly "timeout-minutes"?: number;
-  readonly steps?: readonly WorkflowStep[];
+  readonly strategy?: {
+    readonly "fail-fast"?: boolean;
+    readonly matrix?: { readonly include?: readonly Record<string, string>[] };
+  };
+  readonly steps?: readonly Step[];
 }
 
-interface GithubWorkflow {
+interface Workflow {
   readonly on?: {
     readonly workflow_dispatch?: {
-      readonly inputs?: Readonly<Record<string, {
+      readonly inputs?: Record<string, {
+        readonly description?: string;
         readonly type?: string;
         readonly default?: unknown;
         readonly required?: boolean;
-      }>>;
+      }>;
     };
   };
-  readonly permissions?: Readonly<Record<string, string>>;
-  readonly jobs?: Readonly<Record<string, WorkflowJob>>;
+  readonly permissions?: Record<string, string>;
+  readonly jobs?: Record<string, Job>;
 }
 
 const workflowPath = new URL("../../../.github/workflows/publish-vscode.yml", import.meta.url);
-const ciWorkflowPath = new URL("../../../.github/workflows/ci.yml", import.meta.url);
-const extensionPackagePath = new URL("../package.json", import.meta.url);
-const rootPackagePath = new URL("../../../package.json", import.meta.url);
-const semanticPackagePath = new URL("../../semantic-runtime/package.json", import.meta.url);
-const mcpPackagePath = new URL("../../mcp/package.json", import.meta.url);
-const lanePackagePath = new URL("../../lane-harness/package.json", import.meta.url);
+const ciPath = new URL("../../../.github/workflows/ci.yml", import.meta.url);
+const extensionPath = new URL("../package.json", import.meta.url);
 const workflowText = readFileSync(workflowPath, "utf8");
-const ciWorkflowText = readFileSync(ciWorkflowPath, "utf8");
-const extensionPackage = JSON.parse(readFileSync(extensionPackagePath, "utf8"));
-const rootPackage = JSON.parse(readFileSync(rootPackagePath, "utf8"));
-const semanticPackage = JSON.parse(readFileSync(semanticPackagePath, "utf8"));
-const mcpPackage = JSON.parse(readFileSync(mcpPackagePath, "utf8"));
-const lanePackage = JSON.parse(readFileSync(lanePackagePath, "utf8"));
-
-// Reuse the parser already locked below the pinned VSCE release tool instead of
-// adding another release dependency solely for this static workflow contract.
-const extensionRequire = createRequire(extensionPackagePath);
+const ciText = readFileSync(ciPath, "utf8");
+const extensionPackage = JSON.parse(readFileSync(extensionPath, "utf8"));
+const rootPackage = JSON.parse(readFileSync(new URL("../../../package.json", import.meta.url), "utf8"));
+const semanticPackage = JSON.parse(readFileSync(new URL("../../semantic-runtime/package.json", import.meta.url), "utf8"));
+const mcpPackage = JSON.parse(readFileSync(new URL("../../mcp/package.json", import.meta.url), "utf8"));
+const lanePackage = JSON.parse(readFileSync(new URL("../../lane-harness/package.json", import.meta.url), "utf8"));
+const extensionRequire = createRequire(extensionPath);
 const vsceRequire = createRequire(extensionRequire.resolve("@vscode/vsce/package.json"));
 const yaml = vsceRequire("js-yaml") as { load(value: string): unknown };
-const workflow = yaml.load(workflowText) as GithubWorkflow;
-const ciWorkflow = yaml.load(ciWorkflowText) as GithubWorkflow;
+const workflow = yaml.load(workflowText) as Workflow;
+const ci = yaml.load(ciText) as Workflow;
 const jobs = workflow.jobs ?? {};
-const ciJobs = ciWorkflow.jobs ?? {};
-const release = jobs["release"];
-const steps = release?.steps ?? [];
+const ciJobs = ci.jobs ?? {};
+const candidate = jobs.candidate;
+const host = jobs.host;
+const release = jobs.release;
 
-function namedStep(name: string): WorkflowStep {
-  const step = steps.find((candidate) => candidate.name === name);
-  if (step == null) throw new Error(`Missing publish workflow step: ${name}`);
-  return step;
+function step(job: Job | undefined, name: string): Step {
+  const value = job?.steps?.find((candidateStep) => candidateStep.name === name);
+  if (value == null) throw new Error(`Missing workflow step: ${name}`);
+  return value;
+}
+function index(job: Job | undefined, name: string): number {
+  return job?.steps?.findIndex((value) => value.name === name) ?? -1;
 }
 
-function stepIndex(name: string): number {
-  return steps.findIndex((candidate) => candidate.name === name);
-}
-
-function namedJobStep(job: WorkflowJob | undefined, name: string): WorkflowStep {
-  const step = job?.steps?.find((candidate) => candidate.name === name);
-  if (step == null) throw new Error(`Missing workflow step: ${name}`);
-  return step;
-}
-
-function commandCount(workflowValue: GithubWorkflow, command: string): number {
-  return Object.values(workflowValue.jobs ?? {})
+function text(value: Workflow): string {
+  return Object.values(value.jobs ?? {})
     .flatMap((job) => job.steps ?? [])
-    .flatMap((step) => step.run?.split(/\r?\n/u) ?? [])
+    .flatMap((value) => value.run ?? [])
+    .join("\n");
+}
+
+function count(value: Workflow, command: string): number {
+  return Object.values(value.jobs ?? {})
+    .flatMap((job) => job.steps ?? [])
+    .flatMap((value) => value.run?.split(/\r?\n/u) ?? [])
     .filter((line) => line.trim() === command)
     .length;
 }
 
+const hostMatrix = {
+  "fail-fast": false,
+  matrix: { include: [
+    { lane: "current-stable", label: "current stable" },
+    { lane: "minimum", label: "minimum 1.91" },
+  ] },
+};
+
 describe("VS Code publish workflow contract", () => {
-  test("parses as one Windows release job with immutable action pins", () => {
-    expect(Object.keys(jobs)).toEqual(["release"]);
-    expect(release).toMatchObject({ "runs-on": "windows-latest" });
-    expect(release?.needs).toBeUndefined();
-    expect(workflow.permissions).toEqual({
-      contents: "read",
-      "id-token": "write",
-      attestations: "write",
-      "artifact-metadata": "write",
-    });
-    expect(steps.flatMap((step) => step.uses == null ? [] : [step.uses])).toEqual([
+  test("uses least-privilege candidate, parallel host, and release jobs", () => {
+    expect(Object.keys(jobs).sort()).toEqual(["candidate", "host", "release"]);
+    expect(workflow.permissions).toEqual({});
+    expect(candidate).toMatchObject({ name: "Package the exact VSIX candidate", "runs-on": "windows-latest", "timeout-minutes": 30, permissions: { actions: "read", contents: "read" } });
+    expect(candidate?.needs).toBeUndefined();
+    expect(host).toMatchObject({ name: "Accept exact VSIX (Windows, ${{ matrix.label }})", needs: "candidate", "runs-on": "windows-latest", "timeout-minutes": 75, permissions: { actions: "read", contents: "read" }, strategy: hostMatrix });
+    expect(release).toMatchObject({ name: "Attest and publish the accepted VSIX", needs: ["candidate", "host"], "runs-on": "windows-latest", "timeout-minutes": 45, permissions: { actions: "read", contents: "read", "id-token": "write", attestations: "write", "artifact-metadata": "write" } });
+  });
+
+  test("pins actions and requires successful full CI for the exact main push SHA", () => {
+    const allowed = new Set([
       "actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683",
       "pnpm/action-setup@a7487c7e89a18df4991f7f222e4898a00d66ddda",
       "actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020",
-      "actions/attest@a1948c3f048ba23858d222213b7c278aabede763",
       "actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02",
+      "actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093",
+      "actions/attest@a1948c3f048ba23858d222213b7c278aabede763",
     ]);
-    expect(namedStep("Set up pnpm 11.5.2").with).toMatchObject({ version: "11.5.2" });
-    expect(namedStep("Set up Node.js 22.19.0").with).toMatchObject({ "node-version": "22.19.0" });
-    expect(namedStep("Verify pinned release tools").run).toContain("Expected VSCE 3.9.2");
+    const actions = Object.values(jobs).flatMap((job) => job.steps ?? []).flatMap((value) => value.uses == null ? [] : [value.uses]);
+    expect(actions.every((action) => allowed.has(action))).toBe(true);
+    expect(actions.filter((action) => action.includes("download-artifact"))).toHaveLength(2);
+    const gate = step(candidate, "Require successful full CI for the release commit");
+    expect(gate.env).toEqual({ GH_TOKEN: "${{ github.token }}" });
+    for (const witness of ["--workflow ci.yml", "--commit $env:GITHUB_SHA", "--event push", "--status success", "$_.headBranch -eq 'main'", "$_.headSha -eq $env:GITHUB_SHA", "$_.conclusion -eq 'success'"]) expect(gate.run).toContain(witness);
+    expect(candidate?.outputs).toMatchObject({ ci_run_id: "${{ steps.ci.outputs.ci_run_id }}", ci_run_url: "${{ steps.ci.outputs.ci_run_url }}" });
   });
 
   test("keeps Marketplace publication an immutable-tag opt-in", () => {
-    expect(workflow.on?.workflow_dispatch?.inputs).toEqual({
-      publish: { description: "Publish the verified VSIX to the VS Code Marketplace", required: true, default: false, type: "boolean" },
-    });
-    const identity = namedStep("Validate the committed release identity");
+    expect(workflow.on?.workflow_dispatch?.inputs).toEqual({ publish: { description: "Publish the verified VSIX to the VS Code Marketplace", required: true, default: false, type: "boolean" } });
+    const identity = step(candidate, "Validate the committed release identity");
     expect(identity.run).toContain("refs/tags/vscode-v$version");
     expect(identity.run).toContain('git rev-parse "$releaseTag^{commit}"');
     expect(identity.run).toContain("if ($tagCommit -ne $head)");
     expect(identity.run).toContain("git status --porcelain=v1 --untracked-files=all --ignore-submodules=none");
-
-    const publish = namedStep("Publish the exact accepted VSIX");
+    const publish = step(release, "Publish the exact accepted VSIX");
     expect(publish.if).toBe("${{ inputs.publish }}");
-    expect(publish.env).toEqual({
-      VSCE_PAT: "${{ secrets.VSCE_PAT }}",
-      VSIX_PATH: "${{ steps.release.outputs.vsix_path }}",
-    });
-    expect(publish.run).toContain("pnpm --filter aurelia-2 exec vsce publish --packagePath \"$env:VSIX_PATH\"");
+    expect(publish.env).toEqual({ VSCE_PAT: "${{ secrets.VSCE_PAT }}", VSIX_PATH: "${{ github.workspace }}/packages/vscode/.release/${{ needs.candidate.outputs.vsix_name }}" });
+    expect(publish.run).toContain('vsce publish --packagePath "$env:VSIX_PATH"');
     expect(publish.run).not.toMatch(/--pat|--skip-duplicate|--target|--pre-release/u);
   });
 
-  test("packages once, accepts the same bytes, and verifies around publication", () => {
-    const runText = steps.flatMap((step) => step.run == null ? [] : [step.run]).join("\n");
-    expect(runText.match(/\bpnpm package:ide:vsix\b/gu)).toHaveLength(1);
-    expect(steps.filter((step) => step.run?.trim() === "pnpm verify:ide:vsix")).toHaveLength(3);
-    expect(steps.filter((step) => step.run?.trim() === "pnpm verify:ide:vsix:installed")).toHaveLength(1);
-    expect(runText).not.toMatch(/\bnpx\b|npm version|vsce package|--skip-duplicate|git (?:commit|tag|push)\b/u);
-
-    expect(stepIndex("Package the extension exactly once"))
-      .toBeLessThan(stepIndex("Install and accept the exact VSIX"));
-    expect(stepIndex("Install and accept the exact VSIX"))
-      .toBeLessThan(stepIndex("Re-verify the installed artifact bytes"));
-    expect(stepIndex("Re-verify the installed artifact bytes"))
-      .toBeLessThan(stepIndex("Attest the exact VSIX provenance"));
-    expect(stepIndex("Attest the exact VSIX provenance"))
-      .toBeLessThan(stepIndex("Publish the exact accepted VSIX"));
-    expect(stepIndex("Publish the exact accepted VSIX"))
-      .toBeLessThan(stepIndex("Final verification of the published-or-ready bytes"));
+  test("packages once without duplicating the CI assurance campaign", () => {
+    const all = text(workflow);
+    expect(all.match(/\bpnpm package:ide:vsix\b/gu)).toHaveLength(1);
+    expect(step(candidate, "Package the extension exactly once").run).toBe("pnpm package:ide:vsix");
+    expect(index(candidate, "Recheck exact clean release tree") + 1)
+      .toBe(index(candidate, "Package the extension exactly once"));
+    expect(step(candidate, "Recheck exact clean release tree").run)
+      .toContain("git status --porcelain=v1 --untracked-files=all --ignore-submodules=none");
+    expect(step(candidate, "Recheck exact clean release tree").run)
+      .toContain("git submodule status --recursive");
+    expect(count(workflow, "pnpm test:ide:assurance")).toBe(0);
+    expect(count(workflow, "pnpm test:ide:support")).toBe(0);
+    expect(all).not.toContain("node scripts/run-vitest.mjs packages/language-server/test packages/vscode/test");
+    expect(all).not.toMatch(/\bpnpm test:vscode:extension-host:release\b/u);
   });
 
-  test("admits one canonical semantic/lane and Worker-host release gate in CI and publication", () => {
+  test("hands the exact candidate artifact id to both downstream stages", () => {
+    const upload = step(candidate, "Upload the exact candidate packet");
+    expect(upload.id).toBe("candidate_packet");
+    expect(upload["continue-on-error"]).not.toBe(true);
+    expect(upload.with).toMatchObject({ "if-no-files-found": "error", "include-hidden-files": true, "compression-level": 0, "retention-days": 30 });
+    expect(String(upload.with?.path ?? "").trim().split(/\r?\n/u)).toEqual(["${{ steps.release.outputs.vsix_path }}", "${{ steps.release.outputs.receipt_path }}", "${{ steps.release.outputs.checksum_path }}"]);
+    expect(candidate?.outputs).toMatchObject({ candidate_artifact_id: "${{ steps.candidate_packet.outputs.artifact-id }}", candidate_artifact_digest: "${{ steps.candidate_packet.outputs.artifact-digest }}" });
+    for (const [job, name] of [[host, "Download the exact candidate packet"], [release, "Download the accepted candidate packet"]] as const) {
+      const download = step(job, name);
+      expect(download.uses).toBe("actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093");
+      expect(download.with).toEqual({
+        "artifact-ids": "${{ needs.candidate.outputs.candidate_artifact_id }}",
+        path: "packages/vscode/.release",
+        "merge-multiple": true,
+      });
+    }
+  });
+
+  test("verifies only the expected downloaded packet before acceptance", () => {
+    for (const [job, name] of [[host, "Require only the exact downloaded packet"], [release, "Require only the exact accepted packet"]] as const) {
+      const packet = step(job, name);
+      expect(packet.env).toMatchObject({ VSIX_NAME: "${{ needs.candidate.outputs.vsix_name }}", RECEIPT_NAME: "${{ needs.candidate.outputs.receipt_name }}", CHECKSUM_NAME: "${{ needs.candidate.outputs.checksum_name }}" });
+      expect(packet.run).toContain("Compare-Object -ReferenceObject $expected -DifferenceObject $actual");
+      expect(packet.run).toContain("Attributes.HasFlag([IO.FileAttributes]::ReparsePoint)");
+      expect(packet.run).toContain("contains a directory or reparse point");
+    }
+    expect(step(host, "Verify the downloaded VSIX").run).toBe("pnpm verify:ide:vsix");
+    expect(step(host, "Re-verify the accepted VSIX").run).toBe("pnpm verify:ide:vsix");
+    expect(step(release, "Verify the accepted VSIX").run).toBe("pnpm verify:ide:vsix");
+  });
+
+  test("accepts both installed host lanes and retains final installed acceptance", () => {
+    expect(extensionPackage.scripts).toMatchObject({
+      "test:extension-host:current-stable:built": "node scripts/run-extension-host-tests.mjs --worker --current-stable",
+      "test:extension-host:minimum:built": "node scripts/run-extension-host-tests.mjs --worker --minimum",
+      "test:extension-host:installed:current-stable:built": "node scripts/run-extension-host-tests.mjs --worker --current-stable --installed-vsix",
+      "test:extension-host:installed:minimum:built": "node scripts/run-extension-host-tests.mjs --worker --minimum --installed-vsix",
+    });
+    expect(step(host, "Test the exact installed VSIX on ${{ matrix.label }}").run).toBe("pnpm --filter aurelia-2 run test:extension-host:installed:${{ matrix.lane }}:built");
+    expect(count(workflow, "pnpm verify:ide:vsix:installed")).toBe(1);
+    expect(step(release, "Install and accept the exact VSIX").run).toBe("pnpm verify:ide:vsix:installed");
+    expect(index(release, "Install and accept the exact VSIX")).toBeLessThan(index(release, "Re-verify the installed artifact bytes"));
+    expect(index(release, "Re-verify the installed artifact bytes")).toBeLessThan(index(release, "Attest the exact VSIX provenance"));
+    expect(index(release, "Attest the exact VSIX provenance")).toBeLessThan(index(release, "Publish the exact accepted VSIX"));
+    expect(index(release, "Publish the exact accepted VSIX")).toBeLessThan(index(release, "Final verification of the published-or-ready bytes"));
+  });
+
+  test("attests, publishes, and retains the accepted bytes and evidence", () => {
+    expect(step(release, "Attest the exact VSIX provenance").with).toEqual({ "subject-path": "packages/vscode/.release/${{ needs.candidate.outputs.vsix_name }}" });
+    expect(step(release, "Resolve retained installed evidence").if).toBe("${{ always() }}");
+    expect(step(release, "Final verification of the published-or-ready bytes").run).toBe("pnpm verify:ide:vsix");
+    const evidence = step(release, "Upload the exact release packet and acceptance evidence");
+    expect(evidence.if).toBe("${{ always() }}");
+    expect(evidence.with).toMatchObject({ name: "${{ needs.candidate.outputs.evidence_artifact_name }}", "if-no-files-found": "warn", "include-hidden-files": true, "compression-level": 0, "retention-days": 90 });
+    const paths = String(evidence.with?.path ?? "").trim().split(/\r?\n/u);
+    expect(paths.slice(0, 3)).toEqual(["packages/vscode/.release/${{ needs.candidate.outputs.vsix_name }}", "packages/vscode/.release/${{ needs.candidate.outputs.receipt_name }}", "packages/vscode/.release/${{ needs.candidate.outputs.checksum_name }}"]);
+    expect(paths.join("\n")).not.toMatch(/[*?\[]/u);
+    expect(paths).toContain("${{ steps.evidence.outputs.client_log_path }}");
+    expect(paths).toContain("${{ steps.evidence.outputs.extension_host_log_path }}");
+  });
+
+  test("keeps semantic, IDE, MCP, support, and parallel host gates in CI", () => {
     expect(rootPackage.scripts).toMatchObject({
-      "test:semantic-runtime": "pnpm --filter @aurelia-ls/semantic-runtime test",
       "test:semantic-runtime:built": "node scripts/run-vitest.mjs packages/semantic-runtime/test",
-      "test:semantic-conformance:built":
-        "node packages/semantic-runtime/scripts/contract-semantic-conformance.mjs --strict",
-      "test:semantic-contracts:built":
-        "pnpm run test:semantic-contracts:product:built && pnpm run test:semantic-contracts:runtime:built",
-      "test:semantic-contracts:product:built":
-        "node packages/semantic-runtime/scripts/contract-suite.mjs --route diagnostics --route inquiry --route kernel --route type-system --skip-build",
-      "test:semantic-contracts:runtime:built":
-        "node packages/semantic-runtime/scripts/contract-suite.mjs --route evaluation --route di --domain \"mcp;api;open-seams;reason-kinds\" --skip-build",
+      "test:semantic-conformance:built": "node packages/semantic-runtime/scripts/contract-semantic-conformance.mjs --strict",
+      "test:semantic-contracts:product:built": "node packages/semantic-runtime/scripts/contract-suite.mjs --route diagnostics --route inquiry --route kernel --route type-system --skip-build",
+      "test:semantic-contracts:runtime:built": "node packages/semantic-runtime/scripts/contract-suite.mjs --route evaluation --route di --domain \"mcp;api;open-seams;reason-kinds\" --skip-build",
       "test:ide:lanes:built": "pnpm --filter @aurelia-ls/lane-harness detect",
-      "test:ide:assurance": "pnpm run build:ide:types && pnpm run test:ide:assurance:built",
-      "test:ide:assurance:built":
-        "pnpm run test:semantic-runtime:built && pnpm run test:semantic-conformance:built && pnpm run test:semantic-contracts:built && pnpm run test:ide:lanes:built",
-      "test:vscode:extension-host:release": "pnpm --filter aurelia-2 test:extension-host:release",
+      "bootstrap:aurelia": "npm --prefix aurelia ci --ignore-scripts && npm --prefix aurelia run build",
     });
-    expect(semanticPackage.scripts.test)
-      .toBe("pnpm build && pnpm -w run test:semantic-runtime:built");
+    expect(semanticPackage.scripts.test).toBe("pnpm build && pnpm -w run test:semantic-runtime:built");
     expect(lanePackage.scripts.detect).toBe("node scripts/detect-lanes.mjs");
-    expect(rootPackage.scripts["test:ide:support"])
-      .toBe("pnpm run build:ide && pnpm run test:ide:support:built");
-    expect(rootPackage.scripts["bootstrap:aurelia"])
-      .toBe("npm --prefix aurelia ci --ignore-scripts && npm --prefix aurelia run build");
-    expect(rootPackage.scripts["test:ide:support:built"])
-      .toContain("packages/lane-harness/test/detect-lanes.test.ts");
-    expect(rootPackage.scripts["test:ide:support:built"])
-      .toContain("packages/language-server/test/unit/open-document-source-text-overlay.test.ts");
-    expect(rootPackage.scripts["test:ide:support:built"])
-      .toContain("packages/language-server/test/unit/rename-transaction-mapping.test.ts");
-    const aggregateScriptText = [
-      rootPackage.scripts["test:ide:lanes:built"],
-      rootPackage.scripts["test:semantic-contracts:built"],
-      rootPackage.scripts["test:ide:assurance"],
-      rootPackage.scripts["test:ide:assurance:built"],
-      lanePackage.scripts.detect,
-    ].join("\n");
-    expect(aggregateScriptText).not.toContain("--update");
-
-    expect(release).toMatchObject({
-      "runs-on": "windows-latest",
-      "timeout-minutes": 150,
-    });
-    expect(namedStep("Check aggregate IDE assurance").run)
-      .toBe("pnpm test:ide:assurance");
-    expect(namedStep("Test release VS Code Worker hosts").run)
-      .toBe("pnpm test:vscode:extension-host:release");
-    expect(commandCount(workflow, "pnpm test:ide:assurance")).toBe(1);
-    expect(commandCount(workflow, "pnpm test:ide:assurance:built")).toBe(0);
-    expect(commandCount(workflow, "pnpm test:vscode:extension-host:release")).toBe(1);
-    expect(stepIndex("Test the bounded IDE support contracts"))
-      .toBeLessThan(stepIndex("Check aggregate IDE assurance"));
-    expect(stepIndex("Check aggregate IDE assurance"))
-      .toBeLessThan(stepIndex("Test release VS Code Worker hosts"));
-    expect(stepIndex("Test release VS Code Worker hosts"))
-      .toBeLessThan(stepIndex("Recheck exact clean release tree"));
-    expect(stepIndex("Recheck exact clean release tree") + 1)
-      .toBe(stepIndex("Package the extension exactly once"));
-    expect(namedStep("Recheck exact clean release tree").run).toContain(
-      "git status --porcelain=v1 --untracked-files=all --ignore-submodules=none",
-    );
-    expect(namedStep("Recheck exact clean release tree").run)
-      .toContain("git submodule status --recursive");
-    expect(namedStep("Recheck exact clean release tree").run)
-      .toContain("steps.release.outputs.head");
-
-    const semanticRuntime = ciJobs["semantic-runtime"];
-    expect(semanticRuntime).toMatchObject({
-      name: "IDE Semantic Assurance",
-      "runs-on": "ubuntu-latest",
-      "timeout-minutes": 90,
-    });
-    expect(namedJobStep(semanticRuntime, "Build semantic runtime").run)
-      .toBe("pnpm --filter @aurelia-ls/semantic-runtime build");
-    expect(namedJobStep(semanticRuntime, "Test semantic runtime").run)
-      .toBe("pnpm test:semantic-runtime:built");
-    expect(namedJobStep(semanticRuntime, "Check strict semantic conformance").run)
-      .toBe("pnpm test:semantic-conformance:built");
-    expect(namedJobStep(semanticRuntime, "Check semantic product contracts").run)
-      .toBe("pnpm test:semantic-contracts:product:built");
-    expect(namedJobStep(semanticRuntime, "Check semantic runtime contracts").run)
-      .toBe("pnpm test:semantic-contracts:runtime:built");
-    expect(rootPackage.scripts["test:semantic-contracts:built"])
-      .toBe("pnpm run test:semantic-contracts:product:built && pnpm run test:semantic-contracts:runtime:built");
-    expect(namedJobStep(semanticRuntime, "Build aggregate IDE lanes").run)
-      .toBe("pnpm --filter @aurelia-ls/language-server build");
-    expect(namedJobStep(semanticRuntime, "Check aggregate IDE lanes").run)
-      .toBe("pnpm test:ide:lanes:built");
-    for (const stepName of [
+    expect(mcpPackage.scripts.test).toBe("pnpm build && node ../../scripts/run-vitest.mjs --root ../.. --config vitest.config.ts packages/mcp/test");
+    const semantic = ciJobs["semantic-runtime"];
+    expect(step(semantic, "Test semantic runtime").run).toBe("pnpm test:semantic-runtime:built");
+    expect(step(semantic, "Check strict semantic conformance").run).toBe("pnpm test:semantic-conformance:built");
+    expect(step(semantic, "Check semantic product contracts").run).toBe("pnpm test:semantic-contracts:product:built");
+    expect(step(semantic, "Check semantic runtime contracts").run).toBe("pnpm test:semantic-contracts:runtime:built");
+    expect(step(semantic, "Check aggregate IDE lanes").run).toBe("pnpm test:ide:lanes:built");
+    for (const name of [
       "Build semantic runtime",
       "Test semantic runtime",
       "Check strict semantic conformance",
@@ -246,41 +241,14 @@ describe("VS Code publish workflow contract", () => {
       "Build aggregate IDE lanes",
       "Check aggregate IDE lanes",
     ]) {
-      expect(namedJobStep(semanticRuntime, stepName)["continue-on-error"], stepName).toBe(true);
+      expect(step(semantic, name)["continue-on-error"], name).toBe(true);
     }
-    expect(namedJobStep(semanticRuntime, "Require complete semantic assurance").if)
-      .toBe("${{ always() }}");
-    expect(commandCount(ciWorkflow, "pnpm test:ide:assurance")).toBe(0);
-    expect(commandCount(ciWorkflow, "pnpm test:ide:assurance:built")).toBe(0);
-    const semanticRunText = semanticRuntime?.steps?.flatMap((step) => step.run ?? []).join("\n") ?? "";
-    expect(semanticRunText).not.toContain("contract-suite.mjs");
+    expect(step(semantic, "Require complete semantic assurance").if).toBe("${{ always() }}");
 
-    const ideSupport = ciJobs["ide-support"];
-    expect(ideSupport).toMatchObject({ "timeout-minutes": 30 });
-    expect(ideSupport?.steps?.some((step) => step.name === "Check aggregate IDE assurance"))
-      .toBe(false);
-
-    const ideProducts = ciJobs["ide-products"];
-    expect(ideProducts).toMatchObject({
-      name: "Full Language Server and VS Code Tests",
-      "runs-on": "ubuntu-latest",
-      "timeout-minutes": 60,
-    });
-    expect(namedJobStep(ideProducts, "Build language-server types").run)
-      .toBe("pnpm --filter @aurelia-ls/language-server build");
-    expect(namedJobStep(ideProducts, "Test full language server").run)
-      .toBe("node scripts/run-vitest.mjs packages/language-server/test");
-    expect(namedJobStep(ideProducts, "Test full VS Code extension").run)
-      .toBe("node scripts/run-vitest.mjs packages/vscode/test");
-    expect(namedJobStep(ideProducts, "Typecheck language-server tests").run)
-      .toBe("pnpm --filter @aurelia-ls/language-server typecheck:test");
-    expect(namedJobStep(ideProducts, "Build VS Code types").run)
-      .toBe("pnpm exec tsc -b packages/vscode");
-    expect(namedJobStep(ideProducts, "Bundle VS Code extension").run)
-      .toBe("pnpm --filter aurelia-2 run bundle");
-    expect(namedJobStep(ideProducts, "Typecheck VS Code tests").run)
-      .toBe("pnpm --filter aurelia-2 typecheck:test");
-    for (const stepName of [
+    const products = ciJobs["ide-products"];
+    expect(step(products, "Test full language server").run).toBe("node scripts/run-vitest.mjs packages/language-server/test");
+    expect(step(products, "Test full VS Code extension").run).toBe("node scripts/run-vitest.mjs packages/vscode/test");
+    for (const name of [
       "Build language-server types",
       "Test full language server",
       "Typecheck language-server tests",
@@ -291,31 +259,25 @@ describe("VS Code publish workflow contract", () => {
       "Typecheck VS Code tests",
       "Lint VS Code extension",
     ]) {
-      expect(namedJobStep(ideProducts, stepName)["continue-on-error"], stepName).toBe(true);
+      expect(step(products, name)["continue-on-error"], name).toBe(true);
     }
-    expect(namedJobStep(ideProducts, "Require complete IDE product checks").if)
-      .toBe("${{ always() }}");
-
-    const mcpRelease = ciJobs["mcp-release"];
-    expect(mcpRelease).toMatchObject({ "timeout-minutes": 60 });
-    expect(namedJobStep(mcpRelease, "Test MCP").run).toBe("pnpm --filter @aurelia-ls/mcp test");
-    expect(namedJobStep(mcpRelease, "Typecheck MCP tests").run)
-      .toBe("pnpm --filter @aurelia-ls/mcp typecheck:test");
-    expect(namedJobStep(mcpRelease, "Check MCP release-document contracts").run)
-      .toBe("pnpm --filter @aurelia-ls/mcp contract:release-docs");
-    expect(namedJobStep(mcpRelease, "Check MCP adversarial-surface contracts").run)
-      .toBe("pnpm --filter @aurelia-ls/mcp contract:adversarial-surface");
-    expect(namedJobStep(mcpRelease, "Check MCP pattern-semantic contracts").run)
-      .toBe("pnpm --filter @aurelia-ls/mcp contract:patterns-semantic");
-    expect(namedJobStep(mcpRelease, "Check MCP continuation contracts").run)
-      .toBe("pnpm --filter @aurelia-ls/mcp contract:continuation-pass-through");
-    expect(namedJobStep(mcpRelease, "Pack MCP release tarball").run)
-      .toBe("pnpm --filter @aurelia-ls/mcp release:pack");
-    expect(namedJobStep(mcpRelease, "Probe release tarball").run)
-      .toBe("pnpm --filter @aurelia-ls/mcp probe:release-tarball");
-    expect(namedJobStep(mcpRelease, "Probe project-local install").run)
-      .toBe("pnpm --filter @aurelia-ls/mcp probe:project-local-install");
-    for (const stepName of [
+    expect(step(products, "Require complete IDE product checks").if).toBe("${{ always() }}");
+    expect(step(ciJobs["ide-support"], "Check bounded IDE support contracts").run).toBe("pnpm test:ide:support");
+    const mcp = ciJobs["mcp-release"];
+    for (const [name, command] of [
+      ["Test MCP", "pnpm --filter @aurelia-ls/mcp test"],
+      ["Typecheck MCP tests", "pnpm --filter @aurelia-ls/mcp typecheck:test"],
+      ["Check MCP release-document contracts", "pnpm --filter @aurelia-ls/mcp contract:release-docs"],
+      ["Check MCP adversarial-surface contracts", "pnpm --filter @aurelia-ls/mcp contract:adversarial-surface"],
+      ["Check MCP pattern-semantic contracts", "pnpm --filter @aurelia-ls/mcp contract:patterns-semantic"],
+      ["Check MCP continuation contracts", "pnpm --filter @aurelia-ls/mcp contract:continuation-pass-through"],
+      ["Pack MCP release tarball", "pnpm --filter @aurelia-ls/mcp release:pack"],
+      ["Probe release tarball", "pnpm --filter @aurelia-ls/mcp probe:release-tarball"],
+      ["Probe project-local install", "pnpm --filter @aurelia-ls/mcp probe:project-local-install"],
+    ] as const) {
+      expect(step(mcp, name).run).toBe(command);
+    }
+    for (const name of [
       "Smoke Atlas source maps",
       "Test MCP",
       "Typecheck MCP tests",
@@ -329,89 +291,38 @@ describe("VS Code publish workflow contract", () => {
       "Probe project-local install",
       "Upload MCP release tarball",
     ]) {
-      expect(namedJobStep(mcpRelease, stepName)["continue-on-error"], stepName).toBe(true);
+      expect(step(mcp, name)["continue-on-error"], name).toBe(true);
     }
-    expect(namedJobStep(mcpRelease, "Require complete MCP release checks").if)
-      .toBe("${{ always() }}");
-    expect(mcpPackage.scripts.test)
-      .toBe("pnpm build && node ../../scripts/run-vitest.mjs --root ../.. --config vitest.config.ts packages/mcp/test");
+    expect(step(mcp, "Require complete MCP release checks").if).toBe("${{ always() }}");
+    const ciHost = ciJobs["vscode-extension-host"];
+    expect(ciHost).toMatchObject({ "runs-on": "windows-latest", "timeout-minutes": 60, strategy: hostMatrix });
+    expect(ciHost?.needs).toBeUndefined();
+    expect(step(ciHost, "Build VS Code Worker host inputs").run).toBe("pnpm build:ide");
+    expect(step(ciHost, "Test ${{ matrix.label }} VS Code Worker host").run).toBe("pnpm --filter aurelia-2 run test:extension-host:${{ matrix.lane }}:built");
+    expect(count(ci, "pnpm test:vscode:extension-host:release")).toBe(0);
+  });
 
-    const automaticRunText = Object.values(ciJobs)
-      .flatMap((job) => job.steps ?? [])
-      .flatMap((step) => step.run ?? [])
-      .join("\n");
-    const automaticCommands = automaticRunText.split(/\r?\n/u).map((line) => line.trim());
-    expect(automaticCommands).not.toContain("pnpm build");
-    expect(automaticCommands).not.toContain("pnpm -w build");
-    expect(automaticCommands).not.toContain("pnpm test");
-    expect(automaticRunText).not.toContain("test:compiler");
-    expect(automaticRunText).not.toContain("packages/compiler/test");
-    expect(automaticRunText).not.toContain("test:sem-");
-    expect(automaticRunText).not.toContain("packages/semantic-workspace/test");
-
-    const hostJob = ciJobs["vscode-extension-host"];
-    expect(hostJob).toMatchObject({
-      "runs-on": "windows-latest",
-      "timeout-minutes": 90,
-    });
-    expect(hostJob?.needs).toBeUndefined();
-    expect(namedJobStep(hostJob, "Test release VS Code Worker hosts").run)
-      .toBe("pnpm test:vscode:extension-host:release");
-    expect(commandCount(ciWorkflow, "pnpm test:vscode:extension-host:release")).toBe(1);
-    const hostRunText = hostJob?.steps?.flatMap((step) => step.run ?? []).join("\n") ?? "";
-    expect(hostRunText).not.toContain("pnpm test:vscode:extension-host:current-stable");
-    expect(hostRunText).not.toContain("pnpm test:vscode:extension-host:minimum");
-
-    expect(stepIndex("Test release VS Code Worker hosts"))
-      .toBeLessThan(stepIndex("Package the extension exactly once"));
-
+  test("excludes update modes, legacy suites, and duplicated release QA", () => {
     expect(workflowText).not.toContain("--update");
-    expect(ciWorkflowText).not.toContain("--update");
-    const publicationRunText = steps.flatMap((step) => step.run ?? []).join("\n");
-    expect(publicationRunText).not.toContain("pnpm test:vscode:extension-host:current-stable");
-    expect(publicationRunText).not.toContain("pnpm test:vscode:extension-host:minimum");
+    expect(ciText).not.toContain("--update");
+    const automatic = text(ci);
+    const commands = automatic.split(/\r?\n/u).map((line) => line.trim());
+    expect(commands).not.toContain("pnpm build");
+    expect(commands).not.toContain("pnpm -w build");
+    expect(commands).not.toContain("pnpm test");
+    expect(automatic).not.toContain("test:compiler");
+    expect(automatic).not.toContain("packages/compiler/test");
+    expect(automatic).not.toContain("test:sem-");
+    expect(automatic).not.toContain("packages/semantic-workspace/test");
+    expect(text(workflow)).not.toMatch(/test:semantic-runtime|test:semantic-conformance|test:semantic-contracts|test:ide:lanes/u);
+    expect(text(workflow)).not.toMatch(/\bnpx\b|(?:^|\s)npm version|vsce package|--skip-duplicate|git (?:commit|tag|push)\b/u);
   });
 
-  test("attests and uploads only exact computed release and evidence paths", () => {
-    const attest = namedStep("Attest the exact VSIX provenance");
-    expect(attest.with).toEqual({ "subject-path": "${{ steps.release.outputs.vsix_path }}" });
-
-    const evidence = namedStep("Resolve retained installed evidence");
-    expect(evidence.if).toBe("${{ always() }}");
-
-    const upload = namedStep("Upload the exact release packet and acceptance evidence");
-    expect(upload.if).toBe("${{ always() }}");
-    expect(upload.with).toMatchObject({
-      "if-no-files-found": "warn",
-      "include-hidden-files": true,
-    });
-    const uploadPaths = String(upload.with?.path ?? "").trim().split(/\r?\n/u);
-    expect(uploadPaths).toEqual([
-      "${{ steps.release.outputs.vsix_path }}",
-      "${{ steps.release.outputs.receipt_path }}",
-      "${{ steps.release.outputs.checksum_path }}",
-      "${{ steps.release.outputs.installed_evidence_path }}",
-      "${{ steps.release.outputs.driver_report_path }}",
-      "${{ steps.release.outputs.install_stdout_path }}",
-      "${{ steps.release.outputs.install_stderr_path }}",
-      "${{ steps.release.outputs.host_stdout_path }}",
-      "${{ steps.release.outputs.host_stderr_path }}",
-      "${{ steps.evidence.outputs.client_log_path }}",
-      "${{ steps.evidence.outputs.extension_host_log_path }}",
-    ]);
-    expect(uploadPaths.join("\n")).not.toMatch(/[*?\[]/u);
-    expect(workflowText).toContain("packages/vscode/.release");
-    expect(workflowText).toContain(".temp/vscode-vsix-installed/$shortHead");
-  });
-
-  test("binds the live 0.5.1 metadata and all three release gates into support CI", () => {
+  test("binds live 0.5.1 artifact commands and release contracts", () => {
     expect(extensionPackage.version).toBe("0.5.1");
-    expect(rootPackage.scripts["package:ide:vsix"]).toBe(
-      "tsc -b --force packages/semantic-runtime packages/language-server packages/vscode && pnpm --filter aurelia-2 run release:pack",
-    );
+    expect(rootPackage.scripts["package:ide:vsix"]).toBe("tsc -b --force packages/semantic-runtime packages/language-server packages/vscode && pnpm --filter aurelia-2 run release:pack");
     expect(rootPackage.scripts["verify:ide:vsix"]).toBe("pnpm --filter aurelia-2 run release:verify");
-    expect(rootPackage.scripts["verify:ide:vsix:installed"])
-      .toBe("pnpm --filter aurelia-2 run release:verify-installed");
+    expect(rootPackage.scripts["verify:ide:vsix:installed"]).toBe("pnpm --filter aurelia-2 run release:verify-installed");
     expect(rootPackage.scripts["test:ide:support:built"]).toContain("packages/vscode/test/vsix-release-contract.test.ts");
     expect(rootPackage.scripts["test:ide:support:built"]).toContain("packages/vscode/test/vsix-installed-contract.test.ts");
     expect(rootPackage.scripts["test:ide:support:built"]).toContain("packages/vscode/test/publish-workflow-contract.test.ts");

@@ -381,9 +381,17 @@ jobs:
         run: pnpm test:ide:support
 
   vscode-extension-host:
-    name: VS Code Extension Host Support (Windows)
+    name: VS Code Extension Host Support (Windows, ${{ matrix.label }})
     runs-on: windows-latest
-    timeout-minutes: 90
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - lane: current-stable
+            label: current stable
+          - lane: minimum
+            label: minimum 1.91
     steps:
       - uses: actions/checkout@v4
         with:
@@ -415,5 +423,8 @@ jobs:
       - name: Bootstrap linked Aurelia dependencies
         run: pnpm bootstrap:aurelia
 
-      - name: Test release VS Code Worker hosts
-        run: pnpm test:vscode:extension-host:release
+      - name: Build VS Code Worker host inputs
+        run: pnpm build:ide
+
+      - name: Test ${{ matrix.label }} VS Code Worker host
+        run: pnpm --filter aurelia-2 run test:extension-host:${{ matrix.lane }}:built

@@ -313,7 +313,11 @@ suite("extension-host product surface", () => {
     const extension = vscode.extensions.getExtension(extensionId);
     assert(extension, `Expected extension ${extensionId} in the Extension Development Host.`);
     resourceDiscoveryAcceptance = await authenticateResourceDiscoveryAcceptanceInputs(extension);
-    const transportModuleUrl = pathToFileURL(path.join(extension.extensionPath, "out", "worker-transport.js"));
+    const transportModuleUrl = pathToFileURL(path.join(
+      requiredAbsoluteHostPath("AURELIA_LS_EXTENSION_HOST_HARNESS_ROOT"),
+      "out",
+      "worker-transport.js",
+    ));
     const { shouldUseWorkerTransport } = await import(transportModuleUrl.href);
     selectedTransport = shouldUseWorkerTransport() ? "worker" : "ipc";
     await extension.activate();
@@ -5133,11 +5137,8 @@ async function authenticateResourceDiscoveryAcceptanceInputs(extension) {
   );
   const ledgerPath = requiredAbsoluteHostPath("AURELIA_LS_RESOURCE_DISCOVERY_HOST_LEDGER");
   const reportPath = requiredAbsoluteHostPath("AURELIA_LS_RESOURCE_DISCOVERY_HOST_REPORT");
-  const sourceManifestPath = path.join(
-    extension.extensionPath,
-    "test",
-    "fixtures",
-    "resource-discovery-host.json",
+  const sourceManifestPath = requiredAbsoluteHostPath(
+    "AURELIA_LS_RESOURCE_DISCOVERY_HOST_SOURCE_MANIFEST",
   );
   const sourceManifestBytes = readRegularHostFile(sourceManifestPath, "committed fixture manifest");
   const renderedManifestBytes = readRegularHostFile(renderedManifestPath, "rendered fixture manifest");
@@ -5194,7 +5195,7 @@ async function authenticateResourceDiscoveryAcceptanceInputs(extension) {
   authenticateHostFixtureCorpus(fixture, routedAureliaWorkspace);
 
   const staticContractModuleUrl = pathToFileURL(path.join(
-    extension.extensionPath,
+    requiredAbsoluteHostPath("AURELIA_LS_EXTENSION_HOST_HARNESS_ROOT"),
     "scripts",
     "extension-host-static-contract.mjs",
   ));
@@ -5262,7 +5263,7 @@ async function reauthenticateResourceDiscoveryAcceptanceCorpus() {
   );
   authenticateHostFixtureCorpus(acceptance.fixture, routedAureliaWorkspace);
   const staticContractModuleUrl = pathToFileURL(path.join(
-    acceptance.extensionPath,
+    requiredAbsoluteHostPath("AURELIA_LS_EXTENSION_HOST_HARNESS_ROOT"),
     "scripts",
     "extension-host-static-contract.mjs",
   ));

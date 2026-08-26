@@ -1,4 +1,5 @@
 const assert = require("assert");
+const { lstatSync, realpathSync } = require("fs");
 const path = require("path");
 const { pathToFileURL } = require("url");
 const Mocha = require("mocha");
@@ -80,9 +81,18 @@ async function run() {
 }
 
 async function assertHostSelection() {
+  const product = vscode.extensions.getExtension("AureliaEffect.aurelia-2");
+  assert(product, "Expected the Aurelia product extension.");
+  const productMode = requiredEnvironment("AURELIA_LS_EXTENSION_HOST_PRODUCT_MODE");
+  if (productMode === "installed-vsix") {
+    await assertInstalledProduct(product);
+  } else {
+    assert.strictEqual(productMode, "development");
+  }
+  const harnessRoot = requiredEnvironment("AURELIA_LS_EXTENSION_HOST_HARNESS_ROOT");
   const transportModuleUrl = pathToFileURL(path.resolve(
-    __dirname,
-    "../../../out/worker-transport.js",
+    harnessRoot,
+    "out/worker-transport.js",
   ));
   const { shouldUseWorkerTransport } = await import(transportModuleUrl.href);
   const actualTransport = shouldUseWorkerTransport() ? "worker" : "ipc";
@@ -99,6 +109,59 @@ async function assertHostSelection() {
       + `vscode=${actualVersion} requestedVersion=${versionLane(expectedVersion)} `
       + `transport=${actualTransport}`,
   );
+}
+
+async function assertInstalledProduct(product) {
+  const extensionsRoot = realpathSync(requiredEnvironment("AURELIA_LS_INSTALLED_EXTENSIONS_ROOT"));
+  const sourceRoot = realpathSync(requiredEnvironment("AURELIA_LS_INSTALLED_SOURCE_EXTENSION_ROOT"));
+  const driverRoot = realpathSync(requiredEnvironment("AURELIA_LS_INSTALLED_DRIVER_ROOT"));
+  const productMatches = vscode.extensions.all.filter((extension) =>
+    extension.id.toLowerCase() === "aureliaeffect.aurelia-2"
+  );
+  assert.strictEqual(productMatches.length, 1, "Expected exactly one installed Aurelia product extension.");
+  assert.strictEqual(product.isActive, true, "workspaceContains must activate the installed Aurelia product before test entry.");
+  assert.strictEqual(product.packageJSON.publisher, requiredEnvironment("AURELIA_LS_INSTALLED_PRODUCT_PUBLISHER"));
+  assert.strictEqual(product.packageJSON.name, requiredEnvironment("AURELIA_LS_INSTALLED_PRODUCT_NAME"));
+  assert.strictEqual(product.packageJSON.version, requiredEnvironment("AURELIA_LS_INSTALLED_PRODUCT_VERSION"));
+  assert.strictEqual(product.packageJSON.main, requiredEnvironment("AURELIA_LS_INSTALLED_PRODUCT_MAIN"));
+  assert.strictEqual(product.packageJSON.engines?.vscode, requiredEnvironment("AURELIA_LS_INSTALLED_PRODUCT_ENGINE"));
+  const productPath = realpathSync(product.extensionPath);
+  assertRegularDirectory(productPath, "Installed Aurelia product extension");
+  assertSamePath(productPath, requiredEnvironment("AURELIA_LS_INSTALLED_PRODUCT_PATH"), "Installed Aurelia product path");
+  assertStrictChild(extensionsRoot, productPath, "Installed Aurelia product path");
+  assertOutside(sourceRoot, productPath, "Installed Aurelia product path");
+  assertOutside(driverRoot, productPath, "Installed Aurelia product path");
+  const drivers = vscode.extensions.all.filter((extension) =>
+    extension.id.toLowerCase() === "aurelia-ls-tests.installed-vsix-driver"
+  );
+  assert.strictEqual(drivers.length, 1, "Expected exactly one inert installed-VSIX driver.");
+  const driver = drivers[0];
+  const driverApi = await driver.activate();
+  assert.strictEqual(driverApi?.extensionMode, vscode.ExtensionMode.Test);
+  assertSamePath(driverApi?.extensionPath, driverRoot, "Installed-VSIX driver context path");
+  assertSamePath(realpathSync(driver.extensionPath), driverRoot, "Installed-VSIX driver extension path");
+}
+
+function assertRegularDirectory(candidate, label) {
+  const record = lstatSync(candidate);
+  assert(!record.isSymbolicLink() && record.isDirectory(), `${label} must be a regular directory.`);
+}
+
+function assertSamePath(actual, expected, label) {
+  const normalize = (candidate) => process.platform === "win32"
+    ? path.resolve(candidate).toLowerCase()
+    : path.resolve(candidate);
+  assert.strictEqual(normalize(actual), normalize(expected), `${label} drifted.`);
+}
+
+function assertStrictChild(parent, child, label) {
+  const relative = path.relative(path.resolve(parent), path.resolve(child));
+  assert(relative !== "" && relative !== "." && relative !== ".." && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative), `${label} must be a strict child.`);
+}
+
+function assertOutside(parent, child, label) {
+  const relative = path.relative(path.resolve(parent), path.resolve(child));
+  assert(relative === ".." || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative), `${label} must remain outside ${parent}.`);
 }
 
 function requiredEnvironment(name) {

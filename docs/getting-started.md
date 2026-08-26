@@ -154,6 +154,11 @@ Real Extension Host acceptance is available through:
 pnpm test:vscode:extension-host:release
 ```
 
+The command runs current stable and VS Code 1.91 sequentially for local use.
+CI runs the two lanes in parallel. The release workflow additionally installs
+the single packaged VSIX into isolated current/minimum hosts and publishes that
+same artifact after both lanes pass.
+
 ## Developing the Extension Locally
 
 1. Open the repository in VS Code.
