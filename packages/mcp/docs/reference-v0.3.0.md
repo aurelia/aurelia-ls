@@ -1,7 +1,7 @@
 # Aurelia MCP 0.3.0 Protocol Reference
 
-This document describes the public MCP transport exposed by source version
-0.3.0. The schemas registered by the running server and the static
+This document describes the public MCP transport for the 0.3 release line.
+The schemas registered by the running server and the static
 `aurelia_app_query_catalog` tool/resource are the machine-readable authorities.
 
 For the change from 0.2.0, see the

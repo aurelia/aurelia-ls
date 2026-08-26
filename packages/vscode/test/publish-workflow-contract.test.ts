@@ -404,8 +404,8 @@ describe("VS Code publish workflow contract", () => {
     expect(workflowText).toContain(".temp/vscode-vsix-installed/$shortHead");
   });
 
-  test("binds the live 0.5.0 metadata and all three release gates into support CI", () => {
-    expect(extensionPackage.version).toBe("0.5.0");
+  test("binds the live 0.5.1 metadata and all three release gates into support CI", () => {
+    expect(extensionPackage.version).toBe("0.5.1");
     expect(rootPackage.scripts["package:ide:vsix"]).toBe(
       "tsc -b --force packages/semantic-runtime packages/language-server packages/vscode && pnpm --filter aurelia-2 run release:pack",
     );
