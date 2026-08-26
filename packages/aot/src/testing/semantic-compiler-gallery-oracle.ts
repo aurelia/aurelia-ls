@@ -15,6 +15,17 @@ import {
   type SemanticRuntimeAnswer,
   type SemanticTemplateCompilationResult,
 } from "@aurelia-ls/semantic-runtime";
+import {
+  BrowserEffectiveTemplateMaterializer,
+  executeDeterministicTemplateCompiler,
+  parseBrowserTemplateFragmentDraft,
+  selectBrowserTemplateCompilerCarrier,
+  TemplateCompilerCommentOccurrence,
+  TemplateCompilerElementOccurrence,
+  TemplateCompilerTextOccurrence,
+  type TemplateCompilerDeterministicExecutionReasonKind,
+  type TemplateCompilerDeterministicExecutionState,
+} from "@aurelia-ls/semantic-runtime/browser-template";
 import type {
   CompilerEffectPosture,
   CompilerOracleExpectedProduct,
@@ -27,6 +38,23 @@ import {
 } from "./semantic-compiler-gallery-plan.js";
 
 type SemanticTemplateResource = SemanticApp["emission"]["templates"]["resources"][number];
+type BrowserMaterializationContext = ConstructorParameters<typeof BrowserEffectiveTemplateMaterializer>[0];
+
+class SemanticCompilerGalleryObservationProjection {
+  constructor(
+    readonly observations: readonly SemanticCompilerGalleryObservation[],
+    readonly browserMaterializationMs: number,
+    readonly normalizedStructuralReplayMs: number,
+  ) {}
+}
+
+class NormalizedStructuralReplayProjection {
+  constructor(
+    readonly observation: SemanticCompilerGalleryNormalizedStructuralReplay,
+    readonly browserMaterializationMs: number,
+    readonly replayMs: number,
+  ) {}
+}
 
 export interface SemanticCompilerGalleryRootRow {
   readonly targetKind: string;
@@ -56,6 +84,23 @@ export interface SemanticCompilerGalleryOpenSeamRow {
   readonly seamKindKey: string;
   readonly reasonKinds: readonly string[];
   readonly summary: string;
+}
+
+/** Immutable characterization of normalized structural replay; it is not a JIT equivalence claim. */
+export interface SemanticCompilerGalleryNormalizedStructuralReplay {
+  readonly state: `${TemplateCompilerDeterministicExecutionState}`;
+  readonly reasonKinds: readonly `${TemplateCompilerDeterministicExecutionReasonKind}`[];
+  /** Canonical case-local ordered ledger digest; counts alone are not structural identity. */
+  readonly structuralDigest: string;
+  readonly normalizedContextCount: number;
+  readonly realizedContextCount: number;
+  readonly targetRowCount: number;
+  readonly geometryCount: number;
+  readonly consumedNodeCount: number;
+  readonly consumedAttributeCount: number;
+  readonly inputTransferCount: number;
+  readonly textExpansionCount: number;
+  readonly generatedOccurrenceCount: number;
 }
 
 export class SemanticCompilerGalleryObservation {
@@ -90,6 +135,7 @@ export class SemanticCompilerGalleryObservation {
     },
     readonly issues: readonly SemanticCompilerGalleryIssueRow[],
     readonly openSeams: readonly SemanticCompilerGalleryOpenSeamRow[],
+    readonly normalizedStructuralReplay: SemanticCompilerGalleryNormalizedStructuralReplay,
   ) {}
 }
 
@@ -218,7 +264,18 @@ export class SemanticCompilerGalleryOracle {
         throw new Error("Semantic compiler gallery query returned without an app-world analysis basis and depth.");
       }
       validateGalleryMembership(app, publicAnswer.value, plan.admitted);
-      const observations = observationsFor(app, plan.admitted);
+      const replayRun = runtime.computationLifecycle.begin({
+        kind: "aot-semantic-compiler-gallery-structural-replay",
+        reconciliationKey: `aot-semantic-gallery-structural-replay:${plan.sourceDigest}`,
+        summary: "Bracket browser-effective materialization and normalized structural replay for the AOT semantic gallery.",
+      });
+      let projection: SemanticCompilerGalleryObservationProjection;
+      try {
+        projection = observationsFor(app, plan.admitted, replayRun);
+      } finally {
+        replayRun.abort();
+      }
+      const observations = projection.observations;
       const observedIds = new Set(observations.map((observation) => observation.caseId));
       const missingCaseIds = plan.admitted
         .filter((candidate) => !observedIds.has(candidate.candidate.id))
@@ -249,7 +306,14 @@ export class SemanticCompilerGalleryOracle {
         {
           "semantic.boot": openedAt - startedAt,
           "semantic.analysis": analyzedAt - openedAt,
-          "semantic.projection": projectedAt - analyzedAt,
+          "semantic.browser-template-materialization": projection.browserMaterializationMs,
+          "semantic.normalized-structural-replay": projection.normalizedStructuralReplayMs,
+          "semantic.projection": Math.max(
+            0,
+            projectedAt - analyzedAt
+              - projection.browserMaterializationMs
+              - projection.normalizedStructuralReplayMs,
+          ),
         },
       );
     } finally {
@@ -261,7 +325,8 @@ export class SemanticCompilerGalleryOracle {
 function observationsFor(
   app: SemanticApp,
   cases: readonly SemanticCompilerGalleryCase[],
-): readonly SemanticCompilerGalleryObservation[] {
+  browserMaterialization: BrowserMaterializationContext,
+): SemanticCompilerGalleryObservationProjection {
   const resourcesByName = new Map<string, SemanticTemplateResource>();
   for (const resource of app.emission.templates.resources) {
     const name = resource.compilation.definition.name;
@@ -270,19 +335,312 @@ function observationsFor(
     }
     resourcesByName.set(name, resource);
   }
-  return cases.flatMap((candidate) => {
+  let browserMaterializationMs = 0;
+  let normalizedStructuralReplayMs = 0;
+  const observations = cases.flatMap((candidate) => {
     const definition = candidate.candidate.world.entry;
     if (definition.kind !== "compile") return [];
     const resource = resourcesByName.get(definition.definition.name);
     if (resource == null) return [];
     validateDefinitionFidelity(resource, candidate);
-    return [observationFor(resource, candidate)];
+    const replay = normalizedStructuralReplayFor(resource, candidate, browserMaterialization);
+    browserMaterializationMs += replay.browserMaterializationMs;
+    normalizedStructuralReplayMs += replay.replayMs;
+    return [observationFor(resource, candidate, replay.observation)];
   });
+  return new SemanticCompilerGalleryObservationProjection(
+    observations,
+    browserMaterializationMs,
+    normalizedStructuralReplayMs,
+  );
+}
+
+function normalizedStructuralReplayFor(
+  resource: SemanticTemplateResource,
+  galleryCase: SemanticCompilerGalleryCase,
+  browserMaterialization: BrowserMaterializationContext,
+): NormalizedStructuralReplayProjection {
+  const compilation = resource.compilation;
+  const markup = compilation.unit.templateSource.markup;
+  if (markup == null || compilation.html.draft == null) {
+    throw new Error(
+      `Semantic compiler gallery case '${galleryCase.candidate.id}' has no retained markup/draft for browser replay.`,
+    );
+  }
+  const browserStartedAt = performance.now();
+  const browserDraft = parseBrowserTemplateFragmentDraft(markup);
+  const browserTemplate = new BrowserEffectiveTemplateMaterializer(browserMaterialization).materialize({
+    localKey: `semantic-gallery-structural-replay:${galleryCase.candidate.id}`,
+    sourceRevision: compilation.definition.template?.authoredSourceRevision
+      ?? compilation.unit.templateSource.productHandle,
+    templateSource: compilation.unit.templateSource,
+    authoredHtml: compilation.html,
+    browser: browserDraft,
+    carrierSelection: selectBrowserTemplateCompilerCarrier(browserDraft.fragment),
+  });
+  const browserFinishedAt = performance.now();
+  const result = executeDeterministicTemplateCompiler({ browserTemplate, compilation });
+  const replayFinishedAt = performance.now();
+  const execution = result.structuralExecution;
+  const contexts = compilation.compiledTemplate.targetPlan.readContexts();
+  const observation: SemanticCompilerGalleryNormalizedStructuralReplay = {
+    state: result.state,
+    reasonKinds: result.reasons.map((reason) => reason.reasonKind),
+    structuralDigest: normalizedStructuralReplayDigest(compilation, result),
+    normalizedContextCount: contexts.length,
+    realizedContextCount: execution?.readContexts().length ?? 0,
+    targetRowCount: contexts.reduce((sum, context) => sum + context.readRows().length, 0),
+    geometryCount: execution == null
+      ? 0
+      : execution.readContexts().reduce(
+        (sum, context) => sum + execution.readTargetGeometries(context).length,
+        0,
+      ),
+    consumedNodeCount: execution?.readConsumedNodeDispositions().length ?? 0,
+    consumedAttributeCount: execution?.readConsumedAttributeDispositions().length ?? 0,
+    inputTransferCount: execution?.readInputNodeTransfers().length ?? 0,
+    textExpansionCount: execution?.readInputTextExpansions().length ?? 0,
+    generatedOccurrenceCount: [
+      ...result.forest.readNodes(),
+      ...result.forest.readAttributes(),
+    ].filter((occurrence) => occurrence.generation != null).length,
+  };
+  return new NormalizedStructuralReplayProjection(
+    observation,
+    browserFinishedAt - browserStartedAt,
+    replayFinishedAt - browserFinishedAt,
+  );
+}
+
+function normalizedStructuralReplayDigest(
+  compilation: SemanticTemplateResource["compilation"],
+  result: ReturnType<typeof executeDeterministicTemplateCompiler>,
+): string {
+  const forest = result.forest;
+  const execution = result.structuralExecution;
+  const nodes = forest.readNodes();
+  const attributes = forest.readAttributes();
+  const contexts = compilation.compiledTemplate.targetPlan.readContexts();
+  const nodeIndexes = new Map(nodes.map((node, index) => [node, index]));
+  const attributeIndexes = new Map(attributes.map((attribute, index) => [attribute, index]));
+  const contextIndexes = new Map(contexts.map((context, index) => [context.localKey, index]));
+  const authoredNodeIndexes = new Map(compilation.html.nodes.map((node, index) => [node.productHandle, index]));
+  const authoredAttributeIndexes = new Map(
+    compilation.html.attributes.map((attribute, index) => [attribute.productHandle, index]),
+  );
+  const causeIdentities = new Map<string, string>();
+  const registerCauseIdentities = (
+    prefix: string,
+    values: readonly { readonly productHandle: string | null }[],
+  ): void => {
+    values.forEach((value, index) => {
+      if (value.productHandle != null && !causeIdentities.has(value.productHandle)) {
+        causeIdentities.set(value.productHandle, `${prefix}:${index}`);
+      }
+    });
+  };
+  registerCauseIdentities("authored-node", compilation.html.nodes);
+  registerCauseIdentities("authored-attribute", compilation.html.attributes);
+  registerCauseIdentities("classification", compilation.attributeClassification.classifications);
+  registerCauseIdentities("value-site", compilation.valueSites.sites);
+  registerCauseIdentities("instruction", compilation.compiledTemplate.instructions);
+  registerCauseIdentities("compiled-template", compilation.compiledTemplate.compiledTemplates);
+  registerCauseIdentities("compiler-issue", compilation.compiledTemplate.issues);
+  registerCauseIdentities("context-owner", contexts.map((context) => context.owner));
+  const causeIdentity = (handle: string): string => causeIdentities.get(handle) ?? `raw:${handle}`;
+  const nodesByAuthoredProduct = new Map<string, number[]>();
+  for (const [node, index] of nodeIndexes) {
+    const productHandle = forest.exactAuthoredNodeOrigin(node)?.authored.productHandle ?? null;
+    if (productHandle != null) appendOrdinal(nodesByAuthoredProduct, productHandle, index);
+  }
+  const operationIndexes = new Map<string, number>();
+  const generationFor = (
+    generation: (typeof nodes)[number]["generation"],
+  ): Record<string, unknown> | null => {
+    if (generation == null) return null;
+    const contextIndex = contextIndexes.get(generation.contextKey) ?? null;
+    const operationKey = `${contextIndex ?? "foreign"}:${generation.operationKey}`;
+    let operationIndex = operationIndexes.get(operationKey);
+    if (operationIndex == null) {
+      operationIndex = operationIndexes.size;
+      operationIndexes.set(operationKey, operationIndex);
+    }
+    return {
+      contextIndex,
+      operationIndex,
+      role: generation.role,
+      outputOrdinal: generation.outputOrdinal,
+      causes: generation.causeHandles.map(causeIdentity),
+    };
+  };
+  const nodeIndex = (node: (typeof nodes)[number] | null): number | null =>
+    node == null ? null : nodeIndexes.get(node) ?? null;
+  const contextIndex = (localKey: string | null): number | null =>
+    localKey == null ? null : contextIndexes.get(localKey) ?? null;
+  const nodeValue = (node: (typeof nodes)[number]): readonly unknown[] => {
+    if (node instanceof TemplateCompilerElementOccurrence) {
+      return ["element", node.tagName, node.namespace, node.namespaceUri];
+    }
+    if (node instanceof TemplateCompilerTextOccurrence) return ["text", node.text];
+    if (node instanceof TemplateCompilerCommentOccurrence) {
+      return ["comment", node.text, node.semanticKind];
+    }
+    return [node.inputReference?.nodeKind ?? "fragment"];
+  };
+  const geometryFor = (row: (typeof contexts)[number]["readRows"] extends () => readonly (infer TRow)[] ? TRow : never) => {
+    const geometry = execution?.readTargetGeometry(row) ?? null;
+    if (geometry == null) return null;
+    return "target" in geometry
+      ? {
+          kind: geometry.geometryKind,
+          marker: nodeIndex(geometry.marker),
+          logicalTarget: nodeIndex(geometry.logicalTarget),
+        }
+      : {
+          kind: geometry.geometryKind,
+          marker: nodeIndex(geometry.marker),
+          start: nodeIndex(geometry.start),
+          end: nodeIndex(geometry.end),
+          logicalTarget: nodeIndex(geometry.logicalTarget),
+          replacedNode: nodeIndex(geometry.replacedNode),
+          realizedParent: nodeIndex(geometry.realizedParent),
+          realizedOrdinal: geometry.realizedOrdinal,
+        };
+  };
+  const ledger = {
+    state: result.state,
+    reasons: result.reasons.map((reason) => ({
+      kind: reason.reasonKind,
+      summary: reason.summary,
+      products: reason.productHandles.map(causeIdentity),
+    })),
+    nodes: nodes.map((node, index) => {
+      const authoredProductHandle = forest.exactAuthoredNodeOrigin(node)?.authored.productHandle ?? null;
+      return {
+        index,
+        value: nodeValue(node),
+        input: node.inputReference != null,
+        authoredNodeIndex: authoredProductHandle == null
+          ? null
+          : authoredNodeIndexes.get(authoredProductHandle) ?? null,
+        parent: nodeIndex(node.parent),
+        edgeKind: node.parentEdgeKind,
+        ordinal: node.readParentOrdinal(),
+        generation: generationFor(node.generation),
+      };
+    }),
+    attributes: attributes.map((attribute, index) => {
+      const authoredProductHandle = forest.exactAuthoredAttributeOrigin(attribute)?.authored.productHandle ?? null;
+      return {
+        index,
+        name: attribute.name,
+        value: attribute.value,
+        input: attribute.inputReference != null,
+        authoredAttributeIndex: authoredProductHandle == null
+          ? null
+          : authoredAttributeIndexes.get(authoredProductHandle) ?? null,
+        owner: nodeIndex(attribute.owner),
+        ordinal: attribute.readOwnerOrdinal(),
+        generation: generationFor(attribute.generation),
+      };
+    }),
+    contexts: contexts.map((context, index) => ({
+      index,
+      role: context.role,
+      slotName: context.slotName,
+      ownerContext: contextIndex(context.ownerContext?.localKey ?? null),
+      structure: (() => {
+        const structure = execution?.readContextStructure(context) ?? null;
+        return structure == null
+          ? null
+          : {
+              carrier: nodeIndex(structure.compilerCarrier),
+              content: nodeIndex(structure.compilerContent),
+            };
+      })(),
+      compilerReachableNodeIndexes: context.readCompilerReachableNodeProductHandles().map((productHandle) =>
+        authoredNodeIndexes.get(productHandle) ?? null
+      ),
+      frontiers: context.readFrontiers().map((frontier) => ({
+        projectedTargetOrdinal: frontier.projectedTargetOrdinal,
+        summary: frontier.summary,
+      })),
+      rows: context.readRows().map((row) => {
+        const sourceOccurrences = nodesByAuthoredProduct.get(row.node.productHandle) ?? [];
+        return {
+          ordinal: row.ordinal,
+          projectedTargetOrdinal: row.projectedTargetOrdinal,
+          projectedTargetCount: row.projectedTargetCount,
+          posture: row.posture,
+          targetKind: row.targetKind,
+          sourceNode: sourceOccurrences.length === 1 ? sourceOccurrences[0]! : null,
+          instructionKinds: row.instructions.map((instruction) => instruction.instructionKind),
+          geometry: geometryFor(row),
+        };
+      }),
+    })),
+    consumedNodes: execution?.readConsumedNodeDispositions().map((disposition) => ({
+      context: contextIndex(disposition.context.localKey),
+      node: nodeIndex(disposition.node),
+      authoredNodeIndex: disposition.authoredProductHandle == null
+        ? null
+        : authoredNodeIndexes.get(disposition.authoredProductHandle) ?? null,
+      membershipOrdinal: disposition.membershipOrdinal,
+      owner: nodeIndex(disposition.owner),
+      ownerOrdinal: disposition.ownerOrdinal,
+      eventOrdinal: disposition.eventOrdinal,
+      causes: disposition.causeHandles.map(causeIdentity),
+    })) ?? [],
+    consumedAttributes: execution?.readConsumedAttributeDispositions().map((disposition) => ({
+      context: contextIndex(disposition.context.localKey),
+      attribute: attributeIndexes.get(disposition.attribute) ?? null,
+      authoredAttributeIndex: disposition.authoredProductHandle == null
+        ? null
+        : authoredAttributeIndexes.get(disposition.authoredProductHandle) ?? null,
+      owner: nodeIndex(disposition.owner),
+      ownerOrdinal: disposition.ownerOrdinal,
+      eventOrdinal: disposition.eventOrdinal,
+      causes: disposition.causeHandles.map(causeIdentity),
+    })) ?? [],
+    inputTransfers: execution?.readInputNodeTransfers().map((transfer) => ({
+      context: contextIndex(transfer.context.localKey),
+      node: nodeIndex(transfer.node),
+      authoredNodeIndex: transfer.authoredProductHandle == null
+        ? null
+        : authoredNodeIndexes.get(transfer.authoredProductHandle) ?? null,
+      structuralEntrantNodeIndex: authoredNodeIndexes.get(transfer.structuralEntrantProductHandle) ?? null,
+      sourceParent: nodeIndex(transfer.sourceParent),
+      sourceEdgeKind: transfer.sourceEdgeKind,
+      sourceOrdinal: transfer.sourceOrdinal,
+      destinationParent: nodeIndex(transfer.destinationParent),
+      destinationEdgeKind: transfer.destinationEdgeKind,
+      destinationOrdinal: transfer.destinationOrdinal,
+      eventOrdinal: transfer.eventOrdinal,
+      causes: transfer.causeHandles.map(causeIdentity),
+    })) ?? [],
+    textExpansions: execution?.readInputTextExpansions().map((expansion) => ({
+      context: contextIndex(expansion.context.localKey),
+      input: nodeIndex(expansion.input),
+      sourceParent: nodeIndex(expansion.sourceParent),
+      sourceOrdinal: expansion.sourceOrdinal,
+      outputs: expansion.outputs.map((output) => nodeIndex(output)),
+      eventOrdinal: expansion.eventOrdinal,
+      causes: expansion.causeHandles.map(causeIdentity),
+    })) ?? [],
+  };
+  return digest(canonicalCompilerJson(ledger));
+}
+
+function appendOrdinal(map: Map<string, number[]>, key: string, ordinal: number): void {
+  const ordinals = map.get(key);
+  if (ordinals == null) map.set(key, [ordinal]);
+  else ordinals.push(ordinal);
 }
 
 function observationFor(
   resource: SemanticTemplateResource,
   galleryCase: SemanticCompilerGalleryCase,
+  normalizedStructuralReplay: SemanticCompilerGalleryNormalizedStructuralReplay,
 ): SemanticCompilerGalleryObservation {
   const compilation = resource.compilation;
   const emission = compilation.compiledTemplate;
@@ -360,7 +718,7 @@ function observationFor(
     galleryCase.candidate.id,
     galleryCase.candidate.family,
     compilation.definition.name,
-    digest(canonicalCompilerJson({ compilerProfile, compiledTemplate, authored, issues, openSeams })),
+    digest(canonicalCompilerJson({ compilerProfile, compiledTemplate, authored, issues, openSeams, normalizedStructuralReplay })),
     expectedJitProduct(galleryCase.candidate),
     galleryCase.worldFingerprint,
     galleryCase.anticipatedWorldDifferences,
@@ -371,6 +729,7 @@ function observationFor(
     authored,
     issues,
     openSeams,
+    normalizedStructuralReplay,
   );
 }
 

@@ -4,3 +4,6 @@ export * from './browser-template-parser.js';
 export * from './browser-template-selection.js';
 export * from './browser-template-correspondence.js';
 export * from './browser-effective-template-materializer.js';
+export * from './template-compiler-occurrence.js';
+export * from './template-compiler-structural-execution.js';
+export * from './template-compiler-deterministic-execution.js';

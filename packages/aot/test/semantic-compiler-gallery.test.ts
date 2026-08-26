@@ -70,8 +70,43 @@ describe("semantic compiler gallery", () => {
     });
     expect(run.compilerTreeProfile).toBe("semantic-runtime/authored-html-compiler-input/v1");
     expect(run.stages["semantic.analysis"]).toBeGreaterThan(0);
+    expect(run.stages["semantic.browser-template-materialization"]).toBeGreaterThan(0);
+    expect(run.stages["semantic.normalized-structural-replay"]).toBeGreaterThan(0);
 
     const observations = new Map(run.observations.map((observation) => [observation.caseId, observation]));
+    const replayStates = Object.fromEntries(["exact", "open", "refused"].map((state) => [
+      state,
+      run.observations.filter((observation) => observation.normalizedStructuralReplay.state === state).length,
+    ]));
+    expect(replayStates).toEqual({ exact: 23, open: 5, refused: 3 });
+    expect(run.observations.every((observation) =>
+      ["exact", "open", "refused"].includes(observation.normalizedStructuralReplay.state)
+    )).toBe(true);
+    const openReplayReasons = new Map([
+      ["interaction.browser.carrier-comment-shield", ["browser-context-membership-open"]],
+      ["interaction.browser.duplicate-binding-elision", ["non-singular-origin"]],
+      ["interaction.browser.foster-target-order", ["browser-target-order-open"]],
+      ["interaction.browser.paragraph-controller-topology", ["browser-correspondence-open"]],
+      ["surrogate.static-class", ["surrogate-execution-open"]],
+    ]);
+    for (const [caseId, reasonKinds] of openReplayReasons) {
+      expect(observations.get(caseId)?.normalizedStructuralReplay).toMatchObject({
+        state: "open",
+        reasonKinds,
+        realizedContextCount: 0,
+        geometryCount: 0,
+      });
+    }
+    expect(observations.get("diagnostic.local.duplicate-bindable-attribute")?.normalizedStructuralReplay)
+      .toMatchObject({
+        state: "refused",
+        reasonKinds: ["compiler-refused", "local-template-open"],
+        realizedContextCount: 0,
+      });
+    expect(observations.get("diagnostic.slot.without-shadow")?.normalizedStructuralReplay)
+      .toMatchObject({ state: "refused", reasonKinds: ["compiler-refused"] });
+    expect(observations.get("diagnostic.surrogate.unique-id")?.normalizedStructuralReplay)
+      .toMatchObject({ state: "refused", reasonKinds: ["compiler-refused"] });
     expect(run.observations.every((observation) => observation.authored.draftBindingsRetained)).toBe(true);
     expect(run.observations.every((observation) => /^sha256:[0-9a-f]{64}$/u.test(observation.observationDigest)))
       .toBe(true);
@@ -102,6 +137,45 @@ describe("semantic compiler gallery", () => {
     )).toBe(true);
     expect(siblingDefinitions.filter((definition) => definition.rows.length === 0)
       .every((definition) => definition.compilerReachableNodeCount > 0)).toBe(true);
+    expect(observations.get("interaction.generated.double-sibling-if")?.normalizedStructuralReplay).toEqual({
+      state: "exact",
+      reasonKinds: [],
+      structuralDigest: "sha256:6c159a665f702bedd46aa91ec13e625a2e4f6a9c436ff9f38f1307c3d5493436",
+      normalizedContextCount: 5,
+      realizedContextCount: 5,
+      targetRowCount: 4,
+      geometryCount: 4,
+      consumedNodeCount: 0,
+      consumedAttributeCount: 4,
+      inputTransferCount: 4,
+      textExpansionCount: 0,
+      generatedOccurrenceCount: 20,
+    });
+    expect(observations.get("interaction.generated.nested-if-else-template")?.normalizedStructuralReplay).toEqual({
+      state: "exact",
+      reasonKinds: [],
+      structuralDigest: "sha256:31c9e8f530db6743a6885d85aa4a74fd9f97064f661863ab7215320bc09d378e",
+      normalizedContextCount: 7,
+      realizedContextCount: 7,
+      targetRowCount: 10,
+      geometryCount: 10,
+      consumedNodeCount: 0,
+      consumedAttributeCount: 6,
+      inputTransferCount: 6,
+      textExpansionCount: 4,
+      generatedOccurrenceCount: 26,
+    });
+    expect(observations.get("interpolation.text.ten-hole")?.normalizedStructuralReplay).toMatchObject({
+      state: "exact",
+      normalizedContextCount: 1,
+      realizedContextCount: 1,
+      targetRowCount: 10,
+      geometryCount: 10,
+      textExpansionCount: 1,
+      generatedOccurrenceCount: 20,
+    });
+    expect(observations.get("interpolation.text.ten-hole")?.normalizedStructuralReplay.structuralDigest)
+      .toBe("sha256:b2444338bcf0bb019b80872e36951fa1e954752aabc1a817e6ec3c326cc19239");
     expect(observations.get("interaction.browser.foster-target-order")?.declaredEffects).toContainEqual(
       expect.objectContaining({ kind: "browser-recovery", conservation: "open" }),
     );

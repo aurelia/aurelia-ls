@@ -173,7 +173,9 @@ classification, expression parsing, and instruction lowering converge on the sam
   causes, output role, and ordinal. Scalar text/comment/attribute values remain read-only until their mutation can
   travel through the ordered compiler-effect owner rather than bypassing provenance.
 - `template-compiler-structural-execution.ts` is the product-free join between that forest and the existing
-  `TemplateCompilerTargetPlan`. It assigns one exact template carrier/content root per target context and realizes
+  `TemplateCompilerTargetPlan`. One session can admit a family of sealed root plans over one forest; plan/context keys,
+  compiled-definition products, compiler-reachable authored nodes, and projection contributors are family-unique
+  before mutation. It assigns one exact template carrier/content root per target context and realizes
   complete rows as either marker/target adjacency or marker/start/end render locations, including marker-only outer
   template-controller definitions. Rows can spend only singular 1→1 HTML-tree-builder origins, logical target
   occurrences are unique, inert nested template content is excluded, and geometry stops at the first open row/frontier.
@@ -188,6 +190,21 @@ classification, expression parsing, and instruction lowering converge on the sam
   authority is session-branded and role-checked, including exact generated carrier pairs. This is
   execution mechanics only: it does not freeze transformed products, allocate durable targets, publish kernel records,
   or switch the production compiler traversal.
+- `template-compiler-execution.ts` is the matching product-free ordered semantic-operation transaction. It binds
+  one-to-one to an exact structural family, retains one global order across target-plan lanes, and keeps lane-local
+  terminal completion. Operations use a two-phase protocol: `beginOperation(...)` snapshots the exact event-time
+  target/context before a move or consumption, and `completeOperation(...)` appends Complete, Declined, Open, Refused,
+  or Abrupt only after the semantic boundary finishes. Only one family attempt may be pending, so admission, execution,
+  and sealing cannot interleave around an ordinal gap. The carrier records semantic compiler boundaries rather than
+  every mechanical tree edit and is not yet a durable kernel product.
+- `template-compiler-deterministic-execution.ts` is an intentionally narrower assurance bridge. It spends one
+  `TemplateResourceCompilationEmission` plus its exact browser-effective source family to replay supported built-in
+  structural consequences over already-normalized compiler products. Exact means dispositions, context transfers,
+  text expansion, and target geometry only; it does not prove instruction lowering, hook absence/effects, local-family
+  construction, surrogate compilation, or whole-JIT equivalence. Browser membership/order disagreement, non-singular
+  origins, nonempty surrogates, debug, locals, and open compiler products return typed Open/Refused outcomes before a
+  structural session is exposed. The final production owner remains a browser-occurrence/site walk inside the atomic
+  `compileResourceTree(...)` family boundary.
 - `template-source-coordinate.ts` is the shared decoded-template range boundary used by authored HTML materialization and
   future exact structural correspondence. It validates offset-map shape and maps only a caller-proved contiguous range;
   parse5 token envelopes must never be passed through it merely because they are non-null.
@@ -200,6 +217,9 @@ classification, expression parsing, and instruction lowering converge on the sam
   HTML document/node/attribute products, records ownership claims, and keeps recovery local to the malformed syntax.
   It intentionally stops before Aurelia attribute-pattern parsing, resource lookup, or expression parsing. HTML space
   character checks are named as HTML grammar, not shared with the ECMAScript expression scanner's whitespace law.
+  AOT-profile compilation retains the exact parser draft bindings required for authored/browser correspondence;
+  ordinary IDE/MCP profiles do not pay that run-local retention cost. Valueless attribute drafts end at the attribute
+  name, never after following separator whitespace, so a subsequent attribute keeps an exact independent envelope.
   The front-door materializer owns parse pass framing, source records, document products, and store commits; its tree
   materializer owns recursive node/attribute/recovery publication and decoded-markup-to-authored-source address mapping.
 - `attribute-syntax.ts` models runtime `AttrSyntax`, attribute-pattern executables, `IAttributeParser`, and the
