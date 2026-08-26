@@ -7,6 +7,7 @@ import type { KernelPublicationContext } from '../kernel/publication.js';
 import {
   ComputedObservationDependencyMode,
 } from './computed-observation.js';
+import type { ComputedDependencyKeyRead } from './computed-dependency-config.js';
 import {
   readImportedExportName,
   readSourceImportBindings,
@@ -51,21 +52,21 @@ import {
   type RuntimeObservedMemberSourceProjection,
 } from './observed-dependency-member-source.js';
 import {
-  connectableDraftsForTrackableDependencyKey,
   readTrackableMethodDependency,
+  sourceObservedAccessEffectsForTrackableDependencyKey,
 } from './trackable-method-dependency-recognition.js';
-
-export interface RuntimeProxyObservedDependencyDraft {
-  readonly dependencyKind: RuntimeObservedDependencyKind;
-  readonly expressionKind: string;
-  readonly sourceName: string | null;
-  readonly sourceRootName: string | null;
-  readonly memberName: string | null;
-  readonly keyExpression: string | null;
-  readonly methodName: string | null;
-  readonly spanStart: number | null;
-  readonly spanEnd: number | null;
-}
+import type {
+  RuntimeSourceObservedAccessSeedEffectDraft,
+  RuntimeTypeScriptObservedAccessReference,
+} from '../runtime-expression/source-observed-access-effect.js';
+import {
+  RuntimeExpressionAccessForm,
+  RuntimeExpressionAccessRole,
+} from '../runtime-expression/runtime-expression-access-use.js';
+import {
+  SourceFileRef,
+  sourceSpanFromBounds,
+} from '../expression/source-span.js';
 
 export interface RuntimeProxyObservedDependencyTypeContext {
   readonly checker: ts.TypeChecker;
@@ -121,12 +122,12 @@ export class ProxyObservable {
     };
   }
 
-  /** Preserve one row per authored TypeScript occurrence before observer-level subscription coalescing. */
-  static collectObservedDependencyOccurrenceDrafts(
+  /** Preserve the inducing TypeScript operation together with every source-side observation effect. */
+  static collectObservedAccessEffectDrafts(
     declaration: ts.FunctionLikeDeclaration,
     typeContext: RuntimeProxyObservedDependencyTypeContext | null = null,
     options: RuntimeProxyObservedDependencyCollectionOptions = {},
-  ): readonly RuntimeObservedDependencyDraft[] {
+  ): readonly RuntimeSourceObservedAccessSeedEffectDraft[] {
     const sourceFile = declaration.getSourceFile();
     const rootNames = proxyObservedRootNamesForDeclaration(declaration, options);
     if (rootNames.size === 0) {
@@ -140,7 +141,7 @@ export class ProxyObservable {
       options.trackableMethodStack ?? new Set(),
     );
     dependencies.visit(functionBodyOrExpression(declaration));
-    return dependencies.read();
+    return dependencies.readEffects();
   }
 }
 
@@ -171,7 +172,7 @@ function functionBodyOrExpression(
 }
 
 class RuntimeProxyObservedDependencyDraftCollector {
-  private readonly rows = new Map<string, RuntimeObservedDependencyDraft>();
+  private readonly rows = new Map<string, RuntimeSourceObservedAccessSeedEffectDraft>();
   private readonly aliases = new Map<string, PropertyChain>();
   private readonly rootNames: Set<string>;
   private readonly sourceFileAddressHandle: AddressHandle | null;
@@ -193,10 +194,18 @@ class RuntimeProxyObservedDependencyDraftCollector {
   }
 
   read(): readonly RuntimeObservedDependencyDraft[] {
-    return [...this.rows.values()].sort((left, right) =>
+    return this.readEffects().map((effect) => effect.dependency);
+  }
+
+  readEffects(): readonly RuntimeSourceObservedAccessSeedEffectDraft[] {
+    return [...this.rows.values()].sort((leftEffect, rightEffect) => {
+      const left = leftEffect.dependency;
+      const right = rightEffect.dependency;
+      return (
       `${left.spanStart ?? -1}:${left.dependencyKind}:${left.sourceName ?? ''}:${left.methodName ?? ''}`
         .localeCompare(`${right.spanStart ?? -1}:${right.dependencyKind}:${right.sourceName ?? ''}:${right.methodName ?? ''}`)
-    );
+      );
+    });
   }
 
   visit(node: ts.Node | null): void {
@@ -260,7 +269,12 @@ class RuntimeProxyObservedDependencyDraftCollector {
       this.visit(node.initializer);
       const iteration = this.proxyObservedForOfIterationForExpression(node.initializer);
       if (iteration != null) {
-        this.recordCollectionRead(iteration.receiver, iteration.methodName, iteration.spanNode);
+        this.recordCollectionRead(
+          iteration.receiver,
+          iteration.methodName,
+          iteration.spanNode,
+          observedAccessReferenceForIteration(iteration),
+        );
         this.addProxyWrappableRootNamesForBindingName(node.name);
       }
       return;
@@ -292,6 +306,11 @@ class RuntimeProxyObservedDependencyDraftCollector {
             nameStart: element.name.getStart(this.sourceFile),
             nameEnd: element.name.end,
             memberSource: null,
+            access: observedMemberReadReference(
+              element.name,
+              element.name,
+              RuntimeExpressionAccessForm.Member,
+            ),
             skipObservation: propertyExpressionHasNowrapDecorator(this.typeContext, ownerExpression, propertyName),
             valueCanBeProxyWrapped: this.bindingNameCanBeProxyWrapped(element.name),
           },
@@ -316,29 +335,29 @@ class RuntimeProxyObservedDependencyDraftCollector {
       const usesInterceptedCollectionMethod = receiver != null
         && propertyChainValueCanBeProxyWrapped(receiver)
         && this.receiverCanUseProxyInterceptedCollectionMethod(callee.expression, callee.name.text);
-      const trackableDependencies = this.trackableMethodDependenciesForCall(callee);
+      const trackableEffects = this.trackableMethodEffectsForCall(callee);
 
       if (
         receiver != null
         && propertyChainValueCanBeProxyWrapped(receiver)
-        && (trackableDependencies.length > 0 || !usesInterceptedCollectionMethod)
+        && (trackableEffects.length > 0 || !usesInterceptedCollectionMethod)
       ) {
         // Object proxy handlers observe the method property before invocation. Collection proxy handlers return
         // framework wrapper functions for intercepted methods instead, so those spend collection reads only.
         this.recordPropertyChain(callee);
       }
 
-      if (trackableDependencies.length > 0) {
-        for (const dependency of trackableDependencies) {
-          this.add(dependency);
+      if (trackableEffects.length > 0) {
+        for (const effect of trackableEffects) {
+          this.addEffect(effect);
         }
       } else if (
         receiver != null
         && propertyChainValueCanBeProxyWrapped(receiver)
         && !usesInterceptedCollectionMethod
       ) {
-        for (const dependency of this.ordinaryMethodDependenciesForCall(callee, node, receiver)) {
-          this.add(dependency);
+        for (const effect of this.ordinaryMethodEffectsForCall(callee, node, receiver)) {
+          this.addEffect(effect);
         }
       }
       if (
@@ -347,7 +366,12 @@ class RuntimeProxyObservedDependencyDraftCollector {
         runtimeProxyObservedCollectionMethods.has(callee.name.text) &&
         this.receiverCanUseProxyObservedCollectionMethod(callee.expression, callee.name.text)
       ) {
-        this.recordCollectionRead(receiver, callee.name.text, callee);
+        this.recordCollectionRead(
+          receiver,
+          callee.name.text,
+          callee,
+          observedMemberCallReference(callee),
+        );
         this.visitCollectionCallbacks(callee.name.text, callee.expression, node.arguments);
       }
       this.visit(callee.expression);
@@ -377,7 +401,12 @@ class RuntimeProxyObservedDependencyDraftCollector {
     }
 
     this.recordPropertyChain(iteration.receiverExpression);
-    this.recordCollectionRead(iteration.receiver, iteration.methodName, iteration.spanNode);
+    this.recordCollectionRead(
+      iteration.receiver,
+      iteration.methodName,
+      iteration.spanNode,
+      observedAccessReferenceForIteration(iteration),
+    );
 
     const nestedRootNames = new Set(this.rootNames);
     for (const rootName of this.forOfProxyWrappableBindingRootNames(node.initializer)) {
@@ -391,8 +420,8 @@ class RuntimeProxyObservedDependencyDraftCollector {
       this.trackableMethodStack,
     );
     nested.visit(node.statement);
-    for (const dependency of nested.read()) {
-      this.add(dependency);
+    for (const effect of nested.readEffects()) {
+      this.addEffect(effect);
     }
   }
 
@@ -411,6 +440,7 @@ class RuntimeProxyObservedDependencyDraftCollector {
       'ProxyOwnKeysLengthRead',
       ownKeys.spanNode,
       ownKeys.memberSource,
+      observedAccessReferenceForExpression(ownKeys.receiverExpression),
     );
     this.visit(node.statement);
   }
@@ -423,7 +453,12 @@ class RuntimeProxyObservedDependencyDraftCollector {
     }
 
     this.recordPropertyChain(iteration.receiverExpression);
-    this.recordCollectionRead(iteration.receiver, iteration.methodName, iteration.spanNode);
+    this.recordCollectionRead(
+      iteration.receiver,
+      iteration.methodName,
+      iteration.spanNode,
+      observedAccessReferenceForIteration(iteration),
+    );
   }
 
   private visitCollectionCallbacks(
@@ -456,8 +491,8 @@ class RuntimeProxyObservedDependencyDraftCollector {
       this.trackableMethodStack,
     );
     nested.visit(callback.body);
-    for (const dependency of nested.read()) {
-      this.add(dependency);
+    for (const effect of nested.readEffects()) {
+      this.addEffect(effect);
     }
   }
 
@@ -499,7 +534,7 @@ class RuntimeProxyObservedDependencyDraftCollector {
         memberNameSpanEnd: segment?.nameEnd ?? null,
         spanStart: segment?.start ?? chain.start,
         spanEnd: segment?.end ?? chain.end,
-      });
+      }, segment!.access);
       if (segment?.valueCanBeProxyWrapped === false) {
         return;
       }
@@ -510,6 +545,7 @@ class RuntimeProxyObservedDependencyDraftCollector {
     receiver: PropertyChain,
     methodName: string,
     spanNode: ts.Node,
+    access: RuntimeTypeScriptObservedAccessReference,
   ): void {
     const observedMember = observedMemberSegmentForCollectionReceiver(receiver);
     this.add({
@@ -526,7 +562,7 @@ class RuntimeProxyObservedDependencyDraftCollector {
       memberNameSpanEnd: observedMember?.keyExpression == null ? observedMember?.nameEnd ?? null : null,
       spanStart: spanNode.getStart(this.sourceFile),
       spanEnd: spanNode.end,
-    });
+    }, access);
   }
 
   private recordImplicitPropertyRead(
@@ -535,6 +571,7 @@ class RuntimeProxyObservedDependencyDraftCollector {
     expressionKind: string,
     spanNode: ts.Node,
     memberSource: RuntimeObservedMemberSourceProjection | null,
+    access: RuntimeTypeScriptObservedAccessReference,
   ): void {
     this.add({
       dependencyKind: RuntimeObservedDependencyKind.ProxyPropertyRead,
@@ -550,13 +587,24 @@ class RuntimeProxyObservedDependencyDraftCollector {
       memberNameSpanEnd: spanNode.end,
       spanStart: spanNode.getStart(this.sourceFile),
       spanEnd: spanNode.end,
+    }, access);
+  }
+
+  private add(
+    row: RuntimeObservedDependencyDraft,
+    access: RuntimeTypeScriptObservedAccessReference,
+  ): void {
+    this.addEffect({
+      accessUse: { kind: 'typescript-node', reference: access },
+      dependency: row,
     });
   }
 
-  private add(row: RuntimeObservedDependencyDraft): void {
+  private addEffect(effect: RuntimeSourceObservedAccessSeedEffectDraft): void {
+    const row = effect.dependency;
     const key = runtimeObservedDependencyOccurrenceKey(row);
     if (!this.rows.has(key)) {
-      this.rows.set(key, row);
+      this.rows.set(key, effect);
     }
   }
 
@@ -564,9 +612,9 @@ class RuntimeProxyObservedDependencyDraftCollector {
     return propertyChainForExpression(expression, this.rootNames, this.aliases, this.typeContext);
   }
 
-  private trackableMethodDependenciesForCall(
+  private trackableMethodEffectsForCall(
     callee: ts.PropertyAccessExpression,
-  ): readonly RuntimeObservedDependencyDraft[] {
+  ): readonly RuntimeSourceObservedAccessSeedEffectDraft[] {
     if (this.typeContext == null || this.propertyChainForExpression(callee.expression) == null) {
       return [];
     }
@@ -579,7 +627,7 @@ class RuntimeProxyObservedDependencyDraftCollector {
       return [];
     }
     if (dependency.dependencyMode === ComputedObservationDependencyMode.ProxyAutoTrack) {
-      return ProxyObservable.collectObservedDependencyOccurrenceDrafts(
+      return ProxyObservable.collectObservedAccessEffectDrafts(
         method,
         ProxyObservable.typeContextForChecker(
           this.typeContext.checker,
@@ -601,14 +649,10 @@ class RuntimeProxyObservedDependencyDraftCollector {
     const receiverType = this.checkerTypeForExpression(callee.expression);
     return [
       ...dependency.dependencyKeyReads.flatMap((key) =>
-        connectableDraftsForTrackableDependencyKey(key)
-          .map((draft) => ({
-            ...this.trackableReceiverDependencyDraft(draft, receiverType),
-            sourceFileAddressHandle,
-          }))
+        this.trackableDependencyKeyEffects(callee, method, key, receiverType, sourceFileAddressHandle)
       ),
       ...dependency.dependencyFunctions.flatMap((fn) =>
-        ProxyObservable.collectObservedDependencyOccurrenceDrafts(
+        ProxyObservable.collectObservedAccessEffectDrafts(
           fn,
           ProxyObservable.typeContextForChecker(
             this.typeContext!.checker,
@@ -620,11 +664,11 @@ class RuntimeProxyObservedDependencyDraftCollector {
     ];
   }
 
-  private ordinaryMethodDependenciesForCall(
+  private ordinaryMethodEffectsForCall(
     callee: ts.PropertyAccessExpression,
     call: ts.CallExpression,
     receiver: PropertyChain,
-  ): readonly RuntimeObservedDependencyDraft[] {
+  ): readonly RuntimeSourceObservedAccessSeedEffectDraft[] {
     if (this.typeContext == null) {
       return [];
     }
@@ -656,7 +700,7 @@ class RuntimeProxyObservedDependencyDraftCollector {
       new Set([...this.trackableMethodStack, method]),
     );
     nested.visit(body);
-    return nested.read();
+    return nested.readEffects();
   }
 
   private trackableReceiverDependencyDraft<TDraft extends RuntimeObservedDependencyDraft>(
@@ -670,6 +714,49 @@ class RuntimeProxyObservedDependencyDraftCollector {
       draft,
     );
     return withoutTemplateExpressionProjection(withSource);
+  }
+
+  private trackableDependencyKeyEffects(
+    callee: ts.PropertyAccessExpression,
+    method: ts.MethodDeclaration,
+    dependency: ComputedDependencyKeyRead,
+    receiverType: ts.Type | null,
+    sourceFileAddressHandle: AddressHandle,
+  ): readonly RuntimeSourceObservedAccessSeedEffectDraft[] {
+    const sourceFile = method.getSourceFile();
+    const start = dependency.start ?? method.getStart(sourceFile);
+    const end = dependency.end ?? method.end;
+    const sourceText = sourceFile.text.slice(start, end);
+    const quoted = sourceText.startsWith("'") || sourceText.startsWith('"') || sourceText.startsWith('`');
+    const baseSpan = sourceSpanFromBounds(
+      start + (quoted ? 1 : 0),
+      end - (quoted ? 1 : 0),
+      new SourceFileRef(sourceFileAddressHandle, sourceFile.fileName),
+    );
+    const callSourceFile = callee.getSourceFile();
+    const callSourceFileAddressHandle = ensureSourceFileAddressForCheckerNode(
+      this.typeContext!.publication,
+      this.typeContext!.checker,
+      callSourceFile,
+    ).handle;
+    const callSource = sourceSpanFromBounds(
+      callee.getStart(callSourceFile),
+      callee.end,
+      new SourceFileRef(callSourceFileAddressHandle, callSourceFile.fileName),
+    );
+    return sourceObservedAccessEffectsForTrackableDependencyKey({
+      dependency,
+      baseSpan,
+      projectDependency: (draft) => ({
+        ...this.trackableReceiverDependencyDraft(draft, receiverType),
+        sourceFileAddressHandle,
+      }),
+      handoff: {
+        sourceSpan: callSource,
+        operationName: callee.name.text,
+        coverageReason: 'A statically reached trackable method contributes this declared access, but runtime dispatch can select another implementation.',
+      },
+    });
   }
 
   private checkerTypeForExpression(
@@ -902,6 +989,7 @@ interface PropertyChainSegment {
   readonly nameStart: number;
   readonly nameEnd: number;
   readonly memberSource: RuntimeObservedMemberSourceProjection | null;
+  readonly access: RuntimeTypeScriptObservedAccessReference;
   readonly observed?: boolean;
   readonly skipObservation?: boolean;
   readonly valueCanBeProxyWrapped?: boolean | null;
@@ -970,6 +1058,7 @@ function propertyChainForExpression(
             nameStart: expression.name.getStart(expression.getSourceFile()),
             nameEnd: expression.name.end,
             memberSource: observedMemberSourceForPropertyAccess(typeContext, expression),
+            access: observedMemberReadReference(expression, expression.name),
             skipObservation: propertyAccessHasNowrapDecorator(typeContext, expression),
             valueCanBeProxyWrapped: expressionCanBeProxyWrapped(typeContext, expression),
           },
@@ -1018,6 +1107,70 @@ interface ProxyObservedForInOwnKeys {
   readonly receiverExpression: ts.Expression;
   readonly memberSource: RuntimeObservedMemberSourceProjection | null;
   readonly spanNode: ts.Node;
+}
+
+function observedMemberReadReference(
+  sourceNode: ts.Node,
+  nameNode: ts.Node | null,
+  accessForm: RuntimeExpressionAccessForm | null = null,
+): RuntimeTypeScriptObservedAccessReference {
+  return {
+    sourceNode,
+    nameNode,
+    accessForm: accessForm ?? observedReadAccessForm(sourceNode),
+    role: RuntimeExpressionAccessRole.Read,
+    operationName: null,
+  };
+}
+
+function observedMemberCallReference(
+  callee: ts.PropertyAccessExpression,
+): RuntimeTypeScriptObservedAccessReference {
+  return {
+    sourceNode: callee,
+    nameNode: callee.name,
+    accessForm: RuntimeExpressionAccessForm.MemberCall,
+    role: RuntimeExpressionAccessRole.Call,
+    operationName: callee.name.text,
+  };
+}
+
+function observedAccessReferenceForExpression(
+  expression: ts.Expression,
+): RuntimeTypeScriptObservedAccessReference {
+  const unwrapped = unwrapChainExpression(expression);
+  if (ts.isCallExpression(unwrapped) && ts.isPropertyAccessExpression(unwrapped.expression)) {
+    return observedMemberCallReference(unwrapped.expression);
+  }
+  if (ts.isPropertyAccessExpression(unwrapped)) {
+    return observedMemberReadReference(unwrapped, unwrapped.name);
+  }
+  if (ts.isElementAccessExpression(unwrapped)) {
+    return observedMemberReadReference(unwrapped, unwrapped.argumentExpression ?? unwrapped);
+  }
+  return observedMemberReadReference(unwrapped, unwrapped);
+}
+
+function observedAccessReferenceForIteration(
+  iteration: ProxyObservedForOfIteration,
+): RuntimeTypeScriptObservedAccessReference {
+  return ts.isPropertyAccessExpression(iteration.spanNode)
+    && iteration.spanNode !== iteration.receiverExpression
+      ? observedMemberCallReference(iteration.spanNode)
+      : observedAccessReferenceForExpression(iteration.receiverExpression);
+}
+
+function observedReadAccessForm(node: ts.Node): RuntimeExpressionAccessForm {
+  if (ts.isPropertyAccessExpression(node)) {
+    return RuntimeExpressionAccessForm.Member;
+  }
+  if (ts.isElementAccessExpression(node)) {
+    return RuntimeExpressionAccessForm.Keyed;
+  }
+  if (node.kind === ts.SyntaxKind.ThisKeyword) {
+    return RuntimeExpressionAccessForm.This;
+  }
+  return RuntimeExpressionAccessForm.Scope;
 }
 
 function aliasChain(
@@ -1115,6 +1268,7 @@ function propertyChainSegmentForElementAccess(
       nameStart: nameNode.getStart(expression.getSourceFile()),
       nameEnd: nameNode.end,
       memberSource: observedMemberSourceForElementAccess(typeContext, expression, key),
+      access: observedMemberReadReference(expression, nameNode),
       skipObservation: elementAccessHasNowrapProperty(typeContext, expression, key),
       valueCanBeProxyWrapped: expressionCanBeProxyWrapped(typeContext, expression),
     };
@@ -1131,6 +1285,7 @@ function propertyChainSegmentForElementAccess(
     nameStart: expression.argumentExpression.getStart(expression.getSourceFile()),
     nameEnd: expression.argumentExpression.end,
     memberSource: null,
+    access: observedMemberReadReference(expression, expression.argumentExpression),
     valueCanBeProxyWrapped: expressionCanBeProxyWrapped(typeContext, expression),
   };
 }
@@ -1278,6 +1433,7 @@ function proxyWrappedCallResultChainForExpression(
         nameStart: callee.name.getStart(expression.getSourceFile()),
         nameEnd: callee.name.end,
         memberSource: null,
+        access: observedMemberCallReference(callee),
         observed: false,
         valueCanBeProxyWrapped: true,
       },
@@ -1570,9 +1726,9 @@ function checkerTypeHasNowrapClassDecorator(
 function checkerBaseTypes(
   type: ts.Type,
 ): readonly ts.Type[] {
-  const baseTypes = (type as ts.InterfaceType).getBaseTypes;
-  return typeof baseTypes === 'function'
-    ? baseTypes.call(type as ts.InterfaceType) ?? []
+  const interfaceType = type as ts.InterfaceType;
+  return typeof interfaceType.getBaseTypes === 'function'
+    ? interfaceType.getBaseTypes() ?? []
     : [];
 }
 

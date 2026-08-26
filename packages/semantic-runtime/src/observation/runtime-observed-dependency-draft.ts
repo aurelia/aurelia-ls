@@ -3,6 +3,7 @@ import type {
   ProductHandle,
 } from '../kernel/handles.js';
 import type { CheckerTypeMemberKind } from '../type-system/type-shape.js';
+import type { RuntimeExpressionAccessPublicationDraft } from '../runtime-expression/runtime-expression-access-draft.js';
 import type {
   RuntimeObservedDependencyKind,
   RuntimeObservedMemberSourceRoute,
@@ -33,6 +34,14 @@ export interface RuntimeObservedDependencyAccessUseDraft extends RuntimeObserved
   readonly accessUseProductHandle: ProductHandle;
   /** Exact source already published for the inducing access; null only for source-less generated operations. */
   readonly accessUseSourceAddressHandle: AddressHandle | null;
+}
+
+/** Observation effect retaining the exact unpublished access draft that induced it. */
+export interface RuntimeObservedDependencyAccessDraft<
+  TAccessUse extends RuntimeExpressionAccessPublicationDraft = RuntimeExpressionAccessPublicationDraft,
+> {
+  readonly accessUse: TAccessUse;
+  readonly dependency: RuntimeObservedDependencyDraft;
 }
 
 /** Suppresses duplicate traversal of one source occurrence without coalescing separate authored reads. */

@@ -1641,7 +1641,6 @@ export class SemanticRuntimeLspSession {
         ...extraRequest,
         page: { size: pageSize, cursor },
         inquiryProfile: "lsp-cursor",
-        analysisDepth: "binding-observation",
         includeAuthoringTemplates: true,
         appRetention: "retain-app",
       }) as Promise<SemanticRuntimeAnswer<T>>,

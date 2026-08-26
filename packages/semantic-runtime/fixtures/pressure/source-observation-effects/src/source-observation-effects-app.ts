@@ -16,6 +16,7 @@ class ProfileState {
     },
   };
   readonly tracker = new MouseTracker();
+  readonly items = [{ id: 'one' }, { id: 'two' }];
 }
 
 class StaticInjectedObservationEffects {
@@ -58,6 +59,8 @@ export class SourceObservationEffectsApp {
     this.container.get(IObservation).watch(this.state.profile, (profile) => profile.address.city, (value) => {
       this.latestContainerCity = value;
     });
+    this.observation.watch(this.state, (state) => state.items.filter((item) => item.id.length > 0).length, () => {});
+    this.observation.watch(this.state, 'items.filter(item => item.id).length', () => {});
     this.observation.run(() => {
       let attempts = 0;
       do {

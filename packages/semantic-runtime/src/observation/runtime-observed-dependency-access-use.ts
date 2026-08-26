@@ -4,13 +4,14 @@ import {
   RuntimeExpressionAccessTracking,
 } from '../runtime-expression/runtime-expression-access-use.js';
 import type {
+  RuntimeObservedDependencyAccessDraft,
   RuntimeObservedDependencyAccessUseDraft,
-  RuntimeObservedDependencyDraft,
 } from './runtime-observed-dependency-draft.js';
 import {
   observedMemberSourceFields,
   observedMemberSourceForRuntimeExpressionAccessUse,
 } from './observed-dependency-member-source.js';
+import { RuntimeObservedDependencyKind } from './runtime-observed-dependency.js';
 
 /**
  * Pair each observation effect with the exact access occurrence that induced it.
@@ -20,74 +21,42 @@ import {
  */
 export function observedDependencyAccessUseDrafts(
   context: KernelPublicationContext,
-  dependencies: readonly RuntimeObservedDependencyDraft[],
+  effects: readonly RuntimeObservedDependencyAccessDraft[],
   publications: readonly RuntimeExpressionAccessPublication[],
 ): readonly RuntimeObservedDependencyAccessUseDraft[] {
-  const connectable = publications.filter(
-    (publication) => publication.detail.tracking === RuntimeExpressionAccessTracking.Connectable,
+  const publicationByDraft = new Map(
+    publications
+      .filter((publication) => publication.detail.tracking === RuntimeExpressionAccessTracking.Connectable)
+      .map((publication) => [publication.draft, publication] as const),
   );
-  return dependencies.map((dependency) => {
-    const publication = accessPublicationForDependency(dependency, connectable);
+  return effects.map((effect) => {
+    const publication = publicationByDraft.get(effect.accessUse) ?? null;
     if (publication == null) {
       throw new Error(
-        `Observed dependency '${observedDependencyDisplayName(dependency)}' at `
-        + `${dependency.spanStart ?? 'open'}..${dependency.spanEnd ?? 'open'} has no originating access use.`,
+        `Observed dependency '${observedDependencyDisplayName(effect.dependency)}' at `
+        + `${effect.dependency.spanStart ?? 'open'}..${effect.dependency.spanEnd ?? 'open'} lost its originating access use.`,
       );
     }
+    const dependencyOwnsMemberSource = effect.dependency.dependencyKind === RuntimeObservedDependencyKind.ProxyCollectionRead
+      || effect.dependency.dependencyKind === RuntimeObservedDependencyKind.TemplateCollectionRead
+      || effect.dependency.observedMemberKind != null
+      || effect.dependency.observedMemberSourceAddressHandle != null
+      || effect.dependency.observedMemberSourceRoute != null;
     return {
-      ...dependency,
-      ...observedMemberSourceFields(
-        observedMemberSourceForRuntimeExpressionAccessUse(context, publication.detail),
-      ),
+      ...effect.dependency,
+      ...(dependencyOwnsMemberSource
+        ? {}
+        : observedMemberSourceFields(
+            observedMemberSourceForRuntimeExpressionAccessUse(context, publication.detail),
+          )),
       accessUseProductHandle: publication.detail.productHandle,
       accessUseSourceAddressHandle: publication.detail.sourceAddressHandle,
     };
   });
 }
 
-function accessPublicationForDependency(
-  dependency: RuntimeObservedDependencyDraft,
-  publications: readonly RuntimeExpressionAccessPublication[],
-): RuntimeExpressionAccessPublication | null {
-  const nameMatches = dependency.memberNameSpanStart == null || dependency.memberNameSpanEnd == null
-    ? []
-    : publications.filter((publication) => {
-      const nameSource = publication.draft.nameSourceSpan;
-      return nameSource != null
-        && sourceFilesMatch(dependency, publication)
-        && nameSource.start === dependency.memberNameSpanStart
-        && nameSource.end === dependency.memberNameSpanEnd;
-    });
-  if (nameMatches.length === 1) {
-    return nameMatches[0]!;
-  }
-
-  const sourceMatches = dependency.spanStart == null || dependency.spanEnd == null
-    ? []
-    : publications.filter((publication) =>
-      sourceFilesMatch(dependency, publication)
-      && publication.draft.sourceSpan.start === dependency.spanStart
-      && publication.draft.sourceSpan.end === dependency.spanEnd
-    );
-  if (sourceMatches.length === 1) {
-    return sourceMatches[0]!;
-  }
-  return null;
-}
-
-function sourceFilesMatch(
-  dependency: RuntimeObservedDependencyDraft,
-  publication: RuntimeExpressionAccessPublication,
-): boolean {
-  const dependencyFile = dependency.sourceFileAddressHandle ?? null;
-  const accessFile = publication.draft.sourceSpan.file?.id ?? null;
-  return dependencyFile == null || accessFile == null
-    ? dependencyFile == null
-    : dependencyFile === accessFile;
-}
-
 function observedDependencyDisplayName(
-  dependency: RuntimeObservedDependencyDraft,
+  dependency: RuntimeObservedDependencyAccessDraft['dependency'],
 ): string {
   return dependency.sourceName
     ?? dependency.sourceRootName

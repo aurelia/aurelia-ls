@@ -13,8 +13,9 @@ import {
 } from '../expression/source-span.js';
 import type { KernelStore } from '../kernel/store.js';
 import type { KernelPublicationContext } from '../kernel/publication.js';
-import { sourceFileAddressForAddress } from '../kernel/source-address.js';
-import type { RuntimeObservedDependencyDraft } from '../observation/runtime-observed-dependency-draft.js';
+import type {
+  RuntimeObservedDependencyAccessDraft,
+} from '../observation/runtime-observed-dependency-draft.js';
 import {
   runtimeProxyObservedCollectionMethods,
 } from '../observation/runtime-collection-method-semantics.js';
@@ -34,10 +35,14 @@ import { ensureSourceFileAddressForCheckerNode } from '../type-system/declaratio
 import type { TypeSystemProject } from '../type-system/project.js';
 import {
   CheckerTypeProjectionOrigin,
-  CheckerTypeShapeKind,
   checkerTypeMemberReachableIdentityHandle,
 } from '../type-system/type-shape.js';
 import type { RuntimeSourceAccessUseDraft } from './source-access-use-publication.js';
+import type {
+  RuntimeSourceObservedAccessSeed,
+  RuntimeSourceObservedAccessSeedEffectDraft,
+  RuntimeTypeScriptObservedAccessReference,
+} from './source-observed-access-effect.js';
 import type {
   RuntimeExpressionExecutionContextDraft,
   RuntimeExpressionExecutionQualifierDraft,
@@ -55,18 +60,23 @@ import {
   RuntimeExpressionExecutionQualifierKind,
 } from './runtime-expression-access-use.js';
 
-export interface RuntimeTypeScriptAccessUseDraft extends RuntimeSourceAccessUseDraft {}
+export type RuntimeTypeScriptAccessUseDraft = RuntimeSourceAccessUseDraft;
 
 export interface RuntimeTypeScriptAccessUseCollectionRequest {
   readonly declaration: ts.FunctionLikeDeclaration;
   readonly typeSystem: TypeSystemProject;
   readonly store: KernelStore;
   readonly publication: KernelPublicationContext;
-  /** Occurrence-level framework reads for this operation, before observer subscription coalescing. */
-  readonly trackedDependencies?: readonly RuntimeObservedDependencyDraft[];
+  /** Occurrence-level framework reads paired with their inducing source operations. */
+  readonly observedEffects?: readonly RuntimeSourceObservedAccessSeedEffectDraft[];
   readonly role?: RuntimeExpressionAccessRole;
   /** Cross-operation invocation that admits this declaration body, such as a template call into an `@astTrack` method. */
   readonly executionHandoff?: RuntimeTypeScriptAccessExecutionHandoff;
+}
+
+export interface RuntimeTypeScriptAccessUseCollection {
+  readonly accessUses: readonly RuntimeTypeScriptAccessUseDraft[];
+  readonly observedEffects: readonly RuntimeObservedDependencyAccessDraft<RuntimeTypeScriptAccessUseDraft>[];
 }
 
 export interface RuntimeTypeScriptAccessExecutionHandoff {
@@ -81,16 +91,18 @@ interface TypeScriptAccessCollectionContext extends RuntimeExpressionExecutionCo
   readonly executionQualifiers: readonly RuntimeExpressionExecutionQualifierDraft[];
 }
 
-/** Collect authored TypeScript access occurrences once, then overlay the framework's actual tracking decisions. */
-export function collectRuntimeTypeScriptAccessUseDrafts(
+/** Collect authored TypeScript accesses together with the exact framework observation effects they induce. */
+export function collectRuntimeTypeScriptAccessUseCollection(
   request: RuntimeTypeScriptAccessUseCollectionRequest,
-): readonly RuntimeTypeScriptAccessUseDraft[] {
+): RuntimeTypeScriptAccessUseCollection {
   return new RuntimeTypeScriptAccessUseCollector(request).collect();
 }
 
 class RuntimeTypeScriptAccessUseCollector {
   private readonly rows: RuntimeTypeScriptAccessUseDraft[] = [];
-  private readonly matchedDependencies = new Set<RuntimeObservedDependencyDraft>();
+  private readonly draftBySourceNode = new Map<ts.Node, RuntimeTypeScriptAccessUseDraft>();
+  private readonly draftBySeed = new Map<RuntimeSourceObservedAccessSeed, RuntimeTypeScriptAccessUseDraft>();
+  private readonly draftBySourceDraft = new Map<RuntimeSourceAccessUseDraft, RuntimeTypeScriptAccessUseDraft>();
   private readonly projector: CheckerTypeProjector;
   private readonly sourceFiles = new Map<ts.SourceFile, SourceFileRef>();
   private readonly rootRole: RuntimeExpressionAccessRole;
@@ -100,7 +112,7 @@ class RuntimeTypeScriptAccessUseCollector {
     this.rootRole = request.role ?? RuntimeExpressionAccessRole.Read;
   }
 
-  collect(): readonly RuntimeTypeScriptAccessUseDraft[] {
+  collect(): RuntimeTypeScriptAccessUseCollection {
     const handoff = this.request.executionHandoff ?? null;
     this.visit(this.request.declaration.body ?? null, {
       executionQualifiers: handoff == null
@@ -120,13 +132,25 @@ class RuntimeTypeScriptAccessUseCollector {
         : RuntimeExpressionAccessCoverage.Open,
       coverageReason: handoff?.coverageReason ?? null,
     });
-    this.addTrackedMethodBodyHandoffs();
-    return this.rows.sort((left, right) =>
+    this.addUnvisitedObservedAccesses();
+    const accessUses = this.rows.sort((left, right) =>
       `${left.sourceSpan.file?.path ?? ''}:${left.sourceSpan.start}:${left.nameSourceSpan?.start ?? -1}`
         .localeCompare(
           `${right.sourceSpan.file?.path ?? ''}:${right.sourceSpan.start}:${right.nameSourceSpan?.start ?? -1}`,
         )
     );
+    return {
+      accessUses,
+      observedEffects: (this.request.observedEffects ?? []).map((effect) => {
+        const accessUse = this.draftBySeed.get(effect.accessUse) ?? null;
+        if (accessUse == null) {
+          throw new Error(
+            `Observed dependency '${effect.dependency.sourceName ?? effect.dependency.expressionKind}' lost its exact TypeScript access draft.`,
+          );
+        }
+        return { accessUse, dependency: effect.dependency };
+      }),
+    };
   }
 
   private visit(
@@ -561,13 +585,10 @@ class RuntimeTypeScriptAccessUseCollector {
   ): void {
     const sourceSpan = this.sourceSpan(expression);
     const nameSourceSpan = this.sourceSpan(nameNode);
-    const trackedDependencies = this.trackedDependenciesFor(sourceSpan, nameSourceSpan);
-    for (const dependency of trackedDependencies) {
-      this.matchedDependencies.add(dependency);
-    }
+    const observedSeeds = this.observedSeedsForNode(expression);
     const target = this.targetForAccess(expression);
     const effectiveRole = runtimeExpressionRoleForTypeScriptAccess(expression, role);
-    this.rows.push({
+    const draft: RuntimeTypeScriptAccessUseDraft = {
       origin: RuntimeExpressionAccessOrigin.Authored,
       accessForm,
       role: effectiveRole,
@@ -588,12 +609,17 @@ class RuntimeTypeScriptAccessUseCollector {
       nameSourceSpan,
       tracking: effectiveRole === RuntimeExpressionAccessRole.WriteTarget
         ? RuntimeExpressionAccessTracking.NotApplicable
-        : trackedDependencies.length === 0
+        : observedSeeds.length === 0
           ? RuntimeExpressionAccessTracking.Untracked
           : RuntimeExpressionAccessTracking.Connectable,
       targetResolution: target.resolution,
       targetLinks: target.links,
-    });
+    };
+    this.rows.push(draft);
+    this.draftBySourceNode.set(expression, draft);
+    for (const seed of observedSeeds) {
+      this.draftBySeed.set(seed, draft);
+    }
   }
 
   private targetForAccess(
@@ -728,87 +754,100 @@ class RuntimeTypeScriptAccessUseCollector {
     };
   }
 
-  private addTrackedMethodBodyHandoffs(): void {
-    for (const dependency of this.request.trackedDependencies ?? []) {
-      if (this.matchedDependencies.has(dependency)) {
+  private addUnvisitedObservedAccesses(): void {
+    for (const effect of this.request.observedEffects ?? []) {
+      const seed = effect.accessUse;
+      if (this.draftBySeed.has(seed)) {
         continue;
       }
-      const sourceFileAddressHandle = dependency.sourceFileAddressHandle ?? null;
-      const start = dependency.spanStart;
-      const end = dependency.spanEnd;
-      if (sourceFileAddressHandle == null || start == null || end == null) {
+      if (seed.kind === 'source-draft') {
+        let draft = this.draftBySourceDraft.get(seed.draft) ?? null;
+        if (draft == null) {
+          draft = this.sourceDraftWithExecutionHandoff(seed.draft);
+          this.rows.push(draft);
+          this.draftBySourceDraft.set(seed.draft, draft);
+        }
+        this.draftBySeed.set(seed, draft);
         continue;
       }
-      const sourceFile = sourceFileAddressForAddress(this.request.publication, sourceFileAddressHandle);
-      if (sourceFile == null) {
+      const existing = this.draftBySourceNode.get(seed.reference.sourceNode) ?? null;
+      if (existing != null) {
+        this.draftBySeed.set(seed, existing);
         continue;
       }
-      const file = new SourceFileRef(sourceFile.handle, sourceFile.path);
-      const memberStart = dependency.memberNameSpanStart ?? start;
-      const memberEnd = dependency.memberNameSpanEnd ?? end;
-      const targetLinks = dependency.observedMemberSourceAddressHandle == null
-        ? []
-        : [new RuntimeExpressionAccessTargetLink(
-            null,
-            null,
-            null,
-            null,
-            dependency.observedMemberSourceAddressHandle,
-          )];
-      const handoff = this.request.executionHandoff;
-      this.rows.push({
-        origin: RuntimeExpressionAccessOrigin.Authored,
-        accessForm: dependency.keyExpression == null
-          ? RuntimeExpressionAccessForm.Member
-          : RuntimeExpressionAccessForm.Keyed,
-        role: this.rootRole,
-        scopeLookupAncestor: null,
-        authoredScopeAncestor: null,
-        callbackScopeDepth: null,
-        lexicalLocal: false,
-        executionQualifiers: [
-          ...(handoff?.caller.executionQualifiers ?? []),
-          {
-          kind: RuntimeExpressionExecutionQualifierKind.MethodBodyHandoff,
-          sourceSpan: handoff?.sourceSpan ?? sourceSpanFromBounds(start, end, file),
-          operationName: handoff?.operationName ?? dependency.methodName,
-          },
-        ],
-        minimumExecutions: RuntimeExpressionExecutionMinimum.Zero,
-        maximumExecutions: handoff?.caller.maximumExecutions
-          ?? RuntimeExpressionExecutionMaximum.One,
-        coverage: RuntimeExpressionAccessCoverage.Open,
-        coverageReason: handoff?.coverageReason
-          ?? 'A statically reached method body contributes this access, but runtime dispatch can select another implementation.',
-        sourceSpan: sourceSpanFromBounds(start, end, file),
-        nameSourceSpan: sourceSpanFromBounds(memberStart, memberEnd, file),
-        tracking: RuntimeExpressionAccessTracking.Connectable,
-        targetResolution: targetLinks.length === 0
-          ? RuntimeExpressionAccessTargetResolution.Open
-          : RuntimeExpressionAccessTargetResolution.Exact,
-        targetLinks,
-      });
+      const draft = this.unvisitedObservedAccessDraft(seed.reference, effect.dependency);
+      this.rows.push(draft);
+      this.draftBySourceNode.set(seed.reference.sourceNode, draft);
+      this.draftBySeed.set(seed, draft);
     }
   }
 
-  private trackedDependenciesFor(
-    sourceSpan: SourceSpan,
-    nameSourceSpan: SourceSpan,
-  ): readonly RuntimeObservedDependencyDraft[] {
-    return (this.request.trackedDependencies ?? []).filter((dependency) => {
-      if (dependency.sourceFileAddressHandle !== sourceSpan.file?.id) {
-        return false;
-      }
-      const nameMatches = dependency.memberNameSpanStart != null
-        && dependency.memberNameSpanEnd != null
-        && dependency.memberNameSpanStart === nameSourceSpan.start
-        && dependency.memberNameSpanEnd === nameSourceSpan.end;
-      const sourceMatches = dependency.spanStart != null
-        && dependency.spanEnd != null
-        && dependency.spanStart === sourceSpan.start
-        && dependency.spanEnd === sourceSpan.end;
-      return nameMatches || sourceMatches;
-    });
+  private observedSeedsForNode(node: ts.Node): readonly RuntimeSourceObservedAccessSeed[] {
+    return (this.request.observedEffects ?? [])
+      .map((effect) => effect.accessUse)
+      .filter((seed) => seed.kind === 'typescript-node' && seed.reference.sourceNode === node);
+  }
+
+  private unvisitedObservedAccessDraft(
+    reference: RuntimeTypeScriptObservedAccessReference,
+    dependency: RuntimeSourceObservedAccessSeedEffectDraft['dependency'],
+  ): RuntimeTypeScriptAccessUseDraft {
+    const sourceSpan = this.sourceSpan(reference.sourceNode);
+    const nameSourceSpan = reference.nameNode == null ? null : this.sourceSpan(reference.nameNode);
+    const target = this.targetForAccess(reference.sourceNode);
+    const handoff = this.request.executionHandoff;
+    return {
+      origin: RuntimeExpressionAccessOrigin.Authored,
+      accessForm: reference.accessForm,
+      role: reference.role,
+      scopeLookupAncestor: null,
+      authoredScopeAncestor: null,
+      callbackScopeDepth: null,
+      lexicalLocal: false,
+      executionQualifiers: [
+        ...(handoff?.caller.executionQualifiers ?? []),
+        {
+          kind: RuntimeExpressionExecutionQualifierKind.MethodBodyHandoff,
+          sourceSpan: handoff?.sourceSpan ?? sourceSpan,
+          operationName: handoff?.operationName ?? reference.operationName ?? dependency.methodName,
+        },
+      ],
+      minimumExecutions: RuntimeExpressionExecutionMinimum.Zero,
+      maximumExecutions: handoff?.caller.maximumExecutions ?? RuntimeExpressionExecutionMaximum.One,
+      coverage: RuntimeExpressionAccessCoverage.Open,
+      coverageReason: handoff?.coverageReason
+        ?? 'A statically reached or implicit operation contributes this access, but runtime dispatch can select another implementation.',
+      sourceSpan,
+      nameSourceSpan,
+      tracking: RuntimeExpressionAccessTracking.Connectable,
+      targetResolution: target.resolution,
+      targetLinks: target.links,
+    };
+  }
+
+  private sourceDraftWithExecutionHandoff(
+    draft: RuntimeSourceAccessUseDraft,
+  ): RuntimeTypeScriptAccessUseDraft {
+    const handoff = this.request.executionHandoff;
+    if (handoff == null) {
+      return draft;
+    }
+    return {
+      ...draft,
+      executionQualifiers: [
+        ...handoff.caller.executionQualifiers,
+        ...draft.executionQualifiers,
+        {
+          kind: RuntimeExpressionExecutionQualifierKind.MethodBodyHandoff,
+          sourceSpan: handoff.sourceSpan,
+          operationName: handoff.operationName,
+        },
+      ],
+      minimumExecutions: RuntimeExpressionExecutionMinimum.Zero,
+      maximumExecutions: handoff.caller.maximumExecutions,
+      coverage: RuntimeExpressionAccessCoverage.Open,
+      coverageReason: handoff.coverageReason,
+    };
   }
 
   private sourceSpan(node: ts.Node): SourceSpan {

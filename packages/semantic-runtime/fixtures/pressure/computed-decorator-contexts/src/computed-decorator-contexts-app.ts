@@ -19,6 +19,14 @@ interface RecursiveComputedState {
   readonly self: RecursiveComputedState | null;
 }
 
+interface ShopOffer {
+  readonly itemId: string;
+}
+
+const itemRegistry: Readonly<Record<string, { readonly slot: string }>> = {
+  sword: { slot: 'mainhand' },
+};
+
 @customElement({ name: 'computed-decorator-contexts-app', template })
 export class ComputedDecoratorContextsApp {
   value = 1;
@@ -41,6 +49,44 @@ export class ComputedDecoratorContextsApp {
     label: 'root',
     self: null,
   };
+  filteredWeaponAndToolOffers: ShopOffer[] = [{ itemId: 'sword' }];
+
+  get weaponOffers(): ShopOffer[] {
+    return this.filteredWeaponAndToolOffers.filter(
+      (offer) => itemRegistry[offer.itemId]?.slot === 'mainhand',
+    );
+  }
+
+  get miscWeaponOffers(): ShopOffer[] {
+    const categorizedIds = new Set<string>();
+    return this.weaponOffers.filter((offer) => !categorizedIds.has(offer.itemId));
+  }
+
+  get iteratedWeaponOfferIds(): string {
+    return this.collectWeaponOfferIds();
+  }
+
+  @computed('filteredWeaponAndToolOffers.filter(offer => offer.itemId)')
+  get explicitWeaponOfferCount(): number {
+    return this.filteredWeaponAndToolOffers.length;
+  }
+
+  get firstWeaponOfferId(): string {
+    return this.readFirstWeaponOfferId();
+  }
+
+  private collectWeaponOfferIds(): string {
+    const ids: string[] = [];
+    for (const offer of this.weaponOffers) {
+      ids.push(offer.itemId);
+    }
+    return ids.join(',');
+  }
+
+  private readFirstWeaponOfferId(): string {
+    const [offer] = this.weaponOffers;
+    return offer?.itemId ?? '';
+  }
 
   @computed({ deps: ['value'] })
   get doubled(): number {

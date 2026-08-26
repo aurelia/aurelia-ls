@@ -155,3 +155,8 @@ Publication batches may create access uses and their observation effects togethe
 access use's already-known source address through the transient dependency draft; it must not reread a not-yet-committed
 detail from the publication context. The persistent dependency product keeps only the access-use product handle because
 that durable edge owns the source and target relationship after commit.
+
+Source-side TypeScript collection retains the exact syntax operation with each effect until access drafts are published.
+Direct collection calls point at their member-call operation; implicit iteration can intentionally share the receiver
+access with its property-read effect; method handoffs reuse one access draft for every effect induced by that occurrence.
+Do not reconstruct these relationships from equal name or range spans.

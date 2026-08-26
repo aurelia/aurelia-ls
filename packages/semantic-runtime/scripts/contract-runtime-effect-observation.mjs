@@ -24,7 +24,7 @@ const observedDependencies = app.ask({
 }).value.rows;
 
 const failures = [
-  effectCountExpectation(effects, 6),
+  effectCountExpectation(effects, 8),
   effectExpectation(
     'Run effect should use the RunEffect connectable branch and execute immediately.',
     effects,
@@ -85,9 +85,31 @@ const failures = [
   nestedAccessUseHandleExpectation(
     'Detailed source-effect dependencies should retain handles on nested access-use targets.',
     observedDependencies,
-    'profile.name',
+    'status.label',
   ),
 ].filter(Boolean);
+const getterCollection = observedDependencies.find((row) =>
+  row.dependencyEvaluationKind === 'observer-locator-function-key'
+    && row.occurrence.dependencyKind === 'proxy-collection-read'
+    && row.occurrence.methodName === 'filter'
+);
+if (
+  getterCollection?.occurrence.accessUse.accessForm !== 'member-call'
+  || getterCollection.occurrence.accessUse.role !== 'call'
+) {
+  failures.push('Getter-based source effects should retain the authored filter member-call access.');
+}
+const expressionCollection = observedDependencies.find((row) =>
+  row.dependencyEvaluationKind === 'ast-evaluate'
+    && row.occurrence.dependencyKind === 'template-collection-read'
+    && row.occurrence.methodName === 'filter'
+);
+if (
+  expressionCollection?.occurrence.accessUse.accessForm !== 'member-call'
+  || expressionCollection.occurrence.accessUse.role !== 'call'
+) {
+  failures.push('String source effects should retain the authored filter member-call access.');
+}
 
 const summary = {
   fixture: 'source-observation-effects',

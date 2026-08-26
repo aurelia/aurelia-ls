@@ -7,13 +7,17 @@ import type {
   ExpressionAstNode,
 } from '../expression/ast.js';
 import { aureliaArrayMethodSemanticsFor } from '../expression/array-method-semantics.js';
-import type { SourceSpan } from '../expression/source-span.js';
+import {
+  SourceFileRef,
+  sourceSpanFromBounds,
+  type SourceSpan,
+} from '../expression/source-span.js';
 import type { KernelStore } from '../kernel/store.js';
 import type { KernelPublicationContext } from '../kernel/publication.js';
 import {
   CheckerExpressionTypeEvaluationResultKind,
 } from '../type-system/expression-type-evaluation.js';
-import {
+import type {
   CheckerExpressionTypeEvaluationContext,
 } from '../type-system/expression-type-context.js';
 import type { CheckerExpressionTypeEvaluator } from '../type-system/expression-type-evaluator.js';
@@ -29,21 +33,21 @@ import type {
 import {
   ComputedObservationDependencyMode,
 } from './computed-observation.js';
+import type { ComputedDependencyKeyRead } from './computed-dependency-config.js';
 import {
   ProxyObservable,
 } from './proxy-observable-dependency.js';
 import {
   observedDependencyWithMemberSourceForCheckerType,
 } from './observed-dependency-member-source.js';
-import {
-  type RuntimeObservedDependencyDraft,
-} from './runtime-observed-dependency-draft.js';
+import type { RuntimeObservedDependencyDraft } from './runtime-observed-dependency-draft.js';
 import { ensureSourceFileAddressForCheckerNode } from '../type-system/declaration-source.js';
 import {
-  connectableDraftsForTrackableDependencyKey,
   readTrackableMethodDependency,
+  sourceObservedAccessEffectsForTrackableDependencyKey,
 } from './trackable-method-dependency-recognition.js';
 import type { RuntimeTemplateArrayMethodPolicy } from '../runtime-expression/template-access-use-collector.js';
+import type { RuntimeSourceObservedAccessSeedEffectDraft } from '../runtime-expression/source-observed-access-effect.js';
 
 export interface RuntimeTrackableMethodObservedDependencyRequest {
   /** Checker expression request that owns source expression, runtime Scope, source address, and evaluator mode. */
@@ -57,14 +61,14 @@ export interface RuntimeTrackableMethodObservedDependencyRequest {
 /** One trackable method execution together with the exact template invocation that admits it. */
 export interface RuntimeTrackableMethodObservedDependencyDraft {
   readonly declaration: ts.MethodDeclaration;
-  readonly dependencies: readonly RuntimeObservedDependencyDraft[];
+  readonly effects: readonly RuntimeSourceObservedAccessSeedEffectDraft[];
   readonly invocationSourceSpan: SourceSpan;
   readonly methodName: string;
 }
 
 interface RuntimeTrackableMethodDependencyDraft {
   readonly declaration: ts.MethodDeclaration;
-  readonly dependencies: readonly RuntimeObservedDependencyDraft[];
+  readonly effects: readonly RuntimeSourceObservedAccessSeedEffectDraft[];
 }
 
 /**
@@ -287,7 +291,7 @@ class RuntimeTrackableMethodObservedDependencyCollector {
   ): void {
     this.rows.push({
       declaration: dependency.declaration,
-      dependencies: dependency.dependencies,
+      effects: dependency.effects,
       invocationSourceSpan: invocation.span,
       methodName,
     });
@@ -324,7 +328,7 @@ function trackableDependenciesForMember(
   if (dependency.dependencyMode === ComputedObservationDependencyMode.ProxyAutoTrack) {
     return {
       declaration: method,
-      dependencies: methodBodyProxyDependencies(store, publication, method, carrier.checker),
+      effects: methodBodyProxyEffects(store, publication, method, carrier.checker),
     };
   }
   const sourceFileAddressHandle = ensureSourceFileAddressForCheckerNode(
@@ -337,21 +341,17 @@ function trackableDependenciesForMember(
     : readCheckerTypeShape(publication, member.ownerType)?.carrier?.type ?? null;
   return {
     declaration: method,
-    dependencies: [
-      ...dependency.dependencyKeyReads.flatMap((key) =>
-        connectableDraftsForTrackableDependencyKey(key)
-          .map((draft) => ({
-            ...trackableReceiverDependencyDraft(
-              publication,
-              carrier.checker,
-              receiverType,
-              draft,
-            ),
-            sourceFileAddressHandle,
-          }))
-      ),
+    effects: [
+      ...dependency.dependencyKeyReads.flatMap((key) => trackableDependencyKeyEffects(
+        publication,
+        carrier.checker,
+        receiverType,
+        sourceFileAddressHandle,
+        method,
+        key,
+      )),
       ...dependency.dependencyFunctions.flatMap((fn) =>
-        ProxyObservable.collectObservedDependencyOccurrenceDrafts(
+        ProxyObservable.collectObservedAccessEffectDrafts(
           fn,
           ProxyObservable.typeContextForChecker(carrier.checker, store, publication),
         )
@@ -360,13 +360,13 @@ function trackableDependenciesForMember(
   };
 }
 
-function methodBodyProxyDependencies(
+function methodBodyProxyEffects(
   store: KernelStore,
   publication: KernelPublicationContext,
   method: ts.MethodDeclaration,
   checker: ts.TypeChecker,
-): readonly RuntimeObservedDependencyDraft[] {
-  return ProxyObservable.collectObservedDependencyOccurrenceDrafts(
+): readonly RuntimeSourceObservedAccessSeedEffectDraft[] {
+  return ProxyObservable.collectObservedAccessEffectDrafts(
     method,
     ProxyObservable.typeContextForChecker(checker, store, publication),
     {
@@ -374,6 +374,34 @@ function methodBodyProxyDependencies(
       parameterRootNames: true,
     },
   );
+}
+
+function trackableDependencyKeyEffects(
+  publication: KernelPublicationContext,
+  checker: ts.TypeChecker,
+  receiverType: ts.Type | null,
+  sourceFileAddressHandle: ReturnType<typeof ensureSourceFileAddressForCheckerNode>['handle'],
+  method: ts.MethodDeclaration,
+  dependency: ComputedDependencyKeyRead,
+): readonly RuntimeSourceObservedAccessSeedEffectDraft[] {
+  const sourceFile = method.getSourceFile();
+  const start = dependency.start ?? method.getStart(sourceFile);
+  const end = dependency.end ?? method.end;
+  const sourceText = sourceFile.text.slice(start, end);
+  const quoted = sourceText.startsWith("'") || sourceText.startsWith('"') || sourceText.startsWith('`');
+  const baseSpan = sourceSpanFromBounds(
+    start + (quoted ? 1 : 0),
+    end - (quoted ? 1 : 0),
+    new SourceFileRef(sourceFileAddressHandle, sourceFile.fileName),
+  );
+  return sourceObservedAccessEffectsForTrackableDependencyKey({
+    dependency,
+    baseSpan,
+    projectDependency: (draft) => ({
+      ...trackableReceiverDependencyDraft(publication, checker, receiverType, draft),
+      sourceFileAddressHandle,
+    }),
+  });
 }
 
 function trackableReceiverDependencyDraft<TDraft extends RuntimeObservedDependencyDraft>(
