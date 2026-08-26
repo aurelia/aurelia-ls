@@ -179,7 +179,7 @@ export type TemplateCompilerTargetGeometry =
   | TemplateCompilerRenderLocationTargetGeometry;
 
 /**
- * Product-free join between mutable compiler structure and the existing context-local target plan.
+ * Product-free join between mutable compiler structure and an admitted family of context-local target plans.
  *
  * The session does not interpret attributes, create instructions, allocate durable target products, freeze structural
  * products, or publish kernel records. It owns exact context roots, caused retained-input operations,
@@ -194,7 +194,8 @@ export class TemplateCompilerStructuralExecutionSession {
     if (structuralExecutionForests.has(forest)) {
       throw new Error('Compiler occurrence forest already belongs to a structural execution session.');
     }
-    const session = new TemplateCompilerStructuralExecutionSession(forest, targetPlan);
+    const session = new TemplateCompilerStructuralExecutionSession(forest);
+    session.admitTargetPlanFamily(targetPlan);
     session.bindContextStructure(
       targetPlan.root,
       forest.compilerCarrier,
@@ -204,6 +205,16 @@ export class TemplateCompilerStructuralExecutionSession {
     return session;
   }
 
+  private readonly targetPlans: TemplateCompilerTargetPlan[] = [];
+  private readonly targetPlansByLocalKey = new Map<string, TemplateCompilerTargetPlan>();
+  private readonly contexts: TemplateCompilerTargetContextPlan[] = [];
+  private readonly contextsByLocalKey = new Map<string, TemplateCompilerTargetContextPlan>();
+  private readonly contextsByCompiledTemplateProduct = new Map<ProductHandle, TemplateCompilerTargetContextPlan>();
+  private readonly contextsByCompilerReachableNodeProduct = new Map<ProductHandle, TemplateCompilerTargetContextPlan>();
+  private readonly admittedContextsByTargetPlan = new Map<
+    TemplateCompilerTargetPlan,
+    readonly TemplateCompilerTargetContextPlan[]
+  >();
   private readonly structuresByContextKey = new Map<string, TemplateCompilerContextStructure>();
   private readonly contextKeysByCarrierOccurrence = new Map<string, string>();
   private readonly geometriesByRow = new Map<TemplateCompilerTargetRowPlan, TemplateCompilerTargetGeometry>();
@@ -275,10 +286,7 @@ export class TemplateCompilerStructuralExecutionSession {
   private readonly seededChildNodesByParent = new Map<TemplateCompilerParentOccurrence, TemplateCompilerNodeOccurrence[]>();
   private nextInputEventOrdinal = 0;
 
-  private constructor(
-    readonly forest: TemplateCompilerOccurrenceForest,
-    readonly targetPlan: TemplateCompilerTargetPlan,
-  ) {
+  private constructor(readonly forest: TemplateCompilerOccurrenceForest) {
     for (const node of forest.readNodes()) {
       const authoredProductHandle = forest.exactAuthoredNodeOrigin(node)?.authored.productHandle ?? null;
       if (forest.seededNodePlacement(node) != null && authoredProductHandle != null) {
@@ -297,7 +305,125 @@ export class TemplateCompilerStructuralExecutionSession {
       const owner = forest.seededAttributePlacement(attribute)?.owner ?? null;
       if (owner != null) appendMap(this.seededAttributesByOwner, owner, attribute);
     }
-    this.indexStructuralEntrants();
+  }
+
+  /** Read admitted compilation units in family admission order. */
+  readTargetPlans(): readonly TemplateCompilerTargetPlan[] {
+    return this.targetPlans;
+  }
+
+  /** Read every admitted target context in plan admission and plan-local context order. */
+  readContexts(): readonly TemplateCompilerTargetContextPlan[] {
+    return this.contexts;
+  }
+
+  /** Resolve one admitted context without scanning the target-plan family. */
+  contextForLocalKey(localKey: string): TemplateCompilerTargetContextPlan | null {
+    return this.contextsByLocalKey.get(localKey) ?? null;
+  }
+
+  /** Resolve the exact live or explicitly consumed structural context of one forest occurrence. */
+  contextForOccurrence(
+    occurrence: TemplateCompilerNodeOccurrence | TemplateCompilerAttributeOccurrence,
+  ): TemplateCompilerTargetContextPlan | null {
+    const node = this.forest.nodeForOccurrenceKey(occurrence.occurrenceKey);
+    if (node === occurrence) return this.contextForNodeOccurrence(node);
+    const attribute = this.forest.attributeForOccurrenceKey(occurrence.occurrenceKey);
+    if (attribute !== occurrence) {
+      throw new Error(`Compiler occurrence '${occurrence.occurrenceKey}' belongs to another forest.`);
+    }
+    const consumed = this.consumedAttributes.get(attribute) ?? null;
+    if (consumed != null) {
+      if (attribute.owner != null) {
+        throw new Error(`Consumed compiler attribute '${attribute.occurrenceKey}' still has a live owner.`);
+      }
+      return consumed.context;
+    }
+    return attribute.owner == null ? null : this.contextForNodeOccurrence(attribute.owner);
+  }
+
+  /**
+   * Admit one sealed target-plan context namespace into this family.
+   *
+   * Structural rooting remains separate: generated roots can be created only after admission, while a later typed
+   * extraction operation can bind an existing carrier without weakening generation or input-transfer authority.
+   */
+  admitTargetPlan(targetPlan: TemplateCompilerTargetPlan): void {
+    if (!targetPlan.isSealed) {
+      throw new Error(`Additional compiler target plan '${targetPlan.localKey}' must be sealed before family admission.`);
+    }
+    this.admitTargetPlanFamily(targetPlan);
+  }
+
+  private admitTargetPlanFamily(targetPlan: TemplateCompilerTargetPlan): void {
+    if (this.admittedContextsByTargetPlan.has(targetPlan)) {
+      throw new Error(`Compiler target plan '${targetPlan.localKey}' is already admitted to this structural family.`);
+    }
+    if (this.targetPlansByLocalKey.has(targetPlan.localKey)) {
+      throw new Error(`Compiler target plan key '${targetPlan.localKey}' is not unique in the structural family.`);
+    }
+    targetPlan.assertCoherent();
+    const contexts = [...targetPlan.readContexts()];
+    const localContextKeys = new Set<string>();
+    const localCompiledTemplateProducts = new Set<ProductHandle>();
+    const localReachableNodeProducts = new Set<ProductHandle>();
+    const localProjectionContributors = new Set<HydrateElementProjectionContributor>();
+    for (const context of contexts) {
+      if (
+        targetPlan.contextForLocalKey(context.localKey) !== context
+        || localContextKeys.has(context.localKey)
+        || this.contextsByLocalKey.has(context.localKey)
+      ) {
+        throw new Error(`Compiler target context key '${context.localKey}' is not unique in the structural family.`);
+      }
+      const compiledTemplateProduct = context.compiledTemplate.productHandle;
+      if (
+        localCompiledTemplateProducts.has(compiledTemplateProduct)
+        || this.contextsByCompiledTemplateProduct.has(compiledTemplateProduct)
+      ) {
+        throw new Error(
+          `Compiled-template product '${compiledTemplateProduct}' is not unique in the structural family.`,
+        );
+      }
+      localContextKeys.add(context.localKey);
+      localCompiledTemplateProducts.add(compiledTemplateProduct);
+      for (const productHandle of context.readCompilerReachableNodeProductHandles()) {
+        if (
+          localReachableNodeProducts.has(productHandle)
+          || this.contextsByCompilerReachableNodeProduct.has(productHandle)
+        ) {
+          throw new Error(
+            `Compiler-reachable node '${productHandle}' is not unique in the structural family.`,
+          );
+        }
+        localReachableNodeProducts.add(productHandle);
+      }
+      const authority = context.structuralAuthority;
+      if (authority instanceof TemplateCompilerProjectionContextStructuralAuthority) {
+        for (const contributor of authority.projection.contributors) {
+          if (
+            localProjectionContributors.has(contributor)
+            || this.projectionAuthorityByContributor.has(contributor)
+          ) {
+            throw new Error('Projection contributor object is not unique in the structural family.');
+          }
+          localProjectionContributors.add(contributor);
+        }
+      }
+    }
+
+    this.targetPlans.push(targetPlan);
+    this.targetPlansByLocalKey.set(targetPlan.localKey, targetPlan);
+    this.admittedContextsByTargetPlan.set(targetPlan, contexts);
+    for (const context of contexts) {
+      this.contexts.push(context);
+      this.contextsByLocalKey.set(context.localKey, context);
+      this.contextsByCompiledTemplateProduct.set(context.compiledTemplate.productHandle, context);
+      for (const productHandle of context.readCompilerReachableNodeProductHandles()) {
+        this.contextsByCompilerReachableNodeProduct.set(productHandle, context);
+      }
+    }
+    this.indexStructuralEntrants(contexts);
   }
 
   readContextStructure(
@@ -326,7 +452,7 @@ export class TemplateCompilerStructuralExecutionSession {
     context?: TemplateCompilerTargetContextPlan,
   ): readonly TemplateCompilerConsumedNodeDisposition[] {
     if (context != null) this.requireContext(context);
-    const contexts = context == null ? this.targetPlan.readContexts() : [context];
+    const contexts = context == null ? this.readContexts() : [context];
     return contexts.flatMap((candidate) =>
       [...this.consumedNodesByContextKey.get(candidate.localKey) ?? []].sort(compareConsumedNodes)
     );
@@ -337,7 +463,7 @@ export class TemplateCompilerStructuralExecutionSession {
     context?: TemplateCompilerTargetContextPlan,
   ): readonly TemplateCompilerConsumedAttributeDisposition[] {
     if (context != null) this.requireContext(context);
-    const contexts = context == null ? this.targetPlan.readContexts() : [context];
+    const contexts = context == null ? this.readContexts() : [context];
     return contexts.flatMap((candidate) =>
       [...this.consumedAttributesByContextKey.get(candidate.localKey) ?? []].sort(compareConsumedAttributes)
     );
@@ -958,7 +1084,13 @@ export class TemplateCompilerStructuralExecutionSession {
 
   /** Validate forest/context coverage and exact geometry for every currently complete row. */
   assertCoherent(): void {
-    this.targetPlan.assertCoherent();
+    for (const targetPlan of this.targetPlans) {
+      const admittedContexts = this.admittedContextsByTargetPlan.get(targetPlan) ?? [];
+      if (!sameOccurrences(targetPlan.readContexts(), admittedContexts)) {
+        throw new Error(`Compiler target plan '${targetPlan.localKey}' changed its context family after admission.`);
+      }
+      targetPlan.assertCoherent();
+    }
     this.forest.assertCoherentTopology();
     this.assertGeneratedInventory();
     const realizedReplacedNodes = new Set<TemplateCompilerNodeOccurrence>(
@@ -984,7 +1116,7 @@ export class TemplateCompilerStructuralExecutionSession {
         throw new Error(`Generated compiler attribute '${attribute.occurrenceKey}' has no live owner edge.`);
       }
     }
-    const contexts = this.targetPlan.readContexts();
+    const contexts = this.readContexts();
     if (this.structuresByContextKey.size !== contexts.length) {
       throw new Error('Compiler structural execution does not cover every target context exactly once.');
     }
@@ -1033,7 +1165,7 @@ export class TemplateCompilerStructuralExecutionSession {
     this.assertSeededInputTopology();
     this.assertInputDispositions();
     for (const [row, geometry] of this.geometriesByRow) {
-      const context = this.targetPlan.contextForLocalKey(row.context.localKey);
+      const context = this.contextForLocalKey(row.context.localKey);
       if (context == null || !context.readRows().includes(row) || geometry.context !== context) {
         throw new Error(`Compiler geometry for row '${row.localKey}' belongs to another target plan.`);
       }
@@ -1041,9 +1173,37 @@ export class TemplateCompilerStructuralExecutionSession {
   }
 
   private requireContext(context: TemplateCompilerTargetContextPlan): void {
-    if (this.targetPlan.contextForLocalKey(context.localKey) !== context) {
-      throw new Error(`Compiler target context '${context.localKey}' belongs to another target plan.`);
+    if (this.contextForLocalKey(context.localKey) !== context) {
+      throw new Error(
+        `Compiler target context '${context.localKey}' belongs to another target plan or structural family.`,
+      );
     }
+  }
+
+  private contextForNodeOccurrence(
+    node: TemplateCompilerNodeOccurrence,
+  ): TemplateCompilerTargetContextPlan | null {
+    const consumed = this.consumedNodes.get(node) ?? null;
+    if (consumed != null) {
+      if (node.parent != null || node.parentEdgeKind !== TemplateCompilerOccurrenceEdgeKind.Detached) {
+        throw new Error(`Consumed compiler occurrence '${node.occurrenceKey}' still has a live structural edge.`);
+      }
+      return consumed.context;
+    }
+    const contexts: TemplateCompilerTargetContextPlan[] = [];
+    for (const context of this.contexts) {
+      const structure = this.structuresByContextKey.get(context.localKey) ?? null;
+      if (
+        structure != null
+        && (node === structure.compilerCarrier || contextContains(structure.compilerContent, node))
+      ) {
+        contexts.push(context);
+      }
+    }
+    if (contexts.length > 1) {
+      throw new Error(`Compiler occurrence '${node.occurrenceKey}' belongs to multiple structural contexts.`);
+    }
+    return contexts[0] ?? null;
   }
 
   private transferInputNode(
@@ -1129,8 +1289,8 @@ export class TemplateCompilerStructuralExecutionSession {
     return this.structuralEntrantsByContextKey.get(context.localKey)?.get(node) ?? null;
   }
 
-  private indexStructuralEntrants(): void {
-    for (const context of this.targetPlan.readContexts()) {
+  private indexStructuralEntrants(contexts: readonly TemplateCompilerTargetContextPlan[]): void {
+    for (const context of contexts) {
       const entrants = new Map<TemplateCompilerNodeOccurrence, ProductHandle>();
       this.structuralEntrantsByContextKey.set(context.localKey, entrants);
       const authority = context.structuralAuthority;
@@ -1253,7 +1413,7 @@ export class TemplateCompilerStructuralExecutionSession {
     const sourceProductHandle = authority.instruction.node.productHandle;
     let current = context;
     while (current.ownerContext != null) {
-      const owner = this.targetPlan.contextForLocalKey(current.ownerContext.localKey);
+      const owner = this.contextForLocalKey(current.ownerContext.localKey);
       const ownerAuthority = owner?.structuralAuthority ?? null;
       if (
         owner == null
@@ -1477,7 +1637,7 @@ export class TemplateCompilerStructuralExecutionSession {
   private requireCompleteUnrealizedRow(
     row: TemplateCompilerTargetRowPlan,
   ): TemplateCompilerTargetContextPlan {
-    const context = this.targetPlan.contextForLocalKey(row.context.localKey);
+    const context = this.contextForLocalKey(row.context.localKey);
     if (context == null || !context.readRows().includes(row)) {
       throw new Error(`Compiler target row '${row.localKey}' belongs to another target plan.`);
     }
@@ -1603,7 +1763,7 @@ export class TemplateCompilerStructuralExecutionSession {
         throw new Error(`Generated compiler occurrence '${node.occurrenceKey}' belongs to another session.`);
       }
       this.assertRegisteredGeneration(generation);
-      if (this.targetPlan.contextForLocalKey(generation.contextKey) == null) {
+      if (this.contextForLocalKey(generation.contextKey) == null) {
         throw new Error(`Generated compiler occurrence '${node.occurrenceKey}' names an alien target context.`);
       }
       switch (generation.role) {
@@ -1711,7 +1871,7 @@ export class TemplateCompilerStructuralExecutionSession {
       this.assertRegisteredGeneration(generation);
       if (
         !generation.isOwnedBy(this.generationAuthority)
-        || this.targetPlan.contextForLocalKey(generation.contextKey) == null
+        || this.contextForLocalKey(generation.contextKey) == null
         || generation.role !== TemplateCompilerGeneratedOccurrenceRole.Clone
         || attribute.inputReference == null
         || this.forest.exactAuthoredAttributeOrigin(attribute) == null
@@ -1773,7 +1933,7 @@ export class TemplateCompilerStructuralExecutionSession {
         priorDestination = transfer;
       }
     }
-    for (const context of this.targetPlan.readContexts()) {
+    for (const context of this.readContexts()) {
       if (context.role === TemplateCompilerTargetContextRole.Root) continue;
       this.assertContextEntrantCoverage(context);
     }
@@ -1828,7 +1988,7 @@ export class TemplateCompilerStructuralExecutionSession {
               : this.exactSeededAttributeForAuthored(contributor.slotAttribute.productHandle);
             const ownerContext = context.ownerContext == null
               ? null
-              : this.targetPlan.contextForLocalKey(context.ownerContext.localKey);
+              : this.contextForLocalKey(context.ownerContext.localKey);
             const disposition = auSlotAttribute == null
               ? null
               : this.consumedAttributes.get(auSlotAttribute) ?? null;
@@ -1876,7 +2036,7 @@ export class TemplateCompilerStructuralExecutionSession {
   }
 
   private assertDiscardedProjectionContributors(): void {
-    for (const context of this.targetPlan.readContexts()) {
+    for (const context of this.readContexts()) {
       for (const row of context.readRows()) {
         for (const instruction of row.instructions) {
           if (!(instruction instanceof HydrateElementInstruction)) continue;
@@ -1908,7 +2068,7 @@ export class TemplateCompilerStructuralExecutionSession {
   }
 
   private assertKnownAuSlotProcessContent(): void {
-    for (const context of this.targetPlan.readContexts()) {
+    for (const context of this.readContexts()) {
       for (const row of context.readRows()) {
         for (const instruction of row.instructions) {
           if (!(instruction instanceof HydrateElementInstruction) || instruction.auSlotProcessContent == null) continue;
@@ -2050,7 +2210,7 @@ export class TemplateCompilerStructuralExecutionSession {
       }
     }
 
-    for (const context of this.targetPlan.readContexts()) {
+    for (const context of this.readContexts()) {
       const structure = this.requireContextStructure(context);
       const transferred = structure.compilerContent.readChildren().filter((node) => {
         const expected = this.expectedFinalInputNodeEdges.get(node);

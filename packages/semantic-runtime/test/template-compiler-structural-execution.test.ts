@@ -52,6 +52,101 @@ import {
 } from './browser-effective-template-fixture.js';
 
 describe('template compiler structural execution mechanics', () => {
+  test('owns multiple target plans and exact root structures in one occurrence family', () => {
+    const fixture = new BrowserEffectiveTemplateFixture('template-compiler-structural-family');
+
+    try {
+      const input = fixture.materialize('family', '<div>one</div><span>two</span>');
+      const forest = TemplateCompilerOccurrenceForest.fromBrowserEffective(input.emission);
+      const firstPlan = createTargetPlan(fixture, 'family:first');
+      const secondPlan = createTargetPlan(fixture, 'family:second');
+      for (const node of [
+        requiredAuthoredElement(input.authoredHtml.nodes, 'div'),
+        requiredAuthoredText(input.authoredHtml.nodes, 'one'),
+        requiredAuthoredElement(input.authoredHtml.nodes, 'span'),
+        requiredAuthoredText(input.authoredHtml.nodes, 'two'),
+      ]) {
+        firstPlan.root.recordCompilerReachableNode(node.productHandle);
+      }
+
+      const session = TemplateCompilerStructuralExecutionSession.create(forest, firstPlan);
+      expect(() => session.admitTargetPlan(secondPlan)).toThrow(/must be sealed/);
+      expect(session.readTargetPlans()).toEqual([firstPlan]);
+      expect(session.readContexts()).toEqual([firstPlan.root]);
+      secondPlan.seal();
+      session.admitTargetPlan(secondPlan);
+      expect(session.readTargetPlans()).toEqual([firstPlan, secondPlan]);
+      expect(session.readContexts()).toEqual([firstPlan.root, secondPlan.root]);
+      expect(() => session.assertCoherent()).toThrow(/does not cover every target context/);
+
+      const secondStructure = session.createGeneratedContextStructure(secondPlan.root);
+      expect(session.readContextStructure(firstPlan.root)?.compilerCarrier).toBe(forest.compilerCarrier);
+      expect(session.readContextStructure(secondPlan.root)).toBe(secondStructure);
+      expect(session.contextForOccurrence(requiredOccurrenceElement(forest, 'div'))).toBe(firstPlan.root);
+      expect(session.contextForOccurrence(secondStructure.compilerCarrier)).toBe(secondPlan.root);
+      expect(session.contextForLocalKey(secondPlan.root.localKey)).toBe(secondPlan.root);
+      expect(forest.readRoots()).toEqual([forest.compilerCarrier, secondStructure.compilerCarrier]);
+      expect(secondStructure.compilerContent.readChildren()).toEqual([]);
+      session.assertCoherent();
+
+      expect(() => session.admitTargetPlan(secondPlan)).toThrow(/already admitted/);
+      const duplicatePlanKey = createTargetPlan(fixture, 'family:first');
+      duplicatePlanKey.seal();
+      expect(() => session.admitTargetPlan(duplicatePlanKey)).toThrow(/plan key.*not unique/);
+      const duplicateCompiledRoot = new TemplateCompilerTargetPlan(
+        'family:duplicate-compiled-root:target-plan',
+        new TemplateCompilationContextReference(
+          fixture.run.handles.product('family:duplicate-compiled-root:root-context'),
+          fixture.run.handles.identity('family:duplicate-compiled-root:root-context'),
+          TemplateCompilationContextKind.Root,
+          null,
+        ),
+        secondPlan.root.compiledTemplate,
+      );
+      duplicateCompiledRoot.seal();
+      expect(() => session.admitTargetPlan(duplicateCompiledRoot)).toThrow(/Compiled-template product/);
+      const duplicateReachableNode = createTargetPlan(fixture, 'family:duplicate-reachable-node');
+      duplicateReachableNode.root.recordCompilerReachableNode(
+        requiredAuthoredElement(input.authoredHtml.nodes, 'div').productHandle,
+      );
+      duplicateReachableNode.seal();
+      expect(() => session.admitTargetPlan(duplicateReachableNode)).toThrow(/Compiler-reachable node/);
+      expect(session.readTargetPlans()).toEqual([firstPlan, secondPlan]);
+      expect(session.readContexts()).toEqual([firstPlan.root, secondPlan.root]);
+      session.assertCoherent();
+
+      const sharedContributor = new HydrateElementProjectionContributor(
+        requiredAuthoredText(input.authoredHtml.nodes, 'one').toReference(),
+        'default',
+        null,
+        null,
+        HydrateElementProjectionContributorDisposition.RetainedNode,
+      );
+      const contributorOwner = createProjectionContributorPlan(
+        fixture,
+        'family:contributor-owner',
+        requiredAuthoredElement(input.authoredHtml.nodes, 'div'),
+        sharedContributor,
+      );
+      contributorOwner.seal();
+      session.admitTargetPlan(contributorOwner);
+      const targetPlansBeforeRejectedContributor = [...session.readTargetPlans()];
+      const contextsBeforeRejectedContributor = [...session.readContexts()];
+      const contributorReuse = createProjectionContributorPlan(
+        fixture,
+        'family:contributor-reuse',
+        requiredAuthoredElement(input.authoredHtml.nodes, 'div'),
+        sharedContributor,
+      );
+      contributorReuse.seal();
+      expect(() => session.admitTargetPlan(contributorReuse)).toThrow(/Projection contributor object/);
+      expect(session.readTargetPlans()).toEqual(targetPlansBeforeRejectedContributor);
+      expect(session.readContexts()).toEqual(contextsBeforeRejectedContributor);
+    } finally {
+      fixture.dispose();
+    }
+  });
+
   test('keeps text-output generation independent from input origin and realizes marker preorder exactly', () => {
     const fixture = new BrowserEffectiveTemplateFixture('template-compiler-structural-text');
 
@@ -998,6 +1093,9 @@ describe('template compiler structural execution mechanics', () => {
       expect(attributeDisposition.owner).toBe(div);
       expect(attributeDisposition.ownerOrdinal).toBe(0);
       expect(attribute.owner).toBeNull();
+      expect(session.contextForOccurrence(comment)).toBe(targetPlan.root);
+      expect(session.contextForOccurrence(attribute)).toBe(targetPlan.root);
+      expect(session.contextForOccurrence(span)).toBe(targetPlan.root);
       expect(session.readConsumedNodeDispositions()).toEqual(
         session.readConsumedNodeDispositions(targetPlan.root),
       );
@@ -1417,6 +1515,7 @@ describe('template compiler structural execution mechanics', () => {
         const targetPlan = createTargetPlan(fixture, 'malformed-carrier');
         const instruction = templateControllerInstruction(fixture, authoredDiv, 'malformed-carrier');
         const context = targetPlan.createTemplateControllerContext(targetPlan.root, instruction);
+        targetPlan.root.appendRow('owner', authoredDiv, [instruction]);
         const session = TemplateCompilerStructuralExecutionSession.create(forest, targetPlan);
         const causes = [instruction.productHandle];
         const carrier = forest.createGeneratedElement(
@@ -1458,6 +1557,7 @@ describe('template compiler structural execution mechanics', () => {
         const targetPlan = createTargetPlan(fixture, 'malformed-carrier-namespace');
         const instruction = templateControllerInstruction(fixture, authoredDiv, 'malformed-carrier-namespace');
         const context = targetPlan.createTemplateControllerContext(targetPlan.root, instruction);
+        targetPlan.root.appendRow('owner', authoredDiv, [instruction]);
         const session = TemplateCompilerStructuralExecutionSession.create(forest, targetPlan);
         const causes = [instruction.productHandle];
         const carrier = forest.createGeneratedElement(
@@ -1658,6 +1758,42 @@ function createTargetPlan(
     fixture.run.handles.identity(`${key}:root-compiled-template`),
   );
   return new TemplateCompilerTargetPlan(`${key}:target-plan`, rootContext, rootCompiledTemplate);
+}
+
+function createProjectionContributorPlan(
+  fixture: BrowserEffectiveTemplateFixture,
+  key: string,
+  host: HtmlElement,
+  contributor: HydrateElementProjectionContributor,
+): TemplateCompilerTargetPlan {
+  const targetPlan = createTargetPlan(fixture, key);
+  const projection = new HydrateElementProjectionDefinition(
+    'default',
+    new CompiledTemplateReference(
+      fixture.run.handles.product(`${key}:projection-template`),
+      fixture.run.handles.identity(`${key}:projection-template`),
+    ),
+    [contributor],
+    host.sourceAddressHandle,
+  );
+  const instruction = new HydrateElementInstruction(
+    fixture.run.handles.product(`${key}:host-instruction`),
+    fixture.run.handles.identity(`${key}:host-instruction`),
+    host.toReference(),
+    host.tagName,
+    host.tagName,
+    null,
+    [projection],
+    [],
+    null,
+    [],
+    [],
+    false,
+    host.sourceAddressHandle,
+  );
+  targetPlan.createProjectionContext(targetPlan.root, instruction, projection);
+  targetPlan.root.appendRow('projection-host', host, [instruction]);
+  return targetPlan;
 }
 
 function templateControllerInstruction(
