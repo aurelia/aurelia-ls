@@ -31,6 +31,7 @@ export const enum TemplateRenderTargetKind {
 }
 
 export type CompiledTemplateField =
+  | 'context'
   | 'htmlDocument'
   | 'state'
   | 'compilerReachableNodes'
@@ -40,6 +41,28 @@ export type CompiledTemplateField =
   | 'targets'
   | 'surrogates'
   | 'source';
+
+/** Stable reference to one root or generated compiled-template product. */
+export class CompiledTemplateReference {
+  constructor(
+    readonly productHandle: ProductHandle,
+    readonly identityHandle: IdentityHandle,
+  ) {}
+}
+
+/** Definition role of one compiled template inside a compiler-produced template family. */
+export const enum CompiledTemplateContextRole {
+  Root = 'root',
+  TemplateController = 'template-controller',
+  Projection = 'projection',
+}
+
+/** Durable role of a root or generated compiled definition. */
+export class CompiledTemplateContext {
+  constructor(
+    readonly role: CompiledTemplateContextRole,
+  ) {}
+}
 
 export type TemplateRenderTargetField =
   | 'targetKind'
@@ -114,7 +137,9 @@ export class CompiledTemplate {
     readonly productHandle: ProductHandle,
     /** Identity for this compiled template. */
     readonly identityHandle: IdentityHandle,
-    /** Authored HTML document compiled into this product. */
+    /** Root/generated definition ownership inside this compiled template family. */
+    readonly context: CompiledTemplateContext,
+    /** Authored HTML document that supplies this definition's source-backed nodes. */
     readonly htmlDocumentProductHandle: ProductHandle,
     /** Compiler closure state for the current substrate. */
     readonly state: CompiledTemplateState,
@@ -133,4 +158,11 @@ export class CompiledTemplate {
     /** Field-level provenance for source facts that matter to explanation or ambiguity. */
     readonly fieldProvenance: readonly FieldProvenance<CompiledTemplateField>[] = [],
   ) {}
+
+  toReference(): CompiledTemplateReference {
+    return new CompiledTemplateReference(
+      this.productHandle,
+      this.identityHandle,
+    );
+  }
 }

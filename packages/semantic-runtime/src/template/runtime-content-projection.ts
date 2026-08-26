@@ -5,10 +5,10 @@ import type {
 } from '../configuration/controller.js';
 import type { Container } from '../di/container.js';
 import type { AddressHandle } from '../kernel/handles.js';
+import type { CompiledTemplate } from './compiled-template.js';
 import type {
   HydrateElementInstruction,
-  HydrateElementProjectionInstructionSequence,
-  TemplateInstructionSequence,
+  HydrateElementProjectionDefinition,
 } from './instruction-ir.js';
 import type { RuntimeControllerFrame } from './runtime-controller.js';
 
@@ -42,8 +42,8 @@ export class RuntimeContentProjectionView {
     readonly outletInstruction: HydrateElementInstruction,
     readonly outletController: RuntimeControllerFrame,
     readonly providerInstruction: HydrateElementInstruction | null,
-    readonly projection: HydrateElementProjectionInstructionSequence | null,
-    readonly instructionSequence: TemplateInstructionSequence | null,
+    readonly projection: HydrateElementProjectionDefinition | null,
+    readonly compiledTemplate: CompiledTemplate | null,
     readonly declaringController: RuntimeControllerFrame | null,
     readonly receivingController: RuntimeControllerFrame | null,
     readonly viewFactory: ViewFactory | null,

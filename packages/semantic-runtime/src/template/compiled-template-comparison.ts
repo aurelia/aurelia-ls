@@ -27,6 +27,8 @@ export function compareCompiledTemplateDetails(
     next.productHandle,
     previous.identityHandle,
     next.identityHandle,
+    previous.context.role,
+    next.context.role,
     previous.htmlDocumentProductHandle,
     next.htmlDocumentProductHandle,
     previous.state,
@@ -51,6 +53,32 @@ export function compareCompiledTemplateDetails(
     && sameNullable(previous.surrogateSequence, next.surrogateSequence, (left, right) =>
       sameInstructionSequenceWitnesses(left, right, context));
   return witness
+    ? KernelPublicationDecisionKind.Retain
+    : KernelPublicationDecisionKind.RefreshWitness;
+}
+
+export function compareTemplateRenderTargetDetails(
+  previous: TemplateRenderTarget,
+  next: TemplateRenderTarget,
+  context: KernelPublicationComparisonContext,
+): KernelComparablePublicationDecision {
+  if (!sameRenderTargetSemantics(previous, next)) {
+    return KernelPublicationDecisionKind.Replace;
+  }
+  return sameRenderTargetWitnesses(previous, next, context)
+    ? KernelPublicationDecisionKind.Retain
+    : KernelPublicationDecisionKind.RefreshWitness;
+}
+
+export function compareTemplateInstructionSequenceDetails(
+  previous: TemplateInstructionSequence,
+  next: TemplateInstructionSequence,
+  context: KernelPublicationComparisonContext,
+): KernelComparablePublicationDecision {
+  if (!sameInstructionSequenceSemantics(previous, next)) {
+    return KernelPublicationDecisionKind.Replace;
+  }
+  return sameInstructionSequenceWitnesses(previous, next, context)
     ? KernelPublicationDecisionKind.Retain
     : KernelPublicationDecisionKind.RefreshWitness;
 }

@@ -520,10 +520,10 @@ including memory/kernel deltas when full telemetry is enabled. `profile:app-tele
 subphases. Use full phase memory/kernel snapshots for density questions; use fine phases with
 `SEMANTIC_RUNTIME_TELEMETRY_PHASE_MEMORY=false` and `SEMANTIC_RUNTIME_TELEMETRY_PHASE_KERNEL=false` for cleaner CPU
 attribution because each measured subphase otherwise pays snapshot overhead. Current canaries show render-target sequence walking and nested
-template-controller child sequences as the hot scope-construction path, while runtime rendering's product growth is
+template-controller child definitions as the hot scope-construction path, while runtime rendering's product growth is
 mostly admitted at commit time. Parent templates hydrate child custom-element controllers and child view-model scopes
 for bindable flow, while child view internals stay owned by the child resource's own runtime-analysis emission; only
-built-in template-controller synthetic views recurse through embedded instruction sequences. The large-root canary that
+built-in template-controller synthetic views recurse through compiler-owned child definitions. The large-root canary that
 exposed the issue dropped from roughly 388k records / 71k products / 404MiB construction heap to roughly 120k records /
 23k products / 249MiB after this aggregate boundary was restored, and the top product growth shifted back to ordinary
 template compiler/value-site rows. After that cut, observer setup diagnostics were the next runtime-rendering CPU
@@ -1008,14 +1008,14 @@ cross-area, and product-flow topology:
 - Runtime rendering now separates renderer-product publication, view-factory materialization, controller creation, and
   controller-product publication from render-loop orchestration. `runtime-rendered-instruction-recorder.ts` owns
   renderer-produced runtime bindings, target operations, scope effects, and binding render contexts.
-  `runtime-view-factory-materializer.ts` owns generated embedded custom-element definitions, `IViewFactory` products,
-  synthetic-view aggregate products, and the factory/definition/instruction-sequence claims created by
-  template-controller rendering. `runtime-controller-creation-materializer.ts` owns root, renderer-created child, and
+  `runtime-view-factory-materializer.ts` owns `IViewFactory` products over compiler-owned child compiled templates and
+  their factory/template claims; it no longer invents embedded resource definitions or reconstructs target rows.
+  `runtime-controller-creation-materializer.ts` owns root, renderer-created child, and
   synthetic-view controller frame creation, including child-container materialization and controller hydration lifecycle
   steps. `runtime-controller-publication.ts` owns durable controller products, controller materialization records, and
   controller-to-template/instruction/binding claims after scope materialization attaches modeled `Scope` references.
   `runtime-rendering-materializer.ts` still owns render-target planning, render-host dispatch, traversal, and the
-  decision to recursively render embedded instruction sequences. If more runtime-rendering pressure appears, split
+  decision to recursively render compiler-owned child definitions. If more runtime-rendering pressure appears, split
   along those framework-shaped responsibilities rather than moving record constructors around by file size alone.
 - Template-controller scope construction now has a TypeChecker support boundary. `template-scope-type-projector.ts`
   owns listener event typing, repeat override locals, iterator local projection, let-target types, and promise/value
@@ -1237,10 +1237,10 @@ collaborators should be used through their service models (`IAttributeParser.par
 `IExpressionParser.parse`, `AttrMapper.map/isTwoWay`) rather than through local aliases or duplicated helper logic.
 
 Custom-element child content projection is closed at the compiled-template boundary now. `HydrateElementInstruction`
-owns default/named projection instruction sequences, and direct parent row traversal skips the extracted children so
-non-shadow custom-element content is not analyzed as if it rendered in the parent. If projection pressure returns, start
-from `contract:template-content-projection` and the framework compiler `_extractProjections(...)` shape before touching
-runtime renderer or app-builder generation.
+owns default/named generated projection definitions with definition-local static structure and target rows. Direct
+parent row traversal skips the extracted children so non-shadow custom-element content is not analyzed as if it rendered
+in the parent. If projection pressure returns, start from `contract:template-content-projection` and the framework
+compiler `_extractProjections(...)` shape before touching runtime renderer or app-builder generation.
 
 `compileSpread(...)` is wired from runtime rendering back into `TemplateCompilerService`, but dynamic spread instruction
 materialization is intentionally still open. The runtime path now preserves the captured AttrSyntax handles and emits

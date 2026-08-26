@@ -53,6 +53,42 @@ class RowInnerTemplateController {}
 class ProjectionCard {}
 
 @customElement({
+  name: 'static-context-probe',
+  template: '<div row-outer><span>static child</span></div>',
+  dependencies: [RowOuterTemplateController],
+})
+class StaticContextProbe {}
+
+@customElement({
+  name: 'static-projection-probe',
+  template: '<projection-card><span>static default</span><template au-slot="named"><b>static named</b></template></projection-card>',
+  dependencies: [ProjectionCard],
+})
+class StaticProjectionProbe {}
+
+@customElement({
+  name: 'open-projection-probe',
+  template: '<projection-card><span $bindables></span></projection-card>',
+  dependencies: [ProjectionCard],
+})
+class OpenProjectionProbe {}
+
+@customElement({
+  name: 'containerless-usage-probe',
+  template: '<projection-card containerless></projection-card>',
+  dependencies: [ProjectionCard],
+})
+class ContainerlessUsageProbe {}
+
+@customElement({
+  name: 'slot-under-template-controller-probe',
+  shadowOptions: { mode: 'open' },
+  template: '<div row-outer><slot></slot></div>',
+  dependencies: [RowOuterTemplateController],
+})
+class SlotUnderTemplateControllerProbe {}
+
+@customElement({
   name: 'open-classification-probe',
   template: '<div $bindables></div><div row-outer $bindables><span title.bind="value"></span></div>',
   dependencies: [RowOuterTemplateController],
@@ -66,7 +102,12 @@ class OpenClassificationProbe {
   dependencies: [
     ContainerlessCard,
     OpenClassificationProbe,
+    OpenProjectionProbe,
     ProjectionCard,
+    StaticContextProbe,
+    StaticProjectionProbe,
+    ContainerlessUsageProbe,
+    SlotUnderTemplateControllerProbe,
     RowOuterTemplateController,
     RowInnerTemplateController,
     ShadowContainerlessCard,

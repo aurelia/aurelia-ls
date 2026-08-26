@@ -46,7 +46,6 @@ import {
 import {
   TemplateControllerPromiseSettlementKind,
   type TemplateControllerFlowApplication,
-  type TemplateControllerPromiseState,
 } from './template-controller-flow-state.js';
 import {
   templateControllerValueExpressionProductHandle,
@@ -488,8 +487,12 @@ export class TemplateControllerFlowScopeMaterializer {
     frame: TemplateScopeConstructionFrame,
     switchInstruction: HydrateTemplateControllerInstruction,
   ): readonly HydrateTemplateControllerInstruction[] {
-    const sequence = frame.readSequence(switchInstruction.childInstructionSequenceProductHandle);
-    return sequence?.instructions
+    const compiledTemplate = frame.readCompiledTemplate(
+      switchInstruction.childCompiledTemplate?.productHandle ?? null,
+    );
+    return compiledTemplate?.targets.flatMap((target) =>
+      frame.readSequence(target.instructionSequenceProductHandle)?.instructions ?? []
+    )
       .map((reference) => frame.readInstruction(reference.productHandle))
       .filter((instruction): instruction is HydrateTemplateControllerInstruction =>
         instruction instanceof HydrateTemplateControllerInstruction
@@ -594,8 +597,13 @@ export class TemplateControllerFlowScopeMaterializer {
     localSuffix: string,
   ): BindingScope {
     frame.flowState.clearBranch(parent);
-    const childSequence = frame.readSequence(instruction.childInstructionSequenceProductHandle);
-    if (childSequence == null || childSequence.instructions.length === 0) {
+    const childCompiledTemplate = frame.readCompiledTemplate(
+      instruction.childCompiledTemplate?.productHandle ?? null,
+    );
+    const childHasInstructions = childCompiledTemplate?.targets.some((target) =>
+      (frame.readSequence(target.instructionSequenceProductHandle)?.instructions.length ?? 0) > 0
+    ) ?? false;
+    if (childCompiledTemplate == null || !childHasInstructions) {
       return parent;
     }
 

@@ -93,7 +93,7 @@ import { ResourceProductDetails } from '../resources/product-details.js';
 import type { TypeSystemProject } from '../type-system/project.js';
 import {
   CheckerTypeMemberProjectionPolicy,
-  CheckerTypeProjector,
+  type CheckerTypeProjector,
 } from '../type-system/checker-projector.js';
 import {
   CheckerExpressionScopeNarrower,
@@ -122,12 +122,13 @@ import {
   ProvenanceRecord,
 } from '../kernel/provenance.js';
 import type { CompiledTemplateEmission } from './compiled-template-materializer.js';
+import type { CompiledTemplate } from './compiled-template.js';
 import type { TemplateRuntimeAnalysisProjectContext } from './template-runtime-analysis-context.js';
 import type { TemplateResourceScope } from './compiler-world.js';
 import {
   HydrateAttributeInstruction,
   HydrateElementInstruction,
-  type HydrateElementProjectionInstructionSequence,
+  type HydrateElementProjectionDefinition,
   HydrateLetElementInstruction,
   HydrateTemplateControllerInstruction,
   InterpolationInstruction,
@@ -140,7 +141,6 @@ import {
   SetPropertyInstruction,
   SpreadElementPropBindingInstruction,
   StateBindingInstruction,
-  TemplateBindingMode,
   type TemplateInstruction,
   type TemplateInstructionSequence,
 } from './instruction-ir.js';
@@ -173,7 +173,7 @@ import { repeatStaticLocalValue } from './repeat-static-value.js';
 import { sourceAddressForRuntimeExpressionSpan } from './runtime-expression-source-address.js';
 import { TemplateControllerFlowScopeMaterializer } from './template-controller-flow-scope-materializer.js';
 import {
-  RuntimeBindingScopeIssue,
+  type RuntimeBindingScopeIssue,
   RuntimeBindingScopeIssueCertainty,
   RuntimeBindingScopeIssueKind,
   RuntimeBindingScopeIssuePhase,
@@ -213,7 +213,7 @@ type TemplateScopeConstructionFinePhaseName =
   | 'state-dispatch-event-scope'
   | 'binding-expression-scope-handoffs'
   | 'template-controller-scope'
-  | 'template-controller-child-sequence'
+  | 'template-controller-child-definition'
   | 'runtime-assignment-scope'
   | 'child-element-scope'
   | 'scope-effects'
@@ -364,7 +364,7 @@ interface DynamicCapturedAttributeContext {
  * the context that was active where that provider content was declared.
  */
 class TemplateProjectionContext {
-  private readonly consumedSequenceHandles = new Set<ProductHandle>();
+  private readonly consumedCompiledTemplateHandles = new Set<ProductHandle>();
 
   constructor(
     readonly providerInstruction: HydrateElementInstruction,
@@ -375,12 +375,12 @@ class TemplateProjectionContext {
     readonly parent: TemplateProjectionContext | null,
   ) {}
 
-  consume(projection: HydrateElementProjectionInstructionSequence): void {
-    this.consumedSequenceHandles.add(projection.instructionSequenceProductHandle);
+  consume(projection: HydrateElementProjectionDefinition): void {
+    this.consumedCompiledTemplateHandles.add(projection.compiledTemplate.productHandle);
   }
 
-  isConsumed(projection: HydrateElementProjectionInstructionSequence): boolean {
-    return this.consumedSequenceHandles.has(projection.instructionSequenceProductHandle);
+  isConsumed(projection: HydrateElementProjectionDefinition): boolean {
+    return this.consumedCompiledTemplateHandles.has(projection.compiledTemplate.productHandle);
   }
 }
 
@@ -413,6 +413,7 @@ export class TemplateScopeConstructionFrame {
     readonly services: TemplateScopeConstructionServices,
     private readonly sequencesByProduct: ReadonlyMap<ProductHandle, TemplateInstructionSequence>,
     private readonly instructionsByProduct: ReadonlyMap<ProductHandle, TemplateInstruction>,
+    private readonly compiledTemplatesByProduct: ReadonlyMap<ProductHandle, CompiledTemplate>,
   ) {
     this.currentScope = root.scope;
     this.scopeEmissions = [root];
@@ -436,6 +437,7 @@ export class TemplateScopeConstructionFrame {
         ),
         ...input.runtimeBindings.dynamicInstructions.map((instruction) => [instruction.productHandle, instruction] as const),
       ]),
+      new Map(input.compiledTemplate.compiledTemplates.map((template) => [template.productHandle, template])),
     );
   }
 
@@ -451,6 +453,13 @@ export class TemplateScopeConstructionFrame {
       ? null
       : this.instructionsByProduct.get(productHandle)
         ?? this.input.projectContext.readInstruction(productHandle);
+  }
+
+  readCompiledTemplate(productHandle: ProductHandle | null): CompiledTemplate | null {
+    return productHandle == null
+      ? null
+      : this.compiledTemplatesByProduct.get(productHandle)
+        ?? this.input.projectContext.readCompiledTemplate(productHandle);
   }
 
   addInstructionScope(
@@ -663,7 +672,7 @@ export class TemplateControllerScopeMaterializer {
   private constructRenderTargets(frame: TemplateScopeConstructionFrame): void {
     frame.currentScope = this.constructCompiledTemplateScopes(
       frame,
-      frame.input.compiledTemplate,
+      frame.input.compiledTemplate.compiledTemplate,
       frame.currentScope,
       '',
       frame.input.runtimeBindings.rootController,
@@ -673,7 +682,7 @@ export class TemplateControllerScopeMaterializer {
 
   private constructCompiledTemplateScopes(
     frame: TemplateScopeConstructionFrame,
-    compiledTemplate: CompiledTemplateEmission,
+    compiledTemplate: CompiledTemplate,
     initialScope: BindingScope,
     localPrefix: string,
     controllerContext: RuntimeControllerFrame | null,
@@ -694,7 +703,7 @@ export class TemplateControllerScopeMaterializer {
       currentScope = surrogateSequence;
     }
     return this.measure(frame.input, 'render-target-sequences', () => {
-      compiledTemplate.renderTargets.forEach((target, targetIndex) => {
+      compiledTemplate.targets.forEach((target, targetIndex) => {
         const sequence = frame.readSequence(target.instructionSequenceProductHandle);
         if (sequence == null) {
           return;
@@ -714,13 +723,13 @@ export class TemplateControllerScopeMaterializer {
 
   private constructSurrogateSequence(
     frame: TemplateScopeConstructionFrame,
-    compiledTemplate: CompiledTemplateEmission,
+    compiledTemplate: CompiledTemplate,
     currentScope: BindingScope,
     localPrefix: string,
     controllerContext: RuntimeControllerFrame | null,
     projectionContext: TemplateProjectionContext | null,
   ): BindingScope | null {
-    const sequence = compiledTemplate.compiledTemplate.surrogateSequence;
+    const sequence = compiledTemplate.surrogateSequence;
     if (sequence == null) {
       return null;
     }
@@ -995,7 +1004,7 @@ export class TemplateControllerScopeMaterializer {
     localSuffix: string,
   ): void {
     if (view.selectionKind === RuntimeContentProjectionSelectionKind.Empty
-      || view.instructionSequence == null) {
+      || view.compiledTemplate == null) {
       return;
     }
     if (view.selectionKind === RuntimeContentProjectionSelectionKind.Projected) {
@@ -1005,40 +1014,40 @@ export class TemplateControllerScopeMaterializer {
         );
       }
       projectionContext.consume(view.projection);
-      this.constructProjectedInstructionSequence(
+      this.constructProjectedCompiledTemplateScopes(
         frame,
         projectionContext,
         view.projection,
         view.outletInstruction,
         `${localSuffix}:projected`,
         view.syntheticController,
-        view.instructionSequence,
+        view.compiledTemplate,
       );
       return;
     }
     view.syntheticController?.attachScope(receiverViewScope.toReference());
-    this.constructInstructionSequence(
+    this.constructCompiledTemplateScopes(
       frame,
+      view.compiledTemplate,
       receiverViewScope,
-      view.instructionSequence,
       `${localSuffix}:fallback`,
       view.syntheticController,
       projectionContext,
     );
   }
 
-  private constructProjectedInstructionSequence(
+  private constructProjectedCompiledTemplateScopes(
     frame: TemplateScopeConstructionFrame,
     projectionContext: TemplateProjectionContext,
-    projection: HydrateElementProjectionInstructionSequence,
+    projection: HydrateElementProjectionDefinition,
     outletInstruction: HydrateElementInstruction | null,
     localSuffix: string,
     syntheticController: RuntimeControllerFrame | null = null,
-    realizedSequence: TemplateInstructionSequence | null = null,
+    realizedCompiledTemplate: CompiledTemplate | null = null,
   ): void {
-    const sequence = realizedSequence
-      ?? frame.readSequence(projection.instructionSequenceProductHandle);
-    if (sequence == null) {
+    const compiledTemplate = realizedCompiledTemplate
+      ?? frame.readCompiledTemplate(projection.compiledTemplate.productHandle);
+    if (compiledTemplate == null) {
       return;
     }
     const hostSlot = this.projectionHostSlot(
@@ -1066,10 +1075,10 @@ export class TemplateControllerScopeMaterializer {
       }),
     ));
     syntheticController?.attachScope(projectionScope.toReference());
-    this.constructInstructionSequence(
+    this.constructCompiledTemplateScopes(
       frame,
+      compiledTemplate,
       projectionScope,
-      sequence,
       localSuffix,
       syntheticController ?? projectionContext.declaringControllerContext,
       projectionContext.parent,
@@ -1081,16 +1090,16 @@ export class TemplateControllerScopeMaterializer {
     projectionContext: TemplateProjectionContext,
     localSuffix: string,
   ): void {
-    projectionContext.providerInstruction.projectionInstructionSequences.forEach((projection, index) => {
+    projectionContext.providerInstruction.projections.forEach((projection) => {
       if (projectionContext.isConsumed(projection)) {
         return;
       }
-      this.constructProjectedInstructionSequence(
+      this.constructProjectedCompiledTemplateScopes(
         frame,
         projectionContext,
         projection,
         null,
-        `${localSuffix}:projection:${index}:potential`,
+        `${localSuffix}:projection:${localKeyPart(projection.slotName)}:potential`,
       );
     });
   }
@@ -1336,16 +1345,18 @@ export class TemplateControllerScopeMaterializer {
     controllerContext: RuntimeControllerFrame | null,
     projectionContext: TemplateProjectionContext | null,
   ): void {
-    const childSequence = frame.readSequence(instruction.childInstructionSequenceProductHandle);
-    if (childSequence == null) {
+    const childCompiledTemplate = frame.readCompiledTemplate(
+      instruction.childCompiledTemplate?.productHandle ?? null,
+    );
+    if (childCompiledTemplate == null) {
       return;
     }
-    this.measure(frame.input, 'template-controller-child-sequence', () =>
-      this.constructInstructionSequence(
+    this.measure(frame.input, 'template-controller-child-definition', () =>
+      this.constructCompiledTemplateScopes(
         frame,
+        childCompiledTemplate,
         childScope,
-        childSequence,
-        `${localSuffix}:child-sequence`,
+        `${localSuffix}:child-definition`,
         controllerContext,
         projectionContext,
       )
@@ -2222,7 +2233,7 @@ export class TemplateControllerScopeMaterializer {
     }
     this.constructCompiledTemplateScopes(
       frame,
-      resource.compiledTemplateEmission,
+      resource.compiledTemplateEmission.compiledTemplate,
       childScope,
       `${localSuffix}:custom-element-view`,
       controller,

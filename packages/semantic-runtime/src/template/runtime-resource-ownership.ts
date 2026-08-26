@@ -46,7 +46,9 @@ export function resourceLocalCompilerReachableHtmlNodeProductHandles(
   resource: TemplateResourceRuntimeAnalysisEmission,
 ): ReadonlySet<ProductHandle> {
   return new Set(
-    resource.compilation.compiledTemplate.compiledTemplate.compilerReachableNodeProductHandles,
+    resource.compilation.compiledTemplate.compiledTemplates.flatMap((template) =>
+      template.compilerReachableNodeProductHandles
+    ),
   );
 }
 
@@ -71,8 +73,9 @@ export function compilerReachesHtmlNode(
   node: Pick<HtmlIrNode, 'productHandle'> | null,
 ): boolean {
   return node == null
-    || resource.compilation.compiledTemplate.compiledTemplate.compilerReachableNodeProductHandles
-      .includes(node.productHandle);
+    || resource.compilation.compiledTemplate.compiledTemplates.some((template) =>
+      template.compilerReachableNodeProductHandles.includes(node.productHandle)
+    );
 }
 
 export function compilerReachesHtmlAttribute(

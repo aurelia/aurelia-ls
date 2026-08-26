@@ -501,17 +501,6 @@ export const KernelClaimPredicates = {
       ),
     ),
 
-    /** A modeled controller is associated with a nested instruction sequence owned by its hydration instruction. */
-    ControllerUsesInstructionSequence: defineClaimPredicate(
-      KernelVocabularyNamespace.Configuration,
-      'controller-uses-instruction-sequence',
-      'A modeled controller is associated with a nested instruction sequence owned by its hydration instruction.',
-      claimSignature(
-        productEndpoint(KernelProductKinds.Configuration.Controller),
-        productEndpoint(KernelProductKinds.Instruction.Sequence),
-      ),
-    ),
-
     /** A modeled controller receives or owns a runtime IViewFactory value. */
     ControllerUsesViewFactory: defineClaimPredicate(
       KernelVocabularyNamespace.Configuration,
@@ -556,25 +545,14 @@ export const KernelClaimPredicates = {
       ),
     ),
 
-    /** A runtime IViewFactory creates synthetic views from a nested instruction sequence. */
-    ViewFactoryUsesInstructionSequence: defineClaimPredicate(
+    /** A runtime IViewFactory instantiates one compiler-owned generated definition. */
+    ViewFactoryUsesCompiledTemplate: defineClaimPredicate(
       KernelVocabularyNamespace.Configuration,
-      'view-factory-uses-instruction-sequence',
-      'A runtime IViewFactory creates synthetic views from a nested instruction sequence.',
+      'view-factory-uses-compiled-template',
+      'A runtime IViewFactory instantiates one compiler-owned generated compiled template.',
       claimSignature(
         productEndpoint(KernelProductKinds.Configuration.ViewFactory),
-        productEndpoint(KernelProductKinds.Instruction.Sequence),
-      ),
-    ),
-
-    /** A runtime IViewFactory carries the generated embedded custom-element definition used to create child views. */
-    ViewFactoryUsesDefinition: defineClaimPredicate(
-      KernelVocabularyNamespace.Configuration,
-      'view-factory-uses-definition',
-      'A runtime IViewFactory carries the generated embedded custom-element definition used to create child views.',
-      claimSignature(
-        productEndpoint(KernelProductKinds.Configuration.ViewFactory),
-        productEndpoint(KernelProductKinds.Resource.Definition),
+        productEndpoint(KernelProductKinds.Template.CompiledTemplate),
       ),
     ),
 
@@ -1138,6 +1116,17 @@ export const KernelClaimPredicates = {
       ),
     ),
 
+    /** A root or generated compiled definition directly owns another generated compiled definition. */
+    ContainsChildCompiledTemplate: defineClaimPredicate(
+      KernelVocabularyNamespace.Template,
+      'contains-child-compiled-template',
+      'A compiled template directly owns one generated child compiled template.',
+      claimSignature(
+        productEndpoint(KernelProductKinds.Template.CompiledTemplate),
+        productEndpoint(KernelProductKinds.Template.CompiledTemplate),
+      ),
+    ),
+
     /** A compiled template contains one runtime render target. */
     ContainsRenderTarget: defineClaimPredicate(
       KernelVocabularyNamespace.Template,
@@ -1572,14 +1561,14 @@ export const KernelClaimPredicates = {
       ),
     ),
 
-    /** A lowered hydrate instruction owns a child instruction sequence. */
-    InstructionOwnsChildSequence: defineClaimPredicate(
+    /** A lowered hydrate instruction owns a generated child compiled definition. */
+    InstructionOwnsChildCompiledTemplate: defineClaimPredicate(
       KernelVocabularyNamespace.Instruction,
-      'instruction-owns-child-sequence',
-      'A lowered hydrate instruction owns a child instruction sequence.',
+      'instruction-owns-child-compiled-template',
+      'A lowered hydrate instruction owns a generated child compiled-template product.',
       claimSignature(
         productEndpoint(KernelProductKinds.Instruction.Instruction),
-        productEndpoint(KernelProductKinds.Instruction.Sequence),
+        productEndpoint(KernelProductKinds.Template.CompiledTemplate),
       ),
     ),
 

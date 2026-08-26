@@ -52,12 +52,16 @@ const hydrateElements = (candidate) =>
   candidate.compilation.compiledTemplate.instructions.filter(
     (instruction) => instruction instanceof HydrateElementInstruction,
   );
-const instructionSequence = (candidate, productHandle) => {
-  const sequence = candidate.compilation.compiledTemplate.instructionSequences.find(
-    (value) => value.productHandle === productHandle,
-  );
-  assert.ok(sequence, `Expected instruction sequence ${productHandle}.`);
-  return sequence;
+const projectionInstructions = (candidate, projection) => {
+  const emission = candidate.compilation.compiledTemplate;
+  const compiledTemplate = emission.readCompiledTemplate(projection.compiledTemplate.productHandle);
+  assert.ok(compiledTemplate, `Expected projection compiled template ${projection.compiledTemplate.productHandle}.`);
+  const sequencesByProduct = new Map(emission.instructionSequences.map((sequence) => [sequence.productHandle, sequence]));
+  return compiledTemplate.targets.flatMap((target) => {
+    const sequence = sequencesByProduct.get(target.instructionSequenceProductHandle);
+    assert.ok(sequence, `Expected target instruction sequence ${target.instructionSequenceProductHandle}.`);
+    return sequence.instructions;
+  });
 };
 const queryRows = (kind, detail = 'compact') => {
   const rows = [];
@@ -154,15 +158,15 @@ const receiverUses = hydrateElements(appResource).filter(
   (instruction) => instruction.elementName === 'projection-receiver',
 );
 assert.equal(receiverUses.length, 4, 'Expected projected, default-only, and repeated empty projection-receiver uses.');
-const multiSlotUse = receiverUses.find((instruction) => instruction.projectionInstructionSequences.length === 5);
+const multiSlotUse = receiverUses.find((instruction) => instruction.projections.length === 5);
 assert.ok(multiSlotUse, 'Expected the multi-slot projection-receiver use.');
 assert.deepEqual(
-  multiSlotUse.projectionInstructionSequences.map((projection) => projection.slotName).sort(),
+  multiSlotUse.projections.map((projection) => projection.slotName).sort(),
   ['actions', 'ambiguous', 'default', 'heading', 'unused'],
   'Expected repeated, default, ambiguous-host, and unmatched provider content to converge into five framework slot groups.',
 );
 
-const headingProjection = multiSlotUse.projectionInstructionSequences.find(
+const headingProjection = multiSlotUse.projections.find(
   (projection) => projection.slotName === 'heading',
 );
 assert.ok(headingProjection);
@@ -176,20 +180,20 @@ assert.ok(
   'Expected each explicit repeated provider name to retain its exact source address.',
 );
 assert.equal(
-  instructionSequence(appResource, headingProjection.instructionSequenceProductHandle)
-    .instructions.filter((instruction) => instruction.instructionKind === TemplateInstructionKind.TextBinding)
+  projectionInstructions(appResource, headingProjection)
+    .filter((instruction) => instruction.instructionKind === TemplateInstructionKind.TextBinding)
     .length,
-  2,
-  'Expected repeated heading children to aggregate into one projection definition with both bindings.',
+  4,
+  'Expected repeated two-hole heading children to aggregate into one projection definition with four bindings.',
 );
 
-const actionProjection = multiSlotUse.projectionInstructionSequences.find(
+const actionProjection = multiSlotUse.projections.find(
   (projection) => projection.slotName === 'actions',
 );
 assert.ok(actionProjection);
-const actionSequence = instructionSequence(appResource, actionProjection.instructionSequenceProductHandle);
+const actionInstructions = projectionInstructions(appResource, actionProjection);
 assert.equal(
-  actionSequence.instructions.filter(
+  actionInstructions.filter(
     (instruction) => instruction.instructionKind === TemplateInstructionKind.HydrateTemplateController,
   ).length,
   1,
@@ -198,11 +202,11 @@ assert.equal(
 const repeatInstruction = appResource.compilation.compiledTemplate.instructions.find(
   (instruction) =>
     instruction instanceof HydrateTemplateControllerInstruction
-    && actionSequence.instructions.some((reference) => reference.productHandle === instruction.productHandle),
+    && actionInstructions.some((reference) => reference.productHandle === instruction.productHandle),
 );
 assert.equal(repeatInstruction?.controllerName, 'repeat');
 
-const defaultProjection = multiSlotUse.projectionInstructionSequences.find(
+const defaultProjection = multiSlotUse.projections.find(
   (projection) => projection.slotName === 'default',
 );
 assert.ok(defaultProjection);
@@ -211,9 +215,9 @@ assert.ok(
   'Expected the explicit empty provider attribute to remain distinguishable from inferred default content.',
 );
 assert.ok(
-  instructionSequence(appResource, defaultProjection.instructionSequenceProductHandle)
-    .instructions.some((instruction) => instruction.instructionKind === TemplateInstructionKind.TextBinding),
-  'Expected plain <template au-slot> content to be unwrapped into the projection sequence.',
+  projectionInstructions(appResource, defaultProjection)
+    .some((instruction) => instruction.instructionKind === TemplateInstructionKind.TextBinding),
+  'Expected plain <template au-slot> content to be unwrapped into the projection definition.',
 );
 
 const receiverOutlets = hydrateElements(receiverResource).filter(
@@ -248,14 +252,14 @@ for (const slotName of ['heading', 'default', 'actions']) {
   const outlet = receiverOutlets.find((instruction) => instruction.auSlotProcessContent?.name === slotName);
   assert.ok(outlet, `Expected "${slotName}" outlet.`);
   assert.deepEqual(
-    outlet.projectionInstructionSequences.map((projection) => projection.slotName),
+    outlet.projections.map((projection) => projection.slotName),
     ['default'],
     `Expected "${slotName}" outlet fallback content to compile as the framework default fallback projection.`,
   );
 }
 assert.equal(
   receiverOutlets.find((instruction) => instruction.auSlotProcessContent?.name === '')
-    ?.projectionInstructionSequences.length,
+    ?.projections.length,
   0,
   'Expected the empty-name outlet to retain no fallback definition.',
 );
@@ -264,18 +268,15 @@ const relayReceiverUse = hydrateElements(relayResource).find(
   (instruction) => instruction.elementName === 'projection-receiver',
 );
 assert.ok(relayReceiverUse);
-const relayHeadingProjection = relayReceiverUse.projectionInstructionSequences.find(
+const relayHeadingProjection = relayReceiverUse.projections.find(
   (projection) => projection.slotName === 'heading',
 );
 assert.ok(relayHeadingProjection, 'Expected nested re-projection into the receiver heading slot.');
-const relayHeadingSequence = instructionSequence(
-  relayResource,
-  relayHeadingProjection.instructionSequenceProductHandle,
-);
+const relayHeadingInstructions = projectionInstructions(relayResource, relayHeadingProjection);
 const forwardedOutlet = hydrateElements(relayResource).find(
   (instruction) =>
     instruction.auSlotProcessContent?.name === 'forwarded'
-    && relayHeadingSequence.instructions.some((reference) => reference.productHandle === instruction.productHandle),
+    && relayHeadingInstructions.some((reference) => reference.productHandle === instruction.productHandle),
 );
 assert.ok(forwardedOutlet, 'Expected the nested AuSlot outlet to remain inside the projected instruction sequence.');
 
@@ -283,12 +284,12 @@ const shadowUse = hydrateElements(appResource).find(
   (instruction) => instruction.elementName === 'shadow-slot-receiver',
 );
 assert.deepEqual(
-  shadowUse?.projectionInstructionSequences.map((projection) => projection.slotName),
+  shadowUse?.projections.map((projection) => projection.slotName),
   ['named'],
   'Expected a shadow host to project only explicitly named au-slot children; ordinary light DOM remains light DOM.',
 );
 
-const compilationRows = queryRows(SemanticAppQueryKind.TemplateCompilations, 'full');
+const compilationRows = queryRows(SemanticAppQueryKind.TemplateCompilations, 'handles');
 const compilationRow = (name) => {
   const row = compilationRows.find((candidate) => candidate.definitionName === name);
   assert.ok(row, `Expected public compilation row "${name}".`);
@@ -297,7 +298,33 @@ const compilationRow = (name) => {
 assert.equal(compilationRow('shadow-slot-receiver').compiledTemplateHasSlots, true);
 assert.equal(compilationRow('projection-receiver').compiledTemplateHasSlots, false);
 assert.equal(compilationRow('projection-receiver').compiledTemplateNeedsCompile, false);
-assert.equal(compilationRow('content-projection-topology-app').contentProjectionSequences, 9);
+const appCompilationRow = compilationRow('content-projection-topology-app');
+const appCompiledTemplates = appResource.compilation.compiledTemplate.compiledTemplates;
+assert.equal(appCompilationRow.contentProjectionDefinitions, 9);
+assert.equal(appCompilationRow.compiledTemplates, appCompiledTemplates.length);
+assert.equal(appCompilationRow.generatedCompiledTemplates, appCompiledTemplates.length - 1);
+assert.equal(
+  appCompilationRow.rootRenderTargets,
+  appResource.compilation.compiledTemplate.compiledTemplate.targets.length,
+);
+assert.equal(
+  appCompilationRow.allRenderTargets,
+  appResource.compilation.compiledTemplate.readAllRenderTargets().length,
+);
+assert.equal(
+  appCompilationRow.handles.rootCompiledTemplateProductHandle,
+  appResource.compilation.compiledTemplate.compiledTemplate.productHandle,
+);
+assert.deepEqual(
+  appCompilationRow.handles.compiledTemplateProductHandles,
+  appCompiledTemplates.map((template) => template.productHandle),
+);
+const topology = app.appTopology('handles').value;
+const appRoot = topology.appRoots.find((candidate) =>
+  candidate.component?.elementName === 'content-projection-topology-app'
+);
+assert.ok(appRoot);
+assert.equal(appRoot.compiledTemplates, appCompiledTemplates.length);
 
 const runtimeRendering = appResource.runtimeAnalysis.runtimeRendering;
 const rootController = runtimeRendering.rootController;
@@ -331,11 +358,11 @@ assert.deepEqual(
 );
 assert.deepEqual(
   multiSlotsInfo.projections.map((projection) => projection.contributorSourceAddressHandles.length),
-  multiSlotUse.projectionInstructionSequences.map((projection) => projection.contributors.length),
+  multiSlotUse.projections.map((projection) => projection.contributors.length),
   'Expected IAuSlotsInfo projection provenance to retain every grouped contributor.',
 );
 
-const emptyReceiverUse = receiverUses.find((instruction) => instruction.projectionInstructionSequences.length === 0);
+const emptyReceiverUse = receiverUses.find((instruction) => instruction.projections.length === 0);
 assert.ok(emptyReceiverUse);
 const emptyReceiverController = runtimeRendering.readControllerForInstructionUnderParent(
   emptyReceiverUse.productHandle,
@@ -431,12 +458,20 @@ for (const view of selectedMultiViews) {
 const repeatedHeadingViews = selectedMultiViews.filter((view) => view.slotName === 'heading');
 assert.equal(repeatedHeadingViews.length, 2);
 assert.equal(
-  repeatedHeadingViews[0].instructionSequence?.productHandle,
-  repeatedHeadingViews[1].instructionSequence?.productHandle,
+  repeatedHeadingViews[0].compiledTemplate?.productHandle,
+  repeatedHeadingViews[1].compiledTemplate?.productHandle,
 );
 assert.equal(
-  repeatedHeadingViews[0].viewFactory?.definitionProductHandle,
-  repeatedHeadingViews[1].viewFactory?.definitionProductHandle,
+  repeatedHeadingViews[0].viewFactory?.compiledTemplateProductHandle,
+  repeatedHeadingViews[1].viewFactory?.compiledTemplateProductHandle,
+);
+assert.equal(
+  repeatedHeadingViews[0].syntheticController?.compiledTemplateProductHandle,
+  repeatedHeadingViews[0].compiledTemplate?.productHandle,
+);
+assert.equal(
+  repeatedHeadingViews[1].syntheticController?.compiledTemplateProductHandle,
+  repeatedHeadingViews[1].compiledTemplate?.productHandle,
 );
 assert.notEqual(
   repeatedHeadingViews[0].viewFactory?.productHandle,
@@ -591,13 +626,13 @@ const projectionRows = queryRows(SemanticAppQueryKind.TemplateContentProjections
 assert.equal(projectionRows.length, 74);
 assert.deepEqual(
   Object.fromEntries(
-    ['provider-sequence', 'au-slot-view', 'native-slot-outlet'].map((surfaceKind) => [
+    ['provider-definition', 'au-slot-view', 'native-slot-outlet'].map((surfaceKind) => [
       surfaceKind,
       projectionRows.filter((row) => row.surfaceKind === surfaceKind).length,
     ]),
   ),
   {
-    'provider-sequence': 15,
+    'provider-definition': 15,
     'au-slot-view': 55,
     'native-slot-outlet': 4,
   },
@@ -615,6 +650,26 @@ assert.ok(
   ),
   'Expected root-only receiver analysis to preserve absence instead of collapsing it into intrinsic empty slots info.',
 );
+const providerRows = projectionRows.filter((row) => row.surfaceKind === 'provider-definition');
+for (const row of providerRows) {
+  const owner = resource(row.renderingDefinitionName);
+  assert.ok(
+    owner.compilation.compiledTemplate.compiledTemplates.some((template) =>
+      template.productHandle === row.handles.compiledTemplateProductHandle
+    ),
+    'Expected every public provider definition to name a compiler-owned compiled-template product.',
+  );
+}
+for (const row of projectionRows.filter((candidate) =>
+  candidate.surfaceKind === 'au-slot-view' && candidate.selectionKind === 'projected'
+)) {
+  const provider = providerRows.find((candidate) =>
+    candidate.handles.providerInstructionProductHandle === row.handles.providerInstructionProductHandle
+      && candidate.slotName === row.slotName
+  );
+  assert.ok(provider, 'Expected every selected projected view to retain its provider definition row.');
+  assert.equal(row.handles.compiledTemplateProductHandle, provider.handles.compiledTemplateProductHandle);
+}
 
 const controllerRows = queryRows(SemanticAppQueryKind.RuntimeControllers, 'handles');
 const multiReceiverRow = controllerRows.find((row) =>
@@ -631,6 +686,43 @@ assert.equal(
   receiverHydrationContext.productHandle,
 );
 assert.equal(multiReceiverRow.handles.auSlotsInfoProductHandle, multiSlotsInfo.productHandle);
+const compiledTemplateByHandle = new Map(resources.flatMap((candidate) =>
+  candidate.compilation.compiledTemplate.compiledTemplates.map((template) => [template.productHandle, template])
+));
+const controllerRowByHandle = new Map(controllerRows.map((row) => [
+  row.handles.controllerProductHandle,
+  row,
+]));
+const publicViewFactoryRoles = new Set();
+for (const candidate of resources) {
+  const rendering = candidate.runtimeAnalysis.runtimeRendering;
+  for (const viewFactory of rendering.viewFactories) {
+    const compiledTemplate = compiledTemplateByHandle.get(viewFactory.compiledTemplateProductHandle);
+    const ownerRow = controllerRowByHandle.get(viewFactory.parent?.productHandle);
+    assert.ok(compiledTemplate, 'Expected every view factory to name a published compiled template.');
+    assert.ok(ownerRow, 'Expected every view-factory owner to have a public controller row.');
+    assert.equal(ownerRow.handles.viewFactoryProductHandle, viewFactory.productHandle);
+    assert.equal(
+      ownerRow.handles.viewFactoryCompiledTemplateProductHandle,
+      compiledTemplate.productHandle,
+    );
+    assert.ok(ownerRow.handles.viewFactoryCompiledTemplateClaimHandle);
+    assert.equal(ownerRow.viewFactoryCompiledTemplateRole, compiledTemplate.context.role);
+    assert.equal(ownerRow.viewFactoryCompiledTemplateState, compiledTemplate.state);
+    publicViewFactoryRoles.add(ownerRow.viewFactoryCompiledTemplateRole);
+
+    const syntheticController = rendering.controllers.find((controller) =>
+      controller.creationKind === 'synthetic-view'
+        && controller.viewFactoryProductHandle === viewFactory.productHandle
+    );
+    const syntheticRow = controllerRowByHandle.get(syntheticController?.productHandle);
+    assert.ok(syntheticController, 'Expected every view factory to realize one synthetic controller.');
+    assert.ok(syntheticRow, 'Expected every synthetic view to have a public controller row.');
+    assert.equal(syntheticRow.handles.compiledTemplateProductHandle, compiledTemplate.productHandle);
+    assert.ok(syntheticRow.handles.compiledTemplateClaimHandle);
+  }
+}
+assert.deepEqual([...publicViewFactoryRoles].sort(), ['projection', 'template-controller']);
 for (const row of multiViewRows.filter((candidate) => candidate.selectionKind === 'projected')) {
   assert.equal(
     row.handles.factoryHydrationContextProductHandle,
@@ -1037,8 +1129,8 @@ console.log(JSON.stringify({
     publicProjectionRows: projectionRows.length,
     hydrationContexts: runtimeRendering.hydrationContexts.length,
     auSlotsInfos: runtimeRendering.auSlotsInfos.length,
-    projectedSequences: compilationRows.reduce(
-      (count, row) => count + row.contentProjectionSequences,
+    projectedDefinitions: compilationRows.reduce(
+      (count, row) => count + row.contentProjectionDefinitions,
       0,
     ),
   },

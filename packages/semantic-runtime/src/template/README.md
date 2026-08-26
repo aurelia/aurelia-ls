@@ -314,19 +314,22 @@ classification, expression parsing, and instruction lowering converge on the sam
   existing `TemplateRenderTarget` publication directly; template-controller and projection child contexts retain exact
   known row boundaries, projected/logical target ordinals, target kinds, authored target lineage, and instruction
   grouping. Row posture and context frontiers keep executable command/process effects from turning later projected
-  ordinals into false exactness. Open command bodies still allocate their known target row with an empty compatibility
+  ordinals into false exactness. Open command bodies still allocate their known target row with an empty exact row
   sequence. A closed text interpolation keeps one parser-owned aggregate expression product while each hole owns an
   independent complete target row, `TextBindingInstruction`, exact expression-range source, and stable chain index.
   An incomplete text parse retains one explicitly open compatibility row/instruction with a null aggregate chain
   selector so MCP and IDE keep the instruction-to-scope handoff without making that row AOT-emittable. A typed
-  `compiler.open-text-expansion` seam owns that uncertainty. The current singular child `TemplateInstructionSequence`
-  remains an explicitly named flat compatibility projection of nested context rows until exact child compiled contexts
-  are durable. The plan is acyclic, sealed at assembly, and generation-local; transformed marker/target occurrences join
-  it only after compiler execution owns their creation.
+  `compiler.open-text-expansion` seam owns that uncertainty. The root `TemplateCompilationContext` remains the durable
+  compiler-environment carrier; sealed template-controller/projection target contexts are run-local construction
+  authority and each publishes one child `CompiledTemplate`. Generated target ordinals restart inside that definition,
+  and static zero-row children retain their context-local reachable structure. TC/projection instructions reference the
+  child compiled definition directly and provide the one-way ownership edge. The plan is acyclic, sealed at assembly,
+  and generation-local; transformed marker/target occurrences join it only after compiler execution owns their creation.
 - `compiled-template.ts` and `compiled-template-materializer.ts` model the normalized compiler/runtime handoff behind
   the runtime's transformed template DOM, target rows, surrogate rows, and `ICompiledElementComponentDefinition`
-  instructions. The current product retains authored-node-linked render targets and instruction sequences; it does not
-  yet materialize the browser-parsed, compiler-mutated DOM tree. That missing tree belongs to the latent transformed
+  instructions. Root and generated child products retain context-local authored-node lineage, exact render targets, and
+  row sequences. They still do not materialize the browser-parsed, compiler-mutated DOM blueprint; zero-row reachable
+  nodes conserve static content but are not a substitute for that transformed tree. The missing blueprint belongs to the latent transformed
   template phase, not to the authored `HtmlParseEmission`. The materializer assembles runtime-shaped rows for text
   interpolation, let elements (including an empty `<let>` hydration row), custom elements,
   custom attributes, template controllers, surrogate host attribute instructions, static/property-set instructions, and
@@ -345,14 +348,14 @@ classification, expression parsing, and instruction lowering converge on the sam
   compiled instruction assembly instead of reconstructing it in renderer or value-channel consumers.
   `native-form-control-semantics.ts` owns the shared input/select target roles and initialization dependencies consumed
   by both compiled ordering and checked/select value-channel analysis. Root
-  containerless custom-element rows are render-location targets at this boundary. Exact nested target ownership remains
-  part of the transformed-template work. `runtime-synthetic-view-targets.ts` still projects the flat compatibility
-  sequence back into runtime rows; it must be deleted when exact nested targets and compiler-owned child definitions
-  become durable rather than growing into a peer authority.
+  containerless custom-element rows are render-location targets at this boundary. The instruction's `containerless`
+  field retains only the authored usage flag; definition-level containerless participates in effective target geometry
+  separately, matching the JIT/runtime wire. Exact transformed marker geometry remains part of transformed-template
+  work, but nested row ownership is compiler-owned and no longer reconstructed at runtime.
 - `runtime-rendering-materializer.ts` owns the runtime `Rendering` dispatch loop over compiled render targets and
   instruction sequences. `runtime-view-factory-materializer.ts` owns the `Rendering.getViewFactory(...)` product lane
-  for template controllers: generated embedded custom-element definitions, `IViewFactory` products, synthetic-view
-  aggregate products, and the claims that connect them to child instruction sequences.
+  for template controllers: `IViewFactory` products over compiler-owned child `CompiledTemplate` definitions,
+  synthetic-view aggregate products, and the claims that connect them without manufacturing resource definitions.
   `runtime-controller-creation-materializer.ts` owns root, renderer-created child, and synthetic-view controller frame
   creation, including child-container materialization and controller hydration lifecycle steps.
   `runtime-controller-publication.ts` owns durable controller products, controller materialization records, and
@@ -618,16 +621,15 @@ classification, expression parsing, and instruction lowering converge on the sam
   `RuntimeRenderingEmission` indexes that relation for the same ownership path; this keeps projected content, captured
   transfer, and nested same-file local templates from being guessed through source spans or execution controllers.
   Source containment remains only for rows that genuinely have no binding/instruction product.
-  Custom-element controllers publish `configuration.controller-uses-compiled-template` claims; template-controller
-  controllers publish `configuration.controller-uses-instruction-sequence` claims for their nested child sequence. Those
-  controllers also materialize an `IViewFactory` product with a generated embedded custom-element definition, matching
-  the `ViewFactory.def` shape produced by `Rendering.getViewFactory(...)`. The factory links to both that definition and
-  the child instruction sequence, creates an aggregate `SyntheticViewController` product, and runs a child
-  `Rendering.render(...)` pass for the embedded instruction sequence, mirroring `TemplateControllerRenderer ->
+  Root/custom-element, template-controller, and synthetic-view controllers publish
+  `configuration.controller-uses-compiled-template` claims for their exact definitions. Template controllers also
+  materialize an `IViewFactory` whose compiled-template handle is the semantic counterpart of runtime `ViewFactory.def`;
+  no runtime-created `Resource.Definition` product competes with compiler ownership. The factory creates an aggregate
+  `SyntheticViewController` product and runs the child definition's exact target rows, mirroring `TemplateControllerRenderer ->
   Rendering.getViewFactory(...) -> factory.create(...) -> Controller.$view(...) -> _hydrateSynthetic()`. This is
   intentionally aggregate/cardinality-aware rather than per-runtime-instance: the controller row records `many`,
-  `optional`, or `single` through template-controller semantics. The synthetic render pass groups embedded instructions
-  by authored target node before dispatch so nested renderer and spread-compile logic can still see the target node.
+  `optional`, or `single` through template-controller semantics. The synthetic render pass dispatches the child
+  compiled template's exact target/row products; nested renderer and spread-compile logic no longer depend on authored-node regrouping.
   Recursive child custom-element rendering is guarded by controller ancestry over custom-element definition handles,
   not by fresh controller product handles, so self-recursive or mutually recursive component templates stay finite while
   still exposing the first aggregate child-view surface. When the guard is reached, the child controller records a

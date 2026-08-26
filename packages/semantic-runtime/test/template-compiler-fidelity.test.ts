@@ -5,9 +5,9 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, test } from 'vitest';
 
 import { SemanticAppQueryKind } from '../src/api/contracts.js';
-import { createSemanticRuntime } from '../src/api/runtime.js';
+import { createSemanticRuntime, type SemanticApp } from '../src/api/runtime.js';
 import { ExpressionParseResultKind } from '../src/expression/parse-result-algebra.js';
-import type { AddressHandle } from '../src/kernel/handles.js';
+import type { AddressHandle, ProductHandle } from '../src/kernel/handles.js';
 import {
   NodeSemanticRuntimeProjectInputHost,
   SemanticRuntimeProjectInputAuthority,
@@ -15,17 +15,22 @@ import {
 import { sourceSpanAddressForAddress } from '../src/kernel/source-address.js';
 import type { KernelStoreReadView } from '../src/kernel/store.js';
 import { OpenSeamReasonKind } from '../src/kernel/open-seam.js';
+import { KernelVocabulary } from '../src/kernel/vocabulary.js';
 import { runtimeBindingSourceExpression } from '../src/observation/runtime-binding-expression.js';
 import { RuntimeBindingDataFlowSourceKind } from '../src/observation/runtime-binding-observation.js';
 import { RuntimeExpressionOperationKind } from '../src/runtime-expression/runtime-expression-access-use.js';
 import { RuntimeOperationReachability } from '../src/runtime-expression/runtime-operation.js';
-import { CompiledTemplateState, TemplateRenderTargetKind } from '../src/template/compiled-template.js';
+import {
+  CompiledTemplateContextRole,
+  CompiledTemplateState,
+  TemplateRenderTargetKind,
+} from '../src/template/compiled-template.js';
 import {
   TemplateCompilerTargetContextRole,
   TemplateCompilerTargetContextState,
   TemplateCompilerTargetRowPosture,
 } from '../src/template/compiler-target-plan.js';
-import { HtmlElement, HtmlText } from '../src/template/html-ir.js';
+import { HtmlElement, HtmlText, type HtmlIrNode } from '../src/template/html-ir.js';
 import {
   HydrateElementInstruction,
   HydrateLetElementInstruction,
@@ -36,6 +41,8 @@ import {
   type TemplateInstruction,
 } from '../src/template/instruction-ir.js';
 import { ContentBinding, RuntimeBindingKind } from '../src/template/runtime-binding.js';
+import { RuntimeControllerCreationKind } from '../src/template/runtime-controller.js';
+import { TemplateProductDetails } from '../src/template/product-details.js';
 import {
   bindingSourceEnvironmentSelectionForTemplateExpressionParseAtOffset,
   RuntimeBindingSourceEnvironmentSelectionKind,
@@ -84,14 +91,22 @@ describe('template compiler fidelity', () => {
     expect(hydrateLet?.node.productHandle).toBe(emptyLet?.productHandle);
     expect(hydrateLet?.instructionProductHandles).toEqual([]);
 
-    const containerlessTarget = compiled.renderTargets.find((target) =>
+    const containerlessTarget = compiled.compiledTemplate.targets.find((target) =>
       instructionsForTarget(compiled.instructions, compiled.instructionSequences, target.instructionSequenceProductHandle)
-        .some((instruction) => instruction instanceof HydrateElementInstruction && instruction.containerless)
+        .some((instruction) =>
+          instruction instanceof HydrateElementInstruction
+            && instruction.elementName === 'containerless-card'
+        )
     );
     expect(containerlessTarget?.targetKind).toBe(TemplateRenderTargetKind.RenderLocation);
+    const definitionContainerlessInstruction = compiled.instructions.find((instruction) =>
+      instruction instanceof HydrateElementInstruction
+        && instruction.elementName === 'containerless-card'
+    );
+    expect(definitionContainerlessInstruction).toEqual(expect.objectContaining({ containerless: false }));
 
     const nodes = new Map(compilation.html.nodes.map((node) => [node.productHandle, node]));
-    const targetOrders = compiled.renderTargets.flatMap((target) => {
+    const targetOrders = compiled.compiledTemplate.targets.flatMap((target) => {
       const node = target.htmlNode?.productHandle == null ? null : nodes.get(target.htmlNode.productHandle) ?? null;
       if (!(node instanceof HtmlElement)) {
         return [];
@@ -123,7 +138,7 @@ describe('template compiler fidelity', () => {
     expect(targetPlan.root.state).toBe(TemplateCompilerTargetContextState.Open);
     expect(targetPlan.root.projectedTargetCount).toBe(14);
     expect(rootRows).toHaveLength(14);
-    expect(compiled.renderTargets).toHaveLength(14);
+    expect(compiled.compiledTemplate.targets).toHaveLength(14);
     expect(rootRows.map((row) => ({
       node: row.node instanceof HtmlElement ? row.node.tagName : row.node.text,
       projectedTargetOrdinal: row.projectedTargetOrdinal,
@@ -149,7 +164,7 @@ describe('template compiler fidelity', () => {
     expect(targetPlan.root.readFrontiers().map((frontier) => frontier.projectedTargetOrdinal))
       .toEqual([1, 3, 8]);
     rootRows.forEach((row, index) => {
-      const target = compiled.renderTargets[index]!;
+      const target = compiled.compiledTemplate.targets[index]!;
       expect(row.ordinal).toBe(index);
       expect(row.targetKind).toBe(target.targetKind);
       expect(row.node.productHandle).toBe(target.htmlNode?.productHandle);
@@ -178,7 +193,7 @@ describe('template compiler fidelity', () => {
       compilation.unit.templateSource.markup,
       row.sourceAddressHandle,
     ))).toEqual(['first', 'second']);
-    const multiHoleTargets = multiHoleRows.map((row) => compiled.renderTargets[row.ordinal]!);
+    const multiHoleTargets = multiHoleRows.map((row) => compiled.compiledTemplate.targets[row.ordinal]!);
     const sequencesByHandle = new Map(compiled.instructionSequences.map((sequence) => [
       sequence.productHandle,
       sequence,
@@ -290,6 +305,52 @@ describe('template compiler fidelity', () => {
     const projectionContexts = targetContexts.filter((context) =>
       context.role === TemplateCompilerTargetContextRole.Projection
     );
+    expect(compiled.compiledTemplates).toHaveLength(targetContexts.length);
+    const reachableNodeOwners = new Map<string, string>();
+    for (const context of targetContexts) {
+      const contextTemplate = compiled.readCompiledTemplate(context.compiledTemplate.productHandle);
+      expect(contextTemplate).toEqual(expect.objectContaining({
+        productHandle: context.compiledTemplate.productHandle,
+        identityHandle: context.compiledTemplate.identityHandle,
+        context: expect.objectContaining({
+          role: compiledTemplateRole(context.role),
+        }),
+      }));
+      expect(contextTemplate?.targets).toHaveLength(context.readRows().length);
+      if (context.ownerContext != null) {
+        const parentClaims = runtime.workspace.store.readClaimsForSubject(
+          context.ownerContext.compiledTemplate.productHandle,
+        ).map((handle) => runtime.workspace.store.readClaim(handle));
+        const instructionClaims = runtime.workspace.store.readClaimsForSubject(
+          context.owner.productHandle,
+        ).map((handle) => runtime.workspace.store.readClaim(handle));
+        expect(parentClaims).toContainEqual(expect.objectContaining({
+          predicateKey: KernelVocabulary.Template.ContainsChildCompiledTemplate.key,
+          objectHandle: context.compiledTemplate.productHandle,
+        }));
+        expect(instructionClaims).toContainEqual(expect.objectContaining({
+          predicateKey: KernelVocabulary.Instruction.InstructionOwnsChildCompiledTemplate.key,
+          objectHandle: context.compiledTemplate.productHandle,
+        }));
+      }
+      context.readRows().forEach((row, rowIndex) => {
+        const target = contextTemplate?.targets[rowIndex];
+        const sequence = target == null
+          ? null
+          : sequencesByHandle.get(target.instructionSequenceProductHandle) ?? null;
+        expect(target).toEqual(expect.objectContaining({
+          targetKind: row.targetKind,
+          htmlNode: expect.objectContaining({ productHandle: row.node.productHandle }),
+        }));
+        expect(sequence?.instructions.map((instruction) => instruction.productHandle)).toEqual(
+          row.instructions.map((instruction) => instruction.productHandle),
+        );
+      });
+      for (const productHandle of contextTemplate?.compilerReachableNodeProductHandles ?? []) {
+        expect(reachableNodeOwners.has(productHandle)).toBe(false);
+        reachableNodeOwners.set(productHandle, contextTemplate!.productHandle);
+      }
+    }
     expect(controllerContexts.every((context) => context.state === TemplateCompilerTargetContextState.Complete)).toBe(true);
     expect(projectionContexts.every((context) => context.state === TemplateCompilerTargetContextState.Complete)).toBe(true);
     const controllerInstructions = compiled.instructions.filter((instruction): instruction is HydrateTemplateControllerInstruction =>
@@ -319,7 +380,8 @@ describe('template compiler fidelity', () => {
 
     const containerlessContext = controllerContexts.find((context) =>
       context.readRows().some((row) => row.instructions.some((instruction) =>
-        instruction instanceof HydrateElementInstruction && instruction.containerless
+        instruction instanceof HydrateElementInstruction
+          && instruction.elementName === 'containerless-card'
       ))
     );
     expect(containerlessContext?.readRows()).toEqual([
@@ -329,13 +391,7 @@ describe('template compiler fidelity', () => {
       const ownerInstruction = controllerInstructions.find((instruction) =>
         instruction.productHandle === context.owner.productHandle
       );
-      return ownerInstruction?.childInstructionSequenceProductHandle != null
-        && context.compatibilityInstructionSequenceProductHandle === ownerInstruction.childInstructionSequenceProductHandle
-        && context.flattenInstructions().map((instruction) => instruction.productHandle).join('\0')
-          === flattenedSequenceInstructionHandles(
-            compiled.instructionSequences,
-            ownerInstruction.childInstructionSequenceProductHandle,
-          ).join('\0');
+      return ownerInstruction?.childCompiledTemplate?.productHandle === context.compiledTemplate.productHandle;
     })).toBe(true);
 
     const projectionInstruction = compiled.instructions.find((instruction): instruction is HydrateElementInstruction =>
@@ -358,16 +414,13 @@ describe('template compiler fidelity', () => {
         && row.targetKind === TemplateRenderTargetKind.MarkerTarget
       ) === true
     )).toBe(true);
-    for (const projection of projectionInstruction.projectionInstructionSequences) {
+    for (const projection of projectionInstruction.projections) {
       const context = projectionContexts.find((candidate) =>
         candidate.owner.productHandle === projectionInstruction.productHandle
         && candidate.slotName === projection.slotName
       );
-      expect(context?.flattenInstructions().map((instruction) => instruction.productHandle)).toEqual(
-        flattenedSequenceInstructionHandles(compiled.instructionSequences, projection.instructionSequenceProductHandle),
-      );
-      expect(context?.compatibilityInstructionSequenceProductHandle)
-        .toBe(projection.instructionSequenceProductHandle);
+      expect(context?.compiledTemplate.productHandle)
+        .toBe(projection.compiledTemplate.productHandle);
     }
 
     const openClassificationResource = app.emission.templates.resources.find((candidate) =>
@@ -409,6 +462,113 @@ describe('template compiler fidelity', () => {
       projectedTargetOrdinal: 0,
       posture: TemplateCompilerTargetRowPosture.Complete,
     }]);
+
+    const staticContextResource = requiredTemplateResource(app, 'static-context-probe');
+    const staticControllerContext = staticContextResource.compilation.compiledTemplate.targetPlan.readContexts()
+      .find((context) => context.role === TemplateCompilerTargetContextRole.TemplateController);
+    if (staticControllerContext == null) throw new Error('Expected the static template-controller context.');
+    const staticChildTemplate = staticContextResource.compilation.compiledTemplate.readCompiledTemplate(
+      staticControllerContext.compiledTemplate.productHandle,
+    );
+    expect(staticChildTemplate).toEqual(expect.objectContaining({
+      state: CompiledTemplateState.Complete,
+      needsCompile: false,
+      targets: [],
+    }));
+    expect(htmlNodeLabels(
+      staticContextResource.compilation.html.nodes,
+      staticChildTemplate?.compilerReachableNodeProductHandles ?? [],
+    )).toEqual(['div', 'span', 'static child']);
+    const staticViewFactories = staticContextResource.runtimeAnalysis.runtimeRendering.viewFactories.filter(
+      (factory) => factory.compiledTemplateProductHandle === staticChildTemplate?.productHandle,
+    );
+    expect(staticViewFactories).toHaveLength(1);
+    expect(staticContextResource.runtimeAnalysis.runtimeRendering.controllers.filter((controller) =>
+      controller.creationKind === RuntimeControllerCreationKind.SyntheticView
+        && controller.compiledTemplateProductHandle === staticChildTemplate?.productHandle
+    )).toEqual([
+      expect.objectContaining({
+        compiledTemplateProductHandle: staticChildTemplate?.productHandle,
+      }),
+    ]);
+
+    const staticProjectionResource = requiredTemplateResource(app, 'static-projection-probe');
+    const staticProjectionContexts = staticProjectionResource.compilation.compiledTemplate.targetPlan.readContexts()
+      .filter((context) => context.role === TemplateCompilerTargetContextRole.Projection);
+    expect(staticProjectionContexts.map((context) => context.slotName)).toEqual(['default', 'named']);
+    expect(new Set(staticProjectionContexts.map((context) => context.compiledTemplate.productHandle)).size).toBe(2);
+    const staticProjectionLabels = new Map<string | null, readonly string[]>();
+    for (const context of staticProjectionContexts) {
+      const childTemplate = staticProjectionResource.compilation.compiledTemplate.readCompiledTemplate(
+        context.compiledTemplate.productHandle,
+      );
+      expect(childTemplate).toEqual(expect.objectContaining({
+        state: CompiledTemplateState.Complete,
+        needsCompile: false,
+        targets: [],
+      }));
+      staticProjectionLabels.set(context.slotName, htmlNodeLabels(
+        staticProjectionResource.compilation.html.nodes,
+        childTemplate?.compilerReachableNodeProductHandles ?? [],
+      ));
+    }
+    expect(Object.fromEntries(staticProjectionLabels)).toEqual({
+      default: ['span', 'static default'],
+      named: ['template', 'b', 'static named'],
+    });
+
+    const openProjectionResource = requiredTemplateResource(app, 'open-projection-probe');
+    const openProjectionTemplate = openProjectionResource.compilation.compiledTemplate.compiledTemplates.find(
+      (template) => template.context.role === CompiledTemplateContextRole.Projection,
+    );
+    expect(openProjectionTemplate?.state).toBe(CompiledTemplateState.Open);
+    expect(openProjectionResource.runtimeAnalysis.runtimeRendering.contentProjectionViews.find((view) =>
+      view.compiledTemplate?.productHandle === openProjectionTemplate?.productHandle
+    )?.closureKind).toBe('open');
+
+    const slotResource = requiredTemplateResource(app, 'slot-under-template-controller-probe');
+    const slotCompiled = slotResource.compilation.compiledTemplate;
+    expect(slotCompiled.compiledTemplate.hasSlots).toBe(true);
+    expect(slotCompiled.compiledTemplate.nativeSlotOutlets).toHaveLength(1);
+    expect(slotCompiled.compiledTemplates
+      .filter((template) => template.context.role !== CompiledTemplateContextRole.Root)
+      .every((template) => !template.hasSlots && template.nativeSlotOutlets.length === 0))
+      .toBe(true);
+
+    const usageContainerlessResource = requiredTemplateResource(app, 'containerless-usage-probe');
+    const usageInstruction = usageContainerlessResource.compilation.compiledTemplate.instructions.find(
+      (instruction): instruction is HydrateElementInstruction =>
+        instruction instanceof HydrateElementInstruction && instruction.elementName === 'projection-card'
+    );
+    expect(usageInstruction?.containerless).toBe(true);
+    const usageTarget = usageContainerlessResource.compilation.compiledTemplate.compiledTemplate.targets.find((target) =>
+      instructionsForTarget(
+        usageContainerlessResource.compilation.compiledTemplate.instructions,
+        usageContainerlessResource.compilation.compiledTemplate.instructionSequences,
+        target.instructionSequenceProductHandle,
+      ).includes(usageInstruction!)
+    );
+    expect(usageTarget?.targetKind).toBe(TemplateRenderTargetKind.RenderLocation);
+
+    const compilerTargetHandles = new Set(app.emission.templates.resources.flatMap((templateResource) =>
+      templateResource.compilation.compiledTemplate.compiledTemplates.flatMap((template) =>
+        template.targets.map((target) => target.productHandle)
+      )
+    ));
+    expect(new Set(runtime.workspace.store.productDetails.readBySlot(TemplateProductDetails.RenderTarget)
+      .map((entry) => entry.productHandle))).toEqual(compilerTargetHandles);
+    const compiledTemplateHandles = new Set(app.emission.templates.resources.flatMap((templateResource) =>
+      templateResource.compilation.compiledTemplate.compiledTemplates.map((template) => template.productHandle)
+    ));
+    expect(app.emission.templates.resources.every((templateResource) =>
+      templateResource.runtimeAnalysis.runtimeRendering.viewFactories.every((factory) =>
+        compiledTemplateHandles.has(factory.compiledTemplateProductHandle)
+      )
+      && templateResource.runtimeAnalysis.runtimeRendering.controllers
+        .filter((controller) => controller.creationKind === RuntimeControllerCreationKind.SyntheticView)
+        .every((controller) => controller.compiledTemplateProductHandle != null
+          && compiledTemplateHandles.has(controller.compiledTemplateProductHandle))
+    )).toBe(true);
   }, 30_000);
 
   test('keeps resource planning and runtime analysis partitioned by hole across projection render contexts', async () => {
@@ -664,15 +824,6 @@ function runtimeInstructionTarget(instruction: TemplateInstruction): string | nu
       : null;
 }
 
-function flattenedSequenceInstructionHandles(
-  sequences: readonly { readonly productHandle: string; readonly instructions: readonly { readonly productHandle: string | null }[] }[],
-  productHandle: string,
-): readonly (string | null)[] {
-  return sequences.find((sequence) => sequence.productHandle === productHandle)?.instructions
-    .map((instruction) => instruction.productHandle)
-    ?? [];
-}
-
 function sourceTextForAddress(
   store: KernelStoreReadView,
   source: string,
@@ -697,4 +848,43 @@ function sourceTextForPublicSource(
   return reference?.start == null || reference.end == null
     ? null
     : source.slice(reference.start, reference.end);
+}
+
+function compiledTemplateRole(
+  role: TemplateCompilerTargetContextRole,
+): CompiledTemplateContextRole {
+  switch (role) {
+    case TemplateCompilerTargetContextRole.Root:
+      return CompiledTemplateContextRole.Root;
+    case TemplateCompilerTargetContextRole.TemplateController:
+      return CompiledTemplateContextRole.TemplateController;
+    case TemplateCompilerTargetContextRole.Projection:
+      return CompiledTemplateContextRole.Projection;
+  }
+}
+
+function requiredTemplateResource(
+  app: SemanticApp,
+  definitionName: string,
+): SemanticApp['emission']['templates']['resources'][number] {
+  const resource = app.emission.templates.resources.find((candidate) =>
+    candidate.compilation.definition.name === definitionName
+  );
+  if (resource == null) throw new Error(`Expected the '${definitionName}' template resource.`);
+  return resource;
+}
+
+function htmlNodeLabels(
+  nodes: readonly HtmlIrNode[],
+  productHandles: readonly ProductHandle[],
+): readonly string[] {
+  const nodesByProduct = new Map(nodes.map((node) => [node.productHandle, node]));
+  return productHandles.map((productHandle) => {
+    const node = nodesByProduct.get(productHandle);
+    return node instanceof HtmlElement
+      ? node.tagName
+      : node instanceof HtmlText
+        ? node.text
+        : '#unknown';
+  });
 }

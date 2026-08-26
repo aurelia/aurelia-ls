@@ -30,7 +30,7 @@ export function templateControllerRuntimeEffect(
       new ExpectedSemanticEffectFilter('templateControllerFlowKind', flowKind),
       new ExpectedSemanticEffectFilter('childViewCardinality', childViewCardinality),
       new ExpectedSemanticEffectFilter('childViewRenderingState', 'expanded-aggregate'),
-      new ExpectedSemanticEffectFilter('hydrationHandoffKind', 'instruction-sequence'),
+      new ExpectedSemanticEffectFilter('hydrationHandoffKind', 'compiled-template'),
     ],
   );
 }
@@ -78,7 +78,7 @@ export function linkedTemplateControllerRuntimeEffect(
       new ExpectedSemanticEffectFilter('templateControllerFlowKind', flowKind),
       new ExpectedSemanticEffectFilter('childViewCardinality', childViewCardinality),
       new ExpectedSemanticEffectFilter('childViewRenderingState', 'expanded-aggregate'),
-      new ExpectedSemanticEffectFilter('hydrationHandoffKind', 'instruction-sequence'),
+      new ExpectedSemanticEffectFilter('hydrationHandoffKind', 'compiled-template'),
       new ExpectedSemanticEffectFilter('templateControllerLinkKind', templateControllerLinkKind),
       new ExpectedSemanticEffectFilter('linkedTemplateControllerName', linkedTemplateControllerName),
     ],

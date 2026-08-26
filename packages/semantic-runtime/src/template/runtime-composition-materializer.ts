@@ -314,7 +314,7 @@ export class RuntimeCompositionMaterializer {
     private readonly publication: KernelPublicationContext,
   ) {
     this.childContainerMaterializer = new ContainerChildMaterializer(store, publication);
-    this.controllerPublication = new RuntimeControllerPublicationMaterializer(store, publication);
+    this.controllerPublication = new RuntimeControllerPublicationMaterializer(store);
   }
 
   materialize(input: RuntimeCompositionMaterializationRequest): RuntimeCompositionEmission {

@@ -181,7 +181,7 @@ function controllerReferences(
       controller.children.flatMap(controllerReferenceReferences),
       productDetailReferences(TemplateDetailDescriptors.RuntimeBinding, ...(controller.bindingProductHandles ?? [])),
       productDetailReferences(ConfigurationDetailDescriptors.ViewFactory, controller.viewFactoryProductHandle),
-      productDetailReferences(TemplateDetailDescriptors.InstructionSequence, controller.instructionSequenceProductHandle),
+      productDetailReferences(TemplateDetailDescriptors.CompiledTemplate, controller.compiledTemplateProductHandle),
       kernelRecordReferences(
         controller.locationAddressHandle,
         controller.shadowRootAddressHandle,
@@ -201,9 +201,8 @@ function viewFactoryReferences(
 ): KernelDetailReferenceClosure {
   return mergeKernelDetailReferences(
     containerReferenceReferences(viewFactory.container),
-    productDetailReferences(ResourceDetailDescriptors.Definition, viewFactory.definitionProductHandle),
+    productDetailReferences(TemplateDetailDescriptors.CompiledTemplate, viewFactory.compiledTemplateProductHandle),
     productDetailReferences(TemplateDetailDescriptors.Instruction, viewFactory.instructionProductHandle),
-    productDetailReferences(TemplateDetailDescriptors.InstructionSequence, viewFactory.instructionSequenceProductHandle),
     controllerReferenceReferences(viewFactory.parent),
     kernelFieldProvenanceReferences(viewFactory.fieldProvenance),
   );
@@ -215,8 +214,8 @@ function auSlotsInfoReferences(
   return mergeKernelDetailReferences(
     slotsInfo.projections.flatMap((projection) => mergeKernelDetailReferences(
       productDetailReferences(
-        TemplateDetailDescriptors.InstructionSequence,
-        projection.instructionSequenceProductHandle,
+        TemplateDetailDescriptors.CompiledTemplate,
+        projection.compiledTemplateProductHandle,
       ),
       kernelRecordReferences(
         projection.sourceAddressHandle,

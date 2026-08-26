@@ -7,6 +7,9 @@ import { ResourceProductDetails } from '../resources/product-details.js';
 import type { TemplateResourceCompilationEmission } from './template-compilation-project-pass.js';
 import { TemplateProductDetails } from './product-details.js';
 import type {
+  CompiledTemplate,
+} from './compiled-template.js';
+import type {
   TemplateInstruction,
   TemplateInstructionSequence,
 } from './instruction-ir.js';
@@ -16,6 +19,7 @@ export class TemplateRuntimeAnalysisProjectContext {
   private readonly resourcesByDefinition = new Map<ProductHandle, TemplateRuntimeAnalysisResource>();
   private readonly resourcesBySequence = new Map<ProductHandle, TemplateRuntimeAnalysisResource>();
   private readonly resourcesByInstruction = new Map<ProductHandle, TemplateRuntimeAnalysisResource>();
+  private readonly resourcesByCompiledTemplate = new Map<ProductHandle, TemplateRuntimeAnalysisResource>();
   private readonly requiredResourcesByLocalKey = new Map<string, TemplateRuntimeAnalysisResource>();
 
   constructor(
@@ -35,6 +39,9 @@ export class TemplateRuntimeAnalysisProjectContext {
       }
       for (const sequence of resource.compilation.compiledTemplate.instructionSequences) {
         this.resourcesBySequence.set(sequence.productHandle, resource);
+      }
+      for (const compiledTemplate of resource.compilation.compiledTemplate.compiledTemplates) {
+        this.resourcesByCompiledTemplate.set(compiledTemplate.productHandle, resource);
       }
       for (const instruction of resource.compilation.compiledTemplate.instructions) {
         this.resourcesByInstruction.set(instruction.productHandle, resource);
@@ -73,11 +80,15 @@ export class TemplateRuntimeAnalysisProjectContext {
         .find((sequence) => sequence.productHandle === productHandle) ?? null;
   }
 
-  readResourceForInstructionSequence(
-    /** Instruction-sequence product whose owning compiler world is required. */
-    productHandle: ProductHandle | null,
-  ): TemplateRuntimeAnalysisResource | null {
-    const resource = productHandle == null ? null : this.resourcesBySequence.get(productHandle) ?? null;
+  readCompiledTemplate(productHandle: ProductHandle | null): CompiledTemplate | null {
+    const resource = productHandle == null ? null : this.resourcesByCompiledTemplate.get(productHandle) ?? null;
+    return resource == null
+      ? null
+      : this.requireResource(resource).compilation.compiledTemplate.readCompiledTemplate(productHandle);
+  }
+
+  readResourceForCompiledTemplate(productHandle: ProductHandle | null): TemplateRuntimeAnalysisResource | null {
+    const resource = productHandle == null ? null : this.resourcesByCompiledTemplate.get(productHandle) ?? null;
     return resource == null ? null : this.requireResource(resource);
   }
 
@@ -111,14 +122,13 @@ export class TemplateRuntimeAnalysisProjectContext {
       : this.requireInput(ResourceProductDetails.Definition, compilation.definition.productHandle);
     if (!(currentDefinition instanceof CustomElementDefinition)) {
       throw new Error(
-        `Runtime analysis input ${compilation.definition.productHandle} is not a custom-element definition.`,
+        `Runtime analysis input ${String(compilation.definition.productHandle)} is not a custom-element definition.`,
       );
     }
-    this.requireInput(
-      TemplateProductDetails.CompiledTemplate,
-      compilation.compiledTemplate.compiledTemplate.productHandle,
-    );
-    for (const target of compilation.compiledTemplate.renderTargets) {
+    for (const compiledTemplate of compilation.compiledTemplate.compiledTemplates) {
+      this.requireInput(TemplateProductDetails.CompiledTemplate, compiledTemplate.productHandle);
+    }
+    for (const target of compilation.compiledTemplate.readAllRenderTargets()) {
       this.requireInput(TemplateProductDetails.RenderTarget, target.productHandle);
     }
     for (const sequence of compilation.compiledTemplate.instructionSequences) {

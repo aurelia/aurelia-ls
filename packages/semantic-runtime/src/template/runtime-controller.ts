@@ -41,9 +41,7 @@ import type {
 import type {
   ObserverLocatorLookupResult,
 } from '../observation/observer-locator.js';
-import {
-  RuntimeControllerObserverSetupOutcome,
-} from './runtime-binding.js';
+import type { RuntimeControllerObserverSetupOutcome } from './runtime-binding.js';
 import {
   RuntimeOperationReachability,
 } from '../runtime-expression/runtime-operation.js';
@@ -227,7 +225,7 @@ export class RuntimeControllerFrame {
     readonly sourceAddressHandle: AddressHandle | null,
     readonly provenanceHandle: ProvenanceHandle,
     readonly viewFactoryProductHandle: ProductHandle | null = null,
-    readonly instructionSequenceProductHandle: ProductHandle | null = null,
+    readonly compiledTemplateProductHandle: ProductHandle | null = null,
     readonly syntheticOwnerInstructionProductHandle: ProductHandle | null = null,
   ) {
     this.recordAssemblyStep(
@@ -544,7 +542,7 @@ export class RuntimeControllerFrame {
       this.scope,
       this.readBindingProductHandles(),
       this.viewFactoryProductHandle,
-      this.instructionSequenceProductHandle,
+      this.compiledTemplateProductHandle,
       this.hostAddressHandle,
       null,
       null,

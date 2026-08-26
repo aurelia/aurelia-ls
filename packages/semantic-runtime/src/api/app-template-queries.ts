@@ -4301,14 +4301,17 @@ function templateCompilationRows(
       bindingCommandLowerings: resource.compilation.bindingCommandLowering.lowerings.length
         + resource.compilation.bindingCommandLowering.multiBindingLowerings.length,
       instructions: resource.compilation.compiledTemplate.instructions.length,
-      renderTargets: resource.compilation.compiledTemplate.renderTargets.length,
+      compiledTemplates: resource.compilation.compiledTemplate.compiledTemplates.length,
+      generatedCompiledTemplates: resource.compilation.compiledTemplate.compiledTemplates.length - 1,
+      rootRenderTargets: resource.compilation.compiledTemplate.compiledTemplate.targets.length,
+      allRenderTargets: resource.compilation.compiledTemplate.readAllRenderTargets().length,
       compiledTemplateState: resource.compilation.compiledTemplate.compiledTemplate.state,
       compiledTemplateHasSlots: resource.compilation.compiledTemplate.compiledTemplate.hasSlots,
       compiledTemplateNeedsCompile: resource.compilation.compiledTemplate.compiledTemplate.needsCompile,
-      contentProjectionSequences: resource.compilation.compiledTemplate.instructions.reduce(
+      contentProjectionDefinitions: resource.compilation.compiledTemplate.instructions.reduce(
         (count, instruction) => count + (
           instruction instanceof HydrateElementInstruction
-            ? instruction.projectionInstructionSequences.length
+            ? instruction.projections.length
             : 0
         ),
         0,
@@ -4336,6 +4339,10 @@ function templateCompilationRows(
         handles: {
           definitionProductHandle: resource.compilation.definition.productHandle,
           compilerWorldProductHandle: resource.compilation.compilerWorld.world.productHandle,
+          rootCompiledTemplateProductHandle: resource.compilation.compiledTemplate.compiledTemplate.productHandle,
+          compiledTemplateProductHandles: resource.compilation.compiledTemplate.compiledTemplates.map((template) =>
+            template.productHandle
+          ),
           sourceAddressHandle: resource.compilation.definition.template?.addressHandle
             ?? resource.compilation.definition.sourceAddressHandle,
         },

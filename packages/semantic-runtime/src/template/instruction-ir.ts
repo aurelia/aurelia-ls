@@ -7,6 +7,7 @@ import type {
 import type { FieldProvenance } from '../kernel/provenance.js';
 import type { BindingCommandExecutableReference } from './binding-command-reference.js';
 import type { TemplateVisibleResourceReference } from './compiler-world-reference.js';
+import type { CompiledTemplateReference } from './compiled-template.js';
 import type { HtmlAttributeReference, HtmlNodeReference } from './html-ir.js';
 
 export const enum TemplateInstructionKind {
@@ -143,8 +144,7 @@ export class HydrateElementInstruction {
     readonly resourceLookupName: string,
     /** Compiler-visible resource selected for this instruction, including header and full-definition identity. */
     readonly resource: TemplateVisibleResourceReference | null,
-    readonly childInstructionSequenceProductHandle: ProductHandle | null,
-    readonly projectionInstructionSequences: readonly HydrateElementProjectionInstructionSequence[],
+    readonly projections: readonly HydrateElementProjectionDefinition[],
     /** Known framework `processContent` data; null for ordinary or open custom-element hooks. */
     readonly auSlotProcessContent: AuSlotProcessContentInstructionData | null,
     readonly bindableInstructionProductHandles: readonly ProductHandle[],
@@ -160,12 +160,12 @@ export class HydrateElementInstruction {
 }
 
 /** Projection definition compiled from child content of one custom-element usage. */
-export class HydrateElementProjectionInstructionSequence {
+export class HydrateElementProjectionDefinition {
   constructor(
     /** Slot name on the receiving custom element; empty/default content uses `default`. */
     readonly slotName: string,
-    /** Instruction sequence for the compiled projection template. */
-    readonly instructionSequenceProductHandle: ProductHandle,
+    /** Compiler-owned generated definition that contains the projection's exact target rows and static structure. */
+    readonly compiledTemplate: CompiledTemplateReference,
     /** All authored direct children aggregated into this definition, in source order. */
     readonly contributors: readonly HydrateElementProjectionContributor[],
     /** Source address for the projected child content that produced the sequence. */
@@ -202,7 +202,7 @@ export class HydrateAttributeInstruction {
   }
 }
 
-/** Lowered template-controller instruction that owns a nested template sequence. */
+/** Lowered template-controller instruction that owns a generated child definition. */
 @auLink('template-compiler:HydrateTemplateController')
 export class HydrateTemplateControllerInstruction {
   readonly instructionKind = TemplateInstructionKind.HydrateTemplateController;
@@ -215,7 +215,8 @@ export class HydrateTemplateControllerInstruction {
     readonly controllerName: string,
     /** Compiler-visible resource selected for this instruction, including header and full-definition identity. */
     readonly resource: TemplateVisibleResourceReference | null,
-    readonly childInstructionSequenceProductHandle: ProductHandle | null,
+    /** Compiler-owned generated definition assigned to the framework instruction's `def` field. */
+    readonly childCompiledTemplate: CompiledTemplateReference | null,
     readonly bindingInstructionProductHandles: readonly ProductHandle[],
     readonly sourceAddressHandle: AddressHandle | null,
     readonly fieldProvenance: readonly FieldProvenance<TemplateInstructionField>[] = [],

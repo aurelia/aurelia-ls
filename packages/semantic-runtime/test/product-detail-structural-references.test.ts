@@ -105,6 +105,12 @@ import { TemplateDetailDescriptors } from '../src/template/detail-descriptors.js
 import { HtmlIrNodeKind, HtmlNodeReference } from '../src/template/html-ir.js';
 import { TemplateProductDetails } from '../src/template/product-details.js';
 import {
+  CompiledTemplateReference,
+} from '../src/template/compiled-template.js';
+import {
+  HydrateTemplateControllerInstruction,
+} from '../src/template/instruction-ir.js';
+import {
   RuntimeBindingKind,
   RuntimeBindingReference,
   RuntimeBindingSourceOperationKind,
@@ -331,6 +337,36 @@ describe('product-detail structural references', () => {
       computedObserverSourceReferenceReferences(null),
       runtimeEffectReferenceReferences(null),
     ]).toEqual([[], [], [], [], [], [], [], [], []]);
+  });
+
+  test('closes compiled-template references over both product detail and identity', () => {
+    const handles = new KernelHandleFactory('compiled-template-reference-closure');
+    const sourceAddress = handles.address('source');
+    const compiledTemplateProduct = handles.product('compiled-template');
+    const compiledTemplateIdentity = handles.identity('compiled-template');
+    const instruction = new HydrateTemplateControllerInstruction(
+      handles.product('instruction'),
+      handles.identity('instruction'),
+      new HtmlNodeReference(
+        HtmlIrNodeKind.Element,
+        handles.identity('node'),
+        handles.product('node'),
+        sourceAddress,
+      ),
+      { productHandle: null, addressHandle: sourceAddress, rawName: 'if.bind' },
+      'if',
+      null,
+      new CompiledTemplateReference(compiledTemplateProduct, compiledTemplateIdentity),
+      [],
+      sourceAddress,
+    );
+    const references = TemplateProductDetails.Instruction.referencesFor(instruction);
+    expectProductDetailReference(
+      references,
+      TemplateDetailDescriptors.CompiledTemplate,
+      compiledTemplateProduct,
+    );
+    expectRecordReference(references, compiledTemplateIdentity);
   });
 
   test('retains exact rich-detail occupancy across embedded observation and state products', () => {

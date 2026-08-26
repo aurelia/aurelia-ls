@@ -9,6 +9,7 @@ import {
   type TemplateCompilationContextReference,
 } from './compilation-unit.js';
 import {
+  type CompiledTemplateReference,
   TemplateRenderTargetKind,
 } from './compiled-template.js';
 import type {
@@ -17,7 +18,7 @@ import type {
 } from './html-ir.js';
 import type {
   HydrateElementInstruction,
-  HydrateElementProjectionInstructionSequence,
+  HydrateElementProjectionDefinition,
   HydrateTemplateControllerInstruction,
   TemplateInstruction,
 } from './instruction-ir.js';
@@ -56,7 +57,7 @@ export class TemplateCompilerTargetContextReference {
     readonly contextKind: TemplateCompilationContextKind,
     readonly role: TemplateCompilerTargetContextRole,
     readonly owner: TemplateCompilerTargetContextOwner,
-    readonly compatibilityInstructionSequenceProductHandle: ProductHandle | null,
+    readonly compiledTemplate: CompiledTemplateReference,
   ) {}
 }
 
@@ -75,8 +76,8 @@ export class TemplateCompilerTargetContextFrontier {
 export class TemplateCompilerTargetRowPlan {
   constructor(
     readonly localKey: string,
-    /** Prior handle-local spelling retained while root target products preserve identity. */
-    readonly compatibilityLocalKey: string,
+    /** Stable handle-local suffix used when publishing the durable target row. */
+    readonly publicationLocalKey: string,
     readonly context: TemplateCompilerTargetContextReference,
     readonly ordinal: number,
     /** Exact only when the owning context is complete; otherwise the current compatibility projection ordinal. */
@@ -97,6 +98,8 @@ export class TemplateCompilerTargetContextPlan {
   private readonly rows: TemplateCompilerTargetRowPlan[] = [];
   private readonly ownedContexts: TemplateCompilerTargetContextPlan[] = [];
   private readonly frontiers: TemplateCompilerTargetContextFrontier[] = [];
+  private readonly compilerReachableNodeProductHandles: ProductHandle[] = [];
+  private readonly compilerReachableNodeProducts = new Set<ProductHandle>();
   private sealed = false;
   private nextTargetOrdinal = 0;
 
@@ -105,8 +108,7 @@ export class TemplateCompilerTargetContextPlan {
     readonly contextKind: TemplateCompilationContextKind,
     readonly role: TemplateCompilerTargetContextRole,
     readonly owner: TemplateCompilerTargetContextOwner,
-    /** Temporary flat child sequence projected from exact rows; null only for the root context. */
-    readonly compatibilityInstructionSequenceProductHandle: ProductHandle | null,
+    readonly compiledTemplate: CompiledTemplateReference,
     /** Context whose row/instruction owns this generated definition; not the private JIT context-parent pointer. */
     readonly ownerContext: TemplateCompilerTargetContextReference | null,
     readonly root: TemplateCompilerTargetContextReference,
@@ -126,6 +128,10 @@ export class TemplateCompilerTargetContextPlan {
     return this.frontiers;
   }
 
+  readCompilerReachableNodeProductHandles(): readonly ProductHandle[] {
+    return this.compilerReachableNodeProductHandles;
+  }
+
   get state(): TemplateCompilerTargetContextState {
     return this.frontiers.length > 0
       || this.rows.some((row) => row.posture !== TemplateCompilerTargetRowPosture.Complete)
@@ -143,7 +149,7 @@ export class TemplateCompilerTargetContextPlan {
       this.contextKind,
       this.role,
       this.owner,
-      this.compatibilityInstructionSequenceProductHandle,
+      this.compiledTemplate,
     );
   }
 
@@ -182,11 +188,6 @@ export class TemplateCompilerTargetContextPlan {
     return row;
   }
 
-  /** Explicit compatibility projection for consumers that still accept one flattened child sequence. */
-  flattenInstructions(): readonly TemplateInstruction[] {
-    return this.rows.flatMap((row) => row.instructions);
-  }
-
   recordFrontier(
     local: string,
     summary: string,
@@ -208,6 +209,13 @@ export class TemplateCompilerTargetContextPlan {
     return frontier;
   }
 
+  recordCompilerReachableNode(productHandle: ProductHandle): void {
+    this.requireMutable();
+    if (this.compilerReachableNodeProducts.has(productHandle)) return;
+    this.compilerReachableNodeProducts.add(productHandle);
+    this.compilerReachableNodeProductHandles.push(productHandle);
+  }
+
   admitOwnedContext(child: TemplateCompilerTargetContextPlan): void {
     this.requireMutable();
     if (child.ownerContext?.localKey !== this.localKey) {
@@ -218,6 +226,7 @@ export class TemplateCompilerTargetContextPlan {
 
   seal(): void {
     this.sealed = true;
+    this.compilerReachableNodeProducts.clear();
   }
 
   private requireMutable(): void {
@@ -235,6 +244,7 @@ export class TemplateCompilerTargetPlan {
   constructor(
     readonly localKey: string,
     rootContext: TemplateCompilationContextReference,
+    rootCompiledTemplate: CompiledTemplateReference,
   ) {
     const rootOwner = new TemplateCompilerTargetContextOwner(
       rootContext.productHandle,
@@ -246,14 +256,14 @@ export class TemplateCompilerTargetPlan {
       TemplateCompilationContextKind.Root,
       TemplateCompilerTargetContextRole.Root,
       rootOwner,
-      null,
+      rootCompiledTemplate,
     );
     this.root = new TemplateCompilerTargetContextPlan(
       rootLocalKey,
       TemplateCompilationContextKind.Root,
       TemplateCompilerTargetContextRole.Root,
       rootOwner,
-      null,
+      rootCompiledTemplate,
       null,
       rootReference,
       rootContext.sourceAddressHandle,
@@ -278,8 +288,8 @@ export class TemplateCompilerTargetPlan {
     ownerContext: TemplateCompilerTargetContextPlan,
     instruction: HydrateTemplateControllerInstruction,
   ): TemplateCompilerTargetContextPlan {
-    if (instruction.childInstructionSequenceProductHandle == null) {
-      throw new Error(`Template-controller instruction '${instruction.productHandle}' has no child sequence allocation.`);
+    if (instruction.childCompiledTemplate == null) {
+      throw new Error(`Template-controller instruction '${instruction.productHandle}' has no child compiled-template allocation.`);
     }
     return this.createChild(
       ownerContext,
@@ -289,7 +299,7 @@ export class TemplateCompilerTargetPlan {
         instruction.productHandle,
         instruction.identityHandle,
       ),
-      instruction.childInstructionSequenceProductHandle,
+      instruction.childCompiledTemplate,
       instruction.sourceAddressHandle,
       null,
     );
@@ -298,17 +308,17 @@ export class TemplateCompilerTargetPlan {
   createProjectionContext(
     ownerContext: TemplateCompilerTargetContextPlan,
     instruction: HydrateElementInstruction,
-    projection: HydrateElementProjectionInstructionSequence,
+    projection: HydrateElementProjectionDefinition,
   ): TemplateCompilerTargetContextPlan {
     return this.createChild(
       ownerContext,
-      `${ownerContext.localKey}:projection:${instruction.productHandle}:${projection.instructionSequenceProductHandle}`,
+      `${ownerContext.localKey}:projection:${instruction.productHandle}:${projection.compiledTemplate.productHandle}`,
       TemplateCompilerTargetContextRole.Projection,
       new TemplateCompilerTargetContextOwner(
         instruction.productHandle,
         instruction.identityHandle,
       ),
-      projection.instructionSequenceProductHandle,
+      projection.compiledTemplate,
       projection.sourceAddressHandle ?? instruction.sourceAddressHandle,
       projection.slotName,
     );
@@ -328,11 +338,26 @@ export class TemplateCompilerTargetPlan {
       throw new Error('Compiler target plan contains duplicate context keys.');
     }
     const visited = new Set<TemplateCompilerTargetContextPlan>();
+    const compiledTemplateProducts = new Set<ProductHandle>();
+    const reachableNodeOwners = new Map<ProductHandle, string>();
     const visit = (context: TemplateCompilerTargetContextPlan): void => {
       if (visited.has(context)) {
         throw new Error(`Compiler target context '${context.localKey}' is owned more than once.`);
       }
       visited.add(context);
+      if (compiledTemplateProducts.has(context.compiledTemplate.productHandle)) {
+        throw new Error(`Compiler target context '${context.localKey}' reuses a compiled-template product.`);
+      }
+      compiledTemplateProducts.add(context.compiledTemplate.productHandle);
+      for (const productHandle of context.readCompilerReachableNodeProductHandles()) {
+        const priorOwner = reachableNodeOwners.get(productHandle);
+        if (priorOwner != null) {
+          throw new Error(
+            `Compiler-reachable node '${productHandle}' belongs to both '${priorOwner}' and '${context.localKey}'.`,
+          );
+        }
+        reachableNodeOwners.set(productHandle, context.localKey);
+      }
       let expectedTargetOrdinal = 0;
       context.readRows().forEach((row, ordinal) => {
         const postureCoherent = rowPostureIsCoherent(row);
@@ -362,6 +387,7 @@ export class TemplateCompilerTargetPlan {
       for (const child of context.readOwnedContexts()) {
         if (
           child.ownerContext?.localKey !== context.localKey
+          || child.ownerContext.compiledTemplate.productHandle !== context.compiledTemplate.productHandle
           || child.root.localKey !== this.root.localKey
           || this.contextsByLocalKey.get(child.localKey) !== child
         ) {
@@ -381,7 +407,7 @@ export class TemplateCompilerTargetPlan {
     localKey: string,
     role: TemplateCompilerTargetContextRole,
     owner: TemplateCompilerTargetContextOwner,
-    compatibilityInstructionSequenceProductHandle: ProductHandle,
+    compiledTemplate: CompiledTemplateReference,
     sourceAddressHandle: AddressHandle | null,
     slotName: string | null,
   ): TemplateCompilerTargetContextPlan {
@@ -397,7 +423,7 @@ export class TemplateCompilerTargetPlan {
       TemplateCompilationContextKind.SyntheticView,
       role,
       owner,
-      compatibilityInstructionSequenceProductHandle,
+      compiledTemplate,
       ownerContext.toReference(),
       this.root.toReference(),
       sourceAddressHandle,

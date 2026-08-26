@@ -52,7 +52,6 @@ import {
   type KernelPublicationContext,
   KernelPublicationPlan,
   KernelStoreBatch,
-  publishProductDetail,
   publishProductDetails,
 } from '../kernel/publication.js';
 import {
@@ -60,6 +59,7 @@ import {
   type OpenSeamKindKey,
 } from '../kernel/vocabulary.js';
 import type { CompiledTemplateEmission } from './compiled-template-materializer.js';
+import { CompiledTemplateState, type CompiledTemplate } from './compiled-template.js';
 import type { AttributeSyntaxParseEmission } from './attribute-syntax-materializer.js';
 import {
   type RuntimeBinding,
@@ -99,12 +99,10 @@ import {
 import { ResourceProductDetails } from '../resources/product-details.js';
 import {
   HydrateElementInstruction,
-  type HydrateElementProjectionInstructionSequence,
   HydrateTemplateControllerInstruction,
   IteratorBindingInstruction,
   MultiAttrInstruction,
   type TemplateInstruction,
-  type TemplateInstructionSequence,
 } from './instruction-ir.js';
 import {
   type TemplateExpressionParse,
@@ -126,9 +124,6 @@ import type {
 } from '../observation/computed-observer-source.js';
 import type { CheckerExpressionTypeWorld } from '../type-system/expression-type-world.js';
 import { ObserverLocator } from '../observation/observer-locator.js';
-import {
-  syntheticViewTargetInputs,
-} from './runtime-synthetic-view-targets.js';
 import { expressionProductHandlesForRuntimeBinding } from './runtime-binding-expression-products.js';
 import {
   type RuntimeViewFactoryMaterialization,
@@ -241,8 +236,6 @@ export class RuntimeRenderingEmission {
     readonly auSlotsInfos: readonly AuSlotsInfo[],
     /** Runtime IHydrationContext values installed by custom-element controllers. */
     readonly hydrationContexts: readonly RuntimeHydrationContext[],
-    /** Generated embedded custom-element definitions carried by runtime IViewFactory values. */
-    readonly embeddedDefinitions: readonly CustomElementDefinition[],
     /** Binding render contexts needed by later binding.bind materialization. */
     readonly bindingRenderContexts: readonly RuntimeBindingRenderContext[],
     /** Expression products evaluated in each exact rendered binding environment. */
@@ -474,7 +467,6 @@ class RuntimeRenderingMaterializationState {
   readonly scopeEffects: RuntimeBindingScopeEffect[] = [];
   readonly viewFactories: ViewFactory[] = [];
   readonly auSlotsInfos: AuSlotsInfo[] = [];
-  readonly embeddedDefinitions: CustomElementDefinition[] = [];
   readonly bindingRenderContexts: RuntimeBindingRenderContext[] = [];
   readonly childContainerEmissions: ContainerChildMaterializationEmission[] = [];
   readonly controllerIssues: RuntimeControllerIssue[] = [];
@@ -489,7 +481,6 @@ class RuntimeRenderingMaterializationState {
   readonly contentProjectionViews: RuntimeContentProjectionView[] = [];
   readonly claims: SemanticClaim[] = [];
   readonly viewFactoryByController = new Map<ProductHandle, RuntimeViewFactoryMaterialization>();
-  readonly embeddedDefinitionByInstructionSequence = new Map<ProductHandle, CustomElementDefinition>();
   private readonly controllersByProduct = new Map<ProductHandle, RuntimeControllerFrame>();
 
   constructor(
@@ -552,9 +543,9 @@ export class RuntimeRenderingMaterializer {
   ) {
     this.controllerCreation = new RuntimeControllerCreationMaterializer(store, publication);
     this.renderedInstructionRecorder = new RuntimeRenderedInstructionRecorder(store);
-    this.viewFactoryMaterializer = new RuntimeViewFactoryMaterializer(store, publication);
+    this.viewFactoryMaterializer = new RuntimeViewFactoryMaterializer(store);
     this.childContainerMaterializer = new ContainerChildMaterializer(store, publication);
-    this.controllerPublication = new RuntimeControllerPublicationMaterializer(store, publication);
+    this.controllerPublication = new RuntimeControllerPublicationMaterializer(store);
     this.spreadBindingCreator = new RuntimeSpreadBindingCreator(store, publication);
     this.rendererIssuePublisher = new RuntimeRendererIssuePublisher(store);
   }
@@ -591,10 +582,6 @@ export class RuntimeRenderingMaterializer {
         ...publishProductDetails(ConfigurationProductDetails.ViewFactory, emission.viewFactories),
         ...publishProductDetails(ConfigurationProductDetails.AuSlotsInfo, emission.auSlotsInfos),
         ...publishProductDetails(ConfigurationProductDetails.HydrationContext, emission.hydrationContexts),
-        ...emission.embeddedDefinitions.flatMap((definition) => definition.productHandle == null
-          ? []
-          : [publishProductDetail(ResourceProductDetails.Definition, definition.productHandle, definition)]
-        ),
         ...publishProductDetails(
           TemplateProductDetails.Instruction,
           emission.dynamicInstructions,
@@ -885,7 +872,6 @@ export class RuntimeRenderingMaterializer {
         const context = controller.readHydrationContext();
         return context == null ? [] : [context];
       })),
-      state.embeddedDefinitions,
       state.bindingRenderContexts,
       this.bindingExpressionProductHandles(state),
       state.childContainers(),
@@ -938,6 +924,7 @@ export class RuntimeRenderingMaterializer {
     return this.renderTargetInputsForCompiledTemplate(
       input.localKey,
       input.compiledTemplate,
+      input.compiledTemplate.compiledTemplate,
       source,
       records,
       openSeams,
@@ -946,15 +933,16 @@ export class RuntimeRenderingMaterializer {
 
   private renderTargetInputsForCompiledTemplate(
     localKey: string,
-    compiledTemplate: CompiledTemplateEmission,
+    emission: CompiledTemplateEmission,
+    compiledTemplate: CompiledTemplate,
     source: RuntimeRenderingSourceSet,
     records: KernelStoreRecord[],
     openSeams: OpenSeam[],
   ): readonly TemplateRenderingTargetPlan[] {
-    const sequencesByProduct = new Map(compiledTemplate.instructionSequences.map((sequence) => [sequence.productHandle, sequence]));
-    const instructionsByProduct = new Map(compiledTemplate.instructions.map((instruction) => [instruction.productHandle, instruction]));
+    const sequencesByProduct = new Map(emission.instructionSequences.map((sequence) => [sequence.productHandle, sequence]));
+    const instructionsByProduct = new Map(emission.instructions.map((instruction) => [instruction.productHandle, instruction]));
     const targets: TemplateRenderingTargetPlan[] = [];
-    compiledTemplate.renderTargets.forEach((target, index) => {
+    compiledTemplate.targets.forEach((target, index) => {
       const sequence = sequencesByProduct.get(target.instructionSequenceProductHandle) ?? null;
       if (sequence == null) {
         this.recordOpenSeam(
@@ -1077,6 +1065,7 @@ export class RuntimeRenderingMaterializer {
       this.renderTargetInputsForCompiledTemplate(
         local,
         compiledTemplate,
+        compiledTemplate.compiledTemplate,
         state.source,
         state.records,
         state.openSeams,
@@ -1121,11 +1110,11 @@ export class RuntimeRenderingMaterializer {
     const constructionHydrationContext = outletController.readConstructionHydrationContext();
     const providerInstruction = this.instructionForHydrationContext(state, constructionHydrationContext);
     const slotName = outletInstruction.auSlotProcessContent!.name;
-    const selected = providerInstruction?.projectionInstructionSequences.find((projection) =>
+    const selected = providerInstruction?.projections.find((projection) =>
       projection.slotName === slotName
     ) ?? null;
     const fallback = selected == null
-      ? outletInstruction.projectionInstructionSequences.find((projection) =>
+      ? outletInstruction.projections.find((projection) =>
           projection.slotName === 'default'
         ) ?? null
       : null;
@@ -1168,14 +1157,14 @@ export class RuntimeRenderingMaterializer {
       return null;
     }
 
-    const sequence = state.input.projectContext.readInstructionSequence(
-      projection.instructionSequenceProductHandle,
+    const compiledTemplate = state.input.projectContext.readCompiledTemplate(
+      projection.compiledTemplate.productHandle,
     );
-    if (sequence == null) {
+    if (compiledTemplate == null) {
       this.recordOpenSeam(
-        `${local}:missing-projection-sequence`,
+        `${local}:missing-projection-compiled-template`,
         outletController.identityHandle,
-        `AuSlot '${slotName}' selected instruction sequence '${projection.instructionSequenceProductHandle}', but its compiler product is unavailable to recursive Rendering.render emulation.`,
+        `AuSlot '${slotName}' selected generated definition '${projection.compiledTemplate.productHandle}', but its compiled-template product is unavailable to recursive Rendering.render emulation.`,
         projection.sourceAddressHandle,
         state.source,
         state.records,
@@ -1221,7 +1210,7 @@ export class RuntimeRenderingMaterializer {
         outletController,
         providerInstruction,
         projection,
-        sequence,
+        compiledTemplate,
         declaringController,
         receivingController,
         null,
@@ -1238,12 +1227,12 @@ export class RuntimeRenderingMaterializer {
       state,
       outletController,
       factoryContainer,
-      sequence,
+      compiledTemplate,
       factoryHydrationContext,
     );
     state.contentProjectionViews.push(new RuntimeContentProjectionView(
       selectionKind,
-      embedded.recursiveResult == null
+      embedded.recursiveResult == null || compiledTemplate.state !== CompiledTemplateState.Complete
         ? RuntimeContentProjectionClosureKind.Open
         : RuntimeContentProjectionClosureKind.Complete,
       slotName,
@@ -1251,7 +1240,7 @@ export class RuntimeRenderingMaterializer {
       outletController,
       providerInstruction,
       projection,
-      sequence,
+      compiledTemplate,
       declaringController,
       receivingController,
       embedded.viewFactory.viewFactory,
@@ -1416,8 +1405,8 @@ export class RuntimeRenderingMaterializer {
     state: RuntimeRenderingMaterializationState,
     controller: RuntimeControllerFrame,
   ): TemplateRenderingRunResult | null {
-    const sequence = this.syntheticViewInstructionSequence(local, state, controller);
-    if (sequence == null) {
+    const compiledTemplate = this.syntheticViewCompiledTemplate(local, state, controller);
+    if (compiledTemplate == null) {
       return null;
     }
     const factoryContainer = controller.containerFrame;
@@ -1440,7 +1429,7 @@ export class RuntimeRenderingMaterializer {
       state,
       controller,
       factoryContainer,
-      sequence,
+      compiledTemplate,
       controller.readHydrationContext(),
     ).recursiveResult;
   }
@@ -1450,21 +1439,18 @@ export class RuntimeRenderingMaterializer {
     state: RuntimeRenderingMaterializationState,
     ownerController: RuntimeControllerFrame,
     factoryContainer: Container,
-    sequence: TemplateInstructionSequence,
+    compiledTemplate: CompiledTemplate,
     hydrationContext: RuntimeHydrationContext | null,
   ): RuntimeEmbeddedViewRendering {
     const viewFactory = this.viewFactoryMaterializer.ensureForController(
       `${local}:view-factory`,
-      `${state.input.localKey}:embedded-view-definition:${sequence.productHandle}`,
       ownerController,
       factoryContainer,
-      sequence.productHandle,
+      compiledTemplate,
       state.source,
       state.records,
       state.viewFactories,
-      state.embeddedDefinitions,
       state.viewFactoryByController,
-      state.embeddedDefinitionByInstructionSequence,
     );
     const syntheticController = this.controllerCreation.createSyntheticViewController(
       local,
@@ -1480,13 +1466,13 @@ export class RuntimeRenderingMaterializer {
       syntheticController.sourceAddressHandle,
       'IViewFactory.create produced an aggregate synthetic-view controller for nested instruction analysis.',
     );
-    const resource = state.input.projectContext.readResourceForInstructionSequence(sequence.productHandle);
+    const resource = state.input.projectContext.readResourceForCompiledTemplate(compiledTemplate.productHandle);
     if (resource == null) {
       this.recordOpenSeam(
-        `${local}:missing-sequence-resource`,
+        `${local}:missing-compiled-template-resource`,
         ownerController.identityHandle,
-        `Embedded instruction sequence '${sequence.productHandle}' has no owning compiler world for recursive Rendering.render emulation.`,
-        sequence.sourceAddressHandle,
+        `Generated compiled template '${compiledTemplate.productHandle}' has no owning compiler world for recursive Rendering.render emulation.`,
+        compiledTemplate.sourceAddressHandle,
         state.source,
         state.records,
         state.openSeams,
@@ -1494,33 +1480,33 @@ export class RuntimeRenderingMaterializer {
       );
       return new RuntimeEmbeddedViewRendering(viewFactory, syntheticController, null);
     }
-    const compiledTemplate = resource.compiledTemplateEmission;
-    const instructions = this.instructionsForControllerView(state, compiledTemplate);
+    const compiledTemplateEmission = resource.compiledTemplateEmission;
+    const instructions = this.instructionsForControllerView(state, compiledTemplateEmission);
     const targetInputs = this.measure(state.input, 'synthetic-view-target-inputs', () =>
-      this.syntheticViewRenderingTargetInputs(
+      this.renderTargetInputsForCompiledTemplate(
         local,
-        sequence,
-        instructions,
+        compiledTemplateEmission,
+        compiledTemplate,
         state.source,
         state.records,
         state.openSeams,
       )
     );
-    if (targetInputs.length === 0 && sequence.instructions.length > 0) {
+    if (targetInputs.length === 0 && compiledTemplate.targets.length > 0) {
       return new RuntimeEmbeddedViewRendering(viewFactory, syntheticController, null);
     }
 
     syntheticController.recordAssemblyStep(
       RuntimeControllerAssemblyStage.Rendering,
       RuntimeControllerAssemblyStepKind.RenderInstructions,
-      sequence.productHandle,
-      sequence.sourceAddressHandle,
+      compiledTemplate.productHandle,
+      compiledTemplate.sourceAddressHandle,
       'Rendering.render dispatched synthetic-view child instruction rows.',
     );
     const result = this.measure(state.input, 'synthetic-view-render-dispatch', () =>
       resource.compilerWorld.rendering.render({
         localKey: `${state.input.localKey}:synthetic-view:${syntheticController.productHandle}`,
-        compiledTemplate: compiledTemplate.compiledTemplate,
+        compiledTemplate,
         resourceScope: resource.compilerWorld.resourceScope,
         targets: targetInputs,
         instructions,
@@ -1596,33 +1582,32 @@ export class RuntimeRenderingMaterializer {
     };
   }
 
-  private syntheticViewInstructionSequence(
+  private syntheticViewCompiledTemplate(
     local: string,
     state: RuntimeRenderingMaterializationState,
     controller: RuntimeControllerFrame,
-  ): TemplateInstructionSequence | null {
+  ): CompiledTemplate | null {
     const instructionProductHandle = controller.instructionProductHandle;
     if (instructionProductHandle == null) {
       return null;
     }
     const instruction = this.publication.readProductDetail(TemplateProductDetails.Instruction, instructionProductHandle);
     if (!(instruction instanceof HydrateTemplateControllerInstruction)
-      || instruction.childInstructionSequenceProductHandle == null) {
+      || instruction.childCompiledTemplate == null) {
       return null;
     }
 
-    const sequence = this.publication.readProductDetail(
-      TemplateProductDetails.InstructionSequence,
-      instruction.childInstructionSequenceProductHandle,
+    const compiledTemplate = state.input.projectContext.readCompiledTemplate(
+      instruction.childCompiledTemplate.productHandle,
     );
-    if (sequence != null) {
-      return sequence;
+    if (compiledTemplate != null) {
+      return compiledTemplate;
     }
 
     this.recordOpenSeam(
-      `${local}:missing-child-sequence`,
+      `${local}:missing-child-compiled-template`,
       controller.identityHandle,
-      `Template-controller '${controller.name ?? '(anonymous)'} has a child-view instruction sequence handle, but the sequence detail is not available for synthetic Rendering.render emulation.`,
+      `Template-controller '${controller.name ?? '(anonymous)'} has a child compiled-template handle, but the generated definition is not available for synthetic Rendering.render emulation.`,
       controller.sourceAddressHandle,
       state.source,
       state.records,
@@ -1630,63 +1615,6 @@ export class RuntimeRenderingMaterializer {
       [OpenSeamReasonKind.RuntimeRenderingProductMissing],
     );
     return null;
-  }
-
-  private syntheticViewRenderingTargetInputs(
-    local: string,
-    sequence: TemplateInstructionSequence,
-    instructions: readonly TemplateInstruction[],
-    source: RuntimeRenderingSourceSet,
-    records: KernelStoreRecord[],
-    openSeams: OpenSeam[],
-  ): readonly TemplateRenderingTargetPlan[] {
-    const instructionsByProduct = new Map(instructions.map((instruction) => [instruction.productHandle, instruction]));
-    const sequenceInstructions = this.instructionsForSequence(
-      sequence,
-      instructionsByProduct,
-      `${local}:target`,
-      source,
-      records,
-      openSeams,
-    );
-    if (sequenceInstructions.length === 0 && sequence.instructions.length > 0) {
-      return [];
-    }
-    return syntheticViewTargetInputs({
-      local,
-      sequence,
-      instructions: sequenceInstructions,
-      allocate: (allocationLocal) => this.allocate(allocationLocal),
-    });
-  }
-
-  private instructionsForSequence(
-    sequence: TemplateInstructionSequence,
-    instructionsByProduct: ReadonlyMap<ProductHandle, TemplateInstruction>,
-    local: string,
-    source: RuntimeRenderingSourceSet,
-    records: KernelStoreRecord[],
-    openSeams: OpenSeam[],
-  ): readonly TemplateInstruction[] {
-    const instructions = sequence.instructions
-      .map((reference) => reference.productHandle == null
-        ? null
-        : instructionsByProduct.get(reference.productHandle) ?? null
-      )
-      .filter((instruction): instruction is TemplateInstruction => instruction != null);
-    if (instructions.length !== sequence.instructions.length) {
-      this.recordOpenSeam(
-        `${local}:missing-instructions`,
-        sequence.identityHandle,
-        `Compiled instruction sequence '${sequence.productHandle}' contains instruction references that could not be hydrated for runtime Rendering.`,
-        sequence.sourceAddressHandle,
-        source,
-        records,
-        openSeams,
-        [OpenSeamReasonKind.RuntimeRenderingProductMissing],
-      );
-    }
-    return instructions;
   }
 
   private allocate(local: string): RuntimeRendererAllocation {

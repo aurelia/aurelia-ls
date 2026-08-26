@@ -14,6 +14,7 @@ import {
   type RuntimeControllerFrame,
 } from '../template/runtime-controller.js';
 import type { TemplateInstruction } from '../template/instruction-ir.js';
+import type { CompiledTemplate } from '../template/compiled-template.js';
 import { TemplateProductDetails } from '../template/product-details.js';
 import { ResourceProductDetails } from '../resources/product-details.js';
 import {
@@ -58,12 +59,11 @@ type RuntimeTemplateResourceEmission = AureliaAppWorldProjectEmission['templates
 interface RuntimeControllerProjectionIndexes {
   readonly compiledTemplateInfoByProduct: ReadonlyMap<ProductHandle, CompiledTemplateInfo>;
   readonly compiledTemplateByController: ReadonlyMap<ProductHandle, ProductClaimLink>;
-  readonly instructionSequenceByController: ReadonlyMap<ProductHandle, ProductClaimLink>;
   readonly templateControllerLinkByController: ReadonlyMap<ProductHandle, ProductClaimLink>;
   readonly viewFactoryByController: ReadonlyMap<ProductHandle, ProductClaimLink>;
   readonly syntheticControllerByViewFactory: ReadonlyMap<ProductHandle, ProductClaimLink>;
   readonly viewFactoryBySyntheticController: ReadonlyMap<ProductHandle, ProductClaimLink>;
-  readonly definitionByViewFactory: ReadonlyMap<ProductHandle, ProductClaimLink>;
+  readonly compiledTemplateByViewFactory: ReadonlyMap<ProductHandle, ProductClaimLink>;
 }
 
 interface RuntimeControllerProjectionContext {
@@ -77,11 +77,10 @@ interface RuntimeControllerProjectionState {
   readonly controllerDefinition: FullResourceDefinition | null;
   readonly instruction: TemplateInstruction | null;
   readonly compiledTemplate: ProductClaimLink | null;
-  readonly instructionSequence: ProductClaimLink | null;
   readonly viewFactory: ProductClaimLink | null;
   readonly syntheticView: ProductClaimLink | null;
-  readonly viewFactoryDefinition: ProductClaimLink | null;
-  readonly viewFactoryDefinitionDetail: FullResourceDefinition | null;
+  readonly viewFactoryCompiledTemplate: ProductClaimLink | null;
+  readonly viewFactoryCompiledTemplateDetail: CompiledTemplate | null;
   readonly templateControllerSemantics: BuiltInTemplateControllerSemantics | null;
   readonly templateControllerLink: ProductClaimLink | null;
   readonly linkedTemplateController: RuntimeControllerFrame | null;
@@ -188,11 +187,6 @@ function runtimeControllerProjectionContext(
         KernelVocabulary.Configuration.ControllerUsesCompiledTemplate.key,
         KernelVocabulary.Template.CompiledTemplate.key,
       ),
-      instructionSequenceByController: controllerClaimLinks(
-        store,
-        KernelVocabulary.Configuration.ControllerUsesInstructionSequence.key,
-        KernelVocabulary.Instruction.Sequence.key,
-      ),
       templateControllerLinkByController: controllerClaimLinks(
         store,
         KernelVocabulary.Configuration.ControllerLinksTemplateController.key,
@@ -205,11 +199,11 @@ function runtimeControllerProjectionContext(
       ),
       syntheticControllerByViewFactory,
       viewFactoryBySyntheticController: inverseProductClaimLinks(syntheticControllerByViewFactory),
-      definitionByViewFactory: productClaimLinks(
+      compiledTemplateByViewFactory: productClaimLinks(
         store,
-        KernelVocabulary.Configuration.ViewFactoryUsesDefinition.key,
+        KernelVocabulary.Configuration.ViewFactoryUsesCompiledTemplate.key,
         KernelVocabulary.Configuration.ViewFactory.key,
-        KernelVocabulary.Resource.Definition.key,
+        KernelVocabulary.Template.CompiledTemplate.key,
       ),
     },
   };
@@ -376,11 +370,11 @@ function runtimeControllerTreeRowFields(
 
 function runtimeControllerViewFactoryRowFields(
   state: RuntimeControllerProjectionState,
-): Pick<SemanticRuntimeControllerRow, 'hasViewFactory' | 'viewFactoryDefinitionName' | 'viewFactoryDefinitionClassName'> {
+): Pick<SemanticRuntimeControllerRow, 'hasViewFactory' | 'viewFactoryCompiledTemplateRole' | 'viewFactoryCompiledTemplateState'> {
   return {
     hasViewFactory: state.viewFactory != null,
-    viewFactoryDefinitionName: definitionName(state.viewFactoryDefinitionDetail),
-    viewFactoryDefinitionClassName: definitionClassName(state.viewFactoryDefinitionDetail),
+    viewFactoryCompiledTemplateRole: state.viewFactoryCompiledTemplateDetail?.context.role ?? null,
+    viewFactoryCompiledTemplateState: state.viewFactoryCompiledTemplateDetail?.state ?? null,
   };
 }
 
@@ -413,25 +407,23 @@ function runtimeControllerProjectionState(
 ): RuntimeControllerProjectionState {
   const instruction = instructionForController(controller, context.store);
   const compiledTemplate = context.indexes.compiledTemplateByController.get(controller.productHandle) ?? null;
-  const instructionSequence = context.indexes.instructionSequenceByController.get(controller.productHandle) ?? null;
   const viewFactory = viewFactoryForController(controller, context.indexes);
   const templateControllerSemantics = semanticsForController(controller, context.store);
   const templateControllerLink = context.indexes.templateControllerLinkByController.get(controller.productHandle) ?? null;
-  const viewFactoryDefinition = definitionLinkForViewFactory(viewFactory, context.indexes);
+  const viewFactoryCompiledTemplate = compiledTemplateLinkForViewFactory(viewFactory, context.indexes);
   return {
     controllerDefinition: definitionForController(context.store, controller),
     instruction,
     compiledTemplate,
-    instructionSequence,
     viewFactory,
     syntheticView: syntheticViewForViewFactory(viewFactory, context.indexes),
-    viewFactoryDefinition,
-    viewFactoryDefinitionDetail: definitionDetailForLink(viewFactoryDefinition, context.store),
+    viewFactoryCompiledTemplate,
+    viewFactoryCompiledTemplateDetail: compiledTemplateDetailForLink(viewFactoryCompiledTemplate, context.store),
     templateControllerSemantics,
     templateControllerLink,
     linkedTemplateController: linkedTemplateControllerForLink(templateControllerLink, context.emission),
     scope: controller.readScopeReference(),
-    handoffKind: hydrationHandoffKind(controller, compiledTemplate, instructionSequence),
+    handoffKind: hydrationHandoffKind(controller, compiledTemplate),
     compiledTemplateInfo: infoForCompiledTemplate(compiledTemplate, context.indexes),
   };
 }
@@ -467,13 +459,13 @@ function semanticsForController(
   );
 }
 
-function definitionLinkForViewFactory(
+function compiledTemplateLinkForViewFactory(
   viewFactory: ProductClaimLink | null,
   indexes: RuntimeControllerProjectionIndexes,
 ): ProductClaimLink | null {
   return viewFactory == null
     ? null
-    : indexes.definitionByViewFactory.get(viewFactory.productHandle) ?? null;
+    : indexes.compiledTemplateByViewFactory.get(viewFactory.productHandle) ?? null;
 }
 
 function syntheticViewForViewFactory(
@@ -485,13 +477,13 @@ function syntheticViewForViewFactory(
     : indexes.syntheticControllerByViewFactory.get(viewFactory.productHandle) ?? null;
 }
 
-function definitionDetailForLink(
+function compiledTemplateDetailForLink(
   link: ProductClaimLink | null,
   store: KernelStore,
-): FullResourceDefinition | null {
+): CompiledTemplate | null {
   return link == null
     ? null
-    : store.productDetails.read(ResourceProductDetails.Definition, link.productHandle);
+    : store.productDetails.read(TemplateProductDetails.CompiledTemplate, link.productHandle);
 }
 
 function linkedTemplateControllerForLink(
@@ -534,12 +526,10 @@ function runtimeControllerRowHandles(
       compiledTemplateClaimHandle: state.compiledTemplate?.claimHandle ?? null,
       viewFactoryProductHandle: state.viewFactory?.productHandle ?? null,
       viewFactoryClaimHandle: state.viewFactory?.claimHandle ?? null,
-      viewFactoryDefinitionProductHandle: state.viewFactoryDefinition?.productHandle ?? null,
-      viewFactoryDefinitionClaimHandle: state.viewFactoryDefinition?.claimHandle ?? null,
+      viewFactoryCompiledTemplateProductHandle: state.viewFactoryCompiledTemplate?.productHandle ?? null,
+      viewFactoryCompiledTemplateClaimHandle: state.viewFactoryCompiledTemplate?.claimHandle ?? null,
       linkedTemplateControllerProductHandle: state.linkedTemplateController?.productHandle ?? null,
       templateControllerLinkClaimHandle: state.templateControllerLink?.claimHandle ?? null,
-      instructionSequenceProductHandle: state.instructionSequence?.productHandle ?? null,
-      instructionSequenceClaimHandle: state.instructionSequence?.claimHandle ?? null,
       sourceAddressHandle: controller.sourceAddressHandle,
     },
   } : {};
@@ -581,13 +571,15 @@ function controllerAssemblyStepRows(
 function compiledTemplateInfoByProductHandle(
   emission: AureliaAppWorldProjectEmission,
 ): ReadonlyMap<ProductHandle, CompiledTemplateInfo> {
-  return new Map(emission.templates.resources.map((resource) => [
-    resource.compilation.compiledTemplate.compiledTemplate.productHandle,
-    {
-      definitionName: resource.compilation.definition.name,
-      productHandle: resource.compilation.compiledTemplate.compiledTemplate.productHandle,
-    },
-  ]));
+  return new Map(emission.templates.resources.flatMap((resource) =>
+    resource.compilation.compiledTemplate.compiledTemplates.map((compiledTemplate) => [
+      compiledTemplate.productHandle,
+      {
+        definitionName: resource.compilation.definition.name,
+        productHandle: compiledTemplate.productHandle,
+      },
+    ] as const)
+  ));
 }
 
 function runtimeControllerByProductHandle(
@@ -739,16 +731,12 @@ function linkKindForSemantics(
 function hydrationHandoffKind(
   controller: RuntimeControllerFrame,
   compiledTemplate: ProductClaimLink | null,
-  instructionSequence: ProductClaimLink | null,
 ): SemanticRuntimeControllerHydrationHandoffKind {
   if (controller.creationKind === RuntimeControllerCreationKind.SyntheticView) {
     return 'synthetic-view';
   }
   if (compiledTemplate != null) {
     return 'compiled-template';
-  }
-  if (instructionSequence != null) {
-    return 'instruction-sequence';
   }
   return 'none';
 }

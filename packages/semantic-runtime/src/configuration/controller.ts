@@ -26,17 +26,16 @@ export type ControllerField =
   | 'children'
   | 'bindings'
   | 'viewFactory'
+  | 'compiledTemplate'
   | 'location'
   | 'nodes'
   | 'shadowRoot'
-  | 'instructionSequence'
   | 'source';
 
 export type ViewFactoryField =
   | 'container'
-  | 'definition'
+  | 'compiledTemplate'
   | 'instruction'
-  | 'instructionSequence'
   | 'parent'
   | 'source';
 
@@ -101,12 +100,10 @@ export class ViewFactory {
     readonly name: string | null,
     /** Container that owns the view factory and compiles the nested view. */
     readonly container: ContainerReference,
-    /** Custom-element definition product backing the factory, when the embedded definition is materialized. */
-    readonly definitionProductHandle: ProductHandle | null,
+    /** Compiler-owned generated definition instantiated by this factory. */
+    readonly compiledTemplateProductHandle: ProductHandle,
     /** Controller instruction that caused this factory to exist. */
     readonly instructionProductHandle: ProductHandle | null,
-    /** Nested instruction sequence used when the factory creates a synthetic view. */
-    readonly instructionSequenceProductHandle: ProductHandle,
     /** Controller that receives or owns the factory. */
     readonly parent: ControllerReference | null,
     /** Source address for the owning controller instruction. */
@@ -120,7 +117,7 @@ export class ViewFactory {
 export class AuSlotsInfoProjection {
   constructor(
     readonly slotName: string,
-    readonly instructionSequenceProductHandle: ProductHandle,
+    readonly compiledTemplateProductHandle: ProductHandle,
     readonly sourceAddressHandle: AddressHandle | null,
     readonly contributorSourceAddressHandles: readonly (AddressHandle | null)[],
   ) {}
@@ -178,7 +175,7 @@ export class SyntheticViewController {
     readonly scope: BindingScopeReference | null,
     readonly bindingProductHandles: readonly ProductHandle[] | null,
     readonly viewFactoryProductHandle: ProductHandle | null,
-    readonly instructionSequenceProductHandle: ProductHandle | null,
+    readonly compiledTemplateProductHandle: ProductHandle | null,
     readonly hostAddressHandle: AddressHandle | null,
     readonly locationAddressHandle: AddressHandle | null,
     readonly shadowRootAddressHandle: AddressHandle | null,

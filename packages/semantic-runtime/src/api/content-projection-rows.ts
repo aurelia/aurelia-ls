@@ -2,9 +2,10 @@ import type { AureliaAppWorldProjectEmission } from '../configuration/app-world-
 import type { KernelStore } from '../kernel/store.js';
 import {
   HydrateElementInstruction,
-  type HydrateElementProjectionInstructionSequence,
-  type TemplateInstructionSequence,
+  type HydrateElementProjectionDefinition,
 } from '../template/instruction-ir.js';
+import type { CompiledTemplate } from '../template/compiled-template.js';
+import { TemplateProductDetails } from '../template/product-details.js';
 import type { RuntimeContentProjectionView } from '../template/runtime-content-projection.js';
 import { describeAddress } from './source-reference.js';
 import {
@@ -40,20 +41,17 @@ function providerRows(
   store: KernelStore,
   handles: boolean,
 ): readonly SemanticTemplateContentProjectionProviderRow[] {
-  const sequences = new Map(resource.compilation.compiledTemplate.instructionSequences.map((sequence) =>
-    [sequence.productHandle, sequence] as const
-  ));
   return resource.compilation.compiledTemplate.instructions.flatMap((instruction) => {
     if (!(instruction instanceof HydrateElementInstruction)) {
       return [];
     }
-    const projectedSlotNames = instruction.projectionInstructionSequences.map((projection) => projection.slotName);
-    return instruction.projectionInstructionSequences.map((projection) =>
+    const projectedSlotNames = instruction.projections.map((projection) => projection.slotName);
+    return instruction.projections.map((projection) =>
       providerRow(
         resource.compilation.definition.name,
         instruction,
         projection,
-        sequences.get(projection.instructionSequenceProductHandle) ?? null,
+        resource.compilation.compiledTemplate.readCompiledTemplate(projection.compiledTemplate.productHandle),
         projectedSlotNames,
         store,
         handles,
@@ -65,14 +63,14 @@ function providerRows(
 function providerRow(
   renderingDefinitionName: string,
   instruction: HydrateElementInstruction,
-  projection: HydrateElementProjectionInstructionSequence,
-  sequence: TemplateInstructionSequence | null,
+  projection: HydrateElementProjectionDefinition,
+  compiledTemplate: CompiledTemplate | null,
   providerProjectedSlotNames: readonly string[],
   store: KernelStore,
   handles: boolean,
 ): SemanticTemplateContentProjectionProviderRow {
   return {
-    surfaceKind: SemanticTemplateContentProjectionSurfaceKind.ProviderSequence,
+    surfaceKind: SemanticTemplateContentProjectionSurfaceKind.ProviderDefinition,
     renderingDefinitionName,
     receivingElementName: instruction.elementName,
     slotName: projection.slotName,
@@ -81,13 +79,13 @@ function providerRow(
     explicitContributorCount: projection.contributors.filter((contributor) =>
       contributor.slotNameSourceAddressHandle != null
     ).length,
-    instructionCount: sequence?.instructions.length ?? 0,
+    instructionCount: compiledTemplateInstructionCount(store, compiledTemplate),
     source: describeAddress(store, projection.sourceAddressHandle),
     ...(handles
       ? {
         handles: {
           providerInstructionProductHandle: instruction.productHandle,
-          instructionSequenceProductHandle: projection.instructionSequenceProductHandle,
+          compiledTemplateProductHandle: projection.compiledTemplate.productHandle,
           sourceAddressHandle: projection.sourceAddressHandle,
         },
       }
@@ -122,7 +120,7 @@ function viewRow(
     declaringControllerName: view.declaringController?.name ?? null,
     receivingControllerName: view.receivingController?.name ?? null,
     outletControllerName: view.outletController.name,
-    instructionCount: view.instructionSequence?.instructions.length ?? 0,
+    instructionCount: compiledTemplateInstructionCount(store, view.compiledTemplate),
     hasViewFactory: view.viewFactory != null,
     hasSyntheticController: view.syntheticController != null,
     factoryContainerDepth: view.factoryContainer?.depth ?? null,
@@ -133,12 +131,11 @@ function viewRow(
         handles: {
           outletInstructionProductHandle: view.outletInstruction.productHandle,
           providerInstructionProductHandle: view.providerInstruction?.productHandle ?? null,
-          instructionSequenceProductHandle: view.instructionSequence?.productHandle ?? null,
           declaringControllerProductHandle: view.declaringController?.productHandle ?? null,
           receivingControllerProductHandle: view.receivingController?.productHandle ?? null,
           outletControllerProductHandle: view.outletController.productHandle,
           viewFactoryProductHandle: view.viewFactory?.productHandle ?? null,
-          embeddedDefinitionProductHandle: view.viewFactory?.definitionProductHandle ?? null,
+          compiledTemplateProductHandle: view.compiledTemplate?.productHandle ?? null,
           syntheticControllerProductHandle: view.syntheticController?.productHandle ?? null,
           factoryContainerProductHandle: view.factoryContainer?.productHandle ?? null,
           factoryHydrationContextProductHandle: view.factoryHydrationContext?.productHandle ?? null,
@@ -148,6 +145,17 @@ function viewRow(
       }
       : {}),
   };
+}
+
+function compiledTemplateInstructionCount(
+  store: KernelStore,
+  compiledTemplate: CompiledTemplate | null,
+): number {
+  return compiledTemplate?.targets.reduce((count, target) =>
+    count + (store.productDetails.read(
+      TemplateProductDetails.InstructionSequence,
+      target.instructionSequenceProductHandle,
+    )?.instructions.length ?? 0), 0) ?? 0;
 }
 
 function nativeOutletRows(

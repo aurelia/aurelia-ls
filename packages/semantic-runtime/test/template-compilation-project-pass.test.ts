@@ -23,7 +23,12 @@ import {
 } from '../src/resources/resource-definition-index.js';
 import { TemplateProductDetails } from '../src/template/product-details.js';
 import { compareCompiledTemplateDetails } from '../src/template/compiled-template-comparison.js';
-import { CompiledTemplate, CompiledTemplateState } from '../src/template/compiled-template.js';
+import {
+  CompiledTemplate,
+  CompiledTemplateContext,
+  CompiledTemplateContextRole,
+  CompiledTemplateState,
+} from '../src/template/compiled-template.js';
 import { TemplateCompilationLocus } from '../src/template/template-compilation-cohort.js';
 import { TemplateCompilationProjectPass } from '../src/template/template-compilation-project-pass.js';
 import { TemplateTypeSystemOverlayBuilder } from '../src/template/template-type-system-overlay.js';
@@ -57,6 +62,7 @@ describe('template compilation project pass', () => {
     const productionGeneration = runtime.appAnalysisComputations.authorityFor(app.project.projectKey).current();
     const productionResource = app.emission.templates.resources.find((candidate) =>
       candidate.runtimeAnalysis.runtimeRendering.bindings.length > 0
+        && candidate.compilation.compiledTemplate.compiledTemplates.length > 1
     );
     expect(productionGeneration).not.toBeNull();
     expect(productionResource).toBeDefined();
@@ -98,6 +104,7 @@ describe('template compilation project pass', () => {
     );
     const resource = emission.resources.find((candidate) =>
       candidate.runtimeAnalysis.runtimeRendering.bindings.length > 0
+        && candidate.compilation.compiledTemplate.compiledTemplates.length > 1
     );
     expect(resource).toBeDefined();
     if (resource == null) {
@@ -160,8 +167,8 @@ describe('template compilation project pass', () => {
     ]));
     const runtimeInputHandles = [
       resource.compilation.definition.productHandle,
-      resource.compilation.compiledTemplate.compiledTemplate.productHandle,
-      ...resource.compilation.compiledTemplate.renderTargets.map((target) => target.productHandle),
+      ...resource.compilation.compiledTemplate.compiledTemplates.map((template) => template.productHandle),
+      ...resource.compilation.compiledTemplate.readAllRenderTargets().map((target) => target.productHandle),
       ...resource.compilation.compiledTemplate.instructionSequences.map((sequence) => sequence.productHandle),
       ...resource.compilation.compiledTemplate.instructions.map((instruction) => instruction.productHandle),
       resource.compilation.compilerWorld.world.productHandle,
@@ -267,6 +274,9 @@ describe('template compilation project pass', () => {
     const runtime = new CompiledTemplate(
       store.handles.product('compiled'),
       store.handles.identity('compiled'),
+      new CompiledTemplateContext(
+        CompiledTemplateContextRole.Root,
+      ),
       store.handles.product('html'),
       CompiledTemplateState.Complete,
       [],

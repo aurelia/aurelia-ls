@@ -88,9 +88,19 @@ describe("semantic compiler gallery", () => {
     });
     expect(observations.get("interaction.browser.duplicate-binding-elision")?.compiledTemplate.rootRows[0]
       ?.instructionKinds).toEqual(["property-binding", "property-binding"]);
-    expect(observations.get("interpolation.text.ten-hole")?.compiledTemplate.rootRows).toEqual([
-      expect.objectContaining({ instructionKinds: ["text-binding"] }),
-    ]);
+    const tenHoleRows = observations.get("interpolation.text.ten-hole")?.compiledTemplate.rootRows ?? [];
+    expect(tenHoleRows).toHaveLength(10);
+    expect(tenHoleRows.every((row) => row.instructionKinds.length === 1
+      && row.instructionKinds[0] === "text-binding")).toBe(true);
+    const siblingDefinitions = observations.get("interaction.generated.double-sibling-if")
+      ?.compiledTemplate.generatedDefinitions ?? [];
+    expect(siblingDefinitions).toHaveLength(4);
+    expect(siblingDefinitions.map((definition) => definition.rows.length).sort()).toEqual([0, 0, 1, 1]);
+    expect(siblingDefinitions.every((definition) =>
+      definition.state === 'complete' && definition.needsCompile === false
+    )).toBe(true);
+    expect(siblingDefinitions.filter((definition) => definition.rows.length === 0)
+      .every((definition) => definition.compilerReachableNodeCount > 0)).toBe(true);
     expect(observations.get("interaction.browser.foster-target-order")?.declaredEffects).toContainEqual(
       expect.objectContaining({ kind: "browser-recovery", conservation: "open" }),
     );

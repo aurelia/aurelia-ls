@@ -404,8 +404,11 @@ Retained-app reuse preserves the `includeAuthoringTemplates` admission bit separ
 selection. A project-only app therefore cannot satisfy a later source-locus authoring request merely because both
 requests normalize to an empty source-file list and no limit.
 `TemplateCompilations` returns a `compilationLane` of `app-runtime` or `authoring` so callers can distinguish hydrated
-app templates from source-file-selected authoring templates. Use `authoringTemplateLimit` only as an explicit pressure
-budget or fallback when no source file is known.
+app templates from source-file-selected authoring templates. `compiledTemplates` counts the resource root plus every
+generated template-controller/projection definition; `generatedCompiledTemplates` excludes the root,
+`rootRenderTargets` counts only the resource-root definition, and `allRenderTargets` spans the complete definition
+family. Handle detail exposes the root handle and the ordered full family so zero-row static definitions remain
+addressable. Use `authoringTemplateLimit` only as an explicit pressure budget or fallback when no source file is known.
 
 `AttributeInterpretationExplanation` is the projection-only compiler companion for one exact top-level authored HTML
 attribute name. The cursor must fall inside the exact name span; attribute values, expression tokens, and secondary
@@ -1927,11 +1930,11 @@ that is currently modeled. Lifecycle timeline rows are consecutive-step aggregat
 semantic runtime can currently see: controller creation, child-container setup, `Controller.addChild`,
 `Controller.addBinding`, `IViewFactory` creation, synthetic-view creation, `Rendering.render`, Scope attachment, and
 `Controller.bind`. Custom-element controllers report
-`compiled-template` when the controller has a first-class `ControllerUsesCompiledTemplate` claim. Template-controller
-controllers report `instruction-sequence` when their hydration instruction owns a nested child sequence and expose the
-modeled `IViewFactory` association. The factory carries a generated embedded custom-element definition product, creates
-an aggregate `synthetic-view` controller row for the `IViewFactory.create(...) -> Controller.$view(...) ->
-_hydrateSynthetic() -> Rendering.render(...)` pass, and publishes both definition and instruction-sequence claims.
+`compiled-template` when the controller has a first-class `ControllerUsesCompiledTemplate` claim. This includes
+template-controller owners and their synthetic views: the instruction owns a compiler-published child definition and
+the `IViewFactory` references that same `CompiledTemplate`, rather than a runtime-fabricated resource definition or
+flattened child sequence. The factory creates an aggregate `synthetic-view` controller row for the
+`IViewFactory.create(...) -> Controller.$view(...) -> _hydrateSynthetic() -> Rendering.render(...)` pass.
 Aggregate rows are intentionally cardinality-aware rather than instance-precise: `repeat` still reports `many`, while
 `if` and promise branches report their optional/single branch shape. Template-controller branch rows also expose
 `templateControllerLinkKind` and `linkedTemplateControllerName` when Aurelia's `link(...)` hook connects them to a
@@ -1943,7 +1946,7 @@ inputs preserve Promise values rather than being silently unwrapped. Closed comp
 composition-owned child controller/container, while complete TypeChecker candidate sets remain alternatives rather than
 inventing one selected runtime child.
 
-`TemplateContentProjections` exposes compiler provider sequences, runtime AuSlot selected/fallback/empty views, native
+`TemplateContentProjections` exposes compiler provider definitions, runtime AuSlot selected/fallback/empty views, native
 Shadow DOM slot outlets, declaring/receiving controllers, hydration contexts, AuSlotsInfo, closure, and exact source
 loci. These rows project the shared runtime rendering and contextual-DI products; adapters must not reselect providers
 or reconstruct projection ownership from tag/source containment.

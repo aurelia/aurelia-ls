@@ -477,8 +477,8 @@ describe('production template-family lifecycle', () => {
       ...(resource.compilation.definition.productHandle == null
         ? []
         : [resource.compilation.definition.productHandle]),
-      resource.compilation.compiledTemplate.compiledTemplate.productHandle,
-      ...resource.compilation.compiledTemplate.renderTargets.map((target) => target.productHandle),
+      ...resource.compilation.compiledTemplate.compiledTemplates.map((template) => template.productHandle),
+      ...resource.compilation.compiledTemplate.readAllRenderTargets().map((target) => target.productHandle),
       ...resource.compilation.compiledTemplate.instructionSequences.map((sequence) => sequence.productHandle),
       ...resource.compilation.compiledTemplate.instructions.map((instruction) => instruction.productHandle),
       resource.compilation.compilerWorld.world.productHandle,

@@ -77,7 +77,7 @@
         "Treat CompiledTemplateInstructionFactory and CompiledTemplateInstructionTraversal as companions of the compiled-template materializer unless framework grounding suggests a cleaner Aurelia-shaped split.",
         "If recursive rendering or controller semantics are involved, keep the controller and view-factory materializers in the loop.",
         "Root `<template>` surrogate failures, `<slot>` shadow-DOM failures, and local-template shape failures that match Aurelia template-compiler throws publish compiler issues in this phase; do not reintroduce generic open seams for those framework-rejected cases.",
-        "Custom-element child content projection is a compiler DOM transform: HydrateElementInstruction carries default/named projection instruction sequences, direct parent rows skip extracted children, and `compiler.open-content-projection` should not appear for ordinary slot extraction.",
+        "Custom-element child content projection is a compiler DOM transform: HydrateElementInstruction carries default/named generated projection definitions with definition-local rows and static structure, direct parent rows skip extracted children, and `compiler.open-content-projection` should not appear for ordinary slot extraction.",
         "Avoid ad hoc template feature flags when the framework has a renderer, binding, or controller shape for the behavior.",
         "Use routed app-profile phase kernel summaries before optimizing template bulk. Disposed-app answers can now report which template/runtime phases created answer-local records and product details before QueryClaimGraph reclaims them."
       ],
@@ -86,40 +86,40 @@
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/template/compiled-template-materializer.ts",
           "symbolName": "CompiledTemplateMaterializer",
-          "line": 1280,
+          "line": 2038,
           "summary": "Compiled template materialization class."
         },
         {
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/template/compiled-template-materializer.ts",
           "symbolName": "CompiledTemplateInstructionFactory",
-          "line": 406,
+          "line": 481,
           "summary": "Instruction factory companion for compiled template materialization."
         },
         {
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/template/compiled-template-materializer.ts",
           "symbolName": "CompiledTemplateInstructionTraversal",
-          "line": 739,
+          "line": 820,
           "summary": "Instruction traversal companion for compiled template materialization."
         },
         {
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/template/compiled-template-materializer.ts",
           "symbolName": "CompiledTemplateAssemblyState",
-          "line": 280,
+          "line": 360,
           "summary": "Compiled-template assembly work frame."
         },
         {
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/template/instruction-ir.ts",
-          "symbolName": "HydrateElementProjectionInstructionSequence",
-          "summary": "Slot-name plus instruction-sequence handle carried by HydrateElementInstruction projections."
+          "symbolName": "HydrateElementProjectionDefinition",
+          "summary": "Slot-name plus generated compiled-template reference carried by HydrateElementInstruction projections."
         },
         {
           "kind": "script",
           "command": "pnpm --filter @aurelia-ls/semantic-runtime contract:template-content-projection",
-          "summary": "Contract that proves custom-element child content lowers into projection sequences without compiler.open-content-projection seams."
+          "summary": "Contract that proves custom-element child content lowers into generated projection definitions without compiler.open-content-projection seams."
         },
         {
           "kind": "lens",
@@ -166,11 +166,11 @@
         {
           "kind": "source-declaration-exists",
           "filePath": "packages/semantic-runtime/src/template/instruction-ir.ts",
-          "symbolName": "HydrateElementProjectionInstructionSequence"
+          "symbolName": "HydrateElementProjectionDefinition"
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-05-31"
+      "updatedAt": "2026-08-26"
     },
     {
       "id": "frontier:template-compiler-world-materializer",
@@ -434,7 +434,7 @@
         "Use opt-in fine-grained runtime-analysis phase telemetry when optimizing this frontier. Pair SEMANTIC_RUNTIME_TELEMETRY_FINE_PHASES=true with phase memory/kernel snapshots for density questions, or disable snapshots for cleaner CPU attribution.",
         "This frontier is nextActionPolicy=when-touched after the aggregate child custom-element usage bridge closed; use it as front-door grounding, while runtime rendering/controller records own usage-local child view expansion.",
         "Parent templates should hydrate child custom-element controllers, child view-model scopes, and aggregate child compiled-template views when renderer emulation created a child controller. This is required for wrapper/capture semantics such as field-shell `...$attrs`, because the child template's SpreadBinding must see the parent HydrateElementInstruction that captured the attributes.",
-        "Keep recursive component hydration finite with controller definition ancestry guards, not with definition-wide capture buckets or fresh-controller product handles. Built-in template-controller synthetic views remain recursive because their child instruction sequences are embedded in the same compiled template.",
+        "Keep recursive component hydration finite with controller definition ancestry guards, not with definition-wide capture buckets or fresh-controller product handles. Built-in template-controller synthetic views remain recursive through their compiler-owned child compiled-template definitions.",
         "Recursive custom-element re-entry is now an intentional controller boundary, not an open seam: the child controller records `recursive-hydration-boundary` and API rows expose `childViewRenderingState=recursive-boundary`. Treat that as a finite aggregate analysis state; per-runtime-instance expansion and runtime-state termination policy are still future controller semantics.",
         "Runtime analysis order is a project-pass invariant: schedule compiled resources by rendered-child dependency SCCs, using HydrateElementInstruction.definitionProductHandle and declared direct dependencies. Acyclic parents feed completed bound-controller facts to children; recursive groups share only predecessor facts so child overlays do not depend on incidental resource order.",
         "Runtime-state-specific recursive expansion is not required for template overlays, ordinary TypeChecker diagnostics, or definition-level topology. Treat it as a prerequisite only when the inquiry asks for per-activation truth: SSR/SSG exact view trees for a route/data state, router/viewport activation reuse or deactivate ordering, dynamic composition lifecycle results, two-way/from-view feedback loops that change subsequent rendering, or stateful recursive component diagnostics.",
@@ -1485,7 +1485,7 @@
       "summary": "RuntimeViewFactoryMaterializer owns the Rendering.getViewFactory/IViewFactory lane for embedded template-controller views.",
       "rationale": "Recursive rendering pressure should not hide view-factory semantics inside generic rendering code. Aurelia creates IViewFactory values for embedded views, and semantic-runtime needs that lane to remain explicit for controller trees, synthetic views, and SSR/SSG-facing products.",
       "guidance": [
-        "Start here when template controllers, embedded definitions, synthetic views, or IViewFactory products are involved.",
+        "Start here when template controllers, generated compiled-template definitions, synthetic views, or IViewFactory products are involved.",
         "Keep view-factory product publication distinct from renderer dispatch and controller bind effects.",
         "Use framework.rendering render-consequences before changing view-factory claims or synthetic-view controller creation."
       ],

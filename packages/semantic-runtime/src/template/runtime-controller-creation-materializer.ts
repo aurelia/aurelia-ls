@@ -416,7 +416,7 @@ export class RuntimeControllerCreationMaterializer {
       viewFactory.viewFactory.sourceAddressHandle,
       source.provenanceHandle,
       viewFactory.viewFactory.productHandle,
-      viewFactory.instructionSequenceProductHandle,
+      viewFactory.compiledTemplate.productHandle,
       viewFactory.viewFactory.instructionProductHandle,
     );
     if (hydrationContext != null) {
@@ -485,7 +485,7 @@ export class RuntimeControllerCreationMaterializer {
     intrinsicEmptyAuSlotsInfo: AuSlotsInfo,
   ): AuSlotsInfo {
     if (!(creation.instruction instanceof HydrateElementInstruction)
-      || creation.instruction.projectionInstructionSequences.length === 0) {
+      || creation.instruction.projections.length === 0) {
       return intrinsicEmptyAuSlotsInfo;
     }
     const local = `${creation.local}:au-slots-info`;
@@ -500,13 +500,13 @@ export class RuntimeControllerCreationMaterializer {
       this.store.handles.product(local),
       this.store.handles.identity(local),
       AuSlotsInfoSourceKind.HydrateElementInstruction,
-      [...new Set(creation.instruction.projectionInstructionSequences.map((projection) =>
+      [...new Set(creation.instruction.projections.map((projection) =>
         projection.slotName
       ))],
-      creation.instruction.projectionInstructionSequences.map((projection) =>
+      creation.instruction.projections.map((projection) =>
         new AuSlotsInfoProjection(
           projection.slotName,
-          projection.instructionSequenceProductHandle,
+          projection.compiledTemplate.productHandle,
           projection.sourceAddressHandle,
           projection.contributors.map((contributor) =>
             contributor.slotNameSourceAddressHandle ?? contributor.node.addressHandle
@@ -658,6 +658,10 @@ export class RuntimeControllerCreationMaterializer {
       definition instanceof CustomElementDefinition ? definition.strict : null,
       creation.instruction.sourceAddressHandle,
       source.provenanceHandle,
+      null,
+      creation.instruction instanceof HydrateTemplateControllerInstruction
+        ? creation.instruction.childCompiledTemplate?.productHandle ?? null
+        : null,
     );
   }
 

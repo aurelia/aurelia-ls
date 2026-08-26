@@ -34,6 +34,16 @@ export interface SemanticCompilerGalleryRootRow {
   readonly instructionKinds: readonly string[];
 }
 
+export interface SemanticCompilerGalleryGeneratedDefinition {
+  readonly role: string;
+  readonly state: string;
+  readonly needsCompile: false | null;
+  readonly slotName: string | null;
+  readonly parentDefinitionIndex: number | null;
+  readonly compilerReachableNodeCount: number;
+  readonly rows: readonly SemanticCompilerGalleryRootRow[];
+}
+
 export interface SemanticCompilerGalleryIssueRow {
   readonly phase: string;
   readonly issueKind: string;
@@ -70,7 +80,7 @@ export class SemanticCompilerGalleryObservation {
       readonly rootRows: readonly SemanticCompilerGalleryRootRow[];
       readonly surrogateInstructionKinds: readonly string[];
       readonly allInstructionKinds: readonly string[];
-      readonly nestedSequenceCount: number;
+      readonly generatedDefinitions: readonly SemanticCompilerGalleryGeneratedDefinition[];
     },
     readonly authored: {
       readonly htmlNodes: number;
@@ -276,7 +286,8 @@ function observationFor(
   const compilation = resource.compilation;
   const emission = compilation.compiledTemplate;
   const sequences = new Map(emission.instructionSequences.map((sequence) => [sequence.productHandle, sequence]));
-  const rootRows = emission.compiledTemplate.targets.map((target) => {
+  const rowsFor = (compiledTemplate: typeof emission.compiledTemplate): SemanticCompilerGalleryRootRow[] =>
+    compiledTemplate.targets.map((target) => {
     const sequence = sequences.get(target.instructionSequenceProductHandle) ?? null;
     return {
       targetKind: target.targetKind,
@@ -284,7 +295,16 @@ function observationFor(
       instructionKinds: sequence?.instructions.map((instruction) => instruction.instructionKind) ?? [],
     };
   });
+  const rootRows = rowsFor(emission.compiledTemplate);
   const surrogate = emission.compiledTemplate.surrogateSequence;
+  const definitionIndexes = new Map(emission.compiledTemplates.map((definition, index) => [
+    definition.productHandle,
+    index,
+  ]));
+  const targetContexts = new Map(emission.targetPlan.readContexts().map((context) => [
+    context.compiledTemplate.productHandle,
+    context,
+  ]));
   const compilerProfile = {
     debug: compilation.compilerWorld.templateCompiler.debug,
     resolveResources: compilation.compilerWorld.templateCompiler.resolveResources,
@@ -297,9 +317,23 @@ function observationFor(
     rootRows,
     surrogateInstructionKinds: surrogate?.instructions.map((instruction) => instruction.instructionKind) ?? [],
     allInstructionKinds: emission.instructions.map((instruction) => instruction.instructionKind),
-    nestedSequenceCount: emission.instructionSequences.length
-      - emission.compiledTemplate.targets.length
-      - (surrogate == null ? 0 : 1),
+    generatedDefinitions: emission.compiledTemplates.slice(1).map((definition) => {
+      const targetContext = targetContexts.get(definition.productHandle);
+      if (targetContext == null) {
+        throw new Error(`Compiled definition '${definition.productHandle}' has no target-plan context.`);
+      }
+      return {
+        role: definition.context.role,
+        state: definition.state,
+        needsCompile: definition.needsCompile,
+        slotName: targetContext.slotName,
+        parentDefinitionIndex: targetContext.ownerContext == null
+          ? null
+          : definitionIndexes.get(targetContext.ownerContext.compiledTemplate.productHandle) ?? null,
+        compilerReachableNodeCount: definition.compilerReachableNodeProductHandles.length,
+        rows: rowsFor(definition),
+      };
+    }),
   };
   const authored = {
     htmlNodes: compilation.html.nodes.length,

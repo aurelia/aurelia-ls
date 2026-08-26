@@ -81,6 +81,7 @@ import {
 } from './compiler-world-reference.js';
 import type {
   CompiledTemplate,
+  CompiledTemplateReference,
   TemplateRenderTarget,
 } from './compiled-template.js';
 import type {
@@ -179,7 +180,11 @@ import type {
   TemplateValueSite,
 } from './value-site.js';
 import { TemplateDetailDescriptors } from './detail-descriptors.js';
-import { compareCompiledTemplateDetails } from './compiled-template-comparison.js';
+import {
+  compareCompiledTemplateDetails,
+  compareTemplateInstructionSequenceDetails,
+  compareTemplateRenderTargetDetails,
+} from './compiled-template-comparison.js';
 import {
   compareAttributeParserMachineDetails,
   compareAttributeParserServiceDetails,
@@ -257,7 +262,11 @@ export const TemplateProductDetails = {
     referencesForCompiledTemplate,
     compareCompiledTemplateDetails,
   ),
-  RenderTarget: defineProductDetailSlot(TemplateDetailDescriptors.RenderTarget, referencesForTemplateRenderTarget),
+  RenderTarget: defineProductDetailSlot(
+    TemplateDetailDescriptors.RenderTarget,
+    referencesForTemplateRenderTarget,
+    compareTemplateRenderTargetDetails,
+  ),
   AttributeSyntax: defineProductDetailSlot(TemplateDetailDescriptors.AttributeSyntax, referencesForAttributeSyntax),
   AttributeClassification: defineProductDetailSlot(TemplateDetailDescriptors.AttributeClassification, referencesForAttributeClassification),
   ValueSite: defineProductDetailSlot(TemplateDetailDescriptors.ValueSite, referencesForTemplateValueSite),
@@ -268,7 +277,11 @@ export const TemplateProductDetails = {
   MultiBindingSegment: defineProductDetailSlot(TemplateDetailDescriptors.MultiBindingSegment, referencesForMultiBindingSegment),
   MultiBindingLowering: defineProductDetailSlot(TemplateDetailDescriptors.MultiBindingLowering, referencesForMultiBindingLowering),
   Instruction: defineProductDetailSlot(TemplateDetailDescriptors.Instruction, referencesForTemplateInstruction),
-  InstructionSequence: defineProductDetailSlot(TemplateDetailDescriptors.InstructionSequence, referencesForTemplateInstructionSequence),
+  InstructionSequence: defineProductDetailSlot(
+    TemplateDetailDescriptors.InstructionSequence,
+    referencesForTemplateInstructionSequence,
+    compareTemplateInstructionSequenceDetails,
+  ),
   RuntimeBinding: defineProductDetailSlot(TemplateDetailDescriptors.RuntimeBinding, referencesForRuntimeBinding),
   RuntimeWatcher: defineProductDetailSlot(TemplateDetailDescriptors.RuntimeWatcher, referencesForRuntimeWatcher),
   RuntimeBindingIssue: defineProductDetailSlot(TemplateDetailDescriptors.RuntimeBindingIssue, referencesForRuntimeBindingIssue),
@@ -1347,6 +1360,19 @@ function templateInstructionReferenceReferences(
   );
 }
 
+function compiledTemplateReferenceReferences(
+  template: CompiledTemplateReference | null,
+): KernelDetailReferenceClosure {
+  return template == null
+    ? mergeKernelDetailReferences()
+    : productIdentityAddressReferences(
+        template.productHandle,
+        template.identityHandle,
+        null,
+        TemplateDetailDescriptors.CompiledTemplate,
+      );
+}
+
 function expressionReferences(
   ...handles: readonly (ProductHandle | null | undefined)[]
 ): KernelDetailReferenceClosure {
@@ -1374,16 +1400,11 @@ function referencesForTemplateInstruction(
       return mergeKernelDetailReferences(
         common,
         templateVisibleResourceReferenceReferences(instruction.resource),
-        detailReferences(
-          TemplateDetailDescriptors.InstructionSequence,
-          instruction.childInstructionSequenceProductHandle,
+        ...instruction.projections.map((projection) =>
+          compiledTemplateReferenceReferences(projection.compiledTemplate)
         ),
-        ...instruction.projectionInstructionSequences.map((projection) =>
+        ...instruction.projections.map((projection) =>
           mergeKernelDetailReferences(
-            detailReferences(
-              TemplateDetailDescriptors.InstructionSequence,
-              projection.instructionSequenceProductHandle,
-            ),
             ...projection.contributors.map((contributor) =>
               mergeKernelDetailReferences(
                 htmlNodeReferenceReferences(contributor.node),
@@ -1417,10 +1438,7 @@ function referencesForTemplateInstruction(
         common,
         htmlAttributeReferenceReferences(instruction.attribute),
         templateVisibleResourceReferenceReferences(instruction.resource),
-        detailReferences(
-          TemplateDetailDescriptors.InstructionSequence,
-          instruction.childInstructionSequenceProductHandle,
-        ),
+        compiledTemplateReferenceReferences(instruction.childCompiledTemplate),
         detailsReferences(
           TemplateDetailDescriptors.Instruction,
           instruction.bindingInstructionProductHandles,

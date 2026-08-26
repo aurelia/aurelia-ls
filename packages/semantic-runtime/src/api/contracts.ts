@@ -299,6 +299,7 @@ import type {
 } from '../template/compiler-issue.js';
 import type {
   CompiledNativeSlotNameKind,
+  CompiledTemplateContextRole,
   CompiledTemplateState,
 } from '../template/compiled-template.js';
 import type {
@@ -4494,11 +4495,14 @@ export interface SemanticTemplateCompilationRow {
   readonly expressionParses: number;
   readonly bindingCommandLowerings: number;
   readonly instructions: number;
-  readonly renderTargets: number;
+  readonly compiledTemplates: number;
+  readonly generatedCompiledTemplates: number;
+  readonly rootRenderTargets: number;
+  readonly allRenderTargets: number;
   readonly compiledTemplateState: CompiledTemplateState | `${CompiledTemplateState}`;
   readonly compiledTemplateHasSlots: boolean;
   readonly compiledTemplateNeedsCompile: false | null;
-  readonly contentProjectionSequences: number;
+  readonly contentProjectionDefinitions: number;
   readonly runtimeControllers: number;
   readonly runtimeChildContainers: number;
   readonly runtimeChildContextResolverSlots: number;
@@ -4517,6 +4521,8 @@ export interface SemanticTemplateCompilationRow {
   readonly handles?: {
     readonly definitionProductHandle: ProductHandle | null;
     readonly compilerWorldProductHandle: ProductHandle;
+    readonly rootCompiledTemplateProductHandle: ProductHandle;
+    readonly compiledTemplateProductHandles: readonly ProductHandle[];
     readonly sourceAddressHandle: AddressHandle | null;
   };
 }
@@ -5508,7 +5514,6 @@ export interface SemanticTemplateCursorInfoResult {
 
 export type SemanticRuntimeControllerHydrationHandoffKind =
   | 'compiled-template'
-  | 'instruction-sequence'
   | 'synthetic-view'
   | 'none';
 
@@ -5555,8 +5560,8 @@ export interface SemanticRuntimeControllerRow {
   readonly runtimeWatchers: number;
   readonly hasScope: boolean;
   readonly hasViewFactory: boolean;
-  readonly viewFactoryDefinitionName: string | null;
-  readonly viewFactoryDefinitionClassName: string | null;
+  readonly viewFactoryCompiledTemplateRole: CompiledTemplateContextRole | `${CompiledTemplateContextRole}` | null;
+  readonly viewFactoryCompiledTemplateState: CompiledTemplateState | `${CompiledTemplateState}` | null;
   readonly templateControllerLinkKind: SemanticRuntimeTemplateControllerLinkKind | null;
   readonly linkedTemplateControllerName: string | null;
   readonly templateControllerFlowKind: BuiltInTemplateControllerFlowKind | `${BuiltInTemplateControllerFlowKind}` | null;
@@ -5581,12 +5586,10 @@ export interface SemanticRuntimeControllerRow {
     readonly compiledTemplateClaimHandle: ClaimHandle | null;
     readonly viewFactoryProductHandle: ProductHandle | null;
     readonly viewFactoryClaimHandle: ClaimHandle | null;
-    readonly viewFactoryDefinitionProductHandle: ProductHandle | null;
-    readonly viewFactoryDefinitionClaimHandle: ClaimHandle | null;
+    readonly viewFactoryCompiledTemplateProductHandle: ProductHandle | null;
+    readonly viewFactoryCompiledTemplateClaimHandle: ClaimHandle | null;
     readonly linkedTemplateControllerProductHandle: ProductHandle | null;
     readonly templateControllerLinkClaimHandle: ClaimHandle | null;
-    readonly instructionSequenceProductHandle: ProductHandle | null;
-    readonly instructionSequenceClaimHandle: ClaimHandle | null;
     readonly sourceAddressHandle: AddressHandle | null;
   };
 }
@@ -5769,8 +5772,8 @@ export interface SemanticRuntimeCompositionResult {
 }
 
 export const enum SemanticTemplateContentProjectionSurfaceKind {
-  /** Compiler-owned provider sequence attached to a custom-element use. */
-  ProviderSequence = 'provider-sequence',
+  /** Compiler-owned provider definition attached to a custom-element use. */
+  ProviderDefinition = 'provider-definition',
   /** Runtime AuSlot selected, fallback, or empty view relation. */
   AuSlotView = 'au-slot-view',
   /** Compiler-reachable native Shadow DOM slot outlet. */
@@ -5778,7 +5781,7 @@ export const enum SemanticTemplateContentProjectionSurfaceKind {
 }
 
 export interface SemanticTemplateContentProjectionProviderRow {
-  readonly surfaceKind: SemanticTemplateContentProjectionSurfaceKind.ProviderSequence;
+  readonly surfaceKind: SemanticTemplateContentProjectionSurfaceKind.ProviderDefinition;
   readonly renderingDefinitionName: string;
   readonly receivingElementName: string;
   readonly slotName: string;
@@ -5789,7 +5792,7 @@ export interface SemanticTemplateContentProjectionProviderRow {
   readonly source: SemanticSourceReference | null;
   readonly handles?: {
     readonly providerInstructionProductHandle: ProductHandle;
-    readonly instructionSequenceProductHandle: ProductHandle;
+    readonly compiledTemplateProductHandle: ProductHandle;
     readonly sourceAddressHandle: AddressHandle | null;
   };
 }
@@ -5815,12 +5818,11 @@ export interface SemanticTemplateContentProjectionViewRow {
   readonly handles?: {
     readonly outletInstructionProductHandle: ProductHandle;
     readonly providerInstructionProductHandle: ProductHandle | null;
-    readonly instructionSequenceProductHandle: ProductHandle | null;
     readonly declaringControllerProductHandle: ProductHandle | null;
     readonly receivingControllerProductHandle: ProductHandle | null;
     readonly outletControllerProductHandle: ProductHandle;
     readonly viewFactoryProductHandle: ProductHandle | null;
-    readonly embeddedDefinitionProductHandle: ProductHandle | null;
+    readonly compiledTemplateProductHandle: ProductHandle | null;
     readonly syntheticControllerProductHandle: ProductHandle | null;
     readonly factoryContainerProductHandle: ProductHandle | null;
     readonly factoryHydrationContextProductHandle: ProductHandle | null;

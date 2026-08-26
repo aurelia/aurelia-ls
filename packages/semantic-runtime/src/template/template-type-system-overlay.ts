@@ -2097,10 +2097,16 @@ export class TemplateTypeSystemOverlayBuilder {
     resource: TemplateResourceRuntimeAnalysisEmission,
     switchInstruction: HydrateTemplateControllerInstruction,
   ): readonly HydrateTemplateControllerInstruction[] {
-    const sequence = resource.compilation.compiledTemplate.instructionSequences.find((candidate) =>
-      candidate.productHandle === switchInstruction.childInstructionSequenceProductHandle
-    ) ?? null;
-    const instructions = sequence?.instructions
+    const compiledTemplate = resource.compilation.compiledTemplate.readCompiledTemplate(
+      switchInstruction.childCompiledTemplate?.productHandle ?? null,
+    );
+    const sequencesByProduct = new Map(resource.compilation.compiledTemplate.instructionSequences.map((sequence) => [
+      sequence.productHandle,
+      sequence,
+    ]));
+    const instructions = compiledTemplate?.targets.flatMap((target) =>
+      sequencesByProduct.get(target.instructionSequenceProductHandle)?.instructions ?? []
+    )
       .map((reference) => reference.productHandle == null ? null : templateInstructionForProductHandle(resource, reference.productHandle))
       .filter((instruction): instruction is HydrateTemplateControllerInstruction =>
         instruction instanceof HydrateTemplateControllerInstruction

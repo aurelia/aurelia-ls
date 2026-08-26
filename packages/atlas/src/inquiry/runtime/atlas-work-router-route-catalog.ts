@@ -7522,7 +7522,7 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       "content projection",
       "custom element child projection",
       "HydrateElement projection",
-      "HydrateElementProjectionInstructionSequence",
+      "HydrateElementProjectionDefinition",
       "compiler open content projection",
       "TemplateCompilerIssue",
       "compiler-world construction",
@@ -7549,7 +7549,7 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
           "Value-site and command-lowering work belongs to compiler-world/lowering before observation consumes value channels.",
       },
       {
-        query: "custom element child content projection HydrateElement projection sequence",
+        query: "custom element child content projection HydrateElement projection definition",
         summary:
           "Custom-element child projection should route to compiled-template DOM transform modeling, not app-builder generation or runtime renderer shortcuts.",
       },
@@ -7667,10 +7667,10 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
         kind: "source",
         filePath:
           "packages/semantic-runtime/src/template/instruction-ir.ts",
-        symbolName: "HydrateElementProjectionInstructionSequence",
+        symbolName: "HydrateElementProjectionDefinition",
         role: "supporting",
         summary:
-          "Slot-name plus instruction-sequence handle carried by HydrateElementInstruction projections.",
+          "Slot-name plus generated compiled-template reference carried by HydrateElementInstruction projections.",
       },
       {
         kind: "script",
@@ -7678,7 +7678,7 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
           "pnpm --filter @aurelia-ls/semantic-runtime contract:template-content-projection",
         role: "supporting",
         summary:
-          "Focused contract for custom-element child content lowering into projection instruction sequences.",
+          "Focused contract for custom-element child content lowering into generated projection definitions.",
       },
       {
         kind: "path",

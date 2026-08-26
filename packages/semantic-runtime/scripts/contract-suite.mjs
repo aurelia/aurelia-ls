@@ -519,7 +519,7 @@ const contractSuites = [
     'template',
     'compiler',
     'projection',
-  ], 'contract-template-content-projection.mjs', 'Custom-element child content is lowered into HydrateElement projection instruction sequences instead of parent render rows.'),
+  ], 'contract-template-content-projection.mjs', 'Custom-element child content is lowered into HydrateElement projection definitions instead of parent render rows.'),
   contract('template', 'fast', [
     'template',
     'controller',
