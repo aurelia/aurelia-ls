@@ -169,6 +169,8 @@ export class ParsedHtmlDocumentDraft {
   constructor(
     readonly rootNodes: readonly ParsedHtmlNodeDraft[],
     readonly recoveries: readonly HtmlRecoveryDraft[],
+    readonly markup: string | null,
+    readonly recoveryPolicy: TemplateRecoveryPolicy,
   ) {}
 }
 
@@ -288,6 +290,8 @@ export class HtmlParseMaterializer {
       return new ParsedHtmlDocumentDraft(
         [],
         [new HtmlRecoveryDraft(HtmlRecoveryKind.Open, 'Template source did not carry closed markup text.', 0, 0)],
+        null,
+        input.parseContext.recoveryPolicy,
       );
     }
     return parseHtmlDocumentDraft(input.templateSource.markup, input.parseContext.recoveryPolicy);
@@ -809,7 +813,7 @@ class HtmlScanner {
 
   parseDocument(): ParsedHtmlDocumentDraft {
     const root = this.parseNodes(null, HtmlNamespaceKind.Html, [], [], []);
-    return new ParsedHtmlDocumentDraft(root.nodes, this.recoveries);
+    return new ParsedHtmlDocumentDraft(root.nodes, this.recoveries, this.text, this.recoveryPolicy);
   }
 
   private parseNodes(

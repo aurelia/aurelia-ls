@@ -146,6 +146,13 @@ classification, expression parsing, and instruction lowering converge on the sam
   rule, including discarded immediate-sibling effects. The parse5 AST never enters semantic products, and the helper is available only through the explicit
   `@aurelia-ls/semantic-runtime/browser-template` subpath so ordinary IDE/MCP imports do not load the parser. This is a
   characterized candidate input boundary, not yet a durable kernel product or the production compiler traversal.
+- `browser-template-correspondence.ts` conservatively relates one authored draft to the exact browser draft and parser
+  authorities before carrier selection. It uses opening-token/range anchors for exact occurrences, reconstruction
+  cohorts for one-to-many recovery, named implied/drop/factory derivations, and explicit unresolved partitions for
+  composite, partial, normalized-subspan, or profile-divergent cases. Occurrence keys include source identity/revision,
+  authored recovery policy, browser authority, markup digest, and unambiguous paths. The helper is product-free and
+  exported only through the explicit browser-template subpath; the future materializer spends it into structural and
+  derivation products.
 - `template-structure.ts` and `template-structure-derivation.ts` define the durable, parse5-independent structural
   vocabulary behind that boundary: immutable browser-effective tree/node/attribute records and ordered
   many-input/many-output derivations. Cardinality carries merge, reconstruction, drop, and implied/generated facts;
