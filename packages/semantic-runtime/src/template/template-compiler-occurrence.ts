@@ -1,7 +1,10 @@
+import type { ClaimEndpointHandle } from '../kernel/claim.js';
 import type {
   IdentityHandle,
   ProductHandle,
 } from '../kernel/handles.js';
+import { localKeyPart } from '../kernel/local-key.js';
+import { KernelVocabulary } from '../kernel/vocabulary.js';
 import {
   HtmlCommentSemanticKind,
   HtmlIrNodeKind,
@@ -15,6 +18,10 @@ import type {
   TemplateStructuralNodeReference,
   TemplateStructuralTreeReference,
 } from './template-structure.js';
+import {
+  TemplateStructureDerivationAuthority,
+  type TemplateStructureReference,
+} from './template-structure-derivation.js';
 
 /** Edge that currently owns one mutable compiler occurrence. */
 export const enum TemplateCompilerOccurrenceEdgeKind {
@@ -23,6 +30,77 @@ export const enum TemplateCompilerOccurrenceEdgeKind {
   TemplateContent = 'template-content',
   /** Occurrence remains in the historical inventory but is absent from every live structural edge. */
   Detached = 'detached',
+}
+
+/** Semantic role of one compiler-created occurrence; this is generation metadata, not an exclusive origin. */
+export const enum TemplateCompilerGeneratedOccurrenceRole {
+  TemplateCarrier = 'template-carrier',
+  TemplateContent = 'template-content',
+  CompilerMarker = 'compiler-marker',
+  RenderLocationStart = 'render-location-start',
+  RenderLocationEnd = 'render-location-end',
+  BindingPlaceholder = 'binding-placeholder',
+  StaticTextSegment = 'static-text-segment',
+  Clone = 'clone',
+}
+
+/** Path-independent cause of one compiler-created output occurrence. */
+export class TemplateCompilerOccurrenceGeneration {
+  readonly #sessionAuthority: object;
+
+  constructor(
+    sessionAuthority: object,
+    /** Compiler context in which generation executed; later structural movement does not rewrite this authority. */
+    readonly contextKey: string,
+    readonly operationKey: string,
+    readonly role: TemplateCompilerGeneratedOccurrenceRole,
+    readonly causeHandles: readonly ClaimEndpointHandle[],
+    readonly outputOrdinal: number,
+  ) {
+    this.#sessionAuthority = sessionAuthority;
+    if (contextKey.length === 0 || operationKey.length === 0) {
+      throw new Error('Compiler occurrence generation requires non-empty context and operation keys.');
+    }
+    if (causeHandles.length === 0) {
+      throw new Error(`Compiler occurrence generation '${operationKey}' requires at least one semantic cause.`);
+    }
+    if (!Number.isSafeInteger(outputOrdinal) || outputOrdinal < 0) {
+      throw new Error(`Compiler occurrence generation '${operationKey}' has invalid output ordinal ${outputOrdinal}.`);
+    }
+  }
+
+  isOwnedBy(sessionAuthority: object): boolean {
+    return this.#sessionAuthority === sessionAuthority;
+  }
+}
+
+/** Singular authored/browser relation that is safe to spend as compiler row authority. */
+export class TemplateCompilerExactAuthoredOrigin {
+  constructor(
+    readonly derivationProductHandle: ProductHandle,
+    readonly authored: TemplateStructureReference,
+    readonly browserOutput: TemplateStructureReference,
+  ) {}
+}
+
+/** Immutable browser-input placement retained before compiler execution mutates the occurrence forest. */
+export class TemplateCompilerSeededNodePlacement {
+  constructor(
+    readonly node: TemplateCompilerNodeOccurrence,
+    readonly parent: TemplateCompilerParentOccurrence | null,
+    readonly edgeKind: Exclude<TemplateCompilerOccurrenceEdgeKind, TemplateCompilerOccurrenceEdgeKind.Detached>,
+    readonly ordinal: number,
+    readonly preorderOrdinal: number,
+  ) {}
+}
+
+/** Immutable browser-input attribute ownership retained before compiler execution mutates the occurrence forest. */
+export class TemplateCompilerSeededAttributePlacement {
+  constructor(
+    readonly attribute: TemplateCompilerAttributeOccurrence,
+    readonly owner: TemplateCompilerElementOccurrence,
+    readonly ordinal: number,
+  ) {}
 }
 
 export type TemplateCompilerParentOccurrence =
@@ -57,6 +135,8 @@ export abstract class TemplateCompilerNodeOccurrence {
     readonly inputReference: TemplateStructuralNodeReference | null,
     parent: TemplateCompilerParentOccurrence | null,
     parentEdgeKind: TemplateCompilerOccurrenceEdgeKind,
+    /** Independent generation axis; clones and text-split outputs may retain both this and an input origin. */
+    readonly generation: TemplateCompilerOccurrenceGeneration | null = null,
   ) {
     nodeOwnership.set(this, { parent, edgeKind: parentEdgeKind });
     nodeChildren.set(this, []);
@@ -132,8 +212,9 @@ export class TemplateCompilerElementOccurrence extends TemplateCompilerNodeOccur
     readonly tagName: string,
     readonly namespace: HtmlNamespaceKind,
     readonly namespaceUri: string,
+    generation: TemplateCompilerOccurrenceGeneration | null = null,
   ) {
-    super(occurrenceKey, inputIdentityKey, inputReference, parent, parentEdgeKind);
+    super(occurrenceKey, inputIdentityKey, inputReference, parent, parentEdgeKind, generation);
     elementAttributes.set(this, []);
     elementTemplateContent.set(this, null);
   }
@@ -157,8 +238,9 @@ export class TemplateCompilerTextOccurrence extends TemplateCompilerNodeOccurren
     parent: TemplateCompilerParentOccurrence | null,
     parentEdgeKind: TemplateCompilerOccurrenceEdgeKind,
     readonly text: string,
+    generation: TemplateCompilerOccurrenceGeneration | null = null,
   ) {
-    super(occurrenceKey, inputIdentityKey, inputReference, parent, parentEdgeKind);
+    super(occurrenceKey, inputIdentityKey, inputReference, parent, parentEdgeKind, generation);
   }
 }
 
@@ -173,8 +255,9 @@ export class TemplateCompilerCommentOccurrence extends TemplateCompilerNodeOccur
     parentEdgeKind: TemplateCompilerOccurrenceEdgeKind,
     readonly text: string,
     readonly semanticKind: HtmlCommentSemanticKind,
+    generation: TemplateCompilerOccurrenceGeneration | null = null,
   ) {
-    super(occurrenceKey, inputIdentityKey, inputReference, parent, parentEdgeKind);
+    super(occurrenceKey, inputIdentityKey, inputReference, parent, parentEdgeKind, generation);
   }
 }
 
@@ -190,8 +273,9 @@ export class TemplateCompilerDoctypeOccurrence extends TemplateCompilerNodeOccur
     readonly name: string,
     readonly publicId: string,
     readonly systemId: string,
+    generation: TemplateCompilerOccurrenceGeneration | null = null,
   ) {
-    super(occurrenceKey, inputIdentityKey, inputReference, parent, parentEdgeKind);
+    super(occurrenceKey, inputIdentityKey, inputReference, parent, parentEdgeKind, generation);
   }
 }
 
@@ -206,6 +290,8 @@ export class TemplateCompilerAttributeOccurrence {
     readonly value: string,
     readonly namespaceUri: string | null,
     readonly prefix: string | null,
+    /** Independent generation axis; cloned attributes may retain both this and an input origin. */
+    readonly generation: TemplateCompilerOccurrenceGeneration | null = null,
   ) {
     attributeOwners.set(this, owner);
   }
@@ -239,6 +325,8 @@ interface TemplateCompilerOccurrenceSeed {
   readonly attributesByInputProduct: Map<ProductHandle, TemplateCompilerAttributeOccurrence[]>;
   readonly nodesByInputIdentity: Map<IdentityHandle, TemplateCompilerNodeOccurrence[]>;
   readonly attributesByInputIdentity: Map<IdentityHandle, TemplateCompilerAttributeOccurrence[]>;
+  readonly exactNodeOriginsByInputProduct: Map<ProductHandle, TemplateCompilerExactAuthoredOrigin>;
+  readonly exactAttributeOriginsByInputProduct: Map<ProductHandle, TemplateCompilerExactAuthoredOrigin>;
 }
 
 /** Fresh mutable carrier forest for one browser-effective compiler occurrence. */
@@ -257,14 +345,28 @@ export class TemplateCompilerOccurrenceForest {
   readonly compilerContent: TemplateCompilerFragmentOccurrence;
 
   private readonly rootOccurrences: TemplateCompilerNodeOccurrence[];
-  private readonly nodes: readonly TemplateCompilerNodeOccurrence[];
-  private readonly attributes: readonly TemplateCompilerAttributeOccurrence[];
-  private readonly nodesByOccurrenceKey: ReadonlyMap<string, TemplateCompilerNodeOccurrence>;
-  private readonly attributesByOccurrenceKey: ReadonlyMap<string, TemplateCompilerAttributeOccurrence>;
-  private readonly nodesByInputProduct: ReadonlyMap<ProductHandle, readonly TemplateCompilerNodeOccurrence[]>;
-  private readonly attributesByInputProduct: ReadonlyMap<ProductHandle, readonly TemplateCompilerAttributeOccurrence[]>;
-  private readonly nodesByInputIdentity: ReadonlyMap<IdentityHandle, readonly TemplateCompilerNodeOccurrence[]>;
-  private readonly attributesByInputIdentity: ReadonlyMap<IdentityHandle, readonly TemplateCompilerAttributeOccurrence[]>;
+  private readonly nodes: TemplateCompilerNodeOccurrence[];
+  private readonly attributes: TemplateCompilerAttributeOccurrence[];
+  private readonly nodesByOccurrenceKey: Map<string, TemplateCompilerNodeOccurrence>;
+  private readonly attributesByOccurrenceKey: Map<string, TemplateCompilerAttributeOccurrence>;
+  private readonly nodesByInputProduct: Map<ProductHandle, TemplateCompilerNodeOccurrence[]>;
+  private readonly attributesByInputProduct: Map<ProductHandle, TemplateCompilerAttributeOccurrence[]>;
+  private readonly nodesByInputIdentity: Map<IdentityHandle, TemplateCompilerNodeOccurrence[]>;
+  private readonly attributesByInputIdentity: Map<IdentityHandle, TemplateCompilerAttributeOccurrence[]>;
+  private readonly exactNodeOriginsByInputProduct: ReadonlyMap<ProductHandle, TemplateCompilerExactAuthoredOrigin>;
+  private readonly exactAttributeOriginsByInputProduct: ReadonlyMap<ProductHandle, TemplateCompilerExactAuthoredOrigin>;
+  private readonly seededNodePlacements = new Map<
+    TemplateCompilerNodeOccurrence,
+    TemplateCompilerSeededNodePlacement
+  >();
+  private readonly seededAttributePlacements = new Map<
+    TemplateCompilerAttributeOccurrence,
+    TemplateCompilerSeededAttributePlacement
+  >();
+  private readonly occurrencesByGeneration = new Map<
+    TemplateCompilerOccurrenceGeneration,
+    TemplateCompilerNodeOccurrence | TemplateCompilerAttributeOccurrence
+  >();
 
   private constructor(seed: TemplateCompilerOccurrenceSeed) {
     this.inputTree = seed.inputTree;
@@ -279,7 +381,44 @@ export class TemplateCompilerOccurrenceForest {
     this.attributesByInputProduct = seed.attributesByInputProduct;
     this.nodesByInputIdentity = seed.nodesByInputIdentity;
     this.attributesByInputIdentity = seed.attributesByInputIdentity;
+    this.exactNodeOriginsByInputProduct = seed.exactNodeOriginsByInputProduct;
+    this.exactAttributeOriginsByInputProduct = seed.exactAttributeOriginsByInputProduct;
     for (const root of this.rootOccurrences) rootCollections.set(root, this.rootOccurrences);
+    const seededNodeOrdinals = new Map<TemplateCompilerNodeOccurrence, number>();
+    const seededAttributeOrdinals = new Map<TemplateCompilerAttributeOccurrence, number>();
+    this.rootOccurrences.forEach((root, ordinal) => seededNodeOrdinals.set(root, ordinal));
+    for (const owner of this.nodes) {
+      owner.readChildren().forEach((child, ordinal) => seededNodeOrdinals.set(child, ordinal));
+      if (owner instanceof TemplateCompilerElementOccurrence) {
+        owner.readAttributes().forEach((attribute, ordinal) => seededAttributeOrdinals.set(attribute, ordinal));
+        if (owner.templateContent != null) seededNodeOrdinals.set(owner.templateContent, 0);
+      }
+    }
+    this.nodes.forEach((node, preorderOrdinal) => {
+      const ordinal = seededNodeOrdinals.get(node) ?? null;
+      if (node.inputReference == null || node.generation != null || ordinal == null) {
+        throw new Error(`Seeded compiler occurrence '${node.occurrenceKey}' has no exact browser-input placement.`);
+      }
+      this.seededNodePlacements.set(node, new TemplateCompilerSeededNodePlacement(
+        node,
+        node.parent,
+        node.parentEdgeKind as Exclude<TemplateCompilerOccurrenceEdgeKind, TemplateCompilerOccurrenceEdgeKind.Detached>,
+        ordinal,
+        preorderOrdinal,
+      ));
+    });
+    for (const attribute of this.attributes) {
+      const owner = attribute.owner;
+      const ordinal = seededAttributeOrdinals.get(attribute) ?? null;
+      if (attribute.inputReference == null || attribute.generation != null || owner == null || ordinal == null) {
+        throw new Error(`Seeded compiler attribute '${attribute.occurrenceKey}' has no exact browser-input placement.`);
+      }
+      this.seededAttributePlacements.set(attribute, new TemplateCompilerSeededAttributePlacement(
+        attribute,
+        owner,
+        ordinal,
+      ));
+    }
   }
 
   readRoots(): readonly TemplateCompilerNodeOccurrence[] {
@@ -318,6 +457,148 @@ export class TemplateCompilerOccurrenceForest {
 
   attributesForInputIdentity(identityHandle: IdentityHandle): readonly TemplateCompilerAttributeOccurrence[] {
     return this.attributesByInputIdentity.get(identityHandle) ?? [];
+  }
+
+  exactAuthoredNodeOrigin(
+    occurrence: TemplateCompilerNodeOccurrence,
+  ): TemplateCompilerExactAuthoredOrigin | null {
+    this.requireNode(occurrence);
+    return occurrence.inputReference == null
+      ? null
+      : this.exactNodeOriginsByInputProduct.get(occurrence.inputReference.productHandle) ?? null;
+  }
+
+  exactAuthoredAttributeOrigin(
+    occurrence: TemplateCompilerAttributeOccurrence,
+  ): TemplateCompilerExactAuthoredOrigin | null {
+    this.requireAttribute(occurrence);
+    return occurrence.inputReference == null
+      ? null
+      : this.exactAttributeOriginsByInputProduct.get(occurrence.inputReference.productHandle) ?? null;
+  }
+
+  seededNodePlacement(
+    occurrence: TemplateCompilerNodeOccurrence,
+  ): TemplateCompilerSeededNodePlacement | null {
+    this.requireNode(occurrence);
+    return this.seededNodePlacements.get(occurrence) ?? null;
+  }
+
+  seededAttributePlacement(
+    occurrence: TemplateCompilerAttributeOccurrence,
+  ): TemplateCompilerSeededAttributePlacement | null {
+    this.requireAttribute(occurrence);
+    return this.seededAttributePlacements.get(occurrence) ?? null;
+  }
+
+  /** Create one detached fragment output under compiler authority. */
+  createGeneratedFragment(
+    generation: TemplateCompilerOccurrenceGeneration,
+    inputReference: TemplateStructuralNodeReference | null = null,
+  ): TemplateCompilerFragmentOccurrence {
+    const canonicalInput = this.canonicalGeneratedNodeInput(inputReference, HtmlIrNodeKind.Fragment);
+    return this.recordGeneratedNode(new TemplateCompilerFragmentOccurrence(
+      generatedNodeOccurrenceKey(HtmlIrNodeKind.Fragment, generation),
+      canonicalInput?.identityHandle ?? null,
+      canonicalInput,
+      null,
+      TemplateCompilerOccurrenceEdgeKind.Detached,
+      generation,
+    ));
+  }
+
+  /** Create one detached element output under compiler authority. */
+  createGeneratedElement(
+    generation: TemplateCompilerOccurrenceGeneration,
+    tagName: string,
+    namespace: HtmlNamespaceKind,
+    namespaceUri: string,
+    inputReference: TemplateStructuralNodeReference | null = null,
+  ): TemplateCompilerElementOccurrence {
+    const canonicalInput = this.canonicalGeneratedNodeInput(inputReference, HtmlIrNodeKind.Element);
+    return this.recordGeneratedNode(new TemplateCompilerElementOccurrence(
+      generatedNodeOccurrenceKey(HtmlIrNodeKind.Element, generation),
+      canonicalInput?.identityHandle ?? null,
+      canonicalInput,
+      null,
+      TemplateCompilerOccurrenceEdgeKind.Detached,
+      tagName,
+      namespace,
+      namespaceUri,
+      generation,
+    ));
+  }
+
+  /** Create one detached text output; an input reference preserves 1→N text or clone lineage. */
+  createGeneratedText(
+    generation: TemplateCompilerOccurrenceGeneration,
+    text: string,
+    inputReference: TemplateStructuralNodeReference | null = null,
+  ): TemplateCompilerTextOccurrence {
+    const canonicalInput = this.canonicalGeneratedNodeInput(inputReference, HtmlIrNodeKind.Text);
+    return this.recordGeneratedNode(new TemplateCompilerTextOccurrence(
+      generatedNodeOccurrenceKey(HtmlIrNodeKind.Text, generation),
+      canonicalInput?.identityHandle ?? null,
+      canonicalInput,
+      null,
+      TemplateCompilerOccurrenceEdgeKind.Detached,
+      text,
+      generation,
+    ));
+  }
+
+  /** Create one detached comment output; semantic kind, never text spelling, determines compiler-marker meaning. */
+  createGeneratedComment(
+    generation: TemplateCompilerOccurrenceGeneration,
+    text: string,
+    semanticKind: HtmlCommentSemanticKind,
+    inputReference: TemplateStructuralNodeReference | null = null,
+  ): TemplateCompilerCommentOccurrence {
+    const canonicalInput = this.canonicalGeneratedNodeInput(inputReference, HtmlIrNodeKind.Comment);
+    return this.recordGeneratedNode(new TemplateCompilerCommentOccurrence(
+      generatedNodeOccurrenceKey(HtmlIrNodeKind.Comment, generation),
+      canonicalInput?.identityHandle ?? null,
+      canonicalInput,
+      null,
+      TemplateCompilerOccurrenceEdgeKind.Detached,
+      text,
+      semanticKind,
+      generation,
+    ));
+  }
+
+  /** Create one detached attribute output; an input reference preserves clone/rewrite lineage. */
+  createGeneratedAttribute(
+    generation: TemplateCompilerOccurrenceGeneration,
+    name: string,
+    value: string,
+    namespaceUri: string | null,
+    prefix: string | null,
+    inputReference: TemplateStructuralAttributeReference | null = null,
+  ): TemplateCompilerAttributeOccurrence {
+    const canonicalInput = this.canonicalGeneratedAttributeInput(inputReference);
+    const attribute = new TemplateCompilerAttributeOccurrence(
+      generatedAttributeOccurrenceKey(generation),
+      canonicalInput?.identityHandle ?? null,
+      canonicalInput,
+      null,
+      name,
+      value,
+      namespaceUri,
+      prefix,
+      generation,
+    );
+    this.claimGeneration(generation, attribute);
+    if (this.attributesByOccurrenceKey.has(attribute.occurrenceKey)) {
+      throw new Error(`Compiler attribute occurrence key '${attribute.occurrenceKey}' is not unique.`);
+    }
+    this.attributes.push(attribute);
+    this.attributesByOccurrenceKey.set(attribute.occurrenceKey, attribute);
+    if (canonicalInput != null) {
+      appendMap(this.attributesByInputProduct, canonicalInput.productHandle, attribute);
+      appendMap(this.attributesByInputIdentity, canonicalInput.identityHandle, attribute);
+    }
+    return attribute;
   }
 
   /** Remove one live node edge while retaining the occurrence and its descendants in the historical inventory. */
@@ -514,6 +795,7 @@ export class TemplateCompilerOccurrenceForest {
       ) {
         throw new Error(`Compiler occurrence '${candidate.occurrenceKey}' has incoherent structural ownership.`);
       }
+      this.assertGeneration(candidate.occurrenceKey, candidate.inputReference, candidate.generation);
       this.assertNodeOriginIndex(candidate);
     }
     for (const attribute of this.attributes) {
@@ -522,6 +804,7 @@ export class TemplateCompilerOccurrenceForest {
       if (membership !== attribute.owner) {
         throw new Error(`Compiler attribute '${attribute.occurrenceKey}' has incoherent owner membership.`);
       }
+      this.assertGeneration(attribute.occurrenceKey, attribute.inputReference, attribute.generation);
       this.assertAttributeOriginIndex(attribute);
     }
 
@@ -626,6 +909,91 @@ export class TemplateCompilerOccurrenceForest {
     }
   }
 
+  private recordGeneratedNode<TNode extends TemplateCompilerNodeOccurrence>(node: TNode): TNode {
+    if (node.generation == null) {
+      throw new Error(`Generated compiler occurrence '${node.occurrenceKey}' has no generation authority.`);
+    }
+    this.claimGeneration(node.generation, node);
+    if (this.nodesByOccurrenceKey.has(node.occurrenceKey)) {
+      throw new Error(`Compiler node occurrence key '${node.occurrenceKey}' is not unique.`);
+    }
+    this.nodes.push(node);
+    this.nodesByOccurrenceKey.set(node.occurrenceKey, node);
+    if (node.inputReference != null) {
+      appendMap(this.nodesByInputProduct, node.inputReference.productHandle, node);
+      appendMap(this.nodesByInputIdentity, node.inputReference.identityHandle, node);
+    }
+    return node;
+  }
+
+  private claimGeneration(
+    generation: TemplateCompilerOccurrenceGeneration,
+    occurrence: TemplateCompilerNodeOccurrence | TemplateCompilerAttributeOccurrence,
+  ): void {
+    const existing = this.occurrencesByGeneration.get(generation) ?? null;
+    if (existing != null) {
+      throw new Error(
+        `Compiler generation '${generation.operationKey}' is already spent by '${existing.occurrenceKey}'.`,
+      );
+    }
+    this.occurrencesByGeneration.set(generation, occurrence);
+  }
+
+  private canonicalGeneratedNodeInput(
+    inputReference: TemplateStructuralNodeReference | null,
+    expectedKind: HtmlIrNodeKind,
+  ): TemplateStructuralNodeReference | null {
+    if (inputReference == null) return null;
+    if (inputReference.treeProductHandle !== this.inputTree.productHandle || inputReference.nodeKind !== expectedKind) {
+      throw new Error(`Generated compiler node input '${inputReference.productHandle}' does not match this forest and node kind.`);
+    }
+    const inputOccurrences = this.nodesByInputProduct.get(inputReference.productHandle) ?? [];
+    const canonical = inputOccurrences.find((candidate) => candidate.generation == null)?.inputReference ?? null;
+    if (
+      canonical == null
+      || canonical.treeProductHandle !== inputReference.treeProductHandle
+      || canonical.nodeKind !== inputReference.nodeKind
+      || canonical.productHandle !== inputReference.productHandle
+      || canonical.identityHandle !== inputReference.identityHandle
+      || canonical.addressHandle !== inputReference.addressHandle
+    ) {
+      throw new Error(`Generated compiler node input '${inputReference.productHandle}' is absent from the seeded origin index.`);
+    }
+    return canonical;
+  }
+
+  private canonicalGeneratedAttributeInput(
+    inputReference: TemplateStructuralAttributeReference | null,
+  ): TemplateStructuralAttributeReference | null {
+    if (inputReference == null) return null;
+    if (inputReference.treeProductHandle !== this.inputTree.productHandle) {
+      throw new Error(`Generated compiler attribute input '${inputReference.productHandle}' belongs to another tree.`);
+    }
+    const inputOccurrences = this.attributesByInputProduct.get(inputReference.productHandle) ?? [];
+    const canonical = inputOccurrences.find((candidate) => candidate.generation == null)?.inputReference ?? null;
+    if (
+      canonical == null
+      || canonical.treeProductHandle !== inputReference.treeProductHandle
+      || canonical.productHandle !== inputReference.productHandle
+      || canonical.identityHandle !== inputReference.identityHandle
+      || canonical.addressHandle !== inputReference.addressHandle
+      || canonical.name !== inputReference.name
+    ) {
+      throw new Error(`Generated compiler attribute input '${inputReference.productHandle}' is absent from the seeded origin index.`);
+    }
+    return canonical;
+  }
+
+  private assertGeneration(
+    occurrenceKey: string,
+    inputReference: TemplateStructuralNodeReference | TemplateStructuralAttributeReference | null,
+    generation: TemplateCompilerOccurrenceGeneration | null,
+  ): void {
+    if (inputReference == null && generation == null) {
+      throw new Error(`Originless compiler occurrence '${occurrenceKey}' has no generation authority.`);
+    }
+  }
+
   private assertNodeOriginIndex(node: TemplateCompilerNodeOccurrence): void {
     if ((node.inputReference == null) !== (node.inputIdentityKey == null)) {
       throw new Error(`Compiler occurrence '${node.occurrenceKey}' has a partial input origin.`);
@@ -686,8 +1054,11 @@ class TemplateCompilerOccurrenceForestBuilder {
   private readonly attributesByInputProduct = new Map<ProductHandle, TemplateCompilerAttributeOccurrence[]>();
   private readonly nodesByInputIdentity = new Map<IdentityHandle, TemplateCompilerNodeOccurrence[]>();
   private readonly attributesByInputIdentity = new Map<IdentityHandle, TemplateCompilerAttributeOccurrence[]>();
+  private readonly exactNodeOriginsByInputProduct = new Map<ProductHandle, TemplateCompilerExactAuthoredOrigin>();
+  private readonly exactAttributeOriginsByInputProduct = new Map<ProductHandle, TemplateCompilerExactAuthoredOrigin>();
 
   constructor(private readonly input: BrowserEffectiveTemplateEmission) {
+    this.recordExactAuthoredOrigins();
     for (const node of input.nodes) {
       if (this.inputNodesByProduct.has(node.productHandle)) {
         throw new Error(`Browser-effective input repeats structural node product '${node.productHandle}'.`);
@@ -731,6 +1102,8 @@ class TemplateCompilerOccurrenceForestBuilder {
       attributesByInputProduct: this.attributesByInputProduct,
       nodesByInputIdentity: this.nodesByInputIdentity,
       attributesByInputIdentity: this.attributesByInputIdentity,
+      exactNodeOriginsByInputProduct: this.exactNodeOriginsByInputProduct,
+      exactAttributeOriginsByInputProduct: this.exactAttributeOriginsByInputProduct,
     };
   }
 
@@ -921,6 +1294,107 @@ class TemplateCompilerOccurrenceForestBuilder {
       appendMap(this.attributesByInputIdentity, occurrence.inputIdentityKey, occurrence);
     }
   }
+
+  private recordExactAuthoredOrigins(): void {
+    const originsByAuthoredNode = new Map<ProductHandle, TemplateCompilerExactAuthoredOrigin[]>();
+    const originsByAuthoredAttribute = new Map<ProductHandle, TemplateCompilerExactAuthoredOrigin[]>();
+    const ambiguousNodeOutputs = new Set<ProductHandle>();
+    const ambiguousAttributeOutputs = new Set<ProductHandle>();
+    const ambiguousAuthoredNodes = new Set<ProductHandle>();
+    const ambiguousAuthoredAttributes = new Set<ProductHandle>();
+    for (const derivation of this.input.derivations) {
+      if (derivation.authority !== TemplateStructureDerivationAuthority.HtmlTreeBuilder) continue;
+      const nodeInputs = derivation.inputs
+        .map((term) => term.structure)
+        .filter((input) => input.productKindKey === KernelVocabulary.Template.HtmlNode.key);
+      const nodeOutputs = derivation.outputs
+        .map((term) => term.structure)
+        .filter((output) => output.productKindKey === KernelVocabulary.Template.StructuralNode.key);
+      const attributeInputs = derivation.inputs
+        .map((term) => term.structure)
+        .filter((input) => input.productKindKey === KernelVocabulary.Template.HtmlAttribute.key);
+      const attributeOutputs = derivation.outputs
+        .map((term) => term.structure)
+        .filter((output) => output.productKindKey === KernelVocabulary.Template.StructuralAttribute.key);
+      if (
+        nodeInputs.length > 0
+        && (derivation.inputs.length !== 1 || derivation.outputs.length !== 1 || nodeOutputs.length !== 1)
+      ) {
+        for (const input of nodeInputs) ambiguousAuthoredNodes.add(input.productHandle);
+      }
+      if (
+        attributeInputs.length > 0
+        && (derivation.inputs.length !== 1 || derivation.outputs.length !== 1 || attributeOutputs.length !== 1)
+      ) {
+        for (const input of attributeInputs) ambiguousAuthoredAttributes.add(input.productHandle);
+      }
+      const input = nodeInputs.length === 1 && nodeOutputs.length === 1
+        ? nodeInputs[0]!
+        : attributeInputs.length === 1 && attributeOutputs.length === 1
+          ? attributeInputs[0]!
+          : null;
+      const output = nodeInputs.length === 1 && nodeOutputs.length === 1
+        ? nodeOutputs[0]!
+        : attributeInputs.length === 1 && attributeOutputs.length === 1
+          ? attributeOutputs[0]!
+          : null;
+      if (input == null || output == null || derivation.inputs.length !== 1 || derivation.outputs.length !== 1) {
+        continue;
+      }
+      let outputIndex: Map<ProductHandle, TemplateCompilerExactAuthoredOrigin>;
+      let authoredIndex: Map<ProductHandle, TemplateCompilerExactAuthoredOrigin[]>;
+      let ambiguousOutputs: Set<ProductHandle>;
+      if (
+        input.productKindKey === KernelVocabulary.Template.HtmlNode.key
+        && output.productKindKey === KernelVocabulary.Template.StructuralNode.key
+      ) {
+        outputIndex = this.exactNodeOriginsByInputProduct;
+        authoredIndex = originsByAuthoredNode;
+        ambiguousOutputs = ambiguousNodeOutputs;
+      } else if (
+        input.productKindKey === KernelVocabulary.Template.HtmlAttribute.key
+        && output.productKindKey === KernelVocabulary.Template.StructuralAttribute.key
+      ) {
+        outputIndex = this.exactAttributeOriginsByInputProduct;
+        authoredIndex = originsByAuthoredAttribute;
+        ambiguousOutputs = ambiguousAttributeOutputs;
+      } else {
+        continue;
+      }
+      if (ambiguousOutputs.has(output.productHandle)) {
+        continue;
+      }
+      if (outputIndex.has(output.productHandle)) {
+        outputIndex.delete(output.productHandle);
+        ambiguousOutputs.add(output.productHandle);
+        continue;
+      }
+      const origin = new TemplateCompilerExactAuthoredOrigin(
+        derivation.productHandle,
+        input,
+        output,
+      );
+      outputIndex.set(output.productHandle, origin);
+      appendMap(authoredIndex, input.productHandle, origin);
+    }
+    for (const origins of originsByAuthoredNode.values()) {
+      const authoredProductHandle = origins[0]?.authored.productHandle;
+      if (origins.length <= 1 && (authoredProductHandle == null || !ambiguousAuthoredNodes.has(authoredProductHandle))) {
+        continue;
+      }
+      for (const origin of origins) this.exactNodeOriginsByInputProduct.delete(origin.browserOutput.productHandle);
+    }
+    for (const origins of originsByAuthoredAttribute.values()) {
+      const authoredProductHandle = origins[0]?.authored.productHandle;
+      if (
+        origins.length <= 1
+        && (authoredProductHandle == null || !ambiguousAuthoredAttributes.has(authoredProductHandle))
+      ) {
+        continue;
+      }
+      for (const origin of origins) this.exactAttributeOriginsByInputProduct.delete(origin.browserOutput.productHandle);
+    }
+  }
 }
 
 function nodeOwnershipFor(node: TemplateCompilerNodeOccurrence): TemplateCompilerNodeOwnership {
@@ -1020,4 +1494,29 @@ function inputNodeOccurrenceKey(identityHandle: IdentityHandle): string {
 
 function inputAttributeOccurrenceKey(identityHandle: IdentityHandle): string {
   return `input-attribute:${identityHandle}`;
+}
+
+function generatedNodeOccurrenceKey(
+  nodeKind: HtmlIrNodeKind,
+  generation: TemplateCompilerOccurrenceGeneration,
+): string {
+  return generatedOccurrenceKey(`node:${nodeKind}`, generation);
+}
+
+function generatedAttributeOccurrenceKey(generation: TemplateCompilerOccurrenceGeneration): string {
+  return generatedOccurrenceKey('attribute', generation);
+}
+
+function generatedOccurrenceKey(
+  occurrenceKind: string,
+  generation: TemplateCompilerOccurrenceGeneration,
+): string {
+  return [
+    'generated',
+    occurrenceKind,
+    localKeyPart(generation.contextKey),
+    localKeyPart(generation.operationKey),
+    generation.role,
+    generation.outputOrdinal,
+  ].join(':');
 }

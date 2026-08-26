@@ -1408,12 +1408,22 @@ function referencesForTemplateInstruction(
             ...projection.contributors.map((contributor) =>
               mergeKernelDetailReferences(
                 htmlNodeReferenceReferences(contributor.node),
+                htmlAttributeReferenceReferences(contributor.slotAttribute),
                 kernelRecordReferences(contributor.slotNameSourceAddressHandle),
               )
             ),
             kernelRecordReferences(projection.sourceAddressHandle),
           )
         ),
+        ...instruction.discardedProjectionContributors.map((contributor) =>
+          mergeKernelDetailReferences(
+            htmlNodeReferenceReferences(contributor.node),
+            htmlAttributeReferenceReferences(contributor.slotAttribute),
+            kernelRecordReferences(contributor.slotNameSourceAddressHandle),
+          )
+        ),
+        kernelRecordReferences(instruction.auSlotProcessContent?.nameSourceAddressHandle ?? null),
+        ...(instruction.auSlotProcessContent?.removedChildNodes.map(htmlNodeReferenceReferences) ?? []),
         detailsReferences(
           TemplateDetailDescriptors.Instruction,
           instruction.bindableInstructionProductHandles,

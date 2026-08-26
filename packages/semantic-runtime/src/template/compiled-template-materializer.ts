@@ -87,6 +87,7 @@ import type { TemplateCompilerWorldEmission } from './compiler-world-materialize
 import type { TemplateCompilerReadView } from './compiler-read-view.js';
 import {
   HtmlElement,
+  HtmlNamespaceKind,
   HtmlText,
   hasHtmlAttribute,
   htmlElementAttributeOwnersByElementProduct,
@@ -94,6 +95,7 @@ import {
   type HtmlAttribute,
   type HtmlElementAttributeOwner,
   type HtmlIrNode,
+  type HtmlNodeReference,
 } from './html-ir.js';
 import type { HtmlParseEmission } from './html-parse-materializer.js';
 import {
@@ -101,6 +103,7 @@ import {
   HydrateAttributeInstruction,
   HydrateElementInstruction,
   HydrateElementProjectionContributor,
+  HydrateElementProjectionContributorDisposition,
   HydrateElementProjectionDefinition,
   HydrateLetElementInstruction,
   HydrateTemplateControllerInstruction,
@@ -323,6 +326,7 @@ class ElementProjectionChildGroup {
     readonly extractedChildren: readonly HtmlNodeReferenceLike[],
     readonly sequenceChildren: readonly HtmlNodeReferenceLike[],
     readonly contributors: readonly HydrateElementProjectionContributor[],
+    readonly discardedContributors: readonly HydrateElementProjectionContributor[],
     readonly sourceAddressHandle: AddressHandle | null,
   ) {}
 }
@@ -1016,7 +1020,8 @@ class CompiledTemplateInstructionTraversal {
       ...parts.openTemplateControllerSeamHandles,
     ])];
     const usageContainerless = hasHtmlAttribute(owner, TemplateSpecialAttributeName.Containerless);
-    const effectiveContainerless = elementDefinition?.containerless === true || usageContainerless;
+    const effectiveContainerless = elementDefinition != null
+      && (elementDefinition.containerless === true || usageContainerless);
     if (elementEffectSeamHandles.length > 0) {
       contextPlan.recordFrontier(
         `element-effects:${node.productHandle}`,
@@ -1026,8 +1031,12 @@ class CompiledTemplateInstructionTraversal {
       );
     }
     this.recordNativeSlotOutlet(node, lookupName, parts);
-    const processContentRemovedChildren = this.knownProcessContentRemovedChildHandles(node, elementDefinition);
+    const processContentRemovedChildNodes = this.knownProcessContentRemovedChildren(node, elementDefinition);
+    const processContentRemovedChildren = processContentRemovedChildNodes.flatMap((child) =>
+      child.productHandle == null ? [] : [child.productHandle]
+    );
     const projectionGroups = this.elementProjectionChildGroups(node, elementDefinition, parts);
+    const compiledProjectionGroups = projectionGroups.filter((group) => group.sequenceChildren.length > 0);
     const extractedProjectionChildren = new Set(
       [
         ...processContentRemovedChildren,
@@ -1052,7 +1061,7 @@ class CompiledTemplateInstructionTraversal {
           this.input.compilerReads.resolveResources()
             ? elementResolution?.resource?.toReference() ?? null
             : null,
-          projectionGroups.map((group) => {
+          compiledProjectionGroups.map((group) => {
             const local = `${instructionLocal}:projection:${localKeyPart(group.slotName)}`;
             const projection = {
               slotName: group.slotName,
@@ -1069,7 +1078,8 @@ class CompiledTemplateInstructionTraversal {
               projection.sourceAddressHandle,
             );
           }),
-          this.auSlotProcessContentData(node, elementDefinition),
+          projectionGroups.flatMap((group) => group.discardedContributors),
+          this.auSlotProcessContentData(node, elementDefinition, processContentRemovedChildNodes),
           parts.bindableInstructions.map((instruction) => instruction.productHandle),
           parts.capturedSyntaxProductHandles,
           usageContainerless,
@@ -1112,7 +1122,7 @@ class CompiledTemplateInstructionTraversal {
         );
       }
       if (elementInstruction != null) {
-        this.addProjectionContexts(elementInstruction, projectionGroups, innermostContext);
+        this.addProjectionContexts(elementInstruction, compiledProjectionGroups, innermostContext);
       }
       if (directRow.length > 0 || parts.openDirectInstructionSeamHandles.length > 0) {
         innermostContext.appendRow(
@@ -1175,7 +1185,7 @@ class CompiledTemplateInstructionTraversal {
     this.assemblyState.recordCompilerReachableNode(node, contextPlan);
 
     if (elementInstruction != null) {
-      this.addProjectionContexts(elementInstruction, projectionGroups, contextPlan);
+      this.addProjectionContexts(elementInstruction, compiledProjectionGroups, contextPlan);
     }
     if (directRow.length > 0 || parts.openDirectInstructionSeamHandles.length > 0) {
       contextPlan.appendRow(
@@ -1239,6 +1249,7 @@ class CompiledTemplateInstructionTraversal {
       extractedChildren: HtmlNodeReferenceLike[];
       sequenceChildren: HtmlNodeReferenceLike[];
       contributors: HydrateElementProjectionContributor[];
+      discardedContributors: HydrateElementProjectionContributor[];
       sourceAddressHandle: AddressHandle | null;
     }>();
     for (const childReference of node.children) {
@@ -1256,14 +1267,26 @@ class CompiledTemplateInstructionTraversal {
         extractedChildren: [],
         sequenceChildren: [],
         contributors: [],
+        discardedContributors: [],
         sourceAddressHandle: child?.sourceAddressHandle ?? auSlotAttribute?.sourceAddressHandle ?? node.sourceAddressHandle,
       };
       group.extractedChildren.push(childReference);
-      group.contributors.push(new HydrateElementProjectionContributor(
+      const isDiscardedWhitespace = child instanceof HtmlText && child.text.trim() === '';
+      const contributor = new HydrateElementProjectionContributor(
         childReference,
+        slotName,
+        auSlotAttribute?.toReference() ?? null,
         auSlotAttribute?.valueAddressHandle ?? null,
-      ));
-      if (!(child instanceof HtmlText) || child.text.trim() !== '') {
+        isDiscardedWhitespace
+          ? HydrateElementProjectionContributorDisposition.DiscardedWhitespace
+          : child instanceof HtmlElement && this.isUnwrappedProjectionTemplate(child)
+            ? HydrateElementProjectionContributorDisposition.UnwrappedTemplateContent
+            : HydrateElementProjectionContributorDisposition.RetainedNode,
+      );
+      if (isDiscardedWhitespace) {
+        group.discardedContributors.push(contributor);
+      } else {
+        group.contributors.push(contributor);
         group.sequenceChildren.push(childReference);
       }
       groups.set(slotName, group);
@@ -1273,6 +1296,7 @@ class CompiledTemplateInstructionTraversal {
       group.extractedChildren,
       group.sequenceChildren,
       group.contributors,
+      group.discardedContributors,
       group.sourceAddressHandle,
     ));
   }
@@ -1295,7 +1319,6 @@ class CompiledTemplateInstructionTraversal {
       for (const child of group.sequenceChildren) {
         const childNode = this.nodeForReference(child);
         if (childNode instanceof HtmlElement && this.isUnwrappedProjectionTemplate(childNode)) {
-          this.assemblyState.recordCompilerReachableNode(childNode, projectionContext);
           for (const grandchild of childNode.children) {
             this.visitNode(grandchild, projectionContext);
           }
@@ -1309,6 +1332,7 @@ class CompiledTemplateInstructionTraversal {
   private auSlotProcessContentData(
     node: HtmlElement,
     elementDefinition: CustomElementDefinition,
+    removedChildNodes: readonly HtmlNodeReference[],
   ): AuSlotProcessContentInstructionData | null {
     if (!this.isRuntimeHtmlAuSlotDefinition(elementDefinition)) {
       return null;
@@ -1317,11 +1341,15 @@ class CompiledTemplateInstructionTraversal {
     return new AuSlotProcessContentInstructionData(
       nameAttribute?.rawValue ?? 'default',
       nameAttribute?.valueAddressHandle ?? null,
+      [...removedChildNodes],
     );
   }
 
   private isUnwrappedProjectionTemplate(node: HtmlElement): boolean {
-    if (runtimeElementResourceName(node.tagName, node.namespace) !== 'template') {
+    if (
+      node.namespace !== HtmlNamespaceKind.Html
+      || runtimeElementResourceName(node.tagName, node.namespace) !== 'template'
+    ) {
       return false;
     }
     const owner = this.indexes.ownersByElement.get(node.productHandle) ?? null;
@@ -1330,10 +1358,10 @@ class CompiledTemplateInstructionTraversal {
     ) ?? true;
   }
 
-  private knownProcessContentRemovedChildHandles(
+  private knownProcessContentRemovedChildren(
     node: HtmlElement,
     elementDefinition: CustomElementDefinition | null,
-  ): readonly ProductHandle[] {
+  ): readonly HtmlNodeReference[] {
     if (!this.isRuntimeHtmlAuSlotDefinition(elementDefinition)) {
       return [];
     }
@@ -1341,8 +1369,7 @@ class CompiledTemplateInstructionTraversal {
       const child = this.nodeForReference(childReference);
       return child instanceof HtmlElement
         && this.attributeForElement(child, 'au-slot') != null
-        && child.productHandle != null
-        ? [child.productHandle]
+        ? [childReference]
         : [];
     });
   }

@@ -116,16 +116,30 @@ export class AuSlotProcessContentInstructionData {
     readonly name: string,
     /** Exact authored `name` value span, or null when the framework supplied `default`. */
     readonly nameSourceAddressHandle: AddressHandle | null,
+    /** Exact direct children removed by the known `AuSlot.processContent` implementation. */
+    readonly removedChildNodes: readonly HtmlNodeReference[],
   ) {}
 }
 
-/** One authored child that contributed to a custom-element projection definition. */
+/** Structural outcome assigned to one direct custom-element projection input. */
+export const enum HydrateElementProjectionContributorDisposition {
+  RetainedNode = 'retained-node',
+  UnwrappedTemplateContent = 'unwrapped-template-content',
+  DiscardedWhitespace = 'discarded-whitespace',
+}
+
+/** One authored direct child considered by custom-element projection extraction. */
 export class HydrateElementProjectionContributor {
   constructor(
-    /** Authored direct child extracted into this projection definition. */
+    /** Authored direct child extracted from the custom-element host. */
     readonly node: HtmlNodeReference,
-    /** Exact `[au-slot]` value span, or null for inferred default projection membership. */
+    /** Slot selected before the compiler removes `[au-slot]`. */
+    readonly slotName: string,
+    /** Exact authored `[au-slot]` attribute, or null for inferred default projection membership. */
+    readonly slotAttribute: HtmlAttributeReference | null,
+    /** Exact `[au-slot]` value span, or null for a valueless attribute or inferred membership. */
     readonly slotNameSourceAddressHandle: AddressHandle | null,
+    readonly disposition: HydrateElementProjectionContributorDisposition,
   ) {}
 }
 
@@ -145,6 +159,8 @@ export class HydrateElementInstruction {
     /** Compiler-visible resource selected for this instruction, including header and full-definition identity. */
     readonly resource: TemplateVisibleResourceReference | null,
     readonly projections: readonly HydrateElementProjectionDefinition[],
+    /** Extracted whitespace inputs removed from the host without producing a projection definition member. */
+    readonly discardedProjectionContributors: readonly HydrateElementProjectionContributor[],
     /** Known framework `processContent` data; null for ordinary or open custom-element hooks. */
     readonly auSlotProcessContent: AuSlotProcessContentInstructionData | null,
     readonly bindableInstructionProductHandles: readonly ProductHandle[],
@@ -166,7 +182,7 @@ export class HydrateElementProjectionDefinition {
     readonly slotName: string,
     /** Compiler-owned generated definition that contains the projection's exact target rows and static structure. */
     readonly compiledTemplate: CompiledTemplateReference,
-    /** All authored direct children aggregated into this definition, in source order. */
+    /** Retained or unwrapped authored direct children aggregated into this definition, in source order. */
     readonly contributors: readonly HydrateElementProjectionContributor[],
     /** Source address for the projected child content that produced the sequence. */
     readonly sourceAddressHandle: AddressHandle | null,

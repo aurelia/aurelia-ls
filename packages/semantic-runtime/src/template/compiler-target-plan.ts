@@ -22,6 +22,7 @@ import type {
   HydrateTemplateControllerInstruction,
   TemplateInstruction,
 } from './instruction-ir.js';
+import { HydrateElementProjectionContributorDisposition } from './instruction-ir.js';
 
 /** Semantic role of one compiler context inside a template-family target plan. */
 export const enum TemplateCompilerTargetContextRole {
@@ -49,6 +50,36 @@ export class TemplateCompilerTargetContextOwner {
     readonly identityHandle: IdentityHandle,
   ) {}
 }
+
+export const enum TemplateCompilerTargetContextStructuralAuthorityKind {
+  Root = 'root',
+  TemplateController = 'template-controller',
+  Projection = 'projection',
+}
+
+export class TemplateCompilerRootContextStructuralAuthority {
+  readonly authorityKind = TemplateCompilerTargetContextStructuralAuthorityKind.Root;
+}
+
+export class TemplateCompilerTemplateControllerContextStructuralAuthority {
+  readonly authorityKind = TemplateCompilerTargetContextStructuralAuthorityKind.TemplateController;
+
+  constructor(readonly instruction: HydrateTemplateControllerInstruction) {}
+}
+
+export class TemplateCompilerProjectionContextStructuralAuthority {
+  readonly authorityKind = TemplateCompilerTargetContextStructuralAuthorityKind.Projection;
+
+  constructor(
+    readonly instruction: HydrateElementInstruction,
+    readonly projection: HydrateElementProjectionDefinition,
+  ) {}
+}
+
+export type TemplateCompilerTargetContextStructuralAuthority =
+  | TemplateCompilerRootContextStructuralAuthority
+  | TemplateCompilerTemplateControllerContextStructuralAuthority
+  | TemplateCompilerProjectionContextStructuralAuthority;
 
 /** Acyclic reference to one run-local compiler target context. */
 export class TemplateCompilerTargetContextReference {
@@ -99,9 +130,10 @@ export class TemplateCompilerTargetContextPlan {
   private readonly ownedContexts: TemplateCompilerTargetContextPlan[] = [];
   private readonly frontiers: TemplateCompilerTargetContextFrontier[] = [];
   private readonly compilerReachableNodeProductHandles: ProductHandle[] = [];
-  private readonly compilerReachableNodeProducts = new Set<ProductHandle>();
+  private readonly compilerReachableNodeOrdinals = new Map<ProductHandle, number>();
   private sealed = false;
   private nextTargetOrdinal = 0;
+  private firstConditionalTargetOrdinal: number | null = null;
 
   constructor(
     readonly localKey: string,
@@ -114,6 +146,8 @@ export class TemplateCompilerTargetContextPlan {
     readonly root: TemplateCompilerTargetContextReference,
     readonly sourceAddressHandle: AddressHandle | null,
     readonly slotName: string | null = null,
+    /** Exact semantic owner retained for structural execution; no flattened contributor copy is authoritative. */
+    readonly structuralAuthority: TemplateCompilerTargetContextStructuralAuthority,
   ) {}
 
   readRows(): readonly TemplateCompilerTargetRowPlan[] {
@@ -132,6 +166,10 @@ export class TemplateCompilerTargetContextPlan {
     return this.compilerReachableNodeProductHandles;
   }
 
+  compilerReachableNodeOrdinal(productHandle: ProductHandle): number | null {
+    return this.compilerReachableNodeOrdinals.get(productHandle) ?? null;
+  }
+
   get state(): TemplateCompilerTargetContextState {
     return this.frontiers.length > 0
       || this.rows.some((row) => row.posture !== TemplateCompilerTargetRowPosture.Complete)
@@ -141,6 +179,11 @@ export class TemplateCompilerTargetContextPlan {
 
   get projectedTargetCount(): number {
     return this.nextTargetOrdinal;
+  }
+
+  /** First projected target whose physical order is conditional, or null while the complete prefix remains unbounded. */
+  get exactGeometryPrefixEnd(): number | null {
+    return this.firstConditionalTargetOrdinal;
   }
 
   toReference(): TemplateCompilerTargetContextReference {
@@ -169,6 +212,9 @@ export class TemplateCompilerTargetContextPlan {
       throw new Error(`Compiler target row '${local}' has invalid projected target count ${projectedTargetCount}.`);
     }
     const ordinal = this.rows.length;
+    if (posture === TemplateCompilerTargetRowPosture.Open) {
+      this.recordConditionalTargetOrdinal(this.nextTargetOrdinal);
+    }
     const row = new TemplateCompilerTargetRowPlan(
       `${this.localKey}:row:${ordinal}:${local}`,
       `${ordinal}:${local}`,
@@ -206,13 +252,14 @@ export class TemplateCompilerTargetContextPlan {
       openSeamHandles,
     );
     this.frontiers.push(frontier);
+    this.recordConditionalTargetOrdinal(frontier.projectedTargetOrdinal);
     return frontier;
   }
 
   recordCompilerReachableNode(productHandle: ProductHandle): void {
     this.requireMutable();
-    if (this.compilerReachableNodeProducts.has(productHandle)) return;
-    this.compilerReachableNodeProducts.add(productHandle);
+    if (this.compilerReachableNodeOrdinals.has(productHandle)) return;
+    this.compilerReachableNodeOrdinals.set(productHandle, this.compilerReachableNodeProductHandles.length);
     this.compilerReachableNodeProductHandles.push(productHandle);
   }
 
@@ -226,11 +273,16 @@ export class TemplateCompilerTargetContextPlan {
 
   seal(): void {
     this.sealed = true;
-    this.compilerReachableNodeProducts.clear();
   }
 
   private requireMutable(): void {
     if (this.sealed) throw new Error(`Compiler target context '${this.localKey}' is sealed.`);
+  }
+
+  private recordConditionalTargetOrdinal(projectedTargetOrdinal: number): void {
+    this.firstConditionalTargetOrdinal = this.firstConditionalTargetOrdinal == null
+      ? projectedTargetOrdinal
+      : Math.min(this.firstConditionalTargetOrdinal, projectedTargetOrdinal);
   }
 }
 
@@ -267,6 +319,8 @@ export class TemplateCompilerTargetPlan {
       null,
       rootReference,
       rootContext.sourceAddressHandle,
+      null,
+      new TemplateCompilerRootContextStructuralAuthority(),
     );
     this.contexts = [this.root];
     this.contextsByLocalKey.set(this.root.localKey, this.root);
@@ -302,6 +356,7 @@ export class TemplateCompilerTargetPlan {
       instruction.childCompiledTemplate,
       instruction.sourceAddressHandle,
       null,
+      new TemplateCompilerTemplateControllerContextStructuralAuthority(instruction),
     );
   }
 
@@ -321,6 +376,7 @@ export class TemplateCompilerTargetPlan {
       projection.compiledTemplate,
       projection.sourceAddressHandle ?? instruction.sourceAddressHandle,
       projection.slotName,
+      new TemplateCompilerProjectionContextStructuralAuthority(instruction, projection),
     );
   }
 
@@ -358,6 +414,30 @@ export class TemplateCompilerTargetPlan {
         }
         reachableNodeOwners.set(productHandle, context.localKey);
       }
+      if (
+        context.readCompilerReachableNodeProductHandles().some((productHandle, ordinal) =>
+          context.compilerReachableNodeOrdinal(productHandle) !== ordinal
+        )
+      ) {
+        throw new Error(`Compiler target context '${context.localKey}' has incoherent reachable-node ordinals.`);
+      }
+      if (!contextStructuralAuthorityIsCoherent(context)) {
+        throw new Error(`Compiler target context '${context.localKey}' has incoherent structural authority.`);
+      }
+      if (context.ownerContext != null) {
+        const ownerContext = this.contextsByLocalKey.get(context.ownerContext.localKey) ?? null;
+        const authorityInstruction = context.structuralAuthority instanceof TemplateCompilerTemplateControllerContextStructuralAuthority
+          ? context.structuralAuthority.instruction
+          : context.structuralAuthority instanceof TemplateCompilerProjectionContextStructuralAuthority
+            ? context.structuralAuthority.instruction
+            : null;
+        const ownerOccurrences = ownerContext?.readRows().reduce((count, row) =>
+          count + row.instructions.filter((instruction) => instruction === authorityInstruction).length,
+        0) ?? 0;
+        if (authorityInstruction == null || ownerOccurrences !== 1) {
+          throw new Error(`Compiler target context '${context.localKey}' has no unique owner-row instruction edge.`);
+        }
+      }
       let expectedTargetOrdinal = 0;
       context.readRows().forEach((row, ordinal) => {
         const postureCoherent = rowPostureIsCoherent(row);
@@ -383,6 +463,21 @@ export class TemplateCompilerTargetPlan {
         ) {
           throw new Error(`Compiler target frontier '${frontier.localKey}' is incoherent.`);
         }
+      }
+      let expectedPrefixEnd: number | null = null;
+      for (const row of context.readRows()) {
+        if (row.posture !== TemplateCompilerTargetRowPosture.Open) continue;
+        expectedPrefixEnd = expectedPrefixEnd == null
+          ? row.projectedTargetOrdinal
+          : Math.min(expectedPrefixEnd, row.projectedTargetOrdinal);
+      }
+      for (const frontier of context.readFrontiers()) {
+        expectedPrefixEnd = expectedPrefixEnd == null
+          ? frontier.projectedTargetOrdinal
+          : Math.min(expectedPrefixEnd, frontier.projectedTargetOrdinal);
+      }
+      if (context.exactGeometryPrefixEnd !== expectedPrefixEnd) {
+        throw new Error(`Compiler target context '${context.localKey}' has incoherent exact-geometry prefix state.`);
       }
       for (const child of context.readOwnedContexts()) {
         if (
@@ -410,6 +505,7 @@ export class TemplateCompilerTargetPlan {
     compiledTemplate: CompiledTemplateReference,
     sourceAddressHandle: AddressHandle | null,
     slotName: string | null,
+    structuralAuthority: TemplateCompilerTargetContextStructuralAuthority,
   ): TemplateCompilerTargetContextPlan {
     if (this.sealed) throw new Error(`Compiler target plan '${this.localKey}' is sealed.`);
     if (!this.contexts.includes(ownerContext)) {
@@ -428,6 +524,7 @@ export class TemplateCompilerTargetPlan {
       this.root.toReference(),
       sourceAddressHandle,
       slotName,
+      structuralAuthority,
     );
     ownerContext.admitOwnedContext(child);
     this.contexts.push(child);
@@ -444,5 +541,36 @@ function rowPostureIsCoherent(row: TemplateCompilerTargetRowPlan): boolean {
         && row.openSeamHandles.length === 0;
     case TemplateCompilerTargetRowPosture.Open:
       return row.projectedTargetCount >= 1 && row.openSeamHandles.length > 0;
+  }
+}
+
+function contextStructuralAuthorityIsCoherent(context: TemplateCompilerTargetContextPlan): boolean {
+  const authority = context.structuralAuthority;
+  switch (context.role) {
+    case TemplateCompilerTargetContextRole.Root:
+      return authority instanceof TemplateCompilerRootContextStructuralAuthority
+        && context.ownerContext === null
+        && context.slotName === null;
+    case TemplateCompilerTargetContextRole.TemplateController:
+      return authority instanceof TemplateCompilerTemplateControllerContextStructuralAuthority
+        && authority.instruction.productHandle === context.owner.productHandle
+        && authority.instruction.identityHandle === context.owner.identityHandle
+        && authority.instruction.node.productHandle != null
+        && authority.instruction.childCompiledTemplate?.productHandle === context.compiledTemplate.productHandle
+        && context.slotName === null;
+    case TemplateCompilerTargetContextRole.Projection:
+      return authority instanceof TemplateCompilerProjectionContextStructuralAuthority
+        && authority.instruction.productHandle === context.owner.productHandle
+        && authority.instruction.identityHandle === context.owner.identityHandle
+        && authority.instruction.node.productHandle != null
+        && authority.projection.compiledTemplate.productHandle === context.compiledTemplate.productHandle
+        && authority.projection.slotName === context.slotName
+        && authority.instruction.projections.includes(authority.projection)
+        && authority.projection.contributors.length > 0
+        && authority.projection.contributors.every((contributor) =>
+          contributor.node.productHandle != null
+          && contributor.slotName === authority.projection.slotName
+          && contributor.disposition !== HydrateElementProjectionContributorDisposition.DiscardedWhitespace
+        );
   }
 }

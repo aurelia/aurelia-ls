@@ -26,6 +26,7 @@ import {
   TemplateRenderTargetKind,
 } from '../src/template/compiled-template.js';
 import {
+  TemplateCompilerProjectionContextStructuralAuthority,
   TemplateCompilerTargetContextRole,
   TemplateCompilerTargetContextState,
   TemplateCompilerTargetRowPosture,
@@ -33,6 +34,7 @@ import {
 import { HtmlElement, HtmlText, type HtmlIrNode } from '../src/template/html-ir.js';
 import {
   HydrateElementInstruction,
+  HydrateElementProjectionContributorDisposition,
   HydrateLetElementInstruction,
   HydrateTemplateControllerInstruction,
   InterpolationInstruction,
@@ -497,6 +499,40 @@ describe('template compiler fidelity', () => {
       .filter((context) => context.role === TemplateCompilerTargetContextRole.Projection);
     expect(staticProjectionContexts.map((context) => context.slotName)).toEqual(['default', 'named']);
     expect(new Set(staticProjectionContexts.map((context) => context.compiledTemplate.productHandle)).size).toBe(2);
+    const staticProjectionInstruction = staticProjectionResource.compilation.compiledTemplate.instructions.find(
+      (instruction): instruction is HydrateElementInstruction =>
+        instruction instanceof HydrateElementInstruction && instruction.elementName === 'projection-card'
+    );
+    if (staticProjectionInstruction == null) throw new Error('Expected static projection hydrate-element instruction.');
+    expect(staticProjectionInstruction.projections.map((projection) => ({
+      slotName: projection.slotName,
+      contributorLabels: htmlNodeLabels(
+        staticProjectionResource.compilation.html.nodes,
+        projection.contributors.flatMap((contributor) =>
+          contributor.node.productHandle == null ? [] : [contributor.node.productHandle]
+        ),
+      ),
+      dispositions: projection.contributors.map((contributor) => contributor.disposition),
+    }))).toEqual([
+      {
+        slotName: 'default',
+        contributorLabels: ['span'],
+        dispositions: [HydrateElementProjectionContributorDisposition.RetainedNode],
+      },
+      {
+        slotName: 'named',
+        contributorLabels: ['template'],
+        dispositions: [HydrateElementProjectionContributorDisposition.UnwrappedTemplateContent],
+      },
+    ]);
+    for (const context of staticProjectionContexts) {
+      expect(context.structuralAuthority).toBeInstanceOf(TemplateCompilerProjectionContextStructuralAuthority);
+      const authority = context.structuralAuthority as TemplateCompilerProjectionContextStructuralAuthority;
+      expect(authority.instruction).toBe(staticProjectionInstruction);
+      expect(authority.projection).toBe(staticProjectionInstruction.projections.find((projection) =>
+        projection.compiledTemplate.productHandle === context.compiledTemplate.productHandle
+      ));
+    }
     const staticProjectionLabels = new Map<string | null, readonly string[]>();
     for (const context of staticProjectionContexts) {
       const childTemplate = staticProjectionResource.compilation.compiledTemplate.readCompiledTemplate(
@@ -514,8 +550,77 @@ describe('template compiler fidelity', () => {
     }
     expect(Object.fromEntries(staticProjectionLabels)).toEqual({
       default: ['span', 'static default'],
-      named: ['template', 'b', 'static named'],
+      named: ['b', 'static named'],
     });
+
+    const whitespaceProjectionResource = requiredTemplateResource(app, 'projection-whitespace-probe');
+    const whitespaceProjectionInstruction = whitespaceProjectionResource.compilation.compiledTemplate.instructions.find(
+      (instruction): instruction is HydrateElementInstruction =>
+        instruction instanceof HydrateElementInstruction && instruction.elementName === 'projection-card'
+    );
+    expect(whitespaceProjectionInstruction?.projections).toEqual([]);
+    expect(whitespaceProjectionInstruction?.discardedProjectionContributors).toEqual([
+      expect.objectContaining({
+        slotName: 'default',
+        disposition: HydrateElementProjectionContributorDisposition.DiscardedWhitespace,
+      }),
+    ]);
+    expect(whitespaceProjectionResource.compilation.compiledTemplate.targetPlan.readContexts()).toHaveLength(1);
+
+    const explicitSlotResource = requiredTemplateResource(app, 'projection-explicit-slot-probe');
+    const explicitSlotInstruction = explicitSlotResource.compilation.compiledTemplate.instructions.find(
+      (instruction): instruction is HydrateElementInstruction =>
+        instruction instanceof HydrateElementInstruction && instruction.elementName === 'projection-card'
+    );
+    const explicitContributors = explicitSlotInstruction?.projections[0]?.contributors ?? [];
+    expect(explicitContributors.map((contributor) => ({
+      node: htmlNodeLabels(
+        explicitSlotResource.compilation.html.nodes,
+        contributor.node.productHandle == null ? [] : [contributor.node.productHandle],
+      )[0],
+      slotAttributeName: contributor.slotAttribute?.rawName,
+      hasValueSource: contributor.slotNameSourceAddressHandle != null,
+    }))).toEqual([
+      { node: 'em', slotAttributeName: 'au-slot', hasValueSource: false },
+      { node: 'i', slotAttributeName: 'au-slot', hasValueSource: true },
+    ]);
+
+    const nativeContainerlessResource = requiredTemplateResource(app, 'native-containerless-probe');
+    expect(nativeContainerlessResource.compilation.compiledTemplate.targetPlan.root.readRows()).toEqual([
+      expect.objectContaining({ targetKind: TemplateRenderTargetKind.MarkerTarget }),
+    ]);
+
+    const auSlotRemovalResource = requiredTemplateResource(app, 'au-slot-removal-probe');
+    const auSlotInstruction = auSlotRemovalResource.compilation.compiledTemplate.instructions.find(
+      (instruction): instruction is HydrateElementInstruction =>
+        instruction instanceof HydrateElementInstruction && instruction.elementName === 'au-slot'
+    );
+    expect(auSlotInstruction?.auSlotProcessContent).toEqual(expect.objectContaining({
+      name: 'default',
+      removedChildNodes: [expect.objectContaining({ nodeKind: 'element' })],
+    }));
+    expect(htmlNodeLabels(
+      auSlotRemovalResource.compilation.html.nodes,
+      auSlotInstruction?.auSlotProcessContent?.removedChildNodes.flatMap((child) =>
+        child.productHandle == null ? [] : [child.productHandle]
+      ) ?? [],
+    )).toEqual(['div']);
+    expect(htmlNodeLabels(
+      auSlotRemovalResource.compilation.html.nodes,
+      auSlotRemovalResource.compilation.compiledTemplate.compiledTemplate.compilerReachableNodeProductHandles,
+    )).toEqual(['au-slot']);
+    const auSlotFallbackContext = auSlotRemovalResource.compilation.compiledTemplate.targetPlan.readContexts().find(
+      (context) => context.role === TemplateCompilerTargetContextRole.Projection && context.slotName === 'default'
+    );
+    const auSlotFallbackTemplate = auSlotFallbackContext == null
+      ? null
+      : auSlotRemovalResource.compilation.compiledTemplate.readCompiledTemplate(
+        auSlotFallbackContext.compiledTemplate.productHandle,
+      );
+    expect(htmlNodeLabels(
+      auSlotRemovalResource.compilation.html.nodes,
+      auSlotFallbackTemplate?.compilerReachableNodeProductHandles ?? [],
+    )).toEqual(['span', 'fallback']);
 
     const openProjectionResource = requiredTemplateResource(app, 'open-projection-probe');
     const openProjectionTemplate = openProjectionResource.compilation.compiledTemplate.compiledTemplates.find(

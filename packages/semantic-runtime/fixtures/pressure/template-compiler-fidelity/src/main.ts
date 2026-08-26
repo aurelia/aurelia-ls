@@ -67,6 +67,34 @@ class StaticContextProbe {}
 class StaticProjectionProbe {}
 
 @customElement({
+  name: 'projection-whitespace-probe',
+  template: '<projection-card> \n </projection-card>',
+  dependencies: [ProjectionCard],
+})
+class ProjectionWhitespaceProbe {}
+
+@customElement({
+  name: 'projection-explicit-slot-probe',
+  template: '<projection-card><em au-slot>bare</em><i au-slot="">empty</i></projection-card>',
+  dependencies: [ProjectionCard],
+})
+class ProjectionExplicitSlotProbe {}
+
+@customElement({
+  name: 'native-containerless-probe',
+  template: '<div containerless title.bind="value"></div>',
+})
+class NativeContainerlessProbe {
+  value = '';
+}
+
+@customElement({
+  name: 'au-slot-removal-probe',
+  template: '<au-slot><div au-slot="ignored"></div><span>fallback</span></au-slot>',
+})
+class AuSlotRemovalProbe {}
+
+@customElement({
   name: 'open-projection-probe',
   template: '<projection-card><span $bindables></span></projection-card>',
   dependencies: [ProjectionCard],
@@ -100,12 +128,16 @@ class OpenClassificationProbe {
 @customElement({
   name: 'template-compiler-fidelity-app',
   dependencies: [
+    AuSlotRemovalProbe,
     ContainerlessCard,
     OpenClassificationProbe,
     OpenProjectionProbe,
+    ProjectionWhitespaceProbe,
+    ProjectionExplicitSlotProbe,
     ProjectionCard,
     StaticContextProbe,
     StaticProjectionProbe,
+    NativeContainerlessProbe,
     ContainerlessUsageProbe,
     SlotUnderTemplateControllerProbe,
     RowOuterTemplateController,

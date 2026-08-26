@@ -167,11 +167,27 @@ classification, expression parsing, and instruction lowering converge on the sam
 - `template-compiler-occurrence.ts` imports only the browser-effective compiler-carrier graph into a fresh mutable
   execution forest. Stable occurrence keys are independent of live paths; private edge collections and forest-owned
   move/detach operations preserve coherent root, child, template-content, and attribute ownership while the complete
-  historical inventory remains available for later structural derivations. Input-origin indexes are one-to-many so
-  future cloning does not collapse occurrence identity. Nullable input origins reserve the required shape for future
-  compiler-generated structure, but no generated occurrence may be admitted until it also carries an exact semantic
-  cause, output role, and ordinal. Scalar text/comment/attribute values remain read-only until their mutation can travel
-  through the ordered compiler-effect owner rather than bypassing provenance.
+  historical inventory remains available for later structural derivations. Input-origin indexes are one-to-many;
+  forest-owned generated factories admit pure generated outputs as well as clones/text splits that independently retain
+  an input origin. Every generated occurrence carries its generation context, semantic operation key, ordered nonempty
+  causes, output role, and ordinal. Scalar text/comment/attribute values remain read-only until their mutation can
+  travel through the ordered compiler-effect owner rather than bypassing provenance.
+- `template-compiler-structural-execution.ts` is the product-free join between that forest and the existing
+  `TemplateCompilerTargetPlan`. It assigns one exact template carrier/content root per target context and realizes
+  complete rows as either marker/target adjacency or marker/start/end render locations, including marker-only outer
+  template-controller definitions. Rows can spend only singular 1→1 HTML-tree-builder origins, logical target
+  occurrences are unique, inert nested template content is excluded, and geometry stops at the first open row/frontier.
+  Compiler-marker preorder and ordered live/explicitly-consumed authored membership must match each context plan;
+  authored marker-shaped comments remain plain and static zero-row child contexts still require their own carrier.
+  Immutable seeded parent/owner placement plus typed input operations prevent preorder-preserving reparenting and clone
+  laundering. Contexts retain their exact instruction/projection authority: ordinary projection contributors transfer
+  intact, insignificant host whitespace is consumed without allocating a definition member, and bare template wrappers
+  are consumed while only their direct content children transfer. Exact `[au-slot]` attribute references and known
+  `AuSlot.processContent` removed-child references preserve their source-edge dispositions. Text expansion is an
+  explicit source-anchored 1→N operation, and output bands retain browser-input order across replacements. Generated
+  authority is session-branded and role-checked, including exact generated carrier pairs. This is
+  execution mechanics only: it does not freeze transformed products, allocate durable targets, publish kernel records,
+  or switch the production compiler traversal.
 - `template-source-coordinate.ts` is the shared decoded-template range boundary used by authored HTML materialization and
   future exact structural correspondence. It validates offset-map shape and maps only a caller-proved contiguous range;
   parse5 token envelopes must never be passed through it merely because they are non-null.

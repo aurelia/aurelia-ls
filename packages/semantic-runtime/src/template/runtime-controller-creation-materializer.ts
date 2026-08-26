@@ -509,7 +509,9 @@ export class RuntimeControllerCreationMaterializer {
           projection.compiledTemplate.productHandle,
           projection.sourceAddressHandle,
           projection.contributors.map((contributor) =>
-            contributor.slotNameSourceAddressHandle ?? contributor.node.addressHandle
+            contributor.slotNameSourceAddressHandle
+              ?? contributor.slotAttribute?.addressHandle
+              ?? contributor.node.addressHandle
           ),
         )
       ),

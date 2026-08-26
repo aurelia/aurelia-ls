@@ -77,7 +77,7 @@ function providerRow(
     providerProjectedSlotNames,
     contributorCount: projection.contributors.length,
     explicitContributorCount: projection.contributors.filter((contributor) =>
-      contributor.slotNameSourceAddressHandle != null
+      contributor.slotAttribute != null
     ).length,
     instructionCount: compiledTemplateInstructionCount(store, compiledTemplate),
     source: describeAddress(store, projection.sourceAddressHandle),
