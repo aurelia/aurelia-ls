@@ -26,6 +26,8 @@ export const enum FrameworkIntrinsicDiKey {
   IContextRouter = 'IContextRouter',
   /** Template compiler service installed by runtime-html's default component registrations. */
   ITemplateCompiler = 'ITemplateCompiler',
+  /** Ordered template-compiler extension point resolved with leaf-plus-root resource semantics. */
+  ITemplateCompilerHooks = 'ITemplateCompilerHooks',
   /** Runtime repeat-handler extension point consumed by RepeatableHandlerResolver. */
   IRepeatableHandler = 'IRepeatableHandler',
 }
@@ -44,13 +46,18 @@ export const frameworkIntrinsicDiKeys: readonly FrameworkIntrinsicDiKey[] = [
   FrameworkIntrinsicDiKey.IRouteContext,
   FrameworkIntrinsicDiKey.IContextRouter,
   FrameworkIntrinsicDiKey.ITemplateCompiler,
+  FrameworkIntrinsicDiKey.ITemplateCompilerHooks,
   FrameworkIntrinsicDiKey.IRepeatableHandler,
 ];
+
+const frameworkIntrinsicDiKeysByName: ReadonlyMap<string, FrameworkIntrinsicDiKey> = new Map(
+  frameworkIntrinsicDiKeys.map((key) => [key, key]),
+);
 
 export function frameworkIntrinsicDiKeyLocal(key: FrameworkIntrinsicDiKey): string {
   return `di-key:interface:${key}`;
 }
 
 export function frameworkIntrinsicDiKeyForName(name: string): FrameworkIntrinsicDiKey | null {
-  return frameworkIntrinsicDiKeys.find((key) => key === name) ?? null;
+  return frameworkIntrinsicDiKeysByName.get(name) ?? null;
 }

@@ -51,6 +51,15 @@ const templateCompilerIntrinsicDiKeySource = frameworkDeclarationSourceSpec(
   ],
 );
 
+const templateCompilerHooksIntrinsicDiKeySource = frameworkDeclarationSourceSpec(
+  new Set(['ITemplateCompilerHooks']),
+  ['@aurelia/template-compiler'],
+  [
+    '/aurelia/packages/template-compiler/src/template-compiler.ts',
+    '/aurelia/packages/template-compiler/dist/types/template-compiler.d.ts',
+  ],
+);
+
 const routerIntrinsicDiKeySource = frameworkDeclarationSourceSpec(
   new Set(['IRouteContext', 'IContextRouter']),
   ['@aurelia/router'],
@@ -158,6 +167,8 @@ export function isAureliaFrameworkIntrinsicDiKeyDeclaration(
     case FrameworkIntrinsicDiKey.IInstruction:
     case FrameworkIntrinsicDiKey.ITemplateCompiler:
       return declarationMatchesFrameworkSource(declaration, new Map(), templateCompilerIntrinsicDiKeySource);
+    case FrameworkIntrinsicDiKey.ITemplateCompilerHooks:
+      return declarationMatchesFrameworkSource(declaration, new Map(), templateCompilerHooksIntrinsicDiKeySource);
     case FrameworkIntrinsicDiKey.IRouteContext:
     case FrameworkIntrinsicDiKey.IContextRouter:
       return declarationMatchesFrameworkSource(declaration, new Map(), routerIntrinsicDiKeySource);

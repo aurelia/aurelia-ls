@@ -5,6 +5,10 @@ import { beforeAll, describe, expect, test } from 'vitest';
 
 import { createSemanticRuntime } from '../src/api/runtime.js';
 import { AppTaskCallbackKind } from '../src/configuration/app-task.js';
+import {
+  FrameworkIntrinsicDiKey,
+  frameworkIntrinsicDiKeyLocal,
+} from '../src/di/framework-intrinsic-di-key.js';
 import type { IdentityHandle } from '../src/kernel/handles.js';
 import {
   DiKeyIdentityKind,
@@ -22,6 +26,7 @@ describe('DI key identity', () => {
   let wrapperTargetIdentity: IdentityHandle | null;
   let wrapperTarget: ResolverDiKeyIdentity | null;
   let appTaskKeyIdentity: IdentityHandle | null;
+  let canonicalCompilerHooksKeyIdentity: IdentityHandle;
 
   beforeAll(async () => {
     const fixtureRoot = path.resolve(fileURLToPath(new URL(
@@ -33,6 +38,9 @@ describe('DI key identity', () => {
       storeKey: 'test:di-key-identity',
     });
     const app = await runtime.openApp({ analysisDepth: 'binding-observation' });
+    canonicalCompilerHooksKeyIdentity = runtime.workspace.store.handles.identity(
+      frameworkIntrinsicDiKeyLocal(FrameworkIntrinsicDiKey.ITemplateCompilerHooks),
+    );
     const configuration = app.emission.configuration.readConfiguration();
     const registrations = configuration.registrationAdmissions;
     const instances = registrations.filter((admission) => admission.strategy === RegistrationStrategy.Instance);
@@ -98,6 +106,18 @@ describe('DI key identity', () => {
 
   test('recognizes published Aurelia InterfaceSymbol declarations without source initializers', () => {
     expect(kindForValue('frameworkInterfaceValue')).toBe(DiKeyIdentityKind.Interface);
+  });
+
+  test('canonicalizes the direct and umbrella compiler-hooks exports without trusting friendly-name lookalikes', () => {
+    const direct = keyForValue('directCompilerHooksInterfaceValue');
+    const reexported = keyForValue('reexportedCompilerHooksInterfaceValue');
+    const lookalike = keyForValue('localCompilerHooksLookalikeValue');
+
+    expect(direct).toBe(canonicalCompilerHooksKeyIdentity);
+    expect(reexported).toBe(direct);
+    expect(lookalike).not.toBe(direct);
+    expect(kindForValue('directCompilerHooksInterfaceValue')).toBe(DiKeyIdentityKind.Interface);
+    expect(kindForValue('localCompilerHooksLookalikeValue')).toBe(DiKeyIdentityKind.Interface);
   });
 
   test('keeps constructable identity distinct from the registry JIT branch', () => {

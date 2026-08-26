@@ -1,5 +1,7 @@
-import { newInstanceOf, Registration } from '@aurelia/kernel';
+import { DI, newInstanceOf, Registration } from '@aurelia/kernel';
 import { AppTask, Aurelia, ISanitizer, StandardConfiguration } from '@aurelia/runtime-html';
+import { ITemplateCompilerHooks as DirectTemplateCompilerHooks } from '@aurelia/template-compiler';
+import { ITemplateCompilerHooks as ReexportedTemplateCompilerHooks } from 'aurelia';
 
 import { App } from './app';
 import {
@@ -28,6 +30,9 @@ const directInterfaceValue = { source: 'interface-direct' };
 const reexportedInterfaceValue = { source: 'interface-reexport' };
 const secondInterfaceValue = { source: 'interface-second' };
 const frameworkInterfaceValue = { source: 'framework-interface' };
+const directCompilerHooksInterfaceValue = { source: 'compiler-hooks-interface-direct' };
+const reexportedCompilerHooksInterfaceValue = { source: 'compiler-hooks-interface-reexported' };
+const localCompilerHooksLookalikeValue = { source: 'compiler-hooks-interface-lookalike' };
 const registryConstructableValue = { source: 'registry-constructable' };
 const directObjectValue = { source: 'object-direct' };
 const reexportedObjectValue = { source: 'object-reexport' };
@@ -42,6 +47,8 @@ const secondNumberValue = { source: 'number-second' };
 const callbackValue = () => ({ source: 'callback' });
 const sharedStringKey = 'shared-string-key';
 const sharedNumberKey = 17;
+
+const ITemplateCompilerHooks = DI.createInterface<object>('ITemplateCompilerHooks');
 
 class RegistryConstructableKey {
   static register(): void {}
@@ -58,6 +65,9 @@ new Aurelia()
     Registration.instance(ReexportedInterfaceKey, reexportedInterfaceValue),
     Registration.instance(SecondInterfaceKey, secondInterfaceValue),
     Registration.instance(ISanitizer, frameworkInterfaceValue),
+    Registration.instance(DirectTemplateCompilerHooks, directCompilerHooksInterfaceValue),
+    Registration.instance(ReexportedTemplateCompilerHooks, reexportedCompilerHooksInterfaceValue),
+    Registration.instance(ITemplateCompilerHooks, localCompilerHooksLookalikeValue),
     Registration.instance(RegistryConstructableKey, registryConstructableValue),
     Registration.instance(DirectObjectKey, directObjectValue),
     Registration.instance(ReexportedObjectKey, reexportedObjectValue),
