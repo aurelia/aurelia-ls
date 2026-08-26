@@ -3,6 +3,8 @@ import { FrameworkRegistrationKind } from './registration-reference.js';
 export const enum FrameworkRegistrationCapability {
   /** Runtime services needed before semantic-runtime can construct an app-root compiler world. */
   RuntimeHtmlCompilerServices = 'runtime-html.compiler-services',
+  /** Root/container registration package installs one or more TemplateCompilerHooks entries. */
+  TemplateCompilerHooks = 'template-compiler.hooks',
   /** RuntimeHtml default attribute patterns such as `ref` and dotted command syntax. */
   RuntimeHtmlDefaultBindingSyntax = 'runtime-html.default-binding-syntax',
   /** RuntimeHtml shorthand attribute patterns such as `@trigger` and `:bind`. */

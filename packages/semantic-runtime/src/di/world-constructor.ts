@@ -1350,7 +1350,10 @@ class DiWorldConstructionFrame {
     this.resourceIssues.push(...spent.resourceIssues);
   }
 
-  toEmission(containers: readonly Container[]): DiWorldConstructionEmission {
+  toEmission(
+    containers: readonly Container[],
+    providerActivation: DiProviderActivationView,
+  ): DiWorldConstructionEmission {
     return new DiWorldConstructionEmission(
       containers,
       this.registrationOperations,
@@ -1368,6 +1371,7 @@ class DiWorldConstructionFrame {
       this.issues,
       this.resourceIssues,
       this.records,
+      providerActivation,
     );
   }
 }
@@ -1419,7 +1423,7 @@ export class DiWorldConstructor {
       this.resolverPublication,
       this.registryPublication,
     );
-    const activation = new DiProviderActivationView(
+    const providerActivation = new DiProviderActivationView(
       this.publication,
       evaluation.forkSession(),
       typeSystem,
@@ -1431,7 +1435,8 @@ export class DiWorldConstructor {
         factorySlots: frame.factorySlots,
       },
       registrationValues,
-    ).createSession();
+    );
+    const activation = providerActivation.createSession();
     const registrationCascade = this.registrationSpendingCascade(
       configuration,
       evaluation,
@@ -1461,7 +1466,7 @@ export class DiWorldConstructor {
       ],
     ));
 
-    return frame.toEmission(configuration.containers);
+    return frame.toEmission(configuration.containers, providerActivation);
   }
 
   private registrationSpendingCascade(
@@ -2663,28 +2668,6 @@ function appTaskIndex(
   configuration: ConfigurationKernelEmission,
 ): ReadonlyMap<ProductHandle, AppTaskDefinition> {
   return new Map(configuration.appTasks.map((task) => [task.productHandle, task] as const));
-}
-
-function emptyRegistrationSpendingCascade(): DiRegistrationSpendingCascadeEmission {
-  return {
-    records: [],
-    operations: [],
-    resolvers: [],
-    registries: [],
-    parameterizedRegistries: [],
-    resolverSlots: [],
-    factorySlots: [],
-    resourceSlots: [],
-    resourceSlotExclusions: [],
-    registeredAppTasks: [],
-    openSeams: [],
-    registrationOpenSeamScopes: [],
-    issues: [],
-    resourceIssues: [],
-    evaluationMutationCount: 0,
-    abruptCompletion: null,
-    completion: DiRegistrationCascadeCompletion.Completed,
-  };
 }
 
 function appTaskForRegistrationOperation(

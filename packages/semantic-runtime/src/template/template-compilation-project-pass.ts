@@ -30,12 +30,17 @@ import {
   CustomElementTemplateKind,
 } from '../resources/custom-element-definition.js';
 import type { ResourceDefinitionIndex } from '../resources/resource-definition-index.js';
-import { ResourceDefinitionKind } from '../resources/resource-kind.js';
+import { ResourceProductDetails } from '../resources/product-details.js';
+import {
+  NamedResourceDefinitionContributionKind,
+  ResourceDefinitionKind,
+} from '../resources/resource-kind.js';
 import type { KernelStore, KernelTelemetryReadView } from '../kernel/store.js';
 import { sourceFileAddressHostPath } from '../boot/source-ownership.js';
 import { sourceFileAddressForAddress } from '../kernel/source-address.js';
 import { sourceTextContentRevision } from '../kernel/source-text-revision.js';
 import { SemanticRuntimeAnalysisCurrentnessError } from '../kernel/analysis-currentness.js';
+import { OpenSeam, OpenSeamReasonKind } from '../kernel/open-seam.js';
 import {
   SemanticRuntimeProjectInputReadKind,
   semanticRuntimeProjectInputFileReadKey,
@@ -148,6 +153,13 @@ import {
   TemplateCompilerReadView,
   TemplateCompilerWorldAuthority,
 } from './compiler-read-view.js';
+import {
+  deriveTemplateCompilerHooksForDependencies,
+  templateCompilerHooksInheritedByLocalDefinition,
+  TemplateCompilerHookLane,
+  TemplateCompilerHookOpenReason,
+  TemplateCompilerHookOpenReasonKind,
+} from './compiler-hook-world.js';
 import {
   TemplateCompilationCohortKind,
   TemplateCompilationLocus,
@@ -303,6 +315,7 @@ export type TemplateCompilationProjectPhaseName =
   | TemplateCompilationCohortPlanningPhase
   | 'compilation-unit'
   | 'html-parse'
+  | 'compiler-hook-world'
   | 'local-template-definitions'
   | 'attribute-syntax'
   | 'attribute-classification'
@@ -310,6 +323,11 @@ export type TemplateCompilationProjectPhaseName =
   | 'binding-command-lowering'
   | 'compiled-template'
   | 'runtime-analysis';
+
+type CompilerHookDependencyOpenReadView = Pick<
+  KernelStore,
+  'read' | 'readMaterializationsByOwner'
+>;
 
 export type TemplateCompilationProjectPhaseTiming = SemanticRuntimePhaseTiming<TemplateCompilationProjectPhaseName>;
 
@@ -630,6 +648,8 @@ export class TemplateCompilationProjectEmission {
  */
 export class TemplateCompilationProjectPass {
   private readonly compilerWorldMaterializer: TemplateCompilerWorldMaterializer;
+  /** Store-backed side-effect-free projector used after the producing computation has finished. */
+  private readonly compilerWorldProjector: TemplateCompilerWorldMaterializer;
   private readonly cohortPlanner: TemplateCompilationCohortPlanner;
   private readonly unitMaterializer: TemplateCompilationUnitMaterializer;
   private readonly htmlParser: HtmlParseMaterializer;
@@ -650,6 +670,7 @@ export class TemplateCompilationProjectPass {
     readonly support: FrameworkSupportCatalogs,
   ) {
     this.compilerWorldMaterializer = new TemplateCompilerWorldMaterializer(publication);
+    this.compilerWorldProjector = new TemplateCompilerWorldMaterializer(store);
     this.cohortPlanner = new TemplateCompilationCohortPlanner(store, publication, support);
     this.unitMaterializer = new TemplateCompilationUnitMaterializer(publication);
     this.htmlParser = new HtmlParseMaterializer(publication);
@@ -876,13 +897,14 @@ export class TemplateCompilationProjectPass {
       const authoring: TemplateResourceCompilationEmission[] = [];
       this.publication.withChild(locus, () => {
         const compileOwner = (): void => {
+          const definition = this.requireCurrentTemplateOwnerDefinition(owner);
           if (project != null) {
             this.requireCurrentTemplateSource(project, owner);
           }
           for (const cohort of owner.cohorts) {
             const localKey = templateResourceCompilationLocalKey(plan.projectKey, owner, cohort);
             const result = cohort.parentCompilerWorld.templateCompiler.compile(
-              new TemplateCompilerCompileRequest(localKey, owner.definition),
+              new TemplateCompilerCompileRequest(localKey, definition),
               new ProjectTemplateCompilerHost(
                 this,
                 owner.ownerHandle,
@@ -918,6 +940,18 @@ export class TemplateCompilationProjectPass {
       ));
     }
     return families;
+  }
+
+  private requireCurrentTemplateOwnerDefinition(
+    owner: TemplateCompilationOwnerPlan,
+  ): CustomElementDefinition {
+    const productHandle = owner.definition.productHandle;
+    if (productHandle == null) return owner.definition;
+    const definition = this.publication.readProductDetail(ResourceProductDetails.Definition, productHandle);
+    if (!(definition instanceof CustomElementDefinition)) {
+      throw new Error(`Template owner ${owner.definition.name} lost its current custom-element definition.`);
+    }
+    return definition;
   }
 
   private requireCurrentTemplateSource(
@@ -1086,12 +1120,14 @@ export class TemplateCompilationProjectPass {
       compilerWorld,
       new TemplateCompilerWorldAuthority(
         `template-compiler-world:${localKey}:local-template-world`,
-        () => this.projectCompilerWorldWithPreferredResources(
-          parentCompilerWorldAuthority.current(),
-          localResources,
-          `${localKey}:local-template-world`,
-          sourceAddressHandle,
-        ),
+        () => this.publication.isCurrent()
+          ? compilerWorld
+          : this.projectCompilerWorldWithPreferredResources(
+              parentCompilerWorldAuthority.current(),
+              localResources,
+              `${localKey}:local-template-world`,
+              sourceAddressHandle,
+            ),
       ),
     );
   }
@@ -1123,7 +1159,7 @@ export class TemplateCompilationProjectPass {
       localKey,
       sourceAddressHandle,
     );
-    return this.compilerWorldMaterializer.projectDerived(request);
+    return this.compilerWorldProjector.projectDerived(request);
   }
 
   private compilerWorldDerivationRequest(
@@ -1142,6 +1178,105 @@ export class TemplateCompilationProjectPass {
     );
   }
 
+  private compilerWorldForDefinitionHooks(
+    parentAuthority: TemplateCompilerWorldAuthority,
+    definition: CustomElementDefinition,
+    appRootDefinitionProductHandle: ProductHandle | null,
+    localKey: string,
+    sourceAddressHandle: AddressHandle | null,
+  ): TemplateCompilerWorldSelection {
+    const parent = parentAuthority.current();
+    const request = this.compilerHookWorldDerivationRequest(
+      parent,
+      definition,
+      appRootDefinitionProductHandle,
+      localKey,
+      sourceAddressHandle,
+      this.publication,
+    );
+    const world = this.compilerWorldMaterializer.constructDerived(request);
+    if (world === parent) return new TemplateCompilerWorldSelection(parent, parentAuthority);
+    return new TemplateCompilerWorldSelection(
+      world,
+      new TemplateCompilerWorldAuthority(
+        `template-compiler-world:${localKey}:hook-world`,
+        () => this.publication.isCurrent()
+          ? world
+          : this.compilerWorldProjector.projectDerived(this.compilerHookWorldDerivationRequest(
+              parentAuthority.current(),
+              definition,
+              appRootDefinitionProductHandle,
+              localKey,
+              sourceAddressHandle,
+              this.store,
+            )),
+      ),
+    );
+  }
+
+  private compilerHookWorldDerivationRequest(
+    parent: TemplateCompilerWorldEmission,
+    definition: CustomElementDefinition,
+    appRootDefinitionProductHandle: ProductHandle | null,
+    localKey: string,
+    sourceAddressHandle: AddressHandle | null,
+    openReadView: CompilerHookDependencyOpenReadView,
+  ): TemplateCompilerWorldDerivationRequest {
+    const isLocalDefinition = definition.contributions.some((contribution) =>
+      contribution.contributionKind === NamedResourceDefinitionContributionKind.LocalTemplate
+    );
+    const parentHooks = isLocalDefinition
+      ? templateCompilerHooksInheritedByLocalDefinition(parent.compilerHooks.toCandidate())
+      : parent.compilerHooks.toCandidate();
+    return new TemplateCompilerWorldDerivationRequest(
+      `${localKey}:hook-world`,
+      TemplateCompilerWorldKind.Component,
+      parent,
+      [],
+      TemplateResourceVisibilityKind.Configured,
+      sourceAddressHandle,
+      null,
+      deriveTemplateCompilerHooksForDependencies(
+        parentHooks,
+        definition.dependencies,
+        isLocalDefinition
+          || (definition.productHandle != null && definition.productHandle === appRootDefinitionProductHandle),
+        this.compilerHookDependencyOpenReasons(definition, openReadView),
+      ),
+    );
+  }
+
+  private compilerHookDependencyOpenReasons(
+    definition: CustomElementDefinition,
+    readView: CompilerHookDependencyOpenReadView,
+  ): readonly TemplateCompilerHookOpenReason[] {
+    const ownerHandle = definition.identityHandle ?? definition.sourceAddressHandle;
+    if (ownerHandle == null || definition.productHandle == null) return [];
+    const openSeamHandles = readView.readMaterializationsByOwner(ownerHandle)
+      .filter((materialization) => materialization.productHandles.includes(definition.productHandle!))
+      .flatMap((materialization) => materialization.openSeamHandles);
+    const reasons: TemplateCompilerHookOpenReason[] = [];
+    const seen = new Set(openSeamHandles);
+    for (const handle of seen) {
+      const seam = readView.read(handle);
+      if (
+        !(seam instanceof OpenSeam)
+        || !seam.reasonKinds.some((reasonKind) =>
+          reasonKind === OpenSeamReasonKind.ResourceDefinitionDependenciesOpen
+          || reasonKind === OpenSeamReasonKind.ResourceDefinitionDependencyEntryOpen
+        )
+      ) continue;
+      reasons.push(new TemplateCompilerHookOpenReason(
+        TemplateCompilerHookOpenReasonKind.RegistryDependency,
+        TemplateCompilerHookLane.Leaf,
+        seam.summary,
+        seam.addressHandle,
+        [seam.handle],
+      ));
+    }
+    return reasons;
+  }
+
   compileResourceTree(
     compilerWorldAuthority: TemplateCompilerWorldAuthority,
     familyOwnerHandle: IdentityHandle | ProductHandle,
@@ -1152,17 +1287,27 @@ export class TemplateCompilationProjectPass {
     localKey: string,
     phases: TemplateCompilationPhaseRecorder,
   ): readonly TemplateResourceCompilationEmission[] {
+    const definitionCompilerWorld = phases.measure(
+      'compiler-hook-world',
+      () => this.compilerWorldForDefinitionHooks(
+        compilerWorldAuthority,
+        definition,
+        appRootDefinitionProductHandle,
+        localKey,
+        template.addressHandle ?? definition.sourceAddressHandle,
+      ),
+    );
     const localDefinitions = phases.measure(
       'local-template-definitions',
       () => this.localTemplateDefinitions.materialize(localKey, definition, template),
     );
-    const parentCompilerWorld = compilerWorldAuthority.current();
+    const parentCompilerWorld = definitionCompilerWorld.world;
     const activeCompilerWorld = localDefinitions.definitions.length === 0
-      ? new TemplateCompilerWorldSelection(parentCompilerWorld, compilerWorldAuthority)
+      ? definitionCompilerWorld
       : phases.measure(
         TemplateCompilationCohortPlanningPhase.ComponentCompilerWorld,
         () => this.compilerWorldForLocalDefinitions(
-          compilerWorldAuthority,
+          definitionCompilerWorld.authority,
           localDefinitions,
           localKey,
           template.addressHandle ?? definition.sourceAddressHandle,
@@ -1275,6 +1420,9 @@ export class TemplateCompilationProjectPass {
     if (sourceKind == null) {
       return null;
     }
+
+    // Hook membership is a pre-walk compiler-world input even while execution remains a later browser-tree phase.
+    compilerReads.compilerHooks();
 
     const unit = this.constructCompilationUnit(
       localKey,

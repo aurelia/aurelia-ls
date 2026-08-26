@@ -184,6 +184,35 @@ export class DiProviderActivationResult {
   }
 }
 
+/** Closure of the resolver membership selected by one direct `allResources(key)` lookup. */
+export const enum DiAllResourcesMembershipState {
+  /** Every selected resolver slot is known and ordered. */
+  Exact = 'exact',
+  /** Known slots survive, but unresolved lookup ordering may hide additional members. */
+  Open = 'open',
+}
+
+/** One exact resolver member and the independently retained result of activating it. */
+export class DiAllResourcesProviderEntry {
+  constructor(
+    /** Leaf or root container that owns this resolver row. */
+    readonly handler: Container,
+    /** Exact resolver row selected by runtime `allResources` membership semantics. */
+    readonly slot: ContainerResolverLikeSlot,
+    /** Provider activation without averaging value, open, failure, cycle, or abrupt completion states. */
+    readonly activation: DiProviderActivationResult,
+  ) {}
+}
+
+/** Ordered provider activation for one already-canonical direct DI key. */
+export class DiAllResourcesProviderActivation {
+  constructor(
+    readonly state: DiAllResourcesMembershipState,
+    /** Exact known membership in leaf-registration order followed by root-registration order. */
+    readonly entries: readonly DiAllResourcesProviderEntry[],
+  ) {}
+}
+
 /** Exact failure and receiver policy proven by one ordered container API activation. */
 export class DiContainerApiFailure {
   constructor(
@@ -369,6 +398,20 @@ export class DiProviderActivationView {
 
   createSession(): DiProviderActivationSession {
     return new DiProviderActivationSession(this);
+  }
+
+  /**
+   * Resolve every provider selected by Aurelia's direct `allResources(key)` rule.
+   *
+   * The fresh session keeps speculative singleton and overlay state query-local. The key must already carry canonical
+   * DI identity; this path deliberately does not rediscover it from a source expression.
+   */
+  activateAllResourcesDirectKey(
+    requestor: Container,
+    key: ContainerLookupKey,
+    dependencyNode: ts.Node | null = null,
+  ): DiAllResourcesProviderActivation {
+    return this.createSession().activateAllResourcesDirectKey(requestor, key, dependencyNode);
   }
 
   executionOrdinalForInvocation(invocation: StaticInvocationOccurrence<ts.CallExpression>): number | null {
@@ -633,6 +676,22 @@ export class DiProviderActivationView {
     return this.exactValues.parameterizedRegistrySource(registry);
   }
 
+  activationNodeForResolverSlot(slot: ContainerResolverLikeSlot): ts.Node | null {
+    if (slot instanceof ContainerResolverSlot) {
+      const resolver = slot.resolver;
+      if (resolver instanceof Resolver) {
+        return evaluationValueNode(this.evaluatedResolverState(resolver))
+          ?? this.valueExpressionForReference(resolver._state)
+          ?? this.sourceExpressionForNullableAddress(slot.sourceAddressHandle);
+      }
+      if (resolver instanceof InstanceProvider) {
+        return this.valueExpressionForReference(resolver.resolve().value)
+          ?? this.sourceExpressionForNullableAddress(slot.sourceAddressHandle);
+      }
+    }
+    return this.sourceExpressionForNullableAddress(slot.sourceAddressHandle);
+  }
+
   valueExpressionForReference(reference: RegistrationValueReference | null): ts.Expression | null {
     return reference?.addressHandle == null ? null : this.sourceExpressionForAddress(reference.addressHandle);
   }
@@ -643,6 +702,10 @@ export class DiProviderActivationView {
       addressHandle,
       (path) => this.sourceIndex.readEvaluated(path)?.sourceFile ?? null,
     );
+  }
+
+  private sourceExpressionForNullableAddress(addressHandle: AddressHandle | null): ts.Expression | null {
+    return addressHandle == null ? null : this.sourceExpressionForAddress(addressHandle);
   }
 
   invocationForNode(node: ts.Node): StaticInvocationOccurrence<ts.CallExpression> | null {
@@ -855,6 +918,44 @@ export class DiProviderActivationSession {
               null,
               0,
             );
+    });
+  }
+
+  /** Activate one exact result per member of the built-in leaf-then-root `allResources` lookup. */
+  activateAllResourcesDirectKey(
+    requestor: Container,
+    key: ContainerLookupKey,
+    dependencyNode: ts.Node | null = null,
+  ): DiAllResourcesProviderActivation {
+    return this.withActivation(() => {
+      const lookupSet = this.lookupAllResources(requestor, key);
+      const providerKey: DiProviderActivationKey = {
+        key,
+        classValue: null,
+        sourceValue: null,
+      };
+      const entries: DiAllResourcesProviderEntry[] = [];
+      for (const lookup of lookupSet.lookups) {
+        for (const slot of lookup.slots) {
+          if (!(slot instanceof ContainerResolverSlot) && !(slot instanceof ContainerSelfResolverSlot)) {
+            throw new Error('Fresh direct allResources activation unexpectedly reached a session-local provider.');
+          }
+          const activationNode = dependencyNode ?? this.view.activationNodeForResolverSlot(slot);
+          entries.push(new DiAllResourcesProviderEntry(
+            lookup.handler,
+            slot,
+            activationNode == null
+              ? activationOpen('Exact direct-key provider membership did not retain a provider-owned activation source.')
+              : this.activateSlot(requestor, slot, lookup.handler, providerKey, activationNode, null, 0),
+          ));
+        }
+      }
+      return new DiAllResourcesProviderActivation(
+        lookupSet.closure === DiProviderActivationLookupClosure.Closed
+          ? DiAllResourcesMembershipState.Exact
+          : DiAllResourcesMembershipState.Open,
+        entries,
+      );
     });
   }
 
@@ -2465,6 +2566,19 @@ function activationValueWithPressure(
     openSeams,
     null,
   );
+}
+
+function evaluationValueNode(value: EvaluationValue | null): ts.Node | null {
+  if (value == null) {
+    return null;
+  }
+  switch (value.kind) {
+    case EvaluationValueKind.Function:
+    case EvaluationValueKind.Class:
+      return value.node ?? value.declaration;
+    default:
+      return value.node;
+  }
 }
 
 function activationWithAdditionalPressure(

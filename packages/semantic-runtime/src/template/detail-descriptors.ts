@@ -21,6 +21,7 @@ import type {
   ConfiguredBuiltInSyntaxCatalogSelection,
 } from './built-in-syntax.js';
 import type { TemplateCompilerIssue } from './compiler-issue.js';
+import type { TemplateCompilerHookSet } from './compiler-hook-world.js';
 import type {
   TemplateAttributeMapperService,
   TemplateCompilerService,
@@ -147,6 +148,14 @@ export const TemplateDetailDescriptors = {
     KernelVocabulary.Compiler.Service.key,
     'compiler.service.template-compiler',
     'TemplateCompiler service detail visible through a compiler world.',
+  ),
+  CompilerHookSet: defineProductDetailDescriptor<
+    TemplateCompilerHookSet,
+    typeof KernelVocabulary.Compiler.Service.key
+  >(
+    KernelVocabulary.Compiler.Service.key,
+    'compiler.service.compiler-hooks',
+    'Ordered TemplateCompilerHooks membership and callable closure visible through a compiler world.',
   ),
   ResourceResolverService: defineProductDetailDescriptor<
     TemplateResourceResolverService,

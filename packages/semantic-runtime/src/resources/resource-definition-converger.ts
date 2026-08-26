@@ -1,7 +1,7 @@
 import path from 'node:path';
 import ts from 'typescript';
 import type { SourceFileAdmission } from '../boot/frames.js';
-import { AuthoredSourceTextCache } from '../kernel/authored-source-text.js';
+import type { AuthoredSourceTextCache } from '../kernel/authored-source-text.js';
 import { sourceTextContentRevision } from '../kernel/source-text-revision.js';
 import {
   SourceSpanRole,
@@ -104,7 +104,13 @@ import {
   ShadowRootMode,
 } from './custom-element-definition.js';
 import {
-  AttributePatternDefinitionHeader,
+  hasAureliaRegistryShape,
+  hasTemplateCompilerHookDecorator,
+  templateCompilerHookDecoratorOwner,
+  templateCompilerHookDefineTarget,
+} from './compiler-hook-registry.js';
+import {
+  type AttributePatternDefinitionHeader,
   BindingBehaviorDefinitionHeader,
   BindingCommandDefinitionHeader,
   CustomAttributeDefinitionHeader,
@@ -123,7 +129,6 @@ import {
 import {
   type ResourceRecognitionObservation,
   type ResourceAliasObservation,
-  type ResourceTargetObservation,
   resourceTargetClassLikeNode,
 } from './resource-observation.js';
 import {
@@ -168,7 +173,7 @@ import {
   templateMarkupSourceAddress,
 } from './resource-source-address.js';
 import {
-  ConvergenceOpen,
+  type ConvergenceOpen,
   ConvergenceScalarRead,
   appendConvergenceOpen,
   convergenceOpenForNode,
@@ -180,7 +185,6 @@ import {
   dependencyReferenceForFunction,
   memberName,
   memberNameNode,
-  nullableConvergenceOpenForNode,
   openIfPresent,
   readBooleanField,
   readFieldValue,
@@ -190,7 +194,7 @@ import {
 } from './resource-convergence-support.js';
 import { ResourceFrameworkErrorCode } from './framework-error-code.js';
 import {
-  ResourceIssue,
+  type ResourceIssue,
   ResourceIssueKind,
   ResourceIssuePhase,
 } from './resource-issue.js';
@@ -300,6 +304,13 @@ class ResourceDependenciesRead {
   constructor(
     readonly dependencies: readonly ResourceDependencyReference[],
     readonly open: readonly ConvergenceOpen[],
+  ) {}
+}
+
+class ResourceRegistryDependencyRecognition {
+  constructor(
+    readonly reference: ResourceDependencyReference,
+    readonly openSummary: string | null = null,
   ) {}
 }
 
@@ -1249,7 +1260,7 @@ export class ResourceDefinitionConverger {
     observation: ResourceRecognitionObservation,
     header: ResourceDefinitionHeaderEmission,
     productHandle: ProductHandle,
-    provenanceHandle: ProvenanceHandle,
+    _provenanceHandle: ProvenanceHandle,
   ): ConvergedResourceDefinition | null {
     if (
       !(definition instanceof ValueConverterDefinitionHeader)
@@ -2216,6 +2227,39 @@ function readResourceDependencies(
     ...convergenceOpenForReadPressure('Resource dependencies evaluation remained open.', read),
   ];
   for (const element of value.elements) {
+    const compilerHookRegistry = readTemplateCompilerHookRegistryDependency(
+      context,
+      element.expression,
+      element.value,
+    );
+    if (compilerHookRegistry != null) {
+      dependencies.push(compilerHookRegistry.reference);
+      if (compilerHookRegistry.openSummary != null) {
+        appendConvergenceOpen(
+          open,
+          compilerHookRegistry.openSummary,
+          element.expression,
+          [OpenSeamReasonKind.ResourceDefinitionDependencyEntryOpen],
+        );
+      }
+      continue;
+    }
+    const styleRegistryTarget = readStyleRegistryDependencyReference(context, element.expression);
+    if (styleRegistryTarget != null) {
+      dependencies.push(styleRegistryTarget);
+      continue;
+    }
+    const opaqueRegistry = readOpaqueRegistryDependencyReference(context, element.expression);
+    if (opaqueRegistry != null) {
+      dependencies.push(opaqueRegistry);
+      appendConvergenceOpen(
+        open,
+        'Resource dependency is a registry whose registration effects remain opaque.',
+        element.expression,
+        [OpenSeamReasonKind.ResourceDefinitionDependencyEntryOpen],
+      );
+      continue;
+    }
     if (
       element.value.kind !== EvaluationValueKind.Class
       && element.value.kind !== EvaluationValueKind.Function
@@ -2223,11 +2267,6 @@ function readResourceDependencies(
       const checkerTarget = readCheckerDependencyReference(context, element.expression);
       if (checkerTarget != null) {
         dependencies.push(checkerTarget);
-        continue;
-      }
-      const styleRegistryTarget = readStyleRegistryDependencyReference(element.expression);
-      if (styleRegistryTarget != null) {
-        dependencies.push(styleRegistryTarget);
         continue;
       }
       appendConvergenceOpen(
@@ -2273,6 +2312,12 @@ function mergeResourceDependencies(
   for (const read of reads) {
     open.push(...read.open);
     for (const dependency of read.dependencies) {
+      if (dependency.dependencyKind === ResourceDependencyReferenceKind.Registry) {
+        // Registry entries are ordered effects. Repeated cssModules/hook registries must execute repeatedly just as
+        // CustomElementDefinition merges and registers the authored dependency arrays.
+        dependencies.push(dependency);
+        continue;
+      }
       const key = resourceDependencyReferenceKey(dependency);
       if (seen.has(key)) {
         continue;
@@ -2367,12 +2412,17 @@ function resourceDependencyReferenceKey(
 }
 
 function readStyleRegistryDependencyReference(
+  context: ResourceRecognitionContext,
   expression: ts.Expression | null,
 ): ResourceDependencyReference | null {
   if (expression == null || !ts.isCallExpression(expression)) {
     return null;
   }
-  const callKind = aureliaStyleRegistryCallKind(expression.getSourceFile(), expression.expression);
+  const callKind = aureliaStyleRegistryCallKind(
+    expression.getSourceFile(),
+    expression.expression,
+    context.typeSystem,
+  );
   if (callKind == null) {
     return null;
   }
@@ -2386,6 +2436,93 @@ function readStyleRegistryDependencyReference(
     callKind === AureliaStyleRegistryCallKind.CssModules
       ? ResourceRegistryDependencyKind.CssModules
       : ResourceRegistryDependencyKind.ShadowCss,
+  );
+}
+
+function readTemplateCompilerHookRegistryDependency(
+  context: ResourceRecognitionContext,
+  expression: ts.Expression | null,
+  value: EvaluationValue,
+): ResourceRegistryDependencyRecognition | null {
+  if (expression == null) return null;
+  const defineTarget = templateCompilerHookDefineTarget(expression, context.typeSystem);
+  if (defineTarget != null) {
+    const target = readCheckerDependencyReference(context, defineTarget)
+      ?? dependencyReferenceForSourceExpression(context, defineTarget);
+    return new ResourceRegistryDependencyRecognition(
+      compilerHookRegistryReference(target),
+      target.localName == null
+        ? 'TemplateCompilerHooks.define(...) has an exact registry effect, but its hook target remains open.'
+        : null,
+    );
+  }
+  const evaluatorClass = value.kind === EvaluationValueKind.Class ? value : null;
+  const decoratorOwner = evaluatorClass == null
+    ? null
+    : templateCompilerHookDecoratorOwner(evaluatorClass, context.typeSystem);
+  if (decoratorOwner != null) {
+    return new ResourceRegistryDependencyRecognition(
+      compilerHookRegistryReference(dependencyReferenceForFunction(decoratorOwner)),
+    );
+  }
+  if (context.typeSystem == null) return null;
+  const symbol = context.typeSystem.readProgramAliasedSymbolAtLocation(expression);
+  const declaration = symbol?.valueDeclaration ?? symbol?.declarations?.[0] ?? null;
+  if (
+    declaration == null
+    || (!ts.isClassDeclaration(declaration) && !ts.isClassExpression(declaration))
+    || !hasTemplateCompilerHookDecorator(declaration, context.typeSystem)
+  ) return null;
+  const target = readCheckerDependencyReference(context, expression)
+    ?? dependencyReferenceForSourceExpression(context, expression);
+  return new ResourceRegistryDependencyRecognition(compilerHookRegistryReference(target));
+}
+
+function compilerHookRegistryReference(
+  target: ResourceDependencyReference,
+): ResourceDependencyReference {
+  return new ResourceDependencyReference(
+    target.identityHandle,
+    'TemplateCompilerHooks',
+    target.moduleKey,
+    target.localName,
+    ResourceDependencyReferenceKind.Registry,
+    ResourceRegistryDependencyKind.TemplateCompilerHook,
+  );
+}
+
+function readOpaqueRegistryDependencyReference(
+  context: ResourceRecognitionContext,
+  expression: ts.Expression | null,
+): ResourceDependencyReference | null {
+  if (expression == null || !hasAureliaRegistryShape(context.typeSystem, expression)) return null;
+  const target = readCheckerDependencyReference(context, expression)
+    ?? dependencyReferenceForSourceExpression(context, expression);
+  return new ResourceDependencyReference(
+    target.identityHandle,
+    target.keyName,
+    target.moduleKey,
+    target.localName,
+    ResourceDependencyReferenceKind.Registry,
+    ResourceRegistryDependencyKind.OpaqueRegistry,
+  );
+}
+
+function dependencyReferenceForSourceExpression(
+  context: ResourceRecognitionContext,
+  expression: ts.Expression,
+): ResourceDependencyReference {
+  const target = unwrapExpression(expression);
+  const localName = ts.isIdentifier(target)
+    ? target.text
+    : ts.isClassExpression(target) && target.name != null
+      ? target.name.text
+      : null;
+  return new ResourceDependencyReference(
+    null,
+    localName,
+    context.readAdmittedNodeContext(target)?.moduleKey ?? context.moduleKey,
+    localName,
   );
 }
 

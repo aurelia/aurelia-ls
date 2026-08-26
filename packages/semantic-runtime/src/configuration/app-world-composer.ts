@@ -31,6 +31,8 @@ import {
   type DiDependencyCycleIssueMaterialization,
 } from '../di/dependency-cycle-issues.js';
 import type { Container } from '../di/container.js';
+import { ContainerLookupKey, ContainerLookupKeyKind } from '../di/container-key.js';
+import { activateDirectKeyAllResources } from '../di/provider-membership.js';
 import {
   type BuiltInAttributePatternEmission,
   type BuiltInBindingCommandEmission,
@@ -57,9 +59,15 @@ import {
   type TemplateCompilerWorldEmission,
 } from '../template/compiler-world-materializer.js';
 import {
+  OpenRegistrationAdmission,
+  ParameterizedRegistryAdmission,
+  RegistrationAdmissionKind,
+  RegistryRegistrationAdmission,
+  ResolverRegistrationAdmission,
+  RegistrationStrategy,
   ResourceRegistrationAdmission,
-  type RegistrationAdmissionProduct,
 } from '../registration/registration-admission.js';
+import type { FrameworkRegistrationKind } from '../registration/registration-reference.js';
 import type { AppRoot } from './app-root.js';
 import type { ConfigurationKernelEmission } from './configuration-kernel-emitter.js';
 import type { ConfigurationRecognitionProjectResult } from './configuration-recognition-project-pass.js';
@@ -69,10 +77,6 @@ import {
 } from './framework-service-customization.js';
 import type { TypeSystemProject } from '../type-system/project.js';
 import type { StaticProjectEvaluationResult } from '../evaluation/project-evaluation.js';
-import {
-  DiProviderActivationView,
-  noDiProviderActivationValues,
-} from '../di/provider-activation.js';
 import {
   AppWorldResourceVisibilityComposer,
 } from './app-world-resource-visibility.js';
@@ -88,6 +92,17 @@ import {
   mergeStaticCallableExecutionBindings,
   type StaticCallableExecutionBindings,
 } from '../evaluation/function-execution.js';
+import { projectTemplateCompilerHooksFromDi } from '../template/compiler-hook-world-projector.js';
+import {
+  TemplateCompilerHookLane,
+  TemplateCompilerHookOpenReason,
+  TemplateCompilerHookOpenReasonKind,
+  TemplateCompilerHookSetCandidate,
+} from '../template/compiler-hook-world.js';
+import {
+  templateCompilerHookDecoratorOwner,
+  templateCompilerHookDefineTarget,
+} from '../resources/compiler-hook-registry.js';
 
 /**
  * Current app-world composition envelope.
@@ -194,6 +209,7 @@ export class AureliaAppWorldComposer {
       currentResourceCallableBindings,
       evaluationAuthority,
       resources,
+      typeSystem,
     );
 
     return new AureliaAppWorldEmission(
@@ -225,14 +241,7 @@ export class AureliaAppWorldComposer {
       resources,
       project.projectKey,
     );
-    const activation = new DiProviderActivationView(
-      this.publication,
-      evaluation.forkSession(),
-      typeSystem,
-      kernelConfiguration,
-      diWorld,
-      noDiProviderActivationValues,
-    );
+    const activation = diWorld.providerActivation;
     const sourceIssues = [
       new DiResolveCallIssueMaterializer(this.store, this.publication).materialize(project, typeSystem),
       new DiInjectDecoratorIssueMaterializer(this.store, this.publication).materialize(project, typeSystem),
@@ -261,6 +270,7 @@ export class AureliaAppWorldComposer {
     resourceCallableBindings: StaticCallableExecutionBindings,
     evaluationAuthority: CurrentnessAuthority,
     resourceDefinitions: ResourceDefinitionIndex | null,
+    typeSystem: TypeSystemProject,
   ): readonly TemplateCompilerWorldEmission[] {
     return new AppRootCompilerWorldFrame(
       this.publication,
@@ -276,6 +286,7 @@ export class AureliaAppWorldComposer {
       resourceCallableBindings,
       evaluationAuthority,
       resourceDefinitions,
+      typeSystem,
     ).construct();
   }
 }
@@ -306,6 +317,7 @@ function appendDiSourceIssues(
     [...diWorld.issues, ...issues],
     diWorld.resourceIssues,
     [...diWorld.records, ...records],
+    diWorld.providerActivation,
   );
 }
 
@@ -319,6 +331,7 @@ class AppRootCompilerWorldFrame {
   private readonly containersByProduct: ReadonlyMap<Container['productHandle'], Container>;
   private readonly registeredSyntaxResourceMaterializer: RegisteredSyntaxResourceMaterializer;
   private readonly templateCompilerKeyIdentityHandle: IdentityHandle;
+  private readonly templateCompilerHooksKeyIdentityHandle: IdentityHandle;
 
   constructor(
     publication: ComputationRun,
@@ -334,11 +347,15 @@ class AppRootCompilerWorldFrame {
     private readonly resourceCallableBindings: StaticCallableExecutionBindings,
     private readonly evaluationAuthority: CurrentnessAuthority,
     private readonly resourceDefinitions: ResourceDefinitionIndex | null,
+    private readonly typeSystem: TypeSystemProject,
   ) {
     this.containersByProduct = new Map(configuration.containers.map((container) => [container.productHandle, container]));
     this.registeredSyntaxResourceMaterializer = new RegisteredSyntaxResourceMaterializer(publication);
     this.templateCompilerKeyIdentityHandle = publication.handles.identity(
       frameworkIntrinsicDiKeyLocal(FrameworkIntrinsicDiKey.ITemplateCompiler),
+    );
+    this.templateCompilerHooksKeyIdentityHandle = publication.handles.identity(
+      frameworkIntrinsicDiKeyLocal(FrameworkIntrinsicDiKey.ITemplateCompilerHooks),
     );
   }
 
@@ -381,6 +398,23 @@ class AppRootCompilerWorldFrame {
       resourceDefinitions: this.resourceDefinitions,
     });
     const frameworkServiceCustomization = this.frameworkServiceCustomizations.forContainer(container);
+    const projectedCompilerHooks = projectTemplateCompilerHooksFromDi(activateDirectKeyAllResources(
+      this.diWorld,
+      this.configuration.openSeamScopes,
+      container,
+      new ContainerLookupKey(
+        this.templateCompilerHooksKeyIdentityHandle,
+        ContainerLookupKeyKind.Interface,
+        FrameworkIntrinsicDiKey.ITemplateCompilerHooks,
+      ),
+    ));
+    const registryHookReasons = this.rootCompilerHookRegistryOpenReasons(container, operations);
+    const compilerHooks = registryHookReasons.length === 0
+      ? projectedCompilerHooks
+      : TemplateCompilerHookSetCandidate.open(
+          projectedCompilerHooks.entries,
+          [...projectedCompilerHooks.openReasons, ...registryHookReasons],
+        );
     const evaluationAuthority = this.evaluationAuthority;
     const callableBindings = mergeStaticCallableExecutionBindings(
       [
@@ -408,8 +442,70 @@ class AppRootCompilerWorldFrame {
       null,
       resourceResolution.lookups,
       resourceResolution.blockedLookups,
+      compilerHooks,
     );
     return this.compilerWorldMaterializer.construct(request);
+  }
+
+  private rootCompilerHookRegistryOpenReasons(
+    requestor: Container,
+    operations: readonly ContainerRegistrationOperation[],
+  ): readonly TemplateCompilerHookOpenReason[] {
+    const reasons: TemplateCompilerHookOpenReason[] = [];
+    for (const operation of operations) {
+      if (
+        operation.container.identityHandle !== requestor.identityHandle
+        && operation.container.identityHandle !== requestor.root.identityHandle
+      ) continue;
+      const admission = operation.admission;
+      const registeredValue = 'registeredValue' in admission
+        ? admission.registeredValue
+        : 'registryValue' in admission
+          ? admission.registryValue
+          : null;
+      const classValue = this.diWorld.providerActivation.classValueForReference(registeredValue);
+      const decoratedHook = classValue != null
+        && templateCompilerHookDecoratorOwner(classValue, this.typeSystem) != null;
+      const executesRegistryCarrier = admission instanceof RegistryRegistrationAdmission
+        || admission instanceof ParameterizedRegistryAdmission
+        || (
+          admission instanceof OpenRegistrationAdmission
+          && (
+            admission.strategy === RegistrationStrategy.Unknown
+            || admission.strategy === RegistrationStrategy.Registry
+            || admission.strategy === RegistrationStrategy.RecursiveCarrier
+          )
+        )
+        || (
+          admission instanceof ResolverRegistrationAdmission
+          && (
+            admission.targetKey?.identityHandle != null
+            && admission.targetKey.identityHandle === admission.registeredValue?.identityHandle
+            || admission.admissionKind === RegistrationAdmissionKind.AureliaRegisterArgument
+              && decoratedHook
+          )
+        );
+      if (!executesRegistryCarrier) continue;
+      const sourceAddressHandle = registeredValue?.addressHandle ?? operation.sourceAddressHandle;
+      const sourceExpression = sourceAddressHandle == null
+        ? null
+        : this.diWorld.providerActivation.sourceExpressionForAddress(sourceAddressHandle);
+      const defineHook = sourceExpression == null
+        ? null
+        : templateCompilerHookDefineTarget(sourceExpression, this.typeSystem);
+      if (!decoratedHook && defineHook == null) continue;
+      reasons.push(new TemplateCompilerHookOpenReason(
+        TemplateCompilerHookOpenReasonKind.CompilerWorld,
+        operation.container.identityHandle === requestor.root.identityHandle
+          ? TemplateCompilerHookLane.Root
+          : TemplateCompilerHookLane.Leaf,
+        decoratedHook
+          ? 'A root @templateCompilerHooks registry is known, but its registry body has not been spent into the hook provider list.'
+          : 'A root TemplateCompilerHooks.define(...) registry is known, but its registry body has not been spent into the hook provider list.',
+        sourceAddressHandle,
+      ));
+    }
+    return reasons;
   }
 }
 
@@ -452,7 +548,7 @@ function syntaxForOperations(
 
 interface ConfiguredCatalogSelection {
   readonly registrationAdmissionProductHandle: ProductHandle;
-  readonly frameworkKind: import('../registration/registration-reference.js').FrameworkRegistrationKind;
+  readonly frameworkKind: FrameworkRegistrationKind;
   readonly catalogProductHandles: readonly ProductHandle[];
 }
 

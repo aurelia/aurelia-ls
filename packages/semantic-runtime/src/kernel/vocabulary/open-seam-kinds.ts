@@ -301,6 +301,13 @@ export const KernelOpenSeamKinds = {
     ),
   },
   Compiler: {
+    /** Compiler-hook membership or receiver-bearing execution remains unresolved. */
+    OpenCompilerHooks: defineVocabulary(
+      KernelVocabularyNamespace.Compiler,
+      'open-compiler-hooks',
+      KernelVocabularySlot.OpenSeamKind,
+      'Compiler could not close TemplateCompilerHooks membership or receiver-bearing hook execution.',
+    ),
     /** Executable command or pattern body stayed opaque. */
     OpenExecutableBody: defineVocabulary(
       KernelVocabularyNamespace.Compiler,

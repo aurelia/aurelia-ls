@@ -27,6 +27,7 @@ import type {
   IdentityHandle,
   ProductHandle,
 } from '../kernel/handles.js';
+import type { DiProviderActivationView } from './provider-activation.js';
 
 /** Runtime resolver objects that can occupy a container resolver slot. */
 export type DiResolverProduct = Resolver | InstanceProvider;
@@ -110,6 +111,8 @@ export class DiWorldConstructionEmission {
     readonly resourceIssues: readonly ResourceIssue[],
     /** Kernel records committed for these DI products and seams. */
     readonly records: readonly KernelStoreRecord[],
+    /** Candidate-current evaluator/provider authority retained from this exact construction transaction. */
+    readonly providerActivation: DiProviderActivationView,
   ) {}
 
   /** Definition projection retained for existing query and summary consumers. */

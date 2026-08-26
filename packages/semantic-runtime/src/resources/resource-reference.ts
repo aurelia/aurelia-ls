@@ -14,10 +14,22 @@ export const enum ResourceDependencyReferenceKind {
 }
 
 export const enum ResourceRegistryDependencyKind {
+  /** Built-in registry that installs class mapping plus a component-local template compiler hook. */
   CssModules = 'css-modules',
   ShadowCss = 'shadow-css',
   ChildrenLifecycleHooks = 'children-lifecycle-hooks',
   SlottedLifecycleHooks = 'slotted-lifecycle-hooks',
+  /** Exact `TemplateCompilerHooks.define(...)` or `@templateCompilerHooks` registry entry. */
+  TemplateCompilerHook = 'template-compiler-hook',
+  /** Registry identity is known, but its registration effects remain opaque. */
+  OpaqueRegistry = 'opaque-registry',
+}
+
+export const enum ResourceCompilerHookEffectKind {
+  None = 'none',
+  CssModules = 'css-modules',
+  TemplateCompilerHook = 'template-compiler-hook',
+  OpenRegistry = 'open-registry',
 }
 
 /**
@@ -52,6 +64,28 @@ export class ResourceDependencyReference {
     readonly dependencyKind: ResourceDependencyReferenceKind = ResourceDependencyReferenceKind.Resource,
     readonly registryKind: ResourceRegistryDependencyKind | null = null,
   ) {}
+}
+
+/** Project a component dependency onto its resource-layer compiler-hook effect posture. */
+export function resourceCompilerHookEffectKind(
+  dependency: ResourceDependencyReference,
+): ResourceCompilerHookEffectKind {
+  if (dependency.dependencyKind !== ResourceDependencyReferenceKind.Registry) {
+    return ResourceCompilerHookEffectKind.None;
+  }
+  switch (dependency.registryKind) {
+    case ResourceRegistryDependencyKind.CssModules:
+      return ResourceCompilerHookEffectKind.CssModules;
+    case ResourceRegistryDependencyKind.TemplateCompilerHook:
+      return ResourceCompilerHookEffectKind.TemplateCompilerHook;
+    case ResourceRegistryDependencyKind.OpaqueRegistry:
+      return ResourceCompilerHookEffectKind.OpenRegistry;
+    case ResourceRegistryDependencyKind.ShadowCss:
+    case ResourceRegistryDependencyKind.ChildrenLifecycleHooks:
+    case ResourceRegistryDependencyKind.SlottedLifecycleHooks:
+    case null:
+      return ResourceCompilerHookEffectKind.None;
+  }
 }
 
 export class InstructionReference {

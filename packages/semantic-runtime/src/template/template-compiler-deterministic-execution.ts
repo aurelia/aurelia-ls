@@ -41,6 +41,10 @@ import type {
 } from './template-compiler-occurrence.js';
 import { TemplateCompilerStructuralExecutionSession } from './template-compiler-structural-execution.js';
 import type { TemplateResourceCompilationEmission } from './template-compilation-project-pass.js';
+import {
+  templateCompilerHookExecutionAdmission,
+  TemplateCompilerHookExecutionAdmissionKind,
+} from './compiler-hook-world.js';
 import type { TemplateValueSiteEmission } from './value-site-materializer.js';
 import { TemplateValueSiteKind } from './value-site.js';
 
@@ -51,6 +55,8 @@ export const enum TemplateCompilerDeterministicExecutionState {
   Open = 'open',
   /** Normalized compiler products contain a reached framework refusal. */
   Refused = 'refused',
+  /** Hook provider resolution or member invocation is proven to complete abruptly before structural replay. */
+  Abrupt = 'abrupt',
 }
 
 export const enum TemplateCompilerDeterministicExecutionReasonKind {
@@ -58,6 +64,11 @@ export const enum TemplateCompilerDeterministicExecutionReasonKind {
   BrowserContextMembershipOpen = 'browser-context-membership-open',
   BrowserTargetOrderOpen = 'browser-target-order-open',
   CompilerEffectOpen = 'compiler-effect-open',
+  CompilerHookMembershipOpen = 'compiler-hook-membership-open',
+  CompilerHookProviderOpen = 'compiler-hook-provider-open',
+  CompilerHookProviderAbrupt = 'compiler-hook-provider-abrupt',
+  CompilerHookCallableOpen = 'compiler-hook-callable-open',
+  CompilerHookCallableAbrupt = 'compiler-hook-callable-abrupt',
   CompilerRefused = 'compiler-refused',
   DebugProfileOpen = 'debug-profile-open',
   ForeignCompilation = 'foreign-compilation',
@@ -188,6 +199,11 @@ class DeterministicExecutionFrame {
         'The exact subset currently owns the default compiler mutation profile only; debug attribute retention stays open.',
       ));
     }
+    const compilerHookReasons = this.preflightCompilerHooks();
+    reasons.push(...compilerHookReasons);
+    if (compilerHookReasons.length > 0) {
+      return uniqueReasons(reasons);
+    }
     if (this.input.browserTemplate.openSeams.length > 0) {
       reasons.push(reason(
         TemplateCompilerDeterministicExecutionReasonKind.BrowserCorrespondenceOpen,
@@ -260,15 +276,56 @@ class DeterministicExecutionFrame {
     return uniqueReasons(reasons);
   }
 
+  private preflightCompilerHooks(): readonly TemplateCompilerDeterministicExecutionReason[] {
+    const hooks = this.input.compilation.compilerWorld.compilerHooks;
+    const admission = templateCompilerHookExecutionAdmission(hooks);
+    switch (admission.admissionKind) {
+      case TemplateCompilerHookExecutionAdmissionKind.ExactNoEffect:
+        return [];
+      case TemplateCompilerHookExecutionAdmissionKind.MembershipOpen:
+        return [reason(
+          TemplateCompilerDeterministicExecutionReasonKind.CompilerHookMembershipOpen,
+          'TemplateCompilerHooks membership is open before compiler structural traversal.',
+          [hooks.productHandle],
+        )];
+      case TemplateCompilerHookExecutionAdmissionKind.ProviderAbrupt:
+        return [reason(
+          TemplateCompilerDeterministicExecutionReasonKind.CompilerHookProviderAbrupt,
+          'TemplateCompilerHooks provider-array resolution is proven to complete abruptly before any hook invocation.',
+          [hooks.productHandle],
+        )];
+      case TemplateCompilerHookExecutionAdmissionKind.ProviderOpen:
+        return [reason(
+          TemplateCompilerDeterministicExecutionReasonKind.CompilerHookProviderOpen,
+          'TemplateCompilerHooks provider-array resolution remains open before any hook invocation.',
+          [hooks.productHandle],
+        )];
+      case TemplateCompilerHookExecutionAdmissionKind.CallableAbrupt:
+        return [reason(
+          TemplateCompilerDeterministicExecutionReasonKind.CompilerHookCallableAbrupt,
+          'The first reached TemplateCompilerHooks callable boundary is proven to complete abruptly.',
+          [hooks.productHandle],
+        )];
+      case TemplateCompilerHookExecutionAdmissionKind.CallableOpen:
+        return [reason(
+          TemplateCompilerDeterministicExecutionReasonKind.CompilerHookCallableOpen,
+          'The first reached TemplateCompilerHooks callable boundary has not been executed by structural replay.',
+          [hooks.productHandle],
+        )];
+    }
+  }
+
   execute(): TemplateCompilerDeterministicExecutionResult {
     const reasons = this.preflight();
     if (reasons.length > 0) {
       return new TemplateCompilerDeterministicExecutionResult(
-        reasons.some((candidate) =>
-          candidate.reasonKind === TemplateCompilerDeterministicExecutionReasonKind.CompilerRefused
-        )
-          ? TemplateCompilerDeterministicExecutionState.Refused
-          : TemplateCompilerDeterministicExecutionState.Open,
+        reasons.some(isAbruptExecutionReason)
+          ? TemplateCompilerDeterministicExecutionState.Abrupt
+          : reasons.some((candidate) =>
+              candidate.reasonKind === TemplateCompilerDeterministicExecutionReasonKind.CompilerRefused
+            )
+            ? TemplateCompilerDeterministicExecutionState.Refused
+            : TemplateCompilerDeterministicExecutionState.Open,
         this.forest,
         null,
         reasons,
@@ -984,6 +1041,13 @@ function reason(
   productHandles: readonly ProductHandle[] = [],
 ): TemplateCompilerDeterministicExecutionReason {
   return new TemplateCompilerDeterministicExecutionReason(reasonKind, summary, productHandles);
+}
+
+function isAbruptExecutionReason(
+  candidate: TemplateCompilerDeterministicExecutionReason,
+): boolean {
+  return candidate.reasonKind === TemplateCompilerDeterministicExecutionReasonKind.CompilerHookProviderAbrupt
+    || candidate.reasonKind === TemplateCompilerDeterministicExecutionReasonKind.CompilerHookCallableAbrupt;
 }
 
 function uniqueReasons(

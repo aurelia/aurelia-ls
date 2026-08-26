@@ -28,6 +28,11 @@ import type {
 } from './binding-command-execution.js';
 import type { TemplateCompilerIssue } from './compiler-issue.js';
 import type {
+  TemplateCompilerHookEntry,
+  TemplateCompilerHookOpenReason,
+  TemplateCompilerHookSet,
+} from './compiler-hook-world.js';
+import type {
   TemplateAttributeMapperService,
   TemplateCompilerService,
   TemplateCompilerWorld,
@@ -211,6 +216,39 @@ export function compareTemplateCompilerServiceDetails(
     next,
     context,
     sameValues(previous.debug, next.debug, previous.resolveResources, next.resolveResources),
+  );
+}
+
+export function compareTemplateCompilerHookSetDetails(
+  previous: TemplateCompilerHookSet,
+  next: TemplateCompilerHookSet,
+  context: KernelPublicationComparisonContext,
+): KernelComparablePublicationDecision {
+  if (
+    !sameValues(
+      previous.productHandle,
+      next.productHandle,
+      previous.identityHandle,
+      next.identityHandle,
+      previous.membershipState,
+      next.membershipState,
+    )
+    || !sameArrays(previous.entries, next.entries, sameTemplateCompilerHookEntrySemantics)
+    || !sameArrays(previous.openReasons, next.openReasons, sameTemplateCompilerHookOpenReasonSemantics)
+  ) {
+    return KernelPublicationDecisionKind.Replace;
+  }
+  return witnessDecision(
+    sameKernelRecordWitness(previous.sourceAddressHandle, next.sourceAddressHandle, context)
+      && sameArrays(previous.entries, next.entries, (left, right) =>
+        sameKernelRecordWitness(left.cause.sourceAddressHandle, right.cause.sourceAddressHandle, context)
+          && sameKernelRecordWitness(
+            left.callable.sourceAddressHandle,
+            right.callable.sourceAddressHandle,
+            context,
+          ))
+      && sameArrays(previous.openReasons, next.openReasons, (left, right) =>
+        sameKernelRecordWitness(left.sourceAddressHandle, right.sourceAddressHandle, context)),
   );
 }
 
@@ -554,6 +592,7 @@ function sameCompilerServiceReferenceSemantics(
   previous: TemplateCompilerServiceReference,
   next: TemplateCompilerServiceReference,
 ): boolean {
+  // Open-seam handles name the exact callable pressure and are semantic membership of this candidate.
   return sameValues(
     previous.serviceKind,
     next.serviceKind,
@@ -562,6 +601,67 @@ function sameCompilerServiceReferenceSemantics(
     previous.identityHandle,
     next.identityHandle,
   );
+}
+
+function sameTemplateCompilerHookEntrySemantics(
+  previous: TemplateCompilerHookEntry,
+  next: TemplateCompilerHookEntry,
+): boolean {
+  return sameValues(
+    previous.lane,
+    next.lane,
+    previous.laneOrdinal,
+    next.laneOrdinal,
+    previous.sourceOrdinal,
+    next.sourceOrdinal,
+    previous.hookKind,
+    next.hookKind,
+    previous.cause.causeKind,
+    next.cause.causeKind,
+    previous.cause.productHandle,
+    next.cause.productHandle,
+    previous.cause.identityHandle,
+    next.cause.identityHandle,
+    previous.cause.registryEffectKey,
+    next.cause.registryEffectKey,
+    previous.provider.resolutionKind,
+    next.provider.resolutionKind,
+    previous.provider.reason,
+    next.provider.reason,
+    previous.callable.authorityKind,
+    next.callable.authorityKind,
+    previous.callable.identityHandle,
+    next.callable.identityHandle,
+    previous.callable.callableSlotKey,
+    next.callable.callableSlotKey,
+    previous.callable.reason,
+    next.callable.reason,
+  )
+    && sameArrays(
+      previous.provider.openSeamHandles,
+      next.provider.openSeamHandles,
+      (left, right) => left === right,
+    )
+    && sameArrays(
+      previous.callable.openSeamHandles,
+      next.callable.openSeamHandles,
+      (left, right) => left === right,
+    );
+}
+
+function sameTemplateCompilerHookOpenReasonSemantics(
+  previous: TemplateCompilerHookOpenReason,
+  next: TemplateCompilerHookOpenReason,
+): boolean {
+  return sameValues(
+    previous.reasonKind,
+    next.reasonKind,
+    previous.lane,
+    next.lane,
+    previous.summary,
+    next.summary,
+  )
+    && sameArrays(previous.openSeamHandles, next.openSeamHandles, (left, right) => left === right);
 }
 
 function sameAppRootSemantics(previous: AppRootReference, next: AppRootReference): boolean {

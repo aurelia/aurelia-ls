@@ -57,6 +57,7 @@ import type {
 import type {
   TemplateCompilerIssue,
 } from './compiler-issue.js';
+import type { TemplateCompilerHookSet } from './compiler-hook-world.js';
 import type {
   BuiltInSyntaxCatalog,
   ConfiguredBuiltInSyntaxCatalogSelection,
@@ -196,6 +197,7 @@ import {
   compareTemplateAttributeMapperServiceDetails,
   compareTemplateCompilerIssueDetails,
   compareTemplateCompilerServiceDetails,
+  compareTemplateCompilerHookSetDetails,
   compareTemplateCompilerWorldDetails,
   compareTemplateExpressionParserServiceDetails,
   compareTemplateRenderingServiceDetails,
@@ -217,6 +219,7 @@ export const TemplateProductDetails = {
   World: defineProductDetailSlot(TemplateDetailDescriptors.World, referencesForTemplateCompilerWorld, compareTemplateCompilerWorldDetails),
   ResourceScope: defineProductDetailSlot(TemplateDetailDescriptors.ResourceScope, referencesForTemplateResourceScope, compareTemplateResourceScopeDetails),
   TemplateCompilerService: defineProductDetailSlot(TemplateDetailDescriptors.TemplateCompilerService, referencesForTemplateCompilerService, compareTemplateCompilerServiceDetails),
+  CompilerHookSet: defineProductDetailSlot(TemplateDetailDescriptors.CompilerHookSet, referencesForTemplateCompilerHookSet, compareTemplateCompilerHookSetDetails),
   ResourceResolverService: defineProductDetailSlot(TemplateDetailDescriptors.ResourceResolverService, referencesForTemplateResourceResolverService, compareTemplateResourceResolverServiceDetails),
   ExpressionParserService: defineProductDetailSlot(TemplateDetailDescriptors.ExpressionParserService, referencesForTemplateExpressionParserService, compareTemplateExpressionParserServiceDetails),
   AttributeMapperService: defineProductDetailSlot(TemplateDetailDescriptors.AttributeMapperService, referencesForTemplateAttributeMapperService, compareTemplateAttributeMapperServiceDetails),
@@ -547,6 +550,29 @@ function referencesForTemplateCompilerService(
   );
 }
 
+function referencesForTemplateCompilerHookSet(
+  hookSet: TemplateCompilerHookSet,
+): KernelDetailReferenceClosure {
+  return mergeKernelDetailReferences(
+    ...hookSet.entries.map((entry) => mergeKernelDetailReferences(
+      kernelRecordReferences(
+        entry.cause.productHandle,
+        entry.cause.identityHandle,
+        entry.cause.sourceAddressHandle,
+        entry.callable.identityHandle,
+        entry.callable.sourceAddressHandle,
+        ...entry.provider.openSeamHandles,
+        ...entry.callable.openSeamHandles,
+      ),
+    )),
+    ...hookSet.openReasons.map((reason) => kernelRecordReferences(
+      reason.sourceAddressHandle,
+      ...reason.openSeamHandles,
+    )),
+    kernelRecordReferences(hookSet.sourceAddressHandle),
+  );
+}
+
 function referencesForTemplateResourceResolverService(
   service: TemplateResourceResolverService,
 ): KernelDetailReferenceClosure {
@@ -597,6 +623,9 @@ function templateCompilerServiceReferenceReferences(
   switch (service.serviceKind) {
     case TemplateCompilerServiceKind.TemplateCompiler:
       slot = TemplateDetailDescriptors.TemplateCompilerService;
+      break;
+    case TemplateCompilerServiceKind.CompilerHooks:
+      slot = TemplateDetailDescriptors.CompilerHookSet;
       break;
     case TemplateCompilerServiceKind.ResourceResolver:
       slot = TemplateDetailDescriptors.ResourceResolverService;

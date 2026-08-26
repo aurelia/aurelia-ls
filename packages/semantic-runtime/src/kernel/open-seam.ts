@@ -62,6 +62,10 @@ export const enum OpenSeamReasonKind {
   FeatureNotYetModeled = 'feature-not-yet-modeled',
   /** Binding-command dispatch reached an executable body with no modeled lowering semantics. */
   BindingCommandExecutableBodyOpen = 'binding-command-executable-body-open',
+  /** TemplateCompilerHooks membership cannot be enumerated exactly for the active leaf/root world. */
+  CompilerHookMembershipOpen = 'compiler-hook-membership-open',
+  /** A known compiler-hook entry lacks receiver-bearing callable execution authority. */
+  CompilerHookExecutionOpen = 'compiler-hook-execution-open',
   /** Binding-source value evaluation needs runtime binding state rather than a static source value. */
   BindingSourceNeedsRuntimeValue = 'binding-source-needs-runtime-value',
   /** Binding-source lookup found a scope slot whose static value is not available. */
@@ -233,6 +237,7 @@ export function openSeamBoundaryKindForReason(
     case OpenSeamReasonKind.RuntimeCompositionInputOpen:
     case OpenSeamReasonKind.RouterRouteConfigDynamicHook:
     case OpenSeamReasonKind.RouterRouteConfigExecutionUnproven:
+    case OpenSeamReasonKind.CompilerHookExecutionOpen:
       return OpenSeamBoundaryKind.RuntimeExecutionBoundary;
 
     case OpenSeamReasonKind.StaticEvaluationGuardrailLimit:
@@ -268,6 +273,7 @@ export function openSeamBoundaryKindForReason(
       return OpenSeamBoundaryKind.CauseUnresolved;
 
     case OpenSeamReasonKind.ResourceDefinitionDependenciesOpen:
+    case OpenSeamReasonKind.CompilerHookMembershipOpen:
     case OpenSeamReasonKind.ResourceDefinitionDependencyEntryOpen:
     case OpenSeamReasonKind.ResourceBindableConfigurationOpen:
     case OpenSeamReasonKind.ResourceAnnotationOpen:

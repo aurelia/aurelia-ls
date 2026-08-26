@@ -44,6 +44,7 @@ import type {
 } from './attribute-syntax.js';
 import type { TemplateAttributeMapperNode } from './attribute-mapper.js';
 import type { TemplateVisibleResource } from './compiler-world-reference.js';
+import type { TemplateCompilerHookSet } from './compiler-hook-world.js';
 import {
   evaluateStaticCallableTruthiness,
   StaticCallableTruthinessKind,
@@ -83,6 +84,8 @@ export const enum TemplateCompilerReadKind {
   CapturePredicate = 'capture-predicate',
   /** TemplateCompiler options that alter instruction references. */
   TemplateCompiler = 'template-compiler',
+  /** Ordered TemplateCompilerHooks membership and callable closure. */
+  CompilerHooks = 'compiler-hooks',
 }
 
 export const enum TemplateCompilerScopeClosureState {
@@ -452,6 +455,17 @@ export class TemplateCompilerReadView {
       'resolve-resources',
       templateCompilerResultParts(this.world, result),
       (_store, current) => templateCompilerResultParts(current, current.templateCompiler.resolveResources),
+    );
+    return result;
+  }
+
+  compilerHooks(): TemplateCompilerHookSet {
+    const result = this.world.compilerHooks;
+    this.observe(
+      TemplateCompilerReadKind.CompilerHooks,
+      'all',
+      compilerHookSetResultParts(result),
+      (_store, current) => compilerHookSetResultParts(current.compilerHooks),
     );
     return result;
   }
@@ -917,6 +931,44 @@ function templateCompilerResultParts(
     scalarPart(world.templateCompiler.debug),
     scalarPart(world.templateCompiler.resolveResources),
     scalarPart(result),
+  ];
+}
+
+function compilerHookSetResultParts(
+  hookSet: TemplateCompilerHookSet,
+): readonly string[] {
+  return [
+    hookSet.productHandle,
+    hookSet.identityHandle,
+    hookSet.membershipState,
+    ...hookSet.entries.flatMap((entry) => [
+      entry.lane,
+      String(entry.laneOrdinal),
+      String(entry.sourceOrdinal),
+      entry.hookKind,
+      entry.cause.causeKind,
+      entry.cause.productHandle ?? '',
+      entry.cause.identityHandle ?? '',
+      entry.cause.registryEffectKey ?? '',
+      entry.cause.sourceAddressHandle ?? '',
+      entry.provider.resolutionKind,
+      entry.provider.reason ?? '',
+      ...entry.provider.openSeamHandles,
+      entry.callable.authorityKind,
+      entry.callable.identityHandle ?? '',
+      entry.callable.callableSlotKey ?? '',
+      entry.callable.reason ?? '',
+      ...entry.callable.openSeamHandles,
+      entry.callable.sourceAddressHandle ?? '',
+    ]),
+    ...hookSet.openReasons.flatMap((reason) => [
+      reason.reasonKind,
+      reason.lane ?? '',
+      reason.summary,
+      reason.sourceAddressHandle ?? '',
+      ...reason.openSeamHandles,
+    ]),
+    hookSet.sourceAddressHandle ?? '',
   ];
 }
 

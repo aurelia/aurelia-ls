@@ -105,6 +105,13 @@ The tooling model keeps those consequences distinct:
 - `ContainerLookupKey` names the runtime-facing DI key request passed to container lookup/factory/invoke APIs. It keeps
   the durable identity handle separate from the key-shape branch Aurelia uses for JIT registration, native-function
   construction checks, resolver keys, interface symbols, resource/string/symbol keys, and unknown values.
+- `provider-activation.ts` retains the construction candidate's evaluator/value authority on
+  `DiWorldConstructionEmission`; later compiler/runtime consumers no longer rebuild a weaker activation view after the
+  exact resolver state has disappeared. `provider-membership.ts` exposes a generic direct-key `allResources` query:
+  exact known members remain in leaf-registration order followed by root-registration order, intermediate containers
+  are excluded, and provider-value completion stays separate from membership closure. Registration pressure is joined
+  only at the selected leaf/root loci and retains `Leaf`, `Root`, or genuinely `Global` attribution; known different
+  direct keys and resource registrations cannot falsely open an unrelated canonical interface query.
 - `DiContainerKeyExpressionIdentityKind` is source-local runtime identity evidence. Stable references can be registered
   elsewhere and are usually container-state dependent; direct object/array literals create fresh identities at the call
   site, so they can prove some miss-then-fail branches without a whole container-state join.
@@ -166,7 +173,7 @@ it as a registry.
 Framework and plugin effects resolve public package exports through `TypeSystemProject` and then use the same
 declaration identity authority as authored keys. A support-owned key that is private to a package, or whose declaration
 cannot be proven, remains an explicit `UnknownDiKeyIdentity`; do not recover it by friendly name. Framework intrinsics
-such as `IContainer` and `ITemplateCompiler` retain their canonical cross-package identities.
+such as `IContainer`, `ITemplateCompiler`, and `ITemplateCompilerHooks` retain their canonical cross-package identities.
 
 ## Watchpoints
 

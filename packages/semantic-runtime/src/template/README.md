@@ -14,7 +14,7 @@ classification, expression parsing, and instruction lowering converge on the sam
 - `compiler-world.ts` models the container-scoped compiler world: visible resources, syntax resources, and compiler
   services. It is the handoff from DI world construction into template compilation. The service set mirrors the
   runtime root compilation context: template compiler, resource resolver, attribute parser, binding-command resolver,
-  expression parser, and attribute mapper. The world detail also owns the app-visible `NodeObserverLocator`
+  expression parser, attribute mapper, and the ordered compiler-hook set. The world detail also owns the app-visible `NodeObserverLocator`
   configuration consumed by runtime binding analysis and the app-effective `IKeyMapping` state consumed by listener
   authoring; do not carry that state beside the world in a second emission field.
 - `compiler-world-materializer.ts` materializes a compiler world after earlier passes have selected the visible container,
@@ -28,6 +28,19 @@ classification, expression parsing, and instruction lowering converge on the sam
   spendable compiler-world state. Derived component worlds use one request shape for both construction and projection.
   Construction registers exact reads of the parent products whose values it inherits; side-effect-free projection is
   reserved for live-authority validation and does not pretend to publish or consume those products.
+- `compiler-hook-world.ts` and `compiler-hook-world-projector.ts` own `TemplateCompilerHooks.findAll(...)` as a
+  compiler-world service. Membership is exact-none, an exact leaf-then-root list, or Open; complete/Open/abrupt
+  provider-array resolution is modeled before per-entry callable absence, built-in behavior, static authority,
+  abrupt completion, and callable openness. Root
+  membership comes from canonical `ITemplateCompilerHooks` direct-key provider activation. Component derivation replaces
+  the parent leaf lane, retains the root lane, and projects ordered registry dependencies such as
+  `TemplateCompilerHooks.define(...)`, `@templateCompilerHooks`, and `cssModules(...)`; opaque registries open only the
+  component leaf lane. DI-world pressure attached to a known framework registration is filtered through its capability
+  manifest, so broad StandardConfiguration provider pressure cannot imply a hook that its pinned body never installs.
+  Earlier configuration-recognition seams with no retained admission identity remain conservatively Open rather than
+  borrowing that negative authority. Structural replay admits exact-none and exact lists whose complete provider array
+  resolves and whose entries all prove the optional callable absent; callable/Open/abrupt lists remain distinct until
+  ordered hook execution is connected.
 - `parse-context.ts` carries inquiry pressure that genuinely changes parser/lowering behavior: strict parsing,
   recovery, frontier/cursor preservation, and consumer lane.
 - `compilation-unit.ts` models the compiler front door: authored template source, the selected compiler world,
@@ -113,7 +126,7 @@ classification, expression parsing, and instruction lowering converge on the sam
   for the checker declaration's already-admitted source-file address. They should not borrow the resource target span,
   because imported/factory-backed targets can point at a different authored site than the class body being scanned.
 - `compiler-read-view.ts` is the required run-scoped read boundary for an incremental template front door. It delegates
-  resource, bindable, command, pattern, parser, AttrMapper, and TemplateCompiler operations to the admitted immutable
+  resource, bindable, command, pattern, parser, AttrMapper, TemplateCompiler, and compiler-hook membership operations to the admitted immutable
   compiler world while registering the exact positive or negative keys that were read. The compiler-world authority is
   re-read at commit, and each observation keeps scope, closure/support, and result revisions distinct. Candidate-aware
   definition and materialization reads come through the computation's domain projection so the compiler observation owns

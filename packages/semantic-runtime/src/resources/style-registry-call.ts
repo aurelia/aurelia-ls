@@ -1,6 +1,11 @@
 import ts from 'typescript';
 
 import { unwrapExpression } from '../evaluation/ts-syntax.js';
+import {
+  frameworkDeclarationSourceSpec,
+  symbolMatchesFrameworkDeclarationSource,
+} from '../type-system/framework-declaration-source.js';
+import type { TypeSystemProject } from '../type-system/project.js';
 
 export const enum AureliaStyleRegistryCallKind {
   CssModules = 'css-module-call',
@@ -19,12 +24,49 @@ const AURELIA_STYLE_MODULES = new Set([
 ]);
 
 const styleRegistryImportsBySourceFile = new WeakMap<ts.SourceFile, AureliaStyleRegistryImports>();
+const CSS_MODULES_SOURCE = frameworkDeclarationSourceSpec(
+  new Set(['cssModules']),
+  ['@aurelia/runtime-html'],
+  [
+    '/aurelia/packages/runtime-html/src/templating/styles.ts',
+    '/aurelia/packages/runtime-html/src/index.ts',
+    '/aurelia/packages/runtime-html/dist/types/templating/styles.d.ts',
+    '/aurelia/packages/runtime-html/dist/types/index.d.ts',
+  ],
+);
+const SHADOW_CSS_SOURCE = frameworkDeclarationSourceSpec(
+  new Set(['shadowCSS']),
+  ['@aurelia/runtime-html'],
+  [
+    '/aurelia/packages/runtime-html/src/templating/styles.ts',
+    '/aurelia/packages/runtime-html/src/index.ts',
+    '/aurelia/packages/runtime-html/dist/types/templating/styles.d.ts',
+    '/aurelia/packages/runtime-html/dist/types/index.d.ts',
+  ],
+);
 
 /** Return the framework style registry call kind for cssModules(...) and shadowCSS(...) calls. */
 export function aureliaStyleRegistryCallKind(
   sourceFile: ts.SourceFile,
   expression: ts.Expression,
+  typeSystem: TypeSystemProject | null = null,
 ): AureliaStyleRegistryCallKind | null {
+  if (typeSystem != null) {
+    const symbol = typeSystem.readProgramAliasedSymbolAtLocation(expression);
+    if (symbolMatchesFrameworkDeclarationSource(
+      symbol,
+      typeSystem.checker,
+      new Map(),
+      CSS_MODULES_SOURCE,
+    )) return AureliaStyleRegistryCallKind.CssModules;
+    if (symbolMatchesFrameworkDeclarationSource(
+      symbol,
+      typeSystem.checker,
+      new Map(),
+      SHADOW_CSS_SOURCE,
+    )) return AureliaStyleRegistryCallKind.ShadowCss;
+    return null;
+  }
   return styleRegistryCallKind(readAureliaStyleRegistryImports(sourceFile), expression);
 }
 

@@ -173,7 +173,17 @@ silent open seam. Dependency
 convergence first trusts evaluator-closed class/function values, then uses the TypeChecker as a fallback for identifier
 dependencies that are checker-visible constructable/callable values. Registry dependencies stay separate from visible
 resources: `cssModules(...)`, `shadowCSS(...)`, `@children`, and `@slotted` are modeled as component child-container
-registry effects rather than resource-scope entries. Watch convergence now closes class/method
+registry effects rather than resource-scope entries. `compiler-hook-registry.ts` additionally grounds exact
+`TemplateCompilerHooks.define(...)` calls and both `@templateCompilerHooks` decorator forms from their owning
+framework symbols, including local-barrel reexports and inherited registrable metadata on a subclass constructor.
+Lexically shadowed import names do not acquire framework authority. Those dependencies retain the hook target
+independently from the registry key. `cssModules(...)`
+remains a distinct built-in compiler-hook producer because its registry installs both `ICssClassMapping` and a
+compiling hook; it must not collapse into an ordinary resource or a generic custom hook. Checker-proven values whose
+runtime/static side exposes a callable `register` member retain an `opaque-registry` dependency plus an explicit dependency-entry
+open seam rather than being guessed as resources or hooks. Registry dependencies preserve authored multiplicity and
+order across metadata lanes because repeated registry entries repeat their registration effects; only ordinary
+resource references use dependency-key deduplication. Watch convergence now closes class/method
 `@watch(...)` decorators, static `watches`, and custom-element definition-object `watches` when their expression,
 callback, and flush metadata reduce to static runtime metadata. Custom attributes and template controllers intentionally
 ignore definition-object `watches`, matching the current runtime-html creation path that only merges decorator metadata
