@@ -509,6 +509,64 @@ assert.notEqual(
 );
 
 const accessUseRows = await readAllRuntimeExpressionAccessUses(accessUseRuntime);
+const duplicateInterpolationMarker = '${form.name} / ${form.name}';
+const firstDuplicateUses = accessUsesAt(
+  accessUseRows,
+  duplicateInterpolationMarker,
+  'name',
+  1,
+);
+const secondDuplicateUses = accessUsesAt(
+  accessUseRows,
+  duplicateInterpolationMarker,
+  'name',
+  2,
+);
+assert.equal(firstDuplicateUses.length, 1, 'The first duplicate interpolation hole should have one exact access use.');
+assert.equal(secondDuplicateUses.length, 1, 'The second duplicate interpolation hole should have one exact access use.');
+assert.equal(firstDuplicateUses[0]?.operationKind, 'interpolation-part');
+assert.equal(firstDuplicateUses[0]?.operationIndex, 0);
+assert.equal(secondDuplicateUses[0]?.operationKind, 'interpolation-part');
+assert.equal(secondDuplicateUses[0]?.operationIndex, 1);
+assert.notEqual(
+  firstDuplicateUses[0]?.handles?.ownerProductHandle,
+  secondDuplicateUses[0]?.handles?.ownerProductHandle,
+  'Equal expression shapes in adjacent holes must retain independent runtime binding owners.',
+);
+assert.notEqual(
+  firstDuplicateUses[0]?.handles?.accessUseProductHandle,
+  secondDuplicateUses[0]?.handles?.accessUseProductHandle,
+  'Equal expression shapes in adjacent holes must retain independent access-use products.',
+);
+
+const duplicateDataFlows = await readAllBindingDataFlows(accessUseRuntime);
+const firstDuplicateStart = sourceTokenStart(
+  accessUseTemplateText,
+  duplicateInterpolationMarker,
+  'form.name',
+  1,
+);
+const secondDuplicateStart = sourceTokenStart(
+  accessUseTemplateText,
+  duplicateInterpolationMarker,
+  'form.name',
+  2,
+);
+const duplicateFlowRows = duplicateDataFlows.filter((row) =>
+  row.expressionSource?.path?.replace(/\\/g, '/') === 'src/runtime-expression-access-uses-app.html'
+    && (
+      row.expressionSource.start === firstDuplicateStart
+      || row.expressionSource.start === secondDuplicateStart
+    )
+);
+assert.equal(duplicateFlowRows.length, 2, 'Duplicate interpolation holes should retain two public data-flow rows.');
+assert.deepEqual(
+  duplicateFlowRows.map((row) => [row.expressionSource.start, row.expressionChainIndex]),
+  [[firstDuplicateStart, 0], [secondDuplicateStart, 1]],
+);
+assert.equal(new Set(duplicateFlowRows.map((row) => row.handles?.bindingProductHandle)).size, 2);
+assert.equal(new Set(duplicateFlowRows.map((row) => row.handles?.dataFlowProductHandle)).size, 2);
+
 const rootThis = accessUseAt(
   accessUseRows,
   '${$this} / ${items.map',
@@ -805,6 +863,25 @@ async function readAllRuntimeExpressionAccessUses(semanticRuntime) {
   return rows;
 }
 
+async function readAllBindingDataFlows(semanticRuntime) {
+  const rows = [];
+  let cursor = null;
+  do {
+    const answer = await semanticRuntime.answerAppQuery({
+      kind: SemanticAppQueryKind.BindingDataFlows,
+      detail: 'handles',
+      page: { size: 200, cursor },
+      analysisDepth: 'binding-observation',
+      includeAuthoringTemplates: true,
+      appRetention: 'retain-app',
+    });
+    assertCompleteCollectionAnswer(answer);
+    rows.push(...answer.value.rows);
+    cursor = answer.page?.nextCursor ?? null;
+  } while (cursor != null);
+  return rows;
+}
+
 function accessUseAt(rows, marker, token) {
   const matches = accessUsesAt(rows, marker, token);
   const row = matches[0] ?? null;
@@ -812,8 +889,8 @@ function accessUseAt(rows, marker, token) {
   return row;
 }
 
-function accessUsesAt(rows, marker, token) {
-  const start = sourceTokenStart(accessUseTemplateText, marker, token);
+function accessUsesAt(rows, marker, token, occurrence = 1) {
+  const start = sourceTokenStart(accessUseTemplateText, marker, token, occurrence);
   return rows.filter((candidate) =>
     candidate.nameSource?.path?.replace(/\\/g, '/') === 'src/runtime-expression-access-uses-app.html'
     && candidate.nameSource?.start === start

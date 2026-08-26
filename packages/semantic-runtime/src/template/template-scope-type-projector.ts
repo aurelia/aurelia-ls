@@ -30,13 +30,13 @@ import {
 import {
   expressionProductHandleForBinding,
   isRuntimeExpressionBinding,
+  runtimeBindingSourceExpressionChainIndex,
   type RuntimeExpressionBinding,
 } from '../observation/runtime-binding-expression.js';
 import {
   type RuntimeBindingExpressionScopeProjectionReader,
 } from '../observation/runtime-binding-expression-scope.js';
 import {
-  aggregateRuntimeBindingSourceExpressionChainIndex,
   RuntimeBindingSourceExpressionProjectionKind,
   checkerContextForRuntimeBindingSourceExpressionProjection,
   projectRuntimeBindingSourceExpressionInScope,
@@ -671,7 +671,7 @@ export class TemplateScopeTypeProjector {
       {
         binding,
         expressionProductHandle: expressionProductHandleForBinding(binding),
-        expressionChainIndex: aggregateRuntimeBindingSourceExpressionChainIndex(expression),
+        expressionChainIndex: runtimeBindingSourceExpressionChainIndex(binding),
         expression,
         localKey,
         sourceScope,

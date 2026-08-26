@@ -225,7 +225,7 @@ export class RuntimeBindingSourceExpressionContextProjector {
         openRuntimeSourceExpressionProjection(
           input.binding.productHandle,
           input.expressionProductHandle,
-          index,
+          input.expressionChainIndex ?? index,
           this.expressionResourcePlan,
           expression,
           strictBinding,
@@ -237,7 +237,7 @@ export class RuntimeBindingSourceExpressionContextProjector {
     return projectRuntimeSourceExpressionsWithLifecycle({
       bindingProductHandle: input.binding.productHandle,
       expressionProductHandle: input.expressionProductHandle,
-      expressionChainIndex: null,
+      expressionChainIndex: input.expressionChainIndex,
       expressionResourcePlan: this.expressionResourcePlan,
       expression: input.expression,
       sourceScope: instructionScope,
@@ -289,7 +289,7 @@ export function projectRuntimeBindingSourceExpressionsInScope(
   return projectRuntimeSourceExpressionsWithLifecycle({
     bindingProductHandle: input.binding.productHandle,
     expressionProductHandle: input.expressionProductHandle,
-    expressionChainIndex: null,
+    expressionChainIndex: input.expressionChainIndex,
     expressionResourcePlan,
     expression: input.expression,
     sourceScope: input.sourceScope,
@@ -412,6 +412,7 @@ export function projectRuntimeSourceExpressionsWithLifecycle(
   input: RuntimeSourceExpressionLifecycleProjectionRequest,
 ): readonly RuntimeBindingSourceExpressionProjection[] {
   const authoredParts = runtimeBindingSourceExpressionParts(input.expression);
+  const chainIndexForPart = (index: number): number => input.expressionChainIndex ?? index;
   if (input.bindingBehavior === CheckerExpressionTypeBindingBehaviorEvaluation.AstEvaluateOnly) {
     return authoredParts.map((expression, index) => ({
       kind: RuntimeBindingSourceExpressionProjectionKind.Context,
@@ -421,7 +422,7 @@ export function projectRuntimeSourceExpressionsWithLifecycle(
       scope: input.sourceScope,
       bindingProductHandle: input.bindingProductHandle,
       expressionProductHandle: input.expressionProductHandle,
-      expressionChainIndex: index,
+      expressionChainIndex: chainIndexForPart(index),
       expressionResourcePlan: input.expressionResourcePlan,
       resourceScope: input.resourceScope,
       activeContainer: input.activeContainer,
@@ -434,7 +435,7 @@ export function projectRuntimeSourceExpressionsWithLifecycle(
         .readExpressionChainSourceEvaluationReachability(
           input.bindingProductHandle,
           input.expressionProductHandle,
-          index,
+          chainIndexForPart(index),
         ),
     }));
   }
@@ -450,7 +451,7 @@ export function projectRuntimeSourceExpressionsWithLifecycle(
     ? openRuntimeSourceExpressionProjection(
         input.bindingProductHandle,
         input.expressionProductHandle,
-        index,
+        chainIndexForPart(index),
         input.expressionResourcePlan,
         authoredParts[index] ?? input.expression,
         input.strictBinding,
@@ -466,7 +467,7 @@ export function projectRuntimeSourceExpressionsWithLifecycle(
         scope: projected.scope,
         bindingProductHandle: input.bindingProductHandle,
         expressionProductHandle: input.expressionProductHandle,
-        expressionChainIndex: index,
+        expressionChainIndex: chainIndexForPart(index),
         expressionResourcePlan: input.expressionResourcePlan,
         resourceScope: input.resourceScope,
         activeContainer: input.activeContainer,
@@ -479,7 +480,7 @@ export function projectRuntimeSourceExpressionsWithLifecycle(
           .readExpressionChainSourceEvaluationReachability(
             input.bindingProductHandle,
             input.expressionProductHandle,
-            index,
+            chainIndexForPart(index),
           ),
       });
 }

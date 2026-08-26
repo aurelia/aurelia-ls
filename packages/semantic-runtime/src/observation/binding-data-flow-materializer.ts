@@ -138,7 +138,6 @@ import {
   type RuntimeBindingExpressionScopeProjectionReader,
 } from './runtime-binding-expression-scope.js';
 import {
-  aggregateRuntimeBindingSourceExpressionChainIndex,
   checkerContextForRuntimeBindingSourceExpressionProjection,
   RuntimeBindingSourceExpressionContextProjector,
   RuntimeBindingSourceExpressionProjectionKind,
@@ -182,6 +181,7 @@ import {
   isRuntimeDataFlowBinding,
   isRuntimeSourceOnlyDataFlowBinding,
   runtimeBindingSourceExpression,
+  runtimeBindingSourceExpressionChainIndex,
   type RuntimeInstructionScopeLookup,
   type RuntimeDataFlowBinding,
 } from './runtime-binding-expression.js';
@@ -366,6 +366,7 @@ type DataFlowDraft = {
   readonly targetMutationKind: RuntimeBindingValueChannelTargetMutationKind;
   readonly strictBinding: boolean | null;
   readonly expressionProductHandle: ProductHandle | null;
+  readonly expressionChainIndex: number | null;
   readonly sourceKind: RuntimeBindingDataFlowSourceKind;
   readonly sourceName: string | null;
   readonly sourceRootName: string | null;
@@ -415,6 +416,7 @@ function runtimeBindingDataFlowForDraft(
     target.targetAccess?.toReference() ?? null, target.targetOperation?.toReference() ?? null,
     target.sourceOperation?.toReference() ?? null, target.valueChannel?.toReference() ?? null,
     draft.expressionProductHandle,
+    draft.expressionChainIndex,
     draft.bindingScope?.toReference() ?? scope?.toReference() ?? null,
     draft.direction,
     draft.realization,
@@ -455,6 +457,7 @@ type DataFlowTargetTypes = {
 
 type DataFlowExpressionFacts = {
   readonly expressionProductHandle: ProductHandle | null;
+  readonly expressionChainIndex: number | null;
   readonly ast: ExpressionAstNode | null;
   readonly expressionTypeLocal: string;
 };
@@ -1062,6 +1065,7 @@ class RuntimeBindingDataFlowDraftMaterializer {
       ast: expressionFacts.ast,
       bindingScope: sourceProjection.sourceScope,
       expressionProductHandle: expressionFacts.expressionProductHandle,
+      expressionChainIndex: expressionFacts.expressionChainIndex,
       direction,
       realization: sourceProjection.realization,
       sourceEvaluationKind: lifecycle.sourceEvaluationKind,
@@ -1185,6 +1189,7 @@ class RuntimeBindingDataFlowDraftMaterializer {
     const ast = runtimeBindingSourceExpression(this.typeProjector.publication, binding);
     return {
       expressionProductHandle,
+      expressionChainIndex: runtimeBindingSourceExpressionChainIndex(binding),
       ast,
       expressionTypeLocal: scope == null || ast == null
         ? local
@@ -1243,7 +1248,7 @@ class BindingDataFlowSourceProjector {
       : sourceExpressionContexts.projectSource({
           binding,
           expressionProductHandle: expressionFacts.expressionProductHandle,
-          expressionChainIndex: aggregateRuntimeBindingSourceExpressionChainIndex(expressionFacts.ast),
+          expressionChainIndex: expressionFacts.expressionChainIndex,
           expression: expressionFacts.ast,
           localKey: `${expressionFacts.expressionTypeLocal}:source`,
           sourceScope,

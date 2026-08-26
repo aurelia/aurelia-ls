@@ -4,6 +4,7 @@ import type { ExpressionAstNode } from '../expression/ast.js';
 import {
   bindingExpressionAstForParseAtOffset,
   runtimeAcceptedBindingExpressionAstForParse,
+  runtimeAcceptedBindingExpressionAstForParseChain,
   runtimeAssignmentTargetAstForParse,
 } from './expression-parse-projection.js';
 import { TemplateProductDetails } from './product-details.js';
@@ -26,6 +27,18 @@ export function bindingExpressionAstForProduct(
 ): ExpressionAstNode | null {
   const parse = readTemplateExpressionParse(store, expressionProductHandle);
   return parse == null ? null : runtimeAcceptedBindingExpressionAstForParse(parse);
+}
+
+/** Reads one selected runtime-evaluable chain from its aggregate expression product. */
+export function bindingExpressionAstForProductChain(
+  store: ProductDetailReadView,
+  expressionProductHandle: ProductHandle | null,
+  expressionChainIndex: number,
+): ExpressionAstNode | null {
+  const parse = readTemplateExpressionParse(store, expressionProductHandle);
+  return parse == null
+    ? null
+    : runtimeAcceptedBindingExpressionAstForParseChain(parse, expressionChainIndex);
 }
 
 /** Reads the cursor-active runtime binding expression for a materialized expression product. */

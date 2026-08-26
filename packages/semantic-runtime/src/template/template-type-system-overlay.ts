@@ -131,10 +131,10 @@ import {
   bindingScopesForTemplateExpressionParse,
   bindingBehaviorEvaluationForTemplateExpression,
   RuntimeBindingSourceContextProjectionSelectionKind,
-  runtimeExpressionBindingsForTemplateExpressionParse,
-  runtimeExpressionBindingsForTemplateExpressionParseInScope,
   runtimeExpressionBindingsForTemplateExpressionProductHandle,
+  runtimeExpressionBindingsForTemplateExpressionProductHandleAtChain,
   runtimeExpressionBindingsForTemplateExpressionProductHandleInScope,
+  runtimeExpressionBindingsForTemplateExpressionProductHandleInScopeAtChain,
   resourceLocalEffectiveTemplateExpressionParses,
   selectRuntimeBindingSourceContextProjection,
   templateInstructionForExpressionParse,
@@ -440,7 +440,11 @@ export class TemplateTypeSystemOverlayBuilder {
     for (const parse of resourceLocalEffectiveTemplateExpressionParses(this.store, frame.resource)) {
       for (const expressionSpan of expressionSpansForOverlay(parse)) {
         const scopes = bindingScopesForTemplateExpressionParse(frame.resource, parse);
-        const bindings = runtimeExpressionBindingsForTemplateExpressionParse(frame.resource, parse);
+        const bindings = runtimeExpressionBindingsForTemplateExpressionProductHandleAtChain(
+          frame.resource,
+          parse.productHandle,
+          expressionSpan.chainIndex,
+        );
         if (scopes.length === 0) {
           frame.skipped.push(skippedTemplateTypeSystemOverlayExpression(
             TemplateTypeSystemOverlaySkippedReason.MissingBindingScope,
@@ -453,7 +457,12 @@ export class TemplateTypeSystemOverlayBuilder {
         for (const scope of scopes) {
           const scopedBindings = bindings.length === 0
             ? []
-            : runtimeExpressionBindingsForTemplateExpressionParseInScope(frame.resource, parse, scope);
+            : runtimeExpressionBindingsForTemplateExpressionProductHandleInScopeAtChain(
+                frame.resource,
+                parse.productHandle,
+                expressionSpan.chainIndex,
+                scope,
+              );
           if (bindings.length > 0 && scopedBindings.length === 0) {
             frame.skipped.push(skippedTemplateTypeSystemOverlayExpression(
               TemplateTypeSystemOverlaySkippedReason.UnsupportedExpressionSyntax,
@@ -812,7 +821,6 @@ export class TemplateTypeSystemOverlayBuilder {
       sourceExpressions: projectors.sourceExpressions,
       bindingBehaviorForBinding: (binding) => bindingBehaviorEvaluationForTemplateExpression(
         resource,
-        expressionProductHandle,
         binding,
       ),
     });

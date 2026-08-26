@@ -364,6 +364,8 @@ export class RuntimeBindingDataFlow {
     readonly sourceOperation: RuntimeBindingSourceOperationReference | null,
     readonly valueChannel: RuntimeBindingValueChannelReference | null,
     readonly expressionProductHandle: ProductHandle | null,
+    /** Zero for an ordinary expression/first hole, N for a later hole, or null for aggregate/open selection. */
+    readonly expressionChainIndex: number | null,
     readonly bindingScope: BindingScopeReference | null,
     readonly direction: RuntimeBindingDataFlowDirection,
     /** Whether this edge is direct or depends on runtime creation of a guarded inner binding. */

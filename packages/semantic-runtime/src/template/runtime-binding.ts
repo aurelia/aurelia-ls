@@ -1039,7 +1039,7 @@ export class ListenerBinding {
   }
 }
 
-/** Runtime InterpolationBinding model produced by text or attribute interpolation renderers. */
+/** Runtime InterpolationBinding model produced by aggregate attribute interpolation renderers. */
 @auLink('runtime-html:InterpolationBinding')
 export class InterpolationBinding {
   readonly bindingKind = RuntimeBindingKind.Interpolation;
@@ -1130,6 +1130,8 @@ export class ContentBinding {
     readonly renderer: RuntimeRendererReference,
     readonly node: HtmlNodeReference,
     readonly expressionProductHandle: ProductHandle | null,
+    /** Authored interpolation hole, or null while an open compatibility instruction cannot select one exactly. */
+    readonly expressionChainIndex: number | null,
     readonly scopeEffects: readonly RuntimeBindingScopeEffectReference[],
     readonly sourceAddressHandle: AddressHandle | null,
     readonly fieldProvenance: readonly FieldProvenance<RuntimeBindingField>[] = [],

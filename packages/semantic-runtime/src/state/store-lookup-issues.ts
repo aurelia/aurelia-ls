@@ -8,12 +8,11 @@ import {
 } from '../kernel/publication.js';
 import { sourceSpanAddressForSite } from '../kernel/source-address.js';
 import {
-  KernelStore,
   KernelStoreBatch,
+  type KernelStore,
   type KernelStoreRecord,
 } from '../kernel/store.js';
 import { localKeyPart } from '../kernel/local-key.js';
-import { runtimeAcceptedBindingExpressionAstForParse } from '../template/expression-parse-projection.js';
 import { readTemplateExpressionParse } from '../template/expression-parse-product.js';
 import { expressionProductHandlesForRuntimeBinding } from '../template/runtime-binding-expression-products.js';
 import { sourceAddressForRuntimeExpressionSpan } from '../template/runtime-expression-source-address.js';
@@ -22,6 +21,10 @@ import {
   StateDispatchBinding,
   type RuntimeBinding,
 } from '../template/runtime-binding.js';
+import {
+  isRuntimeExpressionBinding,
+  runtimeBindingSourceExpressionForProduct,
+} from '../observation/runtime-binding-expression.js';
 import { resourceLocalRuntimeBindings } from '../template/runtime-resource-ownership.js';
 import {
   bindingBehaviorResourceOccurrences,
@@ -31,10 +34,7 @@ import type { TemplateCompilationProjectEmission } from '../template/template-co
 import type { TypeSystemProject } from '../type-system/project.js';
 import { BuiltInBindingBehaviorName } from '../resources/built-in-resources.js';
 import { StateRawErrorAuthority } from './framework-raw-error-authority.js';
-import {
-  FromStateStoreReferenceSite,
-  readFromStateStoreReferenceSites,
-} from './from-state-decorator-recognition.js';
+import { readFromStateStoreReferenceSites } from './from-state-decorator-recognition.js';
 import { StateProductDetails } from './product-details.js';
 import { configuredStateStoreForName } from './state-store-identity.js';
 import {
@@ -50,6 +50,8 @@ import {
   StateIssuePublisher,
   type StateIssuePublication,
 } from './state-issue-publication.js';
+
+const STATE_BINDING_BEHAVIOR_NAME: string = BuiltInBindingBehaviorName.State;
 
 /** Source surface that can name a configured @aurelia/state store. */
 export enum StateStoreLookupSiteKind {
@@ -69,9 +71,6 @@ class StateStoreLookupSite {
     readonly storeName: string,
     readonly sourceAddressHandle: AddressHandle,
     readonly sourceRecords: readonly KernelStoreRecord[],
-    readonly sourcePath: string | null,
-    readonly start: number | null,
-    readonly end: number | null,
     readonly storeVisibility: StateStoreVisibilitySelection,
   ) {}
 }
@@ -117,7 +116,7 @@ export class StateStoreLookupIssueMaterializer {
         configuredStateStoreForName(site.storeVisibility.stores, site.storeName) == null
         && site.storeVisibility.openReason == null
       )
-      .map((site, index) => this.publicationForSite(project, site, index));
+      .map((site) => this.publicationForSite(project, site));
     const records = publications.flatMap((publication) => publication.records);
     this.publication.publish(new KernelPublicationPlan(
       new KernelStoreBatch(records, `state-store-lookup-issues:${project.projectKey}`),
@@ -135,9 +134,7 @@ export class StateStoreLookupIssueMaterializer {
   private publicationForSite(
     project: ProjectBootFrame,
     site: StateStoreLookupSite,
-    index: number,
   ): StateIssuePublication {
-    const local = stateStoreLookupIssueLocalKey(project, site, index);
     const publication = this.publisher.publish(
       project.projectKey,
       null,
@@ -173,9 +170,6 @@ function fromStateStoreLookupSites(
       site.storeName,
       source.handle,
       source.records,
-      site.sourcePath,
-      site.start,
-      site.end,
       storeVisibility,
     );
   });
@@ -224,9 +218,6 @@ function stateCommandStoreLookupSites(
         binding.storeName,
         binding.storeNameSourceAddressHandle ?? binding.sourceAddressHandle,
         [],
-        null,
-        null,
-        null,
         storeVisibility,
       ),
     ];
@@ -238,9 +229,6 @@ function stateCommandStoreLookupSites(
         binding.storeName,
         binding.storeNameSourceAddressHandle ?? binding.sourceAddressHandle,
         [],
-        null,
-        null,
-        null,
         storeVisibility,
       ),
     ];
@@ -255,13 +243,15 @@ function stateBindingBehaviorStoreLookupSites(
 ): readonly StateStoreLookupSite[] {
   return expressionProductHandlesForRuntimeBinding(binding).flatMap((productHandle) => {
     const parse = readTemplateExpressionParse(publication, productHandle);
-    const ast = parse == null ? null : runtimeAcceptedBindingExpressionAstForParse(parse);
+    const ast = isRuntimeExpressionBinding(binding)
+      ? runtimeBindingSourceExpressionForProduct(publication, binding, productHandle)
+      : null;
     if (ast == null || parse?.sourceAddressHandle == null) {
       return [];
     }
     const sourceAddressHandle = parse.sourceAddressHandle;
     return bindingBehaviorResourceOccurrences(ast).flatMap(({ expression: behavior }) => {
-      if (behavior.name.name !== BuiltInBindingBehaviorName.State) {
+      if (behavior.name.name !== STATE_BINDING_BEHAVIOR_NAME) {
         return [];
       }
       const storeExpression = behavior.args[0] ?? null;
@@ -286,9 +276,6 @@ function stateBindingBehaviorStoreLookupSites(
           storeName,
           source.handle ?? sourceAddressHandle,
           source.records,
-          null,
-          null,
-          null,
           storeVisibility,
         ),
       ];
@@ -307,21 +294,4 @@ function stateStoreLookupIssueMessage(site: StateStoreLookupSite): string {
     case StateStoreLookupSiteKind.StateBindingBehavior:
       return `The state binding behavior references store "${site.storeName}", but no @aurelia/state store with that name is configured.`;
   }
-}
-
-function stateStoreLookupIssueLocalKey(
-  project: ProjectBootFrame,
-  site: StateStoreLookupSite,
-  index: number,
-): string {
-  return [
-    'state-store-lookup-issue',
-    site.kind,
-    localKeyPart(project.projectKey),
-    localKeyPart(site.storeName),
-    localKeyPart(site.sourcePath ?? 'template'),
-    site.start ?? 'address',
-    site.end ?? 'address',
-    index,
-  ].join(':');
 }

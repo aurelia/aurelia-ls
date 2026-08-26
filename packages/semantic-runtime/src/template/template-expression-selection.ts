@@ -39,6 +39,10 @@ import {
   MultiAttrInstruction,
   type TemplateInstruction,
 } from './instruction-ir.js';
+import {
+  ContentBinding,
+  InterpolationBinding,
+} from './runtime-binding.js';
 import type { TemplateResourceRuntimeAnalysisEmission } from './template-compilation-project-pass.js';
 import type { TemplateExpressionParse } from './value-site.js';
 import {
@@ -137,9 +141,17 @@ export function templateInstructionForExpressionProductHandle(
   resource: TemplateResourceRuntimeAnalysisEmission,
   expressionProductHandle: ProductHandle,
 ): TemplateInstruction | null {
-  return templateInstructionsInRuntimeAnalysis(resource).find((candidate) =>
+  return templateInstructionsForExpressionProductHandle(resource, expressionProductHandle)[0] ?? null;
+}
+
+/** Every effective instruction that evaluates one aggregate expression product. */
+export function templateInstructionsForExpressionProductHandle(
+  resource: TemplateResourceRuntimeAnalysisEmission,
+  expressionProductHandle: ProductHandle,
+): readonly TemplateInstruction[] {
+  return templateInstructionsInRuntimeAnalysis(resource).filter((candidate) =>
     expressionProductHandlesForInstruction(candidate).includes(expressionProductHandle)
-  ) ?? null;
+  );
 }
 
 export function runtimeExpressionBindingsForTemplateExpressionProductHandle(
@@ -151,6 +163,16 @@ export function runtimeExpressionBindingsForTemplateExpressionProductHandle(
     .filter(isRuntimeExpressionBinding);
 }
 
+/** Runtime bindings that spend one selected chain of an aggregate expression product. */
+export function runtimeExpressionBindingsForTemplateExpressionProductHandleAtChain(
+  resource: TemplateResourceRuntimeAnalysisEmission,
+  expressionProductHandle: ProductHandle,
+  expressionChainIndex: number,
+): readonly RuntimeExpressionBinding[] {
+  return runtimeExpressionBindingsForTemplateExpressionProductHandle(resource, expressionProductHandle)
+    .filter((binding) => runtimeBindingOwnsExpressionChain(binding, expressionChainIndex));
+}
+
 /** Runtime bindings for one expression product that can be evaluated from the ambient materialized scope. */
 export function runtimeExpressionBindingsForTemplateExpressionProductHandleInScope(
   resource: TemplateResourceRuntimeAnalysisEmission,
@@ -158,22 +180,34 @@ export function runtimeExpressionBindingsForTemplateExpressionProductHandleInSco
   scope: BindingScope,
   instructionScopes: RuntimeInstructionScopeLookup = instructionScopeLookup(resource.runtimeAnalysis.scopes.instructionScopes),
 ): readonly RuntimeExpressionBinding[] {
-  const instruction = templateInstructionForExpressionProductHandle(resource, expressionProductHandle);
-  if (instruction == null) {
-    return [];
-  }
   return runtimeExpressionBindingsForTemplateExpressionProductHandle(resource, expressionProductHandle)
     .filter((binding) =>
       bindingSourceScopeMatches(
         scope,
         instructionScopes.scopeForInstruction(
-          instruction.productHandle,
+          binding.instructionProductHandle,
           resource.runtimeAnalysis.runtimeRendering
             .requireRenderContextForBinding(binding.productHandle)
             .sourceController.productHandle,
         ),
       )
     );
+}
+
+/** Scope-filtered runtime bindings for one selected chain of an aggregate expression product. */
+export function runtimeExpressionBindingsForTemplateExpressionProductHandleInScopeAtChain(
+  resource: TemplateResourceRuntimeAnalysisEmission,
+  expressionProductHandle: ProductHandle,
+  expressionChainIndex: number,
+  scope: BindingScope,
+  instructionScopes: RuntimeInstructionScopeLookup = instructionScopeLookup(resource.runtimeAnalysis.scopes.instructionScopes),
+): readonly RuntimeExpressionBinding[] {
+  return runtimeExpressionBindingsForTemplateExpressionProductHandleInScope(
+    resource,
+    expressionProductHandle,
+    scope,
+    instructionScopes,
+  ).filter((binding) => runtimeBindingOwnsExpressionChain(binding, expressionChainIndex));
 }
 
 export function runtimeExpressionBindingsForTemplateExpressionParse(
@@ -191,11 +225,18 @@ export function bindingSourceEnvironmentSelectionForTemplateExpressionParseAtOff
   offset: number,
   ambientScope: BindingScope | null = null,
 ): RuntimeBindingSourceEnvironmentSelectionResult {
+  const aggregateExpression = bindingExpressionAstForProduct(store, expressionParse.productHandle);
   const expression = bindingExpressionAstForProductAtOffset(store, expressionParse.productHandle, offset)
     ?? ExpressionParseResultInspector.memberOwnerAtOffset(expressionParse.result, offset);
-  const bindings = ambientScope == null
+  const expressionChainIndex = templateExpressionChainIndexAtCursor(aggregateExpression, offset);
+  const candidateBindings = ambientScope == null
     ? runtimeExpressionBindingsForTemplateExpressionParse(resource, expressionParse)
     : runtimeExpressionBindingsForTemplateExpressionParseInScope(resource, expressionParse, ambientScope);
+  const bindings = expressionChainIndex == null
+    ? candidateBindings
+    : candidateBindings.filter((binding) =>
+        runtimeBindingCanSupplyExpressionChainEnvironment(binding, expressionChainIndex)
+      );
   if (expression == null) {
     return selectRuntimeBindingSourceEnvironment(
       resource,
@@ -214,10 +255,6 @@ export function bindingSourceEnvironmentSelectionForTemplateExpressionParseAtOff
     store,
     resource,
     expressionParse.productHandle,
-    offset,
-  );
-  const expressionChainIndex = templateExpressionChainIndexAtCursor(
-    bindingExpressionAstForProduct(store, expressionParse.productHandle),
     offset,
   );
   const accessUseOwnsSourceEnvironment = accessUses.some((accessUse) =>
@@ -242,7 +279,6 @@ export function bindingSourceEnvironmentSelectionForTemplateExpressionParseAtOff
         sourceExpressions,
         bindingBehaviorForBinding: (binding) => bindingBehaviorEvaluationForTemplateExpression(
           resource,
-          expressionParse.productHandle,
           binding,
         ),
       });
@@ -265,8 +301,7 @@ function selectRuntimeBindingSourceEnvironment(
   bindings: readonly RuntimeExpressionBinding[],
   ambientScope: BindingScope | null,
 ): RuntimeBindingSourceEnvironmentSelectionResult {
-  const instruction = templateInstructionForExpressionParse(resource, expressionParse);
-  if (instruction == null) {
+  if (templateInstructionsForExpressionProductHandle(resource, expressionParse.productHandle).length === 0) {
     return {
       kind: RuntimeBindingSourceEnvironmentSelectionKind.Open,
       openReason: 'Template expression did not retain an effective runtime instruction.',
@@ -278,7 +313,7 @@ function selectRuntimeBindingSourceEnvironment(
       binding.productHandle,
     );
     const scope = ambientScope ?? instructionScopes.scopeForInstruction(
-      instruction.productHandle,
+      binding.instructionProductHandle,
       renderContext.sourceController.productHandle,
     );
     return scope == null
@@ -496,10 +531,9 @@ function bindingBehaviorEvaluationForRuntimeExpressionAccessUse(
 
 export function bindingBehaviorEvaluationForTemplateExpression(
   resource: TemplateResourceRuntimeAnalysisEmission,
-  expressionProductHandle: ProductHandle,
   binding: RuntimeExpressionBinding,
 ): CheckerExpressionTypeBindingBehaviorEvaluation {
-  const instruction = templateInstructionForExpressionProductHandle(resource, expressionProductHandle);
+  const instruction = templateInstructionForProductHandle(resource, binding.instructionProductHandle);
   return instruction instanceof MultiAttrInstruction
     ? CheckerExpressionTypeBindingBehaviorEvaluation.AstEvaluateOnly
     : bindingBehaviorEvaluationForRuntimeBindingSource(binding);
@@ -537,17 +571,36 @@ export function bindingScopesForTemplateExpressionParse(
   resource: TemplateResourceRuntimeAnalysisEmission,
   expressionParse: TemplateExpressionParse,
 ): readonly BindingScope[] {
-  const instruction = templateInstructionForExpressionParse(resource, expressionParse);
-  if (instruction == null) {
+  const instructions = templateInstructionsForExpressionProductHandle(resource, expressionParse.productHandle);
+  if (instructions.length === 0) {
     return [];
   }
+  const instructionHandles = new Set(instructions.map((instruction) => instruction.productHandle));
   return uniqueBindingScopes(
     resource.runtimeAnalysis.scopes.instructionScopes
       .filter((candidate) =>
-        candidate.instructionProductHandle === instruction.productHandle
+        instructionHandles.has(candidate.instructionProductHandle)
       )
       .map((candidate) => candidate.scope),
   );
+}
+
+function runtimeBindingOwnsExpressionChain(
+  binding: RuntimeExpressionBinding,
+  expressionChainIndex: number,
+): boolean {
+  if (binding instanceof ContentBinding) {
+    return binding.expressionChainIndex === expressionChainIndex;
+  }
+  return binding instanceof InterpolationBinding || expressionChainIndex === 0;
+}
+
+function runtimeBindingCanSupplyExpressionChainEnvironment(
+  binding: RuntimeExpressionBinding,
+  expressionChainIndex: number,
+): boolean {
+  return (binding instanceof ContentBinding && binding.expressionChainIndex == null)
+    || runtimeBindingOwnsExpressionChain(binding, expressionChainIndex);
 }
 
 export function templateInstructionForProductHandle(

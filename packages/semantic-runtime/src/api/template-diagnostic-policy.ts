@@ -12,10 +12,14 @@ import {
   RuntimeBindingDataFlowTypeMismatchKind,
   RuntimeBindingValueChannelKind,
 } from '../observation/runtime-binding-observation.js';
-import { bindingDataFlowDirectionIncludesSourceToTarget } from '../observation/binding-data-flow-direction.js';
+import {
+  bindingDataFlowDirectionIncludesSourceToTarget,
+  bindingDataFlowDirectionIncludesTargetToSource,
+} from '../observation/binding-data-flow-direction.js';
+import { runtimeAssignmentTargetAstForExpression } from '../expression/runtime-assignment.js';
 import {
   bindingExpressionAstForProduct,
-  runtimeAssignmentTargetAstForProduct,
+  bindingExpressionAstForProductChain,
 } from '../template/expression-parse-product.js';
 import {
   type RuntimeBindingScopeIssue,
@@ -443,12 +447,19 @@ export function bindingDataFlowDiagnosticSource(
   store: KernelStore,
   dataFlow: RuntimeBindingDataFlow,
 ): NonNullable<SemanticTemplateDiagnosticRow['source']> | null {
-  const expression = sourceAssignmentDiagnosticExpression(store, dataFlow);
+  const assignment = bindingDataFlowDirectionIncludesTargetToSource(dataFlow.direction);
+  const expression = assignment
+    ? sourceAssignmentDiagnosticExpression(store, dataFlow)
+    : runtimeDataFlowExpression(store, dataFlow);
   const span = expression?.span ?? null;
   if (span?.file == null) {
     return null;
   }
-  return sourceReferenceForParserSpan(span.file.path, span, 'binding-source-assignment');
+  return sourceReferenceForParserSpan(
+    span.file.path,
+    span,
+    assignment ? 'binding-source-assignment' : 'binding-source-expression',
+  );
 }
 
 function expressionRuntimeEvaluationDiagnosticForDataFlow(
@@ -560,17 +571,31 @@ function sourceAssignmentDiagnosticExpression(
   store: KernelStore,
   dataFlow: RuntimeBindingDataFlow,
 ): ExpressionAstNode | null {
-  return runtimeAssignmentTargetAstForProduct(store, dataFlow.expressionProductHandle);
+  const expression = runtimeDataFlowExpression(store, dataFlow);
+  return expression == null ? null : runtimeAssignmentTargetAstForExpression(expression);
 }
 
 function runtimeAstDiagnosticExpression(
   store: KernelStore,
   dataFlow: RuntimeBindingDataFlow,
 ): ExpressionAstNode | null {
-  const ast = bindingExpressionAstForProduct(store, dataFlow.expressionProductHandle);
+  const ast = runtimeDataFlowExpression(store, dataFlow);
   return ast == null
     ? null
     : runtimeAstDiagnosticExpressionForOpenKind(ast, dataFlow.sourceTypeOpenKind);
+}
+
+function runtimeDataFlowExpression(
+  store: KernelStore,
+  dataFlow: RuntimeBindingDataFlow,
+): ExpressionAstNode | null {
+  return dataFlow.expressionChainIndex == null
+    ? bindingExpressionAstForProduct(store, dataFlow.expressionProductHandle)
+    : bindingExpressionAstForProductChain(
+        store,
+        dataFlow.expressionProductHandle,
+        dataFlow.expressionChainIndex,
+      );
 }
 
 function runtimeAstDiagnosticExpressionForOpenKind(

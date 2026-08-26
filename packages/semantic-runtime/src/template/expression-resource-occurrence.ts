@@ -33,6 +33,14 @@ export function expressionResourceOccurrences(
   return resourceOccurrencesForChain(expression, 0, 0);
 }
 
+/** Walk one already-selected expression while retaining its aggregate interpolation-chain index. */
+export function expressionResourceOccurrencesAtChain(
+  expression: ExpressionAstNode,
+  expressionChainIndex: number,
+): readonly ExpressionResourceOccurrence[] {
+  return resourceOccurrencesForChain(expression, expressionChainIndex, 0);
+}
+
 export function bindingBehaviorResourceOccurrences(
   expression: ExpressionAstNode,
 ): readonly ExpressionResourceOccurrence<BindingBehaviorExpression>[] {

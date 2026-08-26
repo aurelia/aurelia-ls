@@ -1,4 +1,5 @@
 import { SemanticClaim } from '../kernel/claim.js';
+import { SourceSpanRole } from '../kernel/address.js';
 import {
   OpenSeam,
   OpenSeamReasonKind,
@@ -136,6 +137,7 @@ import {
   type TemplateValueSite,
 } from './value-site.js';
 import { TemplateProductDetails } from './product-details.js';
+import { sourceAddressForRuntimeExpressionSpan } from './runtime-expression-source-address.js';
 
 export interface CompiledTemplateMaterializationRequest {
   /** Store-local key for this compiled-template pass. */
@@ -977,50 +979,75 @@ class CompiledTemplateInstructionTraversal {
     if (parse == null || parse.resultKind === ExpressionParseResultKind.InterpolationAbsent) {
       return;
     }
-    const interpolation = parse.result.kind === ExpressionParseResultKind.InterpolationSuccess
-      ? parse.result.ast
-      : null;
-    const targetCount = interpolation?.expressions.length ?? 1;
-    const posture = interpolation == null
-      ? TemplateCompilerTargetRowPosture.Open
-      : targetCount > 1
-        ? TemplateCompilerTargetRowPosture.AggregateCompatibility
-        : TemplateCompilerTargetRowPosture.Complete;
-    const openSeamHandles = posture === TemplateCompilerTargetRowPosture.Complete
-      ? []
-      : [this.assemblyState.addOpenSeam(
-          `text-target-row:${node.productHandle}`,
-          interpolation == null
-            ? 'Text interpolation target rows remain open because the expression parse did not close.'
-            : `Text interpolation has ${targetCount} holes; the current compiled handoff still projects them through one aggregate compatibility row.`,
+    if (parse.result.kind !== ExpressionParseResultKind.InterpolationSuccess) {
+      const seam = this.assemblyState.addOpenSeam(
+        `text-target-row:${node.productHandle}`,
+        'Text interpolation target rows remain open because the expression parse did not close.',
+        node.sourceAddressHandle,
+        KernelVocabulary.Compiler.OpenTextExpansion.key,
+        [OpenSeamReasonKind.TemplateTextExpansionOpen],
+      );
+      const instruction = this.assemblyState.createInstruction(
+        `text-binding:${node.productHandle}:open`,
+        TemplateInstructionKind.TextBinding,
+        node.identityHandle,
+        node.sourceAddressHandle,
+        (productHandle, identityHandle) => new TextBindingInstruction(
+          productHandle,
+          identityHandle,
+          node.toReference(),
+          parse.productHandle,
+          null,
           node.sourceAddressHandle,
-          KernelVocabulary.Compiler.OpenTextExpansion.key,
-          [OpenSeamReasonKind.TemplateTextExpansionOpen],
-        ).handle];
-    contextPlan.appendRow(
-      `text:${node.productHandle}`,
-      node,
-      [
-        this.assemblyState.createInstruction(
-          `text-binding:${node.productHandle}`,
-          TemplateInstructionKind.TextBinding,
-          node.identityHandle,
-          node.sourceAddressHandle,
-          (productHandle, identityHandle) => new TextBindingInstruction(
-            productHandle,
-            identityHandle,
-            node.toReference(),
-            parse.productHandle,
-            node.sourceAddressHandle,
-            [],
-          ),
+          [],
         ),
-      ],
-      TemplateRenderTargetKind.MarkerTarget,
-      posture,
-      targetCount,
-      openSeamHandles,
-    );
+      );
+      contextPlan.appendRow(
+        `text:${node.productHandle}:open`,
+        node,
+        [instruction],
+        TemplateRenderTargetKind.MarkerTarget,
+        TemplateCompilerTargetRowPosture.Open,
+        1,
+        [seam.handle],
+      );
+      return;
+    }
+    parse.result.ast.expressions.forEach((expression, expressionChainIndex) => {
+      const expressionSource = sourceAddressForRuntimeExpressionSpan(
+        this.assemblyState.store,
+        `compiled-template:${this.input.localKey}:text:${node.productHandle}:expression:${expressionChainIndex}`,
+        parse.sourceAddressHandle,
+        expression.span,
+        SourceSpanRole.Range,
+      );
+      this.assemblyState.records.push(...expressionSource.records);
+      const instruction = this.assemblyState.createInstruction(
+        `text-binding:${node.productHandle}:expression:${expressionChainIndex}`,
+        TemplateInstructionKind.TextBinding,
+        node.identityHandle,
+        expressionSource.handle,
+        (productHandle, identityHandle) => new TextBindingInstruction(
+          productHandle,
+          identityHandle,
+          node.toReference(),
+          parse.productHandle,
+          expressionChainIndex,
+          expressionSource.handle,
+          [],
+        ),
+      );
+      contextPlan.appendRow(
+        `text:${node.productHandle}:expression:${expressionChainIndex}`,
+        node,
+        [instruction],
+        TemplateRenderTargetKind.MarkerTarget,
+        TemplateCompilerTargetRowPosture.Complete,
+        1,
+        [],
+        expressionSource.handle,
+      );
+    });
   }
 
   private visitLetElement(
@@ -2446,7 +2473,7 @@ export class CompiledTemplateMaterializer {
       handles.sequenceIdentityHandle,
       handles.targetProductHandle,
       instructionReferencesFor(row.instructions),
-      row.node.sourceAddressHandle,
+      row.sourceAddressHandle,
     );
   }
 
@@ -2460,7 +2487,7 @@ export class CompiledTemplateMaterializer {
       row.targetKind,
       row.node.toReference(),
       handles.sequenceProductHandle,
-      row.node.sourceAddressHandle,
+      row.sourceAddressHandle,
       [],
     );
   }

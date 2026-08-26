@@ -1,36 +1,57 @@
+import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { describe, expect, test } from 'vitest';
 
+import { SemanticAppQueryKind } from '../src/api/contracts.js';
 import { createSemanticRuntime } from '../src/api/runtime.js';
+import { ExpressionParseResultKind } from '../src/expression/parse-result-algebra.js';
+import type { AddressHandle } from '../src/kernel/handles.js';
+import {
+  NodeSemanticRuntimeProjectInputHost,
+  SemanticRuntimeProjectInputAuthority,
+} from '../src/kernel/project-input.js';
+import { sourceSpanAddressForAddress } from '../src/kernel/source-address.js';
+import type { KernelStoreReadView } from '../src/kernel/store.js';
 import { OpenSeamReasonKind } from '../src/kernel/open-seam.js';
-import { KernelVocabulary } from '../src/kernel/vocabulary.js';
+import { runtimeBindingSourceExpression } from '../src/observation/runtime-binding-expression.js';
+import { RuntimeBindingDataFlowSourceKind } from '../src/observation/runtime-binding-observation.js';
+import { RuntimeExpressionOperationKind } from '../src/runtime-expression/runtime-expression-access-use.js';
+import { RuntimeOperationReachability } from '../src/runtime-expression/runtime-operation.js';
 import { CompiledTemplateState, TemplateRenderTargetKind } from '../src/template/compiled-template.js';
 import {
   TemplateCompilerTargetContextRole,
   TemplateCompilerTargetContextState,
   TemplateCompilerTargetRowPosture,
 } from '../src/template/compiler-target-plan.js';
-import { HtmlElement } from '../src/template/html-ir.js';
+import { HtmlElement, HtmlText } from '../src/template/html-ir.js';
 import {
   HydrateElementInstruction,
   HydrateLetElementInstruction,
   HydrateTemplateControllerInstruction,
   InterpolationInstruction,
   PropertyBindingInstruction,
+  TextBindingInstruction,
   type TemplateInstruction,
 } from '../src/template/instruction-ir.js';
+import { ContentBinding, RuntimeBindingKind } from '../src/template/runtime-binding.js';
+import {
+  bindingSourceEnvironmentSelectionForTemplateExpressionParseAtOffset,
+  RuntimeBindingSourceEnvironmentSelectionKind,
+  runtimeExpressionBindingsForTemplateExpressionProductHandleAtChain,
+} from '../src/template/template-expression-selection.js';
+
+const packageRoot = path.resolve(fileURLToPath(new URL('..', import.meta.url)));
 
 describe('template compiler fidelity', () => {
   test('conserves compiler closure, nested target contexts, empty let, containerless targets, and native instruction order', async () => {
-    const packageRoot = path.resolve(fileURLToPath(new URL('..', import.meta.url)));
     const fixtureRoot = path.join(packageRoot, 'fixtures/pressure/template-compiler-fidelity');
     const runtime = await createSemanticRuntime({
       workspaceRoot: fixtureRoot,
       storeKey: 'contract:template-compiler-fidelity',
     });
-    const app = await runtime.openApp({ analysisDepth: 'runtime-topology' });
+    const app = await runtime.openApp({ analysisDepth: 'binding-observation' });
     const resource = app.emission.templates.resources.find((candidate) =>
       candidate.compilation.definition.name === 'template-compiler-fidelity-app'
     );
@@ -44,16 +65,12 @@ describe('template compiler fidelity', () => {
     expect(compilation.bindingCommandLowering.openSeams).toHaveLength(1);
     expect(compilation.bindingCommandLowering.openSeams[0]?.summary)
       .toContain("Binding command 'open-command'");
-    expect(compiled.openSeams).toHaveLength(4);
+    expect(compiled.openSeams).toHaveLength(3);
     expect(compiled.openSeams).toContain(compilation.bindingCommandLowering.openSeams[0]);
     const textExpansionSeam = compiled.openSeams.find((seam) =>
       seam.reasonKinds.includes(OpenSeamReasonKind.TemplateTextExpansionOpen)
     );
-    expect(textExpansionSeam?.summary).toContain('2 holes');
-    expect(textExpansionSeam).toEqual(expect.objectContaining({
-      seamKindKey: KernelVocabulary.Compiler.OpenTextExpansion.key,
-      reasonKinds: [OpenSeamReasonKind.TemplateTextExpansionOpen],
-    }));
+    expect(textExpansionSeam).toBeUndefined();
     expect(compiled.compiledTemplate.state).toBe(CompiledTemplateState.Partial);
     expect(compiled.compiledTemplate.needsCompile).toBeNull();
 
@@ -105,8 +122,8 @@ describe('template compiler fidelity', () => {
     const rootRows = targetPlan.root.readRows();
     expect(targetPlan.root.state).toBe(TemplateCompilerTargetContextState.Open);
     expect(targetPlan.root.projectedTargetCount).toBe(14);
-    expect(rootRows).toHaveLength(13);
-    expect(compiled.renderTargets).toHaveLength(13);
+    expect(rootRows).toHaveLength(14);
+    expect(compiled.renderTargets).toHaveLength(14);
     expect(rootRows.map((row) => ({
       node: row.node instanceof HtmlElement ? row.node.tagName : row.node.text,
       projectedTargetOrdinal: row.projectedTargetOrdinal,
@@ -123,7 +140,8 @@ describe('template compiler fidelity', () => {
       { node: 'input', projectedTargetOrdinal: 6, projectedTargetCount: 1, posture: TemplateCompilerTargetRowPosture.Complete, targetKind: TemplateRenderTargetKind.MarkerTarget },
       { node: 'input', projectedTargetOrdinal: 7, projectedTargetCount: 1, posture: TemplateCompilerTargetRowPosture.Complete, targetKind: TemplateRenderTargetKind.MarkerTarget },
       { node: 'input', projectedTargetOrdinal: 8, projectedTargetCount: 1, posture: TemplateCompilerTargetRowPosture.Open, targetKind: TemplateRenderTargetKind.MarkerTarget },
-      { node: '${first} / ${second}', projectedTargetOrdinal: 9, projectedTargetCount: 2, posture: TemplateCompilerTargetRowPosture.AggregateCompatibility, targetKind: TemplateRenderTargetKind.MarkerTarget },
+      { node: '${first} / ${second}', projectedTargetOrdinal: 9, projectedTargetCount: 1, posture: TemplateCompilerTargetRowPosture.Complete, targetKind: TemplateRenderTargetKind.MarkerTarget },
+      { node: '${first} / ${second}', projectedTargetOrdinal: 10, projectedTargetCount: 1, posture: TemplateCompilerTargetRowPosture.Complete, targetKind: TemplateRenderTargetKind.MarkerTarget },
       { node: 'section', projectedTargetOrdinal: 11, projectedTargetCount: 1, posture: TemplateCompilerTargetRowPosture.Complete, targetKind: TemplateRenderTargetKind.RenderLocation },
       { node: 'containerless-card', projectedTargetOrdinal: 12, projectedTargetCount: 1, posture: TemplateCompilerTargetRowPosture.Complete, targetKind: TemplateRenderTargetKind.RenderLocation },
       { node: 'projection-card', projectedTargetOrdinal: 13, projectedTargetCount: 1, posture: TemplateCompilerTargetRowPosture.Complete, targetKind: TemplateRenderTargetKind.RenderLocation },
@@ -143,6 +161,121 @@ describe('template compiler fidelity', () => {
         ).map((instruction) => instruction.productHandle),
       );
     });
+    const multiHoleRows = rootRows.filter((row) =>
+      row.node instanceof HtmlText && row.node.text === '${first} / ${second}'
+    );
+    const multiHoleInstructions = multiHoleRows.flatMap((row) => row.instructions)
+      .filter((instruction): instruction is TextBindingInstruction => instruction instanceof TextBindingInstruction);
+    expect(multiHoleInstructions).toHaveLength(2);
+    expect(multiHoleInstructions.map((instruction) => instruction.expressionChainIndex)).toEqual([0, 1]);
+    expect(new Set(multiHoleInstructions.map((instruction) => instruction.expressionProductHandle)).size).toBe(1);
+    expect(new Set(multiHoleInstructions.map((instruction) => instruction.productHandle)).size).toBe(2);
+    expect(multiHoleRows.map((row) => row.sourceAddressHandle)).toEqual(
+      multiHoleInstructions.map((instruction) => instruction.sourceAddressHandle),
+    );
+    expect(multiHoleRows.map((row) => sourceTextForAddress(
+      runtime.workspace.store,
+      compilation.unit.templateSource.markup,
+      row.sourceAddressHandle,
+    ))).toEqual(['first', 'second']);
+    const multiHoleTargets = multiHoleRows.map((row) => compiled.renderTargets[row.ordinal]!);
+    const sequencesByHandle = new Map(compiled.instructionSequences.map((sequence) => [
+      sequence.productHandle,
+      sequence,
+    ]));
+    expect(multiHoleTargets.map((target) => target.sourceAddressHandle)).toEqual(
+      multiHoleRows.map((row) => row.sourceAddressHandle),
+    );
+    expect(multiHoleTargets.map((target) =>
+      sequencesByHandle.get(target.instructionSequenceProductHandle)?.sourceAddressHandle
+    )).toEqual(multiHoleRows.map((row) => row.sourceAddressHandle));
+    expect(new Set(multiHoleTargets.map((target) => target.productHandle)).size).toBe(2);
+    expect(new Set(multiHoleTargets.map((target) => target.instructionSequenceProductHandle)).size).toBe(2);
+
+    const expressionProductHandle = multiHoleInstructions[0]?.expressionProductHandle ?? null;
+    const multiHoleParse = compilation.valueSites.parses.find((parse) =>
+      parse.productHandle === expressionProductHandle
+    );
+    if (multiHoleParse == null) throw new Error('Expected the aggregate multi-hole parser product.');
+    const multiHoleBindings = resource.runtimeAnalysis.runtimeRendering.bindings
+      .filter((binding): binding is ContentBinding =>
+        binding instanceof ContentBinding && binding.expressionProductHandle === expressionProductHandle
+      );
+    expect(multiHoleBindings.map((binding) => binding.expressionChainIndex)).toEqual([0, 1]);
+    for (const expressionChainIndex of [0, 1]) {
+      expect(runtimeExpressionBindingsForTemplateExpressionProductHandleAtChain(
+        resource,
+        multiHoleParse.productHandle,
+        expressionChainIndex,
+      )).toEqual([multiHoleBindings[expressionChainIndex]]);
+      const source = sourceSpanAddressForAddress(
+        runtime.workspace.store,
+        multiHoleRows[expressionChainIndex]?.sourceAddressHandle ?? null,
+      );
+      if (source == null) throw new Error(`Expected source for interpolation hole ${expressionChainIndex}.`);
+      const selection = bindingSourceEnvironmentSelectionForTemplateExpressionParseAtOffset(
+        runtime.workspace.store,
+        resource,
+        multiHoleParse,
+        source.start,
+      );
+      expect(selection.kind).toBe(RuntimeBindingSourceEnvironmentSelectionKind.Context);
+      expect(selection.kind === RuntimeBindingSourceEnvironmentSelectionKind.Context
+        ? selection.sourceProjection?.expressionChainIndex
+        : null).toBe(expressionChainIndex);
+    }
+    expect(multiHoleBindings.map((binding) => runtimeBindingSourceExpression(
+      runtime.workspace.store,
+      binding,
+    ))).toEqual([
+      expect.objectContaining({ $kind: 'AccessScope', name: expect.objectContaining({ name: 'first' }) }),
+      expect.objectContaining({ $kind: 'AccessScope', name: expect.objectContaining({ name: 'second' }) }),
+    ]);
+    const multiHoleBindingHandles = new Set(multiHoleBindings.map((binding) => binding.productHandle));
+    expect(resource.runtimeAnalysis.bindingDataFlow.dataFlows
+      .filter((dataFlow) => dataFlow.binding.productHandle != null
+        && multiHoleBindingHandles.has(dataFlow.binding.productHandle))
+      .map((dataFlow) => ({
+        sourceName: dataFlow.sourceName,
+        expressionChainIndex: dataFlow.expressionChainIndex,
+      }))).toEqual([
+      { sourceName: 'first', expressionChainIndex: 0 },
+      { sourceName: 'second', expressionChainIndex: 1 },
+    ]);
+    expect(resource.runtimeAnalysis.expressionAccesses.accessUses
+      .filter((accessUse) => multiHoleBindingHandles.has(accessUse.ownerProductHandle))
+      .map((accessUse) => ({
+        operationKind: accessUse.operationKind,
+        operationIndex: accessUse.operationIndex,
+        source: sourceTextForAddress(
+          runtime.workspace.store,
+          compilation.unit.templateSource.markup,
+          accessUse.nameSourceAddressHandle,
+        ),
+      }))).toEqual([
+      { operationKind: RuntimeExpressionOperationKind.InterpolationPart, operationIndex: 0, source: 'first' },
+      { operationKind: RuntimeExpressionOperationKind.InterpolationPart, operationIndex: 1, source: 'second' },
+    ]);
+    const publicFlows = app.ask({
+      kind: SemanticAppQueryKind.BindingDataFlows,
+      detail: 'handles',
+      page: { size: 1_000 },
+    }).value.rows.filter((row) => row.definitionName === 'template-compiler-fidelity-app');
+    expect(publicFlows.some((row) =>
+      row.bindingKind === RuntimeBindingKind.Property
+        && row.sourceName === 'selection'
+        && row.expressionChainIndex === 0
+    )).toBe(true);
+    expect(publicFlows.filter((row) =>
+      row.bindingKind === RuntimeBindingKind.Content
+        && row.handles?.expressionProductHandle === multiHoleParse.productHandle
+    ).map((row) => ({
+      expressionChainIndex: row.expressionChainIndex,
+      source: sourceTextForPublicSource(compilation.unit.templateSource.markup, row.expressionSource),
+    }))).toEqual([
+      { expressionChainIndex: 0, source: 'first' },
+      { expressionChainIndex: 1, source: 'second' },
+    ]);
     const firstRootRow = rootRows[0]!;
     expect(() => targetPlan.root.appendRow(
       'late-row',
@@ -277,6 +410,239 @@ describe('template compiler fidelity', () => {
       posture: TemplateCompilerTargetRowPosture.Complete,
     }]);
   }, 30_000);
+
+  test('keeps resource planning and runtime analysis partitioned by hole across projection render contexts', async () => {
+    const fixtureRoot = path.join(packageRoot, 'fixtures/pressure/content-projection-topology');
+    const runtime = await createSemanticRuntime({
+      workspaceRoot: fixtureRoot,
+      storeKey: 'contract:template-text-hole-projection-fidelity',
+    });
+    const app = await runtime.openApp({ analysisDepth: 'binding-observation' });
+    const resource = app.emission.templates.resources.find((candidate) =>
+      candidate.compilation.definition.name === 'content-projection-topology-app'
+    );
+    if (resource == null) throw new Error('Expected the content-projection topology app resource.');
+
+    const node = resource.compilation.html.nodes.find((candidate): candidate is HtmlText =>
+      candidate instanceof HtmlText
+        && candidate.text === '${message | projectionLabel}: ${$host.exposedLabel}'
+    );
+    if (node == null) throw new Error('Expected the resource-bearing multi-hole text node.');
+    const instructions = resource.compilation.compiledTemplate.instructions
+      .filter((instruction): instruction is TextBindingInstruction =>
+        instruction instanceof TextBindingInstruction
+          && instruction.node.productHandle === node.productHandle
+      );
+    expect(instructions.map((instruction) => instruction.expressionChainIndex)).toEqual([0, 1]);
+    const expressionProductHandle = instructions[0]?.expressionProductHandle ?? null;
+    expect(expressionProductHandle).not.toBeNull();
+    expect(instructions.every((instruction) =>
+      instruction.expressionProductHandle === expressionProductHandle
+    )).toBe(true);
+    const parse = resource.compilation.valueSites.parses.find((candidate) =>
+      candidate.productHandle === expressionProductHandle
+    );
+    if (parse?.result.kind !== ExpressionParseResultKind.InterpolationSuccess) {
+      throw new Error('Expected one successful aggregate interpolation parse.');
+    }
+    expect(parse.result.ast.expressions.map((expression) => sourceTextForSpan(
+      resource.compilation.unit.templateSource.markup,
+      expression.span.start,
+      expression.span.end,
+    ))).toEqual(['message | projectionLabel', '$host.exposedLabel']);
+
+    const instructionHandles = new Set(instructions.map((instruction) => instruction.productHandle));
+    const bindings = resource.runtimeAnalysis.runtimeRendering.bindings
+      .filter((binding): binding is ContentBinding =>
+        binding instanceof ContentBinding
+          && binding.node.productHandle === node.productHandle
+          && instructionHandles.has(binding.instructionProductHandle)
+      );
+    expect(bindings).toHaveLength(4);
+    expect(bindings.map((binding) => binding.expressionChainIndex).sort()).toEqual([0, 0, 1, 1]);
+    const bindingsByController = Map.groupBy(bindings, (binding) =>
+      resource.runtimeAnalysis.runtimeRendering
+        .requireRenderContextForBinding(binding.productHandle)
+        .sourceController.productHandle
+    );
+    expect(bindingsByController.size).toBe(2);
+    expect([...bindingsByController.values()].every((controllerBindings) =>
+      controllerBindings.map((binding) => binding.expressionChainIndex).sort().join(',') === '0,1'
+    )).toBe(true);
+    expect(new Set(bindings.map((binding) =>
+      resource.runtimeAnalysis.runtimeRendering
+        .requireRenderContextForBinding(binding.productHandle)
+        .resourceScope.identityHandle
+    )).size).toBe(1);
+
+    const converterExpression = parse.result.ast.expressions[0]!;
+    if (converterExpression.$kind !== 'ValueConverter') {
+      throw new Error('Expected projectionLabel on interpolation chain zero.');
+    }
+    const converterEntries = resource.runtimeAnalysis.expressionResourcePlan
+      .readValueConverterEntries(parse.productHandle, converterExpression);
+    const chainZeroBindingHandles = new Set(bindings
+      .filter((binding) => binding.expressionChainIndex === 0)
+      .map((binding) => binding.productHandle));
+    const bindingHandles = new Set(bindings.map((binding) => binding.productHandle));
+    const flows = resource.runtimeAnalysis.bindingDataFlow.dataFlows.filter((dataFlow) =>
+      dataFlow.binding.productHandle != null && bindingHandles.has(dataFlow.binding.productHandle)
+    );
+    const accesses = resource.runtimeAnalysis.expressionAccesses.accessUses.filter((accessUse) =>
+      bindingHandles.has(accessUse.ownerProductHandle)
+    );
+    const dependencies = resource.runtimeAnalysis.bindingDataFlow.observedDependencies.filter((dependency) =>
+      dependency.binding.productHandle != null && bindingHandles.has(dependency.binding.productHandle)
+    );
+    expect(converterEntries).toHaveLength(2);
+    expect(flows).toHaveLength(4);
+    expect(accesses).toHaveLength(6);
+    expect(dependencies).toHaveLength(6);
+    for (const binding of bindings) {
+      const chainIndex = binding.expressionChainIndex;
+      const bindingConverters = converterEntries.filter((entry) =>
+        entry.binding.productHandle === binding.productHandle
+      );
+      const bindingFlows = flows.filter((dataFlow) =>
+        dataFlow.binding.productHandle === binding.productHandle
+      );
+      const bindingAccesses = accesses.filter((accessUse) =>
+        accessUse.ownerProductHandle === binding.productHandle
+      );
+      const bindingDependencies = dependencies.filter((dependency) =>
+        dependency.binding.productHandle === binding.productHandle
+      );
+      expect(bindingConverters).toHaveLength(chainIndex === 0 ? 1 : 0);
+      expect(bindingConverters.every((entry) =>
+        entry.chainIndex === 0
+          && entry.expressionIndex === 0
+          && entry.bindReachability === RuntimeOperationReachability.Reached
+          && chainZeroBindingHandles.has(entry.binding.productHandle)
+      )).toBe(true);
+      expect(bindingFlows).toEqual([
+        expect.objectContaining({
+          expressionChainIndex: chainIndex,
+          sourceName: chainIndex === 0 ? 'message' : '$host.exposedLabel',
+        }),
+      ]);
+      expect(bindingAccesses).toHaveLength(chainIndex === 0 ? 1 : 2);
+      expect(bindingAccesses.every((accessUse) =>
+        accessUse.operationKind === RuntimeExpressionOperationKind.InterpolationPart
+          && accessUse.operationIndex === chainIndex
+      )).toBe(true);
+      expect(bindingDependencies).toHaveLength(chainIndex === 0 ? 1 : 2);
+    }
+  }, 30_000);
+
+  test('retains authoring scope through explicitly open aggregate text rows without claiming a hole', async () => {
+    const fixtureRoot = path.join(packageRoot, 'fixtures/pressure/template-expression-resource-combinators');
+    const templatePath = path.join(fixtureRoot, 'src/invalid-expression-gallery.html');
+    const ambiguousText = '${label} / ${other |}';
+    const templateText = readFileSync(templatePath, 'utf8').replace('${label |}', ambiguousText);
+    const runtime = await createSemanticRuntime({
+      workspaceRoot: fixtureRoot,
+      storeKey: 'contract:template-text-open-row-fidelity',
+      projectInputAuthority: new SemanticRuntimeProjectInputAuthority(
+        new NodeSemanticRuntimeProjectInputHost({
+          readFile(fileName) {
+            return path.resolve(fileName) === templatePath ? templateText : undefined;
+          },
+          fileExists(fileName) {
+            return path.resolve(fileName) === templatePath ? true : undefined;
+          },
+        }),
+      ),
+    });
+    const app = await runtime.openApp({ analysisDepth: 'binding-observation' });
+    const resource = app.emission.templates.resources.find((candidate) =>
+      candidate.compilation.definition.name === 'invalid-expression-gallery'
+    );
+    if (resource == null) throw new Error('Expected the invalid expression gallery resource.');
+
+    const invalidTexts = [
+      ambiguousText,
+      '${label | 1}',
+      '${label &}',
+      '${label & 1}',
+    ];
+    const rows = resource.compilation.compiledTemplate.targetPlan.readContexts()
+      .flatMap((context) => context.readRows());
+    for (const invalidText of invalidTexts) {
+      const node = resource.compilation.html.nodes.find((candidate): candidate is HtmlText =>
+        candidate instanceof HtmlText && candidate.text === invalidText
+      );
+      if (node == null) throw new Error(`Expected invalid text node '${invalidText}'.`);
+      const row = rows.find((candidate) => candidate.node.productHandle === node.productHandle);
+      expect(row).toEqual(expect.objectContaining({
+        posture: TemplateCompilerTargetRowPosture.Open,
+        projectedTargetCount: 1,
+        sourceAddressHandle: node.sourceAddressHandle,
+      }));
+      expect(row?.openSeamHandles).toHaveLength(1);
+      const seam = resource.compilation.compiledTemplate.openSeams.find((candidate) =>
+        candidate.handle === row?.openSeamHandles[0]
+      );
+      expect(seam?.reasonKinds).toContain(OpenSeamReasonKind.TemplateTextExpansionOpen);
+      const instruction = row?.instructions[0];
+      expect(instruction).toBeInstanceOf(TextBindingInstruction);
+      if (!(instruction instanceof TextBindingInstruction)) continue;
+      expect(instruction.expressionChainIndex).toBeNull();
+      expect(instruction.sourceAddressHandle).toBe(node.sourceAddressHandle);
+      const bindings = resource.runtimeAnalysis.runtimeRendering.bindings
+        .filter((binding): binding is ContentBinding =>
+          binding instanceof ContentBinding
+            && binding.instructionProductHandle === instruction.productHandle
+        );
+      expect(bindings).toHaveLength(1);
+      const binding = bindings[0]!;
+      expect(binding.expressionChainIndex).toBeNull();
+      expect(resource.runtimeAnalysis.expressionResourcePlan
+        .readSourceEvaluationReachability(binding.productHandle))
+        .toBe(RuntimeOperationReachability.Open);
+      expect(resource.runtimeAnalysis.expressionAccesses.accessUses.some((accessUse) =>
+        accessUse.ownerProductHandle === binding.productHandle
+      )).toBe(false);
+      expect(resource.runtimeAnalysis.bindingDataFlow.observedDependencies.some((dependency) =>
+        dependency.binding.productHandle === binding.productHandle
+      )).toBe(false);
+      const dataFlows = resource.runtimeAnalysis.bindingDataFlow.readDataFlowsForBinding(binding.productHandle);
+      expect(dataFlows).toEqual([
+        expect.objectContaining({
+          expressionChainIndex: null,
+          sourceKind: RuntimeBindingDataFlowSourceKind.Open,
+          sourceName: null,
+          sourceEvaluationReachability: RuntimeOperationReachability.Open,
+          bindingScope: expect.objectContaining({ productHandle: expect.any(String) }),
+        }),
+      ]);
+      const parse = resource.compilation.valueSites.parses.find((candidate) =>
+        candidate.productHandle === instruction.expressionProductHandle
+      );
+      if (parse == null) throw new Error(`Expected the parser product for '${invalidText}'.`);
+      const nodeSource = sourceSpanAddressForAddress(runtime.workspace.store, node.sourceAddressHandle);
+      if (nodeSource == null) throw new Error(`Expected the authored source for '${invalidText}'.`);
+      expect(bindingSourceEnvironmentSelectionForTemplateExpressionParseAtOffset(
+        runtime.workspace.store,
+        resource,
+        parse,
+        nodeSource.start + 2,
+      ).kind).toBe(RuntimeBindingSourceEnvironmentSelectionKind.Context);
+    }
+    const publicOpenFlows = app.ask({
+      kind: SemanticAppQueryKind.BindingDataFlows,
+      detail: 'handles',
+      page: { size: 1_000 },
+    }).value.rows.filter((row) =>
+      row.definitionName === 'invalid-expression-gallery'
+        && row.bindingKind === RuntimeBindingKind.Content
+        && row.expressionChainIndex == null
+    );
+    expect(publicOpenFlows).toHaveLength(invalidTexts.length);
+    expect(publicOpenFlows.every((row) =>
+      row.expressionParseResultKind !== ExpressionParseResultKind.InterpolationSuccess
+        && invalidTexts.includes(sourceTextForPublicSource(templateText, row.expressionSource) ?? '')
+    )).toBe(true);
+  }, 30_000);
 });
 
 function instructionsForTarget(
@@ -305,4 +671,30 @@ function flattenedSequenceInstructionHandles(
   return sequences.find((sequence) => sequence.productHandle === productHandle)?.instructions
     .map((instruction) => instruction.productHandle)
     ?? [];
+}
+
+function sourceTextForAddress(
+  store: KernelStoreReadView,
+  source: string,
+  sourceAddressHandle: AddressHandle | null,
+): string | null {
+  const address = sourceSpanAddressForAddress(store, sourceAddressHandle);
+  return address == null ? null : source.slice(address.start, address.end);
+}
+
+function sourceTextForSpan(
+  source: string,
+  start: number,
+  end: number,
+): string {
+  return source.slice(start, end);
+}
+
+function sourceTextForPublicSource(
+  source: string,
+  reference: { readonly start?: number | null; readonly end?: number | null } | null,
+): string | null {
+  return reference?.start == null || reference.end == null
+    ? null
+    : source.slice(reference.start, reference.end);
 }

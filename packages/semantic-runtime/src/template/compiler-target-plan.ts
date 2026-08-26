@@ -39,8 +39,6 @@ export const enum TemplateCompilerTargetRowPosture {
   Complete = 'complete',
   /** Target existence is known while one or more row instructions remain open. */
   Open = 'open',
-  /** Temporary one-row projection of several known logical targets. */
-  AggregateCompatibility = 'aggregate-compatibility',
 }
 
 /** Product/identity that caused and owns one compiler target context. */
@@ -90,6 +88,7 @@ export class TemplateCompilerTargetRowPlan {
     /** Authored target lineage retained until transformed occurrence realization joins this row. */
     readonly node: HtmlElement | HtmlText,
     readonly instructions: readonly TemplateInstruction[],
+    readonly sourceAddressHandle: AddressHandle | null,
   ) {}
 }
 
@@ -156,6 +155,7 @@ export class TemplateCompilerTargetContextPlan {
     posture: TemplateCompilerTargetRowPosture = TemplateCompilerTargetRowPosture.Complete,
     projectedTargetCount = 1,
     openSeamHandles: readonly OpenSeamHandle[] = [],
+    sourceAddressHandle: AddressHandle | null = node.sourceAddressHandle,
   ): TemplateCompilerTargetRowPlan | null {
     this.requireMutable();
     if (instructions.length === 0 && posture === TemplateCompilerTargetRowPosture.Complete) return null;
@@ -175,6 +175,7 @@ export class TemplateCompilerTargetContextPlan {
       targetKind,
       node,
       instructions,
+      sourceAddressHandle,
     );
     this.rows.push(row);
     this.nextTargetOrdinal += projectedTargetCount;
@@ -417,9 +418,5 @@ function rowPostureIsCoherent(row: TemplateCompilerTargetRowPlan): boolean {
         && row.openSeamHandles.length === 0;
     case TemplateCompilerTargetRowPosture.Open:
       return row.projectedTargetCount >= 1 && row.openSeamHandles.length > 0;
-    case TemplateCompilerTargetRowPosture.AggregateCompatibility:
-      return row.projectedTargetCount > 1
-        && row.instructions.length > 0
-        && row.openSeamHandles.length > 0;
   }
 }

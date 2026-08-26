@@ -80,6 +80,18 @@ export function runtimeAcceptedBindingExpressionAstForParse(
     ?? runtimeAcceptedInterpolationAst(parse.result);
 }
 
+/** Select one runtime-evaluable chain while retaining the parser product as aggregate authority. */
+export function runtimeAcceptedBindingExpressionAstForParseChain(
+  parse: TemplateExpressionParse,
+  expressionChainIndex: number,
+): ExpressionAstNode | null {
+  const aggregate = runtimeAcceptedBindingExpressionAstForParse(parse);
+  if (aggregate?.$kind === 'Interpolation') {
+    return aggregate.expressions[expressionChainIndex] ?? null;
+  }
+  return expressionChainIndex === 0 ? aggregate : null;
+}
+
 export function runtimeAssignmentTargetAstForParse(
   parse: TemplateExpressionParse,
 ): ExpressionAstNode | null {

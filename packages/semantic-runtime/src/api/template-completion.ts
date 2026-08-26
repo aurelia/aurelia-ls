@@ -60,6 +60,7 @@ import {
 } from '../di/registration-open-pressure.js';
 import type { RuntimeBindingScopeIssue } from '../template/runtime-binding-scope-issue.js';
 import type { RuntimeBindingIssue } from '../template/runtime-binding-issue.js';
+import type { RuntimeBindingDataFlow } from '../observation/runtime-binding-observation.js';
 import {
   RuntimeBindingBehaviorIssueKind,
   type RuntimeBindingBehaviorIssue,
@@ -143,6 +144,7 @@ import {
 } from '../type-system/checker-member-surface.js';
 import { readOrProjectCheckerTypeMembersInProjection } from '../type-system/checker-type-member-surface.js';
 import { readCheckerReferenceSurface } from '../type-system/type-surface.js';
+import { CheckerExpressionTypeOpenKind } from '../type-system/expression-type-evaluation.js';
 import type { TemplateBindableReference } from '../template/compiler-world-reference.js';
 import { resolveSemanticSourceCursor } from './source-cursor.js';
 import {
@@ -2225,6 +2227,14 @@ function bindingDataFlowDiagnosticRowsForSelection(
     }
     const diagnostics = bindingDataFlowDiagnostics(store, dataFlow, source);
     return diagnostics.flatMap((diagnostic) => {
+      if (diagnostic.selectedMemberName != null && registrationCanHideDataFlowExpressionResource(
+        context.emission,
+        selection,
+        dataFlow,
+        diagnostic.selectedMemberName,
+      )) {
+        return [];
+      }
       const key = templateDiagnosticRowKey(diagnostic, source);
       if (context.seenRows.has(key)) {
         return [];
@@ -2258,6 +2268,32 @@ function bindingDataFlowDiagnosticRowsForSelection(
       }];
     });
   });
+}
+
+function registrationCanHideDataFlowExpressionResource(
+  emission: AureliaAppWorldProjectEmission,
+  selection: TemplateCompletionResourceSelection,
+  dataFlow: RuntimeBindingDataFlow,
+  resourceName: string,
+): boolean {
+  switch (dataFlow.sourceTypeOpenKind) {
+    case CheckerExpressionTypeOpenKind.MissingValueConverterResource:
+      return registrationCanHideNamedResource(
+        emission,
+        selection,
+        ResourceDefinitionKind.ValueConverter,
+        resourceName,
+      );
+    case CheckerExpressionTypeOpenKind.MissingBindingBehaviorResource:
+      return registrationCanHideNamedResource(
+        emission,
+        selection,
+        ResourceDefinitionKind.BindingBehavior,
+        resourceName,
+      );
+    default:
+      return false;
+  }
 }
 
 function expressionRootDiagnosticRowsForSelection(

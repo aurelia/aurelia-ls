@@ -432,6 +432,7 @@ describe('product-detail structural references', () => {
       null,
       expressionParseProduct,
       null,
+      null,
       RuntimeBindingDataFlowDirection.SourceToTarget,
       RuntimeOperationRealization.Direct,
       RuntimeBindingSourceEvaluationKind.ConnectableRead,

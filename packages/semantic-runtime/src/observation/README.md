@@ -776,10 +776,12 @@ retains prospective source/target types, assignment pressure, and the cause of t
 not publish runtime observed dependencies. Binding-observed dependencies therefore remain evidence of a connectable
 read the modeled runtime can actually enter, not merely of syntax that would have been readable if bind had succeeded.
 `RuntimeExpressionResourcePlan` is the lifecycle authority behind that aggregate answer and behind each independently
-bound interpolation part. Source-expression contexts carry the exact expression product and interpolation chain index;
-an earlier part's bind failure marks later parts `blocked-by-bind-failure`, while a failure inside one wrapper chain
-marks structurally inner wrappers `blocked-by-outer-failure`. Scope projection owns only the post-behavior `BindingScope`
-handoff and must not cache or restate either reachability axis.
+bound interpolation part. Source-expression contexts carry the exact expression product and interpolation chain index.
+An aggregate attribute interpolation preserves source-order failure between its parts; compiler-lowered text has one
+`ContentBinding` per hole, so each binding plans only its selected chain. A failure inside either wrapper chain marks
+structurally inner wrappers `blocked-by-outer-failure`. Cross-binding abort in the controller's ordered binding loop is a
+separate activation-order frontier and is not inferred from text adjacency. Scope projection owns only the post-behavior
+`BindingScope` handoff and must not cache or restate either reachability axis.
 Ordinary
 `AccessScope`, `AccessMember`, and `AccessKeyed` reads become `binding-observed-dependencies` rows. Collection method
 calls such as `map(...)` become collection-read rows only when TypeChecker receiver facts can still be a runtime array,
@@ -868,11 +870,13 @@ overlay rows for `& state`, i18n evaluate-only keys, recursive render-context sc
 and post-bind source-evaluation reachability. A blocked or non-evaluated expression remains authoring-addressable
 through its resolution without manufacturing an executable use or connectable dependency. See
 [../runtime-expression/README.md](../runtime-expression/README.md) for the owning layered contract.
-Binding transport and access occurrence cardinality are deliberately independent. One interpolation/class/style
-binding still publishes one aggregate data-flow transport, while each interpolation hole keeps its own operation and
-access-use rows. The transport's source projection therefore uses the aggregate expression plus the common retained
-scope; it must not disappear merely because the occurrence lane contains several holes, and it must not be cloned once
-per hole.
+Binding transport and access occurrence cardinality are deliberately independent. One attribute
+interpolation/class/style binding still publishes one aggregate data-flow transport while each contained hole keeps its
+own operation and access-use rows. Text interpolation is different: the compiler emits one `ContentBinding`, target
+operation, value channel, access-use family, observed-dependency family, and data-flow row per hole. Those products all
+retain the aggregate parse handle plus the original chain index; equal AST shapes in adjacent holes remain independent.
+One compiled text instruction may still produce several runtime binding/data-flow families when projection or recursive
+rendering spends it in several render contexts.
 Recursive rendering can expose one child binding through both its parent aggregate analysis and its own resource
 analysis. Project-wide observation producers therefore select `resourceLocalBindingObservedDependencies(...)` through
 the template runtime ownership boundary before publishing source-owned facts. Handle identity is compilation-context

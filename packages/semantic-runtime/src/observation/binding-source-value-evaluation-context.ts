@@ -44,7 +44,7 @@ export interface RuntimeBindingSourceValueKnownScopeProjectionRequest {
   readonly binding: RuntimeExpressionBinding | null;
   /** Parse product for a binding-owned source; null only when the binding has no parsed product or is ownerless. */
   readonly expressionProductHandle: ProductHandle | null;
-  /** Exact interpolation-hole index, or null for an aggregate interpolation or ownerless source. */
+  /** Ordinary/first lane zero, later interpolation-hole index, or null for aggregate/open/ownerless selection. */
   readonly expressionChainIndex: number | null;
   /** Binding source expression before runtime source-scope projection. */
   readonly expression: ExpressionAstNode;

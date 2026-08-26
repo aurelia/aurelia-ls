@@ -22,11 +22,11 @@ import {
 } from '../observation/observer-locator.js';
 import {
   expressionResourceOccurrences,
+  expressionResourceOccurrencesAtChain,
   isBindingBehaviorOccurrence,
   isValueConverterOccurrence,
   type ExpressionResourceOccurrence,
 } from './expression-resource-occurrence.js';
-import { bindingExpressionAstForProduct } from './expression-parse-product.js';
 import {
   findVisibleTemplateResource,
   readBuiltInVisibleTemplateResource,
@@ -86,6 +86,8 @@ import {
 } from './runtime-binding-target-resolution.js';
 import {
   isRuntimeExpressionBinding,
+  runtimeBindingSourceExpressionChainIndex,
+  runtimeBindingSourceExpressionForProduct,
   type RuntimeExpressionBinding,
 } from '../observation/runtime-binding-expression.js';
 
@@ -577,7 +579,12 @@ export class RuntimeExpressionResourcePlanner {
         activationReachability,
       );
       for (const [expressionIndex, expressionProductHandle] of expressionProductHandles.entries()) {
-        const ast = bindingExpressionAstForProduct(input.expressionWorld.projector.publication, expressionProductHandle);
+        const retainedChainIndex = runtimeBindingSourceExpressionChainIndex(binding);
+        const ast = runtimeBindingSourceExpressionForProduct(
+          input.expressionWorld.projector.publication,
+          binding,
+          expressionProductHandle,
+        );
         if (ast == null) {
           const reachability = activationReachability === RuntimeOperationReachability.Reached
             ? RuntimeOperationReachability.Open
@@ -589,10 +596,12 @@ export class RuntimeExpressionResourcePlanner {
               reachability,
             ),
           );
-          sourceEvaluationReachabilityByChain.set(
-            expressionChainKey(binding.productHandle, expressionProductHandle, 0),
-            reachability,
-          );
+          if (retainedChainIndex != null) {
+            sourceEvaluationReachabilityByChain.set(
+              expressionChainKey(binding.productHandle, expressionProductHandle, retainedChainIndex),
+              reachability,
+            );
+          }
           continue;
         }
         const initialMode = runtimeBindingInitialMode(binding);
@@ -605,7 +614,10 @@ export class RuntimeExpressionResourcePlanner {
         let currentChainIndex: number | null = null;
         let behaviorIndex = 0;
         let converterIndex = 0;
-        for (const occurrence of expressionResourceOccurrences(ast)) {
+        const resourceOccurrences = retainedChainIndex == null
+          ? expressionResourceOccurrences(ast)
+          : expressionResourceOccurrencesAtChain(ast, retainedChainIndex);
+        for (const occurrence of resourceOccurrences) {
           let chainState = chainStates.get(occurrence.chainIndex);
           if (chainState == null) {
             if (currentChainIndex !== occurrence.chainIndex) {
@@ -741,8 +753,10 @@ export class RuntimeExpressionResourcePlanner {
           }
         }
         let earlierChainFailed = false;
-        const chainCount = ast.$kind === 'Interpolation' ? ast.expressions.length : 1;
-        for (let chainIndex = 0; chainIndex < chainCount; chainIndex++) {
+        const chainIndexes = retainedChainIndex == null && ast.$kind === 'Interpolation'
+          ? ast.expressions.map((_expression, index) => index)
+          : [retainedChainIndex ?? 0];
+        for (const chainIndex of chainIndexes) {
           const chainState = chainStates.get(chainIndex) ?? null;
           const chainFailed = chainState?.blockedBy != null;
           const reachability = earlierChainFailed || chainFailed

@@ -6372,6 +6372,8 @@ export interface SemanticBindingDataFlowRow {
   readonly accessUseCount: number;
   readonly expressionParseState: TemplateExpressionParseState | `${TemplateExpressionParseState}` | null;
   readonly expressionParseResultKind: ExpressionParseResultKind | `${ExpressionParseResultKind}` | null;
+  /** Zero for an ordinary expression/first hole, N for a later hole, or null for aggregate/open selection. */
+  readonly expressionChainIndex: number | null;
   readonly valueSiteKind: TemplateValueSiteKind | `${TemplateValueSiteKind}` | null;
   readonly sourceKind: RuntimeBindingDataFlowSourceKind | `${RuntimeBindingDataFlowSourceKind}`;
   readonly sourceName: string | null;

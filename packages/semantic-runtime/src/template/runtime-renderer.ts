@@ -1710,6 +1710,7 @@ function renderContentRuntimeBinding(input: RuntimeRendererInvocation): RuntimeR
     input.renderer.toReference(),
     instruction.node,
     instruction.expressionProductHandle,
+    instruction.expressionChainIndex,
     [],
     instruction.sourceAddressHandle,
   ));

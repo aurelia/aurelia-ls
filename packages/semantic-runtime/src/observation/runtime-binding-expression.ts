@@ -6,7 +6,10 @@ import {
 import { SourceSpan } from '../expression/source-span.js';
 import type { ProductHandle } from '../kernel/handles.js';
 import type { ProductDetailReadView } from '../kernel/product-details.js';
-import { bindingExpressionAstForProduct } from '../template/expression-parse-product.js';
+import {
+  bindingExpressionAstForProduct,
+  bindingExpressionAstForProductChain,
+} from '../template/expression-parse-product.js';
 import {
   AttributeBinding,
   ContentBinding,
@@ -97,13 +100,39 @@ export function runtimeBindingSourceExpression(
   store: ProductDetailReadView,
   binding: RuntimeExpressionBinding,
 ): ExpressionAstNode | null {
-  const parsed = bindingExpressionAstForProduct(store, expressionProductHandleForBinding(binding));
+  return runtimeBindingSourceExpressionForProduct(
+    store,
+    binding,
+    expressionProductHandleForBinding(binding),
+  );
+}
+
+/** Rehydrates the binding source owned by one exact expression product, preserving a selected text hole. */
+export function runtimeBindingSourceExpressionForProduct(
+  store: ProductDetailReadView,
+  binding: RuntimeExpressionBinding,
+  expressionProductHandle: ProductHandle | null,
+): ExpressionAstNode | null {
+  const parsed = binding instanceof ContentBinding && binding.expressionChainIndex != null
+    ? bindingExpressionAstForProductChain(store, expressionProductHandle, binding.expressionChainIndex)
+    : bindingExpressionAstForProduct(store, expressionProductHandle);
   if (parsed != null) {
     return parsed;
   }
   return binding instanceof LetBinding && binding.literalValue != null
     ? new PrimitiveLiteralExpression(new SourceSpan(0, 0, null), binding.literalValue)
     : null;
+}
+
+/** Runtime-evaluable lane retained by one binding; null denotes aggregate or open selection. */
+export function runtimeBindingSourceExpressionChainIndex(
+  binding: RuntimeExpressionBinding,
+): number | null {
+  return binding instanceof ContentBinding
+    ? binding.expressionChainIndex
+    : binding instanceof InterpolationBinding
+      ? null
+      : 0;
 }
 
 /**

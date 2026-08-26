@@ -359,6 +359,8 @@ export class TextBindingInstruction {
     readonly identityHandle: IdentityHandle,
     readonly node: HtmlNodeReference,
     readonly expressionProductHandle: ProductHandle | null,
+    /** Exact runtime-evaluable hole, or null for an explicitly open aggregate compatibility instruction. */
+    readonly expressionChainIndex: number | null,
     readonly sourceAddressHandle: AddressHandle | null,
     readonly fieldProvenance: readonly FieldProvenance<TemplateInstructionField>[] = [],
   ) {}

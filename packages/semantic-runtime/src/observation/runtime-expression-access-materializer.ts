@@ -85,6 +85,7 @@ import {
   MultiAttrInstruction,
 } from '../template/instruction-ir.js';
 import {
+  ContentBinding,
   RefBinding,
   SpreadValueBinding,
   type RuntimeBinding,
@@ -167,6 +168,7 @@ import {
   instructionScopeLookup,
   isRuntimeExpressionBinding,
   runtimeBindingSourceExpression,
+  runtimeBindingSourceExpressionChainIndex,
   type RuntimeExpressionBinding,
   type RuntimeInstructionScopeLookup,
 } from './runtime-binding-expression.js';
@@ -930,32 +932,34 @@ export class RuntimeExpressionAccessMaterializer {
       return accessContexts;
     }
     const expressionProductHandle = expressionProductHandleForBinding(binding);
+    const retainedChainIndex = runtimeBindingSourceExpressionChainIndex(binding);
     const lifecycle = runtimeBindingSourceLifecycle(binding, input.expressionResourcePlan);
     const sourceScope = context.instructionScopes.scopeForBinding(input.runtimeRendering, binding);
     const projections = context.sourceContexts.projectSourceExpressions({
       binding,
       expressionProductHandle,
-      expressionChainIndex: aggregateRuntimeBindingSourceExpressionChainIndex(expression),
+      expressionChainIndex: retainedChainIndex,
       expression,
       localKey: `${bindingLocal}:source`,
     });
     const authoredParts = runtimeBindingSourceExpressionParts(expression);
-    const interpolation = expression.$kind === 'Interpolation';
+    const interpolation = expression.$kind === 'Interpolation' || binding instanceof ContentBinding;
 
     projections.forEach((projection, index) => {
       const authoredPart = authoredParts[index] ?? expression;
+      const expressionChainIndex = projection.expressionChainIndex ?? retainedChainIndex ?? index;
       const chainLifecycle = runtimeBindingSourceChainLifecycle(
         binding,
         input.expressionResourcePlan,
         expressionProductHandle,
-        index,
+        expressionChainIndex,
       );
       accessContexts.push(this.sourceValueAccessContext(
         binding,
         expressionProductHandle,
         authoredPart,
         projection,
-        index,
+        expressionChainIndex,
         interpolation,
         chainLifecycle.evaluationKind,
         chainLifecycle.evaluationReachability,

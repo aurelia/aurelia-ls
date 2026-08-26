@@ -1536,6 +1536,7 @@ export function bindingDataFlowRow(
     accessUseCount: dataFlow.accessUseProductHandles.length,
     expressionParseState: parse?.state ?? null,
     expressionParseResultKind: parse?.resultKind ?? null,
+    expressionChainIndex: dataFlow.expressionChainIndex,
     valueSiteKind: parse?.site.siteKind ?? null,
     sourceKind: dataFlow.sourceKind,
     sourceName: dataFlow.sourceName,
@@ -1575,7 +1576,7 @@ export function bindingDataFlowRow(
     targetToSourceTypeMismatchKinds: dataFlow.targetToSourceTypeMismatchKinds,
     frameworkErrorCode: dataFlow.frameworkErrorCode,
     openReason: dataFlow.openReason,
-    expressionSource: describeAddress(store, parse?.sourceAddressHandle ?? null),
+    expressionSource: expressionSourceForDataFlow(store, dataFlow, parse),
     source: describeAddress(store, dataFlow.sourceAddressHandle),
     ...(handles ? {
       handles: {
@@ -1686,4 +1687,15 @@ function expressionParseForDataFlow(
   dataFlow: RuntimeBindingDataFlow,
 ): TemplateExpressionParse | null {
   return readTemplateExpressionParse(store, dataFlow.expressionProductHandle);
+}
+
+function expressionSourceForDataFlow(
+  store: KernelStore,
+  dataFlow: RuntimeBindingDataFlow,
+  parse: TemplateExpressionParse | null,
+): SemanticSourceReference | null {
+  const expression = parse == null ? null : completedTemplateExpressionAstForParse(parse);
+  return expression?.$kind === 'Interpolation' && dataFlow.expressionChainIndex != null
+    ? describeAddress(store, dataFlow.sourceAddressHandle)
+    : describeAddress(store, parse?.sourceAddressHandle ?? null);
 }

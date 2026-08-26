@@ -313,13 +313,16 @@ classification, expression parsing, and instruction lowering converge on the sam
 - `compiler-target-plan.ts` is the sole run-local owner of compiler context and row boundaries. The root plan feeds the
   existing `TemplateRenderTarget` publication directly; template-controller and projection child contexts retain exact
   known row boundaries, projected/logical target ordinals, target kinds, authored target lineage, and instruction
-  grouping. Row posture and context frontiers keep executable command/process effects and the current multi-hole text
-  aggregate from turning later projected ordinals into false exactness. Open command bodies still allocate their known
-  target row with an empty compatibility sequence; closed multi-hole text retains its known projected multiplicity and a
-  typed `compiler.open-text-expansion` seam until each hole owns an independent instruction/row. Their current singular child
-  `TemplateInstructionSequence` remains an explicitly named flat compatibility projection of those rows until exact
-  nested compiled contexts are durable. The plan is acyclic, sealed at assembly, and generation-local; transformed
-  marker/target occurrences join it only after compiler execution owns their creation.
+  grouping. Row posture and context frontiers keep executable command/process effects from turning later projected
+  ordinals into false exactness. Open command bodies still allocate their known target row with an empty compatibility
+  sequence. A closed text interpolation keeps one parser-owned aggregate expression product while each hole owns an
+  independent complete target row, `TextBindingInstruction`, exact expression-range source, and stable chain index.
+  An incomplete text parse retains one explicitly open compatibility row/instruction with a null aggregate chain
+  selector so MCP and IDE keep the instruction-to-scope handoff without making that row AOT-emittable. A typed
+  `compiler.open-text-expansion` seam owns that uncertainty. The current singular child `TemplateInstructionSequence`
+  remains an explicitly named flat compatibility projection of nested context rows until exact child compiled contexts
+  are durable. The plan is acyclic, sealed at assembly, and generation-local; transformed marker/target occurrences join
+  it only after compiler execution owns their creation.
 - `compiled-template.ts` and `compiled-template-materializer.ts` model the normalized compiler/runtime handoff behind
   the runtime's transformed template DOM, target rows, surrogate rows, and `ICompiledElementComponentDefinition`
   instructions. The current product retains authored-node-linked render targets and instruction sequences; it does not
@@ -542,13 +545,15 @@ classification, expression parsing, and instruction lowering converge on the sam
   owns `ast_behavior_not_found` (`AUR0101`) at bind time. The bind-state application set also mirrors runtime-html's
   outer-to-inner `astBind(...)` traversal so a repeated behavior name publishes `ast_behavior_duplicated` (`AUR0102`)
   on the second bind attempt before behavior-specific effects run.
-  Interpolation bindings are handled as runtime-html handles them: each interpolation hole behaves like an
-  `InterpolationPartBinding` expression for bind-time behavior and value-converter publication, rather than treating the
-  outer interpolation string as an inert wrapper. Parts bind in source order, so a resource-bind failure keeps the
-  failing part's earlier wrappers visible, blocks inner wrappers as `blocked-by-outer-failure`, and blocks every later
-  part as `blocked-by-bind-failure`, including parts with no expression resource of their own. The complete
-  interpolation source operation remains blocked when any part cannot bind, while access-use rows retain each part's
-  own reachability. `RuntimeOperationReachability` is the sole vocabulary
+  Attribute `InterpolationBinding` and compiler-lowered text do not share one runtime cardinality. Attribute
+  interpolation retains one aggregate binding whose holes behave like `InterpolationPartBinding` expressions for
+  bind-time behavior and value-converter publication. Its parts bind in source order, so a resource-bind failure keeps
+  the failing part's earlier wrappers visible, blocks inner wrappers as `blocked-by-outer-failure`, and blocks every
+  later part as `blocked-by-bind-failure`. Text compilation instead emits one `ContentBinding` per hole. Each text
+  binding plans only its selected aggregate chain; resource, access, value-channel, and data-flow consumers retain that
+  original chain index rather than replaying every sibling hole. Aurelia can still abort the controller-wide sequential
+  binding loop when an earlier binding throws. That cross-binding activation order is not closed yet and must not be
+  approximated by a text-only failure coordinator. `RuntimeOperationReachability` is the sole vocabulary
   for both bind and later phase reachability; do not reintroduce a narrower bind-only enum. Behavior application and
   issue products source to the exact behavior name span when the carrier comes from an admitted source file, not just
   the whole binding carrier span.

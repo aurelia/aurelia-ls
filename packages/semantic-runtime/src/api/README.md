@@ -1914,6 +1914,11 @@ value-converter/repeat local that lost element specificity. For member writes wh
 Public binding projections use the same combined template basis as diagnostics: app-runtime resources plus any
 source-selected authoring resources opened for resource-library/package pressure. Keep those bases aligned; otherwise
 diagnostic rows and binding data-flow rows count different template worlds in monorepo/resource-library pressure.
+Detailed `BindingDataFlows` rows expose `expressionChainIndex`. Zero is the sole lane of an ordinary expression or the
+first interpolation hole, a larger number selects a later hole, and null means aggregate evaluation or an open
+authoring row that cannot select a hole yet. For closed text interpolation, `expressionSource` is the exact selected
+hole rather than the whole authored text carrier. This lets AOT/source-map consumers distinguish equal sibling
+expressions without requiring a second parse product per hole.
 
 `RuntimeControllers` exposes controller frames created or reached during runtime `Rendering`, including the resource
 definition, creating instruction, parent/child counts, binding count, scope presence, template-controller flow/cardinality
@@ -2093,7 +2098,8 @@ Use `BindingDataFlowSummary` first when a client needs a compact explanation of 
 assignability/writeback pressure, framework error codes, issue rollups, and the source roots involved. Pass
 `page.size: 0` for an issue-rollup-only first read, then page summary or raw data-flow rows after the issue kind,
 target/value-channel family, or source root is known. Detailed rows report binding
-direction, source-evaluation lifecycle, parser publication state/result kind, value-site kind, source expression lane/name/root/type, raw target
+direction, source-evaluation lifecycle, parser publication state/result kind, value-site kind, source expression
+`expressionChainIndex`/name/root/type, raw target
 property type, observer/direct-operation runtime value type, TypeChecker source-type pressure, source writability for
 target-to-source flows, target mutation policy, TypeChecker assignability checks in the active directions, optional framework error code, source
 address, exact `expressionSource`, optional handles, and row-local runtime data-flow open pressure. Flow direction records
