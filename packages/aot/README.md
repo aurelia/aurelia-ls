@@ -23,6 +23,7 @@ pnpm --filter @aurelia-ls/aot typecheck:test
 pnpm --filter @aurelia-ls/aot test
 pnpm --filter @aurelia-ls/aot oracle:browser
 pnpm --filter @aurelia-ls/aot oracle:jit -- --query=property-binding
+pnpm --filter @aurelia-ls/aot oracle:semantic -- --timing
 ```
 
 `oracle:browser` is a separate 17-case batched Chromium contract and is intentionally absent from the default fast
@@ -41,6 +42,30 @@ framework DI containers per case, registers definition dependencies in the child
 aggregate and slow-case timing, bounds failure output, and supports query/id/tag filters, stable shards, repetition,
 fail-fast, list, and JSON modes. This keeps large corpus iteration cheap and makes external process sharding possible
 without sharing mutable compiler containers.
+
+`oracle:semantic` is a separate observation lane over the same 46 canonical compiler worlds. It generates one
+in-memory Aurelia source gallery and asks the real semantic-runtime app/compiler front door to analyze every admitted
+definition in one generation, amortizing TypeChecker, static evaluation, DI, and framework support. The current
+adapter admits 31 markup/no-setup worlds and reports all 15 unsupported worlds with typed reasons; it never filters
+them into apparent success. Each observation retains the canonical world fingerprint, declared effects, actual
+semantic compiler profile, root/surrogate instruction kinds, diagnostics, open seams, and authored recovery counts.
+The receipt explicitly labels the current compiler-input tree profile as authored HTML; the browser-effective products
+are materialized in semantic-runtime but are not yet connected to the production compiler front door.
+
+This lane is raw conservation pressure, not a parity oracle. Semantic-runtime currently fixes `debug=false` and
+`resolveResources=true`, while the JIT characterizations use `resolveResources=false`; gallery cases also share a
+resource scope, use generated concrete definition types, and traverse authored rather than browser-effective compiler
+structure. Those differences are explicit on every admitted row and recomputed from the observed compiler profile. The
+semantic product still lacks the final compiler-mutated tree required by most `template.outerHTML` invariants, and no
+standalone lane may satisfy a cross-lane equivalence claim. A later coordinator must validate both authority-bound
+receipts, compare an exhaustive shared product, and only then feed satisfied claim IDs into the obligation audit.
+
+The public template-compilation summary contributes its own portable source/model basis. Rich compiler observations
+currently come from a synchronous `app.emission` bracket, are currentness-checked again before egress, and deliberately
+report no portable observation basis; the runtime incarnation is retired before the JSON result returns. They cannot
+feed a later coordinator until semantic-runtime exposes a generation-guarded rich compiler-product query/capability.
+The CLI separately content-addresses the executed AOT and semantic-runtime JavaScript trees and the full dirty-worktree
+delta so an ignored or already-dirty build artifact cannot masquerade as unchanged authority.
 
 Vitest is reserved for harness and contract invariants. The current 46-case JIT registry spans compile-entry bypass,
 diagnostics, static/debug markup, bindings/interpolation/let, slots/projection, surrogates, compileSpread, resource
@@ -72,6 +97,8 @@ pnpm --filter @aurelia-ls/aot oracle:jit -- --list
 pnpm --filter @aurelia-ls/aot oracle:jit:built -- --audit
 pnpm --filter @aurelia-ls/aot oracle:jit:built -- --tag=binding --repeat=20 --timing
 node packages/aot/scripts/run-jit-oracle.mjs --shard=1/4 --json
+pnpm --filter @aurelia-ls/aot oracle:semantic:built -- --list
+node packages/aot/scripts/run-semantic-compiler-oracle.mjs --shard=1/4 --json
 ```
 
 Machine consumers should build once and invoke the Node runner directly (or use a silent package-script invocation) so
