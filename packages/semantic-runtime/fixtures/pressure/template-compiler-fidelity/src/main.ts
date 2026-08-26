@@ -2,6 +2,7 @@ import {
   Aurelia,
   customElement,
   StandardConfiguration,
+  templateController,
 } from '@aurelia/runtime-html';
 import {
   bindingCommand,
@@ -32,8 +33,44 @@ class OpenCommand implements BindingCommandInstance {
 class ContainerlessCard {}
 
 @customElement({
+  name: 'shadow-containerless-card',
+  containerless: true,
+  shadowOptions: { mode: 'open' },
+  template: '<slot></slot>',
+})
+class ShadowContainerlessCard {}
+
+@templateController('row-outer')
+class RowOuterTemplateController {}
+
+@templateController('row-inner')
+class RowInnerTemplateController {}
+
+@customElement({
+  name: 'projection-card',
+  template: '<au-slot></au-slot><au-slot name="named"></au-slot>',
+})
+class ProjectionCard {}
+
+@customElement({
+  name: 'open-classification-probe',
+  template: '<div $bindables></div><div row-outer $bindables><span title.bind="value"></span></div>',
+  dependencies: [RowOuterTemplateController],
+})
+class OpenClassificationProbe {
+  value = '';
+}
+
+@customElement({
   name: 'template-compiler-fidelity-app',
-  dependencies: [ContainerlessCard],
+  dependencies: [
+    ContainerlessCard,
+    OpenClassificationProbe,
+    ProjectionCard,
+    RowOuterTemplateController,
+    RowInnerTemplateController,
+    ShadowContainerlessCard,
+  ],
   template,
 })
 class TemplateCompilerFidelityApp {

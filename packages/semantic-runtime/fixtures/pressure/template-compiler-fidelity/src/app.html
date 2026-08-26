@@ -1,5 +1,6 @@
 <let></let>
-<containerless-card></containerless-card>
+<containerless-card $bindables></containerless-card>
+<shadow-containerless-card><span title.bind="first"></span></shadow-containerless-card>
 <select value.bind="selection" multiple.bind="multiple"></select>
 <input type="checkbox" checked.bind="checked" value.bind="value">
 <input type="checkbox" checked.bind="checked" model.bind="model">
@@ -7,3 +8,9 @@
 <input type="checkbox" checked.bind="checked" disabled.bind="disabled" model.bind="model">
 <input value.open-command="value">
 <p>${first} / ${second}</p>
+<section row-outer row-inner title.bind="value"><strong>${first}</strong></section>
+<containerless-card row-outer></containerless-card>
+<projection-card row-outer>
+  <span>${first}</span>
+  <template au-slot="named"><b title.bind="second"></b></template>
+</projection-card>

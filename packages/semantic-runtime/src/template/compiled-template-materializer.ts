@@ -1,4 +1,4 @@
-import { SemanticClaim, claimsForProduct } from '../kernel/claim.js';
+import { SemanticClaim } from '../kernel/claim.js';
 import {
   OpenSeam,
   OpenSeamReasonKind,
@@ -12,6 +12,7 @@ import type {
   AddressHandle,
   EvidenceHandle,
   IdentityHandle,
+  OpenSeamHandle,
   ProductHandle,
   ProvenanceHandle,
 } from '../kernel/handles.js';
@@ -56,8 +57,8 @@ import type {
   AttributeClassificationEmission,
 } from './attribute-classification-materializer.js';
 import {
-  AttributeClassification,
   AttributeClassificationKind,
+  type AttributeClassification,
   type AttributeSyntax,
 } from './attribute-syntax.js';
 import type { AttributeSyntaxParseEmission } from './attribute-syntax-materializer.js';
@@ -69,17 +70,23 @@ import {
   TemplateRenderTarget,
   TemplateRenderTargetKind,
 } from './compiled-template.js';
+import {
+  TemplateCompilerTargetPlan,
+  TemplateCompilerTargetRowPosture,
+  type TemplateCompilerTargetContextPlan,
+  type TemplateCompilerTargetRowPlan,
+} from './compiler-target-plan.js';
 import type { TemplateCompilationUnit } from './compilation-unit.js';
 import type { TemplateCompilerWorldEmission } from './compiler-world-materializer.js';
 import type { TemplateCompilerReadView } from './compiler-read-view.js';
 import {
-  HtmlAttribute,
   HtmlElement,
-  HtmlElementAttributeOwner,
   HtmlText,
   hasHtmlAttribute,
   htmlElementAttributeOwnersByElementProduct,
   htmlElementLookupName,
+  type HtmlAttribute,
+  type HtmlElementAttributeOwner,
   type HtmlIrNode,
 } from './html-ir.js';
 import type { HtmlParseEmission } from './html-parse-materializer.js';
@@ -110,19 +117,23 @@ import { instructionKindKeyFor } from './instruction-vocabulary.js';
 import { orderCompilerInstructionsForElement } from './compiler-instruction-order.js';
 import { TemplateSpecialAttributeName } from './special-attribute-source.js';
 import { runtimeAttributeName, runtimeElementResourceName } from './runtime-dom-name.js';
+import {
+  BindingCommandLoweringState,
+  type BindingCommandLowering,
+} from './binding-command-execution.js';
 import type { BindingCommandLoweringEmission } from './binding-command-lowering-materializer.js';
 import type { TemplateValueSiteEmission } from './value-site-materializer.js';
 import {
-  TemplateCompilerIssue,
   TemplateCompilerIssueKind,
   TemplateCompilerIssuePhase,
+  type TemplateCompilerIssue,
 } from './compiler-issue.js';
 import { TemplateCompilerIssuePublisher } from './compiler-issue-publication.js';
 import { TemplateCompilerFrameworkErrorCode } from './framework-error-code.js';
 import {
-  TemplateExpressionParse,
-  TemplateValueSite,
   TemplateValueSiteKind,
+  type TemplateExpressionParse,
+  type TemplateValueSite,
 } from './value-site.js';
 import { TemplateProductDetails } from './product-details.js';
 
@@ -155,6 +166,8 @@ export class CompiledTemplateEmission {
     readonly instructions: readonly TemplateInstruction[],
     readonly instructionSequences: readonly TemplateInstructionSequence[],
     readonly renderTargets: readonly TemplateRenderTarget[],
+    /** Run-local row/context authority; open seams still determine closure and nested flat sequences project from it. */
+    readonly targetPlan: TemplateCompilerTargetPlan,
     readonly issues: readonly TemplateCompilerIssue[],
     readonly openSeams: readonly OpenSeam[],
     readonly records: readonly KernelStoreRecord[],
@@ -177,15 +190,6 @@ class CompiledTemplateHandles {
   ) {}
 }
 
-class TargetDraft {
-  constructor(
-    readonly local: string,
-    readonly targetKind: TemplateRenderTargetKind,
-    readonly node: HtmlElement | HtmlText,
-    readonly instructions: readonly TemplateInstruction[],
-  ) {}
-}
-
 class NestedSequenceDraft {
   constructor(
     readonly productHandle: ProductHandle,
@@ -193,8 +197,12 @@ class NestedSequenceDraft {
     readonly ownerProductHandle: ProductHandle,
     readonly ownerIdentityHandle: IdentityHandle,
     readonly sourceAddressHandle: AddressHandle | null,
-    readonly instructions: readonly TemplateInstruction[],
+    readonly contextPlan: TemplateCompilerTargetContextPlan,
   ) {}
+
+  get instructions(): readonly TemplateInstruction[] {
+    return this.contextPlan.flattenInstructions();
+  }
 }
 
 class ProjectionSequenceDraft {
@@ -205,8 +213,12 @@ class ProjectionSequenceDraft {
     readonly ownerIdentityHandle: IdentityHandle,
     readonly slotName: string,
     readonly sourceAddressHandle: AddressHandle | null,
-    readonly instructions: readonly TemplateInstruction[],
+    readonly contextPlan: TemplateCompilerTargetContextPlan,
   ) {}
+
+  get instructions(): readonly TemplateInstruction[] {
+    return this.contextPlan.flattenInstructions();
+  }
 }
 
 class RenderTargetPublication {
@@ -257,7 +269,7 @@ class CompiledTemplateSequencePublications {
 
 class CompiledTemplateAssembly {
   constructor(
-    readonly targetDrafts: readonly TargetDraft[],
+    readonly targetPlan: TemplateCompilerTargetPlan,
     readonly surrogateInstructions: readonly TemplateInstruction[],
     readonly nestedSequenceDrafts: readonly NestedSequenceDraft[],
     readonly projectionSequenceDrafts: readonly ProjectionSequenceDraft[],
@@ -271,13 +283,6 @@ class CompiledTemplateAssembly {
   ) {}
 }
 
-type CompiledTemplateRowEmitter = (
-  local: string,
-  node: HtmlElement | HtmlText,
-  rowInstructions: readonly TemplateInstruction[],
-  targetKind?: TemplateRenderTargetKind,
-) => void;
-
 type ValueInstructionLane =
   | 'bindable'
   | 'custom-attribute'
@@ -290,6 +295,9 @@ interface ElementInstructionParts {
   readonly templateControllerInstructions: readonly HydrateTemplateControllerInstruction[];
   readonly bindableInstructions: readonly TemplateInstruction[];
   readonly capturedSyntaxProductHandles: readonly ProductHandle[];
+  readonly openDirectInstructionSeamHandles: readonly OpenSeamHandle[];
+  readonly openTemplateControllerSeamHandles: readonly OpenSeamHandle[];
+  readonly openStructuralSeamHandles: readonly OpenSeamHandle[];
   readonly hasProcessContentHook: boolean;
   readonly hasOpenProcessContentHook: boolean;
 }
@@ -300,6 +308,9 @@ interface ElementInstructionPartBuckets {
   readonly templateControllerInstructions: HydrateTemplateControllerInstruction[];
   readonly bindableInstructions: TemplateInstruction[];
   readonly capturedSyntaxProductHandles: ProductHandle[];
+  readonly openDirectInstructionSeamHandles: OpenSeamHandle[];
+  readonly openTemplateControllerSeamHandles: OpenSeamHandle[];
+  readonly openStructuralSeamHandles: OpenSeamHandle[];
   readonly hasProcessContentHook: boolean;
   readonly hasOpenProcessContentHook: boolean;
 }
@@ -324,6 +335,7 @@ class CompiledTemplateAssemblyIndexes {
   readonly syntaxByProduct: ReadonlyMap<ProductHandle, AttributeSyntax>;
   readonly classificationsByOwner: ReadonlyMap<ProductHandle, readonly AttributeClassification[]>;
   readonly commandInstructions: ReadonlyMap<ProductHandle, readonly TemplateInstruction[]>;
+  readonly commandLowerings: ReadonlyMap<ProductHandle, readonly BindingCommandLowering[]>;
   readonly parseBySite: ReadonlyMap<ProductHandle, TemplateExpressionParse>;
   readonly valueSiteByClassification: ReadonlyMap<ProductHandle, TemplateValueSite>;
   readonly textValueSiteByNode: ReadonlyMap<ProductHandle, TemplateValueSite>;
@@ -335,6 +347,7 @@ class CompiledTemplateAssemblyIndexes {
     this.syntaxByProduct = new Map(input.attributeSyntax.syntaxes.map((syntax) => [syntax.productHandle, syntax]));
     this.classificationsByOwner = classificationsByOwnerProduct(input.attributeClassification.classifications);
     this.commandInstructions = commandInstructionsByClassification(input);
+    this.commandLowerings = commandLoweringsByClassification(input);
     this.parseBySite = expressionParsesBySite(input);
     this.valueSiteByClassification = valueSitesByClassification(input);
     this.textValueSiteByNode = textValueSitesByNode(input.valueSites.sites);
@@ -350,7 +363,7 @@ class CompiledTemplateAssemblyState {
   readonly compilerReachableNodeProductHandles: ProductHandle[] = [];
   readonly nativeSlotOutlets: CompiledNativeSlotOutlet[] = [];
   readonly issues: TemplateCompilerIssue[] = [];
-  readonly targetDrafts: TargetDraft[] = [];
+  readonly targetPlan: TemplateCompilerTargetPlan;
   readonly surrogateInstructions: TemplateInstruction[] = [];
   readonly nestedSequenceDrafts: NestedSequenceDraft[] = [];
   readonly projectionSequenceDrafts: ProjectionSequenceDraft[] = [];
@@ -366,7 +379,6 @@ class CompiledTemplateAssemblyState {
   }[]>();
 
   private instructionIndex = 0;
-  private rowIndex = 0;
   private readonly compilerReachableNodeProducts = new Set<ProductHandle>();
   private readonly issuePublisher: TemplateCompilerIssuePublisher;
 
@@ -375,6 +387,10 @@ class CompiledTemplateAssemblyState {
     readonly input: CompiledTemplateMaterializationRequest,
     readonly source: CompiledTemplateSourceSet,
   ) {
+    this.targetPlan = new TemplateCompilerTargetPlan(
+      `compiled-template:${input.localKey}:targets`,
+      input.compilationUnit.rootContext,
+    );
     this.issuePublisher = new TemplateCompilerIssuePublisher(store);
     this.issues.push(...input.bindingCommandLowering.issues);
     this.openSeams.push(...input.bindingCommandLowering.openSeams);
@@ -386,7 +402,7 @@ class CompiledTemplateAssemblyState {
     addressHandle: AddressHandle | null,
     seamKindKey: OpenSeamKindKey = KernelVocabulary.Instruction.OpenInstruction.key,
     reasonKinds: readonly OpenSeamReasonKind[] = [OpenSeamReasonKind.FeatureNotYetModeled],
-  ): void => {
+  ): OpenSeam => {
     const seam = new OpenSeam(
       this.store.handles.openSeam(`compiled-template:${this.input.localKey}:assembly:${local}`),
       seamKindKey,
@@ -397,6 +413,7 @@ class CompiledTemplateAssemblyState {
     );
     this.openSeams.push(seam);
     this.records.push(seam);
+    return seam;
   };
 
   readonly addCompilerIssue = (
@@ -459,41 +476,18 @@ class CompiledTemplateAssemblyState {
     this.compilerReachableNodeProductHandles.push(node.productHandle);
   };
 
-  readonly emitRootRow = (
-    local: string,
-    node: HtmlElement | HtmlText,
-    rowInstructions: readonly TemplateInstruction[],
-    targetKind = TemplateRenderTargetKind.MarkerTarget,
-  ): void => {
-    if (rowInstructions.length === 0) {
-      return;
-    }
-    this.targetDrafts.push(new TargetDraft(
-      `${this.rowIndex++}:${local}`,
-      targetKind,
-      node,
-      rowInstructions,
-    ));
-  };
-
-  readonly emitNestedRow = (
-    nestedInstructions: TemplateInstruction[],
-  ) => (
-    _local: string,
-    _node: HtmlElement | HtmlText,
-    rowInstructions: readonly TemplateInstruction[],
-    _targetKind = TemplateRenderTargetKind.MarkerTarget,
-  ): void => {
-    nestedInstructions.push(...rowInstructions);
-  };
-
   readonly addNestedSequenceDraft = (
     ownerInstruction: HydrateTemplateControllerInstruction,
-    sequenceInstructions: readonly TemplateInstruction[],
+    contextPlan: TemplateCompilerTargetContextPlan,
   ): void => {
     const sequence = this.templateControllerChildSequences.get(ownerInstruction.productHandle);
     if (sequence == null) {
-      return;
+      throw new Error(
+        `Template-controller target context '${contextPlan.localKey}' has no child instruction-sequence allocation.`,
+      );
+    }
+    if (contextPlan.compatibilityInstructionSequenceProductHandle !== sequence.productHandle) {
+      throw new Error(`Template-controller target context '${contextPlan.localKey}' changed its child sequence handle.`);
     }
     this.nestedSequenceDrafts.push(new NestedSequenceDraft(
       sequence.productHandle,
@@ -501,14 +495,14 @@ class CompiledTemplateAssemblyState {
       ownerInstruction.productHandle,
       ownerInstruction.identityHandle,
       ownerInstruction.sourceAddressHandle,
-      sequenceInstructions,
+      contextPlan,
     ));
   };
 
   readonly addProjectionSequenceDraft = (
     ownerInstruction: HydrateElementInstruction,
     projection: HydrateElementProjectionInstructionSequence,
-    sequenceInstructions: readonly TemplateInstruction[],
+    contextPlan: TemplateCompilerTargetContextPlan,
   ): void => {
     const sequence = this.elementProjectionSequences
       .get(ownerInstruction.productHandle)
@@ -517,7 +511,10 @@ class CompiledTemplateAssemblyState {
         && candidate.productHandle === projection.instructionSequenceProductHandle
       ) ?? null;
     if (sequence == null) {
-      return;
+      throw new Error(`Projection target context '${contextPlan.localKey}' has no instruction-sequence allocation.`);
+    }
+    if (contextPlan.compatibilityInstructionSequenceProductHandle !== sequence.productHandle) {
+      throw new Error(`Projection target context '${contextPlan.localKey}' changed its child sequence handle.`);
     }
     this.projectionSequenceDrafts.push(new ProjectionSequenceDraft(
       sequence.productHandle,
@@ -526,13 +523,15 @@ class CompiledTemplateAssemblyState {
       ownerInstruction.identityHandle,
       sequence.slotName,
       sequence.sourceAddressHandle,
-      sequenceInstructions,
+      contextPlan,
     ));
   };
 
   toAssembly(): CompiledTemplateAssembly {
+    this.assertCompatibilityContextCoverage();
+    this.targetPlan.seal();
     return new CompiledTemplateAssembly(
-      this.targetDrafts,
+      this.targetPlan,
       this.surrogateInstructions,
       this.nestedSequenceDrafts,
       this.projectionSequenceDrafts,
@@ -544,6 +543,25 @@ class CompiledTemplateAssemblyState {
       this.issues,
       this.openSeams,
     );
+  }
+
+  private assertCompatibilityContextCoverage(): void {
+    const projectedContexts = [
+      ...this.nestedSequenceDrafts.map((draft) => draft.contextPlan),
+      ...this.projectionSequenceDrafts.map((draft) => draft.contextPlan),
+    ];
+    const uniqueProjectedContexts = new Set(projectedContexts);
+    const expectedContexts = this.targetPlan.readContexts().filter((context) => context !== this.targetPlan.root);
+    if (
+      uniqueProjectedContexts.size !== projectedContexts.length
+      || uniqueProjectedContexts.size !== expectedContexts.length
+      || expectedContexts.some((context) =>
+        !uniqueProjectedContexts.has(context)
+        || context.compatibilityInstructionSequenceProductHandle == null
+      )
+    ) {
+      throw new Error('Compiler target contexts do not have one exact compatibility sequence projection each.');
+    }
   }
 }
 
@@ -915,26 +933,26 @@ class CompiledTemplateInstructionTraversal {
     if (rootTemplate != null) {
       this.assemblyState.surrogateInstructions.push(...this.surrogateInstructionsForTemplateElement(rootTemplate));
       for (const child of rootTemplate.children) {
-        this.visitNode(child);
+        this.visitNode(child, this.assemblyState.targetPlan.root);
       }
       return;
     }
 
     for (const root of this.input.html.document.rootNodes) {
-      this.visitNode(root);
+      this.visitNode(root, this.assemblyState.targetPlan.root);
     }
   }
 
   readonly visitNode = (
     nodeRef: { readonly productHandle: ProductHandle | null },
-    emitRow = this.assemblyState.emitRootRow,
+    contextPlan: TemplateCompilerTargetContextPlan,
   ): void => {
     const node = nodeRef.productHandle == null
       ? null
       : this.indexes.nodesByProduct.get(nodeRef.productHandle) ?? null;
     if (node instanceof HtmlText) {
       this.assemblyState.recordCompilerReachableNode(node);
-      this.visitTextNode(node, emitRow);
+      this.visitTextNode(node, contextPlan);
       return;
     }
 
@@ -943,23 +961,43 @@ class CompiledTemplateInstructionTraversal {
     }
 
     this.assemblyState.recordCompilerReachableNode(node);
-    if (this.visitLetElement(node, emitRow)) {
+    if (this.visitLetElement(node, contextPlan)) {
       return;
     }
 
-    this.visitElementNode(node, emitRow);
+    this.visitElementNode(node, contextPlan);
   };
 
   private visitTextNode(
     node: HtmlText,
-    emitRow: CompiledTemplateRowEmitter,
+    contextPlan: TemplateCompilerTargetContextPlan,
   ): void {
     const site = this.indexes.textValueSiteByNode.get(node.productHandle) ?? null;
     const parse = site == null ? null : this.indexes.parseBySite.get(site.productHandle) ?? null;
     if (parse == null || parse.resultKind === ExpressionParseResultKind.InterpolationAbsent) {
       return;
     }
-    emitRow(
+    const interpolation = parse.result.kind === ExpressionParseResultKind.InterpolationSuccess
+      ? parse.result.ast
+      : null;
+    const targetCount = interpolation?.expressions.length ?? 1;
+    const posture = interpolation == null
+      ? TemplateCompilerTargetRowPosture.Open
+      : targetCount > 1
+        ? TemplateCompilerTargetRowPosture.AggregateCompatibility
+        : TemplateCompilerTargetRowPosture.Complete;
+    const openSeamHandles = posture === TemplateCompilerTargetRowPosture.Complete
+      ? []
+      : [this.assemblyState.addOpenSeam(
+          `text-target-row:${node.productHandle}`,
+          interpolation == null
+            ? 'Text interpolation target rows remain open because the expression parse did not close.'
+            : `Text interpolation has ${targetCount} holes; the current compiled handoff still projects them through one aggregate compatibility row.`,
+          node.sourceAddressHandle,
+          KernelVocabulary.Compiler.OpenTextExpansion.key,
+          [OpenSeamReasonKind.TemplateTextExpansionOpen],
+        ).handle];
+    contextPlan.appendRow(
       `text:${node.productHandle}`,
       node,
       [
@@ -978,18 +1016,22 @@ class CompiledTemplateInstructionTraversal {
           ),
         ),
       ],
+      TemplateRenderTargetKind.MarkerTarget,
+      posture,
+      targetCount,
+      openSeamHandles,
     );
   }
 
   private visitLetElement(
     node: HtmlElement,
-    emitRow: CompiledTemplateRowEmitter,
+    contextPlan: TemplateCompilerTargetContextPlan,
   ): boolean {
     if (runtimeElementResourceName(node.tagName, node.namespace) !== 'let') {
       return false;
     }
     const letInstructions = this.letBindingInstructionsForElement(node);
-    emitRow(
+    contextPlan.appendRow(
       `let:${node.productHandle}`,
       node,
       [
@@ -1015,7 +1057,7 @@ class CompiledTemplateInstructionTraversal {
 
   private visitElementNode(
     node: HtmlElement,
-    emitRow: CompiledTemplateRowEmitter,
+    contextPlan: TemplateCompilerTargetContextPlan,
   ): void {
     const owner = this.indexes.ownersByElement.get(node.productHandle) ?? null;
     const classifications = this.indexes.classificationsByOwner.get(node.productHandle) ?? [];
@@ -1028,6 +1070,22 @@ class CompiledTemplateInstructionTraversal {
     let elementInstruction: HydrateElementInstruction | null = null;
     this.recordAuSlotProjectionIssue(node, lookupName, elementDefinition);
     const parts = this.collectElementInstructionParts(node, classifications, elementDefinition);
+    const directOpenSeamHandles = [...new Set([
+      ...parts.openDirectInstructionSeamHandles,
+      ...parts.openStructuralSeamHandles,
+    ])];
+    const elementEffectSeamHandles = [...new Set([
+      ...directOpenSeamHandles,
+      ...parts.openTemplateControllerSeamHandles,
+    ])];
+    if (elementEffectSeamHandles.length > 0) {
+      contextPlan.recordFrontier(
+        `element-effects:${node.productHandle}`,
+        'Executable compiler effects at this element leave subsequent target order conditional.',
+        node.sourceAddressHandle,
+        elementEffectSeamHandles,
+      );
+    }
     this.recordNativeSlotOutlet(node, lookupName, parts);
     const processContentRemovedChildren = this.knownProcessContentRemovedChildHandles(node, elementDefinition);
     const projectionGroups = this.elementProjectionChildGroups(node, elementDefinition, parts);
@@ -1082,7 +1140,6 @@ class CompiledTemplateInstructionTraversal {
         ),
       );
       elementInstructions.push(elementInstruction);
-      this.addProjectionSequenceDrafts(elementInstruction, projectionGroups);
     }
 
     const directRow = [
@@ -1090,46 +1147,114 @@ class CompiledTemplateInstructionTraversal {
       ...parts.attributeInstructions,
       ...orderCompilerInstructionsForElement(node, owner, parts.plainInstructions),
     ];
+    const directRowPosture = directOpenSeamHandles.length > 0
+      ? TemplateCompilerTargetRowPosture.Open
+      : TemplateCompilerTargetRowPosture.Complete;
+    const templateControllerRowPosture = parts.openTemplateControllerSeamHandles.length > 0
+      ? TemplateCompilerTargetRowPosture.Open
+      : TemplateCompilerTargetRowPosture.Complete;
     const shouldCompileChildren = elementDefinition == null
       || (!elementDefinition.containerless && !hasHtmlAttribute(owner, TemplateSpecialAttributeName.Containerless) && !parts.hasOpenProcessContentHook);
 
     if (parts.templateControllerInstructions.length > 0) {
-      const innermostInstructions: TemplateInstruction[] = [...directRow];
+      const controllerContexts: TemplateCompilerTargetContextPlan[] = [];
+      let childContext = contextPlan;
+      for (const instruction of parts.templateControllerInstructions) {
+        childContext = this.assemblyState.targetPlan.createTemplateControllerContext(childContext, instruction);
+        controllerContexts.push(childContext);
+      }
+      const innermostContext = controllerContexts.at(-1)!;
+      if (elementEffectSeamHandles.length > 0) {
+        innermostContext.recordFrontier(
+          `element-effects:${node.productHandle}`,
+          'Executable compiler effects at the template-controller leaf leave its target rows conditional.',
+          node.sourceAddressHandle,
+          elementEffectSeamHandles,
+        );
+      }
+      if (elementInstruction != null) {
+        this.addProjectionSequenceDrafts(elementInstruction, projectionGroups, innermostContext);
+      }
+      if (directRow.length > 0 || parts.openDirectInstructionSeamHandles.length > 0) {
+        innermostContext.appendRow(
+          `element:${node.productHandle}`,
+          node,
+          directRow,
+          elementInstruction?.containerless === true
+            ? TemplateRenderTargetKind.RenderLocation
+            : TemplateRenderTargetKind.MarkerTarget,
+          directRowPosture,
+          1,
+          directOpenSeamHandles,
+        );
+      }
       if (!shouldCompileChildren && !parts.hasProcessContentHook && this.hasUnprojectedChildren(node, extractedProjectionChildren)) {
-        this.assemblyState.addOpenSeam(
+        const seam = this.assemblyState.addOpenSeam(
           `containerless-children:${node.productHandle}`,
           `Custom element '${elementDefinition?.name ?? node.tagName}' is containerless; child content/projection compilation is held open until projection ownership is modeled.`,
           node.sourceAddressHandle,
           KernelVocabulary.Compiler.OpenContentProjection.key,
         );
+        innermostContext.recordFrontier(
+          `containerless-children:${node.productHandle}`,
+          seam.summary,
+          node.sourceAddressHandle,
+          [seam.handle],
+        );
       }
       if (shouldCompileChildren) {
-        const nestedRow = this.assemblyState.emitNestedRow(innermostInstructions);
         for (const child of node.children) {
           if (this.isExtractedProjectionChild(child, extractedProjectionChildren)) {
             continue;
           }
-          this.visitNode(child, nestedRow);
+          this.visitNode(child, innermostContext);
         }
       }
-      let childInstructions: readonly TemplateInstruction[] = innermostInstructions;
-      for (let index = parts.templateControllerInstructions.length - 1; index >= 0; --index) {
-        const instruction = parts.templateControllerInstructions[index]!;
-        this.assemblyState.addNestedSequenceDraft(instruction, childInstructions);
-        childInstructions = [instruction];
+      for (let index = 0; index < parts.templateControllerInstructions.length - 1; index++) {
+        controllerContexts[index]!.appendRow(
+          `template-controller:${node.productHandle}:child:${index}`,
+          node,
+          [parts.templateControllerInstructions[index + 1]!],
+          TemplateRenderTargetKind.RenderLocation,
+          templateControllerRowPosture,
+          1,
+          parts.openTemplateControllerSeamHandles,
+        );
       }
-      emitRow(`template-controller:${node.productHandle}`, node, [parts.templateControllerInstructions[0]!], TemplateRenderTargetKind.RenderLocation);
+      for (let index = parts.templateControllerInstructions.length - 1; index >= 0; --index) {
+        this.assemblyState.addNestedSequenceDraft(
+          parts.templateControllerInstructions[index]!,
+          controllerContexts[index]!,
+        );
+      }
+      contextPlan.appendRow(
+        `template-controller:${node.productHandle}`,
+        node,
+        [parts.templateControllerInstructions[0]!],
+        TemplateRenderTargetKind.RenderLocation,
+        templateControllerRowPosture,
+        1,
+        parts.openTemplateControllerSeamHandles,
+      );
       return;
     }
 
-    emitRow(
-      `element:${node.productHandle}`,
-      node,
-      directRow,
-      elementInstruction?.containerless === true
-        ? TemplateRenderTargetKind.RenderLocation
-        : TemplateRenderTargetKind.MarkerTarget,
-    );
+    if (elementInstruction != null) {
+      this.addProjectionSequenceDrafts(elementInstruction, projectionGroups, contextPlan);
+    }
+    if (directRow.length > 0 || parts.openDirectInstructionSeamHandles.length > 0) {
+      contextPlan.appendRow(
+        `element:${node.productHandle}`,
+        node,
+        directRow,
+        elementInstruction?.containerless === true
+          ? TemplateRenderTargetKind.RenderLocation
+          : TemplateRenderTargetKind.MarkerTarget,
+        directRowPosture,
+        1,
+        directOpenSeamHandles,
+      );
+    }
 
     if (
       runtimeElementResourceName(node.tagName, node.namespace) === 'template'
@@ -1142,11 +1267,17 @@ class CompiledTemplateInstructionTraversal {
 
     if (!shouldCompileChildren) {
       if (!parts.hasProcessContentHook && this.hasUnprojectedChildren(node, extractedProjectionChildren)) {
-        this.assemblyState.addOpenSeam(
+        const seam = this.assemblyState.addOpenSeam(
           `containerless-children:${node.productHandle}`,
           `Custom element '${elementDefinition?.name ?? node.tagName}' is containerless; child content/projection compilation is held open until projection ownership is modeled.`,
           node.sourceAddressHandle,
           KernelVocabulary.Compiler.OpenContentProjection.key,
+        );
+        contextPlan.recordFrontier(
+          `containerless-children:${node.productHandle}`,
+          seam.summary,
+          node.sourceAddressHandle,
+          [seam.handle],
         );
       }
       return;
@@ -1156,7 +1287,7 @@ class CompiledTemplateInstructionTraversal {
       if (this.isExtractedProjectionChild(child, extractedProjectionChildren)) {
         continue;
       }
-      this.visitNode(child, emitRow);
+      this.visitNode(child, contextPlan);
     }
   }
 
@@ -1214,26 +1345,30 @@ class CompiledTemplateInstructionTraversal {
   private addProjectionSequenceDrafts(
     instruction: HydrateElementInstruction,
     projectionGroups: readonly ElementProjectionChildGroup[],
+    parentContext: TemplateCompilerTargetContextPlan,
   ): void {
     for (const projection of instruction.projectionInstructionSequences) {
       const group = projectionGroups.find((candidate) => candidate.slotName === projection.slotName) ?? null;
       if (group == null) {
         continue;
       }
-      const instructions: TemplateInstruction[] = [];
-      const emitRow = this.assemblyState.emitNestedRow(instructions);
+      const projectionContext = this.assemblyState.targetPlan.createProjectionContext(
+        parentContext,
+        instruction,
+        projection,
+      );
       for (const child of group.sequenceChildren) {
         const childNode = this.nodeForReference(child);
         if (childNode instanceof HtmlElement && this.isUnwrappedProjectionTemplate(childNode)) {
           this.assemblyState.recordCompilerReachableNode(childNode);
           for (const grandchild of childNode.children) {
-            this.visitNode(grandchild, emitRow);
+            this.visitNode(grandchild, projectionContext);
           }
         } else {
-          this.visitNode(child, emitRow);
+          this.visitNode(child, projectionContext);
         }
       }
-      this.assemblyState.addProjectionSequenceDraft(instruction, projection, instructions);
+      this.assemblyState.addProjectionSequenceDraft(instruction, projection, projectionContext);
     }
   }
 
@@ -1604,6 +1739,9 @@ class CompiledTemplateInstructionTraversal {
       templateControllerInstructions: [],
       bindableInstructions: [],
       capturedSyntaxProductHandles: [],
+      openDirectInstructionSeamHandles: [],
+      openTemplateControllerSeamHandles: [],
+      openStructuralSeamHandles: [],
       hasProcessContentHook,
       hasOpenProcessContentHook: hasProcessContentHook && !this.isKnownProcessContent(elementDefinition),
     };
@@ -1612,17 +1750,18 @@ class CompiledTemplateInstructionTraversal {
   private recordProcessContentOpenSeam(
     node: HtmlElement,
     elementDefinition: CustomElementDefinition | null,
-    parts: ElementInstructionParts,
+    parts: ElementInstructionPartBuckets,
   ): void {
     if (!parts.hasOpenProcessContentHook || elementDefinition == null) {
       return;
     }
-    this.assemblyState.addOpenSeam(
+    const seam = this.assemblyState.addOpenSeam(
       `process-content:${node.productHandle}`,
       `Custom element '${elementDefinition.name}' has a processContent hook; child DOM compilation is held open because the hook may mutate, remove, or decline compilation of the authored content.`,
       node.sourceAddressHandle,
       KernelVocabulary.Compiler.OpenProcessContentHook.key,
     );
+    parts.openStructuralSeamHandles.push(seam.handle);
   }
 
   private collectAttributeClassificationInstructionPart(
@@ -1635,6 +1774,7 @@ class CompiledTemplateInstructionTraversal {
       ? null
       : this.indexes.attributesByProduct.get(syntax.attribute.productHandle) ?? null;
     const commandBuilt = this.indexes.commandInstructions.get(classification.productHandle) ?? [];
+    this.recordOpenCommandInstruction(classification, parts);
     commandBuilt.forEach((instruction) => this.assemblyState.addExistingInstruction(instruction));
 
     switch (classification.classificationKind) {
@@ -1665,15 +1805,50 @@ class CompiledTemplateInstructionTraversal {
       case AttributeClassificationKind.CompilerControl:
         break;
       case AttributeClassificationKind.Open:
-        if (classification.openReason != null) {
-          this.assemblyState.addOpenSeam(
-            `open-attribute-classification:${classification.productHandle}`,
-            classification.openReason,
-            classification.sourceAddressHandle,
-          );
-        }
+        parts.openStructuralSeamHandles.push(this.assemblyState.addOpenSeam(
+          `open-attribute-classification:${classification.productHandle}`,
+          classification.openReason
+            ?? 'Attribute classification remained open and may change compiler target or instruction ownership.',
+          classification.sourceAddressHandle,
+        ).handle);
         break;
     }
+  }
+
+  private recordOpenCommandInstruction(
+    classification: AttributeClassification,
+    parts: ElementInstructionPartBuckets,
+  ): void {
+    const lowerings = this.indexes.commandLowerings.get(classification.productHandle) ?? [];
+    if (!lowerings.some((lowering) => lowering.state === BindingCommandLoweringState.Open)) return;
+    const sourceHandles = new Set(lowerings.flatMap((lowering) =>
+      lowering.sourceAddressHandle == null ? [] : [lowering.sourceAddressHandle]
+    ));
+    let seamHandles = this.input.bindingCommandLowering.openSeams
+      .filter((seam) =>
+        seam.reasonKinds.includes(OpenSeamReasonKind.BindingCommandExecutableBodyOpen)
+        && (
+          (seam.addressHandle != null && sourceHandles.has(seam.addressHandle))
+          || (
+            classification.sourceAddressHandle != null
+            && seam.addressHandle === classification.sourceAddressHandle
+          )
+        )
+      )
+      .map((seam) => seam.handle);
+    if (seamHandles.length === 0) {
+      seamHandles = [this.assemblyState.addOpenSeam(
+        `open-command-row:${classification.productHandle}`,
+        'Binding-command target existence is known, but its executable instruction body remains open.',
+        classification.sourceAddressHandle,
+        KernelVocabulary.Compiler.OpenExecutableBody.key,
+        [OpenSeamReasonKind.BindingCommandExecutableBodyOpen],
+      ).handle];
+    }
+    const target = classification.classificationKind === AttributeClassificationKind.TemplateController
+      ? parts.openTemplateControllerSeamHandles
+      : parts.openDirectInstructionSeamHandles;
+    target.push(...seamHandles.filter((handle) => !target.includes(handle)));
   }
 
   private collectBindableInstructionPart(
@@ -1975,7 +2150,7 @@ export class CompiledTemplateMaterializer {
       ...sequencePublications.claims,
     ];
     const openSeams = assembly.openSeams;
-    const state = compiledTemplateStateFor(assembly.issues, openSeams, assembly.targetDrafts);
+    const state = compiledTemplateStateFor(assembly.issues, openSeams, assembly.targetPlan.root.readRows());
     const compiledTemplate = this.createCompiledTemplate(
       input,
       handles,
@@ -1983,7 +2158,6 @@ export class CompiledTemplateMaterializer {
       assembly.compilerReachableNodeProductHandles,
       assembly.nativeSlotOutlets,
       sequencePublications,
-      source,
     );
     const records: KernelStoreRecord[] = [...source.records];
     records.push(...assembly.records);
@@ -2005,6 +2179,7 @@ export class CompiledTemplateMaterializer {
       assembly.instructions,
       sequencePublications.instructionSequences,
       sequencePublications.renderTargets,
+      assembly.targetPlan,
       assembly.issues,
       openSeams,
       records,
@@ -2034,12 +2209,12 @@ export class CompiledTemplateMaterializer {
     const instructionSequences: TemplateInstructionSequence[] = [];
     let surrogateSequence: TemplateInstructionSequence | null = null;
 
-    assembly.targetDrafts.forEach((draft, index) => {
-      const publication = this.publishRenderTargetDraft(
+    assembly.targetPlan.root.readRows().forEach((row, index) => {
+      const publication = this.publishRenderTargetRow(
         handles.local,
         handles.productHandle,
         handles.identityHandle,
-        draft,
+        row,
         index,
         source,
       );
@@ -2118,7 +2293,6 @@ export class CompiledTemplateMaterializer {
     compilerReachableNodeProductHandles: readonly ProductHandle[],
     nativeSlotOutlets: readonly CompiledNativeSlotOutlet[],
     sequences: CompiledTemplateSequencePublications,
-    source: CompiledTemplateSourceSet,
   ): CompiledTemplate {
     return new CompiledTemplate(
       handles.productHandle,
@@ -2213,17 +2387,17 @@ export class CompiledTemplateMaterializer {
     );
   }
 
-  private publishRenderTargetDraft(
+  private publishRenderTargetRow(
     compiledLocal: string,
     compiledProductHandle: ProductHandle,
     compiledIdentityHandle: IdentityHandle,
-    draft: TargetDraft,
+    row: TemplateCompilerTargetRowPlan,
     index: number,
     source: CompiledTemplateSourceSet,
   ): RenderTargetPublication {
-    const handles = this.renderTargetPublicationHandles(compiledLocal, draft, index);
-    const sequence = this.instructionSequenceForRenderTarget(handles, draft);
-    const target = this.renderTargetForDraft(handles, draft, source);
+    const handles = this.renderTargetPublicationHandles(compiledLocal, row, index);
+    const sequence = this.instructionSequenceForRenderTarget(handles, row);
+    const target = this.renderTargetForRow(handles, row);
     return new RenderTargetPublication(
       target,
       sequence,
@@ -2240,7 +2414,7 @@ export class CompiledTemplateMaterializer {
         handles,
         target,
         sequence,
-        draft,
+        row,
         source,
       ),
     );
@@ -2248,10 +2422,10 @@ export class CompiledTemplateMaterializer {
 
   private renderTargetPublicationHandles(
     compiledLocal: string,
-    draft: TargetDraft,
+    row: TemplateCompilerTargetRowPlan,
     index: number,
   ): RenderTargetPublicationHandles {
-    const targetLocal = `${compiledLocal}:target:${index}:${draft.local}`;
+    const targetLocal = `${compiledLocal}:target:${index}:${row.compatibilityLocalKey}`;
     const sequenceLocal = `${targetLocal}:instructions`;
     return new RenderTargetPublicationHandles(
       targetLocal,
@@ -2265,29 +2439,28 @@ export class CompiledTemplateMaterializer {
 
   private instructionSequenceForRenderTarget(
     handles: RenderTargetPublicationHandles,
-    draft: TargetDraft,
+    row: TemplateCompilerTargetRowPlan,
   ): TemplateInstructionSequence {
     return new TemplateInstructionSequence(
       handles.sequenceProductHandle,
       handles.sequenceIdentityHandle,
       handles.targetProductHandle,
-      instructionReferencesFor(draft.instructions),
-      draft.node.sourceAddressHandle,
+      instructionReferencesFor(row.instructions),
+      row.node.sourceAddressHandle,
     );
   }
 
-  private renderTargetForDraft(
+  private renderTargetForRow(
     handles: RenderTargetPublicationHandles,
-    draft: TargetDraft,
-    source: CompiledTemplateSourceSet,
+    row: TemplateCompilerTargetRowPlan,
   ): TemplateRenderTarget {
     return new TemplateRenderTarget(
       handles.targetProductHandle,
       handles.targetIdentityHandle,
-      draft.targetKind,
-      draft.node.toReference(),
+      row.targetKind,
+      row.node.toReference(),
       handles.sequenceProductHandle,
-      draft.node.sourceAddressHandle,
+      row.node.sourceAddressHandle,
       [],
     );
   }
@@ -2297,14 +2470,14 @@ export class CompiledTemplateMaterializer {
     handles: RenderTargetPublicationHandles,
     target: TemplateRenderTarget,
     sequence: TemplateInstructionSequence,
-    draft: TargetDraft,
+    row: TemplateCompilerTargetRowPlan,
     source: CompiledTemplateSourceSet,
   ): readonly SemanticClaim[] {
     return [
       this.compiledTemplateContainsRenderTargetClaim(compiledProductHandle, handles, target, source),
-      this.renderTargetForHtmlNodeClaim(handles, target, draft, source),
+      this.renderTargetForHtmlNodeClaim(handles, target, row, source),
       this.renderTargetUsesInstructionSequenceClaim(handles, target, sequence, source),
-      ...sequenceContainsInstructionClaims(this.store, handles.sequenceLocal, sequence.productHandle, draft.instructions, source.provenanceHandle),
+      ...sequenceContainsInstructionClaims(this.store, handles.sequenceLocal, sequence.productHandle, row.instructions, source.provenanceHandle),
     ];
   }
 
@@ -2326,14 +2499,14 @@ export class CompiledTemplateMaterializer {
   private renderTargetForHtmlNodeClaim(
     handles: RenderTargetPublicationHandles,
     target: TemplateRenderTarget,
-    draft: TargetDraft,
+    row: TemplateCompilerTargetRowPlan,
     source: CompiledTemplateSourceSet,
   ): SemanticClaim {
     return new SemanticClaim(
       this.store.handles.claim(`${handles.targetLocal}:target-for-html-node`),
       target.productHandle,
       KernelVocabulary.Template.RenderTargetForHtmlNode.key,
-      draft.node.productHandle,
+      row.node.productHandle,
       source.provenanceHandle,
     );
   }
@@ -2746,6 +2919,29 @@ function commandInstructionsByClassification(
   return result;
 }
 
+function commandLoweringsByClassification(
+  input: CompiledTemplateMaterializationRequest,
+): ReadonlyMap<ProductHandle, readonly BindingCommandLowering[]> {
+  const buildInputByProduct = new Map(input.bindingCommandLowering.buildInputs.map((buildInput) =>
+    [buildInput.productHandle, buildInput]
+  ));
+  const classificationBySyntax = new Map(input.attributeClassification.classifications.map((classification) =>
+    [classification.syntaxProductHandle, classification]
+  ));
+  const result = new Map<ProductHandle, BindingCommandLowering[]>();
+  for (const lowering of input.bindingCommandLowering.lowerings) {
+    const buildInput = buildInputByProduct.get(lowering.inputProductHandle) ?? null;
+    const classification = buildInput?.syntaxProductHandle == null
+      ? null
+      : classificationBySyntax.get(buildInput.syntaxProductHandle) ?? null;
+    if (classification == null) continue;
+    const bucket = result.get(classification.productHandle) ?? [];
+    bucket.push(lowering);
+    result.set(classification.productHandle, bucket);
+  }
+  return result;
+}
+
 function expressionParsesBySite(
   input: CompiledTemplateMaterializationRequest,
 ): ReadonlyMap<ProductHandle, TemplateExpressionParse> {
@@ -2793,7 +2989,7 @@ function isInvalidSurrogateAttributeTarget(target: string): boolean {
     case 'id':
     case 'name':
     case 'au-slot':
-    case TemplateSpecialAttributeName.AsElement:
+    case 'as-element':
       return true;
     default:
       return false;
@@ -2809,7 +3005,7 @@ function nullableInstruction(
 function compiledTemplateStateFor(
   issues: readonly TemplateCompilerIssue[],
   openSeams: readonly OpenSeam[],
-  targetDrafts: readonly TargetDraft[],
+  targetRows: readonly TemplateCompilerTargetRowPlan[],
 ): CompiledTemplateState {
   if (issues.length > 0) {
     return CompiledTemplateState.Invalid;
@@ -2817,7 +3013,7 @@ function compiledTemplateStateFor(
   if (openSeams.length === 0) {
     return CompiledTemplateState.Complete;
   }
-  return targetDrafts.length === 0
+  return targetRows.length === 0
     ? CompiledTemplateState.Open
     : CompiledTemplateState.Partial;
 }

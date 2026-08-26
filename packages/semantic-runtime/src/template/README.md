@@ -310,6 +310,16 @@ classification, expression parsing, and instruction lowering converge on the sam
   value serializer for inline custom-attribute multi-binding segments. Keep raw
   segment splitting and authored segment formatting there so command lowering
   and source producers share one grammar boundary.
+- `compiler-target-plan.ts` is the sole run-local owner of compiler context and row boundaries. The root plan feeds the
+  existing `TemplateRenderTarget` publication directly; template-controller and projection child contexts retain exact
+  known row boundaries, projected/logical target ordinals, target kinds, authored target lineage, and instruction
+  grouping. Row posture and context frontiers keep executable command/process effects and the current multi-hole text
+  aggregate from turning later projected ordinals into false exactness. Open command bodies still allocate their known
+  target row with an empty compatibility sequence; closed multi-hole text retains its known projected multiplicity and a
+  typed `compiler.open-text-expansion` seam until each hole owns an independent instruction/row. Their current singular child
+  `TemplateInstructionSequence` remains an explicitly named flat compatibility projection of those rows until exact
+  nested compiled contexts are durable. The plan is acyclic, sealed at assembly, and generation-local; transformed
+  marker/target occurrences join it only after compiler execution owns their creation.
 - `compiled-template.ts` and `compiled-template-materializer.ts` model the normalized compiler/runtime handoff behind
   the runtime's transformed template DOM, target rows, surrogate rows, and `ICompiledElementComponentDefinition`
   instructions. The current product retains authored-node-linked render targets and instruction sequences; it does not
@@ -333,8 +343,9 @@ classification, expression parsing, and instruction lowering converge on the sam
   `native-form-control-semantics.ts` owns the shared input/select target roles and initialization dependencies consumed
   by both compiled ordering and checked/select value-channel analysis. Root
   containerless custom-element rows are render-location targets at this boundary. Exact nested target ownership remains
-  part of the transformed-template work; downstream synthetic-view grouping must not permanently reinterpret those
-  rows from instruction adjacency.
+  part of the transformed-template work. `runtime-synthetic-view-targets.ts` still projects the flat compatibility
+  sequence back into runtime rows; it must be deleted when exact nested targets and compiler-owned child definitions
+  become durable rather than growing into a peer authority.
 - `runtime-rendering-materializer.ts` owns the runtime `Rendering` dispatch loop over compiled render targets and
   instruction sequences. `runtime-view-factory-materializer.ts` owns the `Rendering.getViewFactory(...)` product lane
   for template controllers: generated embedded custom-element definitions, `IViewFactory` products, synthetic-view

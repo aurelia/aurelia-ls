@@ -118,6 +118,8 @@ export const enum OpenSeamReasonKind {
   TemplateControllerScopeOpen = 'template-controller-scope-open',
   /** Browser-effective structure could not be partitioned uniquely over authored template products. */
   TemplateStructureCorrespondenceOpen = 'template-structure-correspondence-open',
+  /** Compiler text interpolation has known holes whose independent target rows are not yet materialized. */
+  TemplateTextExpansionOpen = 'template-text-expansion-open',
   /** Select value-channel analysis could not close the authored select target. */
   BindingValueChannelSelectTargetOpen = 'binding-value-channel-select-target-open',
   /** Select value-channel analysis could not close option value/model facts. */
@@ -249,6 +251,7 @@ export function openSeamBoundaryKindForReason(
     case OpenSeamReasonKind.BindingValueChannelProductMissing:
     case OpenSeamReasonKind.BindingExpressionOpen:
     case OpenSeamReasonKind.BindingCommandExecutableBodyOpen:
+    case OpenSeamReasonKind.TemplateTextExpansionOpen:
     case OpenSeamReasonKind.RuntimeRenderingProductMissing:
     case OpenSeamReasonKind.RuntimeRenderingRendererUnavailable:
     case OpenSeamReasonKind.DiRegistrationStrategyOpen:

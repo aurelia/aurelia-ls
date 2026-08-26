@@ -324,6 +324,14 @@ export const KernelOpenSeamKinds = {
       KernelVocabularySlot.OpenSeamKind,
       'Compiler could not close child content projection, containerless content, or slot extraction semantics.',
     ),
+
+    /** Text interpolation holes are known but do not yet own independent target rows. */
+    OpenTextExpansion: defineVocabulary(
+      KernelVocabularyNamespace.Compiler,
+      'open-text-expansion',
+      KernelVocabularySlot.OpenSeamKind,
+      'Compiler knows the text interpolation holes but has not materialized their independent target rows.',
+    ),
   },
   Template: {
     /** Authored and effective structure could not be joined without guessing origin or disposition. */
