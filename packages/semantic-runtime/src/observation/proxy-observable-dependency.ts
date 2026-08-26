@@ -32,6 +32,7 @@ import {
 } from './runtime-collection-method-semantics.js';
 import {
   checkerArrayOrTupleType,
+  checkerBaseTypes,
   checkerCollectionSymbolName,
   checkerNullishType,
 } from '../type-system/checker-related-types.js';
@@ -1646,7 +1647,7 @@ function checkerTypeHasDefaultLibraryNonPlainObjectBrand(
     && checkerTypeHasDefaultLibraryDeclaration(type, apparentType)) {
     return true;
   }
-  return checkerBaseTypes(type).some((baseType) =>
+  return checkerBaseTypes(checker, type).some((baseType) =>
     checkerTypeHasDefaultLibraryNonPlainObjectBrand(checker, baseType, seen)
   );
 }
@@ -1689,7 +1690,7 @@ function checkerTypePropertyHasNowrapDecorator(
   if (declarationsHaveNowrapDecorator(property?.declarations)) {
     return true;
   }
-  return checkerBaseTypes(type).some((baseType) =>
+  return checkerBaseTypes(checker, type).some((baseType) =>
     checkerTypePropertyHasNowrapDecorator(checker, baseType, propertyName, seen)
   );
 }
@@ -1718,18 +1719,9 @@ function checkerTypeHasNowrapClassDecorator(
       return true;
     }
   }
-  return checkerBaseTypes(type).some((baseType) =>
+  return checkerBaseTypes(checker, type).some((baseType) =>
     checkerTypeHasNowrapClassDecorator(checker, baseType, seen)
   );
-}
-
-function checkerBaseTypes(
-  type: ts.Type,
-): readonly ts.Type[] {
-  const interfaceType = type as ts.InterfaceType;
-  return typeof interfaceType.getBaseTypes === 'function'
-    ? interfaceType.getBaseTypes() ?? []
-    : [];
 }
 
 function declarationsHaveNowrapDecorator(
