@@ -85,18 +85,37 @@ export interface HtmlParseRequest {
   /** Authored template source to parse. */
   readonly templateSource: TemplateSource;
   /** Compiler-front-door unit that owns the parse. */
-  readonly compilationUnit: TemplateCompilationUnit;
+  readonly compilationUnit: Pick<TemplateCompilationUnit, 'unitKind'>;
   /** Inquiry pressure for recovery/frontier preservation. */
   readonly parseContext: TemplateParseContext;
+  /** Retain run-local draft↔product associations for an admitted browser-effective materializer. */
+  readonly retainDraftBindings?: boolean;
 }
 
 export class HtmlParseEmission {
   constructor(
+    readonly draft: ParsedHtmlDocumentDraft | null,
     readonly document: HtmlDocument,
     readonly nodes: readonly HtmlIrNode[],
     readonly attributes: readonly HtmlAttribute[],
+    readonly nodeDraftBindings: readonly HtmlParseNodeDraftBinding[],
+    readonly attributeDraftBindings: readonly HtmlParseAttributeDraftBinding[],
     readonly recoveries: readonly HtmlRecovery[],
     readonly records: readonly KernelStoreRecord[],
+  ) {}
+}
+
+export class HtmlParseNodeDraftBinding {
+  constructor(
+    readonly draft: ParsedHtmlNodeDraft,
+    readonly node: HtmlIrNode,
+  ) {}
+}
+
+export class HtmlParseAttributeDraftBinding {
+  constructor(
+    readonly draft: ParsedHtmlAttributeDraft,
+    readonly attribute: HtmlAttribute,
   ) {}
 }
 
@@ -187,6 +206,8 @@ class HtmlMaterializationState {
   readonly records: KernelStoreRecord[] = [];
   readonly nodes: HtmlIrNode[] = [];
   readonly attributes: HtmlAttribute[] = [];
+  readonly nodeDraftBindings: HtmlParseNodeDraftBinding[] = [];
+  readonly attributeDraftBindings: HtmlParseAttributeDraftBinding[] = [];
   readonly recoveries: HtmlRecovery[] = [];
   readonly claims: SemanticClaim[] = [];
 
@@ -195,6 +216,7 @@ class HtmlMaterializationState {
     readonly templateSource: TemplateSource,
     readonly source: HtmlParseSourceSet,
     readonly store: KernelStoreReadView,
+    readonly retainDraftBindings: boolean,
   ) {}
 }
 
@@ -258,7 +280,13 @@ export class HtmlParseMaterializer {
 
   private recordsForParse(input: HtmlParseRequest): HtmlParseEmission {
     const source = this.recordsForSource(input);
-    const state = new HtmlMaterializationState(input.localKey, input.templateSource, source, this.store);
+    const state = new HtmlMaterializationState(
+      input.localKey,
+      input.templateSource,
+      source,
+      this.store,
+      input.retainDraftBindings === true,
+    );
     state.records.push(...source.records);
 
     const draft = this.parseDocumentDraft(input);
@@ -277,9 +305,12 @@ export class HtmlParseMaterializer {
     state.records.push(...this.recordsForDocument(input, state, document, sourceClaim));
 
     return new HtmlParseEmission(
+      state.retainDraftBindings ? draft : null,
       document,
       state.nodes,
       state.attributes,
+      state.nodeDraftBindings,
+      state.attributeDraftBindings,
       state.recoveries,
       state.records,
     );
@@ -572,6 +603,9 @@ class HtmlParseTreeMaterializer {
     );
     state.claims.push(claim);
     state.nodes.push(node);
+    if (state.retainDraftBindings) {
+      state.nodeDraftBindings.push(new HtmlParseNodeDraftBinding(draft, node));
+    }
     state.records.push(
       new TemplateNodeIdentity(
         frame.identityHandle,
@@ -680,6 +714,9 @@ class HtmlParseTreeMaterializer {
     const claim = this.attributeContainmentClaim(state, frame, parentProductHandle);
     state.claims.push(claim);
     state.attributes.push(attribute);
+    if (state.retainDraftBindings) {
+      state.attributeDraftBindings.push(new HtmlParseAttributeDraftBinding(draft, attribute));
+    }
     state.records.push(
       new CompilerIdentity(
         frame.identityHandle,

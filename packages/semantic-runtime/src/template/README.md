@@ -149,16 +149,20 @@ classification, expression parsing, and instruction lowering converge on the sam
 - `browser-template-correspondence.ts` conservatively relates one authored draft to the exact browser draft and parser
   authorities before carrier selection. It uses opening-token/range anchors for exact occurrences, reconstruction
   cohorts for one-to-many recovery, named implied/drop/factory derivations, and explicit unresolved partitions for
-  composite, partial, normalized-subspan, or profile-divergent cases. Occurrence keys include source identity/revision,
-  authored recovery policy, browser authority, markup digest, and unambiguous paths. The helper is product-free and
-  exported only through the explicit browser-template subpath; the future materializer spends it into structural and
-  derivation products.
+  composite, partial, normalized-subspan, or profile-divergent cases. Stable occurrence keys combine template identity
+  with unambiguous authored or browser paths; a separate currentness receipt includes source revision, markup digest,
+  authored recovery policy, parser authority, and planner schemas. The helper is product-free and exported only through
+  the explicit browser-template subpath; the materializer spends it into structural and derivation products.
 - `template-structure.ts` and `template-structure-derivation.ts` define the durable, parse5-independent structural
   vocabulary behind that boundary: immutable browser-effective tree/node/attribute records and ordered
   many-input/many-output derivations. Cardinality carries merge, reconstruction, drop, and implied/generated facts;
   there is no exclusive origin enum or second provenance graph. The detail slots own semantic-versus-witness comparison,
-  and unresolved authored/effective partitioning uses the typed structure-correspondence seam. These are accepted product
-  contracts, but no materializer or production compiler reroute exists yet.
+  and unresolved authored/effective partitioning uses the typed structure-correspondence seam.
+- `browser-effective-template-materializer.ts` spends the opt-in authored draft bindings, browser draft, carrier
+  selection, and correspondence plan into one atomic kernel publication. It materializes every structural occurrence,
+  an explicit generated or selected compiler carrier, ordered tree-builder/factory derivation hyperedges, and typed
+  seams for every unresolved partition. Parser envelopes remain witness data; authored addresses enter only through
+  retained authored HTML product bindings. This is not yet wired into the production compiler front door.
 - `template-source-coordinate.ts` is the shared decoded-template range boundary used by authored HTML materialization and
   future exact structural correspondence. It validates offset-map shape and maps only a caller-proved contiguous range;
   parse5 token envelopes must never be passed through it merely because they are non-null.

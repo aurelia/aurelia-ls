@@ -10,6 +10,8 @@ import {
 import { parseBrowserTemplateFragmentDraft } from '../src/template/browser-template-parser.js';
 import {
   BROWSER_TEMPLATE_CARRIER_SELECTION_SCHEMA_VERSION,
+  BrowserTemplateCarrierSelectionDraft,
+  BrowserTemplateCarrierSelectionReason,
   selectBrowserTemplateCompilerCarrier,
 } from '../src/template/browser-template-selection.js';
 import { parseHtmlDocumentDraft } from '../src/template/html-parse-materializer.js';
@@ -91,6 +93,13 @@ describe('authored/browser correspondence planner', () => {
     expect(repeated.nodeDerivations.map((row) => row.browser.occurrenceKey)).toHaveLength(2);
     expect(new Set(repeated.nodeDerivations.map((row) => row.browser.occurrenceKey)).size).toBe(2);
 
+    const ungroundedColgroup = plan('ungrounded-colgroup', '<table><col></table>');
+    expect(ungroundedColgroup.impliedNodes.some((row) => row.reason === 'parser-unlocated')).toBe(false);
+    expect(ungroundedColgroup.unresolvedPartitions).toContainEqual(expect.objectContaining({
+      kind: 'unresolved-implied-origin',
+      browserNodes: [expect.objectContaining({ tagName: 'colgroup' })],
+    }));
+
     const entityBinding = plan('entity-binding', '<input value.bind="foo&#46;bar">');
     expect(entityBinding.attributeDerivations).toEqual([
       expect.objectContaining({ value: 'normalized' }),
@@ -135,6 +144,34 @@ describe('authored/browser correspondence planner', () => {
       encodeURIComponent(BROWSER_TEMPLATE_CARRIER_SELECTION_SCHEMA_VERSION),
     );
 
+    const receiptMarkup = cases[0][1];
+    const receiptBrowser = parseBrowserTemplateFragmentDraft(receiptMarkup);
+    const receiptRequest = {
+      templateIdentity: 'selection-receipt',
+      sourceRevision: 'r1',
+      markup: receiptMarkup,
+      authored: parseHtmlDocumentDraft(receiptMarkup, TemplateRecoveryPolicy.Recover),
+      browser: receiptBrowser,
+    };
+    const withoutSelection = planBrowserTemplateCorrespondence(receiptRequest);
+    const canonicalSelection = selectBrowserTemplateCompilerCarrier(receiptBrowser.fragment);
+    const withSelection = planBrowserTemplateCorrespondence({
+      ...receiptRequest,
+      carrierSelection: canonicalSelection,
+    });
+    expect(withSelection.correspondenceKey).not.toBe(withoutSelection.correspondenceKey);
+    const forgedSelection = new BrowserTemplateCarrierSelectionDraft(
+      canonicalSelection.carrierKind,
+      BrowserTemplateCarrierSelectionReason.NoElement,
+      canonicalSelection.authoredCarrier,
+      canonicalSelection.content,
+      canonicalSelection.discardedInputNodes,
+    );
+    expect(() => planBrowserTemplateCorrespondence({
+      ...receiptRequest,
+      carrierSelection: forgedSelection,
+    })).toThrow('canonical compiler-carrier selection');
+
     const authorityMarkup = cases[0][1];
     const authorityBrowser = parseBrowserTemplateFragmentDraft(authorityMarkup);
     const authorityPlan = (policy: TemplateRecoveryPolicy, sourceRevision: string) =>
@@ -145,10 +182,29 @@ describe('authored/browser correspondence planner', () => {
         authored: parseHtmlDocumentDraft(authorityMarkup, policy),
         browser: authorityBrowser,
       });
-    expect(authorityPlan(TemplateRecoveryPolicy.Strict, 'r1').correspondenceKey)
-      .not.toBe(authorityPlan(TemplateRecoveryPolicy.Recover, 'r1').correspondenceKey);
-    expect(authorityPlan(TemplateRecoveryPolicy.Recover, 'r1').correspondenceKey)
-      .not.toBe(authorityPlan(TemplateRecoveryPolicy.Recover, 'r2').correspondenceKey);
+    const strictR1 = authorityPlan(TemplateRecoveryPolicy.Strict, 'r1');
+    const recoverR1 = authorityPlan(TemplateRecoveryPolicy.Recover, 'r1');
+    const recoverR2 = authorityPlan(TemplateRecoveryPolicy.Recover, 'r2');
+    expect(strictR1.correspondenceKey).not.toBe(recoverR1.correspondenceKey);
+    expect(recoverR1.correspondenceKey).not.toBe(recoverR2.correspondenceKey);
+    expect(strictR1.occurrenceIdentityKey).toBe(recoverR1.occurrenceIdentityKey);
+    expect(recoverR1.occurrenceIdentityKey).toBe(recoverR2.occurrenceIdentityKey);
+    expect(recoverR1.nodeDerivations.map((row) => row.browser.occurrenceKey))
+      .toEqual(recoverR2.nodeDerivations.map((row) => row.browser.occurrenceKey));
+
+    const editedPlan = (markup: string, sourceRevision: string) => planBrowserTemplateCorrespondence({
+      templateIdentity: 'edited',
+      sourceRevision,
+      markup,
+      authored: parseHtmlDocumentDraft(markup, TemplateRecoveryPolicy.Recover),
+      browser: parseBrowserTemplateFragmentDraft(markup),
+    });
+    const beforeEdit = editedPlan('<div>a</div>', 'r1');
+    const afterEdit = editedPlan('<div>longer</div>', 'r2');
+    expect(beforeEdit.correspondenceKey).not.toBe(afterEdit.correspondenceKey);
+    expect(beforeEdit.occurrenceIdentityKey).toBe(afterEdit.occurrenceIdentityKey);
+    expect(beforeEdit.nodeDerivations.find((row) => row.browser.tagName === 'div')?.browser.occurrenceKey)
+      .toBe(afterEdit.nodeDerivations.find((row) => row.browser.tagName === 'div')?.browser.occurrenceKey);
     expect(() => planBrowserTemplateCorrespondence({
       templateIdentity: 'mismatch',
       sourceRevision: 'r1',

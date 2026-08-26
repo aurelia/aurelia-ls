@@ -11,6 +11,7 @@ import {
 } from './browser-template-draft.js';
 import {
   BrowserTemplateCarrierKind,
+  selectBrowserTemplateCompilerCarrier,
   type BrowserTemplateCarrierSelectionDraft,
 } from './browser-template-selection.js';
 import {
@@ -23,7 +24,7 @@ import { HtmlIrNodeKind, HtmlRecoveryKind } from './html-ir.js';
 import type { TemplateRecoveryPolicy } from './parse-context.js';
 
 export const BROWSER_TEMPLATE_CORRESPONDENCE_SCHEMA_VERSION =
-  'semantic-runtime/browser-template-correspondence/v1' as const;
+  'semantic-runtime/browser-template-correspondence/v2' as const;
 
 export type BrowserTemplateCorrespondencePathSegment = number | 'template-content';
 
@@ -138,6 +139,7 @@ export class CorrespondenceUnresolvedPartitionDraft {
       | 'partial-text'
       | 'partial-node-extent'
       | 'implied-node-cause'
+      | 'unresolved-implied-origin'
       | 'normalized-node-value'
       | 'normalized-attribute-value'
       | 'profile-divergent-customizable-select'
@@ -183,6 +185,9 @@ export class BrowserTemplateCorrespondenceDraft {
   readonly schemaVersion = BROWSER_TEMPLATE_CORRESPONDENCE_SCHEMA_VERSION;
 
   constructor(
+    /** Stable prefix for authored/browser occurrence identity within one template. */
+    readonly occurrenceIdentityKey: string,
+    /** Currentness receipt for the exact source, parser, recovery, and planner authorities used by this run. */
     readonly correspondenceKey: string,
     readonly markupDigest: string,
     readonly nodeDerivations: readonly AuthoredBrowserNodeDerivationDraft[],
@@ -254,16 +259,26 @@ export function planBrowserTemplateCorrespondence(
     throw new Error('Authored/browser correspondence requires one exact markup input for both parser drafts.');
   }
   const markupDigest = createHash('sha256').update(request.markup).digest('hex');
-  const correspondenceKey = correspondenceOccurrenceKey(
-    request.templateIdentity,
+  const carrierSelectionAuthority = request.carrierSelection == null
+    ? 'no-carrier-selection'
+    : carrierSelectionFingerprint(request.carrierSelection);
+  if (request.carrierSelection != null) {
+    const canonicalSelection = selectBrowserTemplateCompilerCarrier(request.browser.fragment);
+    if (carrierSelectionFingerprint(canonicalSelection) !== carrierSelectionAuthority) {
+      throw new Error('Browser correspondence requires the canonical compiler-carrier selection for its browser draft.');
+    }
+  }
+  const occurrenceIdentityKey = correspondenceOccurrenceIdentityKey(request.templateIdentity);
+  const correspondenceKey = correspondenceReceiptKey(
+    occurrenceIdentityKey,
     request.sourceRevision,
     request.authored.recoveryPolicy,
     markupDigest,
     request.browser,
-    request.carrierSelection?.schemaVersion ?? 'no-carrier-selection',
+    carrierSelectionAuthority,
   );
-  const authoredEntries = authoredNodeEntries(request.authored, correspondenceKey);
-  const browserEntries = browserNodeEntries(request.browser.fragment.children, correspondenceKey);
+  const authoredEntries = authoredNodeEntries(request.authored, occurrenceIdentityKey);
+  const browserEntries = browserNodeEntries(request.browser.fragment.children, occurrenceIdentityKey);
   const authoredByElementStart = new Map<number, AuthoredNodeEntry[]>();
   const authoredTextLike = authoredEntries.filter((entry) => entry.draft.nodeKind !== HtmlIrNodeKind.Element);
   for (const entry of authoredEntries) {
@@ -281,10 +296,24 @@ export function planBrowserTemplateCorrespondence(
   for (const browser of browserEntries) {
     if (browser.draft.locationKind === BrowserTemplateDraftLocationKind.ParserUnlocated) {
       const derivation = impliedNode(browser, authoredEntries);
-      implied.push(derivation);
+      const grounded = derivation.reason === 'implied-paragraph'
+        || (derivation.reason === 'implied-table-section' && derivation.causeCandidates.length > 0);
+      if (grounded) {
+        implied.push(derivation);
+      } else {
+        unresolved.push(unresolvedNodes(
+          occurrenceIdentityKey,
+          'unresolved-implied-origin',
+          derivation.causeCandidates,
+          [browser.ref],
+          derivation.reason === 'implied-table-section'
+            ? 'The parser inserted a table section, but no exact authored descendant establishes its tree-builder cause.'
+            : 'The parser inserted a structural node whose exact HTML-tree-builder cause is not yet modeled.',
+        ));
+      }
       if (derivation.reason === 'implied-paragraph') {
         unresolved.push(unresolvedNodes(
-          correspondenceKey,
+          occurrenceIdentityKey,
           'implied-node-cause',
           authoredEntries
             .filter((candidate) => htmlAsciiLowercase(candidate.draft.tagName ?? '') === 'p')
@@ -305,7 +334,7 @@ export function planBrowserTemplateCorrespondence(
         matchedAuthoredKeys.add(candidates[0]!.ref.occurrenceKey);
       } else {
         unresolved.push(unresolvedNodes(
-          correspondenceKey,
+          occurrenceIdentityKey,
           'unmatched-browser-node',
           candidates.map((candidate) => candidate.ref),
           [browser.ref],
@@ -336,7 +365,7 @@ export function planBrowserTemplateCorrespondence(
       );
       const kind = intersecting.length > 1 ? 'composite-text' : 'partial-text';
       unresolved.push(unresolvedNodes(
-        correspondenceKey,
+        occurrenceIdentityKey,
         kind,
         intersecting.map((candidate) => candidate.ref),
         [browser.ref],
@@ -348,7 +377,7 @@ export function planBrowserTemplateCorrespondence(
       matchedBrowserKeys.add(browser.ref.occurrenceKey);
     } else {
       unresolved.push(unresolvedNodes(
-        correspondenceKey,
+        occurrenceIdentityKey,
         'unmatched-browser-node',
         [],
         [browser.ref],
@@ -362,7 +391,7 @@ export function planBrowserTemplateCorrespondence(
   for (const derivation of nodeDerivations) {
     if (derivation.extent === 'divergent') {
       unresolved.push(unresolvedNodes(
-        correspondenceKey,
+        occurrenceIdentityKey,
         'partial-node-extent',
         [derivation.authored],
         [derivation.browser],
@@ -371,7 +400,7 @@ export function planBrowserTemplateCorrespondence(
     }
     if (derivation.value === 'normalized') {
       unresolved.push(unresolvedNodes(
-        correspondenceKey,
+        occurrenceIdentityKey,
         'normalized-node-value',
         [derivation.authored],
         [derivation.browser],
@@ -379,12 +408,12 @@ export function planBrowserTemplateCorrespondence(
       ));
     }
   }
-  const reconstructionCohorts = reconstructionCohortsFor(matches, correspondenceKey);
+  const reconstructionCohorts = reconstructionCohortsFor(matches, occurrenceIdentityKey);
   const movedNodes = nodeDerivations
     .filter((derivation) => derivation.placement !== 'retained')
     .map((derivation) => movedNodeDerivation(derivation, matches, matchesByBrowser));
 
-  const attributePlan = planAttributes(authoredEntries, matches, correspondenceKey, unresolved);
+  const attributePlan = planAttributes(authoredEntries, matches, occurrenceIdentityKey, unresolved);
   const droppedAuthoredNodes: AuthoredNodeDropDerivationDraft[] = [];
   for (const authored of authoredEntries) {
     if (matchedAuthoredKeys.has(authored.ref.occurrenceKey)) continue;
@@ -394,7 +423,7 @@ export function planBrowserTemplateCorrespondence(
     }
     if (inCustomizableSelect(authored) && isPinnedLegacySelectProfile(request.browser)) {
       unresolved.push(unresolvedNodes(
-        correspondenceKey,
+        occurrenceIdentityKey,
         'profile-divergent-customizable-select',
         [authored.ref],
         [],
@@ -404,7 +433,7 @@ export function planBrowserTemplateCorrespondence(
     }
     if (!partitionContainsAuthored(unresolved, authored.ref.occurrenceKey)) {
       unresolved.push(unresolvedNodes(
-        correspondenceKey,
+        occurrenceIdentityKey,
         'unmatched-authored-node',
         [authored.ref],
         [],
@@ -419,7 +448,7 @@ export function planBrowserTemplateCorrespondence(
       && !partitionContainsBrowser(unresolved, browser.ref.occurrenceKey)
     ) {
       unresolved.push(unresolvedNodes(
-        correspondenceKey,
+        occurrenceIdentityKey,
         'unmatched-browser-node',
         [],
         [browser.ref],
@@ -430,10 +459,11 @@ export function planBrowserTemplateCorrespondence(
 
   const carrierPlan = planCarrierSelection(
     request.carrierSelection,
-    correspondenceKey,
+    occurrenceIdentityKey,
     new Map(browserEntries.map((entry) => [encodeBrowserTemplatePath(entry.draft.path), entry.ref])),
   );
   return new BrowserTemplateCorrespondenceDraft(
+    occurrenceIdentityKey,
     correspondenceKey,
     markupDigest,
     nodeDerivations,
@@ -473,13 +503,17 @@ export function browserNodeOccurrenceKey(
   return `${correspondenceKey}/browser-node/${node.nodeKind}/${encodeBrowserTemplatePath(node.path)}`;
 }
 
-function correspondenceOccurrenceKey(
-  templateIdentity: string,
+function correspondenceOccurrenceIdentityKey(templateIdentity: string): string {
+  return `browser-correspondence/${encodeURIComponent(templateIdentity)}`;
+}
+
+function correspondenceReceiptKey(
+  occurrenceIdentityKey: string,
   sourceRevision: string,
   authoredRecoveryPolicy: TemplateRecoveryPolicy,
   markupDigest: string,
   browser: BrowserTemplateDraftResult,
-  carrierSelectionSchema: string,
+  carrierSelectionAuthority: string,
 ): string {
   const authority = [
     BROWSER_TEMPLATE_CORRESPONDENCE_SCHEMA_VERSION,
@@ -488,9 +522,21 @@ function correspondenceOccurrenceKey(
     browser.authority.parserVersion,
     browser.authority.context,
     String(browser.authority.scriptingEnabled),
-    carrierSelectionSchema,
+    carrierSelectionAuthority,
   ].join(':');
-  return `browser-correspondence/${encodeURIComponent(templateIdentity)}/${encodeURIComponent(sourceRevision)}/${authoredRecoveryPolicy}/${markupDigest}/${encodeURIComponent(authority)}`;
+  return `${occurrenceIdentityKey}/receipt/${encodeURIComponent(sourceRevision)}/${authoredRecoveryPolicy}/${markupDigest}/${encodeURIComponent(authority)}`;
+}
+
+function carrierSelectionFingerprint(selection: BrowserTemplateCarrierSelectionDraft): string {
+  const semantics = JSON.stringify([
+    selection.carrierKind,
+    selection.reason,
+    selection.authoredCarrier == null ? null : encodeBrowserTemplatePath(selection.authoredCarrier.path),
+    encodeBrowserTemplatePath(selection.content.path),
+    selection.discardedInputNodes.map((node) => encodeBrowserTemplatePath(node.path)),
+  ]);
+  const digest = createHash('sha256').update(semantics).digest('hex');
+  return `${selection.schemaVersion}:${digest}`;
 }
 
 function authoredNodeEntries(
