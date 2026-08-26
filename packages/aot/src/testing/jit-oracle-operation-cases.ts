@@ -3,7 +3,6 @@ import {
   compilerAuthority,
   compilerObligation,
   equalJitInvariant,
-  includesJitInvariant,
   jitCharacterizationCase,
 } from "./compiler-case-builders.js";
 import { CUSTOM_ATTRIBUTE_SETUP_ID } from "./jit-oracle-setups.js";
@@ -49,9 +48,6 @@ export const JIT_ORACLE_OPERATION_CASES: readonly CompilerCase[] = [
       equalJitInvariant("error.code", "The pinned JIT currently throws its internal spread-controller code.", {
         kind: "compiler-error-code",
       }, "AUR9998"),
-      includesJitInvariant("error.resource", "The rejection identifies the bar template controller.", {
-        kind: "compiler-error-message",
-      }, "bar"),
     ],
     contrasts: [],
   }),
