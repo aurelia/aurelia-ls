@@ -100,13 +100,14 @@ import type {
   HtmlRecovery,
 } from './html-ir.js';
 import { HtmlIrNodeKind } from './html-ir.js';
-import type {
-  BrowserEffectiveTemplateAttribute,
-  BrowserEffectiveTemplateNode,
-  BrowserEffectiveTemplateTree,
-  TemplateStructuralAttributeReference,
-  TemplateStructuralNodeReference,
-  TemplateStructuralTreeReference,
+import {
+  TemplateStructuralTreeKind,
+  type TemplateStructuralAttribute,
+  type TemplateStructuralAttributeReference,
+  type TemplateStructuralNode,
+  type TemplateStructuralNodeReference,
+  type TemplateStructuralTree,
+  type TemplateStructuralTreeReference,
 } from './template-structure.js';
 import type {
   TemplateStructureDerivation,
@@ -1028,21 +1029,33 @@ function structuralAttributeReferenceReferences(
 }
 
 function referencesForStructuralTree(
-  tree: BrowserEffectiveTemplateTree,
+  tree: TemplateStructuralTree,
 ): KernelDetailReferenceClosure {
-  return mergeKernelDetailReferences(
-    templateSourceReferenceReferences(tree.templateSource),
-    structuralNodeReferenceReferences(tree.inputFragment),
-    structuralNodeReferenceReferences(tree.compilerCarrier),
-    structuralNodeReferenceReferences(tree.authoredCarrier),
-    structuralNodeReferenceReferences(tree.compilerContent),
-    ...tree.discardedInputNodes.map(structuralNodeReferenceReferences),
-    kernelFieldProvenanceReferences(tree.fieldProvenance),
-  );
+  switch (tree.treeKind) {
+    case TemplateStructuralTreeKind.BrowserEffective:
+      return mergeKernelDetailReferences(
+        templateSourceReferenceReferences(tree.templateSource),
+        structuralNodeReferenceReferences(tree.inputFragment),
+        structuralNodeReferenceReferences(tree.compilerCarrier),
+        structuralNodeReferenceReferences(tree.authoredCarrier),
+        structuralNodeReferenceReferences(tree.compilerContent),
+        ...tree.discardedInputNodes.map(structuralNodeReferenceReferences),
+        kernelFieldProvenanceReferences(tree.fieldProvenance),
+      );
+    case TemplateStructuralTreeKind.CompilerTransformed:
+      return mergeKernelDetailReferences(
+        templateSourceReferenceReferences(tree.templateSource),
+        structuralTreeReferenceReferences(tree.inputTree),
+        structuralNodeReferenceReferences(tree.compilerCarrier),
+        structuralNodeReferenceReferences(tree.compilerContent),
+        kernelFieldProvenanceReferences(tree.fieldProvenance),
+      );
+  }
+  throw new Error('Unknown structural tree kind.');
 }
 
 function referencesForStructuralNode(
-  node: BrowserEffectiveTemplateNode,
+  node: TemplateStructuralNode,
 ): KernelDetailReferenceClosure {
   const common = mergeKernelDetailReferences(
     structuralTreeReferenceReferences(node.tree),
@@ -1069,7 +1082,7 @@ function referencesForStructuralNode(
 }
 
 function referencesForStructuralAttribute(
-  attribute: BrowserEffectiveTemplateAttribute,
+  attribute: TemplateStructuralAttribute,
 ): KernelDetailReferenceClosure {
   return mergeKernelDetailReferences(
     structuralTreeReferenceReferences(attribute.tree),

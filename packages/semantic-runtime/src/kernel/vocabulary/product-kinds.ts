@@ -865,7 +865,7 @@ export const KernelProductKinds = {
       KernelVocabularyNamespace.Template,
       'structural-tree',
       KernelVocabularySlot.ProductKind,
-      'Immutable template structure such as the browser-effective tree, separate from authored HTML and compiler phase.',
+      'Immutable template structure such as a browser-effective input or compiler-transformed output tree.',
     ),
 
     /** Product kind for one occurrence in a structural template tree. */

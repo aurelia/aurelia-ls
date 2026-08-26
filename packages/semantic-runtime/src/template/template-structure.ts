@@ -22,12 +22,18 @@ import type {
 import type { TemplateSourceReference } from './compilation-unit.js';
 import {
   HtmlIrNodeKind,
+  type HtmlCommentSemanticKind,
   type HtmlNamespaceKind,
 } from './html-ir.js';
 
 const StructuralTreeDetailKind = 'template.structural-tree';
 const StructuralNodeDetailKind = 'template.structural-node';
 const StructuralAttributeDetailKind = 'template.structural-attribute';
+
+export const enum TemplateStructuralTreeKind {
+  BrowserEffective = 'browser-effective',
+  CompilerTransformed = 'compiler-transformed',
+}
 
 export type BrowserEffectiveTemplateTreeField =
   | 'templateSource'
@@ -64,12 +70,11 @@ export type BrowserEffectiveTemplateAttributeField =
 
 /** Reference to one immutable structural tree interpretation of an authored template. */
 export class TemplateStructuralTreeReference {
-  readonly treeKind = 'browser-effective' as const;
-
   constructor(
     readonly productHandle: ProductHandle,
     readonly identityHandle: IdentityHandle,
     readonly addressHandle: AddressHandle | null,
+    readonly treeKind: TemplateStructuralTreeKind = TemplateStructuralTreeKind.BrowserEffective,
   ) {}
 }
 
@@ -97,7 +102,7 @@ export class TemplateStructuralAttributeReference {
 
 /** Browser-effective structural tree plus the separate Aurelia carrier-selection result. */
 export class BrowserEffectiveTemplateTree {
-  readonly treeKind = 'browser-effective' as const;
+  readonly treeKind = TemplateStructuralTreeKind.BrowserEffective;
 
   constructor(
     readonly templateSource: TemplateSourceReference,
@@ -130,6 +135,7 @@ export class BrowserEffectiveTemplateTree {
       this.productHandle,
       this.identityHandle,
       this.sourceAddressHandle,
+      this.treeKind,
     );
   }
 }
@@ -322,6 +328,217 @@ export class BrowserEffectiveTemplateAttribute {
   }
 }
 
+export type CompilerTransformedTemplateTreeField =
+  | 'templateSource'
+  | 'inputTree'
+  | 'compilerCarrier'
+  | 'compilerContent'
+  | 'source';
+
+export type CompilerTransformedTemplateNodeField =
+  | 'tree'
+  | 'kind'
+  | 'name'
+  | 'namespace'
+  | 'attributes'
+  | 'children'
+  | 'templateContent'
+  | 'value'
+  | 'realization'
+  | 'source';
+
+export type CompilerTransformedTemplateAttributeField =
+  | 'tree'
+  | 'owner'
+  | 'name'
+  | 'namespace'
+  | 'value'
+  | 'source';
+
+export const enum CompilerTransformedTextKind {
+  Ordinary = 'ordinary',
+  BindingPlaceholder = 'binding-placeholder',
+}
+
+/** Immutable compiler-final tree rooted at the template carrier consumed by runtime Rendering. */
+export class CompilerTransformedTemplateTree {
+  readonly treeKind = TemplateStructuralTreeKind.CompilerTransformed;
+
+  constructor(
+    readonly templateSource: TemplateSourceReference,
+    readonly inputTree: TemplateStructuralTreeReference,
+    readonly compilerCarrier: TemplateStructuralNodeReference,
+    readonly compilerContent: TemplateStructuralNodeReference,
+    readonly fieldProvenance: readonly FieldProvenance<CompilerTransformedTemplateTreeField>[] = [],
+  ) {}
+
+  get productHandle(): ProductHandle {
+    return productDetailHandle(this, StructuralTreeDetailKind);
+  }
+
+  get identityHandle(): IdentityHandle {
+    return productDetailIdentityHandle(this, StructuralTreeDetailKind);
+  }
+
+  get sourceAddressHandle(): AddressHandle | null {
+    return productDetailAddressHandle(this, StructuralTreeDetailKind);
+  }
+
+  toReference(): TemplateStructuralTreeReference {
+    return new TemplateStructuralTreeReference(
+      this.productHandle,
+      this.identityHandle,
+      this.sourceAddressHandle,
+      this.treeKind,
+    );
+  }
+}
+
+export class CompilerTransformedTemplateFragment {
+  readonly nodeKind = HtmlIrNodeKind.Fragment;
+
+  constructor(
+    readonly tree: TemplateStructuralTreeReference,
+    readonly children: readonly TemplateStructuralNodeReference[],
+    readonly fieldProvenance: readonly FieldProvenance<CompilerTransformedTemplateNodeField>[] = [],
+  ) {}
+
+  get productHandle(): ProductHandle {
+    return productDetailHandle(this, StructuralNodeDetailKind);
+  }
+
+  get identityHandle(): IdentityHandle {
+    return productDetailIdentityHandle(this, StructuralNodeDetailKind);
+  }
+
+  get sourceAddressHandle(): AddressHandle | null {
+    return productDetailAddressHandle(this, StructuralNodeDetailKind);
+  }
+
+  toReference(): TemplateStructuralNodeReference {
+    return compilerTransformedStructuralNodeReference(this);
+  }
+}
+
+export class CompilerTransformedTemplateElement {
+  readonly nodeKind = HtmlIrNodeKind.Element;
+
+  constructor(
+    readonly tree: TemplateStructuralTreeReference,
+    readonly tagName: string,
+    readonly namespace: HtmlNamespaceKind,
+    readonly namespaceUri: string,
+    readonly attributes: readonly TemplateStructuralAttributeReference[],
+    readonly children: readonly TemplateStructuralNodeReference[],
+    readonly templateContent: TemplateStructuralNodeReference | null,
+    readonly fieldProvenance: readonly FieldProvenance<CompilerTransformedTemplateNodeField>[] = [],
+  ) {}
+
+  get productHandle(): ProductHandle {
+    return productDetailHandle(this, StructuralNodeDetailKind);
+  }
+
+  get identityHandle(): IdentityHandle {
+    return productDetailIdentityHandle(this, StructuralNodeDetailKind);
+  }
+
+  get sourceAddressHandle(): AddressHandle | null {
+    return productDetailAddressHandle(this, StructuralNodeDetailKind);
+  }
+
+  toReference(): TemplateStructuralNodeReference {
+    return compilerTransformedStructuralNodeReference(this);
+  }
+}
+
+export class CompilerTransformedTemplateText {
+  readonly nodeKind = HtmlIrNodeKind.Text;
+
+  constructor(
+    readonly tree: TemplateStructuralTreeReference,
+    readonly text: string,
+    readonly textKind: CompilerTransformedTextKind = CompilerTransformedTextKind.Ordinary,
+    readonly fieldProvenance: readonly FieldProvenance<CompilerTransformedTemplateNodeField>[] = [],
+  ) {}
+
+  get productHandle(): ProductHandle {
+    return productDetailHandle(this, StructuralNodeDetailKind);
+  }
+
+  get identityHandle(): IdentityHandle {
+    return productDetailIdentityHandle(this, StructuralNodeDetailKind);
+  }
+
+  get sourceAddressHandle(): AddressHandle | null {
+    return productDetailAddressHandle(this, StructuralNodeDetailKind);
+  }
+
+  toReference(): TemplateStructuralNodeReference {
+    return compilerTransformedStructuralNodeReference(this);
+  }
+}
+
+export class CompilerTransformedTemplateComment {
+  readonly nodeKind = HtmlIrNodeKind.Comment;
+
+  constructor(
+    readonly tree: TemplateStructuralTreeReference,
+    readonly text: string,
+    readonly semanticKind: HtmlCommentSemanticKind,
+    readonly fieldProvenance: readonly FieldProvenance<CompilerTransformedTemplateNodeField>[] = [],
+  ) {}
+
+  get productHandle(): ProductHandle {
+    return productDetailHandle(this, StructuralNodeDetailKind);
+  }
+
+  get identityHandle(): IdentityHandle {
+    return productDetailIdentityHandle(this, StructuralNodeDetailKind);
+  }
+
+  get sourceAddressHandle(): AddressHandle | null {
+    return productDetailAddressHandle(this, StructuralNodeDetailKind);
+  }
+
+  toReference(): TemplateStructuralNodeReference {
+    return compilerTransformedStructuralNodeReference(this);
+  }
+}
+
+export class CompilerTransformedTemplateAttribute {
+  constructor(
+    readonly tree: TemplateStructuralTreeReference,
+    readonly owner: TemplateStructuralNodeReference,
+    readonly name: string,
+    readonly value: string,
+    readonly namespaceUri: string | null,
+    readonly prefix: string | null,
+    readonly fieldProvenance: readonly FieldProvenance<CompilerTransformedTemplateAttributeField>[] = [],
+  ) {}
+
+  get productHandle(): ProductHandle {
+    return productDetailHandle(this, StructuralAttributeDetailKind);
+  }
+
+  get identityHandle(): IdentityHandle {
+    return productDetailIdentityHandle(this, StructuralAttributeDetailKind);
+  }
+
+  get sourceAddressHandle(): AddressHandle | null {
+    return productDetailAddressHandle(this, StructuralAttributeDetailKind);
+  }
+
+  toReference(): TemplateStructuralAttributeReference {
+    return new TemplateStructuralAttributeReference(
+      this.tree.productHandle,
+      this.productHandle,
+      this.identityHandle,
+      this.sourceAddressHandle,
+      this.name,
+    );
+  }
+}
+
 export type BrowserEffectiveTemplateNode =
   | BrowserEffectiveTemplateFragment
   | BrowserEffectiveTemplateElement
@@ -329,8 +546,38 @@ export type BrowserEffectiveTemplateNode =
   | BrowserEffectiveTemplateComment
   | BrowserEffectiveTemplateDoctype;
 
+export type CompilerTransformedTemplateNode =
+  | CompilerTransformedTemplateFragment
+  | CompilerTransformedTemplateElement
+  | CompilerTransformedTemplateText
+  | CompilerTransformedTemplateComment;
+
+export type TemplateStructuralTree =
+  | BrowserEffectiveTemplateTree
+  | CompilerTransformedTemplateTree;
+
+export type TemplateStructuralNode =
+  | BrowserEffectiveTemplateNode
+  | CompilerTransformedTemplateNode;
+
+export type TemplateStructuralAttribute =
+  | BrowserEffectiveTemplateAttribute
+  | CompilerTransformedTemplateAttribute;
+
 function structuralNodeReference(
   node: BrowserEffectiveTemplateNode,
+): TemplateStructuralNodeReference {
+  return new TemplateStructuralNodeReference(
+    node.tree.productHandle,
+    node.nodeKind,
+    node.productHandle,
+    node.identityHandle,
+    node.sourceAddressHandle,
+  );
+}
+
+function compilerTransformedStructuralNodeReference(
+  node: CompilerTransformedTemplateNode,
 ): TemplateStructuralNodeReference {
   return new TemplateStructuralNodeReference(
     node.tree.productHandle,

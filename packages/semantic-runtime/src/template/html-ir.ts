@@ -33,6 +33,8 @@ export const enum HtmlNamespaceKind {
 export const enum HtmlCommentSemanticKind {
   Plain = 'plain',
   RenderLocation = 'render-location',
+  RenderLocationStart = 'render-location-start',
+  RenderLocationEnd = 'render-location-end',
   CompilerMarker = 'compiler-marker',
   Open = 'open',
 }

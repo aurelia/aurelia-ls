@@ -6,15 +6,22 @@ import {
   type KernelPublicationComparisonContext,
 } from '../kernel/publication-comparison.js';
 import { HtmlIrNodeKind } from './html-ir.js';
-import type {
+import {
   BrowserEffectiveTemplateAttribute,
-  BrowserEffectiveTemplateElement,
-  BrowserEffectiveTemplateNode,
-  BrowserEffectiveTemplateTree,
-  TemplateStructuralAttributeReference,
-  TemplateStructuralNodeReference,
-  TemplateStructuralTreeReference,
+  CompilerTransformedTemplateAttribute,
+  TemplateStructuralTreeKind,
+  type BrowserEffectiveTemplateNode,
+  type BrowserEffectiveTemplateElement,
+  type BrowserEffectiveTemplateTree,
+  type CompilerTransformedTemplateNode,
+  type TemplateStructuralAttribute,
+  type TemplateStructuralAttributeReference,
+  type TemplateStructuralNode,
+  type TemplateStructuralNodeReference,
+  type TemplateStructuralTree,
+  type TemplateStructuralTreeReference,
 } from './template-structure.js';
+import type { TemplateSourceReference } from './compilation-unit.js';
 import type {
   TemplateStructureDerivation,
   TemplateStructureDerivationTerm,
@@ -22,52 +29,37 @@ import type {
 } from './template-structure-derivation.js';
 
 export function compareStructuralTreeDetails(
-  previous: BrowserEffectiveTemplateTree,
-  next: BrowserEffectiveTemplateTree,
+  previous: TemplateStructuralTree,
+  next: TemplateStructuralTree,
   context: KernelPublicationComparisonContext,
 ): KernelComparablePublicationDecision {
-  const semantic = sameValues(
+  const commonSemantic = sameValues(
     previous.productHandle,
     next.productHandle,
     previous.identityHandle,
     next.identityHandle,
     previous.treeKind,
     next.treeKind,
-    previous.carrierKind,
-    next.carrierKind,
-    previous.carrierReason,
-    next.carrierReason,
   )
-    && sameTemplateSourceSemantics(previous.templateSource, next.templateSource)
-    && sameParserAuthority(previous.parserAuthority, next.parserAuthority)
-    && sameStructuralNodeReferenceSemantics(previous.inputFragment, next.inputFragment)
-    && sameStructuralNodeReferenceSemantics(previous.compilerCarrier, next.compilerCarrier)
-    && sameNullable(previous.authoredCarrier, next.authoredCarrier, sameStructuralNodeReferenceSemantics)
-    && sameStructuralNodeReferenceSemantics(previous.compilerContent, next.compilerContent)
-    && sameArrays(previous.discardedInputNodes, next.discardedInputNodes, sameStructuralNodeReferenceSemantics);
+    && sameTemplateSourceSemantics(previous.templateSource, next.templateSource);
+  const semantic = commonSemantic && sameStructuralTreeVariantSemantics(previous, next);
   if (!semantic) {
     return KernelPublicationDecisionKind.Replace;
   }
-  const witness = sameKernelRecordWitness(previous.sourceAddressHandle, next.sourceAddressHandle, context)
+  const commonWitness = sameKernelRecordWitness(previous.sourceAddressHandle, next.sourceAddressHandle, context)
     && sameKernelRecordWitness(
       previous.templateSource.sourceAddressHandle,
       next.templateSource.sourceAddressHandle,
       context,
     )
-    && sameStructuralNodeReferenceWitness(previous.inputFragment, next.inputFragment, context)
-    && sameStructuralNodeReferenceWitness(previous.compilerCarrier, next.compilerCarrier, context)
-    && sameNullable(previous.authoredCarrier, next.authoredCarrier, (left, right) =>
-      sameStructuralNodeReferenceWitness(left, right, context))
-    && sameStructuralNodeReferenceWitness(previous.compilerContent, next.compilerContent, context)
-    && sameArrays(previous.discardedInputNodes, next.discardedInputNodes, (left, right) =>
-      sameStructuralNodeReferenceWitness(left, right, context))
     && sameKernelFieldProvenance(previous.fieldProvenance, next.fieldProvenance, context);
+  const witness = commonWitness && sameStructuralTreeVariantWitness(previous, next, context);
   return witnessDecision(witness);
 }
 
 export function compareStructuralNodeDetails(
-  previous: BrowserEffectiveTemplateNode,
-  next: BrowserEffectiveTemplateNode,
+  previous: TemplateStructuralNode,
+  next: TemplateStructuralNode,
   context: KernelPublicationComparisonContext,
 ): KernelComparablePublicationDecision {
   if (
@@ -83,6 +75,21 @@ export function compareStructuralNodeDetails(
   ) {
     return KernelPublicationDecisionKind.Replace;
   }
+  if (isBrowserEffectiveNode(previous)) {
+    return isBrowserEffectiveNode(next)
+      ? compareBrowserEffectiveNodeVariant(previous, next, context)
+      : KernelPublicationDecisionKind.Replace;
+  }
+  return isCompilerTransformedNode(next)
+    ? compareCompilerTransformedNodeVariant(previous, next, context)
+    : KernelPublicationDecisionKind.Replace;
+}
+
+function compareBrowserEffectiveNodeVariant(
+  previous: BrowserEffectiveTemplateNode,
+  next: BrowserEffectiveTemplateNode,
+  context: KernelPublicationComparisonContext,
+): KernelComparablePublicationDecision {
   let semantic = true;
   switch (previous.nodeKind) {
     case HtmlIrNodeKind.Fragment: {
@@ -162,9 +169,75 @@ export function compareStructuralNodeDetails(
   return witnessDecision(commonWitness && variantWitness);
 }
 
+function compareCompilerTransformedNodeVariant(
+  previous: CompilerTransformedTemplateNode,
+  next: CompilerTransformedTemplateNode,
+  context: KernelPublicationComparisonContext,
+): KernelComparablePublicationDecision {
+  let semantic = true;
+  switch (previous.nodeKind) {
+    case HtmlIrNodeKind.Fragment:
+      semantic = next.nodeKind === HtmlIrNodeKind.Fragment
+        && sameArrays(previous.children, next.children, sameStructuralNodeReferenceSemantics);
+      break;
+    case HtmlIrNodeKind.Element:
+      semantic = next.nodeKind === HtmlIrNodeKind.Element
+        && sameValues(
+          previous.tagName,
+          next.tagName,
+          previous.namespace,
+          next.namespace,
+          previous.namespaceUri,
+          next.namespaceUri,
+        )
+        && sameArrays(previous.attributes, next.attributes, sameStructuralAttributeReferenceSemantics)
+        && sameArrays(previous.children, next.children, sameStructuralNodeReferenceSemantics)
+        && sameNullable(previous.templateContent, next.templateContent, sameStructuralNodeReferenceSemantics);
+      break;
+    case HtmlIrNodeKind.Text:
+      semantic = next.nodeKind === HtmlIrNodeKind.Text
+        && previous.text === next.text
+        && previous.textKind === next.textKind;
+      break;
+    case HtmlIrNodeKind.Comment:
+      semantic = next.nodeKind === HtmlIrNodeKind.Comment
+        && previous.text === next.text
+        && previous.semanticKind === next.semanticKind;
+      break;
+  }
+  if (!semantic) return KernelPublicationDecisionKind.Replace;
+  const commonWitness = sameKernelRecordWitness(previous.sourceAddressHandle, next.sourceAddressHandle, context)
+    && sameStructuralTreeReferenceWitness(previous.tree, next.tree, context)
+    && sameKernelFieldProvenance(previous.fieldProvenance, next.fieldProvenance, context);
+  let variantWitness = true;
+  switch (previous.nodeKind) {
+    case HtmlIrNodeKind.Fragment:
+      variantWitness = next.nodeKind === HtmlIrNodeKind.Fragment
+        && sameArrays(previous.children, next.children, (left, right) =>
+          sameStructuralNodeReferenceWitness(left, right, context));
+      break;
+    case HtmlIrNodeKind.Element:
+      variantWitness = next.nodeKind === HtmlIrNodeKind.Element
+        && sameArrays(previous.attributes, next.attributes, (left, right) =>
+          sameStructuralAttributeReferenceWitness(left, right, context))
+        && sameArrays(previous.children, next.children, (left, right) =>
+          sameStructuralNodeReferenceWitness(left, right, context))
+        && sameNullable(previous.templateContent, next.templateContent, (left, right) =>
+          sameStructuralNodeReferenceWitness(left, right, context));
+      break;
+    case HtmlIrNodeKind.Text:
+      variantWitness = next.nodeKind === HtmlIrNodeKind.Text;
+      break;
+    case HtmlIrNodeKind.Comment:
+      variantWitness = next.nodeKind === HtmlIrNodeKind.Comment;
+      break;
+  }
+  return witnessDecision(commonWitness && variantWitness);
+}
+
 export function compareStructuralAttributeDetails(
-  previous: BrowserEffectiveTemplateAttribute,
-  next: BrowserEffectiveTemplateAttribute,
+  previous: TemplateStructuralAttribute,
+  next: TemplateStructuralAttribute,
   context: KernelPublicationComparisonContext,
 ): KernelComparablePublicationDecision {
   const semantic = sameValues(
@@ -186,20 +259,28 @@ export function compareStructuralAttributeDetails(
   if (!semantic) {
     return KernelPublicationDecisionKind.Replace;
   }
-  const witness = sameKernelRecordWitness(previous.sourceAddressHandle, next.sourceAddressHandle, context)
+  const commonWitness = sameKernelRecordWitness(previous.sourceAddressHandle, next.sourceAddressHandle, context)
     && sameStructuralTreeReferenceWitness(previous.tree, next.tree, context)
     && sameStructuralNodeReferenceWitness(previous.owner, next.owner, context)
-    && sameValues(
-      previous.locationJoinKind,
-      next.locationJoinKind,
-      previous.parserLocationKey,
-      next.parserLocationKey,
-      previous.sourceTokenName,
-      next.sourceTokenName,
-    )
-    && sameSourceLocation(previous.sourceLocation, next.sourceLocation)
     && sameKernelFieldProvenance(previous.fieldProvenance, next.fieldProvenance, context);
-  return witnessDecision(witness);
+  if (previous instanceof BrowserEffectiveTemplateAttribute) {
+    if (!(next instanceof BrowserEffectiveTemplateAttribute)) {
+      return KernelPublicationDecisionKind.Replace;
+    }
+    return witnessDecision(commonWitness
+      && sameValues(
+        previous.locationJoinKind,
+        next.locationJoinKind,
+        previous.parserLocationKey,
+        next.parserLocationKey,
+        previous.sourceTokenName,
+        next.sourceTokenName,
+      )
+      && sameSourceLocation(previous.sourceLocation, next.sourceLocation));
+  }
+  return next instanceof CompilerTransformedTemplateAttribute
+    ? witnessDecision(commonWitness)
+    : KernelPublicationDecisionKind.Replace;
 }
 
 export function compareStructureDerivationDetails(
@@ -231,8 +312,8 @@ export function compareStructureDerivationDetails(
 }
 
 function sameTemplateSourceSemantics(
-  previous: BrowserEffectiveTemplateTree['templateSource'],
-  next: BrowserEffectiveTemplateTree['templateSource'],
+  previous: TemplateSourceReference,
+  next: TemplateSourceReference,
 ): boolean {
   return sameValues(
     previous.productHandle,
@@ -246,6 +327,76 @@ function sameTemplateSourceSemantics(
     previous.templateAddressHandle,
     next.templateAddressHandle,
   );
+}
+
+function isBrowserEffectiveNode(
+  node: TemplateStructuralNode,
+): node is BrowserEffectiveTemplateNode {
+  return node.tree.treeKind === TemplateStructuralTreeKind.BrowserEffective;
+}
+
+function isCompilerTransformedNode(
+  node: TemplateStructuralNode,
+): node is CompilerTransformedTemplateNode {
+  return node.tree.treeKind === TemplateStructuralTreeKind.CompilerTransformed;
+}
+
+function sameStructuralTreeVariantSemantics(
+  previous: TemplateStructuralTree,
+  next: TemplateStructuralTree,
+): boolean {
+  if (previous.treeKind !== next.treeKind) return false;
+  switch (previous.treeKind) {
+    case TemplateStructuralTreeKind.BrowserEffective: {
+      if (next.treeKind !== TemplateStructuralTreeKind.BrowserEffective) return false;
+      return sameValues(
+        previous.carrierKind,
+        next.carrierKind,
+        previous.carrierReason,
+        next.carrierReason,
+      )
+        && sameParserAuthority(previous.parserAuthority, next.parserAuthority)
+        && sameStructuralNodeReferenceSemantics(previous.inputFragment, next.inputFragment)
+        && sameStructuralNodeReferenceSemantics(previous.compilerCarrier, next.compilerCarrier)
+        && sameNullable(previous.authoredCarrier, next.authoredCarrier, sameStructuralNodeReferenceSemantics)
+        && sameStructuralNodeReferenceSemantics(previous.compilerContent, next.compilerContent)
+        && sameArrays(previous.discardedInputNodes, next.discardedInputNodes, sameStructuralNodeReferenceSemantics);
+    }
+    case TemplateStructuralTreeKind.CompilerTransformed: {
+      if (next.treeKind !== TemplateStructuralTreeKind.CompilerTransformed) return false;
+      return sameStructuralTreeReferenceSemantics(previous.inputTree, next.inputTree)
+        && sameStructuralNodeReferenceSemantics(previous.compilerCarrier, next.compilerCarrier)
+        && sameStructuralNodeReferenceSemantics(previous.compilerContent, next.compilerContent);
+    }
+  }
+  throw new Error('Unknown structural tree kind.');
+}
+
+function sameStructuralTreeVariantWitness(
+  previous: TemplateStructuralTree,
+  next: TemplateStructuralTree,
+  context: KernelPublicationComparisonContext,
+): boolean {
+  if (previous.treeKind !== next.treeKind) return false;
+  switch (previous.treeKind) {
+    case TemplateStructuralTreeKind.BrowserEffective: {
+      if (next.treeKind !== TemplateStructuralTreeKind.BrowserEffective) return false;
+      return sameStructuralNodeReferenceWitness(previous.inputFragment, next.inputFragment, context)
+        && sameStructuralNodeReferenceWitness(previous.compilerCarrier, next.compilerCarrier, context)
+        && sameNullable(previous.authoredCarrier, next.authoredCarrier, (left, right) =>
+          sameStructuralNodeReferenceWitness(left, right, context))
+        && sameStructuralNodeReferenceWitness(previous.compilerContent, next.compilerContent, context)
+        && sameArrays(previous.discardedInputNodes, next.discardedInputNodes, (left, right) =>
+          sameStructuralNodeReferenceWitness(left, right, context));
+    }
+    case TemplateStructuralTreeKind.CompilerTransformed: {
+      if (next.treeKind !== TemplateStructuralTreeKind.CompilerTransformed) return false;
+      return sameStructuralTreeReferenceWitness(previous.inputTree, next.inputTree, context)
+        && sameStructuralNodeReferenceWitness(previous.compilerCarrier, next.compilerCarrier, context)
+        && sameStructuralNodeReferenceWitness(previous.compilerContent, next.compilerContent, context);
+    }
+  }
+  throw new Error('Unknown structural tree kind.');
 }
 
 function sameParserAuthority(

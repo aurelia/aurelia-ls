@@ -46,9 +46,9 @@ import type {
   HtmlRecovery,
 } from './html-ir.js';
 import type {
-  BrowserEffectiveTemplateAttribute,
-  BrowserEffectiveTemplateNode,
-  BrowserEffectiveTemplateTree,
+  TemplateStructuralAttribute,
+  TemplateStructuralNode,
+  TemplateStructuralTree,
 } from './template-structure.js';
 import type { TemplateStructureDerivation } from './template-structure-derivation.js';
 import type {
@@ -309,28 +309,28 @@ export const TemplateDetailDescriptors = {
     'One exact authored HTML parser recovery fact.',
   ),
   StructuralTree: defineProductDetailDescriptor<
-    BrowserEffectiveTemplateTree,
+    TemplateStructuralTree,
     typeof KernelVocabulary.Template.StructuralTree.key
   >(
     KernelVocabulary.Template.StructuralTree.key,
     'template.structural-tree',
-    'Browser-effective structural tree and compiler-carrier selection detail.',
+    'Immutable browser-effective or compiler-transformed structural tree detail.',
   ),
   StructuralNode: defineProductDetailDescriptor<
-    BrowserEffectiveTemplateNode,
+    TemplateStructuralNode,
     typeof KernelVocabulary.Template.StructuralNode.key
   >(
     KernelVocabulary.Template.StructuralNode.key,
     'template.structural-node',
-    'One immutable browser-effective structural node occurrence.',
+    'One immutable structural node occurrence in a browser-effective or compiler-transformed tree.',
   ),
   StructuralAttribute: defineProductDetailDescriptor<
-    BrowserEffectiveTemplateAttribute,
+    TemplateStructuralAttribute,
     typeof KernelVocabulary.Template.StructuralAttribute.key
   >(
     KernelVocabulary.Template.StructuralAttribute.key,
     'template.structural-attribute',
-    'One immutable browser-effective structural attribute occurrence.',
+    'One immutable structural attribute occurrence in a browser-effective or compiler-transformed tree.',
   ),
   StructureDerivation: defineProductDetailDescriptor<
     TemplateStructureDerivation,

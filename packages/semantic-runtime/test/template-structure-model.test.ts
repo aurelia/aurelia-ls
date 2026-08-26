@@ -34,6 +34,7 @@ import {
 } from '../src/template/compilation-unit.js';
 import { TemplateDetailDescriptors } from '../src/template/detail-descriptors.js';
 import {
+  HtmlCommentSemanticKind,
   HtmlIrNodeKind,
   HtmlNamespaceKind,
 } from '../src/template/html-ir.js';
@@ -42,8 +43,14 @@ import {
   BrowserEffectiveTemplateAttribute,
   BrowserEffectiveTemplateElement,
   BrowserEffectiveTemplateTree,
+  CompilerTransformedTemplateAttribute,
+  CompilerTransformedTemplateComment,
+  CompilerTransformedTemplateElement,
+  CompilerTransformedTemplateFragment,
+  CompilerTransformedTemplateTree,
   TemplateStructuralAttributeReference,
   TemplateStructuralNodeReference,
+  TemplateStructuralTreeKind,
   TemplateStructuralTreeReference,
 } from '../src/template/template-structure.js';
 import {
@@ -277,6 +284,116 @@ describe('template structural model', () => {
     );
     expect(() => TemplateProductDetails.StructureDerivation.referencesFor(invalid))
       .toThrow('references non-structural product kind');
+  });
+
+  test('reuses structural product kinds for compiler-transformed trees while preserving marker semantics', () => {
+    const handles = new KernelHandleFactory('compiler-transformed-structure');
+    const inputTree = new TemplateStructuralTreeReference(
+      handles.product('input-tree'),
+      handles.identity('input-tree'),
+      handles.address('input-tree'),
+    );
+    const transformedTree = new TemplateStructuralTreeReference(
+      handles.product('transformed-tree'),
+      handles.identity('transformed-tree'),
+      handles.address('transformed-tree'),
+      TemplateStructuralTreeKind.CompilerTransformed,
+    );
+    const marker = nodeReference(handles, transformedTree, 'marker', HtmlIrNodeKind.Comment);
+    const child = nodeReference(handles, transformedTree, 'child', HtmlIrNodeKind.Element);
+    const content = nodeReference(handles, transformedTree, 'content', HtmlIrNodeKind.Fragment);
+    const carrier = nodeReference(handles, transformedTree, 'carrier', HtmlIrNodeKind.Element);
+    const attribute = new TemplateStructuralAttributeReference(
+      transformedTree.productHandle,
+      handles.product('attribute'),
+      handles.identity('attribute'),
+      handles.address('attribute'),
+      'title',
+    );
+    const source = new TemplateSourceReference(
+      handles.product('source'),
+      handles.identity('source'),
+      TemplateSourceKind.Markup,
+      TemplatePhase.Authored,
+      handles.address('source-template'),
+      handles.address('source-span'),
+    );
+    const tree = bindDetail(
+      new CompilerTransformedTemplateTree(source, inputTree, carrier, content),
+      handles,
+      'transformed-tree',
+      KernelVocabulary.Template.StructuralTree.key,
+      'transformed-tree',
+    );
+    expect(tree.toReference().treeKind).toBe(TemplateStructuralTreeKind.CompilerTransformed);
+    expectProductDetails(TemplateProductDetails.StructuralTree.referencesFor(tree), [
+      [TemplateDetailDescriptors.Source.detailKind, source.productHandle],
+      [TemplateDetailDescriptors.StructuralTree.detailKind, inputTree.productHandle],
+      [TemplateDetailDescriptors.StructuralNode.detailKind, carrier.productHandle],
+      [TemplateDetailDescriptors.StructuralNode.detailKind, content.productHandle],
+    ]);
+
+    const fragment = bindDetail(
+      new CompilerTransformedTemplateFragment(transformedTree, [marker, child]),
+      handles,
+      'content',
+      KernelVocabulary.Template.StructuralNode.key,
+      'content',
+    );
+    const element = bindDetail(
+      new CompilerTransformedTemplateElement(
+        transformedTree,
+        'div',
+        HtmlNamespaceKind.Html,
+        'http://www.w3.org/1999/xhtml',
+        [attribute],
+        [],
+        null,
+      ),
+      handles,
+      'child',
+      KernelVocabulary.Template.StructuralNode.key,
+      'child',
+    );
+    const attributeDetail = bindDetail(
+      new CompilerTransformedTemplateAttribute(transformedTree, child, 'title', 'x', null, null),
+      handles,
+      'attribute',
+      KernelVocabulary.Template.StructuralAttribute.key,
+      'attribute',
+    );
+    expectProductDetails(TemplateProductDetails.StructuralNode.referencesFor(fragment), [
+      [TemplateDetailDescriptors.StructuralTree.detailKind, transformedTree.productHandle],
+      [TemplateDetailDescriptors.StructuralNode.detailKind, marker.productHandle],
+      [TemplateDetailDescriptors.StructuralNode.detailKind, child.productHandle],
+    ]);
+    expectProductDetails(TemplateProductDetails.StructuralNode.referencesFor(element), [
+      [TemplateDetailDescriptors.StructuralTree.detailKind, transformedTree.productHandle],
+      [TemplateDetailDescriptors.StructuralAttribute.detailKind, attribute.productHandle],
+    ]);
+    expectProductDetails(TemplateProductDetails.StructuralAttribute.referencesFor(attributeDetail), [
+      [TemplateDetailDescriptors.StructuralTree.detailKind, transformedTree.productHandle],
+      [TemplateDetailDescriptors.StructuralNode.detailKind, child.productHandle],
+    ]);
+
+    const context = { compareRecordHandles: () => KernelPublicationDecisionKind.Retain } as const;
+    const comment = (kind: HtmlCommentSemanticKind) => bindDetail(
+      new CompilerTransformedTemplateComment(transformedTree, 'au', kind),
+      handles,
+      'marker-detail',
+      KernelVocabulary.Template.StructuralNode.key,
+      'marker-detail',
+    );
+    expect(TemplateProductDetails.StructuralNode.compare(
+      comment(HtmlCommentSemanticKind.CompilerMarker),
+      comment(HtmlCommentSemanticKind.CompilerMarker),
+      context,
+    )).toBe(KernelPublicationDecisionKind.Retain);
+    expect(TemplateProductDetails.StructuralNode.compare(
+      comment(HtmlCommentSemanticKind.CompilerMarker),
+      comment(HtmlCommentSemanticKind.Plain),
+      context,
+    )).toBe(KernelPublicationDecisionKind.Replace);
   });
 
   test('compares structural semantics separately from parser and source witnesses', () => {
