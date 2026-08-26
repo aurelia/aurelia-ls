@@ -46,6 +46,12 @@ import type {
   HtmlRecovery,
 } from './html-ir.js';
 import type {
+  BrowserEffectiveTemplateAttribute,
+  BrowserEffectiveTemplateNode,
+  BrowserEffectiveTemplateTree,
+} from './template-structure.js';
+import type { TemplateStructureDerivation } from './template-structure-derivation.js';
+import type {
   TemplateInstruction,
   TemplateInstructionSequence,
 } from './instruction-ir.js';
@@ -301,6 +307,38 @@ export const TemplateDetailDescriptors = {
     KernelVocabulary.Template.HtmlRecovery.key,
     'template.html-recovery',
     'One exact authored HTML parser recovery fact.',
+  ),
+  StructuralTree: defineProductDetailDescriptor<
+    BrowserEffectiveTemplateTree,
+    typeof KernelVocabulary.Template.StructuralTree.key
+  >(
+    KernelVocabulary.Template.StructuralTree.key,
+    'template.structural-tree',
+    'Browser-effective structural tree and compiler-carrier selection detail.',
+  ),
+  StructuralNode: defineProductDetailDescriptor<
+    BrowserEffectiveTemplateNode,
+    typeof KernelVocabulary.Template.StructuralNode.key
+  >(
+    KernelVocabulary.Template.StructuralNode.key,
+    'template.structural-node',
+    'One immutable browser-effective structural node occurrence.',
+  ),
+  StructuralAttribute: defineProductDetailDescriptor<
+    BrowserEffectiveTemplateAttribute,
+    typeof KernelVocabulary.Template.StructuralAttribute.key
+  >(
+    KernelVocabulary.Template.StructuralAttribute.key,
+    'template.structural-attribute',
+    'One immutable browser-effective structural attribute occurrence.',
+  ),
+  StructureDerivation: defineProductDetailDescriptor<
+    TemplateStructureDerivation,
+    typeof KernelVocabulary.Template.StructureDerivation.key
+  >(
+    KernelVocabulary.Template.StructureDerivation.key,
+    'template.structure-derivation',
+    'One ordered many-input/many-output structural derivation.',
   ),
   CompiledTemplate: defineProductDetailDescriptor<
     CompiledTemplate,

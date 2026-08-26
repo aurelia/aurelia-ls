@@ -326,6 +326,14 @@ export const KernelOpenSeamKinds = {
     ),
   },
   Template: {
+    /** Authored and effective structure could not be joined without guessing origin or disposition. */
+    OpenStructureCorrespondence: defineVocabulary(
+      KernelVocabularyNamespace.Template,
+      'open-structure-correspondence',
+      KernelVocabularySlot.OpenSeamKind,
+      'Authored and browser-effective structure could not be joined without guessing origin, partition, or disposition.',
+    ),
+
     /** App-owned template-controller lifecycle code did not expose one provable synthetic-view Scope handoff. */
     OpenTemplateControllerScope: defineVocabulary(
       KernelVocabularyNamespace.Template,

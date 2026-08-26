@@ -146,6 +146,15 @@ classification, expression parsing, and instruction lowering converge on the sam
   rule, including discarded immediate-sibling effects. The parse5 AST never enters semantic products, and the helper is available only through the explicit
   `@aurelia-ls/semantic-runtime/browser-template` subpath so ordinary IDE/MCP imports do not load the parser. This is a
   characterized candidate input boundary, not yet a durable kernel product or the production compiler traversal.
+- `template-structure.ts` and `template-structure-derivation.ts` define the durable, parse5-independent structural
+  vocabulary behind that boundary: immutable browser-effective tree/node/attribute records and ordered
+  many-input/many-output derivations. Cardinality carries merge, reconstruction, drop, and implied/generated facts;
+  there is no exclusive origin enum or second provenance graph. The detail slots own semantic-versus-witness comparison,
+  and unresolved authored/effective partitioning uses the typed structure-correspondence seam. These are accepted product
+  contracts, but no materializer or production compiler reroute exists yet.
+- `template-source-coordinate.ts` is the shared decoded-template range boundary used by authored HTML materialization and
+  future exact structural correspondence. It validates offset-map shape and maps only a caller-proved contiguous range;
+  parse5 token envelopes must never be passed through it merely because they are non-null.
 - `runtime-dom-name.ts` projects authored tag and attribute spelling into the browser DOM names consumed by framework
   services and TypeScript DOM maps. HTML names normalize to their DOM casing; SVG element/attribute adjustments come
   from the browser-owned HTML foreign-content table, independently of Aurelia's SVGAnalyzer capability vocabulary.

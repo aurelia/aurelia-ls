@@ -100,6 +100,24 @@ import type {
   HtmlRecovery,
 } from './html-ir.js';
 import { HtmlIrNodeKind } from './html-ir.js';
+import type {
+  BrowserEffectiveTemplateAttribute,
+  BrowserEffectiveTemplateNode,
+  BrowserEffectiveTemplateTree,
+  TemplateStructuralAttributeReference,
+  TemplateStructuralNodeReference,
+  TemplateStructuralTreeReference,
+} from './template-structure.js';
+import type {
+  TemplateStructureDerivation,
+  TemplateStructureReference,
+} from './template-structure-derivation.js';
+import {
+  compareStructuralAttributeDetails,
+  compareStructuralNodeDetails,
+  compareStructuralTreeDetails,
+  compareStructureDerivationDetails,
+} from './template-structure-comparison.js';
 import {
   TemplateInstructionKind,
   type TemplateInstructionReference,
@@ -213,6 +231,26 @@ export const TemplateProductDetails = {
   HtmlNode: defineProductDetailSlot(TemplateDetailDescriptors.HtmlNode, referencesForHtmlNode),
   HtmlAttribute: defineProductDetailSlot(TemplateDetailDescriptors.HtmlAttribute, referencesForHtmlAttribute),
   HtmlRecovery: defineProductDetailSlot(TemplateDetailDescriptors.HtmlRecovery, referencesForHtmlRecovery),
+  StructuralTree: defineProductDetailSlot(
+    TemplateDetailDescriptors.StructuralTree,
+    referencesForStructuralTree,
+    compareStructuralTreeDetails,
+  ),
+  StructuralNode: defineProductDetailSlot(
+    TemplateDetailDescriptors.StructuralNode,
+    referencesForStructuralNode,
+    compareStructuralNodeDetails,
+  ),
+  StructuralAttribute: defineProductDetailSlot(
+    TemplateDetailDescriptors.StructuralAttribute,
+    referencesForStructuralAttribute,
+    compareStructuralAttributeDetails,
+  ),
+  StructureDerivation: defineProductDetailSlot(
+    TemplateDetailDescriptors.StructureDerivation,
+    referencesForStructureDerivation,
+    compareStructureDerivationDetails,
+  ),
   CompiledTemplate: defineProductDetailSlot(
     TemplateDetailDescriptors.CompiledTemplate,
     referencesForCompiledTemplate,
@@ -945,6 +983,150 @@ function referencesForHtmlAttribute(
     kernelRecordReferences(attribute.nameAddressHandle, attribute.valueAddressHandle),
     ...attribute.recoveries.map(htmlRecoveryReferenceReferences),
     kernelFieldProvenanceReferences(attribute.fieldProvenance),
+  );
+}
+
+function structuralTreeReferenceReferences(
+  tree: TemplateStructuralTreeReference,
+): KernelDetailReferenceClosure {
+  return productIdentityAddressReferences(
+    tree.productHandle,
+    tree.identityHandle,
+    tree.addressHandle,
+    TemplateDetailDescriptors.StructuralTree,
+  );
+}
+
+function structuralNodeReferenceReferences(
+  node: TemplateStructuralNodeReference | null,
+): KernelDetailReferenceClosure {
+  return node == null
+    ? mergeKernelDetailReferences()
+    : mergeKernelDetailReferences(
+        kernelRecordReferences(node.treeProductHandle),
+        productIdentityAddressReferences(
+          node.productHandle,
+          node.identityHandle,
+          node.addressHandle,
+          TemplateDetailDescriptors.StructuralNode,
+        ),
+      );
+}
+
+function structuralAttributeReferenceReferences(
+  attribute: TemplateStructuralAttributeReference,
+): KernelDetailReferenceClosure {
+  return mergeKernelDetailReferences(
+    kernelRecordReferences(attribute.treeProductHandle),
+    productIdentityAddressReferences(
+      attribute.productHandle,
+      attribute.identityHandle,
+      attribute.addressHandle,
+      TemplateDetailDescriptors.StructuralAttribute,
+    ),
+  );
+}
+
+function referencesForStructuralTree(
+  tree: BrowserEffectiveTemplateTree,
+): KernelDetailReferenceClosure {
+  return mergeKernelDetailReferences(
+    templateSourceReferenceReferences(tree.templateSource),
+    structuralNodeReferenceReferences(tree.inputFragment),
+    structuralNodeReferenceReferences(tree.compilerCarrier),
+    structuralNodeReferenceReferences(tree.authoredCarrier),
+    structuralNodeReferenceReferences(tree.compilerContent),
+    ...tree.discardedInputNodes.map(structuralNodeReferenceReferences),
+    kernelFieldProvenanceReferences(tree.fieldProvenance),
+  );
+}
+
+function referencesForStructuralNode(
+  node: BrowserEffectiveTemplateNode,
+): KernelDetailReferenceClosure {
+  const common = mergeKernelDetailReferences(
+    structuralTreeReferenceReferences(node.tree),
+    kernelFieldProvenanceReferences(node.fieldProvenance),
+  );
+  switch (node.nodeKind) {
+    case HtmlIrNodeKind.Fragment:
+      return mergeKernelDetailReferences(
+        common,
+        ...node.children.map(structuralNodeReferenceReferences),
+      );
+    case HtmlIrNodeKind.Element:
+      return mergeKernelDetailReferences(
+        common,
+        ...node.attributes.map(structuralAttributeReferenceReferences),
+        ...node.children.map(structuralNodeReferenceReferences),
+        structuralNodeReferenceReferences(node.templateContent),
+      );
+    case HtmlIrNodeKind.Text:
+    case HtmlIrNodeKind.Comment:
+    case HtmlIrNodeKind.Doctype:
+      return common;
+  }
+}
+
+function referencesForStructuralAttribute(
+  attribute: BrowserEffectiveTemplateAttribute,
+): KernelDetailReferenceClosure {
+  return mergeKernelDetailReferences(
+    structuralTreeReferenceReferences(attribute.tree),
+    structuralNodeReferenceReferences(attribute.owner),
+    kernelFieldProvenanceReferences(attribute.fieldProvenance),
+  );
+}
+
+function templateStructureReferenceReferences(
+  reference: TemplateStructureReference,
+): KernelDetailReferenceClosure {
+  const descriptor = templateStructureReferenceDescriptor(reference);
+  return productIdentityAddressReferences(
+    reference.productHandle,
+    reference.identityHandle,
+    reference.addressHandle,
+    descriptor,
+  );
+}
+
+function templateStructureReferenceDescriptor(
+  reference: TemplateStructureReference,
+): ProductDetailDescriptor<unknown> {
+  switch (reference.productKindKey) {
+    case KernelVocabulary.Template.HtmlDocument.key:
+      return TemplateDetailDescriptors.HtmlDocument;
+    case KernelVocabulary.Template.HtmlNode.key:
+      return TemplateDetailDescriptors.HtmlNode;
+    case KernelVocabulary.Template.HtmlAttribute.key:
+      return TemplateDetailDescriptors.HtmlAttribute;
+    case KernelVocabulary.Template.StructuralTree.key:
+      return TemplateDetailDescriptors.StructuralTree;
+    case KernelVocabulary.Template.StructuralNode.key:
+      return TemplateDetailDescriptors.StructuralNode;
+    case KernelVocabulary.Template.StructuralAttribute.key:
+      return TemplateDetailDescriptors.StructuralAttribute;
+    default:
+      throw new Error(
+        `Template structure derivation references non-structural product kind ${reference.productKindKey}.`,
+      );
+  }
+}
+
+function referencesForStructureDerivation(
+  derivation: TemplateStructureDerivation,
+): KernelDetailReferenceClosure {
+  return mergeKernelDetailReferences(
+    ...derivation.inputs.map((term) => mergeKernelDetailReferences(
+      templateStructureReferenceReferences(term.structure),
+      kernelRecordReferences(term.segmentAddressHandle),
+    )),
+    ...derivation.outputs.map((term) => mergeKernelDetailReferences(
+      templateStructureReferenceReferences(term.structure),
+      kernelRecordReferences(term.segmentAddressHandle),
+    )),
+    kernelRecordReferences(...derivation.causeHandles),
+    kernelFieldProvenanceReferences(derivation.fieldProvenance),
   );
 }
 

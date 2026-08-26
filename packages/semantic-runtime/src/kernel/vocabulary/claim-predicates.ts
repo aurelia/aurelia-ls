@@ -1021,6 +1021,112 @@ export const KernelClaimPredicates = {
       ),
     ),
 
+    /** An authored template source produced one immutable structural tree interpretation. */
+    ParsesToStructuralTree: defineClaimPredicate(
+      KernelVocabularyNamespace.Template,
+      'parses-to-structural-tree',
+      'An authored template source produced one immutable structural tree interpretation.',
+      claimSignature(
+        productEndpoint(KernelProductKinds.Template.Source),
+        productEndpoint(KernelProductKinds.Template.StructuralTree),
+      ),
+    ),
+
+    /** A structural tree or node contains one ordinary structural child occurrence. */
+    ContainsStructuralNode: defineClaimPredicate(
+      KernelVocabularyNamespace.Template,
+      'contains-structural-node',
+      'A structural tree or node contains one ordinary structural child occurrence.',
+      claimSignature(
+        productEndpoint(
+          KernelProductKinds.Template.StructuralTree,
+          KernelProductKinds.Template.StructuralNode,
+        ),
+        productEndpoint(KernelProductKinds.Template.StructuralNode),
+      ),
+    ),
+
+    /** A structural template element owns its distinct template-content fragment. */
+    HasStructuralTemplateContent: defineClaimPredicate(
+      KernelVocabularyNamespace.Template,
+      'has-structural-template-content',
+      'A structural template element owns its distinct template-content fragment.',
+      claimSignature(
+        productEndpoint(KernelProductKinds.Template.StructuralNode),
+        productEndpoint(KernelProductKinds.Template.StructuralNode),
+      ),
+    ),
+
+    /** A structural element occurrence owns one effective structural attribute. */
+    ContainsStructuralAttribute: defineClaimPredicate(
+      KernelVocabularyNamespace.Template,
+      'contains-structural-attribute',
+      'A structural element occurrence owns one effective structural attribute.',
+      claimSignature(
+        productEndpoint(KernelProductKinds.Template.StructuralNode),
+        productEndpoint(KernelProductKinds.Template.StructuralAttribute),
+      ),
+    ),
+
+    /** A browser-effective tree selected one fragment as Aurelia compiler content. */
+    SelectsCompilerContent: defineClaimPredicate(
+      KernelVocabularyNamespace.Template,
+      'selects-compiler-content',
+      'A browser-effective tree selected one structural fragment as Aurelia compiler content.',
+      claimSignature(
+        productEndpoint(KernelProductKinds.Template.StructuralTree),
+        productEndpoint(KernelProductKinds.Template.StructuralNode),
+      ),
+    ),
+
+    /** An ordered structural derivation consumes one authored or structural product. */
+    StructureDerivationConsumes: defineClaimPredicate(
+      KernelVocabularyNamespace.Template,
+      'structure-derivation-consumes',
+      'An ordered structural derivation consumes one authored or structural product.',
+      claimSignature(
+        productEndpoint(KernelProductKinds.Template.StructureDerivation),
+        productEndpoint(
+          KernelProductKinds.Template.HtmlDocument,
+          KernelProductKinds.Template.HtmlNode,
+          KernelProductKinds.Template.HtmlAttribute,
+          KernelProductKinds.Template.StructuralTree,
+          KernelProductKinds.Template.StructuralNode,
+          KernelProductKinds.Template.StructuralAttribute,
+        ),
+      ),
+    ),
+
+    /** An ordered structural derivation produces one structural product. */
+    StructureDerivationProduces: defineClaimPredicate(
+      KernelVocabularyNamespace.Template,
+      'structure-derivation-produces',
+      'An ordered structural derivation produces one structural product.',
+      claimSignature(
+        productEndpoint(KernelProductKinds.Template.StructureDerivation),
+        productEndpoint(
+          KernelProductKinds.Template.StructuralTree,
+          KernelProductKinds.Template.StructuralNode,
+          KernelProductKinds.Template.StructuralAttribute,
+        ),
+      ),
+    ),
+
+    /** A structural derivation names a non-structural source, identity, or product that caused it. */
+    StructureDerivationCausedBy: defineClaimPredicate(
+      KernelVocabularyNamespace.Template,
+      'structure-derivation-caused-by',
+      'A structural derivation names a non-structural source, identity, or product that caused it.',
+      claimSignature(
+        productEndpoint(KernelProductKinds.Template.StructureDerivation),
+        endpoint([
+          KernelClaimEndpointKind.Address,
+          KernelClaimEndpointKind.Identity,
+          KernelClaimEndpointKind.Product,
+        ]),
+      ),
+    ),
+
     /** An authored HTML document compiled into a compiled-template product. */
     CompilesToCompiledTemplate: defineClaimPredicate(
       KernelVocabularyNamespace.Template,

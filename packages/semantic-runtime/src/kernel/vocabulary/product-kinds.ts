@@ -860,6 +860,38 @@ export const KernelProductKinds = {
       'One exact authored HTML parser recovery fact before diagnostic policy.',
     ),
 
+    /** Product kind for one immutable structural interpretation of a template. */
+    StructuralTree: defineVocabulary(
+      KernelVocabularyNamespace.Template,
+      'structural-tree',
+      KernelVocabularySlot.ProductKind,
+      'Immutable template structure such as the browser-effective tree, separate from authored HTML and compiler phase.',
+    ),
+
+    /** Product kind for one occurrence in a structural template tree. */
+    StructuralNode: defineVocabulary(
+      KernelVocabularyNamespace.Template,
+      'structural-node',
+      KernelVocabularySlot.ProductKind,
+      'One fragment, element, text, comment, or doctype occurrence in an immutable structural template tree.',
+    ),
+
+    /** Product kind for one effective attribute occurrence in a structural template tree. */
+    StructuralAttribute: defineVocabulary(
+      KernelVocabularyNamespace.Template,
+      'structural-attribute',
+      KernelVocabularySlot.ProductKind,
+      'One effective namespace-aware attribute occurrence owned by a structural template node.',
+    ),
+
+    /** Product kind for one ordered many-input/many-output structural derivation. */
+    StructureDerivation: defineVocabulary(
+      KernelVocabularyNamespace.Template,
+      'structure-derivation',
+      KernelVocabularySlot.ProductKind,
+      'Ordered structural inputs, outputs, and non-structural causes for one browser or compiler transition.',
+    ),
+
     /** Product kind for a compiled template after DOM pass-through and instruction-row assembly. */
     CompiledTemplate: defineVocabulary(
       KernelVocabularyNamespace.Template,

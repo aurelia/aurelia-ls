@@ -116,6 +116,8 @@ export const enum OpenSeamReasonKind {
   RuntimeCompositionComponentResolutionOpen = 'runtime-composition-component-resolution-open',
   /** An app-owned template controller's lifecycle could not close the Scope supplied to its synthetic child view. */
   TemplateControllerScopeOpen = 'template-controller-scope-open',
+  /** Browser-effective structure could not be partitioned uniquely over authored template products. */
+  TemplateStructureCorrespondenceOpen = 'template-structure-correspondence-open',
   /** Select value-channel analysis could not close the authored select target. */
   BindingValueChannelSelectTargetOpen = 'binding-value-channel-select-target-open',
   /** Select value-channel analysis could not close option value/model facts. */
@@ -285,6 +287,7 @@ export function openSeamBoundaryKindForReason(
     case OpenSeamReasonKind.ConfigurationOptionOpen:
     case OpenSeamReasonKind.RuntimeCompositionComponentResolutionOpen:
     case OpenSeamReasonKind.TemplateControllerScopeOpen:
+    case OpenSeamReasonKind.TemplateStructureCorrespondenceOpen:
     case OpenSeamReasonKind.BindingValueChannelSelectTargetOpen:
     case OpenSeamReasonKind.BindingValueChannelSelectOptionValueOpen:
     case OpenSeamReasonKind.BindingValueChannelSelectOptionDomainOpen:

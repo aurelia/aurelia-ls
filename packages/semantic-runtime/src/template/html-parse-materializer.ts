@@ -1,5 +1,4 @@
 import {
-  SourceSpanAddress,
   SourceSpanRole,
   TemplateNodeAddress,
 } from '../kernel/address.js';
@@ -58,6 +57,7 @@ import type {
 } from './compilation-unit.js';
 import { isHtmlVoidElement } from './html-elements.js';
 import { htmlAsciiLowercase } from './html-ascii.js';
+import { sourceSpanSiteForDecodedTemplateRange } from './template-source-coordinate.js';
 import {
   HtmlAttribute,
   HtmlComment,
@@ -777,24 +777,7 @@ class HtmlParseTreeMaterializer {
     start: number,
     end: number,
   ): SourceSpanSite | null {
-    if (state.source.sourceAddressHandle == null) {
-      return null;
-    }
-    const sourceAddress = this.store.read(state.source.sourceAddressHandle);
-    if (!(sourceAddress instanceof SourceSpanAddress)) {
-      return null;
-    }
-    const mapped = mapTemplateSourceSpan(state.templateSource.sourceMap, start, end);
-    if (state.templateSource.sourceMap != null && mapped == null) {
-      return null;
-    }
-    const sourceStart = mapped?.start ?? sourceAddress.start + start;
-    const sourceEnd = mapped?.end ?? sourceAddress.start + end;
-    return {
-      sourceFileAddressHandle: sourceAddress.fileHandle,
-      start: sourceStart,
-      end: sourceEnd,
-    };
+    return sourceSpanSiteForDecodedTemplateRange(this.store, state.templateSource, start, end);
   }
 
   private templateNodeAddress(
@@ -812,30 +795,6 @@ class HtmlParseTreeMaterializer {
     ));
     return handle;
   }
-}
-
-function mapTemplateSourceSpan(
-  map: TemplateSource['sourceMap'],
-  start: number,
-  end: number,
-): { readonly start: number; readonly end: number } | null {
-  if (map == null) {
-    return null;
-  }
-  if (
-    start < 0
-    || end < start
-    || end > map.decodedLength
-    || start >= map.decodedToSourceOffsets.length
-    || end >= map.decodedToSourceOffsets.length
-  ) {
-    return null;
-  }
-  const mappedStart = map.decodedToSourceOffsets[start];
-  const mappedEnd = map.decodedToSourceOffsets[end];
-  return typeof mappedStart === 'number' && typeof mappedEnd === 'number'
-    ? { start: mappedStart, end: mappedEnd }
-    : null;
 }
 
 class HtmlScanner {
