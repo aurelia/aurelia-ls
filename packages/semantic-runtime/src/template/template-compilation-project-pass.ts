@@ -1408,6 +1408,7 @@ export class TemplateCompilationProjectPass {
         templateSource: unit.templateSource,
         compilationUnit: unit.compilationUnit,
         parseContext: unit.parseContext,
+        retainDraftBindings: phases.telemetry.inquiryProfile === 'aot',
       } satisfies HtmlParseRequest)
     );
   }

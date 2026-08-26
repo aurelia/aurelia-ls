@@ -93,6 +93,11 @@ describe('authored/browser correspondence planner', () => {
     expect(repeated.nodeDerivations.map((row) => row.browser.occurrenceKey)).toHaveLength(2);
     expect(new Set(repeated.nodeDerivations.map((row) => row.browser.occurrenceKey)).size).toBe(2);
 
+    const followedValueless = plan('followed-valueless', '<div containerless title.bind="value"></div>');
+    expect(followedValueless.unresolvedPartitions).toEqual([]);
+    expect(followedValueless.attributeDerivations.map((row) => row.authored.rawName))
+      .toEqual(['containerless', 'title.bind']);
+
     const ungroundedColgroup = plan('ungrounded-colgroup', '<table><col></table>');
     expect(ungroundedColgroup.impliedNodes.some((row) => row.reason === 'parser-unlocated')).toBe(false);
     expect(ungroundedColgroup.unresolvedPartitions).toContainEqual(expect.objectContaining({

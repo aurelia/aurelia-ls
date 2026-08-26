@@ -86,6 +86,7 @@ export class SemanticCompilerGalleryObservation {
       readonly htmlNodes: number;
       readonly htmlAttributes: number;
       readonly recoveries: number;
+      readonly draftBindingsRetained: boolean;
     },
     readonly issues: readonly SemanticCompilerGalleryIssueRow[],
     readonly openSeams: readonly SemanticCompilerGalleryOpenSeamRow[],
@@ -339,6 +340,9 @@ function observationFor(
     htmlNodes: compilation.html.nodes.length,
     htmlAttributes: compilation.html.attributes.length,
     recoveries: compilation.html.recoveries.length,
+    draftBindingsRetained: compilation.html.draft != null
+      && compilation.html.nodeDraftBindings.length === compilation.html.nodes.length
+      && compilation.html.attributeDraftBindings.length === compilation.html.attributes.length,
   };
   const issues = emission.issues.map((issue): SemanticCompilerGalleryIssueRow => ({
     phase: issue.phase,

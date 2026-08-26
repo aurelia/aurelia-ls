@@ -1292,7 +1292,7 @@ class HtmlScanner {
         rawName,
         '',
         start,
-        this.pos,
+        nameEnd,
         nameStart,
         nameEnd,
         null,

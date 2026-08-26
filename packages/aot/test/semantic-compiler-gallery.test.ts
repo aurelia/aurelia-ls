@@ -72,6 +72,7 @@ describe("semantic compiler gallery", () => {
     expect(run.stages["semantic.analysis"]).toBeGreaterThan(0);
 
     const observations = new Map(run.observations.map((observation) => [observation.caseId, observation]));
+    expect(run.observations.every((observation) => observation.authored.draftBindingsRetained)).toBe(true);
     expect(run.observations.every((observation) => /^sha256:[0-9a-f]{64}$/u.test(observation.observationDigest)))
       .toBe(true);
     expect(run.observations.every((observation) =>
