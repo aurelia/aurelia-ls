@@ -6,6 +6,7 @@ import { afterAll, beforeAll, describe, expect, test } from 'vitest';
 
 import { createSemanticRuntime } from '../src/api/runtime.js';
 import { OpenSeamReasonKind } from '../src/kernel/open-seam.js';
+import { StaticCallableSlot } from '../src/evaluation/function-execution.js';
 import {
   ResourceCompilerHookEffectKind,
   ResourceDependencyReferenceKind,
@@ -65,6 +66,7 @@ describe('component-local compiler-hook registry dependencies', () => {
       'src/hook-app.ts': [
         "import type { IRegistry } from '@aurelia/kernel';",
         "import { cssModules, customElement, shadowCSS } from '@aurelia/runtime-html';",
+        "import generatedClasses from './classes.module.css';",
         "import { TemplateCompilerHooks as HookRegistry } from './hook-barrel.js';",
         "import { DecoratedBareHook, DecoratedCalledHook, DirectHook, InheritedHook } from './hooks.js';",
         'declare const opaqueRegistry: IRegistry;',
@@ -75,6 +77,7 @@ describe('component-local compiler-hook registry dependencies', () => {
         'function RegistryFunction(): void {}',
         'RegistryFunction.register = (): void => {};',
         'const structuralRegistry = { register(): void {} };',
+        "const spreadMappings = [{ spread: 'spread_hash' }];",
         "@customElement({ name: 'actual-resource', template: '' })",
         'export class ActualResource {}',
         '@customElement({',
@@ -105,6 +108,17 @@ describe('component-local compiler-hook registry dependencies', () => {
         '})',
         'export class CssHookHost {}',
         '@customElement({',
+        "  name: 'css-payload-host',",
+        "  template: '<div class=\"exact generated spread\"></div>',",
+        '  dependencies: [cssModules(',
+        "    { exact: 'exact_hash', replaced: 'old_hash' },",
+        "    { replaced: 'new_hash' },",
+        '    generatedClasses,',
+        '    ...spreadMappings,',
+        '  )],',
+        '})',
+        'export class CssPayloadHost {}',
+        '@customElement({',
         "  name: 'open-deps-host',",
         "  template: '<div>open</div>',",
         '  dependencies: [...maybeRegistries, ActualResource],',
@@ -115,13 +129,13 @@ describe('component-local compiler-hook registry dependencies', () => {
         "import { Registration } from '@aurelia/kernel';",
         "import { Aurelia, customElement, StandardConfiguration } from '@aurelia/runtime-html';",
         "import { ITemplateCompilerHooks, TemplateCompilerHooks, templateCompilerHooks } from '@aurelia/template-compiler';",
-        "import { CssHookHost, HookHost, OpenDepsHost } from './hook-app.js';",
+        "import { CssHookHost, CssPayloadHost, HookHost, OpenDepsHost } from './hook-app.js';",
         'const hookWithoutCompilerMember = {};',
         'const rootCompilerHook = { compiling(): void {} };',
         'class RootDefinedHook { compiling(): void {} }',
         '@templateCompilerHooks',
         'class RootDecoratedHook { compiling(): void {} }',
-        "@customElement({ name: 'compiler-hook-app', template: '<hook-host></hook-host><css-hook-host></css-hook-host><open-deps-host></open-deps-host>', dependencies: [HookHost, CssHookHost, OpenDepsHost] })",
+        "@customElement({ name: 'compiler-hook-app', template: '<hook-host></hook-host><css-hook-host></css-hook-host><css-payload-host></css-payload-host><open-deps-host></open-deps-host>', dependencies: [HookHost, CssHookHost, CssPayloadHost, OpenDepsHost] })",
         'class CompilerHookApp {}',
         'new Aurelia()',
         '  .register(',
@@ -133,6 +147,13 @@ describe('component-local compiler-hook registry dependencies', () => {
         '  )',
         '  .app({ host: document.body, component: CompilerHookApp })',
         '  .start();',
+      ].join('\n'),
+      'src/classes.module.css': '.generated { color: rebeccapurple; }\n',
+      'src/style-assets.d.ts': [
+        "declare module '*.module.css' {",
+        '  const classes: Record<string, string>;',
+        '  export default classes;',
+        '}',
       ].join('\n'),
     });
   });
@@ -157,6 +178,21 @@ describe('component-local compiler-hook registry dependencies', () => {
       expect.stringContaining('TemplateCompilerHooks.define'),
       expect.stringContaining('@templateCompilerHooks'),
     ]));
+    expect(rootHooks.entries).toMatchObject([
+      { callable: { authorityKind: TemplateCompilerHookCallableAuthorityKind.Absent } },
+      {
+        callable: {
+          authorityKind: TemplateCompilerHookCallableAuthorityKind.StaticCallable,
+          callableSlotKey: expect.stringContaining(':compiler-hook:'),
+        },
+      },
+    ]);
+    const callableSlotKey = rootHooks.entries[1]?.callable.callableSlotKey ?? null;
+    if (callableSlotKey == null) throw new Error('Expected exact root hook callable slot authority.');
+    const callableTarget = app.emission.appWorld.compilerWorlds[0]!.callableBindings.target(
+      new StaticCallableSlot(callableSlotKey),
+    );
+    expect(callableTarget?.receiver).not.toBeNull();
     const definition = app.emission.resources.sources
       .flatMap((source) => source.convergence.definitions)
       .find((candidate) => 'name' in candidate && candidate.name === 'hook-host');
@@ -270,6 +306,62 @@ describe('component-local compiler-hook registry dependencies', () => {
         compilerHookEffect: ResourceCompilerHookEffectKind.None,
       },
     ]);
+    expect(definition.dependencies[4]?.cssModulesInput).toEqual({
+      mappingArguments: [{
+        entries: [{ className: 'mapped', mappedClassName: 'mapped_hash' }],
+        mayHaveUnknownMappings: false,
+        sourceModuleKey: null,
+      }],
+      mayHaveUnknownArguments: false,
+      mayHaveUnknownArgumentOrder: false,
+    });
+    expect(definition.dependencies[5]?.cssModulesInput).toEqual({
+      mappingArguments: [{
+        entries: [{ className: 'secondary', mappedClassName: 'secondary_hash' }],
+        mayHaveUnknownMappings: false,
+        sourceModuleKey: null,
+      }],
+      mayHaveUnknownArguments: false,
+      mayHaveUnknownArgumentOrder: false,
+    });
+
+    const cssPayloadDefinition = app.emission.resources.sources
+      .flatMap((source) => source.convergence.definitions)
+      .find((candidate) => 'name' in candidate && candidate.name === 'css-payload-host');
+    if (cssPayloadDefinition == null || !('dependencies' in cssPayloadDefinition)) {
+      throw new Error('Expected the css-payload-host custom-element definition.');
+    }
+    const cssPayload = cssPayloadDefinition.dependencies[0]?.cssModulesInput;
+    expect(cssPayload).not.toBeNull();
+    expect(cssPayload).toMatchObject({
+      mappingArguments: [
+        {
+          entries: [
+            { className: 'exact', mappedClassName: 'exact_hash' },
+            { className: 'replaced', mappedClassName: 'old_hash' },
+          ],
+          mayHaveUnknownMappings: false,
+          sourceModuleKey: null,
+        },
+        {
+          entries: [{ className: 'replaced', mappedClassName: 'new_hash' }],
+          mayHaveUnknownMappings: false,
+          sourceModuleKey: null,
+        },
+        {
+          entries: [],
+          mayHaveUnknownMappings: true,
+          sourceModuleKey: expect.stringMatching(/classes\.module\.css$/u),
+        },
+        {
+          entries: [{ className: 'spread', mappedClassName: 'spread_hash' }],
+          mayHaveUnknownMappings: false,
+          sourceModuleKey: null,
+        },
+      ],
+      mayHaveUnknownArguments: false,
+      mayHaveUnknownArgumentOrder: false,
+    });
 
     const opaqueSeams = runtime.workspace.store.readOpenSeams().filter((seam) =>
       seam.summary === 'Resource dependency is a registry whose registration effects remain opaque.'
@@ -299,7 +391,7 @@ describe('component-local compiler-hook registry dependencies', () => {
       { lane: TemplateCompilerHookLane.Leaf, ordinal: 4, hookKind: TemplateCompilerHookKind.CssModules, callable: TemplateCompilerHookCallableAuthorityKind.Open },
       { lane: TemplateCompilerHookLane.Leaf, ordinal: 5, hookKind: TemplateCompilerHookKind.CssModules, callable: TemplateCompilerHookCallableAuthorityKind.Open },
       { lane: TemplateCompilerHookLane.Root, ordinal: 0, hookKind: TemplateCompilerHookKind.Registered, callable: TemplateCompilerHookCallableAuthorityKind.Absent },
-      { lane: TemplateCompilerHookLane.Root, ordinal: 1, hookKind: TemplateCompilerHookKind.Registered, callable: TemplateCompilerHookCallableAuthorityKind.Open },
+      { lane: TemplateCompilerHookLane.Root, ordinal: 1, hookKind: TemplateCompilerHookKind.Registered, callable: TemplateCompilerHookCallableAuthorityKind.StaticCallable },
     ]);
     const dependencyHookReasons = compilation.compilerWorld.compilerHooks.openReasons.filter((reason) =>
       reason.reasonKind === TemplateCompilerHookOpenReasonKind.RegistryDependency
@@ -342,7 +434,7 @@ describe('component-local compiler-hook registry dependencies', () => {
           lane: TemplateCompilerHookLane.Root,
           sourceOrdinal: 1,
           hookKind: TemplateCompilerHookKind.Registered,
-          callable: { authorityKind: TemplateCompilerHookCallableAuthorityKind.Open },
+          callable: { authorityKind: TemplateCompilerHookCallableAuthorityKind.StaticCallable },
         },
       ],
       openReasons: expect.arrayContaining([

@@ -50,6 +50,8 @@ import {
 } from '../kernel/source-open-seam.js';
 import { KernelVocabulary } from '../kernel/vocabulary.js';
 import { readStaticStringValue } from '../evaluation/expression-reader.js';
+import { readEvaluationEnumerableOwnEntries } from '../evaluation/enumerable-own-properties.js';
+import { evaluationIteratorProjection } from '../evaluation/iterator-projection.js';
 import {
   StaticCallableExecutionBinding,
   StaticCallableExecutionBindings,
@@ -67,10 +69,13 @@ import {
   unwrapExpression,
 } from '../evaluation/ts-syntax.js';
 import {
+  EvaluationObjectPropertyPresence,
+  EvaluationObjectPropertyState,
   EvaluationValueKind,
   evaluationArrayUncertaintySummaries,
   type EvaluationValue,
 } from '../evaluation/values.js';
+import { normalizeModuleKey } from '../evaluation/module-graph.js';
 import {
   AttributePatternDefinition,
   AttributePatternDefinitionContribution,
@@ -153,6 +158,9 @@ import type { ResourceDefinitionHeaderEmission } from './resource-definition-hea
 import type { ResourceRecognitionKernelEmission } from './resource-recognition-kernel-emitter.js';
 import {
   ResourceAliasDefinition,
+  ResourceCssModulesMappingArgument,
+  ResourceCssModulesMappingEntry,
+  ResourceCssModulesRegistryInput,
   ResourceDependencyReference,
   ResourceDependencyReferenceKind,
   ResourceRegistryDependencyKind,
@@ -2436,7 +2444,114 @@ function readStyleRegistryDependencyReference(
     callKind === AureliaStyleRegistryCallKind.CssModules
       ? ResourceRegistryDependencyKind.CssModules
       : ResourceRegistryDependencyKind.ShadowCss,
+    callKind === AureliaStyleRegistryCallKind.CssModules
+      ? readCssModulesRegistryInput(context, expression)
+      : null,
   );
+}
+
+function readCssModulesRegistryInput(
+  context: ResourceRecognitionContext,
+  call: ts.CallExpression,
+): ResourceCssModulesRegistryInput {
+  const invocations = context.evaluation.invocationEvaluations.filter((invocation) => invocation.node === call);
+  if (invocations.length === 1) {
+    const argumentList = invocations[0]!.argumentList;
+    return new ResourceCssModulesRegistryInput(
+      argumentList.elements.map((element) => cssModulesMappingArgument(
+        context,
+        element.value,
+        element.openSeams.length > 0,
+      )),
+      !argumentList.shape.hasExactElements,
+      !argumentList.shape.hasExactOrder,
+    );
+  }
+  if (invocations.length > 1) {
+    return new ResourceCssModulesRegistryInput([], true, true);
+  }
+
+  const arguments_: ResourceCssModulesMappingArgument[] = [];
+  let mayHaveUnknownArguments = false;
+  let mayHaveUnknownArgumentOrder = false;
+  for (const argument of call.arguments) {
+    if (ts.isSpreadElement(argument)) {
+      const read = context.expressionReader.evaluateExpression(argument.expression);
+      const projection = read.value == null
+        ? null
+        : evaluationIteratorProjection(read.value, argument);
+      if (
+        projection == null
+        || (projection.shape.exactLength ?? projection.elements.length)
+          > context.evaluation.policy.guardrails.maxLoopIterations
+      ) {
+        mayHaveUnknownArguments = true;
+        mayHaveUnknownArgumentOrder ||= projection?.shape.hasExactOrder === false;
+        continue;
+      }
+      arguments_.push(...projection.elements.map((element) => cssModulesMappingArgument(
+        context,
+        element.value,
+        read.openSeams.length > 0 || element.openSeams.length > 0 || read.abruptCompletion != null,
+      )));
+      mayHaveUnknownArguments ||= projection.shape.exactLength == null || !projection.shape.hasExactElements;
+      mayHaveUnknownArgumentOrder ||= !projection.shape.hasExactOrder;
+      continue;
+    }
+    const read = context.expressionReader.evaluateExpression(argument);
+    arguments_.push(cssModulesMappingArgument(
+      context,
+      read.value,
+      read.openSeams.length > 0 || read.abruptCompletion != null,
+    ));
+  }
+  return new ResourceCssModulesRegistryInput(
+    arguments_,
+    mayHaveUnknownArguments,
+    mayHaveUnknownArgumentOrder,
+  );
+}
+
+function cssModulesMappingArgument(
+  context: ResourceRecognitionContext,
+  value: EvaluationValue | null,
+  hasEvaluationPressure: boolean,
+): ResourceCssModulesMappingArgument {
+  const sourceModuleKey = cssAssetModuleKey(context, value);
+  if (sourceModuleKey != null) {
+    return new ResourceCssModulesMappingArgument([], true, sourceModuleKey);
+  }
+  const enumerable = readEvaluationEnumerableOwnEntries(value);
+  if (enumerable == null) {
+    return new ResourceCssModulesMappingArgument([], true);
+  }
+
+  const entries: ResourceCssModulesMappingEntry[] = [];
+  let mayHaveUnknownMappings = hasEvaluationPressure || enumerable.mayHaveUnknownEntries;
+  for (const entry of enumerable.entries) {
+    if (
+      entry.value.kind !== EvaluationValueKind.String
+      || entry.openSeams.length > 0
+      || entry.property?.state === EvaluationObjectPropertyState.Open
+      || entry.property?.presence === EvaluationObjectPropertyPresence.Conditional
+    ) {
+      mayHaveUnknownMappings = true;
+      continue;
+    }
+    entries.push(new ResourceCssModulesMappingEntry(entry.name, entry.value.value));
+  }
+  return new ResourceCssModulesMappingArgument(entries, mayHaveUnknownMappings);
+}
+
+function cssAssetModuleKey(
+  context: ResourceRecognitionContext,
+  value: EvaluationValue | null,
+): string | null {
+  const node = value?.node ?? null;
+  if (node == null) return null;
+  const sourceFile = node.getSourceFile();
+  if (!/\.css$/iu.test(sourceFile.fileName)) return null;
+  return context.readAdmittedNodeContext(node)?.moduleKey ?? normalizeModuleKey(sourceFile.fileName);
 }
 
 function readTemplateCompilerHookRegistryDependency(

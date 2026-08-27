@@ -179,7 +179,13 @@ framework symbols, including local-barrel reexports and inherited registrable me
 Lexically shadowed import names do not acquire framework authority. Those dependencies retain the hook target
 independently from the registry key. `cssModules(...)`
 remains a distinct built-in compiler-hook producer because its registry installs both `ICssClassMapping` and a
-compiling hook; it must not collapse into an ordinary resource or a generic custom hook. Checker-proven values whose
+compiling hook; it must not collapse into an ordinary resource or a generic custom hook. Its dependency reference
+retains post-spread runtime argument order, exact known string mappings per argument, and independent open
+membership/order axes. Local `.module.css` imports deliberately remain open mapping inputs: static evaluation owns the
+authored stylesheet string, while the eventual hashed class map belongs to the selected build transform. Component
+world construction must fold every ordered `cssModules(...)` registry input into the one shared mapping object captured
+by all of that leaf container's generated hooks; attaching one isolated map to each hook would not match the runtime.
+Checker-proven values whose
 runtime/static side exposes a callable `register` member retain an `opaque-registry` dependency plus an explicit dependency-entry
 open seam rather than being guessed as resources or hooks. Registry dependencies preserve authored multiplicity and
 order across metadata lanes because repeated registry entries repeat their registration effects; only ordinary

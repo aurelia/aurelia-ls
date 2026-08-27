@@ -398,7 +398,8 @@ class AppRootCompilerWorldFrame {
       resourceDefinitions: this.resourceDefinitions,
     });
     const frameworkServiceCustomization = this.frameworkServiceCustomizations.forContainer(container);
-    const projectedCompilerHooks = projectTemplateCompilerHooksFromDi(activateDirectKeyAllResources(
+    const hookWorldLocalKey = `app-root:${appRoot.productHandle}`;
+    const compilerHookProjection = projectTemplateCompilerHooksFromDi(activateDirectKeyAllResources(
       this.diWorld,
       this.configuration.openSeamScopes,
       container,
@@ -407,7 +408,8 @@ class AppRootCompilerWorldFrame {
         ContainerLookupKeyKind.Interface,
         FrameworkIntrinsicDiKey.ITemplateCompilerHooks,
       ),
-    ));
+    ), hookWorldLocalKey);
+    const projectedCompilerHooks = compilerHookProjection.candidate;
     const registryHookReasons = this.rootCompilerHookRegistryOpenReasons(container, operations);
     const compilerHooks = registryHookReasons.length === 0
       ? projectedCompilerHooks
@@ -420,11 +422,12 @@ class AppRootCompilerWorldFrame {
       [
         this.resourceCallableBindings,
         frameworkServiceCustomization.callableBindings,
+        compilerHookProjection.callableBindings,
       ],
       () => evaluationAuthority.requireCurrent(),
     );
     const request = new TemplateCompilerWorldConstructionRequest(
-      `app-root:${appRoot.productHandle}`,
+      hookWorldLocalKey,
       TemplateCompilerWorldKind.AppRoot,
       container,
       appRoot.toReference(),

@@ -805,6 +805,17 @@ function dependencySemanticValue(
     dependency.localName,
     dependency.dependencyKind,
     dependency.registryKind,
+    dependency.cssModulesInput == null
+      ? null
+      : [
+          dependency.cssModulesInput.mappingArguments.map((argument) => [
+            argument.entries.map((entry) => [entry.className, entry.mappedClassName]),
+            argument.mayHaveUnknownMappings,
+            argument.sourceModuleKey,
+          ]),
+          dependency.cssModulesInput.mayHaveUnknownArguments,
+          dependency.cssModulesInput.mayHaveUnknownArgumentOrder,
+        ],
   ];
 }
 

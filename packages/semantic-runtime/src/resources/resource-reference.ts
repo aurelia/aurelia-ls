@@ -32,6 +32,40 @@ export const enum ResourceCompilerHookEffectKind {
   OpenRegistry = 'open-registry',
 }
 
+/** One exact class-name replacement retained from a `cssModules(...)` registry argument. */
+export class ResourceCssModulesMappingEntry {
+  constructor(
+    readonly className: string,
+    readonly mappedClassName: string,
+  ) {}
+}
+
+/**
+ * One runtime argument passed to `cssModules(...)` after ECMAScript spread expansion.
+ *
+ * Known entries remain useful when the argument has open enumerable membership: a later exact registry argument may
+ * still overwrite the same class name and close that lookup. `sourceModuleKey` identifies build-owned CSS-module input
+ * whose eventual mapping is not the raw stylesheet value retained by static evaluation.
+ */
+export class ResourceCssModulesMappingArgument {
+  constructor(
+    readonly entries: readonly ResourceCssModulesMappingEntry[],
+    readonly mayHaveUnknownMappings: boolean,
+    readonly sourceModuleKey: string | null = null,
+  ) {}
+}
+
+/** Ordered runtime inputs for one `cssModules(...)` registry occurrence. */
+export class ResourceCssModulesRegistryInput {
+  constructor(
+    readonly mappingArguments: readonly ResourceCssModulesMappingArgument[],
+    /** Argument-list membership may contain additional runtime mapping objects. */
+    readonly mayHaveUnknownArguments: boolean,
+    /** Retained mapping arguments may occur in a different runtime order. */
+    readonly mayHaveUnknownArgumentOrder: boolean,
+  ) {}
+}
+
 /**
  * Resource-layer reference to a TypeScript value, declaration, or callable without retaining AST state.
  */
@@ -63,6 +97,8 @@ export class ResourceDependencyReference {
     readonly localName: string | null = null,
     readonly dependencyKind: ResourceDependencyReferenceKind = ResourceDependencyReferenceKind.Resource,
     readonly registryKind: ResourceRegistryDependencyKind | null = null,
+    /** Ordered built-in registry input; present only for a recognized `cssModules(...)` dependency. */
+    readonly cssModulesInput: ResourceCssModulesRegistryInput | null = null,
   ) {}
 }
 

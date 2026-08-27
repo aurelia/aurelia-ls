@@ -1,5 +1,10 @@
 import { readStaticOwnProperty } from '../evaluation/property-access.js';
 import {
+  StaticCallableExecutionBinding,
+  StaticCallableExecutionBindings,
+  StaticCallableSlot,
+} from '../evaluation/function-execution.js';
+import {
   EvaluationObjectPropertyPresence,
   EvaluationObjectPropertyState,
   EvaluationValueKind,
@@ -35,18 +40,28 @@ import {
   frameworkRegistrationCapabilitiesForKind,
 } from '../registration/framework-registration-manifest.js';
 
+/** Candidate-local hook projection keeps durable world facts separate from live evaluator callable authority. */
+export class TemplateCompilerHookDiProjection {
+  constructor(
+    readonly candidate: TemplateCompilerHookSetCandidate,
+    readonly callableBindings: StaticCallableExecutionBindings,
+  ) {}
+}
+
 /** Project generic DI membership into the neutral compiler-world hook-set contract. */
 export function projectTemplateCompilerHooksFromDi(
   activation: DiDirectKeyAllResourcesActivation,
-): TemplateCompilerHookSetCandidate {
+  worldLocalKey: string,
+): TemplateCompilerHookDiProjection {
   let leafOrdinal = 0;
   let rootOrdinal = 0;
+  const callableBindings: StaticCallableExecutionBinding[] = [];
   const entries = activation.entries.map((entry) => {
     const lane = entry.handler === entry.handler.root
       ? TemplateCompilerHookLane.Root
       : TemplateCompilerHookLane.Leaf;
     const sourceOrdinal = lane === TemplateCompilerHookLane.Root ? rootOrdinal++ : leafOrdinal++;
-    return hookEntryForProvider(entry, lane, sourceOrdinal);
+    return hookEntryForProvider(entry, lane, sourceOrdinal, worldLocalKey, callableBindings);
   });
   const relevantRegistrationPressure = activation.registrationOpenPressure.filter((pressure) => {
     const frameworkKind = pressure.operation == null
@@ -77,16 +92,22 @@ export function projectTemplateCompilerHooksFromDi(
       null,
     ));
   }
-  return activation.resolverMembershipState === DiAllResourcesMembershipState.Exact
+  const candidate = activation.resolverMembershipState === DiAllResourcesMembershipState.Exact
     && openReasons.length === 0
     ? TemplateCompilerHookSetCandidate.exactList(entries)
     : TemplateCompilerHookSetCandidate.open(entries, openReasons);
+  return new TemplateCompilerHookDiProjection(
+    candidate,
+    new StaticCallableExecutionBindings(callableBindings),
+  );
 }
 
 function hookEntryForProvider(
   entry: DiAllResourcesProviderEntry,
   lane: TemplateCompilerHookLane,
   sourceOrdinal: number,
+  worldLocalKey: string,
+  callableBindings: StaticCallableExecutionBinding[],
 ): TemplateCompilerHookEntry {
   const resolver = entry.slot instanceof ContainerResolverSlot ? entry.slot.resolver : null;
   return new TemplateCompilerHookEntry(
@@ -101,7 +122,7 @@ function hookEntryForProvider(
       entry.slot.sourceAddressHandle,
     ),
     providerAuthorityForProvider(entry),
-    callableAuthorityForProvider(entry),
+    callableAuthorityForProvider(entry, worldLocalKey, callableBindings),
   );
 }
 
@@ -137,6 +158,8 @@ function providerAuthorityForProvider(
 
 function callableAuthorityForProvider(
   entry: DiAllResourcesProviderEntry,
+  worldLocalKey: string,
+  callableBindings: StaticCallableExecutionBinding[],
 ): TemplateCompilerHookCallableAuthority {
   const activation = entry.activation;
   const resolver = entry.slot instanceof ContainerResolverSlot ? entry.slot.resolver : null;
@@ -207,15 +230,28 @@ function callableAuthorityForProvider(
         identityHandle,
         sourceAddressHandle,
       );
-    case EvaluationValueKind.Function:
-      // Exact function membership is known. Receiver-bearing invocation authority is intentionally still separate.
+    case EvaluationValueKind.Function: {
+      const target = entry.callableTarget(compiling.value, value);
+      if (target == null) {
+        return new TemplateCompilerHookCallableAuthority(
+          TemplateCompilerHookCallableAuthorityKind.Open,
+          identityHandle,
+          sourceAddressHandle,
+          null,
+          'Hook compiling function is exact, but its evaluator source is unavailable for candidate-local execution.',
+        );
+      }
+      const slot = new StaticCallableSlot(
+        `template-compiler-world:${worldLocalKey}:compiler-hook:${entry.slot.productHandle}:compiling`,
+      );
+      callableBindings.push(new StaticCallableExecutionBinding(slot, target));
       return new TemplateCompilerHookCallableAuthority(
-        TemplateCompilerHookCallableAuthorityKind.Open,
+        TemplateCompilerHookCallableAuthorityKind.StaticCallable,
         identityHandle,
         sourceAddressHandle,
-        null,
-        'Hook compiling function is exact, but receiver-bearing callable execution is not yet available.',
+        slot.key,
       );
+    }
     default:
       return new TemplateCompilerHookCallableAuthority(
         TemplateCompilerHookCallableAuthorityKind.Abrupt,
