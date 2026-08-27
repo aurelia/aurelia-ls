@@ -1,8 +1,13 @@
 import type { AddressHandle, ProductHandle } from '../kernel/handles.js';
 import { SourceSpanRole, type SourceSpanAddress } from '../kernel/address.js';
-import type { AttributeClassification, AttributeSyntax } from './attribute-syntax.js';
+import {
+  AttributeSyntaxKind,
+  type AttributeClassification,
+  type AttributeSyntax,
+} from './attribute-syntax.js';
 import {
   BindingCommandBuildInputKind,
+  BindingCommandLoweringState,
   type BindingCommandBuildInput,
   type BindingCommandLowering,
   type MultiBindingLowering,
@@ -28,7 +33,12 @@ import {
   TemplateCompilerNormalizedOwnershipRelation,
   TemplateCompilerNormalizedSiteMismatchKind,
 } from './template-compiler-normalized-site-model.js';
-import { TemplateValueSiteKind, type TemplateExpressionParse, type TemplateValueSite } from './value-site.js';
+import {
+  TemplateExpressionParseState,
+  TemplateValueSiteKind,
+  type TemplateExpressionParse,
+  type TemplateValueSite,
+} from './value-site.js';
 
 export interface TemplateCompilerNormalizedMultiBindingGraphContext {
   readonly ownership: TemplateCompilerNormalizedOwnershipBuilder;
@@ -188,6 +198,18 @@ export class TemplateCompilerNormalizedMultiBindingGraphValidator {
         aggregateInstructions,
       );
     }
+    if (
+      aggregate.state !== BindingCommandLoweringState.Complete
+      && admitted.segments.length > 0
+      && !this.terminalSegmentExplainsNonCompleteAggregate(admitted)
+    ) {
+      this.context.mismatch(
+        TemplateCompilerNormalizedSiteMismatchKind.MultiBindingGraphCardinality,
+        'multi-binding/terminal-prefix',
+        'A non-complete multi-binding aggregate retained a prefix with no terminal non-complete segment.',
+        [aggregate.productHandle, admitted.segments[admitted.segments.length - 1]!.productHandle],
+      );
+    }
 
     const buildInputs: BindingCommandBuildInput[] = [];
     const commandLowerings: BindingCommandLowering[] = [];
@@ -195,6 +217,7 @@ export class TemplateCompilerNormalizedMultiBindingGraphValidator {
     const secondaryExpressionParses: TemplateExpressionParse[] = [];
     let aggregateInstructionCursor = 0;
     let segmentOutputsExact = true;
+    const aggregateIsComplete = aggregate.state === BindingCommandLoweringState.Complete;
 
     admitted.segments.forEach((segment, segmentOrdinal) => {
       const syntax = admitted.syntaxes[segmentOrdinal]!;
@@ -219,7 +242,16 @@ export class TemplateCompilerNormalizedMultiBindingGraphValidator {
       const segmentSites = this.context.secondaryValueSitesBySyntax.get(syntax.productHandle) ?? [];
       const segmentParses: TemplateExpressionParse[] = [];
 
-      if (segment.bindable == null) {
+      if (syntax.command != null && segment.command == null) {
+        if (segmentBuildInputs.length > 0 || segmentSites.length > 0) {
+          this.context.mismatch(
+            TemplateCompilerNormalizedSiteMismatchKind.MultiBindingGraphCardinality,
+            'unresolved-multi-binding-segment/outputs',
+            'An unresolved command segment unexpectedly owns command or parser outputs.',
+            [segment.productHandle],
+          );
+        }
+      } else if (segment.bindable == null) {
         if (segmentBuildInputs.length > 0 || segmentSites.length > 0) {
           this.context.mismatch(
             TemplateCompilerNormalizedSiteMismatchKind.MultiBindingGraphCardinality,
@@ -273,8 +305,10 @@ export class TemplateCompilerNormalizedMultiBindingGraphValidator {
               instruction.productHandle,
               TemplateCompilerNormalizedOwnershipRelation.CommandLoweringOwnsInstruction,
             );
-            const aggregateInstruction = aggregateInstructions[aggregateInstructionCursor++] ?? null;
-            if (aggregateInstruction !== instruction) segmentOutputsExact = false;
+            if (aggregateIsComplete) {
+              const aggregateInstruction = aggregateInstructions[aggregateInstructionCursor++] ?? null;
+              if (aggregateInstruction !== instruction) segmentOutputsExact = false;
+            }
           }
           for (const site of segmentSites) {
             this.validateAttributeSiteOrigin(
@@ -336,10 +370,12 @@ export class TemplateCompilerNormalizedMultiBindingGraphValidator {
           const parse = this.expressionParseForSite(site, 'plain-multi-binding/secondary-parse');
           if (parse != null) segmentParses.push(parse);
         }
-        const directInstruction = aggregateInstructions[aggregateInstructionCursor++] ?? null;
-        if (directInstruction == null) {
+        const directInstruction = aggregateIsComplete
+          ? aggregateInstructions[aggregateInstructionCursor++] ?? null
+          : null;
+        if (directInstruction == null && aggregateIsComplete) {
           segmentOutputsExact = false;
-        } else {
+        } else if (directInstruction != null) {
           this.context.ownership.claim(
             segment.productHandle,
             directInstruction.productHandle,
@@ -368,11 +404,17 @@ export class TemplateCompilerNormalizedMultiBindingGraphValidator {
       secondaryExpressionParses.push(...segmentParses);
     });
 
-    if (!segmentOutputsExact || aggregateInstructionCursor !== aggregateInstructions.length) {
+    if (
+      aggregateIsComplete
+        ? !segmentOutputsExact || aggregateInstructionCursor !== aggregateInstructions.length
+        : aggregateInstructions.length !== 0
+    ) {
       this.context.mismatch(
         TemplateCompilerNormalizedSiteMismatchKind.MultiBindingInstructionOrderMismatch,
         'multi-binding/aggregate-instruction-order',
-        'Aggregate instructions are not the exact forward concatenation of ordered segment outputs.',
+        aggregateIsComplete
+          ? 'Aggregate instructions are not the exact forward concatenation of ordered segment outputs.'
+          : 'A non-complete multi-binding aggregate committed instruction handles.',
         [aggregate.productHandle, ...aggregate.instructionProductHandles],
       );
     }
@@ -403,12 +445,18 @@ export class TemplateCompilerNormalizedMultiBindingGraphValidator {
     primaryValueSite: TemplateValueSite,
   ): AdmittedMultiBindingSegments | null {
     const parsedSegments = parseInlineMultiBindingSegments(primaryValueSite.rawValue);
-    let admitted = aggregate.segmentProductHandles.length === parsedSegments.length;
+    const retainedCount = aggregate.segmentProductHandles.length;
+    const complete = aggregate.state === BindingCommandLoweringState.Complete;
+    let admitted = complete
+      ? retainedCount === parsedSegments.length
+      : retainedCount <= parsedSegments.length;
     if (!admitted) {
       this.context.mismatch(
         TemplateCompilerNormalizedSiteMismatchKind.MultiBindingGraphCardinality,
         'multi-binding/reparsed-segments',
-        `Reparsed multi-binding has ${parsedSegments.length} segments; aggregate retains ${aggregate.segmentProductHandles.length}.`,
+        complete
+          ? `Complete reparsed multi-binding has ${parsedSegments.length} segments; aggregate retains ${retainedCount}.`
+          : `Non-complete reparsed multi-binding has ${parsedSegments.length} segments; aggregate retains invalid prefix length ${retainedCount}.`,
         [aggregate.productHandle],
       );
     }
@@ -446,11 +494,40 @@ export class TemplateCompilerNormalizedMultiBindingGraphValidator {
         classification,
         attribute,
         owner,
+        !complete && index === retainedCount - 1,
       );
       segments.push(segment);
       syntaxes.push(syntax);
     });
     return admitted ? new AdmittedMultiBindingSegments(segments, syntaxes) : null;
+  }
+
+  private terminalSegmentExplainsNonCompleteAggregate(
+    admitted: AdmittedMultiBindingSegments,
+  ): boolean {
+    const index = admitted.segments.length - 1;
+    const segment = admitted.segments[index]!;
+    const syntax = admitted.syntaxes[index]!;
+    if (
+      syntax.syntaxKind === AttributeSyntaxKind.Open
+      || segment.bindable == null
+      || (syntax.command != null && segment.command == null)
+    ) {
+      return true;
+    }
+    if (segment.command != null) {
+      const inputs = this.context.buildInputsBySyntax.get(syntax.productHandle) ?? [];
+      return inputs.some((input) =>
+        (this.context.loweringsByInput.get(input.productHandle) ?? []).some((lowering) =>
+          lowering.state !== BindingCommandLoweringState.Complete
+        )
+      );
+    }
+    return (this.context.secondaryValueSitesBySyntax.get(syntax.productHandle) ?? []).some((site) =>
+      (this.context.secondaryExpressionParsesBySite.get(site.productHandle) ?? []).some((parse) =>
+        parse.state !== TemplateExpressionParseState.Complete
+      )
+    );
   }
 
   private validateSegmentAlignment(
@@ -462,14 +539,21 @@ export class TemplateCompilerNormalizedMultiBindingGraphValidator {
     classification: AttributeClassification,
     attribute: HtmlAttribute,
     owner: HtmlElementAttributeOwner,
+    terminalMayHaveUnresolvedCommand: boolean,
   ): void {
+    const commandAligned = syntax.command === (segment.command?.name ?? null)
+      || (
+        terminalMayHaveUnresolvedCommand
+        && syntax.command != null
+        && segment.command == null
+      );
     if (
       segment.segmentIndex !== parsed.segmentIndex
       || segment.rawName !== parsed.rawName
       || segment.rawValue !== parsed.rawValue
       || segment.rawName !== syntax.rawName
       || segment.rawValue !== syntax.rawValue
-      || syntax.command !== (segment.command?.name ?? null)
+      || !commandAligned
       || segment.targetSourceAddressHandle !== syntax.targetSourceAddressHandle
       || !sameNormalizedAttributeReference(segment.attribute, attribute)
       || !sameNormalizedAttributeReference(syntax.attribute, attribute)

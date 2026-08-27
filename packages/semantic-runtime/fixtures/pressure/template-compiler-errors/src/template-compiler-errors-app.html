@@ -3,7 +3,9 @@
 <div $bindables.bind="spreadSource">Reserved bindables syntax</div>
 <div><span au-slot="details">Projection on a non custom element</span></div>
 <slot></slot>
-<div template-probe="value.bind: enabled; missing.bind: enabled">Non-bindable custom attribute segment</div>
+<div template-probe="value.bind: enabled; missing.bind: enabled; value: neverReached">Non-bindable custom attribute segment</div>
+<div template-probe="value.bind: enabled; value.unknown-command: enabled; value: neverReached">Unknown multi-binding command</div>
+<div template-probe="value.bind: enabled; value.bind: #; value: neverReached">Invalid multi-binding command expression</div>
 <let item.trigger="enabled"></let>
 <button click.delegate="enabled = !enabled">Legacy delegate command</button>
 <button click.call="enabled = !enabled">Legacy call command</button>

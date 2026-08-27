@@ -536,14 +536,18 @@ export class TemplateCompilerReadView {
   }
 
   resolveResources(): boolean {
+    return this.readResolveResources().value;
+  }
+
+  readResolveResources(): TemplateCompilerObservedValue<boolean> {
     const result = this.world.templateCompiler.resolveResources;
-    this.observe(
+    const observation = this.observe(
       TemplateCompilerReadKind.TemplateCompiler,
       'resolve-resources',
       templateCompilerResultParts(this.world, result),
       (_store, current) => templateCompilerResultParts(current, current.templateCompiler.resolveResources),
     );
-    return result;
+    return new TemplateCompilerObservedValue(result, observation);
   }
 
   compilerDebug(): boolean {

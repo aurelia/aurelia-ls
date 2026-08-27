@@ -69,6 +69,7 @@ import {
 import type { ParsedMultiBindingSegment } from './multi-binding-segments.js';
 import {
   TemplateCompilerLiveAttributeDisposition,
+  type TemplateCompilerLiveAttributeOwnerView,
   TemplateCompilerLiveAttributeOwnerProgression,
   type TemplateCompilerLiveAttributeOwnerSite,
 } from './template-compiler-live-attribute-owner.js';
@@ -89,6 +90,16 @@ import {
   TemplateExpressionParseState,
   TemplateValueSiteKind,
 } from './value-site.js';
+import {
+  TemplateCompilerInstructionStagingAllocation,
+  type TemplateCompilerInstructionStagingAllocationRequest,
+  type TemplateCompilerInstructionStagingAuthority,
+} from './template-compiler-instruction-staging.js';
+import {
+  type TemplateCompilerLiveElementInstructionStagingResult,
+  TemplateCompilerLiveInstructionStagingRequest,
+  stageTemplateCompilerLiveAttributeOwner,
+} from './template-compiler-live-instruction-staging.js';
 
 export const enum TemplateCompilerLiveAttributeSourceKind {
   AuthoredExact = 'authored-exact',
@@ -232,6 +243,8 @@ export class TemplateCompilerLiveAttributeOwnerResult {
     readonly completion: TemplateCompilerLiveAttributeCompletion,
     readonly terminalContribution: TemplateCompilerLiveAttributeContribution | null,
     readonly reason: TemplateCompilerLiveAttributeOpenReason | null,
+    readonly finalOwnerView: TemplateCompilerLiveAttributeOwnerView,
+    readonly instructionStaging: TemplateCompilerLiveElementInstructionStagingResult,
   ) {
     this.templateControllers = contributions.filter((entry) =>
       entry.targetLane === TemplateCompilerLiveAttributeTargetLane.TemplateController
@@ -252,7 +265,9 @@ export class TemplateCompilerLiveAttributeOwnerResult {
   }
 
   compilerReads(): readonly TemplateCompilerReadObservation[] {
-    return compilerReadsFor(this.debugRead, this.contributions);
+    const reads = [...compilerReadsFor(this.debugRead, this.contributions)];
+    for (const read of this.instructionStaging.compilerReads) retainRead(reads, read);
+    return reads;
   }
 
   compilerReadsAreClosedAndCurrent(): boolean {
@@ -307,7 +322,11 @@ class TemplateCompilerLiveAttributeOwnerAssembly {
       request.element,
       request.siteDriver?.expectedForestMutationRevision ?? request.bootstrapClosure.forestMutationRevision,
     );
-    this.handles = new LiveAttributeAssemblyHandleAuthority(request.handles, request.localKey);
+    this.handles = new LiveAttributeAssemblyHandleAuthority(
+      request.handles,
+      request.localKey,
+      request.element.occurrenceKey,
+    );
     this.authoredElement = this.resolveAuthoredElement();
     this.authoredAttributesByProduct = new Map(
       (request.preWalk?.binding.compilation.html.attributes ?? []).map((attribute) => [
@@ -356,6 +375,19 @@ class TemplateCompilerLiveAttributeOwnerAssembly {
           TemplateCompilerLiveAttributeOpenReasonKind.CompilerReadOpen,
           'One or more compiler-service reads are open or no longer current.',
         ));
+    const structuralEffects = this.contributions.flatMap((entry) => entry.structuralEffects);
+    const finalOwnerView = this.progression.readFinalView();
+    const instructionStaging = stageTemplateCompilerLiveAttributeOwner(new TemplateCompilerLiveInstructionStagingRequest(
+      {
+        element: this.request.element,
+        completion,
+        contributions: this.contributions,
+        structuralEffects,
+        finalOwnerView,
+      },
+      this.request.compilerReads,
+      this.handles,
+    ));
     return new TemplateCompilerLiveAttributeOwnerResult(
       this.request.element,
       this.request.lookupName,
@@ -365,6 +397,8 @@ class TemplateCompilerLiveAttributeOwnerAssembly {
       completion,
       terminal,
       reason,
+      finalOwnerView,
+      instructionStaging,
     );
   }
 
@@ -861,11 +895,24 @@ class LiveAttributeClassificationOwner implements AttributeClassificationDecisio
   }
 }
 
-class LiveAttributeAssemblyHandleAuthority {
+class LiveAttributeAssemblyHandleAuthority implements TemplateCompilerInstructionStagingAuthority {
   constructor(
     private readonly handles: KernelHandleFactory,
     private readonly localKey: string,
+    private readonly elementOccurrenceKey: string,
   ) {}
+
+  create<TInstruction extends TemplateInstruction>(
+    request: TemplateCompilerInstructionStagingAllocationRequest,
+    factory: (allocation: TemplateCompilerInstructionStagingAllocation) => TInstruction,
+  ): TInstruction {
+    const instructionLocal = `${this.localKey}:${request.siteKey}:instruction:${request.local}`;
+    return factory(new TemplateCompilerInstructionStagingAllocation(
+      this.handles.product(instructionLocal),
+      this.handles.identity(instructionLocal),
+      instructionLocal,
+    ));
+  }
 
   valueExpression(
     frame: TemplateCompilerLiveAttributeSiteFrame,
@@ -883,7 +930,7 @@ class LiveAttributeAssemblyHandleAuthority {
   }
 
   private siteKey(frame: TemplateCompilerLiveAttributeSiteFrame): string {
-    return `${this.localKey}:attribute:${frame.liveSite.originalForestOrdinal}:${frame.attribute.occurrenceKey}`;
+    return `${this.localKey}:element:${this.elementOccurrenceKey}:attribute:${frame.attribute.occurrenceKey}`;
   }
 }
 
@@ -915,7 +962,7 @@ class LiveMultiBindingHandleAuthority implements TemplateCompilerLiveMultiBindin
   segment(segment: ParsedMultiBindingSegment): TemplateCompilerLiveBindingCommandHandleFactory {
     return new LiveBindingCommandHandleAuthority(
       this.handles,
-      `${this.siteKey}:multi-binding:${segment.segmentIndex}`,
+      `${this.siteKey}:multi-binding:${segment.start}:${segment.end}:${segment.rawName}`,
     );
   }
 }

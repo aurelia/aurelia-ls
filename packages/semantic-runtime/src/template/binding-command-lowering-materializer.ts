@@ -45,9 +45,14 @@ import type {
   AttributeClassificationEmission,
 } from './attribute-classification-materializer.js';
 import {
+  type AttributeClassificationDecisionIssue,
+  unknownBindingCommandDecisionIssue,
+} from './attribute-classification-decision.js';
+import {
   type AttributeClassification,
   AttributeClassificationKind,
   type AttributeSyntax,
+  AttributeSyntaxKind,
 } from './attribute-syntax.js';
 import type {
   BindingCommandBuildContext,
@@ -91,7 +96,10 @@ import {
   type BuiltInBindingCommand,
 } from './built-in-syntax.js';
 import type { TemplateCompilerWorldEmission } from './compiler-world-materializer.js';
-import type { TemplateCompilerReadView } from './compiler-read-view.js';
+import {
+  TemplateCompilerScopeClosureState,
+  type TemplateCompilerReadView,
+} from './compiler-read-view.js';
 import type { TemplateAttributeMapperNode } from './attribute-mapper.js';
 import {
   TemplateCompilerAttributeOwnerProgression,
@@ -320,6 +328,7 @@ class MultiBindingLoweringResult {
 
 class MultiBindingSegmentLoweringResult {
   constructor(
+    readonly state: BindingCommandLoweringState,
     readonly segment: MultiBindingSegment,
     readonly commandLowerings: readonly BindingCommandLowering[],
     readonly issues: readonly TemplateCompilerIssue[],
@@ -349,6 +358,7 @@ class ClosedMultiBindingSite {
 
 class MultiBindingSiteSegmentBatch {
   constructor(
+    readonly state: BindingCommandLoweringState,
     readonly records: readonly KernelStoreRecord[],
     readonly claims: readonly SemanticClaim[],
     readonly openSeams: readonly OpenSeam[],
@@ -370,6 +380,8 @@ class MaterializedMultiBindingSegment {
     readonly syntax: AttributeSyntax,
     readonly bindable: TemplateBindableReference | null,
     readonly commandMatch: CommandHandlerMatch | null,
+    readonly selectionIssue: AttributeClassificationDecisionIssue | null,
+    readonly selectionOpenSummary: string | null,
     readonly targetSourceAddressHandle: AddressHandle | null,
     readonly sourceAddressHandle: AddressHandle | null,
     readonly sourceAddressRecord: SourceSpanAddress | null,
@@ -383,6 +395,8 @@ class MultiBindingSegmentSelection {
     readonly bindable: TemplateBindableReference | null,
     readonly commandMatch: CommandHandlerMatch | null,
     readonly commandReference: MultiBindingSegment['command'],
+    readonly issue: AttributeClassificationDecisionIssue | null,
+    readonly openSummary: string | null,
   ) {}
 }
 
@@ -430,10 +444,13 @@ class MultiBindingSegmentLoweringFrame {
     this.records.push(...publication.records);
   }
 
-  recordCommandExecution(result: OpenLoweringResult): void {
+  recordCommandExecution(
+    result: OpenLoweringResult,
+    instructions: readonly TemplateInstruction[] = result.result.instructions,
+  ): void {
     this.records.push(...result.openSeams);
     this.openSeams.push(...result.openSeams);
-    this.instructions.push(...result.result.instructions);
+    this.instructions.push(...instructions);
     if (result instanceof ExecutedLoweringResult) {
       this.records.push(...result.context.records);
       this.claims.push(...result.context.claims);
@@ -458,6 +475,12 @@ class MultiBindingSegmentLoweringFrame {
 
   toResult(): MultiBindingSegmentLoweringResult {
     return new MultiBindingSegmentLoweringResult(
+      multiBindingSegmentStateFor(
+        this.openSeams,
+        this.commandLowerings,
+        this.expressionParses,
+        this.issues,
+      ),
       this.segment,
       this.commandLowerings,
       this.issues,
@@ -895,9 +918,21 @@ export class BindingCommandLoweringMaterializer {
     const batch = closed instanceof ClosedMultiBindingSite
       ? this.lowerMultiBindingSiteSegments(local, source, compilerWorld, compilerReads, site, closed)
       : this.openMultiBindingSiteBatch(closed);
-    const state = loweringStateFor(batch.openSeams, batch.commandLowerings, batch.expressionParses, batch.issues);
-    const lowering = this.createMultiBindingLowering(local, site, state, batch);
-    const loweringClaims = this.publisher.claimsForMultiBindingLowering(local, source, site, lowering, batch.instructions);
+    const state = batch.state;
+    const committedInstructions = state === BindingCommandLoweringState.Complete
+      ? batch.instructions
+      : [];
+    const publishedInstructions = state === BindingCommandLoweringState.Complete
+      ? batch.instructions
+      : batch.instructions.filter((instruction) => !batch.directInstructions.includes(instruction));
+    const lowering = this.createMultiBindingLowering(local, site, state, batch, committedInstructions);
+    const loweringClaims = this.publisher.claimsForMultiBindingLowering(
+      local,
+      source,
+      site,
+      lowering,
+      committedInstructions,
+    );
     return new MultiBindingLoweringResult(
       lowering,
       batch.segments,
@@ -905,12 +940,19 @@ export class BindingCommandLoweringMaterializer {
       batch.issues,
       batch.buildInputs,
       batch.attributeSyntaxes,
-      batch.instructions,
+      publishedInstructions,
       batch.valueSites,
       batch.expressionParses,
       [
         ...batch.records,
-        ...this.publisher.publishMultiBindingLoweringRecords(local, source, site, lowering, batch.directInstructions, loweringClaims),
+        ...this.publisher.publishMultiBindingLoweringRecords(
+          local,
+          source,
+          site,
+          lowering,
+          state === BindingCommandLoweringState.Complete ? batch.directInstructions : [],
+          loweringClaims,
+        ),
       ],
       [...batch.claims, ...loweringClaims],
       batch.openSeams,
@@ -936,8 +978,6 @@ export class BindingCommandLoweringMaterializer {
     const classification = site.classification;
     const currentDefinition = compilerReads.currentDefinition(classification?.resource ?? null);
     const definition = currentDefinition instanceof CustomAttributeDefinition ? currentDefinition : null;
-    const parsedSegments = parseInlineMultiBindingSegments(site.rawValue);
-
     if (attribute == null || owner == null || mapperOwner == null || classification == null || definition == null) {
       return this.publisher.openSeam(
         local,
@@ -948,6 +988,21 @@ export class BindingCommandLoweringMaterializer {
         KernelVocabulary.Instruction.OpenInstruction.key,
       );
     }
+    const bindablesRead = compilerReads.readBindables(definition);
+    if (
+      bindablesRead.observation.closure.state !== TemplateCompilerScopeClosureState.Closed
+      || !bindablesRead.observation.validate().isCurrent
+    ) {
+      return this.publisher.openSeam(
+        local,
+        source,
+        site.sourceAddressHandle,
+        `Bindable lookup for custom attribute '${definition.name}' is open or no longer current.`,
+        [OpenSeamReasonKind.BindingTargetProductMissing],
+        KernelVocabulary.Instruction.OpenInstruction.key,
+      );
+    }
+    const parsedSegments = parseInlineMultiBindingSegments(site.rawValue);
     if (parsedSegments.length === 0) {
       return this.publisher.openSeam(
         local,
@@ -965,12 +1020,13 @@ export class BindingCommandLoweringMaterializer {
       classification,
       definition,
       parsedSegments,
-      compilerReads.bindables(definition),
+      bindablesRead.value,
     );
   }
 
   private openMultiBindingSiteBatch(openSeam: OpenSeam): MultiBindingSiteSegmentBatch {
     return new MultiBindingSiteSegmentBatch(
+      BindingCommandLoweringState.Open,
       [openSeam],
       [],
       [openSeam],
@@ -1006,6 +1062,7 @@ export class BindingCommandLoweringMaterializer {
     const directInstructions: TemplateInstruction[] = [];
     const valueSites: TemplateValueSite[] = [];
     const expressionParses: TemplateExpressionParse[] = [];
+    let state = BindingCommandLoweringState.Complete;
 
     for (const parsed of closed.parsedSegments) {
       const segmentLocal = `${local}:segment:${parsed.segmentIndex}`;
@@ -1035,9 +1092,14 @@ export class BindingCommandLoweringMaterializer {
       directInstructions.push(...result.directInstructions);
       valueSites.push(...result.valueSites);
       expressionParses.push(...result.expressionParses);
+      if (result.state !== BindingCommandLoweringState.Complete) {
+        state = result.state;
+        break;
+      }
     }
 
     return new MultiBindingSiteSegmentBatch(
+      state,
       records,
       claims,
       openSeams,
@@ -1058,6 +1120,7 @@ export class BindingCommandLoweringMaterializer {
     site: TemplateValueSite,
     state: BindingCommandLoweringState,
     batch: MultiBindingSiteSegmentBatch,
+    committedInstructions: readonly TemplateInstruction[],
   ): MultiBindingLowering {
     return new MultiBindingLowering(
       this.store.handles.product(`${local}:lowering`),
@@ -1065,7 +1128,7 @@ export class BindingCommandLoweringMaterializer {
       site.toReference(),
       state,
       batch.segments.map((segment) => segment.productHandle),
-      batch.instructions.map((instruction) => instruction.productHandle),
+      committedInstructions.map((instruction) => instruction.productHandle),
       site.sourceAddressHandle,
       [],
     );
@@ -1119,9 +1182,37 @@ export class BindingCommandLoweringMaterializer {
     const frame = new MultiBindingSegmentLoweringFrame(materializedSegment.segment);
     frame.recordSegment(materializedSegment);
 
-    if (materializedSegment.bindable == null) {
+    if (materializedSegment.syntax.syntaxKind === AttributeSyntaxKind.Open) {
+      frame.recordOpenSeam(this.publisher.openSeam(
+        local,
+        source,
+        materializedSegment.syntax.sourceAddressHandle ?? materializedSegment.sourceAddressHandle,
+        'Inline multi-binding attribute parsing remained open.',
+        [OpenSeamReasonKind.FeatureNotYetModeled],
+        KernelVocabulary.Instruction.OpenInstruction.key,
+      ));
+    } else if (materializedSegment.selectionIssue != null) {
+      this.recordInvalidMultiBindingSegmentSelection(
+        local,
+        source,
+        materializedSegment,
+        materializedSegment.selectionIssue,
+        frame,
+      );
+    } else if (materializedSegment.selectionOpenSummary != null) {
+      frame.recordOpenSeam(this.publisher.openSeam(
+        local,
+        source,
+        materializedSegment.syntax.commandSourceAddressHandle
+          ?? materializedSegment.targetSourceAddressHandle
+          ?? materializedSegment.sourceAddressHandle,
+        materializedSegment.selectionOpenSummary,
+        [OpenSeamReasonKind.BindingTargetProductMissing],
+        KernelVocabulary.Instruction.OpenInstruction.key,
+      ));
+    } else if (materializedSegment.bindable == null) {
       this.recordInvalidMultiBindingSegment(local, source, definition, materializedSegment, frame);
-    } else if (materializedSegment.commandMatch == null) {
+    } else if (materializedSegment.syntax.command == null) {
       this.lowerPlainMultiBindingSegment(
         local,
         source,
@@ -1134,7 +1225,7 @@ export class BindingCommandLoweringMaterializer {
         materializedSegment.bindable,
         frame,
       );
-    } else {
+    } else if (materializedSegment.commandMatch != null) {
       this.lowerCommandedMultiBindingSegment(
         local,
         source,
@@ -1149,6 +1240,17 @@ export class BindingCommandLoweringMaterializer {
         materializedSegment.commandMatch,
         frame,
       );
+    } else {
+      frame.recordOpenSeam(this.publisher.openSeam(
+        local,
+        source,
+        materializedSegment.syntax.commandSourceAddressHandle
+          ?? materializedSegment.targetSourceAddressHandle
+          ?? materializedSegment.sourceAddressHandle,
+        `Binding command '${materializedSegment.syntax.command}' has no executable handler in the current compiler world.`,
+        [OpenSeamReasonKind.BindingCommandExecutableBodyOpen],
+        KernelVocabulary.Compiler.OpenExecutableBody.key,
+      ));
     }
 
     return frame.toResult();
@@ -1170,6 +1272,27 @@ export class BindingCommandLoweringMaterializer {
       `Template compilation error in custom attribute "${definition.name}": property "${materializedSegment.syntax.target}" is not bindable.`,
       TemplateCompilerFrameworkErrorCode.CompilerBindingToNonBindable,
       materializedSegment.targetSourceAddressHandle ?? materializedSegment.sourceAddressHandle,
+    ));
+  }
+
+  private recordInvalidMultiBindingSegmentSelection(
+    local: string,
+    source: BindingCommandLoweringSourceSet,
+    materializedSegment: MaterializedMultiBindingSegment,
+    issue: AttributeClassificationDecisionIssue,
+    frame: MultiBindingSegmentLoweringFrame,
+  ): void {
+    frame.recordCommandIssue(this.issuePublisher.publish(
+      `${local}:issue`,
+      materializedSegment.segment.identityHandle,
+      source.provenanceHandle,
+      TemplateCompilerIssuePhase.BindingCommandLowering,
+      issue.issueKind,
+      issue.message,
+      issue.frameworkErrorCode,
+      materializedSegment.syntax.commandSourceAddressHandle
+        ?? materializedSegment.targetSourceAddressHandle
+        ?? materializedSegment.sourceAddressHandle,
     ));
   }
 
@@ -1198,15 +1321,17 @@ export class BindingCommandLoweringMaterializer {
       materializedSegment.sourceAddressRecord,
     );
     frame.recordExpressionPublication(publication);
-    frame.recordDirectInstruction(this.publisher.createMultiBindingValueInstruction(
-      `${local}:instruction`,
-      owner,
-      attribute,
-      bindable.definition.name,
-      parsed.rawValue,
-      publication.parse,
-      materializedSegment.sourceAddressHandle,
-    ));
+    if (publication.parse.state === TemplateExpressionParseState.Complete) {
+      frame.recordDirectInstruction(this.publisher.createMultiBindingValueInstruction(
+        `${local}:instruction`,
+        owner,
+        attribute,
+        bindable.definition.name,
+        parsed.rawValue,
+        publication.parse,
+        materializedSegment.sourceAddressHandle,
+      ));
+    }
   }
 
   private lowerCommandedMultiBindingSegment(
@@ -1250,14 +1375,15 @@ export class BindingCommandLoweringMaterializer {
       materializedSegment.sourceAddressHandle,
       runtimeExpressionParseContextForSourceSpanAddress(this.store, materializedSegment.sourceAddressRecord) ?? null,
     );
-    frame.recordCommandExecution(loweringResult);
-    frame.recordCommandIssue(this.publishCommandLoweringIssue(local, source, buildInput.input, loweringResult.result));
+    const commandResult = multiBindingCommandBuildResult(loweringResult);
+    frame.recordCommandExecution(loweringResult, commandResult.instructions);
+    frame.recordCommandIssue(this.publishCommandLoweringIssue(local, source, buildInput.input, commandResult));
     frame.recordCommandLowering(this.commandPublisher.materializeCommandLowering(
       `${local}:command`,
       source,
       closedCommandReference,
       buildInput.input,
-      loweringResult.result,
+      commandResult,
     ));
   }
 
@@ -1283,12 +1409,14 @@ export class BindingCommandLoweringMaterializer {
       syntaxAddress.handle,
       nameAddress.record ?? nameAddress.handle,
     );
-    const selection = this.selectMultiBindingSegment(
-      compilerWorld,
-      compilerReads,
-      syntax.syntax,
-      bindables,
-    );
+    const selection = syntax.syntax.syntaxKind === AttributeSyntaxKind.Open
+      ? new MultiBindingSegmentSelection(null, null, null, null, null)
+      : this.selectMultiBindingSegment(
+          compilerWorld,
+          compilerReads,
+          syntax.syntax,
+          bindables,
+        );
     const segment = this.publisher.publishMultiBindingSegment(
       local,
       source,
@@ -1306,6 +1434,8 @@ export class BindingCommandLoweringMaterializer {
       syntax.syntax,
       selection.bindable,
       selection.commandMatch,
+      selection.issue,
+      selection.openSummary,
       syntax.syntax.targetSourceAddressHandle,
       valueAddress.handle,
       valueAddress.record,
@@ -1329,10 +1459,25 @@ export class BindingCommandLoweringMaterializer {
     syntax: AttributeSyntax,
     bindables: TemplateAttributeBindablesInfo,
   ): MultiBindingSegmentSelection {
-    const bindable = bindables.attr(syntax.target);
-    const command = syntax.command == null
+    const commandName = syntax.command;
+    const commandRead = commandName == null
       ? null
-      : compilerReads.bindingCommand(syntax.command);
+      : compilerReads.readBindingCommand(commandName);
+    const bindable = bindables.attr(syntax.target);
+    const command = commandRead?.value ?? null;
+    if (commandRead != null && command == null && commandName != null) {
+      const absenceIsExact = commandRead.observation.closure.state === TemplateCompilerScopeClosureState.Closed
+        && commandRead.observation.validate().isCurrent;
+      return new MultiBindingSegmentSelection(
+        bindable,
+        null,
+        null,
+        absenceIsExact ? unknownBindingCommandDecisionIssue(commandName) : null,
+        absenceIsExact
+          ? null
+          : `Binding command '${commandName}' is absent, but compiler-scope closure does not prove current absence.`,
+      );
+    }
     const commandMatch = command == null
       ? null
       : findCommand(compilerWorld, command.toReference());
@@ -1340,6 +1485,10 @@ export class BindingCommandLoweringMaterializer {
       bindable,
       commandMatch,
       commandMatch?.executable.toReference() ?? null,
+      null,
+      command != null && commandMatch == null
+        ? `Binding command '${command.name}' is visible but has no executable registration in the current compiler world.`
+        : null,
     );
   }
 
@@ -1452,6 +1601,42 @@ class ExecutedLoweringResult extends OpenLoweringResult {
   }
 }
 
+function multiBindingCommandBuildResult(
+  lowering: OpenLoweringResult,
+): BindingCommandBuildResult {
+  if (
+    !(lowering instanceof ExecutedLoweringResult)
+    || lowering.result.state !== BindingCommandLoweringState.Complete
+  ) {
+    return lowering.result;
+  }
+  const invalidParse = lowering.context.parses.find((parse) =>
+    parse.state === TemplateExpressionParseState.Error
+  ) ?? null;
+  if (invalidParse != null) {
+    const result = invalidParse.result;
+    return result.kind === ExpressionParseResultKind.CompleteInputParseError
+      ? BindingCommandBuildResult.invalid(
+          result.message,
+          result.frameworkErrorCode,
+          TemplateCompilerIssueKind.BindingCommandBuildInvalid,
+        )
+      : BindingCommandBuildResult.invalid(
+          'Inline multi-binding command expression parsing was invalid.',
+          null,
+          TemplateCompilerIssueKind.BindingCommandBuildInvalid,
+        );
+  }
+  if (lowering.context.parses.some((parse) => parse.state !== TemplateExpressionParseState.Complete)) {
+    return new BindingCommandBuildResult(
+      BindingCommandLoweringState.Partial,
+      [],
+      'Inline multi-binding command expression parsing remained partial.',
+    );
+  }
+  return lowering.result;
+}
+
 function loweringIndexes(input: BindingCommandLoweringRequest): BindingCommandLoweringIndexes {
   return {
     syntaxByProduct: new Map(input.attributeSyntax.syntaxes.map((syntax) => [syntax.productHandle, syntax])),
@@ -1485,7 +1670,7 @@ function parseAttributeSyntaxInWorld(
   return compilerReads.parseAttribute(rawName, rawValue);
 }
 
-function loweringStateFor(
+function multiBindingSegmentStateFor(
   openSeams: readonly OpenSeam[],
   commandLowerings: readonly BindingCommandLowering[],
   parses: readonly TemplateExpressionParse[],
@@ -1500,13 +1685,13 @@ function loweringStateFor(
   }
   if (
     commandLowerings.some((lowering) => lowering.state === BindingCommandLoweringState.Open)
+    || openSeams.length > 0
   ) {
     return BindingCommandLoweringState.Open;
   }
   if (
     commandLowerings.some((lowering) => lowering.state === BindingCommandLoweringState.Partial)
     || parses.some((parse) => parse.state !== TemplateExpressionParseState.Complete)
-    || openSeams.length > 0
   ) {
     return BindingCommandLoweringState.Partial;
   }

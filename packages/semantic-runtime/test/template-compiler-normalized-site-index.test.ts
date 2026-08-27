@@ -13,11 +13,14 @@ import { HtmlElement, HtmlNodeReference, HtmlText } from '../src/template/html-i
 import { HtmlParseEmission } from '../src/template/html-parse-materializer.js';
 import {
   HydrateElementInstruction,
+  HydrateAttributeInstruction,
   IteratorBindingInstruction,
   MultiAttrInstruction,
   SetPropertyInstruction,
   TemplateInstructionKind,
 } from '../src/template/instruction-ir.js';
+import { TemplateCompilerIssueKind } from '../src/template/compiler-issue.js';
+import { TemplateCompilerFrameworkErrorCode } from '../src/template/framework-error-code.js';
 import type { TemplateResourceCompilationEmission } from '../src/template/template-compilation-project-pass.js';
 import {
   buildTemplateCompilerNormalizedSiteIndex,
@@ -255,9 +258,22 @@ describe('template compiler normalized site index', () => {
       site.multiBinding?.segments.some((segment) => segment.rawName === 'missing.bind')
     )?.multiBinding;
     const segment = invalid?.segments.find((candidate) => candidate.rawName === 'missing.bind');
+    expect(invalid?.segments.map((candidate) => candidate.rawName)).toEqual([
+      'value.bind',
+      'missing.bind',
+    ]);
     expect(segment?.bindable).toBeNull();
     expect(segment?.command?.name).toBe('bind');
     expect(invalid?.lowering.state).toBe(BindingCommandLoweringState.Invalid);
+    expect(invalid?.lowering.instructionProductHandles).toEqual([]);
+    expect(invalid?.segments.some((candidate) => candidate.rawValue === 'neverReached')).toBe(false);
+    const staged = invalid?.commandLowerings.flatMap((lowering) => lowering.instructionProductHandles) ?? [];
+    expect(staged.length).toBeGreaterThan(0);
+    const invalidSite = index.attributeSites.find((site) => site.multiBinding === invalid);
+    expect(invalidCompilation.compiledTemplate.instructions.some((instruction) =>
+      instruction instanceof HydrateAttributeInstruction
+      && instruction.attribute.productHandle === invalidSite?.attribute.productHandle
+    )).toBe(false);
     expect(index.outcomes.issues.length).toBeGreaterThan(0);
     expect(index.outcomes.issues).toHaveLength(new Set([
       ...invalidCompilation.attributeClassification.issues.map((issue) => issue.productHandle),
@@ -266,6 +282,66 @@ describe('template compiler normalized site index', () => {
     ]).size);
     expect(index.outcomes.attributionKind)
       .toBe(TemplateCompilerNormalizedOutcomeAttributionKind.PhaseGlobalOwnershipUnavailable);
+  });
+
+  test('stops at a closed-world unknown multi-binding command and publishes AUR0713', () => {
+    const result = buildTemplateCompilerNormalizedSiteIndex(invalidCompilation);
+    expect(result.state).toBe(TemplateCompilerNormalizedSiteIndexState.GraphExact);
+    const index = result.index;
+    if (index == null) throw new Error('Expected GraphExact invalid compiler products.');
+    const site = index.attributeSites.find((candidate) =>
+      candidate.multiBinding?.segments.some((segment) => segment.rawName === 'value.unknown-command')
+    );
+    const multi = site?.multiBinding;
+    expect(multi?.segments.map((segment) => segment.rawName)).toEqual([
+      'value.bind',
+      'value.unknown-command',
+    ]);
+    expect(multi?.segments[1]).toMatchObject({
+      bindable: expect.objectContaining({ definition: expect.objectContaining({ name: 'value' }) }),
+      command: null,
+    });
+    expect(multi?.lowering.state).toBe(BindingCommandLoweringState.Invalid);
+    expect(multi?.lowering.instructionProductHandles).toEqual([]);
+    expect(multi?.segments.some((segment) => segment.rawValue === 'neverReached')).toBe(false);
+    expect(invalidCompilation.bindingCommandLowering.issues).toContainEqual(expect.objectContaining({
+      issueKind: TemplateCompilerIssueKind.UnknownBindingCommand,
+      frameworkErrorCode: TemplateCompilerFrameworkErrorCode.CompilerUnknownBindingCommand,
+    }));
+    expect(invalidCompilation.compiledTemplate.instructions.some((instruction) =>
+      instruction instanceof HydrateAttributeInstruction
+      && instruction.attribute.productHandle === site?.attribute.productHandle
+    )).toBe(false);
+  });
+
+  test('stops after a commanded segment parser failure without committing its instruction', () => {
+    const result = buildTemplateCompilerNormalizedSiteIndex(invalidCompilation);
+    expect(result.state).toBe(TemplateCompilerNormalizedSiteIndexState.GraphExact);
+    const index = result.index;
+    if (index == null) throw new Error('Expected GraphExact invalid compiler products.');
+    const site = index.attributeSites.find((candidate) =>
+      candidate.multiBinding?.segments.some((segment) => segment.rawValue === '#')
+    );
+    const multi = site?.multiBinding;
+    expect(multi?.segments.map((segment) => [segment.rawName, segment.rawValue])).toEqual([
+      ['value.bind', 'enabled'],
+      ['value.bind', '#'],
+    ]);
+    expect(multi?.lowering.state).toBe(BindingCommandLoweringState.Invalid);
+    expect(multi?.lowering.instructionProductHandles).toEqual([]);
+    expect(multi?.commandLowerings.map((lowering) => lowering.state)).toEqual([
+      BindingCommandLoweringState.Complete,
+      BindingCommandLoweringState.Invalid,
+    ]);
+    expect(multi?.commandLowerings[1]?.instructionProductHandles).toEqual([]);
+    expect(multi?.secondaryExpressionParses.some((parse) => parse.state === 'error')).toBe(true);
+    expect(invalidCompilation.bindingCommandLowering.issues).toContainEqual(expect.objectContaining({
+      issueKind: TemplateCompilerIssueKind.BindingCommandBuildInvalid,
+    }));
+    expect(invalidCompilation.compiledTemplate.instructions.some((instruction) =>
+      instruction instanceof HydrateAttributeInstruction
+      && instruction.attribute.productHandle === site?.attribute.productHandle
+    )).toBe(false);
   });
 
   test('keeps downstream corruption in observational parity rather than authored GraphExact', () => {

@@ -3,8 +3,8 @@ import {
   htmlAttributeValue,
 } from './html-ir.js';
 import type {
-  HtmlElement,
-  HtmlElementAttributeOwner,
+  HtmlAttributeOwnerLike,
+  HtmlNamespaceKind,
 } from './html-ir.js';
 import {
   InterpolationInstruction,
@@ -20,9 +20,14 @@ import {
 import { runtimeNodeName } from './runtime-dom-name.js';
 
 /** Preserve the framework compiler's observer-sensitive native instruction order after authored lowering. */
+export interface TemplateCompilerInstructionOrderElement {
+  readonly tagName: string;
+  readonly namespace?: HtmlNamespaceKind;
+}
+
 export function orderCompilerInstructionsForElement(
-  node: HtmlElement,
-  owner: HtmlElementAttributeOwner | null,
+  node: TemplateCompilerInstructionOrderElement,
+  owner: HtmlAttributeOwnerLike | null,
   instructions: readonly TemplateInstruction[],
 ): readonly TemplateInstruction[] {
   if (instructions.length < 2) {

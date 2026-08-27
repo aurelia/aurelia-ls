@@ -104,22 +104,16 @@ import {
 import type { HtmlParseEmission } from './html-parse-materializer.js';
 import {
   AuSlotProcessContentInstructionData,
-  HydrateAttributeInstruction,
+  type HydrateAttributeInstruction,
   HydrateElementInstruction,
   HydrateElementProjectionContributor,
   HydrateElementProjectionContributorDisposition,
   HydrateElementProjectionDefinition,
   HydrateLetElementInstruction,
-  HydrateTemplateControllerInstruction,
+  type HydrateTemplateControllerInstruction,
   InterpolationInstruction,
   LetBindingInstruction,
   PropertyBindingInstruction,
-  SetAttributeInstruction,
-  SetClassAttributeInstruction,
-  SetPropertyInstruction,
-  SetStyleAttributeInstruction,
-  SpreadTransferedBindingInstruction,
-  SpreadValueBindingInstruction,
   TemplateInstructionReference,
   TemplateInstructionSequence,
   TemplateInstructionKind,
@@ -134,6 +128,7 @@ import { compilerRootTemplateElement } from './compiler-root-template.js';
 import {
   BindingCommandLoweringState,
   type BindingCommandLowering,
+  type MultiBindingLowering,
 } from './binding-command-execution.js';
 import type { BindingCommandLoweringEmission } from './binding-command-lowering-materializer.js';
 import type { TemplateValueSiteEmission } from './value-site-materializer.js';
@@ -151,6 +146,21 @@ import {
 } from './value-site.js';
 import { TemplateProductDetails } from './product-details.js';
 import { sourceAddressForRuntimeExpressionSpan } from './runtime-expression-source-address.js';
+import {
+  TemplateCompilerHydrateAttributeStagingRequest,
+  TemplateCompilerHydrateTemplateControllerDraft,
+  TemplateCompilerInstructionStagingAllocation,
+  type TemplateCompilerInstructionStagingAllocationRequest,
+  type TemplateCompilerInstructionStagingAuthority,
+  TemplateCompilerSpreadInstructionStagingRequest,
+  TemplateCompilerStaticAttributePolicy,
+  TemplateCompilerValueInstructionLane,
+  TemplateCompilerValueInstructionStagingRequest,
+  stageTemplateCompilerHydrateAttributeInstruction,
+  stageTemplateCompilerHydrateTemplateControllerInstruction,
+  stageTemplateCompilerSpreadInstruction,
+  stageTemplateCompilerValueInstruction,
+} from './template-compiler-instruction-staging.js';
 
 export interface CompiledTemplateMaterializationRequest {
   /** Store-local key for this compiled-template pass. */
@@ -347,6 +357,7 @@ class CompiledTemplateAssemblyIndexes {
   readonly classificationsByOwner: ReadonlyMap<ProductHandle, readonly AttributeClassification[]>;
   readonly commandInstructions: ReadonlyMap<ProductHandle, readonly TemplateInstruction[]>;
   readonly commandLowerings: ReadonlyMap<ProductHandle, readonly BindingCommandLowering[]>;
+  readonly multiBindingLowerings: ReadonlyMap<ProductHandle, MultiBindingLowering>;
   readonly parseBySite: ReadonlyMap<ProductHandle, TemplateExpressionParse>;
   readonly valueSiteByClassification: ReadonlyMap<ProductHandle, TemplateValueSite>;
   readonly textValueSiteByNode: ReadonlyMap<ProductHandle, TemplateValueSite>;
@@ -359,6 +370,7 @@ class CompiledTemplateAssemblyIndexes {
     this.classificationsByOwner = classificationsByOwnerProduct(input.attributeClassification.classifications);
     this.commandInstructions = commandInstructionsByClassification(input);
     this.commandLowerings = commandLoweringsByClassification(input);
+    this.multiBindingLowerings = multiBindingLoweringsByClassification(input);
     this.parseBySite = expressionParsesBySite(input);
     this.valueSiteByClassification = valueSitesByClassification(input);
     this.textValueSiteByNode = textValueSitesByNode(input.valueSites.sites);
@@ -487,6 +499,33 @@ class CompiledTemplateAssemblyState {
   }
 }
 
+/** Authored publication adapter over the representation-neutral staging constructors. */
+class CompiledTemplateInstructionStagingAuthority implements TemplateCompilerInstructionStagingAuthority {
+  constructor(
+    private readonly assemblyState: CompiledTemplateAssemblyState,
+    private readonly ownerIdentityHandle: IdentityHandle,
+  ) {}
+
+  create<TInstruction extends TemplateInstruction>(
+    request: TemplateCompilerInstructionStagingAllocationRequest,
+    factory: (allocation: TemplateCompilerInstructionStagingAllocation) => TInstruction,
+  ): TInstruction {
+    return this.assemblyState.createInstruction(
+      request.local,
+      request.kind,
+      this.ownerIdentityHandle,
+      request.sourceAddressHandle,
+      (productHandle, identityHandle, instructionLocal) => factory(
+        new TemplateCompilerInstructionStagingAllocation(
+          productHandle,
+          identityHandle,
+          instructionLocal,
+        ),
+      ),
+    );
+  }
+}
+
 class CompiledTemplateInstructionFactory {
   constructor(
     readonly input: CompiledTemplateMaterializationRequest,
@@ -503,48 +542,21 @@ class CompiledTemplateInstructionFactory {
     if (syntax == null || attribute == null) {
       return null;
     }
-    const target = syntax.target;
     const defaultAddressHandle = attribute.valueAddressHandle ?? attribute.sourceAddressHandle;
-    if (target === '...$attrs') {
-      return this.assemblyState.createInstruction(
-        `spread-transfered-binding:${attribute.productHandle}`,
-        TemplateInstructionKind.SpreadTransferedBinding,
-        classification.identityHandle,
-        defaultAddressHandle,
-        (productHandle, identityHandle) => new SpreadTransferedBindingInstruction(
-          productHandle,
-          identityHandle,
-          node.toReference(),
-          attribute.toReference(),
-          defaultAddressHandle,
-          [],
-        ),
-      );
-    }
-    if (!target.startsWith('...')) {
-      return null;
-    }
     const site = this.indexes.valueSiteByClassification.get(classification.productHandle) ?? null;
     const parse = site == null ? null : this.indexes.parseBySite.get(site.productHandle) ?? null;
-    const expressionAddressHandle = site?.sourceAddressHandle ?? defaultAddressHandle;
-    return this.assemblyState.createInstruction(
-      `spread-value-binding:${attribute.productHandle}`,
-      TemplateInstructionKind.SpreadValueBinding,
-      classification.identityHandle,
-      expressionAddressHandle,
-      (productHandle, identityHandle) => new SpreadValueBindingInstruction(
-        productHandle,
-        identityHandle,
-        node.toReference(),
-        attribute.toReference(),
-        '$bindables',
-        target === '...$bindables' ? syntax.rawValue : syntax.target.slice(3),
-        parse?.productHandle ?? null,
-        syntax.targetSourceAddressHandle,
-        expressionAddressHandle,
-        [],
-      ),
-    );
+    return stageTemplateCompilerSpreadInstruction(new TemplateCompilerSpreadInstructionStagingRequest(
+      new CompiledTemplateInstructionStagingAuthority(this.assemblyState, classification.identityHandle),
+      classification.productHandle,
+      attribute.productHandle,
+      node.toReference(),
+      attribute.toReference(),
+      syntax,
+      parse?.productHandle ?? null,
+      syntax.target === '...$attrs'
+        ? defaultAddressHandle
+        : site?.sourceAddressHandle ?? defaultAddressHandle,
+    ));
   };
 
   readonly valueInstructionForClassification = (
@@ -565,26 +577,24 @@ class CompiledTemplateInstructionFactory {
     const parse = site == null ? null : this.indexes.parseBySite.get(site.productHandle) ?? null;
     const target = this.valueInstructionTarget(classification, syntax, node, lane);
     const addressHandle = attribute.valueAddressHandle ?? attribute.sourceAddressHandle;
-    if (parse == null || parse.resultKind === ExpressionParseResultKind.InterpolationAbsent) {
-      return this.staticValueInstructionForClassification(
-        classification,
-        syntax,
-        attribute,
-        node,
-        lane,
-        target,
-        addressHandle,
-        generateStaticAttrInstructions,
-      );
-    }
-    return this.interpolationInstructionForClassification(
-      classification,
-      attribute,
-      node,
+    return stageTemplateCompilerValueInstruction(new TemplateCompilerValueInstructionStagingRequest(
+      new CompiledTemplateInstructionStagingAuthority(this.assemblyState, classification.identityHandle),
+      classification.productHandle,
+      attribute.productHandle,
+      node.toReference(),
+      attribute.toReference(),
+      syntax,
+      authoredValueInstructionLane(lane),
       target,
-      parse,
+      parse?.productHandle ?? null,
+      parse?.result ?? null,
+      null,
+      generateStaticAttrInstructions
+        ? TemplateCompilerStaticAttributePolicy.Transfer
+        : TemplateCompilerStaticAttributePolicy.Preserve,
+      attribute.rawName,
       addressHandle,
-    );
+    ));
   };
 
   private valueInstructionTarget(
@@ -603,192 +613,31 @@ class CompiledTemplateInstructionFactory {
     return classification.bindable?.definition.name ?? customAttributeDefinition?.defaultProperty ?? syntax.target;
   }
 
-  private staticValueInstructionForClassification(
-    classification: AttributeClassification,
-    syntax: AttributeSyntax,
-    attribute: HtmlAttribute,
-    node: HtmlElement,
-    lane: ValueInstructionLane,
-    target: string,
-    addressHandle: AddressHandle | null,
-    generateStaticAttrInstructions: boolean,
-  ): TemplateInstruction | null {
-    if (lane === 'plain') {
-      return generateStaticAttrInstructions
-        ? this.staticPlainAttributeInstruction(classification, syntax, attribute, node, addressHandle)
-        : null;
-    }
-    return this.setPropertyInstructionForClassification(classification, syntax, attribute, node, target, addressHandle);
-  }
-
-  private staticPlainAttributeInstruction(
-    classification: AttributeClassification,
-    syntax: AttributeSyntax,
-    attribute: HtmlAttribute,
-    node: HtmlElement,
-    addressHandle: AddressHandle | null,
-  ): TemplateInstruction {
-    switch (syntax.runtimeRawName) {
-      case 'class':
-        return this.setClassAttributeInstruction(classification, syntax, attribute, node, addressHandle);
-      case 'style':
-        return this.setStyleAttributeInstruction(classification, syntax, attribute, node, addressHandle);
-      default:
-        return this.setAttributeInstruction(classification, syntax, attribute, node, addressHandle);
-    }
-  }
-
-  private setClassAttributeInstruction(
-    classification: AttributeClassification,
-    syntax: AttributeSyntax,
-    attribute: HtmlAttribute,
-    node: HtmlElement,
-    addressHandle: AddressHandle | null,
-  ): SetClassAttributeInstruction {
-    return this.assemblyState.createInstruction(
-      `set-class-attribute:${attribute.productHandle}`,
-      TemplateInstructionKind.SetClassAttribute,
-      classification.identityHandle,
-      addressHandle,
-      (productHandle, identityHandle) => new SetClassAttributeInstruction(
-        productHandle,
-        identityHandle,
-        node.toReference(),
-        attribute.toReference(),
-        syntax.rawValue,
-        addressHandle,
-        [],
-      ),
-    );
-  }
-
-  private setStyleAttributeInstruction(
-    classification: AttributeClassification,
-    syntax: AttributeSyntax,
-    attribute: HtmlAttribute,
-    node: HtmlElement,
-    addressHandle: AddressHandle | null,
-  ): SetStyleAttributeInstruction {
-    return this.assemblyState.createInstruction(
-      `set-style-attribute:${attribute.productHandle}`,
-      TemplateInstructionKind.SetStyleAttribute,
-      classification.identityHandle,
-      addressHandle,
-      (productHandle, identityHandle) => new SetStyleAttributeInstruction(
-        productHandle,
-        identityHandle,
-        node.toReference(),
-        attribute.toReference(),
-        syntax.rawValue,
-        addressHandle,
-        [],
-      ),
-    );
-  }
-
-  private setAttributeInstruction(
-    classification: AttributeClassification,
-    syntax: AttributeSyntax,
-    attribute: HtmlAttribute,
-    node: HtmlElement,
-    addressHandle: AddressHandle | null,
-  ): SetAttributeInstruction {
-    return this.assemblyState.createInstruction(
-      `set-attribute:${attribute.productHandle}`,
-      TemplateInstructionKind.SetAttribute,
-      classification.identityHandle,
-      addressHandle,
-      (productHandle, identityHandle) => new SetAttributeInstruction(
-        productHandle,
-        identityHandle,
-        node.toReference(),
-        attribute.toReference(),
-        attribute.rawName,
-        syntax.rawValue,
-        addressHandle,
-        [],
-      ),
-    );
-  }
-
-  private setPropertyInstructionForClassification(
-    classification: AttributeClassification,
-    syntax: AttributeSyntax,
-    attribute: HtmlAttribute,
-    node: HtmlElement,
-    target: string,
-    addressHandle: AddressHandle | null,
-  ): SetPropertyInstruction {
-    return this.assemblyState.createInstruction(
-      `set-property:${attribute.productHandle}`,
-      TemplateInstructionKind.SetProperty,
-      classification.identityHandle,
-      addressHandle,
-      (productHandle, identityHandle) => new SetPropertyInstruction(
-        productHandle,
-        identityHandle,
-        node.toReference(),
-        attribute.toReference(),
-        target,
-        syntax.rawValue,
-        addressHandle,
-        [],
-      ),
-    );
-  }
-
-  private interpolationInstructionForClassification(
-    classification: AttributeClassification,
-    attribute: HtmlAttribute,
-    node: HtmlElement,
-    target: string,
-    parse: TemplateExpressionParse,
-    addressHandle: AddressHandle | null,
-  ): InterpolationInstruction {
-    return this.assemblyState.createInstruction(
-      `interpolation:${attribute.productHandle}`,
-      TemplateInstructionKind.Interpolation,
-      classification.identityHandle,
-      addressHandle,
-      (productHandle, identityHandle) => new InterpolationInstruction(
-        productHandle,
-        identityHandle,
-        node.toReference(),
-        attribute.toReference(),
-        target,
-        [parse.productHandle],
-        addressHandle,
-        [],
-      ),
-    );
-  }
-
   readonly createHydrateAttributeInstruction = (
     classification: AttributeClassification,
     syntax: AttributeSyntax | null,
     attribute: HtmlAttribute | null,
     node: HtmlElement,
     props: readonly TemplateInstruction[],
-  ): HydrateAttributeInstruction =>
-    this.assemblyState.createInstruction(
-      `hydrate-attribute:${classification.productHandle}`,
-      TemplateInstructionKind.HydrateAttribute,
-      classification.identityHandle,
+  ): HydrateAttributeInstruction => stageTemplateCompilerHydrateAttributeInstruction(
+    new TemplateCompilerHydrateAttributeStagingRequest(
+      new CompiledTemplateInstructionStagingAuthority(this.assemblyState, classification.identityHandle),
+      classification.productHandle,
+      classification.productHandle,
+      node.toReference(),
+      attribute?.toReference() ?? syntax?.attribute ?? {
+        productHandle: null,
+        addressHandle: classification.sourceAddressHandle,
+        rawName: null,
+      },
+      syntax?.target ?? classification.resource?.name ?? '(unknown)',
+      this.input.compilerReads.resolveResources()
+        ? classification.resource?.toReference() ?? null
+        : null,
+      props,
       classification.sourceAddressHandle,
-      (productHandle, identityHandle) => new HydrateAttributeInstruction(
-        productHandle,
-        identityHandle,
-        node.toReference(),
-        attribute?.toReference() ?? syntax?.attribute ?? { productHandle: null, addressHandle: classification.sourceAddressHandle, rawName: null },
-        syntax?.target ?? classification.resource?.name ?? '(unknown)',
-        this.input.compilerReads.resolveResources()
-          ? classification.resource?.toReference() ?? null
-          : null,
-        props.map((instruction) => instruction.productHandle),
-        classification.sourceAddressHandle,
-        [],
-      ),
-    );
+    ),
+  );
 
   readonly createTemplateControllerInstruction = (
     classification: AttributeClassification,
@@ -796,34 +645,51 @@ class CompiledTemplateInstructionFactory {
     attribute: HtmlAttribute | null,
     node: HtmlElement,
     props: readonly TemplateInstruction[],
-  ): HydrateTemplateControllerInstruction =>
-    this.assemblyState.createInstruction(
-      `hydrate-template-controller:${classification.productHandle}`,
-      TemplateInstructionKind.HydrateTemplateController,
+  ): HydrateTemplateControllerInstruction => {
+    const authority = new CompiledTemplateInstructionStagingAuthority(
+      this.assemblyState,
       classification.identityHandle,
-      classification.sourceAddressHandle,
-      (productHandle, identityHandle, instructionLocal) => {
+    );
+    return stageTemplateCompilerHydrateTemplateControllerInstruction(
+      new TemplateCompilerHydrateTemplateControllerDraft(
+        classification.productHandle,
+        classification.productHandle,
+        node.toReference(),
+        attribute?.toReference() ?? syntax?.attribute ?? {
+          productHandle: null,
+          addressHandle: classification.sourceAddressHandle,
+          rawName: null,
+        },
+        syntax?.target ?? classification.resource?.name ?? '(unknown)',
+        this.input.compilerReads.resolveResources()
+          ? classification.resource?.toReference() ?? null
+          : null,
+        props,
+        classification.sourceAddressHandle,
+      ),
+      authority,
+      (instructionLocal) => {
         const childCompiledTemplateLocal = `${instructionLocal}:child-compiled-template`;
-        const childCompiledTemplate = new CompiledTemplateReference(
+        return new CompiledTemplateReference(
           this.assemblyState.store.handles.product(childCompiledTemplateLocal),
           this.assemblyState.store.handles.identity(childCompiledTemplateLocal),
         );
-        return new HydrateTemplateControllerInstruction(
-          productHandle,
-          identityHandle,
-          node.toReference(),
-          attribute?.toReference() ?? syntax?.attribute ?? { productHandle: null, addressHandle: classification.sourceAddressHandle, rawName: null },
-          syntax?.target ?? classification.resource?.name ?? '(unknown)',
-          this.input.compilerReads.resolveResources()
-            ? classification.resource?.toReference() ?? null
-            : null,
-          childCompiledTemplate,
-          props.map((instruction) => instruction.productHandle),
-          classification.sourceAddressHandle,
-          [],
-        );
       },
     );
+  };
+}
+
+function authoredValueInstructionLane(lane: ValueInstructionLane): TemplateCompilerValueInstructionLane {
+  switch (lane) {
+    case 'bindable':
+      return TemplateCompilerValueInstructionLane.ElementBindable;
+    case 'custom-attribute':
+      return TemplateCompilerValueInstructionLane.CustomAttribute;
+    case 'template-controller':
+      return TemplateCompilerValueInstructionLane.TemplateController;
+    case 'plain':
+      return TemplateCompilerValueInstructionLane.Plain;
+  }
 }
 
 class CompiledTemplateInstructionTraversal {
@@ -1906,6 +1772,9 @@ class CompiledTemplateInstructionTraversal {
     commandBuilt: readonly TemplateInstruction[],
     parts: ElementInstructionPartBuckets,
   ): void {
+    if (!this.multiBindingClassificationIsCommitted(classification)) {
+      return;
+    }
     const props = commandBuilt.length > 0
       ? commandBuilt
       : nullableInstruction(this.instructionFactory.valueInstructionForClassification(classification, syntax, attribute, node, 'custom-attribute'));
@@ -1920,10 +1789,18 @@ class CompiledTemplateInstructionTraversal {
     commandBuilt: readonly TemplateInstruction[],
     parts: ElementInstructionPartBuckets,
   ): void {
+    if (!this.multiBindingClassificationIsCommitted(classification)) {
+      return;
+    }
     const props = commandBuilt.length > 0
       ? commandBuilt
       : nullableInstruction(this.instructionFactory.valueInstructionForClassification(classification, syntax, attribute, node, 'template-controller'));
     parts.templateControllerInstructions.push(this.instructionFactory.createTemplateControllerInstruction(classification, syntax, attribute, node, props));
+  }
+
+  private multiBindingClassificationIsCommitted(classification: AttributeClassification): boolean {
+    const lowering = this.indexes.multiBindingLowerings.get(classification.productHandle) ?? null;
+    return lowering == null || lowering.state === BindingCommandLoweringState.Complete;
   }
 
   private collectPlainInstructionPart(
@@ -2032,6 +1909,9 @@ class CompiledTemplateInstructionTraversal {
       }
       switch (classification.classificationKind) {
         case AttributeClassificationKind.CustomAttribute: {
+          if (!this.multiBindingClassificationIsCommitted(classification)) {
+            break;
+          }
           const props = commandBuilt.length > 0
             ? commandBuilt
             : nullableInstruction(this.instructionFactory.valueInstructionForClassification(
@@ -2865,6 +2745,24 @@ function commandLoweringsByClassification(
     const bucket = result.get(classification.productHandle) ?? [];
     bucket.push(lowering);
     result.set(classification.productHandle, bucket);
+  }
+  return result;
+}
+
+function multiBindingLoweringsByClassification(
+  input: CompiledTemplateMaterializationRequest,
+): ReadonlyMap<ProductHandle, MultiBindingLowering> {
+  const sitesByProduct = new Map([
+    ...input.valueSites.sites,
+    ...input.bindingCommandLowering.valueSites,
+  ].map((site) => [site.productHandle, site] as const));
+  const result = new Map<ProductHandle, MultiBindingLowering>();
+  for (const lowering of input.bindingCommandLowering.multiBindingLowerings) {
+    const classificationProductHandle = sitesByProduct.get(lowering.site.productHandle)
+      ?.classification?.productHandle ?? null;
+    if (classificationProductHandle != null) {
+      result.set(classificationProductHandle, lowering);
+    }
   }
   return result;
 }

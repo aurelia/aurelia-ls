@@ -51,6 +51,7 @@ describe('template compiler observed values', () => {
       const bindables = reads.readBindables(elementDefinition);
       const capture = reads.readCapturePredicate(elementDefinition, 'title');
       const debug = reads.readCompilerDebug();
+      const resolveResources = reads.readResolveResources();
 
       expect(element).toBeInstanceOf(TemplateCompilerObservedValue);
       expect(element.value?.resource?.name).toBe('root-surrogate-owner-progression');
@@ -76,6 +77,7 @@ describe('template compiler observed values', () => {
       expect(bindables.value.bindables).toEqual([]);
       expect(capture.value.kind).toBe('open');
       expect(debug.value).toBe(false);
+      expect(resolveResources.value).toBe(compilation.compilerWorld.templateCompiler.resolveResources);
 
       expect(element.observation).toMatchObject({
         readKind: TemplateCompilerReadKind.ElementResource,
@@ -97,6 +99,7 @@ describe('template compiler observed values', () => {
       expect(bindables.observation.readKind).toBe(TemplateCompilerReadKind.Bindables);
       expect(capture.observation.readKind).toBe(TemplateCompilerReadKind.CapturePredicate);
       expect(debug.observation.readKind).toBe(TemplateCompilerReadKind.TemplateCompiler);
+      expect(resolveResources.observation.readKind).toBe(TemplateCompilerReadKind.TemplateCompiler);
       expect(mapped.observation.canonicalKey).toContain(ownerView.attributeStateKey);
       expect(twoWay.observation.canonicalKey).toContain(ownerView.attributeStateKey);
 
@@ -112,6 +115,7 @@ describe('template compiler observed values', () => {
         bindables,
         capture,
         debug,
+        resolveResources,
       ]) {
         expect(receipt.observation.closure).toBe(compilerWorldObservation.closure);
         expect(receipt.observation.validate().isCurrent).toBe(true);
@@ -129,6 +133,7 @@ describe('template compiler observed values', () => {
       expect(reads.readBindables(elementDefinition).observation).toBe(bindables.observation);
       expect(reads.readCapturePredicate(elementDefinition, 'title').observation).toBe(capture.observation);
       expect(reads.readCompilerDebug().observation).toBe(debug.observation);
+      expect(reads.readResolveResources().observation).toBe(resolveResources.observation);
 
       expect(reads.element('root-surrogate-owner-progression')).toEqual(element.value);
       expect(reads.element('au-slot')).toEqual(auSlot.value);
@@ -141,8 +146,9 @@ describe('template compiler observed values', () => {
       expect(reads.bindables(elementDefinition)).toEqual(bindables.value);
       expect(reads.capturePredicate(elementDefinition, 'title')).toEqual(capture.value);
       expect(reads.compilerDebug()).toBe(debug.value);
+      expect(reads.resolveResources()).toBe(resolveResources.value);
 
-      expect(reads.readAll()).toHaveLength(12);
+      expect(reads.readAll()).toHaveLength(13);
       expect(reads.readAll().filter((read) => read.readKind === TemplateCompilerReadKind.AttributeMapper))
         .toEqual([mapped.observation, twoWay.observation]);
     } finally {

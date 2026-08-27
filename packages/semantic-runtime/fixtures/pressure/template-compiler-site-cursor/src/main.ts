@@ -13,6 +13,7 @@ import cursorLiveDuplicateTemplate from './cursor-live-duplicate.html';
 import cursorLiveEmptyTemplate from './cursor-live-empty.html';
 import cursorLiveNonsingularTemplate from './cursor-live-nonsingular.html';
 import cursorLiveMultiBindingTemplate from './cursor-live-multi-binding.html';
+import cursorLiveStagingTemplate from './cursor-live-staging.html';
 import cursorMarkerTemplate from './cursor-marker.html';
 import cursorOpenTemplate from './cursor-open.html';
 import cursorProgressionTemplate from './cursor-progression.html';
@@ -110,6 +111,33 @@ class CursorLiveMultiAttribute {
 class CursorLiveMultiBinding {
   message = 'commanded';
   later = 'unreached';
+}
+
+@customAttribute('cursor-staging-ca')
+class CursorStagingCustomAttribute {
+  @bindable value = '';
+}
+
+@customElement({ name: 'cursor-staging-capture', capture: true })
+class CursorStagingCapture {
+  @bindable title = '';
+}
+
+@customElement('cursor-staging-child')
+class CursorStagingChild {
+  @bindable title = '';
+}
+
+@customElement({
+  name: 'cursor-live-staging',
+  template: cursorLiveStagingTemplate,
+  dependencies: [CursorStagingCustomAttribute, CursorStagingCapture, CursorStagingChild],
+})
+class CursorLiveStaging {
+  message = 'message';
+  spread = { title: 'spread' };
+  value = 'selected';
+  multiple = true;
 }
 
 @customElement({
@@ -235,6 +263,7 @@ void new Aurelia()
     CursorLiveEmpty,
     CursorLiveNonsingular,
     CursorLiveMultiBinding,
+    CursorLiveStaging,
     CursorCommentShield,
     CursorAsElementEmpty,
     CursorProjection,

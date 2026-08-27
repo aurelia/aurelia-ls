@@ -21,8 +21,11 @@ import {
 } from '../src/template/compiler-read-view.js';
 import type { TemplateCompilerReadObservation } from '../src/template/compiler-read-view.js';
 import {
+  HydrateAttributeInstruction,
+  InterpolationInstruction,
   PropertyBindingInstruction,
   SetPropertyInstruction,
+  SpreadValueBindingInstruction,
   TemplateBindingMode,
 } from '../src/template/instruction-ir.js';
 import { TemplateCompilerExecutionSession } from '../src/template/template-compiler-execution.js';
@@ -82,6 +85,7 @@ import type {
   TemplateCompilerLiveExpressionHandleRequest,
   TemplateCompilerLiveInstructionHandleRequest,
 } from '../src/template/template-compiler-live-binding-command.js';
+import { TemplateCompilerElementInstructionStagingState } from '../src/template/template-compiler-instruction-staging.js';
 
 const packageRoot = path.resolve(fileURLToPath(new URL('..', import.meta.url)));
 
@@ -154,6 +158,12 @@ describe('template compiler live attribute owner assembly', () => {
     expect(contribution.valueParse?.read.value.kind).toBe(ExpressionParseResultKind.InterpolationAbsent);
     expect(contribution.instructions).toEqual([]);
     expect(contribution.disposition).toBe(TemplateCompilerLiveAttributeDisposition.Removed);
+    expect(result.instructionStaging).toMatchObject({
+      state: TemplateCompilerElementInstructionStagingState.Complete,
+      directRowTail: [],
+    });
+    expect(result.instructionStaging.templateControllers).toHaveLength(1);
+    expect(result.instructionStaging.templateControllers[0]?.props).toEqual([]);
   });
 
   test('keeps non-exact scalar history terminally open before parser or classifier execution', () => {
@@ -306,7 +316,49 @@ describe('template compiler live attribute owner assembly', () => {
       entryFamily: 'IsProperty',
     });
     expect(multiBinding.remainder).toBeNull();
+    expect(contribution.instructions).toEqual(multiBinding.instructions);
+    expect(result.instructionStaging.hydrateAttributes).toHaveLength(1);
+    expect(result.instructionStaging.hydrateAttributes[0]).toBeInstanceOf(HydrateAttributeInstruction);
+    expect(result.instructionStaging.hydrateAttributes[0]?.bindingInstructionProductHandles)
+      .toEqual(multiBinding.instructions.map((instruction) => instruction.productHandle));
+    expect(result.instructionStaging.directRowTail).toEqual(result.instructionStaging.hydrateAttributes);
     expect(result.compilerReadsAreClosedAndCurrent()).toBe(true);
+  });
+
+  test('stages live CE bindables, captures, spread, CA hydration, and native order in neutral buckets', () => {
+    const run = fixture.run('cursor-live-staging');
+
+    const capture = run.assemble(elementWithId(run.binding.execution.forest, 'capture'));
+    expect(capture.instructionStaging.state).toBe(TemplateCompilerElementInstructionStagingState.Complete);
+    expect(capture.instructionStaging.elementBindableInstructions).toEqual([
+      expect.objectContaining({ instructionKind: 'set-property', targetProperty: 'title', value: 'literal' }),
+    ]);
+    expect(capture.instructionStaging.captures.map((entry) => entry.syntax.target)).toEqual(['id', 'data-extra']);
+    expect(capture.instructionStaging.directRowTail).toEqual([]);
+
+    const spread = run.assemble(elementWithId(run.binding.execution.forest, 'spread'));
+    expect(spread.instructionStaging.elementBindableInstructions).toHaveLength(1);
+    expect(spread.instructionStaging.elementBindableInstructions[0]).toBeInstanceOf(SpreadValueBindingInstruction);
+    expect(spread.instructionStaging.elementBindableInstructions[0]).toMatchObject({
+      target: '$bindables',
+      value: 'spread',
+    });
+
+    const customAttribute = run.assemble(elementWithId(run.binding.execution.forest, 'custom-attribute'));
+    expect(customAttribute.instructionStaging.hydrateAttributes).toHaveLength(1);
+    expect(customAttribute.instructionStaging.hydrateAttributes[0]).toMatchObject({
+      resourceLookupName: 'cursor-staging-ca',
+    });
+    expect(customAttribute.instructionStaging.instructions).toEqual(expect.arrayContaining([
+      expect.objectContaining({ instructionKind: 'set-property', targetProperty: 'value', value: 'static' }),
+      expect.objectContaining({ instructionKind: 'hydrate-attribute' }),
+    ]));
+
+    const nativeOrder = run.assemble(elementWithId(run.binding.execution.forest, 'native-order'));
+    expect(nativeOrder.instructionStaging.plainInstructions.map(instructionTarget)).toEqual(['value', 'multiple']);
+    expect(nativeOrder.instructionStaging.orderedPlainInstructions.map(instructionTarget)).toEqual(['multiple', 'value']);
+    expect(nativeOrder.instructionStaging.directRowTail).toEqual(nativeOrder.instructionStaging.orderedPlainInstructions);
+    expect(nativeOrder.instructionStaging.finalOwnerView).toBe(nativeOrder.finalOwnerView);
   });
 
   test('keeps escaped multi-binding delimiters inside their original segment values', () => {
@@ -618,6 +670,14 @@ function multiBindingContribution(result: TemplateCompilerLiveAttributeOwnerResu
     })))}`);
   }
   return contribution;
+}
+
+function instructionTarget(instruction: PropertyBindingInstruction | InterpolationInstruction | object): string | null {
+  return instruction instanceof PropertyBindingInstruction
+    ? instruction.targetProperty
+    : instruction instanceof InterpolationInstruction
+      ? instruction.target
+      : null;
 }
 
 function reachedMultiBindingSite(

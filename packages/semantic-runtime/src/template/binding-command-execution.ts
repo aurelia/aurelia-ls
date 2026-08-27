@@ -514,7 +514,10 @@ export class MultiBindingLowering {
     readonly state: BindingCommandLoweringState,
     /** Segment products in authored order. */
     readonly segmentProductHandles: readonly ProductHandle[],
-    /** Instruction products produced by all closed segments. */
+    /**
+     * Instruction products committed by the aggregate. Empty unless every reached source segment completed exactly;
+     * command-local lowerings may still retain staged prefix evidence when a later segment terminates the aggregate.
+     */
     readonly instructionProductHandles: readonly ProductHandle[],
     /** Source address for the authored custom-attribute value. */
     readonly sourceAddressHandle: AddressHandle | null,

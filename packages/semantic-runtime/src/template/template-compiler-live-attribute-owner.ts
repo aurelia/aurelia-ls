@@ -208,6 +208,15 @@ export class TemplateCompilerLiveAttributeOwnerProgression {
     return this.sites;
   }
 
+  /** Immutable DOM-shaped mapper view after every reached site disposition has completed. */
+  readFinalView(): TemplateCompilerLiveAttributeOwnerView {
+    this.assertForestRevision();
+    if (!this.finished) {
+      throw new Error(`Live attribute owner '${this.element.occurrenceKey}' has not finished.`);
+    }
+    return new TemplateCompilerLiveAttributeOwnerView(this, this.version, this.stateRevision);
+  }
+
   siteForAttribute(attribute: TemplateCompilerAttributeOccurrence): TemplateCompilerLiveAttributeOwnerSite | null {
     this.assertForestRevision();
     return this.sitesByAttribute.get(attribute) ?? null;

@@ -235,6 +235,14 @@ classification, expression parsing, and instruction lowering converge on the sam
   staged evidence, committed instructions are empty unless the whole aggregate completes, and later source is an
   unreached remainder. Empty custom-attribute/controller values retain the parser call plus an explicit no-binding
   policy. Capture and spread value-site analysis is retained without pretending the ordinary JIT parsed those values.
+- `template-compiler-instruction-staging.ts` owns representation-neutral leaf construction, custom-attribute wrappers,
+  template-controller drafts, instruction buckets, and native INPUT/SELECT ordering. The authored compiled-template
+  factory and `template-compiler-live-instruction-staging.ts` are adapters over those same laws. Live staging retains
+  CE bindable props, capture carriers, committed multi-binding children, raw and ordered plain sequences, exact final
+  owner state, and paired mapper/resolve-resources reads without creating a target row. Empty ordinary CA/TC values
+  produce a zero-prop hydration wrapper; Error/Companion expression results never become committed value instructions.
+  HydrateElement, TC child definitions, projections, processContent metadata, and containerless geometry remain the
+  later structural convergence boundary.
 - `template-compiler-reached-site-semantics.ts`, `template-compiler-site-spend-ledger.ts`, and
   `template-compiler-site-cursor.ts` join that transaction to current root invocation authority. Scalar capture and
   authored/browser routes are shared with the cursor rather than re-derived. Singular compatible sites, successfully

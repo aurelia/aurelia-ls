@@ -52,6 +52,9 @@ describe('template compiler live attribute owner progression', () => {
       expect(dataSite.ownerView.getAttribute('title')).toBe('current');
       progression.complete(dataSite, TemplateCompilerLiveAttributeDisposition.Removed);
       progression.finish();
+      expect(progression.readFinalView().hasAttribute('as-element')).toBe(false);
+      expect(progression.readFinalView().getAttribute('title')).toBe('current');
+      expect(progression.readFinalView().hasAttribute('data-x')).toBe(false);
 
       expect(asElementSite.ownerView.hasAttribute('as-element')).toBe(true);
       expect(asElementSite.ownerView.getAttribute('as-element')).toBe('');
@@ -117,6 +120,7 @@ describe('template compiler live attribute owner progression', () => {
         forest.mutationRevision,
       );
       expect(() => progression.begin(b)).toThrow(/expected 0/u);
+      expect(() => progression.readFinalView()).toThrow(/has not finished/u);
       expect(() => progression.begin(foreignA)).toThrow(/does not belong/u);
       const site = progression.begin(a);
       expect(() => progression.begin(a)).toThrow(/must complete/u);
