@@ -49,11 +49,13 @@ import { CustomAttributeDefinition } from '../resources/custom-attribute-definit
 import { CustomElementDefinition } from '../resources/custom-element-definition.js';
 import { camelCaseAttributeName, normalizeLetBindingTarget } from './attribute-mapper.js';
 import {
-  AU_SLOT_PROCESS_CONTENT_TARGET_NAME,
-  AU_SLOT_RESOURCE_NAME,
-  AU_SLOT_TARGET_NAME,
-  AuSlotStaticAttributeName,
-} from './au-slot-source.js';
+  AuSlotCompilerAttributeSnapshot,
+  AuSlotCompilerChildSnapshot,
+  AuSlotCompilerProcessContentInput,
+  type AuSlotCompilerProcessContentPlan,
+  isRuntimeHtmlAuSlotBuiltInResource,
+  planAuSlotCompilerProcessContent,
+} from './au-slot-compiler-semantics.js';
 import type {
   AttributeClassificationEmission,
 } from './attribute-classification-materializer.js';
@@ -1023,10 +1025,23 @@ class CompiledTemplateInstructionTraversal {
     const elementDefinition = elementResolution?.definition instanceof CustomElementDefinition
       ? elementResolution.definition
       : null;
+    const builtInResource = elementResolution?.builtInResource ?? null;
+    const auSlotProcessContent = elementDefinition?.processContent == null
+      || !isRuntimeHtmlAuSlotBuiltInResource(builtInResource)
+      ? null
+      : planAuSlotCompilerProcessContent(
+          builtInResource,
+          this.auSlotProcessContentInput(node),
+        );
     const elementInstructions: TemplateInstruction[] = [];
     let elementInstruction: HydrateElementInstruction | null = null;
     this.recordAuSlotProjectionIssue(node, lookupName, elementDefinition);
-    const parts = this.collectElementInstructionParts(node, classifications, elementDefinition);
+    const parts = this.collectElementInstructionParts(
+      node,
+      classifications,
+      elementDefinition,
+      auSlotProcessContent != null,
+    );
     const directOpenSeamHandles = [...new Set([
       ...parts.openDirectInstructionSeamHandles,
       ...parts.openStructuralSeamHandles,
@@ -1047,11 +1062,16 @@ class CompiledTemplateInstructionTraversal {
       );
     }
     this.recordNativeSlotOutlet(node, lookupName, parts);
-    const processContentRemovedChildNodes = this.knownProcessContentRemovedChildren(node, elementDefinition);
+    const processContentRemovedChildNodes = auSlotProcessContent?.removedChildren ?? [];
     const processContentRemovedChildren = processContentRemovedChildNodes.flatMap((child) =>
       child.productHandle == null ? [] : [child.productHandle]
     );
-    const projectionGroups = this.elementProjectionChildGroups(node, elementDefinition, parts);
+    const projectionGroups = this.elementProjectionChildGroups(
+      node,
+      elementDefinition,
+      parts,
+      auSlotProcessContent,
+    );
     const compiledProjectionGroups = projectionGroups.filter((group) => group.sequenceChildren.length > 0);
     const extractedProjectionChildren = new Set(
       [
@@ -1095,7 +1115,7 @@ class CompiledTemplateInstructionTraversal {
             );
           }),
           projectionGroups.flatMap((group) => group.discardedContributors),
-          this.auSlotProcessContentData(node, elementDefinition, processContentRemovedChildNodes),
+          this.auSlotProcessContentData(auSlotProcessContent),
           parts.bindableInstructions.map((instruction) => instruction.productHandle),
           parts.capturedSyntaxProductHandles,
           usageContainerless,
@@ -1256,6 +1276,7 @@ class CompiledTemplateInstructionTraversal {
     node: HtmlElement,
     elementDefinition: CustomElementDefinition | null,
     parts: ElementInstructionParts,
+    auSlotProcessContent: AuSlotCompilerProcessContentPlan<HtmlNodeReference, HtmlAttribute> | null,
   ): readonly ElementProjectionChildGroup[] {
     if (elementDefinition == null || parts.hasOpenProcessContentHook) {
       return [];
@@ -1271,7 +1292,7 @@ class CompiledTemplateInstructionTraversal {
     for (const childReference of node.children) {
       const child = this.nodeForReference(childReference);
       const auSlotAttribute = child instanceof HtmlElement ? this.attributeForElement(child, 'au-slot') : null;
-      if (auSlotAttribute != null && this.isRuntimeHtmlAuSlotDefinition(elementDefinition)) {
+      if (auSlotProcessContent?.removedChildren.includes(childReference) === true) {
         continue;
       }
       const shouldExtract = auSlotAttribute != null || !isShadowDom;
@@ -1346,19 +1367,43 @@ class CompiledTemplateInstructionTraversal {
   }
 
   private auSlotProcessContentData(
-    node: HtmlElement,
-    elementDefinition: CustomElementDefinition,
-    removedChildNodes: readonly HtmlNodeReference[],
+    plan: AuSlotCompilerProcessContentPlan<HtmlNodeReference, HtmlAttribute> | null,
   ): AuSlotProcessContentInstructionData | null {
-    if (!this.isRuntimeHtmlAuSlotDefinition(elementDefinition)) {
-      return null;
-    }
-    const nameAttribute = this.attributeForElement(node, AuSlotStaticAttributeName.Name);
+    if (plan == null) return null;
     return new AuSlotProcessContentInstructionData(
-      nameAttribute?.rawValue ?? 'default',
-      nameAttribute?.valueAddressHandle ?? null,
-      [...removedChildNodes],
+      plan.name,
+      plan.nameAttribute?.attribute.valueAddressHandle ?? null,
+      plan.removedChildren,
     );
+  }
+
+  private auSlotProcessContentInput(
+    node: HtmlElement,
+  ): AuSlotCompilerProcessContentInput<HtmlNodeReference, HtmlAttribute> {
+    return new AuSlotCompilerProcessContentInput(
+      this.auSlotCompilerAttributesForElement(node),
+      node.children.map((childReference) => {
+        const child = this.nodeForReference(childReference);
+        return new AuSlotCompilerChildSnapshot(
+          childReference,
+          child instanceof HtmlElement
+            ? this.auSlotCompilerAttributesForElement(child)
+            : null,
+        );
+      }),
+    );
+  }
+
+  private auSlotCompilerAttributesForElement(
+    element: HtmlElement,
+  ): readonly AuSlotCompilerAttributeSnapshot<HtmlAttribute>[] {
+    const owner = this.indexes.ownersByElement.get(element.productHandle) ?? null;
+    return (owner?.attributes ?? []).map((attribute) => new AuSlotCompilerAttributeSnapshot(
+      attribute,
+      runtimeAttributeName(attribute.rawName, element.namespace),
+      attribute.rawValue,
+      null,
+    ));
   }
 
   private isUnwrappedProjectionTemplate(node: HtmlElement): boolean {
@@ -1372,22 +1417,6 @@ class CompiledTemplateInstructionTraversal {
     return owner?.attributes.every((attribute) =>
       runtimeAttributeName(attribute.rawName, node.namespace) === 'au-slot'
     ) ?? true;
-  }
-
-  private knownProcessContentRemovedChildren(
-    node: HtmlElement,
-    elementDefinition: CustomElementDefinition | null,
-  ): readonly HtmlNodeReference[] {
-    if (!this.isRuntimeHtmlAuSlotDefinition(elementDefinition)) {
-      return [];
-    }
-    return node.children.flatMap((childReference) => {
-      const child = this.nodeForReference(childReference);
-      return child instanceof HtmlElement
-        && this.attributeForElement(child, 'au-slot') != null
-        ? [childReference]
-        : [];
-    });
   }
 
   private hasUnprojectedChildren(
@@ -1414,8 +1443,9 @@ class CompiledTemplateInstructionTraversal {
     node: HtmlElement,
     classifications: readonly AttributeClassification[],
     elementDefinition: CustomElementDefinition | null,
+    hasKnownProcessContent: boolean,
   ): ElementInstructionParts {
-    const parts = this.elementInstructionPartBuckets(node, elementDefinition);
+    const parts = this.elementInstructionPartBuckets(elementDefinition, hasKnownProcessContent);
     this.recordProcessContentOpenSeam(node, elementDefinition, parts);
     for (const classification of classifications) {
       this.collectAttributeClassificationInstructionPart(node, classification, parts);
@@ -1706,8 +1736,8 @@ class CompiledTemplateInstructionTraversal {
   }
 
   private elementInstructionPartBuckets(
-    node: HtmlElement,
     elementDefinition: CustomElementDefinition | null,
+    hasKnownProcessContent: boolean,
   ): ElementInstructionPartBuckets {
     const hasProcessContentHook = elementDefinition?.processContent != null;
     return {
@@ -1720,7 +1750,7 @@ class CompiledTemplateInstructionTraversal {
       openTemplateControllerSeamHandles: [],
       openStructuralSeamHandles: [],
       hasProcessContentHook,
-      hasOpenProcessContentHook: hasProcessContentHook && !this.isKnownProcessContent(elementDefinition),
+      hasOpenProcessContentHook: hasProcessContentHook && !hasKnownProcessContent,
     };
   }
 
@@ -1912,20 +1942,6 @@ class CompiledTemplateInstructionTraversal {
     if (instruction != null) {
       parts.plainInstructions.push(instruction);
     }
-  }
-
-  private isKnownProcessContent(
-    elementDefinition: CustomElementDefinition | null,
-  ): boolean {
-    return this.isRuntimeHtmlAuSlotDefinition(elementDefinition);
-  }
-
-  private isRuntimeHtmlAuSlotDefinition(
-    elementDefinition: CustomElementDefinition | null,
-  ): elementDefinition is CustomElementDefinition {
-    return elementDefinition?.name === AU_SLOT_RESOURCE_NAME
-      && elementDefinition.target.localName === AU_SLOT_TARGET_NAME
-      && elementDefinition.processContent?.localName === AU_SLOT_PROCESS_CONTENT_TARGET_NAME;
   }
 
   private letBindingInstructionsForElement(node: HtmlElement): readonly LetBindingInstruction[] {

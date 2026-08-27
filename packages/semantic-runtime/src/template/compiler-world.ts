@@ -28,6 +28,7 @@ import {
   CustomElementTemplateKind,
   type CustomElementDefinition,
 } from '../resources/custom-element-definition.js';
+import type { BuiltInResource } from '../resources/built-in-resources.js';
 import type { TemplateCompilableResourceDefinition } from '../resources/resource-definition.js';
 import {
   ResourceDefinitionKind,
@@ -216,6 +217,8 @@ export class TemplateResolvedResource {
     readonly resource: TemplateVisibleResource | null,
     /** Full custom element/custom attribute definition when known. */
     readonly definition: TemplateCompilableResourceDefinition | null,
+    /** Canonical framework catalog header selected by this lookup, or null for authored/plugin resources. */
+    readonly builtInResource: BuiltInResource | null,
   ) {}
 }
 

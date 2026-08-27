@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, test } from 'vitest';
 
 import { createSemanticRuntime } from '../src/api/runtime.js';
+import { RuntimeHtmlAuSlotResource } from '../src/resources/built-in-resources.js';
 import {
   TemplateCompilerObservedValue,
   TemplateCompilerReadKind,
@@ -36,6 +37,7 @@ describe('template compiler observed values', () => {
       const compilerWorldObservation = reads.readAll()[0]!;
 
       const element = reads.readElement('ROOT-SURROGATE-OWNER-PROGRESSION');
+      const auSlot = reads.readElement('au-slot');
       const attribute = reads.readAttribute('if');
       const command = reads.readBindingCommand('bind');
       const parsed = reads.readParsedAttribute('textcontent.bind', 'message');
@@ -44,7 +46,21 @@ describe('template compiler observed values', () => {
 
       expect(element).toBeInstanceOf(TemplateCompilerObservedValue);
       expect(element.value?.resource?.name).toBe('root-surrogate-owner-progression');
+      expect(element.value?.builtInResource).toBeNull();
+      expect(auSlot.value?.builtInResource).toBeInstanceOf(RuntimeHtmlAuSlotResource);
+      expect(auSlot.value?.builtInResource?.productHandle).toBe(auSlot.value?.resource?.resourceProductHandle);
+      expect(auSlot.observation.resultParts).toEqual(expect.arrayContaining([
+        'built-in-resource',
+        'runtime-html',
+        'au-slot',
+        'AuSlot',
+      ]));
       expect(attribute.value?.resource?.name).toBe('if');
+      expect(attribute.value?.builtInResource).toEqual(expect.objectContaining({
+        packageId: 'runtime-html',
+        targetName: 'If',
+      }));
+      expect(attribute.observation.resultParts).toContain('built-in-resource');
       expect(command.value?.name).toBe('bind');
       expect(parsed.value.execution.target).toBe('textcontent');
       expect(mapped.value).toBe('textContent');
@@ -69,13 +85,14 @@ describe('template compiler observed values', () => {
       expect(mapped.observation.canonicalKey).toContain(ownerView.attributeStateKey);
       expect(twoWay.observation.canonicalKey).toContain(ownerView.attributeStateKey);
 
-      for (const receipt of [element, attribute, command, parsed, mapped, twoWay]) {
+      for (const receipt of [element, auSlot, attribute, command, parsed, mapped, twoWay]) {
         expect(receipt.observation.closure).toBe(compilerWorldObservation.closure);
         expect(receipt.observation.validate().isCurrent).toBe(true);
         expect(reads.readAll()).toContain(receipt.observation);
       }
 
       expect(reads.readElement('root-surrogate-owner-progression').observation).toBe(element.observation);
+      expect(reads.readElement('au-slot').observation).toBe(auSlot.observation);
       expect(reads.readAttribute('if').observation).toBe(attribute.observation);
       expect(reads.readBindingCommand('bind').observation).toBe(command.observation);
       expect(reads.readParsedAttribute('textcontent.bind', 'message').observation).toBe(parsed.observation);
@@ -83,13 +100,14 @@ describe('template compiler observed values', () => {
       expect(reads.readTwoWay(ownerView, 'textcontent').observation).toBe(twoWay.observation);
 
       expect(reads.element('root-surrogate-owner-progression')).toEqual(element.value);
+      expect(reads.element('au-slot')).toEqual(auSlot.value);
       expect(reads.attribute('if')).toEqual(attribute.value);
       expect(reads.bindingCommand('bind')).toBe(command.value);
       expect(reads.parseAttribute('textcontent.bind', 'message')).toEqual(parsed.value);
       expect(reads.mapAttribute(ownerView, 'textcontent')).toBe(mapped.value);
       expect(reads.isTwoWay(ownerView, 'textcontent')).toBe(twoWay.value);
 
-      expect(reads.readAll()).toHaveLength(7);
+      expect(reads.readAll()).toHaveLength(8);
       expect(reads.readAll().filter((read) => read.readKind === TemplateCompilerReadKind.AttributeMapper))
         .toEqual([mapped.observation, twoWay.observation]);
     } finally {

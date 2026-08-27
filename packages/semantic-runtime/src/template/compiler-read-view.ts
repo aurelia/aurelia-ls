@@ -14,6 +14,7 @@ import type { ExpressionType } from '../expression/ast.js';
 import type { ExpressionParseContext } from '../expression/expression-parse-support.js';
 import type { ExpressionParseResult } from '../expression/parse-result-algebra.js';
 import type { CustomAttributeDefinition } from '../resources/custom-attribute-definition.js';
+import type { BuiltInResource } from '../resources/built-in-resources.js';
 import {
   CustomElementCaptureKind,
   type CustomElementDefinition,
@@ -33,6 +34,7 @@ import {
   type TemplateElementBindablesInfo,
 } from './compiler-world.js';
 import {
+  readBuiltInVisibleTemplateResource,
   readVisibleTemplateResourceDefinition,
 } from './compiler-resource-lookup.js';
 import type {
@@ -704,6 +706,7 @@ function resolvedVisibleResource(
       : TemplateResourceResolutionKind.Definition,
     resource,
     compilable,
+    readBuiltInVisibleTemplateResource(store, resource),
   );
 }
 
@@ -713,6 +716,24 @@ function resolvedResourceResultParts(result: TemplateResolvedResource | null): r
     : [
       result.resolutionKind,
       ...visibleResourceResultParts(result.resource),
+      ...builtInResourceResultParts(result.builtInResource),
+    ];
+}
+
+function builtInResourceResultParts(resource: BuiltInResource | null): readonly string[] {
+  return resource == null
+    ? ['no-built-in-resource']
+    : [
+      'built-in-resource',
+      resource.packageId,
+      resource.group,
+      resource.resourceKind,
+      resource.name,
+      resource.targetName,
+      ...resource.aliases,
+      resource.productHandle ?? '',
+      resource.identityHandle ?? '',
+      resource.sourceAddressHandle ?? '',
     ];
 }
 
