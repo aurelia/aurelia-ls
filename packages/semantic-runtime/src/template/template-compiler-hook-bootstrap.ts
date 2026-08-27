@@ -43,6 +43,7 @@ export const enum TemplateCompilerHookBootstrapState {
 /** Product-free outcome of the pre-plan hook phase for one compiler invocation lane. */
 export class TemplateCompilerHookBootstrapResult {
   constructor(
+    readonly lane: TemplateCompilerExecutionLaneReference,
     readonly state: TemplateCompilerHookBootstrapState,
     readonly operations: readonly TemplateCompilerOperation[],
     readonly boundaryEntryOrdinal: number | null,
@@ -103,6 +104,7 @@ class TemplateCompilerHookBootstrapFrame {
       if (boundary != null) return boundary;
     }
     return new TemplateCompilerHookBootstrapResult(
+      this.request.lane,
       TemplateCompilerHookBootstrapState.Exact,
       this.readNewOperations(),
       null,
@@ -419,6 +421,7 @@ class TemplateCompilerHookBootstrapFrame {
     _operation: TemplateCompilerOperation,
   ): TemplateCompilerHookBootstrapResult {
     return new TemplateCompilerHookBootstrapResult(
+      this.request.lane,
       state,
       this.readNewOperations(),
       entryOrdinal,
