@@ -1,0 +1,506 @@
+import { createHash } from 'node:crypto';
+
+import type { KernelPublicationContext } from '../kernel/publication.js';
+import type { ProductDetailReadView } from '../kernel/product-details.js';
+import type {
+  KernelMaterializationReadView,
+  KernelReadProjectionRevisionView,
+} from '../kernel/store.js';
+import type {
+  TemplateCompilationFrontDoorEmission,
+  TemplateResourceCompilationEmission,
+} from './template-compilation-project-pass.js';
+import type { BrowserEffectiveTemplateEmission } from './browser-effective-template-materializer.js';
+import { LocalTemplateDefinitionMaterializer } from './local-template-definition-materializer.js';
+import { TemplateCompilerReadView, TemplateCompilerWorldAuthority } from './compiler-read-view.js';
+import { TemplateCompilerExecutionSession } from './template-compiler-execution.js';
+import {
+  executeTemplateCompilerHookBootstrap,
+  TemplateCompilerHookBootstrapState,
+} from './template-compiler-hook-bootstrap.js';
+import {
+  executeTemplateCompilerLocalExtraction,
+  TemplateCompilerLocalExtractionState,
+} from './template-compiler-local-extraction.js';
+import {
+  buildTemplateCompilerNormalizedSiteIndex,
+  TemplateCompilerNormalizedSiteIndexState,
+} from './template-compiler-normalized-site-index.js';
+import { TemplateCompilerOccurrenceForest } from './template-compiler-occurrence.js';
+import { TemplateCompilerPreWalkRemainderAuthority } from './template-compiler-prewalk-remainder.js';
+import {
+  bindTemplateCompilerRootSiteInvocation,
+  TemplateCompilerSiteInvocationBindingState,
+} from './template-compiler-site-invocation.js';
+import {
+  executeTemplateCompilerRootSiteCursor,
+  TemplateCompilerSiteCursorResultState,
+} from './template-compiler-site-cursor.js';
+import {
+  TemplateCompilerSiteCursorAttributeEvent,
+  TemplateCompilerSiteCursorElementEvent,
+  type TemplateCompilerSiteCursorEvent,
+  TemplateCompilerSiteCursorFrontier,
+  TemplateCompilerSiteCursorIgnoredNodeEvent,
+  TemplateCompilerSiteCursorPhaseEvent,
+  TemplateCompilerSiteCursorSubtreeExclusionEvent,
+  TemplateCompilerSiteCursorSurrogateValidationEvent,
+  TemplateCompilerSiteCursorTextEvent,
+} from './template-compiler-site-cursor-event.js';
+
+export const enum TemplateCompilerRootSiteCursorObservationAdmissionState {
+  GraphMismatch = 'graph-mismatch',
+  HookOpen = 'hook-open',
+  HookAbrupt = 'hook-abrupt',
+  LocalRefused = 'local-refused',
+  LocalAbrupt = 'local-abrupt',
+  LocalExtractedUnsupported = 'local-extracted-unsupported',
+  FamilyMissing = 'family-missing',
+  RootBindingMismatch = 'root-binding-mismatch',
+  CursorAdmissionMismatch = 'cursor-admission-mismatch',
+  CursorTranscript = 'cursor-transcript',
+}
+
+export interface TemplateCompilerRootSiteCursorObservationCurrentness {
+  readonly exact: boolean;
+  readonly forestMutationRevisionDelta: number;
+  readonly globalOperationCountDelta: number;
+}
+
+interface TemplateCompilerRootSiteCursorObservationBase {
+  readonly admissionState: TemplateCompilerRootSiteCursorObservationAdmissionState;
+  readonly reasonKinds: readonly string[];
+  readonly graphState: string;
+  readonly hookState: string | null;
+  readonly hookBoundaryEntryOrdinal: number | null;
+  readonly localState: string | null;
+  readonly localCompletedExtractionCount: number | null;
+  readonly localExtractedTemplateCount: number | null;
+  readonly bindingState: string | null;
+  readonly localIssueKind: string | null;
+  readonly localFrameworkErrorCode: string | null;
+  readonly authoredBundleCount: number;
+}
+
+export interface TemplateCompilerRootSiteCursorUnavailableObservation
+  extends TemplateCompilerRootSiteCursorObservationBase {
+  readonly admissionState: Exclude<
+    TemplateCompilerRootSiteCursorObservationAdmissionState,
+    TemplateCompilerRootSiteCursorObservationAdmissionState.CursorTranscript
+  >;
+}
+
+export interface TemplateCompilerRootSiteCursorTranscriptObservation
+  extends TemplateCompilerRootSiteCursorObservationBase {
+  readonly admissionState: TemplateCompilerRootSiteCursorObservationAdmissionState.CursorTranscript;
+  readonly reasonKinds: readonly [];
+  readonly frontierKind: string | null;
+  readonly frontierPhase: string | null;
+  readonly eventKindCounts: Readonly<Record<string, number>>;
+  readonly phaseKinds: readonly string[];
+  readonly phaseCounts: Readonly<Record<string, number>>;
+  readonly eventDigest: string;
+  readonly ledgerState: string;
+  readonly spendDispositionCounts: Readonly<Record<string, number>>;
+  readonly remainderKindCounts: Readonly<Record<string, number>>;
+  readonly occurrenceOnlyDispositionCounts: Readonly<Record<string, number>>;
+  readonly spendCount: number;
+  readonly remainderCount: number;
+  readonly rawUnspentCount: number;
+  readonly blockedByFrontierCount: number;
+  readonly conflictCount: number;
+  readonly nextTranscriptOrdinal: number;
+  readonly nextSiteEventOrdinal: number;
+  readonly currentness: TemplateCompilerRootSiteCursorObservationCurrentness;
+}
+
+/** Portable plain-data observation; it retains no executable compiler, forest, read, or binding authority. */
+export type TemplateCompilerRootSiteCursorObservation =
+  | TemplateCompilerRootSiteCursorUnavailableObservation
+  | TemplateCompilerRootSiteCursorTranscriptObservation;
+
+export interface TemplateCompilerRootSiteCursorObservationRequest {
+  readonly observationKey: string;
+  readonly compilation: TemplateResourceCompilationEmission;
+  readonly browserEmission: BrowserEffectiveTemplateEmission;
+  readonly currentFrontDoor: TemplateCompilationFrontDoorEmission;
+  /** Candidate-local publication context revoked with the caller's enclosing computation. */
+  readonly publication: KernelPublicationContext;
+  /** Current committed/candidate read authority used by paired compiler-service receipts. */
+  readonly compilerReadStore: Pick<KernelMaterializationReadView, 'readMaterializationsByOwner'>
+    & ProductDetailReadView
+    & KernelReadProjectionRevisionView;
+}
+
+/**
+ * Run the exact root-only bootstrap/cursor pipeline and project it to portable data before the run context retires.
+ *
+ * This is compiler-conservation observation, not JIT equivalence, AOT eligibility, or an obligation result.
+ */
+export function observeTemplateCompilerRootSiteCursor(
+  request: TemplateCompilerRootSiteCursorObservationRequest,
+): TemplateCompilerRootSiteCursorObservation {
+  const graphExact = buildTemplateCompilerNormalizedSiteIndex(request.compilation);
+  if (graphExact.state !== TemplateCompilerNormalizedSiteIndexState.GraphExact || graphExact.index == null) {
+    return unavailable(
+      TemplateCompilerRootSiteCursorObservationAdmissionState.GraphMismatch,
+      graphExact.mismatches.map((mismatch) => mismatch.mismatchKind),
+      graphExact.state,
+      null,
+      null,
+      null,
+      0,
+    );
+  }
+  const authoredBundleCount = graphExact.index.attributeSites.length + graphExact.index.textSites.length;
+  const forest = TemplateCompilerOccurrenceForest.fromBrowserEffective(request.browserEmission);
+  const execution = TemplateCompilerExecutionSession.createForForest(
+    `root-site-cursor-observation:${request.observationKey}`,
+    forest,
+  );
+  const lane = execution.admitRootInvocation(request.compilation.localKey);
+  const hook = executeTemplateCompilerHookBootstrap({
+    execution,
+    lane,
+    compilerWorld: request.compilation.compilerWorld,
+    executionOpenSeamHandle: request.publication.handles.openSeam(
+      `root-site-cursor-observation:${request.observationKey}:hook-open`,
+    ),
+  });
+  if (hook.state !== TemplateCompilerHookBootstrapState.Exact) {
+    const admissionState = hook.state === TemplateCompilerHookBootstrapState.Abrupt
+      ? TemplateCompilerRootSiteCursorObservationAdmissionState.HookAbrupt
+      : TemplateCompilerRootSiteCursorObservationAdmissionState.HookOpen;
+    return unavailable(
+      admissionState,
+      [admissionState],
+      graphExact.state,
+      hook.state,
+      null,
+      null,
+      authoredBundleCount,
+      null,
+      null,
+      hook.boundaryEntryOrdinal,
+    );
+  }
+
+  const definitions = new LocalTemplateDefinitionMaterializer(request.publication);
+  const local = executeTemplateCompilerLocalExtraction({
+    execution,
+    lane,
+    hookBootstrap: hook,
+    ownerName: request.compilation.definition.name,
+    ownerCauseHandles: [
+      request.compilation.definition.productHandle ?? request.compilation.unit.templateSource.productHandle,
+    ],
+    reserveDefinition: (invocationKey) => definitions.reserveOccurrenceDefinition(invocationKey),
+  });
+  if (!local.isExact()) {
+    const admissionState = local.state === TemplateCompilerLocalExtractionState.Abrupt
+      ? TemplateCompilerRootSiteCursorObservationAdmissionState.LocalAbrupt
+      : TemplateCompilerRootSiteCursorObservationAdmissionState.LocalRefused;
+    const failure = local.failure;
+    return unavailable(
+      admissionState,
+      [failure?.issueKind ?? admissionState],
+      graphExact.state,
+      hook.state,
+      local.state,
+      null,
+      authoredBundleCount,
+      failure?.issueKind ?? null,
+      failure?.frameworkErrorCode ?? null,
+      hook.boundaryEntryOrdinal,
+      local.completedExtractions.length,
+      0,
+    );
+  }
+  const closure = execution.closeInvocationBootstrap(hook, local);
+  if (local.state === TemplateCompilerLocalExtractionState.Extracted) {
+    const admissionState = TemplateCompilerRootSiteCursorObservationAdmissionState.LocalExtractedUnsupported;
+    return unavailable(
+      admissionState,
+      [admissionState],
+      graphExact.state,
+      hook.state,
+      local.state,
+      null,
+      authoredBundleCount,
+      null,
+      null,
+      hook.boundaryEntryOrdinal,
+      local.completedExtractions.length,
+      local.completedExtractions.length,
+    );
+  }
+
+  const family = request.currentFrontDoor.familyForOwner(request.compilation.familyOwnerHandle);
+  if (family == null) {
+    const admissionState = TemplateCompilerRootSiteCursorObservationAdmissionState.FamilyMissing;
+    return unavailable(
+      admissionState,
+      [admissionState],
+      graphExact.state,
+      hook.state,
+      local.state,
+      null,
+      authoredBundleCount,
+      null,
+      null,
+      hook.boundaryEntryOrdinal,
+      local.completedExtractions.length,
+      0,
+    );
+  }
+  const binding = bindTemplateCompilerRootSiteInvocation({
+    execution,
+    bootstrapClosure: closure,
+    browserEmission: request.browserEmission,
+    graphExact,
+    currentFrontDoor: request.currentFrontDoor,
+    currentFamily: family,
+  });
+  if (binding.state !== TemplateCompilerSiteInvocationBindingState.Exact || binding.binding == null) {
+    return unavailable(
+      TemplateCompilerRootSiteCursorObservationAdmissionState.RootBindingMismatch,
+      binding.reasons.map((entry) => entry.reasonKind),
+      graphExact.state,
+      hook.state,
+      local.state,
+      binding.state,
+      authoredBundleCount,
+      null,
+      null,
+      hook.boundaryEntryOrdinal,
+      local.completedExtractions.length,
+      0,
+    );
+  }
+
+  const compilerReads = new TemplateCompilerReadView(
+    request.compilerReadStore,
+    TemplateCompilerWorldAuthority.fixed(request.compilation.compilerWorld),
+  );
+  const cursor = executeTemplateCompilerRootSiteCursor({
+    binding: binding.binding,
+    compilerReads,
+    preWalkAuthority: TemplateCompilerPreWalkRemainderAuthority.capture(binding.binding),
+  });
+  if (cursor.state !== TemplateCompilerSiteCursorResultState.Transcript || cursor.transcript == null) {
+    return unavailable(
+      TemplateCompilerRootSiteCursorObservationAdmissionState.CursorAdmissionMismatch,
+      cursor.reasons.map((entry) => entry.reasonKind),
+      graphExact.state,
+      hook.state,
+      local.state,
+      binding.state,
+      authoredBundleCount,
+      null,
+      null,
+      hook.boundaryEntryOrdinal,
+      local.completedExtractions.length,
+      0,
+    );
+  }
+
+  const transcript = cursor.transcript;
+  const eventKindCounts: Record<string, number> = {};
+  const phaseKinds: string[] = [];
+  const phaseCounts: Record<string, number> = {};
+  for (const event of transcript.events) {
+    increment(eventKindCounts, event.eventKind);
+    if (event instanceof TemplateCompilerSiteCursorPhaseEvent) {
+      phaseKinds.push(event.phaseKind);
+      increment(phaseCounts, event.phaseKind);
+    }
+  }
+  const forestMutationRevisionDelta = transcript.endForestMutationRevision
+    - transcript.startForestMutationRevision;
+  const globalOperationCountDelta = transcript.endGlobalOperationCount
+    - transcript.startGlobalOperationCount;
+  return {
+    admissionState: TemplateCompilerRootSiteCursorObservationAdmissionState.CursorTranscript,
+    reasonKinds: [],
+    graphState: graphExact.state,
+    hookState: hook.state,
+    hookBoundaryEntryOrdinal: hook.boundaryEntryOrdinal,
+    localState: local.state,
+    localCompletedExtractionCount: local.completedExtractions.length,
+    localExtractedTemplateCount: 0,
+    bindingState: binding.state,
+    localIssueKind: null,
+    localFrameworkErrorCode: null,
+    frontierKind: transcript.frontier?.frontierKind ?? null,
+    frontierPhase: transcript.frontier?.phaseKind ?? null,
+    eventKindCounts,
+    phaseKinds,
+    phaseCounts,
+    eventDigest: cursorEventDigest(transcript.events, transcript.binding.forest),
+    ledgerState: transcript.ledger.state,
+    spendDispositionCounts: counts(transcript.ledger.spends.map((spend) => spend.disposition)),
+    remainderKindCounts: counts(
+      transcript.ledger.authoredRemainderEvidence.map((evidence) => evidence.reasonKind),
+    ),
+    occurrenceOnlyDispositionCounts: counts(
+      transcript.ledger.occurrenceOnlyRows.map((row) => row.disposition),
+    ),
+    authoredBundleCount,
+    spendCount: transcript.ledger.spends.length,
+    remainderCount: transcript.ledger.authoredRemainderEvidence.length,
+    rawUnspentCount: transcript.ledger.rawUnspent.length,
+    blockedByFrontierCount: transcript.ledger.blockedByFrontier.length,
+    conflictCount: transcript.ledger.conflicts.length,
+    nextTranscriptOrdinal: transcript.nextTranscriptOrdinal,
+    nextSiteEventOrdinal: transcript.nextSiteEventOrdinal,
+    currentness: {
+      exact: forestMutationRevisionDelta === 0 && globalOperationCountDelta === 0,
+      forestMutationRevisionDelta,
+      globalOperationCountDelta,
+    },
+  };
+}
+
+function unavailable(
+  admissionState: Exclude<
+    TemplateCompilerRootSiteCursorObservationAdmissionState,
+    TemplateCompilerRootSiteCursorObservationAdmissionState.CursorTranscript
+  >,
+  reasonKinds: readonly string[],
+  graphState: string,
+  hookState: string | null,
+  localState: string | null,
+  bindingState: string | null,
+  authoredBundleCount: number,
+  localIssueKind: string | null = null,
+  localFrameworkErrorCode: string | null = null,
+  hookBoundaryEntryOrdinal: number | null = null,
+  localCompletedExtractionCount: number | null = null,
+  localExtractedTemplateCount: number | null = null,
+): TemplateCompilerRootSiteCursorUnavailableObservation {
+  return {
+    admissionState,
+    reasonKinds,
+    graphState,
+    hookState,
+    hookBoundaryEntryOrdinal,
+    localState,
+    localCompletedExtractionCount,
+    localExtractedTemplateCount,
+    bindingState,
+    localIssueKind,
+    localFrameworkErrorCode,
+    authoredBundleCount,
+  };
+}
+
+function cursorEventDigest(
+  events: readonly TemplateCompilerSiteCursorEvent[],
+  forest: TemplateCompilerOccurrenceForest,
+): string {
+  const hash = createHash('sha256');
+  const nodeIndexes = new Map(forest.readNodes().map((node, index) => [node, index] as const));
+  const attributeIndexes = new Map(
+    forest.readAttributes().map((attribute, index) => [attribute, index] as const),
+  );
+  const nodeIndex = (node: Parameters<typeof nodeIndexes.get>[0] | null): number | null =>
+    node == null ? null : nodeIndexes.get(node) ?? null;
+  for (const event of events) {
+    const parts: readonly unknown[] = event instanceof TemplateCompilerSiteCursorPhaseEvent
+      ? [event.eventKind, event.phaseKind, event.remainderReceipts.map((receipt) => receipt.remainderKind)]
+      : event instanceof TemplateCompilerSiteCursorElementEvent
+        ? [
+            event.eventKind,
+            nodeIndex(event.element),
+            nodeIndex(event.parent),
+            event.element.tagName,
+            event.parentOrdinal,
+            nodeIndex(event.capturedSuccessor),
+            event.browserOriginState,
+            event.lookupName,
+            event.occurrenceOnlyRow?.disposition ?? null,
+          ]
+        : event instanceof TemplateCompilerSiteCursorAttributeEvent
+          ? [
+              event.eventKind,
+              nodeIndex(event.owner),
+              attributeIndexes.get(event.attribute) ?? null,
+              event.scalar.qualifiedName,
+              event.forestOrdinal,
+              event.jitLiveOrdinal,
+              event.browserOriginState,
+              event.spend?.disposition ?? null,
+              event.occurrenceOnlyRow?.disposition ?? null,
+              event.normalizedOutcome,
+            ]
+          : event instanceof TemplateCompilerSiteCursorTextEvent
+            ? [
+                event.eventKind,
+                nodeIndex(event.text),
+                nodeIndex(event.parent),
+                event.parentOrdinal,
+                nodeIndex(event.capturedSuccessor),
+                event.browserOriginState,
+                event.spend?.disposition ?? null,
+                event.occurrenceOnlyRow?.disposition ?? null,
+                event.normalizedOutcome,
+              ]
+            : event instanceof TemplateCompilerSiteCursorIgnoredNodeEvent
+              ? [
+                  event.eventKind,
+                  nodeIndex(event.node),
+                  nodeIndex(event.parent),
+                  event.parentOrdinal,
+                  nodeIndex(event.capturedSuccessor),
+                  event.occurrenceOnlyRow.disposition,
+                ]
+              : event instanceof TemplateCompilerSiteCursorSubtreeExclusionEvent
+                ? [
+                    event.eventKind,
+                    nodeIndex(event.owner),
+                    nodeIndex(event.root),
+                    event.disposition,
+                    event.spends.length,
+                  ]
+                : event instanceof TemplateCompilerSiteCursorSurrogateValidationEvent
+                  ? [
+                      event.eventKind,
+                      nodeIndex(event.carrier),
+                      attributeIndexes.get(event.attribute) ?? null,
+                      event.scalar.qualifiedName,
+                      event.forestOrdinal,
+                      event.parsed.value.execution.target,
+                      event.outcome,
+                    ]
+                  : event instanceof TemplateCompilerSiteCursorFrontier
+                    ? [
+                        event.eventKind,
+                        nodeIndex(event.node),
+                        event.attribute == null ? null : attributeIndexes.get(event.attribute) ?? null,
+                        nodeIndex(event.capturedSuccessor),
+                        event.phaseKind,
+                        event.frontierKind,
+                        event.nextSiteEventOrdinal,
+                      ]
+                    : unsupportedCursorEvent(event);
+    const encoded = JSON.stringify([event.ordinal, ...parts]);
+    hash.update(String(encoded.length));
+    hash.update(':');
+    hash.update(encoded);
+  }
+  return `sha256:${hash.digest('hex')}`;
+}
+
+function unsupportedCursorEvent(event: TemplateCompilerSiteCursorEvent): never {
+  throw new Error(`Unsupported root site cursor event '${event.eventKind}'.`);
+}
+
+function counts(values: readonly string[]): Readonly<Record<string, number>> {
+  const result: Record<string, number> = {};
+  for (const value of values) increment(result, value);
+  return result;
+}
+
+function increment(countsByValue: Record<string, number>, value: string): void {
+  countsByValue[value] = (countsByValue[value] ?? 0) + 1;
+}

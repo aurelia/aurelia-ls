@@ -4,19 +4,10 @@ export * from './browser-template-parser.js';
 export * from './browser-template-selection.js';
 export * from './browser-template-correspondence.js';
 export * from './browser-effective-template-materializer.js';
-export * from './compiler-read-view.js';
-export * from './template-compiler-normalized-site-index.js';
-export * from './template-compiler-authored-origin-index.js';
-export * from './template-compiler-occurrence.js';
-export * from './template-compiler-dom-query.js';
-export * from './template-compiler-live-attribute-owner.js';
-export * from './template-compiler-structural-execution.js';
-export * from './template-compiler-execution.js';
-export * from './template-compiler-hook-bootstrap.js';
-export * from './template-compiler-local-extraction.js';
-export * from './local-template-definition-materializer.js';
+export {
+  TemplateCompilerCommentOccurrence,
+  TemplateCompilerElementOccurrence,
+  TemplateCompilerTextOccurrence,
+} from './template-compiler-occurrence.js';
 export * from './template-compiler-deterministic-execution.js';
-export * from './template-compiler-site-invocation.js';
-export * from './template-compiler-prewalk-remainder.js';
-export * from './template-compiler-site-spend-ledger.js';
-export * from './template-compiler-site-cursor.js';
+export * from './template-compiler-root-site-cursor-observation.js';
