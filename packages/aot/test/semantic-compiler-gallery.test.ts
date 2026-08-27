@@ -189,10 +189,10 @@ describe("semantic compiler gallery", () => {
         : []
     );
     expect([...new Set(transcriptCursors.map((cursor) => cursor.frontierKind ?? "complete"))].sort()).toEqual([
+      "after-attributes-before-projection",
       "after-attributes-before-template-controller",
       "at-live-attribute-relowering",
       "authored-precedent-mismatch",
-      "before-process-content",
       "complete",
       "invalid-surrogate-attribute",
       "let-element-lowering-required",
@@ -210,11 +210,11 @@ describe("semantic compiler gallery", () => {
         + sumCounts(cursor.occurrenceOnlyDispositionCounts)
       );
       expect(cursor.conflictCount).toBe(0);
-      expect(cursor.currentness).toEqual({
-        exact: true,
-        forestMutationRevisionDelta: 0,
-        globalOperationCountDelta: 0,
-      });
+      expect(cursor.currentness.exact).toBe(true);
+      expect(cursor.currentness.forestMutationRevisionDelta)
+        .toBe(cursor.currentness.expectedForestMutationRevisionDelta);
+      expect(cursor.currentness.globalOperationCountDelta)
+        .toBe(cursor.currentness.expectedGlobalOperationCountDelta);
       expect(cursor.eventDigest).toMatch(/^sha256:[0-9a-f]{64}$/u);
       expect(cursor.reasonKinds).toEqual([]);
       expect(cursor.eventKindCounts.frontier ?? 0).toBe(cursor.frontierKind == null ? 0 : 1);
@@ -277,8 +277,16 @@ describe("semantic compiler gallery", () => {
       blockedByFrontierCount: 2,
     });
     expect(observations.get("projection.au-slot.interpolation-fallback")?.siteCursor).toMatchObject({
-      frontierKind: "before-process-content",
+      frontierKind: "after-attributes-before-projection",
       frontierPhase: "content-start",
+      eventKindCounts: { "process-content": 1 },
+      currentness: {
+        exact: true,
+        forestMutationRevisionDelta: 0,
+        expectedForestMutationRevisionDelta: 0,
+        globalOperationCountDelta: 1,
+        expectedGlobalOperationCountDelta: 1,
+      },
     });
     expect(observations.get("surrogate.static-class")?.siteCursor).toMatchObject({
       frontierKind: "surrogate-classification-required",

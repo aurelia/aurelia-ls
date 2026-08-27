@@ -52,10 +52,16 @@ describe("AOT semantic compiler oracle CLI", () => {
       frontierKind: "at-live-attribute-relowering",
       currentness: {
         exact: true,
-        forestMutationRevisionDelta: 0,
-        globalOperationCountDelta: 0,
+        expectedForestMutationRevisionDelta: expect.any(Number),
+        expectedGlobalOperationCountDelta: expect.any(Number),
       },
     });
+    const currentness = duplicate?.siteCursor.currentness;
+    if (currentness == null) throw new Error("Expected a portable cursor currentness receipt.");
+    expect(currentness.forestMutationRevisionDelta)
+      .toBe(currentness.expectedForestMutationRevisionDelta);
+    expect(currentness.globalOperationCountDelta)
+      .toBe(currentness.expectedGlobalOperationCountDelta);
     expect(receipt).not.toHaveProperty("satisfiedClaimIds");
   }, 15_000);
 });
@@ -97,7 +103,9 @@ interface SemanticCompilerOracleReceipt {
         readonly currentness?: {
           readonly exact: boolean;
           readonly forestMutationRevisionDelta: number;
+          readonly expectedForestMutationRevisionDelta: number;
           readonly globalOperationCountDelta: number;
+          readonly expectedGlobalOperationCountDelta: number;
         };
       };
     }[];
