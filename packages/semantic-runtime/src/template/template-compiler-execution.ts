@@ -584,6 +584,14 @@ export class TemplateCompilerOperation {
   }
 }
 
+/** One committed scalar transition paired with its exact family-global operation boundary. */
+export class TemplateCompilerAttributeValueTransition {
+  constructor(
+    readonly operation: TemplateCompilerOperation,
+    readonly mutation: TemplateCompilerAttributeValueMutation,
+  ) {}
+}
+
 export const enum TemplateCompilerBootstrapDriverKind {
   CompilerHooks = 'compiler-hooks',
   LocalTemplateExtraction = 'local-template-extraction',
@@ -698,6 +706,55 @@ export class TemplateCompilerInvocationBootstrapClosure {
   }
 }
 
+/** Whether a reached attribute's current scalar is fully explained by the committed execution ledger. */
+export const enum TemplateCompilerReachedAttributeScalarState {
+  Exact = 'exact',
+  /** The live forest value differs from the last value explained by committed compiler operations. */
+  UnledgeredCurrentValue = 'unledgered-current-value',
+  /** One indexed transition does not continue the preceding browser/generated or compiler value. */
+  IncoherentTransitionHistory = 'incoherent-transition-history',
+}
+
+/**
+ * Family-owned event-time scalar receipt for one live attribute reached after exact invocation bootstrap.
+ *
+ * Input and generation are independent axes: a seeded input has only input authority, a pure generated attribute has
+ * only generation authority, and a generated clone may carry both.
+ */
+export class TemplateCompilerReachedAttributeScalarReceipt {
+  readonly #familyAuthority: object;
+
+  constructor(
+    familyAuthority: object,
+    readonly state: TemplateCompilerReachedAttributeScalarState,
+    readonly lane: TemplateCompilerExecutionLaneReference,
+    readonly bootstrapClosure: TemplateCompilerInvocationBootstrapClosure,
+    readonly owner: TemplateCompilerElementOccurrence,
+    readonly attribute: TemplateCompilerAttributeOccurrence,
+    readonly liveOrdinal: number,
+    readonly qualifiedName: string,
+    readonly inputIdentityKey: IdentityHandle | null,
+    readonly inputReference: TemplateCompilerAttributeOccurrence['inputReference'],
+    readonly generation: TemplateCompilerOccurrenceGeneration | null,
+    readonly initialValue: string,
+    readonly replayedValue: string,
+    readonly currentValue: string,
+    readonly transitions: readonly TemplateCompilerAttributeValueTransition[],
+    readonly forestMutationRevision: number,
+    readonly globalOperationCount: number,
+  ) {
+    this.#familyAuthority = familyAuthority;
+  }
+
+  isExact(): boolean {
+    return this.state === TemplateCompilerReachedAttributeScalarState.Exact;
+  }
+
+  isOwnedBy(familyAuthority: object): boolean {
+    return this.#familyAuthority === familyAuthority;
+  }
+}
+
 /**
  * Product-free forest-first owner for one exact compiler family/cohort invocation.
  *
@@ -790,6 +847,11 @@ export class TemplateCompilerExecutionSession {
     TemplateCompilerOperationContextReference,
     TemplateCompilerOperation[]
   >();
+  private readonly attributeValueTransitionsByAttribute = new Map<
+    TemplateCompilerAttributeOccurrence,
+    TemplateCompilerAttributeValueTransition[]
+  >();
+  private attributeValueTransitionCount = 0;
   private readonly producedProducts = new Map<ProductHandle, TemplateCompilerOperation>();
   private readonly terminalOperationsByLane = new Map<
     TemplateCompilerExecutionLaneReference,
@@ -1124,6 +1186,86 @@ export class TemplateCompilerExecutionSession {
     return this.bootstrapClosuresByLane.get(lane) ?? null;
   }
 
+  /** Capture one live attribute scalar at the unchanged post-bootstrap lane frontier. */
+  captureReachedAttributeScalar(
+    closure: TemplateCompilerInvocationBootstrapClosure,
+    owner: TemplateCompilerElementOccurrence,
+    attribute: TemplateCompilerAttributeOccurrence,
+    liveOrdinal: number,
+  ): TemplateCompilerReachedAttributeScalarReceipt {
+    this.requireMutable();
+    this.requireNoPendingAttempt('capture a reached attribute scalar');
+    const lane = closure.lane;
+    this.requireLane(lane);
+    if (
+      !closure.isOwnedBy(this.familyAuthority)
+      || this.bootstrapClosuresByLane.get(lane) !== closure
+    ) {
+      throw new Error(`Compiler invocation lane '${lane.localKey}' has no exact stored bootstrap closure.`);
+    }
+    const laneOperations = this.operationsByLane.get(lane)!;
+    if (
+      this.invocationPhases.get(lane) !== TemplateCompilerInvocationPhase.BootstrapClosed
+      || laneOperations.length !== closure.laneOperationCount
+    ) {
+      throw new Error(`Compiler invocation lane '${lane.localKey}' bootstrap closure no longer owns its lane frontier.`);
+    }
+    if (!Number.isSafeInteger(liveOrdinal) || liveOrdinal < 0) {
+      throw new Error(`Compiler attribute '${attribute.occurrenceKey}' has invalid live ordinal ${liveOrdinal}.`);
+    }
+    if (
+      this.forest.nodeForOccurrenceKey(owner.occurrenceKey) !== owner
+      || this.forest.attributeForOccurrenceKey(attribute.occurrenceKey) !== attribute
+      || attribute.owner !== owner
+      || owner.readAttributes()[liveOrdinal] !== attribute
+    ) {
+      throw new Error(
+        `Compiler attribute '${attribute.occurrenceKey}' is not live at owner '${owner.occurrenceKey}' ordinal ${liveOrdinal}.`,
+      );
+    }
+    this.requireOccurrenceContext(this.bootstrapContextsByLane.get(lane)!, attribute);
+    if ((attribute.inputIdentityKey == null) !== (attribute.inputReference == null)) {
+      throw new Error(`Compiler attribute '${attribute.occurrenceKey}' has partial input authority.`);
+    }
+
+    const transitions = this.attributeValueTransitionsByAttribute.get(attribute) ?? [];
+    let replayedValue = attribute.initialValue;
+    let state = TemplateCompilerReachedAttributeScalarState.Exact;
+    for (const transition of transitions) {
+      if (transition.mutation.previousValue !== replayedValue) {
+        state = TemplateCompilerReachedAttributeScalarState.IncoherentTransitionHistory;
+        break;
+      }
+      replayedValue = transition.mutation.nextValue;
+    }
+    if (
+      state === TemplateCompilerReachedAttributeScalarState.Exact
+      && replayedValue !== attribute.value
+    ) {
+      state = TemplateCompilerReachedAttributeScalarState.UnledgeredCurrentValue;
+    }
+
+    return new TemplateCompilerReachedAttributeScalarReceipt(
+      this.familyAuthority,
+      state,
+      lane,
+      closure,
+      owner,
+      attribute,
+      liveOrdinal,
+      qualifiedCompilerAttributeName(attribute),
+      attribute.inputIdentityKey,
+      attribute.inputReference,
+      attribute.generation,
+      attribute.initialValue,
+      replayedValue,
+      attribute.value,
+      [...transitions],
+      this.forest.mutationRevision,
+      this.operations.length,
+    );
+  }
+
   admitTargetPlan(targetPlan: TemplateCompilerTargetPlan): TemplateCompilerExecutionLaneReference {
     this.requireMutable();
     this.requireNoPendingAttempt('admit a target plan');
@@ -1429,6 +1571,7 @@ export class TemplateCompilerExecutionSession {
     this.operationsByKey.set(operation.operationKey, operation);
     this.operationsByLane.get(operation.lane)!.push(operation);
     this.operationsByContext.get(operation.context)!.push(operation);
+    this.recordCommittedAttributeValueTransitions(operation);
     for (const productHandle of operation.producedProductHandles) {
       this.producedProducts.set(productHandle, operation);
     }
@@ -1439,6 +1582,22 @@ export class TemplateCompilerExecutionSession {
     this.pendingMutationOverlay = null;
     this.pendingAuthorityBatch = null;
     return operation;
+  }
+
+  private recordCommittedAttributeValueTransitions(operation: TemplateCompilerOperation): void {
+    if (operation.mutationBatch.state !== TemplateCompilerMutationBatchState.Committed) {
+      return;
+    }
+    for (const mutation of operation.mutationBatch.attributeValueMutations) {
+      const transitions = this.attributeValueTransitionsByAttribute.get(mutation.attribute);
+      const transition = new TemplateCompilerAttributeValueTransition(operation, mutation);
+      if (transitions == null) {
+        this.attributeValueTransitionsByAttribute.set(mutation.attribute, [transition]);
+      } else {
+        transitions.push(transition);
+      }
+      this.attributeValueTransitionCount++;
+    }
   }
 
   /** Reserve generation metadata during mechanical work inside the exact pending operation batch. */
@@ -1606,6 +1765,8 @@ export class TemplateCompilerExecutionSession {
     const operationKeys = new Set<string>();
     const producedProducts = new Map<ProductHandle, TemplateCompilerOperation>();
     const replayedAttributeValues = new Map<TemplateCompilerAttributeOccurrence, string>();
+    const expectedAttributeValueTransitionCounts = new Map<TemplateCompilerAttributeOccurrence, number>();
+    let expectedAttributeValueTransitionCount = 0;
     const terminalOperations = new Map<TemplateCompilerExecutionLaneReference, TemplateCompilerOperation>();
     const expectedLaneOperations = new Map(
       this.lanes.map((lane) => [lane, [] as TemplateCompilerOperation[]]),
@@ -1688,6 +1849,18 @@ export class TemplateCompilerExecutionSession {
           );
         }
         if (operation.mutationBatch.state === TemplateCompilerMutationBatchState.Committed) {
+          const transitionOrdinal = expectedAttributeValueTransitionCounts.get(mutation.attribute) ?? 0;
+          const transition = this.attributeValueTransitionsByAttribute.get(mutation.attribute)?.[transitionOrdinal];
+          if (
+            transition?.operation !== operation
+            || transition.mutation !== mutation
+          ) {
+            throw new Error(
+              `Compiler attribute '${mutation.attribute.occurrenceKey}' lost its committed scalar transition index.`,
+            );
+          }
+          expectedAttributeValueTransitionCounts.set(mutation.attribute, transitionOrdinal + 1);
+          expectedAttributeValueTransitionCount++;
           replayedAttributeValues.set(mutation.attribute, mutation.nextValue);
         }
       }
@@ -1714,6 +1887,11 @@ export class TemplateCompilerExecutionSession {
       || [...producedProducts].some(([handle, operation]) => this.producedProducts.get(handle) !== operation)
       || terminalOperations.size !== this.terminalOperationsByLane.size
       || [...terminalOperations].some(([lane, operation]) => this.terminalOperationsByLane.get(lane) !== operation)
+      || expectedAttributeValueTransitionCount !== this.attributeValueTransitionCount
+      || expectedAttributeValueTransitionCounts.size !== this.attributeValueTransitionsByAttribute.size
+      || [...expectedAttributeValueTransitionCounts].some(([attribute, count]) =>
+        this.attributeValueTransitionsByAttribute.get(attribute)?.length !== count
+      )
       || [...expectedLaneOperations].some(([lane, operations]) =>
         !sameOccurrences(this.operationsByLane.get(lane) ?? [], operations)
       )
@@ -2143,4 +2321,10 @@ function mutationBatchStateForCompletion(
 
 function sameOccurrences<T>(left: readonly T[], right: readonly T[]): boolean {
   return left.length === right.length && left.every((value, index) => value === right[index]);
+}
+
+function qualifiedCompilerAttributeName(attribute: TemplateCompilerAttributeOccurrence): string {
+  return attribute.prefix == null
+    ? attribute.name
+    : `${attribute.prefix}:${attribute.name}`;
 }
