@@ -78,7 +78,7 @@ describe("semantic compiler gallery", () => {
       state,
       run.observations.filter((observation) => observation.normalizedStructuralReplay.state === state).length,
     ]));
-    expect(replayStates).toEqual({ exact: 23, open: 5, refused: 3 });
+    expect(replayStates).toEqual({ exact: 23, open: 6, refused: 2 });
     expect(run.observations.every((observation) =>
       ["exact", "open", "refused"].includes(observation.normalizedStructuralReplay.state)
     )).toBe(true);
@@ -87,6 +87,7 @@ describe("semantic compiler gallery", () => {
       ["interaction.browser.duplicate-binding-elision", ["non-singular-origin"]],
       ["interaction.browser.foster-target-order", ["browser-target-order-open"]],
       ["interaction.browser.paragraph-controller-topology", ["browser-correspondence-open"]],
+      ["diagnostic.local.duplicate-bindable-attribute", ["local-template-open"]],
       ["surrogate.static-class", ["surrogate-execution-open"]],
     ]);
     for (const [caseId, reasonKinds] of openReplayReasons) {
@@ -97,12 +98,6 @@ describe("semantic compiler gallery", () => {
         geometryCount: 0,
       });
     }
-    expect(observations.get("diagnostic.local.duplicate-bindable-attribute")?.normalizedStructuralReplay)
-      .toMatchObject({
-        state: "refused",
-        reasonKinds: ["compiler-refused", "local-template-open"],
-        realizedContextCount: 0,
-      });
     expect(observations.get("diagnostic.slot.without-shadow")?.normalizedStructuralReplay)
       .toMatchObject({ state: "refused", reasonKinds: ["compiler-refused"] });
     expect(observations.get("diagnostic.surrogate.unique-id")?.normalizedStructuralReplay)

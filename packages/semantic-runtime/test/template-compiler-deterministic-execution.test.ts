@@ -12,7 +12,8 @@ import { selectBrowserTemplateCompilerCarrier } from '../src/template/browser-te
 import {
   TemplateCompilerTargetContextRole,
 } from '../src/template/compiler-target-plan.js';
-import { TemplateRenderTargetKind } from '../src/template/compiled-template.js';
+import { CompiledTemplateState, TemplateRenderTargetKind } from '../src/template/compiled-template.js';
+import { isLocalTemplateAuthoringIssueKind } from '../src/template/compiler-issue.js';
 import { HtmlText } from '../src/template/html-ir.js';
 import {
   HydrateElementInstruction,
@@ -243,4 +244,61 @@ describe('deterministic template compiler structural replay', () => {
       runtime.retireWorkspaceIncarnation();
     }
   }, 15_000);
+
+  test('keeps broad local-template authoring candidates Open until extraction reaches a refusal', async () => {
+    const fixtureRoot = path.join(
+      packageRoot,
+      'fixtures/pressure/resource-registration-local-template-errors',
+    );
+    const runtime = await createSemanticRuntime({
+      workspaceRoot: fixtureRoot,
+      storeKey: 'contract:template-compiler-local-authoring-issue-bridge',
+    });
+    const app = await runtime.openApp({
+      analysisDepth: 'runtime-topology',
+      telemetry: { inquiryProfile: 'aot' },
+    });
+    const compilation = app.emission.templates.resources.find((resource) =>
+      resource.compilation.definition.name === 'duplicate-local-bindable-attribute-case'
+    )?.compilation;
+    if (compilation == null) throw new Error('Expected duplicate local-bindable compiler products.');
+    expect(compilation.compiledTemplate.compiledTemplate.state).toBe(CompiledTemplateState.Invalid);
+    expect(compilation.compiledTemplate.issues.length).toBeGreaterThan(0);
+    expect(compilation.compiledTemplate.issues.every((issue) =>
+      isLocalTemplateAuthoringIssueKind(issue.issueKind)
+    )).toBe(true);
+    const markup = compilation.unit.templateSource.markup;
+    if (markup == null || compilation.html.draft == null) {
+      throw new Error('Expected retained local-template markup and authored draft bindings.');
+    }
+    const browserRun = runtime.computationLifecycle.begin({
+      kind: 'template-compiler-local-authoring-issue-bridge-test',
+      reconciliationKey: 'template-compiler-local-authoring-issue-bridge-test',
+      summary: 'Prove broad local diagnostics do not masquerade as reached AOT refusal.',
+    });
+    try {
+      const browser = parseBrowserTemplateFragmentDraft(markup);
+      const browserTemplate = new BrowserEffectiveTemplateMaterializer(browserRun).materialize({
+        localKey: 'deterministic-execution:local-authoring-issue-bridge',
+        sourceRevision: compilation.definition.template?.authoredSourceRevision ?? 'test:local-authoring-issue',
+        templateSource: compilation.unit.templateSource,
+        authoredHtml: compilation.html,
+        browser,
+        carrierSelection: selectBrowserTemplateCompilerCarrier(browser.fragment),
+      });
+      const result = executeDeterministicTemplateCompiler({ browserTemplate, compilation });
+      expect(result.state).toBe(TemplateCompilerDeterministicExecutionState.Open);
+      expect(result.reasons).toEqual([
+        expect.objectContaining({
+          reasonKind: TemplateCompilerDeterministicExecutionReasonKind.LocalTemplateOpen,
+        }),
+      ]);
+      expect(result.reasons.some((reason) =>
+        reason.reasonKind === TemplateCompilerDeterministicExecutionReasonKind.CompilerRefused
+      )).toBe(false);
+    } finally {
+      browserRun.abort();
+      runtime.retireWorkspaceIncarnation();
+    }
+  }, 20_000);
 });

@@ -45,6 +45,7 @@ import {
   templateCompilerHookExecutionAdmission,
   TemplateCompilerHookExecutionAdmissionKind,
 } from './compiler-hook-world.js';
+import { isLocalTemplateAuthoringIssueKind } from './compiler-issue.js';
 import type { TemplateValueSiteEmission } from './value-site-materializer.js';
 import { TemplateValueSiteKind } from './value-site.js';
 
@@ -214,11 +215,25 @@ class DeterministicExecutionFrame {
     } else {
       reasons.push(...this.preflightBrowserContextAuthority());
     }
-    if (compiled.issues.length > 0 || compiled.compiledTemplate.state === CompiledTemplateState.Invalid) {
+    // Interim bridge: the normalized handoff still co-locates broad authored local diagnostics with reached issues.
+    // Local extraction must own refusal order before those candidates can participate in AOT refusal authority.
+    const reachedCompilerIssues = compiled.issues.filter((issue) =>
+      !isLocalTemplateAuthoringIssueKind(issue.issueKind)
+    );
+    const invalidityIsLocalAuthoringOnly = compiled.compiledTemplate.state === CompiledTemplateState.Invalid
+      && compiled.issues.length > 0
+      && reachedCompilerIssues.length === 0;
+    if (
+      reachedCompilerIssues.length > 0
+      || (
+        compiled.compiledTemplate.state === CompiledTemplateState.Invalid
+        && !invalidityIsLocalAuthoringOnly
+      )
+    ) {
       reasons.push(reason(
         TemplateCompilerDeterministicExecutionReasonKind.CompilerRefused,
         'The normalized compiler handoff contains a reached compiler refusal.',
-        compiled.issues.map((issue) => issue.productHandle),
+        reachedCompilerIssues.map((issue) => issue.productHandle),
       ));
     }
     if (

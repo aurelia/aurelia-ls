@@ -39,6 +39,46 @@ export const enum TemplateCompilerIssueKind {
   AttributeClassificationInvalid = 'attribute-classification-invalid',
 }
 
+/**
+ * Broad authored local-shape findings retained for IDE diagnostics before reached extraction owns refusal order.
+ *
+ * Root-template `as-custom-element` is intentionally excluded: after exact hook execution it is the earlier dedicated
+ * compiler root check, not one of `_compileLocalElement`'s seven authoring candidates.
+ */
+export function isLocalTemplateAuthoringIssueKind(
+  issueKind: TemplateCompilerIssueKind,
+): boolean {
+  switch (issueKind) {
+    case TemplateCompilerIssueKind.OnlyLocalTemplates:
+    case TemplateCompilerIssueKind.LocalTemplateNotUnderRoot:
+    case TemplateCompilerIssueKind.LocalTemplateBindableNotUnderRoot:
+    case TemplateCompilerIssueKind.LocalTemplateBindableNameMissing:
+    case TemplateCompilerIssueKind.LocalTemplateBindableDuplicate:
+    case TemplateCompilerIssueKind.LocalTemplateNameEmpty:
+    case TemplateCompilerIssueKind.LocalTemplateNameDuplicate:
+      return true;
+    case TemplateCompilerIssueKind.AttributePatternDuplicate:
+    case TemplateCompilerIssueKind.BindingCommandAlreadyRegistered:
+    case TemplateCompilerIssueKind.NoSpreadTemplateController:
+    case TemplateCompilerIssueKind.InvalidClassBindingSyntax:
+    case TemplateCompilerIssueKind.InvalidSurrogateAttribute:
+    case TemplateCompilerIssueKind.TemplateControllerOnSurrogate:
+    case TemplateCompilerIssueKind.ProjectionOnNonCustomElement:
+    case TemplateCompilerIssueKind.SlotWithoutShadowDom:
+    case TemplateCompilerIssueKind.RootTemplateCannotBeLocal:
+    case TemplateCompilerIssueKind.UnknownBindingCommand:
+    case TemplateCompilerIssueKind.BindingToNonBindable:
+    case TemplateCompilerIssueKind.InvalidLetCommand:
+    case TemplateCompilerIssueKind.ReservedSpreadSyntax:
+    case TemplateCompilerIssueKind.ReservedBindableSyntax:
+    case TemplateCompilerIssueKind.BindingCommandBuildInvalid:
+    case TemplateCompilerIssueKind.AttributeClassificationInvalid:
+      return false;
+  }
+  const exhaustiveIssueKind: never = issueKind;
+  return exhaustiveIssueKind;
+}
+
 export type TemplateCompilerIssueSeverity =
   | 'information'
   | 'warning'
