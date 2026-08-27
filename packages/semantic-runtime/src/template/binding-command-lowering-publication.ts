@@ -40,12 +40,11 @@ import {
   KernelVocabulary,
   type OpenSeamKindKey,
 } from '../kernel/vocabulary.js';
-import type { ExpressionType } from '../expression/ast.js';
 import {
   ExpressionParseResultKind,
 } from '../expression/parse-result-algebra.js';
 import {
-  AttributeClassification,
+  type AttributeClassification,
   AttributeSyntax,
   type AttributeParserParseResult,
 } from './attribute-syntax.js';
@@ -53,22 +52,22 @@ import {
   attributeSyntaxPartSources,
   type AttributeSyntaxPartSources,
 } from './attribute-syntax-source.js';
+import { selectTemplateMultiBindingSegmentValueSite } from './attribute-value-site-selection.js';
 import type {
   BindingCommandLoweringRequest,
 } from './binding-command-lowering-materializer.js';
 import {
   BindingCommandBuildInput,
   BindingCommandBuildInputKind,
-  BindingCommandBuildResult,
+  type BindingCommandBuildResult,
   BindingCommandLowering,
-  MultiBindingLowering,
+  type MultiBindingLowering,
   MultiBindingSegment,
 } from './binding-command-execution.js';
 import type { TemplateBindableReference } from './compiler-world-reference.js';
 import {
-  TemplateExpressionParse,
-  TemplateValueSite,
-  TemplateValueSiteKind,
+  type TemplateExpressionParse,
+  type TemplateValueSite,
 } from './value-site.js';
 import {
   TemplateValueSitePublicationRequest,
@@ -79,12 +78,12 @@ import {
   runtimeExpressionParseContextForSourceSpanAddress,
 } from './runtime-expression-source-address.js';
 import {
-  HtmlAttribute,
-  HtmlElementAttributeOwner,
+  type HtmlAttribute,
+  type HtmlElementAttributeOwner,
   HtmlAttributeReference,
 } from './html-ir.js';
 import {
-  ParsedMultiBindingSegment,
+  type ParsedMultiBindingSegment,
 } from './multi-binding-segments.js';
 import {
   expressionProductHandlesForInstruction,
@@ -567,18 +566,21 @@ export class BindingCommandLoweringPublisher {
     syntax: AttributeSyntax,
     bindable: TemplateBindableReference,
     expression: string,
-    entryFamily: ExpressionType,
     sourceAddressHandle: AddressHandle | null,
     sourceAddressRecord: SourceSpanAddress | null,
   ): PublishedMultiBindingExpressionParse {
+    const selection = selectTemplateMultiBindingSegmentValueSite(expression);
+    if (selection.entryFamily == null) {
+      throw new Error('Inline multi-binding segment selection must retain its interpolation parser entry.');
+    }
     const publication = this.valueSitePublisher.publish(new TemplateValueSitePublicationRequest(
       `${local}:value-site`,
       `${local}:expression-parse`,
       parser,
       source.provenanceHandle,
-      TemplateValueSiteKind.CustomAttributeValue,
-      expression,
-      entryFamily,
+      selection.siteKind,
+      selection.rawValue,
+      selection.entryFamily,
       originalSite.node,
       originalSite.attribute,
       syntax,

@@ -22,6 +22,7 @@ import type {
   TemplateCompilerObservedValue,
   TemplateCompilerReadView,
 } from './compiler-read-view.js';
+import { TemplateCompilerScopeClosureState } from './compiler-read-view.js';
 import type {
   TemplateBindablesInfo,
   TemplateResolvedResource,
@@ -147,11 +148,18 @@ class AttributeClassificationDecisionExecution {
     const commandName = this.syntax.command;
     this.bindingCommandRead = commandName == null ? null : this.reads.readBindingCommand(commandName);
     const bindingCommand = this.bindingCommandRead?.value?.toReference() ?? null;
-    if (commandName != null && bindingCommand == null && isRemovedV1BindingCommand(commandName)) {
-      return this.invalidDecision(
-        TemplateCompilerIssueKind.UnknownBindingCommand,
-        unknownBindingCommandMessage(commandName),
-        TemplateCompilerFrameworkErrorCode.CompilerUnknownBindingCommand,
+    if (commandName != null && bindingCommand == null) {
+      const commandObservation = this.bindingCommandRead?.observation;
+      if (
+        commandObservation?.closure.state === TemplateCompilerScopeClosureState.Closed
+        && commandObservation.validate().isCurrent
+      ) {
+        const issue = unknownBindingCommandDecisionIssue(commandName);
+        return this.invalidDecision(issue.issueKind, issue.message, issue.frameworkErrorCode);
+      }
+      return this.openDecision(
+        null,
+        `Binding command '${commandName}' is absent, but compiler-scope closure does not prove current absence.`,
       );
     }
 
@@ -368,13 +376,14 @@ class AttributeClassificationDecisionExecution {
   }
 }
 
-function isRemovedV1BindingCommand(commandName: string): boolean {
-  return commandName === 'delegate' || commandName === 'call';
-}
-
-function unknownBindingCommandMessage(commandName: string): string {
+/** Normalized compiler issue for a command name absent from a closed compiler world. */
+export function unknownBindingCommandDecisionIssue(commandName: string): AttributeClassificationDecisionIssue {
   const help = removedV1BindingCommandHelp(commandName);
-  return `Template compilation error: unknown binding command: "${commandName}".${help}`;
+  return new AttributeClassificationDecisionIssue(
+    TemplateCompilerIssueKind.UnknownBindingCommand,
+    `Template compilation error: unknown binding command: "${commandName}".${help}`,
+    TemplateCompilerFrameworkErrorCode.CompilerUnknownBindingCommand,
+  );
 }
 
 function removedV1BindingCommandHelp(commandName: string): string {

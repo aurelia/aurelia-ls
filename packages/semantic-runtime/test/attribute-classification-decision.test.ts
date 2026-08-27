@@ -14,6 +14,7 @@ import {
 import type { BindingCommandExecutable } from '../src/template/binding-command-execution.js';
 import {
   TemplateCompilerObservedValue,
+  TemplateCompilerScopeClosureState,
   type TemplateCompilerReadObservation,
   type TemplateCompilerReadView,
 } from '../src/template/compiler-read-view.js';
@@ -111,7 +112,10 @@ describe('product-free attribute classification decision', () => {
     expect(decision.reads.bindables).toEqual([bindablesRead]);
   });
 
-  test('rejects removed v1 commands before element lookup while retaining the negative command read', () => {
+  test.each([
+    ['click.delegate', 'click', 'delegate'],
+    ['value.mystery', 'value', 'mystery'],
+  ])('rejects absent command %s before element lookup when its read is closed and current', (rawName, target, command) => {
     const commandRead = observed<BindingCommandExecutable | null>(null);
     let elementRead = false;
     const reads = {
@@ -127,10 +131,10 @@ describe('product-free attribute classification decision', () => {
     const decision = decideAttributeClassification(
       syntax({
         syntaxKind: AttributeSyntaxKind.Pattern,
-        rawName: 'click.delegate',
-        runtimeRawName: 'click.delegate',
-        target: 'click',
-        command: 'delegate',
+        rawName,
+        runtimeRawName: rawName,
+        target,
+        command,
       }),
       owner('button', 'button'),
       reads,
@@ -138,8 +142,46 @@ describe('product-free attribute classification decision', () => {
 
     expect(elementRead).toBe(false);
     expect(decision.classificationKind).toBe(AttributeClassificationKind.Open);
-    expect(decision.issue?.message).toContain('unknown binding command: "delegate"');
+    expect(decision.issue).toMatchObject({
+      issueKind: 'unknown-binding-command',
+      frameworkErrorCode: 'AUR0713',
+    });
+    expect(decision.issue?.message).toContain(`unknown binding command: "${command}"`);
     expect(decision.reads.bindingCommand).toBe(commandRead);
+  });
+
+  test('keeps an absent command typed Open when compiler-scope closure is open', () => {
+    const commandRead = observed<BindingCommandExecutable | null>(
+      null,
+      TemplateCompilerScopeClosureState.Open,
+    );
+    let elementRead = false;
+    const reads = {
+      readBindingCommand() {
+        return commandRead;
+      },
+      readElement() {
+        elementRead = true;
+        throw new Error('Element lookup must remain unreachable.');
+      },
+    } as unknown as TemplateCompilerReadView;
+
+    const decision = decideAttributeClassification(
+      syntax({
+        syntaxKind: AttributeSyntaxKind.Pattern,
+        rawName: 'value.mystery',
+        runtimeRawName: 'value.mystery',
+        target: 'value',
+        command: 'mystery',
+      }),
+      owner('input', 'input'),
+      reads,
+    );
+
+    expect(elementRead).toBe(false);
+    expect(decision.classificationKind).toBe(AttributeClassificationKind.Open);
+    expect(decision.issue).toBeNull();
+    expect(decision.openReason).toContain('does not prove current absence');
   });
 });
 
@@ -163,8 +205,14 @@ function owner(tagName: string, lookupName: string): AttributeClassificationDeci
   };
 }
 
-function observed<TValue>(value: TValue): TemplateCompilerObservedValue<TValue> {
-  return new TemplateCompilerObservedValue(value, {} as TemplateCompilerReadObservation);
+function observed<TValue>(
+  value: TValue,
+  closureState = TemplateCompilerScopeClosureState.Closed,
+): TemplateCompilerObservedValue<TValue> {
+  return new TemplateCompilerObservedValue(value, {
+    closure: { state: closureState },
+    validate: () => ({ isCurrent: true }),
+  } as unknown as TemplateCompilerReadObservation);
 }
 
 function throwingReads(): TemplateCompilerReadView {

@@ -60,6 +60,14 @@ import {
   type TemplateCompilerLiveInstructionHandleRequest,
 } from './template-compiler-live-binding-command.js';
 import {
+  executeTemplateCompilerLiveMultiBinding,
+  TemplateCompilerLiveMultiBindingCompletion,
+  type TemplateCompilerLiveMultiBindingHandleAuthority,
+  TemplateCompilerLiveMultiBindingRequest,
+  type TemplateCompilerLiveMultiBindingResult,
+} from './template-compiler-live-multi-binding.js';
+import type { ParsedMultiBindingSegment } from './multi-binding-segments.js';
+import {
   TemplateCompilerLiveAttributeDisposition,
   TemplateCompilerLiveAttributeOwnerProgression,
   type TemplateCompilerLiveAttributeOwnerSite,
@@ -119,7 +127,8 @@ export const enum TemplateCompilerLiveAttributeOpenReasonKind {
   ValueParseInvalid = 'value-parse-invalid',
   CommandOpen = 'command-open',
   CommandInvalid = 'command-invalid',
-  MultiBindingExecutionRequired = 'multi-binding-execution-required',
+  MultiBindingOpen = 'multi-binding-open',
+  MultiBindingInvalid = 'multi-binding-invalid',
   CompilerReadOpen = 'compiler-read-open',
 }
 
@@ -202,6 +211,7 @@ export class TemplateCompilerLiveAttributeContribution {
     readonly disposition: TemplateCompilerLiveAttributeDisposition,
     readonly completion: TemplateCompilerLiveAttributeCompletion,
     readonly reason: TemplateCompilerLiveAttributeOpenReason | null,
+    readonly multiBinding: TemplateCompilerLiveMultiBindingResult | null = null,
   ) {}
 }
 
@@ -432,13 +442,65 @@ class TemplateCompilerLiveAttributeOwnerAssembly {
       emptyValueBindingPolicy: TemplateAttributeEmptyValueBindingPolicy.NoBinding,
     });
     if (valueSelection?.siteKind === TemplateValueSiteKind.MultiBindingValue) {
-      return this.openContribution(
+      if (!(definition instanceof CustomAttributeDefinition)) {
+        return this.openContribution(
+          frame,
+          TemplateCompilerLiveAttributeOpenReasonKind.ClassificationOpen,
+          'Reached multi-binding selection has no exact custom-attribute definition.',
+          syntax,
+          classification,
+          valueSelection,
+        );
+      }
+      const multiBinding = executeTemplateCompilerLiveMultiBinding(new TemplateCompilerLiveMultiBindingRequest(
+        this.request.compilerReads,
+        frame.liveSite.ownerView,
+        this.nodeReference(frame.source),
+        this.attributeReference(frame),
+        definition,
+        valueSelection.rawValue,
+        this.handles.multiBindingSite(frame),
+      ));
+      if (multiBinding.completion === TemplateCompilerLiveMultiBindingCompletion.Invalid) {
+        return this.invalidContribution(
+          frame,
+          syntax,
+          classification,
+          TemplateCompilerLiveAttributeOpenReasonKind.MultiBindingInvalid,
+          multiBinding.reason?.summary ?? 'Reached inline multi-binding was invalid.',
+          valueSelection,
+          null,
+          null,
+          multiBinding.instructions,
+          multiBinding,
+        );
+      }
+      if (multiBinding.completion === TemplateCompilerLiveMultiBindingCompletion.Open) {
+        return this.openContribution(
+          frame,
+          TemplateCompilerLiveAttributeOpenReasonKind.MultiBindingOpen,
+          multiBinding.reason?.summary ?? 'Reached inline multi-binding remained open.',
+          syntax,
+          classification,
+          valueSelection,
+          null,
+          null,
+          multiBinding.instructions,
+          multiBinding,
+        );
+      }
+      return this.completeContribution(
         frame,
-        TemplateCompilerLiveAttributeOpenReasonKind.MultiBindingExecutionRequired,
-        'Reached inline multi-binding requires ordered live segment execution.',
         syntax,
         classification,
         valueSelection,
+        null,
+        null,
+        multiBinding.instructions,
+        targetLaneFor(classification, syntax),
+        [],
+        true,
+        multiBinding,
       );
     }
 
@@ -453,6 +515,8 @@ class TemplateCompilerLiveAttributeOwnerAssembly {
         syntax.command ?? classification.bindingCommand.name,
         this.handles.commandSite(frame),
         classification.bindable?.definition ?? null,
+        null,
+        classification.reads.bindingCommand ?? undefined,
       ));
     if (command?.state === TemplateCompilerLiveBindingCommandState.Open) {
       return this.openContribution(
@@ -684,6 +748,7 @@ class TemplateCompilerLiveAttributeOwnerAssembly {
     targetLane: TemplateCompilerLiveAttributeTargetLane,
     structuralEffects: readonly TemplateCompilerLiveAttributeStructuralEffectKind[],
     consumed: boolean,
+    multiBinding: TemplateCompilerLiveMultiBindingResult | null = null,
   ): TemplateCompilerLiveAttributeContribution {
     return new TemplateCompilerLiveAttributeContribution(
       frame,
@@ -700,6 +765,7 @@ class TemplateCompilerLiveAttributeOwnerAssembly {
         : TemplateCompilerLiveAttributeDisposition.Retained,
       TemplateCompilerLiveAttributeCompletion.Complete,
       null,
+      multiBinding,
     );
   }
 
@@ -713,6 +779,7 @@ class TemplateCompilerLiveAttributeOwnerAssembly {
     valueParse: TemplateCompilerLiveAttributeValueParse | null = null,
     command: TemplateCompilerLiveBindingCommandResult | null = null,
     instructions: readonly TemplateInstruction[] = [],
+    multiBinding: TemplateCompilerLiveMultiBindingResult | null = null,
   ): TemplateCompilerLiveAttributeContribution {
     return new TemplateCompilerLiveAttributeContribution(
       frame,
@@ -727,6 +794,7 @@ class TemplateCompilerLiveAttributeOwnerAssembly {
       TemplateCompilerLiveAttributeDisposition.Open,
       TemplateCompilerLiveAttributeCompletion.Invalid,
       new TemplateCompilerLiveAttributeOpenReason(reasonKind, summary),
+      multiBinding,
     );
   }
 
@@ -746,6 +814,7 @@ class TemplateCompilerLiveAttributeOwnerAssembly {
     valueParse: TemplateCompilerLiveAttributeValueParse | null = null,
     command: TemplateCompilerLiveBindingCommandResult | null = null,
     instructions: readonly TemplateInstruction[] = [],
+    multiBinding: TemplateCompilerLiveMultiBindingResult | null = null,
   ): TemplateCompilerLiveAttributeContribution {
     return new TemplateCompilerLiveAttributeContribution(
       frame,
@@ -760,6 +829,7 @@ class TemplateCompilerLiveAttributeOwnerAssembly {
       TemplateCompilerLiveAttributeDisposition.Open,
       TemplateCompilerLiveAttributeCompletion.Open,
       new TemplateCompilerLiveAttributeOpenReason(reasonKind, summary),
+      multiBinding,
     );
   }
 }
@@ -808,6 +878,10 @@ class LiveAttributeAssemblyHandleAuthority {
     return new LiveBindingCommandHandleAuthority(this.handles, this.siteKey(frame));
   }
 
+  multiBindingSite(frame: TemplateCompilerLiveAttributeSiteFrame): TemplateCompilerLiveMultiBindingHandleAuthority {
+    return new LiveMultiBindingHandleAuthority(this.handles, this.siteKey(frame));
+  }
+
   private siteKey(frame: TemplateCompilerLiveAttributeSiteFrame): string {
     return `${this.localKey}:attribute:${frame.liveSite.originalForestOrdinal}:${frame.attribute.occurrenceKey}`;
   }
@@ -829,6 +903,20 @@ class LiveBindingCommandHandleAuthority implements TemplateCompilerLiveBindingCo
 
   expression(request: TemplateCompilerLiveExpressionHandleRequest): ProductHandle {
     return this.handles.product(`${this.siteKey}:expression:${request.ordinal}:${request.entryFamily}`);
+  }
+}
+
+class LiveMultiBindingHandleAuthority implements TemplateCompilerLiveMultiBindingHandleAuthority {
+  constructor(
+    private readonly handles: KernelHandleFactory,
+    private readonly siteKey: string,
+  ) {}
+
+  segment(segment: ParsedMultiBindingSegment): TemplateCompilerLiveBindingCommandHandleFactory {
+    return new LiveBindingCommandHandleAuthority(
+      this.handles,
+      `${this.siteKey}:multi-binding:${segment.segmentIndex}`,
+    );
   }
 }
 
@@ -933,6 +1021,7 @@ function compilerReadsFor(
     retainRead(reads, contribution.classification.reads.capturePredicate?.observation ?? null);
     retainRead(reads, contribution.valueParse?.read.observation ?? null);
     for (const read of contribution.command?.compilerReads ?? []) retainRead(reads, read);
+    for (const read of contribution.multiBinding?.compilerReads() ?? []) retainRead(reads, read);
   }
   return reads;
 }

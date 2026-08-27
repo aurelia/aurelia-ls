@@ -1,4 +1,10 @@
-import { Aurelia, customElement, StandardConfiguration } from '@aurelia/runtime-html';
+import {
+  Aurelia,
+  bindable,
+  customAttribute,
+  customElement,
+  StandardConfiguration,
+} from '@aurelia/runtime-html';
 import cursorAsElementEmptyTemplate from './cursor-as-element-empty.html';
 import cursorCommentShieldTemplate from './cursor-comment-shield.html';
 import cursorEmptyTemplate from './cursor-empty.html';
@@ -6,6 +12,7 @@ import cursorFosterTemplate from './cursor-foster.html';
 import cursorLiveDuplicateTemplate from './cursor-live-duplicate.html';
 import cursorLiveEmptyTemplate from './cursor-live-empty.html';
 import cursorLiveNonsingularTemplate from './cursor-live-nonsingular.html';
+import cursorLiveMultiBindingTemplate from './cursor-live-multi-binding.html';
 import cursorMarkerTemplate from './cursor-marker.html';
 import cursorOpenTemplate from './cursor-open.html';
 import cursorProgressionTemplate from './cursor-progression.html';
@@ -87,6 +94,22 @@ class CursorLiveEmpty {}
 })
 class CursorLiveNonsingular {
   title = 'reconstructed';
+}
+
+@customAttribute('cursor-live-multi')
+class CursorLiveMultiAttribute {
+  @bindable first = '';
+  @bindable second = '';
+}
+
+@customElement({
+  name: 'cursor-live-multi-binding',
+  template: cursorLiveMultiBindingTemplate,
+  dependencies: [CursorLiveMultiAttribute],
+})
+class CursorLiveMultiBinding {
+  message = 'commanded';
+  later = 'unreached';
 }
 
 @customElement({
@@ -211,6 +234,7 @@ void new Aurelia()
     CursorLiveDuplicate,
     CursorLiveEmpty,
     CursorLiveNonsingular,
+    CursorLiveMultiBinding,
     CursorCommentShield,
     CursorAsElementEmpty,
     CursorProjection,

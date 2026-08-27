@@ -98,6 +98,21 @@ export function selectTemplateAttributeValueSite(
   }
 }
 
+/**
+ * Select the secondary value lane owned by one command-free inline custom-attribute segment.
+ * This deliberately does not recurse through primary custom-attribute multi-binding selection.
+ */
+export function selectTemplateMultiBindingSegmentValueSite(
+  rawValue: string,
+): TemplateAttributeValueSiteSelection {
+  return new TemplateAttributeValueSiteSelection(
+    TemplateValueSiteKind.CustomAttributeValue,
+    rawValue,
+    'Interpolation',
+    null,
+  );
+}
+
 function interpolationSelection(
   siteKind: TemplateValueSiteKind,
   rawValue: string,

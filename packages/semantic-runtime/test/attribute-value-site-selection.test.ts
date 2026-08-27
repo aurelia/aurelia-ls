@@ -9,6 +9,7 @@ import { ResourceTargetReference } from '../src/resources/resource-reference.js'
 import { AttributeClassificationKind } from '../src/template/attribute-syntax.js';
 import {
   selectTemplateAttributeValueSite,
+  selectTemplateMultiBindingSegmentValueSite,
   TemplateAttributeEmptyValueBindingPolicy,
   TemplateAttributeValueSiteSelection,
   type TemplateAttributeValueSiteSelectionInput,
@@ -199,6 +200,16 @@ describe('product-free attribute value-site selection', () => {
     ];
 
     expect(results.map((result) => result?.emptyValueBindingPolicy)).toEqual([null, null, null]);
+  });
+
+  test('keeps secondary multi-binding interpolation in the custom-attribute lane without recursive splitting', () => {
+    expect(selectTemplateMultiBindingSegmentValueSite('condition ? "left:right" : "right"')).toEqual(
+      selected(
+        TemplateValueSiteKind.CustomAttributeValue,
+        'condition ? "left:right" : "right"',
+        'Interpolation',
+      ),
+    );
   });
 });
 

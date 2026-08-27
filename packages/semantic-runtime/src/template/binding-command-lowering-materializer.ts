@@ -1194,7 +1194,6 @@ export class BindingCommandLoweringMaterializer {
       materializedSegment.syntax,
       bindable,
       parsed.rawValue,
-      'Interpolation',
       materializedSegment.sourceAddressHandle,
       materializedSegment.sourceAddressRecord,
     );

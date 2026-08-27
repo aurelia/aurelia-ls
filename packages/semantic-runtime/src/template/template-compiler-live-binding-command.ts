@@ -23,9 +23,11 @@ import {
   type BindingCommandTailSyntax,
 } from './binding-command-execution.js';
 import type {
+  TemplateCompilerObservedValue,
   TemplateCompilerReadObservation,
   TemplateCompilerReadView,
 } from './compiler-read-view.js';
+import { TemplateCompilerReadKind } from './compiler-read-view.js';
 import type {
   AttributeParserParseResult,
 } from './attribute-syntax.js';
@@ -52,6 +54,8 @@ export const enum TemplateCompilerLiveBindingCommandOpenReasonKind {
   ExecutableBodyOpen = 'executable-body-open',
   /** A command marked built-in had no matching framework handler in this compiler world. */
   BuiltInHandlerAbsent = 'built-in-handler-absent',
+  /** A caller-supplied command receipt belongs to another lookup or compiler scope. */
+  SelectedCommandReadMismatch = 'selected-command-read-mismatch',
   /** The framework handler explicitly retained an open semantic result. */
   HandlerReturnedOpen = 'handler-returned-open',
 }
@@ -123,6 +127,7 @@ export class TemplateCompilerLiveBindingCommandRequest {
     readonly handles: TemplateCompilerLiveBindingCommandHandleFactory,
     readonly bindable: BindableDefinition | null = null,
     readonly expressionParseContext: ExpressionParseContext | null = null,
+    readonly selectedCommandRead: TemplateCompilerObservedValue<BindingCommandExecutable | null> | undefined = undefined,
   ) {}
 }
 
@@ -173,7 +178,20 @@ export type TemplateCompilerLiveBindingCommandResult =
 export function executeTemplateCompilerLiveBindingCommand(
   request: TemplateCompilerLiveBindingCommandRequest,
 ): TemplateCompilerLiveBindingCommandResult {
-  const commandRead = request.compilerReads.readBindingCommand(request.commandName);
+  const commandRead = request.selectedCommandRead
+    ?? request.compilerReads.readBindingCommand(request.commandName);
+  if (
+    commandRead.observation.readKind !== TemplateCompilerReadKind.BindingCommand
+    || commandRead.observation.canonicalKey !== request.commandName
+    || commandRead.observation.compilerScopeIdentityHandle !== request.compilerReads.world.resourceScope.identityHandle
+  ) {
+    return emptyOpen(
+      commandRead.observation,
+      TemplateCompilerLiveBindingCommandOpenReasonKind.SelectedCommandReadMismatch,
+      `Selected binding-command read does not authorize '${request.commandName}' in the current compiler scope.`,
+      commandRead.value,
+    );
+  }
   const command = commandRead.value;
   if (command == null) {
     const message = `Binding command '${request.commandName}' is absent from the current compiler world.`;

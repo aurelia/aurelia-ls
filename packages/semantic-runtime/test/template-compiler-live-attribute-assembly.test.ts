@@ -4,6 +4,9 @@ import { fileURLToPath } from 'node:url';
 import { afterAll, beforeAll, describe, expect, test, vi } from 'vitest';
 
 import { createSemanticRuntime } from '../src/api/runtime.js';
+import { KernelHandleFactory } from '../src/kernel/handles.js';
+import { CustomAttributeDefinition } from '../src/resources/custom-attribute-definition.js';
+import { BindingCommandInstructionAllocation } from '../src/template/binding-command-execution.js';
 import {
   BrowserEffectiveTemplateMaterializer,
   type BrowserEffectiveTemplateEmission,
@@ -11,11 +14,15 @@ import {
 import { parseBrowserTemplateFragmentDraft } from '../src/template/browser-template-parser.js';
 import { selectBrowserTemplateCompilerCarrier } from '../src/template/browser-template-selection.js';
 import {
+  TemplateCompilerObservedValue,
   TemplateCompilerReadView,
+  TemplateCompilerScopeClosureState,
   TemplateCompilerWorldAuthority,
 } from '../src/template/compiler-read-view.js';
+import type { TemplateCompilerReadObservation } from '../src/template/compiler-read-view.js';
 import {
   PropertyBindingInstruction,
+  SetPropertyInstruction,
   TemplateBindingMode,
 } from '../src/template/instruction-ir.js';
 import { TemplateCompilerExecutionSession } from '../src/template/template-compiler-execution.js';
@@ -56,6 +63,25 @@ import type {
   TemplateResourceCompilationEmission,
 } from '../src/template/template-compilation-project-pass.js';
 import { ExpressionParseResultKind } from '../src/expression/parse-result-algebra.js';
+import {
+  HtmlAttributeReference,
+  HtmlIrNodeKind,
+  HtmlNodeReference,
+} from '../src/template/html-ir.js';
+import type { TemplateAttributeBindablesInfo } from '../src/template/compiler-world.js';
+import {
+  TemplateCompilerLiveMultiBindingCompletion,
+  type TemplateCompilerLiveMultiBindingHandleAuthority,
+  TemplateCompilerLiveMultiBindingReasonKind,
+  TemplateCompilerLiveMultiBindingRequest,
+  executeTemplateCompilerLiveMultiBinding,
+} from '../src/template/template-compiler-live-multi-binding.js';
+import type { ParsedMultiBindingSegment } from '../src/template/multi-binding-segments.js';
+import type {
+  TemplateCompilerLiveBindingCommandHandleFactory,
+  TemplateCompilerLiveExpressionHandleRequest,
+  TemplateCompilerLiveInstructionHandleRequest,
+} from '../src/template/template-compiler-live-binding-command.js';
 
 const packageRoot = path.resolve(fileURLToPath(new URL('..', import.meta.url)));
 
@@ -205,6 +231,201 @@ describe('template compiler live attribute owner assembly', () => {
       ordinal.mockRestore();
     }
   }, 30_000);
+
+  test('keeps an open bindables receipt terminal before segment parsing or staged allocation', () => {
+    const parsedAttribute = vi.fn();
+    const compilerReads = {
+      readBindables: () => new TemplateCompilerObservedValue(
+        {} as TemplateAttributeBindablesInfo,
+        {
+          closure: { state: TemplateCompilerScopeClosureState.Open },
+          validate: () => ({ isCurrent: true }),
+        } as unknown as TemplateCompilerReadObservation,
+      ),
+      readParsedAttribute: parsedAttribute,
+    } as unknown as TemplateCompilerReadView;
+    const handles: TemplateCompilerLiveMultiBindingHandleAuthority = {
+      segment() {
+        throw new Error('Open bindables must prevent staged allocation.');
+      },
+    };
+    const result = executeTemplateCompilerLiveMultiBinding(new TemplateCompilerLiveMultiBindingRequest(
+      compilerReads,
+      { tagName: 'div' },
+      new HtmlNodeReference(HtmlIrNodeKind.Element, null, null, null),
+      new HtmlAttributeReference(null, null, 'open-attr'),
+      { name: 'open-attr' } as CustomAttributeDefinition,
+      'value: message',
+      handles,
+    ));
+
+    expect(result.completion).toBe(TemplateCompilerLiveMultiBindingCompletion.Open);
+    expect(result.reason?.reasonKind).toBe(TemplateCompilerLiveMultiBindingReasonKind.BindablesOpen);
+    expect(result.segments).toEqual([]);
+    expect(result.remainder?.text).toBe('value: message');
+    expect(parsedAttribute).not.toHaveBeenCalled();
+  });
+
+  test('executes plain and commanded inline segments in source order', () => {
+    const run = fixture.run('cursor-live-multi-binding');
+    const element = elementWithId(run.binding.execution.forest, 'plain-command');
+    const result = run.assemble(element);
+    const contribution = multiBindingContribution(result);
+    const multiBinding = contribution.multiBinding!;
+
+    expect(result.completion).toBe(TemplateCompilerLiveAttributeCompletion.Complete);
+    expect(multiBinding.completion).toBe(TemplateCompilerLiveMultiBindingCompletion.Complete);
+    expect(multiBinding.segments.map((segment) => ({
+      name: segment.segment.rawName,
+      value: segment.segment.rawValue,
+      command: segment.syntax.command,
+      bindable: segment.selection.bindable?.definition.name,
+    }))).toEqual([
+      { name: 'first', value: 'literal', command: null, bindable: 'first' },
+      { name: 'second.bind', value: 'message', command: 'bind', bindable: 'second' },
+    ]);
+    expect(multiBinding.instructions).toEqual([
+      expect.objectContaining({
+        instructionKind: 'set-property',
+        targetProperty: 'first',
+        value: 'literal',
+      }),
+      expect.objectContaining({
+        instructionKind: 'property-binding',
+        targetProperty: 'second',
+        bindingMode: TemplateBindingMode.ToView,
+      }),
+    ]);
+    expect(multiBinding.instructions[0]).toBeInstanceOf(SetPropertyInstruction);
+    expect(multiBinding.instructions[1]).toBeInstanceOf(PropertyBindingInstruction);
+    expect(multiBinding.segments[0]?.valueParse?.read.value.kind)
+      .toBe(ExpressionParseResultKind.InterpolationAbsent);
+    expect(multiBinding.segments[0]?.valueSelection?.siteKind).toBe('custom-attribute-value');
+    expect(multiBinding.segments[1]?.command?.expressionParses[0]).toMatchObject({
+      expression: 'message',
+      entryFamily: 'IsProperty',
+    });
+    expect(multiBinding.remainder).toBeNull();
+    expect(result.compilerReadsAreClosedAndCurrent()).toBe(true);
+  });
+
+  test('keeps escaped multi-binding delimiters inside their original segment values', () => {
+    const run = fixture.run('cursor-live-multi-binding');
+    const result = run.assemble(elementWithId(run.binding.execution.forest, 'escaped'));
+    const multiBinding = multiBindingContribution(result).multiBinding!;
+
+    expect(result.completion).toBe(TemplateCompilerLiveAttributeCompletion.Complete);
+    expect(multiBinding.segments.map((segment) => segment.segment.rawValue)).toEqual([
+      'left\\;middle\\:right',
+      'tail',
+    ]);
+    expect(multiBinding.instructions).toEqual([
+      expect.objectContaining({ targetProperty: 'first', value: 'left\\;middle\\:right' }),
+      expect.objectContaining({ targetProperty: 'second', value: 'tail' }),
+    ]);
+    expect(multiBinding.segments.every((segment) =>
+      segment.valueParse?.read.value.kind === ExpressionParseResultKind.InterpolationAbsent
+    )).toBe(true);
+  });
+
+  test('terminates at the first non-bindable segment and retains later text only as remainder', () => {
+    const run = fixture.run('cursor-live-multi-binding');
+    const site = reachedMultiBindingSite(run, 'first-invalid');
+    const parsedAttribute = vi.spyOn(run.reads, 'readParsedAttribute');
+    const parsedExpression = vi.spyOn(run.reads, 'readParsedExpression');
+    const multiBinding = executeReachedMultiBinding(
+      run,
+      site,
+      'first: okay; missing.bind: nope; second.bind: later',
+      'first-invalid',
+    );
+
+    expect(multiBinding.completion).toBe(TemplateCompilerLiveMultiBindingCompletion.Invalid);
+    expect(multiBinding.segments.map((segment) => segment.segment.rawName)).toEqual([
+      'first',
+      'missing.bind',
+    ]);
+    expect(multiBinding.terminalSegment).toBe(multiBinding.segments[1]);
+    expect(multiBinding.reason?.reasonKind).toBe(TemplateCompilerLiveMultiBindingReasonKind.BindingToNonBindable);
+    expect(multiBinding.compilerIssue).toMatchObject({
+      issueKind: 'binding-to-non-bindable',
+      frameworkErrorCode: 'AUR0707',
+    });
+    expect(multiBinding.instructions).toEqual([]);
+    expect(multiBinding.stagedInstructions).toEqual([
+      expect.objectContaining({ instructionKind: 'set-property', targetProperty: 'first', value: 'okay' }),
+    ]);
+    expect(multiBinding.remainder).toMatchObject({
+      text: '; second.bind: later',
+    });
+    expect(multiBinding.remainder?.start).toBe(multiBinding.terminalSegment?.segment.end);
+    expect(parsedAttribute.mock.calls.map(([name, value]) => [name, value])).toEqual([
+      ['first', 'okay'],
+      ['missing.bind', 'nope'],
+    ]);
+    expect(parsedExpression.mock.calls.map(([value, entry]) => [value, entry])).toEqual([
+      ['okay', 'Interpolation'],
+    ]);
+  });
+
+  test('classifies an absent segment command as compiler-invalid without committing prefix output', () => {
+    const run = fixture.run('cursor-live-multi-binding');
+    const site = reachedMultiBindingSite(run, 'unknown-command');
+    const parsedAttribute = vi.spyOn(run.reads, 'readParsedAttribute');
+    const parsedExpression = vi.spyOn(run.reads, 'readParsedExpression');
+    const multiBinding = executeReachedMultiBinding(
+      run,
+      site,
+      'first.unknown-command: nope; second: later',
+      'unknown-command',
+    );
+
+    expect(multiBinding.completion).toBe(TemplateCompilerLiveMultiBindingCompletion.Invalid);
+    expect(multiBinding.terminalSegment?.syntax.command).toBe('unknown-command');
+    expect(multiBinding.reason).toMatchObject({
+      reasonKind: TemplateCompilerLiveMultiBindingReasonKind.UnknownBindingCommand,
+      compilerIssue: {
+        issueKind: 'unknown-binding-command',
+        frameworkErrorCode: 'AUR0713',
+      },
+    });
+    expect(multiBinding.instructions).toEqual([]);
+    expect(multiBinding.stagedInstructions).toEqual([]);
+    expect(multiBinding.remainder?.text).toBe('; second: later');
+    expect(parsedAttribute.mock.calls.map(([name, value]) => [name, value])).toEqual([
+      ['first.unknown-command', 'nope'],
+    ]);
+    expect(parsedExpression).not.toHaveBeenCalled();
+  });
+
+  test('retains the terminal parser result when a commanded segment is invalid', () => {
+    const run = fixture.run('cursor-live-multi-binding');
+    const site = reachedMultiBindingSite(run, 'unknown-command');
+    const parsedAttribute = vi.spyOn(run.reads, 'readParsedAttribute');
+    const parsedExpression = vi.spyOn(run.reads, 'readParsedExpression');
+    const multiBinding = executeReachedMultiBinding(
+      run,
+      site,
+      'first.for: { id, id } of items; second: later',
+      'parser-invalid',
+    );
+
+    expect(multiBinding.completion).toBe(TemplateCompilerLiveMultiBindingCompletion.Invalid);
+    expect(multiBinding.reason?.reasonKind).toBe(TemplateCompilerLiveMultiBindingReasonKind.CommandInvalid);
+    expect(multiBinding.instructions).toEqual([]);
+    expect(multiBinding.stagedInstructions).toHaveLength(1);
+    expect(multiBinding.terminalExpressionParseResults).toEqual([
+      expect.objectContaining({ kind: ExpressionParseResultKind.CompleteInputParseError }),
+    ]);
+    expect(multiBinding.abruptCommandFailure).toBeNull();
+    expect(multiBinding.remainder?.text).toBe('; second: later');
+    expect(parsedAttribute.mock.calls.map(([name, value]) => [name, value])).toEqual([
+      ['first.for', '{ id, id } of items'],
+    ]);
+    expect(parsedExpression.mock.calls.map(([value, entry]) => [value, entry])).toEqual([
+      ['{ id, id } of items', 'IsIterator'],
+    ]);
+  });
 });
 
 class LiveAttributeAssemblyRun {
@@ -371,4 +592,92 @@ function elements(
   return forest.readNodes().filter((node): node is TemplateCompilerElementOccurrence =>
     node instanceof TemplateCompilerElementOccurrence && node.tagName === tagName
   );
+}
+
+function elementWithId(
+  forest: TemplateCompilerOccurrenceForest,
+  id: string,
+): TemplateCompilerElementOccurrence {
+  const element = forest.readNodes().find((node): node is TemplateCompilerElementOccurrence =>
+    node instanceof TemplateCompilerElementOccurrence
+    && node.readAttributes().some((attribute) => attribute.name === 'id' && attribute.value === id)
+  );
+  if (element == null) throw new Error(`Expected element #${id}.`);
+  return element;
+}
+
+function multiBindingContribution(result: TemplateCompilerLiveAttributeOwnerResult) {
+  const contribution = result.contributions.find((entry) => entry.multiBinding != null);
+  if (contribution?.multiBinding == null) {
+    throw new Error(`Expected one live multi-binding contribution: ${JSON.stringify(result.contributions.map((entry) => ({
+      name: entry.frame.scalar.qualifiedName,
+      source: entry.frame.source.sourceKind,
+      completion: entry.completion,
+      reason: entry.reason?.summary ?? null,
+      value: entry.frame.scalar.currentValue,
+    })))}`);
+  }
+  return contribution;
+}
+
+function reachedMultiBindingSite(
+  run: LiveAttributeAssemblyRun,
+  elementId: string,
+) {
+  return multiBindingContribution(run.assemble(elementWithId(run.binding.execution.forest, elementId)));
+}
+
+function executeReachedMultiBinding(
+  run: LiveAttributeAssemblyRun,
+  site: ReturnType<typeof multiBindingContribution>,
+  rawValue: string,
+  local: string,
+) {
+  const definition = site.classification.resolvedDefinition;
+  if (!(definition instanceof CustomAttributeDefinition)) {
+    throw new Error('Expected exact custom-attribute definition for live multi-binding execution.');
+  }
+  const node = site.frame.source.authoredElement?.toReference();
+  const attribute = site.frame.source.authoredAttribute?.toReference();
+  if (node == null || attribute == null) throw new Error('Expected exact authored references for the reached site.');
+  return executeTemplateCompilerLiveMultiBinding(new TemplateCompilerLiveMultiBindingRequest(
+    run.reads,
+    site.frame.liveSite.ownerView,
+    node,
+    attribute,
+    definition,
+    rawValue,
+    new TestMultiBindingHandleAuthority(local),
+  ));
+}
+
+class TestMultiBindingHandleAuthority implements TemplateCompilerLiveMultiBindingHandleAuthority {
+  private readonly handles: KernelHandleFactory;
+
+  constructor(local: string) {
+    this.handles = new KernelHandleFactory(`contract:live-multi-binding:${local}`);
+  }
+
+  segment(segment: ParsedMultiBindingSegment): TemplateCompilerLiveBindingCommandHandleFactory {
+    return new TestSegmentHandleAuthority(this.handles, segment.segmentIndex);
+  }
+}
+
+class TestSegmentHandleAuthority implements TemplateCompilerLiveBindingCommandHandleFactory {
+  constructor(
+    private readonly handles: KernelHandleFactory,
+    private readonly segmentIndex: number,
+  ) {}
+
+  instruction(request: TemplateCompilerLiveInstructionHandleRequest): BindingCommandInstructionAllocation {
+    const local = `segment:${this.segmentIndex}:instruction:${request.ordinal}:${request.local}`;
+    return new BindingCommandInstructionAllocation(
+      this.handles.product(local),
+      this.handles.identity(local),
+    );
+  }
+
+  expression(request: TemplateCompilerLiveExpressionHandleRequest) {
+    return this.handles.product(`segment:${this.segmentIndex}:expression:${request.ordinal}:${request.entryFamily}`);
+  }
 }
