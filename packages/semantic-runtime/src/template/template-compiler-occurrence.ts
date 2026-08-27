@@ -119,6 +119,7 @@ const elementAttributes = new WeakMap<TemplateCompilerElementOccurrence, Templat
 const elementTemplateContent = new WeakMap<TemplateCompilerElementOccurrence, TemplateCompilerFragmentOccurrence | null>();
 const attributeOwners = new WeakMap<TemplateCompilerAttributeOccurrence, TemplateCompilerElementOccurrence | null>();
 const attributeValues = new WeakMap<TemplateCompilerAttributeOccurrence, string>();
+const attributeScalarWriteRevisions = new WeakMap<TemplateCompilerAttributeOccurrence, number>();
 
 /**
  * Product-free mutable node occurrence used only inside one compiler execution.
@@ -298,6 +299,7 @@ export class TemplateCompilerAttributeOccurrence {
   ) {
     attributeOwners.set(this, owner);
     attributeValues.set(this, value);
+    attributeScalarWriteRevisions.set(this, 0);
     this.initialValue = value;
   }
 
@@ -307,6 +309,11 @@ export class TemplateCompilerAttributeOccurrence {
 
   get value(): string {
     return attributeValueFor(this);
+  }
+
+  /** Count of committed or direct forest scalar writes since this occurrence was created. */
+  get scalarWriteRevision(): number {
+    return attributeScalarWriteRevisionFor(this);
   }
 
   /** Current ordinal in the owner's live attribute collection, or null while detached. */
@@ -772,6 +779,7 @@ export class TemplateCompilerOccurrenceForest {
   rewriteAttributeValue(attribute: TemplateCompilerAttributeOccurrence, value: string): void {
     this.requireAttribute(attribute);
     attributeValues.set(attribute, value);
+    attributeScalarWriteRevisions.set(attribute, attribute.scalarWriteRevision + 1);
     this._mutationRevision += 1;
   }
 
@@ -1039,6 +1047,9 @@ export class TemplateCompilerOccurrenceForest {
   }
 
   private assertAttributeOriginIndex(attribute: TemplateCompilerAttributeOccurrence): void {
+    if (!Number.isSafeInteger(attribute.scalarWriteRevision) || attribute.scalarWriteRevision < 0) {
+      throw new Error(`Compiler attribute '${attribute.occurrenceKey}' has an invalid scalar-write revision.`);
+    }
     if ((attribute.inputReference == null) !== (attribute.inputIdentityKey == null)) {
       throw new Error(`Compiler attribute '${attribute.occurrenceKey}' has a partial input origin.`);
     }
@@ -1470,6 +1481,14 @@ function attributeValueFor(attribute: TemplateCompilerAttributeOccurrence): stri
   const value = attributeValues.get(attribute);
   if (value == null) throw new Error(`Compiler attribute '${attribute.occurrenceKey}' has no scalar value state.`);
   return value;
+}
+
+function attributeScalarWriteRevisionFor(attribute: TemplateCompilerAttributeOccurrence): number {
+  const revision = attributeScalarWriteRevisions.get(attribute);
+  if (revision == null) {
+    throw new Error(`Compiler attribute '${attribute.occurrenceKey}' has no scalar-write revision.`);
+  }
+  return revision;
 }
 
 function isParentOccurrence(node: TemplateCompilerNodeOccurrence): node is TemplateCompilerParentOccurrence {

@@ -106,20 +106,21 @@ describe('template compiler reached attribute scalar', () => {
     }
   });
 
-  test('captures a qualified seeded input without scanning owner or family inventories', () => {
+  test('captures a qualified seeded input without scans and falsifies unledgered same-value writes', () => {
     const attributes = Array.from({ length: 256 }, (_, index) => `data-${index}="${index}"`).join(' ');
     const fixture = new ReachedAttributeFixture(
       'reached-attribute-cost',
       `<svg ${attributes} xlink:href="#probe"></svg>`,
     );
     try {
-      const hook = fixture.emptyHook(fixture.rootLane);
-      const extraction = fixture.extract(fixture.rootLane, hook);
-      const closure = fixture.execution.closeInvocationBootstrap(hook, extraction);
       const owner = fixture.requiredElement('svg');
       const attribute = owner.readAttributes().find((candidate) => candidate.prefix === 'xlink') ?? null;
       if (attribute == null) throw new Error('Expected one live xlink attribute.');
       const liveOrdinal = owner.readAttributes().length - 1;
+      const hook = fixture.rewriteHook(fixture.rootLane, attribute, '#probe', 'authorized-no-op');
+      const extraction = fixture.extract(fixture.rootLane, hook);
+      const closure = fixture.execution.closeInvocationBootstrap(hook, extraction);
+      expect(hook.operations[0]?.mutationBatch.attributeValueMutations).toEqual([]);
       const readOwnerAttributes = vi.spyOn(owner, 'readAttributes');
       const readOwnerOrdinal = vi.spyOn(attribute, 'readOwnerOrdinal');
       const readForestAttributes = vi.spyOn(fixture.forest, 'readAttributes');
@@ -135,78 +136,88 @@ describe('template compiler reached attribute scalar', () => {
       expect(receipt).toMatchObject({
         state: TemplateCompilerReachedAttributeScalarState.Exact,
         qualifiedName: 'xlink:href',
+        namespaceUri: 'http://www.w3.org/1999/xlink',
+        prefix: 'xlink',
         inputIdentityKey: attribute.inputIdentityKey,
         inputReference: attribute.inputReference,
         generation: null,
         initialValue: '#probe',
         replayedValue: '#probe',
         currentValue: '#probe',
+        scalarWriteRevision: 0,
         transitions: [],
-        globalOperationCount: 0,
+        globalOperationCount: 1,
       });
       expect(readOwnerAttributes).toHaveBeenCalledTimes(1);
       expect(readOwnerOrdinal).not.toHaveBeenCalled();
       expect(readForestAttributes).not.toHaveBeenCalled();
       expect(readFamilyOperations).not.toHaveBeenCalled();
 
-      fixture.forest.rewriteAttributeValue(attribute, '#direct');
-      const unledgered = fixture.execution.captureReachedAttributeScalar(
+      fixture.forest.rewriteAttributeValue(attribute, '#probe');
+      const sameValueWrite = fixture.execution.captureReachedAttributeScalar(
         closure,
         owner,
         attribute,
         liveOrdinal,
       );
-      expect(unledgered).toMatchObject({
-        state: TemplateCompilerReachedAttributeScalarState.UnledgeredCurrentValue,
+      expect(sameValueWrite).toMatchObject({
+        state: TemplateCompilerReachedAttributeScalarState.UnledgeredScalarWriteRevision,
         initialValue: '#probe',
         replayedValue: '#probe',
-        currentValue: '#direct',
+        currentValue: '#probe',
+        scalarWriteRevision: 1,
       });
-      expect(unledgered.isExact()).toBe(false);
-    } finally {
-      fixture.dispose();
-    }
-  });
+      expect(sameValueWrite.isExact()).toBe(false);
 
-  test('rejects a stored closure after same-lane target work and audits its scalar transition index', () => {
-    const fixture = new ReachedAttributeFixture(
-      'reached-attribute-stale-lane',
-      '<div title="before"></div>',
-    );
-    try {
-      const hook = fixture.emptyHook(fixture.rootLane);
-      const extraction = fixture.extract(fixture.rootLane, hook);
-      const closure = fixture.execution.closeInvocationBootstrap(hook, extraction);
-      const attribute = fixture.requiredAttribute('title');
-      const owner = attribute.owner;
-      if (owner == null) throw new Error('Expected one live title attribute.');
+      fixture.forest.rewriteAttributeValue(attribute, '#middle');
+      fixture.forest.rewriteAttributeValue(attribute, '#probe');
+      const roundTripWrites = fixture.execution.captureReachedAttributeScalar(
+        closure,
+        owner,
+        attribute,
+        liveOrdinal,
+      );
+      expect(roundTripWrites).toMatchObject({
+        state: TemplateCompilerReachedAttributeScalarState.UnledgeredScalarWriteRevision,
+        replayedValue: '#probe',
+        currentValue: '#probe',
+        scalarWriteRevision: 3,
+      });
       const targetPlan = createRootTargetPlan(fixture.browser, fixture.rootLane.localKey);
       recordReachableCompilerInputs(targetPlan, fixture.forest);
       const structural = fixture.execution.createStructuralExecution(targetPlan);
       targetPlan.seal();
       fixture.execution.attachTargetPlan(fixture.rootLane, targetPlan);
-      const context = fixture.execution.admitContext(fixture.rootLane, targetPlan.root);
-      const callable = new TemplateCompilerCallableReference(
-        fixture.browser.run.handles.product('stale-lane:callable'),
-        fixture.browser.run.handles.identity('stale-lane:callable'),
-        fixture.browser.run.handles.address('stale-lane:callable'),
-      );
-      const attempt = fixture.execution.beginOperation({
-        operationKey: 'stale-lane:process-content',
-        context,
-        operationKind: TemplateCompilerOperationKind.ProcessContent,
-        executionMechanism: TemplateCompilerOperationExecutionMechanism.StaticCallable,
-        target: fixture.execution.callableEffectTarget(context, callable, owner),
-        causeHandles: [fixture.browser.run.handles.product('stale-lane:cause')],
-      });
-      fixture.execution.rewriteAttributeValue(attempt, attribute, 'after');
-      fixture.execution.completeOperation(
-        attempt,
-        new TemplateCompilerOperationCompletion(TemplateCompilerOperationCompletionKind.Complete),
-      );
+      fixture.execution.admitContext(fixture.rootLane, targetPlan.root);
+      structural.assertCoherent();
+      expect(() => fixture.execution.assertCoherent()).toThrow(/unledgered scalar-write revision/);
+    } finally {
+      fixture.dispose();
+    }
+  });
+
+  test('rejects capture immediately after target admission and audits the pre-target transition index', () => {
+    const fixture = new ReachedAttributeFixture(
+      'reached-attribute-stale-lane',
+      '<div title="before"></div>',
+    );
+    try {
+      const attribute = fixture.requiredAttribute('title');
+      const owner = attribute.owner;
+      if (owner == null) throw new Error('Expected one live title attribute.');
+      const hook = fixture.rewriteHook(fixture.rootLane, attribute, 'hooked', 'pre-target');
+      const extraction = fixture.extract(fixture.rootLane, hook);
+      const closure = fixture.execution.closeInvocationBootstrap(hook, extraction);
+      expect(fixture.execution.captureReachedAttributeScalar(closure, owner, attribute, 0).isExact()).toBe(true);
+      const targetPlan = createRootTargetPlan(fixture.browser, fixture.rootLane.localKey);
+      recordReachableCompilerInputs(targetPlan, fixture.forest);
+      const structural = fixture.execution.createStructuralExecution(targetPlan);
+      targetPlan.seal();
+      fixture.execution.attachTargetPlan(fixture.rootLane, targetPlan);
 
       expect(() => fixture.execution.captureReachedAttributeScalar(closure, owner, attribute, 0))
-        .toThrow(/no longer owns its lane frontier/);
+        .toThrow(/cannot run after target admission/);
+      fixture.execution.admitContext(fixture.rootLane, targetPlan.root);
       structural.assertCoherent();
       expect(() => fixture.execution.assertCoherent()).not.toThrow();
     } finally {
@@ -229,16 +240,6 @@ class ReachedAttributeFixture {
     );
     this.execution = TemplateCompilerExecutionSession.createForForest(`${localKey}:family`, this.forest);
     this.rootLane = this.execution.admitRootInvocation(`${localKey}:root`);
-  }
-
-  emptyHook(lane: TemplateCompilerExecutionLaneReference): TemplateCompilerHookBootstrapResult {
-    return new TemplateCompilerHookBootstrapResult(
-      lane,
-      TemplateCompilerHookBootstrapState.Exact,
-      [],
-      null,
-      null,
-    );
   }
 
   extract(

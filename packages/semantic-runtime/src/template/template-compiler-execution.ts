@@ -709,6 +709,8 @@ export class TemplateCompilerInvocationBootstrapClosure {
 /** Whether a reached attribute's current scalar is fully explained by the committed execution ledger. */
 export const enum TemplateCompilerReachedAttributeScalarState {
   Exact = 'exact',
+  /** Forest writes outnumber the committed scalar transitions retained for this occurrence. */
+  UnledgeredScalarWriteRevision = 'unledgered-scalar-write-revision',
   /** The live forest value differs from the last value explained by committed compiler operations. */
   UnledgeredCurrentValue = 'unledgered-current-value',
   /** One indexed transition does not continue the preceding browser/generated or compiler value. */
@@ -716,10 +718,11 @@ export const enum TemplateCompilerReachedAttributeScalarState {
 }
 
 /**
- * Family-owned event-time scalar receipt for one live attribute reached after exact invocation bootstrap.
+ * Family-owned immutable event-time scalar receipt for one attribute reached after exact invocation bootstrap.
  *
  * Input and generation are independent axes: a seeded input has only input authority, a pure generated attribute has
- * only generation authority, and a generated clone may carry both.
+ * only generation authority, and a generated clone may carry both. Owner and ordinal identify the capture event; later
+ * live placement or topology requires a separate cursor proof.
  */
 export class TemplateCompilerReachedAttributeScalarReceipt {
   readonly #familyAuthority: object;
@@ -733,12 +736,15 @@ export class TemplateCompilerReachedAttributeScalarReceipt {
     readonly attribute: TemplateCompilerAttributeOccurrence,
     readonly liveOrdinal: number,
     readonly qualifiedName: string,
+    readonly namespaceUri: string | null,
+    readonly prefix: string | null,
     readonly inputIdentityKey: IdentityHandle | null,
     readonly inputReference: TemplateCompilerAttributeOccurrence['inputReference'],
     readonly generation: TemplateCompilerOccurrenceGeneration | null,
     readonly initialValue: string,
     readonly replayedValue: string,
     readonly currentValue: string,
+    readonly scalarWriteRevision: number,
     readonly transitions: readonly TemplateCompilerAttributeValueTransition[],
     readonly forestMutationRevision: number,
     readonly globalOperationCount: number,
@@ -1186,7 +1192,7 @@ export class TemplateCompilerExecutionSession {
     return this.bootstrapClosuresByLane.get(lane) ?? null;
   }
 
-  /** Capture one live attribute scalar at the unchanged post-bootstrap lane frontier. */
+  /** Capture immutable event-time scalar authority; live placement remains owned by the reached walker/cursor. */
   captureReachedAttributeScalar(
     closure: TemplateCompilerInvocationBootstrapClosure,
     owner: TemplateCompilerElementOccurrence,
@@ -1202,6 +1208,12 @@ export class TemplateCompilerExecutionSession {
       || this.bootstrapClosuresByLane.get(lane) !== closure
     ) {
       throw new Error(`Compiler invocation lane '${lane.localKey}' has no exact stored bootstrap closure.`);
+    }
+    if (
+      lane.targetPlan != null
+      || (this.contextsByLane.get(lane)?.length ?? 0) > 0
+    ) {
+      throw new Error(`Compiler invocation lane '${lane.localKey}' scalar capture cannot run after target admission.`);
     }
     const laneOperations = this.operationsByLane.get(lane)!;
     if (
@@ -1240,6 +1252,12 @@ export class TemplateCompilerExecutionSession {
     }
     if (
       state === TemplateCompilerReachedAttributeScalarState.Exact
+      && attribute.scalarWriteRevision !== transitions.length
+    ) {
+      state = TemplateCompilerReachedAttributeScalarState.UnledgeredScalarWriteRevision;
+    }
+    if (
+      state === TemplateCompilerReachedAttributeScalarState.Exact
       && replayedValue !== attribute.value
     ) {
       state = TemplateCompilerReachedAttributeScalarState.UnledgeredCurrentValue;
@@ -1254,12 +1272,15 @@ export class TemplateCompilerExecutionSession {
       attribute,
       liveOrdinal,
       qualifiedCompilerAttributeName(attribute),
+      attribute.namespaceUri,
+      attribute.prefix,
       attribute.inputIdentityKey,
       attribute.inputReference,
       attribute.generation,
       attribute.initialValue,
       replayedValue,
       attribute.value,
+      attribute.scalarWriteRevision,
       [...transitions],
       this.forest.mutationRevision,
       this.operations.length,
@@ -1901,7 +1922,14 @@ export class TemplateCompilerExecutionSession {
     ) {
       throw new Error(`Compiler execution family '${this.familyKey}' has incoherent operation indexes.`);
     }
-    for (const [attribute, replayedValue] of replayedAttributeValues) {
+    for (const attribute of this.forest.readAttributes()) {
+      const transitionCount = this.attributeValueTransitionsByAttribute.get(attribute)?.length ?? 0;
+      if (attribute.scalarWriteRevision !== transitionCount) {
+        throw new Error(
+          `Compiler attribute '${attribute.occurrenceKey}' has an unledgered scalar-write revision.`,
+        );
+      }
+      const replayedValue = replayedAttributeValues.get(attribute) ?? attribute.initialValue;
       if (attribute.value !== replayedValue) {
         throw new Error(
           `Compiler attribute '${attribute.occurrenceKey}' does not match its committed scalar mutation history.`,
