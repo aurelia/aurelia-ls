@@ -23,6 +23,7 @@ import {
   TemplateCompilerLiveAttributeSourceKind,
 } from '../src/template/template-compiler-live-attribute-assembly.js';
 import { TemplateCompilerLiveAttributeDisposition } from '../src/template/template-compiler-live-attribute-owner.js';
+import { TemplateCompilerLiveAllocationSnapshotState } from '../src/template/template-compiler-live-allocation.js';
 import {
   TemplateCompilerHydrateElementBlockerKind,
   TemplateCompilerHydrateElementBlockerScope,
@@ -30,6 +31,7 @@ import {
   TemplateCompilerHydrateElementProjectionState,
   TemplateCompilerHydrateElementStagingState,
 } from '../src/template/template-compiler-hydrate-element-staging.js';
+import { TemplateCompilerRootCompilationStateKind } from '../src/template/template-compiler-root-state.js';
 import {
   buildTemplateCompilerNormalizedSiteIndex,
   TemplateCompilerNormalizedSiteIndexState,
@@ -62,7 +64,12 @@ import {
   TemplateCompilerSiteCursorSurrogateValidationOutcome,
   TemplateCompilerSiteCursorTextEvent,
   type TemplateCompilerSiteCursorTranscript,
+  type TemplateCompilerSiteCursorResult,
 } from '../src/template/template-compiler-site-cursor.js';
+import {
+  TemplateCompilerOrdinaryRootCompletionRefusalKind,
+  TemplateCompilerOrdinaryRootCompletionState,
+} from '../src/template/template-compiler-root-completion.js';
 import {
   TemplateCompilerOccurrenceOnlyDisposition,
   TemplateCompilerSiteSpendDisposition,
@@ -114,6 +121,28 @@ describe('template compiler root site cursor', () => {
     });
     expect(staticText?.occurrenceOnlyRow?.disposition).toBe('static-text-pass-through');
     expect(staticText?.instructionStaging).toBeNull();
+    expect(transcript.allocationSnapshot.state).toBe(TemplateCompilerLiveAllocationSnapshotState.Complete);
+    expect(transcript.allocationSnapshot.instructionAllocations).toHaveLength(1);
+    expect(transcript.allocationSnapshot.instructionAllocations[0]?.instruction)
+      .toBe(dynamic?.instructionStaging?.instructions[0]);
+    expect(transcript.allocationSnapshot.sourceAllocations).toHaveLength(1);
+    expect(transcript.allocationSnapshot.sourceAllocations[0]?.source)
+      .toBe(dynamic?.instructionStaging?.holes[0]?.source);
+    expect(transcript.allocationSnapshot.expressionAllocations).toEqual([]);
+    const retainedInstruction = transcript.allocationSnapshot.instructionAllocations[0]!;
+    const retainedSource = transcript.allocationSnapshot.sourceAllocations[0]!;
+    expect(() => retainedInstruction.bind({}, retainedInstruction.instruction!)).toThrow();
+    expect(() => retainedSource.bind({}, retainedSource.source!)).toThrow();
+    const laterPhase = transcript.allocationSnapshot.ledger.namespace.beginPhase(
+      `${transcript.binding.lane.localKey}:target-plan-test`,
+    );
+    expect(() => laterPhase.allocateInstruction(
+      `${transcript.binding.lane.localKey}:target-plan-test:text`,
+      'collision-canary',
+      retainedInstruction.instructionKind,
+      retainedInstruction.sourceAddressHandle,
+      retainedInstruction.instructionLocal,
+    )).toThrow();
     expect(transcript.nextTranscriptOrdinal).toBe(transcript.events.length);
     expect(transcript.nextSiteEventOrdinal).toBe(transcript.ledger.completion.nextSiteEventOrdinal);
   });
@@ -229,6 +258,134 @@ describe('template compiler root site cursor', () => {
     expect(elementTags(transcript)).not.toContain('span');
   });
 
+  test('accumulates native slot output only from reached shadow-root slots', () => {
+    const validResult = fixture.run('cursor-slot-valid').execute();
+    const valid = requireTranscript(validResult);
+    expect(valid.frontier).toBeNull();
+    expect(valid.rootState.stateKind).toBe(TemplateCompilerRootCompilationStateKind.Complete);
+    expect(valid.rootState.hasSlots).toBe(true);
+    expect(valid.rootState.nativeSlots).toHaveLength(1);
+    expect(valid.rootState.nativeSlots[0]?.element.tagName).toBe('slot');
+    expect(eventsOf(valid, TemplateCompilerSiteCursorAttributeEvent).map((event) =>
+      event.scalar.qualifiedName
+    )).toEqual(['name.bind']);
+    const completedSlot = validResult.completion?.receipt?.elementSites.find((site) =>
+      site.event.lookupName === 'slot'
+    );
+    expect(completedSlot?.owner.contributions.map((contribution) => contribution.syntax?.target)).toEqual(['name']);
+    expect(completedSlot?.owner.instructionStaging.directRowTail).toHaveLength(1);
+
+    const inert = fixture.transcript('cursor-slot-inert');
+    expect(inert.frontier).toBeNull();
+    expect(inert.rootState.stateKind).toBe(TemplateCompilerRootCompilationStateKind.Complete);
+    expect(inert.rootState.hasSlots).toBe(false);
+    expect(inert.rootState.nativeSlots).toEqual([]);
+    expect(eventsOf(inert, TemplateCompilerSiteCursorSubtreeExclusionEvent)).toHaveLength(1);
+  });
+
+  test('rejects a reached native slot before attributes, descendants, and later siblings without Shadow DOM', () => {
+    const result = fixture.run('cursor-slot-invalid').execute();
+    const transcript = requireTranscript(result);
+    expect(transcript.frontier?.frontierKind)
+      .toBe(TemplateCompilerSiteCursorFrontierKind.NativeSlotWithoutShadowDomInvalid);
+    expect(transcript.rootState.stateKind).toBe(TemplateCompilerRootCompilationStateKind.Invalid);
+    expect(transcript.rootState.hasSlots).toBe(false);
+    expect(transcript.rootState.nativeSlots).toHaveLength(1);
+    expect(elementTags(transcript)).toEqual(['slot']);
+    expect(eventsOf(transcript, TemplateCompilerSiteCursorAttributeEvent)).toEqual([]);
+    expect(transcript.ledger.spends).toEqual([]);
+    expect(transcript.ledger.blockedByFrontier).toHaveLength(3);
+    expect(result.completion?.state).toBe(TemplateCompilerOrdinaryRootCompletionState.Ineligible);
+    expect(result.completion?.refusals.map((refusal) => refusal.refusalKind)).toEqual([
+      TemplateCompilerOrdinaryRootCompletionRefusalKind.CursorFrontier,
+      TemplateCompilerOrdinaryRootCompletionRefusalKind.RootStateInvalid,
+      TemplateCompilerOrdinaryRootCompletionRefusalKind.RootPhaseIncomplete,
+    ]);
+    expect(result.completion?.receipt).toBeNull();
+  });
+
+  test('mints nominal ordinary-root receipts without using authored accounting openness as the gate', () => {
+    const names = [
+      'cursor-as-element-empty',
+      'cursor-comment-shield',
+      'cursor-empty',
+      'cursor-foster',
+      'cursor-live-duplicate',
+      'cursor-live-multi-binding',
+      'cursor-live-nonsingular',
+      'cursor-live-staging',
+      'cursor-progression',
+      'cursor-slot-inert',
+      'cursor-slot-valid',
+      'cursor-wide',
+    ];
+    for (const name of names) {
+      const result = fixture.run(name).execute();
+      const transcript = requireTranscript(result);
+      const completion = result.completion;
+      const receipt = completion?.receipt;
+      const completionLabel = `${name}: ${completion?.refusals.map((refusal) => refusal.refusalKind).join(',')}`;
+      expect(completion?.state, completionLabel).toBe(TemplateCompilerOrdinaryRootCompletionState.Complete);
+      expect(completion?.refusals, name).toEqual([]);
+      expect(receipt?.isModuleConstructed(), name).toBe(true);
+      expect(receipt?.isCurrent(), name).toBe(true);
+      expect(receipt?.transcript, name).toBe(transcript);
+      expect(receipt?.endpoint, name).toBe(result.siteEndpoint);
+      expect(receipt?.endpoint.laneOperationCount, name).toBe(transcript.endLaneOperationCount);
+      expect(receipt?.compilerReads, name).toEqual(transcript.compilerReads.readAll());
+      expect(receipt?.elementSites.map((site) => site.event.element), name)
+        .toEqual(transcript.attributeOwners.map((owner) => owner.element));
+      expect(new Set(receipt?.elementSites.map((site) => site.rowSlotKey)).size, name)
+        .toBe(receipt?.elementSites.length);
+    }
+
+    const duplicate = requireTranscript(fixture.run('cursor-live-duplicate').execute());
+    expect(duplicate.ledger.state).toBe('open');
+    expect(duplicate.ledger.rawUnspent).toHaveLength(2);
+  });
+
+  test('never promotes the current typed ordinary-root frontiers into completion receipts', () => {
+    const names = [
+      'cursor-containerless',
+      'cursor-live-empty',
+      'cursor-marker',
+      'cursor-open',
+      'cursor-process-content-arbitrary',
+      'cursor-projection',
+      'cursor-shadow-containerless',
+      'cursor-shapes',
+      'cursor-slot-invalid',
+      'cursor-slots-containerless',
+      'cursor-surrogate-invalid',
+      'cursor-surrogate-valid',
+      'cursor-template-controller',
+      'cursor-usage-containerless',
+    ];
+    for (const name of names) {
+      const result = fixture.run(name).execute();
+      expect(requireTranscript(result).frontier, name).not.toBeNull();
+      expect(result.completion?.state, name).toBe(TemplateCompilerOrdinaryRootCompletionState.Ineligible);
+      expect(result.completion?.receipt, name).toBeNull();
+      expect(result.completion?.refusals.map((refusal) => refusal.refusalKind), name)
+        .toContain(TemplateCompilerOrdinaryRootCompletionRefusalKind.CursorFrontier);
+    }
+  });
+
+  test('revokes a completion receipt when its exact pre-plan forest endpoint advances', () => {
+    const run = fixture.freshRun('cursor-progression');
+    const result = run.execute();
+    const receipt = result.completion?.receipt;
+    if (receipt == null || result.siteEndpoint == null) throw new Error('Expected fresh current completion receipt.');
+    expect(receipt.isCurrent()).toBe(true);
+
+    const attribute = run.binding.forest.readAttributes()[0];
+    if (attribute == null) throw new Error('Expected one live attribute for endpoint invalidation.');
+    run.binding.forest.rewriteAttributeValue(attribute, `${attribute.value}:after-receipt`);
+
+    expect(run.binding.execution.siteExecutionEndpointIsCurrent(result.siteEndpoint)).toBe(false);
+    expect(receipt.isCurrent()).toBe(false);
+  });
+
   test('keeps central structural effects and reached live invalidity distinct', () => {
     const expected = new Map<string, TemplateCompilerSiteCursorFrontierKind>([
       ['cursor-template-controller', TemplateCompilerSiteCursorFrontierKind.AfterAttributesBeforeTemplateController],
@@ -328,11 +485,18 @@ describe('template compiler root site cursor', () => {
     ] as const;
     let named: TemplateCompilerSiteCursorTranscript | null = null;
     for (const [name, expectedName, expectedCarrier] of cases) {
-      const transcript = fixture.transcript(name);
+      const result = fixture.run(name).execute();
+      const transcript = requireTranscript(result);
       if (name === 'cursor-process-content-named') named = transcript;
       const processEvents = eventsOf(transcript, TemplateCompilerSiteCursorProcessContentEvent);
       expect(processEvents, name).toHaveLength(1);
       const event = processEvents[0]!;
+      expect(result.siteEndpoint?.siteOperations, name).toEqual([event.result.operation]);
+      expect(result.siteEndpoint?.laneOperationCount, name).toBe(transcript.endLaneOperationCount);
+      expect(result.completion?.state, name).toBe(TemplateCompilerOrdinaryRootCompletionState.Ineligible);
+      expect(result.completion?.receipt, name).toBeNull();
+      expect(result.completion?.refusals.map((refusal) => refusal.refusalKind), name)
+        .toContain(TemplateCompilerOrdinaryRootCompletionRefusalKind.CursorFrontier);
       expect(event.result.metadata.name, name).toBe(expectedName);
       expect(event.result.nameCarrier?.value ?? null, name).toBe(expectedCarrier);
       expect(event.result.operation.executionOrdinal, name).toBe(transcript.startGlobalOperationCount);
@@ -519,6 +683,18 @@ describe('template compiler root site cursor', () => {
       'set-property',
       'property-binding',
     ]);
+    const segmentExpressions = transcript.allocationSnapshot.expressionAllocations.filter((allocation) =>
+      allocation.entryFamily === 'Interpolation'
+    );
+    expect(segmentExpressions.length).toBeGreaterThan(0);
+    expect(segmentExpressions.every((allocation) => allocation.sourceSpan != null)).toBe(true);
+    const retainedExpression = segmentExpressions[0]!;
+    expect(() => retainedExpression.bind(
+      {},
+      retainedExpression.compilerRead!,
+      retainedExpression.result!,
+      retainedExpression.sourceSpan,
+    )).toThrow();
   });
 
   test('retains exact owner-scoped instruction staging on the cursor transcript', () => {
@@ -536,6 +712,13 @@ describe('template compiler root site cursor', () => {
     expect(select?.instructionStaging.directRowTail.map((instruction) =>
       'targetProperty' in instruction ? instruction.targetProperty : null
     )).toEqual(['multiple', 'value']);
+    expect(transcript.allocationSnapshot.state).toBe(TemplateCompilerLiveAllocationSnapshotState.Complete);
+    expect(transcript.allocationSnapshot.instructionAllocations.every((entry) => entry.instruction != null)).toBe(true);
+    expect(transcript.allocationSnapshot.expressionAllocations.map((entry) => entry.expression).sort())
+      .toEqual(['literal', 'multiple', 'static', 'value']);
+    expect(transcript.allocationSnapshot.expressionAllocations.every((entry) =>
+      entry.compilerRead != null && entry.result != null
+    )).toBe(true);
 
     expect(transcript.hydrateElementEnvelopes).toHaveLength(4);
     const byTag = new Map(transcript.hydrateElementEnvelopes.map((envelope) => [
@@ -600,7 +783,6 @@ describe('template compiler root site cursor', () => {
       binding: run.binding,
       compilerReads: foreignReads,
       preWalkAuthority: TemplateCompilerPreWalkRemainderAuthority.capture(run.binding),
-      handles: fixture.browserRun.handles,
     });
     expect(wrongReads.state).toBe(TemplateCompilerSiteCursorResultState.Mismatch);
 
@@ -608,7 +790,6 @@ describe('template compiler root site cursor', () => {
       binding: run.binding,
       compilerReads: run.reads(),
       preWalkAuthority: TemplateCompilerPreWalkRemainderAuthority.capture(foreign.binding),
-      handles: fixture.browserRun.handles,
     });
     expect(wrongPrewalk.state).toBe(TemplateCompilerSiteCursorResultState.Mismatch);
   });
@@ -642,22 +823,22 @@ class CursorRun {
     );
   }
 
-  transcript(): TemplateCompilerSiteCursorTranscript {
-    const result = executeTemplateCompilerRootSiteCursor({
+  execute(): TemplateCompilerSiteCursorResult {
+    return executeTemplateCompilerRootSiteCursor({
       binding: this.binding,
       compilerReads: this.reads(),
       preWalkAuthority: TemplateCompilerPreWalkRemainderAuthority.capture(this.binding),
-      handles: this.fixture.browserRun.handles,
     });
-    if (result.state !== TemplateCompilerSiteCursorResultState.Transcript || result.transcript == null) {
-      throw new Error(`Expected cursor transcript: ${result.reasons.map((reason) => reason.summary).join(' ')}`);
-    }
-    return result.transcript;
+  }
+
+  transcript(): TemplateCompilerSiteCursorTranscript {
+    return requireTranscript(this.execute());
   }
 }
 
 class CursorFixture {
   private readonly runs = new Map<string, CursorRun>();
+  private freshRunOrdinal = 0;
 
   private constructor(
     readonly runtime: Awaited<ReturnType<typeof createSemanticRuntime>>,
@@ -696,6 +877,18 @@ class CursorFixture {
 
   transcript(name: string): TemplateCompilerSiteCursorTranscript {
     return this.run(name).transcript();
+  }
+
+  freshRun(name: string): CursorRun {
+    const compilation = this.compilation(name);
+    const family = this.frontDoor.familyForOwner(compilation.familyOwnerHandle);
+    if (family == null) throw new Error(`Expected current cursor family '${name}'.`);
+    const ordinal = this.freshRunOrdinal++;
+    return new CursorRun(
+      this,
+      compilation,
+      this.bind(compilation, family, `cursor-browser:${name}:fresh:${ordinal}`),
+    );
   }
 
   transcriptWithUnledgeredRewrite(name: string, attributeName: string): TemplateCompilerSiteCursorTranscript {
@@ -799,6 +992,13 @@ function eventsOf<TEvent>(
   Type: abstract new (...args: never[]) => TEvent,
 ): readonly TEvent[] {
   return transcript.events.filter((event): event is TemplateCompilerSiteCursorEvent & TEvent => event instanceof Type);
+}
+
+function requireTranscript(result: TemplateCompilerSiteCursorResult): TemplateCompilerSiteCursorTranscript {
+  if (result.state !== TemplateCompilerSiteCursorResultState.Transcript || result.transcript == null) {
+    throw new Error(`Expected cursor transcript: ${result.reasons.map((reason) => reason.summary).join(' ')}`);
+  }
+  return result.transcript;
 }
 
 type TemplateCompilerSiteCursorEvent = TemplateCompilerSiteCursorTranscript['events'][number];

@@ -25,6 +25,9 @@ import cursorProcessContentArbitraryTemplate from './cursor-process-content-arbi
 import cursorProcessContentDuplicateNameTemplate from './cursor-process-content-duplicate-name.html';
 import cursorShapesTemplate from './cursor-shapes.html';
 import cursorShadowContainerlessTemplate from './cursor-shadow-containerless.html';
+import cursorSlotInertTemplate from './cursor-slot-inert.html';
+import cursorSlotInvalidTemplate from './cursor-slot-invalid.html';
+import cursorSlotValidTemplate from './cursor-slot-valid.html';
 import cursorSlotsContainerlessTemplate from './cursor-slots-containerless.html';
 import cursorSurrogateInvalidTemplate from './cursor-surrogate-invalid.html';
 import cursorSurrogateValidTemplate from './cursor-surrogate-valid.html';
@@ -278,6 +281,31 @@ class CursorSlotsContainerlessLeaf {}
 class CursorSlotsContainerless {}
 
 @customElement({
+  name: 'cursor-slot-valid',
+  template: cursorSlotValidTemplate,
+  shadowOptions: { mode: 'open' },
+})
+class CursorSlotValid {
+  slotName = 'content';
+}
+
+@customElement({
+  name: 'cursor-slot-invalid',
+  template: cursorSlotInvalidTemplate,
+})
+class CursorSlotInvalid {
+  message = 'host';
+  child = 'child';
+  later = 'later';
+}
+
+@customElement({
+  name: 'cursor-slot-inert',
+  template: cursorSlotInertTemplate,
+})
+class CursorSlotInert {}
+
+@customElement({
   name: 'cursor-open',
   template: cursorOpenTemplate,
 })
@@ -319,6 +347,9 @@ void new Aurelia()
     CursorUsageContainerless,
     CursorShadowContainerless,
     CursorSlotsContainerless,
+    CursorSlotValid,
+    CursorSlotInvalid,
+    CursorSlotInert,
     CursorOpen,
     CursorSurrogateValid,
   )

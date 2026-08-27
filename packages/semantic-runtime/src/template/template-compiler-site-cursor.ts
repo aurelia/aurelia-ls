@@ -1,6 +1,7 @@
 import type { CustomElementDefinition } from '../resources/custom-element-definition.js';
-import type { KernelHandleFactory } from '../kernel/handles.js';
-import { ExpressionParseResultKind } from '../expression/parse-result-algebra.js';
+import type { AddressHandle, ProductHandle } from '../kernel/handles.js';
+import { ExpressionParseResultKind, type ExpressionParseResult } from '../expression/parse-result-algebra.js';
+import type { SourceSpan } from '../expression/source-span.js';
 import {
   AttributeSyntaxKind,
 } from './attribute-syntax.js';
@@ -9,6 +10,7 @@ import {
 } from './compiler-read-view.js';
 import type {
   TemplateCompilerObservedValue,
+  TemplateCompilerReadObservation,
   TemplateCompilerReadView,
 } from './compiler-read-view.js';
 import type { TemplateResolvedResource } from './compiler-world.js';
@@ -53,8 +55,15 @@ import {
 } from './template-compiler-site-spend-ledger.js';
 import type { TemplateCompilerAuthoredSiteRemainderEvidence } from './template-compiler-site-spend-ledger.js';
 import type { HtmlElement } from './html-ir.js';
-import type { TextBindingInstruction } from './instruction-ir.js';
-import type { TemplateCompilerSiteExecutionDriverReference } from './template-compiler-execution.js';
+import {
+  TemplateInstructionKind,
+  type TemplateInstruction,
+  type TextBindingInstruction,
+} from './instruction-ir.js';
+import type {
+  TemplateCompilerSiteExecutionDriverReference,
+  TemplateCompilerSiteExecutionEndpointReceipt,
+} from './template-compiler-execution.js';
 import {
   executeTemplateCompilerProcessContent,
   planTemplateCompilerProcessContent,
@@ -65,6 +74,7 @@ import {
   runtimeElementLookupName,
   runtimeElementResourceName,
 } from './runtime-dom-name.js';
+import { TemplateCompilerNativeSlotDecisionKind } from './native-slot-compiler-semantics.js';
 import {
   TemplateCompilerBrowserOriginRouteKind,
 } from './template-compiler-authored-origin-index.js';
@@ -106,6 +116,20 @@ import {
   type TemplateCompilerHydrateElementStagingResult,
   stageTemplateCompilerHydrateElementEnvelope,
 } from './template-compiler-hydrate-element-staging.js';
+import {
+  TemplateCompilerLiveAllocationNamespace,
+  TemplateCompilerLiveSourceAllocationRole,
+  type TemplateCompilerLiveAllocationLedger,
+  type TemplateCompilerLiveAllocationSnapshot,
+} from './template-compiler-live-allocation.js';
+import {
+  TemplateCompilerRootCompilationAccumulator,
+  type TemplateCompilerRootCompilationState,
+} from './template-compiler-root-state.js';
+import {
+  completeTemplateCompilerOrdinaryRoot,
+  type TemplateCompilerOrdinaryRootCompletionResult,
+} from './template-compiler-root-completion.js';
 
 const siteCursorConstructionAuthority = {};
 
@@ -113,6 +137,7 @@ export const enum TemplateCompilerSiteCursorAdmissionReasonKind {
   ForeignBinding = 'foreign-binding',
   ForeignPreWalkAuthority = 'foreign-pre-walk-authority',
   CompilerReadWorldMismatch = 'compiler-read-world-mismatch',
+  BrowserPublicationUnavailable = 'browser-publication-unavailable',
   InvocationNoLongerCurrent = 'invocation-no-longer-current',
 }
 
@@ -134,14 +159,19 @@ export class TemplateCompilerSiteCursorTranscript {
     readonly events: readonly TemplateCompilerSiteCursorEvent[],
     readonly attributeOwners: readonly TemplateCompilerLiveAttributeOwnerResult[],
     readonly hydrateElementEnvelopes: readonly TemplateCompilerHydrateElementStagingResult[],
+    readonly rootState: TemplateCompilerRootCompilationState,
+    readonly allocationSnapshot: TemplateCompilerLiveAllocationSnapshot,
     readonly ledger: TemplateCompilerSiteSpendLedgerResult,
     readonly frontier: TemplateCompilerSiteCursorFrontier | null,
     readonly startForestMutationRevision: number,
     readonly endForestMutationRevision: number,
     readonly startGlobalOperationCount: number,
     readonly endGlobalOperationCount: number,
+    readonly startLaneOperationCount: number,
+    readonly endLaneOperationCount: number,
     readonly expectedEndForestMutationRevision: number,
     readonly expectedEndGlobalOperationCount: number,
+    readonly expectedEndLaneOperationCount: number,
     readonly nextTranscriptOrdinal: number,
     readonly nextSiteEventOrdinal: number,
   ) {
@@ -149,7 +179,8 @@ export class TemplateCompilerSiteCursorTranscript {
     const frontierIsCurrentnessLoss = frontier?.frontierKind
       === TemplateCompilerSiteCursorFrontierKind.CurrentnessLost;
     const currentnessActuallyChanged = expectedEndForestMutationRevision !== endForestMutationRevision
-      || expectedEndGlobalOperationCount !== endGlobalOperationCount;
+      || expectedEndGlobalOperationCount !== endGlobalOperationCount
+      || expectedEndLaneOperationCount !== endLaneOperationCount;
     if (
       authority !== siteCursorConstructionAuthority
       || !binding.isModuleConstructed()
@@ -171,6 +202,11 @@ export class TemplateCompilerSiteCursorTranscript {
         attributeOwners,
         hydrateElementEnvelopes,
       )
+      || !rootStateIsCoherent(binding, events, rootState)
+      || !allocationSnapshot.isModuleConstructed()
+      || allocationSnapshot.ledger.rootSiteKey !== binding.lane.localKey
+      || allocationSnapshot.ledger.namespace.authority !== binding.browserEmission.publication
+      || !liveAllocationSnapshotIsCoherent(events, attributeOwners, allocationSnapshot)
       || nextTranscriptOrdinal !== events.length
       || (frontier == null
         ? events.some((event) => event instanceof TemplateCompilerSiteCursorFrontier)
@@ -201,10 +237,15 @@ export class TemplateCompilerSiteCursorResult {
   constructor(
     readonly transcript: TemplateCompilerSiteCursorTranscript | null,
     readonly reasons: readonly TemplateCompilerSiteCursorAdmissionReason[],
+    readonly siteEndpoint: TemplateCompilerSiteExecutionEndpointReceipt | null,
+    readonly completion: TemplateCompilerOrdinaryRootCompletionResult | null,
   ) {
     this.state = transcript == null
       ? TemplateCompilerSiteCursorResultState.Mismatch
       : TemplateCompilerSiteCursorResultState.Transcript;
+    if ((transcript == null) !== (completion == null) || (transcript == null && siteEndpoint != null)) {
+      throw new Error('Template compiler cursor result lost transcript, endpoint, or completion ownership.');
+    }
   }
 }
 
@@ -212,8 +253,6 @@ export interface TemplateCompilerRootSiteCursorRequest {
   readonly binding: TemplateCompilerSiteInvocationBinding;
   readonly compilerReads: TemplateCompilerReadView;
   readonly preWalkAuthority: TemplateCompilerPreWalkRemainderAuthority;
-  /** Candidate-local handle namespace for staged live instructions and expression parses. */
-  readonly handles: KernelHandleFactory;
 }
 
 interface TemplateCompilerSiteCursorContainerFrame {
@@ -230,8 +269,17 @@ export function executeTemplateCompilerRootSiteCursor(
   request: TemplateCompilerRootSiteCursorRequest,
 ): TemplateCompilerSiteCursorResult {
   const reasons = cursorAdmissionReasons(request);
-  if (reasons.length > 0) return new TemplateCompilerSiteCursorResult(null, reasons);
-  return new TemplateCompilerSiteCursorResult(new TemplateCompilerRootSiteCursor(request).execute(), []);
+  if (reasons.length > 0) return new TemplateCompilerSiteCursorResult(null, reasons, null, null);
+  const transcript = new TemplateCompilerRootSiteCursor(request).execute();
+  const siteEndpoint = transcript.frontier?.frontierKind === TemplateCompilerSiteCursorFrontierKind.CurrentnessLost
+    ? null
+    : request.binding.execution.captureSiteExecutionEndpoint(request.binding.bootstrapClosure);
+  return new TemplateCompilerSiteCursorResult(
+    transcript,
+    [],
+    siteEndpoint,
+    completeTemplateCompilerOrdinaryRoot(transcript, siteEndpoint),
+  );
 }
 
 function cursorAdmissionReasons(
@@ -260,6 +308,12 @@ function cursorAdmissionReasons(
     reasons.push(new TemplateCompilerSiteCursorAdmissionReason(
       TemplateCompilerSiteCursorAdmissionReasonKind.CompilerReadWorldMismatch,
       'Root cursor compiler reads belong to another compiler-world object.',
+    ));
+  }
+  if (!binding.browserEmission.publication.isCurrent()) {
+    reasons.push(new TemplateCompilerSiteCursorAdmissionReason(
+      TemplateCompilerSiteCursorAdmissionReasonKind.BrowserPublicationUnavailable,
+      'Root cursor browser-effective publication authority is no longer current.',
     ));
   }
   const current = bindTemplateCompilerRootSiteInvocation({
@@ -291,8 +345,12 @@ class TemplateCompilerRootSiteCursor {
   private readonly events: TemplateCompilerSiteCursorEvent[] = [];
   private readonly attributeOwners: TemplateCompilerLiveAttributeOwnerResult[] = [];
   private readonly hydrateElementEnvelopes: TemplateCompilerHydrateElementStagingResult[] = [];
+  private readonly rootState: TemplateCompilerRootCompilationAccumulator;
+  private readonly allocations: TemplateCompilerLiveAllocationLedger;
+  private readonly allocationNamespace: TemplateCompilerLiveAllocationNamespace;
   private readonly startForestMutationRevision: number;
   private readonly startGlobalOperationCount: number;
+  private readonly startLaneOperationCount: number;
   private transcriptOrdinal = 0;
   private phaseKind = TemplateCompilerSiteCursorPhaseKind.PreWalkRemainders;
   private frontier: TemplateCompilerSiteCursorFrontier | null = null;
@@ -305,6 +363,10 @@ class TemplateCompilerRootSiteCursor {
     this.ledger = new TemplateCompilerSiteSpendLedger(this.binding.index);
     this.startForestMutationRevision = this.binding.forest.mutationRevision;
     this.startGlobalOperationCount = this.binding.execution.sequence.readOperations().length;
+    this.startLaneOperationCount = this.binding.execution.sequence.readLaneOperations(this.binding.lane).length;
+    this.rootState = new TemplateCompilerRootCompilationAccumulator(this.binding.definition);
+    this.allocationNamespace = new TemplateCompilerLiveAllocationNamespace(this.binding.browserEmission.publication);
+    this.allocations = this.allocationNamespace.beginPhase(this.binding.lane.localKey);
     this.semantics = new TemplateCompilerSiteCursorSemanticResolver(
       this.binding,
       this.compilerReads,
@@ -327,10 +389,13 @@ class TemplateCompilerRootSiteCursor {
     const ledger = this.ledger.finish(completion);
     const endForestMutationRevision = this.binding.forest.mutationRevision;
     const endGlobalOperationCount = this.binding.execution.sequence.readOperations().length;
+    const endLaneOperationCount = this.binding.execution.sequence.readLaneOperations(this.binding.lane).length;
     const expectedEndForestMutationRevision = this.siteDriver?.expectedForestMutationRevision
       ?? this.startForestMutationRevision;
     const expectedEndGlobalOperationCount = this.siteDriver?.expectedGlobalOperationCount
       ?? this.startGlobalOperationCount;
+    const expectedEndLaneOperationCount = this.siteDriver?.expectedLaneOperationCount
+      ?? this.startLaneOperationCount;
     const transcript = new TemplateCompilerSiteCursorTranscript(
       siteCursorConstructionAuthority,
       this.binding,
@@ -339,14 +404,19 @@ class TemplateCompilerRootSiteCursor {
       this.events,
       this.attributeOwners,
       this.hydrateElementEnvelopes,
+      this.rootState.finish(),
+      this.allocations.finish(),
       ledger,
       this.frontier,
       this.startForestMutationRevision,
       endForestMutationRevision,
       this.startGlobalOperationCount,
       endGlobalOperationCount,
+      this.startLaneOperationCount,
+      endLaneOperationCount,
       expectedEndForestMutationRevision,
       expectedEndGlobalOperationCount,
+      expectedEndLaneOperationCount,
       this.transcriptOrdinal,
       this.ledger.nextSiteEventOrdinal,
     );
@@ -735,6 +805,31 @@ class TemplateCompilerRootSiteCursor {
       );
       return null;
     }
+    const nativeSlot = this.rootState.reachElement(element, lookupName);
+    if (nativeSlot.decisionKind !== TemplateCompilerNativeSlotDecisionKind.NotApplicable) {
+      if (nativeSlot.decisionKind === TemplateCompilerNativeSlotDecisionKind.Open) {
+        this.stop(
+          TemplateCompilerSiteCursorFrontierKind.NativeSlotRootOpen,
+          element,
+          asElement?.attribute ?? null,
+          null,
+          successor,
+          'Reached native slot has no exact root custom-element definition.',
+        );
+        return null;
+      }
+      if (nativeSlot.decisionKind === TemplateCompilerNativeSlotDecisionKind.Invalid) {
+        this.stop(
+          TemplateCompilerSiteCursorFrontierKind.NativeSlotWithoutShadowDomInvalid,
+          element,
+          asElement?.attribute ?? null,
+          null,
+          successor,
+          `Native <slot> requires Shadow DOM on root custom element '${this.binding.definition.name}'.`,
+        );
+        return null;
+      }
+    }
     let processContent: TemplateCompilerProcessContentResult | null = null;
     if (elementDefinition?.processContent != null) {
       const plan = planTemplateCompilerProcessContent({
@@ -803,7 +898,7 @@ class TemplateCompilerRootSiteCursor {
       preWalk: this.preWalk,
       element,
       lookupName,
-      handles: this.request.handles,
+      allocations: this.allocations,
     });
     this.attributeOwners.push(assembly);
     const receipts = new Map(assembly.contributions.map((contribution) => [
@@ -1219,18 +1314,26 @@ class TemplateCompilerRootSiteCursor {
     const parseResult = bundle.expressionParse.result;
     if (parseResult.kind !== ExpressionParseResultKind.InterpolationSuccess) return null;
     const siteKey = `${this.binding.lane.localKey}:live-text:${text.occurrenceKey}`;
-    const sources = parseResult.ast.expressions.map((expression, expressionChainIndex) =>
-      new TemplateCompilerTextHoleSourceRange(
+    const sources = parseResult.ast.expressions.map((expression, expressionChainIndex) => {
+      const sourceAllocation = this.allocations.allocateSource(
+        siteKey,
+        `${siteKey}:hole:${expressionChainIndex}:source:${expression.span.start}:${expression.span.end}`,
+        TemplateCompilerLiveSourceAllocationRole.TextInterpolationHole,
         expressionChainIndex,
         expression.span,
         bundle.expressionParse.sourceAddressHandle,
-        this.request.handles.address(
-          `${siteKey}:hole:${expressionChainIndex}:source:${expression.span.start}:${expression.span.end}`,
-        ),
-      )
-    );
+      );
+      const source = new TemplateCompilerTextHoleSourceRange(
+        expressionChainIndex,
+        expression.span,
+        bundle.expressionParse.sourceAddressHandle,
+        sourceAllocation.addressHandle,
+      );
+      this.allocations.bindSource(source);
+      return source;
+    });
     return stageTemplateCompilerTextInstructions(new TemplateCompilerTextInstructionStagingRequest(
-      new CursorTextInstructionStagingAuthority(this.request.handles),
+      new CursorTextInstructionStagingAuthority(this.allocations),
       siteKey,
       text.occurrenceKey,
       bundle.text.toReference(),
@@ -1748,6 +1851,139 @@ function hydrateElementEnvelopesAreCoherent(
   });
 }
 
+function rootStateIsCoherent(
+  binding: TemplateCompilerSiteInvocationBinding,
+  events: readonly TemplateCompilerSiteCursorEvent[],
+  rootState: TemplateCompilerRootCompilationState,
+): boolean {
+  if (!rootState.isModuleConstructed() || rootState.rootDefinition !== binding.definition) return false;
+  const elementEvents = events.filter((event): event is TemplateCompilerSiteCursorElementEvent =>
+    event instanceof TemplateCompilerSiteCursorElementEvent
+  );
+  const nativeSlotEvents = elementEvents.filter((event) => event.lookupName === 'slot');
+  return nativeSlotEvents.length === rootState.nativeSlots.length
+    && rootState.nativeSlots.every((slot, index) => {
+      const event = nativeSlotEvents[index];
+      return event?.element === slot.element
+        && event.lookupName === slot.decision.lookupName
+        && slot.decision.rootDefinition === binding.definition;
+    });
+}
+
+function liveAllocationSnapshotIsCoherent(
+  events: readonly TemplateCompilerSiteCursorEvent[],
+  owners: readonly TemplateCompilerLiveAttributeOwnerResult[],
+  snapshot: TemplateCompilerLiveAllocationSnapshot,
+): boolean {
+  const expectedInstructions = new Map<ProductHandle, TemplateInstruction>();
+  const expectedExpressions = new Map<ProductHandle, {
+    readonly read: TemplateCompilerReadObservation;
+    readonly result: ExpressionParseResult;
+    readonly sourceSpan: SourceSpan | null;
+  }>();
+  const expectedSources = new Map<AddressHandle, TemplateCompilerTextHoleSourceRange>();
+  const retainExpression = (
+    productHandle: ProductHandle,
+    read: TemplateCompilerReadObservation,
+    result: ExpressionParseResult,
+    sourceSpan: SourceSpan | null,
+  ): void => {
+    expectedExpressions.set(productHandle, { read, result, sourceSpan });
+  };
+  const retainCommand = (command: TemplateCompilerLiveAttributeContribution['command']): void => {
+    for (const parse of command?.expressionParses ?? []) {
+      retainExpression(
+        parse.expressionProductHandle,
+        parse.compilerRead,
+        parse.result,
+        parse.sourceSpan,
+      );
+    }
+  };
+
+  for (const owner of owners) {
+    for (const instruction of owner.instructionStaging.instructions) {
+      expectedInstructions.set(instruction.productHandle, instruction);
+    }
+    for (const contribution of owner.contributions) {
+      for (const instruction of contribution.instructions) {
+        expectedInstructions.set(instruction.productHandle, instruction);
+      }
+      for (const instruction of contribution.command?.instructions ?? []) {
+        expectedInstructions.set(instruction.productHandle, instruction);
+      }
+      for (const instruction of contribution.multiBinding?.stagedInstructions ?? []) {
+        expectedInstructions.set(instruction.productHandle, instruction);
+      }
+      const valueParse = contribution.valueParse;
+      if (valueParse != null) {
+        retainExpression(
+          valueParse.expressionProductHandle,
+          valueParse.read.observation,
+          valueParse.read.value,
+          null,
+        );
+      }
+      retainCommand(contribution.command);
+      for (const segment of contribution.multiBinding?.segments ?? []) {
+        const segmentParse = segment.valueParse;
+        if (segmentParse != null) {
+          retainExpression(
+            segmentParse.expressionProductHandle,
+            segmentParse.read.observation,
+            segmentParse.read.value,
+            segmentParse.sourceSpan,
+          );
+        }
+        retainCommand(segment.command);
+      }
+    }
+  }
+  for (const event of events) {
+    if (!(event instanceof TemplateCompilerSiteCursorTextEvent)) continue;
+    for (const hole of event.instructionStaging?.holes ?? []) {
+      expectedInstructions.set(hole.instruction.productHandle, hole.instruction);
+      const sourceAddressHandle = hole.source.sourceAddressHandle;
+      if (sourceAddressHandle != null) expectedSources.set(sourceAddressHandle, hole.source);
+    }
+  }
+
+  const boundInstructions = snapshot.instructionAllocations.filter((allocation) => allocation.instruction != null);
+  const boundExpressions = snapshot.expressionAllocations.filter((allocation) =>
+    allocation.compilerRead != null && allocation.result != null
+  );
+  const boundSources = snapshot.sourceAllocations.filter((allocation) => allocation.source != null);
+  return boundInstructions.length === expectedInstructions.size
+    && boundExpressions.length === expectedExpressions.size
+    && boundSources.length === expectedSources.size
+    && snapshot.instructionAllocations.every((allocation) =>
+      allocation.instruction == null
+        || allocation.instruction === expectedInstructions.get(allocation.productHandle)
+    )
+    && snapshot.expressionAllocations.every((allocation) => {
+      if (allocation.compilerRead == null || allocation.result == null) return true;
+      const expected = expectedExpressions.get(allocation.productHandle) ?? null;
+      return expected != null
+        && allocation.compilerRead === expected.read
+        && allocation.result === expected.result
+        && sameSourceSpan(allocation.sourceSpan, expected.sourceSpan);
+    })
+    && snapshot.sourceAllocations.every((allocation) =>
+      allocation.source == null
+        || allocation.source === expectedSources.get(allocation.addressHandle)
+    );
+}
+
+function sameSourceSpan(left: SourceSpan | null, right: SourceSpan | null): boolean {
+  return left === right || (
+    left != null
+    && right != null
+    && left.start === right.start
+    && left.end === right.end
+    && left.file?.id === right.file?.id
+  );
+}
+
 function instructionStagingStateFor(
   completion: TemplateCompilerLiveAttributeCompletion,
 ): TemplateCompilerElementInstructionStagingState {
@@ -1800,17 +2036,26 @@ function invalidSurrogateTarget(target: string): boolean {
 }
 
 class CursorTextInstructionStagingAuthority implements TemplateCompilerTextInstructionStagingAuthority {
-  constructor(private readonly handles: KernelHandleFactory) {}
+  constructor(private readonly allocations: TemplateCompilerLiveAllocationLedger) {}
 
   create(
     request: TemplateCompilerTextInstructionAllocationRequest,
     factory: (allocation: TemplateCompilerTextInstructionAllocation) => TextBindingInstruction,
   ): TextBindingInstruction {
     const local = `${request.siteKey}:hole:${request.expressionChainIndex}:text-binding`;
-    return factory(new TemplateCompilerTextInstructionAllocation(
-      this.handles.product(local),
-      this.handles.identity(local),
+    const retained = this.allocations.allocateInstruction(
+      request.siteKey,
+      `text-hole:${request.expressionChainIndex}`,
+      TemplateInstructionKind.TextBinding,
+      request.source.sourceAddressHandle,
       local,
+    );
+    const instruction = factory(new TemplateCompilerTextInstructionAllocation(
+      retained.productHandle,
+      retained.identityHandle,
+      retained.instructionLocal,
     ));
+    this.allocations.bindInstruction(instruction);
+    return instruction;
   }
 }

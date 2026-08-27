@@ -161,6 +161,7 @@ describe('live template-compiler binding-command execution', () => {
       patternParts: [],
       sourceAddressHandle: null,
     };
+    const triggerHandles = new DeterministicLiveHandles('trigger');
     const trigger = executeTemplateCompilerLiveBindingCommand(new TemplateCompilerLiveBindingCommandRequest(
       new TemplateCompilerReadView(
         progressionRuntime.workspace.store,
@@ -171,13 +172,15 @@ describe('live template-compiler binding-command execution', () => {
       site.attribute.toReference(),
       triggerSyntax,
       'trigger',
-      new DeterministicLiveHandles('trigger'),
+      triggerHandles,
     ));
     expect(trigger.state).toBe(TemplateCompilerLiveBindingCommandState.Executed);
     if (trigger.state !== TemplateCompilerLiveBindingCommandState.Executed) throw new Error('Expected trigger execution.');
     expect(trigger.ignoreAttr).toBe(true);
     expect(trigger.instructions[0]).toBeInstanceOf(ListenerBindingInstruction);
     expect(trigger.instructions[0]).toMatchObject({ eventName: 'click' });
+    expect(triggerHandles.instructionRequests[0]?.sourceAddressHandle).toBe(site.attribute.sourceAddressHandle);
+    expect(trigger.instructions[0]?.sourceAddressHandle).toBe(site.attribute.sourceAddressHandle);
     expect(trigger.expressionParses[0]).toMatchObject({ expression: 'save()', entryFamily: 'IsFunction' });
   });
 

@@ -32,6 +32,7 @@ import {
 } from './template-compiler-occurrence.js';
 import type { TemplateCompilerLiveAttributeOwnerResult } from './template-compiler-live-attribute-assembly.js';
 import type { TemplateCompilerHydrateElementStagingResult } from './template-compiler-hydrate-element-staging.js';
+import type { TemplateCompilerLiveAllocationSnapshot } from './template-compiler-live-allocation.js';
 import { TemplateCompilerPreWalkRemainderAuthority } from './template-compiler-prewalk-remainder.js';
 import {
   bindTemplateCompilerRootSiteInvocation,
@@ -39,6 +40,7 @@ import {
 } from './template-compiler-site-invocation.js';
 import {
   executeTemplateCompilerRootSiteCursor,
+  type TemplateCompilerSiteCursorTranscript,
   TemplateCompilerSiteCursorResultState,
 } from './template-compiler-site-cursor.js';
 import {
@@ -71,8 +73,10 @@ export interface TemplateCompilerRootSiteCursorObservationCurrentness {
   readonly exact: boolean;
   readonly forestMutationRevisionDelta: number;
   readonly globalOperationCountDelta: number;
+  readonly laneOperationCountDelta: number;
   readonly expectedForestMutationRevisionDelta: number;
   readonly expectedGlobalOperationCountDelta: number;
+  readonly expectedLaneOperationCountDelta: number;
 }
 
 interface TemplateCompilerRootSiteCursorObservationBase {
@@ -108,6 +112,22 @@ export interface TemplateCompilerRootSiteCursorTranscriptObservation
   readonly phaseKinds: readonly string[];
   readonly phaseCounts: Readonly<Record<string, number>>;
   readonly eventDigest: string;
+  readonly rootStateKind: string;
+  readonly hasSlots: boolean;
+  readonly nativeSlotCount: number;
+  readonly allocationState: string;
+  readonly instructionAllocationCount: number;
+  readonly expressionAllocationCount: number;
+  readonly sourceAllocationCount: number;
+  readonly completionState: string;
+  readonly completionRefusalKinds: readonly string[];
+  readonly completionReceiptPresent: boolean;
+  readonly completedElementSiteCount: number;
+  readonly completedTextSiteCount: number;
+  readonly completedTextHoleCount: number;
+  readonly completedRowSiteCount: number;
+  readonly siteOperationCount: number;
+  readonly completionCompilerReadCount: number;
   readonly ledgerState: string;
   readonly spendDispositionCounts: Readonly<Record<string, number>>;
   readonly remainderKindCounts: Readonly<Record<string, number>>;
@@ -294,7 +314,6 @@ export function observeTemplateCompilerRootSiteCursor(
     binding: binding.binding,
     compilerReads,
     preWalkAuthority: TemplateCompilerPreWalkRemainderAuthority.capture(binding.binding),
-    handles: request.publication.handles,
   });
   if (cursor.state !== TemplateCompilerSiteCursorResultState.Transcript || cursor.transcript == null) {
     return unavailable(
@@ -314,6 +333,11 @@ export function observeTemplateCompilerRootSiteCursor(
   }
 
   const transcript = cursor.transcript;
+  const completion = cursor.completion;
+  if (completion == null) {
+    throw new Error('Cursor transcript observation lost its ordinary-root completion decision.');
+  }
+  const completionReceipt = completion.receipt;
   const eventKindCounts: Record<string, number> = {};
   const phaseKinds: string[] = [];
   const phaseCounts: Record<string, number> = {};
@@ -328,10 +352,14 @@ export function observeTemplateCompilerRootSiteCursor(
     - transcript.startForestMutationRevision;
   const globalOperationCountDelta = transcript.endGlobalOperationCount
     - transcript.startGlobalOperationCount;
+  const laneOperationCountDelta = transcript.endLaneOperationCount
+    - transcript.startLaneOperationCount;
   const expectedForestMutationRevisionDelta = transcript.expectedEndForestMutationRevision
     - transcript.startForestMutationRevision;
   const expectedGlobalOperationCountDelta = transcript.expectedEndGlobalOperationCount
     - transcript.startGlobalOperationCount;
+  const expectedLaneOperationCountDelta = transcript.expectedEndLaneOperationCount
+    - transcript.startLaneOperationCount;
   return {
     admissionState: TemplateCompilerRootSiteCursorObservationAdmissionState.CursorTranscript,
     reasonKinds: [],
@@ -353,8 +381,32 @@ export function observeTemplateCompilerRootSiteCursor(
       transcript.events,
       transcript.attributeOwners,
       transcript.hydrateElementEnvelopes,
+      transcript.rootState,
+      transcript.allocationSnapshot,
       transcript.binding.forest,
     ),
+    rootStateKind: transcript.rootState.stateKind,
+    hasSlots: transcript.rootState.hasSlots,
+    nativeSlotCount: transcript.rootState.nativeSlots.length,
+    allocationState: transcript.allocationSnapshot.state,
+    instructionAllocationCount: transcript.allocationSnapshot.instructionAllocations.length,
+    expressionAllocationCount: transcript.allocationSnapshot.expressionAllocations.length,
+    sourceAllocationCount: transcript.allocationSnapshot.sourceAllocations.length,
+    completionState: completion.state,
+    completionRefusalKinds: completion.refusals.map((refusal) => refusal.refusalKind),
+    completionReceiptPresent: completionReceipt != null,
+    completedElementSiteCount: completionReceipt?.elementSites.length ?? 0,
+    completedTextSiteCount: completionReceipt?.textSites.length ?? 0,
+    completedTextHoleCount: completionReceipt?.textSites.reduce(
+      (count, site) => count + site.holeSlotKeys.length,
+      0,
+    ) ?? 0,
+    completedRowSiteCount: completionReceipt == null
+      ? 0
+      : completionReceipt.elementSites.filter((site) => site.rowRequired).length
+        + completionReceipt.textSites.reduce((count, site) => count + site.holeSlotKeys.length, 0),
+    siteOperationCount: cursor.siteEndpoint?.siteOperations.length ?? 0,
+    completionCompilerReadCount: completionReceipt?.compilerReads.length ?? 0,
     ledgerState: transcript.ledger.state,
     spendDispositionCounts: counts(transcript.ledger.spends.map((spend) => spend.disposition)),
     remainderKindCounts: counts(
@@ -373,11 +425,14 @@ export function observeTemplateCompilerRootSiteCursor(
     nextSiteEventOrdinal: transcript.nextSiteEventOrdinal,
     currentness: {
       exact: transcript.endForestMutationRevision === transcript.expectedEndForestMutationRevision
-        && transcript.endGlobalOperationCount === transcript.expectedEndGlobalOperationCount,
+        && transcript.endGlobalOperationCount === transcript.expectedEndGlobalOperationCount
+        && transcript.endLaneOperationCount === transcript.expectedEndLaneOperationCount,
       forestMutationRevisionDelta,
       globalOperationCountDelta,
+      laneOperationCountDelta,
       expectedForestMutationRevisionDelta,
       expectedGlobalOperationCountDelta,
+      expectedLaneOperationCountDelta,
     },
   };
 }
@@ -419,6 +474,8 @@ function cursorEventDigest(
   events: readonly TemplateCompilerSiteCursorEvent[],
   attributeOwners: readonly TemplateCompilerLiveAttributeOwnerResult[],
   hydrateElementEnvelopes: readonly TemplateCompilerHydrateElementStagingResult[],
+  rootState: TemplateCompilerSiteCursorTranscript['rootState'],
+  allocations: TemplateCompilerLiveAllocationSnapshot,
   forest: TemplateCompilerOccurrenceForest,
 ): string {
   const hash = createHash('sha256');
@@ -665,6 +722,49 @@ function cursorEventDigest(
     hash.update(':');
     hash.update(encoded);
   }
+  const rootStateEncoded = JSON.stringify([
+    'root-state',
+    rootState.stateKind,
+    rootState.hasSlots,
+    rootState.nativeSlots.map((slot) => [
+      nodeIndex(slot.element),
+      slot.decision.decisionKind,
+      slot.decision.lookupName,
+    ]),
+  ]);
+  hash.update(String(rootStateEncoded.length));
+  hash.update(':');
+  hash.update(rootStateEncoded);
+  const allocationEncoded = JSON.stringify([
+    'live-allocations',
+    allocations.state,
+    allocations.instructionAllocations.map((entry) => [
+      entry.siteKey,
+      entry.local,
+      entry.instructionKind,
+      entry.instruction?.instructionKind ?? null,
+    ]),
+    allocations.expressionAllocations.map((entry) => [
+      entry.siteKey,
+      entry.local,
+      entry.entryFamily,
+      entry.expression,
+      entry.ordinal,
+      entry.result?.kind ?? null,
+    ]),
+    allocations.sourceAllocations.map((entry) => [
+      entry.siteKey,
+      entry.local,
+      entry.role,
+      entry.expressionChainIndex,
+      entry.expressionSpan.start,
+      entry.expressionSpan.end,
+      entry.source != null,
+    ]),
+  ]);
+  hash.update(String(allocationEncoded.length));
+  hash.update(':');
+  hash.update(allocationEncoded);
   return `sha256:${hash.digest('hex')}`;
 }
 

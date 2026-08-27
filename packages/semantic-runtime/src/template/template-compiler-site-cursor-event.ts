@@ -65,6 +65,8 @@ export const enum TemplateCompilerSiteCursorFrontierKind {
   AuthoredPrecedentMismatch = 'authored-precedent-mismatch',
   AsElementScalarOpen = 'as-element-scalar-open',
   ElementResolutionOpen = 'element-resolution-open',
+  NativeSlotRootOpen = 'native-slot-root-open',
+  NativeSlotWithoutShadowDomInvalid = 'native-slot-without-shadow-dom-invalid',
   BeforeProcessContent = 'before-process-content',
   AtLiveAttributeRelowering = 'at-live-attribute-relowering',
   ReachedLiveAttributeOpen = 'reached-live-attribute-open',

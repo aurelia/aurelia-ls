@@ -34,6 +34,7 @@ import {
 
 const compilerExecutionForests = new WeakSet<TemplateCompilerOccurrenceForest>();
 const compilerExecutionStructuralFamilies = new WeakSet<TemplateCompilerStructuralExecutionSession>();
+const siteExecutionEndpointAuthority = {};
 
 /** Current executable phase of one compiler invocation lane. */
 export const enum TemplateCompilerInvocationPhase {
@@ -828,6 +829,49 @@ export class TemplateCompilerSiteExecutionDriverReference {
   }
 }
 
+/** Session-owned immutable endpoint of one released pre-plan site-operation prefix. */
+export class TemplateCompilerSiteExecutionEndpointReceipt {
+  readonly #authority: object;
+
+  constructor(
+    authority: object,
+    readonly execution: TemplateCompilerExecutionSession,
+    readonly lane: TemplateCompilerExecutionLaneReference,
+    readonly bootstrapClosure: TemplateCompilerInvocationBootstrapClosure,
+    readonly siteContext: TemplateCompilerSiteExecutionContextReference | null,
+    readonly forestMutationRevision: number,
+    readonly globalOperationCount: number,
+    readonly laneOperationCount: number,
+    readonly siteOperations: readonly TemplateCompilerOperation[],
+  ) {
+    if (
+      authority !== siteExecutionEndpointAuthority
+      || bootstrapClosure.lane !== lane
+      || (siteContext != null && (
+        siteContext.lane !== lane
+        || siteContext.bootstrapClosure !== bootstrapClosure
+      ))
+      || siteOperations.length !== laneOperationCount - bootstrapClosure.laneOperationCount
+      || siteOperations.some((operation) =>
+        operation.lane !== lane
+        || operation.context !== siteContext
+      )
+    ) {
+      throw new Error('Template compiler site endpoint lost lane, context, or operation-prefix authority.');
+    }
+    this.#authority = authority;
+  }
+
+  isOwnedBy(
+    execution: TemplateCompilerExecutionSession,
+    lane: TemplateCompilerExecutionLaneReference,
+  ): boolean {
+    return this.#authority === siteExecutionEndpointAuthority
+      && this.execution === execution
+      && this.lane === lane;
+  }
+}
+
 /** Whether a reached attribute's current scalar is fully explained by the committed execution ledger. */
 export const enum TemplateCompilerReachedAttributeScalarState {
   Exact = 'exact',
@@ -1472,6 +1516,74 @@ export class TemplateCompilerExecutionSession {
   ): TemplateCompilerSiteExecutionContextReference | null {
     this.requireLane(lane);
     return this.siteContextsByLane.get(lane) ?? null;
+  }
+
+  /** Snapshot the exact released pre-plan endpoint; this is temporal evidence, not traversal completion authority. */
+  captureSiteExecutionEndpoint(
+    bootstrapClosure: TemplateCompilerInvocationBootstrapClosure,
+  ): TemplateCompilerSiteExecutionEndpointReceipt {
+    this.requireMutable();
+    this.requireNoPendingAttempt('capture a site execution endpoint');
+    this.requireNoActiveSiteExecutionDriver('capture a site execution endpoint');
+    const lane = bootstrapClosure.lane;
+    this.requireLane(lane);
+    this.requireOpenLane(lane);
+    const laneOperations = this.sequence.readLaneOperations(lane);
+    const siteContext = this.siteContextsByLane.get(lane) ?? null;
+    const phase = this.invocationPhases.get(lane);
+    const siteOperations = laneOperations.slice(bootstrapClosure.laneOperationCount);
+    if (
+      !bootstrapClosure.isOwnedBy(this.familyAuthority)
+      || this.bootstrapClosuresByLane.get(lane) !== bootstrapClosure
+      || lane.targetPlan != null
+      || this.structuralFamily != null
+      || (this.contextsByLane.get(lane)?.length ?? 0) > 0
+      || (siteContext == null) !== (siteOperations.length === 0)
+      || (siteContext == null
+        ? phase !== TemplateCompilerInvocationPhase.BootstrapClosed
+        : phase !== TemplateCompilerInvocationPhase.SiteExecution)
+      || (siteContext != null && !sameOccurrences(
+        this.sequence.readContextOperations(siteContext),
+        siteOperations,
+      ))
+    ) {
+      throw new Error(`Compiler invocation lane '${lane.localKey}' has no exact released site endpoint.`);
+    }
+    return new TemplateCompilerSiteExecutionEndpointReceipt(
+      siteExecutionEndpointAuthority,
+      this,
+      lane,
+      bootstrapClosure,
+      siteContext,
+      this.forest.mutationRevision,
+      this.operations.length,
+      laneOperations.length,
+      siteOperations,
+    );
+  }
+
+  siteExecutionEndpointIsCurrent(endpoint: TemplateCompilerSiteExecutionEndpointReceipt): boolean {
+    if (!endpoint.isOwnedBy(this, endpoint.lane)) return false;
+    const lane = endpoint.lane;
+    const currentLaneOperations = this.sequence.readLaneOperations(lane);
+    const phase = this.invocationPhases.get(lane);
+    return this.pendingAttempt == null
+      && this.activeSiteExecutionDriver == null
+      && this.bootstrapClosuresByLane.get(lane) === endpoint.bootstrapClosure
+      && (this.siteContextsByLane.get(lane) ?? null) === endpoint.siteContext
+      && (endpoint.siteContext == null
+        ? phase === TemplateCompilerInvocationPhase.BootstrapClosed
+        : phase === TemplateCompilerInvocationPhase.SiteExecution)
+      && lane.targetPlan == null
+      && this.structuralFamily == null
+      && (this.contextsByLane.get(lane)?.length ?? 0) === 0
+      && this.forest.mutationRevision === endpoint.forestMutationRevision
+      && this.operations.length === endpoint.globalOperationCount
+      && currentLaneOperations.length === endpoint.laneOperationCount
+      && sameOccurrences(
+        currentLaneOperations.slice(endpoint.bootstrapClosure.laneOperationCount),
+        endpoint.siteOperations,
+      );
   }
 
   /** Assert that one read-only caller still holds this family's exact currently-active site driver. */

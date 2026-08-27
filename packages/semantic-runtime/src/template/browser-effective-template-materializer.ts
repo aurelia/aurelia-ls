@@ -123,8 +123,13 @@ interface ValidatedBrowserEffectiveTemplateMaterializationRequest
   readonly correspondence: BrowserTemplateCorrespondenceDraft;
 }
 
+const browserEffectiveTemplateEmissionAuthority = {};
+
 export class BrowserEffectiveTemplateEmission {
+  readonly #authority: object;
+
   constructor(
+    authority: object,
     readonly correspondence: BrowserTemplateCorrespondenceDraft,
     readonly tree: BrowserEffectiveTemplateTree,
     readonly nodes: readonly BrowserEffectiveTemplateNode[],
@@ -132,7 +137,46 @@ export class BrowserEffectiveTemplateEmission {
     readonly derivations: readonly TemplateStructureDerivation[],
     readonly openSeams: readonly OpenSeam[],
     readonly records: readonly KernelStoreRecord[],
-  ) {}
+    /** Generation-bound candidate that owns this tree and all later run-local compiler allocations. */
+    readonly publication: KernelPublicationContext,
+  ) {
+    if (authority !== browserEffectiveTemplateEmissionAuthority) {
+      throw new Error('Browser-effective template emissions are module-constructed capabilities.');
+    }
+    this.#authority = authority;
+  }
+
+  isModuleConstructed(): boolean {
+    return this.#authority === browserEffectiveTemplateEmissionAuthority;
+  }
+
+  withCorrespondence(correspondence: BrowserTemplateCorrespondenceDraft): BrowserEffectiveTemplateEmission {
+    return new BrowserEffectiveTemplateEmission(
+      browserEffectiveTemplateEmissionAuthority,
+      correspondence,
+      this.tree,
+      this.nodes,
+      this.attributes,
+      this.derivations,
+      this.openSeams,
+      this.records,
+      this.publication,
+    );
+  }
+
+  withOpenSeams(openSeams: readonly OpenSeam[]): BrowserEffectiveTemplateEmission {
+    return new BrowserEffectiveTemplateEmission(
+      browserEffectiveTemplateEmissionAuthority,
+      this.correspondence,
+      this.tree,
+      this.nodes,
+      this.attributes,
+      this.derivations,
+      openSeams,
+      this.records,
+      this.publication,
+    );
+  }
 }
 
 class BrowserEffectiveTemplateSourceSet {
@@ -470,6 +514,7 @@ export class BrowserEffectiveTemplateMaterializer {
       ),
     );
     return new BrowserEffectiveTemplateEmission(
+      browserEffectiveTemplateEmissionAuthority,
       input.correspondence,
       tree,
       state.nodes,
@@ -477,6 +522,7 @@ export class BrowserEffectiveTemplateMaterializer {
       state.derivations,
       state.openSeams,
       state.records,
+      this.store,
     );
   }
 

@@ -39,6 +39,10 @@ import {
   type TemplateCompilerLiveAttributeOwnerResult,
 } from '../src/template/template-compiler-live-attribute-assembly.js';
 import { TemplateCompilerLiveAttributeDisposition } from '../src/template/template-compiler-live-attribute-owner.js';
+import {
+  TemplateCompilerLiveAllocationNamespace,
+  type TemplateCompilerLiveAllocationLedger,
+} from '../src/template/template-compiler-live-allocation.js';
 import { executeTemplateCompilerLocalExtraction } from '../src/template/template-compiler-local-extraction.js';
 import {
   buildTemplateCompilerNormalizedSiteIndex,
@@ -483,6 +487,7 @@ describe('template compiler live attribute owner assembly', () => {
 class LiveAttributeAssemblyRun {
   readonly preWalk: TemplateCompilerPreWalkRemainderAuthority;
   readonly reads: TemplateCompilerReadView;
+  readonly allocations: TemplateCompilerLiveAllocationLedger;
 
   constructor(
     readonly fixture: LiveAttributeAssemblyFixture,
@@ -495,6 +500,7 @@ class LiveAttributeAssemblyRun {
       fixture.runtime.workspace.store,
       TemplateCompilerWorldAuthority.fixed(binding.compilerWorld),
     );
+    this.allocations = new TemplateCompilerLiveAllocationNamespace(fixture.browserRun).beginPhase(localKey);
   }
 
   assemble(element: TemplateCompilerElementOccurrence): TemplateCompilerLiveAttributeOwnerResult {
@@ -519,7 +525,7 @@ class LiveAttributeAssemblyRun {
       preWalk: this.preWalk,
       element,
       lookupName,
-      handles: this.fixture.browserRun.handles,
+      allocations: this.allocations,
     });
   }
 }

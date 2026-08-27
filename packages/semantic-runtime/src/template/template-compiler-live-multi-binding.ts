@@ -4,7 +4,7 @@ import {
   ExpressionParseResultKind,
   type ExpressionParseResult,
 } from '../expression/parse-result-algebra.js';
-import { sourceSpanFromBounds } from '../expression/source-span.js';
+import { sourceSpanFromBounds, type SourceSpan } from '../expression/source-span.js';
 import type { TemplateAttributeMapperNode } from './attribute-mapper.js';
 import {
   AttributeClassificationDecisionIssue,
@@ -142,6 +142,7 @@ export class TemplateCompilerLiveMultiBindingValueParse {
     readonly expressionProductHandle: ProductHandle,
     readonly selection: TemplateAttributeValueSiteSelection,
     readonly read: TemplateCompilerObservedValue<ExpressionParseResult>,
+    readonly sourceSpan: SourceSpan,
   ) {}
 
   get state(): TemplateExpressionParseState {
@@ -469,15 +470,17 @@ function executeSegment(
     valueSelection.rawValue,
     0,
   ));
+  const sourceSpan = sourceSpanFromBounds(segment.valueStart, segment.valueEnd);
   const read = request.compilerReads.readParsedExpression(
     valueSelection.rawValue,
     valueSelection.entryFamily,
-    { baseSpan: sourceSpanFromBounds(segment.valueStart, segment.valueEnd) },
+    { baseSpan: sourceSpan },
   );
   const valueParse = new TemplateCompilerLiveMultiBindingValueParse(
     expressionProductHandle,
     valueSelection,
     read,
+    sourceSpan,
   );
   const completion = completionForParses([read.value]);
   if (completion !== TemplateCompilerLiveMultiBindingCompletion.Complete) {
@@ -508,6 +511,7 @@ function executeSegment(
     instructionKind,
     syntax.target,
     0,
+    syntax.sourceAddressHandle,
   ));
   const instruction = read.value.kind === ExpressionParseResultKind.InterpolationAbsent
     ? new SetPropertyInstruction(

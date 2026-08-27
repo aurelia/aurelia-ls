@@ -194,10 +194,41 @@ describe("semantic compiler gallery", () => {
       "complete",
       "invalid-surrogate-attribute",
       "let-element-lowering-required",
+      "native-slot-without-shadow-dom-invalid",
       "surrogate-classification-required",
     ]);
     expect([...new Set(transcriptCursors.map((cursor) => cursor.ledgerState))].sort())
       .toEqual(["all-sites-accounted", "open"]);
+    expect(transcriptCursors.filter((cursor) => cursor.completionReceiptPresent)).toHaveLength(23);
+    expect(transcriptCursors.filter((cursor) => cursor.completionState === "complete")).toHaveLength(23);
+    expect(run.observations.filter((observation) =>
+      observation.siteCursor.admissionState === TemplateCompilerRootSiteCursorObservationAdmissionState.CursorTranscript
+      && observation.siteCursor.completionReceiptPresent
+    ).map((observation) => observation.caseId).sort()).toEqual([
+      "attribute-owner-state.binding-first",
+      "attribute-owner-state.interpolation-first",
+      "binding.listener.trigger",
+      "binding.property.input-value",
+      "binding.property.input-value-as-number",
+      "binding.property.label-for",
+      "debug.data-attributes.removed",
+      "interaction.browser.carrier-comment-shield",
+      "interaction.browser.duplicate-binding-elision",
+      "interaction.browser.foster-target-order",
+      "interpolation.text.single-hole",
+      "interpolation.text.ten-hole",
+      "markup.static.platform-attribute",
+      "native-order.checkbox.checked-before-matcher",
+      "native-order.checkbox.checked-before-model",
+      "native-order.checkbox.checked-before-model-matcher",
+      "native-order.checkbox.model-before-checked",
+      "native-order.radio.checked-before-value",
+      "native-order.radio.value-before-checked",
+      "native-order.select.matcher-value-multiple",
+      "native-order.select.multiple-matcher-value",
+      "native-order.select.static-multiple-value-matcher",
+      "native-order.select.value-matcher-multiple",
+    ]);
     for (const cursor of transcriptCursors) {
       expect(cursor.authoredBundleCount).toBe(cursor.spendCount + cursor.rawUnspentCount);
       expect(cursor.rawUnspentCount).toBe(cursor.remainderCount + cursor.blockedByFrontierCount);
@@ -213,6 +244,8 @@ describe("semantic compiler gallery", () => {
         .toBe(cursor.currentness.expectedForestMutationRevisionDelta);
       expect(cursor.currentness.globalOperationCountDelta)
         .toBe(cursor.currentness.expectedGlobalOperationCountDelta);
+      expect(cursor.currentness.laneOperationCountDelta)
+        .toBe(cursor.currentness.expectedLaneOperationCountDelta);
       expect(cursor.eventDigest).toMatch(/^sha256:[0-9a-f]{64}$/u);
       expect(cursor.reasonKinds).toEqual([]);
       expect(cursor.eventKindCounts.frontier ?? 0).toBe(cursor.frontierKind == null ? 0 : 1);
@@ -255,6 +288,9 @@ describe("semantic compiler gallery", () => {
       remainderKindCounts: { "html-tree-builder-dropped": 1 },
       rawUnspentCount: 1,
       blockedByFrontierCount: 0,
+      completionState: "complete",
+      completionReceiptPresent: true,
+      completionRefusalKinds: [],
     });
     expect(observations.get("interaction.browser.foster-target-order")?.siteCursor).toMatchObject({
       frontierKind: null,
@@ -304,14 +340,30 @@ describe("semantic compiler gallery", () => {
     expect(tenHoleCursor.eventKindCounts.text).toBe(1);
     expect(tenHoleCursor.spendCount).toBe(1);
     expect(tenHoleCursor.nextSiteEventOrdinal).toBe(1);
+    expect(tenHoleCursor.completionState).toBe("complete");
+    expect(tenHoleCursor.completedTextSiteCount).toBe(1);
+    expect(tenHoleCursor.completedTextHoleCount).toBe(10);
+    expect(tenHoleCursor.completedRowSiteCount).toBe(10);
+    expect(tenHoleCursor.instructionAllocationCount).toBe(10);
+    expect(tenHoleCursor.sourceAllocationCount).toBe(10);
     expect(observations.get("diagnostic.slot.without-shadow")).toMatchObject({
       compiledTemplate: { state: "invalid" },
       issues: [{ issueKind: "slot-without-shadow-dom", frameworkErrorCode: "AUR0717" }],
       siteCursor: {
         admissionState: "cursor-transcript",
-        frontierKind: null,
-        ledgerState: "all-sites-accounted",
+        frontierKind: "native-slot-without-shadow-dom-invalid",
+        ledgerState: "open",
         conflictCount: 0,
+        rootStateKind: "invalid",
+        hasSlots: false,
+        nativeSlotCount: 1,
+        completionState: "ineligible",
+        completionReceiptPresent: false,
+        completionRefusalKinds: [
+          "cursor-frontier",
+          "root-state-invalid",
+          "root-phase-incomplete",
+        ],
       },
     });
     expect(cursorDigest(observations, "attribute-owner-state.interpolation-first"))

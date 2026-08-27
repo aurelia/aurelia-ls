@@ -73,6 +73,8 @@ describe('template compiler site invocation binding', () => {
     expect(binding.lane).toBe(fixture.lane);
     expect(binding.forest).toBe(fixture.forest);
     expect(binding.browserEmission).toBe(fixture.browserEmission);
+    expect(binding.browserEmission.isModuleConstructed()).toBe(true);
+    expect(binding.browserEmission.publication).toBe(fixture.browserRun);
     expect(binding.graphExact).toBe(fixture.graphExact);
     expect(binding.index).toBe(fixture.graphExact.index);
     expect(binding.compilation).toBe(fixture.compilation);
@@ -135,15 +137,7 @@ describe('template compiler site invocation binding', () => {
       correspondence.compilerCarrier,
       correspondence.factoryDiscards,
     );
-    const wrongRevisionBrowser = new BrowserEffectiveTemplateEmission(
-      wrongRevision,
-      fixture.browserEmission.tree,
-      fixture.browserEmission.nodes,
-      fixture.browserEmission.attributes,
-      fixture.browserEmission.derivations,
-      fixture.browserEmission.openSeams,
-      fixture.browserEmission.records,
-    );
+    const wrongRevisionBrowser = fixture.browserEmission.withCorrespondence(wrongRevision);
     const revisionResult = fixture.bind({ browserEmission: wrongRevisionBrowser });
     expect(revisionResult.reasons.map((reason) => reason.reasonKind)).toContain(
       TemplateCompilerSiteInvocationBindingReasonKind.BrowserSourceMismatch,
@@ -162,15 +156,7 @@ describe('template compiler site invocation binding', () => {
       null,
       [OpenSeamReasonKind.TemplateStructureCorrespondenceOpen],
     );
-    const browser = new BrowserEffectiveTemplateEmission(
-      fixture.browserEmission.correspondence,
-      fixture.browserEmission.tree,
-      fixture.browserEmission.nodes,
-      fixture.browserEmission.attributes,
-      fixture.browserEmission.derivations,
-      [seam],
-      fixture.browserEmission.records,
-    );
+    const browser = fixture.browserEmission.withOpenSeams([seam]);
     const result = fixture.bind({ browserEmission: browser });
     expect(result.state).toBe(TemplateCompilerSiteInvocationBindingState.Exact);
     expect(result.binding?.browserEmission.openSeams).toEqual([seam]);

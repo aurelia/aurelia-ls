@@ -51,10 +51,14 @@ describe("AOT semantic compiler oracle CLI", () => {
       admissionState: "cursor-transcript",
       frontierKind: null,
       ledgerState: "open",
+      completionState: "complete",
+      completionReceiptPresent: true,
+      completionRefusalKinds: [],
       currentness: {
         exact: true,
         expectedForestMutationRevisionDelta: expect.any(Number),
         expectedGlobalOperationCountDelta: expect.any(Number),
+        expectedLaneOperationCountDelta: expect.any(Number),
       },
     });
     const currentness = duplicate?.siteCursor.currentness;
@@ -63,6 +67,8 @@ describe("AOT semantic compiler oracle CLI", () => {
       .toBe(currentness.expectedForestMutationRevisionDelta);
     expect(currentness.globalOperationCountDelta)
       .toBe(currentness.expectedGlobalOperationCountDelta);
+    expect(currentness.laneOperationCountDelta)
+      .toBe(currentness.expectedLaneOperationCountDelta);
     expect(receipt).not.toHaveProperty("satisfiedClaimIds");
   }, 15_000);
 });
@@ -102,12 +108,17 @@ interface SemanticCompilerOracleReceipt {
         readonly admissionState: string;
         readonly frontierKind?: string | null;
         readonly ledgerState?: string;
+        readonly completionState?: string;
+        readonly completionReceiptPresent?: boolean;
+        readonly completionRefusalKinds?: readonly string[];
         readonly currentness?: {
           readonly exact: boolean;
           readonly forestMutationRevisionDelta: number;
           readonly expectedForestMutationRevisionDelta: number;
           readonly globalOperationCountDelta: number;
           readonly expectedGlobalOperationCountDelta: number;
+          readonly laneOperationCountDelta: number;
+          readonly expectedLaneOperationCountDelta: number;
         };
       };
     }[];

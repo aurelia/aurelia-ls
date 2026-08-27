@@ -1,6 +1,5 @@
 import type { ExpressionParseResult } from '../expression/parse-result-algebra.js';
 import type { ProductHandle } from '../kernel/handles.js';
-import type { KernelHandleFactory } from '../kernel/handles.js';
 import { CustomAttributeDefinition } from '../resources/custom-attribute-definition.js';
 import { ResourceDefinitionKind } from '../resources/resource-kind.js';
 import {
@@ -100,6 +99,7 @@ import {
   TemplateCompilerLiveInstructionStagingRequest,
   stageTemplateCompilerLiveAttributeOwner,
 } from './template-compiler-live-instruction-staging.js';
+import type { TemplateCompilerLiveAllocationLedger } from './template-compiler-live-allocation.js';
 
 export const enum TemplateCompilerLiveAttributeSourceKind {
   AuthoredExact = 'authored-exact',
@@ -288,7 +288,7 @@ export interface TemplateCompilerLiveAttributeOwnerAssemblyRequest {
   readonly preWalk?: TemplateCompilerPreWalkRemainderAuthority | null;
   readonly element: TemplateCompilerElementOccurrence;
   readonly lookupName: string;
-  readonly handles: KernelHandleFactory;
+  readonly allocations: TemplateCompilerLiveAllocationLedger;
 }
 
 /** Execute live attribute parsing/classification/value/command decisions in browser NamedNodeMap order. */
@@ -324,7 +324,7 @@ class TemplateCompilerLiveAttributeOwnerAssembly {
       request.siteDriver?.expectedForestMutationRevision ?? request.bootstrapClosure.forestMutationRevision,
     );
     this.handles = new LiveAttributeAssemblyHandleAuthority(
-      request.handles,
+      request.allocations,
       request.localKey,
       request.element.occurrenceKey,
     );
@@ -389,6 +389,7 @@ class TemplateCompilerLiveAttributeOwnerAssembly {
       this.request.compilerReads,
       this.handles,
     ));
+    this.handles.bindOwner(this.contributions, instructionStaging);
     return new TemplateCompilerLiveAttributeOwnerResult(
       this.request.element,
       this.authoredElement,
@@ -899,7 +900,7 @@ class LiveAttributeClassificationOwner implements AttributeClassificationDecisio
 
 class LiveAttributeAssemblyHandleAuthority implements TemplateCompilerInstructionStagingAuthority {
   constructor(
-    private readonly handles: KernelHandleFactory,
+    private readonly allocations: TemplateCompilerLiveAllocationLedger,
     private readonly localKey: string,
     private readonly elementOccurrenceKey: string,
   ) {}
@@ -909,26 +910,86 @@ class LiveAttributeAssemblyHandleAuthority implements TemplateCompilerInstructio
     factory: (allocation: TemplateCompilerInstructionStagingAllocation) => TInstruction,
   ): TInstruction {
     const instructionLocal = `${this.localKey}:${request.siteKey}:instruction:${request.local}`;
-    return factory(new TemplateCompilerInstructionStagingAllocation(
-      this.handles.product(instructionLocal),
-      this.handles.identity(instructionLocal),
+    const allocationSiteKey = `${this.localKey}:${request.siteKey}`;
+    const retained = this.allocations.allocateInstruction(
+      allocationSiteKey,
+      request.local,
+      request.kind,
+      request.sourceAddressHandle,
       instructionLocal,
+    );
+    const instruction = factory(new TemplateCompilerInstructionStagingAllocation(
+      retained.productHandle,
+      retained.identityHandle,
+      retained.instructionLocal,
     ));
+    this.allocations.bindInstruction(instruction);
+    return instruction;
   }
 
   valueExpression(
     frame: TemplateCompilerLiveAttributeSiteFrame,
     selection: TemplateAttributeValueSiteSelection,
   ): ProductHandle {
-    return this.handles.product(`${this.siteKey(frame)}:value:${selection.siteKind}`);
+    if (selection.entryFamily == null) {
+      throw new Error('Live direct value expression allocation requires one parser entry family.');
+    }
+    const siteKey = this.siteKey(frame);
+    return this.allocations.allocateExpression(
+      siteKey,
+      `${siteKey}:value:${selection.siteKind}`,
+      selection.entryFamily,
+      selection.rawValue,
+      0,
+    ).productHandle;
   }
 
   commandSite(frame: TemplateCompilerLiveAttributeSiteFrame): TemplateCompilerLiveBindingCommandHandleFactory {
-    return new LiveBindingCommandHandleAuthority(this.handles, this.siteKey(frame));
+    return new LiveBindingCommandHandleAuthority(this.allocations, this.siteKey(frame));
   }
 
   multiBindingSite(frame: TemplateCompilerLiveAttributeSiteFrame): TemplateCompilerLiveMultiBindingHandleAuthority {
-    return new LiveMultiBindingHandleAuthority(this.handles, this.siteKey(frame));
+    return new LiveMultiBindingHandleAuthority(this.allocations, this.siteKey(frame));
+  }
+
+  bindOwner(
+    contributions: readonly TemplateCompilerLiveAttributeContribution[],
+    staging: TemplateCompilerLiveElementInstructionStagingResult,
+  ): void {
+    const instructions = new Map<ProductHandle, TemplateInstruction>();
+    for (const instruction of staging.instructions) instructions.set(instruction.productHandle, instruction);
+    for (const contribution of contributions) {
+      for (const instruction of contribution.instructions) instructions.set(instruction.productHandle, instruction);
+      for (const instruction of contribution.command?.instructions ?? []) {
+        instructions.set(instruction.productHandle, instruction);
+      }
+      for (const instruction of contribution.multiBinding?.stagedInstructions ?? []) {
+        instructions.set(instruction.productHandle, instruction);
+      }
+      const valueParse = contribution.valueParse;
+      if (valueParse != null) {
+        this.allocations.bindExpression(
+          valueParse.expressionProductHandle,
+          valueParse.read.observation,
+          valueParse.read.value,
+          null,
+        );
+      }
+      bindCommandExpressions(this.allocations, contribution.command);
+      for (const segment of contribution.multiBinding?.segments ?? []) {
+        const segmentParse = segment.valueParse;
+        if (segmentParse != null) {
+          this.allocations.bindExpression(
+            segmentParse.expressionProductHandle,
+            segmentParse.read.observation,
+            segmentParse.read.value,
+            segmentParse.sourceSpan,
+          );
+        }
+        bindCommandExpressions(this.allocations, segment.command);
+      }
+    }
+    for (const instruction of instructions.values()) this.allocations.bindInstruction(instruction);
   }
 
   private siteKey(frame: TemplateCompilerLiveAttributeSiteFrame): string {
@@ -938,33 +999,61 @@ class LiveAttributeAssemblyHandleAuthority implements TemplateCompilerInstructio
 
 class LiveBindingCommandHandleAuthority implements TemplateCompilerLiveBindingCommandHandleFactory {
   constructor(
-    private readonly handles: KernelHandleFactory,
+    private readonly allocations: TemplateCompilerLiveAllocationLedger,
     private readonly siteKey: string,
   ) {}
 
   instruction(request: TemplateCompilerLiveInstructionHandleRequest): BindingCommandInstructionAllocation {
     const key = `${this.siteKey}:instruction:${request.ordinal}:${request.local}`;
+    const retained = this.allocations.allocateInstruction(
+      this.siteKey,
+      `command:${request.ordinal}:${request.local}`,
+      request.instructionKind,
+      request.sourceAddressHandle,
+      key,
+    );
     return new BindingCommandInstructionAllocation(
-      this.handles.product(key),
-      this.handles.identity(key),
+      retained.productHandle,
+      retained.identityHandle,
     );
   }
 
   expression(request: TemplateCompilerLiveExpressionHandleRequest): ProductHandle {
-    return this.handles.product(`${this.siteKey}:expression:${request.ordinal}:${request.entryFamily}`);
+    const key = `${this.siteKey}:expression:${request.ordinal}:${request.entryFamily}`;
+    return this.allocations.allocateExpression(
+      this.siteKey,
+      key,
+      request.entryFamily,
+      request.expression,
+      request.ordinal,
+    ).productHandle;
   }
 }
 
 class LiveMultiBindingHandleAuthority implements TemplateCompilerLiveMultiBindingHandleAuthority {
   constructor(
-    private readonly handles: KernelHandleFactory,
+    private readonly allocations: TemplateCompilerLiveAllocationLedger,
     private readonly siteKey: string,
   ) {}
 
   segment(segment: ParsedMultiBindingSegment): TemplateCompilerLiveBindingCommandHandleFactory {
     return new LiveBindingCommandHandleAuthority(
-      this.handles,
+      this.allocations,
       `${this.siteKey}:multi-binding:${segment.start}:${segment.end}:${segment.rawName}`,
+    );
+  }
+}
+
+function bindCommandExpressions(
+  allocations: TemplateCompilerLiveAllocationLedger,
+  command: TemplateCompilerLiveBindingCommandResult | null,
+): void {
+  for (const parse of command?.expressionParses ?? []) {
+    allocations.bindExpression(
+      parse.expressionProductHandle,
+      parse.compilerRead,
+      parse.result,
+      parse.sourceSpan,
     );
   }
 }

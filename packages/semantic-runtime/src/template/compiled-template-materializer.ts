@@ -121,6 +121,10 @@ import {
   type TemplateInstruction,
 } from './instruction-ir.js';
 import { instructionKindKeyFor } from './instruction-vocabulary.js';
+import {
+  decideTemplateCompilerNativeSlot,
+  TemplateCompilerNativeSlotDecisionKind,
+} from './native-slot-compiler-semantics.js';
 import { orderCompilerInstructionsForElement } from './compiler-instruction-order.js';
 import { TemplateSpecialAttributeName } from './special-attribute-source.js';
 import { runtimeAttributeName, runtimeElementResourceName } from './runtime-dom-name.js';
@@ -1345,7 +1349,7 @@ class CompiledTemplateInstructionTraversal {
     classifications: readonly AttributeClassification[],
     elementDefinition: CustomElementDefinition | null,
     hasKnownProcessContent: boolean,
-  ): ElementInstructionParts {
+  ): ElementInstructionPartBuckets {
     const parts = this.elementInstructionPartBuckets(elementDefinition, hasKnownProcessContent);
     this.recordProcessContentOpenSeam(node, elementDefinition, parts);
     for (const classification of classifications) {
@@ -1357,13 +1361,12 @@ class CompiledTemplateInstructionTraversal {
   private recordNativeSlotOutlet(
     node: HtmlElement,
     lookupName: string,
-    parts: ElementInstructionParts,
+    parts: ElementInstructionPartBuckets,
   ): void {
-    if (lookupName !== 'slot') {
-      return;
-    }
     const rootDefinition = this.rootCustomElementDefinition();
-    if (rootDefinition?.shadowOptions != null) {
+    const decision = decideTemplateCompilerNativeSlot(lookupName, rootDefinition);
+    if (decision.decisionKind === TemplateCompilerNativeSlotDecisionKind.NotApplicable) return;
+    if (decision.decisionKind === TemplateCompilerNativeSlotDecisionKind.Exact) {
       const nameAttribute = this.attributeForElement(node, 'name');
       const owner = this.indexes.ownersByElement.get(node.productHandle) ?? null;
       const nameSyntax = this.input.attributeSyntax.syntaxes.find((syntax) =>
@@ -1397,6 +1400,16 @@ class CompiledTemplateInstructionTraversal {
           ? dynamicNameAttribute?.valueAddressHandle ?? dynamicNameInstruction?.sourceAddressHandle ?? nameSyntax?.sourceAddressHandle ?? null
           : nameAttribute?.valueAddressHandle ?? null,
       ));
+      return;
+    }
+    if (decision.decisionKind === TemplateCompilerNativeSlotDecisionKind.Open) {
+      const seam = this.assemblyState.addOpenSeam(
+        `native-slot-root:${node.productHandle}`,
+        'Native <slot> root Shadow DOM authority remains open.',
+        node.sourceAddressHandle,
+        KernelVocabulary.Compiler.OpenContentProjection.key,
+      );
+      parts.openStructuralSeamHandles.push(seam.handle);
       return;
     }
     this.assemblyState.addCompilerIssue(

@@ -190,6 +190,11 @@ export class BindingCommandBuildInfo {
   ) {}
 }
 
+/** Shared framework instruction-source fallback used by productful and reached command execution. */
+export function bindingCommandInstructionSource(info: BindingCommandBuildInfo): AddressHandle | null {
+  return info.sourceAddressHandle ?? info.syntax.sourceAddressHandle ?? info.attribute.addressHandle;
+}
+
 /** Project one attribute-parser execution into the secondary syntax shape binding commands consume. */
 export function bindingCommandTailSyntaxFromExecution(
   execution: AttributePatternExecutionResult,

@@ -1,4 +1,4 @@
-import type { ProductHandle } from '../kernel/handles.js';
+import type { AddressHandle, ProductHandle } from '../kernel/handles.js';
 import type { BindableDefinition } from '../resources/bindable-definition.js';
 import type { ExpressionType } from '../expression/ast.js';
 import type { ExpressionParseContext } from '../expression/expression-parse-support.js';
@@ -12,6 +12,7 @@ import {
   BindingCommandBuildInfo,
   type BindingCommandBuildContext,
   BindingCommandBuildResult,
+  bindingCommandInstructionSource,
   type BindingCommandExecutable,
   BindingCommandExecutionKind,
   type BindingCommandInstructionAllocation,
@@ -66,6 +67,7 @@ export class TemplateCompilerLiveInstructionHandleRequest {
     readonly instructionKind: TemplateInstructionKind,
     readonly local: string,
     readonly ordinal: number,
+    readonly sourceAddressHandle: AddressHandle | null,
   ) {}
 }
 
@@ -272,13 +274,14 @@ class LiveBindingCommandBuildContext implements BindingCommandBuildContext {
 
   allocateInstruction(
     kind: TemplateInstructionKind,
-    _info: BindingCommandBuildInfo,
+    info: BindingCommandBuildInfo,
     local: string,
   ): BindingCommandInstructionAllocation {
     return this.request.handles.instruction(new TemplateCompilerLiveInstructionHandleRequest(
       kind,
       local,
       this.instructionOrdinal++,
+      bindingCommandInstructionSource(info),
     ));
   }
 

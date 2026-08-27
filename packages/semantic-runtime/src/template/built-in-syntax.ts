@@ -13,7 +13,7 @@ import { BindableBindingMode } from '../resources/bindable-definition.js';
 import {
   AttributePatternExecutionKind,
   AttributePatternExecutionResult,
-  AttributePatternScore,
+  type AttributePatternScore,
   AttributeSyntaxKind,
   compileAttributePatternDefinition,
   isBetterAttributePatternScore,
@@ -22,6 +22,7 @@ import {
 import {
   BindingCommandBuildResult,
   BindingCommandExecutionKind,
+  bindingCommandInstructionSource,
   type BindingCommandBuildContext,
   type BindingCommandBuildInfo,
 } from './binding-command-execution.js';
@@ -79,10 +80,6 @@ function attributePatternResult(
   parts: readonly string[] = [],
 ): AttributePatternExecutionResult {
   return AttributePatternExecutionResult.pattern(rawName, rawValue, target, command, parts);
-}
-
-function instructionSource(info: BindingCommandBuildInfo): AddressHandle | null {
-  return info.sourceAddressHandle ?? info.syntax.sourceAddressHandle ?? info.attribute.addressHandle;
 }
 
 function allocateInstruction(
@@ -158,7 +155,7 @@ function buildIteratorBinding(
         tailSyntax.command,
         rawValue,
         expressionProductHandle,
-        instructionSource(info),
+        bindingCommandInstructionSource(info),
       ));
     }
   }
@@ -174,7 +171,7 @@ function buildIteratorBinding(
     iterator.objectBindingSourceKeys,
     iterator.expressionProductHandle,
     tailInstructionProductHandles,
-    instructionSource(info),
+    bindingCommandInstructionSource(info),
   ] as const;
   instructions.push(command.name === BuiltInBindingCommandName.ForOf
     ? new IterateBindingInstruction(...instructionArgs)
@@ -219,7 +216,7 @@ function buildFixedPropertyBinding(
       context.parsePropertyExpression(expression, info, null),
       mode,
       bindingCommandReference(command),
-      instructionSource(info),
+      bindingCommandInstructionSource(info),
     ),
   ]);
 }
@@ -255,7 +252,7 @@ function buildDefaultPropertyBinding(
       context.parsePropertyExpression(expression, info, null),
       mode,
       bindingCommandReference(command),
-      instructionSource(info),
+      bindingCommandInstructionSource(info),
     ),
   ]);
 }
@@ -278,7 +275,7 @@ function buildAttributeBinding(
       attr,
       target,
       context.parsePropertyExpression(expression, info, null),
-      instructionSource(info),
+      bindingCommandInstructionSource(info),
     ),
   ]);
 }
@@ -433,7 +430,10 @@ export function builtInBindingCommandAttributeName(
   targetName: string,
   commandArgument = '',
 ): string {
-  if (commandName === BuiltInBindingCommandName.Ref && (targetName.length === 0 || targetName === BuiltInBindingCommandTargetName.Element)) {
+  if (
+    commandName === BuiltInBindingCommandName.Ref
+    && (targetName.length === 0 || targetName === String(BuiltInBindingCommandTargetName.Element))
+  ) {
     return BuiltInBindingCommandName.Ref;
   }
   if (commandName === BuiltInBindingCommandName.ForOf) {
@@ -1014,7 +1014,7 @@ export class RefBindingCommand {
         info.syntax.target,
         info.syntax.targetSourceAddressHandle ?? info.syntax.commandSourceAddressHandle,
         context.parsePropertyExpression(info.syntax.rawValue, info, null),
-        instructionSource(info),
+        bindingCommandInstructionSource(info),
       ),
     ]);
   }
@@ -1055,7 +1055,7 @@ export class TriggerBindingCommand {
         info.syntax.parts[2] ?? null,
         info.syntax.patternParts.find((part) => part.partIndex === 2)?.sourceAddressHandle ?? null,
         bindingCommandReference(this),
-        instructionSource(info),
+        bindingCommandInstructionSource(info),
       ),
     ]);
   }
@@ -1096,7 +1096,7 @@ export class CaptureBindingCommand {
         info.syntax.parts[2] ?? null,
         info.syntax.patternParts.find((part) => part.partIndex === 2)?.sourceAddressHandle ?? null,
         bindingCommandReference(this),
-        instructionSource(info),
+        bindingCommandInstructionSource(info),
       ),
     ]);
   }
@@ -1228,7 +1228,7 @@ export class SpreadValueBindingCommand {
         info.syntax.rawValue,
         context.parsePropertyExpression(info.syntax.rawValue, info, null),
         info.syntax.targetSourceAddressHandle,
-        info.expressionSourceAddressHandle ?? instructionSource(info),
+        info.expressionSourceAddressHandle ?? bindingCommandInstructionSource(info),
       ),
     ]);
   }
@@ -1264,7 +1264,7 @@ export class TranslationBindingCommand {
         info.attribute,
         info.syntax.rawValue,
         targetForPropertyBinding(info, context),
-        instructionSource(info),
+        bindingCommandInstructionSource(info),
       ),
     ]);
   }
@@ -1300,7 +1300,7 @@ export class TranslationBindBindingCommand {
         info.attribute,
         context.parsePropertyExpression(info.syntax.rawValue, info, null),
         targetForPropertyBinding(info, context),
-        instructionSource(info),
+        bindingCommandInstructionSource(info),
       ),
     ]);
   }
@@ -1336,7 +1336,7 @@ export class TranslationParametersBindingCommand {
         info.attribute,
         context.parsePropertyExpression(info.syntax.rawValue, info, null),
         targetForPropertyBinding(info, context),
-        instructionSource(info),
+        bindingCommandInstructionSource(info),
       ),
     ]);
   }
@@ -1376,7 +1376,7 @@ export class StateBindingCommand {
         info.syntax.parts[0] ?? null,
         info.syntax.patternParts.find((part) => part.partIndex === 2)?.sourceAddressHandle ?? null,
         context.parseFunctionExpression(expression, info),
-        instructionSource(info),
+        bindingCommandInstructionSource(info),
       ),
     ]);
   }
@@ -1415,7 +1415,7 @@ export class DispatchBindingCommand {
         info.syntax.parts[0] ?? null,
         info.syntax.patternParts.find((part) => part.partIndex === 2)?.sourceAddressHandle ?? null,
         context.parsePropertyExpression(info.syntax.rawValue, info, null),
-        instructionSource(info),
+        bindingCommandInstructionSource(info),
       ),
     ]);
   }
@@ -1814,6 +1814,6 @@ export function findBuiltInBindingCommand(
 export function findUniqueBuiltInBindingCommandByName(
   name: string,
 ): BuiltInBindingCommand | null {
-  const matches = allBuiltInBindingCommands().filter((command) => command.name === name);
+  const matches = allBuiltInBindingCommands().filter((command) => String(command.name) === name);
   return matches.length === 1 ? matches[0]! : null;
 }

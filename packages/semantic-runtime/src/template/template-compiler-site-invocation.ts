@@ -47,6 +47,7 @@ export const enum TemplateCompilerSiteInvocationBindingReasonKind {
   HookSetMismatch = 'hook-set-mismatch',
   LocalTemplatesUnsupported = 'local-templates-unsupported',
   BrowserTreeMismatch = 'browser-tree-mismatch',
+  BrowserPublicationUnavailable = 'browser-publication-unavailable',
   BrowserSourceMismatch = 'browser-source-mismatch',
   BrowserMarkupMismatch = 'browser-markup-mismatch',
 }
@@ -337,6 +338,12 @@ function validateBrowserInput(
   const browser = request.browserEmission;
   const forestTree = request.execution.forest.inputTree;
   const browserTree = browser.tree;
+  if (!browser.isModuleConstructed() || !browser.publication.isCurrent()) {
+    reasons.push(reason(
+      TemplateCompilerSiteInvocationBindingReasonKind.BrowserPublicationUnavailable,
+      'Browser-effective input does not retain one current module-owned publication candidate.',
+    ));
+  }
   if (
     forestTree.productHandle !== browserTree.productHandle
     || forestTree.identityHandle !== browserTree.identityHandle
