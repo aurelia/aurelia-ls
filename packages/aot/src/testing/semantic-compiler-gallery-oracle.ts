@@ -337,8 +337,9 @@ function observationsFor(
   browserMaterialization: BrowserMaterializationContext,
   compilerReadStore: CompilerReadStore,
 ): SemanticCompilerGalleryObservationProjection {
+  const templates = app.emission.templates;
   const resourcesByName = new Map<string, SemanticTemplateResource>();
-  for (const resource of app.emission.templates.resources) {
+  for (const resource of templates.resources) {
     const name = resource.compilation.definition.name;
     if (resourcesByName.has(name)) {
       throw new Error(`Semantic compiler gallery emitted duplicate definition ${name}.`);
@@ -362,7 +363,7 @@ function observationsFor(
       observationKey: candidate.candidate.id,
       compilation: resource.compilation,
       browserEmission: replay.browserTemplate,
-      currentFrontDoor: app.emission.templates.frontDoor,
+      currentFrontDoor: templates.frontDoor,
       publication: browserMaterialization,
       compilerReadStore,
     });
