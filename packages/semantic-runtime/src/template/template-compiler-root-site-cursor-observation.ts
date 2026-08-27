@@ -26,7 +26,10 @@ import {
   buildTemplateCompilerNormalizedSiteIndex,
   TemplateCompilerNormalizedSiteIndexState,
 } from './template-compiler-normalized-site-index.js';
-import { TemplateCompilerOccurrenceForest } from './template-compiler-occurrence.js';
+import {
+  TemplateCompilerAttributeOccurrence,
+  TemplateCompilerOccurrenceForest,
+} from './template-compiler-occurrence.js';
 import { TemplateCompilerPreWalkRemainderAuthority } from './template-compiler-prewalk-remainder.js';
 import {
   bindTemplateCompilerRootSiteInvocation,
@@ -43,6 +46,7 @@ import {
   TemplateCompilerSiteCursorFrontier,
   TemplateCompilerSiteCursorIgnoredNodeEvent,
   TemplateCompilerSiteCursorPhaseEvent,
+  TemplateCompilerSiteCursorProcessContentEvent,
   TemplateCompilerSiteCursorSubtreeExclusionEvent,
   TemplateCompilerSiteCursorSurrogateValidationEvent,
   TemplateCompilerSiteCursorTextEvent,
@@ -65,6 +69,8 @@ export interface TemplateCompilerRootSiteCursorObservationCurrentness {
   readonly exact: boolean;
   readonly forestMutationRevisionDelta: number;
   readonly globalOperationCountDelta: number;
+  readonly expectedForestMutationRevisionDelta: number;
+  readonly expectedGlobalOperationCountDelta: number;
 }
 
 interface TemplateCompilerRootSiteCursorObservationBase {
@@ -319,6 +325,10 @@ export function observeTemplateCompilerRootSiteCursor(
     - transcript.startForestMutationRevision;
   const globalOperationCountDelta = transcript.endGlobalOperationCount
     - transcript.startGlobalOperationCount;
+  const expectedForestMutationRevisionDelta = transcript.expectedEndForestMutationRevision
+    - transcript.startForestMutationRevision;
+  const expectedGlobalOperationCountDelta = transcript.expectedEndGlobalOperationCount
+    - transcript.startGlobalOperationCount;
   return {
     admissionState: TemplateCompilerRootSiteCursorObservationAdmissionState.CursorTranscript,
     reasonKinds: [],
@@ -354,9 +364,12 @@ export function observeTemplateCompilerRootSiteCursor(
     nextTranscriptOrdinal: transcript.nextTranscriptOrdinal,
     nextSiteEventOrdinal: transcript.nextSiteEventOrdinal,
     currentness: {
-      exact: forestMutationRevisionDelta === 0 && globalOperationCountDelta === 0,
+      exact: transcript.endForestMutationRevision === transcript.expectedEndForestMutationRevision
+        && transcript.endGlobalOperationCount === transcript.expectedEndGlobalOperationCount,
       forestMutationRevisionDelta,
       globalOperationCountDelta,
+      expectedForestMutationRevisionDelta,
+      expectedGlobalOperationCountDelta,
     },
   };
 }
@@ -433,6 +446,30 @@ function cursorEventDigest(
               event.occurrenceOnlyRow?.disposition ?? null,
               event.normalizedOutcome,
             ]
+          : event instanceof TemplateCompilerSiteCursorProcessContentEvent
+            ? [
+                event.eventKind,
+                nodeIndex(event.host),
+                event.plan.state,
+                event.result.metadata.name,
+                event.result.nameCarrier == null
+                  ? null
+                  : attributeIndexes.get(event.result.nameCarrier) ?? null,
+                event.result.strictFalse,
+                event.result.operation.executionOrdinal,
+                event.result.removals.map((removal) => [
+                  nodeIndex(removal.occurrence),
+                  removal.liveOrdinal,
+                ]),
+                event.removedSpends.map((spend) => [
+                  spend.occurrence instanceof TemplateCompilerAttributeOccurrence
+                    ? ['attribute', attributeIndexes.get(spend.occurrence) ?? null]
+                    : ['text', nodeIndex(spend.occurrence)],
+                  spend.disposition,
+                  spend.siteEventOrdinal,
+                  spend.causeOperation?.executionOrdinal ?? null,
+                ]),
+              ]
           : event instanceof TemplateCompilerSiteCursorTextEvent
             ? [
                 event.eventKind,

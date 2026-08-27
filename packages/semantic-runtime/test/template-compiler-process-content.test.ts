@@ -60,11 +60,30 @@ describe('template compiler processContent', () => {
         state: plan.state,
         name: plan.metadata?.name,
         carrier: plan.nameCarrier?.value ?? null,
+        scalarExact: plan.nameScalar?.isExact() ?? null,
         strictFalse: plan.strictFalse,
       }))).toEqual([
-        { state: TemplateCompilerProcessContentPlanState.Exact, name: 'default', carrier: null, strictFalse: false },
-        { state: TemplateCompilerProcessContentPlanState.Exact, name: '', carrier: '', strictFalse: false },
-        { state: TemplateCompilerProcessContentPlanState.Exact, name: 'heading', carrier: 'heading', strictFalse: false },
+        {
+          state: TemplateCompilerProcessContentPlanState.Exact,
+          name: 'default',
+          carrier: null,
+          scalarExact: null,
+          strictFalse: false,
+        },
+        {
+          state: TemplateCompilerProcessContentPlanState.Exact,
+          name: '',
+          carrier: '',
+          scalarExact: true,
+          strictFalse: false,
+        },
+        {
+          state: TemplateCompilerProcessContentPlanState.Exact,
+          name: 'heading',
+          carrier: 'heading',
+          scalarExact: true,
+          strictFalse: false,
+        },
       ]);
       expect(run.execution.invocationPhase(run.closure.lane)).toBe(TemplateCompilerInvocationPhase.BootstrapClosed);
       expect(run.execution.siteExecutionContext(run.closure.lane)).toBeNull();
@@ -89,6 +108,9 @@ describe('template compiler processContent', () => {
       expect(result.isModuleConstructed()).toBe(true);
       expect(result.metadata.name).toBe('heading');
       expect(result.nameCarrier?.value).toBe('heading');
+      expect(result.nameScalar).toBe(plan.nameScalar);
+      expect(result.nameScalar?.currentValue).toBe('heading');
+      expect(result.nameScalar?.isExact()).toBe(true);
       expect(result.strictFalse).toBe(false);
       expect(result.operation).toMatchObject({
         operationKind: TemplateCompilerOperationKind.ProcessContent,
@@ -100,11 +122,46 @@ describe('template compiler processContent', () => {
       expect(result.removedOccurrences.every((occurrence) =>
         occurrence.parent == null && occurrence.parentEdgeKind === TemplateCompilerOccurrenceEdgeKind.Detached
       )).toBe(true);
+      expect(result.removedSiteOccurrences.length).toBeGreaterThan(0);
+      expect(result.removedSiteOccurrences.every((occurrence) =>
+        result.authorizesRemovedSiteOccurrence(occurrence)
+      )).toBe(true);
       expect(host.readChildren().map(nodeLabel)).toEqual(['lead', 'b', 'tail']);
       expect(result.operation.mutationBatch.nodeDetachmentMutations.map((mutation) => mutation.previousOrdinal))
         .toEqual([1, 1]);
 
       run.execution.finishSiteExecutionDriver(driver);
+    } finally {
+      run.dispose();
+    }
+  });
+
+  test('keeps a directly rewritten pre-bootstrap name scalar Open without admitting an operation', () => {
+    const run = fixture.run(
+      'projection-receiver',
+      '<au-slot name="authored"></au-slot>',
+      (forest) => {
+        const host = forest.readNodes().find((node): node is TemplateCompilerElementOccurrence =>
+          node instanceof TemplateCompilerElementOccurrence && node.tagName.toLowerCase() === 'au-slot'
+        );
+        const name = host?.readAttributes().find((attribute) => qualifiedName(attribute) === 'name') ?? null;
+        if (name == null) throw new Error('Expected pre-bootstrap AuSlot name carrier.');
+        forest.rewriteAttributeValue(name, 'direct-rewrite');
+      },
+    );
+    try {
+      const plan = run.plan(run.requiredElement('au-slot'));
+
+      expect(plan).toMatchObject({
+        state: TemplateCompilerProcessContentPlanState.Open,
+        planningDriver: null,
+        openReason: { reasonKind: TemplateCompilerProcessContentOpenReasonKind.InputScalarOpen },
+        nameCarrier: { value: 'direct-rewrite' },
+        nameScalar: { currentValue: 'direct-rewrite' },
+      });
+      expect(plan.nameScalar?.isExact()).toBe(false);
+      expect(run.execution.sequence.readOperations()).toHaveLength(run.closure.laneOperationCount);
+      expect(run.execution.siteExecutionContext(run.closure.lane)).toBeNull();
     } finally {
       run.dispose();
     }
@@ -209,7 +266,11 @@ class ProcessContentFixture {
     ]);
   }
 
-  run(definitionName: string, markup: string): ProcessContentRun {
+  run(
+    definitionName: string,
+    markup: string,
+    prepareForest: ((forest: TemplateCompilerOccurrenceForest) => void) | null = null,
+  ): ProcessContentRun {
     const compilation = this.compilations.find((candidate) => candidate.definition.name === definitionName);
     if (compilation == null) throw new Error(`Expected processContent compilation '${definitionName}'.`);
     return ProcessContentRun.create(
@@ -217,6 +278,7 @@ class ProcessContentFixture {
       compilation,
       `process-content:${this.nextRunOrdinal++}`,
       markup,
+      prepareForest,
     );
   }
 
@@ -238,11 +300,13 @@ class ProcessContentRun {
     compilation: TemplateResourceCompilationEmission,
     localKey: string,
     markup: string,
+    prepareForest: ((forest: TemplateCompilerOccurrenceForest) => void) | null,
   ): ProcessContentRun {
     const browser = new BrowserEffectiveTemplateFixture(localKey);
     const forest = TemplateCompilerOccurrenceForest.fromBrowserEffective(
       browser.materialize(localKey, markup).emission,
     );
+    prepareForest?.(forest);
     const execution = TemplateCompilerExecutionSession.createForForest(localKey, forest);
     const lane = execution.admitRootInvocation(compilation.localKey);
     const hook = executeTemplateCompilerHookBootstrap({

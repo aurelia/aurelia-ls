@@ -29,6 +29,7 @@ import {
   TemplateCompilerPreWalkRemainderAuthority,
   TemplateCompilerPreWalkRemainderReceipt,
 } from './template-compiler-prewalk-remainder.js';
+import { TemplateCompilerProcessContentResult } from './template-compiler-process-content.js';
 
 export type TemplateCompilerNormalizedSiteBundle =
   | TemplateCompilerNormalizedSite
@@ -51,6 +52,7 @@ export const enum TemplateCompilerSiteSpendDisposition {
   TransferredToChildInvocation = 'transferred-to-child-invocation',
   InertTemplateContent = 'inert-template-content',
   LetContentSuppressed = 'let-content-suppressed',
+  ProcessContentRemoved = 'process-content-removed',
 }
 
 /** Caller-classified candidate occurrence that intentionally has no authored-precedent bundle spend. */
@@ -79,6 +81,7 @@ export const enum TemplateCompilerSiteSpendConflictKind {
   AuthoredRemainderAlreadyRecorded = 'authored-remainder-already-recorded',
   AuthoredRemainderForSpentSite = 'authored-remainder-for-spent-site',
   InvalidPreWalkRemainderAuthority = 'invalid-pre-walk-remainder-authority',
+  InvalidProcessContentRemovalAuthority = 'invalid-process-content-removal-authority',
 }
 
 /** One local-extraction disposition captured from the exact post-bootstrap occurrence topology. */
@@ -565,6 +568,30 @@ export class TemplateCompilerSiteSpendLedger {
       receipt.causeOperation,
       receipt.destinationLane,
     );
+  }
+
+  excludeProcessContentRemoved(
+    bundle: TemplateCompilerNormalizedSiteBundle,
+    occurrence: TemplateCompilerSpendOccurrence,
+    result: TemplateCompilerProcessContentResult,
+  ): TemplateCompilerSiteSpendAttempt {
+    this.assertOpen();
+    const disposition = TemplateCompilerSiteSpendDisposition.ProcessContentRemoved;
+    const common = this.validateCommonSpend(bundle, occurrence, disposition);
+    if (common != null) return common;
+    if (
+      !(result instanceof TemplateCompilerProcessContentResult)
+      || !result.isModuleConstructed()
+      || !result.authorizesRemovedSiteOccurrence(occurrence)
+    ) {
+      return this.conflict(
+        TemplateCompilerSiteSpendConflictKind.InvalidProcessContentRemovalAuthority,
+        bundle,
+        occurrence,
+        disposition,
+      );
+    }
+    return this.commitSpend(bundle, occurrence, disposition, null, result.operation, null);
   }
 
   recordOccurrenceOnly(

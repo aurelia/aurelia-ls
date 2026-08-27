@@ -17,6 +17,7 @@ import {
   TemplateCompilerLiveAttributeOwnerProgression,
 } from './template-compiler-live-attribute-owner.js';
 import {
+  TemplateCompilerAttributeOccurrence,
   TemplateCompilerCommentOccurrence,
   TemplateCompilerDoctypeOccurrence,
   TemplateCompilerElementOccurrence,
@@ -25,7 +26,6 @@ import {
   type TemplateCompilerParentOccurrence,
   TemplateCompilerTextOccurrence,
 } from './template-compiler-occurrence.js';
-import type { TemplateCompilerAttributeOccurrence } from './template-compiler-occurrence.js';
 import {
   TemplateCompilerPreWalkRemainderAuthority,
   TemplateCompilerPreWalkBrowserOriginState,
@@ -48,6 +48,13 @@ import {
 } from './template-compiler-site-spend-ledger.js';
 import type { TemplateCompilerAuthoredSiteRemainderEvidence } from './template-compiler-site-spend-ledger.js';
 import type { HtmlElement } from './html-ir.js';
+import type { TemplateCompilerSiteExecutionDriverReference } from './template-compiler-execution.js';
+import {
+  executeTemplateCompilerProcessContent,
+  planTemplateCompilerProcessContent,
+  TemplateCompilerProcessContentPlanState,
+  type TemplateCompilerProcessContentResult,
+} from './template-compiler-process-content.js';
 import {
   runtimeElementLookupName,
   runtimeElementResourceName,
@@ -66,6 +73,7 @@ import {
   TemplateCompilerSiteCursorNormalizedOutcome,
   TemplateCompilerSiteCursorPhaseEvent,
   TemplateCompilerSiteCursorPhaseKind,
+  TemplateCompilerSiteCursorProcessContentEvent,
   TemplateCompilerSiteCursorSubtreeExclusionEvent,
   TemplateCompilerSiteCursorSurrogateValidationEvent,
   TemplateCompilerSiteCursorSurrogateValidationOutcome,
@@ -108,14 +116,16 @@ export class TemplateCompilerSiteCursorTranscript {
     readonly endForestMutationRevision: number,
     readonly startGlobalOperationCount: number,
     readonly endGlobalOperationCount: number,
+    readonly expectedEndForestMutationRevision: number,
+    readonly expectedEndGlobalOperationCount: number,
     readonly nextTranscriptOrdinal: number,
     readonly nextSiteEventOrdinal: number,
   ) {
     const expectedFrontierKind = frontier?.frontierKind ?? null;
     const frontierIsCurrentnessLoss = frontier?.frontierKind
       === TemplateCompilerSiteCursorFrontierKind.CurrentnessLost;
-    const currentnessActuallyChanged = startForestMutationRevision !== endForestMutationRevision
-      || startGlobalOperationCount !== endGlobalOperationCount;
+    const currentnessActuallyChanged = expectedEndForestMutationRevision !== endForestMutationRevision
+      || expectedEndGlobalOperationCount !== endGlobalOperationCount;
     if (
       authority !== siteCursorConstructionAuthority
       || !binding.isModuleConstructed()
@@ -123,7 +133,9 @@ export class TemplateCompilerSiteCursorTranscript {
       || preWalkAuthority.index !== binding.index
       || compilerReads.world !== binding.compilerWorld
       || events.some((event, ordinal) =>
-        !event.isOwnedBy(siteCursorConstructionAuthority) || event.ordinal !== ordinal
+        !event.isOwnedBy(siteCursorConstructionAuthority)
+        || event.ordinal !== ordinal
+        || (event instanceof TemplateCompilerSiteCursorProcessContentEvent && !event.isCoherent())
       )
       || nextTranscriptOrdinal !== events.length
       || (frontier == null
@@ -174,7 +186,10 @@ interface TemplateCompilerSiteCursorContainerFrame {
   nextOrdinal: number;
 }
 
-/** Execute one product-free no-local root prefix without admitting a target plan or mutating the occurrence forest. */
+/**
+ * Execute one product-free no-local root prefix without admitting a target plan.
+ * Forest mutation is admitted only through exact cursor-owned built-in site operations.
+ */
 export function executeTemplateCompilerRootSiteCursor(
   request: TemplateCompilerRootSiteCursorRequest,
 ): TemplateCompilerSiteCursorResult {
@@ -243,6 +258,7 @@ class TemplateCompilerRootSiteCursor {
   private transcriptOrdinal = 0;
   private phaseKind = TemplateCompilerSiteCursorPhaseKind.PreWalkRemainders;
   private frontier: TemplateCompilerSiteCursorFrontier | null = null;
+  private siteDriver: TemplateCompilerSiteExecutionDriverReference | null = null;
 
   constructor(readonly request: TemplateCompilerRootSiteCursorRequest) {
     this.binding = request.binding;
@@ -273,7 +289,11 @@ class TemplateCompilerRootSiteCursor {
     const ledger = this.ledger.finish(completion);
     const endForestMutationRevision = this.binding.forest.mutationRevision;
     const endGlobalOperationCount = this.binding.execution.sequence.readOperations().length;
-    return new TemplateCompilerSiteCursorTranscript(
+    const expectedEndForestMutationRevision = this.siteDriver?.expectedForestMutationRevision
+      ?? this.startForestMutationRevision;
+    const expectedEndGlobalOperationCount = this.siteDriver?.expectedGlobalOperationCount
+      ?? this.startGlobalOperationCount;
+    const transcript = new TemplateCompilerSiteCursorTranscript(
       siteCursorConstructionAuthority,
       this.binding,
       this.compilerReads,
@@ -285,9 +305,18 @@ class TemplateCompilerRootSiteCursor {
       endForestMutationRevision,
       this.startGlobalOperationCount,
       endGlobalOperationCount,
+      expectedEndForestMutationRevision,
+      expectedEndGlobalOperationCount,
       this.transcriptOrdinal,
       this.ledger.nextSiteEventOrdinal,
     );
+    if (
+      this.siteDriver != null
+      && this.frontier?.frontierKind !== TemplateCompilerSiteCursorFrontierKind.CurrentnessLost
+    ) {
+      this.binding.execution.finishSiteExecutionDriver(this.siteDriver);
+    }
+    return transcript;
   }
 
   private primePreWalkRemainders(): void {
@@ -634,16 +663,43 @@ class TemplateCompilerRootSiteCursor {
       );
       return null;
     }
+    let processContent: TemplateCompilerProcessContentResult | null = null;
     if (elementDefinition?.processContent != null) {
-      this.stop(
-        TemplateCompilerSiteCursorFrontierKind.BeforeProcessContent,
+      const plan = planTemplateCompilerProcessContent({
+        execution: this.binding.execution,
+        siteAuthority: this.siteDriver ?? this.binding.bootstrapClosure,
+        compilerReads: this.compilerReads,
+        elementRead,
+        host: element,
+      });
+      if (plan.state !== TemplateCompilerProcessContentPlanState.Exact) {
+        this.stop(
+          TemplateCompilerSiteCursorFrontierKind.BeforeProcessContent,
+          element,
+          null,
+          null,
+          successor,
+          plan.openReason?.summary
+            ?? `Custom element '${elementDefinition.name}' has an open processContent effect.`,
+        );
+        return null;
+      }
+      if (this.siteDriver == null) {
+        this.siteDriver = this.binding.execution.beginSiteExecutionDriver(plan.frontier);
+        this.semantics.useSiteDriver(this.siteDriver);
+      }
+      processContent = executeTemplateCompilerProcessContent({ plan, driver: this.siteDriver });
+      const removedSpends: TemplateCompilerSiteSpend[] = [];
+      this.events.push(new TemplateCompilerSiteCursorProcessContentEvent(
+        siteCursorConstructionAuthority,
+        this.transcriptOrdinal++,
         element,
-        null,
-        null,
-        successor,
-        `Custom element '${elementDefinition.name}' has a processContent effect before attribute traversal.`,
-      );
-      return null;
+        plan,
+        processContent,
+        removedSpends,
+      ));
+      this.accountProcessContentRemovals(processContent, removedSpends);
+      if (this.frontier != null) return null;
     }
 
     return this.visitElementAttributesAndChildren(
@@ -664,7 +720,7 @@ class TemplateCompilerRootSiteCursor {
     const progression = new TemplateCompilerLiveAttributeOwnerProgression(
       this.binding.forest,
       element,
-      this.startForestMutationRevision,
+      this.siteDriver?.expectedForestMutationRevision ?? this.startForestMutationRevision,
     );
     let hasTemplateController = false;
     let hasUsageContainerless = false;
@@ -672,8 +728,7 @@ class TemplateCompilerRootSiteCursor {
     for (const attribute of element.readAttributes()) {
       if (this.frontier != null) break;
       const liveSite = progression.begin(attribute);
-      const scalar = relation.receipts.get(attribute) ?? this.binding.execution.captureReachedAttributeScalar(
-        this.binding.bootstrapClosure,
+      const scalar = relation.receipts.get(attribute) ?? this.semantics.captureReachedAttributeScalar(
         element,
         attribute,
         liveSite.originalForestOrdinal,
@@ -1319,14 +1374,62 @@ class TemplateCompilerRootSiteCursor {
     }
   }
 
+  private accountProcessContentRemovals(
+    result: TemplateCompilerProcessContentResult,
+    spends: TemplateCompilerSiteSpend[],
+  ): void {
+    for (const occurrence of result.removedSiteOccurrences) {
+      const originState = this.semantics.originState(occurrence);
+      const node = occurrence instanceof TemplateCompilerAttributeOccurrence
+        ? occurrence.owner
+        : occurrence;
+      if (
+        occurrence.generation != null
+        || originState === TemplateCompilerPreWalkBrowserOriginState.NonSingular
+        || originState === TemplateCompilerPreWalkBrowserOriginState.CorrespondenceOpen
+        || originState === TemplateCompilerPreWalkBrowserOriginState.Unknown
+      ) {
+        this.stop(
+          occurrence.generation != null
+            ? TemplateCompilerSiteCursorFrontierKind.GeneratedSiteNeedsLowering
+            : originState === TemplateCompilerPreWalkBrowserOriginState.NonSingular
+              ? TemplateCompilerSiteCursorFrontierKind.NonSingularBrowserOrigin
+              : TemplateCompilerSiteCursorFrontierKind.AuthoredPrecedentMismatch,
+          node,
+          occurrence instanceof TemplateCompilerAttributeOccurrence ? occurrence : null,
+          null,
+          null,
+          'processContent removed a site without singular closed authored/browser bundle authority.',
+        );
+        break;
+      }
+      const bundle = occurrence instanceof TemplateCompilerAttributeOccurrence
+        ? this.semantics.singularAttributeBundle(occurrence)
+        : this.semantics.singularTextBundle(occurrence);
+      if (bundle == null || this.preWalk.receiptFor(bundle) != null) continue;
+      const attempt = this.ledger.excludeProcessContentRemoved(bundle, occurrence, result);
+      if (attempt instanceof TemplateCompilerSiteSpendConflict) {
+        this.stop(
+          TemplateCompilerSiteCursorFrontierKind.AccountingMismatch,
+          node,
+          occurrence instanceof TemplateCompilerAttributeOccurrence ? occurrence : null,
+          bundle,
+          null,
+          'processContent removal bundle conflicted with the site ledger.',
+        );
+        break;
+      }
+      spends.push(attempt);
+    }
+  }
+
   private validateSurrogate(): void {
     const carrier = this.binding.forest.compilerCarrier;
     const attributes = carrier.readAttributes();
     this.phaseKind = TemplateCompilerSiteCursorPhaseKind.SurrogateValidationStart;
     this.phase(TemplateCompilerSiteCursorPhaseKind.SurrogateValidationStart);
     for (const [ordinal, attribute] of attributes.entries()) {
-      const scalar = this.binding.execution.captureReachedAttributeScalar(
-        this.binding.bootstrapClosure,
+      const scalar = this.semantics.captureReachedAttributeScalar(
         carrier,
         attribute,
         ordinal,
@@ -1461,10 +1564,21 @@ class TemplateCompilerRootSiteCursor {
   }
 
   private ensureCurrentness(): void {
+    const expectedForestMutationRevision = this.siteDriver?.expectedForestMutationRevision
+      ?? this.startForestMutationRevision;
+    const expectedGlobalOperationCount = this.siteDriver?.expectedGlobalOperationCount
+      ?? this.startGlobalOperationCount;
     if (
-      this.binding.forest.mutationRevision !== this.startForestMutationRevision
-      || this.binding.execution.sequence.readOperations().length !== this.startGlobalOperationCount
+      this.binding.forest.mutationRevision !== expectedForestMutationRevision
+      || this.binding.execution.sequence.readOperations().length !== expectedGlobalOperationCount
     ) {
+      if (this.frontier != null) {
+        if (this.events[this.events.length - 1] !== this.frontier) {
+          throw new Error('Compiler cursor currentness cannot replace a nonterminal frontier event.');
+        }
+        this.events.pop();
+        this.transcriptOrdinal--;
+      }
       const frontier = new TemplateCompilerSiteCursorFrontier(
         siteCursorConstructionAuthority,
         this.transcriptOrdinal++,
@@ -1477,7 +1591,7 @@ class TemplateCompilerRootSiteCursor {
         this.ledger.nextSiteEventOrdinal,
         this.binding.forest.mutationRevision,
         this.binding.execution.sequence.readOperations().length,
-        'Compiler forest or operation frontier changed during non-mutating traversal.',
+        'Compiler forest or operation frontier diverged from cursor-owned execution currentness.',
       );
       this.frontier = frontier;
       this.events.push(frontier);

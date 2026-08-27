@@ -20,7 +20,11 @@ import {
   type TemplateCompilerReadView,
   TemplateCompilerScopeClosureState,
 } from './compiler-read-view.js';
-import type { TemplateCompilerReachedAttributeScalarReceipt } from './template-compiler-execution.js';
+import type {
+  TemplateCompilerInvocationBootstrapClosure,
+  TemplateCompilerReachedAttributeScalarReceipt,
+  TemplateCompilerSiteExecutionDriverReference,
+} from './template-compiler-execution.js';
 import type {
   TemplateCompilerNormalizedSite,
   TemplateCompilerNormalizedTextSite,
@@ -69,6 +73,7 @@ export class TemplateCompilerSiteCursorSemanticResolver {
     string,
     TemplateCompilerObservedValue<TemplateResolvedResource | null>
   >();
+  private siteAuthority: TemplateCompilerInvocationBootstrapClosure | TemplateCompilerSiteExecutionDriverReference;
 
   constructor(
     readonly binding: TemplateCompilerSiteInvocationBinding,
@@ -78,6 +83,27 @@ export class TemplateCompilerSiteCursorSemanticResolver {
     this.authoredOwnersByElement = htmlElementAttributeOwnersByElementProduct(
       binding.compilation.html.nodes,
       binding.compilation.html.attributes,
+    );
+    this.siteAuthority = binding.bootstrapClosure;
+  }
+
+  useSiteDriver(driver: TemplateCompilerSiteExecutionDriverReference): void {
+    if (driver.frontier.bootstrapClosure !== this.binding.bootstrapClosure) {
+      throw new Error('Compiler site semantic resolver cannot adopt a foreign site driver.');
+    }
+    this.siteAuthority = driver;
+  }
+
+  captureReachedAttributeScalar(
+    owner: TemplateCompilerElementOccurrence,
+    attribute: TemplateCompilerAttributeOccurrence,
+    liveOrdinal: number,
+  ): TemplateCompilerReachedAttributeScalarReceipt {
+    return this.binding.execution.captureReachedAttributeScalar(
+      this.siteAuthority,
+      owner,
+      attribute,
+      liveOrdinal,
     );
   }
 
@@ -120,8 +146,7 @@ export class TemplateCompilerSiteCursorSemanticResolver {
       if (qualifiedAttributeName(attribute) !== 'as-element') continue;
       return {
         attribute,
-        scalar: this.binding.execution.captureReachedAttributeScalar(
-          this.binding.bootstrapClosure,
+        scalar: this.captureReachedAttributeScalar(
           element,
           attribute,
           ordinal,
@@ -151,8 +176,7 @@ export class TemplateCompilerSiteCursorSemanticResolver {
       && expectedOwner.attributes.length === liveAttributes.length;
 
     for (const [ordinal, attribute] of liveAttributes.entries()) {
-      const scalar = this.binding.execution.captureReachedAttributeScalar(
-        this.binding.bootstrapClosure,
+      const scalar = this.captureReachedAttributeScalar(
         element,
         attribute,
         ordinal,

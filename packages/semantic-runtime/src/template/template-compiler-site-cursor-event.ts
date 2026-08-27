@@ -26,13 +26,18 @@ import type {
   TemplateCompilerNormalizedSiteBundle,
   TemplateCompilerOccurrenceOnlyRow,
   TemplateCompilerSiteSpend,
-  TemplateCompilerSiteSpendDisposition,
 } from './template-compiler-site-spend-ledger.js';
+import { TemplateCompilerSiteSpendDisposition } from './template-compiler-site-spend-ledger.js';
 import type { HtmlElement } from './html-ir.js';
+import type {
+  TemplateCompilerProcessContentPlan,
+  TemplateCompilerProcessContentResult,
+} from './template-compiler-process-content.js';
 
 export const enum TemplateCompilerSiteCursorEventKind {
   Phase = 'phase',
   Element = 'element',
+  ProcessContent = 'process-content',
   Attribute = 'attribute',
   Text = 'text',
   IgnoredNode = 'ignored-node',
@@ -132,6 +137,33 @@ export class TemplateCompilerSiteCursorElementEvent extends TemplateCompilerSite
     readonly elementDefinition: CustomElementDefinition | null,
   ) {
     super(authority, ordinal, TemplateCompilerSiteCursorEventKind.Element);
+  }
+}
+
+export class TemplateCompilerSiteCursorProcessContentEvent extends TemplateCompilerSiteCursorEvent {
+  constructor(
+    authority: object,
+    ordinal: number,
+    readonly host: TemplateCompilerElementOccurrence,
+    readonly plan: TemplateCompilerProcessContentPlan,
+    readonly result: TemplateCompilerProcessContentResult,
+    readonly removedSpends: readonly TemplateCompilerSiteSpend[],
+  ) {
+    super(authority, ordinal, TemplateCompilerSiteCursorEventKind.ProcessContent);
+    if (!this.isCoherent()) {
+      throw new Error('Compiler processContent cursor event lost exact plan, operation, or removal spending authority.');
+    }
+  }
+
+  isCoherent(): boolean {
+    return this.result.plan === this.plan
+      && this.plan.host === this.host
+      && this.removedSpends.every((spend) =>
+        spend.disposition === TemplateCompilerSiteSpendDisposition.ProcessContentRemoved
+        && spend.siteEventOrdinal == null
+        && spend.causeOperation === this.result.operation
+        && this.result.authorizesRemovedSiteOccurrence(spend.occurrence)
+      );
   }
 }
 

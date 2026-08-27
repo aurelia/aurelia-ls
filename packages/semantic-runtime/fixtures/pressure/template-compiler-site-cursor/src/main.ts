@@ -8,6 +8,9 @@ import cursorOpenTemplate from './cursor-open.html';
 import cursorProgressionTemplate from './cursor-progression.html';
 import cursorProjectionTemplate from './cursor-projection.html';
 import cursorProcessContentTemplate from './cursor-process-content.html';
+import cursorProcessContentEmptyTemplate from './cursor-process-content-empty.html';
+import cursorProcessContentNamedTemplate from './cursor-process-content-named.html';
+import cursorProcessContentArbitraryTemplate from './cursor-process-content-arbitrary.html';
 import cursorShapesTemplate from './cursor-shapes.html';
 import cursorSurrogateInvalidTemplate from './cursor-surrogate-invalid.html';
 import cursorSurrogateValidTemplate from './cursor-surrogate-valid.html';
@@ -115,6 +118,36 @@ class CursorTemplateController {
 })
 class CursorProcessContent {}
 
+@customElement({
+  name: 'cursor-process-content-empty',
+  template: cursorProcessContentEmptyTemplate,
+})
+class CursorProcessContentEmpty {}
+
+@customElement({
+  name: 'cursor-process-content-named',
+  template: cursorProcessContentNamedTemplate,
+})
+class CursorProcessContentNamed {
+  removed = 'removed';
+  kept = 'kept';
+}
+
+@customElement({
+  name: 'cursor-arbitrary-content',
+  processContent: () => true,
+})
+class CursorArbitraryContent {}
+
+@customElement({
+  name: 'cursor-process-content-arbitrary',
+  template: cursorProcessContentArbitraryTemplate,
+  dependencies: [CursorArbitraryContent],
+})
+class CursorProcessContentArbitrary {
+  message = 'open';
+}
+
 @customElement({ name: 'cursor-containerless-leaf', containerless: true })
 class CursorContainerlessLeaf {}
 
@@ -154,6 +187,9 @@ void new Aurelia()
     CursorWide,
     CursorTemplateController,
     CursorProcessContent,
+    CursorProcessContentEmpty,
+    CursorProcessContentNamed,
+    CursorProcessContentArbitrary,
     CursorContainerless,
     CursorOpen,
     CursorSurrogateValid,

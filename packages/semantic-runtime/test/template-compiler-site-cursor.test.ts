@@ -44,6 +44,7 @@ import {
   TemplateCompilerSiteCursorFrontierKind,
   TemplateCompilerSiteCursorPhaseEvent,
   TemplateCompilerSiteCursorPhaseKind,
+  TemplateCompilerSiteCursorProcessContentEvent,
   TemplateCompilerSiteCursorResultState,
   TemplateCompilerSiteCursorSubtreeExclusionEvent,
   TemplateCompilerSiteCursorSurrogateValidationEvent,
@@ -197,7 +198,6 @@ describe('template compiler root site cursor', () => {
   test('keeps the central effect and normalized-open frontiers distinct', () => {
     const expected = new Map<string, TemplateCompilerSiteCursorFrontierKind>([
       ['cursor-template-controller', TemplateCompilerSiteCursorFrontierKind.AfterAttributesBeforeTemplateController],
-      ['cursor-process-content', TemplateCompilerSiteCursorFrontierKind.BeforeProcessContent],
       ['cursor-containerless', TemplateCompilerSiteCursorFrontierKind.AfterAttributesBeforeContainerless],
       ['cursor-open', TemplateCompilerSiteCursorFrontierKind.ReachedNormalizedOpen],
     ]);
@@ -207,6 +207,80 @@ describe('template compiler root site cursor', () => {
       expect(transcript.frontier?.frontierKind, name)
         .not.toBe(TemplateCompilerSiteCursorFrontierKind.ReachedNormalizedInvalid);
     }
+  });
+
+  test('executes canonical AuSlot processContent before host attributes with exact removal spending', () => {
+    const cases = [
+      ['cursor-process-content', 'default', null],
+      ['cursor-process-content-empty', '', ''],
+      ['cursor-process-content-named', 'heading', 'heading'],
+    ] as const;
+    let named: TemplateCompilerSiteCursorTranscript | null = null;
+    for (const [name, expectedName, expectedCarrier] of cases) {
+      const transcript = fixture.transcript(name);
+      if (name === 'cursor-process-content-named') named = transcript;
+      const processEvents = eventsOf(transcript, TemplateCompilerSiteCursorProcessContentEvent);
+      expect(processEvents, name).toHaveLength(1);
+      const event = processEvents[0]!;
+      expect(event.result.metadata.name, name).toBe(expectedName);
+      expect(event.result.nameCarrier?.value ?? null, name).toBe(expectedCarrier);
+      expect(event.result.operation.executionOrdinal, name).toBe(transcript.startGlobalOperationCount);
+      expect(transcript.endGlobalOperationCount - transcript.startGlobalOperationCount, name).toBe(1);
+      expect(transcript.expectedEndGlobalOperationCount, name).toBe(transcript.endGlobalOperationCount);
+      expect(transcript.expectedEndForestMutationRevision, name).toBe(transcript.endForestMutationRevision);
+      const firstHostAttributeOrdinal = transcript.events.findIndex((candidate) =>
+        candidate instanceof TemplateCompilerSiteCursorAttributeEvent && candidate.owner === event.host
+      );
+      if (firstHostAttributeOrdinal >= 0) expect(event.ordinal, name).toBeLessThan(firstHostAttributeOrdinal);
+    }
+
+    if (named == null) throw new Error('Expected named processContent transcript.');
+    const event = eventsOf(named, TemplateCompilerSiteCursorProcessContentEvent)[0]!;
+    expect(event.result.removals.map((removal) => [
+      removal.occurrence instanceof TemplateCompilerElementOccurrence
+        ? removal.occurrence.tagName
+        : removal.occurrence.nodeKind,
+      removal.liveOrdinal,
+    ])).toEqual([['span', 1], ['em', 1]]);
+    expect(event.result.removedOccurrences.every((occurrence) => occurrence.parent == null)).toBe(true);
+    expect(event.host.readChildren().some((child) =>
+      child instanceof TemplateCompilerElementOccurrence && child.tagName === 'b'
+    )).toBe(true);
+    expect(event.removedSpends).toHaveLength(4);
+    expect(event.removedSpends.map((spend) => spend.occurrence))
+      .toEqual(event.result.removedSiteOccurrences);
+    expect(event.removedSpends.every((spend) =>
+      spend.disposition === TemplateCompilerSiteSpendDisposition.ProcessContentRemoved
+      && spend.siteEventOrdinal == null
+      && spend.causeOperation === event.result.operation
+      && event.result.authorizesRemovedSiteOccurrence(spend.occurrence)
+    )).toBe(true);
+    expect(named.endForestMutationRevision - named.startForestMutationRevision).toBe(2);
+  });
+
+  test('keeps arbitrary processContent Open without admitting a site driver', () => {
+    // Exact AuSlot -> arbitrary-hook chaining remains deferred: AuSlot currently reaches the projection/containerless
+    // structural frontier before a later sibling can be visited, so composing that sequence here would fabricate reach.
+    const run = fixture.run('cursor-process-content-arbitrary');
+    const transcript = run.transcript();
+    const repeated = run.transcript();
+    expect(transcriptProjection(repeated)).toEqual(transcriptProjection(transcript));
+    expect(transcript.frontier?.frontierKind).toBe(TemplateCompilerSiteCursorFrontierKind.BeforeProcessContent);
+    expect(eventsOf(transcript, TemplateCompilerSiteCursorProcessContentEvent)).toEqual([]);
+    expect(transcript.binding.execution.siteExecutionContext(transcript.binding.lane)).toBeNull();
+    expect(transcript.endForestMutationRevision).toBe(transcript.startForestMutationRevision);
+    expect(transcript.endGlobalOperationCount).toBe(transcript.startGlobalOperationCount);
+    expect(repeated.binding.execution.siteExecutionContext(repeated.binding.lane)).toBeNull();
+  });
+
+  test('does not execute AuSlot from an unledgered name scalar', () => {
+    const transcript = fixture.transcriptWithUnledgeredRewrite('cursor-process-content-named', 'name');
+
+    expect(transcript.frontier?.frontierKind).toBe(TemplateCompilerSiteCursorFrontierKind.BeforeProcessContent);
+    expect(eventsOf(transcript, TemplateCompilerSiteCursorProcessContentEvent)).toEqual([]);
+    expect(transcript.endForestMutationRevision).toBe(transcript.startForestMutationRevision);
+    expect(transcript.endGlobalOperationCount).toBe(transcript.startGlobalOperationCount);
+    expect(transcript.binding.execution.siteExecutionContext(transcript.binding.lane)).toBeNull();
   });
 
   test('finishes all-valid surrogate validation before the dedicated classification frontier', () => {

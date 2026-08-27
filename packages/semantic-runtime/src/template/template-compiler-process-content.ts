@@ -36,6 +36,7 @@ import {
   TemplateCompilerOperationExecutionMechanism,
   TemplateCompilerOperationKind,
   type TemplateCompilerOperation,
+  type TemplateCompilerReachedAttributeScalarReceipt,
   TemplateCompilerSiteExecutionDriverReference,
   type TemplateCompilerSiteExecutionFrontier,
 } from './template-compiler-execution.js';
@@ -43,6 +44,7 @@ import {
   type TemplateCompilerAttributeOccurrence,
   TemplateCompilerElementOccurrence,
   type TemplateCompilerNodeOccurrence,
+  TemplateCompilerTextOccurrence,
 } from './template-compiler-occurrence.js';
 
 const processContentPlanAuthority = {};
@@ -58,6 +60,7 @@ export const enum TemplateCompilerProcessContentOpenReasonKind {
   DefinitionOpen = 'definition-open',
   CallableOpen = 'callable-open',
   ArbitraryHook = 'arbitrary-hook',
+  InputScalarOpen = 'input-scalar-open',
 }
 
 export class TemplateCompilerProcessContentOpenReason {
@@ -106,6 +109,7 @@ export class TemplateCompilerProcessContentPlan {
     > | null,
     readonly metadata: TemplateCompilerProcessContentNameMetadata | null,
     readonly nameCarrier: TemplateCompilerAttributeOccurrence | null,
+    readonly nameScalar: TemplateCompilerReachedAttributeScalarReceipt | null,
     readonly strictFalse: false | null,
     readonly openReason: TemplateCompilerProcessContentOpenReason | null,
     readonly forestMutationRevision: number,
@@ -119,6 +123,7 @@ export class TemplateCompilerProcessContentPlan {
           && callable != null
           && auSlot != null
           && metadata != null
+          && (nameCarrier == null) === (nameScalar == null)
           && strictFalse === false
           && openReason == null)
       || (state === TemplateCompilerProcessContentPlanState.Open) !== (openReason != null)
@@ -146,6 +151,12 @@ export class TemplateCompilerProcessContentRemoval {
 /** Nominal exact execution result for one committed built-in processContent operation. */
 export class TemplateCompilerProcessContentResult {
   readonly #authority: object;
+  readonly #removedSiteOccurrenceSet: ReadonlySet<
+    TemplateCompilerAttributeOccurrence | TemplateCompilerTextOccurrence
+  >;
+  readonly removedSiteOccurrences: readonly (
+    TemplateCompilerAttributeOccurrence | TemplateCompilerTextOccurrence
+  )[];
 
   constructor(
     authority: object,
@@ -154,6 +165,7 @@ export class TemplateCompilerProcessContentResult {
     readonly operation: TemplateCompilerOperation,
     readonly metadata: TemplateCompilerProcessContentNameMetadata,
     readonly nameCarrier: TemplateCompilerAttributeOccurrence | null,
+    readonly nameScalar: TemplateCompilerReachedAttributeScalarReceipt | null,
     readonly removals: readonly TemplateCompilerProcessContentRemoval[],
     readonly strictFalse: false,
   ) {
@@ -164,6 +176,7 @@ export class TemplateCompilerProcessContentResult {
       || !plan.isExact()
       || plan.metadata !== metadata
       || plan.nameCarrier !== nameCarrier
+      || plan.nameScalar !== nameScalar
       || driver.context !== operation.context
       || operation.operationKind !== TemplateCompilerOperationKind.ProcessContent
       || operation.executionMechanism !== TemplateCompilerOperationExecutionMechanism.BuiltIn
@@ -180,6 +193,11 @@ export class TemplateCompilerProcessContentResult {
       throw new Error('Template compiler processContent result lost operation, metadata, or removal authority.');
     }
     this.#authority = authority;
+    this.removedSiteOccurrences = removals.flatMap((removal) => siteOccurrencesInSubtree(removal.occurrence));
+    this.#removedSiteOccurrenceSet = new Set(this.removedSiteOccurrences);
+    if (this.#removedSiteOccurrenceSet.size !== this.removedSiteOccurrences.length) {
+      throw new Error('Template compiler processContent result repeats one removed site occurrence.');
+    }
   }
 
   isModuleConstructed(): boolean {
@@ -189,13 +207,20 @@ export class TemplateCompilerProcessContentResult {
   get removedOccurrences(): readonly TemplateCompilerNodeOccurrence[] {
     return this.removals.map((removal) => removal.occurrence);
   }
+
+  authorizesRemovedSiteOccurrence(
+    occurrence: TemplateCompilerAttributeOccurrence | TemplateCompilerTextOccurrence,
+  ): boolean {
+    return this.isModuleConstructed() && this.#removedSiteOccurrenceSet.has(occurrence);
+  }
 }
 
 /** Resolve one reached live processContent site without admitting a site driver. */
 export function planTemplateCompilerProcessContent(
   request: TemplateCompilerProcessContentPlanningRequest,
 ): TemplateCompilerProcessContentPlan {
-  const temporal = validatePlanningAuthority(request);
+  const liveHost = liveProcessContentHost(request.host);
+  const temporal = validatePlanningAuthority(request, liveHost.lookupName);
   const result = request.elementRead.value;
   const definition = result?.definition instanceof CustomElementDefinition
     ? result.definition
@@ -263,10 +288,36 @@ export function planTemplateCompilerProcessContent(
   }
   const auSlot = planAuSlotCompilerProcessContent(
     result.builtInResource,
-    liveAuSlotInput(request.host),
+    liveHost.auSlotInput,
   );
   if (auSlot == null) {
     throw new Error('Canonical AuSlot resource lost its shared compiler processContent plan.');
+  }
+  const nameCarrier = auSlot.nameAttribute?.attribute ?? null;
+  let nameScalar: TemplateCompilerReachedAttributeScalarReceipt | null = null;
+  if (nameCarrier != null) {
+    const nameOrdinal = liveHost.attributeOrdinals.get(nameCarrier) ?? null;
+    if (nameOrdinal == null) {
+      throw new Error('AuSlot shared name carrier is absent from its event-time host attribute index.');
+    }
+    nameScalar = request.execution.captureReachedAttributeScalar(
+      request.siteAuthority,
+      request.host,
+      nameCarrier,
+      nameOrdinal,
+    );
+  }
+  if (nameScalar != null && (!nameScalar.isExact() || nameScalar.currentValue !== auSlot.name)) {
+    return openPlan(
+      request,
+      temporal,
+      definition,
+      TemplateCompilerProcessContentOpenReasonKind.InputScalarOpen,
+      'AuSlot static name is not fully explained by the current committed compiler scalar history.',
+      auSlot,
+      nameCarrier,
+      nameScalar,
+    );
   }
   const metadata = new TemplateCompilerProcessContentNameMetadata(auSlot.name);
   return new TemplateCompilerProcessContentPlan(
@@ -283,7 +334,8 @@ export function planTemplateCompilerProcessContent(
     callable,
     auSlot,
     metadata,
-    auSlot.nameAttribute?.attribute ?? null,
+    nameCarrier,
+    nameScalar,
     false,
     null,
     temporal.forestMutationRevision,
@@ -335,6 +387,7 @@ export function executeTemplateCompilerProcessContent(
     operation,
     plan.metadata,
     plan.nameCarrier,
+    plan.nameScalar,
     removals,
     false,
   );
@@ -353,6 +406,7 @@ class ProcessContentTemporalAuthority {
 
 function validatePlanningAuthority(
   request: TemplateCompilerProcessContentPlanningRequest,
+  lookupName: string,
 ): ProcessContentTemporalAuthority {
   const { execution, compilerReads, elementRead, host } = request;
   const driver = isSiteDriver(request.siteAuthority) ? request.siteAuthority : null;
@@ -364,7 +418,7 @@ function validatePlanningAuthority(
     || elementRead.observation.readKind !== TemplateCompilerReadKind.ElementResource
     || elementRead.observation.compilerScopeIdentityHandle !== compilerReads.world.resourceScope.identityHandle
     || !compilerReads.readAll().includes(elementRead.observation)
-    || compilerReads.readElement(liveElementLookupName(host)).observation !== elementRead.observation
+    || compilerReads.readElement(lookupName).observation !== elementRead.observation
     || execution.forest.nodeForOccurrenceKey(host.occurrenceKey) !== host
     || !belongsToInvocationContent(host, lane.compilerContent)
   ) {
@@ -426,6 +480,12 @@ function openPlan(
   definition: CustomElementDefinition | null,
   reasonKind: TemplateCompilerProcessContentOpenReasonKind,
   summary: string,
+  auSlot: AuSlotCompilerProcessContentPlan<
+    TemplateCompilerNodeOccurrence,
+    TemplateCompilerAttributeOccurrence
+  > | null = null,
+  nameCarrier: TemplateCompilerAttributeOccurrence | null = null,
+  nameScalar: TemplateCompilerReachedAttributeScalarReceipt | null = null,
 ): TemplateCompilerProcessContentPlan {
   return new TemplateCompilerProcessContentPlan(
     processContentPlanAuthority,
@@ -439,9 +499,10 @@ function openPlan(
     request.host,
     definition,
     null,
+    auSlot,
     null,
-    null,
-    null,
+    nameCarrier,
+    nameScalar,
     null,
     new TemplateCompilerProcessContentOpenReason(reasonKind, summary),
     temporal.forestMutationRevision,
@@ -474,15 +535,43 @@ function callableReference(definition: CustomElementDefinition): TemplateCompile
     : new TemplateCompilerCallableReference(null, callable.identityHandle, sourceAddress);
 }
 
-function liveAuSlotInput(
-  host: TemplateCompilerElementOccurrence,
-): AuSlotCompilerProcessContentInput<TemplateCompilerNodeOccurrence, TemplateCompilerAttributeOccurrence> {
-  return new AuSlotCompilerProcessContentInput(
-    liveAttributes(host),
-    host.readChildren().map((child) => new AuSlotCompilerChildSnapshot(
-      child,
-      child instanceof TemplateCompilerElementOccurrence ? liveAttributes(child) : null,
-    )),
+class LiveProcessContentHost {
+  constructor(
+    readonly lookupName: string,
+    readonly auSlotInput: AuSlotCompilerProcessContentInput<
+      TemplateCompilerNodeOccurrence,
+      TemplateCompilerAttributeOccurrence
+    >,
+    readonly attributeOrdinals: ReadonlyMap<TemplateCompilerAttributeOccurrence, number>,
+  ) {}
+}
+
+/** Capture lookup, scalar ordinals, and shared AuSlot input in one O(attribute width) host pass. */
+function liveProcessContentHost(host: TemplateCompilerElementOccurrence): LiveProcessContentHost {
+  const hostAttributes: AuSlotCompilerAttributeSnapshot<TemplateCompilerAttributeOccurrence>[] = [];
+  const attributeOrdinals = new Map<TemplateCompilerAttributeOccurrence, number>();
+  let asElementValue: string | null = null;
+  for (const [ordinal, attribute] of host.readAttributes().entries()) {
+    const qualifiedName = qualifiedAttributeName(attribute);
+    attributeOrdinals.set(attribute, ordinal);
+    hostAttributes.push(new AuSlotCompilerAttributeSnapshot(
+      attribute,
+      qualifiedName,
+      attribute.value,
+      attribute.namespaceUri,
+    ));
+    if (qualifiedName === 'as-element') asElementValue = attribute.value;
+  }
+  return new LiveProcessContentHost(
+    runtimeElementLookupName(host.tagName, host.namespace, asElementValue),
+    new AuSlotCompilerProcessContentInput(
+      hostAttributes,
+      host.readChildren().map((child) => new AuSlotCompilerChildSnapshot(
+        child,
+        child instanceof TemplateCompilerElementOccurrence ? liveAttributes(child) : null,
+      )),
+    ),
+    attributeOrdinals,
   );
 }
 
@@ -497,9 +586,23 @@ function liveAttributes(
   ));
 }
 
-function liveElementLookupName(host: TemplateCompilerElementOccurrence): string {
-  const asElement = host.readAttributes().find((attribute) => qualifiedAttributeName(attribute) === 'as-element');
-  return runtimeElementLookupName(host.tagName, host.namespace, asElement?.value ?? null);
+function siteOccurrencesInSubtree(
+  root: TemplateCompilerNodeOccurrence,
+): readonly (TemplateCompilerAttributeOccurrence | TemplateCompilerTextOccurrence)[] {
+  const occurrences: (TemplateCompilerAttributeOccurrence | TemplateCompilerTextOccurrence)[] = [];
+  const pending: TemplateCompilerNodeOccurrence[] = [root];
+  while (pending.length > 0) {
+    const node = pending.pop()!;
+    if (node instanceof TemplateCompilerTextOccurrence) occurrences.push(node);
+    if (node instanceof TemplateCompilerElementOccurrence) {
+      occurrences.push(...node.readAttributes());
+      if (node.templateContent != null) pending.push(node.templateContent);
+    }
+    for (let ordinal = node.readChildren().length - 1; ordinal >= 0; ordinal--) {
+      pending.push(node.readChildren()[ordinal]!);
+    }
+  }
+  return occurrences;
 }
 
 function qualifiedAttributeName(attribute: TemplateCompilerAttributeOccurrence): string {
