@@ -86,6 +86,8 @@ import type { TemplateCompilationUnit } from './compilation-unit.js';
 import type { TemplateCompilerWorldEmission } from './compiler-world-materializer.js';
 import type { TemplateCompilerReadView } from './compiler-read-view.js';
 import {
+  HtmlComment,
+  HtmlCommentSemanticKind,
   HtmlElement,
   HtmlNamespaceKind,
   HtmlText,
@@ -831,6 +833,7 @@ class CompiledTemplateInstructionTraversal {
   ) {}
 
   run(): void {
+    this.recordAuthoredCompilerMarkerIssues();
     const rootTemplate = compilerRootTemplateElement(this.input.html);
     const contentRoots = rootTemplate?.children ?? this.input.html.document.rootNodes;
     if (rootTemplate != null) {
@@ -849,6 +852,26 @@ class CompiledTemplateInstructionTraversal {
 
     for (const root of this.input.html.document.rootNodes) {
       this.visitNode(root, this.assemblyState.targetPlan.root);
+    }
+  }
+
+  private recordAuthoredCompilerMarkerIssues(): void {
+    for (const node of this.input.html.nodes) {
+      if (
+        !(node instanceof HtmlComment)
+        || node.semanticKind !== HtmlCommentSemanticKind.Plain
+        || node.text !== 'au'
+      ) {
+        continue;
+      }
+      this.assemblyState.addCompilerIssue(
+        `authored-compiler-marker:${node.productHandle}`,
+        node.identityHandle,
+        TemplateCompilerIssueKind.AuthoredCompilerMarker,
+        'Authored <!--au--> comments collide with Aurelia compiler target markers.',
+        null,
+        node.sourceAddressHandle,
+      );
     }
   }
 

@@ -22,5 +22,7 @@ describe('template compiler issue authority classification', () => {
       .toBe(false);
     expect(isLocalTemplateAuthoringIssueKind(TemplateCompilerIssueKind.InvalidSurrogateAttribute))
       .toBe(false);
+    expect(isLocalTemplateAuthoringIssueKind(TemplateCompilerIssueKind.AuthoredCompilerMarker))
+      .toBe(false);
   });
 });

@@ -33,6 +33,8 @@ export const enum TemplateCompilerIssueKind {
   UnknownBindingCommand = 'unknown-binding-command',
   BindingToNonBindable = 'binding-to-non-bindable',
   InvalidLetCommand = 'invalid-let-command',
+  /** Source-authored `<!--au-->` collides with the compiler's runtime target marker spelling. */
+  AuthoredCompilerMarker = 'authored-compiler-marker',
   ReservedSpreadSyntax = 'reserved-spread-syntax',
   ReservedBindableSyntax = 'reserved-bindables-syntax',
   BindingCommandBuildInvalid = 'binding-command-build-invalid',
@@ -69,6 +71,7 @@ export function isLocalTemplateAuthoringIssueKind(
     case TemplateCompilerIssueKind.UnknownBindingCommand:
     case TemplateCompilerIssueKind.BindingToNonBindable:
     case TemplateCompilerIssueKind.InvalidLetCommand:
+    case TemplateCompilerIssueKind.AuthoredCompilerMarker:
     case TemplateCompilerIssueKind.ReservedSpreadSyntax:
     case TemplateCompilerIssueKind.ReservedBindableSyntax:
     case TemplateCompilerIssueKind.BindingCommandBuildInvalid:
