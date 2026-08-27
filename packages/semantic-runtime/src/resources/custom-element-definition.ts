@@ -98,6 +98,14 @@ export class ShadowOptionsDefinition {
   ) {}
 }
 
+/** Runtime-html must retain a host element whenever the component creates a native shadow root. */
+export function customElementRequiresShadowHost(
+  shadowOptions: ShadowOptionsDefinition | null,
+  hasSlots: boolean,
+): boolean {
+  return shadowOptions != null || hasSlots;
+}
+
 // TODO(resource-convergence): This is a provisional field-contribution envelope. Once convergence has real materializers,
 // decide whether contributions should become per-origin variants, per-field patches, or another tighter shape.
 export class CustomElementDefinitionContribution {

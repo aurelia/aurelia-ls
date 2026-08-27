@@ -236,6 +236,7 @@ export class TemplateCompilerLiveAttributeOwnerResult {
 
   constructor(
     readonly element: TemplateCompilerElementOccurrence,
+    readonly authoredElement: HtmlElement | null,
     readonly lookupName: string,
     readonly debugRead: TemplateCompilerObservedValue<boolean>,
     readonly progression: TemplateCompilerLiveAttributeOwnerProgression,
@@ -390,6 +391,7 @@ class TemplateCompilerLiveAttributeOwnerAssembly {
     ));
     return new TemplateCompilerLiveAttributeOwnerResult(
       this.request.element,
+      this.authoredElement,
       this.request.lookupName,
       this.debugRead,
       this.progression,

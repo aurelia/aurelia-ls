@@ -813,6 +813,7 @@ function elementResourceResultParts(result: TemplateResolvedResource | null): re
         definition.capture.kind,
         scalarPart(definition.containerless),
         scalarPart(definition.shadowOptions != null),
+        scalarPart(definition.hasSlots),
         scalarPart(definition.processContent != null),
       ]
       : ['no-custom-element-definition']),

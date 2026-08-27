@@ -24,6 +24,13 @@ import {
 } from '../src/template/template-compiler-live-attribute-assembly.js';
 import { TemplateCompilerLiveAttributeDisposition } from '../src/template/template-compiler-live-attribute-owner.js';
 import {
+  TemplateCompilerHydrateElementBlockerKind,
+  TemplateCompilerHydrateElementBlockerScope,
+  TemplateCompilerHydrateElementProcessContentState,
+  TemplateCompilerHydrateElementProjectionState,
+  TemplateCompilerHydrateElementStagingState,
+} from '../src/template/template-compiler-hydrate-element-staging.js';
+import {
   buildTemplateCompilerNormalizedSiteIndex,
   TemplateCompilerNormalizedSiteIndexState,
 } from '../src/template/template-compiler-normalized-site-index.js';
@@ -200,6 +207,19 @@ describe('template compiler root site cursor', () => {
     expect(transcript.frontier?.node).toBeInstanceOf(TemplateCompilerElementOccurrence);
     expect((transcript.frontier?.node as TemplateCompilerElementOccurrence).tagName).toBe('cursor-leaf');
     expect(elementTags(transcript)).not.toContain('span');
+    expect(transcript.hydrateElementEnvelopes).toHaveLength(1);
+    const envelope = transcript.hydrateElementEnvelopes[0]!;
+    expect(envelope.state).toBe(TemplateCompilerHydrateElementStagingState.Pending);
+    expect(envelope.instructionReady).toBe(false);
+    expect(blockerProjection(envelope)).toEqual([
+      [TemplateCompilerHydrateElementBlockerScope.Envelope, TemplateCompilerHydrateElementBlockerKind.ProjectionExtractionPending],
+      [TemplateCompilerHydrateElementBlockerScope.Downstream, TemplateCompilerHydrateElementBlockerKind.TargetRowPlacementPending],
+    ]);
+    expect(envelope.draft?.projection.state).toBe(TemplateCompilerHydrateElementProjectionState.PendingExtraction);
+    expect(envelope.draft?.projection.postProcessChildren).toHaveLength(1);
+    expect((envelope.draft?.projection.postProcessChildren[0] as TemplateCompilerElementOccurrence).tagName).toBe('span');
+    expect(envelope.draft?.processContent.state).toBe(TemplateCompilerHydrateElementProcessContentState.Absent);
+    expect(envelope.draft?.containerless.effective).toBe(false);
   });
 
   test('stops on an exact authored reserved marker without publishing a local issue', () => {
@@ -213,10 +233,13 @@ describe('template compiler root site cursor', () => {
     const expected = new Map<string, TemplateCompilerSiteCursorFrontierKind>([
       ['cursor-template-controller', TemplateCompilerSiteCursorFrontierKind.AfterAttributesBeforeTemplateController],
       ['cursor-containerless', TemplateCompilerSiteCursorFrontierKind.AfterAttributesBeforeContainerless],
+      ['cursor-usage-containerless', TemplateCompilerSiteCursorFrontierKind.AfterAttributesBeforeContainerless],
       ['cursor-open', TemplateCompilerSiteCursorFrontierKind.ReachedLiveAttributeInvalid],
     ]);
+    let containerless: TemplateCompilerSiteCursorTranscript | null = null;
     for (const [name, frontier] of expected) {
       const transcript = fixture.transcript(name);
+      if (name === 'cursor-containerless') containerless = transcript;
       expect(transcript.frontier?.frontierKind, name).toBe(frontier);
       expect(transcript.frontier?.frontierKind, name)
         .not.toBe(TemplateCompilerSiteCursorFrontierKind.ReachedNormalizedInvalid);
@@ -229,6 +252,71 @@ describe('template compiler root site cursor', () => {
       issueKind: 'unknown-binding-command',
       frameworkErrorCode: 'AUR0713',
     });
+    if (containerless == null) throw new Error('Expected containerless transcript.');
+    expect(containerless.hydrateElementEnvelopes).toHaveLength(1);
+    const envelope = containerless.hydrateElementEnvelopes[0]!;
+    expect(envelope.state).toBe(TemplateCompilerHydrateElementStagingState.Exact);
+    expect(envelope.instructionReady).toBe(true);
+    expect(envelope.draft?.containerless).toMatchObject({
+      effective: true,
+      fromDefinition: true,
+      fromUsage: false,
+    });
+    expect(blockerProjection(envelope)).toEqual([
+      [TemplateCompilerHydrateElementBlockerScope.Downstream, TemplateCompilerHydrateElementBlockerKind.ContainerlessPlacementPending],
+      [TemplateCompilerHydrateElementBlockerScope.Downstream, TemplateCompilerHydrateElementBlockerKind.TargetRowPlacementPending],
+    ]);
+  });
+
+  test('keeps usage-only containerless distinct from effective target placement', () => {
+    const transcript = fixture.transcript('cursor-usage-containerless');
+    expect(transcript.frontier?.frontierKind)
+      .toBe(TemplateCompilerSiteCursorFrontierKind.AfterAttributesBeforeContainerless);
+    expect(transcript.hydrateElementEnvelopes).toHaveLength(1);
+    const envelope = transcript.hydrateElementEnvelopes[0]!;
+    expect(envelope.state).toBe(TemplateCompilerHydrateElementStagingState.Exact);
+    expect(envelope.draft?.containerless).toMatchObject({
+      effective: true,
+      fromDefinition: false,
+      fromUsage: true,
+    });
+    expect(blockerProjection(envelope)).toEqual([
+      [TemplateCompilerHydrateElementBlockerScope.Downstream, TemplateCompilerHydrateElementBlockerKind.ContainerlessPlacementPending],
+      [TemplateCompilerHydrateElementBlockerScope.Downstream, TemplateCompilerHydrateElementBlockerKind.TargetRowPlacementPending],
+    ]);
+  });
+
+  test('rejects usage containerless whenever the custom element requires a native shadow host', () => {
+    const cases = [
+      ['cursor-shadow-containerless', 'shadow'],
+      ['cursor-slots-containerless', 'slots'],
+    ] as const;
+    for (const [name, cause] of cases) {
+      const transcript = fixture.transcript(name);
+      expect(transcript.frontier?.frontierKind, name)
+        .toBe(TemplateCompilerSiteCursorFrontierKind.HydrateElementEnvelopeInvalid);
+      expect(transcript.hydrateElementEnvelopes, name).toHaveLength(1);
+      const envelope = transcript.hydrateElementEnvelopes[0]!;
+      expect(envelope.state, name).toBe(TemplateCompilerHydrateElementStagingState.Invalid);
+      expect(envelope.instructionReady, name).toBe(false);
+      if (cause === 'shadow') {
+        expect(envelope.draft?.definition.shadowOptions, name).toMatchObject({ mode: 'open' });
+      } else {
+        expect(envelope.draft?.definition.hasSlots, name).toBe(true);
+        expect(envelope.draft?.elementRead.observation.resultParts.slice(-4), name)
+          .toEqual(['false', 'false', 'true', 'false']);
+      }
+      expect(envelope.draft?.containerless, name).toMatchObject({
+        effective: true,
+        fromDefinition: false,
+        fromUsage: true,
+      });
+      expect(blockerProjection(envelope), name).toEqual([
+        [TemplateCompilerHydrateElementBlockerScope.Downstream, TemplateCompilerHydrateElementBlockerKind.ContainerlessPlacementPending],
+        [TemplateCompilerHydrateElementBlockerScope.Envelope, TemplateCompilerHydrateElementBlockerKind.ContainerlessShadowHostInvalid],
+        [TemplateCompilerHydrateElementBlockerScope.Downstream, TemplateCompilerHydrateElementBlockerKind.TargetRowPlacementPending],
+      ]);
+    }
   });
 
   test('executes canonical AuSlot processContent before host attributes with exact removal spending', () => {
@@ -236,6 +324,7 @@ describe('template compiler root site cursor', () => {
       ['cursor-process-content', 'default', null],
       ['cursor-process-content-empty', '', ''],
       ['cursor-process-content-named', 'heading', 'heading'],
+      ['cursor-process-content-duplicate-name', 'first', 'first'],
     ] as const;
     let named: TemplateCompilerSiteCursorTranscript | null = null;
     for (const [name, expectedName, expectedCarrier] of cases) {
@@ -254,6 +343,62 @@ describe('template compiler root site cursor', () => {
         candidate instanceof TemplateCompilerSiteCursorAttributeEvent && candidate.owner === event.host
       );
       if (firstHostAttributeOrdinal >= 0) expect(event.ordinal, name).toBeLessThan(firstHostAttributeOrdinal);
+      if (name === 'cursor-process-content') {
+        expect(transcript.hydrateElementEnvelopes).toHaveLength(1);
+        const envelope = transcript.hydrateElementEnvelopes[0]!;
+        expect(envelope.state).toBe(TemplateCompilerHydrateElementStagingState.Exact);
+        expect(envelope.instructionReady).toBe(true);
+        expect(envelope.draft).toMatchObject({
+          elementName: 'au-slot',
+          resourceLookupName: 'au-slot',
+        });
+        expect(envelope.draft?.processContent.state).toBe(TemplateCompilerHydrateElementProcessContentState.Exact);
+        expect(envelope.draft?.processContent.result).toBe(event.result);
+        expect(envelope.draft?.processContent.metadata).toMatchObject({
+          name: 'default',
+          nameSourceAddressHandle: null,
+        });
+        expect(envelope.draft?.projection.state).toBe(TemplateCompilerHydrateElementProjectionState.None);
+        expect(envelope.draft?.projection.postProcessChildren).toEqual([]);
+        expect(envelope.draft?.containerless).toMatchObject({
+          effective: true,
+          fromDefinition: true,
+          fromUsage: false,
+        });
+        expect(envelope.draft?.endpoint).toMatchObject({
+          forestMutationRevision: transcript.endForestMutationRevision,
+          globalOperationCount: transcript.endGlobalOperationCount,
+        });
+      } else if (name === 'cursor-process-content-empty') {
+        const envelope = transcript.hydrateElementEnvelopes[0]!;
+        expect(envelope.state).toBe(TemplateCompilerHydrateElementStagingState.Exact);
+        expect(envelope.draft?.processContent.metadata?.name).toBe('');
+        expect(envelope.draft?.processContent.metadata?.nameSourceAddressHandle).not.toBeNull();
+      } else if (name === 'cursor-process-content-named') {
+        const envelope = transcript.hydrateElementEnvelopes[0]!;
+        expect(transcript.frontier?.frontierKind)
+          .toBe(TemplateCompilerSiteCursorFrontierKind.AfterAttributesBeforeProjection);
+        expect(envelope.state).toBe(TemplateCompilerHydrateElementStagingState.Pending);
+        expect(envelope.draft?.processContent.state).toBe(TemplateCompilerHydrateElementProcessContentState.Exact);
+        expect(envelope.draft?.projection.state).toBe(TemplateCompilerHydrateElementProjectionState.PendingExtraction);
+        expect(envelope.draft?.projection.postProcessChildren.filter((child) =>
+          child instanceof TemplateCompilerElementOccurrence
+        ).map((child) => child.tagName)).toEqual(['b']);
+      } else {
+        const envelope = transcript.hydrateElementEnvelopes[0]!;
+        expect(transcript.frontier?.frontierKind)
+          .toBe(TemplateCompilerSiteCursorFrontierKind.AfterAttributesBeforeContainerless);
+        expect(envelope.state).toBe(TemplateCompilerHydrateElementStagingState.Exact);
+        expect(envelope.draft?.processContent.state).toBe(TemplateCompilerHydrateElementProcessContentState.Exact);
+        expect(envelope.draft?.processContent.metadata?.name).toBe('first');
+        expect(envelope.draft?.processContent.metadata?.nameSourceAddressHandle).not.toBeNull();
+        expect(blockerProjection(envelope)).toEqual([
+          [TemplateCompilerHydrateElementBlockerScope.Downstream, TemplateCompilerHydrateElementBlockerKind.ContainerlessPlacementPending],
+          [TemplateCompilerHydrateElementBlockerScope.Downstream, TemplateCompilerHydrateElementBlockerKind.TargetRowPlacementPending],
+        ]);
+        expect(transcript.ledger.authoredRemainderEvidence).toHaveLength(1);
+        expect(transcript.ledger.rawUnspent).toHaveLength(1);
+      }
     }
 
     if (named == null) throw new Error('Expected named processContent transcript.');
@@ -391,6 +536,53 @@ describe('template compiler root site cursor', () => {
     expect(select?.instructionStaging.directRowTail.map((instruction) =>
       'targetProperty' in instruction ? instruction.targetProperty : null
     )).toEqual(['multiple', 'value']);
+
+    expect(transcript.hydrateElementEnvelopes).toHaveLength(4);
+    const byTag = new Map(transcript.hydrateElementEnvelopes.map((envelope) => [
+      envelope.element.tagName,
+      envelope,
+    ]));
+    const capture = byTag.get('cursor-staging-capture');
+    expect(capture?.state).toBe(TemplateCompilerHydrateElementStagingState.Exact);
+    expect(capture?.instructionReady).toBe(true);
+    expect(capture?.draft?.bindableInstructions.map((instruction) =>
+      'targetProperty' in instruction ? instruction.targetProperty : null
+    )).toEqual(['title']);
+    expect(capture?.draft?.captures.map((entry) => entry.syntax.target)).toEqual(['id', 'data-extra']);
+    expect(blockerProjection(capture!)).toEqual([
+      [TemplateCompilerHydrateElementBlockerScope.Downstream, TemplateCompilerHydrateElementBlockerKind.TargetRowPlacementPending],
+      [TemplateCompilerHydrateElementBlockerScope.Downstream, TemplateCompilerHydrateElementBlockerKind.CaptureSyntaxPublicationPending],
+    ]);
+
+    const child = byTag.get('cursor-staging-child');
+    expect(child?.state).toBe(TemplateCompilerHydrateElementStagingState.Exact);
+    expect(child?.instructionReady).toBe(true);
+    expect(child?.draft?.owner).toBe(child?.owner);
+    expect(child?.draft?.source.authoredElement).toBe(child?.owner.authoredElement);
+    expect(child?.owner.compilerReads().every((read) => child.compilerReads.includes(read))).toBe(true);
+    expect(child?.draft?.bindableInstructions).toBe(child?.owner.instructionStaging.elementBindableInstructions);
+    expect(child?.draft?.bindableInstructions).toMatchObject([{
+      instructionKind: 'spread-value-binding',
+      target: '$bindables',
+    }]);
+    expect(child?.draft?.captures).toEqual([]);
+    expect(child?.draft?.projection.state).toBe(TemplateCompilerHydrateElementProjectionState.None);
+    expect(child?.draft?.processContent.state).toBe(TemplateCompilerHydrateElementProcessContentState.Absent);
+    expect(blockerProjection(child!)).toEqual([
+      [TemplateCompilerHydrateElementBlockerScope.Downstream, TemplateCompilerHydrateElementBlockerKind.TargetRowPlacementPending],
+    ]);
+
+    for (const tag of ['div', 'select']) {
+      const native = byTag.get(tag);
+      expect(native?.state, tag).toBe(TemplateCompilerHydrateElementStagingState.NotApplicable);
+      expect(native?.draft, tag).toBeNull();
+      expect(native?.blockers, tag).toEqual([]);
+      expect(native?.compilerReads, tag).toHaveLength(1);
+      expect(native?.compilerReads[0], tag).toMatchObject({
+        readKind: 'element-resource',
+        canonicalKey: tag,
+      });
+    }
   });
 
   test('is deterministic and rejects foreign read/prewalk capabilities', () => {
@@ -617,6 +809,12 @@ function phaseKinds(transcript: TemplateCompilerSiteCursorTranscript): readonly 
 
 function elementTags(transcript: TemplateCompilerSiteCursorTranscript): readonly string[] {
   return eventsOf(transcript, TemplateCompilerSiteCursorElementEvent).map((event) => event.element.tagName);
+}
+
+function blockerProjection(
+  envelope: TemplateCompilerSiteCursorTranscript['hydrateElementEnvelopes'][number],
+): readonly (readonly [TemplateCompilerHydrateElementBlockerScope, TemplateCompilerHydrateElementBlockerKind])[] {
+  return envelope.blockers.map((blocker) => [blocker.scope, blocker.blockerKind]);
 }
 
 function transcriptProjection(transcript: TemplateCompilerSiteCursorTranscript): unknown {

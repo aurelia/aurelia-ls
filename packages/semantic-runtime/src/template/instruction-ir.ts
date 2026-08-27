@@ -116,7 +116,7 @@ export class AuSlotProcessContentInstructionData {
   constructor(
     /** Static outlet name selected by `AuSlot`; absence is lowered to the framework `default` name. */
     readonly name: string,
-    /** Exact authored `name` value span, or null when the framework supplied `default`. */
+    /** Exact authored `name` value span, or null for a framework default or non-singular live source. */
     readonly nameSourceAddressHandle: AddressHandle | null,
   ) {}
 }

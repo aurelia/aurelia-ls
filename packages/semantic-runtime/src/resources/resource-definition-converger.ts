@@ -107,6 +107,7 @@ import {
   CustomElementTemplateKind,
   ShadowOptionsDefinition,
   ShadowRootMode,
+  customElementRequiresShadowHost,
 } from './custom-element-definition.js';
 import {
   hasAureliaRegistryShape,
@@ -1940,7 +1941,7 @@ function readCustomElementControllerNoShadowOnContainerlessIssue(
   hasSlots: boolean,
   shadowOptionsSourceNode: ts.Node | null = null,
 ): ResourceIssuePublication | null {
-  if (!containerless || (shadowOptions == null && !hasSlots)) {
+  if (!containerless || !customElementRequiresShadowHost(shadowOptions, hasSlots)) {
     return null;
   }
   const sourceNode = shadowOptions != null

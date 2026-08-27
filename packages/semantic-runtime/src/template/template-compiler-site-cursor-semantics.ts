@@ -1,4 +1,3 @@
-import type { CustomElementDefinition } from '../resources/custom-element-definition.js';
 import {
   TemplateCompilerAttributeOwnerProgressionLaneKind,
   TemplateCompilerAttributeOwnerProgressionState,
@@ -133,14 +132,9 @@ export class TemplateCompilerSiteCursorSemanticResolver extends TemplateCompiler
       && scalar.prefix == null;
   }
 
-  hasProjectionEffect(
-    element: TemplateCompilerElementOccurrence,
-    definition: CustomElementDefinition | null,
-  ): boolean {
-    const children = element.readChildren();
-    if (children.length === 0) return false;
-    if (definition != null && definition.shadowOptions == null) return true;
-    return children.some((child) =>
+  /** Native parents only reach this path to preserve the known `[au-slot]`-on-non-CE diagnostic frontier. */
+  hasProjectionOnNativeElement(element: TemplateCompilerElementOccurrence): boolean {
+    return element.readChildren().some((child) =>
       child instanceof TemplateCompilerElementOccurrence
       && child.readAttributes().some((attribute) => qualifiedAttributeName(attribute) === 'au-slot')
     );

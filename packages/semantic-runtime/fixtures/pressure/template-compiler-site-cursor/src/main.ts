@@ -22,11 +22,15 @@ import cursorProcessContentTemplate from './cursor-process-content.html';
 import cursorProcessContentEmptyTemplate from './cursor-process-content-empty.html';
 import cursorProcessContentNamedTemplate from './cursor-process-content-named.html';
 import cursorProcessContentArbitraryTemplate from './cursor-process-content-arbitrary.html';
+import cursorProcessContentDuplicateNameTemplate from './cursor-process-content-duplicate-name.html';
 import cursorShapesTemplate from './cursor-shapes.html';
+import cursorShadowContainerlessTemplate from './cursor-shadow-containerless.html';
+import cursorSlotsContainerlessTemplate from './cursor-slots-containerless.html';
 import cursorSurrogateInvalidTemplate from './cursor-surrogate-invalid.html';
 import cursorSurrogateValidTemplate from './cursor-surrogate-valid.html';
 import cursorTemplateControllerTemplate from './cursor-template-controller.html';
 import cursorContainerlessTemplate from './cursor-containerless.html';
+import cursorUsageContainerlessTemplate from './cursor-usage-containerless.html';
 import cursorWideTemplate from './cursor-wide.html';
 
 @customElement({
@@ -213,6 +217,12 @@ class CursorProcessContentNamed {
 }
 
 @customElement({
+  name: 'cursor-process-content-duplicate-name',
+  template: cursorProcessContentDuplicateNameTemplate,
+})
+class CursorProcessContentDuplicateName {}
+
+@customElement({
   name: 'cursor-arbitrary-content',
   processContent: () => true,
 })
@@ -236,6 +246,36 @@ class CursorContainerlessLeaf {}
   dependencies: [CursorContainerlessLeaf],
 })
 class CursorContainerless {}
+
+@customElement({ name: 'cursor-usage-containerless-leaf' })
+class CursorUsageContainerlessLeaf {}
+
+@customElement({
+  name: 'cursor-usage-containerless',
+  template: cursorUsageContainerlessTemplate,
+  dependencies: [CursorUsageContainerlessLeaf],
+})
+class CursorUsageContainerless {}
+
+@customElement({ name: 'cursor-shadow-leaf', shadowOptions: { mode: 'open' } })
+class CursorShadowLeaf {}
+
+@customElement({
+  name: 'cursor-shadow-containerless',
+  template: cursorShadowContainerlessTemplate,
+  dependencies: [CursorShadowLeaf],
+})
+class CursorShadowContainerless {}
+
+@customElement({ name: 'cursor-slots-containerless-leaf', hasSlots: true })
+class CursorSlotsContainerlessLeaf {}
+
+@customElement({
+  name: 'cursor-slots-containerless',
+  template: cursorSlotsContainerlessTemplate,
+  dependencies: [CursorSlotsContainerlessLeaf],
+})
+class CursorSlotsContainerless {}
 
 @customElement({
   name: 'cursor-open',
@@ -273,8 +313,12 @@ void new Aurelia()
     CursorProcessContent,
     CursorProcessContentEmpty,
     CursorProcessContentNamed,
+    CursorProcessContentDuplicateName,
     CursorProcessContentArbitrary,
     CursorContainerless,
+    CursorUsageContainerless,
+    CursorShadowContainerless,
+    CursorSlotsContainerless,
     CursorOpen,
     CursorSurrogateValid,
   )

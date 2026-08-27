@@ -8,14 +8,15 @@ import {
   TemplateCompilerScopeClosureState,
 } from './compiler-read-view.js';
 import type {
+  TemplateCompilerObservedValue,
   TemplateCompilerReadView,
 } from './compiler-read-view.js';
+import type { TemplateResolvedResource } from './compiler-world.js';
 import {
   assembleTemplateCompilerLiveAttributeOwner,
   TemplateCompilerLiveAttributeCompletion,
   TemplateCompilerLiveAttributeOpenReasonKind,
   TemplateCompilerLiveAttributeSourceKind,
-  TemplateCompilerLiveAttributeStructuralEffectKind,
   type TemplateCompilerLiveAttributeContribution,
   type TemplateCompilerLiveAttributeOwnerResult,
 } from './template-compiler-live-attribute-assembly.js';
@@ -99,6 +100,12 @@ import {
   TemplateCompilerTextInstructionStagingRequest,
   stageTemplateCompilerTextInstructions,
 } from './template-compiler-text-instruction-staging.js';
+import {
+  TemplateCompilerHydrateElementProjectionState,
+  TemplateCompilerHydrateElementStagingState,
+  type TemplateCompilerHydrateElementStagingResult,
+  stageTemplateCompilerHydrateElementEnvelope,
+} from './template-compiler-hydrate-element-staging.js';
 
 const siteCursorConstructionAuthority = {};
 
@@ -126,6 +133,7 @@ export class TemplateCompilerSiteCursorTranscript {
     readonly preWalkAuthority: TemplateCompilerPreWalkRemainderAuthority,
     readonly events: readonly TemplateCompilerSiteCursorEvent[],
     readonly attributeOwners: readonly TemplateCompilerLiveAttributeOwnerResult[],
+    readonly hydrateElementEnvelopes: readonly TemplateCompilerHydrateElementStagingResult[],
     readonly ledger: TemplateCompilerSiteSpendLedgerResult,
     readonly frontier: TemplateCompilerSiteCursorFrontier | null,
     readonly startForestMutationRevision: number,
@@ -156,6 +164,13 @@ export class TemplateCompilerSiteCursorTranscript {
         || (event instanceof TemplateCompilerSiteCursorTextEvent && !event.isCoherent())
       )
       || !liveAttributeOwnersAreCoherent(binding, events, attributeOwners)
+      || !hydrateElementEnvelopesAreCoherent(
+        binding,
+        compilerReads,
+        events,
+        attributeOwners,
+        hydrateElementEnvelopes,
+      )
       || nextTranscriptOrdinal !== events.length
       || (frontier == null
         ? events.some((event) => event instanceof TemplateCompilerSiteCursorFrontier)
@@ -275,6 +290,7 @@ class TemplateCompilerRootSiteCursor {
   private readonly semantics: TemplateCompilerSiteCursorSemanticResolver;
   private readonly events: TemplateCompilerSiteCursorEvent[] = [];
   private readonly attributeOwners: TemplateCompilerLiveAttributeOwnerResult[] = [];
+  private readonly hydrateElementEnvelopes: TemplateCompilerHydrateElementStagingResult[] = [];
   private readonly startForestMutationRevision: number;
   private readonly startGlobalOperationCount: number;
   private transcriptOrdinal = 0;
@@ -322,6 +338,7 @@ class TemplateCompilerRootSiteCursor {
       this.preWalk,
       this.events,
       this.attributeOwners,
+      this.hydrateElementEnvelopes,
       ledger,
       this.frontier,
       this.startForestMutationRevision,
@@ -761,8 +778,10 @@ class TemplateCompilerRootSiteCursor {
       element,
       authoredElement,
       elementDefinition,
+      elementRead,
       lookupName,
       successor,
+      processContent,
     );
   }
 
@@ -770,8 +789,10 @@ class TemplateCompilerRootSiteCursor {
     element: TemplateCompilerElementOccurrence,
     authoredElement: HtmlElement | null,
     elementDefinition: CustomElementDefinition | null,
+    elementRead: TemplateCompilerObservedValue<TemplateResolvedResource | null>,
     lookupName: string,
     successor: TemplateCompilerNodeOccurrence | null,
+    processContent: TemplateCompilerProcessContentResult | null,
   ): TemplateCompilerSiteCursorContainerFrame | null {
     const assembly = assembleTemplateCompilerLiveAttributeOwner({
       localKey: `${this.binding.lane.localKey}:live-attributes:${element.occurrenceKey}`,
@@ -877,10 +898,52 @@ class TemplateCompilerRootSiteCursor {
       return null;
     }
 
-    const hasTemplateController = assembly.templateControllers.length > 0;
-    const hasUsageContainerless = assembly.structuralEffects.includes(
-      TemplateCompilerLiveAttributeStructuralEffectKind.UsageContainerless,
-    );
+    const resolveResourcesRead = elementDefinition == null
+      ? null
+      : this.compilerReads.readResolveResources();
+    const globalOperationCount = this.binding.execution.sequence.readOperations().length;
+    const laneOperationCount = this.binding.execution.sequence.readLaneOperations(this.binding.lane).length;
+    const hydrateElementEnvelope = stageTemplateCompilerHydrateElementEnvelope({
+      familyOwnerKey: String(this.binding.currentFamily.ownerHandle),
+      compilerReads: this.compilerReads,
+      element,
+      lookupName,
+      elementRead,
+      resolveResourcesRead,
+      owner: assembly,
+      processContent,
+      postProcessChildren: [...element.readChildren()],
+      forestMutationRevision: this.binding.forest.mutationRevision,
+      expectedForestMutationRevision: this.siteDriver?.expectedForestMutationRevision
+        ?? this.startForestMutationRevision,
+      globalOperationCount,
+      expectedGlobalOperationCount: this.siteDriver?.expectedGlobalOperationCount
+        ?? this.startGlobalOperationCount,
+      laneOperationCount,
+      expectedLaneOperationCount: this.siteDriver?.expectedLaneOperationCount
+        ?? this.binding.bootstrapClosure.laneOperationCount,
+    });
+    this.hydrateElementEnvelopes.push(hydrateElementEnvelope);
+    if (
+      hydrateElementEnvelope.state === TemplateCompilerHydrateElementStagingState.Open
+      || hydrateElementEnvelope.state === TemplateCompilerHydrateElementStagingState.Invalid
+    ) {
+      this.stop(
+        hydrateElementEnvelope.state === TemplateCompilerHydrateElementStagingState.Invalid
+          ? TemplateCompilerSiteCursorFrontierKind.HydrateElementEnvelopeInvalid
+          : TemplateCompilerSiteCursorFrontierKind.HydrateElementEnvelopeOpen,
+        element,
+        null,
+        null,
+        successor,
+        hydrateElementEnvelope.blockers.map((blocker) => blocker.summary).join(' ')
+          || 'HydrateElement envelope staging did not close.',
+      );
+      return null;
+    }
+
+    const hydrateElementDraft = hydrateElementEnvelope.draft;
+    const hasTemplateController = assembly.instructionStaging.templateControllers.length > 0;
 
     if (hasTemplateController) {
       this.stop(
@@ -893,7 +956,10 @@ class TemplateCompilerRootSiteCursor {
       );
       return null;
     }
-    if (this.semantics.hasProjectionEffect(element, elementDefinition)) {
+    if (
+      hydrateElementDraft?.projection.state === TemplateCompilerHydrateElementProjectionState.PendingExtraction
+      || (elementDefinition == null && this.semantics.hasProjectionOnNativeElement(element))
+    ) {
       this.stop(
         TemplateCompilerSiteCursorFrontierKind.AfterAttributesBeforeProjection,
         element,
@@ -904,7 +970,7 @@ class TemplateCompilerRootSiteCursor {
       );
       return null;
     }
-    if (elementDefinition != null && (elementDefinition.containerless === true || hasUsageContainerless)) {
+    if (hydrateElementDraft?.containerless.effective === true) {
       this.stop(
         TemplateCompilerSiteCursorFrontierKind.AfterAttributesBeforeContainerless,
         element,
@@ -1622,6 +1688,64 @@ function liveAttributeOwnersAreCoherent(
     }
   }
   return seenContributions.size === eventsByContribution.size;
+}
+
+function hydrateElementEnvelopesAreCoherent(
+  binding: TemplateCompilerSiteInvocationBinding,
+  compilerReads: TemplateCompilerReadView,
+  events: readonly TemplateCompilerSiteCursorEvent[],
+  owners: readonly TemplateCompilerLiveAttributeOwnerResult[],
+  envelopes: readonly TemplateCompilerHydrateElementStagingResult[],
+): boolean {
+  const expectedOwners = owners.filter((owner) =>
+    owner.completion === TemplateCompilerLiveAttributeCompletion.Complete
+  );
+  if (envelopes.length !== expectedOwners.length) return false;
+  const elementEvents = events.filter((event): event is TemplateCompilerSiteCursorElementEvent =>
+    event instanceof TemplateCompilerSiteCursorElementEvent
+  );
+  const processEvents = events.filter((event): event is TemplateCompilerSiteCursorProcessContentEvent =>
+    event instanceof TemplateCompilerSiteCursorProcessContentEvent
+  );
+  const seen = new Set<TemplateCompilerElementOccurrence>();
+  return envelopes.every((envelope, index) => {
+    const owner = expectedOwners[index];
+    const elementEvent = elementEvents.find((event) => event.element === envelope.element) ?? null;
+    const processEvent = processEvents.find((event) => event.host === envelope.element) ?? null;
+    const draft = envelope.draft;
+    if (
+      owner == null
+      || seen.has(envelope.element)
+      || !envelope.isModuleConstructed()
+      || envelope.owner !== owner
+      || owner.element !== envelope.element
+      || owner.lookupName !== elementEvent?.lookupName
+      || owner.authoredElement !== elementEvent?.authoredElement
+      || binding.forest.nodeForOccurrenceKey(envelope.element.occurrenceKey) !== envelope.element
+      || elementEvent?.elementRead == null
+      || envelope.compilerReads.some((read) => !compilerReads.readAll().includes(read))
+      || ((
+        envelope.state === TemplateCompilerHydrateElementStagingState.Exact
+        || envelope.state === TemplateCompilerHydrateElementStagingState.Pending
+      ) && draft == null)
+      || ((
+        envelope.state === TemplateCompilerHydrateElementStagingState.NotApplicable
+        || envelope.state === TemplateCompilerHydrateElementStagingState.Open
+      ) && draft != null)
+      || (draft != null && (
+        !draft.isModuleConstructed()
+        || draft.owner !== owner
+        || draft.elementRead !== elementEvent.elementRead
+        || draft.definition !== elementEvent.elementDefinition
+        || draft.resourceLookupName !== elementEvent.lookupName
+        || draft.source.authoredElement !== elementEvent.authoredElement
+        || owner.compilerReads().some((read) => !envelope.compilerReads.includes(read))
+        || draft.processContent.result !== (processEvent?.result ?? null)
+      ))
+    ) return false;
+    seen.add(envelope.element);
+    return true;
+  });
 }
 
 function instructionStagingStateFor(

@@ -31,6 +31,7 @@ import {
   TemplateCompilerOccurrenceForest,
 } from './template-compiler-occurrence.js';
 import type { TemplateCompilerLiveAttributeOwnerResult } from './template-compiler-live-attribute-assembly.js';
+import type { TemplateCompilerHydrateElementStagingResult } from './template-compiler-hydrate-element-staging.js';
 import { TemplateCompilerPreWalkRemainderAuthority } from './template-compiler-prewalk-remainder.js';
 import {
   bindTemplateCompilerRootSiteInvocation,
@@ -351,6 +352,7 @@ export function observeTemplateCompilerRootSiteCursor(
     eventDigest: cursorEventDigest(
       transcript.events,
       transcript.attributeOwners,
+      transcript.hydrateElementEnvelopes,
       transcript.binding.forest,
     ),
     ledgerState: transcript.ledger.state,
@@ -416,6 +418,7 @@ function unavailable(
 function cursorEventDigest(
   events: readonly TemplateCompilerSiteCursorEvent[],
   attributeOwners: readonly TemplateCompilerLiveAttributeOwnerResult[],
+  hydrateElementEnvelopes: readonly TemplateCompilerHydrateElementStagingResult[],
   forest: TemplateCompilerOccurrenceForest,
 ): string {
   const hash = createHash('sha256');
@@ -613,6 +616,50 @@ function cursorEventDigest(
       owner.instructionStaging.directRowTail.map((instruction) => instruction.instructionKind),
       owner.instructionStaging.captures.map((capture) => capture.syntax.target),
       owner.instructionStaging.structuralEffects,
+    ]);
+    hash.update(String(encoded.length));
+    hash.update(':');
+    hash.update(encoded);
+  }
+  for (const envelope of hydrateElementEnvelopes) {
+    const draft = envelope.draft;
+    const encoded = JSON.stringify([
+      'hydrate-element-envelope',
+      nodeIndex(envelope.element),
+      envelope.state,
+      envelope.instructionReady,
+      envelope.blockers.map((blocker) => [blocker.scope, blocker.blockerKind]),
+      draft == null
+        ? null
+        : [
+            draft.siteKey,
+            draft.elementName,
+            draft.resourceLookupName,
+            draft.resource?.name ?? null,
+            draft.bindableInstructions.map((instruction) => instruction.instructionKind),
+            draft.captures.map((capture) => capture.syntax.target),
+            draft.processContent.state,
+            draft.processContent.metadata?.name ?? null,
+            draft.processContent.result?.removals.length ?? 0,
+            draft.projection.state,
+            draft.projection.postProcessChildren.map(nodeIndex),
+            [
+              draft.containerless.effective,
+              draft.containerless.fromDefinition,
+              draft.containerless.fromUsage,
+            ],
+            [
+              draft.source.authoredElement?.productHandle ?? null,
+              draft.source.inputAddressHandle,
+              draft.source.sourceAddressHandle,
+              draft.source.hasGenerationCause,
+            ],
+            [
+              draft.endpoint.forestMutationRevision,
+              draft.endpoint.globalOperationCount,
+              draft.endpoint.laneOperationCount,
+            ],
+          ],
     ]);
     hash.update(String(encoded.length));
     hash.update(':');

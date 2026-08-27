@@ -69,6 +69,8 @@ export const enum TemplateCompilerSiteCursorFrontierKind {
   AtLiveAttributeRelowering = 'at-live-attribute-relowering',
   ReachedLiveAttributeOpen = 'reached-live-attribute-open',
   ReachedLiveAttributeInvalid = 'reached-live-attribute-invalid',
+  HydrateElementEnvelopeOpen = 'hydrate-element-envelope-open',
+  HydrateElementEnvelopeInvalid = 'hydrate-element-envelope-invalid',
   ReachedNormalizedOpen = 'reached-normalized-open',
   ReachedNormalizedInvalid = 'reached-normalized-invalid',
   LetElementLoweringRequired = 'let-element-lowering-required',
