@@ -136,6 +136,54 @@ describe('static evaluation sessions', () => {
     ).kind).toBe(StaticCallableTruthinessKind.False);
   });
 
+  test('executes retained member callables with their exact receiver in the isolated session', () => {
+    const source = ts.createSourceFile(
+      'src/receiver-predicate.ts',
+      [
+        'const receiver = {',
+        "  expected: 'accepted',",
+        '  calls: 0,',
+        '  predicate(value) {',
+        '    this.calls = this.calls + 1;',
+        '    return value === this.expected;',
+        '  },',
+        '};',
+      ].join('\n'),
+      ts.ScriptTarget.Latest,
+      true,
+      ts.ScriptKind.TS,
+    );
+    const evaluator = new StaticEvaluator();
+    const evaluation = evaluator.evaluateSourceFile(source);
+    const receiver = requireValueKind(
+      evaluation.environment.readValue('receiver'),
+      EvaluationValueKind.Object,
+    );
+    const predicate = requireValueKind(
+      receiver.properties.get('predicate')?.value ?? null,
+      EvaluationValueKind.Function,
+    );
+    const target = new StaticCallableTarget(
+      predicate,
+      evaluator.policy,
+      evaluation.runtimeHost,
+      [],
+      receiver,
+    );
+
+    const result = evaluateStaticCallableTruthiness(
+      target,
+      [new EvaluationStringValue('accepted', source)],
+    );
+
+    expect(result.kind).toBe(StaticCallableTruthinessKind.Open);
+    expect(result.reason).toBe('Callable execution reached modeled mutation.');
+    expect(receiver.properties.get('calls')?.value).toEqual(expect.objectContaining({
+      kind: EvaluationValueKind.Number,
+      value: 0,
+    }));
+  });
+
   test('keeps stateful predicate writes open and out of the retained graph', () => {
     const source = ts.createSourceFile(
       'src/stateful-predicate.ts',

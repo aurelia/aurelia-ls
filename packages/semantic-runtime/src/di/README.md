@@ -111,7 +111,9 @@ The tooling model keeps those consequences distinct:
   exact known members remain in leaf-registration order followed by root-registration order, intermediate containers
   are excluded, and provider-value completion stays separate from membership closure. Registration pressure is joined
   only at the selected leaf/root loci and retains `Leaf`, `Root`, or genuinely `Global` attribution; known different
-  direct keys and resource registrations cannot falsely open an unrelated canonical interface query.
+  direct keys and resource registrations cannot falsely open an unrelated canonical interface query. Each exact
+  provider entry can bind a known member function to its provider receiver under the same candidate-local evaluator
+  policy and runtime host; durable consumers still retain only a callable slot under app-generation currentness.
 - `DiContainerKeyExpressionIdentityKind` is source-local runtime identity evidence. Stable references can be registered
   elsewhere and are usually container-state dependent; direct object/array literals create fresh identities at the call
   site, so they can prove some miss-then-fail branches without a whole container-state join.

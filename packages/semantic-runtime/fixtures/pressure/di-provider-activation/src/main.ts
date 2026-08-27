@@ -83,7 +83,12 @@ const IDefaultInstance = DI.createInterface<DefaultServiceContract>(
 );
 const IMissingDefault = DI.createInterface<DefaultServiceContract>('IMissingDefault');
 
-const exactInstance = { marker: 'exact-instance' };
+const exactInstance = {
+  marker: 'exact-instance',
+  matchesMarker(value: string): boolean {
+    return this.marker === value;
+  },
+};
 const rootOnly = { marker: 'root-only' };
 const multiFirst = { marker: 'multi-first' };
 const multiSecond = { marker: 'multi-second' };

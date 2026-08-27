@@ -1,4 +1,4 @@
-import ts from 'typescript';
+import type ts from 'typescript';
 
 import {
   StaticEvaluator,
@@ -33,6 +33,8 @@ export class StaticCallableTarget {
     readonly runtimeHost: StaticEvaluationRuntimeHost,
     /** Pressure retained while resolving the callable itself. */
     readonly openSeams: readonly EvaluationOpenSeam[] = [],
+    /** Exact receiver supplied as `this` when the retained function came from a member read. */
+    readonly receiver: EvaluationValue | null = null,
   ) {}
 }
 
@@ -107,14 +109,11 @@ export class StaticCallableTruthinessResult {
   ) {}
 
   get value(): boolean | null {
-    switch (this.kind) {
-      case StaticCallableTruthinessKind.True:
-        return true;
-      case StaticCallableTruthinessKind.False:
-        return false;
-      case StaticCallableTruthinessKind.Open:
-        return null;
-    }
+    return this.kind === StaticCallableTruthinessKind.True
+      ? true
+      : this.kind === StaticCallableTruthinessKind.False
+        ? false
+        : null;
   }
 }
 
@@ -177,6 +176,7 @@ export function evaluateStaticCallableTruthiness(
     target.policy,
     runtimeHost,
     argumentValues.map((value) => session.forkValue(value)),
+    target.receiver == null ? null : session.forkValue(target.receiver),
   );
   if (result.abruptCompletion != null) {
     return new StaticCallableTruthinessResult(

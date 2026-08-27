@@ -28,8 +28,14 @@ import {
 } from '../src/di/provider-activation.js';
 import { Resolver } from '../src/di/resolver.js';
 import type { DiWorldConstructionEmission } from '../src/di/world-construction.js';
+import {
+  evaluateStaticCallableTruthiness,
+  StaticCallableTruthinessKind,
+} from '../src/evaluation/function-execution.js';
+import { readStaticOwnProperty } from '../src/evaluation/property-access.js';
 import type { StaticProjectEvaluationResult } from '../src/evaluation/project-evaluation.js';
 import {
+  EvaluationStringValue,
   EvaluationValueKind,
   type EvaluationValue,
 } from '../src/evaluation/values.js';
@@ -96,6 +102,30 @@ describe('direct-key allResources provider membership', () => {
     expect(result.entries[0]?.activation.state).toBe(DiProviderActivationState.Value);
     expect(marker(result.entries[0]?.activation.value ?? null)).toBe('lexical-before');
     expect(fixture.world.providerActivation).toBe(fixture.app.emission.appWorld.diWorld.providerActivation);
+  });
+
+  test('binds an exact provider member to its candidate-local receiver', () => {
+    const result = activate(fixture, fixture.root, fixture.exactInstanceKey);
+    const entry = result.entries[0] ?? null;
+    const receiver = entry?.activation.value ?? null;
+    const callable = receiver == null ? null : readStaticOwnProperty(receiver, 'matchesMarker')?.value ?? null;
+    if (entry == null || receiver == null || callable?.kind !== EvaluationValueKind.Function) {
+      throw new Error('Expected exact instance provider callable authority.');
+    }
+    const target = entry.callableTarget(callable, receiver);
+    if (target == null) {
+      throw new Error('Expected the provider callable to retain an evaluator source.');
+    }
+
+    expect(target.receiver).toBe(receiver);
+    expect(evaluateStaticCallableTruthiness(
+      target,
+      [new EvaluationStringValue('exact-instance', callable.declaration)],
+    ).kind).toBe(StaticCallableTruthinessKind.True);
+    expect(evaluateStaticCallableTruthiness(
+      target,
+      [new EvaluationStringValue('other', callable.declaration)],
+    ).kind).toBe(StaticCallableTruthinessKind.False);
   });
 
   test('selects finite pressure only at leaf/root while retaining genuinely global pressure', () => {
@@ -169,6 +199,7 @@ interface ProviderMembershipFixture {
   readonly leaf: Container;
   readonly multiKey: ContainerLookupKey;
   readonly lexicalKey: ContainerLookupKey;
+  readonly exactInstanceKey: ContainerLookupKey;
 }
 
 async function openProviderMembershipFixture(): Promise<ProviderMembershipFixture> {
@@ -188,13 +219,17 @@ async function openProviderMembershipFixture(): Promise<ProviderMembershipFixtur
 
   const multiSlots = resolverSlotsForLocalName(root, 'multi');
   const lexicalSlot = resolverSlotsForLocalName(root, 'lexical')[0] ?? null;
+  const exactInstanceSlot = resolverSlotsForLocalName(root, 'exact-instance')[0] ?? null;
   const multiKey = multiSlots[0]?.resolver instanceof Resolver
     ? containerLookupKeyForRegistrationKey(multiSlots[0].resolver._key)
     : null;
   const lexicalKey = lexicalSlot?.resolver instanceof Resolver
     ? containerLookupKeyForRegistrationKey(lexicalSlot.resolver._key)
     : null;
-  if (multiSlots.length !== 2 || multiKey == null || lexicalKey == null) {
+  const exactInstanceKey = exactInstanceSlot?.resolver instanceof Resolver
+    ? containerLookupKeyForRegistrationKey(exactInstanceSlot.resolver._key)
+    : null;
+  if (multiSlots.length !== 2 || multiKey == null || lexicalKey == null || exactInstanceKey == null) {
     throw new Error('Expected exact multi and instance provider keys in the DI fixture.');
   }
 
@@ -212,6 +247,7 @@ async function openProviderMembershipFixture(): Promise<ProviderMembershipFixtur
     leaf,
     multiKey,
     lexicalKey,
+    exactInstanceKey,
   };
 }
 

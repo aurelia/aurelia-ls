@@ -23,6 +23,7 @@ import {
 } from '../evaluation/evaluator.js';
 import { EvaluationRead } from '../evaluation/expression-reader.js';
 import { StaticEvaluationSessionFork } from '../evaluation/evaluation-session.js';
+import { StaticCallableTarget } from '../evaluation/function-execution.js';
 import type { StaticIntrinsicEvaluationHost } from '../evaluation/intrinsics.js';
 import {
   isStaticCallInvocationOccurrence,
@@ -201,7 +202,17 @@ export class DiAllResourcesProviderEntry {
     readonly slot: ContainerResolverLikeSlot,
     /** Provider activation without averaging value, open, failure, cycle, or abrupt completion states. */
     readonly activation: DiProviderActivationResult,
+    private readonly activationView: DiProviderActivationView,
   ) {}
+
+  /** Bind an exact provider member to its receiver in the same candidate-local evaluator realm. */
+  callableTarget(
+    value: EvaluationFunctionValue,
+    receiver: EvaluationValue,
+    openSeams: readonly EvaluationOpenSeam[] = [],
+  ): StaticCallableTarget | null {
+    return this.activationView.callableTarget(value, receiver, openSeams);
+  }
 }
 
 /** Ordered provider activation for one already-canonical direct DI key. */
@@ -676,6 +687,25 @@ export class DiProviderActivationView {
     return this.exactValues.parameterizedRegistrySource(registry);
   }
 
+  /** Retain one exact member function and receiver under this candidate's evaluator policy and runtime host. */
+  callableTarget(
+    value: EvaluationFunctionValue,
+    receiver: EvaluationValue,
+    openSeams: readonly EvaluationOpenSeam[] = [],
+  ): StaticCallableTarget | null {
+    const source = this.sourceIndex.readEvaluated(value.environment.moduleKey)
+      ?? this.sourceIndex.readEvaluatedForNode(value.declaration);
+    return source == null
+      ? null
+      : new StaticCallableTarget(
+          value,
+          source.evaluation.policy,
+          source.evaluation.runtimeHost,
+          openSeams,
+          receiver,
+        );
+  }
+
   activationNodeForResolverSlot(slot: ContainerResolverLikeSlot): ts.Node | null {
     if (slot instanceof ContainerResolverSlot) {
       const resolver = slot.resolver;
@@ -947,6 +977,7 @@ export class DiProviderActivationSession {
             activationNode == null
               ? activationOpen('Exact direct-key provider membership did not retain a provider-owned activation source.')
               : this.activateSlot(requestor, slot, lookup.handler, providerKey, activationNode, null, 0),
+            this.view,
           ));
         }
       }

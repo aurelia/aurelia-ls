@@ -157,8 +157,10 @@ SCCs requires an explicit evaluator-realm partition rather than independent fork
 `StaticCallableTarget` is the candidate-local companion for consumers that must execute an already-retained function
 rather than rediscover it from syntax. Durable products retain a `StaticCallableSlot`; the current app-analysis
 candidate resolves that slot through `StaticCallableExecutionBindings`, whose owning evaluation generation checks
-currentness before exposing the exact closure. `evaluateStaticCallableTruthiness(...)` forks that closure-bearing value
-graph, preserves its evaluator policy and runtime host, and admits only closed truthiness reached without audit
+currentness before exposing the exact closure. A target may retain the exact receiver for a member function; function,
+receiver, and arguments enter the same invocation fork so `this` aliases are preserved without mutating the admitted
+candidate graph. `evaluateStaticCallableTruthiness(...)` preserves the evaluator policy and runtime host and admits
+only closed truthiness reached without audit
 pressure or modeled mutation. The fork prevents speculative writes from escaping; the mutation check prevents
 independently replayed stateful predicates from being mistaken for Aurelia's ordered runtime state. Evaluator values
 never enter durable product comparison. Compiler reads retain the observed policy result, so reuse follows semantic
