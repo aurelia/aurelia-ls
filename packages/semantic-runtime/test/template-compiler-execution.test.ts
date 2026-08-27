@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'vitest';
+import { describe, expect, test, vi } from 'vitest';
 
 import { TemplateCompilationContextKind, TemplateCompilationContextReference } from '../src/template/compilation-unit.js';
 import { CompiledTemplateReference } from '../src/template/compiled-template.js';
@@ -46,6 +46,50 @@ import { TemplateCompilerStructuralExecutionSession } from '../src/template/temp
 import { BrowserEffectiveTemplateFixture } from './browser-effective-template-fixture.js';
 
 describe('template compiler execution sequence', () => {
+  test('opens and commits a pending mutation batch without scanning forest inventory', () => {
+    const browser = new BrowserEffectiveTemplateFixture('compiler-execution-mutation-batch-cost');
+
+    try {
+      const markup = `<div>${'<span>item</span>'.repeat(256)}</div>`;
+      const input = browser.materialize('root', markup);
+      const forest = TemplateCompilerOccurrenceForest.fromBrowserEffective(input.emission);
+      const execution = TemplateCompilerExecutionSession.createForForest(
+        'compiler-execution-mutation-batch-cost:family',
+        forest,
+      );
+      const lane = execution.admitRootInvocation('compiler-execution-mutation-batch-cost:lane');
+      const bootstrap = execution.bootstrapContext(lane);
+      const hookSet = compilerHookSet(browser, 'mutation-batch-cost:hook-set');
+      const readNodes = vi.spyOn(forest, 'readNodes');
+      const readAttributes = vi.spyOn(forest, 'readAttributes');
+      const readRoots = vi.spyOn(forest, 'readRoots');
+
+      const attempt = execution.beginOperation({
+        operationKey: 'mutation-batch-cost:resolution',
+        context: bootstrap,
+        operationKind: TemplateCompilerOperationKind.CompilerHook,
+        executionMechanism: TemplateCompilerOperationExecutionMechanism.BuiltIn,
+        target: execution.compilerHookTarget(
+          bootstrap,
+          hookSet,
+          TemplateCompilerHookOperationStage.HookSetResolution,
+          null,
+        ),
+        causeHandles: [hookSet.productHandle],
+      });
+      execution.completeOperation(
+        attempt,
+        new TemplateCompilerOperationCompletion(TemplateCompilerOperationCompletionKind.Complete),
+      );
+
+      expect(readNodes).not.toHaveBeenCalled();
+      expect(readAttributes).not.toHaveBeenCalled();
+      expect(readRoots).not.toHaveBeenCalled();
+    } finally {
+      browser.dispose();
+    }
+  });
+
   test('begins from an invocation carrier and attaches its target plan only after bootstrap closes', () => {
     const browser = new BrowserEffectiveTemplateFixture('compiler-execution-bootstrap');
 
@@ -95,6 +139,9 @@ describe('template compiler execution sequence', () => {
         target: hookTarget,
         causeHandles: [hookSet.productHandle],
       });
+      expect(() => execution.detachAttribute(attempt, title))
+        .toThrow(/cannot perform local-extraction topology mutations/);
+      expect(title.owner).not.toBeNull();
       expect(execution.readAttributeValue(attempt, title)).toBe('hello');
       execution.rewriteAttributeValue(attempt, title, 'mapped');
       expect(execution.readAttributeValue(attempt, title)).toBe('mapped');
@@ -341,6 +388,48 @@ describe('template compiler execution sequence', () => {
     }
   });
 
+  test('rejects Open local extraction after a typed topology detachment escapes', () => {
+    const browser = new BrowserEffectiveTemplateFixture('compiler-execution-topology-rollback-boundary');
+
+    try {
+      const input = browser.materialize(
+        'root',
+        '<template as-custom-element="local-card"><span>local</span></template><div>owner</div>',
+      );
+      const forest = TemplateCompilerOccurrenceForest.fromBrowserEffective(input.emission);
+      const execution = TemplateCompilerExecutionSession.createForForest(
+        'compiler-execution-topology-rollback-boundary:family',
+        forest,
+      );
+      const lane = execution.admitRootInvocation('compiler-execution-topology-rollback-boundary:lane');
+      const bootstrap = execution.bootstrapContext(lane);
+      const localCarrier = forest.readNodes().find((node): node is TemplateCompilerElementOccurrence =>
+        node instanceof TemplateCompilerElementOccurrence
+        && node.tagName === 'template'
+        && node !== forest.compilerCarrier
+      ) ?? null;
+      if (localCarrier == null) throw new Error('Expected rollback-boundary local carrier.');
+      const attempt = execution.beginOperation({
+        operationKey: 'topology-rollback:extract',
+        context: bootstrap,
+        operationKind: TemplateCompilerOperationKind.LocalTemplateExtraction,
+        executionMechanism: TemplateCompilerOperationExecutionMechanism.BuiltIn,
+        target: execution.occurrenceTarget(bootstrap, localCarrier),
+        causeHandles: [browser.run.handles.product('topology-rollback:definition')],
+      });
+      execution.detachNode(attempt, localCarrier);
+
+      expect(() => execution.completeOperation(attempt, new TemplateCompilerOperationCompletion(
+        TemplateCompilerOperationCompletionKind.Open,
+        [browser.run.handles.openSeam('topology-rollback:open')],
+      ))).toThrow(/cannot discard generated or topological output until forest rollback exists/);
+      expect(execution.readPendingAttempt()).toBe(attempt);
+      expect(localCarrier.parentEdgeKind).toBe(TemplateCompilerOccurrenceEdgeKind.Detached);
+    } finally {
+      browser.dispose();
+    }
+  });
+
   test('admits an extracted local carrier as a second pre-plan invocation in the same forest', () => {
     const browser = new BrowserEffectiveTemplateFixture('compiler-execution-local-bootstrap');
 
@@ -368,6 +457,10 @@ describe('template compiler execution sequence', () => {
       if (localCarrier == null || localContent == null || localSpan == null) {
         throw new Error('Expected one local-template carrier and its content.');
       }
+      const declarationAttribute = localCarrier.readAttributes().find((attribute) =>
+        attribute.name === 'as-custom-element'
+      ) ?? null;
+      if (declarationAttribute == null) throw new Error('Expected local-template declaration attribute.');
       const extractionTarget = execution.occurrenceTarget(rootBootstrap, localCarrier);
       const extractionAttempt = execution.beginOperation({
         operationKey: 'local-bootstrap:extract',
@@ -377,7 +470,8 @@ describe('template compiler execution sequence', () => {
         target: extractionTarget,
         causeHandles: [browser.run.handles.product('local-bootstrap:definition')],
       });
-      forest.detachNode(localCarrier);
+      execution.detachAttribute(extractionAttempt, declarationAttribute);
+      execution.detachNode(extractionAttempt, localCarrier);
       const extraction = execution.completeOperation(
         extractionAttempt,
         new TemplateCompilerOperationCompletion(TemplateCompilerOperationCompletionKind.Complete),
@@ -391,6 +485,24 @@ describe('template compiler execution sequence', () => {
       const localBootstrap = execution.bootstrapContext(localLane);
 
       expect(localCarrier.parent).toBeNull();
+      expect(declarationAttribute.owner).toBeNull();
+      expect(extraction.mutationBatch.topologyMutations).toEqual([
+        expect.objectContaining({
+          eventOrdinal: 0,
+          attribute: declarationAttribute,
+          previousOwner: localCarrier,
+          previousOrdinal: 0,
+        }),
+        expect.objectContaining({
+          eventOrdinal: 1,
+          node: localCarrier,
+          previousParent: forest.compilerContent,
+          previousEdgeKind: TemplateCompilerOccurrenceEdgeKind.Child,
+          previousOrdinal: 0,
+        }),
+      ]);
+      expect(extraction.mutationBatch.attributeDetachmentMutations).toHaveLength(1);
+      expect(extraction.mutationBatch.nodeDetachmentMutations).toHaveLength(1);
       expect(localLane.compilerCarrier).toBe(localCarrier);
       expect(localLane.compilerContent).toBe(localContent);
       expect(execution.occurrenceTarget(localBootstrap, localSpan).occurrence).toBe(localSpan);

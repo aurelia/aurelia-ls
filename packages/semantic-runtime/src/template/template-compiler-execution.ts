@@ -10,14 +10,16 @@ import type {
   TemplateCompilerTargetPlan,
 } from './compiler-target-plan.js';
 import type { TemplateCompilerHookSet } from './compiler-hook-world.js';
-import type {
-  TemplateCompilerAttributeOccurrence,
-  TemplateCompilerElementOccurrence,
-  TemplateCompilerFragmentOccurrence,
-  TemplateCompilerGeneratedOccurrenceRole,
-  TemplateCompilerNodeOccurrence,
-  TemplateCompilerOccurrenceGeneration,
-  TemplateCompilerOccurrenceForest,
+import {
+  TemplateCompilerOccurrenceEdgeKind,
+  type TemplateCompilerAttributeOccurrence,
+  type TemplateCompilerElementOccurrence,
+  type TemplateCompilerFragmentOccurrence,
+  type TemplateCompilerGeneratedOccurrenceRole,
+  type TemplateCompilerNodeOccurrence,
+  type TemplateCompilerOccurrenceGeneration,
+  type TemplateCompilerOccurrenceForest,
+  type TemplateCompilerParentOccurrence,
 } from './template-compiler-occurrence.js';
 import { TemplateCompilerStructuralExecutionSession } from './template-compiler-structural-execution.js';
 import {
@@ -128,13 +130,90 @@ export class TemplateCompilerAttributeValueMutation {
   }
 }
 
+/** Exact live node edge removed by one compiler operation. */
+export class TemplateCompilerNodeDetachmentMutation {
+  constructor(
+    readonly eventOrdinal: number,
+    readonly node: TemplateCompilerNodeOccurrence,
+    readonly previousParent: TemplateCompilerParentOccurrence | null,
+    readonly previousEdgeKind: Exclude<
+      TemplateCompilerOccurrenceEdgeKind,
+      TemplateCompilerOccurrenceEdgeKind.Detached
+    >,
+    readonly previousOrdinal: number,
+  ) {
+    if (
+      !Number.isSafeInteger(eventOrdinal)
+      || eventOrdinal < 0
+      || !Number.isSafeInteger(previousOrdinal)
+      || previousOrdinal < 0
+    ) {
+      throw new Error(`Compiler node '${node.occurrenceKey}' detachment has an invalid prior ordinal.`);
+    }
+    if (
+      (previousEdgeKind === TemplateCompilerOccurrenceEdgeKind.Root) !== (previousParent == null)
+      || (previousEdgeKind === TemplateCompilerOccurrenceEdgeKind.TemplateContent && previousOrdinal !== 0)
+    ) {
+      throw new Error(`Compiler node '${node.occurrenceKey}' detachment has an incoherent prior edge.`);
+    }
+  }
+}
+
+/** Exact live attribute owner slot removed by one compiler operation. */
+export class TemplateCompilerAttributeDetachmentMutation {
+  constructor(
+    readonly eventOrdinal: number,
+    readonly attribute: TemplateCompilerAttributeOccurrence,
+    readonly previousOwner: TemplateCompilerElementOccurrence,
+    readonly previousOrdinal: number,
+  ) {
+    if (
+      !Number.isSafeInteger(eventOrdinal)
+      || eventOrdinal < 0
+      || !Number.isSafeInteger(previousOrdinal)
+      || previousOrdinal < 0
+    ) {
+      throw new Error(`Compiler attribute '${attribute.occurrenceKey}' detachment has an invalid prior ordinal.`);
+    }
+  }
+}
+
+export type TemplateCompilerTopologyMutation =
+  | TemplateCompilerNodeDetachmentMutation
+  | TemplateCompilerAttributeDetachmentMutation;
+
 /** Normalized mutations attempted by one compiler operation. */
 export class TemplateCompilerOperationMutationBatch {
   constructor(
     readonly state: TemplateCompilerMutationBatchState,
     readonly attributeValueMutations: readonly TemplateCompilerAttributeValueMutation[],
     readonly occurrenceGenerationReservations: readonly TemplateCompilerOccurrenceGeneration[] = [],
-  ) {}
+    readonly topologyMutations: readonly TemplateCompilerTopologyMutation[] = [],
+  ) {
+    const nodeDetachmentMutations = this.nodeDetachmentMutations;
+    const attributeDetachmentMutations = this.attributeDetachmentMutations;
+    if (
+      topologyMutations.some((mutation, index) => mutation.eventOrdinal !== index)
+      || new Set(nodeDetachmentMutations.map((mutation) => mutation.node)).size
+        !== nodeDetachmentMutations.length
+      || new Set(attributeDetachmentMutations.map((mutation) => mutation.attribute)).size
+        !== attributeDetachmentMutations.length
+    ) {
+      throw new Error('Compiler mutation batch repeats a topology detachment occurrence.');
+    }
+  }
+
+  get nodeDetachmentMutations(): readonly TemplateCompilerNodeDetachmentMutation[] {
+    return this.topologyMutations.filter((mutation): mutation is TemplateCompilerNodeDetachmentMutation =>
+      mutation instanceof TemplateCompilerNodeDetachmentMutation
+    );
+  }
+
+  get attributeDetachmentMutations(): readonly TemplateCompilerAttributeDetachmentMutation[] {
+    return this.topologyMutations.filter((mutation): mutation is TemplateCompilerAttributeDetachmentMutation =>
+      mutation instanceof TemplateCompilerAttributeDetachmentMutation
+    );
+  }
 }
 
 class TemplateCompilerPendingMutationOverlay {
@@ -142,6 +221,9 @@ class TemplateCompilerPendingMutationOverlay {
     TemplateCompilerAttributeOccurrence,
     TemplateCompilerAttributeValueMutation
   >();
+  private readonly topologyMutations: TemplateCompilerTopologyMutation[] = [];
+  private readonly detachedNodes = new Set<TemplateCompilerNodeOccurrence>();
+  private readonly detachedAttributes = new Set<TemplateCompilerAttributeOccurrence>();
 
   readAttributeValue(attribute: TemplateCompilerAttributeOccurrence): string {
     return this.attributeValueMutations.get(attribute)?.nextValue ?? attribute.value;
@@ -160,6 +242,34 @@ class TemplateCompilerPendingMutationOverlay {
     );
   }
 
+  recordNodeDetachment(mutation: TemplateCompilerNodeDetachmentMutation): void {
+    if (this.detachedNodes.has(mutation.node)) {
+      throw new Error(`Compiler node '${mutation.node.occurrenceKey}' is already detached by this operation.`);
+    }
+    if (mutation.eventOrdinal !== this.topologyMutations.length) {
+      throw new Error('Compiler node detachment lost global topology mutation order.');
+    }
+    this.detachedNodes.add(mutation.node);
+    this.topologyMutations.push(mutation);
+  }
+
+  recordAttributeDetachment(mutation: TemplateCompilerAttributeDetachmentMutation): void {
+    if (this.detachedAttributes.has(mutation.attribute)) {
+      throw new Error(
+        `Compiler attribute '${mutation.attribute.occurrenceKey}' is already detached by this operation.`,
+      );
+    }
+    if (mutation.eventOrdinal !== this.topologyMutations.length) {
+      throw new Error('Compiler attribute detachment lost global topology mutation order.');
+    }
+    this.detachedAttributes.add(mutation.attribute);
+    this.topologyMutations.push(mutation);
+  }
+
+  get nextTopologyMutationOrdinal(): number {
+    return this.topologyMutations.length;
+  }
+
   finish(
     state: TemplateCompilerMutationBatchState,
     occurrenceGenerationReservations: readonly TemplateCompilerOccurrenceGeneration[],
@@ -168,6 +278,7 @@ class TemplateCompilerPendingMutationOverlay {
       state,
       [...this.attributeValueMutations.values()],
       [...occurrenceGenerationReservations],
+      [...this.topologyMutations],
     );
   }
 }
@@ -709,6 +820,53 @@ export class TemplateCompilerExecutionSession {
     overlay.rewriteAttributeValue(attribute, value);
   }
 
+  /** Detach one live node during local-template extraction while retaining its exact event-time edge. */
+  detachNode(
+    attempt: TemplateCompilerPendingOperationAttempt,
+    node: TemplateCompilerNodeOccurrence,
+  ): void {
+    const overlay = this.requirePendingMutationOverlay(attempt);
+    this.requireLocalExtractionTopologyAttempt(attempt);
+    this.requireOccurrenceContext(attempt.context, node);
+    const previousEdgeKind = node.parentEdgeKind;
+    const previousOrdinal = node.readParentOrdinal();
+    if (previousEdgeKind === TemplateCompilerOccurrenceEdgeKind.Detached || previousOrdinal == null) {
+      throw new Error(`Compiler node '${node.occurrenceKey}' has no live edge to detach.`);
+    }
+    const mutation = new TemplateCompilerNodeDetachmentMutation(
+      overlay.nextTopologyMutationOrdinal,
+      node,
+      node.parent,
+      previousEdgeKind,
+      previousOrdinal,
+    );
+    this.forest.detachNode(node);
+    overlay.recordNodeDetachment(mutation);
+  }
+
+  /** Detach one live attribute during local-template extraction while retaining its exact owner slot. */
+  detachAttribute(
+    attempt: TemplateCompilerPendingOperationAttempt,
+    attribute: TemplateCompilerAttributeOccurrence,
+  ): void {
+    const overlay = this.requirePendingMutationOverlay(attempt);
+    this.requireLocalExtractionTopologyAttempt(attempt);
+    this.requireOccurrenceContext(attempt.context, attribute);
+    const previousOwner = attribute.owner;
+    const previousOrdinal = attribute.readOwnerOrdinal();
+    if (previousOwner == null || previousOrdinal == null) {
+      throw new Error(`Compiler attribute '${attribute.occurrenceKey}' has no live owner to detach.`);
+    }
+    const mutation = new TemplateCompilerAttributeDetachmentMutation(
+      overlay.nextTopologyMutationOrdinal,
+      attribute,
+      previousOwner,
+      previousOrdinal,
+    );
+    this.forest.detachAttribute(attribute);
+    overlay.recordAttributeDetachment(mutation);
+  }
+
   /** Admit the root compiler invocation before hooks or local-template discovery. */
   admitRootInvocation(localKey: string): TemplateCompilerExecutionLaneReference {
     if (this.lanes.length > 0) {
@@ -1231,6 +1389,32 @@ export class TemplateCompilerExecutionSession {
           );
         }
       }
+      if (
+        operation.mutationBatch.topologyMutations.length > 0
+        && (
+          operation.mutationBatch.state === TemplateCompilerMutationBatchState.Discarded
+          || operation.operationKind !== TemplateCompilerOperationKind.LocalTemplateExtraction
+        )
+      ) {
+        throw new Error(
+          `Compiler operation '${operation.operationKey}' owns unsupported topology mutation history.`,
+        );
+      }
+      for (const mutation of operation.mutationBatch.topologyMutations) {
+        if (mutation instanceof TemplateCompilerNodeDetachmentMutation) {
+          if (this.forest.nodeForOccurrenceKey(mutation.node.occurrenceKey) !== mutation.node) {
+            throw new Error(
+              `Compiler operation '${operation.operationKey}' detached a node from another forest.`,
+            );
+          }
+        } else if (
+          this.forest.attributeForOccurrenceKey(mutation.attribute.occurrenceKey) !== mutation.attribute
+        ) {
+          throw new Error(
+            `Compiler operation '${operation.operationKey}' detached an attribute from another forest.`,
+          );
+        }
+      }
       for (const mutation of operation.mutationBatch.attributeValueMutations) {
         const previousValue = replayedAttributeValues.get(mutation.attribute) ?? mutation.attribute.initialValue;
         if (mutation.previousValue !== previousValue) {
@@ -1324,6 +1508,16 @@ export class TemplateCompilerExecutionSession {
       throw new Error(`Compiler operation attempt '${attempt.operationKey}' has no pending authority batch.`);
     }
     return this.pendingAuthorityBatch;
+  }
+
+  private requireLocalExtractionTopologyAttempt(
+    attempt: TemplateCompilerPendingOperationAttempt,
+  ): void {
+    if (attempt.operationKind !== TemplateCompilerOperationKind.LocalTemplateExtraction) {
+      throw new Error(
+        `Compiler operation '${attempt.operationKey}' cannot perform local-extraction topology mutations.`,
+      );
+    }
   }
 
   private requireLane(lane: TemplateCompilerExecutionLaneReference): void {
