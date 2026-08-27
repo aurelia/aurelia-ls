@@ -8,7 +8,7 @@ import type {
 
 export * from './template-compiler-normalized-site-model.js';
 
-/** Build and validate one GraphExact attribute/text schedule basis without publishing a semantic product. */
+/** Build and validate one GraphExact authored attribute/text precedent without publishing a semantic product. */
 export function buildTemplateCompilerNormalizedSiteIndex(
   compilation: TemplateResourceCompilationEmission,
 ): TemplateCompilerNormalizedSiteIndexResult {

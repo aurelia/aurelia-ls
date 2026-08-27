@@ -1,47 +1,73 @@
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
-
 import { beforeAll, describe, expect, test } from 'vitest';
 
-import { createSemanticRuntime } from '../src/api/runtime.js';
-import { bindProductDetailEnvelope, readProductDetailEnvelope } from '../src/kernel/product-details.js';
+import { KernelHandleFactory } from '../src/kernel/handles.js';
 import { AttributeClassificationEmission } from '../src/template/attribute-classification-materializer.js';
 import { AttributeSyntaxParseEmission } from '../src/template/attribute-syntax-materializer.js';
-import { AttributeSyntax } from '../src/template/attribute-syntax.js';
 import {
   BindingCommandLowering,
   BindingCommandLoweringState,
   MultiBindingLowering,
   MultiBindingSegment,
 } from '../src/template/binding-command-execution.js';
-import { BindingCommandLoweringEmission } from '../src/template/binding-command-lowering-materializer.js';
 import { HtmlElement, HtmlNodeReference, HtmlText } from '../src/template/html-ir.js';
 import { HtmlParseEmission } from '../src/template/html-parse-materializer.js';
-import { IteratorBindingInstruction, TemplateInstructionKind } from '../src/template/instruction-ir.js';
 import {
-  TemplateResourceCompilationEmission,
-} from '../src/template/template-compilation-project-pass.js';
+  HydrateElementInstruction,
+  IteratorBindingInstruction,
+  MultiAttrInstruction,
+  SetPropertyInstruction,
+  TemplateInstructionKind,
+} from '../src/template/instruction-ir.js';
+import type { TemplateResourceCompilationEmission } from '../src/template/template-compilation-project-pass.js';
 import {
   buildTemplateCompilerNormalizedSiteIndex,
+  TemplateCompilerNormalizedDownstreamInstructionParityState,
   TemplateCompilerNormalizedOutcomeAttributionKind,
   TemplateCompilerNormalizedSiteIndexState,
   TemplateCompilerNormalizedSiteMismatchKind,
 } from '../src/template/template-compiler-normalized-site-index.js';
-import { TemplateValueSite, TemplateValueSiteKind } from '../src/template/value-site.js';
-import { TemplateValueSiteEmission } from '../src/template/value-site-materializer.js';
-
-const packageRoot = path.resolve(fileURLToPath(new URL('..', import.meta.url)));
+import { TemplateValueSiteKind, TemplateValueSiteReference } from '../src/template/value-site.js';
+import {
+  TemplateValueSiteEmission,
+  TemplateValueSiteExpectation,
+  TemplateValueSiteExpectationDecision,
+} from '../src/template/value-site-materializer.js';
+import {
+  compilationWith,
+  compiledTemplateEmission,
+  equivalentAttributeSyntax,
+  equivalentHtmlElement,
+  fixtureCompilation,
+  htmlEmission,
+  instructionWithNode,
+  instructionWithSource,
+  iteratorWith,
+  loweringEmission,
+  multiAttrWithExpression,
+  segmentWithBindable,
+  segmentWithSiteAndSource,
+  segmentWithSource,
+  segmentWithSyntax,
+  setPropertyWithOutput,
+  sortedHandles,
+  tracked,
+  valueSiteEmission,
+  valueSiteWith,
+  valueSiteWithNode,
+} from './normalized-site-index-fixture.js';
 
 describe('template compiler normalized site index', () => {
   let compilation: TemplateResourceCompilationEmission;
   let repeatCompilation: TemplateResourceCompilationEmission;
   let openCompilation: TemplateResourceCompilationEmission;
+  let invalidCompilation: TemplateResourceCompilationEmission;
 
   beforeAll(async () => {
-    [compilation, repeatCompilation, openCompilation] = await Promise.all([
+    [compilation, repeatCompilation, openCompilation, invalidCompilation] = await Promise.all([
       fixtureCompilation('bindable-contracts-lab', 'bindable-lab-app'),
       fixtureCompilation('template-controller-scope-lab', 'scope-lab-app'),
       fixtureCompilation('template-compiler-fidelity', 'template-compiler-fidelity-app'),
+      fixtureCompilation('template-compiler-errors', 'template-compiler-errors-app'),
     ]);
   }, 30_000);
 
@@ -112,16 +138,18 @@ describe('template compiler normalized site index', () => {
       normalizedInstructions: compilation.bindingCommandLowering.instructions.length,
       downstreamCreatedInstructions: compilation.compiledTemplate.createdInstructions.length,
     });
-    expect(index.outcomes.issues).toBe(compilation.compiledTemplate.issues);
-    expect(index.outcomes.openSeams).toBe(compilation.compiledTemplate.openSeams);
+    expect(index.outcomes.issues).toEqual(compilation.compiledTemplate.issues);
+    expect(index.outcomes.openSeams).toEqual(compilation.compiledTemplate.openSeams);
     expect(index.outcomes.attributionKind)
-      .toBe(TemplateCompilerNormalizedOutcomeAttributionKind.NoPhaseGlobalOutcomes);
+      .toBe(TemplateCompilerNormalizedOutcomeAttributionKind.NoRetainedPhaseGlobalOutcomes);
     expect(index.downstreamInstructions.rows.map((row) => row.instruction))
       .toEqual(compilation.compiledTemplate.createdInstructions);
     expect(index.downstreamInstructions.attributeOutputs).toHaveLength(13);
     expect(index.downstreamInstructions.textOutputs).toHaveLength(0);
     expect(index.downstreamInstructions.excludedStructuralOutputs).toHaveLength(9);
     expect(index.downstreamInstructions.attributeOutputs.every((row) => row.attributeSite != null)).toBe(true);
+    expect(index.downstreamInstructions.state)
+      .toBe(TemplateCompilerNormalizedDownstreamInstructionParityState.Exact);
 
     expect(sortedHandles(index.sites.map((site) => site.syntax.productHandle)))
       .toEqual(sortedHandles(compilation.attributeSyntax.syntaxes.map((syntax) => syntax.productHandle)));
@@ -186,8 +214,12 @@ describe('template compiler normalized site index', () => {
     expect(result.state).toBe(TemplateCompilerNormalizedSiteIndexState.GraphExact);
     const index = result.index;
     if (index == null) throw new Error('Expected GraphExact product structure with open semantic posture.');
-    expect(index.outcomes.openSeams).toBe(openCompilation.compiledTemplate.openSeams);
+    expect(index.outcomes.openSeams).toEqual(openCompilation.compiledTemplate.openSeams);
     expect(index.outcomes.openSeams.length).toBeGreaterThan(0);
+    expect(index.outcomes.openSeams).toHaveLength(new Set([
+      ...openCompilation.bindingCommandLowering.openSeams.map((seam) => seam.handle),
+      ...openCompilation.compiledTemplate.openSeams.map((seam) => seam.handle),
+    ]).size);
     expect(index.outcomes.attributionKind)
       .toBe(TemplateCompilerNormalizedOutcomeAttributionKind.PhaseGlobalOwnershipUnavailable);
     const openCommand = index.attributeSites.find((site) => site.syntax.command === 'open-command');
@@ -196,6 +228,124 @@ describe('template compiler normalized site index', () => {
       .toBe(openCompilation.bindingCommandLowering);
     expect(openCommand?.outcomeRoute.compiledTemplateAuthority)
       .toBe(openCompilation.compiledTemplate);
+    expect(index.downstreamInstructions.state)
+      .toBe(TemplateCompilerNormalizedDownstreamInstructionParityState.Mismatch);
+  });
+
+  test('keeps known-command nonbindable segments GraphExact and semantically Invalid', () => {
+    const result = buildTemplateCompilerNormalizedSiteIndex(invalidCompilation);
+    expect(result.state).toBe(TemplateCompilerNormalizedSiteIndexState.GraphExact);
+    const index = result.index;
+    if (index == null) throw new Error('Expected GraphExact invalid compiler products.');
+    const invalid = index.attributeSites.find((site) =>
+      site.multiBinding?.segments.some((segment) => segment.rawName === 'missing.bind')
+    )?.multiBinding;
+    const segment = invalid?.segments.find((candidate) => candidate.rawName === 'missing.bind');
+    expect(segment?.bindable).toBeNull();
+    expect(segment?.command?.name).toBe('bind');
+    expect(invalid?.lowering.state).toBe(BindingCommandLoweringState.Invalid);
+    expect(index.outcomes.issues.length).toBeGreaterThan(0);
+    expect(index.outcomes.issues).toHaveLength(new Set([
+      ...invalidCompilation.attributeClassification.issues.map((issue) => issue.productHandle),
+      ...invalidCompilation.bindingCommandLowering.issues.map((issue) => issue.productHandle),
+      ...invalidCompilation.compiledTemplate.issues.map((issue) => issue.productHandle),
+    ]).size);
+    expect(index.outcomes.attributionKind)
+      .toBe(TemplateCompilerNormalizedOutcomeAttributionKind.PhaseGlobalOwnershipUnavailable);
+  });
+
+  test('keeps downstream corruption in observational parity rather than authored GraphExact', () => {
+    const createdSets = compilation.compiledTemplate.createdInstructions.filter(
+      (instruction): instruction is SetPropertyInstruction => instruction instanceof SetPropertyInstruction,
+    );
+    const left = createdSets[0];
+    const right = createdSets[1];
+    if (left == null || right == null) throw new Error('Expected two created set-property outputs.');
+    const swappedLeft = setPropertyWithOutput(left, right);
+    const swappedRight = setPropertyWithOutput(right, left);
+    const swappedCreated = compilation.compiledTemplate.createdInstructions.map((instruction) =>
+      instruction === left ? swappedLeft : instruction === right ? swappedRight : instruction
+    );
+    const swappedAll = compilation.compiledTemplate.instructions.map((instruction) =>
+      instruction === left ? swappedLeft : instruction === right ? swappedRight : instruction
+    );
+    const swapped = buildTemplateCompilerNormalizedSiteIndex(compilationWith(compilation, {
+      compiledTemplate: compiledTemplateEmission(compilation, {
+        instructions: swappedAll,
+        createdInstructions: swappedCreated,
+      }),
+    }));
+    expect(swapped.state).toBe(TemplateCompilerNormalizedSiteIndexState.GraphExact);
+    expect(swapped.index?.downstreamInstructions.state)
+      .toBe(TemplateCompilerNormalizedDownstreamInstructionParityState.Mismatch);
+    expect(swapped.index?.downstreamInstructions.mismatches.map((mismatch) => mismatch.relation))
+      .toContain('compiled-created-instruction/attribute');
+
+    const normalized = compilation.bindingCommandLowering.instructions[0];
+    if (normalized == null) throw new Error('Expected one normalized instruction.');
+    const missingNormalized = buildTemplateCompilerNormalizedSiteIndex(compilationWith(compilation, {
+      compiledTemplate: compiledTemplateEmission(compilation, {
+        instructions: compilation.compiledTemplate.instructions.filter((instruction) =>
+          instruction.productHandle !== normalized.productHandle
+        ),
+      }),
+    }));
+    expect(missingNormalized.state).toBe(TemplateCompilerNormalizedSiteIndexState.GraphExact);
+    expect(missingNormalized.index?.downstreamInstructions.mismatches.map((mismatch) => mismatch.relation))
+      .toContain('compiled-template/reverse-instruction-membership');
+
+    const hydrate = compilation.compiledTemplate.createdInstructions.find(
+      (instruction): instruction is HydrateElementInstruction => instruction instanceof HydrateElementInstruction,
+    );
+    const capturedCandidate = hydrate == null
+      ? null
+      : compilation.attributeSyntax.syntaxes.find((syntax) =>
+          compilation.attributeClassification.classifications.some((classification) =>
+            classification.syntaxProductHandle === syntax.productHandle
+            && classification.ownerNode.productHandle === hydrate.node.productHandle
+          )
+        ) ?? null;
+    if (hydrate == null || capturedCandidate == null) throw new Error('Expected hydrate-element and same-node syntax.');
+    const malformedHydrate = new HydrateElementInstruction(
+      hydrate.productHandle,
+      hydrate.identityHandle,
+      new HtmlNodeReference(
+        hydrate.node.nodeKind,
+        null,
+        hydrate.node.productHandle,
+        hydrate.node.addressHandle,
+      ),
+      hydrate.elementName,
+      hydrate.resourceLookupName,
+      hydrate.resource,
+      hydrate.projections,
+      hydrate.discardedProjectionContributors,
+      hydrate.auSlotProcessContent,
+      hydrate.bindableInstructionProductHandles,
+      [capturedCandidate.productHandle, capturedCandidate.productHandle],
+      hydrate.containerless,
+      hydrate.sourceAddressHandle,
+      hydrate.fieldProvenance,
+    );
+    const malformedCreated = compilation.compiledTemplate.createdInstructions.map((instruction) =>
+      instruction === hydrate ? malformedHydrate : instruction
+    );
+    const malformedAll = compilation.compiledTemplate.instructions.map((instruction) =>
+      instruction === hydrate ? malformedHydrate : instruction
+    );
+    const structural = buildTemplateCompilerNormalizedSiteIndex(compilationWith(compilation, {
+      compiledTemplate: compiledTemplateEmission(compilation, {
+        instructions: malformedAll,
+        createdInstructions: malformedCreated,
+      }),
+    }));
+    expect(structural.state).toBe(TemplateCompilerNormalizedSiteIndexState.GraphExact);
+    expect(structural.index?.downstreamInstructions.mismatches.map((mismatch) => mismatch.mismatchKind))
+      .toEqual(expect.arrayContaining([
+        TemplateCompilerNormalizedSiteMismatchKind.DuplicateReference,
+        TemplateCompilerNormalizedSiteMismatchKind.InstructionReferenceMismatch,
+        TemplateCompilerNormalizedSiteMismatchKind.CrossReferenceMismatch,
+      ]));
   });
 
   test('indexes text interpolation and the three-site repeat.for command graph exactly', () => {
@@ -246,6 +396,61 @@ describe('template compiler normalized site index', () => {
     )).toBe(true);
     expect(index.downstreamInstructions.textOutputs.length).toBeGreaterThan(index.textSites.length);
     expect(index.downstreamInstructions.rows).toHaveLength(repeatCompilation.compiledTemplate.createdInstructions.length);
+  });
+
+  test('enforces selector-owned primary site presence and shape', () => {
+    const required = compilation.valueSites.sites.find((site) =>
+      site.siteKind === TemplateValueSiteKind.BindingCommandValue
+    );
+    if (required == null) throw new Error('Expected a required binding-command primary site.');
+    const removed = buildTemplateCompilerNormalizedSiteIndex(compilationWith(compilation, {
+      valueSites: valueSiteEmission(compilation, {
+        sites: compilation.valueSites.sites.filter((site) => site !== required),
+      }),
+    }));
+    expect(removed.state).toBe(TemplateCompilerNormalizedSiteIndexState.Mismatch);
+    expect(removed.mismatches.map((mismatch) => mismatch.mismatchKind)).toContain(
+      TemplateCompilerNormalizedSiteMismatchKind.PrimaryValueSiteCardinality,
+    );
+
+    const relabeled = valueSiteWith(required, { siteKind: TemplateValueSiteKind.BindableValue });
+    const relabeledResult = buildTemplateCompilerNormalizedSiteIndex(compilationWith(compilation, {
+      valueSites: valueSiteEmission(compilation, {
+        sites: compilation.valueSites.sites.map((site) => site === required ? relabeled : site),
+      }),
+    }));
+    expect(relabeledResult.state).toBe(TemplateCompilerNormalizedSiteIndexState.Mismatch);
+    expect(relabeledResult.mismatches.map((mismatch) => mismatch.mismatchKind)).toContain(
+      TemplateCompilerNormalizedSiteMismatchKind.CrossReferenceMismatch,
+    );
+
+    const rawCorrupt = valueSiteWith(required, { rawValue: `${required.rawValue}:corrupt` });
+    const rawResult = buildTemplateCompilerNormalizedSiteIndex(compilationWith(compilation, {
+      valueSites: valueSiteEmission(compilation, {
+        sites: compilation.valueSites.sites.map((site) => site === required ? rawCorrupt : site),
+      }),
+    }));
+    expect(rawResult.state).toBe(TemplateCompilerNormalizedSiteIndexState.Mismatch);
+    expect(rawResult.mismatches.map((mismatch) => mismatch.mismatchKind)).toContain(
+      TemplateCompilerNormalizedSiteMismatchKind.CrossReferenceMismatch,
+    );
+
+    if (required.syntax == null) throw new Error('Expected top-level syntax for required site.');
+    const runtimeNameCorrupt = equivalentAttributeSyntax(required.syntax, { runtimeRawName: 'not-browser-normalized' });
+    const runtimeNameSite = valueSiteWith(required, { syntax: runtimeNameCorrupt });
+    const runtimeNameResult = buildTemplateCompilerNormalizedSiteIndex(compilationWith(compilation, {
+      attributeSyntax: new AttributeSyntaxParseEmission(
+        compilation.attributeSyntax.syntaxes.map((syntax) => syntax === required.syntax ? runtimeNameCorrupt : syntax),
+        compilation.attributeSyntax.records,
+      ),
+      valueSites: valueSiteEmission(compilation, {
+        sites: compilation.valueSites.sites.map((site) => site === required ? runtimeNameSite : site),
+      }),
+    }));
+    expect(runtimeNameResult.state).toBe(TemplateCompilerNormalizedSiteIndexState.Mismatch);
+    expect(runtimeNameResult.mismatches.map((mismatch) => mismatch.relation)).toContain(
+      'top-level-syntax/scalars',
+    );
   });
 
   test('rejects duplicate, foreign, and parse-less text interpolation products', () => {
@@ -303,6 +508,37 @@ describe('template compiler normalized site index', () => {
     expect(parseLessResult.state).toBe(TemplateCompilerNormalizedSiteIndexState.Mismatch);
     expect(parseLessResult.mismatches.map((mismatch) => mismatch.mismatchKind)).toContain(
       TemplateCompilerNormalizedSiteMismatchKind.ExpressionParseCardinality,
+    );
+  });
+
+  test('rejects shared attribute ownership and Frankenstein family authorities', () => {
+    const elements = compilation.html.nodes.filter((node): node is HtmlElement => node instanceof HtmlElement);
+    const sourceOwner = elements.find((element) => element.attributes.length > 0);
+    const secondOwner = elements.find((element) => element !== sourceOwner);
+    const sharedReference = sourceOwner?.attributes[0] ?? null;
+    if (sourceOwner == null || secondOwner == null || sharedReference == null) {
+      throw new Error('Expected two elements and one authored attribute reference.');
+    }
+    const sharedOwner = equivalentHtmlElement(secondOwner, {
+      attributes: [...secondOwner.attributes, sharedReference],
+    });
+    const ownerResult = buildTemplateCompilerNormalizedSiteIndex(compilationWith(compilation, {
+      html: htmlEmission(compilation, {
+        nodes: compilation.html.nodes.map((node) => node === secondOwner ? sharedOwner : node),
+      }),
+    }));
+    expect(ownerResult.state).toBe(TemplateCompilerNormalizedSiteIndexState.Mismatch);
+    expect(ownerResult.mismatches.map((mismatch) => mismatch.mismatchKind)).toContain(
+      TemplateCompilerNormalizedSiteMismatchKind.AttributeOwnerCardinality,
+    );
+
+    const frankenstein = buildTemplateCompilerNormalizedSiteIndex(compilationWith(compilation, {
+      compilerWorld: openCompilation.compilerWorld,
+      definition: openCompilation.definition,
+    }));
+    expect(frankenstein.state).toBe(TemplateCompilerNormalizedSiteIndexState.Mismatch);
+    expect(frankenstein.mismatches.map((mismatch) => mismatch.mismatchKind)).toContain(
+      TemplateCompilerNormalizedSiteMismatchKind.CompilationBasisMismatch,
     );
   });
 
@@ -395,6 +631,30 @@ describe('template compiler normalized site index', () => {
     expect(misboundResult.mismatches.map((mismatch) => mismatch.mismatchKind)).toContain(
       TemplateCompilerNormalizedSiteMismatchKind.CrossReferenceMismatch,
     );
+    const commandedSegment = compilation.bindingCommandLowering.multiBindingSegments.find((segment) =>
+      segment.command != null
+    );
+    const commandedSyntax = commandedSegment == null
+      ? null
+      : compilation.bindingCommandLowering.attributeSyntaxes.find((syntax) =>
+          syntax.productHandle === commandedSegment.syntaxProductHandle
+        ) ?? null;
+    if (commandedSegment == null || commandedSyntax == null) throw new Error('Expected commanded segment syntax.');
+    const nullCommandSyntax = equivalentAttributeSyntax(commandedSyntax, { command: null });
+    const nullCommandResult = buildTemplateCompilerNormalizedSiteIndex(compilationWith(compilation, {
+      bindingCommandLowering: loweringEmission(compilation, {
+        attributeSyntaxes: compilation.bindingCommandLowering.attributeSyntaxes.map((syntax) =>
+          syntax === commandedSyntax ? nullCommandSyntax : syntax
+        ),
+        valueSites: compilation.bindingCommandLowering.valueSites.map((site) =>
+          site.syntax === commandedSyntax ? valueSiteWith(site, { syntax: nullCommandSyntax }) : site
+        ),
+      }),
+    }));
+    expect(nullCommandResult.state).toBe(TemplateCompilerNormalizedSiteIndexState.Mismatch);
+    expect(nullCommandResult.mismatches.map((mismatch) => mismatch.relation)).toContain(
+      'multi-binding-segment/alignment',
+    );
 
     const directAggregate = compilation.bindingCommandLowering.multiBindingLowerings.find((lowering) =>
       lowering.segmentProductHandles.length > 1
@@ -424,6 +684,27 @@ describe('template compiler normalized site index', () => {
     expect(reversedDirectResult.mismatches.map((mismatch) => mismatch.mismatchKind)).toContain(
       TemplateCompilerNormalizedSiteMismatchKind.MultiBindingInstructionOrderMismatch,
     );
+    const directInstruction = compilation.bindingCommandLowering.instructions.find((instruction) =>
+      instruction.productHandle === directAggregate.instructionProductHandles[0]
+    );
+    if (directInstruction == null) throw new Error('Expected a direct multi-binding instruction.');
+    const badDirect = instructionWithNode(directInstruction, new HtmlNodeReference(
+      directInstruction.node.nodeKind,
+      null,
+      directInstruction.node.productHandle,
+      directInstruction.node.addressHandle,
+    ));
+    const badDirectResult = buildTemplateCompilerNormalizedSiteIndex(compilationWith(compilation, {
+      bindingCommandLowering: loweringEmission(compilation, {
+        instructions: compilation.bindingCommandLowering.instructions.map((instruction) =>
+          instruction === directInstruction ? badDirect : instruction
+        ),
+      }),
+    }));
+    expect(badDirectResult.state).toBe(TemplateCompilerNormalizedSiteIndexState.Mismatch);
+    expect(badDirectResult.mismatches.map((mismatch) => mismatch.relation)).toContain(
+      'plain-multi-binding-segment/instruction',
+    );
     const deletedDirect = new MultiBindingLowering(
       directAggregate.productHandle,
       directAggregate.identityHandle,
@@ -442,10 +723,9 @@ describe('template compiler normalized site index', () => {
       }),
     }));
     expect(deletedDirectResult.state).toBe(TemplateCompilerNormalizedSiteIndexState.Mismatch);
-    expect(deletedDirectResult.mismatches.map((mismatch) => mismatch.mismatchKind)).toEqual(expect.arrayContaining([
-      TemplateCompilerNormalizedSiteMismatchKind.MultiBindingGraphCardinality,
+    expect(deletedDirectResult.mismatches.map((mismatch) => mismatch.mismatchKind)).toContain(
       TemplateCompilerNormalizedSiteMismatchKind.MultiBindingInstructionOrderMismatch,
-    ]));
+    );
 
     const commandLowering = compilation.bindingCommandLowering.lowerings.find((lowering) =>
       lowering.instructionProductHandles.length > 0
@@ -491,6 +771,223 @@ describe('template compiler normalized site index', () => {
     expect(nonIdenticalResult.mismatches.map((mismatch) => mismatch.mismatchKind)).toContain(
       TemplateCompilerNormalizedSiteMismatchKind.CrossReferenceMismatch,
     );
+  });
+
+  test('uses producer claims for repeat expression roles and exact tail order', () => {
+    const repeat = buildTemplateCompilerNormalizedSiteIndex(repeatCompilation).index?.attributeSites.find((site) =>
+      site.syntax.rawName === 'repeat.for' && site.syntax.rawValue.includes('contextual.bind')
+    );
+    const iterator = repeat?.command?.instructions.find((instruction): instruction is IteratorBindingInstruction =>
+      instruction instanceof IteratorBindingInstruction
+    );
+    const contextual = repeat?.command?.instructions.find((instruction): instruction is MultiAttrInstruction =>
+      instruction instanceof MultiAttrInstruction && instruction.expressionProductHandle != null
+    );
+    if (iterator == null || contextual?.expressionProductHandle == null || iterator.iterableExpressionProductHandle == null) {
+      throw new Error('Expected repeat iterator and contextual tail expression roles.');
+    }
+
+    const swappedIterator = iteratorWith(iterator, {
+      iterableExpressionProductHandle: contextual.expressionProductHandle,
+    });
+    const swappedContextual = multiAttrWithExpression(contextual, iterator.iterableExpressionProductHandle);
+    const swapped = buildTemplateCompilerNormalizedSiteIndex(compilationWith(repeatCompilation, {
+      bindingCommandLowering: loweringEmission(repeatCompilation, {
+        instructions: repeatCompilation.bindingCommandLowering.instructions.map((instruction) =>
+          instruction === iterator
+            ? swappedIterator
+            : instruction === contextual
+              ? swappedContextual
+              : instruction
+        ),
+      }),
+    }));
+    expect(swapped.state).toBe(TemplateCompilerNormalizedSiteIndexState.Mismatch);
+    expect(swapped.mismatches.map((mismatch) => mismatch.relation)).toContain(
+      'instruction-expression/claims',
+    );
+
+    const reversedIterator = iteratorWith(iterator, {
+      tailInstructionProductHandles: [...iterator.tailInstructionProductHandles].reverse(),
+    });
+    const reversed = buildTemplateCompilerNormalizedSiteIndex(compilationWith(repeatCompilation, {
+      bindingCommandLowering: loweringEmission(repeatCompilation, {
+        instructions: repeatCompilation.bindingCommandLowering.instructions.map((instruction) =>
+          instruction === iterator ? reversedIterator : instruction
+        ),
+      }),
+    }));
+    expect(reversed.state).toBe(TemplateCompilerNormalizedSiteIndexState.Mismatch);
+    expect(reversed.mismatches.map((mismatch) => mismatch.relation)).toContain(
+      'iterator-instruction/tail-order',
+    );
+  });
+
+  test('rejects missing segment source maps when the primary multi-binding source is exact', () => {
+    const exact = buildTemplateCompilerNormalizedSiteIndex(compilation).index;
+    const multi = exact?.attributeSites.map((site) => site.multiBinding).find((candidate) =>
+      candidate != null
+      && candidate.segments.length > 1
+      && candidate.segments.every((segment) => segment.command == null)
+    );
+    if (multi == null) throw new Error('Expected a plain multi-binding bundle.');
+    const segmentHandles = new Set(multi.segments.map((segment) => segment.productHandle));
+    const instructionHandles = new Set(multi.instructions.map((instruction) => instruction.productHandle));
+    const sourceUnmappedSegments = compilation.bindingCommandLowering.multiBindingSegments.map((segment) =>
+      segmentHandles.has(segment.productHandle) ? segmentWithSource(segment, null) : segment
+    );
+    const sourceUnmappedInstructions = compilation.bindingCommandLowering.instructions.map((instruction) =>
+      instructionHandles.has(instruction.productHandle) ? instructionWithSource(instruction, null) : instruction
+    );
+    const result = buildTemplateCompilerNormalizedSiteIndex(compilationWith(compilation, {
+      bindingCommandLowering: loweringEmission(compilation, {
+        multiBindingSegments: sourceUnmappedSegments,
+        instructions: sourceUnmappedInstructions,
+      }),
+    }));
+    expect(result.state).toBe(TemplateCompilerNormalizedSiteIndexState.Mismatch);
+    expect(result.mismatches.map((mismatch) => mismatch.relation)).toContain(
+      'multi-binding-segment/alignment',
+    );
+  });
+
+  test('consumes ordered plain multi-binding outputs when the whole source basis is unmapped', () => {
+    const exact = buildTemplateCompilerNormalizedSiteIndex(compilation).index;
+    const bundle = exact?.attributeSites.find((site) =>
+      site.primaryValueSite != null
+      && site.multiBinding != null
+      && site.multiBinding.segments.length > 1
+      && site.multiBinding.segments.every((segment) => segment.command == null)
+    );
+    if (bundle?.primaryValueSite == null || bundle.multiBinding == null) {
+      throw new Error('Expected a plain multi-binding source-unmapped seed.');
+    }
+    const primary = valueSiteWith(bundle.primaryValueSite, { sourceAddressHandle: null });
+    const primaryReference = new TemplateValueSiteReference(
+      primary.productHandle,
+      primary.identityHandle,
+      primary.siteKind,
+      primary.entryFamily,
+      null,
+    );
+    const segmentHandles = new Set(bundle.multiBinding.segments.map((segment) => segment.productHandle));
+    const instructionHandles = new Set(bundle.multiBinding.instructions.map((instruction) => instruction.productHandle));
+    const segments = compilation.bindingCommandLowering.multiBindingSegments.map((segment) =>
+      segmentHandles.has(segment.productHandle)
+        ? segmentWithSiteAndSource(segment, primaryReference, null)
+        : segment
+    );
+    const aggregate = bundle.multiBinding.lowering;
+    const unmappedAggregate = new MultiBindingLowering(
+      aggregate.productHandle,
+      aggregate.identityHandle,
+      primaryReference,
+      aggregate.state,
+      aggregate.segmentProductHandles,
+      aggregate.instructionProductHandles,
+      null,
+      aggregate.fieldProvenance,
+    );
+    const instructions = compilation.bindingCommandLowering.instructions.map((instruction) =>
+      instructionHandles.has(instruction.productHandle) ? instructionWithSource(instruction, null) : instruction
+    );
+    const expectations = compilation.valueSites.expectations.map((decision) => {
+      if (decision.ownerProductHandle !== bundle.classification.productHandle || decision.expectation == null) {
+        return decision;
+      }
+      const expectation = decision.expectation;
+      return new TemplateValueSiteExpectationDecision(
+        decision.ownerKind,
+        decision.ownerProductHandle,
+        new TemplateValueSiteExpectation(
+          expectation.siteKind,
+          expectation.rawValue,
+          expectation.entryFamily,
+          expectation.node,
+          expectation.attribute,
+          expectation.syntax,
+          expectation.classification,
+          expectation.bindingCommand,
+          expectation.bindable,
+          null,
+        ),
+      );
+    });
+    const result = buildTemplateCompilerNormalizedSiteIndex(compilationWith(compilation, {
+      valueSites: valueSiteEmission(compilation, {
+        sites: compilation.valueSites.sites.map((site) => site === bundle.primaryValueSite ? primary : site),
+        expectations,
+      }),
+      bindingCommandLowering: loweringEmission(compilation, {
+        multiBindingSegments: segments,
+        multiBindingLowerings: compilation.bindingCommandLowering.multiBindingLowerings.map((lowering) =>
+          lowering === aggregate ? unmappedAggregate : lowering
+        ),
+        instructions,
+      }),
+    }));
+    expect(result.state).toBe(TemplateCompilerNormalizedSiteIndexState.GraphExact);
+  });
+
+  test('rejects K-way segment syntax aliasing without grouped expansion', () => {
+    const aggregate = compilation.bindingCommandLowering.multiBindingLowerings.find((lowering) =>
+      lowering.segmentProductHandles.length > 1
+    );
+    const seed = aggregate == null
+      ? null
+      : compilation.bindingCommandLowering.multiBindingSegments.find((segment) =>
+          segment.productHandle === aggregate.segmentProductHandles[0]
+        ) ?? null;
+    if (aggregate == null || seed == null) throw new Error('Expected an aggregate alias seed.');
+    const handles = new KernelHandleFactory('normalized-site-alias-scaling');
+    const aliases = Array.from({ length: 256 }, (_, index) => new MultiBindingSegment(
+      handles.product(`segment:${index}`),
+      handles.identity(`segment:${index}`),
+      seed.site,
+      seed.attribute,
+      seed.syntaxProductHandle,
+      seed.bindable,
+      seed.command,
+      index,
+      seed.rawName,
+      seed.rawValue,
+      seed.targetSourceAddressHandle,
+      seed.sourceAddressHandle,
+      seed.fieldProvenance,
+    ));
+    const reads = { count: 0 };
+    const aliasHandles = tracked(aliases.map((segment) => segment.productHandle), reads);
+    const aliasAggregate = new MultiBindingLowering(
+      aggregate.productHandle,
+      aggregate.identityHandle,
+      aggregate.site,
+      aggregate.state,
+      aliasHandles,
+      aggregate.instructionProductHandles,
+      aggregate.sourceAddressHandle,
+      aggregate.fieldProvenance,
+    );
+    const replacedHandles = new Set(aggregate.segmentProductHandles);
+    const malformed = compilationWith(compilation, {
+      bindingCommandLowering: loweringEmission(compilation, {
+        multiBindingSegments: [
+          ...compilation.bindingCommandLowering.multiBindingSegments.filter((segment) =>
+            !replacedHandles.has(segment.productHandle)
+          ),
+          ...aliases,
+        ],
+        multiBindingLowerings: compilation.bindingCommandLowering.multiBindingLowerings.map((lowering) =>
+          lowering === aggregate ? aliasAggregate : lowering
+        ),
+      }),
+    });
+    reads.count = 0;
+    const result = buildTemplateCompilerNormalizedSiteIndex(malformed);
+    expect(result.state).toBe(TemplateCompilerNormalizedSiteIndexState.Mismatch);
+    expect(result.mismatches.map((mismatch) => mismatch.mismatchKind)).toContain(
+      TemplateCompilerNormalizedSiteMismatchKind.ExclusiveOwnershipConflict,
+    );
+    expect(reads.count).toBeLessThanOrEqual(aliasHandles.length * 6);
   });
 
   test('keeps malformed nested instruction edges linear', () => {
@@ -564,6 +1061,7 @@ describe('template compiler normalized site index', () => {
       tracked(compilation.valueSites.sites, reads),
       tracked(compilation.valueSites.parses, reads),
       compilation.valueSites.records,
+      compilation.valueSites.expectations,
     );
     const bindingCommandLowering = loweringEmission(compilation, {
       buildInputs: tracked(compilation.bindingCommandLowering.buildInputs, reads),
@@ -603,214 +1101,3 @@ describe('template compiler normalized site index', () => {
     expect(reads.count).toBeLessThanOrEqual(phaseRowCount * 3);
   });
 });
-
-async function fixtureCompilation(
-  fixtureName: string,
-  definitionName: string,
-): Promise<TemplateResourceCompilationEmission> {
-  const runtime = await createSemanticRuntime({
-    workspaceRoot: path.join(packageRoot, 'fixtures/pressure', fixtureName),
-    storeKey: `contract:template-compiler-normalized-site-index:${fixtureName}`,
-  });
-  const app = await runtime.openApp();
-  const resource = app.emission.templates.resources.find((candidate) =>
-    candidate.compilation.definition.name === definitionName
-  );
-  if (resource == null) throw new Error(`Expected compilation '${definitionName}' in fixture '${fixtureName}'.`);
-  return resource.compilation;
-}
-
-interface CompilationOverrides {
-  readonly html?: HtmlParseEmission;
-  readonly attributeSyntax?: AttributeSyntaxParseEmission;
-  readonly attributeClassification?: AttributeClassificationEmission;
-  readonly valueSites?: TemplateValueSiteEmission;
-  readonly bindingCommandLowering?: BindingCommandLoweringEmission;
-}
-
-type ValueSiteEmissionOverrides = Partial<Pick<TemplateValueSiteEmission, 'sites' | 'parses'>>;
-
-type HtmlEmissionOverrides = Partial<Pick<HtmlParseEmission, 'nodes' | 'attributes'>>;
-
-function htmlEmission(
-  compilation: TemplateResourceCompilationEmission,
-  overrides: HtmlEmissionOverrides,
-): HtmlParseEmission {
-  return new HtmlParseEmission(
-    compilation.html.draft,
-    compilation.html.document,
-    overrides.nodes ?? compilation.html.nodes,
-    overrides.attributes ?? compilation.html.attributes,
-    compilation.html.nodeDraftBindings,
-    compilation.html.attributeDraftBindings,
-    compilation.html.recoveries,
-    compilation.html.records,
-  );
-}
-
-function valueSiteEmission(
-  compilation: TemplateResourceCompilationEmission,
-  overrides: ValueSiteEmissionOverrides,
-): TemplateValueSiteEmission {
-  return new TemplateValueSiteEmission(
-    overrides.sites ?? compilation.valueSites.sites,
-    overrides.parses ?? compilation.valueSites.parses,
-    compilation.valueSites.records,
-  );
-}
-
-function valueSiteWithNode(site: TemplateValueSite, node: HtmlNodeReference): TemplateValueSite {
-  return valueSiteWith(site, { node });
-}
-
-function valueSiteWith(
-  site: TemplateValueSite,
-  overrides: { readonly node?: HtmlNodeReference; readonly syntax?: AttributeSyntax },
-): TemplateValueSite {
-  const envelope = readProductDetailEnvelope(site);
-  if (envelope == null) throw new Error('Expected the value-site product envelope.');
-  return bindProductDetailEnvelope(new TemplateValueSite(
-    site.siteKind,
-    site.rawValue,
-    site.entryFamily,
-    overrides.node ?? site.node,
-    site.attribute,
-    overrides.syntax ?? site.syntax,
-    site.classification,
-    site.bindingCommand,
-    site.bindable,
-    site.fieldProvenance,
-  ), envelope);
-}
-
-function equivalentAttributeSyntax(syntax: AttributeSyntax): AttributeSyntax {
-  const envelope = readProductDetailEnvelope(syntax);
-  if (envelope == null) throw new Error('Expected the attribute-syntax product envelope.');
-  return bindProductDetailEnvelope(new AttributeSyntax(
-    syntax.syntaxKind,
-    syntax.rawName,
-    syntax.runtimeRawName,
-    syntax.nameSourceAddressHandle,
-    syntax.rawValue,
-    syntax.target,
-    syntax.targetSourceAddressHandle,
-    syntax.command,
-    syntax.commandSourceAddressHandle,
-    syntax.parts,
-    syntax.patternParts,
-    syntax.pattern,
-    syntax.compiledPatternProductHandle,
-    syntax.patternLiterals,
-    syntax.attribute,
-    syntax.fieldProvenance,
-  ), envelope);
-}
-
-function segmentWithSyntax(
-  segment: MultiBindingSegment,
-  syntaxProductHandle: MultiBindingSegment['syntaxProductHandle'],
-): MultiBindingSegment {
-  return new MultiBindingSegment(
-    segment.productHandle,
-    segment.identityHandle,
-    segment.site,
-    segment.attribute,
-    syntaxProductHandle,
-    segment.bindable,
-    segment.command,
-    segment.segmentIndex,
-    segment.rawName,
-    segment.rawValue,
-    segment.targetSourceAddressHandle,
-    segment.sourceAddressHandle,
-    segment.fieldProvenance,
-  );
-}
-
-function segmentWithBindable(
-  segment: MultiBindingSegment,
-  bindable: MultiBindingSegment['bindable'],
-): MultiBindingSegment {
-  return new MultiBindingSegment(
-    segment.productHandle,
-    segment.identityHandle,
-    segment.site,
-    segment.attribute,
-    segment.syntaxProductHandle,
-    bindable,
-    segment.command,
-    segment.segmentIndex,
-    segment.rawName,
-    segment.rawValue,
-    segment.targetSourceAddressHandle,
-    segment.sourceAddressHandle,
-    segment.fieldProvenance,
-  );
-}
-
-function compilationWith(
-  compilation: TemplateResourceCompilationEmission,
-  overrides: CompilationOverrides,
-): TemplateResourceCompilationEmission {
-  return new TemplateResourceCompilationEmission(
-    compilation.localKey,
-    compilation.familyOwnerHandle,
-    compilation.analysisContextProductHandle,
-    compilation.appRootDefinitionProductHandle,
-    compilation.parentCompilerWorld,
-    compilation.compilerWorld,
-    compilation.definition,
-    compilation.unit,
-    overrides.html ?? compilation.html,
-    overrides.attributeSyntax ?? compilation.attributeSyntax,
-    overrides.attributeClassification ?? compilation.attributeClassification,
-    overrides.valueSites ?? compilation.valueSites,
-    overrides.bindingCommandLowering ?? compilation.bindingCommandLowering,
-    compilation.compiledTemplate,
-    compilation.registeredReads,
-  );
-}
-
-type LoweringEmissionOverrides = Partial<Pick<BindingCommandLoweringEmission,
-  | 'buildInputs'
-  | 'lowerings'
-  | 'attributeSyntaxes'
-  | 'multiBindingSegments'
-  | 'multiBindingLowerings'
-  | 'instructions'
-  | 'valueSites'
-  | 'expressionParses'
->>;
-
-function loweringEmission(
-  compilation: TemplateResourceCompilationEmission,
-  overrides: LoweringEmissionOverrides,
-): BindingCommandLoweringEmission {
-  const lowering = compilation.bindingCommandLowering;
-  return new BindingCommandLoweringEmission(
-    overrides.buildInputs ?? lowering.buildInputs,
-    overrides.lowerings ?? lowering.lowerings,
-    lowering.issues,
-    overrides.attributeSyntaxes ?? lowering.attributeSyntaxes,
-    overrides.multiBindingSegments ?? lowering.multiBindingSegments,
-    overrides.multiBindingLowerings ?? lowering.multiBindingLowerings,
-    overrides.instructions ?? lowering.instructions,
-    overrides.valueSites ?? lowering.valueSites,
-    overrides.expressionParses ?? lowering.expressionParses,
-    lowering.openSeams,
-    lowering.records,
-  );
-}
-
-function tracked<T>(values: readonly T[], reads: { count: number }): readonly T[] {
-  return new Proxy(values, {
-    get(target, property, receiver) {
-      if (typeof property === 'string' && /^\d+$/u.test(property)) reads.count++;
-      return Reflect.get(target, property, receiver);
-    },
-  });
-}
-
-function sortedHandles(handles: readonly string[]): readonly string[] {
-  return [...handles].sort();
-}

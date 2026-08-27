@@ -191,7 +191,7 @@ export class TemplateCompilerNormalizedOwnershipLedger {
 }
 
 export const enum TemplateCompilerNormalizedOutcomeAttributionKind {
-  NoPhaseGlobalOutcomes = 'no-phase-global-outcomes',
+  NoRetainedPhaseGlobalOutcomes = 'no-retained-phase-global-outcomes',
   PhaseGlobalOwnershipUnavailable = 'phase-global-ownership-unavailable',
 }
 
@@ -204,7 +204,7 @@ export class TemplateCompilerNormalizedOutcomeInventory {
     readonly openSeams: readonly OpenSeam[],
   ) {
     this.attributionKind = issues.length === 0 && openSeams.length === 0
-      ? TemplateCompilerNormalizedOutcomeAttributionKind.NoPhaseGlobalOutcomes
+      ? TemplateCompilerNormalizedOutcomeAttributionKind.NoRetainedPhaseGlobalOutcomes
       : TemplateCompilerNormalizedOutcomeAttributionKind.PhaseGlobalOwnershipUnavailable;
   }
 }
@@ -230,14 +230,26 @@ export class TemplateCompilerNormalizedDownstreamInstruction {
   ) {}
 }
 
-/** Complete typed inventory of compiled-template-created instructions that live lowering must regenerate. */
+export const enum TemplateCompilerNormalizedDownstreamInstructionParityState {
+  Exact = 'exact',
+  Mismatch = 'mismatch',
+}
+
+/** Observational parity inventory; rows are never authored-precedent or scheduling authority. */
 export class TemplateCompilerNormalizedDownstreamInstructionInventory {
+  readonly state: TemplateCompilerNormalizedDownstreamInstructionParityState;
+
   constructor(
     readonly rows: readonly TemplateCompilerNormalizedDownstreamInstruction[],
     readonly attributeOutputs: readonly TemplateCompilerNormalizedDownstreamInstruction[],
     readonly textOutputs: readonly TemplateCompilerNormalizedDownstreamInstruction[],
     readonly excludedStructuralOutputs: readonly TemplateCompilerNormalizedDownstreamInstruction[],
-  ) {}
+    readonly mismatches: readonly TemplateCompilerNormalizedSiteMismatch[] = [],
+  ) {
+    this.state = mismatches.length === 0
+      ? TemplateCompilerNormalizedDownstreamInstructionParityState.Exact
+      : TemplateCompilerNormalizedDownstreamInstructionParityState.Mismatch;
+  }
 }
 
 /** Cardinality of the validated graph, retained for conservation and performance checks. */
@@ -267,10 +279,12 @@ export class TemplateCompilerNormalizedSiteCardinality {
 }
 
 /**
- * Immutable, product-free read index over one compiler-front-door emission.
+ * Immutable authored-precedent index over one compiler-front-door emission.
  *
  * `GraphExact` means the retained normalized product graph and its cross-references are exact. It does not mean every
- * compiler effect completed semantically: issue/open-seam posture remains explicit in `outcomes` and bundle routes.
+ * compiler effect completed semantically, that the basis is current, or that it is the complete live-site universe.
+ * Currentness must be paired externally; browser normalization and generated sites require the later live resolver.
+ * Issue/open-seam posture remains explicit in `outcomes` and bundle routes.
  */
 export class TemplateCompilerNormalizedSiteIndex {
   private readonly attributeSitesByProduct: ReadonlyMap<ProductHandle, TemplateCompilerNormalizedSite>;
@@ -352,10 +366,12 @@ export const enum TemplateCompilerNormalizedSiteIndexState {
 
 export const enum TemplateCompilerNormalizedSiteMismatchKind {
   HtmlDocumentAuthorityMismatch = 'html-document-authority-mismatch',
+  CompilationBasisMismatch = 'compilation-basis-mismatch',
   DuplicateProduct = 'duplicate-product',
   DuplicateReference = 'duplicate-reference',
   ExclusiveOwnershipConflict = 'exclusive-ownership-conflict',
   MissingAttributeOwner = 'missing-attribute-owner',
+  AttributeOwnerCardinality = 'attribute-owner-cardinality',
   TopLevelSyntaxCardinality = 'top-level-syntax-cardinality',
   ClassificationCardinality = 'classification-cardinality',
   PrimaryValueSiteCardinality = 'primary-value-site-cardinality',

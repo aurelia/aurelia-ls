@@ -1,4 +1,6 @@
 import type { ProductHandle } from '../kernel/handles.js';
+import { SourceSpanAddress } from '../kernel/address.js';
+import type { AddressHandle } from '../kernel/handles.js';
 import type {
   AttributeClassification,
   AttributeSyntax,
@@ -15,11 +17,15 @@ import {
   type HtmlAttribute,
   type HtmlIrNode,
   HtmlText,
-  htmlElementAttributeOwnersByAttributeProduct,
+  htmlElementAttributeOwnersByElementProduct,
   type HtmlElementAttributeOwner,
 } from './html-ir.js';
 import type { TemplateInstruction } from './instruction-ir.js';
 import type { TemplateResourceCompilationEmission } from './template-compilation-project-pass.js';
+import type { TemplateCompilerWorld, TemplateCompilerWorldReference } from './compiler-world.js';
+import type { TemplateParseContext, TemplateParseContextReference } from './parse-context.js';
+import { runtimeAttributeName } from './runtime-dom-name.js';
+import { TemplateCompilerNormalizedClaimIndex } from './template-compiler-normalized-claim-index.js';
 import {
   TemplateCompilerNormalizedInstructionGraphValidator,
 } from './template-compiler-normalized-instruction-graph.js';
@@ -29,7 +35,7 @@ import {
 import {
   TemplateCompilerNormalizedCommandSite,
   TemplateCompilerNormalizedCompilationBasis,
-  TemplateCompilerNormalizedMultiBindingSite,
+  type TemplateCompilerNormalizedMultiBindingSite,
   TemplateCompilerNormalizedOutcomeInventory,
   TemplateCompilerNormalizedOwnershipRelation,
   TemplateCompilerNormalizedSite,
@@ -55,6 +61,11 @@ import {
   type TemplateExpressionParse,
   type TemplateValueSite,
 } from './value-site.js';
+import {
+  TemplateValueSiteExpectationOwnerKind,
+  type TemplateValueSiteExpectation,
+  type TemplateValueSiteExpectationDecision,
+} from './value-site-materializer.js';
 
 export function validateTemplateCompilerNormalizedSiteGraph(
   compilation: TemplateResourceCompilationEmission,
@@ -65,6 +76,7 @@ export function validateTemplateCompilerNormalizedSiteGraph(
 class TemplateCompilerNormalizedSiteGraphValidator {
   private readonly mismatches: TemplateCompilerNormalizedSiteMismatch[] = [];
   private readonly ownership: TemplateCompilerNormalizedOwnershipBuilder;
+  private readonly claimIndex: TemplateCompilerNormalizedClaimIndex;
   private readonly instructionGraph: TemplateCompilerNormalizedInstructionGraphValidator;
   private readonly multiBindingGraph: TemplateCompilerNormalizedMultiBindingGraphValidator;
   private readonly productKinds = new Map<ProductHandle, string>();
@@ -73,7 +85,7 @@ class TemplateCompilerNormalizedSiteGraphValidator {
   private readonly elementsByProduct = new Map<ProductHandle, HtmlElement>();
   private readonly textsByProduct = new Map<ProductHandle, HtmlText>();
   private readonly attributesByProduct = new Map<ProductHandle, HtmlAttribute>();
-  private readonly ownersByAttributeProduct: ReadonlyMap<ProductHandle, HtmlElementAttributeOwner>;
+  private readonly ownersByAttributeProduct = new Map<ProductHandle, HtmlElementAttributeOwner[]>();
   private readonly topLevelSyntaxesByProduct = new Map<ProductHandle, AttributeSyntax>();
   private readonly topLevelSyntaxesByAttribute = new Map<ProductHandle, AttributeSyntax[]>();
   private readonly classificationsByProduct = new Map<ProductHandle, AttributeClassification>();
@@ -81,6 +93,8 @@ class TemplateCompilerNormalizedSiteGraphValidator {
   private readonly primaryValueSitesByProduct = new Map<ProductHandle, TemplateValueSite>();
   private readonly primaryValueSitesByClassification = new Map<ProductHandle, TemplateValueSite[]>();
   private readonly primaryTextValueSitesByNode = new Map<ProductHandle, TemplateValueSite[]>();
+  private readonly expectationsByClassification = new Map<ProductHandle, TemplateValueSiteExpectationDecision[]>();
+  private readonly expectationsByText = new Map<ProductHandle, TemplateValueSiteExpectationDecision[]>();
   private readonly primaryExpressionParsesByProduct = new Map<ProductHandle, TemplateExpressionParse>();
   private readonly primaryExpressionParsesBySite = new Map<ProductHandle, TemplateExpressionParse[]>();
   private readonly secondarySyntaxesByProduct = new Map<ProductHandle, AttributeSyntax>();
@@ -97,11 +111,11 @@ class TemplateCompilerNormalizedSiteGraphValidator {
   private readonly multiBindingLoweringsBySite = new Map<ProductHandle, MultiBindingLowering[]>();
   private readonly normalizedInstructionsByProduct = new Map<ProductHandle, TemplateInstruction>();
   private readonly createdInstructionsByProduct = new Map<ProductHandle, TemplateInstruction>();
+  private readonly sourceSpansByHandle = new Map<AddressHandle, SourceSpanAddress>();
 
   constructor(private readonly compilation: TemplateResourceCompilationEmission) {
-    this.ownersByAttributeProduct = htmlElementAttributeOwnersByAttributeProduct(
-      compilation.html.nodes,
-      compilation.html.attributes,
+    this.claimIndex = new TemplateCompilerNormalizedClaimIndex(
+      compilation.bindingCommandLowering.records,
     );
     this.ownership = new TemplateCompilerNormalizedOwnershipBuilder(
       (kind, relation, summary, handles) => this.mismatch(kind, relation, summary, handles),
@@ -109,11 +123,15 @@ class TemplateCompilerNormalizedSiteGraphValidator {
     this.instructionGraph = new TemplateCompilerNormalizedInstructionGraphValidator({
       compilation,
       ownership: this.ownership,
+      claimIndex: this.claimIndex,
       normalizedInstructionsByProduct: this.normalizedInstructionsByProduct,
       createdInstructionsByProduct: this.createdInstructionsByProduct,
       primaryExpressionParsesByProduct: this.primaryExpressionParsesByProduct,
       secondaryExpressionParsesByProduct: this.secondaryExpressionParsesByProduct,
       topLevelSyntaxesByProduct: this.topLevelSyntaxesByProduct,
+      classificationsBySyntax: this.classificationsBySyntax,
+      elementsByProduct: this.elementsByProduct,
+      textsByProduct: this.textsByProduct,
       ownerForSyntax: (syntax) => this.ownerForSyntax(syntax),
       mismatch: (kind, relation, summary, handles) => this.mismatch(kind, relation, summary, handles),
       missing: (relation, ownerHandle, missingHandle) => this.missing(relation, ownerHandle, missingHandle),
@@ -133,6 +151,7 @@ class TemplateCompilerNormalizedSiteGraphValidator {
       loweringsByInput: this.loweringsByInput,
       segmentsByProduct: this.segmentsByProduct,
       normalizedInstructionsByProduct: this.normalizedInstructionsByProduct,
+      sourceSpansByHandle: this.sourceSpansByHandle,
       mismatch: (kind, relation, summary, handles) => this.mismatch(kind, relation, summary, handles),
       missing: (relation, ownerHandle, missingHandle) => this.missing(relation, ownerHandle, missingHandle),
       crossReference: (relation, summary, handles) => this.crossReference(relation, summary, handles),
@@ -167,8 +186,21 @@ class TemplateCompilerNormalizedSiteGraphValidator {
       [...this.textsByProduct.values()],
       ledger,
       new TemplateCompilerNormalizedOutcomeInventory(
-        this.compilation.compiledTemplate.issues,
-        this.compilation.compiledTemplate.openSeams,
+        uniqueBy(
+          [
+            ...this.compilation.attributeClassification.issues,
+            ...this.compilation.bindingCommandLowering.issues,
+            ...this.compilation.compiledTemplate.issues,
+          ],
+          (issue) => issue.productHandle,
+        ),
+        uniqueBy(
+          [
+            ...this.compilation.bindingCommandLowering.openSeams,
+            ...this.compilation.compiledTemplate.openSeams,
+          ],
+          (seam) => seam.handle,
+        ),
       ),
       downstream,
       new TemplateCompilerNormalizedSiteCardinality(
@@ -209,9 +241,63 @@ class TemplateCompilerNormalizedSiteGraphValidator {
         [compiledDocument, htmlDocument, unitSource, emittedSource],
       );
     }
+    const unit = this.compilation.unit;
+    const world = this.compilation.compilerWorld.world;
+    const unitWorld = unit.compilationUnit.compilerWorld;
+    const rootWorld = unit.rootContext.compilerWorld;
+    const unitParse = unit.compilationUnit.parseContext;
+    const rootParse = unit.rootContext.parseContext;
+    const rootReference = unit.compilationUnit.rootContext;
+    const sourceOwner = unit.templateSource.owner;
+    const definition = this.compilation.definition;
+    const basisMatches = sameCompilerWorldReference(unitWorld, world)
+      && sameCompilerWorldReference(rootWorld, world)
+      && unit.compilationUnit.rootContext.productHandle === unit.rootContext.productHandle
+      && unit.compilationUnit.rootContext.identityHandle === unit.rootContext.identityHandle
+      && unit.compilationUnit.rootContext.contextKind === unit.rootContext.contextKind
+      && rootReference.sourceAddressHandle === unit.rootContext.sourceAddressHandle
+      && unit.rootContext.compilationUnitProductHandle === unit.compilationUnit.productHandle
+      && unit.compilationUnit.templateSource.identityHandle === unit.templateSource.identityHandle
+      && unit.compilationUnit.templateSource.sourceKind === unit.templateSource.sourceKind
+      && unit.compilationUnit.templateSource.phase === unit.templateSource.phase
+      && unit.compilationUnit.templateSource.templateAddressHandle === unit.templateSource.templateAddressHandle
+      && unit.compilationUnit.templateSource.sourceAddressHandle === unit.templateSource.sourceAddressHandle
+      && sameParseContextReference(unitParse, unit.parseContext)
+      && sameParseContextReference(rootParse, unit.parseContext)
+      && unit.rootContext.resourceScope.productHandle === this.compilation.compilerWorld.resourceScope.productHandle
+      && unit.rootContext.resourceScope.identityHandle === this.compilation.compilerWorld.resourceScope.identityHandle
+      && unit.rootContext.resourceScope.sourceAddressHandle === this.compilation.compilerWorld.resourceScope.sourceAddressHandle
+      && unit.rootContext.resourceScope.container.productHandle
+        === this.compilation.compilerWorld.resourceScope.container.productHandle
+      && unit.rootContext.resourceScope.container.identityHandle
+        === this.compilation.compilerWorld.resourceScope.container.identityHandle
+      && (sourceOwner?.productHandle == null || definition.productHandle == null
+        || sourceOwner.productHandle === definition.productHandle)
+      && (sourceOwner?.identityHandle == null || definition.identityHandle == null
+        || sourceOwner.identityHandle === definition.identityHandle);
+    if (!basisMatches) {
+      this.mismatch(
+        TemplateCompilerNormalizedSiteMismatchKind.CompilationBasisMismatch,
+        'compilation-family/front-door-basis',
+        'Compilation source, unit, parse/root context, compiler world, resource scope, and definition ownership do not retain one front-door basis.',
+        [
+          unit.compilationUnit.productHandle,
+          unit.templateSource.productHandle,
+          world.productHandle,
+          this.compilation.compilerWorld.resourceScope.productHandle,
+          ...productHandle(definition.productHandle),
+        ],
+      );
+    }
   }
 
   private indexGraph(): void {
+    for (const record of this.compilation.html.records) {
+      if (record instanceof SourceSpanAddress) this.sourceSpansByHandle.set(record.handle, record);
+    }
+    for (const record of this.compilation.bindingCommandLowering.records) {
+      if (record instanceof SourceSpanAddress) this.sourceSpansByHandle.set(record.handle, record);
+    }
     this.registerProduct('html-document', this.compilation.html.document.productHandle);
     for (const node of this.compilation.html.nodes) {
       this.register('html-node', node.productHandle, node, this.nodesByProduct);
@@ -220,6 +306,27 @@ class TemplateCompilerNormalizedSiteGraphValidator {
     }
     for (const attribute of this.compilation.html.attributes) {
       this.register('html-attribute', attribute.productHandle, attribute, this.attributesByProduct);
+    }
+    const ownersByElement = htmlElementAttributeOwnersByElementProduct(
+      this.compilation.html.nodes,
+      this.compilation.html.attributes,
+    );
+    for (const owner of ownersByElement.values()) {
+      for (const reference of owner.element.attributes) {
+        this.append(this.ownersByAttributeProduct, reference.productHandle, owner);
+        const attribute = reference.productHandle == null
+          ? null
+          : this.attributesByProduct.get(reference.productHandle) ?? null;
+        if (attribute == null) {
+          this.missing('html-element/attribute-reference', owner.element.productHandle, reference.productHandle);
+        } else if (!sameNormalizedAttributeReference(reference, attribute)) {
+          this.crossReference(
+            'html-element/attribute-reference',
+            'Element attribute reference does not retain the exact authored attribute name and address.',
+            [owner.element.productHandle, attribute.productHandle],
+          );
+        }
+      }
     }
     for (const syntax of this.compilation.attributeSyntax.syntaxes) {
       this.register('top-level-attribute-syntax', syntax.productHandle, syntax, this.topLevelSyntaxesByProduct);
@@ -235,6 +342,22 @@ class TemplateCompilerNormalizedSiteGraphValidator {
         this.append(this.primaryTextValueSitesByNode, site.node.productHandle, site);
       } else if (site.classification?.productHandle != null) {
         this.append(this.primaryValueSitesByClassification, site.classification.productHandle, site);
+      }
+    }
+    for (const decision of this.compilation.valueSites.expectations) {
+      switch (decision.ownerKind) {
+        case TemplateValueSiteExpectationOwnerKind.AttributeClassification:
+          this.append(this.expectationsByClassification, decision.ownerProductHandle, decision);
+          if (!this.classificationsByProduct.has(decision.ownerProductHandle)) {
+            this.missing('value-site-expectation/classification', decision.ownerProductHandle, null);
+          }
+          break;
+        case TemplateValueSiteExpectationOwnerKind.Text:
+          this.append(this.expectationsByText, decision.ownerProductHandle, decision);
+          if (!this.textsByProduct.has(decision.ownerProductHandle)) {
+            this.missing('value-site-expectation/text', decision.ownerProductHandle, null);
+          }
+          break;
       }
     }
     for (const parse of this.compilation.valueSites.parses) {
@@ -271,23 +394,28 @@ class TemplateCompilerNormalizedSiteGraphValidator {
       this.register('normalized-instruction', instruction.productHandle, instruction, this.normalizedInstructionsByProduct);
     }
     for (const instruction of this.compilation.compiledTemplate.createdInstructions) {
-      this.register('compiled-created-instruction', instruction.productHandle, instruction, this.createdInstructionsByProduct);
+      if (!this.createdInstructionsByProduct.has(instruction.productHandle)) {
+        this.createdInstructionsByProduct.set(instruction.productHandle, instruction);
+      }
     }
   }
 
   private validateGraphReferences(): void {
     for (const attribute of this.attributesByProduct.values()) {
-      if (!this.ownersByAttributeProduct.has(attribute.productHandle)) {
+      const owners = this.ownersByAttributeProduct.get(attribute.productHandle) ?? [];
+      if (owners.length !== 1) {
         this.mismatch(
-          TemplateCompilerNormalizedSiteMismatchKind.MissingAttributeOwner,
+          owners.length === 0
+            ? TemplateCompilerNormalizedSiteMismatchKind.MissingAttributeOwner
+            : TemplateCompilerNormalizedSiteMismatchKind.AttributeOwnerCardinality,
           'html-attribute/owner',
-          `Authored attribute '${attribute.rawName}' has no exact element owner.`,
-          [attribute.productHandle],
+          `Authored attribute '${attribute.rawName}' must have exactly one element owner; found ${owners.length}.`,
+          [attribute.productHandle, ...owners.map((owner) => owner.element.productHandle)],
         );
       }
     }
     for (const syntax of this.topLevelSyntaxesByProduct.values()) {
-      this.validateSyntaxAttribute(syntax, 'top-level-syntax/attribute');
+      this.validateTopLevelSyntax(syntax);
     }
     for (const syntax of this.secondarySyntaxesByProduct.values()) {
       this.validateSyntaxAttribute(syntax, 'secondary-syntax/attribute');
@@ -333,7 +461,8 @@ class TemplateCompilerNormalizedSiteGraphValidator {
   }
 
   private buildAttributeSite(attribute: HtmlAttribute): TemplateCompilerNormalizedSite | null {
-    const owner = this.ownersByAttributeProduct.get(attribute.productHandle) ?? null;
+    const owners = this.ownersByAttributeProduct.get(attribute.productHandle) ?? [];
+    const owner = owners.length === 1 ? owners[0]! : null;
     const syntax = this.single(
       this.topLevelSyntaxesByAttribute.get(attribute.productHandle) ?? [],
       TemplateCompilerNormalizedSiteMismatchKind.TopLevelSyntaxCardinality,
@@ -362,12 +491,18 @@ class TemplateCompilerNormalizedSiteGraphValidator {
       TemplateCompilerNormalizedOwnershipRelation.SyntaxOwnsClassification,
     );
 
-    const primaryValueSite = this.optionalSingle(
-      this.primaryValueSitesByClassification.get(classification.productHandle) ?? [],
+    const expectationDecision = this.single(
+      this.expectationsByClassification.get(classification.productHandle) ?? [],
       TemplateCompilerNormalizedSiteMismatchKind.PrimaryValueSiteCardinality,
-      'classification/primary-value-site',
-      'Attribute classification owns more than one primary value site.',
+      'classification/value-site-expectation',
+      'Attribute classification must retain exactly one selector expectation decision.',
       [classification.productHandle],
+    );
+    const primaryValueSite = this.primarySiteForExpectation(
+      classification.productHandle,
+      expectationDecision?.expectation ?? null,
+      this.primaryValueSitesByClassification.get(classification.productHandle) ?? [],
+      'classification/primary-value-site',
     );
     let primaryExpressionParse: TemplateExpressionParse | null = null;
     if (primaryValueSite != null) {
@@ -418,14 +553,19 @@ class TemplateCompilerNormalizedSiteGraphValidator {
   private buildTextSites(): readonly TemplateCompilerNormalizedTextSite[] {
     const result: TemplateCompilerNormalizedTextSite[] = [];
     for (const text of this.textsByProduct.values()) {
-      const candidates = this.primaryTextValueSitesByNode.get(text.productHandle) ?? [];
-      if (candidates.length === 0) continue;
-      const site = this.single(
-        candidates,
+      const decision = this.single(
+        this.expectationsByText.get(text.productHandle) ?? [],
         TemplateCompilerNormalizedSiteMismatchKind.TextValueSiteCardinality,
-        'html-text/value-site',
-        'One authored text node owns more than one primary interpolation value site.',
+        'html-text/value-site-expectation',
+        'Authored text must retain exactly one selector expectation decision.',
         [text.productHandle],
+      );
+      const site = this.primarySiteForExpectation(
+        text.productHandle,
+        decision?.expectation ?? null,
+        this.primaryTextValueSitesByNode.get(text.productHandle) ?? [],
+        'html-text/value-site',
+        TemplateCompilerNormalizedSiteMismatchKind.TextValueSiteCardinality,
       );
       if (site == null) continue;
       this.ownership.claim(
@@ -566,6 +706,33 @@ class TemplateCompilerNormalizedSiteGraphValidator {
           classification,
           primaryValueSite,
         );
+  }
+
+  private primarySiteForExpectation(
+    ownerProductHandle: ProductHandle,
+    expectation: TemplateValueSiteExpectation | null,
+    candidates: readonly TemplateValueSite[],
+    relation: string,
+    mismatchKind = TemplateCompilerNormalizedSiteMismatchKind.PrimaryValueSiteCardinality,
+  ): TemplateValueSite | null {
+    const expectedCount = expectation == null ? 0 : 1;
+    if (candidates.length !== expectedCount) {
+      this.mismatch(
+        mismatchKind,
+        relation,
+        `Selector expectation requires ${expectedCount} primary value site; found ${candidates.length}.`,
+        [ownerProductHandle, ...candidates.map((site) => site.productHandle)],
+      );
+    }
+    const site = candidates.length === 1 ? candidates[0]! : null;
+    if (site != null && expectation != null && !sameValueSiteExpectation(site, expectation)) {
+      this.crossReference(
+        `${relation}/shape`,
+        'Primary value site does not match the selector-owned kind, raw value, entry family, origin, or selection.',
+        [ownerProductHandle, site.productHandle],
+      );
+    }
+    return site;
   }
 
   private validatePrimaryValueSite(site: TemplateValueSite): void {
@@ -763,7 +930,7 @@ class TemplateCompilerNormalizedSiteGraphValidator {
   }
 
   private validateCommandReference(
-    expected: AttributeClassification['bindingCommand'] | MultiBindingSegment['command'],
+    expected: AttributeClassification['bindingCommand'],
     lowering: BindingCommandLowering,
     relation: string,
   ): void {
@@ -844,6 +1011,27 @@ class TemplateCompilerNormalizedSiteGraphValidator {
     }
   }
 
+  private validateTopLevelSyntax(syntax: AttributeSyntax): void {
+    this.validateSyntaxAttribute(syntax, 'top-level-syntax/attribute');
+    const attribute = this.attributeForSyntax(syntax);
+    const owner = this.ownerForSyntax(syntax);
+    if (
+      attribute != null
+      && owner != null
+      && (
+        syntax.rawName !== attribute.rawName
+        || syntax.rawValue !== attribute.rawValue
+        || syntax.runtimeRawName !== runtimeAttributeName(attribute.rawName, owner.namespace)
+      )
+    ) {
+      this.crossReference(
+        'top-level-syntax/scalars',
+        'Top-level syntax does not retain the authored name/value and browser-normalized runtime name.',
+        [syntax.productHandle, attribute.productHandle],
+      );
+    }
+  }
+
   private validateSyntaxAttribute(syntax: AttributeSyntax, relation: string): void {
     const attribute = this.attributeForSyntax(syntax);
     if (attribute == null) {
@@ -878,9 +1066,10 @@ class TemplateCompilerNormalizedSiteGraphValidator {
   }
 
   private ownerForSyntax(syntax: AttributeSyntax): HtmlElementAttributeOwner | null {
-    return syntax.attribute.productHandle == null
-      ? null
-      : this.ownersByAttributeProduct.get(syntax.attribute.productHandle) ?? null;
+    const owners = syntax.attribute.productHandle == null
+      ? []
+      : this.ownersByAttributeProduct.get(syntax.attribute.productHandle) ?? [];
+    return owners.length === 1 ? owners[0]! : null;
   }
 
   private register<T>(
@@ -968,4 +1157,65 @@ class TemplateCompilerNormalizedSiteGraphValidator {
 
 function productHandle(handle: ProductHandle | null | undefined): readonly ProductHandle[] {
   return handle == null ? [] : [handle];
+}
+
+function sameValueSiteExpectation(
+  site: TemplateValueSite,
+  expectation: TemplateValueSiteExpectation,
+): boolean {
+  return site.siteKind === expectation.siteKind
+    && site.rawValue === expectation.rawValue
+    && site.entryFamily === expectation.entryFamily
+    && site.node.productHandle === expectation.node.productHandle
+    && site.node.identityHandle === expectation.node.identityHandle
+    && site.node.addressHandle === expectation.node.addressHandle
+    && site.node.nodeKind === expectation.node.nodeKind
+    && site.attribute?.productHandle === expectation.attribute?.productHandle
+    && site.attribute?.addressHandle === expectation.attribute?.addressHandle
+    && site.attribute?.rawName === expectation.attribute?.rawName
+    && site.syntax === expectation.syntax
+    && site.classification === expectation.classification
+    && sameNormalizedBindingCommandReference(site.bindingCommand, expectation.bindingCommand)
+    && site.bindable === expectation.bindable
+    && site.sourceAddressHandle === expectation.sourceAddressHandle;
+}
+
+function uniqueBy<TValue, TKey>(
+  values: readonly TValue[],
+  keyFor: (value: TValue) => TKey,
+): readonly TValue[] {
+  const occupied = new Set<TKey>();
+  const result: TValue[] = [];
+  for (const value of values) {
+    const key = keyFor(value);
+    if (occupied.has(key)) continue;
+    occupied.add(key);
+    result.push(value);
+  }
+  return result;
+}
+
+function sameCompilerWorldReference(
+  reference: TemplateCompilerWorldReference,
+  world: TemplateCompilerWorld,
+): boolean {
+  return reference.productHandle === world.productHandle
+    && reference.identityHandle === world.identityHandle
+    && reference.worldKind === world.worldKind
+    && reference.container.productHandle === world.container.productHandle
+    && reference.container.identityHandle === world.container.identityHandle
+    && reference.container.addressHandle === world.container.addressHandle
+    && reference.container.localName === world.container.localName
+    && reference.sourceAddressHandle === world.sourceAddressHandle;
+}
+
+function sameParseContextReference(
+  reference: TemplateParseContextReference,
+  context: TemplateParseContext,
+): boolean {
+  return reference.productHandle === context.productHandle
+    && reference.consumer === context.consumer
+    && reference.recoveryPolicy === context.recoveryPolicy
+    && reference.frontier === context.frontier
+    && reference.sourceAddressHandle === context.sourceAddressHandle;
 }

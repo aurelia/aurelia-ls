@@ -32,7 +32,7 @@ import { CustomAttributeDefinition } from '../resources/custom-attribute-definit
 import { ResourceDefinitionKind } from '../resources/resource-kind.js';
 import type { AttributeClassificationEmission } from './attribute-classification-materializer.js';
 import {
-  AttributeClassification,
+  type AttributeClassification,
   AttributeClassificationKind,
   type AttributeSyntax,
 } from './attribute-syntax.js';
@@ -43,13 +43,13 @@ import type {
 import type { TemplateCompilerReadView } from './compiler-read-view.js';
 import type { TemplateCompilationUnit } from './compilation-unit.js';
 import {
-  HtmlAttribute,
+  type HtmlAttribute,
   HtmlText,
 } from './html-ir.js';
 import type { HtmlParseEmission } from './html-parse-materializer.js';
 import {
-  TemplateExpressionParse,
-  TemplateValueSite,
+  type TemplateExpressionParse,
+  type TemplateValueSite,
   TemplateValueSiteKind,
 } from './value-site.js';
 import {
@@ -79,6 +79,8 @@ export class TemplateValueSiteEmission {
     readonly sites: readonly TemplateValueSite[],
     readonly parses: readonly TemplateExpressionParse[],
     readonly records: readonly KernelStoreRecord[],
+    /** Positive and negative selector decisions for every authored classification and text node. */
+    readonly expectations: readonly TemplateValueSiteExpectationDecision[] = [],
   ) {}
 }
 
@@ -89,7 +91,13 @@ class TemplateValueSiteSourceSet {
   ) {}
 }
 
-class PendingValueSite {
+export const enum TemplateValueSiteExpectationOwnerKind {
+  AttributeClassification = 'attribute-classification',
+  Text = 'text',
+}
+
+/** Consumer-neutral positive single-site shape selected before parser publication. */
+export class TemplateValueSiteExpectation {
   constructor(
     readonly siteKind: TemplateValueSiteKind,
     readonly rawValue: string,
@@ -102,6 +110,20 @@ class PendingValueSite {
     readonly bindable: TemplateBindableReference | null,
     readonly sourceAddressHandle: TemplateValueSite['sourceAddressHandle'],
   ) {}
+}
+
+/** Exact positive/negative selector decision for one authored classification or text node. */
+export class TemplateValueSiteExpectationDecision {
+  constructor(
+    readonly ownerKind: TemplateValueSiteExpectationOwnerKind,
+    readonly ownerProductHandle: ProductHandle,
+    readonly expectation: TemplateValueSiteExpectation | null,
+  ) {}
+}
+
+/** Minimal definition lookup needed by custom-attribute multi-binding selection. */
+export interface TemplateValueSiteSelectionContext {
+  currentDefinition(resource: AttributeClassification['resource']): object | null;
 }
 
 class ValueSiteMaterializationEmission {
@@ -142,15 +164,18 @@ export class TemplateValueSiteMaterializer {
     const sites: TemplateValueSite[] = [];
     const parses: TemplateExpressionParse[] = [];
     const claims: SemanticClaim[] = [];
-    const pendingSites = [
-      ...textValueSites(input.html),
-      ...attributeValueSites(
+    const expectations = [
+      ...textValueSiteExpectationDecisions(input.html),
+      ...attributeValueSiteExpectationDecisions(
         input.html,
         input.attributeSyntax,
         input.attributeClassification,
         input.compilerReads,
       ),
     ];
+    const pendingSites = expectations.flatMap((decision) =>
+      decision.expectation == null ? [] : [decision.expectation]
+    );
 
     pendingSites.forEach((pending, index) => {
       const emission = this.recordsForValueSite(input, source, pending, index);
@@ -172,13 +197,13 @@ export class TemplateValueSiteMaterializer {
       claims.map((claim) => claim.handle),
     ));
 
-    return new TemplateValueSiteEmission(sites, parses, records);
+    return new TemplateValueSiteEmission(sites, parses, records, expectations);
   }
 
   private recordsForValueSite(
     input: TemplateValueSiteRequest,
     source: TemplateValueSiteSourceSet,
-    pending: PendingValueSite,
+    pending: TemplateValueSiteExpectation,
     index: number,
   ): ValueSiteMaterializationEmission {
     const siteLocal = `template-value-site:${input.localKey}:${index}`;
@@ -216,7 +241,7 @@ export class TemplateValueSiteMaterializer {
 
   private expressionSourceForPendingSite(
     siteLocal: string,
-    pending: PendingValueSite,
+    pending: TemplateValueSiteExpectation,
   ): SourceSpanAddressPublication | null {
     const syntax = pending.syntax;
     if (pending.siteKind !== TemplateValueSiteKind.SpreadValue
@@ -260,7 +285,7 @@ export class TemplateValueSiteMaterializer {
 }
 
 function valueSiteSubject(
-  pending: PendingValueSite,
+  pending: TemplateValueSiteExpectation,
 ): ProductHandle | null {
   return pending.classification?.productHandle
     ?? pending.syntax?.productHandle
@@ -269,11 +294,23 @@ function valueSiteSubject(
     ?? null;
 }
 
-function textValueSites(html: HtmlParseEmission): readonly PendingValueSite[] {
+function textValueSiteExpectationDecisions(
+  html: HtmlParseEmission,
+): readonly TemplateValueSiteExpectationDecision[] {
   return html.nodes
     .filter((node): node is HtmlText => node instanceof HtmlText)
-    .filter((node) => hasInterpolationOpener(node.text))
-    .map((node) => new PendingValueSite(
+    .map((node) => new TemplateValueSiteExpectationDecision(
+      TemplateValueSiteExpectationOwnerKind.Text,
+      node.productHandle,
+      templateTextValueSiteExpectation(node),
+    ));
+}
+
+export function templateTextValueSiteExpectation(
+  node: HtmlText,
+): TemplateValueSiteExpectation | null {
+  return hasInterpolationOpener(node.text)
+    ? new TemplateValueSiteExpectation(
       TemplateValueSiteKind.TextInterpolation,
       node.text,
       'Interpolation',
@@ -284,18 +321,19 @@ function textValueSites(html: HtmlParseEmission): readonly PendingValueSite[] {
       null,
       null,
       node.sourceAddressHandle,
-    ));
+    )
+    : null;
 }
 
-function attributeValueSites(
+function attributeValueSiteExpectationDecisions(
   html: HtmlParseEmission,
   syntaxEmission: AttributeSyntaxParseEmission,
   classificationEmission: AttributeClassificationEmission,
-  compilerReads: TemplateCompilerReadView,
-): readonly PendingValueSite[] {
+  selection: TemplateValueSiteSelectionContext,
+): readonly TemplateValueSiteExpectationDecision[] {
   const attributesByProduct = new Map(html.attributes.map((attribute) => [attribute.productHandle, attribute]));
   const syntaxByProduct = new Map(syntaxEmission.syntaxes.map((syntax) => [syntax.productHandle, syntax]));
-  const sites: PendingValueSite[] = [];
+  const decisions: TemplateValueSiteExpectationDecision[] = [];
   for (const classification of classificationEmission.classifications) {
     const syntax = classification.syntaxProductHandle == null
       ? null
@@ -309,22 +347,23 @@ function attributeValueSites(
     if (attribute == null) {
       continue;
     }
-    const site = siteForAttributeClassification(classification, syntax, attribute, compilerReads);
-    if (site != null) {
-      sites.push(site);
-    }
+    decisions.push(new TemplateValueSiteExpectationDecision(
+      TemplateValueSiteExpectationOwnerKind.AttributeClassification,
+      classification.productHandle,
+      templateAttributeValueSiteExpectation(classification, syntax, attribute, selection),
+    ));
   }
-  return sites;
+  return decisions;
 }
 
-function siteForAttributeClassification(
+export function templateAttributeValueSiteExpectation(
   classification: AttributeClassification,
   syntax: AttributeSyntax,
   attribute: HtmlAttribute,
-  compilerReads: TemplateCompilerReadView,
-): PendingValueSite | null {
+  selection: TemplateValueSiteSelectionContext,
+): TemplateValueSiteExpectation | null {
   if (classification.bindingCommand != null) {
-    return new PendingValueSite(
+    return new TemplateValueSiteExpectation(
       TemplateValueSiteKind.BindingCommandValue,
       syntax.rawValue,
       null,
@@ -350,7 +389,7 @@ function siteForAttributeClassification(
       );
     case AttributeClassificationKind.CustomAttribute:
     case AttributeClassificationKind.TemplateController:
-      return customAttributeOrTemplateControllerSite(classification, syntax, attribute, compilerReads);
+      return customAttributeOrTemplateControllerSite(classification, syntax, attribute, selection);
     case AttributeClassificationKind.Captured:
       return interpolationAttributeSite(
         TemplateValueSiteKind.CapturedValue,
@@ -362,7 +401,7 @@ function siteForAttributeClassification(
       if (syntax.target === '...$attrs') {
         return null;
       }
-      return new PendingValueSite(
+      return new TemplateValueSiteExpectation(
         TemplateValueSiteKind.SpreadValue,
         spreadValueExpression(syntax),
         'IsProperty',
@@ -386,7 +425,7 @@ function plainAttributeValueSite(
   classification: AttributeClassification,
   syntax: AttributeSyntax,
   attribute: HtmlAttribute,
-): PendingValueSite | null {
+): TemplateValueSiteExpectation | null {
   return hasInterpolationOpener(syntax.rawValue)
     ? interpolationAttributeSite(
       TemplateValueSiteKind.PlainAttributeInterpolation,
@@ -407,8 +446,8 @@ function interpolationAttributeSite(
   classification: AttributeClassification,
   syntax: AttributeSyntax,
   attribute: HtmlAttribute,
-): PendingValueSite {
-  return new PendingValueSite(
+): TemplateValueSiteExpectation {
+  return new TemplateValueSiteExpectation(
     siteKind,
     syntax.rawValue,
     'Interpolation',
@@ -426,14 +465,14 @@ function customAttributeOrTemplateControllerSite(
   classification: AttributeClassification,
   syntax: AttributeSyntax,
   attribute: HtmlAttribute,
-  compilerReads: TemplateCompilerReadView,
-): PendingValueSite {
-  const definition = compilerReads.currentDefinition(classification.resource);
+  selection: TemplateValueSiteSelectionContext,
+): TemplateValueSiteExpectation {
+  const definition = selection.currentDefinition(classification.resource);
   const isMultiBinding = definition instanceof CustomAttributeDefinition
     && !definition.noMultiBindings
     && hasInlineBindings(syntax.rawValue);
   if (isMultiBinding) {
-    return new PendingValueSite(
+    return new TemplateValueSiteExpectation(
       TemplateValueSiteKind.MultiBindingValue,
       syntax.rawValue,
       null,

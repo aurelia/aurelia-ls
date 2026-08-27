@@ -1,12 +1,18 @@
 import { ExpressionParseResultKind } from '../expression/parse-result-algebra.js';
 import type { ProductHandle } from '../kernel/handles.js';
-import type { AttributeSyntax } from './attribute-syntax.js';
+import { InstructionIdentity } from '../kernel/identity.js';
+import {
+  AttributeClassificationKind,
+  type AttributeClassification,
+  type AttributeSyntax,
+} from './attribute-syntax.js';
 import type { MultiBindingSegment } from './binding-command-execution.js';
 import {
   type HtmlAttribute,
   type HtmlAttributeReference,
-  HtmlElement,
+  type HtmlElement,
   type HtmlElementAttributeOwner,
+  type HtmlText,
 } from './html-ir.js';
 import {
   HydrateAttributeInstruction,
@@ -18,12 +24,12 @@ import {
   MultiAttrInstruction,
   SetPropertyInstruction,
   SpreadElementPropBindingInstruction,
-  TextBindingInstruction,
   expressionProductHandlesForInstruction,
   nestedInstructionProductHandlesForInstructions,
   type TemplateInstruction,
 } from './instruction-ir.js';
 import type { TemplateResourceCompilationEmission } from './template-compilation-project-pass.js';
+import type { TemplateCompilerNormalizedClaimIndex } from './template-compiler-normalized-claim-index.js';
 import type { TemplateCompilerNormalizedOwnershipBuilder } from './template-compiler-normalized-ownership.js';
 import {
   sameNormalizedAttributeReference,
@@ -35,6 +41,7 @@ import {
   TemplateCompilerNormalizedDownstreamInstructionDisposition,
   TemplateCompilerNormalizedDownstreamInstructionExclusionKind,
   TemplateCompilerNormalizedDownstreamInstructionInventory,
+  TemplateCompilerNormalizedSiteMismatch,
   TemplateCompilerNormalizedSiteMismatchKind,
   type TemplateCompilerNormalizedSite,
   type TemplateCompilerNormalizedTextSite,
@@ -44,11 +51,15 @@ import type { TemplateExpressionParse } from './value-site.js';
 export interface TemplateCompilerNormalizedInstructionGraphContext {
   readonly compilation: TemplateResourceCompilationEmission;
   readonly ownership: TemplateCompilerNormalizedOwnershipBuilder;
+  readonly claimIndex: TemplateCompilerNormalizedClaimIndex;
   readonly normalizedInstructionsByProduct: ReadonlyMap<ProductHandle, TemplateInstruction>;
   readonly createdInstructionsByProduct: ReadonlyMap<ProductHandle, TemplateInstruction>;
   readonly primaryExpressionParsesByProduct: ReadonlyMap<ProductHandle, TemplateExpressionParse>;
   readonly secondaryExpressionParsesByProduct: ReadonlyMap<ProductHandle, TemplateExpressionParse>;
   readonly topLevelSyntaxesByProduct: ReadonlyMap<ProductHandle, AttributeSyntax>;
+  readonly classificationsBySyntax: ReadonlyMap<ProductHandle, readonly AttributeClassification[]>;
+  readonly elementsByProduct: ReadonlyMap<ProductHandle, HtmlElement>;
+  readonly textsByProduct: ReadonlyMap<ProductHandle, HtmlText>;
   readonly ownerForSyntax: (syntax: AttributeSyntax) => HtmlElementAttributeOwner | null;
   readonly mismatch: (
     kind: TemplateCompilerNormalizedSiteMismatchKind,
@@ -63,6 +74,43 @@ export interface TemplateCompilerNormalizedInstructionGraphContext {
     relation: string,
     ownerHandle: ProductHandle,
   ) => void;
+}
+
+class DownstreamInstructionParityFrame {
+  readonly mismatches: TemplateCompilerNormalizedSiteMismatch[] = [];
+
+  mismatch(
+    kind: TemplateCompilerNormalizedSiteMismatchKind,
+    relation: string,
+    summary: string,
+    handles: readonly ProductHandle[],
+  ): void {
+    this.mismatches.push(new TemplateCompilerNormalizedSiteMismatch(kind, relation, summary, handles));
+  }
+
+  missing(relation: string, owner: ProductHandle, missing: ProductHandle | null): void {
+    this.mismatch(
+      TemplateCompilerNormalizedSiteMismatchKind.DownstreamInstructionInventoryMismatch,
+      relation,
+      'Downstream instruction parity references an absent authored-precedent product.',
+      missing == null ? [owner] : [owner, missing],
+    );
+  }
+
+  unique(handles: readonly ProductHandle[], relation: string, owner: ProductHandle): void {
+    const occupied = new Set<ProductHandle>();
+    for (const handle of handles) {
+      if (occupied.has(handle)) {
+        this.mismatch(
+          TemplateCompilerNormalizedSiteMismatchKind.DuplicateReference,
+          relation,
+          'Downstream instruction parity repeats one product reference.',
+          [owner, handle],
+        );
+      }
+      occupied.add(handle);
+    }
+  }
 }
 
 /** Validates normalized instruction ownership and inventories downstream compiled-template outputs. */
@@ -96,7 +144,9 @@ export class TemplateCompilerNormalizedInstructionGraphValidator {
     owner: HtmlElement,
   ): boolean {
     const expectedKey = this.plainMultiBindingInstructionKeyForSegment(segment, parses, attribute, owner);
-    return expectedKey != null && expectedKey === this.plainMultiBindingInstructionKey(instruction);
+    return expectedKey != null
+      && expectedKey === this.plainMultiBindingInstructionKey(instruction)
+      && sameInstructionOrigin(instruction, attribute, owner);
   }
 
   plainMultiBindingInstructionKeyForSegment(
@@ -152,9 +202,11 @@ export class TemplateCompilerNormalizedInstructionGraphValidator {
     attribute: HtmlAttribute,
     element: HtmlElement,
   ): void {
+    this.validateProducerClaims(ownerProductHandle, instructions);
     const instructionByProduct = new Map(instructions.map((instruction) => [instruction.productHandle, instruction]));
     const instructionOrdinal = new Map(instructions.map((instruction, ordinal) => [instruction.productHandle, ordinal]));
     const parsesByHandle = new Map(parses.map((parse) => [parse.productHandle, parse]));
+    const earlierMultiAttrHandles: ProductHandle[] = [];
     for (const instruction of instructions) {
       if (!sameInstructionOrigin(instruction, attribute, element)) {
         this.context.crossReference(
@@ -164,6 +216,7 @@ export class TemplateCompilerNormalizedInstructionGraphValidator {
         );
       }
       this.validateInstructionExpressions(ownerProductHandle, instruction, parses, parsesByHandle);
+      this.validateInstructionClaimRoles(ownerProductHandle, instruction);
       const nested = instructionProductHandles(instruction);
       const iteratorTails = new Set(nestedInstructionProductHandlesForInstructions([instruction]));
       this.context.validateUniqueHandles(nested, 'instruction/nested-products', instruction.productHandle);
@@ -195,6 +248,52 @@ export class TemplateCompilerNormalizedInstructionGraphValidator {
           ordinal,
         );
       });
+      if (instruction instanceof IteratorBindingInstruction) {
+        if (!sameHandleSequence(instruction.tailInstructionProductHandles, earlierMultiAttrHandles)) {
+          this.context.mismatch(
+            TemplateCompilerNormalizedSiteMismatchKind.InstructionReferenceMismatch,
+            'iterator-instruction/tail-order',
+            'Iterator tail handles do not equal the exact ordered earlier MultiAttr subsequence.',
+            [instruction.productHandle, ...instruction.tailInstructionProductHandles],
+          );
+        }
+      }
+      if (instruction instanceof MultiAttrInstruction) earlierMultiAttrHandles.push(instruction.productHandle);
+    }
+  }
+
+  validateProducerClaims(
+    producerProductHandle: ProductHandle,
+    instructions: readonly TemplateInstruction[],
+  ): void {
+    const claimed = this.context.claimIndex.instructionsForProducer(producerProductHandle);
+    const actual = instructions.map((instruction) => instruction.productHandle);
+    if (!sameHandleSequence(claimed, actual)) {
+      this.context.mismatch(
+        TemplateCompilerNormalizedSiteMismatchKind.InstructionReferenceMismatch,
+        'instruction-producer/claims',
+        'ProducesInstruction claims do not exactly match the producer instruction sequence.',
+        [producerProductHandle, ...actual],
+      );
+    }
+  }
+
+  validateInstructionClaimRoles(
+    producerProductHandle: ProductHandle,
+    instruction: TemplateInstruction,
+  ): void {
+    const claimed = this.context.claimIndex.expressionParsesForInstruction(
+      producerProductHandle,
+      instruction.productHandle,
+    );
+    const actual = expressionProductHandlesForInstruction(instruction);
+    if (!sameHandleSequence(claimed, actual)) {
+      this.context.mismatch(
+        TemplateCompilerNormalizedSiteMismatchKind.InstructionReferenceMismatch,
+        'instruction-expression/claims',
+        'UsesExpressionParse claims do not exactly match instruction expression roles and order.',
+        [producerProductHandle, instruction.productHandle, ...actual],
+      );
     }
   }
 
@@ -202,8 +301,40 @@ export class TemplateCompilerNormalizedInstructionGraphValidator {
     attributeSites: readonly TemplateCompilerNormalizedSite[],
     textSites: readonly TemplateCompilerNormalizedTextSite[],
   ): TemplateCompilerNormalizedDownstreamInstructionInventory {
-    const attributeSitesByProduct = new Map(attributeSites.map((site) => [site.attributeProductHandle, site]));
-    const textSitesByProduct = new Map(textSites.map((site) => [site.textProductHandle, site]));
+    const parity = new DownstreamInstructionParityFrame();
+    const attributeSitesByProducerIdentity = new Map(attributeSites.flatMap((site) => [
+      [site.syntax.identityHandle, site] as const,
+      [site.classification.identityHandle, site] as const,
+    ]));
+    const textSitesByProducerIdentity = new Map(textSites.map((site) => [site.text.identityHandle, site]));
+    const instructionIdentities = new Map<TemplateInstruction['identityHandle'], InstructionIdentity>();
+    for (const record of this.context.compilation.compiledTemplate.records) {
+      if (!(record instanceof InstructionIdentity)) continue;
+      if (instructionIdentities.has(record.handle)) {
+        parity.mismatch(
+          TemplateCompilerNormalizedSiteMismatchKind.DuplicateProduct,
+          'compiled-created-instruction/identity',
+          'Compiled instruction identity is repeated.',
+          [],
+        );
+      }
+      instructionIdentities.set(record.handle, record);
+    }
+    const createdSeen = new Set<ProductHandle>();
+    for (const instruction of this.context.compilation.compiledTemplate.createdInstructions) {
+      if (
+        createdSeen.has(instruction.productHandle)
+        || this.context.normalizedInstructionsByProduct.has(instruction.productHandle)
+      ) {
+        parity.mismatch(
+          TemplateCompilerNormalizedSiteMismatchKind.DuplicateProduct,
+          'compiled-created-instruction/product-handle',
+          'Created instruction product collides with another downstream or normalized instruction.',
+          [instruction.productHandle],
+        );
+      }
+      createdSeen.add(instruction.productHandle);
+    }
     const allInstructions = new Map<ProductHandle, TemplateInstruction>([
       ...this.context.normalizedInstructionsByProduct,
       ...this.context.createdInstructionsByProduct,
@@ -211,7 +342,7 @@ export class TemplateCompilerNormalizedInstructionGraphValidator {
     const aggregateSeen = new Set<ProductHandle>();
     for (const instruction of this.context.compilation.compiledTemplate.instructions) {
       if (aggregateSeen.has(instruction.productHandle)) {
-        this.context.mismatch(
+        parity.mismatch(
           TemplateCompilerNormalizedSiteMismatchKind.DuplicateReference,
           'compiled-template/instruction-inventory',
           'Compiled-template instruction inventory repeats one product handle.',
@@ -220,10 +351,20 @@ export class TemplateCompilerNormalizedInstructionGraphValidator {
       }
       aggregateSeen.add(instruction.productHandle);
       if (allInstructions.get(instruction.productHandle) !== instruction) {
-        this.context.mismatch(
+        parity.mismatch(
           TemplateCompilerNormalizedSiteMismatchKind.DownstreamInstructionInventoryMismatch,
           'compiled-template/instruction-inventory',
           'Compiled-template instruction inventory contains a foreign or non-identical instruction object.',
+          [instruction.productHandle],
+        );
+      }
+    }
+    for (const [handle, instruction] of allInstructions) {
+      if (!aggregateSeen.has(handle)) {
+        parity.mismatch(
+          TemplateCompilerNormalizedSiteMismatchKind.DownstreamInstructionInventoryMismatch,
+          'compiled-template/reverse-instruction-membership',
+          'Normalized or created instruction is absent from the compiled aggregate inventory.',
           [instruction.productHandle],
         );
       }
@@ -235,27 +376,31 @@ export class TemplateCompilerNormalizedInstructionGraphValidator {
     const excludedStructuralOutputs: TemplateCompilerNormalizedDownstreamInstruction[] = [];
     for (const instruction of this.context.compilation.compiledTemplate.createdInstructions) {
       if (!aggregateSeen.has(instruction.productHandle)) {
-        this.context.mismatch(
+        parity.mismatch(
           TemplateCompilerNormalizedSiteMismatchKind.DownstreamInstructionInventoryMismatch,
           'compiled-created-instruction/aggregate-membership',
           'Compiled-template-created instruction is absent from the compiled instruction inventory.',
           [instruction.productHandle],
         );
       }
-      const attributeReference = instructionAttributeReference(instruction);
-      const attributeSite = attributeReference?.productHandle == null
+      const identity = instructionIdentities.get(instruction.identityHandle) ?? null;
+      if (identity == null) {
+        parity.mismatch(
+          TemplateCompilerNormalizedSiteMismatchKind.DownstreamInstructionInventoryMismatch,
+          'compiled-created-instruction/identity',
+          'Compiled-template-created instruction has no independent InstructionIdentity owner.',
+          [instruction.productHandle],
+        );
+      }
+      const attributeSite = identity == null
         ? null
-        : attributeSitesByProduct.get(attributeReference.productHandle) ?? null;
-      const textSite = instruction instanceof TextBindingInstruction && instruction.node.productHandle != null
-        ? textSitesByProduct.get(instruction.node.productHandle) ?? null
-        : null;
+        : attributeSitesByProducerIdentity.get(identity.ownerHandle) ?? null;
+      const textSite = identity == null
+        ? null
+        : textSitesByProducerIdentity.get(identity.ownerHandle) ?? null;
       let row: TemplateCompilerNormalizedDownstreamInstruction;
-      if (attributeReference != null) {
-        if (attributeSite == null) {
-          this.context.missing('compiled-created-instruction/attribute-site', instruction.productHandle, attributeReference.productHandle);
-        } else {
-          this.validateDownstreamInstruction(instruction, attributeSite, null, allInstructions);
-        }
+      if (attributeSite != null) {
+        this.validateDownstreamInstruction(instruction, attributeSite, null, allInstructions, parity);
         row = new TemplateCompilerNormalizedDownstreamInstruction(
           instruction,
           TemplateCompilerNormalizedDownstreamInstructionDisposition.RegenerateFromAttributeSite,
@@ -264,12 +409,8 @@ export class TemplateCompilerNormalizedInstructionGraphValidator {
           null,
         );
         attributeOutputs.push(row);
-      } else if (instruction instanceof TextBindingInstruction) {
-        if (textSite == null) {
-          this.context.missing('compiled-created-instruction/text-site', instruction.productHandle, instruction.node.productHandle);
-        } else {
-          this.validateDownstreamInstruction(instruction, null, textSite, allInstructions);
-        }
+      } else if (textSite != null) {
+        this.validateDownstreamInstruction(instruction, null, textSite, allInstructions, parity);
         row = new TemplateCompilerNormalizedDownstreamInstruction(
           instruction,
           TemplateCompilerNormalizedDownstreamInstructionDisposition.RegenerateFromTextSite,
@@ -279,7 +420,7 @@ export class TemplateCompilerNormalizedInstructionGraphValidator {
         );
         textOutputs.push(row);
       } else {
-        this.validateDownstreamInstruction(instruction, null, null, allInstructions);
+        this.validateDownstreamInstruction(instruction, null, null, allInstructions, parity);
         row = new TemplateCompilerNormalizedDownstreamInstruction(
           instruction,
           TemplateCompilerNormalizedDownstreamInstructionDisposition.ExcludedStructuralOutput,
@@ -296,6 +437,7 @@ export class TemplateCompilerNormalizedInstructionGraphValidator {
       attributeOutputs,
       textOutputs,
       excludedStructuralOutputs,
+      parity.mismatches,
     );
   }
 
@@ -332,7 +474,21 @@ export class TemplateCompilerNormalizedInstructionGraphValidator {
     attributeSite: TemplateCompilerNormalizedSite | null,
     textSite: TemplateCompilerNormalizedTextSite | null,
     allInstructions: ReadonlyMap<ProductHandle, TemplateInstruction>,
+    parity: DownstreamInstructionParityFrame,
   ): void {
+    const authoredNode = instruction.node.productHandle == null
+      ? null
+      : this.context.elementsByProduct.get(instruction.node.productHandle)
+        ?? this.context.textsByProduct.get(instruction.node.productHandle)
+        ?? null;
+    if (authoredNode == null || !sameNormalizedNodeReference(instruction.node, authoredNode)) {
+      parity.mismatch(
+        TemplateCompilerNormalizedSiteMismatchKind.CrossReferenceMismatch,
+        'compiled-created-instruction/authored-node',
+        'Compiled-template-created instruction does not retain an exact authored element/text node reference.',
+        [instruction.productHandle, ...productHandle(instruction.node.productHandle)],
+      );
+    }
     const expectedNode = attributeSite?.owner.element ?? textSite?.text ?? null;
     if (
       attributeSite != null
@@ -341,14 +497,16 @@ export class TemplateCompilerNormalizedInstructionGraphValidator {
         attributeSite.attribute,
       )
     ) {
-      this.context.crossReference(
+      parity.mismatch(
+        TemplateCompilerNormalizedSiteMismatchKind.CrossReferenceMismatch,
         'compiled-created-instruction/attribute',
         'Compiled-template-created instruction does not retain its exact authored attribute reference.',
         [instruction.productHandle, attributeSite.attribute.productHandle],
       );
     }
     if (expectedNode != null && !sameNormalizedNodeReference(instruction.node, expectedNode)) {
-      this.context.crossReference(
+      parity.mismatch(
+        TemplateCompilerNormalizedSiteMismatchKind.CrossReferenceMismatch,
         'compiled-created-instruction/node',
         'Compiled-template-created instruction does not retain its exact authored site node.',
         [instruction.productHandle, expectedNode.productHandle],
@@ -358,14 +516,14 @@ export class TemplateCompilerNormalizedInstructionGraphValidator {
       ?? (textSite == null ? [] : [textSite.expressionParse]);
     const allowedParseHandles = new Set(allowedParses.map((parse) => parse.productHandle));
     const expressionHandles = expressionProductHandlesForInstruction(instruction);
-    this.context.validateUniqueHandles(
+    parity.unique(
       expressionHandles,
       'compiled-created-instruction/expression-products',
       instruction.productHandle,
     );
     for (const handle of expressionHandles) {
       if (this.expressionParse(handle) == null || !allowedParseHandles.has(handle)) {
-        this.context.mismatch(
+        parity.mismatch(
           TemplateCompilerNormalizedSiteMismatchKind.InstructionReferenceMismatch,
           'compiled-created-instruction/expression-products',
           'Compiled-template-created instruction expression does not belong to its exact normalized site.',
@@ -374,11 +532,11 @@ export class TemplateCompilerNormalizedInstructionGraphValidator {
       }
     }
     const nestedHandles = instructionProductHandles(instruction);
-    this.context.validateUniqueHandles(nestedHandles, 'compiled-created-instruction/product-references', instruction.productHandle);
+    parity.unique(nestedHandles, 'compiled-created-instruction/product-references', instruction.productHandle);
     for (const handle of nestedHandles) {
       const nested = allInstructions.get(handle) ?? null;
       if (nested == null || instruction.node.productHandle !== nested.node.productHandle) {
-        this.context.mismatch(
+        parity.mismatch(
           TemplateCompilerNormalizedSiteMismatchKind.InstructionReferenceMismatch,
           'compiled-created-instruction/product-references',
           'Compiled-template-created instruction references a missing or foreign-node instruction product.',
@@ -387,11 +545,23 @@ export class TemplateCompilerNormalizedInstructionGraphValidator {
       }
     }
     if (instruction instanceof HydrateElementInstruction) {
+      parity.unique(
+        instruction.captureSyntaxProductHandles,
+        'hydrate-element/capture-syntax-products',
+        instruction.productHandle,
+      );
       for (const syntaxHandle of instruction.captureSyntaxProductHandles) {
         const syntax = this.context.topLevelSyntaxesByProduct.get(syntaxHandle) ?? null;
         const owner = syntax == null ? null : this.context.ownerForSyntax(syntax);
-        if (syntax == null || owner?.element.productHandle !== instruction.node.productHandle) {
-          this.context.mismatch(
+        const classifications = this.context.classificationsBySyntax.get(syntaxHandle) ?? [];
+        if (
+          syntax == null
+          || owner == null
+          || !sameNormalizedNodeReference(instruction.node, owner.element)
+          || classifications.length !== 1
+          || classifications[0]?.classificationKind !== AttributeClassificationKind.Captured
+        ) {
+          parity.mismatch(
             TemplateCompilerNormalizedSiteMismatchKind.InstructionReferenceMismatch,
             'hydrate-element/capture-syntax-products',
             'Hydrate-element capture syntax is missing or belongs to a different authored element.',
@@ -432,4 +602,12 @@ function instructionProductHandles(instruction: TemplateInstruction): readonly P
   if (instruction instanceof IteratorBindingInstruction) return instruction.tailInstructionProductHandles;
   if (instruction instanceof SpreadElementPropBindingInstruction) return [instruction.instructionProductHandle];
   return [];
+}
+
+function sameHandleSequence(left: readonly ProductHandle[], right: readonly ProductHandle[]): boolean {
+  return left.length === right.length && left.every((handle, index) => handle === right[index]);
+}
+
+function productHandle(handle: ProductHandle | null): readonly ProductHandle[] {
+  return handle == null ? [] : [handle];
 }
