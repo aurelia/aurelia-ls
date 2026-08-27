@@ -52,8 +52,8 @@ import {
   TemplateCompilationUnit,
   TemplateCompilationUnitKind,
   TemplateSource,
-  TemplateSourceKind,
-  TemplateSourceOwnerReference,
+  type TemplateSourceKind,
+  type TemplateSourceOwnerReference,
 } from './compilation-unit.js';
 import {
   TemplateFrontierKind,
@@ -97,6 +97,61 @@ export class TemplateCompilationUnitConstructionRequest {
       null,
     ),
   ) {}
+}
+
+/** Authored source and parse pressure known before compiler-local resources select the final compilation world. */
+export class TemplateCompilationIngressPreparationRequest {
+  constructor(
+    readonly localKey: string,
+    readonly unitKind: TemplateCompilationUnitKind,
+    readonly owner: TemplateSourceOwnerReference | null,
+    readonly sourceKind: TemplateSourceKind,
+    readonly markup: string | null,
+    readonly sourceAddressHandle: AddressHandle | null,
+    readonly sourceMap: TemplateSourceOffsetMap | null,
+    readonly consumer: TemplateParseConsumer = TemplateParseConsumer.Compilation,
+    readonly recoveryPolicy: TemplateRecoveryPolicy = TemplateRecoveryPolicy.Strict,
+    readonly frontier: TemplateParseFrontier = new TemplateParseFrontier(
+      TemplateFrontierKind.None,
+      null,
+      null,
+    ),
+  ) {}
+}
+
+/** Final compiler-world and local-resource facts joined only after browser effects and local extraction can run. */
+export class TemplateCompilationUnitCompletionRequest {
+  constructor(
+    readonly compilerWorld: TemplateCompilerWorldEmission,
+    readonly localElementNames: readonly string[],
+    readonly dependencyIdentityHandles: readonly IdentityHandle[],
+  ) {}
+}
+
+/** Candidate-local authored ingress whose products may feed parsers before the complete unit is published. */
+export class TemplateCompilationIngressPreparation {
+  constructor(
+    readonly localKey: string,
+    readonly unitKind: TemplateCompilationUnitKind,
+    readonly templateSource: TemplateSource,
+    readonly parseContext: TemplateParseContext,
+  ) {}
+}
+
+interface TemplateCompilationUnitAssemblyInput {
+  readonly localKey: string;
+  readonly unitKind: TemplateCompilationUnitKind;
+  readonly compilerWorld: TemplateCompilerWorldEmission;
+  readonly owner: TemplateSourceOwnerReference | null;
+  readonly sourceKind: TemplateSourceKind;
+  readonly markup: string | null;
+  readonly sourceAddressHandle: AddressHandle | null;
+  readonly sourceMap: TemplateSourceOffsetMap | null;
+  readonly localElementNames: readonly string[];
+  readonly dependencyIdentityHandles: readonly IdentityHandle[];
+  readonly consumer: TemplateParseConsumer;
+  readonly recoveryPolicy: TemplateRecoveryPolicy;
+  readonly frontier: TemplateParseFrontier;
 }
 
 export class TemplateCompilationUnitEmission {
@@ -156,6 +211,12 @@ class TemplateCompilationUnitHandleSet {
   }
 }
 
+interface TemplateCompilationIngressPreparationState {
+  readonly input: TemplateCompilationIngressPreparationRequest;
+  readonly handles: TemplateCompilationUnitHandleSet;
+  readonly source: TemplateCompilationSourceSet;
+}
+
 class TemplateCompilationUnitProducts {
   constructor(
     readonly templateSource: TemplateSource,
@@ -182,7 +243,7 @@ class TemplateCompilationClaimMaterializer {
 
   recordsForUnit(
     local: string,
-    input: TemplateCompilationUnitConstructionRequest,
+    input: TemplateCompilationUnitAssemblyInput,
     templateSource: TemplateSource,
     parseContext: TemplateParseContext,
     rootContext: TemplateCompilationContext,
@@ -198,7 +259,7 @@ class TemplateCompilationClaimMaterializer {
 
   private sourceClaimsForUnit(
     local: string,
-    input: TemplateCompilationUnitConstructionRequest,
+    input: TemplateCompilationUnitAssemblyInput,
     templateSource: TemplateSource,
     provenanceHandle: ProvenanceHandle,
   ): readonly SemanticClaim[] {
@@ -217,7 +278,7 @@ class TemplateCompilationClaimMaterializer {
 
   private compilationUnitClaimsForUnit(
     local: string,
-    input: TemplateCompilationUnitConstructionRequest,
+    input: TemplateCompilationUnitAssemblyInput,
     templateSource: TemplateSource,
     parseContext: TemplateParseContext,
     rootContext: TemplateCompilationContext,
@@ -250,7 +311,7 @@ class TemplateCompilationClaimMaterializer {
   private compilationUnitUsesWorldClaim(
     local: string,
     compilationUnit: TemplateCompilationUnit,
-    input: TemplateCompilationUnitConstructionRequest,
+    input: TemplateCompilationUnitAssemblyInput,
     provenanceHandle: ProvenanceHandle,
   ): SemanticClaim {
     return new SemanticClaim(
@@ -294,7 +355,7 @@ class TemplateCompilationClaimMaterializer {
 
   private rootContextClaimsForUnit(
     local: string,
-    input: TemplateCompilationUnitConstructionRequest,
+    input: TemplateCompilationUnitAssemblyInput,
     parseContext: TemplateParseContext,
     rootContext: TemplateCompilationContext,
     provenanceHandle: ProvenanceHandle,
@@ -330,6 +391,11 @@ class TemplateCompilationClaimMaterializer {
 /** Materializes the compiler-front-door products that parser and lowering materializers consume. */
 export class TemplateCompilationUnitMaterializer {
   private readonly claims: TemplateCompilationClaimMaterializer;
+  private readonly ingressStates = new WeakMap<
+    TemplateCompilationIngressPreparation,
+    TemplateCompilationIngressPreparationState
+  >();
+  private readonly completedIngresses = new WeakSet<TemplateCompilationIngressPreparation>();
 
   constructor(
     /** Hot analysis store that receives compilation-front-door records. */
@@ -339,9 +405,57 @@ export class TemplateCompilationUnitMaterializer {
   }
 
   construct(input: TemplateCompilationUnitConstructionRequest): TemplateCompilationUnitEmission {
-    const emission = this.recordsForUnit(input);
+    const ingress = this.prepareIngress(new TemplateCompilationIngressPreparationRequest(
+      input.localKey,
+      input.unitKind,
+      input.owner,
+      input.sourceKind,
+      input.markup,
+      input.sourceAddressHandle,
+      input.sourceMap,
+      input.consumer,
+      input.recoveryPolicy,
+      input.frontier,
+    ));
+    return this.constructPrepared(ingress, new TemplateCompilationUnitCompletionRequest(
+      input.compilerWorld,
+      input.localElementNames,
+      input.dependencyIdentityHandles,
+    ));
+  }
+
+  /** Prepare source/parse products without publishing or requiring the final compiler world. */
+  prepareIngress(
+    input: TemplateCompilationIngressPreparationRequest,
+  ): TemplateCompilationIngressPreparation {
+    const source = this.recordsForSource(input.localKey, input.sourceAddressHandle);
+    const handles = this.handlesForUnit(input.localKey);
+    const preparation = new TemplateCompilationIngressPreparation(
+      input.localKey,
+      input.unitKind,
+      this.templateSourceForIngress(input, handles, source),
+      this.parseContextForIngress(input, handles, source),
+    );
+    this.ingressStates.set(preparation, { input, handles, source });
+    return preparation;
+  }
+
+  /** Join a prepared ingress to the selected compiler world and publish the original complete unit closure. */
+  constructPrepared(
+    ingress: TemplateCompilationIngressPreparation,
+    completion: TemplateCompilationUnitCompletionRequest,
+  ): TemplateCompilationUnitEmission {
+    const state = this.ingressStates.get(ingress) ?? null;
+    if (state == null) {
+      throw new Error('Template compilation ingress belongs to another materializer.');
+    }
+    if (this.completedIngresses.has(ingress)) {
+      throw new Error(`Template compilation ingress '${ingress.localKey}' is already completed.`);
+    }
+    const input = this.assemblyInput(state.input, completion);
+    const emission = this.recordsForUnit(input, ingress, state);
     this.store.publish(new KernelPublicationPlan(
-      new KernelStoreBatch(emission.records, `template-compilation-unit:${input.localKey}`),
+      new KernelStoreBatch(emission.records, `template-compilation-unit:${ingress.localKey}`),
       [
         publishProductDetail(TemplateProductDetails.Source, emission.templateSource.productHandle, emission.templateSource),
         publishProductDetail(TemplateProductDetails.ParseContext, emission.parseContext.productHandle, emission.parseContext),
@@ -349,17 +463,19 @@ export class TemplateCompilationUnitMaterializer {
         publishProductDetail(TemplateProductDetails.CompilationUnit, emission.compilationUnit.productHandle, emission.compilationUnit),
       ],
     ));
+    this.completedIngresses.add(ingress);
     return emission;
   }
 
-  private recordsForUnit(input: TemplateCompilationUnitConstructionRequest): TemplateCompilationUnitEmission {
-    const records: KernelStoreRecord[] = [];
+  private recordsForUnit(
+    input: TemplateCompilationUnitAssemblyInput,
+    ingress: TemplateCompilationIngressPreparation,
+    state: TemplateCompilationIngressPreparationState,
+  ): TemplateCompilationUnitEmission {
+    const records: KernelStoreRecord[] = [...state.source.records];
     const local = input.localKey;
-    const source = this.recordsForSource(local, input.sourceAddressHandle);
-    records.push(...source.records);
-
-    const handles = this.handlesForUnit(local);
-    const products = this.productsForUnit(input, handles, source);
+    const { handles, source } = state;
+    const products = this.productsForUnit(input, ingress, handles, source);
     const claims = this.claims.recordsForUnit(
       local,
       input,
@@ -379,6 +495,27 @@ export class TemplateCompilationUnitMaterializer {
     return products.toEmission(records);
   }
 
+  private assemblyInput(
+    ingress: TemplateCompilationIngressPreparationRequest,
+    completion: TemplateCompilationUnitCompletionRequest,
+  ): TemplateCompilationUnitAssemblyInput {
+    return {
+      localKey: ingress.localKey,
+      unitKind: ingress.unitKind,
+      compilerWorld: completion.compilerWorld,
+      owner: ingress.owner,
+      sourceKind: ingress.sourceKind,
+      markup: ingress.markup,
+      sourceAddressHandle: ingress.sourceAddressHandle,
+      sourceMap: ingress.sourceMap,
+      localElementNames: completion.localElementNames,
+      dependencyIdentityHandles: completion.dependencyIdentityHandles,
+      consumer: ingress.consumer,
+      recoveryPolicy: ingress.recoveryPolicy,
+      frontier: ingress.frontier,
+    };
+  }
+
   private handlesForUnit(local: string): TemplateCompilationUnitHandleSet {
     return new TemplateCompilationUnitHandleSet(
       this.store.handles.address(`template-source:${local}`),
@@ -394,12 +531,12 @@ export class TemplateCompilationUnitMaterializer {
   }
 
   private productsForUnit(
-    input: TemplateCompilationUnitConstructionRequest,
+    input: TemplateCompilationUnitAssemblyInput,
+    ingress: TemplateCompilationIngressPreparation,
     handles: TemplateCompilationUnitHandleSet,
     source: TemplateCompilationSourceSet,
   ): TemplateCompilationUnitProducts {
-    const templateSource = this.templateSourceForUnit(input, handles, source);
-    const parseContext = this.parseContextForUnit(input, handles, source);
+    const { templateSource, parseContext } = ingress;
     const rootContext = this.rootContextForUnit(
       input,
       handles,
@@ -422,8 +559,8 @@ export class TemplateCompilationUnitMaterializer {
     );
   }
 
-  private templateSourceForUnit(
-    input: TemplateCompilationUnitConstructionRequest,
+  private templateSourceForIngress(
+    input: TemplateCompilationIngressPreparationRequest,
     handles: TemplateCompilationUnitHandleSet,
     source: TemplateCompilationSourceSet,
   ): TemplateSource {
@@ -441,8 +578,8 @@ export class TemplateCompilationUnitMaterializer {
     );
   }
 
-  private parseContextForUnit(
-    input: TemplateCompilationUnitConstructionRequest,
+  private parseContextForIngress(
+    input: TemplateCompilationIngressPreparationRequest,
     handles: TemplateCompilationUnitHandleSet,
     source: TemplateCompilationSourceSet,
   ): TemplateParseContext {
@@ -457,7 +594,7 @@ export class TemplateCompilationUnitMaterializer {
   }
 
   private rootContextForUnit(
-    input: TemplateCompilationUnitConstructionRequest,
+    input: TemplateCompilationUnitAssemblyInput,
     handles: TemplateCompilationUnitHandleSet,
     source: TemplateCompilationSourceSet,
     parseContext: TemplateParseContext,
@@ -494,7 +631,7 @@ export class TemplateCompilationUnitMaterializer {
   }
 
   private compilationUnitForProducts(
-    input: TemplateCompilationUnitConstructionRequest,
+    input: TemplateCompilationUnitAssemblyInput,
     handles: TemplateCompilationUnitHandleSet,
     source: TemplateCompilationSourceSet,
     templateSource: TemplateSource,
@@ -515,7 +652,7 @@ export class TemplateCompilationUnitMaterializer {
   }
 
   private identityRecordsForUnit(
-    input: TemplateCompilationUnitConstructionRequest,
+    input: TemplateCompilationUnitAssemblyInput,
     handles: TemplateCompilationUnitHandleSet,
     source: TemplateCompilationSourceSet,
   ): readonly KernelStoreRecord[] {
@@ -529,7 +666,7 @@ export class TemplateCompilationUnitMaterializer {
   }
 
   private templateAddressForUnit(
-    input: TemplateCompilationUnitConstructionRequest,
+    input: TemplateCompilationUnitAssemblyInput,
     handles: TemplateCompilationUnitHandleSet,
     source: TemplateCompilationSourceSet,
   ): TemplateAddress {
@@ -542,7 +679,7 @@ export class TemplateCompilationUnitMaterializer {
   }
 
   private templateIdentityForUnit(
-    input: TemplateCompilationUnitConstructionRequest,
+    input: TemplateCompilationUnitAssemblyInput,
     handles: TemplateCompilationUnitHandleSet,
   ): TemplateIdentity {
     return new TemplateIdentity(
@@ -554,7 +691,7 @@ export class TemplateCompilationUnitMaterializer {
   }
 
   private parseContextIdentityForUnit(
-    input: TemplateCompilationUnitConstructionRequest,
+    input: TemplateCompilationUnitAssemblyInput,
     handles: TemplateCompilationUnitHandleSet,
     source: TemplateCompilationSourceSet,
   ): CompilerIdentity {
@@ -568,7 +705,7 @@ export class TemplateCompilationUnitMaterializer {
   }
 
   private compilationUnitIdentityForUnit(
-    input: TemplateCompilationUnitConstructionRequest,
+    input: TemplateCompilationUnitAssemblyInput,
     handles: TemplateCompilationUnitHandleSet,
     source: TemplateCompilationSourceSet,
   ): CompilerIdentity {
