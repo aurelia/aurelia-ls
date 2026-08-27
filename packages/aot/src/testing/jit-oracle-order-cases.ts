@@ -1,4 +1,4 @@
-import { itPropertyBinding } from "@aurelia/template-compiler";
+import { BindingMode, itInterpolation, itPropertyBinding } from "@aurelia/template-compiler";
 import {
   compiledDefinitionEnvelope,
   compilerAuthority,
@@ -15,6 +15,7 @@ import type {
 } from "./compiler-case.js";
 
 const templateCompilerSource = "packages/template-compiler/src/template-compiler.ts";
+const attributeMapperSource = "packages/runtime-html/src/compiler/attribute-mapper.ts";
 const checkedObserverSource = "packages/runtime-html/src/observation/checked-observer.ts";
 const selectObserverSource = "packages/runtime-html/src/observation/select-value-observer.ts";
 const checkedObserverSuite = "packages/__tests__/src/3-runtime-html/checked-observer.spec.ts";
@@ -136,7 +137,78 @@ export const JIT_ORACLE_ORDER_CASES: readonly CompilerCase[] = [
     }],
   }),
   staticMultipleSelectCase(),
+  progressiveOwnerStateCase("interpolation-first"),
+  progressiveOwnerStateCase("binding-first"),
 ];
+
+function progressiveOwnerStateCase(
+  order: "interpolation-first" | "binding-first",
+): CompilerCase {
+  const interpolationFirst = order === "interpolation-first";
+  const name = `attribute-owner-state-${order}`;
+  const interpolation = 'contenteditable="${editable}"';
+  const binding = 'textcontent.bind="value"';
+  const markup = `<template><div ${interpolationFirst ? `${interpolation} ${binding}` : `${binding} ${interpolation}`}></div></template>`;
+  const propertyIndex = interpolationFirst ? 1 : 0;
+  const interpolationIndex = interpolationFirst ? 0 : 1;
+  const expectedMode = interpolationFirst ? BindingMode.toView : BindingMode.twoWay;
+  const peerId = interpolationFirst
+    ? "attribute-owner-state.binding-first"
+    : "attribute-owner-state.interpolation-first";
+
+  return jitCharacterizationCase({
+    id: `attribute-owner-state.${order}`,
+    family: "attribute-owner-state",
+    tags: ["attribute", "order", "attr-mapper", "live-dom", "binding-mode"],
+    requirement: interpolationFirst
+      ? "A consumed contenteditable interpolation is absent when the following textcontent binding selects its default mode."
+      : "A textcontent binding sees a later contenteditable interpolation before that attribute is consumed.",
+    provenance: [
+      compilerAuthority(templateCompilerSource, 736, 969, "implementation", {
+        symbolName: "TemplateCompiler._classifyAttributes",
+        summary: "The JIT iterates and removes attributes from the live NamedNodeMap in authored order.",
+      }),
+      compilerAuthority(attributeMapperSource, 91, 134, "runtime-consequence", {
+        symbolName: "AttrMapper.isTwoWay / shouldDefaultToTwoWay",
+        summary: "textcontent defaults to two-way only while the live element has contenteditable.",
+      }),
+    ],
+    obligations: [
+      compilerObligation("compiler.order.element-attribute-plain", "primary", "Live attribute removal orders interpolation and plain-command lowering."),
+      compilerObligation("compiler.attribute.stable-order", "primary", "Authored order determines the live owner state seen by later lowering."),
+      compilerObligation("compiler.attribute.dom-removal", "primary", "Interpolation removal occurs before the next attribute builds."),
+      compilerObligation("compiler.attribute.plain-interpolation", "interaction", "The contenteditable interpolation supplies the state transition."),
+      compilerObligation("compiler.attribute.plain-binding-command", "interaction", "The textcontent bind command selects mode from event-time owner state."),
+      compilerObligation("compiler.wire.property", "runtime-consequence", "The selected binding mode remains runtime-visible."),
+    ],
+    world: inlineCompilerWorld(name, markup),
+    invariants: [
+      ...compiledDefinitionEnvelope(name, 1),
+      equalJitInvariant("owner-state.template", "Both compiler-owned attributes are removed after lowering.", {
+        kind: "template-outer-html",
+      }, '<template><!--au--><div></div></template>'),
+      equalJitInvariant("owner-state.row-width", "The one div owns interpolation and property instructions.", {
+        kind: "instruction-row-width",
+        row: 0,
+      }, 2),
+      equalJitInvariant("owner-state.interpolation-type", "contenteditable remains an interpolation instruction.",
+        instructionFieldSelector(0, interpolationIndex, "type"), itInterpolation),
+      equalJitInvariant("owner-state.interpolation-target", "The interpolation maps to contentEditable.",
+        instructionFieldSelector(0, interpolationIndex, "to"), "contentEditable"),
+      equalJitInvariant("owner-state.binding-type", "textcontent remains a property binding.",
+        instructionFieldSelector(0, propertyIndex, "type"), itPropertyBinding),
+      equalJitInvariant("owner-state.binding-target", "textcontent maps to textContent.",
+        instructionFieldSelector(0, propertyIndex, "to"), "textContent"),
+      equalJitInvariant("owner-state.binding-mode", "The binding mode reflects the live owner at this exact site.",
+        instructionFieldSelector(0, propertyIndex, "mode"), expectedMode),
+    ],
+    contrasts: [{
+      caseId: peerId,
+      relation: "metamorphic",
+      difference: "Reversing only these attributes changes the textcontent mode because removal occurs between visits.",
+    }],
+  });
+}
 
 interface InputOrderCaseInput {
   readonly id: string;

@@ -41,6 +41,8 @@ const refSuite = "packages/__tests__/src/3-runtime-html/template-compiler.ref.sp
  * command, setter, or processContent body, so they intentionally declare no extension effects.
  */
 export const JIT_ORACLE_RESOURCE_CASES: readonly CompilerCase[] = [
+  asElementPhysicalTagCase(),
+  asElementEmptyOverrideCase(),
   jitCharacterizationCase({
     id: "resource.command-override.same-name-attribute",
     family: "resource-precedence",
@@ -307,6 +309,84 @@ export const JIT_ORACLE_RESOURCE_CASES: readonly CompilerCase[] = [
     contrasts: [],
   }),
 ];
+
+function asElementPhysicalTagCase(): CompilerCase {
+  const name = "resource-as-element-physical-tag";
+  return jitCharacterizationCase({
+    id: "resource.as-element.physical-tag-resource",
+    family: "resource-as-element",
+    tags: ["resource", "custom-element", "as-element", "physical-tag", "presence"],
+    requirement: "Without as-element, a custom-element resource registered under the physical tag name is hydrated.",
+    provenance: [
+      compilerAuthority(templateCompilerSource, 474, 489, "implementation", {
+        symbolName: "TemplateCompiler._compileElement",
+        summary: "The JIT falls back to nodeName only when getAttribute('as-element') returns null.",
+      }),
+      compilerAuthority(directCompilerSuite, 410, 427, "behavior", {
+        suiteName: "3-runtime-html/template-compiler.spec.ts",
+        testName: "understands [as-element] / does not throw when element is not found",
+        summary: "The direct suite fixes resource lookup through as-element and its missing-resource control.",
+      }),
+    ],
+    obligations: [
+      compilerObligation("compiler.element.resource-lookup", "primary", "Physical tag lookup selects the registered resource."),
+      compilerObligation("compiler.element.hydration", "runtime-consequence", "The selected resource produces HydrateElement."),
+      compilerObligation("compiler.element.as-element", "contrast", "This is the absent-attribute control for the empty override."),
+    ],
+    world: resourceWorld(name, '<template><div></div></template>', [
+      customElementSetup("native-div-resource", "div"),
+    ]),
+    invariants: [
+      ...compiledDefinitionEnvelope(name, 1),
+      templateHtml("as-element-physical.template", '<template><!--au--><div></div></template>'),
+      rowWidth("as-element-physical.row-width", 0, 1),
+      instructionField("as-element-physical.type", 0, 0, "type", itHydrateElement),
+      instructionField("as-element-physical.resource", 0, 0, "res", "div"),
+    ],
+    contrasts: [{
+      caseId: "resource.as-element.present-empty",
+      relation: "metamorphic",
+      difference: "A present empty override suppresses physical-tag lookup instead of behaving like absence.",
+    }],
+  });
+}
+
+function asElementEmptyOverrideCase(): CompilerCase {
+  const name = "resource-as-element-present-empty";
+  return jitCharacterizationCase({
+    id: "resource.as-element.present-empty",
+    family: "resource-as-element",
+    tags: ["resource", "custom-element", "as-element", "empty", "presence"],
+    requirement: "A present empty as-element value performs the empty-string lookup and does not fall back to the physical tag.",
+    provenance: [
+      compilerAuthority(templateCompilerSource, 474, 489, "implementation", {
+        symbolName: "TemplateCompiler._compileElement",
+        summary: "Nullish fallback preserves an empty present getAttribute result as the effective lookup name.",
+      }),
+      compilerAuthority(templateCompilerSource, 746, 765, "implementation", {
+        symbolName: "TemplateCompiler._classifyAttributes",
+        summary: "as-element is removed as compiler control after it has selected the lookup name.",
+      }),
+    ],
+    obligations: [
+      compilerObligation("compiler.element.as-element", "primary", "Presence and empty scalar semantics are exercised independently."),
+      compilerObligation("compiler.element.resource-lookup", "primary", "The empty lookup misses despite a physical-tag resource."),
+      compilerObligation("compiler.attribute.special-control", "interaction", "The empty compiler-control attribute is removed."),
+    ],
+    world: resourceWorld(name, '<template><div as-element=""></div></template>', [
+      customElementSetup("native-div-resource", "div"),
+    ]),
+    invariants: [
+      ...compiledDefinitionEnvelope(name, 0),
+      templateHtml("as-element-empty.template", '<template><div></div></template>'),
+    ],
+    contrasts: [{
+      caseId: "resource.as-element.physical-tag-resource",
+      relation: "metamorphic",
+      difference: "Removing the empty override admits the physical-tag resource and one hydration row.",
+    }],
+  });
+}
 
 interface GenericResourceSetup {
   readonly invocation: CompilerSetupInvocation;

@@ -43,10 +43,10 @@ aggregate and slow-case timing, bounds failure output, and supports query/id/tag
 fail-fast, list, and JSON modes. This keeps large corpus iteration cheap and makes external process sharding possible
 without sharing mutable compiler containers.
 
-`oracle:semantic` is a separate observation lane over the same 46 canonical compiler worlds. It generates one
+`oracle:semantic` is a separate observation lane over the same 50 canonical compiler worlds. It generates one
 in-memory Aurelia source gallery and asks the real semantic-runtime app/compiler front door to analyze every admitted
 definition in one generation, amortizing TypeChecker, static evaluation, DI, and framework support. The current
-adapter admits 31 markup/no-setup worlds and reports all 15 unsupported worlds with typed reasons; it never filters
+adapter admits 33 markup/no-setup worlds and reports all 17 unsupported worlds with typed reasons; it never filters
 them into apparent success. Each observation retains the canonical world fingerprint, declared effects, actual
 semantic compiler profile, root/surrogate instruction kinds, diagnostics, open seams, and authored recovery counts.
 The receipt explicitly labels the current compiler-input tree profile as authored HTML; the browser-effective products
@@ -67,10 +67,12 @@ feed a later coordinator until semantic-runtime exposes a generation-guarded ric
 The CLI separately content-addresses the executed AOT and semantic-runtime JavaScript trees and the full dirty-worktree
 delta so an ignored or already-dirty build artifact cannot masquerade as unchanged authority.
 
-Vitest is reserved for harness and contract invariants. The current 46-case JIT registry spans compile-entry bypass,
+Vitest is reserved for harness and contract invariants. The current 50-case JIT registry spans compile-entry bypass,
 diagnostics, static/debug markup, bindings/interpolation/let, slots/projection, surrogates, compileSpread, resource
 precedence, capture/spread/ref, native form ordering, generated controller interactions, hooks, processContent, and
-nested template controllers. Four browser/compiler interactions additionally fix fostered target order, paragraph
+nested template controllers. It also pins two DOM-presence distinctions exposed by Chapter 1 pressure: absent versus
+present-empty `as-element`, and progressive attribute removal changing a later mapper-selected binding mode. Four
+browser/compiler interactions additionally fix fostered target order, paragraph
 controller topology, duplicate-binding elision, and current comment-shield carrier behavior. They remain JIT-only
 consequences until the multi-lane coordinator joins browser structure to compiled output.
 

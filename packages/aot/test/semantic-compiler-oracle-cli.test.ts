@@ -27,9 +27,9 @@ describe("AOT semantic compiler oracle CLI", () => {
     expect(receipt.caseRegistry.fingerprint).toMatch(/^sha256:[0-9a-f]{64}$/u);
     expect(receipt.gallery).toMatchObject({
       compilerTreeProfile: "semantic-runtime/authored-html-compiler-input/v1",
-      selectedCaseCount: 46,
-      admittedCaseCount: 31,
-      unsupportedCaseCount: 15,
+      selectedCaseCount: 50,
+      admittedCaseCount: 33,
+      unsupportedCaseCount: 17,
     });
     expect(receipt.run.observationAuthority).toMatchObject({
       kind: "synchronous-app-emission-bracket",
@@ -40,7 +40,7 @@ describe("AOT semantic compiler oracle CLI", () => {
     expect(receipt.run.summaryAnalysisBasis?.revision)
       .toMatch(/^semantic-analysis-basis\/1:[A-Za-z0-9_-]+$/u);
     expect(receipt.run.summaryAnalysisDepth).toBe("runtime-topology");
-    expect(receipt.run.observations).toHaveLength(31);
+    expect(receipt.run.observations).toHaveLength(33);
     expect(receipt.run.missingCaseIds).toEqual([]);
     const duplicate = receipt.run.observations.find((observation) =>
       observation.caseId === "interaction.browser.duplicate-binding-elision"

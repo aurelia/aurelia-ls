@@ -20,9 +20,9 @@ describe("semantic compiler gallery", () => {
     const plan = planner.plan(JIT_ORACLE_CASES);
     const repeated = planner.plan([...JIT_ORACLE_CASES].reverse());
 
-    expect(plan.selectedCaseCount).toBe(46);
-    expect(plan.admitted).toHaveLength(31);
-    expect(plan.unsupported).toHaveLength(15);
+    expect(plan.selectedCaseCount).toBe(50);
+    expect(plan.admitted).toHaveLength(33);
+    expect(plan.unsupported).toHaveLength(17);
     expect(plan.admitted.length + plan.unsupported.length).toBe(plan.selectedCaseCount);
     expect(plan.sourceText).toBe(repeated.sourceText);
     expect(plan.sourceDigest).toBe(repeated.sourceDigest);
@@ -53,12 +53,12 @@ describe("semantic compiler gallery", () => {
     const plan = new SemanticCompilerGalleryPlanner().plan(JIT_ORACLE_CASES);
     const run = await new SemanticCompilerGalleryOracle({ workspaceRoot: galleryRoot }).execute(plan);
 
-    expect(run.selectedCaseCount).toBe(46);
-    expect(run.admittedCaseCount).toBe(31);
-    expect(run.unsupported).toHaveLength(15);
-    expect(run.observations).toHaveLength(31);
+    expect(run.selectedCaseCount).toBe(50);
+    expect(run.admittedCaseCount).toBe(33);
+    expect(run.unsupported).toHaveLength(17);
+    expect(run.observations).toHaveLength(33);
     expect(run.missingCaseIds).toEqual([]);
-    expect(run.publicCompilationRowCount).toBe(32);
+    expect(run.publicCompilationRowCount).toBe(34);
     expect(run.summaryAnalysisBasis?.revision).toMatch(/^semantic-analysis-basis\/1:[A-Za-z0-9_-]+$/u);
     expect(run.summaryAnalysisDepth).toBe("runtime-topology");
     expect(run.inquiryProfile).toBe("aot");
@@ -78,7 +78,7 @@ describe("semantic compiler gallery", () => {
       state,
       run.observations.filter((observation) => observation.normalizedStructuralReplay.state === state).length,
     ]));
-    expect(replayStates).toEqual({ exact: 23, open: 6, refused: 2 });
+    expect(replayStates).toEqual({ exact: 25, open: 6, refused: 2 });
     expect(run.observations.every((observation) =>
       ["exact", "open", "refused"].includes(observation.normalizedStructuralReplay.state)
     )).toBe(true);
