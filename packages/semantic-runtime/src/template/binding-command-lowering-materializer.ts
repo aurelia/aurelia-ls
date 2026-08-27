@@ -29,10 +29,7 @@ import {
   KernelVocabulary,
   type OpenSeamKindKey,
 } from '../kernel/vocabulary.js';
-import type {
-  BindingIdentifierOrPattern,
-  ExpressionType,
-} from '../expression/ast.js';
+import type { ExpressionType } from '../expression/ast.js';
 import type { ExpressionParseContext } from '../expression/expression-parse-support.js';
 import type { SourceSpan } from '../expression/source-span.js';
 import type {
@@ -42,8 +39,6 @@ import type {
 import {
   ExpressionParseResultKind,
 } from '../expression/parse-result-algebra.js';
-import { visitExpressionAstNodes } from '../expression/parse-result-inspection.js';
-import { admitRepeatObjectBindingPattern } from '../expression/repeat-object-binding-pattern.js';
 import { CustomAttributeDefinition } from '../resources/custom-attribute-definition.js';
 import type { AttributeSyntaxParseEmission } from './attribute-syntax-materializer.js';
 import type {
@@ -52,7 +47,6 @@ import type {
 import {
   type AttributeClassification,
   AttributeClassificationKind,
-  type AttributePatternExecutionResult,
   type AttributeSyntax,
 } from './attribute-syntax.js';
 import type {
@@ -60,15 +54,17 @@ import type {
 } from './binding-command-execution.js';
 import {
   BindingCommandBuildInfo,
+  bindingCommandIteratorParse,
+  bindingCommandTailSyntaxFromExecution,
   type BindingCommandBuildInput,
   BindingCommandBuildResult,
   type BindingCommandExecutable,
   BindingCommandExecutionKind,
   BindingCommandInstructionAllocation,
-  BindingCommandIteratorParse,
+  type BindingCommandIteratorParse,
   type BindingCommandLowering,
   BindingCommandLoweringState,
-  BindingCommandTailSyntax,
+  type BindingCommandTailSyntax,
   MultiBindingLowering,
   type MultiBindingSegment,
 } from './binding-command-execution.js';
@@ -545,13 +541,7 @@ class CommandLoweringExecutionContext implements BindingCommandBuildContext {
   ): BindingCommandIteratorParse {
     const publication = this.parseExpression(expression, 'IsIterator', info, null);
     const result = publication.result as IteratorParseResult;
-    return new BindingCommandIteratorParse(
-      publication.parse.productHandle,
-      iteratorLocalNames(result),
-      iteratorObjectBindingSourceKeys(result),
-      iteratorRawTailText(result),
-      iteratorTailSpan(result),
-    );
+    return bindingCommandIteratorParse(publication.parse.productHandle, result);
   }
 
   parseAttributeSyntax(
@@ -559,7 +549,7 @@ class CommandLoweringExecutionContext implements BindingCommandBuildContext {
     rawValue: string,
     _info: BindingCommandBuildInfo,
   ): BindingCommandTailSyntax | null {
-    return BindingCommandTailSyntaxFromExecution(parseAttributeSyntaxInWorld(
+    return bindingCommandTailSyntaxFromExecution(parseAttributeSyntaxInWorld(
       this.compilerReads,
       rawName,
       rawValue,
@@ -1494,72 +1484,6 @@ function parseAttributeSyntaxInWorld(
   rawValue: string,
 ) {
   return compilerReads.parseAttribute(rawName, rawValue);
-}
-
-function BindingCommandTailSyntaxFromExecution(
-  execution: AttributePatternExecutionResult,
-): BindingCommandTailSyntax {
-  return new BindingCommandTailSyntax(
-    execution.rawName,
-    execution.rawValue,
-    execution.target,
-    execution.command,
-    execution.parts,
-  );
-}
-
-function iteratorLocalNames(result: IteratorParseResult): readonly string[] {
-  if (result.kind !== ExpressionParseResultKind.IteratorSuccess) {
-    return [];
-  }
-  if (result.ast.declaration.$kind === 'ObjectBindingPattern') {
-    const admission = admitRepeatObjectBindingPattern(result.ast.declaration);
-    return admission.admitted ? admission.localNames : [];
-  }
-  return bindingNames(result.ast.declaration);
-}
-
-function iteratorObjectBindingSourceKeys(result: IteratorParseResult): readonly (string | number)[] {
-  if (
-    result.kind !== ExpressionParseResultKind.IteratorSuccess
-    || result.ast.declaration.$kind !== 'ObjectBindingPattern'
-  ) {
-    return [];
-  }
-  const admission = admitRepeatObjectBindingPattern(result.ast.declaration);
-  return admission.admitted ? admission.sourceKeys : [];
-}
-
-function bindingNames(pattern: BindingIdentifierOrPattern): readonly string[] {
-  const names: string[] = [];
-  visitExpressionAstNodes(pattern, (expression) => {
-    if (expression.$kind === 'BindingIdentifier') {
-      names.push(expression.name.name);
-    }
-  });
-  return names;
-}
-
-function iteratorRawTailText(result: IteratorParseResult): string | null {
-  switch (result.kind) {
-    case ExpressionParseResultKind.IteratorSuccess:
-    case ExpressionParseResultKind.IteratorDegradedPublication:
-    case ExpressionParseResultKind.IteratorFrontierPublication:
-      return result.trailingSplit?.rawTailText ?? null;
-    case ExpressionParseResultKind.CompleteInputParseError:
-      return null;
-  }
-}
-
-function iteratorTailSpan(result: IteratorParseResult): SourceSpan | null {
-  switch (result.kind) {
-    case ExpressionParseResultKind.IteratorSuccess:
-    case ExpressionParseResultKind.IteratorDegradedPublication:
-    case ExpressionParseResultKind.IteratorFrontierPublication:
-      return result.trailingSplit?.tailSpan ?? null;
-    case ExpressionParseResultKind.CompleteInputParseError:
-      return null;
-  }
 }
 
 function loweringStateFor(

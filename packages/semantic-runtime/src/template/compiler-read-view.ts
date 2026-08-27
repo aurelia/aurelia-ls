@@ -430,16 +430,35 @@ export class TemplateCompilerReadView {
     expressionTypeOrContext?: ExpressionType | ExpressionParseContext,
     maybeContext?: ExpressionParseContext,
   ): ExpressionParseResult {
+    return typeof expressionTypeOrContext === 'string'
+      ? this.readParsedExpression(expression, expressionTypeOrContext, maybeContext).value
+      : this.readParsedExpression(expression, expressionTypeOrContext).value;
+  }
+
+  readParsedExpression(
+    expression: string,
+    context?: ExpressionParseContext,
+  ): TemplateCompilerObservedValue<ExpressionParseResult>;
+  readParsedExpression(
+    expression: string,
+    expressionType: ExpressionType,
+    context?: ExpressionParseContext,
+  ): TemplateCompilerObservedValue<ExpressionParseResult>;
+  readParsedExpression(
+    expression: string,
+    expressionTypeOrContext?: ExpressionType | ExpressionParseContext,
+    maybeContext?: ExpressionParseContext,
+  ): TemplateCompilerObservedValue<ExpressionParseResult> {
     const result = typeof expressionTypeOrContext === 'string'
       ? this.world.expressionParser.parse(expression, expressionTypeOrContext, maybeContext)
       : this.world.expressionParser.parse(expression, expressionTypeOrContext);
-    this.observe(
+    const observation = this.observe(
       TemplateCompilerReadKind.ExpressionParser,
       typeof expressionTypeOrContext === 'string' ? expressionTypeOrContext : 'default',
       expressionParserResultParts(this.world),
       (_store, current) => expressionParserResultParts(current),
     );
-    return result;
+    return new TemplateCompilerObservedValue(result, observation);
   }
 
   mapAttribute(node: TemplateAttributeMapperNode, attributeName: string): string | null {
@@ -525,6 +544,21 @@ export class TemplateCompilerReadView {
       (_store, current) => templateCompilerResultParts(current, current.templateCompiler.resolveResources),
     );
     return result;
+  }
+
+  compilerDebug(): boolean {
+    return this.readCompilerDebug().value;
+  }
+
+  readCompilerDebug(): TemplateCompilerObservedValue<boolean> {
+    const result = this.world.templateCompiler.debug;
+    const observation = this.observe(
+      TemplateCompilerReadKind.TemplateCompiler,
+      'debug',
+      templateCompilerResultParts(this.world, result),
+      (_store, current) => templateCompilerResultParts(current, current.templateCompiler.debug),
+    );
+    return new TemplateCompilerObservedValue(result, observation);
   }
 
   compilerHooks(): TemplateCompilerHookSet {

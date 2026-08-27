@@ -3,6 +3,9 @@ import cursorAsElementEmptyTemplate from './cursor-as-element-empty.html';
 import cursorCommentShieldTemplate from './cursor-comment-shield.html';
 import cursorEmptyTemplate from './cursor-empty.html';
 import cursorFosterTemplate from './cursor-foster.html';
+import cursorLiveDuplicateTemplate from './cursor-live-duplicate.html';
+import cursorLiveEmptyTemplate from './cursor-live-empty.html';
+import cursorLiveNonsingularTemplate from './cursor-live-nonsingular.html';
 import cursorMarkerTemplate from './cursor-marker.html';
 import cursorOpenTemplate from './cursor-open.html';
 import cursorProgressionTemplate from './cursor-progression.html';
@@ -59,6 +62,31 @@ class CursorSurrogateInvalid {}
 })
 class CursorFoster {
   title = 'fostered';
+}
+
+@customElement({
+  name: 'cursor-live-duplicate',
+  template: cursorLiveDuplicateTemplate,
+})
+class CursorLiveDuplicate {
+  first = 'first';
+  second = 'second';
+  dropped = 'dropped';
+  value = 'value';
+}
+
+@customElement({
+  name: 'cursor-live-empty',
+  template: cursorLiveEmptyTemplate,
+})
+class CursorLiveEmpty {}
+
+@customElement({
+  name: 'cursor-live-nonsingular',
+  template: cursorLiveNonsingularTemplate,
+})
+class CursorLiveNonsingular {
+  title = 'reconstructed';
 }
 
 @customElement({
@@ -180,6 +208,9 @@ void new Aurelia()
     CursorShapes,
     CursorSurrogateInvalid,
     CursorFoster,
+    CursorLiveDuplicate,
+    CursorLiveEmpty,
+    CursorLiveNonsingular,
     CursorCommentShield,
     CursorAsElementEmpty,
     CursorProjection,

@@ -1,5 +1,4 @@
-import { CustomElementDefinition } from '../resources/custom-element-definition.js';
-import { ResourceDefinitionKind } from '../resources/resource-kind.js';
+import type { CustomElementDefinition } from '../resources/custom-element-definition.js';
 import {
   AttributeClassificationKind,
   AttributeSyntaxKind,
@@ -11,33 +10,20 @@ import {
 } from './attribute-owner-progression.js';
 import { BindingCommandLoweringState } from './binding-command-execution.js';
 import {
-  TemplateResourceResolutionKind,
-  type TemplateResolvedResource,
-} from './compiler-world.js';
-import { TemplateResourceVisibilityKind } from './compiler-world-reference.js';
-import {
-  type TemplateCompilerObservedValue,
   type TemplateCompilerReadView,
-  TemplateCompilerScopeClosureState,
 } from './compiler-read-view.js';
 import type {
-  TemplateCompilerInvocationBootstrapClosure,
   TemplateCompilerReachedAttributeScalarReceipt,
-  TemplateCompilerSiteExecutionDriverReference,
 } from './template-compiler-execution.js';
 import type {
   TemplateCompilerNormalizedSite,
-  TemplateCompilerNormalizedTextSite,
 } from './template-compiler-normalized-site-index.js';
 import type { TemplateCompilerLiveAttributeOwnerSite } from './template-compiler-live-attribute-owner.js';
 import {
   type TemplateCompilerAttributeOccurrence,
   TemplateCompilerElementOccurrence,
-  type TemplateCompilerNodeOccurrence,
-  type TemplateCompilerTextOccurrence,
 } from './template-compiler-occurrence.js';
 import {
-  TemplateCompilerPreWalkBrowserOriginState,
   type TemplateCompilerPreWalkRemainderAuthority,
 } from './template-compiler-prewalk-remainder.js';
 import type { TemplateCompilerSiteInvocationBinding } from './template-compiler-site-invocation.js';
@@ -54,9 +40,9 @@ import {
 } from './runtime-dom-name.js';
 import {
   TemplateCompilerBrowserOriginRouteKind,
-  type TemplateCompilerBrowserOriginRoute,
 } from './template-compiler-authored-origin-index.js';
 import { TemplateExpressionParseState } from './value-site.js';
+import { TemplateCompilerReachedSiteSemanticResolver } from './template-compiler-reached-site-semantics.js';
 
 export class TemplateCompilerCursorElementOwnerRelation {
   constructor(
@@ -67,93 +53,25 @@ export class TemplateCompilerCursorElementOwnerRelation {
 }
 
 /** Exact graph/live compatibility resolver shared by the cursor's traversal phases. */
-export class TemplateCompilerSiteCursorSemanticResolver {
+export class TemplateCompilerSiteCursorSemanticResolver extends TemplateCompilerReachedSiteSemanticResolver {
   private readonly authoredOwnersByElement;
-  private readonly elementReadsByName = new Map<
-    string,
-    TemplateCompilerObservedValue<TemplateResolvedResource | null>
-  >();
-  private siteAuthority: TemplateCompilerInvocationBootstrapClosure | TemplateCompilerSiteExecutionDriverReference;
 
   constructor(
     readonly binding: TemplateCompilerSiteInvocationBinding,
-    readonly compilerReads: TemplateCompilerReadView,
-    readonly preWalk: TemplateCompilerPreWalkRemainderAuthority,
+    compilerReads: TemplateCompilerReadView,
+    preWalk: TemplateCompilerPreWalkRemainderAuthority,
   ) {
+    super({
+      execution: binding.execution,
+      bootstrapClosure: binding.bootstrapClosure,
+      compilerReads,
+      preWalk,
+      index: binding.index,
+    });
     this.authoredOwnersByElement = htmlElementAttributeOwnersByElementProduct(
       binding.compilation.html.nodes,
       binding.compilation.html.attributes,
     );
-    this.siteAuthority = binding.bootstrapClosure;
-  }
-
-  useSiteDriver(driver: TemplateCompilerSiteExecutionDriverReference): void {
-    if (driver.frontier.bootstrapClosure !== this.binding.bootstrapClosure) {
-      throw new Error('Compiler site semantic resolver cannot adopt a foreign site driver.');
-    }
-    this.siteAuthority = driver;
-  }
-
-  captureReachedAttributeScalar(
-    owner: TemplateCompilerElementOccurrence,
-    attribute: TemplateCompilerAttributeOccurrence,
-    liveOrdinal: number,
-  ): TemplateCompilerReachedAttributeScalarReceipt {
-    return this.binding.execution.captureReachedAttributeScalar(
-      this.siteAuthority,
-      owner,
-      attribute,
-      liveOrdinal,
-    );
-  }
-
-  readElement(lookupName: string): TemplateCompilerObservedValue<TemplateResolvedResource | null> {
-    const existing = this.elementReadsByName.get(lookupName);
-    if (existing != null) return existing;
-    const read = this.compilerReads.readElement(lookupName);
-    this.elementReadsByName.set(lookupName, read);
-    return read;
-  }
-
-  elementReadIsClosed(read: TemplateCompilerObservedValue<TemplateResolvedResource | null>): boolean {
-    if (
-      !read.observation.validate().isCurrent
-      || read.observation.closure.state !== TemplateCompilerScopeClosureState.Closed
-    ) return false;
-    if (read.value == null) return true;
-    return read.value.resolutionKind === TemplateResourceResolutionKind.Definition
-      && read.value.resource?.visibilityKind !== TemplateResourceVisibilityKind.Open
-      && read.value.resource?.resourceKind === ResourceDefinitionKind.CustomElement
-      && read.value.definition instanceof CustomElementDefinition
-      && read.value.definition.type === ResourceDefinitionKind.CustomElement;
-  }
-
-  closedElementDefinition(
-    read: TemplateCompilerObservedValue<TemplateResolvedResource | null>,
-  ): CustomElementDefinition | null {
-    return this.elementReadIsClosed(read) && read.value?.definition instanceof CustomElementDefinition
-      ? read.value.definition
-      : null;
-  }
-
-  readAsElementScalar(
-    element: TemplateCompilerElementOccurrence,
-  ): {
-    readonly attribute: TemplateCompilerAttributeOccurrence;
-    readonly scalar: TemplateCompilerReachedAttributeScalarReceipt;
-  } | null {
-    for (const [ordinal, attribute] of element.readAttributes().entries()) {
-      if (qualifiedAttributeName(attribute) !== 'as-element') continue;
-      return {
-        attribute,
-        scalar: this.captureReachedAttributeScalar(
-          element,
-          attribute,
-          ordinal,
-        ),
-      };
-    }
-    return null;
   }
 
   elementOwnerRelation(
@@ -269,44 +187,6 @@ export class TemplateCompilerSiteCursorSemanticResolver {
     );
   }
 
-  singularAttributeBundle(attribute: TemplateCompilerAttributeOccurrence): TemplateCompilerNormalizedSite | null {
-    const route = this.originRoute(attribute);
-    return route?.routeKind === TemplateCompilerBrowserOriginRouteKind.Singular
-      ? this.binding.index.siteForAttribute(route.exactOrigin!.authored.productHandle)
-      : null;
-  }
-
-  singularTextBundle(text: TemplateCompilerTextOccurrence): TemplateCompilerNormalizedTextSite | null {
-    const route = this.originRoute(text);
-    return route?.routeKind === TemplateCompilerBrowserOriginRouteKind.Singular
-      ? this.binding.index.siteForText(route.exactOrigin!.authored.productHandle)
-      : null;
-  }
-
-  originRoute(
-    occurrence: TemplateCompilerNodeOccurrence | TemplateCompilerAttributeOccurrence,
-  ): TemplateCompilerBrowserOriginRoute | null {
-    const reference = occurrence.inputReference;
-    if (reference == null) return null;
-    const route = this.preWalk.originRouteForBrowserProduct(reference.productHandle);
-    if (
-      route != null
-      && (
-        route.browser.productHandle !== reference.productHandle
-        || route.browser.identityHandle !== reference.identityHandle
-        || route.browser.addressHandle !== reference.addressHandle
-      )
-    ) return null;
-    return route;
-  }
-
-  originState(
-    occurrence: TemplateCompilerNodeOccurrence | TemplateCompilerAttributeOccurrence,
-  ): TemplateCompilerPreWalkBrowserOriginState {
-    return occurrence.inputReference == null
-      ? TemplateCompilerPreWalkBrowserOriginState.Absent
-      : this.preWalk.originStateForBrowserProduct(occurrence.inputReference.productHandle);
-  }
 }
 
 function qualifiedAttributeName(attribute: TemplateCompilerAttributeOccurrence): string {

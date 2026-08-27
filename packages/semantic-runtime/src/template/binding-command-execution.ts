@@ -8,7 +8,16 @@ import type { FieldProvenance } from '../kernel/provenance.js';
 import type { BindableDefinition } from '../resources/bindable-definition.js';
 import type { ResourceTargetReference } from '../resources/resource-reference.js';
 import type { SourceSpan } from '../expression/source-span.js';
-import type { AttributeSyntax } from './attribute-syntax.js';
+import type { BindingIdentifierOrPattern } from '../expression/ast.js';
+import {
+  ExpressionParseResultKind,
+  type IteratorParseResult,
+} from '../expression/parse-result-algebra.js';
+import { visitExpressionAstNodes } from '../expression/parse-result-inspection.js';
+import { admitRepeatObjectBindingPattern } from '../expression/repeat-object-binding-pattern.js';
+import type {
+  AttributePatternExecutionResult,
+} from './attribute-syntax.js';
 import type { HtmlAttributeReference, HtmlNodeReference } from './html-ir.js';
 import type { TemplateValueSiteReference } from './value-site.js';
 import type {
@@ -141,6 +150,26 @@ export class BindingCommandTailSyntax {
 }
 
 /**
+ * Minimum syntax view consumed by framework binding-command implementations.
+ *
+ * Authored `AttributeSyntax` products satisfy this interface, but live compiler
+ * execution can supply an occurrence-owned carrier without first publishing an
+ * authored syntax product.
+ */
+export interface BindingCommandSyntax {
+  readonly rawValue: string;
+  readonly target: string;
+  readonly targetSourceAddressHandle: AddressHandle | null;
+  readonly commandSourceAddressHandle: AddressHandle | null;
+  readonly parts: readonly string[];
+  readonly patternParts: readonly {
+    readonly partIndex: number;
+    readonly sourceAddressHandle: AddressHandle;
+  }[];
+  readonly sourceAddressHandle: AddressHandle | null;
+}
+
+/**
  * Runtime-shaped build info for executing a binding command model.
  *
  * The durable product below keeps normalized handles. This object is the
@@ -150,7 +179,7 @@ export class BindingCommandBuildInfo {
   constructor(
     readonly node: HtmlNodeReference,
     readonly attribute: HtmlAttributeReference,
-    readonly syntax: AttributeSyntax,
+    readonly syntax: BindingCommandSyntax,
     readonly bindable: BindableDefinition | null,
     readonly buildInputProductHandle: ProductHandle | null,
     readonly bindableOwnerProductHandle: ProductHandle | null,
@@ -159,6 +188,90 @@ export class BindingCommandBuildInfo {
     /** Source address for the authored expression value submitted to the command parser entry point. */
     readonly expressionSourceAddressHandle: AddressHandle | null = sourceAddressHandle,
   ) {}
+}
+
+/** Project one attribute-parser execution into the secondary syntax shape binding commands consume. */
+export function bindingCommandTailSyntaxFromExecution(
+  execution: AttributePatternExecutionResult,
+): BindingCommandTailSyntax {
+  return new BindingCommandTailSyntax(
+    execution.rawName,
+    execution.rawValue,
+    execution.target,
+    execution.command,
+    execution.parts,
+  );
+}
+
+/**
+ * Project one iterator parser result into the runtime-shaped command parse.
+ * Both product publication and product-free live execution use this law.
+ */
+export function bindingCommandIteratorParse(
+  expressionProductHandle: ProductHandle | null,
+  result: IteratorParseResult,
+): BindingCommandIteratorParse {
+  return new BindingCommandIteratorParse(
+    expressionProductHandle,
+    iteratorLocalNames(result),
+    iteratorObjectBindingSourceKeys(result),
+    iteratorRawTailText(result),
+    iteratorTailSpan(result),
+  );
+}
+
+function iteratorLocalNames(result: IteratorParseResult): readonly string[] {
+  if (result.kind !== ExpressionParseResultKind.IteratorSuccess) {
+    return [];
+  }
+  if (result.ast.declaration.$kind === 'ObjectBindingPattern') {
+    const admission = admitRepeatObjectBindingPattern(result.ast.declaration);
+    return admission.admitted ? admission.localNames : [];
+  }
+  return bindingNames(result.ast.declaration);
+}
+
+function iteratorObjectBindingSourceKeys(result: IteratorParseResult): readonly (string | number)[] {
+  if (
+    result.kind !== ExpressionParseResultKind.IteratorSuccess
+    || result.ast.declaration.$kind !== 'ObjectBindingPattern'
+  ) {
+    return [];
+  }
+  const admission = admitRepeatObjectBindingPattern(result.ast.declaration);
+  return admission.admitted ? admission.sourceKeys : [];
+}
+
+function bindingNames(pattern: BindingIdentifierOrPattern): readonly string[] {
+  const names: string[] = [];
+  visitExpressionAstNodes(pattern, (expression) => {
+    if (expression.$kind === 'BindingIdentifier') {
+      names.push(expression.name.name);
+    }
+  });
+  return names;
+}
+
+function iteratorRawTailText(result: IteratorParseResult): string | null {
+  switch (result.kind) {
+    case ExpressionParseResultKind.IteratorSuccess:
+    case ExpressionParseResultKind.IteratorDegradedPublication:
+    case ExpressionParseResultKind.IteratorFrontierPublication:
+      return result.trailingSplit?.rawTailText ?? null;
+    case ExpressionParseResultKind.CompleteInputParseError:
+      return null;
+  }
+}
+
+function iteratorTailSpan(result: IteratorParseResult): SourceSpan | null {
+  switch (result.kind) {
+    case ExpressionParseResultKind.IteratorSuccess:
+    case ExpressionParseResultKind.IteratorDegradedPublication:
+    case ExpressionParseResultKind.IteratorFrontierPublication:
+      return result.trailingSplit?.tailSpan ?? null;
+    case ExpressionParseResultKind.CompleteInputParseError:
+      return null;
+  }
 }
 
 export interface BindingCommandBuildContext {
