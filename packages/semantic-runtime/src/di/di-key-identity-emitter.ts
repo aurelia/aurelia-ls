@@ -54,6 +54,7 @@ import {
   readAureliaResolverWrapperCall,
 } from './resolver-wrapper-recognition.js';
 import type { EvaluatedRegistrationKeyDeclarationSource } from '../registration/registration-observation.js';
+import { aureliaFrameworkInterfaceEvaluationForValue } from '../configuration/aurelia-evaluation-runtime.js';
 
 /** All available evidence for normalizing one authored DI key occurrence. */
 export class DiKeyExpressionIdentityRequest {
@@ -120,6 +121,22 @@ export class DiKeyIdentityEmitter {
     const ignore = this.emitIgnoreResolverIdentity(records, request);
     if (ignore != null) {
       return ignore;
+    }
+
+    const evaluatedInterface = aureliaFrameworkInterfaceEvaluationForValue(request.evaluatedValue);
+    const evaluatedIntrinsic = evaluatedInterface == null
+      ? null
+      : frameworkIntrinsicDiKeyForName(evaluatedInterface.friendlyName);
+    if (evaluatedInterface != null && evaluatedIntrinsic != null) {
+      const handle = this.interfaceKeyIdentityHandle(evaluatedIntrinsic);
+      this.emitInterfaceKeyIdentity(
+        records,
+        handle,
+        evaluatedInterface.friendlyName,
+        null,
+        request.occurrenceAddressHandle,
+      );
+      return new DiKeyIdentityEmission(handle, DiKeyIdentityKind.Interface, ContainerLookupKeyKind.Interface);
     }
 
     const stringValue = evaluatedStringValue(request.evaluatedValue)

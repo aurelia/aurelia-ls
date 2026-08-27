@@ -50,7 +50,7 @@ import {
   EvaluationArrayElement,
   EvaluationArrayShape,
   EvaluationArrayValue,
-  EvaluationClassValue,
+  type EvaluationClassValue,
   EvaluationFunctionValue,
   EvaluationStringValue,
   EvaluationUndefined,
@@ -78,7 +78,7 @@ import {
 import { ContainerDefaultResolverPolicy } from '../di/container-configuration.js';
 import { DiResolverKeyKind } from '../kernel/identity.js';
 import {
-  RegistrationStrategy,
+  type RegistrationStrategy,
 } from '../registration/registration-admission.js';
 import {
   REGISTRATION_FACTORY_SHAPES,
@@ -122,6 +122,11 @@ const MODULE_LOADER_MODULES = new Set([
 const BINDING_MODE_MODULES = new Set([
   'aurelia',
   '@aurelia/runtime-html',
+  '@aurelia/template-compiler',
+]);
+
+const TEMPLATE_COMPILER_HOOK_MODULES = new Set([
+  'aurelia',
   '@aurelia/template-compiler',
 ]);
 
@@ -171,6 +176,9 @@ const syntheticSource = ts.createSourceFile(
     function resolver() {}
     function inject() {}
     function injectDecorator() {}
+    function define() {}
+    function templateCompilerHooks() {}
+    function templateCompilerHookDecorator() {}
     function Boolean(value) { return !!value; }
   `,
   ts.ScriptTarget.Latest,
@@ -192,12 +200,16 @@ const aureliaResolverFactoryKindsByFunction = new WeakMap<EvaluationFunctionValu
 const aureliaResolverEvaluationsByValue = new WeakMap<object, AureliaResolverEvaluation>();
 const aureliaClassInjectionEvaluationsByValue = new WeakMap<EvaluationClassValue, DiClassInjectionEvaluation>();
 const registryBodiesByObject = new WeakMap<EvaluationObjectValue, RegistryBodyReference>();
+const templateCompilerHookTargetsByRegistry = new WeakMap<EvaluationObjectValue, EvaluationClassValue>();
+const templateCompilerHookRegistriesByClass = new WeakMap<EvaluationClassValue, EvaluationObjectValue>();
+const templateCompilerHookDecoratorFunctions = new WeakSet<EvaluationFunctionValue>();
 const resolverBuilderObjects = new WeakSet<EvaluationObjectValue>();
 const consumedResolverBuilderObjects = new WeakSet<EvaluationObjectValue>();
 const invalidResolverBuilderObjects = new WeakSet<EvaluationObjectValue>();
 const resolverBuilderEffectsByObject = new WeakMap<EvaluationObjectValue, AureliaInterfaceDefaultRegistrationEffect>();
 const resolverBuilderEffectsByResult = new WeakMap<EvaluationObjectValue, AureliaInterfaceDefaultRegistrationEffect>();
 const interfaceEvaluationsByObject = new WeakMap<EvaluationObjectValue, AureliaInterfaceEvaluation>();
+const frameworkInterfaceValues = new WeakSet<EvaluationObjectValue>();
 const containerEvaluationsByObject = new WeakMap<EvaluationObjectValue, AureliaContainerEvaluation>();
 const aureliaFacadeEvaluationsByObject = new WeakMap<EvaluationObjectValue, AureliaFacadeEvaluation>();
 const aureliaFacadeModulesByConstructor = new WeakMap<EvaluationFunctionValue, string>();
@@ -227,7 +239,7 @@ export class AureliaInterfaceEvaluation {
     readonly friendlyName: string,
     readonly defaultRegistrationState: AureliaInterfaceDefaultRegistrationState,
     readonly defaultRegistration: AureliaInterfaceDefaultRegistrationEffect | null,
-    readonly sourceNode: ts.CallExpression,
+    readonly sourceNode: ts.Node,
   ) {}
 }
 
@@ -406,6 +418,9 @@ const aureliaStaticEvaluationRuntimeHostOperations: StaticEvaluationRuntimeHostO
       if (facadeModule != null) {
         aureliaFacadeModulesByConstructor.set(target, facadeModule);
       }
+      if (templateCompilerHookDecoratorFunctions.has(source)) {
+        templateCompilerHookDecoratorFunctions.add(target);
+      }
     }
     const resolverEvaluation = aureliaResolverEvaluationsByValue.get(source);
     if (resolverEvaluation != null) {
@@ -425,6 +440,10 @@ const aureliaStaticEvaluationRuntimeHostOperations: StaticEvaluationRuntimeHostO
           forkDiClassInjectionEvaluation(injection, transfer),
         );
       }
+      const registrable = templateCompilerHookRegistriesByClass.get(source);
+      if (registrable != null) {
+        templateCompilerHookRegistriesByClass.set(target, transfer.forkValue(registrable));
+      }
     }
     if (source.kind !== EvaluationValueKind.Object || target.kind !== EvaluationValueKind.Object) {
       return;
@@ -433,9 +452,16 @@ const aureliaStaticEvaluationRuntimeHostOperations: StaticEvaluationRuntimeHostO
     if (registryBody != null) {
       registryBodiesByObject.set(target, registryBody);
     }
+    const compilerHookTarget = templateCompilerHookTargetsByRegistry.get(source);
+    if (compilerHookTarget != null) {
+      templateCompilerHookTargetsByRegistry.set(target, transfer.forkValue(compilerHookTarget));
+    }
     const interfaceEvaluation = interfaceEvaluationsByObject.get(source);
     if (interfaceEvaluation != null) {
       interfaceEvaluationsByObject.set(target, forkAureliaInterfaceEvaluation(interfaceEvaluation, transfer));
+    }
+    if (frameworkInterfaceValues.has(source)) {
+      frameworkInterfaceValues.add(target);
     }
     const containerEvaluation = containerEvaluationsByObject.get(source);
     if (containerEvaluation != null) {
@@ -468,6 +494,13 @@ const aureliaStaticEvaluationRuntimeHostOperations: StaticEvaluationRuntimeHostO
     value: EvaluationClassValue,
     host: StaticClassValueObservationHost,
   ): void {
+    const templateCompilerHookDecorator = templateCompilerHookDecoratorForClass(value, host);
+    if (templateCompilerHookDecorator != null) {
+      templateCompilerHookRegistriesByClass.set(
+        value,
+        templateCompilerHookRegistry(templateCompilerHookDecorator, value),
+      );
+    }
     const classDecorators = evaluateAureliaInjectionDecorators(
       ts.getDecorators(value.declaration) ?? [],
       value,
@@ -576,6 +609,31 @@ export function aureliaInterfaceEvaluationForValue(
   value: EvaluationValue | null,
 ): AureliaInterfaceEvaluation | null {
   return value?.kind === EvaluationValueKind.Object
+    ? interfaceEvaluationsByObject.get(value) ?? null
+    : null;
+}
+
+/** Framework-owned interface object used by interpreted registry bodies that have no authored key expression. */
+export function aureliaFrameworkInterfaceEvaluationValue(
+  friendlyName: string,
+  sourceNode: ts.Node,
+): EvaluationObjectValue {
+  const value = interfaceEvaluationObject(sourceNode, friendlyName, false);
+  interfaceEvaluationsByObject.set(value, new AureliaInterfaceEvaluation(
+    friendlyName,
+    AureliaInterfaceDefaultRegistrationState.None,
+    null,
+    sourceNode,
+  ));
+  frameworkInterfaceValues.add(value);
+  return value;
+}
+
+/** Framework-owned interface metadata, distinct from app-created lookalikes with the same friendly name. */
+export function aureliaFrameworkInterfaceEvaluationForValue(
+  value: EvaluationValue | null,
+): AureliaInterfaceEvaluation | null {
+  return value?.kind === EvaluationValueKind.Object && frameworkInterfaceValues.has(value)
     ? interfaceEvaluationsByObject.get(value) ?? null
     : null;
 }
@@ -819,7 +877,7 @@ function evaluateCreateInterfaceCall(
 }
 
 function interfaceEvaluationObject(
-  call: ts.CallExpression,
+  call: ts.Node,
   friendlyName: string,
   hasConfigureArgument: boolean,
 ): EvaluationObjectValue {
@@ -979,6 +1037,29 @@ export function aureliaRegistryBodyForEvaluationValue(
     : null;
 }
 
+/** Runtime registrable metadata selected by `Container.register(...)`, including inherited constructor metadata. */
+export function aureliaRegistrableRegistryForEvaluationValue(
+  value: EvaluationValue | null,
+): EvaluationObjectValue | null {
+  if (value?.kind !== EvaluationValueKind.Class) return null;
+  let current: EvaluationClassValue | null = value;
+  while (current != null) {
+    const registry = templateCompilerHookRegistriesByClass.get(current) ?? null;
+    if (registry != null) return registry;
+    current = current.baseClass;
+  }
+  return null;
+}
+
+/** Exact singleton provider captured by one interpreted `TemplateCompilerHooks.define(...)` registry value. */
+export function aureliaTemplateCompilerHookTargetForRegistryValue(
+  value: EvaluationValue | null,
+): EvaluationClassValue | null {
+  return value?.kind === EvaluationValueKind.Object
+    ? templateCompilerHookTargetsByRegistry.get(value) ?? null
+    : null;
+}
+
 /** Whether an evaluator function is Aurelia's imported ambient `resolve` API. */
 export function isAureliaResolveEvaluationFunction(
   value: EvaluationValue | null,
@@ -1037,6 +1118,10 @@ export const aureliaExternalEvaluationValueResolver: StaticModuleExternalValueRe
     ) {
       return aliasedResourcesRegistryFunction();
     }
+    const templateCompilerHookValue = aureliaTemplateCompilerHookExternalImportValue(entry);
+    if (templateCompilerHookValue != null) {
+      return templateCompilerHookValue;
+    }
     const diValue = aureliaDiExternalImportValue(entry);
     if (diValue != null) {
       return diValue;
@@ -1079,6 +1164,26 @@ function aureliaFrameworkExternalImportValue(
   return frameworkKind == null
     ? null
     : aureliaFrameworkRegistrationValueForKind(frameworkKind, entry.node);
+}
+
+function aureliaTemplateCompilerHookExternalImportValue(
+  entry: EvaluationImportEntry,
+): EvaluationValue | null {
+  if (
+    entry.importKind !== EvaluationImportKind.Named
+    || entry.exportName == null
+    || !TEMPLATE_COMPILER_HOOK_MODULES.has(entry.moduleSpecifier)
+  ) {
+    return null;
+  }
+  switch (entry.exportName) {
+    case 'TemplateCompilerHooks':
+      return templateCompilerHooksObject(entry.node);
+    case 'templateCompilerHooks':
+      return templateCompilerHooksDecoratorFunction();
+    default:
+      return null;
+  }
 }
 
 function aureliaFacadeExternalImportValue(
@@ -1205,6 +1310,20 @@ function aureliaExternalNamespaceValue(
     properties.set('aliasedResourcesRegistry', new EvaluationObjectProperty(
       'aliasedResourcesRegistry',
       aliasedResourcesRegistryFunction(),
+      entry.node,
+      EvaluationObjectPropertyState.Closed,
+    ));
+  }
+  if (TEMPLATE_COMPILER_HOOK_MODULES.has(entry.moduleSpecifier)) {
+    properties.set('TemplateCompilerHooks', new EvaluationObjectProperty(
+      'TemplateCompilerHooks',
+      templateCompilerHooksObject(entry.node),
+      entry.node,
+      EvaluationObjectPropertyState.Closed,
+    ));
+    properties.set('templateCompilerHooks', new EvaluationObjectProperty(
+      'templateCompilerHooks',
+      templateCompilerHooksDecoratorFunction(),
       entry.node,
       EvaluationObjectPropertyState.Closed,
     ));
@@ -1483,6 +1602,64 @@ function registryObject(node: ts.Node, registryBody: RegistryBodyReference | nul
   return value;
 }
 
+function templateCompilerHooksObject(node: ts.Node): EvaluationObjectValue {
+  return new EvaluationObjectValue(new Map([
+    syntheticCallProperty('define', evaluateTemplateCompilerHooksDefineCall),
+  ]), false, node);
+}
+
+function evaluateTemplateCompilerHooksDefineCall(
+  frame: StaticInvocationFrame,
+  host: StaticIntrinsicEvaluationHost,
+): EvaluationObjectValue {
+  const arguments_ = exactAureliaInvocationArguments(frame, host);
+  const target = arguments_?.length === 1
+    && arguments_[0]!.openSeams.length === 0
+    && arguments_[0]!.value.kind === EvaluationValueKind.Class
+      ? arguments_[0]!.value
+      : null;
+  return templateCompilerHookRegistry(frame.node, target);
+}
+
+function templateCompilerHookRegistry(
+  node: ts.Node,
+  target: EvaluationClassValue | null,
+): EvaluationObjectValue {
+  const value = registryObject(node, new RegistryBodyReference(
+    RegistryBodyKind.TemplateCompilerHooks,
+    target == null
+      ? RegistryBodyInterpretationState.Open
+      : RegistryBodyInterpretationState.Interpreted,
+  ));
+  if (target != null) {
+    templateCompilerHookTargetsByRegistry.set(value, target);
+  }
+  return value;
+}
+
+function templateCompilerHooksDecoratorFunction(): EvaluationFunctionValue {
+  const value = syntheticFunctionForCall('templateCompilerHooks', (frame, host) => {
+    const arguments_ = exactAureliaInvocationArguments(frame, host);
+    if (arguments_ == null || arguments_.length !== 0) {
+      return host.unknown(
+        'templateCompilerHooks(...) decorator factory arguments did not match the framework no-argument form.',
+        frame.node,
+        frame.moduleKey,
+        EvaluationOpenSeamKind.DynamicCall,
+      );
+    }
+    return templateCompilerHookDecoratorFunction();
+  });
+  templateCompilerHookDecoratorFunctions.add(value);
+  return value;
+}
+
+function templateCompilerHookDecoratorFunction(): EvaluationFunctionValue {
+  const value = syntheticFunctionValue('templateCompilerHookDecorator');
+  templateCompilerHookDecoratorFunctions.add(value);
+  return value;
+}
+
 function aliasedResourcesRegistryFunction(): EvaluationFunctionValue {
   return syntheticFunctionForCall('aliasedResourcesRegistry', (frame, host) => registryObject(
     frame.node,
@@ -1597,6 +1774,42 @@ function evaluateAureliaInjectionDecorators(
   });
 }
 
+function templateCompilerHookDecoratorForClass(
+  owner: EvaluationClassValue,
+  host: StaticClassValueObservationHost,
+): ts.Expression | null {
+  if (!ts.canHaveDecorators(owner.declaration)) return null;
+  for (const decorator of ts.getDecorators(owner.declaration) ?? []) {
+    const expression = unwrapExpression(decorator.expression);
+    if (ts.isCallExpression(expression)) {
+      const callee = closedDecoratorReferenceEvidence(expression.expression, owner.environment);
+      if (
+        callee?.value.kind !== EvaluationValueKind.Function
+        || !templateCompilerHookDecoratorFunctions.has(callee.value)
+      ) {
+        continue;
+      }
+      const result = host.evaluateExpression(expression);
+      if (
+        result.openSeams.length === 0
+        && result.value.kind === EvaluationValueKind.Function
+        && templateCompilerHookDecoratorFunctions.has(result.value)
+      ) {
+        return expression;
+      }
+      continue;
+    }
+    const value = closedDecoratorReferenceEvidence(expression, owner.environment);
+    if (
+      value?.value.kind === EvaluationValueKind.Function
+      && templateCompilerHookDecoratorFunctions.has(value.value)
+    ) {
+      return expression;
+    }
+  }
+  return null;
+}
+
 function evaluateAureliaInjectionDecorator(
   decorator: ts.Decorator,
   owner: EvaluationClassValue,
@@ -1694,7 +1907,7 @@ function evaluatedDecoratorOpenReason(
     : fallback;
 }
 
-function aureliaResolveFunction(node: ts.Node): EvaluationFunctionValue {
+function aureliaResolveFunction(_node: ts.Node): EvaluationFunctionValue {
   const value = syntheticFunctionForCall('resolve', (frame, host) =>
     evaluateAureliaResolveCall(frame, host)
   );

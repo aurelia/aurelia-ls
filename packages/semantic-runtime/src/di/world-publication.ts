@@ -1,7 +1,7 @@
 import { SemanticClaim } from '../kernel/claim.js';
 import {
   OpenSeam,
-  OpenSeamReasonKind,
+  type OpenSeamReasonKind,
 } from '../kernel/open-seam.js';
 import {
   EvidenceKind,
@@ -64,7 +64,7 @@ import {
   ResourceIssueRelatedInformation,
 } from '../resources/resource-issue.js';
 import {
-  ResourceIssuePublication,
+  type ResourceIssuePublication,
   ResourceIssuePublisher,
 } from '../resources/resource-issue-publication.js';
 import type {
@@ -87,7 +87,7 @@ import {
 } from './framework-registration-effects.js';
 import type { Container } from './container.js';
 import type { ContainerLookupKey } from './container-key.js';
-import { ContainerRegistrationOperation } from './container-registration.js';
+import { type ContainerRegistrationOperation } from './container-registration.js';
 import {
   ParameterizedRegistry,
   type RegistryField,
@@ -103,7 +103,7 @@ import {
 } from './container-slot.js';
 import type { DiIssue } from './di-issue.js';
 import {
-  DiKeyIdentityEmitter,
+  type DiKeyIdentityEmitter,
   type DiKeyIdentityEmission,
   resourceDiKeyIdentityLocal,
 } from './di-key-identity-emitter.js';
@@ -754,6 +754,8 @@ export function summaryForRegistryValueOpen(
   switch (registryValue?.registryBody?.bodyKind) {
     case RegistryBodyKind.AliasedResourcesRegistry:
       return 'aliasedResourcesRegistry(...) module input or alias arguments are not statically closed enough for registry body interpretation.';
+    case RegistryBodyKind.TemplateCompilerHooks:
+      return 'TemplateCompilerHooks registry target did not close to one constructable hook provider.';
     case undefined:
       break;
   }

@@ -10,6 +10,7 @@ import {
 import {
   EvaluationObjectPropertyState,
   EvaluationValueKind,
+  type EvaluationClassValue,
   type EvaluationObjectProperty,
   type EvaluationObjectValue,
   type EvaluationValue,
@@ -69,6 +70,8 @@ import {
 import {
   RegistrationAdmissionObservation,
   RegistrationCarrierKind,
+  RegistrationKeyObservation,
+  RegistrationKeyObservationKind,
   RegistrationRecognitionOpen,
   RegistrationValueObservation,
 } from '../registration/registration-observation.js';
@@ -122,6 +125,8 @@ import type {
 } from './configuration-observation.js';
 import {
   aureliaContainerDefaultResolverPolicyForValue,
+  aureliaFrameworkInterfaceEvaluationValue,
+  aureliaTemplateCompilerHookTargetForRegistryValue,
   type AureliaContainerEvaluation,
 } from './aurelia-evaluation-runtime.js';
 import type { ConfigurationEvaluationBindingFrame } from './configuration-evaluation-bindings.js';
@@ -1075,6 +1080,7 @@ export class ConfigurationStepMaterializer {
     }).flatMap((admission) => [
       admission,
       ...aliasedResourcesRegistryBodyRegistrations(admission, context, resources),
+      ...templateCompilerHookRegistryBodyRegistrations(admission, context),
     ]);
     return this.registrationEmitter.materialize(
       new RegistrationEmissionContext(
@@ -1351,6 +1357,68 @@ function aliasedResourcesRegistryBodyRegistrations(
     ));
   });
   return registrations;
+}
+
+function templateCompilerHookRegistryBodyRegistrations(
+  observation: RegistrationAdmissionObservation,
+  context: ConfigurationRecognitionContext,
+): readonly RegistrationAdmissionObservation[] {
+  const registeredValue = observation.registeredValue;
+  const body = registeredValue?.registryBody ?? null;
+  if (
+    body?.bodyKind !== RegistryBodyKind.TemplateCompilerHooks
+    || body.state !== RegistryBodyInterpretationState.Interpreted
+    || registeredValue == null
+    || !ts.isExpression(observation.sourceNode)
+  ) {
+    return [];
+  }
+  const target = aureliaTemplateCompilerHookTargetForRegistryValue(registeredValue.evaluatedValue);
+  if (target == null) return [];
+  const sourceNode = observation.sourceNode;
+  const interfaceValue = aureliaFrameworkInterfaceEvaluationValue('ITemplateCompilerHooks', sourceNode);
+  return [new RegistrationAdmissionObservation(
+    RegistrationCarrierKind.RegistryRegisterMethod,
+    RegistrationAdmissionKind.RegistryMethod,
+    RegistrationStrategy.Singleton,
+    RegistrationKeyRole.AdmittedKey,
+    sourceNode,
+    new RegistrationKeyObservation(
+      'ITemplateCompilerHooks',
+      sourceNode,
+      RegistrationKeyObservationKind.Expression,
+      null,
+      interfaceValue,
+      context.sourceFileAddressHandleForNode(sourceNode),
+    ),
+    templateCompilerHookTargetObservation(target, sourceNode, context),
+    [],
+    [],
+    null,
+  )];
+}
+
+function templateCompilerHookTargetObservation(
+  target: EvaluationClassValue,
+  sourceNode: ts.Expression,
+  context: ConfigurationRecognitionContext,
+): RegistrationValueObservation {
+  const declarationName = ts.getNameOfDeclaration(target.declaration)?.getText(target.declaration.getSourceFile())
+    ?? null;
+  const declarationAddress = context.sourceFileAddressHandleForNode(target.declaration);
+  return new RegistrationValueObservation(
+    RegistrationValueKind.Constructable,
+    declarationName,
+    declarationAddress == null ? sourceNode : target.declaration,
+    declarationAddress != null,
+    null,
+    null,
+    declarationAddress,
+    declarationAddress == null ? null : target.environment.moduleKey,
+    null,
+    null,
+    target,
+  );
 }
 
 function resourceDefinitionName(definition: FullResourceDefinition): string | null {

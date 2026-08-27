@@ -67,7 +67,12 @@ import {
   RegistrationStrategy,
   ResourceRegistrationAdmission,
 } from '../registration/registration-admission.js';
-import type { FrameworkRegistrationKind } from '../registration/registration-reference.js';
+import {
+  type FrameworkRegistrationKind,
+  RegistryBodyInterpretationState,
+  RegistryBodyKind,
+} from '../registration/registration-reference.js';
+import { RegistryValue } from '../di/registry.js';
 import type { AppRoot } from './app-root.js';
 import type { ConfigurationKernelEmission } from './configuration-kernel-emitter.js';
 import type { ConfigurationRecognitionProjectResult } from './configuration-recognition-project-pass.js';
@@ -489,6 +494,13 @@ class AppRootCompilerWorldFrame {
           )
         );
       if (!executesRegistryCarrier) continue;
+      if (
+        operation.registrationValue instanceof RegistryValue
+        && operation.registrationValue.registryValue?.registryBody?.bodyKind === RegistryBodyKind.TemplateCompilerHooks
+        && operation.registrationValue.registryValue.registryBody.state === RegistryBodyInterpretationState.Interpreted
+      ) {
+        continue;
+      }
       const sourceAddressHandle = registeredValue?.addressHandle ?? operation.sourceAddressHandle;
       const sourceExpression = sourceAddressHandle == null
         ? null

@@ -87,6 +87,8 @@ export const enum FrameworkRegistrationKind {
 export const enum RegistryBodyKind {
   /** Kernel `aliasedResourcesRegistry(mod, mainAlias, aliases)` registry body. */
   AliasedResourcesRegistry = 'aliased-resources-registry',
+  /** Template compiler `TemplateCompilerHooks.define(Type)` singleton-provider registry body. */
+  TemplateCompilerHooks = 'template-compiler-hooks',
 }
 
 export const enum RegistryBodyInterpretationState {

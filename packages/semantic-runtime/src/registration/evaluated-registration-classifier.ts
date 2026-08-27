@@ -5,15 +5,16 @@ import {
   type EvaluationValue,
 } from '../evaluation/values.js';
 import {
-  AureliaFrameworkRegistrationEvaluation,
-  AureliaFrameworkRegistrationFactoryEvaluation,
-  AureliaInterfaceEvaluation,
-  AureliaRegistrationFactoryEvaluation,
+  type AureliaFrameworkRegistrationEvaluation,
+  type AureliaFrameworkRegistrationFactoryEvaluation,
+  type AureliaInterfaceEvaluation,
+  type AureliaRegistrationFactoryEvaluation,
   aureliaFrameworkRegistrationEvaluationForValue,
   aureliaFrameworkRegistrationFactoryEvaluationForValue,
   aureliaInterfaceEvaluationForValue,
   aureliaRegistrationFactoryEvaluationForValue,
   aureliaFrameworkRegistrationKindForEvaluationValue,
+  aureliaRegistrableRegistryForEvaluationValue,
 } from '../configuration/aurelia-evaluation-runtime.js';
 import {
   frameworkRegistrationKindForAdmission,
@@ -132,6 +133,10 @@ export function classifyEvaluatedRegistrationValue(
   }
   if (hasEvaluationRegisterFunction(value)) {
     return new EvaluatedRegistryRegistration(value);
+  }
+  const registrable = aureliaRegistrableRegistryForEvaluationValue(value);
+  if (registrable != null && hasEvaluationRegisterFunction(registrable)) {
+    return new EvaluatedRegistryRegistration(registrable);
   }
   if (isPlainClassFallbackValue(value)) {
     return new EvaluatedPlainClassRegistration(value);
