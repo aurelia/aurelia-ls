@@ -16,7 +16,9 @@ import {
   TemplateCompilerLiveAttributeSourceKind,
   TemplateCompilerLiveAttributeStructuralEffectKind,
   type TemplateCompilerLiveAttributeContribution,
+  type TemplateCompilerLiveAttributeOwnerResult,
 } from './template-compiler-live-attribute-assembly.js';
+import { TemplateCompilerElementInstructionStagingState } from './template-compiler-instruction-staging.js';
 import {
   TemplateCompilerAttributeOccurrence,
   TemplateCompilerCommentOccurrence,
@@ -111,6 +113,7 @@ export class TemplateCompilerSiteCursorTranscript {
     readonly compilerReads: TemplateCompilerReadView,
     readonly preWalkAuthority: TemplateCompilerPreWalkRemainderAuthority,
     readonly events: readonly TemplateCompilerSiteCursorEvent[],
+    readonly attributeOwners: readonly TemplateCompilerLiveAttributeOwnerResult[],
     readonly ledger: TemplateCompilerSiteSpendLedgerResult,
     readonly frontier: TemplateCompilerSiteCursorFrontier | null,
     readonly startForestMutationRevision: number,
@@ -139,6 +142,7 @@ export class TemplateCompilerSiteCursorTranscript {
         || (event instanceof TemplateCompilerSiteCursorProcessContentEvent && !event.isCoherent())
         || (event instanceof TemplateCompilerSiteCursorAttributeEvent && !event.isCoherent())
       )
+      || !liveAttributeOwnersAreCoherent(binding, events, attributeOwners)
       || nextTranscriptOrdinal !== events.length
       || (frontier == null
         ? events.some((event) => event instanceof TemplateCompilerSiteCursorFrontier)
@@ -257,6 +261,7 @@ class TemplateCompilerRootSiteCursor {
   private readonly ledger: TemplateCompilerSiteSpendLedger;
   private readonly semantics: TemplateCompilerSiteCursorSemanticResolver;
   private readonly events: TemplateCompilerSiteCursorEvent[] = [];
+  private readonly attributeOwners: TemplateCompilerLiveAttributeOwnerResult[] = [];
   private readonly startForestMutationRevision: number;
   private readonly startGlobalOperationCount: number;
   private transcriptOrdinal = 0;
@@ -303,6 +308,7 @@ class TemplateCompilerRootSiteCursor {
       this.compilerReads,
       this.preWalk,
       this.events,
+      this.attributeOwners,
       ledger,
       this.frontier,
       this.startForestMutationRevision,
@@ -765,6 +771,7 @@ class TemplateCompilerRootSiteCursor {
       lookupName,
       handles: this.request.handles,
     });
+    this.attributeOwners.push(assembly);
     const receipts = new Map(assembly.contributions.map((contribution) => [
       contribution.frame.attribute,
       contribution.frame.scalar,
@@ -1527,6 +1534,59 @@ class TemplateCompilerRootSiteCursor {
       this.frontier = frontier;
       this.events.push(frontier);
     }
+  }
+}
+
+function liveAttributeOwnersAreCoherent(
+  binding: TemplateCompilerSiteInvocationBinding,
+  events: readonly TemplateCompilerSiteCursorEvent[],
+  owners: readonly TemplateCompilerLiveAttributeOwnerResult[],
+): boolean {
+  const eventsByContribution = new Map<
+    TemplateCompilerLiveAttributeContribution,
+    TemplateCompilerSiteCursorAttributeEvent[]
+  >();
+  for (const event of events) {
+    if (!(event instanceof TemplateCompilerSiteCursorAttributeEvent) || event.liveContribution == null) continue;
+    const bucket = eventsByContribution.get(event.liveContribution);
+    if (bucket == null) eventsByContribution.set(event.liveContribution, [event]);
+    else bucket.push(event);
+  }
+  const seenElements = new Set<TemplateCompilerElementOccurrence>();
+  const seenContributions = new Set<TemplateCompilerLiveAttributeContribution>();
+  for (const owner of owners) {
+    if (
+      seenElements.has(owner.element)
+      || binding.forest.nodeForOccurrenceKey(owner.element.occurrenceKey) !== owner.element
+      || owner.progression.element !== owner.element
+      || owner.instructionStaging.finalOwnerView !== owner.finalOwnerView
+      || owner.instructionStaging.state !== instructionStagingStateFor(owner.completion)
+      || owner.progression.readSites().length !== owner.contributions.length
+    ) return false;
+    seenElements.add(owner.element);
+    for (const [ordinal, contribution] of owner.contributions.entries()) {
+      if (
+        seenContributions.has(contribution)
+        || contribution.frame.attribute.owner !== owner.element
+        || contribution.frame.liveSite !== owner.progression.readSites()[ordinal]
+        || eventsByContribution.get(contribution)?.length !== 1
+      ) return false;
+      seenContributions.add(contribution);
+    }
+  }
+  return seenContributions.size === eventsByContribution.size;
+}
+
+function instructionStagingStateFor(
+  completion: TemplateCompilerLiveAttributeCompletion,
+): TemplateCompilerElementInstructionStagingState {
+  switch (completion) {
+    case TemplateCompilerLiveAttributeCompletion.Complete:
+      return TemplateCompilerElementInstructionStagingState.Complete;
+    case TemplateCompilerLiveAttributeCompletion.Invalid:
+      return TemplateCompilerElementInstructionStagingState.Invalid;
+    case TemplateCompilerLiveAttributeCompletion.Open:
+      return TemplateCompilerElementInstructionStagingState.Open;
   }
 }
 

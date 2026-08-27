@@ -367,6 +367,23 @@ describe('template compiler root site cursor', () => {
     ]);
   });
 
+  test('retains exact owner-scoped instruction staging on the cursor transcript', () => {
+    const transcript = fixture.transcript('cursor-live-staging');
+    const contributionSet = new Set(transcript.attributeOwners.flatMap((owner) => owner.contributions));
+    const attributeEvents = eventsOf(transcript, TemplateCompilerSiteCursorAttributeEvent);
+    const select = transcript.attributeOwners.find((owner) => owner.element.tagName === 'select');
+
+    expect(transcript.frontier).toBeNull();
+    expect(transcript.attributeOwners).toHaveLength(4);
+    expect(attributeEvents.every((event) =>
+      event.liveContribution != null && contributionSet.has(event.liveContribution)
+    )).toBe(true);
+    expect(select?.instructionStaging.finalOwnerView).toBe(select?.finalOwnerView);
+    expect(select?.instructionStaging.directRowTail.map((instruction) =>
+      'targetProperty' in instruction ? instruction.targetProperty : null
+    )).toEqual(['multiple', 'value']);
+  });
+
   test('is deterministic and rejects foreign read/prewalk capabilities', () => {
     const run = fixture.run('cursor-empty');
     const first = run.transcript();

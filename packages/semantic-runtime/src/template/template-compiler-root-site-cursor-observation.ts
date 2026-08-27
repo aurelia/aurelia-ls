@@ -30,6 +30,7 @@ import {
   TemplateCompilerAttributeOccurrence,
   TemplateCompilerOccurrenceForest,
 } from './template-compiler-occurrence.js';
+import type { TemplateCompilerLiveAttributeOwnerResult } from './template-compiler-live-attribute-assembly.js';
 import { TemplateCompilerPreWalkRemainderAuthority } from './template-compiler-prewalk-remainder.js';
 import {
   bindTemplateCompilerRootSiteInvocation,
@@ -347,7 +348,11 @@ export function observeTemplateCompilerRootSiteCursor(
     eventKindCounts,
     phaseKinds,
     phaseCounts,
-    eventDigest: cursorEventDigest(transcript.events, transcript.binding.forest),
+    eventDigest: cursorEventDigest(
+      transcript.events,
+      transcript.attributeOwners,
+      transcript.binding.forest,
+    ),
     ledgerState: transcript.ledger.state,
     spendDispositionCounts: counts(transcript.ledger.spends.map((spend) => spend.disposition)),
     remainderKindCounts: counts(
@@ -410,6 +415,7 @@ function unavailable(
 
 function cursorEventDigest(
   events: readonly TemplateCompilerSiteCursorEvent[],
+  attributeOwners: readonly TemplateCompilerLiveAttributeOwnerResult[],
   forest: TemplateCompilerOccurrenceForest,
 ): string {
   const hash = createHash('sha256');
@@ -576,6 +582,31 @@ function cursorEventDigest(
                       ]
                     : unsupportedCursorEvent(event);
     const encoded = JSON.stringify([event.ordinal, ...parts]);
+    hash.update(String(encoded.length));
+    hash.update(':');
+    hash.update(encoded);
+  }
+  for (const owner of attributeOwners) {
+    const encoded = JSON.stringify([
+      'attribute-owner',
+      nodeIndex(owner.element),
+      owner.lookupName,
+      owner.completion,
+      owner.reason?.reasonKind ?? null,
+      owner.finalOwnerView.attributeStateKey,
+      owner.contributions.map((contribution) =>
+        attributeIndexes.get(contribution.frame.attribute) ?? null
+      ),
+      owner.instructionStaging.state,
+      owner.instructionStaging.hydrateAttributes.map((instruction) => instruction.resourceLookupName),
+      owner.instructionStaging.templateControllers.map((draft) => draft.controllerName),
+      owner.instructionStaging.elementBindableInstructions.map((instruction) => instruction.instructionKind),
+      owner.instructionStaging.plainInstructions.map((instruction) => instruction.instructionKind),
+      owner.instructionStaging.orderedPlainInstructions.map((instruction) => instruction.instructionKind),
+      owner.instructionStaging.directRowTail.map((instruction) => instruction.instructionKind),
+      owner.instructionStaging.captures.map((capture) => capture.syntax.target),
+      owner.instructionStaging.structuralEffects,
+    ]);
     hash.update(String(encoded.length));
     hash.update(':');
     hash.update(encoded);
