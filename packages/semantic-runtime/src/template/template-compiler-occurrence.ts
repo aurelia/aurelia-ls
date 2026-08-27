@@ -4,7 +4,6 @@ import type {
   ProductHandle,
 } from '../kernel/handles.js';
 import { localKeyPart } from '../kernel/local-key.js';
-import { KernelVocabulary } from '../kernel/vocabulary.js';
 import {
   HtmlCommentSemanticKind,
   HtmlIrNodeKind,
@@ -19,9 +18,11 @@ import type {
   TemplateStructuralTreeReference,
 } from './template-structure.js';
 import {
-  TemplateStructureDerivationAuthority,
-  type TemplateStructureReference,
-} from './template-structure-derivation.js';
+  TemplateCompilerAuthoredOriginIndex,
+  type TemplateCompilerExactAuthoredOrigin,
+} from './template-compiler-authored-origin-index.js';
+
+export { TemplateCompilerExactAuthoredOrigin } from './template-compiler-authored-origin-index.js';
 
 /** Edge that currently owns one mutable compiler occurrence. */
 export const enum TemplateCompilerOccurrenceEdgeKind {
@@ -72,15 +73,6 @@ export class TemplateCompilerOccurrenceGeneration {
   isOwnedBy(sessionAuthority: object): boolean {
     return this.#sessionAuthority === sessionAuthority;
   }
-}
-
-/** Singular authored/browser relation that is safe to spend as compiler row authority. */
-export class TemplateCompilerExactAuthoredOrigin {
-  constructor(
-    readonly derivationProductHandle: ProductHandle,
-    readonly authored: TemplateStructureReference,
-    readonly browserOutput: TemplateStructureReference,
-  ) {}
 }
 
 /** Immutable browser-input placement retained before compiler execution mutates the occurrence forest. */
@@ -1335,103 +1327,14 @@ class TemplateCompilerOccurrenceForestBuilder {
   }
 
   private recordExactAuthoredOrigins(): void {
-    const originsByAuthoredNode = new Map<ProductHandle, TemplateCompilerExactAuthoredOrigin[]>();
-    const originsByAuthoredAttribute = new Map<ProductHandle, TemplateCompilerExactAuthoredOrigin[]>();
-    const ambiguousNodeOutputs = new Set<ProductHandle>();
-    const ambiguousAttributeOutputs = new Set<ProductHandle>();
-    const ambiguousAuthoredNodes = new Set<ProductHandle>();
-    const ambiguousAuthoredAttributes = new Set<ProductHandle>();
-    for (const derivation of this.input.derivations) {
-      if (derivation.authority !== TemplateStructureDerivationAuthority.HtmlTreeBuilder) continue;
-      const nodeInputs = derivation.inputs
-        .map((term) => term.structure)
-        .filter((input) => input.productKindKey === KernelVocabulary.Template.HtmlNode.key);
-      const nodeOutputs = derivation.outputs
-        .map((term) => term.structure)
-        .filter((output) => output.productKindKey === KernelVocabulary.Template.StructuralNode.key);
-      const attributeInputs = derivation.inputs
-        .map((term) => term.structure)
-        .filter((input) => input.productKindKey === KernelVocabulary.Template.HtmlAttribute.key);
-      const attributeOutputs = derivation.outputs
-        .map((term) => term.structure)
-        .filter((output) => output.productKindKey === KernelVocabulary.Template.StructuralAttribute.key);
-      if (
-        nodeInputs.length > 0
-        && (derivation.inputs.length !== 1 || derivation.outputs.length !== 1 || nodeOutputs.length !== 1)
-      ) {
-        for (const input of nodeInputs) ambiguousAuthoredNodes.add(input.productHandle);
-      }
-      if (
-        attributeInputs.length > 0
-        && (derivation.inputs.length !== 1 || derivation.outputs.length !== 1 || attributeOutputs.length !== 1)
-      ) {
-        for (const input of attributeInputs) ambiguousAuthoredAttributes.add(input.productHandle);
-      }
-      const input = nodeInputs.length === 1 && nodeOutputs.length === 1
-        ? nodeInputs[0]!
-        : attributeInputs.length === 1 && attributeOutputs.length === 1
-          ? attributeInputs[0]!
-          : null;
-      const output = nodeInputs.length === 1 && nodeOutputs.length === 1
-        ? nodeOutputs[0]!
-        : attributeInputs.length === 1 && attributeOutputs.length === 1
-          ? attributeOutputs[0]!
-          : null;
-      if (input == null || output == null || derivation.inputs.length !== 1 || derivation.outputs.length !== 1) {
-        continue;
-      }
-      let outputIndex: Map<ProductHandle, TemplateCompilerExactAuthoredOrigin>;
-      let authoredIndex: Map<ProductHandle, TemplateCompilerExactAuthoredOrigin[]>;
-      let ambiguousOutputs: Set<ProductHandle>;
-      if (
-        input.productKindKey === KernelVocabulary.Template.HtmlNode.key
-        && output.productKindKey === KernelVocabulary.Template.StructuralNode.key
-      ) {
-        outputIndex = this.exactNodeOriginsByInputProduct;
-        authoredIndex = originsByAuthoredNode;
-        ambiguousOutputs = ambiguousNodeOutputs;
-      } else if (
-        input.productKindKey === KernelVocabulary.Template.HtmlAttribute.key
-        && output.productKindKey === KernelVocabulary.Template.StructuralAttribute.key
-      ) {
-        outputIndex = this.exactAttributeOriginsByInputProduct;
-        authoredIndex = originsByAuthoredAttribute;
-        ambiguousOutputs = ambiguousAttributeOutputs;
-      } else {
-        continue;
-      }
-      if (ambiguousOutputs.has(output.productHandle)) {
-        continue;
-      }
-      if (outputIndex.has(output.productHandle)) {
-        outputIndex.delete(output.productHandle);
-        ambiguousOutputs.add(output.productHandle);
-        continue;
-      }
-      const origin = new TemplateCompilerExactAuthoredOrigin(
-        derivation.productHandle,
-        input,
-        output,
-      );
-      outputIndex.set(output.productHandle, origin);
-      appendMap(authoredIndex, input.productHandle, origin);
+    const origins = new TemplateCompilerAuthoredOriginIndex(this.input.derivations);
+    for (const node of this.input.nodes) {
+      const origin = origins.exactOriginForBrowserProduct(node.productHandle);
+      if (origin != null) this.exactNodeOriginsByInputProduct.set(node.productHandle, origin);
     }
-    for (const origins of originsByAuthoredNode.values()) {
-      const authoredProductHandle = origins[0]?.authored.productHandle;
-      if (origins.length <= 1 && (authoredProductHandle == null || !ambiguousAuthoredNodes.has(authoredProductHandle))) {
-        continue;
-      }
-      for (const origin of origins) this.exactNodeOriginsByInputProduct.delete(origin.browserOutput.productHandle);
-    }
-    for (const origins of originsByAuthoredAttribute.values()) {
-      const authoredProductHandle = origins[0]?.authored.productHandle;
-      if (
-        origins.length <= 1
-        && (authoredProductHandle == null || !ambiguousAuthoredAttributes.has(authoredProductHandle))
-      ) {
-        continue;
-      }
-      for (const origin of origins) this.exactAttributeOriginsByInputProduct.delete(origin.browserOutput.productHandle);
+    for (const attribute of this.input.attributes) {
+      const origin = origins.exactOriginForBrowserProduct(attribute.productHandle);
+      if (origin != null) this.exactAttributeOriginsByInputProduct.set(attribute.productHandle, origin);
     }
   }
 }

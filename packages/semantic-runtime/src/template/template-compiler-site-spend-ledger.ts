@@ -25,6 +25,10 @@ import {
   TemplateCompilerTextOccurrence,
 } from './template-compiler-occurrence.js';
 import type { TemplateCompilerNodeOccurrence } from './template-compiler-occurrence.js';
+import {
+  TemplateCompilerPreWalkRemainderAuthority,
+  TemplateCompilerPreWalkRemainderReceipt,
+} from './template-compiler-prewalk-remainder.js';
 
 export type TemplateCompilerNormalizedSiteBundle =
   | TemplateCompilerNormalizedSite
@@ -74,6 +78,7 @@ export const enum TemplateCompilerSiteSpendConflictKind {
   DuplicateAuthoredRemainderEvidence = 'duplicate-authored-remainder-evidence',
   AuthoredRemainderAlreadyRecorded = 'authored-remainder-already-recorded',
   AuthoredRemainderForSpentSite = 'authored-remainder-for-spent-site',
+  InvalidPreWalkRemainderAuthority = 'invalid-pre-walk-remainder-authority',
 }
 
 /** One local-extraction disposition captured from the exact post-bootstrap occurrence topology. */
@@ -294,6 +299,7 @@ export class TemplateCompilerAuthoredSiteRemainderEvidence {
     readonly bundle: TemplateCompilerNormalizedSiteBundle,
     readonly reasonKind: string,
     readonly summary: string,
+    readonly preWalkReceipt: TemplateCompilerPreWalkRemainderReceipt | null = null,
   ) {
     if (reasonKind.length === 0 || summary.length === 0) {
       throw new Error('Authored site remainder evidence requires a non-empty reason and summary.');
@@ -604,6 +610,44 @@ export class TemplateCompilerSiteSpendLedger {
     summary: string,
   ): TemplateCompilerAuthoredSiteRemainderEvidence | TemplateCompilerSiteSpendConflict {
     this.assertOpen();
+    return this.recordAuthoredRemainderCandidate(bundle, reasonKind, summary, null);
+  }
+
+  recordAuthorizedAuthoredRemainder(
+    authority: TemplateCompilerPreWalkRemainderAuthority,
+    receipt: TemplateCompilerPreWalkRemainderReceipt,
+  ): TemplateCompilerAuthoredSiteRemainderEvidence | TemplateCompilerSiteSpendConflict {
+    this.assertOpen();
+    const bundle = receipt instanceof TemplateCompilerPreWalkRemainderReceipt
+      ? receipt.bundle
+      : null;
+    if (
+      !(authority instanceof TemplateCompilerPreWalkRemainderAuthority)
+      || !(receipt instanceof TemplateCompilerPreWalkRemainderReceipt)
+      || authority.index !== this.index
+      || !authority.owns(receipt)
+    ) {
+      return this.conflict(
+        TemplateCompilerSiteSpendConflictKind.InvalidPreWalkRemainderAuthority,
+        bundle,
+        null,
+        null,
+      );
+    }
+    return this.recordAuthoredRemainderCandidate(
+      receipt.bundle,
+      receipt.reasonKind,
+      receipt.summary,
+      receipt,
+    );
+  }
+
+  private recordAuthoredRemainderCandidate(
+    bundle: TemplateCompilerNormalizedSiteBundle,
+    reasonKind: string,
+    summary: string,
+    preWalkReceipt: TemplateCompilerPreWalkRemainderReceipt | null,
+  ): TemplateCompilerAuthoredSiteRemainderEvidence | TemplateCompilerSiteSpendConflict {
     if (!this.isOwnedBundle(bundle)) {
       return this.conflict(
         TemplateCompilerSiteSpendConflictKind.ForeignIndexBundle,
@@ -628,7 +672,12 @@ export class TemplateCompilerSiteSpendLedger {
         null,
       );
     }
-    const evidence = new TemplateCompilerAuthoredSiteRemainderEvidence(bundle, reasonKind, summary);
+    const evidence = new TemplateCompilerAuthoredSiteRemainderEvidence(
+      bundle,
+      reasonKind,
+      summary,
+      preWalkReceipt,
+    );
     this.authoredRemainderEvidence.push(evidence);
     this.remainderByBundle.set(bundle, evidence);
     return evidence;

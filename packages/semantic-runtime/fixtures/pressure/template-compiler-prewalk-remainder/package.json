@@ -1,0 +1,11 @@
+{
+  "name": "template-compiler-prewalk-remainder",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "aurelia": "^2.0.0-rc.2"
+  },
+  "devDependencies": {
+    "typescript": "^6.0.3"
+  }
+}
