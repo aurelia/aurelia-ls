@@ -1474,6 +1474,14 @@ export class TemplateCompilerExecutionSession {
     return this.siteContextsByLane.get(lane) ?? null;
   }
 
+  /** Assert that one read-only caller still holds this family's exact currently-active site driver. */
+  assertCurrentSiteExecutionDriver(
+    driver: TemplateCompilerSiteExecutionDriverReference,
+  ): void {
+    this.requireNoPendingAttempt('assert current site execution driver');
+    this.requireCurrentSiteExecutionDriver(driver);
+  }
+
   /** Capture immutable event-time scalar authority; live placement remains owned by the reached walker/cursor. */
   captureReachedAttributeScalar(
     authority: TemplateCompilerInvocationBootstrapClosure | TemplateCompilerSiteExecutionDriverReference,

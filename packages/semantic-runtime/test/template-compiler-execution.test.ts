@@ -263,6 +263,7 @@ describe('template compiler execution sequence', () => {
         causeHandles: [browser.run.handles.product('site-process:definition')],
         siteExecutionDriver: driver,
       });
+      expect(() => execution.assertCurrentSiteExecutionDriver(driver)).toThrow(/operation.*pending/);
       const content = element.readChildren()[0];
       if (content == null) throw new Error('Expected processContent child.');
       expect(() => execution.detachDirectChild(attempt, element, 0, content))
@@ -272,6 +273,7 @@ describe('template compiler execution sequence', () => {
         attempt,
         new TemplateCompilerOperationCompletion(TemplateCompilerOperationCompletionKind.Declined),
       );
+      expect(() => execution.assertCurrentSiteExecutionDriver(driver)).not.toThrow();
       const scalar = execution.captureReachedAttributeScalar(driver, element, attribute, 0);
 
       expect(execution.sequence.readSiteContexts()).toEqual([context]);
