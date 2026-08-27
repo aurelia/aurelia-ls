@@ -6,6 +6,8 @@ import {
   StandardConfiguration,
 } from '@aurelia/runtime-html';
 import cursorAsElementEmptyTemplate from './cursor-as-element-empty.html';
+import cursorAuthoredCarrierEmptyTemplate from './cursor-authored-carrier-empty.html';
+import cursorAuthoredCarrierStaticTemplate from './cursor-authored-carrier-static.html';
 import cursorCommentShieldTemplate from './cursor-comment-shield.html';
 import cursorEmptyTemplate from './cursor-empty.html';
 import cursorFosterTemplate from './cursor-foster.html';
@@ -34,6 +36,7 @@ import cursorSlotsContainerlessTemplate from './cursor-slots-containerless.html'
 import cursorSurrogateInvalidTemplate from './cursor-surrogate-invalid.html';
 import cursorSurrogateValidTemplate from './cursor-surrogate-valid.html';
 import cursorTemplateControllerTemplate from './cursor-template-controller.html';
+import cursorTenHoleTemplate from './cursor-ten-hole.html';
 import cursorContainerlessTemplate from './cursor-containerless.html';
 import cursorUsageContainerlessTemplate from './cursor-usage-containerless.html';
 import cursorWideTemplate from './cursor-wide.html';
@@ -191,6 +194,23 @@ class CursorCommentShield {
   inside = 'inside';
 }
 
+@customElement({
+  name: 'cursor-ten-hole',
+  template: cursorTenHoleTemplate,
+})
+class CursorTenHole {
+  a = 'a';
+  b = 'b';
+  c = 'c';
+  d = 'd';
+  e = 'e';
+  f = 'f';
+  g = 'g';
+  h = 'h';
+  i = 'i';
+  j = 'j';
+}
+
 @customElement({ name: 'div', template: '' })
 class NativeDivResource {}
 
@@ -200,6 +220,18 @@ class NativeDivResource {}
   dependencies: [NativeDivResource],
 })
 class CursorAsElementEmpty {}
+
+@customElement({
+  name: 'cursor-authored-carrier-empty',
+  template: cursorAuthoredCarrierEmptyTemplate,
+})
+class CursorAuthoredCarrierEmpty {}
+
+@customElement({
+  name: 'cursor-authored-carrier-static',
+  template: cursorAuthoredCarrierStaticTemplate,
+})
+class CursorAuthoredCarrierStatic {}
 
 @customElement({ name: 'cursor-leaf' })
 class CursorLeaf {}
@@ -370,7 +402,10 @@ void new Aurelia()
     CursorRowMerged,
     CursorRowInterleave,
     CursorCommentShield,
+    CursorTenHole,
     CursorAsElementEmpty,
+    CursorAuthoredCarrierEmpty,
+    CursorAuthoredCarrierStatic,
     CursorProjection,
     CursorMarker,
     CursorWide,

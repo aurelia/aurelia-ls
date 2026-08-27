@@ -10,6 +10,7 @@ import {
 import {
   TemplateCompilerProjectionContextStructuralAuthority,
   TemplateCompilerTargetContextRole,
+  TemplateCompilerTargetRowSourceKind,
   TemplateCompilerTargetRowPosture,
   TemplateCompilerTemplateControllerContextStructuralAuthority,
   type TemplateCompilerTargetContextPlan,
@@ -46,6 +47,7 @@ import type {
 import { TemplateCompilerForestMutationAuthority } from './template-compiler-mutation-authority.js';
 
 const structuralExecutionForests = new WeakSet<TemplateCompilerOccurrenceForest>();
+const preparedBorrowingSessions = new WeakSet<TemplateCompilerStructuralExecutionSession>();
 
 interface TemplateCompilerProjectionContributorInput {
   readonly host: TemplateCompilerElementOccurrence;
@@ -71,6 +73,8 @@ export class TemplateCompilerConsumedNodeDisposition {
     readonly authoredProductHandle: ProductHandle | null,
     /** Authored compiler-reachable slot filled by this removal; null for browser-only inputs. */
     readonly membershipOrdinal: number | null,
+    /** Occurrence-primary compiler-reachable slot filled by this removal. */
+    readonly occurrenceMembershipOrdinal: number | null,
     /** Exact live structural edge at the consumption event. */
     readonly owner: TemplateCompilerFragmentOccurrence | TemplateCompilerElementOccurrence,
     readonly ownerEdgeKind: TemplateCompilerOccurrenceEdgeKind.Child,
@@ -208,20 +212,63 @@ export class TemplateCompilerStructuralExecutionSession {
     targetPlan: TemplateCompilerTargetPlan,
     mutationAuthority: TemplateCompilerForestMutationAuthority,
   ): TemplateCompilerStructuralExecutionSession {
+    const session = TemplateCompilerStructuralExecutionSession.prepareBorrowing(
+      forest,
+      targetPlan,
+      mutationAuthority,
+    );
+    TemplateCompilerStructuralExecutionSession.commitPreparedBorrowing(session);
+    return session;
+  }
+
+  /** Build and fully validate a borrowed family without claiming its forest globally. */
+  static prepareBorrowing(
+    forest: TemplateCompilerOccurrenceForest,
+    targetPlan: TemplateCompilerTargetPlan,
+    mutationAuthority: TemplateCompilerForestMutationAuthority,
+  ): TemplateCompilerStructuralExecutionSession {
     if (structuralExecutionForests.has(forest)) {
       throw new Error('Compiler occurrence forest already belongs to a structural execution session.');
     }
     if (mutationAuthority.forest !== forest) {
       throw new Error('Compiler structural execution cannot borrow another forest mutation authority.');
     }
-    return TemplateCompilerStructuralExecutionSession.createWithAuthority(
+    const session = TemplateCompilerStructuralExecutionSession.assembleWithAuthority(
       forest,
       targetPlan,
       mutationAuthority,
     );
+    preparedBorrowingSessions.add(session);
+    return session;
+  }
+
+  /** Commit one already-validated borrowed family as the forest's unique structural owner. */
+  static commitPreparedBorrowing(session: TemplateCompilerStructuralExecutionSession): void {
+    if (
+      !preparedBorrowingSessions.has(session)
+      || structuralExecutionForests.has(session.forest)
+    ) {
+      throw new Error('Prepared compiler structural execution is stale or already committed.');
+    }
+    preparedBorrowingSessions.delete(session);
+    structuralExecutionForests.add(session.forest);
   }
 
   private static createWithAuthority(
+    forest: TemplateCompilerOccurrenceForest,
+    targetPlan: TemplateCompilerTargetPlan,
+    mutationAuthority: TemplateCompilerForestMutationAuthority,
+  ): TemplateCompilerStructuralExecutionSession {
+    const session = TemplateCompilerStructuralExecutionSession.assembleWithAuthority(
+      forest,
+      targetPlan,
+      mutationAuthority,
+    );
+    structuralExecutionForests.add(forest);
+    return session;
+  }
+
+  private static assembleWithAuthority(
     forest: TemplateCompilerOccurrenceForest,
     targetPlan: TemplateCompilerTargetPlan,
     mutationAuthority: TemplateCompilerForestMutationAuthority,
@@ -233,7 +280,6 @@ export class TemplateCompilerStructuralExecutionSession {
       forest.compilerCarrier,
       forest.compilerContent,
     );
-    structuralExecutionForests.add(forest);
     return session;
   }
 
@@ -243,6 +289,10 @@ export class TemplateCompilerStructuralExecutionSession {
   private readonly contextsByLocalKey = new Map<string, TemplateCompilerTargetContextPlan>();
   private readonly contextsByCompiledTemplateProduct = new Map<ProductHandle, TemplateCompilerTargetContextPlan>();
   private readonly contextsByCompilerReachableNodeProduct = new Map<ProductHandle, TemplateCompilerTargetContextPlan>();
+  private readonly contextsByCompilerReachableOccurrence = new Map<
+    TemplateCompilerNodeOccurrence,
+    TemplateCompilerTargetContextPlan
+  >();
   private readonly admittedContextsByTargetPlan = new Map<
     TemplateCompilerTargetPlan,
     readonly TemplateCompilerTargetContextPlan[]
@@ -399,6 +449,7 @@ export class TemplateCompilerStructuralExecutionSession {
     const localContextKeys = new Set<string>();
     const localCompiledTemplateProducts = new Set<ProductHandle>();
     const localReachableNodeProducts = new Set<ProductHandle>();
+    const localReachableOccurrences = new Set<TemplateCompilerNodeOccurrence>();
     const localProjectionContributors = new Set<HydrateElementProjectionContributor>();
     for (const context of contexts) {
       if (
@@ -430,6 +481,18 @@ export class TemplateCompilerStructuralExecutionSession {
         }
         localReachableNodeProducts.add(productHandle);
       }
+      for (const membership of context.readOccurrenceMemberships()) {
+        if (
+          this.forest.nodeForOccurrenceKey(membership.occurrence.occurrenceKey) !== membership.occurrence
+          || localReachableOccurrences.has(membership.occurrence)
+          || this.contextsByCompilerReachableOccurrence.has(membership.occurrence)
+        ) {
+          throw new Error(
+            `Compiler-reachable occurrence '${membership.occurrence.occurrenceKey}' is not unique in the structural family.`,
+          );
+        }
+        localReachableOccurrences.add(membership.occurrence);
+      }
       const authority = context.structuralAuthority;
       if (authority instanceof TemplateCompilerProjectionContextStructuralAuthority) {
         for (const contributor of authority.projection.contributors) {
@@ -453,6 +516,9 @@ export class TemplateCompilerStructuralExecutionSession {
       this.contextsByCompiledTemplateProduct.set(context.compiledTemplate.productHandle, context);
       for (const productHandle of context.readCompilerReachableNodeProductHandles()) {
         this.contextsByCompilerReachableNodeProduct.set(productHandle, context);
+      }
+      for (const membership of context.readOccurrenceMemberships()) {
+        this.contextsByCompilerReachableOccurrence.set(membership.occurrence, context);
       }
     }
     this.indexStructuralEntrants(contexts);
@@ -512,8 +578,13 @@ export class TemplateCompilerStructuralExecutionSession {
   }
 
   /** Read caused text expansions in compiler execution order. */
-  readInputTextExpansions(): readonly TemplateCompilerInputTextExpansion[] {
-    return [...this.inputTextExpansions.values()].sort(compareInputEvents);
+  readInputTextExpansions(
+    context?: TemplateCompilerTargetContextPlan,
+  ): readonly TemplateCompilerInputTextExpansion[] {
+    if (context != null) this.requireContext(context);
+    return [...this.inputTextExpansions.values()]
+      .filter((expansion) => context == null || expansion.context === context)
+      .sort(compareInputEvents);
   }
 
   /** Create path-independent generation authority for a node/attribute factory call owned by this session. */
@@ -524,13 +595,36 @@ export class TemplateCompilerStructuralExecutionSession {
     causeHandles: readonly ClaimEndpointHandle[],
     outputOrdinal: number,
   ): TemplateCompilerOccurrenceGeneration {
+    return this.createGenerationInOperation(
+      context,
+      operationKey,
+      causeHandles,
+      operationKey,
+      causeHandles,
+      role,
+      outputOrdinal,
+    );
+  }
+
+  /** Create one independently identified/caused output inside a wider structural operation batch. */
+  createGenerationInOperation(
+    context: TemplateCompilerTargetContextPlan,
+    batchOperationKey: string,
+    batchCauseHandles: readonly ClaimEndpointHandle[],
+    generationOperationKey: string,
+    generationCauseHandles: readonly ClaimEndpointHandle[],
+    role: TemplateCompilerGeneratedOccurrenceRole,
+    outputOrdinal: number,
+  ): TemplateCompilerOccurrenceGeneration {
     this.requireContext(context);
     return this.mutationAuthority.createStructuralGeneration(
       context.localKey,
-      operationKey,
+      batchOperationKey,
       role,
-      causeHandles,
+      batchCauseHandles,
       outputOrdinal,
+      generationOperationKey,
+      generationCauseHandles,
     );
   }
 
@@ -644,10 +738,48 @@ export class TemplateCompilerStructuralExecutionSession {
         `Compiler carrier '${compilerCarrier.occurrenceKey}' belongs to both '${priorContextKey}' and '${context.localKey}'.`,
       );
     }
+    this.requireInitialOccurrenceMembership(context, compilerCarrier, compilerContent);
     const structure = new TemplateCompilerContextStructure(context, compilerCarrier, compilerContent);
     this.structuresByContextKey.set(context.localKey, structure);
     this.contextKeysByCarrierOccurrence.set(compilerCarrier.occurrenceKey, context.localKey);
     return structure;
+  }
+
+  /** Prove occurrence-primary reachability against the exact structure before admitting its context root. */
+  private requireInitialOccurrenceMembership(
+    context: TemplateCompilerTargetContextPlan,
+    compilerCarrier: TemplateCompilerElementOccurrence,
+    compilerContent: TemplateCompilerFragmentOccurrence,
+  ): void {
+    const memberships = context.readOccurrenceMemberships();
+    if (memberships.length === 0) return;
+    const expected: TemplateCompilerNodeOccurrence[] = [compilerCarrier];
+    contextPreorder(compilerContent, (node) => {
+      if (node instanceof TemplateCompilerElementOccurrence || node instanceof TemplateCompilerTextOccurrence) {
+        expected.push(node);
+      }
+    });
+    if (
+      memberships.length !== expected.length
+      || memberships.some((membership, ordinal) => {
+        const occurrence = expected[ordinal] ?? null;
+        const exactAuthoredProduct = occurrence == null
+          ? null
+          : this.forest.exactAuthoredNodeOrigin(occurrence)?.authored.productHandle ?? null;
+        return membership.ordinal !== ordinal
+          || membership.occurrence !== occurrence
+          || (membership.authoredNode?.productHandle ?? null) !== exactAuthoredProduct;
+      })
+    ) {
+      throw new Error(
+        `Compiler target context '${context.localKey}' has divergent initial occurrence membership/order.`,
+      );
+    }
+    for (const row of context.readRows()) {
+      if (row.occurrence == null || context.occurrenceMembershipFor(row.occurrence) == null) {
+        throw new Error(`Compiler target row '${row.localKey}' has no exact context occurrence membership.`);
+      }
+    }
   }
 
   /** Extract one authored `<template>` occurrence as the exact carrier for a child compiler context. */
@@ -717,6 +849,7 @@ export class TemplateCompilerStructuralExecutionSession {
     context: TemplateCompilerTargetContextPlan,
     outputs: readonly TemplateCompilerTextOccurrence[],
     causeHandles: readonly ClaimEndpointHandle[],
+    detachInput: ((input: TemplateCompilerTextOccurrence) => void) | null = null,
   ): TemplateCompilerInputTextExpansion {
     const structure = this.requireContextStructure(context);
     this.requireForestNode(input);
@@ -762,7 +895,11 @@ export class TemplateCompilerStructuralExecutionSession {
     }
     this.requireCurrentInputEdgeAuthority(input);
     this.assertSeededSourceOrder(input);
-    this.forest.detachNode(input);
+    if (detachInput == null) this.forest.detachNode(input);
+    else detachInput(input);
+    if (!hasDetachedNodeEdge(input)) {
+      throw new Error(`Compiler text input '${input.occurrenceKey}' detachment did not consume its source edge.`);
+    }
     outputs.forEach((output, outputOrdinal) => this.forest.insertDetachedNode(
       output,
       parent,
@@ -831,6 +968,7 @@ export class TemplateCompilerStructuralExecutionSession {
     const membershipOrdinal = authoredProductHandle == null
       ? null
       : context.compilerReachableNodeOrdinal(authoredProductHandle);
+    const occurrenceMembershipOrdinal = context.occurrenceMembershipOrdinal(node);
     this.requireCurrentInputEdgeAuthority(node);
     this.assertSeededSourceOrder(node);
     this.forest.detachNode(node);
@@ -843,6 +981,7 @@ export class TemplateCompilerStructuralExecutionSession {
       node.inputReference,
       authoredProductHandle,
       membershipOrdinal,
+      occurrenceMembershipOrdinal,
       owner,
       TemplateCompilerOccurrenceEdgeKind.Child,
       ownerOrdinal,
@@ -863,6 +1002,7 @@ export class TemplateCompilerStructuralExecutionSession {
     attribute: TemplateCompilerAttributeOccurrence,
     context: TemplateCompilerTargetContextPlan,
     causeHandles: readonly ClaimEndpointHandle[],
+    detachAttribute: ((attribute: TemplateCompilerAttributeOccurrence) => void) | null = null,
   ): TemplateCompilerConsumedAttributeDisposition {
     const structure = this.requireContextStructure(context);
     if (this.forest.attributeForOccurrenceKey(attribute.occurrenceKey) !== attribute) {
@@ -891,7 +1031,11 @@ export class TemplateCompilerStructuralExecutionSession {
     }
     this.assertSeededAttributeOrder(attribute, owner);
     this.requireNodeInContext(owner, structure);
-    this.forest.detachAttribute(attribute);
+    if (detachAttribute == null) this.forest.detachAttribute(attribute);
+    else detachAttribute(attribute);
+    if (!hasDetachedAttributeOwner(attribute)) {
+      throw new Error(`Compiler attribute '${attribute.occurrenceKey}' detachment did not consume its owner edge.`);
+    }
     const disposition = new TemplateCompilerConsumedAttributeDisposition(
       context,
       attribute,
@@ -913,6 +1057,25 @@ export class TemplateCompilerStructuralExecutionSession {
     target: TemplateCompilerElementOccurrence | TemplateCompilerTextOccurrence,
     additionalCauseHandles: readonly ClaimEndpointHandle[] = [],
   ): TemplateCompilerMarkerTargetGeometry {
+    return this.realizeMarkerTargetForOperation(
+      row,
+      target,
+      row.localKey,
+      rowCauseHandles(row, additionalCauseHandles),
+      0,
+    );
+  }
+
+  /** Realize a row marker inside a wider exact operation, such as one multi-hole text expansion. */
+  realizeMarkerTargetForOperation(
+    row: TemplateCompilerTargetRowPlan,
+    target: TemplateCompilerElementOccurrence | TemplateCompilerTextOccurrence,
+    batchOperationKey: string,
+    batchCauseHandles: readonly ClaimEndpointHandle[],
+    markerOutputOrdinal: number,
+    markerOperationKey: string = batchOperationKey,
+    markerCauseHandles: readonly ClaimEndpointHandle[] = batchCauseHandles,
+  ): TemplateCompilerMarkerTargetGeometry {
     const context = this.requireCompleteUnrealizedRow(row);
     if (row.targetKind !== TemplateRenderTargetKind.MarkerTarget) {
       throw new Error(`Compiler target row '${row.localKey}' is not an ordinary marker target.`);
@@ -933,12 +1096,14 @@ export class TemplateCompilerStructuralExecutionSession {
     }
     this.claimSourceTarget(row, target);
     const marker = this.forest.createGeneratedComment(
-      this.createGeneration(
+      this.createGenerationInOperation(
         context,
-        row.localKey,
+        batchOperationKey,
+        batchCauseHandles,
+        markerOperationKey,
+        markerCauseHandles,
         TemplateCompilerGeneratedOccurrenceRole.CompilerMarker,
-        rowCauseHandles(row, additionalCauseHandles),
-        0,
+        markerOutputOrdinal,
       ),
       'au',
       HtmlCommentSemanticKind.CompilerMarker,
@@ -1167,6 +1332,7 @@ export class TemplateCompilerStructuralExecutionSession {
         throw new Error(`Compiler target marker preorder diverges from row order in '${context.localKey}'.`);
       }
       this.assertContextAuthoredMembership(structure);
+      this.assertContextOccurrenceMembership(structure);
     }
     this.assertSourceBandOrder();
     const roots = this.forest.readRoots();
@@ -1206,6 +1372,8 @@ export class TemplateCompilerStructuralExecutionSession {
       }
       return consumed.context;
     }
+    const admitted = this.contextsByCompilerReachableOccurrence.get(node) ?? null;
+    if (admitted != null) return admitted;
     const contexts: TemplateCompilerTargetContextPlan[] = [];
     for (const context of this.contexts) {
       const structure = this.structuresByContextKey.get(context.localKey) ?? null;
@@ -1673,6 +1841,17 @@ export class TemplateCompilerStructuralExecutionSession {
     row: TemplateCompilerTargetRowPlan,
     occurrence: TemplateCompilerNodeOccurrence,
   ): void {
+    if (row.sourceKind === TemplateCompilerTargetRowSourceKind.TextHole) {
+      const expansion = occurrence instanceof TemplateCompilerTextOccurrence
+        ? this.inputTextExpansionsByOutput.get(occurrence) ?? null
+        : null;
+      if (expansion?.input !== row.occurrence) {
+        throw new Error(
+          `Compiler text row '${row.localKey}' does not own expansion output '${occurrence.occurrenceKey}'.`,
+        );
+      }
+      return;
+    }
     if (row.occurrence != null) {
       if (row.occurrence !== occurrence) {
         throw new Error(
@@ -1697,15 +1876,22 @@ export class TemplateCompilerStructuralExecutionSession {
     if (row.occurrence instanceof TemplateCompilerTextOccurrence || row.node instanceof HtmlText) {
       const instruction = row.instructions.length === 1 ? row.instructions[0] : null;
       const generation = target.generation;
+      const expansion = target instanceof TemplateCompilerTextOccurrence
+        ? this.inputTextExpansionsByOutput.get(target) ?? null
+        : null;
+      const generationMatchesRow = row.sourceKind === TemplateCompilerTargetRowSourceKind.TextHole
+        ? expansion?.input === row.occurrence
+          && generation?.operationKey === row.localKey
+          && generation.outputOrdinal === 0
+        : generation?.operationKey === row.localKey && generation.outputOrdinal === 0;
       if (
         !(target instanceof TemplateCompilerTextOccurrence)
         || target.text !== ' '
         || !(instruction instanceof TextBindingInstruction)
         || generation?.role !== TemplateCompilerGeneratedOccurrenceRole.BindingPlaceholder
         || generation.contextKey !== context.localKey
-        || generation.operationKey !== row.localKey
-        || generation.outputOrdinal !== 0
         || !generation.causeHandles.includes(instruction.productHandle)
+        || !generationMatchesRow
       ) {
         throw new Error(
           `Compiler text row '${row.localKey}' requires its exact generated binding placeholder.`,
@@ -1837,13 +2023,25 @@ export class TemplateCompilerStructuralExecutionSession {
           break;
         case TemplateCompilerGeneratedOccurrenceRole.BindingPlaceholder: {
           const row = this.sourceTargetRowsByOccurrence.get(node) ?? null;
+          const expansion = node instanceof TemplateCompilerTextOccurrence
+            ? this.inputTextExpansionsByOutput.get(node) ?? null
+            : null;
+          const generationMatchesRow = row?.sourceKind === TemplateCompilerTargetRowSourceKind.TextHole
+            ? expansion?.input === row.occurrence
+              && generation.operationKey === row.localKey
+              && generation.outputOrdinal === 0
+              && sameOccurrences(
+                generation.causeHandles,
+                row.instructions.map((instruction) => instruction.productHandle),
+              )
+            : row?.localKey === generation.operationKey && generation.outputOrdinal === 0;
           if (
             !(node instanceof TemplateCompilerTextOccurrence)
             || node.text !== ' '
             || this.forest.exactAuthoredNodeOrigin(node) == null
             || row == null
             || row.context.localKey !== generation.contextKey
-            || row.localKey !== generation.operationKey
+            || !generationMatchesRow
             || this.geometriesByRow.get(row)?.geometryKind !== TemplateCompilerTargetGeometryKind.Marker
             || (this.geometriesByRow.get(row) as TemplateCompilerMarkerTargetGeometry).target !== node
           ) {
@@ -2324,6 +2522,7 @@ export class TemplateCompilerStructuralExecutionSession {
       const expectedOrdinal = exactOrigin == null
         ? null
         : disposition.context.compilerReachableNodeOrdinal(exactOrigin);
+      const expectedOccurrenceOrdinal = disposition.context.occurrenceMembershipOrdinal(node);
       const hasInvalidEventOrdinal = !Number.isSafeInteger(disposition.eventOrdinal)
         || disposition.eventOrdinal < 0
         || disposition.eventOrdinal >= this.nextInputEventOrdinal
@@ -2336,6 +2535,7 @@ export class TemplateCompilerStructuralExecutionSession {
         || disposition.inputReference !== node.inputReference
         || disposition.authoredProductHandle !== exactOrigin
         || disposition.membershipOrdinal !== expectedOrdinal
+        || disposition.occurrenceMembershipOrdinal !== expectedOccurrenceOrdinal
         || this.forest.nodeForOccurrenceKey(disposition.owner.occurrenceKey) !== disposition.owner
         || disposition.ownerEdgeKind !== TemplateCompilerOccurrenceEdgeKind.Child
         || disposition.ownerOrdinal < 0
@@ -2471,6 +2671,62 @@ export class TemplateCompilerStructuralExecutionSession {
     }
   }
 
+  private assertContextOccurrenceMembership(structure: TemplateCompilerContextStructure): void {
+    const expected = structure.context.readOccurrenceMemberships();
+    if (expected.length === 0) return;
+    const live: TemplateCompilerNodeOccurrence[] = [structure.compilerCarrier];
+    const represented = new Set<TemplateCompilerNodeOccurrence>(live);
+    contextPreorder(structure.compilerContent, (node) => {
+      let source: TemplateCompilerNodeOccurrence | null = null;
+      if (
+        (node instanceof TemplateCompilerElementOccurrence
+          && (node.generation == null || structure.context.occurrenceMembershipFor(node) != null))
+        || (node instanceof TemplateCompilerTextOccurrence && node.generation == null)
+      ) {
+        source = node;
+      } else if (node instanceof TemplateCompilerTextOccurrence) {
+        source = this.inputTextExpansionsByOutput.get(node)?.input ?? null;
+      } else if (node instanceof TemplateCompilerCommentOccurrence) {
+        source = this.geometriesByEnd.get(node)?.replacedNode ?? null;
+      }
+      if (source != null && !represented.has(source)) {
+        represented.add(source);
+        live.push(source);
+      }
+    });
+    const consumedByOrdinal = new Map<number, TemplateCompilerConsumedNodeDisposition>();
+    for (const disposition of this.consumedNodesByContextKey.get(structure.context.localKey) ?? []) {
+      const ordinal = disposition.occurrenceMembershipOrdinal;
+      if (ordinal == null) continue;
+      if (consumedByOrdinal.has(ordinal) || represented.has(disposition.node)) {
+        throw new Error(
+          `Compiler target context '${structure.context.localKey}' has duplicate occurrence disposition.`,
+        );
+      }
+      consumedByOrdinal.set(ordinal, disposition);
+    }
+    let liveIndex = 0;
+    for (let ordinal = 0; ordinal < expected.length; ordinal++) {
+      const actual = consumedByOrdinal.get(ordinal)?.node ?? live[liveIndex++];
+      const membership = expected[ordinal]!;
+      if (
+        membership.ordinal !== ordinal
+        || membership.occurrence !== actual
+        || structure.context.occurrenceMembershipFor(actual) !== membership
+      ) {
+        throw new Error(
+          `Compiler target context '${structure.context.localKey}' has divergent occurrence membership/order.`,
+        );
+      }
+    }
+    if (
+      liveIndex !== live.length
+      || [...consumedByOrdinal.keys()].some((ordinal) => ordinal >= expected.length)
+    ) {
+      throw new Error(`Compiler target context '${structure.context.localKey}' has excess occurrence membership.`);
+    }
+  }
+
   private contextLiveAuthoredMembership(
     structure: TemplateCompilerContextStructure,
   ): readonly ProductHandle[] {
@@ -2554,13 +2810,22 @@ export class TemplateCompilerStructuralExecutionSession {
     if (geometry.row.context.localKey !== structure.context.localKey) {
       throw new Error(`Compiler target row '${geometry.row.localKey}' names the wrong structural context.`);
     }
+    const markerGeneration = geometry.marker.generation;
+    const textTargetGeneration = geometry.geometryKind === TemplateCompilerTargetGeometryKind.Marker
+      && geometry.row.sourceKind === TemplateCompilerTargetRowSourceKind.TextHole
+      ? geometry.target.generation
+      : null;
+    const markerOperationIsExact = textTargetGeneration == null
+      ? markerGeneration?.operationKey === geometry.row.localKey
+        && markerGeneration.outputOrdinal === 0
+      : markerGeneration?.operationKey === textTargetGeneration.operationKey
+        && markerGeneration.outputOrdinal === textTargetGeneration.outputOrdinal;
     if (
       geometry.marker.semanticKind !== HtmlCommentSemanticKind.CompilerMarker
       || this.geometriesByMarker.get(geometry.marker) !== geometry
-      || geometry.marker.generation?.role !== TemplateCompilerGeneratedOccurrenceRole.CompilerMarker
-      || geometry.marker.generation.contextKey !== structure.context.localKey
-      || geometry.marker.generation.operationKey !== geometry.row.localKey
-      || geometry.marker.generation.outputOrdinal !== 0
+      || markerGeneration?.role !== TemplateCompilerGeneratedOccurrenceRole.CompilerMarker
+      || markerGeneration.contextKey !== structure.context.localKey
+      || !markerOperationIsExact
     ) {
       throw new Error(`Compiler target row '${geometry.row.localKey}' has an incoherent generated marker.`);
     }
@@ -2623,6 +2888,14 @@ export class TemplateCompilerStructuralExecutionSession {
       }
     }
   }
+}
+
+function hasDetachedNodeEdge(node: TemplateCompilerNodeOccurrence): boolean {
+  return node.parent === null && node.parentEdgeKind === TemplateCompilerOccurrenceEdgeKind.Detached;
+}
+
+function hasDetachedAttributeOwner(attribute: TemplateCompilerAttributeOccurrence): boolean {
+  return attribute.owner === null;
 }
 
 function rowCauseHandles(

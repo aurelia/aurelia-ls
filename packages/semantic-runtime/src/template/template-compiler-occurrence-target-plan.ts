@@ -99,6 +99,10 @@ export class TemplateCompilerOccurrenceTargetPlanAssembly {
       || targetPlan.root.compiledTemplate.identityHandle !== rootCompiledTemplate.identityHandle
       || !targetPlan.isSealed
       || rowMappings.length !== rows.rows.length
+      || !sameObjects(
+        targetPlan.root.readOccurrenceMemberships().map((membership) => membership.occurrence),
+        [rows.rootMembership.compilerCarrier, ...rows.occurrenceMemberships.map((membership) => membership.occurrence)],
+      )
       || !sameObjects(rowMappings.map((mapping) => mapping.draft), rows.rows)
       || !sameObjects(rowMappings.map((mapping) => mapping.row), targetPlan.root.readRows())
     ) {
@@ -230,6 +234,11 @@ export function allocateTemplateCompilerOccurrenceTargetPlan(
     lane.localKey,
     receipt.transcript.binding.unit.rootContext,
     rootCompiledTemplate,
+  );
+  targetPlan.root.recordCompilerReachableOccurrence(
+    rows.rootMembership.stableSlotKey,
+    rows.rootMembership.compilerCarrier,
+    rows.rootMembership.authoredNode,
   );
   for (const membership of rows.occurrenceMemberships) {
     targetPlan.root.recordCompilerReachableOccurrence(

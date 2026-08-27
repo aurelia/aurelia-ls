@@ -60,7 +60,25 @@ describe("AOT semantic compiler oracle CLI", () => {
       occurrenceTargetPlanState: "exact",
       occurrenceTargetPlanReasonKinds: [],
       occurrenceTargetPlanFreshRoot: true,
+      occurrenceTargetAttachmentPresent: true,
+      occurrenceTargetAttachmentContextCount: 1,
+      occurrenceTargetAttachmentStructuralPlanCount: 1,
+      occurrenceTargetAttachmentInvocationPhase: "target-execution",
+      occurrenceTargetAttachmentConsumedPrePlanAuthority: true,
+      occurrenceTargetAttachmentCurrentBeforeExecution: true,
+      occurrenceTargetAttachmentCurrentAfterExecution: false,
+      occurrenceTargetAttachmentForestMutationRevisionDelta: 0,
+      occurrenceTargetAttachmentGlobalOperationCountDelta: 0,
+      occurrenceTargetAttachmentLaneOperationCountDelta: 0,
+      occurrenceTargetExecutionPresent: true,
+      occurrenceTargetExecutionOperationCount: expect.any(Number),
+      occurrenceTargetExecutionInvocationPhase: "target-closed",
+      occurrenceTargetExecutionSealed: true,
+      occurrenceTargetExecutionDigest: expect.stringMatching(/^sha256:[0-9a-f]{64}$/u),
+      occurrenceTargetExecutionGlobalOperationCountDelta: expect.any(Number),
+      occurrenceTargetExecutionLaneOperationCountDelta: expect.any(Number),
       currentness: {
+        authorityScope: "historical-site-cursor-prefix",
         exact: true,
         expectedForestMutationRevisionDelta: expect.any(Number),
         expectedGlobalOperationCountDelta: expect.any(Number),
@@ -123,7 +141,25 @@ interface SemanticCompilerOracleReceipt {
         readonly occurrenceTargetPlanState?: string;
         readonly occurrenceTargetPlanReasonKinds?: readonly string[];
         readonly occurrenceTargetPlanFreshRoot?: boolean | null;
+        readonly occurrenceTargetAttachmentPresent?: boolean;
+        readonly occurrenceTargetAttachmentContextCount?: number;
+        readonly occurrenceTargetAttachmentStructuralPlanCount?: number;
+        readonly occurrenceTargetAttachmentInvocationPhase?: string | null;
+        readonly occurrenceTargetAttachmentConsumedPrePlanAuthority?: boolean | null;
+        readonly occurrenceTargetAttachmentCurrentBeforeExecution?: boolean | null;
+        readonly occurrenceTargetAttachmentCurrentAfterExecution?: boolean | null;
+        readonly occurrenceTargetAttachmentForestMutationRevisionDelta?: number;
+        readonly occurrenceTargetAttachmentGlobalOperationCountDelta?: number;
+        readonly occurrenceTargetAttachmentLaneOperationCountDelta?: number;
+        readonly occurrenceTargetExecutionPresent?: boolean;
+        readonly occurrenceTargetExecutionOperationCount?: number;
+        readonly occurrenceTargetExecutionInvocationPhase?: string | null;
+        readonly occurrenceTargetExecutionSealed?: boolean;
+        readonly occurrenceTargetExecutionDigest?: string | null;
+        readonly occurrenceTargetExecutionGlobalOperationCountDelta?: number;
+        readonly occurrenceTargetExecutionLaneOperationCountDelta?: number;
         readonly currentness?: {
+          readonly authorityScope: string;
           readonly exact: boolean;
           readonly forestMutationRevisionDelta: number;
           readonly expectedForestMutationRevisionDelta: number;

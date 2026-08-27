@@ -13,7 +13,11 @@ import type {
 import type { BrowserEffectiveTemplateEmission } from './browser-effective-template-materializer.js';
 import { LocalTemplateDefinitionMaterializer } from './local-template-definition-materializer.js';
 import { TemplateCompilerReadView, TemplateCompilerWorldAuthority } from './compiler-read-view.js';
-import { TemplateCompilerExecutionSession } from './template-compiler-execution.js';
+import {
+  TemplateCompilerAttributeDetachmentMutation,
+  TemplateCompilerExecutionSession,
+  TemplateCompilerOccurrenceOperationTarget,
+} from './template-compiler-execution.js';
 import {
   executeTemplateCompilerHookBootstrap,
   TemplateCompilerHookBootstrapState,
@@ -28,7 +32,12 @@ import {
 } from './template-compiler-normalized-site-index.js';
 import {
   TemplateCompilerAttributeOccurrence,
+  TemplateCompilerCommentOccurrence,
+  TemplateCompilerElementOccurrence,
+  TemplateCompilerFragmentOccurrence,
   TemplateCompilerOccurrenceForest,
+  TemplateCompilerTextOccurrence,
+  type TemplateCompilerNodeOccurrence,
 } from './template-compiler-occurrence.js';
 import type { TemplateCompilerLiveAttributeOwnerResult } from './template-compiler-live-attribute-assembly.js';
 import type { TemplateCompilerHydrateElementStagingResult } from './template-compiler-hydrate-element-staging.js';
@@ -42,6 +51,10 @@ import {
   allocateTemplateCompilerOccurrenceTargetPlan,
   type TemplateCompilerOccurrenceTargetPlanAssembly,
 } from './template-compiler-occurrence-target-plan.js';
+import {
+  executeTemplateCompilerOccurrenceTarget,
+  type TemplateCompilerOccurrenceTargetExecution,
+} from './template-compiler-occurrence-target-execution.js';
 import { TemplateCompilerPreWalkRemainderAuthority } from './template-compiler-prewalk-remainder.js';
 import { templateInstructionSemanticSignature } from './instruction-ir.js';
 import {
@@ -80,6 +93,7 @@ export const enum TemplateCompilerRootSiteCursorObservationAdmissionState {
 }
 
 export interface TemplateCompilerRootSiteCursorObservationCurrentness {
+  readonly authorityScope: 'historical-site-cursor-prefix';
   readonly exact: boolean;
   readonly forestMutationRevisionDelta: number;
   readonly globalOperationCountDelta: number;
@@ -148,6 +162,7 @@ export interface TemplateCompilerRootSiteCursorTranscriptObservation
   readonly occurrenceRowInstructionSignatures: readonly (readonly (readonly unknown[])[])[];
   readonly occurrenceSourcePostureCounts: Readonly<Record<string, number>>;
   readonly occurrenceCaptureDecisionCounts: Readonly<Record<string, number>>;
+  readonly occurrenceAttributeDispositionCounts: Readonly<Record<string, number>>;
   readonly occurrenceTextExpansionCount: number;
   readonly occurrenceTextExpansionOutputCount: number;
   readonly occurrencePrePlanEffectState: string | null;
@@ -159,6 +174,28 @@ export interface TemplateCompilerRootSiteCursorTranscriptObservation
   readonly occurrenceTargetPlanStableRowKeys: readonly string[];
   readonly occurrenceTargetPlanFreshRoot: boolean | null;
   readonly occurrenceTargetPlanDigest: string | null;
+  readonly occurrenceTargetAttachmentPresent: boolean;
+  readonly occurrenceTargetAttachmentContextCount: number;
+  readonly occurrenceTargetAttachmentStructuralPlanCount: number;
+  readonly occurrenceTargetAttachmentInvocationPhase: string | null;
+  readonly occurrenceTargetAttachmentConsumedPrePlanAuthority: boolean | null;
+  readonly occurrenceTargetAttachmentCurrentBeforeExecution: boolean | null;
+  readonly occurrenceTargetAttachmentCurrentAfterExecution: boolean | null;
+  readonly occurrenceTargetAttachmentForestMutationRevisionDelta: number;
+  readonly occurrenceTargetAttachmentGlobalOperationCountDelta: number;
+  readonly occurrenceTargetAttachmentLaneOperationCountDelta: number;
+  readonly occurrenceTargetExecutionPresent: boolean;
+  readonly occurrenceTargetExecutionOperationCount: number;
+  readonly occurrenceTargetExecutionOperationKindCounts: Readonly<Record<string, number>>;
+  readonly occurrenceTargetExecutionAttributeDispositionCount: number;
+  readonly occurrenceTargetExecutionTextExpansionCount: number;
+  readonly occurrenceTargetExecutionGeometryCount: number;
+  readonly occurrenceTargetExecutionInvocationPhase: string | null;
+  readonly occurrenceTargetExecutionSealed: boolean;
+  readonly occurrenceTargetExecutionForestMutationRevisionDelta: number;
+  readonly occurrenceTargetExecutionGlobalOperationCountDelta: number;
+  readonly occurrenceTargetExecutionLaneOperationCountDelta: number;
+  readonly occurrenceTargetExecutionDigest: string | null;
   readonly ledgerState: string;
   readonly spendDispositionCounts: Readonly<Record<string, number>>;
   readonly remainderKindCounts: Readonly<Record<string, number>>;
@@ -377,6 +414,30 @@ export function observeTemplateCompilerRootSiteCursor(
     ? null
     : allocateTemplateCompilerOccurrenceTargetPlan(occurrenceAssembly);
   const targetPlanAssembly = occurrenceTargetPlan?.assembly ?? null;
+  const attachmentStartForestMutationRevision = forest.mutationRevision;
+  const attachmentStartGlobalOperationCount = execution.sequence.readOperations().length;
+  const attachmentStartLaneOperationCount = execution.sequence.readLaneOperations(lane).length;
+  const occurrenceTargetAttachment = targetPlanAssembly == null
+    ? null
+    : execution.attachOccurrenceTargetPlan(targetPlanAssembly);
+  if (occurrenceTargetAttachment != null) execution.assertCoherent();
+  const attachmentEndForestMutationRevision = forest.mutationRevision;
+  const attachmentEndGlobalOperationCount = execution.sequence.readOperations().length;
+  const attachmentEndLaneOperationCount = execution.sequence.readLaneOperations(lane).length;
+  const attachmentInvocationPhase = occurrenceTargetAttachment == null
+    ? null
+    : execution.invocationPhase(lane);
+  const attachmentConsumedPrePlanAuthority = occurrenceTargetAttachment == null
+    ? null
+    : !completionReceipt!.isCurrent()
+      && !execution.siteExecutionEndpointIsCurrent(completionReceipt!.endpoint)
+      && !targetPlanAssembly!.isCurrent();
+  const attachmentCurrentBeforeExecution = occurrenceTargetAttachment?.isCurrent() ?? null;
+  const occurrenceTargetExecution = occurrenceTargetAttachment == null
+    ? null
+    : executeTemplateCompilerOccurrenceTarget(occurrenceTargetAttachment);
+  if (occurrenceTargetExecution != null) execution.seal();
+  const attachmentCurrentAfterExecution = occurrenceTargetAttachment?.isCurrent() ?? null;
   const eventKindCounts: Record<string, number> = {};
   const phaseKinds: string[] = [];
   const phaseCounts: Record<string, number> = {};
@@ -450,7 +511,9 @@ export function observeTemplateCompilerRootSiteCursor(
     occurrenceRowAssemblyReasonKinds: occurrenceRows?.reasons.map((reason) => reason.reasonKind) ?? [],
     occurrenceRowCount: occurrenceAssembly?.rows.length ?? 0,
     occurrenceStaticSiteCount: occurrenceAssembly?.staticSites.length ?? 0,
-    occurrenceMembershipCount: occurrenceAssembly?.occurrenceMemberships.length ?? 0,
+    occurrenceMembershipCount: occurrenceAssembly == null
+      ? 0
+      : 1 + occurrenceAssembly.occurrenceMemberships.length,
     occurrenceInstructionKindCounts: counts(
       occurrenceAssembly?.rows.flatMap((row) => row.instructionKinds) ?? [],
     ),
@@ -463,6 +526,9 @@ export function observeTemplateCompilerRootSiteCursor(
       ...(occurrenceAssembly?.staticSites.map((site) => site.sourcePosture) ?? []),
     ]),
     occurrenceCaptureDecisionCounts: counts(occurrenceAssembly?.captureSyntaxDecisionKinds ?? []),
+    occurrenceAttributeDispositionCounts: counts(
+      occurrenceAssembly?.attributeDispositions.map((disposition) => disposition.disposition) ?? [],
+    ),
     occurrenceTextExpansionCount: occurrenceAssembly?.textExpansions.length ?? 0,
     occurrenceTextExpansionOutputCount: occurrenceAssembly?.textExpansions.reduce(
       (count, expansion) => count + expansion.outputs.length,
@@ -482,6 +548,42 @@ export function observeTemplateCompilerRootSiteCursor(
       : targetPlanAssembly.rootCompiledTemplate.productHandle
         !== transcript.binding.compilation.compiledTemplate.compiledTemplate.productHandle,
     occurrenceTargetPlanDigest: targetPlanAssembly == null ? null : occurrenceTargetPlanDigest(targetPlanAssembly),
+    occurrenceTargetAttachmentPresent: occurrenceTargetAttachment != null,
+    occurrenceTargetAttachmentContextCount: occurrenceTargetAttachment?.contexts.length ?? 0,
+    occurrenceTargetAttachmentStructuralPlanCount:
+      occurrenceTargetAttachment?.structuralExecution.readTargetPlans().length ?? 0,
+    occurrenceTargetAttachmentInvocationPhase: attachmentInvocationPhase,
+    occurrenceTargetAttachmentConsumedPrePlanAuthority: attachmentConsumedPrePlanAuthority,
+    occurrenceTargetAttachmentCurrentBeforeExecution: attachmentCurrentBeforeExecution,
+    occurrenceTargetAttachmentCurrentAfterExecution: attachmentCurrentAfterExecution,
+    occurrenceTargetAttachmentForestMutationRevisionDelta:
+      attachmentEndForestMutationRevision - attachmentStartForestMutationRevision,
+    occurrenceTargetAttachmentGlobalOperationCountDelta:
+      attachmentEndGlobalOperationCount - attachmentStartGlobalOperationCount,
+    occurrenceTargetAttachmentLaneOperationCountDelta:
+      attachmentEndLaneOperationCount - attachmentStartLaneOperationCount,
+    occurrenceTargetExecutionPresent: occurrenceTargetExecution != null,
+    occurrenceTargetExecutionOperationCount: occurrenceTargetExecution?.operations.length ?? 0,
+    occurrenceTargetExecutionOperationKindCounts: counts(
+      occurrenceTargetExecution?.operations.map((operation) => operation.operationKind) ?? [],
+    ),
+    occurrenceTargetExecutionAttributeDispositionCount:
+      occurrenceTargetExecution?.attributeDispositions.length ?? 0,
+    occurrenceTargetExecutionTextExpansionCount: occurrenceTargetExecution?.textExpansions.length ?? 0,
+    occurrenceTargetExecutionGeometryCount: occurrenceTargetExecution?.targetGeometries.length ?? 0,
+    occurrenceTargetExecutionInvocationPhase: occurrenceTargetExecution == null
+      ? null
+      : execution.invocationPhase(lane),
+    occurrenceTargetExecutionSealed: occurrenceTargetExecution != null && execution.isSealed,
+    occurrenceTargetExecutionForestMutationRevisionDelta:
+      forest.mutationRevision - attachmentEndForestMutationRevision,
+    occurrenceTargetExecutionGlobalOperationCountDelta:
+      execution.sequence.readOperations().length - attachmentEndGlobalOperationCount,
+    occurrenceTargetExecutionLaneOperationCountDelta:
+      execution.sequence.readLaneOperations(lane).length - attachmentEndLaneOperationCount,
+    occurrenceTargetExecutionDigest: occurrenceTargetExecution == null
+      ? null
+      : occurrenceTargetExecutionDigest(occurrenceTargetExecution),
     ledgerState: transcript.ledger.state,
     spendDispositionCounts: counts(transcript.ledger.spends.map((spend) => spend.disposition)),
     remainderKindCounts: counts(
@@ -499,6 +601,7 @@ export function observeTemplateCompilerRootSiteCursor(
     nextTranscriptOrdinal: transcript.nextTranscriptOrdinal,
     nextSiteEventOrdinal: transcript.nextSiteEventOrdinal,
     currentness: {
+      authorityScope: 'historical-site-cursor-prefix',
       exact: transcript.endForestMutationRevision === transcript.expectedEndForestMutationRevision
         && transcript.endGlobalOperationCount === transcript.expectedEndGlobalOperationCount
         && transcript.endLaneOperationCount === transcript.expectedEndLaneOperationCount,
@@ -520,12 +623,21 @@ function occurrenceRowDigest(assembly: TemplateCompilerOccurrenceRowAssembly): s
       assembly.rootMembership.stableSlotKey,
       assembly.rootMembership.compilerCarrier.occurrenceKey,
       assembly.rootMembership.compilerContent.occurrenceKey,
+      assembly.rootMembership.authoredNode?.productHandle ?? null,
     ],
     assembly.occurrenceMemberships.map((membership) => [
       membership.stableSlotKey,
       membership.occurrence.occurrenceKey,
       membership.authoredNode?.productHandle ?? null,
       membership.sourcePosture,
+    ]),
+    assembly.attributeDispositions.map((disposition) => [
+      disposition.stableSlotKey,
+      disposition.attribute.occurrenceKey,
+      disposition.disposition,
+      disposition.originalForestOrdinal,
+      disposition.simulatedLiveOrdinal,
+      disposition.causeHandles,
     ]),
     assembly.rows.map((row) => [
       row.stableSlotKey,
@@ -591,6 +703,112 @@ function occurrenceTargetPlanDigest(assembly: TemplateCompilerOccurrenceTargetPl
     ]),
   ]);
   return `sha256:${createHash('sha256').update(encoded).digest('hex')}`;
+}
+
+function occurrenceTargetExecutionDigest(execution: TemplateCompilerOccurrenceTargetExecution): string {
+  const structural = execution.attachment.structuralExecution;
+  const encoded = JSON.stringify([
+    execution.operations.map((operation) => [
+      operation.operationKey,
+      operation.operationKind,
+      operation.executionMechanism,
+      operation.target instanceof TemplateCompilerOccurrenceOperationTarget
+        ? operation.target.occurrence.occurrenceKey
+        : operation.target.targetKind,
+      operation.causeHandles,
+      operation.sourceAddressHandle,
+      operation.startForestMutationRevision,
+      operation.endForestMutationRevision,
+      operation.mutationBatch.occurrenceGenerationReservations.map(generationProjection),
+      operation.mutationBatch.topologyMutations.map((mutation) =>
+        mutation instanceof TemplateCompilerAttributeDetachmentMutation
+          ? ['attribute', mutation.eventOrdinal, mutation.attribute.occurrenceKey,
+              mutation.previousOwner.occurrenceKey, mutation.previousOrdinal]
+          : ['node', mutation.eventOrdinal, mutation.node.occurrenceKey,
+              mutation.previousParent?.occurrenceKey ?? null, mutation.previousEdgeKind, mutation.previousOrdinal]
+      ),
+    ]),
+    execution.attributeDispositions.map((disposition) => [
+      disposition.attribute.occurrenceKey,
+      disposition.owner.occurrenceKey,
+      disposition.ownerOrdinal,
+      disposition.eventOrdinal,
+      disposition.causeHandles,
+    ]),
+    execution.textExpansions.map((expansion) => [
+      expansion.input.occurrenceKey,
+      expansion.sourceParent.occurrenceKey,
+      expansion.sourceOrdinal,
+      expansion.outputs.map((output) => [
+        output.occurrenceKey,
+        output.text,
+        generationProjection(output.generation),
+      ]),
+      expansion.causeHandles,
+    ]),
+    execution.targetGeometries.map((geometry) => [
+      geometry.geometryKind,
+      geometry.row.stableSlotKey,
+      geometry.marker.occurrenceKey,
+      generationProjection(geometry.marker.generation),
+      geometry.logicalTarget.occurrenceKey,
+    ]),
+    execution.attachment.execution.forest.readRoots().map(occurrenceProjection),
+    [
+      execution.closure.forestMutationRevision,
+      execution.closure.globalOperationCount,
+      execution.closure.laneOperationCount,
+      structural.readConsumedNodeDispositions().length,
+      structural.readInputNodeTransfers().length,
+    ],
+  ]);
+  return `sha256:${createHash('sha256').update(encoded).digest('hex')}`;
+}
+
+function generationProjection(
+  generation: TemplateCompilerNodeOccurrence['generation'],
+): readonly unknown[] | null {
+  return generation == null ? null : [
+    generation.contextKey,
+    generation.operationKey,
+    generation.batchOperationKey,
+    generation.role,
+    generation.causeHandles,
+    generation.outputOrdinal,
+  ];
+}
+
+function occurrenceProjection(node: TemplateCompilerNodeOccurrence): readonly unknown[] {
+  const children = node.readChildren().map(occurrenceProjection);
+  if (node instanceof TemplateCompilerFragmentOccurrence) {
+    return ['fragment', node.occurrenceKey, generationProjection(node.generation), children];
+  }
+  if (node instanceof TemplateCompilerElementOccurrence) {
+    return [
+      'element',
+      node.occurrenceKey,
+      node.tagName,
+      node.namespace,
+      generationProjection(node.generation),
+      node.readAttributes().map((attribute) => [
+        attribute.occurrenceKey,
+        attribute.name,
+        attribute.namespaceUri,
+        attribute.prefix,
+        attribute.value,
+        generationProjection(attribute.generation),
+      ]),
+      children,
+      node.templateContent == null ? null : occurrenceProjection(node.templateContent),
+    ];
+  }
+  if (node instanceof TemplateCompilerTextOccurrence) {
+    return ['text', node.occurrenceKey, node.text, generationProjection(node.generation)];
+  }
+  if (node instanceof TemplateCompilerCommentOccurrence) {
+    return ['comment', node.occurrenceKey, node.text, node.semanticKind, generationProjection(node.generation)];
+  }
+  return ['unknown', node.occurrenceKey, node.nodeKind, generationProjection(node.generation), children];
 }
 
 function unavailable(

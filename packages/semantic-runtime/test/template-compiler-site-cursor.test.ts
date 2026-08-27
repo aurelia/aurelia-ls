@@ -15,12 +15,20 @@ import {
   TemplateCompilerReadView,
   TemplateCompilerWorldAuthority,
 } from '../src/template/compiler-read-view.js';
-import { TemplateCompilerExecutionSession } from '../src/template/template-compiler-execution.js';
+import {
+  TemplateCompilerAttributeDetachmentMutation,
+  TemplateCompilerExecutionSession,
+  TemplateCompilerInvocationPhase,
+  TemplateCompilerNodeDetachmentMutation,
+  TemplateCompilerOccurrenceOperationTarget,
+  TemplateCompilerOperationKind,
+} from '../src/template/template-compiler-execution.js';
 import { executeTemplateCompilerHookBootstrap } from '../src/template/template-compiler-hook-bootstrap.js';
 import { executeTemplateCompilerLocalExtraction } from '../src/template/template-compiler-local-extraction.js';
 import {
   TemplateCompilerLiveAttributeCompletion,
   TemplateCompilerLiveAttributeSourceKind,
+  TemplateCompilerLiveAttributeTargetLane,
 } from '../src/template/template-compiler-live-attribute-assembly.js';
 import { TemplateCompilerLiveAttributeDisposition } from '../src/template/template-compiler-live-attribute-owner.js';
 import { TemplateCompilerLiveAllocationSnapshotState } from '../src/template/template-compiler-live-allocation.js';
@@ -38,8 +46,12 @@ import {
 } from '../src/template/template-compiler-normalized-site-index.js';
 import {
   TemplateCompilerAttributeOccurrence,
+  TemplateCompilerCommentOccurrence,
   TemplateCompilerElementOccurrence,
+  TemplateCompilerFragmentOccurrence,
+  TemplateCompilerGeneratedOccurrenceRole,
   TemplateCompilerOccurrenceForest,
+  TemplateCompilerTextOccurrence,
 } from '../src/template/template-compiler-occurrence.js';
 import {
   TemplateCompilerPreWalkRemainderAuthority,
@@ -81,6 +93,7 @@ import {
   TemplateCompilerOccurrenceTargetPlanReasonKind,
   TemplateCompilerOccurrenceTargetPlanState,
 } from '../src/template/template-compiler-occurrence-target-plan.js';
+import { executeTemplateCompilerOccurrenceTarget } from '../src/template/template-compiler-occurrence-target-execution.js';
 import {
   TemplateCompilerTargetContextState,
   TemplateCompilerTargetPlan,
@@ -98,6 +111,9 @@ import type {
 } from '../src/template/template-compilation-project-pass.js';
 
 const packageRoot = path.resolve(fileURLToPath(new URL('..', import.meta.url)));
+type CursorCandidateRun = ReturnType<
+  Awaited<ReturnType<typeof createSemanticRuntime>>['computationLifecycle']['begin']
+>;
 
 describe('template compiler root site cursor', () => {
   let fixture: CursorFixture;
@@ -518,7 +534,10 @@ describe('template compiler root site cursor', () => {
       expect(targetAssembly.targetPlan.root.projectedTargetCount, name).toBe(rowAssembly.rows.length);
       expect(targetAssembly.targetPlan.root.exactGeometryPrefixEnd, name).toBeNull();
       expect(targetAssembly.targetPlan.root.readOccurrenceMemberships().map((membership) => membership.occurrence), name)
-        .toEqual(rowAssembly.occurrenceMemberships.map((membership) => membership.occurrence));
+        .toEqual([
+          rowAssembly.rootMembership.compilerCarrier,
+          ...rowAssembly.occurrenceMemberships.map((membership) => membership.occurrence),
+        ]);
       expect(targetAssembly.rootCompiledTemplate.productHandle, name)
         .not.toBe(rowAssembly.receipt.transcript.binding.compilation.compiledTemplate.compiledTemplate.productHandle);
       expect(targetAssembly.targetAllocation.productReservations, name).toEqual([targetAssembly.rootReservation]);
@@ -1082,6 +1101,393 @@ describe('template compiler root site cursor', () => {
       attributeOrdinal.mockRestore();
     }
   }, 30_000);
+
+  test('atomically attaches receipt-bound occurrence plans without using the legacy gate', () => {
+    for (const name of [
+      'cursor-as-element-empty',
+      'cursor-empty',
+      'cursor-live-nonsingular',
+      'cursor-progression',
+    ]) {
+      const run = fixture.freshRun(name);
+      const result = run.execute();
+      const receipt = result.completion?.receipt;
+      if (receipt == null) throw new Error(`Expected fresh completion receipt for '${name}'.`);
+      const rows = assembleTemplateCompilerOrdinaryRootRows(receipt).assembly;
+      if (rows == null) throw new Error(`Expected fresh row assembly for '${name}'.`);
+      const target = allocateTemplateCompilerOccurrenceTargetPlan(rows).assembly;
+      if (target == null) throw new Error(`Expected fresh target-plan assembly for '${name}'.`);
+      const startRevision = run.binding.forest.mutationRevision;
+
+      const attachment = run.binding.execution.attachOccurrenceTargetPlan(target);
+
+      expect(attachment.isModuleConstructed(), name).toBe(true);
+      expect(attachment.isCurrent(), name).toBe(true);
+      expect(attachment.execution, name).toBe(run.binding.execution);
+      expect(attachment.assembly, name).toBe(target);
+      expect(attachment.structuralExecution, name).toBe(run.binding.execution.structuralExecution);
+      expect(attachment.contexts, name).toHaveLength(1);
+      expect(attachment.contexts[0]?.targetContext, name).toBe(target.targetPlan.root);
+      expect(attachment.structuralExecution.readContextStructure(target.targetPlan.root), name).toMatchObject({
+        compilerCarrier: run.binding.lane.compilerCarrier,
+        compilerContent: run.binding.lane.compilerContent,
+      });
+      expect(run.binding.lane.targetPlan, name).toBe(target.targetPlan);
+      expect(run.binding.execution.invocationPhase(run.binding.lane), name).toBe('target-execution');
+      expect(run.binding.forest.mutationRevision, name).toBe(startRevision);
+      expect(receipt.isCurrent(), name).toBe(false);
+      expect(target.isCurrent(), name).toBe(false);
+      expect(run.binding.execution.attachOccurrenceTargetPlan(target), name).toBe(attachment);
+      expect(() => run.binding.execution.attachTargetPlan(run.binding.lane, target.targetPlan), name)
+        .toThrow(/nominal site completion authority/u);
+      expect(() => run.binding.execution.closeOccurrenceTargetExecution(attachment), name)
+        .toThrow(/incomplete structural disposition coverage/u);
+      expect(() => run.binding.execution.seal(), name)
+        .toThrow(/has not closed occurrence target execution/u);
+      run.binding.execution.assertCoherent();
+    }
+  });
+
+  test('refuses target execution when the attached forest frontier changes out of band', () => {
+    const run = fixture.freshRun('cursor-progression');
+    const receipt = run.execute().completion?.receipt;
+    if (receipt == null) throw new Error('Expected fresh completion receipt.');
+    const rows = assembleTemplateCompilerOrdinaryRootRows(receipt).assembly;
+    if (rows == null) throw new Error('Expected fresh row assembly.');
+    const target = allocateTemplateCompilerOccurrenceTargetPlan(rows).assembly;
+    if (target == null) throw new Error('Expected exact target plan.');
+    const attachment = run.binding.execution.attachOccurrenceTargetPlan(target);
+    const context = attachment.contexts[0]!;
+    const attribute = run.binding.forest.readAttributes()[0]!;
+    const startOperations = run.binding.execution.sequence.readOperations().length;
+
+    run.binding.forest.rewriteAttributeValue(attribute, `${attribute.value}:out-of-band`);
+
+    expect(attachment.isCurrent()).toBe(false);
+    expect(() => executeTemplateCompilerOccurrenceTarget(attachment))
+      .toThrow(/exact current attached root context/u);
+    expect(run.binding.execution.sequence.readOperations()).toHaveLength(startOperations);
+    expect(run.binding.execution.sequence.readContextOperations(context)).toEqual([]);
+    expect(attachment.structuralExecution.readTargetGeometries(context.targetContext)).toEqual([]);
+    expect(attachment.structuralExecution.readConsumedAttributeDispositions(context.targetContext)).toEqual([]);
+  });
+
+  test('refuses target execution after its candidate allocation authority is revoked', () => {
+    const candidate = fixture.runtime.computationLifecycle.begin({
+      kind: 'template-compiler-target-revocation-test',
+      reconciliationKey: fixture.browserRun.locus.reconciliationKey,
+      summary: 'Disposable target-allocation authority.',
+    });
+    let aborted = false;
+    try {
+      const run = fixture.freshRunInCandidate('cursor-empty', candidate);
+      const receipt = run.execute().completion?.receipt;
+      if (receipt == null) throw new Error('Expected fresh completion receipt.');
+      const rows = assembleTemplateCompilerOrdinaryRootRows(receipt).assembly;
+      if (rows == null) throw new Error('Expected fresh row assembly.');
+      const target = allocateTemplateCompilerOccurrenceTargetPlan(rows).assembly;
+      if (target == null) throw new Error('Expected exact target plan.');
+      const attachment = run.binding.execution.attachOccurrenceTargetPlan(target);
+      const startRevision = run.binding.forest.mutationRevision;
+      const startOperationCount = run.binding.execution.sequence.readOperations().length;
+
+      candidate.abort();
+      aborted = true;
+
+      expect(attachment.isCurrent()).toBe(false);
+      expect(() => executeTemplateCompilerOccurrenceTarget(attachment))
+        .toThrow(/exact current attached root context/u);
+      expect(run.binding.forest.mutationRevision).toBe(startRevision);
+      expect(run.binding.execution.sequence.readOperations()).toHaveLength(startOperationCount);
+    } finally {
+      if (!aborted) candidate.abort();
+    }
+  });
+
+  test('refuses sealing after a closed target loses candidate allocation authority', () => {
+    const candidate = fixture.runtime.computationLifecycle.begin({
+      kind: 'template-compiler-target-seal-revocation-test',
+      reconciliationKey: fixture.browserRun.locus.reconciliationKey,
+      summary: 'Disposable closed target-allocation authority.',
+    });
+    let aborted = false;
+    try {
+      const run = fixture.freshRunInCandidate('cursor-authored-carrier-static', candidate);
+      const receipt = run.execute().completion?.receipt;
+      if (receipt == null) throw new Error('Expected fresh completion receipt.');
+      const rows = assembleTemplateCompilerOrdinaryRootRows(receipt).assembly;
+      if (rows == null) throw new Error('Expected fresh row assembly.');
+      const target = allocateTemplateCompilerOccurrenceTargetPlan(rows).assembly;
+      if (target == null) throw new Error('Expected exact target plan.');
+      const attachment = run.binding.execution.attachOccurrenceTargetPlan(target);
+      executeTemplateCompilerOccurrenceTarget(attachment);
+
+      candidate.abort();
+      aborted = true;
+
+      expect(() => run.binding.execution.seal()).toThrow(/lost terminal allocation authority/u);
+    } finally {
+      if (!aborted) candidate.abort();
+    }
+  });
+
+  test('admits an authored template carrier as the first occurrence membership', () => {
+    for (const [name, expectedMembershipCount] of [
+      ['cursor-authored-carrier-empty', 1],
+      ['cursor-authored-carrier-static', 2],
+    ] as const) {
+      const run = fixture.freshRun(name);
+      const receipt = run.execute().completion?.receipt;
+      if (receipt == null) throw new Error(`Expected fresh completion receipt for '${name}'.`);
+      const rows = assembleTemplateCompilerOrdinaryRootRows(receipt).assembly;
+      if (rows == null) throw new Error(`Expected fresh row assembly for '${name}'.`);
+      const target = allocateTemplateCompilerOccurrenceTargetPlan(rows).assembly;
+      if (target == null) throw new Error(`Expected exact target plan for '${name}'.`);
+
+      expect(rows.rootMembership.authoredNode, name).not.toBeNull();
+      expect(rows.rows, name).toEqual([]);
+      expect(target.targetPlan.root.readOccurrenceMemberships(), name).toHaveLength(expectedMembershipCount);
+      expect(target.targetPlan.root.readOccurrenceMemberships()[0]?.occurrence, name)
+        .toBe(run.binding.lane.compilerCarrier);
+      expect(target.targetPlan.root.readOccurrenceMemberships()[0]?.authoredNode, name)
+        .toBe(rows.rootMembership.authoredNode);
+      if (name === 'cursor-authored-carrier-static') {
+        const child = target.targetPlan.root.readOccurrenceMemberships()[1];
+        expect(child?.occurrence).toBe(rows.occurrenceMemberships[0]?.occurrence);
+        expect(child?.authoredNode).toBe(rows.occurrenceMemberships[0]?.authoredNode);
+      }
+
+      const attachment = run.binding.execution.attachOccurrenceTargetPlan(target);
+      const result = executeTemplateCompilerOccurrenceTarget(attachment);
+      expect(result.operations, name).toEqual([]);
+      expect(result.targetGeometries, name).toEqual([]);
+      if (name === 'cursor-authored-carrier-static') {
+        expect(run.binding.lane.compilerContent.readChildren()[0]).toMatchObject({ tagName: 'div' });
+        expect((run.binding.lane.compilerContent.readChildren()[0] as TemplateCompilerElementOccurrence)
+          .readAttributes()).toMatchObject([{ name: 'title', value: 'static' }]);
+      }
+      expect(run.binding.execution.seal(), name).toBe(run.binding.execution.sequence);
+    }
+  });
+
+  test('refuses sealing after a closed occurrence target advances out of band', () => {
+    const run = fixture.freshRun('cursor-authored-carrier-static');
+    const receipt = run.execute().completion?.receipt;
+    if (receipt == null) throw new Error('Expected fresh completion receipt.');
+    const rows = assembleTemplateCompilerOrdinaryRootRows(receipt).assembly;
+    if (rows == null) throw new Error('Expected fresh row assembly.');
+    const target = allocateTemplateCompilerOccurrenceTargetPlan(rows).assembly;
+    if (target == null) throw new Error('Expected exact target plan.');
+    const attachment = run.binding.execution.attachOccurrenceTargetPlan(target);
+    executeTemplateCompilerOccurrenceTarget(attachment);
+    const retained = run.binding.forest.readAttributes()[0]!;
+
+    run.binding.forest.rewriteAttributeValue(retained, 'changed-after-close');
+
+    expect(() => run.binding.execution.seal()).toThrow(/advanced after occurrence target closure/u);
+  });
+
+  test('executes and closes the complete HE-free ordinary-root substrate in compiler site order', () => {
+    for (const name of [
+      'cursor-as-element-empty',
+      'cursor-comment-shield',
+      'cursor-empty',
+      'cursor-foster',
+      'cursor-live-duplicate',
+      'cursor-live-multi-binding',
+      'cursor-live-nonsingular',
+      'cursor-progression',
+      'cursor-row-interleave',
+      'cursor-slot-inert',
+      'cursor-slot-valid',
+      'cursor-ten-hole',
+      'cursor-wide',
+    ]) {
+      const run = fixture.freshRun(name);
+      const cursor = run.execute();
+      const receipt = cursor.completion?.receipt;
+      if (receipt == null) throw new Error(`Expected fresh completion receipt for '${name}'.`);
+      const rows = assembleTemplateCompilerOrdinaryRootRows(receipt).assembly;
+      if (rows == null) throw new Error(`Expected fresh row assembly for '${name}'.`);
+      const target = allocateTemplateCompilerOccurrenceTargetPlan(rows).assembly;
+      if (target == null) throw new Error(`Expected exact target plan for '${name}'.`);
+      const attachment = run.binding.execution.attachOccurrenceTargetPlan(target);
+
+      const result = executeTemplateCompilerOccurrenceTarget(attachment);
+      const removedCount = rows.attributeDispositions.filter((disposition) =>
+        disposition.disposition === TemplateCompilerLiveAttributeDisposition.Removed
+      ).length;
+      const elementRowCount = rows.rows.filter((row) => row.site.siteKind === 'element').length;
+
+      expect(result.isModuleConstructed(), name).toBe(true);
+      expect(attachment.isCurrent(), name).toBe(false);
+      expect(result.attachment, name).toBe(attachment);
+      expect(result.attributeDispositions, name).toHaveLength(removedCount);
+      expect(result.textExpansions, name).toHaveLength(rows.textExpansions.length);
+      expect(result.targetGeometries, name).toHaveLength(rows.rows.length);
+      expect(result.operations, name).toHaveLength(removedCount + elementRowCount + rows.textExpansions.length);
+      expect(result.operations.filter((operation) =>
+        operation.operationKind === TemplateCompilerOperationKind.AttributeDisposition
+      ), name).toHaveLength(removedCount);
+      expect(result.operations.filter((operation) =>
+        operation.operationKind === TemplateCompilerOperationKind.HydrationTargetCreation
+      ), name).toHaveLength(elementRowCount);
+      expect(result.operations.filter((operation) =>
+        operation.operationKind === TemplateCompilerOperationKind.TextInterpolationExpansion
+      ), name).toHaveLength(rows.textExpansions.length);
+      expect(result.operations.every((operation, ordinal) =>
+        ordinal === 0
+          ? operation.startForestMutationRevision === attachment.forestMutationRevision
+          : operation.startForestMutationRevision === result.operations[ordinal - 1]!.endForestMutationRevision
+      ), name).toBe(true);
+      expect(result.operations.at(-1)?.endForestMutationRevision ?? attachment.forestMutationRevision, name)
+        .toBe(result.closure.forestMutationRevision);
+      for (const operation of result.operations) {
+        if (!(operation.target instanceof TemplateCompilerOccurrenceOperationTarget)) {
+          throw new Error(`Expected occurrence target for '${operation.operationKey}'.`);
+        }
+        if (operation.operationKind === TemplateCompilerOperationKind.AttributeDisposition) {
+          expect(operation.mutationBatch.topologyMutations, operation.operationKey).toEqual([
+            expect.any(TemplateCompilerAttributeDetachmentMutation),
+          ]);
+          expect(operation.mutationBatch.attributeDetachmentMutations[0]?.attribute)
+            .toBe(operation.target.occurrence);
+          expect(operation.mutationBatch.occurrenceGenerationReservations).toEqual([]);
+        } else if (operation.operationKind === TemplateCompilerOperationKind.HydrationTargetCreation) {
+          expect(operation.mutationBatch.topologyMutations, operation.operationKey).toEqual([]);
+          expect(operation.mutationBatch.occurrenceGenerationReservations, operation.operationKey).toMatchObject([{
+            role: TemplateCompilerGeneratedOccurrenceRole.CompilerMarker,
+            operationKey: operation.operationKey,
+            batchOperationKey: operation.operationKey,
+            outputOrdinal: 0,
+          }]);
+        } else if (operation.operationKind === TemplateCompilerOperationKind.TextInterpolationExpansion) {
+          const expansion = rows.textExpansions.find((candidate) =>
+            operation.target instanceof TemplateCompilerOccurrenceOperationTarget
+            && candidate.site.event.text === operation.target.occurrence
+          )!;
+          const holeCount = expansion.outputs.filter((output) => output.outputKind === 'hole').length;
+          expect(operation.mutationBatch.topologyMutations, operation.operationKey).toEqual([
+            expect.any(TemplateCompilerNodeDetachmentMutation),
+          ]);
+          expect(operation.mutationBatch.nodeDetachmentMutations[0]?.node).toBe(expansion.site.event.text);
+          expect(operation.mutationBatch.occurrenceGenerationReservations, operation.operationKey)
+            .toHaveLength(expansion.outputs.length + holeCount);
+          expect(operation.mutationBatch.occurrenceGenerationReservations.filter((generation) =>
+            generation.role === TemplateCompilerGeneratedOccurrenceRole.BindingPlaceholder
+          )).toHaveLength(holeCount);
+          expect(operation.mutationBatch.occurrenceGenerationReservations.filter((generation) =>
+            generation.role === TemplateCompilerGeneratedOccurrenceRole.CompilerMarker
+          )).toHaveLength(holeCount);
+        }
+      }
+      for (const mapping of target.rowMappings.filter((candidate) => candidate.draft.textOutput != null)) {
+        const expansion = rows.textExpansions.find((candidate) => candidate.site === mapping.draft.site)!;
+        const geometry = attachment.structuralExecution.readTargetGeometry(mapping.row);
+        if (geometry?.geometryKind !== 'marker') throw new Error(`Expected text marker geometry for '${name}'.`);
+        const rowCauses = mapping.row.instructions.map((instruction) => instruction.productHandle);
+        const batchOperationKey = `${attachment.contexts[0]!.localKey}:${expansion.stableSlotKey}`;
+        expect(geometry.target.generation, mapping.row.localKey).toMatchObject({
+          operationKey: mapping.row.localKey,
+          batchOperationKey,
+          outputOrdinal: 0,
+          causeHandles: rowCauses,
+        });
+        expect(geometry.marker.generation, mapping.row.localKey).toMatchObject({
+          operationKey: mapping.row.localKey,
+          batchOperationKey,
+          outputOrdinal: 0,
+          causeHandles: rowCauses,
+        });
+      }
+      expect(run.binding.execution.invocationPhase(run.binding.lane), name)
+        .toBe(TemplateCompilerInvocationPhase.TargetClosed);
+      expect(executeTemplateCompilerOccurrenceTarget(attachment), name).toBe(result);
+      expect(run.binding.execution.seal(), name).toBe(run.binding.execution.sequence);
+      run.binding.execution.assertCoherent();
+
+      if (name === 'cursor-as-element-empty') {
+        expect(result.targetGeometries).toEqual([]);
+        expect(result.attributeDispositions).toHaveLength(1);
+        expect(result.attributeDispositions[0]?.attribute.name).toBe('as-element');
+        expect(result.attributeDispositions[0]?.attribute.owner).toBeNull();
+      }
+      if (name === 'cursor-slot-inert') {
+        expect(result.operations).toEqual([]);
+        expect(result.targetGeometries).toEqual([]);
+      }
+      if (name === 'cursor-live-multi-binding') {
+        const customAttribute = rows.attributeDispositions.find((disposition) =>
+          disposition.contribution.targetLane === TemplateCompilerLiveAttributeTargetLane.CustomAttribute
+        );
+        const wrapper = customAttribute?.site.owner.instructionStaging.hydrateAttributes[0] ?? null;
+        expect(customAttribute).not.toBeNull();
+        expect(wrapper).not.toBeNull();
+        expect(customAttribute?.causeHandles[0]).toBe(customAttribute?.attribute.inputReference?.productHandle);
+        expect(customAttribute?.causeHandles).toContain(wrapper?.productHandle);
+        expect(result.attributeDispositions.find((disposition) =>
+          disposition.attribute === customAttribute?.attribute
+        )?.causeHandles).toEqual(customAttribute?.causeHandles);
+      }
+      if (name === 'cursor-live-duplicate') {
+        const structure = attachment.structuralExecution.readContextStructure(target.targetPlan.root)!;
+        expect(occurrenceShape(structure.compilerContent)).toEqual([
+          'comment:au',
+          ['element:div', [], []],
+          'text:\n',
+          'comment:au',
+          ['element:div', [], []],
+          'text:\n',
+        ]);
+      }
+      if (name === 'cursor-live-nonsingular') {
+        expect(new Set(result.targetGeometries.map((geometry) => geometry.logicalTarget)).size).toBe(2);
+        expect(result.targetGeometries.map((geometry) => geometry.row.occurrence))
+          .toEqual(result.targetGeometries.map((geometry) => geometry.logicalTarget));
+      }
+      if (name === 'cursor-row-interleave') {
+        const structure = attachment.structuralExecution.readContextStructure(target.targetPlan.root)!;
+        expect(occurrenceShape(structure.compilerContent)).toEqual([
+          'text:before ',
+          'comment:au',
+          'text: ',
+          'text: middle ',
+          'comment:au',
+          'text: ',
+          'text: end',
+          'comment:au',
+          ['element:div', [], [
+            'text:inner ',
+            'comment:au',
+            'text: ',
+            'text: tail',
+          ]],
+          'comment:au',
+          ['element:span', [], []],
+          'text:after ',
+          'comment:au',
+          'text: ',
+          'text: done\n',
+        ]);
+      }
+      if (name === 'cursor-ten-hole') {
+        const structure = attachment.structuralExecution.readContextStructure(target.targetPlan.root)!;
+        const paragraph = structure.compilerContent.readChildren().find((node) =>
+          node instanceof TemplateCompilerElementOccurrence && node.tagName === 'p'
+        );
+        if (!(paragraph instanceof TemplateCompilerElementOccurrence)) {
+          throw new Error('Expected ten-hole paragraph.');
+        }
+        expect(rows.rows).toHaveLength(10);
+        expect(rows.textExpansions).toHaveLength(1);
+        expect(result.operations).toHaveLength(1);
+        expect(occurrenceShape(paragraph)).toEqual(Array.from(
+          { length: 10 },
+          () => ['comment:au', 'text: '],
+        ).flat());
+      }
+    }
+  }, 30_000);
 });
 
 class CursorRun {
@@ -1166,6 +1572,21 @@ class CursorFixture {
     );
   }
 
+  freshRunInCandidate(
+    name: string,
+    candidate: CursorCandidateRun,
+  ): CursorRun {
+    const compilation = this.compilation(name);
+    const family = this.frontDoor.familyForOwner(compilation.familyOwnerHandle);
+    if (family == null) throw new Error(`Expected current cursor family '${name}'.`);
+    const ordinal = this.freshRunOrdinal++;
+    return new CursorRun(
+      this,
+      compilation,
+      this.bind(compilation, family, `cursor-browser:${name}:candidate:${ordinal}`, null, candidate),
+    );
+  }
+
   transcriptWithUnledgeredRewrite(name: string, attributeName: string): TemplateCompilerSiteCursorTranscript {
     const compilation = this.compilation(name);
     const family = this.frontDoor.familyForOwner(compilation.familyOwnerHandle);
@@ -1193,8 +1614,9 @@ class CursorFixture {
     family: TemplateCompilationFamilyFrontDoorEmission,
     localKey: string,
     prepareForest: ((forest: TemplateCompilerOccurrenceForest) => void) | null = null,
+    publication: CursorCandidateRun = this.browserRun,
   ): TemplateCompilerSiteInvocationBinding {
-    const browserEmission = this.materializeBrowser(compilation, localKey);
+    const browserEmission = this.materializeBrowser(compilation, localKey, publication);
     const forest = TemplateCompilerOccurrenceForest.fromBrowserEffective(browserEmission);
     prepareForest?.(forest);
     const execution = TemplateCompilerExecutionSession.createForForest(localKey, forest);
@@ -1203,7 +1625,7 @@ class CursorFixture {
       execution,
       lane,
       compilerWorld: compilation.compilerWorld,
-      executionOpenSeamHandle: this.browserRun.handles.openSeam(`${localKey}:hook-open`),
+      executionOpenSeamHandle: publication.handles.openSeam(`${localKey}:hook-open`),
     });
     const local = executeTemplateCompilerLocalExtraction({
       execution,
@@ -1245,13 +1667,14 @@ class CursorFixture {
   private materializeBrowser(
     compilation: TemplateResourceCompilationEmission,
     localKey: string,
+    publication: CursorCandidateRun = this.browserRun,
   ): BrowserEffectiveTemplateEmission {
     const markup = compilation.unit.templateSource.markup;
     if (markup == null || compilation.html.draft == null) {
       throw new Error(`Cursor compilation '${compilation.definition.name}' has no retained markup/draft.`);
     }
     const browser = parseBrowserTemplateFragmentDraft(markup);
-    return new BrowserEffectiveTemplateMaterializer(this.browserRun).materialize({
+    return new BrowserEffectiveTemplateMaterializer(publication).materialize({
       localKey,
       sourceRevision: compilation.definition.template?.authoredSourceRevision ?? `test:${localKey}`,
       templateSource: compilation.unit.templateSource,
@@ -1274,6 +1697,23 @@ function requireTranscript(result: TemplateCompilerSiteCursorResult): TemplateCo
     throw new Error(`Expected cursor transcript: ${result.reasons.map((reason) => reason.summary).join(' ')}`);
   }
   return result.transcript;
+}
+
+function occurrenceShape(
+  node: TemplateCompilerFragmentOccurrence | TemplateCompilerElementOccurrence,
+): readonly unknown[] {
+  return node.readChildren().map((child): unknown => {
+    if (child instanceof TemplateCompilerCommentOccurrence) return `comment:${child.text}`;
+    if (child instanceof TemplateCompilerTextOccurrence) return `text:${child.text}`;
+    if (child instanceof TemplateCompilerElementOccurrence) {
+      return [
+        `element:${child.tagName}`,
+        child.readAttributes().map((attribute) => `${attribute.name}=${attribute.value}`),
+        occurrenceShape(child),
+      ];
+    }
+    return ['fragment', occurrenceShape(child)];
+  });
 }
 
 type TemplateCompilerSiteCursorEvent = TemplateCompilerSiteCursorTranscript['events'][number];

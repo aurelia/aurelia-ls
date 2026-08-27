@@ -216,37 +216,51 @@ export class TemplateCompilerForestMutationAuthority {
   /** Structural mechanics borrow the exact pending execution batch, or an explicit normalized replay batch. */
   createStructuralGeneration(
     contextKey: string,
-    operationKey: string,
+    batchOperationKey: string,
     role: TemplateCompilerGeneratedOccurrenceRole,
-    causeHandles: readonly ClaimEndpointHandle[],
+    batchCauseHandles: readonly ClaimEndpointHandle[],
     outputOrdinal: number,
+    generationOperationKey: string = batchOperationKey,
+    generationCauseHandles: readonly ClaimEndpointHandle[] = batchCauseHandles,
   ): TemplateCompilerOccurrenceGeneration {
-    const operationIdentity = mutationOperationIdentity(contextKey, operationKey);
+    const operationIdentity = mutationOperationIdentity(contextKey, batchOperationKey);
     const pending = this.#pendingBatchesByOperation.get(operationIdentity) ?? null;
     if (pending != null) {
-      this.requireBatchCauses(pending, causeHandles);
-      return this.reserveGeneration(pending, role, outputOrdinal);
+      this.requireBatchCauses(pending, batchCauseHandles);
+      return this.reserveGeneration(
+        pending,
+        role,
+        outputOrdinal,
+        generationOperationKey,
+        generationCauseHandles,
+      );
     }
     if (!this.supportsNormalizedReplay) {
       throw new Error(
-        `Compiler generation '${operationKey}' has no pending mutation batch in the forest execution authority.`,
+        `Compiler generation '${batchOperationKey}' has no pending mutation batch in the forest execution authority.`,
       );
     }
     let completed = this.#completedBatchesByOperation.get(operationIdentity) ?? null;
     if (completed == null) {
-      requireBatchIdentity(contextKey, operationKey, causeHandles);
+      requireBatchIdentity(contextKey, batchOperationKey, batchCauseHandles);
       completed = new TemplateCompilerCompletedMutationBatch(
         this.#generationAuthority,
         TemplateCompilerCompletedMutationBatchKind.NormalizedReplay,
         contextKey,
-        operationKey,
-        [...causeHandles],
+        batchOperationKey,
+        [...batchCauseHandles],
         {},
       );
       this.#completedBatchesByOperation.set(operationIdentity, completed);
     }
-    this.requireBatchCauses(completed, causeHandles);
-    return this.createCompletedGeneration(completed, role, outputOrdinal);
+    this.requireBatchCauses(completed, batchCauseHandles);
+    return this.createCompletedGeneration(
+      completed,
+      role,
+      outputOrdinal,
+      generationOperationKey,
+      generationCauseHandles,
+    );
   }
 
   reserveExecutionGeneration(
@@ -254,10 +268,18 @@ export class TemplateCompilerForestMutationAuthority {
     pending: TemplateCompilerPendingMutationBatch,
     role: TemplateCompilerGeneratedOccurrenceRole,
     outputOrdinal: number,
+    generationOperationKey: string = pending.operationKey,
+    generationCauseHandles: readonly ClaimEndpointHandle[] = pending.causeHandles,
   ): TemplateCompilerOccurrenceGeneration {
     this.requireExecutionOwner(executionOwner);
     this.requirePendingBatch(pending);
-    return this.reserveGeneration(pending, role, outputOrdinal);
+    return this.reserveGeneration(
+      pending,
+      role,
+      outputOrdinal,
+      generationOperationKey,
+      generationCauseHandles,
+    );
   }
 
   ownsGeneration(generation: TemplateCompilerOccurrenceGeneration): boolean {
@@ -285,8 +307,8 @@ export class TemplateCompilerForestMutationAuthority {
       || !generation.isOwnedBy(this.#generationAuthority)
       || !batch.isOwnedBy(this.#generationAuthority)
       || batch.contextKey !== generation.contextKey
-      || batch.operationKey !== generation.operationKey
-      || !sameOccurrences(batch.causeHandles, generation.causeHandles)
+      || batch.operationKey !== generation.batchOperationKey
+      || !isOrderedCauseSubset(generation.causeHandles, batch.causeHandles)
       || !this.#generationTuples.has(tuple)
     ) {
       throw new Error(`Compiler generation '${generation.operationKey}' has no completed mutation authority.`);
@@ -314,16 +336,20 @@ export class TemplateCompilerForestMutationAuthority {
     pending: TemplateCompilerPendingMutationBatch,
     role: TemplateCompilerGeneratedOccurrenceRole,
     outputOrdinal: number,
+    generationOperationKey: string = pending.operationKey,
+    generationCauseHandles: readonly ClaimEndpointHandle[] = pending.causeHandles,
   ): TemplateCompilerOccurrenceGeneration {
-    const tuple = generationTuple(pending.contextKey, pending.operationKey, role, outputOrdinal);
+    requireGenerationIdentity(pending, generationOperationKey, generationCauseHandles);
+    const tuple = generationTuple(pending.contextKey, generationOperationKey, role, outputOrdinal);
     this.requireUniqueTuple(tuple);
     const generation = new TemplateCompilerOccurrenceGeneration(
       this.#generationAuthority,
       pending.contextKey,
-      pending.operationKey,
+      generationOperationKey,
       role,
-      pending.causeHandles,
+      [...generationCauseHandles],
       outputOrdinal,
+      pending.operationKey,
     );
     this.#generationTuples.add(tuple);
     this.#pendingGenerationRegistrations.set(
@@ -337,16 +363,20 @@ export class TemplateCompilerForestMutationAuthority {
     completed: TemplateCompilerCompletedMutationBatch,
     role: TemplateCompilerGeneratedOccurrenceRole,
     outputOrdinal: number,
+    generationOperationKey: string = completed.operationKey,
+    generationCauseHandles: readonly ClaimEndpointHandle[] = completed.causeHandles,
   ): TemplateCompilerOccurrenceGeneration {
-    const tuple = generationTuple(completed.contextKey, completed.operationKey, role, outputOrdinal);
+    requireGenerationIdentity(completed, generationOperationKey, generationCauseHandles);
+    const tuple = generationTuple(completed.contextKey, generationOperationKey, role, outputOrdinal);
     this.requireUniqueTuple(tuple);
     const generation = new TemplateCompilerOccurrenceGeneration(
       this.#generationAuthority,
       completed.contextKey,
-      completed.operationKey,
+      generationOperationKey,
       role,
-      completed.causeHandles,
+      [...generationCauseHandles],
       outputOrdinal,
+      completed.operationKey,
     );
     this.#generationTuples.add(tuple);
     this.#generationRegistrations.set(
@@ -420,6 +450,34 @@ function requireBatchIdentity(
   if (contextKey.length === 0 || operationKey.length === 0 || causeHandles.length === 0) {
     throw new Error('Compiler mutation batch requires context, operation, and semantic causes.');
   }
+}
+
+function requireGenerationIdentity(
+  batch: TemplateCompilerPendingMutationBatch | TemplateCompilerCompletedMutationBatch,
+  operationKey: string,
+  causeHandles: readonly ClaimEndpointHandle[],
+): void {
+  if (
+    operationKey.length === 0
+    || causeHandles.length === 0
+    || new Set(causeHandles).size !== causeHandles.length
+    || !isOrderedCauseSubset(causeHandles, batch.causeHandles)
+  ) {
+    throw new Error(
+      `Compiler generation '${operationKey}' is not an independently caused output of batch '${batch.operationKey}'.`,
+    );
+  }
+}
+
+function isOrderedCauseSubset(
+  subset: readonly ClaimEndpointHandle[],
+  superset: readonly ClaimEndpointHandle[],
+): boolean {
+  let cursor = 0;
+  for (const cause of superset) {
+    if (cause === subset[cursor]) cursor++;
+  }
+  return cursor === subset.length;
 }
 
 function mutationOperationIdentity(contextKey: string, operationKey: string): string {

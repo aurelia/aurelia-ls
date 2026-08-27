@@ -222,6 +222,16 @@ export class TemplateCompilerTargetContextPlan {
     return this.compilerReachableNodeOrdinals.get(productHandle) ?? null;
   }
 
+  occurrenceMembershipFor(
+    occurrence: TemplateCompilerNodeOccurrence,
+  ): TemplateCompilerTargetOccurrenceMembership | null {
+    return this.occurrenceMembershipsByOccurrence.get(occurrence) ?? null;
+  }
+
+  occurrenceMembershipOrdinal(occurrence: TemplateCompilerNodeOccurrence): number | null {
+    return this.occurrenceMembershipsByOccurrence.get(occurrence)?.ordinal ?? null;
+  }
+
   get state(): TemplateCompilerTargetContextState {
     return this.frontiers.length > 0
       || this.rows.some((row) => row.posture !== TemplateCompilerTargetRowPosture.Complete)
@@ -315,6 +325,9 @@ export class TemplateCompilerTargetContextPlan {
       && (('tagName' in occurrence) !== ('tagName' in authoredNode))
     ) {
       throw new Error(`Compiler occurrence row '${stableSlotKey}' mixes element/text source kinds.`);
+    }
+    if (!this.occurrenceMembershipsByOccurrence.has(occurrence)) {
+      throw new Error(`Compiler occurrence row '${stableSlotKey}' has no admitted occurrence membership.`);
     }
     const ordinal = this.rows.length;
     const row = new TemplateCompilerTargetRowPlan(

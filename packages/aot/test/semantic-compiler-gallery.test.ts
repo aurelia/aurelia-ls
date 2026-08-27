@@ -203,6 +203,8 @@ describe("semantic compiler gallery", () => {
     expect(transcriptCursors.filter((cursor) => cursor.completionState === "complete")).toHaveLength(23);
     expect(transcriptCursors.filter((cursor) => cursor.occurrenceRowAssemblyState === "exact")).toHaveLength(23);
     expect(transcriptCursors.filter((cursor) => cursor.occurrenceTargetPlanState === "exact")).toHaveLength(23);
+    expect(transcriptCursors.filter((cursor) => cursor.occurrenceTargetAttachmentPresent)).toHaveLength(23);
+    expect(transcriptCursors.filter((cursor) => cursor.occurrenceTargetExecutionPresent)).toHaveLength(23);
     expect(transcriptCursors.every((cursor) =>
       cursor.completionReceiptPresent === (cursor.occurrenceRowAssemblyState === "exact")
     )).toBe(true);
@@ -240,6 +242,38 @@ describe("semantic compiler gallery", () => {
     expect(exactOccurrenceCursors.reduce((count, cursor) => count + cursor.occurrenceRowCount, 0)).toBe(33);
     expect(exactOccurrenceCursors.reduce((count, cursor) => count + cursor.occurrenceTargetPlanRowCount, 0)).toBe(33);
     expect(exactOccurrenceCursors.reduce((count, cursor) => count + cursor.occurrenceStaticSiteCount, 0)).toBe(8);
+    expect(exactOccurrenceCursors.reduce(
+      (count, cursor) => count + cursor.occurrenceTargetExecutionOperationCount,
+      0,
+    )).toBe(63);
+    expect(exactOccurrenceCursors.reduce(
+      (count, cursor) => count + cursor.occurrenceTargetExecutionAttributeDispositionCount,
+      0,
+    )).toBe(39);
+    expect(exactOccurrenceCursors.reduce(
+      (count, cursor) => count + cursor.occurrenceTargetExecutionTextExpansionCount,
+      0,
+    )).toBe(2);
+    expect(exactOccurrenceCursors.reduce(
+      (count, cursor) => count + cursor.occurrenceTargetExecutionGeometryCount,
+      0,
+    )).toBe(33);
+    expect(exactOccurrenceCursors.reduce(
+      (count, cursor) => count + cursor.occurrenceTargetExecutionForestMutationRevisionDelta,
+      0,
+    )).toBe(129);
+    expect(exactOccurrenceCursors.reduce(
+      (count, cursor) => count + (cursor.occurrenceTargetExecutionOperationKindCounts["attribute-disposition"] ?? 0),
+      0,
+    )).toBe(39);
+    expect(exactOccurrenceCursors.reduce(
+      (count, cursor) => count + (cursor.occurrenceTargetExecutionOperationKindCounts["hydration-target-creation"] ?? 0),
+      0,
+    )).toBe(22);
+    expect(exactOccurrenceCursors.reduce(
+      (count, cursor) => count + (cursor.occurrenceTargetExecutionOperationKindCounts["text-interpolation-expansion"] ?? 0),
+      0,
+    )).toBe(2);
     const occurrenceInstructionTotals: Record<string, number> = {};
     for (const cursor of exactOccurrenceCursors) {
       for (const [kind, count] of Object.entries(cursor.occurrenceInstructionKindCounts)) {
@@ -263,6 +297,7 @@ describe("semantic compiler gallery", () => {
       );
       expect(cursor.conflictCount).toBe(0);
       expect(cursor.currentness.exact).toBe(true);
+      expect(cursor.currentness.authorityScope).toBe("historical-site-cursor-prefix");
       expect(cursor.currentness.forestMutationRevisionDelta)
         .toBe(cursor.currentness.expectedForestMutationRevisionDelta);
       expect(cursor.currentness.globalOperationCountDelta)
@@ -275,8 +310,11 @@ describe("semantic compiler gallery", () => {
         expect(cursor.occurrencePrePlanEffectState).toBe("none");
         expect(cursor.occurrenceRowDigest).toMatch(/^sha256:[0-9a-f]{64}$/u);
         expect(cursor.occurrenceMembershipCount)
-          .toBe(cursor.completedElementSiteCount + cursor.completedTextSiteCount);
-        expect(cursor.occurrenceTargetPlanState).toBe("exact");
+          .toBe(1 + cursor.completedElementSiteCount + cursor.completedTextSiteCount);
+      } else {
+        expect(cursor.occurrenceRowDigest).toBeNull();
+      }
+      if (cursor.occurrenceTargetPlanState === "exact") {
         expect(cursor.occurrenceTargetPlanReasonKinds).toEqual([]);
         expect(cursor.occurrenceTargetPlanRowCount).toBe(cursor.occurrenceRowCount);
         expect(cursor.occurrenceTargetPlanMembershipCount).toBe(cursor.occurrenceMembershipCount);
@@ -284,11 +322,77 @@ describe("semantic compiler gallery", () => {
           .toBe(cursor.occurrenceTargetPlanStableRowKeys.length);
         expect(cursor.occurrenceTargetPlanFreshRoot).toBe(true);
         expect(cursor.occurrenceTargetPlanDigest).toMatch(/^sha256:[0-9a-f]{64}$/u);
+        expect(cursor.occurrenceTargetAttachmentPresent).toBe(true);
+        expect(cursor.occurrenceTargetAttachmentContextCount).toBe(1);
+        expect(cursor.occurrenceTargetAttachmentStructuralPlanCount).toBe(1);
+        expect(cursor.occurrenceTargetAttachmentInvocationPhase).toBe("target-execution");
+        expect(cursor.occurrenceTargetAttachmentConsumedPrePlanAuthority).toBe(true);
+        expect(cursor.occurrenceTargetAttachmentCurrentBeforeExecution).toBe(true);
+        expect(cursor.occurrenceTargetAttachmentCurrentAfterExecution).toBe(false);
+        expect(cursor.occurrenceTargetExecutionPresent).toBe(true);
+        expect(cursor.occurrenceTargetExecutionAttributeDispositionCount)
+          .toBe(cursor.occurrenceAttributeDispositionCounts.removed ?? 0);
+        expect(cursor.occurrenceTargetExecutionTextExpansionCount)
+          .toBe(cursor.occurrenceTextExpansionCount);
+        expect(cursor.occurrenceTargetExecutionGeometryCount).toBe(cursor.occurrenceRowCount);
+        expect(cursor.occurrenceTargetExecutionOperationCount).toBe(
+          (cursor.occurrenceAttributeDispositionCounts.removed ?? 0)
+          + cursor.occurrenceRowCount
+          - cursor.completedTextHoleCount
+          + cursor.occurrenceTextExpansionCount
+        );
+        expect(sumCounts(cursor.occurrenceTargetExecutionOperationKindCounts))
+          .toBe(cursor.occurrenceTargetExecutionOperationCount);
+        expect(cursor.occurrenceTargetExecutionOperationKindCounts["attribute-disposition"] ?? 0)
+          .toBe(cursor.occurrenceAttributeDispositionCounts.removed ?? 0);
+        expect(cursor.occurrenceTargetExecutionOperationKindCounts["hydration-target-creation"] ?? 0)
+          .toBe(cursor.occurrenceRowCount - cursor.completedTextHoleCount);
+        expect(cursor.occurrenceTargetExecutionOperationKindCounts["text-interpolation-expansion"] ?? 0)
+          .toBe(cursor.occurrenceTextExpansionCount);
+        expect(cursor.occurrenceTargetExecutionInvocationPhase).toBe("target-closed");
+        expect(cursor.occurrenceTargetExecutionSealed).toBe(true);
+        expect(cursor.occurrenceTargetExecutionDigest).toMatch(/^sha256:[0-9a-f]{64}$/u);
+        expect(cursor.occurrenceTargetExecutionGlobalOperationCountDelta)
+          .toBe(cursor.occurrenceTargetExecutionOperationCount);
+        expect(cursor.occurrenceTargetExecutionLaneOperationCountDelta)
+          .toBe(cursor.occurrenceTargetExecutionOperationCount);
+        expect(cursor.occurrenceTargetExecutionForestMutationRevisionDelta).toBe(
+          (cursor.occurrenceAttributeDispositionCounts.removed ?? 0)
+          + 2 * cursor.occurrenceRowCount
+          + cursor.occurrenceTextExpansionCount
+          + 2 * cursor.occurrenceTextExpansionOutputCount
+        );
       } else {
-        expect(cursor.occurrenceRowDigest).toBeNull();
-        expect(cursor.occurrenceTargetPlanState).toBe("not-applicable");
+        if (cursor.occurrenceRowAssemblyState === "exact") {
+          expect(["pending", "ineligible"]).toContain(cursor.occurrenceTargetPlanState);
+          expect(cursor.occurrenceTargetPlanReasonKinds.length).toBeGreaterThan(0);
+        } else {
+          expect(cursor.occurrenceTargetPlanState).toBe("not-applicable");
+        }
         expect(cursor.occurrenceTargetPlanDigest).toBeNull();
+        expect(cursor.occurrenceTargetAttachmentPresent).toBe(false);
+        expect(cursor.occurrenceTargetAttachmentContextCount).toBe(0);
+        expect(cursor.occurrenceTargetAttachmentStructuralPlanCount).toBe(0);
+        expect(cursor.occurrenceTargetAttachmentInvocationPhase).toBeNull();
+        expect(cursor.occurrenceTargetAttachmentConsumedPrePlanAuthority).toBeNull();
+        expect(cursor.occurrenceTargetAttachmentCurrentBeforeExecution).toBeNull();
+        expect(cursor.occurrenceTargetAttachmentCurrentAfterExecution).toBeNull();
+        expect(cursor.occurrenceTargetExecutionPresent).toBe(false);
+        expect(cursor.occurrenceTargetExecutionOperationCount).toBe(0);
+        expect(cursor.occurrenceTargetExecutionOperationKindCounts).toEqual({});
+        expect(cursor.occurrenceTargetExecutionAttributeDispositionCount).toBe(0);
+        expect(cursor.occurrenceTargetExecutionTextExpansionCount).toBe(0);
+        expect(cursor.occurrenceTargetExecutionGeometryCount).toBe(0);
+        expect(cursor.occurrenceTargetExecutionInvocationPhase).toBeNull();
+        expect(cursor.occurrenceTargetExecutionSealed).toBe(false);
+        expect(cursor.occurrenceTargetExecutionDigest).toBeNull();
+        expect(cursor.occurrenceTargetExecutionForestMutationRevisionDelta).toBe(0);
+        expect(cursor.occurrenceTargetExecutionGlobalOperationCountDelta).toBe(0);
+        expect(cursor.occurrenceTargetExecutionLaneOperationCountDelta).toBe(0);
       }
+      expect(cursor.occurrenceTargetAttachmentForestMutationRevisionDelta).toBe(0);
+      expect(cursor.occurrenceTargetAttachmentGlobalOperationCountDelta).toBe(0);
+      expect(cursor.occurrenceTargetAttachmentLaneOperationCountDelta).toBe(0);
       expect(cursor.reasonKinds).toEqual([]);
       expect(cursor.eventKindCounts.frontier ?? 0).toBe(cursor.frontierKind == null ? 0 : 1);
       if (cursor.frontierKind == null) {

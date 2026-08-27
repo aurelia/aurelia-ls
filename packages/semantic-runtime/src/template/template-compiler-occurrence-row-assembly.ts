@@ -1,3 +1,4 @@
+import type { ClaimEndpointHandle } from '../kernel/claim.js';
 import type { AddressHandle } from '../kernel/handles.js';
 import type { AttributeSyntax } from './attribute-syntax.js';
 import { TemplateRenderTargetKind } from './compiled-template.js';
@@ -25,6 +26,11 @@ import type {
   TemplateCompilerOrdinaryRootCursorCompletionReceipt,
 } from './template-compiler-root-completion.js';
 import type { TemplateCompilerCapturedAttributeStaging } from './template-compiler-live-instruction-staging.js';
+import {
+  TemplateCompilerLiveAttributeTargetLane,
+  type TemplateCompilerLiveAttributeContribution,
+} from './template-compiler-live-attribute-assembly.js';
+import { TemplateCompilerLiveAttributeDisposition } from './template-compiler-live-attribute-owner.js';
 import type { TemplateCompilerTextInstructionHole } from './template-compiler-text-instruction-staging.js';
 import type {
   TemplateCompilerElementOccurrence,
@@ -240,9 +246,19 @@ export class TemplateCompilerOccurrenceStaticSite {
 /** Exact root carrier/content membership retained independently from authored target rows. */
 export class TemplateCompilerOccurrenceRootMembership {
   readonly stableSlotKey: string;
+  readonly authoredNode: HtmlElement | null;
 
   constructor(readonly receipt: TemplateCompilerOrdinaryRootCursorCompletionReceipt) {
     this.stableSlotKey = `root:${receipt.endpoint.lane.compilerCarrier.occurrenceKey}:membership`;
+    const origin = receipt.transcript.binding.forest.exactAuthoredNodeOrigin(
+      receipt.endpoint.lane.compilerCarrier,
+    );
+    this.authoredNode = origin == null
+      ? null
+      : receipt.transcript.binding.index.elementForProduct(origin.authored.productHandle);
+    if (origin != null && this.authoredNode == null) {
+      throw new Error('Occurrence root membership lost its exact authored element lineage.');
+    }
   }
 
   get compilerCarrier() {
@@ -277,6 +293,70 @@ export class TemplateCompilerOccurrenceMembership {
   }
 }
 
+/** One exact final JIT disposition for a reached browser-effective attribute. */
+export class TemplateCompilerOccurrenceAttributeDispositionDraft {
+  readonly stableSlotKey: string;
+  readonly causeHandles: readonly ClaimEndpointHandle[];
+  readonly qualifiedName: string;
+  readonly finalValue: string;
+  readonly finalOwnerStateKey: string;
+
+  constructor(
+    readonly site: TemplateCompilerCompletedElementSite,
+    readonly contribution: TemplateCompilerLiveAttributeContribution,
+  ) {
+    const attribute = contribution.frame.attribute;
+    const hydrateAttribute = contribution.targetLane === TemplateCompilerLiveAttributeTargetLane.CustomAttribute
+      ? site.owner.instructionStaging.hydrateAttributes.find((instruction) =>
+          instruction.attribute.productHandle
+            === (contribution.frame.source.authoredAttribute?.productHandle ?? null)
+          && instruction.attribute.rawName === contribution.frame.scalar.qualifiedName
+        ) ?? null
+      : null;
+    this.stableSlotKey = `attribute:${attribute.occurrenceKey}:disposition`;
+    this.qualifiedName = contribution.frame.scalar.qualifiedName;
+    this.finalValue = attribute.value;
+    this.finalOwnerStateKey = site.owner.finalOwnerView.attributeStateKey;
+    this.causeHandles = [...new Set<ClaimEndpointHandle>([
+      ...(attribute.inputReference == null ? [] : [attribute.inputReference.productHandle]),
+      ...(hydrateAttribute == null ? [] : [hydrateAttribute.productHandle]),
+      ...contribution.instructions.map((instruction) => instruction.productHandle),
+    ])];
+    if (
+      !site.owner.contributions.includes(contribution)
+      || contribution.frame.attribute.owner !== site.event.element
+      || contribution.frame.liveSite.attribute !== contribution.frame.attribute
+      || contribution.frame.liveSite.disposition !== contribution.disposition
+      || contribution.disposition === TemplateCompilerLiveAttributeDisposition.Open
+      || site.owner.finalOwnerView.hasAttribute(this.qualifiedName)
+        !== (contribution.disposition === TemplateCompilerLiveAttributeDisposition.Retained)
+      || (contribution.disposition === TemplateCompilerLiveAttributeDisposition.Retained
+        && site.owner.finalOwnerView.getAttribute(this.qualifiedName) !== this.finalValue)
+      || (contribution.targetLane === TemplateCompilerLiveAttributeTargetLane.CustomAttribute
+        && hydrateAttribute == null)
+      || this.causeHandles.length === 0
+    ) {
+      throw new Error(`Attribute disposition '${this.stableSlotKey}' lost owner, outcome, or cause authority.`);
+    }
+  }
+
+  get attribute() {
+    return this.contribution.frame.attribute;
+  }
+
+  get disposition(): TemplateCompilerLiveAttributeDisposition {
+    return this.contribution.disposition;
+  }
+
+  get originalForestOrdinal(): number {
+    return this.contribution.frame.liveSite.originalForestOrdinal;
+  }
+
+  get simulatedLiveOrdinal(): number {
+    return this.contribution.frame.liveSite.simulatedLiveOrdinal;
+  }
+}
+
 /** Product-free occurrence row input for the later shared target-plan/structural join. */
 export class TemplateCompilerOccurrenceRowAssembly {
   readonly #authority: object;
@@ -288,12 +368,16 @@ export class TemplateCompilerOccurrenceRowAssembly {
     readonly receipt: TemplateCompilerOrdinaryRootCursorCompletionReceipt,
     readonly rootMembership: TemplateCompilerOccurrenceRootMembership,
     readonly occurrenceMemberships: readonly TemplateCompilerOccurrenceMembership[],
+    readonly attributeDispositions: readonly TemplateCompilerOccurrenceAttributeDispositionDraft[],
     readonly rows: readonly TemplateCompilerOccurrenceTargetRowDraft[],
     readonly staticSites: readonly TemplateCompilerOccurrenceStaticSite[],
     readonly textExpansions: readonly TemplateCompilerTextExpansionDraft[],
   ) {
     const rowSites = new Set(rows.map((row) => row.site));
     const staticSiteSet = new Set(staticSites.map((site) => site.site));
+    const rootAuthoredProduct = receipt.transcript.binding.forest
+      .exactAuthoredNodeOrigin(rootMembership.compilerCarrier)?.authored.productHandle ?? null;
+    const expectedContributions = receipt.elementSites.flatMap((site) => site.owner.contributions);
     this.prePlanEffectState = receipt.endpoint.siteOperations.length === 0
       ? TemplateCompilerOccurrencePrePlanEffectState.None
       : TemplateCompilerOccurrencePrePlanEffectState.RequiresStructuralAdoption;
@@ -305,10 +389,17 @@ export class TemplateCompilerOccurrenceRowAssembly {
       || rootMembership.receipt !== receipt
       || rootMembership.compilerCarrier !== receipt.endpoint.lane.compilerCarrier
       || rootMembership.compilerContent !== receipt.endpoint.lane.compilerContent
+      || (rootMembership.authoredNode?.productHandle ?? null) !== rootAuthoredProduct
       || occurrenceMemberships.length !== receipt.orderedSites.length
       || occurrenceMemberships.some((membership, index) => membership.site !== receipt.orderedSites[index])
       || new Set(occurrenceMemberships.map((membership) => membership.stableSlotKey)).size
         !== occurrenceMemberships.length
+      || attributeDispositions.length !== expectedContributions.length
+      || attributeDispositions.some((disposition, index) =>
+        disposition.contribution !== expectedContributions[index]
+      )
+      || new Set(attributeDispositions.map((disposition) => disposition.stableSlotKey)).size
+        !== attributeDispositions.length
       || rows.some((row, ordinal) =>
         row.ordinal !== ordinal
         || row.projectedTargetOrdinal !== ordinal
@@ -483,6 +574,9 @@ export function assembleTemplateCompilerOrdinaryRootRows(
       receipt,
       new TemplateCompilerOccurrenceRootMembership(receipt),
       receipt.orderedSites.map((site) => new TemplateCompilerOccurrenceMembership(site)),
+      receipt.elementSites.flatMap((site) => site.owner.contributions.map((contribution) =>
+        new TemplateCompilerOccurrenceAttributeDispositionDraft(site, contribution)
+      )),
       rows,
       staticSites,
       textExpansions,

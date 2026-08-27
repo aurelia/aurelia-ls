@@ -53,13 +53,16 @@ export class TemplateCompilerOccurrenceGeneration {
     sessionAuthority: object,
     /** Compiler context in which generation executed; later structural movement does not rewrite this authority. */
     readonly contextKey: string,
+    /** Stable local producer identity; a wider execution batch may produce several independently caused outputs. */
     readonly operationKey: string,
     readonly role: TemplateCompilerGeneratedOccurrenceRole,
     readonly causeHandles: readonly ClaimEndpointHandle[],
     readonly outputOrdinal: number,
+    /** Ordered execution operation whose mutation batch authorized this output. */
+    readonly batchOperationKey: string = operationKey,
   ) {
     this.#sessionAuthority = sessionAuthority;
-    if (contextKey.length === 0 || operationKey.length === 0) {
+    if (contextKey.length === 0 || operationKey.length === 0 || batchOperationKey.length === 0) {
       throw new Error('Compiler occurrence generation requires non-empty context and operation keys.');
     }
     if (causeHandles.length === 0) {
