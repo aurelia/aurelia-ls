@@ -77,6 +77,17 @@ import {
   TemplateCompilerOccurrenceSourcePosture,
 } from '../src/template/template-compiler-occurrence-row-assembly.js';
 import {
+  allocateTemplateCompilerOccurrenceTargetPlan,
+  TemplateCompilerOccurrenceTargetPlanReasonKind,
+  TemplateCompilerOccurrenceTargetPlanState,
+} from '../src/template/template-compiler-occurrence-target-plan.js';
+import {
+  TemplateCompilerTargetContextState,
+  TemplateCompilerTargetPlan,
+  TemplateCompilerTargetRowPosture,
+  TemplateCompilerTargetRowSourceKind,
+} from '../src/template/compiler-target-plan.js';
+import {
   TemplateCompilerOccurrenceOnlyDisposition,
   TemplateCompilerSiteSpendDisposition,
 } from '../src/template/template-compiler-site-spend-ledger.js';
@@ -470,6 +481,128 @@ describe('template compiler root site cursor', () => {
       'hydrate-attribute': 6,
       'hydrate-element': 3,
     });
+
+    const hydratePending = new Map([
+      ['cursor-live-staging', assemblies.get('cursor-live-staging')!.rows
+        .filter((row) => row.hydrateElement != null).map((row) => row.stableSlotKey)],
+      ['cursor-row-merged', assemblies.get('cursor-row-merged')!.rows
+        .filter((row) => row.hydrateElement != null).map((row) => row.stableSlotKey)],
+    ]);
+    const targetPlans = new Map<string, NonNullable<ReturnType<typeof allocateTemplateCompilerOccurrenceTargetPlan>['assembly']>>();
+    for (const [name, rowAssembly] of assemblies) {
+      const namespace = rowAssembly.receipt.transcript.allocationSnapshot.ledger.namespace;
+      const reservationsBefore = namespace.readReservationCounts();
+      const result = allocateTemplateCompilerOccurrenceTargetPlan(rowAssembly);
+      const pendingSlots = hydratePending.get(name) ?? null;
+      if (pendingSlots != null) {
+        expect(result.state, name).toBe(TemplateCompilerOccurrenceTargetPlanState.Pending);
+        expect(result.assembly, name).toBeNull();
+        expect(result.reasons, name).toEqual([expect.objectContaining({
+          reasonKind: TemplateCompilerOccurrenceTargetPlanReasonKind.HydrateElementInstructionRequired,
+          stableRowSlotKeys: pendingSlots,
+        })]);
+        expect(allocateTemplateCompilerOccurrenceTargetPlan(rowAssembly).state, name)
+          .toBe(TemplateCompilerOccurrenceTargetPlanState.Pending);
+        expect(namespace.readReservationCounts(), name).toEqual(reservationsBefore);
+        continue;
+      }
+      expect(result.state, name).toBe(TemplateCompilerOccurrenceTargetPlanState.Exact);
+      const targetAssembly = result.assembly;
+      if (targetAssembly == null) throw new Error(`Expected occurrence target plan for '${name}'.`);
+      expect(targetAssembly.isCurrent(), name).toBe(true);
+      expect(targetAssembly.targetPlan.isSealed, name).toBe(true);
+      expect(targetAssembly.targetPlan.localKey, name).toBe(rowAssembly.receipt.endpoint.lane.localKey);
+      expect(targetAssembly.targetPlan.root.state, name).toBe(TemplateCompilerTargetContextState.Complete);
+      expect(targetAssembly.targetPlan.root.readFrontiers(), name).toEqual([]);
+      expect(targetAssembly.targetPlan.root.readOwnedContexts(), name).toEqual([]);
+      expect(targetAssembly.targetPlan.root.projectedTargetCount, name).toBe(rowAssembly.rows.length);
+      expect(targetAssembly.targetPlan.root.exactGeometryPrefixEnd, name).toBeNull();
+      expect(targetAssembly.targetPlan.root.readOccurrenceMemberships().map((membership) => membership.occurrence), name)
+        .toEqual(rowAssembly.occurrenceMemberships.map((membership) => membership.occurrence));
+      expect(targetAssembly.rootCompiledTemplate.productHandle, name)
+        .not.toBe(rowAssembly.receipt.transcript.binding.compilation.compiledTemplate.compiledTemplate.productHandle);
+      expect(targetAssembly.targetAllocation.productReservations, name).toEqual([targetAssembly.rootReservation]);
+      expect(namespace.readReservationCounts().productHandles, name)
+        .toBe(reservationsBefore.productHandles + 1);
+      expect(targetAssembly.rowMappings.every((mapping) =>
+        mapping.row.sourceKind === (mapping.draft.textOutput == null
+          ? TemplateCompilerTargetRowSourceKind.RetainedOccurrence
+          : TemplateCompilerTargetRowSourceKind.TextHole)
+        && mapping.row.posture === TemplateCompilerTargetRowPosture.Complete
+        && mapping.row.stableSlotKey === mapping.draft.stableSlotKey
+        && mapping.row.publicationLocalKey === mapping.draft.stableSlotKey
+      ), name).toBe(true);
+      expect(allocateTemplateCompilerOccurrenceTargetPlan(rowAssembly).assembly, name).toBe(targetAssembly);
+      targetPlans.set(name, targetAssembly);
+    }
+    expect(targetPlans.size).toBe(12);
+    expect([...targetPlans.values()].reduce(
+      (count, targetAssembly) => count + targetAssembly.targetPlan.root.readRows().length,
+      0,
+    )).toBe(21);
+    const unattached = targetPlans.get('cursor-empty')!;
+    expect(() => unattached.rows.receipt.transcript.binding.execution.attachTargetPlan(
+      unattached.rows.receipt.endpoint.lane,
+      unattached.targetPlan,
+    )).toThrow(/nominal site completion authority/u);
+
+    for (const name of ['cursor-as-element-empty', 'cursor-slot-inert']) {
+      const targetAssembly = targetPlans.get(name);
+      expect(targetAssembly?.targetPlan.root.readRows(), name).toEqual([]);
+      expect(targetAssembly?.targetPlan.root.readOccurrenceMemberships().length, name).toBeGreaterThan(0);
+    }
+    const nonSingularPlan = targetPlans.get('cursor-live-nonsingular');
+    expect(nonSingularPlan?.rowMappings.map((mapping) => mapping.row.node)).toEqual([null, null]);
+    expect(new Set(nonSingularPlan?.rowMappings.map((mapping) => mapping.row.inputNode?.productHandle)).size).toBe(2);
+
+    const stableDrafts = assemblies.get('cursor-live-duplicate')!.rows;
+    const stableB = stableDrafts[1]!;
+    const stableA = stableDrafts[0]!;
+    const stableReference = targetPlans.get('cursor-live-duplicate')!.rootCompiledTemplate;
+    const rootContext = assemblies.get('cursor-live-duplicate')!.receipt.transcript.binding.unit.rootContext;
+    const planOne = new TemplateCompilerTargetPlan('stable-key-canary', rootContext, stableReference);
+    planOne.root.recordCompilerReachableOccurrence('membership:b', stableB.occurrence, stableB.authoredNode);
+    const rowBAtZero = planOne.root.appendOccurrenceRow(
+      stableB.stableSlotKey,
+      stableB.occurrence,
+      stableB.authoredNode,
+      stableB.instructions,
+      stableB.targetKind,
+      stableB.sourceAddressHandle,
+    );
+    planOne.seal();
+    const planTwo = new TemplateCompilerTargetPlan('stable-key-canary', rootContext, stableReference);
+    planTwo.root.recordCompilerReachableOccurrence('membership:a', stableA.occurrence, stableA.authoredNode);
+    planTwo.root.recordCompilerReachableOccurrence('membership:b', stableB.occurrence, stableB.authoredNode);
+    planTwo.root.appendOccurrenceRow(
+      stableA.stableSlotKey,
+      stableA.occurrence,
+      stableA.authoredNode,
+      stableA.instructions,
+      stableA.targetKind,
+      stableA.sourceAddressHandle,
+    );
+    const rowBAtOne = planTwo.root.appendOccurrenceRow(
+      stableB.stableSlotKey,
+      stableB.occurrence,
+      stableB.authoredNode,
+      stableB.instructions,
+      stableB.targetKind,
+      stableB.sourceAddressHandle,
+    );
+    expect(rowBAtOne.localKey).toBe(rowBAtZero.localKey);
+    expect(rowBAtOne.publicationLocalKey).toBe(rowBAtZero.publicationLocalKey);
+    expect(rowBAtOne.targetPublicationLocal('compiled', 1))
+      .toBe(rowBAtZero.targetPublicationLocal('compiled', 0));
+    expect(rowBAtOne.ordinal).toBe(1);
+    expect(rowBAtZero.ordinal).toBe(0);
+    expect(() => planTwo.root.appendOccurrenceRow(
+      stableB.stableSlotKey,
+      stableB.occurrence,
+      stableB.authoredNode,
+      stableB.instructions,
+    )).toThrow();
+    planTwo.seal();
   });
 
   test('never promotes the current typed ordinary-root frontiers into completion receipts', () => {
@@ -505,6 +638,11 @@ describe('template compiler root site cursor', () => {
     const receipt = result.completion?.receipt;
     if (receipt == null || result.siteEndpoint == null) throw new Error('Expected fresh current completion receipt.');
     expect(receipt.isCurrent()).toBe(true);
+    const rowAssembly = assembleTemplateCompilerOrdinaryRootRows(receipt).assembly;
+    if (rowAssembly == null) throw new Error('Expected fresh current row assembly.');
+    const targetAssembly = allocateTemplateCompilerOccurrenceTargetPlan(rowAssembly).assembly;
+    if (targetAssembly == null) throw new Error('Expected fresh current target-plan assembly.');
+    expect(targetAssembly.isCurrent()).toBe(true);
 
     const attribute = run.binding.forest.readAttributes()[0];
     if (attribute == null) throw new Error('Expected one live attribute for endpoint invalidation.');
@@ -514,6 +652,9 @@ describe('template compiler root site cursor', () => {
     expect(receipt.isCurrent()).toBe(false);
     expect(assembleTemplateCompilerOrdinaryRootRows(receipt).state)
       .toBe(TemplateCompilerOccurrenceRowAssemblyState.Ineligible);
+    expect(targetAssembly.isCurrent()).toBe(false);
+    expect(allocateTemplateCompilerOccurrenceTargetPlan(rowAssembly).state)
+      .toBe(TemplateCompilerOccurrenceTargetPlanState.Ineligible);
   });
 
   test('keeps central structural effects and reached live invalidity distinct', () => {

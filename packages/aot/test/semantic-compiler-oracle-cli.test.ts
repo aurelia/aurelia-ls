@@ -57,6 +57,9 @@ describe("AOT semantic compiler oracle CLI", () => {
       occurrenceRowAssemblyState: "exact",
       occurrenceRowAssemblyReasonKinds: [],
       occurrencePrePlanEffectState: "none",
+      occurrenceTargetPlanState: "exact",
+      occurrenceTargetPlanReasonKinds: [],
+      occurrenceTargetPlanFreshRoot: true,
       currentness: {
         exact: true,
         expectedForestMutationRevisionDelta: expect.any(Number),
@@ -117,6 +120,9 @@ interface SemanticCompilerOracleReceipt {
         readonly occurrenceRowAssemblyState?: string;
         readonly occurrenceRowAssemblyReasonKinds?: readonly string[];
         readonly occurrencePrePlanEffectState?: string | null;
+        readonly occurrenceTargetPlanState?: string;
+        readonly occurrenceTargetPlanReasonKinds?: readonly string[];
+        readonly occurrenceTargetPlanFreshRoot?: boolean | null;
         readonly currentness?: {
           readonly exact: boolean;
           readonly forestMutationRevisionDelta: number;

@@ -2420,7 +2420,7 @@ export class CompiledTemplateMaterializer {
     row: TemplateCompilerTargetRowPlan,
     index: number,
   ): RenderTargetPublicationHandles {
-    const targetLocal = `${compiledLocal}:target:${index}:${row.publicationLocalKey}`;
+    const targetLocal = row.targetPublicationLocal(compiledLocal, index);
     const sequenceLocal = `${targetLocal}:instructions`;
     return new RenderTargetPublicationHandles(
       targetLocal,
@@ -2453,7 +2453,7 @@ export class CompiledTemplateMaterializer {
       handles.targetProductHandle,
       handles.targetIdentityHandle,
       row.targetKind,
-      row.node.toReference(),
+      requiredAuthoredTargetRowNode(row).toReference(),
       handles.sequenceProductHandle,
       row.sourceAddressHandle,
       [],
@@ -2501,7 +2501,7 @@ export class CompiledTemplateMaterializer {
       this.store.handles.claim(`${handles.targetLocal}:target-for-html-node`),
       target.productHandle,
       KernelVocabulary.Template.RenderTargetForHtmlNode.key,
-      row.node.productHandle,
+      requiredAuthoredTargetRowNode(row).productHandle,
       source.provenanceHandle,
     );
   }
@@ -2873,6 +2873,13 @@ function nullableInstruction(
   instruction: TemplateInstruction | null,
 ): readonly TemplateInstruction[] {
   return instruction == null ? [] : [instruction];
+}
+
+function requiredAuthoredTargetRowNode(row: TemplateCompilerTargetRowPlan): HtmlElement | HtmlText {
+  if (row.node == null) {
+    throw new Error(`Authored compiled-template publication cannot publish occurrence row '${row.stableSlotKey}'.`);
+  }
+  return row.node;
 }
 
 function compiledTemplateStateFor(

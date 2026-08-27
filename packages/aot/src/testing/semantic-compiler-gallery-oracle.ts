@@ -590,7 +590,9 @@ function normalizedStructuralReplayDigest(
         summary: frontier.summary,
       })),
       rows: context.readRows().map((row) => {
-        const sourceOccurrences = nodesByAuthoredProduct.get(row.node.productHandle) ?? [];
+        const sourceOccurrences = row.occurrence == null
+          ? row.node == null ? [] : nodesByAuthoredProduct.get(row.node.productHandle) ?? []
+          : [row.occurrence];
         return {
           ordinal: row.ordinal,
           projectedTargetOrdinal: row.projectedTargetOrdinal,

@@ -202,6 +202,7 @@ describe("semantic compiler gallery", () => {
     expect(transcriptCursors.filter((cursor) => cursor.completionReceiptPresent)).toHaveLength(23);
     expect(transcriptCursors.filter((cursor) => cursor.completionState === "complete")).toHaveLength(23);
     expect(transcriptCursors.filter((cursor) => cursor.occurrenceRowAssemblyState === "exact")).toHaveLength(23);
+    expect(transcriptCursors.filter((cursor) => cursor.occurrenceTargetPlanState === "exact")).toHaveLength(23);
     expect(transcriptCursors.every((cursor) =>
       cursor.completionReceiptPresent === (cursor.occurrenceRowAssemblyState === "exact")
     )).toBe(true);
@@ -237,6 +238,7 @@ describe("semantic compiler gallery", () => {
       cursor.occurrenceRowAssemblyState === "exact"
     );
     expect(exactOccurrenceCursors.reduce((count, cursor) => count + cursor.occurrenceRowCount, 0)).toBe(33);
+    expect(exactOccurrenceCursors.reduce((count, cursor) => count + cursor.occurrenceTargetPlanRowCount, 0)).toBe(33);
     expect(exactOccurrenceCursors.reduce((count, cursor) => count + cursor.occurrenceStaticSiteCount, 0)).toBe(8);
     const occurrenceInstructionTotals: Record<string, number> = {};
     for (const cursor of exactOccurrenceCursors) {
@@ -274,8 +276,18 @@ describe("semantic compiler gallery", () => {
         expect(cursor.occurrenceRowDigest).toMatch(/^sha256:[0-9a-f]{64}$/u);
         expect(cursor.occurrenceMembershipCount)
           .toBe(cursor.completedElementSiteCount + cursor.completedTextSiteCount);
+        expect(cursor.occurrenceTargetPlanState).toBe("exact");
+        expect(cursor.occurrenceTargetPlanReasonKinds).toEqual([]);
+        expect(cursor.occurrenceTargetPlanRowCount).toBe(cursor.occurrenceRowCount);
+        expect(cursor.occurrenceTargetPlanMembershipCount).toBe(cursor.occurrenceMembershipCount);
+        expect(new Set(cursor.occurrenceTargetPlanStableRowKeys).size)
+          .toBe(cursor.occurrenceTargetPlanStableRowKeys.length);
+        expect(cursor.occurrenceTargetPlanFreshRoot).toBe(true);
+        expect(cursor.occurrenceTargetPlanDigest).toMatch(/^sha256:[0-9a-f]{64}$/u);
       } else {
         expect(cursor.occurrenceRowDigest).toBeNull();
+        expect(cursor.occurrenceTargetPlanState).toBe("not-applicable");
+        expect(cursor.occurrenceTargetPlanDigest).toBeNull();
       }
       expect(cursor.reasonKinds).toEqual([]);
       expect(cursor.eventKindCounts.frontier ?? 0).toBe(cursor.frontierKind == null ? 0 : 1);
@@ -323,6 +335,7 @@ describe("semantic compiler gallery", () => {
       completionRefusalKinds: [],
       occurrenceRowCount: 1,
       occurrenceRowInstructionTargets: [["title"]],
+      occurrenceTargetPlanRowCount: 1,
     });
     expect(observations.get("interaction.browser.foster-target-order")?.siteCursor).toMatchObject({
       frontierKind: null,
@@ -331,6 +344,7 @@ describe("semantic compiler gallery", () => {
         "browser-implied-element-pass-through": 1,
       },
       occurrenceRowInstructionTargets: [["title"], ["class"], ["textContent"]],
+      occurrenceTargetPlanRowCount: 3,
     });
     expect(observations.get("interaction.browser.carrier-comment-shield")?.siteCursor).toMatchObject({
       occurrenceRowCount: 1,
@@ -339,6 +353,8 @@ describe("semantic compiler gallery", () => {
     expect(observations.get("markup.static.platform-attribute")?.siteCursor).toMatchObject({
       occurrenceRowCount: 0,
       occurrenceInstructionKindCounts: {},
+      occurrenceTargetPlanState: "exact",
+      occurrenceTargetPlanRowCount: 0,
     });
     expect(observations.get("interaction.generated.double-sibling-if")?.siteCursor).toMatchObject({
       frontierKind: "after-attributes-before-template-controller",
@@ -388,6 +404,7 @@ describe("semantic compiler gallery", () => {
     expect(tenHoleCursor.instructionAllocationCount).toBe(10);
     expect(tenHoleCursor.sourceAllocationCount).toBe(10);
     expect(tenHoleCursor.occurrenceRowCount).toBe(10);
+    expect(tenHoleCursor.occurrenceTargetPlanRowCount).toBe(10);
     expect(tenHoleCursor.occurrenceInstructionKindCounts).toEqual({ "text-binding": 10 });
     const nativeTargetOrders = new Map<string, readonly string[]>([
       ["native-order.checkbox.checked-before-matcher", ["matcher", "checked"]],

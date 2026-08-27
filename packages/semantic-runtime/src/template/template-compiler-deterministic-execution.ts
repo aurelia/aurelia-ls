@@ -17,6 +17,7 @@ import {
 import {
   HtmlText,
   htmlElementAttributeOwnersByAttributeProduct,
+  type HtmlElement,
   type HtmlElementAttributeOwner,
 } from './html-ir.js';
 import {
@@ -366,11 +367,12 @@ class DeterministicExecutionFrame {
     for (const context of this.input.compilation.compiledTemplate.targetPlan.readContexts()) {
       const textRowsByNode = rowsByTextNode(context);
       for (const row of context.readRows()) {
-        if (this.exactNode(row.node.productHandle) == null) {
+        const rowNode = requiredAuthoredRowNode(row);
+        if (this.exactNode(rowNode.productHandle) == null) {
           reasons.push(reason(
             TemplateCompilerDeterministicExecutionReasonKind.NonSingularOrigin,
             `Compiler row '${row.localKey}' has no singular browser occurrence.`,
-            [row.node.productHandle],
+            [rowNode.productHandle],
           ));
         }
         const controller = singleTemplateControllerInstruction(row);
@@ -675,14 +677,15 @@ class DeterministicExecutionFrame {
     if (this.executedContexts.has(context)) return;
     this.executedContexts.add(context);
     for (const row of context.readRows()) {
+      const rowNode = requiredAuthoredRowNode(row);
       if (session.readTargetGeometry(row) != null) continue;
-      if (row.node instanceof HtmlText) {
-        this.executeText(context, row.node, session);
+      if (rowNode instanceof HtmlText) {
+        this.executeText(context, rowNode, session);
         continue;
       }
       const controller = singleTemplateControllerInstruction(row);
       if (controller != null) {
-        this.consumeOwnerAttributes(context, row.node.productHandle, session);
+        this.consumeOwnerAttributes(context, rowNode.productHandle, session);
         this.executeTemplateController(context, row, controller, session);
         continue;
       }
@@ -692,7 +695,7 @@ class DeterministicExecutionFrame {
       if (elementInstruction?.auSlotProcessContent != null) {
         this.consumeKnownAuSlotChildren(context, elementInstruction, session);
       }
-      this.consumeOwnerAttributes(context, row.node.productHandle, session);
+      this.consumeOwnerAttributes(context, rowNode.productHandle, session);
       if (elementInstruction != null) {
         this.executeProjections(context, elementInstruction, session);
       }
@@ -709,7 +712,7 @@ class DeterministicExecutionFrame {
     outerInstruction: HydrateTemplateControllerInstruction,
     session: TemplateCompilerStructuralExecutionSession,
   ): void {
-    const source = this.exactNode(outerRow.node.productHandle);
+    const source = this.exactNode(requiredAuthoredRowNode(outerRow).productHandle);
     if (!(source instanceof TemplateCompilerElementOccurrence)) {
       throw new Error(`Template-controller row '${outerRow.localKey}' lost its exact element occurrence.`);
     }
@@ -835,7 +838,9 @@ class DeterministicExecutionFrame {
   ): void {
     if (this.expandedTextNodes.has(node.productHandle)) return;
     this.expandedTextNodes.add(node.productHandle);
-    const rows = context.readRows().filter((row) => row.node.productHandle === node.productHandle);
+    const rows = context.readRows().filter((row) =>
+      requiredAuthoredRowNode(row).productHandle === node.productHandle
+    );
     const input = this.exactNode(node.productHandle);
     const parse = this.textParsesByNode.get(node.productHandle) ?? null;
     if (
@@ -910,7 +915,7 @@ class DeterministicExecutionFrame {
     row: TemplateCompilerTargetRowPlan,
     session: TemplateCompilerStructuralExecutionSession,
   ): void {
-    const occurrence = this.exactNode(row.node.productHandle);
+    const occurrence = this.exactNode(requiredAuthoredRowNode(row).productHandle);
     if (row.targetKind === TemplateRenderTargetKind.MarkerTarget) {
       if (
         !(occurrence instanceof TemplateCompilerElementOccurrence)
@@ -1034,9 +1039,17 @@ function rowsByTextNode(
 ): ReadonlyMap<ProductHandle, readonly TemplateCompilerTargetRowPlan[]> {
   const rows = new Map<ProductHandle, TemplateCompilerTargetRowPlan[]>();
   for (const row of context.readRows()) {
-    if (row.node instanceof HtmlText) appendMap(rows, row.node.productHandle, row);
+    const node = requiredAuthoredRowNode(row);
+    if (node instanceof HtmlText) appendMap(rows, node.productHandle, row);
   }
   return rows;
+}
+
+function requiredAuthoredRowNode(row: TemplateCompilerTargetRowPlan): HtmlElement | HtmlText {
+  if (row.node == null) {
+    throw new Error(`Legacy deterministic replay cannot consume occurrence row '${row.stableSlotKey}'.`);
+  }
+  return row.node;
 }
 
 function singleTemplateControllerInstruction(

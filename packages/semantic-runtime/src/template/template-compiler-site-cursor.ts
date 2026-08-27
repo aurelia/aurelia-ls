@@ -1962,6 +1962,7 @@ function liveAllocationSnapshotIsCoherent(
   return boundInstructions.length === expectedInstructions.size
     && boundExpressions.length === expectedExpressions.size
     && boundSources.length === expectedSources.size
+    && snapshot.productReservations.length === 0
     && snapshot.instructionAllocations.every((allocation) =>
       allocation.instruction == null
         || allocation.instruction === expectedInstructions.get(allocation.productHandle)

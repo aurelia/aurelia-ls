@@ -1673,8 +1673,16 @@ export class TemplateCompilerStructuralExecutionSession {
     row: TemplateCompilerTargetRowPlan,
     occurrence: TemplateCompilerNodeOccurrence,
   ): void {
+    if (row.occurrence != null) {
+      if (row.occurrence !== occurrence) {
+        throw new Error(
+          `Compiler target row '${row.localKey}' does not own occurrence '${occurrence.occurrenceKey}'.`,
+        );
+      }
+      return;
+    }
     const origin = this.forest.exactAuthoredNodeOrigin(occurrence);
-    if (origin?.authored.productHandle !== row.node.productHandle) {
+    if (row.node == null || origin?.authored.productHandle !== row.node.productHandle) {
       throw new Error(
         `Compiler target row '${row.localKey}' has no exact singular authored origin on '${occurrence.occurrenceKey}'.`,
       );
@@ -1686,7 +1694,7 @@ export class TemplateCompilerStructuralExecutionSession {
     target: TemplateCompilerElementOccurrence | TemplateCompilerTextOccurrence,
     context: TemplateCompilerTargetContextPlan,
   ): void {
-    if (row.node instanceof HtmlText) {
+    if (row.occurrence instanceof TemplateCompilerTextOccurrence || row.node instanceof HtmlText) {
       const instruction = row.instructions.length === 1 ? row.instructions[0] : null;
       const generation = target.generation;
       if (
@@ -1706,11 +1714,13 @@ export class TemplateCompilerStructuralExecutionSession {
       return;
     }
     if (
-      row.node instanceof HtmlElement
+      (row.occurrence instanceof TemplateCompilerElementOccurrence || row.node instanceof HtmlElement)
       && target instanceof TemplateCompilerElementOccurrence
-      && target.generation == null
+      && (row.occurrence == null ? target.generation == null : target === row.occurrence)
     ) return;
-    throw new Error(`Compiler target row '${row.localKey}' changed its authored node/target shape.`);
+    throw new Error(row.occurrence == null
+      ? `Compiler target row '${row.localKey}' changed its authored node/target shape.`
+      : `Compiler target row '${row.localKey}' changed its source occurrence/target shape.`);
   }
 
   private claimSourceTarget(

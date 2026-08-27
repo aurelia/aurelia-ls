@@ -23,10 +23,36 @@ export const enum TemplateCompilerLiveSourceAllocationRole {
   TextInterpolationHole = 'text-interpolation-hole',
 }
 
+export const enum TemplateCompilerLiveProductReservationRole {
+  RootCompiledTemplate = 'root-compiled-template',
+  EffectiveAttributeSyntax = 'effective-attribute-syntax',
+}
+
+/** Forward product/identity funding; publication and product-detail binding remain downstream. */
+export class TemplateCompilerLiveProductReservation {
+  constructor(
+    readonly siteKey: string,
+    readonly local: string,
+    readonly role: TemplateCompilerLiveProductReservationRole,
+    readonly sourceAddressHandle: AddressHandle | null,
+    readonly productHandle: ProductHandle,
+    readonly identityHandle: IdentityHandle,
+  ) {}
+}
+
 /** Generation-bound owner of every allocation phase in one compiler candidate. */
 export interface TemplateCompilerLiveAllocationAuthority {
   readonly handles: KernelHandleFactory;
   isCurrent(): boolean;
+}
+
+export class TemplateCompilerLiveAllocationNamespaceCounts {
+  constructor(
+    readonly semanticSlots: number,
+    readonly productHandles: number,
+    readonly identityHandles: number,
+    readonly addressHandles: number,
+  ) {}
 }
 
 export class TemplateCompilerLiveAllocationNamespace {
@@ -45,6 +71,15 @@ export class TemplateCompilerLiveAllocationNamespace {
 
   isCurrent(): boolean {
     return this.authority.isCurrent();
+  }
+
+  readReservationCounts(): TemplateCompilerLiveAllocationNamespaceCounts {
+    return new TemplateCompilerLiveAllocationNamespaceCounts(
+      this.semanticSlots.size,
+      this.productHandles.size,
+      this.identityHandles.size,
+      this.addressHandles.size,
+    );
   }
 
   beginPhase(rootSiteKey: string): TemplateCompilerLiveAllocationLedger {
@@ -85,6 +120,16 @@ export class TemplateCompilerLiveAllocationNamespace {
       null,
       null,
       allocation.addressHandle,
+    );
+  }
+
+  reserveProduct(authority: object, reservation: TemplateCompilerLiveProductReservation): void {
+    this.reserve(
+      authority,
+      `product:${reservation.siteKey}:${reservation.local}:${reservation.role}`,
+      reservation.productHandle,
+      reservation.identityHandle,
+      null,
     );
   }
 
@@ -250,10 +295,12 @@ export class TemplateCompilerLiveAllocationSnapshot {
     readonly instructionAllocations: readonly TemplateCompilerLiveInstructionAllocation[],
     readonly expressionAllocations: readonly TemplateCompilerLiveExpressionAllocation[],
     readonly sourceAllocations: readonly TemplateCompilerLiveSourceAllocation[],
+    readonly productReservations: readonly TemplateCompilerLiveProductReservation[],
   ) {
     const productHandles = [
       ...instructionAllocations.map((entry) => entry.productHandle),
       ...expressionAllocations.map((entry) => entry.productHandle),
+      ...productReservations.map((entry) => entry.productHandle),
     ];
     this.state = instructionAllocations.every((entry) => entry.instruction != null)
       && expressionAllocations.every((entry) => entry.compilerRead != null && entry.result != null)
@@ -263,11 +310,14 @@ export class TemplateCompilerLiveAllocationSnapshot {
     if (
       authority !== liveAllocationSnapshotAuthority
       || ledger.rootSiteKey.length === 0
-      || [...instructionAllocations, ...expressionAllocations, ...sourceAllocations].some((entry) =>
+      || [...instructionAllocations, ...expressionAllocations, ...sourceAllocations, ...productReservations].some((entry) =>
         !entry.siteKey.startsWith(`${ledger.rootSiteKey}:`)
       )
       || new Set(productHandles).size !== productHandles.length
-      || new Set(instructionAllocations.map((entry) => entry.identityHandle)).size !== instructionAllocations.length
+      || new Set([
+        ...instructionAllocations.map((entry) => entry.identityHandle),
+        ...productReservations.map((entry) => entry.identityHandle),
+      ]).size !== instructionAllocations.length + productReservations.length
       || new Set(sourceAllocations.map((entry) => entry.addressHandle)).size !== sourceAllocations.length
     ) {
       throw new Error('Live allocation snapshot lost unique candidate-local handle authority.');
@@ -294,6 +344,7 @@ export class TemplateCompilerLiveAllocationLedger {
   private readonly instructionAllocations: TemplateCompilerLiveInstructionAllocation[] = [];
   private readonly expressionAllocations: TemplateCompilerLiveExpressionAllocation[] = [];
   private readonly sourceAllocations: TemplateCompilerLiveSourceAllocation[] = [];
+  private readonly productReservations: TemplateCompilerLiveProductReservation[] = [];
   private readonly instructionsByProduct = new Map<ProductHandle, TemplateCompilerLiveInstructionAllocation>();
   private readonly expressionsByProduct = new Map<ProductHandle, TemplateCompilerLiveExpressionAllocation>();
   private readonly sourcesByAddress = new Map<AddressHandle, TemplateCompilerLiveSourceAllocation>();
@@ -392,6 +443,27 @@ export class TemplateCompilerLiveAllocationLedger {
     return allocation;
   }
 
+  reserveProduct(
+    siteKey: string,
+    local: string,
+    role: TemplateCompilerLiveProductReservationRole,
+    sourceAddressHandle: AddressHandle | null,
+    allocationLocal: string,
+  ): TemplateCompilerLiveProductReservation {
+    this.requireMutable();
+    const reservation = new TemplateCompilerLiveProductReservation(
+      siteKey,
+      local,
+      role,
+      sourceAddressHandle,
+      this.handles.product(allocationLocal),
+      this.handles.identity(allocationLocal),
+    );
+    this.namespace.reserveProduct(liveAllocationLedgerAuthority, reservation);
+    this.productReservations.push(reservation);
+    return reservation;
+  }
+
   bindSource(source: TemplateCompilerTextHoleSourceRange): void {
     this.requireMutable();
     const addressHandle = source.sourceAddressHandle;
@@ -432,6 +504,7 @@ export class TemplateCompilerLiveAllocationLedger {
       this.instructionAllocations,
       this.expressionAllocations,
       this.sourceAllocations,
+      this.productReservations,
     );
   }
 

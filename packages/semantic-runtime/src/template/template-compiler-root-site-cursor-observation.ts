@@ -38,7 +38,12 @@ import {
   TemplateCompilerTextExpansionOutputKind,
   type TemplateCompilerOccurrenceRowAssembly,
 } from './template-compiler-occurrence-row-assembly.js';
+import {
+  allocateTemplateCompilerOccurrenceTargetPlan,
+  type TemplateCompilerOccurrenceTargetPlanAssembly,
+} from './template-compiler-occurrence-target-plan.js';
 import { TemplateCompilerPreWalkRemainderAuthority } from './template-compiler-prewalk-remainder.js';
+import { templateInstructionSemanticSignature } from './instruction-ir.js';
 import {
   bindTemplateCompilerRootSiteInvocation,
   TemplateCompilerSiteInvocationBindingState,
@@ -147,6 +152,13 @@ export interface TemplateCompilerRootSiteCursorTranscriptObservation
   readonly occurrenceTextExpansionOutputCount: number;
   readonly occurrencePrePlanEffectState: string | null;
   readonly occurrenceRowDigest: string | null;
+  readonly occurrenceTargetPlanState: string;
+  readonly occurrenceTargetPlanReasonKinds: readonly string[];
+  readonly occurrenceTargetPlanRowCount: number;
+  readonly occurrenceTargetPlanMembershipCount: number;
+  readonly occurrenceTargetPlanStableRowKeys: readonly string[];
+  readonly occurrenceTargetPlanFreshRoot: boolean | null;
+  readonly occurrenceTargetPlanDigest: string | null;
   readonly ledgerState: string;
   readonly spendDispositionCounts: Readonly<Record<string, number>>;
   readonly remainderKindCounts: Readonly<Record<string, number>>;
@@ -361,6 +373,10 @@ export function observeTemplateCompilerRootSiteCursor(
     ? null
     : assembleTemplateCompilerOrdinaryRootRows(completionReceipt);
   const occurrenceAssembly = occurrenceRows?.assembly ?? null;
+  const occurrenceTargetPlan = occurrenceAssembly == null
+    ? null
+    : allocateTemplateCompilerOccurrenceTargetPlan(occurrenceAssembly);
+  const targetPlanAssembly = occurrenceTargetPlan?.assembly ?? null;
   const eventKindCounts: Record<string, number> = {};
   const phaseKinds: string[] = [];
   const phaseCounts: Record<string, number> = {};
@@ -454,6 +470,18 @@ export function observeTemplateCompilerRootSiteCursor(
     ) ?? 0,
     occurrencePrePlanEffectState: occurrenceAssembly?.prePlanEffectState ?? null,
     occurrenceRowDigest: occurrenceAssembly == null ? null : occurrenceRowDigest(occurrenceAssembly),
+    occurrenceTargetPlanState: occurrenceTargetPlan?.state ?? 'not-applicable',
+    occurrenceTargetPlanReasonKinds: occurrenceTargetPlan?.reasons.map((reason) => reason.reasonKind) ?? [],
+    occurrenceTargetPlanRowCount: targetPlanAssembly?.targetPlan.root.readRows().length ?? 0,
+    occurrenceTargetPlanMembershipCount: targetPlanAssembly?.targetPlan.root.readOccurrenceMemberships().length ?? 0,
+    occurrenceTargetPlanStableRowKeys: targetPlanAssembly?.targetPlan.root.readRows().map((row) =>
+      row.stableSlotKey
+    ) ?? [],
+    occurrenceTargetPlanFreshRoot: targetPlanAssembly == null
+      ? null
+      : targetPlanAssembly.rootCompiledTemplate.productHandle
+        !== transcript.binding.compilation.compiledTemplate.compiledTemplate.productHandle,
+    occurrenceTargetPlanDigest: targetPlanAssembly == null ? null : occurrenceTargetPlanDigest(targetPlanAssembly),
     ledgerState: transcript.ledger.state,
     spendDispositionCounts: counts(transcript.ledger.spends.map((spend) => spend.disposition)),
     remainderKindCounts: counts(
@@ -533,6 +561,36 @@ function occurrenceRowDigest(assembly: TemplateCompilerOccurrenceRowAssembly): s
   ]);
   hash.update(encoded);
   return `sha256:${hash.digest('hex')}`;
+}
+
+function occurrenceTargetPlanDigest(assembly: TemplateCompilerOccurrenceTargetPlanAssembly): string {
+  const encoded = JSON.stringify([
+    assembly.targetPlan.localKey,
+    assembly.rootReservation.role,
+    assembly.targetPlan.root.state,
+    assembly.targetPlan.root.projectedTargetCount,
+    assembly.targetPlan.root.readOccurrenceMemberships().map((membership) => [
+      membership.stableSlotKey,
+      membership.ordinal,
+      membership.occurrence.occurrenceKey,
+      membership.inputNode?.productHandle ?? null,
+      membership.authoredNode?.productHandle ?? null,
+    ]),
+    assembly.targetPlan.root.readRows().map((row) => [
+      row.stableSlotKey,
+      row.publicationLocalKey,
+      row.ordinal,
+      row.projectedTargetOrdinal,
+      row.projectedTargetCount,
+      row.targetKind,
+      row.sourceKind,
+      row.expressionChainIndex,
+      row.inputNode?.productHandle ?? null,
+      row.node?.productHandle ?? null,
+      row.instructions.map(templateInstructionSemanticSignature),
+    ]),
+  ]);
+  return `sha256:${createHash('sha256').update(encoded).digest('hex')}`;
 }
 
 function unavailable(

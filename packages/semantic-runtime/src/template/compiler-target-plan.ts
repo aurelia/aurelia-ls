@@ -17,6 +17,12 @@ import type {
   HtmlText,
 } from './html-ir.js';
 import type {
+  TemplateCompilerElementOccurrence,
+  TemplateCompilerNodeOccurrence,
+  TemplateCompilerTextOccurrence,
+} from './template-compiler-occurrence.js';
+import type { TemplateStructuralNodeReference } from './template-structure.js';
+import type {
   HydrateElementInstruction,
   HydrateElementProjectionDefinition,
   HydrateTemplateControllerInstruction,
@@ -104,9 +110,17 @@ export class TemplateCompilerTargetContextFrontier {
 }
 
 /** One compiler-side row projection with explicit exact/open/aggregate posture. */
+export const enum TemplateCompilerTargetRowSourceKind {
+  Authored = 'authored',
+  RetainedOccurrence = 'retained-occurrence',
+  TextHole = 'text-hole',
+}
+
 export class TemplateCompilerTargetRowPlan {
   constructor(
     readonly localKey: string,
+    /** Stable semantic identity independent from row order. */
+    readonly stableSlotKey: string,
     /** Stable handle-local suffix used when publishing the durable target row. */
     readonly publicationLocalKey: string,
     readonly context: TemplateCompilerTargetContextReference,
@@ -117,11 +131,38 @@ export class TemplateCompilerTargetRowPlan {
     readonly posture: TemplateCompilerTargetRowPosture,
     readonly openSeamHandles: readonly OpenSeamHandle[],
     readonly targetKind: TemplateRenderTargetKind,
-    /** Authored target lineage retained until transformed occurrence realization joins this row. */
-    readonly node: HtmlElement | HtmlText,
+    readonly sourceKind: TemplateCompilerTargetRowSourceKind,
+    /** Optional authored target lineage; occurrence rows do not require a singular authored node. */
+    readonly node: HtmlElement | HtmlText | null,
+    /** Exact run-local target input for occurrence-primary rows. */
+    readonly occurrence: TemplateCompilerElementOccurrence | TemplateCompilerTextOccurrence | null,
+    /** Browser-effective structural product retained independently from authored lineage. */
+    readonly inputNode: TemplateStructuralNodeReference | null,
+    /** Parser hole index for a text-hole row; null for authored and retained-element rows. */
+    readonly expressionChainIndex: number | null,
     readonly instructions: readonly TemplateInstruction[],
     readonly sourceAddressHandle: AddressHandle | null,
   ) {}
+
+  targetPublicationLocal(compiledLocal: string, index: number): string {
+    return this.sourceKind === TemplateCompilerTargetRowSourceKind.Authored
+      ? `${compiledLocal}:target:${index}:${this.publicationLocalKey}`
+      : `${compiledLocal}:target:${this.publicationLocalKey}`;
+  }
+}
+
+/** One occurrence admitted as compiler-reachable structure in exact traversal order. */
+export class TemplateCompilerTargetOccurrenceMembership {
+  constructor(
+    readonly stableSlotKey: string,
+    readonly ordinal: number,
+    readonly occurrence: TemplateCompilerNodeOccurrence,
+    readonly authoredNode: HtmlElement | HtmlText | null,
+  ) {}
+
+  get inputNode(): TemplateStructuralNodeReference | null {
+    return this.occurrence.inputReference;
+  }
 }
 
 /** Mutable row owner for one root, template-controller, or projection compiler context. */
@@ -131,6 +172,13 @@ export class TemplateCompilerTargetContextPlan {
   private readonly frontiers: TemplateCompilerTargetContextFrontier[] = [];
   private readonly compilerReachableNodeProductHandles: ProductHandle[] = [];
   private readonly compilerReachableNodeOrdinals = new Map<ProductHandle, number>();
+  private readonly occurrenceMemberships: TemplateCompilerTargetOccurrenceMembership[] = [];
+  private readonly occurrenceMembershipsByOccurrence = new Map<
+    TemplateCompilerNodeOccurrence,
+    TemplateCompilerTargetOccurrenceMembership
+  >();
+  private readonly stableRowSlots = new Set<string>();
+  private readonly stableMembershipSlots = new Set<string>();
   private sealed = false;
   private nextTargetOrdinal = 0;
   private firstConditionalTargetOrdinal: number | null = null;
@@ -164,6 +212,10 @@ export class TemplateCompilerTargetContextPlan {
 
   readCompilerReachableNodeProductHandles(): readonly ProductHandle[] {
     return this.compilerReachableNodeProductHandles;
+  }
+
+  readOccurrenceMemberships(): readonly TemplateCompilerTargetOccurrenceMembership[] {
+    return this.occurrenceMemberships;
   }
 
   compilerReachableNodeOrdinal(productHandle: ProductHandle): number | null {
@@ -218,6 +270,7 @@ export class TemplateCompilerTargetContextPlan {
     const row = new TemplateCompilerTargetRowPlan(
       `${this.localKey}:row:${ordinal}:${local}`,
       `${ordinal}:${local}`,
+      `${ordinal}:${local}`,
       this.toReference(),
       ordinal,
       this.nextTargetOrdinal,
@@ -225,12 +278,69 @@ export class TemplateCompilerTargetContextPlan {
       posture,
       openSeamHandles,
       targetKind,
+      TemplateCompilerTargetRowSourceKind.Authored,
       node,
+      null,
+      null,
+      null,
+      instructions,
+      sourceAddressHandle,
+    );
+    this.stableRowSlots.add(row.stableSlotKey);
+    this.rows.push(row);
+    this.nextTargetOrdinal += projectedTargetCount;
+    return row;
+  }
+
+  appendOccurrenceRow(
+    stableSlotKey: string,
+    occurrence: TemplateCompilerElementOccurrence | TemplateCompilerTextOccurrence,
+    authoredNode: HtmlElement | HtmlText | null,
+    instructions: readonly TemplateInstruction[],
+    targetKind: TemplateRenderTargetKind = TemplateRenderTargetKind.MarkerTarget,
+    sourceAddressHandle: AddressHandle | null = authoredNode?.sourceAddressHandle
+      ?? occurrence.inputReference?.addressHandle
+      ?? null,
+    expressionChainIndex: number | null = null,
+  ): TemplateCompilerTargetRowPlan {
+    this.requireMutable();
+    if (stableSlotKey.length === 0 || this.stableRowSlots.has(stableSlotKey)) {
+      throw new Error(`Compiler occurrence row slot '${stableSlotKey}' is empty or already admitted.`);
+    }
+    if (instructions.length === 0) {
+      throw new Error(`Compiler occurrence row '${stableSlotKey}' requires at least one exact instruction.`);
+    }
+    if (
+      authoredNode != null
+      && (('tagName' in occurrence) !== ('tagName' in authoredNode))
+    ) {
+      throw new Error(`Compiler occurrence row '${stableSlotKey}' mixes element/text source kinds.`);
+    }
+    const ordinal = this.rows.length;
+    const row = new TemplateCompilerTargetRowPlan(
+      `${this.localKey}:row:${stableSlotKey}`,
+      stableSlotKey,
+      stableSlotKey,
+      this.toReference(),
+      ordinal,
+      this.nextTargetOrdinal,
+      1,
+      TemplateCompilerTargetRowPosture.Complete,
+      [],
+      targetKind,
+      expressionChainIndex == null
+        ? TemplateCompilerTargetRowSourceKind.RetainedOccurrence
+        : TemplateCompilerTargetRowSourceKind.TextHole,
+      authoredNode,
+      occurrence,
+      occurrence.inputReference,
+      expressionChainIndex,
       instructions,
       sourceAddressHandle,
     );
     this.rows.push(row);
-    this.nextTargetOrdinal += projectedTargetCount;
+    this.stableRowSlots.add(stableSlotKey);
+    this.nextTargetOrdinal += 1;
     return row;
   }
 
@@ -261,6 +371,32 @@ export class TemplateCompilerTargetContextPlan {
     if (this.compilerReachableNodeOrdinals.has(productHandle)) return;
     this.compilerReachableNodeOrdinals.set(productHandle, this.compilerReachableNodeProductHandles.length);
     this.compilerReachableNodeProductHandles.push(productHandle);
+  }
+
+  recordCompilerReachableOccurrence(
+    stableSlotKey: string,
+    occurrence: TemplateCompilerNodeOccurrence,
+    authoredNode: HtmlElement | HtmlText | null,
+  ): TemplateCompilerTargetOccurrenceMembership {
+    this.requireMutable();
+    if (
+      stableSlotKey.length === 0
+      || this.stableMembershipSlots.has(stableSlotKey)
+      || this.occurrenceMembershipsByOccurrence.has(occurrence)
+    ) {
+      throw new Error(`Compiler occurrence membership '${stableSlotKey}' is empty or already admitted.`);
+    }
+    const membership = new TemplateCompilerTargetOccurrenceMembership(
+      stableSlotKey,
+      this.occurrenceMemberships.length,
+      occurrence,
+      authoredNode,
+    );
+    this.occurrenceMemberships.push(membership);
+    this.occurrenceMembershipsByOccurrence.set(occurrence, membership);
+    this.stableMembershipSlots.add(stableSlotKey);
+    if (authoredNode != null) this.recordCompilerReachableNode(authoredNode.productHandle);
+    return membership;
   }
 
   admitOwnedContext(child: TemplateCompilerTargetContextPlan): void {
@@ -396,6 +532,7 @@ export class TemplateCompilerTargetPlan {
     const visited = new Set<TemplateCompilerTargetContextPlan>();
     const compiledTemplateProducts = new Set<ProductHandle>();
     const reachableNodeOwners = new Map<ProductHandle, string>();
+    const reachableOccurrenceOwners = new Map<TemplateCompilerNodeOccurrence, string>();
     const visit = (context: TemplateCompilerTargetContextPlan): void => {
       if (visited.has(context)) {
         throw new Error(`Compiler target context '${context.localKey}' is owned more than once.`);
@@ -421,6 +558,19 @@ export class TemplateCompilerTargetPlan {
       ) {
         throw new Error(`Compiler target context '${context.localKey}' has incoherent reachable-node ordinals.`);
       }
+      for (const [ordinal, membership] of context.readOccurrenceMemberships().entries()) {
+        const priorOwner = reachableOccurrenceOwners.get(membership.occurrence) ?? null;
+        if (
+          membership.ordinal !== ordinal
+          || membership.stableSlotKey.length === 0
+          || priorOwner != null
+          || (membership.authoredNode != null
+            && context.compilerReachableNodeOrdinal(membership.authoredNode.productHandle) == null)
+        ) {
+          throw new Error(`Compiler occurrence membership '${membership.stableSlotKey}' is incoherent.`);
+        }
+        reachableOccurrenceOwners.set(membership.occurrence, context.localKey);
+      }
       if (!contextStructuralAuthorityIsCoherent(context)) {
         throw new Error(`Compiler target context '${context.localKey}' has incoherent structural authority.`);
       }
@@ -439,6 +589,9 @@ export class TemplateCompilerTargetPlan {
         }
       }
       let expectedTargetOrdinal = 0;
+      if (new Set(context.readRows().map((row) => row.stableSlotKey)).size !== context.readRows().length) {
+        throw new Error(`Compiler target context '${context.localKey}' repeats a stable row slot.`);
+      }
       context.readRows().forEach((row, ordinal) => {
         const postureCoherent = rowPostureIsCoherent(row);
         if (
@@ -446,6 +599,27 @@ export class TemplateCompilerTargetPlan {
           || row.ordinal !== ordinal
           || row.projectedTargetOrdinal !== expectedTargetOrdinal
           || row.projectedTargetCount < 1
+          || row.stableSlotKey.length === 0
+          || (row.sourceKind === TemplateCompilerTargetRowSourceKind.Authored
+            && (row.node == null || row.occurrence != null || row.inputNode != null))
+          || (row.sourceKind !== TemplateCompilerTargetRowSourceKind.Authored
+            && (
+              row.occurrence == null
+              || row.inputNode !== row.occurrence.inputReference
+              || (row.inputNode == null && row.node == null && row.occurrence.generation == null)
+              || !context.readOccurrenceMemberships().some((membership) =>
+                membership.occurrence === row.occurrence
+                && membership.authoredNode === row.node
+              )
+            ))
+          || (row.sourceKind === TemplateCompilerTargetRowSourceKind.TextHole
+            && (
+              row.expressionChainIndex == null
+              || row.expressionChainIndex < 0
+              || !('text' in row.occurrence!)
+            ))
+          || (row.sourceKind !== TemplateCompilerTargetRowSourceKind.TextHole
+            && row.expressionChainIndex != null)
           || !postureCoherent
         ) {
           throw new Error(`Compiler target row '${row.localKey}' has incoherent context ownership.`);
