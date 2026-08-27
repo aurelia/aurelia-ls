@@ -14,7 +14,8 @@ classification, expression parsing, and instruction lowering converge on the sam
 - `compiler-world.ts` models the container-scoped compiler world: visible resources, syntax resources, and compiler
   services. It is the handoff from DI world construction into template compilation. The service set mirrors the
   runtime root compilation context: template compiler, resource resolver, attribute parser, binding-command resolver,
-  expression parser, attribute mapper, and the ordered compiler-hook set. The world detail also owns the app-visible `NodeObserverLocator`
+  expression parser, attribute mapper, the ordered compiler-hook set, and the component-local CSS class mapping. The
+  world detail also owns the app-visible `NodeObserverLocator`
   configuration consumed by runtime binding analysis and the app-effective `IKeyMapping` state consumed by listener
   authoring; do not carry that state beside the world in a second emission field.
 - `compiler-world-materializer.ts` materializes a compiler world after earlier passes have selected the visible container,
@@ -41,6 +42,14 @@ classification, expression parsing, and instruction lowering converge on the sam
   borrowing that negative authority. Structural replay admits exact-none and exact lists whose complete provider array
   resolves and whose entries all prove the optional callable absent; callable/Open/abrupt lists remain distinct until
   ordered hook execution is connected.
+- `css-class-mapping.ts` folds ordered `cssModules(...)` registry inputs into the one raw `ICssClassMapping` authority
+  shared inside a component leaf locus. Its property algebra keeps exact values, exact absence, and Open lookup separate,
+  so a later exact registry write can close one class name without claiming unrelated build-owned mappings. Component
+  mappings do not inherit through parent components; JIT local elements replay their owner dependencies into a fresh
+  mapping product. Every generated leaf CSS hook references that product, while runtime class consumers read the same
+  service. The authority exposes raw values because framework consumers currently differ between truthy and nullish
+  fallback. Root-lane CSS hooks, once root `cssModules(...)` registration is projected, require a distinct root mapping
+  authority rather than being rebound to the component leaf.
 - `parse-context.ts` carries inquiry pressure that genuinely changes parser/lowering behavior: strict parsing,
   recovery, frontier/cursor preservation, and consumer lane.
 - `compilation-unit.ts` models the compiler front door: authored template source, the selected compiler world,

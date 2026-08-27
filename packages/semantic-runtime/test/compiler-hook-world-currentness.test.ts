@@ -28,6 +28,7 @@ import {
   TemplateCompilerReadObservation,
 } from '../src/template/compiler-read-view.js';
 import { TemplateProductDetails } from '../src/template/product-details.js';
+import { CssClassMappingPropertyState } from '../src/template/css-class-mapping.js';
 import { TemplateCompilationLocus } from '../src/template/template-compilation-cohort.js';
 import type { TemplateResourceCompilationEmission } from '../src/template/template-compilation-project-pass.js';
 import { BrowserEffectiveTemplateMaterializer } from '../src/template/browser-effective-template-materializer.js';
@@ -43,7 +44,7 @@ import { MutableProjectSourceOverlay } from './support/incremental-conformance.j
 const packageRoot = path.resolve(fileURLToPath(new URL('..', import.meta.url)));
 
 describe('compiler-hook world currentness', () => {
-  test('replaces only the component hook fact when a cssModules dependency is added and removed', async () => {
+  test('reconciles component hook membership and CSS mapping changes without disturbing stable siblings', async () => {
     const workspaceRoot = await mkdtemp(path.join(packageRoot, '.compiler-hook-world-currentness-'));
     const mutableFileName = path.join(workspaceRoot, 'src/mutable-card.ts');
     const originalMutableSource = [
@@ -64,7 +65,9 @@ describe('compiler-hook world currentness', () => {
         "  dependencies: [cssModules({ mapped: 'mapped_hash' })],",
       ].join('\n'),
     );
+    const remappedMutableSource = changedMutableSource.replace('mapped_hash', 'mapped_hash_v2');
     expect(changedMutableSource).not.toBe(originalMutableSource);
+    expect(remappedMutableSource).not.toBe(changedMutableSource);
 
     const overlay = new MutableProjectSourceOverlay();
     const inputAuthority = new SemanticRuntimeProjectInputAuthority(
@@ -139,6 +142,7 @@ describe('compiler-hook world currentness', () => {
       const changedMutable = requireCompilation(changed, 'mutable-card');
       const changedStable = requireCompilation(changed, 'stable-card');
       const changedMutableRead = requireHookRead(changedMutable);
+      const changedMappingRead = requireCssClassMappingRead(changedMutable);
       const changedStableRead = requireHookRead(changedStable);
 
       expect(changedRootHooks.productHandle).toBe(baselineRootHooks.productHandle);
@@ -160,7 +164,7 @@ describe('compiler-hook world currentness', () => {
       const replayRun = runtime.computationLifecycle.begin({
         kind: 'compiler-hook-currentness-replay',
         reconciliationKey: 'compiler-hook-currentness-replay',
-        summary: 'Exercise exact CSS Modules hook membership with provider execution still open.',
+        summary: 'Exercise exact CSS Modules hook membership before built-in hook execution lands.',
       });
       try {
         const browser = parseBrowserTemplateFragmentDraft(changedMarkup);
@@ -178,7 +182,7 @@ describe('compiler-hook world currentness', () => {
         });
         expect(replay.state).toBe(TemplateCompilerDeterministicExecutionState.Open);
         expect(replay.reasons.map((reason) => reason.reasonKind)).toContain(
-          TemplateCompilerDeterministicExecutionReasonKind.CompilerHookProviderOpen,
+          TemplateCompilerDeterministicExecutionReasonKind.CompilerHookCallableOpen,
         );
       } finally {
         replayRun.abort();
@@ -214,8 +218,41 @@ describe('compiler-hook world currentness', () => {
         baselineStable.compilerWorld.compilerHooks.productHandle,
       );
 
+      overlay.write(mutableFileName, remappedMutableSource);
+      const remapped = await reopenApp(runtime, inputAuthority, changed);
+      const remappedMutable = requireCompilation(remapped, 'mutable-card');
+      const remappedStable = requireCompilation(remapped, 'stable-card');
+      const remappedMutableRead = requireHookRead(remappedMutable);
+      const remappedMappingRead = requireCssClassMappingRead(remappedMutable);
+      expect(remappedMutable.compilerWorld.cssClassMapping.productHandle)
+        .not.toBe(changedMutable.compilerWorld.cssClassMapping.productHandle);
+      expect(remappedMutable.compilerWorld.cssClassMapping.lookup('mapped')).toEqual({
+        propertyState: CssClassMappingPropertyState.Value,
+        mappedClassName: 'mapped_hash_v2',
+      });
+      expect(remappedMutableRead.observedRevision).not.toBe(changedMutableRead.observedRevision);
+      expect(remappedMappingRead.observedRevision).not.toBe(changedMappingRead.observedRevision);
+      expectFamilyTransition(
+        runtime,
+        remapped,
+        changedMutable.familyOwnerHandle,
+        ComputationChildTransitionKind.Withdrawn,
+      );
+      expectFamilyTransition(
+        runtime,
+        remapped,
+        remappedMutable.familyOwnerHandle,
+        ComputationChildTransitionKind.Executed,
+      );
+      expectFamilyTransition(
+        runtime,
+        remapped,
+        remappedStable.familyOwnerHandle,
+        ComputationChildTransitionKind.Carried,
+      );
+
       overlay.write(mutableFileName, originalMutableSource);
-      const restored = await reopenApp(runtime, inputAuthority, changed);
+      const restored = await reopenApp(runtime, inputAuthority, remapped);
       const restoredRootHooks = requireRootHookSet(restored);
       const restoredMutable = requireCompilation(restored, 'mutable-card');
       const restoredStable = requireCompilation(restored, 'stable-card');
@@ -237,7 +274,7 @@ describe('compiler-hook world currentness', () => {
       expectFamilyTransition(
         runtime,
         restored,
-        changedMutable.familyOwnerHandle,
+        remappedMutable.familyOwnerHandle,
         ComputationChildTransitionKind.Withdrawn,
       );
       expectFamilyTransition(
@@ -249,7 +286,7 @@ describe('compiler-hook world currentness', () => {
       expectFamilyTransition(
         runtime,
         restored,
-        changedStable.familyOwnerHandle,
+        remappedStable.familyOwnerHandle,
         ComputationChildTransitionKind.Carried,
       );
     } finally {
@@ -287,6 +324,24 @@ function requireHookRead(
   if (read == null) {
     throw new Error(
       `Expected compiler-hooks read for '${compilation.definition.name}'; observed ${compilation.registeredReads
+        .map((candidate) => `${candidate.constructor.name}:${candidate.readKey}`)
+        .join(', ')}.`,
+    );
+  }
+  return read;
+}
+
+function requireCssClassMappingRead(
+  compilation: TemplateResourceCompilationEmission,
+): ComputationRead {
+  const read = compilation.registeredReads.find((candidate) =>
+    candidate instanceof TemplateCompilerReadObservation
+      ? candidate.readKind === TemplateCompilerReadKind.CssClassMapping && candidate.canonicalKey === 'all'
+      : candidate.domain === 'template-compiler' && candidate.readKey.includes('|css-class-mapping|all')
+  ) ?? null;
+  if (read == null) {
+    throw new Error(
+      `Expected CSS class-mapping read for '${compilation.definition.name}'; observed ${compilation.registeredReads
         .map((candidate) => `${candidate.constructor.name}:${candidate.readKey}`)
         .join(', ')}.`,
     );

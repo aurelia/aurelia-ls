@@ -58,6 +58,7 @@ import type {
   TemplateCompilerIssue,
 } from './compiler-issue.js';
 import type { TemplateCompilerHookSet } from './compiler-hook-world.js';
+import type { CssClassMappingAuthority } from './css-class-mapping.js';
 import type {
   BuiltInSyntaxCatalog,
   ConfiguredBuiltInSyntaxCatalogSelection,
@@ -193,6 +194,7 @@ import {
   compareBindingCommandExecutableDetails,
   compareBindingCommandResolverDetails,
   compareCompiledAttributePatternDetails,
+  compareCssClassMappingAuthorityDetails,
   compareRuntimeRendererDetails,
   compareTemplateAttributeMapperServiceDetails,
   compareTemplateCompilerIssueDetails,
@@ -220,6 +222,7 @@ export const TemplateProductDetails = {
   ResourceScope: defineProductDetailSlot(TemplateDetailDescriptors.ResourceScope, referencesForTemplateResourceScope, compareTemplateResourceScopeDetails),
   TemplateCompilerService: defineProductDetailSlot(TemplateDetailDescriptors.TemplateCompilerService, referencesForTemplateCompilerService, compareTemplateCompilerServiceDetails),
   CompilerHookSet: defineProductDetailSlot(TemplateDetailDescriptors.CompilerHookSet, referencesForTemplateCompilerHookSet, compareTemplateCompilerHookSetDetails),
+  CssClassMapping: defineProductDetailSlot(TemplateDetailDescriptors.CssClassMapping, referencesForCssClassMapping, compareCssClassMappingAuthorityDetails),
   ResourceResolverService: defineProductDetailSlot(TemplateDetailDescriptors.ResourceResolverService, referencesForTemplateResourceResolverService, compareTemplateResourceResolverServiceDetails),
   ExpressionParserService: defineProductDetailSlot(TemplateDetailDescriptors.ExpressionParserService, referencesForTemplateExpressionParserService, compareTemplateExpressionParserServiceDetails),
   AttributeMapperService: defineProductDetailSlot(TemplateDetailDescriptors.AttributeMapperService, referencesForTemplateAttributeMapperService, compareTemplateAttributeMapperServiceDetails),
@@ -564,12 +567,34 @@ function referencesForTemplateCompilerHookSet(
         ...entry.provider.openSeamHandles,
         ...entry.callable.openSeamHandles,
       ),
+      entry.cssClassMapping == null
+        ? mergeKernelDetailReferences()
+        : productIdentityAddressReferences(
+            entry.cssClassMapping.productHandle,
+            entry.cssClassMapping.identityHandle,
+            entry.cssClassMapping.sourceAddressHandle,
+            TemplateDetailDescriptors.CssClassMapping,
+          ),
     )),
     ...hookSet.openReasons.map((reason) => kernelRecordReferences(
       reason.sourceAddressHandle,
       ...reason.openSeamHandles,
     )),
     kernelRecordReferences(hookSet.sourceAddressHandle),
+  );
+}
+
+function referencesForCssClassMapping(
+  mapping: CssClassMappingAuthority,
+): KernelDetailReferenceClosure {
+  return mergeKernelDetailReferences(
+    kernelRecordReferences(
+      mapping.sourceAddressHandle,
+      ...mapping.openReasons.flatMap((reason) => [
+        reason.sourceAddressHandle,
+        ...reason.openSeamHandles,
+      ]),
+    ),
   );
 }
 
@@ -626,6 +651,9 @@ function templateCompilerServiceReferenceReferences(
       break;
     case TemplateCompilerServiceKind.CompilerHooks:
       slot = TemplateDetailDescriptors.CompilerHookSet;
+      break;
+    case TemplateCompilerServiceKind.CssClassMapping:
+      slot = TemplateDetailDescriptors.CssClassMapping;
       break;
     case TemplateCompilerServiceKind.ResourceResolver:
       slot = TemplateDetailDescriptors.ResourceResolverService;

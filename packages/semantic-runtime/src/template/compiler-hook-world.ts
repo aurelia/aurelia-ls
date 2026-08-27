@@ -13,6 +13,7 @@ import {
   ResourceCompilerHookEffectKind,
   type ResourceDependencyReference,
 } from '../resources/resource-reference.js';
+import type { CssClassMappingAuthorityReference } from './css-class-mapping.js';
 
 /** Whether the complete `TemplateCompilerHooks.findAll(...)` membership is known for one compiler invocation. */
 export const enum TemplateCompilerHookMembershipState {
@@ -134,6 +135,8 @@ export class TemplateCompilerHookEntry {
     readonly cause: TemplateCompilerHookEntryCause,
     readonly provider: TemplateCompilerHookProviderAuthority,
     readonly callable: TemplateCompilerHookCallableAuthority,
+    /** Shared leaf-locus mapping captured by every framework-generated CSS Modules hook. */
+    readonly cssClassMapping: CssClassMappingAuthorityReference | null = null,
   ) {}
 }
 
@@ -454,18 +457,22 @@ function componentRegistryHookEntry(
       ].join('\0'),
     ),
     new TemplateCompilerHookProviderAuthority(
-      TemplateCompilerHookProviderResolutionKind.Open,
       hookKind === TemplateCompilerHookKind.CssModules
-        ? 'CSS Modules hook provider construction has not been executed in the component leaf container.'
+        ? TemplateCompilerHookProviderResolutionKind.Value
+        : TemplateCompilerHookProviderResolutionKind.Open,
+      hookKind === TemplateCompilerHookKind.CssModules
+        ? null
         : 'Component hook provider construction has not been executed in the component leaf container.',
     ),
     new TemplateCompilerHookCallableAuthority(
-      TemplateCompilerHookCallableAuthorityKind.Open,
+      hookKind === TemplateCompilerHookKind.CssModules
+        ? TemplateCompilerHookCallableAuthorityKind.BuiltIn
+        : TemplateCompilerHookCallableAuthorityKind.Open,
       dependency.identityHandle,
       null,
       null,
       hookKind === TemplateCompilerHookKind.CssModules
-        ? 'CSS Modules hook membership is known, but its mapping payload has not been retained for exact execution.'
+        ? null
         : 'Component hook membership is known, but receiver-bearing callable execution is not yet available.',
     ),
   );
@@ -492,7 +499,20 @@ function sameTemplateCompilerHookEntry(
     && left.callable.sourceAddressHandle === right.callable.sourceAddressHandle
     && left.callable.callableSlotKey === right.callable.callableSlotKey
     && left.callable.reason === right.callable.reason
-    && sameArrays(left.callable.openSeamHandles, right.callable.openSeamHandles, (a, b) => a === b);
+    && sameArrays(left.callable.openSeamHandles, right.callable.openSeamHandles, (a, b) => a === b)
+    && sameCssClassMappingReference(left.cssClassMapping, right.cssClassMapping);
+}
+
+function sameCssClassMappingReference(
+  left: CssClassMappingAuthorityReference | null,
+  right: CssClassMappingAuthorityReference | null,
+): boolean {
+  return left === right
+    || left != null
+      && right != null
+      && left.productHandle === right.productHandle
+      && left.identityHandle === right.identityHandle
+      && left.sourceAddressHandle === right.sourceAddressHandle;
 }
 
 function sameTemplateCompilerHookOpenReason(

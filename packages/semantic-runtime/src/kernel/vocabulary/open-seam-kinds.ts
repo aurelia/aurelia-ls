@@ -308,6 +308,13 @@ export const KernelOpenSeamKinds = {
       KernelVocabularySlot.OpenSeamKind,
       'Compiler could not close TemplateCompilerHooks membership or receiver-bearing hook execution.',
     ),
+    /** Component-local CSS class mapping still depends on open registry or build-transform input. */
+    OpenCssClassMapping: defineVocabulary(
+      KernelVocabularyNamespace.Compiler,
+      'open-css-class-mapping',
+      KernelVocabularySlot.OpenSeamKind,
+      'Compiler/runtime world could not close the component-local ICssClassMapping authority.',
+    ),
     /** Executable command or pattern body stayed opaque. */
     OpenExecutableBody: defineVocabulary(
       KernelVocabularyNamespace.Compiler,

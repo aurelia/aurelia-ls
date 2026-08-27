@@ -45,6 +45,7 @@ import type {
 import type { TemplateAttributeMapperNode } from './attribute-mapper.js';
 import type { TemplateVisibleResource } from './compiler-world-reference.js';
 import type { TemplateCompilerHookSet } from './compiler-hook-world.js';
+import type { CssClassMappingAuthority } from './css-class-mapping.js';
 import {
   evaluateStaticCallableTruthiness,
   StaticCallableTruthinessKind,
@@ -86,6 +87,8 @@ export const enum TemplateCompilerReadKind {
   TemplateCompiler = 'template-compiler',
   /** Ordered TemplateCompilerHooks membership and callable closure. */
   CompilerHooks = 'compiler-hooks',
+  /** Component-local raw ICssClassMapping authority used by built-in hooks and runtime class consumers. */
+  CssClassMapping = 'css-class-mapping',
 }
 
 export const enum TemplateCompilerScopeClosureState {
@@ -466,6 +469,17 @@ export class TemplateCompilerReadView {
       'all',
       compilerHookSetResultParts(result),
       (_store, current) => compilerHookSetResultParts(current.compilerHooks),
+    );
+    return result;
+  }
+
+  cssClassMapping(): CssClassMappingAuthority {
+    const result = this.world.cssClassMapping;
+    this.observe(
+      TemplateCompilerReadKind.CssClassMapping,
+      'all',
+      cssClassMappingResultParts(result),
+      (_store, current) => cssClassMappingResultParts(current.cssClassMapping),
     );
     return result;
   }
@@ -960,6 +974,9 @@ function compilerHookSetResultParts(
       entry.callable.reason ?? '',
       ...entry.callable.openSeamHandles,
       entry.callable.sourceAddressHandle ?? '',
+      entry.cssClassMapping?.productHandle ?? '',
+      entry.cssClassMapping?.identityHandle ?? '',
+      entry.cssClassMapping?.sourceAddressHandle ?? '',
     ]),
     ...hookSet.openReasons.flatMap((reason) => [
       reason.reasonKind,
@@ -969,6 +986,32 @@ function compilerHookSetResultParts(
       ...reason.openSeamHandles,
     ]),
     hookSet.sourceAddressHandle ?? '',
+  ];
+}
+
+function cssClassMappingResultParts(
+  mapping: CssClassMappingAuthority,
+): readonly string[] {
+  return [
+    mapping.productHandle,
+    mapping.identityHandle,
+    mapping.authorityState,
+    mapping.defaultPropertyState,
+    ...mapping.properties.flatMap((property) => [
+      property.className,
+      property.propertyState,
+      property.mappedClassName ?? '',
+    ]),
+    ...mapping.openReasons.flatMap((reason) => [
+      reason.reasonKind,
+      reason.summary,
+      String(reason.sourceOrdinal ?? ''),
+      String(reason.mappingArgumentOrdinal ?? ''),
+      reason.sourceModuleKey ?? '',
+      reason.sourceAddressHandle ?? '',
+      ...reason.openSeamHandles,
+    ]),
+    mapping.sourceAddressHandle ?? '',
   ];
 }
 

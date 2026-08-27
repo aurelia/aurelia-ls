@@ -2264,7 +2264,7 @@ function readResourceDependencies(
         open,
         'Resource dependency is a registry whose registration effects remain opaque.',
         element.expression,
-        [OpenSeamReasonKind.ResourceDefinitionDependencyEntryOpen],
+        [OpenSeamReasonKind.ResourceOpaqueRegistryEffectsOpen],
       );
       continue;
     }

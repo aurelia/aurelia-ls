@@ -7,6 +7,7 @@ import { afterAll, beforeAll, describe, expect, test } from 'vitest';
 import { createSemanticRuntime } from '../src/api/runtime.js';
 import { OpenSeamReasonKind } from '../src/kernel/open-seam.js';
 import { StaticCallableSlot } from '../src/evaluation/function-execution.js';
+import { EvaluationValueKind } from '../src/evaluation/values.js';
 import {
   ResourceCompilerHookEffectKind,
   ResourceDependencyReferenceKind,
@@ -19,7 +20,12 @@ import {
   TemplateCompilerHookLane,
   TemplateCompilerHookMembershipState,
   TemplateCompilerHookOpenReasonKind,
+  TemplateCompilerHookProviderResolutionKind,
 } from '../src/template/compiler-hook-world.js';
+import {
+  CssClassMappingAuthorityState,
+  CssClassMappingPropertyState,
+} from '../src/template/css-class-mapping.js';
 import { TemplateCompilerReadKind } from '../src/template/compiler-read-view.js';
 import { BrowserEffectiveTemplateMaterializer } from '../src/template/browser-effective-template-materializer.js';
 import { parseBrowserTemplateFragmentDraft } from '../src/template/browser-template-parser.js';
@@ -135,6 +141,7 @@ describe('component-local compiler-hook registry dependencies', () => {
         'class RootDefinedHook { compiling(): void {} }',
         '@templateCompilerHooks',
         'class RootDecoratedHook { compiling(): void {} }',
+        'class RootInheritedHook extends RootDecoratedHook {}',
         "@customElement({ name: 'compiler-hook-app', template: '<hook-host></hook-host><css-hook-host></css-hook-host><css-payload-host></css-payload-host><open-deps-host></open-deps-host>', dependencies: [HookHost, CssHookHost, CssPayloadHost, OpenDepsHost] })",
         'class CompilerHookApp {}',
         'new Aurelia()',
@@ -144,6 +151,8 @@ describe('component-local compiler-hook registry dependencies', () => {
         '    Registration.instance(ITemplateCompilerHooks, rootCompilerHook),',
         '    TemplateCompilerHooks.define(RootDefinedHook),',
         '    RootDecoratedHook,',
+        '    RootInheritedHook,',
+        '    TemplateCompilerHooks.define(RootDefinedHook),',
         '  )',
         '  .app({ host: document.body, component: CompilerHookApp })',
         '  .start();',
@@ -173,19 +182,32 @@ describe('component-local compiler-hook registry dependencies', () => {
     });
     const rootHooks = app.emission.appWorld.compilerWorlds[0]?.compilerHooks;
     if (rootHooks == null) throw new Error('Expected app-root compiler hooks.');
-    expect(rootHooks.membershipState).toBe(TemplateCompilerHookMembershipState.Open);
-    expect(rootHooks.openReasons.map((reason) => reason.summary)).toEqual(expect.arrayContaining([
-      expect.stringContaining('TemplateCompilerHooks.define'),
-      expect.stringContaining('@templateCompilerHooks'),
-    ]));
-    expect(rootHooks.entries).toMatchObject([
-      { callable: { authorityKind: TemplateCompilerHookCallableAuthorityKind.Absent } },
-      {
-        callable: {
-          authorityKind: TemplateCompilerHookCallableAuthorityKind.StaticCallable,
-          callableSlotKey: expect.stringContaining(':compiler-hook:'),
-        },
-      },
+    expect(rootHooks.membershipState).toBe(TemplateCompilerHookMembershipState.ExactList);
+    expect(rootHooks.openReasons).toEqual([]);
+    expect(rootHooks.entries.map((entry) => entry.callable.authorityKind)).toEqual([
+      TemplateCompilerHookCallableAuthorityKind.Absent,
+      TemplateCompilerHookCallableAuthorityKind.StaticCallable,
+      TemplateCompilerHookCallableAuthorityKind.StaticCallable,
+      TemplateCompilerHookCallableAuthorityKind.StaticCallable,
+      TemplateCompilerHookCallableAuthorityKind.StaticCallable,
+      TemplateCompilerHookCallableAuthorityKind.StaticCallable,
+    ]);
+    expect(rootHooks.entries.map((entry) => entry.sourceOrdinal)).toEqual([0, 1, 2, 3, 4, 5]);
+    expect(rootHooks.entries.map((entry) => entry.laneOrdinal)).toEqual([0, 1, 2, 3, 4, 5]);
+    const receiverClassNames = rootHooks.entries.slice(2).map((entry) => {
+      const slotKey = entry.callable.callableSlotKey;
+      if (slotKey == null) return null;
+      const target = app.emission.appWorld.compilerWorlds[0]!.callableBindings.target(new StaticCallableSlot(slotKey));
+      const declaration = target?.receiver?.kind === EvaluationValueKind.Instance
+        ? target.receiver.classValue.declaration
+        : null;
+      return declaration?.name?.getText(declaration.getSourceFile()) ?? null;
+    });
+    expect(receiverClassNames).toEqual([
+      'RootDefinedHook',
+      'RootDecoratedHook',
+      'RootDecoratedHook',
+      'RootDefinedHook',
     ]);
     const callableSlotKey = rootHooks.entries[1]?.callable.callableSlotKey ?? null;
     if (callableSlotKey == null) throw new Error('Expected exact root hook callable slot authority.');
@@ -369,7 +391,7 @@ describe('component-local compiler-hook registry dependencies', () => {
     expect(opaqueSeams).toHaveLength(6);
     expect(opaqueSeams.every((seam) =>
       seam.reasonKinds.length === 1
-      && seam.reasonKinds[0] === OpenSeamReasonKind.ResourceDefinitionDependencyEntryOpen
+      && seam.reasonKinds[0] === OpenSeamReasonKind.ResourceOpaqueRegistryEffectsOpen
     )).toBe(true);
 
     const compilation = app.emission.templates.resources.find((resource) =>
@@ -388,10 +410,14 @@ describe('component-local compiler-hook registry dependencies', () => {
       { lane: TemplateCompilerHookLane.Leaf, ordinal: 1, hookKind: TemplateCompilerHookKind.Registered, callable: TemplateCompilerHookCallableAuthorityKind.Open },
       { lane: TemplateCompilerHookLane.Leaf, ordinal: 2, hookKind: TemplateCompilerHookKind.Registered, callable: TemplateCompilerHookCallableAuthorityKind.Open },
       { lane: TemplateCompilerHookLane.Leaf, ordinal: 3, hookKind: TemplateCompilerHookKind.Registered, callable: TemplateCompilerHookCallableAuthorityKind.Open },
-      { lane: TemplateCompilerHookLane.Leaf, ordinal: 4, hookKind: TemplateCompilerHookKind.CssModules, callable: TemplateCompilerHookCallableAuthorityKind.Open },
-      { lane: TemplateCompilerHookLane.Leaf, ordinal: 5, hookKind: TemplateCompilerHookKind.CssModules, callable: TemplateCompilerHookCallableAuthorityKind.Open },
+      { lane: TemplateCompilerHookLane.Leaf, ordinal: 4, hookKind: TemplateCompilerHookKind.CssModules, callable: TemplateCompilerHookCallableAuthorityKind.BuiltIn },
+      { lane: TemplateCompilerHookLane.Leaf, ordinal: 5, hookKind: TemplateCompilerHookKind.CssModules, callable: TemplateCompilerHookCallableAuthorityKind.BuiltIn },
       { lane: TemplateCompilerHookLane.Root, ordinal: 0, hookKind: TemplateCompilerHookKind.Registered, callable: TemplateCompilerHookCallableAuthorityKind.Absent },
       { lane: TemplateCompilerHookLane.Root, ordinal: 1, hookKind: TemplateCompilerHookKind.Registered, callable: TemplateCompilerHookCallableAuthorityKind.StaticCallable },
+      { lane: TemplateCompilerHookLane.Root, ordinal: 2, hookKind: TemplateCompilerHookKind.Registered, callable: TemplateCompilerHookCallableAuthorityKind.StaticCallable },
+      { lane: TemplateCompilerHookLane.Root, ordinal: 3, hookKind: TemplateCompilerHookKind.Registered, callable: TemplateCompilerHookCallableAuthorityKind.StaticCallable },
+      { lane: TemplateCompilerHookLane.Root, ordinal: 4, hookKind: TemplateCompilerHookKind.Registered, callable: TemplateCompilerHookCallableAuthorityKind.StaticCallable },
+      { lane: TemplateCompilerHookLane.Root, ordinal: 5, hookKind: TemplateCompilerHookKind.Registered, callable: TemplateCompilerHookCallableAuthorityKind.StaticCallable },
     ]);
     const dependencyHookReasons = compilation.compilerWorld.compilerHooks.openReasons.filter((reason) =>
       reason.reasonKind === TemplateCompilerHookOpenReasonKind.RegistryDependency
@@ -406,22 +432,32 @@ describe('component-local compiler-hook registry dependencies', () => {
       readKind: TemplateCompilerReadKind.CompilerHooks,
       canonicalKey: 'all',
     }));
+    expect(compilation.registeredReads).toContainEqual(expect.objectContaining({
+      readKind: TemplateCompilerReadKind.CssClassMapping,
+      canonicalKey: 'all',
+    }));
 
     const cssCompilation = app.emission.templates.resources.find((resource) =>
       resource.compilation.definition.name === 'css-hook-host'
     )?.compilation;
     if (cssCompilation == null) throw new Error('Expected css-hook-host template compilation.');
     expect(cssCompilation.compilerWorld.compilerHooks).toMatchObject({
-      membershipState: TemplateCompilerHookMembershipState.Open,
+      membershipState: TemplateCompilerHookMembershipState.ExactList,
       entries: [
         {
           lane: TemplateCompilerHookLane.Leaf,
           sourceOrdinal: 0,
           hookKind: TemplateCompilerHookKind.CssModules,
-          provider: { openSeamHandles: [expect.stringMatching(/^kernel:/u)] },
+          provider: {
+            resolutionKind: TemplateCompilerHookProviderResolutionKind.Value,
+            openSeamHandles: [],
+          },
           callable: {
-            authorityKind: TemplateCompilerHookCallableAuthorityKind.Open,
-            openSeamHandles: [expect.stringMatching(/^kernel:/u)],
+            authorityKind: TemplateCompilerHookCallableAuthorityKind.BuiltIn,
+            openSeamHandles: [],
+          },
+          cssClassMapping: {
+            productHandle: cssCompilation.compilerWorld.cssClassMapping.productHandle,
           },
         },
         {
@@ -436,13 +472,23 @@ describe('component-local compiler-hook registry dependencies', () => {
           hookKind: TemplateCompilerHookKind.Registered,
           callable: { authorityKind: TemplateCompilerHookCallableAuthorityKind.StaticCallable },
         },
-      ],
-      openReasons: expect.arrayContaining([
-        expect.objectContaining({
-          reasonKind: TemplateCompilerHookOpenReasonKind.CompilerWorld,
+        ...[2, 3, 4, 5].map((sourceOrdinal) => ({
           lane: TemplateCompilerHookLane.Root,
-        }),
-      ]),
+          sourceOrdinal,
+          hookKind: TemplateCompilerHookKind.Registered,
+          callable: { authorityKind: TemplateCompilerHookCallableAuthorityKind.StaticCallable },
+        })),
+      ],
+    });
+    expect(cssCompilation.compilerWorld.cssClassMapping).toMatchObject({
+      authorityState: CssClassMappingAuthorityState.Exact,
+      defaultPropertyState: CssClassMappingPropertyState.Absent,
+      properties: [{
+        className: 'mapped',
+        propertyState: CssClassMappingPropertyState.Value,
+        mappedClassName: 'mapped_hash',
+      }],
+      openReasons: [],
     });
     const localHookCompilation = app.emission.templates.resources.find((resource) =>
       resource.compilation.definition.name === 'local-hook-child'
@@ -456,7 +502,17 @@ describe('component-local compiler-hook registry dependencies', () => {
       }),
       expect.objectContaining({ lane: TemplateCompilerHookLane.Root, laneOrdinal: 0 }),
       expect.objectContaining({ lane: TemplateCompilerHookLane.Root, laneOrdinal: 1 }),
+      expect.objectContaining({ lane: TemplateCompilerHookLane.Root, laneOrdinal: 2 }),
+      expect.objectContaining({ lane: TemplateCompilerHookLane.Root, laneOrdinal: 3 }),
+      expect.objectContaining({ lane: TemplateCompilerHookLane.Root, laneOrdinal: 4 }),
+      expect.objectContaining({ lane: TemplateCompilerHookLane.Root, laneOrdinal: 5 }),
     ]);
+    expect(localHookCompilation.compilerWorld.cssClassMapping.productHandle)
+      .not.toBe(cssCompilation.compilerWorld.cssClassMapping.productHandle);
+    expect(localHookCompilation.compilerWorld.cssClassMapping.properties)
+      .toEqual(cssCompilation.compilerWorld.cssClassMapping.properties);
+    expect(localHookCompilation.compilerWorld.compilerHooks.entries[0]?.cssClassMapping?.productHandle)
+      .toBe(localHookCompilation.compilerWorld.cssClassMapping.productHandle);
     const openDependenciesCompilation = app.emission.templates.resources.find((resource) =>
       resource.compilation.definition.name === 'open-deps-host'
     )?.compilation;
@@ -466,6 +522,10 @@ describe('component-local compiler-hook registry dependencies', () => {
     expect(openDependenciesCompilation.compilerWorld.compilerHooks.entries).toEqual([
       expect.objectContaining({ lane: TemplateCompilerHookLane.Root, sourceOrdinal: 0 }),
       expect.objectContaining({ lane: TemplateCompilerHookLane.Root, sourceOrdinal: 1 }),
+      expect.objectContaining({ lane: TemplateCompilerHookLane.Root, sourceOrdinal: 2 }),
+      expect.objectContaining({ lane: TemplateCompilerHookLane.Root, sourceOrdinal: 3 }),
+      expect.objectContaining({ lane: TemplateCompilerHookLane.Root, sourceOrdinal: 4 }),
+      expect.objectContaining({ lane: TemplateCompilerHookLane.Root, sourceOrdinal: 5 }),
     ]);
     expect(openDependenciesCompilation.compilerWorld.compilerHooks.openReasons).toEqual(expect.arrayContaining([
       expect.objectContaining({
@@ -481,7 +541,7 @@ describe('component-local compiler-hook registry dependencies', () => {
     const replayRun = runtime.computationLifecycle.begin({
       kind: 'compiler-hook-admission-test',
       reconciliationKey: 'compiler-hook-admission-test',
-      summary: 'Prove that conservative root hook membership blocks structural replay before browser mutation.',
+      summary: 'Prove that built-in CSS hook execution remains explicit before browser mutation.',
     });
     try {
       const browser = parseBrowserTemplateFragmentDraft(markup);
@@ -496,7 +556,7 @@ describe('component-local compiler-hook registry dependencies', () => {
       const replay = executeDeterministicTemplateCompiler({ browserTemplate, compilation: cssCompilation });
       expect(replay.state).toBe(TemplateCompilerDeterministicExecutionState.Open);
       expect(replay.reasons.map((reason) => reason.reasonKind)).toContain(
-        TemplateCompilerDeterministicExecutionReasonKind.CompilerHookMembershipOpen,
+        TemplateCompilerDeterministicExecutionReasonKind.CompilerHookCallableOpen,
       );
     } finally {
       replayRun.abort();

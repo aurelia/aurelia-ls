@@ -46,6 +46,8 @@ export const enum OpenSeamReasonKind {
   ResourceDefinitionDependenciesOpen = 'resource-definition-dependencies-open',
   /** One resource dependency entry did not resolve to a class, function, or registry dependency. */
   ResourceDefinitionDependencyEntryOpen = 'resource-definition-dependency-entry-open',
+  /** A retained registry dependency has exact identity but opaque registration effects. */
+  ResourceOpaqueRegistryEffectsOpen = 'resource-opaque-registry-effects-open',
   /** Resource bindable metadata could not be fully converged from decorator/static/definition source. */
   ResourceBindableConfigurationOpen = 'resource-bindable-configuration-open',
   /** Resource annotation metadata could not be fully converged from decorator source. */
@@ -66,6 +68,8 @@ export const enum OpenSeamReasonKind {
   CompilerHookMembershipOpen = 'compiler-hook-membership-open',
   /** A known compiler-hook entry lacks receiver-bearing callable execution authority. */
   CompilerHookExecutionOpen = 'compiler-hook-execution-open',
+  /** Component-local ICssClassMapping lookup authority remains partial or open. */
+  CompilerCssClassMappingOpen = 'compiler-css-class-mapping-open',
   /** Binding-source value evaluation needs runtime binding state rather than a static source value. */
   BindingSourceNeedsRuntimeValue = 'binding-source-needs-runtime-value',
   /** Binding-source lookup found a scope slot whose static value is not available. */
@@ -274,7 +278,9 @@ export function openSeamBoundaryKindForReason(
 
     case OpenSeamReasonKind.ResourceDefinitionDependenciesOpen:
     case OpenSeamReasonKind.CompilerHookMembershipOpen:
+    case OpenSeamReasonKind.CompilerCssClassMappingOpen:
     case OpenSeamReasonKind.ResourceDefinitionDependencyEntryOpen:
+    case OpenSeamReasonKind.ResourceOpaqueRegistryEffectsOpen:
     case OpenSeamReasonKind.ResourceBindableConfigurationOpen:
     case OpenSeamReasonKind.ResourceAnnotationOpen:
     case OpenSeamReasonKind.ResourceWatchOpen:

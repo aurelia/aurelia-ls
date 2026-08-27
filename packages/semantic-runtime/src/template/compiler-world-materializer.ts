@@ -101,6 +101,8 @@ import {
   TemplateCompilerHookCallableAuthority,
   TemplateCompilerHookCallableAuthorityKind,
   TemplateCompilerHookEntry,
+  TemplateCompilerHookKind,
+  TemplateCompilerHookLane,
   TemplateCompilerHookOpenReason,
   TemplateCompilerHookProviderAuthority,
   TemplateCompilerHookProviderResolutionKind,
@@ -109,6 +111,12 @@ import {
   unmodeledTemplateCompilerHooks,
 } from './compiler-hook-world.js';
 import { OpenSeam, OpenSeamReasonKind } from '../kernel/open-seam.js';
+import {
+  CssClassMappingAuthority,
+  CssClassMappingAuthorityCandidate,
+  CssClassMappingOpenReason,
+  sameCssClassMappingAuthorityCandidate,
+} from './css-class-mapping.js';
 
 export class TemplateCompilerWorldConstructionRequest {
   constructor(
@@ -151,6 +159,8 @@ export class TemplateCompilerWorldConstructionRequest {
     readonly blockedResourceLookups: readonly TemplateResourceScopeBlockedLookup[] = [],
     /** Ordered hook membership/callable candidate for this exact compiler invocation world. */
     readonly compilerHooks: TemplateCompilerHookSetCandidate = unmodeledTemplateCompilerHooks,
+    /** Component-local `ICssClassMapping` candidate shared by generated hooks and runtime class consumers. */
+    readonly cssClassMapping: CssClassMappingAuthorityCandidate = CssClassMappingAuthorityCandidate.exactNone,
   ) {}
 }
 
@@ -167,6 +177,8 @@ export class TemplateCompilerWorldDerivationRequest {
     readonly retainedContextResources: readonly TemplateVisibleResource[] | null = null,
     /** Replacement leaf/root hook projection; null inherits the parent hook set exactly. */
     readonly compilerHooks: TemplateCompilerHookSetCandidate | null = null,
+    /** Replacement leaf-locus CSS mapping; null inherits the exact current locus. */
+    readonly cssClassMapping: CssClassMappingAuthorityCandidate | null = null,
   ) {}
 }
 
@@ -177,6 +189,7 @@ export class TemplateCompilerWorldEmission {
     readonly resourceScope: TemplateResourceScope,
     readonly templateCompiler: TemplateCompilerService,
     readonly compilerHooks: TemplateCompilerHookSet,
+    readonly cssClassMapping: CssClassMappingAuthority,
     readonly resourceResolver: TemplateResourceResolverService,
     readonly expressionParser: TemplateExpressionParserService,
     readonly attributeMapper: TemplateAttributeMapperService,
@@ -206,6 +219,7 @@ export class TemplateCompilerWorldEmission {
           this.resourceScope,
           this.templateCompiler,
           this.compilerHooks,
+          this.cssClassMapping,
           this.resourceResolver,
           this.expressionParser,
           this.attributeMapper,
@@ -301,6 +315,8 @@ class CompilerWorldHandleSet {
     readonly templateCompilerIdentityHandle: IdentityHandle,
     readonly compilerHooksProductHandle: ProductHandle,
     readonly compilerHooksIdentityHandle: IdentityHandle,
+    readonly cssClassMappingProductHandle: ProductHandle,
+    readonly cssClassMappingIdentityHandle: IdentityHandle,
     readonly resourceResolverProductHandle: ProductHandle,
     readonly resourceResolverIdentityHandle: IdentityHandle,
     readonly expressionParserProductHandle: ProductHandle,
@@ -320,6 +336,7 @@ class CompilerWorldHandleSet {
       this.bindingResolverProductHandle,
       this.templateCompilerProductHandle,
       this.compilerHooksProductHandle,
+      this.cssClassMappingProductHandle,
       this.resourceResolverProductHandle,
       this.expressionParserProductHandle,
       this.attributeMapperProductHandle,
@@ -334,6 +351,7 @@ class CompilerWorldProducts {
     readonly resourceScope: TemplateResourceScope,
     readonly templateCompiler: TemplateCompilerService,
     readonly compilerHooks: TemplateCompilerHookSet,
+    readonly cssClassMapping: CssClassMappingAuthority,
     readonly resourceResolver: TemplateResourceResolverService,
     readonly expressionParser: TemplateExpressionParserService,
     readonly attributeMapper: TemplateAttributeMapperService,
@@ -344,6 +362,7 @@ class CompilerWorldProducts {
     readonly syntaxResources: readonly TemplateVisibleResource[],
     readonly serviceReferences: readonly TemplateCompilerServiceReference[],
     readonly hookRecords: readonly KernelStoreRecord[],
+    readonly cssClassMappingRecords: readonly KernelStoreRecord[],
     readonly issues: readonly TemplateCompilerIssue[],
     readonly issueRecords: readonly KernelStoreRecord[],
   ) {}
@@ -358,6 +377,7 @@ class CompilerWorldProducts {
       this.resourceScope,
       this.templateCompiler,
       this.compilerHooks,
+      this.cssClassMapping,
       this.resourceResolver,
       this.expressionParser,
       this.attributeMapper,
@@ -386,6 +406,13 @@ class CompilerWorldAttributeParserProducts {
 class CompilerWorldHookProducts {
   constructor(
     readonly hookSet: TemplateCompilerHookSet,
+    readonly records: readonly KernelStoreRecord[],
+  ) {}
+}
+
+class CompilerWorldCssClassMappingProducts {
+  constructor(
+    readonly authority: CssClassMappingAuthority,
     readonly records: readonly KernelStoreRecord[],
   ) {}
 }
@@ -436,6 +463,7 @@ export class TemplateCompilerWorldMaterializer {
   ): TemplateCompilerWorldConstructionRequest | null {
     const parent = input.parent;
     const compilerHooks = input.compilerHooks ?? parent.compilerHooks.toCandidate();
+    const cssClassMapping = input.cssClassMapping ?? parent.cssClassMapping.toCandidate();
     const resolution = mergeVisibleResourceScopeResolution(
       input.preferredResources,
       parent.resourceScope.resources,
@@ -458,6 +486,7 @@ export class TemplateCompilerWorldMaterializer {
       && !hasNewLookups
       && !hasNewBlockedLookups
       && sameTemplateCompilerHookSetCandidate(compilerHooks, parent.compilerHooks.toCandidate())
+      && sameCssClassMappingAuthorityCandidate(cssClassMapping, parent.cssClassMapping.toCandidate())
     ) {
       return null;
     }
@@ -481,12 +510,14 @@ export class TemplateCompilerWorldMaterializer {
       resolution.lookups,
       resolution.blockedLookups,
       compilerHooks,
+      cssClassMapping,
     );
   }
 
   private observeDerivationInputs(parent: TemplateCompilerWorldEmission): void {
     this.requireDerivationInput(TemplateProductDetails.World, parent.world.productHandle);
     this.requireDerivationInput(TemplateProductDetails.CompilerHookSet, parent.compilerHooks.productHandle);
+    this.requireDerivationInput(TemplateProductDetails.CssClassMapping, parent.cssClassMapping.productHandle);
     this.requireDerivationInput(TemplateProductDetails.ResourceScope, parent.resourceScope.productHandle);
     this.requireDerivationInput(TemplateProductDetails.AttributeParserService, parent.attributeParser.productHandle);
     this.requireDerivationInput(TemplateProductDetails.AttributeParserMachine, parent.attributeParserMachine.productHandle);
@@ -526,6 +557,11 @@ export class TemplateCompilerWorldMaterializer {
           TemplateProductDetails.CompilerHookSet,
           emission.compilerHooks.productHandle,
           emission.compilerHooks,
+        ),
+        publishProductDetail(
+          TemplateProductDetails.CssClassMapping,
+          emission.cssClassMapping.productHandle,
+          emission.cssClassMapping,
         ),
         publishProductDetail(
           TemplateProductDetails.ResourceResolverService,
@@ -577,7 +613,7 @@ export class TemplateCompilerWorldMaterializer {
 
     const handles = this.handlesForWorld(local);
     const products = this.productsForWorld(input, handles, source);
-    records.push(...products.hookRecords);
+    records.push(...products.hookRecords, ...products.cssClassMappingRecords);
 
     const claims = this.recordsForClaims(
       local,
@@ -595,7 +631,13 @@ export class TemplateCompilerWorldMaterializer {
     records.push(
       ...this.identityRecordsForWorld(input, handles, source),
       ...this.materializedProductRecordsForWorld(handles, source),
-      this.materializationRecordForWorld(local, handles, claims, products.compilerHooks),
+      this.materializationRecordForWorld(
+        local,
+        handles,
+        claims,
+        products.compilerHooks,
+        products.cssClassMapping,
+      ),
     );
 
     return products.toEmission(input, records);
@@ -617,6 +659,8 @@ export class TemplateCompilerWorldMaterializer {
       this.store.handles.identity(`template-compiler-service:${local}`),
       this.store.handles.product(`compiler-hook-set:${local}`),
       this.store.handles.identity(`compiler-hook-set:${local}`),
+      this.store.handles.product(`css-class-mapping:${local}`),
+      this.store.handles.identity(`css-class-mapping:${local}`),
       this.store.handles.product(`resource-resolver-service:${local}`),
       this.store.handles.identity(`resource-resolver-service:${local}`),
       this.store.handles.product(`expression-parser-service:${local}`),
@@ -646,7 +690,14 @@ export class TemplateCompilerWorldMaterializer {
     const attributeParserMachine = attributeParserProducts.machine;
     const bindingCommandResolver = this.bindingCommandResolverForWorld(input, handles, source, issues);
     const templateCompiler = this.templateCompilerServiceForWorld(input, handles, source);
-    const compilerHookProducts = this.compilerHookSetForWorld(input, handles, source);
+    const cssClassMappingProducts = this.cssClassMappingForWorld(input, handles, source);
+    const cssClassMapping = cssClassMappingProducts.authority;
+    const compilerHookProducts = this.compilerHookSetForWorld(
+      input,
+      handles,
+      source,
+      cssClassMapping,
+    );
     const compilerHooks = compilerHookProducts.hookSet;
     const resourceResolver = this.resourceResolverForWorld(input, handles, source);
     const expressionParser = this.expressionParserForWorld(input, handles, source);
@@ -655,6 +706,7 @@ export class TemplateCompilerWorldMaterializer {
     const services = [
       templateCompiler.toReference(),
       compilerHooks.toReference(),
+      cssClassMapping.toReference(),
       resourceResolver.toReference(),
       attributeParser.toReference(),
       bindingCommandResolver.toReference(),
@@ -675,6 +727,7 @@ export class TemplateCompilerWorldMaterializer {
       resourceScope,
       templateCompiler,
       compilerHooks,
+      cssClassMapping,
       resourceResolver,
       expressionParser,
       attributeMapper,
@@ -685,6 +738,7 @@ export class TemplateCompilerWorldMaterializer {
       syntaxResources,
       services,
       compilerHookProducts.records,
+      cssClassMappingProducts.records,
       issues.issues,
       issues.records,
     );
@@ -810,10 +864,49 @@ export class TemplateCompilerWorldMaterializer {
     );
   }
 
+  private cssClassMappingForWorld(
+    input: TemplateCompilerWorldConstructionRequest,
+    handles: CompilerWorldHandleSet,
+    source: CompilerWorldSourceSet,
+  ): CompilerWorldCssClassMappingProducts {
+    const records: KernelStoreRecord[] = [];
+    const openReasons = input.cssClassMapping.openReasons.map((reason, index) => {
+      if (reason.openSeamHandles.length > 0) return reason;
+      const open = this.cssClassMappingOpenSeam(
+        input.localKey,
+        index,
+        reason.summary,
+        reason.sourceAddressHandle ?? source.addressHandle,
+      );
+      records.push(...open.records);
+      return new CssClassMappingOpenReason(
+        reason.reasonKind,
+        reason.summary,
+        reason.sourceOrdinal,
+        reason.mappingArgumentOrdinal,
+        reason.sourceModuleKey,
+        reason.sourceAddressHandle,
+        [open.handle],
+      );
+    });
+    return new CompilerWorldCssClassMappingProducts(
+      new CssClassMappingAuthority(
+        handles.cssClassMappingProductHandle,
+        handles.cssClassMappingIdentityHandle,
+        input.cssClassMapping.properties,
+        input.cssClassMapping.defaultPropertyState,
+        openReasons,
+        source.addressHandle,
+      ),
+      records,
+    );
+  }
+
   private compilerHookSetForWorld(
     input: TemplateCompilerWorldConstructionRequest,
     handles: CompilerWorldHandleSet,
     source: CompilerWorldSourceSet,
+    cssClassMapping: CssClassMappingAuthority,
   ): CompilerWorldHookProducts {
     const records: KernelStoreRecord[] = [];
     const entries = input.compilerHooks.entries.map((entry, index) => {
@@ -858,7 +951,15 @@ export class TemplateCompilerWorldMaterializer {
           [open.handle],
         );
       }
-      if (provider === entry.provider && callable === entry.callable) return entry;
+      const cssClassMappingReference = entry.hookKind === TemplateCompilerHookKind.CssModules
+        && entry.lane === TemplateCompilerHookLane.Leaf
+        ? cssClassMapping.toReference()
+        : entry.cssClassMapping;
+      if (
+        provider === entry.provider
+        && callable === entry.callable
+        && cssClassMappingReference === entry.cssClassMapping
+      ) return entry;
       return new TemplateCompilerHookEntry(
         entry.lane,
         entry.laneOrdinal,
@@ -867,6 +968,7 @@ export class TemplateCompilerWorldMaterializer {
         entry.cause,
         provider,
         callable,
+        cssClassMappingReference,
       );
     });
     const openReasons = input.compilerHooks.openReasons.map((reason, index) => {
@@ -898,6 +1000,37 @@ export class TemplateCompilerWorldMaterializer {
       ),
       records,
     );
+  }
+
+  private cssClassMappingOpenSeam(
+    worldLocalKey: string,
+    index: number,
+    summary: string,
+    addressHandle: AddressHandle | null,
+  ): { readonly records: readonly KernelStoreRecord[]; readonly handle: OpenSeamHandle } {
+    const key = `css-class-mapping:${worldLocalKey}:open:${index}`;
+    const evidenceHandle = this.store.handles.evidence(key);
+    const handle = this.store.handles.openSeam(key);
+    return {
+      handle,
+      records: [
+        new EvidenceRecord(
+          evidenceHandle,
+          EvidenceKind.SemanticObservation,
+          [EvidenceRole.Scope, EvidenceRole.Diagnostic],
+          summary,
+          addressHandle,
+        ),
+        new OpenSeam(
+          handle,
+          KernelVocabulary.Compiler.OpenCssClassMapping.key,
+          summary,
+          addressHandle,
+          evidenceHandle,
+          [OpenSeamReasonKind.CompilerCssClassMappingOpen],
+        ),
+      ],
+    };
   }
 
   private compilerHookOpenSeam(
@@ -1028,6 +1161,7 @@ export class TemplateCompilerWorldMaterializer {
       identity(handles.bindingResolverIdentityHandle, KernelVocabulary.Compiler.Service.key, handles.worldIdentityHandle, source, 'IBindingCommandResolver'),
       identity(handles.templateCompilerIdentityHandle, KernelVocabulary.Compiler.Service.key, handles.worldIdentityHandle, source, 'TemplateCompiler'),
       identity(handles.compilerHooksIdentityHandle, KernelVocabulary.Compiler.Service.key, handles.worldIdentityHandle, source, 'ITemplateCompilerHooks'),
+      identity(handles.cssClassMappingIdentityHandle, KernelVocabulary.Compiler.Service.key, handles.worldIdentityHandle, source, 'ICssClassMapping'),
       identity(handles.resourceResolverIdentityHandle, KernelVocabulary.Compiler.Service.key, handles.worldIdentityHandle, source, 'IResourceResolver'),
       identity(handles.expressionParserIdentityHandle, KernelVocabulary.Compiler.Service.key, handles.worldIdentityHandle, source, 'IExpressionParser'),
       identity(handles.attributeMapperIdentityHandle, KernelVocabulary.Compiler.Service.key, handles.worldIdentityHandle, source, 'IAttrMapper'),
@@ -1047,6 +1181,7 @@ export class TemplateCompilerWorldMaterializer {
       [handles.bindingResolverProductHandle, KernelVocabulary.Compiler.BindingCommandResolver.key, handles.bindingResolverIdentityHandle],
       [handles.templateCompilerProductHandle, KernelVocabulary.Compiler.Service.key, handles.templateCompilerIdentityHandle],
       [handles.compilerHooksProductHandle, KernelVocabulary.Compiler.Service.key, handles.compilerHooksIdentityHandle],
+      [handles.cssClassMappingProductHandle, KernelVocabulary.Compiler.Service.key, handles.cssClassMappingIdentityHandle],
       [handles.resourceResolverProductHandle, KernelVocabulary.Compiler.Service.key, handles.resourceResolverIdentityHandle],
       [handles.expressionParserProductHandle, KernelVocabulary.Compiler.Service.key, handles.expressionParserIdentityHandle],
       [handles.attributeMapperProductHandle, KernelVocabulary.Compiler.Service.key, handles.attributeMapperIdentityHandle],
@@ -1068,17 +1203,19 @@ export class TemplateCompilerWorldMaterializer {
     handles: CompilerWorldHandleSet,
     claims: CompilerWorldClaims,
     compilerHooks: TemplateCompilerHookSet,
+    cssClassMapping: CssClassMappingAuthority,
   ): MaterializationRecord {
     return new MaterializationRecord(
       this.store.handles.materialization(`template-world:${local}`),
       handles.worldIdentityHandle,
       handles.materializedProductHandles,
       claims.allClaims.map((claim) => claim.handle),
-      [
+      [...new Set([
         ...compilerHooks.entries.flatMap((entry) => entry.provider.openSeamHandles),
         ...compilerHooks.entries.flatMap((entry) => entry.callable.openSeamHandles),
         ...compilerHooks.openReasons.flatMap((reason) => reason.openSeamHandles),
-      ],
+        ...cssClassMapping.openReasons.flatMap((reason) => reason.openSeamHandles),
+      ])],
     );
   }
 

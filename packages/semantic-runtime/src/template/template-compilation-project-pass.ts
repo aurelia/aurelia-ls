@@ -156,10 +156,16 @@ import {
 import {
   deriveTemplateCompilerHooksForDependencies,
   templateCompilerHooksInheritedByLocalDefinition,
+  TemplateCompilerHookKind,
   TemplateCompilerHookLane,
   TemplateCompilerHookOpenReason,
   TemplateCompilerHookOpenReasonKind,
 } from './compiler-hook-world.js';
+import {
+  CssClassMappingOpenReason,
+  CssClassMappingOpenReasonKind,
+  deriveCssClassMappingForDependencies,
+} from './css-class-mapping.js';
 import {
   TemplateCompilationCohortKind,
   TemplateCompilationLocus,
@@ -1228,6 +1234,14 @@ export class TemplateCompilationProjectPass {
     const parentHooks = isLocalDefinition
       ? templateCompilerHooksInheritedByLocalDefinition(parent.compilerHooks.toCandidate())
       : parent.compilerHooks.toCandidate();
+    const dependencyOpenSeams = this.resourceDependencyOpenSeams(definition, openReadView);
+    const dependencyOpenReasons = dependencyOpenSeams.map((seam) => new TemplateCompilerHookOpenReason(
+      TemplateCompilerHookOpenReasonKind.RegistryDependency,
+      TemplateCompilerHookLane.Leaf,
+      seam.summary,
+      seam.addressHandle,
+      [seam.handle],
+    ));
     return new TemplateCompilerWorldDerivationRequest(
       `${localKey}:hook-world`,
       TemplateCompilerWorldKind.Component,
@@ -1241,21 +1255,42 @@ export class TemplateCompilationProjectPass {
         definition.dependencies,
         isLocalDefinition
           || (definition.productHandle != null && definition.productHandle === appRootDefinitionProductHandle),
-        this.compilerHookDependencyOpenReasons(definition, openReadView),
+        dependencyOpenReasons,
       ),
+      isLocalDefinition
+        ? parent.cssClassMapping.toCandidate()
+        : deriveCssClassMappingForDependencies(
+            parent.cssClassMapping.toCandidate(),
+            definition.dependencies,
+            false,
+            dependencyOpenSeams
+              .filter((seam) => seam.reasonKinds.some((reasonKind) =>
+                reasonKind === OpenSeamReasonKind.ResourceDefinitionDependenciesOpen
+                || reasonKind === OpenSeamReasonKind.ResourceDefinitionDependencyEntryOpen
+              ))
+              .map((seam) => new CssClassMappingOpenReason(
+                CssClassMappingOpenReasonKind.DependencySet,
+                seam.summary,
+                null,
+                null,
+                null,
+                seam.addressHandle,
+                [seam.handle],
+              )),
+          ),
     );
   }
 
-  private compilerHookDependencyOpenReasons(
+  private resourceDependencyOpenSeams(
     definition: CustomElementDefinition,
     readView: CompilerHookDependencyOpenReadView,
-  ): readonly TemplateCompilerHookOpenReason[] {
+  ): readonly OpenSeam[] {
     const ownerHandle = definition.identityHandle ?? definition.sourceAddressHandle;
     if (ownerHandle == null || definition.productHandle == null) return [];
     const openSeamHandles = readView.readMaterializationsByOwner(ownerHandle)
       .filter((materialization) => materialization.productHandles.includes(definition.productHandle!))
       .flatMap((materialization) => materialization.openSeamHandles);
-    const reasons: TemplateCompilerHookOpenReason[] = [];
+    const seams: OpenSeam[] = [];
     const seen = new Set(openSeamHandles);
     for (const handle of seen) {
       const seam = readView.read(handle);
@@ -1264,17 +1299,12 @@ export class TemplateCompilationProjectPass {
         || !seam.reasonKinds.some((reasonKind) =>
           reasonKind === OpenSeamReasonKind.ResourceDefinitionDependenciesOpen
           || reasonKind === OpenSeamReasonKind.ResourceDefinitionDependencyEntryOpen
+          || reasonKind === OpenSeamReasonKind.ResourceOpaqueRegistryEffectsOpen
         )
       ) continue;
-      reasons.push(new TemplateCompilerHookOpenReason(
-        TemplateCompilerHookOpenReasonKind.RegistryDependency,
-        TemplateCompilerHookLane.Leaf,
-        seam.summary,
-        seam.addressHandle,
-        [seam.handle],
-      ));
+      seams.push(seam);
     }
-    return reasons;
+    return seams;
   }
 
   compileResourceTree(
@@ -1422,7 +1452,10 @@ export class TemplateCompilationProjectPass {
     }
 
     // Hook membership is a pre-walk compiler-world input even while execution remains a later browser-tree phase.
-    compilerReads.compilerHooks();
+    const compilerHooks = compilerReads.compilerHooks();
+    if (compilerHooks.entries.some((entry) => entry.hookKind === TemplateCompilerHookKind.CssModules)) {
+      compilerReads.cssClassMapping();
+    }
 
     const unit = this.constructCompilationUnit(
       localKey,

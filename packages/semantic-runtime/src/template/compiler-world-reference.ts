@@ -12,6 +12,8 @@ import type { ResourceDefinitionKind } from '../resources/resource-kind.js';
 export const enum TemplateCompilerServiceKind {
   /** Runtime TemplateCompiler service. */
   TemplateCompiler = 'template-compiler',
+  /** Component-local `ICssClassMapping` shared by built-in hooks and runtime class consumers. */
+  CssClassMapping = 'css-class-mapping',
   /** Ordered `ITemplateCompilerHooks` membership and callable closure for one compiler invocation world. */
   CompilerHooks = 'compiler-hooks',
   /** Runtime IResourceResolver service for custom element/custom attribute lookup and bindable maps. */

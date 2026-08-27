@@ -22,6 +22,7 @@ import type {
 } from './built-in-syntax.js';
 import type { TemplateCompilerIssue } from './compiler-issue.js';
 import type { TemplateCompilerHookSet } from './compiler-hook-world.js';
+import type { CssClassMappingAuthority } from './css-class-mapping.js';
 import type {
   TemplateAttributeMapperService,
   TemplateCompilerService,
@@ -156,6 +157,14 @@ export const TemplateDetailDescriptors = {
     KernelVocabulary.Compiler.Service.key,
     'compiler.service.compiler-hooks',
     'Ordered TemplateCompilerHooks membership and callable closure visible through a compiler world.',
+  ),
+  CssClassMapping: defineProductDetailDescriptor<
+    CssClassMappingAuthority,
+    typeof KernelVocabulary.Compiler.Service.key
+  >(
+    KernelVocabulary.Compiler.Service.key,
+    'compiler.service.css-class-mapping',
+    'Component-local ICssClassMapping authority shared by compiler hooks and runtime class consumers.',
   ),
   ResourceResolverService: defineProductDetailDescriptor<
     TemplateResourceResolverService,

@@ -51,6 +51,10 @@ import type {
 } from './compiler-world-reference.js';
 import type { RuntimeRenderer } from './runtime-renderer.js';
 import type { RuntimeKeyMappingConfiguration } from './runtime-event-modifier.js';
+import type {
+  CssClassMappingAuthority,
+  CssClassMappingOpenReason,
+} from './css-class-mapping.js';
 
 /** Slot-owned comparison for a compiler world and the semantic service references it exposes. */
 export function compareTemplateCompilerWorldDetails(
@@ -246,7 +250,45 @@ export function compareTemplateCompilerHookSetDetails(
             left.callable.sourceAddressHandle,
             right.callable.sourceAddressHandle,
             context,
+          )
+          && sameKernelRecordWitness(
+            left.cssClassMapping?.sourceAddressHandle ?? null,
+            right.cssClassMapping?.sourceAddressHandle ?? null,
+            context,
           ))
+      && sameArrays(previous.openReasons, next.openReasons, (left, right) =>
+        sameKernelRecordWitness(left.sourceAddressHandle, right.sourceAddressHandle, context)),
+  );
+}
+
+export function compareCssClassMappingAuthorityDetails(
+  previous: CssClassMappingAuthority,
+  next: CssClassMappingAuthority,
+  context: KernelPublicationComparisonContext,
+): KernelComparablePublicationDecision {
+  if (
+    !sameValues(
+      previous.productHandle,
+      next.productHandle,
+      previous.identityHandle,
+      next.identityHandle,
+      previous.defaultPropertyState,
+      next.defaultPropertyState,
+    )
+    || !sameArrays(previous.properties, next.properties, (left, right) => sameValues(
+      left.className,
+      right.className,
+      left.propertyState,
+      right.propertyState,
+      left.mappedClassName,
+      right.mappedClassName,
+    ))
+    || !sameArrays(previous.openReasons, next.openReasons, sameCssClassMappingOpenReasonSemantics)
+  ) {
+    return KernelPublicationDecisionKind.Replace;
+  }
+  return witnessDecision(
+    sameKernelRecordWitness(previous.sourceAddressHandle, next.sourceAddressHandle, context)
       && sameArrays(previous.openReasons, next.openReasons, (left, right) =>
         sameKernelRecordWitness(left.sourceAddressHandle, right.sourceAddressHandle, context)),
   );
@@ -624,6 +666,10 @@ function sameTemplateCompilerHookEntrySemantics(
     next.cause.identityHandle,
     previous.cause.registryEffectKey,
     next.cause.registryEffectKey,
+    previous.cssClassMapping?.productHandle ?? null,
+    next.cssClassMapping?.productHandle ?? null,
+    previous.cssClassMapping?.identityHandle ?? null,
+    next.cssClassMapping?.identityHandle ?? null,
     previous.provider.resolutionKind,
     next.provider.resolutionKind,
     previous.provider.reason,
@@ -647,6 +693,24 @@ function sameTemplateCompilerHookEntrySemantics(
       next.callable.openSeamHandles,
       (left, right) => left === right,
     );
+}
+
+function sameCssClassMappingOpenReasonSemantics(
+  previous: CssClassMappingOpenReason,
+  next: CssClassMappingOpenReason,
+): boolean {
+  return sameValues(
+    previous.reasonKind,
+    next.reasonKind,
+    previous.summary,
+    next.summary,
+    previous.sourceOrdinal,
+    next.sourceOrdinal,
+    previous.mappingArgumentOrdinal,
+    next.mappingArgumentOrdinal,
+    previous.sourceModuleKey,
+    next.sourceModuleKey,
+  ) && sameArrays(previous.openSeamHandles, next.openSeamHandles, (left, right) => left === right);
 }
 
 function sameTemplateCompilerHookOpenReasonSemantics(
