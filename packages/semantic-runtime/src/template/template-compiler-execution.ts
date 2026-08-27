@@ -40,6 +40,7 @@ export const enum TemplateCompilerInvocationPhase {
   CompilerHooks = 'compiler-hooks',
   LocalTemplateExtraction = 'local-template-extraction',
   BootstrapClosed = 'bootstrap-closed',
+  SiteExecution = 'site-execution',
   TargetExecution = 'target-execution',
 }
 
@@ -499,6 +500,28 @@ export class TemplateCompilerBootstrapContextReference {
   }
 }
 
+/** Canonical pre-plan context admitted lazily when one invocation first executes a reached browser site. */
+export class TemplateCompilerSiteExecutionContextReference {
+  readonly #familyAuthority: object;
+
+  constructor(
+    familyAuthority: object,
+    readonly lane: TemplateCompilerExecutionLaneReference,
+    readonly bootstrapClosure: TemplateCompilerInvocationBootstrapClosure,
+    readonly ordinal: number,
+  ) {
+    this.#familyAuthority = familyAuthority;
+  }
+
+  get localKey(): string {
+    return `${this.lane.localKey}:site`;
+  }
+
+  isOwnedBy(familyAuthority: object): boolean {
+    return this.#familyAuthority === familyAuthority;
+  }
+}
+
 /** Canonical family-local reference to one exact structural target context. */
 export class TemplateCompilerExecutionContextReference {
   readonly #familyAuthority: object;
@@ -524,6 +547,7 @@ export class TemplateCompilerExecutionContextReference {
 
 export type TemplateCompilerOperationContextReference =
   | TemplateCompilerBootstrapContextReference
+  | TemplateCompilerSiteExecutionContextReference
   | TemplateCompilerExecutionContextReference;
 
 /** Event-time authority retained while one semantic compiler boundary performs its mechanical work. */
@@ -541,6 +565,9 @@ export class TemplateCompilerPendingOperationAttempt {
     readonly causeHandles: readonly ClaimEndpointHandle[],
     readonly producedProductHandles: readonly ProductHandle[],
     readonly sourceAddressHandle: AddressHandle | null,
+    readonly startForestMutationRevision: number,
+    readonly laneOperationOrdinal: number,
+    readonly siteExecutionDriver: TemplateCompilerSiteExecutionDriverReference | null,
   ) {
     this.#familyAuthority = familyAuthority;
   }
@@ -571,6 +598,9 @@ export class TemplateCompilerOperation {
     readonly causeHandles: readonly ClaimEndpointHandle[],
     readonly producedProductHandles: readonly ProductHandle[],
     readonly sourceAddressHandle: AddressHandle | null,
+    readonly startForestMutationRevision: number,
+    readonly endForestMutationRevision: number,
+    readonly laneOperationOrdinal: number,
   ) {
     this.#familyAuthority = familyAuthority;
   }
@@ -626,6 +656,8 @@ export interface TemplateCompilerOperationAttemptRequest {
   readonly sourceAddressHandle?: AddressHandle | null;
   /** Exact same-lane bootstrap driver, when hook/local orchestration currently owns admission. */
   readonly bootstrapDriver?: TemplateCompilerBootstrapDriverReference;
+  /** Exact family-exclusive site driver, when browser-site orchestration owns pre-plan admission. */
+  readonly siteExecutionDriver?: TemplateCompilerSiteExecutionDriverReference;
 }
 
 /** Read-only view over the run-local execution topology owned by one compiler family session. */
@@ -635,6 +667,7 @@ export class TemplateCompilerExecutionSequence {
     readonly familyKey: string,
     private readonly lanes: TemplateCompilerExecutionLaneReference[],
     private readonly bootstrapContexts: TemplateCompilerBootstrapContextReference[],
+    private readonly siteContexts: TemplateCompilerSiteExecutionContextReference[],
     private readonly contexts: TemplateCompilerExecutionContextReference[],
     private readonly operations: TemplateCompilerOperation[],
     private readonly operationsByLane: Map<TemplateCompilerExecutionLaneReference, TemplateCompilerOperation[]>,
@@ -651,6 +684,10 @@ export class TemplateCompilerExecutionSequence {
 
   readBootstrapContexts(): readonly TemplateCompilerBootstrapContextReference[] {
     return this.bootstrapContexts;
+  }
+
+  readSiteContexts(): readonly TemplateCompilerSiteExecutionContextReference[] {
+    return this.siteContexts;
   }
 
   readOperations(): readonly TemplateCompilerOperation[] {
@@ -706,6 +743,91 @@ export class TemplateCompilerInvocationBootstrapClosure {
   }
 }
 
+/**
+ * Immutable temporal authority for beginning one pre-plan site walk.
+ *
+ * Capturing a frontier is intentionally side-effect free: an observational cursor may reuse it while the retained
+ * forest and operation frontiers remain unchanged. Only executable driver admission advances the invocation phase.
+ */
+export class TemplateCompilerSiteExecutionFrontier {
+  readonly #familyAuthority: object;
+
+  constructor(
+    familyAuthority: object,
+    readonly lane: TemplateCompilerExecutionLaneReference,
+    readonly bootstrapClosure: TemplateCompilerInvocationBootstrapClosure,
+    readonly forestMutationRevision: number,
+    readonly globalOperationCount: number,
+    readonly laneOperationCount: number,
+  ) {
+    this.#familyAuthority = familyAuthority;
+  }
+
+  isOwnedBy(familyAuthority: object): boolean {
+    return this.#familyAuthority === familyAuthority;
+  }
+}
+
+/** Family-exclusive capability that advances currentness through one live pre-plan site walk. */
+export class TemplateCompilerSiteExecutionDriverReference {
+  readonly #familyAuthority: object;
+  #expectedForestMutationRevision: number;
+  #expectedGlobalOperationCount: number;
+  #expectedLaneOperationCount: number;
+
+  constructor(
+    familyAuthority: object,
+    readonly frontier: TemplateCompilerSiteExecutionFrontier,
+    readonly context: TemplateCompilerSiteExecutionContextReference,
+  ) {
+    this.#familyAuthority = familyAuthority;
+    this.#expectedForestMutationRevision = frontier.forestMutationRevision;
+    this.#expectedGlobalOperationCount = frontier.globalOperationCount;
+    this.#expectedLaneOperationCount = frontier.laneOperationCount;
+  }
+
+  get lane(): TemplateCompilerExecutionLaneReference {
+    return this.context.lane;
+  }
+
+  get expectedForestMutationRevision(): number {
+    return this.#expectedForestMutationRevision;
+  }
+
+  get expectedGlobalOperationCount(): number {
+    return this.#expectedGlobalOperationCount;
+  }
+
+  get expectedLaneOperationCount(): number {
+    return this.#expectedLaneOperationCount;
+  }
+
+  isOwnedBy(familyAuthority: object): boolean {
+    return this.#familyAuthority === familyAuthority;
+  }
+
+  advance(
+    familyAuthority: object,
+    forestMutationRevision: number,
+    globalOperationCount: number,
+    laneOperationCount: number,
+  ): void {
+    if (!this.isOwnedBy(familyAuthority)) {
+      throw new Error(`Compiler site driver for '${this.lane.localKey}' belongs to another family.`);
+    }
+    if (
+      forestMutationRevision < this.#expectedForestMutationRevision
+      || globalOperationCount !== this.#expectedGlobalOperationCount + 1
+      || laneOperationCount !== this.#expectedLaneOperationCount + 1
+    ) {
+      throw new Error(`Compiler site driver for '${this.lane.localKey}' cannot advance across an incoherent operation.`);
+    }
+    this.#expectedForestMutationRevision = forestMutationRevision;
+    this.#expectedGlobalOperationCount = globalOperationCount;
+    this.#expectedLaneOperationCount = laneOperationCount;
+  }
+}
+
 /** Whether a reached attribute's current scalar is fully explained by the committed execution ledger. */
 export const enum TemplateCompilerReachedAttributeScalarState {
   Exact = 'exact',
@@ -732,6 +854,7 @@ export class TemplateCompilerReachedAttributeScalarReceipt {
     readonly state: TemplateCompilerReachedAttributeScalarState,
     readonly lane: TemplateCompilerExecutionLaneReference,
     readonly bootstrapClosure: TemplateCompilerInvocationBootstrapClosure,
+    readonly siteExecutionContext: TemplateCompilerSiteExecutionContextReference | null,
     readonly owner: TemplateCompilerElementOccurrence,
     readonly attribute: TemplateCompilerAttributeOccurrence,
     readonly liveOrdinal: number,
@@ -748,6 +871,7 @@ export class TemplateCompilerReachedAttributeScalarReceipt {
     readonly transitions: readonly TemplateCompilerAttributeValueTransition[],
     readonly forestMutationRevision: number,
     readonly globalOperationCount: number,
+    readonly laneOperationCount: number,
   ) {
     this.#familyAuthority = familyAuthority;
   }
@@ -781,6 +905,7 @@ export class TemplateCompilerExecutionSession {
       familyKey,
       structuralExecution.forest,
       structuralExecution.mutationAuthority,
+      true,
     );
     compilerExecutionForests.add(structuralExecution.forest);
     session.attachStructuralExecution(structuralExecution);
@@ -794,7 +919,7 @@ export class TemplateCompilerExecutionSession {
     if (compilerExecutionForests.has(forest)) {
       throw new Error('Compiler occurrence forest already owns an ordered execution session.');
     }
-    const session = new TemplateCompilerExecutionSession(familyKey, forest, null);
+    const session = new TemplateCompilerExecutionSession(familyKey, forest, null, false);
     compilerExecutionForests.add(forest);
     return session;
   }
@@ -833,6 +958,12 @@ export class TemplateCompilerExecutionSession {
     TemplateCompilerExecutionLaneReference,
     TemplateCompilerBootstrapDriverReference
   >();
+  private readonly siteContexts: TemplateCompilerSiteExecutionContextReference[] = [];
+  private readonly siteContextsByLane = new Map<
+    TemplateCompilerExecutionLaneReference,
+    TemplateCompilerSiteExecutionContextReference
+  >();
+  private activeSiteExecutionDriver: TemplateCompilerSiteExecutionDriverReference | null = null;
   private readonly contexts: TemplateCompilerExecutionContextReference[] = [];
   private readonly contextsByTargetContext = new Map<
     TemplateCompilerTargetContextPlan,
@@ -873,6 +1004,7 @@ export class TemplateCompilerExecutionSession {
     readonly familyKey: string,
     readonly forest: TemplateCompilerOccurrenceForest,
     mutationAuthority: TemplateCompilerForestMutationAuthority | null,
+    private readonly legacyStructuralCompatibility: boolean,
   ) {
     if (familyKey.length === 0) {
       throw new Error('Compiler execution family requires a non-empty key.');
@@ -885,6 +1017,7 @@ export class TemplateCompilerExecutionSession {
       familyKey,
       this.lanes,
       this.bootstrapContexts,
+      this.siteContexts,
       this.contexts,
       this.operations,
       this.operationsByLane,
@@ -905,6 +1038,8 @@ export class TemplateCompilerExecutionSession {
   ): TemplateCompilerStructuralExecutionSession {
     this.requireMutable();
     this.requireNoPendingAttempt('create structural execution');
+    this.requireNoActiveSiteExecutionDriver('create structural execution');
+    this.requireLegacyStructuralCompatibility('create structural execution');
     if (this.structuralFamily != null) {
       throw new Error('Compiler execution family already owns structural execution.');
     }
@@ -920,6 +1055,8 @@ export class TemplateCompilerExecutionSession {
   attachStructuralExecution(structuralExecution: TemplateCompilerStructuralExecutionSession): void {
     this.requireMutable();
     this.requireNoPendingAttempt('attach structural execution');
+    this.requireNoActiveSiteExecutionDriver('attach structural execution');
+    this.requireLegacyStructuralCompatibility('attach structural execution');
     if (this.structuralFamily === structuralExecution) return;
     if (this.structuralFamily != null) {
       throw new Error('Compiler execution family already owns another structural execution session.');
@@ -1021,6 +1158,7 @@ export class TemplateCompilerExecutionSession {
 
   /** Admit the root compiler invocation before hooks or local-template discovery. */
   admitRootInvocation(localKey: string): TemplateCompilerExecutionLaneReference {
+    this.requireNoActiveSiteExecutionDriver('admit a root compiler invocation');
     if (this.lanes.length > 0) {
       throw new Error('Compiler execution family root invocation must be admitted first.');
     }
@@ -1034,6 +1172,7 @@ export class TemplateCompilerExecutionSession {
     compilerContent: TemplateCompilerFragmentOccurrence,
     extraction: TemplateCompilerOperation,
   ): TemplateCompilerExecutionLaneReference {
+    this.requireNoActiveSiteExecutionDriver('admit an extracted compiler invocation');
     const detachment = extraction.mutationBatch.nodeDetachmentMutations;
     if (
       !extraction.isOwnedBy(this.familyAuthority)
@@ -1076,6 +1215,7 @@ export class TemplateCompilerExecutionSession {
   beginHookBootstrapDriver(
     lane: TemplateCompilerExecutionLaneReference,
   ): TemplateCompilerBootstrapDriverReference {
+    this.requireNoActiveSiteExecutionDriver('begin a hook bootstrap driver');
     if (this.sequence.readLaneOperations(lane).length !== 0) {
       throw new Error(`Compiler hook bootstrap for '${lane.localKey}' does not start at the lane frontier.`);
     }
@@ -1087,6 +1227,7 @@ export class TemplateCompilerExecutionSession {
     lane: TemplateCompilerExecutionLaneReference,
     hookOperations: readonly TemplateCompilerOperation[],
   ): TemplateCompilerBootstrapDriverReference {
+    this.requireNoActiveSiteExecutionDriver('begin a local-template extraction driver');
     const laneOperations = this.sequence.readLaneOperations(lane);
     if (
       !sameOccurrences(laneOperations, hookOperations)
@@ -1103,6 +1244,7 @@ export class TemplateCompilerExecutionSession {
 
   /** Release a bootstrap driver after its synchronous phase returns one exact result. */
   finishBootstrapDriver(driver: TemplateCompilerBootstrapDriverReference): void {
+    this.requireNoActiveSiteExecutionDriver('finish a bootstrap driver');
     if (
       !driver.isOwnedBy(this.familyAuthority)
       || this.activeBootstrapDriversByLane.get(driver.lane) !== driver
@@ -1120,6 +1262,7 @@ export class TemplateCompilerExecutionSession {
   ): TemplateCompilerInvocationBootstrapClosure {
     this.requireMutable();
     this.requireNoPendingAttempt('close invocation bootstrap');
+    this.requireNoActiveSiteExecutionDriver('close invocation bootstrap');
     const lane = hookBootstrap.lane;
     this.requireLane(lane);
     this.requireOpenLane(lane);
@@ -1192,15 +1335,106 @@ export class TemplateCompilerExecutionSession {
     return this.bootstrapClosuresByLane.get(lane) ?? null;
   }
 
+  /** Capture a repeatable, side-effect-free temporal frontier for a post-bootstrap site cursor. */
+  captureSiteExecutionFrontier(
+    bootstrapClosure: TemplateCompilerInvocationBootstrapClosure,
+  ): TemplateCompilerSiteExecutionFrontier {
+    this.requireMutable();
+    this.requireNoPendingAttempt('capture a site execution frontier');
+    this.requireNoActiveSiteExecutionDriver('capture a site execution frontier');
+    const lane = bootstrapClosure.lane;
+    this.requireLane(lane);
+    this.requireOpenLane(lane);
+    if (
+      !bootstrapClosure.isOwnedBy(this.familyAuthority)
+      || this.bootstrapClosuresByLane.get(lane) !== bootstrapClosure
+      || this.invocationPhases.get(lane) !== TemplateCompilerInvocationPhase.BootstrapClosed
+      || lane.targetPlan != null
+      || this.siteContextsByLane.has(lane)
+      || (this.contextsByLane.get(lane)?.length ?? 0) > 0
+      || this.sequence.readLaneOperations(lane).length !== bootstrapClosure.laneOperationCount
+    ) {
+      throw new Error(`Compiler invocation lane '${lane.localKey}' has no repeatable post-bootstrap site frontier.`);
+    }
+    return new TemplateCompilerSiteExecutionFrontier(
+      this.familyAuthority,
+      lane,
+      bootstrapClosure,
+      this.forest.mutationRevision,
+      this.operations.length,
+      this.operationsByLane.get(lane)!.length,
+    );
+  }
+
+  /** Lazily admit the one pre-plan site context when the cursor reaches its first executable effect. */
+  beginSiteExecutionDriver(
+    frontier: TemplateCompilerSiteExecutionFrontier,
+  ): TemplateCompilerSiteExecutionDriverReference {
+    this.requireMutable();
+    this.requireNoPendingAttempt('begin site execution');
+    this.requireNoActiveSiteExecutionDriver('begin site execution');
+    if (this.activeBootstrapDriversByLane.size > 0) {
+      throw new Error('Cannot begin site execution while a compiler bootstrap driver is active.');
+    }
+    this.requireCurrentSiteExecutionFrontier(frontier);
+    const lane = frontier.lane;
+    const context = new TemplateCompilerSiteExecutionContextReference(
+      this.familyAuthority,
+      lane,
+      frontier.bootstrapClosure,
+      this.siteContexts.length,
+    );
+    const driver = new TemplateCompilerSiteExecutionDriverReference(
+      this.familyAuthority,
+      frontier,
+      context,
+    );
+    this.siteContexts.push(context);
+    this.siteContextsByLane.set(lane, context);
+    this.operationsByContext.set(context, []);
+    this.invocationPhases.set(lane, TemplateCompilerInvocationPhase.SiteExecution);
+    this.activeSiteExecutionDriver = driver;
+    return driver;
+  }
+
+  /** Release a current nonterminal driver without claiming that the wider site walk completed. */
+  finishSiteExecutionDriver(
+    driver: TemplateCompilerSiteExecutionDriverReference,
+  ): void {
+    this.requireMutable();
+    this.requireNoPendingAttempt('finish site execution driver');
+    this.requireCurrentSiteExecutionDriver(driver);
+    const lane = driver.lane;
+    this.requireOpenLane(lane);
+    const operations = this.operationsByContext.get(driver.context) ?? [];
+    if (operations.length === 0) {
+      throw new Error(
+        `Compiler site driver for '${lane.localKey}' cannot finish before one exact operation.`,
+      );
+    }
+    this.activeSiteExecutionDriver = null;
+  }
+
+  siteExecutionContext(
+    lane: TemplateCompilerExecutionLaneReference,
+  ): TemplateCompilerSiteExecutionContextReference | null {
+    this.requireLane(lane);
+    return this.siteContextsByLane.get(lane) ?? null;
+  }
+
   /** Capture immutable event-time scalar authority; live placement remains owned by the reached walker/cursor. */
   captureReachedAttributeScalar(
-    closure: TemplateCompilerInvocationBootstrapClosure,
+    authority: TemplateCompilerInvocationBootstrapClosure | TemplateCompilerSiteExecutionDriverReference,
     owner: TemplateCompilerElementOccurrence,
     attribute: TemplateCompilerAttributeOccurrence,
     liveOrdinal: number,
   ): TemplateCompilerReachedAttributeScalarReceipt {
     this.requireMutable();
     this.requireNoPendingAttempt('capture a reached attribute scalar');
+    const siteDriver = authority instanceof TemplateCompilerSiteExecutionDriverReference
+      ? authority
+      : null;
+    const closure = siteDriver?.frontier.bootstrapClosure ?? authority;
     const lane = closure.lane;
     this.requireLane(lane);
     if (
@@ -1209,18 +1443,21 @@ export class TemplateCompilerExecutionSession {
     ) {
       throw new Error(`Compiler invocation lane '${lane.localKey}' has no exact stored bootstrap closure.`);
     }
-    if (
-      lane.targetPlan != null
-      || (this.contextsByLane.get(lane)?.length ?? 0) > 0
-    ) {
+    if (lane.targetPlan != null || (this.contextsByLane.get(lane)?.length ?? 0) > 0) {
       throw new Error(`Compiler invocation lane '${lane.localKey}' scalar capture cannot run after target admission.`);
     }
     const laneOperations = this.operationsByLane.get(lane)!;
-    if (
-      this.invocationPhases.get(lane) !== TemplateCompilerInvocationPhase.BootstrapClosed
-      || laneOperations.length !== closure.laneOperationCount
-    ) {
-      throw new Error(`Compiler invocation lane '${lane.localKey}' bootstrap closure no longer owns its lane frontier.`);
+    const siteContext = siteDriver?.context ?? null;
+    if (siteDriver == null) {
+      if (
+        this.invocationPhases.get(lane) !== TemplateCompilerInvocationPhase.BootstrapClosed
+        || this.siteContextsByLane.has(lane)
+        || laneOperations.length !== closure.laneOperationCount
+      ) {
+        throw new Error(`Compiler invocation lane '${lane.localKey}' bootstrap closure no longer owns its lane frontier.`);
+      }
+    } else {
+      this.requireCurrentSiteExecutionDriver(siteDriver);
     }
     if (!Number.isSafeInteger(liveOrdinal) || liveOrdinal < 0) {
       throw new Error(`Compiler attribute '${attribute.occurrenceKey}' has invalid live ordinal ${liveOrdinal}.`);
@@ -1235,7 +1472,10 @@ export class TemplateCompilerExecutionSession {
         `Compiler attribute '${attribute.occurrenceKey}' is not live at owner '${owner.occurrenceKey}' ordinal ${liveOrdinal}.`,
       );
     }
-    this.requireOccurrenceContext(this.bootstrapContextsByLane.get(lane)!, attribute);
+    this.requireOccurrenceContext(
+      siteContext ?? this.bootstrapContextsByLane.get(lane)!,
+      attribute,
+    );
     if ((attribute.inputIdentityKey == null) !== (attribute.inputReference == null)) {
       throw new Error(`Compiler attribute '${attribute.occurrenceKey}' has partial input authority.`);
     }
@@ -1268,6 +1508,7 @@ export class TemplateCompilerExecutionSession {
       state,
       lane,
       closure,
+      siteContext,
       owner,
       attribute,
       liveOrdinal,
@@ -1284,12 +1525,15 @@ export class TemplateCompilerExecutionSession {
       [...transitions],
       this.forest.mutationRevision,
       this.operations.length,
+      laneOperations.length,
     );
   }
 
   admitTargetPlan(targetPlan: TemplateCompilerTargetPlan): TemplateCompilerExecutionLaneReference {
     this.requireMutable();
     this.requireNoPendingAttempt('admit a target plan');
+    this.requireNoActiveSiteExecutionDriver('admit a target plan');
+    this.requireLegacyStructuralCompatibility('admit a target plan');
     const structuralExecution = this.requireStructuralExecution();
     if (!structuralExecution.readTargetPlans().includes(targetPlan)) {
       throw new Error(`Compiler target plan '${targetPlan.localKey}' belongs to another structural family.`);
@@ -1313,13 +1557,15 @@ export class TemplateCompilerExecutionSession {
     return this.attachTargetPlan(lane, targetPlan);
   }
 
-  /** Attach one sealed post-bootstrap target plan to its existing compiler invocation lane. */
+  /** Compatibility path available only to sessions born from already-planned structural replay. */
   attachTargetPlan(
     lane: TemplateCompilerExecutionLaneReference,
     targetPlan: TemplateCompilerTargetPlan,
   ): TemplateCompilerExecutionLaneReference {
     this.requireMutable();
     this.requireNoPendingAttempt('attach a target plan');
+    this.requireNoActiveSiteExecutionDriver('attach a target plan');
+    this.requireLegacyStructuralCompatibility('attach a target plan');
     this.requireLane(lane);
     this.requireOpenLane(lane);
     if (!targetPlan.isSealed) {
@@ -1352,6 +1598,7 @@ export class TemplateCompilerExecutionSession {
   ): TemplateCompilerExecutionContextReference {
     this.requireMutable();
     this.requireNoPendingAttempt('admit a target context');
+    this.requireNoActiveSiteExecutionDriver('admit a target context');
     this.requireLane(lane);
     this.requireOpenLane(lane);
     const targetPlan = lane.targetPlan;
@@ -1396,6 +1643,7 @@ export class TemplateCompilerExecutionSession {
   ): TemplateCompilerExecutionLaneReference {
     this.requireMutable();
     this.requireNoPendingAttempt('admit a compiler invocation');
+    this.requireNoActiveSiteExecutionDriver('admit a compiler invocation');
     if (this.lanesByLocalKey.has(localKey)) {
       throw new Error(`Compiler execution lane key '${localKey}' is already admitted.`);
     }
@@ -1491,6 +1739,11 @@ export class TemplateCompilerExecutionSession {
     this.requireNoPendingAttempt('begin another operation');
     this.requireContext(request.context);
     this.requireOpenLane(request.context.lane);
+    this.requireSiteExecutionDriver(
+      request.context,
+      request.operationKind,
+      request.siteExecutionDriver ?? null,
+    );
     this.requireBootstrapDriver(
       request.context,
       request.operationKind,
@@ -1523,6 +1776,9 @@ export class TemplateCompilerExecutionSession {
       [...request.causeHandles],
       [...producedProductHandles],
       request.sourceAddressHandle ?? null,
+      this.forest.mutationRevision,
+      this.operationsByLane.get(request.context.lane)!.length,
+      request.siteExecutionDriver ?? null,
     );
     const mutationOverlay = new TemplateCompilerPendingMutationOverlay();
     const authorityBatch = this.mutationAuthority.beginExecutionBatch(
@@ -1560,6 +1816,19 @@ export class TemplateCompilerExecutionSession {
       batchState,
       this.mutationAuthority.readPendingGenerations(authorityBatch),
     );
+    const isSiteExecution = attempt.context instanceof TemplateCompilerSiteExecutionContextReference;
+    if (
+      isSiteExecution
+      && (
+        this.forest.mutationRevision !== attempt.startForestMutationRevision
+        || mutationBatch.occurrenceGenerationReservations.length > 0
+        || mutationBatch.topologyMutations.length > 0
+      )
+    ) {
+      throw new Error(
+        `Compiler site operation '${attempt.operationKey}' has an unledgered forest mutation before scalar commit.`,
+      );
+    }
     this.mutationAuthority.finishExecutionBatch(
       this.familyAuthority,
       authorityBatch,
@@ -1570,6 +1839,17 @@ export class TemplateCompilerExecutionSession {
       for (const mutation of mutationBatch.attributeValueMutations) {
         this.forest.rewriteAttributeValue(mutation.attribute, mutation.nextValue);
       }
+    }
+    if (
+      isSiteExecution
+      && this.forest.mutationRevision !== attempt.startForestMutationRevision
+        + (mutationBatch.state === TemplateCompilerMutationBatchState.Committed
+          ? mutationBatch.attributeValueMutations.length
+          : 0)
+    ) {
+      throw new Error(
+        `Compiler site operation '${attempt.operationKey}' lost exact scalar-only mutation currentness.`,
+      );
     }
 
     // No current-occurrence lookup belongs here: successful structural execution may intentionally have moved or
@@ -1587,6 +1867,9 @@ export class TemplateCompilerExecutionSession {
       attempt.causeHandles,
       attempt.producedProductHandles,
       attempt.sourceAddressHandle,
+      attempt.startForestMutationRevision,
+      this.forest.mutationRevision,
+      attempt.laneOperationOrdinal,
     );
     this.operations.push(operation);
     this.operationsByKey.set(operation.operationKey, operation);
@@ -1598,6 +1881,14 @@ export class TemplateCompilerExecutionSession {
     }
     if (isTerminalCompilerCompletion(operation.completion.completionKind)) {
       this.terminalOperationsByLane.set(operation.lane, operation);
+    }
+    if (attempt.siteExecutionDriver != null) {
+      attempt.siteExecutionDriver.advance(
+        this.familyAuthority,
+        this.forest.mutationRevision,
+        this.operations.length,
+        this.operationsByLane.get(operation.lane)!.length,
+      );
     }
     this.pendingAttempt = null;
     this.pendingMutationOverlay = null;
@@ -1633,6 +1924,11 @@ export class TemplateCompilerExecutionSession {
     ) {
       throw new Error(
         `Compiler generation '${attempt.operationKey}' requires its exact pending mutation batch.`,
+      );
+    }
+    if (attempt.context instanceof TemplateCompilerSiteExecutionContextReference) {
+      throw new Error(
+        `Compiler site operation '${attempt.operationKey}' does not admit generated structure before typed site topology exists.`,
       );
     }
     return this.mutationAuthority.reserveExecutionGeneration(
@@ -1675,6 +1971,9 @@ export class TemplateCompilerExecutionSession {
     if (this.activeBootstrapDriversByLane.size > 0) {
       throw new Error(`Compiler execution family '${this.familyKey}' still has an active bootstrap driver.`);
     }
+    if (this.activeSiteExecutionDriver != null) {
+      throw new Error(`Compiler execution family '${this.familyKey}' still has an active site driver.`);
+    }
     this.mutationAuthority.assertGeneratedInventory();
     if (this.lanes.length === 0) {
       throw new Error(`Compiler execution family '${this.familyKey}' has no root invocation lane.`);
@@ -1694,11 +1993,13 @@ export class TemplateCompilerExecutionSession {
       throw new Error(`Compiler execution family '${this.familyKey}' has incomplete structural-plan coverage.`);
     }
     const visitedBootstrapContexts = new Set<TemplateCompilerBootstrapContextReference>();
+    const visitedSiteContexts = new Set<TemplateCompilerSiteExecutionContextReference>();
     const visitedContexts = new Set<TemplateCompilerExecutionContextReference>();
     for (const [laneOrdinal, lane] of this.lanes.entries()) {
       const targetPlan = lane.targetPlan;
       const bootstrapContext = this.bootstrapContextsByLane.get(lane) ?? null;
       const bootstrapClosure = this.bootstrapClosuresByLane.get(lane) ?? null;
+      const siteContext = this.siteContextsByLane.get(lane) ?? null;
       const invocationPhase = this.invocationPhases.get(lane);
       if (targetPlan == null && !this.terminalOperationsByLane.has(lane)) {
         throw new Error(
@@ -1728,13 +2029,24 @@ export class TemplateCompilerExecutionSession {
           || bootstrapClosure.laneOperationCount > this.sequence.readLaneOperations(lane).length
           || (
             invocationPhase !== TemplateCompilerInvocationPhase.BootstrapClosed
+            && invocationPhase !== TemplateCompilerInvocationPhase.SiteExecution
             && invocationPhase !== TemplateCompilerInvocationPhase.TargetExecution
           )
+        ))
+        || (invocationPhase === TemplateCompilerInvocationPhase.SiteExecution && (
+          siteContext == null || targetPlan != null
+        ))
+        || (siteContext != null && (
+          !siteContext.isOwnedBy(this.familyAuthority)
+          || siteContext.lane !== lane
+          || siteContext.bootstrapClosure !== bootstrapClosure
+          || this.siteContexts[siteContext.ordinal] !== siteContext
         ))
       ) {
         throw new Error(`Compiler execution lane '${lane.localKey}' has incoherent family ownership.`);
       }
       visitedBootstrapContexts.add(bootstrapContext);
+      if (siteContext != null) visitedSiteContexts.add(siteContext);
       const laneContexts = this.contextsByLane.get(lane);
       if (
         laneContexts == null
@@ -1775,6 +2087,7 @@ export class TemplateCompilerExecutionSession {
     const structuralContexts = structuralExecution?.readContexts() ?? [];
     if (
       visitedBootstrapContexts.size !== this.bootstrapContexts.length
+      || visitedSiteContexts.size !== this.siteContexts.length
       || visitedContexts.size !== this.contexts.length
       || structuralContexts.length !== this.contexts.length
       || structuralContexts.some((context) => !this.contextsByTargetContext.has(context))
@@ -1793,20 +2106,27 @@ export class TemplateCompilerExecutionSession {
       this.lanes.map((lane) => [lane, [] as TemplateCompilerOperation[]]),
     );
     const expectedContextOperations = new Map(
-      [...this.bootstrapContexts, ...this.contexts]
+      [...this.bootstrapContexts, ...this.siteContexts, ...this.contexts]
         .map((context) => [context, [] as TemplateCompilerOperation[]] as const),
     );
     const admittedOperationContexts = new Set<TemplateCompilerOperationContextReference>([
       ...this.bootstrapContexts,
+      ...this.siteContexts,
       ...this.contexts,
     ]);
     for (const [executionOrdinal, operation] of this.operations.entries()) {
+      const expectedLaneOperationOrdinal = expectedLaneOperations.get(operation.lane)?.length ?? -1;
       if (
         !operation.isOwnedBy(this.familyAuthority)
         || operation.executionOrdinal !== executionOrdinal
+        || operation.laneOperationOrdinal !== expectedLaneOperationOrdinal
+        || operation.startForestMutationRevision > operation.endForestMutationRevision
+        || operation.endForestMutationRevision > this.forest.mutationRevision
         || operationKeys.has(operation.operationKey)
         || this.operationsByKey.get(operation.operationKey) !== operation
         || !admittedOperationContexts.has(operation.context)
+        || (operation.context instanceof TemplateCompilerSiteExecutionContextReference
+          && operation.operationKind !== TemplateCompilerOperationKind.ProcessContent)
       ) {
         throw new Error(`Compiler operation '${operation.operationKey}' has incoherent family order or ownership.`);
       }
@@ -2015,6 +2335,7 @@ export class TemplateCompilerExecutionSession {
   ): TemplateCompilerBootstrapDriverReference {
     this.requireMutable();
     this.requireNoPendingAttempt('begin bootstrap driver');
+    this.requireNoActiveSiteExecutionDriver('begin a bootstrap driver');
     this.requireLane(lane);
     this.requireOpenLane(lane);
     if (
@@ -2040,6 +2361,66 @@ export class TemplateCompilerExecutionSession {
   private requireMutable(): void {
     if (this.sealed) {
       throw new Error(`Compiler execution family '${this.familyKey}' is sealed.`);
+    }
+  }
+
+  private requireNoActiveSiteExecutionDriver(action: string): void {
+    if (this.activeSiteExecutionDriver != null) {
+      throw new Error(
+        `Cannot ${action} while compiler site driver for '${this.activeSiteExecutionDriver.lane.localKey}' is active.`,
+      );
+    }
+  }
+
+  private requireLegacyStructuralCompatibility(action: string): void {
+    if (!this.legacyStructuralCompatibility) {
+      throw new Error(
+        `Cannot ${action} from a forest-first compiler execution before nominal site completion authority exists.`,
+      );
+    }
+  }
+
+  private requireCurrentSiteExecutionFrontier(frontier: TemplateCompilerSiteExecutionFrontier): void {
+    const lane = frontier.lane;
+    this.requireLane(lane);
+    this.requireOpenLane(lane);
+    if (
+      !frontier.isOwnedBy(this.familyAuthority)
+      || !frontier.bootstrapClosure.isOwnedBy(this.familyAuthority)
+      || this.bootstrapClosuresByLane.get(lane) !== frontier.bootstrapClosure
+      || this.invocationPhases.get(lane) !== TemplateCompilerInvocationPhase.BootstrapClosed
+      || lane.targetPlan != null
+      || this.siteContextsByLane.has(lane)
+      || (this.contextsByLane.get(lane)?.length ?? 0) > 0
+      || this.forest.mutationRevision !== frontier.forestMutationRevision
+      || this.operations.length !== frontier.globalOperationCount
+      || this.operationsByLane.get(lane)!.length !== frontier.laneOperationCount
+      || frontier.laneOperationCount !== frontier.bootstrapClosure.laneOperationCount
+    ) {
+      throw new Error(`Compiler site frontier for '${lane.localKey}' is foreign, stale, or no longer pre-plan.`);
+    }
+  }
+
+  private requireCurrentSiteExecutionDriver(driver: TemplateCompilerSiteExecutionDriverReference): void {
+    const lane = driver.lane;
+    this.requireLane(lane);
+    if (
+      !driver.isOwnedBy(this.familyAuthority)
+      || this.activeSiteExecutionDriver !== driver
+      || !driver.frontier.isOwnedBy(this.familyAuthority)
+      || driver.frontier.bootstrapClosure !== this.bootstrapClosuresByLane.get(lane)
+      || !driver.context.isOwnedBy(this.familyAuthority)
+      || driver.context.lane !== lane
+      || driver.context.bootstrapClosure !== driver.frontier.bootstrapClosure
+      || this.siteContextsByLane.get(lane) !== driver.context
+      || this.siteContexts[driver.context.ordinal] !== driver.context
+      || this.invocationPhases.get(lane) !== TemplateCompilerInvocationPhase.SiteExecution
+      || lane.targetPlan != null
+      || this.forest.mutationRevision !== driver.expectedForestMutationRevision
+      || this.operations.length !== driver.expectedGlobalOperationCount
+      || this.operationsByLane.get(lane)!.length !== driver.expectedLaneOperationCount
+    ) {
+      throw new Error(`Compiler site driver for '${lane.localKey}' is foreign, stale, or no longer active.`);
     }
   }
 
@@ -2122,6 +2503,17 @@ export class TemplateCompilerExecutionSession {
       }
       return;
     }
+    if (context instanceof TemplateCompilerSiteExecutionContextReference) {
+      if (
+        !context.isOwnedBy(this.familyAuthority)
+        || this.siteContextsByLane.get(context.lane) !== context
+        || this.siteContexts[context.ordinal] !== context
+        || context.bootstrapClosure !== this.bootstrapClosuresByLane.get(context.lane)
+      ) {
+        throw new Error(`Compiler site context '${context.localKey}' belongs to another family.`);
+      }
+      return;
+    }
     if (
       !context.isOwnedBy(this.familyAuthority)
       || this.contextsByTargetContext.get(context.targetContext) !== context
@@ -2158,6 +2550,36 @@ export class TemplateCompilerExecutionSession {
     }
   }
 
+  private requireSiteExecutionDriver(
+    context: TemplateCompilerOperationContextReference,
+    operationKind: TemplateCompilerOperationKind,
+    driver: TemplateCompilerSiteExecutionDriverReference | null,
+  ): void {
+    const active = this.activeSiteExecutionDriver;
+    if (context instanceof TemplateCompilerSiteExecutionContextReference) {
+      if (
+        driver == null
+        || active !== driver
+        || driver.context !== context
+        || operationKind !== TemplateCompilerOperationKind.ProcessContent
+      ) {
+        throw new Error(
+          `Compiler site context currently admits only processContent under its exact active driver.`,
+        );
+      }
+      this.requireCurrentSiteExecutionDriver(driver);
+      return;
+    }
+    if (driver != null) {
+      throw new Error(`Compiler site driver cannot admit operation '${operationKind}' outside its site context.`);
+    }
+    if (active != null) {
+      throw new Error(
+        `Compiler operation '${operationKind}' cannot interleave with active site driver '${active.lane.localKey}'.`,
+      );
+    }
+  }
+
   private requireOccurrenceContext(
     context: TemplateCompilerOperationContextReference,
     occurrence: TemplateCompilerNodeOccurrence | TemplateCompilerAttributeOccurrence,
@@ -2173,6 +2595,21 @@ export class TemplateCompilerExecutionSession {
       ) {
         throw new Error(
           `Compiler occurrence '${occurrence.occurrenceKey}' does not belong to bootstrap context '${context.localKey}'.`,
+        );
+      }
+      return;
+    }
+    if (context instanceof TemplateCompilerSiteExecutionContextReference) {
+      const node = this.forest.nodeForOccurrenceKey(occurrence.occurrenceKey);
+      const attribute = node == null
+        ? this.forest.attributeForOccurrenceKey(occurrence.occurrenceKey)
+        : null;
+      if (
+        (node !== occurrence && attribute !== occurrence)
+        || !this.occurrenceBelongsToInvocationLane(context.lane, occurrence)
+      ) {
+        throw new Error(
+          `Compiler occurrence '${occurrence.occurrenceKey}' does not belong to site context '${context.localKey}'.`,
         );
       }
       return;
@@ -2311,11 +2748,26 @@ export class TemplateCompilerExecutionSession {
       this.invocationPhases.set(context.lane, TemplateCompilerInvocationPhase.LocalTemplateExtraction);
       return;
     }
+    if (context instanceof TemplateCompilerSiteExecutionContextReference) {
+      if (current !== TemplateCompilerInvocationPhase.SiteExecution) {
+        throw new Error(
+          `Compiler site operation cannot run after lane '${context.lane.localKey}' entered '${current}'.`,
+        );
+      }
+      return;
+    }
     this.invocationPhases.set(context.lane, TemplateCompilerInvocationPhase.TargetExecution);
   }
 
   private occurrenceBelongsToBootstrapContext(
     context: TemplateCompilerBootstrapContextReference,
+    occurrence: TemplateCompilerNodeOccurrence | TemplateCompilerAttributeOccurrence,
+  ): boolean {
+    return this.occurrenceBelongsToInvocationLane(context.lane, occurrence);
+  }
+
+  private occurrenceBelongsToInvocationLane(
+    lane: TemplateCompilerExecutionLaneReference,
     occurrence: TemplateCompilerNodeOccurrence | TemplateCompilerAttributeOccurrence,
   ): boolean {
     let node: TemplateCompilerNodeOccurrence | null = this.forest.nodeForOccurrenceKey(occurrence.occurrenceKey);
@@ -2325,7 +2777,7 @@ export class TemplateCompilerExecutionSession {
       node = attribute.owner;
     }
     while (node != null) {
-      if (node === context.compilerCarrier) return true;
+      if (node === lane.compilerCarrier) return true;
       node = node.parent;
     }
     return false;

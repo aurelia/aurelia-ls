@@ -17,6 +17,8 @@ import {
   TemplateCompilerHookSet,
 } from '../src/template/compiler-hook-world.js';
 import {
+  TemplateCompilerBootstrapDriverKind,
+  TemplateCompilerBootstrapDriverReference,
   TemplateCompilerCallableEffectOperationTarget,
   TemplateCompilerCallableReference,
   TemplateCompilerExecutionSession,
@@ -33,6 +35,14 @@ import {
   type TemplateCompilerOperation,
   type TemplateCompilerOperationAttemptRequest,
 } from '../src/template/template-compiler-execution.js';
+import {
+  TemplateCompilerHookBootstrapResult,
+  TemplateCompilerHookBootstrapState,
+} from '../src/template/template-compiler-hook-bootstrap.js';
+import {
+  TemplateCompilerLocalExtractionResult,
+  TemplateCompilerLocalExtractionState,
+} from '../src/template/template-compiler-local-extraction.js';
 import {
   TemplateCompilerAttributeOccurrence,
   TemplateCompilerElementOccurrence,
@@ -90,7 +100,7 @@ describe('template compiler execution sequence', () => {
     }
   });
 
-  test('begins from an invocation carrier and attaches its target plan only after bootstrap closes', () => {
+  test('begins from an invocation carrier without exposing legacy structural planning', () => {
     const browser = new BrowserEffectiveTemplateFixture('compiler-execution-bootstrap');
 
     try {
@@ -169,62 +179,233 @@ describe('template compiler execution sequence', () => {
 
       const targetPlan = createRootTargetPlan(browser, lane.localKey);
       recordReachableCompilerInputs(targetPlan, forest);
-      const foreignInput = browser.materialize('foreign-authority', '<div>foreign</div>');
-      const foreignForest = TemplateCompilerOccurrenceForest.fromBrowserEffective(foreignInput.emission);
-      const foreignExecution = TemplateCompilerExecutionSession.createForForest(
-        'compiler-execution-bootstrap:foreign-family',
-        foreignForest,
-      );
-      expect(() => TemplateCompilerStructuralExecutionSession.createBorrowing(
-        forest,
-        targetPlan,
-        foreignExecution.mutationAuthority,
-      )).toThrow(/another forest mutation authority/);
-      const structural = execution.createStructuralExecution(targetPlan);
-      expect(() => structural.createGeneration(
-        targetPlan.root,
-        'bootstrap:unbacked-structural-generation',
-        TemplateCompilerGeneratedOccurrenceRole.Clone,
-        [browser.run.handles.product('bootstrap:unbacked-cause')],
-        0,
-      )).toThrow(/no pending mutation batch/);
-      expect(() => execution.attachTargetPlan(lane, targetPlan)).toThrow(/must be sealed/);
-      targetPlan.seal();
-      expect(execution.attachTargetPlan(lane, targetPlan)).toBe(lane);
-      const targetContext = execution.admitContext(lane, targetPlan.root);
-      const structuralGenerationCause = browser.run.handles.product('bootstrap:backed-generation-cause');
-      const structuralGenerationAttempt = execution.beginOperation({
-        operationKey: 'bootstrap:backed-structural-generation',
-        context: targetContext,
-        operationKind: TemplateCompilerOperationKind.HydrationTargetCreation,
-        executionMechanism: TemplateCompilerOperationExecutionMechanism.BuiltIn,
-        target: new TemplateCompilerInstructionOperationTarget(
-          browser.run.handles.product('bootstrap:backed-generation-instruction'),
-          browser.run.handles.identity('bootstrap:backed-generation-instruction'),
-        ),
-        causeHandles: [structuralGenerationCause],
-      });
-      const backedStructuralGeneration = structural.createGeneration(
-        targetPlan.root,
-        structuralGenerationAttempt.operationKey,
-        TemplateCompilerGeneratedOccurrenceRole.Clone,
-        [structuralGenerationCause],
-        0,
-      );
-      const structuralGenerationOperation = execution.completeOperation(
-        structuralGenerationAttempt,
-        new TemplateCompilerOperationCompletion(TemplateCompilerOperationCompletionKind.Complete),
-      );
-      expect(execution.mutationAuthority.completedBatchForGeneration(backedStructuralGeneration)?.batchKind)
-        .toBe(TemplateCompilerCompletedMutationBatchKind.Execution);
-      structural.assertCoherent();
-      expect(execution.sequence.readContextOperations(targetContext)).toEqual([structuralGenerationOperation]);
-      expect(execution.seal()).toBe(execution.sequence);
-      expect(execution.structuralExecution).toBe(structural);
-      expect(lane.targetPlan).toBe(targetPlan);
+      expect(() => execution.createStructuralExecution(targetPlan))
+        .toThrow(/forest-first compiler execution before nominal site completion authority/);
+      expect(() => execution.attachTargetPlan(lane, targetPlan))
+        .toThrow(/forest-first compiler execution before nominal site completion authority/);
+      expect(() => execution.admitTargetPlan(targetPlan))
+        .toThrow(/forest-first compiler execution before nominal site completion authority/);
+      expect(execution.structuralExecution).toBeNull();
+      expect(lane.targetPlan).toBeNull();
       expect(() => TemplateCompilerExecutionSession.createForForest('duplicate', forest)).toThrow(/already owns/);
     } finally {
       browser.dispose();
+    }
+  });
+
+  test('keeps a zero-operation site frontier repeatable without fabricating execution closure', () => {
+    const browser = new BrowserEffectiveTemplateFixture('compiler-execution-site-zero');
+    try {
+      const forest = TemplateCompilerOccurrenceForest.fromBrowserEffective(
+        browser.materialize('root', '<main><span>content</span></main>').emission,
+      );
+      const execution = TemplateCompilerExecutionSession.createForForest('site-zero:family', forest);
+      const lane = execution.admitRootInvocation('site-zero:plan');
+      const bootstrapClosure = closeExactNoLocalBootstrap(browser, execution, lane, 'site-zero');
+
+      const first = execution.captureSiteExecutionFrontier(bootstrapClosure);
+      const second = execution.captureSiteExecutionFrontier(bootstrapClosure);
+      expect(second).not.toBe(first);
+      expect(second).toMatchObject({
+        lane,
+        bootstrapClosure,
+        forestMutationRevision: first.forestMutationRevision,
+        globalOperationCount: first.globalOperationCount,
+        laneOperationCount: first.laneOperationCount,
+      });
+      expect(execution.invocationPhase(lane)).toBe(TemplateCompilerInvocationPhase.BootstrapClosed);
+      expect(execution.sequence.readSiteContexts()).toEqual([]);
+      expect(execution.siteExecutionContext(lane)).toBeNull();
+    } finally {
+      browser.dispose();
+    }
+  });
+
+  test('executes mutating processContent before planning under one lazy site context', () => {
+    const browser = new BrowserEffectiveTemplateFixture('compiler-execution-site-process-content');
+    try {
+      const forest = TemplateCompilerOccurrenceForest.fromBrowserEffective(
+        browser.materialize('root', '<div title="before">content</div>').emission,
+      );
+      const execution = TemplateCompilerExecutionSession.createForForest('site-process:family', forest);
+      const lane = execution.admitRootInvocation('site-process:plan');
+      const bootstrapClosure = closeExactNoLocalBootstrap(browser, execution, lane, 'site-process');
+      const frontier = execution.captureSiteExecutionFrontier(bootstrapClosure);
+      expect(execution.sequence.readSiteContexts()).toEqual([]);
+
+      const driver = execution.beginSiteExecutionDriver(frontier);
+      const context = driver.context;
+      const element = forest.readNodes().find((node): node is TemplateCompilerElementOccurrence =>
+        node instanceof TemplateCompilerElementOccurrence && node.tagName === 'div'
+      );
+      const attribute = element?.readAttributes().find((candidate) => candidate.name === 'title') ?? null;
+      if (element == null || attribute == null) throw new Error('Expected processContent site occurrences.');
+      const callable = new TemplateCompilerCallableReference(
+        browser.run.handles.product('site-process:callable'),
+        browser.run.handles.identity('site-process:callable'),
+        browser.run.handles.address('site-process:callable'),
+      );
+      expect(() => execution.beginOperation({
+        operationKey: 'site-process:unsupported-attribute',
+        context,
+        operationKind: TemplateCompilerOperationKind.AttributeDisposition,
+        executionMechanism: TemplateCompilerOperationExecutionMechanism.BuiltIn,
+        target: execution.occurrenceTarget(context, attribute),
+        causeHandles: [browser.run.handles.product('site-process:definition')],
+        siteExecutionDriver: driver,
+      })).toThrow(/currently admits only processContent/);
+      const attempt = execution.beginOperation({
+        operationKey: 'site-process:invoke',
+        context,
+        operationKind: TemplateCompilerOperationKind.ProcessContent,
+        executionMechanism: TemplateCompilerOperationExecutionMechanism.StaticCallable,
+        target: execution.callableEffectTarget(context, callable, element),
+        causeHandles: [browser.run.handles.product('site-process:definition')],
+        siteExecutionDriver: driver,
+      });
+      execution.rewriteAttributeValue(attempt, attribute, 'after');
+      const operation = execution.completeOperation(
+        attempt,
+        new TemplateCompilerOperationCompletion(TemplateCompilerOperationCompletionKind.Declined),
+      );
+      const scalar = execution.captureReachedAttributeScalar(driver, element, attribute, 0);
+
+      expect(execution.sequence.readSiteContexts()).toEqual([context]);
+      expect(execution.sequence.readContextOperations(context)).toEqual([operation]);
+      expect(operation).toMatchObject({
+        context,
+        startForestMutationRevision: frontier.forestMutationRevision,
+        endForestMutationRevision: forest.mutationRevision,
+        laneOperationOrdinal: frontier.laneOperationCount,
+      });
+      expect(scalar).toMatchObject({
+        bootstrapClosure,
+        siteExecutionContext: context,
+        currentValue: 'after',
+        replayedValue: 'after',
+        laneOperationCount: frontier.laneOperationCount + 1,
+      });
+      expect(scalar.isExact()).toBe(true);
+      expect(() => execution.captureReachedAttributeScalar(bootstrapClosure, element, attribute, 0))
+        .toThrow(/bootstrap closure no longer owns/);
+
+      execution.finishSiteExecutionDriver(driver);
+      expect(execution.invocationPhase(lane)).toBe(TemplateCompilerInvocationPhase.SiteExecution);
+      expect(() => execution.beginOperation({
+        operationKey: 'site-process:after-close',
+        context,
+        operationKind: TemplateCompilerOperationKind.ProcessContent,
+        executionMechanism: TemplateCompilerOperationExecutionMechanism.StaticCallable,
+        target: execution.callableEffectTarget(context, callable, element),
+        causeHandles: [browser.run.handles.product('site-process:definition')],
+        siteExecutionDriver: driver,
+      })).toThrow(/currently admits only processContent/);
+
+      const targetPlan = createRootTargetPlan(browser, lane.localKey);
+      recordReachableCompilerInputs(targetPlan, forest);
+      expect(() => execution.createStructuralExecution(targetPlan))
+        .toThrow(/forest-first compiler execution before nominal site completion authority/);
+      targetPlan.seal();
+      expect(() => execution.attachTargetPlan(lane, targetPlan))
+        .toThrow(/forest-first compiler execution before nominal site completion authority/);
+      expect(() => execution.admitTargetPlan(targetPlan))
+        .toThrow(/forest-first compiler execution before nominal site completion authority/);
+      expect(lane.targetPlan).toBeNull();
+      expect(() => execution.seal()).toThrow(/no target plan or terminal bootstrap outcome/);
+    } finally {
+      browser.dispose();
+    }
+  });
+
+  test('rejects foreign, stale, and interleaved site execution authority', () => {
+    const left = new BrowserEffectiveTemplateFixture('compiler-execution-site-authority-left');
+    const right = new BrowserEffectiveTemplateFixture('compiler-execution-site-authority-right');
+    try {
+      const leftForest = TemplateCompilerOccurrenceForest.fromBrowserEffective(
+        left.materialize('root', '<div title="left"></div>').emission,
+      );
+      const rightForest = TemplateCompilerOccurrenceForest.fromBrowserEffective(
+        right.materialize('root', '<div title="right"></div>').emission,
+      );
+      const leftExecution = TemplateCompilerExecutionSession.createForForest('site-authority:left', leftForest);
+      const rightExecution = TemplateCompilerExecutionSession.createForForest('site-authority:right', rightForest);
+      const leftLane = leftExecution.admitRootInvocation('site-authority:left:lane');
+      const rightLane = rightExecution.admitRootInvocation('site-authority:right:lane');
+      const leftClosure = closeExactNoLocalBootstrap(left, leftExecution, leftLane, 'site-authority:left');
+      const rightClosure = closeExactNoLocalBootstrap(right, rightExecution, rightLane, 'site-authority:right');
+      const leftFrontier = leftExecution.captureSiteExecutionFrontier(leftClosure);
+      const rightFrontier = rightExecution.captureSiteExecutionFrontier(rightClosure);
+
+      expect(() => leftExecution.beginSiteExecutionDriver(rightFrontier)).toThrow(/another family/);
+      const rightAttribute = rightForest.readAttributes().find((candidate) => candidate.name === 'title');
+      if (rightAttribute == null) throw new Error('Expected stale-frontier attribute.');
+      rightForest.rewriteAttributeValue(rightAttribute, 'stale');
+      expect(() => rightExecution.beginSiteExecutionDriver(rightFrontier)).toThrow(/foreign, stale, or no longer pre-plan/);
+
+      const driver = leftExecution.beginSiteExecutionDriver(leftFrontier);
+      expect(() => leftExecution.beginHookBootstrapDriver(leftLane))
+        .toThrow(/while compiler site driver/);
+      expect(() => leftExecution.finishBootstrapDriver(new TemplateCompilerBootstrapDriverReference(
+        {},
+        leftLane,
+        TemplateCompilerBootstrapDriverKind.CompilerHooks,
+      ))).toThrow(/while compiler site driver/);
+      expect(() => leftExecution.closeInvocationBootstrap(
+        leftClosure.hookBootstrap,
+        leftClosure.localExtraction,
+      )).toThrow(/while compiler site driver/);
+      expect(() => leftExecution.admitRootInvocation('site-authority:interleaved-root'))
+        .toThrow(/while compiler site driver/);
+      const bootstrap = leftExecution.bootstrapContext(leftLane);
+      const hooks = compilerHookSet(left, 'site-authority:interleaved-hook');
+      expect(() => leftExecution.beginOperation({
+        operationKey: 'site-authority:interleaved',
+        context: bootstrap,
+        operationKind: TemplateCompilerOperationKind.CompilerHook,
+        executionMechanism: TemplateCompilerOperationExecutionMechanism.BuiltIn,
+        target: leftExecution.compilerHookTarget(
+          bootstrap,
+          hooks,
+          TemplateCompilerHookOperationStage.HookSetResolution,
+          null,
+        ),
+        causeHandles: [hooks.productHandle],
+      })).toThrow(/cannot interleave with active site driver/);
+
+      const element = leftForest.readNodes().find((node): node is TemplateCompilerElementOccurrence =>
+        node instanceof TemplateCompilerElementOccurrence && node.tagName === 'div'
+      );
+      if (element == null) throw new Error('Expected active-driver element.');
+      const callable = new TemplateCompilerCallableReference(
+        left.run.handles.product('site-authority:callable'),
+        left.run.handles.identity('site-authority:callable'),
+        left.run.handles.address('site-authority:callable'),
+      );
+      const attempt = leftExecution.beginOperation({
+        operationKey: 'site-authority:owned',
+        context: driver.context,
+        operationKind: TemplateCompilerOperationKind.ProcessContent,
+        executionMechanism: TemplateCompilerOperationExecutionMechanism.StaticCallable,
+        target: leftExecution.callableEffectTarget(driver.context, callable, element),
+        causeHandles: [left.run.handles.product('site-authority:definition')],
+        siteExecutionDriver: driver,
+      });
+      expect(() => leftExecution.createGeneration(
+        attempt,
+        TemplateCompilerGeneratedOccurrenceRole.Clone,
+        0,
+      )).toThrow(/does not admit generated structure/);
+      const leftAttribute = element.readAttributes()[0]!;
+      leftForest.rewriteAttributeValue(leftAttribute, 'unledgered-during-attempt');
+      expect(() => leftExecution.completeOperation(
+        attempt,
+        new TemplateCompilerOperationCompletion(TemplateCompilerOperationCompletionKind.Complete),
+      )).toThrow(/unledgered forest mutation before scalar commit/);
+      expect(leftExecution.readPendingAttempt()).toBe(attempt);
+      expect(leftExecution.sequence.readContextOperations(driver.context)).toEqual([]);
+    } finally {
+      left.dispose();
+      right.dispose();
     }
   });
 
@@ -953,6 +1134,53 @@ describe('template compiler execution sequence', () => {
     }
   });
 });
+
+function closeExactNoLocalBootstrap(
+  browser: BrowserEffectiveTemplateFixture,
+  execution: TemplateCompilerExecutionSession,
+  lane: ReturnType<TemplateCompilerExecutionSession['admitRootInvocation']>,
+  localKey: string,
+) {
+  const driver = execution.beginHookBootstrapDriver(lane);
+  const context = execution.bootstrapContext(lane);
+  const hooks = compilerHookSet(browser, `${localKey}:hooks`);
+  let operation: TemplateCompilerOperation | null = null;
+  try {
+    operation = execution.completeOperation(execution.beginOperation({
+      operationKey: `${localKey}:hooks:resolve`,
+      context,
+      operationKind: TemplateCompilerOperationKind.CompilerHook,
+      executionMechanism: TemplateCompilerOperationExecutionMechanism.BuiltIn,
+      target: execution.compilerHookTarget(
+        context,
+        hooks,
+        TemplateCompilerHookOperationStage.HookSetResolution,
+        null,
+      ),
+      causeHandles: [hooks.productHandle],
+      bootstrapDriver: driver,
+    }), new TemplateCompilerOperationCompletion(TemplateCompilerOperationCompletionKind.Complete));
+  } finally {
+    execution.finishBootstrapDriver(driver);
+  }
+  const hook = new TemplateCompilerHookBootstrapResult(
+    lane,
+    TemplateCompilerHookBootstrapState.Exact,
+    [operation!],
+    null,
+    null,
+  );
+  const local = new TemplateCompilerLocalExtractionResult(
+    lane,
+    TemplateCompilerLocalExtractionState.NoLocalTemplates,
+    execution.forest.mutationRevision,
+    [],
+    [],
+    null,
+    null,
+  );
+  return execution.closeInvocationBootstrap(hook, local);
+}
 
 function compilerHookSet(
   browser: BrowserEffectiveTemplateFixture,

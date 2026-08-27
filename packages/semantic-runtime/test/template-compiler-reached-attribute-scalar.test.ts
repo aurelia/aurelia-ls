@@ -183,20 +183,12 @@ describe('template compiler reached attribute scalar', () => {
         currentValue: '#probe',
         scalarWriteRevision: 3,
       });
-      const targetPlan = createRootTargetPlan(fixture.browser, fixture.rootLane.localKey);
-      recordReachableCompilerInputs(targetPlan, fixture.forest);
-      const structural = fixture.execution.createStructuralExecution(targetPlan);
-      targetPlan.seal();
-      fixture.execution.attachTargetPlan(fixture.rootLane, targetPlan);
-      fixture.execution.admitContext(fixture.rootLane, targetPlan.root);
-      structural.assertCoherent();
-      expect(() => fixture.execution.assertCoherent()).toThrow(/unledgered scalar-write revision/);
     } finally {
       fixture.dispose();
     }
   });
 
-  test('rejects capture immediately after target admission and audits the pre-target transition index', () => {
+  test('keeps bootstrap capture repeatable while rejecting forest-first target planning', () => {
     const fixture = new ReachedAttributeFixture(
       'reached-attribute-stale-lane',
       '<div title="before"></div>',
@@ -211,15 +203,12 @@ describe('template compiler reached attribute scalar', () => {
       expect(fixture.execution.captureReachedAttributeScalar(closure, owner, attribute, 0).isExact()).toBe(true);
       const targetPlan = createRootTargetPlan(fixture.browser, fixture.rootLane.localKey);
       recordReachableCompilerInputs(targetPlan, fixture.forest);
-      const structural = fixture.execution.createStructuralExecution(targetPlan);
+      expect(() => fixture.execution.createStructuralExecution(targetPlan))
+        .toThrow(/forest-first compiler execution before nominal site completion authority/);
       targetPlan.seal();
-      fixture.execution.attachTargetPlan(fixture.rootLane, targetPlan);
-
-      expect(() => fixture.execution.captureReachedAttributeScalar(closure, owner, attribute, 0))
-        .toThrow(/cannot run after target admission/);
-      fixture.execution.admitContext(fixture.rootLane, targetPlan.root);
-      structural.assertCoherent();
-      expect(() => fixture.execution.assertCoherent()).not.toThrow();
+      expect(() => fixture.execution.attachTargetPlan(fixture.rootLane, targetPlan))
+        .toThrow(/forest-first compiler execution before nominal site completion authority/);
+      expect(fixture.execution.captureReachedAttributeScalar(closure, owner, attribute, 0).isExact()).toBe(true);
     } finally {
       fixture.dispose();
     }
