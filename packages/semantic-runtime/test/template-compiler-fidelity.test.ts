@@ -597,11 +597,14 @@ describe('template compiler fidelity', () => {
     );
     expect(auSlotInstruction?.auSlotProcessContent).toEqual(expect.objectContaining({
       name: 'default',
-      removedChildNodes: [expect.objectContaining({ nodeKind: 'element' })],
     }));
+    expect(auSlotInstruction?.auSlotProcessContent).not.toHaveProperty('removedChildNodes');
+    expect(auSlotInstruction?.auSlotProcessContentRemovedChildNodes).toEqual([
+      expect.objectContaining({ nodeKind: 'element' }),
+    ]);
     expect(htmlNodeLabels(
       auSlotRemovalResource.compilation.html.nodes,
-      auSlotInstruction?.auSlotProcessContent?.removedChildNodes.flatMap((child) =>
+      auSlotInstruction?.auSlotProcessContentRemovedChildNodes.flatMap((child) =>
         child.productHandle == null ? [] : [child.productHandle]
       ) ?? [],
     )).toEqual(['div']);

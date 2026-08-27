@@ -390,6 +390,7 @@ describe('template compiler structural execution mechanics', () => {
         null,
         [],
         [],
+        [],
         true,
         authoredElement.sourceAddressHandle,
       );
@@ -754,6 +755,7 @@ describe('template compiler structural execution mechanics', () => {
         null,
         [],
         [],
+        [],
         false,
         authoredHost.sourceAddressHandle,
       );
@@ -881,7 +883,8 @@ describe('template compiler structural execution mechanics', () => {
         null,
         [],
         [],
-        new AuSlotProcessContentInstructionData('default', null, [authoredRemoved.toReference()]),
+        new AuSlotProcessContentInstructionData('default', null),
+        [authoredRemoved.toReference()],
         [],
         [],
         false,
@@ -1786,6 +1789,7 @@ function createProjectionContributorPlan(
     [projection],
     [],
     null,
+    [],
     [],
     [],
     false,

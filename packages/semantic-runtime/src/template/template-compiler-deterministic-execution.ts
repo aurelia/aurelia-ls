@@ -480,7 +480,7 @@ class DeterministicExecutionFrame {
               if (input != null) discarded.add(input);
             }
           }
-          for (const reference of instruction.auSlotProcessContent?.removedChildNodes ?? []) {
+          for (const reference of instruction.auSlotProcessContentRemovedChildNodes) {
             if (reference.productHandle != null) {
               const input = this.exactNode(reference.productHandle);
               if (input != null) discarded.add(input);
@@ -560,7 +560,7 @@ class DeterministicExecutionFrame {
   ): readonly TemplateCompilerDeterministicExecutionReason[] {
     const reasons: TemplateCompilerDeterministicExecutionReason[] = [];
     const references = [
-      ...instruction.auSlotProcessContent?.removedChildNodes ?? [],
+      ...instruction.auSlotProcessContentRemovedChildNodes,
       ...instruction.discardedProjectionContributors.map((contributor) => contributor.node),
       ...instruction.projections.flatMap((projection) =>
         projection.contributors.map((contributor) => contributor.node)
@@ -820,7 +820,7 @@ class DeterministicExecutionFrame {
     instruction: HydrateElementInstruction,
     session: TemplateCompilerStructuralExecutionSession,
   ): void {
-    for (const reference of instruction.auSlotProcessContent?.removedChildNodes ?? []) {
+    for (const reference of instruction.auSlotProcessContentRemovedChildNodes) {
       if (reference.productHandle == null) continue;
       const node = this.exactNode(reference.productHandle);
       if (node == null) throw new Error('Known AuSlot removal lost its exact browser occurrence.');

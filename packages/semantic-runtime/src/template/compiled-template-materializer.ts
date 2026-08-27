@@ -161,6 +161,14 @@ import {
   stageTemplateCompilerSpreadInstruction,
   stageTemplateCompilerValueInstruction,
 } from './template-compiler-instruction-staging.js';
+import {
+  TemplateCompilerTextHoleSourceRange,
+  TemplateCompilerTextInstructionAllocation,
+  type TemplateCompilerTextInstructionAllocationRequest,
+  type TemplateCompilerTextInstructionStagingAuthority,
+  TemplateCompilerTextInstructionStagingRequest,
+  stageTemplateCompilerTextInstructions,
+} from './template-compiler-text-instruction-staging.js';
 
 export interface CompiledTemplateMaterializationRequest {
   /** Store-local key for this compiled-template pass. */
@@ -776,7 +784,34 @@ class CompiledTemplateInstructionTraversal {
     if (parse == null || parse.resultKind === ExpressionParseResultKind.InterpolationAbsent) {
       return;
     }
-    if (parse.result.kind !== ExpressionParseResultKind.InterpolationSuccess) {
+    const sources = parse.result.kind === ExpressionParseResultKind.InterpolationSuccess
+      ? parse.result.ast.expressions.map((expression, expressionChainIndex) => {
+          const expressionSource = sourceAddressForRuntimeExpressionSpan(
+            this.assemblyState.store,
+            `compiled-template:${this.input.localKey}:text:${node.productHandle}:expression:${expressionChainIndex}`,
+            parse.sourceAddressHandle,
+            expression.span,
+            SourceSpanRole.Range,
+          );
+          this.assemblyState.records.push(...expressionSource.records);
+          return new TemplateCompilerTextHoleSourceRange(
+            expressionChainIndex,
+            expression.span,
+            parse.sourceAddressHandle,
+            expressionSource.handle,
+          );
+        })
+      : [];
+    const staging = stageTemplateCompilerTextInstructions(new TemplateCompilerTextInstructionStagingRequest(
+      this.textInstructionStagingAuthority(node),
+      `text:${node.productHandle}`,
+      String(node.productHandle),
+      node.toReference(),
+      parse.productHandle,
+      parse.result,
+      sources,
+    ));
+    if (staging == null) {
       const seam = this.assemblyState.addOpenSeam(
         `text-target-row:${node.productHandle}`,
         'Text interpolation target rows remain open because the expression parse did not close.',
@@ -810,41 +845,41 @@ class CompiledTemplateInstructionTraversal {
       );
       return;
     }
-    parse.result.ast.expressions.forEach((expression, expressionChainIndex) => {
-      const expressionSource = sourceAddressForRuntimeExpressionSpan(
-        this.assemblyState.store,
-        `compiled-template:${this.input.localKey}:text:${node.productHandle}:expression:${expressionChainIndex}`,
-        parse.sourceAddressHandle,
-        expression.span,
-        SourceSpanRole.Range,
-      );
-      this.assemblyState.records.push(...expressionSource.records);
-      const instruction = this.assemblyState.createInstruction(
-        `text-binding:${node.productHandle}:expression:${expressionChainIndex}`,
-        TemplateInstructionKind.TextBinding,
-        node.identityHandle,
-        expressionSource.handle,
-        (productHandle, identityHandle) => new TextBindingInstruction(
-          productHandle,
-          identityHandle,
-          node.toReference(),
-          parse.productHandle,
-          expressionChainIndex,
-          expressionSource.handle,
-          [],
-        ),
-      );
+    staging.holes.forEach((hole) => {
       contextPlan.appendRow(
-        `text:${node.productHandle}:expression:${expressionChainIndex}`,
+        `text:${node.productHandle}:expression:${hole.expressionChainIndex}`,
         node,
-        [instruction],
+        [hole.instruction],
         TemplateRenderTargetKind.MarkerTarget,
         TemplateCompilerTargetRowPosture.Complete,
         1,
         [],
-        expressionSource.handle,
+        hole.source.sourceAddressHandle,
       );
     });
+  }
+
+  private textInstructionStagingAuthority(
+    node: HtmlText,
+  ): TemplateCompilerTextInstructionStagingAuthority {
+    return {
+      create: (
+        request: TemplateCompilerTextInstructionAllocationRequest,
+        factory,
+      ): TextBindingInstruction => this.assemblyState.createInstruction(
+        `text-binding:${node.productHandle}:expression:${request.expressionChainIndex}`,
+        TemplateInstructionKind.TextBinding,
+        node.identityHandle,
+        request.source.sourceAddressHandle,
+        (productHandle, identityHandle, instructionLocal) => factory(
+          new TemplateCompilerTextInstructionAllocation(
+            productHandle,
+            identityHandle,
+            instructionLocal,
+          ),
+        ),
+      ),
+    };
   }
 
   private visitLetElement(
@@ -982,6 +1017,7 @@ class CompiledTemplateInstructionTraversal {
           }),
           projectionGroups.flatMap((group) => group.discardedContributors),
           this.auSlotProcessContentData(auSlotProcessContent),
+          processContentRemovedChildNodes,
           parts.bindableInstructions.map((instruction) => instruction.productHandle),
           parts.capturedSyntaxProductHandles,
           usageContainerless,
@@ -1239,7 +1275,6 @@ class CompiledTemplateInstructionTraversal {
     return new AuSlotProcessContentInstructionData(
       plan.name,
       plan.nameAttribute?.attribute.valueAddressHandle ?? null,
-      plan.removedChildren,
     );
   }
 

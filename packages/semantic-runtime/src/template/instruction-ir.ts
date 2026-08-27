@@ -73,6 +73,8 @@ export type TemplateInstructionField =
   | 'storeName'
   | 'rawExpression'
   | 'children'
+  | 'processContent'
+  | 'processContentRemovedChildren'
   | 'captures'
   | 'instructions'
   | 'tailInstructions'
@@ -109,15 +111,13 @@ export class TemplateInstructionSequence {
   ) {}
 }
 
-/** Known output of runtime-html `AuSlot.processContent` stored in the hydrate-element instruction data field. */
+/** Wire-facing output of runtime-html `AuSlot.processContent` stored in the hydrate-element instruction data field. */
 export class AuSlotProcessContentInstructionData {
   constructor(
     /** Static outlet name selected by `AuSlot`; absence is lowered to the framework `default` name. */
     readonly name: string,
     /** Exact authored `name` value span, or null when the framework supplied `default`. */
     readonly nameSourceAddressHandle: AddressHandle | null,
-    /** Exact direct children removed by the known `AuSlot.processContent` implementation. */
-    readonly removedChildNodes: readonly HtmlNodeReference[],
   ) {}
 }
 
@@ -163,6 +163,8 @@ export class HydrateElementInstruction {
     readonly discardedProjectionContributors: readonly HydrateElementProjectionContributor[],
     /** Known framework `processContent` data; null for ordinary or open custom-element hooks. */
     readonly auSlotProcessContent: AuSlotProcessContentInstructionData | null,
+    /** Authored direct-child references consumed by deterministic AuSlot audit/replay; never framework wire data. */
+    readonly auSlotProcessContentRemovedChildNodes: readonly HtmlNodeReference[],
     readonly bindableInstructionProductHandles: readonly ProductHandle[],
     readonly captureSyntaxProductHandles: readonly ProductHandle[],
     readonly containerless: boolean,

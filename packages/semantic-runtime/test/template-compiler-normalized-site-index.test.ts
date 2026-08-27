@@ -411,6 +411,7 @@ describe('template compiler normalized site index', () => {
       hydrate.projections,
       hydrate.discardedProjectionContributors,
       hydrate.auSlotProcessContent,
+      hydrate.auSlotProcessContentRemovedChildNodes,
       hydrate.bindableInstructionProductHandles,
       [capturedCandidate.productHandle, capturedCandidate.productHandle],
       hydrate.containerless,

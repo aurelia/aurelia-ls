@@ -1480,7 +1480,7 @@ function referencesForTemplateInstruction(
           )
         ),
         kernelRecordReferences(instruction.auSlotProcessContent?.nameSourceAddressHandle ?? null),
-        ...(instruction.auSlotProcessContent?.removedChildNodes.map(htmlNodeReferenceReferences) ?? []),
+        ...instruction.auSlotProcessContentRemovedChildNodes.map(htmlNodeReferenceReferences),
         detailsReferences(
           TemplateDetailDescriptors.Instruction,
           instruction.bindableInstructionProductHandles,

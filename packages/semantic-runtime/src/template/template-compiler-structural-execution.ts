@@ -1390,7 +1390,7 @@ export class TemplateCompilerStructuralExecutionSession {
         if (instruction.discardedProjectionContributors.some((contributor) =>
           this.projectionHostChild(instruction, contributor)?.contributor === node
         )) return instruction.productHandle;
-        if (instruction.auSlotProcessContent?.removedChildNodes.some((child) =>
+        if (instruction.auSlotProcessContentRemovedChildNodes.some((child) =>
           this.instructionHostChild(instruction, child)?.child === node
         ) === true) return instruction.productHandle;
       }
@@ -2069,7 +2069,7 @@ export class TemplateCompilerStructuralExecutionSession {
       for (const row of context.readRows()) {
         for (const instruction of row.instructions) {
           if (!(instruction instanceof HydrateElementInstruction) || instruction.auSlotProcessContent == null) continue;
-          const removed = instruction.auSlotProcessContent.removedChildNodes;
+          const removed = instruction.auSlotProcessContentRemovedChildNodes;
           if (new Set(removed.map((child) => child.productHandle)).size !== removed.length) {
             throw new Error(`AuSlot instruction '${instruction.productHandle}' repeats a removed child input.`);
           }
