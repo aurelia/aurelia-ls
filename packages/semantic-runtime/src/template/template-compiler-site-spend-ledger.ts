@@ -46,6 +46,7 @@ export const enum TemplateCompilerSiteSpendDisposition {
   LocalBindableMetadataConsumed = 'local-bindable-metadata-consumed',
   TransferredToChildInvocation = 'transferred-to-child-invocation',
   InertTemplateContent = 'inert-template-content',
+  LetContentSuppressed = 'let-content-suppressed',
 }
 
 /** Caller-classified candidate occurrence that intentionally has no authored-precedent bundle spend. */
@@ -488,13 +489,17 @@ export class TemplateCompilerSiteSpendLedger {
       | TemplateCompilerSiteSpendDisposition.LocalDeclarationConsumed
       | TemplateCompilerSiteSpendDisposition.LocalBindableMetadataConsumed
       | TemplateCompilerSiteSpendDisposition.TransferredToChildInvocation
-      | TemplateCompilerSiteSpendDisposition.InertTemplateContent,
+      | TemplateCompilerSiteSpendDisposition.InertTemplateContent
+      | TemplateCompilerSiteSpendDisposition.LetContentSuppressed,
     authority: TemplateCompilerLocalSiteExclusionAuthority | null = null,
   ): TemplateCompilerSiteSpendAttempt {
     this.assertOpen();
     const common = this.validateCommonSpend(bundle, occurrence, disposition);
     if (common != null) return common;
-    if (disposition === TemplateCompilerSiteSpendDisposition.InertTemplateContent) {
+    if (
+      disposition === TemplateCompilerSiteSpendDisposition.InertTemplateContent
+      || disposition === TemplateCompilerSiteSpendDisposition.LetContentSuppressed
+    ) {
       if (authority != null) {
         return this.conflict(
           TemplateCompilerSiteSpendConflictKind.UnexpectedLocalExclusionAuthority,

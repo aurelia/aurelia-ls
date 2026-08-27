@@ -117,6 +117,37 @@ describe('template compiler site spend ledger', () => {
     )).toThrow(/already finished/);
   });
 
+  test('keeps terminal let content distinct from inert template content', () => {
+    const inert = normalizedTextSite('inert-template-content');
+    const letChild = normalizedTextSite('let-content');
+    const ledger = new TemplateCompilerSiteSpendLedger(normalizedIndex([], [inert, letChild]));
+
+    const inertSpend = ledger.exclude(
+      inert,
+      textOccurrence('inert-template-content'),
+      TemplateCompilerSiteSpendDisposition.InertTemplateContent,
+    );
+    const letSpend = ledger.exclude(
+      letChild,
+      textOccurrence('let-content'),
+      TemplateCompilerSiteSpendDisposition.LetContentSuppressed,
+    );
+
+    expect(inertSpend).toMatchObject({
+      disposition: TemplateCompilerSiteSpendDisposition.InertTemplateContent,
+      causeOperation: null,
+      siteEventOrdinal: null,
+    });
+    expect(letSpend).toMatchObject({
+      disposition: TemplateCompilerSiteSpendDisposition.LetContentSuppressed,
+      causeOperation: null,
+      siteEventOrdinal: null,
+    });
+    expect(ledger.finish(
+      TemplateCompilerSiteSpendCompletion.complete(ledger.nextSiteEventOrdinal),
+    ).state).toBe(TemplateCompilerSiteSpendLedgerState.AllSitesAccounted);
+  });
+
   test('reports both exclusive-spend directions and event collisions', () => {
     const first = normalizedAttributeSite('first');
     const second = normalizedAttributeSite('second');
