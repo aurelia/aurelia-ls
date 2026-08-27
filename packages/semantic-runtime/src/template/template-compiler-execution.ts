@@ -104,6 +104,60 @@ export class TemplateCompilerOperationCompletion {
   }
 }
 
+export const enum TemplateCompilerMutationBatchState {
+  Committed = 'committed',
+  Discarded = 'discarded',
+}
+
+/** One scalar DOM write preserving the exact attribute occurrence identity. */
+export class TemplateCompilerAttributeValueMutation {
+  constructor(
+    readonly attribute: TemplateCompilerAttributeOccurrence,
+    readonly previousValue: string,
+    readonly nextValue: string,
+  ) {
+    if (previousValue === nextValue) {
+      throw new Error(`Compiler attribute '${attribute.occurrenceKey}' mutation has no scalar change.`);
+    }
+  }
+}
+
+/** Normalized mutations attempted by one compiler operation. */
+export class TemplateCompilerOperationMutationBatch {
+  constructor(
+    readonly state: TemplateCompilerMutationBatchState,
+    readonly attributeValueMutations: readonly TemplateCompilerAttributeValueMutation[],
+  ) {}
+}
+
+class TemplateCompilerPendingMutationOverlay {
+  private readonly attributeValueMutations = new Map<
+    TemplateCompilerAttributeOccurrence,
+    TemplateCompilerAttributeValueMutation
+  >();
+
+  readAttributeValue(attribute: TemplateCompilerAttributeOccurrence): string {
+    return this.attributeValueMutations.get(attribute)?.nextValue ?? attribute.value;
+  }
+
+  rewriteAttributeValue(attribute: TemplateCompilerAttributeOccurrence, value: string): void {
+    const existing = this.attributeValueMutations.get(attribute) ?? null;
+    const previousValue = existing?.previousValue ?? attribute.value;
+    if (previousValue === value) {
+      this.attributeValueMutations.delete(attribute);
+      return;
+    }
+    this.attributeValueMutations.set(
+      attribute,
+      new TemplateCompilerAttributeValueMutation(attribute, previousValue, value),
+    );
+  }
+
+  finish(state: TemplateCompilerMutationBatchState): TemplateCompilerOperationMutationBatch {
+    return new TemplateCompilerOperationMutationBatch(state, [...this.attributeValueMutations.values()]);
+  }
+}
+
 export const enum TemplateCompilerOperationTargetKind {
   Occurrence = 'occurrence',
   Resource = 'resource',
@@ -382,6 +436,7 @@ export class TemplateCompilerOperation {
     readonly executionMechanism: TemplateCompilerOperationExecutionMechanism,
     readonly target: TemplateCompilerOperationTarget,
     readonly completion: TemplateCompilerOperationCompletion,
+    readonly mutationBatch: TemplateCompilerOperationMutationBatch,
     readonly causeHandles: readonly ClaimEndpointHandle[],
     readonly producedProductHandles: readonly ProductHandle[],
     readonly sourceAddressHandle: AddressHandle | null,
@@ -525,6 +580,7 @@ export class TemplateCompilerExecutionSession {
   >();
   private structuralFamily: TemplateCompilerStructuralExecutionSession | null = null;
   private pendingAttempt: TemplateCompilerPendingOperationAttempt | null = null;
+  private pendingMutationOverlay: TemplateCompilerPendingMutationOverlay | null = null;
   private sealed = false;
 
   private constructor(
@@ -573,6 +629,33 @@ export class TemplateCompilerExecutionSession {
 
   readPendingAttempt(): TemplateCompilerPendingOperationAttempt | null {
     return this.pendingAttempt;
+  }
+
+  readAttributeValue(
+    attempt: TemplateCompilerPendingOperationAttempt,
+    attribute: TemplateCompilerAttributeOccurrence,
+  ): string {
+    const overlay = this.requirePendingMutationOverlay(attempt);
+    this.requireOccurrenceContext(attempt.context, attribute);
+    return overlay.readAttributeValue(attribute);
+  }
+
+  rewriteAttributeValue(
+    attempt: TemplateCompilerPendingOperationAttempt,
+    attribute: TemplateCompilerAttributeOccurrence,
+    value: string,
+  ): void {
+    const overlay = this.requirePendingMutationOverlay(attempt);
+    if (
+      attempt.operationKind !== TemplateCompilerOperationKind.CompilerHook
+      && attempt.operationKind !== TemplateCompilerOperationKind.ProcessContent
+    ) {
+      throw new Error(
+        `Compiler operation '${attempt.operationKey}' cannot perform extension-owned scalar DOM rewrites.`,
+      );
+    }
+    this.requireOccurrenceContext(attempt.context, attribute);
+    overlay.rewriteAttributeValue(attribute, value);
   }
 
   /** Admit the root compiler invocation before hooks or local-template discovery. */
@@ -838,6 +921,7 @@ export class TemplateCompilerExecutionSession {
       request.sourceAddressHandle ?? null,
     );
     this.pendingAttempt = attempt;
+    this.pendingMutationOverlay = new TemplateCompilerPendingMutationOverlay();
     return attempt;
   }
 
@@ -857,6 +941,14 @@ export class TemplateCompilerExecutionSession {
       completion,
       attempt.operationKey,
     );
+    const mutationBatch = this.requirePendingMutationOverlay(attempt).finish(
+      mutationBatchStateForCompletion(completion.completionKind),
+    );
+    if (mutationBatch.state === TemplateCompilerMutationBatchState.Committed) {
+      for (const mutation of mutationBatch.attributeValueMutations) {
+        this.forest.rewriteAttributeValue(mutation.attribute, mutation.nextValue);
+      }
+    }
 
     // No current-occurrence lookup belongs here: successful structural execution may intentionally have moved or
     // consumed the target. The pending attempt already proved its exact context immediately before that work began.
@@ -869,6 +961,7 @@ export class TemplateCompilerExecutionSession {
       attempt.executionMechanism,
       attempt.target,
       completion,
+      mutationBatch,
       attempt.causeHandles,
       attempt.producedProductHandles,
       attempt.sourceAddressHandle,
@@ -884,6 +977,7 @@ export class TemplateCompilerExecutionSession {
       this.terminalOperationsByLane.set(operation.lane, operation);
     }
     this.pendingAttempt = null;
+    this.pendingMutationOverlay = null;
     return operation;
   }
 
@@ -995,6 +1089,7 @@ export class TemplateCompilerExecutionSession {
 
     const operationKeys = new Set<string>();
     const producedProducts = new Map<ProductHandle, TemplateCompilerOperation>();
+    const replayedAttributeValues = new Map<TemplateCompilerAttributeOccurrence, string>();
     const terminalOperations = new Map<TemplateCompilerExecutionLaneReference, TemplateCompilerOperation>();
     const expectedLaneOperations = new Map(
       this.lanes.map((lane) => [lane, [] as TemplateCompilerOperation[]]),
@@ -1028,6 +1123,20 @@ export class TemplateCompilerExecutionSession {
         operation.completion,
         operation.operationKey,
       );
+      if (operation.mutationBatch.state !== mutationBatchStateForCompletion(operation.completion.completionKind)) {
+        throw new Error(`Compiler operation '${operation.operationKey}' has an incoherent mutation-batch outcome.`);
+      }
+      for (const mutation of operation.mutationBatch.attributeValueMutations) {
+        const previousValue = replayedAttributeValues.get(mutation.attribute) ?? mutation.attribute.initialValue;
+        if (mutation.previousValue !== previousValue) {
+          throw new Error(
+            `Compiler operation '${operation.operationKey}' rewrites attribute '${mutation.attribute.occurrenceKey}' from a stale value.`,
+          );
+        }
+        if (operation.mutationBatch.state === TemplateCompilerMutationBatchState.Committed) {
+          replayedAttributeValues.set(mutation.attribute, mutation.nextValue);
+        }
+      }
       this.requireRecordedTarget(operation.context, operation.operationKind, operation.target);
       operationKeys.add(operation.operationKey);
       expectedLaneOperations.get(operation.lane)!.push(operation);
@@ -1060,6 +1169,13 @@ export class TemplateCompilerExecutionSession {
     ) {
       throw new Error(`Compiler execution family '${this.familyKey}' has incoherent operation indexes.`);
     }
+    for (const [attribute, replayedValue] of replayedAttributeValues) {
+      if (attribute.value !== replayedValue) {
+        throw new Error(
+          `Compiler attribute '${attribute.occurrenceKey}' does not match its committed scalar mutation history.`,
+        );
+      }
+    }
   }
 
   private requireMutable(): void {
@@ -1074,6 +1190,22 @@ export class TemplateCompilerExecutionSession {
         `Cannot ${action} while compiler operation '${this.pendingAttempt.operationKey}' is pending.`,
       );
     }
+    if (this.pendingMutationOverlay != null) {
+      throw new Error(`Cannot ${action} while an ownerless compiler mutation overlay remains active.`);
+    }
+  }
+
+  private requirePendingMutationOverlay(
+    attempt: TemplateCompilerPendingOperationAttempt,
+  ): TemplateCompilerPendingMutationOverlay {
+    if (
+      this.pendingAttempt !== attempt
+      || !attempt.isOwnedBy(this.familyAuthority)
+      || this.pendingMutationOverlay == null
+    ) {
+      throw new Error(`Compiler operation attempt '${attempt.operationKey}' has no active mutation overlay.`);
+    }
+    return this.pendingMutationOverlay;
   }
 
   private requireLane(lane: TemplateCompilerExecutionLaneReference): void {
@@ -1292,6 +1424,15 @@ function isTerminalCompilerCompletion(completionKind: TemplateCompilerOperationC
   return completionKind === TemplateCompilerOperationCompletionKind.Open
     || completionKind === TemplateCompilerOperationCompletionKind.Refused
     || completionKind === TemplateCompilerOperationCompletionKind.Abrupt;
+}
+
+function mutationBatchStateForCompletion(
+  completionKind: TemplateCompilerOperationCompletionKind,
+): TemplateCompilerMutationBatchState {
+  return completionKind === TemplateCompilerOperationCompletionKind.Complete
+    || completionKind === TemplateCompilerOperationCompletionKind.Declined
+    ? TemplateCompilerMutationBatchState.Committed
+    : TemplateCompilerMutationBatchState.Discarded;
 }
 
 function sameOccurrences<T>(left: readonly T[], right: readonly T[]): boolean {

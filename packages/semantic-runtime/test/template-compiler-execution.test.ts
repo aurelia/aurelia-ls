@@ -24,6 +24,7 @@ import {
   TemplateCompilerHookOperationStage,
   TemplateCompilerInstructionOperationTarget,
   TemplateCompilerInvocationPhase,
+  TemplateCompilerMutationBatchState,
   TemplateCompilerOperationCompletion,
   TemplateCompilerOperationCompletionKind,
   TemplateCompilerOperationExecutionMechanism,
@@ -82,6 +83,8 @@ describe('template compiler execution sequence', () => {
         0,
         callable,
       );
+      const title = forest.readAttributes().find((attribute) => attribute.name === 'title');
+      if (title == null) throw new Error('Expected bootstrap scalar-mutation attribute.');
       const attempt = execution.beginOperation({
         operationKey: 'bootstrap:hook:0',
         context: bootstrap,
@@ -90,6 +93,10 @@ describe('template compiler execution sequence', () => {
         target: hookTarget,
         causeHandles: [hookSet.productHandle],
       });
+      expect(execution.readAttributeValue(attempt, title)).toBe('hello');
+      execution.rewriteAttributeValue(attempt, title, 'mapped');
+      expect(execution.readAttributeValue(attempt, title)).toBe('mapped');
+      expect(title.value).toBe('hello');
       const hook = execution.completeOperation(
         attempt,
         new TemplateCompilerOperationCompletion(TemplateCompilerOperationCompletionKind.Complete),
@@ -103,6 +110,11 @@ describe('template compiler execution sequence', () => {
       expect(hookTarget).toBeInstanceOf(TemplateCompilerHookOperationTarget);
       expect(hookTarget.entryOrdinal).toBe(0);
       expect(hookTarget.callable).toBe(callable);
+      expect(hook.mutationBatch).toMatchObject({
+        state: TemplateCompilerMutationBatchState.Committed,
+        attributeValueMutations: [{ attribute: title, previousValue: 'hello', nextValue: 'mapped' }],
+      });
+      expect(title.value).toBe('mapped');
       expect(execution.invocationPhase(lane)).toBe(TemplateCompilerInvocationPhase.CompilerHooks);
       expect(() => execution.seal()).toThrow(/no target plan or terminal bootstrap outcome/);
 
@@ -129,7 +141,7 @@ describe('template compiler execution sequence', () => {
     const browser = new BrowserEffectiveTemplateFixture('compiler-execution-bootstrap-terminal');
 
     try {
-      const input = browser.materialize('root', '<div>content</div>');
+      const input = browser.materialize('root', '<div class="before">content</div>');
       const forest = TemplateCompilerOccurrenceForest.fromBrowserEffective(input.emission);
       const execution = TemplateCompilerExecutionSession.createForForest(
         'compiler-execution-bootstrap-terminal:family',
@@ -143,6 +155,8 @@ describe('template compiler execution sequence', () => {
         browser.run.handles.address('terminal:hook'),
       );
       const hookSet = compilerHookSet(browser, 'terminal:hook-set', 2);
+      const classAttribute = forest.readAttributes().find((attribute) => attribute.name === 'class');
+      if (classAttribute == null) throw new Error('Expected terminal scalar-mutation attribute.');
       const firstTarget = execution.compilerHookTarget(
         bootstrap,
         hookSet,
@@ -150,15 +164,20 @@ describe('template compiler execution sequence', () => {
         0,
         callable,
       );
-      const first = execution.completeOperation(execution.beginOperation({
+      const firstAttempt = execution.beginOperation({
         operationKey: 'terminal:hook:exact-prefix',
         context: bootstrap,
         operationKind: TemplateCompilerOperationKind.CompilerHook,
         executionMechanism: TemplateCompilerOperationExecutionMechanism.StaticCallable,
         target: firstTarget,
         causeHandles: [hookSet.productHandle],
-      }), new TemplateCompilerOperationCompletion(TemplateCompilerOperationCompletionKind.Complete));
-      const terminal = execution.completeOperation(execution.beginOperation({
+      });
+      execution.rewriteAttributeValue(firstAttempt, classAttribute, 'exact-prefix');
+      const first = execution.completeOperation(
+        firstAttempt,
+        new TemplateCompilerOperationCompletion(TemplateCompilerOperationCompletionKind.Complete),
+      );
+      const terminalAttempt = execution.beginOperation({
         operationKey: 'terminal:hook:open',
         context: bootstrap,
         operationKind: TemplateCompilerOperationKind.CompilerHook,
@@ -171,12 +190,17 @@ describe('template compiler execution sequence', () => {
           callable,
         ),
         causeHandles: [hookSet.productHandle],
-      }), new TemplateCompilerOperationCompletion(
+      });
+      execution.rewriteAttributeValue(terminalAttempt, classAttribute, 'discarded-open-write');
+      const terminal = execution.completeOperation(terminalAttempt, new TemplateCompilerOperationCompletion(
         TemplateCompilerOperationCompletionKind.Open,
         [browser.run.handles.openSeam('terminal:hook-open')],
       ));
 
       expect(execution.sequence.readLaneOperations(lane)).toEqual([first, terminal]);
+      expect(first.mutationBatch.state).toBe(TemplateCompilerMutationBatchState.Committed);
+      expect(terminal.mutationBatch.state).toBe(TemplateCompilerMutationBatchState.Discarded);
+      expect(classAttribute.value).toBe('exact-prefix');
       expect(execution.seal()).toBe(execution.sequence);
       expect(lane.targetPlan).toBeNull();
       expect(execution.structuralExecution).toBeNull();

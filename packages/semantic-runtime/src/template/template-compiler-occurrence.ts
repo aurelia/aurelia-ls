@@ -118,6 +118,7 @@ const rootCollections = new WeakMap<TemplateCompilerNodeOccurrence, readonly Tem
 const elementAttributes = new WeakMap<TemplateCompilerElementOccurrence, TemplateCompilerAttributeOccurrence[]>();
 const elementTemplateContent = new WeakMap<TemplateCompilerElementOccurrence, TemplateCompilerFragmentOccurrence | null>();
 const attributeOwners = new WeakMap<TemplateCompilerAttributeOccurrence, TemplateCompilerElementOccurrence | null>();
+const attributeValues = new WeakMap<TemplateCompilerAttributeOccurrence, string>();
 
 /**
  * Product-free mutable node occurrence used only inside one compiler execution.
@@ -281,23 +282,31 @@ export class TemplateCompilerDoctypeOccurrence extends TemplateCompilerNodeOccur
 
 /** Mutable effective attribute occurrence; a null owner means compiler-detached but historically retained. */
 export class TemplateCompilerAttributeOccurrence {
+  readonly initialValue: string;
+
   constructor(
     readonly occurrenceKey: string,
     readonly inputIdentityKey: IdentityHandle | null,
     readonly inputReference: TemplateStructuralAttributeReference | null,
     owner: TemplateCompilerElementOccurrence | null,
     readonly name: string,
-    readonly value: string,
+    value: string,
     readonly namespaceUri: string | null,
     readonly prefix: string | null,
     /** Independent generation axis; cloned attributes may retain both this and an input origin. */
     readonly generation: TemplateCompilerOccurrenceGeneration | null = null,
   ) {
     attributeOwners.set(this, owner);
+    attributeValues.set(this, value);
+    this.initialValue = value;
   }
 
   get owner(): TemplateCompilerElementOccurrence | null {
     return attributeOwnerFor(this);
+  }
+
+  get value(): string {
+    return attributeValueFor(this);
   }
 
   /** Current ordinal in the owner's live attribute collection, or null while detached. */
@@ -746,6 +755,12 @@ export class TemplateCompilerOccurrenceForest {
       throw new Error(`Detached compiler attribute '${attribute.occurrenceKey}' cannot be reordered.`);
     }
     this.moveAttribute(attribute, owner, ordinal);
+  }
+
+  /** Apply one already-authorized scalar rewrite without changing DOM attribute occurrence identity. */
+  rewriteAttributeValue(attribute: TemplateCompilerAttributeOccurrence, value: string): void {
+    this.requireAttribute(attribute);
+    attributeValues.set(attribute, value);
   }
 
   /** Validate complete live and detached topology before transformed-tree freezing. */
@@ -1436,6 +1451,12 @@ function attributeOwnerFor(attribute: TemplateCompilerAttributeOccurrence): Temp
   const owner = attributeOwners.get(attribute);
   if (owner === undefined) throw new Error(`Compiler attribute '${attribute.occurrenceKey}' has no owner state.`);
   return owner;
+}
+
+function attributeValueFor(attribute: TemplateCompilerAttributeOccurrence): string {
+  const value = attributeValues.get(attribute);
+  if (value == null) throw new Error(`Compiler attribute '${attribute.occurrenceKey}' has no scalar value state.`);
+  return value;
 }
 
 function isParentOccurrence(node: TemplateCompilerNodeOccurrence): node is TemplateCompilerParentOccurrence {

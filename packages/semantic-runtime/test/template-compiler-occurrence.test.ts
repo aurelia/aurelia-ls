@@ -81,6 +81,10 @@ describe('template compiler occurrence forest', () => {
         node instanceof TemplateCompilerTextOccurrence && node.text === 'before'
       );
       const secondText = second.nodesForInputProduct(firstText?.inputReference?.productHandle as ProductHandle)[0];
+      const firstTitle = first.readAttributes().find((attribute) => attribute.name === 'title');
+      const secondTitle = firstTitle?.inputReference == null
+        ? null
+        : second.attributesForInputProduct(firstTitle.inputReference.productHandle)[0] ?? null;
 
       expect(elements.filter((element) => element.tagName === 'template')).toHaveLength(2);
       expect(elements.filter((element) => element.tagName === 'template').every((element) =>
@@ -106,6 +110,11 @@ describe('template compiler occurrence forest', () => {
         .toEqual(expect.objectContaining({ nodeKind: HtmlIrNodeKind.Text, text: 'before' }));
       expect(firstText.parentEdgeKind).toBe(TemplateCompilerOccurrenceEdgeKind.Detached);
       expect(firstText).not.toBe(secondText);
+      if (firstTitle == null || secondTitle == null) throw new Error('Expected isolated title attributes.');
+      first.rewriteAttributeValue(firstTitle, 'changed');
+      expect(firstTitle.initialValue).toBe('x');
+      expect(firstTitle.value).toBe('changed');
+      expect(secondTitle.value).toBe('x');
       first.insertDetachedNode(
         firstText,
         firstTextParent,
