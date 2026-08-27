@@ -10,7 +10,10 @@ import {
 } from '../kernel/evidence.js';
 import type {
   AddressHandle,
+  IdentityHandle,
+  ProductHandle,
 } from '../kernel/handles.js';
+import { localKeyPart } from '../kernel/local-key.js';
 import {
   AureliaResourceDeclarationKind,
   AureliaResourceIdentity,
@@ -64,9 +67,32 @@ import {
   type ParsedHtmlNodeDraft,
   parseHtmlDocumentDraft,
 } from './html-parse-materializer.js';
-import { HtmlIrNodeKind, HtmlRecoveryKind } from './html-ir.js';
+import {
+  HtmlAttribute,
+  HtmlElement,
+  HtmlIrNodeKind,
+  HtmlRecoveryKind,
+} from './html-ir.js';
 import { TemplateRecoveryPolicy } from './parse-context.js';
+import { TemplateProductDetails } from './product-details.js';
 import { runtimeAttributeName, runtimeElementResourceName } from './runtime-dom-name.js';
+import {
+  TemplateCompilerOperationCompletionKind,
+  TemplateCompilerOperationKind,
+  TemplateCompilerOccurrenceOperationTarget,
+} from './template-compiler-execution.js';
+import type {
+  TemplateCompilerExtractedLocalBindable,
+  TemplateCompilerExtractedLocalTemplate,
+  TemplateCompilerLocalExtractionHandoff,
+} from './template-compiler-local-extraction.js';
+import {
+  TemplateCompilerOccurrenceEdgeKind,
+  type TemplateCompilerAttributeOccurrence,
+  type TemplateCompilerElementOccurrence,
+  type TemplateCompilerOccurrenceForest,
+} from './template-compiler-occurrence.js';
+import { BrowserEffectiveTemplateAttribute } from './template-structure.js';
 
 export class LocalTemplateDefinitionMaterialization {
   constructor(
@@ -74,6 +100,47 @@ export class LocalTemplateDefinitionMaterialization {
     readonly definitions: readonly CustomElementDefinition[],
     readonly records: readonly KernelStoreRecord[],
   ) {}
+}
+
+/** Stable, non-publishing definition handles reserved for one cohort-local compiler invocation. */
+export class LocalTemplateDefinitionHandleReservation {
+  constructor(
+    readonly invocationKey: string,
+    readonly productHandle: ProductHandle,
+    readonly identityHandle: IdentityHandle,
+  ) {}
+}
+
+/** Definition plus its exact detached carrier handoff for later DomNode compilation. */
+export class LocalTemplateOccurrenceDefinitionEntry {
+  constructor(
+    readonly definition: CustomElementDefinition,
+    readonly extracted: TemplateCompilerExtractedLocalTemplate,
+  ) {}
+}
+
+/** Candidate-local successful extraction batch prepared without publishing any resource records. */
+export class LocalTemplateOccurrenceDefinitionPreparation {
+  constructor(
+    /** Owner dependencies plus ordered sibling entries remain the authority for later generated-Type wiring. */
+    readonly ownerDefinition: CustomElementDefinition,
+    readonly handoff: TemplateCompilerLocalExtractionHandoff,
+    readonly entries: readonly LocalTemplateOccurrenceDefinitionEntry[],
+    readonly records: readonly KernelStoreRecord[],
+  ) {}
+}
+
+/** Atomically published local definitions retaining their run-local carrier handoffs. */
+export class LocalTemplateOccurrenceDefinitionMaterialization {
+  constructor(
+    readonly ownerDefinition: CustomElementDefinition,
+    readonly entries: readonly LocalTemplateOccurrenceDefinitionEntry[],
+    readonly records: readonly KernelStoreRecord[],
+  ) {}
+
+  get definitions(): readonly CustomElementDefinition[] {
+    return this.entries.map((entry) => entry.definition);
+  }
 }
 
 class LocalTemplateSyntax {
@@ -88,6 +155,32 @@ class LocalBindablePublication {
   constructor(
     readonly definition: BindableDefinition,
     readonly contribution: BindableDefinitionContribution,
+  ) {}
+}
+
+class LocalTemplateBindableFacts {
+  constructor(
+    readonly propertyName: string,
+    readonly explicitAttributeName: string | null,
+    readonly mode: string | null,
+    readonly sourceAddressHandle: AddressHandle | null,
+    readonly nameSourceAddressHandle: AddressHandle | null,
+    readonly attributeSourceAddressHandle: AddressHandle | null,
+    readonly modeSourceAddressHandle: AddressHandle | null,
+  ) {}
+}
+
+class LocalTemplateDefinitionFacts {
+  constructor(
+    readonly local: string,
+    readonly productHandle: ProductHandle,
+    readonly identityHandle: IdentityHandle,
+    readonly name: string,
+    readonly template: CustomElementTemplateDefinition,
+    readonly bindables: readonly LocalTemplateBindableFacts[],
+    readonly sourceAddressHandle: AddressHandle | null,
+    readonly nameSourceAddressHandle: AddressHandle | null,
+    readonly initialHasSlots: boolean,
   ) {}
 }
 
@@ -139,10 +232,102 @@ class LocalTemplateSourceCoordinates {
 /** Materializes framework compiler-local custom-element definitions before owner template lowering. */
 export class LocalTemplateDefinitionMaterializer {
   private readonly materializations = new Map<string, LocalTemplateDefinitionMaterialization>();
+  private readonly reservationsByInvocationKey = new Map<string, LocalTemplateDefinitionHandleReservation>();
+  private readonly occurrencePreparations = new WeakSet<LocalTemplateOccurrenceDefinitionPreparation>();
+  private readonly publishedOccurrencePreparations = new WeakSet<LocalTemplateOccurrenceDefinitionPreparation>();
+  private readonly publishedOccurrenceInvocationKeys = new Set<string>();
 
   constructor(
     readonly store: KernelPublicationContext,
   ) {}
+
+  /** Allocate stable invocation-local handles without publishing a resource or definition detail. */
+  reserveOccurrenceDefinition(invocationKey: string): LocalTemplateDefinitionHandleReservation {
+    const existing = this.reservationsByInvocationKey.get(invocationKey);
+    if (existing != null) return existing;
+    const local = `local-template-definition:invocation:${localKeyPart(invocationKey)}`;
+    const reservation = new LocalTemplateDefinitionHandleReservation(
+      invocationKey,
+      this.store.handles.product(local),
+      this.store.handles.identity(local),
+    );
+    this.reservationsByInvocationKey.set(invocationKey, reservation);
+    return reservation;
+  }
+
+  /** Build all DomNode definitions from one nominal full-success extraction receipt without publishing them. */
+  prepareOccurrenceHandoff(
+    ownerDefinition: CustomElementDefinition,
+    forest: TemplateCompilerOccurrenceForest,
+    handoff: TemplateCompilerLocalExtractionHandoff,
+  ): LocalTemplateOccurrenceDefinitionPreparation {
+    this.validateOccurrenceHandoff(forest, handoff);
+    const records: KernelStoreRecord[] = [];
+    const entries = handoff.entries.map((extracted) => {
+      const reservation = extracted.definitionReservation;
+      const carrierSourceAddressHandle = this.authoredElementSourceAddress(forest, extracted.carrier);
+      const facts = new LocalTemplateDefinitionFacts(
+        `local-template-definition:invocation:${localKeyPart(extracted.invocationKey)}`,
+        reservation.productHandle,
+        reservation.identityHandle,
+        extracted.name,
+        new CustomElementTemplateDefinition(
+          CustomElementTemplateKind.DomNode,
+          null,
+          carrierSourceAddressHandle,
+          null,
+          ownerDefinition.template?.authoredSourceRevision ?? null,
+        ),
+        extracted.bindables.map((bindable) => this.occurrenceBindableFacts(forest, bindable)),
+        carrierSourceAddressHandle,
+        this.effectiveAttributeValueSourceAddress(forest, extracted.declarationAttribute),
+        false,
+      );
+      return new LocalTemplateOccurrenceDefinitionEntry(
+        this.definitionForFacts(facts, records),
+        extracted,
+      );
+    });
+    const preparation = new LocalTemplateOccurrenceDefinitionPreparation(ownerDefinition, handoff, entries, records);
+    this.occurrencePreparations.add(preparation);
+    return preparation;
+  }
+
+  /** Publish one complete extraction batch atomically; refused/partial results have no preparation capability. */
+  publishOccurrenceHandoff(
+    preparation: LocalTemplateOccurrenceDefinitionPreparation,
+  ): LocalTemplateOccurrenceDefinitionMaterialization {
+    if (!this.occurrencePreparations.has(preparation)) {
+      throw new Error('Local-template occurrence preparation belongs to another materializer.');
+    }
+    if (this.publishedOccurrencePreparations.has(preparation)) {
+      throw new Error('Local-template occurrence preparation is already published.');
+    }
+    const repeatedInvocation = preparation.entries.find((entry) =>
+      this.publishedOccurrenceInvocationKeys.has(entry.extracted.invocationKey)
+    ) ?? null;
+    if (repeatedInvocation != null) {
+      throw new Error(`Local-template invocation '${repeatedInvocation.extracted.invocationKey}' is already published.`);
+    }
+    this.store.publish(new KernelPublicationPlan(
+      new KernelStoreBatch(
+        preparation.records,
+        `local-template-definitions:${preparation.handoff.ownerLane.localKey}`,
+      ),
+      preparation.entries.map((entry) =>
+        publishProductDetail(ResourceProductDetails.Definition, entry.definition.productHandle!, entry.definition)
+      ),
+    ));
+    this.publishedOccurrencePreparations.add(preparation);
+    for (const entry of preparation.entries) {
+      this.publishedOccurrenceInvocationKeys.add(entry.extracted.invocationKey);
+    }
+    return new LocalTemplateOccurrenceDefinitionMaterialization(
+      preparation.ownerDefinition,
+      preparation.entries,
+      preparation.records,
+    );
+  }
 
   materialize(
     localKey: string,
@@ -205,8 +390,6 @@ export class LocalTemplateDefinitionMaterializer {
   ): CustomElementDefinition {
     const name = syntax.nameAttribute.rawValue;
     const local = `local-template-definition:${ownerLocalKey}:${name}`;
-    const productHandle = this.store.handles.product(local);
-    const identityHandle = this.store.handles.identity(local);
     const sourceAddressHandle = coordinates.address(
       `${local}:declaration`,
       syntax.node.start,
@@ -244,20 +427,35 @@ export class LocalTemplateDefinitionMaterializer {
       localSource.sourceMap,
       ownerTemplate.authoredSourceRevision,
     );
-    const bindables = syntax.bindables.map((bindable) =>
-      this.bindableForSyntax(local, bindable, coordinates, records)
-    );
-    const target = new ResourceTargetReference(null, sourceAddressHandle, null, null);
-    const key = runtimeResourceKeyForKind(ResourceDefinitionKind.CustomElement, name)!;
+    return this.definitionForFacts(new LocalTemplateDefinitionFacts(
+      local,
+      this.store.handles.product(local),
+      this.store.handles.identity(local),
+      name,
+      template,
+      syntax.bindables.map((bindable) => this.bindableFactsForSyntax(local, bindable, coordinates, records)),
+      sourceAddressHandle,
+      nameSourceAddressHandle,
+      containsCompilerVisibleElement(syntax.node.children, 'slot'),
+    ), records);
+  }
+
+  private definitionForFacts(
+    facts: LocalTemplateDefinitionFacts,
+    records: KernelStoreRecord[],
+  ): CustomElementDefinition {
+    const bindables = facts.bindables.map((bindable) => this.bindableForFacts(bindable));
+    const target = new ResourceTargetReference(null, facts.sourceAddressHandle, null, null);
+    const key = runtimeResourceKeyForKind(ResourceDefinitionKind.CustomElement, facts.name)!;
     const capture = new CustomElementCaptureDefinition(CustomElementCaptureKind.None);
     const contribution = new CustomElementDefinitionContribution(
       NamedResourceDefinitionContributionKind.LocalTemplate,
       target,
-      name,
+      facts.name,
       [],
       key,
       capture,
-      template,
+      facts.template,
       [],
       [],
       null,
@@ -266,7 +464,7 @@ export class LocalTemplateDefinitionMaterializer {
       bindables.map((bindable) => bindable.contribution),
       false,
       null,
-      containsCompilerVisibleElement(syntax.node.children, 'slot'),
+      facts.initialHasSlots,
       false,
       [],
       null,
@@ -274,15 +472,15 @@ export class LocalTemplateDefinitionMaterializer {
       [],
     );
     const definition = new CustomElementDefinition(
-      productHandle,
-      identityHandle,
-      sourceAddressHandle,
+      facts.productHandle,
+      facts.identityHandle,
+      facts.sourceAddressHandle,
       target,
-      name,
+      facts.name,
       [],
       key,
       capture,
-      template,
+      facts.template,
       [],
       [],
       null,
@@ -298,25 +496,23 @@ export class LocalTemplateDefinitionMaterializer {
       null,
       [contribution],
       [],
-      nameSourceAddressHandle,
+      facts.nameSourceAddressHandle,
     );
-    records.push(...this.recordsForDefinition(local, definition, nameSourceAddressHandle));
+    records.push(...this.recordsForDefinition(facts.local, definition, facts.nameSourceAddressHandle));
     return definition;
   }
 
-  private bindableForSyntax(
+  private bindableFactsForSyntax(
     ownerLocal: string,
     bindable: ParsedHtmlNodeDraft,
     coordinates: LocalTemplateSourceCoordinates,
     records: KernelStoreRecord[],
-  ): LocalBindablePublication {
+  ): LocalTemplateBindableFacts {
     const nameAttribute = attributeForDraft(bindable, 'name')!;
     const local = `${ownerLocal}:bindable:${nameAttribute.rawValue}`;
     const attributeAttribute = attributeForDraft(bindable, 'attribute');
     const modeAttribute = attributeForDraft(bindable, 'mode');
     const name = nameAttribute.rawValue;
-    const attribute = attributeAttribute?.rawValue ?? bindableAttributeNameForProperty(name);
-    const mode = localBindableMode(modeAttribute?.rawValue ?? null);
     const sourceAddressHandle = coordinates.address(
       `${local}:declaration`,
       bindable.start,
@@ -349,37 +545,167 @@ export class LocalTemplateDefinitionMaterializer {
         SourceSpanRole.Value,
         records,
       );
+    return new LocalTemplateBindableFacts(
+      name,
+      attributeAttribute?.rawValue ?? null,
+      modeAttribute?.rawValue ?? null,
+      sourceAddressHandle,
+      nameSourceAddressHandle,
+      attributeSourceAddressHandle,
+      modeSourceAddressHandle,
+    );
+  }
+
+  private bindableForFacts(facts: LocalTemplateBindableFacts): LocalBindablePublication {
+    const attribute = facts.explicitAttributeName ?? bindableAttributeNameForProperty(facts.propertyName);
+    const mode = localBindableMode(facts.mode);
     const setter = new BindableSetterDefinition(BindableSetterKind.Default);
     return new LocalBindablePublication(
       new BindableDefinition(
         attribute,
-        `${name}Changed`,
+        `${facts.propertyName}Changed`,
         mode,
-        name,
+        facts.propertyName,
         setter,
-        sourceAddressHandle,
+        facts.sourceAddressHandle,
         [],
-        nameSourceAddressHandle,
-        attributeSourceAddressHandle,
+        facts.nameSourceAddressHandle,
+        facts.attributeSourceAddressHandle,
         null,
-        modeSourceAddressHandle,
+        facts.modeSourceAddressHandle,
       ),
       new BindableDefinitionContribution(
         BindableContributionKind.LocalTemplate,
-        name,
-        attributeAttribute?.rawValue ?? null,
+        facts.propertyName,
+        facts.explicitAttributeName,
         null,
         mode,
-        name,
+        facts.propertyName,
         setter,
-        sourceAddressHandle,
+        facts.sourceAddressHandle,
         [],
-        nameSourceAddressHandle,
-        attributeSourceAddressHandle,
+        facts.nameSourceAddressHandle,
+        facts.attributeSourceAddressHandle,
         null,
-        modeSourceAddressHandle,
+        facts.modeSourceAddressHandle,
       ),
     );
+  }
+
+  private validateOccurrenceHandoff(
+    forest: TemplateCompilerOccurrenceForest,
+    handoff: TemplateCompilerLocalExtractionHandoff,
+  ): void {
+    if (!handoff.isFullSuccessReceipt()) {
+      throw new Error('Local-template occurrence publication requires a full-success extraction receipt.');
+    }
+    const invocationKeys = new Set<string>();
+    const names = new Set<string>();
+    for (const [declarationOrdinal, entry] of handoff.entries.entries()) {
+      if (
+        entry.declarationOrdinal !== declarationOrdinal
+        || invocationKeys.has(entry.invocationKey)
+        || names.has(entry.name)
+        || entry.definitionReservation !== this.reserveOccurrenceDefinition(entry.invocationKey)
+        || entry.definitionReservation.invocationKey !== entry.invocationKey
+      ) {
+        throw new Error('Local-template extraction handoff has incoherent declaration order, reservation, or identity.');
+      }
+      invocationKeys.add(entry.invocationKey);
+      names.add(entry.name);
+      if (
+        entry.invocationLane == null
+        || entry.invocationLane.localKey !== entry.invocationKey
+        || entry.invocationLane.compilerCarrier !== entry.carrier
+        || entry.invocationLane.compilerContent !== entry.content
+        || forest.nodeForOccurrenceKey(entry.carrier.occurrenceKey) !== entry.carrier
+        || forest.nodeForOccurrenceKey(entry.content.occurrenceKey) !== entry.content
+        || entry.carrier.parent !== null
+        || entry.carrier.parentEdgeKind !== TemplateCompilerOccurrenceEdgeKind.Detached
+        || entry.carrier.templateContent !== entry.content
+        || entry.declarationAttribute.owner !== null
+        || forest.attributeForOccurrenceKey(entry.declarationAttribute.occurrenceKey) !== entry.declarationAttribute
+      ) {
+        throw new Error(`Local-template extraction '${entry.invocationKey}' lost its detached carrier authority.`);
+      }
+      this.requireCompleteDetachment(entry.carrierDetachmentOperation, entry.carrier, entry.invocationKey);
+      for (const [bindableOrdinal, bindable] of entry.bindables.entries()) {
+        if (
+          bindable.ordinal !== bindableOrdinal
+          || forest.nodeForOccurrenceKey(bindable.element.occurrenceKey) !== bindable.element
+          || bindable.element.parent !== null
+          || bindable.element.parentEdgeKind !== TemplateCompilerOccurrenceEdgeKind.Detached
+        ) {
+          throw new Error(`Local-template bindable ${bindableOrdinal} in '${entry.invocationKey}' lost detachment authority.`);
+        }
+        this.requireCompleteDetachment(
+          bindable.detachmentOperation,
+          bindable.element,
+          `${entry.invocationKey}:bindable:${bindableOrdinal}`,
+        );
+      }
+    }
+  }
+
+  private requireCompleteDetachment(
+    operation: TemplateCompilerExtractedLocalTemplate['carrierDetachmentOperation'],
+    occurrence: TemplateCompilerElementOccurrence,
+    label: string,
+  ): void {
+    if (
+      operation.operationKind !== TemplateCompilerOperationKind.LocalTemplateExtraction
+      || operation.completion.completionKind !== TemplateCompilerOperationCompletionKind.Complete
+      || !(operation.target instanceof TemplateCompilerOccurrenceOperationTarget)
+      || operation.target.occurrence !== occurrence
+      || !operation.mutationBatch.nodeDetachmentMutations.some((mutation) => mutation.node === occurrence)
+    ) {
+      throw new Error(`Local-template occurrence '${label}' has no exact completed detachment operation.`);
+    }
+  }
+
+  private occurrenceBindableFacts(
+    forest: TemplateCompilerOccurrenceForest,
+    bindable: TemplateCompilerExtractedLocalBindable,
+  ): LocalTemplateBindableFacts {
+    return new LocalTemplateBindableFacts(
+      bindable.propertyName,
+      bindable.explicitAttributeName,
+      bindable.mode,
+      this.authoredElementSourceAddress(forest, bindable.element),
+      this.effectiveAttributeValueSourceAddress(forest, bindable.nameAttribute),
+      this.effectiveAttributeValueSourceAddress(forest, bindable.attributeAttribute),
+      this.effectiveAttributeValueSourceAddress(forest, bindable.modeAttribute),
+    );
+  }
+
+  private authoredElementSourceAddress(
+    forest: TemplateCompilerOccurrenceForest,
+    element: TemplateCompilerElementOccurrence,
+  ): AddressHandle | null {
+    const origin = forest.exactAuthoredNodeOrigin(element);
+    const authored = origin == null
+      ? null
+      : this.store.readProductDetail(TemplateProductDetails.HtmlNode, origin.authored.productHandle);
+    return authored instanceof HtmlElement ? authored.sourceAddressHandle : null;
+  }
+
+  private effectiveAttributeValueSourceAddress(
+    forest: TemplateCompilerOccurrenceForest,
+    attribute: TemplateCompilerAttributeOccurrence | null,
+  ): AddressHandle | null {
+    if (attribute?.inputReference == null) return null;
+    const browser = this.store.readProductDetail(
+      TemplateProductDetails.StructuralAttribute,
+      attribute.inputReference.productHandle,
+    );
+    if (!(browser instanceof BrowserEffectiveTemplateAttribute) || browser.value !== attribute.value) {
+      return null;
+    }
+    const origin = forest.exactAuthoredAttributeOrigin(attribute);
+    const authored = origin == null
+      ? null
+      : this.store.readProductDetail(TemplateProductDetails.HtmlAttribute, origin.authored.productHandle);
+    return authored instanceof HtmlAttribute ? authored.valueAddressHandle : null;
   }
 
   private recordsForDefinition(
