@@ -376,6 +376,7 @@ export class TemplateCompilerOccurrenceForest {
     TemplateCompilerOccurrenceGeneration,
     TemplateCompilerNodeOccurrence | TemplateCompilerAttributeOccurrence
   >();
+  private _mutationRevision = 0;
 
   private constructor(seed: TemplateCompilerOccurrenceSeed) {
     this.inputTree = seed.inputTree;
@@ -442,6 +443,11 @@ export class TemplateCompilerOccurrenceForest {
   /** Complete attribute inventory, including compiler-detached attributes retained for lineage. */
   readAttributes(): readonly TemplateCompilerAttributeOccurrence[] {
     return this.attributes;
+  }
+
+  /** O(1) conservative epoch for inventory, topology, ownership, ordering, and scalar forest mutation. */
+  get mutationRevision(): number {
+    return this._mutationRevision;
   }
 
   nodeForOccurrenceKey(occurrenceKey: string): TemplateCompilerNodeOccurrence | null {
@@ -607,6 +613,7 @@ export class TemplateCompilerOccurrenceForest {
       appendMap(this.attributesByInputProduct, canonicalInput.productHandle, attribute);
       appendMap(this.attributesByInputIdentity, canonicalInput.identityHandle, attribute);
     }
+    this._mutationRevision += 1;
     return attribute;
   }
 
@@ -639,6 +646,7 @@ export class TemplateCompilerOccurrenceForest {
         break;
     }
     setNodeOwnership(node, null, TemplateCompilerOccurrenceEdgeKind.Detached);
+    this._mutationRevision += 1;
   }
 
   /** Admit one detached occurrence onto an exact live structural edge. */
@@ -654,6 +662,7 @@ export class TemplateCompilerOccurrenceForest {
     }
     this.validateNodeInsertion(node, parent, edgeKind, ordinal);
     this.insertNodeUnchecked(node, parent, edgeKind, ordinal);
+    this._mutationRevision += 1;
   }
 
   /** Atomically move a live or detached occurrence to another edge without changing occurrence identity. */
@@ -707,6 +716,7 @@ export class TemplateCompilerOccurrenceForest {
     }
     removeExact(mutableAttributes(owner), attribute, `compiler attribute '${attribute.occurrenceKey}'`);
     attributeOwners.set(attribute, null);
+    this._mutationRevision += 1;
   }
 
   /** Admit one detached attribute at an exact live owner ordinal. */
@@ -723,6 +733,7 @@ export class TemplateCompilerOccurrenceForest {
     assertInsertionOrdinal(ordinal, mutableAttributes(owner).length, `attribute '${attribute.occurrenceKey}'`);
     mutableAttributes(owner).splice(ordinal, 0, attribute);
     attributeOwners.set(attribute, owner);
+    this._mutationRevision += 1;
   }
 
   /** Atomically move or reorder an attribute without changing occurrence identity. */
@@ -761,6 +772,7 @@ export class TemplateCompilerOccurrenceForest {
   rewriteAttributeValue(attribute: TemplateCompilerAttributeOccurrence, value: string): void {
     this.requireAttribute(attribute);
     attributeValues.set(attribute, value);
+    this._mutationRevision += 1;
   }
 
   /** Validate complete live and detached topology before transformed-tree freezing. */
@@ -938,6 +950,7 @@ export class TemplateCompilerOccurrenceForest {
       appendMap(this.nodesByInputProduct, node.inputReference.productHandle, node);
       appendMap(this.nodesByInputIdentity, node.inputReference.identityHandle, node);
     }
+    this._mutationRevision += 1;
     return node;
   }
 

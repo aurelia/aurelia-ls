@@ -30,7 +30,7 @@ import {
   TemplateCompilerFragmentOccurrence,
   TemplateCompilerGeneratedOccurrenceRole,
   TemplateCompilerOccurrenceEdgeKind,
-  TemplateCompilerOccurrenceGeneration,
+  type TemplateCompilerOccurrenceGeneration,
   TemplateCompilerTextOccurrence,
 } from './template-compiler-occurrence.js';
 import type {
@@ -43,6 +43,7 @@ import type {
   TemplateStructuralAttributeReference,
   TemplateStructuralNodeReference,
 } from './template-structure.js';
+import { TemplateCompilerForestMutationAuthority } from './template-compiler-mutation-authority.js';
 
 const structuralExecutionForests = new WeakSet<TemplateCompilerOccurrenceForest>();
 
@@ -194,7 +195,38 @@ export class TemplateCompilerStructuralExecutionSession {
     if (structuralExecutionForests.has(forest)) {
       throw new Error('Compiler occurrence forest already belongs to a structural execution session.');
     }
-    const session = new TemplateCompilerStructuralExecutionSession(forest);
+    return TemplateCompilerStructuralExecutionSession.createWithAuthority(
+      forest,
+      targetPlan,
+      TemplateCompilerForestMutationAuthority.createForNormalizedReplay(forest),
+    );
+  }
+
+  /** Forest-first execution creates the authority before target planning; structural replay borrows it here. */
+  static createBorrowing(
+    forest: TemplateCompilerOccurrenceForest,
+    targetPlan: TemplateCompilerTargetPlan,
+    mutationAuthority: TemplateCompilerForestMutationAuthority,
+  ): TemplateCompilerStructuralExecutionSession {
+    if (structuralExecutionForests.has(forest)) {
+      throw new Error('Compiler occurrence forest already belongs to a structural execution session.');
+    }
+    if (mutationAuthority.forest !== forest) {
+      throw new Error('Compiler structural execution cannot borrow another forest mutation authority.');
+    }
+    return TemplateCompilerStructuralExecutionSession.createWithAuthority(
+      forest,
+      targetPlan,
+      mutationAuthority,
+    );
+  }
+
+  private static createWithAuthority(
+    forest: TemplateCompilerOccurrenceForest,
+    targetPlan: TemplateCompilerTargetPlan,
+    mutationAuthority: TemplateCompilerForestMutationAuthority,
+  ): TemplateCompilerStructuralExecutionSession {
+    const session = new TemplateCompilerStructuralExecutionSession(forest, mutationAuthority);
     session.admitTargetPlanFamily(targetPlan);
     session.bindContextStructure(
       targetPlan.root,
@@ -221,9 +253,6 @@ export class TemplateCompilerStructuralExecutionSession {
   private readonly geometriesByMarker = new Map<TemplateCompilerCommentOccurrence, TemplateCompilerTargetGeometry>();
   private readonly geometriesByStart = new Map<TemplateCompilerCommentOccurrence, TemplateCompilerRenderLocationTargetGeometry>();
   private readonly geometriesByEnd = new Map<TemplateCompilerCommentOccurrence, TemplateCompilerRenderLocationTargetGeometry>();
-  private readonly generationAuthority = {};
-  private readonly generationCausesByOperation = new Map<string, readonly ClaimEndpointHandle[]>();
-  private readonly generationTuples = new Set<string>();
   private readonly sourceTargetRowsByOccurrence = new Map<TemplateCompilerNodeOccurrence, TemplateCompilerTargetRowPlan>();
   private readonly latestRenderReplacementByOccurrence = new Map<
     TemplateCompilerElementOccurrence,
@@ -286,7 +315,10 @@ export class TemplateCompilerStructuralExecutionSession {
   private readonly seededChildNodesByParent = new Map<TemplateCompilerParentOccurrence, TemplateCompilerNodeOccurrence[]>();
   private nextInputEventOrdinal = 0;
 
-  private constructor(readonly forest: TemplateCompilerOccurrenceForest) {
+  private constructor(
+    readonly forest: TemplateCompilerOccurrenceForest,
+    readonly mutationAuthority: TemplateCompilerForestMutationAuthority,
+  ) {
     for (const node of forest.readNodes()) {
       const authoredProductHandle = forest.exactAuthoredNodeOrigin(node)?.authored.productHandle ?? null;
       if (forest.seededNodePlacement(node) != null && authoredProductHandle != null) {
@@ -493,29 +525,13 @@ export class TemplateCompilerStructuralExecutionSession {
     outputOrdinal: number,
   ): TemplateCompilerOccurrenceGeneration {
     this.requireContext(context);
-    const operationIdentity = JSON.stringify([context.localKey, operationKey]);
-    const existingCauses = this.generationCausesByOperation.get(operationIdentity);
-    if (existingCauses != null && !sameOccurrences(existingCauses, causeHandles)) {
-      throw new Error(
-        `Compiler generation operation '${operationKey}' changed its ordered semantic causes.`,
-      );
-    }
-    const canonicalCauses = existingCauses ?? [...causeHandles];
-    const generation = new TemplateCompilerOccurrenceGeneration(
-      this.generationAuthority,
+    return this.mutationAuthority.createStructuralGeneration(
       context.localKey,
       operationKey,
       role,
-      canonicalCauses,
+      causeHandles,
       outputOrdinal,
     );
-    const tuple = JSON.stringify([context.localKey, operationKey, role, outputOrdinal]);
-    if (this.generationTuples.has(tuple)) {
-      throw new Error(`Compiler generation tuple '${tuple}' is not unique.`);
-    }
-    if (existingCauses == null) this.generationCausesByOperation.set(operationIdentity, canonicalCauses);
-    this.generationTuples.add(tuple);
-    return generation;
   }
 
   /** Create and assign a generated `<template>` carrier plus content fragment to one child target context. */
@@ -1697,20 +1713,6 @@ export class TemplateCompilerStructuralExecutionSession {
     throw new Error(`Compiler target row '${row.localKey}' changed its authored node/target shape.`);
   }
 
-  private assertRegisteredGeneration(generation: TemplateCompilerOccurrenceGeneration): void {
-    const operationIdentity = JSON.stringify([generation.contextKey, generation.operationKey]);
-    const causes = this.generationCausesByOperation.get(operationIdentity) ?? null;
-    const tuple = JSON.stringify([
-      generation.contextKey,
-      generation.operationKey,
-      generation.role,
-      generation.outputOrdinal,
-    ]);
-    if (causes == null || !sameOccurrences(causes, generation.causeHandles) || !this.generationTuples.has(tuple)) {
-      throw new Error(`Compiler generation '${generation.operationKey}' is absent from session authority.`);
-    }
-  }
-
   private claimSourceTarget(
     row: TemplateCompilerTargetRowPlan,
     occurrence: TemplateCompilerNodeOccurrence,
@@ -1756,13 +1758,10 @@ export class TemplateCompilerStructuralExecutionSession {
   }
 
   private assertGeneratedInventory(): void {
+    this.mutationAuthority.assertGeneratedInventory();
     for (const node of this.forest.readNodes()) {
       const generation = node.generation;
       if (generation == null) continue;
-      if (!generation.isOwnedBy(this.generationAuthority)) {
-        throw new Error(`Generated compiler occurrence '${node.occurrenceKey}' belongs to another session.`);
-      }
-      this.assertRegisteredGeneration(generation);
       if (this.contextForLocalKey(generation.contextKey) == null) {
         throw new Error(`Generated compiler occurrence '${node.occurrenceKey}' names an alien target context.`);
       }
@@ -1868,10 +1867,8 @@ export class TemplateCompilerStructuralExecutionSession {
     for (const attribute of this.forest.readAttributes()) {
       const generation = attribute.generation;
       if (generation == null) continue;
-      this.assertRegisteredGeneration(generation);
       if (
-        !generation.isOwnedBy(this.generationAuthority)
-        || this.contextForLocalKey(generation.contextKey) == null
+        this.contextForLocalKey(generation.contextKey) == null
         || generation.role !== TemplateCompilerGeneratedOccurrenceRole.Clone
         || attribute.inputReference == null
         || this.forest.exactAuthoredAttributeOrigin(attribute) == null

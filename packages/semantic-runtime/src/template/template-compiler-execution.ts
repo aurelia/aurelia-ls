@@ -14,10 +14,16 @@ import type {
   TemplateCompilerAttributeOccurrence,
   TemplateCompilerElementOccurrence,
   TemplateCompilerFragmentOccurrence,
+  TemplateCompilerGeneratedOccurrenceRole,
   TemplateCompilerNodeOccurrence,
+  TemplateCompilerOccurrenceGeneration,
   TemplateCompilerOccurrenceForest,
 } from './template-compiler-occurrence.js';
-import type { TemplateCompilerStructuralExecutionSession } from './template-compiler-structural-execution.js';
+import { TemplateCompilerStructuralExecutionSession } from './template-compiler-structural-execution.js';
+import {
+  TemplateCompilerForestMutationAuthority,
+  type TemplateCompilerPendingMutationBatch,
+} from './template-compiler-mutation-authority.js';
 
 const compilerExecutionForests = new WeakSet<TemplateCompilerOccurrenceForest>();
 const compilerExecutionStructuralFamilies = new WeakSet<TemplateCompilerStructuralExecutionSession>();
@@ -127,6 +133,7 @@ export class TemplateCompilerOperationMutationBatch {
   constructor(
     readonly state: TemplateCompilerMutationBatchState,
     readonly attributeValueMutations: readonly TemplateCompilerAttributeValueMutation[],
+    readonly occurrenceGenerationReservations: readonly TemplateCompilerOccurrenceGeneration[] = [],
   ) {}
 }
 
@@ -153,8 +160,15 @@ class TemplateCompilerPendingMutationOverlay {
     );
   }
 
-  finish(state: TemplateCompilerMutationBatchState): TemplateCompilerOperationMutationBatch {
-    return new TemplateCompilerOperationMutationBatch(state, [...this.attributeValueMutations.values()]);
+  finish(
+    state: TemplateCompilerMutationBatchState,
+    occurrenceGenerationReservations: readonly TemplateCompilerOccurrenceGeneration[],
+  ): TemplateCompilerOperationMutationBatch {
+    return new TemplateCompilerOperationMutationBatch(
+      state,
+      [...this.attributeValueMutations.values()],
+      [...occurrenceGenerationReservations],
+    );
   }
 }
 
@@ -522,7 +536,15 @@ export class TemplateCompilerExecutionSession {
     familyKey: string,
     structuralExecution: TemplateCompilerStructuralExecutionSession,
   ): TemplateCompilerExecutionSession {
-    const session = TemplateCompilerExecutionSession.createForForest(familyKey, structuralExecution.forest);
+    if (compilerExecutionForests.has(structuralExecution.forest)) {
+      throw new Error('Compiler occurrence forest already owns an ordered execution session.');
+    }
+    const session = new TemplateCompilerExecutionSession(
+      familyKey,
+      structuralExecution.forest,
+      structuralExecution.mutationAuthority,
+    );
+    compilerExecutionForests.add(structuralExecution.forest);
     session.attachStructuralExecution(structuralExecution);
     return session;
   }
@@ -534,7 +556,7 @@ export class TemplateCompilerExecutionSession {
     if (compilerExecutionForests.has(forest)) {
       throw new Error('Compiler occurrence forest already owns an ordered execution session.');
     }
-    const session = new TemplateCompilerExecutionSession(familyKey, forest);
+    const session = new TemplateCompilerExecutionSession(familyKey, forest, null);
     compilerExecutionForests.add(forest);
     return session;
   }
@@ -581,15 +603,20 @@ export class TemplateCompilerExecutionSession {
   private structuralFamily: TemplateCompilerStructuralExecutionSession | null = null;
   private pendingAttempt: TemplateCompilerPendingOperationAttempt | null = null;
   private pendingMutationOverlay: TemplateCompilerPendingMutationOverlay | null = null;
+  private pendingAuthorityBatch: TemplateCompilerPendingMutationBatch | null = null;
   private sealed = false;
 
   private constructor(
     readonly familyKey: string,
     readonly forest: TemplateCompilerOccurrenceForest,
+    mutationAuthority: TemplateCompilerForestMutationAuthority | null,
   ) {
     if (familyKey.length === 0) {
       throw new Error('Compiler execution family requires a non-empty key.');
     }
+    this.mutationAuthority = mutationAuthority
+      ?? TemplateCompilerForestMutationAuthority.createForExecution(forest, this.familyAuthority);
+    this.mutationAuthority.claimExecutionOwner(this.familyAuthority);
     this.sequence = new TemplateCompilerExecutionSequence(
       this.familyAuthority,
       familyKey,
@@ -602,8 +629,29 @@ export class TemplateCompilerExecutionSession {
     );
   }
 
+  /** Forest-first mutation/generation authority later borrowed by structural replay. */
+  readonly mutationAuthority: TemplateCompilerForestMutationAuthority;
+
   get structuralExecution(): TemplateCompilerStructuralExecutionSession | null {
     return this.structuralFamily;
+  }
+
+  /** Attach the first structural target plan to this already-owned forest authority. */
+  createStructuralExecution(
+    targetPlan: TemplateCompilerTargetPlan,
+  ): TemplateCompilerStructuralExecutionSession {
+    this.requireMutable();
+    this.requireNoPendingAttempt('create structural execution');
+    if (this.structuralFamily != null) {
+      throw new Error('Compiler execution family already owns structural execution.');
+    }
+    const structuralExecution = TemplateCompilerStructuralExecutionSession.createBorrowing(
+      this.forest,
+      targetPlan,
+      this.mutationAuthority,
+    );
+    this.attachStructuralExecution(structuralExecution);
+    return structuralExecution;
   }
 
   attachStructuralExecution(structuralExecution: TemplateCompilerStructuralExecutionSession): void {
@@ -618,6 +666,9 @@ export class TemplateCompilerExecutionSession {
     }
     if (structuralExecution.forest !== this.forest) {
       throw new Error('Compiler structural execution belongs to another occurrence forest.');
+    }
+    if (structuralExecution.mutationAuthority !== this.mutationAuthority) {
+      throw new Error('Compiler structural execution borrowed another forest mutation authority.');
     }
     this.structuralFamily = structuralExecution;
     compilerExecutionStructuralFamilies.add(structuralExecution);
@@ -920,8 +971,17 @@ export class TemplateCompilerExecutionSession {
       [...producedProductHandles],
       request.sourceAddressHandle ?? null,
     );
+    const mutationOverlay = new TemplateCompilerPendingMutationOverlay();
+    const authorityBatch = this.mutationAuthority.beginExecutionBatch(
+      this.familyAuthority,
+      attempt.context.localKey,
+      attempt.operationKey,
+      attempt.causeHandles,
+      mutationOverlay,
+    );
     this.pendingAttempt = attempt;
-    this.pendingMutationOverlay = new TemplateCompilerPendingMutationOverlay();
+    this.pendingMutationOverlay = mutationOverlay;
+    this.pendingAuthorityBatch = authorityBatch;
     return attempt;
   }
 
@@ -941,8 +1001,17 @@ export class TemplateCompilerExecutionSession {
       completion,
       attempt.operationKey,
     );
+    const authorityBatch = this.requirePendingAuthorityBatch(attempt);
+    const batchState = mutationBatchStateForCompletion(completion.completionKind);
     const mutationBatch = this.requirePendingMutationOverlay(attempt).finish(
-      mutationBatchStateForCompletion(completion.completionKind),
+      batchState,
+      this.mutationAuthority.readPendingGenerations(authorityBatch),
+    );
+    this.mutationAuthority.finishExecutionBatch(
+      this.familyAuthority,
+      authorityBatch,
+      batchState === TemplateCompilerMutationBatchState.Committed,
+      mutationBatch,
     );
     if (mutationBatch.state === TemplateCompilerMutationBatchState.Committed) {
       for (const mutation of mutationBatch.attributeValueMutations) {
@@ -978,7 +1047,30 @@ export class TemplateCompilerExecutionSession {
     }
     this.pendingAttempt = null;
     this.pendingMutationOverlay = null;
+    this.pendingAuthorityBatch = null;
     return operation;
+  }
+
+  /** Reserve generation metadata during mechanical work inside the exact pending operation batch. */
+  createGeneration(
+    attempt: TemplateCompilerPendingOperationAttempt,
+    role: TemplateCompilerGeneratedOccurrenceRole,
+    outputOrdinal: number,
+  ): TemplateCompilerOccurrenceGeneration {
+    if (
+      this.pendingAttempt !== attempt
+      || !attempt.isOwnedBy(this.familyAuthority)
+    ) {
+      throw new Error(
+        `Compiler generation '${attempt.operationKey}' requires its exact pending mutation batch.`,
+      );
+    }
+    return this.mutationAuthority.reserveExecutionGeneration(
+      this.familyAuthority,
+      this.requirePendingAuthorityBatch(attempt),
+      role,
+      outputOrdinal,
+    );
   }
 
   private assertProducedProductsAvailable(
@@ -1010,6 +1102,7 @@ export class TemplateCompilerExecutionSession {
 
   assertCoherent(): void {
     this.requireNoPendingAttempt('assert family coherence');
+    this.mutationAuthority.assertGeneratedInventory();
     if (this.lanes.length === 0) {
       throw new Error(`Compiler execution family '${this.familyKey}' has no root invocation lane.`);
     }
@@ -1126,6 +1219,18 @@ export class TemplateCompilerExecutionSession {
       if (operation.mutationBatch.state !== mutationBatchStateForCompletion(operation.completion.completionKind)) {
         throw new Error(`Compiler operation '${operation.operationKey}' has an incoherent mutation-batch outcome.`);
       }
+      for (const generation of operation.mutationBatch.occurrenceGenerationReservations) {
+        const completedBatch = this.mutationAuthority.completedBatchForGeneration(generation);
+        if (
+          operation.mutationBatch.state === TemplateCompilerMutationBatchState.Committed
+            ? completedBatch?.sourceBatch !== operation.mutationBatch
+            : completedBatch != null
+        ) {
+          throw new Error(
+            `Compiler operation '${operation.operationKey}' has incoherent occurrence-generation authority.`,
+          );
+        }
+      }
       for (const mutation of operation.mutationBatch.attributeValueMutations) {
         const previousValue = replayedAttributeValues.get(mutation.attribute) ?? mutation.attribute.initialValue;
         if (mutation.previousValue !== previousValue) {
@@ -1190,8 +1295,8 @@ export class TemplateCompilerExecutionSession {
         `Cannot ${action} while compiler operation '${this.pendingAttempt.operationKey}' is pending.`,
       );
     }
-    if (this.pendingMutationOverlay != null) {
-      throw new Error(`Cannot ${action} while an ownerless compiler mutation overlay remains active.`);
+    if (this.pendingMutationOverlay != null || this.pendingAuthorityBatch != null) {
+      throw new Error(`Cannot ${action} while an ownerless compiler mutation batch remains active.`);
     }
   }
 
@@ -1206,6 +1311,19 @@ export class TemplateCompilerExecutionSession {
       throw new Error(`Compiler operation attempt '${attempt.operationKey}' has no active mutation overlay.`);
     }
     return this.pendingMutationOverlay;
+  }
+
+  private requirePendingAuthorityBatch(
+    attempt: TemplateCompilerPendingOperationAttempt,
+  ): TemplateCompilerPendingMutationBatch {
+    if (
+      this.pendingAttempt !== attempt
+      || !attempt.isOwnedBy(this.familyAuthority)
+      || this.pendingAuthorityBatch == null
+    ) {
+      throw new Error(`Compiler operation attempt '${attempt.operationKey}' has no pending authority batch.`);
+    }
+    return this.pendingAuthorityBatch;
   }
 
   private requireLane(lane: TemplateCompilerExecutionLaneReference): void {

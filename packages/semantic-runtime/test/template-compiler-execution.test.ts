@@ -36,10 +36,12 @@ import {
 import {
   TemplateCompilerAttributeOccurrence,
   TemplateCompilerElementOccurrence,
+  TemplateCompilerGeneratedOccurrenceRole,
   TemplateCompilerOccurrenceEdgeKind,
   TemplateCompilerOccurrenceForest,
   TemplateCompilerTextOccurrence,
 } from '../src/template/template-compiler-occurrence.js';
+import { TemplateCompilerCompletedMutationBatchKind } from '../src/template/template-compiler-mutation-authority.js';
 import { TemplateCompilerStructuralExecutionSession } from '../src/template/template-compiler-structural-execution.js';
 import { BrowserEffectiveTemplateFixture } from './browser-effective-template-fixture.js';
 
@@ -120,14 +122,56 @@ describe('template compiler execution sequence', () => {
 
       const targetPlan = createRootTargetPlan(browser, lane.localKey);
       recordReachableCompilerInputs(targetPlan, forest);
-      const structural = TemplateCompilerStructuralExecutionSession.create(forest, targetPlan);
-      execution.attachStructuralExecution(structural);
+      const foreignInput = browser.materialize('foreign-authority', '<div>foreign</div>');
+      const foreignForest = TemplateCompilerOccurrenceForest.fromBrowserEffective(foreignInput.emission);
+      const foreignExecution = TemplateCompilerExecutionSession.createForForest(
+        'compiler-execution-bootstrap:foreign-family',
+        foreignForest,
+      );
+      expect(() => TemplateCompilerStructuralExecutionSession.createBorrowing(
+        forest,
+        targetPlan,
+        foreignExecution.mutationAuthority,
+      )).toThrow(/another forest mutation authority/);
+      const structural = execution.createStructuralExecution(targetPlan);
+      expect(() => structural.createGeneration(
+        targetPlan.root,
+        'bootstrap:unbacked-structural-generation',
+        TemplateCompilerGeneratedOccurrenceRole.Clone,
+        [browser.run.handles.product('bootstrap:unbacked-cause')],
+        0,
+      )).toThrow(/no pending mutation batch/);
       expect(() => execution.attachTargetPlan(lane, targetPlan)).toThrow(/must be sealed/);
       targetPlan.seal();
       expect(execution.attachTargetPlan(lane, targetPlan)).toBe(lane);
       const targetContext = execution.admitContext(lane, targetPlan.root);
+      const structuralGenerationCause = browser.run.handles.product('bootstrap:backed-generation-cause');
+      const structuralGenerationAttempt = execution.beginOperation({
+        operationKey: 'bootstrap:backed-structural-generation',
+        context: targetContext,
+        operationKind: TemplateCompilerOperationKind.HydrationTargetCreation,
+        executionMechanism: TemplateCompilerOperationExecutionMechanism.BuiltIn,
+        target: new TemplateCompilerInstructionOperationTarget(
+          browser.run.handles.product('bootstrap:backed-generation-instruction'),
+          browser.run.handles.identity('bootstrap:backed-generation-instruction'),
+        ),
+        causeHandles: [structuralGenerationCause],
+      });
+      const backedStructuralGeneration = structural.createGeneration(
+        targetPlan.root,
+        structuralGenerationAttempt.operationKey,
+        TemplateCompilerGeneratedOccurrenceRole.Clone,
+        [structuralGenerationCause],
+        0,
+      );
+      const structuralGenerationOperation = execution.completeOperation(
+        structuralGenerationAttempt,
+        new TemplateCompilerOperationCompletion(TemplateCompilerOperationCompletionKind.Complete),
+      );
+      expect(execution.mutationAuthority.completedBatchForGeneration(backedStructuralGeneration)?.batchKind)
+        .toBe(TemplateCompilerCompletedMutationBatchKind.Execution);
       structural.assertCoherent();
-      expect(execution.sequence.readContextOperations(targetContext)).toEqual([]);
+      expect(execution.sequence.readContextOperations(targetContext)).toEqual([structuralGenerationOperation]);
       expect(execution.seal()).toBe(execution.sequence);
       expect(execution.structuralExecution).toBe(structural);
       expect(lane.targetPlan).toBe(targetPlan);
@@ -173,10 +217,29 @@ describe('template compiler execution sequence', () => {
         causeHandles: [hookSet.productHandle],
       });
       execution.rewriteAttributeValue(firstAttempt, classAttribute, 'exact-prefix');
+      const sourceText = forest.readNodes().find((node): node is TemplateCompilerTextOccurrence =>
+        node instanceof TemplateCompilerTextOccurrence && node.text === 'content'
+      ) ?? null;
+      if (sourceText?.inputReference == null) throw new Error('Expected bootstrap generation source text.');
+      const bootstrapGeneration = execution.createGeneration(
+        firstAttempt,
+        TemplateCompilerGeneratedOccurrenceRole.Clone,
+        0,
+      );
+      const generated = forest.createGeneratedText(
+        bootstrapGeneration,
+        'content-copy',
+        sourceText.inputReference,
+      );
+      expect(() => execution.mutationAuthority.assertGeneratedInventory())
+        .toThrow(/no completed mutation authority/);
       const first = execution.completeOperation(
         firstAttempt,
         new TemplateCompilerOperationCompletion(TemplateCompilerOperationCompletionKind.Complete),
       );
+      expect(generated.generation).toBe(bootstrapGeneration);
+      expect(execution.mutationAuthority.completedBatchForGeneration(bootstrapGeneration)?.batchKind)
+        .toBe(TemplateCompilerCompletedMutationBatchKind.Execution);
       const terminalAttempt = execution.beginOperation({
         operationKey: 'terminal:hook:open',
         context: bootstrap,
@@ -191,11 +254,25 @@ describe('template compiler execution sequence', () => {
         ),
         causeHandles: [hookSet.productHandle],
       });
+      const terminalForestRevision = forest.mutationRevision;
       execution.rewriteAttributeValue(terminalAttempt, classAttribute, 'discarded-open-write');
+      const discardedReservation = execution.createGeneration(
+        terminalAttempt,
+        TemplateCompilerGeneratedOccurrenceRole.Clone,
+        0,
+      );
       const terminal = execution.completeOperation(terminalAttempt, new TemplateCompilerOperationCompletion(
         TemplateCompilerOperationCompletionKind.Open,
         [browser.run.handles.openSeam('terminal:hook-open')],
       ));
+      expect(terminal.mutationBatch.occurrenceGenerationReservations).toEqual([discardedReservation]);
+      expect(execution.mutationAuthority.completedBatchForGeneration(discardedReservation)).toBeNull();
+      expect(forest.mutationRevision).toBe(terminalForestRevision);
+      expect(() => execution.createGeneration(
+        terminalAttempt,
+        TemplateCompilerGeneratedOccurrenceRole.Clone,
+        0,
+      )).toThrow(/exact pending mutation batch/);
 
       expect(execution.sequence.readLaneOperations(lane)).toEqual([first, terminal]);
       expect(first.mutationBatch.state).toBe(TemplateCompilerMutationBatchState.Committed);
@@ -204,6 +281,61 @@ describe('template compiler execution sequence', () => {
       expect(execution.seal()).toBe(execution.sequence);
       expect(lane.targetPlan).toBeNull();
       expect(execution.structuralExecution).toBeNull();
+    } finally {
+      browser.dispose();
+    }
+  });
+
+  test('rejects Open completion after pending generated topology escapes before rollback exists', () => {
+    const browser = new BrowserEffectiveTemplateFixture('compiler-execution-generation-rollback-boundary');
+
+    try {
+      const input = browser.materialize('root', '<div>content</div>');
+      const forest = TemplateCompilerOccurrenceForest.fromBrowserEffective(input.emission);
+      const execution = TemplateCompilerExecutionSession.createForForest(
+        'compiler-execution-generation-rollback-boundary:family',
+        forest,
+      );
+      const lane = execution.admitRootInvocation('compiler-execution-generation-rollback-boundary:lane');
+      const bootstrap = execution.bootstrapContext(lane);
+      const hookSet = compilerHookSet(browser, 'generation-rollback:hook-set');
+      const sourceText = forest.readNodes().find((node): node is TemplateCompilerTextOccurrence =>
+        node instanceof TemplateCompilerTextOccurrence && node.text === 'content'
+      ) ?? null;
+      if (sourceText?.inputReference == null) throw new Error('Expected rollback-boundary source text.');
+      const attempt = execution.beginOperation({
+        operationKey: 'generation-rollback:hook',
+        context: bootstrap,
+        operationKind: TemplateCompilerOperationKind.CompilerHook,
+        executionMechanism: TemplateCompilerOperationExecutionMechanism.BuiltIn,
+        target: execution.compilerHookTarget(
+          bootstrap,
+          hookSet,
+          TemplateCompilerHookOperationStage.Invocation,
+          0,
+          new TemplateCompilerCallableReference(
+            browser.run.handles.product('generation-rollback:callable'),
+            browser.run.handles.identity('generation-rollback:callable'),
+            browser.run.handles.address('generation-rollback:callable'),
+          ),
+        ),
+        causeHandles: [hookSet.productHandle],
+      });
+      const pendingForestRevision = forest.mutationRevision;
+      const generation = execution.createGeneration(
+        attempt,
+        TemplateCompilerGeneratedOccurrenceRole.Clone,
+        0,
+      );
+      forest.createGeneratedText(generation, 'escaped', sourceText.inputReference);
+      expect(forest.mutationRevision).toBeGreaterThan(pendingForestRevision);
+
+      expect(() => execution.completeOperation(attempt, new TemplateCompilerOperationCompletion(
+        TemplateCompilerOperationCompletionKind.Open,
+        [browser.run.handles.openSeam('generation-rollback:open')],
+      ))).toThrow(/cannot discard generated or topological output until forest rollback exists/);
+      expect(execution.readPendingAttempt()).toBe(attempt);
+      expect(execution.mutationAuthority.completedBatchForGeneration(generation)).toBeNull();
     } finally {
       browser.dispose();
     }
@@ -277,6 +409,11 @@ describe('template compiler execution sequence', () => {
 
     try {
       const local = fixture.addRootLane('local-template');
+      const normalizedGeneration = fixture.structural.readContextStructure(local.plan.root)
+        ?.compilerCarrier.generation ?? null;
+      if (normalizedGeneration == null) throw new Error('Expected normalized replay generation authority.');
+      expect(fixture.execution.mutationAuthority.completedBatchForGeneration(normalizedGeneration)?.batchKind)
+        .toBe(TemplateCompilerCompletedMutationBatchKind.NormalizedReplay);
       const causes = [fixture.product('cause:syntax'), fixture.product('cause:resource')];
       const produced = [fixture.product('produced:instruction')];
       const rootOperation = fixture.recordOperation({
