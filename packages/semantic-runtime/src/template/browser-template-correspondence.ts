@@ -187,6 +187,10 @@ export class BrowserTemplateCorrespondenceDraft {
   constructor(
     /** Stable prefix for authored/browser occurrence identity within one template. */
     readonly occurrenceIdentityKey: string,
+    /** Exact caller-owned template identity used to derive occurrence identity. */
+    readonly templateIdentity: string,
+    /** Exact source epoch supplied by the current authored-source authority. */
+    readonly sourceRevision: string,
     /** Currentness receipt for the exact source, parser, recovery, and planner authorities used by this run. */
     readonly correspondenceKey: string,
     readonly markupDigest: string,
@@ -258,7 +262,7 @@ export function planBrowserTemplateCorrespondence(
   if (request.markup !== request.browser.markup || request.markup !== request.authored.markup) {
     throw new Error('Authored/browser correspondence requires one exact markup input for both parser drafts.');
   }
-  const markupDigest = createHash('sha256').update(request.markup).digest('hex');
+  const markupDigest = browserTemplateCorrespondenceMarkupDigest(request.markup);
   const carrierSelectionAuthority = request.carrierSelection == null
     ? 'no-carrier-selection'
     : carrierSelectionFingerprint(request.carrierSelection);
@@ -268,7 +272,7 @@ export function planBrowserTemplateCorrespondence(
       throw new Error('Browser correspondence requires the canonical compiler-carrier selection for its browser draft.');
     }
   }
-  const occurrenceIdentityKey = correspondenceOccurrenceIdentityKey(request.templateIdentity);
+  const occurrenceIdentityKey = browserTemplateCorrespondenceOccurrenceIdentityKey(request.templateIdentity);
   const correspondenceKey = correspondenceReceiptKey(
     occurrenceIdentityKey,
     request.sourceRevision,
@@ -464,6 +468,8 @@ export function planBrowserTemplateCorrespondence(
   );
   return new BrowserTemplateCorrespondenceDraft(
     occurrenceIdentityKey,
+    request.templateIdentity,
+    request.sourceRevision,
     correspondenceKey,
     markupDigest,
     nodeDerivations,
@@ -503,8 +509,14 @@ export function browserNodeOccurrenceKey(
   return `${correspondenceKey}/browser-node/${node.nodeKind}/${encodeBrowserTemplatePath(node.path)}`;
 }
 
-function correspondenceOccurrenceIdentityKey(templateIdentity: string): string {
+/** Stable occurrence-identity authority shared by correspondence producers and exact invocation consumers. */
+export function browserTemplateCorrespondenceOccurrenceIdentityKey(templateIdentity: string): string {
   return `browser-correspondence/${encodeURIComponent(templateIdentity)}`;
+}
+
+/** Exact authored/browser markup fingerprint owned by the correspondence layer. */
+export function browserTemplateCorrespondenceMarkupDigest(markup: string): string {
+  return createHash('sha256').update(markup).digest('hex');
 }
 
 function correspondenceReceiptKey(
