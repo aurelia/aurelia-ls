@@ -5,21 +5,23 @@ import {
 } from './template-compiler-normalized-site-index.js';
 import type { TemplateCompilerNormalizedSiteIndex } from './template-compiler-normalized-site-index.js';
 import {
-  TemplateCompilerAttributeDetachmentMutation,
-  TemplateCompilerExecutionLaneReference,
-  TemplateCompilerMutationBatchState,
-  TemplateCompilerNodeDetachmentMutation,
-  TemplateCompilerOccurrenceOperationTarget,
-  TemplateCompilerOperation,
-  TemplateCompilerOperationCompletionKind,
-  TemplateCompilerOperationKind,
+  TemplateCompilerInvocationPhase,
 } from './template-compiler-execution.js';
+import type {
+  TemplateCompilerExecutionLaneReference,
+  TemplateCompilerExecutionSession,
+  TemplateCompilerInvocationBootstrapClosure,
+  TemplateCompilerOperation,
+} from './template-compiler-execution.js';
+import type {
+  TemplateCompilerExtractedLocalBindable,
+  TemplateCompilerExtractedLocalTemplate,
+} from './template-compiler-local-extraction.js';
 import {
   TemplateCompilerAttributeOccurrence,
   TemplateCompilerCommentOccurrence,
   TemplateCompilerDoctypeOccurrence,
   TemplateCompilerElementOccurrence,
-  TemplateCompilerOccurrenceEdgeKind,
   TemplateCompilerTextOccurrence,
 } from './template-compiler-occurrence.js';
 import type { TemplateCompilerNodeOccurrence } from './template-compiler-occurrence.js';
@@ -36,7 +38,7 @@ export type TemplateCompilerOccurrenceOnlyTarget =
   | TemplateCompilerNodeOccurrence
   | TemplateCompilerAttributeOccurrence;
 
-/** Exact disposition assigned to one authored-precedent site bundle. */
+/** Candidate accounting disposition assigned to one authored-precedent site bundle. */
 export const enum TemplateCompilerSiteSpendDisposition {
   BrowserCompatible = 'browser-compatible',
   BrowserReloweringRequired = 'browser-relowering-required',
@@ -46,7 +48,7 @@ export const enum TemplateCompilerSiteSpendDisposition {
   InertTemplateContent = 'inert-template-content',
 }
 
-/** Live occurrence that intentionally has no authored-precedent bundle spend. */
+/** Caller-classified candidate occurrence that intentionally has no authored-precedent bundle spend. */
 export const enum TemplateCompilerOccurrenceOnlyDisposition {
   StaticTextPassThrough = 'static-text-pass-through',
   BrowserImpliedElementPassThrough = 'browser-implied-element-pass-through',
@@ -63,17 +65,192 @@ export const enum TemplateCompilerSiteSpendConflictKind {
   SiteOccurrenceKindMismatch = 'site-occurrence-kind-mismatch',
   InvalidDisposition = 'invalid-disposition',
   InvalidEventOrdinal = 'invalid-event-ordinal',
-  EventOrdinalAlreadySpent = 'event-ordinal-already-spent',
-  MissingCauseOperation = 'missing-cause-operation',
-  UnexpectedCauseOperation = 'unexpected-cause-operation',
-  InvalidCauseOperation = 'invalid-cause-operation',
-  MissingDestinationLane = 'missing-destination-lane',
-  UnexpectedDestinationLane = 'unexpected-destination-lane',
-  InvalidDestinationLane = 'invalid-destination-lane',
+  SiteEventOrdinalMismatch = 'site-event-ordinal-mismatch',
+  MissingLocalExclusionAuthority = 'missing-local-exclusion-authority',
+  UnexpectedLocalExclusionAuthority = 'unexpected-local-exclusion-authority',
+  InvalidLocalExclusionAuthority = 'invalid-local-exclusion-authority',
   InvalidOccurrenceDisposition = 'invalid-occurrence-disposition',
   DuplicateAuthoredRemainderEvidence = 'duplicate-authored-remainder-evidence',
   AuthoredRemainderAlreadyRecorded = 'authored-remainder-already-recorded',
   AuthoredRemainderForSpentSite = 'authored-remainder-for-spent-site',
+}
+
+/** One local-extraction disposition captured from the exact post-bootstrap occurrence topology. */
+export class TemplateCompilerLocalSiteExclusionReceipt {
+  readonly #authority: object;
+
+  constructor(
+    authority: object,
+    readonly occurrence: TemplateCompilerSpendOccurrence,
+    readonly disposition:
+      | TemplateCompilerSiteSpendDisposition.LocalDeclarationConsumed
+      | TemplateCompilerSiteSpendDisposition.LocalBindableMetadataConsumed
+      | TemplateCompilerSiteSpendDisposition.TransferredToChildInvocation,
+    readonly causeOperation: TemplateCompilerOperation,
+    readonly destinationLane: TemplateCompilerExecutionLaneReference | null,
+    readonly extraction: TemplateCompilerExtractedLocalTemplate,
+    readonly bindable: TemplateCompilerExtractedLocalBindable | null,
+  ) {
+    this.#authority = authority;
+  }
+
+  isOwnedBy(authority: object): boolean {
+    return this.#authority === authority;
+  }
+}
+
+const localSiteExclusionConstructionAuthority = {};
+
+/**
+ * Nominal event-time snapshot of every local declaration, bindable-metadata, and child-transfer site exclusion.
+ *
+ * Capture is intentionally allowed only at the exact closure forest revision, before any child or sibling work. The
+ * snapshot remains stable after capture; later topology is not consulted while accounting individual bundles.
+ */
+export class TemplateCompilerLocalSiteExclusionAuthority {
+  static capture(
+    execution: TemplateCompilerExecutionSession,
+    closure: TemplateCompilerInvocationBootstrapClosure,
+  ): TemplateCompilerLocalSiteExclusionAuthority {
+    if (
+      execution.bootstrapClosure(closure.lane) !== closure
+      || execution.invocationPhase(closure.lane) !== TemplateCompilerInvocationPhase.BootstrapClosed
+      || closure.lane.targetPlan != null
+      || execution.sequence.readContexts().some((context) => context.lane === closure.lane)
+      || execution.sequence.readLaneOperations(closure.lane).length !== closure.laneOperationCount
+      || execution.forest.mutationRevision !== closure.forestMutationRevision
+      || closure.childLaneTransfers.some((transfer) =>
+        execution.invocationPhase(transfer.childLane) !== TemplateCompilerInvocationPhase.CompilerHooks
+        || execution.sequence.readLaneOperations(transfer.childLane).length !== 0
+      )
+    ) {
+      throw new Error(
+        `Compiler invocation lane '${closure.lane.localKey}' has no current pre-child local-exclusion frontier.`,
+      );
+    }
+    const authority = new TemplateCompilerLocalSiteExclusionAuthority(
+      localSiteExclusionConstructionAuthority,
+      execution,
+      closure,
+    );
+    authority.captureRows();
+    return authority;
+  }
+
+  readonly #receiptAuthority = {};
+  readonly #receiptsByOccurrence = new Map<
+    TemplateCompilerSpendOccurrence,
+    TemplateCompilerLocalSiteExclusionReceipt
+  >();
+
+  private constructor(
+    constructionAuthority: object,
+    readonly execution: TemplateCompilerExecutionSession,
+    readonly closure: TemplateCompilerInvocationBootstrapClosure,
+  ) {
+    if (constructionAuthority !== localSiteExclusionConstructionAuthority) {
+      throw new Error('Local site exclusion authority was not captured by this module.');
+    }
+  }
+
+  receiptFor(
+    occurrence: TemplateCompilerSpendOccurrence,
+  ): TemplateCompilerLocalSiteExclusionReceipt | null {
+    return this.#receiptsByOccurrence.get(occurrence) ?? null;
+  }
+
+  owns(receipt: TemplateCompilerLocalSiteExclusionReceipt): boolean {
+    return receipt.isOwnedBy(this.#receiptAuthority)
+      && this.#receiptsByOccurrence.get(receipt.occurrence) === receipt;
+  }
+
+  private captureRows(): void {
+    const attributeDetachments = new Map<TemplateCompilerAttributeOccurrence, TemplateCompilerOperation>();
+    const nodeDetachments = new Map<TemplateCompilerNodeOccurrence, TemplateCompilerOperation>();
+    for (const operation of this.closure.localExtraction.operations) {
+      for (const mutation of operation.mutationBatch.attributeDetachmentMutations) {
+        if (attributeDetachments.has(mutation.attribute)) {
+          throw new Error(`Local exclusion attribute '${mutation.attribute.occurrenceKey}' is detached more than once.`);
+        }
+        attributeDetachments.set(mutation.attribute, operation);
+      }
+      for (const mutation of operation.mutationBatch.nodeDetachmentMutations) {
+        if (nodeDetachments.has(mutation.node)) {
+          throw new Error(`Local exclusion node '${mutation.node.occurrenceKey}' is detached more than once.`);
+        }
+        nodeDetachments.set(mutation.node, operation);
+      }
+    }
+
+    for (const transfer of this.closure.childLaneTransfers) {
+      const extraction = transfer.extraction;
+      const declarationOperation = attributeDetachments.get(extraction.declarationAttribute) ?? null;
+      if (declarationOperation == null) {
+        throw new Error(`Local declaration '${extraction.name}' has no exact attribute-detachment operation.`);
+      }
+      this.addReceipt(
+        extraction.declarationAttribute,
+        TemplateCompilerSiteSpendDisposition.LocalDeclarationConsumed,
+        declarationOperation,
+        null,
+        extraction,
+        null,
+      );
+      for (const bindable of extraction.bindables) {
+        if (nodeDetachments.get(bindable.element) !== bindable.detachmentOperation) {
+          throw new Error(`Local bindable '${bindable.propertyName}' has no exact node-detachment operation.`);
+        }
+        for (const occurrence of siteOccurrencesInSubtree(bindable.element)) {
+          this.addReceipt(
+            occurrence,
+            TemplateCompilerSiteSpendDisposition.LocalBindableMetadataConsumed,
+            bindable.detachmentOperation,
+            null,
+            extraction,
+            bindable,
+          );
+        }
+      }
+      if (nodeDetachments.get(extraction.carrier) !== extraction.carrierDetachmentOperation) {
+        throw new Error(`Local carrier '${extraction.name}' has no exact node-detachment operation.`);
+      }
+      for (const occurrence of siteOccurrencesInSubtree(extraction.carrier)) {
+        this.addReceipt(
+          occurrence,
+          TemplateCompilerSiteSpendDisposition.TransferredToChildInvocation,
+          extraction.carrierDetachmentOperation,
+          transfer.childLane,
+          extraction,
+          null,
+        );
+      }
+    }
+  }
+
+  private addReceipt(
+    occurrence: TemplateCompilerSpendOccurrence,
+    disposition:
+      | TemplateCompilerSiteSpendDisposition.LocalDeclarationConsumed
+      | TemplateCompilerSiteSpendDisposition.LocalBindableMetadataConsumed
+      | TemplateCompilerSiteSpendDisposition.TransferredToChildInvocation,
+    causeOperation: TemplateCompilerOperation,
+    destinationLane: TemplateCompilerExecutionLaneReference | null,
+    extraction: TemplateCompilerExtractedLocalTemplate,
+    bindable: TemplateCompilerExtractedLocalBindable | null,
+  ): void {
+    if (this.#receiptsByOccurrence.has(occurrence)) {
+      throw new Error(`Local exclusion occurrence '${occurrence.occurrenceKey}' has more than one disposition.`);
+    }
+    this.#receiptsByOccurrence.set(occurrence, new TemplateCompilerLocalSiteExclusionReceipt(
+      this.#receiptAuthority,
+      occurrence,
+      disposition,
+      causeOperation,
+      destinationLane,
+      extraction,
+      bindable,
+    ));
+  }
 }
 
 /** One successful authored-site accounting row. */
@@ -83,7 +260,7 @@ export class TemplateCompilerSiteSpend {
     readonly bundle: TemplateCompilerNormalizedSiteBundle,
     readonly occurrence: TemplateCompilerSpendOccurrence,
     readonly disposition: TemplateCompilerSiteSpendDisposition,
-    readonly eventOrdinal: number | null,
+    readonly siteEventOrdinal: number | null,
     readonly causeOperation: TemplateCompilerOperation | null,
     readonly destinationLane: TemplateCompilerExecutionLaneReference | null,
   ) {}
@@ -95,7 +272,7 @@ export class TemplateCompilerOccurrenceOnlyRow {
     readonly ordinal: number,
     readonly occurrence: TemplateCompilerOccurrenceOnlyTarget,
     readonly disposition: TemplateCompilerOccurrenceOnlyDisposition,
-    readonly eventOrdinal: number,
+    readonly siteEventOrdinal: number,
   ) {}
 }
 
@@ -123,21 +300,68 @@ export class TemplateCompilerAuthoredSiteRemainderEvidence {
   }
 }
 
-/** Minimal structural contract accepted from the later browser cursor. */
-export interface TemplateCompilerSiteSpendFrontier {
-  readonly frontierKind: string;
+export const enum TemplateCompilerSiteSpendCompletionKind {
+  Complete = 'complete',
+  Blocked = 'blocked',
+}
+
+const siteSpendCompletionAuthority = {};
+
+/** Nominal accounting completion supplied by the later cursor or caller-owned candidate walk. */
+export class TemplateCompilerSiteSpendCompletion {
+  static complete(nextSiteEventOrdinal: number): TemplateCompilerSiteSpendCompletion {
+    return new TemplateCompilerSiteSpendCompletion(
+      siteSpendCompletionAuthority,
+      TemplateCompilerSiteSpendCompletionKind.Complete,
+      null,
+      nextSiteEventOrdinal,
+    );
+  }
+
+  static blocked(frontierKind: string, nextSiteEventOrdinal: number): TemplateCompilerSiteSpendCompletion {
+    if (frontierKind.length === 0) {
+      throw new Error('Blocked site accounting completion requires a non-empty frontier kind.');
+    }
+    return new TemplateCompilerSiteSpendCompletion(
+      siteSpendCompletionAuthority,
+      TemplateCompilerSiteSpendCompletionKind.Blocked,
+      frontierKind,
+      nextSiteEventOrdinal,
+    );
+  }
+
+  private constructor(
+    authority: object,
+    readonly completionKind: TemplateCompilerSiteSpendCompletionKind,
+    readonly frontierKind: string | null,
+    readonly nextSiteEventOrdinal: number,
+  ) {
+    this.#authority = authority;
+    if (authority !== siteSpendCompletionAuthority) {
+      throw new Error('Site spend completion belongs to another construction authority.');
+    }
+    if (!Number.isSafeInteger(nextSiteEventOrdinal) || nextSiteEventOrdinal < 0) {
+      throw new Error(`Site accounting completion has invalid next event ordinal ${nextSiteEventOrdinal}.`);
+    }
+  }
+
+  readonly #authority: object;
+
+  isNominal(): boolean {
+    return this.#authority === siteSpendCompletionAuthority;
+  }
 }
 
 export class TemplateCompilerSiteBlockedByFrontier {
   constructor(
     readonly bundle: TemplateCompilerNormalizedSiteBundle,
-    readonly frontier: TemplateCompilerSiteSpendFrontier,
+    readonly completion: TemplateCompilerSiteSpendCompletion,
   ) {}
 }
 
 export const enum TemplateCompilerSiteSpendLedgerState {
-  /** Every authored bundle has one non-open disposition and no accounting conflict remains. */
-  Accounted = 'accounted',
+  /** Every authored bundle has one non-open candidate row; this is not cursor/origin execution proof. */
+  AllSitesAccounted = 'all-sites-accounted',
   /** Relowering, an occurrence-only semantic gap, a frontier, or an unspent authored bundle remains. */
   Open = 'open',
   /** At least one attempted accounting relation violated the ledger contract. */
@@ -154,7 +378,7 @@ export class TemplateCompilerSiteSpendLedgerResult {
     readonly authoredRemainderEvidence: readonly TemplateCompilerAuthoredSiteRemainderEvidence[],
     readonly rawUnspent: readonly TemplateCompilerNormalizedSiteBundle[],
     readonly blockedByFrontier: readonly TemplateCompilerSiteBlockedByFrontier[],
-    readonly frontier: TemplateCompilerSiteSpendFrontier | null,
+    readonly completion: TemplateCompilerSiteSpendCompletion,
   ) {
     const hasOpenSpend = spends.some((spend) =>
       spend.disposition === TemplateCompilerSiteSpendDisposition.BrowserReloweringRequired
@@ -165,9 +389,12 @@ export class TemplateCompilerSiteSpendLedgerResult {
     );
     this.state = conflicts.length > 0
       ? TemplateCompilerSiteSpendLedgerState.Mismatch
-      : hasOpenSpend || hasOpenOccurrence || frontier != null || rawUnspent.length > 0
+      : hasOpenSpend
+          || hasOpenOccurrence
+          || completion.completionKind === TemplateCompilerSiteSpendCompletionKind.Blocked
+          || rawUnspent.length > 0
         ? TemplateCompilerSiteSpendLedgerState.Open
-        : TemplateCompilerSiteSpendLedgerState.Accounted;
+        : TemplateCompilerSiteSpendLedgerState.AllSitesAccounted;
   }
 }
 
@@ -183,7 +410,9 @@ export type TemplateCompilerOccurrenceOnlyAttempt =
  * Mutable product-free accounting owner for one authored-precedent index.
  *
  * Bundle and occurrence identity are both exclusive. Named remainder evidence and frontier blocking remain visible
- * without being promoted into successful spends.
+ * without being promoted into successful spends. Browser compatibility, inertness, and occurrence-only rows remain
+ * caller-classified candidates until the later cursor supplies its own nominal origin/reachability receipts; this
+ * ledger never upgrades accounting completeness into compiler execution proof.
  */
 export class TemplateCompilerSiteSpendLedger {
   private readonly spends: TemplateCompilerSiteSpend[] = [];
@@ -196,19 +425,20 @@ export class TemplateCompilerSiteSpendLedger {
     TemplateCompilerOccurrenceOnlyTarget,
     TemplateCompilerSiteSpend | TemplateCompilerOccurrenceOnlyRow
   >();
-  private readonly events = new Map<number, TemplateCompilerSiteSpend | TemplateCompilerOccurrenceOnlyRow>();
   private readonly remainderByBundle = new Map<
     TemplateCompilerNormalizedSiteBundle,
     TemplateCompilerAuthoredSiteRemainderEvidence
   >();
-  private readonly extractionOccurrencesByOperation = new Map<
-    TemplateCompilerOperation,
-    ReadonlySet<TemplateCompilerSpendOccurrence>
-  >();
   private finishedResult: TemplateCompilerSiteSpendLedgerResult | null = null;
-  private finishedFrontier: TemplateCompilerSiteSpendFrontier | null = null;
+  private finishedCompletion: TemplateCompilerSiteSpendCompletion | null = null;
+  private _nextSiteEventOrdinal = 0;
 
   constructor(readonly index: TemplateCompilerNormalizedSiteIndex) {}
+
+  /** Next contiguous ledger-local site-event ordinal; unrelated cursor element events do not create gaps here. */
+  get nextSiteEventOrdinal(): number {
+    return this._nextSiteEventOrdinal;
+  }
 
   spendForBundle(bundle: TemplateCompilerNormalizedSiteBundle): TemplateCompilerSiteSpend | null {
     return this.spendsByBundle.get(bundle) ?? null;
@@ -230,7 +460,7 @@ export class TemplateCompilerSiteSpendLedger {
     disposition:
       | TemplateCompilerSiteSpendDisposition.BrowserCompatible
       | TemplateCompilerSiteSpendDisposition.BrowserReloweringRequired,
-    eventOrdinal: number,
+    siteEventOrdinal: number,
   ): TemplateCompilerSiteSpendAttempt {
     this.assertOpen();
     const common = this.validateCommonSpend(bundle, occurrence, disposition);
@@ -246,9 +476,9 @@ export class TemplateCompilerSiteSpendLedger {
         disposition,
       );
     }
-    const eventConflict = this.validateEventOrdinal(eventOrdinal, bundle, occurrence, disposition);
+    const eventConflict = this.validateSiteEventOrdinal(siteEventOrdinal, bundle, occurrence, disposition);
     if (eventConflict != null) return eventConflict;
-    return this.commitSpend(bundle, occurrence, disposition, eventOrdinal, null, null);
+    return this.commitSpend(bundle, occurrence, disposition, siteEventOrdinal, null, null);
   }
 
   exclude(
@@ -259,122 +489,77 @@ export class TemplateCompilerSiteSpendLedger {
       | TemplateCompilerSiteSpendDisposition.LocalBindableMetadataConsumed
       | TemplateCompilerSiteSpendDisposition.TransferredToChildInvocation
       | TemplateCompilerSiteSpendDisposition.InertTemplateContent,
-    causeOperation: TemplateCompilerOperation | null = null,
-    destinationLane: TemplateCompilerExecutionLaneReference | null = null,
+    authority: TemplateCompilerLocalSiteExclusionAuthority | null = null,
   ): TemplateCompilerSiteSpendAttempt {
     this.assertOpen();
     const common = this.validateCommonSpend(bundle, occurrence, disposition);
     if (common != null) return common;
-    switch (disposition) {
-      case TemplateCompilerSiteSpendDisposition.LocalDeclarationConsumed: {
-        const causeConflict = this.validateExtractionCause(
-          bundle,
-          occurrence,
-          disposition,
-          causeOperation,
-          'attribute',
-        );
-        if (causeConflict != null) return causeConflict;
-        if (destinationLane != null) {
-          return this.conflict(
-            TemplateCompilerSiteSpendConflictKind.UnexpectedDestinationLane,
-            bundle,
-            occurrence,
-            disposition,
-          );
-        }
-        break;
-      }
-      case TemplateCompilerSiteSpendDisposition.LocalBindableMetadataConsumed: {
-        const causeConflict = this.validateExtractionCause(
-          bundle,
-          occurrence,
-          disposition,
-          causeOperation,
-          'node',
-        );
-        if (causeConflict != null) return causeConflict;
-        if (destinationLane != null) {
-          return this.conflict(
-            TemplateCompilerSiteSpendConflictKind.UnexpectedDestinationLane,
-            bundle,
-            occurrence,
-            disposition,
-          );
-        }
-        break;
-      }
-      case TemplateCompilerSiteSpendDisposition.TransferredToChildInvocation: {
-        const causeConflict = this.validateExtractionCause(
-          bundle,
-          occurrence,
-          disposition,
-          causeOperation,
-          'node',
-        );
-        if (causeConflict != null) return causeConflict;
-        if (destinationLane == null) {
-          return this.conflict(
-            TemplateCompilerSiteSpendConflictKind.MissingDestinationLane,
-            bundle,
-            occurrence,
-            disposition,
-          );
-        }
-        const detachedCarrier = causeOperation!.mutationBatch.nodeDetachmentMutations[0]?.node ?? null;
-        const carrierDetachment = causeOperation!.mutationBatch.nodeDetachmentMutations[0] ?? null;
-        if (
-          !(destinationLane instanceof TemplateCompilerExecutionLaneReference)
-          || destinationLane === causeOperation!.lane
-          || !(detachedCarrier instanceof TemplateCompilerElementOccurrence)
-          || detachedCarrier.templateContent == null
-          || destinationLane.compilerCarrier !== detachedCarrier
-          || destinationLane.compilerContent !== detachedCarrier.templateContent
-          || carrierDetachment?.previousParent !== causeOperation!.lane.compilerContent
-          || carrierDetachment.previousEdgeKind !== TemplateCompilerOccurrenceEdgeKind.Child
-        ) {
-          return this.conflict(
-            TemplateCompilerSiteSpendConflictKind.InvalidDestinationLane,
-            bundle,
-            occurrence,
-            disposition,
-          );
-        }
-        break;
-      }
-      case TemplateCompilerSiteSpendDisposition.InertTemplateContent:
-        if (causeOperation != null) {
-          return this.conflict(
-            TemplateCompilerSiteSpendConflictKind.UnexpectedCauseOperation,
-            bundle,
-            occurrence,
-            disposition,
-          );
-        }
-        if (destinationLane != null) {
-          return this.conflict(
-            TemplateCompilerSiteSpendConflictKind.UnexpectedDestinationLane,
-            bundle,
-            occurrence,
-            disposition,
-          );
-        }
-        break;
-      default:
+    if (disposition === TemplateCompilerSiteSpendDisposition.InertTemplateContent) {
+      if (authority != null) {
         return this.conflict(
-          TemplateCompilerSiteSpendConflictKind.InvalidDisposition,
+          TemplateCompilerSiteSpendConflictKind.UnexpectedLocalExclusionAuthority,
           bundle,
           occurrence,
           disposition,
         );
+      }
+      return this.commitSpend(bundle, occurrence, disposition, null, null, null);
     }
-    return this.commitSpend(bundle, occurrence, disposition, null, causeOperation, destinationLane);
+    if (
+      disposition !== TemplateCompilerSiteSpendDisposition.LocalDeclarationConsumed
+      && disposition !== TemplateCompilerSiteSpendDisposition.LocalBindableMetadataConsumed
+      && disposition !== TemplateCompilerSiteSpendDisposition.TransferredToChildInvocation
+    ) {
+      return this.conflict(
+        TemplateCompilerSiteSpendConflictKind.InvalidDisposition,
+        bundle,
+        occurrence,
+        disposition,
+      );
+    }
+    if (authority == null) {
+      return this.conflict(
+        TemplateCompilerSiteSpendConflictKind.MissingLocalExclusionAuthority,
+        bundle,
+        occurrence,
+        disposition,
+      );
+    }
+    if (!(authority instanceof TemplateCompilerLocalSiteExclusionAuthority)) {
+      return this.conflict(
+        TemplateCompilerSiteSpendConflictKind.InvalidLocalExclusionAuthority,
+        bundle,
+        occurrence,
+        disposition,
+      );
+    }
+    const receipt = authority.receiptFor(occurrence);
+    if (
+      receipt == null
+      || !authority.owns(receipt)
+      || receipt.disposition !== disposition
+    ) {
+      return this.conflict(
+        TemplateCompilerSiteSpendConflictKind.InvalidLocalExclusionAuthority,
+        bundle,
+        occurrence,
+        disposition,
+      );
+    }
+    return this.commitSpend(
+      bundle,
+      occurrence,
+      disposition,
+      null,
+      receipt.causeOperation,
+      receipt.destinationLane,
+    );
   }
 
   recordOccurrenceOnly(
     occurrence: TemplateCompilerOccurrenceOnlyTarget,
     disposition: TemplateCompilerOccurrenceOnlyDisposition,
-    eventOrdinal: number,
+    siteEventOrdinal: number,
   ): TemplateCompilerOccurrenceOnlyAttempt {
     this.assertOpen();
     if (!this.validOccurrenceDisposition(occurrence, disposition)) {
@@ -394,17 +579,17 @@ export class TemplateCompilerSiteSpendLedger {
         disposition,
       );
     }
-    const eventConflict = this.validateEventOrdinal(eventOrdinal, null, occurrence, disposition);
+    const eventConflict = this.validateSiteEventOrdinal(siteEventOrdinal, null, occurrence, disposition);
     if (eventConflict != null) return eventConflict;
     const row = new TemplateCompilerOccurrenceOnlyRow(
       this.occurrenceOnlyRows.length,
       occurrence,
       disposition,
-      eventOrdinal,
+      siteEventOrdinal,
     );
     this.occurrenceOnlyRows.push(row);
     this.rowsByOccurrence.set(occurrence, row);
-    this.events.set(eventOrdinal, row);
+    this._nextSiteEventOrdinal++;
     return row;
   }
 
@@ -444,12 +629,20 @@ export class TemplateCompilerSiteSpendLedger {
     return evidence;
   }
 
-  finish(frontier: TemplateCompilerSiteSpendFrontier | null = null): TemplateCompilerSiteSpendLedgerResult {
+  finish(completion: TemplateCompilerSiteSpendCompletion): TemplateCompilerSiteSpendLedgerResult {
+    if (!(completion instanceof TemplateCompilerSiteSpendCompletion) || !completion.isNominal()) {
+      throw new Error('Site spend ledger requires one nominal completion.');
+    }
     if (this.finishedResult != null) {
-      if (frontier !== this.finishedFrontier) {
-        throw new Error('Site spend ledger was already finished against another frontier.');
+      if (completion !== this.finishedCompletion) {
+        throw new Error('Site spend ledger was already finished against another completion.');
       }
       return this.finishedResult;
+    }
+    if (completion.nextSiteEventOrdinal !== this._nextSiteEventOrdinal) {
+      throw new Error(
+        `Site spend completion expects event ${completion.nextSiteEventOrdinal}, current event is ${this._nextSiteEventOrdinal}.`,
+      );
     }
     const unspent: TemplateCompilerNormalizedSiteBundle[] = [];
     for (const bundle of this.index.attributeSites) {
@@ -458,11 +651,11 @@ export class TemplateCompilerSiteSpendLedger {
     for (const bundle of this.index.textSites) {
       if (!this.spendsByBundle.has(bundle)) unspent.push(bundle);
     }
-    const blockedByFrontier = frontier == null
+    const blockedByFrontier = completion.completionKind === TemplateCompilerSiteSpendCompletionKind.Complete
       ? []
       : unspent
         .filter((bundle) => !this.remainderByBundle.has(bundle))
-        .map((bundle) => new TemplateCompilerSiteBlockedByFrontier(bundle, frontier));
+        .map((bundle) => new TemplateCompilerSiteBlockedByFrontier(bundle, completion));
     const result = new TemplateCompilerSiteSpendLedgerResult(
       this.spends,
       this.occurrenceOnlyRows,
@@ -470,9 +663,9 @@ export class TemplateCompilerSiteSpendLedger {
       this.authoredRemainderEvidence,
       unspent,
       blockedByFrontier,
-      frontier,
+      completion,
     );
-    this.finishedFrontier = frontier;
+    this.finishedCompletion = completion;
     this.finishedResult = result;
     return result;
   }
@@ -527,13 +720,13 @@ export class TemplateCompilerSiteSpendLedger {
     return null;
   }
 
-  private validateEventOrdinal(
-    eventOrdinal: number,
+  private validateSiteEventOrdinal(
+    siteEventOrdinal: number,
     bundle: TemplateCompilerNormalizedSiteBundle | null,
     occurrence: TemplateCompilerOccurrenceOnlyTarget,
     disposition: TemplateCompilerSiteSpendDisposition | TemplateCompilerOccurrenceOnlyDisposition,
   ): TemplateCompilerSiteSpendConflict | null {
-    if (!Number.isSafeInteger(eventOrdinal) || eventOrdinal < 0) {
+    if (!Number.isSafeInteger(siteEventOrdinal) || siteEventOrdinal < 0) {
       return this.conflict(
         TemplateCompilerSiteSpendConflictKind.InvalidEventOrdinal,
         bundle,
@@ -541,113 +734,22 @@ export class TemplateCompilerSiteSpendLedger {
         disposition,
       );
     }
-    if (this.events.has(eventOrdinal)) {
+    if (siteEventOrdinal !== this._nextSiteEventOrdinal) {
       return this.conflict(
-        TemplateCompilerSiteSpendConflictKind.EventOrdinalAlreadySpent,
+        TemplateCompilerSiteSpendConflictKind.SiteEventOrdinalMismatch,
         bundle,
         occurrence,
         disposition,
       );
     }
     return null;
-  }
-
-  private validateExtractionCause(
-    bundle: TemplateCompilerNormalizedSiteBundle,
-    occurrence: TemplateCompilerSpendOccurrence,
-    disposition: TemplateCompilerSiteSpendDisposition,
-    causeOperation: TemplateCompilerOperation | null,
-    topologyKind: 'attribute' | 'node',
-  ): TemplateCompilerSiteSpendConflict | null {
-    if (causeOperation == null) {
-      return this.conflict(
-        TemplateCompilerSiteSpendConflictKind.MissingCauseOperation,
-        bundle,
-        occurrence,
-        disposition,
-      );
-    }
-    if (
-      !(causeOperation instanceof TemplateCompilerOperation)
-      || causeOperation.operationKind !== TemplateCompilerOperationKind.LocalTemplateExtraction
-      || causeOperation.completion.completionKind !== TemplateCompilerOperationCompletionKind.Complete
-      || causeOperation.mutationBatch.state !== TemplateCompilerMutationBatchState.Committed
-    ) {
-      return this.conflict(
-        TemplateCompilerSiteSpendConflictKind.InvalidCauseOperation,
-        bundle,
-        occurrence,
-        disposition,
-      );
-    }
-    const target = causeOperation.target;
-    if (topologyKind === 'attribute') {
-      const detachments = causeOperation.mutationBatch.attributeDetachmentMutations;
-      if (
-        !(occurrence instanceof TemplateCompilerAttributeOccurrence)
-        || causeOperation.mutationBatch.topologyMutations.length !== 1
-        || detachments.length !== 1
-        || !(detachments[0] instanceof TemplateCompilerAttributeDetachmentMutation)
-        || detachments[0].attribute !== occurrence
-        || !(target instanceof TemplateCompilerOccurrenceOperationTarget)
-        || target.occurrence !== occurrence
-      ) {
-        return this.conflict(
-          TemplateCompilerSiteSpendConflictKind.InvalidCauseOperation,
-          bundle,
-          occurrence,
-          disposition,
-        );
-      }
-      return null;
-    }
-    const detachments = causeOperation.mutationBatch.nodeDetachmentMutations;
-    const detachedNode = detachments[0]?.node ?? null;
-    if (
-      causeOperation.mutationBatch.topologyMutations.length !== 1
-      || detachments.length !== 1
-      || !(detachments[0] instanceof TemplateCompilerNodeDetachmentMutation)
-      || detachedNode == null
-      || !this.extractionOccurrences(causeOperation, detachedNode).has(occurrence)
-      || !(target instanceof TemplateCompilerOccurrenceOperationTarget)
-      || target.occurrence !== detachedNode
-    ) {
-      return this.conflict(
-        TemplateCompilerSiteSpendConflictKind.InvalidCauseOperation,
-        bundle,
-        occurrence,
-        disposition,
-      );
-    }
-    return null;
-  }
-
-  private extractionOccurrences(
-    operation: TemplateCompilerOperation,
-    root: TemplateCompilerNodeOccurrence,
-  ): ReadonlySet<TemplateCompilerSpendOccurrence> {
-    const existing = this.extractionOccurrencesByOperation.get(operation) ?? null;
-    if (existing != null) return existing;
-    const occurrences = new Set<TemplateCompilerSpendOccurrence>();
-    const pending: TemplateCompilerNodeOccurrence[] = [root];
-    while (pending.length > 0) {
-      const node = pending.pop()!;
-      if (node instanceof TemplateCompilerTextOccurrence) occurrences.add(node);
-      if (node instanceof TemplateCompilerElementOccurrence) {
-        for (const attribute of node.readAttributes()) occurrences.add(attribute);
-        if (node.templateContent != null) pending.push(node.templateContent);
-      }
-      pending.push(...node.readChildren());
-    }
-    this.extractionOccurrencesByOperation.set(operation, occurrences);
-    return occurrences;
   }
 
   private commitSpend(
     bundle: TemplateCompilerNormalizedSiteBundle,
     occurrence: TemplateCompilerSpendOccurrence,
     disposition: TemplateCompilerSiteSpendDisposition,
-    eventOrdinal: number | null,
+    siteEventOrdinal: number | null,
     causeOperation: TemplateCompilerOperation | null,
     destinationLane: TemplateCompilerExecutionLaneReference | null,
   ): TemplateCompilerSiteSpend {
@@ -656,7 +758,7 @@ export class TemplateCompilerSiteSpendLedger {
       bundle,
       occurrence,
       disposition,
-      eventOrdinal,
+      siteEventOrdinal,
       causeOperation,
       destinationLane,
     );
@@ -664,7 +766,7 @@ export class TemplateCompilerSiteSpendLedger {
     this.spendsByBundle.set(bundle, spend);
     this.spendsByProductHandle.set(templateCompilerNormalizedSiteBundleProductHandle(bundle), spend);
     this.rowsByOccurrence.set(occurrence, spend);
-    if (eventOrdinal != null) this.events.set(eventOrdinal, spend);
+    if (siteEventOrdinal != null) this._nextSiteEventOrdinal++;
     return spend;
   }
 
@@ -735,4 +837,21 @@ export function templateCompilerNormalizedSiteBundleProductHandle(
   return bundle instanceof TemplateCompilerNormalizedSite
     ? bundle.attributeProductHandle
     : bundle.textProductHandle;
+}
+
+function siteOccurrencesInSubtree(
+  root: TemplateCompilerNodeOccurrence,
+): readonly TemplateCompilerSpendOccurrence[] {
+  const occurrences: TemplateCompilerSpendOccurrence[] = [];
+  const pending: TemplateCompilerNodeOccurrence[] = [root];
+  while (pending.length > 0) {
+    const node = pending.pop()!;
+    if (node instanceof TemplateCompilerTextOccurrence) occurrences.push(node);
+    if (node instanceof TemplateCompilerElementOccurrence) {
+      occurrences.push(...node.readAttributes());
+      if (node.templateContent != null) pending.push(node.templateContent);
+    }
+    pending.push(...node.readChildren());
+  }
+  return occurrences;
 }
