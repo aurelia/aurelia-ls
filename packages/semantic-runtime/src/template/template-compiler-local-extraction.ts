@@ -11,6 +11,7 @@ import {
   templateCompilerElementAttribute,
 } from './template-compiler-dom-query.js';
 import {
+  type TemplateCompilerBootstrapDriverReference,
   type TemplateCompilerExecutionLaneReference,
   type TemplateCompilerExecutionSession,
   type TemplateCompilerOperation,
@@ -108,6 +109,17 @@ export class TemplateCompilerLocalExtractionResult {
     readonly handoff: TemplateCompilerLocalExtractionHandoff | null,
     readonly failure: TemplateCompilerLocalExtractionFailure | null,
   ) {}
+
+  isExact(): boolean {
+    return (
+      this.state === TemplateCompilerLocalExtractionState.NoLocalTemplates
+      || this.state === TemplateCompilerLocalExtractionState.Extracted
+    ) && this.failure == null;
+  }
+
+  hasExtractedTemplates(): boolean {
+    return this.state === TemplateCompilerLocalExtractionState.Extracted;
+  }
 }
 
 export interface TemplateCompilerLocalExtractionRequest {
@@ -142,8 +154,9 @@ interface PendingExtractedLocalTemplate {
 
 class TemplateCompilerLocalExtractionFrame {
   private readonly context;
-  private readonly initialOperationCount: number;
+  private readonly operations: TemplateCompilerOperation[] = [];
   private readonly completed: PendingExtractedLocalTemplate[] = [];
+  private readonly driver: TemplateCompilerBootstrapDriverReference;
 
   constructor(private readonly request: TemplateCompilerLocalExtractionRequest) {
     if (request.ownerCauseHandles.length === 0) {
@@ -161,10 +174,21 @@ class TemplateCompilerLocalExtractionFrame {
       throw new Error(`Local-template extraction for '${request.lane.localKey}' requires exact hook bootstrap.`);
     }
     this.context = request.execution.bootstrapContext(request.lane);
-    this.initialOperationCount = request.execution.sequence.readOperations().length;
+    this.driver = request.execution.beginLocalTemplateExtractionDriver(
+      request.lane,
+      request.hookBootstrap.operations,
+    );
   }
 
   execute(): TemplateCompilerLocalExtractionResult {
+    try {
+      return this.executeOwned();
+    } finally {
+      this.request.execution.finishBootstrapDriver(this.driver);
+    }
+  }
+
+  private executeOwned(): TemplateCompilerLocalExtractionResult {
     const rootDeclaration = templateCompilerElementAttribute(this.context.compilerCarrier, 'as-custom-element');
     if (rootDeclaration != null) {
       return this.refuse(
@@ -232,7 +256,7 @@ class TemplateCompilerLocalExtractionFrame {
       this.request.lane,
       TemplateCompilerLocalExtractionState.Extracted,
       this.request.execution.forest.mutationRevision,
-      this.readNewOperations(),
+      this.operations,
       entries,
       handoff,
       null,
@@ -393,9 +417,10 @@ class TemplateCompilerLocalExtractionFrame {
       executionMechanism: TemplateCompilerOperationExecutionMechanism.BuiltIn,
       target: this.request.execution.occurrenceTarget(this.context, attribute),
       causeHandles,
+      bootstrapDriver: this.driver,
     });
     this.request.execution.detachAttribute(attempt, attribute);
-    return this.request.execution.completeOperation(attempt, complete());
+    return this.completeOperation(attempt, complete());
   }
 
   private detachNode(
@@ -410,9 +435,10 @@ class TemplateCompilerLocalExtractionFrame {
       executionMechanism: TemplateCompilerOperationExecutionMechanism.BuiltIn,
       target: this.request.execution.occurrenceTarget(this.context, node),
       causeHandles,
+      bootstrapDriver: this.driver,
     });
     this.request.execution.detachNode(attempt, node);
-    return this.request.execution.completeOperation(attempt, complete());
+    return this.completeOperation(attempt, complete());
   }
 
   private refuse(
@@ -438,7 +464,7 @@ class TemplateCompilerLocalExtractionFrame {
       this.request.lane,
       TemplateCompilerLocalExtractionState.Refused,
       this.request.execution.forest.mutationRevision,
-      this.readNewOperations(),
+      this.operations,
       this.partialExtractions(),
       null,
       new TemplateCompilerLocalExtractionFailure(issueKind, frameworkErrorCode, summary, target, operation),
@@ -466,7 +492,7 @@ class TemplateCompilerLocalExtractionFrame {
       this.request.lane,
       TemplateCompilerLocalExtractionState.Abrupt,
       this.request.execution.forest.mutationRevision,
-      this.readNewOperations(),
+      this.operations,
       this.partialExtractions(),
       null,
       new TemplateCompilerLocalExtractionFailure(null, null, summary, target, operation),
@@ -487,8 +513,9 @@ class TemplateCompilerLocalExtractionFrame {
       executionMechanism: mechanism,
       target: this.request.execution.occurrenceTarget(this.context, target),
       causeHandles,
+      bootstrapDriver: this.driver,
     });
-    return this.request.execution.completeOperation(attempt, completion);
+    return this.completeOperation(attempt, completion);
   }
 
   private partialExtractions(): readonly TemplateCompilerExtractedLocalTemplate[] {
@@ -506,8 +533,13 @@ class TemplateCompilerLocalExtractionFrame {
     ));
   }
 
-  private readNewOperations(): readonly TemplateCompilerOperation[] {
-    return this.request.execution.sequence.readOperations().slice(this.initialOperationCount);
+  private completeOperation(
+    attempt: Parameters<TemplateCompilerExecutionSession['completeOperation']>[0],
+    completion: TemplateCompilerOperationCompletion,
+  ): TemplateCompilerOperation {
+    const operation = this.request.execution.completeOperation(attempt, completion);
+    this.operations.push(operation);
+    return operation;
   }
 }
 

@@ -8,9 +8,13 @@ import {
   TemplateCompilerLocalExtractionState,
 } from '../src/template/template-compiler-local-extraction.js';
 import {
+  type TemplateCompilerExecutionLaneReference,
   TemplateCompilerExecutionSession,
   TemplateCompilerInvocationPhase,
+  TemplateCompilerOperationCompletion,
   TemplateCompilerOperationCompletionKind,
+  TemplateCompilerOperationExecutionMechanism,
+  TemplateCompilerOperationKind,
 } from '../src/template/template-compiler-execution.js';
 import {
   TemplateCompilerElementOccurrence,
@@ -60,8 +64,28 @@ describe('template compiler local extraction', () => {
         operation.completion.completionKind === TemplateCompilerOperationCompletionKind.Complete
       )).toBe(true);
 
+      const closure = fixture.execution.closeInvocationBootstrap(fixture.hookBootstrap, result);
+      expect(closure).toMatchObject({
+        lane: fixture.lane,
+        forestMutationRevision: result.forestMutationRevision,
+        laneOperationCount: result.operations.length,
+      });
+      expect(closure.childLaneTransfers.map((transfer) => transfer.extraction.name))
+        .toEqual(['first', 'second']);
+      expect(closure.childLaneTransfers.map((transfer) => transfer.childLane))
+        .toEqual(result.completedExtractions.map((entry) => entry.invocationLane));
+      expect(fixture.execution.bootstrapClosure(fixture.lane)).toBe(closure);
+      expect(fixture.execution.invocationPhase(fixture.lane))
+        .toBe(TemplateCompilerInvocationPhase.BootstrapClosed);
+
       const first = result.completedExtractions[0]!;
       const second = result.completedExtractions[1]!;
+      expect(() => fixture.execution.admitExtractedInvocation(
+        `${fixture.lane.localKey}:duplicate-transfer`,
+        first.carrier,
+        first.content,
+        first.carrierDetachmentOperation,
+      )).toThrow(/already transferred/);
       expect(first.carrier.parentEdgeKind).toBe(TemplateCompilerOccurrenceEdgeKind.Detached);
       expect(first.declarationAttribute.owner).toBeNull();
       expect(first.bindables).toHaveLength(1);
@@ -102,6 +126,32 @@ describe('template compiler local extraction', () => {
       });
       expect(fixture.execution.invocationPhase(fixture.lane))
         .toBe(TemplateCompilerInvocationPhase.CompilerHooks);
+      const closure = fixture.execution.closeInvocationBootstrap(fixture.hookBootstrap, result);
+      expect(closure.childLaneTransfers).toEqual([]);
+      expect(closure.laneOperationCount).toBe(0);
+      expect(fixture.execution.invocationPhase(fixture.lane))
+        .toBe(TemplateCompilerInvocationPhase.BootstrapClosed);
+      expect(() => fixture.execute()).toThrow(/does not start before target admission/);
+    } finally {
+      fixture.dispose();
+    }
+  });
+
+  test('refuses to close a no-local result after its forest epoch changes', () => {
+    const fixture = new LocalExtractionFixture(
+      'local-extraction-stale-no-local',
+      '<div title="before"></div>',
+    );
+    try {
+      const result = fixture.execute();
+      const title = fixture.forest.readAttributes().find((attribute) => attribute.name === 'title')!;
+      fixture.forest.rewriteAttributeValue(title, 'after');
+
+      expect(result.forestMutationRevision).not.toBe(fixture.forest.mutationRevision);
+      expect(() => fixture.execution.closeInvocationBootstrap(fixture.hookBootstrap, result))
+        .toThrow(/not current and exact/);
+      expect(fixture.execution.invocationPhase(fixture.lane))
+        .toBe(TemplateCompilerInvocationPhase.CompilerHooks);
     } finally {
       fixture.dispose();
     }
@@ -122,6 +172,8 @@ describe('template compiler local extraction', () => {
       expect(result.operations).toHaveLength(1);
       expect(result.operations[0]?.completion.completionKind)
         .toBe(TemplateCompilerOperationCompletionKind.Refused);
+      expect(() => fixture.execution.closeInvocationBootstrap(fixture.hookBootstrap, result))
+        .toThrow(/ended with 'refused'/);
       expect(fixture.execution.seal()).toBe(fixture.execution.sequence);
     } finally {
       fixture.dispose();
@@ -278,6 +330,93 @@ describe('template compiler local extraction', () => {
       fixture.dispose();
     }
   });
+
+  test('allows foreign-lane interleaving while keeping the subject driver receipt exact', () => {
+    const fixture = new LocalExtractionFixture(
+      'local-extraction-lane-local-receipt',
+      [
+        '<template as-custom-element="subject">',
+        '  <template as-custom-element="nested"></template><div></div>',
+        '</template>',
+        '<template as-custom-element="sibling"><span></span></template>',
+        '<div></div>',
+      ].join(''),
+    );
+    try {
+      const rootResult = fixture.execute();
+      const rootClosure = fixture.execution.closeInvocationBootstrap(fixture.hookBootstrap, rootResult);
+      const [subject, sibling] = rootResult.completedExtractions;
+      const subjectLane = subject?.invocationLane ?? null;
+      const siblingLane = sibling?.invocationLane ?? null;
+      if (subjectLane == null || siblingLane == null) throw new Error('Expected two extracted child lanes.');
+      const subjectHook = new TemplateCompilerHookBootstrapResult(
+        subjectLane,
+        TemplateCompilerHookBootstrapState.Exact,
+        [],
+        null,
+        null,
+      );
+      const siblingContext = fixture.execution.bootstrapContext(siblingLane);
+      const siblingTarget = sibling.content.readChildren()[0]!;
+
+      const result = fixture.executeLane(subjectLane, subjectHook, () => {
+        const attempt = fixture.execution.beginOperation({
+          operationKey: `${siblingLane.localKey}:reentrant-unrelated`,
+          context: siblingContext,
+          operationKind: TemplateCompilerOperationKind.LocalTemplateExtraction,
+          executionMechanism: TemplateCompilerOperationExecutionMechanism.BuiltIn,
+          target: fixture.execution.occurrenceTarget(siblingContext, siblingTarget),
+          causeHandles: [fixture.browser.run.handles.product('foreign-reentrant-cause')],
+        });
+        fixture.execution.completeOperation(
+          attempt,
+          new TemplateCompilerOperationCompletion(TemplateCompilerOperationCompletionKind.Complete),
+        );
+      });
+
+      expect(result.state).toBe(TemplateCompilerLocalExtractionState.Extracted);
+      expect(result.operations).toHaveLength(2);
+      expect(result.operations.every((operation) => operation.lane === subjectLane)).toBe(true);
+      expect(fixture.execution.sequence.readLaneOperations(siblingLane)).toHaveLength(1);
+      expect(result.forestMutationRevision).toBe(fixture.forest.mutationRevision);
+      const subjectClosure = fixture.execution.closeInvocationBootstrap(subjectHook, result);
+      expect(rootClosure.childLaneTransfers.map((transfer) => transfer.childLane))
+        .toEqual([subjectLane, siblingLane]);
+      expect(subjectClosure.lane).toBe(subjectLane);
+    } finally {
+      fixture.dispose();
+    }
+  });
+
+  test('blocks a re-entrant same-lane operation before extraction mutates', () => {
+    const fixture = new LocalExtractionFixture(
+      'local-extraction-driver-owned-receipt',
+      '<template as-custom-element="subject"></template><div></div>',
+    );
+    try {
+      const context = fixture.execution.bootstrapContext(fixture.lane);
+      const carrier = localCarriers(fixture.forest)[0]!;
+      expect(() => fixture.execute(() => {
+        const attempt = fixture.execution.beginOperation({
+          operationKey: `${fixture.lane.localKey}:reentrant-unrelated`,
+          context,
+          operationKind: TemplateCompilerOperationKind.LocalTemplateExtraction,
+          executionMechanism: TemplateCompilerOperationExecutionMechanism.BuiltIn,
+          target: fixture.execution.occurrenceTarget(context, carrier),
+          causeHandles: [fixture.browser.run.handles.product('same-lane-reentrant-cause')],
+        });
+        fixture.execution.completeOperation(
+          attempt,
+          new TemplateCompilerOperationCompletion(TemplateCompilerOperationCompletionKind.Complete),
+        );
+      })).toThrow(/outside its active 'local-template-extraction' driver/);
+      expect(fixture.execution.sequence.readLaneOperations(fixture.lane)).toEqual([]);
+      expect(carrier.parent).toBe(fixture.forest.compilerContent);
+      expect(carrier.readAttributes().some((attribute) => attribute.name === 'as-custom-element')).toBe(true);
+    } finally {
+      fixture.dispose();
+    }
+  });
 });
 
 class LocalExtractionFixture {
@@ -285,6 +424,7 @@ class LocalExtractionFixture {
   readonly forest: TemplateCompilerOccurrenceForest;
   readonly execution: TemplateCompilerExecutionSession;
   readonly lane;
+  readonly hookBootstrap: TemplateCompilerHookBootstrapResult;
   private readonly reservations = new Map<string, TemplateCompilerLocalDefinitionReservation>();
 
   constructor(localKey: string, markup: string) {
@@ -294,22 +434,32 @@ class LocalExtractionFixture {
     );
     this.execution = TemplateCompilerExecutionSession.createForForest(`${localKey}:family`, this.forest);
     this.lane = this.execution.admitRootInvocation(`${localKey}:root`);
+    this.hookBootstrap = new TemplateCompilerHookBootstrapResult(
+      this.lane,
+      TemplateCompilerHookBootstrapState.Exact,
+      [],
+      null,
+      null,
+    );
   }
 
-  execute() {
+  execute(onReserve?: (invocationKey: string) => void) {
+    return this.executeLane(this.lane, this.hookBootstrap, onReserve);
+  }
+
+  executeLane(
+    lane: TemplateCompilerExecutionLaneReference,
+    hookBootstrap: TemplateCompilerHookBootstrapResult,
+    onReserve?: (invocationKey: string) => void,
+  ) {
     return executeTemplateCompilerLocalExtraction({
       execution: this.execution,
-      lane: this.lane,
-      hookBootstrap: new TemplateCompilerHookBootstrapResult(
-        this.lane,
-        TemplateCompilerHookBootstrapState.Exact,
-        [],
-        null,
-        null,
-      ),
+      lane,
+      hookBootstrap,
       ownerName: 'owner-element',
       ownerCauseHandles: [this.browser.run.handles.product('owner-definition')],
       reserveDefinition: (invocationKey) => {
+        onReserve?.(invocationKey);
         let reservation = this.reservations.get(invocationKey);
         if (reservation == null) {
           reservation = {

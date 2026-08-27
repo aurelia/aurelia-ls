@@ -15,6 +15,7 @@ import {
 } from './compiler-hook-world.js';
 import type { TemplateCompilerWorldEmission } from './compiler-world-materializer.js';
 import {
+  type TemplateCompilerBootstrapDriverReference,
   TemplateCompilerCallableReference,
   type TemplateCompilerBootstrapContextReference,
   type TemplateCompilerExecutionLaneReference,
@@ -49,6 +50,10 @@ export class TemplateCompilerHookBootstrapResult {
     readonly boundaryEntryOrdinal: number | null,
     readonly summary: string | null,
   ) {}
+
+  isExact(): boolean {
+    return this.state === TemplateCompilerHookBootstrapState.Exact;
+  }
 }
 
 export interface TemplateCompilerHookBootstrapRequest {
@@ -62,15 +67,24 @@ export interface TemplateCompilerHookBootstrapRequest {
 class TemplateCompilerHookBootstrapFrame {
   private readonly context: TemplateCompilerBootstrapContextReference;
   private readonly hooks: TemplateCompilerHookSet;
-  private readonly initialOperationCount: number;
+  private readonly operations: TemplateCompilerOperation[] = [];
+  private readonly driver: TemplateCompilerBootstrapDriverReference;
 
   constructor(private readonly request: TemplateCompilerHookBootstrapRequest) {
     this.context = request.execution.bootstrapContext(request.lane);
     this.hooks = request.compilerWorld.compilerHooks;
-    this.initialOperationCount = request.execution.sequence.readOperations().length;
+    this.driver = request.execution.beginHookBootstrapDriver(request.lane);
   }
 
   execute(): TemplateCompilerHookBootstrapResult {
+    try {
+      return this.executeOwned();
+    } finally {
+      this.request.execution.finishBootstrapDriver(this.driver);
+    }
+  }
+
+  private executeOwned(): TemplateCompilerHookBootstrapResult {
     if (this.hooks.membershipState === TemplateCompilerHookMembershipState.Open) {
       return this.finishBoundary(
         TemplateCompilerHookBootstrapState.Open,
@@ -106,7 +120,7 @@ class TemplateCompilerHookBootstrapFrame {
     return new TemplateCompilerHookBootstrapResult(
       this.request.lane,
       TemplateCompilerHookBootstrapState.Exact,
-      this.readNewOperations(),
+      this.operations,
       null,
       null,
     );
@@ -229,11 +243,12 @@ class TemplateCompilerHookBootstrapFrame {
       executionMechanism: TemplateCompilerOperationExecutionMechanism.BuiltIn,
       target,
       causeHandles: [this.hooks.productHandle, mapping.productHandle],
+      bootstrapDriver: this.driver,
     });
     for (const rewrite of effect.rewrites) {
       this.request.execution.rewriteAttributeValue(attempt, rewrite.attribute, rewrite.value);
     }
-    const operation = this.request.execution.completeOperation(
+    const operation = this.completeOperation(
       attempt,
       complete(),
     );
@@ -399,8 +414,9 @@ class TemplateCompilerHookBootstrapFrame {
       executionMechanism: mechanism,
       target,
       causeHandles,
+      bootstrapDriver: this.driver,
     });
-    return this.request.execution.completeOperation(attempt, completion);
+    return this.completeOperation(attempt, completion);
   }
 
   private entryOperationKey(entryOrdinal: number, suffix: string): string {
@@ -423,14 +439,19 @@ class TemplateCompilerHookBootstrapFrame {
     return new TemplateCompilerHookBootstrapResult(
       this.request.lane,
       state,
-      this.readNewOperations(),
+      this.operations,
       entryOrdinal,
       summary,
     );
   }
 
-  private readNewOperations(): readonly TemplateCompilerOperation[] {
-    return this.request.execution.sequence.readOperations().slice(this.initialOperationCount);
+  private completeOperation(
+    attempt: Parameters<TemplateCompilerExecutionSession['completeOperation']>[0],
+    completion: TemplateCompilerOperationCompletion,
+  ): TemplateCompilerOperation {
+    const operation = this.request.execution.completeOperation(attempt, completion);
+    this.operations.push(operation);
+    return operation;
   }
 }
 

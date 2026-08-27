@@ -461,6 +461,20 @@ describe('template compiler execution sequence', () => {
         attribute.name === 'as-custom-element'
       ) ?? null;
       if (declarationAttribute == null) throw new Error('Expected local-template declaration attribute.');
+      const declarationTarget = execution.occurrenceTarget(rootBootstrap, declarationAttribute);
+      const declarationAttempt = execution.beginOperation({
+        operationKey: 'local-bootstrap:remove-name',
+        context: rootBootstrap,
+        operationKind: TemplateCompilerOperationKind.LocalTemplateExtraction,
+        executionMechanism: TemplateCompilerOperationExecutionMechanism.BuiltIn,
+        target: declarationTarget,
+        causeHandles: [browser.run.handles.product('local-bootstrap:definition')],
+      });
+      execution.detachAttribute(declarationAttempt, declarationAttribute);
+      const declarationRemoval = execution.completeOperation(
+        declarationAttempt,
+        new TemplateCompilerOperationCompletion(TemplateCompilerOperationCompletionKind.Complete),
+      );
       const extractionTarget = execution.occurrenceTarget(rootBootstrap, localCarrier);
       const extractionAttempt = execution.beginOperation({
         operationKey: 'local-bootstrap:extract',
@@ -470,7 +484,6 @@ describe('template compiler execution sequence', () => {
         target: extractionTarget,
         causeHandles: [browser.run.handles.product('local-bootstrap:definition')],
       });
-      execution.detachAttribute(extractionAttempt, declarationAttribute);
       execution.detachNode(extractionAttempt, localCarrier);
       const extraction = execution.completeOperation(
         extractionAttempt,
@@ -486,22 +499,25 @@ describe('template compiler execution sequence', () => {
 
       expect(localCarrier.parent).toBeNull();
       expect(declarationAttribute.owner).toBeNull();
-      expect(extraction.mutationBatch.topologyMutations).toEqual([
+      expect(declarationRemoval.mutationBatch.topologyMutations).toEqual([
         expect.objectContaining({
           eventOrdinal: 0,
           attribute: declarationAttribute,
           previousOwner: localCarrier,
           previousOrdinal: 0,
         }),
+      ]);
+      expect(extraction.mutationBatch.topologyMutations).toEqual([
         expect.objectContaining({
-          eventOrdinal: 1,
+          eventOrdinal: 0,
           node: localCarrier,
           previousParent: forest.compilerContent,
           previousEdgeKind: TemplateCompilerOccurrenceEdgeKind.Child,
           previousOrdinal: 0,
         }),
       ]);
-      expect(extraction.mutationBatch.attributeDetachmentMutations).toHaveLength(1);
+      expect(declarationRemoval.mutationBatch.attributeDetachmentMutations).toHaveLength(1);
+      expect(extraction.mutationBatch.attributeDetachmentMutations).toHaveLength(0);
       expect(extraction.mutationBatch.nodeDetachmentMutations).toHaveLength(1);
       expect(localLane.compilerCarrier).toBe(localCarrier);
       expect(localLane.compilerContent).toBe(localContent);

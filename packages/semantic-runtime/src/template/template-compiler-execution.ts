@@ -10,6 +10,11 @@ import type {
   TemplateCompilerTargetPlan,
 } from './compiler-target-plan.js';
 import type { TemplateCompilerHookSet } from './compiler-hook-world.js';
+import type { TemplateCompilerHookBootstrapResult } from './template-compiler-hook-bootstrap.js';
+import type {
+  TemplateCompilerExtractedLocalTemplate,
+  TemplateCompilerLocalExtractionResult,
+} from './template-compiler-local-extraction.js';
 import {
   TemplateCompilerOccurrenceEdgeKind,
   type TemplateCompilerAttributeOccurrence,
@@ -34,6 +39,7 @@ const compilerExecutionStructuralFamilies = new WeakSet<TemplateCompilerStructur
 export const enum TemplateCompilerInvocationPhase {
   CompilerHooks = 'compiler-hooks',
   LocalTemplateExtraction = 'local-template-extraction',
+  BootstrapClosed = 'bootstrap-closed',
   TargetExecution = 'target-execution',
 }
 
@@ -578,6 +584,28 @@ export class TemplateCompilerOperation {
   }
 }
 
+export const enum TemplateCompilerBootstrapDriverKind {
+  CompilerHooks = 'compiler-hooks',
+  LocalTemplateExtraction = 'local-template-extraction',
+}
+
+/** Nominal capability held while one bootstrap driver owns all same-lane operation admission. */
+export class TemplateCompilerBootstrapDriverReference {
+  readonly #familyAuthority: object;
+
+  constructor(
+    familyAuthority: object,
+    readonly lane: TemplateCompilerExecutionLaneReference,
+    readonly driverKind: TemplateCompilerBootstrapDriverKind,
+  ) {
+    this.#familyAuthority = familyAuthority;
+  }
+
+  isOwnedBy(familyAuthority: object): boolean {
+    return this.#familyAuthority === familyAuthority;
+  }
+}
+
 /** Input retained before one semantic compiler boundary begins mechanical execution. */
 export interface TemplateCompilerOperationAttemptRequest {
   readonly operationKey: string;
@@ -588,6 +616,8 @@ export interface TemplateCompilerOperationAttemptRequest {
   readonly causeHandles: readonly ClaimEndpointHandle[];
   readonly producedProductHandles?: readonly ProductHandle[];
   readonly sourceAddressHandle?: AddressHandle | null;
+  /** Exact same-lane bootstrap driver, when hook/local orchestration currently owns admission. */
+  readonly bootstrapDriver?: TemplateCompilerBootstrapDriverReference;
 }
 
 /** Read-only view over the run-local execution topology owned by one compiler family session. */
@@ -634,6 +664,40 @@ export class TemplateCompilerExecutionSequence {
   }
 }
 
+/** Exact transfer of one fully extracted local carrier from its parent bootstrap into a fresh child lane. */
+export class TemplateCompilerExtractedInvocationTransfer {
+  constructor(
+    readonly extraction: TemplateCompilerExtractedLocalTemplate,
+    readonly childLane: TemplateCompilerExecutionLaneReference,
+  ) {}
+}
+
+/**
+ * Session-owned capability proving that one invocation completed hooks and local discovery against a precise epoch.
+ *
+ * The forest epoch is event-time authority only. Later sibling or child work may legitimately advance the shared
+ * forest, while this lane remains closed against further bootstrap operations.
+ */
+export class TemplateCompilerInvocationBootstrapClosure {
+  readonly #familyAuthority: object;
+
+  constructor(
+    familyAuthority: object,
+    readonly lane: TemplateCompilerExecutionLaneReference,
+    readonly hookBootstrap: TemplateCompilerHookBootstrapResult,
+    readonly localExtraction: TemplateCompilerLocalExtractionResult,
+    readonly forestMutationRevision: number,
+    readonly laneOperationCount: number,
+    readonly childLaneTransfers: readonly TemplateCompilerExtractedInvocationTransfer[],
+  ) {
+    this.#familyAuthority = familyAuthority;
+  }
+
+  isOwnedBy(familyAuthority: object): boolean {
+    return this.#familyAuthority === familyAuthority;
+  }
+}
+
 /**
  * Product-free forest-first owner for one exact compiler family/cohort invocation.
  *
@@ -677,6 +741,18 @@ export class TemplateCompilerExecutionSession {
   private readonly lanes: TemplateCompilerExecutionLaneReference[] = [];
   private readonly lanesByTargetPlan = new Map<TemplateCompilerTargetPlan, TemplateCompilerExecutionLaneReference>();
   private readonly lanesByLocalKey = new Map<string, TemplateCompilerExecutionLaneReference>();
+  private readonly lanesByCompilerCarrier = new Map<
+    TemplateCompilerElementOccurrence,
+    TemplateCompilerExecutionLaneReference
+  >();
+  private readonly lanesByCompilerContent = new Map<
+    TemplateCompilerFragmentOccurrence,
+    TemplateCompilerExecutionLaneReference
+  >();
+  private readonly extractedLanesByOperation = new Map<
+    TemplateCompilerOperation,
+    TemplateCompilerExecutionLaneReference
+  >();
   private readonly bootstrapContexts: TemplateCompilerBootstrapContextReference[] = [];
   private readonly bootstrapContextsByLane = new Map<
     TemplateCompilerExecutionLaneReference,
@@ -685,6 +761,14 @@ export class TemplateCompilerExecutionSession {
   private readonly invocationPhases = new Map<
     TemplateCompilerExecutionLaneReference,
     TemplateCompilerInvocationPhase
+  >();
+  private readonly bootstrapClosuresByLane = new Map<
+    TemplateCompilerExecutionLaneReference,
+    TemplateCompilerInvocationBootstrapClosure
+  >();
+  private readonly activeBootstrapDriversByLane = new Map<
+    TemplateCompilerExecutionLaneReference,
+    TemplateCompilerBootstrapDriverReference
   >();
   private readonly contexts: TemplateCompilerExecutionContextReference[] = [];
   private readonly contextsByTargetContext = new Map<
@@ -882,16 +966,30 @@ export class TemplateCompilerExecutionSession {
     compilerContent: TemplateCompilerFragmentOccurrence,
     extraction: TemplateCompilerOperation,
   ): TemplateCompilerExecutionLaneReference {
+    const detachment = extraction.mutationBatch.nodeDetachmentMutations;
     if (
       !extraction.isOwnedBy(this.familyAuthority)
       || extraction.operationKind !== TemplateCompilerOperationKind.LocalTemplateExtraction
       || extraction.completion.completionKind !== TemplateCompilerOperationCompletionKind.Complete
+      || extraction.mutationBatch.state !== TemplateCompilerMutationBatchState.Committed
+      || extraction.mutationBatch.attributeValueMutations.length !== 0
+      || extraction.mutationBatch.occurrenceGenerationReservations.length !== 0
+      || extraction.mutationBatch.topologyMutations.length !== 1
       || !(extraction.target instanceof TemplateCompilerOccurrenceOperationTarget)
       || extraction.target.occurrence !== compilerCarrier
+      || detachment.length !== 1
+      || detachment[0]?.node !== compilerCarrier
+      || detachment[0].previousParent !== extraction.lane.compilerContent
+      || detachment[0].previousEdgeKind !== TemplateCompilerOccurrenceEdgeKind.Child
     ) {
       throw new Error('Local compiler invocation requires its exact completed carrier-extraction operation.');
     }
-    return this.admitInvocation(localKey, compilerCarrier, compilerContent);
+    if (this.extractedLanesByOperation.has(extraction)) {
+      throw new Error(`Local carrier-extraction operation '${extraction.operationKey}' is already transferred.`);
+    }
+    const lane = this.admitInvocation(localKey, compilerCarrier, compilerContent);
+    this.extractedLanesByOperation.set(extraction, lane);
+    return lane;
   }
 
   bootstrapContext(
@@ -904,6 +1002,126 @@ export class TemplateCompilerExecutionSession {
   invocationPhase(lane: TemplateCompilerExecutionLaneReference): TemplateCompilerInvocationPhase {
     this.requireLane(lane);
     return this.invocationPhases.get(lane)!;
+  }
+
+  /** Reserve same-lane operation admission for the exact hook-bootstrap driver. */
+  beginHookBootstrapDriver(
+    lane: TemplateCompilerExecutionLaneReference,
+  ): TemplateCompilerBootstrapDriverReference {
+    if (this.sequence.readLaneOperations(lane).length !== 0) {
+      throw new Error(`Compiler hook bootstrap for '${lane.localKey}' does not start at the lane frontier.`);
+    }
+    return this.beginBootstrapDriver(lane, TemplateCompilerBootstrapDriverKind.CompilerHooks);
+  }
+
+  /** Reserve same-lane operation admission only after the exact hook result owns the whole lane frontier. */
+  beginLocalTemplateExtractionDriver(
+    lane: TemplateCompilerExecutionLaneReference,
+    hookOperations: readonly TemplateCompilerOperation[],
+  ): TemplateCompilerBootstrapDriverReference {
+    const laneOperations = this.sequence.readLaneOperations(lane);
+    if (
+      !sameOccurrences(laneOperations, hookOperations)
+      || hookOperations.some((operation) =>
+        operation.lane !== lane
+        || operation.operationKind !== TemplateCompilerOperationKind.CompilerHook
+        || operation.completion.completionKind !== TemplateCompilerOperationCompletionKind.Complete
+      )
+    ) {
+      throw new Error(`Local-template extraction for '${lane.localKey}' does not own the exact hook frontier.`);
+    }
+    return this.beginBootstrapDriver(lane, TemplateCompilerBootstrapDriverKind.LocalTemplateExtraction);
+  }
+
+  /** Release a bootstrap driver after its synchronous phase returns one exact result. */
+  finishBootstrapDriver(driver: TemplateCompilerBootstrapDriverReference): void {
+    if (
+      !driver.isOwnedBy(this.familyAuthority)
+      || this.activeBootstrapDriversByLane.get(driver.lane) !== driver
+    ) {
+      throw new Error(`Compiler bootstrap driver for '${driver.lane.localKey}' is not active in this family.`);
+    }
+    this.requireNoPendingAttempt('finish bootstrap driver');
+    this.activeBootstrapDriversByLane.delete(driver.lane);
+  }
+
+  /** Atomically close hook execution and local discovery before browser-site scheduling starts. */
+  closeInvocationBootstrap(
+    hookBootstrap: TemplateCompilerHookBootstrapResult,
+    localExtraction: TemplateCompilerLocalExtractionResult,
+  ): TemplateCompilerInvocationBootstrapClosure {
+    this.requireMutable();
+    this.requireNoPendingAttempt('close invocation bootstrap');
+    const lane = hookBootstrap.lane;
+    this.requireLane(lane);
+    this.requireOpenLane(lane);
+    if (this.activeBootstrapDriversByLane.has(lane)) {
+      throw new Error(`Compiler invocation lane '${lane.localKey}' bootstrap driver is still active.`);
+    }
+    if (this.bootstrapClosuresByLane.has(lane)) {
+      throw new Error(`Compiler invocation lane '${lane.localKey}' bootstrap is already closed.`);
+    }
+    if (
+      lane.targetPlan != null
+      || (this.contextsByLane.get(lane)?.length ?? 0) > 0
+    ) {
+      throw new Error(`Compiler invocation lane '${lane.localKey}' cannot close bootstrap after target admission.`);
+    }
+    if (!hookBootstrap.isExact() || localExtraction.lane !== lane) {
+      throw new Error(`Compiler invocation lane '${lane.localKey}' requires exact hook and local bootstrap results.`);
+    }
+    if (!localExtraction.isExact()) {
+      throw new Error(
+        `Compiler invocation lane '${lane.localKey}' cannot close bootstrap from '${localExtraction.state}'.`,
+      );
+    }
+    if (
+      localExtraction.failure != null
+      || localExtraction.forestMutationRevision !== this.forest.mutationRevision
+    ) {
+      throw new Error(`Compiler invocation lane '${lane.localKey}' local bootstrap result is not current and exact.`);
+    }
+
+    const expectedOperations = [...hookBootstrap.operations, ...localExtraction.operations];
+    const laneOperations = this.sequence.readLaneOperations(lane);
+    if (
+      !sameOccurrences(laneOperations, expectedOperations)
+      || hookBootstrap.operations.some((operation) =>
+        operation.lane !== lane
+        || operation.operationKind !== TemplateCompilerOperationKind.CompilerHook
+        || operation.completion.completionKind !== TemplateCompilerOperationCompletionKind.Complete
+      )
+      || localExtraction.operations.some((operation) =>
+        operation.lane !== lane
+        || operation.operationKind !== TemplateCompilerOperationKind.LocalTemplateExtraction
+        || operation.completion.completionKind !== TemplateCompilerOperationCompletionKind.Complete
+      )
+    ) {
+      throw new Error(`Compiler invocation lane '${lane.localKey}' bootstrap operation frontier is incoherent.`);
+    }
+
+    const childLaneTransfers = localExtraction.hasExtractedTemplates()
+      ? this.closeExtractedLocalBootstrap(lane, localExtraction)
+      : this.closeNoLocalBootstrap(lane, localExtraction);
+    const closure = new TemplateCompilerInvocationBootstrapClosure(
+      this.familyAuthority,
+      lane,
+      hookBootstrap,
+      localExtraction,
+      localExtraction.forestMutationRevision,
+      laneOperations.length,
+      childLaneTransfers,
+    );
+    this.bootstrapClosuresByLane.set(lane, closure);
+    this.invocationPhases.set(lane, TemplateCompilerInvocationPhase.BootstrapClosed);
+    return closure;
+  }
+
+  bootstrapClosure(
+    lane: TemplateCompilerExecutionLaneReference,
+  ): TemplateCompilerInvocationBootstrapClosure | null {
+    this.requireLane(lane);
+    return this.bootstrapClosuresByLane.get(lane) ?? null;
   }
 
   admitTargetPlan(targetPlan: TemplateCompilerTargetPlan): TemplateCompilerExecutionLaneReference {
@@ -1018,6 +1236,13 @@ export class TemplateCompilerExecutionSession {
     if (this.lanesByLocalKey.has(localKey)) {
       throw new Error(`Compiler execution lane key '${localKey}' is already admitted.`);
     }
+    const carrierLane = this.lanesByCompilerCarrier.get(compilerCarrier) ?? null;
+    const contentLane = this.lanesByCompilerContent.get(compilerContent) ?? null;
+    if (carrierLane != null || contentLane != null) {
+      throw new Error(
+        `Compiler invocation '${localKey}' reuses the carrier/content of '${(carrierLane ?? contentLane)!.localKey}'.`,
+      );
+    }
     if (this.lanes.length === 0 && compilerCarrier !== this.forest.compilerCarrier) {
       throw new Error(`Compiler invocation '${localKey}' cannot precede the root compiler carrier.`);
     }
@@ -1043,6 +1268,8 @@ export class TemplateCompilerExecutionSession {
     );
     this.lanes.push(lane);
     this.lanesByLocalKey.set(localKey, lane);
+    this.lanesByCompilerCarrier.set(compilerCarrier, lane);
+    this.lanesByCompilerContent.set(compilerContent, lane);
     this.bootstrapContexts.push(bootstrapContext);
     this.bootstrapContextsByLane.set(lane, bootstrapContext);
     this.invocationPhases.set(lane, TemplateCompilerInvocationPhase.CompilerHooks);
@@ -1101,6 +1328,11 @@ export class TemplateCompilerExecutionSession {
     this.requireNoPendingAttempt('begin another operation');
     this.requireContext(request.context);
     this.requireOpenLane(request.context.lane);
+    this.requireBootstrapDriver(
+      request.context,
+      request.operationKind,
+      request.bootstrapDriver ?? null,
+    );
     if (request.operationKey.length === 0) {
       throw new Error('Compiler operation requires a non-empty key.');
     }
@@ -1260,6 +1492,9 @@ export class TemplateCompilerExecutionSession {
 
   assertCoherent(): void {
     this.requireNoPendingAttempt('assert family coherence');
+    if (this.activeBootstrapDriversByLane.size > 0) {
+      throw new Error(`Compiler execution family '${this.familyKey}' still has an active bootstrap driver.`);
+    }
     this.mutationAuthority.assertGeneratedInventory();
     if (this.lanes.length === 0) {
       throw new Error(`Compiler execution family '${this.familyKey}' has no root invocation lane.`);
@@ -1271,6 +1506,8 @@ export class TemplateCompilerExecutionSession {
       structuralTargetPlans.length !== plannedLanes.length
       || structuralTargetPlans.some((targetPlan) => !this.lanesByTargetPlan.has(targetPlan))
       || this.lanesByLocalKey.size !== this.lanes.length
+      || this.lanesByCompilerCarrier.size !== this.lanes.length
+      || this.lanesByCompilerContent.size !== this.lanes.length
       || this.invocationPhases.size !== this.lanes.length
       || (structuralExecution == null && plannedLanes.length > 0)
     ) {
@@ -1281,6 +1518,8 @@ export class TemplateCompilerExecutionSession {
     for (const [laneOrdinal, lane] of this.lanes.entries()) {
       const targetPlan = lane.targetPlan;
       const bootstrapContext = this.bootstrapContextsByLane.get(lane) ?? null;
+      const bootstrapClosure = this.bootstrapClosuresByLane.get(lane) ?? null;
+      const invocationPhase = this.invocationPhases.get(lane);
       if (targetPlan == null && !this.terminalOperationsByLane.has(lane)) {
         throw new Error(
           `Compiler execution lane '${lane.localKey}' has no target plan or terminal bootstrap outcome.`,
@@ -1290,13 +1529,28 @@ export class TemplateCompilerExecutionSession {
         !lane.isOwnedBy(this.familyAuthority)
         || lane.ordinal !== laneOrdinal
         || this.lanesByLocalKey.get(lane.localKey) !== lane
-        || !this.invocationPhases.has(lane)
+        || this.lanesByCompilerCarrier.get(lane.compilerCarrier) !== lane
+        || this.lanesByCompilerContent.get(lane.compilerContent) !== lane
+        || invocationPhase == null
         || bootstrapContext == null
         || !bootstrapContext.isOwnedBy(this.familyAuthority)
         || bootstrapContext.lane !== lane
         || bootstrapContext.ordinal !== laneOrdinal
         || this.bootstrapContexts[laneOrdinal] !== bootstrapContext
         || (targetPlan != null && this.lanesByTargetPlan.get(targetPlan) !== lane)
+        || (invocationPhase === TemplateCompilerInvocationPhase.BootstrapClosed && bootstrapClosure == null)
+        || (bootstrapClosure != null && (
+          !bootstrapClosure.isOwnedBy(this.familyAuthority)
+          || bootstrapClosure.lane !== lane
+          || bootstrapClosure.hookBootstrap.lane !== lane
+          || bootstrapClosure.localExtraction.lane !== lane
+          || bootstrapClosure.forestMutationRevision > this.forest.mutationRevision
+          || bootstrapClosure.laneOperationCount > this.sequence.readLaneOperations(lane).length
+          || (
+            invocationPhase !== TemplateCompilerInvocationPhase.BootstrapClosed
+            && invocationPhase !== TemplateCompilerInvocationPhase.TargetExecution
+          )
+        ))
       ) {
         throw new Error(`Compiler execution lane '${lane.localKey}' has incoherent family ownership.`);
       }
@@ -1325,6 +1579,17 @@ export class TemplateCompilerExecutionSession {
           throw new Error(`Compiler execution context '${context.localKey}' has incoherent structural ownership.`);
         }
         visitedContexts.add(context);
+      }
+    }
+    for (const [operation, lane] of this.extractedLanesByOperation) {
+      if (
+        operation.operationKind !== TemplateCompilerOperationKind.LocalTemplateExtraction
+        || operation.completion.completionKind !== TemplateCompilerOperationCompletionKind.Complete
+        || !(operation.target instanceof TemplateCompilerOccurrenceOperationTarget)
+        || operation.target.occurrence !== lane.compilerCarrier
+        || this.lanesByCompilerCarrier.get(lane.compilerCarrier) !== lane
+      ) {
+        throw new Error(`Compiler extraction operation '${operation.operationKey}' has an incoherent child lane.`);
       }
     }
     const structuralContexts = structuralExecution?.readContexts() ?? [];
@@ -1467,6 +1732,105 @@ export class TemplateCompilerExecutionSession {
     }
   }
 
+  private closeNoLocalBootstrap(
+    lane: TemplateCompilerExecutionLaneReference,
+    localExtraction: TemplateCompilerLocalExtractionResult,
+  ): readonly TemplateCompilerExtractedInvocationTransfer[] {
+    if (
+      this.invocationPhases.get(lane) !== TemplateCompilerInvocationPhase.CompilerHooks
+      || localExtraction.operations.length !== 0
+      || localExtraction.completedExtractions.length !== 0
+      || localExtraction.handoff != null
+    ) {
+      throw new Error(`Compiler invocation lane '${lane.localKey}' has an incoherent no-local bootstrap result.`);
+    }
+    return [];
+  }
+
+  private closeExtractedLocalBootstrap(
+    lane: TemplateCompilerExecutionLaneReference,
+    localExtraction: TemplateCompilerLocalExtractionResult,
+  ): readonly TemplateCompilerExtractedInvocationTransfer[] {
+    const handoff = localExtraction.handoff;
+    if (
+      this.invocationPhases.get(lane) !== TemplateCompilerInvocationPhase.LocalTemplateExtraction
+      || handoff == null
+      || !handoff.isFullSuccessReceipt()
+      || handoff.ownerLane !== lane
+      || handoff.entries.length === 0
+      || !sameOccurrences(handoff.entries, localExtraction.completedExtractions)
+    ) {
+      throw new Error(`Compiler invocation lane '${lane.localKey}' has an incoherent extracted-local handoff.`);
+    }
+
+    const transfers: TemplateCompilerExtractedInvocationTransfer[] = [];
+    const childLanes = new Set<TemplateCompilerExecutionLaneReference>();
+    for (const extraction of handoff.entries) {
+      const childLane = extraction.invocationLane;
+      const operation = extraction.carrierDetachmentOperation;
+      const carrierDetachments = operation.mutationBatch.nodeDetachmentMutations;
+      if (childLane == null) {
+        throw new Error(`Extracted local template '${extraction.name}' has no admitted child invocation lane.`);
+      }
+      this.requireLane(childLane);
+      const childContext = this.bootstrapContextsByLane.get(childLane) ?? null;
+      if (
+        childLane === lane
+        || childLanes.has(childLane)
+        || childLane.localKey !== extraction.invocationKey
+        || childLane.targetPlan != null
+        || childLane.compilerCarrier !== extraction.carrier
+        || childLane.compilerContent !== extraction.content
+        || childContext?.compilerCarrier !== extraction.carrier
+        || childContext.compilerContent !== extraction.content
+        || this.invocationPhases.get(childLane) !== TemplateCompilerInvocationPhase.CompilerHooks
+        || this.sequence.readLaneOperations(childLane).length !== 0
+        || !localExtraction.operations.includes(operation)
+        || this.extractedLanesByOperation.get(operation) !== childLane
+        || operation.operationKind !== TemplateCompilerOperationKind.LocalTemplateExtraction
+        || operation.completion.completionKind !== TemplateCompilerOperationCompletionKind.Complete
+        || carrierDetachments.length !== 1
+        || carrierDetachments[0]?.node !== extraction.carrier
+        || carrierDetachments[0].previousParent !== lane.compilerContent
+        || !(operation.target instanceof TemplateCompilerOccurrenceOperationTarget)
+        || operation.target.occurrence !== extraction.carrier
+      ) {
+        throw new Error(`Extracted local template '${extraction.name}' has an incoherent child-lane transfer.`);
+      }
+      childLanes.add(childLane);
+      transfers.push(new TemplateCompilerExtractedInvocationTransfer(extraction, childLane));
+    }
+    return transfers;
+  }
+
+  private beginBootstrapDriver(
+    lane: TemplateCompilerExecutionLaneReference,
+    driverKind: TemplateCompilerBootstrapDriverKind,
+  ): TemplateCompilerBootstrapDriverReference {
+    this.requireMutable();
+    this.requireNoPendingAttempt('begin bootstrap driver');
+    this.requireLane(lane);
+    this.requireOpenLane(lane);
+    if (
+      this.invocationPhases.get(lane) !== TemplateCompilerInvocationPhase.CompilerHooks
+      || lane.targetPlan != null
+      || (this.contextsByLane.get(lane)?.length ?? 0) > 0
+      || this.bootstrapClosuresByLane.has(lane)
+    ) {
+      throw new Error(`Compiler bootstrap driver for '${lane.localKey}' does not start before target admission.`);
+    }
+    if (this.activeBootstrapDriversByLane.has(lane)) {
+      throw new Error(`Compiler invocation lane '${lane.localKey}' already has an active bootstrap driver.`);
+    }
+    const driver = new TemplateCompilerBootstrapDriverReference(
+      this.familyAuthority,
+      lane,
+      driverKind,
+    );
+    this.activeBootstrapDriversByLane.set(lane, driver);
+    return driver;
+  }
+
   private requireMutable(): void {
     if (this.sealed) {
       throw new Error(`Compiler execution family '${this.familyKey}' is sealed.`);
@@ -1558,6 +1922,33 @@ export class TemplateCompilerExecutionSession {
       || this.contextsByLocalKey.get(context.localKey) !== context
     ) {
       throw new Error(`Compiler execution context '${context.localKey}' belongs to another family.`);
+    }
+  }
+
+  private requireBootstrapDriver(
+    context: TemplateCompilerOperationContextReference,
+    operationKind: TemplateCompilerOperationKind,
+    driver: TemplateCompilerBootstrapDriverReference | null,
+  ): void {
+    const active = this.activeBootstrapDriversByLane.get(context.lane) ?? null;
+    if (active == null) {
+      if (driver != null) {
+        throw new Error(`Compiler bootstrap driver for '${context.lane.localKey}' is not active.`);
+      }
+      return;
+    }
+    const expectedKind = active.driverKind === TemplateCompilerBootstrapDriverKind.CompilerHooks
+      ? TemplateCompilerOperationKind.CompilerHook
+      : TemplateCompilerOperationKind.LocalTemplateExtraction;
+    if (
+      !(context instanceof TemplateCompilerBootstrapContextReference)
+      || driver !== active
+      || !active.isOwnedBy(this.familyAuthority)
+      || operationKind !== expectedKind
+    ) {
+      throw new Error(
+        `Compiler invocation lane '${context.lane.localKey}' operation is outside its active '${active.driverKind}' driver.`,
+      );
     }
   }
 
@@ -1703,9 +2094,12 @@ export class TemplateCompilerExecutionSession {
         }
         return;
       }
-      if (current === TemplateCompilerInvocationPhase.TargetExecution) {
+      if (
+        current === TemplateCompilerInvocationPhase.BootstrapClosed
+        || current === TemplateCompilerInvocationPhase.TargetExecution
+      ) {
         throw new Error(
-          `Local-template extraction cannot run after lane '${context.lane.localKey}' entered target execution.`,
+          `Local-template extraction cannot run after lane '${context.lane.localKey}' entered '${current}'.`,
         );
       }
       this.invocationPhases.set(context.lane, TemplateCompilerInvocationPhase.LocalTemplateExtraction);
