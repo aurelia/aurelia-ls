@@ -235,6 +235,14 @@ export class TemplateCompilerReadObservation implements ComputationRead {
   }
 }
 
+/** One compiler-service value paired with the exact canonical read observation that authorized it. */
+export class TemplateCompilerObservedValue<TValue> {
+  constructor(
+    readonly value: TValue,
+    readonly observation: TemplateCompilerReadObservation,
+  ) {}
+}
+
 /**
  * Run-scoped compiler read surface.
  *
@@ -271,9 +279,13 @@ export class TemplateCompilerReadView {
   }
 
   element(name: string): TemplateResolvedResource | null {
+    return this.readElement(name).value;
+  }
+
+  readElement(name: string): TemplateCompilerObservedValue<TemplateResolvedResource | null> {
     const canonical = name.toLowerCase();
     const result = resolvedVisibleResource(this.store, this.world.resourceResolver.el(canonical));
-    this.observe(
+    const observation = this.observe(
       TemplateCompilerReadKind.ElementResource,
       canonical,
       elementResourceResultParts(result),
@@ -281,13 +293,17 @@ export class TemplateCompilerReadView {
         resolvedVisibleResource(store, current.resourceResolver.el(canonical)),
       ),
     );
-    return result;
+    return new TemplateCompilerObservedValue(result, observation);
   }
 
   attribute(name: string): TemplateResolvedResource | null {
+    return this.readAttribute(name).value;
+  }
+
+  readAttribute(name: string): TemplateCompilerObservedValue<TemplateResolvedResource | null> {
     const canonical = name;
     const result = resolvedVisibleResource(this.store, this.world.resourceResolver.attr(canonical));
-    this.observe(
+    const observation = this.observe(
       TemplateCompilerReadKind.AttributeResource,
       canonical,
       attributeResourceResultParts(result),
@@ -295,7 +311,7 @@ export class TemplateCompilerReadView {
         resolvedVisibleResource(store, current.resourceResolver.attr(canonical)),
       ),
     );
-    return result;
+    return new TemplateCompilerObservedValue(result, observation);
   }
 
   bindables(definition: CustomElementDefinition): TemplateElementBindablesInfo;
@@ -324,30 +340,41 @@ export class TemplateCompilerReadView {
   }
 
   bindingCommand(name: string): BindingCommandExecutable | null {
+    return this.readBindingCommand(name).value;
+  }
+
+  readBindingCommand(name: string): TemplateCompilerObservedValue<BindingCommandExecutable | null> {
     const canonical = name;
     const result = this.world.bindingCommandResolver.get(canonical);
-    this.observe(
+    const observation = this.observe(
       TemplateCompilerReadKind.BindingCommand,
       canonical,
       commandResultParts(result),
       (_store, current) => commandResultParts(current.bindingCommandResolver.get(canonical)),
     );
-    return result;
+    return new TemplateCompilerObservedValue(result, observation);
   }
 
   parseAttribute(
     rawName: string,
     rawValue: string,
   ): AttributeParserParseResult {
+    return this.readParsedAttribute(rawName, rawValue).value;
+  }
+
+  readParsedAttribute(
+    rawName: string,
+    rawValue: string,
+  ): TemplateCompilerObservedValue<AttributeParserParseResult> {
     const canonical = revisionDigest([rawName, rawValue]);
     const result = parseAttributeInWorld(this.world, rawName, rawValue);
-    this.observe(
+    const observation = this.observe(
       TemplateCompilerReadKind.AttributePattern,
       canonical,
       patternResultParts(result),
       (_store, current) => patternResultParts(parseAttributeInWorld(current, rawName, rawValue)),
     );
-    return result;
+    return new TemplateCompilerObservedValue(result, observation);
   }
 
   templateOwnerResource(definition: CustomElementDefinition): TemplateVisibleResource | null {
@@ -399,25 +426,39 @@ export class TemplateCompilerReadView {
   }
 
   mapAttribute(node: TemplateAttributeMapperNode, attributeName: string): string | null {
+    return this.readMappedAttribute(node, attributeName).value;
+  }
+
+  readMappedAttribute(
+    node: TemplateAttributeMapperNode,
+    attributeName: string,
+  ): TemplateCompilerObservedValue<string | null> {
     const result = this.world.attributeMapper.map(node, attributeName);
     const canonical = attributeMapperReadKey('map', node, attributeName);
-    this.observe(
+    const observation = this.observe(
       TemplateCompilerReadKind.AttributeMapper,
       canonical,
       attributeMapperResultParts(this.world, result),
       (_store, current) => attributeMapperResultParts(current, current.attributeMapper.map(node, attributeName)),
     );
-    return result;
+    return new TemplateCompilerObservedValue(result, observation);
   }
 
   isTwoWay(node: TemplateAttributeMapperNode, attributeName: string): boolean | null {
+    return this.readTwoWay(node, attributeName).value;
+  }
+
+  readTwoWay(
+    node: TemplateAttributeMapperNode,
+    attributeName: string,
+  ): TemplateCompilerObservedValue<boolean | null> {
     const result = this.world.attributeMapper.isTwoWay(
       node,
       attributeName,
       this.world.callableBindings,
     );
     const canonical = attributeMapperReadKey('two-way', node, attributeName);
-    this.observe(
+    const observation = this.observe(
       TemplateCompilerReadKind.AttributeMapper,
       canonical,
       attributeMapperResultParts(this.world, result),
@@ -426,7 +467,7 @@ export class TemplateCompilerReadView {
         current.attributeMapper.isTwoWay(node, attributeName, current.callableBindings),
       ),
     );
-    return result;
+    return new TemplateCompilerObservedValue(result, observation);
   }
 
   capturePredicate(
@@ -493,9 +534,14 @@ export class TemplateCompilerReadView {
     canonicalKey: string,
     resultParts: readonly string[],
     readCurrentResult: TemplateCompilerResultReader,
-  ): void {
+  ): TemplateCompilerReadObservation {
     const readKey = `${this.world.resourceScope.identityHandle}|${kind}|${canonicalKey}`;
     const observed = readRevision(this.observedScopeRevision, this.observedClosure, resultParts);
+    const existing = this.readsByKey.get(readKey);
+    if (existing != null && existing.observedRevision !== observed.result) {
+      throw new Error(`Compiler read ${readKey} produced conflicting revisions in one compilation run.`);
+    }
+    if (existing != null) return existing;
     const observation = new TemplateCompilerReadObservation(
       kind,
       readKey,
@@ -507,11 +553,8 @@ export class TemplateCompilerReadView {
       () => this.currentState.readRevision(readCurrentResult),
       readCurrentResult,
     );
-    const existing = this.readsByKey.get(readKey);
-    if (existing != null && existing.observedRevision !== observation.observedRevision) {
-      throw new Error(`Compiler read ${readKey} produced conflicting revisions in one compilation run.`);
-    }
     this.readsByKey.set(readKey, observation);
+    return observation;
   }
 }
 
