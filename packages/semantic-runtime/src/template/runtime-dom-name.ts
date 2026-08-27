@@ -58,6 +58,17 @@ export function runtimeAsElementResourceName(value: string): string {
   return value.toLowerCase();
 }
 
+/** Effective TemplateCompiler element lookup, preserving present-empty `as-element` separately from absence. */
+export function runtimeElementLookupName(
+  tagName: string,
+  namespace: HtmlRuntimeNamespace | undefined,
+  asElementValue: string | null,
+): string {
+  return asElementValue == null
+    ? runtimeElementResourceName(tagName, namespace)
+    : runtimeAsElementResourceName(asElementValue);
+}
+
 /** DOM attribute spelling seen by Aurelia after the browser parses authored markup. */
 export function runtimeAttributeName(
   attributeName: string,

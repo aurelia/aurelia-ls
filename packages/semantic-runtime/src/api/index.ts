@@ -91,6 +91,7 @@ export {
 export {
   runtimeAsElementResourceName,
   runtimeAttributeName,
+  runtimeElementLookupName,
   runtimeElementResourceName,
   runtimeLocalName,
   runtimeNodeName,

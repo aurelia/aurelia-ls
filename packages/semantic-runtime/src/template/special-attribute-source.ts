@@ -1,9 +1,8 @@
 import { authoredTemplateAttributeText, type AuthoredTemplateAttributeSource } from './authored-template-source.js';
 import type { HtmlRuntimeNamespace } from './runtime-dom-name.js';
 import {
-  runtimeAsElementResourceName,
   runtimeAttributeName,
-  runtimeElementResourceName,
+  runtimeElementLookupName,
 } from './runtime-dom-name.js';
 
 /** Framework-owned template attributes consumed by the compiler before ordinary binding/resource classification. */
@@ -54,9 +53,7 @@ export function templateElementLookupNameFromAttributes(
     TemplateSpecialAttributeName.AsElement,
     namespace,
   );
-  return asElement == null
-    ? runtimeElementResourceName(tagName, namespace)
-    : runtimeAsElementResourceName(asElement);
+  return runtimeElementLookupName(tagName, namespace, asElement);
 }
 
 /** Serialize an `as-element` compiler-control attribute. */

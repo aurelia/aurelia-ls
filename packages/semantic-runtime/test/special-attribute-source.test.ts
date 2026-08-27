@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'vitest';
 
 import { HtmlNamespaceKind } from '../src/template/html-ir.js';
+import { runtimeElementLookupName } from '../src/template/runtime-dom-name.js';
 import {
   templateElementLookupNameFromAttributes,
   TemplateSpecialAttributeName,
@@ -8,6 +9,8 @@ import {
 
 describe('template element lookup name', () => {
   test('distinguishes an absent as-element attribute from an empty present value', () => {
+    expect(runtimeElementLookupName('DIV', undefined, null)).toBe('div');
+    expect(runtimeElementLookupName('DIV', undefined, '')).toBe('');
     expect(templateElementLookupNameFromAttributes('DIV', [])).toBe('div');
     expect(templateElementLookupNameFromAttributes('DIV', [{
       rawName: TemplateSpecialAttributeName.AsElement,
