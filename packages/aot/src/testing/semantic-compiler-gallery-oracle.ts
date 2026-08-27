@@ -18,11 +18,14 @@ import {
 import {
   BrowserEffectiveTemplateMaterializer,
   executeDeterministicTemplateCompiler,
+  observeTemplateCompilerRootSiteCursor,
   parseBrowserTemplateFragmentDraft,
   selectBrowserTemplateCompilerCarrier,
   TemplateCompilerCommentOccurrence,
   TemplateCompilerElementOccurrence,
   TemplateCompilerTextOccurrence,
+  type BrowserEffectiveTemplateEmission,
+  type TemplateCompilerRootSiteCursorObservation,
   type TemplateCompilerDeterministicExecutionReasonKind,
   type TemplateCompilerDeterministicExecutionState,
 } from "@aurelia-ls/semantic-runtime/browser-template";
@@ -39,18 +42,21 @@ import {
 
 type SemanticTemplateResource = SemanticApp["emission"]["templates"]["resources"][number];
 type BrowserMaterializationContext = ConstructorParameters<typeof BrowserEffectiveTemplateMaterializer>[0];
+type CompilerReadStore = Parameters<typeof observeTemplateCompilerRootSiteCursor>[0]["compilerReadStore"];
 
 class SemanticCompilerGalleryObservationProjection {
   constructor(
     readonly observations: readonly SemanticCompilerGalleryObservation[],
     readonly browserMaterializationMs: number,
     readonly normalizedStructuralReplayMs: number,
+    readonly siteCursorMs: number,
   ) {}
 }
 
 class NormalizedStructuralReplayProjection {
   constructor(
     readonly observation: SemanticCompilerGalleryNormalizedStructuralReplay,
+    readonly browserTemplate: BrowserEffectiveTemplateEmission,
     readonly browserMaterializationMs: number,
     readonly replayMs: number,
   ) {}
@@ -136,6 +142,7 @@ export class SemanticCompilerGalleryObservation {
     readonly issues: readonly SemanticCompilerGalleryIssueRow[],
     readonly openSeams: readonly SemanticCompilerGalleryOpenSeamRow[],
     readonly normalizedStructuralReplay: SemanticCompilerGalleryNormalizedStructuralReplay,
+    readonly siteCursor: TemplateCompilerRootSiteCursorObservation,
   ) {}
 }
 
@@ -271,7 +278,7 @@ export class SemanticCompilerGalleryOracle {
       });
       let projection: SemanticCompilerGalleryObservationProjection;
       try {
-        projection = observationsFor(app, plan.admitted, replayRun);
+        projection = observationsFor(app, plan.admitted, replayRun, runtime.workspace.store);
       } finally {
         replayRun.abort();
       }
@@ -308,11 +315,13 @@ export class SemanticCompilerGalleryOracle {
           "semantic.analysis": analyzedAt - openedAt,
           "semantic.browser-template-materialization": projection.browserMaterializationMs,
           "semantic.normalized-structural-replay": projection.normalizedStructuralReplayMs,
+          "semantic.site-cursor": projection.siteCursorMs,
           "semantic.projection": Math.max(
             0,
             projectedAt - analyzedAt
               - projection.browserMaterializationMs
-              - projection.normalizedStructuralReplayMs,
+              - projection.normalizedStructuralReplayMs
+              - projection.siteCursorMs,
           ),
         },
       );
@@ -326,6 +335,7 @@ function observationsFor(
   app: SemanticApp,
   cases: readonly SemanticCompilerGalleryCase[],
   browserMaterialization: BrowserMaterializationContext,
+  compilerReadStore: CompilerReadStore,
 ): SemanticCompilerGalleryObservationProjection {
   const resourcesByName = new Map<string, SemanticTemplateResource>();
   for (const resource of app.emission.templates.resources) {
@@ -337,6 +347,7 @@ function observationsFor(
   }
   let browserMaterializationMs = 0;
   let normalizedStructuralReplayMs = 0;
+  let siteCursorMs = 0;
   const observations = cases.flatMap((candidate) => {
     const definition = candidate.candidate.world.entry;
     if (definition.kind !== "compile") return [];
@@ -346,12 +357,23 @@ function observationsFor(
     const replay = normalizedStructuralReplayFor(resource, candidate, browserMaterialization);
     browserMaterializationMs += replay.browserMaterializationMs;
     normalizedStructuralReplayMs += replay.replayMs;
-    return [observationFor(resource, candidate, replay.observation)];
+    const cursorStartedAt = performance.now();
+    const siteCursor = observeTemplateCompilerRootSiteCursor({
+      observationKey: candidate.candidate.id,
+      compilation: resource.compilation,
+      browserEmission: replay.browserTemplate,
+      currentFrontDoor: app.emission.templates.frontDoor,
+      publication: browserMaterialization,
+      compilerReadStore,
+    });
+    siteCursorMs += performance.now() - cursorStartedAt;
+    return [observationFor(resource, candidate, replay.observation, siteCursor)];
   });
   return new SemanticCompilerGalleryObservationProjection(
     observations,
     browserMaterializationMs,
     normalizedStructuralReplayMs,
+    siteCursorMs,
   );
 }
 
@@ -407,6 +429,7 @@ function normalizedStructuralReplayFor(
   };
   return new NormalizedStructuralReplayProjection(
     observation,
+    browserTemplate,
     browserFinishedAt - browserStartedAt,
     replayFinishedAt - browserFinishedAt,
   );
@@ -641,6 +664,7 @@ function observationFor(
   resource: SemanticTemplateResource,
   galleryCase: SemanticCompilerGalleryCase,
   normalizedStructuralReplay: SemanticCompilerGalleryNormalizedStructuralReplay,
+  siteCursor: TemplateCompilerRootSiteCursorObservation,
 ): SemanticCompilerGalleryObservation {
   const compilation = resource.compilation;
   const emission = compilation.compiledTemplate;
@@ -718,7 +742,15 @@ function observationFor(
     galleryCase.candidate.id,
     galleryCase.candidate.family,
     compilation.definition.name,
-    digest(canonicalCompilerJson({ compilerProfile, compiledTemplate, authored, issues, openSeams, normalizedStructuralReplay })),
+    digest(canonicalCompilerJson({
+      compilerProfile,
+      compiledTemplate,
+      authored,
+      issues,
+      openSeams,
+      normalizedStructuralReplay,
+      siteCursor,
+    })),
     expectedJitProduct(galleryCase.candidate),
     galleryCase.worldFingerprint,
     galleryCase.anticipatedWorldDifferences,
@@ -730,6 +762,7 @@ function observationFor(
     issues,
     openSeams,
     normalizedStructuralReplay,
+    siteCursor,
   );
 }
 

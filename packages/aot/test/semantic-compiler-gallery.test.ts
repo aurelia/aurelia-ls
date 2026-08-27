@@ -3,8 +3,12 @@ import { fileURLToPath } from "node:url";
 
 import { describe, expect, test } from "vitest";
 
+import { TemplateCompilerRootSiteCursorObservationAdmissionState } from "@aurelia-ls/semantic-runtime/browser-template";
 import { JIT_ORACLE_CASES } from "../src/testing/jit-oracle-case-registry.js";
-import { SemanticCompilerGalleryOracle } from "../src/testing/semantic-compiler-gallery-oracle.js";
+import {
+  type SemanticCompilerGalleryObservation,
+  SemanticCompilerGalleryOracle,
+} from "../src/testing/semantic-compiler-gallery-oracle.js";
 import {
   SemanticCompilerGalleryPlanner,
   SemanticCompilerGalleryUnsupportedReason,
@@ -72,6 +76,7 @@ describe("semantic compiler gallery", () => {
     expect(run.stages["semantic.analysis"]).toBeGreaterThan(0);
     expect(run.stages["semantic.browser-template-materialization"]).toBeGreaterThan(0);
     expect(run.stages["semantic.normalized-structural-replay"]).toBeGreaterThan(0);
+    expect(run.stages["semantic.site-cursor"]).toBeGreaterThan(0);
 
     const observations = new Map(run.observations.map((observation) => [observation.caseId, observation]));
     const replayStates = Object.fromEntries(["exact", "open", "refused"].map((state) => [
@@ -174,6 +179,146 @@ describe("semantic compiler gallery", () => {
     expect(observations.get("interaction.browser.foster-target-order")?.declaredEffects).toContainEqual(
       expect.objectContaining({ kind: "browser-recovery", conservation: "open" }),
     );
+
+    expect([...new Set(run.observations.map((observation) => observation.siteCursor.admissionState))].sort())
+      .toEqual(["cursor-transcript", "local-refused"]);
+    const transcriptCursors = run.observations.flatMap((observation) =>
+      observation.siteCursor.admissionState
+        === TemplateCompilerRootSiteCursorObservationAdmissionState.CursorTranscript
+        ? [observation.siteCursor]
+        : []
+    );
+    expect([...new Set(transcriptCursors.map((cursor) => cursor.frontierKind ?? "complete"))].sort()).toEqual([
+      "after-attributes-before-template-controller",
+      "at-live-attribute-relowering",
+      "authored-precedent-mismatch",
+      "before-process-content",
+      "complete",
+      "invalid-surrogate-attribute",
+      "let-element-lowering-required",
+      "surrogate-classification-required",
+    ]);
+    expect([...new Set(transcriptCursors.map((cursor) => cursor.ledgerState))].sort())
+      .toEqual(["all-sites-accounted", "open"]);
+    for (const cursor of transcriptCursors) {
+      expect(cursor.authoredBundleCount).toBe(cursor.spendCount + cursor.rawUnspentCount);
+      expect(cursor.rawUnspentCount).toBe(cursor.remainderCount + cursor.blockedByFrontierCount);
+      expect(sumCounts(cursor.eventKindCounts)).toBe(cursor.nextTranscriptOrdinal);
+      expect(cursor.nextSiteEventOrdinal).toBe(
+        (cursor.spendDispositionCounts["browser-compatible"] ?? 0)
+        + (cursor.spendDispositionCounts["browser-relowering-required"] ?? 0)
+        + sumCounts(cursor.occurrenceOnlyDispositionCounts)
+      );
+      expect(cursor.conflictCount).toBe(0);
+      expect(cursor.currentness).toEqual({
+        exact: true,
+        forestMutationRevisionDelta: 0,
+        globalOperationCountDelta: 0,
+      });
+      expect(cursor.eventDigest).toMatch(/^sha256:[0-9a-f]{64}$/u);
+      expect(cursor.reasonKinds).toEqual([]);
+      expect(cursor.eventKindCounts.frontier ?? 0).toBe(cursor.frontierKind == null ? 0 : 1);
+      if (cursor.frontierKind == null) {
+        expect(cursor.phaseKinds.at(-1)).toBe("surrogate-end");
+      } else {
+        expect(cursor.frontierPhase).toBe(cursor.phaseKinds.at(-1));
+      }
+    }
+
+    expect(observations.get("attribute-owner-state.interpolation-first")?.siteCursor).toMatchObject({
+      admissionState: "cursor-transcript",
+      frontierKind: null,
+      ledgerState: "all-sites-accounted",
+      spendDispositionCounts: { "browser-compatible": 2 },
+    });
+    expect(observations.get("diagnostic.local.duplicate-bindable-attribute")?.siteCursor).toMatchObject({
+      admissionState: "local-refused",
+      reasonKinds: ["local-template-bindable-duplicate"],
+      graphState: "graph-exact",
+      hookState: "exact",
+      hookBoundaryEntryOrdinal: null,
+      localState: "refused",
+      localCompletedExtractionCount: 0,
+      localExtractedTemplateCount: 0,
+      bindingState: null,
+      localIssueKind: "local-template-bindable-duplicate",
+      localFrameworkErrorCode: "AUR0712",
+    });
+    expect(observations.get("diagnostic.surrogate.unique-id")?.siteCursor).toMatchObject({
+      frontierKind: "invalid-surrogate-attribute",
+      frontierPhase: "surrogate-validation-start",
+      spendCount: 0,
+      blockedByFrontierCount: 1,
+    });
+    expect(observations.get("interaction.browser.duplicate-binding-elision")?.siteCursor).toMatchObject({
+      frontierKind: "at-live-attribute-relowering",
+      spendDispositionCounts: { "browser-relowering-required": 1 },
+      remainderKindCounts: { "html-tree-builder-dropped": 1 },
+    });
+    expect(observations.get("interaction.browser.foster-target-order")?.siteCursor).toMatchObject({
+      frontierKind: null,
+      occurrenceOnlyDispositionCounts: {
+        "static-text-pass-through": 2,
+        "browser-implied-element-pass-through": 1,
+      },
+    });
+    expect(observations.get("interaction.generated.double-sibling-if")?.siteCursor).toMatchObject({
+      frontierKind: "after-attributes-before-template-controller",
+      frontierPhase: "content-start",
+    });
+    expect(observations.get("interaction.browser.paragraph-controller-topology")?.siteCursor).toMatchObject({
+      frontierKind: "authored-precedent-mismatch",
+      spendCount: 0,
+      blockedByFrontierCount: 3,
+    });
+    expect(observations.get("let.bind-interpolation")?.siteCursor).toMatchObject({
+      frontierKind: "let-element-lowering-required",
+      spendCount: 0,
+      blockedByFrontierCount: 2,
+    });
+    expect(observations.get("projection.au-slot.interpolation-fallback")?.siteCursor).toMatchObject({
+      frontierKind: "before-process-content",
+      frontierPhase: "content-start",
+    });
+    expect(observations.get("surrogate.static-class")?.siteCursor).toMatchObject({
+      frontierKind: "surrogate-classification-required",
+      frontierPhase: "surrogate-validation-end",
+    });
+    const tenHoleCursor = observations.get("interpolation.text.ten-hole")?.siteCursor;
+    expect(tenHoleCursor?.admissionState)
+      .toBe(TemplateCompilerRootSiteCursorObservationAdmissionState.CursorTranscript);
+    if (tenHoleCursor?.admissionState !== TemplateCompilerRootSiteCursorObservationAdmissionState.CursorTranscript) {
+      throw new Error("Expected ten-hole cursor transcript.");
+    }
+    expect(tenHoleCursor.frontierKind).toBeNull();
+    expect(tenHoleCursor.eventKindCounts.text).toBe(1);
+    expect(tenHoleCursor.spendCount).toBe(1);
+    expect(tenHoleCursor.nextSiteEventOrdinal).toBe(1);
+    expect(observations.get("diagnostic.slot.without-shadow")).toMatchObject({
+      compiledTemplate: { state: "invalid" },
+      issues: [{ issueKind: "slot-without-shadow-dom", frameworkErrorCode: "AUR0717" }],
+      siteCursor: {
+        admissionState: "cursor-transcript",
+        frontierKind: null,
+        ledgerState: "all-sites-accounted",
+        conflictCount: 0,
+      },
+    });
+    expect(cursorDigest(observations, "attribute-owner-state.interpolation-first"))
+      .not.toBe(cursorDigest(observations, "attribute-owner-state.binding-first"));
+    expect(cursorDigest(observations, "native-order.checkbox.checked-before-model"))
+      .not.toBe(cursorDigest(observations, "native-order.checkbox.model-before-checked"));
+
+    for (const observation of run.observations) {
+      const portable = observation.siteCursor;
+      expect(Object.getPrototypeOf(portable)).toBe(Object.prototype);
+      const roundTripped: unknown = JSON.parse(JSON.stringify(portable));
+      expect(roundTripped).toEqual(portable);
+      const serialized = JSON.stringify(portable);
+      for (const forbidden of ["binding", "execution", "forest", "compilerReads", "preWalkAuthority", "browserEmission"]) {
+        expect(serialized).not.toContain(`"${forbidden}"`);
+      }
+    }
   }, 15_000);
 
   test("marks an entirely unsupported selection as having no semantic currentness proof", async () => {
@@ -193,3 +338,17 @@ describe("semantic compiler gallery", () => {
     });
   });
 });
+
+function sumCounts(counts: Readonly<Record<string, number>>): number {
+  return Object.values(counts).reduce((sum, count) => sum + count, 0);
+}
+
+function cursorDigest(
+  observations: ReadonlyMap<string, SemanticCompilerGalleryObservation>,
+  caseId: string,
+): string | null {
+  const cursor = observations.get(caseId)?.siteCursor;
+  return cursor?.admissionState === TemplateCompilerRootSiteCursorObservationAdmissionState.CursorTranscript
+    ? cursor.eventDigest
+    : null;
+}

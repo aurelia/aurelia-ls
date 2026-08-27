@@ -47,6 +47,15 @@ describe("AOT semantic compiler oracle CLI", () => {
     );
     expect(duplicate?.compiledTemplate.rootRows[0]?.instructionKinds)
       .toEqual(["property-binding", "property-binding"]);
+    expect(duplicate?.siteCursor).toMatchObject({
+      admissionState: "cursor-transcript",
+      frontierKind: "at-live-attribute-relowering",
+      currentness: {
+        exact: true,
+        forestMutationRevisionDelta: 0,
+        globalOperationCountDelta: 0,
+      },
+    });
     expect(receipt).not.toHaveProperty("satisfiedClaimIds");
   }, 15_000);
 });
@@ -81,6 +90,15 @@ interface SemanticCompilerOracleReceipt {
       readonly caseId: string;
       readonly compiledTemplate: {
         readonly rootRows: readonly { readonly instructionKinds: readonly string[] }[];
+      };
+      readonly siteCursor: {
+        readonly admissionState: string;
+        readonly frontierKind?: string | null;
+        readonly currentness?: {
+          readonly exact: boolean;
+          readonly forestMutationRevisionDelta: number;
+          readonly globalOperationCountDelta: number;
+        };
       };
     }[];
     readonly missingCaseIds: readonly string[];
