@@ -98,7 +98,10 @@ export class TemplateCompilerLocalExtractionHandoff {
 
 export class TemplateCompilerLocalExtractionResult {
   constructor(
+    readonly lane: TemplateCompilerExecutionLaneReference,
     readonly state: TemplateCompilerLocalExtractionState,
+    /** Exact forest epoch after the extraction boundary closed. */
+    readonly forestMutationRevision: number,
     readonly operations: readonly TemplateCompilerOperation[],
     /** Completed candidates remain visible on refusal, but own no admitted child lane and are not publishable. */
     readonly completedExtractions: readonly TemplateCompilerExtractedLocalTemplate[],
@@ -179,7 +182,9 @@ class TemplateCompilerLocalExtractionFrame {
     );
     if (candidates.length === 0) {
       return new TemplateCompilerLocalExtractionResult(
+        this.request.lane,
         TemplateCompilerLocalExtractionState.NoLocalTemplates,
+        this.request.execution.forest.mutationRevision,
         [],
         [],
         null,
@@ -224,7 +229,9 @@ class TemplateCompilerLocalExtractionFrame {
     });
     const handoff = new TemplateCompilerLocalExtractionHandoff(this.request.lane, entries);
     return new TemplateCompilerLocalExtractionResult(
+      this.request.lane,
       TemplateCompilerLocalExtractionState.Extracted,
+      this.request.execution.forest.mutationRevision,
       this.readNewOperations(),
       entries,
       handoff,
@@ -428,7 +435,9 @@ class TemplateCompilerLocalExtractionFrame {
       causeHandles,
     );
     return new TemplateCompilerLocalExtractionResult(
+      this.request.lane,
       TemplateCompilerLocalExtractionState.Refused,
+      this.request.execution.forest.mutationRevision,
       this.readNewOperations(),
       this.partialExtractions(),
       null,
@@ -454,7 +463,9 @@ class TemplateCompilerLocalExtractionFrame {
       causeHandles,
     );
     return new TemplateCompilerLocalExtractionResult(
+      this.request.lane,
       TemplateCompilerLocalExtractionState.Abrupt,
+      this.request.execution.forest.mutationRevision,
       this.readNewOperations(),
       this.partialExtractions(),
       null,

@@ -42,6 +42,8 @@ describe('template compiler local extraction', () => {
       const result = fixture.execute();
 
       expect(result.state).toBe(TemplateCompilerLocalExtractionState.Extracted);
+      expect(result.lane).toBe(fixture.lane);
+      expect(result.forestMutationRevision).toBe(fixture.forest.mutationRevision);
       expect(result.failure).toBeNull();
       expect(result.handoff?.isFullSuccessReceipt()).toBe(true);
       expect(result.completedExtractions.map((entry) => entry.name)).toEqual(['first', 'second']);
@@ -90,7 +92,9 @@ describe('template compiler local extraction', () => {
     try {
       const result = fixture.execute();
       expect(result).toMatchObject({
+        lane: fixture.lane,
         state: TemplateCompilerLocalExtractionState.NoLocalTemplates,
+        forestMutationRevision: fixture.forest.mutationRevision,
         operations: [],
         completedExtractions: [],
         handoff: null,
