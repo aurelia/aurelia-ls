@@ -29,7 +29,6 @@ import {
 import type { ExpressionType } from '../expression/ast.js';
 import { hasInterpolationStart } from '../expression/expression-boundary-scanner.js';
 import { CustomAttributeDefinition } from '../resources/custom-attribute-definition.js';
-import { ResourceDefinitionKind } from '../resources/resource-kind.js';
 import type { AttributeClassificationEmission } from './attribute-classification-materializer.js';
 import {
   type AttributeClassification,
@@ -37,6 +36,10 @@ import {
   type AttributeSyntax,
 } from './attribute-syntax.js';
 import type { AttributeSyntaxParseEmission } from './attribute-syntax-materializer.js';
+import {
+  selectTemplateAttributeValueSite,
+  TemplateAttributeEmptyValueBindingPolicy,
+} from './attribute-value-site-selection.js';
 import type {
   TemplateBindableReference,
 } from './compiler-world-reference.js';
@@ -250,7 +253,7 @@ export class TemplateValueSiteMaterializer {
       return null;
     }
     const targetSource = sourceSpanAddressForAddress(this.store, syntax.targetSourceAddressHandle);
-    const expression = spreadValueExpression(syntax);
+    const expression = pending.rawValue;
     if (targetSource == null || !syntax.target.startsWith('...') || expression.length === 0) {
       return null;
     }
@@ -362,160 +365,43 @@ export function templateAttributeValueSiteExpectation(
   attribute: HtmlAttribute,
   selection: TemplateValueSiteSelectionContext,
 ): TemplateValueSiteExpectation | null {
-  if (classification.bindingCommand != null) {
-    return new TemplateValueSiteExpectation(
-      TemplateValueSiteKind.BindingCommandValue,
-      syntax.rawValue,
-      null,
-      classification.ownerNode,
-      attribute.toReference(),
-      syntax,
-      classification,
-      classification.bindingCommand,
-      classification.bindable,
-      attribute.valueAddressHandle ?? attribute.sourceAddressHandle,
-    );
-  }
-
-  switch (classification.classificationKind) {
-    case AttributeClassificationKind.Plain:
-      return plainAttributeValueSite(classification, syntax, attribute);
-    case AttributeClassificationKind.Bindable:
-      return interpolationAttributeSite(
-        TemplateValueSiteKind.BindableValue,
-        classification,
-        syntax,
-        attribute,
-      );
-    case AttributeClassificationKind.CustomAttribute:
-    case AttributeClassificationKind.TemplateController:
-      return customAttributeOrTemplateControllerSite(classification, syntax, attribute, selection);
-    case AttributeClassificationKind.Captured:
-      return interpolationAttributeSite(
-        TemplateValueSiteKind.CapturedValue,
-        classification,
-        syntax,
-        attribute,
-      );
-    case AttributeClassificationKind.Spread:
-      if (syntax.target === '...$attrs') {
-        return null;
-      }
-      return new TemplateValueSiteExpectation(
-        TemplateValueSiteKind.SpreadValue,
-        spreadValueExpression(syntax),
-        'IsProperty',
-        classification.ownerNode,
-        attribute.toReference(),
-        syntax,
-        classification,
-        null,
-        null,
-        attribute.valueAddressHandle ?? attribute.sourceAddressHandle,
-      );
-    case AttributeClassificationKind.BindingCommand:
-    case AttributeClassificationKind.CompilerControl:
-    case AttributeClassificationKind.Ref:
-    case AttributeClassificationKind.Open:
-      return null;
-  }
-}
-
-function plainAttributeValueSite(
-  classification: AttributeClassification,
-  syntax: AttributeSyntax,
-  attribute: HtmlAttribute,
-): TemplateValueSiteExpectation | null {
-  return hasInterpolationOpener(syntax.rawValue)
-    ? interpolationAttributeSite(
-      TemplateValueSiteKind.PlainAttributeInterpolation,
-      classification,
-      syntax,
-      attribute,
-    )
+  const definition = classification.bindingCommand == null
+    && (classification.classificationKind === AttributeClassificationKind.CustomAttribute
+      || classification.classificationKind === AttributeClassificationKind.TemplateController)
+    ? selection.currentDefinition(classification.resource)
     : null;
+  const selected = selectTemplateAttributeValueSite({
+    classificationKind: classification.classificationKind,
+    resourceKind: classification.resourceKind,
+    definition: definition instanceof CustomAttributeDefinition ? definition : null,
+    rawValue: syntax.rawValue,
+    target: syntax.target,
+    hasBindingCommand: classification.bindingCommand != null,
+    // Preserve the authored materializer's current publication shape while the element/spread policy is characterized.
+    emptyValueBindingPolicy: TemplateAttributeEmptyValueBindingPolicy.BindPrimary,
+  });
+  if (selected == null) {
+    return null;
+  }
+  return new TemplateValueSiteExpectation(
+    selected.siteKind,
+    selected.rawValue,
+    selected.entryFamily,
+    classification.ownerNode,
+    attribute.toReference(),
+    syntax,
+    classification,
+    selected.siteKind === TemplateValueSiteKind.BindingCommandValue
+      ? classification.bindingCommand
+      : null,
+    selected.siteKind === TemplateValueSiteKind.SpreadValue
+      ? null
+      : classification.bindable,
+    attribute.valueAddressHandle ?? attribute.sourceAddressHandle,
+  );
 }
 
 function hasInterpolationOpener(value: string): boolean {
   // Interpolation parsing is only meaningful after an unescaped grammar opener appears; the parser still owns the full hole grammar.
   return hasInterpolationStart(value);
-}
-
-function interpolationAttributeSite(
-  siteKind: TemplateValueSiteKind,
-  classification: AttributeClassification,
-  syntax: AttributeSyntax,
-  attribute: HtmlAttribute,
-): TemplateValueSiteExpectation {
-  return new TemplateValueSiteExpectation(
-    siteKind,
-    syntax.rawValue,
-    'Interpolation',
-    classification.ownerNode,
-    attribute.toReference(),
-    syntax,
-    classification,
-    null,
-    classification.bindable,
-    attribute.valueAddressHandle ?? attribute.sourceAddressHandle,
-  );
-}
-
-function customAttributeOrTemplateControllerSite(
-  classification: AttributeClassification,
-  syntax: AttributeSyntax,
-  attribute: HtmlAttribute,
-  selection: TemplateValueSiteSelectionContext,
-): TemplateValueSiteExpectation {
-  const definition = selection.currentDefinition(classification.resource);
-  const isMultiBinding = definition instanceof CustomAttributeDefinition
-    && !definition.noMultiBindings
-    && hasInlineBindings(syntax.rawValue);
-  if (isMultiBinding) {
-    return new TemplateValueSiteExpectation(
-      TemplateValueSiteKind.MultiBindingValue,
-      syntax.rawValue,
-      null,
-      classification.ownerNode,
-      attribute.toReference(),
-      syntax,
-      classification,
-      null,
-      classification.bindable,
-      attribute.valueAddressHandle ?? attribute.sourceAddressHandle,
-    );
-  }
-  return interpolationAttributeSite(
-    classification.resourceKind === ResourceDefinitionKind.TemplateController
-      ? TemplateValueSiteKind.TemplateControllerValue
-      : TemplateValueSiteKind.CustomAttributeValue,
-    classification,
-    syntax,
-    attribute,
-  );
-}
-
-function spreadValueExpression(
-  syntax: AttributeSyntax,
-): string {
-  return syntax.target === '...$bindables'
-    ? syntax.rawValue
-    : syntax.target.slice(3);
-}
-
-function hasInlineBindings(rawValue: string): boolean {
-  const len = rawValue.length;
-  let i = 0;
-  while (i < len) {
-    const ch = rawValue.charCodeAt(i);
-    if (ch === 92) {
-      ++i;
-    } else if (ch === 58) {
-      return true;
-    } else if (ch === 36 && rawValue.charCodeAt(i + 1) === 123) {
-      return false;
-    }
-    ++i;
-  }
-  return false;
 }

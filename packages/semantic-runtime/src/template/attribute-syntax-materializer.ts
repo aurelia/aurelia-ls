@@ -36,6 +36,10 @@ import {
   type AttributeParserParseResult,
 } from './attribute-syntax.js';
 import {
+  AttributeSyntaxSiteParseInput,
+  parseAttributeSyntaxSite,
+} from './attribute-syntax-parsing.js';
+import {
   attributeSyntaxPartSources,
   type AttributeSyntaxPartSources,
 } from './attribute-syntax-source.js';
@@ -49,7 +53,6 @@ import {
 } from './html-ir.js';
 import type { HtmlParseEmission } from './html-parse-materializer.js';
 import { TemplateProductDetails } from './product-details.js';
-import { runtimeAttributeName } from './runtime-dom-name.js';
 
 export interface AttributeSyntaxParseRequest {
   /** Store-local key for this attribute-syntax parse pass. */
@@ -137,13 +140,14 @@ export class AttributeSyntaxLoweringSession {
     }
     this.occupiedSiteKeys.add(input.localKey);
 
-    // TemplateCompiler receives DOM Attr.name after template.innerHTML parsing, not the
-    // source spelling. Keep the authored HtmlAttribute as source authority while feeding
-    // the runtime-shaped parser the browser-normalized name it actually observes.
-    const parse = this.input.compilerReads.parseAttribute(
-      runtimeAttributeName(input.attribute.rawName, input.namespace),
-      input.attribute.rawValue,
-    );
+    const parse = parseAttributeSyntaxSite(
+      this.input.compilerReads,
+      AttributeSyntaxSiteParseInput.authored(
+        input.attribute.rawName,
+        input.attribute.rawValue,
+        input.namespace,
+      ),
+    ).parse;
     const partSources = attributeSyntaxPartSources(
       this.store,
       input.localKey,

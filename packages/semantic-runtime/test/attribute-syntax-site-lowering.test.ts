@@ -26,8 +26,16 @@ import {
   type AuthoredAttributeSyntaxSiteEmission,
   AttributeSyntaxMaterializer,
 } from '../src/template/attribute-syntax-materializer.js';
+import {
+  AttributeSyntaxParseInputKind,
+  AttributeSyntaxSiteParseInput,
+  parseAttributeSyntaxSite,
+} from '../src/template/attribute-syntax-parsing.js';
 import type { TemplateCompilerWorldEmission } from '../src/template/compiler-world-materializer.js';
-import type { TemplateCompilerReadView } from '../src/template/compiler-read-view.js';
+import type {
+  TemplateCompilerObservedValue,
+  TemplateCompilerReadView,
+} from '../src/template/compiler-read-view.js';
 import type { TemplateCompilationUnit } from '../src/template/compilation-unit.js';
 import {
   HtmlAttribute,
@@ -48,19 +56,27 @@ class PublicationProbe {
 
 class CompilerReadProbe {
   readonly calls: Array<readonly [rawName: string, rawValue: string]> = [];
+  readonly observation = { readKey: 'attribute-syntax-probe' };
 
   constructor(
     private readonly executableProductHandle: ReturnType<KernelHandleFactory['product']>,
   ) {}
 
-  parseAttribute(rawName: string, rawValue: string): AttributeParserParseResult {
+  readParsedAttribute(
+    rawName: string,
+    rawValue: string,
+  ): TemplateCompilerObservedValue<AttributeParserParseResult> {
     this.calls.push([rawName, rawValue]);
     const execution = rawName.endsWith('.bind')
       ? AttributePatternExecutionResult.pattern(rawName, rawValue, rawName.slice(0, -5), 'bind')
       : AttributePatternExecutionResult.plain(rawName, rawValue);
-    return new ProbeAttributeParserParseResult(execution, rawName.endsWith('.bind')
+    const parse = new ProbeAttributeParserParseResult(execution, rawName.endsWith('.bind')
       ? this.executableProductHandle
       : null);
+    return {
+      value: parse,
+      observation: this.observation,
+    } as unknown as TemplateCompilerObservedValue<AttributeParserParseResult>;
   }
 }
 
@@ -78,6 +94,51 @@ class ProbeAttributeParserParseResult extends AttributeParserParseResult {
 }
 
 describe('attribute-syntax single-site lowering', () => {
+  test('normalizes authored names once and spends the exact runtime parser input', () => {
+    const reads = new CompilerReadProbe(new KernelHandleFactory('contract:attribute-syntax-law').product('bind'));
+    const cases = [
+      [
+        AttributeSyntaxSiteParseInput.authored('VALUE.BIND', 'message', HtmlNamespaceKind.Html),
+        'value.bind',
+      ],
+      [
+        AttributeSyntaxSiteParseInput.authored('viewbox', '0 0 10 10', HtmlNamespaceKind.Svg),
+        'viewBox',
+      ],
+      [
+        AttributeSyntaxSiteParseInput.authored('definitionurl', 'schema', HtmlNamespaceKind.Math),
+        'definitionURL',
+      ],
+    ] as const;
+
+    for (const [input, runtimeRawName] of cases) {
+      const result = parseAttributeSyntaxSite(reads, input);
+      expect(result.input).toBe(input);
+      expect(result.input.inputKind).toBe(AttributeSyntaxParseInputKind.Authored);
+      expect(result.input.runtimeRawName).toBe(runtimeRawName);
+      expect(result.parse.execution.rawName).toBe(runtimeRawName);
+      expect(result.read.observation).toBe(reads.observation);
+    }
+
+    expect(reads.calls).toEqual([
+      ['value.bind', 'message'],
+      ['viewBox', '0 0 10 10'],
+      ['definitionURL', 'schema'],
+    ]);
+  });
+
+  test('does not reinterpret an exact live/runtime raw name', () => {
+    const reads = new CompilerReadProbe(new KernelHandleFactory('contract:attribute-syntax-law').product('bind'));
+    const input = AttributeSyntaxSiteParseInput.runtime('VALUE.BIND', 'message');
+    const result = parseAttributeSyntaxSite(reads, input);
+
+    expect(result.input.inputKind).toBe(AttributeSyntaxParseInputKind.Runtime);
+    expect(result.input.rawName).toBe('VALUE.BIND');
+    expect(result.input.runtimeRawName).toBe('VALUE.BIND');
+    expect(result.parse.execution.rawName).toBe('VALUE.BIND');
+    expect(reads.calls).toEqual([['VALUE.BIND', 'message']]);
+  });
+
   test('keeps legacy batch and direct-site products, rows, claims, reads, and handles identical', () => {
     const fixture = loweringFixture();
     const legacyPublication = new PublicationProbe();
@@ -89,6 +150,16 @@ describe('attribute-syntax single-site lowering', () => {
       compilerWorld: {} as TemplateCompilerWorldEmission,
       compilerReads: legacyReads as unknown as TemplateCompilerReadView,
     });
+    expect(legacy.syntaxes.map((syntax) => [
+      syntax.rawName,
+      syntax.runtimeRawName,
+      syntax.rawValue,
+      syntax.target,
+      syntax.command,
+    ])).toEqual([
+      ['VALUE.BIND', 'value.bind', 'message', 'value', 'bind'],
+      ['definitionurl', 'definitionURL', 'https://example.test/schema', 'definitionURL', null],
+    ]);
 
     const directPublication = new PublicationProbe();
     const directReads = new CompilerReadProbe(directPublication.handles.product('binding-command:bind'));

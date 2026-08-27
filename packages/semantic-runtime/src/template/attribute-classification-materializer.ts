@@ -1,4 +1,4 @@
-import { SemanticClaim, claimsForProduct } from '../kernel/claim.js';
+import { SemanticClaim } from '../kernel/claim.js';
 import {
   EvidenceKind,
   EvidenceRecord,
@@ -35,20 +35,18 @@ import {
 } from '../kernel/publication.js';
 import { KernelVocabulary } from '../kernel/vocabulary.js';
 import {
-  CustomElementCaptureKind,
-  type CustomElementCaptureDefinition,
-} from '../resources/custom-element-definition.js';
-import { StaticCallableTruthinessKind } from '../evaluation/function-execution.js';
-import { ResourceDefinitionKind } from '../resources/resource-kind.js';
-import {
   AttributeClassification,
   AttributeClassificationKind,
-  AttributeSyntaxKind,
   type AttributeSyntax,
 } from './attribute-syntax.js';
 import type { AttributeSyntaxParseEmission } from './attribute-syntax-materializer.js';
 import {
-  TemplateCompilerIssue,
+  AttributeClassificationDecision,
+  type AttributeClassificationDecisionOwner,
+  decideAttributeClassification,
+} from './attribute-classification-decision.js';
+import {
+  type TemplateCompilerIssue,
   TemplateCompilerIssueKind,
   TemplateCompilerIssuePhase,
 } from './compiler-issue.js';
@@ -56,20 +54,12 @@ import {
   TemplateCompilerIssuePublisher,
   type TemplateCompilerIssuePublication,
 } from './compiler-issue-publication.js';
-import type {
-  TemplateResolvedResource,
-} from './compiler-world.js';
-import type {
-  TemplateBindableReference,
-  TemplateVisibleResource,
-} from './compiler-world-reference.js';
 import type { TemplateCompilerWorldEmission } from './compiler-world-materializer.js';
 import type { TemplateCompilerReadView } from './compiler-read-view.js';
 import type { TemplateCompilationUnit } from './compilation-unit.js';
-import { TemplateCompilerFrameworkErrorCode } from './framework-error-code.js';
 import {
-  HtmlAttribute,
-  HtmlElementAttributeOwner,
+  type HtmlAttribute,
+  type HtmlElementAttributeOwner,
   HtmlIrNodeKind,
   htmlElementAttributeOwnersByAttributeProduct,
   htmlElementLookupName,
@@ -77,7 +67,6 @@ import {
 } from './html-ir.js';
 import type { HtmlParseEmission } from './html-parse-materializer.js';
 import { TemplateProductDetails } from './product-details.js';
-import { isTemplateSpecialAttributeName } from './special-attribute-source.js';
 
 export interface AttributeClassificationRequest {
   /** Store-local key for this classification pass. */
@@ -106,26 +95,6 @@ class AttributeClassificationSourceSet {
   constructor(
     readonly records: readonly KernelStoreRecord[],
     readonly provenanceHandle: ProvenanceHandle,
-  ) {}
-}
-
-class ClassificationDecision {
-  constructor(
-    readonly classificationKind: AttributeClassificationKind,
-    readonly resourceKind: ResourceDefinitionKind | null,
-    readonly resource: TemplateVisibleResource | null,
-    readonly bindingCommand: AttributeClassification['bindingCommand'],
-    readonly bindable: TemplateBindableReference | null,
-    readonly issue: TemplateCompilerIssueDraft | null = null,
-    readonly openReason: string | null = null,
-  ) {}
-}
-
-class TemplateCompilerIssueDraft {
-  constructor(
-    readonly issueKind: TemplateCompilerIssueKind,
-    readonly message: string,
-    readonly frameworkErrorCode: string | null,
   ) {}
 }
 
@@ -215,8 +184,8 @@ export class AttributeClassificationMaterializer {
     const productHandle = this.store.handles.product(local);
     const identityHandle = this.store.handles.identity(local);
     const decision = attribute == null || owner == null
-      ? openDecision()
-      : classifySyntax(syntax, owner, compilerReads);
+      ? new AttributeClassificationDecision(AttributeClassificationKind.Open, null, null, null, null)
+      : decideAttributeClassification(syntax, new AuthoredAttributeClassificationOwner(owner), compilerReads);
     const classification = this.createAttributeClassification(
       productHandle,
       identityHandle,
@@ -252,7 +221,7 @@ export class AttributeClassificationMaterializer {
     source: AttributeClassificationSourceSet,
     syntax: AttributeSyntax,
     owner: HtmlElementAttributeOwner | null,
-    decision: ClassificationDecision,
+    decision: AttributeClassificationDecision,
   ): AttributeClassification {
     return bindProductDetailEnvelope(new AttributeClassification(
       syntax.productHandle,
@@ -278,7 +247,7 @@ export class AttributeClassificationMaterializer {
     source: AttributeClassificationSourceSet,
     syntax: AttributeSyntax,
     classification: AttributeClassification,
-    decision: ClassificationDecision,
+    decision: AttributeClassificationDecision,
   ): readonly SemanticClaim[] {
     const referencedProductHandle = referencedProductHandleForDecision(decision);
     return [
@@ -377,7 +346,7 @@ function ownerForSyntax(
 }
 
 function referencedProductHandleForDecision(
-  decision: ClassificationDecision,
+  decision: AttributeClassificationDecision,
 ): ProductHandle | null {
   return decision.resource?.definitionProductHandle
     ?? decision.resource?.resourceProductHandle
@@ -385,234 +354,22 @@ function referencedProductHandleForDecision(
     ?? null;
 }
 
-function classifySyntax(
-  syntax: AttributeSyntax,
-  owner: HtmlElementAttributeOwner,
-  reads: TemplateCompilerReadView,
-): ClassificationDecision {
-  const rawName = syntax.runtimeRawName;
-  const target = syntax.target;
+class AuthoredAttributeClassificationOwner implements AttributeClassificationDecisionOwner {
+  readonly lookupName: string;
 
-  if (isTemplateSpecialAttributeName(rawName)) {
-    return new ClassificationDecision(AttributeClassificationKind.CompilerControl, null, null, null, null);
-  }
-  if (syntax.syntaxKind === AttributeSyntaxKind.Open) {
-    return openDecision();
+  constructor(readonly owner: HtmlElementAttributeOwner) {
+    this.lookupName = htmlElementLookupName(owner.element, owner);
   }
 
-  const commandName = syntax.command;
-  const bindingCommand = commandName == null
-    ? null
-    : reads.bindingCommand(commandName)?.toReference() ?? null;
-  if (commandName != null && bindingCommand == null && isRemovedV1BindingCommand(commandName)) {
-    return invalidDecision(
-      TemplateCompilerIssueKind.UnknownBindingCommand,
-      unknownBindingCommandMessage(commandName),
-      TemplateCompilerFrameworkErrorCode.CompilerUnknownBindingCommand,
-    );
-  }
-  const elementResolution = reads.element(htmlElementLookupName(owner.element, owner));
-  const elementDefinition = elementResolution?.definition?.type === ResourceDefinitionKind.CustomElement
-    ? elementResolution.definition
-    : null;
-
-  const captureDecision = elementDefinition == null || elementResolution == null
-    ? null
-    : classifyCapture(syntax, elementDefinition.capture, elementResolution, bindingCommand != null, reads);
-  if (captureDecision != null) {
-    return captureDecision;
+  get tagName(): string {
+    return this.owner.tagName;
   }
 
-  if (target === '...$attrs') {
-    return new ClassificationDecision(AttributeClassificationKind.Spread, null, null, bindingCommand, null);
+  get namespace(): HtmlElementAttributeOwner['namespace'] {
+    return this.owner.namespace;
   }
 
-  if (bindingCommand != null && commandIgnoresAttribute(bindingCommand, reads)) {
-    return new ClassificationDecision(AttributeClassificationKind.BindingCommand, null, null, bindingCommand, null);
-  }
-
-  if (target.startsWith('...')) {
-    return elementDefinition != null && target.slice(3) !== '$element'
-      ? new ClassificationDecision(AttributeClassificationKind.Spread, ResourceDefinitionKind.CustomElement, elementResolution?.resource ?? null, bindingCommand, null)
-      : invalidDecision(
-        TemplateCompilerIssueKind.ReservedSpreadSyntax,
-        `Spreading syntax "...xxx" is reserved. Encountered "${syntax.target}".`,
-        TemplateCompilerFrameworkErrorCode.CompilerNoReservedSpreadSyntax,
-      );
-  }
-
-  if (elementDefinition != null) {
-    const bindable = reads.bindables(elementDefinition).attr(target);
-    if (bindable != null) {
-      return new ClassificationDecision(
-        AttributeClassificationKind.Bindable,
-        ResourceDefinitionKind.CustomElement,
-        elementResolution?.resource ?? null,
-        bindingCommand,
-        bindable,
-      );
-    }
-    if (target === '$bindables') {
-      return bindingCommand == null
-        ? openDecision()
-        : new ClassificationDecision(AttributeClassificationKind.Spread, ResourceDefinitionKind.CustomElement, elementResolution?.resource ?? null, bindingCommand, null);
-    }
-  } else if (target === '$bindables') {
-    return invalidDecision(
-      TemplateCompilerIssueKind.ReservedBindableSyntax,
-      `Usage of $bindables is only allowed on custom elements. Encountered "${syntax.rawName}".`,
-      TemplateCompilerFrameworkErrorCode.CompilerNoReservedBindableSyntax,
-    );
-  }
-
-  const attributeResolution = reads.attribute(target);
-  if (attributeResolution?.resource != null) {
-    const classificationKind = attributeResolution.resource.resourceKind === ResourceDefinitionKind.TemplateController
-      ? AttributeClassificationKind.TemplateController
-      : AttributeClassificationKind.CustomAttribute;
-    const bindable = attributeResolution.definition?.type === ResourceDefinitionKind.CustomAttribute
-      ? reads.bindables(attributeResolution.definition).primary
-      : null;
-    return new ClassificationDecision(
-      classificationKind,
-      attributeResolution.resource.resourceKind,
-      attributeResolution.resource,
-      bindingCommand,
-      bindable,
-    );
-  }
-
-  return bindingCommand == null
-    ? new ClassificationDecision(AttributeClassificationKind.Plain, null, null, null, null)
-    : new ClassificationDecision(AttributeClassificationKind.BindingCommand, null, null, bindingCommand, null);
-}
-
-function classifyCapture(
-  syntax: AttributeSyntax,
-  capture: CustomElementCaptureDefinition,
-  elementResolution: TemplateResolvedResource,
-  hasBindingCommand: boolean,
-  reads: TemplateCompilerReadView,
-): ClassificationDecision | null {
-  if (capture.kind === CustomElementCaptureKind.None) {
-    return null;
-  }
-  const elementDefinition = elementResolution.definition?.type === ResourceDefinitionKind.CustomElement
-    ? elementResolution.definition
-    : null;
-  if (elementDefinition == null) {
-    return null;
-  }
-  if (capture.kind === CustomElementCaptureKind.Predicate) {
-    const result = reads.capturePredicate(elementDefinition, syntax.target);
-    if (result.kind === StaticCallableTruthinessKind.False) {
-      return null;
-    }
-    if (result.kind === StaticCallableTruthinessKind.Open) {
-      return openDecision(
-        null,
-        `Custom-element capture predicate remained open. ${result.reason ?? ''}`.trim(),
-      );
-    }
-  }
-  const target = syntax.target;
-  if (hasBindingCommand && commandIgnoresAttributeName(syntax.command, reads)) {
-    return new ClassificationDecision(
-      AttributeClassificationKind.Captured,
-      ResourceDefinitionKind.CustomElement,
-      elementResolution.resource,
-      null,
-      null,
-    );
-  }
-  const canCapture = target !== 'au-slot'
-    && target !== 'slot'
-    && (target.indexOf('...') === -1 || target === '...$attrs');
-  if (!canCapture) {
-    return null;
-  }
-  const bindable = reads.bindables(elementDefinition).attr(target);
-  const templateController = reads.attribute(target);
-  if (bindable != null || templateController?.resource?.resourceKind === ResourceDefinitionKind.TemplateController) {
-    return null;
-  }
-  return new ClassificationDecision(
-    AttributeClassificationKind.Captured,
-    ResourceDefinitionKind.CustomElement,
-    elementResolution.resource,
-    null,
-    null,
-  );
-}
-
-function commandIgnoresAttribute(
-  command: NonNullable<AttributeClassification['bindingCommand']>,
-  reads: TemplateCompilerReadView,
-): boolean {
-  return commandIgnoresAttributeName(command.name, reads);
-}
-
-function commandIgnoresAttributeName(
-  commandName: string | null,
-  reads: TemplateCompilerReadView,
-): boolean {
-  return commandName == null
-    ? false
-    : reads.bindingCommand(commandName)?.ignoreAttr === true;
-}
-
-function openDecision(
-  bindingCommand: AttributeClassification['bindingCommand'] = null,
-  openReason: string | null = null,
-): ClassificationDecision {
-  return new ClassificationDecision(
-    AttributeClassificationKind.Open,
-    null,
-    null,
-    bindingCommand,
-    null,
-    null,
-    openReason,
-  );
-}
-
-function invalidDecision(
-  issueKind: TemplateCompilerIssueKind,
-  message: string,
-  frameworkErrorCode: string | null,
-  bindingCommand: AttributeClassification['bindingCommand'] = null,
-): ClassificationDecision {
-  return new ClassificationDecision(
-    AttributeClassificationKind.Open,
-    null,
-    null,
-    bindingCommand,
-    null,
-    new TemplateCompilerIssueDraft(issueKind, message, frameworkErrorCode),
-  );
-}
-
-function isRemovedV1BindingCommand(commandName: string): boolean {
-  return commandName === 'delegate' || commandName === 'call';
-}
-
-function unknownBindingCommandMessage(commandName: string): string {
-  const help = removedV1BindingCommandHelp(commandName);
-  return `Template compilation error: unknown binding command: "${commandName}".${help}`;
-}
-
-function removedV1BindingCommandHelp(commandName: string): string {
-  switch (commandName) {
-    case 'delegate':
-      return ' The ".delegate" binding command has been removed in v2.'
-        + ' Binding command ".trigger" should be used instead.'
-        + ' If you are migrating v1 application, install compat package'
-        + ' to add back the ".delegate" binding command for ease of migration.';
-    case 'call':
-      return ' The ".call" binding command has been removed in v2.'
-        + ' If you want to pass a callback that preserves the context of the function call,'
-        + ' you can use lambda instead. Refer to lambda expression doc for more details.';
-    default:
-      return '';
+  get attributes(): HtmlElementAttributeOwner['attributes'] {
+    return this.owner.attributes;
   }
 }

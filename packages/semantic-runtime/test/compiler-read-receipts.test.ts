@@ -43,6 +43,12 @@ describe('template compiler observed values', () => {
       const parsed = reads.readParsedAttribute('textcontent.bind', 'message');
       const mapped = reads.readMappedAttribute(ownerView, 'textcontent');
       const twoWay = reads.readTwoWay(ownerView, 'textcontent');
+      const elementDefinition = element.value?.definition;
+      if (elementDefinition?.type !== 'custom-element') {
+        throw new Error('Expected a custom-element definition behind the root resource.');
+      }
+      const bindables = reads.readBindables(elementDefinition);
+      const capture = reads.readCapturePredicate(elementDefinition, 'title');
 
       expect(element).toBeInstanceOf(TemplateCompilerObservedValue);
       expect(element.value?.resource?.name).toBe('root-surrogate-owner-progression');
@@ -65,6 +71,8 @@ describe('template compiler observed values', () => {
       expect(parsed.value.execution.target).toBe('textcontent');
       expect(mapped.value).toBe('textContent');
       expect(twoWay.value).toBe(true);
+      expect(bindables.value.bindables).toEqual([]);
+      expect(capture.value.kind).toBe('open');
 
       expect(element.observation).toMatchObject({
         readKind: TemplateCompilerReadKind.ElementResource,
@@ -82,10 +90,12 @@ describe('template compiler observed values', () => {
       expect(parsed.observation.readKind).toBe(TemplateCompilerReadKind.AttributePattern);
       expect(mapped.observation.readKind).toBe(TemplateCompilerReadKind.AttributeMapper);
       expect(twoWay.observation.readKind).toBe(TemplateCompilerReadKind.AttributeMapper);
+      expect(bindables.observation.readKind).toBe(TemplateCompilerReadKind.Bindables);
+      expect(capture.observation.readKind).toBe(TemplateCompilerReadKind.CapturePredicate);
       expect(mapped.observation.canonicalKey).toContain(ownerView.attributeStateKey);
       expect(twoWay.observation.canonicalKey).toContain(ownerView.attributeStateKey);
 
-      for (const receipt of [element, auSlot, attribute, command, parsed, mapped, twoWay]) {
+      for (const receipt of [element, auSlot, attribute, command, parsed, mapped, twoWay, bindables, capture]) {
         expect(receipt.observation.closure).toBe(compilerWorldObservation.closure);
         expect(receipt.observation.validate().isCurrent).toBe(true);
         expect(reads.readAll()).toContain(receipt.observation);
@@ -98,6 +108,8 @@ describe('template compiler observed values', () => {
       expect(reads.readParsedAttribute('textcontent.bind', 'message').observation).toBe(parsed.observation);
       expect(reads.readMappedAttribute(ownerView, 'textcontent').observation).toBe(mapped.observation);
       expect(reads.readTwoWay(ownerView, 'textcontent').observation).toBe(twoWay.observation);
+      expect(reads.readBindables(elementDefinition).observation).toBe(bindables.observation);
+      expect(reads.readCapturePredicate(elementDefinition, 'title').observation).toBe(capture.observation);
 
       expect(reads.element('root-surrogate-owner-progression')).toEqual(element.value);
       expect(reads.element('au-slot')).toEqual(auSlot.value);
@@ -106,8 +118,10 @@ describe('template compiler observed values', () => {
       expect(reads.parseAttribute('textcontent.bind', 'message')).toEqual(parsed.value);
       expect(reads.mapAttribute(ownerView, 'textcontent')).toBe(mapped.value);
       expect(reads.isTwoWay(ownerView, 'textcontent')).toBe(twoWay.value);
+      expect(reads.bindables(elementDefinition)).toEqual(bindables.value);
+      expect(reads.capturePredicate(elementDefinition, 'title')).toEqual(capture.value);
 
-      expect(reads.readAll()).toHaveLength(8);
+      expect(reads.readAll()).toHaveLength(10);
       expect(reads.readAll().filter((read) => read.readKind === TemplateCompilerReadKind.AttributeMapper))
         .toEqual([mapped.observation, twoWay.observation]);
     } finally {

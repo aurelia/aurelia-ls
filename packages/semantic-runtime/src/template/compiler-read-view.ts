@@ -319,11 +319,26 @@ export class TemplateCompilerReadView {
   bindables(definition: CustomElementDefinition): TemplateElementBindablesInfo;
   bindables(definition: CustomAttributeDefinition): TemplateAttributeBindablesInfo;
   bindables(definition: TemplateCompilableResourceDefinition): TemplateBindablesInfo {
+    return this.readBindables(definition).value;
+  }
+
+  readBindables(
+    definition: CustomElementDefinition,
+  ): TemplateCompilerObservedValue<TemplateElementBindablesInfo>;
+  readBindables(
+    definition: CustomAttributeDefinition,
+  ): TemplateCompilerObservedValue<TemplateAttributeBindablesInfo>;
+  readBindables(
+    definition: TemplateCompilableResourceDefinition,
+  ): TemplateCompilerObservedValue<TemplateBindablesInfo>;
+  readBindables(
+    definition: TemplateCompilableResourceDefinition,
+  ): TemplateCompilerObservedValue<TemplateBindablesInfo> {
     const canonical = definition.productHandle ?? definition.identityHandle ?? definition.name;
     const result: TemplateBindablesInfo = definition.type === ResourceDefinitionKind.CustomElement
       ? this.world.resourceResolver.bindables(definition)
       : this.world.resourceResolver.bindables(definition);
-    this.observe(
+    const observation = this.observe(
       TemplateCompilerReadKind.Bindables,
       canonical,
       bindableResultParts(result),
@@ -338,7 +353,7 @@ export class TemplateCompilerReadView {
           );
       },
     );
-    return result;
+    return new TemplateCompilerObservedValue(result, observation);
   }
 
   bindingCommand(name: string): BindingCommandExecutable | null {
@@ -476,9 +491,16 @@ export class TemplateCompilerReadView {
     definition: CustomElementDefinition,
     attributeName: string,
   ): StaticCallableTruthinessResult {
+    return this.readCapturePredicate(definition, attributeName).value;
+  }
+
+  readCapturePredicate(
+    definition: CustomElementDefinition,
+    attributeName: string,
+  ): TemplateCompilerObservedValue<StaticCallableTruthinessResult> {
     const canonical = `${definition.productHandle ?? definition.identityHandle ?? definition.name}|${attributeName}`;
     const result = evaluateCapturePredicateInWorld(this.world, definition, attributeName);
-    this.observe(
+    const observation = this.observe(
       TemplateCompilerReadKind.CapturePredicate,
       canonical,
       callableTruthinessResultParts(result),
@@ -491,7 +513,7 @@ export class TemplateCompilerReadView {
         );
       },
     );
-    return result;
+    return new TemplateCompilerObservedValue(result, observation);
   }
 
   resolveResources(): boolean {
