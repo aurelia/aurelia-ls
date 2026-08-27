@@ -49,6 +49,8 @@ export class TemplateCompilerHookBootstrapResult {
     readonly operations: readonly TemplateCompilerOperation[],
     readonly boundaryEntryOrdinal: number | null,
     readonly summary: string | null,
+    /** Exact compiler-world object whose provider/callable authority produced this result. */
+    readonly compilerWorld: TemplateCompilerWorldEmission | null = null,
   ) {}
 
   isExact(): boolean {
@@ -123,6 +125,7 @@ class TemplateCompilerHookBootstrapFrame {
       this.operations,
       null,
       null,
+      this.request.compilerWorld,
     );
   }
 
@@ -442,6 +445,7 @@ class TemplateCompilerHookBootstrapFrame {
       this.operations,
       entryOrdinal,
       summary,
+      this.request.compilerWorld,
     );
   }
 

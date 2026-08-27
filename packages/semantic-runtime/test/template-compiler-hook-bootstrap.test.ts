@@ -113,6 +113,7 @@ describe('template compiler hook bootstrap', () => {
         try {
           const exact = executeHookBootstrap(browserRun, exactCompilation, 'exact');
           expect(exact.result.state).toBe(TemplateCompilerHookBootstrapState.Exact);
+          expect(exact.result.compilerWorld).toBe(exactCompilation.compilerWorld);
           expect(exact.result.boundaryEntryOrdinal).toBeNull();
           expect(exact.result.operations.map((operation) => ({
             stage: (operation.target as TemplateCompilerHookOperationTarget).operationStage,
@@ -150,6 +151,7 @@ describe('template compiler hook bootstrap', () => {
           )).toBe(true);
 
           const open = executeHookBootstrap(browserRun, openCompilation, 'open');
+          expect(open.result.compilerWorld).toBe(openCompilation.compilerWorld);
           expect(open.result).toMatchObject({
             state: TemplateCompilerHookBootstrapState.Open,
             boundaryEntryOrdinal: 0,
@@ -175,6 +177,7 @@ describe('template compiler hook bootstrap', () => {
           expect(open.execution.seal()).toBe(open.execution.sequence);
 
           const providerOpen = executeHookBootstrap(browserRun, providerOpenCompilation, 'provider-open');
+          expect(providerOpen.result.compilerWorld).toBe(providerOpenCompilation.compilerWorld);
           expect(providerOpen.result).toMatchObject({
             state: TemplateCompilerHookBootstrapState.Open,
             boundaryEntryOrdinal: 1,
@@ -253,6 +256,7 @@ describe('template compiler hook bootstrap', () => {
         });
         try {
           const execution = executeHookBootstrap(browserRun, compilation, 'root-static');
+          expect(execution.result.compilerWorld).toBe(compilation.compilerWorld);
           expect(execution.result).toMatchObject({
             state: TemplateCompilerHookBootstrapState.Open,
             boundaryEntryOrdinal: 2,
