@@ -542,6 +542,13 @@ function cursorEventDigest(
                 event.spend?.disposition ?? null,
                 event.occurrenceOnlyRow?.disposition ?? null,
                 event.siteOutcome,
+                event.instructionStaging?.holes.map((hole) => [
+                  hole.expressionChainIndex,
+                  hole.expressionSpan.start,
+                  hole.expressionSpan.end,
+                  hole.expressionSpan.file?.id ?? null,
+                  hole.instruction.instructionKind,
+                ]) ?? null,
               ]
             : event instanceof TemplateCompilerSiteCursorIgnoredNodeEvent
               ? [

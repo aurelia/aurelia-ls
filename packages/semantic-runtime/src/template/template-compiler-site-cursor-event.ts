@@ -1,4 +1,5 @@
 import type { CustomElementDefinition } from '../resources/custom-element-definition.js';
+import { ExpressionParseResultKind } from '../expression/parse-result-algebra.js';
 import type { AttributeParserParseResult } from './attribute-syntax.js';
 import type { TemplateCompilerAttributeOwnerProgressionSite } from './attribute-owner-progression.js';
 import type { TemplateResolvedResource } from './compiler-world.js';
@@ -34,6 +35,7 @@ import type {
   TemplateCompilerProcessContentResult,
 } from './template-compiler-process-content.js';
 import type { TemplateCompilerLiveAttributeContribution } from './template-compiler-live-attribute-assembly.js';
+import type { TemplateCompilerTextInstructionStaging } from './template-compiler-text-instruction-staging.js';
 
 export const enum TemplateCompilerSiteCursorEventKind {
   Phase = 'phase',
@@ -219,8 +221,26 @@ export class TemplateCompilerSiteCursorTextEvent extends TemplateCompilerSiteCur
     readonly spend: TemplateCompilerSiteSpend | null,
     readonly occurrenceOnlyRow: TemplateCompilerOccurrenceOnlyRow | null,
     readonly siteOutcome: TemplateCompilerSiteCursorSiteOutcome,
+    readonly instructionStaging: TemplateCompilerTextInstructionStaging | null = null,
   ) {
     super(authority, ordinal, TemplateCompilerSiteCursorEventKind.Text);
+    if (!this.isCoherent()) {
+      throw new Error('Compiler live text cursor event lost exact parser-hole instruction staging authority.');
+    }
+  }
+
+  isCoherent(): boolean {
+    const expectsStaging = this.siteOutcome === TemplateCompilerSiteCursorSiteOutcome.Complete
+      && this.spend?.disposition === TemplateCompilerSiteSpendDisposition.BrowserCompatible
+      && this.bundle?.expressionParse.result.kind === ExpressionParseResultKind.InterpolationSuccess;
+    if (!expectsStaging) return this.instructionStaging == null;
+    const staging = this.instructionStaging;
+    return staging != null
+      && staging.isModuleConstructed()
+      && staging.occurrenceKey === this.text.occurrenceKey
+      && staging.node.productHandle === this.bundle?.text.productHandle
+      && staging.expressionProductHandle === this.bundle?.expressionParse.productHandle
+      && staging.parseResult === this.bundle?.expressionParse.result;
   }
 }
 

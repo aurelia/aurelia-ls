@@ -243,6 +243,10 @@ classification, expression parsing, and instruction lowering converge on the sam
   produce a zero-prop hydration wrapper; Error/Companion expression results never become committed value instructions.
   HydrateElement, TC child definitions, projections, processContent metadata, and containerless geometry remain the
   later structural convergence boundary.
+- `template-compiler-text-instruction-staging.ts` is the corresponding shared text-hole law. A completed interpolation
+  owns one nominal `TextBindingInstruction` per parser expression in chain order, with explicit occurrence/hole slots
+  and exact caller-supplied ranges. Authored compiled-template traversal and compatible live cursor text events use the
+  same staging; static, companion, invalid, and relowering text allocate no committed hole instructions.
 - `template-compiler-reached-site-semantics.ts`, `template-compiler-site-spend-ledger.ts`, and
   `template-compiler-site-cursor.ts` join that transaction to current root invocation authority. Scalar capture and
   authored/browser routes are shared with the cursor rather than re-derived. Singular compatible sites, successfully

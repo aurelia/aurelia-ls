@@ -96,8 +96,17 @@ describe('template compiler root site cursor', () => {
     const texts = eventsOf(transcript, TemplateCompilerSiteCursorTextEvent);
     expect(texts).toHaveLength(2);
     expect(texts.filter((event) => event.bundle != null)).toHaveLength(1);
-    expect(texts.find((event) => event.bundle == null)?.occurrenceOnlyRow?.disposition)
-      .toBe('static-text-pass-through');
+    const dynamic = texts.find((event) => event.bundle != null);
+    const staticText = texts.find((event) => event.bundle == null);
+    expect(dynamic?.instructionStaging?.isModuleConstructed()).toBe(true);
+    expect(dynamic?.instructionStaging?.holes.map((hole) => hole.expressionChainIndex)).toEqual([0]);
+    expect(dynamic?.instructionStaging?.instructions[0]).toMatchObject({
+      instructionKind: 'text-binding',
+      expressionChainIndex: 0,
+      expressionProductHandle: dynamic.bundle?.expressionParse.productHandle,
+    });
+    expect(staticText?.occurrenceOnlyRow?.disposition).toBe('static-text-pass-through');
+    expect(staticText?.instructionStaging).toBeNull();
     expect(transcript.nextTranscriptOrdinal).toBe(transcript.events.length);
     expect(transcript.nextSiteEventOrdinal).toBe(transcript.ledger.completion.nextSiteEventOrdinal);
   });

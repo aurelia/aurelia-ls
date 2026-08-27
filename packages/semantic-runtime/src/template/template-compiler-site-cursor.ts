@@ -1,5 +1,6 @@
 import type { CustomElementDefinition } from '../resources/custom-element-definition.js';
 import type { KernelHandleFactory } from '../kernel/handles.js';
+import { ExpressionParseResultKind } from '../expression/parse-result-algebra.js';
 import {
   AttributeSyntaxKind,
 } from './attribute-syntax.js';
@@ -51,6 +52,7 @@ import {
 } from './template-compiler-site-spend-ledger.js';
 import type { TemplateCompilerAuthoredSiteRemainderEvidence } from './template-compiler-site-spend-ledger.js';
 import type { HtmlElement } from './html-ir.js';
+import type { TextBindingInstruction } from './instruction-ir.js';
 import type { TemplateCompilerSiteExecutionDriverReference } from './template-compiler-execution.js';
 import {
   executeTemplateCompilerProcessContent,
@@ -65,6 +67,7 @@ import {
 import {
   TemplateCompilerBrowserOriginRouteKind,
 } from './template-compiler-authored-origin-index.js';
+import type { TemplateCompilerNormalizedTextSite } from './template-compiler-normalized-site-index.js';
 import { TemplateExpressionParseState, TemplateValueSiteKind } from './value-site.js';
 import {
   TemplateCompilerSiteCursorAttributeEvent,
@@ -87,6 +90,15 @@ export * from './template-compiler-site-cursor-event.js';
 import {
   TemplateCompilerSiteCursorSemanticResolver,
 } from './template-compiler-site-cursor-semantics.js';
+import {
+  TemplateCompilerTextHoleSourceRange,
+  TemplateCompilerTextInstructionAllocation,
+  type TemplateCompilerTextInstructionAllocationRequest,
+  type TemplateCompilerTextInstructionStaging,
+  type TemplateCompilerTextInstructionStagingAuthority,
+  TemplateCompilerTextInstructionStagingRequest,
+  stageTemplateCompilerTextInstructions,
+} from './template-compiler-text-instruction-staging.js';
 
 const siteCursorConstructionAuthority = {};
 
@@ -141,6 +153,7 @@ export class TemplateCompilerSiteCursorTranscript {
         || event.ordinal !== ordinal
         || (event instanceof TemplateCompilerSiteCursorProcessContentEvent && !event.isCoherent())
         || (event instanceof TemplateCompilerSiteCursorAttributeEvent && !event.isCoherent())
+        || (event instanceof TemplateCompilerSiteCursorTextEvent && !event.isCoherent())
       )
       || !liveAttributeOwnersAreCoherent(binding, events, attributeOwners)
       || nextTranscriptOrdinal !== events.length
@@ -1082,6 +1095,11 @@ class TemplateCompilerRootSiteCursor {
         : bundle.expressionParse.state === TemplateExpressionParseState.Complete
           ? TemplateCompilerSiteCursorSiteOutcome.Complete
           : TemplateCompilerSiteCursorSiteOutcome.Open;
+    const instructionStaging = compatible
+      && spend != null
+      && siteOutcome === TemplateCompilerSiteCursorSiteOutcome.Complete
+      ? this.stageTextInstructions(text, bundle)
+      : null;
     this.events.push(new TemplateCompilerSiteCursorTextEvent(
       siteCursorConstructionAuthority,
       this.transcriptOrdinal++,
@@ -1094,6 +1112,7 @@ class TemplateCompilerRootSiteCursor {
       spend,
       null,
       siteOutcome,
+      instructionStaging,
     ));
     if (spend == null) {
       this.stop(
@@ -1125,6 +1144,34 @@ class TemplateCompilerRootSiteCursor {
         'Reached text interpolation parse is not Complete.',
       );
     }
+  }
+
+  private stageTextInstructions(
+    text: TemplateCompilerTextOccurrence,
+    bundle: TemplateCompilerNormalizedTextSite,
+  ): TemplateCompilerTextInstructionStaging | null {
+    const parseResult = bundle.expressionParse.result;
+    if (parseResult.kind !== ExpressionParseResultKind.InterpolationSuccess) return null;
+    const siteKey = `${this.binding.lane.localKey}:live-text:${text.occurrenceKey}`;
+    const sources = parseResult.ast.expressions.map((expression, expressionChainIndex) =>
+      new TemplateCompilerTextHoleSourceRange(
+        expressionChainIndex,
+        expression.span,
+        bundle.expressionParse.sourceAddressHandle,
+        this.request.handles.address(
+          `${siteKey}:hole:${expressionChainIndex}:source:${expression.span.start}:${expression.span.end}`,
+        ),
+      )
+    );
+    return stageTemplateCompilerTextInstructions(new TemplateCompilerTextInstructionStagingRequest(
+      new CursorTextInstructionStagingAuthority(this.request.handles),
+      siteKey,
+      text.occurrenceKey,
+      bundle.text.toReference(),
+      bundle.expressionParse.productHandle,
+      parseResult,
+      sources,
+    ));
   }
 
   private visitIgnored(
@@ -1626,4 +1673,20 @@ function invalidSurrogateTarget(target: string): boolean {
     || target === 'name'
     || target === 'au-slot'
     || target === 'as-element';
+}
+
+class CursorTextInstructionStagingAuthority implements TemplateCompilerTextInstructionStagingAuthority {
+  constructor(private readonly handles: KernelHandleFactory) {}
+
+  create(
+    request: TemplateCompilerTextInstructionAllocationRequest,
+    factory: (allocation: TemplateCompilerTextInstructionAllocation) => TextBindingInstruction,
+  ): TextBindingInstruction {
+    const local = `${request.siteKey}:hole:${request.expressionChainIndex}:text-binding`;
+    return factory(new TemplateCompilerTextInstructionAllocation(
+      this.handles.product(local),
+      this.handles.identity(local),
+      local,
+    ));
+  }
 }
