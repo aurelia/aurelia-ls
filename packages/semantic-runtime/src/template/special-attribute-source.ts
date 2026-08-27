@@ -54,7 +54,7 @@ export function templateElementLookupNameFromAttributes(
     TemplateSpecialAttributeName.AsElement,
     namespace,
   );
-  return asElement == null || asElement.length === 0
+  return asElement == null
     ? runtimeElementResourceName(tagName, namespace)
     : runtimeAsElementResourceName(asElement);
 }
