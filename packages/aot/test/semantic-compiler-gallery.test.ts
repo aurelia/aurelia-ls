@@ -201,6 +201,10 @@ describe("semantic compiler gallery", () => {
       .toEqual(["all-sites-accounted", "open"]);
     expect(transcriptCursors.filter((cursor) => cursor.completionReceiptPresent)).toHaveLength(23);
     expect(transcriptCursors.filter((cursor) => cursor.completionState === "complete")).toHaveLength(23);
+    expect(transcriptCursors.filter((cursor) => cursor.occurrenceRowAssemblyState === "exact")).toHaveLength(23);
+    expect(transcriptCursors.every((cursor) =>
+      cursor.completionReceiptPresent === (cursor.occurrenceRowAssemblyState === "exact")
+    )).toBe(true);
     expect(run.observations.filter((observation) =>
       observation.siteCursor.admissionState === TemplateCompilerRootSiteCursorObservationAdmissionState.CursorTranscript
       && observation.siteCursor.completionReceiptPresent
@@ -229,6 +233,23 @@ describe("semantic compiler gallery", () => {
       "native-order.select.static-multiple-value-matcher",
       "native-order.select.value-matcher-multiple",
     ]);
+    const exactOccurrenceCursors = transcriptCursors.filter((cursor) =>
+      cursor.occurrenceRowAssemblyState === "exact"
+    );
+    expect(exactOccurrenceCursors.reduce((count, cursor) => count + cursor.occurrenceRowCount, 0)).toBe(33);
+    expect(exactOccurrenceCursors.reduce((count, cursor) => count + cursor.occurrenceStaticSiteCount, 0)).toBe(8);
+    const occurrenceInstructionTotals: Record<string, number> = {};
+    for (const cursor of exactOccurrenceCursors) {
+      for (const [kind, count] of Object.entries(cursor.occurrenceInstructionKindCounts)) {
+        occurrenceInstructionTotals[kind] = (occurrenceInstructionTotals[kind] ?? 0) + count;
+      }
+    }
+    expect(occurrenceInstructionTotals).toEqual({
+      "property-binding": 35,
+      interpolation: 3,
+      "listener-binding": 1,
+      "text-binding": 11,
+    });
     for (const cursor of transcriptCursors) {
       expect(cursor.authoredBundleCount).toBe(cursor.spendCount + cursor.rawUnspentCount);
       expect(cursor.rawUnspentCount).toBe(cursor.remainderCount + cursor.blockedByFrontierCount);
@@ -247,6 +268,15 @@ describe("semantic compiler gallery", () => {
       expect(cursor.currentness.laneOperationCountDelta)
         .toBe(cursor.currentness.expectedLaneOperationCountDelta);
       expect(cursor.eventDigest).toMatch(/^sha256:[0-9a-f]{64}$/u);
+      if (cursor.occurrenceRowAssemblyState === "exact") {
+        expect(cursor.occurrenceRowAssemblyReasonKinds).toEqual([]);
+        expect(cursor.occurrencePrePlanEffectState).toBe("none");
+        expect(cursor.occurrenceRowDigest).toMatch(/^sha256:[0-9a-f]{64}$/u);
+        expect(cursor.occurrenceMembershipCount)
+          .toBe(cursor.completedElementSiteCount + cursor.completedTextSiteCount);
+      } else {
+        expect(cursor.occurrenceRowDigest).toBeNull();
+      }
       expect(cursor.reasonKinds).toEqual([]);
       expect(cursor.eventKindCounts.frontier ?? 0).toBe(cursor.frontierKind == null ? 0 : 1);
       if (cursor.frontierKind == null) {
@@ -291,6 +321,8 @@ describe("semantic compiler gallery", () => {
       completionState: "complete",
       completionReceiptPresent: true,
       completionRefusalKinds: [],
+      occurrenceRowCount: 1,
+      occurrenceRowInstructionTargets: [["title"]],
     });
     expect(observations.get("interaction.browser.foster-target-order")?.siteCursor).toMatchObject({
       frontierKind: null,
@@ -298,6 +330,15 @@ describe("semantic compiler gallery", () => {
         "static-text-pass-through": 2,
         "browser-implied-element-pass-through": 1,
       },
+      occurrenceRowInstructionTargets: [["title"], ["class"], ["textContent"]],
+    });
+    expect(observations.get("interaction.browser.carrier-comment-shield")?.siteCursor).toMatchObject({
+      occurrenceRowCount: 1,
+      occurrenceRowInstructionTargets: [["title"]],
+    });
+    expect(observations.get("markup.static.platform-attribute")?.siteCursor).toMatchObject({
+      occurrenceRowCount: 0,
+      occurrenceInstructionKindCounts: {},
     });
     expect(observations.get("interaction.generated.double-sibling-if")?.siteCursor).toMatchObject({
       frontierKind: "after-attributes-before-template-controller",
@@ -346,6 +387,34 @@ describe("semantic compiler gallery", () => {
     expect(tenHoleCursor.completedRowSiteCount).toBe(10);
     expect(tenHoleCursor.instructionAllocationCount).toBe(10);
     expect(tenHoleCursor.sourceAllocationCount).toBe(10);
+    expect(tenHoleCursor.occurrenceRowCount).toBe(10);
+    expect(tenHoleCursor.occurrenceInstructionKindCounts).toEqual({ "text-binding": 10 });
+    const nativeTargetOrders = new Map<string, readonly string[]>([
+      ["native-order.checkbox.checked-before-matcher", ["matcher", "checked"]],
+      ["native-order.checkbox.checked-before-model", ["model", "checked"]],
+      ["native-order.checkbox.checked-before-model-matcher", ["matcher", "model", "checked"]],
+      ["native-order.checkbox.model-before-checked", ["model", "checked"]],
+      ["native-order.radio.checked-before-value", ["value", "checked"]],
+      ["native-order.radio.value-before-checked", ["value", "checked"]],
+      ["native-order.select.matcher-value-multiple", ["matcher", "multiple", "value"]],
+      ["native-order.select.multiple-matcher-value", ["multiple", "matcher", "value"]],
+      ["native-order.select.static-multiple-value-matcher", ["value", "matcher"]],
+      ["native-order.select.value-matcher-multiple", ["multiple", "matcher", "value"]],
+    ]);
+    for (const [caseId, targets] of nativeTargetOrders) {
+      expect(observations.get(caseId)?.siteCursor).toMatchObject({
+        occurrenceRowCount: 1,
+        occurrenceRowInstructionTargets: [targets],
+      });
+    }
+    expect(requiredTranscriptCursor(observations, "native-order.checkbox.checked-before-model")
+      .occurrenceRowInstructionSignatures[0]?.map((signature) => [signature[1], signature[3]]))
+      .toEqual([["model", "to-view"], ["checked", "two-way"]]);
+    expect(requiredTranscriptCursor(observations, "native-order.select.static-multiple-value-matcher")
+      .occurrenceRowInstructionSignatures[0]?.map((signature) => [signature[1], signature[3]]))
+      .toEqual([["value", "two-way"], ["matcher", "to-view"]]);
+    expect(observations.get("interaction.browser.foster-target-order")?.siteCursor)
+      .toMatchObject({ occurrenceSourcePostureCounts: { "browser-effective": 1 } });
     expect(observations.get("diagnostic.slot.without-shadow")).toMatchObject({
       compiledTemplate: { state: "invalid" },
       issues: [{ issueKind: "slot-without-shadow-dom", frameworkErrorCode: "AUR0717" }],
@@ -403,6 +472,20 @@ describe("semantic compiler gallery", () => {
 
 function sumCounts(counts: Readonly<Record<string, number>>): number {
   return Object.values(counts).reduce((sum, count) => sum + count, 0);
+}
+
+function requiredTranscriptCursor(
+  observations: ReadonlyMap<string, SemanticCompilerGalleryObservation>,
+  caseId: string,
+): Extract<
+  SemanticCompilerGalleryObservation['siteCursor'],
+  { readonly admissionState: TemplateCompilerRootSiteCursorObservationAdmissionState.CursorTranscript }
+> {
+  const cursor = observations.get(caseId)?.siteCursor;
+  if (cursor?.admissionState !== TemplateCompilerRootSiteCursorObservationAdmissionState.CursorTranscript) {
+    throw new Error(`Expected cursor transcript for '${caseId}'.`);
+  }
+  return cursor;
 }
 
 function cursorDigest(

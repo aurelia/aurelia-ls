@@ -56,6 +56,7 @@ export class TemplateCompilerOrdinaryRootCompletionRefusal {
 
 /** Completion-owned element input for future occurrence-primary row assembly. */
 export class TemplateCompilerCompletedElementSite {
+  readonly siteKind = 'element' as const;
   readonly rowSlotKey: string;
 
   constructor(
@@ -74,6 +75,7 @@ export class TemplateCompilerCompletedElementSite {
 
 /** Completion-owned text input with stable per-hole slots independent from traversal ordinal. */
 export class TemplateCompilerCompletedTextSite {
+  readonly siteKind = 'text' as const;
   readonly holeSlotKeys: readonly string[];
 
   constructor(readonly event: TemplateCompilerSiteCursorTextEvent) {
@@ -87,6 +89,10 @@ export class TemplateCompilerCompletedTextSite {
   }
 }
 
+export type TemplateCompilerCompletedOrdinarySite =
+  | TemplateCompilerCompletedElementSite
+  | TemplateCompilerCompletedTextSite;
+
 /** Nominal successful end of one no-local ordinary root cursor walk. */
 export class TemplateCompilerOrdinaryRootCursorCompletionReceipt {
   readonly #authority: object;
@@ -96,6 +102,7 @@ export class TemplateCompilerOrdinaryRootCursorCompletionReceipt {
     readonly transcript: TemplateCompilerSiteCursorTranscript,
     readonly endpoint: TemplateCompilerSiteExecutionEndpointReceipt,
     readonly compilerReads: readonly TemplateCompilerReadObservation[],
+    readonly orderedSites: readonly TemplateCompilerCompletedOrdinarySite[],
     readonly elementSites: readonly TemplateCompilerCompletedElementSite[],
     readonly textSites: readonly TemplateCompilerCompletedTextSite[],
     readonly ignoredNodes: readonly TemplateCompilerSiteCursorIgnoredNodeEvent[],
@@ -108,6 +115,10 @@ export class TemplateCompilerOrdinaryRootCursorCompletionReceipt {
       || endpoint.execution !== transcript.binding.execution
       || endpoint.lane !== transcript.binding.lane
       || endpoint.bootstrapClosure !== transcript.binding.bootstrapClosure
+      || orderedSites.length !== elementSites.length + textSites.length
+      || orderedSites.some((site, index) =>
+        index > 0 && orderedSites[index - 1]!.event.ordinal >= site.event.ordinal
+      )
       || elementSites.length !== transcript.attributeOwners.length
       || elementSites.length !== transcript.hydrateElementEnvelopes.length
     ) {
@@ -330,12 +341,20 @@ export function completeTemplateCompilerOrdinaryRoot(
     envelopesByElement.get(event.element)!,
   ));
   const textSites = texts.map((event) => new TemplateCompilerCompletedTextSite(event));
+  const elementsByEvent = new Map(elementSites.map((site) => [site.event, site]));
+  const textsByEvent = new Map(textSites.map((site) => [site.event, site]));
+  const orderedSites: TemplateCompilerCompletedOrdinarySite[] = [];
+  for (const event of transcript.events) {
+    if (event instanceof TemplateCompilerSiteCursorElementEvent) orderedSites.push(elementsByEvent.get(event)!);
+    if (event instanceof TemplateCompilerSiteCursorTextEvent) orderedSites.push(textsByEvent.get(event)!);
+  }
   return new TemplateCompilerOrdinaryRootCompletionResult(
     new TemplateCompilerOrdinaryRootCursorCompletionReceipt(
       ordinaryRootCompletionAuthority,
       transcript,
       endpoint,
       compilerReads,
+      orderedSites,
       elementSites,
       textSites,
       transcript.events.filter((event): event is TemplateCompilerSiteCursorIgnoredNodeEvent =>

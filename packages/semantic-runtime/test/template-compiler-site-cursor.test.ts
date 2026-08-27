@@ -71,6 +71,12 @@ import {
   TemplateCompilerOrdinaryRootCompletionState,
 } from '../src/template/template-compiler-root-completion.js';
 import {
+  assembleTemplateCompilerOrdinaryRootRows,
+  TemplateCompilerCaptureSyntaxDecisionKind,
+  TemplateCompilerOccurrenceRowAssemblyState,
+  TemplateCompilerOccurrenceSourcePosture,
+} from '../src/template/template-compiler-occurrence-row-assembly.js';
+import {
   TemplateCompilerOccurrenceOnlyDisposition,
   TemplateCompilerSiteSpendDisposition,
 } from '../src/template/template-compiler-site-spend-ledger.js';
@@ -315,10 +321,13 @@ describe('template compiler root site cursor', () => {
       'cursor-live-nonsingular',
       'cursor-live-staging',
       'cursor-progression',
+      'cursor-row-interleave',
+      'cursor-row-merged',
       'cursor-slot-inert',
       'cursor-slot-valid',
       'cursor-wide',
     ];
+    const assemblies = new Map<string, NonNullable<ReturnType<typeof assembleTemplateCompilerOrdinaryRootRows>['assembly']>>();
     for (const name of names) {
       const result = fixture.run(name).execute();
       const transcript = requireTranscript(result);
@@ -337,11 +346,130 @@ describe('template compiler root site cursor', () => {
         .toEqual(transcript.attributeOwners.map((owner) => owner.element));
       expect(new Set(receipt?.elementSites.map((site) => site.rowSlotKey)).size, name)
         .toBe(receipt?.elementSites.length);
+      const rowResult = assembleTemplateCompilerOrdinaryRootRows(receipt!);
+      expect(rowResult.state, name).toBe(TemplateCompilerOccurrenceRowAssemblyState.Exact);
+      expect(rowResult.reasons, name).toEqual([]);
+      const rowAssembly = rowResult.assembly;
+      if (rowAssembly == null) throw new Error(`Expected occurrence row assembly for '${name}'.`);
+      expect(new Set([
+        ...rowAssembly.rows.map((row) => row.site),
+        ...rowAssembly.staticSites.map((site) => site.site),
+      ]).size, name).toBe(receipt?.orderedSites.length);
+      assemblies.set(name, rowAssembly);
     }
 
     const duplicate = requireTranscript(fixture.run('cursor-live-duplicate').execute());
     expect(duplicate.ledger.state).toBe('open');
     expect(duplicate.ledger.rawUnspent).toHaveLength(2);
+
+    expect(assemblies.get('cursor-empty')?.rows.map((row) => row.instructionKinds)).toEqual([
+      ['text-binding'],
+    ]);
+    expect(assemblies.get('cursor-live-staging')?.rows.map((row) => row.instructionKinds)).toEqual([
+      ['hydrate-element'],
+      ['hydrate-element'],
+      ['hydrate-attribute'],
+      ['property-binding', 'property-binding'],
+    ]);
+    expect(assemblies.get('cursor-live-staging')?.rows[0]?.hydrateElement?.envelope.captures)
+      .toHaveLength(3);
+    expect(assemblies.get('cursor-live-staging')?.rows[0]?.hydrateElement?.captures.map((capture) =>
+      capture.decisionKind
+    )).toEqual([
+      TemplateCompilerCaptureSyntaxDecisionKind.ReuseAuthored,
+      TemplateCompilerCaptureSyntaxDecisionKind.ReuseAuthored,
+      TemplateCompilerCaptureSyntaxDecisionKind.EffectiveSyntaxRequired,
+    ]);
+    expect(assemblies.get('cursor-live-nonsingular')?.rows.some((row) =>
+      row.sourcePosture === TemplateCompilerOccurrenceSourcePosture.BrowserEffective
+    )).toBe(true);
+    expect(assemblies.get('cursor-foster')?.staticSites.map((site) => [
+      site.site.siteKind === 'element' ? site.site.event.element.tagName : 'text',
+      site.sourcePosture,
+    ])).toEqual([
+      ['table', TemplateCompilerOccurrenceSourcePosture.AuthoredExact],
+      ['text', TemplateCompilerOccurrenceSourcePosture.AuthoredExact],
+    ]);
+    expect(assemblies.get('cursor-slot-valid')?.receipt.transcript.rootState.hasSlots).toBe(true);
+    expect(assemblies.get('cursor-row-interleave')?.rows.map((row) => [
+      row.site.siteKind,
+      row.instructionKinds,
+    ])).toEqual([
+      ['text', ['text-binding']],
+      ['text', ['text-binding']],
+      ['element', ['property-binding']],
+      ['text', ['text-binding']],
+      ['element', ['property-binding']],
+      ['text', ['text-binding']],
+    ]);
+    expect(assemblies.get('cursor-row-interleave')?.textExpansions.map((expansion) =>
+      expansion.outputs.map((output) => output.outputKind === 'static' ? output.text : 'hole')
+    )).toEqual([
+      ['before ', 'hole', ' middle ', 'hole', ' end'],
+      ['inner ', 'hole', ' tail'],
+      ['after ', 'hole', ' done\n'],
+    ]);
+    expect(assemblies.get('cursor-row-merged')?.rows.map((row) => row.instructionKinds)).toEqual([
+      ['hydrate-element', 'hydrate-attribute', 'property-binding'],
+    ]);
+    expect(assemblies.get('cursor-row-merged')?.rows[0]?.hydrateElement?.envelope.bindableInstructions)
+      .toHaveLength(1);
+    expect(assemblies.get('cursor-as-element-empty')?.rows).toEqual([]);
+    expect(assemblies.get('cursor-slot-inert')?.rows).toEqual([]);
+
+    const duplicateRows = assemblies.get('cursor-live-duplicate')?.rows ?? [];
+    expect(duplicateRows.map((row) => row.instructionKinds.length)).toEqual([1, 2]);
+    expect(duplicateRows.map((row) => row.instructionTargets)).toEqual([
+      ['title'],
+      ['contentEditable', 'textContent'],
+    ]);
+
+    const nonSingularRows = assemblies.get('cursor-live-nonsingular')?.rows ?? [];
+    expect(nonSingularRows).toHaveLength(2);
+    expect(nonSingularRows.every((row) =>
+      row.sourcePosture === TemplateCompilerOccurrenceSourcePosture.BrowserEffective
+      && row.authoredNode == null
+    )).toBe(true);
+    expect(nonSingularRows.map((row) => row.instructionTargets)).toEqual([['title'], ['title']]);
+
+    const wideRows = assemblies.get('cursor-wide')?.rows ?? [];
+    expect(wideRows).toHaveLength(1);
+    expect(wideRows[0]?.instructions).toHaveLength(128);
+    expect(wideRows[0]?.instructionTargets).toEqual(Array.from({ length: 128 }, (_, index) => `data-${index}`));
+
+    const mergedRow = assemblies.get('cursor-row-merged')?.rows[0];
+    if (mergedRow?.site.siteKind !== 'element') throw new Error('Expected merged element row.');
+    expect(mergedRow.instructionTargets).toEqual(['cursor-merged-leaf', 'cursor-merged-ca', 'data-extra']);
+    expect(mergedRow.hydrateElement?.envelope.bindableInstructions.map((instruction) =>
+      'targetProperty' in instruction ? instruction.targetProperty : null
+    )).toEqual(['title']);
+    const hydrateAttribute = mergedRow.instructions.find((instruction) =>
+      instruction.instructionKind === 'hydrate-attribute'
+    );
+    if (hydrateAttribute == null || !('bindingInstructionProductHandles' in hydrateAttribute)) {
+      throw new Error('Expected merged HydrateAttribute instruction.');
+    }
+    const mergedInstructions = new Map(mergedRow.site.owner.instructionStaging.instructions.map((instruction) => [
+      instruction.productHandle,
+      instruction,
+    ]));
+    expect(hydrateAttribute.bindingInstructionProductHandles.map((handle) => {
+      const instruction = mergedInstructions.get(handle);
+      return instruction != null && 'targetProperty' in instruction ? instruction.targetProperty : null;
+    })).toEqual(['value']);
+
+    const allRows = [...assemblies.values()].flatMap((assembly) => assembly.rows);
+    expect(allRows).toHaveLength(26);
+    expect(allRows.reduce((count, row) => count + row.instructionKinds.length, 0)).toBe(159);
+    const instructionKindCounts = Object.fromEntries([...new Set(allRows.flatMap((row) => row.instructionKinds))]
+      .map((kind) => [kind, allRows.flatMap((row) => row.instructionKinds).filter((candidate) => candidate === kind).length]));
+    expect(instructionKindCounts).toEqual({
+      'text-binding': 6,
+      'property-binding': 141,
+      interpolation: 3,
+      'hydrate-attribute': 6,
+      'hydrate-element': 3,
+    });
   });
 
   test('never promotes the current typed ordinary-root frontiers into completion receipts', () => {
@@ -384,6 +512,8 @@ describe('template compiler root site cursor', () => {
 
     expect(run.binding.execution.siteExecutionEndpointIsCurrent(result.siteEndpoint)).toBe(false);
     expect(receipt.isCurrent()).toBe(false);
+    expect(assembleTemplateCompilerOrdinaryRootRows(receipt).state)
+      .toBe(TemplateCompilerOccurrenceRowAssemblyState.Ineligible);
   });
 
   test('keeps central structural effects and reached live invalidity distinct', () => {
@@ -731,7 +861,11 @@ describe('template compiler root site cursor', () => {
     expect(capture?.draft?.bindableInstructions.map((instruction) =>
       'targetProperty' in instruction ? instruction.targetProperty : null
     )).toEqual(['title']);
-    expect(capture?.draft?.captures.map((entry) => entry.syntax.target)).toEqual(['id', 'data-extra']);
+    expect(capture?.draft?.captures.map((entry) => entry.syntax.target)).toEqual([
+      'id',
+      'data-extra',
+      'data-upper',
+    ]);
     expect(blockerProjection(capture!)).toEqual([
       [TemplateCompilerHydrateElementBlockerScope.Downstream, TemplateCompilerHydrateElementBlockerKind.TargetRowPlacementPending],
       [TemplateCompilerHydrateElementBlockerScope.Downstream, TemplateCompilerHydrateElementBlockerKind.CaptureSyntaxPublicationPending],

@@ -33,6 +33,11 @@ import {
 import type { TemplateCompilerLiveAttributeOwnerResult } from './template-compiler-live-attribute-assembly.js';
 import type { TemplateCompilerHydrateElementStagingResult } from './template-compiler-hydrate-element-staging.js';
 import type { TemplateCompilerLiveAllocationSnapshot } from './template-compiler-live-allocation.js';
+import {
+  assembleTemplateCompilerOrdinaryRootRows,
+  TemplateCompilerTextExpansionOutputKind,
+  type TemplateCompilerOccurrenceRowAssembly,
+} from './template-compiler-occurrence-row-assembly.js';
 import { TemplateCompilerPreWalkRemainderAuthority } from './template-compiler-prewalk-remainder.js';
 import {
   bindTemplateCompilerRootSiteInvocation,
@@ -128,6 +133,20 @@ export interface TemplateCompilerRootSiteCursorTranscriptObservation
   readonly completedRowSiteCount: number;
   readonly siteOperationCount: number;
   readonly completionCompilerReadCount: number;
+  readonly occurrenceRowAssemblyState: string;
+  readonly occurrenceRowAssemblyReasonKinds: readonly string[];
+  readonly occurrenceRowCount: number;
+  readonly occurrenceStaticSiteCount: number;
+  readonly occurrenceMembershipCount: number;
+  readonly occurrenceInstructionKindCounts: Readonly<Record<string, number>>;
+  readonly occurrenceRowInstructionTargets: readonly (readonly (string | null)[])[];
+  readonly occurrenceRowInstructionSignatures: readonly (readonly (readonly unknown[])[])[];
+  readonly occurrenceSourcePostureCounts: Readonly<Record<string, number>>;
+  readonly occurrenceCaptureDecisionCounts: Readonly<Record<string, number>>;
+  readonly occurrenceTextExpansionCount: number;
+  readonly occurrenceTextExpansionOutputCount: number;
+  readonly occurrencePrePlanEffectState: string | null;
+  readonly occurrenceRowDigest: string | null;
   readonly ledgerState: string;
   readonly spendDispositionCounts: Readonly<Record<string, number>>;
   readonly remainderKindCounts: Readonly<Record<string, number>>;
@@ -338,6 +357,10 @@ export function observeTemplateCompilerRootSiteCursor(
     throw new Error('Cursor transcript observation lost its ordinary-root completion decision.');
   }
   const completionReceipt = completion.receipt;
+  const occurrenceRows = completionReceipt == null
+    ? null
+    : assembleTemplateCompilerOrdinaryRootRows(completionReceipt);
+  const occurrenceAssembly = occurrenceRows?.assembly ?? null;
   const eventKindCounts: Record<string, number> = {};
   const phaseKinds: string[] = [];
   const phaseCounts: Record<string, number> = {};
@@ -407,6 +430,30 @@ export function observeTemplateCompilerRootSiteCursor(
         + completionReceipt.textSites.reduce((count, site) => count + site.holeSlotKeys.length, 0),
     siteOperationCount: cursor.siteEndpoint?.siteOperations.length ?? 0,
     completionCompilerReadCount: completionReceipt?.compilerReads.length ?? 0,
+    occurrenceRowAssemblyState: occurrenceRows?.state ?? 'not-applicable',
+    occurrenceRowAssemblyReasonKinds: occurrenceRows?.reasons.map((reason) => reason.reasonKind) ?? [],
+    occurrenceRowCount: occurrenceAssembly?.rows.length ?? 0,
+    occurrenceStaticSiteCount: occurrenceAssembly?.staticSites.length ?? 0,
+    occurrenceMembershipCount: occurrenceAssembly?.occurrenceMemberships.length ?? 0,
+    occurrenceInstructionKindCounts: counts(
+      occurrenceAssembly?.rows.flatMap((row) => row.instructionKinds) ?? [],
+    ),
+    occurrenceRowInstructionTargets: occurrenceAssembly?.rows.map((row) => row.instructionTargets) ?? [],
+    occurrenceRowInstructionSignatures: occurrenceAssembly?.rows.map((row) =>
+      row.instructionSemanticSignatures
+    ) ?? [],
+    occurrenceSourcePostureCounts: counts([
+      ...(occurrenceAssembly?.rows.map((row) => row.sourcePosture) ?? []),
+      ...(occurrenceAssembly?.staticSites.map((site) => site.sourcePosture) ?? []),
+    ]),
+    occurrenceCaptureDecisionCounts: counts(occurrenceAssembly?.captureSyntaxDecisionKinds ?? []),
+    occurrenceTextExpansionCount: occurrenceAssembly?.textExpansions.length ?? 0,
+    occurrenceTextExpansionOutputCount: occurrenceAssembly?.textExpansions.reduce(
+      (count, expansion) => count + expansion.outputs.length,
+      0,
+    ) ?? 0,
+    occurrencePrePlanEffectState: occurrenceAssembly?.prePlanEffectState ?? null,
+    occurrenceRowDigest: occurrenceAssembly == null ? null : occurrenceRowDigest(occurrenceAssembly),
     ledgerState: transcript.ledger.state,
     spendDispositionCounts: counts(transcript.ledger.spends.map((spend) => spend.disposition)),
     remainderKindCounts: counts(
@@ -435,6 +482,57 @@ export function observeTemplateCompilerRootSiteCursor(
       expectedLaneOperationCountDelta,
     },
   };
+}
+
+function occurrenceRowDigest(assembly: TemplateCompilerOccurrenceRowAssembly): string {
+  const hash = createHash('sha256');
+  const encoded = JSON.stringify([
+    assembly.prePlanEffectState,
+    [
+      assembly.rootMembership.stableSlotKey,
+      assembly.rootMembership.compilerCarrier.occurrenceKey,
+      assembly.rootMembership.compilerContent.occurrenceKey,
+    ],
+    assembly.occurrenceMemberships.map((membership) => [
+      membership.stableSlotKey,
+      membership.occurrence.occurrenceKey,
+      membership.authoredNode?.productHandle ?? null,
+      membership.sourcePosture,
+    ]),
+    assembly.rows.map((row) => [
+      row.stableSlotKey,
+      row.ordinal,
+      row.projectedTargetOrdinal,
+      row.occurrence.occurrenceKey,
+      row.sourcePosture,
+      row.instructionSemanticSignatures,
+      row.instructionTargets,
+    ]),
+    assembly.staticSites.map((site) => [
+      site.site.siteKind,
+      site.site.event.ordinal,
+      site.site.siteKind === 'element'
+        ? site.site.event.element.occurrenceKey
+        : site.site.event.text.occurrenceKey,
+      site.sourcePosture,
+    ]),
+    assembly.textExpansions.map((expansion) => [
+      expansion.stableSlotKey,
+      expansion.site.event.text.occurrenceKey,
+      expansion.outputs.map((output) => output.outputKind === TemplateCompilerTextExpansionOutputKind.Static
+        ? [output.outputKind, output.stableSlotKey, output.outputOrdinal, output.partIndex, output.text]
+        : [
+            output.outputKind,
+            output.stableSlotKey,
+            output.outputOrdinal,
+            output.holeIndex,
+            output.hole.expressionChainIndex,
+            output.hole.instruction.instructionKind,
+          ]),
+    ]),
+  ]);
+  hash.update(encoded);
+  return `sha256:${hash.digest('hex')}`;
 }
 
 function unavailable(
@@ -599,6 +697,7 @@ function cursorEventDigest(
                 event.parentOrdinal,
                 nodeIndex(event.capturedSuccessor),
                 event.browserOriginState,
+                event.authoredText?.productHandle ?? null,
                 event.spend?.disposition ?? null,
                 event.occurrenceOnlyRow?.disposition ?? null,
                 event.siteOutcome,

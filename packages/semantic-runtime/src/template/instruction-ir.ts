@@ -690,6 +690,165 @@ export type TemplateInstruction =
   | StateBindingInstruction
   | DispatchBindingInstruction;
 
+/** Explicit semantic signature for parity/digest projections; excludes allocation identity and source provenance. */
+export function templateInstructionSemanticSignature(instruction: TemplateInstruction): readonly unknown[] {
+  switch (instruction.instructionKind) {
+    case TemplateInstructionKind.HydrateElement:
+      return [
+        instruction.instructionKind,
+        instruction.elementName,
+        instruction.resourceLookupName,
+        instruction.resource?.name ?? null,
+        instruction.projections.map((projection) => projection.slotName),
+        instruction.discardedProjectionContributors.length,
+        instruction.auSlotProcessContent?.name ?? null,
+        instruction.auSlotProcessContentRemovedChildNodes.length,
+        instruction.bindableInstructionProductHandles,
+        instruction.captureSyntaxProductHandles,
+        instruction.containerless,
+      ];
+    case TemplateInstructionKind.HydrateAttribute:
+      return [
+        instruction.instructionKind,
+        instruction.resourceLookupName,
+        instruction.resource?.name ?? null,
+        instruction.bindingInstructionProductHandles,
+      ];
+    case TemplateInstructionKind.HydrateTemplateController:
+      return [
+        instruction.instructionKind,
+        instruction.controllerName,
+        instruction.resource?.name ?? null,
+        instruction.childCompiledTemplate?.productHandle ?? null,
+        instruction.bindingInstructionProductHandles,
+      ];
+    case TemplateInstructionKind.HydrateLetElement:
+      return [instruction.instructionKind, instruction.instructionProductHandles, instruction.toBindingContext];
+    case TemplateInstructionKind.PropertyBinding:
+      return [
+        instruction.instructionKind,
+        instruction.targetProperty,
+        instruction.expressionProductHandle,
+        instruction.bindingMode,
+        instruction.command?.name ?? null,
+      ];
+    case TemplateInstructionKind.Interpolation:
+      return [instruction.instructionKind, instruction.target, instruction.expressionProductHandles];
+    case TemplateInstructionKind.ListenerBinding:
+      return [
+        instruction.instructionKind,
+        instruction.eventName,
+        instruction.expressionProductHandle,
+        instruction.strategy,
+        instruction.eventModifier,
+        instruction.command?.name ?? null,
+      ];
+    case TemplateInstructionKind.IteratorBinding:
+      return [
+        instruction.instructionKind,
+        instruction.targetProperty,
+        instruction.localNames,
+        instruction.objectBindingSourceKeys,
+        instruction.iterableExpressionProductHandle,
+        instruction.tailInstructionProductHandles,
+        'frameworkInstructionType' in instruction ? instruction.frameworkInstructionType : null,
+      ];
+    case TemplateInstructionKind.RefBinding:
+      return [instruction.instructionKind, instruction.target, instruction.expressionProductHandle];
+    case TemplateInstructionKind.LetBinding:
+      return [instruction.instructionKind, instruction.target, instruction.expressionProductHandle, instruction.literalValue];
+    case TemplateInstructionKind.TextBinding:
+      return [instruction.instructionKind, instruction.expressionProductHandle, instruction.expressionChainIndex];
+    case TemplateInstructionKind.SetProperty:
+      return [instruction.instructionKind, instruction.targetProperty, instruction.value];
+    case TemplateInstructionKind.SetAttribute:
+      return [instruction.instructionKind, instruction.targetAttribute, instruction.value];
+    case TemplateInstructionKind.SetClassAttribute:
+    case TemplateInstructionKind.SetStyleAttribute:
+      return [instruction.instructionKind, instruction.value];
+    case TemplateInstructionKind.StylePropertyBinding:
+      return [instruction.instructionKind, instruction.targetProperty, instruction.expressionProductHandle];
+    case TemplateInstructionKind.AttributeBinding:
+      return [instruction.instructionKind, instruction.attr, instruction.target, instruction.expressionProductHandle];
+    case TemplateInstructionKind.MultiAttr:
+      return [
+        instruction.instructionKind,
+        instruction.target,
+        instruction.command,
+        instruction.value,
+        instruction.expressionProductHandle,
+      ];
+    case TemplateInstructionKind.SpreadTransferedBinding:
+      return [instruction.instructionKind];
+    case TemplateInstructionKind.SpreadElementPropBinding:
+      return [instruction.instructionKind, instruction.instructionProductHandle];
+    case TemplateInstructionKind.SpreadValueBinding:
+      return [instruction.instructionKind, instruction.target, instruction.value, instruction.expressionProductHandle];
+    case TemplateInstructionKind.TranslationBinding:
+      return [instruction.instructionKind, instruction.rawExpression, instruction.target];
+    case TemplateInstructionKind.TranslationBindBinding:
+    case TemplateInstructionKind.TranslationParametersBinding:
+      return [instruction.instructionKind, instruction.target, instruction.expressionProductHandle];
+    case TemplateInstructionKind.StateBinding:
+      return [
+        instruction.instructionKind,
+        instruction.rawExpression,
+        instruction.target,
+        instruction.storeName,
+        instruction.expressionProductHandle,
+      ];
+    case TemplateInstructionKind.DispatchBinding:
+      return [
+        instruction.instructionKind,
+        instruction.eventName,
+        instruction.rawExpression,
+        instruction.storeName,
+        instruction.expressionProductHandle,
+      ];
+  }
+}
+
+/** Primary runtime target/resource/event selected by one instruction, when the family has one. */
+export function templateInstructionSemanticTarget(instruction: TemplateInstruction): string | null {
+  switch (instruction.instructionKind) {
+    case TemplateInstructionKind.HydrateElement:
+      return instruction.elementName;
+    case TemplateInstructionKind.HydrateAttribute:
+      return instruction.resourceLookupName;
+    case TemplateInstructionKind.HydrateTemplateController:
+      return instruction.controllerName;
+    case TemplateInstructionKind.PropertyBinding:
+    case TemplateInstructionKind.IteratorBinding:
+    case TemplateInstructionKind.SetProperty:
+    case TemplateInstructionKind.StylePropertyBinding:
+      return instruction.targetProperty;
+    case TemplateInstructionKind.Interpolation:
+      return instruction.target;
+    case TemplateInstructionKind.ListenerBinding:
+    case TemplateInstructionKind.DispatchBinding:
+      return instruction.eventName;
+    case TemplateInstructionKind.RefBinding:
+    case TemplateInstructionKind.LetBinding:
+    case TemplateInstructionKind.AttributeBinding:
+    case TemplateInstructionKind.MultiAttr:
+    case TemplateInstructionKind.SpreadValueBinding:
+    case TemplateInstructionKind.TranslationBinding:
+    case TemplateInstructionKind.TranslationBindBinding:
+    case TemplateInstructionKind.TranslationParametersBinding:
+    case TemplateInstructionKind.StateBinding:
+      return instruction.target;
+    case TemplateInstructionKind.SetAttribute:
+      return instruction.targetAttribute;
+    case TemplateInstructionKind.HydrateLetElement:
+    case TemplateInstructionKind.TextBinding:
+    case TemplateInstructionKind.SetClassAttribute:
+    case TemplateInstructionKind.SetStyleAttribute:
+    case TemplateInstructionKind.SpreadTransferedBinding:
+    case TemplateInstructionKind.SpreadElementPropBinding:
+      return null;
+  }
+}
+
 export function expressionProductHandlesForInstruction(
   instruction: TemplateInstruction,
 ): readonly ProductHandle[] {

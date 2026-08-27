@@ -1098,6 +1098,9 @@ class TemplateCompilerRootSiteCursor {
   ): void {
     const originState = this.semantics.originState(text);
     const route = this.semantics.originRoute(text);
+    const authoredText = route?.exactOrigin == null
+      ? null
+      : this.binding.index.textForProduct(route.exactOrigin.authored.productHandle);
     const bundle = route?.routeKind === TemplateCompilerBrowserOriginRouteKind.Singular
       ? this.binding.index.siteForText(route.exactOrigin!.authored.productHandle)
       : null;
@@ -1111,6 +1114,7 @@ class TemplateCompilerRootSiteCursor {
         parentOrdinal,
         successor,
         originState,
+        authoredText,
         null,
         null,
         row,
@@ -1138,6 +1142,7 @@ class TemplateCompilerRootSiteCursor {
         parentOrdinal,
         successor,
         originState,
+        authoredText,
         null,
         null,
         row,
@@ -1164,6 +1169,7 @@ class TemplateCompilerRootSiteCursor {
         parentOrdinal,
         successor,
         originState,
+        authoredText,
         null,
         null,
         null,
@@ -1180,9 +1186,6 @@ class TemplateCompilerRootSiteCursor {
       return;
     }
     if (bundle == null) {
-      const authoredText = route?.exactOrigin == null
-        ? null
-        : this.binding.index.textForProduct(route.exactOrigin.authored.productHandle);
       if (authoredText == null || authoredText.text !== text.text) {
         this.events.push(new TemplateCompilerSiteCursorTextEvent(
           siteCursorConstructionAuthority,
@@ -1192,6 +1195,7 @@ class TemplateCompilerRootSiteCursor {
           parentOrdinal,
           successor,
           originState,
+          authoredText,
           null,
           null,
           null,
@@ -1227,6 +1231,7 @@ class TemplateCompilerRootSiteCursor {
         parentOrdinal,
         successor,
         originState,
+        authoredText,
         null,
         null,
         row,
@@ -1269,6 +1274,7 @@ class TemplateCompilerRootSiteCursor {
       parentOrdinal,
       successor,
       originState,
+      authoredText,
       bundle,
       spend,
       null,

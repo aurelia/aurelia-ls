@@ -29,7 +29,7 @@ import type {
   TemplateCompilerSiteSpend,
 } from './template-compiler-site-spend-ledger.js';
 import { TemplateCompilerSiteSpendDisposition } from './template-compiler-site-spend-ledger.js';
-import type { HtmlElement } from './html-ir.js';
+import type { HtmlElement, HtmlText } from './html-ir.js';
 import type {
   TemplateCompilerProcessContentPlan,
   TemplateCompilerProcessContentResult,
@@ -221,6 +221,7 @@ export class TemplateCompilerSiteCursorTextEvent extends TemplateCompilerSiteCur
     readonly parentOrdinal: number,
     readonly capturedSuccessor: TemplateCompilerNodeOccurrence | null,
     readonly browserOriginState: TemplateCompilerPreWalkBrowserOriginState,
+    readonly authoredText: HtmlText | null,
     readonly bundle: TemplateCompilerNormalizedTextSite | null,
     readonly spend: TemplateCompilerSiteSpend | null,
     readonly occurrenceOnlyRow: TemplateCompilerOccurrenceOnlyRow | null,
@@ -234,6 +235,7 @@ export class TemplateCompilerSiteCursorTextEvent extends TemplateCompilerSiteCur
   }
 
   isCoherent(): boolean {
+    if (this.bundle != null && this.authoredText !== this.bundle.text) return false;
     const expectsStaging = this.siteOutcome === TemplateCompilerSiteCursorSiteOutcome.Complete
       && this.spend?.disposition === TemplateCompilerSiteSpendDisposition.BrowserCompatible
       && this.bundle?.expressionParse.result.kind === ExpressionParseResultKind.InterpolationSuccess;

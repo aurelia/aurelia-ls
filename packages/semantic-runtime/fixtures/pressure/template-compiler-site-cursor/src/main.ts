@@ -23,6 +23,8 @@ import cursorProcessContentEmptyTemplate from './cursor-process-content-empty.ht
 import cursorProcessContentNamedTemplate from './cursor-process-content-named.html';
 import cursorProcessContentArbitraryTemplate from './cursor-process-content-arbitrary.html';
 import cursorProcessContentDuplicateNameTemplate from './cursor-process-content-duplicate-name.html';
+import cursorRowInterleaveTemplate from './cursor-row-interleave.html';
+import cursorRowMergedTemplate from './cursor-row-merged.html';
 import cursorShapesTemplate from './cursor-shapes.html';
 import cursorShadowContainerlessTemplate from './cursor-shadow-containerless.html';
 import cursorSlotInertTemplate from './cursor-slot-inert.html';
@@ -145,6 +147,39 @@ class CursorLiveStaging {
   spread = { title: 'spread' };
   value = 'selected';
   multiple = true;
+}
+
+@customElement({ name: 'cursor-merged-leaf' })
+class CursorMergedLeaf {
+  @bindable title = '';
+}
+
+@customAttribute('cursor-merged-ca')
+class CursorMergedCustomAttribute {
+  @bindable value = '';
+}
+
+@customElement({
+  name: 'cursor-row-merged',
+  template: cursorRowMergedTemplate,
+  dependencies: [CursorMergedLeaf, CursorMergedCustomAttribute],
+})
+class CursorRowMerged {
+  title = 'title';
+  ca = 'ca';
+  extra = 'extra';
+}
+
+@customElement({
+  name: 'cursor-row-interleave',
+  template: cursorRowInterleaveTemplate,
+})
+class CursorRowInterleave {
+  a = 'a';
+  b = 'b';
+  c = 'c';
+  d = 'd';
+  e = 'e';
 }
 
 @customElement({
@@ -332,6 +367,8 @@ void new Aurelia()
     CursorLiveNonsingular,
     CursorLiveMultiBinding,
     CursorLiveStaging,
+    CursorRowMerged,
+    CursorRowInterleave,
     CursorCommentShield,
     CursorAsElementEmpty,
     CursorProjection,

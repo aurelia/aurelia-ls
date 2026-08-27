@@ -337,7 +337,11 @@ describe('template compiler live attribute owner assembly', () => {
     expect(capture.instructionStaging.elementBindableInstructions).toEqual([
       expect.objectContaining({ instructionKind: 'set-property', targetProperty: 'title', value: 'literal' }),
     ]);
-    expect(capture.instructionStaging.captures.map((entry) => entry.syntax.target)).toEqual(['id', 'data-extra']);
+    expect(capture.instructionStaging.captures.map((entry) => entry.syntax.target)).toEqual([
+      'id',
+      'data-extra',
+      'data-upper',
+    ]);
     expect(capture.instructionStaging.directRowTail).toEqual([]);
 
     const spread = run.assemble(elementWithId(run.binding.execution.forest, 'spread'));
