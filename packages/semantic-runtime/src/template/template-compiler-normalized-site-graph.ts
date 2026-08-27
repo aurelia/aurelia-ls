@@ -56,6 +56,7 @@ import {
   sameNormalizedNodeReference,
   sameNormalizedValueSiteReference,
 } from './template-compiler-normalized-reference.js';
+import type { TemplateCompilerAttributeOwnerProgressionSite } from './attribute-owner-progression.js';
 import {
   TemplateValueSiteKind,
   type TemplateExpressionParse,
@@ -164,6 +165,7 @@ class TemplateCompilerNormalizedSiteGraphValidator {
     this.validateFamilyAuthority();
     this.indexGraph();
     this.validateGraphReferences();
+    this.validateAttributeOwnerProgression();
 
     const attributeSites: TemplateCompilerNormalizedSite[] = [];
     for (const attribute of this.compilation.html.attributes) {
@@ -529,6 +531,8 @@ class TemplateCompilerNormalizedSiteGraphValidator {
       ...(multiBinding?.commandLowerings ?? []),
     ];
 
+    const ownerProgressionSite = this.ownerProgressionSite(attribute, syntax, classification, owner);
+    if (ownerProgressionSite == null) return null;
     return new TemplateCompilerNormalizedSite(
       attribute.productHandle,
       owner,
@@ -539,6 +543,7 @@ class TemplateCompilerNormalizedSiteGraphValidator {
       primaryExpressionParse,
       command,
       multiBinding,
+      ownerProgressionSite,
       new TemplateCompilerNormalizedSiteOutcomeRoute(
         classification,
         routeLowerings,
@@ -548,6 +553,62 @@ class TemplateCompilerNormalizedSiteGraphValidator {
         this.compilation.compiledTemplate,
       ),
     );
+  }
+
+  private ownerProgressionSite(
+    attribute: HtmlAttribute,
+    syntax: AttributeSyntax,
+    classification: AttributeClassification,
+    owner: HtmlElementAttributeOwner,
+  ): TemplateCompilerAttributeOwnerProgressionSite | null {
+    const progression = this.compilation.attributeOwnerProgression;
+    const site = progression.siteForAttribute(attribute.productHandle);
+    if (
+      site == null
+      || site.attribute !== attribute
+      || site.syntax !== syntax
+      || site.classification !== classification
+      || site.owner?.element !== owner.element
+      || site.disposition == null
+    ) {
+      this.mismatch(
+        TemplateCompilerNormalizedSiteMismatchKind.AttributeOwnerProgressionMismatch,
+        'attribute-site/owner-progression',
+        'Attribute bundle does not retain its exact completed JIT owner progression site.',
+        [attribute.productHandle, syntax.productHandle, classification.productHandle],
+      );
+      return null;
+    }
+    return site;
+  }
+
+  private validateAttributeOwnerProgression(): void {
+    const progression = this.compilation.attributeOwnerProgression;
+    const sites = progression.readSites();
+    const html = this.compilation.html;
+    const coherentBasis = progression.html.document === html.document
+      && progression.html.nodes.length === html.nodes.length
+      && progression.html.nodes.every((candidate, index) => candidate === html.nodes[index])
+      && progression.html.attributes.length === html.attributes.length
+      && progression.html.attributes.every((candidate, index) => candidate === html.attributes[index]);
+    const coherentSites = sites.length === html.attributes.length
+      && html.attributes.every((attribute, index) => {
+        const site = sites[index];
+        const owners = this.ownersByAttributeProduct.get(attribute.productHandle) ?? [];
+        return site?.attribute === attribute
+          && owners.length === 1
+          && site.owner?.element === owners[0]?.element
+          && site.disposition != null
+          && progression.siteForAttribute(attribute.productHandle) === site;
+      });
+    if (!coherentBasis || !coherentSites) {
+      this.mismatch(
+        TemplateCompilerNormalizedSiteMismatchKind.AttributeOwnerProgressionMismatch,
+        'compilation/attribute-owner-progression',
+        'Attribute owner progression does not conserve one completed site per authored attribute.',
+        html.attributes.map((attribute) => attribute.productHandle),
+      );
+    }
   }
 
   private buildTextSites(): readonly TemplateCompilerNormalizedTextSite[] {

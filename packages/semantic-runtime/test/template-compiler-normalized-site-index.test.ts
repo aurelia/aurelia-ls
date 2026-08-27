@@ -209,6 +209,20 @@ describe('template compiler normalized site index', () => {
     expect(normalizedOwnedHandles.every((handle) => index.ownership.ownerOf(handle) != null)).toBe(true);
   });
 
+  test('refuses a foreign attribute-owner progression as GraphExact authority', () => {
+    const foreignProgression = repeatCompilation.attributeOwnerProgression;
+    const result = buildTemplateCompilerNormalizedSiteIndex(compilationWith(compilation, {
+      bindingCommandLowering: loweringEmission(compilation, {
+        attributeOwnerProgression: foreignProgression,
+      }),
+    }));
+
+    expect(result.state).toBe(TemplateCompilerNormalizedSiteIndexState.Mismatch);
+    expect(result.mismatches).toContainEqual(expect.objectContaining({
+      mismatchKind: TemplateCompilerNormalizedSiteMismatchKind.AttributeOwnerProgressionMismatch,
+    }));
+  });
+
   test('keeps GraphExact distinct from phase-global semantic openness', () => {
     const result = buildTemplateCompilerNormalizedSiteIndex(openCompilation);
     expect(result.state).toBe(TemplateCompilerNormalizedSiteIndexState.GraphExact);

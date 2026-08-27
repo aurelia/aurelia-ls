@@ -89,6 +89,12 @@ export interface HtmlAttributeLike {
 
 export interface HtmlAttributeOwnerLike {
   readonly attributes?: readonly HtmlAttributeLike[];
+  /** DOM-shaped exact lookup supplied by progressive/live owner views without materializing an attribute array. */
+  hasAttribute?(name: string): boolean;
+  /** DOM-shaped exact lookup supplied by progressive/live owner views without materializing an attribute array. */
+  getAttribute?(name: string): string | null;
+  /** O(1) immutable key for the exact attribute state observed by a mapper consumer. */
+  readonly attributeStateKey?: string;
 }
 
 export function normalizeHtmlTagName(tagName: string): string {
@@ -99,6 +105,7 @@ export function htmlAttributeValue(
   owner: HtmlAttributeOwnerLike | null | undefined,
   name: string,
 ): string | null {
+  if (owner?.getAttribute != null) return owner.getAttribute(name);
   return owner?.attributes?.find((attribute) => attribute.rawName?.toLowerCase() === name)?.rawValue ?? null;
 }
 
@@ -106,6 +113,7 @@ export function hasHtmlAttribute(
   owner: HtmlAttributeOwnerLike | null | undefined,
   name: string,
 ): boolean {
+  if (owner?.hasAttribute != null) return owner.hasAttribute(name);
   return owner?.attributes?.some((attribute) => attribute.rawName?.toLowerCase() === name) ?? false;
 }
 

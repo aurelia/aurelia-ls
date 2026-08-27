@@ -665,6 +665,7 @@ function normalizedAttributeSiteWithHandle(attributeProductHandle: ProductHandle
     null,
     null,
     null as never,
+    null as never,
   );
 }
 

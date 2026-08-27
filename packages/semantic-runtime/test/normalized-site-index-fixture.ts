@@ -417,6 +417,7 @@ type LoweringEmissionOverrides = Partial<Pick<BindingCommandLoweringEmission,
   | 'instructions'
   | 'valueSites'
   | 'expressionParses'
+  | 'attributeOwnerProgression'
 >>;
 
 export function loweringEmission(
@@ -435,6 +436,7 @@ export function loweringEmission(
     overrides.valueSites ?? lowering.valueSites,
     overrides.expressionParses ?? lowering.expressionParses,
     lowering.openSeams,
+    overrides.attributeOwnerProgression ?? lowering.attributeOwnerProgression,
     lowering.records,
   );
 }
@@ -474,5 +476,3 @@ export function tracked<T>(values: readonly T[], reads: { count: number }): read
 export function sortedHandles(handles: readonly string[]): readonly string[] {
   return [...handles].sort();
 }
-
-

@@ -126,6 +126,7 @@ import { instructionKindKeyFor } from './instruction-vocabulary.js';
 import { orderCompilerInstructionsForElement } from './compiler-instruction-order.js';
 import { TemplateSpecialAttributeName } from './special-attribute-source.js';
 import { runtimeAttributeName, runtimeElementResourceName } from './runtime-dom-name.js';
+import { compilerRootTemplateElement } from './compiler-root-template.js';
 import {
   BindingCommandLoweringState,
   type BindingCommandLowering,
@@ -830,15 +831,7 @@ class CompiledTemplateInstructionTraversal {
   ) {}
 
   run(): void {
-    const rootNodes = this.input.html.document.rootNodes
-      .map((root) => root.productHandle == null ? null : this.indexes.nodesByProduct.get(root.productHandle) ?? null)
-      .filter((node): node is HtmlElement | HtmlText => node instanceof HtmlElement || node instanceof HtmlText);
-    const rootElements = rootNodes.filter((node): node is HtmlElement => node instanceof HtmlElement);
-    const rootTemplate = rootNodes.every((node) => node instanceof HtmlElement || node.text.trim().length === 0)
-      && rootElements.length === 1
-      && rootElements[0]?.tagName.toLowerCase() === 'template'
-      ? rootElements[0]
-      : null;
+    const rootTemplate = compilerRootTemplateElement(this.input.html);
     const contentRoots = rootTemplate?.children ?? this.input.html.document.rootNodes;
     if (rootTemplate != null) {
       this.assemblyState.recordCompilerReachableNode(rootTemplate, this.assemblyState.targetPlan.root);

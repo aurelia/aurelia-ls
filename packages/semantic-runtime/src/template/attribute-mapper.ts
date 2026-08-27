@@ -1,7 +1,7 @@
 import {
   evaluateStaticCallableTruthiness,
-  StaticCallableExecutionBindings,
-  StaticCallableSlot,
+  type StaticCallableExecutionBindings,
+  type StaticCallableSlot,
   StaticCallableTruthinessKind,
 } from '../evaluation/function-execution.js';
 import {
@@ -25,8 +25,8 @@ import {
   hasHtmlAttribute,
   htmlAttributeValue,
   HtmlNamespaceKind,
+  type HtmlAttributeOwnerLike,
   normalizeHtmlTagName,
-  type HtmlAttributeLike,
 } from './html-ir.js';
 import {
   runtimeAttributeName,
@@ -34,10 +34,9 @@ import {
 } from './runtime-dom-name.js';
 
 /** Minimal element shape consumed by AttrMapper without depending on DOM nodes. */
-export interface TemplateAttributeMapperNode {
+export interface TemplateAttributeMapperNode extends HtmlAttributeOwnerLike {
   readonly tagName: string;
   readonly namespace?: HtmlNamespaceKind;
-  readonly attributes?: readonly HtmlAttributeLike[];
 }
 
 export class AttributeMapperMapping {
@@ -116,11 +115,7 @@ export class AttributeMapperTwoWayRule {
           return StaticInvocationNotApplicable;
         }
         return staticInvocationValue(new EvaluationBooleanValue(
-          node.attributes?.some((attribute) =>
-            attribute.rawName != null
-            && runtimeAttributeName(attribute.rawName, node.namespace)
-              === runtimeAttributeName(name.value, node.namespace)
-          ) ?? false,
+          hasHtmlAttribute(node, runtimeAttributeName(name.value, node.namespace)),
           frame.node,
         ));
       }),

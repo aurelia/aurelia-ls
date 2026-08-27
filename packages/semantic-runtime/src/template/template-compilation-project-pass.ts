@@ -123,6 +123,7 @@ import {
   type BindingCommandLoweringEmission,
   type BindingCommandLoweringRequest,
 } from './binding-command-lowering-materializer.js';
+import type { TemplateCompilerAttributeOwnerProgression } from './attribute-owner-progression.js';
 import {
   CompiledTemplateMaterializer,
   type CompiledTemplateEmission,
@@ -184,6 +185,8 @@ import {
 export class TemplateResourceCompilationEmission {
   /** Top-level and secondary AttrSyntax products in compiler publication order. */
   readonly authoredAttributeSyntaxes: readonly AttributeSyntax[];
+  /** JIT-ordered owner observations consumed by mapper-sensitive lowering. */
+  readonly attributeOwnerProgression: TemplateCompilerAttributeOwnerProgression;
 
   constructor(
     /** Store-local key shared by this resource's compiler and runtime phases. */
@@ -221,6 +224,7 @@ export class TemplateResourceCompilationEmission {
       ...attributeSyntax.syntaxes,
       ...bindingCommandLowering.attributeSyntaxes,
     ];
+    this.attributeOwnerProgression = bindingCommandLowering.attributeOwnerProgression;
   }
 
   /** Retain compiler products while rebasing the generation-bound authorities consumed downstream. */

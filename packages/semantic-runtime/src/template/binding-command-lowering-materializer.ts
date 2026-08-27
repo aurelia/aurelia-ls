@@ -1,10 +1,10 @@
-import { SemanticClaim } from '../kernel/claim.js';
+import { type SemanticClaim } from '../kernel/claim.js';
 import {
   SourceSpanRole,
   type SourceSpanAddress,
 } from '../kernel/address.js';
 import {
-  OpenSeam,
+  type OpenSeam,
   OpenSeamReasonKind,
 } from '../kernel/open-seam.js';
 import type {
@@ -50,38 +50,39 @@ import type {
   AttributeClassificationEmission,
 } from './attribute-classification-materializer.js';
 import {
-  AttributeClassification,
-  AttributePatternExecutionResult,
-  AttributeSyntax,
+  type AttributeClassification,
+  AttributeClassificationKind,
+  type AttributePatternExecutionResult,
+  type AttributeSyntax,
 } from './attribute-syntax.js';
 import type {
   BindingCommandBuildContext,
 } from './binding-command-execution.js';
 import {
   BindingCommandBuildInfo,
-  BindingCommandBuildInput,
+  type BindingCommandBuildInput,
   BindingCommandBuildResult,
-  BindingCommandExecutable,
+  type BindingCommandExecutable,
   BindingCommandExecutionKind,
   BindingCommandInstructionAllocation,
   BindingCommandIteratorParse,
-  BindingCommandLowering,
+  type BindingCommandLowering,
   BindingCommandLoweringState,
   BindingCommandTailSyntax,
   MultiBindingLowering,
-  MultiBindingSegment,
+  type MultiBindingSegment,
 } from './binding-command-execution.js';
 import {
   BindingCommandProductPublisher,
   BindingCommandLoweringPublisher,
-  BindingCommandLoweringSourceSet,
+  type BindingCommandLoweringSourceSet,
   type CommandAttributeClassification,
   type PublishedBindingCommandBuild,
-  PublishedBindingCommandLowering,
+  type PublishedBindingCommandLowering,
   type PublishedMultiBindingExpressionParse,
 } from './binding-command-lowering-publication.js';
 import {
-  TemplateCompilerIssue,
+  type TemplateCompilerIssue,
   TemplateCompilerIssueKind,
   TemplateCompilerIssuePhase,
 } from './compiler-issue.js';
@@ -95,15 +96,24 @@ import {
 } from './built-in-syntax.js';
 import type { TemplateCompilerWorldEmission } from './compiler-world-materializer.js';
 import type { TemplateCompilerReadView } from './compiler-read-view.js';
+import type { TemplateAttributeMapperNode } from './attribute-mapper.js';
+import {
+  TemplateCompilerAttributeOwnerProgression,
+  TemplateCompilerAttributeOwnerProgressionDisposition,
+  TemplateCompilerAttributeOwnerProgressionOpenReason,
+  TemplateCompilerAttributeOwnerProgressionOpenReasonKind,
+  TemplateCompilerAttributeOwnerProgressionState,
+  type TemplateCompilerAttributeOwnerProgressionSite,
+} from './attribute-owner-progression.js';
 import type {
   TemplateAttributeBindablesInfo,
 } from './compiler-world.js';
 import type { TemplateBindableReference } from './compiler-world-reference.js';
 import type { TemplateCompilationUnit } from './compilation-unit.js';
 import {
-  TemplateExpressionParse,
+  type TemplateExpressionParse,
   TemplateExpressionParseState,
-  TemplateValueSite,
+  type TemplateValueSite,
   TemplateValueSiteKind,
 } from './value-site.js';
 import {
@@ -116,12 +126,12 @@ import {
 } from './runtime-expression-source-address.js';
 import type { TemplateValueSiteEmission } from './value-site-materializer.js';
 import {
-  HtmlAttribute,
-  HtmlElementAttributeOwner,
+  type HtmlAttribute,
+  type HtmlElementAttributeOwner,
   htmlElementAttributeOwnersByAttributeProduct,
 } from './html-ir.js';
 import {
-  ParsedMultiBindingSegment,
+  type ParsedMultiBindingSegment,
   parseInlineMultiBindingSegments,
 } from './multi-binding-segments.js';
 import type {
@@ -129,7 +139,7 @@ import type {
 } from './html-ir.js';
 import type { HtmlParseEmission } from './html-parse-materializer.js';
 import {
-  TemplateInstructionKind,
+  type TemplateInstructionKind,
   type TemplateInstruction,
 } from './instruction-ir.js';
 import { TemplateProductDetails } from './product-details.js';
@@ -164,6 +174,7 @@ export class BindingCommandLoweringEmission {
     readonly valueSites: readonly TemplateValueSite[],
     readonly expressionParses: readonly TemplateExpressionParse[],
     readonly openSeams: readonly OpenSeam[],
+    readonly attributeOwnerProgression: TemplateCompilerAttributeOwnerProgression,
     readonly records: readonly KernelStoreRecord[],
   ) {}
 }
@@ -248,7 +259,7 @@ class BindingCommandLoweringFrame {
     return this.openSeams.map((seam) => seam.handle);
   }
 
-  toEmission(): BindingCommandLoweringEmission {
+  toEmission(attributeOwnerProgression: TemplateCompilerAttributeOwnerProgression): BindingCommandLoweringEmission {
     return new BindingCommandLoweringEmission(
       this.buildInputs,
       this.lowerings,
@@ -260,6 +271,7 @@ class BindingCommandLoweringFrame {
       this.valueSites,
       this.expressionParses,
       this.openSeams,
+      attributeOwnerProgression,
       this.records,
     );
   }
@@ -331,6 +343,7 @@ class ClosedMultiBindingSite {
   constructor(
     readonly attribute: HtmlAttribute,
     readonly owner: HtmlElementAttributeOwner,
+    readonly mapperOwner: TemplateAttributeMapperNode,
     readonly classification: AttributeClassification,
     readonly definition: CustomAttributeDefinition,
     readonly parsedSegments: readonly ParsedMultiBindingSegment[],
@@ -488,7 +501,7 @@ class CommandLoweringExecutionContext implements BindingCommandBuildContext {
     readonly source: BindingCommandLoweringSourceSet,
     readonly compilerWorld: TemplateCompilerWorldEmission,
     readonly compilerReads: TemplateCompilerReadView,
-    readonly owner: HtmlElementAttributeOwner,
+    readonly owner: TemplateAttributeMapperNode,
     readonly syntax: AttributeSyntax,
     readonly classification: AttributeClassification,
     readonly command: BindingCommandExecutable,
@@ -657,8 +670,7 @@ export class BindingCommandLoweringMaterializer {
     const frame = new BindingCommandLoweringFrame(source.records);
     const indexes = loweringIndexes(input);
 
-    this.lowerBindingCommandClassifications(input, source, indexes, frame);
-    this.lowerMultiBindingValueSites(input, source, indexes, frame);
+    const attributeOwnerProgression = this.lowerInProgressiveAttributeOrder(input, source, indexes, frame);
     frame.recordMaterialization(new MaterializationRecord(
       this.store.handles.materialization(`binding-command-lowering:${input.localKey}`),
       input.compilationUnit.identityHandle,
@@ -667,60 +679,121 @@ export class BindingCommandLoweringMaterializer {
       frame.openSeamHandles(),
     ));
 
-    return frame.toEmission();
+    return frame.toEmission(attributeOwnerProgression);
   }
 
-  private lowerBindingCommandClassifications(
+  private lowerInProgressiveAttributeOrder(
     input: BindingCommandLoweringRequest,
     source: BindingCommandLoweringSourceSet,
     indexes: BindingCommandLoweringIndexes,
     frame: BindingCommandLoweringFrame,
-  ): void {
-    input.attributeClassification.classifications.forEach((classification, index) => {
-      if (classification.bindingCommand == null) {
-        return;
+  ): TemplateCompilerAttributeOwnerProgression {
+    const progression = new TemplateCompilerAttributeOwnerProgression(input.html);
+    const syntaxesByAttribute = new Map(input.attributeSyntax.syntaxes.flatMap((syntax) =>
+      syntax.attribute.productHandle == null ? [] : [[syntax.attribute.productHandle, syntax] as const]
+    ));
+    const classificationsBySyntax = new Map(input.attributeClassification.classifications.map((classification) =>
+      [classification.syntaxProductHandle, classification] as const
+    ));
+    const primarySitesByClassification = new Map(input.valueSites.sites.flatMap((site) =>
+      site.classification?.productHandle == null ? [] : [[site.classification.productHandle, site] as const]
+    ));
+    const parsesBySite = new Map(input.valueSites.parses.map((parse) => [parse.site.productHandle, parse] as const));
+    const classificationOrdinals = new Map(input.attributeClassification.classifications.map((classification, ordinal) =>
+      [classification, ordinal] as const
+    ));
+    const valueSiteOrdinals = new Map(input.valueSites.sites.map((site, ordinal) => [site, ordinal] as const));
+    const commandResults = new Map<AttributeClassification, BindingCommandClassificationLoweringResult>();
+    const multiBindingResults = new Map<TemplateValueSite, MultiBindingLoweringResult>();
+
+    for (const attribute of input.html.attributes) {
+      const syntax = syntaxesByAttribute.get(attribute.productHandle) ?? null;
+      const classification = syntax == null
+        ? null
+        : classificationsBySyntax.get(syntax.productHandle) ?? null;
+      const primarySite = classification == null
+        ? null
+        : primarySitesByClassification.get(classification.productHandle) ?? null;
+      const parse = primarySite == null ? null : parsesBySite.get(primarySite.productHandle) ?? null;
+      const progressionSite = progression.begin(attribute, syntax, classification);
+      let commandResult: BindingCommandClassificationLoweringResult | null = null;
+      let multiBindingResult: MultiBindingLoweringResult | null = null;
+      if (classification?.bindingCommand != null) {
+        const ordinal = classificationOrdinals.get(classification)!;
+        commandResult = this.lowerBindingCommandClassification(
+          `binding-command-lowering:${input.localKey}:${ordinal}`,
+          source,
+          input.compilerWorld,
+          input.compilerReads,
+          classification as CommandAttributeClassification,
+          syntax,
+          attribute,
+          progressionSite.owner,
+          progressionSite.ownerView ?? progressionSite.owner,
+        );
+        commandResults.set(classification, commandResult);
+      } else if (primarySite?.siteKind === TemplateValueSiteKind.MultiBindingValue) {
+        const ordinal = valueSiteOrdinals.get(primarySite)!;
+        multiBindingResult = this.lowerMultiBindingSite(
+          `multi-binding-lowering:${input.localKey}:${ordinal}`,
+          source,
+          input.compilerWorld,
+          input.compilerReads,
+          primarySite,
+          indexes.attributesByProduct,
+          indexes.ownersByAttributeProduct,
+          progressionSite.ownerView ?? progressionSite.owner,
+        );
+        multiBindingResults.set(primarySite, multiBindingResult);
       }
-      const syntax = indexes.syntaxByProduct.get(classification.syntaxProductHandle) ?? null;
-      const attribute = syntax?.attribute.productHandle == null
-        ? null
-        : indexes.attributesByProduct.get(syntax.attribute.productHandle) ?? null;
-      const owner = syntax?.attribute.productHandle == null
-        ? null
-        : indexes.ownersByAttributeProduct.get(syntax.attribute.productHandle) ?? null;
-      const local = `binding-command-lowering:${input.localKey}:${index}`;
-      frame.recordCommandClassification(this.lowerBindingCommandClassification(
-        local,
-        source,
-        input.compilerWorld,
-        input.compilerReads,
-        classification as CommandAttributeClassification,
-        syntax,
-        attribute,
-        owner,
-      ));
+      const completion = progressionCompletion(
+        progressionSite,
+        primarySite,
+        parse,
+        commandResult?.lowering ?? null,
+        multiBindingResult?.lowering ?? null,
+        input.compilerWorld.templateCompiler.debug,
+      );
+      progression.complete(progressionSite, completion.disposition, completion.openReason);
+    }
+
+    input.attributeClassification.classifications.forEach((classification, ordinal) => {
+      if (classification.bindingCommand == null) return;
+      let result = commandResults.get(classification) ?? null;
+      if (result == null) {
+        const syntax = indexes.syntaxByProduct.get(classification.syntaxProductHandle) ?? null;
+        const attribute = syntax?.attribute.productHandle == null
+          ? null
+          : indexes.attributesByProduct.get(syntax.attribute.productHandle) ?? null;
+        result = this.lowerBindingCommandClassification(
+          `binding-command-lowering:${input.localKey}:${ordinal}`,
+          source,
+          input.compilerWorld,
+          input.compilerReads,
+          classification as CommandAttributeClassification,
+          syntax,
+          attribute,
+          null,
+          null,
+        );
+      }
+      frame.recordCommandClassification(result);
     });
-  }
-
-  private lowerMultiBindingValueSites(
-    input: BindingCommandLoweringRequest,
-    source: BindingCommandLoweringSourceSet,
-    indexes: BindingCommandLoweringIndexes,
-    frame: BindingCommandLoweringFrame,
-  ): void {
-    input.valueSites.sites.forEach((site, index) => {
-      if (site.siteKind !== TemplateValueSiteKind.MultiBindingValue) {
-        return;
-      }
-      frame.recordMultiBindingSite(this.lowerMultiBindingSite(
-        `multi-binding-lowering:${input.localKey}:${index}`,
+    input.valueSites.sites.forEach((site, ordinal) => {
+      if (site.siteKind !== TemplateValueSiteKind.MultiBindingValue) return;
+      const result = multiBindingResults.get(site) ?? this.lowerMultiBindingSite(
+        `multi-binding-lowering:${input.localKey}:${ordinal}`,
         source,
         input.compilerWorld,
         input.compilerReads,
         site,
         indexes.attributesByProduct,
         indexes.ownersByAttributeProduct,
-      ));
+        null,
+      );
+      frame.recordMultiBindingSite(result);
     });
+    return progression.finish();
   }
 
   private lowerBindingCommandClassification(
@@ -732,6 +805,7 @@ export class BindingCommandLoweringMaterializer {
     syntax: AttributeSyntax | null,
     attribute: HtmlAttribute | null,
     owner: HtmlElementAttributeOwner | null,
+    mapperOwner: TemplateAttributeMapperNode | null,
   ): BindingCommandClassificationLoweringResult {
     const records: KernelStoreRecord[] = [];
     const claims: SemanticClaim[] = [];
@@ -750,7 +824,11 @@ export class BindingCommandLoweringMaterializer {
     records.push(...buildInput.records);
     claims.push(...buildInput.claims);
 
-    const loweringResult = syntax == null || attribute == null || owner == null || commandMatch == null
+    const loweringResult = syntax == null
+      || attribute == null
+      || owner == null
+      || mapperOwner == null
+      || commandMatch == null
       ? this.openLowering(
           local,
           source,
@@ -763,7 +841,7 @@ export class BindingCommandLoweringMaterializer {
         source,
         compilerWorld,
         compilerReads,
-        owner,
+        mapperOwner,
         syntax,
         attribute,
         classification,
@@ -812,6 +890,7 @@ export class BindingCommandLoweringMaterializer {
     site: TemplateValueSite,
     attributesByProduct: ReadonlyMap<ProductHandle, HtmlAttribute>,
     ownersByAttributeProduct: ReadonlyMap<ProductHandle, HtmlElementAttributeOwner>,
+    mapperOwner: TemplateAttributeMapperNode | null,
   ): MultiBindingLoweringResult {
     const closed = this.closeMultiBindingSite(
       local,
@@ -821,6 +900,7 @@ export class BindingCommandLoweringMaterializer {
       site,
       attributesByProduct,
       ownersByAttributeProduct,
+      mapperOwner,
     );
     const batch = closed instanceof ClosedMultiBindingSite
       ? this.lowerMultiBindingSiteSegments(local, source, compilerWorld, compilerReads, site, closed)
@@ -855,6 +935,7 @@ export class BindingCommandLoweringMaterializer {
     site: TemplateValueSite,
     attributesByProduct: ReadonlyMap<ProductHandle, HtmlAttribute>,
     ownersByAttributeProduct: ReadonlyMap<ProductHandle, HtmlElementAttributeOwner>,
+    mapperOwner: TemplateAttributeMapperNode | null,
   ): ClosedMultiBindingSite | OpenSeam {
     const attribute = site.attribute?.productHandle == null
       ? null
@@ -867,7 +948,7 @@ export class BindingCommandLoweringMaterializer {
     const definition = currentDefinition instanceof CustomAttributeDefinition ? currentDefinition : null;
     const parsedSegments = parseInlineMultiBindingSegments(site.rawValue);
 
-    if (attribute == null || owner == null || classification == null || definition == null) {
+    if (attribute == null || owner == null || mapperOwner == null || classification == null || definition == null) {
       return this.publisher.openSeam(
         local,
         source,
@@ -890,6 +971,7 @@ export class BindingCommandLoweringMaterializer {
     return new ClosedMultiBindingSite(
       attribute,
       owner,
+      mapperOwner,
       classification,
       definition,
       parsedSegments,
@@ -945,6 +1027,7 @@ export class BindingCommandLoweringMaterializer {
         site,
         closed.attribute,
         closed.owner,
+        closed.mapperOwner,
         closed.classification,
         closed.definition,
         parsed,
@@ -1027,6 +1110,7 @@ export class BindingCommandLoweringMaterializer {
     site: TemplateValueSite,
     attribute: HtmlAttribute,
     owner: HtmlElementAttributeOwner,
+    mapperOwner: TemplateAttributeMapperNode,
     classification: AttributeClassification,
     definition: CustomAttributeDefinition,
     parsed: ParsedMultiBindingSegment,
@@ -1068,6 +1152,7 @@ export class BindingCommandLoweringMaterializer {
         compilerReads,
         attribute,
         owner,
+        mapperOwner,
         classification,
         materializedSegment,
         materializedSegment.bindable,
@@ -1142,6 +1227,7 @@ export class BindingCommandLoweringMaterializer {
     compilerReads: TemplateCompilerReadView,
     attribute: HtmlAttribute,
     owner: HtmlElementAttributeOwner,
+    mapperOwner: TemplateAttributeMapperNode,
     classification: AttributeClassification,
     materializedSegment: MaterializedMultiBindingSegment,
     bindable: TemplateBindableReference,
@@ -1164,7 +1250,7 @@ export class BindingCommandLoweringMaterializer {
       source,
       compilerWorld,
       compilerReads,
-      owner,
+      mapperOwner,
       materializedSegment.syntax,
       attribute,
       classification,
@@ -1273,7 +1359,7 @@ export class BindingCommandLoweringMaterializer {
     source: BindingCommandLoweringSourceSet,
     compilerWorld: TemplateCompilerWorldEmission,
     compilerReads: TemplateCompilerReadView,
-    owner: HtmlElementAttributeOwner,
+    mapperOwner: TemplateAttributeMapperNode,
     syntax: AttributeSyntax,
     attribute: HtmlAttribute,
     classification: AttributeClassification,
@@ -1301,7 +1387,7 @@ export class BindingCommandLoweringMaterializer {
       source,
       compilerWorld,
       compilerReads,
-      owner,
+      mapperOwner,
       syntax,
       classification,
       executable,
@@ -1502,6 +1588,117 @@ function loweringStateFor(
     return BindingCommandLoweringState.Partial;
   }
   return BindingCommandLoweringState.Complete;
+}
+
+class AttributeProgressionCompletion {
+  constructor(
+    readonly disposition: TemplateCompilerAttributeOwnerProgressionDisposition,
+    readonly openReason: TemplateCompilerAttributeOwnerProgressionOpenReason | null,
+  ) {}
+}
+
+function progressionCompletion(
+  site: TemplateCompilerAttributeOwnerProgressionSite,
+  primaryValueSite: TemplateValueSite | null,
+  primaryParse: TemplateExpressionParse | null,
+  commandLowering: BindingCommandLowering | null,
+  multiBindingLowering: MultiBindingLowering | null,
+  debug: boolean,
+): AttributeProgressionCompletion {
+  if (site.state === TemplateCompilerAttributeOwnerProgressionState.Open) {
+    return new AttributeProgressionCompletion(
+      TemplateCompilerAttributeOwnerProgressionDisposition.Open,
+      site.openReason ?? progressionOpen(site, 'A prior attribute left owner state open.'),
+    );
+  }
+  const classification = site.classification;
+  if (
+    site.syntax == null
+    || classification == null
+    || classification.classificationKind === AttributeClassificationKind.Open
+  ) {
+    return new AttributeProgressionCompletion(
+      TemplateCompilerAttributeOwnerProgressionDisposition.Open,
+      progressionOpen(site, 'Attribute syntax or classification is open.'),
+    );
+  }
+  if (
+    classification.classificationKind === AttributeClassificationKind.Captured
+    || classification.classificationKind === AttributeClassificationKind.CompilerControl
+  ) {
+    return progressionSuccess(debug, true);
+  }
+  if (classification.bindingCommand != null) {
+    return commandLowering?.state === BindingCommandLoweringState.Complete
+      ? progressionSuccess(debug, true)
+      : new AttributeProgressionCompletion(
+          TemplateCompilerAttributeOwnerProgressionDisposition.Open,
+          progressionOpen(site, 'Binding-command execution did not close exactly.'),
+        );
+  }
+  if (primaryValueSite?.siteKind === TemplateValueSiteKind.MultiBindingValue) {
+    return multiBindingLowering?.state === BindingCommandLoweringState.Complete
+      ? progressionSuccess(debug, true)
+      : new AttributeProgressionCompletion(
+          TemplateCompilerAttributeOwnerProgressionDisposition.Open,
+          progressionOpen(site, 'Inline multi-binding execution did not close exactly.'),
+        );
+  }
+
+  switch (classification.classificationKind) {
+    case AttributeClassificationKind.Plain:
+      if (primaryValueSite == null) return progressionSuccess(debug, false);
+      if (primaryParse?.state !== TemplateExpressionParseState.Complete) {
+        return new AttributeProgressionCompletion(
+          TemplateCompilerAttributeOwnerProgressionDisposition.Open,
+          progressionOpen(site, 'Plain-attribute interpolation parsing did not close exactly.'),
+        );
+      }
+      return progressionSuccess(
+        debug,
+        primaryParse.resultKind !== ExpressionParseResultKind.InterpolationAbsent,
+      );
+    case AttributeClassificationKind.Bindable:
+    case AttributeClassificationKind.CustomAttribute:
+    case AttributeClassificationKind.TemplateController:
+    case AttributeClassificationKind.Spread:
+      if (
+        primaryValueSite?.entryFamily != null
+        && primaryParse?.state !== TemplateExpressionParseState.Complete
+      ) {
+        return new AttributeProgressionCompletion(
+          TemplateCompilerAttributeOwnerProgressionDisposition.Open,
+          progressionOpen(site, 'Attribute value parsing did not close exactly.'),
+        );
+      }
+      return progressionSuccess(debug, true);
+    case AttributeClassificationKind.BindingCommand:
+    case AttributeClassificationKind.Ref:
+      return new AttributeProgressionCompletion(
+        TemplateCompilerAttributeOwnerProgressionDisposition.Open,
+        progressionOpen(site, 'Attribute execution did not retain an exact lowering.'),
+      );
+  }
+}
+
+function progressionSuccess(debug: boolean, removed: boolean): AttributeProgressionCompletion {
+  return new AttributeProgressionCompletion(
+    !debug && removed
+      ? TemplateCompilerAttributeOwnerProgressionDisposition.Removed
+      : TemplateCompilerAttributeOwnerProgressionDisposition.Retained,
+    null,
+  );
+}
+
+function progressionOpen(
+  site: TemplateCompilerAttributeOwnerProgressionSite,
+  summary: string,
+): TemplateCompilerAttributeOwnerProgressionOpenReason {
+  return new TemplateCompilerAttributeOwnerProgressionOpenReason(
+    TemplateCompilerAttributeOwnerProgressionOpenReasonKind.CurrentSiteOpen,
+    site.attribute.productHandle,
+    summary,
+  );
 }
 
 function missingInputSummary(

@@ -27,6 +27,7 @@ import type {
 } from './html-ir.js';
 import type { TemplateInstruction } from './instruction-ir.js';
 import type { CompiledTemplateEmission } from './compiled-template-materializer.js';
+import type { TemplateCompilerAttributeOwnerProgressionSite } from './attribute-owner-progression.js';
 import type { TemplateResourceCompilationEmission } from './template-compilation-project-pass.js';
 import type {
   TemplateExpressionParse,
@@ -108,6 +109,7 @@ export class TemplateCompilerNormalizedSite {
     readonly primaryExpressionParse: TemplateExpressionParse | null,
     readonly command: TemplateCompilerNormalizedCommandSite | null,
     readonly multiBinding: TemplateCompilerNormalizedMultiBindingSite | null,
+    readonly ownerProgressionSite: TemplateCompilerAttributeOwnerProgressionSite,
     readonly outcomeRoute: TemplateCompilerNormalizedSiteOutcomeRoute,
   ) {}
 
@@ -372,6 +374,7 @@ export const enum TemplateCompilerNormalizedSiteMismatchKind {
   ExclusiveOwnershipConflict = 'exclusive-ownership-conflict',
   MissingAttributeOwner = 'missing-attribute-owner',
   AttributeOwnerCardinality = 'attribute-owner-cardinality',
+  AttributeOwnerProgressionMismatch = 'attribute-owner-progression-mismatch',
   TopLevelSyntaxCardinality = 'top-level-syntax-cardinality',
   ClassificationCardinality = 'classification-cardinality',
   PrimaryValueSiteCardinality = 'primary-value-site-cardinality',

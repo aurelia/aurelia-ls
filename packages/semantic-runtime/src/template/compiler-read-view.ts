@@ -1086,6 +1086,15 @@ function attributeMapperReadKey(
   node: TemplateAttributeMapperNode,
   attributeName: string,
 ): string {
+  if (node.attributeStateKey != null) {
+    return revisionParts([
+      operation,
+      node.tagName,
+      node.namespace ?? '',
+      attributeName,
+      node.attributeStateKey,
+    ]);
+  }
   return revisionParts([
     operation,
     node.tagName,
