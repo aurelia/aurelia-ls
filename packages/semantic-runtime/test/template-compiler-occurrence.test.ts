@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'vitest';
+import { describe, expect, test, vi } from 'vitest';
 
 import type { ProductHandle } from '../src/kernel/handles.js';
 import { HtmlCommentSemanticKind, HtmlIrNodeKind } from '../src/template/html-ir.js';
@@ -187,6 +187,40 @@ describe('template compiler occurrence forest', () => {
       forest.assertCoherentTopology();
       other.assertCoherentTopology();
     } finally {
+      fixture.dispose();
+    }
+  });
+
+  test('detaches caller-proven direct child slots without ordinal rediscovery', () => {
+    const fixture = new BrowserEffectiveTemplateFixture('template-compiler-occurrence-direct-child');
+    const readParentOrdinal = vi.spyOn(TemplateCompilerElementOccurrence.prototype, 'readParentOrdinal');
+    try {
+      const markup = `<div>${Array.from({ length: 256 }, (_, ordinal) => `<i data-n="${ordinal}"></i>`).join('')}</div>`;
+      const forest = TemplateCompilerOccurrenceForest.fromBrowserEffective(
+        fixture.materialize('wide', markup).emission,
+      );
+      const parent = forest.readNodes().find((node): node is TemplateCompilerElementOccurrence =>
+        node instanceof TemplateCompilerElementOccurrence && node.tagName === 'div'
+      );
+      if (parent == null) throw new Error('Expected wide direct-child parent.');
+      const children = [...parent.readChildren()];
+      const startRevision = forest.mutationRevision;
+      readParentOrdinal.mockClear();
+
+      expect(() => forest.detachDirectChild(parent, 1, children[0]!)).toThrow(/not live/);
+      for (let ordinal = children.length - 1; ordinal >= 0; ordinal--) {
+        forest.detachDirectChild(parent, ordinal, children[ordinal]!);
+      }
+
+      expect(parent.readChildren()).toEqual([]);
+      expect(forest.mutationRevision).toBe(startRevision + children.length);
+      expect(children.every((child) =>
+        child.parent == null && child.parentEdgeKind === TemplateCompilerOccurrenceEdgeKind.Detached
+      )).toBe(true);
+      expect(readParentOrdinal).not.toHaveBeenCalled();
+      forest.assertCoherentTopology();
+    } finally {
+      readParentOrdinal.mockRestore();
       fixture.dispose();
     }
   });

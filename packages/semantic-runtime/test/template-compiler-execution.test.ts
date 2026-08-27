@@ -263,6 +263,10 @@ describe('template compiler execution sequence', () => {
         causeHandles: [browser.run.handles.product('site-process:definition')],
         siteExecutionDriver: driver,
       });
+      const content = element.readChildren()[0];
+      if (content == null) throw new Error('Expected processContent child.');
+      expect(() => execution.detachDirectChild(attempt, element, 0, content))
+        .toThrow(/cannot perform built-in site direct-child detachment/);
       execution.rewriteAttributeValue(attempt, attribute, 'after');
       const operation = execution.completeOperation(
         attempt,
@@ -313,6 +317,180 @@ describe('template compiler execution sequence', () => {
       expect(lane.targetPlan).toBeNull();
       expect(() => execution.seal()).toThrow(/no target plan or terminal bootstrap outcome/);
     } finally {
+      browser.dispose();
+    }
+  });
+
+  test('commits built-in processContent child detachments in caller-proven order', () => {
+    const browser = new BrowserEffectiveTemplateFixture('compiler-execution-site-detachment');
+    try {
+      const forest = TemplateCompilerOccurrenceForest.fromBrowserEffective(
+        browser.materialize(
+          'root',
+          '<div title="before"><i id="a"><u></u></i><i id="b"></i><i id="c"></i></div>',
+        ).emission,
+      );
+      const execution = TemplateCompilerExecutionSession.createForForest('site-detachment:family', forest);
+      const lane = execution.admitRootInvocation('site-detachment:plan');
+      const bootstrapClosure = closeExactNoLocalBootstrap(browser, execution, lane, 'site-detachment');
+      const driver = execution.beginSiteExecutionDriver(
+        execution.captureSiteExecutionFrontier(bootstrapClosure),
+      );
+      const parent = forest.readNodes().find((node): node is TemplateCompilerElementOccurrence =>
+        node instanceof TemplateCompilerElementOccurrence && node.tagName === 'div'
+      );
+      const title = parent?.readAttributes().find((attribute) => attribute.name === 'title') ?? null;
+      if (parent == null || title == null) throw new Error('Expected built-in processContent parent.');
+      const [first, second, third] = parent.readChildren();
+      if (first == null || second == null || third == null) throw new Error('Expected three direct children.');
+      const callable = new TemplateCompilerCallableReference(
+        browser.run.handles.product('site-detachment:callable'),
+        browser.run.handles.identity('site-detachment:callable'),
+        browser.run.handles.address('site-detachment:callable'),
+      );
+      const attempt = execution.beginOperation({
+        operationKey: 'site-detachment:process-content',
+        context: driver.context,
+        operationKind: TemplateCompilerOperationKind.ProcessContent,
+        executionMechanism: TemplateCompilerOperationExecutionMechanism.BuiltIn,
+        target: execution.callableEffectTarget(driver.context, callable, parent),
+        causeHandles: [browser.run.handles.product('site-detachment:definition')],
+        siteExecutionDriver: driver,
+      });
+
+      if (!(first instanceof TemplateCompilerElementOccurrence)) {
+        throw new Error('Expected descendant processContent parent candidate.');
+      }
+      const unrelatedChild = first.readChildren()[0];
+      if (unrelatedChild == null) throw new Error('Expected unrelated descendant child.');
+      expect(() => execution.detachDirectChild(attempt, first, 0, unrelatedChild))
+        .toThrow(/only from its exact processContent host/);
+      expect(first.readChildren()).toEqual([unrelatedChild]);
+      execution.detachDirectChild(attempt, parent, 1, second);
+      execution.detachDirectChild(attempt, parent, 1, third);
+      execution.rewriteAttributeValue(attempt, title, 'after');
+      const operation = execution.completeOperation(
+        attempt,
+        new TemplateCompilerOperationCompletion(TemplateCompilerOperationCompletionKind.Complete),
+      );
+
+      expect(parent.readChildren()).toEqual([first]);
+      expect(operation.mutationBatch.nodeDetachmentMutations.map((mutation) => ({
+        eventOrdinal: mutation.eventOrdinal,
+        node: mutation.node,
+        previousParent: mutation.previousParent,
+        previousOrdinal: mutation.previousOrdinal,
+      }))).toEqual([
+        { eventOrdinal: 0, node: second, previousParent: parent, previousOrdinal: 1 },
+        { eventOrdinal: 1, node: third, previousParent: parent, previousOrdinal: 1 },
+      ]);
+      expect(operation.endForestMutationRevision - operation.startForestMutationRevision).toBe(3);
+      expect(execution.captureReachedAttributeScalar(driver, parent, title, 0)).toMatchObject({
+        currentValue: 'after',
+        replayedValue: 'after',
+      });
+      execution.finishSiteExecutionDriver(driver);
+      forest.assertCoherentTopology();
+    } finally {
+      browser.dispose();
+    }
+  });
+
+  test('rejects discarded built-in processContent topology without blessing the pending attempt', () => {
+    const browser = new BrowserEffectiveTemplateFixture('compiler-execution-site-detachment-discard');
+    try {
+      const forest = TemplateCompilerOccurrenceForest.fromBrowserEffective(
+        browser.materialize('root', '<div><i></i></div>').emission,
+      );
+      const execution = TemplateCompilerExecutionSession.createForForest('site-detachment-discard:family', forest);
+      const lane = execution.admitRootInvocation('site-detachment-discard:plan');
+      const closure = closeExactNoLocalBootstrap(browser, execution, lane, 'site-detachment-discard');
+      const driver = execution.beginSiteExecutionDriver(execution.captureSiteExecutionFrontier(closure));
+      const parent = forest.readNodes().find((node): node is TemplateCompilerElementOccurrence =>
+        node instanceof TemplateCompilerElementOccurrence && node.tagName === 'div'
+      );
+      const child = parent?.readChildren()[0] ?? null;
+      if (parent == null || child == null) throw new Error('Expected discarded direct child.');
+      const callable = new TemplateCompilerCallableReference(
+        browser.run.handles.product('site-detachment-discard:callable'),
+        browser.run.handles.identity('site-detachment-discard:callable'),
+        browser.run.handles.address('site-detachment-discard:callable'),
+      );
+      const attempt = execution.beginOperation({
+        operationKey: 'site-detachment-discard:process-content',
+        context: driver.context,
+        operationKind: TemplateCompilerOperationKind.ProcessContent,
+        executionMechanism: TemplateCompilerOperationExecutionMechanism.BuiltIn,
+        target: execution.callableEffectTarget(driver.context, callable, parent),
+        causeHandles: [browser.run.handles.product('site-detachment-discard:definition')],
+        siteExecutionDriver: driver,
+      });
+      execution.detachDirectChild(attempt, parent, 0, child);
+
+      expect(() => execution.completeOperation(
+        attempt,
+        new TemplateCompilerOperationCompletion(
+          TemplateCompilerOperationCompletionKind.Open,
+          [browser.run.handles.openSeam('site-detachment-discard:open')],
+        ),
+      )).toThrow(/cannot discard generated or topological output until forest rollback exists/);
+      expect(execution.readPendingAttempt()).toBe(attempt);
+      expect(execution.sequence.readContextOperations(driver.context)).toEqual([]);
+    } finally {
+      browser.dispose();
+    }
+  });
+
+  test('records a wide built-in direct-child detachment batch without ordinal scans', () => {
+    const browser = new BrowserEffectiveTemplateFixture('compiler-execution-site-detachment-wide');
+    const readParentOrdinal = vi.spyOn(TemplateCompilerElementOccurrence.prototype, 'readParentOrdinal');
+    try {
+      const markup = `<div>${'<i></i>'.repeat(256)}</div>`;
+      const forest = TemplateCompilerOccurrenceForest.fromBrowserEffective(
+        browser.materialize('root', markup).emission,
+      );
+      const execution = TemplateCompilerExecutionSession.createForForest('site-detachment-wide:family', forest);
+      const lane = execution.admitRootInvocation('site-detachment-wide:plan');
+      const closure = closeExactNoLocalBootstrap(browser, execution, lane, 'site-detachment-wide');
+      const driver = execution.beginSiteExecutionDriver(execution.captureSiteExecutionFrontier(closure));
+      const parent = forest.readNodes().find((node): node is TemplateCompilerElementOccurrence =>
+        node instanceof TemplateCompilerElementOccurrence && node.tagName === 'div'
+      );
+      if (parent == null) throw new Error('Expected wide processContent parent.');
+      const children = [...parent.readChildren()];
+      const callable = new TemplateCompilerCallableReference(
+        browser.run.handles.product('site-detachment-wide:callable'),
+        browser.run.handles.identity('site-detachment-wide:callable'),
+        browser.run.handles.address('site-detachment-wide:callable'),
+      );
+      const attempt = execution.beginOperation({
+        operationKey: 'site-detachment-wide:process-content',
+        context: driver.context,
+        operationKind: TemplateCompilerOperationKind.ProcessContent,
+        executionMechanism: TemplateCompilerOperationExecutionMechanism.BuiltIn,
+        target: execution.callableEffectTarget(driver.context, callable, parent),
+        causeHandles: [browser.run.handles.product('site-detachment-wide:definition')],
+        siteExecutionDriver: driver,
+      });
+      readParentOrdinal.mockClear();
+      for (let ordinal = children.length - 1; ordinal >= 0; ordinal--) {
+        execution.detachDirectChild(attempt, parent, ordinal, children[ordinal]!);
+      }
+      const operation = execution.completeOperation(
+        attempt,
+        new TemplateCompilerOperationCompletion(TemplateCompilerOperationCompletionKind.Complete),
+      );
+
+      expect(operation.mutationBatch.nodeDetachmentMutations).toHaveLength(256);
+      expect(operation.mutationBatch.nodeDetachmentMutations.map((mutation) => mutation.eventOrdinal))
+        .toEqual(Array.from({ length: 256 }, (_, ordinal) => ordinal));
+      expect(operation.mutationBatch.nodeDetachmentMutations.map((mutation) => mutation.previousOrdinal))
+        .toEqual(Array.from({ length: 256 }, (_, ordinal) => 255 - ordinal));
+      expect(readParentOrdinal).not.toHaveBeenCalled();
+      execution.finishSiteExecutionDriver(driver);
+      forest.assertCoherentTopology();
+    } finally {
+      readParentOrdinal.mockRestore();
       browser.dispose();
     }
   });
@@ -400,7 +578,7 @@ describe('template compiler execution sequence', () => {
       expect(() => leftExecution.completeOperation(
         attempt,
         new TemplateCompilerOperationCompletion(TemplateCompilerOperationCompletionKind.Complete),
-      )).toThrow(/unledgered forest mutation before scalar commit/);
+      )).toThrow(/unledgered or unsupported forest mutation before scalar commit/);
       expect(leftExecution.readPendingAttempt()).toBe(attempt);
       expect(leftExecution.sequence.readContextOperations(driver.context)).toEqual([]);
     } finally {

@@ -1133,6 +1133,58 @@ export class TemplateCompilerExecutionSession {
     overlay.recordNodeDetachment(mutation);
   }
 
+  /** Detach one caller-proven direct child during a built-in pre-plan processContent operation. */
+  detachDirectChild(
+    attempt: TemplateCompilerPendingOperationAttempt,
+    parent: TemplateCompilerParentOccurrence,
+    ordinal: number,
+    node: TemplateCompilerNodeOccurrence,
+  ): void {
+    const overlay = this.requirePendingMutationOverlay(attempt);
+    if (
+      !(attempt.context instanceof TemplateCompilerSiteExecutionContextReference)
+      || attempt.operationKind !== TemplateCompilerOperationKind.ProcessContent
+      || attempt.executionMechanism !== TemplateCompilerOperationExecutionMechanism.BuiltIn
+      || attempt.siteExecutionDriver == null
+      || this.activeSiteExecutionDriver !== attempt.siteExecutionDriver
+      || attempt.siteExecutionDriver.context !== attempt.context
+    ) {
+      throw new Error(
+        `Compiler operation '${attempt.operationKey}' cannot perform built-in site direct-child detachment.`,
+      );
+    }
+    if (
+      !(attempt.target instanceof TemplateCompilerCallableEffectOperationTarget)
+      || attempt.target.actedOn.occurrence !== parent
+    ) {
+      throw new Error(
+        `Compiler operation '${attempt.operationKey}' can detach children only from its exact processContent host.`,
+      );
+    }
+    this.requireOccurrenceContext(attempt.context, parent);
+    this.requireOccurrenceContext(attempt.context, node);
+    if (
+      !Number.isSafeInteger(ordinal)
+      || ordinal < 0
+      || node.parent !== parent
+      || node.parentEdgeKind !== TemplateCompilerOccurrenceEdgeKind.Child
+      || parent.readChildren()[ordinal] !== node
+    ) {
+      throw new Error(
+        `Compiler node '${node.occurrenceKey}' is not the current direct child at ordinal ${ordinal}.`,
+      );
+    }
+    const mutation = new TemplateCompilerNodeDetachmentMutation(
+      overlay.nextTopologyMutationOrdinal,
+      node,
+      parent,
+      TemplateCompilerOccurrenceEdgeKind.Child,
+      ordinal,
+    );
+    this.forest.detachDirectChild(parent, ordinal, node);
+    overlay.recordNodeDetachment(mutation);
+  }
+
   /** Detach one live attribute during local-template extraction while retaining its exact owner slot. */
   detachAttribute(
     attempt: TemplateCompilerPendingOperationAttempt,
@@ -1817,16 +1869,27 @@ export class TemplateCompilerExecutionSession {
       this.mutationAuthority.readPendingGenerations(authorityBatch),
     );
     const isSiteExecution = attempt.context instanceof TemplateCompilerSiteExecutionContextReference;
+    const siteNodeDetachments = mutationBatch.nodeDetachmentMutations;
+    const siteTopologyIsExact = mutationBatch.topologyMutations.length === siteNodeDetachments.length
+      && siteNodeDetachments.every((mutation) =>
+        mutation.previousParent != null
+        && mutation.previousEdgeKind === TemplateCompilerOccurrenceEdgeKind.Child
+      );
     if (
       isSiteExecution
       && (
-        this.forest.mutationRevision !== attempt.startForestMutationRevision
+        this.forest.mutationRevision !== attempt.startForestMutationRevision + siteNodeDetachments.length
         || mutationBatch.occurrenceGenerationReservations.length > 0
-        || mutationBatch.topologyMutations.length > 0
+        || !siteTopologyIsExact
+        || (siteNodeDetachments.length > 0
+          && (
+            attempt.operationKind !== TemplateCompilerOperationKind.ProcessContent
+            || attempt.executionMechanism !== TemplateCompilerOperationExecutionMechanism.BuiltIn
+          ))
       )
     ) {
       throw new Error(
-        `Compiler site operation '${attempt.operationKey}' has an unledgered forest mutation before scalar commit.`,
+        `Compiler site operation '${attempt.operationKey}' has an unledgered or unsupported forest mutation before scalar commit.`,
       );
     }
     this.mutationAuthority.finishExecutionBatch(
@@ -1842,7 +1905,7 @@ export class TemplateCompilerExecutionSession {
     }
     if (
       isSiteExecution
-      && this.forest.mutationRevision !== attempt.startForestMutationRevision
+      && this.forest.mutationRevision !== attempt.startForestMutationRevision + siteNodeDetachments.length
         + (mutationBatch.state === TemplateCompilerMutationBatchState.Committed
           ? mutationBatch.attributeValueMutations.length
           : 0)
@@ -2156,11 +2219,39 @@ export class TemplateCompilerExecutionSession {
           );
         }
       }
+      const siteNodeDetachments = operation.mutationBatch.nodeDetachmentMutations;
+      const siteTopologyIsExact = operation.mutationBatch.topologyMutations.length === siteNodeDetachments.length
+        && siteNodeDetachments.every((mutation) =>
+          mutation.previousParent != null
+          && mutation.previousEdgeKind === TemplateCompilerOccurrenceEdgeKind.Child
+        );
+      const isSiteProcessContent = operation.context instanceof TemplateCompilerSiteExecutionContextReference
+        && operation.operationKind === TemplateCompilerOperationKind.ProcessContent;
+      if (
+        isSiteProcessContent
+        && (
+          operation.mutationBatch.occurrenceGenerationReservations.length > 0
+          || !siteTopologyIsExact
+          || (siteNodeDetachments.length > 0
+            && operation.executionMechanism !== TemplateCompilerOperationExecutionMechanism.BuiltIn)
+          || operation.endForestMutationRevision !== operation.startForestMutationRevision
+            + siteNodeDetachments.length
+            + (operation.mutationBatch.state === TemplateCompilerMutationBatchState.Committed
+              ? operation.mutationBatch.attributeValueMutations.length
+              : 0)
+        )
+      ) {
+        throw new Error(`Compiler site operation '${operation.operationKey}' has incoherent mutation currentness.`);
+      }
+      const topologyIsAdmitted = operation.operationKind === TemplateCompilerOperationKind.LocalTemplateExtraction
+        || (isSiteProcessContent
+          && operation.executionMechanism === TemplateCompilerOperationExecutionMechanism.BuiltIn
+          && siteTopologyIsExact);
       if (
         operation.mutationBatch.topologyMutations.length > 0
         && (
           operation.mutationBatch.state === TemplateCompilerMutationBatchState.Discarded
-          || operation.operationKind !== TemplateCompilerOperationKind.LocalTemplateExtraction
+          || !topologyIsAdmitted
         )
       ) {
         throw new Error(

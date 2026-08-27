@@ -648,6 +648,31 @@ export class TemplateCompilerOccurrenceForest {
     this._mutationRevision += 1;
   }
 
+  /** Detach one caller-proven ordinary child slot without rediscovering its ordinal. */
+  detachDirectChild(
+    parent: TemplateCompilerParentOccurrence,
+    ordinal: number,
+    node: TemplateCompilerNodeOccurrence,
+  ): void {
+    this.requireParent(parent);
+    this.requireNode(node);
+    const children = mutableChildren(parent);
+    if (
+      !Number.isSafeInteger(ordinal)
+      || ordinal < 0
+      || node.parent !== parent
+      || node.parentEdgeKind !== TemplateCompilerOccurrenceEdgeKind.Child
+      || children[ordinal] !== node
+    ) {
+      throw new Error(
+        `Compiler direct child '${node.occurrenceKey}' is not live at parent '${parent.occurrenceKey}' ordinal ${ordinal}.`,
+      );
+    }
+    children.splice(ordinal, 1);
+    setNodeOwnership(node, null, TemplateCompilerOccurrenceEdgeKind.Detached);
+    this._mutationRevision += 1;
+  }
+
   /** Admit one detached occurrence onto an exact live structural edge. */
   insertDetachedNode(
     node: TemplateCompilerNodeOccurrence,
