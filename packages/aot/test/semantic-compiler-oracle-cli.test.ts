@@ -49,7 +49,8 @@ describe("AOT semantic compiler oracle CLI", () => {
       .toEqual(["property-binding", "property-binding"]);
     expect(duplicate?.siteCursor).toMatchObject({
       admissionState: "cursor-transcript",
-      frontierKind: "at-live-attribute-relowering",
+      frontierKind: null,
+      ledgerState: "open",
       currentness: {
         exact: true,
         expectedForestMutationRevisionDelta: expect.any(Number),
@@ -100,6 +101,7 @@ interface SemanticCompilerOracleReceipt {
       readonly siteCursor: {
         readonly admissionState: string;
         readonly frontierKind?: string | null;
+        readonly ledgerState?: string;
         readonly currentness?: {
           readonly exact: boolean;
           readonly forestMutationRevisionDelta: number;

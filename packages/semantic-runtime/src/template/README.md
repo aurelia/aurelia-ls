@@ -219,6 +219,29 @@ classification, expression parsing, and instruction lowering converge on the sam
   or Abrupt only after the semantic boundary finishes. Only one family attempt may be pending, so admission, execution,
   and sealing cannot interleave around an ordinal gap. The carrier records semantic compiler boundaries rather than
   every mechanical tree edit and is not yet a durable kernel product.
+- `attribute-syntax-parsing.ts`, `attribute-classification-decision.ts`, and
+  `attribute-value-site-selection.ts` are the shared non-publishing single-site laws beneath the authored batch
+  materializers and the browser-occurrence compiler. Parsing distinguishes authored-name normalization from an exact
+  runtime name and retains its paired compiler read. Classification consumes an explicit reached element lookup name,
+  preserves the selected full definition plus command/resource/bindable/capture reads, and treats command absence as
+  AUR0713 only under closed/current scope. Primary and secondary multi-binding value selection stay distinct so a
+  segment cannot recursively become another primary multi-binding site.
+- `template-compiler-live-attribute-owner.ts`, `template-compiler-live-binding-command.ts`,
+  `template-compiler-live-multi-binding.ts`, and `template-compiler-live-attribute-assembly.ts` own one reached
+  element's event-time attribute transaction. The owner supplies immutable O(1) pre-site `NamedNodeMap` views; the
+  assembly reparses and reclassifies browser occurrences in live order, executes existing built-in command handlers,
+  distinguishes authored source relation from independent generation, and buffers element contributions without
+  publishing rows. Inline multi-binding stops at the first Invalid/Open segment: prior instruction objects remain
+  staged evidence, committed instructions are empty unless the whole aggregate completes, and later source is an
+  unreached remainder. Empty custom-attribute/controller values retain the parser call plus an explicit no-binding
+  policy. Capture and spread value-site analysis is retained without pretending the ordinary JIT parsed those values.
+- `template-compiler-reached-site-semantics.ts`, `template-compiler-site-spend-ledger.ts`, and
+  `template-compiler-site-cursor.ts` join that transaction to current root invocation authority. Scalar capture and
+  authored/browser routes are shared with the cursor rather than re-derived. Singular compatible sites, successfully
+  relowered sites, non-singular/browser-only occurrences, authored remainders, and frontier-blocked bundles remain
+  separate axes. The cursor may complete live semantics while its accounting/lineage ledger stays Open; it still stops
+  before template-controller wrapping, projection extraction, containerless replacement, generated elements, and
+  other structural contexts that do not yet have a live target-plan join.
 - `template-compiler-deterministic-execution.ts` is an intentionally narrower assurance bridge. It spends one
   `TemplateResourceCompilationEmission` plus its exact browser-effective source family to replay supported built-in
   structural consequences over already-normalized compiler products. Exact means dispositions, context transfers,

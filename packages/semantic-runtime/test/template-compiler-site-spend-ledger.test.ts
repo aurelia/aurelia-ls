@@ -452,6 +452,16 @@ describe('template compiler site spend ledger', () => {
       TemplateCompilerOccurrenceOnlyDisposition.NonSingularBrowserOrigin,
       5,
     )).not.toBeInstanceOf(TemplateCompilerSiteSpendConflict);
+    expect(ledger.recordOccurrenceOnly(
+      attributeOccurrence('live-assembled'),
+      TemplateCompilerOccurrenceOnlyDisposition.LiveAttributeAssembled,
+      6,
+    )).not.toBeInstanceOf(TemplateCompilerSiteSpendConflict);
+    expect(ledger.recordOccurrenceOnly(
+      elementOccurrence('live-element'),
+      TemplateCompilerOccurrenceOnlyDisposition.LiveElementAssembled,
+      7,
+    )).not.toBeInstanceOf(TemplateCompilerSiteSpendConflict);
 
     const result = ledger.finish(
       TemplateCompilerSiteSpendCompletion.complete(ledger.nextSiteEventOrdinal),
@@ -461,6 +471,8 @@ describe('template compiler site spend ledger', () => {
       occurrenceOnlyRows: expect.arrayContaining([
         expect.objectContaining({ disposition: TemplateCompilerOccurrenceOnlyDisposition.GeneratedSiteNeedsLowering }),
         expect.objectContaining({ disposition: TemplateCompilerOccurrenceOnlyDisposition.NonSingularBrowserOrigin }),
+        expect.objectContaining({ disposition: TemplateCompilerOccurrenceOnlyDisposition.LiveAttributeAssembled }),
+        expect.objectContaining({ disposition: TemplateCompilerOccurrenceOnlyDisposition.LiveElementAssembled }),
       ]),
     });
 
@@ -468,7 +480,7 @@ describe('template compiler site spend ledger', () => {
     const invalid = invalidLedger.recordOccurrenceOnly(
       elementOccurrence('not-text'),
       TemplateCompilerOccurrenceOnlyDisposition.StaticTextPassThrough,
-      6,
+      8,
     );
     expect(invalid).toMatchObject({
       conflictKind: TemplateCompilerSiteSpendConflictKind.InvalidOccurrenceDisposition,

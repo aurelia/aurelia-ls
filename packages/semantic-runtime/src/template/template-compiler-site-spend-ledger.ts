@@ -63,6 +63,10 @@ export const enum TemplateCompilerOccurrenceOnlyDisposition {
   IgnoredDoctype = 'ignored-doctype',
   GeneratedSiteNeedsLowering = 'generated-site-needs-lowering',
   NonSingularBrowserOrigin = 'non-singular-browser-origin',
+  /** Reached browser/generated attribute compiled from live semantics without one singular authored bundle spend. */
+  LiveAttributeAssembled = 'live-attribute-assembled',
+  /** Reached browser element compiled by live identity despite open or non-authored structural lineage. */
+  LiveElementAssembled = 'live-element-assembled',
 }
 
 export const enum TemplateCompilerSiteSpendConflictKind {
@@ -885,6 +889,10 @@ export class TemplateCompilerSiteSpendLedger {
         return occurrence.generation != null;
       case TemplateCompilerOccurrenceOnlyDisposition.NonSingularBrowserOrigin:
         return true;
+      case TemplateCompilerOccurrenceOnlyDisposition.LiveAttributeAssembled:
+        return occurrence instanceof TemplateCompilerAttributeOccurrence;
+      case TemplateCompilerOccurrenceOnlyDisposition.LiveElementAssembled:
+        return occurrence instanceof TemplateCompilerElementOccurrence;
     }
   }
 

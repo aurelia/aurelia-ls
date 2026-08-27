@@ -33,6 +33,7 @@ import type {
   TemplateCompilerProcessContentPlan,
   TemplateCompilerProcessContentResult,
 } from './template-compiler-process-content.js';
+import type { TemplateCompilerLiveAttributeContribution } from './template-compiler-live-attribute-assembly.js';
 
 export const enum TemplateCompilerSiteCursorEventKind {
   Phase = 'phase',
@@ -64,6 +65,8 @@ export const enum TemplateCompilerSiteCursorFrontierKind {
   ElementResolutionOpen = 'element-resolution-open',
   BeforeProcessContent = 'before-process-content',
   AtLiveAttributeRelowering = 'at-live-attribute-relowering',
+  ReachedLiveAttributeOpen = 'reached-live-attribute-open',
+  ReachedLiveAttributeInvalid = 'reached-live-attribute-invalid',
   ReachedNormalizedOpen = 'reached-normalized-open',
   ReachedNormalizedInvalid = 'reached-normalized-invalid',
   LetElementLoweringRequired = 'let-element-lowering-required',
@@ -78,7 +81,7 @@ export const enum TemplateCompilerSiteCursorFrontierKind {
   AccountingMismatch = 'accounting-mismatch',
 }
 
-export const enum TemplateCompilerSiteCursorNormalizedOutcome {
+export const enum TemplateCompilerSiteCursorSiteOutcome {
   Complete = 'complete',
   Open = 'open',
   Invalid = 'invalid',
@@ -180,11 +183,26 @@ export class TemplateCompilerSiteCursorAttributeEvent extends TemplateCompilerSi
     readonly bundle: TemplateCompilerNormalizedSite | null,
     readonly spend: TemplateCompilerSiteSpend | null,
     readonly occurrenceOnlyRow: TemplateCompilerOccurrenceOnlyRow | null,
-    readonly normalizedOutcome: TemplateCompilerSiteCursorNormalizedOutcome,
+    readonly siteOutcome: TemplateCompilerSiteCursorSiteOutcome,
     readonly authoredProgression: TemplateCompilerAttributeOwnerProgressionSite | null,
     readonly liveOwnerSite: TemplateCompilerLiveAttributeOwnerSite,
+    readonly liveContribution: TemplateCompilerLiveAttributeContribution | null = null,
   ) {
     super(authority, ordinal, TemplateCompilerSiteCursorEventKind.Attribute);
+    if (!this.isCoherent()) {
+      throw new Error('Compiler live attribute cursor event lost its reached frame or disposition authority.');
+    }
+  }
+
+  isCoherent(): boolean {
+    return this.liveContribution == null
+      || (
+        this.liveContribution.frame.attribute === this.attribute
+        && this.liveContribution.frame.liveSite === this.liveOwnerSite
+        && this.liveContribution.frame.scalar === this.scalar
+        && this.liveContribution.frame.source.originState === this.browserOriginState
+        && this.liveContribution.disposition === this.liveOwnerSite.disposition
+      );
   }
 }
 
@@ -200,7 +218,7 @@ export class TemplateCompilerSiteCursorTextEvent extends TemplateCompilerSiteCur
     readonly bundle: TemplateCompilerNormalizedTextSite | null,
     readonly spend: TemplateCompilerSiteSpend | null,
     readonly occurrenceOnlyRow: TemplateCompilerOccurrenceOnlyRow | null,
-    readonly normalizedOutcome: TemplateCompilerSiteCursorNormalizedOutcome,
+    readonly siteOutcome: TemplateCompilerSiteCursorSiteOutcome,
   ) {
     super(authority, ordinal, TemplateCompilerSiteCursorEventKind.Text);
   }

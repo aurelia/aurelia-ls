@@ -18,6 +18,10 @@ import {
 import { TemplateCompilerExecutionSession } from '../src/template/template-compiler-execution.js';
 import { executeTemplateCompilerHookBootstrap } from '../src/template/template-compiler-hook-bootstrap.js';
 import { executeTemplateCompilerLocalExtraction } from '../src/template/template-compiler-local-extraction.js';
+import {
+  TemplateCompilerLiveAttributeCompletion,
+  TemplateCompilerLiveAttributeSourceKind,
+} from '../src/template/template-compiler-live-attribute-assembly.js';
 import { TemplateCompilerLiveAttributeDisposition } from '../src/template/template-compiler-live-attribute-owner.js';
 import {
   buildTemplateCompilerNormalizedSiteIndex,
@@ -53,6 +57,7 @@ import {
   type TemplateCompilerSiteCursorTranscript,
 } from '../src/template/template-compiler-site-cursor.js';
 import {
+  TemplateCompilerOccurrenceOnlyDisposition,
   TemplateCompilerSiteSpendDisposition,
 } from '../src/template/template-compiler-site-spend-ledger.js';
 import type {
@@ -195,11 +200,11 @@ describe('template compiler root site cursor', () => {
     expect(elementTags(transcript)).not.toContain('span');
   });
 
-  test('keeps the central effect and normalized-open frontiers distinct', () => {
+  test('keeps central structural effects and reached live invalidity distinct', () => {
     const expected = new Map<string, TemplateCompilerSiteCursorFrontierKind>([
       ['cursor-template-controller', TemplateCompilerSiteCursorFrontierKind.AfterAttributesBeforeTemplateController],
       ['cursor-containerless', TemplateCompilerSiteCursorFrontierKind.AfterAttributesBeforeContainerless],
-      ['cursor-open', TemplateCompilerSiteCursorFrontierKind.ReachedNormalizedOpen],
+      ['cursor-open', TemplateCompilerSiteCursorFrontierKind.ReachedLiveAttributeInvalid],
     ]);
     for (const [name, frontier] of expected) {
       const transcript = fixture.transcript(name);
@@ -207,6 +212,14 @@ describe('template compiler root site cursor', () => {
       expect(transcript.frontier?.frontierKind, name)
         .not.toBe(TemplateCompilerSiteCursorFrontierKind.ReachedNormalizedInvalid);
     }
+    const invalid = eventsOf(
+      fixture.transcript('cursor-open'),
+      TemplateCompilerSiteCursorAttributeEvent,
+    )[0];
+    expect(invalid?.liveContribution?.classification.issue).toMatchObject({
+      issueKind: 'unknown-binding-command',
+      frameworkErrorCode: 'AUR0713',
+    });
   });
 
   test('executes canonical AuSlot processContent before host attributes with exact removal spending', () => {
@@ -302,6 +315,58 @@ describe('template compiler root site cursor', () => {
     expect(attribute.scalar.isExact()).toBe(false);
   });
 
+  test('continues after successful duplicate-survivor relowering without erasing remainder evidence', () => {
+    const transcript = fixture.transcript('cursor-live-duplicate');
+    const attributes = eventsOf(transcript, TemplateCompilerSiteCursorAttributeEvent);
+
+    expect(transcript.frontier).toBeNull();
+    expect(attributes).toHaveLength(3);
+    expect(attributes.every((event) =>
+      event.liveContribution?.completion === TemplateCompilerLiveAttributeCompletion.Complete
+    )).toBe(true);
+    expect(attributes.map((event) => event.spend?.disposition)).toEqual([
+      TemplateCompilerSiteSpendDisposition.BrowserReloweringRequired,
+      TemplateCompilerSiteSpendDisposition.BrowserReloweringRequired,
+      TemplateCompilerSiteSpendDisposition.BrowserReloweringRequired,
+    ]);
+    expect(transcript.ledger.authoredRemainderEvidence).toHaveLength(2);
+    expect(transcript.ledger.rawUnspent).toHaveLength(2);
+    expect(transcript.ledger.blockedByFrontier).toEqual([]);
+    expect(attributes[2]?.liveContribution?.instructions[0]).toMatchObject({
+      targetProperty: 'textContent',
+      bindingMode: 'to-view',
+    });
+  });
+
+  test('compiles non-singular reconstructed attributes as occurrence-owned rows', () => {
+    const transcript = fixture.transcript('cursor-live-nonsingular');
+    const attributes = eventsOf(transcript, TemplateCompilerSiteCursorAttributeEvent);
+
+    expect(transcript.frontier).toBeNull();
+    expect(attributes).toHaveLength(2);
+    expect(attributes.every((event) =>
+      event.liveContribution?.frame.source.sourceKind === TemplateCompilerLiveAttributeSourceKind.AuthoredNonSingular
+      && event.liveContribution.completion === TemplateCompilerLiveAttributeCompletion.Complete
+      && event.occurrenceOnlyRow?.disposition === TemplateCompilerOccurrenceOnlyDisposition.NonSingularBrowserOrigin
+    )).toBe(true);
+    expect(transcript.ledger.authoredRemainderEvidence).toHaveLength(1);
+    expect(transcript.ledger.rawUnspent).toHaveLength(1);
+  });
+
+  test('carries complete ordered multi-binding contributions through the live cursor', () => {
+    const transcript = fixture.transcript('cursor-live-multi-binding');
+    const multiBindings = eventsOf(transcript, TemplateCompilerSiteCursorAttributeEvent)
+      .flatMap((event) => event.liveContribution?.multiBinding == null ? [] : [event.liveContribution.multiBinding]);
+
+    expect(transcript.frontier).toBeNull();
+    expect(multiBindings).toHaveLength(4);
+    expect(multiBindings.every((result) => result.completion === 'complete')).toBe(true);
+    expect(multiBindings[0]?.instructions.map((instruction) => instruction.instructionKind)).toEqual([
+      'set-property',
+      'property-binding',
+    ]);
+  });
+
   test('is deterministic and rejects foreign read/prewalk capabilities', () => {
     const run = fixture.run('cursor-empty');
     const first = run.transcript();
@@ -317,6 +382,7 @@ describe('template compiler root site cursor', () => {
       binding: run.binding,
       compilerReads: foreignReads,
       preWalkAuthority: TemplateCompilerPreWalkRemainderAuthority.capture(run.binding),
+      handles: fixture.browserRun.handles,
     });
     expect(wrongReads.state).toBe(TemplateCompilerSiteCursorResultState.Mismatch);
 
@@ -324,6 +390,7 @@ describe('template compiler root site cursor', () => {
       binding: run.binding,
       compilerReads: run.reads(),
       preWalkAuthority: TemplateCompilerPreWalkRemainderAuthority.capture(foreign.binding),
+      handles: fixture.browserRun.handles,
     });
     expect(wrongPrewalk.state).toBe(TemplateCompilerSiteCursorResultState.Mismatch);
   });
@@ -362,6 +429,7 @@ class CursorRun {
       binding: this.binding,
       compilerReads: this.reads(),
       preWalkAuthority: TemplateCompilerPreWalkRemainderAuthority.capture(this.binding),
+      handles: this.fixture.browserRun.handles,
     });
     if (result.state !== TemplateCompilerSiteCursorResultState.Transcript || result.transcript == null) {
       throw new Error(`Expected cursor transcript: ${result.reasons.map((reason) => reason.summary).join(' ')}`);

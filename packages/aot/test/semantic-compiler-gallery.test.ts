@@ -191,8 +191,6 @@ describe("semantic compiler gallery", () => {
     expect([...new Set(transcriptCursors.map((cursor) => cursor.frontierKind ?? "complete"))].sort()).toEqual([
       "after-attributes-before-projection",
       "after-attributes-before-template-controller",
-      "at-live-attribute-relowering",
-      "authored-precedent-mismatch",
       "complete",
       "invalid-surrogate-attribute",
       "let-element-lowering-required",
@@ -251,9 +249,12 @@ describe("semantic compiler gallery", () => {
       blockedByFrontierCount: 1,
     });
     expect(observations.get("interaction.browser.duplicate-binding-elision")?.siteCursor).toMatchObject({
-      frontierKind: "at-live-attribute-relowering",
+      frontierKind: null,
+      ledgerState: "open",
       spendDispositionCounts: { "browser-relowering-required": 1 },
       remainderKindCounts: { "html-tree-builder-dropped": 1 },
+      rawUnspentCount: 1,
+      blockedByFrontierCount: 0,
     });
     expect(observations.get("interaction.browser.foster-target-order")?.siteCursor).toMatchObject({
       frontierKind: null,
@@ -267,9 +268,10 @@ describe("semantic compiler gallery", () => {
       frontierPhase: "content-start",
     });
     expect(observations.get("interaction.browser.paragraph-controller-topology")?.siteCursor).toMatchObject({
-      frontierKind: "authored-precedent-mismatch",
-      spendCount: 0,
-      blockedByFrontierCount: 3,
+      frontierKind: "after-attributes-before-template-controller",
+      spendCount: 1,
+      occurrenceOnlyDispositionCounts: { "live-element-assembled": 1 },
+      blockedByFrontierCount: 2,
     });
     expect(observations.get("let.bind-interpolation")?.siteCursor).toMatchObject({
       frontierKind: "let-element-lowering-required",

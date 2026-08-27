@@ -292,6 +292,7 @@ export function observeTemplateCompilerRootSiteCursor(
     binding: binding.binding,
     compilerReads,
     preWalkAuthority: TemplateCompilerPreWalkRemainderAuthority.capture(binding.binding),
+    handles: request.publication.handles,
   });
   if (cursor.state !== TemplateCompilerSiteCursorResultState.Transcript || cursor.transcript == null) {
     return unavailable(
@@ -444,7 +445,61 @@ function cursorEventDigest(
               event.browserOriginState,
               event.spend?.disposition ?? null,
               event.occurrenceOnlyRow?.disposition ?? null,
-              event.normalizedOutcome,
+              event.siteOutcome,
+              event.liveContribution == null
+                ? null
+                : [
+                    event.liveContribution.frame.source.sourceKind,
+                    event.liveContribution.completion,
+                    event.liveContribution.targetLane,
+                    event.liveContribution.disposition,
+                    event.liveContribution.reason?.reasonKind ?? null,
+                    event.liveContribution.structuralEffects,
+                    event.liveContribution.syntax == null
+                      ? null
+                      : [
+                          event.liveContribution.syntax.syntaxKind,
+                          event.liveContribution.syntax.runtimeRawName,
+                          event.liveContribution.syntax.rawValue,
+                          event.liveContribution.syntax.target,
+                          event.liveContribution.syntax.command,
+                          event.liveContribution.syntax.parts,
+                        ],
+                    [
+                      event.liveContribution.classification.classificationKind,
+                      event.liveContribution.classification.resourceKind,
+                      event.liveContribution.classification.resource?.name ?? null,
+                      event.liveContribution.classification.bindingCommand?.name ?? null,
+                      event.liveContribution.classification.bindable?.definition.name ?? null,
+                      event.liveContribution.classification.issue?.issueKind ?? null,
+                      event.liveContribution.classification.issue?.frameworkErrorCode ?? null,
+                    ],
+                    event.liveContribution.valueSelection == null
+                      ? null
+                      : [
+                          event.liveContribution.valueSelection.siteKind,
+                          event.liveContribution.valueSelection.rawValue,
+                          event.liveContribution.valueSelection.entryFamily,
+                          event.liveContribution.valueSelection.emptyValueBindingPolicy,
+                          event.liveContribution.valueParse?.read.value.kind ?? null,
+                        ],
+                    event.liveContribution.instructions.map((instruction) => instruction.instructionKind),
+                    event.liveContribution.multiBinding == null
+                      ? null
+                      : [
+                          event.liveContribution.multiBinding.completion,
+                          event.liveContribution.multiBinding.reason?.reasonKind ?? null,
+                          event.liveContribution.multiBinding.segments.map((segment) => [
+                            segment.segment.rawName,
+                            segment.segment.rawValue,
+                            segment.syntax.target,
+                            segment.syntax.command,
+                            segment.selection.bindable?.definition.name ?? null,
+                            segment.completion,
+                            segment.instructions.map((instruction) => instruction.instructionKind),
+                          ]),
+                        ],
+                  ],
             ]
           : event instanceof TemplateCompilerSiteCursorProcessContentEvent
             ? [
@@ -480,7 +535,7 @@ function cursorEventDigest(
                 event.browserOriginState,
                 event.spend?.disposition ?? null,
                 event.occurrenceOnlyRow?.disposition ?? null,
-                event.normalizedOutcome,
+                event.siteOutcome,
               ]
             : event instanceof TemplateCompilerSiteCursorIgnoredNodeEvent
               ? [

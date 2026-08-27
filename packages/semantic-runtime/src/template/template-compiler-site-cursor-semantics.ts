@@ -1,14 +1,8 @@
 import type { CustomElementDefinition } from '../resources/custom-element-definition.js';
 import {
-  AttributeClassificationKind,
-  AttributeSyntaxKind,
-} from './attribute-syntax.js';
-import {
-  TemplateCompilerAttributeOwnerProgressionDisposition,
   TemplateCompilerAttributeOwnerProgressionLaneKind,
   TemplateCompilerAttributeOwnerProgressionState,
 } from './attribute-owner-progression.js';
-import { BindingCommandLoweringState } from './binding-command-execution.js';
 import {
   type TemplateCompilerReadView,
 } from './compiler-read-view.js';
@@ -28,9 +22,6 @@ import {
 } from './template-compiler-prewalk-remainder.js';
 import type { TemplateCompilerSiteInvocationBinding } from './template-compiler-site-invocation.js';
 import {
-  TemplateCompilerSiteCursorNormalizedOutcome,
-} from './template-compiler-site-cursor-event.js';
-import {
   htmlElementAttributeOwnersByElementProduct,
   type HtmlElement,
 } from './html-ir.js';
@@ -41,7 +32,6 @@ import {
 import {
   TemplateCompilerBrowserOriginRouteKind,
 } from './template-compiler-authored-origin-index.js';
-import { TemplateExpressionParseState } from './value-site.js';
 import { TemplateCompilerReachedSiteSemanticResolver } from './template-compiler-reached-site-semantics.js';
 
 export class TemplateCompilerCursorElementOwnerRelation {
@@ -77,8 +67,8 @@ export class TemplateCompilerSiteCursorSemanticResolver extends TemplateCompiler
   elementOwnerRelation(
     element: TemplateCompilerElementOccurrence,
     authoredElement: HtmlElement | null,
+    receipts: ReadonlyMap<TemplateCompilerAttributeOccurrence, TemplateCompilerReachedAttributeScalarReceipt>,
   ): TemplateCompilerCursorElementOwnerRelation {
-    const receipts = new Map<TemplateCompilerAttributeOccurrence, TemplateCompilerReachedAttributeScalarReceipt>();
     const expectedOwner = authoredElement == null
       ? null
       : this.authoredOwnersByElement.get(authoredElement.productHandle) ?? null;
@@ -94,18 +84,14 @@ export class TemplateCompilerSiteCursorSemanticResolver extends TemplateCompiler
       && expectedOwner.attributes.length === liveAttributes.length;
 
     for (const [ordinal, attribute] of liveAttributes.entries()) {
-      const scalar = this.captureReachedAttributeScalar(
-        element,
-        attribute,
-        ordinal,
-      );
-      receipts.set(attribute, scalar);
+      const scalar = receipts.get(attribute) ?? null;
       const route = this.originRoute(attribute);
       const authoredAttribute = route?.routeKind === TemplateCompilerBrowserOriginRouteKind.Singular
         ? expectedAttributesByProduct.get(route.exactOrigin!.authored.productHandle) ?? null
         : null;
       const expectedAtPosition = expectedOwner?.attributes[ordinal] ?? null;
-      exact &&= scalar.isExact()
+      exact &&= scalar != null
+        && scalar.isExact()
         && authoredAttribute != null
         && authoredAttribute === expectedAtPosition
         && scalar.qualifiedName === runtimeAttributeName(authoredAttribute.rawName, expectedOwner!.namespace)
@@ -145,33 +131,6 @@ export class TemplateCompilerSiteCursorSemanticResolver extends TemplateCompiler
       && scalar.currentValue === bundle.attribute.rawValue
       && scalar.namespaceUri == null
       && scalar.prefix == null;
-  }
-
-  normalizedAttributeOutcome(bundle: TemplateCompilerNormalizedSite): TemplateCompilerSiteCursorNormalizedOutcome {
-    if (
-      bundle.syntax.syntaxKind === AttributeSyntaxKind.Open
-      || bundle.classification.classificationKind === AttributeClassificationKind.Open
-    ) return TemplateCompilerSiteCursorNormalizedOutcome.Open;
-    const parses = bundle.readExpressionParses();
-    const lowerings = [
-      ...(bundle.command == null ? [] : [bundle.command.lowering]),
-      ...(bundle.multiBinding?.commandLowerings ?? []),
-      ...(bundle.multiBinding == null ? [] : [bundle.multiBinding.lowering]),
-    ];
-    const hasInvalid = parses.some((parse) => parse.state === TemplateExpressionParseState.Error)
-      || lowerings.some((lowering) => lowering.state === BindingCommandLoweringState.Invalid);
-    const hasOpen = parses.some((parse) => parse.state !== TemplateExpressionParseState.Complete
-      && parse.state !== TemplateExpressionParseState.Error)
-      || lowerings.some((lowering) => lowering.state !== BindingCommandLoweringState.Complete
-        && lowering.state !== BindingCommandLoweringState.Invalid);
-    if (hasInvalid && hasOpen) return TemplateCompilerSiteCursorNormalizedOutcome.Open;
-    if (hasInvalid) return TemplateCompilerSiteCursorNormalizedOutcome.Invalid;
-    if (hasOpen) return TemplateCompilerSiteCursorNormalizedOutcome.Open;
-    if (
-      bundle.ownerProgressionSite.disposition === TemplateCompilerAttributeOwnerProgressionDisposition.Open
-      || bundle.ownerProgressionSite.state === TemplateCompilerAttributeOwnerProgressionState.Open
-    ) return TemplateCompilerSiteCursorNormalizedOutcome.Open;
-    return TemplateCompilerSiteCursorNormalizedOutcome.Complete;
   }
 
   hasProjectionEffect(

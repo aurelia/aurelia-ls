@@ -1,11 +1,8 @@
 import type { CustomElementDefinition } from '../resources/custom-element-definition.js';
+import type { KernelHandleFactory } from '../kernel/handles.js';
 import {
-  AttributeClassificationKind,
   AttributeSyntaxKind,
 } from './attribute-syntax.js';
-import {
-  TemplateCompilerAttributeOwnerProgressionDisposition,
-} from './attribute-owner-progression.js';
 import {
   TemplateCompilerScopeClosureState,
 } from './compiler-read-view.js';
@@ -13,9 +10,13 @@ import type {
   TemplateCompilerReadView,
 } from './compiler-read-view.js';
 import {
-  TemplateCompilerLiveAttributeDisposition,
-  TemplateCompilerLiveAttributeOwnerProgression,
-} from './template-compiler-live-attribute-owner.js';
+  assembleTemplateCompilerLiveAttributeOwner,
+  TemplateCompilerLiveAttributeCompletion,
+  TemplateCompilerLiveAttributeOpenReasonKind,
+  TemplateCompilerLiveAttributeSourceKind,
+  TemplateCompilerLiveAttributeStructuralEffectKind,
+  type TemplateCompilerLiveAttributeContribution,
+} from './template-compiler-live-attribute-assembly.js';
 import {
   TemplateCompilerAttributeOccurrence,
   TemplateCompilerCommentOccurrence,
@@ -70,7 +71,7 @@ import {
   TemplateCompilerSiteCursorFrontier,
   TemplateCompilerSiteCursorFrontierKind,
   TemplateCompilerSiteCursorIgnoredNodeEvent,
-  TemplateCompilerSiteCursorNormalizedOutcome,
+  TemplateCompilerSiteCursorSiteOutcome,
   TemplateCompilerSiteCursorPhaseEvent,
   TemplateCompilerSiteCursorPhaseKind,
   TemplateCompilerSiteCursorProcessContentEvent,
@@ -136,6 +137,7 @@ export class TemplateCompilerSiteCursorTranscript {
         !event.isOwnedBy(siteCursorConstructionAuthority)
         || event.ordinal !== ordinal
         || (event instanceof TemplateCompilerSiteCursorProcessContentEvent && !event.isCoherent())
+        || (event instanceof TemplateCompilerSiteCursorAttributeEvent && !event.isCoherent())
       )
       || nextTranscriptOrdinal !== events.length
       || (frontier == null
@@ -178,6 +180,8 @@ export interface TemplateCompilerRootSiteCursorRequest {
   readonly binding: TemplateCompilerSiteInvocationBinding;
   readonly compilerReads: TemplateCompilerReadView;
   readonly preWalkAuthority: TemplateCompilerPreWalkRemainderAuthority;
+  /** Candidate-local handle namespace for staged live instructions and expression parses. */
+  readonly handles: KernelHandleFactory;
 }
 
 interface TemplateCompilerSiteCursorContainerFrame {
@@ -452,37 +456,66 @@ class TemplateCompilerRootSiteCursor {
         element,
         TemplateCompilerOccurrenceOnlyDisposition.NonSingularBrowserOrigin,
       );
-      this.events.push(new TemplateCompilerSiteCursorElementEvent(
-        siteCursorConstructionAuthority,
-        this.transcriptOrdinal++,
-        element,
-        parent,
-        parentOrdinal,
-        successor,
-        authoredElement,
-        originState,
-        elementOccurrenceRow,
-        runtimeElementResourceName(element.tagName, element.namespace),
-        null,
-        null,
-        null,
-      ));
-      this.stop(
-        elementOccurrenceRow == null
-          ? TemplateCompilerSiteCursorFrontierKind.AccountingMismatch
-          : TemplateCompilerSiteCursorFrontierKind.NonSingularBrowserOrigin,
-        element,
-        null,
-        null,
-        successor,
-        'Element has no singular closed authored/browser origin.',
-      );
-      return null;
+      if (elementOccurrenceRow == null) {
+        this.events.push(new TemplateCompilerSiteCursorElementEvent(
+          siteCursorConstructionAuthority,
+          this.transcriptOrdinal++,
+          element,
+          parent,
+          parentOrdinal,
+          successor,
+          authoredElement,
+          originState,
+          null,
+          runtimeElementResourceName(element.tagName, element.namespace),
+          null,
+          null,
+          null,
+        ));
+        this.stop(
+          TemplateCompilerSiteCursorFrontierKind.AccountingMismatch,
+          element,
+          null,
+          null,
+          successor,
+          'Non-singular element accounting conflicted with the site ledger.',
+        );
+        return null;
+      }
     }
-    if (
-      originState === TemplateCompilerPreWalkBrowserOriginState.CorrespondenceOpen
-      || originState === TemplateCompilerPreWalkBrowserOriginState.Unknown
-    ) {
+    if (originState === TemplateCompilerPreWalkBrowserOriginState.CorrespondenceOpen) {
+      elementOccurrenceRow = this.recordOccurrenceOnly(
+        element,
+        TemplateCompilerOccurrenceOnlyDisposition.LiveElementAssembled,
+      );
+      if (elementOccurrenceRow == null) {
+        this.events.push(new TemplateCompilerSiteCursorElementEvent(
+          siteCursorConstructionAuthority,
+          this.transcriptOrdinal++,
+          element,
+          parent,
+          parentOrdinal,
+          successor,
+          authoredElement,
+          originState,
+          null,
+          runtimeElementResourceName(element.tagName, element.namespace),
+          null,
+          null,
+          null,
+        ));
+        this.stop(
+          TemplateCompilerSiteCursorFrontierKind.AccountingMismatch,
+          element,
+          null,
+          null,
+          successor,
+          'Correspondence-open element accounting conflicted with the site ledger.',
+        );
+        return null;
+      }
+    }
+    if (originState === TemplateCompilerPreWalkBrowserOriginState.Unknown) {
       this.events.push(new TemplateCompilerSiteCursorElementEvent(
         siteCursorConstructionAuthority,
         this.transcriptOrdinal++,
@@ -504,7 +537,7 @@ class TemplateCompilerRootSiteCursor {
         null,
         null,
         successor,
-        'Element authored/browser correspondence remains open or unavailable.',
+        'Element authored/browser correspondence is unavailable.',
       );
       return null;
     }
@@ -541,7 +574,10 @@ class TemplateCompilerRootSiteCursor {
         );
         return null;
       }
-    } else if (authoredElement == null) {
+    } else if (
+      originState === TemplateCompilerPreWalkBrowserOriginState.Singular
+      && authoredElement == null
+    ) {
       this.events.push(new TemplateCompilerSiteCursorElementEvent(
         siteCursorConstructionAuthority,
         this.transcriptOrdinal++,
@@ -706,6 +742,7 @@ class TemplateCompilerRootSiteCursor {
       element,
       authoredElement,
       elementDefinition,
+      lookupName,
       successor,
     );
   }
@@ -714,222 +751,116 @@ class TemplateCompilerRootSiteCursor {
     element: TemplateCompilerElementOccurrence,
     authoredElement: HtmlElement | null,
     elementDefinition: CustomElementDefinition | null,
+    lookupName: string,
     successor: TemplateCompilerNodeOccurrence | null,
   ): TemplateCompilerSiteCursorContainerFrame | null {
-    const relation = this.semantics.elementOwnerRelation(element, authoredElement);
-    const progression = new TemplateCompilerLiveAttributeOwnerProgression(
-      this.binding.forest,
+    const assembly = assembleTemplateCompilerLiveAttributeOwner({
+      localKey: `${this.binding.lane.localKey}:live-attributes:${element.occurrenceKey}`,
+      execution: this.binding.execution,
+      bootstrapClosure: this.binding.bootstrapClosure,
+      siteDriver: this.siteDriver,
+      compilerReads: this.compilerReads,
+      preWalk: this.preWalk,
       element,
-      this.siteDriver?.expectedForestMutationRevision ?? this.startForestMutationRevision,
-    );
-    let hasTemplateController = false;
-    let hasUsageContainerless = false;
+      lookupName,
+      handles: this.request.handles,
+    });
+    const receipts = new Map(assembly.contributions.map((contribution) => [
+      contribution.frame.attribute,
+      contribution.frame.scalar,
+    ]));
+    const relation = this.semantics.elementOwnerRelation(element, authoredElement, receipts);
 
-    for (const attribute of element.readAttributes()) {
-      if (this.frontier != null) break;
-      const liveSite = progression.begin(attribute);
-      const scalar = relation.receipts.get(attribute) ?? this.semantics.captureReachedAttributeScalar(
-        element,
-        attribute,
-        liveSite.originalForestOrdinal,
-      );
-      const originState = this.semantics.originState(attribute);
-      const route = this.semantics.originRoute(attribute);
-      const bundle = route?.routeKind === TemplateCompilerBrowserOriginRouteKind.Singular
-        ? this.binding.index.siteForAttribute(route.exactOrigin!.authored.productHandle)
-        : null;
-
-      if (attribute.generation != null || originState === TemplateCompilerPreWalkBrowserOriginState.Absent) {
-        const row = this.recordOccurrenceOnly(
-          attribute,
-          TemplateCompilerOccurrenceOnlyDisposition.GeneratedSiteNeedsLowering,
-        );
-        progression.complete(liveSite, TemplateCompilerLiveAttributeDisposition.Open);
-        this.events.push(new TemplateCompilerSiteCursorAttributeEvent(
-          siteCursorConstructionAuthority,
-          this.transcriptOrdinal++,
+    for (const contribution of assembly.contributions) {
+      const frame = contribution.frame;
+      const attribute = frame.attribute;
+      const bundle = this.semantics.singularAttributeBundle(attribute);
+      let spend: TemplateCompilerSiteSpend | null = null;
+      let row: TemplateCompilerOccurrenceOnlyRow | null = null;
+      if (bundle != null) {
+        const compatible = this.semantics.attributeIsCompatible(
           element,
+          authoredElement,
+          bundle,
           attribute,
-          liveSite.originalForestOrdinal,
-          liveSite.simulatedLiveOrdinal,
-          scalar,
-          originState,
-          null,
-          null,
-          row,
-          TemplateCompilerSiteCursorNormalizedOutcome.ReloweringRequired,
-          null,
-          liveSite,
-        ));
-        this.stop(
-          row == null
-            ? TemplateCompilerSiteCursorFrontierKind.AccountingMismatch
-            : TemplateCompilerSiteCursorFrontierKind.GeneratedSiteNeedsLowering,
-          element,
-          attribute,
-          null,
-          successor,
-          'Generated or browser-implied attribute requires live syntax and lowering.',
+          frame.scalar,
+          frame.liveSite,
+          relation,
         );
-        break;
+        spend = this.bindSpend(
+          bundle,
+          attribute,
+          compatible
+            ? TemplateCompilerSiteSpendDisposition.BrowserCompatible
+            : TemplateCompilerSiteSpendDisposition.BrowserReloweringRequired,
+        );
+      } else {
+        row = this.recordOccurrenceOnly(
+          attribute,
+          contribution.frame.source.sourceKind === TemplateCompilerLiveAttributeSourceKind.AuthoredNonSingular
+            ? TemplateCompilerOccurrenceOnlyDisposition.NonSingularBrowserOrigin
+            : TemplateCompilerOccurrenceOnlyDisposition.LiveAttributeAssembled,
+        );
       }
-      if (originState === TemplateCompilerPreWalkBrowserOriginState.NonSingular) {
-        const row = this.recordOccurrenceOnly(
-          attribute,
-          TemplateCompilerOccurrenceOnlyDisposition.NonSingularBrowserOrigin,
-        );
-        progression.complete(liveSite, TemplateCompilerLiveAttributeDisposition.Open);
-        this.events.push(new TemplateCompilerSiteCursorAttributeEvent(
-          siteCursorConstructionAuthority,
-          this.transcriptOrdinal++,
-          element,
-          attribute,
-          liveSite.originalForestOrdinal,
-          liveSite.simulatedLiveOrdinal,
-          scalar,
-          originState,
-          null,
-          null,
-          row,
-          TemplateCompilerSiteCursorNormalizedOutcome.ReloweringRequired,
-          null,
-          liveSite,
-        ));
-        this.stop(
-          row == null
-            ? TemplateCompilerSiteCursorFrontierKind.AccountingMismatch
-            : TemplateCompilerSiteCursorFrontierKind.NonSingularBrowserOrigin,
-          element,
-          attribute,
-          null,
-          successor,
-          'Attribute has no singular GraphExact authored/browser origin.',
-        );
-        break;
-      }
-      if (originState !== TemplateCompilerPreWalkBrowserOriginState.Singular || bundle == null) {
-        progression.complete(liveSite, TemplateCompilerLiveAttributeDisposition.Open);
-        this.events.push(new TemplateCompilerSiteCursorAttributeEvent(
-          siteCursorConstructionAuthority,
-          this.transcriptOrdinal++,
-          element,
-          attribute,
-          liveSite.originalForestOrdinal,
-          liveSite.simulatedLiveOrdinal,
-          scalar,
-          originState,
-          null,
-          null,
-          null,
-          TemplateCompilerSiteCursorNormalizedOutcome.ReloweringRequired,
-          null,
-          liveSite,
-        ));
-        this.stop(
-          TemplateCompilerSiteCursorFrontierKind.AuthoredPrecedentMismatch,
-          element,
-          attribute,
-          null,
-          successor,
-          'Attribute authored/browser correspondence or GraphExact bundle ownership remains open.',
-        );
-        break;
-      }
-
-      const compatible = this.semantics.attributeIsCompatible(
-        element,
-        authoredElement,
-        bundle,
-        attribute,
-        scalar,
-        liveSite,
-        relation,
-      );
-      const disposition = compatible
-        ? TemplateCompilerSiteSpendDisposition.BrowserCompatible
-        : TemplateCompilerSiteSpendDisposition.BrowserReloweringRequired;
-      const spend = this.bindSpend(bundle, attribute, disposition);
-      if (spend == null) {
-        progression.complete(liveSite, TemplateCompilerLiveAttributeDisposition.Open);
+      if ((bundle != null && spend == null) || (bundle == null && row == null)) {
         this.stop(
           TemplateCompilerSiteCursorFrontierKind.AccountingMismatch,
           element,
           attribute,
           bundle,
           successor,
-          'Attribute bundle conflicted with the site ledger.',
-        );
-        break;
-      }
-      if (!compatible) {
-        progression.complete(liveSite, TemplateCompilerLiveAttributeDisposition.Open);
-        this.events.push(new TemplateCompilerSiteCursorAttributeEvent(
-          siteCursorConstructionAuthority,
-          this.transcriptOrdinal++,
-          element,
-          attribute,
-          liveSite.originalForestOrdinal,
-          liveSite.simulatedLiveOrdinal,
-          scalar,
-          originState,
-          bundle,
-          spend,
-          null,
-          TemplateCompilerSiteCursorNormalizedOutcome.ReloweringRequired,
-          bundle.ownerProgressionSite,
-          liveSite,
-        ));
-        this.stop(
-          TemplateCompilerSiteCursorFrontierKind.AtLiveAttributeRelowering,
-          element,
-          attribute,
-          bundle,
-          successor,
-          'Live attribute scalar, owner, name, namespace, order, or progression diverges from authored precedent.',
+          'Live attribute contribution conflicted with the site ledger.',
         );
         break;
       }
 
-      const normalizedOutcome = this.semantics.normalizedAttributeOutcome(bundle);
-      const liveDisposition = liveDispositionFor(bundle.ownerProgressionSite.disposition);
-      progression.complete(liveSite, liveDisposition);
+      const outcome = liveAttributeOutcome(contribution);
       this.events.push(new TemplateCompilerSiteCursorAttributeEvent(
         siteCursorConstructionAuthority,
         this.transcriptOrdinal++,
         element,
         attribute,
-        liveSite.originalForestOrdinal,
-        liveSite.simulatedLiveOrdinal,
-        scalar,
-        originState,
+        frame.liveSite.originalForestOrdinal,
+        frame.liveSite.simulatedLiveOrdinal,
+        frame.scalar,
+        frame.source.originState,
         bundle,
         spend,
-        null,
-        normalizedOutcome,
-        bundle.ownerProgressionSite,
-        liveSite,
+        row,
+        outcome,
+        bundle?.ownerProgressionSite ?? null,
+        frame.liveSite,
+        contribution,
       ));
-      if (normalizedOutcome !== TemplateCompilerSiteCursorNormalizedOutcome.Complete) {
+      if (contribution.completion !== TemplateCompilerLiveAttributeCompletion.Complete) {
         this.stop(
-          normalizedOutcome === TemplateCompilerSiteCursorNormalizedOutcome.Invalid
-            ? TemplateCompilerSiteCursorFrontierKind.ReachedNormalizedInvalid
-            : TemplateCompilerSiteCursorFrontierKind.ReachedNormalizedOpen,
+          liveAttributeFrontier(contribution),
           element,
           attribute,
           bundle,
           successor,
-          normalizedOutcome === TemplateCompilerSiteCursorNormalizedOutcome.Invalid
-            ? 'Reached normalized attribute semantics retain an exact invalid outcome.'
-            : 'Reached normalized attribute semantics remain open.',
+          contribution.reason?.summary ?? 'Reached live attribute semantics did not complete.',
         );
         break;
       }
-      hasTemplateController ||= bundle.classification.classificationKind
-        === AttributeClassificationKind.TemplateController;
-      hasUsageContainerless ||= bundle.syntax.runtimeRawName === 'containerless';
     }
-    progression.finish();
     if (this.frontier != null) return null;
+    if (assembly.completion !== TemplateCompilerLiveAttributeCompletion.Complete) {
+      this.stop(
+        TemplateCompilerSiteCursorFrontierKind.ReachedLiveAttributeOpen,
+        element,
+        null,
+        null,
+        successor,
+        assembly.reason?.summary ?? 'Live attribute owner assembly remained open.',
+      );
+      return null;
+    }
+
+    const hasTemplateController = assembly.templateControllers.length > 0;
+    const hasUsageContainerless = assembly.structuralEffects.includes(
+      TemplateCompilerLiveAttributeStructuralEffectKind.UsageContainerless,
+    );
 
     if (hasTemplateController) {
       this.stop(
@@ -1002,7 +933,7 @@ class TemplateCompilerRootSiteCursor {
         null,
         null,
         row,
-        TemplateCompilerSiteCursorNormalizedOutcome.ReloweringRequired,
+        TemplateCompilerSiteCursorSiteOutcome.ReloweringRequired,
       ));
       this.stop(
         row == null
@@ -1029,7 +960,7 @@ class TemplateCompilerRootSiteCursor {
         null,
         null,
         row,
-        TemplateCompilerSiteCursorNormalizedOutcome.ReloweringRequired,
+        TemplateCompilerSiteCursorSiteOutcome.ReloweringRequired,
       ));
       this.stop(
         row == null
@@ -1055,7 +986,7 @@ class TemplateCompilerRootSiteCursor {
         null,
         null,
         null,
-        TemplateCompilerSiteCursorNormalizedOutcome.ReloweringRequired,
+        TemplateCompilerSiteCursorSiteOutcome.ReloweringRequired,
       ));
       this.stop(
         TemplateCompilerSiteCursorFrontierKind.AuthoredPrecedentMismatch,
@@ -1083,7 +1014,7 @@ class TemplateCompilerRootSiteCursor {
           null,
           null,
           null,
-          TemplateCompilerSiteCursorNormalizedOutcome.ReloweringRequired,
+          TemplateCompilerSiteCursorSiteOutcome.ReloweringRequired,
         ));
         this.stop(
           TemplateCompilerSiteCursorFrontierKind.TextReloweringRequired,
@@ -1118,7 +1049,7 @@ class TemplateCompilerRootSiteCursor {
         null,
         null,
         row,
-        TemplateCompilerSiteCursorNormalizedOutcome.NotApplicable,
+        TemplateCompilerSiteCursorSiteOutcome.NotApplicable,
       ));
       return;
     }
@@ -1137,13 +1068,13 @@ class TemplateCompilerRootSiteCursor {
         ? TemplateCompilerSiteSpendDisposition.BrowserCompatible
         : TemplateCompilerSiteSpendDisposition.BrowserReloweringRequired,
     );
-    const normalizedOutcome = !compatible
-      ? TemplateCompilerSiteCursorNormalizedOutcome.ReloweringRequired
+    const siteOutcome = !compatible
+      ? TemplateCompilerSiteCursorSiteOutcome.ReloweringRequired
       : bundle.expressionParse.state === TemplateExpressionParseState.Error
-        ? TemplateCompilerSiteCursorNormalizedOutcome.Invalid
+        ? TemplateCompilerSiteCursorSiteOutcome.Invalid
         : bundle.expressionParse.state === TemplateExpressionParseState.Complete
-          ? TemplateCompilerSiteCursorNormalizedOutcome.Complete
-          : TemplateCompilerSiteCursorNormalizedOutcome.Open;
+          ? TemplateCompilerSiteCursorSiteOutcome.Complete
+          : TemplateCompilerSiteCursorSiteOutcome.Open;
     this.events.push(new TemplateCompilerSiteCursorTextEvent(
       siteCursorConstructionAuthority,
       this.transcriptOrdinal++,
@@ -1155,7 +1086,7 @@ class TemplateCompilerRootSiteCursor {
       bundle,
       spend,
       null,
-      normalizedOutcome,
+      siteOutcome,
     ));
     if (spend == null) {
       this.stop(
@@ -1175,9 +1106,9 @@ class TemplateCompilerRootSiteCursor {
         successor,
         'Browser-effective text scalar differs from authored interpolation precedent.',
       );
-    } else if (normalizedOutcome !== TemplateCompilerSiteCursorNormalizedOutcome.Complete) {
+    } else if (siteOutcome !== TemplateCompilerSiteCursorSiteOutcome.Complete) {
       this.stop(
-        normalizedOutcome === TemplateCompilerSiteCursorNormalizedOutcome.Invalid
+        siteOutcome === TemplateCompilerSiteCursorSiteOutcome.Invalid
           ? TemplateCompilerSiteCursorFrontierKind.ReachedNormalizedInvalid
           : TemplateCompilerSiteCursorFrontierKind.ReachedNormalizedOpen,
         text,
@@ -1599,17 +1530,34 @@ class TemplateCompilerRootSiteCursor {
   }
 }
 
-function liveDispositionFor(
-  disposition: TemplateCompilerAttributeOwnerProgressionDisposition | null,
-): TemplateCompilerLiveAttributeDisposition {
-  switch (disposition) {
-    case TemplateCompilerAttributeOwnerProgressionDisposition.Retained:
-      return TemplateCompilerLiveAttributeDisposition.Retained;
-    case TemplateCompilerAttributeOwnerProgressionDisposition.Removed:
-      return TemplateCompilerLiveAttributeDisposition.Removed;
-    case TemplateCompilerAttributeOwnerProgressionDisposition.Open:
-    case null:
-      return TemplateCompilerLiveAttributeDisposition.Open;
+function liveAttributeOutcome(
+  contribution: TemplateCompilerLiveAttributeContribution,
+): TemplateCompilerSiteCursorSiteOutcome {
+  switch (contribution.completion) {
+    case TemplateCompilerLiveAttributeCompletion.Complete:
+      return TemplateCompilerSiteCursorSiteOutcome.Complete;
+    case TemplateCompilerLiveAttributeCompletion.Invalid:
+      return TemplateCompilerSiteCursorSiteOutcome.Invalid;
+    case TemplateCompilerLiveAttributeCompletion.Open:
+      return contribution.reason?.reasonKind === TemplateCompilerLiveAttributeOpenReasonKind.SourceAuthorityOpen
+        ? TemplateCompilerSiteCursorSiteOutcome.ReloweringRequired
+        : TemplateCompilerSiteCursorSiteOutcome.Open;
+  }
+}
+
+function liveAttributeFrontier(
+  contribution: TemplateCompilerLiveAttributeContribution,
+): TemplateCompilerSiteCursorFrontierKind {
+  if (contribution.reason?.reasonKind === TemplateCompilerLiveAttributeOpenReasonKind.SourceAuthorityOpen) {
+    return TemplateCompilerSiteCursorFrontierKind.AtLiveAttributeRelowering;
+  }
+  switch (contribution.completion) {
+    case TemplateCompilerLiveAttributeCompletion.Complete:
+      throw new Error('Complete live attribute contribution has no terminal frontier.');
+    case TemplateCompilerLiveAttributeCompletion.Invalid:
+      return TemplateCompilerSiteCursorFrontierKind.ReachedLiveAttributeInvalid;
+    case TemplateCompilerLiveAttributeCompletion.Open:
+      return TemplateCompilerSiteCursorFrontierKind.ReachedLiveAttributeOpen;
   }
 }
 
