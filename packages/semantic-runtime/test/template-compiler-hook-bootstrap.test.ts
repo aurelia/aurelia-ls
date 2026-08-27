@@ -21,6 +21,10 @@ import {
   TemplateCompilerHookBootstrapState,
 } from '../src/template/template-compiler-hook-bootstrap.js';
 import {
+  observeTemplateCompilerRootSiteCursor,
+  TemplateCompilerRootSiteCursorObservationAdmissionState,
+} from '../src/template/template-compiler-root-site-cursor-observation.js';
+import {
   TemplateCompilerElementOccurrence,
   TemplateCompilerOccurrenceForest,
 } from '../src/template/template-compiler-occurrence.js';
@@ -105,6 +109,7 @@ describe('template compiler hook bootstrap', () => {
         const exactCompilation = requireCompilation(app, 'exact-css-host');
         const openCompilation = requireCompilation(app, 'open-css-host');
         const providerOpenCompilation = requireCompilation(app, 'provider-open-host');
+        const currentFrontDoor = app.emission.templates.frontDoor;
         const browserRun = runtime.computationLifecycle.begin({
           kind: 'template-compiler-hook-bootstrap-test',
           reconciliationKey: 'template-compiler-hook-bootstrap-test',
@@ -149,6 +154,19 @@ describe('template compiler hook bootstrap', () => {
           expect(exact.result.operations.every((operation) =>
             operation.mutationBatch.state === TemplateCompilerMutationBatchState.Committed
           )).toBe(true);
+          const exactPortable = observeTemplateCompilerRootSiteCursor({
+            observationKey: 'exact-css',
+            compilation: exactCompilation,
+            browserEmission: exact.browserTemplate,
+            currentFrontDoor,
+            publication: browserRun,
+            compilerReadStore: runtime.workspace.store,
+          });
+          expect(exactPortable).toMatchObject({
+            admissionState: TemplateCompilerRootSiteCursorObservationAdmissionState.CursorTranscript,
+            hookState: TemplateCompilerHookBootstrapState.Exact,
+            hookBoundaryEntryOrdinal: null,
+          });
 
           const open = executeHookBootstrap(browserRun, openCompilation, 'open');
           expect(open.result.compilerWorld).toBe(openCompilation.compilerWorld);
@@ -175,6 +193,36 @@ describe('template compiler hook bootstrap', () => {
           ]);
           expect(classValuesByTag(open.forest)).toEqual({ div: ['generated stable'] });
           expect(open.execution.seal()).toBe(open.execution.sequence);
+          const openPortable = observeTemplateCompilerRootSiteCursor({
+            observationKey: 'open-css',
+            compilation: openCompilation,
+            browserEmission: open.browserTemplate,
+            currentFrontDoor,
+            publication: browserRun,
+            compilerReadStore: runtime.workspace.store,
+          });
+          expect(openPortable).toMatchObject({
+            admissionState: TemplateCompilerRootSiteCursorObservationAdmissionState.HookOpen,
+            reasonKinds: [TemplateCompilerRootSiteCursorObservationAdmissionState.HookOpen],
+            hookState: TemplateCompilerHookBootstrapState.Open,
+            hookBoundaryEntryOrdinal: 0,
+          });
+
+          for (const portable of [exactPortable, openPortable]) {
+            expect(Object.getPrototypeOf(portable)).toBe(Object.prototype);
+            const serialized = JSON.stringify(portable);
+            expect(JSON.parse(serialized)).toEqual(portable);
+            for (const forbidden of [
+              'binding',
+              'execution',
+              'forest',
+              'compilerReads',
+              'preWalkAuthority',
+              'browserEmission',
+            ]) {
+              expect(serialized).not.toContain(`"${forbidden}"`);
+            }
+          }
 
           const providerOpen = executeHookBootstrap(browserRun, providerOpenCompilation, 'provider-open');
           expect(providerOpen.result.compilerWorld).toBe(providerOpenCompilation.compilerWorld);
@@ -329,7 +377,7 @@ function executeHookBootstrap(
     compilerWorld: compilation.compilerWorld,
     executionOpenSeamHandle: browserRun.handles.openSeam(`hook-bootstrap:${localKey}:execution-open`),
   });
-  return { forest, execution, lane, result };
+  return { browserTemplate, forest, execution, lane, result };
 }
 
 function classValuesByTag(
