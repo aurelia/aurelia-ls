@@ -205,6 +205,8 @@ describe("semantic compiler gallery", () => {
     expect(transcriptCursors.filter((cursor) => cursor.occurrenceTargetPlanState === "exact")).toHaveLength(23);
     expect(transcriptCursors.filter((cursor) => cursor.occurrenceTargetAttachmentPresent)).toHaveLength(23);
     expect(transcriptCursors.filter((cursor) => cursor.occurrenceTargetExecutionPresent)).toHaveLength(23);
+    expect(transcriptCursors.filter((cursor) => cursor.occurrenceHydrateElementAllocationState === "exact"))
+      .toHaveLength(0);
     expect(transcriptCursors.every((cursor) =>
       cursor.completionReceiptPresent === (cursor.occurrenceRowAssemblyState === "exact")
     )).toBe(true);
@@ -305,6 +307,12 @@ describe("semantic compiler gallery", () => {
       expect(cursor.currentness.laneOperationCountDelta)
         .toBe(cursor.currentness.expectedLaneOperationCountDelta);
       expect(cursor.eventDigest).toMatch(/^sha256:[0-9a-f]{64}$/u);
+      expect(cursor.occurrenceHydrateElementAllocationState).toBe("not-applicable");
+      expect(cursor.occurrenceHydrateElementAllocationReasonKinds).toEqual([]);
+      expect(cursor.occurrenceHydrateElementHeadCount).toBe(0);
+      expect(cursor.occurrenceHydrateElementReusedCaptureCount).toBe(0);
+      expect(cursor.occurrenceHydrateElementEffectiveCaptureCount).toBe(0);
+      expect(cursor.occurrenceHydrateElementAllocationDigest).toBeNull();
       if (cursor.occurrenceRowAssemblyState === "exact") {
         expect(cursor.occurrenceRowAssemblyReasonKinds).toEqual([]);
         expect(cursor.occurrencePrePlanEffectState).toBe("none");
@@ -322,6 +330,7 @@ describe("semantic compiler gallery", () => {
           .toBe(cursor.occurrenceTargetPlanStableRowKeys.length);
         expect(cursor.occurrenceTargetPlanFreshRoot).toBe(true);
         expect(cursor.occurrenceTargetPlanDigest).toMatch(/^sha256:[0-9a-f]{64}$/u);
+        expect(cursor.occurrenceTargetPublicationPrerequisiteCounts).toEqual({});
         expect(cursor.occurrenceTargetAttachmentPresent).toBe(true);
         expect(cursor.occurrenceTargetAttachmentContextCount).toBe(1);
         expect(cursor.occurrenceTargetAttachmentStructuralPlanCount).toBe(1);
@@ -370,6 +379,7 @@ describe("semantic compiler gallery", () => {
           expect(cursor.occurrenceTargetPlanState).toBe("not-applicable");
         }
         expect(cursor.occurrenceTargetPlanDigest).toBeNull();
+        expect(cursor.occurrenceTargetPublicationPrerequisiteCounts).toEqual({});
         expect(cursor.occurrenceTargetAttachmentPresent).toBe(false);
         expect(cursor.occurrenceTargetAttachmentContextCount).toBe(0);
         expect(cursor.occurrenceTargetAttachmentStructuralPlanCount).toBe(0);

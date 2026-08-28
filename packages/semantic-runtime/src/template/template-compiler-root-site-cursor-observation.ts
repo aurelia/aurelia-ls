@@ -52,6 +52,10 @@ import {
   type TemplateCompilerOccurrenceTargetPlanAssembly,
 } from './template-compiler-occurrence-target-plan.js';
 import {
+  allocateTemplateCompilerOccurrenceHydrateElements,
+  type TemplateCompilerOccurrenceHydrateElementAllocationAssembly,
+} from './template-compiler-occurrence-hydrate-element-allocation.js';
+import {
   executeTemplateCompilerOccurrenceTarget,
   type TemplateCompilerOccurrenceTargetExecution,
 } from './template-compiler-occurrence-target-execution.js';
@@ -167,6 +171,12 @@ export interface TemplateCompilerRootSiteCursorTranscriptObservation
   readonly occurrenceTextExpansionOutputCount: number;
   readonly occurrencePrePlanEffectState: string | null;
   readonly occurrenceRowDigest: string | null;
+  readonly occurrenceHydrateElementAllocationState: string;
+  readonly occurrenceHydrateElementAllocationReasonKinds: readonly string[];
+  readonly occurrenceHydrateElementHeadCount: number;
+  readonly occurrenceHydrateElementReusedCaptureCount: number;
+  readonly occurrenceHydrateElementEffectiveCaptureCount: number;
+  readonly occurrenceHydrateElementAllocationDigest: string | null;
   readonly occurrenceTargetPlanState: string;
   readonly occurrenceTargetPlanReasonKinds: readonly string[];
   readonly occurrenceTargetPlanRowCount: number;
@@ -174,6 +184,7 @@ export interface TemplateCompilerRootSiteCursorTranscriptObservation
   readonly occurrenceTargetPlanStableRowKeys: readonly string[];
   readonly occurrenceTargetPlanFreshRoot: boolean | null;
   readonly occurrenceTargetPlanDigest: string | null;
+  readonly occurrenceTargetPublicationPrerequisiteCounts: Readonly<Record<string, number>>;
   readonly occurrenceTargetAttachmentPresent: boolean;
   readonly occurrenceTargetAttachmentContextCount: number;
   readonly occurrenceTargetAttachmentStructuralPlanCount: number;
@@ -410,9 +421,13 @@ export function observeTemplateCompilerRootSiteCursor(
     ? null
     : assembleTemplateCompilerOrdinaryRootRows(completionReceipt);
   const occurrenceAssembly = occurrenceRows?.assembly ?? null;
+  const occurrenceHydrateElements = occurrenceAssembly == null
+    ? null
+    : allocateTemplateCompilerOccurrenceHydrateElements(occurrenceAssembly);
+  const hydrateElementAssembly = occurrenceHydrateElements?.assembly ?? null;
   const occurrenceTargetPlan = occurrenceAssembly == null
     ? null
-    : allocateTemplateCompilerOccurrenceTargetPlan(occurrenceAssembly);
+    : allocateTemplateCompilerOccurrenceTargetPlan(occurrenceAssembly, hydrateElementAssembly);
   const targetPlanAssembly = occurrenceTargetPlan?.assembly ?? null;
   const attachmentStartForestMutationRevision = forest.mutationRevision;
   const attachmentStartGlobalOperationCount = execution.sequence.readOperations().length;
@@ -536,6 +551,21 @@ export function observeTemplateCompilerRootSiteCursor(
     ) ?? 0,
     occurrencePrePlanEffectState: occurrenceAssembly?.prePlanEffectState ?? null,
     occurrenceRowDigest: occurrenceAssembly == null ? null : occurrenceRowDigest(occurrenceAssembly),
+    occurrenceHydrateElementAllocationState: occurrenceHydrateElements?.state ?? 'not-applicable',
+    occurrenceHydrateElementAllocationReasonKinds:
+      occurrenceHydrateElements?.reasons.map((reason) => reason.reasonKind) ?? [],
+    occurrenceHydrateElementHeadCount: hydrateElementAssembly?.heads.length ?? 0,
+    occurrenceHydrateElementReusedCaptureCount: hydrateElementAssembly?.heads.reduce(
+      (count, head) => count + head.captures.filter((capture) => capture.effectiveReservation == null).length,
+      0,
+    ) ?? 0,
+    occurrenceHydrateElementEffectiveCaptureCount: hydrateElementAssembly?.heads.reduce(
+      (count, head) => count + head.captures.filter((capture) => capture.effectiveReservation != null).length,
+      0,
+    ) ?? 0,
+    occurrenceHydrateElementAllocationDigest: hydrateElementAssembly == null
+      ? null
+      : occurrenceHydrateElementAllocationDigest(hydrateElementAssembly),
     occurrenceTargetPlanState: occurrenceTargetPlan?.state ?? 'not-applicable',
     occurrenceTargetPlanReasonKinds: occurrenceTargetPlan?.reasons.map((reason) => reason.reasonKind) ?? [],
     occurrenceTargetPlanRowCount: targetPlanAssembly?.targetPlan.root.readRows().length ?? 0,
@@ -548,6 +578,9 @@ export function observeTemplateCompilerRootSiteCursor(
       : targetPlanAssembly.rootCompiledTemplate.productHandle
         !== transcript.binding.compilation.compiledTemplate.compiledTemplate.productHandle,
     occurrenceTargetPlanDigest: targetPlanAssembly == null ? null : occurrenceTargetPlanDigest(targetPlanAssembly),
+    occurrenceTargetPublicationPrerequisiteCounts: counts(
+      targetPlanAssembly?.publicationPrerequisites.map((entry) => entry.prerequisiteKind) ?? [],
+    ),
     occurrenceTargetAttachmentPresent: occurrenceTargetAttachment != null,
     occurrenceTargetAttachmentContextCount: occurrenceTargetAttachment?.contexts.length ?? 0,
     occurrenceTargetAttachmentStructuralPlanCount:
@@ -700,6 +733,40 @@ function occurrenceTargetPlanDigest(assembly: TemplateCompilerOccurrenceTargetPl
       row.inputNode?.productHandle ?? null,
       row.node?.productHandle ?? null,
       row.instructions.map(templateInstructionSemanticSignature),
+    ]),
+    assembly.attributeDispositionMappings.map((mapping) => [
+      mapping.draft.stableSlotKey,
+      mapping.causeHandles,
+    ]),
+    assembly.publicationPrerequisites.map((entry) => [
+      entry.prerequisiteKind,
+      entry.capture.draft.stableSlotKey,
+      entry.capture.productHandle,
+    ]),
+  ]);
+  return `sha256:${createHash('sha256').update(encoded).digest('hex')}`;
+}
+
+function occurrenceHydrateElementAllocationDigest(
+  assembly: TemplateCompilerOccurrenceHydrateElementAllocationAssembly,
+): string {
+  const encoded = JSON.stringify([
+    assembly.allocation.ledger.rootSiteKey,
+    assembly.heads.map((head) => [
+      head.row.stableSlotKey,
+      head.head.instructionSlotKey,
+      head.instructionAllocation.siteKey,
+      head.instructionAllocation.local,
+      head.instructionAllocation.instructionLocal,
+      templateInstructionSemanticSignature(head.instruction),
+      head.captures.map((capture) => [
+        capture.draft.stableSlotKey,
+        capture.draft.decisionKind,
+        capture.productHandle,
+        capture.draft.authoredSyntax?.productHandle ?? null,
+        capture.effectiveReservation?.productHandle ?? null,
+        capture.effectiveReservation?.identityHandle ?? null,
+      ]),
     ]),
   ]);
   return `sha256:${createHash('sha256').update(encoded).digest('hex')}`;

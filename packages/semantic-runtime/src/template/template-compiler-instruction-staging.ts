@@ -17,7 +17,11 @@ import type {
   HtmlNodeReference,
 } from './html-ir.js';
 import {
+  type AuSlotProcessContentInstructionData,
   HydrateAttributeInstruction,
+  HydrateElementInstruction,
+  type HydrateElementProjectionContributor,
+  type HydrateElementProjectionDefinition,
   HydrateTemplateControllerInstruction,
   InterpolationInstruction,
   SetAttributeInstruction,
@@ -73,6 +77,56 @@ export interface TemplateCompilerInstructionStagingAuthority {
     request: TemplateCompilerInstructionStagingAllocationRequest,
     factory: (allocation: TemplateCompilerInstructionStagingAllocation) => TInstruction,
   ): TInstruction;
+}
+
+export class TemplateCompilerHydrateElementInstructionStagingRequest {
+  constructor(
+    readonly authority: TemplateCompilerInstructionStagingAuthority,
+    readonly siteKey: string,
+    readonly localKey: string,
+    readonly node: HtmlNodeReference,
+    readonly elementName: string,
+    readonly resourceLookupName: string,
+    readonly resource: TemplateVisibleResourceReference | null,
+    readonly projectionDefinitions: (
+      instructionLocal: string,
+    ) => readonly HydrateElementProjectionDefinition[],
+    readonly discardedProjectionContributors: readonly HydrateElementProjectionContributor[],
+    readonly auSlotProcessContent: AuSlotProcessContentInstructionData | null,
+    readonly auSlotProcessContentRemovedChildNodes: readonly HtmlNodeReference[],
+    readonly bindableInstructions: readonly TemplateInstruction[],
+    readonly captureSyntaxProductHandles: readonly ProductHandle[],
+    /** Runtime wire flag is usage-site syntax, independent from effective render-location placement. */
+    readonly usageContainerless: boolean,
+    readonly sourceAddressHandle: AddressHandle | null,
+  ) {}
+}
+
+/** Shared RC2 HydrateElement construction law; callers own allocation and child-definition reservation. */
+export function stageTemplateCompilerHydrateElementInstruction(
+  request: TemplateCompilerHydrateElementInstructionStagingRequest,
+): HydrateElementInstruction {
+  return createInstruction(
+    request,
+    TemplateInstructionKind.HydrateElement,
+    'hydrate-element',
+    (allocation) => new HydrateElementInstruction(
+      allocation.productHandle,
+      allocation.identityHandle,
+      request.node,
+      request.elementName,
+      request.resourceLookupName,
+      request.resource,
+      request.projectionDefinitions(allocation.instructionLocal),
+      request.discardedProjectionContributors,
+      request.auSlotProcessContent,
+      request.auSlotProcessContentRemovedChildNodes,
+      request.bindableInstructions.map((instruction) => instruction.productHandle),
+      request.captureSyntaxProductHandles,
+      request.usageContainerless,
+      request.sourceAddressHandle,
+    ),
+  );
 }
 
 export interface TemplateCompilerInstructionStagingSyntax {

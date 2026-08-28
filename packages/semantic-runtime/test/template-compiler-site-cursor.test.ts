@@ -31,7 +31,10 @@ import {
   TemplateCompilerLiveAttributeTargetLane,
 } from '../src/template/template-compiler-live-attribute-assembly.js';
 import { TemplateCompilerLiveAttributeDisposition } from '../src/template/template-compiler-live-attribute-owner.js';
-import { TemplateCompilerLiveAllocationSnapshotState } from '../src/template/template-compiler-live-allocation.js';
+import {
+  TemplateCompilerLiveAllocationSnapshotState,
+  TemplateCompilerLiveProductReservationRole,
+} from '../src/template/template-compiler-live-allocation.js';
 import {
   TemplateCompilerHydrateElementBlockerKind,
   TemplateCompilerHydrateElementBlockerScope,
@@ -93,6 +96,11 @@ import {
   TemplateCompilerOccurrenceTargetPlanReasonKind,
   TemplateCompilerOccurrenceTargetPlanState,
 } from '../src/template/template-compiler-occurrence-target-plan.js';
+import {
+  allocateTemplateCompilerOccurrenceHydrateElements,
+  TemplateCompilerOccurrenceHydrateElementAllocationReasonKind,
+  TemplateCompilerOccurrenceHydrateElementAllocationState,
+} from '../src/template/template-compiler-occurrence-hydrate-element-allocation.js';
 import { executeTemplateCompilerOccurrenceTarget } from '../src/template/template-compiler-occurrence-target-execution.js';
 import {
   TemplateCompilerTargetContextState,
@@ -104,6 +112,7 @@ import {
   TemplateCompilerOccurrenceOnlyDisposition,
   TemplateCompilerSiteSpendDisposition,
 } from '../src/template/template-compiler-site-spend-ledger.js';
+import { TemplateProductDetails } from '../src/template/product-details.js';
 import type {
   TemplateCompilationFamilyFrontDoorEmission,
   TemplateCompilationFrontDoorEmission,
@@ -508,7 +517,10 @@ describe('template compiler root site cursor', () => {
     for (const [name, rowAssembly] of assemblies) {
       const namespace = rowAssembly.receipt.transcript.allocationSnapshot.ledger.namespace;
       const reservationsBefore = namespace.readReservationCounts();
-      const result = allocateTemplateCompilerOccurrenceTargetPlan(rowAssembly);
+      let result = allocateTemplateCompilerOccurrenceTargetPlan(rowAssembly);
+      let hydrateElements: NonNullable<
+        ReturnType<typeof allocateTemplateCompilerOccurrenceHydrateElements>['assembly']
+      > | null = null;
       const pendingSlots = hydratePending.get(name) ?? null;
       if (pendingSlots != null) {
         expect(result.state, name).toBe(TemplateCompilerOccurrenceTargetPlanState.Pending);
@@ -520,7 +532,29 @@ describe('template compiler root site cursor', () => {
         expect(allocateTemplateCompilerOccurrenceTargetPlan(rowAssembly).state, name)
           .toBe(TemplateCompilerOccurrenceTargetPlanState.Pending);
         expect(namespace.readReservationCounts(), name).toEqual(reservationsBefore);
-        continue;
+        const hydrateResult = allocateTemplateCompilerOccurrenceHydrateElements(rowAssembly);
+        expect(hydrateResult.state, name).toBe(TemplateCompilerOccurrenceHydrateElementAllocationState.Exact);
+        hydrateElements = hydrateResult.assembly;
+        if (hydrateElements == null) throw new Error(`Expected HydrateElement allocation for '${name}'.`);
+        const effectiveCaptureCount = hydrateElements.heads.flatMap((head) => head.captures).filter((capture) =>
+          capture.effectiveReservation != null
+        ).length;
+        expect(hydrateElements.heads, name).toHaveLength(pendingSlots.length);
+        expect(hydrateElements.allocation.instructionAllocations, name).toHaveLength(pendingSlots.length);
+        expect(hydrateElements.allocation.productReservations, name).toHaveLength(effectiveCaptureCount);
+        expect(hydrateElements.allocation.expressionAllocations, name).toEqual([]);
+        expect(hydrateElements.allocation.sourceAllocations, name).toEqual([]);
+        expect(namespace.readReservationCounts(), name).toMatchObject({
+          semanticSlots: reservationsBefore.semanticSlots + pendingSlots.length + effectiveCaptureCount,
+          productHandles: reservationsBefore.productHandles + pendingSlots.length + effectiveCaptureCount,
+          identityHandles: reservationsBefore.identityHandles + pendingSlots.length + effectiveCaptureCount,
+          addressHandles: reservationsBefore.addressHandles,
+        });
+        expect(allocateTemplateCompilerOccurrenceHydrateElements(rowAssembly).assembly, name).toBe(hydrateElements);
+        result = allocateTemplateCompilerOccurrenceTargetPlan(rowAssembly, hydrateElements);
+      } else {
+        expect(allocateTemplateCompilerOccurrenceHydrateElements(rowAssembly).state, name)
+          .toBe(TemplateCompilerOccurrenceHydrateElementAllocationState.NotApplicable);
       }
       expect(result.state, name).toBe(TemplateCompilerOccurrenceTargetPlanState.Exact);
       const targetAssembly = result.assembly;
@@ -541,8 +575,22 @@ describe('template compiler root site cursor', () => {
       expect(targetAssembly.rootCompiledTemplate.productHandle, name)
         .not.toBe(rowAssembly.receipt.transcript.binding.compilation.compiledTemplate.compiledTemplate.productHandle);
       expect(targetAssembly.targetAllocation.productReservations, name).toEqual([targetAssembly.rootReservation]);
+      const reservationsAfterFunding = pendingSlots == null
+        ? reservationsBefore
+        : {
+            semanticSlots: reservationsBefore.semanticSlots
+              + hydrateElements!.allocation.instructionAllocations.length
+              + hydrateElements!.allocation.productReservations.length,
+            productHandles: reservationsBefore.productHandles
+              + hydrateElements!.allocation.instructionAllocations.length
+              + hydrateElements!.allocation.productReservations.length,
+            identityHandles: reservationsBefore.identityHandles
+              + hydrateElements!.allocation.instructionAllocations.length
+              + hydrateElements!.allocation.productReservations.length,
+            addressHandles: reservationsBefore.addressHandles,
+          };
       expect(namespace.readReservationCounts().productHandles, name)
-        .toBe(reservationsBefore.productHandles + 1);
+        .toBe(reservationsAfterFunding.productHandles + 1);
       expect(targetAssembly.rowMappings.every((mapping) =>
         mapping.row.sourceKind === (mapping.draft.textOutput == null
           ? TemplateCompilerTargetRowSourceKind.RetainedOccurrence
@@ -551,14 +599,111 @@ describe('template compiler root site cursor', () => {
         && mapping.row.stableSlotKey === mapping.draft.stableSlotKey
         && mapping.row.publicationLocalKey === mapping.draft.stableSlotKey
       ), name).toBe(true);
-      expect(allocateTemplateCompilerOccurrenceTargetPlan(rowAssembly).assembly, name).toBe(targetAssembly);
+      expect(allocateTemplateCompilerOccurrenceTargetPlan(rowAssembly, hydrateElements).assembly, name)
+        .toBe(targetAssembly);
       targetPlans.set(name, targetAssembly);
     }
-    expect(targetPlans.size).toBe(12);
+    expect(targetPlans.size).toBe(14);
     expect([...targetPlans.values()].reduce(
       (count, targetAssembly) => count + targetAssembly.targetPlan.root.readRows().length,
       0,
-    )).toBe(21);
+    )).toBe(26);
+    const stagingPlan = targetPlans.get('cursor-live-staging')!;
+    expect(stagingPlan.hydrateElements?.heads).toHaveLength(2);
+    expect(stagingPlan.publicationPrerequisites).toMatchObject([{
+      prerequisiteKind: 'effective-attribute-syntax-materialization',
+    }]);
+    const captureHead = stagingPlan.hydrateElements?.heads.find((head) => head.captures.length > 0);
+    if (captureHead == null) throw new Error('Expected allocated capture HydrateElement head.');
+    expect(captureHead?.captures.map((capture) => [
+      capture.draft.decisionKind,
+      capture.productHandle,
+      capture.draft.authoredSyntax?.productHandle ?? null,
+      capture.effectiveReservation?.productHandle ?? null,
+    ])).toEqual([
+      [TemplateCompilerCaptureSyntaxDecisionKind.ReuseAuthored,
+        captureHead.captures[0]?.draft.authoredSyntax?.productHandle,
+        captureHead.captures[0]?.draft.authoredSyntax?.productHandle, null],
+      [TemplateCompilerCaptureSyntaxDecisionKind.ReuseAuthored,
+        captureHead.captures[1]?.draft.authoredSyntax?.productHandle,
+        captureHead.captures[1]?.draft.authoredSyntax?.productHandle, null],
+      [TemplateCompilerCaptureSyntaxDecisionKind.EffectiveSyntaxRequired,
+        captureHead.captures[2]?.effectiveReservation?.productHandle,
+        null, captureHead.captures[2]?.effectiveReservation?.productHandle],
+    ]);
+    expect(captureHead?.instruction.containerless).toBe(captureHead?.head.envelope.containerless.fromUsage);
+    for (const head of stagingPlan.hydrateElements?.heads ?? []) {
+      expect(fixture.runtime.workspace.store.readProductDetail(
+        TemplateProductDetails.Instruction,
+        head.instruction.productHandle,
+      )).toBeNull();
+      expect(stagingPlan.rowMappings.find((mapping) => mapping.draft === head.row)?.row.instructions[0])
+        .toBe(head.instruction);
+      for (const capture of head.captures) {
+        if (capture.effectiveReservation != null) {
+          expect(fixture.runtime.workspace.store.readProductDetail(
+            TemplateProductDetails.AttributeSyntax,
+            capture.productHandle,
+          )).toBeNull();
+        }
+        const disposition = stagingPlan.attributeDispositionMappings.find((mapping) =>
+          mapping.draft.contribution === capture.draft.capture.contribution
+        );
+        expect(disposition?.causeHandles).toContain(head.instruction.productHandle);
+        expect(disposition?.causeHandles).toContain(capture.productHandle);
+      }
+      for (const disposition of stagingPlan.attributeDispositionMappings.filter((mapping) =>
+        mapping.draft.site === head.row.site
+      )) {
+        const input = disposition.draft.attribute.inputReference?.productHandle;
+        if (input == null) throw new Error('Expected browser attribute cause.');
+        const contribution = disposition.draft.contribution;
+        if (contribution.targetLane === TemplateCompilerLiveAttributeTargetLane.ElementBindable) {
+          expect(disposition.causeHandles).toEqual([
+            input,
+            head.instruction.productHandle,
+            ...head.head.envelope.bindableInstructions.map((instruction) => instruction.productHandle),
+          ]);
+        } else if (contribution.targetLane === TemplateCompilerLiveAttributeTargetLane.Capture) {
+          const capture = head.captures.find((candidate) =>
+            candidate.draft.capture.contribution === contribution
+          )!;
+          expect(disposition.causeHandles).toEqual([
+            input,
+            head.instruction.productHandle,
+            capture.productHandle,
+          ]);
+        } else {
+          expect(disposition.causeHandles).toEqual(disposition.draft.causeHandles);
+          expect(disposition.causeHandles).not.toContain(head.instruction.productHandle);
+        }
+      }
+    }
+    const mergedPlan = targetPlans.get('cursor-row-merged')!;
+    expect(mergedPlan.hydrateElements?.heads).toHaveLength(1);
+    expect(mergedPlan.publicationPrerequisites).toEqual([]);
+    expect(mergedPlan.rowMappings[0]?.row.instructions.map((instruction) => instruction.instructionKind)).toEqual([
+      'hydrate-element',
+      'hydrate-attribute',
+      'property-binding',
+    ]);
+    const mergedHead = mergedPlan.hydrateElements!.heads[0]!;
+    for (const disposition of mergedPlan.attributeDispositionMappings.filter((mapping) =>
+      mapping.draft.site === mergedHead.row.site
+    )) {
+      const input = disposition.draft.attribute.inputReference?.productHandle;
+      if (input == null) throw new Error('Expected merged browser attribute cause.');
+      if (disposition.draft.contribution.targetLane === TemplateCompilerLiveAttributeTargetLane.ElementBindable) {
+        expect(disposition.causeHandles).toEqual([
+          input,
+          mergedHead.instruction.productHandle,
+          ...mergedHead.head.envelope.bindableInstructions.map((instruction) => instruction.productHandle),
+        ]);
+      } else {
+        expect(disposition.causeHandles).toEqual(disposition.draft.causeHandles);
+        expect(disposition.causeHandles).not.toContain(mergedHead.instruction.productHandle);
+      }
+    }
     const unattached = targetPlans.get('cursor-empty')!;
     expect(() => unattached.rows.receipt.transcript.binding.execution.attachTargetPlan(
       unattached.rows.receipt.endpoint.lane,
@@ -674,6 +819,59 @@ describe('template compiler root site cursor', () => {
     expect(targetAssembly.isCurrent()).toBe(false);
     expect(allocateTemplateCompilerOccurrenceTargetPlan(rowAssembly).state)
       .toBe(TemplateCompilerOccurrenceTargetPlanState.Ineligible);
+  });
+
+  test('keeps stale HydrateElement allocation refusal side-effect free', () => {
+    const run = fixture.freshRun('cursor-live-staging');
+    const receipt = run.execute().completion?.receipt;
+    if (receipt == null) throw new Error('Expected fresh HydrateElement completion receipt.');
+    const rows = assembleTemplateCompilerOrdinaryRootRows(receipt).assembly;
+    if (rows == null) throw new Error('Expected fresh HydrateElement row assembly.');
+    const namespace = receipt.transcript.allocationSnapshot.ledger.namespace;
+    const counts = namespace.readReservationCounts();
+    const attribute = run.binding.forest.readAttributes()[0]!;
+
+    run.binding.forest.rewriteAttributeValue(attribute, `${attribute.value}:stale`);
+
+    const result = allocateTemplateCompilerOccurrenceHydrateElements(rows);
+    expect(result.state).toBe(TemplateCompilerOccurrenceHydrateElementAllocationState.Ineligible);
+    expect(result.assembly).toBeNull();
+    expect(result.reasons).toEqual([expect.objectContaining({ reasonKind: 'stale-receipt' })]);
+    expect(namespace.readReservationCounts()).toEqual(counts);
+  });
+
+  test('commits HydrateElement funding atomically when a later head collides', () => {
+    const run = fixture.freshRun('cursor-live-staging');
+    const receipt = run.execute().completion?.receipt;
+    if (receipt == null) throw new Error('Expected fresh HydrateElement completion receipt.');
+    const rows = assembleTemplateCompilerOrdinaryRootRows(receipt).assembly;
+    if (rows == null) throw new Error('Expected fresh HydrateElement row assembly.');
+    const hydrateRows = rows.rows.filter((row) => row.hydrateElement != null);
+    const second = hydrateRows[1];
+    if (second?.hydrateElement == null) throw new Error('Expected a second HydrateElement row.');
+    const namespace = receipt.transcript.allocationSnapshot.ledger.namespace;
+    const phaseKey = `${receipt.endpoint.lane.localKey}:occurrence-hydrate-elements`;
+    const instructionSiteKey = `${phaseKey}:${second.hydrateElement.instructionSlotKey}`;
+    const instructionLocal = `${instructionSiteKey}:instruction:hydrate-element:${second.occurrence.occurrenceKey}`;
+    const collision = namespace.beginPhase(`${receipt.endpoint.lane.localKey}:he-collision`);
+    collision.reserveProduct(
+      `${receipt.endpoint.lane.localKey}:he-collision:product`,
+      'collision',
+      TemplateCompilerLiveProductReservationRole.RootCompiledTemplate,
+      null,
+      instructionLocal,
+    );
+    collision.finish();
+    const counts = namespace.readReservationCounts();
+
+    const result = allocateTemplateCompilerOccurrenceHydrateElements(rows);
+
+    expect(result.state).toBe(TemplateCompilerOccurrenceHydrateElementAllocationState.Ineligible);
+    expect(result.assembly).toBeNull();
+    expect(result.reasons).toEqual([expect.objectContaining({
+      reasonKind: TemplateCompilerOccurrenceHydrateElementAllocationReasonKind.AllocationCollision,
+    })]);
+    expect(namespace.readReservationCounts()).toEqual(counts);
   });
 
   test('keeps central structural effects and reached live invalidity distinct', () => {
@@ -1287,7 +1485,7 @@ describe('template compiler root site cursor', () => {
     expect(() => run.binding.execution.seal()).toThrow(/advanced after occurrence target closure/u);
   });
 
-  test('executes and closes the complete HE-free ordinary-root substrate in compiler site order', () => {
+  test('executes and closes the funded ordinary-root substrate in compiler site order', () => {
     for (const name of [
       'cursor-as-element-empty',
       'cursor-comment-shield',
@@ -1296,8 +1494,10 @@ describe('template compiler root site cursor', () => {
       'cursor-live-duplicate',
       'cursor-live-multi-binding',
       'cursor-live-nonsingular',
+      'cursor-live-staging',
       'cursor-progression',
       'cursor-row-interleave',
+      'cursor-row-merged',
       'cursor-slot-inert',
       'cursor-slot-valid',
       'cursor-ten-hole',
@@ -1309,7 +1509,8 @@ describe('template compiler root site cursor', () => {
       if (receipt == null) throw new Error(`Expected fresh completion receipt for '${name}'.`);
       const rows = assembleTemplateCompilerOrdinaryRootRows(receipt).assembly;
       if (rows == null) throw new Error(`Expected fresh row assembly for '${name}'.`);
-      const target = allocateTemplateCompilerOccurrenceTargetPlan(rows).assembly;
+      const hydrateElements = allocateTemplateCompilerOccurrenceHydrateElements(rows).assembly;
+      const target = allocateTemplateCompilerOccurrenceTargetPlan(rows, hydrateElements).assembly;
       if (target == null) throw new Error(`Expected exact target plan for '${name}'.`);
       const attachment = run.binding.execution.attachOccurrenceTargetPlan(target);
 

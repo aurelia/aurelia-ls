@@ -16,6 +16,7 @@ import {
 import type { TemplateCompilerCompletedOrdinarySite } from './template-compiler-root-completion.js';
 import type {
   TemplateCompilerOccurrenceTargetPlanAssembly,
+  TemplateCompilerOccurrenceTargetAttributeDispositionMapping,
   TemplateCompilerOccurrenceTargetRowMapping,
 } from './template-compiler-occurrence-target-plan.js';
 
@@ -34,7 +35,11 @@ export const enum TemplateCompilerOccurrenceTargetScheduleEntryKind {
 export class TemplateCompilerOccurrenceAttributeScheduleEntry {
   readonly entryKind = TemplateCompilerOccurrenceTargetScheduleEntryKind.AttributeDisposition;
 
-  constructor(readonly disposition: TemplateCompilerOccurrenceAttributeDispositionDraft) {}
+  constructor(readonly mapping: TemplateCompilerOccurrenceTargetAttributeDispositionMapping) {}
+
+  get disposition(): TemplateCompilerOccurrenceAttributeDispositionDraft {
+    return this.mapping.draft;
+  }
 
   get operationKey(): string {
     return this.disposition.stableSlotKey;
@@ -45,7 +50,7 @@ export class TemplateCompilerOccurrenceAttributeScheduleEntry {
   }
 
   get causeHandles(): readonly ClaimEndpointHandle[] {
-    return this.disposition.causeHandles;
+    return this.mapping.causeHandles;
   }
 
   get sourceAddressHandle(): AddressHandle | null {
@@ -157,6 +162,9 @@ export function buildTemplateCompilerOccurrenceTargetSchedule(
   }
   const rows = assembly.rows;
   const mappingsByDraft = new Map(assembly.rowMappings.map((mapping) => [mapping.draft, mapping] as const));
+  const dispositionMappingsByDraft = new Map(
+    assembly.attributeDispositionMappings.map((mapping) => [mapping.draft, mapping] as const),
+  );
   const attributeDispositionsBySite = groupBy(rows.attributeDispositions, (disposition) => disposition.site);
   const elementRowBySite = new Map<
     TemplateCompilerCompletedOrdinarySite,
@@ -178,7 +186,7 @@ export function buildTemplateCompilerOccurrenceTargetSchedule(
       throw new Error(`Occurrence row '${draft.stableSlotKey}' lost its exact target-plan mapping.`);
     }
     if (draft.site.siteKind === 'element') {
-      if (draft.hydrateElement != null || elementRowBySite.has(draft.site)) {
+      if (elementRowBySite.has(draft.site)) {
         throw new Error(`Element site '${draft.stableSlotKey}' is not one exact native row.`);
       }
       elementRowBySite.set(draft.site, mapping);
@@ -209,7 +217,11 @@ export function buildTemplateCompilerOccurrenceTargetSchedule(
     if (site.siteKind === 'element') {
       for (const disposition of attributeDispositionsBySite.get(site) ?? []) {
         if (disposition.disposition === TemplateCompilerLiveAttributeDisposition.Removed) {
-          entries.push(new TemplateCompilerOccurrenceAttributeScheduleEntry(disposition));
+          const mapping = dispositionMappingsByDraft.get(disposition) ?? null;
+          if (mapping == null) {
+            throw new Error(`Attribute disposition '${disposition.stableSlotKey}' has no funded cause mapping.`);
+          }
+          entries.push(new TemplateCompilerOccurrenceAttributeScheduleEntry(mapping));
         }
       }
       const mapping = elementRowBySite.get(site) ?? null;

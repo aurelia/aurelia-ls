@@ -57,9 +57,16 @@ describe("AOT semantic compiler oracle CLI", () => {
       occurrenceRowAssemblyState: "exact",
       occurrenceRowAssemblyReasonKinds: [],
       occurrencePrePlanEffectState: "none",
+      occurrenceHydrateElementAllocationState: "not-applicable",
+      occurrenceHydrateElementAllocationReasonKinds: [],
+      occurrenceHydrateElementHeadCount: 0,
+      occurrenceHydrateElementReusedCaptureCount: 0,
+      occurrenceHydrateElementEffectiveCaptureCount: 0,
+      occurrenceHydrateElementAllocationDigest: null,
       occurrenceTargetPlanState: "exact",
       occurrenceTargetPlanReasonKinds: [],
       occurrenceTargetPlanFreshRoot: true,
+      occurrenceTargetPublicationPrerequisiteCounts: {},
       occurrenceTargetAttachmentPresent: true,
       occurrenceTargetAttachmentContextCount: 1,
       occurrenceTargetAttachmentStructuralPlanCount: 1,
@@ -138,9 +145,16 @@ interface SemanticCompilerOracleReceipt {
         readonly occurrenceRowAssemblyState?: string;
         readonly occurrenceRowAssemblyReasonKinds?: readonly string[];
         readonly occurrencePrePlanEffectState?: string | null;
+        readonly occurrenceHydrateElementAllocationState?: string;
+        readonly occurrenceHydrateElementAllocationReasonKinds?: readonly string[];
+        readonly occurrenceHydrateElementHeadCount?: number;
+        readonly occurrenceHydrateElementReusedCaptureCount?: number;
+        readonly occurrenceHydrateElementEffectiveCaptureCount?: number;
+        readonly occurrenceHydrateElementAllocationDigest?: string | null;
         readonly occurrenceTargetPlanState?: string;
         readonly occurrenceTargetPlanReasonKinds?: readonly string[];
         readonly occurrenceTargetPlanFreshRoot?: boolean | null;
+        readonly occurrenceTargetPublicationPrerequisiteCounts?: Readonly<Record<string, number>>;
         readonly occurrenceTargetAttachmentPresent?: boolean;
         readonly occurrenceTargetAttachmentContextCount?: number;
         readonly occurrenceTargetAttachmentStructuralPlanCount?: number;

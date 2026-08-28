@@ -13,3 +13,4 @@ export * from './template-compiler-deterministic-execution.js';
 export * from './template-compiler-root-site-cursor-observation.js';
 export * from './template-compiler-occurrence-target-execution.js';
 export * from './template-compiler-occurrence-target-schedule.js';
+export * from './template-compiler-occurrence-hydrate-element-allocation.js';

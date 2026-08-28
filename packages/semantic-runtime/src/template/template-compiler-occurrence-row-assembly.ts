@@ -47,7 +47,9 @@ export const enum TemplateCompilerOccurrenceRowAssemblyState {
 export const enum TemplateCompilerOccurrenceRowAssemblyReasonKind {
   ForeignReceipt = 'foreign-receipt',
   StaleReceipt = 'stale-receipt',
-  StructuralContinuationRequired = 'structural-continuation-required',
+  TemplateControllerContextRequired = 'template-controller-context-required',
+  ProjectionExtractionRequired = 'projection-extraction-required',
+  ContainerlessPlacementRequired = 'containerless-placement-required',
   SiteTokenMismatch = 'site-token-mismatch',
 }
 
@@ -561,8 +563,8 @@ export function assembleTemplateCompilerOrdinaryRootRows(
   const textExpansions: TemplateCompilerTextExpansionDraft[] = [];
   for (const site of receipt.orderedSites) {
     if (site.siteKind === 'element') {
-      const refusal = appendElementSite(site, rows, staticSites);
-      if (refusal != null) return new TemplateCompilerOccurrenceRowAssemblyResult(null, [refusal]);
+      const refusals = appendElementSite(site, rows, staticSites);
+      if (refusals.length > 0) return new TemplateCompilerOccurrenceRowAssemblyResult(null, refusals);
     } else {
       const refusal = appendTextSite(site, rows, staticSites, textExpansions);
       if (refusal != null) return new TemplateCompilerOccurrenceRowAssemblyResult(null, [refusal]);
@@ -589,18 +591,28 @@ function appendElementSite(
   site: TemplateCompilerCompletedElementSite,
   rows: TemplateCompilerOccurrenceTargetRowDraft[],
   staticSites: TemplateCompilerOccurrenceStaticSite[],
-): TemplateCompilerOccurrenceRowAssemblyReason | null {
+): readonly TemplateCompilerOccurrenceRowAssemblyReason[] {
   const envelope = site.hydrateElement.draft;
-  if (
-    site.owner.instructionStaging.templateControllers.length > 0
-    || envelope?.projection.state === TemplateCompilerHydrateElementProjectionState.PendingExtraction
-    || envelope?.containerless.effective === true
-  ) {
-    return new TemplateCompilerOccurrenceRowAssemblyReason(
-      TemplateCompilerOccurrenceRowAssemblyReasonKind.StructuralContinuationRequired,
-      `Element '${site.event.element.occurrenceKey}' still requires controller, projection, or containerless continuation.`,
-    );
+  const continuationReasons: TemplateCompilerOccurrenceRowAssemblyReason[] = [];
+  if (site.owner.instructionStaging.templateControllers.length > 0) {
+    continuationReasons.push(new TemplateCompilerOccurrenceRowAssemblyReason(
+      TemplateCompilerOccurrenceRowAssemblyReasonKind.TemplateControllerContextRequired,
+      `Element '${site.event.element.occurrenceKey}' requires template-controller context placement.`,
+    ));
   }
+  if (envelope?.projection.state === TemplateCompilerHydrateElementProjectionState.PendingExtraction) {
+    continuationReasons.push(new TemplateCompilerOccurrenceRowAssemblyReason(
+      TemplateCompilerOccurrenceRowAssemblyReasonKind.ProjectionExtractionRequired,
+      `Element '${site.event.element.occurrenceKey}' requires projection extraction.`,
+    ));
+  }
+  if (envelope?.containerless.effective === true) {
+    continuationReasons.push(new TemplateCompilerOccurrenceRowAssemblyReason(
+      TemplateCompilerOccurrenceRowAssemblyReasonKind.ContainerlessPlacementRequired,
+      `Element '${site.event.element.occurrenceKey}' requires containerless target placement.`,
+    ));
+  }
+  if (continuationReasons.length > 0) return continuationReasons;
   const hydrateElement = envelope == null
     ? null
     : new TemplateCompilerOccurrenceHydrateElementRowDraft(site, envelope);
@@ -608,7 +620,7 @@ function appendElementSite(
   const posture = sourcePostureForElement(site);
   if (hydrateElement == null && instructions.length === 0) {
     staticSites.push(new TemplateCompilerOccurrenceStaticSite(site, posture));
-    return null;
+    return [];
   }
   const ordinal = rows.length;
   rows.push(new TemplateCompilerOccurrenceTargetRowDraft(
@@ -627,7 +639,7 @@ function appendElementSite(
     null,
     instructions,
   ));
-  return null;
+  return [];
 }
 
 function appendTextSite(

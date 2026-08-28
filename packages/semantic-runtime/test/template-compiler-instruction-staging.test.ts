@@ -14,6 +14,7 @@ import {
 } from '../src/template/html-ir.js';
 import {
   HydrateAttributeInstruction,
+  HydrateElementInstruction,
   HydrateTemplateControllerInstruction,
   InterpolationInstruction,
   SetPropertyInstruction,
@@ -22,6 +23,7 @@ import {
   TemplateCompilerElementInstructionBuckets,
   TemplateCompilerElementInstructionStagingState,
   TemplateCompilerHydrateAttributeStagingRequest,
+  TemplateCompilerHydrateElementInstructionStagingRequest,
   TemplateCompilerHydrateTemplateControllerDraft,
   TemplateCompilerInstructionStagingAllocation,
   type TemplateCompilerInstructionStagingAllocationRequest,
@@ -30,6 +32,7 @@ import {
   TemplateCompilerValueInstructionLane,
   TemplateCompilerValueInstructionStagingRequest,
   stageTemplateCompilerHydrateAttributeInstruction,
+  stageTemplateCompilerHydrateElementInstruction,
   stageTemplateCompilerHydrateTemplateControllerInstruction,
   stageTemplateCompilerValueInstruction,
 } from '../src/template/template-compiler-instruction-staging.js';
@@ -133,6 +136,43 @@ describe('template compiler instruction staging laws', () => {
     expect(controller).toBeInstanceOf(HydrateTemplateControllerInstruction);
     expect(controller.childCompiledTemplate).not.toBeNull();
     expect(draft.props).toEqual([]);
+  });
+
+  test('keeps the HydrateElement wire flag on usage syntax rather than effective placement', () => {
+    for (const [definitionContainerless, usageContainerless, expectedWireFlag] of [
+      [true, false, false],
+      [false, true, true],
+      [true, true, true],
+    ] as const) {
+      const authority = new TestInstructionAuthority(
+        `hydrate-element:${definitionContainerless}:${usageContainerless}`,
+      );
+      const instruction = stageTemplateCompilerHydrateElementInstruction(
+        new TemplateCompilerHydrateElementInstructionStagingRequest(
+          authority,
+          'site:element',
+          'element',
+          node,
+          'my-element',
+          'my-alias',
+          null,
+          () => [],
+          [],
+          null,
+          [],
+          [],
+          [],
+          usageContainerless,
+          null,
+        ),
+      );
+
+      expect(definitionContainerless || usageContainerless).toBe(true);
+      expect(instruction).toBeInstanceOf(HydrateElementInstruction);
+      expect(instruction.containerless).toBe(expectedWireFlag);
+      expect(instruction.elementName).toBe('my-element');
+      expect(instruction.resourceLookupName).toBe('my-alias');
+    }
   });
 
   test('retains bucket identity while ordering only the final plain sequence', () => {

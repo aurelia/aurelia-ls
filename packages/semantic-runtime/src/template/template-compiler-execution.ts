@@ -3364,6 +3364,9 @@ export class TemplateCompilerExecutionSession {
     const removed = rows.attributeDispositions.filter((disposition) =>
       disposition.disposition === TemplateCompilerLiveAttributeDisposition.Removed
     );
+    const removedEntries = schedule.entries.filter((entry): entry is TemplateCompilerOccurrenceAttributeScheduleEntry =>
+      entry instanceof TemplateCompilerOccurrenceAttributeScheduleEntry
+    );
     const retained = rows.attributeDispositions.filter((disposition) =>
       disposition.disposition === TemplateCompilerLiveAttributeDisposition.Retained
     );
@@ -3383,9 +3386,9 @@ export class TemplateCompilerExecutionSession {
     if (
       consumed.length !== removed.length
       || consumed.some((disposition, ordinal) =>
-        disposition.attribute !== removed[ordinal]?.attribute
-        || disposition.ownerOrdinal !== removed[ordinal]?.simulatedLiveOrdinal
-        || !sameOccurrences(disposition.causeHandles, removed[ordinal]?.causeHandles ?? [])
+        disposition.attribute !== removedEntries[ordinal]?.disposition.attribute
+        || disposition.ownerOrdinal !== removedEntries[ordinal]?.disposition.simulatedLiveOrdinal
+        || !sameOccurrences(disposition.causeHandles, removedEntries[ordinal]?.causeHandles ?? [])
       )
       || retained.some((disposition) => disposition.attribute.owner !== disposition.site.event.element)
       || !finalOwnerAttributesAreExact

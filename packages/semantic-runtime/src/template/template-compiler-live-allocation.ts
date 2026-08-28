@@ -55,6 +55,13 @@ export class TemplateCompilerLiveAllocationNamespaceCounts {
   ) {}
 }
 
+interface TemplateCompilerLiveReservationProposal {
+  readonly semanticSlot: string;
+  readonly productHandle: ProductHandle | null;
+  readonly identityHandle: IdentityHandle | null;
+  readonly addressHandle: AddressHandle | null;
+}
+
 export class TemplateCompilerLiveAllocationNamespace {
   readonly handles: KernelHandleFactory;
   private readonly productHandles = new Set<ProductHandle>();
@@ -90,69 +97,113 @@ export class TemplateCompilerLiveAllocationNamespace {
       liveAllocationLedgerAuthority,
       this,
       rootSiteKey,
+      false,
+    );
+  }
+
+  /** Create a phase whose handles become namespace-visible only through one validated commit. */
+  preparePhase(rootSiteKey: string): TemplateCompilerLiveAllocationLedger {
+    if (!this.isCurrent()) {
+      throw new Error('Live compiler allocation namespace is no longer current.');
+    }
+    return new TemplateCompilerLiveAllocationLedger(
+      liveAllocationLedgerAuthority,
+      this,
+      rootSiteKey,
+      true,
     );
   }
 
   reserveInstruction(authority: object, allocation: TemplateCompilerLiveInstructionAllocation): void {
-    this.reserve(
-      authority,
-      `instruction:${allocation.siteKey}:${allocation.local}`,
-      allocation.productHandle,
-      allocation.identityHandle,
-      null,
-    );
+    this.reserve(authority, {
+      semanticSlot: `instruction:${allocation.siteKey}:${allocation.local}`,
+      productHandle: allocation.productHandle,
+      identityHandle: allocation.identityHandle,
+      addressHandle: null,
+    });
   }
 
   reserveExpression(authority: object, allocation: TemplateCompilerLiveExpressionAllocation): void {
-    this.reserve(
-      authority,
-      `expression:${allocation.siteKey}:${allocation.local}`,
-      allocation.productHandle,
-      null,
-      null,
-    );
+    this.reserve(authority, {
+      semanticSlot: `expression:${allocation.siteKey}:${allocation.local}`,
+      productHandle: allocation.productHandle,
+      identityHandle: null,
+      addressHandle: null,
+    });
   }
 
   reserveSource(authority: object, allocation: TemplateCompilerLiveSourceAllocation): void {
-    this.reserve(
-      authority,
-      `source:${allocation.siteKey}:${allocation.local}`,
-      null,
-      null,
-      allocation.addressHandle,
-    );
+    this.reserve(authority, {
+      semanticSlot: `source:${allocation.siteKey}:${allocation.local}`,
+      productHandle: null,
+      identityHandle: null,
+      addressHandle: allocation.addressHandle,
+    });
   }
 
   reserveProduct(authority: object, reservation: TemplateCompilerLiveProductReservation): void {
-    this.reserve(
-      authority,
-      `product:${reservation.siteKey}:${reservation.local}:${reservation.role}`,
-      reservation.productHandle,
-      reservation.identityHandle,
-      null,
-    );
+    this.reserve(authority, {
+      semanticSlot: `product:${reservation.siteKey}:${reservation.local}:${reservation.role}`,
+      productHandle: reservation.productHandle,
+      identityHandle: reservation.identityHandle,
+      addressHandle: null,
+    });
   }
 
   private reserve(
     authority: object,
-    semanticSlot: string,
-    productHandle: ProductHandle | null,
-    identityHandle: IdentityHandle | null,
-    addressHandle: AddressHandle | null,
+    proposal: TemplateCompilerLiveReservationProposal,
   ): void {
+    this.commitPrepared(authority, [proposal]);
+  }
+
+  /** Atomically admit a fully prepared phase after proving all within-batch and namespace uniqueness. */
+  commitPrepared(
+    authority: object,
+    proposals: readonly TemplateCompilerLiveReservationProposal[],
+  ): void {
+    const localSemanticSlots = new Set<string>();
+    const localProductHandles = new Set<ProductHandle>();
+    const localIdentityHandles = new Set<IdentityHandle>();
+    const localAddressHandles = new Set<AddressHandle>();
     if (
       authority !== liveAllocationLedgerAuthority
-      || this.semanticSlots.has(semanticSlot)
-      || (productHandle != null && this.productHandles.has(productHandle))
-      || (identityHandle != null && this.identityHandles.has(identityHandle))
-      || (addressHandle != null && this.addressHandles.has(addressHandle))
+      || !this.isCurrent()
+      || proposals.length === 0
     ) {
-      throw new Error(`Live compiler allocation namespace already owns '${semanticSlot}'.`);
+      throw new Error('Live compiler prepared allocation batch is foreign, stale, or empty.');
     }
-    this.semanticSlots.add(semanticSlot);
-    if (productHandle != null) this.productHandles.add(productHandle);
-    if (identityHandle != null) this.identityHandles.add(identityHandle);
-    if (addressHandle != null) this.addressHandles.add(addressHandle);
+    for (const proposal of proposals) {
+      if (
+        proposal.semanticSlot.length === 0
+        || this.semanticSlots.has(proposal.semanticSlot)
+        || localSemanticSlots.has(proposal.semanticSlot)
+        || (proposal.productHandle != null && (
+          this.productHandles.has(proposal.productHandle)
+          || localProductHandles.has(proposal.productHandle)
+        ))
+        || (proposal.identityHandle != null && (
+          this.identityHandles.has(proposal.identityHandle)
+          || localIdentityHandles.has(proposal.identityHandle)
+        ))
+        || (proposal.addressHandle != null && (
+          this.addressHandles.has(proposal.addressHandle)
+          || localAddressHandles.has(proposal.addressHandle)
+        ))
+      ) {
+        throw new Error(`Live compiler allocation namespace already owns '${proposal.semanticSlot}'.`);
+      }
+      localSemanticSlots.add(proposal.semanticSlot);
+      if (proposal.productHandle != null) localProductHandles.add(proposal.productHandle);
+      if (proposal.identityHandle != null) localIdentityHandles.add(proposal.identityHandle);
+      if (proposal.addressHandle != null) localAddressHandles.add(proposal.addressHandle);
+    }
+    for (const proposal of proposals) {
+      this.semanticSlots.add(proposal.semanticSlot);
+      if (proposal.productHandle != null) this.productHandles.add(proposal.productHandle);
+      if (proposal.identityHandle != null) this.identityHandles.add(proposal.identityHandle);
+      if (proposal.addressHandle != null) this.addressHandles.add(proposal.addressHandle);
+    }
   }
 }
 
@@ -349,15 +400,18 @@ export class TemplateCompilerLiveAllocationLedger {
   private readonly expressionsByProduct = new Map<ProductHandle, TemplateCompilerLiveExpressionAllocation>();
   private readonly sourcesByAddress = new Map<AddressHandle, TemplateCompilerLiveSourceAllocation>();
   private finished: TemplateCompilerLiveAllocationSnapshot | null = null;
+  private committed: boolean;
 
   constructor(
     authority: object,
     readonly namespace: TemplateCompilerLiveAllocationNamespace,
     readonly rootSiteKey: string,
+    private readonly prepared: boolean,
   ) {
     if (authority !== liveAllocationLedgerAuthority || rootSiteKey.length === 0) {
       throw new Error('Live compiler allocation phase requires namespace-owned non-empty authority.');
     }
+    this.committed = !prepared;
   }
 
   get handles(): KernelHandleFactory {
@@ -384,7 +438,7 @@ export class TemplateCompilerLiveAllocationLedger {
     if (this.instructionsByProduct.has(allocation.productHandle)) {
       throw new Error(`Live instruction slot '${instructionLocal}' was allocated more than once.`);
     }
-    this.namespace.reserveInstruction(liveAllocationLedgerAuthority, allocation);
+    if (!this.prepared) this.namespace.reserveInstruction(liveAllocationLedgerAuthority, allocation);
     this.instructionAllocations.push(allocation);
     this.instructionsByProduct.set(allocation.productHandle, allocation);
     return allocation;
@@ -410,7 +464,7 @@ export class TemplateCompilerLiveAllocationLedger {
     if (this.expressionsByProduct.has(productHandle)) {
       throw new Error(`Live expression slot '${local}' was allocated more than once.`);
     }
-    this.namespace.reserveExpression(liveAllocationLedgerAuthority, allocation);
+    if (!this.prepared) this.namespace.reserveExpression(liveAllocationLedgerAuthority, allocation);
     this.expressionAllocations.push(allocation);
     this.expressionsByProduct.set(productHandle, allocation);
     return allocation;
@@ -437,7 +491,7 @@ export class TemplateCompilerLiveAllocationLedger {
     if (this.sourcesByAddress.has(allocation.addressHandle)) {
       throw new Error(`Live source slot '${local}' was allocated more than once.`);
     }
-    this.namespace.reserveSource(liveAllocationLedgerAuthority, allocation);
+    if (!this.prepared) this.namespace.reserveSource(liveAllocationLedgerAuthority, allocation);
     this.sourceAllocations.push(allocation);
     this.sourcesByAddress.set(allocation.addressHandle, allocation);
     return allocation;
@@ -459,7 +513,7 @@ export class TemplateCompilerLiveAllocationLedger {
       this.handles.product(allocationLocal),
       this.handles.identity(allocationLocal),
     );
-    this.namespace.reserveProduct(liveAllocationLedgerAuthority, reservation);
+    if (!this.prepared) this.namespace.reserveProduct(liveAllocationLedgerAuthority, reservation);
     this.productReservations.push(reservation);
     return reservation;
   }
@@ -497,7 +551,55 @@ export class TemplateCompilerLiveAllocationLedger {
     allocation.bind(liveAllocationLedgerAuthority, read, result, sourceSpan);
   }
 
+  /** Atomically expose one prepared phase after every object has been constructed and bound. */
+  commitPrepared(): TemplateCompilerLiveAllocationSnapshot {
+    this.requireMutable();
+    if (!this.prepared || this.committed) {
+      throw new Error('Live compiler allocation phase is not an uncommitted prepared phase.');
+    }
+    const snapshot = new TemplateCompilerLiveAllocationSnapshot(
+      liveAllocationSnapshotAuthority,
+      this,
+      this.instructionAllocations,
+      this.expressionAllocations,
+      this.sourceAllocations,
+      this.productReservations,
+    );
+    this.namespace.commitPrepared(liveAllocationLedgerAuthority, [
+      ...this.instructionAllocations.map((allocation): TemplateCompilerLiveReservationProposal => ({
+        semanticSlot: `instruction:${allocation.siteKey}:${allocation.local}`,
+        productHandle: allocation.productHandle,
+        identityHandle: allocation.identityHandle,
+        addressHandle: null,
+      })),
+      ...this.expressionAllocations.map((allocation): TemplateCompilerLiveReservationProposal => ({
+        semanticSlot: `expression:${allocation.siteKey}:${allocation.local}`,
+        productHandle: allocation.productHandle,
+        identityHandle: null,
+        addressHandle: null,
+      })),
+      ...this.sourceAllocations.map((allocation): TemplateCompilerLiveReservationProposal => ({
+        semanticSlot: `source:${allocation.siteKey}:${allocation.local}`,
+        productHandle: null,
+        identityHandle: null,
+        addressHandle: allocation.addressHandle,
+      })),
+      ...this.productReservations.map((reservation): TemplateCompilerLiveReservationProposal => ({
+        semanticSlot: `product:${reservation.siteKey}:${reservation.local}:${reservation.role}`,
+        productHandle: reservation.productHandle,
+        identityHandle: reservation.identityHandle,
+        addressHandle: null,
+      })),
+    ]);
+    this.committed = true;
+    this.finished = snapshot;
+    return snapshot;
+  }
+
   finish(): TemplateCompilerLiveAllocationSnapshot {
+    if (!this.committed) {
+      throw new Error('Prepared live compiler allocation phase must commit before finishing.');
+    }
     return this.finished ??= new TemplateCompilerLiveAllocationSnapshot(
       liveAllocationSnapshotAuthority,
       this,

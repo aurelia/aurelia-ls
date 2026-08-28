@@ -1,4 +1,7 @@
+import type { ClaimEndpointHandle } from '../kernel/claim.js';
+import { AttributeClassificationKind } from './attribute-syntax.js';
 import { CompiledTemplateReference } from './compiled-template.js';
+import type { TemplateInstruction } from './instruction-ir.js';
 import {
   TemplateCompilerTargetPlan,
   TemplateCompilerTargetRowPosture,
@@ -6,11 +9,20 @@ import {
 } from './compiler-target-plan.js';
 import { TemplateCompilerLiveAllocationSnapshotState } from './template-compiler-live-allocation.js';
 import {
+  TemplateCompilerLiveAttributeTargetLane,
+} from './template-compiler-live-attribute-assembly.js';
+import {
   TemplateCompilerLiveProductReservationRole,
   type TemplateCompilerLiveAllocationSnapshot,
   type TemplateCompilerLiveProductReservation,
 } from './template-compiler-live-allocation.js';
+import type {
+  TemplateCompilerAllocatedCaptureSyntaxReference,
+  TemplateCompilerAllocatedHydrateElementHead,
+  TemplateCompilerOccurrenceHydrateElementAllocationAssembly,
+} from './template-compiler-occurrence-hydrate-element-allocation.js';
 import {
+  type TemplateCompilerOccurrenceAttributeDispositionDraft,
   TemplateCompilerOccurrencePrePlanEffectState,
   TemplateCompilerOccurrenceSourcePosture,
   type TemplateCompilerOccurrenceRowAssembly,
@@ -34,6 +46,7 @@ export const enum TemplateCompilerOccurrenceTargetPlanReasonKind {
   StaleReceipt = 'stale-receipt',
   ParentAllocationOpen = 'parent-allocation-open',
   HydrateElementInstructionRequired = 'hydrate-element-instruction-required',
+  HydrateElementAllocationMismatch = 'hydrate-element-allocation-mismatch',
   PrePlanEffectAdoptionRequired = 'pre-plan-effect-adoption-required',
   SourceAuthorityOpen = 'source-authority-open',
   RowAllocationMismatch = 'row-allocation-mismatch',
@@ -52,30 +65,73 @@ export class TemplateCompilerOccurrenceTargetRowMapping {
   constructor(
     readonly draft: TemplateCompilerOccurrenceTargetRowDraft,
     readonly row: TemplateCompilerTargetRowPlan,
+    readonly hydrateElement: TemplateCompilerAllocatedHydrateElementHead | null,
   ) {
-    if (
-      row.stableSlotKey !== draft.stableSlotKey
-      || row.ordinal !== draft.ordinal
-      || row.projectedTargetOrdinal !== draft.projectedTargetOrdinal
-      || row.projectedTargetCount !== draft.projectedTargetCount
-      || row.targetKind !== draft.targetKind
-      || row.sourceAddressHandle !== draft.sourceAddressHandle
-      || row.occurrence !== draft.occurrence
-      || row.node !== draft.authoredNode
-      || row.inputNode !== draft.occurrence.inputReference
-      || row.expressionChainIndex !== (draft.textOutput?.hole.expressionChainIndex ?? null)
-      || row.posture !== TemplateCompilerTargetRowPosture.Complete
-      || row.openSeamHandles.length !== 0
-      || !sameObjects(row.instructions, draft.instructions)
-    ) {
-      throw new Error(`Occurrence target row '${draft.stableSlotKey}' lost draft/plan authority.`);
+    const instructions = [
+      ...(hydrateElement == null ? [] : [hydrateElement.instruction]),
+      ...draft.instructions,
+    ];
+    const mismatches = [
+      (draft.hydrateElement != null) !== (hydrateElement != null) ? 'hydrate-element-presence' : null,
+      hydrateElement != null && hydrateElement.row !== draft ? 'hydrate-element-row' : null,
+      row.stableSlotKey !== draft.stableSlotKey ? 'stable-slot' : null,
+      row.ordinal !== draft.ordinal ? 'ordinal' : null,
+      row.projectedTargetOrdinal !== draft.projectedTargetOrdinal ? 'projected-ordinal' : null,
+      row.projectedTargetCount !== draft.projectedTargetCount ? 'projected-count' : null,
+      row.targetKind !== draft.targetKind ? 'target-kind' : null,
+      row.sourceAddressHandle !== draft.sourceAddressHandle ? 'source-address' : null,
+      row.occurrence !== draft.occurrence ? 'occurrence' : null,
+      row.node !== draft.authoredNode ? 'authored-node' : null,
+      row.inputNode !== draft.occurrence.inputReference ? 'input-node' : null,
+      row.expressionChainIndex !== (draft.textOutput?.hole.expressionChainIndex ?? null)
+        ? 'expression-chain-index'
+        : null,
+      row.posture !== TemplateCompilerTargetRowPosture.Complete ? 'posture' : null,
+      row.openSeamHandles.length !== 0 ? 'open-seams' : null,
+      !sameObjects(row.instructions, instructions) ? 'instructions' : null,
+    ].filter((mismatch): mismatch is string => mismatch != null);
+    if (mismatches.length > 0) {
+      throw new Error(
+        `Occurrence target row '${draft.stableSlotKey}' lost ${mismatches.join(', ')} authority.`,
+      );
     }
   }
 }
 
-/** Exact native/text-only shared target plan; no structural mutation or publication has occurred. */
+/** Allocation-resolved final cause band for one reached attribute disposition. */
+export class TemplateCompilerOccurrenceTargetAttributeDispositionMapping {
+  constructor(
+    readonly draft: TemplateCompilerOccurrenceAttributeDispositionDraft,
+    readonly causeHandles: readonly ClaimEndpointHandle[],
+  ) {
+    if (causeHandles.length === 0 || new Set(causeHandles).size !== causeHandles.length) {
+      throw new Error(`Attribute disposition '${draft.stableSlotKey}' has no unique final causes.`);
+    }
+  }
+}
+
+export const enum TemplateCompilerOccurrenceTargetPublicationPrerequisiteKind {
+  EffectiveAttributeSyntaxMaterialization = 'effective-attribute-syntax-materialization',
+}
+
+/** Funded future product that must materialize before this target family can become durable wire. */
+export class TemplateCompilerOccurrenceTargetPublicationPrerequisite {
+  readonly prerequisiteKind =
+    TemplateCompilerOccurrenceTargetPublicationPrerequisiteKind.EffectiveAttributeSyntaxMaterialization;
+
+  constructor(
+    readonly capture: TemplateCompilerAllocatedCaptureSyntaxReference,
+  ) {
+    if (capture.effectiveReservation == null) {
+      throw new Error(`Captured syntax '${capture.draft.stableSlotKey}' is already materialized authored syntax.`);
+    }
+  }
+}
+
+/** Exact funded ordinary-root shared target plan; no structural mutation or publication has occurred. */
 export class TemplateCompilerOccurrenceTargetPlanAssembly {
   readonly #authority: object;
+  readonly publicationPrerequisites: readonly TemplateCompilerOccurrenceTargetPublicationPrerequisite[];
 
   constructor(
     authority: object,
@@ -83,9 +139,14 @@ export class TemplateCompilerOccurrenceTargetPlanAssembly {
     readonly rootReservation: TemplateCompilerLiveProductReservation,
     readonly rootCompiledTemplate: CompiledTemplateReference,
     readonly targetAllocation: TemplateCompilerLiveAllocationSnapshot,
+    readonly hydrateElements: TemplateCompilerOccurrenceHydrateElementAllocationAssembly | null,
     readonly targetPlan: TemplateCompilerTargetPlan,
     readonly rowMappings: readonly TemplateCompilerOccurrenceTargetRowMapping[],
+    readonly attributeDispositionMappings: readonly TemplateCompilerOccurrenceTargetAttributeDispositionMapping[],
   ) {
+    this.publicationPrerequisites = hydrateElements?.heads.flatMap((head) => head.captures)
+      .filter((capture) => capture.effectiveReservation != null)
+      .map((capture) => new TemplateCompilerOccurrenceTargetPublicationPrerequisite(capture)) ?? [];
     if (
       authority !== occurrenceTargetPlanAuthority
       || rootReservation.role !== TemplateCompilerLiveProductReservationRole.RootCompiledTemplate
@@ -94,6 +155,11 @@ export class TemplateCompilerOccurrenceTargetPlanAssembly {
       || targetAllocation.productReservations.length !== 1
       || targetAllocation.productReservations[0] !== rootReservation
       || targetAllocation.state !== TemplateCompilerLiveAllocationSnapshotState.Complete
+      || (hydrateElements != null && (
+        !hydrateElements.isModuleConstructed()
+        || hydrateElements.rows !== rows
+        || this.publicationPrerequisites.length !== hydrateElements.allocation.productReservations.length
+      ))
       || targetPlan.localKey !== rows.receipt.endpoint.lane.localKey
       || targetPlan.root.compiledTemplate.productHandle !== rootCompiledTemplate.productHandle
       || targetPlan.root.compiledTemplate.identityHandle !== rootCompiledTemplate.identityHandle
@@ -105,6 +171,10 @@ export class TemplateCompilerOccurrenceTargetPlanAssembly {
       )
       || !sameObjects(rowMappings.map((mapping) => mapping.draft), rows.rows)
       || !sameObjects(rowMappings.map((mapping) => mapping.row), targetPlan.root.readRows())
+      || !sameObjects(
+        attributeDispositionMappings.map((mapping) => mapping.draft),
+        rows.attributeDispositions,
+      )
     ) {
       throw new Error('Occurrence target-plan assembly lost receipt, allocation, or exact row mapping authority.');
     }
@@ -118,7 +188,8 @@ export class TemplateCompilerOccurrenceTargetPlanAssembly {
   isCurrent(): boolean {
     return this.isModuleConstructed()
       && this.rows.receipt.isCurrent()
-      && this.targetAllocation.isCurrent();
+      && this.targetAllocation.isCurrent()
+      && (this.hydrateElements?.allocation.isCurrent() ?? true);
   }
 }
 
@@ -137,9 +208,10 @@ export class TemplateCompilerOccurrenceTargetPlanResult {
   }
 }
 
-/** Allocate and seal the shared native/text-only root plan after complete side-effect-free preflight. */
+/** Allocate and seal the shared funded ordinary-root plan after complete side-effect-free preflight. */
 export function allocateTemplateCompilerOccurrenceTargetPlan(
   rows: TemplateCompilerOccurrenceRowAssembly,
+  hydrateElements: TemplateCompilerOccurrenceHydrateElementAllocationAssembly | null = null,
 ): TemplateCompilerOccurrenceTargetPlanResult {
   if (!rows.isModuleConstructed()) {
     return ineligible(
@@ -148,7 +220,10 @@ export function allocateTemplateCompilerOccurrenceTargetPlan(
     );
   }
   const existing = exactPlansByRows.get(rows) ?? null;
-  if (existing?.assembly?.isCurrent() === true) return existing;
+  if (
+    existing?.assembly?.isCurrent() === true
+    && existing.assembly.hydrateElements === hydrateElements
+  ) return existing;
   if (!rows.receipt.isCurrent()) {
     return ineligible(
       TemplateCompilerOccurrenceTargetPlanReasonKind.StaleReceipt,
@@ -166,10 +241,26 @@ export function allocateTemplateCompilerOccurrenceTargetPlan(
     );
   }
   const hydrateRows = rows.rows.filter((row) => row.hydrateElement != null);
-  if (hydrateRows.length > 0) {
+  if (hydrateRows.length > 0 && hydrateElements == null) {
     return pending(
       TemplateCompilerOccurrenceTargetPlanReasonKind.HydrateElementInstructionRequired,
       'HydrateElement row heads require capture/instruction allocation before a shared plan can be sealed.',
+      hydrateRows.map((row) => row.stableSlotKey),
+    );
+  }
+  if (
+    (hydrateRows.length === 0) !== (hydrateElements == null)
+    || (hydrateElements != null && (
+      !hydrateElements.isModuleConstructed()
+      || !hydrateElements.isCurrent()
+      || hydrateElements.rows !== rows
+      || hydrateElements.heads.length !== hydrateRows.length
+      || hydrateRows.some((row) => hydrateElements.headForRow(row) == null)
+    ))
+  ) {
+    return ineligible(
+      TemplateCompilerOccurrenceTargetPlanReasonKind.HydrateElementAllocationMismatch,
+      'Occurrence target-plan allocation received foreign, stale, or incomplete HydrateElement funding.',
       hydrateRows.map((row) => row.stableSlotKey),
     );
   }
@@ -218,6 +309,24 @@ export function allocateTemplateCompilerOccurrenceTargetPlan(
       'Occurrence target-plan root reservation collides with authored compiled output.',
     );
   }
+  const missingBindableCauses = rows.attributeDispositions.filter((draft) => {
+    if (draft.contribution.targetLane !== TemplateCompilerLiveAttributeTargetLane.ElementBindable) return false;
+    const head = hydrateElements?.headForSite(draft.site) ?? null;
+    return head != null && bindableInstructionsForDisposition(draft, head).length === 0;
+  });
+  if (missingBindableCauses.length > 0) {
+    return ineligible(
+      TemplateCompilerOccurrenceTargetPlanReasonKind.HydrateElementAllocationMismatch,
+      'Funded HydrateElement disposition lost its exact nested bindable instruction cause.',
+      [...new Set(missingBindableCauses.map((draft) => draft.site.rowSlotKey))],
+    );
+  }
+  const attributeDispositionMappings = rows.attributeDispositions.map((draft) =>
+    new TemplateCompilerOccurrenceTargetAttributeDispositionMapping(
+      draft,
+      finalAttributeDispositionCauses(draft, hydrateElements),
+    )
+  );
   const targetAllocation = parentAllocation.ledger.namespace.beginPhase(phaseKey);
   const rootReservation = targetAllocation.reserveProduct(
     `${phaseKey}:root`,
@@ -247,18 +356,26 @@ export function allocateTemplateCompilerOccurrenceTargetPlan(
       membership.authoredNode,
     );
   }
-  const rowMappings = rows.rows.map((draft) => new TemplateCompilerOccurrenceTargetRowMapping(
-    draft,
-    targetPlan.root.appendOccurrenceRow(
+  const rowMappings = rows.rows.map((draft) => {
+    const hydrateElement = hydrateElements?.headForRow(draft) ?? null;
+    const instructions = [
+      ...(hydrateElement == null ? [] : [hydrateElement.instruction]),
+      ...draft.instructions,
+    ];
+    return new TemplateCompilerOccurrenceTargetRowMapping(
+      draft,
+      targetPlan.root.appendOccurrenceRow(
       draft.stableSlotKey,
       draft.occurrence,
       draft.authoredNode,
-      draft.instructions,
+      instructions,
       draft.targetKind,
       draft.sourceAddressHandle,
       draft.textOutput?.hole.expressionChainIndex ?? null,
-    ),
-  ));
+      ),
+      hydrateElement,
+    );
+  });
   targetPlan.seal();
   const assembly = new TemplateCompilerOccurrenceTargetPlanAssembly(
     occurrenceTargetPlanAuthority,
@@ -266,8 +383,10 @@ export function allocateTemplateCompilerOccurrenceTargetPlan(
     rootReservation,
     rootCompiledTemplate,
     targetAllocation.finish(),
+    hydrateElements,
     targetPlan,
     rowMappings,
+    attributeDispositionMappings,
   );
   const result = new TemplateCompilerOccurrenceTargetPlanResult(
     TemplateCompilerOccurrenceTargetPlanState.Exact,
@@ -300,6 +419,49 @@ function ineligible(
     null,
     [new TemplateCompilerOccurrenceTargetPlanReason(reasonKind, summary, stableRowSlotKeys)],
   );
+}
+
+function finalAttributeDispositionCauses(
+  draft: TemplateCompilerOccurrenceAttributeDispositionDraft,
+  hydrateElements: TemplateCompilerOccurrenceHydrateElementAllocationAssembly | null,
+): readonly ClaimEndpointHandle[] {
+  const head = hydrateElements?.headForSite(draft.site) ?? null;
+  if (head == null) return draft.causeHandles;
+  const contribution = draft.contribution;
+  const capture = head.captures.find((candidate) =>
+    candidate.draft.capture.contribution === contribution
+  ) ?? null;
+  const hydrateElementOwnsDisposition =
+    contribution.targetLane === TemplateCompilerLiveAttributeTargetLane.ElementBindable
+    || contribution.targetLane === TemplateCompilerLiveAttributeTargetLane.Capture
+    || contribution.classification.classificationKind === AttributeClassificationKind.CompilerControl;
+  if (!hydrateElementOwnsDisposition) return draft.causeHandles;
+  const [inputCause, ...existingCauses] = draft.causeHandles;
+  const ownedBindableInstructions = bindableInstructionsForDisposition(draft, head);
+  return [...new Set<ClaimEndpointHandle>([
+    ...(inputCause == null ? [] : [inputCause]),
+    head.instruction.productHandle,
+    ...(capture == null ? [] : [capture.productHandle]),
+    ...ownedBindableInstructions.map((instruction) => instruction.productHandle),
+    ...existingCauses,
+  ])];
+}
+
+function bindableInstructionsForDisposition(
+  draft: TemplateCompilerOccurrenceAttributeDispositionDraft,
+  head: TemplateCompilerAllocatedHydrateElementHead,
+): readonly TemplateInstruction[] {
+  if (draft.contribution.targetLane !== TemplateCompilerLiveAttributeTargetLane.ElementBindable) return [];
+  return head.head.envelope.bindableInstructions.filter((instruction) => {
+    if (!('attribute' in instruction)) return false;
+    const instructionAttribute = instruction.attribute;
+    if (instructionAttribute == null) return false;
+    const authoredAttribute = draft.contribution.frame.source.authoredAttribute;
+    return authoredAttribute == null
+      ? instructionAttribute.productHandle == null
+        && instructionAttribute.rawName === draft.contribution.frame.scalar.qualifiedName
+      : instructionAttribute.productHandle === authoredAttribute.productHandle;
+  });
 }
 
 function sameObjects<T>(left: readonly T[], right: readonly T[]): boolean {

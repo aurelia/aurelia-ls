@@ -105,7 +105,7 @@ import type { HtmlParseEmission } from './html-parse-materializer.js';
 import {
   AuSlotProcessContentInstructionData,
   type HydrateAttributeInstruction,
-  HydrateElementInstruction,
+  type HydrateElementInstruction,
   HydrateElementProjectionContributor,
   HydrateElementProjectionContributorDisposition,
   HydrateElementProjectionDefinition,
@@ -152,6 +152,7 @@ import { TemplateProductDetails } from './product-details.js';
 import { sourceAddressForRuntimeExpressionSpan } from './runtime-expression-source-address.js';
 import {
   TemplateCompilerHydrateAttributeStagingRequest,
+  TemplateCompilerHydrateElementInstructionStagingRequest,
   TemplateCompilerHydrateTemplateControllerDraft,
   TemplateCompilerInstructionStagingAllocation,
   type TemplateCompilerInstructionStagingAllocationRequest,
@@ -161,6 +162,7 @@ import {
   TemplateCompilerValueInstructionLane,
   TemplateCompilerValueInstructionStagingRequest,
   stageTemplateCompilerHydrateAttributeInstruction,
+  stageTemplateCompilerHydrateElementInstruction,
   stageTemplateCompilerHydrateTemplateControllerInstruction,
   stageTemplateCompilerSpreadInstruction,
   stageTemplateCompilerValueInstruction,
@@ -988,45 +990,44 @@ class CompiledTemplateInstructionTraversal {
     );
 
     if (elementDefinition != null) {
-      elementInstruction = this.assemblyState.createInstruction(
-        `hydrate-element:${node.productHandle}`,
-        TemplateInstructionKind.HydrateElement,
-        elementDefinition.identityHandle ?? node.identityHandle,
-        node.sourceAddressHandle,
-        (productHandle, identityHandle, instructionLocal) => new HydrateElementInstruction(
-          productHandle,
-          identityHandle,
+      elementInstruction = stageTemplateCompilerHydrateElementInstruction(
+        new TemplateCompilerHydrateElementInstructionStagingRequest(
+          new CompiledTemplateInstructionStagingAuthority(
+            this.assemblyState,
+            elementDefinition.identityHandle ?? node.identityHandle,
+          ),
+          `element:${node.productHandle}`,
+          node.productHandle,
           node.toReference(),
           elementDefinition.name,
           lookupName,
           this.input.compilerReads.resolveResources()
             ? elementResolution?.resource?.toReference() ?? null
             : null,
-          compiledProjectionGroups.map((group) => {
-            const local = `${instructionLocal}:projection:${localKeyPart(group.slotName)}`;
-            const projection = {
-              slotName: group.slotName,
-              compiledTemplate: new CompiledTemplateReference(
-                this.assemblyState.store.handles.product(`${local}:compiled-template`),
-                this.assemblyState.store.handles.identity(`${local}:compiled-template`),
-              ),
-              sourceAddressHandle: group.sourceAddressHandle,
-            };
-            return new HydrateElementProjectionDefinition(
-              projection.slotName,
-              projection.compiledTemplate,
-              group.contributors,
-              projection.sourceAddressHandle,
-            );
-          }),
+          (instructionLocal) => compiledProjectionGroups.map((group) => {
+              const local = `${instructionLocal}:projection:${localKeyPart(group.slotName)}`;
+              const projection = {
+                slotName: group.slotName,
+                compiledTemplate: new CompiledTemplateReference(
+                  this.assemblyState.store.handles.product(`${local}:compiled-template`),
+                  this.assemblyState.store.handles.identity(`${local}:compiled-template`),
+                ),
+                sourceAddressHandle: group.sourceAddressHandle,
+              };
+              return new HydrateElementProjectionDefinition(
+                projection.slotName,
+                projection.compiledTemplate,
+                group.contributors,
+                projection.sourceAddressHandle,
+              );
+            }),
           projectionGroups.flatMap((group) => group.discardedContributors),
           this.auSlotProcessContentData(auSlotProcessContent),
           processContentRemovedChildNodes,
-          parts.bindableInstructions.map((instruction) => instruction.productHandle),
+          parts.bindableInstructions,
           parts.capturedSyntaxProductHandles,
           usageContainerless,
           node.sourceAddressHandle,
-          [],
         ),
       );
       elementInstructions.push(elementInstruction);
