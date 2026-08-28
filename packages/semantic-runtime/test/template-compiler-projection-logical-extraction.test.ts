@@ -25,6 +25,12 @@ import {
   TemplateCompilerContextFamilyCompletionState,
 } from '../src/template/template-compiler-context-family-completion.js';
 import {
+  prepareTemplateCompilerContextFamilyAllocation,
+  TemplateCompilerContextFamilyAllocationReasonKind,
+  TemplateCompilerContextFamilyAllocationState,
+  TemplateCompilerFundedContextDefinitionOwnerKind,
+} from '../src/template/template-compiler-context-family-allocation.js';
+import {
   assembleTemplateCompilerContextFamilyRows,
   TemplateCompilerContextFamilyRowAssemblyState,
   TemplateCompilerFamilyOccurrenceArrivalPosture,
@@ -41,6 +47,11 @@ import {
   TemplateCompilerHydrateElementBlockerKind,
   type TemplateCompilerHydrateElementEnvelopeDraft,
 } from '../src/template/template-compiler-hydrate-element-staging.js';
+import { TemplateInstructionKind } from '../src/template/instruction-ir.js';
+import {
+  TemplateCompilerLiveAllocationLedgerState,
+  TemplateCompilerLiveProductReservationRole,
+} from '../src/template/template-compiler-live-allocation.js';
 import { executeTemplateCompilerLocalExtraction } from '../src/template/template-compiler-local-extraction.js';
 import {
   buildTemplateCompilerNormalizedSiteIndex,
@@ -746,6 +757,209 @@ describe('template compiler projection logical extraction', () => {
     });
   });
 
+  test('prepares TC and projection definitions in topological row order without exposing handles', () => {
+    const run = fixture.run(
+      'projection-logical-tc-host',
+      TemplateCompilerSiteCursorTraversalMode.ClosedContextFamily,
+    );
+    const completion = completeTemplateCompilerContextFamily(run.transcript, run.endpoint);
+    if (completion.receipt == null) throw new Error('Expected a TC plus projection family receipt.');
+    const rows = assembleTemplateCompilerContextFamilyRows(completion.receipt).assembly;
+    if (rows == null) throw new Error('Expected TC plus projection family rows.');
+    const wires = prepareTemplateCompilerFamilyWireFunding(rows).funding;
+    if (wires == null) throw new Error('Expected TC plus projection family wires.');
+    const namespace = run.transcript.allocationSnapshot.ledger.namespace;
+    const countsBefore = namespace.readReservationCounts();
+    const result = prepareTemplateCompilerContextFamilyAllocation(rows, wires);
+    const preparation = result.preparation;
+    if (preparation == null) {
+      throw new Error(`Expected prepared TC plus projection allocation: ${result.reasons[0]?.summary ?? 'unknown'}`);
+    }
+    const hydrateElement = preparation.hydrateElements[0]?.instruction;
+    const transition = completion.traversal?.templateControllerTransitions[0];
+    const extraction = completion.traversal?.projectionExtractions[0];
+    if (hydrateElement == null || transition == null || extraction == null) {
+      throw new Error('Expected one funded HE with exact TC and projection owners.');
+    }
+
+    expect(result.state).toBe(TemplateCompilerContextFamilyAllocationState.Exact);
+    expect(preparation.isCurrent()).toBe(true);
+    expect(preparation.preparedAllocation.ledger.state).toBe(TemplateCompilerLiveAllocationLedgerState.Prepared);
+    expect(namespace.readReservationCounts()).toEqual(countsBefore);
+    expect(preparation.contextDefinitions.map((definition) => definition.ownerKind)).toEqual([
+      TemplateCompilerFundedContextDefinitionOwnerKind.Root,
+      TemplateCompilerFundedContextDefinitionOwnerKind.TemplateController,
+      TemplateCompilerFundedContextDefinitionOwnerKind.TemplateController,
+      TemplateCompilerFundedContextDefinitionOwnerKind.Projection,
+      TemplateCompilerFundedContextDefinitionOwnerKind.Projection,
+    ]);
+    const expectedOwners = [
+      rows.rootMembership,
+      ...transition.realization.edges,
+      ...extraction.realization.entrantBands,
+    ];
+    for (const [ordinal, definition] of preparation.contextDefinitions.entries()) {
+      expect(definition.contextAssembly).toBe(rows.contexts[ordinal]);
+      expect(definition.owner).toBe(expectedOwners[ordinal]);
+    }
+    expect(preparation.contextDefinitions.map((definition) => definition.reservation.role)).toEqual([
+      TemplateCompilerLiveProductReservationRole.RootCompiledTemplate,
+      TemplateCompilerLiveProductReservationRole.GeneratedCompiledTemplate,
+      TemplateCompilerLiveProductReservationRole.GeneratedCompiledTemplate,
+      TemplateCompilerLiveProductReservationRole.GeneratedCompiledTemplate,
+      TemplateCompilerLiveProductReservationRole.GeneratedCompiledTemplate,
+    ]);
+    expect(preparation.fundedInstructions.map((funded) => funded.instruction.instructionKind)).toEqual([
+      TemplateInstructionKind.HydrateTemplateController,
+      TemplateInstructionKind.HydrateTemplateController,
+      TemplateInstructionKind.HydrateElement,
+    ]);
+    expect(preparation.preparedAllocation.instructionAllocations)
+      .toHaveLength(preparation.fundedInstructions.length);
+    for (const [ordinal, allocation] of preparation.preparedAllocation.instructionAllocations.entries()) {
+      expect(allocation.instruction).toBe(preparation.fundedInstructions[ordinal]?.instruction);
+    }
+    expect(preparation.preparedAllocation.productReservations.map((reservation) => reservation.role))
+      .toEqual(preparation.contextDefinitions.map((definition) => definition.reservation.role));
+    expect(preparation.preparedAllocation.expressionAllocations).toEqual([]);
+    expect(preparation.preparedAllocation.sourceAllocations).toEqual([]);
+    expect(hydrateElement.projections.map((projection) => projection.slotName)).toEqual(['default', 'named']);
+    expect(preparation.hydrateTemplateControllers.every((funded) =>
+      preparation.definitionForContext(funded.draft.childContext)?.compiledTemplate
+        === funded.instruction.childCompiledTemplate
+    )).toBe(true);
+    const projectionDefinitions = preparation.contextDefinitions.filter((definition) =>
+      definition.ownerKind === TemplateCompilerFundedContextDefinitionOwnerKind.Projection
+    );
+    expect(projectionDefinitions).toHaveLength(hydrateElement.projections.length);
+    for (const [ordinal, definition] of projectionDefinitions.entries()) {
+      expect(definition.compiledTemplate).toBe(hydrateElement.projections[ordinal]?.compiledTemplate);
+    }
+  });
+
+  test('prepares a TC-only context chain without inventing a HydrateElement allocation', () => {
+    const run = fixture.run(
+      'projection-logical-tc-only-host',
+      TemplateCompilerSiteCursorTraversalMode.ClosedContextFamily,
+    );
+    const completion = completeTemplateCompilerContextFamily(run.transcript, run.endpoint);
+    if (completion.receipt == null) throw new Error('Expected a TC-only family receipt.');
+    const rows = assembleTemplateCompilerContextFamilyRows(completion.receipt).assembly;
+    if (rows == null) throw new Error('Expected TC-only family rows.');
+    const wires = prepareTemplateCompilerFamilyWireFunding(rows).funding;
+    if (wires == null) throw new Error('Expected TC-only family wires.');
+    const namespace = run.transcript.allocationSnapshot.ledger.namespace;
+    const countsBefore = namespace.readReservationCounts();
+    const result = prepareTemplateCompilerContextFamilyAllocation(rows, wires);
+    const preparation = result.preparation;
+    if (preparation == null) {
+      throw new Error(`Expected TC-only allocation: ${result.reasons[0]?.summary ?? 'unknown'}`);
+    }
+
+    expect(result.state).toBe(TemplateCompilerContextFamilyAllocationState.Exact);
+    expect(namespace.readReservationCounts()).toEqual(countsBefore);
+    expect(preparation.contextDefinitions.map((definition) => definition.ownerKind)).toEqual([
+      TemplateCompilerFundedContextDefinitionOwnerKind.Root,
+      TemplateCompilerFundedContextDefinitionOwnerKind.TemplateController,
+      TemplateCompilerFundedContextDefinitionOwnerKind.TemplateController,
+    ]);
+    expect(preparation.fundedInstructions.map((funded) => funded.instruction.instructionKind)).toEqual([
+      TemplateInstructionKind.HydrateTemplateController,
+      TemplateInstructionKind.HydrateTemplateController,
+    ]);
+    expect(preparation.hydrateTemplateControllers).toHaveLength(2);
+    expect(preparation.hydrateElements).toEqual([]);
+    expect(preparation.preparedAllocation.productReservations.map((reservation) => reservation.role)).toEqual([
+      TemplateCompilerLiveProductReservationRole.RootCompiledTemplate,
+      TemplateCompilerLiveProductReservationRole.GeneratedCompiledTemplate,
+      TemplateCompilerLiveProductReservationRole.GeneratedCompiledTemplate,
+    ]);
+  });
+
+  test('funds empty projection definitions while leaving whitespace-only groups definition-free', () => {
+    const cases = [
+      {
+        name: 'projection-logical-host',
+        ownerKinds: [
+          TemplateCompilerFundedContextDefinitionOwnerKind.Root,
+          TemplateCompilerFundedContextDefinitionOwnerKind.Projection,
+          TemplateCompilerFundedContextDefinitionOwnerKind.Projection,
+          TemplateCompilerFundedContextDefinitionOwnerKind.Projection,
+        ],
+        slots: ['default', 'named', 'empty'],
+        contributorCounts: [1, 2, 1],
+        discarded: 1,
+      },
+      {
+        name: 'projection-logical-whitespace-host',
+        ownerKinds: [TemplateCompilerFundedContextDefinitionOwnerKind.Root],
+        slots: [],
+        contributorCounts: [],
+        discarded: 1,
+      },
+    ] as const;
+    for (const expected of cases) {
+      const run = fixture.run(expected.name, TemplateCompilerSiteCursorTraversalMode.ClosedContextFamily);
+      const completion = completeTemplateCompilerContextFamily(run.transcript, run.endpoint);
+      if (completion.receipt == null) throw new Error(`Expected family receipt for '${expected.name}'.`);
+      const rows = assembleTemplateCompilerContextFamilyRows(completion.receipt).assembly;
+      if (rows == null) throw new Error(`Expected family rows for '${expected.name}'.`);
+      const wires = prepareTemplateCompilerFamilyWireFunding(rows).funding;
+      if (wires == null) throw new Error(`Expected family wires for '${expected.name}'.`);
+      const namespace = run.transcript.allocationSnapshot.ledger.namespace;
+      const countsBefore = namespace.readReservationCounts();
+      const result = prepareTemplateCompilerContextFamilyAllocation(rows, wires);
+      const preparation = result.preparation;
+      if (preparation == null) {
+        throw new Error(`Expected family allocation for '${expected.name}': ${result.reasons[0]?.summary ?? 'unknown'}`);
+      }
+      const hydrateElement = preparation.hydrateElements[0]?.instruction;
+      if (hydrateElement == null) throw new Error(`Expected funded HE for '${expected.name}'.`);
+
+      expect(result.state, expected.name).toBe(TemplateCompilerContextFamilyAllocationState.Exact);
+      expect(namespace.readReservationCounts(), expected.name).toEqual(countsBefore);
+      expect(preparation.contextDefinitions.map((definition) => definition.ownerKind), expected.name)
+        .toEqual(expected.ownerKinds);
+      expect(hydrateElement.projections.map((projection) => projection.slotName), expected.name)
+        .toEqual(expected.slots);
+      expect(hydrateElement.projections.map((projection) => projection.contributors.length), expected.name)
+        .toEqual(expected.contributorCounts);
+      expect(hydrateElement.discardedProjectionContributors, expected.name).toHaveLength(expected.discarded);
+      expect(preparation.preparedAllocation.productReservations, expected.name)
+        .toHaveLength(expected.ownerKinds.length);
+    }
+  });
+
+  test('rejects a foreign family wire inventory before opening an allocation phase', () => {
+    const sourceRun = fixture.run(
+      'projection-logical-host',
+      TemplateCompilerSiteCursorTraversalMode.ClosedContextFamily,
+    );
+    const foreignRun = fixture.run(
+      'projection-logical-whitespace-host',
+      TemplateCompilerSiteCursorTraversalMode.ClosedContextFamily,
+    );
+    const sourceCompletion = completeTemplateCompilerContextFamily(sourceRun.transcript, sourceRun.endpoint);
+    const foreignCompletion = completeTemplateCompilerContextFamily(foreignRun.transcript, foreignRun.endpoint);
+    if (sourceCompletion.receipt == null || foreignCompletion.receipt == null) {
+      throw new Error('Expected source and foreign family receipts.');
+    }
+    const sourceRows = assembleTemplateCompilerContextFamilyRows(sourceCompletion.receipt).assembly;
+    const foreignRows = assembleTemplateCompilerContextFamilyRows(foreignCompletion.receipt).assembly;
+    if (sourceRows == null || foreignRows == null) throw new Error('Expected source and foreign family rows.');
+    const foreignWires = prepareTemplateCompilerFamilyWireFunding(foreignRows).funding;
+    if (foreignWires == null) throw new Error('Expected foreign family wires.');
+    const namespace = sourceRun.transcript.allocationSnapshot.ledger.namespace;
+    const countsBefore = namespace.readReservationCounts();
+    const result = prepareTemplateCompilerContextFamilyAllocation(sourceRows, foreignWires);
+
+    expect(result.state).toBe(TemplateCompilerContextFamilyAllocationState.Ineligible);
+    expect(result.preparation).toBeNull();
+    expect(result.reasons.map((reason) => reason.reasonKind))
+      .toEqual([TemplateCompilerContextFamilyAllocationReasonKind.ForeignWires]);
+    expect(namespace.readReservationCounts()).toEqual(countsBefore);
+  });
+
   test('classifies a real non-singular TC attribute as Pending without losing semantic ownership', () => {
     const run = fixture.run(
       'projection-logical-nonsingular-tc-wire-host',
@@ -757,6 +971,9 @@ describe('template compiler projection logical extraction', () => {
     if (rows == null) throw new Error('Expected non-singular-TC rows.');
     const result = prepareTemplateCompilerFamilyWireFunding(rows);
     if (result.funding == null) throw new Error('Expected non-singular TC wire ownership.');
+    const namespace = run.transcript.allocationSnapshot.ledger.namespace;
+    const countsBefore = namespace.readReservationCounts();
+    const allocation = prepareTemplateCompilerContextFamilyAllocation(rows, result.funding);
     const draft = result.drafts.find((candidate) =>
       candidate.role === TemplateCompilerFamilyWireRole.TemplateControllerAttribute
       && candidate.resolution === TemplateCompilerFamilyWireResolution.NonSingular
@@ -774,6 +991,11 @@ describe('template compiler projection logical extraction', () => {
       && event.realization.edges.includes(draft.semanticOwner)
     )).toBe(true);
     expect(result.reasons.some((reason) => reason.draft === draft)).toBe(true);
+    expect(allocation.state).toBe(TemplateCompilerContextFamilyAllocationState.Pending);
+    expect(allocation.preparation).toBeNull();
+    expect(allocation.reasons.map((reason) => reason.reasonKind))
+      .toEqual([TemplateCompilerContextFamilyAllocationReasonKind.WireFundingPending]);
+    expect(namespace.readReservationCounts()).toEqual(countsBefore);
   });
 
   test('refuses compatibility traversal mode instead of treating its frontier as a family', () => {

@@ -16,6 +16,7 @@ import {
   HydrateElementInstruction,
   HydrateElementProjectionContributorDisposition,
   HydrateTemplateControllerInstruction,
+  TemplateInstructionKind,
 } from '../src/template/instruction-ir.js';
 import {
   TemplateCompilerReadView,
@@ -33,6 +34,11 @@ import {
   completeTemplateCompilerContextFamily,
   TemplateCompilerContextFamilyCompletionState,
 } from '../src/template/template-compiler-context-family-completion.js';
+import {
+  prepareTemplateCompilerContextFamilyAllocation,
+  TemplateCompilerContextFamilyAllocationState,
+  TemplateCompilerFundedContextDefinitionOwnerKind,
+} from '../src/template/template-compiler-context-family-allocation.js';
 import {
   assembleTemplateCompilerContextFamilyRows,
 } from '../src/template/template-compiler-context-family-row-assembly.js';
@@ -1172,6 +1178,13 @@ describe('template compiler root site cursor', () => {
     const rootWires = prepareTemplateCompilerFamilyWireFunding(rootRows);
     const funding = rootWires.funding;
     if (funding == null) throw new Error('Expected root-only processContent family wire funding.');
+    const namespace = rootTranscript.allocationSnapshot.ledger.namespace;
+    const countsBefore = namespace.readReservationCounts();
+    const allocation = prepareTemplateCompilerContextFamilyAllocation(rootRows, funding);
+    const preparation = allocation.preparation;
+    if (preparation == null) {
+      throw new Error(`Expected root-only processContent allocation: ${allocation.reasons[0]?.summary ?? 'unknown'}`);
+    }
     const removed = rootProcessEvent.result.removedOccurrences;
     const removedSet = new Set(removed);
     const removedSiteSet = new Set(rootProcessEvent.result.removedSiteOccurrences);
@@ -1206,6 +1219,23 @@ describe('template compiler root site cursor', () => {
     expect(eventsOf(rootTranscript, TemplateCompilerSiteCursorContainerlessPlacementEvent))
       .toHaveLength(1);
     expect(rootWires.state).toBe(TemplateCompilerFamilyWireFundingState.Exact);
+    expect(allocation.state).toBe(TemplateCompilerContextFamilyAllocationState.Exact);
+    expect(namespace.readReservationCounts()).toEqual(countsBefore);
+    expect(preparation.contextDefinitions.map((definition) => definition.ownerKind)).toEqual([
+      TemplateCompilerFundedContextDefinitionOwnerKind.Root,
+    ]);
+    expect(preparation.preparedAllocation.productReservations.map((reservation) => reservation.role)).toEqual([
+      TemplateCompilerLiveProductReservationRole.RootCompiledTemplate,
+    ]);
+    expect(preparation.hydrateElements).toHaveLength(1);
+    expect(preparation.hydrateElements[0]?.instruction.auSlotProcessContent)
+      .toMatchObject({
+        name: rootProcessEvent.result.metadata.name,
+        nameSourceAddressHandle: null,
+      });
+    expect(preparation.hydrateElements[0]?.instruction.auSlotProcessContentRemovedChildNodes)
+      .toEqual(removedDrafts.map((draft) => draft.wireReference));
+    expect(preparation.hydrateElements[0]?.instruction.containerless).toBe(false);
     expect(rootProcessEvent.result.metadata.name).toBe('default');
     expect(removed.map((occurrence) =>
       occurrence instanceof TemplateCompilerElementOccurrence ? occurrence.tagName : occurrence.nodeKind
@@ -1270,6 +1300,56 @@ describe('template compiler root site cursor', () => {
     expect(transcript.taskSnapshot.contextForEvent(transition)).toBe(transcript.taskSnapshot.rootContext);
     expect(transcript.taskSnapshot.contextForEvent(placement)?.contextKind)
       .toBe(TemplateCompilerSiteCursorContextKind.TemplateController);
+  });
+
+  test('funds an effective capture before its HE projection definition', () => {
+    const result = fixture.freshRun('cursor-context-family-capture-projection').execute(
+      TemplateCompilerSiteCursorTraversalMode.ClosedContextFamily,
+    );
+    const transcript = requireTranscript(result);
+    const completion = completeTemplateCompilerContextFamily(transcript, result.siteEndpoint);
+    if (completion.receipt == null) throw new Error('Expected capture-projection family completion.');
+    const rows = assembleTemplateCompilerContextFamilyRows(completion.receipt).assembly;
+    if (rows == null) throw new Error('Expected capture-projection family rows.');
+    const wires = prepareTemplateCompilerFamilyWireFunding(rows).funding;
+    if (wires == null) throw new Error('Expected capture-projection family wires.');
+    const namespace = transcript.allocationSnapshot.ledger.namespace;
+    const countsBefore = namespace.readReservationCounts();
+    const allocation = prepareTemplateCompilerContextFamilyAllocation(rows, wires);
+    const preparation = allocation.preparation;
+    if (preparation == null) {
+      throw new Error(`Expected capture-projection allocation: ${allocation.reasons[0]?.summary ?? 'unknown'}`);
+    }
+    const head = preparation.hydrateElements[0];
+    if (head == null) throw new Error('Expected capture-projection HydrateElement funding.');
+
+    expect(allocation.state).toBe(TemplateCompilerContextFamilyAllocationState.Exact);
+    expect(namespace.readReservationCounts()).toEqual(countsBefore);
+    expect(preparation.contextDefinitions.map((definition) => definition.ownerKind)).toEqual([
+      TemplateCompilerFundedContextDefinitionOwnerKind.Root,
+      TemplateCompilerFundedContextDefinitionOwnerKind.TemplateController,
+      TemplateCompilerFundedContextDefinitionOwnerKind.Projection,
+    ]);
+    expect(preparation.fundedInstructions.map((funded) => funded.instruction.instructionKind)).toEqual([
+      TemplateInstructionKind.HydrateTemplateController,
+      TemplateInstructionKind.HydrateElement,
+    ]);
+    expect(head.captures.map((capture) => capture.draft.decisionKind)).toEqual([
+      TemplateCompilerCaptureSyntaxDecisionKind.EffectiveSyntaxRequired,
+    ]);
+    expect(head.instruction.projections.map((projection) => projection.slotName)).toEqual(['default']);
+    expect(head.productReservations.map((reservation) => reservation.role)).toEqual([
+      TemplateCompilerLiveProductReservationRole.EffectiveAttributeSyntax,
+      TemplateCompilerLiveProductReservationRole.GeneratedCompiledTemplate,
+    ]);
+    expect(preparation.preparedAllocation.productReservations.map((reservation) => reservation.role)).toEqual([
+      TemplateCompilerLiveProductReservationRole.RootCompiledTemplate,
+      TemplateCompilerLiveProductReservationRole.GeneratedCompiledTemplate,
+      TemplateCompilerLiveProductReservationRole.EffectiveAttributeSyntax,
+      TemplateCompilerLiveProductReservationRole.GeneratedCompiledTemplate,
+    ]);
+    expect(preparation.preparedAllocation.productReservations[2]).toBe(head.captures[0]?.effectiveReservation);
+    expect(preparation.preparedAllocation.productReservations[3]).toBe(head.projectionFunding.reservations[0]);
   });
 
   test('keeps arbitrary processContent Open without admitting a site driver', () => {

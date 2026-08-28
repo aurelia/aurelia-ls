@@ -10,6 +10,7 @@ import cursorAsElementEmptyTemplate from './cursor-as-element-empty.html';
 import cursorAuthoredCarrierEmptyTemplate from './cursor-authored-carrier-empty.html';
 import cursorAuthoredCarrierStaticTemplate from './cursor-authored-carrier-static.html';
 import cursorCommentShieldTemplate from './cursor-comment-shield.html';
+import cursorContextFamilyCaptureProjectionTemplate from './cursor-context-family-capture-projection.html';
 import cursorContextFamilyContainerlessTcTemplate from './cursor-context-family-containerless-tc.html';
 import cursorContextFamilyProjectionTemplate from './cursor-context-family-projection.html';
 import cursorContextFamilyTcTemplate from './cursor-context-family-tc.html';
@@ -209,6 +210,15 @@ class CursorOuterTemplateController {}
 
 @templateController('cursor-inner')
 class CursorInnerTemplateController {}
+
+@customElement({
+  name: 'cursor-context-family-capture-projection',
+  template: cursorContextFamilyCaptureProjectionTemplate,
+  dependencies: [CursorStagingCapture, CursorOuterTemplateController],
+})
+class CursorContextFamilyCaptureProjection {
+  message = 'captured';
+}
 
 @customElement({
   name: 'cursor-context-family-tc',
@@ -488,6 +498,7 @@ void new Aurelia()
     CursorRowInterleave,
     CursorCommentShield,
     CursorContextFamilyTc,
+    CursorContextFamilyCaptureProjection,
     CursorContextFamilyContainerlessTc,
     CursorTenHole,
     CursorAsElementEmpty,
