@@ -51,7 +51,7 @@ import type {
 import type { TemplateCompilerLiveAttributeContribution } from './template-compiler-live-attribute-assembly.js';
 import type { TemplateCompilerTextInstructionStaging } from './template-compiler-text-instruction-staging.js';
 import {
-  TemplateCompilerHydrateElementProcessContentState,
+  isTemplateCompilerProcessContentSettledForHost,
   TemplateCompilerHydrateElementProjectionState,
   type TemplateCompilerHydrateElementEnvelopeDraft,
 } from './template-compiler-hydrate-element-staging.js';
@@ -380,7 +380,7 @@ export class TemplateCompilerSiteCursorContainerlessPlacementEvent extends Templ
     if (
       envelope.element !== element
       || !envelope.containerless.effective
-      || envelope.processContent.state !== TemplateCompilerHydrateElementProcessContentState.Absent
+      || !isTemplateCompilerProcessContentSettledForHost(element, envelope.processContent)
       || (!projectionFree && !projectionExtracted)
     ) {
       throw new Error('Containerless placement event requires one logically empty ordinary host.');

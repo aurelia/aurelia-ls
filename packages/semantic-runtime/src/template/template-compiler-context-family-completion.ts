@@ -7,9 +7,9 @@ import {
 import type { TemplateCompilerSiteExecutionEndpointReceipt } from './template-compiler-execution.js';
 import { TemplateCompilerTargetRowPlacementKind } from './compiler-target-plan.js';
 import {
+  isTemplateCompilerProcessContentSettledForHost,
   TemplateCompilerHydrateElementBlockerKind,
   TemplateCompilerHydrateElementBlockerScope,
-  TemplateCompilerHydrateElementProcessContentState,
   TemplateCompilerHydrateElementProjectionState,
   TemplateCompilerHydrateElementStagingState,
   type TemplateCompilerHydrateElementBlocker,
@@ -377,12 +377,13 @@ export function completeTemplateCompilerContextFamily(
   if (
     (transcript.taskSnapshot.contexts.length <= 1
       && projectionEvents.length === 0
-      && templateControllerEvents.length === 0)
+      && templateControllerEvents.length === 0
+      && audit.processContentEvents.length === 0)
     || transcript.taskSnapshot.contexts[0]?.context !== transcript.taskSnapshot.rootContext
   ) {
     refuse(
       TemplateCompilerContextFamilyCompletionReasonKind.ContextFamilyMissing,
-      'Context-family completion requires at least one generated traversal context.',
+      'Context-family completion requires a generated traversal context or one exact non-ordinary compiler effect.',
     );
   }
   if (
@@ -416,7 +417,12 @@ export function completeTemplateCompilerContextFamily(
     refuse,
   );
   const hydrateElementByElement = new Map(hydrateElements.map((entry) => [entry.staging.element, entry]));
-  validateContainerlessPlacements(audit, projectionEvents, refuse);
+  validateContainerlessPlacements(
+    audit,
+    projectionEvents,
+    templateControllerValidation.eventByHydrateElement,
+    refuse,
+  );
   if (reasons.length > 0) return ineligible(audit, reasons);
 
   const hasTemplateControllerContexts = templateControllerValidation.hasTemplateControllerContexts;
@@ -862,6 +868,10 @@ function validateHydrateElements(
 function validateContainerlessPlacements(
   audit: TemplateCompilerTraversalCompletionAudit,
   projectionEvents: readonly TemplateCompilerSiteCursorProjectionExtractionEvent[],
+  templateControllerEventByHydrateElement: ReadonlyMap<
+    TemplateCompilerHydrateElementStagingResult,
+    TemplateCompilerSiteCursorTemplateControllerTransitionEvent
+  >,
   refuse: (reasonKind: TemplateCompilerContextFamilyCompletionReasonKind, summary: string) => void,
 ): void {
   const projectionByHost = new Map(projectionEvents.map((event) => [event.host, event]));
@@ -873,7 +883,7 @@ function validateContainerlessPlacements(
     const projection = projectionByHost.get(staging.element) ?? null;
     if (placement.projectionExtraction !== projection) return true;
     if (
-      draft.processContent.state !== TemplateCompilerHydrateElementProcessContentState.Absent
+      !isTemplateCompilerProcessContentSettledForHost(staging.element, draft.processContent)
       || (projection == null && staging.element.readChildren().length > 0)
       || (projection != null && projection.preparation.residuals.length > 0)
     ) return true;
@@ -883,9 +893,11 @@ function validateContainerlessPlacements(
     const projectionContextEvents = projection?.entrantBandStagings.flatMap((entry) =>
       contextSubtreeEvents(audit.transcript.taskSnapshot, entry.band.context)
     ) ?? [];
+    const templateController = templateControllerEventByHydrateElement.get(staging) ?? null;
     const prerequisites = [
       ...audit.attributeEvents.filter((event) => event.owner === staging.element),
       ...audit.processContentEvents.filter((event) => event.host === staging.element),
+      ...(templateController == null ? [] : [templateController]),
       ...(projection == null ? [] : [projection]),
       ...projectionContextEvents,
     ];

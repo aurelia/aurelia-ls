@@ -29,6 +29,19 @@ import {
   TemplateCompilerOccurrenceOperationTarget,
   TemplateCompilerOperationKind,
 } from '../src/template/template-compiler-execution.js';
+import {
+  completeTemplateCompilerContextFamily,
+  TemplateCompilerContextFamilyCompletionState,
+} from '../src/template/template-compiler-context-family-completion.js';
+import {
+  assembleTemplateCompilerContextFamilyRows,
+} from '../src/template/template-compiler-context-family-row-assembly.js';
+import {
+  prepareTemplateCompilerFamilyWireFunding,
+  TemplateCompilerFamilyWireFundingState,
+  TemplateCompilerFamilyWireResolution,
+  TemplateCompilerFamilyWireRole,
+} from '../src/template/template-compiler-family-wire-funding.js';
 import { executeTemplateCompilerHookBootstrap } from '../src/template/template-compiler-hook-bootstrap.js';
 import { executeTemplateCompilerLocalExtraction } from '../src/template/template-compiler-local-extraction.js';
 import {
@@ -87,8 +100,10 @@ import {
   TemplateCompilerSiteCursorSubtreeExclusionEvent,
   TemplateCompilerSiteCursorSurrogateValidationEvent,
   TemplateCompilerSiteCursorSurrogateValidationOutcome,
+  TemplateCompilerSiteCursorTemplateControllerTransitionEvent,
   TemplateCompilerSiteCursorTextEvent,
   TemplateCompilerSiteCursorTaskStopKind,
+  TemplateCompilerSiteCursorTraversalMode,
   type TemplateCompilerSiteCursorTranscript,
   type TemplateCompilerSiteCursorResult,
 } from '../src/template/template-compiler-site-cursor.js';
@@ -1140,6 +1155,123 @@ describe('template compiler root site cursor', () => {
     expect(named.endForestMutationRevision - named.startForestMutationRevision).toBe(2);
   });
 
+  test('admits a root-only processContent family and funds only direct removed-child wires', () => {
+    const rootResult = fixture.freshRun('cursor-process-content-removals').execute(
+      TemplateCompilerSiteCursorTraversalMode.ClosedContextFamily,
+    );
+    const rootTranscript = requireTranscript(rootResult);
+    const rootCompletion = completeTemplateCompilerContextFamily(rootTranscript, rootResult.siteEndpoint);
+    const rootProcessEvent = eventsOf(rootTranscript, TemplateCompilerSiteCursorProcessContentEvent)[0];
+    if (rootCompletion.receipt == null || rootCompletion.traversal == null || rootProcessEvent == null) {
+      throw new Error(
+        `Expected a closed root-only processContent family: ${rootCompletion.reasons.map((reason) => reason.summary).join(' ')}`,
+      );
+    }
+    const rootRows = assembleTemplateCompilerContextFamilyRows(rootCompletion.receipt).assembly;
+    if (rootRows == null) throw new Error('Expected root-only processContent family rows.');
+    const rootWires = prepareTemplateCompilerFamilyWireFunding(rootRows);
+    const funding = rootWires.funding;
+    if (funding == null) throw new Error('Expected root-only processContent family wire funding.');
+    const removed = rootProcessEvent.result.removedOccurrences;
+    const removedSet = new Set(removed);
+    const removedSiteSet = new Set(rootProcessEvent.result.removedSiteOccurrences);
+    const removedDrafts = rootWires.drafts.filter((draft) =>
+      draft.role === TemplateCompilerFamilyWireRole.ProcessContentRemovedChild
+    );
+    const firstCarrier = removed[0];
+    if (!(firstCarrier instanceof TemplateCompilerElementOccurrence)) {
+      throw new Error('Expected the first direct processContent removal to be one element carrier.');
+    }
+    const nestedElement = firstCarrier.readChildren().find(
+      (child): child is TemplateCompilerElementOccurrence => child instanceof TemplateCompilerElementOccurrence,
+    );
+    const nestedComment = firstCarrier.readChildren().find(
+      (child): child is TemplateCompilerCommentOccurrence => child instanceof TemplateCompilerCommentOccurrence,
+    );
+    if (nestedElement == null || nestedComment == null) {
+      throw new Error('Expected the detached carrier to retain its nested element and comment.');
+    }
+    const processEffects = rootCompletion.traversal.contexts.flatMap((context) =>
+      context.processContentEffects
+    );
+
+    expect(rootCompletion.state).toBe(TemplateCompilerContextFamilyCompletionState.Complete);
+    expect(rootResult.completion?.state).toBe(TemplateCompilerOrdinaryRootCompletionState.Ineligible);
+    expect(rootResult.completion?.refusals.map((refusal) => refusal.refusalKind)).toEqual([
+      TemplateCompilerOrdinaryRootCompletionRefusalKind.ContextFamilyTraversal,
+    ]);
+    expect(rootTranscript.taskSnapshot.contexts).toHaveLength(1);
+    expect(processEffects).toHaveLength(1);
+    expect(processEffects[0]).toBe(rootProcessEvent);
+    expect(eventsOf(rootTranscript, TemplateCompilerSiteCursorContainerlessPlacementEvent))
+      .toHaveLength(1);
+    expect(rootWires.state).toBe(TemplateCompilerFamilyWireFundingState.Exact);
+    expect(rootProcessEvent.result.metadata.name).toBe('default');
+    expect(removed.map((occurrence) =>
+      occurrence instanceof TemplateCompilerElementOccurrence ? occurrence.tagName : occurrence.nodeKind
+    )).toEqual(['div', 'p']);
+    expect(removedDrafts).toHaveLength(removed.length);
+    for (const [ordinal, draft] of removedDrafts.entries()) {
+      const occurrence = removed[ordinal]!;
+      expect(draft.occurrence).toBe(occurrence);
+      expect(draft.semanticOwner).toBe(rootProcessEvent.result);
+      expect(draft.resolution).toBe(TemplateCompilerFamilyWireResolution.ExactAuthored);
+      expect(draft.valueAddressHandle).toBeNull();
+      expect(draft.valueSpanRequired).toBe(false);
+      expect(draft.wireReference).toMatchObject({
+        productHandle: rootTranscript.binding.forest.exactAuthoredNodeOrigin(occurrence)?.authored.productHandle,
+        identityHandle: rootTranscript.binding.forest.exactAuthoredNodeOrigin(occurrence)?.authored.identityHandle,
+        addressHandle: rootTranscript.binding.forest.exactAuthoredNodeOrigin(occurrence)?.authored.addressHandle,
+      });
+    }
+    expect(rootTranscript.binding.forest.exactAuthoredNodeOrigin(nestedElement)).not.toBeNull();
+    expect(rootTranscript.binding.forest.exactAuthoredNodeOrigin(nestedComment)).not.toBeNull();
+    expect(funding.draftsForOccurrence(
+      nestedElement,
+      TemplateCompilerFamilyWireRole.ProcessContentRemovedChild,
+    )).toEqual([]);
+    expect(funding.draftsForOccurrence(
+      nestedComment,
+      TemplateCompilerFamilyWireRole.ProcessContentRemovedChild,
+    )).toEqual([]);
+    for (const occurrence of rootProcessEvent.result.removedSiteOccurrences) {
+      expect(funding.draftsForOccurrence(
+        occurrence,
+        TemplateCompilerFamilyWireRole.ProcessContentRemovedChild,
+      )).toEqual([]);
+    }
+    expect(eventsOf(rootTranscript, TemplateCompilerSiteCursorElementEvent).some((event) =>
+      removedSet.has(event.element) || event.element === nestedElement
+    )).toBe(false);
+    expect(eventsOf(rootTranscript, TemplateCompilerSiteCursorAttributeEvent).some((event) =>
+      removedSiteSet.has(event.attribute)
+    )).toBe(false);
+    expect(eventsOf(rootTranscript, TemplateCompilerSiteCursorTextEvent).some((event) =>
+      removedSiteSet.has(event.text)
+    )).toBe(false);
+  });
+
+  test('places a TC-wrapped containerless host after its transition event', () => {
+    const result = fixture.freshRun('cursor-context-family-containerless-tc').execute(
+      TemplateCompilerSiteCursorTraversalMode.ClosedContextFamily,
+    );
+    const transcript = requireTranscript(result);
+    const completion = completeTemplateCompilerContextFamily(transcript, result.siteEndpoint);
+    const transition = eventsOf(transcript, TemplateCompilerSiteCursorTemplateControllerTransitionEvent)[0];
+    const placement = eventsOf(transcript, TemplateCompilerSiteCursorContainerlessPlacementEvent)[0];
+    if (transition == null || placement == null) {
+      throw new Error('Expected one TC transition followed by one containerless placement.');
+    }
+
+    expect(completion.state).toBe(TemplateCompilerContextFamilyCompletionState.Complete);
+    expect(transcript.taskSnapshot.contexts).toHaveLength(2);
+    expect(transition.host).toBe(placement.element);
+    expect(placement.ordinal).toBe(transition.ordinal + 1);
+    expect(transcript.taskSnapshot.contextForEvent(transition)).toBe(transcript.taskSnapshot.rootContext);
+    expect(transcript.taskSnapshot.contextForEvent(placement)?.contextKind)
+      .toBe(TemplateCompilerSiteCursorContextKind.TemplateController);
+  });
+
   test('keeps arbitrary processContent Open without admitting a site driver', () => {
     // Exact AuSlot -> arbitrary-hook chaining remains deferred: AuSlot currently reaches the projection/containerless
     // structural frontier before a later sibling can be visited, so composing that sequence here would fabricate reach.
@@ -2063,11 +2195,14 @@ class CursorRun {
     );
   }
 
-  execute(): TemplateCompilerSiteCursorResult {
+  execute(
+    traversalMode: TemplateCompilerSiteCursorTraversalMode = TemplateCompilerSiteCursorTraversalMode.CompatibilityStop,
+  ): TemplateCompilerSiteCursorResult {
     return executeTemplateCompilerRootSiteCursor({
       binding: this.binding,
       compilerReads: this.reads(),
       preWalkAuthority: TemplateCompilerPreWalkRemainderAuthority.capture(this.binding),
+      traversalMode,
     });
   }
 

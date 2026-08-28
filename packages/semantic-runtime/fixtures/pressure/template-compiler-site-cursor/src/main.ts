@@ -10,6 +10,7 @@ import cursorAsElementEmptyTemplate from './cursor-as-element-empty.html';
 import cursorAuthoredCarrierEmptyTemplate from './cursor-authored-carrier-empty.html';
 import cursorAuthoredCarrierStaticTemplate from './cursor-authored-carrier-static.html';
 import cursorCommentShieldTemplate from './cursor-comment-shield.html';
+import cursorContextFamilyContainerlessTcTemplate from './cursor-context-family-containerless-tc.html';
 import cursorContextFamilyProjectionTemplate from './cursor-context-family-projection.html';
 import cursorContextFamilyTcTemplate from './cursor-context-family-tc.html';
 import cursorEmptyTemplate from './cursor-empty.html';
@@ -25,6 +26,7 @@ import cursorOpenTemplate from './cursor-open.html';
 import cursorProgressionTemplate from './cursor-progression.html';
 import cursorProjectionTemplate from './cursor-projection.html';
 import cursorProcessContentTemplate from './cursor-process-content.html';
+import cursorProcessContentRemovalsTemplate from './cursor-process-content-removals.html';
 import cursorProcessContentEmptyTemplate from './cursor-process-content-empty.html';
 import cursorProcessContentNamedTemplate from './cursor-process-content-named.html';
 import cursorProcessContentArbitraryTemplate from './cursor-process-content-arbitrary.html';
@@ -326,6 +328,12 @@ class CursorTemplateController {
 class CursorProcessContent {}
 
 @customElement({
+  name: 'cursor-process-content-removals',
+  template: cursorProcessContentRemovalsTemplate,
+})
+class CursorProcessContentRemovals {}
+
+@customElement({
   name: 'cursor-process-content-empty',
   template: cursorProcessContentEmptyTemplate,
 })
@@ -363,6 +371,13 @@ class CursorProcessContentArbitrary {
 
 @customElement({ name: 'cursor-containerless-leaf', containerless: true })
 class CursorContainerlessLeaf {}
+
+@customElement({
+  name: 'cursor-context-family-containerless-tc',
+  template: cursorContextFamilyContainerlessTcTemplate,
+  dependencies: [CursorContainerlessLeaf, CursorOuterTemplateController],
+})
+class CursorContextFamilyContainerlessTc {}
 
 @customElement({
   name: 'cursor-containerless',
@@ -473,6 +488,7 @@ void new Aurelia()
     CursorRowInterleave,
     CursorCommentShield,
     CursorContextFamilyTc,
+    CursorContextFamilyContainerlessTc,
     CursorTenHole,
     CursorAsElementEmpty,
     CursorAuthoredCarrierEmpty,
@@ -486,6 +502,7 @@ void new Aurelia()
     CursorWide,
     CursorTemplateController,
     CursorProcessContent,
+    CursorProcessContentRemovals,
     CursorProcessContentEmpty,
     CursorProcessContentNamed,
     CursorProcessContentDuplicateName,

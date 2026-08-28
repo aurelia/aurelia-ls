@@ -118,6 +118,19 @@ export class TemplateCompilerHydrateElementProcessContentDraft {
   ) {}
 }
 
+/** Whether processContent is absent or has one exact committed result for this host. */
+export function isTemplateCompilerProcessContentSettledForHost(
+  element: TemplateCompilerElementOccurrence,
+  processContent: TemplateCompilerHydrateElementProcessContentDraft,
+): boolean {
+  return processContent.state === TemplateCompilerHydrateElementProcessContentState.Absent
+    || (
+      processContent.state === TemplateCompilerHydrateElementProcessContentState.Exact
+      && processContent.result?.isModuleConstructed() === true
+      && processContent.result.plan.host === element
+    );
+}
+
 export const enum TemplateCompilerHydrateElementProjectionState {
   None = 'none',
   PendingExtraction = 'pending-extraction',

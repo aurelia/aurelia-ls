@@ -118,8 +118,9 @@ import {
   stageTemplateCompilerTextInstructions,
 } from './template-compiler-text-instruction-staging.js';
 import {
-  TemplateCompilerHydrateElementProcessContentState,
+  isTemplateCompilerProcessContentSettledForHost,
   TemplateCompilerHydrateElementProjectionState,
+  TemplateCompilerHydrateElementProcessContentState,
   TemplateCompilerHydrateElementStagingState,
   type TemplateCompilerHydrateElementStagingResult,
   stageTemplateCompilerHydrateElementEnvelope,
@@ -1229,7 +1230,13 @@ class TemplateCompilerRootSiteCursor {
     }
     if (hydrateElementDraft?.containerless.effective === true) {
       if (
-        hydrateElementDraft.processContent.state !== TemplateCompilerHydrateElementProcessContentState.Absent
+        !(
+          hydrateElementDraft.processContent.state === TemplateCompilerHydrateElementProcessContentState.Absent
+          || (
+            this.traversalMode === TemplateCompilerSiteCursorTraversalMode.ClosedContextFamily
+            && isTemplateCompilerProcessContentSettledForHost(element, hydrateElementDraft.processContent)
+          )
+        )
         || element.readChildren().length > 0
       ) {
         this.stop(
@@ -1553,7 +1560,13 @@ class TemplateCompilerRootSiteCursor {
     if (draft?.containerless.effective === true) {
       const hasUnsupportedChildren = state.projectionEvent == null && element.readChildren().length > 0;
       if (
-        draft.processContent.state !== TemplateCompilerHydrateElementProcessContentState.Absent
+        !(
+          draft.processContent.state === TemplateCompilerHydrateElementProcessContentState.Absent
+          || (
+            this.traversalMode === TemplateCompilerSiteCursorTraversalMode.ClosedContextFamily
+            && isTemplateCompilerProcessContentSettledForHost(element, draft.processContent)
+          )
+        )
         || hasUnsupportedChildren
       ) {
         this.stop(

@@ -18,7 +18,10 @@ import {
   TemplateCompilerSiteCursorTextEvent,
   TemplateCompilerSiteCursorElementEvent,
 } from './template-compiler-site-cursor-event.js';
-import type { TemplateCompilerSiteCursorTranscript } from './template-compiler-site-cursor.js';
+import {
+  type TemplateCompilerSiteCursorTranscript,
+  TemplateCompilerSiteCursorTraversalMode,
+} from './template-compiler-site-cursor.js';
 
 const ordinaryRootCompletionAuthority = {};
 
@@ -197,13 +200,13 @@ export function completeTemplateCompilerOrdinaryRoot(
     TemplateCompilerTraversalCompletionAuditReasonKind.ForeignTranscript,
     TemplateCompilerTraversalCompletionAuditReasonKind.CursorFrontier,
   ]);
-  if (
-    transcript.taskSnapshot.contexts.length !== 1
-    || transcript.taskSnapshot.contexts[0]?.context !== transcript.taskSnapshot.rootContext
-  ) {
+  const ordinaryTraversal = transcript.traversalMode === TemplateCompilerSiteCursorTraversalMode.CompatibilityStop
+    && transcript.taskSnapshot.contexts.length === 1
+    && transcript.taskSnapshot.contexts[0]?.context === transcript.taskSnapshot.rootContext;
+  if (!ordinaryTraversal) {
     refuse(
       TemplateCompilerOrdinaryRootCompletionRefusalKind.ContextFamilyTraversal,
-      'Ordinary-root completion cannot claim a generated compiler context family.',
+      'Ordinary-root completion requires compatibility traversal with exactly the root context.',
     );
   }
   appendAuditReasons([
@@ -218,7 +221,7 @@ export function completeTemplateCompilerOrdinaryRoot(
     TemplateCompilerTraversalCompletionAuditReasonKind.UnexplainedAuthoredRemainder,
     TemplateCompilerTraversalCompletionAuditReasonKind.LiveSiteIncomplete,
   ]);
-  if (transcript.hydrateElementEnvelopes.some((envelope) =>
+  if (ordinaryTraversal && transcript.hydrateElementEnvelopes.some((envelope) =>
     envelope.state !== TemplateCompilerHydrateElementStagingState.Exact
     && envelope.state !== TemplateCompilerHydrateElementStagingState.NotApplicable
   )) {
@@ -227,7 +230,7 @@ export function completeTemplateCompilerOrdinaryRoot(
       'One or more reached HydrateElement envelopes remain semantically incomplete.',
     );
   }
-  if (
+  if (ordinaryTraversal && (
     audit.placementsByElement.size !== audit.containerlessPlacements.length
     || transcript.hydrateElementEnvelopes.some((envelope) => {
       const placeable = envelope.state === TemplateCompilerHydrateElementStagingState.Exact
@@ -246,7 +249,7 @@ export function completeTemplateCompilerOrdinaryRoot(
       );
       return placement.ordinal !== lastElementEventOrdinal + 1;
     })
-  ) {
+  )) {
     refuse(
       TemplateCompilerOrdinaryRootCompletionRefusalKind.ContainerlessPlacementMismatch,
       'Effective containerless elements require one exact cursor placement decision.',
