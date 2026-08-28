@@ -404,6 +404,12 @@ classification, expression parsing, and instruction lowering converge on the sam
   visible on parse products while runtime-shaped consumers ask whether Aurelia itself would accept a binding expression
   lane. A final interpolation hole whose body is complete but whose `}` is missing is one such case: parser state remains
   companion/frontier, while binding data-flow can still spend the runtime-accepted interpolation expression.
+- `../expression/runtime-ast-value.ts` projects source-rich semantic ASTs to framework-shaped plain runtime values.
+  It strips spans, Identifier wrappers, key spans, and authored scope-path evidence while retaining runtime-computed
+  fields and recursively projected children. Parenthesized scope/member/global callees canonicalize to RC2 CallScope,
+  CallMember, or CallGlobal shapes; keyed, arrow, and optional global callees retain CallFunction. Semantic optional
+  ancestor intent, binding-pattern/destructuring representation differences, behavior-bearing CustomExpression, and
+  direct global calls whose optional intent was not retained return named Pending results rather than losing meaning.
 - `binding-command-execution.ts` models runtime binding-command executables, resolver state, command build inputs, and
   lowering results. Custom command bodies can stay opaque while still preserving the exact command/input boundary.
   `BindingCommandBuildInput` mirrors the framework's `ICommandBuildInfo` shape and should stay limited to the command's

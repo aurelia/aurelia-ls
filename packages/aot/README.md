@@ -80,6 +80,9 @@ dependencies, surrogate values, and executable identities—so structural covera
 The next wire-value phase now has its required semantic authority: the context-family value retains candidate-owned
 live expression results alongside durable parse products, without exporting allocation ledgers or compiler-read
 objects. AOT must consume the shared semantic-runtime AST/wire projector over those values, never reparse source text.
+The shared runtime-AST value projector now covers the framework-compatible semantic AST families and explicitly keeps
+the remaining RC2 representation deltas Pending. The current exact gallery needs only AccessScope, CallScope,
+PrimitiveLiteral, and Interpolation roots; full instruction-wire projection remains the next join.
 The CLI separately content-addresses the executed AOT and semantic-runtime JavaScript trees and the full dirty-worktree
 delta so an ignored or already-dirty build artifact cannot masquerade as unchanged authority.
 
