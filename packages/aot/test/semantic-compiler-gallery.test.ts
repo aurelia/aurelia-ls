@@ -6,6 +6,12 @@ import { describe, expect, test } from "vitest";
 import { TemplateCompilerRootSiteCursorObservationAdmissionState } from "@aurelia-ls/semantic-runtime/browser-template";
 import { JIT_ORACLE_CASES } from "../src/testing/jit-oracle-case-registry.js";
 import {
+  JitCompilerBlueprintBatch,
+  JitCompilerBlueprintObserver,
+} from "../src/testing/jit-compiler-blueprint-observer.js";
+import { JitCompilerCaseExecutor } from "../src/testing/jit-compiler-case-executor.js";
+import { createJitCompilerOracle } from "../src/testing/jit-compiler-oracle.js";
+import {
   type SemanticCompilerGalleryObservation,
   SemanticCompilerGalleryOracle,
 } from "../src/testing/semantic-compiler-gallery-oracle.js";
@@ -19,6 +25,11 @@ import {
   SEMANTIC_FROZEN_FAMILY_OBSERVER_VERSION,
   SEMANTIC_FROZEN_FAMILY_OMITTED_JIT_FIELDS,
 } from "../src/testing/semantic-frozen-family-observer.js";
+import {
+  compareSemanticFrozenFamiliesToJit,
+  SEMANTIC_FROZEN_FAMILY_COMMON_JIT_FIELDS,
+  SemanticFrozenFamilyStructuralMismatchKind,
+} from "../src/testing/semantic-frozen-family-structural-comparison.js";
 
 const packageRoot = path.resolve(fileURLToPath(new URL("..", import.meta.url)));
 const galleryRoot = path.join(packageRoot, "fixtures/semantic-compiler-gallery");
@@ -676,6 +687,115 @@ describe("semantic compiler gallery", () => {
       .not.toBe(cursorDigest(observations, "attribute-owner-state.binding-first"));
     expect(cursorDigest(observations, "native-order.checkbox.checked-before-model"))
       .not.toBe(cursorDigest(observations, "native-order.checkbox.model-before-checked"));
+
+    const exactCaseIds = new Set(run.observations.flatMap((observation) =>
+      observation.frozenFamily.kind === "exact" ? [observation.caseId] : []
+    ));
+    const exactJitCases = JIT_ORACLE_CASES.filter((candidate) => exactCaseIds.has(candidate.id));
+    const jitOracle = createJitCompilerOracle();
+    let jitBatch: JitCompilerBlueprintBatch;
+    let comparison;
+    try {
+      jitBatch = await new JitCompilerBlueprintObserver(new JitCompilerCaseExecutor())
+        .observeCases(exactJitCases, jitOracle);
+      comparison = compareSemanticFrozenFamiliesToJit(run.observations, jitBatch);
+    } finally {
+      jitOracle.dispose();
+    }
+    expect(exactJitCases).toHaveLength(27);
+    expect(comparison.isClean).toBe(true);
+    expect(comparison.comparisonPosture).toBe("structural-characterization-only");
+    expect(comparison.selectedExactCaseCount).toBe(27);
+    expect(comparison.joinedCaseCount).toBe(27);
+    expect(comparison.matchingCaseIds).toHaveLength(27);
+    expect(comparison.mismatches).toEqual([]);
+    expect(comparison.satisfiedClaimIds).toEqual([]);
+    expect(comparison.comparedFields).toBe(SEMANTIC_FROZEN_FAMILY_COMMON_JIT_FIELDS);
+    expect(comparison.omittedJitFields).toBe(SEMANTIC_FROZEN_FAMILY_OMITTED_JIT_FIELDS);
+    expect(comparison.counts).toEqual({
+      semanticDefinitions: 40,
+      jitDefinitions: 40,
+      semanticRows: 52,
+      jitRows: 52,
+      semanticGeometries: 52,
+      jitGeometries: 52,
+      semanticInstructions: 69,
+      jitInstructions: 69,
+      semanticHasSlotsTrue: 0,
+      jitHasSlotsTrue: 0,
+    });
+    const mutationSource = observations.get("binding.property.input-value")?.frozenFamily;
+    if (mutationSource?.kind !== "exact") throw new Error("Expected exact property-binding mutation source.");
+    const mutationDefinition = mutationSource.definitions[0];
+    const mutationRow = mutationDefinition?.rows[0];
+    if (mutationDefinition == null || mutationRow == null) throw new Error("Expected one mutation-source row.");
+    const mutationComparison = compareSemanticFrozenFamiliesToJit([{
+      caseId: "binding.property.input-value",
+      frozenFamily: {
+        ...mutationSource,
+        definitions: [{
+          ...mutationDefinition,
+          rows: [{ ...mutationRow, frameworkInstructionKinds: ["deliberate-mismatch"] }],
+        }],
+      },
+    }], jitBatch);
+    expect(mutationComparison.isClean).toBe(false);
+    expect(mutationComparison.mismatches).toMatchObject([{
+      caseId: "binding.property.input-value",
+      definitionIndex: 0,
+      mismatchKind: SemanticFrozenFamilyStructuralMismatchKind.RowInstructionKinds,
+    }]);
+    const targetKindComparison = compareSemanticFrozenFamiliesToJit([{
+      caseId: "binding.property.input-value",
+      frozenFamily: {
+        ...mutationSource,
+        definitions: [{
+          ...mutationDefinition,
+          rows: [{ ...mutationRow, targetKind: "render-location" }],
+        }],
+      },
+    }], jitBatch);
+    expect(targetKindComparison.mismatches.some((mismatch) =>
+      mismatch.mismatchKind === SemanticFrozenFamilyStructuralMismatchKind.TargetGeometry
+    )).toBe(true);
+    const ownershipComparison = compareSemanticFrozenFamiliesToJit([{
+      caseId: "binding.property.input-value",
+      frozenFamily: {
+        ...mutationSource,
+        definitions: [{ ...mutationDefinition, definitionIndex: 1 }],
+      },
+    }], jitBatch);
+    expect(ownershipComparison.mismatches.some((mismatch) =>
+      mismatch.mismatchKind === SemanticFrozenFamilyStructuralMismatchKind.DefinitionOwnership
+    )).toBe(true);
+    const missingComparison = compareSemanticFrozenFamiliesToJit([{
+      caseId: "binding.property.input-value",
+      frozenFamily: mutationSource,
+    }], new JitCompilerBlueprintBatch([]));
+    expect(missingComparison.isClean).toBe(false);
+    expect(missingComparison.counts).toEqual({
+      semanticDefinitions: 1,
+      jitDefinitions: 0,
+      semanticRows: 1,
+      jitRows: 0,
+      semanticGeometries: 1,
+      jitGeometries: 0,
+      semanticInstructions: 1,
+      jitInstructions: 0,
+      semanticHasSlotsTrue: 0,
+      jitHasSlotsTrue: 0,
+    });
+    const vacuousComparison = compareSemanticFrozenFamiliesToJit([], new JitCompilerBlueprintBatch([]));
+    expect(vacuousComparison.isVacuous).toBe(true);
+    expect(vacuousComparison.isClean).toBe(false);
+    const duplicateJit = jitBatch.observations.find((observation) =>
+      observation.data.caseId === "binding.property.input-value"
+    );
+    if (duplicateJit == null) throw new Error("Expected duplicate-JIT guard source.");
+    expect(() => compareSemanticFrozenFamiliesToJit([{
+      caseId: "binding.property.input-value",
+      frozenFamily: mutationSource,
+    }], new JitCompilerBlueprintBatch([duplicateJit, duplicateJit]))).toThrow(/unique JIT case ids/u);
 
     for (const observation of run.observations) {
       const portable = observation.siteCursor;

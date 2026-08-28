@@ -65,6 +65,12 @@ slot value materialization. No standalone lane may satisfy a cross-lane equivale
 validate both authority-bound receipts, compare an exhaustive shared product, and only then feed satisfied claim IDs
 into the obligation audit.
 
+The independent structural comparison currently joins all 27 exact semantic rows to fresh JIT blueprints with zero
+mismatches across 40 definitions, 52 rows/target geometries, and 69 ordered instruction kinds. It compares only the
+declared common slice and deliberately returns `satisfiedClaimIds: []`; a falsifier regression changes one semantic
+instruction kind and proves the comparator does not report a false clean result. This is strong Chapter 1 conservation
+evidence, not the later authority-validating or exhaustive-wire parity coordinator.
+
 The public template-compilation summary contributes its own portable source/model basis. Rich compiler observations
 currently come from a synchronous `app.emission` bracket, are currentness-checked again before egress, and deliberately
 report no portable observation basis; the runtime incarnation is retired before the JSON result returns. Raw
