@@ -56,6 +56,10 @@ import {
 } from '../src/template/template-compiler-context-family-operation-schedule.js';
 import { executeTemplateCompilerContextFamilyTarget } from '../src/template/template-compiler-context-family-target-execution.js';
 import {
+  prepareTemplateCompilerContextFamilyFreeze,
+  TemplateCompilerContextFamilyFreezePreparationState,
+} from '../src/template/template-compiler-context-family-freeze.js';
+import {
   assembleTemplateCompilerContextFamilyRows,
   TemplateCompilerContextFamilyRowAssemblyState,
   TemplateCompilerFamilyOccurrenceArrivalPosture,
@@ -1090,7 +1094,35 @@ describe('template compiler projection logical extraction', () => {
     expect(rehomingOperation.endForestMutationRevision - rehomingOperation.startForestMutationRevision).toBe(1);
     expect(execution.targetGeometries).toHaveLength(preparation.rowMappings.length);
     expect(execution.closure.attachment).toBe(attachment);
+    expect(prepareTemplateCompilerContextFamilyFreeze(execution).state)
+      .toBe(TemplateCompilerContextFamilyFreezePreparationState.Ineligible);
     expect(run.binding.execution.seal()).toBe(run.binding.execution.sequence);
+    const freeze = prepareTemplateCompilerContextFamilyFreeze(execution);
+    expect(freeze.state).toBe(TemplateCompilerContextFamilyFreezePreparationState.Exact);
+    expect(freeze.preparation?.isCurrent()).toBe(true);
+    expect(prepareTemplateCompilerContextFamilyFreeze(execution).preparation).toBe(freeze.preparation);
+    expect(freeze.preparation?.contexts).toHaveLength(preparation.contextMappings.length);
+    expect(freeze.preparation?.contexts.every((context) =>
+      context.treeReservation.addressHandle != null
+      && context.nodes.length > 0
+      && new Set(context.nodes.map((node) => node.path.join('/'))).size === context.nodes.length
+    )).toBe(true);
+    expect(freeze.preparation?.contexts.flatMap((context) => context.nodes)
+      .filter((node) => node.occurrence.generation != null)
+      .every((node) => node.authoredSourceAddressHandle == null)).toBe(true);
+    for (const context of freeze.preparation?.contexts ?? []) {
+      const mapping = preparation.contextMappings.find((candidate) => candidate.targetContext === context.context);
+      if (mapping == null) throw new Error('Expected freeze context definition mapping.');
+      for (const row of context.rows) {
+        const expectedTargetLocal = `${mapping.definition.compiledTemplate.productHandle}:target:${row.row.publicationLocalKey}`;
+        expect(row.targetReservation.productHandle)
+          .toBe(run.transcript.allocationSnapshot.ledger.handles.product(expectedTargetLocal));
+        expect(row.sequenceReservation.productHandle)
+          .toBe(run.transcript.allocationSnapshot.ledger.handles.product(`${expectedTargetLocal}:instructions`));
+      }
+    }
+    const derivationOperations = freeze.preparation?.derivations.map((derivation) => derivation.operation) ?? [];
+    expect(execution.operations.every((operation) => derivationOperations.includes(operation))).toBe(true);
   });
 
   test('inherits adopted source availability for a nested TC transition', () => {
@@ -1447,6 +1479,15 @@ describe('template compiler projection logical extraction', () => {
         expect(result.target.targetPlan.readContexts()).toHaveLength(1);
       }
       expect(run.binding.execution.seal(), name).toBe(run.binding.execution.sequence);
+      const freeze = prepareTemplateCompilerContextFamilyFreeze(result.execution);
+      expect(freeze.state, name).toBe(TemplateCompilerContextFamilyFreezePreparationState.Exact);
+      expect(freeze.preparation?.isCurrent(), name).toBe(true);
+      if (name === 'projection-logical-host') {
+        const emptyFreeze = freeze.preparation?.contexts.find((context) => context.context.slotName === 'empty');
+        expect(emptyFreeze?.nodes).toHaveLength(2);
+        expect(emptyFreeze?.nodes[0]?.occurrence).toBe(emptyFreeze?.structure.compilerCarrier);
+        expect(emptyFreeze?.nodes[1]?.occurrence).toBe(emptyFreeze?.structure.compilerContent);
+      }
     }
 
     const interleaved = fixture.run(
@@ -1480,6 +1521,25 @@ describe('template compiler projection logical extraction', () => {
       mutation.previousParent === interleavedProjection.projection!.event.host
     ).map((mutation) => mutation.node)).toEqual(physicalNodes);
     expect(interleaved.binding.execution.seal()).toBe(interleaved.binding.execution.sequence);
+    const interleavedFreeze = prepareTemplateCompilerContextFamilyFreeze(interleavedResult.execution);
+    expect(interleavedFreeze.state).toBe(TemplateCompilerContextFamilyFreezePreparationState.Exact);
+    const freezePreparation = interleavedFreeze.preparation!;
+    const namespace = freezePreparation.preparedAllocation.ledger.namespace;
+    const driftRoot = 'interleaved-freeze-currentness-drift';
+    const drift = namespace.beginPhase(driftRoot);
+    drift.reserveProduct(
+      `${driftRoot}:site`,
+      'product',
+      TemplateCompilerLiveProductReservationRole.EffectiveAttributeSyntax,
+      null,
+      `${driftRoot}:product`,
+    );
+    drift.finish();
+    expect(freezePreparation.isCurrent()).toBe(false);
+    expect(freezePreparation.preparedAllocation.ledger.state)
+      .toBe(TemplateCompilerLiveAllocationLedgerState.Prepared);
+    expect(prepareTemplateCompilerContextFamilyFreeze(interleavedResult.execution).state)
+      .toBe(TemplateCompilerContextFamilyFreezePreparationState.Ineligible);
   });
 
   test('rejects realization replay through a fresh task session', () => {

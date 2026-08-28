@@ -28,6 +28,12 @@ export const enum TemplateCompilerLiveProductReservationRole {
   RootCompiledTemplate = 'root-compiled-template',
   GeneratedCompiledTemplate = 'generated-compiled-template',
   EffectiveAttributeSyntax = 'effective-attribute-syntax',
+  CompilerTransformedTree = 'compiler-transformed-tree',
+  CompilerTransformedNode = 'compiler-transformed-node',
+  CompilerTransformedAttribute = 'compiler-transformed-attribute',
+  CompilerStructureDerivation = 'compiler-structure-derivation',
+  RenderTarget = 'render-target',
+  InstructionSequence = 'instruction-sequence',
 }
 
 export const enum TemplateCompilerLiveAllocationLedgerState {
@@ -45,6 +51,7 @@ export class TemplateCompilerLiveProductReservation {
     readonly sourceAddressHandle: AddressHandle | null,
     readonly productHandle: ProductHandle,
     readonly identityHandle: IdentityHandle,
+    readonly addressHandle: AddressHandle | null = null,
   ) {}
 }
 
@@ -154,7 +161,7 @@ export class TemplateCompilerLiveAllocationNamespace {
       semanticSlot: `product:${reservation.siteKey}:${reservation.local}:${reservation.role}`,
       productHandle: reservation.productHandle,
       identityHandle: reservation.identityHandle,
-      addressHandle: null,
+      addressHandle: reservation.addressHandle,
     });
   }
 
@@ -559,6 +566,7 @@ export class TemplateCompilerLiveAllocationLedger {
     role: TemplateCompilerLiveProductReservationRole,
     sourceAddressHandle: AddressHandle | null,
     allocationLocal: string,
+    addressLocal: string | null = null,
   ): TemplateCompilerLiveProductReservation {
     this.requireMutable();
     const reservation = new TemplateCompilerLiveProductReservation(
@@ -568,6 +576,7 @@ export class TemplateCompilerLiveAllocationLedger {
       sourceAddressHandle,
       this.handles.product(allocationLocal),
       this.handles.identity(allocationLocal),
+      addressLocal == null ? null : this.handles.address(addressLocal),
     );
     if (!this.prepared) this.namespace.reserveProduct(liveAllocationLedgerAuthority, reservation);
     this.productReservations.push(reservation);
@@ -723,6 +732,10 @@ function allocationInventoryIsCoherent(
     ...expressionAllocations.map((entry) => entry.productHandle),
     ...productReservations.map((entry) => entry.productHandle),
   ];
+  const addressHandles = [
+    ...sourceAllocations.map((entry) => entry.addressHandle),
+    ...productReservations.flatMap((entry) => entry.addressHandle == null ? [] : [entry.addressHandle]),
+  ];
   return ledger.rootSiteKey.length > 0
     && [...instructionAllocations, ...expressionAllocations, ...sourceAllocations, ...productReservations].every((entry) =>
       entry.siteKey.startsWith(`${ledger.rootSiteKey}:`)
@@ -732,7 +745,7 @@ function allocationInventoryIsCoherent(
       ...instructionAllocations.map((entry) => entry.identityHandle),
       ...productReservations.map((entry) => entry.identityHandle),
     ]).size === instructionAllocations.length + productReservations.length
-    && new Set(sourceAllocations.map((entry) => entry.addressHandle)).size === sourceAllocations.length;
+    && new Set(addressHandles).size === addressHandles.length;
 }
 
 function allocationReservationProposals(
@@ -764,7 +777,7 @@ function allocationReservationProposals(
       semanticSlot: `product:${reservation.siteKey}:${reservation.local}:${reservation.role}`,
       productHandle: reservation.productHandle,
       identityHandle: reservation.identityHandle,
-      addressHandle: null,
+      addressHandle: reservation.addressHandle,
     })),
   ];
 }

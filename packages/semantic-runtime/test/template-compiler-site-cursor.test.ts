@@ -50,6 +50,10 @@ import {
 } from '../src/template/template-compiler-context-family-structural-schedule.js';
 import { executeTemplateCompilerContextFamilyTarget } from '../src/template/template-compiler-context-family-target-execution.js';
 import {
+  prepareTemplateCompilerContextFamilyFreeze,
+  TemplateCompilerContextFamilyFreezePreparationState,
+} from '../src/template/template-compiler-context-family-freeze.js';
+import {
   assembleTemplateCompilerContextFamilyRows,
 } from '../src/template/template-compiler-context-family-row-assembly.js';
 import {
@@ -1339,6 +1343,12 @@ describe('template compiler root site cursor', () => {
     expect(targetExecution.consumedNodes).toEqual(adopted);
     expect(targetExecution.targetGeometries).toHaveLength(1);
     expect(rootTranscript.binding.execution.seal()).toBe(rootTranscript.binding.execution.sequence);
+    const freeze = prepareTemplateCompilerContextFamilyFreeze(targetExecution);
+    expect(freeze.state).toBe(TemplateCompilerContextFamilyFreezePreparationState.Exact);
+    expect(freeze.preparation?.derivations.some((derivation) =>
+      derivation.operation.operationKind === TemplateCompilerOperationKind.ProcessContent
+    )).toBe(true);
+    expect(freeze.preparation?.isCurrent()).toBe(true);
   });
 
   test('places a TC-wrapped containerless host after its transition event', () => {
