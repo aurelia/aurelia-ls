@@ -21,7 +21,6 @@ import {
 } from './template-compiler-hydrate-element-staging.js';
 import type {
   TemplateCompilerCompletedElementSite,
-  TemplateCompilerCompletedOrdinarySite,
   TemplateCompilerCompletedTextSite,
   TemplateCompilerOrdinaryRootCursorCompletionReceipt,
 } from './template-compiler-root-completion.js';
@@ -60,6 +59,22 @@ export class TemplateCompilerOccurrenceRowAssemblyReason {
   ) {}
 }
 
+/** Shared reached-element fields needed by row lowering, independent from ordinary or family completion ownership. */
+export type TemplateCompilerElementLoweringSite = Pick<
+  TemplateCompilerCompletedElementSite,
+  'siteKind' | 'rowSlotKey' | 'event' | 'owner' | 'hydrateElement' | 'containerlessPlacement'
+>;
+
+/** Shared reached-text fields needed by row lowering, independent from ordinary or family completion ownership. */
+export type TemplateCompilerTextLoweringSite = Pick<
+  TemplateCompilerCompletedTextSite,
+  'siteKind' | 'holeSlotKeys' | 'event'
+>;
+
+export type TemplateCompilerLoweringSite =
+  | TemplateCompilerElementLoweringSite
+  | TemplateCompilerTextLoweringSite;
+
 export const enum TemplateCompilerOccurrenceSourcePosture {
   AuthoredExact = 'authored-exact',
   BrowserEffective = 'browser-effective',
@@ -96,7 +111,7 @@ export class TemplateCompilerOccurrenceHydrateElementRowDraft {
   readonly captures: readonly TemplateCompilerCapturedSyntaxRowDraft[];
 
   constructor(
-    readonly site: TemplateCompilerCompletedElementSite,
+    readonly site: TemplateCompilerElementLoweringSite,
     readonly envelope: TemplateCompilerHydrateElementEnvelopeDraft,
   ) {
     this.instructionSlotKey = `${site.rowSlotKey}:hydrate-element`;
@@ -182,7 +197,7 @@ export type TemplateCompilerTextExpansionOutputDraft =
 export class TemplateCompilerTextExpansionDraft {
   constructor(
     readonly stableSlotKey: string,
-    readonly site: TemplateCompilerCompletedTextSite,
+    readonly site: TemplateCompilerTextLoweringSite,
     readonly outputs: readonly TemplateCompilerTextExpansionOutputDraft[],
   ) {
     if (
@@ -210,7 +225,7 @@ export class TemplateCompilerOccurrenceTargetRowDraft {
     readonly authoredNode: HtmlElement | HtmlText | null,
     readonly sourcePosture: TemplateCompilerOccurrenceSourcePosture,
     readonly sourceAddressHandle: AddressHandle | null,
-    readonly site: TemplateCompilerCompletedOrdinarySite,
+    readonly site: TemplateCompilerLoweringSite,
     readonly hydrateElement: TemplateCompilerOccurrenceRowHead,
     readonly textOutput: TemplateCompilerTextHoleOutputDraft | null,
     readonly instructions: readonly TemplateInstruction[],
@@ -241,7 +256,7 @@ export class TemplateCompilerOccurrenceTargetRowDraft {
 /** Reached ordinary site that contributes final static structure but no target row. */
 export class TemplateCompilerOccurrenceStaticSite {
   constructor(
-    readonly site: TemplateCompilerCompletedOrdinarySite,
+    readonly site: TemplateCompilerLoweringSite,
     readonly sourcePosture: TemplateCompilerOccurrenceSourcePosture,
   ) {}
 }
@@ -278,7 +293,7 @@ export class TemplateCompilerOccurrenceMembership {
   readonly stableSlotKey: string;
   readonly sourcePosture: TemplateCompilerOccurrenceSourcePosture;
 
-  constructor(readonly site: TemplateCompilerCompletedOrdinarySite) {
+  constructor(readonly site: TemplateCompilerLoweringSite) {
     this.stableSlotKey = site.siteKind === 'element'
       ? `element:${site.event.element.occurrenceKey}:membership`
       : `text:${site.event.text.occurrenceKey}:membership`;
@@ -305,7 +320,7 @@ export class TemplateCompilerOccurrenceAttributeDispositionDraft {
   readonly finalOwnerStateKey: string;
 
   constructor(
-    readonly site: TemplateCompilerCompletedElementSite,
+    readonly site: TemplateCompilerElementLoweringSite,
     readonly contribution: TemplateCompilerLiveAttributeContribution,
   ) {
     const attribute = contribution.frame.attribute;
@@ -437,7 +452,7 @@ export class TemplateCompilerOccurrenceRowAssembly {
 }
 
 function capturedSyntaxDraft(
-  site: TemplateCompilerCompletedElementSite,
+  site: TemplateCompilerElementLoweringSite,
   capture: TemplateCompilerCapturedAttributeStaging,
 ): TemplateCompilerCapturedSyntaxRowDraft {
   const authored = capture.contribution.frame.source.authoredPrecedent?.syntax ?? null;
@@ -594,7 +609,7 @@ export function assembleTemplateCompilerOrdinaryRootRows(
 }
 
 function appendElementSite(
-  site: TemplateCompilerCompletedElementSite,
+  site: TemplateCompilerElementLoweringSite,
   rows: TemplateCompilerOccurrenceTargetRowDraft[],
   staticSites: TemplateCompilerOccurrenceStaticSite[],
 ): readonly TemplateCompilerOccurrenceRowAssemblyReason[] {
@@ -649,7 +664,7 @@ function appendElementSite(
 }
 
 function appendTextSite(
-  site: TemplateCompilerCompletedTextSite,
+  site: TemplateCompilerTextLoweringSite,
   rows: TemplateCompilerOccurrenceTargetRowDraft[],
   staticSites: TemplateCompilerOccurrenceStaticSite[],
   textExpansions: TemplateCompilerTextExpansionDraft[],
@@ -723,7 +738,7 @@ function appendTextSite(
 }
 
 function sourcePostureForElement(
-  site: TemplateCompilerCompletedElementSite,
+  site: TemplateCompilerElementLoweringSite,
 ): TemplateCompilerOccurrenceSourcePosture {
   if (site.event.authoredElement != null) return TemplateCompilerOccurrenceSourcePosture.AuthoredExact;
   if (site.event.element.generation != null) return TemplateCompilerOccurrenceSourcePosture.Generated;
@@ -732,7 +747,7 @@ function sourcePostureForElement(
 }
 
 function sourcePostureForText(
-  site: TemplateCompilerCompletedTextSite,
+  site: TemplateCompilerTextLoweringSite,
 ): TemplateCompilerOccurrenceSourcePosture {
   if (site.event.authoredText != null) return TemplateCompilerOccurrenceSourcePosture.AuthoredExact;
   if (site.event.text.generation != null) return TemplateCompilerOccurrenceSourcePosture.Generated;

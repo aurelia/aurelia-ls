@@ -13,11 +13,12 @@ import {
 } from './template-compiler-occurrence.js';
 import {
   TemplateCompilerTextExpansionOutputKind,
+  type TemplateCompilerElementLoweringSite,
   type TemplateCompilerOccurrenceAttributeDispositionDraft,
   type TemplateCompilerOccurrenceTargetRowDraft,
+  type TemplateCompilerTextLoweringSite,
   type TemplateCompilerTextExpansionDraft,
 } from './template-compiler-occurrence-row-assembly.js';
-import type { TemplateCompilerCompletedOrdinarySite } from './template-compiler-root-completion.js';
 import type {
   TemplateCompilerOccurrenceTargetPlanAssembly,
   TemplateCompilerOccurrenceTargetAttributeDispositionMapping,
@@ -131,15 +132,15 @@ export class TemplateCompilerOccurrenceTargetSchedule {
     readonly assembly: TemplateCompilerOccurrenceTargetPlanAssembly,
     readonly entries: readonly TemplateCompilerOccurrenceTargetScheduleEntry[],
     readonly attributeDispositionsBySite: ReadonlyMap<
-      TemplateCompilerCompletedOrdinarySite,
+      TemplateCompilerElementLoweringSite,
       readonly TemplateCompilerOccurrenceAttributeDispositionDraft[]
     >,
     readonly elementRowBySite: ReadonlyMap<
-      TemplateCompilerCompletedOrdinarySite,
+      TemplateCompilerElementLoweringSite,
       TemplateCompilerOccurrenceTargetRowMapping
     >,
     readonly textExpansionBySite: ReadonlyMap<
-      TemplateCompilerCompletedOrdinarySite,
+      TemplateCompilerTextLoweringSite,
       TemplateCompilerTextExpansionDraft
     >,
     readonly textRowsByExpansion: ReadonlyMap<
@@ -177,11 +178,11 @@ export function buildTemplateCompilerOccurrenceTargetSchedule(
   );
   const attributeDispositionsBySite = groupBy(rows.attributeDispositions, (disposition) => disposition.site);
   const elementRowBySite = new Map<
-    TemplateCompilerCompletedOrdinarySite,
+    TemplateCompilerElementLoweringSite,
     TemplateCompilerOccurrenceTargetRowMapping
   >();
   const textExpansionBySite = new Map<
-    TemplateCompilerCompletedOrdinarySite,
+    TemplateCompilerTextLoweringSite,
     TemplateCompilerTextExpansionDraft
   >();
   const textRowsByExpansion = new Map<
