@@ -156,6 +156,7 @@ import {
   TemplateCompilerSiteSpendDisposition,
 } from '../src/template/template-compiler-site-spend-ledger.js';
 import { TemplateProductDetails } from '../src/template/product-details.js';
+import { TemplateCompilerStructuralExecutionSession } from '../src/template/template-compiler-structural-execution.js';
 import type {
   TemplateCompilationFamilyFrontDoorEmission,
   TemplateCompilationFrontDoorEmission,
@@ -1300,6 +1301,23 @@ describe('template compiler root site cursor', () => {
     expect(eventsOf(rootTranscript, TemplateCompilerSiteCursorTextEvent).some((event) =>
       removedSiteSet.has(event.text)
     )).toBe(false);
+
+    const structural = TemplateCompilerStructuralExecutionSession.prepareBorrowing(
+      rootTranscript.binding.forest,
+      target.targetPlan,
+      rootTranscript.binding.execution.mutationAuthority,
+    );
+    const fundedHydrateElement = preparation.hydrateElements[0]!;
+    const adopted = rootProcessEvent.result.removals.map((removal) =>
+      structural.adoptProcessContentRemovedNode(
+        rootProcessEvent.result,
+        removal,
+        target.targetPlan.root,
+        [fundedHydrateElement.instruction.productHandle],
+      )
+    );
+    expect(adopted.map((disposition) => disposition.node)).toEqual(removed);
+    expect(structural.readConsumedNodeDispositions(target.targetPlan.root)).toEqual(adopted);
   });
 
   test('places a TC-wrapped containerless host after its transition event', () => {

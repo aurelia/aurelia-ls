@@ -47,6 +47,10 @@ import type {
 } from './template-compiler-occurrence.js';
 import { TemplateCompilerOccurrenceMembershipArrivalPosture } from './template-compiler-occurrence-membership.js';
 import type {
+  TemplateCompilerProcessContentRemoval,
+  TemplateCompilerProcessContentResult,
+} from './template-compiler-process-content.js';
+import type {
   TemplateStructuralAttributeReference,
   TemplateStructuralNodeReference,
 } from './template-structure.js';
@@ -975,6 +979,63 @@ export class TemplateCompilerStructuralExecutionSession {
       edgeKind: TemplateCompilerOccurrenceEdgeKind.Detached,
     });
     return expansion;
+  }
+
+  /** Adopt one already-committed processContent detachment as a context-local 1→0 disposition. */
+  adoptProcessContentRemovedNode(
+    result: TemplateCompilerProcessContentResult,
+    removal: TemplateCompilerProcessContentRemoval,
+    context: TemplateCompilerTargetContextPlan,
+    causeHandles: readonly ClaimEndpointHandle[],
+  ): TemplateCompilerConsumedNodeDisposition {
+    this.requireContextStructure(context);
+    const node = removal.occurrence;
+    const mutation = removal.mutation;
+    this.requireForestNode(node);
+    const seeded = this.forest.seededNodePlacement(node);
+    const requiredSourceCause = this.requiredSourceConsumptionCause(node, context);
+    if (
+      !result.isModuleConstructed()
+      || result.plan.execution.forest !== this.forest
+      || !result.removals.includes(removal)
+      || mutation.node !== node
+      || mutation.previousParent !== result.plan.host
+      || mutation.previousEdgeKind !== TemplateCompilerOccurrenceEdgeKind.Child
+      || removal.liveOrdinal !== mutation.previousOrdinal
+      || seeded?.parent !== mutation.previousParent
+      || seeded.edgeKind !== mutation.previousEdgeKind
+      || node.parent != null
+      || node.parentEdgeKind !== TemplateCompilerOccurrenceEdgeKind.Detached
+      || node.inputReference == null
+      || node.generation != null
+      || this.consumedNodes.has(node)
+      || this.sourceTargetRowsByOccurrence.has(node)
+      || causeHandles.length === 0
+      || (requiredSourceCause != null && !causeHandles.includes(requiredSourceCause))
+    ) {
+      throw new Error(`Compiler processContent removal '${node.occurrenceKey}' lost committed source-edge authority.`);
+    }
+    const authoredProductHandle = this.forest.exactAuthoredNodeOrigin(node)?.authored.productHandle ?? null;
+    const disposition = new TemplateCompilerConsumedNodeDisposition(
+      context,
+      node,
+      node.inputReference,
+      authoredProductHandle,
+      authoredProductHandle == null ? null : context.compilerReachableNodeOrdinal(authoredProductHandle),
+      context.occurrenceMembershipOrdinal(node),
+      mutation.previousParent,
+      TemplateCompilerOccurrenceEdgeKind.Child,
+      mutation.previousOrdinal,
+      this.nextInputEventOrdinal++,
+      [...causeHandles],
+    );
+    this.consumedNodes.set(node, disposition);
+    appendMap(this.consumedNodesByContextKey, context.localKey, disposition);
+    this.expectedFinalInputNodeEdges.set(node, {
+      parent: null,
+      edgeKind: TemplateCompilerOccurrenceEdgeKind.Detached,
+    });
+    return disposition;
   }
 
   /** Consume one browser-effective input node as a context-local 1→0 output with explicit semantic causes. */
