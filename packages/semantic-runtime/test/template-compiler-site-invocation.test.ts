@@ -42,6 +42,7 @@ import {
   bindTemplateCompilerRootSiteInvocation,
   TemplateCompilerSiteInvocationBindingReasonKind,
   TemplateCompilerSiteInvocationBindingState,
+  TemplateCompilerSiteInvocationIngressKind,
   TemplateCompilerSiteInvocationMembershipLane,
 } from '../src/template/template-compiler-site-invocation.js';
 import { BrowserEffectiveTemplateFixture } from './browser-effective-template-fixture.js';
@@ -73,6 +74,8 @@ describe('template compiler site invocation binding', () => {
     expect(binding.lane).toBe(fixture.lane);
     expect(binding.forest).toBe(fixture.forest);
     expect(binding.browserEmission).toBe(fixture.browserEmission);
+    expect(binding.ingress.ingressKind).toBe(TemplateCompilerSiteInvocationIngressKind.RootBrowser);
+    expect(binding.ingress.isModuleConstructed()).toBe(true);
     expect(binding.browserEmission.isModuleConstructed()).toBe(true);
     expect(binding.browserEmission.publication).toBe(fixture.browserRun);
     expect(binding.graphExact).toBe(fixture.graphExact);
@@ -295,10 +298,36 @@ describe('template compiler site invocation binding', () => {
       expect(result.reasons.map((reason) => reason.reasonKind)).not.toContain(
         TemplateCompilerSiteInvocationBindingReasonKind.BootstrapMismatch,
       );
+
+      const childLane = closure.childLaneTransfers[0]?.childLane;
+      if (childLane == null) throw new Error('Expected one extracted child invocation lane.');
+      const childHook = executeTemplateCompilerHookBootstrap({
+        execution,
+        lane: childLane,
+        compilerWorld: fixture.compilation.compilerWorld,
+        executionOpenSeamHandle: local.run.handles.openSeam('child-hook-open'),
+      });
+      const childLocal = executeTemplateCompilerLocalExtraction({
+        execution,
+        lane: childLane,
+        hookBootstrap: childHook,
+        ownerName: 'local-card',
+        ownerCauseHandles: [closure.childLaneTransfers[0]!.extraction.definitionReservation.productHandle],
+        reserveDefinition: (invocationKey) => definitions.reserveOccurrenceDefinition(invocationKey),
+      });
+      const childClosure = execution.closeInvocationBootstrap(childHook, childLocal);
+      const childResult = fixture.bind({ execution, bootstrapClosure: childClosure, browserEmission: browser });
+      expect(childResult.reasons.map((reason) => reason.reasonKind)).toContain(
+        TemplateCompilerSiteInvocationBindingReasonKind.RootLaneMismatch,
+      );
+      expect(childResult.reasons.map((reason) => reason.reasonKind)).not.toContain(
+        TemplateCompilerSiteInvocationBindingReasonKind.ExecutionClosureMismatch,
+      );
     } finally {
       local.dispose();
     }
   });
+
 });
 
 interface RootInvocationBindingOverrides {

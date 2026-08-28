@@ -149,6 +149,7 @@ import {
 } from '../src/template/template-compiler-prewalk-remainder.js';
 import {
   bindTemplateCompilerRootSiteInvocation,
+  TemplateCompilerSiteInvocationBindingReasonKind,
   TemplateCompilerSiteInvocationBindingState,
   type TemplateCompilerSiteInvocationBinding,
 } from '../src/template/template-compiler-site-invocation.js';
@@ -1542,6 +1543,18 @@ describe('template compiler root site cursor', () => {
     const attachment = rootTranscript.binding.execution.commitPreparedContextFamilyTargetAttachment(
       attachmentPreparation,
     );
+    const rebound = bindTemplateCompilerRootSiteInvocation({
+      execution: rootTranscript.binding.execution,
+      bootstrapClosure: rootTranscript.binding.bootstrapClosure,
+      browserEmission: rootTranscript.binding.browserEmission,
+      graphExact: rootTranscript.binding.graphExact,
+      currentFrontDoor: rootTranscript.binding.currentFrontDoor,
+      currentFamily: rootTranscript.binding.currentFamily,
+    });
+    expect(rebound.reasons.map((reason) => reason.reasonKind)).toEqual(expect.arrayContaining([
+      TemplateCompilerSiteInvocationBindingReasonKind.ExecutionClosureMismatch,
+      TemplateCompilerSiteInvocationBindingReasonKind.RootLaneMismatch,
+    ]));
     expect(attachment.isCurrent()).toBe(true);
     expect(attachment.committedAllocation.prepared).toBe(preparation.preparedAllocation);
     expect(attachment.structuralExecution.readConsumedNodeDispositions(target.targetPlan.root)).toEqual(adopted);

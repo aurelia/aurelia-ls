@@ -31,6 +31,7 @@ import {
 } from './template-compiler-normalized-site-index.js';
 
 const siteInvocationBindingAuthority = {};
+const rootSiteInvocationIngressAuthority = {};
 
 export const enum TemplateCompilerSiteInvocationMembershipLane {
   App = 'app',
@@ -50,6 +51,47 @@ export const enum TemplateCompilerSiteInvocationBindingReasonKind {
   BrowserPublicationUnavailable = 'browser-publication-unavailable',
   BrowserSourceMismatch = 'browser-source-mismatch',
   BrowserMarkupMismatch = 'browser-markup-mismatch',
+}
+
+export const enum TemplateCompilerSiteInvocationIngressKind {
+  RootBrowser = 'root-browser',
+}
+
+/** Exact browser-effective ingress for the execution forest's root invocation. */
+export class TemplateCompilerRootSiteInvocationIngress {
+  readonly ingressKind = TemplateCompilerSiteInvocationIngressKind.RootBrowser;
+  readonly #authority: object;
+
+  constructor(
+    authority: object,
+    readonly browserEmission: BrowserEffectiveTemplateEmission,
+  ) {
+    if (authority !== rootSiteInvocationIngressAuthority) {
+      throw new Error('Root site invocation ingress is a module-constructed capability.');
+    }
+    this.#authority = authority;
+  }
+
+  isModuleConstructed(): boolean {
+    return this.#authority === rootSiteInvocationIngressAuthority;
+  }
+}
+
+export type TemplateCompilerSiteInvocationIngress = TemplateCompilerRootSiteInvocationIngress;
+
+function prepareTemplateCompilerRootSiteInvocationIngress(
+  browserEmission: BrowserEffectiveTemplateEmission,
+): TemplateCompilerRootSiteInvocationIngress {
+  return new TemplateCompilerRootSiteInvocationIngress(rootSiteInvocationIngressAuthority, browserEmission);
+}
+
+interface TemplateCompilerSiteInvocationBindingRequest {
+  readonly execution: TemplateCompilerExecutionSession;
+  readonly bootstrapClosure: TemplateCompilerInvocationBootstrapClosure;
+  readonly ingress: TemplateCompilerSiteInvocationIngress;
+  readonly graphExact: TemplateCompilerNormalizedSiteIndexResult;
+  readonly currentFrontDoor: TemplateCompilationFrontDoorEmission;
+  readonly currentFamily: TemplateCompilationFamilyFrontDoorEmission;
 }
 
 /** Extracted lanes remain unsupported until occurrence-backed HTML ingress or an exact authored-site crosswalk exists. */
@@ -74,7 +116,7 @@ export interface TemplateCompilerRootSiteInvocationBindingRequest {
 }
 
 /**
- * Nominal no-local root capability joining one event-time compiler invocation to current authored precedent.
+ * Nominal no-local invocation capability joining one event-time compiler invocation to current authored precedent.
  *
  * This is not a cursor, target plan, family-completion receipt, or extracted-lane capability. Browser correspondence
  * frontiers remain owned by the later cursor. All derived compiler facts come from the exact GraphExact index basis.
@@ -86,7 +128,7 @@ export class TemplateCompilerSiteInvocationBinding {
     authority: object,
     readonly execution: TemplateCompilerExecutionSession,
     readonly bootstrapClosure: TemplateCompilerInvocationBootstrapClosure,
-    readonly browserEmission: BrowserEffectiveTemplateEmission,
+    readonly ingress: TemplateCompilerSiteInvocationIngress,
     readonly graphExact: TemplateCompilerNormalizedSiteIndexResult,
     readonly currentFrontDoor: TemplateCompilationFrontDoorEmission,
     readonly currentFamily: TemplateCompilationFamilyFrontDoorEmission,
@@ -105,6 +147,10 @@ export class TemplateCompilerSiteInvocationBinding {
 
   get forest(): TemplateCompilerOccurrenceForest {
     return this.execution.forest;
+  }
+
+  get browserEmission(): BrowserEffectiveTemplateEmission {
+    return this.ingress.browserEmission;
   }
 
   get index(): TemplateCompilerNormalizedSiteIndex {
@@ -158,6 +204,20 @@ export class TemplateCompilerSiteInvocationBindingResult {
 export function bindTemplateCompilerRootSiteInvocation(
   request: TemplateCompilerRootSiteInvocationBindingRequest,
 ): TemplateCompilerSiteInvocationBindingResult {
+  return bindTemplateCompilerSiteInvocation({
+    execution: request.execution,
+    bootstrapClosure: request.bootstrapClosure,
+    ingress: prepareTemplateCompilerRootSiteInvocationIngress(request.browserEmission),
+    graphExact: request.graphExact,
+    currentFrontDoor: request.currentFrontDoor,
+    currentFamily: request.currentFamily,
+  });
+}
+
+/** Bind one exact current invocation through its explicit compiler-input ingress authority. */
+function bindTemplateCompilerSiteInvocation(
+  request: TemplateCompilerSiteInvocationBindingRequest,
+): TemplateCompilerSiteInvocationBindingResult {
   const reasons: TemplateCompilerSiteInvocationBindingReason[] = [];
   const index = request.graphExact.state === TemplateCompilerNormalizedSiteIndexState.GraphExact
     ? request.graphExact.index
@@ -165,15 +225,16 @@ export function bindTemplateCompilerRootSiteInvocation(
   if (index == null || index.compilation !== index.basis.compilation) {
     reasons.push(reason(
       TemplateCompilerSiteInvocationBindingReasonKind.GraphPrecedentMismatch,
-      'Root invocation requires one GraphExact authored-precedent index and its exact retained compilation.',
+      'Invocation binding requires one GraphExact authored-precedent index and its exact retained compilation.',
     ));
     return new TemplateCompilerSiteInvocationBindingResult(null, reasons);
   }
 
   const membershipLane = validateCurrentMembership(request, index, reasons);
   validateExecutionClosure(request, reasons);
+  validateRootExecutionIngress(request, reasons);
   validateBootstrap(request, index, reasons);
-  validateBrowserInput(request, index, reasons);
+  validateRootBrowserInput(request, index, reasons);
   if (reasons.length > 0 || membershipLane == null) {
     return new TemplateCompilerSiteInvocationBindingResult(null, reasons);
   }
@@ -182,7 +243,7 @@ export function bindTemplateCompilerRootSiteInvocation(
       siteInvocationBindingAuthority,
       request.execution,
       request.bootstrapClosure,
-      request.browserEmission,
+      request.ingress,
       request.graphExact,
       request.currentFrontDoor,
       request.currentFamily,
@@ -194,7 +255,7 @@ export function bindTemplateCompilerRootSiteInvocation(
 }
 
 function validateCurrentMembership(
-  request: TemplateCompilerRootSiteInvocationBindingRequest,
+  request: TemplateCompilerSiteInvocationBindingRequest,
   index: TemplateCompilerNormalizedSiteIndex,
   reasons: TemplateCompilerSiteInvocationBindingReason[],
 ): TemplateCompilerSiteInvocationMembershipLane | null {
@@ -232,36 +293,47 @@ function validateCurrentMembership(
 }
 
 function validateExecutionClosure(
-  request: TemplateCompilerRootSiteInvocationBindingRequest,
+  request: TemplateCompilerSiteInvocationBindingRequest,
   reasons: TemplateCompilerSiteInvocationBindingReason[],
 ): void {
   const { execution, bootstrapClosure: closure } = request;
   const lane = closure.lane;
   const lanes = execution.sequence.readLanes();
-  const laneIsOwned = lanes[0] === lane;
+  const laneIsOwned = lanes.includes(lane);
   const closureIsStored = laneIsOwned && execution.bootstrapClosure(lane) === closure;
   const phaseIsClosed = laneIsOwned
     && execution.invocationPhase(lane) === TemplateCompilerInvocationPhase.BootstrapClosed;
-  const noContexts = execution.sequence.readContexts().length === 0
-    && execution.structuralExecution == null;
   const laneOperations = laneIsOwned ? execution.sequence.readLaneOperations(lane) : [];
   if (
     !closureIsStored
     || !phaseIsClosed
-    || !noContexts
     || lane.targetPlan != null
     || laneOperations.length !== closure.laneOperationCount
     || execution.forest.mutationRevision !== closure.forestMutationRevision
   ) {
     reasons.push(reason(
       TemplateCompilerSiteInvocationBindingReasonKind.ExecutionClosureMismatch,
-      'Root invocation closure is not the exact stored bootstrap frontier before target/context admission.',
+      'Invocation closure is not the exact stored same-lane bootstrap frontier before target admission.',
     ));
   }
+}
+
+function validateRootExecutionIngress(
+  request: TemplateCompilerSiteInvocationBindingRequest,
+  reasons: TemplateCompilerSiteInvocationBindingReason[],
+): void {
+  const { execution, bootstrapClosure: closure } = request;
+  const lane = closure.lane;
+  const lanes = execution.sequence.readLanes();
+  const noContexts = execution.sequence.readContexts().length === 0
+    && execution.structuralExecution == null;
   const roots = execution.forest.readRoots();
   if (
-    !laneIsOwned
+    !request.ingress.isModuleConstructed()
+    || request.ingress.ingressKind !== TemplateCompilerSiteInvocationIngressKind.RootBrowser
+    || lanes[0] !== lane
     || lane.ordinal !== 0
+    || !noContexts
     || roots.length !== 1
     || roots[0] !== execution.forest.compilerCarrier
     || lane.compilerCarrier !== execution.forest.compilerCarrier
@@ -275,7 +347,7 @@ function validateExecutionClosure(
 }
 
 function validateBootstrap(
-  request: TemplateCompilerRootSiteInvocationBindingRequest,
+  request: TemplateCompilerSiteInvocationBindingRequest,
   index: TemplateCompilerNormalizedSiteIndex,
   reasons: TemplateCompilerSiteInvocationBindingReason[],
 ): void {
@@ -303,7 +375,7 @@ function validateBootstrap(
   ) {
     reasons.push(reason(
       TemplateCompilerSiteInvocationBindingReasonKind.LocalTemplatesUnsupported,
-      'Only no-local root invocations are supported; extracted lanes require occurrence-backed compilation ingress.',
+      'Only no-local invocations are supported; extracted lanes require occurrence-backed compilation ingress.',
     ));
   }
   if (hook.compilerWorld !== index.compilerWorld) {
@@ -330,12 +402,12 @@ function validateBootstrap(
   }
 }
 
-function validateBrowserInput(
-  request: TemplateCompilerRootSiteInvocationBindingRequest,
+function validateRootBrowserInput(
+  request: TemplateCompilerSiteInvocationBindingRequest,
   index: TemplateCompilerNormalizedSiteIndex,
   reasons: TemplateCompilerSiteInvocationBindingReason[],
 ): void {
-  const browser = request.browserEmission;
+  const browser = request.ingress.browserEmission;
   const forestTree = request.execution.forest.inputTree;
   const browserTree = browser.tree;
   if (!browser.isModuleConstructed() || !browser.publication.isCurrent()) {
