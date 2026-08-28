@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { COMPILER_CASE_SCHEMA_VERSION } from "../src/testing/compiler-case.js";
 import {
   BROWSER_TREE_ORACLE_CASES,
   browserTreeOracleCaseDigest,
@@ -155,7 +156,7 @@ describe("browser-tree oracle contract", () => {
     expect(BROWSER_TREE_ORACLE_CASES).toHaveLength(17);
     for (const candidate of BROWSER_TREE_ORACLE_CASES) {
       expect(candidate.caseKind).toBe("browser-tree");
-      expect(candidate.schemaVersion).toBe("aurelia-ls/compiler-case/v1");
+      expect(candidate.schemaVersion).toBe(COMPILER_CASE_SCHEMA_VERSION);
       expect(candidate.provenance.length).toBeGreaterThanOrEqual(3);
       expect(candidate.obligations.map((row) => row.id)).toContain("compiler.browser-tree.fragment-context");
       expect(candidate.obligations.map((row) => row.id)).not.toContain("compiler.browser-tree.root-wrapper");

@@ -38,6 +38,7 @@ export const enum SemanticCompilerGalleryUnsupportedReason {
   BindableDefinition = "bindable-definition",
   GalleryResourceInterference = "gallery-resource-interference",
   NonUniqueSourceDependencyIdentity = "non-unique-source-dependency-identity",
+  LocalTemplateCohort = "local-template-cohort",
 }
 
 export const enum SemanticCompilerGalleryWorldDifference {
@@ -224,6 +225,13 @@ function unsupportedReasons(candidate: CompilerCase): readonly SemanticCompilerG
   }
   if (definition.bindables != null) {
     reasons.push(SemanticCompilerGalleryUnsupportedReason.BindableDefinition);
+  }
+  if (
+    candidate.oracles.lanes[0]?.expectedProduct === "compiled-definition"
+    && definition.template?.kind === "markup"
+    && markupHasLocalTemplate(definition.template.value)
+  ) {
+    reasons.push(SemanticCompilerGalleryUnsupportedReason.LocalTemplateCohort);
   }
   return reasons;
 }
@@ -423,6 +431,18 @@ function resourceNamesUsedByMarkup(markup: string): ReadonlySet<string> {
     names.add((match[1] ?? match[2] ?? match[3] ?? "").toLowerCase());
   }
   return names;
+}
+
+function markupHasLocalTemplate(markup: string): boolean {
+  const visit = (nodes: readonly BrowserTemplateNodeDraft[]): boolean => nodes.some((node) => {
+    if (node.nodeKind !== BrowserTemplateDraftNodeKind.Element) return false;
+    if (
+      node.tagName === "template"
+      && node.attributes.some((attribute) => attribute.name === "as-custom-element")
+    ) return true;
+    return visit(node.children) || visit(node.templateContent?.children ?? []);
+  });
+  return visit(parseBrowserTemplateFragmentDraft(markup).fragment.children);
 }
 
 function digest(value: string): string {

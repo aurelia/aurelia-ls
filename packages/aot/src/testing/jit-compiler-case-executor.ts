@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import type { Key } from "@aurelia/kernel";
+import { CustomElement } from "@aurelia/runtime-html";
 import {
   AttrSyntax,
   itHydrateAttribute,
@@ -70,6 +71,11 @@ interface JitCompilerCaseRun {
   readonly execution: void | BatchCaseExecution;
 }
 
+interface JitCompilerErrorExecution {
+  readonly error: unknown;
+  readonly request: JitCompilerRequest | JitCompilerSpreadRequest;
+}
+
 /** JIT-side adapter for the runner-neutral compiler case dialect. */
 export class JitCompilerCaseExecutor {
   readonly #factories: ReadonlyMap<string, CompilerSetupFactory>;
@@ -100,38 +106,78 @@ export class JitCompilerCaseExecutor {
     return (await this.#run(candidate, oracle)).outcome;
   }
 
-  async #run(candidate: CompilerCase, oracle: JitCompilerOracle): Promise<JitCompilerCaseRun> {
+  /** Inspect a verified framework product before its setup world is disposed. */
+  public async inspectOutcome<T>(
+    candidate: CompilerCase,
+    oracle: JitCompilerOracle,
+    inspect: (
+      outcome: JitCompilerCaseOutcome,
+      request: JitCompilerRequest | JitCompilerSpreadRequest,
+    ) => T | Promise<T>,
+  ): Promise<T> {
+    let completed = false;
+    let inspected: T | undefined;
+    await this.#run(candidate, oracle, async (outcome, request) => {
+      inspected = await inspect(outcome, request);
+      completed = true;
+    });
+    if (!completed) throw new Error(`Compiler case ${candidate.id} did not complete scoped outcome inspection.`);
+    return inspected as T;
+  }
+
+  async #run(
+    candidate: CompilerCase,
+    oracle: JitCompilerOracle,
+    inspect?: (
+      outcome: JitCompilerCaseOutcome,
+      request: JitCompilerRequest | JitCompilerSpreadRequest,
+    ) => void | Promise<void>,
+  ): Promise<JitCompilerCaseRun> {
     const setups = await this.#materializeSetups(candidate, oracle);
     let result: void | BatchCaseExecution;
     let outcome: JitCompilerCaseOutcome | undefined;
+    let inspectionRequest: JitCompilerRequest | JitCompilerSpreadRequest | null = null;
     let executionFailed = false;
     let executionError: unknown;
     try {
       const expectedProduct = frameworkJitExpectedProduct(candidate);
       if (expectedProduct === "compiler-error") {
-        const error = this.#executeForError(candidate, oracle, setups);
-        outcome = { kind: "compiler-error", error };
+        const failure = this.#executeForError(candidate, oracle, setups);
+        inspectionRequest = failure.request;
+        outcome = { kind: "compiler-error", error: failure.error };
         verifyJitInvariants(candidate, outcome);
         result = undefined;
       } else if (candidate.world.entry.kind === "compile") {
         if (expectedProduct === "unchanged-definition") {
-          const execution = oracle.bypass(this.#compileRequest(candidate, setups));
+          const request = this.#compileRequest(candidate, setups);
+          inspectionRequest = request;
+          const execution = oracle.bypass(request);
           outcome = { kind: "unchanged-definition", value: execution.definition };
           verifyJitInvariants(candidate, outcome);
           result = execution;
         } else {
           assert.equal(expectedProduct, "compiled-definition", `${candidate.id}: JIT oracle product`);
-          const execution = oracle.compile(this.#compileRequest(candidate, setups));
+          const request = this.#compileRequest(candidate, setups);
+          inspectionRequest = request;
+          const execution = oracle.compile(request);
           outcome = { kind: "compiled-definition", value: execution.compiled };
           verifyJitInvariants(candidate, outcome);
           result = execution;
         }
       } else {
         assert.equal(expectedProduct, "spread-instructions", `${candidate.id}: JIT oracle product`);
-        const execution = oracle.compileSpread(this.#spreadRequest(candidate, oracle, setups));
+        const request = this.#spreadRequest(candidate, oracle, setups);
+        inspectionRequest = request;
+        const execution = oracle.compileSpread(request);
         outcome = { kind: "spread-instructions", value: execution.instructions };
         verifyJitInvariants(candidate, outcome);
         result = execution;
+      }
+      if (inspect != null) {
+        if (inspectionRequest == null) {
+          throw new Error(`Compiler case ${candidate.id} has no inspectable materialized request.`);
+        }
+        await inspect(outcome, inspectionRequest);
       }
     } catch (error) {
       executionFailed = true;
@@ -207,7 +253,12 @@ export class JitCompilerCaseExecutor {
     assert.equal(entry.kind, "compile", `${candidate.id}: compile entry`);
     const registrations = materializeRegistrations(candidate, setups);
     return {
-      definition: materializeDefinition(entry.definition, setups, registrations.dependencies),
+      definition: materializeDefinition(
+        entry.definition,
+        setups,
+        registrations.dependencies,
+        entry.entryType != null,
+      ),
       rootRegistrationsBefore: registrations.rootBefore,
       rootRegistrationsAfter: registrations.rootAfter,
       localRegistrations: registrations.local,
@@ -248,21 +299,23 @@ export class JitCompilerCaseExecutor {
     };
   }
 
-  #executeForError(candidate: CompilerCase, oracle: JitCompilerOracle, setups: MaterializedSetups): unknown {
-    const invoke = candidate.world.entry.kind === "compile"
-      ? (() => {
-          const request = this.#compileRequest(candidate, setups);
-          return () => oracle.compile(request);
-        })()
-      : (() => {
-          const request = this.#spreadRequest(candidate, oracle, setups);
-          return () => oracle.compileSpread(request);
-        })();
+  #executeForError(
+    candidate: CompilerCase,
+    oracle: JitCompilerOracle,
+    setups: MaterializedSetups,
+  ): JitCompilerErrorExecution {
+    const request = candidate.world.entry.kind === "compile"
+      ? this.#compileRequest(candidate, setups)
+      : this.#spreadRequest(candidate, oracle, setups);
     try {
-      invoke();
+      if (candidate.world.entry.kind === "compile") {
+        oracle.compile(request);
+      } else {
+        oracle.compileSpread(request as JitCompilerSpreadRequest);
+      }
     } catch (error) {
       if (error instanceof JitCompilerInvocationError) {
-        return error.frameworkError;
+        return { error: error.frameworkError, request };
       }
       throw error;
     }
@@ -336,8 +389,9 @@ function materializeDefinition(
   definition: CompilerElementDefinition,
   setups: MaterializedSetups,
   dependencies: readonly Key[],
+  materializeEntryType = false,
 ): IElementComponentDefinition {
-  return {
+  const materialized: IElementComponentDefinition = {
     name: definition.name,
     type: "custom-element",
     template: materializeTemplate(definition.template, setups),
@@ -367,8 +421,12 @@ function materializeDefinition(
           set: bindable.set == null
             ? undefined
             : resolveWorldRef(bindable.set, setups) as (value: unknown) => unknown,
-        })),
+      })),
   };
+  if (materializeEntryType) {
+    return CustomElement.getDefinition(CustomElement.define(materialized, class {}));
+  }
+  return materialized;
 }
 
 function materializePrecompiledInstructionRows(
@@ -526,8 +584,10 @@ function verifyJitInvariants(candidate: CompilerCase, outcome: JitCompilerCaseOu
 function selectedInvariantValue(invariant: CompilerFocusedInvariant, outcome: JitCompilerCaseOutcome): unknown {
   const selector = invariant.selector;
   switch (selector.kind) {
-    case "definition-field":
-      return definitionOutcome(outcome, selector.kind)[selector.field];
+    case "definition-field": {
+      const definition = definitionOutcome(outcome, selector.kind);
+      return selector.field === "type" ? definition.type ?? "custom-element" : definition[selector.field];
+    }
     case "definition-bindable-count": {
       const bindables = definitionOutcome(outcome, selector.kind).bindables;
       return Array.isArray(bindables) ? bindables.length : Object.keys(bindables ?? {}).length;

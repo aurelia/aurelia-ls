@@ -1,7 +1,7 @@
 import type { StringBindingMode } from "@aurelia/template-compiler";
 import type { BatchCaseDescriptor } from "./batch-contracts.js";
 
-export const COMPILER_CASE_SCHEMA_VERSION = "aurelia-ls/compiler-case/v1" as const;
+export const COMPILER_CASE_SCHEMA_VERSION = "aurelia-ls/compiler-case/v2" as const;
 export const COMPILER_CORPUS_FRAMEWORK_REVISION = "4ff60906593bdedc9f9dc6003606ba138df87f0e";
 
 /** Stable semantic obligation key, independent of current source line numbers. */
@@ -61,6 +61,11 @@ export interface CompilerWorldRef {
   readonly export: string;
 }
 
+/** Definition target Type supplied by each oracle's own entry carrier rather than by a setup fixture. */
+export interface CompilerEntryTypeReference {
+  readonly kind: "entry-custom-element-type";
+}
+
 export type CompilerTemplateSource =
   | { readonly kind: "markup"; readonly value: string }
   | { readonly kind: "setup-ref"; readonly value: CompilerWorldRef };
@@ -106,6 +111,7 @@ export type CompilerDomTarget =
 export type CompilerEntry =
   | {
       readonly kind: "compile";
+      readonly entryType?: CompilerEntryTypeReference;
       readonly definition: CompilerElementDefinition;
     }
   | {

@@ -19,7 +19,7 @@ describe("compiler case contract", () => {
   it("admits JIT characterizations without equivalence or false closed claims", () => {
     const catalog = caseCatalog(JIT_ORACLE_CASES);
 
-    expect(catalog.cases).toHaveLength(56);
+    expect(catalog.cases).toHaveLength(60);
     expect(catalog.cases.every((candidate) => candidate.oracles.claims.length === 0)).toBe(true);
     expect(catalog.cases.every((candidate) => candidate.closure.every((claim) => claim.state !== "closed")))
       .toBe(true);

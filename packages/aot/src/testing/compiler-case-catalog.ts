@@ -260,6 +260,16 @@ function validateCompilerCases(
     for (const registration of candidate.world.registrations) {
       validateWorldRef(candidate.id, registration.value, setupBySymbol);
     }
+    if (
+      candidate.world.entry.kind === "compile"
+      && candidate.world.entry.entryType != null
+      && (
+        candidate.world.entry.entryType.kind !== "entry-custom-element-type"
+        || candidate.world.entry.definition.Type != null
+      )
+    ) {
+      throw new Error(`Compiler case ${candidate.id} has an invalid or competing entry Type carrier.`);
+    }
     validateDefinitionRefs(candidate.id, entryDefinition(candidate), setupBySymbol);
     if (candidate.world.entry.kind === "compile-spread") {
       if (candidate.world.entry.target.kind === "setup-ref") {

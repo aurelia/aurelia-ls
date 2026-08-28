@@ -66,9 +66,9 @@ describe("semantic compiler gallery", () => {
     const plan = planner.plan(JIT_ORACLE_CASES);
     const repeated = planner.plan([...JIT_ORACLE_CASES].reverse());
 
-    expect(plan.selectedCaseCount).toBe(56);
+    expect(plan.selectedCaseCount).toBe(60);
     expect(plan.admitted).toHaveLength(49);
-    expect(plan.unsupported).toHaveLength(7);
+    expect(plan.unsupported).toHaveLength(11);
     expect(plan.admitted.length + plan.unsupported.length).toBe(plan.selectedCaseCount);
     expect(plan.sourceText).toBe(repeated.sourceText);
     expect(plan.sourceDigest).toBe(repeated.sourceDigest);
@@ -95,6 +95,16 @@ describe("semantic compiler gallery", () => {
       SemanticCompilerGalleryUnsupportedReason.SetupMaterialization,
       SemanticCompilerGalleryUnsupportedReason.RegistrationMaterialization,
     ]));
+    for (const caseId of [
+      "local.hoisted-bindables",
+      "local.peer-owner-closure",
+      "local.recursive-nesting",
+      "local.use-site-controller-chain",
+    ]) {
+      expect(unsupported.get(caseId)).toEqual([
+        SemanticCompilerGalleryUnsupportedReason.LocalTemplateCohort,
+      ]);
+    }
     const setupBacked = plan.admitted.filter((candidate) => candidate.setupProjections.length > 0);
     expect(setupBacked).toHaveLength(12);
     expect(setupBacked.every((candidate) =>
@@ -121,9 +131,9 @@ describe("semantic compiler gallery", () => {
     const plan = new SemanticCompilerGalleryPlanner().plan(JIT_ORACLE_CASES);
     const run = await new SemanticCompilerGalleryOracle({ workspaceRoot: galleryRoot }).execute(plan);
 
-    expect(run.selectedCaseCount).toBe(56);
+    expect(run.selectedCaseCount).toBe(60);
     expect(run.admittedCaseCount).toBe(49);
-    expect(run.unsupported).toHaveLength(7);
+    expect(run.unsupported).toHaveLength(11);
     expect(run.observations).toHaveLength(49);
     expect(run.missingCaseIds).toEqual([]);
     expect(run.publicCompilationRowCount).toBe(60);

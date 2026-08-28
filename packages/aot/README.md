@@ -111,7 +111,7 @@ semantic `BindableDefinition` value, and the later runtime-rehydrated object are
 The CLI separately content-addresses the executed AOT and semantic-runtime JavaScript trees and the full dirty-worktree
 delta so an ignored or already-dirty build artifact cannot masquerade as unchanged authority.
 
-Vitest is reserved for harness and contract invariants. The current 53-case JIT registry spans compile-entry bypass,
+Vitest is reserved for harness and contract invariants. The current 60-case JIT registry spans compile-entry bypass,
 diagnostics, static/debug markup, bindings/interpolation/let, slots/projection, surrogates, compileSpread, resource
 precedence, capture/spread/ref, native form ordering, generated controller interactions, hooks, processContent, and
 nested template controllers. It also pins two DOM-presence distinctions exposed by Chapter 1 pressure: absent versus
@@ -120,7 +120,12 @@ browser/compiler interactions additionally fix fostered target order, paragraph
 controller topology, duplicate-binding elision, and current comment-shield carrier behavior. They remain JIT-only
 consequences until the multi-lane coordinator joins browser structure to compiled output.
 
-Cases are declarative `aurelia-ls/compiler-case/v1` records. They carry pinned source/test provenance, semantic
+Four positive local-element worlds separately characterize hoisting and bindable layers, owner/peer Type cycles,
+recursive nested cohorts, and a repeat/if use-site chain. A cycle-safe observer recursively compiles nine generated
+local Types into ten compiled definition-family values while retaining 26 exact dependency-role edges. These cases are
+kept outside the semantic gallery until occurrence-backed child ingress and generated constructable values are joined.
+
+Cases are declarative `aurelia-ls/compiler-case/v2` records. They carry pinned source/test provenance, semantic
 obligation witnesses, a runner-neutral compiler/resource world, explicit setup references and registration placement,
 focused invariants, oracle lanes, contrasts, extension effects, and multidimensional closure claims. The generic batch
 engine receives an executor separately; case records contain no `run(...)` callback. Named executable setups have a

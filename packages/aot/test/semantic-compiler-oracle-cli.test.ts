@@ -27,9 +27,9 @@ describe("AOT semantic compiler oracle CLI", () => {
     expect(receipt.caseRegistry.fingerprint).toMatch(/^sha256:[0-9a-f]{64}$/u);
     expect(receipt.gallery).toMatchObject({
       compilerTreeProfile: "semantic-runtime/authored-html-compiler-input/v1",
-      selectedCaseCount: 56,
+      selectedCaseCount: 60,
       admittedCaseCount: 49,
-      unsupportedCaseCount: 7,
+      unsupportedCaseCount: 11,
     });
     expect(receipt.run.observationAuthority).toMatchObject({
       kind: "synchronous-app-emission-bracket",

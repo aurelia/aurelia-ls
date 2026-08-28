@@ -115,10 +115,10 @@ describe("JIT compiler transformed-blueprint observer", () => {
       const first = await observer.observeCases(JIT_ORACLE_CASES, oracle);
       const repeated = await observer.observeCases(JIT_ORACLE_CASES, oracle);
 
-      expect(JIT_ORACLE_CASES).toHaveLength(56);
-      expect(first.observations).toHaveLength(56);
-      expect(first.data.selectedCaseCount).toBe(56);
-      expect(new Set(first.observations.map((observation) => observation.data.caseId)).size).toBe(56);
+      expect(JIT_ORACLE_CASES).toHaveLength(60);
+      expect(first.observations).toHaveLength(60);
+      expect(first.data.selectedCaseCount).toBe(60);
+      expect(new Set(first.observations.map((observation) => observation.data.caseId)).size).toBe(60);
       expect(first.canonicalData).toBe(canonicalCompilerJson(first.data));
       expect(first.digest).toMatch(/^sha256:[a-f0-9]{64}$/u);
       expect(first.data.caseSetDigest).toMatch(/^sha256:[a-f0-9]{64}$/u);
@@ -137,7 +137,7 @@ describe("JIT compiler transformed-blueprint observer", () => {
 
       const outcomes = countOutcomes(first);
       expect(outcomes).toEqual({
-        "compiled-definition": 51,
+        "compiled-definition": 55,
         "compiler-error": 4,
         "spread-instructions": 0,
         "unchanged-definition": 1,
@@ -148,9 +148,9 @@ describe("JIT compiler transformed-blueprint observer", () => {
           ? [{ caseId: observation.data.caseId, outcome: observation.data.outcome }]
           : []
       );
-      expect(compiled.flatMap(({ outcome }) => outcome.definitions)).toHaveLength(81);
+      expect(compiled.flatMap(({ outcome }) => outcome.definitions)).toHaveLength(87);
       expect(compiled.flatMap(({ outcome }) => outcome.definitions.flatMap((definition) => definition.targetMarkers)))
-        .toHaveLength(89);
+        .toHaveLength(99);
       for (const { caseId, outcome } of compiled) {
         expect(outcome.definitions[0]?.owner, caseId).toEqual({ kind: "root" });
         expect(outcome.definitions.map((definition) => definition.definitionIndex), caseId)

@@ -262,6 +262,14 @@ export class JitCompilerBlueprintObserver {
   }
 }
 
+/** Normalize one already-compiled definition family without re-entering the compiler or owning its lifecycle. */
+export function normalizeJitCompiledDefinitionFamily(
+  definition: IElementComponentDefinition,
+  rootNameIntent: string,
+): readonly JitCompilerBlueprintDefinition[] {
+  return new DefinitionFamilyNormalizer("compiler-output", rootNameIntent).normalize(definition);
+}
+
 interface InstructionLocation {
   readonly parentDefinitionIndex: number;
   readonly rowIndex: number;
@@ -360,14 +368,14 @@ class DefinitionFamilyNormalizer {
         definitionIndex: index,
         owner: record.owner,
         name: this.definitionName(index, definition),
-        type: definition.type,
+        type: definition.type ?? "custom-element",
         needsCompile: definition.needsCompile ?? null,
         containerless: definition.containerless ?? false,
         hasSlots: definition.hasSlots ?? false,
         shadowOptions: definition.shadowOptions == null ? null : { mode: definition.shadowOptions.mode },
         enhance: definition.enhance ?? false,
         capture: this.values.value(definition.capture ?? false, null, ["capture"]),
-        bindables: this.values.value(definition.bindables ?? {}, null, ["bindables"]),
+        bindables: definition.bindables == null ? {} : this.values.definitionBindables(definition.bindables),
         dependencies: (definition.dependencies ?? []).map((dependency, dependencyIndex) =>
           this.values.value(dependency, null, ["dependencies", dependencyIndex])
         ),
@@ -419,6 +427,20 @@ class BlueprintValueNormalizer {
       result[key] = this.instructionField(instruction.type, key, fieldValue, location);
     }
     return result;
+  }
+
+  definitionBindables(value: unknown): CompilerCaseData {
+    if (Array.isArray(value)) return this.value(value, null, ["bindables"]);
+    if (value == null || typeof value !== "object") {
+      throw new Error("JIT compiled-definition bindables must be an authored array or normalized record.");
+    }
+    return this.bindableDescriptions(value as Readonly<Record<string, {
+      readonly attribute: string;
+      readonly callback: string;
+      readonly mode: number;
+      readonly name: string;
+      readonly set: object & { readonly name?: string };
+    }>>);
   }
 
   private instructionField(
@@ -723,10 +745,10 @@ function normalizeOutcome(
       return {
         kind: "compiled-definition",
         rootDefinitionIndex: 0,
-        definitions: new DefinitionFamilyNormalizer(
-          "compiler-output",
+        definitions: normalizeJitCompiledDefinitionFamily(
+          outcome.value,
           candidate.world.entry.definition.name,
-        ).normalize(outcome.value),
+        ),
       };
     }
     case "unchanged-definition": {

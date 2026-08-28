@@ -39,6 +39,38 @@ describe("JIT compiler case executor", () => {
     }
   });
 
+  it("keeps the setup world alive for scoped verified-outcome inspection", async () => {
+    const events: string[] = [];
+    const factories = [setupFactory("fixture.one", "one"), setupFactory("fixture.two", "two")];
+    const materializers = [
+      setupMaterializer("fixture.one", "one", events),
+      setupMaterializer("fixture.two", "two", events),
+    ];
+    const executor = new JitCompilerCaseExecutor(factories, materializers);
+    const oracle = createJitCompilerOracle();
+    try {
+      const name = await executor.inspectOutcome(
+        withRegistrationSetups(staticCase(), factories),
+        oracle,
+        (outcome) => {
+          events.push("inspect");
+          if (outcome.kind !== "compiled-definition") throw new Error("Expected a compiled inspection product.");
+          return outcome.value.name;
+        },
+      );
+      expect(name).toBe("aot-static-attribute");
+      expect(events).toEqual([
+        "materialize:one",
+        "materialize:two",
+        "inspect",
+        "dispose:two",
+        "dispose:one",
+      ]);
+    } finally {
+      oracle.dispose();
+    }
+  });
+
   it("cleans earlier setups when a later materializer fails", async () => {
     const events: string[] = [];
     const factories = [setupFactory("fixture.one", "one"), setupFactory("fixture.two", "two")];
