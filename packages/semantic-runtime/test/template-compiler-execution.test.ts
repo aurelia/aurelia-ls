@@ -1008,7 +1008,7 @@ describe('template compiler execution sequence', () => {
         TemplateCompilerOccurrenceEdgeKind.Child,
         0,
       );
-      expect(fixture.structural.contextForOccurrence(div)).toBe(local.plan.root);
+      expect(fixture.structural.structuralContextForOccurrence(div)).toBe(local.plan.root);
       const movedOperation = fixture.execution.completeOperation(
         movingAttempt,
         fixture.completion(TemplateCompilerOperationCompletionKind.Complete),

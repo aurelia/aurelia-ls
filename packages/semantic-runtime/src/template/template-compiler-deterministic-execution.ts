@@ -30,6 +30,7 @@ import {
   HydrateTemplateControllerInstruction,
   SpreadTransferedBindingInstruction,
   TextBindingInstruction,
+  type HydrateElementProjectionContributor,
   type HydrateElementProjectionDefinition,
 } from './instruction-ir.js';
 import { runtimeAttributeName, runtimeElementResourceName } from './runtime-dom-name.js';
@@ -798,13 +799,7 @@ class DeterministicExecutionFrame {
         if (node == null) throw new Error('Projection contributor lost its exact browser occurrence.');
         switch (contributor.disposition) {
           case HydrateElementProjectionContributorDisposition.RetainedNode: {
-            const slotProduct = contributor.slotAttribute?.productHandle ?? null;
-            if (slotProduct != null) {
-              const attribute = this.exactAttribute(slotProduct);
-              if (attribute == null) throw new Error('Projection slot attribute lost its exact browser occurrence.');
-              session.consumeAttributeForContext(attribute, ownerContext, [instruction.productHandle]);
-              this.consumedAttributeProducts.add(slotProduct);
-            }
+            this.consumeProjectionSlotAttribute(ownerContext, instruction, contributor, session);
             session.moveNodeIntoContext(node, context, ordinal++, [instruction.productHandle]);
             break;
           }
@@ -812,6 +807,7 @@ class DeterministicExecutionFrame {
             if (!(node instanceof TemplateCompilerElementOccurrence) || node.templateContent == null) {
               throw new Error('Unwrapped projection contributor is not an exact template occurrence.');
             }
+            this.consumeProjectionSlotAttribute(ownerContext, instruction, contributor, session);
             const children = [...node.templateContent.readChildren()];
             session.consumeNodeForContext(node, context, [instruction.productHandle]);
             for (const child of children) {
@@ -825,6 +821,20 @@ class DeterministicExecutionFrame {
       }
       this.executeContext(context, session);
     }
+  }
+
+  private consumeProjectionSlotAttribute(
+    ownerContext: TemplateCompilerTargetContextPlan,
+    instruction: HydrateElementInstruction,
+    contributor: HydrateElementProjectionContributor,
+    session: TemplateCompilerStructuralExecutionSession,
+  ): void {
+    const slotProduct = contributor.slotAttribute?.productHandle ?? null;
+    if (slotProduct == null) return;
+    const attribute = this.exactAttribute(slotProduct);
+    if (attribute == null) throw new Error('Projection slot attribute lost its exact browser occurrence.');
+    session.consumeAttributeForContext(attribute, ownerContext, [instruction.productHandle]);
+    this.consumedAttributeProducts.add(slotProduct);
   }
 
   private consumeKnownAuSlotChildren(

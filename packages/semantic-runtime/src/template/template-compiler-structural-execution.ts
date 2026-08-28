@@ -411,12 +411,23 @@ export class TemplateCompilerStructuralExecutionSession {
     return this.contextsByLocalKey.get(localKey) ?? null;
   }
 
-  /** Resolve the exact live or explicitly consumed structural context of one forest occurrence. */
-  contextForOccurrence(
+  /** Resolve the unique context whose compiler plan admits this occurrence, independent from its current DOM edge. */
+  compilationContextForOccurrence(
+    occurrence: TemplateCompilerNodeOccurrence,
+  ): TemplateCompilerTargetContextPlan | null {
+    const node = this.forest.nodeForOccurrenceKey(occurrence.occurrenceKey);
+    if (node !== occurrence) {
+      throw new Error(`Compiler occurrence '${occurrence.occurrenceKey}' belongs to another forest.`);
+    }
+    return this.compilationContextForNodeOccurrence(node);
+  }
+
+  /** Resolve the exact live, replaced, expanded, or explicitly consumed structural context of one occurrence. */
+  structuralContextForOccurrence(
     occurrence: TemplateCompilerNodeOccurrence | TemplateCompilerAttributeOccurrence,
   ): TemplateCompilerTargetContextPlan | null {
     const node = this.forest.nodeForOccurrenceKey(occurrence.occurrenceKey);
-    if (node === occurrence) return this.contextForNodeOccurrence(node);
+    if (node === occurrence) return this.structuralContextForNodeOccurrence(node);
     const attribute = this.forest.attributeForOccurrenceKey(occurrence.occurrenceKey);
     if (attribute !== occurrence) {
       throw new Error(`Compiler occurrence '${occurrence.occurrenceKey}' belongs to another forest.`);
@@ -428,7 +439,7 @@ export class TemplateCompilerStructuralExecutionSession {
       }
       return consumed.context;
     }
-    return attribute.owner == null ? null : this.contextForNodeOccurrence(attribute.owner);
+    return attribute.owner == null ? null : this.structuralContextForNodeOccurrence(attribute.owner);
   }
 
   /**
@@ -1390,7 +1401,20 @@ export class TemplateCompilerStructuralExecutionSession {
     }
   }
 
-  private contextForNodeOccurrence(
+  private compilationContextForNodeOccurrence(
+    node: TemplateCompilerNodeOccurrence,
+  ): TemplateCompilerTargetContextPlan | null {
+    const admitted = this.contextsByCompilerReachableOccurrence.get(node) ?? null;
+    if (admitted != null) return admitted;
+    const authoredProductHandle = this.forest.exactAuthoredNodeOrigin(node)?.authored.productHandle ?? null;
+    if (authoredProductHandle != null) {
+      const authored = this.contextsByCompilerReachableNodeProduct.get(authoredProductHandle) ?? null;
+      if (authored != null) return authored;
+    }
+    return null;
+  }
+
+  private structuralContextForNodeOccurrence(
     node: TemplateCompilerNodeOccurrence,
   ): TemplateCompilerTargetContextPlan | null {
     const consumed = this.consumedNodes.get(node) ?? null;
@@ -1400,8 +1424,6 @@ export class TemplateCompilerStructuralExecutionSession {
       }
       return consumed.context;
     }
-    const admitted = this.contextsByCompilerReachableOccurrence.get(node) ?? null;
-    if (admitted != null) return admitted;
     const contexts: TemplateCompilerTargetContextPlan[] = [];
     for (const context of this.contexts) {
       const structure = this.structuresByContextKey.get(context.localKey) ?? null;
@@ -1415,7 +1437,14 @@ export class TemplateCompilerStructuralExecutionSession {
     if (contexts.length > 1) {
       throw new Error(`Compiler occurrence '${node.occurrenceKey}' belongs to multiple structural contexts.`);
     }
-    return contexts[0] ?? null;
+    if (contexts.length === 1) return contexts[0]!;
+    if (node instanceof TemplateCompilerTextOccurrence) {
+      const expansion = this.inputTextExpansions.get(node) ?? null;
+      if (expansion != null) return expansion.context;
+    }
+    return node instanceof TemplateCompilerElementOccurrence
+      ? this.latestRenderReplacementByOccurrence.get(node)?.context ?? null
+      : null;
   }
 
   private transferInputNode(
@@ -2218,25 +2247,12 @@ export class TemplateCompilerStructuralExecutionSession {
               `Projection context '${context.localKey}' has no exact retained-contributor transfer.`,
             );
           }
-          if (contributor.slotAttribute != null) {
-            const auSlotAttribute = contributor.slotAttribute.productHandle == null
-              ? null
-              : this.exactSeededAttributeForAuthored(contributor.slotAttribute.productHandle);
-            const ownerContext = context.ownerContext == null
-              ? null
-              : this.contextForLocalKey(context.ownerContext.localKey);
-            const disposition = auSlotAttribute == null
-              ? null
-              : this.consumedAttributes.get(auSlotAttribute) ?? null;
-            if (
-              ownerContext == null
-              || disposition?.context !== ownerContext
-              || !disposition.causeHandles.includes(authority.instruction.productHandle)
-              || disposition.eventOrdinal >= retainedTransfer.eventOrdinal
-            ) {
-              throw new Error(`Projection context '${context.localKey}' retained its explicit au-slot attribute.`);
-            }
-          }
+          this.requireProjectionSlotAttributeDisposition(
+            context,
+            authority,
+            contributor,
+            retainedTransfer.eventOrdinal,
+          );
           break;
         }
         case HydrateElementProjectionContributorDisposition.UnwrappedTemplateContent: {
@@ -2256,6 +2272,12 @@ export class TemplateCompilerStructuralExecutionSession {
           ) {
             throw new Error(`Projection context '${context.localKey}' has an incoherent unwrapped-template extraction.`);
           }
+          this.requireProjectionSlotAttributeDisposition(
+            context,
+            authority,
+            contributor,
+            disposition.eventOrdinal,
+          );
           break;
         }
         case HydrateElementProjectionContributorDisposition.DiscardedWhitespace:
@@ -2269,6 +2291,32 @@ export class TemplateCompilerStructuralExecutionSession {
     node: TemplateCompilerNodeOccurrence,
   ): TemplateCompilerInputNodeTransfer | null {
     return this.inputNodeTransfersByContextAndNode.get(context.localKey)?.get(node) ?? null;
+  }
+
+  private requireProjectionSlotAttributeDisposition(
+    context: TemplateCompilerTargetContextPlan,
+    authority: TemplateCompilerProjectionContextStructuralAuthority,
+    contributor: HydrateElementProjectionContributor,
+    beforeEventOrdinal: number,
+  ): void {
+    if (contributor.slotAttribute == null) return;
+    const auSlotAttribute = contributor.slotAttribute.productHandle == null
+      ? null
+      : this.exactSeededAttributeForAuthored(contributor.slotAttribute.productHandle);
+    const ownerContext = context.ownerContext == null
+      ? null
+      : this.contextForLocalKey(context.ownerContext.localKey);
+    const disposition = auSlotAttribute == null
+      ? null
+      : this.consumedAttributes.get(auSlotAttribute) ?? null;
+    if (
+      ownerContext == null
+      || disposition?.context !== ownerContext
+      || !disposition.causeHandles.includes(authority.instruction.productHandle)
+      || disposition.eventOrdinal >= beforeEventOrdinal
+    ) {
+      throw new Error(`Projection context '${context.localKey}' retained its explicit au-slot attribute.`);
+    }
   }
 
   private assertDiscardedProjectionContributors(): void {

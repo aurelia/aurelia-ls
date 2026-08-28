@@ -85,8 +85,10 @@ describe('template compiler structural execution mechanics', () => {
       const secondStructure = session.createGeneratedContextStructure(secondPlan.root);
       expect(session.readContextStructure(firstPlan.root)?.compilerCarrier).toBe(forest.compilerCarrier);
       expect(session.readContextStructure(secondPlan.root)).toBe(secondStructure);
-      expect(session.contextForOccurrence(requiredOccurrenceElement(forest, 'div'))).toBe(firstPlan.root);
-      expect(session.contextForOccurrence(secondStructure.compilerCarrier)).toBe(secondPlan.root);
+      expect(session.structuralContextForOccurrence(requiredOccurrenceElement(forest, 'div'))).toBe(firstPlan.root);
+      expect(session.compilationContextForOccurrence(requiredOccurrenceElement(forest, 'div'))).toBe(firstPlan.root);
+      expect(session.structuralContextForOccurrence(secondStructure.compilerCarrier)).toBe(secondPlan.root);
+      expect(session.compilationContextForOccurrence(secondStructure.compilerCarrier)).toBeNull();
       expect(session.contextForLocalKey(secondPlan.root.localKey)).toBe(secondPlan.root);
       expect(forest.readRoots()).toEqual([forest.compilerCarrier, secondStructure.compilerCarrier]);
       expect(secondStructure.compilerContent.readChildren()).toEqual([]);
@@ -145,6 +147,39 @@ describe('template compiler structural execution mechanics', () => {
       expect(() => session.admitTargetPlan(contributorReuse)).toThrow(/Projection contributor object/);
       expect(session.readTargetPlans()).toEqual(targetPlansBeforeRejectedContributor);
       expect(session.readContexts()).toEqual(contextsBeforeRejectedContributor);
+    } finally {
+      fixture.dispose();
+    }
+  });
+
+  test('separates final compilation membership from pre-transfer structural ownership', () => {
+    const fixture = new BrowserEffectiveTemplateFixture('template-compiler-context-axis-split');
+    try {
+      const input = fixture.materialize('context-axis-split', '<div></div>');
+      const forest = TemplateCompilerOccurrenceForest.fromBrowserEffective(input.emission);
+      const authoredDiv = requiredAuthoredElement(input.authoredHtml.nodes, 'div');
+      const div = requiredOccurrenceElement(forest, 'div');
+      const targetPlan = createTargetPlan(fixture, 'context-axis-split');
+      const instruction = templateControllerInstruction(fixture, authoredDiv, 'context-axis-split');
+      const child = targetPlan.createTemplateControllerContext(targetPlan.root, instruction);
+      const row = targetPlan.root.appendRow(
+        'context-axis-split',
+        authoredDiv,
+        [instruction],
+        TemplateRenderTargetKind.RenderLocation,
+        TemplateCompilerTargetRowPosture.Complete,
+        1,
+        [],
+        authoredDiv.sourceAddressHandle,
+        new TemplateCompilerTemplateControllerSourceReplacementPlacement(instruction),
+      );
+      if (row == null) throw new Error('Expected source-replacement row.');
+      child.recordCompilerReachableOccurrence('context-axis-split:div', div, authoredDiv);
+
+      const session = TemplateCompilerStructuralExecutionSession.create(forest, targetPlan);
+
+      expect(session.compilationContextForOccurrence(div)).toBe(child);
+      expect(session.structuralContextForOccurrence(div)).toBe(targetPlan.root);
     } finally {
       fixture.dispose();
     }
@@ -724,6 +759,7 @@ describe('template compiler structural execution mechanics', () => {
           && node !== forest.compilerCarrier
           && node.tagName.toLowerCase() === 'template'
       );
+      const wrapperAuSlot = wrapper?.readAttributes().find((attribute) => attribute.name === 'au-slot');
       const bold = requiredOccurrenceElement(forest, 'b');
       const italic = requiredOccurrenceElement(forest, 'i');
       const namedComment = requiredOccurrenceComment(forest, 'named-comment');
@@ -733,6 +769,7 @@ describe('template compiler structural execution mechanics', () => {
       );
       if (
         wrapper == null
+        || wrapperAuSlot == null
         || projectionWhitespace == null
         || defaultAuSlot == null
         || authoredDefaultAuSlot == null
@@ -875,7 +912,16 @@ describe('template compiler structural execution mechanics', () => {
       session.moveNodeIntoContext(defaultComment, defaultContext, 0, [hostInstruction.productHandle]);
       session.consumeAttributeForContext(defaultAuSlot, targetPlan.root, [hostInstruction.productHandle]);
       session.moveNodeIntoContext(defaultElement, defaultContext, 1, [hostInstruction.productHandle]);
-      session.consumeNodeForContext(wrapper, namedContext, [hostInstruction.productHandle]);
+      const wrapperSlotDisposition = session.consumeAttributeForContext(
+        wrapperAuSlot,
+        targetPlan.root,
+        [hostInstruction.productHandle],
+      );
+      const wrapperDisposition = session.consumeNodeForContext(
+        wrapper,
+        namedContext,
+        [hostInstruction.productHandle],
+      );
       session.moveNodeIntoContext(namedComment, namedContext, 0, [hostInstruction.productHandle]);
       session.moveNodeIntoContext(bold, namedContext, 1, [hostInstruction.productHandle]);
       session.moveNodeIntoContext(italic, namedContext, 2, [hostInstruction.productHandle]);
@@ -886,6 +932,8 @@ describe('template compiler structural execution mechanics', () => {
       expect(defaultStructure.compilerContent.readChildren()).toEqual([defaultComment, defaultElement]);
       expect(namedStructure.compilerContent.readChildren()).toEqual([namedComment, bold, italic]);
       expect(wrapper.parentEdgeKind).toBe(TemplateCompilerOccurrenceEdgeKind.Detached);
+      expect(wrapperAuSlot.owner).toBeNull();
+      expect(wrapperSlotDisposition.eventOrdinal).toBeLessThan(wrapperDisposition.eventOrdinal);
       expect(defaultAuSlot.owner).toBeNull();
       expect(whitespaceDisposition.membershipOrdinal).toBeNull();
       expect(whitespaceDisposition.context).toBe(targetPlan.root);
@@ -1153,9 +1201,9 @@ describe('template compiler structural execution mechanics', () => {
       expect(attributeDisposition.owner).toBe(div);
       expect(attributeDisposition.ownerOrdinal).toBe(0);
       expect(attribute.owner).toBeNull();
-      expect(session.contextForOccurrence(comment)).toBe(targetPlan.root);
-      expect(session.contextForOccurrence(attribute)).toBe(targetPlan.root);
-      expect(session.contextForOccurrence(span)).toBe(targetPlan.root);
+      expect(session.structuralContextForOccurrence(comment)).toBe(targetPlan.root);
+      expect(session.structuralContextForOccurrence(attribute)).toBe(targetPlan.root);
+      expect(session.structuralContextForOccurrence(span)).toBe(targetPlan.root);
       expect(session.readConsumedNodeDispositions()).toEqual(
         session.readConsumedNodeDispositions(targetPlan.root),
       );

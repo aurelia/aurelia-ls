@@ -3287,7 +3287,7 @@ export class TemplateCompilerExecutionSession {
       }
       return;
     }
-    const structuralContext = this.requireStructuralExecution().contextForOccurrence(occurrence);
+    const structuralContext = this.requireStructuralExecution().structuralContextForOccurrence(occurrence);
     if (structuralContext !== context.targetContext) {
       throw new Error(
         `Compiler occurrence '${occurrence.occurrenceKey}' does not belong to structural context '${context.localKey}'.`,
