@@ -502,6 +502,8 @@ export class TemplateCompilerContextFamilyStructuralSchedulePreparation {
     TemplateCompilerSiteCursorProjectionExtractionEvent['realization']['entrantBands'][number]['context'],
     TemplateCompilerFamilyContextStructuralSchedule
   >;
+  /** Exact child-before-return order for adopting already-committed processContent removals. */
+  readonly processContentExecutionOrder: readonly TemplateCompilerFamilyProcessContentAdoptionEntry[];
 
   constructor(
     authority: object,
@@ -542,17 +544,11 @@ export class TemplateCompilerContextFamilyStructuralSchedulePreparation {
       ...tcRows,
       ...ordinaryRows,
     ]);
-    const transitionEntries = reached.flatMap((entry) =>
-      entry.templateController == null ? [] : [entry.templateController]
+    const executionOrder = structuralScheduleExecutionOrder(rootExecution);
+    this.processContentExecutionOrder = executionOrder.processContent;
+    const expectedProcessRemovals = rows.receipt.traversal.audit.processContentEvents.flatMap(
+      (event) => event.result.removals,
     );
-    const projectionEntries = loweredElements.flatMap((entry) => entry.projection == null ? [] : [entry.projection]);
-    const processEntries = loweredElements.flatMap((entry) => entry.processContent);
-    const expectedProcessRemovals = target.processContentHydrateElements.flatMap((head) => {
-      const site = head.draft.site;
-      return site instanceof TemplateCompilerFamilyElementLoweringSite
-        ? site.reach.hydrateElement.staging.draft?.processContent.result?.removals ?? []
-        : [];
-    });
     if (
       authority !== familyStructuralScheduleAuthority
       || !target.isModuleConstructed()
@@ -576,14 +572,14 @@ export class TemplateCompilerContextFamilyStructuralSchedulePreparation {
       || scheduledRows.size !== target.rowMappings.length
       || target.rowMappings.some((mapping) => !scheduledRows.has(mapping))
       || !sameObjects(
-        transitionEntries.map((entry) => entry.event),
+        executionOrder.templateControllers.map((entry) => entry.event),
         rows.receipt.traversal.templateControllerTransitions,
       )
       || !sameObjects(
-        projectionEntries.map((entry) => entry.event),
+        executionOrder.projections.map((entry) => entry.event),
         rows.receipt.traversal.projectionExtractions,
       )
-      || !sameObjects(processEntries.map((entry) => entry.removal), expectedProcessRemovals)
+      || !sameObjects(this.processContentExecutionOrder.map((entry) => entry.removal), expectedProcessRemovals)
     ) {
       throw new Error('Context-family structural schedule lost context, reach, row, or attribute coverage.');
     }
@@ -597,6 +593,36 @@ export class TemplateCompilerContextFamilyStructuralSchedulePreparation {
   isCurrent(): boolean {
     return this.isModuleConstructed() && this.target.isCurrent();
   }
+}
+
+function structuralScheduleExecutionOrder(
+  root: TemplateCompilerFamilyContextExecutionBand,
+): {
+  readonly templateControllers: readonly TemplateCompilerFamilyTemplateControllerScheduleEntry[];
+  readonly projections: readonly TemplateCompilerFamilyProjectionScheduleEntry[];
+  readonly processContent: readonly TemplateCompilerFamilyProcessContentAdoptionEntry[];
+} {
+  const templateControllers: TemplateCompilerFamilyTemplateControllerScheduleEntry[] = [];
+  const projections: TemplateCompilerFamilyProjectionScheduleEntry[] = [];
+  const processContent: TemplateCompilerFamilyProcessContentAdoptionEntry[] = [];
+  const visit = (context: TemplateCompilerFamilyContextExecutionBand): void => {
+    for (const entry of context.entries) {
+      if (entry instanceof TemplateCompilerFamilyReachedElementExecutionBand) {
+        const controller = entry.templateController;
+        if (controller == null) continue;
+        templateControllers.push(controller.schedule);
+        for (const child of controller.contextChain) visit(child);
+        continue;
+      }
+      if (entry instanceof TemplateCompilerFamilyLoweredElementExecutionBand) {
+        processContent.push(...entry.schedule.processContent);
+        if (entry.schedule.projection != null) projections.push(entry.schedule.projection);
+        for (const group of entry.projectionGroups) visit(group.context);
+      }
+    }
+  };
+  visit(root);
+  return { templateControllers, projections, processContent };
 }
 
 /** Build the complete non-mutating family structural schedule from retained semantic ownership. */

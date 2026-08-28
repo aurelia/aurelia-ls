@@ -1011,7 +1011,9 @@ export class TemplateCompilerStructuralExecutionSession {
     removal: TemplateCompilerProcessContentRemoval,
     removalOrdinal: number,
   ): TemplateCompilerConsumedNodeDisposition {
-    this.requireContextStructure(context);
+    // The removal already happened during the cursor. Generated context roots are established later by the target
+    // execution schedule, so adoption needs admitted target-context authority rather than premature structural rooting.
+    this.requireContext(context);
     const node = removal.occurrence;
     const mutation = removal.mutation;
     this.requireForestNode(node);

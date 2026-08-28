@@ -14,6 +14,11 @@ import {
   SemanticCompilerGalleryUnsupportedReason,
   SemanticCompilerGalleryWorldDifference,
 } from "../src/testing/semantic-compiler-gallery-plan.js";
+import {
+  SEMANTIC_FROZEN_FAMILY_EXACT_FIELDS,
+  SEMANTIC_FROZEN_FAMILY_OBSERVER_VERSION,
+  SEMANTIC_FROZEN_FAMILY_OMITTED_JIT_FIELDS,
+} from "../src/testing/semantic-frozen-family-observer.js";
 
 const packageRoot = path.resolve(fileURLToPath(new URL("..", import.meta.url)));
 const galleryRoot = path.join(packageRoot, "fixtures/semantic-compiler-gallery");
@@ -77,6 +82,7 @@ describe("semantic compiler gallery", () => {
     expect(run.stages["semantic.browser-template-materialization"]).toBeGreaterThan(0);
     expect(run.stages["semantic.normalized-structural-replay"]).toBeGreaterThan(0);
     expect(run.stages["semantic.site-cursor"]).toBeGreaterThan(0);
+    expect(run.stages["semantic.frozen-family"]).toBeGreaterThan(0);
 
     const observations = new Map(run.observations.map((observation) => [observation.caseId, observation]));
     const replayStates = Object.fromEntries(["exact", "open", "refused"].map((state) => [
@@ -116,6 +122,37 @@ describe("semantic compiler gallery", () => {
       && observation.worldDifferences.includes(SemanticCompilerGalleryWorldDifference.CompilerTreeAuthority)
       && observation.worldDifferences.includes(SemanticCompilerGalleryWorldDifference.GeneratedDefinitionType)
     )).toBe(true);
+    const frozenStates = Object.fromEntries([
+      "exact:frozen-value",
+      "ineligible:root-site-run",
+      "ineligible:family-completion",
+      "pending:family-completion",
+      "pending:frozen-value",
+    ].map((state) => [
+      state,
+      run.observations.filter((observation) =>
+        `${observation.frozenFamily.state}:${observation.frozenFamily.stage}` === state
+      ).length,
+    ]));
+    expect(frozenStates).toEqual({
+      "exact:frozen-value": 27,
+      "ineligible:root-site-run": 1,
+      "ineligible:family-completion": 2,
+      "pending:family-completion": 2,
+      "pending:frozen-value": 1,
+    });
+    expect(run.observations.every((observation) =>
+      observation.frozenFamily.schemaVersion === SEMANTIC_FROZEN_FAMILY_OBSERVER_VERSION
+    )).toBe(true);
+    const exactFrozen = run.observations.flatMap((observation) =>
+      observation.frozenFamily.kind === "exact" ? [observation.frozenFamily] : []
+    );
+    expect(exactFrozen).toHaveLength(27);
+    expect(exactFrozen.every((frozen) =>
+      /^sha256:[0-9a-f]{64}$/u.test(frozen.structuralDigest)
+      && frozen.exactFields === SEMANTIC_FROZEN_FAMILY_EXACT_FIELDS
+      && frozen.omittedJitFields === SEMANTIC_FROZEN_FAMILY_OMITTED_JIT_FIELDS
+    )).toBe(true);
     expect(observations.get("diagnostic.surrogate.unique-id")).toMatchObject({
       expectedJitProduct: "compiler-error",
       compilerProfile: { debug: false, resolveResources: true },
@@ -137,6 +174,70 @@ describe("semantic compiler gallery", () => {
     )).toBe(true);
     expect(siblingDefinitions.filter((definition) => definition.rows.length === 0)
       .every((definition) => definition.compilerReachableNodeCount > 0)).toBe(true);
+    const frozenSibling = observations.get("interaction.generated.double-sibling-if")?.frozenFamily;
+    expect(frozenSibling?.kind).toBe("exact");
+    if (frozenSibling?.kind !== "exact") throw new Error("Expected exact frozen sibling family.");
+    expect(frozenSibling.definitions.map((definition) => definition.rows.length)).toEqual([2, 1, 0, 1, 0]);
+    expect(frozenSibling.definitions.map((definition) => definition.owner)).toEqual([
+      { kind: "root" },
+      {
+        kind: "template-controller",
+        parentDefinitionIndex: 0,
+        rowIndex: 0,
+        instructionIndex: 0,
+        instructionKind: "hydrate-template-controller",
+        slotName: null,
+        fieldPath: ["def"],
+      },
+      {
+        kind: "template-controller",
+        parentDefinitionIndex: 1,
+        rowIndex: 0,
+        instructionIndex: 0,
+        instructionKind: "hydrate-template-controller",
+        slotName: null,
+        fieldPath: ["def"],
+      },
+      {
+        kind: "template-controller",
+        parentDefinitionIndex: 0,
+        rowIndex: 1,
+        instructionIndex: 0,
+        instructionKind: "hydrate-template-controller",
+        slotName: null,
+        fieldPath: ["def"],
+      },
+      {
+        kind: "template-controller",
+        parentDefinitionIndex: 3,
+        rowIndex: 0,
+        instructionIndex: 0,
+        instructionKind: "hydrate-template-controller",
+        slotName: null,
+        fieldPath: ["def"],
+      },
+    ]);
+    const frozenParagraph = observations.get("interaction.browser.paragraph-controller-topology")?.frozenFamily;
+    expect(frozenParagraph?.kind).toBe("exact");
+    if (frozenParagraph?.kind !== "exact") throw new Error("Expected exact frozen paragraph family.");
+    expect(frozenParagraph.definitions).toHaveLength(3);
+    expect(frozenParagraph.definitions.map((definition) => definition.rows.length)).toEqual([2, 0, 1]);
+    expect(frozenParagraph.sourceOpenSeams).toEqual([
+      {
+        seamKindKey: "template.open-structure-correspondence",
+        reasonKinds: ["template-structure-correspondence-open"],
+      },
+      {
+        seamKindKey: "template.open-structure-correspondence",
+        reasonKinds: ["template-structure-correspondence-open"],
+      },
+    ]);
+    expect(observations.get("slot.native.nested-has-slots")?.frozenFamily).toMatchObject({
+      kind: "unavailable",
+      state: "pending",
+      stage: "frozen-value",
+      reasons: [{ reasonKind: "native-slot-materialization-pending" }],
+    });
     expect(observations.get("interaction.generated.double-sibling-if")?.normalizedStructuralReplay).toEqual({
       state: "exact",
       reasonKinds: [],
@@ -584,6 +685,19 @@ describe("semantic compiler gallery", () => {
       const serialized = JSON.stringify(portable);
       for (const forbidden of ["binding", "execution", "forest", "compilerReads", "preWalkAuthority", "browserEmission"]) {
         expect(serialized).not.toContain(`"${forbidden}"`);
+      }
+      const frozen = observation.frozenFamily;
+      expect(Object.getPrototypeOf(frozen)).toBe(Object.prototype);
+      expect(JSON.parse(JSON.stringify(frozen))).toEqual(frozen);
+      const frozenSerialized = JSON.stringify(frozen);
+      for (const forbidden of [
+        "kernel:store",
+        '"preparation"',
+        '"committedAllocation"',
+        '"targetPlan"',
+        '"occurrenceKey"',
+      ]) {
+        expect(frozenSerialized).not.toContain(forbidden);
       }
     }
   }, 15_000);

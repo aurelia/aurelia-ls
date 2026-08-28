@@ -29,9 +29,8 @@ import {
   type TemplateCompilerContextFamilyOperationSchedule,
   type TemplateCompilerFamilyOperationScheduleEntry,
 } from './template-compiler-context-family-operation-schedule.js';
-import {
-  TemplateCompilerFamilyLoweredElementScheduleEntry,
-  type TemplateCompilerContextFamilyStructuralSchedulePreparation,
+import type {
+  TemplateCompilerContextFamilyStructuralSchedulePreparation,
 } from './template-compiler-context-family-structural-schedule.js';
 import type { TemplateCompilerHookBootstrapResult } from './template-compiler-hook-bootstrap.js';
 import { HydrateElementProjectionContributorDisposition } from './instruction-ir.js';
@@ -990,10 +989,7 @@ export class TemplateCompilerContextFamilyTargetAttachmentPreparation {
     const lane = rows.receipt.endpoint.lane;
     const targetContexts = target.targetPlan.readContexts();
     const globalContextBase = execution.sequence.readContexts().length;
-    const scheduledProcessRemovals = schedule.contexts.flatMap((context) => context.entries)
-      .flatMap((entry) => entry instanceof TemplateCompilerFamilyLoweredElementScheduleEntry
-        ? entry.processContent
-        : []);
+    const scheduledProcessRemovals = schedule.processContentExecutionOrder;
     if (
       authority !== contextFamilyTargetAttachmentPreparationAuthority
       || schedule.target !== target
@@ -1534,19 +1530,14 @@ export class TemplateCompilerExecutionSession {
       this.mutationAuthority,
     );
     const adoptedProcessContent: TemplateCompilerConsumedNodeDisposition[] = [];
-    for (const context of schedule.contexts) {
-      for (const entry of context.entries) {
-        if (!(entry instanceof TemplateCompilerFamilyLoweredElementScheduleEntry)) continue;
-        for (const processContent of entry.processContent) {
-          adoptedProcessContent.push(structuralExecution.adoptCommittedProcessContentRemoval(
-            processContent.contextMapping.targetContext,
-            processContent.hydrateElement.instruction,
-            processContent.result,
-            processContent.removal,
-            processContent.removalOrdinal,
-          ));
-        }
-      }
+    for (const processContent of schedule.processContentExecutionOrder) {
+      adoptedProcessContent.push(structuralExecution.adoptCommittedProcessContentRemoval(
+        processContent.contextMapping.targetContext,
+        processContent.hydrateElement.instruction,
+        processContent.result,
+        processContent.removal,
+        processContent.removalOrdinal,
+      ));
     }
     const globalContextBase = this.contexts.length;
     const contexts = targetPlan.readContexts().map((targetContext, ordinal) =>

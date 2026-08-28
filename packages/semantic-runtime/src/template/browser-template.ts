@@ -5,6 +5,16 @@ export * from './browser-template-selection.js';
 export * from './browser-template-correspondence.js';
 export * from './browser-effective-template-materializer.js';
 export {
+  CompilerTransformedTemplateAttribute,
+  CompilerTransformedTemplateComment,
+  CompilerTransformedTemplateElement,
+  CompilerTransformedTemplateFragment,
+  CompilerTransformedTemplateText,
+  CompilerTransformedTemplateTree,
+  type CompilerTransformedTemplateNode,
+} from './template-structure.js';
+export { TemplateInstructionKind } from './instruction-ir.js';
+export {
   TemplateCompilerCommentOccurrence,
   TemplateCompilerElementOccurrence,
   TemplateCompilerTextOccurrence,

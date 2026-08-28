@@ -17,6 +17,7 @@ import {
 } from "@aurelia-ls/semantic-runtime";
 import {
   BrowserEffectiveTemplateMaterializer,
+  compileTemplateCompilerContextFamily,
   executeDeterministicTemplateCompiler,
   observeTemplateCompilerRootSiteCursor,
   parseBrowserTemplateFragmentDraft,
@@ -39,6 +40,10 @@ import {
   type SemanticCompilerGalleryCase,
   type SemanticCompilerGalleryPlan,
 } from "./semantic-compiler-gallery-plan.js";
+import {
+  observeSemanticFrozenFamily,
+  type SemanticFrozenFamilyObservation,
+} from "./semantic-frozen-family-observer.js";
 
 type SemanticTemplateResource = SemanticApp["emission"]["templates"]["resources"][number];
 type BrowserMaterializationContext = ConstructorParameters<typeof BrowserEffectiveTemplateMaterializer>[0];
@@ -50,6 +55,7 @@ class SemanticCompilerGalleryObservationProjection {
     readonly browserMaterializationMs: number,
     readonly normalizedStructuralReplayMs: number,
     readonly siteCursorMs: number,
+    readonly frozenFamilyMs: number,
   ) {}
 }
 
@@ -143,6 +149,7 @@ export class SemanticCompilerGalleryObservation {
     readonly openSeams: readonly SemanticCompilerGalleryOpenSeamRow[],
     readonly normalizedStructuralReplay: SemanticCompilerGalleryNormalizedStructuralReplay,
     readonly siteCursor: TemplateCompilerRootSiteCursorObservation,
+    readonly frozenFamily: SemanticFrozenFamilyObservation,
   ) {}
 }
 
@@ -316,12 +323,14 @@ export class SemanticCompilerGalleryOracle {
           "semantic.browser-template-materialization": projection.browserMaterializationMs,
           "semantic.normalized-structural-replay": projection.normalizedStructuralReplayMs,
           "semantic.site-cursor": projection.siteCursorMs,
+          "semantic.frozen-family": projection.frozenFamilyMs,
           "semantic.projection": Math.max(
             0,
             projectedAt - analyzedAt
               - projection.browserMaterializationMs
               - projection.normalizedStructuralReplayMs
-              - projection.siteCursorMs,
+              - projection.siteCursorMs
+              - projection.frozenFamilyMs,
           ),
         },
       );
@@ -349,6 +358,7 @@ function observationsFor(
   let browserMaterializationMs = 0;
   let normalizedStructuralReplayMs = 0;
   let siteCursorMs = 0;
+  let frozenFamilyMs = 0;
   const observations = cases.flatMap((candidate) => {
     const definition = candidate.candidate.world.entry;
     if (definition.kind !== "compile") return [];
@@ -367,13 +377,31 @@ function observationsFor(
       compilerReadStore,
     });
     siteCursorMs += performance.now() - cursorStartedAt;
-    return [observationFor(resource, candidate, replay.observation, siteCursor)];
+    const frozenStartedAt = performance.now();
+    let frozenFamily: SemanticFrozenFamilyObservation;
+    try {
+      frozenFamily = observeSemanticFrozenFamily(compileTemplateCompilerContextFamily({
+        compilationKey: `semantic-gallery:${candidate.candidate.id}`,
+        compilation: resource.compilation,
+        browserEmission: replay.browserTemplate,
+        currentFrontDoor: templates.frontDoor,
+        compilerReadStore,
+      }));
+    } catch (error) {
+      throw new Error(
+        `Semantic frozen-family case '${candidate.candidate.id}' failed its internal compiler invariant.`,
+        { cause: error },
+      );
+    }
+    frozenFamilyMs += performance.now() - frozenStartedAt;
+    return [observationFor(resource, candidate, replay.observation, siteCursor, frozenFamily)];
   });
   return new SemanticCompilerGalleryObservationProjection(
     observations,
     browserMaterializationMs,
     normalizedStructuralReplayMs,
     siteCursorMs,
+    frozenFamilyMs,
   );
 }
 
@@ -667,6 +695,7 @@ function observationFor(
   galleryCase: SemanticCompilerGalleryCase,
   normalizedStructuralReplay: SemanticCompilerGalleryNormalizedStructuralReplay,
   siteCursor: TemplateCompilerRootSiteCursorObservation,
+  frozenFamily: SemanticFrozenFamilyObservation,
 ): SemanticCompilerGalleryObservation {
   const compilation = resource.compilation;
   const emission = compilation.compiledTemplate;
@@ -752,6 +781,7 @@ function observationFor(
       openSeams,
       normalizedStructuralReplay,
       siteCursor,
+      frozenFamily,
     })),
     expectedJitProduct(galleryCase.candidate),
     galleryCase.worldFingerprint,
@@ -765,6 +795,7 @@ function observationFor(
     openSeams,
     normalizedStructuralReplay,
     siteCursor,
+    frozenFamily,
   );
 }
 

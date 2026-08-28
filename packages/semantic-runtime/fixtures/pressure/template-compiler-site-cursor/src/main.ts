@@ -12,6 +12,7 @@ import cursorAuthoredCarrierStaticTemplate from './cursor-authored-carrier-stati
 import cursorCommentShieldTemplate from './cursor-comment-shield.html';
 import cursorContextFamilyCaptureProjectionTemplate from './cursor-context-family-capture-projection.html';
 import cursorContextFamilyContainerlessTcTemplate from './cursor-context-family-containerless-tc.html';
+import cursorContextFamilyNestedProcessContentTemplate from './cursor-context-family-nested-process-content.html';
 import cursorContextFamilyProjectionTemplate from './cursor-context-family-projection.html';
 import cursorContextFamilyTcTemplate from './cursor-context-family-tc.html';
 import cursorEmptyTemplate from './cursor-empty.html';
@@ -344,6 +345,13 @@ class CursorProcessContent {}
 class CursorProcessContentRemovals {}
 
 @customElement({
+  name: 'cursor-context-family-nested-process-content',
+  template: cursorContextFamilyNestedProcessContentTemplate,
+  dependencies: [CursorOuterTemplateController],
+})
+class CursorContextFamilyNestedProcessContent {}
+
+@customElement({
   name: 'cursor-process-content-empty',
   template: cursorProcessContentEmptyTemplate,
 })
@@ -514,6 +522,7 @@ void new Aurelia()
     CursorTemplateController,
     CursorProcessContent,
     CursorProcessContentRemovals,
+    CursorContextFamilyNestedProcessContent,
     CursorProcessContentEmpty,
     CursorProcessContentNamed,
     CursorProcessContentDuplicateName,

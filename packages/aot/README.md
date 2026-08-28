@@ -49,24 +49,28 @@ definition in one generation, amortizing TypeChecker, static evaluation, DI, and
 adapter admits 33 markup/no-setup worlds and reports all 17 unsupported worlds with typed reasons; it never filters
 them into apparent success. Each observation retains the canonical world fingerprint, declared effects, actual
 semantic compiler profile, root/surrogate instruction kinds, diagnostics, open seams, and authored recovery counts.
-The receipt explicitly labels the current compiler-input tree profile as authored HTML; the browser-effective products
-are materialized in semantic-runtime but are not yet connected to the production compiler front door.
+The receipt explicitly labels the older compiler-input observation as authored HTML. In the same synchronous bracket,
+the browser-effective product now enters semantic-runtime's root-inclusive context-family compiler and is projected to
+the separate `aurelia-ls/aot-semantic-frozen-family/v1` structural characterization before its candidate retires.
 
 This lane is raw conservation pressure, not a parity oracle. Semantic-runtime currently fixes `debug=false` and
 `resolveResources=true`, while the JIT characterizations use `resolveResources=false`; gallery cases also share a
 resource scope, use generated concrete definition types, and traverse authored rather than browser-effective compiler
-structure. Those differences are explicit on every admitted row and recomputed from the observed compiler profile. The
-current gallery projection still omits the final compiler-mutated family required by most `template.outerHTML`
-invariants, and no standalone lane may satisfy a cross-lane equivalence claim. Semantic-runtime now exposes that family
-through a generation-bound in-process compiler result; the next AOT adapter must normalize it while its candidate is
-current. A later coordinator must validate both authority-bound receipts, compare an exhaustive shared product, and
-only then feed satisfied claim IDs into the obligation audit.
+structure. Those differences are explicit on every admitted row and recomputed from the observed compiler profile.
+The frozen-family lane currently reaches 27 exact final families across the 33 admitted worlds. It characterizes final
+definition ownership, transformed templates, row/instruction-kind order, target geometry, `needsCompile`, `hasSlots`,
+derivation cardinality, and retained source-correspondence seams. The remaining six worlds keep their exact typed gate:
+one local-definition diagnostic, two invalid compiler diagnostics, pending let/surrogate lowering, and pending native-
+slot value materialization. No standalone lane may satisfy a cross-lane equivalence claim. A later coordinator must
+validate both authority-bound receipts, compare an exhaustive shared product, and only then feed satisfied claim IDs
+into the obligation audit.
 
 The public template-compilation summary contributes its own portable source/model basis. Rich compiler observations
 currently come from a synchronous `app.emission` bracket, are currentness-checked again before egress, and deliberately
-report no portable observation basis; the runtime incarnation is retired before the JSON result returns. The new
-context-family compiler capability closes that semantic-runtime prerequisite, but raw executable/frozen objects still
-must not escape this bracket; AOT needs a portable structural characterization before coordination.
+report no portable observation basis; the runtime incarnation is retired before the JSON result returns. Raw
+executable/frozen objects do not escape: only the plain-data structural characterization does. It explicitly lists the
+JIT fields it omits—full instruction values, expression AST wires, resource/runtime identities, definition metadata,
+dependencies, surrogate values, and executable identities—so structural coverage cannot masquerade as full parity.
 The CLI separately content-addresses the executed AOT and semantic-runtime JavaScript trees and the full dirty-worktree
 delta so an ignored or already-dirty build artifact cannot masquerade as unchanged authority.
 

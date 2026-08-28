@@ -44,6 +44,8 @@ import {
 import {
   prepareTemplateCompilerFamilyWireFunding,
   type TemplateCompilerFamilyWireFundingReason,
+  type TemplateCompilerFamilyWireFundingResult,
+  TemplateCompilerFamilyWireResolution,
   TemplateCompilerFamilyWireFundingState,
 } from './template-compiler-family-wire-funding.js';
 import {
@@ -171,9 +173,7 @@ export function compileTemplateCompilerContextFamily(
   const wires = prepareTemplateCompilerFamilyWireFunding(rows.assembly);
   if (wires.state !== TemplateCompilerFamilyWireFundingState.Exact || wires.funding == null) {
     return unavailable(
-      wires.state === TemplateCompilerFamilyWireFundingState.Pending
-        ? TemplateCompilerContextFamilyCompilationState.Pending
-        : TemplateCompilerContextFamilyCompilationState.Ineligible,
+      wireFundingOutcome(wires),
       TemplateCompilerContextFamilyCompilationStage.WireFunding,
       wires.reasons.map(wireFundingReason),
     );
@@ -229,6 +229,20 @@ export function compileTemplateCompilerContextFamily(
     projectTemplateCompilerContextFamilyValue(frozen.value),
     [],
   );
+}
+
+function wireFundingOutcome(
+  result: TemplateCompilerFamilyWireFundingResult,
+): Exclude<
+  TemplateCompilerContextFamilyCompilationState,
+  TemplateCompilerContextFamilyCompilationState.Exact
+> {
+  if (result.state === TemplateCompilerFamilyWireFundingState.Ineligible) {
+    return TemplateCompilerContextFamilyCompilationState.Ineligible;
+  }
+  return result.reasons.some((reason) => reason.draft?.resolution === TemplateCompilerFamilyWireResolution.Open)
+    ? TemplateCompilerContextFamilyCompilationState.Open
+    : TemplateCompilerContextFamilyCompilationState.Pending;
 }
 
 function completionOutcome(

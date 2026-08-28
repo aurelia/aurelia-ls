@@ -267,7 +267,12 @@ classification, expression parsing, and instruction lowering converge on the sam
   as terminal uncertainty. Structural execution then proves exact mutations and transfers before sealing. Freeze
   constructs the existing `CompilerTransformedTemplateTree`, node/attribute, `TemplateStructureDerivation`,
   `TemplateRenderTarget`, `TemplateInstructionSequence`, and `CompiledTemplate` products in final structural order.
-  Effective captured syntax and native slot outlet values remain independent typed Pending gates.
+  Effective captured syntax and native slot outlet values remain independent typed Pending gates. Wire funding keeps
+  exact lexical/source carrier identity separate from structural correspondence posture: paragraph auto-close can
+  leave extent provenance Open while its uniquely grounded template-controller node/attribute wire remains Exact.
+  Recursive schedule chronology also owns pre-attachment processContent adoption; context inventory order cannot assign
+  event ordinals, and already-committed removals require admitted target context rather than a generated root that the
+  later target execution has not created yet.
 - `template-compiler-context-family-compilation.ts` is the generation-bound in-process front door over that transaction.
   Root-inclusive mode sends an ordinary one-context template through the same family transaction rather than retaining
   a separate production corridor. It returns the final family or a stage-local Pending, Ineligible, Open, or Abrupt

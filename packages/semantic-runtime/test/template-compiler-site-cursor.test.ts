@@ -1376,6 +1376,46 @@ describe('template compiler root site cursor', () => {
       .toBe(frozen.value?.root.tree.productHandle);
   });
 
+  test('adopts nested and later root processContent removals in recursive cursor order', () => {
+    const result = fixture.freshRun('cursor-context-family-nested-process-content').execute(
+      TemplateCompilerSiteCursorTraversalMode.ClosedContextFamily,
+    );
+    const transcript = requireTranscript(result);
+    const completion = completeTemplateCompilerContextFamily(transcript, result.siteEndpoint);
+    if (completion.receipt == null) throw new Error('Expected nested processContent family completion.');
+    const rows = assembleTemplateCompilerContextFamilyRows(completion.receipt).assembly;
+    if (rows == null) throw new Error('Expected nested processContent family rows.');
+    const wires = prepareTemplateCompilerFamilyWireFunding(rows).funding;
+    if (wires == null) throw new Error('Expected nested processContent family wires.');
+    const allocation = prepareTemplateCompilerContextFamilyAllocation(rows, wires).preparation;
+    if (allocation == null) throw new Error('Expected nested processContent family allocation.');
+    const target = prepareTemplateCompilerContextFamilyTargetPlan(allocation).preparation;
+    if (target == null) throw new Error('Expected nested processContent family target plan.');
+    const schedule = prepareTemplateCompilerContextFamilyStructuralSchedule(target);
+    const processEvents = eventsOf(transcript, TemplateCompilerSiteCursorProcessContentEvent);
+    const expectedRemovals = processEvents.flatMap((event) => event.result.removals);
+
+    expect(processEvents).toHaveLength(2);
+    expect(processEvents.map((event) => transcript.taskSnapshot.contextForEvent(event)?.contextKind)).toEqual([
+      TemplateCompilerSiteCursorContextKind.TemplateController,
+      TemplateCompilerSiteCursorContextKind.Root,
+    ]);
+    expect(schedule.processContentExecutionOrder.map((entry) => entry.removal)).toEqual(expectedRemovals);
+    expect(schedule.processContentExecutionOrder.map((entry) => entry.contextMapping.cursorContext.contextKind)).toEqual([
+      TemplateCompilerSiteCursorContextKind.TemplateController,
+      TemplateCompilerSiteCursorContextKind.Root,
+    ]);
+
+    const attachmentPreparation = transcript.binding.execution.prepareContextFamilyTargetAttachment(target, schedule);
+    expect(attachmentPreparation.adoptedProcessContent.map((disposition) => disposition.node))
+      .toEqual(expectedRemovals.map((removal) => removal.occurrence));
+    expect(attachmentPreparation.adoptedProcessContent.map((disposition) => disposition.eventOrdinal)).toEqual([0, 1]);
+    const attachment = transcript.binding.execution.commitPreparedContextFamilyTargetAttachment(attachmentPreparation);
+    const execution = executeTemplateCompilerContextFamilyTarget(attachment);
+    expect(new Set(execution.consumedNodes)).toEqual(new Set(attachmentPreparation.adoptedProcessContent));
+    expect(transcript.binding.execution.seal()).toBe(transcript.binding.execution.sequence);
+  });
+
   test('joins the shared root-site run as one nominal compiler capability', () => {
     const candidate = fixture.runtime.computationLifecycle.begin({
       kind: 'template-compiler-root-site-run-test',

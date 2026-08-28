@@ -1,5 +1,6 @@
 import type { AddressHandle, ProductHandle } from '../kernel/handles.js';
 import type { TemplateCompilerExactAuthoredOrigin } from './template-compiler-authored-origin-index.js';
+import { TemplateCompilerBrowserOriginRouteKind } from './template-compiler-authored-origin-index.js';
 import type {
   TemplateCompilerContextFamilyRowAssembly,
 } from './template-compiler-context-family-row-assembly.js';
@@ -85,6 +86,8 @@ export class TemplateCompilerFamilyWireFundingDraft {
     readonly wireReference: TemplateCompilerFamilyWireReference | null,
     readonly valueAddressHandle: AddressHandle | null,
     readonly valueSpanRequired: boolean,
+    /** Structural correspondence posture remains independent from exact source-carrier wire identity. */
+    readonly browserOriginState: TemplateCompilerPreWalkBrowserOriginState,
     readonly resolution: TemplateCompilerFamilyWireResolution,
     readonly summary: string,
   ) {
@@ -102,6 +105,10 @@ export class TemplateCompilerFamilyWireFundingDraft {
         || authoredObject == null
         || wireReference == null
         || (valueSpanRequired && valueAddressHandle == null)
+        || (
+          browserOriginState !== TemplateCompilerPreWalkBrowserOriginState.Singular
+          && browserOriginState !== TemplateCompilerPreWalkBrowserOriginState.CorrespondenceOpen
+        )
       ))
       || (!nodeKind && !valueSpanRequired && valueAddressHandle != null)
       || (nodeKind && (valueSpanRequired || valueAddressHandle != null))
@@ -273,9 +280,11 @@ export function prepareTemplateCompilerFamilyWireFunding(
     expectedWire: HtmlNodeReference | null = null,
   ): void => {
     const resolved = resolveNode(assembly, basis, occurrence, expectedOrigin);
-    const resolution = resolved.resolution === TemplateCompilerFamilyWireResolution.ExactAuthored
+    const browserOriginState = expectedOrigin?.browserOriginState ?? occurrenceOriginState(assembly, occurrence);
+    const stagingMismatch = resolved.resolution === TemplateCompilerFamilyWireResolution.ExactAuthored
       && expectedWire != null
-      && !sameNodeReference(resolved.wireReference as HtmlNodeReference, expectedWire)
+      && !sameNodeReference(resolved.wireReference as HtmlNodeReference, expectedWire);
+    const resolution = stagingMismatch
       ? TemplateCompilerFamilyWireResolution.InvariantMismatch
       : resolved.resolution;
     drafts.push(new TemplateCompilerFamilyWireFundingDraft(
@@ -290,9 +299,12 @@ export function prepareTemplateCompilerFamilyWireFunding(
       resolved.wireReference,
       null,
       false,
+      browserOriginState,
       resolution,
-      resolution === TemplateCompilerFamilyWireResolution.InvariantMismatch
-        ? `Recovered node wire for '${occurrence.occurrenceKey}' diverges from retained staging.`
+      stagingMismatch
+        ? `Recovered node wire for '${occurrence.occurrenceKey}' diverges from retained staging in ${
+            nodeReferenceMismatchFields(resolved.wireReference as HtmlNodeReference, expectedWire).join(', ')
+          }.`
         : resolved.summary,
     ));
   };
@@ -307,6 +319,7 @@ export function prepareTemplateCompilerFamilyWireFunding(
     expectedRawValue: string | null = null,
   ): void => {
     const resolved = resolveAttribute(assembly, basis, occurrence, expectedOrigin);
+    const browserOriginState = expectedOrigin?.browserOriginState ?? occurrenceOriginState(assembly, occurrence);
     const authored = resolved.authoredObject instanceof HtmlAttribute ? resolved.authoredObject : null;
     let resolution = resolved.resolution;
     let summary = resolved.summary;
@@ -344,6 +357,7 @@ export function prepareTemplateCompilerFamilyWireFunding(
       resolved.wireReference,
       valueSpanRequired ? authored?.valueAddressHandle ?? null : null,
       valueSpanRequired,
+      browserOriginState,
       resolution,
       summary,
     ));
@@ -465,11 +479,22 @@ function resolveNode(
     || !sameExactOrigin(expectedOrigin.exactAuthoredOrigin, exactOrigin)
   );
   if (mismatch) return mismatchWire('Projection node origin diverges from the current occurrence forest.');
-  const posture = resolutionPosture(assembly, occurrence, expectedOrigin, exactOrigin);
+  let posture = resolutionPosture(assembly, occurrence, expectedOrigin, exactOrigin);
   if (exactOrigin == null) return unresolvedWire(posture, occurrence.occurrenceKey);
   const originState = expectedOrigin?.browserOriginState ?? occurrenceOriginState(assembly, occurrence);
-  if (originState !== TemplateCompilerPreWalkBrowserOriginState.Singular) {
-    return mismatchWire('Exact authored node origin contradicts its retained browser-origin posture.');
+  const rawRoute = occurrence.inputReference == null
+    ? null
+    : assembly.receipt.traversal.audit.transcript.preWalkAuthority
+      .originRouteForBrowserProduct(occurrence.inputReference.productHandle);
+  const exactCarrierThroughOpenCorrespondence = occurrence.generation == null
+    && originState === TemplateCompilerPreWalkBrowserOriginState.CorrespondenceOpen
+    && rawRoute?.routeKind === TemplateCompilerBrowserOriginRouteKind.Singular
+    && sameExactOrigin(rawRoute.exactOrigin, exactOrigin);
+  if (exactCarrierThroughOpenCorrespondence) posture = TemplateCompilerFamilyWireResolution.ExactAuthored;
+  if (originState !== TemplateCompilerPreWalkBrowserOriginState.Singular && !exactCarrierThroughOpenCorrespondence) {
+    return mismatchWire(
+      `Exact authored node origin contradicts retained '${originState}' browser-origin posture.`,
+    );
   }
   const authored = basis.nodesByProduct.get(exactOrigin.authored.productHandle) ?? null;
   if (authored == null || authored instanceof HtmlDocument || !('toReference' in authored)) {
@@ -508,11 +533,22 @@ function resolveAttribute(
     || !sameExactOrigin(expectedOrigin.exactAuthoredOrigin, exactOrigin)
   );
   if (mismatch) return mismatchWire('Projection attribute origin diverges from the current occurrence forest.');
-  const posture = resolutionPosture(assembly, occurrence, expectedOrigin, exactOrigin);
+  let posture = resolutionPosture(assembly, occurrence, expectedOrigin, exactOrigin);
   if (exactOrigin == null) return unresolvedWire(posture, occurrence.occurrenceKey);
   const originState = expectedOrigin?.browserOriginState ?? occurrenceOriginState(assembly, occurrence);
-  if (originState !== TemplateCompilerPreWalkBrowserOriginState.Singular) {
-    return mismatchWire('Exact authored attribute origin contradicts its retained browser-origin posture.');
+  const rawRoute = occurrence.inputReference == null
+    ? null
+    : assembly.receipt.traversal.audit.transcript.preWalkAuthority
+      .originRouteForBrowserProduct(occurrence.inputReference.productHandle);
+  const exactCarrierThroughOpenCorrespondence = occurrence.generation == null
+    && originState === TemplateCompilerPreWalkBrowserOriginState.CorrespondenceOpen
+    && rawRoute?.routeKind === TemplateCompilerBrowserOriginRouteKind.Singular
+    && sameExactOrigin(rawRoute.exactOrigin, exactOrigin);
+  if (exactCarrierThroughOpenCorrespondence) posture = TemplateCompilerFamilyWireResolution.ExactAuthored;
+  if (originState !== TemplateCompilerPreWalkBrowserOriginState.Singular && !exactCarrierThroughOpenCorrespondence) {
+    return mismatchWire(
+      `Exact authored attribute origin contradicts retained '${originState}' browser-origin posture.`,
+    );
   }
   const authored = basis.attributesByProduct.get(exactOrigin.authored.productHandle) ?? null;
   if (authored == null) {
@@ -617,6 +653,15 @@ function sameNodeReference(left: HtmlNodeReference, right: HtmlNodeReference): b
     && left.productHandle === right.productHandle
     && left.identityHandle === right.identityHandle
     && left.addressHandle === right.addressHandle;
+}
+
+function nodeReferenceMismatchFields(left: HtmlNodeReference, right: HtmlNodeReference): readonly string[] {
+  return [
+    ...(left.nodeKind === right.nodeKind ? [] : ['node-kind']),
+    ...(left.productHandle === right.productHandle ? [] : ['product']),
+    ...(left.identityHandle === right.identityHandle ? [] : ['identity']),
+    ...(left.addressHandle === right.addressHandle ? [] : ['address']),
+  ];
 }
 
 function sameAttributeReference(left: HtmlAttributeReference, right: HtmlAttributeReference): boolean {

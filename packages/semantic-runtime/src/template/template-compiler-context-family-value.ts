@@ -1,4 +1,5 @@
 import type { ProductHandle } from '../kernel/handles.js';
+import type { OpenSeam } from '../kernel/open-seam.js';
 import type { CustomElementDefinition } from '../resources/custom-element-definition.js';
 import type {
   CompiledTemplate,
@@ -138,6 +139,7 @@ export class TemplateCompilerContextFamilyValue {
     readonly contexts: readonly TemplateCompilerContextFamilyValueContext[],
     readonly derivations: readonly TemplateStructureDerivation[],
     readonly instructions: readonly TemplateInstruction[],
+    readonly sourceOpenSeams: readonly OpenSeam[],
     private readonly current: () => boolean,
   ) {
     if (
@@ -174,6 +176,7 @@ export function projectTemplateCompilerContextFamilyValue(
     contexts,
     frozen.derivations,
     instructions,
+    frozen.browserInput.openSeams,
     () => frozen.isCurrent(),
   );
 }
