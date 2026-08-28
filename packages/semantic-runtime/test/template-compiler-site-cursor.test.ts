@@ -13,6 +13,11 @@ import { parseBrowserTemplateFragmentDraft } from '../src/template/browser-templ
 import { selectBrowserTemplateCompilerCarrier } from '../src/template/browser-template-selection.js';
 import { TemplateRenderTargetKind } from '../src/template/compiled-template.js';
 import {
+  HydrateElementInstruction,
+  HydrateElementProjectionContributorDisposition,
+  HydrateTemplateControllerInstruction,
+} from '../src/template/instruction-ir.js';
+import {
   TemplateCompilerReadView,
   TemplateCompilerWorldAuthority,
 } from '../src/template/compiler-read-view.js';
@@ -106,6 +111,7 @@ import {
 import { executeTemplateCompilerOccurrenceTarget } from '../src/template/template-compiler-occurrence-target-execution.js';
 import {
   TemplateCompilerTargetContextState,
+  TemplateCompilerTargetContextRole,
   TemplateCompilerTargetPlan,
   TemplateCompilerTargetRowPosture,
   TemplateCompilerTargetRowSourceKind,
@@ -1320,6 +1326,74 @@ describe('template compiler root site cursor', () => {
       preWalkAuthority: TemplateCompilerPreWalkRemainderAuthority.capture(foreign.binding),
     });
     expect(wrongPrewalk.state).toBe(TemplateCompilerSiteCursorResultState.Mismatch);
+  });
+
+  test('pins the shared generated-context graph before live family scheduling', () => {
+    const tcPlan = fixture.run('cursor-context-family-tc').compilation.compiledTemplate.targetPlan;
+    const tcContexts = tcPlan.readContexts();
+    expect(tcContexts.map((context) => context.role)).toEqual([
+      TemplateCompilerTargetContextRole.Root,
+      TemplateCompilerTargetContextRole.TemplateController,
+      TemplateCompilerTargetContextRole.TemplateController,
+    ]);
+    expect(tcContexts[0]?.readRows().map((row) => [
+      row.targetKind,
+      row.node != null && 'tagName' in row.node ? row.node.tagName : null,
+      row.instructions.map((instruction) => instruction.instructionKind),
+    ])).toEqual([
+      [TemplateRenderTargetKind.RenderLocation, 'template', ['hydrate-template-controller']],
+      [TemplateRenderTargetKind.MarkerTarget, 'span', ['property-binding']],
+    ]);
+    expect(tcContexts[1]?.readRows().map((row) => [
+      row.targetKind,
+      row.instructions.map((instruction) => instruction.instructionKind),
+    ])).toEqual([
+      [TemplateRenderTargetKind.RenderLocation, ['hydrate-template-controller']],
+    ]);
+    expect(tcContexts[2]?.readRows().map((row) => [
+      row.targetKind,
+      row.node != null && 'tagName' in row.node ? row.node.tagName : null,
+      row.instructions.map((instruction) => instruction.instructionKind),
+    ])).toEqual([
+      [TemplateRenderTargetKind.MarkerTarget, 'div', ['property-binding']],
+    ]);
+    expect(tcContexts.slice(0, 2).map((context) =>
+      context.readRows()[0]?.instructions[0]
+    ).every((instruction) => instruction instanceof HydrateTemplateControllerInstruction)).toBe(true);
+
+    const projectionPlan = fixture.run('cursor-context-family-projection').compilation.compiledTemplate.targetPlan;
+    const projectionContexts = projectionPlan.readContexts();
+    expect(projectionContexts.map((context) => [context.role, context.slotName])).toEqual([
+      [TemplateCompilerTargetContextRole.Root, null],
+      [TemplateCompilerTargetContextRole.Projection, 'default'],
+      [TemplateCompilerTargetContextRole.Projection, 'named'],
+    ]);
+    expect(projectionContexts[0]?.readRows().map((row) => [
+      row.targetKind,
+      row.node != null && 'tagName' in row.node ? row.node.tagName : null,
+      row.instructions.map((instruction) => instruction.instructionKind),
+    ])).toEqual([
+      [TemplateRenderTargetKind.MarkerTarget, 'cursor-leaf', ['hydrate-element']],
+      [TemplateRenderTargetKind.MarkerTarget, 'div', ['property-binding']],
+    ]);
+    expect(projectionContexts.slice(1).map((context) => context.readRows())).toEqual([[], []]);
+    const hydrate = projectionContexts[0]?.readRows()[0]?.instructions[0];
+    if (!(hydrate instanceof HydrateElementInstruction)) throw new Error('Expected projection HydrateElement.');
+    expect(hydrate.projections.map((projection) => [
+      projection.slotName,
+      projection.contributors.map((contributor) => contributor.disposition),
+    ])).toEqual([
+      ['default', [HydrateElementProjectionContributorDisposition.RetainedNode]],
+      ['named', [
+        HydrateElementProjectionContributorDisposition.RetainedNode,
+        HydrateElementProjectionContributorDisposition.UnwrappedTemplateContent,
+      ]],
+    ]);
+
+    expect(fixture.transcript('cursor-context-family-tc').frontier?.frontierKind)
+      .toBe(TemplateCompilerSiteCursorFrontierKind.AfterAttributesBeforeTemplateController);
+    expect(fixture.transcript('cursor-context-family-projection').frontier?.frontierKind)
+      .toBe(TemplateCompilerSiteCursorFrontierKind.AfterAttributesBeforeProjection);
   });
 
   test('keeps a wide attribute walk linear without consulting indexOf-backed ordinals', () => {

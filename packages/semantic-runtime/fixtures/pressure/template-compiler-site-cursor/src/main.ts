@@ -4,11 +4,14 @@ import {
   customAttribute,
   customElement,
   StandardConfiguration,
+  templateController,
 } from '@aurelia/runtime-html';
 import cursorAsElementEmptyTemplate from './cursor-as-element-empty.html';
 import cursorAuthoredCarrierEmptyTemplate from './cursor-authored-carrier-empty.html';
 import cursorAuthoredCarrierStaticTemplate from './cursor-authored-carrier-static.html';
 import cursorCommentShieldTemplate from './cursor-comment-shield.html';
+import cursorContextFamilyProjectionTemplate from './cursor-context-family-projection.html';
+import cursorContextFamilyTcTemplate from './cursor-context-family-tc.html';
 import cursorEmptyTemplate from './cursor-empty.html';
 import cursorFosterTemplate from './cursor-foster.html';
 import cursorLiveDuplicateTemplate from './cursor-live-duplicate.html';
@@ -197,6 +200,22 @@ class CursorCommentShield {
   inside = 'inside';
 }
 
+@templateController('cursor-outer')
+class CursorOuterTemplateController {}
+
+@templateController('cursor-inner')
+class CursorInnerTemplateController {}
+
+@customElement({
+  name: 'cursor-context-family-tc',
+  template: cursorContextFamilyTcTemplate,
+  dependencies: [CursorOuterTemplateController, CursorInnerTemplateController],
+})
+class CursorContextFamilyTc {
+  value = 'inner';
+  after = 'after';
+}
+
 @customElement({
   name: 'cursor-ten-hole',
   template: cursorTenHoleTemplate,
@@ -245,6 +264,15 @@ class CursorLeaf {}
   dependencies: [CursorLeaf],
 })
 class CursorProjection {}
+
+@customElement({
+  name: 'cursor-context-family-projection',
+  template: cursorContextFamilyProjectionTemplate,
+  dependencies: [CursorLeaf],
+})
+class CursorContextFamilyProjection {
+  after = 'after';
+}
 
 @customElement({
   name: 'cursor-marker',
@@ -427,11 +455,13 @@ void new Aurelia()
     CursorRowMerged,
     CursorRowInterleave,
     CursorCommentShield,
+    CursorContextFamilyTc,
     CursorTenHole,
     CursorAsElementEmpty,
     CursorAuthoredCarrierEmpty,
     CursorAuthoredCarrierStatic,
     CursorProjection,
+    CursorContextFamilyProjection,
     CursorMarker,
     CursorNativeContainerless,
     CursorWide,
