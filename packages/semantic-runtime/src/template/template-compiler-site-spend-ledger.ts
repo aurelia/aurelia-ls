@@ -1,4 +1,5 @@
 import type { ProductHandle } from '../kernel/handles.js';
+import { TemplateCompilerBrowserOriginRouteKind } from './template-compiler-authored-origin-index.js';
 import {
   TemplateCompilerNormalizedSite,
   TemplateCompilerNormalizedTextSite,
@@ -26,10 +27,12 @@ import {
 } from './template-compiler-occurrence.js';
 import type { TemplateCompilerNodeOccurrence } from './template-compiler-occurrence.js';
 import {
+  TemplateCompilerPreWalkBrowserOriginState,
   TemplateCompilerPreWalkRemainderAuthority,
   TemplateCompilerPreWalkRemainderReceipt,
 } from './template-compiler-prewalk-remainder.js';
 import { TemplateCompilerProcessContentResult } from './template-compiler-process-content.js';
+import { TemplateCompilerProjectionSlotConsumptionReceipt } from './template-compiler-projection-logical-extraction.js';
 
 export type TemplateCompilerNormalizedSiteBundle =
   | TemplateCompilerNormalizedSite
@@ -53,6 +56,7 @@ export const enum TemplateCompilerSiteSpendDisposition {
   InertTemplateContent = 'inert-template-content',
   LetContentSuppressed = 'let-content-suppressed',
   ProcessContentRemoved = 'process-content-removed',
+  ProjectionSlotAttributeConsumed = 'projection-slot-attribute-consumed',
 }
 
 /** Caller-classified candidate occurrence that intentionally has no authored-precedent bundle spend. */
@@ -67,6 +71,8 @@ export const enum TemplateCompilerOccurrenceOnlyDisposition {
   LiveAttributeAssembled = 'live-attribute-assembled',
   /** Reached browser element compiled by live identity despite open or non-authored structural lineage. */
   LiveElementAssembled = 'live-element-assembled',
+  /** Explicit live `[au-slot]` excluded before a projected logical owner walk without one authored bundle. */
+  ProjectionSlotAttributeConsumed = 'projection-slot-attribute-consumed',
 }
 
 export const enum TemplateCompilerSiteSpendConflictKind {
@@ -86,6 +92,7 @@ export const enum TemplateCompilerSiteSpendConflictKind {
   AuthoredRemainderForSpentSite = 'authored-remainder-for-spent-site',
   InvalidPreWalkRemainderAuthority = 'invalid-pre-walk-remainder-authority',
   InvalidProcessContentRemovalAuthority = 'invalid-process-content-removal-authority',
+  InvalidProjectionSlotConsumptionAuthority = 'invalid-projection-slot-consumption-authority',
 }
 
 /** One local-extraction disposition captured from the exact post-bootstrap occurrence topology. */
@@ -276,6 +283,7 @@ export class TemplateCompilerSiteSpend {
     readonly siteEventOrdinal: number | null,
     readonly causeOperation: TemplateCompilerOperation | null,
     readonly destinationLane: TemplateCompilerExecutionLaneReference | null,
+    readonly projectionSlotConsumption: TemplateCompilerProjectionSlotConsumptionReceipt | null,
   ) {}
 }
 
@@ -285,7 +293,8 @@ export class TemplateCompilerOccurrenceOnlyRow {
     readonly ordinal: number,
     readonly occurrence: TemplateCompilerOccurrenceOnlyTarget,
     readonly disposition: TemplateCompilerOccurrenceOnlyDisposition,
-    readonly siteEventOrdinal: number,
+    readonly siteEventOrdinal: number | null,
+    readonly projectionSlotConsumption: TemplateCompilerProjectionSlotConsumptionReceipt | null,
   ) {}
 }
 
@@ -492,7 +501,7 @@ export class TemplateCompilerSiteSpendLedger {
     }
     const eventConflict = this.validateSiteEventOrdinal(siteEventOrdinal, bundle, occurrence, disposition);
     if (eventConflict != null) return eventConflict;
-    return this.commitSpend(bundle, occurrence, disposition, siteEventOrdinal, null, null);
+    return this.commitSpend(bundle, occurrence, disposition, siteEventOrdinal, null, null, null);
   }
 
   exclude(
@@ -521,7 +530,7 @@ export class TemplateCompilerSiteSpendLedger {
           disposition,
         );
       }
-      return this.commitSpend(bundle, occurrence, disposition, null, null, null);
+      return this.commitSpend(bundle, occurrence, disposition, null, null, null, null);
     }
     if (
       disposition !== TemplateCompilerSiteSpendDisposition.LocalDeclarationConsumed
@@ -571,6 +580,7 @@ export class TemplateCompilerSiteSpendLedger {
       null,
       receipt.causeOperation,
       receipt.destinationLane,
+      null,
     );
   }
 
@@ -595,7 +605,64 @@ export class TemplateCompilerSiteSpendLedger {
         disposition,
       );
     }
-    return this.commitSpend(bundle, occurrence, disposition, null, result.operation, null);
+    return this.commitSpend(bundle, occurrence, disposition, null, result.operation, null, null);
+  }
+
+  /** Exclude one exact authored `[au-slot]` bundle through its projection grouping capability. */
+  excludeProjectionSlotAttribute(
+    bundle: TemplateCompilerNormalizedSite,
+    occurrence: TemplateCompilerAttributeOccurrence,
+    consumption: TemplateCompilerProjectionSlotConsumptionReceipt,
+  ): TemplateCompilerSiteSpendAttempt {
+    this.assertOpen();
+    const disposition = TemplateCompilerSiteSpendDisposition.ProjectionSlotAttributeConsumed;
+    const common = this.validateCommonSpend(bundle, occurrence, disposition);
+    if (common != null) return common;
+    if (!this.validProjectionSlotConsumption(consumption, occurrence, bundle)) {
+      return this.conflict(
+        TemplateCompilerSiteSpendConflictKind.InvalidProjectionSlotConsumptionAuthority,
+        bundle,
+        occurrence,
+        disposition,
+      );
+    }
+    return this.commitSpend(bundle, occurrence, disposition, null, null, null, consumption);
+  }
+
+  /** Exclude one explicit live `[au-slot]` occurrence with no singular authored bundle. */
+  excludeProjectionSlotOccurrence(
+    occurrence: TemplateCompilerAttributeOccurrence,
+    consumption: TemplateCompilerProjectionSlotConsumptionReceipt,
+  ): TemplateCompilerOccurrenceOnlyAttempt {
+    this.assertOpen();
+    const disposition = TemplateCompilerOccurrenceOnlyDisposition.ProjectionSlotAttributeConsumed;
+    const occupied = this.rowsByOccurrence.get(occurrence) ?? null;
+    if (occupied != null) {
+      return this.conflict(
+        TemplateCompilerSiteSpendConflictKind.OccurrenceAlreadySpent,
+        occupied instanceof TemplateCompilerSiteSpend ? occupied.bundle : null,
+        occurrence,
+        disposition,
+      );
+    }
+    if (!this.validProjectionSlotConsumption(consumption, occurrence, null)) {
+      return this.conflict(
+        TemplateCompilerSiteSpendConflictKind.InvalidProjectionSlotConsumptionAuthority,
+        null,
+        occurrence,
+        disposition,
+      );
+    }
+    const row = new TemplateCompilerOccurrenceOnlyRow(
+      this.occurrenceOnlyRows.length,
+      occurrence,
+      disposition,
+      null,
+      consumption,
+    );
+    this.occurrenceOnlyRows.push(row);
+    this.rowsByOccurrence.set(occurrence, row);
+    return row;
   }
 
   recordOccurrenceOnly(
@@ -628,6 +695,7 @@ export class TemplateCompilerSiteSpendLedger {
       occurrence,
       disposition,
       siteEventOrdinal,
+      null,
     );
     this.occurrenceOnlyRows.push(row);
     this.rowsByOccurrence.set(occurrence, row);
@@ -837,6 +905,7 @@ export class TemplateCompilerSiteSpendLedger {
     siteEventOrdinal: number | null,
     causeOperation: TemplateCompilerOperation | null,
     destinationLane: TemplateCompilerExecutionLaneReference | null,
+    projectionSlotConsumption: TemplateCompilerProjectionSlotConsumptionReceipt | null,
   ): TemplateCompilerSiteSpend {
     const spend = new TemplateCompilerSiteSpend(
       this.spends.length,
@@ -846,6 +915,7 @@ export class TemplateCompilerSiteSpendLedger {
       siteEventOrdinal,
       causeOperation,
       destinationLane,
+      projectionSlotConsumption,
     );
     this.spends.push(spend);
     this.spendsByBundle.set(bundle, spend);
@@ -893,7 +963,42 @@ export class TemplateCompilerSiteSpendLedger {
         return occurrence instanceof TemplateCompilerAttributeOccurrence;
       case TemplateCompilerOccurrenceOnlyDisposition.LiveElementAssembled:
         return occurrence instanceof TemplateCompilerElementOccurrence;
+      case TemplateCompilerOccurrenceOnlyDisposition.ProjectionSlotAttributeConsumed:
+        return false;
     }
+  }
+
+  private validProjectionSlotConsumption(
+    consumption: TemplateCompilerProjectionSlotConsumptionReceipt,
+    occurrence: TemplateCompilerAttributeOccurrence,
+    bundle: TemplateCompilerNormalizedSite | null,
+  ): boolean {
+    if (
+      !(consumption instanceof TemplateCompilerProjectionSlotConsumptionReceipt)
+      || !consumption.isModuleConstructed()
+      || consumption.attribute !== occurrence
+      || consumption.element !== occurrence.owner
+      || consumption.contributor.slotAttribute !== occurrence
+      || consumption.origin.occurrence !== occurrence
+    ) return false;
+    const origin = consumption.origin;
+    if (bundle == null) {
+      if (origin.exactAuthoredOrigin != null) return false;
+      return (
+        origin.browserOriginState === TemplateCompilerPreWalkBrowserOriginState.Absent
+        && (
+          origin.browserOriginRoute == null
+          || origin.browserOriginRoute.routeKind === TemplateCompilerBrowserOriginRouteKind.Absent
+        )
+      ) || (
+        origin.browserOriginState === TemplateCompilerPreWalkBrowserOriginState.NonSingular
+        && origin.browserOriginRoute?.routeKind === TemplateCompilerBrowserOriginRouteKind.NonSingular
+      );
+    }
+    return origin.browserOriginState === TemplateCompilerPreWalkBrowserOriginState.Singular
+      && origin.browserOriginRoute?.routeKind === TemplateCompilerBrowserOriginRouteKind.Singular
+      && origin.browserOriginRoute.exactOrigin?.authored.productHandle === bundle.attributeProductHandle
+      && origin.exactAuthoredOrigin?.authored.productHandle === bundle.attributeProductHandle;
   }
 
   private conflict(

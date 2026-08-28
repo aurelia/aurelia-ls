@@ -2,6 +2,7 @@ import { describe, expect, test, vi } from 'vitest';
 
 import type { ProductHandle } from '../src/kernel/handles.js';
 import { HtmlCommentSemanticKind, HtmlNamespaceKind } from '../src/template/html-ir.js';
+import { TemplateCompilerBrowserOriginRouteKind } from '../src/template/template-compiler-authored-origin-index.js';
 import {
   TemplateCompilerNormalizedDownstreamInstructionInventory,
   TemplateCompilerNormalizedOutcomeInventory,
@@ -32,6 +33,8 @@ import {
   TemplateCompilerTextOccurrence,
 } from '../src/template/template-compiler-occurrence.js';
 import type { TemplateCompilerFragmentOccurrence } from '../src/template/template-compiler-occurrence.js';
+import { TemplateCompilerPreWalkBrowserOriginState } from '../src/template/template-compiler-prewalk-remainder.js';
+import { TemplateCompilerProjectionSlotConsumptionReceipt } from '../src/template/template-compiler-projection-logical-extraction.js';
 import {
   executeTemplateCompilerLocalExtraction,
   type TemplateCompilerLocalDefinitionReservation,
@@ -490,6 +493,118 @@ describe('template compiler site spend ledger', () => {
     ).state).toBe(TemplateCompilerSiteSpendLedgerState.Mismatch);
   });
 
+  test('excludes projection slot syntax through nominal receipts without spending site-event ordinals', () => {
+    const moduleConstructed = vi.spyOn(
+      TemplateCompilerProjectionSlotConsumptionReceipt.prototype,
+      'isModuleConstructed',
+    ).mockReturnValue(true);
+    const authoredSite = normalizedAttributeSite('projection-slot-authored');
+    const authoredOccurrence = projectionSlotOccurrence('projection-slot-authored');
+    const liveOccurrence = projectionSlotOccurrence('projection-slot-live');
+    const reconstructedOccurrence = projectionSlotOccurrence('projection-slot-reconstructed');
+    const authoredConsumption = projectionSlotConsumption(
+      authoredOccurrence,
+      authoredSite.attributeProductHandle,
+    );
+    const liveConsumption = projectionSlotConsumption(liveOccurrence, null);
+    const reconstructedConsumption = projectionSlotConsumption(
+      reconstructedOccurrence,
+      null,
+      TemplateCompilerPreWalkBrowserOriginState.NonSingular,
+    );
+    const ledger = new TemplateCompilerSiteSpendLedger(normalizedIndex([authoredSite], []));
+
+    try {
+      const authored = ledger.excludeProjectionSlotAttribute(
+        authoredSite,
+        authoredOccurrence,
+        authoredConsumption,
+      );
+      expect(authored).toMatchObject({
+        disposition: TemplateCompilerSiteSpendDisposition.ProjectionSlotAttributeConsumed,
+        siteEventOrdinal: null,
+        causeOperation: null,
+        destinationLane: null,
+        projectionSlotConsumption: authoredConsumption,
+      });
+      expect(ledger.nextSiteEventOrdinal).toBe(0);
+
+      const live = ledger.excludeProjectionSlotOccurrence(liveOccurrence, liveConsumption);
+      expect(live).toMatchObject({
+        disposition: TemplateCompilerOccurrenceOnlyDisposition.ProjectionSlotAttributeConsumed,
+        siteEventOrdinal: null,
+        projectionSlotConsumption: liveConsumption,
+      });
+      expect(ledger.rowForOccurrence(liveOccurrence)).toBe(live);
+      expect(ledger.nextSiteEventOrdinal).toBe(0);
+
+      const reconstructed = ledger.excludeProjectionSlotOccurrence(
+        reconstructedOccurrence,
+        reconstructedConsumption,
+      );
+      expect(reconstructed).toMatchObject({
+        disposition: TemplateCompilerOccurrenceOnlyDisposition.ProjectionSlotAttributeConsumed,
+        siteEventOrdinal: null,
+        projectionSlotConsumption: reconstructedConsumption,
+      });
+      expect(ledger.nextSiteEventOrdinal).toBe(0);
+
+      const reached = ledger.recordOccurrenceOnly(
+        textOccurrence('projection-slot-later-site'),
+        TemplateCompilerOccurrenceOnlyDisposition.StaticTextPassThrough,
+        0,
+      );
+      expect(reached).toMatchObject({ siteEventOrdinal: 0, projectionSlotConsumption: null });
+      expect(ledger.nextSiteEventOrdinal).toBe(1);
+
+      const result = ledger.finish(TemplateCompilerSiteSpendCompletion.complete(ledger.nextSiteEventOrdinal));
+      expect(result.state).toBe(TemplateCompilerSiteSpendLedgerState.AllSitesAccounted);
+      expect(result.rawUnspent).toEqual([]);
+      expect(result.spends).toEqual([authored]);
+      expect(result.occurrenceOnlyRows).toEqual([live, reconstructed, reached]);
+    } finally {
+      moduleConstructed.mockRestore();
+    }
+  });
+
+  test('rejects foreign-origin and structurally forged projection slot receipts', () => {
+    const moduleConstructed = vi.spyOn(
+      TemplateCompilerProjectionSlotConsumptionReceipt.prototype,
+      'isModuleConstructed',
+    ).mockReturnValue(true);
+    const site = normalizedAttributeSite('projection-slot-authority');
+    const occurrence = projectionSlotOccurrence('projection-slot-authority');
+    const ledger = new TemplateCompilerSiteSpendLedger(normalizedIndex([site], []));
+
+    try {
+      expect(ledger.excludeProjectionSlotAttribute(
+        site,
+        occurrence,
+        {} as never,
+      )).toMatchObject({
+        conflictKind: TemplateCompilerSiteSpendConflictKind.InvalidProjectionSlotConsumptionAuthority,
+      });
+
+      expect(ledger.excludeProjectionSlotAttribute(
+        site,
+        occurrence,
+        projectionSlotConsumption(occurrence, product('attribute:foreign-projection-slot')),
+      )).toMatchObject({
+        conflictKind: TemplateCompilerSiteSpendConflictKind.InvalidProjectionSlotConsumptionAuthority,
+      });
+      expect(ledger.recordOccurrenceOnly(
+        projectionSlotOccurrence('projection-slot-free-disposition'),
+        TemplateCompilerOccurrenceOnlyDisposition.ProjectionSlotAttributeConsumed,
+        0,
+      )).toMatchObject({
+        conflictKind: TemplateCompilerSiteSpendConflictKind.InvalidOccurrenceDisposition,
+      });
+      expect(ledger.nextSiteEventOrdinal).toBe(0);
+    } finally {
+      moduleConstructed.mockRestore();
+    }
+  });
+
   test('keeps authored remainder evidence, raw unspent, and frontier blocking separate', () => {
     const spent = normalizedAttributeSite('spent');
     const blocked = normalizedAttributeSite('blocked');
@@ -762,6 +877,56 @@ function attributeOccurrenceOwnedBy(
     null,
     null,
   );
+}
+
+function projectionSlotOccurrence(localKey: string): TemplateCompilerAttributeOccurrence {
+  const owner = elementOccurrence(`projection-slot-owner:${localKey}`);
+  return new TemplateCompilerAttributeOccurrence(
+    `projection-slot-attribute-occurrence:${localKey}`,
+    null,
+    null,
+    owner,
+    'au-slot',
+    'named',
+    null,
+    null,
+  );
+}
+
+function projectionSlotConsumption(
+  occurrence: TemplateCompilerAttributeOccurrence,
+  authoredProductHandle: ProductHandle | null,
+  originState: TemplateCompilerPreWalkBrowserOriginState = authoredProductHandle == null
+    ? TemplateCompilerPreWalkBrowserOriginState.Absent
+    : TemplateCompilerPreWalkBrowserOriginState.Singular,
+): TemplateCompilerProjectionSlotConsumptionReceipt {
+  const exactOrigin = authoredProductHandle == null
+    ? null
+    : { authored: { productHandle: authoredProductHandle } };
+  return Object.assign(
+    Object.create(TemplateCompilerProjectionSlotConsumptionReceipt.prototype) as object,
+    {
+      attribute: occurrence,
+      element: occurrence.owner,
+      contributor: { slotAttribute: occurrence },
+      origin: {
+        occurrence,
+        browserOriginState: originState,
+        browserOriginRoute: originState === TemplateCompilerPreWalkBrowserOriginState.Absent
+          ? null
+          : originState === TemplateCompilerPreWalkBrowserOriginState.NonSingular
+            ? {
+                routeKind: TemplateCompilerBrowserOriginRouteKind.NonSingular,
+                exactOrigin: null,
+              }
+            : {
+              routeKind: TemplateCompilerBrowserOriginRouteKind.Singular,
+              exactOrigin,
+            },
+        exactAuthoredOrigin: exactOrigin,
+      },
+    },
+  ) as TemplateCompilerProjectionSlotConsumptionReceipt;
 }
 
 function textOccurrence(localKey: string): TemplateCompilerTextOccurrence {
