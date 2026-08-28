@@ -5,6 +5,7 @@ import {
   type TemplateCompilerTraversalCompletionAuditReasonKind,
 } from './template-compiler-completion-audit.js';
 import type { TemplateCompilerSiteExecutionEndpointReceipt } from './template-compiler-execution.js';
+import { TemplateCompilerTargetRowPlacementKind } from './compiler-target-plan.js';
 import {
   TemplateCompilerHydrateElementBlockerKind,
   TemplateCompilerHydrateElementBlockerScope,
@@ -23,6 +24,7 @@ import {
   type TemplateCompilerSiteCursorProjectionEntrantBandStaging,
   TemplateCompilerSiteCursorProjectionExtractionEvent,
   TemplateCompilerSiteCursorSubtreeExclusionEvent,
+  TemplateCompilerSiteCursorTemplateControllerTransitionEvent,
   TemplateCompilerSiteCursorTextEvent,
 } from './template-compiler-site-cursor-event.js';
 import {
@@ -42,6 +44,10 @@ import {
   TemplateCompilerSiteSpendDisposition,
   type TemplateCompilerSiteSpend,
 } from './template-compiler-site-spend-ledger.js';
+import type {
+  TemplateCompilerTemplateControllerLeafRehomingReceipt,
+  TemplateCompilerTemplateControllerTransitionEdgeReceipt,
+} from './template-compiler-template-controller-transition.js';
 
 const contextFamilyTraversalAuthority = {};
 const contextFamilyCompletionAuthority = {};
@@ -66,6 +72,7 @@ export const enum TemplateCompilerContextFamilyCompletionReasonKind {
   ExplicitShadowUnsupported = 'explicit-shadow-unsupported',
   ContainerlessPlacementMismatch = 'containerless-placement-mismatch',
   TemplateControllerTransitionMissing = 'template-controller-transition-missing',
+  TemplateControllerTransitionEvidenceMismatch = 'template-controller-transition-evidence-mismatch',
 }
 
 export class TemplateCompilerContextFamilyCompletionReason {
@@ -98,15 +105,67 @@ export class TemplateCompilerCompletedProjectionContext {
   }
 }
 
+/** Exact future HTC row edge that owns one generated TC traversal context. */
+export class TemplateCompilerCompletedTemplateControllerContext {
+  constructor(
+    readonly event: TemplateCompilerSiteCursorTemplateControllerTransitionEvent,
+    readonly edge: TemplateCompilerTemplateControllerTransitionEdgeReceipt,
+  ) {
+    if (
+      !event.isCoherent()
+      || !edge.isModuleConstructed()
+      || edge.preparation !== event.preparation
+      || !event.realization.edges.includes(edge)
+      || edge.childContext.contextKind !== TemplateCompilerSiteCursorContextKind.TemplateController
+    ) {
+      throw new Error('Completed template-controller context lost transition-event or edge authority.');
+    }
+  }
+
+  get context(): TemplateCompilerSiteCursorContextReference {
+    return this.edge.childContext;
+  }
+}
+
+/** Separate lowering authority that rehomes one reached host and its direct tail to the terminal TC leaf. */
+export class TemplateCompilerCompletedTemplateControllerLeafRehoming {
+  constructor(
+    readonly event: TemplateCompilerSiteCursorTemplateControllerTransitionEvent,
+    readonly receipt: TemplateCompilerTemplateControllerLeafRehomingReceipt,
+  ) {
+    if (
+      !event.isCoherent()
+      || !receipt.isModuleConstructed()
+      || receipt !== event.realization.leafRehoming
+      || receipt.preparation !== event.preparation
+      || receipt.terminalLeaf !== event.realization.terminalLeaf
+    ) {
+      throw new Error('Completed template-controller leaf rehoming lost event or terminal-leaf authority.');
+    }
+  }
+}
+
 /** HE staging after cursor-owned family effects discharge only their exact envelope blockers. */
 export class TemplateCompilerCompletedFamilyHydrateElement {
   constructor(
     readonly staging: TemplateCompilerHydrateElementStagingResult,
     readonly projectionExtraction: TemplateCompilerSiteCursorProjectionExtractionEvent | null,
+    readonly templateControllerTransition: TemplateCompilerSiteCursorTemplateControllerTransitionEvent | null,
     readonly containerlessPlacement: TemplateCompilerSiteCursorContainerlessPlacementEvent | null,
     readonly dischargedBlockers: readonly TemplateCompilerHydrateElementBlocker[],
     readonly forwardedBlockers: readonly TemplateCompilerHydrateElementBlocker[],
-  ) {}
+  ) {
+    if (
+      (projectionExtraction != null
+        && projectionExtraction.preparation.request.envelope !== staging.draft)
+      || (templateControllerTransition != null
+        && templateControllerTransition.preparation.request.hydrateElement !== staging)
+      || (containerlessPlacement != null && containerlessPlacement.envelope !== staging.draft)
+      || dischargedBlockers.some((blocker) => forwardedBlockers.includes(blocker))
+    ) {
+      throw new Error('Completed family HE evidence lost projection, TC, placement, or blocker ownership.');
+    }
+  }
 }
 
 /** Reached element evidence only; final row slot, placement ownership, and membership remain deliberately absent. */
@@ -152,8 +211,10 @@ export class TemplateCompilerCompletedContextTraversal {
     readonly exclusions: readonly TemplateCompilerSiteCursorSubtreeExclusionEvent[],
     readonly processContentEffects: readonly TemplateCompilerSiteCursorProcessContentEvent[],
     readonly projectionExtractions: readonly TemplateCompilerSiteCursorProjectionExtractionEvent[],
+    readonly templateControllerTransitions: readonly TemplateCompilerSiteCursorTemplateControllerTransitionEvent[],
     readonly containerlessPlacements: readonly TemplateCompilerSiteCursorContainerlessPlacementEvent[],
     readonly projectionOwner: TemplateCompilerCompletedProjectionContext | null,
+    readonly templateControllerOwner: TemplateCompilerCompletedTemplateControllerContext | null,
   ) {
     this.context = task.context;
     if (
@@ -166,6 +227,10 @@ export class TemplateCompilerCompletedContextTraversal {
       )
       || (task.context.contextKind === TemplateCompilerSiteCursorContextKind.Projection) !== (projectionOwner != null)
       || (projectionOwner != null && projectionOwner.context !== task.context)
+      || (templateControllerOwner != null && (
+        task.context.contextKind !== TemplateCompilerSiteCursorContextKind.TemplateController
+        || templateControllerOwner.context !== task.context
+      ))
     ) {
       throw new Error('Completed compiler context traversal lost task, site order, or projection ownership.');
     }
@@ -182,8 +247,15 @@ export class TemplateCompilerContextFamilyTraversal {
     readonly contexts: readonly TemplateCompilerCompletedContextTraversal[],
     readonly hydrateElements: readonly TemplateCompilerCompletedFamilyHydrateElement[],
     readonly projectionExtractions: readonly TemplateCompilerSiteCursorProjectionExtractionEvent[],
+    readonly templateControllerTransitions: readonly TemplateCompilerSiteCursorTemplateControllerTransitionEvent[],
+    readonly templateControllerLeafRehomings: readonly TemplateCompilerCompletedTemplateControllerLeafRehoming[],
     readonly hasTemplateControllerContexts: boolean,
+    readonly templateControllerTransitionsComplete: boolean,
   ) {
+    const templateControllerContexts = contexts.filter((context) =>
+      context.context.contextKind === TemplateCompilerSiteCursorContextKind.TemplateController
+    );
+    const transitionEdges = templateControllerTransitions.flatMap((event) => event.realization.edges);
     if (
       authority !== contextFamilyTraversalAuthority
       || !audit.isModuleConstructed()
@@ -191,9 +263,19 @@ export class TemplateCompilerContextFamilyTraversal {
       || contexts.length !== audit.transcript.taskSnapshot.contexts.length
       || contexts.some((context, ordinal) => context.task !== audit.transcript.taskSnapshot.contexts[ordinal])
       || hydrateElements.length !== audit.transcript.hydrateElementEnvelopes.length
+      || templateControllerTransitions.length !== templateControllerLeafRehomings.length
+      || templateControllerLeafRehomings.some((rehoming, ordinal) =>
+        rehoming.event !== templateControllerTransitions[ordinal]
+      )
       || hasTemplateControllerContexts !== contexts.some((context) =>
         context.context.contextKind === TemplateCompilerSiteCursorContextKind.TemplateController
       )
+      || (templateControllerTransitionsComplete && (
+        transitionEdges.length !== templateControllerContexts.length
+        || templateControllerContexts.some((context, ordinal) =>
+          context.templateControllerOwner?.edge !== transitionEdges[ordinal]
+        )
+      ))
     ) {
       throw new Error('Compiler context-family traversal lost common audit, context, or HE coverage.');
     }
@@ -222,7 +304,7 @@ export class TemplateCompilerContextFamilyCompletionReceipt {
     if (
       authority !== contextFamilyCompletionAuthority
       || !traversal.isModuleConstructed()
-      || traversal.hasTemplateControllerContexts
+      || !traversal.templateControllerTransitionsComplete
       || traversal.audit.endpoint !== endpoint
       || traversal.audit.compilerReads !== compilerReads
     ) {
@@ -272,6 +354,10 @@ export function completeTemplateCompilerContextFamily(
     (event): event is TemplateCompilerSiteCursorProjectionExtractionEvent =>
       event instanceof TemplateCompilerSiteCursorProjectionExtractionEvent,
   );
+  const templateControllerEvents = transcript.events.filter(
+    (event): event is TemplateCompilerSiteCursorTemplateControllerTransitionEvent =>
+      event instanceof TemplateCompilerSiteCursorTemplateControllerTransitionEvent,
+  );
   const reasons = audit.reasons.map((reason) => new TemplateCompilerContextFamilyCompletionReason(
     reason.reasonKind,
     reason.summary,
@@ -289,7 +375,9 @@ export function completeTemplateCompilerContextFamily(
     );
   }
   if (
-    (transcript.taskSnapshot.contexts.length <= 1 && projectionEvents.length === 0)
+    (transcript.taskSnapshot.contexts.length <= 1
+      && projectionEvents.length === 0
+      && templateControllerEvents.length === 0)
     || transcript.taskSnapshot.contexts[0]?.context !== transcript.taskSnapshot.rootContext
   ) {
     refuse(
@@ -313,31 +401,30 @@ export function completeTemplateCompilerContextFamily(
   if (reasons.length > 0) return ineligible(audit, reasons);
 
   const projectionOwners = validateProjectionContexts(transcript, projectionEvents, refuse);
+  const templateControllerValidation = validateTemplateControllerTransitions(
+    transcript,
+    templateControllerEvents,
+    projectionEvents,
+    refuse,
+  );
   validateProjectionAccounting(transcript, projectionEvents, refuse);
   validateEffectAndExclusionAccounting(transcript, refuse);
-  const hydrateElements = validateHydrateElements(audit, projectionEvents, refuse);
+  const hydrateElements = validateHydrateElements(
+    audit,
+    projectionEvents,
+    templateControllerValidation.eventByHydrateElement,
+    refuse,
+  );
   const hydrateElementByElement = new Map(hydrateElements.map((entry) => [entry.staging.element, entry]));
   validateContainerlessPlacements(audit, projectionEvents, refuse);
-  const templateControllerContextCount = transcript.taskSnapshot.contexts.filter((task) =>
-    task.context.contextKind === TemplateCompilerSiteCursorContextKind.TemplateController
-  ).length;
-  const templateControllerDraftCount = transcript.attributeOwners.reduce(
-    (count, owner) => count + owner.instructionStaging.templateControllers.length,
-    0,
-  );
-  if (templateControllerContextCount !== templateControllerDraftCount) {
-    refuse(
-      TemplateCompilerContextFamilyCompletionReasonKind.ContextTaskIncomplete,
-      'Template-controller draft and generated task-context cardinality diverged.',
-    );
-  }
   if (reasons.length > 0) return ineligible(audit, reasons);
 
-  const hasTemplateControllerContexts = templateControllerContextCount > 0;
+  const hasTemplateControllerContexts = templateControllerValidation.hasTemplateControllerContexts;
   const contexts = transcript.taskSnapshot.contexts.map((task) => completedContext(
     audit,
     task,
     projectionOwners.get(task.context) ?? null,
+    templateControllerValidation.ownerByContext.get(task.context) ?? null,
     hydrateElementByElement,
   ));
   const traversal = new TemplateCompilerContextFamilyTraversal(
@@ -346,9 +433,12 @@ export function completeTemplateCompilerContextFamily(
     contexts,
     hydrateElements,
     projectionEvents,
+    templateControllerEvents,
+    templateControllerValidation.leafRehomings,
     hasTemplateControllerContexts,
+    templateControllerValidation.complete,
   );
-  if (hasTemplateControllerContexts) {
+  if (!templateControllerValidation.complete) {
     return new TemplateCompilerContextFamilyCompletionResult(
       TemplateCompilerContextFamilyCompletionState.Pending,
       audit,
@@ -460,6 +550,176 @@ function validateProjectionContexts(
   return owners;
 }
 
+interface TemplateControllerTransitionValidation {
+  readonly hasTemplateControllerContexts: boolean;
+  readonly complete: boolean;
+  readonly ownerByContext: ReadonlyMap<
+    TemplateCompilerSiteCursorContextReference,
+    TemplateCompilerCompletedTemplateControllerContext
+  >;
+  readonly eventByHydrateElement: ReadonlyMap<
+    TemplateCompilerHydrateElementStagingResult,
+    TemplateCompilerSiteCursorTemplateControllerTransitionEvent
+  >;
+  readonly leafRehomings: readonly TemplateCompilerCompletedTemplateControllerLeafRehoming[];
+}
+
+function validateTemplateControllerTransitions(
+  transcript: TemplateCompilerSiteCursorTranscript,
+  events: readonly TemplateCompilerSiteCursorTemplateControllerTransitionEvent[],
+  projectionEvents: readonly TemplateCompilerSiteCursorProjectionExtractionEvent[],
+  refuse: (reasonKind: TemplateCompilerContextFamilyCompletionReasonKind, summary: string) => void,
+): TemplateControllerTransitionValidation {
+  const tasks = transcript.taskSnapshot;
+  const tcTasks = tasks.contexts.filter((task) =>
+    task.context.contextKind === TemplateCompilerSiteCursorContextKind.TemplateController
+  );
+  const tcOwners = transcript.attributeOwners.filter((owner) =>
+    owner.instructionStaging.templateControllers.length > 0
+  );
+  const tcOwnerSet = new Set(tcOwners);
+  const ownerByContext = new Map<
+    TemplateCompilerSiteCursorContextReference,
+    TemplateCompilerCompletedTemplateControllerContext
+  >();
+  const eventByOwner = new Map<
+    TemplateCompilerSiteCursorTranscript['attributeOwners'][number],
+    TemplateCompilerSiteCursorTemplateControllerTransitionEvent
+  >();
+  const eventByHydrateElement = new Map<
+    TemplateCompilerHydrateElementStagingResult,
+    TemplateCompilerSiteCursorTemplateControllerTransitionEvent
+  >();
+  const leafRehomings: TemplateCompilerCompletedTemplateControllerLeafRehoming[] = [];
+  let evidenceMismatch = false;
+  const mismatch = (summary: string): void => {
+    evidenceMismatch = true;
+    refuse(
+      TemplateCompilerContextFamilyCompletionReasonKind.TemplateControllerTransitionEvidenceMismatch,
+      summary,
+    );
+  };
+
+  for (const event of events) {
+    const preparation = event.preparation;
+    const realization = event.realization;
+    const owner = preparation.request.owner;
+    const hydrateElement = preparation.request.hydrateElement;
+    const reachedElement = preparation.request.reachedElement;
+    const elementEvent = reachedElement.elementEvent;
+    const sourceSelection = preparation.sourceSelection;
+    const transitionBinding = tasks.bindingForEvent(event);
+    const elementBinding = tasks.bindingForEvent(elementEvent);
+    const linkedProjections = projectionEvents.filter((projection) =>
+      projection.preparation.reachedElement === reachedElement
+    );
+    const projectionPending = hydrateElement.draft?.projection.state
+      === TemplateCompilerHydrateElementProjectionState.PendingExtraction;
+    const linkedProjection = linkedProjections.length === 1 ? linkedProjections[0]! : null;
+    const firstContextOrdinal = realization.contexts[0]?.ordinal ?? -1;
+    const edgesAreExact = realization.edges.length === preparation.drafts.length
+      && realization.contexts.length === preparation.drafts.length
+      && realization.edges.every((edge, ordinal) => {
+        const expectedRowContext = ordinal === 0
+          ? preparation.sourceContext
+          : realization.contexts[ordinal - 1]!;
+        const expectedChildContext = realization.contexts[ordinal];
+        const expectedPlacement = ordinal === 0
+          ? TemplateCompilerTargetRowPlacementKind.TemplateControllerSourceReplacement
+          : TemplateCompilerTargetRowPlacementKind.TemplateControllerGeneratedAppend;
+        return edge.isModuleConstructed()
+          && edge.preparation === preparation
+          && edge.ordinal === ordinal
+          && edge.draft === preparation.drafts[ordinal]
+          && edge.rowContext === expectedRowContext
+          && edge.childContext === expectedChildContext
+          && edge.placementKind === expectedPlacement
+          && expectedChildContext?.contextKind === TemplateCompilerSiteCursorContextKind.TemplateController
+          && expectedChildContext.parent === expectedRowContext
+          && expectedChildContext.ordinal === firstContextOrdinal + ordinal;
+      });
+    const continuation = realization.request.terminalLeafContinuation;
+    const leaf = realization.leafRehoming;
+    const projectionRelationIsExact = projectionPending
+      ? linkedProjection != null
+        && linkedProjections.length === 1
+        && event.ordinal < linkedProjection.ordinal
+        && realization.request.projectionRealization === linkedProjection.realization
+        && linkedProjection.realization.request.preparation.reachedElement === reachedElement
+        && linkedProjection.realization.request.contexts.every((input) =>
+          input.context.parent === realization.terminalLeaf
+        )
+      : linkedProjections.length === 0 && realization.request.projectionRealization == null;
+    const coherent = event.isCoherent()
+      && tcOwnerSet.has(owner)
+      && event.host === preparation.host
+      && event.host === elementEvent.element
+      && preparation.request.hydrateElement.owner === owner
+      && preparation.drafts === owner.instructionStaging.templateControllers
+      && preparation.sourceContext === sourceSelection.context
+      && elementEvent.ordinal < event.ordinal
+      && transitionBinding?.context === preparation.sourceContext
+      && transitionBinding.context === sourceSelection.context
+      && transitionBinding.visit === sourceSelection.visit
+      && transitionBinding.work === sourceSelection.work
+      && elementBinding?.context === preparation.sourceContext
+      && elementBinding.visit === sourceSelection.visit
+      && elementBinding.work === sourceSelection.work
+      && edgesAreExact
+      && realization.terminalLeaf === realization.contexts.at(-1)
+      && continuation.isModuleConstructed()
+      && continuation.context === realization.terminalLeaf
+      && continuation.sourceSelection === sourceSelection
+      && continuation.sourceContext === preparation.sourceContext
+      && leaf.isModuleConstructed()
+      && leaf === realization.leafRehoming
+      && leaf.preparation === preparation
+      && leaf.host === event.host
+      && leaf.sourceContext === preparation.sourceContext
+      && leaf.terminalLeaf === realization.terminalLeaf
+      && leaf.owner === owner
+      && leaf.hydrateElement === hydrateElement
+      && leaf.directRowTail === preparation.directRowTail
+      && leaf.projectionRealization === realization.request.projectionRealization
+      && projectionRelationIsExact;
+    if (
+      !coherent
+      || eventByOwner.has(owner)
+      || eventByHydrateElement.has(hydrateElement)
+      || realization.edges.some((edge) => ownerByContext.has(edge.childContext))
+    ) {
+      mismatch(`Template-controller transition for '${event.host.occurrenceKey}' lost source, chain, leaf, or projection authority.`);
+      continue;
+    }
+    eventByOwner.set(owner, event);
+    eventByHydrateElement.set(hydrateElement, event);
+    for (const edge of realization.edges) {
+      ownerByContext.set(
+        edge.childContext,
+        new TemplateCompilerCompletedTemplateControllerContext(event, edge),
+      );
+    }
+    leafRehomings.push(new TemplateCompilerCompletedTemplateControllerLeafRehoming(event, leaf));
+  }
+
+  if (
+    events.length > tcOwners.length
+    || ownerByContext.size > tcTasks.length
+    || events.some((event) => !transcript.events.includes(event))
+  ) {
+    mismatch('Template-controller transition inventory contains an extra or foreign owner/context edge.');
+  }
+  const missing = tcOwners.some((owner) => !eventByOwner.has(owner))
+    || tcTasks.some((task) => !ownerByContext.has(task.context));
+  return {
+    hasTemplateControllerContexts: tcTasks.length > 0,
+    complete: !evidenceMismatch && !missing,
+    ownerByContext,
+    eventByHydrateElement,
+    leafRehomings,
+  };
+}
+
 function validateProjectionAccounting(
   transcript: TemplateCompilerSiteCursorTranscript,
   events: readonly TemplateCompilerSiteCursorProjectionExtractionEvent[],
@@ -531,6 +791,10 @@ function validateEffectAndExclusionAccounting(
 function validateHydrateElements(
   audit: TemplateCompilerTraversalCompletionAudit,
   projectionEvents: readonly TemplateCompilerSiteCursorProjectionExtractionEvent[],
+  templateControllerEventByHydrateElement: ReadonlyMap<
+    TemplateCompilerHydrateElementStagingResult,
+    TemplateCompilerSiteCursorTemplateControllerTransitionEvent
+  >,
   refuse: (reasonKind: TemplateCompilerContextFamilyCompletionReasonKind, summary: string) => void,
 ): readonly TemplateCompilerCompletedFamilyHydrateElement[] {
   const eventByDraft = new Map(projectionEvents.map((event) => [event.preparation.request.envelope, event]));
@@ -543,6 +807,7 @@ function validateHydrateElements(
   const completed = audit.transcript.hydrateElementEnvelopes.map((staging) => {
     const draft = staging.draft;
     const event = draft == null ? null : eventByDraft.get(draft) ?? null;
+    const templateControllerEvent = templateControllerEventByHydrateElement.get(staging) ?? null;
     const envelopeBlockers = staging.blockers.filter((blocker) =>
       blocker.scope === TemplateCompilerHydrateElementBlockerScope.Envelope
     );
@@ -567,6 +832,8 @@ function validateHydrateElements(
         && projectionIsDischarged)
       || (blocker.blockerKind === TemplateCompilerHydrateElementBlockerKind.ContainerlessPlacementPending
         && placement != null)
+      || (blocker.blockerKind === TemplateCompilerHydrateElementBlockerKind.TemplateControllerPlacementPending
+        && templateControllerEvent?.preparation.request.hydrateElement === staging)
     );
     const forwardedBlockers = staging.blockers.filter((blocker) =>
       blocker.scope === TemplateCompilerHydrateElementBlockerScope.Downstream
@@ -575,6 +842,7 @@ function validateHydrateElements(
     return new TemplateCompilerCompletedFamilyHydrateElement(
       staging,
       event,
+      templateControllerEvent,
       placement,
       dischargedBlockers,
       forwardedBlockers,
@@ -639,6 +907,7 @@ function completedContext(
   audit: TemplateCompilerTraversalCompletionAudit,
   task: TemplateCompilerSiteCursorContextTaskSnapshot,
   projectionOwner: TemplateCompilerCompletedProjectionContext | null,
+  templateControllerOwner: TemplateCompilerCompletedTemplateControllerContext | null,
   hydrateElementByElement: ReadonlyMap<
     TemplateCompilerSiteCursorElementEvent['element'],
     TemplateCompilerCompletedFamilyHydrateElement
@@ -681,10 +950,14 @@ function completedContext(
     task.events.filter((event): event is TemplateCompilerSiteCursorProjectionExtractionEvent =>
       event instanceof TemplateCompilerSiteCursorProjectionExtractionEvent
     ),
+    task.events.filter((event): event is TemplateCompilerSiteCursorTemplateControllerTransitionEvent =>
+      event instanceof TemplateCompilerSiteCursorTemplateControllerTransitionEvent
+    ),
     task.events.filter((event): event is TemplateCompilerSiteCursorContainerlessPlacementEvent =>
       event instanceof TemplateCompilerSiteCursorContainerlessPlacementEvent
     ),
     projectionOwner,
+    templateControllerOwner,
   );
 }
 

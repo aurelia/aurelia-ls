@@ -330,6 +330,15 @@ describe('template compiler projection logical extraction', () => {
       directRowTail: transition.preparation.directRowTail,
       projectionRealization: null,
     });
+    const family = completeTemplateCompilerContextFamily(run.transcript, run.endpoint);
+    expect(family.state).toBe(TemplateCompilerContextFamilyCompletionState.Complete);
+    expect(family.traversal?.contexts.filter((context) =>
+      context.context.contextKind === TemplateCompilerSiteCursorContextKind.TemplateController
+    ).every((context, ordinal) =>
+      context.templateControllerOwner?.edge === transition.realization.edges[ordinal]
+    )).toBe(true);
+    expect(family.traversal?.templateControllerLeafRehomings[0]?.receipt)
+      .toBe(transition.realization.leafRehoming);
     expect(run.completion.refusals.map((refusal) => refusal.refusalKind))
       .toContain(TemplateCompilerOrdinaryRootCompletionRefusalKind.ContextFamilyTraversal);
   });
@@ -352,6 +361,8 @@ describe('template compiler projection logical extraction', () => {
       TemplateCompilerSiteCursorContextTaskState.Waiting,
       TemplateCompilerSiteCursorContextTaskState.Stopped,
     ]);
+    expect(completeTemplateCompilerContextFamily(transcript, run.endpoint).state)
+      .toBe(TemplateCompilerContextFamilyCompletionState.Ineligible);
   });
 
   test('enters the terminal TC leaf, runs projection fan-out, and returns to the root sibling', () => {
@@ -447,6 +458,9 @@ describe('template compiler projection logical extraction', () => {
     expect(result.state).toBe(TemplateCompilerContextFamilyCompletionState.Complete);
     expect(result.reasons).toEqual([]);
     expect(result.receipt?.isCurrent()).toBe(true);
+    expect(result.traversal?.templateControllerTransitions).toEqual([]);
+    expect(result.traversal?.templateControllerLeafRehomings).toEqual([]);
+    expect(result.traversal?.contexts.every((context) => context.templateControllerOwner == null)).toBe(true);
     expect(result.traversal?.contexts.map((context) => [
       context.context.contextKind,
       context.projectionOwner?.staging.band.planned.group.slotName ?? null,
@@ -483,20 +497,46 @@ describe('template compiler projection logical extraction', () => {
     expect(result.traversal?.projectionExtractions).toEqual([extraction]);
   });
 
-  test('retains an exact TC plus projection traversal as specifically Pending', () => {
+  test('completes TC plus projection through exact edge owners and leaf rehoming', () => {
     const run = fixture.run(
       'projection-logical-tc-host',
       TemplateCompilerSiteCursorTraversalMode.ClosedContextFamily,
     );
+    const transition = eventsOf(run.transcript, TemplateCompilerSiteCursorTemplateControllerTransitionEvent)[0]!;
+    const projection = eventsOf(run.transcript, TemplateCompilerSiteCursorProjectionExtractionEvent)[0]!;
     const result = completeTemplateCompilerContextFamily(run.transcript, run.endpoint);
 
-    expect(result.state).toBe(TemplateCompilerContextFamilyCompletionState.Pending);
-    expect(result.receipt).toBeNull();
+    expect(result.state).toBe(TemplateCompilerContextFamilyCompletionState.Complete);
+    expect(result.receipt?.isCurrent()).toBe(true);
     expect(result.traversal?.isCurrent()).toBe(true);
-    expect(result.reasons.map((reason) => reason.reasonKind)).toEqual([
-      TemplateCompilerContextFamilyCompletionReasonKind.TemplateControllerTransitionMissing,
-    ]);
+    expect(result.reasons).toEqual([]);
     expect(result.traversal?.hasTemplateControllerContexts).toBe(true);
+    expect(result.traversal?.templateControllerTransitions).toHaveLength(1);
+    expect(result.traversal?.templateControllerTransitions[0]).toBe(transition);
+    const sourceTransitions = result.traversal?.contexts.find((context) =>
+      context.context === transition.preparation.sourceContext
+    )?.templateControllerTransitions;
+    expect(sourceTransitions).toHaveLength(1);
+    expect(sourceTransitions?.[0]).toBe(transition);
+    expect(result.traversal?.contexts.filter((context) =>
+      context.context.contextKind === TemplateCompilerSiteCursorContextKind.TemplateController
+    ).every((context, ordinal) =>
+      context.templateControllerOwner?.edge === transition.realization.edges[ordinal]
+    )).toBe(true);
+    expect(result.traversal?.templateControllerLeafRehomings[0]?.event).toBe(transition);
+    expect(result.traversal?.templateControllerLeafRehomings[0]?.receipt)
+      .toBe(transition.realization.leafRehoming);
+    expect(transition.ordinal).toBeLessThan(projection.ordinal);
+    expect(transition.realization.request.projectionRealization).toBe(projection.realization);
+    expect(projection.realization.request.contexts.every((input) =>
+      input.context.parent === transition.realization.terminalLeaf
+    )).toBe(true);
+    const host = result.traversal?.hydrateElements.find((entry) =>
+      entry.staging === transition.preparation.request.hydrateElement
+    );
+    expect(host?.templateControllerTransition).toBe(transition);
+    expect(host?.dischargedBlockers.map((blocker) => blocker.blockerKind))
+      .toContain(TemplateCompilerHydrateElementBlockerKind.TemplateControllerPlacementPending);
   });
 
   test('refuses compatibility traversal mode instead of treating its frontier as a family', () => {
