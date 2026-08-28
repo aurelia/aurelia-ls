@@ -1,29 +1,23 @@
-import { TemplateCompilerContainerlessReplacementPlacement } from './compiler-target-plan.js';
 import {
-  TemplateCompilerOperationCompletion,
-  TemplateCompilerOperationCompletionKind,
-  TemplateCompilerOperationExecutionMechanism,
-  TemplateCompilerOperationKind,
   type TemplateCompilerOccurrenceTargetExecutionClosure,
   type TemplateCompilerOccurrenceTargetAttachment,
   type TemplateCompilerOperation,
 } from './template-compiler-execution.js';
 import { TemplateCompilerLiveAttributeDisposition } from './template-compiler-live-attribute-owner.js';
 import {
-  TemplateCompilerGeneratedOccurrenceRole,
-  TemplateCompilerElementOccurrence,
-  type TemplateCompilerTextOccurrence,
-} from './template-compiler-occurrence.js';
-import {
-  TemplateCompilerTextExpansionOutputKind,
   type TemplateCompilerOccurrenceAttributeDispositionDraft,
 } from './template-compiler-occurrence-row-assembly.js';
-import type { TemplateCompilerCompletedOrdinarySite } from './template-compiler-root-completion.js';
 import {
   TemplateCompilerOccurrenceAttributeScheduleEntry,
   TemplateCompilerOccurrenceElementTargetScheduleEntry,
   TemplateCompilerOccurrenceTextExpansionScheduleEntry,
 } from './template-compiler-occurrence-target-schedule.js';
+import {
+  assertTemplateCompilerFinalAttributeSiteState,
+  executeTemplateCompilerOrdinaryTargetOperation,
+  executeTemplateCompilerTargetAttributeOperation,
+  executeTemplateCompilerTextExpansionOperation,
+} from './template-compiler-target-operation-execution.js';
 import type {
   TemplateCompilerConsumedAttributeDisposition,
   TemplateCompilerInputTextExpansion,
@@ -121,148 +115,60 @@ export function executeTemplateCompilerOccurrenceTarget(
   for (const entry of schedule.entries) {
     if (entry instanceof TemplateCompilerOccurrenceAttributeScheduleEntry) {
       const disposition = entry.disposition;
-      if (disposition.attribute.readOwnerOrdinal() !== disposition.simulatedLiveOrdinal) {
-        throw new Error(
-          `Attribute disposition '${disposition.stableSlotKey}' lost its JIT-live owner ordinal.`,
-        );
-      }
-      const attempt = execution.beginOperation({
-        operationKey: entry.operationKey,
+      const result = executeTemplateCompilerTargetAttributeOperation({
+        execution,
+        structural,
         context,
-        operationKind: TemplateCompilerOperationKind.AttributeDisposition,
-        executionMechanism: TemplateCompilerOperationExecutionMechanism.BuiltIn,
-        target: execution.occurrenceTarget(context, disposition.attribute),
+        operationKey: entry.operationKey,
+        disposition,
         causeHandles: entry.causeHandles,
         sourceAddressHandle: entry.sourceAddressHandle,
       });
-      attributeDispositions.push(structural.consumeAttributeForContext(
-        disposition.attribute,
-        context.targetContext,
-        entry.causeHandles,
-        (attribute) => execution.detachTargetAttribute(attempt, attribute),
-      ));
-      operations.push(execution.completeOperation(
-        attempt,
-        new TemplateCompilerOperationCompletion(TemplateCompilerOperationCompletionKind.Complete),
-      ));
+      attributeDispositions.push(result.disposition);
+      operations.push(result.operation);
       continue;
     }
 
     if (entry instanceof TemplateCompilerOccurrenceElementTargetScheduleEntry) {
       const mapping = entry.mapping;
-      const isContainerless = mapping.row.placement instanceof TemplateCompilerContainerlessReplacementPlacement;
-      const attempt = execution.beginOperation({
-        operationKey: entry.operationKey,
+      const result = executeTemplateCompilerOrdinaryTargetOperation({
+        execution,
+        structural,
         context,
-        operationKind: isContainerless
-          ? TemplateCompilerOperationKind.ContainerlessReplacement
-          : TemplateCompilerOperationKind.HydrationTargetCreation,
-        executionMechanism: TemplateCompilerOperationExecutionMechanism.BuiltIn,
-        target: execution.occurrenceTarget(context, mapping.draft.occurrence),
+        operationKey: entry.operationKey,
+        row: mapping.row,
+        occurrence: mapping.draft.occurrence,
         causeHandles: entry.causeHandles,
         sourceAddressHandle: entry.sourceAddressHandle,
       });
-      if (isContainerless) {
-        if (!(mapping.draft.occurrence instanceof TemplateCompilerElementOccurrence)) {
-          throw new Error(`Containerless row '${mapping.row.localKey}' lost its element occurrence.`);
-        }
-        targetGeometries.push(structural.realizeRenderLocationTarget(
-          mapping.row,
-          mapping.draft.occurrence,
-          [],
-          (element) => execution.detachContainerlessTarget(attempt, element),
-        ));
-      } else {
-        targetGeometries.push(structural.realizeMarkerTarget(mapping.row, mapping.draft.occurrence));
-      }
-      operations.push(execution.completeOperation(
-        attempt,
-        new TemplateCompilerOperationCompletion(TemplateCompilerOperationCompletionKind.Complete),
-      ));
+      targetGeometries.push(result.geometry);
+      operations.push(result.operation);
       continue;
     }
 
     if (!(entry instanceof TemplateCompilerOccurrenceTextExpansionScheduleEntry)) {
       throw new Error('Occurrence target schedule contains an unknown operation entry.');
     }
-    const expansion = entry.expansion;
-    const mappings = entry.mappings;
-    const attempt = execution.beginOperation({
-      operationKey: entry.operationKey,
+    const result = executeTemplateCompilerTextExpansionOperation({
+      execution,
+      structural,
       context,
-      operationKind: TemplateCompilerOperationKind.TextInterpolationExpansion,
-      executionMechanism: TemplateCompilerOperationExecutionMechanism.BuiltIn,
-      target: execution.occurrenceTarget(context, expansion.site.event.text),
+      operationKey: entry.operationKey,
+      expansion: entry.expansion,
+      mappings: entry.mappings,
       causeHandles: entry.causeHandles,
       sourceAddressHandle: entry.sourceAddressHandle,
     });
-    const generatedOutputs: TemplateCompilerTextOccurrence[] = [];
-    const generatedHoleOutputs = new Map<number, TemplateCompilerTextOccurrence>();
-    const mappingByHoleIndex = new Map(mappings.map((mapping) => [
-      mapping.draft.textOutput!.holeIndex,
-      mapping,
-    ] as const));
-    let staticOrdinal = 0;
-    for (const output of expansion.outputs) {
-      const role = output.outputKind === TemplateCompilerTextExpansionOutputKind.Static
-        ? TemplateCompilerGeneratedOccurrenceRole.StaticTextSegment
-        : TemplateCompilerGeneratedOccurrenceRole.BindingPlaceholder;
-      const mapping = output.outputKind === TemplateCompilerTextExpansionOutputKind.Hole
-        ? mappingByHoleIndex.get(output.holeIndex) ?? null
-        : null;
-      if (output.outputKind === TemplateCompilerTextExpansionOutputKind.Hole && mapping == null) {
-        throw new Error(`Text expansion '${expansion.stableSlotKey}' lost hole ${output.holeIndex}.`);
-      }
-      const generation = output.outputKind === TemplateCompilerTextExpansionOutputKind.Static
-        ? execution.createGeneration(attempt, role, staticOrdinal++)
-        : execution.createGenerationOutput(
-          attempt,
-          mapping!.row.localKey,
-          mapping!.row.instructions.map((instruction) => instruction.productHandle),
-          role,
-          0,
-        );
-      const generated = execution.forest.createGeneratedText(
-        generation,
-        output.outputKind === TemplateCompilerTextExpansionOutputKind.Static ? output.text : ' ',
-        expansion.site.event.text.inputReference,
-      );
-      generatedOutputs.push(generated);
-      if (output.outputKind === TemplateCompilerTextExpansionOutputKind.Hole) {
-        generatedHoleOutputs.set(output.holeIndex, generated);
-      }
-    }
-    textExpansions.push(structural.expandTextInput(
-      expansion.site.event.text,
-      context.targetContext,
-      generatedOutputs,
-      entry.causeHandles,
-      (input) => execution.detachTargetText(attempt, input),
-    ));
-    for (const mapping of mappings) {
-      const holeIndex = mapping.draft.textOutput!.holeIndex;
-      const placeholder = generatedHoleOutputs.get(holeIndex) ?? null;
-      if (placeholder == null) {
-        throw new Error(`Text expansion '${expansion.stableSlotKey}' lost hole ${holeIndex}.`);
-      }
-      targetGeometries.push(structural.realizeMarkerTargetForOperation(
-        mapping.row,
-        placeholder,
-        entry.operationKey,
-        entry.causeHandles,
-        0,
-        mapping.row.localKey,
-        mapping.row.instructions.map((instruction) => instruction.productHandle),
-      ));
-    }
-    operations.push(execution.completeOperation(
-      attempt,
-      new TemplateCompilerOperationCompletion(TemplateCompilerOperationCompletionKind.Complete),
-    ));
+    textExpansions.push(result.expansion);
+    targetGeometries.push(...result.geometries);
+    operations.push(result.operation);
   }
 
   for (const site of rows.receipt.elementSites) {
-    assertFinalOwnerAttributeState(site, schedule.attributeDispositionsBySite.get(site) ?? []);
+    assertTemplateCompilerFinalAttributeSiteState(
+      site.owner,
+      schedule.attributeDispositionsBySite.get(site) ?? [],
+    );
   }
 
   assertDispositionCoverage(rows.attributeDispositions, structural.readConsumedAttributeDispositions());
@@ -293,22 +199,5 @@ function assertDispositionCoverage(
     || retained.some((draft) => draft.attribute.owner !== draft.site.event.element)
   ) {
     throw new Error('Occurrence target execution diverged from final live attribute dispositions.');
-  }
-}
-
-function assertFinalOwnerAttributeState(
-  site: Extract<TemplateCompilerCompletedOrdinarySite, { readonly siteKind: 'element' }>,
-  dispositions: readonly TemplateCompilerOccurrenceAttributeDispositionDraft[],
-): void {
-  const retained = dispositions.filter((disposition) =>
-    disposition.disposition === TemplateCompilerLiveAttributeDisposition.Retained
-  );
-  const actual = site.event.element.readAttributes();
-  if (
-    actual.length !== retained.length
-    || actual.some((attribute, ordinal) => attribute !== retained[ordinal]?.attribute)
-    || retained.some((disposition) => disposition.attribute.value !== disposition.finalValue)
-  ) {
-    throw new Error(`Element '${site.event.element.occurrenceKey}' diverged from its final JIT attribute view.`);
   }
 }

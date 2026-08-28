@@ -21,6 +21,7 @@ import {
 } from '../src/template/compiler-target-plan.js';
 import {
   TemplateCompilerExecutionSession,
+  TemplateCompilerOperationKind,
   type TemplateCompilerSiteExecutionEndpointReceipt,
 } from '../src/template/template-compiler-execution.js';
 import {
@@ -49,6 +50,11 @@ import {
   TemplateCompilerFamilyTemplateControllerScheduleEntry,
   TemplateCompilerFamilyTextScheduleEntry,
 } from '../src/template/template-compiler-context-family-structural-schedule.js';
+import {
+  TemplateCompilerFamilyTemplateControllerRehomingOperationScheduleEntry,
+  TemplateCompilerFamilyTemplateControllerRowOperationScheduleEntry,
+} from '../src/template/template-compiler-context-family-operation-schedule.js';
+import { executeTemplateCompilerContextFamilyTarget } from '../src/template/template-compiler-context-family-target-execution.js';
 import {
   assembleTemplateCompilerContextFamilyRows,
   TemplateCompilerContextFamilyRowAssemblyState,
@@ -1052,6 +1058,39 @@ describe('template compiler projection logical extraction', () => {
       );
       expect(mapping.causeHandles).toContain(funded?.instruction.productHandle);
     }
+    const attachmentPreparation = run.binding.execution.prepareContextFamilyTargetAttachment(
+      preparation,
+      schedule,
+    );
+    const attachment = run.binding.execution.commitPreparedContextFamilyTargetAttachment(
+      attachmentPreparation,
+    );
+    expect(() => run.binding.execution.closeContextFamilyTargetExecution(attachment))
+      .toThrow(/diverged from its prepared operation schedule/u);
+    expect(() => run.binding.execution.seal())
+      .toThrow(/has not closed context-family target execution/u);
+    const execution = executeTemplateCompilerContextFamilyTarget(attachment);
+    expect(execution.operations.map((operation) => operation.operationKey))
+      .toEqual(attachment.operationSchedule.entries.map((entry) => entry.operationKey));
+    const rehomingEntry = attachment.operationSchedule.entries.find((entry) =>
+      entry instanceof TemplateCompilerFamilyTemplateControllerRehomingOperationScheduleEntry
+    );
+    const tcRowEntries = attachment.operationSchedule.entries.filter(
+      (entry): entry is TemplateCompilerFamilyTemplateControllerRowOperationScheduleEntry =>
+        entry instanceof TemplateCompilerFamilyTemplateControllerRowOperationScheduleEntry,
+    );
+    if (rehomingEntry == null) throw new Error('Expected explicit terminal TC rehoming operation.');
+    const rehomingOrdinal = attachment.operationSchedule.entries.indexOf(rehomingEntry);
+    expect(tcRowEntries.every((entry) =>
+      attachment.operationSchedule.entries.indexOf(entry) < rehomingOrdinal
+    )).toBe(true);
+    expect(rehomingOrdinal).toBeLessThan(attachment.operationSchedule.entries.length - 1);
+    const rehomingOperation = execution.operations[rehomingOrdinal]!;
+    expect(rehomingOperation.mutationBatch.topologyMutations).toEqual([]);
+    expect(rehomingOperation.endForestMutationRevision - rehomingOperation.startForestMutationRevision).toBe(1);
+    expect(execution.targetGeometries).toHaveLength(preparation.rowMappings.length);
+    expect(execution.closure.attachment).toBe(attachment);
+    expect(run.binding.execution.seal()).toBe(run.binding.execution.sequence);
   });
 
   test('inherits adopted source availability for a nested TC transition', () => {
@@ -1136,7 +1175,11 @@ describe('template compiler projection logical extraction', () => {
     expect(attachment.contexts.map((context) => context.targetContext)).toEqual(contexts);
     expect(run.binding.forest.mutationRevision).toBe(forestRevision);
     expect(namespace.readReservationCounts().semanticSlots).toBeGreaterThan(countsBefore.semanticSlots);
-    run.binding.execution.assertCoherent();
+    const execution = executeTemplateCompilerContextFamilyTarget(attachment);
+    expect(execution.inputTransfers.map((transfer) => transfer.node)).toContain(
+      schedule.contexts[1]?.initialization.inputCarrier,
+    );
+    expect(run.binding.execution.seal()).toBe(run.binding.execution.sequence);
   });
 
   test('funds empty projection definitions while leaving whitespace-only groups definition-free', () => {
@@ -1362,6 +1405,83 @@ describe('template compiler projection logical extraction', () => {
       .toContain(TemplateCompilerHydrateElementBlockerKind.ContainerlessPlacementPending);
   });
 
+  test('executes mixed, empty, and whitespace projection extraction in physical contributor order', () => {
+    const cases = ['projection-logical-host', 'projection-logical-whitespace-host'] as const;
+    for (const name of cases) {
+      const run = fixture.run(
+        name,
+        TemplateCompilerSiteCursorTraversalMode.ClosedContextFamily,
+        'family-target-execution',
+      );
+      const result = executeClosedFamily(run);
+      const projectionEntry = result.schedule.contexts.flatMap((context) => context.entries)
+        .find((entry) =>
+          entry instanceof TemplateCompilerFamilyLoweredElementScheduleEntry
+          && entry.projection != null
+        );
+      if (!(projectionEntry instanceof TemplateCompilerFamilyLoweredElementScheduleEntry)
+        || projectionEntry.projection == null) {
+        throw new Error(`Expected executable projection schedule for '${name}'.`);
+      }
+      const projectionOperation = result.execution.operations.find((operation) =>
+        operation.operationKind === TemplateCompilerOperationKind.ProjectionExtraction
+        && operation.mutationBatch.topologyMutations.length > 0
+      );
+      if (projectionOperation == null) throw new Error(`Expected projection operation for '${name}'.`);
+      const physicalNodes = projectionEntry.projection.physicalContributors.map((contributor) =>
+        contributor.receipt.source.node
+      );
+      expect(projectionOperation.mutationBatch.nodeDetachmentMutations.filter((mutation) =>
+        mutation.previousParent === projectionEntry.projection!.event.host
+      ).map((mutation) => mutation.node), name).toEqual(physicalNodes);
+      expect(projectionEntry.projection.physicalContributors.flatMap((contributor) =>
+        contributor.receipt.slotConsumption == null ? [] : [contributor.receipt.slotConsumption.attribute]
+      ).every((attribute) => attribute.owner == null), name).toBe(true);
+      if (name === 'projection-logical-host') {
+        const emptyContext = result.target.targetPlan.readContexts().find((context) => context.slotName === 'empty');
+        const emptyStructure = emptyContext == null
+          ? null
+          : result.attachment.structuralExecution.readContextStructure(emptyContext);
+        expect(emptyStructure?.compilerContent.readChildren()).toEqual([]);
+      } else {
+        expect(result.target.targetPlan.readContexts()).toHaveLength(1);
+      }
+      expect(run.binding.execution.seal(), name).toBe(run.binding.execution.sequence);
+    }
+
+    const interleaved = fixture.run(
+      'projection-logical-interleaved-host',
+      TemplateCompilerSiteCursorTraversalMode.ClosedContextFamily,
+      'family-target-execution',
+    );
+    const interleavedResult = executeClosedFamily(interleaved);
+    const interleavedProjection = interleavedResult.schedule.contexts.flatMap((context) => context.entries)
+      .find((entry) =>
+        entry instanceof TemplateCompilerFamilyLoweredElementScheduleEntry
+        && entry.projection != null
+      );
+    if (!(interleavedProjection instanceof TemplateCompilerFamilyLoweredElementScheduleEntry)
+      || interleavedProjection.projection == null) {
+      throw new Error('Expected interleaved projection schedule.');
+    }
+    const physicalNodes = interleavedProjection.projection.physicalContributors.map((contributor) =>
+      contributor.receipt.source.node
+    );
+    const groupedNodes = interleavedProjection.projection.groups.flatMap((group) =>
+      group.contributors.map((contributor) => contributor.receipt.source.node)
+    );
+    expect(physicalNodes.map(occurrenceLabel)).toEqual(['span', 'b', 'em']);
+    expect(groupedNodes.map(occurrenceLabel)).toEqual(['span', 'em', 'b']);
+    const interleavedOperation = interleavedResult.execution.operations.find((operation) =>
+      operation.operationKind === TemplateCompilerOperationKind.ProjectionExtraction
+      && operation.mutationBatch.topologyMutations.length > 0
+    );
+    expect(interleavedOperation?.mutationBatch.nodeDetachmentMutations.filter((mutation) =>
+      mutation.previousParent === interleavedProjection.projection!.event.host
+    ).map((mutation) => mutation.node)).toEqual(physicalNodes);
+    expect(interleaved.binding.execution.seal()).toBe(interleaved.binding.execution.sequence);
+  });
+
   test('rejects realization replay through a fresh task session', () => {
     const run = fixture.run('projection-logical-host');
     const preparation = run.prepare();
@@ -1444,8 +1564,9 @@ class ProjectionLogicalExtractionFixture {
   run(
     name: string,
     traversalMode: TemplateCompilerSiteCursorTraversalMode = TemplateCompilerSiteCursorTraversalMode.CompatibilityStop,
+    instanceKey: string = 'default',
   ): ProjectionFixtureRun {
-    const runKey = `${name}:${traversalMode}`;
+    const runKey = `${name}:${traversalMode}:${instanceKey}`;
     const existing = this.runs.get(runKey);
     if (existing != null) return existing;
     const compilation = compilationFor(this.frontDoor, name);
@@ -1456,7 +1577,7 @@ class ProjectionLogicalExtractionFixture {
       family,
       this.frontDoor,
       this.candidate,
-      `projection-logical-extraction:${name}:${traversalMode}`,
+      `projection-logical-extraction:${name}:${traversalMode}:${instanceKey}`,
     );
     const preWalk = TemplateCompilerPreWalkRemainderAuthority.capture(binding);
     const result = executeTemplateCompilerRootSiteCursor({
@@ -1493,6 +1614,25 @@ class ProjectionLogicalExtractionFixture {
     this.candidate.abort();
     this.runtime.retireWorkspaceIncarnation();
   }
+}
+
+function executeClosedFamily(run: ProjectionFixtureRun) {
+  const completion = completeTemplateCompilerContextFamily(run.transcript, run.endpoint);
+  if (completion.receipt == null) throw new Error('Expected executable family completion.');
+  const rows = assembleTemplateCompilerContextFamilyRows(completion.receipt).assembly;
+  if (rows == null) throw new Error('Expected executable family rows.');
+  const wires = prepareTemplateCompilerFamilyWireFunding(rows).funding;
+  if (wires == null) throw new Error('Expected executable family wires.');
+  const allocation = prepareTemplateCompilerContextFamilyAllocation(rows, wires).preparation;
+  if (allocation == null) throw new Error('Expected executable family allocation.');
+  const target = prepareTemplateCompilerContextFamilyTargetPlan(allocation).preparation;
+  if (target == null) throw new Error('Expected executable family target plan.');
+  const schedule = prepareTemplateCompilerContextFamilyStructuralSchedule(target);
+  const attachment = run.binding.execution.commitPreparedContextFamilyTargetAttachment(
+    run.binding.execution.prepareContextFamilyTargetAttachment(target, schedule),
+  );
+  const execution = executeTemplateCompilerContextFamilyTarget(attachment);
+  return { completion, rows, target, schedule, attachment, execution };
 }
 
 function requireHostSelection(

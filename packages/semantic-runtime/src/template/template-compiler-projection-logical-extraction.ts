@@ -552,6 +552,11 @@ export class TemplateCompilerProjectionLogicalExtractionPreparation {
         receipt.grouping !== this.grouping
         || groupByContributor.get(receipt.contributor) !== receipt.group
       )
+      || contributorReceipts.some((receipt, ordinal) =>
+        receipt.source.parent !== request.envelope.element
+        || (ordinal > 0
+          && contributorReceipts[ordinal - 1]!.source.sourceOrdinal >= receipt.source.sourceOrdinal)
+      )
       || slotConsumptions.length !== expectedSlotContributors.length
       || this.#consumptionsByElement.size !== slotConsumptions.length
       || slotConsumptions.some((receipt, ordinal) =>
@@ -745,74 +750,77 @@ export function prepareTemplateCompilerProjectionLogicalExtraction(
   const residuals: TemplateCompilerProjectionResidualReceipt[] = [];
   const hostSource = indexPhysicalSource(request, request.envelope.element, sourceByParent);
 
-  for (const group of grouping.groups) {
-    for (const contributor of group.members) {
-      const source = physicalContributorSource(request, group, contributor, hostSource, contributor.node);
-      const slotConsumption = contributor.slotAttribute == null
-        ? null
-        : createSlotConsumption(request, group, contributor);
-      if (slotConsumption != null) slotConsumptions.push(slotConsumption);
-      let discarded: TemplateCompilerProjectionDiscardedWhitespaceReceipt | null = null;
-      let unwrapped: TemplateCompilerProjectionUnwrappedWrapperReceipt | null = null;
-      let entrantSources: TemplateCompilerProjectionPhysicalSourceReceipt[];
-      switch (contributor.disposition) {
-        case HydrateElementProjectionContributorDisposition.RetainedNode:
-          entrantSources = [source];
-          break;
-        case HydrateElementProjectionContributorDisposition.DiscardedWhitespace:
-          entrantSources = [];
-          discarded = new TemplateCompilerProjectionDiscardedWhitespaceReceipt(
-            projectionLogicalExtractionAuthority,
-            grouping,
-            group,
-            contributor,
-            source,
-          );
-          discardedWhitespace.push(discarded);
-          break;
-        case HydrateElementProjectionContributorDisposition.UnwrappedTemplateContent: {
-          const wrapper = contributor.node;
-          if (!(wrapper instanceof TemplateCompilerElementOccurrence) || wrapper.templateContent == null) {
-            throw new Error('Unwrapped projection contributor has no exact template-content occurrence.');
-          }
-          const content = wrapper.templateContent;
-          const contentSource = indexPhysicalSource(request, content, sourceByParent);
-          entrantSources = contentSource.snapshot.children.map((node) => physicalContributorSource(
-            request,
-            group,
-            contributor,
-            contentSource,
-            node,
-          ));
-          unwrapped = new TemplateCompilerProjectionUnwrappedWrapperReceipt(
-            projectionLogicalExtractionAuthority,
-            grouping,
-            group,
-            contributor,
-            wrapper,
-            source,
-            content,
-            contentSource.snapshot,
-            slotConsumption,
-          );
-          unwrappedWrappers.push(unwrapped);
-          break;
+  const groupByContributor = new Map(grouping.groups.flatMap((group) =>
+    group.members.map((contributor) => [contributor, group] as const)
+  ));
+  for (const contributor of grouping.extractedContributors) {
+    const group = groupByContributor.get(contributor);
+    if (group == null) throw new Error('Projection contributor lost its same-slot group.');
+    const source = physicalContributorSource(request, group, contributor, hostSource, contributor.node);
+    const slotConsumption = contributor.slotAttribute == null
+      ? null
+      : createSlotConsumption(request, group, contributor);
+    if (slotConsumption != null) slotConsumptions.push(slotConsumption);
+    let discarded: TemplateCompilerProjectionDiscardedWhitespaceReceipt | null = null;
+    let unwrapped: TemplateCompilerProjectionUnwrappedWrapperReceipt | null = null;
+    let entrantSources: TemplateCompilerProjectionPhysicalSourceReceipt[];
+    switch (contributor.disposition) {
+      case HydrateElementProjectionContributorDisposition.RetainedNode:
+        entrantSources = [source];
+        break;
+      case HydrateElementProjectionContributorDisposition.DiscardedWhitespace:
+        entrantSources = [];
+        discarded = new TemplateCompilerProjectionDiscardedWhitespaceReceipt(
+          projectionLogicalExtractionAuthority,
+          grouping,
+          group,
+          contributor,
+          source,
+        );
+        discardedWhitespace.push(discarded);
+        break;
+      case HydrateElementProjectionContributorDisposition.UnwrappedTemplateContent: {
+        const wrapper = contributor.node;
+        if (!(wrapper instanceof TemplateCompilerElementOccurrence) || wrapper.templateContent == null) {
+          throw new Error('Unwrapped projection contributor has no exact template-content occurrence.');
         }
+        const content = wrapper.templateContent;
+        const contentSource = indexPhysicalSource(request, content, sourceByParent);
+        entrantSources = contentSource.snapshot.children.map((node) => physicalContributorSource(
+          request,
+          group,
+          contributor,
+          contentSource,
+          node,
+        ));
+        unwrapped = new TemplateCompilerProjectionUnwrappedWrapperReceipt(
+          projectionLogicalExtractionAuthority,
+          grouping,
+          group,
+          contributor,
+          wrapper,
+          source,
+          content,
+          contentSource.snapshot,
+          slotConsumption,
+        );
+        unwrappedWrappers.push(unwrapped);
+        break;
       }
-      const receipt = new TemplateCompilerProjectionContributorReceipt(
-        projectionLogicalExtractionAuthority,
-        grouping,
-        group,
-        contributor,
-        source,
-        slotConsumption,
-        discarded,
-        unwrapped,
-      );
-      contributorReceipts.push(receipt);
-      receiptsByContributor.set(contributor, receipt);
-      entrantSourcesByContributor.set(contributor, entrantSources);
     }
+    const receipt = new TemplateCompilerProjectionContributorReceipt(
+      projectionLogicalExtractionAuthority,
+      grouping,
+      group,
+      contributor,
+      source,
+      slotConsumption,
+      discarded,
+      unwrapped,
+    );
+    contributorReceipts.push(receipt);
+    receiptsByContributor.set(contributor, receipt);
+    entrantSourcesByContributor.set(contributor, entrantSources);
   }
 
   for (const residual of grouping.residualChildren) {
@@ -1102,6 +1110,8 @@ function validatePreparationRequest(
   const host = envelope.element;
   const hostChildren = host.readChildren();
   const groupedMembers = grouping.groups.flatMap((group) => group.members);
+  const groupedMemberSet = new Set(groupedMembers);
+  const extractedContributorSet = new Set(grouping.extractedContributors);
   const extractedNodes = new Set(grouping.extractedContributors.map((contributor) => contributor.node));
   const residualNodes = new Set(grouping.residualChildren.map((child) => child.node));
   const hostOriginState = host.inputReference == null
@@ -1137,8 +1147,9 @@ function validatePreparationRequest(
     || hostChildren.length !== envelope.projection.postProcessChildren.length
     || !sameObjects(hostChildren, envelope.projection.postProcessChildren)
     || groupedMembers.length !== grouping.extractedContributors.length
-    || !sameObjects(groupedMembers, grouping.extractedContributors)
-    || new Set(groupedMembers).size !== groupedMembers.length
+    || groupedMemberSet.size !== groupedMembers.length
+    || extractedContributorSet.size !== grouping.extractedContributors.length
+    || groupedMembers.some((member) => !extractedContributorSet.has(member))
     || extractedNodes.size !== grouping.extractedContributors.length
     || residualNodes.size !== grouping.residualChildren.length
     || extractedNodes.size + residualNodes.size !== hostChildren.length

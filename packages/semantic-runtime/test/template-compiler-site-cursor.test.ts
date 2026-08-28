@@ -48,6 +48,7 @@ import {
   TemplateCompilerFamilyContextInitializationKind,
   TemplateCompilerFamilyLoweredElementScheduleEntry,
 } from '../src/template/template-compiler-context-family-structural-schedule.js';
+import { executeTemplateCompilerContextFamilyTarget } from '../src/template/template-compiler-context-family-target-execution.js';
 import {
   assembleTemplateCompilerContextFamilyRows,
 } from '../src/template/template-compiler-context-family-row-assembly.js';
@@ -1334,7 +1335,10 @@ describe('template compiler root site cursor', () => {
     expect(attachment.committedAllocation.prepared).toBe(preparation.preparedAllocation);
     expect(attachment.structuralExecution.readConsumedNodeDispositions(target.targetPlan.root)).toEqual(adopted);
     expect(namespace.readReservationCounts().semanticSlots).toBeGreaterThan(countsBefore.semanticSlots);
-    rootTranscript.binding.execution.assertCoherent();
+    const targetExecution = executeTemplateCompilerContextFamilyTarget(attachment);
+    expect(targetExecution.consumedNodes).toEqual(adopted);
+    expect(targetExecution.targetGeometries).toHaveLength(1);
+    expect(rootTranscript.binding.execution.seal()).toBe(rootTranscript.binding.execution.sequence);
   });
 
   test('places a TC-wrapped containerless host after its transition event', () => {
@@ -1356,6 +1360,27 @@ describe('template compiler root site cursor', () => {
     expect(transcript.taskSnapshot.contextForEvent(transition)).toBe(transcript.taskSnapshot.rootContext);
     expect(transcript.taskSnapshot.contextForEvent(placement)?.contextKind)
       .toBe(TemplateCompilerSiteCursorContextKind.TemplateController);
+
+    if (completion.receipt == null) throw new Error('Expected TC-containerless family receipt.');
+    const rows = assembleTemplateCompilerContextFamilyRows(completion.receipt).assembly;
+    if (rows == null) throw new Error('Expected TC-containerless family rows.');
+    const wires = prepareTemplateCompilerFamilyWireFunding(rows).funding;
+    if (wires == null) throw new Error('Expected TC-containerless family wires.');
+    const allocation = prepareTemplateCompilerContextFamilyAllocation(rows, wires).preparation;
+    if (allocation == null) throw new Error('Expected TC-containerless family allocation.');
+    const target = prepareTemplateCompilerContextFamilyTargetPlan(allocation).preparation;
+    if (target == null) throw new Error('Expected TC-containerless target plan.');
+    const schedule = prepareTemplateCompilerContextFamilyStructuralSchedule(target);
+    const attachment = transcript.binding.execution.commitPreparedContextFamilyTargetAttachment(
+      transcript.binding.execution.prepareContextFamilyTargetAttachment(target, schedule),
+    );
+    const targetExecution = executeTemplateCompilerContextFamilyTarget(attachment);
+    expect(targetExecution.inputTransfers.map((transfer) => transfer.node)).toContain(transition.host);
+    expect(targetExecution.targetGeometries.filter((geometry) =>
+      'replacedNode' in geometry && geometry.replacedNode === transition.host
+    ))
+      .toHaveLength(2);
+    expect(transcript.binding.execution.seal()).toBe(transcript.binding.execution.sequence);
   });
 
   test('funds an effective capture before its HE projection definition', () => {

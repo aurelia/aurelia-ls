@@ -129,7 +129,18 @@ export class TemplateCompilerInputNodeTransfer {
     readonly destinationOrdinal: number,
     readonly eventOrdinal: number,
     readonly causeHandles: readonly ClaimEndpointHandle[],
-  ) {}
+    readonly startForestMutationRevision: number,
+    readonly endForestMutationRevision: number,
+  ) {
+    const expectedDelta = sourceEdgeKind === TemplateCompilerOccurrenceEdgeKind.Detached ? 1 : 2;
+    if (
+      !Number.isSafeInteger(startForestMutationRevision)
+      || !Number.isSafeInteger(endForestMutationRevision)
+      || endForestMutationRevision !== startForestMutationRevision + expectedDelta
+    ) {
+      throw new Error(`Compiler input transfer '${node.occurrenceKey}' lost its exact forest mutation interval.`);
+    }
+  }
 }
 
 /** One caused 1→N replacement of a seeded text occurrence by compiler-generated text outputs. */
@@ -892,6 +903,11 @@ export class TemplateCompilerStructuralExecutionSession {
     context: TemplateCompilerTargetContextPlan,
     ordinal: number,
     causeHandles: readonly ClaimEndpointHandle[],
+    moveNode: ((
+      node: TemplateCompilerNodeOccurrence,
+      destinationParent: TemplateCompilerParentOccurrence,
+      destinationOrdinal: number,
+    ) => void) | null = null,
   ): void {
     const structure = this.requireContextStructure(context);
     this.transferInputNode(
@@ -901,6 +917,7 @@ export class TemplateCompilerStructuralExecutionSession {
       TemplateCompilerOccurrenceEdgeKind.Child,
       ordinal,
       causeHandles,
+      moveNode,
     );
   }
 
@@ -1059,6 +1076,7 @@ export class TemplateCompilerStructuralExecutionSession {
     node: TemplateCompilerNodeOccurrence,
     context: TemplateCompilerTargetContextPlan,
     causeHandles: readonly ClaimEndpointHandle[],
+    detachNode: ((node: TemplateCompilerNodeOccurrence) => void) | null = null,
   ): TemplateCompilerConsumedNodeDisposition {
     const structure = this.requireContextStructure(context);
     this.requireForestNode(node);
@@ -1100,7 +1118,11 @@ export class TemplateCompilerStructuralExecutionSession {
     const occurrenceMembershipOrdinal = context.occurrenceMembershipOrdinal(node);
     this.requireCurrentInputEdgeAuthority(node);
     this.assertSeededSourceOrder(node);
-    this.forest.detachNode(node);
+    if (detachNode == null) this.forest.detachNode(node);
+    else detachNode(node);
+    if (!hasDetachedNodeEdge(node)) {
+      throw new Error(`Consumed compiler occurrence '${node.occurrenceKey}' detachment did not consume its edge.`);
+    }
     if (node instanceof TemplateCompilerElementOccurrence) {
       this.latestRenderReplacementByOccurrence.delete(node);
     }
@@ -1568,6 +1590,11 @@ export class TemplateCompilerStructuralExecutionSession {
     >,
     destinationOrdinal: number,
     causeHandles: readonly ClaimEndpointHandle[],
+    moveNode: ((
+      node: TemplateCompilerNodeOccurrence,
+      destinationParent: TemplateCompilerParentOccurrence,
+      destinationOrdinal: number,
+    ) => void) | null = null,
   ): TemplateCompilerInputNodeTransfer {
     this.requireContext(context);
     this.requireForestNode(node);
@@ -1606,7 +1633,22 @@ export class TemplateCompilerStructuralExecutionSession {
     const sourceOrdinal = node.readParentOrdinal();
     this.requireCurrentInputEdgeAuthority(node);
     this.assertSeededSourceOrder(node);
-    this.forest.moveNode(node, destinationParent, destinationEdgeKind, destinationOrdinal);
+    const startForestMutationRevision = this.forest.mutationRevision;
+    if (moveNode == null) {
+      this.forest.moveNode(node, destinationParent, destinationEdgeKind, destinationOrdinal);
+    } else {
+      if (destinationParent == null || destinationEdgeKind !== TemplateCompilerOccurrenceEdgeKind.Child) {
+        throw new Error(`Compiler transfer '${node.occurrenceKey}' callback requires one ordinary child destination.`);
+      }
+      moveNode(node, destinationParent, destinationOrdinal);
+    }
+    if (
+      node.parent !== destinationParent
+      || node.parentEdgeKind !== destinationEdgeKind
+      || node.readParentOrdinal() !== destinationOrdinal
+    ) {
+      throw new Error(`Compiler transfer '${node.occurrenceKey}' did not realize its exact destination edge.`);
+    }
     const transfer = new TemplateCompilerInputNodeTransfer(
       context,
       node,
@@ -1621,6 +1663,8 @@ export class TemplateCompilerStructuralExecutionSession {
       destinationOrdinal,
       this.nextInputEventOrdinal++,
       [...causeHandles],
+      startForestMutationRevision,
+      this.forest.mutationRevision,
     );
     this.inputNodeTransfers.push(transfer);
     appendMap(this.inputNodeTransfersByNode, node, transfer);
@@ -2289,6 +2333,7 @@ export class TemplateCompilerStructuralExecutionSession {
         const destinationIsContextCarrier = transfer.destinationEdgeKind === TemplateCompilerOccurrenceEdgeKind.Root
           && transfer.destinationParent === null
           && structure.compilerCarrier === node;
+        const expectedForestDelta = transfer.sourceEdgeKind === TemplateCompilerOccurrenceEdgeKind.Detached ? 1 : 2;
         if (
           transfer.node !== node
           || transfer.inputReference !== node.inputReference
@@ -2301,6 +2346,10 @@ export class TemplateCompilerStructuralExecutionSession {
           || (!destinationIsContextContent && !destinationIsContextCarrier)
           || !Number.isSafeInteger(transfer.destinationOrdinal)
           || transfer.destinationOrdinal < 0
+          || !Number.isSafeInteger(transfer.startForestMutationRevision)
+          || transfer.endForestMutationRevision
+            !== transfer.startForestMutationRevision + expectedForestDelta
+          || transfer.endForestMutationRevision > this.forest.mutationRevision
           || transfer.causeHandles.length === 0
           || this.inputNodeTransfer(transfer.context, node) !== transfer
         ) {

@@ -98,10 +98,14 @@ export class TemplateCompilerProjectionGroupingPlan<TNode, TAttribute> {
     readonly residualChildren: readonly TemplateCompilerProjectionChildSnapshot<TNode, TAttribute>[],
   ) {
     const grouped = groups.flatMap((group) => group.members);
+    const groupedSet = new Set(grouped);
+    const extractedSet = new Set(extractedContributors);
     if (
       new Set(groups.map((group) => group.slotName)).size !== groups.length
       || grouped.length !== extractedContributors.length
-      || extractedContributors.some((contributor) => !grouped.includes(contributor))
+      || groupedSet.size !== grouped.length
+      || extractedSet.size !== extractedContributors.length
+      || extractedContributors.some((contributor) => !groupedSet.has(contributor))
     ) {
       throw new Error('Projection grouping plan lost group, extraction, or residual-child coverage.');
     }

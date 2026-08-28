@@ -249,6 +249,7 @@ export class TemplateCompilerFamilyProjectionGroupSchedule {
 export class TemplateCompilerFamilyProjectionScheduleEntry {
   readonly groups: readonly TemplateCompilerFamilyProjectionGroupSchedule[];
   readonly discardedContributors: readonly TemplateCompilerFamilyProjectionContributorScheduleEntry[];
+  readonly physicalContributors: readonly TemplateCompilerFamilyProjectionContributorScheduleEntry[];
 
   constructor(
     readonly event: TemplateCompilerSiteCursorProjectionExtractionEvent,
@@ -278,6 +279,17 @@ export class TemplateCompilerFamilyProjectionScheduleEntry {
       }
       return new TemplateCompilerFamilyProjectionContributorScheduleEntry(receipt, contributor);
     });
+    const scheduledContributors = [
+      ...this.groups.flatMap((group) => group.contributors),
+      ...this.discardedContributors,
+    ];
+    const scheduledByReceipt = new Map(scheduledContributors.map((contributor) =>
+      [contributor.receipt, contributor] as const
+    ));
+    this.physicalContributors = event.preparation.contributorReceipts.flatMap((receipt) => {
+      const contributor = scheduledByReceipt.get(receipt);
+      return contributor == null ? [] : [contributor];
+    });
     const row = hydrateElement.draft.row;
     const site = hydrateElement.draft.site;
     if (
@@ -288,6 +300,10 @@ export class TemplateCompilerFamilyProjectionScheduleEntry {
       || this.groups.length !== hydrateElement.instruction.projections.length
       || this.discardedContributors.length
         !== hydrateElement.instruction.discardedProjectionContributors.length
+      || this.physicalContributors.length !== event.preparation.contributorReceipts.length
+      || this.physicalContributors.some((contributor, ordinal) =>
+        contributor.receipt !== event.preparation.contributorReceipts[ordinal]
+      )
       || event.realization.request.contexts.some((input) => input.context.parent !== ownerContext.cursorContext)
     ) {
       throw new Error(`Family projection '${event.host.occurrenceKey}' lost HE owner or group coverage.`);
