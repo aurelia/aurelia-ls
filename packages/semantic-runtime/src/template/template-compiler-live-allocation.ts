@@ -465,6 +465,11 @@ export class TemplateCompilerLiveAllocationLedger {
     return this.phaseState;
   }
 
+  /** Whether this mutable phase keeps every reservation namespace-invisible until an exact prepared commit. */
+  get isPreparedPhase(): boolean {
+    return this.prepared;
+  }
+
   get handles(): KernelHandleFactory {
     return this.namespace.handles;
   }

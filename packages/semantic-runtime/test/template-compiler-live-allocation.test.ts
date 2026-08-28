@@ -1,7 +1,21 @@
 import { describe, expect, test } from 'vitest';
 
 import { KernelHandleFactory } from '../src/kernel/handles.js';
-import { TemplateInstructionKind } from '../src/template/instruction-ir.js';
+import { CompiledTemplateReference } from '../src/template/compiled-template.js';
+import { HtmlIrNodeKind, HtmlNodeReference } from '../src/template/html-ir.js';
+import {
+  AuSlotProcessContentInstructionData,
+  HydrateElementProjectionContributor,
+  HydrateElementProjectionContributorDisposition,
+  HydrateElementProjectionDefinition,
+  TemplateInstructionKind,
+} from '../src/template/instruction-ir.js';
+import {
+  fundTemplateCompilerHydrateElements,
+  TemplateCompilerHydrateElementFundingDraft,
+  TemplateCompilerHydrateElementProjectionFunding,
+  type TemplateCompilerHydrateElementProjectionFundingPlan,
+} from '../src/template/template-compiler-hydrate-element-funding.js';
 import {
   TemplateCompilerLiveAllocationLedgerState,
   TemplateCompilerLiveAllocationNamespace,
@@ -9,6 +23,10 @@ import {
   TemplateCompilerLiveProductReservationRole,
   type TemplateCompilerLiveAllocationAuthority,
 } from '../src/template/template-compiler-live-allocation.js';
+import {
+  TemplateCompilerCaptureSyntaxDecisionKind,
+  type TemplateCompilerCapturedSyntaxRowDraft,
+} from '../src/template/template-compiler-occurrence-row-assembly.js';
 
 describe('template compiler live prepared allocation', () => {
   test('freezes one complete local inventory before committing its exact snapshot', () => {
@@ -147,7 +165,205 @@ describe('template compiler live prepared allocation', () => {
       'prepared:late-product:product',
     )).toThrow('no longer mutable');
   });
+
+  test('funds explicit projection, processContent, capture, and usage-containerless wire without committing', () => {
+    const authority = new TestAllocationAuthority('neutral-he-funding');
+    const namespace = new TemplateCompilerLiveAllocationNamespace(authority);
+    const phaseKey = 'neutral-he-funding';
+    const ledger = namespace.preparePhase(phaseKey);
+    const emptyCounts = namespace.readReservationCounts();
+    const node = new HtmlNodeReference(
+      HtmlIrNodeKind.Element,
+      authority.handles.product('host-node'),
+      authority.handles.identity('host-node'),
+      authority.handles.address('host-node'),
+    );
+    const retained = new HydrateElementProjectionContributor(
+      node,
+      'named',
+      null,
+      null,
+      HydrateElementProjectionContributorDisposition.RetainedNode,
+    );
+    const discarded = new HydrateElementProjectionContributor(
+      node,
+      'default',
+      null,
+      null,
+      HydrateElementProjectionContributorDisposition.DiscardedWhitespace,
+    );
+    const projectionPlan = new TestProjectionFundingPlan('named', retained);
+    const site = {};
+    const row = { stableSlotKey: 'row:host', site };
+    const capture = effectiveCapture('row:host:capture:syntax');
+    const metadata = new AuSlotProcessContentInstructionData('outlet', null);
+    const draft = new TemplateCompilerHydrateElementFundingDraft(
+      row,
+      site,
+      'row:host:hydrate-element',
+      'occurrence:host',
+      node,
+      authority.handles.identity('owner'),
+      'x-host',
+      'x-host',
+      null,
+      projectionPlan,
+      [discarded],
+      metadata,
+      [node],
+      [],
+      [capture],
+      true,
+      node.addressHandle,
+    );
+
+    const funding = fundTemplateCompilerHydrateElements(ledger, phaseKey, [draft]);
+    const head = funding.heads[0]!;
+
+    expect(ledger.state).toBe(TemplateCompilerLiveAllocationLedgerState.Mutable);
+    expect(namespace.readReservationCounts()).toEqual(emptyCounts);
+    expect(projectionPlan.instructionLocal)
+      .toBe(`${phaseKey}:row:host:hydrate-element:instruction:hydrate-element:occurrence:host`);
+    expect(head.instruction.projections).toBe(head.projectionFunding.definitions);
+    expect(head.instruction.discardedProjectionContributors).toEqual([discarded]);
+    expect(head.instruction.auSlotProcessContent).toBe(metadata);
+    expect(head.instruction.auSlotProcessContentRemovedChildNodes).toEqual([node]);
+    expect(head.instruction.containerless).toBe(true);
+    expect(head.instructionOwnerIdentityHandle).toBe(draft.instructionOwnerIdentityHandle);
+    expect(funding.productReservations.map((reservation) => reservation.role)).toEqual([
+      TemplateCompilerLiveProductReservationRole.EffectiveAttributeSyntax,
+      TemplateCompilerLiveProductReservationRole.GeneratedCompiledTemplate,
+    ]);
+
+    const prepared = ledger.prepareSnapshot();
+    expect(namespace.readReservationCounts()).toEqual(emptyCounts);
+    expect(prepared.instructionAllocations).toEqual(funding.instructionAllocations);
+    expect(prepared.productReservations).toEqual(funding.productReservations);
+    ledger.commitPrepared(prepared);
+    expect(namespace.readReservationCounts()).toMatchObject({
+      semanticSlots: 3,
+      productHandles: 3,
+      identityHandles: 3,
+      addressHandles: 0,
+    });
+  });
+
+  test('rejects incoherent projection, processContent, and capture funding drafts before allocation', () => {
+    const authority = new TestAllocationAuthority('neutral-he-falsifiers');
+    const node = new HtmlNodeReference(HtmlIrNodeKind.Element, null, null, null);
+    const site = {};
+    const row = { stableSlotKey: 'row:host', site };
+    const discarded = new HydrateElementProjectionContributor(
+      node,
+      'named',
+      null,
+      null,
+      HydrateElementProjectionContributorDisposition.DiscardedWhitespace,
+    );
+    const reservation = new TemplateCompilerLiveAllocationNamespace(authority)
+      .preparePhase('projection-falsifier')
+      .reserveProduct(
+        'projection-falsifier:child',
+        'child',
+        TemplateCompilerLiveProductReservationRole.GeneratedCompiledTemplate,
+        null,
+        'projection-falsifier:child',
+      );
+    const invalidDefinition = new HydrateElementProjectionDefinition(
+      'named',
+      new CompiledTemplateReference(reservation.productHandle, reservation.identityHandle),
+      [discarded],
+      null,
+    );
+    expect(() => TemplateCompilerHydrateElementProjectionFunding.create(
+      [invalidDefinition],
+      [reservation],
+    )).toThrow('definition/reservation ownership');
+
+    const validPlan = new TestProjectionFundingPlan('named', new HydrateElementProjectionContributor(
+      node,
+      'named',
+      null,
+      null,
+      HydrateElementProjectionContributorDisposition.RetainedNode,
+    ));
+    const args = () => [
+      row,
+      site,
+      'row:host:hydrate-element',
+      'occurrence:host',
+      node,
+      authority.handles.identity('owner'),
+      'x-host',
+      'x-host',
+      null,
+      validPlan,
+      [],
+    ] as const;
+    expect(() => new TemplateCompilerHydrateElementFundingDraft(
+      ...args(),
+      null,
+      [node],
+      [],
+      [],
+      false,
+      null,
+    )).toThrow('row, wire, or reservation authority');
+    const duplicateCapture = effectiveCapture('duplicate');
+    expect(() => new TemplateCompilerHydrateElementFundingDraft(
+      ...args(),
+      null,
+      [],
+      [],
+      [duplicateCapture, duplicateCapture],
+      false,
+      null,
+    )).toThrow('row, wire, or reservation authority');
+  });
 });
+
+class TestProjectionFundingPlan implements TemplateCompilerHydrateElementProjectionFundingPlan {
+  instructionLocal: string | null = null;
+
+  constructor(
+    private readonly slotName: string,
+    private readonly contributor: HydrateElementProjectionContributor,
+  ) {}
+
+  fund(
+    instructionLocal: string,
+    ledger: ReturnType<TemplateCompilerLiveAllocationNamespace['preparePhase']>,
+  ): TemplateCompilerHydrateElementProjectionFunding {
+    this.instructionLocal = instructionLocal;
+    const local = `${instructionLocal}:projection:${this.slotName}`;
+    const reservation = ledger.reserveProduct(
+      local,
+      `projection:${this.slotName}`,
+      TemplateCompilerLiveProductReservationRole.GeneratedCompiledTemplate,
+      null,
+      `${local}:compiled-template`,
+    );
+    return TemplateCompilerHydrateElementProjectionFunding.create(
+      [new HydrateElementProjectionDefinition(
+        this.slotName,
+        new CompiledTemplateReference(reservation.productHandle, reservation.identityHandle),
+        [this.contributor],
+        null,
+      )],
+      [reservation],
+    );
+  }
+}
+
+function effectiveCapture(stableSlotKey: string): TemplateCompilerCapturedSyntaxRowDraft {
+  return {
+    stableSlotKey,
+    capture: { syntax: { sourceAddressHandle: null } },
+    decisionKind: TemplateCompilerCaptureSyntaxDecisionKind.EffectiveSyntaxRequired,
+    authoredSyntax: null,
+    instructionAttribute: null,
+  } as unknown as TemplateCompilerCapturedSyntaxRowDraft;
+}
 
 class TestAllocationAuthority implements TemplateCompilerLiveAllocationAuthority {
   readonly handles: KernelHandleFactory;
