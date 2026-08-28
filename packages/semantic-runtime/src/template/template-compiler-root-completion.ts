@@ -2,31 +2,23 @@ import { TemplateCompilerScopeClosureState } from './compiler-read-view.js';
 import type { TemplateCompilerReadObservation } from './compiler-read-view.js';
 import type { TemplateCompilerSiteExecutionEndpointReceipt } from './template-compiler-execution.js';
 import {
+  auditTemplateCompilerTraversalCompletion,
+  TemplateCompilerTraversalCompletionAuditReasonKind,
+} from './template-compiler-completion-audit.js';
+import {
   TemplateCompilerHydrateElementProcessContentState,
   TemplateCompilerHydrateElementProjectionState,
   TemplateCompilerHydrateElementStagingState,
 } from './template-compiler-hydrate-element-staging.js';
-import { TemplateCompilerElementInstructionStagingState } from './template-compiler-instruction-staging.js';
-import { TemplateCompilerLiveAttributeCompletion } from './template-compiler-live-attribute-assembly.js';
-import { TemplateCompilerLiveAllocationSnapshotState } from './template-compiler-live-allocation.js';
-import { TemplateCompilerRootCompilationStateKind } from './template-compiler-root-state.js';
 import {
-  TemplateCompilerSiteCursorAttributeEvent,
-  TemplateCompilerSiteCursorContainerlessPlacementEvent,
+  type TemplateCompilerSiteCursorContainerlessPlacementEvent,
   TemplateCompilerSiteCursorIgnoredNodeEvent,
-  TemplateCompilerSiteCursorPhaseEvent,
-  TemplateCompilerSiteCursorPhaseKind,
-  TemplateCompilerSiteCursorProcessContentEvent,
-  TemplateCompilerSiteCursorSiteOutcome,
   TemplateCompilerSiteCursorSubtreeExclusionEvent,
   TemplateCompilerSiteCursorSurrogateValidationEvent,
   TemplateCompilerSiteCursorTextEvent,
   TemplateCompilerSiteCursorElementEvent,
 } from './template-compiler-site-cursor-event.js';
 import type { TemplateCompilerSiteCursorTranscript } from './template-compiler-site-cursor.js';
-import {
-  TemplateCompilerSiteSpendCompletionKind,
-} from './template-compiler-site-spend-ledger.js';
 
 const ordinaryRootCompletionAuthority = {};
 
@@ -182,6 +174,7 @@ export function completeTemplateCompilerOrdinaryRoot(
   transcript: TemplateCompilerSiteCursorTranscript,
   endpoint: TemplateCompilerSiteExecutionEndpointReceipt | null,
 ): TemplateCompilerOrdinaryRootCompletionResult {
+  const audit = auditTemplateCompilerTraversalCompletion(transcript, endpoint);
   const refusals: TemplateCompilerOrdinaryRootCompletionRefusal[] = [];
   const refuse = (
     refusalKind: TemplateCompilerOrdinaryRootCompletionRefusalKind,
@@ -191,19 +184,19 @@ export function completeTemplateCompilerOrdinaryRoot(
       refusals.push(new TemplateCompilerOrdinaryRootCompletionRefusal(refusalKind, summary));
     }
   };
+  const appendAuditReasons = (
+    kinds: readonly TemplateCompilerTraversalCompletionAuditReasonKind[],
+  ): void => {
+    for (const kind of kinds) {
+      const reason = audit.reasonFor(kind);
+      if (reason != null) refuse(ordinaryRefusalKindForAudit(kind), reason.summary);
+    }
+  };
 
-  if (!transcript.isModuleConstructed()) {
-    refuse(
-      TemplateCompilerOrdinaryRootCompletionRefusalKind.ForeignTranscript,
-      'Ordinary root completion requires one module-constructed cursor transcript.',
-    );
-  }
-  if (transcript.frontier != null) {
-    refuse(
-      TemplateCompilerOrdinaryRootCompletionRefusalKind.CursorFrontier,
-      `Cursor stopped at '${transcript.frontier.frontierKind}'.`,
-    );
-  }
+  appendAuditReasons([
+    TemplateCompilerTraversalCompletionAuditReasonKind.ForeignTranscript,
+    TemplateCompilerTraversalCompletionAuditReasonKind.CursorFrontier,
+  ]);
   if (
     transcript.taskSnapshot.contexts.length !== 1
     || transcript.taskSnapshot.contexts[0]?.context !== transcript.taskSnapshot.rootContext
@@ -213,138 +206,18 @@ export function completeTemplateCompilerOrdinaryRoot(
       'Ordinary-root completion cannot claim a generated compiler context family.',
     );
   }
-  switch (transcript.rootState.stateKind) {
-    case TemplateCompilerRootCompilationStateKind.Invalid:
-      refuse(
-        TemplateCompilerOrdinaryRootCompletionRefusalKind.RootStateInvalid,
-        'Reached root-global compiler output is invalid.',
-      );
-      break;
-    case TemplateCompilerRootCompilationStateKind.Open:
-      refuse(
-        TemplateCompilerOrdinaryRootCompletionRefusalKind.RootStateOpen,
-        'Reached root-global compiler output remains open.',
-      );
-      break;
-    case TemplateCompilerRootCompilationStateKind.Complete:
-      break;
-  }
-  const lastEvent = transcript.events.at(-1) ?? null;
-  if (
-    !(lastEvent instanceof TemplateCompilerSiteCursorPhaseEvent)
-    || lastEvent.phaseKind !== TemplateCompilerSiteCursorPhaseKind.SurrogateEnd
-  ) {
-    refuse(
-      TemplateCompilerOrdinaryRootCompletionRefusalKind.RootPhaseIncomplete,
-      'Cursor did not complete the root surrogate-end phase.',
-    );
-  }
-
-  if (endpoint == null) {
-    refuse(
-      TemplateCompilerOrdinaryRootCompletionRefusalKind.EndpointMissing,
-      'Cursor has no released session-owned site endpoint.',
-    );
-  } else if (
-    !endpoint.isOwnedBy(transcript.binding.execution, transcript.binding.lane)
-    || !transcript.binding.execution.siteExecutionEndpointIsCurrent(endpoint)
-    || endpoint.forestMutationRevision !== transcript.endForestMutationRevision
-    || endpoint.globalOperationCount !== transcript.endGlobalOperationCount
-    || endpoint.laneOperationCount !== transcript.endLaneOperationCount
-    || endpoint.forestMutationRevision !== transcript.expectedEndForestMutationRevision
-    || endpoint.globalOperationCount !== transcript.expectedEndGlobalOperationCount
-    || endpoint.laneOperationCount !== transcript.expectedEndLaneOperationCount
-  ) {
-    refuse(
-      TemplateCompilerOrdinaryRootCompletionRefusalKind.EndpointMismatch,
-      'Session-owned site endpoint does not match the transcript and current pre-plan execution frontier.',
-    );
-  }
-  if (endpoint != null) {
-    const representedOperations = transcript.events.flatMap((event) =>
-      event instanceof TemplateCompilerSiteCursorProcessContentEvent ? [event.result.operation] : []
-    );
-    if (!sameObjects(endpoint.siteOperations, representedOperations)) {
-      refuse(
-        TemplateCompilerOrdinaryRootCompletionRefusalKind.SiteOperationMismatch,
-        'Released site-operation suffix is not represented exactly by cursor effect events.',
-      );
-    }
-  }
-
-  const compilerReads = [...transcript.compilerReads.readAll()];
-  if (compilerReads.some((read) =>
-    read.closure.state !== TemplateCompilerScopeClosureState.Closed
-    || !read.validate().isCurrent
-  )) {
-    refuse(
-      TemplateCompilerOrdinaryRootCompletionRefusalKind.CompilerReadOpen,
-      'One or more compiler reads are open or no longer current at root completion.',
-    );
-  }
-
-  const ledger = transcript.ledger;
-  if (
-    ledger.conflicts.length > 0
-    || (transcript.frontier == null && (
-      ledger.completion.completionKind !== TemplateCompilerSiteSpendCompletionKind.Complete
-      || ledger.blockedByFrontier.length > 0
-    ))
-  ) {
-    refuse(
-      TemplateCompilerOrdinaryRootCompletionRefusalKind.AccountingMismatch,
-      'Site accounting did not finish one conflict-free unblocked walk.',
-    );
-  }
-  const exactRemainders = new Map(
-    ledger.authoredRemainderEvidence.map((evidence) => [evidence.bundle, evidence]),
-  );
-  const frontierBlockedBundles = new Set(ledger.blockedByFrontier.map((blocked) => blocked.bundle));
-  if (
-    ledger.rawUnspent.some((bundle) => {
-      const evidence = exactRemainders.get(bundle) ?? null;
-      const hasExactRemainder = evidence?.preWalkReceipt != null
-        && transcript.preWalkAuthority.owns(evidence.preWalkReceipt);
-      return !hasExactRemainder && !frontierBlockedBundles.has(bundle);
-    })
-    || ledger.authoredRemainderEvidence.some((evidence) => !ledger.rawUnspent.includes(evidence.bundle))
-  ) {
-    refuse(
-      TemplateCompilerOrdinaryRootCompletionRefusalKind.UnexplainedAuthoredRemainder,
-      'Every raw-unspent authored bundle must have exactly its cursor-owned pre-walk remainder receipt.',
-    );
-  }
-
-  const attributes = transcript.events.filter((event): event is TemplateCompilerSiteCursorAttributeEvent =>
-    event instanceof TemplateCompilerSiteCursorAttributeEvent
-  );
-  const elementEvents = transcript.events.filter((event): event is TemplateCompilerSiteCursorElementEvent =>
-    event instanceof TemplateCompilerSiteCursorElementEvent
-  );
-  const containerlessPlacements = transcript.events.filter(
-    (event): event is TemplateCompilerSiteCursorContainerlessPlacementEvent =>
-      event instanceof TemplateCompilerSiteCursorContainerlessPlacementEvent
-  );
-  const placementsByElement = new Map(containerlessPlacements.map((event) => [event.element, event] as const));
-  const texts = transcript.events.filter((event): event is TemplateCompilerSiteCursorTextEvent =>
-    event instanceof TemplateCompilerSiteCursorTextEvent
-  );
-  if (
-    transcript.attributeOwners.some((owner) =>
-      owner.completion !== TemplateCompilerLiveAttributeCompletion.Complete
-      || owner.instructionStaging.state !== TemplateCompilerElementInstructionStagingState.Complete
-    )
-    || attributes.some((event) => event.siteOutcome !== TemplateCompilerSiteCursorSiteOutcome.Complete)
-    || texts.some((event) =>
-      event.siteOutcome !== TemplateCompilerSiteCursorSiteOutcome.Complete
-      && event.siteOutcome !== TemplateCompilerSiteCursorSiteOutcome.NotApplicable
-    )
-  ) {
-    refuse(
-      TemplateCompilerOrdinaryRootCompletionRefusalKind.LiveSiteIncomplete,
-      'One or more reached attribute/text sites lack complete live semantic staging.',
-    );
-  }
+  appendAuditReasons([
+    TemplateCompilerTraversalCompletionAuditReasonKind.RootStateInvalid,
+    TemplateCompilerTraversalCompletionAuditReasonKind.RootStateOpen,
+    TemplateCompilerTraversalCompletionAuditReasonKind.RootPhaseIncomplete,
+    TemplateCompilerTraversalCompletionAuditReasonKind.EndpointMissing,
+    TemplateCompilerTraversalCompletionAuditReasonKind.EndpointMismatch,
+    TemplateCompilerTraversalCompletionAuditReasonKind.SiteOperationMismatch,
+    TemplateCompilerTraversalCompletionAuditReasonKind.CompilerReadOpen,
+    TemplateCompilerTraversalCompletionAuditReasonKind.AccountingMismatch,
+    TemplateCompilerTraversalCompletionAuditReasonKind.UnexplainedAuthoredRemainder,
+    TemplateCompilerTraversalCompletionAuditReasonKind.LiveSiteIncomplete,
+  ]);
   if (transcript.hydrateElementEnvelopes.some((envelope) =>
     envelope.state !== TemplateCompilerHydrateElementStagingState.Exact
     && envelope.state !== TemplateCompilerHydrateElementStagingState.NotApplicable
@@ -355,7 +228,7 @@ export function completeTemplateCompilerOrdinaryRoot(
     );
   }
   if (
-    placementsByElement.size !== containerlessPlacements.length
+    audit.placementsByElement.size !== audit.containerlessPlacements.length
     || transcript.hydrateElementEnvelopes.some((envelope) => {
       const placeable = envelope.state === TemplateCompilerHydrateElementStagingState.Exact
         && envelope.draft?.containerless.effective === true
@@ -363,13 +236,13 @@ export function completeTemplateCompilerOrdinaryRoot(
         && envelope.draft.projection.state === TemplateCompilerHydrateElementProjectionState.None
         && envelope.element.readChildren().length === 0
         && envelope.owner.instructionStaging.templateControllers.length === 0;
-      return placeable !== placementsByElement.has(envelope.element);
+      return placeable !== audit.placementsByElement.has(envelope.element);
     })
-    || containerlessPlacements.some((placement) => {
-      const elementEvent = elementEvents.find((event) => event.element === placement.element) ?? null;
+    || audit.containerlessPlacements.some((placement) => {
+      const elementEvent = audit.elementEvents.find((event) => event.element === placement.element) ?? null;
       const lastElementEventOrdinal = Math.max(
         elementEvent?.ordinal ?? -1,
-        ...attributes.filter((event) => event.owner === placement.element).map((event) => event.ordinal),
+        ...audit.attributeEvents.filter((event) => event.owner === placement.element).map((event) => event.ordinal),
       );
       return placement.ordinal !== lastElementEventOrdinal + 1;
     })
@@ -379,28 +252,18 @@ export function completeTemplateCompilerOrdinaryRoot(
       'Effective containerless elements require one exact cursor placement decision.',
     );
   }
-  if (
-    transcript.allocationSnapshot.state !== TemplateCompilerLiveAllocationSnapshotState.Complete
-    || !transcript.allocationSnapshot.isCurrent()
-  ) {
-    refuse(
-      TemplateCompilerOrdinaryRootCompletionRefusalKind.AllocationOpen,
-      'Reached live allocation inventory contains an unbound instruction or expression slot.',
-    );
-  }
+  appendAuditReasons([TemplateCompilerTraversalCompletionAuditReasonKind.AllocationOpen]);
 
   if (refusals.length > 0 || endpoint == null) {
     return new TemplateCompilerOrdinaryRootCompletionResult(null, refusals);
   }
-  const ownersByElement = new Map(transcript.attributeOwners.map((owner) => [owner.element, owner]));
-  const envelopesByElement = new Map(transcript.hydrateElementEnvelopes.map((envelope) => [envelope.element, envelope]));
-  const elementSites = elementEvents.map((event) => new TemplateCompilerCompletedElementSite(
+  const elementSites = audit.elementEvents.map((event) => new TemplateCompilerCompletedElementSite(
     event,
-    ownersByElement.get(event.element)!,
-    envelopesByElement.get(event.element)!,
-    placementsByElement.get(event.element) ?? null,
+    audit.ownersByElement.get(event.element)!,
+    audit.envelopesByElement.get(event.element)!,
+    audit.placementsByElement.get(event.element) ?? null,
   ));
-  const textSites = texts.map((event) => new TemplateCompilerCompletedTextSite(event));
+  const textSites = audit.textEvents.map((event) => new TemplateCompilerCompletedTextSite(event));
   const elementsByEvent = new Map(elementSites.map((site) => [site.event, site]));
   const textsByEvent = new Map(textSites.map((site) => [site.event, site]));
   const orderedSites: TemplateCompilerCompletedOrdinarySite[] = [];
@@ -413,7 +276,7 @@ export function completeTemplateCompilerOrdinaryRoot(
       ordinaryRootCompletionAuthority,
       transcript,
       endpoint,
-      compilerReads,
+      audit.compilerReads,
       orderedSites,
       elementSites,
       textSites,
@@ -431,6 +294,35 @@ export function completeTemplateCompilerOrdinaryRoot(
   );
 }
 
-function sameObjects<T>(left: readonly T[], right: readonly T[]): boolean {
-  return left.length === right.length && left.every((value, index) => value === right[index]);
+function ordinaryRefusalKindForAudit(
+  reasonKind: TemplateCompilerTraversalCompletionAuditReasonKind,
+): TemplateCompilerOrdinaryRootCompletionRefusalKind {
+  switch (reasonKind) {
+    case TemplateCompilerTraversalCompletionAuditReasonKind.ForeignTranscript:
+      return TemplateCompilerOrdinaryRootCompletionRefusalKind.ForeignTranscript;
+    case TemplateCompilerTraversalCompletionAuditReasonKind.CursorFrontier:
+      return TemplateCompilerOrdinaryRootCompletionRefusalKind.CursorFrontier;
+    case TemplateCompilerTraversalCompletionAuditReasonKind.RootStateInvalid:
+      return TemplateCompilerOrdinaryRootCompletionRefusalKind.RootStateInvalid;
+    case TemplateCompilerTraversalCompletionAuditReasonKind.RootStateOpen:
+      return TemplateCompilerOrdinaryRootCompletionRefusalKind.RootStateOpen;
+    case TemplateCompilerTraversalCompletionAuditReasonKind.RootPhaseIncomplete:
+      return TemplateCompilerOrdinaryRootCompletionRefusalKind.RootPhaseIncomplete;
+    case TemplateCompilerTraversalCompletionAuditReasonKind.EndpointMissing:
+      return TemplateCompilerOrdinaryRootCompletionRefusalKind.EndpointMissing;
+    case TemplateCompilerTraversalCompletionAuditReasonKind.EndpointMismatch:
+      return TemplateCompilerOrdinaryRootCompletionRefusalKind.EndpointMismatch;
+    case TemplateCompilerTraversalCompletionAuditReasonKind.SiteOperationMismatch:
+      return TemplateCompilerOrdinaryRootCompletionRefusalKind.SiteOperationMismatch;
+    case TemplateCompilerTraversalCompletionAuditReasonKind.CompilerReadOpen:
+      return TemplateCompilerOrdinaryRootCompletionRefusalKind.CompilerReadOpen;
+    case TemplateCompilerTraversalCompletionAuditReasonKind.AccountingMismatch:
+      return TemplateCompilerOrdinaryRootCompletionRefusalKind.AccountingMismatch;
+    case TemplateCompilerTraversalCompletionAuditReasonKind.UnexplainedAuthoredRemainder:
+      return TemplateCompilerOrdinaryRootCompletionRefusalKind.UnexplainedAuthoredRemainder;
+    case TemplateCompilerTraversalCompletionAuditReasonKind.LiveSiteIncomplete:
+      return TemplateCompilerOrdinaryRootCompletionRefusalKind.LiveSiteIncomplete;
+    case TemplateCompilerTraversalCompletionAuditReasonKind.AllocationOpen:
+      return TemplateCompilerOrdinaryRootCompletionRefusalKind.AllocationOpen;
+  }
 }
