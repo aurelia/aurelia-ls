@@ -120,6 +120,16 @@ export type TemplateCompilerRuntimeInstructionValue =
       readonly from: RuntimeExpressionAstValue;
     }
   | {
+      readonly type: TemplateCompilerFrameworkInstructionType.LetBinding;
+      readonly from: RuntimeExpressionAstValue;
+      readonly to: string;
+    }
+  | {
+      readonly type: TemplateCompilerFrameworkInstructionType.HydrateLetElement;
+      readonly instructions: readonly TemplateCompilerRuntimeInstructionValue[];
+      readonly toBindingContext: boolean;
+    }
+  | {
       readonly type: TemplateCompilerFrameworkInstructionType.HydrateTemplateController;
       readonly def: TemplateCompilerRuntimeDefinitionReferenceValue;
       readonly res: TemplateCompilerRuntimeResourceNameValue;
@@ -159,6 +169,7 @@ export const enum TemplateCompilerRuntimeInstructionReasonKind {
   MissingResourceName = 'missing-resource-name',
   CaptureSyntaxPending = 'capture-syntax-pending',
   UnsupportedHydrateElementData = 'unsupported-hydrate-element-data',
+  LetBindingSourceIncoherent = 'let-binding-source-incoherent',
   UnsupportedInstructionKind = 'unsupported-instruction-kind',
 }
 
@@ -450,6 +461,34 @@ class RuntimeInstructionFamilyProjector {
           instruction.expressionChainIndex,
         );
         return from == null ? null : { type: TemplateCompilerFrameworkInstructionType.TextBinding, from };
+      }
+      case TemplateInstructionKind.LetBinding: {
+        const hasExpression = instruction.expressionProductHandle != null;
+        const hasLiteral = instruction.literalValue != null;
+        if (hasExpression === hasLiteral) {
+          this.pending(
+            instruction,
+            TemplateCompilerRuntimeInstructionReasonKind.LetBindingSourceIncoherent,
+            'Runtime let binding requires exactly one parsed expression or primitive literal source.',
+          );
+          return null;
+        }
+        const from = hasExpression
+          ? this.expression(instruction, instruction.expressionProductHandle, null)
+          : { $kind: 'PrimitiveLiteral', value: instruction.literalValue! } as const;
+        return from == null ? null : {
+          type: TemplateCompilerFrameworkInstructionType.LetBinding,
+          from,
+          to: instruction.target,
+        };
+      }
+      case TemplateInstructionKind.HydrateLetElement: {
+        const instructions = this.nested(instruction);
+        return instructions == null ? null : {
+          type: TemplateCompilerFrameworkInstructionType.HydrateLetElement,
+          instructions,
+          toBindingContext: instruction.toBindingContext,
+        };
       }
       case TemplateInstructionKind.HydrateTemplateController: {
         const props = this.nested(instruction);

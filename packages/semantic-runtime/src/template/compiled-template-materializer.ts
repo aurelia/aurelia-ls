@@ -47,7 +47,7 @@ import { localKeyPart } from '../kernel/local-key.js';
 import { ExpressionParseResultKind } from '../expression/parse-result-algebra.js';
 import { CustomAttributeDefinition } from '../resources/custom-attribute-definition.js';
 import { CustomElementDefinition } from '../resources/custom-element-definition.js';
-import { camelCaseAttributeName, normalizeLetBindingTarget } from './attribute-mapper.js';
+import { camelCaseAttributeName } from './attribute-mapper.js';
 import {
   AuSlotCompilerAttributeSnapshot,
   AuSlotCompilerChildSnapshot,
@@ -125,6 +125,10 @@ import {
   type TemplateInstruction,
 } from './instruction-ir.js';
 import { instructionKindKeyFor } from './instruction-vocabulary.js';
+import {
+  decideTemplateCompilerLetAttribute,
+  TemplateCompilerLetAttributeKind,
+} from './let-element-compiler-semantics.js';
 import {
   decideTemplateCompilerNativeSlot,
   decideTemplateCompilerNativeSlotName,
@@ -1913,13 +1917,19 @@ class CompiledTemplateInstructionTraversal {
       if (syntax == null) {
         continue;
       }
-      if (syntax.runtimeRawName === 'to-binding-context') {
+      const decision = decideTemplateCompilerLetAttribute(
+        syntax.runtimeRawName,
+        syntax.rawValue,
+        syntax.target,
+        syntax.command,
+      );
+      if (decision.decisionKind === TemplateCompilerLetAttributeKind.ToBindingContext) {
         continue;
       }
       const classification = this.input.attributeClassification.classifications.find((candidate) =>
         candidate.syntaxProductHandle === syntax.productHandle
       ) ?? null;
-      if (classification?.bindingCommand != null && syntax.command !== 'bind') {
+      if (decision.decisionKind === TemplateCompilerLetAttributeKind.InvalidCommand) {
         this.assemblyState.addCompilerIssue(
           `let-command:${attribute.productHandle}`,
           syntax.identityHandle,
@@ -1951,7 +1961,7 @@ class CompiledTemplateInstructionTraversal {
           identityHandle,
           node.toReference(),
           attribute.toReference(),
-          normalizeLetBindingTarget(syntax.target),
+          decision.target!,
           expressionHandle,
           literalValue,
           attribute.valueAddressHandle ?? attribute.sourceAddressHandle,

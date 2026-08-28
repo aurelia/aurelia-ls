@@ -300,6 +300,9 @@ classification, expression parsing, and instruction lowering converge on the sam
   child/projection definition references, containerless state, captures, and known `AuSlot` data. Unsupported kinds or
   AST representations remain typed Pending. Exact values/results are module-constructed and cross-check family
   instruction order plus every row/value link before they can leave semantic-runtime.
+  Hydrate-let and let-binding values share `let-element-compiler-semantics.ts` with the authored compiler adapter:
+  context-flag exclusion, property versus interpolation/literal parsing, invalid-command posture, and target
+  normalization are one law. The live cursor still owns the remaining fresh allocation/spend/row handoff.
 - `template-compiler-compiled-definition-value.ts` is the layered pre-rehydration compiler view. The root overlay keeps
   its complete `CustomElementDefinition` base—including metadata the JIT blueprint does not report—while transformed
   template, exact rows, final root `hasSlots`, empty surrogate values, and `needsCompile=false` come from the compiler

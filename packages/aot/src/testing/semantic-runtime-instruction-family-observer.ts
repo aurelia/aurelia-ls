@@ -128,6 +128,20 @@ function normalizeInstruction(
         type: value.type,
         from: normalizeSemanticRuntimeExpressionAstForObservation(value.from),
       };
+    case TemplateCompilerFrameworkInstructionType.LetBinding:
+      return {
+        kind: "let-binding",
+        type: value.type,
+        from: normalizeSemanticRuntimeExpressionAstForObservation(value.from),
+        to: value.to,
+      };
+    case TemplateCompilerFrameworkInstructionType.HydrateLetElement:
+      return {
+        kind: "hydrate-let-element",
+        type: value.type,
+        instructions: value.instructions.map((instruction) => normalizeInstruction(instruction, definitionIndexes)),
+        toBindingContext: value.toBindingContext,
+      };
     case TemplateCompilerFrameworkInstructionType.HydrateTemplateController:
       return {
         kind: "hydrate-template-controller",
