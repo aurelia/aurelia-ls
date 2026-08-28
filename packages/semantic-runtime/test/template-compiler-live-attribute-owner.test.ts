@@ -171,6 +171,51 @@ describe('template compiler live attribute owner progression', () => {
     }
   });
 
+  test('retains finished owner history across unrelated, scalar, and detachment revisions', () => {
+    const fixture = new BrowserEffectiveTemplateFixture('template-compiler-live-attribute-owner-history');
+    try {
+      const forest = TemplateCompilerOccurrenceForest.fromBrowserEffective(fixture.materialize(
+        'history',
+        '<div title="before"></div><span></span>',
+      ).emission);
+      const owner = elements(forest, 'div')[0];
+      const unrelated = elements(forest, 'span')[0];
+      const title = owner?.readAttributes()[0];
+      if (owner == null || unrelated == null || title == null) throw new Error('Expected historical owner inputs.');
+      const input = TemplateCompilerLiveAttributeOwnerInput.capture(
+        forest,
+        owner,
+        forest.mutationRevision,
+      );
+      const progression = new TemplateCompilerLiveAttributeOwnerProgression(input);
+      const site = progression.begin(title);
+      progression.complete(site, TemplateCompilerLiveAttributeDisposition.Retained);
+      const finished = progression.finish().readFinalView();
+
+      forest.detachNode(unrelated);
+      expect(input.isCurrent()).toBe(false);
+      expect(progression.readSites()).toEqual([site]);
+      expect(progression.siteForAttribute(title)).toBe(site);
+      expect(site.ownerView.getAttribute('title')).toBe('before');
+      expect(finished.getAttribute('title')).toBe('before');
+      expect(title.value).toBe('before');
+
+      forest.rewriteAttributeValue(title, 'after');
+      expect(site.ownerView.getAttribute('title')).toBe('before');
+      expect(finished.getAttribute('title')).toBe('before');
+      expect(title.value).toBe('after');
+
+      forest.detachAttribute(title);
+      expect(owner.readAttributes()).toEqual([]);
+      expect(progression.siteForAttribute(title)).toBe(site);
+      expect(site.ownerView.hasAttribute('title')).toBe(true);
+      expect(site.ownerView.getAttribute('title')).toBe('before');
+      expect(finished.getAttribute('title')).toBe('before');
+    } finally {
+      fixture.dispose();
+    }
+  });
+
   test('uses exact namespace-qualified names and occurrence values', () => {
     const fixture = new BrowserEffectiveTemplateFixture('template-compiler-live-attribute-owner-qualified');
     try {

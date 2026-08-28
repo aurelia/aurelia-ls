@@ -48,6 +48,7 @@ export class TemplateCompilerLiveAttributeOwnerInput {
 
   readonly #authority: object;
   readonly #originalOrdinalByAttribute: ReadonlyMap<TemplateCompilerAttributeOccurrence, number>;
+  readonly #valueByAttribute: ReadonlyMap<TemplateCompilerAttributeOccurrence, string>;
   readonly #suppressed: ReadonlySet<TemplateCompilerAttributeOccurrence>;
   readonly physicalAttributes: readonly TemplateCompilerAttributeOccurrence[];
   readonly visibleAttributes: readonly TemplateCompilerAttributeOccurrence[];
@@ -105,6 +106,7 @@ export class TemplateCompilerLiveAttributeOwnerInput {
     }
     this.#authority = authority;
     this.#originalOrdinalByAttribute = originalOrdinalByAttribute;
+    this.#valueByAttribute = new Map(physicalAttributes.map((attribute) => [attribute, attribute.value] as const));
     this.#suppressed = suppressed;
     this.physicalAttributes = physicalAttributes;
     this.suppressedAttributes = [...suppressedAttributes];
@@ -125,6 +127,10 @@ export class TemplateCompilerLiveAttributeOwnerInput {
 
   originalOrdinalFor(attribute: TemplateCompilerAttributeOccurrence): number | null {
     return this.#originalOrdinalByAttribute.get(attribute) ?? null;
+  }
+
+  capturedValueFor(attribute: TemplateCompilerAttributeOccurrence): string | null {
+    return this.#valueByAttribute.get(attribute) ?? null;
   }
 
   isSuppressed(attribute: TemplateCompilerAttributeOccurrence): boolean {
@@ -149,11 +155,11 @@ export class TemplateCompilerLiveAttributeOwnerView implements TemplateAttribute
   }
 
   hasAttribute(qualifiedName: string): boolean {
-    return this.progression.readQualifiedAttribute(qualifiedName, this.version) != null;
+    return this.progression.hasQualifiedAttribute(qualifiedName, this.version);
   }
 
   getAttribute(qualifiedName: string): string | null {
-    return this.progression.readQualifiedAttribute(qualifiedName, this.version)?.value ?? null;
+    return this.progression.readQualifiedAttributeValue(qualifiedName, this.version);
   }
 }
 
@@ -356,29 +362,38 @@ export class TemplateCompilerLiveAttributeOwnerProgression {
   }
 
   readSites(): readonly TemplateCompilerLiveAttributeOwnerSite[] {
-    this.assertForestRevision();
+    this.assertHistoricalRead();
     return this.sites;
   }
 
   /** Immutable DOM-shaped mapper view after every reached site disposition has completed. */
   readFinalView(): TemplateCompilerLiveAttributeOwnerView {
-    this.assertForestRevision();
     if (!this.finished) {
+      this.assertForestRevision();
       throw new Error(`Live attribute owner '${this.element.occurrenceKey}' has not finished.`);
     }
     return new TemplateCompilerLiveAttributeOwnerView(this, this.version, this.stateRevision);
   }
 
   siteForAttribute(attribute: TemplateCompilerAttributeOccurrence): TemplateCompilerLiveAttributeOwnerSite | null {
-    this.assertForestRevision();
+    this.assertHistoricalRead();
     return this.sitesByAttribute.get(attribute) ?? null;
   }
 
-  readQualifiedAttribute(
+  hasQualifiedAttribute(qualifiedName: string, version: number): boolean {
+    return this.qualifiedAttributeAtVersion(qualifiedName, version) != null;
+  }
+
+  readQualifiedAttributeValue(qualifiedName: string, version: number): string | null {
+    const attribute = this.qualifiedAttributeAtVersion(qualifiedName, version);
+    return attribute == null ? null : this.input.capturedValueFor(attribute);
+  }
+
+  private qualifiedAttributeAtVersion(
     qualifiedName: string,
     version: number,
   ): TemplateCompilerAttributeOccurrence | null {
-    this.assertForestRevision();
+    this.assertHistoricalRead();
     if (!Number.isSafeInteger(version) || version < 0 || version > this.version) {
       throw new Error(`Live attribute owner view has invalid version ${version}.`);
     }
@@ -392,6 +407,10 @@ export class TemplateCompilerLiveAttributeOwnerProgression {
     this.assertForestRevision();
     if (this.finished) throw new Error('Live attribute owner progression is already finished.');
     if (this.terminalOpen) throw new Error('Live attribute owner progression is terminally open.');
+  }
+
+  private assertHistoricalRead(): void {
+    if (!this.finished) this.assertForestRevision();
   }
 
   private assertForestRevision(): void {
