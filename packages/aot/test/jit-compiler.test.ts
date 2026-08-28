@@ -46,6 +46,11 @@ describe("AOT JIT compiler oracle", () => {
       name: "child-item",
       template: "<template></template>",
     });
+    const SiblingItem = CustomElement.define({
+      name: "sibling-item",
+      template: "<template></template>",
+    });
+    const dependencies = [ChildItem, SiblingItem] as const;
     const oracle = createJitCompilerOracle();
     try {
       const unresolved = oracle.compile({
@@ -53,9 +58,12 @@ describe("AOT JIT compiler oracle", () => {
           name: "dependency-by-name",
           type: "custom-element",
           template: "<template><child-item></child-item></template>",
-          dependencies: [ChildItem],
+          dependencies,
         },
       }).compiled;
+      expect(unresolved.dependencies).toHaveLength(dependencies.length);
+      expect(unresolved.dependencies?.[0]).toBe(ChildItem);
+      expect(unresolved.dependencies?.[1]).toBe(SiblingItem);
       const unresolvedInstruction = unresolved.instructions[0]?.[0];
       expect(unresolvedInstruction?.type).toBe(itHydrateElement);
       expect((unresolvedInstruction as HydrateElementInstruction).res).toBe("child-item");
@@ -65,10 +73,13 @@ describe("AOT JIT compiler oracle", () => {
           name: "dependency-by-definition",
           type: "custom-element",
           template: "<template><child-item></child-item></template>",
-          dependencies: [ChildItem],
+          dependencies,
         },
         resolveResources: true,
       }).compiled;
+      expect(resolved.dependencies).toHaveLength(dependencies.length);
+      expect(resolved.dependencies?.[0]).toBe(ChildItem);
+      expect(resolved.dependencies?.[1]).toBe(SiblingItem);
       const resolvedInstruction = resolved.instructions[0]?.[0];
       expect(resolvedInstruction?.type).toBe(itHydrateElement);
       expect((resolvedInstruction as HydrateElementInstruction).res).not.toBe("child-item");

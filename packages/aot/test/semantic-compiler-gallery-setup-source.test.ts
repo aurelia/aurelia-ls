@@ -111,6 +111,26 @@ describe("semantic compiler gallery setup source", () => {
     expect(plan.sourceText).toContain(`"dependencies":[${setupClassNames.join(",")}]`);
     for (const className of setupClassNames) expect(registerLine).not.toContain(className);
   });
+
+  test("keeps repeated source dependency identities outside the narrow comparison corridor", () => {
+    const source = requireCase("resource.as-element.physical-tag-resource");
+    const registration = source.world.registrations[0];
+    if (registration == null) throw new Error("Expected one source dependency registration.");
+    const repeated: CompilerCase = {
+      ...source,
+      id: "resource.as-element.repeated-source-dependency-control",
+      world: {
+        ...source.world,
+        registrations: [registration, registration],
+      },
+    };
+    const plan = new SemanticCompilerGalleryPlanner().plan([repeated]);
+
+    expect(plan.admitted).toEqual([]);
+    expect(plan.unsupported[0]?.reasons).toEqual([
+      SemanticCompilerGalleryUnsupportedReason.NonUniqueSourceDependencyIdentity,
+    ]);
+  });
 });
 
 function requireCase(id: string): CompilerCase {

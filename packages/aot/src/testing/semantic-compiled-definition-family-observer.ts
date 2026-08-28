@@ -20,7 +20,10 @@ import type {
 import type { SemanticRuntimeInstructionFamilyObservation } from "./semantic-runtime-instruction-family-observer.js";
 
 export const SEMANTIC_COMPILED_DEFINITION_FAMILY_OBSERVER_VERSION =
-  "aurelia-ls/aot-semantic-compiled-definition-family/v1" as const;
+  "aurelia-ls/aot-semantic-compiled-definition-family/v2" as const;
+
+export const SEMANTIC_COMPILED_DEFINITION_DEPENDENCY_POSTURE =
+  "pre-rehydration-unique-source-declared-resource-identities" as const;
 
 export const SEMANTIC_COMPILED_DEFINITION_COMMON_JIT_FIELDS = [
   "definition-index",
@@ -34,7 +37,7 @@ export const SEMANTIC_COMPILED_DEFINITION_COMMON_JIT_FIELDS = [
   "enhance",
   "capture-value",
   "bindable-values",
-  "dependency-values",
+  "unique-source-declared-resource-dependency-identities",
   "transformed-template",
   "target-alignment",
   "target-markers",
@@ -55,7 +58,63 @@ export const SEMANTIC_COMPILED_DEFINITION_OMITTED_FIELDS = [
   "native-slot-outlet-values",
   "concrete-generated-name",
   "runtime-rehydrated-anonymous-type",
+  "dependency-executable-value-identities",
+  "dependency-registry-module-and-plain-constructable-values",
+  "repeated-source-dependency-registration-effects",
+  "compiler-added-local-type-values",
+  "post-rehydration-dependency-values",
 ] as const;
+
+export type SemanticCompiledDefinitionSourceDependencyIdentity = Readonly<{
+  [key: string]: CompilerCaseData;
+  kind: "source-declared-resource-dependency";
+  resourceKind: "custom-element" | "custom-attribute";
+  resourceKey: string;
+  name: string;
+  aliases: readonly string[];
+}>;
+
+export function semanticCompiledDefinitionSourceDependencyIdentity(
+  resourceKind: SemanticCompiledDefinitionSourceDependencyIdentity["resourceKind"],
+  resourceKey: string,
+  name: string,
+  aliases: readonly string[],
+): SemanticCompiledDefinitionSourceDependencyIdentity {
+  if (resourceKey.length === 0 || name.length === 0) {
+    throw new Error("Source-declared resource dependency identity requires a resource key and name.");
+  }
+  return {
+    kind: "source-declared-resource-dependency",
+    resourceKind,
+    resourceKey,
+    name,
+    aliases,
+  };
+}
+
+/**
+ * Cross-world identity slice for the gallery's unique source-declared CE/CA dependencies.
+ *
+ * The associated semantic root still owns the exact ordered ResourceDependencyReferences. These portable rows only
+ * name the resource-registration identity shared with the independently materialized JIT world; they do not stand in
+ * for arbitrary dependency runtime values or compiler-created local Types.
+ */
+export class SemanticCompiledDefinitionSourceDependencySlice {
+  constructor(
+    readonly root: TemplateCompilerCompiledDefinitionOverlay,
+    readonly values: readonly SemanticCompiledDefinitionSourceDependencyIdentity[],
+  ) {
+    if (
+      values.length !== root.dependencies.length
+      || root.compilerAddedDependencies.length !== 0
+      || new Set(values.map((value) => value.resourceKey)).size !== values.length
+    ) {
+      throw new Error(
+        "Source-declared dependency slice requires unique root resource keys and cannot cross into local Types.",
+      );
+    }
+  }
+}
 
 export type SemanticCompiledDefinitionFamilyObservation =
   | {
@@ -65,6 +124,7 @@ export type SemanticCompiledDefinitionFamilyObservation =
       readonly definitionCount: number;
       readonly definitionDigest: string;
       readonly definitions: readonly CompilerCaseData[];
+      readonly dependencyPosture: typeof SEMANTIC_COMPILED_DEFINITION_DEPENDENCY_POSTURE;
       readonly commonJitFields: typeof SEMANTIC_COMPILED_DEFINITION_COMMON_JIT_FIELDS;
       readonly omittedFields: typeof SEMANTIC_COMPILED_DEFINITION_OMITTED_FIELDS;
     }
@@ -74,6 +134,7 @@ export type SemanticCompiledDefinitionFamilyObservation =
       readonly state: "pending" | "ineligible";
       readonly reasonKinds: readonly string[];
       readonly stableKeyCounts: readonly number[];
+      readonly dependencyPosture: typeof SEMANTIC_COMPILED_DEFINITION_DEPENDENCY_POSTURE;
       readonly commonJitFields: readonly [];
       readonly omittedFields: typeof SEMANTIC_COMPILED_DEFINITION_OMITTED_FIELDS;
     };
@@ -82,6 +143,7 @@ export function observeSemanticCompiledDefinitionFamily(
   result: TemplateCompilerCompiledDefinitionFamilyResult,
   frozen: SemanticFrozenFamilyObservation,
   runtimeInstructions: SemanticRuntimeInstructionFamilyObservation | null,
+  sourceDependencies: SemanticCompiledDefinitionSourceDependencySlice | null,
 ): SemanticCompiledDefinitionFamilyObservation {
   if (!result.isModuleConstructed()) {
     throw new Error("Compiled-definition observer requires a semantic-runtime-constructed result.");
@@ -93,6 +155,7 @@ export function observeSemanticCompiledDefinitionFamily(
       state: result.state === TemplateCompilerCompiledDefinitionFamilyState.Pending ? "pending" : "ineligible",
       reasonKinds: result.reasons.map((reason) => reason.reasonKind),
       stableKeyCounts: result.reasons.map((reason) => reason.stableKeys.length),
+      dependencyPosture: SEMANTIC_COMPILED_DEFINITION_DEPENDENCY_POSTURE,
       commonJitFields: [],
       omittedFields: SEMANTIC_COMPILED_DEFINITION_OMITTED_FIELDS,
     };
@@ -100,6 +163,9 @@ export function observeSemanticCompiledDefinitionFamily(
     return observation;
   }
   if (!result.value.isCurrent()) throw new Error("Compiled-definition family changed before portable observation.");
+  if (sourceDependencies == null || sourceDependencies.root !== result.value.root) {
+    throw new Error("Exact compiled-definition observation requires its root source-dependency slice.");
+  }
   if (frozen.kind !== "exact" || runtimeInstructions?.kind !== "exact") {
     throw new Error("Exact compiled-definition observation requires exact structural and instruction observations.");
   }
@@ -124,7 +190,7 @@ export function observeSemanticCompiledDefinitionFamily(
     }
     const capture = normalizeCapture(definition, projectionReasons);
     const bindables = normalizeBindables(definition, projectionReasons);
-    const dependencies = normalizeDependencies(definition, projectionReasons);
+    const dependencies = normalizeDependencies(definition, sourceDependencies, projectionReasons);
     const name: CompilerCaseData = definition.name.nameKind === TemplateCompilerCompiledDefinitionNameKind.Declared
       ? { kind: "declared", value: definition.name.value }
       : { kind: "compiler-generated" };
@@ -163,6 +229,7 @@ export function observeSemanticCompiledDefinitionFamily(
       state: "pending",
       reasonKinds: [...new Set(projectionReasons)],
       stableKeyCounts: [...new Set(projectionReasons)].map(() => 0),
+      dependencyPosture: SEMANTIC_COMPILED_DEFINITION_DEPENDENCY_POSTURE,
       commonJitFields: [],
       omittedFields: SEMANTIC_COMPILED_DEFINITION_OMITTED_FIELDS,
     };
@@ -176,6 +243,7 @@ export function observeSemanticCompiledDefinitionFamily(
     definitionCount: definitions.length,
     definitionDigest: semanticCompiledDefinitionDigest(definitions),
     definitions,
+    dependencyPosture: SEMANTIC_COMPILED_DEFINITION_DEPENDENCY_POSTURE,
     commonJitFields: SEMANTIC_COMPILED_DEFINITION_COMMON_JIT_FIELDS,
     omittedFields: SEMANTIC_COMPILED_DEFINITION_OMITTED_FIELDS,
   };
@@ -231,8 +299,10 @@ function normalizeBindables(
 
 function normalizeDependencies(
   definition: TemplateCompilerCompiledDefinitionOverlay,
+  sourceDependencies: SemanticCompiledDefinitionSourceDependencySlice,
   reasons: string[],
 ): readonly CompilerCaseData[] {
+  if (definition === sourceDependencies.root) return sourceDependencies.values;
   if (definition.dependencies.length === 0 && definition.compilerAddedDependencies.length === 0) return [];
   reasons.push("dependency-value-comparison-pending");
   return [];

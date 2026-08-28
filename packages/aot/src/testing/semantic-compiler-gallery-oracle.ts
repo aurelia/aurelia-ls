@@ -29,6 +29,7 @@ import {
   projectTemplateCompilerRuntimeInstructionFamily,
   TemplateCompilerRuntimeResourceRepresentation,
   type BrowserEffectiveTemplateEmission,
+  type TemplateCompilerCompiledDefinitionOverlay,
   type TemplateCompilerRootSiteCursorObservation,
   type TemplateCompilerDeterministicExecutionReasonKind,
   type TemplateCompilerDeterministicExecutionState,
@@ -46,7 +47,10 @@ import {
 import { SemanticCompilerGallerySetupResourceKind } from "./semantic-compiler-gallery-setup-source.js";
 import {
   observeSemanticCompiledDefinitionFamily,
+  semanticCompiledDefinitionSourceDependencyIdentity,
+  SemanticCompiledDefinitionSourceDependencySlice,
   type SemanticCompiledDefinitionFamilyObservation,
+  type SemanticCompiledDefinitionSourceDependencyIdentity,
 } from "./semantic-compiled-definition-family-observer.js";
 import {
   observeSemanticFrozenFamily,
@@ -61,6 +65,14 @@ type SemanticTemplateResource = SemanticApp["emission"]["templates"]["resources"
 type SemanticResourceIndex = SemanticApp["emission"]["resourceIndex"];
 type BrowserMaterializationContext = ConstructorParameters<typeof BrowserEffectiveTemplateMaterializer>[0];
 type CompilerReadStore = Parameters<typeof observeTemplateCompilerRootSiteCursor>[0]["compilerReadStore"];
+
+interface SemanticSetupDependencyDefinition {
+  readonly type: "custom-element" | "custom-attribute";
+  readonly target: { readonly localName: string | null };
+  readonly name: string;
+  readonly key: string;
+  readonly aliases: readonly { readonly name: string }[];
+}
 
 class SemanticCompilerGalleryObservationProjection {
   constructor(
@@ -421,14 +433,23 @@ function observationsFor(
             resourceRepresentation: TemplateCompilerRuntimeResourceRepresentation.Name,
         });
         runtimeInstructions = observeSemanticRuntimeInstructionFamily(runtimeInstructionResult);
+        const compiledDefinitionResult = projectTemplateCompilerCompiledDefinitionFamily({
+          family: familyResult.value,
+          instructions: runtimeInstructionResult,
+          readView: compilerReadStore,
+        });
+        const sourceDependencies = compiledDefinitionResult.value == null
+          ? null
+          : sourceDeclaredResourceDependencySlice(
+              compiledDefinitionResult.value.root,
+              candidate,
+              app.emission.resourceIndex,
+            );
         compiledDefinitions = observeSemanticCompiledDefinitionFamily(
-          projectTemplateCompilerCompiledDefinitionFamily({
-            family: familyResult.value,
-            instructions: runtimeInstructionResult,
-            readView: compilerReadStore,
-          }),
+          compiledDefinitionResult,
           frozenFamily,
           runtimeInstructions,
+          sourceDependencies,
         );
       }
     } catch (error) {
@@ -964,6 +985,55 @@ function validateDefinitionDependencyFidelity(
       );
     }
   });
+}
+
+function sourceDeclaredResourceDependencySlice(
+  root: TemplateCompilerCompiledDefinitionOverlay,
+  galleryCase: SemanticCompilerGalleryCase,
+  resourceIndex: SemanticResourceIndex,
+): SemanticCompiledDefinitionSourceDependencySlice {
+  if (root.dependencies.length !== galleryCase.dependencies.length) {
+    throw new Error(
+      `Semantic compiler gallery definition ${galleryCase.candidate.id} lost source-declared dependency coverage.`,
+    );
+  }
+  const values = root.dependencies.map((dependency, index): SemanticCompiledDefinitionSourceDependencyIdentity => {
+    const planned = galleryCase.dependencies[index] ?? null;
+    const resolved = resourceIndex.lookupAllByDependencyReference(dependency);
+    if (planned == null || resolved.length !== 1) {
+      throw new Error(
+        `Semantic compiler gallery definition ${galleryCase.candidate.id} dependency ${index} is not one exact setup resource.`,
+      );
+    }
+    const candidateDefinition = resolved[0]!;
+    const definitionKind = String(candidateDefinition.type);
+    if (
+      (definitionKind !== "custom-element" && definitionKind !== "custom-attribute")
+      || definitionKind !== String(planned.resource.kind)
+    ) {
+      throw new Error(
+        `Semantic compiler gallery definition ${galleryCase.candidate.id} dependency ${index} is not a setup CE/CA.`,
+      );
+    }
+    const definition = candidateDefinition as unknown as SemanticSetupDependencyDefinition;
+    if (
+      definition.type !== definitionKind
+      || definition.target.localName !== planned.resource.className
+      || definition.name !== planned.resource.publicName
+      || !sameStringArrays(definition.aliases.map((alias) => alias.name), planned.resource.aliases)
+    ) {
+      throw new Error(
+        `Semantic compiler gallery definition ${galleryCase.candidate.id} dependency ${index} lost its setup resource identity.`,
+      );
+    }
+    return semanticCompiledDefinitionSourceDependencyIdentity(
+      definition.type,
+      definition.key,
+      definition.name,
+      definition.aliases.map((alias) => alias.name),
+    );
+  });
+  return new SemanticCompiledDefinitionSourceDependencySlice(root, values);
 }
 
 function observedWorldDifferences(

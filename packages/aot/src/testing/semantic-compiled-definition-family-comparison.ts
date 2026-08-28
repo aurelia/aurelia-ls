@@ -3,13 +3,15 @@ import { canonicalCompilerJson } from "./compiler-canonical-data.js";
 import type { JitCompilerBlueprintBatch } from "./jit-compiler-blueprint-observer.js";
 import {
   SEMANTIC_COMPILED_DEFINITION_COMMON_JIT_FIELDS,
+  SEMANTIC_COMPILED_DEFINITION_DEPENDENCY_POSTURE,
   SEMANTIC_COMPILED_DEFINITION_OMITTED_FIELDS,
+  semanticCompiledDefinitionSourceDependencyIdentity,
   semanticCompiledDefinitionDigest,
   type SemanticCompiledDefinitionFamilyObservation,
 } from "./semantic-compiled-definition-family-observer.js";
 
 export const SEMANTIC_COMPILED_DEFINITION_COMPARISON_VERSION =
-  "aurelia-ls/aot-semantic-compiled-definition-comparison/v1" as const;
+  "aurelia-ls/aot-semantic-compiled-definition-comparison/v2" as const;
 
 export const enum SemanticCompiledDefinitionMismatchKind {
   MissingJitCase = "missing-jit-case",
@@ -35,6 +37,7 @@ export interface SemanticCompiledDefinitionComparisonInput {
 export class SemanticCompiledDefinitionComparison {
   readonly schemaVersion = SEMANTIC_COMPILED_DEFINITION_COMPARISON_VERSION;
   readonly comparisonPosture = "compiled-definition-characterization-only" as const;
+  readonly dependencyComparisonPosture = SEMANTIC_COMPILED_DEFINITION_DEPENDENCY_POSTURE;
   readonly comparedFields = SEMANTIC_COMPILED_DEFINITION_COMMON_JIT_FIELDS;
   readonly omittedFields = SEMANTIC_COMPILED_DEFINITION_OMITTED_FIELDS;
   readonly satisfiedClaimIds: readonly [] = [];
@@ -163,10 +166,11 @@ export function compareSemanticCompiledDefinitionsToJit(
         jitDefinitions.length,
       ));
     }
-    const semanticCommon = semantic.definitions.map(commonDefinitionFields);
-    const jitCommon = jitDefinitions.map((definition, index) => commonDefinitionFields(
+    const semanticCommon = semantic.definitions.map(semanticCommonDefinitionFields);
+    const jitCommon = jitDefinitions.map((definition, index) => jitCommonDefinitionFields(
       definition as unknown as CompilerCaseData,
       index,
+      index === 0 ? sourceDeclaredDependencyCount(semantic.definitions[0] ?? null) : null,
     ));
     if (!sameData(semanticCommon, jitCommon)) {
       mismatches.push(mismatch(
@@ -193,6 +197,67 @@ function definitionIndex(definition: CompilerCaseData): number | null {
   if (definition == null || Array.isArray(definition) || typeof definition !== "object") return null;
   const value = (definition as Readonly<Record<string, CompilerCaseData>>).definitionIndex;
   return typeof value === "number" ? value : null;
+}
+
+function semanticCommonDefinitionFields(definition: CompilerCaseData): CompilerCaseData {
+  return commonDefinitionFields(definition);
+}
+
+function jitCommonDefinitionFields(
+  definition: CompilerCaseData,
+  definitionIndex: number,
+  sourceDependencyCount: number | null,
+): CompilerCaseData {
+  const common = commonDefinitionFields(definition, definitionIndex);
+  if (common == null || Array.isArray(common) || typeof common !== "object") {
+    throw new Error("Compiled-definition JIT normalization lost its definition record.");
+  }
+  const record = common as Readonly<Record<string, CompilerCaseData>>;
+  const dependencies = record.dependencies;
+  if (!Array.isArray(dependencies)) {
+    throw new Error("Compiled-definition JIT normalization requires one dependency array.");
+  }
+  return {
+    ...record,
+    dependencies: (sourceDependencyCount == null ? dependencies : dependencies.slice(0, sourceDependencyCount))
+      .map(jitSourceDeclaredResourceDependencyIdentity),
+  };
+}
+
+function sourceDeclaredDependencyCount(definition: CompilerCaseData): number {
+  if (definition == null || Array.isArray(definition) || typeof definition !== "object") {
+    throw new Error("Compiled-definition source dependency count requires one semantic root record.");
+  }
+  const dependencies = (definition as Readonly<Record<string, CompilerCaseData>>).dependencies;
+  if (!Array.isArray(dependencies)) {
+    throw new Error("Compiled-definition source dependency count requires one semantic dependency array.");
+  }
+  return dependencies.length;
+}
+
+function jitSourceDeclaredResourceDependencyIdentity(value: CompilerCaseData): CompilerCaseData {
+  if (value == null || Array.isArray(value) || typeof value !== "object") {
+    return { kind: "jit-dependency-outside-source-resource-corridor", value };
+  }
+  const record = value as Readonly<Record<string, CompilerCaseData>>;
+  if (
+    record.kind !== "resource-reference"
+    || (record.resourceKind !== "custom-element" && record.resourceKind !== "custom-attribute")
+    || typeof record.resourceKey !== "string"
+    || record.resourceKey.length === 0
+    || typeof record.name !== "string"
+    || record.name.length === 0
+    || !Array.isArray(record.aliases)
+    || record.aliases.some((alias) => typeof alias !== "string")
+  ) {
+    return { kind: "jit-dependency-outside-source-resource-corridor", value };
+  }
+  return semanticCompiledDefinitionSourceDependencyIdentity(
+    record.resourceKind,
+    record.resourceKey,
+    record.name,
+    record.aliases as readonly string[],
+  );
 }
 
 function commonDefinitionFields(definition: CompilerCaseData, definitionIndex?: number): CompilerCaseData {

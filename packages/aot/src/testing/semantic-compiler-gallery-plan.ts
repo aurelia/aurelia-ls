@@ -37,6 +37,7 @@ export const enum SemanticCompilerGalleryUnsupportedReason {
   ExecutableDefinitionField = "executable-definition-field",
   BindableDefinition = "bindable-definition",
   GalleryResourceInterference = "gallery-resource-interference",
+  NonUniqueSourceDependencyIdentity = "non-unique-source-dependency-identity",
 }
 
 export const enum SemanticCompilerGalleryWorldDifference {
@@ -208,6 +209,9 @@ function unsupportedReasons(candidate: CompilerCase): readonly SemanticCompilerG
   )) {
     reasons.push(SemanticCompilerGalleryUnsupportedReason.RegistrationMaterialization);
   }
+  if (sourceProjectableSetups && !hasUniqueSourceDependencyIdentities(candidate)) {
+    reasons.push(SemanticCompilerGalleryUnsupportedReason.NonUniqueSourceDependencyIdentity);
+  }
   if (definition.instructions !== undefined || definition.surrogates !== undefined) {
     reasons.push(SemanticCompilerGalleryUnsupportedReason.PrecompiledDefinitionFields);
   }
@@ -222,6 +226,24 @@ function unsupportedReasons(candidate: CompilerCase): readonly SemanticCompilerG
     reasons.push(SemanticCompilerGalleryUnsupportedReason.BindableDefinition);
   }
   return reasons;
+}
+
+function hasUniqueSourceDependencyIdentities(candidate: CompilerCase): boolean {
+  const projectionBySymbol = new Map(candidate.world.setups.map((invocation, index) => [
+    invocation.symbol,
+    projectSemanticCompilerGallerySetup(invocation, `DependencyEligibility${index}`),
+  ]));
+  const resourceKeys = candidate.world.registrations.flatMap((registration) => {
+    if (registration.site !== "definition-dependency" || registration.cardinality !== "single") return [];
+    const projection = projectionBySymbol.get(registration.value.setup) ?? null;
+    const setupExport = projection?.exports.find((candidateExport) =>
+      candidateExport.exportName === registration.value.export
+    ) ?? null;
+    return setupExport == null
+      ? []
+      : [`${setupExport.resource.kind}:${setupExport.resource.publicName}`];
+  });
+  return new Set(resourceKeys).size === resourceKeys.length;
 }
 
 function compileDefinition(candidate: CompilerCase): CompilerElementDefinition {

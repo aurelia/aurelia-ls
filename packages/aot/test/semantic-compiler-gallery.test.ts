@@ -8,6 +8,7 @@ import type { CompilerCaseData } from "../src/testing/compiler-case.js";
 import { JIT_ORACLE_CASES } from "../src/testing/jit-oracle-case-registry.js";
 import {
   JitCompilerBlueprintBatch,
+  JitCompilerBlueprintObservation,
   JitCompilerBlueprintObserver,
 } from "../src/testing/jit-compiler-blueprint-observer.js";
 import { JitCompilerCaseExecutor } from "../src/testing/jit-compiler-case-executor.js";
@@ -23,6 +24,7 @@ import {
 import {
   semanticCompiledDefinitionDigest,
   SEMANTIC_COMPILED_DEFINITION_COMMON_JIT_FIELDS,
+  SEMANTIC_COMPILED_DEFINITION_DEPENDENCY_POSTURE,
   SEMANTIC_COMPILED_DEFINITION_FAMILY_OBSERVER_VERSION,
   SEMANTIC_COMPILED_DEFINITION_OMITTED_FIELDS,
 } from "../src/testing/semantic-compiled-definition-family-observer.js";
@@ -243,10 +245,11 @@ describe("semantic compiler gallery", () => {
     const exactCompiledDefinitions = run.observations.flatMap((observation) =>
       observation.compiledDefinitions?.kind === "exact" ? [observation.compiledDefinitions] : []
     );
-    expect(exactCompiledDefinitions).toHaveLength(34);
-    expect(exactCompiledDefinitions.reduce((count, observation) => count + observation.definitionCount, 0)).toBe(49);
+    expect(exactCompiledDefinitions).toHaveLength(46);
+    expect(exactCompiledDefinitions.reduce((count, observation) => count + observation.definitionCount, 0)).toBe(76);
     expect(exactCompiledDefinitions.every((observation) =>
       observation.schemaVersion === SEMANTIC_COMPILED_DEFINITION_FAMILY_OBSERVER_VERSION
+      && observation.dependencyPosture === SEMANTIC_COMPILED_DEFINITION_DEPENDENCY_POSTURE
       && observation.commonJitFields === SEMANTIC_COMPILED_DEFINITION_COMMON_JIT_FIELDS
       && observation.omittedFields === SEMANTIC_COMPILED_DEFINITION_OMITTED_FIELDS
       && /^sha256:[0-9a-f]{64}$/u.test(observation.definitionDigest)
@@ -263,20 +266,27 @@ describe("semantic compiler gallery", () => {
       observation.compiledDefinitions?.kind === "unavailable"
       && observation.compiledDefinitions.reasonKinds.includes("dependency-value-comparison-pending")
     ).map((observation) => observation.caseId).sort();
-    expect(dependencyPending).toEqual([
-      "interaction.generated.containerless-repeat-controller",
-      "interaction.generated.same-node-if-repeat-custom-element",
-      "resource.as-element.physical-tag-resource",
-      "resource.as-element.present-empty",
-      "resource.capture.value-bind-syntax",
-      "resource.command-override.same-name-attribute",
-      "resource.element-bindable.same-name-attribute",
-      "resource.projection.default-and-named",
-      "resource.ref.component-custom-element",
-      "resource.spread-bindables.item-shorthand",
-      "resource.spread-bindables.reserved-shorthand",
-      "resource.template-controller.inside-out-order",
-    ]);
+    expect(dependencyPending).toEqual([]);
+    const sourceDependencies = exactCompiledDefinitions.flatMap((observation) =>
+      observation.definitions.flatMap((definition) => {
+        if (definition == null || Array.isArray(definition) || typeof definition !== "object") return [];
+        const dependencies = (definition as Readonly<Record<string, CompilerCaseData>>).dependencies;
+        return Array.isArray(dependencies) ? dependencies : [];
+      })
+    );
+    expect(sourceDependencies).toHaveLength(14);
+    expect(sourceDependencies.filter((dependency) =>
+      dependency != null
+      && !Array.isArray(dependency)
+      && typeof dependency === "object"
+      && dependency.resourceKind === "custom-element"
+    )).toHaveLength(10);
+    expect(sourceDependencies.filter((dependency) =>
+      dependency != null
+      && !Array.isArray(dependency)
+      && typeof dependency === "object"
+      && dependency.resourceKind === "custom-attribute"
+    )).toHaveLength(4);
     expect(observations.get("definition.header.capture-all")?.compiledDefinitions).toMatchObject({
       kind: "exact",
       definitions: [{ capture: true, containerless: false }],
@@ -930,15 +940,134 @@ describe("semantic compiler gallery", () => {
     const definitionComparison = compareSemanticCompiledDefinitionsToJit(run.observations, jitBatch);
     expect(definitionComparison.isClean).toBe(true);
     expect(definitionComparison.comparisonPosture).toBe("compiled-definition-characterization-only");
+    expect(definitionComparison.dependencyComparisonPosture)
+      .toBe(SEMANTIC_COMPILED_DEFINITION_DEPENDENCY_POSTURE);
     expect(definitionComparison.comparedFields).toBe(SEMANTIC_COMPILED_DEFINITION_COMMON_JIT_FIELDS);
     expect(definitionComparison.omittedFields).toBe(SEMANTIC_COMPILED_DEFINITION_OMITTED_FIELDS);
-    expect(definitionComparison.selectedExactCaseCount).toBe(34);
-    expect(definitionComparison.joinedCaseCount).toBe(34);
-    expect(definitionComparison.matchingCaseIds).toHaveLength(34);
-    expect(definitionComparison.semanticDefinitionCount).toBe(49);
-    expect(definitionComparison.jitDefinitionCount).toBe(49);
+    expect(definitionComparison.selectedExactCaseCount).toBe(46);
+    expect(definitionComparison.joinedCaseCount).toBe(46);
+    expect(definitionComparison.matchingCaseIds).toHaveLength(46);
+    expect(definitionComparison.semanticDefinitionCount).toBe(76);
+    expect(definitionComparison.jitDefinitionCount).toBe(76);
     expect(definitionComparison.mismatches).toEqual([]);
     expect(definitionComparison.satisfiedClaimIds).toEqual([]);
+    const dependencyDefinitionSource = observations.get("resource.element-bindable.same-name-attribute")
+      ?.compiledDefinitions;
+    if (dependencyDefinitionSource?.kind !== "exact") {
+      throw new Error("Expected exact source-declared dependency mutation source.");
+    }
+    const dependencyRoot = dependencyDefinitionSource.definitions[0];
+    if (dependencyRoot == null || Array.isArray(dependencyRoot) || typeof dependencyRoot !== "object") {
+      throw new Error("Expected one source-declared dependency root record.");
+    }
+    const dependencyRootRecord = dependencyRoot as Readonly<Record<string, CompilerCaseData>>;
+    const dependencyValues = dependencyRootRecord.dependencies;
+    if (!Array.isArray(dependencyValues) || dependencyValues.length !== 2) {
+      throw new Error("Expected two source-declared dependency identities.");
+    }
+    const firstDependency = dependencyValues[0];
+    if (firstDependency == null || Array.isArray(firstDependency) || typeof firstDependency !== "object") {
+      throw new Error("Expected one source-declared resource dependency record.");
+    }
+    const changedDependencyDefinitions = [{
+      ...dependencyRootRecord,
+      dependencies: [{ ...firstDependency, resourceKey: "au:resource:custom-element:wrong" }, dependencyValues[1]!],
+    }];
+    const changedDependency = compareSemanticCompiledDefinitionsToJit([{
+      caseId: "resource.element-bindable.same-name-attribute",
+      compiledDefinitions: {
+        ...dependencyDefinitionSource,
+        definitions: changedDependencyDefinitions,
+        definitionDigest: semanticCompiledDefinitionDigest(changedDependencyDefinitions),
+      },
+    }], jitBatch);
+    expect(changedDependency.isClean).toBe(false);
+    expect(changedDependency.mismatches).toMatchObject([{
+      caseId: "resource.element-bindable.same-name-attribute",
+      mismatchKind: SemanticCompiledDefinitionMismatchKind.DefinitionFields,
+    }]);
+    const reorderedDependencyDefinitions = [{
+      ...dependencyRootRecord,
+      dependencies: [dependencyValues[1]!, dependencyValues[0]!],
+    }];
+    const reorderedDependency = compareSemanticCompiledDefinitionsToJit([{
+      caseId: "resource.element-bindable.same-name-attribute",
+      compiledDefinitions: {
+        ...dependencyDefinitionSource,
+        definitions: reorderedDependencyDefinitions,
+        definitionDigest: semanticCompiledDefinitionDigest(reorderedDependencyDefinitions),
+      },
+    }], jitBatch);
+    expect(reorderedDependency.isClean).toBe(false);
+    expect(reorderedDependency.mismatches).toMatchObject([{
+      caseId: "resource.element-bindable.same-name-attribute",
+      mismatchKind: SemanticCompiledDefinitionMismatchKind.DefinitionFields,
+    }]);
+    const dependencyJitSource = jitBatch.observations.find((observation) =>
+      observation.data.caseId === "resource.element-bindable.same-name-attribute"
+    );
+    if (dependencyJitSource?.data.outcome.kind !== "compiled-definition") {
+      throw new Error("Expected one JIT source-declared dependency mutation source.");
+    }
+    const dependencyJitRoot = dependencyJitSource.data.outcome.definitions[0];
+    if (dependencyJitRoot == null) throw new Error("Expected one JIT dependency root definition.");
+    const jitDependencyValues = dependencyJitRoot.dependencies;
+    const firstJitDependency = jitDependencyValues[0];
+    if (
+      jitDependencyValues.length !== 2
+      || firstJitDependency == null
+      || Array.isArray(firstJitDependency)
+      || typeof firstJitDependency !== "object"
+    ) {
+      throw new Error("Expected two JIT source-declared dependency values.");
+    }
+    const compilerAddedTailJitBatch = new JitCompilerBlueprintBatch([
+      new JitCompilerBlueprintObservation({
+        ...dependencyJitSource.data,
+        outcome: {
+          ...dependencyJitSource.data.outcome,
+          definitions: [{
+            ...dependencyJitRoot,
+            dependencies: [
+              ...jitDependencyValues,
+              { ...firstJitDependency, resourceKey: "au:resource:custom-element:local-tail", name: "local-tail" },
+            ],
+          }],
+        },
+      }),
+    ]);
+    const compilerAddedTail = compareSemanticCompiledDefinitionsToJit([{
+      caseId: "resource.element-bindable.same-name-attribute",
+      compiledDefinitions: dependencyDefinitionSource,
+    }], compilerAddedTailJitBatch);
+    expect(compilerAddedTail.isClean).toBe(true);
+    const outsideDependencyJitBatch = new JitCompilerBlueprintBatch([
+      new JitCompilerBlueprintObservation({
+        ...dependencyJitSource.data,
+        outcome: {
+          ...dependencyJitSource.data.outcome,
+          definitions: [{
+            ...dependencyJitRoot,
+            dependencies: [{
+              kind: "resource-reference",
+              resourceKind: "custom-element",
+              resourceKey: "",
+              name: "",
+              aliases: [],
+            }],
+          }],
+        },
+      }),
+    ]);
+    const outsideDependency = compareSemanticCompiledDefinitionsToJit([{
+      caseId: "resource.element-bindable.same-name-attribute",
+      compiledDefinitions: dependencyDefinitionSource,
+    }], outsideDependencyJitBatch);
+    expect(outsideDependency.isClean).toBe(false);
+    expect(outsideDependency.mismatches).toMatchObject([{
+      caseId: "resource.element-bindable.same-name-attribute",
+      mismatchKind: SemanticCompiledDefinitionMismatchKind.DefinitionFields,
+    }]);
     const nativeSlotDefinitionSource = observations.get("slot.native.nested-has-slots")?.compiledDefinitions;
     if (nativeSlotDefinitionSource?.kind !== "exact") {
       throw new Error("Expected exact native-slot definition ownership mutation source.");
