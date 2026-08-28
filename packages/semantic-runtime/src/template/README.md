@@ -280,7 +280,11 @@ classification, expression parsing, and instruction lowering converge on the sam
   before forest/hook execution. `template-compiler-context-family-value.ts` narrows the internal frozen owner to final
   definition ownership, transformed products, instruction rows, target geometry, derivations, and currentness; target
   plans, mutable occurrences, freeze reservations, and allocation ledgers do not cross the consumer boundary. The value
-  is still in-process rather than a portable wire and must be projected while its publication candidate remains current.
+  also projects the root live-expression inventory as nominal product/result/source values without exposing allocation
+  slots or compiler-read capabilities. Durable parse products and candidate-owned results share the result-level
+  runtime-accepted AST selection law in `expression-parse-projection.ts`; consumers must not reparse the retained raw
+  strings. The value is still in-process rather than a portable wire and must be projected while its publication
+  candidate remains current.
 - `template-compiler-deterministic-execution.ts` is an intentionally narrower assurance bridge. It spends one
   `TemplateResourceCompilationEmission` plus its exact browser-effective source family to replay supported built-in
   structural consequences over already-normalized compiler products. Exact means dispositions, context transfers,

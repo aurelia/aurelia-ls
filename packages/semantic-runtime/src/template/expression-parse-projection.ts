@@ -10,6 +10,7 @@ import {
   ExpressionParseResultKind,
   InterpolationHoleBoundaryKind,
   type InterpolationFrontierPublication,
+  type ExpressionParseResult,
 } from '../expression/parse-result-algebra.js';
 import { runtimeAssignmentTargetAstForExpression } from '../expression/runtime-assignment.js';
 import { expressionSpanContainsOffset } from '../expression/source-span.js';
@@ -28,12 +29,19 @@ type IndexedBindingExpression = {
 export function completedTemplateExpressionAstForParse(
   parse: TemplateExpressionParse,
 ): ExpressionAstNode | null {
-  switch (parse.result.kind) {
+  return completedTemplateExpressionAstForResult(parse.result);
+}
+
+/** Result-level form shared by durable parse products and candidate-owned live compiler expression calls. */
+export function completedTemplateExpressionAstForResult(
+  result: ExpressionParseResult,
+): ExpressionAstNode | null {
+  switch (result.kind) {
     case ExpressionParseResultKind.ExpressionSuccess:
     case ExpressionParseResultKind.EmptyExpressionSuccess:
     case ExpressionParseResultKind.InterpolationSuccess:
     case ExpressionParseResultKind.OpaqueSuccess:
-      return parse.result.ast;
+      return result.ast;
     default:
       return null;
   }
@@ -47,10 +55,16 @@ export function completedTemplateExpressionAstForParse(
 export function bindingExpressionAstForParse(
   parse: TemplateExpressionParse,
 ): ExpressionAstNode | null {
-  if (parse.result.kind === ExpressionParseResultKind.IteratorSuccess) {
-    return parse.result.ast.iterable;
+  return bindingExpressionAstForResult(parse.result);
+}
+
+export function bindingExpressionAstForResult(
+  result: ExpressionParseResult,
+): ExpressionAstNode | null {
+  if (result.kind === ExpressionParseResultKind.IteratorSuccess) {
+    return result.ast.iterable;
   }
-  return completedTemplateExpressionAstForParse(parse);
+  return completedTemplateExpressionAstForResult(result);
 }
 
 /** Returns the runtime binding expression, narrowed to the active interpolation hole when a cursor offset is inside one. */
@@ -76,8 +90,14 @@ export function bindingExpressionAstForParseAtOffset(
 export function runtimeAcceptedBindingExpressionAstForParse(
   parse: TemplateExpressionParse,
 ): ExpressionAstNode | null {
-  return bindingExpressionAstForParse(parse)
-    ?? runtimeAcceptedInterpolationAst(parse.result);
+  return runtimeAcceptedBindingExpressionAstForResult(parse.result);
+}
+
+export function runtimeAcceptedBindingExpressionAstForResult(
+  result: ExpressionParseResult,
+): ExpressionAstNode | null {
+  return bindingExpressionAstForResult(result)
+    ?? runtimeAcceptedInterpolationAst(result);
 }
 
 /** Select one runtime-evaluable chain while retaining the parser product as aggregate authority. */
@@ -85,7 +105,14 @@ export function runtimeAcceptedBindingExpressionAstForParseChain(
   parse: TemplateExpressionParse,
   expressionChainIndex: number,
 ): ExpressionAstNode | null {
-  const aggregate = runtimeAcceptedBindingExpressionAstForParse(parse);
+  return runtimeAcceptedBindingExpressionAstForResultChain(parse.result, expressionChainIndex);
+}
+
+export function runtimeAcceptedBindingExpressionAstForResultChain(
+  result: ExpressionParseResult,
+  expressionChainIndex: number,
+): ExpressionAstNode | null {
+  const aggregate = runtimeAcceptedBindingExpressionAstForResult(result);
   if (aggregate?.$kind === 'Interpolation') {
     return aggregate.expressions[expressionChainIndex] ?? null;
   }
@@ -100,7 +127,7 @@ export function runtimeAssignmentTargetAstForParse(
 }
 
 function runtimeAcceptedInterpolationAst(
-  result: TemplateExpressionParse['result'],
+  result: ExpressionParseResult,
 ): Interpolation | null {
   if (result.kind !== ExpressionParseResultKind.InterpolationFrontierPublication) {
     return null;

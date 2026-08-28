@@ -159,6 +159,8 @@ describe("semantic compiler gallery", () => {
       observation.frozenFamily.kind === "exact" ? [observation.frozenFamily] : []
     );
     expect(exactFrozen).toHaveLength(27);
+    expect(exactFrozen.reduce((count, frozen) => count + frozen.liveExpressionCount, 0)).toBe(52);
+    expect(exactFrozen.reduce((count, frozen) => count + frozen.referencedLiveExpressionCount, 0)).toBe(49);
     expect(exactFrozen.every((frozen) =>
       /^sha256:[0-9a-f]{64}$/u.test(frozen.structuralDigest)
       && frozen.exactFields === SEMANTIC_FROZEN_FAMILY_EXACT_FIELDS

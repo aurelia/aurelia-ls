@@ -25,6 +25,10 @@ import type {
   TemplateCompilerContextFamilyFrozenContext,
   TemplateCompilerContextFamilyFrozenValue,
 } from './template-compiler-context-family-frozen-value.js';
+import {
+  projectTemplateCompilerContextFamilyExpressionValue,
+  type TemplateCompilerContextFamilyExpressionValue,
+} from './template-compiler-context-family-expression-value.js';
 import { TemplateCompilerTargetGeometryKind } from './template-compiler-structural-execution.js';
 
 const compiledFamilyValueAuthority = {};
@@ -132,6 +136,7 @@ export class TemplateCompilerContextFamilyValueContext {
 /** Narrow public view over one current in-process frozen family. */
 export class TemplateCompilerContextFamilyValue {
   readonly #authority: object;
+  readonly #liveExpressionByProduct: ReadonlyMap<ProductHandle, TemplateCompilerContextFamilyExpressionValue>;
 
   constructor(
     authority: object,
@@ -140,12 +145,19 @@ export class TemplateCompilerContextFamilyValue {
     readonly derivations: readonly TemplateStructureDerivation[],
     readonly instructions: readonly TemplateInstruction[],
     readonly sourceOpenSeams: readonly OpenSeam[],
+    readonly liveExpressions: readonly TemplateCompilerContextFamilyExpressionValue[],
     private readonly current: () => boolean,
   ) {
+    this.#liveExpressionByProduct = new Map(liveExpressions.map((expression) => [
+      expression.productHandle,
+      expression,
+    ]));
     if (
       authority !== compiledFamilyValueAuthority
       || contexts.length === 0
       || contexts[0]?.owner.ownerKind !== TemplateCompilerContextFamilyValueOwnerKind.Root
+      || this.#liveExpressionByProduct.size !== liveExpressions.length
+      || liveExpressions.some((expression) => !expression.isModuleConstructed())
     ) {
       throw new Error('Compiled context-family value lost root or family coverage.');
     }
@@ -160,6 +172,10 @@ export class TemplateCompilerContextFamilyValue {
     return this.contexts.map((context) => context.compiledTemplate);
   }
 
+  liveExpressionForProduct(productHandle: ProductHandle): TemplateCompilerContextFamilyExpressionValue | null {
+    return this.#liveExpressionByProduct.get(productHandle) ?? null;
+  }
+
   isCurrent(): boolean {
     return this.#authority === compiledFamilyValueAuthority && this.current();
   }
@@ -170,6 +186,14 @@ export function projectTemplateCompilerContextFamilyValue(
 ): TemplateCompilerContextFamilyValue {
   const contexts = frozen.contexts.map((context) => projectContext(context));
   const instructions = frozen.instructions;
+  const liveAllocation = frozen.preparation.execution.attachment.target.allocation.rows.receipt.traversal.audit
+    .transcript.allocationSnapshot;
+  const liveExpressions = liveAllocation.expressionAllocations.map(
+    (allocation) => projectTemplateCompilerContextFamilyExpressionValue(
+      allocation,
+      () => liveAllocation.isCurrent() && frozen.isCurrent(),
+    ),
+  );
   return new TemplateCompilerContextFamilyValue(
     compiledFamilyValueAuthority,
     frozen.rootDefinition,
@@ -177,6 +201,7 @@ export function projectTemplateCompilerContextFamilyValue(
     frozen.derivations,
     instructions,
     frozen.browserInput.openSeams,
+    liveExpressions,
     () => frozen.isCurrent(),
   );
 }

@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { afterAll, beforeAll, describe, expect, test, vi } from 'vitest';
 
 import { createSemanticRuntime } from '../src/api/runtime.js';
+import { runtimeAcceptedBindingExpressionAstForResult } from '../src/template/expression-parse-projection.js';
 import { AttributeClassificationKind } from '../src/template/attribute-syntax.js';
 import {
   BrowserEffectiveTemplateMaterializer,
@@ -35,6 +36,9 @@ import {
   TemplateCompilerContextFamilyCompilationStage,
   TemplateCompilerContextFamilyCompilationState,
 } from '../src/template/template-compiler-context-family-compilation.js';
+import type {
+  TemplateCompilerContextFamilyExpressionValue,
+} from '../src/template/template-compiler-context-family-expression-value.js';
 import {
   completeTemplateCompilerContextFamily,
   TemplateCompilerContextFamilyCompletionState,
@@ -1545,6 +1549,7 @@ describe('template compiler root site cursor', () => {
       ['cursor-context-family-containerless-tc', 'template-controller'],
       ['cursor-context-family-projection', 'projection'],
     ] as const) {
+      let retainedExpression: TemplateCompilerContextFamilyExpressionValue | null = null;
       const candidate = fixture.runtime.computationLifecycle.begin({
         kind: `template-compiler-context-family-value-${ownerKind}-test`,
         reconciliationKey: fixture.browserRun.locus.reconciliationKey,
@@ -1562,9 +1567,27 @@ describe('template compiler root site cursor', () => {
         const rows = value?.contexts.flatMap((context) => context.rows) ?? [];
         expect(rows.length, name).toBeGreaterThan(0);
         expect(rows.every((row) => row.geometry.marker.productHandle.length > 0), name).toBe(true);
+        if (ownerKind === 'projection' && value != null) {
+          const instruction = value.instructions.find((candidate) =>
+            candidate.instructionKind === TemplateInstructionKind.PropertyBinding
+          );
+          if (instruction == null) throw new Error('Expected projection-family property binding.');
+          if (instruction.expressionProductHandle == null) {
+            throw new Error('Expected projection-family property binding expression handle.');
+          }
+          const expression = value.liveExpressionForProduct(instruction.expressionProductHandle);
+          retainedExpression = expression;
+          const ast = expression == null ? null : runtimeAcceptedBindingExpressionAstForResult(expression.result);
+          expect(value.liveExpressions).toEqual(expression == null ? [] : [expression]);
+          expect(expression?.expression).toBe('after');
+          expect(expression?.isCurrent()).toBe(true);
+          expect(ast?.$kind).toBe('AccessScope');
+          expect(ast?.$kind === 'AccessScope' ? ast.name.name : null).toBe('after');
+        }
       } finally {
         candidate.abort();
       }
+      if (retainedExpression != null) expect(retainedExpression.isCurrent(), name).toBe(false);
     }
   });
 

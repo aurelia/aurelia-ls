@@ -77,6 +77,9 @@ report no portable observation basis; the runtime incarnation is retired before 
 executable/frozen objects do not escape: only the plain-data structural characterization does. It explicitly lists the
 JIT fields it omits—full instruction values, expression AST wires, resource/runtime identities, definition metadata,
 dependencies, surrogate values, and executable identities—so structural coverage cannot masquerade as full parity.
+The next wire-value phase now has its required semantic authority: the context-family value retains candidate-owned
+live expression results alongside durable parse products, without exporting allocation ledgers or compiler-read
+objects. AOT must consume the shared semantic-runtime AST/wire projector over those values, never reparse source text.
 The CLI separately content-addresses the executed AOT and semantic-runtime JavaScript trees and the full dirty-worktree
 delta so an ignored or already-dirty build artifact cannot masquerade as unchanged authority.
 

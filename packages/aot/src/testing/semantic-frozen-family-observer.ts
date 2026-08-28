@@ -5,6 +5,7 @@ import {
   CompilerTransformedTemplateElement,
   CompilerTransformedTemplateFragment,
   CompilerTransformedTemplateText,
+  expressionProductHandlesForInstruction,
   TemplateCompilerContextFamilyCompilationState,
   TemplateCompilerContextFamilyValueGeometryKind,
   TemplateCompilerContextFamilyValueOwnerKind,
@@ -143,6 +144,8 @@ export type SemanticFrozenFamilyObservation =
       readonly definitions: readonly SemanticFrozenFamilyDefinition[];
       readonly derivations: readonly SemanticFrozenFamilyDerivation[];
       readonly sourceOpenSeams: readonly SemanticFrozenFamilySourceOpenSeam[];
+      readonly liveExpressionCount: number;
+      readonly referencedLiveExpressionCount: number;
       readonly exactFields: typeof SEMANTIC_FROZEN_FAMILY_EXACT_FIELDS;
       readonly omittedJitFields: typeof SEMANTIC_FROZEN_FAMILY_OMITTED_JIT_FIELDS;
     }
@@ -339,6 +342,13 @@ export function observeSemanticFrozenFamily(
     seamKindKey: seam.seamKindKey,
     reasonKinds: seam.reasonKinds,
   }));
+  const liveExpressionCount = result.value.liveExpressions.length;
+  const referencedExpressionHandles = new Set(result.value.instructions.flatMap((instruction) =>
+    expressionProductHandlesForInstruction(instruction)
+  ));
+  const referencedLiveExpressionCount = result.value.liveExpressions.filter((expression) =>
+    referencedExpressionHandles.has(expression.productHandle)
+  ).length;
   const structuralValue = { definitions, derivations, sourceOpenSeams };
   const observation: SemanticFrozenFamilyObservation = {
     schemaVersion: SEMANTIC_FROZEN_FAMILY_OBSERVER_VERSION,
@@ -349,6 +359,8 @@ export function observeSemanticFrozenFamily(
     definitions,
     derivations,
     sourceOpenSeams,
+    liveExpressionCount,
+    referencedLiveExpressionCount,
     exactFields: SEMANTIC_FROZEN_FAMILY_EXACT_FIELDS,
     omittedJitFields: SEMANTIC_FROZEN_FAMILY_OMITTED_JIT_FIELDS,
   };

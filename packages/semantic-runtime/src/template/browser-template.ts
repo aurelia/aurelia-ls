@@ -13,7 +13,10 @@ export {
   CompilerTransformedTemplateTree,
   type CompilerTransformedTemplateNode,
 } from './template-structure.js';
-export { TemplateInstructionKind } from './instruction-ir.js';
+export {
+  expressionProductHandlesForInstruction,
+  TemplateInstructionKind,
+} from './instruction-ir.js';
 export {
   TemplateCompilerCommentOccurrence,
   TemplateCompilerElementOccurrence,
@@ -33,6 +36,7 @@ export {
   TemplateCompilerContextFamilyValueRow,
   type TemplateCompilerContextFamilyValueGeometry,
 } from './template-compiler-context-family-value.js';
+export { TemplateCompilerContextFamilyExpressionValue } from './template-compiler-context-family-expression-value.js';
 export * from './template-compiler-occurrence-target-execution.js';
 export * from './template-compiler-occurrence-target-schedule.js';
 export * from './template-compiler-occurrence-hydrate-element-allocation.js';
