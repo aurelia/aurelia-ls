@@ -1157,6 +1157,48 @@ export class TemplateCompilerStructuralExecutionSession {
     causeHandles: readonly ClaimEndpointHandle[],
     detachAttribute: ((attribute: TemplateCompilerAttributeOccurrence) => void) | null = null,
   ): TemplateCompilerConsumedAttributeDisposition {
+    return this.consumeAttributeWithOwnerAuthority(
+      attribute,
+      context,
+      causeHandles,
+      detachAttribute,
+      (owner, structure) => this.requireNodeInContext(owner, structure),
+    );
+  }
+
+  /** Consume one root-surrogate attribute from the compiler carrier, outside the content membership tree. */
+  consumeRootSurrogateAttribute(
+    attribute: TemplateCompilerAttributeOccurrence,
+    context: TemplateCompilerTargetContextPlan,
+    causeHandles: readonly ClaimEndpointHandle[],
+    detachAttribute: ((attribute: TemplateCompilerAttributeOccurrence) => void) | null = null,
+  ): TemplateCompilerConsumedAttributeDisposition {
+    return this.consumeAttributeWithOwnerAuthority(
+      attribute,
+      context,
+      causeHandles,
+      detachAttribute,
+      (owner, structure) => {
+        if (
+          context.role !== TemplateCompilerTargetContextRole.Root
+          || owner !== structure.compilerCarrier
+        ) {
+          throw new Error(`Compiler surrogate attribute '${attribute.occurrenceKey}' is outside the root carrier.`);
+        }
+      },
+    );
+  }
+
+  private consumeAttributeWithOwnerAuthority(
+    attribute: TemplateCompilerAttributeOccurrence,
+    context: TemplateCompilerTargetContextPlan,
+    causeHandles: readonly ClaimEndpointHandle[],
+    detachAttribute: ((attribute: TemplateCompilerAttributeOccurrence) => void) | null,
+    assertOwner: (
+      owner: TemplateCompilerElementOccurrence,
+      structure: TemplateCompilerContextStructure,
+    ) => void,
+  ): TemplateCompilerConsumedAttributeDisposition {
     const structure = this.requireContextStructure(context);
     if (this.forest.attributeForOccurrenceKey(attribute.occurrenceKey) !== attribute) {
       throw new Error(`Compiler attribute '${attribute.occurrenceKey}' belongs to another forest.`);
@@ -1183,7 +1225,7 @@ export class TemplateCompilerStructuralExecutionSession {
       throw new Error(`Consumed compiler attribute '${attribute.occurrenceKey}' changed its seeded input owner.`);
     }
     this.assertSeededAttributeOrder(attribute, owner);
-    this.requireNodeInContext(owner, structure);
+    assertOwner(owner, structure);
     if (detachAttribute == null) this.forest.detachAttribute(attribute);
     else detachAttribute(attribute);
     if (!hasDetachedAttributeOwner(attribute)) {

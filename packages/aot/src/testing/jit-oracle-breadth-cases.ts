@@ -28,6 +28,7 @@ import type {
 } from "./compiler-case.js";
 
 const templateCompilerSource = "packages/template-compiler/src/template-compiler.ts";
+const bindingCommandSource = "packages/template-compiler/src/binding-command.ts";
 const auSlotSource = "packages/runtime-html/src/resources/custom-elements/au-slot.ts";
 const directCompilerSuite = "packages/__tests__/src/3-runtime-html/template-compiler.spec.ts";
 const auSlotSuite = "packages/__tests__/src/3-runtime-html/template-compiler.au-slot.spec.ts";
@@ -483,6 +484,53 @@ const staticSurrogateCase = jitCharacterizationCase({
   }],
 });
 
+const dynamicSurrogateNonDebugCase = dynamicSurrogateCase(false);
+const dynamicSurrogateDebugCase = dynamicSurrogateCase(true);
+
+const dynamicSurrogateContextFamilyCase = jitCharacterizationCase({
+  id: "surrogate.dynamic-context-family",
+  family: "surrogate",
+  tags: ["breadth", "surrogate", "binding", "template-controller", "context-family"],
+  requirement: "A dynamic root surrogate remains terminal when content lowering creates generated template-controller contexts.",
+  provenance: [
+    compilerAuthority(directCompilerSuite, 168, 223, "behavior", {
+      suiteName: "3-runtime-html/template-compiler.spec.ts",
+      testName: "compiles dynamic surrogate attributes",
+      summary: "The direct compiler cases establish dynamic root instruction lowering and attribute consumption.",
+    }),
+    compilerAuthority(templateCompilerSource, 139, 149, "implementation", {
+      symbolName: "TemplateCompiler.compile",
+      summary: "The compiler completes recursive generated-context content before it lowers root surrogates.",
+    }),
+    compilerAuthority(templateCompilerSource, 335, 362, "implementation", {
+      symbolName: "TemplateCompiler._compileSurrogate",
+      summary: "Root surrogate instructions stay in their own flat definition field after recursive content lowering.",
+    }),
+  ],
+  obligations: [
+    compilerObligation("compiler.definition.surrogates", "primary", "The root definition retains its dynamic surrogate instruction."),
+    compilerObligation("compiler.surrogate.flat-wire", "primary", "The root instruction stays outside both root and generated rows."),
+    compilerObligation("compiler.attribute.dom-removal", "primary", "The root binding is consumed after the context family returns."),
+    compilerObligation("compiler.template-controller.nested-definition", "interaction", "The child if publishes its generated compiled definition."),
+    compilerObligation("compiler.wire.hydrate-template-controller", "interaction", "The root row retains the if controller and its child definition."),
+  ],
+  world: inlineCompilerWorld(
+    "aot-dynamic-surrogate-context-family",
+    '<template class.bind="klass"><div if.bind="show" title.bind="inside"></div></template>',
+  ),
+  invariants: [
+    ...compiledDefinitionEnvelope("aot-dynamic-surrogate-context-family", 1, 1),
+    equalJitInvariant("surrogate.family-template", "The controller is replaced before the terminal root attribute is consumed.", {
+      kind: "template-outer-html",
+    }, "<template><!--au--><!--au-start--><!--au-end--></template>"),
+  ],
+  contrasts: [{
+    caseId: "surrogate.dynamic-root-attributes",
+    relation: "nearest-neighbor",
+    difference: "Both consume dynamic root attributes terminally; this world also crosses generated context boundaries.",
+  }],
+});
+
 /** Setup-free breadth cases that StandardConfiguration can execute in an isolated JIT world. */
 export const JIT_ORACLE_BREADTH_CASES: readonly CompilerCase[] = [
   auSlotFallbackCase,
@@ -496,6 +544,9 @@ export const JIT_ORACLE_BREADTH_CASES: readonly CompilerCase[] = [
   dataAttributesNonDebugCase,
   dataAttributesDebugCase,
   staticSurrogateCase,
+  dynamicSurrogateNonDebugCase,
+  dynamicSurrogateDebugCase,
+  dynamicSurrogateContextFamilyCase,
 ];
 
 function shadowCompilerWorld(name: string, markup: string): CompilerWorld {
@@ -584,6 +635,83 @@ function dataAttributesCase(debug: boolean): CompilerCase {
         ? "Enabling debug retains the two dynamic authored attributes without changing the asserted instruction shape."
         : "Disabling debug removes the two consumed attributes without removing their asserted instructions.",
     }],
+  });
+}
+
+function dynamicSurrogateCase(debug: boolean): CompilerCase {
+  const id = debug ? "surrogate.dynamic-root-attributes.debug" : "surrogate.dynamic-root-attributes";
+  const name = debug ? "aot-dynamic-root-surrogate-debug" : "aot-dynamic-root-surrogate";
+  const counterpart = debug ? "surrogate.dynamic-root-attributes" : "surrogate.dynamic-root-attributes.debug";
+  const markup = '<template class.bind="klass" data-static="x" hide="literal" data-note="${message}" click.trigger="act()" element.ref="root" style.bind="styles" ...$attrs><div title.bind="inside"></div></template>';
+  return jitCharacterizationCase({
+    id,
+    family: "surrogate",
+    tags: ["breadth", "surrogate", "debug", "binding", "interpolation", "listener", "ref", "custom-attribute", "spread", "mutation-order"],
+    requirement: debug
+      ? "Debug compilation retains interleaved dynamic root syntax while emitting the same ordered flat surrogate sequence."
+      : "Interleaved dynamic root attribute lanes emit one ordered flat surrogate sequence and are consumed only after ordinary content compilation completes.",
+    provenance: [
+      compilerAuthority(directCompilerSuite, 168, 223, "behavior", {
+        suiteName: "3-runtime-html/template-compiler.spec.ts",
+        testName: "compiles dynamic surrogate attributes",
+        summary: "The direct compiler cases cover surrogate bindings, interpolation, custom attributes, and validation.",
+      }),
+      compilerAuthority(templateCompilerSource, 139, 149, "implementation", {
+        symbolName: "TemplateCompiler.compile",
+        summary: "The compiler completes recursive content compilation before it lowers root surrogates.",
+      }),
+      compilerAuthority(templateCompilerSource, 335, 362, "implementation", {
+        symbolName: "TemplateCompiler._compileSurrogate",
+        summary: "Surrogate classification validates first and publishes custom attributes before plain host instructions.",
+      }),
+      compilerAuthority(templateCompilerSource, 746, 752, "implementation", {
+        symbolName: "TemplateCompiler._classifyAttributes",
+        summary: "Debug mode retains compiler-consumed attributes without changing instruction lowering.",
+      }),
+      compilerAuthority(bindingCommandSource, 393, 516, "implementation", {
+        summary: "Listener, ref, class/style, and spread commands retain their framework wire fields.",
+      }),
+    ],
+    obligations: [
+      compilerObligation("compiler.definition.surrogates", "primary", "The definition publishes the complete eight-instruction root sequence."),
+      compilerObligation("compiler.surrogate.flat-wire", "primary", "Root instructions remain one flat sequence outside content rows."),
+      compilerObligation("compiler.attribute.dom-removal", debug ? "contrast" : "primary", debug
+        ? "Debug mode suppresses root and content attribute removal."
+        : "Non-debug compilation removes every consumed root attribute."),
+      compilerObligation("compiler.attribute.debug-preservation", debug ? "primary" : "contrast", debug
+        ? "All dynamic authored attributes remain visible after lowering."
+        : "The paired debug world proves removal is profile-dependent."),
+      compilerObligation("compiler.surrogate.custom-attribute", "primary", "The root show alias hydrates before earlier-authored ordinary host instructions."),
+      compilerObligation("compiler.instruction.listener-binding", "interaction", "The root listener preserves its event command semantics."),
+      compilerObligation("compiler.wire.ref", "interaction", "The root ref preserves its assignment expression and reference target."),
+      compilerObligation("compiler.wire.spread-transfer", "interaction", "The reserved root spread emits its transfer instruction."),
+      compilerObligation("compiler.node.row-target-alignment", "interaction", "The ordinary child row remains independent from root-surrogate mutation."),
+    ],
+    world: inlineCompilerWorld(name, markup, { debug }),
+    invariants: [
+      ...compiledDefinitionEnvelope(name, 1, 8),
+      equalJitInvariant("surrogate.dynamic-template", debug
+        ? "Debug lowering retains root and child syntax after content and surrogate compilation."
+        : "Content lowering finishes and all consumed root attributes are absent from the final template.", {
+        kind: "template-outer-html",
+      }, debug
+        ? '<template class.bind="klass" data-static="x" hide="literal" data-note="${message}" click.trigger="act()" element.ref="root" style.bind="styles" ...$attrs=""><!--au--><div title.bind="inside"></div></template>'
+        : '<template data-static="x"><!--au--><div></div></template>'),
+    ],
+    contrasts: [
+      {
+        caseId: counterpart,
+        relation: "metamorphic",
+        difference: debug
+          ? "Debug retains all consumed attributes without changing the instruction sequence."
+          : "Non-debug removes consumed attributes without changing the instruction sequence.",
+      },
+      {
+        caseId: "surrogate.static-class",
+        relation: "interaction-control",
+        difference: "Static root transfers remain visible in both profiles; dynamic removal is debug-dependent.",
+      },
+    ],
   });
 }
 

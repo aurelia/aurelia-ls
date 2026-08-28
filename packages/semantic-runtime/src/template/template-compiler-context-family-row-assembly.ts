@@ -39,6 +39,7 @@ import {
   type TemplateCompilerTextExpansionDraft,
   type TemplateCompilerTextLoweringSite,
 } from './template-compiler-occurrence-row-assembly.js';
+import type { TemplateCompilerSurrogateAttributeDispositionDraft } from './template-compiler-surrogate-staging.js';
 import {
   TemplateCompilerSiteCursorContextKind,
   type TemplateCompilerSiteCursorContextReference,
@@ -505,6 +506,7 @@ export class TemplateCompilerContextFamilyRowAssembly {
     readonly contexts: readonly TemplateCompilerFamilyContextRowAssembly[],
     readonly reachDispositions: readonly TemplateCompilerFamilyReachDisposition[],
     readonly surrogateInstructions: readonly TemplateInstruction[],
+    readonly surrogateAttributeDispositions: readonly TemplateCompilerSurrogateAttributeDispositionDraft[],
   ) {
     this.contextByReference = new Map(contexts.map((context) => [context.context, context] as const));
     const occurrences = reachDispositions.map((disposition) =>
@@ -529,6 +531,10 @@ export class TemplateCompilerContextFamilyRowAssembly {
       || !sameObjects(
         surrogateInstructions,
         receipt.traversal.audit.surrogateClassification?.result.staging?.instructions ?? [],
+      )
+      || !sameObjects(
+        surrogateAttributeDispositions,
+        receipt.traversal.audit.surrogateClassification?.result.staging?.attributeDispositions ?? [],
       )
     ) {
       throw new Error('Context-family row assembly lost receipt, context, reach, or occurrence coverage.');
@@ -889,6 +895,7 @@ export function assembleTemplateCompilerContextFamilyRows(
     contextAssemblies,
     dispositions,
     receipt.traversal.audit.surrogateClassification?.result.staging?.instructions ?? [],
+    receipt.traversal.audit.surrogateClassification?.result.staging?.attributeDispositions ?? [],
   );
   const uniquePendingReasons = [...new Map(pendingReasons.map((reason) => [
     `${reason.reasonKind}:${reason.summary}`,

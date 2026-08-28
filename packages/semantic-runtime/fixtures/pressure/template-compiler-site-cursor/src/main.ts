@@ -131,6 +131,7 @@ class CursorSurrogateInvalid {}
 })
 class CursorSurrogateDynamic {
   rootClass = 'root-class';
+  inside = 'inside';
 }
 
 @customElement({
@@ -447,7 +448,9 @@ class CursorContainerlessLeaf {}
   template: cursorContextFamilyContainerlessTcTemplate,
   dependencies: [CursorContainerlessLeaf, CursorOuterTemplateController],
 })
-class CursorContextFamilyContainerlessTc {}
+class CursorContextFamilyContainerlessTc {
+  rootClass = 'root-class';
+}
 
 @customElement({
   name: 'cursor-containerless',

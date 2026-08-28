@@ -422,6 +422,8 @@ describe('template compiler live attribute owner assembly', () => {
     expect(customAttribute.instructionStaging.hydrateAttributes).toHaveLength(1);
     expect(customAttribute.instructionStaging.hydrateAttributes[0]).toMatchObject({
       resourceLookupName: 'cursor-staging-ca',
+      resourceName: 'cursor-staging-ca',
+      resourceAlias: null,
     });
     expect(customAttribute.instructionStaging.instructions).toEqual(expect.arrayContaining([
       expect.objectContaining({ instructionKind: 'set-property', targetProperty: 'value', value: 'static' }),

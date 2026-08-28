@@ -4,17 +4,17 @@ import {
   type TemplateCompilerOperation,
 } from './template-compiler-execution.js';
 import { TemplateCompilerLiveAttributeDisposition } from './template-compiler-live-attribute-owner.js';
-import {
-  type TemplateCompilerOccurrenceAttributeDispositionDraft,
-} from './template-compiler-occurrence-row-assembly.js';
+import type { TemplateCompilerAttributeDispositionDraft } from './template-compiler-attribute-disposition.js';
 import {
   TemplateCompilerOccurrenceAttributeScheduleEntry,
   TemplateCompilerOccurrenceElementTargetScheduleEntry,
+  TemplateCompilerOccurrenceSurrogateAttributeScheduleEntry,
   TemplateCompilerOccurrenceTextExpansionScheduleEntry,
 } from './template-compiler-occurrence-target-schedule.js';
 import {
-  assertTemplateCompilerFinalAttributeSiteState,
+  assertTemplateCompilerFinalAttributeOwnerState,
   executeTemplateCompilerOrdinaryTargetOperation,
+  executeTemplateCompilerRootSurrogateAttributeOperation,
   executeTemplateCompilerTargetAttributeOperation,
   executeTemplateCompilerTextExpansionOperation,
 } from './template-compiler-target-operation-execution.js';
@@ -44,7 +44,10 @@ export class TemplateCompilerOccurrenceTargetExecution {
     readonly closure: TemplateCompilerOccurrenceTargetExecutionClosure,
   ) {
     const rowAssembly = attachment.assembly.rows;
-    const removedCount = rowAssembly.attributeDispositions.filter((disposition) =>
+    const removedCount = [
+      ...rowAssembly.attributeDispositions,
+      ...rowAssembly.surrogateAttributeDispositions,
+    ].filter((disposition) =>
       disposition.disposition === TemplateCompilerLiveAttributeDisposition.Removed
     ).length;
     if (
@@ -113,9 +116,15 @@ export function executeTemplateCompilerOccurrenceTarget(
   const targetGeometries: TemplateCompilerTargetGeometry[] = [];
 
   for (const entry of schedule.entries) {
-    if (entry instanceof TemplateCompilerOccurrenceAttributeScheduleEntry) {
+    if (
+      entry instanceof TemplateCompilerOccurrenceAttributeScheduleEntry
+      || entry instanceof TemplateCompilerOccurrenceSurrogateAttributeScheduleEntry
+    ) {
       const disposition = entry.disposition;
-      const result = executeTemplateCompilerTargetAttributeOperation({
+      const executeAttribute = entry instanceof TemplateCompilerOccurrenceSurrogateAttributeScheduleEntry
+        ? executeTemplateCompilerRootSurrogateAttributeOperation
+        : executeTemplateCompilerTargetAttributeOperation;
+      const result = executeAttribute({
         execution,
         structural,
         context,
@@ -165,13 +174,23 @@ export function executeTemplateCompilerOccurrenceTarget(
   }
 
   for (const site of rows.receipt.elementSites) {
-    assertTemplateCompilerFinalAttributeSiteState(
+    assertTemplateCompilerFinalAttributeOwnerState(
       site.owner,
       schedule.attributeDispositionsBySite.get(site) ?? [],
     );
   }
+  const surrogate = rows.receipt.surrogateClassification?.result.staging ?? null;
+  if (surrogate != null) {
+    assertTemplateCompilerFinalAttributeOwnerState(
+      surrogate.owner,
+      rows.surrogateAttributeDispositions,
+    );
+  }
 
-  assertDispositionCoverage(rows.attributeDispositions, structural.readConsumedAttributeDispositions());
+  assertDispositionCoverage(
+    [...rows.attributeDispositions, ...rows.surrogateAttributeDispositions],
+    structural.readConsumedAttributeDispositions(),
+  );
   const closure = execution.closeOccurrenceTargetExecution(attachment);
   execution.assertCoherent();
   const result = new TemplateCompilerOccurrenceTargetExecution(
@@ -188,7 +207,7 @@ export function executeTemplateCompilerOccurrenceTarget(
 }
 
 function assertDispositionCoverage(
-  drafts: readonly TemplateCompilerOccurrenceAttributeDispositionDraft[],
+  drafts: readonly TemplateCompilerAttributeDispositionDraft[],
   consumed: readonly TemplateCompilerConsumedAttributeDisposition[],
 ): void {
   const removed = drafts.filter((draft) => draft.disposition === TemplateCompilerLiveAttributeDisposition.Removed);
@@ -196,7 +215,7 @@ function assertDispositionCoverage(
   if (
     consumed.length !== removed.length
     || consumed.some((disposition, index) => disposition.attribute !== removed[index]?.attribute)
-    || retained.some((draft) => draft.attribute.owner !== draft.site.event.element)
+    || retained.some((draft) => draft.attribute.owner !== draft.owner.element)
   ) {
     throw new Error('Occurrence target execution diverged from final live attribute dispositions.');
   }

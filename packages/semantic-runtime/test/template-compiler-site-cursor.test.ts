@@ -84,6 +84,7 @@ import {
   TemplateCompilerFamilyLoweredElementScheduleEntry,
 } from '../src/template/template-compiler-context-family-structural-schedule.js';
 import { executeTemplateCompilerContextFamilyTarget } from '../src/template/template-compiler-context-family-target-execution.js';
+import { TemplateCompilerFamilySurrogateAttributeOperationScheduleEntry } from '../src/template/template-compiler-context-family-operation-schedule.js';
 import {
   prepareTemplateCompilerContextFamilyFreeze,
   TemplateCompilerContextFamilyFreezePreparationState,
@@ -618,6 +619,7 @@ describe('template compiler root site cursor', () => {
       'cursor-slot-inert',
       'cursor-slot-valid',
       'cursor-surrogate-valid',
+      'cursor-surrogate-dynamic',
       'cursor-wide',
     ];
     const assemblies = new Map<string, NonNullable<ReturnType<typeof assembleTemplateCompilerOrdinaryRootRows>['assembly']>>();
@@ -752,13 +754,13 @@ describe('template compiler root site cursor', () => {
     })).toEqual(['value']);
 
     const allRows = [...assemblies.values()].flatMap((assembly) => assembly.rows);
-    expect(allRows).toHaveLength(28);
-    expect(allRows.reduce((count, row) => count + row.instructionKinds.length, 0)).toBe(161);
+    expect(allRows).toHaveLength(29);
+    expect(allRows.reduce((count, row) => count + row.instructionKinds.length, 0)).toBe(162);
     const instructionKindCounts = Object.fromEntries([...new Set(allRows.flatMap((row) => row.instructionKinds))]
       .map((kind) => [kind, allRows.flatMap((row) => row.instructionKinds).filter((candidate) => candidate === kind).length]));
     expect(instructionKindCounts).toEqual({
       'text-binding': 7,
-      'property-binding': 141,
+      'property-binding': 142,
       interpolation: 3,
       'hydrate-attribute': 6,
       'hydrate-element': 3,
@@ -862,11 +864,11 @@ describe('template compiler root site cursor', () => {
         .toBe(targetAssembly);
       targetPlans.set(name, targetAssembly);
     }
-    expect(targetPlans.size).toBe(16);
+    expect(targetPlans.size).toBe(17);
     expect([...targetPlans.values()].reduce(
       (count, targetAssembly) => count + targetAssembly.targetPlan.root.readRows().length,
       0,
-    )).toBe(28);
+    )).toBe(29);
     expect(targetPlans.get('cursor-surrogate-valid')?.targetPlan.root.readSurrogateInstructions().map((instruction) =>
       instruction.instructionKind
     )).toEqual([
@@ -874,6 +876,9 @@ describe('template compiler root site cursor', () => {
       TemplateInstructionKind.SetStyleAttribute,
       TemplateInstructionKind.SetAttribute,
     ]);
+    expect(targetPlans.get('cursor-surrogate-dynamic')?.targetPlan.root.readSurrogateInstructions().map((instruction) =>
+      instruction.instructionKind
+    )).toEqual([TemplateInstructionKind.PropertyBinding]);
     const stagingPlan = targetPlans.get('cursor-live-staging')!;
     expect(stagingPlan.hydrateElements?.heads).toHaveLength(2);
     expect(stagingPlan.publicationPrerequisites).toMatchObject([{
@@ -1048,7 +1053,6 @@ describe('template compiler root site cursor', () => {
       'cursor-slot-invalid',
       'cursor-slots-containerless',
       'cursor-surrogate-invalid',
-      'cursor-surrogate-dynamic',
       'cursor-surrogate-template-controller',
       'cursor-template-controller',
     ];
@@ -2069,6 +2073,11 @@ describe('template compiler root site cursor', () => {
       'replacedNode' in geometry && geometry.replacedNode === transition.host
     ))
       .toHaveLength(2);
+    expect(attachment.operationSchedule.entries.at(-1))
+      .toBeInstanceOf(TemplateCompilerFamilySurrogateAttributeOperationScheduleEntry);
+    expect(targetExecution.operations.at(-1)?.operationKind)
+      .toBe(TemplateCompilerOperationKind.AttributeDisposition);
+    expect(transcript.binding.lane.compilerCarrier.readAttributes()).toEqual([]);
     expect(transcript.binding.execution.seal()).toBe(transcript.binding.execution.sequence);
   });
 
@@ -2226,14 +2235,19 @@ describe('template compiler root site cursor', () => {
     expect(result.completion?.receipt?.surrogateClassification).toBe(classification);
   });
 
-  test('keeps consumed surrogate mutations pending and template controllers distinctly invalid', () => {
+  test('closes instruction-owned surrogate mutations and keeps template controllers distinctly invalid', () => {
     const dynamic = fixture.transcript('cursor-surrogate-dynamic');
     const dynamicEvent = eventsOf(dynamic, TemplateCompilerSiteCursorSurrogateClassificationEvent)[0];
-    expect(dynamic.frontier?.frontierKind)
-      .toBe(TemplateCompilerSiteCursorFrontierKind.SurrogateStructuralMutationPending);
+    expect(dynamic.frontier).toBeNull();
     expect(dynamicEvent?.result).toMatchObject({
-      state: 'pending',
-      reasons: [{ reasonKind: TemplateCompilerSurrogateStagingReasonKind.StructuralMutationPending }],
+      state: 'exact',
+      reasons: [],
+      staging: {
+        attributeDispositions: [expect.objectContaining({
+          disposition: TemplateCompilerLiveAttributeDisposition.Removed,
+          instructionCauseHandles: [expect.anything()],
+        })],
+      },
       owner: {
         instructionStaging: {
           directRowTail: [expect.objectContaining({ instructionKind: TemplateInstructionKind.PropertyBinding })],
@@ -2823,6 +2837,7 @@ describe('template compiler root site cursor', () => {
       'cursor-row-merged',
       'cursor-slot-inert',
       'cursor-slot-valid',
+      'cursor-surrogate-dynamic',
       'cursor-ten-hole',
       'cursor-usage-containerless',
       'cursor-wide',
@@ -2839,7 +2854,10 @@ describe('template compiler root site cursor', () => {
       const attachment = run.binding.execution.attachOccurrenceTargetPlan(target);
 
       const result = executeTemplateCompilerOccurrenceTarget(attachment);
-      const removedCount = rows.attributeDispositions.filter((disposition) =>
+      const removedCount = [
+        ...rows.attributeDispositions,
+        ...rows.surrogateAttributeDispositions,
+      ].filter((disposition) =>
         disposition.disposition === TemplateCompilerLiveAttributeDisposition.Removed
       ).length;
       const elementRowCount = rows.rows.filter((row) => row.site.siteKind === 'element').length;
@@ -2974,6 +2992,14 @@ describe('template compiler root site cursor', () => {
         expect(result.operations).toEqual([]);
         expect(result.targetGeometries).toEqual([]);
       }
+      if (name === 'cursor-surrogate-dynamic') {
+        expect(result.operations.map((operation) => operation.operationKey)).toEqual([
+          rows.attributeDispositions[0]?.stableSlotKey,
+          target.rowMappings[0]?.row.localKey,
+          rows.surrogateAttributeDispositions[0]?.stableSlotKey,
+        ]);
+        expect(run.binding.lane.compilerCarrier.readAttributes()).toEqual([]);
+      }
       if (name === 'cursor-native-containerless') {
         expect(rows.rows).toEqual([]);
         expect(result.targetGeometries).toEqual([]);
@@ -2994,7 +3020,7 @@ describe('template compiler root site cursor', () => {
         expect(customAttribute).not.toBeNull();
         expect(wrapper).not.toBeNull();
         expect(customAttribute?.causeHandles[0]).toBe(customAttribute?.attribute.inputReference?.productHandle);
-        expect(customAttribute?.causeHandles).toContain(wrapper?.productHandle);
+        expect(customAttribute?.causeHandles[1]).toBe(wrapper?.productHandle);
         expect(result.attributeDispositions.find((disposition) =>
           disposition.attribute === customAttribute?.attribute
         )?.causeHandles).toEqual(customAttribute?.causeHandles);

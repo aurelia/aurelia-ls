@@ -23,6 +23,7 @@ import {
   TemplateCompilerFamilyGeneratedContextOperationScheduleEntry,
   TemplateCompilerFamilyOrdinaryTargetOperationScheduleEntry,
   TemplateCompilerFamilyProjectionOperationScheduleEntry,
+  TemplateCompilerFamilySurrogateAttributeOperationScheduleEntry,
   TemplateCompilerFamilyTemplateControllerRehomingOperationScheduleEntry,
   TemplateCompilerFamilyTemplateControllerRowOperationScheduleEntry,
   TemplateCompilerFamilyTextOperationScheduleEntry,
@@ -45,6 +46,7 @@ import {
   buildTemplateCompilerOccurrenceTargetSchedule,
   TemplateCompilerOccurrenceAttributeScheduleEntry,
   TemplateCompilerOccurrenceElementTargetScheduleEntry,
+  TemplateCompilerOccurrenceSurrogateAttributeScheduleEntry,
   TemplateCompilerOccurrenceTextExpansionScheduleEntry,
   type TemplateCompilerOccurrenceTargetSchedule,
   type TemplateCompilerOccurrenceTargetScheduleEntry,
@@ -4013,13 +4015,18 @@ export class TemplateCompilerExecutionSession {
       throw new Error('Occurrence target completion requires one exact root execution context.');
     }
     const schedule = attachment.schedule;
-    const removed = rows.attributeDispositions.filter((disposition) =>
+    const allAttributeDispositions = [
+      ...rows.attributeDispositions,
+      ...rows.surrogateAttributeDispositions,
+    ];
+    const removed = allAttributeDispositions.filter((disposition) =>
       disposition.disposition === TemplateCompilerLiveAttributeDisposition.Removed
     );
-    const removedEntries = schedule.entries.filter((entry): entry is TemplateCompilerOccurrenceAttributeScheduleEntry =>
+    const removedEntries = schedule.entries.filter((entry) =>
       entry instanceof TemplateCompilerOccurrenceAttributeScheduleEntry
+      || entry instanceof TemplateCompilerOccurrenceSurrogateAttributeScheduleEntry
     );
-    const retained = rows.attributeDispositions.filter((disposition) =>
+    const retained = allAttributeDispositions.filter((disposition) =>
       disposition.disposition === TemplateCompilerLiveAttributeDisposition.Retained
     );
     const consumed = structural.readConsumedAttributeDispositions(context.targetContext);
@@ -4035,6 +4042,17 @@ export class TemplateCompilerExecutionSession {
         && actual.every((attribute, ordinal) => attribute === retainedDispositions[ordinal]?.attribute)
         && retainedDispositions.every((disposition) => disposition.attribute.value === disposition.finalValue);
     });
+    const surrogate = rows.receipt.surrogateClassification?.result.staging ?? null;
+    const retainedSurrogates = rows.surrogateAttributeDispositions.filter((disposition) =>
+      disposition.disposition === TemplateCompilerLiveAttributeDisposition.Retained
+    );
+    const finalSurrogateAttributesAreExact = surrogate == null
+      ? rows.surrogateAttributeDispositions.length === 0
+      : surrogate.owner.element.readAttributes().length === retainedSurrogates.length
+        && surrogate.owner.element.readAttributes().every((attribute, ordinal) =>
+          attribute === retainedSurrogates[ordinal]?.attribute
+        )
+        && retainedSurrogates.every((disposition) => disposition.attribute.value === disposition.finalValue);
     if (
       consumed.length !== removed.length
       || consumed.some((disposition, ordinal) =>
@@ -4042,8 +4060,9 @@ export class TemplateCompilerExecutionSession {
         || disposition.ownerOrdinal !== removedEntries[ordinal]?.disposition.simulatedLiveOrdinal
         || !sameOccurrences(disposition.causeHandles, removedEntries[ordinal]?.causeHandles ?? [])
       )
-      || retained.some((disposition) => disposition.attribute.owner !== disposition.site.event.element)
+      || retained.some((disposition) => disposition.attribute.owner !== disposition.owner.element)
       || !finalOwnerAttributesAreExact
+      || !finalSurrogateAttributesAreExact
       || expansions.length !== rows.textExpansions.length
       || expansions.some((expansion, ordinal) =>
         !this.targetTextExpansionIsExact(
@@ -4263,7 +4282,10 @@ export class TemplateCompilerExecutionSession {
         && forestDelta === 4;
     }
 
-    if (expected instanceof TemplateCompilerFamilyAttributeOperationScheduleEntry) {
+    if (
+      expected instanceof TemplateCompilerFamilyAttributeOperationScheduleEntry
+      || expected instanceof TemplateCompilerFamilySurrogateAttributeOperationScheduleEntry
+    ) {
       return this.targetAttributeOperationMutationIsExact(
         structural,
         expected.context.targetContext,
@@ -4549,7 +4571,10 @@ export class TemplateCompilerExecutionSession {
   ): boolean {
     const structural = attachment.structuralExecution;
     const context = attachment.assembly.targetPlan.root;
-    if (expected instanceof TemplateCompilerOccurrenceAttributeScheduleEntry) {
+    if (
+      expected instanceof TemplateCompilerOccurrenceAttributeScheduleEntry
+      || expected instanceof TemplateCompilerOccurrenceSurrogateAttributeScheduleEntry
+    ) {
       return this.targetAttributeOperationMutationIsExact(
         structural,
         context,
@@ -4665,6 +4690,7 @@ function contextFamilyOperationTargetIsExact(
         && target.occurrence === entry.occurrence;
   }
   const occurrence = entry instanceof TemplateCompilerFamilyAttributeOperationScheduleEntry
+    || entry instanceof TemplateCompilerFamilySurrogateAttributeOperationScheduleEntry
     || entry instanceof TemplateCompilerFamilyOrdinaryTargetOperationScheduleEntry
     || entry instanceof TemplateCompilerFamilyTextOperationScheduleEntry
     ? entry.occurrence
@@ -4678,7 +4704,10 @@ function contextFamilyOperationTargetIsExact(
 function operationKindForScheduleEntry(
   entry: TemplateCompilerOccurrenceTargetScheduleEntry,
 ): TemplateCompilerOperationKind {
-  if (entry instanceof TemplateCompilerOccurrenceAttributeScheduleEntry) {
+  if (
+    entry instanceof TemplateCompilerOccurrenceAttributeScheduleEntry
+    || entry instanceof TemplateCompilerOccurrenceSurrogateAttributeScheduleEntry
+  ) {
     return TemplateCompilerOperationKind.AttributeDisposition;
   }
   if (entry instanceof TemplateCompilerOccurrenceElementTargetScheduleEntry) {

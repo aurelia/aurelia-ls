@@ -157,6 +157,14 @@ function normalizeInstruction(
         props: value.props.map((instruction) => normalizeInstruction(instruction, definitionIndexes)),
         res: normalizeResource(value.res),
       };
+    case TemplateCompilerFrameworkInstructionType.HydrateAttribute:
+      return {
+        kind: "hydrate-attribute",
+        type: value.type,
+        alias: normalizeUnknown(value.alias),
+        props: value.props.map((instruction) => normalizeInstruction(instruction, definitionIndexes)),
+        res: normalizeResource(value.res),
+      };
     case TemplateCompilerFrameworkInstructionType.HydrateElement:
       return {
         kind: "hydrate-element",
@@ -175,6 +183,13 @@ function normalizeInstruction(
         value: value.value,
         to: value.to,
       };
+    case TemplateCompilerFrameworkInstructionType.SetProperty:
+      return {
+        kind: "set-property",
+        type: value.type,
+        value: value.value,
+        to: value.to,
+      };
     case TemplateCompilerFrameworkInstructionType.SetClassAttribute:
       return {
         kind: "set-class-attribute",
@@ -186,6 +201,18 @@ function normalizeInstruction(
         kind: "set-style-attribute",
         type: value.type,
         value: value.value,
+      };
+    case TemplateCompilerFrameworkInstructionType.RefBinding:
+      return {
+        kind: "ref-binding",
+        type: value.type,
+        from: normalizeSemanticRuntimeExpressionAstForObservation(value.from),
+        to: value.to,
+      };
+    case TemplateCompilerFrameworkInstructionType.SpreadTransferedBinding:
+      return {
+        kind: "spread-transferred-binding",
+        type: value.type,
       };
   }
 }

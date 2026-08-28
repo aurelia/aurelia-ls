@@ -145,6 +145,10 @@ export function stageTemplateCompilerLiveAttributeOwner(
             node,
             attribute,
             syntax.target,
+            contribution.classification.resource?.name ?? syntax.target,
+            contribution.classification.resource?.aliases.some((alias) => alias === syntax.target) === true
+              ? syntax.target
+              : null,
             resolveResources.value ? contribution.classification.resource?.toReference() ?? null : null,
             props,
             syntax.sourceAddressHandle,

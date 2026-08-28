@@ -106,7 +106,9 @@ describe('template compiler instruction staging laws', () => {
         'ca',
         node,
         attribute,
-        'focus',
+        'hide',
+        'show',
+        'hide',
         null,
         [prop],
         null,
@@ -132,6 +134,12 @@ describe('template compiler instruction staging laws', () => {
     );
 
     expect(hydrate).toBeInstanceOf(HydrateAttributeInstruction);
+    expect(hydrate).toMatchObject({
+      resourceLookupName: 'hide',
+      resourceName: 'show',
+      resourceAlias: 'hide',
+      resource: null,
+    });
     expect(hydrate.bindingInstructionProductHandles).toEqual([prop.productHandle]);
     expect(controller).toBeInstanceOf(HydrateTemplateControllerInstruction);
     expect(controller.childCompiledTemplate).not.toBeNull();

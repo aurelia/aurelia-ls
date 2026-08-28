@@ -14,6 +14,7 @@ import {
   TemplateCompilerFamilyGeneratedContextOperationScheduleEntry,
   TemplateCompilerFamilyOrdinaryTargetOperationScheduleEntry,
   TemplateCompilerFamilyProjectionOperationScheduleEntry,
+  TemplateCompilerFamilySurrogateAttributeOperationScheduleEntry,
   TemplateCompilerFamilyTemplateControllerRehomingOperationScheduleEntry,
   TemplateCompilerFamilyTemplateControllerRowOperationScheduleEntry,
   TemplateCompilerFamilyTextOperationScheduleEntry,
@@ -25,8 +26,9 @@ import {
 } from './instruction-ir.js';
 import type { TemplateCompilerOccurrenceAttributeDispositionDraft } from './template-compiler-occurrence-row-assembly.js';
 import {
-  assertTemplateCompilerFinalAttributeSiteState,
+  assertTemplateCompilerFinalAttributeOwnerState,
   executeTemplateCompilerOrdinaryTargetOperation,
+  executeTemplateCompilerRootSurrogateAttributeOperation,
   executeTemplateCompilerTargetAttributeOperation,
   executeTemplateCompilerTextExpansionOperation,
 } from './template-compiler-target-operation-execution.js';
@@ -124,8 +126,14 @@ export function executeTemplateCompilerContextFamilyTarget(
       continue;
     }
 
-    if (entry instanceof TemplateCompilerFamilyAttributeOperationScheduleEntry) {
-      const result = executeTemplateCompilerTargetAttributeOperation({
+    if (
+      entry instanceof TemplateCompilerFamilyAttributeOperationScheduleEntry
+      || entry instanceof TemplateCompilerFamilySurrogateAttributeOperationScheduleEntry
+    ) {
+      const executeAttribute = entry instanceof TemplateCompilerFamilySurrogateAttributeOperationScheduleEntry
+        ? executeTemplateCompilerRootSurrogateAttributeOperation
+        : executeTemplateCompilerTargetAttributeOperation;
+      const result = executeAttribute({
         execution,
         structural,
         context: entry.context,
@@ -380,9 +388,17 @@ function assertFinalAttributeState(attachment: TemplateCompilerContextFamilyTarg
     const site = disposition.site;
     if (site.siteKind !== 'element' || visited.has(site)) continue;
     visited.add(site);
-    assertTemplateCompilerFinalAttributeSiteState(
+    assertTemplateCompilerFinalAttributeOwnerState(
       site.owner,
       dispositionsBySite.get(site) ?? [],
+    );
+  }
+  const rows = attachment.target.allocation.rows;
+  const surrogate = rows.receipt.traversal.audit.surrogateClassification?.result.staging ?? null;
+  if (surrogate != null) {
+    assertTemplateCompilerFinalAttributeOwnerState(
+      surrogate.owner,
+      rows.surrogateAttributeDispositions,
     );
   }
 }

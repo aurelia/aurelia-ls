@@ -683,6 +683,10 @@ class CompiledTemplateInstructionFactory {
         rawName: null,
       },
       syntax?.target ?? classification.resource?.name ?? '(unknown)',
+      classification.resource?.name ?? syntax?.target ?? '(unknown)',
+      syntax != null && classification.resource?.aliases.includes(syntax.target) === true
+        ? syntax.target
+        : null,
       this.input.compilerReads.resolveResources()
         ? classification.resource?.toReference() ?? null
         : null,
@@ -1987,7 +1991,8 @@ class CompiledTemplateInstructionTraversal {
 
   private surrogateInstructionsForTemplateElement(node: HtmlElement): readonly TemplateInstruction[] {
     const classifications = this.indexes.classificationsByOwner.get(node.productHandle) ?? [];
-    const result: TemplateInstruction[] = [];
+    const owner = this.indexes.ownersByElement.get(node.productHandle) ?? null;
+    const parts = this.elementInstructionPartBuckets(null, false);
     for (const classification of classifications) {
       const syntax = this.indexes.syntaxByProduct.get(classification.syntaxProductHandle) ?? null;
       const attribute = syntax?.attribute.productHandle == null
@@ -2013,21 +2018,19 @@ class CompiledTemplateInstructionTraversal {
           if (!this.multiBindingClassificationIsCommitted(classification)) {
             break;
           }
-          const props = commandBuilt.length > 0
-            ? commandBuilt
-            : nullableInstruction(this.instructionFactory.valueInstructionForClassification(
-              classification,
-              syntax,
-              attribute,
-              node,
-              'custom-attribute',
-            ));
-          result.push(this.instructionFactory.createHydrateAttributeInstruction(classification, syntax, attribute, node, props));
+          this.collectCustomAttributeInstructionPart(
+            node,
+            classification,
+            syntax,
+            attribute,
+            commandBuilt,
+            parts,
+          );
           break;
         }
         case AttributeClassificationKind.Plain: {
           if (commandBuilt.length > 0) {
-            result.push(...commandBuilt);
+            parts.plainInstructions.push(...commandBuilt);
           } else {
             const instruction = this.instructionFactory.valueInstructionForClassification(
               classification,
@@ -2038,14 +2041,24 @@ class CompiledTemplateInstructionTraversal {
               true,
             );
             if (instruction != null) {
-              result.push(instruction);
+              parts.plainInstructions.push(instruction);
             }
           }
           break;
         }
         case AttributeClassificationKind.BindingCommand:
         case AttributeClassificationKind.Ref:
-          result.push(...commandBuilt);
+          parts.plainInstructions.push(...commandBuilt);
+          break;
+        case AttributeClassificationKind.Spread:
+          this.collectSpreadInstructionPart(
+            node,
+            classification,
+            syntax,
+            attribute,
+            commandBuilt,
+            parts,
+          );
           break;
         case AttributeClassificationKind.TemplateController:
           this.assemblyState.addCompilerIssue(
@@ -2058,7 +2071,6 @@ class CompiledTemplateInstructionTraversal {
           );
           break;
         case AttributeClassificationKind.Bindable:
-        case AttributeClassificationKind.Spread:
         case AttributeClassificationKind.Captured:
         case AttributeClassificationKind.CompilerControl:
         case AttributeClassificationKind.Open:
@@ -2070,7 +2082,17 @@ class CompiledTemplateInstructionTraversal {
           break;
       }
     }
-    return result;
+    if (parts.bindableInstructions.length > 0) {
+      this.assemblyState.addOpenSeam(
+        `surrogate-bindable-spread:${node.productHandle}`,
+        'Root surrogate spread produced bindable-targeting instructions without an element definition owner.',
+        node.sourceAddressHandle,
+      );
+    }
+    return [
+      ...parts.attributeInstructions,
+      ...orderCompilerInstructionsForElement(node, owner, parts.plainInstructions),
+    ];
   }
 }
 

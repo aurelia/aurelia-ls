@@ -1,8 +1,16 @@
 import {
+  itHydrateAttribute,
+  itHydrateTemplateController,
+  itInterpolation,
   itLetBinding,
+  itListenerBinding,
+  itPropertyBinding,
+  itRefBinding,
   itSetAttribute,
   itSetClassAttribute,
+  itSetProperty,
   itSetStyleAttribute,
+  itSpreadTransferedBinding,
   itTextBinding,
   type HydrateElementInstruction,
   type HydrateLetElementInstruction,
@@ -32,7 +40,7 @@ describe("setup-free JIT oracle breadth cases", () => {
     );
 
     validateJitCharacterizationCases(catalog.cases);
-    expect(catalog.cases).toHaveLength(11);
+    expect(catalog.cases).toHaveLength(14);
     expect(catalog.cases.every((candidate) => candidate.world.setups.length === 0)).toBe(true);
     expect(catalog.cases.every((candidate) => candidate.world.registrations.length === 0)).toBe(true);
     expect(catalog.cases.every((candidate) => candidate.oracles.claims.length === 0)).toBe(true);
@@ -68,7 +76,7 @@ describe("setup-free JIT oracle breadth cases", () => {
     }
   });
 
-  it("retains nested fallback, let, and flat surrogate products beyond the generic selectors", async () => {
+  it("retains nested fallback, let, and static/dynamic surrogate products beyond the generic selectors", async () => {
     const executor = new JitCompilerCaseExecutor();
     const oracle = createJitCompilerOracle();
     try {
@@ -94,6 +102,42 @@ describe("setup-free JIT oracle breadth cases", () => {
         { type: itSetStyleAttribute, value: "display:block" },
         { type: itSetAttribute, value: "x", to: "data-ok" },
       ]);
+
+      const dynamic = await compileCase("surrogate.dynamic-root-attributes", executor, oracle);
+      expect((dynamic.compiled.template as HTMLTemplateElement).outerHTML)
+        .toBe('<template data-static="x"><!--au--><div></div></template>');
+      const dynamicSurrogateTypes = [
+        itHydrateAttribute,
+        itPropertyBinding,
+        itSetAttribute,
+        itInterpolation,
+        itListenerBinding,
+        itRefBinding,
+        itPropertyBinding,
+        itSpreadTransferedBinding,
+      ];
+      expect(dynamic.compiled.surrogates.map((instruction) => instruction.type))
+        .toEqual(dynamicSurrogateTypes);
+      expect(dynamic.compiled.surrogates[0]).toEqual({
+        type: itHydrateAttribute,
+        res: "show",
+        alias: "hide",
+        props: [{ type: itSetProperty, value: "literal", to: "value" }],
+      });
+
+      const dynamicDebug = await compileCase("surrogate.dynamic-root-attributes.debug", executor, oracle);
+      expect((dynamicDebug.compiled.template as HTMLTemplateElement).outerHTML)
+        .toBe('<template class.bind="klass" data-static="x" hide="literal" data-note="${message}" click.trigger="act()" element.ref="root" style.bind="styles" ...$attrs=""><!--au--><div title.bind="inside"></div></template>');
+      expect(dynamicDebug.compiled.surrogates.map((instruction) => instruction.type))
+        .toEqual(dynamicSurrogateTypes);
+
+      const family = await compileCase("surrogate.dynamic-context-family", executor, oracle);
+      expect((family.compiled.template as HTMLTemplateElement).outerHTML)
+        .toBe("<template><!--au--><!--au-start--><!--au-end--></template>");
+      expect(family.compiled.instructions[0]?.map((instruction) => instruction.type))
+        .toEqual([itHydrateTemplateController]);
+      expect(family.compiled.surrogates.map((instruction) => instruction.type))
+        .toEqual([itPropertyBinding]);
     } finally {
       oracle.dispose();
     }

@@ -23,10 +23,10 @@ import {
 } from './template-compiler-occurrence.js';
 import {
   TemplateCompilerTextExpansionOutputKind,
-  type TemplateCompilerOccurrenceAttributeDispositionDraft,
   type TemplateCompilerOccurrenceTargetRowDraft,
   type TemplateCompilerTextExpansionDraft,
 } from './template-compiler-occurrence-row-assembly.js';
+import type { TemplateCompilerAttributeDispositionDraft } from './template-compiler-attribute-disposition.js';
 import type {
   TemplateCompilerConsumedAttributeDisposition,
   TemplateCompilerInputTextExpansion,
@@ -39,7 +39,7 @@ export interface TemplateCompilerTargetAttributeOperationRequest {
   readonly structural: TemplateCompilerStructuralExecutionSession;
   readonly context: TemplateCompilerExecutionContextReference;
   readonly operationKey: string;
-  readonly disposition: TemplateCompilerOccurrenceAttributeDispositionDraft;
+  readonly disposition: TemplateCompilerAttributeDispositionDraft;
   readonly causeHandles: readonly ClaimEndpointHandle[];
   readonly sourceAddressHandle: AddressHandle | null;
 }
@@ -52,9 +52,9 @@ export class TemplateCompilerTargetAttributeOperationResult {
 }
 
 /** Prove one reached element's final live attribute collection, values, order, and removed-owner disposition. */
-export function assertTemplateCompilerFinalAttributeSiteState(
+export function assertTemplateCompilerFinalAttributeOwnerState(
   owner: TemplateCompilerLiveAttributeOwnerResult,
-  dispositions: readonly TemplateCompilerOccurrenceAttributeDispositionDraft[],
+  dispositions: readonly TemplateCompilerAttributeDispositionDraft[],
 ): void {
   const element = owner.element;
   const visible = owner.ownerInput.visibleAttributes;
@@ -85,6 +85,20 @@ export function assertTemplateCompilerFinalAttributeSiteState(
 export function executeTemplateCompilerTargetAttributeOperation(
   request: TemplateCompilerTargetAttributeOperationRequest,
 ): TemplateCompilerTargetAttributeOperationResult {
+  return executeAttributeOperation(request, false);
+}
+
+/** Execute the shared disposition law with explicit root-carrier authority for one surrogate attribute. */
+export function executeTemplateCompilerRootSurrogateAttributeOperation(
+  request: TemplateCompilerTargetAttributeOperationRequest,
+): TemplateCompilerTargetAttributeOperationResult {
+  return executeAttributeOperation(request, true);
+}
+
+function executeAttributeOperation(
+  request: TemplateCompilerTargetAttributeOperationRequest,
+  rootSurrogate: boolean,
+): TemplateCompilerTargetAttributeOperationResult {
   const { execution, structural, context, disposition } = request;
   if (disposition.attribute.readOwnerOrdinal() !== disposition.simulatedLiveOrdinal) {
     throw new Error(`Attribute disposition '${request.operationKey}' lost its JIT-live owner ordinal.`);
@@ -98,12 +112,15 @@ export function executeTemplateCompilerTargetAttributeOperation(
     causeHandles: request.causeHandles,
     sourceAddressHandle: request.sourceAddressHandle,
   });
-  const consumed = structural.consumeAttributeForContext(
-    disposition.attribute,
-    context.targetContext,
-    request.causeHandles,
-    (attribute) => execution.detachTargetAttribute(attempt, attribute),
-  );
+  const consume = rootSurrogate
+    ? structural.consumeRootSurrogateAttribute.bind(structural)
+    : structural.consumeAttributeForContext.bind(structural);
+  const consumed = consume(
+      disposition.attribute,
+      context.targetContext,
+      request.causeHandles,
+      (attribute) => execution.detachTargetAttribute(attempt, attribute),
+    );
   return new TemplateCompilerTargetAttributeOperationResult(
     complete(execution, attempt),
     consumed,

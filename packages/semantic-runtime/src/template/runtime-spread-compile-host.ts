@@ -19,14 +19,14 @@ import {
   BindingCommandInstructionAllocation,
   BindingCommandIteratorParse,
   BindingCommandLoweringState,
-  BindingCommandTailSyntax,
+  type BindingCommandTailSyntax,
   type BindingCommandBuildResult,
   type BindingCommandBuildContext,
   type BindingCommandExecutable,
 } from './binding-command-execution.js';
 import type { TemplateCompilerWorldEmission } from './compiler-world-materializer.js';
 import {
-  TemplateCompilerSpreadCompileRequest,
+  type TemplateCompilerSpreadCompileRequest,
   type TemplateCompilerSpreadCompileHost,
   TemplateCompilerSpreadCompileResult,
   type TemplateCompilerService,
@@ -50,8 +50,8 @@ import {
 import { instructionKindKeyFor } from './instruction-vocabulary.js';
 import { TemplateProductDetails } from './product-details.js';
 import {
-  TemplateExpressionParse,
-  TemplateValueSite,
+  type TemplateExpressionParse,
+  type TemplateValueSite,
   TemplateValueSiteKind,
 } from './value-site.js';
 import {
@@ -74,7 +74,7 @@ import {
 import {
   RuntimeBindingIssueKind,
   RuntimeBindingIssuePhase,
-  RuntimeBindingIssuePublisher,
+  type RuntimeBindingIssuePublisher,
 } from './runtime-binding-issue.js';
 import type { RuntimeBindingIssue } from './runtime-binding-issue.js';
 import type {
@@ -207,6 +207,8 @@ export class RuntimeTemplateCompilerSpreadCompileHost implements TemplateCompile
           targetNode.toReference(),
           syntax.attribute,
           target,
+          attributeDefinition.name,
+          attributeDefinition.aliases.some((alias) => alias.name === target) ? target : null,
           this.world.templateCompiler.resolveResources
             ? attributeResource?.toReference() ?? null
             : null,

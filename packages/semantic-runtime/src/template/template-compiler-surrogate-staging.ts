@@ -1,5 +1,4 @@
 import type { TemplateInstruction } from './instruction-ir.js';
-import { AttributeClassificationKind } from './attribute-syntax.js';
 import {
   TemplateCompilerElementInstructionStagingState,
 } from './template-compiler-instruction-staging.js';
@@ -7,7 +6,7 @@ import {
   TemplateCompilerLiveAttributeCompletion,
   type TemplateCompilerLiveAttributeOwnerResult,
 } from './template-compiler-live-attribute-assembly.js';
-import { TemplateCompilerLiveAttributeDisposition } from './template-compiler-live-attribute-owner.js';
+import { TemplateCompilerAttributeDispositionDraft } from './template-compiler-attribute-disposition.js';
 
 const surrogateStagingAuthority = {};
 
@@ -33,6 +32,20 @@ export class TemplateCompilerSurrogateStagingReason {
 }
 
 /** Exact root-host instruction sequence after the dedicated validation and live classification passes. */
+export class TemplateCompilerSurrogateAttributeDispositionDraft
+  extends TemplateCompilerAttributeDispositionDraft {
+  constructor(
+    owner: TemplateCompilerLiveAttributeOwnerResult,
+    contribution: TemplateCompilerLiveAttributeOwnerResult['contributions'][number],
+  ) {
+    super(
+      `surrogate:attribute:${contribution.frame.attribute.occurrenceKey}:disposition`,
+      owner,
+      contribution,
+    );
+  }
+}
+
 export class TemplateCompilerSurrogateStaging {
   readonly #authority: object;
   readonly instructions: readonly TemplateInstruction[];
@@ -40,6 +53,7 @@ export class TemplateCompilerSurrogateStaging {
   constructor(
     authority: object,
     readonly owner: TemplateCompilerLiveAttributeOwnerResult,
+    readonly attributeDispositions: readonly TemplateCompilerSurrogateAttributeDispositionDraft[],
   ) {
     this.instructions = owner.instructionStaging.directRowTail;
     if (
@@ -47,18 +61,16 @@ export class TemplateCompilerSurrogateStaging {
       || owner.completion !== TemplateCompilerLiveAttributeCompletion.Complete
       || owner.instructionStaging.state !== TemplateCompilerElementInstructionStagingState.Complete
       || owner.templateControllers.length > 0
-      || owner.captures.length > 0
-      || owner.contributions.some((contribution) =>
-        contribution.classification.classificationKind !== AttributeClassificationKind.Plain
-        || contribution.valueSelection != null
-        || contribution.command != null
-        || contribution.multiBinding != null
+      || attributeDispositions.length !== owner.contributions.length
+      || attributeDispositions.some((disposition, ordinal) =>
+        disposition.owner !== owner
+        || disposition.contribution !== owner.contributions[ordinal]
       )
-      || (!owner.debugRead.value && owner.contributions.some((contribution) =>
-        contribution.disposition === TemplateCompilerLiveAttributeDisposition.Removed
-      ))
+      || this.attributeDispositions.some((disposition) =>
+        disposition.instructionCauseHandles.length === 0
+      )
     ) {
-      throw new Error('Surrogate staging lost exact owner, instruction, or retained-attribute authority.');
+      throw new Error('Surrogate staging lost exact owner, instruction, or disposition authority.');
     }
     this.#authority = authority;
   }
@@ -86,7 +98,7 @@ export class TemplateCompilerSurrogateStagingResult {
   }
 }
 
-/** Classify the complete live root owner without pretending compiler-time attribute mutations have executed. */
+/** Classify the complete live root owner and retain its later terminal structural dispositions. */
 export function stageTemplateCompilerSurrogate(
   owner: TemplateCompilerLiveAttributeOwnerResult,
 ): TemplateCompilerSurrogateStagingResult {
@@ -114,33 +126,23 @@ export function stageTemplateCompilerSurrogate(
       'Template controllers are invalid on a root surrogate.',
     );
   }
-  if (owner.contributions.some((contribution) =>
-    contribution.classification.classificationKind !== AttributeClassificationKind.Plain
-    || contribution.valueSelection != null
-    || contribution.command != null
-    || contribution.multiBinding != null
+  const dispositions = owner.contributions.map((contribution) =>
+    new TemplateCompilerSurrogateAttributeDispositionDraft(owner, contribution)
+  );
+  if (dispositions.some((disposition) =>
+    disposition.instructionCauseHandles.length === 0
   )) {
     return unavailable(
       owner,
       TemplateCompilerSurrogateStagingState.Pending,
       TemplateCompilerSurrogateStagingReasonKind.StructuralMutationPending,
-      'Only retained static surrogate attributes are closed; dynamic/control attributes need structural execution.',
-    );
-  }
-  if (!owner.debugRead.value && owner.contributions.some((contribution) =>
-    contribution.disposition === TemplateCompilerLiveAttributeDisposition.Removed
-  )) {
-    return unavailable(
-      owner,
-      TemplateCompilerSurrogateStagingState.Pending,
-      TemplateCompilerSurrogateStagingReasonKind.StructuralMutationPending,
-      'Surrogate instructions are exact, but compiler-consumed root attributes still need structural execution.',
+      'A surrogate attribute has no instruction-owned compiler outcome.',
     );
   }
   return new TemplateCompilerSurrogateStagingResult(
     owner,
     TemplateCompilerSurrogateStagingState.Exact,
-    new TemplateCompilerSurrogateStaging(surrogateStagingAuthority, owner),
+    new TemplateCompilerSurrogateStaging(surrogateStagingAuthority, owner, dispositions),
     [],
   );
 }

@@ -203,20 +203,28 @@ export class HydrateAttributeInstruction {
     readonly attribute: HtmlAttributeReference,
     /** Effective compiler lookup name authored by the template, including aliases. */
     readonly resourceLookupName: string,
+    /** Canonical runtime resource name retained independently from resolved-resource representation. */
+    readonly resourceName: string,
+    /** Authored declared alias selected by the compiler, or null for the canonical/registration name. */
+    readonly resourceAlias: string | null,
     /** Compiler-visible resource selected for this instruction, including header and full-definition identity. */
     readonly resource: TemplateVisibleResourceReference | null,
     readonly bindingInstructionProductHandles: readonly ProductHandle[],
     readonly sourceAddressHandle: AddressHandle | null,
     readonly fieldProvenance: readonly FieldProvenance<TemplateInstructionField>[] = [],
-  ) {}
+  ) {
+    if (
+      resourceLookupName.length === 0
+      || resourceName.length === 0
+      || (resourceAlias != null && resourceAlias !== resourceLookupName)
+      || (resource != null && resource.name !== resourceName)
+    ) {
+      throw new Error('HydrateAttribute instruction lost canonical resource or alias authority.');
+    }
+  }
 
   get definitionProductHandle(): ProductHandle | null {
     return this.resource?.definitionProductHandle ?? null;
-  }
-
-  /** Canonical custom-attribute definition name used by runtime controller and ref identity. */
-  get resourceName(): string {
-    return this.resource?.name ?? this.resourceLookupName;
   }
 }
 
@@ -723,6 +731,8 @@ export function templateInstructionSemanticSignature(instruction: TemplateInstru
       return [
         instruction.instructionKind,
         instruction.resourceLookupName,
+        instruction.resourceName,
+        instruction.resourceAlias,
         instruction.resource?.name ?? null,
         instruction.bindingInstructionProductHandles,
       ];

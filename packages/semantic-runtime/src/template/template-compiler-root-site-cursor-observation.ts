@@ -154,6 +154,7 @@ export interface TemplateCompilerRootSiteCursorTranscriptObservation
   readonly occurrenceSourcePostureCounts: Readonly<Record<string, number>>;
   readonly occurrenceCaptureDecisionCounts: Readonly<Record<string, number>>;
   readonly occurrenceAttributeDispositionCounts: Readonly<Record<string, number>>;
+  readonly surrogateAttributeDispositionCounts: Readonly<Record<string, number>>;
   readonly occurrenceTextExpansionCount: number;
   readonly occurrenceTextExpansionOutputCount: number;
   readonly occurrencePrePlanEffectState: string | null;
@@ -405,6 +406,9 @@ export function observeTemplateCompilerRootSiteCursor(
     occurrenceCaptureDecisionCounts: counts(occurrenceAssembly?.captureSyntaxDecisionKinds ?? []),
     occurrenceAttributeDispositionCounts: counts(
       occurrenceAssembly?.attributeDispositions.map((disposition) => disposition.disposition) ?? [],
+    ),
+    surrogateAttributeDispositionCounts: counts(
+      occurrenceAssembly?.surrogateAttributeDispositions.map((disposition) => disposition.disposition) ?? [],
     ),
     occurrenceTextExpansionCount: occurrenceAssembly?.textExpansions.length ?? 0,
     occurrenceTextExpansionOutputCount: occurrenceAssembly?.textExpansions.reduce(

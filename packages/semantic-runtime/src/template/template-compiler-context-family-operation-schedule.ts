@@ -19,6 +19,7 @@ import {
   type TemplateCompilerFamilyProjectionScheduleEntry,
   TemplateCompilerFamilyReachedElementExecutionBand,
   TemplateCompilerFamilyReachedElementScheduleEntry,
+  type TemplateCompilerFamilySurrogateAttributeScheduleEntry,
   type TemplateCompilerFamilyTemplateControllerScheduleEntry,
   TemplateCompilerFamilyTextScheduleEntry,
 } from './template-compiler-context-family-structural-schedule.js';
@@ -108,6 +109,42 @@ export class TemplateCompilerFamilyAttributeOperationScheduleEntry
   }
 
   get draft(): TemplateCompilerOccurrenceAttributeDispositionDraft {
+    return this.schedule.draft;
+  }
+
+  get occurrence(): TemplateCompilerAttributeOccurrence {
+    return this.draft.attribute;
+  }
+
+  get operationKey(): string {
+    return this.draft.stableSlotKey;
+  }
+
+  get causeHandles(): readonly ClaimEndpointHandle[] {
+    return this.schedule.mapping.causeHandles;
+  }
+
+  get sourceAddressHandle(): AddressHandle | null {
+    return this.occurrence.inputReference?.addressHandle ?? null;
+  }
+}
+
+/** One terminal root-surrogate attribute consumption after the recursive family content band. */
+export class TemplateCompilerFamilySurrogateAttributeOperationScheduleEntry
+  implements TemplateCompilerFamilyOperationScheduleEntryBase {
+  readonly entryKind = TemplateCompilerFamilyOperationScheduleEntryKind.AttributeDisposition;
+  readonly operationKind = TemplateCompilerOperationKind.AttributeDisposition;
+
+  constructor(
+    readonly schedule: TemplateCompilerFamilySurrogateAttributeScheduleEntry,
+    readonly context: TemplateCompilerExecutionContextReference,
+  ) {
+    if (context.targetContext !== schedule.contextMapping.targetContext || !schedule.requiresConsumption) {
+      throw new Error(`Family surrogate attribute '${schedule.draft.stableSlotKey}' lost executable root ownership.`);
+    }
+  }
+
+  get draft() {
     return this.schedule.draft;
   }
 
@@ -295,6 +332,7 @@ export class TemplateCompilerFamilyTextOperationScheduleEntry
 export type TemplateCompilerFamilyOperationScheduleEntry =
   | TemplateCompilerFamilyGeneratedContextOperationScheduleEntry
   | TemplateCompilerFamilyAttributeOperationScheduleEntry
+  | TemplateCompilerFamilySurrogateAttributeOperationScheduleEntry
   | TemplateCompilerFamilyTemplateControllerRowOperationScheduleEntry
   | TemplateCompilerFamilyTemplateControllerRehomingOperationScheduleEntry
   | TemplateCompilerFamilyProjectionOperationScheduleEntry
@@ -338,6 +376,9 @@ export class TemplateCompilerContextFamilyOperationSchedule {
     const expectedAttributes = reached.flatMap((entry) => entry.attributes.filter((attribute) =>
       attribute.requiresConsumption
     ));
+    const expectedSurrogateAttributes = structural.surrogateAttributes.filter((attribute) =>
+      attribute.requiresConsumption
+    );
     const expectedTransitions = reached.flatMap((entry) =>
       entry.templateController == null ? [] : [entry.templateController]
     );
@@ -355,6 +396,10 @@ export class TemplateCompilerContextFamilyOperationSchedule {
     const attributeEntries = entries.filter(
       (entry): entry is TemplateCompilerFamilyAttributeOperationScheduleEntry =>
         entry instanceof TemplateCompilerFamilyAttributeOperationScheduleEntry,
+    );
+    const surrogateAttributeEntries = entries.filter(
+      (entry): entry is TemplateCompilerFamilySurrogateAttributeOperationScheduleEntry =>
+        entry instanceof TemplateCompilerFamilySurrogateAttributeOperationScheduleEntry,
     );
     const tcRowEntries = entries.filter(
       (entry): entry is TemplateCompilerFamilyTemplateControllerRowOperationScheduleEntry =>
@@ -388,6 +433,14 @@ export class TemplateCompilerContextFamilyOperationSchedule {
       || new Set(entries.map((entry) => entry.operationKey)).size !== entries.length
       || !sameObjectCoverage(generatedEntries.map((entry) => entry.initialization), expectedGenerated)
       || !sameObjectCoverage(attributeEntries.map((entry) => entry.schedule), expectedAttributes)
+      || !sameObjectCoverage(
+        surrogateAttributeEntries.map((entry) => entry.schedule),
+        expectedSurrogateAttributes,
+      )
+      || !sameObjects(
+        entries.slice(entries.length - surrogateAttributeEntries.length),
+        surrogateAttributeEntries,
+      )
       || !sameObjectCoverage(tcRowEntries.map((entry) => entry.mapping), expectedTcRows)
       || !sameObjectCoverage(rehomingEntries.map((entry) => entry.transition), expectedTransitions)
       || !sameObjectCoverage(projectionEntries.map((entry) => entry.projection), expectedProjections)
@@ -496,6 +549,13 @@ export function buildTemplateCompilerContextFamilyOperationSchedule(
     }
   };
   visit(structural.rootExecution);
+  for (const surrogate of structural.surrogateAttributes) {
+    if (!surrogate.requiresConsumption) continue;
+    entries.push(new TemplateCompilerFamilySurrogateAttributeOperationScheduleEntry(
+      surrogate,
+      executionContext(surrogate.contextMapping),
+    ));
+  }
   return new TemplateCompilerContextFamilyOperationSchedule(
     familyOperationScheduleAuthority,
     structural,
@@ -515,4 +575,8 @@ function sameObjectCoverage<T>(actual: readonly T[], expected: readonly T[]): bo
     && actualSet.size === actual.length
     && expectedSet.size === expected.length
     && actual.every((value) => expectedSet.has(value));
+}
+
+function sameObjects<T>(left: readonly T[], right: readonly T[]): boolean {
+  return left.length === right.length && left.every((value, index) => value === right[index]);
 }

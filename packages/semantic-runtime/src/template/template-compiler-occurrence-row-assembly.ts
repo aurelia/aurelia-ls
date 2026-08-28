@@ -1,4 +1,3 @@
-import type { ClaimEndpointHandle } from '../kernel/claim.js';
 import type { AddressHandle } from '../kernel/handles.js';
 import type { AttributeSyntax } from './attribute-syntax.js';
 import { TemplateRenderTargetKind } from './compiled-template.js';
@@ -26,17 +25,15 @@ import type {
   TemplateCompilerOrdinaryRootCursorCompletionReceipt,
 } from './template-compiler-root-completion.js';
 import type { TemplateCompilerCapturedAttributeStaging } from './template-compiler-live-instruction-staging.js';
-import {
-  TemplateCompilerLiveAttributeTargetLane,
-  type TemplateCompilerLiveAttributeContribution,
-} from './template-compiler-live-attribute-assembly.js';
-import { TemplateCompilerLiveAttributeDisposition } from './template-compiler-live-attribute-owner.js';
+import type { TemplateCompilerLiveAttributeContribution } from './template-compiler-live-attribute-assembly.js';
 import type { TemplateCompilerTextInstructionHole } from './template-compiler-text-instruction-staging.js';
 import { TemplateCompilerTargetRowPlacementKind } from './compiler-target-plan.js';
 import type {
   TemplateCompilerElementOccurrence,
   TemplateCompilerTextOccurrence,
 } from './template-compiler-occurrence.js';
+import { TemplateCompilerAttributeDispositionDraft } from './template-compiler-attribute-disposition.js';
+import type { TemplateCompilerSurrogateAttributeDispositionDraft } from './template-compiler-surrogate-staging.js';
 
 const occurrenceRowAssemblyAuthority = {};
 
@@ -341,66 +338,20 @@ export class TemplateCompilerOccurrenceMembership {
 }
 
 /** One exact final JIT disposition for a reached browser-effective attribute. */
-export class TemplateCompilerOccurrenceAttributeDispositionDraft {
-  readonly stableSlotKey: string;
-  readonly causeHandles: readonly ClaimEndpointHandle[];
-  readonly qualifiedName: string;
-  readonly finalValue: string;
-  readonly finalOwnerStateKey: string;
-
+export class TemplateCompilerOccurrenceAttributeDispositionDraft
+  extends TemplateCompilerAttributeDispositionDraft {
   constructor(
     readonly site: TemplateCompilerElementLoweringSite,
-    readonly contribution: TemplateCompilerLiveAttributeContribution,
+    contribution: TemplateCompilerLiveAttributeContribution,
   ) {
     const attribute = contribution.frame.attribute;
-    const hydrateAttribute = contribution.targetLane === TemplateCompilerLiveAttributeTargetLane.CustomAttribute
-      ? site.owner.instructionStaging.hydrateAttributes.find((instruction) =>
-          instruction.attribute.productHandle
-            === (contribution.frame.source.authoredAttribute?.productHandle ?? null)
-          && instruction.attribute.rawName === contribution.frame.scalar.qualifiedName
-        ) ?? null
-      : null;
-    this.stableSlotKey = `attribute:${attribute.occurrenceKey}:disposition`;
-    this.qualifiedName = contribution.frame.scalar.qualifiedName;
-    this.finalValue = attribute.value;
-    this.finalOwnerStateKey = site.owner.finalOwnerView.attributeStateKey;
-    this.causeHandles = [...new Set<ClaimEndpointHandle>([
-      ...(attribute.inputReference == null ? [] : [attribute.inputReference.productHandle]),
-      ...(hydrateAttribute == null ? [] : [hydrateAttribute.productHandle]),
-      ...contribution.instructions.map((instruction) => instruction.productHandle),
-    ])];
+    super(`attribute:${attribute.occurrenceKey}:disposition`, site.owner, contribution);
     if (
       !site.owner.contributions.includes(contribution)
       || contribution.frame.attribute.owner !== site.event.element
-      || contribution.frame.liveSite.attribute !== contribution.frame.attribute
-      || contribution.frame.liveSite.disposition !== contribution.disposition
-      || contribution.disposition === TemplateCompilerLiveAttributeDisposition.Open
-      || site.owner.finalOwnerView.hasAttribute(this.qualifiedName)
-        !== (contribution.disposition === TemplateCompilerLiveAttributeDisposition.Retained)
-      || (contribution.disposition === TemplateCompilerLiveAttributeDisposition.Retained
-        && site.owner.finalOwnerView.getAttribute(this.qualifiedName) !== this.finalValue)
-      || (contribution.targetLane === TemplateCompilerLiveAttributeTargetLane.CustomAttribute
-        && hydrateAttribute == null)
-      || this.causeHandles.length === 0
     ) {
       throw new Error(`Attribute disposition '${this.stableSlotKey}' lost owner, outcome, or cause authority.`);
     }
-  }
-
-  get attribute() {
-    return this.contribution.frame.attribute;
-  }
-
-  get disposition(): TemplateCompilerLiveAttributeDisposition {
-    return this.contribution.disposition;
-  }
-
-  get originalForestOrdinal(): number {
-    return this.contribution.frame.liveSite.originalForestOrdinal;
-  }
-
-  get simulatedLiveOrdinal(): number {
-    return this.contribution.frame.liveSite.simulatedLiveOrdinal;
   }
 }
 
@@ -416,6 +367,7 @@ export class TemplateCompilerOccurrenceRowAssembly {
     readonly rootMembership: TemplateCompilerOccurrenceRootMembership,
     readonly occurrenceMemberships: readonly TemplateCompilerOccurrenceMembership[],
     readonly attributeDispositions: readonly TemplateCompilerOccurrenceAttributeDispositionDraft[],
+    readonly surrogateAttributeDispositions: readonly TemplateCompilerSurrogateAttributeDispositionDraft[],
     readonly rows: readonly TemplateCompilerOccurrenceTargetRowDraft[],
     readonly staticSites: readonly TemplateCompilerOccurrenceStaticSite[],
     readonly textExpansions: readonly TemplateCompilerTextExpansionDraft[],
@@ -447,6 +399,15 @@ export class TemplateCompilerOccurrenceRowAssembly {
       )
       || new Set(attributeDispositions.map((disposition) => disposition.stableSlotKey)).size
         !== attributeDispositions.length
+      || !sameObjects(
+        surrogateAttributeDispositions,
+        receipt.surrogateClassification?.result.staging?.attributeDispositions ?? [],
+      )
+      || new Set([
+        ...attributeDispositions,
+        ...surrogateAttributeDispositions,
+      ].map((disposition) => disposition.stableSlotKey)).size
+        !== attributeDispositions.length + surrogateAttributeDispositions.length
       || rows.some((row, ordinal) =>
         row.ordinal !== ordinal
         || row.projectedTargetOrdinal !== ordinal
@@ -631,6 +592,7 @@ export function assembleTemplateCompilerOrdinaryRootRows(
       receipt.elementSites.flatMap((site) => site.owner.contributions.map((contribution) =>
         new TemplateCompilerOccurrenceAttributeDispositionDraft(site, contribution)
       )),
+      receipt.surrogateClassification?.result.staging?.attributeDispositions ?? [],
       rows,
       staticSites,
       textExpansions,
@@ -840,4 +802,8 @@ function ineligible(
     null,
     [new TemplateCompilerOccurrenceRowAssemblyReason(reasonKind, summary)],
   );
+}
+
+function sameObjects<T>(left: readonly T[], right: readonly T[]): boolean {
+  return left.length === right.length && left.every((value, index) => value === right[index]);
 }

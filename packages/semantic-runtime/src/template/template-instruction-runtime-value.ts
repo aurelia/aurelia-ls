@@ -137,6 +137,12 @@ export type TemplateCompilerRuntimeInstructionValue =
       readonly props: readonly TemplateCompilerRuntimeInstructionValue[];
     }
   | {
+      readonly type: TemplateCompilerFrameworkInstructionType.HydrateAttribute;
+      readonly res: TemplateCompilerRuntimeResourceNameValue;
+      readonly alias: string | undefined;
+      readonly props: readonly TemplateCompilerRuntimeInstructionValue[];
+    }
+  | {
       readonly type: TemplateCompilerFrameworkInstructionType.HydrateElement;
       readonly res: TemplateCompilerRuntimeResourceNameValue;
       readonly props: readonly TemplateCompilerRuntimeInstructionValue[];
@@ -151,12 +157,25 @@ export type TemplateCompilerRuntimeInstructionValue =
       readonly to: string;
     }
   | {
+      readonly type: TemplateCompilerFrameworkInstructionType.SetProperty;
+      readonly value: string;
+      readonly to: string;
+    }
+  | {
       readonly type: TemplateCompilerFrameworkInstructionType.SetClassAttribute;
       readonly value: string;
     }
   | {
       readonly type: TemplateCompilerFrameworkInstructionType.SetStyleAttribute;
       readonly value: string;
+    }
+  | {
+      readonly type: TemplateCompilerFrameworkInstructionType.RefBinding;
+      readonly from: RuntimeExpressionAstValue;
+      readonly to: string;
+    }
+  | {
+      readonly type: TemplateCompilerFrameworkInstructionType.SpreadTransferedBinding;
     };
 
 export const enum TemplateCompilerRuntimeInstructionFamilyState {
@@ -530,6 +549,16 @@ class RuntimeInstructionFamilyProjector {
           props,
         };
       }
+      case TemplateInstructionKind.HydrateAttribute: {
+        const props = this.nested(instruction);
+        const res = this.resource(instruction, instruction.resourceName);
+        return props == null || res == null ? null : {
+          type: TemplateCompilerFrameworkInstructionType.HydrateAttribute,
+          res,
+          alias: instruction.resourceAlias ?? undefined,
+          props,
+        };
+      }
       case TemplateInstructionKind.HydrateElement: {
         const props = this.nested(instruction);
         const res = this.resource(instruction, instruction.resource?.name ?? instruction.elementName);
@@ -581,6 +610,12 @@ class RuntimeInstructionFamilyProjector {
           value: instruction.value,
           to: instruction.targetAttribute,
         };
+      case TemplateInstructionKind.SetProperty:
+        return {
+          type: TemplateCompilerFrameworkInstructionType.SetProperty,
+          value: instruction.value,
+          to: instruction.targetProperty,
+        };
       case TemplateInstructionKind.SetClassAttribute:
         return {
           type: TemplateCompilerFrameworkInstructionType.SetClassAttribute,
@@ -591,6 +626,16 @@ class RuntimeInstructionFamilyProjector {
           type: TemplateCompilerFrameworkInstructionType.SetStyleAttribute,
           value: instruction.value,
         };
+      case TemplateInstructionKind.RefBinding: {
+        const from = this.expression(instruction, instruction.expressionProductHandle, null);
+        return from == null ? null : {
+          type: TemplateCompilerFrameworkInstructionType.RefBinding,
+          from,
+          to: instruction.target,
+        };
+      }
+      case TemplateInstructionKind.SpreadTransferedBinding:
+        return { type: TemplateCompilerFrameworkInstructionType.SpreadTransferedBinding };
       default:
         this.pending(
           instruction,

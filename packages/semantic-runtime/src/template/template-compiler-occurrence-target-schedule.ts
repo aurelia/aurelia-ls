@@ -25,6 +25,8 @@ import type {
   TemplateCompilerOccurrenceTargetAttributeDispositionMapping,
   TemplateCompilerOccurrenceTargetRowMapping,
 } from './template-compiler-occurrence-target-plan.js';
+import type { TemplateCompilerSurrogateAttributeDispositionDraft } from './template-compiler-surrogate-staging.js';
+import type { TemplateCompilerTargetAttributeDispositionMapping } from './template-compiler-target-attribute-disposition.js';
 
 const occurrenceTargetScheduleAuthority = {};
 
@@ -48,6 +50,37 @@ export class TemplateCompilerOccurrenceAttributeScheduleEntry {
   constructor(readonly mapping: TemplateCompilerOccurrenceTargetAttributeDispositionMapping) {}
 
   get disposition(): TemplateCompilerOccurrenceAttributeDispositionDraft {
+    return this.mapping.draft;
+  }
+
+  get operationKey(): string {
+    return this.disposition.stableSlotKey;
+  }
+
+  get occurrence(): TemplateCompilerAttributeOccurrence {
+    return this.disposition.attribute;
+  }
+
+  get causeHandles(): readonly ClaimEndpointHandle[] {
+    return this.mapping.causeHandles;
+  }
+
+  get sourceAddressHandle(): AddressHandle | null {
+    return this.disposition.attribute.inputReference?.addressHandle ?? null;
+  }
+}
+
+/** One root-surrogate attribute consumption scheduled after the complete content target band. */
+export class TemplateCompilerOccurrenceSurrogateAttributeScheduleEntry {
+  readonly entryKind = TemplateCompilerOccurrenceTargetScheduleEntryKind.AttributeDisposition;
+
+  constructor(
+    readonly mapping: TemplateCompilerTargetAttributeDispositionMapping<
+      TemplateCompilerSurrogateAttributeDispositionDraft
+    >,
+  ) {}
+
+  get disposition(): TemplateCompilerSurrogateAttributeDispositionDraft {
     return this.mapping.draft;
   }
 
@@ -125,6 +158,7 @@ export class TemplateCompilerOccurrenceTextExpansionScheduleEntry {
 
 export type TemplateCompilerOccurrenceTargetScheduleEntry =
   | TemplateCompilerOccurrenceAttributeScheduleEntry
+  | TemplateCompilerOccurrenceSurrogateAttributeScheduleEntry
   | TemplateCompilerOccurrenceElementTargetScheduleEntry
   | TemplateCompilerOccurrenceTextExpansionScheduleEntry;
 
@@ -136,6 +170,7 @@ export class TemplateCompilerOccurrenceTargetSchedule {
     authority: object,
     readonly assembly: TemplateCompilerOccurrenceTargetPlanAssembly,
     readonly entries: readonly TemplateCompilerOccurrenceTargetScheduleEntry[],
+    readonly surrogateAttributeEntries: readonly TemplateCompilerOccurrenceSurrogateAttributeScheduleEntry[],
     readonly attributeDispositionsBySite: ReadonlyMap<
       TemplateCompilerElementLoweringSite,
       readonly TemplateCompilerOccurrenceAttributeDispositionDraft[]
@@ -156,6 +191,16 @@ export class TemplateCompilerOccurrenceTargetSchedule {
     if (
       authority !== occurrenceTargetScheduleAuthority
       || entries.some((entry) => entry.operationKey.length === 0 || entry.causeHandles.length === 0)
+      || !sameObjects(
+        surrogateAttributeEntries.map((entry) => entry.mapping),
+        assembly.surrogateAttributeDispositionMappings.filter((mapping) =>
+          mapping.draft.disposition === TemplateCompilerLiveAttributeDisposition.Removed
+        ),
+      )
+      || !sameObjects(
+        entries.slice(entries.length - surrogateAttributeEntries.length),
+        surrogateAttributeEntries,
+      )
     ) {
       throw new Error('Occurrence target schedule lost assembly, operation, or cause authority.');
     }
@@ -256,10 +301,17 @@ export function buildTemplateCompilerOccurrenceTargetSchedule(
       }
     }
   }
+  const surrogateAttributeEntries = assembly.surrogateAttributeDispositionMappings.flatMap((mapping) =>
+    mapping.draft.disposition === TemplateCompilerLiveAttributeDisposition.Removed
+      ? [new TemplateCompilerOccurrenceSurrogateAttributeScheduleEntry(mapping)]
+      : []
+  );
+  entries.push(...surrogateAttributeEntries);
   const schedule = new TemplateCompilerOccurrenceTargetSchedule(
     occurrenceTargetScheduleAuthority,
     assembly,
     entries,
+    surrogateAttributeEntries,
     attributeDispositionsBySite,
     elementRowBySite,
     textExpansionBySite,
@@ -311,4 +363,8 @@ function groupBy<TValue, TKey>(
     else existing.push(value);
   }
   return result;
+}
+
+function sameObjects<T>(left: readonly T[], right: readonly T[]): boolean {
+  return left.length === right.length && left.every((value, index) => value === right[index]);
 }

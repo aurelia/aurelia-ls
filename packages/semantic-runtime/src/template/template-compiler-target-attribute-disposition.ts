@@ -4,6 +4,7 @@ import type { HydrateElementInstruction, TemplateInstruction } from './instructi
 import { TemplateCompilerLiveAttributeTargetLane } from './template-compiler-live-attribute-assembly.js';
 import type { TemplateCompilerAllocatedCaptureSyntaxReference } from './template-compiler-hydrate-element-funding.js';
 import type { TemplateCompilerOccurrenceAttributeDispositionDraft } from './template-compiler-occurrence-row-assembly.js';
+import type { TemplateCompilerAttributeDispositionDraft } from './template-compiler-attribute-disposition.js';
 
 export interface TemplateCompilerTargetHydrateElementDispositionFunding {
   readonly instruction: HydrateElementInstruction;
@@ -12,9 +13,11 @@ export interface TemplateCompilerTargetHydrateElementDispositionFunding {
 }
 
 /** Allocation-resolved final causes for one reached attribute disposition. */
-export class TemplateCompilerTargetAttributeDispositionMapping {
+export class TemplateCompilerTargetAttributeDispositionMapping<
+  TDraft extends TemplateCompilerAttributeDispositionDraft = TemplateCompilerAttributeDispositionDraft,
+> {
   constructor(
-    readonly draft: TemplateCompilerOccurrenceAttributeDispositionDraft,
+    readonly draft: TDraft,
     readonly causeHandles: readonly ClaimEndpointHandle[],
   ) {
     if (causeHandles.length === 0 || new Set(causeHandles).size !== causeHandles.length) {

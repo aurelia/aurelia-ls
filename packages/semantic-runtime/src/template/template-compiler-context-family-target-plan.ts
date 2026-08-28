@@ -51,6 +51,7 @@ import {
 import type { TemplateCompilerProjectionRealizedEntrantBand } from './template-compiler-projection-logical-extraction.js';
 import type { TemplateCompilerSiteCursorContextReference } from './template-compiler-site-cursor-task.js';
 import { TemplateCompilerTemplateControllerTransitionEdgeReceipt } from './template-compiler-template-controller-transition.js';
+import type { TemplateCompilerSurrogateAttributeDispositionDraft } from './template-compiler-surrogate-staging.js';
 
 const contextFamilyTargetPlanAuthority = {};
 
@@ -361,7 +362,12 @@ export class TemplateCompilerContextFamilyTargetPlanPreparation {
     readonly rootMembership: TemplateCompilerContextFamilyRootMembershipMapping,
     readonly membershipMappings: readonly TemplateCompilerContextFamilyTargetMembershipMapping[],
     readonly rowMappings: readonly TemplateCompilerContextFamilyTargetRowMapping[],
-    readonly attributeDispositionMappings: readonly TemplateCompilerTargetAttributeDispositionMapping[],
+    readonly attributeDispositionMappings: readonly TemplateCompilerTargetAttributeDispositionMapping<
+      TemplateCompilerOccurrenceAttributeDispositionDraft
+    >[],
+    readonly surrogateAttributeDispositionMappings: readonly TemplateCompilerTargetAttributeDispositionMapping<
+      TemplateCompilerSurrogateAttributeDispositionDraft
+    >[],
   ) {
     const contextByCursor = new Map<
       TemplateCompilerSiteCursorContextReference,
@@ -435,6 +441,10 @@ export class TemplateCompilerContextFamilyTargetPlanPreparation {
       || !sameObjects(
         attributeDispositionMappings.map((mapping) => mapping.draft),
         expectedAttributeDispositions,
+      )
+      || !sameObjects(
+        surrogateAttributeDispositionMappings.map((mapping) => mapping.draft),
+        rows.surrogateAttributeDispositions,
       )
       || !sameCounts(allocation.namespaceCountsBefore, namespaceCounts)
     ) {
@@ -531,7 +541,9 @@ export function prepareTemplateCompilerContextFamilyTargetPlan(
   }
   const indexes = indexTargetFunding(allocation);
   if (indexes instanceof TemplateCompilerContextFamilyTargetPlanResult) return indexes;
-  let attributeDispositionMappings: readonly TemplateCompilerTargetAttributeDispositionMapping[];
+  let attributeDispositionMappings: readonly TemplateCompilerTargetAttributeDispositionMapping<
+    TemplateCompilerOccurrenceAttributeDispositionDraft
+  >[];
   try {
     attributeDispositionMappings = rows.contexts.flatMap((context) =>
       context.attributeDispositions.map((draft) => attributeDispositionMapping(draft, indexes))
@@ -545,6 +557,9 @@ export function prepareTemplateCompilerContextFamilyTargetPlan(
       [error.stableSlotKey],
     );
   }
+  const surrogateAttributeDispositionMappings = rows.surrogateAttributeDispositions.map((draft) =>
+    new TemplateCompilerTargetAttributeDispositionMapping(draft, draft.causeHandles)
+  );
 
   const targetPlan = new TemplateCompilerTargetPlan(
     rows.receipt.endpoint.lane.localKey,
@@ -712,6 +727,7 @@ export function prepareTemplateCompilerContextFamilyTargetPlan(
     membershipMappings,
     rowMappings,
     attributeDispositionMappings,
+    surrogateAttributeDispositionMappings,
   );
   if (!preparation.isCurrent()) {
     return unavailable(
@@ -849,7 +865,7 @@ function indexTargetFunding(
 function attributeDispositionMapping(
   draft: TemplateCompilerOccurrenceAttributeDispositionDraft,
   indexes: TargetFundingIndexes,
-): TemplateCompilerTargetAttributeDispositionMapping {
+): TemplateCompilerTargetAttributeDispositionMapping<TemplateCompilerOccurrenceAttributeDispositionDraft> {
   const head = indexes.heBySite.get(draft.site) ?? null;
   const hydrateElement: TemplateCompilerTargetHydrateElementDispositionFunding | null = head == null
     ? null

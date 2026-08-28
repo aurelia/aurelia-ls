@@ -148,6 +148,30 @@ export class TemplateCompilerFamilyAttributeScheduleEntry {
   }
 }
 
+/** Root-surrogate attribute disposition retained outside every content-context entry band. */
+export class TemplateCompilerFamilySurrogateAttributeScheduleEntry {
+  constructor(
+    readonly contextMapping: TemplateCompilerContextFamilyTargetContextMapping,
+    readonly mapping: TemplateCompilerContextFamilyTargetPlanPreparation[
+      'surrogateAttributeDispositionMappings'
+    ][number],
+  ) {
+    if (
+      contextMapping.targetContext.role !== TemplateCompilerTargetContextRole.Root
+    ) {
+      throw new Error(`Family surrogate attribute '${mapping.draft.stableSlotKey}' lost root-carrier ownership.`);
+    }
+  }
+
+  get draft() {
+    return this.mapping.draft;
+  }
+
+  get requiresConsumption(): boolean {
+    return this.draft.disposition === TemplateCompilerLiveAttributeDisposition.Removed;
+  }
+}
+
 export class TemplateCompilerFamilyProcessContentAdoptionEntry {
   constructor(
     readonly disposition: TemplateCompilerFamilyReachDisposition,
@@ -529,6 +553,8 @@ export class TemplateCompilerContextFamilyStructuralSchedulePreparation {
   >;
   /** Exact child-before-return order for adopting already-committed processContent removals. */
   readonly processContentExecutionOrder: readonly TemplateCompilerFamilyProcessContentAdoptionEntry[];
+  /** Root attribute outcomes execute only after the complete recursive content band returns. */
+  readonly surrogateAttributes: readonly TemplateCompilerFamilySurrogateAttributeScheduleEntry[];
 
   constructor(
     authority: object,
@@ -544,6 +570,9 @@ export class TemplateCompilerContextFamilyStructuralSchedulePreparation {
       context.contextMapping.cursorContext,
       context,
     ] as const));
+    this.surrogateAttributes = target.surrogateAttributeDispositionMappings.map((mapping) =>
+      new TemplateCompilerFamilySurrogateAttributeScheduleEntry(contexts[0]!.contextMapping, mapping)
+    );
     const rows = target.allocation.rows;
     const reached = contexts.flatMap((context) => context.entries).filter(
       (entry): entry is TemplateCompilerFamilyReachedElementScheduleEntry =>
@@ -613,6 +642,13 @@ export class TemplateCompilerContextFamilyStructuralSchedulePreparation {
         rows.receipt.traversal.projectionExtractions,
       )
       || !sameObjects(this.processContentExecutionOrder.map((entry) => entry.removal), expectedProcessRemovals)
+      || !sameObjects(
+        this.surrogateAttributes.map((entry) => entry.mapping),
+        target.surrogateAttributeDispositionMappings,
+      )
+      || this.surrogateAttributes.some((entry) =>
+        entry.draft.owner.element !== rows.rootMembership.compilerCarrier
+      )
     ) {
       throw new Error('Context-family structural schedule lost context, reach, row, or attribute coverage.');
     }

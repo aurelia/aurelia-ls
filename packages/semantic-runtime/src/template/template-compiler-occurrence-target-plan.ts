@@ -30,9 +30,11 @@ import type {
 import {
   TemplateCompilerOccurrencePrePlanEffectState,
   TemplateCompilerOccurrenceSourcePosture,
+  type TemplateCompilerOccurrenceAttributeDispositionDraft,
   type TemplateCompilerOccurrenceRowAssembly,
   type TemplateCompilerOccurrenceTargetRowDraft,
 } from './template-compiler-occurrence-row-assembly.js';
+import type { TemplateCompilerSurrogateAttributeDispositionDraft } from './template-compiler-surrogate-staging.js';
 
 const occurrenceTargetPlanAuthority = {};
 const exactPlansByRows = new WeakMap<
@@ -78,7 +80,7 @@ export class TemplateCompilerOccurrenceTargetRowMapping {
 
 /** Allocation-resolved final cause band for one reached attribute disposition. */
 export class TemplateCompilerOccurrenceTargetAttributeDispositionMapping
-  extends TemplateCompilerTargetAttributeDispositionMapping {}
+  extends TemplateCompilerTargetAttributeDispositionMapping<TemplateCompilerOccurrenceAttributeDispositionDraft> {}
 
 export const enum TemplateCompilerOccurrenceTargetPublicationPrerequisiteKind {
   EffectiveAttributeSyntaxMaterialization = 'effective-attribute-syntax-materialization',
@@ -134,6 +136,9 @@ export class TemplateCompilerOccurrenceTargetPlanAssembly {
     readonly targetPlan: TemplateCompilerTargetPlan,
     readonly rowMappings: readonly TemplateCompilerOccurrenceTargetRowMapping[],
     readonly attributeDispositionMappings: readonly TemplateCompilerOccurrenceTargetAttributeDispositionMapping[],
+    readonly surrogateAttributeDispositionMappings: readonly TemplateCompilerTargetAttributeDispositionMapping<
+      TemplateCompilerSurrogateAttributeDispositionDraft
+    >[],
   ) {
     const effectiveSyntaxPrerequisites = hydrateElements?.heads.flatMap((head) => head.captures)
       .filter((capture) => capture.effectiveReservation != null)
@@ -177,6 +182,10 @@ export class TemplateCompilerOccurrenceTargetPlanAssembly {
       || !sameObjects(
         attributeDispositionMappings.map((mapping) => mapping.draft),
         rows.attributeDispositions,
+      )
+      || !sameObjects(
+        surrogateAttributeDispositionMappings.map((mapping) => mapping.draft),
+        rows.surrogateAttributeDispositions,
       )
     ) {
       throw new Error('Occurrence target-plan assembly lost receipt, allocation, or exact row mapping authority.');
@@ -338,6 +347,9 @@ export function allocateTemplateCompilerOccurrenceTargetPlan(
       ),
     )
   );
+  const surrogateAttributeDispositionMappings = rows.surrogateAttributeDispositions.map((draft) =>
+    new TemplateCompilerTargetAttributeDispositionMapping(draft, draft.causeHandles)
+  );
   const targetAllocation = parentAllocation.ledger.namespace.beginPhase(phaseKey);
   const rootReservation = targetAllocation.reserveProduct(
     `${phaseKey}:root`,
@@ -404,6 +416,7 @@ export function allocateTemplateCompilerOccurrenceTargetPlan(
     targetPlan,
     rowMappings,
     attributeDispositionMappings,
+    surrogateAttributeDispositionMappings,
   );
   const result = new TemplateCompilerOccurrenceTargetPlanResult(
     TemplateCompilerOccurrenceTargetPlanState.Exact,
