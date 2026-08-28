@@ -12,6 +12,7 @@ import type { TemplateInstruction, TemplateInstructionKind } from './instruction
 import type { TemplateCompilerTextHoleSourceRange } from './template-compiler-text-instruction-staging.js';
 
 const liveAllocationSnapshotAuthority = {};
+const livePreparedAllocationSnapshotAuthority = {};
 const liveAllocationLedgerAuthority = {};
 
 export const enum TemplateCompilerLiveAllocationSnapshotState {
@@ -25,7 +26,14 @@ export const enum TemplateCompilerLiveSourceAllocationRole {
 
 export const enum TemplateCompilerLiveProductReservationRole {
   RootCompiledTemplate = 'root-compiled-template',
+  GeneratedCompiledTemplate = 'generated-compiled-template',
   EffectiveAttributeSyntax = 'effective-attribute-syntax',
+}
+
+export const enum TemplateCompilerLiveAllocationLedgerState {
+  Mutable = 'mutable',
+  Prepared = 'prepared',
+  Committed = 'committed',
 }
 
 /** Forward product/identity funding; publication and product-detail binding remain downstream. */
@@ -336,7 +344,15 @@ export class TemplateCompilerLiveSourceAllocation {
  * Arrays preserve within-kind allocation chronology for audit only. Row/site tokens own semantic and publication
  * order; consumers must never publish by iterating this braid.
  */
-export class TemplateCompilerLiveAllocationSnapshot {
+export interface TemplateCompilerLiveAllocationInventory {
+  readonly state: TemplateCompilerLiveAllocationSnapshotState;
+  readonly instructionAllocations: readonly TemplateCompilerLiveInstructionAllocation[];
+  readonly expressionAllocations: readonly TemplateCompilerLiveExpressionAllocation[];
+  readonly sourceAllocations: readonly TemplateCompilerLiveSourceAllocation[];
+  readonly productReservations: readonly TemplateCompilerLiveProductReservation[];
+}
+
+export class TemplateCompilerLiveAllocationSnapshot implements TemplateCompilerLiveAllocationInventory {
   readonly #authority: object;
   readonly state: TemplateCompilerLiveAllocationSnapshotState;
 
@@ -347,29 +363,18 @@ export class TemplateCompilerLiveAllocationSnapshot {
     readonly expressionAllocations: readonly TemplateCompilerLiveExpressionAllocation[],
     readonly sourceAllocations: readonly TemplateCompilerLiveSourceAllocation[],
     readonly productReservations: readonly TemplateCompilerLiveProductReservation[],
+    readonly prepared: TemplateCompilerLivePreparedAllocationSnapshot | null,
   ) {
-    const productHandles = [
-      ...instructionAllocations.map((entry) => entry.productHandle),
-      ...expressionAllocations.map((entry) => entry.productHandle),
-      ...productReservations.map((entry) => entry.productHandle),
-    ];
-    this.state = instructionAllocations.every((entry) => entry.instruction != null)
-      && expressionAllocations.every((entry) => entry.compilerRead != null && entry.result != null)
-      && sourceAllocations.every((entry) => entry.source != null)
-      ? TemplateCompilerLiveAllocationSnapshotState.Complete
-      : TemplateCompilerLiveAllocationSnapshotState.Open;
+    this.state = allocationInventoryState(instructionAllocations, expressionAllocations, sourceAllocations);
     if (
       authority !== liveAllocationSnapshotAuthority
-      || ledger.rootSiteKey.length === 0
-      || [...instructionAllocations, ...expressionAllocations, ...sourceAllocations, ...productReservations].some((entry) =>
-        !entry.siteKey.startsWith(`${ledger.rootSiteKey}:`)
+      || !allocationInventoryIsCoherent(
+        ledger,
+        instructionAllocations,
+        expressionAllocations,
+        sourceAllocations,
+        productReservations,
       )
-      || new Set(productHandles).size !== productHandles.length
-      || new Set([
-        ...instructionAllocations.map((entry) => entry.identityHandle),
-        ...productReservations.map((entry) => entry.identityHandle),
-      ]).size !== instructionAllocations.length + productReservations.length
-      || new Set(sourceAllocations.map((entry) => entry.addressHandle)).size !== sourceAllocations.length
     ) {
       throw new Error('Live allocation snapshot lost unique candidate-local handle authority.');
     }
@@ -382,6 +387,48 @@ export class TemplateCompilerLiveAllocationSnapshot {
 
   isCurrent(): boolean {
     return this.isModuleConstructed() && this.ledger.namespace.isCurrent();
+  }
+}
+
+/** Nominal complete inventory frozen locally before any prepared handle becomes namespace-visible. */
+export class TemplateCompilerLivePreparedAllocationSnapshot implements TemplateCompilerLiveAllocationInventory {
+  readonly #authority: object;
+  readonly state = TemplateCompilerLiveAllocationSnapshotState.Complete;
+
+  constructor(
+    authority: object,
+    readonly ledger: TemplateCompilerLiveAllocationLedger,
+    readonly instructionAllocations: readonly TemplateCompilerLiveInstructionAllocation[],
+    readonly expressionAllocations: readonly TemplateCompilerLiveExpressionAllocation[],
+    readonly sourceAllocations: readonly TemplateCompilerLiveSourceAllocation[],
+    readonly productReservations: readonly TemplateCompilerLiveProductReservation[],
+  ) {
+    if (
+      authority !== livePreparedAllocationSnapshotAuthority
+      || instructionAllocations.length + expressionAllocations.length
+        + sourceAllocations.length + productReservations.length === 0
+      || allocationInventoryState(instructionAllocations, expressionAllocations, sourceAllocations)
+        !== TemplateCompilerLiveAllocationSnapshotState.Complete
+      || !allocationInventoryIsCoherent(
+        ledger,
+        instructionAllocations,
+        expressionAllocations,
+        sourceAllocations,
+        productReservations,
+      )
+    ) {
+      throw new Error('Prepared live allocation inventory is incomplete or incoherent.');
+    }
+    this.#authority = authority;
+  }
+
+  isModuleConstructed(): boolean {
+    return this.#authority === livePreparedAllocationSnapshotAuthority;
+  }
+
+  isCurrent(): boolean {
+    return this.isModuleConstructed()
+      && this.ledger.preparedSnapshotIsCurrent(this);
   }
 }
 
@@ -400,7 +447,8 @@ export class TemplateCompilerLiveAllocationLedger {
   private readonly expressionsByProduct = new Map<ProductHandle, TemplateCompilerLiveExpressionAllocation>();
   private readonly sourcesByAddress = new Map<AddressHandle, TemplateCompilerLiveSourceAllocation>();
   private finished: TemplateCompilerLiveAllocationSnapshot | null = null;
-  private committed: boolean;
+  private preparedSnapshot: TemplateCompilerLivePreparedAllocationSnapshot | null = null;
+  private phaseState = TemplateCompilerLiveAllocationLedgerState.Mutable;
 
   constructor(
     authority: object,
@@ -411,7 +459,10 @@ export class TemplateCompilerLiveAllocationLedger {
     if (authority !== liveAllocationLedgerAuthority || rootSiteKey.length === 0) {
       throw new Error('Live compiler allocation phase requires namespace-owned non-empty authority.');
     }
-    this.committed = !prepared;
+  }
+
+  get state(): TemplateCompilerLiveAllocationLedgerState {
+    return this.phaseState;
   }
 
   get handles(): KernelHandleFactory {
@@ -551,12 +602,70 @@ export class TemplateCompilerLiveAllocationLedger {
     allocation.bind(liveAllocationLedgerAuthority, read, result, sourceSpan);
   }
 
-  /** Atomically expose one prepared phase after every object has been constructed and bound. */
-  commitPrepared(): TemplateCompilerLiveAllocationSnapshot {
-    this.requireMutable();
-    if (!this.prepared || this.committed) {
-      throw new Error('Live compiler allocation phase is not an uncommitted prepared phase.');
+  /** Validate and freeze a complete prepared inventory without changing namespace ownership. */
+  prepareSnapshot(): TemplateCompilerLivePreparedAllocationSnapshot {
+    if (!this.prepared) {
+      throw new Error('Eager live compiler allocation phases do not expose prepared snapshots.');
     }
+    if (this.phaseState === TemplateCompilerLiveAllocationLedgerState.Prepared) return this.preparedSnapshot!;
+    if (this.phaseState !== TemplateCompilerLiveAllocationLedgerState.Mutable) {
+      throw new Error('Live compiler allocation phase is already committed.');
+    }
+    const snapshot = new TemplateCompilerLivePreparedAllocationSnapshot(
+      livePreparedAllocationSnapshotAuthority,
+      this,
+      this.instructionAllocations,
+      this.expressionAllocations,
+      this.sourceAllocations,
+      this.productReservations,
+    );
+    this.preparedSnapshot = snapshot;
+    this.phaseState = TemplateCompilerLiveAllocationLedgerState.Prepared;
+    return snapshot;
+  }
+
+  /** Atomically expose exactly one previously validated prepared inventory. */
+  commitPrepared(
+    snapshot: TemplateCompilerLivePreparedAllocationSnapshot,
+  ): TemplateCompilerLiveAllocationSnapshot {
+    if (
+      !this.prepared
+      || this.phaseState !== TemplateCompilerLiveAllocationLedgerState.Prepared
+      || this.preparedSnapshot !== snapshot
+      || !snapshot.isModuleConstructed()
+      || snapshot.ledger !== this
+      || !snapshot.isCurrent()
+    ) {
+      throw new Error('Live compiler allocation commit requires its exact current prepared snapshot.');
+    }
+    const committed = new TemplateCompilerLiveAllocationSnapshot(
+      liveAllocationSnapshotAuthority,
+      this,
+      snapshot.instructionAllocations,
+      snapshot.expressionAllocations,
+      snapshot.sourceAllocations,
+      snapshot.productReservations,
+      snapshot,
+    );
+    this.namespace.commitPrepared(
+      liveAllocationLedgerAuthority,
+      allocationReservationProposals(
+        snapshot.instructionAllocations,
+        snapshot.expressionAllocations,
+        snapshot.sourceAllocations,
+        snapshot.productReservations,
+      ),
+    );
+    this.phaseState = TemplateCompilerLiveAllocationLedgerState.Committed;
+    this.finished = committed;
+    return committed;
+  }
+
+  finish(): TemplateCompilerLiveAllocationSnapshot {
+    if (this.prepared && this.phaseState !== TemplateCompilerLiveAllocationLedgerState.Committed) {
+      throw new Error('Prepared live compiler allocation phase must commit before finishing.');
+    }
+    if (this.finished != null) return this.finished;
     const snapshot = new TemplateCompilerLiveAllocationSnapshot(
       liveAllocationSnapshotAuthority,
       this,
@@ -564,53 +673,93 @@ export class TemplateCompilerLiveAllocationLedger {
       this.expressionAllocations,
       this.sourceAllocations,
       this.productReservations,
+      null,
     );
-    this.namespace.commitPrepared(liveAllocationLedgerAuthority, [
-      ...this.instructionAllocations.map((allocation): TemplateCompilerLiveReservationProposal => ({
-        semanticSlot: `instruction:${allocation.siteKey}:${allocation.local}`,
-        productHandle: allocation.productHandle,
-        identityHandle: allocation.identityHandle,
-        addressHandle: null,
-      })),
-      ...this.expressionAllocations.map((allocation): TemplateCompilerLiveReservationProposal => ({
-        semanticSlot: `expression:${allocation.siteKey}:${allocation.local}`,
-        productHandle: allocation.productHandle,
-        identityHandle: null,
-        addressHandle: null,
-      })),
-      ...this.sourceAllocations.map((allocation): TemplateCompilerLiveReservationProposal => ({
-        semanticSlot: `source:${allocation.siteKey}:${allocation.local}`,
-        productHandle: null,
-        identityHandle: null,
-        addressHandle: allocation.addressHandle,
-      })),
-      ...this.productReservations.map((reservation): TemplateCompilerLiveReservationProposal => ({
-        semanticSlot: `product:${reservation.siteKey}:${reservation.local}:${reservation.role}`,
-        productHandle: reservation.productHandle,
-        identityHandle: reservation.identityHandle,
-        addressHandle: null,
-      })),
-    ]);
-    this.committed = true;
     this.finished = snapshot;
+    this.phaseState = TemplateCompilerLiveAllocationLedgerState.Committed;
     return snapshot;
   }
 
-  finish(): TemplateCompilerLiveAllocationSnapshot {
-    if (!this.committed) {
-      throw new Error('Prepared live compiler allocation phase must commit before finishing.');
-    }
-    return this.finished ??= new TemplateCompilerLiveAllocationSnapshot(
-      liveAllocationSnapshotAuthority,
-      this,
-      this.instructionAllocations,
-      this.expressionAllocations,
-      this.sourceAllocations,
-      this.productReservations,
-    );
+  preparedSnapshotIsCurrent(snapshot: TemplateCompilerLivePreparedAllocationSnapshot): boolean {
+    return this.prepared
+      && this.phaseState === TemplateCompilerLiveAllocationLedgerState.Prepared
+      && this.preparedSnapshot === snapshot
+      && this.namespace.isCurrent();
   }
 
   private requireMutable(): void {
-    if (this.finished != null) throw new Error('Live compiler allocation ledger is already finished.');
+    if (this.phaseState !== TemplateCompilerLiveAllocationLedgerState.Mutable) {
+      throw new Error('Live compiler allocation ledger is no longer mutable.');
+    }
   }
+}
+
+function allocationInventoryState(
+  instructionAllocations: readonly TemplateCompilerLiveInstructionAllocation[],
+  expressionAllocations: readonly TemplateCompilerLiveExpressionAllocation[],
+  sourceAllocations: readonly TemplateCompilerLiveSourceAllocation[],
+): TemplateCompilerLiveAllocationSnapshotState {
+  return instructionAllocations.every((entry) => entry.instruction != null)
+      && expressionAllocations.every((entry) => entry.compilerRead != null && entry.result != null)
+      && sourceAllocations.every((entry) => entry.source != null)
+    ? TemplateCompilerLiveAllocationSnapshotState.Complete
+    : TemplateCompilerLiveAllocationSnapshotState.Open;
+}
+
+function allocationInventoryIsCoherent(
+  ledger: TemplateCompilerLiveAllocationLedger,
+  instructionAllocations: readonly TemplateCompilerLiveInstructionAllocation[],
+  expressionAllocations: readonly TemplateCompilerLiveExpressionAllocation[],
+  sourceAllocations: readonly TemplateCompilerLiveSourceAllocation[],
+  productReservations: readonly TemplateCompilerLiveProductReservation[],
+): boolean {
+  const productHandles = [
+    ...instructionAllocations.map((entry) => entry.productHandle),
+    ...expressionAllocations.map((entry) => entry.productHandle),
+    ...productReservations.map((entry) => entry.productHandle),
+  ];
+  return ledger.rootSiteKey.length > 0
+    && [...instructionAllocations, ...expressionAllocations, ...sourceAllocations, ...productReservations].every((entry) =>
+      entry.siteKey.startsWith(`${ledger.rootSiteKey}:`)
+    )
+    && new Set(productHandles).size === productHandles.length
+    && new Set([
+      ...instructionAllocations.map((entry) => entry.identityHandle),
+      ...productReservations.map((entry) => entry.identityHandle),
+    ]).size === instructionAllocations.length + productReservations.length
+    && new Set(sourceAllocations.map((entry) => entry.addressHandle)).size === sourceAllocations.length;
+}
+
+function allocationReservationProposals(
+  instructionAllocations: readonly TemplateCompilerLiveInstructionAllocation[],
+  expressionAllocations: readonly TemplateCompilerLiveExpressionAllocation[],
+  sourceAllocations: readonly TemplateCompilerLiveSourceAllocation[],
+  productReservations: readonly TemplateCompilerLiveProductReservation[],
+): readonly TemplateCompilerLiveReservationProposal[] {
+  return [
+    ...instructionAllocations.map((allocation): TemplateCompilerLiveReservationProposal => ({
+      semanticSlot: `instruction:${allocation.siteKey}:${allocation.local}`,
+      productHandle: allocation.productHandle,
+      identityHandle: allocation.identityHandle,
+      addressHandle: null,
+    })),
+    ...expressionAllocations.map((allocation): TemplateCompilerLiveReservationProposal => ({
+      semanticSlot: `expression:${allocation.siteKey}:${allocation.local}`,
+      productHandle: allocation.productHandle,
+      identityHandle: null,
+      addressHandle: null,
+    })),
+    ...sourceAllocations.map((allocation): TemplateCompilerLiveReservationProposal => ({
+      semanticSlot: `source:${allocation.siteKey}:${allocation.local}`,
+      productHandle: null,
+      identityHandle: null,
+      addressHandle: allocation.addressHandle,
+    })),
+    ...productReservations.map((reservation): TemplateCompilerLiveReservationProposal => ({
+      semanticSlot: `product:${reservation.siteKey}:${reservation.local}:${reservation.role}`,
+      productHandle: reservation.productHandle,
+      identityHandle: reservation.identityHandle,
+      addressHandle: null,
+    })),
+  ];
 }

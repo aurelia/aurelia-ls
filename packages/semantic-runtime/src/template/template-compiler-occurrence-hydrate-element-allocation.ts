@@ -15,7 +15,9 @@ import type { HydrateElementInstruction, TemplateInstruction } from './instructi
 import {
   TemplateCompilerLiveAllocationSnapshotState,
   TemplateCompilerLiveProductReservationRole,
+  type TemplateCompilerLiveAllocationInventory,
   type TemplateCompilerLiveAllocationLedger,
+  type TemplateCompilerLivePreparedAllocationSnapshot,
   type TemplateCompilerLiveAllocationSnapshot,
   type TemplateCompilerLiveInstructionAllocation,
   type TemplateCompilerLiveProductReservation,
@@ -30,6 +32,7 @@ import {
 } from './template-compiler-occurrence-row-assembly.js';
 
 const hydrateElementAllocationAuthority = {};
+const hydrateElementAllocationPreparationAuthority = {};
 const exactAllocationsByRows = new WeakMap<
   TemplateCompilerOccurrenceRowAssembly,
   TemplateCompilerOccurrenceHydrateElementAllocationResult
@@ -132,9 +135,51 @@ export class TemplateCompilerAllocatedHydrateElementHead {
   }
 }
 
+/** Fully validated HE/capture assembly whose allocation inventory is still namespace-invisible. */
+export class TemplateCompilerOccurrenceHydrateElementAllocationPreparation {
+  readonly #authority: object;
+  readonly headsByRow: ReadonlyMap<
+    TemplateCompilerOccurrenceTargetRowDraft,
+    TemplateCompilerAllocatedHydrateElementHead
+  >;
+  readonly headsBySite: ReadonlyMap<
+    TemplateCompilerOccurrenceTargetRowDraft['site'],
+    TemplateCompilerAllocatedHydrateElementHead
+  >;
+
+  constructor(
+    authority: object,
+    readonly rows: TemplateCompilerOccurrenceRowAssembly,
+    readonly allocation: TemplateCompilerLivePreparedAllocationSnapshot,
+    readonly heads: readonly TemplateCompilerAllocatedHydrateElementHead[],
+  ) {
+    this.headsByRow = new Map(heads.map((head) => [head.row, head] as const));
+    this.headsBySite = new Map(heads.map((head) => [head.row.site, head] as const));
+    if (
+      authority !== hydrateElementAllocationPreparationAuthority
+      || !hydrateElementAllocationCoverageIsExact(
+        rows,
+        allocation,
+        heads,
+        this.headsByRow,
+        this.headsBySite,
+      )
+    ) {
+      throw new Error('Prepared HydrateElement allocation lost row, instruction, or capture coverage.');
+    }
+    this.#authority = authority;
+  }
+
+  isModuleConstructed(): boolean {
+    return this.#authority === hydrateElementAllocationPreparationAuthority;
+  }
+}
+
 /** Candidate-local HE/capture funding that does not publish compiler products or target rows. */
 export class TemplateCompilerOccurrenceHydrateElementAllocationAssembly {
   readonly #authority: object;
+  readonly rows: TemplateCompilerOccurrenceRowAssembly;
+  readonly heads: readonly TemplateCompilerAllocatedHydrateElementHead[];
   private readonly headsByRow: ReadonlyMap<
     TemplateCompilerOccurrenceTargetRowDraft,
     TemplateCompilerAllocatedHydrateElementHead
@@ -144,40 +189,31 @@ export class TemplateCompilerOccurrenceHydrateElementAllocationAssembly {
     TemplateCompilerAllocatedHydrateElementHead
   >;
 
-  constructor(
+  private constructor(
     authority: object,
-    readonly rows: TemplateCompilerOccurrenceRowAssembly,
+    preparation: TemplateCompilerOccurrenceHydrateElementAllocationPreparation,
     readonly allocation: TemplateCompilerLiveAllocationSnapshot,
-    readonly heads: readonly TemplateCompilerAllocatedHydrateElementHead[],
   ) {
-    const expectedRows = rows.rows.filter((row) => row.hydrateElement != null);
-    const effectiveCaptures = heads.flatMap((head) => head.captures).filter((capture) =>
-      capture.effectiveReservation != null
-    );
-    this.headsByRow = new Map(heads.map((head) => [head.row, head] as const));
-    this.headsBySite = new Map(heads.map((head) => [head.row.site, head] as const));
+    this.#authority = authority;
+    this.rows = preparation.rows;
+    this.heads = preparation.heads;
+    this.headsByRow = preparation.headsByRow;
+    this.headsBySite = preparation.headsBySite;
+  }
+
+  static fromCommittedPreparation(
+    authority: object,
+    preparation: TemplateCompilerOccurrenceHydrateElementAllocationPreparation,
+    allocation: TemplateCompilerLiveAllocationSnapshot,
+  ): TemplateCompilerOccurrenceHydrateElementAllocationAssembly {
     if (
       authority !== hydrateElementAllocationAuthority
-      || allocation.state !== TemplateCompilerLiveAllocationSnapshotState.Complete
-      || allocation.instructionAllocations.length !== heads.length
-      || allocation.expressionAllocations.length !== 0
-      || allocation.sourceAllocations.length !== 0
-      || allocation.productReservations.length !== effectiveCaptures.length
-      || this.headsByRow.size !== heads.length
-      || this.headsBySite.size !== heads.length
-      || !sameObjects(heads.map((head) => head.row), expectedRows)
-      || !sameObjects(
-        heads.map((head) => head.instructionAllocation),
-        allocation.instructionAllocations,
-      )
-      || !sameObjects(
-        effectiveCaptures.map((capture) => capture.effectiveReservation!),
-        allocation.productReservations,
-      )
+      || !preparation.isModuleConstructed()
+      || allocation.prepared !== preparation.allocation
     ) {
-      throw new Error('HydrateElement allocation assembly lost row, instruction, or capture coverage.');
+      throw new Error('Committed HydrateElement allocation lost its exact prepared inventory.');
     }
-    this.#authority = authority;
+    return new TemplateCompilerOccurrenceHydrateElementAllocationAssembly(authority, preparation, allocation);
   }
 
   isModuleConstructed(): boolean {
@@ -384,9 +420,26 @@ export function allocateTemplateCompilerOccurrenceHydrateElements(
       captures,
     );
   });
+  let preparedAllocation: TemplateCompilerLivePreparedAllocationSnapshot;
+  try {
+    preparedAllocation = ledger.prepareSnapshot();
+  } catch {
+    return refused(
+      TemplateCompilerOccurrenceHydrateElementAllocationState.Ineligible,
+      TemplateCompilerOccurrenceHydrateElementAllocationReasonKind.InstructionAllocationMismatch,
+      'HydrateElement prospective allocation inventory is incomplete or incoherent.',
+      hydrateRows.map((row) => row.stableSlotKey),
+    );
+  }
+  const preparation = new TemplateCompilerOccurrenceHydrateElementAllocationPreparation(
+    hydrateElementAllocationPreparationAuthority,
+    rows,
+    preparedAllocation,
+    heads,
+  );
   let allocation: TemplateCompilerLiveAllocationSnapshot;
   try {
-    allocation = ledger.commitPrepared();
+    allocation = ledger.commitPrepared(preparedAllocation);
   } catch {
     return refused(
       TemplateCompilerOccurrenceHydrateElementAllocationState.Ineligible,
@@ -395,11 +448,10 @@ export function allocateTemplateCompilerOccurrenceHydrateElements(
       hydrateRows.map((row) => row.stableSlotKey),
     );
   }
-  const assembly = new TemplateCompilerOccurrenceHydrateElementAllocationAssembly(
+  const assembly = TemplateCompilerOccurrenceHydrateElementAllocationAssembly.fromCommittedPreparation(
     hydrateElementAllocationAuthority,
-    rows,
+    preparation,
     allocation,
-    heads,
   );
   const result = new TemplateCompilerOccurrenceHydrateElementAllocationResult(
     TemplateCompilerOccurrenceHydrateElementAllocationState.Exact,
@@ -460,6 +512,38 @@ function refused(
     null,
     [new TemplateCompilerOccurrenceHydrateElementAllocationReason(reasonKind, summary, stableRowSlotKeys)],
   );
+}
+
+function hydrateElementAllocationCoverageIsExact(
+  rows: TemplateCompilerOccurrenceRowAssembly,
+  allocation: TemplateCompilerLiveAllocationInventory,
+  heads: readonly TemplateCompilerAllocatedHydrateElementHead[],
+  headsByRow: ReadonlyMap<TemplateCompilerOccurrenceTargetRowDraft, TemplateCompilerAllocatedHydrateElementHead>,
+  headsBySite: ReadonlyMap<
+    TemplateCompilerOccurrenceTargetRowDraft['site'],
+    TemplateCompilerAllocatedHydrateElementHead
+  >,
+): boolean {
+  const expectedRows = rows.rows.filter((row) => row.hydrateElement != null);
+  const effectiveCaptures = heads.flatMap((head) => head.captures).filter((capture) =>
+    capture.effectiveReservation != null
+  );
+  return allocation.state === TemplateCompilerLiveAllocationSnapshotState.Complete
+    && allocation.instructionAllocations.length === heads.length
+    && allocation.expressionAllocations.length === 0
+    && allocation.sourceAllocations.length === 0
+    && allocation.productReservations.length === effectiveCaptures.length
+    && headsByRow.size === heads.length
+    && headsBySite.size === heads.length
+    && sameObjects(heads.map((head) => head.row), expectedRows)
+    && sameObjects(
+      heads.map((head) => head.instructionAllocation),
+      allocation.instructionAllocations,
+    )
+    && sameObjects(
+      effectiveCaptures.map((capture) => capture.effectiveReservation!),
+      allocation.productReservations,
+    );
 }
 
 function sameObjects<T>(left: readonly T[], right: readonly T[]): boolean {
