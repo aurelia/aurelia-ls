@@ -24,6 +24,12 @@ import {
   TemplateCompilerContextFamilyCompletionReasonKind,
   TemplateCompilerContextFamilyCompletionState,
 } from '../src/template/template-compiler-context-family-completion.js';
+import {
+  assembleTemplateCompilerContextFamilyRows,
+  TemplateCompilerContextFamilyRowAssemblyState,
+  TemplateCompilerFamilyOccurrenceArrivalPosture,
+  TemplateCompilerFamilyTemplateControllerTransitionRowDraft,
+} from '../src/template/template-compiler-context-family-row-assembly.js';
 import { executeTemplateCompilerHookBootstrap } from '../src/template/template-compiler-hook-bootstrap.js';
 import {
   TemplateCompilerHydrateElementBlockerKind,
@@ -537,6 +543,125 @@ describe('template compiler projection logical extraction', () => {
     expect(host?.templateControllerTransition).toBe(transition);
     expect(host?.dischargedBlockers.map((blocker) => blocker.blockerKind))
       .toContain(TemplateCompilerHydrateElementBlockerKind.TemplateControllerPlacementPending);
+  });
+
+  test('lowers projection-only reaches into context-local ordinary rows and incoming memberships', () => {
+    const run = fixture.run(
+      'projection-logical-host',
+      TemplateCompilerSiteCursorTraversalMode.ClosedContextFamily,
+    );
+    const completion = completeTemplateCompilerContextFamily(run.transcript, run.endpoint);
+    if (completion.receipt == null) throw new Error('Expected a projection family receipt.');
+    const result = assembleTemplateCompilerContextFamilyRows(completion.receipt);
+    const assembly = result.assembly;
+    if (assembly == null) throw new Error('Expected projection family row characterization.');
+    const [root, defaultContext, namedContext, emptyContext] = assembly.contexts;
+
+    expect(result.state).toBe(TemplateCompilerContextFamilyRowAssemblyState.Pending);
+    expect(root?.templateControllerRows).toEqual([]);
+    expect(root?.ordinaryRows.map((row) =>
+      row.site.siteKind === 'element' ? row.site.event.element.tagName : '#text'
+    )).toEqual(['projection-logical-leaf', 'div']);
+    expect(defaultContext?.memberships.map((membership) => occurrenceLabel(membership.occurrence)))
+      .toEqual(['span', '#text']);
+    expect(namedContext?.memberships.map((membership) => occurrenceLabel(membership.occurrence)))
+      .toEqual(['b', '#text', 'i', '#text']);
+    expect(namedContext?.memberships.every((membership) =>
+      membership.arrivalPosture === TemplateCompilerFamilyOccurrenceArrivalPosture.IncomingTransfer
+    )).toBe(true);
+    expect(emptyContext).toMatchObject({ rows: [], memberships: [] });
+    expect(root?.memberships.every((membership) =>
+      membership.arrivalPosture === TemplateCompilerFamilyOccurrenceArrivalPosture.Initial
+    )).toBe(true);
+  });
+
+  test('splits two TC rows, rehomes the host solely to the adopted leaf, and preserves following root order', () => {
+    const run = fixture.run(
+      'projection-logical-tc-only-host',
+      TemplateCompilerSiteCursorTraversalMode.ClosedContextFamily,
+    );
+    const completion = completeTemplateCompilerContextFamily(run.transcript, run.endpoint);
+    if (completion.receipt == null) throw new Error('Expected a TC-only family receipt.');
+    const result = assembleTemplateCompilerContextFamilyRows(completion.receipt);
+    const assembly = result.assembly;
+    if (assembly == null) throw new Error('Expected TC-only family row characterization.');
+    const [root, outer, leaf] = assembly.contexts;
+    const rootTransition = root?.rows[0];
+    const outerTransition = outer?.rows[0];
+
+    expect(result.state).toBe(TemplateCompilerContextFamilyRowAssemblyState.Pending);
+    expect(rootTransition).toBeInstanceOf(TemplateCompilerFamilyTemplateControllerTransitionRowDraft);
+    expect(rootTransition).toMatchObject({
+      ordinal: 0,
+      placementKind: TemplateCompilerTargetRowPlacementKind.TemplateControllerSourceReplacement,
+      occurrence: expect.objectContaining({ tagName: 'template' }),
+    });
+    expect(root?.ordinaryRows.map((row) =>
+      row.site.siteKind === 'element' ? row.site.event.element.tagName : '#text'
+    )).toEqual(['span']);
+    expect(root?.rows.map((row) => row.ordinal)).toEqual([0, 1]);
+    expect(outerTransition).toBeInstanceOf(TemplateCompilerFamilyTemplateControllerTransitionRowDraft);
+    expect(outerTransition).toMatchObject({
+      ordinal: 0,
+      placementKind: TemplateCompilerTargetRowPlacementKind.TemplateControllerGeneratedAppend,
+      occurrence: null,
+    });
+    expect(outer?.memberships).toEqual([]);
+    const hostMemberships = assembly.contexts.flatMap((context) => context.memberships).filter((membership) =>
+      membership.occurrence instanceof TemplateCompilerElementOccurrence
+      && membership.occurrence.tagName === 'template'
+    );
+    expect(hostMemberships).toHaveLength(1);
+    expect(hostMemberships[0]?.context).toBe(leaf?.context);
+    expect(hostMemberships[0]?.arrivalPosture).toBe(TemplateCompilerFamilyOccurrenceArrivalPosture.AdoptedInput);
+    expect(leaf?.memberships.every((membership) =>
+      membership.arrivalPosture === TemplateCompilerFamilyOccurrenceArrivalPosture.AdoptedInput
+    )).toBe(true);
+    expect(leaf?.ordinaryRows.map((row) =>
+      row.site.siteKind === 'element' ? row.site.event.element.tagName : '#text'
+    )).toEqual(['div']);
+    expect(root?.attributeDispositions.some((disposition) =>
+      disposition.site.event.element.tagName === 'template'
+    )).toBe(true);
+  });
+
+  test('lowers a TC plus projection host in the leaf and retains incoming projection ownership', () => {
+    const run = fixture.run(
+      'projection-logical-tc-host',
+      TemplateCompilerSiteCursorTraversalMode.ClosedContextFamily,
+    );
+    const completion = completeTemplateCompilerContextFamily(run.transcript, run.endpoint);
+    if (completion.receipt == null) throw new Error('Expected a TC plus projection family receipt.');
+    const result = assembleTemplateCompilerContextFamilyRows(completion.receipt);
+    const assembly = result.assembly;
+    if (assembly == null) throw new Error('Expected TC plus projection row characterization.');
+    const [root, outer, leaf, defaultContext, namedContext] = assembly.contexts;
+
+    expect(result.state).toBe(TemplateCompilerContextFamilyRowAssemblyState.Pending);
+    expect(root?.templateControllerRows).toHaveLength(1);
+    expect(outer?.templateControllerRows).toHaveLength(1);
+    expect(leaf?.ordinaryRows.map((row) =>
+      row.site.siteKind === 'element' ? row.site.event.element.tagName : '#text'
+    )).toEqual(['projection-logical-leaf']);
+    const hostMembership = leaf?.memberships.find((membership) =>
+      membership.occurrence instanceof TemplateCompilerElementOccurrence
+      && membership.occurrence.tagName === 'projection-logical-leaf'
+    );
+    expect(hostMembership?.arrivalPosture).toBe(TemplateCompilerFamilyOccurrenceArrivalPosture.IncomingTransfer);
+    expect(defaultContext?.memberships.every((membership) =>
+      membership.arrivalPosture === TemplateCompilerFamilyOccurrenceArrivalPosture.IncomingTransfer
+    )).toBe(true);
+    expect(namedContext?.memberships.every((membership) =>
+      membership.arrivalPosture === TemplateCompilerFamilyOccurrenceArrivalPosture.IncomingTransfer
+    )).toBe(true);
+    expect(defaultContext?.traversal.projectionOwner?.context).toBe(defaultContext?.context);
+    expect(namedContext?.traversal.projectionOwner?.context).toBe(namedContext?.context);
+    expect(root?.attributeDispositions.some((disposition) =>
+      disposition.site.event.element.tagName === 'projection-logical-leaf'
+    )).toBe(true);
+    expect(leaf?.attributeDispositions.some((disposition) =>
+      disposition.site.event.element.tagName === 'projection-logical-leaf'
+    )).toBe(false);
   });
 
   test('refuses compatibility traversal mode instead of treating its frontier as a family', () => {
