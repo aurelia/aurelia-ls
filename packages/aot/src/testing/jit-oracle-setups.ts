@@ -15,8 +15,10 @@ import {
 
 export const CUSTOM_ELEMENT_SETUP_ID = "resource.custom-element";
 export const CUSTOM_ATTRIBUTE_SETUP_ID = "resource.custom-attribute";
+export const CUSTOM_ELEMENT_SETUP_VERSION = 1;
+export const CUSTOM_ATTRIBUTE_SETUP_VERSION = 1;
 
-interface CustomElementSetupArgs {
+export interface CustomElementSetupArgs {
   readonly name: string;
   readonly template: string;
   readonly bindables: readonly CompilerCaseBindableDefinition[];
@@ -25,7 +27,7 @@ interface CustomElementSetupArgs {
   readonly shadowMode: "open" | "closed" | null;
 }
 
-interface CustomAttributeSetupArgs {
+export interface CustomAttributeSetupArgs {
   readonly name: string;
   readonly bindables: readonly CompilerCaseBindableDefinition[];
   readonly isTemplateController: boolean;
@@ -36,7 +38,7 @@ interface CustomAttributeSetupArgs {
 
 class CustomElementSetupFactory implements CompilerSetupFactory {
   public readonly factoryId = CUSTOM_ELEMENT_SETUP_ID;
-  public readonly version = 1;
+  public readonly version = CUSTOM_ELEMENT_SETUP_VERSION;
   public readonly exports = ["resource"] as const;
 
   public validate(args: CompilerCaseData | undefined): void {
@@ -59,7 +61,7 @@ class CustomElementSetupFactory implements CompilerSetupFactory {
 
 class CustomAttributeSetupFactory implements CompilerSetupFactory {
   public readonly factoryId = CUSTOM_ATTRIBUTE_SETUP_ID;
-  public readonly version = 1;
+  public readonly version = CUSTOM_ATTRIBUTE_SETUP_VERSION;
   public readonly exports = ["resource"] as const;
 
   public validate(args: CompilerCaseData | undefined): void {
@@ -128,6 +130,9 @@ export const JIT_ORACLE_SETUP_FACTORIES: readonly CompilerSetupFactory[] = [
   ...JIT_ORACLE_EXTENSION_SETUP_FACTORIES,
 ];
 
+/** Consumer-neutral setup factories admitted by the current declarative corpus. */
+export const COMPILER_SETUP_FACTORIES = JIT_ORACLE_SETUP_FACTORIES;
+
 /** JIT setup materializers admitted by the current declarative corpus. */
 export const JIT_ORACLE_SETUP_MATERIALIZERS: readonly JitCompilerSetupMaterializer[] = [
   customElementMaterializer,
@@ -135,7 +140,7 @@ export const JIT_ORACLE_SETUP_MATERIALIZERS: readonly JitCompilerSetupMaterializ
   ...JIT_ORACLE_EXTENSION_SETUP_MATERIALIZERS,
 ];
 
-function readCustomElementArgs(args: CompilerCaseData | undefined): CustomElementSetupArgs {
+export function readCustomElementArgs(args: CompilerCaseData | undefined): CustomElementSetupArgs {
   const record = setupRecord(args, CUSTOM_ELEMENT_SETUP_ID);
   assertKeys(record, ["name", "template", "bindables", "capture", "containerless", "shadowMode"], CUSTOM_ELEMENT_SETUP_ID);
   return {
@@ -148,7 +153,7 @@ function readCustomElementArgs(args: CompilerCaseData | undefined): CustomElemen
   };
 }
 
-function readCustomAttributeArgs(args: CompilerCaseData | undefined): CustomAttributeSetupArgs {
+export function readCustomAttributeArgs(args: CompilerCaseData | undefined): CustomAttributeSetupArgs {
   const record = setupRecord(args, CUSTOM_ATTRIBUTE_SETUP_ID);
   assertKeys(record, ["name", "bindables", "isTemplateController", "noMultiBindings", "defaultProperty", "aliases"], CUSTOM_ATTRIBUTE_SETUP_ID);
   return {
@@ -267,7 +272,7 @@ function optionalStringArray(value: CompilerCaseData | undefined, setupId: strin
   if (!Array.isArray(value) || value.some((entry) => typeof entry !== "string")) {
     throw new Error(`${setupId}.${key} must be a string array.`);
   }
-  return value as readonly string[];
+  return (value as readonly string[]).slice();
 }
 
 function assertKeys(

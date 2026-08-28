@@ -43,6 +43,7 @@ import {
   type SemanticCompilerGalleryCase,
   type SemanticCompilerGalleryPlan,
 } from "./semantic-compiler-gallery-plan.js";
+import { SemanticCompilerGallerySetupResourceKind } from "./semantic-compiler-gallery-setup-source.js";
 import {
   observeSemanticCompiledDefinitionFamily,
   type SemanticCompiledDefinitionFamilyObservation,
@@ -57,6 +58,7 @@ import {
 } from "./semantic-runtime-instruction-family-observer.js";
 
 type SemanticTemplateResource = SemanticApp["emission"]["templates"]["resources"][number];
+type SemanticResourceIndex = SemanticApp["emission"]["resourceIndex"];
 type BrowserMaterializationContext = ConstructorParameters<typeof BrowserEffectiveTemplateMaterializer>[0];
 type CompilerReadStore = Parameters<typeof observeTemplateCompilerRootSiteCursor>[0]["compilerReadStore"];
 
@@ -281,6 +283,7 @@ export class SemanticCompilerGalleryOracle {
       const publicAnswer = app.ask({
         kind: SemanticAppQueryKind.TemplateCompilations,
         detail: SemanticRuntimeDetail.Handles,
+        page: { size: app.emission.templates.resources.length },
         inquiryProfile: "aot",
       }) as SemanticRuntimeAnswer<SemanticTemplateCompilationResult>;
       const publicCompilationRowCount = publicAnswer.value.rows.length;
@@ -360,13 +363,18 @@ function observationsFor(
   compilerReadStore: CompilerReadStore,
 ): SemanticCompilerGalleryObservationProjection {
   const templates = app.emission.templates;
-  const resourcesByName = new Map<string, SemanticTemplateResource>();
+  const resourcesByClassName = new Map<string, SemanticTemplateResource>();
   for (const resource of templates.resources) {
-    const name = resource.compilation.definition.name;
-    if (resourcesByName.has(name)) {
-      throw new Error(`Semantic compiler gallery emitted duplicate definition ${name}.`);
+    const className = resource.compilation.definition.target.localName;
+    if (className == null) {
+      throw new Error(
+        `Semantic compiler gallery emitted definition ${resource.compilation.definition.name} without a target class.`,
+      );
     }
-    resourcesByName.set(name, resource);
+    if (resourcesByClassName.has(className)) {
+      throw new Error(`Semantic compiler gallery emitted duplicate target class ${className}.`);
+    }
+    resourcesByClassName.set(className, resource);
   }
   let browserMaterializationMs = 0;
   let normalizedStructuralReplayMs = 0;
@@ -375,9 +383,9 @@ function observationsFor(
   const observations = cases.flatMap((candidate) => {
     const definition = candidate.candidate.world.entry;
     if (definition.kind !== "compile") return [];
-    const resource = resourcesByName.get(definition.definition.name);
+    const resource = resourcesByClassName.get(candidate.className);
     if (resource == null) return [];
-    validateDefinitionFidelity(resource, candidate);
+    validateDefinitionFidelity(resource, candidate, app.emission.resourceIndex);
     const replay = normalizedStructuralReplayFor(resource, candidate, browserMaterialization);
     browserMaterializationMs += replay.browserMaterializationMs;
     normalizedStructuralReplayMs += replay.replayMs;
@@ -854,19 +862,28 @@ function validateGalleryMembership(
   publicResult: SemanticTemplateCompilationResult,
   cases: readonly SemanticCompilerGalleryCase[],
 ): void {
+  const setupCustomElements = cases.flatMap((candidate) => candidate.setupProjections)
+    .flatMap((projection) => projection.resources)
+    .filter((resource) => resource.kind === SemanticCompilerGallerySetupResourceKind.CustomElement);
+  const expectedClassNames = [
+    "AotSemanticGalleryRoot",
+    ...cases.map((candidate) => candidate.className),
+    ...setupCustomElements.map((resource) => resource.className),
+  ].sort();
+  const directClassNames = app.emission.templates.resources
+    .map((resource) => resource.compilation.definition.target.localName ?? "<missing-target-class>")
+    .sort();
+  if (!sameStringArrays(expectedClassNames, directClassNames)) {
+    throw new Error(
+      `Semantic compiler gallery target-class membership differs: expected [${expectedClassNames.join(", ")}], `
+      + `received [${directClassNames.join(", ")}].`,
+    );
+  }
   const expectedNames = [
     "aot-semantic-gallery-root",
     ...cases.map((candidate) => compileDefinition(candidate).name),
+    ...setupCustomElements.map((resource) => resource.publicName),
   ].sort();
-  const directNames = app.emission.templates.resources
-    .map((resource) => resource.compilation.definition.name)
-    .sort();
-  if (!sameStringArrays(expectedNames, directNames)) {
-    throw new Error(
-      `Semantic compiler gallery resource membership differs: expected [${expectedNames.join(", ")}], `
-      + `received [${directNames.join(", ")}].`,
-    );
-  }
   const publicNames = publicResult.rows
     .map((row) => `${row.compilationLane}:${row.definitionName}`)
     .sort();
@@ -882,6 +899,7 @@ function validateGalleryMembership(
 function validateDefinitionFidelity(
   resource: SemanticTemplateResource,
   galleryCase: SemanticCompilerGalleryCase,
+  resourceIndex: SemanticResourceIndex,
 ): void {
   const expected = compileDefinition(galleryCase);
   if (expected.template?.kind !== "markup") {
@@ -919,6 +937,33 @@ function validateDefinitionFidelity(
       + `expected ${canonicalCompilerJson(expectedShape)}, received ${canonicalCompilerJson(actualShape)}.`,
     );
   }
+  validateDefinitionDependencyFidelity(actual.dependencies, galleryCase, resourceIndex);
+}
+
+function validateDefinitionDependencyFidelity(
+  actualDependencies: SemanticTemplateResource["compilation"]["definition"]["dependencies"],
+  galleryCase: SemanticCompilerGalleryCase,
+  resourceIndex: SemanticResourceIndex,
+): void {
+  const expectedClassNames = galleryCase.dependencies.map((dependency) => dependency.resource.className);
+  const actualClassNames = actualDependencies.map((dependency) => dependency.localName ?? "<missing-target-class>");
+  if (!sameStringArrays(expectedClassNames, actualClassNames)) {
+    throw new Error(
+      `Semantic compiler gallery definition ${galleryCase.candidate.id} dependency order differs: `
+      + `expected [${expectedClassNames.join(", ")}], received [${actualClassNames.join(", ")}].`,
+    );
+  }
+  actualDependencies.forEach((dependency, index) => {
+    const className = expectedClassNames[index]!;
+    const resolvedClassNames = resourceIndex.lookupAllByDependencyReference(dependency)
+      .map((definition) => definition.target.localName ?? "<missing-target-class>");
+    if (!sameStringArrays([className], resolvedClassNames)) {
+      throw new Error(
+        `Semantic compiler gallery definition ${galleryCase.candidate.id} dependency ${className} `
+        + `does not resolve to its setup target identity: received [${resolvedClassNames.join(", ")}].`,
+      );
+    }
+  });
 }
 
 function observedWorldDifferences(
@@ -932,6 +977,9 @@ function observedWorldDifferences(
     ...(galleryCase.candidate.world.compiler.resolveResources === compilerProfile.resolveResources
       ? []
       : [SemanticCompilerGalleryWorldDifference.ResolveResources]),
+    ...(galleryCase.setupProjections.length === 0
+      ? []
+      : [SemanticCompilerGalleryWorldDifference.DeclarativeSetupSource]),
     SemanticCompilerGalleryWorldDifference.SharedResourceScope,
     SemanticCompilerGalleryWorldDifference.CompilerTreeAuthority,
     SemanticCompilerGalleryWorldDifference.GeneratedDefinitionType,
