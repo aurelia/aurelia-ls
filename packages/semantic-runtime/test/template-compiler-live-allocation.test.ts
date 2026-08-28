@@ -2,7 +2,7 @@ import { describe, expect, test } from 'vitest';
 
 import { KernelHandleFactory } from '../src/kernel/handles.js';
 import { CompiledTemplateReference } from '../src/template/compiled-template.js';
-import { HtmlIrNodeKind, HtmlNodeReference } from '../src/template/html-ir.js';
+import { HtmlAttributeReference, HtmlIrNodeKind, HtmlNodeReference } from '../src/template/html-ir.js';
 import {
   AuSlotProcessContentInstructionData,
   HydrateElementProjectionContributor,
@@ -12,10 +12,17 @@ import {
 } from '../src/template/instruction-ir.js';
 import {
   fundTemplateCompilerHydrateElements,
+  TemplateCompilerEmptyHydrateElementProjectionFundingPlan,
   TemplateCompilerHydrateElementFundingDraft,
   TemplateCompilerHydrateElementProjectionFunding,
   type TemplateCompilerHydrateElementProjectionFundingPlan,
 } from '../src/template/template-compiler-hydrate-element-funding.js';
+import {
+  fundTemplateCompilerHydrateTemplateControllers,
+  TemplateCompilerHydrateTemplateControllerChildFunding,
+  type TemplateCompilerHydrateTemplateControllerChildFundingPlan,
+  TemplateCompilerHydrateTemplateControllerFundingDraft,
+} from '../src/template/template-compiler-hydrate-template-controller-funding.js';
 import {
   TemplateCompilerLiveAllocationLedgerState,
   TemplateCompilerLiveAllocationNamespace,
@@ -27,6 +34,7 @@ import {
   TemplateCompilerCaptureSyntaxDecisionKind,
   type TemplateCompilerCapturedSyntaxRowDraft,
 } from '../src/template/template-compiler-occurrence-row-assembly.js';
+import { TemplateCompilerPreparedInstructionFundingAuthority } from '../src/template/template-compiler-prepared-instruction-funding.js';
 
 describe('template compiler live prepared allocation', () => {
   test('freezes one complete local inventory before committing its exact snapshot', () => {
@@ -217,7 +225,8 @@ describe('template compiler live prepared allocation', () => {
       node.addressHandle,
     );
 
-    const funding = fundTemplateCompilerHydrateElements(ledger, phaseKey, [draft]);
+    const instructionAuthority = TemplateCompilerPreparedInstructionFundingAuthority.create(ledger, phaseKey);
+    const funding = fundTemplateCompilerHydrateElements(instructionAuthority, [draft]);
     const head = funding.heads[0]!;
 
     expect(ledger.state).toBe(TemplateCompilerLiveAllocationLedgerState.Mutable);
@@ -320,6 +329,125 @@ describe('template compiler live prepared allocation', () => {
       null,
     )).toThrow('row, wire, or reservation authority');
   });
+
+  test('shares one chronological prepared instruction authority across HTC and HE funding', () => {
+    const allocationAuthority = new TestAllocationAuthority('shared-htc-he');
+    const namespace = new TemplateCompilerLiveAllocationNamespace(allocationAuthority);
+    const phaseKey = 'shared-htc-he';
+    const ledger = namespace.preparePhase(phaseKey);
+    const instructionAuthority = TemplateCompilerPreparedInstructionFundingAuthority.create(ledger, phaseKey);
+    const emptyCounts = namespace.readReservationCounts();
+    const node = new HtmlNodeReference(HtmlIrNodeKind.Element, null, null, null);
+    const attribute = new HtmlAttributeReference(null, null, 'if.bind');
+    const edge = {};
+    const rowContext = {};
+    const childContext = {};
+    const tcRow = { stableSlotKey: 'row:tc', edge, rowContext, childContext };
+    const childPlan = new TestChildFundingPlan(childContext);
+    const tcDraft = new TemplateCompilerHydrateTemplateControllerFundingDraft(
+      tcRow,
+      edge,
+      rowContext,
+      childContext,
+      'row:tc:instruction',
+      'row:tc',
+      node,
+      attribute,
+      'if',
+      null,
+      [],
+      null,
+      childPlan,
+    );
+
+    expect(fundTemplateCompilerHydrateTemplateControllers(instructionAuthority, []).edges).toEqual([]);
+    const tcFunding = fundTemplateCompilerHydrateTemplateControllers(instructionAuthority, [tcDraft]);
+    const heSite = {};
+    const heRow = { stableSlotKey: 'row:he', site: heSite };
+    const heDraft = new TemplateCompilerHydrateElementFundingDraft(
+      heRow,
+      heSite,
+      'row:he:instruction',
+      'occurrence:he',
+      node,
+      allocationAuthority.handles.identity('he-owner'),
+      'x-he',
+      'x-he',
+      null,
+      new TemplateCompilerEmptyHydrateElementProjectionFundingPlan(),
+      [],
+      null,
+      [],
+      [],
+      [],
+      false,
+      null,
+    );
+    const heFunding = fundTemplateCompilerHydrateElements(instructionAuthority, [heDraft]);
+
+    expect(namespace.readReservationCounts()).toEqual(emptyCounts);
+    expect(ledger.state).toBe(TemplateCompilerLiveAllocationLedgerState.Mutable);
+    expect(childPlan.instructionLocal)
+      .toBe(`${phaseKey}:row:tc:instruction:instruction:hydrate-template-controller:row:tc`);
+    expect(tcFunding.edges[0]?.childFunding.context).toBe(childContext);
+    expect(tcFunding.edges[0]?.instruction.childCompiledTemplate)
+      .toBe(tcFunding.edges[0]?.childFunding.compiledTemplate);
+    expect(tcFunding.edges[0]?.instructionOwnerIdentityHandle)
+      .toBe(tcFunding.instructionAllocations[0]?.identityHandle);
+    expect(instructionAuthority.readAllocations()).toEqual([
+      tcFunding.instructionAllocations[0],
+      heFunding.instructionAllocations[0],
+    ]);
+    expect(ledger.state).toBe(TemplateCompilerLiveAllocationLedgerState.Mutable);
+  });
+
+  test('rejects foreign HTC row and child-context funding authority', () => {
+    const allocationAuthority = new TestAllocationAuthority('htc-falsifiers');
+    const namespace = new TemplateCompilerLiveAllocationNamespace(allocationAuthority);
+    const ledger = namespace.preparePhase('htc-falsifiers');
+    const instructionAuthority = TemplateCompilerPreparedInstructionFundingAuthority.create(
+      ledger,
+      'htc-falsifiers',
+    );
+    const edge = {};
+    const rowContext = {};
+    const childContext = {};
+    const row = { stableSlotKey: 'row:tc', edge, rowContext, childContext };
+    expect(() => new TemplateCompilerHydrateTemplateControllerFundingDraft(
+      row,
+      {},
+      rowContext,
+      childContext,
+      'row:tc:instruction',
+      'row:tc',
+      new HtmlNodeReference(HtmlIrNodeKind.Element, null, null, null),
+      new HtmlAttributeReference(null, null, 'if.bind'),
+      'if',
+      null,
+      [],
+      null,
+      new TestChildFundingPlan(childContext),
+    )).toThrow('row, edge, context');
+
+    const draft = new TemplateCompilerHydrateTemplateControllerFundingDraft(
+      row,
+      edge,
+      rowContext,
+      childContext,
+      'row:tc:instruction',
+      'row:tc',
+      new HtmlNodeReference(HtmlIrNodeKind.Element, null, null, null),
+      new HtmlAttributeReference(null, null, 'if.bind'),
+      'if',
+      null,
+      [],
+      null,
+      new TestChildFundingPlan({}),
+    );
+    expect(() => fundTemplateCompilerHydrateTemplateControllers(instructionAuthority, [draft]))
+      .toThrow('foreign context funding');
+    expect(namespace.readReservationCounts()).toMatchObject({ semanticSlots: 0 });
+  });
 });
 
 class TestProjectionFundingPlan implements TemplateCompilerHydrateElementProjectionFundingPlan {
@@ -351,6 +479,33 @@ class TestProjectionFundingPlan implements TemplateCompilerHydrateElementProject
         null,
       )],
       [reservation],
+    );
+  }
+}
+
+class TestChildFundingPlan implements TemplateCompilerHydrateTemplateControllerChildFundingPlan {
+  instructionLocal: string | null = null;
+
+  constructor(private readonly context: object) {}
+
+  fund(
+    instructionLocal: string,
+    ledger: ReturnType<TemplateCompilerLiveAllocationNamespace['preparePhase']>,
+  ): TemplateCompilerHydrateTemplateControllerChildFunding {
+    this.instructionLocal = instructionLocal;
+    const local = `${instructionLocal}:child-compiled-template`;
+    const reservation = ledger.reserveProduct(
+      `${instructionLocal}:child`,
+      'child-compiled-template',
+      TemplateCompilerLiveProductReservationRole.GeneratedCompiledTemplate,
+      null,
+      local,
+    );
+    return TemplateCompilerHydrateTemplateControllerChildFunding.create(
+      instructionLocal,
+      this.context,
+      reservation,
+      new CompiledTemplateReference(reservation.productHandle, reservation.identityHandle),
     );
   }
 }

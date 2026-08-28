@@ -28,6 +28,7 @@ import {
   type TemplateCompilerOccurrenceRowAssembly,
   type TemplateCompilerOccurrenceTargetRowDraft,
 } from './template-compiler-occurrence-row-assembly.js';
+import { TemplateCompilerPreparedInstructionFundingAuthority } from './template-compiler-prepared-instruction-funding.js';
 
 const hydrateElementAllocationAuthority = {};
 const hydrateElementAllocationPreparationAuthority = {};
@@ -352,6 +353,7 @@ export function allocateTemplateCompilerOccurrenceHydrateElements(
   const lane = rows.receipt.endpoint.lane;
   const phaseKey = `${lane.localKey}:occurrence-hydrate-elements`;
   const ledger = parentAllocation.ledger.namespace.preparePhase(phaseKey);
+  const instructionAuthority = TemplateCompilerPreparedInstructionFundingAuthority.create(ledger, phaseKey);
   const fundingDrafts = hydrateRows.map((row) => {
     const head = row.hydrateElement!;
     return new TemplateCompilerHydrateElementFundingDraft(
@@ -374,7 +376,7 @@ export function allocateTemplateCompilerOccurrenceHydrateElements(
       head.envelope.source.sourceAddressHandle,
     );
   });
-  const funding = fundTemplateCompilerHydrateElements(ledger, phaseKey, fundingDrafts);
+  const funding = fundTemplateCompilerHydrateElements(instructionAuthority, fundingDrafts);
   const heads = funding.heads.map((funded, ordinal) => new TemplateCompilerAllocatedHydrateElementHead(
     hydrateRows[ordinal]!,
     hydrateRows[ordinal]!.hydrateElement!,

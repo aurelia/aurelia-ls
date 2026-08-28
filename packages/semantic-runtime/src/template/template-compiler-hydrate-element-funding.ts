@@ -12,12 +12,8 @@ import {
 import {
   stageTemplateCompilerHydrateElementInstruction,
   TemplateCompilerHydrateElementInstructionStagingRequest,
-  TemplateCompilerInstructionStagingAllocation,
-  type TemplateCompilerInstructionStagingAllocationRequest,
-  type TemplateCompilerInstructionStagingAuthority,
 } from './template-compiler-instruction-staging.js';
 import {
-  TemplateCompilerLiveAllocationLedgerState,
   TemplateCompilerLiveProductReservationRole,
   type TemplateCompilerLiveAllocationLedger,
   type TemplateCompilerLiveInstructionAllocation,
@@ -27,6 +23,7 @@ import {
   TemplateCompilerCaptureSyntaxDecisionKind,
   type TemplateCompilerCapturedSyntaxRowDraft,
 } from './template-compiler-occurrence-row-assembly.js';
+import type { TemplateCompilerPreparedInstructionFundingAuthority } from './template-compiler-prepared-instruction-funding.js';
 
 /** Minimal row identity required by neutral HE funding. */
 export interface TemplateCompilerHydrateElementFundingRow<TSite extends object> {
@@ -250,20 +247,17 @@ export class TemplateCompilerHydrateElementFundingResult {
 
 /** Allocate/bind explicit HE drafts into one mutable namespace-invisible phase without preparing or committing it. */
 export function fundTemplateCompilerHydrateElements(
-  ledger: TemplateCompilerLiveAllocationLedger,
-  phaseKey: string,
+  authority: TemplateCompilerPreparedInstructionFundingAuthority,
   drafts: readonly TemplateCompilerHydrateElementFundingDraft<object, TemplateCompilerHydrateElementFundingRow<object>>[],
 ): TemplateCompilerHydrateElementFundingResult {
+  const { ledger, phaseKey } = authority;
   if (
-    !ledger.isPreparedPhase
-    || ledger.state !== TemplateCompilerLiveAllocationLedgerState.Mutable
-    || ledger.rootSiteKey !== phaseKey
-    || phaseKey.length === 0
+    !authority.isModuleConstructed()
+    || !authority.isCurrent()
     || new Set(drafts.map((draft) => draft.instructionSlotKey)).size !== drafts.length
   ) {
     throw new Error('HydrateElement funding requires one mutable prepared phase and unique explicit drafts.');
   }
-  const authority = new HydrateElementFundingInstructionAuthority(ledger, phaseKey);
   const heads = drafts.map((draft) => {
     const captures = draft.captures.map((capture) => {
       if (capture.decisionKind === TemplateCompilerCaptureSyntaxDecisionKind.ReuseAuthored) {
@@ -322,44 +316,6 @@ export function fundTemplateCompilerHydrateElements(
     );
   });
   return new TemplateCompilerHydrateElementFundingResult(heads);
-}
-
-class HydrateElementFundingInstructionAuthority implements TemplateCompilerInstructionStagingAuthority {
-  private readonly allocationsByInstruction = new Map<TemplateInstruction, TemplateCompilerLiveInstructionAllocation>();
-
-  constructor(
-    private readonly ledger: TemplateCompilerLiveAllocationLedger,
-    private readonly phaseKey: string,
-  ) {}
-
-  create<TInstruction extends TemplateInstruction>(
-    request: TemplateCompilerInstructionStagingAllocationRequest,
-    factory: (allocation: TemplateCompilerInstructionStagingAllocation) => TInstruction,
-  ): TInstruction {
-    const siteKey = `${this.phaseKey}:${request.siteKey}`;
-    const instructionLocal = `${siteKey}:instruction:${request.local}`;
-    const retained = this.ledger.allocateInstruction(
-      siteKey,
-      request.local,
-      request.kind,
-      request.sourceAddressHandle,
-      instructionLocal,
-    );
-    const instruction = factory(new TemplateCompilerInstructionStagingAllocation(
-      retained.productHandle,
-      retained.identityHandle,
-      retained.instructionLocal,
-    ));
-    this.ledger.bindInstruction(instruction);
-    this.allocationsByInstruction.set(instruction, retained);
-    return instruction;
-  }
-
-  allocationFor(instruction: TemplateInstruction): TemplateCompilerLiveInstructionAllocation {
-    const allocation = this.allocationsByInstruction.get(instruction) ?? null;
-    if (allocation == null) throw new Error('HydrateElement instruction lost its neutral funding allocation.');
-    return allocation;
-  }
 }
 
 function sameObjects<T>(left: readonly T[], right: readonly T[]): boolean {
