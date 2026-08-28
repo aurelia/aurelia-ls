@@ -9,9 +9,10 @@ import type {
 import {
   TemplateCompilerTargetContextStructuralAuthorityKind,
 } from './compiler-target-plan.js';
-import type {
-  TemplateInstruction,
-  TemplateInstructionSequence,
+import {
+  TemplateInstructionKind,
+  type TemplateInstruction,
+  type TemplateInstructionSequence,
 } from './instruction-ir.js';
 import {
   CompilerTransformedTemplateComment,
@@ -134,6 +135,31 @@ export class TemplateCompilerContextFamilyValueContext {
   }
 }
 
+/** Recursive compiler-definition discovery location over the final context family. */
+export class TemplateCompilerContextFamilyDefinitionLocation {
+  constructor(
+    readonly context: TemplateCompilerContextFamilyValueContext,
+    readonly parentContext: TemplateCompilerContextFamilyValueContext | null,
+    readonly parentRowIndex: number | null,
+    readonly parentInstructionIndex: number | null,
+  ) {
+    const root = context.owner.ownerKind === TemplateCompilerContextFamilyValueOwnerKind.Root;
+    const parentInstruction = parentContext == null || parentRowIndex == null || parentInstructionIndex == null
+      ? null
+      : parentContext.rows[parentRowIndex]?.instructions[parentInstructionIndex] ?? null;
+    if (
+      root !== (parentContext == null && parentRowIndex == null && parentInstructionIndex == null)
+      || (!root && (
+        parentContext == null
+        || parentInstruction !== context.owner.instruction
+        || context.owner.parentCompiledTemplateProductHandle !== parentContext.compiledTemplate.productHandle
+      ))
+    ) {
+      throw new Error('Compiled context-family definition location lost root or parent instruction ownership.');
+    }
+  }
+}
+
 /** Narrow public view over one current in-process frozen family. */
 export class TemplateCompilerContextFamilyValue {
   readonly #authority: object;
@@ -190,6 +216,92 @@ export class TemplateCompilerContextFamilyValue {
 
   isCurrent(): boolean {
     return this.isModuleConstructed() && this.current();
+  }
+}
+
+/** Order root and generated definitions exactly as recursive framework instruction discovery encounters them. */
+export function orderTemplateCompilerContextFamilyDefinitions(
+  value: TemplateCompilerContextFamilyValue,
+): readonly TemplateCompilerContextFamilyDefinitionLocation[] {
+  const childrenByInstruction = new Map<TemplateInstruction, TemplateCompilerContextFamilyValueContext[]>();
+  for (const context of value.contexts) {
+    const instruction = context.owner.instruction;
+    if (instruction == null) continue;
+    const children = childrenByInstruction.get(instruction);
+    if (children == null) childrenByInstruction.set(instruction, [context]);
+    else children.push(context);
+  }
+  const locations: TemplateCompilerContextFamilyDefinitionLocation[] = [];
+  const seen = new Set<ProductHandle>();
+  const visit = (
+    context: TemplateCompilerContextFamilyValueContext,
+    parentContext: TemplateCompilerContextFamilyValueContext | null,
+    parentRowIndex: number | null,
+    parentInstructionIndex: number | null,
+  ): void => {
+    if (seen.has(context.compiledTemplate.productHandle)) {
+      throw new Error('Compiled context-family definition has more than one recursive owner location.');
+    }
+    seen.add(context.compiledTemplate.productHandle);
+    locations.push(new TemplateCompilerContextFamilyDefinitionLocation(
+      context,
+      parentContext,
+      parentRowIndex,
+      parentInstructionIndex,
+    ));
+    for (const [rowIndex, row] of context.rows.entries()) {
+      for (const [instructionIndex, instruction] of row.instructions.entries()) {
+        for (const child of orderedDefinitionChildren(
+          instruction,
+          childrenByInstruction.get(instruction) ?? [],
+        )) {
+          visit(child, context, rowIndex, instructionIndex);
+        }
+      }
+    }
+  };
+  visit(value.root, null, null, null);
+  if (locations.length !== value.contexts.length || seen.size !== value.contexts.length) {
+    throw new Error('Compiled context-family definition order did not cover every unique context.');
+  }
+  return locations;
+}
+
+function orderedDefinitionChildren(
+  instruction: TemplateInstruction,
+  children: readonly TemplateCompilerContextFamilyValueContext[],
+): readonly TemplateCompilerContextFamilyValueContext[] {
+  if (children.length === 0) return [];
+  switch (instruction.instructionKind) {
+    case TemplateInstructionKind.HydrateTemplateController:
+      if (
+        children.length !== 1
+        || children[0]?.owner.ownerKind !== TemplateCompilerContextFamilyValueOwnerKind.TemplateController
+        || children[0].compiledTemplate.productHandle !== instruction.childCompiledTemplate?.productHandle
+      ) {
+        throw new Error('Compiled context-family template-controller child does not match its instruction definition.');
+      }
+      return children;
+    case TemplateInstructionKind.HydrateElement: {
+      const byProduct = new Map(children.map((child) => [child.compiledTemplate.productHandle, child]));
+      const ordered = instruction.projections.map((projection) => {
+        const child = byProduct.get(projection.compiledTemplate.productHandle) ?? null;
+        if (
+          child == null
+          || child.owner.ownerKind !== TemplateCompilerContextFamilyValueOwnerKind.Projection
+          || child.owner.slotName !== projection.slotName
+        ) {
+          throw new Error(`Compiled context-family projection '${projection.slotName}' has no exact child context.`);
+        }
+        return child;
+      });
+      if (ordered.length !== children.length || new Set(ordered).size !== ordered.length) {
+        throw new Error('Compiled context-family projection order did not cover every child context.');
+      }
+      return ordered;
+    }
+    default:
+      throw new Error(`Instruction '${instruction.instructionKind}' unexpectedly owns a compiled definition.`);
   }
 }
 

@@ -273,6 +273,9 @@ classification, expression parsing, and instruction lowering converge on the sam
   Recursive schedule chronology also owns pre-attachment processContent adoption; context inventory order cannot assign
   event ordinals, and already-committed removals require admitted target context rather than a generated root that the
   later target execution has not created yet.
+  `orderTemplateCompilerContextFamilyDefinitions(...)` projects the final root/controller/projection family into the
+  framework's recursive child-definition discovery order. Structural assurance and runtime definition values share
+  this owner-location law; context inventory order remains a separate construction axis.
 - `template-compiler-context-family-compilation.ts` is the generation-bound in-process front door over that transaction.
   Root-inclusive mode sends an ordinary one-context template through the same family transaction rather than retaining
   a separate production corridor. It returns the final family or a stage-local Pending, Ineligible, Open, or Abrupt

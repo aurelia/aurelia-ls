@@ -6,10 +6,10 @@ import {
   CompilerTransformedTemplateFragment,
   CompilerTransformedTemplateText,
   expressionProductHandlesForInstruction,
+  orderTemplateCompilerContextFamilyDefinitions,
   TemplateCompilerContextFamilyCompilationState,
   TemplateCompilerContextFamilyValueGeometryKind,
   TemplateCompilerContextFamilyValueOwnerKind,
-  TemplateInstructionKind,
   type CompilerTransformedTemplateNode,
   type TemplateCompilerContextFamilyCompilationResult,
   type TemplateCompilerContextFamilyValue,
@@ -374,87 +374,39 @@ export function observeSemanticFrozenFamily(
 export function orderSemanticFrozenFamilyDefinitions(
   value: TemplateCompilerContextFamilyValue,
 ): readonly SemanticFrozenFamilyOrderedDefinition[] {
-  const uniqueProducts = new Set(value.contexts.map((context) => context.compiledTemplate.productHandle));
-  const childrenByInstruction = new Map<object, TemplateCompilerContextFamilyValueContext[]>();
-  for (const context of value.contexts) {
-    const instruction = context.owner.instruction;
-    if (instruction == null) continue;
-    const children = childrenByInstruction.get(instruction);
-    if (children == null) childrenByInstruction.set(instruction, [context]);
-    else children.push(context);
-  }
-  const records: SemanticFrozenFamilyOrderedDefinition[] = [];
-  const indexes = new Map<string, number>();
-  const visit = (context: TemplateCompilerContextFamilyValueContext, owner: SemanticFrozenFamilyDefinitionOwner): void => {
-    if (indexes.has(context.compiledTemplate.productHandle)) {
-      throw new Error("Semantic frozen-family child definition has more than one owner location.");
+  const locations = orderTemplateCompilerContextFamilyDefinitions(value);
+  const indexes = new Map(locations.map((location, index) => [location.context, index]));
+  return locations.map((location): SemanticFrozenFamilyOrderedDefinition => {
+    const context = location.context;
+    if (context.owner.ownerKind === TemplateCompilerContextFamilyValueOwnerKind.Root) {
+      return { context, owner: { kind: "root" } };
     }
-    const parentDefinitionIndex = records.length;
-    indexes.set(context.compiledTemplate.productHandle, parentDefinitionIndex);
-    records.push({ context, owner });
-    for (const [rowIndex, row] of context.rows.entries()) {
-      for (const [instructionIndex, instruction] of row.instructions.entries()) {
-        const children = orderedInstructionChildren(instruction, childrenByInstruction.get(instruction) ?? []);
-        for (const child of children) {
-          if (child.owner.parentCompiledTemplateProductHandle !== context.compiledTemplate.productHandle) {
-            throw new Error("Semantic frozen-family child has the wrong parent definition.");
-          }
-          visit(child, {
-              kind: child.owner.ownerKind,
-              parentDefinitionIndex,
-              rowIndex,
-              instructionIndex,
-              instructionKind: frameworkInstructionKind(instruction.instructionKind),
-              slotName: child.owner.slotName,
-              fieldPath: child.owner.ownerKind === TemplateCompilerContextFamilyValueOwnerKind.Projection
-                ? ["projections", child.owner.slotName!]
-                : ["def"],
-          });
-        }
-      }
+    const parentContext = location.parentContext;
+    const rowIndex = location.parentRowIndex;
+    const instructionIndex = location.parentInstructionIndex;
+    if (parentContext == null || rowIndex == null || instructionIndex == null) {
+      throw new Error("Semantic frozen-family generated definition has no exact parent location.");
     }
-  };
-  visit(value.root, { kind: "root" });
-  if (records.length !== value.contexts.length || uniqueProducts.size !== value.contexts.length) {
-    throw new Error("Semantic frozen-family definition walk did not cover every unique context.");
-  }
-  return records;
-}
-
-function orderedInstructionChildren(
-  instruction: TemplateCompilerContextFamilyValue["instructions"][number],
-  children: readonly TemplateCompilerContextFamilyValueContext[],
-): readonly TemplateCompilerContextFamilyValueContext[] {
-  if (children.length === 0) return [];
-  if (instruction.instructionKind === TemplateInstructionKind.HydrateTemplateController) {
-    if (
-      children.length !== 1
-      || children[0]?.owner.ownerKind !== TemplateCompilerContextFamilyValueOwnerKind.TemplateController
-      || children[0].compiledTemplate.productHandle !== instruction.childCompiledTemplate?.productHandle
-    ) {
-      throw new Error("Semantic frozen-family HTC child does not match its final instruction definition.");
+    const parentDefinitionIndex = indexes.get(parentContext) ?? null;
+    const instruction = parentContext.rows[rowIndex]?.instructions[instructionIndex] ?? null;
+    if (parentDefinitionIndex == null || instruction == null || instruction !== context.owner.instruction) {
+      throw new Error("Semantic frozen-family generated definition lost its shared family owner location.");
     }
-    return children;
-  }
-  if (instruction.instructionKind === TemplateInstructionKind.HydrateElement) {
-    const byProduct = new Map(children.map((child) => [child.compiledTemplate.productHandle, child]));
-    const ordered = instruction.projections.map((projection) => {
-      const child = byProduct.get(projection.compiledTemplate.productHandle) ?? null;
-      if (
-        child == null
-        || child.owner.ownerKind !== TemplateCompilerContextFamilyValueOwnerKind.Projection
-        || child.owner.slotName !== projection.slotName
-      ) {
-        throw new Error(`Semantic frozen-family projection '${projection.slotName}' has no exact child context.`);
-      }
-      return child;
-    });
-    if (ordered.length !== children.length) {
-      throw new Error("Semantic frozen-family HE projection order did not cover every child context.");
-    }
-    return ordered;
-  }
-  throw new Error(`Semantic frozen-family instruction '${instruction.instructionKind}' unexpectedly owns a definition.`);
+    return {
+      context,
+      owner: {
+        kind: context.owner.ownerKind,
+        parentDefinitionIndex,
+        rowIndex,
+        instructionIndex,
+        instructionKind: frameworkInstructionKind(instruction.instructionKind),
+        slotName: context.owner.slotName,
+        fieldPath: context.owner.ownerKind === TemplateCompilerContextFamilyValueOwnerKind.Projection
+          ? ["projections", context.owner.slotName!]
+          : ["def"],
+      },
+    };
+  });
 }
 
 function normalizeDefinition(

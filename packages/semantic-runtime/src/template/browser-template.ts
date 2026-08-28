@@ -28,6 +28,7 @@ export * from './template-compiler-root-site-cursor-observation.js';
 export * from './template-compiler-context-family-compilation.js';
 export {
   TemplateCompilerContextFamilyMarkerGeometry,
+  TemplateCompilerContextFamilyDefinitionLocation,
   TemplateCompilerContextFamilyRenderLocationGeometry,
   TemplateCompilerContextFamilyValue,
   TemplateCompilerContextFamilyValueContext,
@@ -35,6 +36,7 @@ export {
   TemplateCompilerContextFamilyValueOwner,
   TemplateCompilerContextFamilyValueOwnerKind,
   TemplateCompilerContextFamilyValueRow,
+  orderTemplateCompilerContextFamilyDefinitions,
   type TemplateCompilerContextFamilyValueGeometry,
 } from './template-compiler-context-family-value.js';
 export { TemplateCompilerContextFamilyExpressionValue } from './template-compiler-context-family-expression-value.js';
