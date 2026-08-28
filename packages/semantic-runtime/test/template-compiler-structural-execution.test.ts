@@ -1147,6 +1147,8 @@ describe('template compiler structural execution mechanics', () => {
         innerInstruction,
       );
       if (row == null || outerRow == null) throw new Error('Expected stacked input template-controller rows.');
+      expect(outerRow.stableSlotKey).toBe('input-template-controller-inner');
+      expect(outerRow.publicationLocalKey).toBe('input-template-controller-inner');
       const session = TemplateCompilerStructuralExecutionSession.create(forest, targetPlan);
       const outerStructure = session.createGeneratedContextStructure(outerContext);
       expect(() => session.createGeneratedContextStructure(childContext)).toThrow(/must adopt/);

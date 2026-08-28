@@ -405,24 +405,30 @@ export class TemplateCompilerTargetContextPlan {
 
   /** Append one render-location row born inside a generated template-controller context. */
   appendGeneratedContextBoundaryRow(
-    local: string,
+    stableSlotKey: string,
     instruction: HydrateTemplateControllerInstruction,
     posture: TemplateCompilerTargetRowPosture = TemplateCompilerTargetRowPosture.Complete,
     openSeamHandles: readonly OpenSeamHandle[] = [],
     sourceAddressHandle: AddressHandle | null = instruction.sourceAddressHandle,
   ): TemplateCompilerTargetRowPlan {
     this.requireMutable();
-    if (this.role !== TemplateCompilerTargetContextRole.TemplateController) {
-      throw new Error(`Compiler context '${this.localKey}' cannot append a generated template-controller boundary.`);
+    if (
+      this.role !== TemplateCompilerTargetContextRole.TemplateController
+      || stableSlotKey.length === 0
+      || this.stableRowSlots.has(stableSlotKey)
+    ) {
+      throw new Error(
+        `Compiler context '${this.localKey}' cannot append generated boundary '${stableSlotKey}'.`,
+      );
     }
     const ordinal = this.rows.length;
     if (posture === TemplateCompilerTargetRowPosture.Open) {
       this.recordConditionalTargetOrdinal(this.nextTargetOrdinal);
     }
     const row = new TemplateCompilerTargetRowPlan(
-      `${this.localKey}:row:${ordinal}:${local}`,
-      `${ordinal}:${local}`,
-      `${ordinal}:${local}`,
+      `${this.localKey}:row:${stableSlotKey}`,
+      stableSlotKey,
+      stableSlotKey,
       this.toReference(),
       ordinal,
       this.nextTargetOrdinal,
@@ -440,7 +446,7 @@ export class TemplateCompilerTargetContextPlan {
       sourceAddressHandle,
     );
     this.rows.push(row);
-    this.stableRowSlots.add(row.stableSlotKey);
+    this.stableRowSlots.add(stableSlotKey);
     this.nextTargetOrdinal += 1;
     return row;
   }
