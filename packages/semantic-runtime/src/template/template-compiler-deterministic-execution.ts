@@ -4,9 +4,13 @@ import type { ProductHandle } from '../kernel/handles.js';
 import { AttributeClassificationKind } from './attribute-syntax.js';
 import type { BrowserEffectiveTemplateEmission } from './browser-effective-template-materializer.js';
 import {
+  TemplateCompilerContainerlessReplacementPlacement,
+  TemplateCompilerMarkerTargetPlacement,
   TemplateCompilerProjectionContextStructuralAuthority,
   TemplateCompilerTargetRowPosture,
   TemplateCompilerTemplateControllerContextStructuralAuthority,
+  TemplateCompilerTemplateControllerGeneratedAppendPlacement,
+  TemplateCompilerTemplateControllerSourceReplacementPlacement,
   type TemplateCompilerTargetContextPlan,
   type TemplateCompilerTargetRowPlan,
 } from './compiler-target-plan.js';
@@ -367,8 +371,10 @@ class DeterministicExecutionFrame {
     for (const context of this.input.compilation.compiledTemplate.targetPlan.readContexts()) {
       const textRowsByNode = rowsByTextNode(context);
       for (const row of context.readRows()) {
-        const rowNode = requiredAuthoredRowNode(row);
-        if (this.exactNode(rowNode.productHandle) == null) {
+        const rowNode = row.placement instanceof TemplateCompilerTemplateControllerGeneratedAppendPlacement
+          ? null
+          : requiredAuthoredRowNode(row);
+        if (rowNode != null && this.exactNode(rowNode.productHandle) == null) {
           reasons.push(reason(
             TemplateCompilerDeterministicExecutionReasonKind.NonSingularOrigin,
             `Compiler row '${row.localKey}' has no singular browser occurrence.`,
@@ -399,7 +405,7 @@ class DeterministicExecutionFrame {
             const instruction = row.instructions.length === 1 ? row.instructions[0] : null;
             return !(instruction instanceof TextBindingInstruction)
               || instruction.expressionChainIndex !== index
-              || row.targetKind !== TemplateRenderTargetKind.MarkerTarget;
+              || !(row.placement instanceof TemplateCompilerMarkerTargetPlacement);
           })
         ) {
           reasons.push(reason(
@@ -677,8 +683,11 @@ class DeterministicExecutionFrame {
     if (this.executedContexts.has(context)) return;
     this.executedContexts.add(context);
     for (const row of context.readRows()) {
-      const rowNode = requiredAuthoredRowNode(row);
       if (session.readTargetGeometry(row) != null) continue;
+      if (row.placement instanceof TemplateCompilerTemplateControllerGeneratedAppendPlacement) {
+        throw new Error(`Generated context row '${row.localKey}' was not realized by its template-controller chain.`);
+      }
+      const rowNode = requiredAuthoredRowNode(row);
       if (rowNode instanceof HtmlText) {
         this.executeText(context, rowNode, session);
         continue;
@@ -915,8 +924,12 @@ class DeterministicExecutionFrame {
     row: TemplateCompilerTargetRowPlan,
     session: TemplateCompilerStructuralExecutionSession,
   ): void {
+    if (row.placement instanceof TemplateCompilerTemplateControllerGeneratedAppendPlacement) {
+      session.appendRenderLocationTarget(row);
+      return;
+    }
     const occurrence = this.exactNode(requiredAuthoredRowNode(row).productHandle);
-    if (row.targetKind === TemplateRenderTargetKind.MarkerTarget) {
+    if (row.placement instanceof TemplateCompilerMarkerTargetPlacement) {
       if (
         !(occurrence instanceof TemplateCompilerElementOccurrence)
         && !(occurrence instanceof TemplateCompilerTextOccurrence)
@@ -924,7 +937,10 @@ class DeterministicExecutionFrame {
       session.realizeMarkerTarget(row, occurrence);
       return;
     }
-    if (row.targetKind === TemplateRenderTargetKind.RenderLocation) {
+    if (
+      row.placement instanceof TemplateCompilerContainerlessReplacementPlacement
+      || row.placement instanceof TemplateCompilerTemplateControllerSourceReplacementPlacement
+    ) {
       if (!(occurrence instanceof TemplateCompilerElementOccurrence)) {
         throw new Error(`Render-location row '${row.localKey}' lost its exact element target.`);
       }
@@ -1039,6 +1055,7 @@ function rowsByTextNode(
 ): ReadonlyMap<ProductHandle, readonly TemplateCompilerTargetRowPlan[]> {
   const rows = new Map<ProductHandle, TemplateCompilerTargetRowPlan[]>();
   for (const row of context.readRows()) {
+    if (row.placement instanceof TemplateCompilerTemplateControllerGeneratedAppendPlacement) continue;
     const node = requiredAuthoredRowNode(row);
     if (node instanceof HtmlText) appendMap(rows, node.productHandle, row);
   }

@@ -9,6 +9,9 @@ import {
   TemplateCompilationContextReference,
 } from '../src/template/compilation-unit.js';
 import {
+  TemplateCompilerContainerlessReplacementPlacement,
+  TemplateCompilerMarkerTargetPlacement,
+  TemplateCompilerTemplateControllerSourceReplacementPlacement,
   TemplateCompilerTargetPlan,
   TemplateCompilerTargetRowPosture,
 } from '../src/template/compiler-target-plan.js';
@@ -142,6 +145,26 @@ describe('template compiler structural execution mechanics', () => {
       expect(() => session.admitTargetPlan(contributorReuse)).toThrow(/Projection contributor object/);
       expect(session.readTargetPlans()).toEqual(targetPlansBeforeRejectedContributor);
       expect(session.readContexts()).toEqual(contextsBeforeRejectedContributor);
+    } finally {
+      fixture.dispose();
+    }
+  });
+
+  test('does not infer render-location placement from the runtime target kind', () => {
+    const fixture = new BrowserEffectiveTemplateFixture('template-compiler-explicit-placement');
+    try {
+      const input = fixture.materialize('explicit-placement', '<div></div>');
+      const authoredDiv = requiredAuthoredElement(input.authoredHtml.nodes, 'div');
+      const targetPlan = createTargetPlan(fixture, 'explicit-placement');
+      const instruction = setAttributeInstruction(fixture, authoredDiv, 'explicit-placement');
+      const row = targetPlan.root.appendRow(
+        'explicit-placement',
+        authoredDiv,
+        [instruction],
+        TemplateRenderTargetKind.RenderLocation,
+      );
+      expect(row?.placement).toBeInstanceOf(TemplateCompilerMarkerTargetPlacement);
+      expect(() => targetPlan.assertCoherent()).toThrow(/incoherent context ownership/);
     } finally {
       fixture.dispose();
     }
@@ -371,12 +394,15 @@ describe('template compiler structural execution mechanics', () => {
         authoredElement,
         [outerInstruction],
         TemplateRenderTargetKind.RenderLocation,
+        TemplateCompilerTargetRowPosture.Complete,
+        1,
+        [],
+        authoredElement.sourceAddressHandle,
+        new TemplateCompilerTemplateControllerSourceReplacementPlacement(outerInstruction),
       );
-      const outerRow = outerContext.appendRow(
+      const outerRow = outerContext.appendGeneratedContextBoundaryRow(
         'inner-repeat',
-        authoredElement,
-        [innerInstruction],
-        TemplateRenderTargetKind.RenderLocation,
+        innerInstruction,
       );
       const containerlessInstruction = new HydrateElementInstruction(
         fixture.run.handles.product('inner-containerless-instruction'),
@@ -399,16 +425,26 @@ describe('template compiler structural execution mechanics', () => {
         authoredElement,
         [containerlessInstruction],
         TemplateRenderTargetKind.RenderLocation,
+        TemplateCompilerTargetRowPosture.Complete,
+        1,
+        [],
+        authoredElement.sourceAddressHandle,
+        new TemplateCompilerContainerlessReplacementPlacement(containerlessInstruction),
       );
       if (rootRow == null || outerRow == null || innerRow == null) {
         throw new Error('Expected complete render-location rows.');
       }
+      expect(rootRow.placement).toBeInstanceOf(TemplateCompilerTemplateControllerSourceReplacementPlacement);
+      expect(outerRow.sourceKind).toBe('generated-context-boundary');
+      expect(outerRow.node).toBeNull();
+      expect(outerRow.occurrence).toBeNull();
+      expect(innerRow.placement).toBeInstanceOf(TemplateCompilerContainerlessReplacementPlacement);
       const session = TemplateCompilerStructuralExecutionSession.create(forest, targetPlan);
       expect(() => session.assertCoherent()).toThrow(/cover every target context/);
       const outerStructure = session.createGeneratedContextStructure(outerContext);
       const innerStructure = session.createGeneratedContextStructure(innerContext);
 
-      expect(() => session.appendRenderLocationTarget(rootRow)).toThrow(/sole append-only outer/);
+      expect(() => session.appendRenderLocationTarget(rootRow)).toThrow(/generated-append placement authority/);
       const rootGeometry = session.realizeRenderLocationTarget(rootRow, inputElement);
       expect(() => session.moveNodeIntoContext(
         inputElement,
@@ -422,6 +458,7 @@ describe('template compiler structural execution mechanics', () => {
       session.assertCoherent();
 
       expect(rootGeometry.geometryKind).toBe(TemplateCompilerTargetGeometryKind.RenderLocation);
+      expect(rootGeometry.placement).toBe(rootRow.placement);
       expect(rootGeometry.logicalTarget).toBe(rootGeometry.end);
       expect(rootGeometry.marker.text).toBe('au');
       expect(rootGeometry.start.text).toBe('au-start');
@@ -434,6 +471,7 @@ describe('template compiler structural execution mechanics', () => {
         expect.objectContaining({ semanticKind: HtmlCommentSemanticKind.Plain, text: 'au-end' }),
       ]);
       expect(outerGeometry.replacedNode).toBeNull();
+      expect(outerGeometry.placement).toBe(outerRow.placement);
       expect(outerStructure.compilerContent.readChildren()).toEqual([
         outerGeometry.marker,
         outerGeometry.start,
@@ -446,6 +484,7 @@ describe('template compiler structural execution mechanics', () => {
       ]);
       expect(rootGeometry.replacedNode).toBe(inputElement);
       expect(innerGeometry.replacedNode).toBe(inputElement);
+      expect(innerGeometry.placement).toBe(innerRow.placement);
       expect(rootGeometry.end).not.toBe(innerGeometry.end);
       expect(inputElement.parent).toBeNull();
       expect(inputElement.parentEdgeKind).toBe(TemplateCompilerOccurrenceEdgeKind.Detached);
@@ -496,6 +535,11 @@ describe('template compiler structural execution mechanics', () => {
         authoredElements[index]!,
         [instruction],
         TemplateRenderTargetKind.RenderLocation,
+        TemplateCompilerTargetRowPosture.Complete,
+        1,
+        [],
+        authoredElements[index]!.sourceAddressHandle,
+        new TemplateCompilerTemplateControllerSourceReplacementPlacement(instruction),
       ));
       if (rootRows.some((row) => row == null)) throw new Error('Expected three root render-location rows.');
       const childInstructions = authoredElements.slice(0, 2).map((element, index) =>
@@ -846,14 +890,24 @@ describe('template compiler structural execution mechanics', () => {
       expect(whitespaceDisposition.membershipOrdinal).toBeNull();
       expect(whitespaceDisposition.context).toBe(targetPlan.root);
 
+      const invalidProjectionInstruction = templateControllerInstruction(
+        fixture,
+        authoredDefault,
+        'projection-invalid-append',
+      );
       const invalidProjectionRow = defaultContext.appendRow(
         'invalid-append',
         authoredDefault,
-        [setAttributeInstruction(fixture, authoredDefault, 'projection-invalid-append')],
+        [invalidProjectionInstruction],
         TemplateRenderTargetKind.RenderLocation,
+        TemplateCompilerTargetRowPosture.Complete,
+        1,
+        [],
+        authoredDefault.sourceAddressHandle,
+        new TemplateCompilerTemplateControllerSourceReplacementPlacement(invalidProjectionInstruction),
       );
       if (invalidProjectionRow == null) throw new Error('Expected one invalid projection append row.');
-      expect(() => session.appendRenderLocationTarget(invalidProjectionRow)).toThrow(/sole append-only outer/);
+      expect(() => session.appendRenderLocationTarget(invalidProjectionRow)).toThrow(/generated-append placement authority/);
     } finally {
       fixture.dispose();
     }
@@ -992,12 +1046,15 @@ describe('template compiler structural execution mechanics', () => {
         authoredTemplate,
         [outerInstruction],
         TemplateRenderTargetKind.RenderLocation,
+        TemplateCompilerTargetRowPosture.Complete,
+        1,
+        [],
+        authoredTemplate.sourceAddressHandle,
+        new TemplateCompilerTemplateControllerSourceReplacementPlacement(outerInstruction),
       );
-      const outerRow = outerContext.appendRow(
+      const outerRow = outerContext.appendGeneratedContextBoundaryRow(
         'input-template-controller-inner',
-        authoredTemplate,
-        [innerInstruction],
-        TemplateRenderTargetKind.RenderLocation,
+        innerInstruction,
       );
       if (row == null || outerRow == null) throw new Error('Expected stacked input template-controller rows.');
       const session = TemplateCompilerStructuralExecutionSession.create(forest, targetPlan);
@@ -1158,6 +1215,11 @@ describe('template compiler structural execution mechanics', () => {
           authoredDiv,
           [instruction],
           TemplateRenderTargetKind.RenderLocation,
+          TemplateCompilerTargetRowPosture.Complete,
+          1,
+          [],
+          authoredDiv.sourceAddressHandle,
+          new TemplateCompilerTemplateControllerSourceReplacementPlacement(instruction),
         );
         if (row == null) throw new Error('Expected template-controller flattening row.');
         const session = TemplateCompilerStructuralExecutionSession.create(forest, targetPlan);
@@ -1193,12 +1255,22 @@ describe('template compiler structural execution mechanics', () => {
           authoredDiv,
           [outerInstruction],
           TemplateRenderTargetKind.RenderLocation,
+          TemplateCompilerTargetRowPosture.Complete,
+          1,
+          [],
+          authoredDiv.sourceAddressHandle,
+          new TemplateCompilerTemplateControllerSourceReplacementPlacement(outerInstruction),
         );
         const outerRow = outerContext.appendRow(
           'distinct-inner',
           authoredSpan,
           [innerInstruction],
           TemplateRenderTargetKind.RenderLocation,
+          TemplateCompilerTargetRowPosture.Complete,
+          1,
+          [],
+          authoredSpan.sourceAddressHandle,
+          new TemplateCompilerTemplateControllerSourceReplacementPlacement(innerInstruction),
         );
         if (rootRow == null || outerRow == null) throw new Error('Expected distinct-source TC rows.');
         const session = TemplateCompilerStructuralExecutionSession.create(forest, targetPlan);
@@ -1206,7 +1278,7 @@ describe('template compiler structural execution mechanics', () => {
         session.createGeneratedContextStructure(innerContext);
         session.realizeRenderLocationTarget(rootRow, div);
         session.moveNodeIntoContext(div, outerContext, 0, [outerInstruction.productHandle]);
-        expect(() => session.appendRenderLocationTarget(outerRow)).toThrow(/sole append-only outer/);
+        expect(() => session.appendRenderLocationTarget(outerRow)).toThrow(/generated-append placement authority/);
         const descendantGeometry = session.realizeRenderLocationTarget(outerRow, span);
         session.moveNodeIntoContext(span, innerContext, 0, [innerInstruction.productHandle]);
         session.assertCoherent();
@@ -1238,6 +1310,11 @@ describe('template compiler structural execution mechanics', () => {
           authoredDiv,
           [instruction],
           TemplateRenderTargetKind.RenderLocation,
+          TemplateCompilerTargetRowPosture.Complete,
+          1,
+          [],
+          authoredDiv.sourceAddressHandle,
+          new TemplateCompilerTemplateControllerSourceReplacementPlacement(instruction),
         );
         if (row == null) throw new Error('Expected render-reorder row.');
         const session = TemplateCompilerStructuralExecutionSession.create(forest, targetPlan);
@@ -1330,6 +1407,11 @@ describe('template compiler structural execution mechanics', () => {
           authoredDiv,
           [instruction],
           TemplateRenderTargetKind.RenderLocation,
+          TemplateCompilerTargetRowPosture.Complete,
+          1,
+          [],
+          authoredDiv.sourceAddressHandle,
+          new TemplateCompilerTemplateControllerSourceReplacementPlacement(instruction),
         );
         if (row == null) throw new Error('Expected transferred-attribute row.');
         const session = TemplateCompilerStructuralExecutionSession.create(forest, targetPlan);

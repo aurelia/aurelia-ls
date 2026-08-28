@@ -32,6 +32,7 @@ import {
 } from './template-compiler-live-attribute-assembly.js';
 import { TemplateCompilerLiveAttributeDisposition } from './template-compiler-live-attribute-owner.js';
 import type { TemplateCompilerTextInstructionHole } from './template-compiler-text-instruction-staging.js';
+import { TemplateCompilerTargetRowPlacementKind } from './compiler-target-plan.js';
 import type {
   TemplateCompilerElementOccurrence,
   TemplateCompilerTextOccurrence,
@@ -204,6 +205,7 @@ export class TemplateCompilerOccurrenceTargetRowDraft {
     readonly ordinal: number,
     readonly projectedTargetOrdinal: number,
     readonly targetKind: TemplateRenderTargetKind,
+    readonly placementKind: TemplateCompilerTargetRowPlacementKind,
     readonly occurrence: TemplateCompilerElementOccurrence | TemplateCompilerTextOccurrence,
     readonly authoredNode: HtmlElement | HtmlText | null,
     readonly sourcePosture: TemplateCompilerOccurrenceSourcePosture,
@@ -406,6 +408,11 @@ export class TemplateCompilerOccurrenceRowAssembly {
         || row.projectedTargetOrdinal !== ordinal
         || row.stableSlotKey.length === 0
         || row.instructionKinds.length === 0
+        || (row.placementKind === TemplateCompilerTargetRowPlacementKind.Marker
+          ? row.targetKind !== TemplateRenderTargetKind.MarkerTarget
+          : row.placementKind === TemplateCompilerTargetRowPlacementKind.ContainerlessReplacement
+            ? row.targetKind !== TemplateRenderTargetKind.RenderLocation
+            : true)
       )
       || new Set(rows.map((row) => row.stableSlotKey)).size !== rows.length
       || staticSites.some((site) => rowSites.has(site.site))
@@ -623,6 +630,9 @@ function appendElementSite(
     site.containerlessPlacement != null
       ? TemplateRenderTargetKind.RenderLocation
       : TemplateRenderTargetKind.MarkerTarget,
+    site.containerlessPlacement != null
+      ? TemplateCompilerTargetRowPlacementKind.ContainerlessReplacement
+      : TemplateCompilerTargetRowPlacementKind.Marker,
     site.event.element,
     site.event.authoredElement,
     posture,
@@ -698,6 +708,7 @@ function appendTextSite(
       ordinal,
       ordinal,
       TemplateRenderTargetKind.MarkerTarget,
+      TemplateCompilerTargetRowPlacementKind.Marker,
       site.event.text,
       site.event.authoredText,
       posture,

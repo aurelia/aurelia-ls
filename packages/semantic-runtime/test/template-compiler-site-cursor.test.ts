@@ -110,9 +110,14 @@ import {
 } from '../src/template/template-compiler-occurrence-hydrate-element-allocation.js';
 import { executeTemplateCompilerOccurrenceTarget } from '../src/template/template-compiler-occurrence-target-execution.js';
 import {
+  TemplateCompilerContainerlessReplacementPlacement,
+  TemplateCompilerMarkerTargetPlacement,
+  TemplateCompilerTemplateControllerGeneratedAppendPlacement,
+  TemplateCompilerTemplateControllerSourceReplacementPlacement,
   TemplateCompilerTargetContextState,
   TemplateCompilerTargetContextRole,
   TemplateCompilerTargetPlan,
+  TemplateCompilerTargetRowPlacementKind,
   TemplateCompilerTargetRowPosture,
   TemplateCompilerTargetRowSourceKind,
 } from '../src/template/compiler-target-plan.js';
@@ -617,6 +622,7 @@ describe('template compiler root site cursor', () => {
         && mapping.row.posture === TemplateCompilerTargetRowPosture.Complete
         && mapping.row.stableSlotKey === mapping.draft.stableSlotKey
         && mapping.row.publicationLocalKey === mapping.draft.stableSlotKey
+        && mapping.row.placement.placementKind === mapping.draft.placementKind
       ), name).toBe(true);
       expect(allocateTemplateCompilerOccurrenceTargetPlan(rowAssembly, hydrateElements).assembly, name)
         .toBe(targetAssembly);
@@ -1371,6 +1377,16 @@ describe('template compiler root site cursor', () => {
     expect(tcContexts.slice(0, 2).map((context) =>
       context.readRows()[0]?.instructions[0]
     ).every((instruction) => instruction instanceof HydrateTemplateControllerInstruction)).toBe(true);
+    expect(tcContexts[0]?.readRows()[0]?.placement)
+      .toBeInstanceOf(TemplateCompilerTemplateControllerSourceReplacementPlacement);
+    expect(tcContexts[1]?.readRows()[0]).toMatchObject({
+      sourceKind: TemplateCompilerTargetRowSourceKind.GeneratedContextBoundary,
+      node: null,
+      occurrence: null,
+      inputNode: null,
+    });
+    expect(tcContexts[1]?.readRows()[0]?.placement)
+      .toBeInstanceOf(TemplateCompilerTemplateControllerGeneratedAppendPlacement);
 
     const projectionPlan = fixture.run('cursor-context-family-projection').compilation.compiledTemplate.targetPlan;
     const projectionContexts = projectionPlan.readContexts();
@@ -1659,7 +1675,7 @@ describe('template compiler root site cursor', () => {
       ).length;
       const elementRowCount = rows.rows.filter((row) => row.site.siteKind === 'element').length;
       const containerlessRowCount = rows.rows.filter((row) =>
-        row.targetKind === TemplateRenderTargetKind.RenderLocation
+        row.placementKind === TemplateCompilerTargetRowPlacementKind.ContainerlessReplacement
       ).length;
       const markerElementRowCount = elementRowCount - containerlessRowCount;
 
@@ -1838,6 +1854,8 @@ describe('template compiler root site cursor', () => {
         });
         expect(target.rowMappings[0]?.row.instructions.map((instruction) => instruction.instructionKind))
           .toEqual(['hydrate-element']);
+        expect(target.rowMappings[0]?.row.placement)
+          .toBeInstanceOf(TemplateCompilerContainerlessReplacementPlacement);
         expect(target.rowMappings[0]?.hydrateElement?.instruction.containerless)
           .toBe(name === 'cursor-usage-containerless');
         expect(target.publicationPrerequisites.map((entry) => entry.prerequisiteKind)).toEqual([
@@ -1846,6 +1864,7 @@ describe('template compiler root site cursor', () => {
         const geometry = result.targetGeometries[0];
         if (geometry?.geometryKind !== 'render-location') throw new Error('Expected containerless geometry.');
         expect(geometry.replacedNode).toBe(rows.rows[0]?.occurrence);
+        expect(geometry.placement).toBe(target.rowMappings[0]?.row.placement);
         expect(geometry.replacedNode?.parent).toBeNull();
         expect(geometry.logicalTarget).toBe(geometry.end);
         expect(attachment.structuralExecution.readConsumedNodeDispositions()).toEqual([]);
@@ -1923,6 +1942,9 @@ describe('template compiler root site cursor', () => {
         ]);
       }
       if (name === 'cursor-row-interleave') {
+        expect(target.rowMappings.every((mapping) =>
+          mapping.row.placement instanceof TemplateCompilerMarkerTargetPlacement
+        )).toBe(true);
         const structure = attachment.structuralExecution.readContextStructure(target.targetPlan.root)!;
         expect(occurrenceShape(structure.compilerContent)).toEqual([
           'text:before ',

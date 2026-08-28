@@ -1,5 +1,5 @@
 import type { IdentityHandle, ProductHandle } from '../kernel/handles.js';
-import { TemplateRenderTargetKind } from './compiled-template.js';
+import { TemplateCompilerTargetRowPlacementKind } from './compiler-target-plan.js';
 import {
   TemplateCompilerHydrateElementProcessContentState,
   TemplateCompilerHydrateElementProjectionState,
@@ -280,9 +280,10 @@ export function allocateTemplateCompilerOccurrenceHydrateElements(
       || head.envelope.containerless.effective !== (head.site.containerlessPlacement != null)
       || (head.site.containerlessPlacement != null && (
         head.site.containerlessPlacement.envelope !== head.envelope
-        || row.targetKind !== TemplateRenderTargetKind.RenderLocation
+        || row.placementKind !== TemplateCompilerTargetRowPlacementKind.ContainerlessReplacement
       ))
-      || (head.site.containerlessPlacement == null && row.targetKind !== TemplateRenderTargetKind.MarkerTarget)
+      || (head.site.containerlessPlacement == null
+        && row.placementKind !== TemplateCompilerTargetRowPlacementKind.Marker)
       || head.site.owner.instructionStaging.templateControllers.length > 0;
   });
   if (envelopeMismatch.length > 0) {

@@ -1,9 +1,12 @@
 import type { ClaimEndpointHandle } from '../kernel/claim.js';
 import { AttributeClassificationKind } from './attribute-syntax.js';
-import { CompiledTemplateReference, TemplateRenderTargetKind } from './compiled-template.js';
+import { CompiledTemplateReference } from './compiled-template.js';
 import type { TemplateInstruction } from './instruction-ir.js';
 import {
+  TemplateCompilerContainerlessReplacementPlacement,
+  TemplateCompilerMarkerTargetPlacement,
   TemplateCompilerTargetPlan,
+  TemplateCompilerTargetRowPlacementKind,
   TemplateCompilerTargetRowPosture,
   type TemplateCompilerTargetRowPlan,
 } from './compiler-target-plan.js';
@@ -79,6 +82,16 @@ export class TemplateCompilerOccurrenceTargetRowMapping {
       row.projectedTargetOrdinal !== draft.projectedTargetOrdinal ? 'projected-ordinal' : null,
       row.projectedTargetCount !== draft.projectedTargetCount ? 'projected-count' : null,
       row.targetKind !== draft.targetKind ? 'target-kind' : null,
+      row.placement.placementKind !== draft.placementKind ? 'placement-kind' : null,
+      draft.placementKind === TemplateCompilerTargetRowPlacementKind.ContainerlessReplacement
+        && (!(row.placement instanceof TemplateCompilerContainerlessReplacementPlacement)
+          || row.placement.instruction !== hydrateElement?.instruction)
+        ? 'containerless-placement'
+        : null,
+      draft.placementKind === TemplateCompilerTargetRowPlacementKind.Marker
+        && !(row.placement instanceof TemplateCompilerMarkerTargetPlacement)
+        ? 'marker-placement'
+        : null,
       row.sourceAddressHandle !== draft.sourceAddressHandle ? 'source-address' : null,
       row.occurrence !== draft.occurrence ? 'occurrence' : null,
       row.node !== draft.authoredNode ? 'authored-node' : null,
@@ -137,7 +150,8 @@ export class TemplateCompilerOccurrenceContainerlessHostPrerequisite {
   constructor(readonly hydrateElement: TemplateCompilerAllocatedHydrateElementHead) {
     if (
       !hydrateElement.head.envelope.containerless.effective
-      || hydrateElement.row.targetKind !== TemplateRenderTargetKind.RenderLocation
+      || hydrateElement.row.placementKind
+        !== TemplateCompilerTargetRowPlacementKind.ContainerlessReplacement
     ) {
       throw new Error(`HydrateElement row '${hydrateElement.row.stableSlotKey}' is not effectively containerless.`);
     }
@@ -399,6 +413,9 @@ export function allocateTemplateCompilerOccurrenceTargetPlan(
       draft.targetKind,
       draft.sourceAddressHandle,
       draft.textOutput?.hole.expressionChainIndex ?? null,
+      draft.placementKind === TemplateCompilerTargetRowPlacementKind.ContainerlessReplacement
+        ? new TemplateCompilerContainerlessReplacementPlacement(hydrateElement!.instruction)
+        : new TemplateCompilerMarkerTargetPlacement(),
       ),
       hydrateElement,
     );

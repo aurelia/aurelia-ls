@@ -678,6 +678,7 @@ function occurrenceRowDigest(assembly: TemplateCompilerOccurrenceRowAssembly): s
       row.ordinal,
       row.projectedTargetOrdinal,
       row.targetKind,
+      row.placementKind,
       row.occurrence.occurrenceKey,
       row.sourcePosture,
       row.instructionSemanticSignatures,
@@ -730,6 +731,7 @@ function occurrenceTargetPlanDigest(assembly: TemplateCompilerOccurrenceTargetPl
       row.projectedTargetOrdinal,
       row.projectedTargetCount,
       row.targetKind,
+      row.placement.placementKind,
       row.sourceKind,
       row.expressionChainIndex,
       row.inputNode?.productHandle ?? null,
@@ -818,6 +820,7 @@ function occurrenceTargetExecutionDigest(execution: TemplateCompilerOccurrenceTa
     execution.targetGeometries.map((geometry) => [
       geometry.geometryKind,
       geometry.row.stableSlotKey,
+      geometry.placement.placementKind,
       geometry.marker.occurrenceKey,
       generationProjection(geometry.marker.generation),
       geometry.logicalTarget.occurrenceKey,

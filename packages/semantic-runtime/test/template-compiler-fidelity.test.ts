@@ -26,7 +26,11 @@ import {
   TemplateRenderTargetKind,
 } from '../src/template/compiled-template.js';
 import {
+  TemplateCompilerContainerlessReplacementPlacement,
+  TemplateCompilerMarkerTargetPlacement,
   TemplateCompilerProjectionContextStructuralAuthority,
+  TemplateCompilerTemplateControllerGeneratedAppendPlacement,
+  TemplateCompilerTemplateControllerSourceReplacementPlacement,
   TemplateCompilerTargetContextRole,
   TemplateCompilerTargetContextState,
   TemplateCompilerTargetRowPosture,
@@ -141,6 +145,16 @@ describe('template compiler fidelity', () => {
     expect(targetPlan.root.projectedTargetCount).toBe(14);
     expect(rootRows).toHaveLength(14);
     expect(compiled.compiledTemplate.targets).toHaveLength(14);
+    expect(rootRows.some((row) =>
+      row.placement instanceof TemplateCompilerTemplateControllerSourceReplacementPlacement
+    )).toBe(true);
+    expect(rootRows.filter((row) => row.targetKind === TemplateRenderTargetKind.MarkerTarget).every((row) =>
+      row.placement instanceof TemplateCompilerMarkerTargetPlacement
+    )).toBe(true);
+    expect(rootRows.filter((row) => row.targetKind === TemplateRenderTargetKind.RenderLocation).every((row) =>
+      row.placement instanceof TemplateCompilerContainerlessReplacementPlacement
+        || row.placement instanceof TemplateCompilerTemplateControllerSourceReplacementPlacement
+    )).toBe(true);
     expect(rootRows.map((row) => ({
       node: row.node instanceof HtmlElement ? row.node.tagName : row.node.text,
       projectedTargetOrdinal: row.projectedTargetOrdinal,
@@ -337,12 +351,16 @@ describe('template compiler fidelity', () => {
       }
       context.readRows().forEach((row, rowIndex) => {
         const target = contextTemplate?.targets[rowIndex];
+        const authoredNodeProductHandle = row.node?.productHandle
+          ?? (row.placement instanceof TemplateCompilerTemplateControllerGeneratedAppendPlacement
+            ? row.placement.instruction.node.productHandle
+            : null);
         const sequence = target == null
           ? null
           : sequencesByHandle.get(target.instructionSequenceProductHandle) ?? null;
         expect(target).toEqual(expect.objectContaining({
           targetKind: row.targetKind,
-          htmlNode: expect.objectContaining({ productHandle: row.node.productHandle }),
+          htmlNode: expect.objectContaining({ productHandle: authoredNodeProductHandle }),
         }));
         expect(sequence?.instructions.map((instruction) => instruction.productHandle)).toEqual(
           row.instructions.map((instruction) => instruction.productHandle),
@@ -369,6 +387,7 @@ describe('template compiler fidelity', () => {
       expect.objectContaining({
         targetKind: TemplateRenderTargetKind.RenderLocation,
         instructions: [innerInstruction],
+        placement: expect.any(TemplateCompilerTemplateControllerGeneratedAppendPlacement),
       }),
     ]);
     expect(innerContext.readRows().map((row) => ({

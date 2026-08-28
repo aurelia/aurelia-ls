@@ -8,12 +8,17 @@ import {
   type HtmlNodeReference,
 } from './html-ir.js';
 import {
+  TemplateCompilerContainerlessReplacementPlacement,
+  TemplateCompilerMarkerTargetPlacement,
   TemplateCompilerProjectionContextStructuralAuthority,
   TemplateCompilerTargetContextRole,
   TemplateCompilerTargetRowSourceKind,
   TemplateCompilerTargetRowPosture,
   TemplateCompilerTemplateControllerContextStructuralAuthority,
+  TemplateCompilerTemplateControllerGeneratedAppendPlacement,
+  TemplateCompilerTemplateControllerSourceReplacementPlacement,
   type TemplateCompilerTargetContextPlan,
+  type TemplateCompilerRenderLocationPlacement,
   type TemplateCompilerTargetPlan,
   type TemplateCompilerTargetRowPlan,
 } from './compiler-target-plan.js';
@@ -148,6 +153,7 @@ export class TemplateCompilerMarkerTargetGeometry {
   constructor(
     readonly row: TemplateCompilerTargetRowPlan,
     readonly context: TemplateCompilerTargetContextPlan,
+    readonly placement: TemplateCompilerMarkerTargetPlacement,
     readonly marker: TemplateCompilerCommentOccurrence,
     readonly target: TemplateCompilerElementOccurrence | TemplateCompilerTextOccurrence,
   ) {}
@@ -164,6 +170,7 @@ export class TemplateCompilerRenderLocationTargetGeometry {
   constructor(
     readonly row: TemplateCompilerTargetRowPlan,
     readonly context: TemplateCompilerTargetContextPlan,
+    readonly placement: TemplateCompilerRenderLocationPlacement,
     readonly marker: TemplateCompilerCommentOccurrence,
     readonly start: TemplateCompilerCommentOccurrence,
     readonly end: TemplateCompilerCommentOccurrence,
@@ -1077,7 +1084,10 @@ export class TemplateCompilerStructuralExecutionSession {
     markerCauseHandles: readonly ClaimEndpointHandle[] = batchCauseHandles,
   ): TemplateCompilerMarkerTargetGeometry {
     const context = this.requireCompleteUnrealizedRow(row);
-    if (row.targetKind !== TemplateRenderTargetKind.MarkerTarget) {
+    if (
+      row.targetKind !== TemplateRenderTargetKind.MarkerTarget
+      || !(row.placement instanceof TemplateCompilerMarkerTargetPlacement)
+    ) {
       throw new Error(`Compiler target row '${row.localKey}' is not an ordinary marker target.`);
     }
     const structure = this.requireContextStructure(context);
@@ -1114,7 +1124,7 @@ export class TemplateCompilerStructuralExecutionSession {
       TemplateCompilerOccurrenceEdgeKind.Child,
       ordinal,
     );
-    const geometry = new TemplateCompilerMarkerTargetGeometry(row, context, marker, target);
+    const geometry = new TemplateCompilerMarkerTargetGeometry(row, context, row.placement, marker, target);
     this.geometriesByRow.set(row, geometry);
     this.geometriesByMarker.set(marker, geometry);
     return geometry;
@@ -1130,6 +1140,12 @@ export class TemplateCompilerStructuralExecutionSession {
     const context = this.requireCompleteUnrealizedRow(row);
     if (row.targetKind !== TemplateRenderTargetKind.RenderLocation) {
       throw new Error(`Compiler target row '${row.localKey}' is not a render-location target.`);
+    }
+    if (
+      !(row.placement instanceof TemplateCompilerContainerlessReplacementPlacement)
+      && !(row.placement instanceof TemplateCompilerTemplateControllerSourceReplacementPlacement)
+    ) {
+      throw new Error(`Compiler target row '${row.localKey}' has no input-replacement placement authority.`);
     }
     const structure = this.requireContextStructure(context);
     this.requireForestNode(replacedNode);
@@ -1156,6 +1172,7 @@ export class TemplateCompilerStructuralExecutionSession {
       ordinal,
       replacedNode,
       additionalCauseHandles,
+      row.placement,
     );
     if (detachReplacedNode == null) this.forest.detachNode(replacedNode);
     else detachReplacedNode(replacedNode);
@@ -1182,6 +1199,9 @@ export class TemplateCompilerStructuralExecutionSession {
     if (row.targetKind !== TemplateRenderTargetKind.RenderLocation) {
       throw new Error(`Compiler target row '${row.localKey}' is not a render-location target.`);
     }
+    if (!(row.placement instanceof TemplateCompilerTemplateControllerGeneratedAppendPlacement)) {
+      throw new Error(`Compiler target row '${row.localKey}' has no generated-append placement authority.`);
+    }
     const structure = this.requireContextStructure(context);
     this.requireAppendOnlyOuterTemplateController(context, row, structure);
     return this.insertRenderLocationGeometry(
@@ -1191,6 +1211,7 @@ export class TemplateCompilerStructuralExecutionSession {
       0,
       null,
       additionalCauseHandles,
+      row.placement,
     );
   }
 
@@ -1201,6 +1222,7 @@ export class TemplateCompilerStructuralExecutionSession {
     ordinal: number,
     replacedNode: TemplateCompilerElementOccurrence | null,
     additionalCauseHandles: readonly ClaimEndpointHandle[],
+    placement: TemplateCompilerRenderLocationPlacement,
   ): TemplateCompilerRenderLocationTargetGeometry {
     if (!Number.isSafeInteger(ordinal) || ordinal < 0 || ordinal > parent.readChildren().length) {
       throw new Error(
@@ -1247,6 +1269,7 @@ export class TemplateCompilerStructuralExecutionSession {
     const geometry = new TemplateCompilerRenderLocationTargetGeometry(
       row,
       context,
+      placement,
       marker,
       start,
       end,
@@ -1944,7 +1967,10 @@ export class TemplateCompilerStructuralExecutionSession {
       context.role !== TemplateCompilerTargetContextRole.TemplateController
       || row.ordinal !== 0
       || context.readRows().length !== 1
+      || row.sourceKind !== TemplateCompilerTargetRowSourceKind.GeneratedContextBoundary
+      || !(row.placement instanceof TemplateCompilerTemplateControllerGeneratedAppendPlacement)
       || !(instruction instanceof HydrateTemplateControllerInstruction)
+      || row.placement.instruction !== instruction
       || !(contextAuthority instanceof TemplateCompilerTemplateControllerContextStructuralAuthority)
       || contextAuthority.instruction.node.productHandle !== instruction.node.productHandle
       || innerContexts.length !== 1
@@ -2837,7 +2863,11 @@ export class TemplateCompilerStructuralExecutionSession {
     this.requireNodeInContext(geometry.marker, structure);
     switch (geometry.geometryKind) {
       case TemplateCompilerTargetGeometryKind.Marker: {
-        if (geometry.row.targetKind !== TemplateRenderTargetKind.MarkerTarget) {
+        if (
+          geometry.row.targetKind !== TemplateRenderTargetKind.MarkerTarget
+          || geometry.placement !== geometry.row.placement
+          || !(geometry.placement instanceof TemplateCompilerMarkerTargetPlacement)
+        ) {
           throw new Error(`Compiler marker geometry '${geometry.row.localKey}' changed target kind.`);
         }
         this.requireMarkerTargetShape(geometry.row, geometry.target, structure.context);
@@ -2854,7 +2884,15 @@ export class TemplateCompilerStructuralExecutionSession {
         return;
       }
       case TemplateCompilerTargetGeometryKind.RenderLocation: {
-        if (geometry.row.targetKind !== TemplateRenderTargetKind.RenderLocation) {
+        const placementMatchesSource = geometry.replacedNode == null
+          ? geometry.placement instanceof TemplateCompilerTemplateControllerGeneratedAppendPlacement
+          : geometry.placement instanceof TemplateCompilerContainerlessReplacementPlacement
+            || geometry.placement instanceof TemplateCompilerTemplateControllerSourceReplacementPlacement;
+        if (
+          geometry.row.targetKind !== TemplateRenderTargetKind.RenderLocation
+          || geometry.placement !== geometry.row.placement
+          || !placementMatchesSource
+        ) {
           throw new Error(`Compiler render-location geometry '${geometry.row.localKey}' changed target kind.`);
         }
         this.requireNodeInContext(geometry.start, structure);

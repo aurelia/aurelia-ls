@@ -1,6 +1,10 @@
 import type { ClaimEndpointHandle } from '../kernel/claim.js';
 import type { AddressHandle } from '../kernel/handles.js';
-import type { TemplateCompilerTargetRowPlan } from './compiler-target-plan.js';
+import {
+  TemplateCompilerContainerlessReplacementPlacement,
+  TemplateCompilerMarkerTargetPlacement,
+  type TemplateCompilerTargetRowPlan,
+} from './compiler-target-plan.js';
 import { TemplateCompilerLiveAttributeDisposition } from './template-compiler-live-attribute-owner.js';
 import {
   TemplateCompilerElementOccurrence,
@@ -63,7 +67,13 @@ export class TemplateCompilerOccurrenceElementTargetScheduleEntry {
   readonly occurrence: TemplateCompilerElementOccurrence;
 
   constructor(readonly mapping: TemplateCompilerOccurrenceTargetRowMapping) {
-    if (!(mapping.draft.occurrence instanceof TemplateCompilerElementOccurrence)) {
+    if (
+      !(mapping.draft.occurrence instanceof TemplateCompilerElementOccurrence)
+      || (
+        !(mapping.row.placement instanceof TemplateCompilerMarkerTargetPlacement)
+        && !(mapping.row.placement instanceof TemplateCompilerContainerlessReplacementPlacement)
+      )
+    ) {
       throw new Error(`Element schedule entry '${mapping.row.localKey}' lost its element occurrence.`);
     }
     this.occurrence = mapping.draft.occurrence;

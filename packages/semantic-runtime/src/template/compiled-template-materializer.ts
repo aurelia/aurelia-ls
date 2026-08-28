@@ -77,6 +77,10 @@ import {
   TemplateRenderTargetKind,
 } from './compiled-template.js';
 import {
+  TemplateCompilerContainerlessReplacementPlacement,
+  TemplateCompilerMarkerTargetPlacement,
+  TemplateCompilerTemplateControllerGeneratedAppendPlacement,
+  TemplateCompilerTemplateControllerSourceReplacementPlacement,
   TemplateCompilerTargetContextRole,
   TemplateCompilerTargetContextState,
   TemplateCompilerTargetPlan,
@@ -1057,6 +1061,9 @@ class CompiledTemplateInstructionTraversal {
       ...parts.attributeInstructions,
       ...orderCompilerInstructionsForElement(node, owner, parts.plainInstructions),
     ];
+    const directPlacement = effectiveContainerless
+      ? new TemplateCompilerContainerlessReplacementPlacement(elementInstruction!)
+      : new TemplateCompilerMarkerTargetPlacement();
     const directRowPosture = directOpenSeamHandles.length > 0
       ? TemplateCompilerTargetRowPosture.Open
       : TemplateCompilerTargetRowPosture.Complete;
@@ -1097,6 +1104,8 @@ class CompiledTemplateInstructionTraversal {
           directRowPosture,
           1,
           directOpenSeamHandles,
+          node.sourceAddressHandle,
+          directPlacement,
         );
       }
       if (!shouldCompileChildren && !parts.hasProcessContentHook && this.hasUnprojectedChildren(node, extractedProjectionChildren)) {
@@ -1122,14 +1131,12 @@ class CompiledTemplateInstructionTraversal {
         }
       }
       for (let index = 0; index < parts.templateControllerInstructions.length - 1; index++) {
-        controllerContexts[index]!.appendRow(
+        controllerContexts[index]!.appendGeneratedContextBoundaryRow(
           `template-controller:${node.productHandle}:child:${index}`,
-          node,
-          [parts.templateControllerInstructions[index + 1]!],
-          TemplateRenderTargetKind.RenderLocation,
+          parts.templateControllerInstructions[index + 1]!,
           templateControllerRowPosture,
-          1,
           parts.openTemplateControllerSeamHandles,
+          node.sourceAddressHandle,
         );
       }
       contextPlan.appendRow(
@@ -1140,6 +1147,10 @@ class CompiledTemplateInstructionTraversal {
         templateControllerRowPosture,
         1,
         parts.openTemplateControllerSeamHandles,
+        node.sourceAddressHandle,
+        new TemplateCompilerTemplateControllerSourceReplacementPlacement(
+          parts.templateControllerInstructions[0]!,
+        ),
       );
       return;
     }
@@ -1160,6 +1171,8 @@ class CompiledTemplateInstructionTraversal {
         directRowPosture,
         1,
         directOpenSeamHandles,
+        node.sourceAddressHandle,
+        directPlacement,
       );
     }
 
@@ -2457,7 +2470,7 @@ export class CompiledTemplateMaterializer {
       handles.targetProductHandle,
       handles.targetIdentityHandle,
       row.targetKind,
-      requiredAuthoredTargetRowNode(row).toReference(),
+      requiredAuthoredTargetRowNodeReference(row),
       handles.sequenceProductHandle,
       row.sourceAddressHandle,
       [],
@@ -2505,7 +2518,7 @@ export class CompiledTemplateMaterializer {
       this.store.handles.claim(`${handles.targetLocal}:target-for-html-node`),
       target.productHandle,
       KernelVocabulary.Template.RenderTargetForHtmlNode.key,
-      requiredAuthoredTargetRowNode(row).productHandle,
+      requiredAuthoredTargetRowNodeReference(row).productHandle!,
       source.provenanceHandle,
     );
   }
@@ -2879,11 +2892,15 @@ function nullableInstruction(
   return instruction == null ? [] : [instruction];
 }
 
-function requiredAuthoredTargetRowNode(row: TemplateCompilerTargetRowPlan): HtmlElement | HtmlText {
-  if (row.node == null) {
-    throw new Error(`Authored compiled-template publication cannot publish occurrence row '${row.stableSlotKey}'.`);
+function requiredAuthoredTargetRowNodeReference(row: TemplateCompilerTargetRowPlan): HtmlNodeReference {
+  if (row.node != null) return row.node.toReference();
+  if (
+    row.placement instanceof TemplateCompilerTemplateControllerGeneratedAppendPlacement
+    && row.placement.instruction.node.productHandle != null
+  ) {
+    return row.placement.instruction.node;
   }
-  return row.node;
+  throw new Error(`Authored compiled-template publication cannot publish occurrence row '${row.stableSlotKey}'.`);
 }
 
 function compiledTemplateStateFor(

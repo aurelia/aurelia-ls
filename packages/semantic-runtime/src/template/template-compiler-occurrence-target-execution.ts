@@ -1,4 +1,4 @@
-import { TemplateRenderTargetKind } from './compiled-template.js';
+import { TemplateCompilerContainerlessReplacementPlacement } from './compiler-target-plan.js';
 import {
   TemplateCompilerOperationCompletion,
   TemplateCompilerOperationCompletionKind,
@@ -150,7 +150,7 @@ export function executeTemplateCompilerOccurrenceTarget(
 
     if (entry instanceof TemplateCompilerOccurrenceElementTargetScheduleEntry) {
       const mapping = entry.mapping;
-      const isContainerless = mapping.row.targetKind === TemplateRenderTargetKind.RenderLocation;
+      const isContainerless = mapping.row.placement instanceof TemplateCompilerContainerlessReplacementPlacement;
       const attempt = execution.beginOperation({
         operationKey: entry.operationKey,
         context,

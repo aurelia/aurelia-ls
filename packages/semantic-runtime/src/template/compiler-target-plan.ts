@@ -22,13 +22,13 @@ import type {
   TemplateCompilerTextOccurrence,
 } from './template-compiler-occurrence.js';
 import type { TemplateStructuralNodeReference } from './template-structure.js';
-import type {
-  HydrateElementInstruction,
-  HydrateElementProjectionDefinition,
-  HydrateTemplateControllerInstruction,
-  TemplateInstruction,
+import {
+  HydrateElementProjectionContributorDisposition,
+  type HydrateElementInstruction,
+  type HydrateElementProjectionDefinition,
+  type HydrateTemplateControllerInstruction,
+  type TemplateInstruction,
 } from './instruction-ir.js';
-import { HydrateElementProjectionContributorDisposition } from './instruction-ir.js';
 
 /** Semantic role of one compiler context inside a template-family target plan. */
 export const enum TemplateCompilerTargetContextRole {
@@ -114,7 +114,53 @@ export const enum TemplateCompilerTargetRowSourceKind {
   Authored = 'authored',
   RetainedOccurrence = 'retained-occurrence',
   TextHole = 'text-hole',
+  /** Append-only render-location row born inside a generated template-controller context. */
+  GeneratedContextBoundary = 'generated-context-boundary',
 }
+
+export const enum TemplateCompilerTargetRowPlacementKind {
+  Marker = 'marker',
+  ContainerlessReplacement = 'containerless-replacement',
+  TemplateControllerSourceReplacement = 'template-controller-source-replacement',
+  TemplateControllerGeneratedAppend = 'template-controller-generated-append',
+}
+
+/** Ordinary marker placement; target kind alone never authorizes structural realization. */
+export class TemplateCompilerMarkerTargetPlacement {
+  readonly placementKind = TemplateCompilerTargetRowPlacementKind.Marker;
+}
+
+/** Exact custom-element instruction whose effective host is replaced by a render location. */
+export class TemplateCompilerContainerlessReplacementPlacement {
+  readonly placementKind = TemplateCompilerTargetRowPlacementKind.ContainerlessReplacement;
+
+  constructor(readonly instruction: HydrateElementInstruction) {}
+}
+
+/** Outermost template-controller instruction that replaces the retained source occurrence. */
+export class TemplateCompilerTemplateControllerSourceReplacementPlacement {
+  readonly placementKind = TemplateCompilerTargetRowPlacementKind.TemplateControllerSourceReplacement;
+
+  constructor(readonly instruction: HydrateTemplateControllerInstruction) {}
+}
+
+/** Inner template-controller instruction appended to an already-generated context boundary. */
+export class TemplateCompilerTemplateControllerGeneratedAppendPlacement {
+  readonly placementKind = TemplateCompilerTargetRowPlacementKind.TemplateControllerGeneratedAppend;
+
+  constructor(readonly instruction: HydrateTemplateControllerInstruction) {}
+}
+
+export type TemplateCompilerTargetRowPlacement =
+  | TemplateCompilerMarkerTargetPlacement
+  | TemplateCompilerContainerlessReplacementPlacement
+  | TemplateCompilerTemplateControllerSourceReplacementPlacement
+  | TemplateCompilerTemplateControllerGeneratedAppendPlacement;
+
+export type TemplateCompilerRenderLocationPlacement = Exclude<
+  TemplateCompilerTargetRowPlacement,
+  TemplateCompilerMarkerTargetPlacement
+>;
 
 export class TemplateCompilerTargetRowPlan {
   constructor(
@@ -131,6 +177,7 @@ export class TemplateCompilerTargetRowPlan {
     readonly posture: TemplateCompilerTargetRowPosture,
     readonly openSeamHandles: readonly OpenSeamHandle[],
     readonly targetKind: TemplateRenderTargetKind,
+    readonly placement: TemplateCompilerTargetRowPlacement,
     readonly sourceKind: TemplateCompilerTargetRowSourceKind,
     /** Optional authored target lineage; occurrence rows do not require a singular authored node. */
     readonly node: HtmlElement | HtmlText | null,
@@ -146,6 +193,7 @@ export class TemplateCompilerTargetRowPlan {
 
   targetPublicationLocal(compiledLocal: string, index: number): string {
     return this.sourceKind === TemplateCompilerTargetRowSourceKind.Authored
+      || this.sourceKind === TemplateCompilerTargetRowSourceKind.GeneratedContextBoundary
       ? `${compiledLocal}:target:${index}:${this.publicationLocalKey}`
       : `${compiledLocal}:target:${this.publicationLocalKey}`;
   }
@@ -267,8 +315,12 @@ export class TemplateCompilerTargetContextPlan {
     projectedTargetCount = 1,
     openSeamHandles: readonly OpenSeamHandle[] = [],
     sourceAddressHandle: AddressHandle | null = node.sourceAddressHandle,
+    placement: TemplateCompilerTargetRowPlacement = new TemplateCompilerMarkerTargetPlacement(),
   ): TemplateCompilerTargetRowPlan | null {
     this.requireMutable();
+    if (placement instanceof TemplateCompilerTemplateControllerGeneratedAppendPlacement) {
+      throw new Error(`Compiler generated context row '${local}' requires the dedicated append boundary.`);
+    }
     if (instructions.length === 0 && posture === TemplateCompilerTargetRowPosture.Complete) return null;
     if (!Number.isSafeInteger(projectedTargetCount) || projectedTargetCount < 1) {
       throw new Error(`Compiler target row '${local}' has invalid projected target count ${projectedTargetCount}.`);
@@ -288,6 +340,7 @@ export class TemplateCompilerTargetContextPlan {
       posture,
       openSeamHandles,
       targetKind,
+      placement,
       TemplateCompilerTargetRowSourceKind.Authored,
       node,
       null,
@@ -302,6 +355,48 @@ export class TemplateCompilerTargetContextPlan {
     return row;
   }
 
+  /** Append one render-location row born inside a generated template-controller context. */
+  appendGeneratedContextBoundaryRow(
+    local: string,
+    instruction: HydrateTemplateControllerInstruction,
+    posture: TemplateCompilerTargetRowPosture = TemplateCompilerTargetRowPosture.Complete,
+    openSeamHandles: readonly OpenSeamHandle[] = [],
+    sourceAddressHandle: AddressHandle | null = instruction.sourceAddressHandle,
+  ): TemplateCompilerTargetRowPlan {
+    this.requireMutable();
+    if (this.role !== TemplateCompilerTargetContextRole.TemplateController) {
+      throw new Error(`Compiler context '${this.localKey}' cannot append a generated template-controller boundary.`);
+    }
+    const ordinal = this.rows.length;
+    if (posture === TemplateCompilerTargetRowPosture.Open) {
+      this.recordConditionalTargetOrdinal(this.nextTargetOrdinal);
+    }
+    const row = new TemplateCompilerTargetRowPlan(
+      `${this.localKey}:row:${ordinal}:${local}`,
+      `${ordinal}:${local}`,
+      `${ordinal}:${local}`,
+      this.toReference(),
+      ordinal,
+      this.nextTargetOrdinal,
+      1,
+      posture,
+      openSeamHandles,
+      TemplateRenderTargetKind.RenderLocation,
+      new TemplateCompilerTemplateControllerGeneratedAppendPlacement(instruction),
+      TemplateCompilerTargetRowSourceKind.GeneratedContextBoundary,
+      null,
+      null,
+      null,
+      null,
+      [instruction],
+      sourceAddressHandle,
+    );
+    this.rows.push(row);
+    this.stableRowSlots.add(row.stableSlotKey);
+    this.nextTargetOrdinal += 1;
+    return row;
+  }
+
   appendOccurrenceRow(
     stableSlotKey: string,
     occurrence: TemplateCompilerElementOccurrence | TemplateCompilerTextOccurrence,
@@ -312,6 +407,7 @@ export class TemplateCompilerTargetContextPlan {
       ?? occurrence.inputReference?.addressHandle
       ?? null,
     expressionChainIndex: number | null = null,
+    placement: TemplateCompilerTargetRowPlacement = new TemplateCompilerMarkerTargetPlacement(),
   ): TemplateCompilerTargetRowPlan {
     this.requireMutable();
     if (stableSlotKey.length === 0 || this.stableRowSlots.has(stableSlotKey)) {
@@ -341,6 +437,7 @@ export class TemplateCompilerTargetContextPlan {
       TemplateCompilerTargetRowPosture.Complete,
       [],
       targetKind,
+      placement,
       expressionChainIndex == null
         ? TemplateCompilerTargetRowSourceKind.RetainedOccurrence
         : TemplateCompilerTargetRowSourceKind.TextHole,
@@ -546,6 +643,17 @@ export class TemplateCompilerTargetPlan {
     const compiledTemplateProducts = new Set<ProductHandle>();
     const reachableNodeOwners = new Map<ProductHandle, string>();
     const reachableOccurrenceOwners = new Map<TemplateCompilerNodeOccurrence, string>();
+    const instructionOccurrenceCountsByContext = new Map(
+      this.contexts.map((context) => {
+        const counts = new Map<TemplateInstruction, number>();
+        for (const row of context.readRows()) {
+          for (const instruction of row.instructions) {
+            counts.set(instruction, (counts.get(instruction) ?? 0) + 1);
+          }
+        }
+        return [context, counts] as const;
+      }),
+    );
     const visit = (context: TemplateCompilerTargetContextPlan): void => {
       if (visited.has(context)) {
         throw new Error(`Compiler target context '${context.localKey}' is owned more than once.`);
@@ -594,19 +702,32 @@ export class TemplateCompilerTargetPlan {
           : context.structuralAuthority instanceof TemplateCompilerProjectionContextStructuralAuthority
             ? context.structuralAuthority.instruction
             : null;
-        const ownerOccurrences = ownerContext?.readRows().reduce((count, row) =>
-          count + row.instructions.filter((instruction) => instruction === authorityInstruction).length,
-        0) ?? 0;
+        const ownerOccurrences = ownerContext == null || authorityInstruction == null
+          ? 0
+          : instructionOccurrenceCountsByContext.get(ownerContext)?.get(authorityInstruction) ?? 0;
         if (authorityInstruction == null || ownerOccurrences !== 1) {
           throw new Error(`Compiler target context '${context.localKey}' has no unique owner-row instruction edge.`);
         }
       }
       let expectedTargetOrdinal = 0;
+      const templateControllerChildCounts = new Map<HydrateTemplateControllerInstruction, number>();
+      for (const child of context.readOwnedContexts()) {
+        const authority = child.structuralAuthority;
+        if (authority instanceof TemplateCompilerTemplateControllerContextStructuralAuthority) {
+          templateControllerChildCounts.set(
+            authority.instruction,
+            (templateControllerChildCounts.get(authority.instruction) ?? 0) + 1,
+          );
+        }
+      }
       if (new Set(context.readRows().map((row) => row.stableSlotKey)).size !== context.readRows().length) {
         throw new Error(`Compiler target context '${context.localKey}' repeats a stable row slot.`);
       }
       context.readRows().forEach((row, ordinal) => {
         const postureCoherent = rowPostureIsCoherent(row);
+        const occurrenceMembership = row.occurrence == null
+          ? null
+          : context.occurrenceMembershipFor(row.occurrence);
         if (
           row.context.localKey !== context.localKey
           || row.ordinal !== ordinal
@@ -615,15 +736,21 @@ export class TemplateCompilerTargetPlan {
           || row.stableSlotKey.length === 0
           || (row.sourceKind === TemplateCompilerTargetRowSourceKind.Authored
             && (row.node == null || row.occurrence != null || row.inputNode != null))
+          || (row.sourceKind === TemplateCompilerTargetRowSourceKind.GeneratedContextBoundary
+            && (
+              row.node != null
+              || row.occurrence != null
+              || row.inputNode != null
+              || row.expressionChainIndex != null
+            ))
           || (row.sourceKind !== TemplateCompilerTargetRowSourceKind.Authored
+            && row.sourceKind !== TemplateCompilerTargetRowSourceKind.GeneratedContextBoundary
             && (
               row.occurrence == null
               || row.inputNode !== row.occurrence.inputReference
               || (row.inputNode == null && row.node == null && row.occurrence.generation == null)
-              || !context.readOccurrenceMemberships().some((membership) =>
-                membership.occurrence === row.occurrence
-                && membership.authoredNode === row.node
-              )
+              || occurrenceMembership == null
+              || occurrenceMembership.authoredNode !== row.node
             ))
           || (row.sourceKind === TemplateCompilerTargetRowSourceKind.TextHole
             && (
@@ -633,6 +760,8 @@ export class TemplateCompilerTargetPlan {
             ))
           || (row.sourceKind !== TemplateCompilerTargetRowSourceKind.TextHole
             && row.expressionChainIndex != null)
+          || !rowPlacementIsCoherent(row)
+          || !rowTemplateControllerPlacementOwnsChild(row, templateControllerChildCounts)
           || !postureCoherent
         ) {
           throw new Error(`Compiler target row '${row.localKey}' has incoherent context ownership.`);
@@ -729,6 +858,47 @@ function rowPostureIsCoherent(row: TemplateCompilerTargetRowPlan): boolean {
     case TemplateCompilerTargetRowPosture.Open:
       return row.projectedTargetCount >= 1 && row.openSeamHandles.length > 0;
   }
+}
+
+function rowPlacementIsCoherent(row: TemplateCompilerTargetRowPlan): boolean {
+  const placement = row.placement;
+  if (placement instanceof TemplateCompilerMarkerTargetPlacement) {
+    return row.targetKind === TemplateRenderTargetKind.MarkerTarget;
+  }
+  if (placement instanceof TemplateCompilerContainerlessReplacementPlacement) {
+    return row.targetKind === TemplateRenderTargetKind.RenderLocation
+      && rowHasElementSource(row)
+      && row.instructions.includes(placement.instruction);
+  }
+  if (placement instanceof TemplateCompilerTemplateControllerSourceReplacementPlacement) {
+    return row.targetKind === TemplateRenderTargetKind.RenderLocation
+      && rowHasElementSource(row)
+      && row.sourceKind !== TemplateCompilerTargetRowSourceKind.GeneratedContextBoundary
+      && row.instructions.length === 1
+      && row.instructions[0] === placement.instruction;
+  }
+  return placement instanceof TemplateCompilerTemplateControllerGeneratedAppendPlacement
+    && row.targetKind === TemplateRenderTargetKind.RenderLocation
+    && row.sourceKind === TemplateCompilerTargetRowSourceKind.GeneratedContextBoundary
+    && row.instructions.length === 1
+    && row.instructions[0] === placement.instruction;
+}
+
+function rowTemplateControllerPlacementOwnsChild(
+  row: TemplateCompilerTargetRowPlan,
+  childCounts: ReadonlyMap<HydrateTemplateControllerInstruction, number>,
+): boolean {
+  const placement = row.placement;
+  if (
+    !(placement instanceof TemplateCompilerTemplateControllerSourceReplacementPlacement)
+    && !(placement instanceof TemplateCompilerTemplateControllerGeneratedAppendPlacement)
+  ) return true;
+  return childCounts.get(placement.instruction) === 1;
+}
+
+function rowHasElementSource(row: TemplateCompilerTargetRowPlan): boolean {
+  return (row.node != null && 'tagName' in row.node)
+    || (row.occurrence != null && 'tagName' in row.occurrence);
 }
 
 function contextStructuralAuthorityIsCoherent(context: TemplateCompilerTargetContextPlan): boolean {

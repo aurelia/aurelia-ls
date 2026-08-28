@@ -5,11 +5,12 @@ import type {
   OpenSeamHandle,
   ProductHandle,
 } from '../kernel/handles.js';
-import type {
-  TemplateCompilerTargetContextPlan,
-  TemplateCompilerTargetPlan,
+import {
+  TemplateCompilerContainerlessReplacementPlacement,
+  TemplateCompilerMarkerTargetPlacement,
+  type TemplateCompilerTargetContextPlan,
+  type TemplateCompilerTargetPlan,
 } from './compiler-target-plan.js';
-import { TemplateRenderTargetKind } from './compiled-template.js';
 import type { TemplateCompilerHookSet } from './compiler-hook-world.js';
 import type {
   TemplateCompilerOccurrenceTargetPlanAssembly,
@@ -3566,7 +3567,7 @@ export class TemplateCompilerExecutionSession {
     }
     if (expected instanceof TemplateCompilerOccurrenceElementTargetScheduleEntry) {
       const geometry = attachment.structuralExecution.readTargetGeometry(expected.mapping.row);
-      if (expected.mapping.row.targetKind === TemplateRenderTargetKind.RenderLocation) {
+      if (expected.mapping.row.placement instanceof TemplateCompilerContainerlessReplacementPlacement) {
         if (geometry?.geometryKind !== TemplateCompilerTargetGeometryKind.RenderLocation) return false;
         const mutation = batch.nodeDetachmentMutations.length === 1
           ? batch.nodeDetachmentMutations[0]!
@@ -3588,6 +3589,7 @@ export class TemplateCompilerExecutionSession {
           && sameOccurrences(batch.occurrenceGenerationReservations, generations)
           && operation.endForestMutationRevision === operation.startForestMutationRevision + 7;
       }
+      if (!(expected.mapping.row.placement instanceof TemplateCompilerMarkerTargetPlacement)) return false;
       const generation = geometry?.marker.generation ?? null;
       return geometry?.row === expected.mapping.row
         && batch.topologyMutations.length === 0
@@ -3699,7 +3701,7 @@ function operationKindForScheduleEntry(
     return TemplateCompilerOperationKind.AttributeDisposition;
   }
   if (entry instanceof TemplateCompilerOccurrenceElementTargetScheduleEntry) {
-    return entry.mapping.row.targetKind === TemplateRenderTargetKind.RenderLocation
+    return entry.mapping.row.placement instanceof TemplateCompilerContainerlessReplacementPlacement
       ? TemplateCompilerOperationKind.ContainerlessReplacement
       : TemplateCompilerOperationKind.HydrationTargetCreation;
   }
