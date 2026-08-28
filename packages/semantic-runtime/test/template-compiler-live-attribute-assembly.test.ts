@@ -38,7 +38,11 @@ import {
   TemplateCompilerLiveAttributeStructuralEffectKind,
   type TemplateCompilerLiveAttributeOwnerResult,
 } from '../src/template/template-compiler-live-attribute-assembly.js';
-import { TemplateCompilerLiveAttributeDisposition } from '../src/template/template-compiler-live-attribute-owner.js';
+import {
+  TemplateCompilerLiveAttributeDisposition,
+  TemplateCompilerLiveAttributeOwnerInput,
+  type TemplateCompilerLiveAttributeSuppressionAuthority,
+} from '../src/template/template-compiler-live-attribute-owner.js';
 import {
   TemplateCompilerLiveAllocationNamespace,
   type TemplateCompilerLiveAllocationLedger,
@@ -226,6 +230,39 @@ describe('template compiler live attribute owner assembly', () => {
     });
   });
 
+  test('assembles only the exact logically visible owner sequence without mutating the forest', () => {
+    const run = fixture.run('cursor-live-staging');
+    const element = elements(run.binding.execution.forest, 'cursor-staging-capture')[0];
+    if (element == null) throw new Error('Expected capture custom element.');
+    const physicalBefore = [...element.readAttributes()];
+    const suppressed = physicalBefore[0]!;
+    const revision = run.binding.execution.forest.mutationRevision;
+    const ownerInput = TemplateCompilerLiveAttributeOwnerInput.capture(
+      run.binding.execution.forest,
+      element,
+      revision,
+      testSuppressionAuthority(
+        run.binding.execution.forest,
+        element,
+        [suppressed],
+      ),
+    );
+
+    const result = run.assemble(element, ownerInput);
+
+    expect(result.ownerInput).toBe(ownerInput);
+    expect(result.contributions.map((entry) => entry.frame.attribute)).toEqual(physicalBefore.slice(1));
+    expect(result.contributions[0]?.frame.liveSite).toMatchObject({
+      originalForestOrdinal: 1,
+      simulatedLiveOrdinal: 0,
+    });
+    expect(result.contributions.every((entry) => !entry.frame.liveSite.ownerView.hasAttribute(suppressed.name)))
+      .toBe(true);
+    expect(result.finalOwnerView.hasAttribute(suppressed.name)).toBe(false);
+    expect(element.readAttributes()).toEqual(physicalBefore);
+    expect(run.binding.execution.forest.mutationRevision).toBe(revision);
+  });
+
   test('keeps a wide reached owner linear and command-complete', () => {
     const ordinal = vi.spyOn(TemplateCompilerAttributeOccurrence.prototype, 'readOwnerOrdinal');
     try {
@@ -240,6 +277,35 @@ describe('template compiler live attribute owner assembly', () => {
         entry.frame.liveSite.simulatedLiveOrdinal === 0
         && entry.instructions[0] instanceof PropertyBindingInstruction
       )).toBe(true);
+      expect(ordinal).not.toHaveBeenCalled();
+    } finally {
+      ordinal.mockRestore();
+    }
+  }, 30_000);
+
+  test('keeps a wide logically suppressed assembly linear without consulting owner ordinals', () => {
+    const ordinal = vi.spyOn(TemplateCompilerAttributeOccurrence.prototype, 'readOwnerOrdinal');
+    try {
+      const run = fixture.run('cursor-wide');
+      const element = elements(run.binding.execution.forest, 'div')[0];
+      if (element == null) throw new Error('Expected wide div occurrence.');
+      const suppressed = element.readAttributes()[64]!;
+      const revision = run.binding.execution.forest.mutationRevision;
+      const input = TemplateCompilerLiveAttributeOwnerInput.capture(
+        run.binding.execution.forest,
+        element,
+        revision,
+        testSuppressionAuthority(
+          run.binding.execution.forest,
+          element,
+          [suppressed],
+        ),
+      );
+      const result = run.assemble(element, input);
+
+      expect(result.completion).toBe(TemplateCompilerLiveAttributeCompletion.Complete);
+      expect(result.contributions).toHaveLength(127);
+      expect(result.contributions.some((entry) => entry.frame.attribute === suppressed)).toBe(false);
       expect(ordinal).not.toHaveBeenCalled();
     } finally {
       ordinal.mockRestore();
@@ -507,7 +573,10 @@ class LiveAttributeAssemblyRun {
     this.allocations = new TemplateCompilerLiveAllocationNamespace(fixture.browserRun).beginPhase(localKey);
   }
 
-  assemble(element: TemplateCompilerElementOccurrence): TemplateCompilerLiveAttributeOwnerResult {
+  assemble(
+    element: TemplateCompilerElementOccurrence,
+    ownerInput: TemplateCompilerLiveAttributeOwnerInput | null = null,
+  ): TemplateCompilerLiveAttributeOwnerResult {
     const reached = new TemplateCompilerReachedSiteSemanticResolver({
       execution: this.binding.execution,
       bootstrapClosure: this.binding.bootstrapClosure,
@@ -530,6 +599,7 @@ class LiveAttributeAssemblyRun {
       element,
       lookupName,
       allocations: this.allocations,
+      ownerInput,
     });
   }
 }
@@ -680,6 +750,21 @@ function multiBindingContribution(result: TemplateCompilerLiveAttributeOwnerResu
     })))}`);
   }
   return contribution;
+}
+
+function testSuppressionAuthority(
+  forest: TemplateCompilerOccurrenceForest,
+  element: TemplateCompilerElementOccurrence,
+  suppressedAttributes: readonly TemplateCompilerAttributeOccurrence[],
+): TemplateCompilerLiveAttributeSuppressionAuthority {
+  const forestMutationRevision = forest.mutationRevision;
+  return {
+    forest,
+    element,
+    forestMutationRevision,
+    suppressedAttributes: [...suppressedAttributes],
+    isCurrent: () => forest.mutationRevision === forestMutationRevision,
+  };
 }
 
 function instructionTarget(instruction: PropertyBindingInstruction | InterpolationInstruction | object): string | null {

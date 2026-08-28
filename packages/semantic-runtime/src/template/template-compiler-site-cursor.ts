@@ -1809,6 +1809,9 @@ function liveAttributeOwnersAreCoherent(
     if (
       seenElements.has(owner.element)
       || binding.forest.nodeForOccurrenceKey(owner.element.occurrenceKey) !== owner.element
+      || owner.ownerInput.forest !== binding.forest
+      || owner.ownerInput.element !== owner.element
+      || owner.progression.ownerInput !== owner.ownerInput
       || owner.progression.element !== owner.element
       || owner.instructionStaging.finalOwnerView !== owner.finalOwnerView
       || owner.instructionStaging.state !== instructionStagingStateFor(owner.completion)

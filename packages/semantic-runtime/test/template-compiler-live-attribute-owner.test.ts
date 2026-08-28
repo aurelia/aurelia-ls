@@ -1,11 +1,14 @@
-import { describe, expect, test } from 'vitest';
+import { describe, expect, test, vi } from 'vitest';
 
 import { hasHtmlAttribute, htmlAttributeValue } from '../src/template/html-ir.js';
 import {
   TemplateCompilerLiveAttributeDisposition,
+  TemplateCompilerLiveAttributeOwnerInput,
   TemplateCompilerLiveAttributeOwnerProgression,
+  type TemplateCompilerLiveAttributeSuppressionAuthority,
 } from '../src/template/template-compiler-live-attribute-owner.js';
 import {
+  TemplateCompilerAttributeOccurrence,
   TemplateCompilerElementOccurrence,
   TemplateCompilerOccurrenceForest,
 } from '../src/template/template-compiler-occurrence.js';
@@ -198,6 +201,141 @@ describe('template compiler live attribute owner progression', () => {
     }
   });
 
+  test('hides exact first and middle physical attributes while preserving physical and compact ordinals', () => {
+    const fixture = new BrowserEffectiveTemplateFixture('template-compiler-live-attribute-owner-suppression');
+    try {
+      const forest = TemplateCompilerOccurrenceForest.fromBrowserEffective(fixture.materialize(
+        'suppression',
+        '<div au-slot="one" title="two" data-x="three"></div>'
+          + '<div title="one" au-slot="two" data-x="three"></div>',
+      ).emission);
+      const [firstOwner, middleOwner] = elements(forest, 'div');
+      if (firstOwner == null || middleOwner == null) throw new Error('Expected suppression owners.');
+
+      for (const [owner, suppressedOrdinal, expectedOriginalOrdinals] of [
+        [firstOwner, 0, [1, 2]],
+        [middleOwner, 1, [0, 2]],
+      ] as const) {
+        const physicalBefore = [...owner.readAttributes()];
+        const suppressed = physicalBefore[suppressedOrdinal]!;
+        const suppression = testSuppressionAuthority(
+          forest,
+          owner,
+          [suppressed],
+        );
+        const input = TemplateCompilerLiveAttributeOwnerInput.capture(
+          forest,
+          owner,
+          forest.mutationRevision,
+          suppression,
+        );
+        const progression = new TemplateCompilerLiveAttributeOwnerProgression(input);
+
+        expect(input.visibleAttributes.map((attribute) => attribute.name)).toEqual(['title', 'data-x']);
+        expect(progression.readAttributesToVisit()).toEqual(input.visibleAttributes);
+        for (const [visibleOrdinal, attribute] of input.visibleAttributes.entries()) {
+          const site = progression.begin(attribute);
+          expect(site.originalForestOrdinal).toBe(expectedOriginalOrdinals[visibleOrdinal]);
+          expect(site.simulatedLiveOrdinal).toBe(visibleOrdinal);
+          expect(site.ownerView.hasAttribute('au-slot')).toBe(false);
+          expect(site.ownerView.getAttribute('au-slot')).toBeNull();
+          progression.complete(site, TemplateCompilerLiveAttributeDisposition.Retained);
+        }
+        progression.finish();
+
+        expect(progression.readFinalView().hasAttribute('au-slot')).toBe(false);
+        expect(owner.readAttributes()).toEqual(physicalBefore);
+        expect(suppressed.owner).toBe(owner);
+      }
+    } finally {
+      fixture.dispose();
+    }
+  });
+
+  test('rejects duplicate, foreign, and revision-drifted suppression authority', () => {
+    const fixture = new BrowserEffectiveTemplateFixture('template-compiler-live-attribute-owner-suppression-authority');
+    try {
+      const emission = fixture.materialize('authority', '<div au-slot title></div>').emission;
+      const forest = TemplateCompilerOccurrenceForest.fromBrowserEffective(emission);
+      const foreignForest = TemplateCompilerOccurrenceForest.fromBrowserEffective(emission);
+      const owner = elements(forest, 'div')[0]!;
+      const foreignOwner = elements(foreignForest, 'div')[0]!;
+      const slot = owner.readAttributes()[0]!;
+      const foreignSlot = foreignOwner.readAttributes()[0]!;
+
+      expect(() => TemplateCompilerLiveAttributeOwnerInput.capture(
+        forest,
+        owner,
+        forest.mutationRevision,
+        testSuppressionAuthority(forest, owner, [slot, slot]),
+      )).toThrow(/suppression authority/u);
+      expect(() => TemplateCompilerLiveAttributeOwnerInput.capture(
+        forest,
+        owner,
+        forest.mutationRevision,
+        testSuppressionAuthority(forest, owner, [foreignSlot]),
+      )).toThrow(/suppression authority/u);
+
+      const suppression = testSuppressionAuthority(forest, owner, [slot]);
+      expect(() => TemplateCompilerLiveAttributeOwnerInput.capture(
+        foreignForest,
+        foreignOwner,
+        foreignForest.mutationRevision,
+        suppression,
+      )).toThrow(/suppression authority/u);
+
+      forest.rewriteAttributeValue(slot, 'stale');
+      expect(suppression.isCurrent()).toBe(false);
+      expect(() => TemplateCompilerLiveAttributeOwnerInput.capture(
+        forest,
+        owner,
+        forest.mutationRevision,
+        suppression,
+      )).toThrow(/suppression authority/u);
+    } finally {
+      fixture.dispose();
+    }
+  });
+
+  test('keeps a 128-wide suppressed walk linear without consulting owner ordinals', () => {
+    const fixture = new BrowserEffectiveTemplateFixture('template-compiler-live-attribute-owner-suppression-wide');
+    const ordinal = vi.spyOn(TemplateCompilerAttributeOccurrence.prototype, 'readOwnerOrdinal');
+    try {
+      const attributes = Array.from({ length: 128 }, (_, index) => `data-${index}="${index}"`).join(' ');
+      const forest = TemplateCompilerOccurrenceForest.fromBrowserEffective(fixture.materialize(
+        'wide-suppression',
+        `<div ${attributes}></div>`,
+      ).emission);
+      const owner = elements(forest, 'div')[0]!;
+      const suppressed = owner.readAttributes()[64]!;
+      const input = TemplateCompilerLiveAttributeOwnerInput.capture(
+        forest,
+        owner,
+        forest.mutationRevision,
+        testSuppressionAuthority(
+          forest,
+          owner,
+          [suppressed],
+        ),
+      );
+      const progression = new TemplateCompilerLiveAttributeOwnerProgression(input);
+
+      for (const [visibleOrdinal, attribute] of progression.readAttributesToVisit().entries()) {
+        const site = progression.begin(attribute);
+        expect(site.originalForestOrdinal).toBe(visibleOrdinal < 64 ? visibleOrdinal : visibleOrdinal + 1);
+        expect(site.simulatedLiveOrdinal).toBe(visibleOrdinal);
+        progression.complete(site, TemplateCompilerLiveAttributeDisposition.Retained);
+      }
+
+      expect(progression.finish()).toBe(progression);
+      expect(progression.readSites()).toHaveLength(127);
+      expect(ordinal).not.toHaveBeenCalled();
+    } finally {
+      ordinal.mockRestore();
+      fixture.dispose();
+    }
+  });
+
   test('keeps 512 command-style sites linear with bounded mapper state keys', () => {
     const fixture = new BrowserEffectiveTemplateFixture('template-compiler-live-attribute-owner-wide');
     try {
@@ -243,4 +381,19 @@ function elements(
   return forest.readNodes().filter((node): node is TemplateCompilerElementOccurrence =>
     node instanceof TemplateCompilerElementOccurrence && node.tagName === tagName
   );
+}
+
+function testSuppressionAuthority(
+  forest: TemplateCompilerOccurrenceForest,
+  element: TemplateCompilerElementOccurrence,
+  suppressedAttributes: readonly TemplateCompilerAttributeOccurrence[],
+): TemplateCompilerLiveAttributeSuppressionAuthority {
+  const forestMutationRevision = forest.mutationRevision;
+  return {
+    forest,
+    element,
+    forestMutationRevision,
+    suppressedAttributes: [...suppressedAttributes],
+    isCurrent: () => forest.mutationRevision === forestMutationRevision,
+  };
 }

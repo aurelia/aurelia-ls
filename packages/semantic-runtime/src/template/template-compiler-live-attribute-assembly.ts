@@ -68,6 +68,7 @@ import {
 import type { ParsedMultiBindingSegment } from './multi-binding-segments.js';
 import {
   TemplateCompilerLiveAttributeDisposition,
+  TemplateCompilerLiveAttributeOwnerInput,
   type TemplateCompilerLiveAttributeOwnerView,
   TemplateCompilerLiveAttributeOwnerProgression,
   type TemplateCompilerLiveAttributeOwnerSite,
@@ -238,6 +239,7 @@ export class TemplateCompilerLiveAttributeOwnerResult {
     readonly element: TemplateCompilerElementOccurrence,
     readonly authoredElement: HtmlElement | null,
     readonly lookupName: string,
+    readonly ownerInput: TemplateCompilerLiveAttributeOwnerInput,
     readonly debugRead: TemplateCompilerObservedValue<boolean>,
     readonly progression: TemplateCompilerLiveAttributeOwnerProgression,
     readonly contributions: readonly TemplateCompilerLiveAttributeContribution[],
@@ -247,6 +249,13 @@ export class TemplateCompilerLiveAttributeOwnerResult {
     readonly finalOwnerView: TemplateCompilerLiveAttributeOwnerView,
     readonly instructionStaging: TemplateCompilerLiveElementInstructionStagingResult,
   ) {
+    if (
+      !ownerInput.isCurrent()
+      || ownerInput.element !== element
+      || progression.ownerInput !== ownerInput
+    ) {
+      throw new Error('Live attribute owner result lost its exact logical owner input.');
+    }
     this.templateControllers = contributions.filter((entry) =>
       entry.targetLane === TemplateCompilerLiveAttributeTargetLane.TemplateController
     );
@@ -289,6 +298,7 @@ export interface TemplateCompilerLiveAttributeOwnerAssemblyRequest {
   readonly element: TemplateCompilerElementOccurrence;
   readonly lookupName: string;
   readonly allocations: TemplateCompilerLiveAllocationLedger;
+  readonly ownerInput?: TemplateCompilerLiveAttributeOwnerInput | null;
 }
 
 /** Execute live attribute parsing/classification/value/command decisions in browser NamedNodeMap order. */
@@ -301,6 +311,7 @@ export function assembleTemplateCompilerLiveAttributeOwner(
 class TemplateCompilerLiveAttributeOwnerAssembly {
   private readonly semantics: TemplateCompilerReachedSiteSemanticResolver;
   private readonly debugRead: TemplateCompilerObservedValue<boolean>;
+  private readonly ownerInput: TemplateCompilerLiveAttributeOwnerInput;
   private readonly progression: TemplateCompilerLiveAttributeOwnerProgression;
   private readonly handles: LiveAttributeAssemblyHandleAuthority;
   private readonly authoredElement: HtmlElement | null;
@@ -318,11 +329,23 @@ class TemplateCompilerLiveAttributeOwnerAssembly {
     });
     if (request.siteDriver != null) this.semantics.useSiteDriver(request.siteDriver);
     this.debugRead = request.compilerReads.readCompilerDebug();
-    this.progression = new TemplateCompilerLiveAttributeOwnerProgression(
+    const forestMutationRevision = request.siteDriver?.expectedForestMutationRevision
+      ?? request.bootstrapClosure.forestMutationRevision;
+    const ownerInput = request.ownerInput ?? TemplateCompilerLiveAttributeOwnerInput.capture(
       request.execution.forest,
       request.element,
-      request.siteDriver?.expectedForestMutationRevision ?? request.bootstrapClosure.forestMutationRevision,
+      forestMutationRevision,
     );
+    if (
+      !ownerInput.isCurrent()
+      || ownerInput.forest !== request.execution.forest
+      || ownerInput.element !== request.element
+      || ownerInput.forestMutationRevision !== forestMutationRevision
+    ) {
+      throw new Error('Live attribute assembly received a foreign or stale logical owner input.');
+    }
+    this.ownerInput = ownerInput;
+    this.progression = new TemplateCompilerLiveAttributeOwnerProgression(ownerInput);
     this.handles = new LiveAttributeAssemblyHandleAuthority(
       request.allocations,
       request.localKey,
@@ -339,7 +362,7 @@ class TemplateCompilerLiveAttributeOwnerAssembly {
 
   execute(): TemplateCompilerLiveAttributeOwnerResult {
     let terminal: TemplateCompilerLiveAttributeContribution | null = null;
-    for (const attribute of this.request.element.readAttributes()) {
+    for (const attribute of this.progression.readAttributesToVisit()) {
       const liveSite = this.progression.begin(attribute);
       const scalar = this.semantics.captureReachedAttributeScalar(
         this.request.element,
@@ -394,6 +417,7 @@ class TemplateCompilerLiveAttributeOwnerAssembly {
       this.request.element,
       this.authoredElement,
       this.request.lookupName,
+      this.ownerInput,
       this.debugRead,
       this.progression,
       this.contributions,
