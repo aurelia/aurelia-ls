@@ -14,6 +14,7 @@ import {
   TemplateCompilerReadView,
   TemplateCompilerWorldAuthority,
 } from '../src/template/compiler-read-view.js';
+import { TemplateCompilerTargetRowPlacementKind } from '../src/template/compiler-target-plan.js';
 import {
   TemplateCompilerExecutionSession,
   type TemplateCompilerSiteExecutionEndpointReceipt,
@@ -67,6 +68,7 @@ import {
   TemplateCompilerSiteCursorProjectionExtractionEvent,
   TemplateCompilerSiteCursorResultState,
   TemplateCompilerSiteCursorTaskSession,
+  TemplateCompilerSiteCursorTemplateControllerTransitionEvent,
   TemplateCompilerSiteCursorTraversalMode,
   type TemplateCompilerSiteCursorTaskSelection,
   type TemplateCompilerSiteCursorTranscript,
@@ -249,6 +251,7 @@ describe('template compiler projection logical extraction', () => {
     expect(contextForElement(tasks, elements, 'div')).toBe(tasks.rootContext);
     expect(eventsOf(transcript, TemplateCompilerSiteCursorAttributeEvent)
       .filter((event) => event.attribute.name === 'au-slot')).toEqual([]);
+    expect(eventsOf(transcript, TemplateCompilerSiteCursorTemplateControllerTransitionEvent)).toEqual([]);
     expect(tasks.taskForContext(contexts[3]!)?.events).toEqual([]);
     expect(run.completion.refusals.map((refusal) => refusal.refusalKind))
       .toContain(TemplateCompilerOrdinaryRootCompletionRefusalKind.ContextFamilyTraversal);
@@ -286,6 +289,8 @@ describe('template compiler projection logical extraction', () => {
     const tasks = transcript.taskSnapshot;
     const contexts = tasks.contexts.map((task) => task.context);
     const elements = eventsOf(transcript, TemplateCompilerSiteCursorElementEvent);
+    const transition = eventsOf(transcript, TemplateCompilerSiteCursorTemplateControllerTransitionEvent)[0];
+    if (transition == null) throw new Error('Expected one TC-only transition event.');
 
     expect(transcript.frontier).toBeNull();
     expect(contexts.map((context) => context.contextKind)).toEqual([
@@ -299,8 +304,54 @@ describe('template compiler projection logical extraction', () => {
     expect(contextForElement(tasks, elements, 'div')).toBe(contexts[2]);
     expect(contextForElement(tasks, elements, 'span')).toBe(tasks.rootContext);
     expect(eventsOf(transcript, TemplateCompilerSiteCursorProjectionExtractionEvent)).toEqual([]);
+    expect(transition).toBeDefined();
+    expect(tasks.contextForEvent(transition!)).toBe(tasks.rootContext);
+    expect(transition.preparation.request.reachedElement.elementEvent.ordinal).toBeLessThan(transition.ordinal);
+    expect(transition?.preparation.drafts)
+      .toBe(transition?.preparation.request.owner.instructionStaging.templateControllers);
+    expect(transition?.preparation.drafts.map((draft) => draft.controllerName))
+      .toEqual(['projection-logical-outer', 'projection-logical-inner']);
+    expect(transition?.realization.contexts).toEqual(contexts.slice(1));
+    expect(transition?.realization.edges.map((edge) => [
+      edge.rowContext,
+      edge.childContext,
+      edge.placementKind,
+    ])).toEqual([
+      [tasks.rootContext, contexts[1], TemplateCompilerTargetRowPlacementKind.TemplateControllerSourceReplacement],
+      [contexts[1], contexts[2], TemplateCompilerTargetRowPlacementKind.TemplateControllerGeneratedAppend],
+    ]);
+    expect(transition?.realization.terminalLeaf).toBe(contexts[2]);
+    expect(transition?.realization.leafRehoming).toMatchObject({
+      host: transition.preparation.host,
+      sourceContext: tasks.rootContext,
+      terminalLeaf: contexts[2],
+      owner: transition.preparation.request.owner,
+      hydrateElement: transition.preparation.request.hydrateElement,
+      directRowTail: transition.preparation.directRowTail,
+      projectionRealization: null,
+    });
     expect(run.completion.refusals.map((refusal) => refusal.refusalKind))
       .toContain(TemplateCompilerOrdinaryRootCompletionRefusalKind.ContextFamilyTraversal);
+  });
+
+  test('stops native TC leaf traversal when a child still carries projection syntax', () => {
+    const run = fixture.run(
+      'projection-logical-native-tc-slot-host',
+      TemplateCompilerSiteCursorTraversalMode.ClosedContextFamily,
+    );
+    const transcript = run.transcript;
+    const transition = eventsOf(transcript, TemplateCompilerSiteCursorTemplateControllerTransitionEvent)[0];
+
+    expect(transcript.frontier?.frontierKind)
+      .toBe(TemplateCompilerSiteCursorFrontierKind.AfterAttributesBeforeProjection);
+    expect(transition).toBeDefined();
+    expect(transcript.taskSnapshot.contextForEvent(transition!)).toBe(transcript.taskSnapshot.rootContext);
+    expect(eventsOf(transcript, TemplateCompilerSiteCursorElementEvent).map((event) => event.element.tagName))
+      .not.toContain('span');
+    expect(transcript.taskSnapshot.contexts.map((task) => task.state)).toEqual([
+      TemplateCompilerSiteCursorContextTaskState.Waiting,
+      TemplateCompilerSiteCursorContextTaskState.Stopped,
+    ]);
   });
 
   test('enters the terminal TC leaf, runs projection fan-out, and returns to the root sibling', () => {
@@ -313,6 +364,8 @@ describe('template compiler projection logical extraction', () => {
     const contexts = tasks.contexts.map((task) => task.context);
     const elements = eventsOf(transcript, TemplateCompilerSiteCursorElementEvent);
     const projectionEvent = eventsOf(transcript, TemplateCompilerSiteCursorProjectionExtractionEvent)[0];
+    const transition = eventsOf(transcript, TemplateCompilerSiteCursorTemplateControllerTransitionEvent)[0];
+    if (transition == null) throw new Error('Expected one TC plus projection transition event.');
 
     expect(transcript.frontier).toBeNull();
     expect(contexts.map((context) => context.contextKind)).toEqual([
@@ -326,6 +379,43 @@ describe('template compiler projection logical extraction', () => {
     expect(contexts[2]?.parent).toBe(contexts[1]);
     expect(contexts[3]?.parent).toBe(contexts[2]);
     expect(contexts[4]?.parent).toBe(contexts[2]);
+    expect(transition).toBeDefined();
+    expect(tasks.contextForEvent(transition!)).toBe(tasks.rootContext);
+    expect(transition.ordinal).toBeLessThan(projectionEvent!.ordinal);
+    expect(transition?.preparation.drafts)
+      .toBe(transition?.preparation.request.owner.instructionStaging.templateControllers);
+    expect(transition?.preparation.drafts.map((draft) => draft.controllerName))
+      .toEqual(['projection-logical-outer', 'projection-logical-inner']);
+    expect(transition?.realization.contexts).toEqual(contexts.slice(1, 3));
+    expect(transition?.realization.edges.map((edge) => [
+      edge.draft,
+      edge.rowContext,
+      edge.childContext,
+      edge.placementKind,
+    ])).toEqual([
+      [
+        transition?.preparation.drafts[0],
+        tasks.rootContext,
+        contexts[1],
+        TemplateCompilerTargetRowPlacementKind.TemplateControllerSourceReplacement,
+      ],
+      [
+        transition?.preparation.drafts[1],
+        contexts[1],
+        contexts[2],
+        TemplateCompilerTargetRowPlacementKind.TemplateControllerGeneratedAppend,
+      ],
+    ]);
+    expect(transition?.realization.terminalLeaf).toBe(contexts[2]);
+    expect(transition?.realization.leafRehoming.host).toBe(transition?.preparation.host);
+    expect(transition?.realization.leafRehoming.owner).toBe(transition?.preparation.request.owner);
+    expect(transition?.realization.leafRehoming.hydrateElement)
+      .toBe(transition?.preparation.request.hydrateElement);
+    expect(transition?.realization.leafRehoming.directRowTail).toBe(transition?.preparation.directRowTail);
+    expect(transition?.realization.leafRehoming.projectionRealization).toBe(projectionEvent?.realization);
+    expect(transition?.realization.request.terminalLeafContinuation.context).toBe(contexts[2]);
+    expect(transition?.realization.request.terminalLeafContinuation.sourceSelection)
+      .toBe(transition?.preparation.sourceSelection);
     expect(tasks.contextForEvent(projectionEvent!)).toBe(tasks.rootContext);
     expect(contextForElement(tasks, elements, 'projection-logical-leaf')).toBe(tasks.rootContext);
     expect(contextForElement(tasks, elements, 'span')).toBe(contexts[3]);

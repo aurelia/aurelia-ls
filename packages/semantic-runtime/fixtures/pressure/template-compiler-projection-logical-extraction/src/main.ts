@@ -6,6 +6,7 @@ import {
 } from '@aurelia/runtime-html';
 import projectionLogicalHostTemplate from './projection-logical-host.html';
 import projectionLogicalContainerlessHostTemplate from './projection-logical-containerless-host.html';
+import projectionLogicalNativeTcSlotHostTemplate from './projection-logical-native-tc-slot-host.html';
 import projectionLogicalShadowHostTemplate from './projection-logical-shadow-host.html';
 import projectionLogicalTcHostTemplate from './projection-logical-tc-host.html';
 import projectionLogicalTcOnlyHostTemplate from './projection-logical-tc-only-host.html';
@@ -47,6 +48,15 @@ class ProjectionLogicalWhitespaceHost {
   dependencies: [ProjectionLogicalContainerlessLeaf],
 })
 class ProjectionLogicalContainerlessHost {
+  after = 'after';
+}
+
+@customElement({
+  name: 'projection-logical-native-tc-slot-host',
+  template: projectionLogicalNativeTcSlotHostTemplate,
+  dependencies: [ProjectionLogicalOuterTemplateController],
+})
+class ProjectionLogicalNativeTcSlotHost {
   after = 'after';
 }
 
@@ -97,6 +107,7 @@ void new Aurelia()
     ProjectionLogicalHost,
     ProjectionLogicalWhitespaceHost,
     ProjectionLogicalContainerlessHost,
+    ProjectionLogicalNativeTcSlotHost,
     ProjectionLogicalTcHost,
     ProjectionLogicalTcOnlyHost,
     ProjectionLogicalShadowHost,

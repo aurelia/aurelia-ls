@@ -98,11 +98,13 @@ import {
   TemplateCompilerSiteCursorSubtreeExclusionEvent,
   TemplateCompilerSiteCursorSurrogateValidationEvent,
   TemplateCompilerSiteCursorSurrogateValidationOutcome,
+  TemplateCompilerSiteCursorTemplateControllerTransitionEvent,
   TemplateCompilerSiteCursorTextEvent,
 } from './template-compiler-site-cursor-event.js';
 
 export * from './template-compiler-site-cursor-event.js';
 export * from './template-compiler-site-cursor-task.js';
+export * from './template-compiler-template-controller-transition.js';
 import {
   TemplateCompilerSiteCursorSemanticResolver,
 } from './template-compiler-site-cursor-semantics.js';
@@ -140,6 +142,11 @@ import {
   type TemplateCompilerProjectionLogicalExtractionRealization,
   type TemplateCompilerProjectionSlotConsumptionReceipt,
 } from './template-compiler-projection-logical-extraction.js';
+import {
+  prepareTemplateCompilerTemplateControllerTransition,
+  realizeTemplateCompilerTemplateControllerTransition,
+  type TemplateCompilerTemplateControllerTransitionRealization,
+} from './template-compiler-template-controller-transition.js';
 import {
   completeTemplateCompilerOrdinaryRoot,
   type TemplateCompilerOrdinaryRootCompletionResult,
@@ -268,11 +275,16 @@ export class TemplateCompilerSiteCursorTranscript {
         rootOwnedCursorEvent(event)
         && taskSnapshot.contextForEvent(event) !== taskSnapshot.rootContext
       )
+      || events.some((event) =>
+        event instanceof TemplateCompilerSiteCursorTemplateControllerTransitionEvent
+        && !templateControllerTransitionEventBindingIsCoherent(taskSnapshot, event)
+      )
       || events.some((event, ordinal) =>
         !event.isOwnedBy(siteCursorConstructionAuthority)
         || event.ordinal !== ordinal
         || (event instanceof TemplateCompilerSiteCursorProcessContentEvent && !event.isCoherent())
         || (event instanceof TemplateCompilerSiteCursorAttributeEvent && !event.isCoherent())
+        || (event instanceof TemplateCompilerSiteCursorTemplateControllerTransitionEvent && !event.isCoherent())
         || (event instanceof TemplateCompilerSiteCursorProjectionExtractionEvent && !event.isCoherent())
         || (event instanceof TemplateCompilerSiteCursorTextEvent && !event.isCoherent())
       )
@@ -362,6 +374,8 @@ class TemplateCompilerClosedElementContinuation {
     readonly hydrateElement: TemplateCompilerHydrateElementStagingResult,
     readonly terminalContext: TemplateCompilerSiteCursorContextReference,
     readonly hasTemplateControllers: boolean,
+    readonly templateControllerRealization: TemplateCompilerTemplateControllerTransitionRealization | null,
+    readonly templateControllerEvent: TemplateCompilerSiteCursorTemplateControllerTransitionEvent | null,
     readonly preparation: TemplateCompilerProjectionLogicalExtractionPreparation | null,
     readonly realization: TemplateCompilerProjectionLogicalExtractionRealization | null,
     readonly projectionEvent: TemplateCompilerSiteCursorProjectionExtractionEvent | null,
@@ -1262,6 +1276,13 @@ class TemplateCompilerRootSiteCursor {
     const element = elementEvent.element;
     const sourceSelection = reachedElement.reachedSelectionEvent.selection;
     const sourceContext = sourceSelection.context;
+    const templateControllerPreparation = hasTemplateControllers
+      ? prepareTemplateCompilerTemplateControllerTransition({
+          reachedElement,
+          owner: hydrateElement.owner,
+          hydrateElement,
+        })
+      : null;
     const projectionPending = hydrateElement.draft?.projection.state
       === TemplateCompilerHydrateElementProjectionState.PendingExtraction;
     const preparation = projectionPending
@@ -1318,6 +1339,7 @@ class TemplateCompilerRootSiteCursor {
     );
 
     let realization: TemplateCompilerProjectionLogicalExtractionRealization | null = null;
+    const entrantBandStagings: TemplateCompilerSiteCursorProjectionEntrantBandStaging[] = [];
     let projectionEvent: TemplateCompilerSiteCursorProjectionExtractionEvent | null = null;
     if (preparation != null) {
       realization = realizeTemplateCompilerProjectionLogicalExtraction({
@@ -1325,7 +1347,6 @@ class TemplateCompilerRootSiteCursor {
         continuation,
         contexts: projectionContextInputs,
       });
-      const entrantBandStagings: TemplateCompilerSiteCursorProjectionEntrantBandStaging[] = [];
       for (const band of realization.entrantBands) {
         const works = this.taskSession.stageContextLogicalEntrantBand(band.context, band.entrantInputs);
         entrantBandStagings.push(new TemplateCompilerSiteCursorProjectionEntrantBandStaging(band, works));
@@ -1341,6 +1362,28 @@ class TemplateCompilerRootSiteCursor {
           });
         }
       }
+    }
+
+    const templateControllerRealization = templateControllerPreparation == null
+      ? null
+      : realizeTemplateCompilerTemplateControllerTransition({
+          preparation: templateControllerPreparation,
+          contexts: templateControllerContexts,
+          terminalLeafContinuation: continuation,
+          projectionRealization: realization,
+        });
+    const templateControllerEvent = templateControllerRealization == null
+      ? null
+      : new TemplateCompilerSiteCursorTemplateControllerTransitionEvent(
+          siteCursorConstructionAuthority,
+          this.transcriptOrdinal++,
+          element,
+          templateControllerPreparation!,
+          templateControllerRealization,
+        );
+    if (templateControllerEvent != null) this.appendEvent(templateControllerEvent);
+
+    if (preparation != null && realization != null) {
       projectionEvent = new TemplateCompilerSiteCursorProjectionExtractionEvent(
         siteCursorConstructionAuthority,
         this.transcriptOrdinal++,
@@ -1364,6 +1407,8 @@ class TemplateCompilerRootSiteCursor {
       hydrateElement,
       terminalContext,
       hasTemplateControllers,
+      templateControllerRealization,
+      templateControllerEvent,
       preparation,
       realization,
       projectionEvent,
@@ -1471,6 +1516,8 @@ class TemplateCompilerRootSiteCursor {
         state.hydrateElement,
         state.terminalContext,
         state.hasTemplateControllers,
+        state.templateControllerRealization,
+        state.templateControllerEvent,
         state.preparation,
         state.realization,
         state.projectionEvent,
@@ -1488,6 +1535,21 @@ class TemplateCompilerRootSiteCursor {
     const event = state.reachedElement.elementEvent;
     const element = event.element;
     const draft = state.hydrateElement.draft;
+    if (
+      draft == null
+      && state.projectionEvent == null
+      && this.semantics.hasProjectionOnNativeElement(element)
+    ) {
+      this.stop(
+        TemplateCompilerSiteCursorFrontierKind.AfterAttributesBeforeProjection,
+        element,
+        null,
+        null,
+        event.capturedSuccessor,
+        'Native template-controller host retains projection syntax that cannot enter ordinary leaf traversal.',
+      );
+      return null;
+    }
     if (draft?.containerless.effective === true) {
       const hasUnsupportedChildren = state.projectionEvent == null && element.readChildren().length > 0;
       if (
@@ -2446,6 +2508,19 @@ function sameObjects<T>(left: readonly T[], right: readonly T[]): boolean {
 function rootOwnedCursorEvent(event: TemplateCompilerSiteCursorEvent): boolean {
   return event instanceof TemplateCompilerSiteCursorPhaseEvent
     || event instanceof TemplateCompilerSiteCursorSurrogateValidationEvent;
+}
+
+function templateControllerTransitionEventBindingIsCoherent(
+  tasks: TemplateCompilerSiteCursorTaskSessionSnapshot,
+  event: TemplateCompilerSiteCursorTemplateControllerTransitionEvent,
+): boolean {
+  const binding = tasks.bindingForEvent(event);
+  const selection = event.preparation.sourceSelection;
+  return binding != null
+    && binding.context === event.preparation.sourceContext
+    && binding.context === selection.context
+    && binding.visit === selection.visit
+    && binding.work === selection.work;
 }
 
 function instructionStagingStateFor(

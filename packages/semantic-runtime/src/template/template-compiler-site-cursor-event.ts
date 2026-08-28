@@ -38,6 +38,10 @@ import type {
   TemplateCompilerProjectionRealizedEntrantBand,
   TemplateCompilerProjectionSlotConsumptionReceipt,
 } from './template-compiler-projection-logical-extraction.js';
+import type {
+  TemplateCompilerTemplateControllerTransitionPreparation,
+  TemplateCompilerTemplateControllerTransitionRealization,
+} from './template-compiler-template-controller-transition.js';
 import type { TemplateCompilerSiteCursorLogicalEntrantWork } from './template-compiler-site-cursor-task.js';
 import type { HtmlElement, HtmlText } from './html-ir.js';
 import type {
@@ -57,6 +61,7 @@ export const enum TemplateCompilerSiteCursorEventKind {
   Element = 'element',
   ProcessContent = 'process-content',
   Attribute = 'attribute',
+  TemplateControllerTransition = 'template-controller-transition',
   ProjectionExtraction = 'projection-extraction',
   ContainerlessPlacement = 'containerless-placement',
   Text = 'text',
@@ -226,6 +231,33 @@ export class TemplateCompilerSiteCursorAttributeEvent extends TemplateCompilerSi
         && this.liveContribution.frame.source.originState === this.browserOriginState
         && this.liveContribution.disposition === this.liveOwnerSite.disposition
       );
+  }
+}
+
+/** Exact source-owned transition from one reached host through its complete ordered TC context chain. */
+export class TemplateCompilerSiteCursorTemplateControllerTransitionEvent extends TemplateCompilerSiteCursorEvent {
+  constructor(
+    authority: object,
+    ordinal: number,
+    readonly host: TemplateCompilerElementOccurrence,
+    readonly preparation: TemplateCompilerTemplateControllerTransitionPreparation,
+    readonly realization: TemplateCompilerTemplateControllerTransitionRealization,
+  ) {
+    super(authority, ordinal, TemplateCompilerSiteCursorEventKind.TemplateControllerTransition);
+    if (!this.isCoherent()) {
+      throw new Error('Compiler template-controller transition event lost its host or realized context chain.');
+    }
+  }
+
+  isCoherent(): boolean {
+    return this.preparation.isModuleConstructed()
+      && this.realization.isModuleConstructed()
+      && this.realization.request.preparation === this.preparation
+      && this.preparation.host === this.host
+      && this.preparation.request.reachedElement.elementEvent.element === this.host
+      && this.preparation.request.reachedElement.elementEvent.ordinal < this.ordinal
+      && this.realization.leafRehoming.host === this.host
+      && this.realization.contexts.length === this.preparation.drafts.length;
   }
 }
 
