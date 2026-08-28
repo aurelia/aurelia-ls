@@ -22,6 +22,7 @@ import {
   type TemplateCompilerLiveAttributeContribution,
   type TemplateCompilerLiveAttributeOwnerResult,
 } from './template-compiler-live-attribute-assembly.js';
+import { TemplateCompilerLiveAttributeOwnerInput } from './template-compiler-live-attribute-owner.js';
 import { TemplateCompilerElementInstructionStagingState } from './template-compiler-instruction-staging.js';
 import {
   TemplateCompilerAttributeOccurrence,
@@ -92,6 +93,8 @@ import {
   TemplateCompilerSiteCursorPhaseEvent,
   TemplateCompilerSiteCursorPhaseKind,
   TemplateCompilerSiteCursorProcessContentEvent,
+  TemplateCompilerSiteCursorProjectionEntrantBandStaging,
+  TemplateCompilerSiteCursorProjectionExtractionEvent,
   TemplateCompilerSiteCursorSubtreeExclusionEvent,
   TemplateCompilerSiteCursorSurrogateValidationEvent,
   TemplateCompilerSiteCursorSurrogateValidationOutcome,
@@ -130,11 +133,24 @@ import {
   type TemplateCompilerRootCompilationState,
 } from './template-compiler-root-state.js';
 import {
+  prepareTemplateCompilerProjectionLogicalExtraction,
+  realizeTemplateCompilerProjectionLogicalExtraction,
+  rebaseTemplateCompilerProjectionLiveSlotSuppression,
+  type TemplateCompilerProjectionLogicalExtractionPreparation,
+  type TemplateCompilerProjectionLogicalExtractionRealization,
+  type TemplateCompilerProjectionSlotConsumptionReceipt,
+} from './template-compiler-projection-logical-extraction.js';
+import {
   completeTemplateCompilerOrdinaryRoot,
   type TemplateCompilerOrdinaryRootCompletionResult,
 } from './template-compiler-root-completion.js';
 import {
+  TemplateCompilerSiteCursorContextKind,
+  type TemplateCompilerSiteCursorContextReference,
+  TemplateCompilerSiteCursorLogicalEntrantWork,
   type TemplateCompilerSiteCursorReachedSelectionEventAttestation,
+  TemplateCompilerSiteCursorSelectionKind,
+  TemplateCompilerSiteCursorStagedElementContinuationWork,
   TemplateCompilerSiteCursorTaskSession,
   type TemplateCompilerSiteCursorTaskSelection,
   type TemplateCompilerSiteCursorTaskSessionSnapshot,
@@ -206,6 +222,7 @@ export class TemplateCompilerSiteCursorTranscript {
     readonly binding: TemplateCompilerSiteInvocationBinding,
     readonly compilerReads: TemplateCompilerReadView,
     readonly preWalkAuthority: TemplateCompilerPreWalkRemainderAuthority,
+    readonly traversalMode: TemplateCompilerSiteCursorTraversalMode,
     readonly events: readonly TemplateCompilerSiteCursorEvent[],
     readonly taskSnapshot: TemplateCompilerSiteCursorTaskSessionSnapshot,
     readonly attributeOwners: readonly TemplateCompilerLiveAttributeOwnerResult[],
@@ -234,6 +251,10 @@ export class TemplateCompilerSiteCursorTranscript {
       || expectedEndLaneOperationCount !== endLaneOperationCount;
     if (
       authority !== siteCursorConstructionAuthority
+      || (
+        traversalMode !== TemplateCompilerSiteCursorTraversalMode.CompatibilityStop
+        && traversalMode !== TemplateCompilerSiteCursorTraversalMode.ClosedContextFamily
+      )
       || !binding.isModuleConstructed()
       || preWalkAuthority.binding !== binding
       || preWalkAuthority.index !== binding.index
@@ -252,6 +273,7 @@ export class TemplateCompilerSiteCursorTranscript {
         || event.ordinal !== ordinal
         || (event instanceof TemplateCompilerSiteCursorProcessContentEvent && !event.isCoherent())
         || (event instanceof TemplateCompilerSiteCursorAttributeEvent && !event.isCoherent())
+        || (event instanceof TemplateCompilerSiteCursorProjectionExtractionEvent && !event.isCoherent())
         || (event instanceof TemplateCompilerSiteCursorTextEvent && !event.isCoherent())
       )
       || !liveAttributeOwnersAreCoherent(binding, events, attributeOwners)
@@ -310,15 +332,46 @@ export class TemplateCompilerSiteCursorResult {
   }
 }
 
+export const enum TemplateCompilerSiteCursorTraversalMode {
+  CompatibilityStop = 'compatibility-stop',
+  ClosedContextFamily = 'closed-context-family',
+}
+
 export interface TemplateCompilerRootSiteCursorRequest {
   readonly binding: TemplateCompilerSiteInvocationBinding;
   readonly compilerReads: TemplateCompilerReadView;
   readonly preWalkAuthority: TemplateCompilerPreWalkRemainderAuthority;
+  readonly traversalMode?: TemplateCompilerSiteCursorTraversalMode;
 }
 
 interface TemplateCompilerSiteCursorChildFrame {
   readonly parent: TemplateCompilerParentOccurrence;
   readonly children: readonly TemplateCompilerNodeOccurrence[];
+}
+
+const enum TemplateCompilerClosedElementContinuationPhase {
+  EnterTemplateControllerLeaf = 'enter-template-controller-leaf',
+  EnterTemplateControllerLeafWithProjection = 'enter-template-controller-leaf-with-projection',
+  AfterProjection = 'after-projection',
+}
+
+class TemplateCompilerClosedElementContinuation {
+  constructor(
+    readonly phase: TemplateCompilerClosedElementContinuationPhase,
+    readonly reachedElement: TemplateCompilerSiteCursorReachedElement,
+    readonly hydrateElement: TemplateCompilerHydrateElementStagingResult,
+    readonly terminalContext: TemplateCompilerSiteCursorContextReference,
+    readonly hasTemplateControllers: boolean,
+    readonly preparation: TemplateCompilerProjectionLogicalExtractionPreparation | null,
+    readonly realization: TemplateCompilerProjectionLogicalExtractionRealization | null,
+    readonly projectionEvent: TemplateCompilerSiteCursorProjectionExtractionEvent | null,
+    readonly projectionContexts: readonly TemplateCompilerSiteCursorContextReference[],
+  ) {}
+}
+
+interface TemplateCompilerProjectedEntrantSemantics {
+  readonly preparation: TemplateCompilerProjectionLogicalExtractionPreparation;
+  readonly slotConsumption: TemplateCompilerProjectionSlotConsumptionReceipt | null;
 }
 
 /**
@@ -408,6 +461,12 @@ class TemplateCompilerRootSiteCursor {
   private readonly rootState: TemplateCompilerRootCompilationAccumulator;
   private readonly allocations: TemplateCompilerLiveAllocationLedger;
   private readonly allocationNamespace: TemplateCompilerLiveAllocationNamespace;
+  private readonly traversalMode: TemplateCompilerSiteCursorTraversalMode;
+  private readonly closedElementContinuations = new Map<
+    TemplateCompilerSiteCursorStagedElementContinuationWork,
+    TemplateCompilerClosedElementContinuation
+  >();
+  private readonly projectedEntrantSemantics = new Map<object, TemplateCompilerProjectedEntrantSemantics>();
   private readonly startForestMutationRevision: number;
   private readonly startGlobalOperationCount: number;
   private readonly startLaneOperationCount: number;
@@ -420,6 +479,7 @@ class TemplateCompilerRootSiteCursor {
     this.binding = request.binding;
     this.compilerReads = request.compilerReads;
     this.preWalk = request.preWalkAuthority;
+    this.traversalMode = request.traversalMode ?? TemplateCompilerSiteCursorTraversalMode.CompatibilityStop;
     this.ledger = new TemplateCompilerSiteSpendLedger(this.binding.index);
     this.startForestMutationRevision = this.binding.forest.mutationRevision;
     this.startGlobalOperationCount = this.binding.execution.sequence.readOperations().length;
@@ -466,6 +526,7 @@ class TemplateCompilerRootSiteCursor {
       this.binding,
       this.compilerReads,
       this.preWalk,
+      this.traversalMode,
       events,
       taskSnapshot,
       this.attributeOwners,
@@ -546,6 +607,9 @@ class TemplateCompilerRootSiteCursor {
   private visitNode(
     selection: TemplateCompilerSiteCursorTaskSelection,
   ): TemplateCompilerSiteCursorChildFrame | null {
+    if (selection.selectionKind === TemplateCompilerSiteCursorSelectionKind.StagedElementContinuation) {
+      return this.continueClosedElement(selection);
+    }
     const { node, parent, parentOrdinal, capturedSuccessor: successor } = selection.visit;
     if (node instanceof TemplateCompilerElementOccurrence) {
       return this.visitElement(selection, node, parent, parentOrdinal, successor);
@@ -957,6 +1021,7 @@ class TemplateCompilerRootSiteCursor {
     successor: TemplateCompilerNodeOccurrence | null,
     processContent: TemplateCompilerProcessContentResult | null,
   ): TemplateCompilerSiteCursorChildFrame | null {
+    const ownerInput = this.projectedOwnerInput(reachedElement);
     const assembly = assembleTemplateCompilerLiveAttributeOwner({
       localKey: `${this.binding.lane.localKey}:live-attributes:${element.occurrenceKey}`,
       execution: this.binding.execution,
@@ -967,6 +1032,7 @@ class TemplateCompilerRootSiteCursor {
       element,
       lookupName,
       allocations: this.allocations,
+      ownerInput,
     });
     this.attributeOwners.push(assembly);
     const receipts = new Map(assembly.contributions.map((contribution) => [
@@ -1108,6 +1174,19 @@ class TemplateCompilerRootSiteCursor {
 
     const hydrateElementDraft = hydrateElementEnvelope.draft;
     const hasTemplateController = assembly.instructionStaging.templateControllers.length > 0;
+    const hasClosedProjection = hydrateElementDraft?.projection.state
+      === TemplateCompilerHydrateElementProjectionState.PendingExtraction;
+
+    if (
+      this.traversalMode === TemplateCompilerSiteCursorTraversalMode.ClosedContextFamily
+      && (hasTemplateController || hasClosedProjection)
+    ) {
+      return this.enterClosedGeneratedContexts(
+        reachedElement,
+        hydrateElementEnvelope,
+        hasTemplateController,
+      );
+    }
 
     if (hasTemplateController) {
       this.stop(
@@ -1121,7 +1200,7 @@ class TemplateCompilerRootSiteCursor {
       return null;
     }
     if (
-      hydrateElementDraft?.projection.state === TemplateCompilerHydrateElementProjectionState.PendingExtraction
+      hasClosedProjection
       || (elementDefinition == null && this.semantics.hasProjectionOnNativeElement(element))
     ) {
       this.stop(
@@ -1168,6 +1247,284 @@ class TemplateCompilerRootSiteCursor {
         [element.templateContent],
       );
       return null;
+    }
+    return element.readChildren().length === 0
+      ? null
+      : { parent: element, children: element.readChildren() };
+  }
+
+  private enterClosedGeneratedContexts(
+    reachedElement: TemplateCompilerSiteCursorReachedElement,
+    hydrateElement: TemplateCompilerHydrateElementStagingResult,
+    hasTemplateControllers: boolean,
+  ): TemplateCompilerSiteCursorChildFrame | null {
+    const elementEvent = reachedElement.elementEvent;
+    const element = elementEvent.element;
+    const sourceSelection = reachedElement.reachedSelectionEvent.selection;
+    const sourceContext = sourceSelection.context;
+    const projectionPending = hydrateElement.draft?.projection.state
+      === TemplateCompilerHydrateElementProjectionState.PendingExtraction;
+    const preparation = projectionPending
+      ? prepareTemplateCompilerProjectionLogicalExtraction({
+          forest: this.binding.forest,
+          preWalk: this.preWalk,
+          envelope: hydrateElement.draft,
+        })
+      : null;
+    if (preparation?.residuals.length) {
+      this.stop(
+        TemplateCompilerSiteCursorFrontierKind.AfterAttributesBeforeProjection,
+        element,
+        null,
+        null,
+        elementEvent.capturedSuccessor,
+        'Explicit-shadow projection retains residual host children that require same-context selected traversal.',
+      );
+      return null;
+    }
+
+    const slotAccounting = preparation == null
+      ? null
+      : this.accountProjectionSlotConsumptions(preparation);
+    if (preparation != null && slotAccounting == null) return null;
+
+    const templateControllers = hasTemplateControllers
+      ? hydrateElement.owner.instructionStaging.templateControllers
+      : [];
+    const templateControllerContexts: TemplateCompilerSiteCursorContextReference[] = [];
+    let terminalContext = sourceContext;
+    for (const [ordinal, draft] of templateControllers.entries()) {
+      terminalContext = this.taskSession.createChildContext(
+        terminalContext,
+        `${sourceContext.localKey}:element:${element.occurrenceKey}:template-controller:${ordinal}:${draft.controllerName}`,
+        TemplateCompilerSiteCursorContextKind.TemplateController,
+      );
+      templateControllerContexts.push(terminalContext);
+    }
+
+    const projectionContextInputs = preparation?.plannedEntrantBands.map((band, ordinal) => ({
+      group: band.group,
+      context: this.taskSession.createChildContext(
+        terminalContext,
+        `${terminalContext.localKey}:projection:${ordinal}:${band.group.slotName}`,
+        TemplateCompilerSiteCursorContextKind.Projection,
+      ),
+    })) ?? [];
+    const continuationPayload: object = preparation ?? reachedElement;
+    const continuation = this.taskSession.pushStagedElementContinuation(
+      terminalContext,
+      sourceSelection.visit,
+      continuationPayload,
+    );
+
+    let realization: TemplateCompilerProjectionLogicalExtractionRealization | null = null;
+    let projectionEvent: TemplateCompilerSiteCursorProjectionExtractionEvent | null = null;
+    if (preparation != null) {
+      realization = realizeTemplateCompilerProjectionLogicalExtraction({
+        preparation,
+        continuation,
+        contexts: projectionContextInputs,
+      });
+      const entrantBandStagings: TemplateCompilerSiteCursorProjectionEntrantBandStaging[] = [];
+      for (const band of realization.entrantBands) {
+        const works = this.taskSession.stageContextLogicalEntrantBand(band.context, band.entrantInputs);
+        entrantBandStagings.push(new TemplateCompilerSiteCursorProjectionEntrantBandStaging(band, works));
+        for (const [ordinal, entrant] of band.entrants.entries()) {
+          const work = works[ordinal]!;
+          if (work.entrantAuthority !== entrant) {
+            throw new Error('Projection cursor staging replaced its realized entrant authority.');
+          }
+          const consumption = entrant.planned.contributor.slotConsumption;
+          this.projectedEntrantSemantics.set(entrant, {
+            preparation,
+            slotConsumption: consumption?.element === entrant.node ? consumption : null,
+          });
+        }
+      }
+      projectionEvent = new TemplateCompilerSiteCursorProjectionExtractionEvent(
+        siteCursorConstructionAuthority,
+        this.transcriptOrdinal++,
+        element,
+        preparation,
+        realization,
+        entrantBandStagings,
+        slotAccounting!.authoredSpends,
+        slotAccounting!.occurrenceRows,
+      );
+      this.appendEvent(projectionEvent);
+    }
+
+    const state = new TemplateCompilerClosedElementContinuation(
+      hasTemplateControllers
+        ? preparation == null
+          ? TemplateCompilerClosedElementContinuationPhase.EnterTemplateControllerLeaf
+          : TemplateCompilerClosedElementContinuationPhase.EnterTemplateControllerLeafWithProjection
+        : TemplateCompilerClosedElementContinuationPhase.AfterProjection,
+      reachedElement,
+      hydrateElement,
+      terminalContext,
+      hasTemplateControllers,
+      preparation,
+      realization,
+      projectionEvent,
+      projectionContextInputs.map((input) => input.context),
+    );
+    this.closedElementContinuations.set(continuation, state);
+
+    if (hasTemplateControllers) {
+      this.taskSession.scheduleContextChain(sourceContext, templateControllerContexts);
+    } else {
+      this.taskSession.scheduleChildContexts(sourceContext, state.projectionContexts);
+    }
+    return null;
+  }
+
+  private accountProjectionSlotConsumptions(
+    preparation: TemplateCompilerProjectionLogicalExtractionPreparation,
+  ): {
+    readonly authoredSpends: readonly TemplateCompilerSiteSpend[];
+    readonly occurrenceRows: readonly TemplateCompilerOccurrenceOnlyRow[];
+  } | null {
+    const authoredSpends: TemplateCompilerSiteSpend[] = [];
+    const occurrenceRows: TemplateCompilerOccurrenceOnlyRow[] = [];
+    for (const consumption of preparation.slotConsumptions) {
+      const attribute = consumption.attribute;
+      const bundle = this.semantics.singularAttributeBundle(attribute);
+      if (bundle != null) {
+        const result = this.ledger.excludeProjectionSlotAttribute(bundle, attribute, consumption);
+        if (result instanceof TemplateCompilerSiteSpendConflict) {
+          this.stop(
+            TemplateCompilerSiteCursorFrontierKind.AccountingMismatch,
+            preparation.elementEvent.element,
+            attribute,
+            bundle,
+            preparation.elementEvent.capturedSuccessor,
+            'Projection slot attribute conflicted with authored site accounting.',
+          );
+          return null;
+        }
+        authoredSpends.push(result);
+      } else {
+        const result = this.ledger.excludeProjectionSlotOccurrence(attribute, consumption);
+        if (result instanceof TemplateCompilerSiteSpendConflict) {
+          this.stop(
+            TemplateCompilerSiteCursorFrontierKind.AccountingMismatch,
+            preparation.elementEvent.element,
+            attribute,
+            null,
+            preparation.elementEvent.capturedSuccessor,
+            'Projection slot attribute conflicted with occurrence-only accounting.',
+          );
+          return null;
+        }
+        occurrenceRows.push(result);
+      }
+    }
+    return { authoredSpends, occurrenceRows };
+  }
+
+  private projectedOwnerInput(
+    reachedElement: TemplateCompilerSiteCursorReachedElement,
+  ): TemplateCompilerLiveAttributeOwnerInput | null {
+    const work = reachedElement.reachedSelectionEvent.selection.work;
+    if (!(work instanceof TemplateCompilerSiteCursorLogicalEntrantWork)) return null;
+    const semantics = this.projectedEntrantSemantics.get(work.entrantAuthority) ?? null;
+    if (semantics?.slotConsumption == null) return null;
+    const suppression = rebaseTemplateCompilerProjectionLiveSlotSuppression(
+      semantics.preparation,
+      semantics.slotConsumption,
+      reachedElement,
+    );
+    return TemplateCompilerLiveAttributeOwnerInput.capture(
+      this.binding.forest,
+      reachedElement.elementEvent.element,
+      this.binding.forest.mutationRevision,
+      suppression,
+    );
+  }
+
+  private continueClosedElement(
+    selection: TemplateCompilerSiteCursorTaskSelection,
+  ): TemplateCompilerSiteCursorChildFrame | null {
+    const work = selection.work;
+    if (!(work instanceof TemplateCompilerSiteCursorStagedElementContinuationWork)) {
+      throw new Error('Closed compiler context selected a non-continuation work item.');
+    }
+    const state = this.closedElementContinuations.get(work) ?? null;
+    if (state == null || state.terminalContext !== selection.context) {
+      throw new Error('Closed compiler element continuation lost its terminal context state.');
+    }
+    this.closedElementContinuations.delete(work);
+
+    if (state.phase === TemplateCompilerClosedElementContinuationPhase.EnterTemplateControllerLeafWithProjection) {
+      if (state.preparation == null) {
+        throw new Error('Template-controller projection continuation lost its extraction preparation.');
+      }
+      const postProjection = this.taskSession.pushStagedElementContinuation(
+        state.terminalContext,
+        selection.visit,
+        state.preparation,
+      );
+      this.closedElementContinuations.set(postProjection, new TemplateCompilerClosedElementContinuation(
+        TemplateCompilerClosedElementContinuationPhase.AfterProjection,
+        state.reachedElement,
+        state.hydrateElement,
+        state.terminalContext,
+        state.hasTemplateControllers,
+        state.preparation,
+        state.realization,
+        state.projectionEvent,
+        state.projectionContexts,
+      ));
+      this.taskSession.scheduleChildContexts(state.terminalContext, state.projectionContexts);
+      return null;
+    }
+    return this.finishClosedElement(state);
+  }
+
+  private finishClosedElement(
+    state: TemplateCompilerClosedElementContinuation,
+  ): TemplateCompilerSiteCursorChildFrame | null {
+    const event = state.reachedElement.elementEvent;
+    const element = event.element;
+    const draft = state.hydrateElement.draft;
+    if (draft?.containerless.effective === true) {
+      const hasUnsupportedChildren = state.projectionEvent == null && element.readChildren().length > 0;
+      if (
+        draft.processContent.state !== TemplateCompilerHydrateElementProcessContentState.Absent
+        || hasUnsupportedChildren
+      ) {
+        this.stop(
+          TemplateCompilerSiteCursorFrontierKind.AfterAttributesBeforeContainerless,
+          element,
+          null,
+          null,
+          event.capturedSuccessor,
+          'Containerless replacement still has processContent or child-ownership continuation.',
+        );
+        return null;
+      }
+      this.appendEvent(new TemplateCompilerSiteCursorContainerlessPlacementEvent(
+        siteCursorConstructionAuthority,
+        this.transcriptOrdinal++,
+        element,
+        event.parent,
+        event.parentOrdinal,
+        event.capturedSuccessor,
+        draft,
+        state.projectionEvent,
+      ));
+      return null;
+    }
+    if (state.projectionEvent != null) return null;
+    if (!state.hasTemplateControllers) {
+      throw new Error('Closed compiler continuation has neither projection nor template-controller work.');
+    }
+    if (element.templateContent != null) {
+      return {
+        parent: element.templateContent,
+        children: element.templateContent.readChildren(),
+      };
     }
     return element.readChildren().length === 0
       ? null
@@ -1781,7 +2138,7 @@ class TemplateCompilerRootSiteCursor {
   }
 
   private appendEvent(event: TemplateCompilerSiteCursorEvent): void {
-    this.taskSession.appendRootEvent(event);
+    this.taskSession.appendEvent(event);
   }
 
   private stop(
@@ -1837,7 +2194,7 @@ class TemplateCompilerRootSiteCursor {
       );
       this.frontier = frontier;
       if (replaced == null) this.appendEvent(frontier);
-      else this.taskSession.replaceTerminalRootEvent(replaced, frontier);
+      else this.taskSession.replaceTerminalEvent(replaced, frontier);
     }
   }
 }

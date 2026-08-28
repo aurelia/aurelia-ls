@@ -612,6 +612,10 @@ export class TemplateCompilerProjectionLogicalExtractionPreparation {
 /** Exact projection context allocated by the caller for one definition-producing group. */
 export interface TemplateCompilerProjectionLogicalContextInput {
   readonly group: ProjectionGroup;
+  /**
+   * Logical/output owner. RC2 flattens this private compiler-context edge to the pre-TC source context, but historical
+   * compiler provenance names the terminal TC context as the technical parent and the owning HE publishes the result.
+   */
   readonly context: TemplateCompilerSiteCursorContextReference;
 }
 

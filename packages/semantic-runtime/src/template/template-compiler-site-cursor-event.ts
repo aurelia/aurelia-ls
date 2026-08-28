@@ -28,7 +28,17 @@ import type {
   TemplateCompilerOccurrenceOnlyRow,
   TemplateCompilerSiteSpend,
 } from './template-compiler-site-spend-ledger.js';
-import { TemplateCompilerSiteSpendDisposition } from './template-compiler-site-spend-ledger.js';
+import {
+  TemplateCompilerOccurrenceOnlyDisposition,
+  TemplateCompilerSiteSpendDisposition,
+} from './template-compiler-site-spend-ledger.js';
+import type {
+  TemplateCompilerProjectionLogicalExtractionPreparation,
+  TemplateCompilerProjectionLogicalExtractionRealization,
+  TemplateCompilerProjectionRealizedEntrantBand,
+  TemplateCompilerProjectionSlotConsumptionReceipt,
+} from './template-compiler-projection-logical-extraction.js';
+import type { TemplateCompilerSiteCursorLogicalEntrantWork } from './template-compiler-site-cursor-task.js';
 import type { HtmlElement, HtmlText } from './html-ir.js';
 import type {
   TemplateCompilerProcessContentPlan,
@@ -47,6 +57,7 @@ export const enum TemplateCompilerSiteCursorEventKind {
   Element = 'element',
   ProcessContent = 'process-content',
   Attribute = 'attribute',
+  ProjectionExtraction = 'projection-extraction',
   ContainerlessPlacement = 'containerless-placement',
   Text = 'text',
   IgnoredNode = 'ignored-node',
@@ -218,6 +229,101 @@ export class TemplateCompilerSiteCursorAttributeEvent extends TemplateCompilerSi
   }
 }
 
+/** Exact task work staged for one realized projection entrant band, including an intentional empty band. */
+export class TemplateCompilerSiteCursorProjectionEntrantBandStaging {
+  readonly works: readonly TemplateCompilerSiteCursorLogicalEntrantWork[];
+
+  constructor(
+    readonly band: TemplateCompilerProjectionRealizedEntrantBand,
+    works: readonly TemplateCompilerSiteCursorLogicalEntrantWork[],
+  ) {
+    this.works = [...works];
+    if (!this.isCoherent()) {
+      throw new Error('Compiler projection entrant staging lost its realized work identities or order.');
+    }
+  }
+
+  isCoherent(): boolean {
+    return this.band.isModuleConstructed()
+      && this.works.length === this.band.entrants.length
+      && this.works.every((work, ordinal) => {
+        const entrant = this.band.entrants[ordinal];
+        return entrant != null
+          && work.isModuleConstructed()
+          && work.context === this.band.context
+          && work.entrantAuthority === entrant
+          && work.node === entrant.node
+          && work.physicalSource.source === entrant.source
+          && work.physicalSource.sourceOrdinal === entrant.planned.source.sourceOrdinal
+          && work.logicalOrdinal === entrant.planned.logicalOrdinal
+          && work.logicalSuccessor === entrant.planned.logicalSuccessor;
+      });
+  }
+}
+
+/** Exact host-time projection redistribution and `[au-slot]` accounting decision. */
+export class TemplateCompilerSiteCursorProjectionExtractionEvent extends TemplateCompilerSiteCursorEvent {
+  constructor(
+    authority: object,
+    ordinal: number,
+    readonly host: TemplateCompilerElementOccurrence,
+    readonly preparation: TemplateCompilerProjectionLogicalExtractionPreparation,
+    readonly realization: TemplateCompilerProjectionLogicalExtractionRealization,
+    readonly entrantBandStagings: readonly TemplateCompilerSiteCursorProjectionEntrantBandStaging[],
+    readonly authoredSlotSpends: readonly TemplateCompilerSiteSpend[],
+    readonly occurrenceOnlySlotRows: readonly TemplateCompilerOccurrenceOnlyRow[],
+  ) {
+    super(authority, ordinal, TemplateCompilerSiteCursorEventKind.ProjectionExtraction);
+    if (!this.isCoherent()) {
+      throw new Error('Compiler projection extraction event lost its host, context realization, or slot accounting.');
+    }
+  }
+
+  isCoherent(): boolean {
+    if (
+      !this.preparation.isModuleConstructed()
+      || !this.realization.isModuleConstructed()
+      || this.preparation.request.envelope.element !== this.host
+      || this.preparation.elementEvent.element !== this.host
+      || this.preparation.elementEvent.ordinal >= this.ordinal
+      || this.realization.request.preparation !== this.preparation
+      || this.entrantBandStagings.length !== this.realization.entrantBands.length
+      || this.entrantBandStagings.some((staging, ordinal) =>
+        staging.band !== this.realization.entrantBands[ordinal]
+        || !staging.isCoherent()
+      )
+    ) return false;
+    const rows = new Map<
+      TemplateCompilerProjectionSlotConsumptionReceipt,
+      TemplateCompilerSiteSpend | TemplateCompilerOccurrenceOnlyRow
+    >();
+    for (const spend of this.authoredSlotSpends) {
+      const consumption = spend.projectionSlotConsumption;
+      if (
+        consumption == null
+        || spend.disposition !== TemplateCompilerSiteSpendDisposition.ProjectionSlotAttributeConsumed
+        || spend.siteEventOrdinal != null
+        || spend.occurrence !== consumption.attribute
+        || rows.has(consumption)
+      ) return false;
+      rows.set(consumption, spend);
+    }
+    for (const row of this.occurrenceOnlySlotRows) {
+      const consumption = row.projectionSlotConsumption;
+      if (
+        consumption == null
+        || row.disposition !== TemplateCompilerOccurrenceOnlyDisposition.ProjectionSlotAttributeConsumed
+        || row.siteEventOrdinal != null
+        || row.occurrence !== consumption.attribute
+        || rows.has(consumption)
+      ) return false;
+      rows.set(consumption, row);
+    }
+    return rows.size === this.preparation.slotConsumptions.length
+      && this.preparation.slotConsumptions.every((consumption) => rows.has(consumption));
+  }
+}
+
 /** Exact cursor decision to suppress empty host content and defer physical replacement to target execution. */
 export class TemplateCompilerSiteCursorContainerlessPlacementEvent extends TemplateCompilerSiteCursorEvent {
   constructor(
@@ -228,16 +334,24 @@ export class TemplateCompilerSiteCursorContainerlessPlacementEvent extends Templ
     readonly parentOrdinal: number,
     readonly capturedSuccessor: TemplateCompilerNodeOccurrence | null,
     readonly envelope: TemplateCompilerHydrateElementEnvelopeDraft,
+    readonly projectionExtraction: TemplateCompilerSiteCursorProjectionExtractionEvent | null = null,
   ) {
     super(authority, ordinal, TemplateCompilerSiteCursorEventKind.ContainerlessPlacement);
+    const projectionFree = envelope.projection.state === TemplateCompilerHydrateElementProjectionState.None
+      && projectionExtraction == null
+      && element.readChildren().length === 0;
+    const projectionExtracted = envelope.projection.state === TemplateCompilerHydrateElementProjectionState.PendingExtraction
+      && projectionExtraction?.host === element
+      && projectionExtraction.preparation.request.envelope === envelope
+      && projectionExtraction.preparation.residuals.length === 0
+      && projectionExtraction.ordinal < ordinal;
     if (
       envelope.element !== element
       || !envelope.containerless.effective
-      || envelope.projection.state !== TemplateCompilerHydrateElementProjectionState.None
       || envelope.processContent.state !== TemplateCompilerHydrateElementProcessContentState.Absent
-      || element.readChildren().length !== 0
+      || (!projectionFree && !projectionExtracted)
     ) {
-      throw new Error('Containerless placement event requires one empty projection-free ordinary host.');
+      throw new Error('Containerless placement event requires one logically empty ordinary host.');
     }
   }
 }

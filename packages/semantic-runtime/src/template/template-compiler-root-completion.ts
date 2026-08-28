@@ -40,6 +40,7 @@ export const enum TemplateCompilerOrdinaryRootCompletionRefusalKind {
   CursorFrontier = 'cursor-frontier',
   RootStateInvalid = 'root-state-invalid',
   RootStateOpen = 'root-state-open',
+  ContextFamilyTraversal = 'context-family-traversal',
   RootPhaseIncomplete = 'root-phase-incomplete',
   EndpointMissing = 'endpoint-missing',
   EndpointMismatch = 'endpoint-mismatch',
@@ -201,6 +202,15 @@ export function completeTemplateCompilerOrdinaryRoot(
     refuse(
       TemplateCompilerOrdinaryRootCompletionRefusalKind.CursorFrontier,
       `Cursor stopped at '${transcript.frontier.frontierKind}'.`,
+    );
+  }
+  if (
+    transcript.taskSnapshot.contexts.length !== 1
+    || transcript.taskSnapshot.contexts[0]?.context !== transcript.taskSnapshot.rootContext
+  ) {
+    refuse(
+      TemplateCompilerOrdinaryRootCompletionRefusalKind.ContextFamilyTraversal,
+      'Ordinary-root completion cannot claim a generated compiler context family.',
     );
   }
   switch (transcript.rootState.stateKind) {

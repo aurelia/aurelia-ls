@@ -48,12 +48,24 @@ import {
 } from '../src/template/template-compiler-site-invocation.js';
 import {
   executeTemplateCompilerRootSiteCursor,
+  TemplateCompilerSiteCursorAttributeEvent,
+  TemplateCompilerSiteCursorContainerlessPlacementEvent,
   TemplateCompilerSiteCursorContextKind,
+  TemplateCompilerSiteCursorContextTaskState,
+  TemplateCompilerSiteCursorElementEvent,
+  type TemplateCompilerSiteCursorEvent,
+  TemplateCompilerSiteCursorFrontierKind,
+  TemplateCompilerSiteCursorProjectionExtractionEvent,
   TemplateCompilerSiteCursorResultState,
   TemplateCompilerSiteCursorTaskSession,
+  TemplateCompilerSiteCursorTraversalMode,
   type TemplateCompilerSiteCursorTaskSelection,
   type TemplateCompilerSiteCursorTranscript,
 } from '../src/template/template-compiler-site-cursor.js';
+import {
+  TemplateCompilerOrdinaryRootCompletionRefusalKind,
+  type TemplateCompilerOrdinaryRootCompletionResult,
+} from '../src/template/template-compiler-root-completion.js';
 import type {
   TemplateCompilationFamilyFrontDoorEmission,
   TemplateCompilationFrontDoorEmission,
@@ -78,6 +90,7 @@ describe('template compiler projection logical extraction', () => {
 
   test('prepares mixed-parent, empty, discarded, and slot-consumption plans from the attested transcript', () => {
     const run = fixture.run('projection-logical-host');
+    expect(run.transcript.traversalMode).toBe(TemplateCompilerSiteCursorTraversalMode.CompatibilityStop);
     const startRevision = run.binding.forest.mutationRevision;
     const startOperationCount = run.binding.execution.sequence.readOperations().length;
     const schedulerCapture = vi.spyOn(
@@ -172,6 +185,159 @@ describe('template compiler projection logical extraction', () => {
     expect(preparation.discardedWhitespace).toEqual([]);
   });
 
+  test('keeps explicit-shadow residual traversal at its named closed-family frontier', () => {
+    const run = fixture.run(
+      'projection-logical-shadow-host',
+      TemplateCompilerSiteCursorTraversalMode.ClosedContextFamily,
+    );
+
+    expect(run.transcript.frontier?.frontierKind)
+      .toBe(TemplateCompilerSiteCursorFrontierKind.AfterAttributesBeforeProjection);
+    expect(run.transcript.taskSnapshot.contexts).toHaveLength(1);
+    expect(eventsOf(run.transcript, TemplateCompilerSiteCursorProjectionExtractionEvent)).toEqual([]);
+  });
+
+  test('traverses non-TC projection groups and resumes the following source sibling in closed-family mode', () => {
+    const run = fixture.run(
+      'projection-logical-host',
+      TemplateCompilerSiteCursorTraversalMode.ClosedContextFamily,
+    );
+    const transcript = run.transcript;
+    const tasks = transcript.taskSnapshot;
+    const contexts = tasks.contexts.map((task) => task.context);
+    const projectionEvent = eventsOf(transcript, TemplateCompilerSiteCursorProjectionExtractionEvent)[0];
+    const elements = eventsOf(transcript, TemplateCompilerSiteCursorElementEvent);
+
+    expect(transcript.frontier).toBeNull();
+    expect(transcript.traversalMode).toBe(TemplateCompilerSiteCursorTraversalMode.ClosedContextFamily);
+    expect(contexts.map((context) => context.contextKind)).toEqual([
+      TemplateCompilerSiteCursorContextKind.Root,
+      TemplateCompilerSiteCursorContextKind.Projection,
+      TemplateCompilerSiteCursorContextKind.Projection,
+      TemplateCompilerSiteCursorContextKind.Projection,
+    ]);
+    expect(contexts.slice(1).every((context) => context.parent === tasks.rootContext)).toBe(true);
+    expect(tasks.contexts.every((task) => task.state === TemplateCompilerSiteCursorContextTaskState.Drained)).toBe(true);
+    expect(projectionEvent?.preparation.plannedEntrantBands.map((band) => band.group.slotName))
+      .toEqual(['default', 'named', 'empty']);
+    expect(projectionEvent?.entrantBandStagings.map((staging) => [
+      staging.band.planned.group.slotName,
+      staging.works.length,
+    ])).toEqual([
+      ['default', 1],
+      ['named', 2],
+      ['empty', 0],
+    ]);
+    for (const staging of projectionEvent?.entrantBandStagings ?? []) {
+      expect(staging.works.map((work) => [work.context, work.entrantAuthority])).toEqual(
+        staging.band.entrants.map((entrant) => [staging.band.context, entrant]),
+      );
+    }
+    expect(tasks.contextForEvent(projectionEvent!)).toBe(tasks.rootContext);
+    expect(contextForElement(tasks, elements, 'span')).toBe(contexts[1]);
+    expect(contextForElement(tasks, elements, 'b')).toBe(contexts[2]);
+    expect(contextForElement(tasks, elements, 'i')).toBe(contexts[2]);
+    expect(contextForElement(tasks, elements, 'div')).toBe(tasks.rootContext);
+    expect(eventsOf(transcript, TemplateCompilerSiteCursorAttributeEvent)
+      .filter((event) => event.attribute.name === 'au-slot')).toEqual([]);
+    expect(tasks.taskForContext(contexts[3]!)?.events).toEqual([]);
+    expect(run.completion.refusals.map((refusal) => refusal.refusalKind))
+      .toContain(TemplateCompilerOrdinaryRootCompletionRefusalKind.ContextFamilyTraversal);
+  });
+
+  test('places a logically empty projected containerless host after group traversal', () => {
+    const run = fixture.run(
+      'projection-logical-containerless-host',
+      TemplateCompilerSiteCursorTraversalMode.ClosedContextFamily,
+    );
+    const transcript = run.transcript;
+    const extraction = eventsOf(transcript, TemplateCompilerSiteCursorProjectionExtractionEvent)[0];
+    const placement = eventsOf(transcript, TemplateCompilerSiteCursorContainerlessPlacementEvent)[0];
+
+    expect(transcript.frontier).toBeNull();
+    expect(extraction).toBeDefined();
+    expect(placement).toBeDefined();
+    expect(placement?.projectionExtraction).toBe(extraction);
+    expect(extraction!.ordinal).toBeLessThan(placement!.ordinal);
+    expect(transcript.taskSnapshot.contextForEvent(extraction!)).toBe(transcript.taskSnapshot.rootContext);
+    expect(transcript.taskSnapshot.contextForEvent(placement!)).toBe(transcript.taskSnapshot.rootContext);
+    expect(contextForElement(
+      transcript.taskSnapshot,
+      eventsOf(transcript, TemplateCompilerSiteCursorElementEvent),
+      'div',
+    )).toBe(transcript.taskSnapshot.rootContext);
+  });
+
+  test('traverses authored template content in the terminal TC leaf', () => {
+    const run = fixture.run(
+      'projection-logical-tc-only-host',
+      TemplateCompilerSiteCursorTraversalMode.ClosedContextFamily,
+    );
+    const transcript = run.transcript;
+    const tasks = transcript.taskSnapshot;
+    const contexts = tasks.contexts.map((task) => task.context);
+    const elements = eventsOf(transcript, TemplateCompilerSiteCursorElementEvent);
+
+    expect(transcript.frontier).toBeNull();
+    expect(contexts.map((context) => context.contextKind)).toEqual([
+      TemplateCompilerSiteCursorContextKind.Root,
+      TemplateCompilerSiteCursorContextKind.TemplateController,
+      TemplateCompilerSiteCursorContextKind.TemplateController,
+    ]);
+    expect(contexts[1]?.parent).toBe(tasks.rootContext);
+    expect(contexts[2]?.parent).toBe(contexts[1]);
+    expect(contextForElement(tasks, elements, 'template')).toBe(tasks.rootContext);
+    expect(contextForElement(tasks, elements, 'div')).toBe(contexts[2]);
+    expect(contextForElement(tasks, elements, 'span')).toBe(tasks.rootContext);
+    expect(eventsOf(transcript, TemplateCompilerSiteCursorProjectionExtractionEvent)).toEqual([]);
+    expect(run.completion.refusals.map((refusal) => refusal.refusalKind))
+      .toContain(TemplateCompilerOrdinaryRootCompletionRefusalKind.ContextFamilyTraversal);
+  });
+
+  test('enters the terminal TC leaf, runs projection fan-out, and returns to the root sibling', () => {
+    const run = fixture.run(
+      'projection-logical-tc-host',
+      TemplateCompilerSiteCursorTraversalMode.ClosedContextFamily,
+    );
+    const transcript = run.transcript;
+    const tasks = transcript.taskSnapshot;
+    const contexts = tasks.contexts.map((task) => task.context);
+    const elements = eventsOf(transcript, TemplateCompilerSiteCursorElementEvent);
+    const projectionEvent = eventsOf(transcript, TemplateCompilerSiteCursorProjectionExtractionEvent)[0];
+
+    expect(transcript.frontier).toBeNull();
+    expect(contexts.map((context) => context.contextKind)).toEqual([
+      TemplateCompilerSiteCursorContextKind.Root,
+      TemplateCompilerSiteCursorContextKind.TemplateController,
+      TemplateCompilerSiteCursorContextKind.TemplateController,
+      TemplateCompilerSiteCursorContextKind.Projection,
+      TemplateCompilerSiteCursorContextKind.Projection,
+    ]);
+    expect(contexts[1]?.parent).toBe(tasks.rootContext);
+    expect(contexts[2]?.parent).toBe(contexts[1]);
+    expect(contexts[3]?.parent).toBe(contexts[2]);
+    expect(contexts[4]?.parent).toBe(contexts[2]);
+    expect(tasks.contextForEvent(projectionEvent!)).toBe(tasks.rootContext);
+    expect(contextForElement(tasks, elements, 'projection-logical-leaf')).toBe(tasks.rootContext);
+    expect(contextForElement(tasks, elements, 'span')).toBe(contexts[3]);
+    expect(contextForElement(tasks, elements, 'b')).toBe(contexts[4]);
+    expect(contextForElement(tasks, elements, 'div')).toBe(tasks.rootContext);
+    const attributes = eventsOf(transcript, TemplateCompilerSiteCursorAttributeEvent);
+    expect(attributes.filter((event) => event.attribute.name === 'au-slot')).toEqual([]);
+    const namedTitle = attributes.find((event) =>
+      event.owner.tagName === 'b' && event.scalar.qualifiedName === 'title.bind'
+    );
+    const followingTitle = attributes.find((event) =>
+      event.owner.tagName === 'div' && event.scalar.qualifiedName === 'title.bind'
+    );
+    expect(namedTitle).toBeDefined();
+    expect(followingTitle).toBeDefined();
+    expect(tasks.contextForEvent(namedTitle!)).toBe(contexts[4]);
+    expect(tasks.contextForEvent(followingTitle!)).toBe(tasks.rootContext);
+    expect(run.completion.refusals.map((refusal) => refusal.refusalKind))
+      .toContain(TemplateCompilerOrdinaryRootCompletionRefusalKind.ContextFamilyTraversal);
+  });
+
   test('rejects realization replay through a fresh task session', () => {
     const run = fixture.run('projection-logical-host');
     const preparation = run.prepare();
@@ -209,6 +375,7 @@ class ProjectionFixtureRun {
     readonly binding: TemplateCompilerSiteInvocationBinding,
     readonly preWalk: TemplateCompilerPreWalkRemainderAuthority,
     readonly transcript: TemplateCompilerSiteCursorTranscript,
+    readonly completion: TemplateCompilerOrdinaryRootCompletionResult,
   ) {}
 
   get envelope(): TemplateCompilerHydrateElementEnvelopeDraft {
@@ -249,8 +416,12 @@ class ProjectionLogicalExtractionFixture {
     return new ProjectionLogicalExtractionFixture(runtime, candidate, app.emission.templates.frontDoor);
   }
 
-  run(name: string): ProjectionFixtureRun {
-    const existing = this.runs.get(name);
+  run(
+    name: string,
+    traversalMode: TemplateCompilerSiteCursorTraversalMode = TemplateCompilerSiteCursorTraversalMode.CompatibilityStop,
+  ): ProjectionFixtureRun {
+    const runKey = `${name}:${traversalMode}`;
+    const existing = this.runs.get(runKey);
     if (existing != null) return existing;
     const compilation = compilationFor(this.frontDoor, name);
     const family = this.frontDoor.familyForOwner(compilation.familyOwnerHandle);
@@ -260,7 +431,7 @@ class ProjectionLogicalExtractionFixture {
       family,
       this.frontDoor,
       this.candidate,
-      `projection-logical-extraction:${name}`,
+      `projection-logical-extraction:${name}:${traversalMode}`,
     );
     const preWalk = TemplateCompilerPreWalkRemainderAuthority.capture(binding);
     const result = executeTemplateCompilerRootSiteCursor({
@@ -270,12 +441,17 @@ class ProjectionLogicalExtractionFixture {
         TemplateCompilerWorldAuthority.fixed(compilation.compilerWorld),
       ),
       preWalkAuthority: preWalk,
+      traversalMode,
     });
-    if (result.state !== TemplateCompilerSiteCursorResultState.Transcript || result.transcript == null) {
+    if (
+      result.state !== TemplateCompilerSiteCursorResultState.Transcript
+      || result.transcript == null
+      || result.completion == null
+    ) {
       throw new Error(`Expected projection transcript: ${result.reasons.map((reason) => reason.summary).join(' ')}`);
     }
-    const run = new ProjectionFixtureRun(this, compilation, binding, preWalk, result.transcript);
-    this.runs.set(name, run);
+    const run = new ProjectionFixtureRun(this, compilation, binding, preWalk, result.transcript, result.completion);
+    this.runs.set(runKey, run);
     return run;
   }
 
@@ -376,4 +552,21 @@ function occurrenceLabel(occurrence: TemplateCompilerNodeOccurrence): string {
   if (occurrence instanceof TemplateCompilerFragmentOccurrence) return '#fragment';
   if (occurrence instanceof TemplateCompilerTextOccurrence) return '#text';
   return occurrence.nodeKind;
+}
+
+function eventsOf<TEvent extends TemplateCompilerSiteCursorEvent>(
+  transcript: TemplateCompilerSiteCursorTranscript,
+  eventType: abstract new (...args: never[]) => TEvent,
+): readonly TEvent[] {
+  return transcript.events.filter((event): event is TEvent => event instanceof eventType);
+}
+
+function contextForElement(
+  tasks: TemplateCompilerSiteCursorTranscript['taskSnapshot'],
+  events: readonly TemplateCompilerSiteCursorElementEvent[],
+  tagName: string,
+) {
+  const event = events.find((candidate) => candidate.element.tagName === tagName);
+  if (event == null) throw new Error(`Expected reached element '${tagName}'.`);
+  return tasks.contextForEvent(event);
 }
