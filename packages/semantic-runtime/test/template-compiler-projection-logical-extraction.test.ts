@@ -1075,6 +1075,12 @@ describe('template compiler projection logical extraction', () => {
     const preparation = result.preparation;
     if (preparation == null) throw new Error('Expected nested TC target plan.');
     const schedule = prepareTemplateCompilerContextFamilyStructuralSchedule(preparation);
+    const namespace = run.transcript.allocationSnapshot.ledger.namespace;
+    const countsBefore = namespace.readReservationCounts();
+    const attachmentPreparation = run.binding.execution.prepareContextFamilyTargetAttachment(
+      preparation,
+      schedule,
+    );
     const contexts = preparation.targetPlan.readContexts();
     const sourceRows = preparation.rowMappings.filter((mapping) =>
       mapping.row.sourceKind === TemplateCompilerTargetRowSourceKind.TemplateControllerTransitionSource
@@ -1115,6 +1121,22 @@ describe('template compiler projection logical extraction', () => {
     expect(contexts[2]?.readOccurrenceMemberships().some((membership) =>
       membership.arrivalPosture === TemplateCompilerFamilyOccurrenceArrivalPosture.IncomingTransfer
     )).toBe(true);
+    expect(attachmentPreparation.isCurrent()).toBe(true);
+    expect(allocation.preparedAllocation.ledger.state).toBe(TemplateCompilerLiveAllocationLedgerState.Prepared);
+    expect(namespace.readReservationCounts()).toEqual(countsBefore);
+    const forestRevision = run.binding.forest.mutationRevision;
+    const attachment = run.binding.execution.commitPreparedContextFamilyTargetAttachment(
+      attachmentPreparation,
+    );
+    expect(attachment.isCurrent()).toBe(true);
+    expect(attachmentPreparation.isCurrent()).toBe(false);
+    expect(attachment.committedAllocation.prepared).toBe(allocation.preparedAllocation);
+    expect(allocation.preparedAllocation.ledger.state).toBe(TemplateCompilerLiveAllocationLedgerState.Committed);
+    expect(run.binding.execution.structuralExecution).toBe(attachment.structuralExecution);
+    expect(attachment.contexts.map((context) => context.targetContext)).toEqual(contexts);
+    expect(run.binding.forest.mutationRevision).toBe(forestRevision);
+    expect(namespace.readReservationCounts().semanticSlots).toBeGreaterThan(countsBefore.semanticSlots);
+    run.binding.execution.assertCoherent();
   });
 
   test('funds empty projection definitions while leaving whitespace-only groups definition-free', () => {
@@ -1236,6 +1258,44 @@ describe('template compiler projection logical extraction', () => {
     expect(result.reasons.map((reason) => reason.reasonKind))
       .toEqual([TemplateCompilerContextFamilyAllocationReasonKind.ForeignWires]);
     expect(namespace.readReservationCounts()).toEqual(countsBefore);
+  });
+
+  test('keeps allocation and structural ownership uncommitted when attachment currentness advances', () => {
+    const run = fixture.run(
+      'projection-logical-valueless-slot-host',
+      TemplateCompilerSiteCursorTraversalMode.ClosedContextFamily,
+    );
+    const completion = completeTemplateCompilerContextFamily(run.transcript, run.endpoint);
+    if (completion.receipt == null) throw new Error('Expected attachment collision family completion.');
+    const rows = assembleTemplateCompilerContextFamilyRows(completion.receipt).assembly;
+    if (rows == null) throw new Error('Expected attachment collision family rows.');
+    const wires = prepareTemplateCompilerFamilyWireFunding(rows).funding;
+    if (wires == null) throw new Error('Expected attachment collision family wires.');
+    const allocation = prepareTemplateCompilerContextFamilyAllocation(rows, wires).preparation;
+    if (allocation == null) throw new Error('Expected attachment collision family allocation.');
+    const target = prepareTemplateCompilerContextFamilyTargetPlan(allocation).preparation;
+    if (target == null) throw new Error('Expected attachment collision target plan.');
+    const schedule = prepareTemplateCompilerContextFamilyStructuralSchedule(target);
+    const attachment = run.binding.execution.prepareContextFamilyTargetAttachment(target, schedule);
+    const namespace = run.transcript.allocationSnapshot.ledger.namespace;
+    const phaseKey = allocation.preparedAllocation.ledger.rootSiteKey;
+    const collisionPhaseKey = `${phaseKey}:collision`;
+    const eager = namespace.beginPhase(collisionPhaseKey);
+    eager.reserveProduct(
+      `${collisionPhaseKey}:root`,
+      'compiled-template:root-collision',
+      TemplateCompilerLiveProductReservationRole.RootCompiledTemplate,
+      null,
+      `${phaseKey}:compiled-template:root`,
+    );
+    eager.finish();
+
+    expect(attachment.isCurrent()).toBe(false);
+    expect(() => run.binding.execution.commitPreparedContextFamilyTargetAttachment(attachment))
+      .toThrow(/foreign or stale/u);
+    expect(allocation.preparedAllocation.ledger.state).toBe(TemplateCompilerLiveAllocationLedgerState.Prepared);
+    expect(run.binding.execution.structuralExecution).toBeNull();
+    expect(run.binding.lane.targetPlan).toBeNull();
   });
 
   test('classifies a real non-singular TC attribute as Pending without losing semantic ownership', () => {

@@ -161,7 +161,6 @@ import {
   TemplateCompilerSiteSpendDisposition,
 } from '../src/template/template-compiler-site-spend-ledger.js';
 import { TemplateProductDetails } from '../src/template/product-details.js';
-import { TemplateCompilerStructuralExecutionSession } from '../src/template/template-compiler-structural-execution.js';
 import type {
   TemplateCompilationFamilyFrontDoorEmission,
   TemplateCompilationFrontDoorEmission,
@@ -1319,23 +1318,23 @@ describe('template compiler root site cursor', () => {
       removedSiteSet.has(event.text)
     )).toBe(false);
 
-    const structural = TemplateCompilerStructuralExecutionSession.prepareBorrowing(
-      rootTranscript.binding.forest,
-      target.targetPlan,
-      rootTranscript.binding.execution.mutationAuthority,
+    const attachmentPreparation = rootTranscript.binding.execution.prepareContextFamilyTargetAttachment(
+      target,
+      schedule,
     );
-    const fundedHydrateElement = preparation.hydrateElements[0]!;
-    const adopted = rootProcessEvent.result.removals.map((removal, ordinal) =>
-      structural.adoptCommittedProcessContentRemoval(
-        target.targetPlan.root,
-        fundedHydrateElement.instruction,
-        rootProcessEvent.result,
-        removal,
-        ordinal,
-      )
-    );
+    const adopted = attachmentPreparation.adoptedProcessContent;
+    expect(attachmentPreparation.isCurrent()).toBe(true);
     expect(adopted.map((disposition) => disposition.node)).toEqual(removed);
-    expect(structural.readConsumedNodeDispositions(target.targetPlan.root)).toEqual(adopted);
+    expect(attachmentPreparation.structuralExecution.readConsumedNodeDispositions(target.targetPlan.root))
+      .toEqual(adopted);
+    const attachment = rootTranscript.binding.execution.commitPreparedContextFamilyTargetAttachment(
+      attachmentPreparation,
+    );
+    expect(attachment.isCurrent()).toBe(true);
+    expect(attachment.committedAllocation.prepared).toBe(preparation.preparedAllocation);
+    expect(attachment.structuralExecution.readConsumedNodeDispositions(target.targetPlan.root)).toEqual(adopted);
+    expect(namespace.readReservationCounts().semanticSlots).toBeGreaterThan(countsBefore.semanticSlots);
+    rootTranscript.binding.execution.assertCoherent();
   });
 
   test('places a TC-wrapped containerless host after its transition event', () => {

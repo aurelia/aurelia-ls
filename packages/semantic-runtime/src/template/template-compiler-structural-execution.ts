@@ -266,6 +266,11 @@ export class TemplateCompilerStructuralExecutionSession {
     structuralExecutionForests.add(session.forest);
   }
 
+  static preparedBorrowingIsCurrent(session: TemplateCompilerStructuralExecutionSession): boolean {
+    return preparedBorrowingSessions.has(session)
+      && !structuralExecutionForests.has(session.forest);
+  }
+
   private static createWithAuthority(
     forest: TemplateCompilerOccurrenceForest,
     targetPlan: TemplateCompilerTargetPlan,
