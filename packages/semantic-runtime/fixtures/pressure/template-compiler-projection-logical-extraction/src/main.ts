@@ -7,9 +7,11 @@ import {
 import projectionLogicalHostTemplate from './projection-logical-host.html';
 import projectionLogicalContainerlessHostTemplate from './projection-logical-containerless-host.html';
 import projectionLogicalNativeTcSlotHostTemplate from './projection-logical-native-tc-slot-host.html';
+import projectionLogicalNonsingularTcWireHostTemplate from './projection-logical-nonsingular-tc-wire-host.html';
 import projectionLogicalShadowHostTemplate from './projection-logical-shadow-host.html';
 import projectionLogicalTcHostTemplate from './projection-logical-tc-host.html';
 import projectionLogicalTcOnlyHostTemplate from './projection-logical-tc-only-host.html';
+import projectionLogicalValuelessSlotHostTemplate from './projection-logical-valueless-slot-host.html';
 import projectionLogicalWhitespaceHostTemplate from './projection-logical-whitespace-host.html';
 
 @customElement({ name: 'projection-logical-leaf' })
@@ -61,6 +63,20 @@ class ProjectionLogicalNativeTcSlotHost {
 }
 
 @customElement({
+  name: 'projection-logical-nonsingular-tc-wire-host',
+  template: projectionLogicalNonsingularTcWireHostTemplate,
+  dependencies: [ProjectionLogicalOuterTemplateController],
+})
+class ProjectionLogicalNonsingularTcWireHost {}
+
+@customElement({
+  name: 'projection-logical-valueless-slot-host',
+  template: projectionLogicalValuelessSlotHostTemplate,
+  dependencies: [ProjectionLogicalLeaf],
+})
+class ProjectionLogicalValuelessSlotHost {}
+
+@customElement({
   name: 'projection-logical-tc-host',
   template: projectionLogicalTcHostTemplate,
   dependencies: [
@@ -108,8 +124,10 @@ void new Aurelia()
     ProjectionLogicalWhitespaceHost,
     ProjectionLogicalContainerlessHost,
     ProjectionLogicalNativeTcSlotHost,
+    ProjectionLogicalNonsingularTcWireHost,
     ProjectionLogicalTcHost,
     ProjectionLogicalTcOnlyHost,
+    ProjectionLogicalValuelessSlotHost,
     ProjectionLogicalShadowHost,
   )
   .app({

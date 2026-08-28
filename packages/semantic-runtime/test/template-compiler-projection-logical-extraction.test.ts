@@ -30,6 +30,12 @@ import {
   TemplateCompilerFamilyOccurrenceArrivalPosture,
   TemplateCompilerFamilyTemplateControllerTransitionRowDraft,
 } from '../src/template/template-compiler-context-family-row-assembly.js';
+import {
+  prepareTemplateCompilerFamilyWireFunding,
+  TemplateCompilerFamilyWireFundingState,
+  TemplateCompilerFamilyWireResolution,
+  TemplateCompilerFamilyWireRole,
+} from '../src/template/template-compiler-family-wire-funding.js';
 import { executeTemplateCompilerHookBootstrap } from '../src/template/template-compiler-hook-bootstrap.js';
 import {
   TemplateCompilerHydrateElementBlockerKind,
@@ -76,6 +82,7 @@ import {
   TemplateCompilerSiteCursorTaskSession,
   TemplateCompilerSiteCursorTemplateControllerTransitionEvent,
   TemplateCompilerSiteCursorTraversalMode,
+  TemplateCompilerTemplateControllerTransitionEdgeReceipt,
   type TemplateCompilerSiteCursorTaskSelection,
   type TemplateCompilerSiteCursorTranscript,
 } from '../src/template/template-compiler-site-cursor.js';
@@ -662,6 +669,111 @@ describe('template compiler projection logical extraction', () => {
     expect(leaf?.attributeDispositions.some((disposition) =>
       disposition.site.event.element.tagName === 'projection-logical-leaf'
     )).toBe(false);
+  });
+
+  test('recovers exact HE, TC, contributor, slot, and nonempty value-span wires by occurrence', () => {
+    const run = fixture.run(
+      'projection-logical-tc-host',
+      TemplateCompilerSiteCursorTraversalMode.ClosedContextFamily,
+    );
+    const completion = completeTemplateCompilerContextFamily(run.transcript, run.endpoint);
+    if (completion.receipt == null) throw new Error('Expected an exact wire family receipt.');
+    const rows = assembleTemplateCompilerContextFamilyRows(completion.receipt).assembly;
+    if (rows == null) throw new Error('Expected an exact wire row characterization.');
+    const result = prepareTemplateCompilerFamilyWireFunding(rows);
+    const funding = result.funding;
+    if (funding == null) throw new Error('Expected exact family wire funding.');
+    const transition = completion.traversal?.templateControllerTransitions[0];
+    const extraction = completion.traversal?.projectionExtractions[0];
+    if (transition == null || extraction == null) throw new Error('Expected TC and projection wire owners.');
+
+    expect(result.state).toBe(TemplateCompilerFamilyWireFundingState.Exact);
+    for (const edge of transition.realization.edges) {
+      expect(funding.draftForOwner(edge, TemplateCompilerFamilyWireRole.TemplateControllerNode))
+        .toMatchObject({
+          resolution: TemplateCompilerFamilyWireResolution.ExactAuthored,
+          wireReference: edge.draft.node,
+        });
+      expect(funding.draftForOwner(edge, TemplateCompilerFamilyWireRole.TemplateControllerAttribute))
+        .toMatchObject({
+          resolution: TemplateCompilerFamilyWireResolution.ExactAuthored,
+          wireReference: edge.draft.attribute,
+        });
+    }
+    const host = transition.preparation.host;
+    expect(funding.draftsForOccurrence(host, TemplateCompilerFamilyWireRole.TemplateControllerNode)).toHaveLength(2);
+    const hydrateHead = rows.contexts.flatMap((context) => context.ordinaryRows)
+      .find((row) => row.hydrateElement != null)?.hydrateElement;
+    if (hydrateHead == null) throw new Error('Expected one HE wire owner.');
+    expect(funding.draftForOwner(hydrateHead, TemplateCompilerFamilyWireRole.HydrateElementNode))
+      .toMatchObject({
+        resolution: TemplateCompilerFamilyWireResolution.ExactAuthored,
+        wireReference: hydrateHead.instructionNode,
+      });
+    for (const contributor of extraction.preparation.contributorReceipts) {
+      expect(funding.draftForOwner(contributor, TemplateCompilerFamilyWireRole.ProjectionContributorNode))
+        .toMatchObject({ resolution: TemplateCompilerFamilyWireResolution.ExactAuthored });
+    }
+    const slot = extraction.preparation.slotConsumptions[0];
+    if (slot == null) throw new Error('Expected one named projection slot wire.');
+    expect(funding.draftForOwner(slot, TemplateCompilerFamilyWireRole.ProjectionSlotAttribute)).toMatchObject({
+      resolution: TemplateCompilerFamilyWireResolution.ExactAuthored,
+      valueSpanRequired: true,
+    });
+    expect(funding.draftForOwner(slot, TemplateCompilerFamilyWireRole.ProjectionSlotAttribute)?.valueAddressHandle)
+      .not.toBeNull();
+  });
+
+  test('keeps a valueless projection slot exact without inventing a value span', () => {
+    const run = fixture.run(
+      'projection-logical-valueless-slot-host',
+      TemplateCompilerSiteCursorTraversalMode.ClosedContextFamily,
+    );
+    const completion = completeTemplateCompilerContextFamily(run.transcript, run.endpoint);
+    if (completion.receipt == null) throw new Error('Expected a valueless-slot family receipt.');
+    const rows = assembleTemplateCompilerContextFamilyRows(completion.receipt).assembly;
+    if (rows == null) throw new Error('Expected valueless-slot rows.');
+    const result = prepareTemplateCompilerFamilyWireFunding(rows);
+    const consumption = completion.traversal?.projectionExtractions[0]?.preparation.slotConsumptions[0];
+    if (consumption == null || result.funding == null) throw new Error('Expected valueless slot ownership.');
+    const draft = result.funding.draftForOwner(consumption, TemplateCompilerFamilyWireRole.ProjectionSlotAttribute);
+
+    expect(result.state).toBe(TemplateCompilerFamilyWireFundingState.Exact);
+    expect(draft).toMatchObject({
+      resolution: TemplateCompilerFamilyWireResolution.ExactAuthored,
+      valueSpanRequired: false,
+      valueAddressHandle: null,
+    });
+  });
+
+  test('classifies a real non-singular TC attribute as Pending without losing semantic ownership', () => {
+    const run = fixture.run(
+      'projection-logical-nonsingular-tc-wire-host',
+      TemplateCompilerSiteCursorTraversalMode.ClosedContextFamily,
+    );
+    const completion = completeTemplateCompilerContextFamily(run.transcript, run.endpoint);
+    if (completion.receipt == null) throw new Error('Expected a non-singular-TC family receipt.');
+    const rows = assembleTemplateCompilerContextFamilyRows(completion.receipt).assembly;
+    if (rows == null) throw new Error('Expected non-singular-TC rows.');
+    const result = prepareTemplateCompilerFamilyWireFunding(rows);
+    if (result.funding == null) throw new Error('Expected non-singular TC wire ownership.');
+    const draft = result.drafts.find((candidate) =>
+      candidate.role === TemplateCompilerFamilyWireRole.TemplateControllerAttribute
+      && candidate.resolution === TemplateCompilerFamilyWireResolution.NonSingular
+    );
+    if (draft == null) throw new Error('Expected one non-singular TC attribute draft.');
+
+    expect(result.state).toBe(TemplateCompilerFamilyWireFundingState.Pending);
+    expect(draft).toMatchObject({
+      resolution: TemplateCompilerFamilyWireResolution.NonSingular,
+      wireReference: null,
+    });
+    expect(draft.semanticOwner).toBeInstanceOf(TemplateCompilerTemplateControllerTransitionEdgeReceipt);
+    expect(completion.traversal?.templateControllerTransitions.some((event) =>
+      draft.semanticOwner instanceof TemplateCompilerTemplateControllerTransitionEdgeReceipt
+      && event.realization.edges.includes(draft.semanticOwner)
+    )).toBe(true);
+    expect(result.reasons.some((reason) => reason.draft === draft)).toBe(true);
   });
 
   test('refuses compatibility traversal mode instead of treating its frontier as a family', () => {
