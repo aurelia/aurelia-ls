@@ -275,6 +275,8 @@ export class TemplateCompilerTargetContextPlan {
   >();
   private readonly stableRowSlots = new Set<string>();
   private readonly stableMembershipSlots = new Set<string>();
+  private surrogateInstructions: readonly TemplateInstruction[] = [];
+  private surrogateInstructionsBound = false;
   private sealed = false;
   private nextTargetOrdinal = 0;
   private firstConditionalTargetOrdinal: number | null = null;
@@ -312,6 +314,27 @@ export class TemplateCompilerTargetContextPlan {
 
   readOccurrenceMemberships(): readonly TemplateCompilerTargetOccurrenceMembership[] {
     return this.occurrenceMemberships;
+  }
+
+  readSurrogateInstructions(): readonly TemplateInstruction[] {
+    return this.surrogateInstructions;
+  }
+
+  get hasBoundSurrogateInstructions(): boolean {
+    return this.surrogateInstructionsBound;
+  }
+
+  bindRootSurrogateInstructions(instructions: readonly TemplateInstruction[]): void {
+    this.requireMutable();
+    if (
+      this.role !== TemplateCompilerTargetContextRole.Root
+      || this.surrogateInstructionsBound
+      || new Set(instructions.map((instruction) => instruction.productHandle)).size !== instructions.length
+    ) {
+      throw new Error(`Compiler target context '${this.localKey}' cannot bind root surrogate instructions.`);
+    }
+    this.surrogateInstructions = instructions;
+    this.surrogateInstructionsBound = true;
   }
 
   compilerReachableNodeOrdinal(productHandle: ProductHandle): number | null {
@@ -850,6 +873,20 @@ export class TemplateCompilerTargetPlan {
       }
       if (!contextStructuralAuthorityIsCoherent(context)) {
         throw new Error(`Compiler target context '${context.localKey}' has incoherent structural authority.`);
+      }
+      const rowInstructionProducts = new Set(context.readRows().flatMap((row) =>
+        row.instructions.map((instruction) => instruction.productHandle)
+      ));
+      if (
+        (context.role !== TemplateCompilerTargetContextRole.Root && (
+          context.hasBoundSurrogateInstructions
+          || context.readSurrogateInstructions().length > 0
+        ))
+        || context.readSurrogateInstructions().some((instruction) =>
+          rowInstructionProducts.has(instruction.productHandle)
+        )
+      ) {
+        throw new Error(`Compiler target context '${context.localKey}' has incoherent surrogate instruction ownership.`);
       }
       if (context.ownerContext != null) {
         const ownerContext = this.contextsByLocalKey.get(context.ownerContext.localKey) ?? null;

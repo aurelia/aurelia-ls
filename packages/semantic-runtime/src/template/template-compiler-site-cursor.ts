@@ -3,9 +3,6 @@ import type { AddressHandle, ProductHandle } from '../kernel/handles.js';
 import { ExpressionParseResultKind, type ExpressionParseResult } from '../expression/parse-result-algebra.js';
 import type { SourceSpan } from '../expression/source-span.js';
 import {
-  AttributeSyntaxKind,
-} from './attribute-syntax.js';
-import {
   TemplateCompilerScopeClosureState,
 } from './compiler-read-view.js';
 import type {
@@ -23,7 +20,10 @@ import {
   type TemplateCompilerLiveAttributeOwnerResult,
 } from './template-compiler-live-attribute-assembly.js';
 import { TemplateCompilerLiveAttributeOwnerInput } from './template-compiler-live-attribute-owner.js';
-import { TemplateCompilerElementInstructionStagingState } from './template-compiler-instruction-staging.js';
+import {
+  TemplateCompilerElementInstructionStagingState,
+  TemplateCompilerStaticAttributePolicy,
+} from './template-compiler-instruction-staging.js';
 import {
   TemplateCompilerAttributeOccurrence,
   TemplateCompilerCommentOccurrence,
@@ -82,6 +82,7 @@ import {
 } from './template-compiler-authored-origin-index.js';
 import type { TemplateCompilerNormalizedTextSite } from './template-compiler-normalized-site-index.js';
 import { TemplateExpressionParseState, TemplateValueSiteKind } from './value-site.js';
+import { decideTemplateCompilerSurrogateValidation } from './surrogate-compiler-semantics.js';
 import {
   TemplateCompilerSiteCursorAttributeEvent,
   TemplateCompilerSiteCursorContainerlessPlacementEvent,
@@ -98,6 +99,7 @@ import {
   TemplateCompilerSiteCursorProjectionEntrantBandStaging,
   TemplateCompilerSiteCursorProjectionExtractionEvent,
   TemplateCompilerSiteCursorSubtreeExclusionEvent,
+  TemplateCompilerSiteCursorSurrogateClassificationEvent,
   TemplateCompilerSiteCursorSurrogateValidationEvent,
   TemplateCompilerSiteCursorSurrogateValidationOutcome,
   TemplateCompilerSiteCursorTemplateControllerTransitionEvent,
@@ -139,6 +141,11 @@ import {
   type TemplateCompilerLetElementStagingState,
   TemplateCompilerLetReachedAttribute,
 } from './template-compiler-let-element-staging.js';
+import {
+  stageTemplateCompilerSurrogate,
+  TemplateCompilerSurrogateStagingReasonKind,
+  TemplateCompilerSurrogateStagingState,
+} from './template-compiler-surrogate-staging.js';
 import {
   TemplateCompilerRootCompilationAccumulator,
   type TemplateCompilerRootCompilationState,
@@ -293,6 +300,8 @@ export class TemplateCompilerSiteCursorTranscript {
         || event.ordinal !== ordinal
         || (event instanceof TemplateCompilerSiteCursorProcessContentEvent && !event.isCoherent())
         || (event instanceof TemplateCompilerSiteCursorLetElementEvent && !event.isCoherent())
+        || (event instanceof TemplateCompilerSiteCursorSurrogateValidationEvent && !event.isCoherent())
+        || (event instanceof TemplateCompilerSiteCursorSurrogateClassificationEvent && !event.isCoherent())
         || (event instanceof TemplateCompilerSiteCursorAttributeEvent && !event.isCoherent())
         || (event instanceof TemplateCompilerSiteCursorTemplateControllerTransitionEvent && !event.isCoherent())
         || (event instanceof TemplateCompilerSiteCursorProjectionExtractionEvent && !event.isCoherent())
@@ -2266,15 +2275,15 @@ class TemplateCompilerRootSiteCursor {
         ordinal,
       );
       const parsed = this.compilerReads.readParsedAttribute(scalar.qualifiedName, scalar.currentValue);
-      const current = scalar.isExact()
-        && parsed.observation.validate().isCurrent
-        && parsed.observation.closure.state === TemplateCompilerScopeClosureState.Closed;
-      const invalid = current && invalidSurrogateTarget(parsed.value.execution.target);
-      const outcome = !current || parsed.value.execution.syntaxKind === AttributeSyntaxKind.Open
-        ? TemplateCompilerSiteCursorSurrogateValidationOutcome.Open
-        : invalid
-          ? TemplateCompilerSiteCursorSurrogateValidationOutcome.Refused
-          : TemplateCompilerSiteCursorSurrogateValidationOutcome.Valid;
+      const parserWasCurrent = parsed.observation.validate().isCurrent;
+      const parserClosureWasClosed = parsed.observation.closure.state === TemplateCompilerScopeClosureState.Closed;
+      const outcome = decideTemplateCompilerSurrogateValidation(
+        scalar.isExact(),
+        parserWasCurrent,
+        parserClosureWasClosed,
+        parsed.value.execution.syntaxKind,
+        parsed.value.execution.target,
+      );
       this.appendEvent(new TemplateCompilerSiteCursorSurrogateValidationEvent(
         siteCursorConstructionAuthority,
         this.transcriptOrdinal++,
@@ -2283,6 +2292,8 @@ class TemplateCompilerRootSiteCursor {
         ordinal,
         scalar,
         parsed,
+        parserWasCurrent,
+        parserClosureWasClosed,
         outcome,
       ));
       if (outcome === TemplateCompilerSiteCursorSurrogateValidationOutcome.Open) {
@@ -2311,18 +2322,117 @@ class TemplateCompilerRootSiteCursor {
     this.phaseKind = TemplateCompilerSiteCursorPhaseKind.SurrogateValidationEnd;
     this.phase(TemplateCompilerSiteCursorPhaseKind.SurrogateValidationEnd);
     if (attributes.length > 0) {
-      this.stop(
-        TemplateCompilerSiteCursorFrontierKind.SurrogateClassificationRequired,
-        carrier,
-        null,
-        null,
-        null,
-        'Non-empty surrogate requires its dedicated progressive classification and output grouping lane.',
-      );
-      return;
+      this.stageSurrogate(carrier);
+      if (this.frontier != null) return;
     }
     this.phaseKind = TemplateCompilerSiteCursorPhaseKind.SurrogateEnd;
     this.phase(TemplateCompilerSiteCursorPhaseKind.SurrogateEnd);
+  }
+
+  private stageSurrogate(carrier: TemplateCompilerElementOccurrence): void {
+    const owner = assembleTemplateCompilerLiveAttributeOwner({
+      localKey: `${this.binding.lane.localKey}:live-surrogate`,
+      execution: this.binding.execution,
+      bootstrapClosure: this.binding.bootstrapClosure,
+      siteDriver: this.siteDriver,
+      compilerReads: this.compilerReads,
+      preWalk: this.preWalk,
+      element: carrier,
+      lookupName: runtimeElementResourceName(carrier.tagName, carrier.namespace),
+      allocations: this.allocations,
+      elementDefinitionEligible: false,
+      staticAttributePolicy: TemplateCompilerStaticAttributePolicy.Transfer,
+    });
+    const relation = this.semantics.elementOwnerRelation(
+      carrier,
+      owner.authoredElement,
+      new Map(owner.contributions.map((contribution) => [
+        contribution.frame.attribute,
+        contribution.frame.scalar,
+      ] as const)),
+    );
+    const spends: TemplateCompilerSiteSpend[] = [];
+    const occurrenceOnlyRows: TemplateCompilerOccurrenceOnlyRow[] = [];
+    let accountingFailure: TemplateCompilerLiveAttributeContribution | null = null;
+    for (const contribution of owner.contributions) {
+      const frame = contribution.frame;
+      const attribute = frame.attribute;
+      const bundle = this.semantics.singularAttributeBundle(attribute);
+      if (bundle == null) {
+        const row = this.recordOccurrenceOnly(
+          attribute,
+          frame.source.sourceKind === TemplateCompilerLiveAttributeSourceKind.AuthoredNonSingular
+            ? TemplateCompilerOccurrenceOnlyDisposition.NonSingularBrowserOrigin
+            : TemplateCompilerOccurrenceOnlyDisposition.LiveAttributeAssembled,
+        );
+        if (row == null) {
+          accountingFailure = contribution;
+          break;
+        }
+        occurrenceOnlyRows.push(row);
+        continue;
+      }
+      const compatible = this.semantics.surrogateAttributeIsCompatible(
+        carrier,
+        owner.authoredElement,
+        bundle,
+        attribute,
+        frame.scalar,
+        frame.liveSite,
+        relation,
+      );
+      const spend = this.bindSpend(
+        bundle,
+        attribute,
+        compatible
+          ? TemplateCompilerSiteSpendDisposition.BrowserCompatible
+          : TemplateCompilerSiteSpendDisposition.BrowserReloweringRequired,
+      );
+      if (spend == null) {
+        accountingFailure = contribution;
+        break;
+      }
+      spends.push(spend);
+    }
+    const result = stageTemplateCompilerSurrogate(owner);
+    this.appendEvent(new TemplateCompilerSiteCursorSurrogateClassificationEvent(
+      siteCursorConstructionAuthority,
+      this.transcriptOrdinal++,
+      carrier,
+      result,
+      spends,
+      occurrenceOnlyRows,
+      accountingFailure == null,
+    ));
+    if (accountingFailure != null) {
+      this.stop(
+        TemplateCompilerSiteCursorFrontierKind.AccountingMismatch,
+        carrier,
+        accountingFailure.frame.attribute,
+        this.semantics.singularAttributeBundle(accountingFailure.frame.attribute),
+        null,
+        'Reached surrogate attribute conflicted with the site accounting ledger.',
+      );
+      return;
+    }
+    if (result.state === TemplateCompilerSurrogateStagingState.Exact) return;
+    const reason = result.reasons[0];
+    this.stop(
+      reason?.reasonKind === TemplateCompilerSurrogateStagingReasonKind.TemplateControllerInvalid
+        ? TemplateCompilerSiteCursorFrontierKind.InvalidSurrogateTemplateController
+        : result.state === TemplateCompilerSurrogateStagingState.Invalid
+          ? TemplateCompilerSiteCursorFrontierKind.SurrogateClassificationInvalid
+          : result.state === TemplateCompilerSurrogateStagingState.Pending
+            ? TemplateCompilerSiteCursorFrontierKind.SurrogateStructuralMutationPending
+            : TemplateCompilerSiteCursorFrontierKind.SurrogateClassificationOpen,
+      carrier,
+      owner.terminalContribution?.frame.attribute ?? null,
+      owner.terminalContribution == null
+        ? null
+        : this.semantics.singularAttributeBundle(owner.terminalContribution.frame.attribute),
+      null,
+      reason?.summary ?? 'Surrogate live classification remained unavailable.',
+    );
   }
 
   private bindSpend(
@@ -2585,7 +2695,13 @@ function liveAllocationSnapshotIsCoherent(
     }
   };
 
-  for (const owner of owners) {
+  const allocationOwners = [
+    ...owners,
+    ...events.flatMap((event) => event instanceof TemplateCompilerSiteCursorSurrogateClassificationEvent
+      ? [event.result.owner]
+      : []),
+  ];
+  for (const owner of allocationOwners) {
     for (const instruction of owner.instructionStaging.instructions) {
       expectedInstructions.set(instruction.productHandle, instruction);
     }
@@ -2693,7 +2809,8 @@ function sameObjects<T>(left: readonly T[], right: readonly T[]): boolean {
 
 function rootOwnedCursorEvent(event: TemplateCompilerSiteCursorEvent): boolean {
   return event instanceof TemplateCompilerSiteCursorPhaseEvent
-    || event instanceof TemplateCompilerSiteCursorSurrogateValidationEvent;
+    || event instanceof TemplateCompilerSiteCursorSurrogateValidationEvent
+    || event instanceof TemplateCompilerSiteCursorSurrogateClassificationEvent;
 }
 
 function templateControllerTransitionEventBindingIsCoherent(
@@ -2751,13 +2868,6 @@ function liveAttributeFrontier(
     case TemplateCompilerLiveAttributeCompletion.Open:
       return TemplateCompilerSiteCursorFrontierKind.ReachedLiveAttributeOpen;
   }
-}
-
-function invalidSurrogateTarget(target: string): boolean {
-  return target === 'id'
-    || target === 'name'
-    || target === 'au-slot'
-    || target === 'as-element';
 }
 
 class CursorTextInstructionStagingAuthority implements TemplateCompilerTextInstructionStagingAuthority {

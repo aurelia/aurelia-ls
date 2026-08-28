@@ -1,7 +1,12 @@
 import { createHash } from 'node:crypto';
 
 import type { AddressHandle } from '../kernel/handles.js';
-import type { TemplateCompilerTargetContextPlan, TemplateCompilerTargetRowPlan } from './compiler-target-plan.js';
+import {
+  type TemplateCompilerTargetContextPlan,
+  TemplateCompilerTargetContextRole,
+  type TemplateCompilerTargetRowPlan,
+} from './compiler-target-plan.js';
+import type { TemplateInstruction } from './instruction-ir.js';
 import type { TemplateCompilerContextFamilyTargetPlanPreparation } from './template-compiler-context-family-target-plan.js';
 import type { TemplateCompilerContextFamilyTargetExecution } from './template-compiler-context-family-target-execution.js';
 import type { TemplateCompilerOperation } from './template-compiler-execution.js';
@@ -182,6 +187,8 @@ export class TemplateCompilerContextFamilyFreezeContextPreparation {
     readonly nodes: readonly TemplateCompilerContextFamilyFreezeNodeReservation[],
     readonly attributes: readonly TemplateCompilerContextFamilyFreezeAttributeReservation[],
     readonly rows: readonly TemplateCompilerContextFamilyFreezeTargetRowReservation[],
+    readonly surrogateInstructions: readonly TemplateInstruction[],
+    readonly surrogateSequenceReservation: TemplateCompilerLiveProductReservation | null,
   ) {
     this.nodeByOccurrence = new Map(nodes.map((node) => [node.occurrence, node] as const));
     this.attributeByOccurrence = new Map(attributes.map((attribute) => [attribute.occurrence, attribute] as const));
@@ -200,6 +207,13 @@ export class TemplateCompilerContextFamilyFreezeContextPreparation {
       || this.attributeByOccurrence.size !== attributes.length
       || rows.length !== context.readRows().length
       || rows.some((row, ordinal) => row.row !== context.readRows()[ordinal])
+      || surrogateInstructions !== context.readSurrogateInstructions()
+      || (surrogateInstructions.length === 0) !== (surrogateSequenceReservation == null)
+      || (surrogateSequenceReservation != null && (
+        context.role !== TemplateCompilerTargetContextRole.Root
+        || surrogateSequenceReservation.role !== TemplateCompilerLiveProductReservationRole.InstructionSequence
+        || surrogateSequenceReservation.addressHandle != null
+      ))
     ) {
       throw new Error(`Context '${context.localKey}' lost transformed freeze inventory coverage.`);
     }
@@ -233,6 +247,7 @@ export class TemplateCompilerContextFamilyFreezePreparation {
         ...context.nodes.map((node) => node.reservation),
         ...context.attributes.map((attribute) => attribute.reservation),
         ...context.rows.flatMap((row) => [row.targetReservation, row.sequenceReservation]),
+        ...(context.surrogateSequenceReservation == null ? [] : [context.surrogateSequenceReservation]),
       ]),
       ...derivations.map((derivation) => derivation.reservation),
     ];
@@ -444,6 +459,18 @@ export function prepareTemplateCompilerContextFamilyFreeze(
         ),
       );
     });
+    const surrogateInstructions = planned.context.readSurrogateInstructions();
+    const surrogateSequenceReservation = surrogateInstructions.length === 0
+      ? null
+      : ledger.reserveProduct(
+          siteKey,
+          'surrogate-sequence',
+          TemplateCompilerLiveProductReservationRole.InstructionSequence,
+          surrogateInstructions[0]?.sourceAddressHandle
+            ?? planned.structure.compilerCarrier.inputReference?.addressHandle
+            ?? planned.context.sourceAddressHandle,
+          `${compiledLocal}:surrogate-instructions`,
+        );
     return new TemplateCompilerContextFamilyFreezeContextPreparation(
       planned.context,
       planned.structure,
@@ -451,6 +478,8 @@ export function prepareTemplateCompilerContextFamilyFreeze(
       nodes,
       attributes,
       rows,
+      surrogateInstructions,
+      surrogateSequenceReservation,
     );
   });
   const derivationOperations = structuralDerivationOperations(execution);

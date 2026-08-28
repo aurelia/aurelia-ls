@@ -14,8 +14,9 @@ import {
   type TemplateCompilerSiteCursorContainerlessPlacementEvent,
   TemplateCompilerSiteCursorIgnoredNodeEvent,
   TemplateCompilerSiteCursorLetElementEvent,
+  type TemplateCompilerSiteCursorSurrogateClassificationEvent,
   TemplateCompilerSiteCursorSubtreeExclusionEvent,
-  TemplateCompilerSiteCursorSurrogateValidationEvent,
+  type TemplateCompilerSiteCursorSurrogateValidationEvent,
   TemplateCompilerSiteCursorTextEvent,
   TemplateCompilerSiteCursorElementEvent,
 } from './template-compiler-site-cursor-event.js';
@@ -137,6 +138,7 @@ export class TemplateCompilerOrdinaryRootCursorCompletionReceipt {
     readonly elementSites: readonly TemplateCompilerCompletedElementSite[],
     readonly textSites: readonly TemplateCompilerCompletedTextSite[],
     readonly letSites: readonly TemplateCompilerCompletedLetElementSite[],
+    readonly surrogateClassification: TemplateCompilerSiteCursorSurrogateClassificationEvent | null,
     readonly ignoredNodes: readonly TemplateCompilerSiteCursorIgnoredNodeEvent[],
     readonly exclusions: readonly TemplateCompilerSiteCursorSubtreeExclusionEvent[],
     readonly surrogateValidations: readonly TemplateCompilerSiteCursorSurrogateValidationEvent[],
@@ -307,15 +309,14 @@ export function completeTemplateCompilerOrdinaryRoot(
       elementSites,
       textSites,
       letSites,
+      audit.surrogateClassification,
       transcript.events.filter((event): event is TemplateCompilerSiteCursorIgnoredNodeEvent =>
         event instanceof TemplateCompilerSiteCursorIgnoredNodeEvent
       ),
       transcript.events.filter((event): event is TemplateCompilerSiteCursorSubtreeExclusionEvent =>
         event instanceof TemplateCompilerSiteCursorSubtreeExclusionEvent
       ),
-      transcript.events.filter((event): event is TemplateCompilerSiteCursorSurrogateValidationEvent =>
-        event instanceof TemplateCompilerSiteCursorSurrogateValidationEvent
-      ),
+      audit.surrogateValidations,
     ),
     [],
   );

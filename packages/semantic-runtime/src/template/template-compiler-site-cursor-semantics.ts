@@ -153,6 +153,33 @@ export class TemplateCompilerSiteCursorSemanticResolver extends TemplateCompiler
       && progression.openReason?.reasonKind === TemplateCompilerAttributeOwnerProgressionOpenReasonKind.DedicatedLetOwner;
   }
 
+  surrogateAttributeIsCompatible(
+    element: TemplateCompilerElementOccurrence,
+    authoredElement: HtmlElement | null,
+    bundle: TemplateCompilerNormalizedSite,
+    attribute: TemplateCompilerAttributeOccurrence,
+    scalar: TemplateCompilerReachedAttributeScalarReceipt,
+    liveSite: TemplateCompilerLiveAttributeOwnerSite,
+    relation: TemplateCompilerCursorElementOwnerRelation,
+  ): boolean {
+    const progression = bundle.ownerProgressionSite;
+    return this.attributeOriginIsCompatible(
+      element,
+      authoredElement,
+      bundle,
+      attribute,
+      scalar,
+      liveSite.originalForestOrdinal,
+      relation,
+    )
+      && progression.laneKind === TemplateCompilerAttributeOwnerProgressionLaneKind.SurrogateOpen
+      && progression.state === TemplateCompilerAttributeOwnerProgressionState.Open
+      && progression.ownerView == null
+      && progression.disposition === TemplateCompilerAttributeOwnerProgressionDisposition.Open
+      && progression.openReason?.reasonKind
+        === TemplateCompilerAttributeOwnerProgressionOpenReasonKind.DedicatedSurrogateOwner;
+  }
+
   /** Native parents only reach this path to preserve the known `[au-slot]`-on-non-CE diagnostic frontier. */
   hasProjectionOnNativeElement(element: TemplateCompilerElementOccurrence): boolean {
     return element.readChildren().some((child) =>

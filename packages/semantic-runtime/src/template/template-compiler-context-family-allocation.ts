@@ -650,6 +650,7 @@ function prepareFamilyAllocationInputs(
     allocation.instruction == null ? [] : [[allocation.productHandle, allocation.instruction] as const]
   ));
   const requiredExistingInstructions: TemplateInstruction[] = [];
+  requiredExistingInstructions.push(...rows.surrogateInstructions);
   for (const context of rows.contexts) {
     for (const row of context.ordinaryRows) {
       requiredExistingInstructions.push(...row.instructions);

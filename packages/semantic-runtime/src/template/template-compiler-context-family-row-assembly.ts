@@ -1,4 +1,5 @@
 import { TemplateRenderTargetKind } from './compiled-template.js';
+import type { TemplateInstruction } from './instruction-ir.js';
 import {
   TemplateCompilerCompletedContextTraversal,
   type TemplateCompilerCompletedFamilyElementReach,
@@ -503,6 +504,7 @@ export class TemplateCompilerContextFamilyRowAssembly {
     readonly rootMembership: TemplateCompilerFamilyRootMembershipDraft,
     readonly contexts: readonly TemplateCompilerFamilyContextRowAssembly[],
     readonly reachDispositions: readonly TemplateCompilerFamilyReachDisposition[],
+    readonly surrogateInstructions: readonly TemplateInstruction[],
   ) {
     this.contextByReference = new Map(contexts.map((context) => [context.context, context] as const));
     const occurrences = reachDispositions.map((disposition) =>
@@ -524,6 +526,10 @@ export class TemplateCompilerContextFamilyRowAssembly {
       )
       || new Set(occurrences).size !== occurrences.length
       || reachDispositions.some((disposition) => !this.contextByReference.has(disposition.loweringContext))
+      || !sameObjects(
+        surrogateInstructions,
+        receipt.traversal.audit.surrogateClassification?.result.staging?.instructions ?? [],
+      )
     ) {
       throw new Error('Context-family row assembly lost receipt, context, reach, or occurrence coverage.');
     }
@@ -882,6 +888,7 @@ export function assembleTemplateCompilerContextFamilyRows(
     new TemplateCompilerFamilyRootMembershipDraft(receipt),
     contextAssemblies,
     dispositions,
+    receipt.traversal.audit.surrogateClassification?.result.staging?.instructions ?? [],
   );
   const uniquePendingReasons = [...new Map(pendingReasons.map((reason) => [
     `${reason.reasonKind}:${reason.summary}`,
@@ -936,6 +943,10 @@ function appendMap<TKey, TValue>(map: Map<TKey, TValue[]>, key: TKey, value: TVa
   const bucket = map.get(key);
   if (bucket == null) map.set(key, [value]);
   else bucket.push(value);
+}
+
+function sameObjects<T>(left: readonly T[], right: readonly T[]): boolean {
+  return left.length === right.length && left.every((value, ordinal) => value === right[ordinal]);
 }
 
 function ineligible(

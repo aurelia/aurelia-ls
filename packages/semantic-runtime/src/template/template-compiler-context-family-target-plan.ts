@@ -407,6 +407,7 @@ export class TemplateCompilerContextFamilyTargetPlanPreparation {
       authority !== contextFamilyTargetPlanAuthority
       || !allocation.isCurrent()
       || !targetPlan.isSealed
+      || !targetPlan.root.hasBoundSurrogateInstructions
       || contextMappings.length !== rows.contexts.length
       || this.contextByCursor.size !== contextMappings.length
       || !sameObjects(contextMappings.map((mapping) => mapping.contextAssembly), rows.contexts)
@@ -429,6 +430,8 @@ export class TemplateCompilerContextFamilyTargetPlanPreparation {
         expectedRowContexts,
       )
       || !sameObjects(rowMappings.map((mapping) => mapping.row), targetRows)
+      || !sameObjects(targetPlan.root.readSurrogateInstructions(), rows.surrogateInstructions)
+      || targetPlan.readContexts().slice(1).some((context) => context.readSurrogateInstructions().length > 0)
       || !sameObjects(
         attributeDispositionMappings.map((mapping) => mapping.draft),
         expectedAttributeDispositions,
@@ -698,6 +701,7 @@ export function prepareTemplateCompilerContextFamilyTargetPlan(
     }
   }
 
+  targetPlan.root.bindRootSurrogateInstructions(rows.surrogateInstructions);
   targetPlan.seal();
   const preparation = new TemplateCompilerContextFamilyTargetPlanPreparation(
     contextFamilyTargetPlanAuthority,

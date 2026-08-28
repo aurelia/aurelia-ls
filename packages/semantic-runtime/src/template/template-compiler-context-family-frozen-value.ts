@@ -131,6 +131,8 @@ export class TemplateCompilerContextFamilyFrozenContext {
     this.attributeByOccurrence = new Map(
       preparation.attributes.map((attribute, ordinal) => [attribute.occurrence, attributes[ordinal]!] as const),
     );
+    const surrogateSequence = compiledTemplate.surrogateSequence;
+    const surrogateReservation = preparation.surrogateSequenceReservation;
     if (
       nodes.length !== preparation.nodes.length
       || attributes.length !== preparation.attributes.length
@@ -149,10 +151,23 @@ export class TemplateCompilerContextFamilyFrozenContext {
       || compiledTemplate.transformedTree?.productHandle !== tree.productHandle
       || compiledTemplate.targets.length !== rows.length
       || compiledTemplate.targets.some((target, ordinal) => target !== rows[ordinal]?.target)
+      || (surrogateSequence == null) !== (surrogateReservation == null)
+      || (surrogateSequence != null && (
+        surrogateReservation == null
+        || surrogateSequence.productHandle !== surrogateReservation.productHandle
+        || surrogateSequence.identityHandle !== surrogateReservation.identityHandle
+        || surrogateSequence.ownerProductHandle !== compiledTemplate.productHandle
+        || surrogateSequence.instructions.length !== preparation.surrogateInstructions.length
+        || surrogateSequence.instructions.some((instruction, ordinal) =>
+          instruction.productHandle !== preparation.surrogateInstructions[ordinal]?.productHandle
+        )
+      ))
       || this.nodeByOccurrence.size !== nodes.length
       || this.attributeByOccurrence.size !== attributes.length
     ) {
-      throw new Error(`Frozen context '${preparation.context.localKey}' lost tree, row, or compiled-template coverage.`);
+      throw new Error(
+        `Frozen context '${preparation.context.localKey}' lost tree, row, surrogate, or compiled-template coverage.`,
+      );
     }
   }
 }
@@ -218,7 +233,10 @@ export class TemplateCompilerContextFamilyFrozenValue {
   get instructions(): readonly TemplateInstruction[] {
     const allocation = this.preparation.execution.attachment.target.allocation;
     const roots = this.preparation.contexts.flatMap((context) =>
-      context.context.readRows().flatMap((row) => row.instructions)
+      [
+        ...context.context.readRows().flatMap((row) => row.instructions),
+        ...context.surrogateInstructions,
+      ]
     );
     const available = new Map<ProductHandle, TemplateInstruction>([
       ...allocation.parentAllocation.instructionAllocations.flatMap((entry) =>
@@ -459,6 +477,11 @@ function materializeContext(
     context.treeReservation.addressHandle,
   );
   const rows = context.rows.map((row) => materializeRow(row, provenanceHandle));
+  const surrogateSequence = materializeSurrogateSequence(
+    context,
+    family,
+    provenanceHandle,
+  );
   const compiledTemplate = bindCompiledTemplate(
     context,
     tree,
@@ -466,6 +489,7 @@ function materializeContext(
     family,
     provenanceHandle,
     nativeSlotOutlets,
+    surrogateSequence,
   );
   return new TemplateCompilerContextFamilyFrozenContext(
     context,
@@ -573,13 +597,9 @@ function bindCompiledTemplate(
   family: TemplateCompilerContextFamilyFreezePreparation,
   provenanceHandle: ProvenanceHandle,
   nativeSlotOutlets: readonly CompiledNativeSlotOutlet[],
+  surrogateSequence: TemplateInstructionSequence | null,
 ): CompiledTemplate {
-  const reservation = family.execution.attachment.target.contextMappings.find((mapping) =>
-    mapping.targetContext === context.context
-  )?.definition.reservation ?? null;
-  if (reservation == null) {
-    throw new Error(`Context '${context.context.localKey}' lost compiled-template reservation.`);
-  }
+  const reservation = compiledTemplateReservationForContext(context, family);
   const compilation = binding(family).compilation;
   const detail = new CompiledTemplate(
     reservation.productHandle,
@@ -592,7 +612,7 @@ function bindCompiledTemplate(
     nativeSlotOutlets,
     false,
     rows.map((row) => row.target),
-    null,
+    surrogateSequence,
     context.context.sourceAddressHandle ?? binding(family).source.sourceAddressHandle,
     [],
   );
@@ -603,6 +623,42 @@ function bindCompiledTemplate(
     detail.sourceAddressHandle,
     provenanceHandle,
   ));
+}
+
+function materializeSurrogateSequence(
+  context: TemplateCompilerContextFamilyFreezeContextPreparation,
+  family: TemplateCompilerContextFamilyFreezePreparation,
+  provenanceHandle: ProvenanceHandle,
+): TemplateInstructionSequence | null {
+  const reservation = context.surrogateSequenceReservation;
+  if (reservation == null) return null;
+  const compiledTemplate = compiledTemplateReservationForContext(context, family);
+  return bindReservation(
+    new TemplateInstructionSequence(
+      reservation.productHandle,
+      reservation.identityHandle,
+      compiledTemplate.productHandle,
+      instructionReferencesFor(context.surrogateInstructions),
+      reservation.sourceAddressHandle,
+    ),
+    reservation,
+    KernelVocabulary.Instruction.Sequence.key,
+    provenanceHandle,
+    reservation.sourceAddressHandle,
+  );
+}
+
+function compiledTemplateReservationForContext(
+  context: TemplateCompilerContextFamilyFreezeContextPreparation,
+  family: TemplateCompilerContextFamilyFreezePreparation,
+): TemplateCompilerLiveProductReservation {
+  const reservation = family.execution.attachment.target.contextMappings.find((mapping) =>
+    mapping.targetContext === context.context
+  )?.definition.reservation ?? null;
+  if (reservation == null) {
+    throw new Error(`Context '${context.context.localKey}' lost compiled-template reservation.`);
+  }
+  return reservation;
 }
 
 function materializeDerivations(

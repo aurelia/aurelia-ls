@@ -123,12 +123,17 @@ export class TemplateCompilerContextFamilyValueContext {
     readonly nodes: readonly CompilerTransformedTemplateNode[],
     readonly attributes: readonly CompilerTransformedTemplateAttribute[],
     readonly rows: readonly TemplateCompilerContextFamilyValueRow[],
+    readonly surrogates: readonly TemplateInstruction[],
     readonly compiledTemplate: CompiledTemplate,
   ) {
     if (
       compiledTemplate.transformedTree?.productHandle !== tree.productHandle
       || compiledTemplate.targets.length !== rows.length
       || compiledTemplate.targets.some((target, ordinal) => target !== rows[ordinal]?.target)
+      || surrogates.length !== (compiledTemplate.surrogateSequence?.instructions.length ?? 0)
+      || surrogates.some((instruction, ordinal) =>
+        instruction.productHandle !== compiledTemplate.surrogateSequence?.instructions[ordinal]?.productHandle
+      )
     ) {
       throw new Error('Compiled context-family context lost tree, target, or row coverage.');
     }
@@ -350,6 +355,7 @@ function projectContext(
     context.nodes,
     context.attributes,
     rows,
+    context.preparation.surrogateInstructions,
     context.compiledTemplate,
   );
 }

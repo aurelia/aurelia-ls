@@ -59,6 +59,7 @@ export class TemplateCompilerLiveInstructionStagingRequest {
     readonly owner: TemplateCompilerLiveInstructionStagingOwner,
     readonly compilerReads: TemplateCompilerReadView,
     readonly authority: TemplateCompilerInstructionStagingAuthority,
+    readonly staticAttributePolicy: TemplateCompilerStaticAttributePolicy,
   ) {}
 }
 
@@ -228,6 +229,12 @@ function liveValueInstruction(
     retainRead(reads, mapped.observation);
     target = mapped.value ?? camelCaseAttributeName(syntax.target);
   }
+  const sourceAddressHandle = request.staticAttributePolicy === TemplateCompilerStaticAttributePolicy.Transfer
+    && contribution.frame.source.hasExactAuthoredScalar
+    ? contribution.frame.source.authoredAttribute?.valueAddressHandle
+      ?? contribution.frame.source.authoredAttribute?.sourceAddressHandle
+      ?? syntax.sourceAddressHandle
+    : syntax.sourceAddressHandle;
   return stageTemplateCompilerValueInstruction(new TemplateCompilerValueInstructionStagingRequest(
     request.authority,
     siteKey,
@@ -240,9 +247,9 @@ function liveValueInstruction(
     valueParse?.expressionProductHandle ?? null,
     valueParse?.read.value ?? null,
     contribution.valueSelection?.emptyValueBindingPolicy ?? null,
-    TemplateCompilerStaticAttributePolicy.Preserve,
+    request.staticAttributePolicy,
     contribution.frame.scalar.qualifiedName,
-    syntax.sourceAddressHandle,
+    sourceAddressHandle,
   ));
 }
 

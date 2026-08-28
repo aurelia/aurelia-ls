@@ -289,6 +289,7 @@ function frontierOutcome(
     case TemplateCompilerSiteCursorFrontierKind.HydrateElementEnvelopeOpen:
     case TemplateCompilerSiteCursorFrontierKind.ReachedNormalizedOpen:
     case TemplateCompilerSiteCursorFrontierKind.SurrogateValidationOpen:
+    case TemplateCompilerSiteCursorFrontierKind.SurrogateClassificationOpen:
     case TemplateCompilerSiteCursorFrontierKind.LetElementOpen:
       return TemplateCompilerContextFamilyCompilationState.Open;
     case TemplateCompilerSiteCursorFrontierKind.GeneratedSiteNeedsLowering:
@@ -299,7 +300,7 @@ function frontierOutcome(
     case TemplateCompilerSiteCursorFrontierKind.AfterAttributesBeforeProjection:
     case TemplateCompilerSiteCursorFrontierKind.AfterAttributesBeforeContainerless:
     case TemplateCompilerSiteCursorFrontierKind.TextReloweringRequired:
-    case TemplateCompilerSiteCursorFrontierKind.SurrogateClassificationRequired:
+    case TemplateCompilerSiteCursorFrontierKind.SurrogateStructuralMutationPending:
       return TemplateCompilerContextFamilyCompilationState.Pending;
     case TemplateCompilerSiteCursorFrontierKind.CurrentnessLost:
     case TemplateCompilerSiteCursorFrontierKind.NativeSlotWithoutShadowDomInvalid:
@@ -308,6 +309,8 @@ function frontierOutcome(
     case TemplateCompilerSiteCursorFrontierKind.ReachedNormalizedInvalid:
     case TemplateCompilerSiteCursorFrontierKind.AuthoredCompilerMarkerReserved:
     case TemplateCompilerSiteCursorFrontierKind.InvalidSurrogateAttribute:
+    case TemplateCompilerSiteCursorFrontierKind.SurrogateClassificationInvalid:
+    case TemplateCompilerSiteCursorFrontierKind.InvalidSurrogateTemplateController:
     case TemplateCompilerSiteCursorFrontierKind.InvalidLetCommand:
     case TemplateCompilerSiteCursorFrontierKind.UnknownLetBindingCommand:
     case TemplateCompilerSiteCursorFrontierKind.InvalidLetExpression:

@@ -118,6 +118,7 @@ export function observeSemanticCompiledDefinitionFamily(
       || instructions == null
       || structure.definitionIndex !== definitionIndex
       || instructions.definitionIndex !== definitionIndex
+      || definition.surrogateValues.length !== instructions.surrogates.length
     ) {
       throw new Error(`Compiled-definition observation lost definition ${definitionIndex} alignment.`);
     }
@@ -152,7 +153,7 @@ export function observeSemanticCompiledDefinitionFamily(
         ...row.geometry,
       })),
       rows: instructions.rows,
-      surrogates: definition.surrogateValues,
+      surrogates: instructions.surrogates,
     };
   });
   if (projectionReasons.length > 0) {

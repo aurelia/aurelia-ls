@@ -47,6 +47,8 @@ import cursorSlotInvalidTemplate from './cursor-slot-invalid.html';
 import cursorSlotValidTemplate from './cursor-slot-valid.html';
 import cursorSlotsContainerlessTemplate from './cursor-slots-containerless.html';
 import cursorSurrogateInvalidTemplate from './cursor-surrogate-invalid.html';
+import cursorSurrogateDynamicTemplate from './cursor-surrogate-dynamic.html';
+import cursorSurrogateTemplateControllerTemplate from './cursor-surrogate-template-controller.html';
 import cursorSurrogateValidTemplate from './cursor-surrogate-valid.html';
 import cursorTaskNestedProjectionTemplate from './cursor-task-nested-projection.html';
 import cursorTaskNestedTcTemplate from './cursor-task-nested-tc.html';
@@ -122,6 +124,14 @@ class CursorLetUnknown {
   template: cursorSurrogateInvalidTemplate,
 })
 class CursorSurrogateInvalid {}
+
+@customElement({
+  name: 'cursor-surrogate-dynamic',
+  template: cursorSurrogateDynamicTemplate,
+})
+class CursorSurrogateDynamic {
+  rootClass = 'root-class';
+}
 
 @customElement({
   name: 'cursor-foster',
@@ -243,6 +253,13 @@ class CursorCommentShield {
 
 @templateController('cursor-outer')
 class CursorOuterTemplateController {}
+
+@customElement({
+  name: 'cursor-surrogate-template-controller',
+  template: cursorSurrogateTemplateControllerTemplate,
+  dependencies: [CursorOuterTemplateController],
+})
+class CursorSurrogateTemplateController {}
 
 @templateController('cursor-inner')
 class CursorInnerTemplateController {}
@@ -544,6 +561,8 @@ void new Aurelia()
     CursorLetInvalid,
     CursorLetUnknown,
     CursorSurrogateInvalid,
+    CursorSurrogateDynamic,
+    CursorSurrogateTemplateController,
     CursorFoster,
     CursorLiveDuplicate,
     CursorLiveEmpty,

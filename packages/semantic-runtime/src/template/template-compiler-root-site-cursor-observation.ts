@@ -63,6 +63,7 @@ import {
   TemplateCompilerSiteCursorPhaseEvent,
   TemplateCompilerSiteCursorProcessContentEvent,
   TemplateCompilerSiteCursorSubtreeExclusionEvent,
+  TemplateCompilerSiteCursorSurrogateClassificationEvent,
   TemplateCompilerSiteCursorSurrogateValidationEvent,
   TemplateCompilerSiteCursorTextEvent,
 } from './template-compiler-site-cursor-event.js';
@@ -137,6 +138,7 @@ export interface TemplateCompilerRootSiteCursorTranscriptObservation
   readonly completedElementSiteCount: number;
   readonly completedTextSiteCount: number;
   readonly completedLetSiteCount: number;
+  readonly surrogateInstructionCount: number;
   readonly completedTextHoleCount: number;
   readonly completedRowSiteCount: number;
   readonly siteOperationCount: number;
@@ -369,6 +371,8 @@ export function observeTemplateCompilerRootSiteCursor(
     completedElementSiteCount: completionReceipt?.elementSites.length ?? 0,
     completedTextSiteCount: completionReceipt?.textSites.length ?? 0,
     completedLetSiteCount: completionReceipt?.letSites.length ?? 0,
+    surrogateInstructionCount:
+      completionReceipt?.surrogateClassification?.result.staging?.instructions.length ?? 0,
     completedTextHoleCount: completionReceipt?.textSites.reduce(
       (count, site) => count + site.holeSlotKeys.length,
       0,
@@ -1008,17 +1012,47 @@ function cursorEventDigest(
                     event.disposition,
                     event.spends.length,
                   ]
-                : event instanceof TemplateCompilerSiteCursorSurrogateValidationEvent
-                  ? [
+              : event instanceof TemplateCompilerSiteCursorSurrogateValidationEvent
+                ? [
                       event.eventKind,
                       nodeIndex(event.carrier),
                       attributeIndexes.get(event.attribute) ?? null,
                       event.scalar.qualifiedName,
-                      event.forestOrdinal,
-                      event.parsed.value.execution.target,
-                      event.outcome,
+                    event.forestOrdinal,
+                    event.parsed.value.execution.target,
+                    event.parserWasCurrent,
+                    event.parserClosureWasClosed,
+                    event.outcome,
+                  ]
+                : event instanceof TemplateCompilerSiteCursorSurrogateClassificationEvent
+                  ? [
+                      event.eventKind,
+                      nodeIndex(event.carrier),
+                      event.result.state,
+                      event.result.reasons.map((reason) => reason.reasonKind),
+                      event.result.owner.contributions.map((contribution) => [
+                        attributeIndexes.get(contribution.frame.attribute) ?? null,
+                        contribution.classification.classificationKind,
+                        contribution.targetLane,
+                        contribution.disposition,
+                        contribution.instructions.map((instruction) => instruction.instructionKind),
+                      ]),
+                      event.result.staging?.instructions.map((instruction) => instruction.instructionKind) ?? null,
+                      event.spends.map((spend) => [
+                        spend.occurrence instanceof TemplateCompilerAttributeOccurrence
+                          ? attributeIndexes.get(spend.occurrence) ?? null
+                          : null,
+                        spend.disposition,
+                      ]),
+                      event.occurrenceOnlyRows.map((row) => [
+                        row.occurrence instanceof TemplateCompilerAttributeOccurrence
+                          ? attributeIndexes.get(row.occurrence) ?? null
+                          : null,
+                        row.disposition,
+                      ]),
+                      event.accountingComplete,
                     ]
-                  : event instanceof TemplateCompilerSiteCursorFrontier
+                : event instanceof TemplateCompilerSiteCursorFrontier
                     ? [
                         event.eventKind,
                         nodeIndex(event.node),

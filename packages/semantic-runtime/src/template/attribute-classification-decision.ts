@@ -52,6 +52,8 @@ export interface AttributeClassificationDecisionSyntax {
  */
 export interface AttributeClassificationDecisionOwner extends TemplateAttributeMapperNode {
   readonly lookupName: string;
+  /** False for root surrogates, whose JIT classification explicitly suppresses custom-element features. */
+  readonly elementDefinitionEligible?: boolean;
 }
 
 /** Invalid classification outcome retained for the publication layer to turn into a compiler issue. */
@@ -163,8 +165,10 @@ class AttributeClassificationDecisionExecution {
       );
     }
 
-    this.elementRead = this.reads.readElement(this.owner.lookupName);
-    const elementResolution = this.elementRead.value;
+    this.elementRead = this.owner.elementDefinitionEligible === false
+      ? null
+      : this.reads.readElement(this.owner.lookupName);
+    const elementResolution = this.elementRead?.value ?? null;
     const elementDefinition = elementResolution?.definition?.type === ResourceDefinitionKind.CustomElement
       ? elementResolution.definition
       : null;

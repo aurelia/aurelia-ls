@@ -165,6 +165,7 @@ import {
   TemplateCompilerSiteCursorProcessContentEvent,
   TemplateCompilerSiteCursorResultState,
   TemplateCompilerSiteCursorSubtreeExclusionEvent,
+  TemplateCompilerSiteCursorSurrogateClassificationEvent,
   TemplateCompilerSiteCursorSurrogateValidationEvent,
   TemplateCompilerSiteCursorSurrogateValidationOutcome,
   TemplateCompilerSiteCursorTemplateControllerTransitionEvent,
@@ -175,6 +176,7 @@ import {
   type TemplateCompilerSiteCursorResult,
 } from '../src/template/template-compiler-site-cursor.js';
 import { TemplateCompilerSiteCursorTaskSession } from '../src/template/template-compiler-site-cursor-task.js';
+import { TemplateCompilerSurrogateStagingReasonKind } from '../src/template/template-compiler-surrogate-staging.js';
 import {
   TemplateCompilerOrdinaryRootCompletionRefusalKind,
   TemplateCompilerOrdinaryRootCompletionState,
@@ -457,6 +459,7 @@ describe('template compiler root site cursor', () => {
       TemplateCompilerSiteCursorSurrogateValidationOutcome.Refused,
     ]);
     expect(validations.map((event) => event.parsed.value.execution.target)).toEqual(['data-ok', 'id']);
+    expect(validations.map((event) => event.scalar.qualifiedName)).toEqual(['data-ok', 'id.bind']);
     expect(transcript.ledger.spends).toHaveLength(0);
   });
 
@@ -614,6 +617,7 @@ describe('template compiler root site cursor', () => {
       'cursor-shapes',
       'cursor-slot-inert',
       'cursor-slot-valid',
+      'cursor-surrogate-valid',
       'cursor-wide',
     ];
     const assemblies = new Map<string, NonNullable<ReturnType<typeof assembleTemplateCompilerOrdinaryRootRows>['assembly']>>();
@@ -858,11 +862,18 @@ describe('template compiler root site cursor', () => {
         .toBe(targetAssembly);
       targetPlans.set(name, targetAssembly);
     }
-    expect(targetPlans.size).toBe(15);
+    expect(targetPlans.size).toBe(16);
     expect([...targetPlans.values()].reduce(
       (count, targetAssembly) => count + targetAssembly.targetPlan.root.readRows().length,
       0,
     )).toBe(28);
+    expect(targetPlans.get('cursor-surrogate-valid')?.targetPlan.root.readSurrogateInstructions().map((instruction) =>
+      instruction.instructionKind
+    )).toEqual([
+      TemplateInstructionKind.SetClassAttribute,
+      TemplateInstructionKind.SetStyleAttribute,
+      TemplateInstructionKind.SetAttribute,
+    ]);
     const stagingPlan = targetPlans.get('cursor-live-staging')!;
     expect(stagingPlan.hydrateElements?.heads).toHaveLength(2);
     expect(stagingPlan.publicationPrerequisites).toMatchObject([{
@@ -989,6 +1000,7 @@ describe('template compiler root site cursor', () => {
       stableB.targetKind,
       stableB.sourceAddressHandle,
     );
+    planOne.root.bindRootSurrogateInstructions([]);
     planOne.seal();
     const planTwo = new TemplateCompilerTargetPlan('stable-key-canary', rootContext, stableReference);
     planTwo.root.recordCompilerReachableOccurrence('membership:a', stableA.occurrence, stableA.authoredNode);
@@ -1021,6 +1033,7 @@ describe('template compiler root site cursor', () => {
       stableB.authoredNode,
       stableB.instructions,
     )).toThrow();
+    planTwo.root.bindRootSurrogateInstructions([]);
     planTwo.seal();
   });
 
@@ -1035,7 +1048,8 @@ describe('template compiler root site cursor', () => {
       'cursor-slot-invalid',
       'cursor-slots-containerless',
       'cursor-surrogate-invalid',
-      'cursor-surrogate-valid',
+      'cursor-surrogate-dynamic',
+      'cursor-surrogate-template-controller',
       'cursor-template-controller',
     ];
     for (const name of names) {
@@ -2171,13 +2185,102 @@ describe('template compiler root site cursor', () => {
     expect(transcript.binding.execution.siteExecutionContext(transcript.binding.lane)).toBeNull();
   });
 
-  test('finishes all-valid surrogate validation before the dedicated classification frontier', () => {
-    const transcript = fixture.transcript('cursor-surrogate-valid');
-    expect(transcript.frontier?.frontierKind)
-      .toBe(TemplateCompilerSiteCursorFrontierKind.SurrogateClassificationRequired);
+  test('finishes all-valid surrogate validation and stages one flat host-transfer sequence', () => {
+    const result = fixture.run('cursor-surrogate-valid').execute();
+    const transcript = requireTranscript(result);
+    expect(transcript.frontier).toBeNull();
     expect(phaseKinds(transcript)).toContain(TemplateCompilerSiteCursorPhaseKind.SurrogateValidationEnd);
-    expect(eventsOf(transcript, TemplateCompilerSiteCursorSurrogateValidationEvent)).toHaveLength(1);
-    expect(transcript.ledger.spends).toHaveLength(0);
+    expect(eventsOf(transcript, TemplateCompilerSiteCursorSurrogateValidationEvent)).toHaveLength(3);
+    const classification = eventsOf(transcript, TemplateCompilerSiteCursorSurrogateClassificationEvent)[0];
+    expect(classification?.result).toMatchObject({
+      state: 'exact',
+      staging: {
+        instructions: [
+          expect.objectContaining({
+            instructionKind: TemplateInstructionKind.SetClassAttribute,
+            value: 'root-class',
+          }),
+          expect.objectContaining({
+            instructionKind: TemplateInstructionKind.SetStyleAttribute,
+            value: 'display:block',
+          }),
+          expect.objectContaining({
+            instructionKind: TemplateInstructionKind.SetAttribute,
+            targetAttribute: 'data-ok',
+            value: 'x',
+          }),
+        ],
+      },
+    });
+    expect(classification?.spends.map((spend) => spend.disposition)).toEqual([
+      TemplateCompilerSiteSpendDisposition.BrowserCompatible,
+      TemplateCompilerSiteSpendDisposition.BrowserCompatible,
+      TemplateCompilerSiteSpendDisposition.BrowserCompatible,
+    ]);
+    expect(classification?.occurrenceOnlyRows).toEqual([]);
+    expect(classification?.result.staging?.instructions.map((instruction) => instruction.sourceAddressHandle)).toEqual(
+      classification?.result.owner.contributions.map((contribution) =>
+        contribution.frame.source.authoredAttribute?.valueAddressHandle ?? null
+      ),
+    );
+    expect(result.completion?.receipt?.surrogateClassification).toBe(classification);
+  });
+
+  test('keeps consumed surrogate mutations pending and template controllers distinctly invalid', () => {
+    const dynamic = fixture.transcript('cursor-surrogate-dynamic');
+    const dynamicEvent = eventsOf(dynamic, TemplateCompilerSiteCursorSurrogateClassificationEvent)[0];
+    expect(dynamic.frontier?.frontierKind)
+      .toBe(TemplateCompilerSiteCursorFrontierKind.SurrogateStructuralMutationPending);
+    expect(dynamicEvent?.result).toMatchObject({
+      state: 'pending',
+      reasons: [{ reasonKind: TemplateCompilerSurrogateStagingReasonKind.StructuralMutationPending }],
+      owner: {
+        instructionStaging: {
+          directRowTail: [expect.objectContaining({ instructionKind: TemplateInstructionKind.PropertyBinding })],
+        },
+      },
+    });
+
+    const templateController = fixture.transcript('cursor-surrogate-template-controller');
+    const templateControllerEvent = eventsOf(
+      templateController,
+      TemplateCompilerSiteCursorSurrogateClassificationEvent,
+    )[0];
+    expect(templateController.frontier?.frontierKind)
+      .toBe(TemplateCompilerSiteCursorFrontierKind.InvalidSurrogateTemplateController);
+    expect(templateControllerEvent?.result).toMatchObject({
+      state: 'invalid',
+      reasons: [{ reasonKind: TemplateCompilerSurrogateStagingReasonKind.TemplateControllerInvalid }],
+      owner: { templateControllers: [expect.anything()] },
+    });
+  });
+
+  test('freezes the flat surrogate sequence on the root definition outside target rows', () => {
+    const candidate = fixture.runtime.computationLifecycle.begin({
+      kind: 'template-compiler-surrogate-freeze-test',
+      reconciliationKey: fixture.browserRun.locus.reconciliationKey,
+      summary: 'Root surrogate target-context and freeze transport proof.',
+    });
+    try {
+      const result = fixture.compileContextFamily('cursor-surrogate-valid', candidate);
+      expect(result.state).toBe(TemplateCompilerContextFamilyCompilationState.Exact);
+      const root = result.value?.root;
+      if (root == null) throw new Error('Expected exact root surrogate family value.');
+      const sequence = root.compiledTemplate.surrogateSequence;
+      expect(root.rows).toEqual([]);
+      expect(root.surrogates.map((instruction) => instruction.instructionKind)).toEqual([
+        TemplateInstructionKind.SetClassAttribute,
+        TemplateInstructionKind.SetStyleAttribute,
+        TemplateInstructionKind.SetAttribute,
+      ]);
+      expect(sequence?.instructions.map((instruction) => instruction.productHandle)).toEqual(
+        root.surrogates.map((instruction) => instruction.productHandle),
+      );
+      expect(sequence?.ownerProductHandle).toBe(root.compiledTemplate.productHandle);
+      expect(sequence?.sourceAddressHandle).toBe(root.surrogates[0]?.sourceAddressHandle);
+    } finally {
+      candidate.abort();
+    }
   });
 
   test('spends an unledgered pre-bootstrap scalar as live relowering and stops', () => {

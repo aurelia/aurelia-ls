@@ -6,7 +6,9 @@ import {
   itInterpolation,
   itLetBinding,
   itPropertyBinding,
+  itSetAttribute,
   itSetClassAttribute,
+  itSetStyleAttribute,
   itTextBinding,
 } from "@aurelia/template-compiler";
 import {
@@ -407,8 +409,8 @@ const dataAttributesDebugCase = dataAttributesCase(true);
 const staticSurrogateCase = jitCharacterizationCase({
   id: "surrogate.static-class",
   family: "surrogate",
-  tags: ["breadth", "surrogate", "static", "class"],
-  requirement: "A nonempty static root class produces one flat surrogate instruction while remaining visible on the template root.",
+  tags: ["breadth", "surrogate", "static", "class", "style", "attribute"],
+  requirement: "Static root class, style, and ordinary attributes produce one flat surrogate sequence while remaining visible on the template root.",
   provenance: [
     compilerAuthority(directCompilerSuite, 144, 154, "behavior", {
       suiteName: "3-runtime-html/template-compiler.spec.ts",
@@ -423,19 +425,21 @@ const staticSurrogateCase = jitCharacterizationCase({
   obligations: [
     compilerObligation("compiler.attribute.surrogate-static", "primary", "Static root class is lowered instead of treated as ordinary inert markup."),
     compilerObligation("compiler.surrogate.static-class", "primary", "The host-transfer instruction retains the class text."),
+    compilerObligation("compiler.surrogate.static-style", "primary", "The host-transfer instruction retains the style text."),
+    compilerObligation("compiler.surrogate.static-attribute", "primary", "The host-transfer instruction retains an ordinary attribute name and value."),
     compilerObligation("compiler.definition.surrogates", "primary", "The compiled definition publishes a nonempty surrogate product."),
     compilerObligation("compiler.surrogate.flat-wire", "boundary", "The live producer supplies the currently flat surrogate wire without resolving its type conflict."),
     compilerObligation("compiler.wire.static-dom", "interaction", "The static DOM instruction retains its exact value."),
   ],
   world: inlineCompilerWorld(
     "aot-static-class-surrogate",
-    '<template class="h-100"></template>',
+    '<template class="h-100" style="display:block" data-ok="x"></template>',
   ),
   invariants: [
-    ...compiledDefinitionEnvelope("aot-static-class-surrogate", 0, 1),
-    equalJitInvariant("surrogate.template", "The root template retains the authored class in the JIT product.", {
+    ...compiledDefinitionEnvelope("aot-static-class-surrogate", 0, 3),
+    equalJitInvariant("surrogate.template", "The root template retains the authored static attributes in the JIT product.", {
       kind: "template-outer-html",
-    }, '<template class="h-100"></template>'),
+    }, '<template class="h-100" style="display:block" data-ok="x"></template>'),
     equalJitInvariant("surrogate.type", "The flat surrogate row contains a class-set instruction.", {
       kind: "surrogate-field",
       instruction: 0,
@@ -446,6 +450,31 @@ const staticSurrogateCase = jitCharacterizationCase({
       instruction: 0,
       field: "value",
     }, "h-100"),
+    equalJitInvariant("surrogate.style-type", "The flat surrogate sequence contains a style-set instruction.", {
+      kind: "surrogate-field",
+      instruction: 1,
+      field: "type",
+    }, itSetStyleAttribute),
+    equalJitInvariant("surrogate.style-value", "The style instruction retains the authored declaration text.", {
+      kind: "surrogate-field",
+      instruction: 1,
+      field: "value",
+    }, "display:block"),
+    equalJitInvariant("surrogate.attribute-type", "The flat surrogate sequence contains an ordinary attribute-set instruction.", {
+      kind: "surrogate-field",
+      instruction: 2,
+      field: "type",
+    }, itSetAttribute),
+    equalJitInvariant("surrogate.attribute-target", "The ordinary attribute instruction retains its target name.", {
+      kind: "surrogate-field",
+      instruction: 2,
+      field: "to",
+    }, "data-ok"),
+    equalJitInvariant("surrogate.attribute-value", "The ordinary attribute instruction retains its value.", {
+      kind: "surrogate-field",
+      instruction: 2,
+      field: "value",
+    }, "x"),
   ],
   contrasts: [{
     caseId: "debug.data-attributes.removed",

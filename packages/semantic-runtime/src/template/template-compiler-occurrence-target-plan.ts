@@ -162,6 +162,7 @@ export class TemplateCompilerOccurrenceTargetPlanAssembly {
       || targetPlan.root.compiledTemplate.productHandle !== rootCompiledTemplate.productHandle
       || targetPlan.root.compiledTemplate.identityHandle !== rootCompiledTemplate.identityHandle
       || !targetPlan.isSealed
+      || !targetPlan.root.hasBoundSurrogateInstructions
       || rowMappings.length !== rows.rows.length
       || !sameObjects(
         targetPlan.root.readOccurrenceMemberships().map((membership) => membership.occurrence),
@@ -169,6 +170,10 @@ export class TemplateCompilerOccurrenceTargetPlanAssembly {
       )
       || !sameObjects(rowMappings.map((mapping) => mapping.draft), rows.rows)
       || !sameObjects(rowMappings.map((mapping) => mapping.row), targetPlan.root.readRows())
+      || !sameObjects(
+        targetPlan.root.readSurrogateInstructions(),
+        rows.receipt.surrogateClassification?.result.staging?.instructions ?? [],
+      )
       || !sameObjects(
         attributeDispositionMappings.map((mapping) => mapping.draft),
         rows.attributeDispositions,
@@ -385,6 +390,9 @@ export function allocateTemplateCompilerOccurrenceTargetPlan(
       hydrateElement,
     );
   });
+  targetPlan.root.bindRootSurrogateInstructions(
+    receipt.surrogateClassification?.result.staging?.instructions ?? [],
+  );
   targetPlan.seal();
   const assembly = new TemplateCompilerOccurrenceTargetPlanAssembly(
     occurrenceTargetPlanAuthority,

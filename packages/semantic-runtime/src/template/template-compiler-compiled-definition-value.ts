@@ -64,7 +64,6 @@ export class TemplateCompilerCompiledDefinitionOverlay {
   readonly needsCompile = false as const;
   readonly type = ResourceDefinitionKind.CustomElement;
   readonly compilerAddedDependencies: readonly [] = [];
-  readonly surrogateValues: readonly [] = [];
 
   constructor(
     readonly headerKind: TemplateCompilerCompiledDefinitionHeaderKind,
@@ -86,6 +85,10 @@ export class TemplateCompilerCompiledDefinitionOverlay {
 
   get compiledTemplate(): CompiledTemplate {
     return this.context.compiledTemplate;
+  }
+
+  get surrogateValues(): TemplateCompilerRuntimeInstructionContextValue['surrogates'] {
+    return this.instructions.surrogates;
   }
 
   get template(): CompilerTransformedTemplateTree {
@@ -150,7 +153,6 @@ export const enum TemplateCompilerCompiledDefinitionReasonKind {
   CaptureOpen = 'capture-open',
   BindableSetterOpen = 'bindable-setter-open',
   CompilerAddedDependenciesUnavailable = 'compiler-added-dependencies-unavailable',
-  SurrogateInstructionValuesUnavailable = 'surrogate-instruction-values-unavailable',
   ProductDetailProjectionChanged = 'product-detail-projection-changed',
 }
 
@@ -378,17 +380,6 @@ export function projectTemplateCompilerCompiledDefinitionFamily(
       TemplateCompilerCompiledDefinitionReasonKind.CompilerAddedDependenciesUnavailable,
       'Compiler-created local dependency identities do not yet have generated constructable runtime values.',
       request.family.compilerAddedDependencyIdentityHandles,
-      true,
-    ));
-  }
-  const contextsWithSurrogates = request.family.contexts.filter((context) =>
-    (context.compiledTemplate.surrogateSequence?.instructions.length ?? 0) > 0
-  );
-  if (contextsWithSurrogates.length > 0) {
-    reasons.push(new TemplateCompilerCompiledDefinitionReason(
-      TemplateCompilerCompiledDefinitionReasonKind.SurrogateInstructionValuesUnavailable,
-      'Runtime surrogate instruction values are not present in the exact instruction family.',
-      contextsWithSurrogates.map((context) => context.compiledTemplate.productHandle),
       true,
     ));
   }

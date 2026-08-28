@@ -7,7 +7,7 @@ import {
 } from "./semantic-runtime-instruction-family-observer.js";
 
 export const SEMANTIC_RUNTIME_INSTRUCTION_COMPARISON_VERSION =
-  "aurelia-ls/aot-semantic-runtime-instruction-comparison/v1" as const;
+  "aurelia-ls/aot-semantic-runtime-instruction-comparison/v2" as const;
 
 export const SEMANTIC_RUNTIME_INSTRUCTION_COMMON_JIT_FIELDS = [
   "recursive-instruction-type-and-kind",
@@ -20,6 +20,7 @@ export const SEMANTIC_RUNTIME_INSTRUCTION_COMMON_JIT_FIELDS = [
   "containerless",
   "captures",
   "process-content-data",
+  "surrogate-instruction-values",
 ] as const;
 
 export const enum SemanticRuntimeInstructionMismatchKind {
@@ -33,6 +34,7 @@ export const enum SemanticRuntimeInstructionMismatchKind {
   RowInstructionCountMetadata = "row-instruction-count-metadata",
   RowInstructionCount = "row-instruction-count",
   InstructionRows = "instruction-rows",
+  SurrogateInstructions = "surrogate-instructions",
 }
 
 export interface SemanticRuntimeInstructionMismatch {
@@ -113,7 +115,9 @@ export function compareSemanticRuntimeInstructionsToJit(
 
   for (const input of exact) {
     const mismatchStart = mismatches.length;
-    const semanticRows = input.runtimeInstructions.definitions.map((definition) => definition.rows);
+    const semanticDefinitions = input.runtimeInstructions.definitions;
+    const semanticRows = semanticDefinitions.map((definition) => definition.rows);
+    const semanticSurrogates = semanticDefinitions.map((definition) => definition.surrogates);
     const semanticDefinitionIndexes = input.runtimeInstructions.definitions.map((definition) => definition.definitionIndex);
     const expectedDefinitionIndexes = input.runtimeInstructions.definitions.map((_, definitionIndex) => definitionIndex);
     const semanticCaseRowInstructionCount = semanticRows.reduce((count, definition) =>
@@ -122,7 +126,7 @@ export function compareSemanticRuntimeInstructionsToJit(
     const semanticCaseInstructionCount = semanticRows.reduce(
       (count, definition) => count + countInstructions(definition),
       0,
-    );
+    ) + semanticSurrogates.reduce((count, surrogates) => count + countInstructions([surrogates]), 0);
     semanticInstructionCount += semanticCaseInstructionCount;
     semanticRowInstructionCount += semanticCaseRowInstructionCount;
     const semanticWireDigest = semanticRuntimeInstructionFamilyWireDigest(input.runtimeInstructions.definitions);
@@ -180,6 +184,7 @@ export function compareSemanticRuntimeInstructionsToJit(
       continue;
     }
     const jitRows = outcome.definitions.map((definition) => definition.rows);
+    const jitSurrogates = outcome.definitions.map((definition) => definition.surrogates);
     const jitDefinitionIndexes = outcome.definitions.map((definition) => definition.definitionIndex);
     const expectedJitDefinitionIndexes = outcome.definitions.map((_, definitionIndex) => definitionIndex);
     const jitCaseRowInstructionCount = jitRows.reduce((count, definition) =>
@@ -188,7 +193,7 @@ export function compareSemanticRuntimeInstructionsToJit(
     const jitCaseInstructionCount = jitRows.reduce(
       (count, definition) => count + countInstructions(definition),
       0,
-    );
+    ) + jitSurrogates.reduce((count, surrogates) => count + countInstructions([surrogates]), 0);
     jitRowInstructionCount += jitCaseRowInstructionCount;
     jitInstructionCount += jitCaseInstructionCount;
     if (!sameData(jitDefinitionIndexes, expectedJitDefinitionIndexes)) {
@@ -229,6 +234,14 @@ export function compareSemanticRuntimeInstructionsToJit(
         SemanticRuntimeInstructionMismatchKind.InstructionRows,
         semanticRows,
         jitRows,
+      ));
+    }
+    if (!sameData(semanticSurrogates, jitSurrogates)) {
+      mismatches.push(mismatch(
+        input.caseId,
+        SemanticRuntimeInstructionMismatchKind.SurrogateInstructions,
+        semanticSurrogates,
+        jitSurrogates,
       ));
     }
     if (mismatches.length === mismatchStart) matchingCaseIds.push(input.caseId);

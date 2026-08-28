@@ -144,6 +144,19 @@ export type TemplateCompilerRuntimeInstructionValue =
       readonly containerless: boolean;
       readonly captures: readonly [];
       readonly data: TemplateCompilerRuntimeElementDataValue;
+    }
+  | {
+      readonly type: TemplateCompilerFrameworkInstructionType.SetAttribute;
+      readonly value: string;
+      readonly to: string;
+    }
+  | {
+      readonly type: TemplateCompilerFrameworkInstructionType.SetClassAttribute;
+      readonly value: string;
+    }
+  | {
+      readonly type: TemplateCompilerFrameworkInstructionType.SetStyleAttribute;
+      readonly value: string;
     };
 
 export const enum TemplateCompilerRuntimeInstructionFamilyState {
@@ -194,12 +207,14 @@ export class TemplateCompilerRuntimeInstructionContextValue {
   constructor(
     readonly context: TemplateCompilerContextFamilyValueContext,
     readonly rows: readonly (readonly TemplateCompilerRuntimeInstructionValue[])[],
+    readonly surrogates: readonly TemplateCompilerRuntimeInstructionValue[],
   ) {
     if (
       rows.length !== context.rows.length
       || rows.some((row, ordinal) => row.length !== context.rows[ordinal]?.instructions.length)
+      || surrogates.length !== (context.compiledTemplate.surrogateSequence?.instructions.length ?? 0)
     ) {
-      throw new Error('Runtime instruction context value lost final row coverage.');
+      throw new Error('Runtime instruction context value lost final row or surrogate coverage.');
     }
   }
 }
@@ -232,6 +247,10 @@ export class TemplateCompilerRuntimeInstructionFamilyValue {
           return instruction == null || this.#valueByInstruction.get(instruction) !== value;
         })
       ))
+      || contexts.some((context) => context.surrogates.some((value, instructionOrdinal) => {
+        const instruction = context.context.surrogates[instructionOrdinal] ?? null;
+        return instruction == null || this.#valueByInstruction.get(instruction) !== value;
+      }))
     ) {
       throw new Error('Runtime instruction family value lost context or instruction coverage.');
     }
@@ -320,6 +339,10 @@ export function projectTemplateCompilerRuntimeInstructionFamily(
       const value = projector.project(instruction);
       return value == null ? [] : [value];
     })),
+    surrogates: context.surrogates.flatMap((instruction) => {
+      const value = projector.project(instruction);
+      return value == null ? [] : [value];
+    }),
   }));
   if (!productDetailRevision.equals(request.productDetails.readProjectionRevision())) {
     return unavailable(
@@ -345,6 +368,7 @@ export function projectTemplateCompilerRuntimeInstructionFamily(
   const contexts = projectedContexts.map((context) => new TemplateCompilerRuntimeInstructionContextValue(
     context.context,
     context.rows,
+    context.surrogates,
   ));
   return new TemplateCompilerRuntimeInstructionFamilyResult(
     runtimeInstructionFamilyAuthority,
@@ -551,6 +575,22 @@ class RuntimeInstructionFamilyProjector {
               data,
             };
       }
+      case TemplateInstructionKind.SetAttribute:
+        return {
+          type: TemplateCompilerFrameworkInstructionType.SetAttribute,
+          value: instruction.value,
+          to: instruction.targetAttribute,
+        };
+      case TemplateInstructionKind.SetClassAttribute:
+        return {
+          type: TemplateCompilerFrameworkInstructionType.SetClassAttribute,
+          value: instruction.value,
+        };
+      case TemplateInstructionKind.SetStyleAttribute:
+        return {
+          type: TemplateCompilerFrameworkInstructionType.SetStyleAttribute,
+          value: instruction.value,
+        };
       default:
         this.pending(
           instruction,

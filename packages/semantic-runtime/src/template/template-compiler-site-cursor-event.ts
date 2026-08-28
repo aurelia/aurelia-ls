@@ -3,7 +3,7 @@ import { ExpressionParseResultKind } from '../expression/parse-result-algebra.js
 import type { AttributeParserParseResult } from './attribute-syntax.js';
 import type { TemplateCompilerAttributeOwnerProgressionSite } from './attribute-owner-progression.js';
 import type { TemplateResolvedResource } from './compiler-world.js';
-import type { TemplateCompilerObservedValue } from './compiler-read-view.js';
+import { TemplateCompilerScopeClosureState, type TemplateCompilerObservedValue } from './compiler-read-view.js';
 import type { TemplateCompilerReachedAttributeScalarReceipt } from './template-compiler-execution.js';
 import type {
   TemplateCompilerNormalizedSite,
@@ -51,6 +51,14 @@ import type {
 import type { TemplateCompilerLiveAttributeContribution } from './template-compiler-live-attribute-assembly.js';
 import type { TemplateCompilerTextInstructionStaging } from './template-compiler-text-instruction-staging.js';
 import type { TemplateCompilerLetElementStaging } from './template-compiler-let-element-staging.js';
+import type { TemplateCompilerSurrogateStagingResult } from './template-compiler-surrogate-staging.js';
+import {
+  decideTemplateCompilerSurrogateValidation,
+  type TemplateCompilerSurrogateValidationOutcome,
+} from './surrogate-compiler-semantics.js';
+export {
+  TemplateCompilerSurrogateValidationOutcome as TemplateCompilerSiteCursorSurrogateValidationOutcome,
+} from './surrogate-compiler-semantics.js';
 import {
   isTemplateCompilerProcessContentSettledForHost,
   TemplateCompilerHydrateElementProjectionState,
@@ -70,6 +78,7 @@ export const enum TemplateCompilerSiteCursorEventKind {
   IgnoredNode = 'ignored-node',
   SubtreeExclusion = 'subtree-exclusion',
   SurrogateValidation = 'surrogate-validation',
+  SurrogateClassification = 'surrogate-classification',
   Frontier = 'frontier',
 }
 
@@ -110,7 +119,10 @@ export const enum TemplateCompilerSiteCursorFrontierKind {
   AuthoredCompilerMarkerReserved = 'authored-compiler-marker-reserved',
   SurrogateValidationOpen = 'surrogate-validation-open',
   InvalidSurrogateAttribute = 'invalid-surrogate-attribute',
-  SurrogateClassificationRequired = 'surrogate-classification-required',
+  SurrogateClassificationOpen = 'surrogate-classification-open',
+  SurrogateClassificationInvalid = 'surrogate-classification-invalid',
+  InvalidSurrogateTemplateController = 'invalid-surrogate-template-controller',
+  SurrogateStructuralMutationPending = 'surrogate-structural-mutation-pending',
   AccountingMismatch = 'accounting-mismatch',
 }
 
@@ -120,12 +132,6 @@ export const enum TemplateCompilerSiteCursorSiteOutcome {
   Invalid = 'invalid',
   ReloweringRequired = 'relowering-required',
   NotApplicable = 'not-applicable',
-}
-
-export const enum TemplateCompilerSiteCursorSurrogateValidationOutcome {
-  Valid = 'valid',
-  Open = 'open',
-  Refused = 'refused',
 }
 
 export abstract class TemplateCompilerSiteCursorEvent {
@@ -503,9 +509,70 @@ export class TemplateCompilerSiteCursorSurrogateValidationEvent extends Template
     readonly forestOrdinal: number,
     readonly scalar: TemplateCompilerReachedAttributeScalarReceipt,
     readonly parsed: TemplateCompilerObservedValue<AttributeParserParseResult>,
-    readonly outcome: TemplateCompilerSiteCursorSurrogateValidationOutcome,
+    readonly parserWasCurrent: boolean,
+    readonly parserClosureWasClosed: boolean,
+    readonly outcome: TemplateCompilerSurrogateValidationOutcome,
   ) {
     super(authority, ordinal, TemplateCompilerSiteCursorEventKind.SurrogateValidation);
+    if (!this.isCoherent()) throw new Error('Compiler surrogate validation lost scalar or parser authority.');
+  }
+
+  isCoherent(): boolean {
+    const expectedOutcome = decideTemplateCompilerSurrogateValidation(
+      this.scalar.isExact(),
+      this.parserWasCurrent,
+      this.parserClosureWasClosed,
+      this.parsed.value.execution.syntaxKind,
+      this.parsed.value.execution.target,
+    );
+    return Number.isSafeInteger(this.forestOrdinal)
+      && this.forestOrdinal >= 0
+      && this.attribute.owner === this.carrier
+      && this.scalar.owner === this.carrier
+      && this.scalar.attribute === this.attribute
+      && this.scalar.liveOrdinal === this.forestOrdinal
+      && this.parsed.value.execution.rawName === this.scalar.qualifiedName
+      && this.parsed.value.execution.rawValue === this.scalar.currentValue
+      && this.parserClosureWasClosed === (
+        this.parsed.observation.closure.state === TemplateCompilerScopeClosureState.Closed
+      )
+      && this.outcome === expectedOutcome;
+  }
+}
+
+/** Complete live root-surrogate classification after the all-attribute validation pass. */
+export class TemplateCompilerSiteCursorSurrogateClassificationEvent extends TemplateCompilerSiteCursorEvent {
+  constructor(
+    authority: object,
+    ordinal: number,
+    readonly carrier: TemplateCompilerElementOccurrence,
+    readonly result: TemplateCompilerSurrogateStagingResult,
+    readonly spends: readonly TemplateCompilerSiteSpend[],
+    readonly occurrenceOnlyRows: readonly TemplateCompilerOccurrenceOnlyRow[],
+    readonly accountingComplete: boolean,
+  ) {
+    super(authority, ordinal, TemplateCompilerSiteCursorEventKind.SurrogateClassification);
+    if (!this.isCoherent()) throw new Error('Compiler surrogate event lost owner, staging, or accounting coverage.');
+  }
+
+  isCoherent(): boolean {
+    const owner = this.result.owner;
+    const accountedOccurrences = [
+      ...this.spends.map((spend) => spend.occurrence),
+      ...this.occurrenceOnlyRows.map((row) => row.occurrence),
+    ];
+    const accountedCount = accountedOccurrences.length;
+    return owner.element === this.carrier
+      && (accountedCount === owner.contributions.length) === this.accountingComplete
+      && accountedCount <= owner.contributions.length
+      && new Set(accountedOccurrences).size === accountedCount
+      && owner.contributions.slice(0, accountedCount).every((contribution) => {
+        const attribute = contribution.frame.attribute;
+        const precedent = contribution.frame.source.authoredPrecedent;
+        return precedent == null
+          ? this.occurrenceOnlyRows.some((row) => row.occurrence === attribute)
+          : this.spends.some((spend) => spend.occurrence === attribute && spend.bundle === precedent);
+      });
   }
 }
 

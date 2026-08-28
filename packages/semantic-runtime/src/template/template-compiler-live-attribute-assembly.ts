@@ -94,6 +94,7 @@ import {
   TemplateCompilerInstructionStagingAllocation,
   type TemplateCompilerInstructionStagingAllocationRequest,
   type TemplateCompilerInstructionStagingAuthority,
+  TemplateCompilerStaticAttributePolicy,
 } from './template-compiler-instruction-staging.js';
 import {
   type TemplateCompilerLiveElementInstructionStagingResult,
@@ -299,6 +300,8 @@ export interface TemplateCompilerLiveAttributeOwnerAssemblyRequest {
   readonly lookupName: string;
   readonly allocations: TemplateCompilerLiveAllocationLedger;
   readonly ownerInput?: TemplateCompilerLiveAttributeOwnerInput | null;
+  readonly elementDefinitionEligible?: boolean;
+  readonly staticAttributePolicy?: TemplateCompilerStaticAttributePolicy;
 }
 
 /** Execute live attribute parsing/classification/value/command decisions in browser NamedNodeMap order. */
@@ -411,6 +414,7 @@ class TemplateCompilerLiveAttributeOwnerAssembly {
       },
       this.request.compilerReads,
       this.handles,
+      this.request.staticAttributePolicy ?? TemplateCompilerStaticAttributePolicy.Preserve,
     ));
     this.handles.bindOwner(this.contributions, instructionStaging);
     return new TemplateCompilerLiveAttributeOwnerResult(
@@ -470,7 +474,11 @@ class TemplateCompilerLiveAttributeOwnerAssembly {
     }
     const classification = decideAttributeClassification(
       syntax,
-      new LiveAttributeClassificationOwner(frame.liveSite.ownerView, this.request.lookupName),
+      new LiveAttributeClassificationOwner(
+        frame.liveSite.ownerView,
+        this.request.lookupName,
+        this.request.elementDefinitionEligible !== false,
+      ),
       this.request.compilerReads,
     );
     if (classification.issue != null) {
@@ -899,6 +907,7 @@ class LiveAttributeClassificationOwner implements AttributeClassificationDecisio
   constructor(
     private readonly owner: TemplateCompilerLiveAttributeOwnerSite['ownerView'],
     readonly lookupName: string,
+    readonly elementDefinitionEligible: boolean,
   ) {}
 
   get tagName(): string {

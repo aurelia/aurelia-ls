@@ -284,7 +284,8 @@ classification, expression parsing, and instruction lowering converge on the sam
   a separate production corridor. It returns the final family or a stage-local Pending, Ineligible, Open, or Abrupt
   result without converting invariant failures into ordinary compiler uncertainty. Revoked browser input is refused
   before forest/hook execution. `template-compiler-context-family-value.ts` narrows the internal frozen owner to final
-  definition ownership, transformed products, instruction rows, target geometry, derivations, and currentness; target
+  definition ownership, transformed products, instruction rows, root surrogate instructions, target geometry,
+  derivations, and currentness; target
   plans, mutable occurrences, freeze reservations, and allocation ledgers do not cross the consumer boundary. The value
   also projects the root live-expression inventory as nominal product/result/source values without exposing allocation
   slots or compiler-read capabilities. Durable parse products and candidate-owned results share the result-level
@@ -295,20 +296,23 @@ classification, expression parsing, and instruction lowering converge on the sam
   values. The family retains the exact product-detail authority used by its compiler run, and durable reads must finish
   inside one unchanged technical projection-revision bracket. This prevents torn reads without treating unrelated
   store changes as a permanent semantic dependency. One shared recursive
-  instruction-ownership helper covers element, attribute, controller, let, iterator-tail, and spread-child edges. The current exact corridor materializes property,
-  interpolation, listener, text, template-controller, and custom-element wires, including canonical resource names,
+  instruction-ownership helper covers element, attribute, controller, let, iterator-tail, and spread-child edges. The
+  current exact corridor materializes property, interpolation, listener, text, template-controller, custom-element,
+  let, and static class/style/general-attribute wires, including canonical resource names,
   child/projection definition references, containerless state, captures, and known `AuSlot` data. Unsupported kinds or
   AST representations remain typed Pending. Exact values/results are module-constructed and cross-check family
   instruction order plus every row/value link before they can leave semantic-runtime.
   Hydrate-let and let-binding values share `let-element-compiler-semantics.ts` with the authored compiler adapter:
   context-flag exclusion, property versus interpolation/literal parsing, invalid-command posture, and target
-  normalization are one law. The live cursor still owns the remaining fresh allocation/spend/row handoff.
+  normalization are one law. The live cursor owns fresh allocation/spend/row handoff. Static root surrogates use the
+  same live classification and neutral `Transfer` policy, then travel outside marker rows on the root target context;
+  consumed/dynamic surrogate attributes remain Pending until their root-carrier mutations execute.
 - `template-compiler-compiled-definition-value.ts` is the layered pre-rehydration compiler view. The root overlay keeps
   its complete `CustomElementDefinition` base—including metadata the JIT blueprint does not report—while transformed
-  template, exact rows, final root `hasSlots`, empty surrogate values, and `needsCompile=false` come from the compiler
+  template, exact rows, final root `hasSlots`, flat surrogate values, and `needsCompile=false` come from the compiler
   family. Generated controller/projection children use the framework's separate sparse/default header profile and keep
   only compiler-generated name intent; concrete names remain artifact policy. Root materialization open seams, Open
-  capture/setter values, compiler-added local constructable dependencies, missing surrogate values, foreign authority,
+  capture/setter values, compiler-added local constructable dependencies, foreign authority,
   changed root-definition details, and torn technical read projections remain typed gates. Exact values retain and
   revalidate the root detail identity plus its materialization-open closure without treating unrelated store mutations
   as semantic invalidation. This is not the later runtime-rehydrated

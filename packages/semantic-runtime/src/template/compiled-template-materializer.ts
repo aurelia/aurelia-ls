@@ -160,6 +160,7 @@ import {
 } from './value-site.js';
 import { TemplateProductDetails } from './product-details.js';
 import { sourceAddressForRuntimeExpressionSpan } from './runtime-expression-source-address.js';
+import { isInvalidTemplateCompilerSurrogateTarget } from './surrogate-compiler-semantics.js';
 import {
   TemplateCompilerHydrateAttributeStagingRequest,
   TemplateCompilerHydrateElementInstructionStagingRequest,
@@ -330,7 +331,14 @@ class CompiledTemplateAssembly {
     readonly records: readonly KernelStoreRecord[],
     readonly issues: readonly TemplateCompilerIssue[],
     readonly openSeams: readonly OpenSeam[],
-  ) {}
+  ) {
+    if (
+      !targetPlan.root.hasBoundSurrogateInstructions
+      || targetPlan.root.readSurrogateInstructions() !== surrogateInstructions
+    ) {
+      throw new Error('Compiled-template assembly lost explicit root surrogate ownership.');
+    }
+  }
 }
 
 type ValueInstructionLane =
@@ -528,6 +536,7 @@ class CompiledTemplateAssemblyState {
   };
 
   toAssembly(): CompiledTemplateAssembly {
+    this.targetPlan.root.bindRootSurrogateInstructions(this.surrogateInstructions);
     this.targetPlan.seal();
     return new CompiledTemplateAssembly(
       this.targetPlan,
@@ -1988,7 +1997,7 @@ class CompiledTemplateInstructionTraversal {
       if (commandBuilt.length > 0) {
         commandBuilt.forEach((instruction) => this.assemblyState.addExistingInstruction(instruction));
       }
-      if (syntax != null && isInvalidSurrogateAttributeTarget(syntax.target)) {
+      if (syntax != null && isInvalidTemplateCompilerSurrogateTarget(syntax.target)) {
         this.assemblyState.addCompilerIssue(
           `surrogate-invalid-attribute:${classification.productHandle}`,
           syntax.identityHandle,
@@ -2900,18 +2909,6 @@ function ownerElementsByProduct(
   html: HtmlParseEmission,
 ): ReadonlyMap<ProductHandle, HtmlElementAttributeOwner> {
   return htmlElementAttributeOwnersByElementProduct(html.nodes, html.attributes);
-}
-
-function isInvalidSurrogateAttributeTarget(target: string): boolean {
-  switch (target.toLowerCase()) {
-    case 'id':
-    case 'name':
-    case 'au-slot':
-    case 'as-element':
-      return true;
-    default:
-      return false;
-  }
 }
 
 function nullableInstruction(

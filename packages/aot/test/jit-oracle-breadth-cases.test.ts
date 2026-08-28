@@ -1,6 +1,8 @@
 import {
   itLetBinding,
+  itSetAttribute,
   itSetClassAttribute,
+  itSetStyleAttribute,
   itTextBinding,
   type HydrateElementInstruction,
   type HydrateLetElementInstruction,
@@ -89,6 +91,8 @@ describe("setup-free JIT oracle breadth cases", () => {
       const surrogate = await compileCase("surrogate.static-class", executor, oracle);
       expect(surrogate.compiled.surrogates).toEqual([
         { type: itSetClassAttribute, value: "h-100" },
+        { type: itSetStyleAttribute, value: "display:block" },
+        { type: itSetAttribute, value: "x", to: "data-ok" },
       ]);
     } finally {
       oracle.dispose();

@@ -20,7 +20,7 @@ import {
 import { orderSemanticFrozenFamilyDefinitions } from "./semantic-frozen-family-observer.js";
 
 export const SEMANTIC_RUNTIME_INSTRUCTION_FAMILY_OBSERVER_VERSION =
-  "aurelia-ls/aot-semantic-runtime-instruction-family/v1" as const;
+  "aurelia-ls/aot-semantic-runtime-instruction-family/v2" as const;
 
 export type SemanticRuntimeInstructionFamilyObservation =
   | {
@@ -34,6 +34,7 @@ export type SemanticRuntimeInstructionFamilyObservation =
       readonly definitions: readonly {
         readonly definitionIndex: number;
         readonly rows: readonly (readonly CompilerCaseData[])[];
+        readonly surrogates: readonly CompilerCaseData[];
       }[];
     }
   | {
@@ -76,6 +77,11 @@ export function observeSemanticRuntimeInstructionFamily(
       if (value == null) throw new Error(`Runtime instruction '${instruction.productHandle}' has no exact value.`);
       return normalizeInstruction(value, definitionIndexes);
     })),
+    surrogates: definition.context.surrogates.map((instruction) => {
+      const value = result.value!.valueForInstruction(instruction);
+      if (value == null) throw new Error(`Runtime surrogate instruction '${instruction.productHandle}' has no exact value.`);
+      return normalizeInstruction(value, definitionIndexes);
+    }),
   }));
   const observation: SemanticRuntimeInstructionFamilyObservation = {
     schemaVersion: SEMANTIC_RUNTIME_INSTRUCTION_FAMILY_OBSERVER_VERSION,
@@ -161,6 +167,25 @@ function normalizeInstruction(
         projections: value.projections?.map((projection) => normalizeProjection(projection, definitionIndexes)) ?? null,
         props: value.props.map((instruction) => normalizeInstruction(instruction, definitionIndexes)),
         res: normalizeResource(value.res),
+      };
+    case TemplateCompilerFrameworkInstructionType.SetAttribute:
+      return {
+        kind: "set-attribute",
+        type: value.type,
+        value: value.value,
+        to: value.to,
+      };
+    case TemplateCompilerFrameworkInstructionType.SetClassAttribute:
+      return {
+        kind: "set-class-attribute",
+        type: value.type,
+        value: value.value,
+      };
+    case TemplateCompilerFrameworkInstructionType.SetStyleAttribute:
+      return {
+        kind: "set-style-attribute",
+        type: value.type,
+        value: value.value,
       };
   }
 }

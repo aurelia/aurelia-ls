@@ -14,10 +14,14 @@ import {
   TemplateCompilerSiteCursorPhaseKind,
   TemplateCompilerSiteCursorProcessContentEvent,
   TemplateCompilerSiteCursorSiteOutcome,
+  TemplateCompilerSiteCursorSurrogateClassificationEvent,
+  TemplateCompilerSiteCursorSurrogateValidationEvent,
+  TemplateCompilerSiteCursorSurrogateValidationOutcome,
   TemplateCompilerSiteCursorTextEvent,
 } from './template-compiler-site-cursor-event.js';
 import type { TemplateCompilerSiteCursorTranscript } from './template-compiler-site-cursor.js';
 import { TemplateCompilerSiteSpendCompletionKind } from './template-compiler-site-spend-ledger.js';
+import { TemplateCompilerSurrogateStagingState } from './template-compiler-surrogate-staging.js';
 
 const traversalCompletionAuditAuthority = {};
 
@@ -73,6 +77,8 @@ export class TemplateCompilerTraversalCompletionAudit {
     readonly attributeEvents: readonly TemplateCompilerSiteCursorAttributeEvent[],
     readonly textEvents: readonly TemplateCompilerSiteCursorTextEvent[],
     readonly letEvents: readonly TemplateCompilerSiteCursorLetElementEvent[],
+    readonly surrogateValidations: readonly TemplateCompilerSiteCursorSurrogateValidationEvent[],
+    readonly surrogateClassification: TemplateCompilerSiteCursorSurrogateClassificationEvent | null,
     readonly processContentEvents: readonly TemplateCompilerSiteCursorProcessContentEvent[],
     readonly containerlessPlacements: readonly TemplateCompilerSiteCursorContainerlessPlacementEvent[],
     readonly reasons: readonly TemplateCompilerTraversalCompletionAuditReason[],
@@ -87,6 +93,8 @@ export class TemplateCompilerTraversalCompletionAudit {
       || this.ownersByElement.size !== transcript.attributeOwners.length
       || this.envelopesByElement.size !== transcript.hydrateElementEnvelopes.length
       || this.placementsByElement.size !== containerlessPlacements.length
+      || surrogateValidations.some((validation) => !validation.isCoherent())
+      || (surrogateClassification != null && !surrogateClassification.isCoherent())
     ) {
       throw new Error('Compiler traversal completion audit lost unique owner, envelope, or placement authority.');
     }
@@ -255,6 +263,17 @@ export function auditTemplateCompilerTraversalCompletion(
   const letEvents = transcript.events.filter((event): event is TemplateCompilerSiteCursorLetElementEvent =>
     event instanceof TemplateCompilerSiteCursorLetElementEvent
   );
+  const surrogateClassifications = transcript.events.filter(
+    (event): event is TemplateCompilerSiteCursorSurrogateClassificationEvent =>
+      event instanceof TemplateCompilerSiteCursorSurrogateClassificationEvent,
+  );
+  const surrogateClassification = surrogateClassifications[0] ?? null;
+  const surrogateValidations = transcript.events.filter(
+    (event): event is TemplateCompilerSiteCursorSurrogateValidationEvent =>
+      event instanceof TemplateCompilerSiteCursorSurrogateValidationEvent,
+  );
+  const surrogateCarrier = transcript.binding.forest.compilerCarrier;
+  const surrogateAttributes = surrogateCarrier.readAttributes();
   const letElementEvents = new Set(letEvents.map((event) => event.elementEvent));
   const attributeEvents = transcript.events.filter((event): event is TemplateCompilerSiteCursorAttributeEvent =>
     event instanceof TemplateCompilerSiteCursorAttributeEvent
@@ -275,10 +294,26 @@ export function auditTemplateCompilerTraversalCompletion(
       event.siteOutcome !== TemplateCompilerSiteCursorSiteOutcome.Complete
       && event.siteOutcome !== TemplateCompilerSiteCursorSiteOutcome.NotApplicable
     )
+    || surrogateClassifications.length > 1
+    || surrogateValidations.length !== surrogateAttributes.length
+    || surrogateValidations.some((validation, ordinal) =>
+      validation.carrier !== surrogateCarrier
+      || validation.attribute !== surrogateAttributes[ordinal]
+      || validation.forestOrdinal !== ordinal
+      || validation.outcome !== TemplateCompilerSiteCursorSurrogateValidationOutcome.Valid
+    )
+    || (surrogateAttributes.length === 0) !== (surrogateClassification == null)
+    || (surrogateClassification != null && (
+      surrogateClassification.carrier !== surrogateCarrier
+      || surrogateClassification.result.owner.contributions.length !== surrogateAttributes.length
+      || !surrogateClassification.accountingComplete
+      || surrogateClassification.result.state !== TemplateCompilerSurrogateStagingState.Exact
+      || surrogateClassification.result.staging == null
+    ))
   ) {
     refuse(
       TemplateCompilerTraversalCompletionAuditReasonKind.LiveSiteIncomplete,
-      'One or more reached attribute/text sites lack complete live semantic staging.',
+      'One or more reached attribute, text, let, or surrogate sites lack complete live semantic staging.',
     );
   }
   if (
@@ -304,6 +339,8 @@ export function auditTemplateCompilerTraversalCompletion(
     attributeEvents,
     textEvents,
     letEvents,
+    surrogateValidations,
+    surrogateClassification,
     processContentEvents,
     containerlessPlacements,
     reasons,
