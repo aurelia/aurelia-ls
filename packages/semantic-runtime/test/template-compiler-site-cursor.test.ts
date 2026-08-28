@@ -11,6 +11,7 @@ import {
 } from '../src/template/browser-effective-template-materializer.js';
 import { parseBrowserTemplateFragmentDraft } from '../src/template/browser-template-parser.js';
 import { selectBrowserTemplateCompilerCarrier } from '../src/template/browser-template-selection.js';
+import { TemplateRenderTargetKind } from '../src/template/compiled-template.js';
 import {
   TemplateCompilerReadView,
   TemplateCompilerWorldAuthority,
@@ -68,6 +69,7 @@ import {
 import {
   executeTemplateCompilerRootSiteCursor,
   TemplateCompilerSiteCursorAttributeEvent,
+  TemplateCompilerSiteCursorContainerlessPlacementEvent,
   TemplateCompilerSiteCursorElementEvent,
   TemplateCompilerSiteCursorFrontierKind,
   TemplateCompilerSiteCursorPhaseEvent,
@@ -771,7 +773,6 @@ describe('template compiler root site cursor', () => {
 
   test('never promotes the current typed ordinary-root frontiers into completion receipts', () => {
     const names = [
-      'cursor-containerless',
       'cursor-live-empty',
       'cursor-marker',
       'cursor-open',
@@ -784,7 +785,6 @@ describe('template compiler root site cursor', () => {
       'cursor-surrogate-invalid',
       'cursor-surrogate-valid',
       'cursor-template-controller',
-      'cursor-usage-containerless',
     ];
     for (const name of names) {
       const result = fixture.run(name).execute();
@@ -877,14 +877,10 @@ describe('template compiler root site cursor', () => {
   test('keeps central structural effects and reached live invalidity distinct', () => {
     const expected = new Map<string, TemplateCompilerSiteCursorFrontierKind>([
       ['cursor-template-controller', TemplateCompilerSiteCursorFrontierKind.AfterAttributesBeforeTemplateController],
-      ['cursor-containerless', TemplateCompilerSiteCursorFrontierKind.AfterAttributesBeforeContainerless],
-      ['cursor-usage-containerless', TemplateCompilerSiteCursorFrontierKind.AfterAttributesBeforeContainerless],
       ['cursor-open', TemplateCompilerSiteCursorFrontierKind.ReachedLiveAttributeInvalid],
     ]);
-    let containerless: TemplateCompilerSiteCursorTranscript | null = null;
     for (const [name, frontier] of expected) {
       const transcript = fixture.transcript(name);
-      if (name === 'cursor-containerless') containerless = transcript;
       expect(transcript.frontier?.frontierKind, name).toBe(frontier);
       expect(transcript.frontier?.frontierKind, name)
         .not.toBe(TemplateCompilerSiteCursorFrontierKind.ReachedNormalizedInvalid);
@@ -897,7 +893,21 @@ describe('template compiler root site cursor', () => {
       issueKind: 'unknown-binding-command',
       frameworkErrorCode: 'AUR0713',
     });
-    if (containerless == null) throw new Error('Expected containerless transcript.');
+    const containerlessResult = fixture.run('cursor-containerless').execute();
+    const containerless = requireTranscript(containerlessResult);
+    expect(containerless.frontier).toBeNull();
+    const containerlessReceipt = containerlessResult.completion?.receipt;
+    expect(containerlessReceipt).not.toBeNull();
+    const placement = eventsOf(containerless, TemplateCompilerSiteCursorContainerlessPlacementEvent)[0]!;
+    const elementEvent = eventsOf(containerless, TemplateCompilerSiteCursorElementEvent)[0]!;
+    expect(placement).toMatchObject({
+      element: elementEvent.element,
+      parent: elementEvent.parent,
+      parentOrdinal: elementEvent.parentOrdinal,
+      capturedSuccessor: elementEvent.capturedSuccessor,
+    });
+    expect(placement.ordinal).toBe(elementEvent.ordinal + 1);
+    expect(containerlessReceipt?.elementSites[0]?.containerlessPlacement).toBe(placement);
     expect(containerless.hydrateElementEnvelopes).toHaveLength(1);
     const envelope = containerless.hydrateElementEnvelopes[0]!;
     expect(envelope.state).toBe(TemplateCompilerHydrateElementStagingState.Exact);
@@ -914,9 +924,15 @@ describe('template compiler root site cursor', () => {
   });
 
   test('keeps usage-only containerless distinct from effective target placement', () => {
-    const transcript = fixture.transcript('cursor-usage-containerless');
-    expect(transcript.frontier?.frontierKind)
-      .toBe(TemplateCompilerSiteCursorFrontierKind.AfterAttributesBeforeContainerless);
+    const result = fixture.run('cursor-usage-containerless').execute();
+    const transcript = requireTranscript(result);
+    expect(transcript.frontier).toBeNull();
+    const receipt = result.completion?.receipt;
+    expect(receipt).not.toBeNull();
+    const placement = eventsOf(transcript, TemplateCompilerSiteCursorContainerlessPlacementEvent)[0]!;
+    const attributeEvent = eventsOf(transcript, TemplateCompilerSiteCursorAttributeEvent)[0]!;
+    expect(placement.ordinal).toBe(attributeEvent.ordinal + 1);
+    expect(receipt?.elementSites[0]?.containerlessPlacement).toBe(placement);
     expect(transcript.hydrateElementEnvelopes).toHaveLength(1);
     const envelope = transcript.hydrateElementEnvelopes[0]!;
     expect(envelope.state).toBe(TemplateCompilerHydrateElementStagingState.Exact);
@@ -931,13 +947,29 @@ describe('template compiler root site cursor', () => {
     ]);
   });
 
+  test('keeps child-bearing containerless projection-first', () => {
+    const result = fixture.run('cursor-containerless-child').execute();
+    const transcript = requireTranscript(result);
+    expect(transcript.frontier?.frontierKind)
+      .toBe(TemplateCompilerSiteCursorFrontierKind.AfterAttributesBeforeProjection);
+    expect(eventsOf(transcript, TemplateCompilerSiteCursorContainerlessPlacementEvent)).toEqual([]);
+    expect(result.completion?.receipt).toBeNull();
+    expect(result.completion?.refusals.map((refusal) => refusal.refusalKind))
+      .not.toContain(TemplateCompilerOrdinaryRootCompletionRefusalKind.ContainerlessPlacementMismatch);
+    expect(transcript.hydrateElementEnvelopes[0]?.draft).toMatchObject({
+      projection: { state: TemplateCompilerHydrateElementProjectionState.PendingExtraction },
+      containerless: { effective: true, fromDefinition: true, fromUsage: false },
+    });
+  });
+
   test('rejects usage containerless whenever the custom element requires a native shadow host', () => {
     const cases = [
       ['cursor-shadow-containerless', 'shadow'],
       ['cursor-slots-containerless', 'slots'],
     ] as const;
     for (const [name, cause] of cases) {
-      const transcript = fixture.transcript(name);
+      const result = fixture.run(name).execute();
+      const transcript = requireTranscript(result);
       expect(transcript.frontier?.frontierKind, name)
         .toBe(TemplateCompilerSiteCursorFrontierKind.HydrateElementEnvelopeInvalid);
       expect(transcript.hydrateElementEnvelopes, name).toHaveLength(1);
@@ -961,6 +993,8 @@ describe('template compiler root site cursor', () => {
         [TemplateCompilerHydrateElementBlockerScope.Envelope, TemplateCompilerHydrateElementBlockerKind.ContainerlessShadowHostInvalid],
         [TemplateCompilerHydrateElementBlockerScope.Downstream, TemplateCompilerHydrateElementBlockerKind.TargetRowPlacementPending],
       ]);
+      expect(result.completion?.refusals.map((refusal) => refusal.refusalKind), name)
+        .not.toContain(TemplateCompilerOrdinaryRootCompletionRefusalKind.ContainerlessPlacementMismatch);
     }
   });
 
@@ -985,6 +1019,8 @@ describe('template compiler root site cursor', () => {
       expect(result.completion?.receipt, name).toBeNull();
       expect(result.completion?.refusals.map((refusal) => refusal.refusalKind), name)
         .toContain(TemplateCompilerOrdinaryRootCompletionRefusalKind.CursorFrontier);
+      expect(result.completion?.refusals.map((refusal) => refusal.refusalKind), name)
+        .not.toContain(TemplateCompilerOrdinaryRootCompletionRefusalKind.ContainerlessPlacementMismatch);
       expect(event.result.metadata.name, name).toBe(expectedName);
       expect(event.result.nameCarrier?.value ?? null, name).toBe(expectedCarrier);
       expect(event.result.operation.executionOrdinal, name).toBe(transcript.startGlobalOperationCount);
@@ -1489,18 +1525,22 @@ describe('template compiler root site cursor', () => {
     for (const name of [
       'cursor-as-element-empty',
       'cursor-comment-shield',
+      'cursor-containerless',
+      'cursor-containerless-order',
       'cursor-empty',
       'cursor-foster',
       'cursor-live-duplicate',
       'cursor-live-multi-binding',
       'cursor-live-nonsingular',
       'cursor-live-staging',
+      'cursor-native-containerless',
       'cursor-progression',
       'cursor-row-interleave',
       'cursor-row-merged',
       'cursor-slot-inert',
       'cursor-slot-valid',
       'cursor-ten-hole',
+      'cursor-usage-containerless',
       'cursor-wide',
     ]) {
       const run = fixture.freshRun(name);
@@ -1519,6 +1559,10 @@ describe('template compiler root site cursor', () => {
         disposition.disposition === TemplateCompilerLiveAttributeDisposition.Removed
       ).length;
       const elementRowCount = rows.rows.filter((row) => row.site.siteKind === 'element').length;
+      const containerlessRowCount = rows.rows.filter((row) =>
+        row.targetKind === TemplateRenderTargetKind.RenderLocation
+      ).length;
+      const markerElementRowCount = elementRowCount - containerlessRowCount;
 
       expect(result.isModuleConstructed(), name).toBe(true);
       expect(attachment.isCurrent(), name).toBe(false);
@@ -1532,7 +1576,10 @@ describe('template compiler root site cursor', () => {
       ), name).toHaveLength(removedCount);
       expect(result.operations.filter((operation) =>
         operation.operationKind === TemplateCompilerOperationKind.HydrationTargetCreation
-      ), name).toHaveLength(elementRowCount);
+      ), name).toHaveLength(markerElementRowCount);
+      expect(result.operations.filter((operation) =>
+        operation.operationKind === TemplateCompilerOperationKind.ContainerlessReplacement
+      ), name).toHaveLength(containerlessRowCount);
       expect(result.operations.filter((operation) =>
         operation.operationKind === TemplateCompilerOperationKind.TextInterpolationExpansion
       ), name).toHaveLength(rows.textExpansions.length);
@@ -1562,6 +1609,32 @@ describe('template compiler root site cursor', () => {
             batchOperationKey: operation.operationKey,
             outputOrdinal: 0,
           }]);
+        } else if (operation.operationKind === TemplateCompilerOperationKind.ContainerlessReplacement) {
+          const mapping = target.rowMappings.find((candidate) =>
+            candidate.draft.occurrence === operation.target.occurrence
+          )!;
+          const geometry = attachment.structuralExecution.readTargetGeometry(mapping.row);
+          if (geometry?.geometryKind !== 'render-location') {
+            throw new Error(`Expected render-location geometry for '${operation.operationKey}'.`);
+          }
+          expect(operation.mutationBatch.topologyMutations, operation.operationKey).toEqual([
+            expect.any(TemplateCompilerNodeDetachmentMutation),
+          ]);
+          expect(operation.mutationBatch.nodeDetachmentMutations[0]).toMatchObject({
+            node: geometry.replacedNode,
+            previousParent: geometry.realizedParent,
+            previousOrdinal: geometry.realizedOrdinal + 3,
+          });
+          expect(operation.mutationBatch.occurrenceGenerationReservations.map((generation) => [
+            generation.role,
+            generation.operationKey,
+            generation.outputOrdinal,
+          ])).toEqual([
+            [TemplateCompilerGeneratedOccurrenceRole.CompilerMarker, operation.operationKey, 0],
+            [TemplateCompilerGeneratedOccurrenceRole.RenderLocationStart, operation.operationKey, 0],
+            [TemplateCompilerGeneratedOccurrenceRole.RenderLocationEnd, operation.operationKey, 0],
+          ]);
+          expect(operation.endForestMutationRevision - operation.startForestMutationRevision).toBe(7);
         } else if (operation.operationKind === TemplateCompilerOperationKind.TextInterpolationExpansion) {
           const expansion = rows.textExpansions.find((candidate) =>
             operation.target instanceof TemplateCompilerOccurrenceOperationTarget
@@ -1617,6 +1690,18 @@ describe('template compiler root site cursor', () => {
         expect(result.operations).toEqual([]);
         expect(result.targetGeometries).toEqual([]);
       }
+      if (name === 'cursor-native-containerless') {
+        expect(rows.rows).toEqual([]);
+        expect(result.targetGeometries).toEqual([]);
+        expect(result.operations.map((operation) => operation.operationKind)).toEqual([
+          TemplateCompilerOperationKind.AttributeDisposition,
+        ]);
+        const disposition = target.attributeDispositionMappings[0]!;
+        expect(disposition.draft.attribute.name).toBe('containerless');
+        expect(disposition.causeHandles).toEqual([
+          disposition.draft.attribute.inputReference?.productHandle,
+        ]);
+      }
       if (name === 'cursor-live-multi-binding') {
         const customAttribute = rows.attributeDispositions.find((disposition) =>
           disposition.contribution.targetLane === TemplateCompilerLiveAttributeTargetLane.CustomAttribute
@@ -1645,6 +1730,98 @@ describe('template compiler root site cursor', () => {
         expect(new Set(result.targetGeometries.map((geometry) => geometry.logicalTarget)).size).toBe(2);
         expect(result.targetGeometries.map((geometry) => geometry.row.occurrence))
           .toEqual(result.targetGeometries.map((geometry) => geometry.logicalTarget));
+      }
+      if (name === 'cursor-containerless' || name === 'cursor-usage-containerless') {
+        expect(rows.rows).toHaveLength(1);
+        expect(rows.rows[0]).toMatchObject({
+          targetKind: TemplateRenderTargetKind.RenderLocation,
+          instructions: [],
+        });
+        expect(target.rowMappings[0]?.row.instructions.map((instruction) => instruction.instructionKind))
+          .toEqual(['hydrate-element']);
+        expect(target.rowMappings[0]?.hydrateElement?.instruction.containerless)
+          .toBe(name === 'cursor-usage-containerless');
+        expect(target.publicationPrerequisites.map((entry) => entry.prerequisiteKind)).toEqual([
+          'containerless-host-requirement',
+        ]);
+        const geometry = result.targetGeometries[0];
+        if (geometry?.geometryKind !== 'render-location') throw new Error('Expected containerless geometry.');
+        expect(geometry.replacedNode).toBe(rows.rows[0]?.occurrence);
+        expect(geometry.replacedNode?.parent).toBeNull();
+        expect(geometry.logicalTarget).toBe(geometry.end);
+        expect(attachment.structuralExecution.readConsumedNodeDispositions()).toEqual([]);
+        const structure = attachment.structuralExecution.readContextStructure(target.targetPlan.root)!;
+        expect(occurrenceShape(structure.compilerContent)).toEqual([
+          'comment:au',
+          'comment:au-start',
+          'comment:au-end',
+          'text:\n',
+        ]);
+        if (name === 'cursor-usage-containerless') {
+          const disposition = target.attributeDispositionMappings.find((mapping) =>
+            mapping.draft.attribute.name === 'containerless'
+          )!;
+          expect(disposition.causeHandles).toEqual([
+            disposition.draft.attribute.inputReference?.productHandle,
+            target.rowMappings[0]?.hydrateElement?.instruction.productHandle,
+          ]);
+          expect(result.operations.map((operation) => operation.operationKind)).toEqual([
+            TemplateCompilerOperationKind.AttributeDisposition,
+            TemplateCompilerOperationKind.ContainerlessReplacement,
+          ]);
+        } else {
+          expect(result.operations.map((operation) => operation.operationKind)).toEqual([
+            TemplateCompilerOperationKind.ContainerlessReplacement,
+          ]);
+        }
+      }
+      if (name === 'cursor-containerless-order') {
+        expect(requireTranscript(cursor).events.filter((event) =>
+          event.eventKind === 'element'
+          || event.eventKind === 'attribute'
+          || event.eventKind === 'containerless-placement'
+        ).map((event) => event.eventKind)).toEqual([
+          'element', 'containerless-placement',
+          'element', 'attribute', 'containerless-placement',
+          'element', 'attribute', 'containerless-placement',
+          'element', 'attribute',
+        ]);
+        expect(rows.rows.map((row) => row.targetKind)).toEqual([
+          TemplateRenderTargetKind.RenderLocation,
+          TemplateRenderTargetKind.RenderLocation,
+          TemplateRenderTargetKind.RenderLocation,
+          TemplateRenderTargetKind.MarkerTarget,
+        ]);
+        expect(target.rowMappings.slice(0, 3).map((mapping) =>
+          mapping.hydrateElement?.instruction.containerless
+        )).toEqual([false, true, true]);
+        expect(target.publicationPrerequisites.map((entry) => entry.prerequisiteKind)).toEqual([
+          'containerless-host-requirement',
+          'containerless-host-requirement',
+          'containerless-host-requirement',
+        ]);
+        expect(result.targetGeometries.map((geometry) => geometry.geometryKind)).toEqual([
+          'render-location',
+          'render-location',
+          'render-location',
+          'marker',
+        ]);
+        expect(result.operations.map((operation) => operation.operationKind)).toEqual([
+          TemplateCompilerOperationKind.ContainerlessReplacement,
+          TemplateCompilerOperationKind.AttributeDisposition,
+          TemplateCompilerOperationKind.ContainerlessReplacement,
+          TemplateCompilerOperationKind.AttributeDisposition,
+          TemplateCompilerOperationKind.ContainerlessReplacement,
+          TemplateCompilerOperationKind.AttributeDisposition,
+          TemplateCompilerOperationKind.HydrationTargetCreation,
+        ]);
+        const structure = attachment.structuralExecution.readContextStructure(target.targetPlan.root)!;
+        expect(occurrenceShape(structure.compilerContent)).toEqual([
+          'comment:au', 'comment:au-start', 'comment:au-end',
+          'comment:au', 'comment:au-start', 'comment:au-end',
+          'comment:au', 'comment:au-start', 'comment:au-end',
+          'comment:au', ['element:div', [], []], 'text:\n',
+        ]);
       }
       if (name === 'cursor-row-interleave') {
         const structure = attachment.structuralExecution.readContextStructure(target.targetPlan.root)!;

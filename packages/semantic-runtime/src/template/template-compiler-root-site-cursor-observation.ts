@@ -72,6 +72,7 @@ import {
 } from './template-compiler-site-cursor.js';
 import {
   TemplateCompilerSiteCursorAttributeEvent,
+  TemplateCompilerSiteCursorContainerlessPlacementEvent,
   TemplateCompilerSiteCursorElementEvent,
   type TemplateCompilerSiteCursorEvent,
   TemplateCompilerSiteCursorFrontier,
@@ -676,6 +677,7 @@ function occurrenceRowDigest(assembly: TemplateCompilerOccurrenceRowAssembly): s
       row.stableSlotKey,
       row.ordinal,
       row.projectedTargetOrdinal,
+      row.targetKind,
       row.occurrence.occurrenceKey,
       row.sourcePosture,
       row.instructionSemanticSignatures,
@@ -740,8 +742,8 @@ function occurrenceTargetPlanDigest(assembly: TemplateCompilerOccurrenceTargetPl
     ]),
     assembly.publicationPrerequisites.map((entry) => [
       entry.prerequisiteKind,
-      entry.capture.draft.stableSlotKey,
-      entry.capture.productHandle,
+      'capture' in entry ? entry.capture.draft.stableSlotKey : entry.hydrateElement.row.stableSlotKey,
+      'capture' in entry ? entry.capture.productHandle : entry.hydrateElement.instruction.productHandle,
     ]),
   ]);
   return `sha256:${createHash('sha256').update(encoded).digest('hex')}`;
@@ -1031,6 +1033,17 @@ function cursorEventDigest(
                   spend.siteEventOrdinal,
                   spend.causeOperation?.executionOrdinal ?? null,
                 ]),
+              ]
+          : event instanceof TemplateCompilerSiteCursorContainerlessPlacementEvent
+            ? [
+                event.eventKind,
+                nodeIndex(event.element),
+                nodeIndex(event.parent),
+                event.parentOrdinal,
+                nodeIndex(event.capturedSuccessor),
+                event.envelope.containerless.effective,
+                event.envelope.containerless.fromDefinition,
+                event.envelope.containerless.fromUsage,
               ]
           : event instanceof TemplateCompilerSiteCursorTextEvent
             ? [

@@ -36,12 +36,18 @@ import type {
 } from './template-compiler-process-content.js';
 import type { TemplateCompilerLiveAttributeContribution } from './template-compiler-live-attribute-assembly.js';
 import type { TemplateCompilerTextInstructionStaging } from './template-compiler-text-instruction-staging.js';
+import {
+  TemplateCompilerHydrateElementProcessContentState,
+  TemplateCompilerHydrateElementProjectionState,
+  type TemplateCompilerHydrateElementEnvelopeDraft,
+} from './template-compiler-hydrate-element-staging.js';
 
 export const enum TemplateCompilerSiteCursorEventKind {
   Phase = 'phase',
   Element = 'element',
   ProcessContent = 'process-content',
   Attribute = 'attribute',
+  ContainerlessPlacement = 'containerless-placement',
   Text = 'text',
   IgnoredNode = 'ignored-node',
   SubtreeExclusion = 'subtree-exclusion',
@@ -209,6 +215,30 @@ export class TemplateCompilerSiteCursorAttributeEvent extends TemplateCompilerSi
         && this.liveContribution.frame.source.originState === this.browserOriginState
         && this.liveContribution.disposition === this.liveOwnerSite.disposition
       );
+  }
+}
+
+/** Exact cursor decision to suppress empty host content and defer physical replacement to target execution. */
+export class TemplateCompilerSiteCursorContainerlessPlacementEvent extends TemplateCompilerSiteCursorEvent {
+  constructor(
+    authority: object,
+    ordinal: number,
+    readonly element: TemplateCompilerElementOccurrence,
+    readonly parent: TemplateCompilerParentOccurrence,
+    readonly parentOrdinal: number,
+    readonly capturedSuccessor: TemplateCompilerNodeOccurrence | null,
+    readonly envelope: TemplateCompilerHydrateElementEnvelopeDraft,
+  ) {
+    super(authority, ordinal, TemplateCompilerSiteCursorEventKind.ContainerlessPlacement);
+    if (
+      envelope.element !== element
+      || !envelope.containerless.effective
+      || envelope.projection.state !== TemplateCompilerHydrateElementProjectionState.None
+      || envelope.processContent.state !== TemplateCompilerHydrateElementProcessContentState.Absent
+      || element.readChildren().length !== 0
+    ) {
+      throw new Error('Containerless placement event requires one empty projection-free ordinary host.');
+    }
   }
 }
 

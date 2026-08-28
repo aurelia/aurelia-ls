@@ -1,3 +1,4 @@
+import { TemplateRenderTargetKind } from './compiled-template.js';
 import {
   TemplateCompilerOperationCompletion,
   TemplateCompilerOperationCompletionKind,
@@ -10,6 +11,7 @@ import {
 import { TemplateCompilerLiveAttributeDisposition } from './template-compiler-live-attribute-owner.js';
 import {
   TemplateCompilerGeneratedOccurrenceRole,
+  TemplateCompilerElementOccurrence,
   type TemplateCompilerTextOccurrence,
 } from './template-compiler-occurrence.js';
 import {
@@ -71,10 +73,10 @@ export class TemplateCompilerOccurrenceTargetExecution {
 }
 
 /**
- * Execute the exact HE-free ordinary-root plan in completed-site order and close its structural result.
+ * Execute one exact funded ordinary-root plan in completed-site order and close its structural result.
  *
- * Element rows become one marker operation after their removed attributes. A text interpolation remains one atomic
- * expansion operation regardless of hole count; its static segments, placeholders, and markers share that cause band.
+ * Element rows become a marker or render-location operation after their removed attributes. A text interpolation
+ * remains one atomic expansion regardless of hole count; static segments, placeholders, and markers share that batch.
  */
 export function executeTemplateCompilerOccurrenceTarget(
   attachment: TemplateCompilerOccurrenceTargetAttachment,
@@ -148,16 +150,31 @@ export function executeTemplateCompilerOccurrenceTarget(
 
     if (entry instanceof TemplateCompilerOccurrenceElementTargetScheduleEntry) {
       const mapping = entry.mapping;
+      const isContainerless = mapping.row.targetKind === TemplateRenderTargetKind.RenderLocation;
       const attempt = execution.beginOperation({
         operationKey: entry.operationKey,
         context,
-        operationKind: TemplateCompilerOperationKind.HydrationTargetCreation,
+        operationKind: isContainerless
+          ? TemplateCompilerOperationKind.ContainerlessReplacement
+          : TemplateCompilerOperationKind.HydrationTargetCreation,
         executionMechanism: TemplateCompilerOperationExecutionMechanism.BuiltIn,
         target: execution.occurrenceTarget(context, mapping.draft.occurrence),
         causeHandles: entry.causeHandles,
         sourceAddressHandle: entry.sourceAddressHandle,
       });
-      targetGeometries.push(structural.realizeMarkerTarget(mapping.row, mapping.draft.occurrence));
+      if (isContainerless) {
+        if (!(mapping.draft.occurrence instanceof TemplateCompilerElementOccurrence)) {
+          throw new Error(`Containerless row '${mapping.row.localKey}' lost its element occurrence.`);
+        }
+        targetGeometries.push(structural.realizeRenderLocationTarget(
+          mapping.row,
+          mapping.draft.occurrence,
+          [],
+          (element) => execution.detachContainerlessTarget(attempt, element),
+        ));
+      } else {
+        targetGeometries.push(structural.realizeMarkerTarget(mapping.row, mapping.draft.occurrence));
+      }
       operations.push(execution.completeOperation(
         attempt,
         new TemplateCompilerOperationCompletion(TemplateCompilerOperationCompletionKind.Complete),

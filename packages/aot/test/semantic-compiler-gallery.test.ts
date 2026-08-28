@@ -355,7 +355,11 @@ describe("semantic compiler gallery", () => {
         expect(cursor.occurrenceTargetExecutionOperationKindCounts["attribute-disposition"] ?? 0)
           .toBe(cursor.occurrenceAttributeDispositionCounts.removed ?? 0);
         expect(cursor.occurrenceTargetExecutionOperationKindCounts["hydration-target-creation"] ?? 0)
-          .toBe(cursor.occurrenceRowCount - cursor.completedTextHoleCount);
+          .toBe(
+            cursor.occurrenceRowCount
+            - cursor.completedTextHoleCount
+            - (cursor.occurrenceTargetExecutionOperationKindCounts["containerless-replacement"] ?? 0)
+          );
         expect(cursor.occurrenceTargetExecutionOperationKindCounts["text-interpolation-expansion"] ?? 0)
           .toBe(cursor.occurrenceTextExpansionCount);
         expect(cursor.occurrenceTargetExecutionInvocationPhase).toBe("target-closed");
@@ -368,6 +372,7 @@ describe("semantic compiler gallery", () => {
         expect(cursor.occurrenceTargetExecutionForestMutationRevisionDelta).toBe(
           (cursor.occurrenceAttributeDispositionCounts.removed ?? 0)
           + 2 * cursor.occurrenceRowCount
+          + 5 * (cursor.occurrenceTargetExecutionOperationKindCounts["containerless-replacement"] ?? 0)
           + cursor.occurrenceTextExpansionCount
           + 2 * cursor.occurrenceTextExpansionOutputCount
         );

@@ -82,6 +82,7 @@ import type { TemplateCompilerNormalizedTextSite } from './template-compiler-nor
 import { TemplateExpressionParseState, TemplateValueSiteKind } from './value-site.js';
 import {
   TemplateCompilerSiteCursorAttributeEvent,
+  TemplateCompilerSiteCursorContainerlessPlacementEvent,
   TemplateCompilerSiteCursorElementEvent,
   type TemplateCompilerSiteCursorEvent,
   TemplateCompilerSiteCursorFrontier,
@@ -111,6 +112,7 @@ import {
   stageTemplateCompilerTextInstructions,
 } from './template-compiler-text-instruction-staging.js';
 import {
+  TemplateCompilerHydrateElementProcessContentState,
   TemplateCompilerHydrateElementProjectionState,
   TemplateCompilerHydrateElementStagingState,
   type TemplateCompilerHydrateElementStagingResult,
@@ -875,6 +877,8 @@ class TemplateCompilerRootSiteCursor {
       elementDefinition,
       elementRead,
       lookupName,
+      parent,
+      parentOrdinal,
       successor,
       processContent,
     );
@@ -886,6 +890,8 @@ class TemplateCompilerRootSiteCursor {
     elementDefinition: CustomElementDefinition | null,
     elementRead: TemplateCompilerObservedValue<TemplateResolvedResource | null>,
     lookupName: string,
+    parent: TemplateCompilerParentOccurrence,
+    parentOrdinal: number,
     successor: TemplateCompilerNodeOccurrence | null,
     processContent: TemplateCompilerProcessContentResult | null,
   ): TemplateCompilerSiteCursorContainerFrame | null {
@@ -1066,14 +1072,29 @@ class TemplateCompilerRootSiteCursor {
       return null;
     }
     if (hydrateElementDraft?.containerless.effective === true) {
-      this.stop(
-        TemplateCompilerSiteCursorFrontierKind.AfterAttributesBeforeContainerless,
+      if (
+        hydrateElementDraft.processContent.state !== TemplateCompilerHydrateElementProcessContentState.Absent
+        || element.readChildren().length > 0
+      ) {
+        this.stop(
+          TemplateCompilerSiteCursorFrontierKind.AfterAttributesBeforeContainerless,
+          element,
+          null,
+          null,
+          successor,
+          'Containerless replacement still has processContent or child-ownership continuation.',
+        );
+        return null;
+      }
+      this.events.push(new TemplateCompilerSiteCursorContainerlessPlacementEvent(
+        siteCursorConstructionAuthority,
+        this.transcriptOrdinal++,
         element,
-        null,
-        null,
+        parent,
+        parentOrdinal,
         successor,
-        'Containerless replacement changes child reachability and following target structure.',
-      );
+        hydrateElementDraft,
+      ));
       return null;
     }
     if (element.templateContent != null) {

@@ -49,7 +49,6 @@ export const enum TemplateCompilerOccurrenceRowAssemblyReasonKind {
   StaleReceipt = 'stale-receipt',
   TemplateControllerContextRequired = 'template-controller-context-required',
   ProjectionExtractionRequired = 'projection-extraction-required',
-  ContainerlessPlacementRequired = 'containerless-placement-required',
   SiteTokenMismatch = 'site-token-mismatch',
 }
 
@@ -198,13 +197,13 @@ export class TemplateCompilerTextExpansionDraft {
 
 /** One occurrence-primary ordinary-root row; ordinal orders rows but never participates in identity. */
 export class TemplateCompilerOccurrenceTargetRowDraft {
-  readonly targetKind = TemplateRenderTargetKind.MarkerTarget;
   readonly projectedTargetCount = 1 as const;
 
   constructor(
     readonly stableSlotKey: string,
     readonly ordinal: number,
     readonly projectedTargetOrdinal: number,
+    readonly targetKind: TemplateRenderTargetKind,
     readonly occurrence: TemplateCompilerElementOccurrence | TemplateCompilerTextOccurrence,
     readonly authoredNode: HtmlElement | HtmlText | null,
     readonly sourcePosture: TemplateCompilerOccurrenceSourcePosture,
@@ -606,12 +605,6 @@ function appendElementSite(
       `Element '${site.event.element.occurrenceKey}' requires projection extraction.`,
     ));
   }
-  if (envelope?.containerless.effective === true) {
-    continuationReasons.push(new TemplateCompilerOccurrenceRowAssemblyReason(
-      TemplateCompilerOccurrenceRowAssemblyReasonKind.ContainerlessPlacementRequired,
-      `Element '${site.event.element.occurrenceKey}' requires containerless target placement.`,
-    ));
-  }
   if (continuationReasons.length > 0) return continuationReasons;
   const hydrateElement = envelope == null
     ? null
@@ -627,6 +620,9 @@ function appendElementSite(
     site.rowSlotKey,
     ordinal,
     ordinal,
+    site.containerlessPlacement != null
+      ? TemplateRenderTargetKind.RenderLocation
+      : TemplateRenderTargetKind.MarkerTarget,
     site.event.element,
     site.event.authoredElement,
     posture,
@@ -701,6 +697,7 @@ function appendTextSite(
       site.holeSlotKeys[holeIndex]!,
       ordinal,
       ordinal,
+      TemplateRenderTargetKind.MarkerTarget,
       site.event.text,
       site.event.authoredText,
       posture,

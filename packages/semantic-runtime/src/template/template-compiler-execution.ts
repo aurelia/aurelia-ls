@@ -9,6 +9,7 @@ import type {
   TemplateCompilerTargetContextPlan,
   TemplateCompilerTargetPlan,
 } from './compiler-target-plan.js';
+import { TemplateRenderTargetKind } from './compiled-template.js';
 import type { TemplateCompilerHookSet } from './compiler-hook-world.js';
 import type {
   TemplateCompilerOccurrenceTargetPlanAssembly,
@@ -1547,6 +1548,42 @@ export class TemplateCompilerExecutionSession {
     overlay.recordNodeDetachment(mutation);
   }
 
+  /** Detach the exact element replaced by one target-execution containerless operation. */
+  detachContainerlessTarget(
+    attempt: TemplateCompilerPendingOperationAttempt,
+    element: TemplateCompilerElementOccurrence,
+  ): void {
+    const overlay = this.requirePendingMutationOverlay(attempt);
+    if (
+      !(attempt.context instanceof TemplateCompilerExecutionContextReference)
+      || attempt.operationKind !== TemplateCompilerOperationKind.ContainerlessReplacement
+      || attempt.executionMechanism !== TemplateCompilerOperationExecutionMechanism.BuiltIn
+      || !(attempt.target instanceof TemplateCompilerOccurrenceOperationTarget)
+      || attempt.target.occurrence !== element
+    ) {
+      throw new Error(`Compiler operation '${attempt.operationKey}' cannot detach a containerless target.`);
+    }
+    this.requireOccurrenceContext(attempt.context, element);
+    const previousParent = element.parent;
+    const previousOrdinal = element.readParentOrdinal();
+    if (
+      previousParent == null
+      || previousOrdinal == null
+      || element.parentEdgeKind !== TemplateCompilerOccurrenceEdgeKind.Child
+    ) {
+      throw new Error(`Compiler element '${element.occurrenceKey}' has no ordinary live edge to replace.`);
+    }
+    const mutation = new TemplateCompilerNodeDetachmentMutation(
+      overlay.nextTopologyMutationOrdinal,
+      element,
+      previousParent,
+      TemplateCompilerOccurrenceEdgeKind.Child,
+      previousOrdinal,
+    );
+    this.forest.detachNode(element);
+    overlay.recordNodeDetachment(mutation);
+  }
+
   /** Detach the exact attribute owned by one target-execution disposition operation. */
   detachTargetAttribute(
     attempt: TemplateCompilerPendingOperationAttempt,
@@ -2762,6 +2799,12 @@ export class TemplateCompilerExecutionSession {
         && operation.mutationBatch.topologyMutations.length === 1
         && operation.mutationBatch.nodeDetachmentMutations.length === 1
         && siteTopologyIsExact;
+      const isTargetContainerlessReplacement = operation.context instanceof TemplateCompilerExecutionContextReference
+        && operation.operationKind === TemplateCompilerOperationKind.ContainerlessReplacement
+        && operation.executionMechanism === TemplateCompilerOperationExecutionMechanism.BuiltIn
+        && operation.mutationBatch.topologyMutations.length === 1
+        && operation.mutationBatch.nodeDetachmentMutations.length === 1
+        && siteTopologyIsExact;
       if (
         isSiteProcessContent
         && (
@@ -2781,6 +2824,7 @@ export class TemplateCompilerExecutionSession {
       const topologyIsAdmitted = operation.operationKind === TemplateCompilerOperationKind.LocalTemplateExtraction
         || isTargetAttributeDisposition
         || isTargetTextExpansion
+        || isTargetContainerlessReplacement
         || (isSiteProcessContent
           && operation.executionMechanism === TemplateCompilerOperationExecutionMechanism.BuiltIn
           && siteTopologyIsExact);
@@ -3522,6 +3566,28 @@ export class TemplateCompilerExecutionSession {
     }
     if (expected instanceof TemplateCompilerOccurrenceElementTargetScheduleEntry) {
       const geometry = attachment.structuralExecution.readTargetGeometry(expected.mapping.row);
+      if (expected.mapping.row.targetKind === TemplateRenderTargetKind.RenderLocation) {
+        if (geometry?.geometryKind !== TemplateCompilerTargetGeometryKind.RenderLocation) return false;
+        const mutation = batch.nodeDetachmentMutations.length === 1
+          ? batch.nodeDetachmentMutations[0]!
+          : null;
+        const generations = [
+          geometry.marker.generation,
+          geometry.start.generation,
+          geometry.end.generation,
+        ];
+        return geometry.replacedNode === expected.mapping.draft.occurrence
+          && generations.every((generation) => generation != null)
+          && batch.topologyMutations.length === 1
+          && batch.attributeDetachmentMutations.length === 0
+          && mutation?.eventOrdinal === 0
+          && mutation.node === geometry.replacedNode
+          && mutation.previousParent === geometry.realizedParent
+          && mutation.previousEdgeKind === TemplateCompilerOccurrenceEdgeKind.Child
+          && mutation.previousOrdinal === geometry.realizedOrdinal + 3
+          && sameOccurrences(batch.occurrenceGenerationReservations, generations)
+          && operation.endForestMutationRevision === operation.startForestMutationRevision + 7;
+      }
       const generation = geometry?.marker.generation ?? null;
       return geometry?.row === expected.mapping.row
         && batch.topologyMutations.length === 0
@@ -3633,7 +3699,9 @@ function operationKindForScheduleEntry(
     return TemplateCompilerOperationKind.AttributeDisposition;
   }
   if (entry instanceof TemplateCompilerOccurrenceElementTargetScheduleEntry) {
-    return TemplateCompilerOperationKind.HydrationTargetCreation;
+    return entry.mapping.row.targetKind === TemplateRenderTargetKind.RenderLocation
+      ? TemplateCompilerOperationKind.ContainerlessReplacement
+      : TemplateCompilerOperationKind.HydrationTargetCreation;
   }
   return TemplateCompilerOperationKind.TextInterpolationExpansion;
 }

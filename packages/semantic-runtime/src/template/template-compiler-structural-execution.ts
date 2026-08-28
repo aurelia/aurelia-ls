@@ -1125,6 +1125,7 @@ export class TemplateCompilerStructuralExecutionSession {
     row: TemplateCompilerTargetRowPlan,
     replacedNode: TemplateCompilerElementOccurrence,
     additionalCauseHandles: readonly ClaimEndpointHandle[] = [],
+    detachReplacedNode: ((node: TemplateCompilerElementOccurrence) => void) | null = null,
   ): TemplateCompilerRenderLocationTargetGeometry {
     const context = this.requireCompleteUnrealizedRow(row);
     if (row.targetKind !== TemplateRenderTargetKind.RenderLocation) {
@@ -1156,7 +1157,11 @@ export class TemplateCompilerStructuralExecutionSession {
       replacedNode,
       additionalCauseHandles,
     );
-    this.forest.detachNode(replacedNode);
+    if (detachReplacedNode == null) this.forest.detachNode(replacedNode);
+    else detachReplacedNode(replacedNode);
+    if (!hasDetachedNodeEdge(replacedNode)) {
+      throw new Error(`Render-location input '${replacedNode.occurrenceKey}' detachment did not consume its edge.`);
+    }
     this.latestRenderReplacementByOccurrence.set(replacedNode, geometry);
     appendMap(this.renderReplacementsByOccurrence, replacedNode, geometry);
     if (replacedNode.generation == null && replacedNode.inputReference != null) {

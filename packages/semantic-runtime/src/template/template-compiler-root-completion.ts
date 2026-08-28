@@ -1,13 +1,18 @@
 import { TemplateCompilerScopeClosureState } from './compiler-read-view.js';
 import type { TemplateCompilerReadObservation } from './compiler-read-view.js';
 import type { TemplateCompilerSiteExecutionEndpointReceipt } from './template-compiler-execution.js';
-import { TemplateCompilerHydrateElementStagingState } from './template-compiler-hydrate-element-staging.js';
+import {
+  TemplateCompilerHydrateElementProcessContentState,
+  TemplateCompilerHydrateElementProjectionState,
+  TemplateCompilerHydrateElementStagingState,
+} from './template-compiler-hydrate-element-staging.js';
 import { TemplateCompilerElementInstructionStagingState } from './template-compiler-instruction-staging.js';
 import { TemplateCompilerLiveAttributeCompletion } from './template-compiler-live-attribute-assembly.js';
 import { TemplateCompilerLiveAllocationSnapshotState } from './template-compiler-live-allocation.js';
 import { TemplateCompilerRootCompilationStateKind } from './template-compiler-root-state.js';
 import {
   TemplateCompilerSiteCursorAttributeEvent,
+  TemplateCompilerSiteCursorContainerlessPlacementEvent,
   TemplateCompilerSiteCursorIgnoredNodeEvent,
   TemplateCompilerSiteCursorPhaseEvent,
   TemplateCompilerSiteCursorPhaseKind,
@@ -44,6 +49,7 @@ export const enum TemplateCompilerOrdinaryRootCompletionRefusalKind {
   UnexplainedAuthoredRemainder = 'unexplained-authored-remainder',
   LiveSiteIncomplete = 'live-site-incomplete',
   HydrateElementIncomplete = 'hydrate-element-incomplete',
+  ContainerlessPlacementMismatch = 'containerless-placement-mismatch',
   AllocationOpen = 'allocation-open',
 }
 
@@ -63,8 +69,21 @@ export class TemplateCompilerCompletedElementSite {
     readonly event: TemplateCompilerSiteCursorElementEvent,
     readonly owner: TemplateCompilerSiteCursorTranscript['attributeOwners'][number],
     readonly hydrateElement: TemplateCompilerSiteCursorTranscript['hydrateElementEnvelopes'][number],
+    readonly containerlessPlacement: TemplateCompilerSiteCursorContainerlessPlacementEvent | null,
   ) {
     this.rowSlotKey = `element:${event.element.occurrenceKey}:direct-row`;
+    if (
+      (hydrateElement.draft?.containerless.effective === true) !== (containerlessPlacement != null)
+      || (containerlessPlacement != null && (
+        containerlessPlacement.element !== event.element
+        || containerlessPlacement.parent !== event.parent
+        || containerlessPlacement.parentOrdinal !== event.parentOrdinal
+        || containerlessPlacement.capturedSuccessor !== event.capturedSuccessor
+        || containerlessPlacement.envelope !== hydrateElement.draft
+      ))
+    ) {
+      throw new Error(`Completed element '${event.element.occurrenceKey}' lost containerless placement authority.`);
+    }
   }
 
   get rowRequired(): boolean {
@@ -289,6 +308,14 @@ export function completeTemplateCompilerOrdinaryRoot(
   const attributes = transcript.events.filter((event): event is TemplateCompilerSiteCursorAttributeEvent =>
     event instanceof TemplateCompilerSiteCursorAttributeEvent
   );
+  const elementEvents = transcript.events.filter((event): event is TemplateCompilerSiteCursorElementEvent =>
+    event instanceof TemplateCompilerSiteCursorElementEvent
+  );
+  const containerlessPlacements = transcript.events.filter(
+    (event): event is TemplateCompilerSiteCursorContainerlessPlacementEvent =>
+      event instanceof TemplateCompilerSiteCursorContainerlessPlacementEvent
+  );
+  const placementsByElement = new Map(containerlessPlacements.map((event) => [event.element, event] as const));
   const texts = transcript.events.filter((event): event is TemplateCompilerSiteCursorTextEvent =>
     event instanceof TemplateCompilerSiteCursorTextEvent
   );
@@ -318,6 +345,31 @@ export function completeTemplateCompilerOrdinaryRoot(
     );
   }
   if (
+    placementsByElement.size !== containerlessPlacements.length
+    || transcript.hydrateElementEnvelopes.some((envelope) => {
+      const placeable = envelope.state === TemplateCompilerHydrateElementStagingState.Exact
+        && envelope.draft?.containerless.effective === true
+        && envelope.draft.processContent.state === TemplateCompilerHydrateElementProcessContentState.Absent
+        && envelope.draft.projection.state === TemplateCompilerHydrateElementProjectionState.None
+        && envelope.element.readChildren().length === 0
+        && envelope.owner.instructionStaging.templateControllers.length === 0;
+      return placeable !== placementsByElement.has(envelope.element);
+    })
+    || containerlessPlacements.some((placement) => {
+      const elementEvent = elementEvents.find((event) => event.element === placement.element) ?? null;
+      const lastElementEventOrdinal = Math.max(
+        elementEvent?.ordinal ?? -1,
+        ...attributes.filter((event) => event.owner === placement.element).map((event) => event.ordinal),
+      );
+      return placement.ordinal !== lastElementEventOrdinal + 1;
+    })
+  ) {
+    refuse(
+      TemplateCompilerOrdinaryRootCompletionRefusalKind.ContainerlessPlacementMismatch,
+      'Effective containerless elements require one exact cursor placement decision.',
+    );
+  }
+  if (
     transcript.allocationSnapshot.state !== TemplateCompilerLiveAllocationSnapshotState.Complete
     || !transcript.allocationSnapshot.isCurrent()
   ) {
@@ -330,15 +382,13 @@ export function completeTemplateCompilerOrdinaryRoot(
   if (refusals.length > 0 || endpoint == null) {
     return new TemplateCompilerOrdinaryRootCompletionResult(null, refusals);
   }
-  const elementEvents = transcript.events.filter((event): event is TemplateCompilerSiteCursorElementEvent =>
-    event instanceof TemplateCompilerSiteCursorElementEvent
-  );
   const ownersByElement = new Map(transcript.attributeOwners.map((owner) => [owner.element, owner]));
   const envelopesByElement = new Map(transcript.hydrateElementEnvelopes.map((envelope) => [envelope.element, envelope]));
   const elementSites = elementEvents.map((event) => new TemplateCompilerCompletedElementSite(
     event,
     ownersByElement.get(event.element)!,
     envelopesByElement.get(event.element)!,
+    placementsByElement.get(event.element) ?? null,
   ));
   const textSites = texts.map((event) => new TemplateCompilerCompletedTextSite(event));
   const elementsByEvent = new Map(elementSites.map((site) => [site.event, site]));

@@ -17,6 +17,7 @@ import cursorLiveNonsingularTemplate from './cursor-live-nonsingular.html';
 import cursorLiveMultiBindingTemplate from './cursor-live-multi-binding.html';
 import cursorLiveStagingTemplate from './cursor-live-staging.html';
 import cursorMarkerTemplate from './cursor-marker.html';
+import cursorNativeContainerlessTemplate from './cursor-native-containerless.html';
 import cursorOpenTemplate from './cursor-open.html';
 import cursorProgressionTemplate from './cursor-progression.html';
 import cursorProjectionTemplate from './cursor-projection.html';
@@ -38,6 +39,8 @@ import cursorSurrogateValidTemplate from './cursor-surrogate-valid.html';
 import cursorTemplateControllerTemplate from './cursor-template-controller.html';
 import cursorTenHoleTemplate from './cursor-ten-hole.html';
 import cursorContainerlessTemplate from './cursor-containerless.html';
+import cursorContainerlessChildTemplate from './cursor-containerless-child.html';
+import cursorContainerlessOrderTemplate from './cursor-containerless-order.html';
 import cursorUsageContainerlessTemplate from './cursor-usage-containerless.html';
 import cursorWideTemplate from './cursor-wide.html';
 
@@ -250,6 +253,12 @@ class CursorProjection {}
 class CursorMarker {}
 
 @customElement({
+  name: 'cursor-native-containerless',
+  template: cursorNativeContainerlessTemplate,
+})
+class CursorNativeContainerless {}
+
+@customElement({
   name: 'cursor-wide',
   template: cursorWideTemplate,
 })
@@ -317,6 +326,13 @@ class CursorContainerlessLeaf {}
 })
 class CursorContainerless {}
 
+@customElement({
+  name: 'cursor-containerless-child',
+  template: cursorContainerlessChildTemplate,
+  dependencies: [CursorContainerlessLeaf],
+})
+class CursorContainerlessChild {}
+
 @customElement({ name: 'cursor-usage-containerless-leaf' })
 class CursorUsageContainerlessLeaf {}
 
@@ -326,6 +342,15 @@ class CursorUsageContainerlessLeaf {}
   dependencies: [CursorUsageContainerlessLeaf],
 })
 class CursorUsageContainerless {}
+
+@customElement({
+  name: 'cursor-containerless-order',
+  template: cursorContainerlessOrderTemplate,
+  dependencies: [CursorContainerlessLeaf, CursorUsageContainerlessLeaf],
+})
+class CursorContainerlessOrder {
+  value = 'after';
+}
 
 @customElement({ name: 'cursor-shadow-leaf', shadowOptions: { mode: 'open' } })
 class CursorShadowLeaf {}
@@ -408,6 +433,7 @@ void new Aurelia()
     CursorAuthoredCarrierStatic,
     CursorProjection,
     CursorMarker,
+    CursorNativeContainerless,
     CursorWide,
     CursorTemplateController,
     CursorProcessContent,
@@ -416,7 +442,9 @@ void new Aurelia()
     CursorProcessContentDuplicateName,
     CursorProcessContentArbitrary,
     CursorContainerless,
+    CursorContainerlessChild,
     CursorUsageContainerless,
+    CursorContainerlessOrder,
     CursorShadowContainerless,
     CursorSlotsContainerless,
     CursorSlotValid,

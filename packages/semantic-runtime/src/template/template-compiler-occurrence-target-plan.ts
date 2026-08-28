@@ -1,6 +1,6 @@
 import type { ClaimEndpointHandle } from '../kernel/claim.js';
 import { AttributeClassificationKind } from './attribute-syntax.js';
-import { CompiledTemplateReference } from './compiled-template.js';
+import { CompiledTemplateReference, TemplateRenderTargetKind } from './compiled-template.js';
 import type { TemplateInstruction } from './instruction-ir.js';
 import {
   TemplateCompilerTargetPlan,
@@ -112,6 +112,7 @@ export class TemplateCompilerOccurrenceTargetAttributeDispositionMapping {
 
 export const enum TemplateCompilerOccurrenceTargetPublicationPrerequisiteKind {
   EffectiveAttributeSyntaxMaterialization = 'effective-attribute-syntax-materialization',
+  ContainerlessHostRequirement = 'containerless-host-requirement',
 }
 
 /** Funded future product that must materialize before this target family can become durable wire. */
@@ -128,10 +129,29 @@ export class TemplateCompilerOccurrenceTargetPublicationPrerequisite {
   }
 }
 
+/** Whole-family join ensuring a locally containerless target never requires a final native host. */
+export class TemplateCompilerOccurrenceContainerlessHostPrerequisite {
+  readonly prerequisiteKind =
+    TemplateCompilerOccurrenceTargetPublicationPrerequisiteKind.ContainerlessHostRequirement;
+
+  constructor(readonly hydrateElement: TemplateCompilerAllocatedHydrateElementHead) {
+    if (
+      !hydrateElement.head.envelope.containerless.effective
+      || hydrateElement.row.targetKind !== TemplateRenderTargetKind.RenderLocation
+    ) {
+      throw new Error(`HydrateElement row '${hydrateElement.row.stableSlotKey}' is not effectively containerless.`);
+    }
+  }
+}
+
+export type TemplateCompilerOccurrencePublicationPrerequisite =
+  | TemplateCompilerOccurrenceTargetPublicationPrerequisite
+  | TemplateCompilerOccurrenceContainerlessHostPrerequisite;
+
 /** Exact funded ordinary-root shared target plan; no structural mutation or publication has occurred. */
 export class TemplateCompilerOccurrenceTargetPlanAssembly {
   readonly #authority: object;
-  readonly publicationPrerequisites: readonly TemplateCompilerOccurrenceTargetPublicationPrerequisite[];
+  readonly publicationPrerequisites: readonly TemplateCompilerOccurrencePublicationPrerequisite[];
 
   constructor(
     authority: object,
@@ -144,9 +164,16 @@ export class TemplateCompilerOccurrenceTargetPlanAssembly {
     readonly rowMappings: readonly TemplateCompilerOccurrenceTargetRowMapping[],
     readonly attributeDispositionMappings: readonly TemplateCompilerOccurrenceTargetAttributeDispositionMapping[],
   ) {
-    this.publicationPrerequisites = hydrateElements?.heads.flatMap((head) => head.captures)
+    const effectiveSyntaxPrerequisites = hydrateElements?.heads.flatMap((head) => head.captures)
       .filter((capture) => capture.effectiveReservation != null)
       .map((capture) => new TemplateCompilerOccurrenceTargetPublicationPrerequisite(capture)) ?? [];
+    const containerlessPrerequisites = hydrateElements?.heads
+      .filter((head) => head.head.envelope.containerless.effective)
+      .map((head) => new TemplateCompilerOccurrenceContainerlessHostPrerequisite(head)) ?? [];
+    this.publicationPrerequisites = [
+      ...effectiveSyntaxPrerequisites,
+      ...containerlessPrerequisites,
+    ];
     if (
       authority !== occurrenceTargetPlanAuthority
       || rootReservation.role !== TemplateCompilerLiveProductReservationRole.RootCompiledTemplate
@@ -158,7 +185,7 @@ export class TemplateCompilerOccurrenceTargetPlanAssembly {
       || (hydrateElements != null && (
         !hydrateElements.isModuleConstructed()
         || hydrateElements.rows !== rows
-        || this.publicationPrerequisites.length !== hydrateElements.allocation.productReservations.length
+        || effectiveSyntaxPrerequisites.length !== hydrateElements.allocation.productReservations.length
       ))
       || targetPlan.localKey !== rows.receipt.endpoint.lane.localKey
       || targetPlan.root.compiledTemplate.productHandle !== rootCompiledTemplate.productHandle
