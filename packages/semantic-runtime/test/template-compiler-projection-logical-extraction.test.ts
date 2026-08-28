@@ -646,7 +646,7 @@ describe('template compiler projection logical extraction', () => {
     )).toEqual(['div']);
     expect(assembly.contexts.map((context) => context.sourceAvailability.sourceArrivalPosture)).toEqual([
       TemplateCompilerFamilyOccurrenceArrivalPosture.Initial,
-      TemplateCompilerFamilyOccurrenceArrivalPosture.AdoptedInput,
+      null,
       TemplateCompilerFamilyOccurrenceArrivalPosture.AdoptedInput,
     ]);
     expect(root?.attributeDispositions.some((disposition) =>
@@ -671,7 +671,7 @@ describe('template compiler projection logical extraction', () => {
     expect(outer?.templateControllerRows).toHaveLength(1);
     expect(assembly.contexts.map((context) => context.sourceAvailability.sourceArrivalPosture)).toEqual([
       TemplateCompilerFamilyOccurrenceArrivalPosture.Initial,
-      TemplateCompilerFamilyOccurrenceArrivalPosture.IncomingTransfer,
+      null,
       TemplateCompilerFamilyOccurrenceArrivalPosture.IncomingTransfer,
       TemplateCompilerFamilyOccurrenceArrivalPosture.IncomingTransfer,
       TemplateCompilerFamilyOccurrenceArrivalPosture.IncomingTransfer,

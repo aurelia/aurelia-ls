@@ -353,23 +353,35 @@ export class TemplateCompilerFamilyRootMembershipDraft {
   }
 }
 
-/** Bind-time source availability shared by every source-bearing row reached in one compiler context. */
+export const enum TemplateCompilerFamilyContextSourceAvailabilityKind {
+  SourceBearing = 'source-bearing',
+  GeneratedOnly = 'generated-only',
+}
+
+/** Bind-time source availability, or an explicit generated-only intermediate TC context. */
 export class TemplateCompilerFamilyContextSourceAvailability {
   readonly #authority: object;
-  readonly sourceArrivalPosture: TemplateCompilerOccurrenceMembershipArrivalPosture;
+  readonly availabilityKind: TemplateCompilerFamilyContextSourceAvailabilityKind;
+  readonly sourceArrivalPosture: TemplateCompilerOccurrenceMembershipArrivalPosture | null;
 
   constructor(
     authority: object,
     readonly traversal: TemplateCompilerCompletedContextTraversal,
   ) {
     const context = traversal.context;
+    const terminalTemplateController = traversal.templateControllerOwner?.event.realization.terminalLeaf === context;
     this.sourceArrivalPosture = context.contextKind === TemplateCompilerSiteCursorContextKind.Root
       ? TemplateCompilerOccurrenceMembershipArrivalPosture.Initial
       : context.contextKind === TemplateCompilerSiteCursorContextKind.Projection
         ? TemplateCompilerOccurrenceMembershipArrivalPosture.IncomingTransfer
-        : traversal.templateControllerOwner?.edge.preparation.host.templateContent == null
-          ? TemplateCompilerOccurrenceMembershipArrivalPosture.IncomingTransfer
-          : TemplateCompilerOccurrenceMembershipArrivalPosture.AdoptedInput;
+        : !terminalTemplateController
+          ? null
+          : traversal.templateControllerOwner?.edge.preparation.host.templateContent == null
+            ? TemplateCompilerOccurrenceMembershipArrivalPosture.IncomingTransfer
+            : TemplateCompilerOccurrenceMembershipArrivalPosture.AdoptedInput;
+    this.availabilityKind = this.sourceArrivalPosture == null
+      ? TemplateCompilerFamilyContextSourceAvailabilityKind.GeneratedOnly
+      : TemplateCompilerFamilyContextSourceAvailabilityKind.SourceBearing;
     if (
       authority !== familyRowAssemblyAuthority
       || (context.contextKind === TemplateCompilerSiteCursorContextKind.Root)
@@ -378,6 +390,10 @@ export class TemplateCompilerFamilyContextSourceAvailability {
         !== (traversal.projectionOwner != null)
       || (context.contextKind === TemplateCompilerSiteCursorContextKind.TemplateController)
         !== (traversal.templateControllerOwner != null)
+      || (context.contextKind === TemplateCompilerSiteCursorContextKind.TemplateController
+        && terminalTemplateController !== (
+          this.availabilityKind === TemplateCompilerFamilyContextSourceAvailabilityKind.SourceBearing
+        ))
     ) {
       throw new Error(`Family context '${context.localKey}' lost source-availability ownership.`);
     }
@@ -386,6 +402,10 @@ export class TemplateCompilerFamilyContextSourceAvailability {
 
   isModuleConstructed(): boolean {
     return this.#authority === familyRowAssemblyAuthority;
+  }
+
+  get isSourceBearing(): boolean {
+    return this.availabilityKind === TemplateCompilerFamilyContextSourceAvailabilityKind.SourceBearing;
   }
 }
 
