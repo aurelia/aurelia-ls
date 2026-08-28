@@ -690,6 +690,18 @@ export type TemplateInstruction =
   | StateBindingInstruction
   | DispatchBindingInstruction;
 
+/** Ordered runtime-facing references for one already-funded instruction row. */
+export function instructionReferencesFor(
+  instructions: readonly TemplateInstruction[],
+): readonly TemplateInstructionReference[] {
+  return instructions.map((instruction) => new TemplateInstructionReference(
+    instruction.instructionKind,
+    instruction.productHandle,
+    instruction.identityHandle,
+    instruction.sourceAddressHandle,
+  ));
+}
+
 /** Explicit semantic signature for parity/digest projections; excludes allocation identity and source provenance. */
 export function templateInstructionSemanticSignature(instruction: TemplateInstruction): readonly unknown[] {
   switch (instruction.instructionKind) {

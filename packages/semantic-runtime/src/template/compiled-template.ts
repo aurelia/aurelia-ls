@@ -7,6 +7,7 @@ import type {
 import type { FieldProvenance } from '../kernel/provenance.js';
 import type { HtmlNodeReference } from './html-ir.js';
 import type { TemplateInstructionSequence } from './instruction-ir.js';
+import type { TemplateStructuralTreeReference } from './template-structure.js';
 
 export const enum CompiledTemplateState {
   /** The framework compiler would reject this template before producing a usable compiled definition. */
@@ -33,6 +34,7 @@ export const enum TemplateRenderTargetKind {
 export type CompiledTemplateField =
   | 'context'
   | 'htmlDocument'
+  | 'transformedTree'
   | 'state'
   | 'compilerReachableNodes'
   | 'hasSlots'
@@ -141,6 +143,8 @@ export class CompiledTemplate {
     readonly context: CompiledTemplateContext,
     /** Authored HTML document that supplies this definition's source-backed nodes. */
     readonly htmlDocumentProductHandle: ProductHandle,
+    /** Exact compiler-final structural tree consumed by runtime Rendering, when published. */
+    readonly transformedTree: TemplateStructuralTreeReference | null,
     /** Compiler closure state for the current substrate. */
     readonly state: CompiledTemplateState,
     /** Authored element/text products reached by the framework compiler's DOM traversal. */

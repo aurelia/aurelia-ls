@@ -295,6 +295,8 @@ export function compareStructureDerivationDetails(
     next.identityHandle,
     previous.authority,
     next.authority,
+    previous.operationOrdinal,
+    next.operationOrdinal,
   )
     && sameArrays(previous.inputs, next.inputs, sameDerivationTermSemantics)
     && sameArrays(previous.outputs, next.outputs, sameDerivationTermSemantics)

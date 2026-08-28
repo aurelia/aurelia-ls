@@ -1369,6 +1369,14 @@ function referencesForCompiledTemplate(
 ): KernelDetailReferenceClosure {
   return mergeKernelDetailReferences(
     detailReferences(TemplateDetailDescriptors.HtmlDocument, template.htmlDocumentProductHandle),
+    template.transformedTree == null
+      ? []
+      : productIdentityAddressReferences(
+          template.transformedTree.productHandle,
+          template.transformedTree.identityHandle,
+          template.transformedTree.addressHandle,
+          TemplateDetailDescriptors.StructuralTree,
+        ),
     detailsReferences(TemplateDetailDescriptors.HtmlNode, template.compilerReachableNodeProductHandles),
     ...template.nativeSlotOutlets.map((outlet) =>
       mergeKernelDetailReferences(

@@ -36,6 +36,7 @@ export function compareCompiledTemplateDetails(
     previous.needsCompile,
     next.needsCompile,
   )
+    && sameNullable(previous.transformedTree, next.transformedTree, sameStructuralTreeSemantics)
     && sameArrays(previous.compilerReachableNodeProductHandles, next.compilerReachableNodeProductHandles, sameValues)
     && sameArrays(previous.nativeSlotOutlets, next.nativeSlotOutlets, sameNativeSlotOutletSemantics)
     && sameArrays(previous.targets, next.targets, sameRenderTargetSemantics)
@@ -45,6 +46,8 @@ export function compareCompiledTemplateDetails(
   }
 
   const witness = sameKernelRecordWitness(previous.sourceAddressHandle, next.sourceAddressHandle, context)
+    && sameNullable(previous.transformedTree, next.transformedTree, (left, right) =>
+      sameStructuralTreeWitnesses(left, right, context))
     && sameKernelFieldProvenance(previous.fieldProvenance, next.fieldProvenance, context)
     && sameArrays(previous.nativeSlotOutlets, next.nativeSlotOutlets, (left, right) =>
       sameNativeSlotOutletWitnesses(left, right, context))
@@ -137,6 +140,28 @@ function sameHtmlNodeSemantics(previous: HtmlNodeReference, next: HtmlNodeRefere
     previous.productHandle,
     next.productHandle,
   );
+}
+
+function sameStructuralTreeSemantics(
+  previous: NonNullable<CompiledTemplate['transformedTree']>,
+  next: NonNullable<CompiledTemplate['transformedTree']>,
+): boolean {
+  return sameValues(
+    previous.treeKind,
+    next.treeKind,
+    previous.productHandle,
+    next.productHandle,
+    previous.identityHandle,
+    next.identityHandle,
+  );
+}
+
+function sameStructuralTreeWitnesses(
+  previous: NonNullable<CompiledTemplate['transformedTree']>,
+  next: NonNullable<CompiledTemplate['transformedTree']>,
+  context: KernelPublicationComparisonContext,
+): boolean {
+  return sameKernelRecordWitness(previous.addressHandle, next.addressHandle, context);
 }
 
 function sameHtmlNodeWitnesses(

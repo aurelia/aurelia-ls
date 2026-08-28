@@ -44,6 +44,7 @@ export type TemplateStructureDerivationField =
   | 'inputs'
   | 'outputs'
   | 'causes'
+  | 'operationOrdinal'
   | 'source';
 
 /**
@@ -59,7 +60,16 @@ export class TemplateStructureDerivation {
     readonly outputs: readonly TemplateStructureDerivationTerm[],
     readonly causeHandles: readonly ClaimEndpointHandle[],
     readonly fieldProvenance: readonly FieldProvenance<TemplateStructureDerivationField>[] = [],
-  ) {}
+    /** Family-global compiler operation ordinal; null for parser/factory derivations and legacy compiler products. */
+    readonly operationOrdinal: number | null = null,
+  ) {
+    if (
+      operationOrdinal != null
+      && (!Number.isSafeInteger(operationOrdinal) || operationOrdinal < 0)
+    ) {
+      throw new Error('Template structure derivation has an invalid compiler operation ordinal.');
+    }
+  }
 
   get productHandle(): ProductHandle {
     return productDetailHandle(this, StructureDerivationDetailKind);

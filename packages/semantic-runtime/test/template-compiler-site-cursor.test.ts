@@ -54,6 +54,11 @@ import {
   TemplateCompilerContextFamilyFreezePreparationState,
 } from '../src/template/template-compiler-context-family-freeze.js';
 import {
+  materializeTemplateCompilerContextFamilyFrozenValue,
+  TemplateCompilerContextFamilyFrozenValueReasonKind,
+  TemplateCompilerContextFamilyFrozenValueState,
+} from '../src/template/template-compiler-context-family-frozen-value.js';
+import {
   assembleTemplateCompilerContextFamilyRows,
 } from '../src/template/template-compiler-context-family-row-assembly.js';
 import {
@@ -1349,6 +1354,15 @@ describe('template compiler root site cursor', () => {
       derivation.operation.operationKind === TemplateCompilerOperationKind.ProcessContent
     )).toBe(true);
     expect(freeze.preparation?.isCurrent()).toBe(true);
+    const frozen = materializeTemplateCompilerContextFamilyFrozenValue(freeze.preparation!);
+    expect(frozen.state).toBe(TemplateCompilerContextFamilyFrozenValueState.Exact);
+    const processDerivation = frozen.value?.derivations.find((derivation) =>
+      derivation.operationOrdinal === rootProcessEvent.result.operation.executionOrdinal
+    );
+    expect(processDerivation?.inputs).toHaveLength(removed.length);
+    expect(processDerivation?.outputs).toEqual([]);
+    expect(frozen.value?.root.compiledTemplate.transformedTree?.productHandle)
+      .toBe(frozen.value?.root.tree.productHandle);
   });
 
   test('places a TC-wrapped containerless host after its transition event', () => {
@@ -1465,6 +1479,20 @@ describe('template compiler root site cursor', () => {
       .toContain(preparation.hydrateTemplateControllers[0]?.instruction.productHandle);
     expect(preparation.preparedAllocation.ledger.state).toBe(TemplateCompilerLiveAllocationLedgerState.Prepared);
     expect(namespace.readReservationCounts()).toEqual(countsBefore);
+    const attachment = transcript.binding.execution.commitPreparedContextFamilyTargetAttachment(
+      transcript.binding.execution.prepareContextFamilyTargetAttachment(target, schedule),
+    );
+    const targetExecution = executeTemplateCompilerContextFamilyTarget(attachment);
+    transcript.binding.execution.seal();
+    const freeze = prepareTemplateCompilerContextFamilyFreeze(targetExecution);
+    if (freeze.preparation == null) throw new Error('Expected capture-projection freeze preparation.');
+    const frozen = materializeTemplateCompilerContextFamilyFrozenValue(freeze.preparation);
+    expect(frozen.state).toBe(TemplateCompilerContextFamilyFrozenValueState.Pending);
+    expect(frozen.reasons.map((reason) => reason.reasonKind)).toEqual([
+      TemplateCompilerContextFamilyFrozenValueReasonKind.EffectiveCaptureMaterializationPending,
+    ]);
+    expect(freeze.preparation.preparedAllocation.ledger.state)
+      .toBe(TemplateCompilerLiveAllocationLedgerState.Prepared);
   });
 
   test('keeps arbitrary processContent Open without admitting a site driver', () => {

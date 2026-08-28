@@ -278,6 +278,7 @@ describe('template compilation project pass', () => {
         CompiledTemplateContextRole.Root,
       ),
       store.handles.product('html'),
+      null,
       CompiledTemplateState.Complete,
       [],
       [],

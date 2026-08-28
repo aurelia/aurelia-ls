@@ -116,9 +116,9 @@ import {
   HydrateLetElementInstruction,
   type HydrateTemplateControllerInstruction,
   InterpolationInstruction,
+  instructionReferencesFor,
   LetBindingInstruction,
   PropertyBindingInstruction,
-  TemplateInstructionReference,
   TemplateInstructionSequence,
   TemplateInstructionKind,
   TextBindingInstruction,
@@ -2282,6 +2282,7 @@ export class CompiledTemplateMaterializer {
         handles.identityHandle,
         compiledTemplateContextForTargetContext(context),
         input.html.document.productHandle,
+        null,
         state,
         context.readCompilerReachableNodeProductHandles(),
         context === assembly.targetPlan.root ? assembly.nativeSlotOutlets : [],
@@ -2951,19 +2952,6 @@ function compiledTemplateContextRole(
     case TemplateCompilerTargetContextRole.Projection:
       return CompiledTemplateContextRole.Projection;
   }
-}
-
-function instructionReferencesFor(
-  instructions: readonly TemplateInstruction[],
-): readonly TemplateInstructionReference[] {
-  return instructions.map((instruction) =>
-    new TemplateInstructionReference(
-      instruction.instructionKind,
-      instruction.productHandle,
-      instruction.identityHandle,
-      instruction.sourceAddressHandle,
-    )
-  );
 }
 
 function sequenceContainsInstructionClaims(

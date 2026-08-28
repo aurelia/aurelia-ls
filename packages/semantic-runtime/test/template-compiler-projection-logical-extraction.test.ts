@@ -60,6 +60,10 @@ import {
   TemplateCompilerContextFamilyFreezePreparationState,
 } from '../src/template/template-compiler-context-family-freeze.js';
 import {
+  materializeTemplateCompilerContextFamilyFrozenValue,
+  TemplateCompilerContextFamilyFrozenValueState,
+} from '../src/template/template-compiler-context-family-frozen-value.js';
+import {
   assembleTemplateCompilerContextFamilyRows,
   TemplateCompilerContextFamilyRowAssemblyState,
   TemplateCompilerFamilyOccurrenceArrivalPosture,
@@ -1123,6 +1127,31 @@ describe('template compiler projection logical extraction', () => {
     }
     const derivationOperations = freeze.preparation?.derivations.map((derivation) => derivation.operation) ?? [];
     expect(execution.operations.every((operation) => derivationOperations.includes(operation))).toBe(true);
+    const frozen = materializeTemplateCompilerContextFamilyFrozenValue(freeze.preparation!);
+    expect(frozen.state).toBe(TemplateCompilerContextFamilyFrozenValueState.Exact);
+    expect(frozen.value?.isCurrent()).toBe(true);
+    expect(frozen.value?.compiledTemplates).toHaveLength(preparation.contextMappings.length);
+    expect(frozen.value?.contexts.every((context) =>
+      context.compiledTemplate.needsCompile === false
+      && context.compiledTemplate.transformedTree?.productHandle === context.tree.productHandle
+      && context.rows.length === context.preparation.context.readRows().length
+    )).toBe(true);
+    expect(frozen.value?.derivations.map((derivation) => derivation.operationOrdinal))
+      .toEqual(freeze.preparation?.derivations.map((derivation) => derivation.operation.executionOrdinal));
+    const textOperation = execution.operations.find((operation) =>
+      operation.operationKind === TemplateCompilerOperationKind.TextInterpolationExpansion
+    );
+    const textDerivation = textOperation == null
+      ? null
+      : frozen.value?.derivations.find((derivation) => derivation.operationOrdinal === textOperation.executionOrdinal);
+    const textOutputProducts = new Set(textDerivation?.outputs.map((output) => output.structure.productHandle) ?? []);
+    const finalNodeOrder = frozen.value?.contexts.flatMap((context) =>
+      context.preparation.nodes.map((node) => context.nodeByOccurrence.get(node.occurrence)!.productHandle)
+    ) ?? [];
+    expect(textDerivation?.outputs.map((output) => output.structure.productHandle))
+      .toEqual(finalNodeOrder.filter((productHandle) => textOutputProducts.has(productHandle)));
+    expect(freeze.preparation?.isCurrent()).toBe(false);
+    expect(materializeTemplateCompilerContextFamilyFrozenValue(freeze.preparation!).value).toBe(frozen.value);
   });
 
   test('inherits adopted source availability for a nested TC transition', () => {

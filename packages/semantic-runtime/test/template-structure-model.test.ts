@@ -516,12 +516,15 @@ describe('template structural model', () => {
       authority: TemplateStructureDerivationAuthority,
       segmentKey: string,
       cause: KernelRecordHandle,
+      operationOrdinal: number | null = null,
     ) => bindDetail(
       new TemplateStructureDerivation(
         authority,
         [new TemplateStructureDerivationTerm(authored, handles.address(segmentKey))],
         [new TemplateStructureDerivationTerm(effective)],
         [cause],
+        [],
+        operationOrdinal,
       ),
       handles,
       'derivation',
@@ -542,6 +545,11 @@ describe('template structural model', () => {
     expect(TemplateProductDetails.StructureDerivation.compare(
       derivation(TemplateStructureDerivationAuthority.HtmlTreeBuilder, 'segment-a', cause),
       derivation(TemplateStructureDerivationAuthority.TemplateCompiler, 'segment-a', cause),
+      context,
+    )).toBe(KernelPublicationDecisionKind.Replace);
+    expect(TemplateProductDetails.StructureDerivation.compare(
+      derivation(TemplateStructureDerivationAuthority.TemplateCompiler, 'segment-a', cause, 1),
+      derivation(TemplateStructureDerivationAuthority.TemplateCompiler, 'segment-a', cause, 2),
       context,
     )).toBe(KernelPublicationDecisionKind.Replace);
     expect(TemplateProductDetails.StructureDerivation.compare(
