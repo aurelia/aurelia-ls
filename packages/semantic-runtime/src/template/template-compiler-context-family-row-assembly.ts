@@ -353,6 +353,42 @@ export class TemplateCompilerFamilyRootMembershipDraft {
   }
 }
 
+/** Bind-time source availability shared by every source-bearing row reached in one compiler context. */
+export class TemplateCompilerFamilyContextSourceAvailability {
+  readonly #authority: object;
+  readonly sourceArrivalPosture: TemplateCompilerOccurrenceMembershipArrivalPosture;
+
+  constructor(
+    authority: object,
+    readonly traversal: TemplateCompilerCompletedContextTraversal,
+  ) {
+    const context = traversal.context;
+    this.sourceArrivalPosture = context.contextKind === TemplateCompilerSiteCursorContextKind.Root
+      ? TemplateCompilerOccurrenceMembershipArrivalPosture.Initial
+      : context.contextKind === TemplateCompilerSiteCursorContextKind.Projection
+        ? TemplateCompilerOccurrenceMembershipArrivalPosture.IncomingTransfer
+        : traversal.templateControllerOwner?.edge.preparation.host.templateContent == null
+          ? TemplateCompilerOccurrenceMembershipArrivalPosture.IncomingTransfer
+          : TemplateCompilerOccurrenceMembershipArrivalPosture.AdoptedInput;
+    if (
+      authority !== familyRowAssemblyAuthority
+      || (context.contextKind === TemplateCompilerSiteCursorContextKind.Root)
+        !== (traversal.projectionOwner == null && traversal.templateControllerOwner == null)
+      || (context.contextKind === TemplateCompilerSiteCursorContextKind.Projection)
+        !== (traversal.projectionOwner != null)
+      || (context.contextKind === TemplateCompilerSiteCursorContextKind.TemplateController)
+        !== (traversal.templateControllerOwner != null)
+    ) {
+      throw new Error(`Family context '${context.localKey}' lost source-availability ownership.`);
+    }
+    this.#authority = authority;
+  }
+
+  isModuleConstructed(): boolean {
+    return this.#authority === familyRowAssemblyAuthority;
+  }
+}
+
 /** One context-local non-allocated row and membership characterization. */
 export class TemplateCompilerFamilyContextRowAssembly {
   readonly context: TemplateCompilerSiteCursorContextReference;
@@ -360,6 +396,7 @@ export class TemplateCompilerFamilyContextRowAssembly {
   constructor(
     readonly traversal: TemplateCompilerCompletedContextTraversal,
     readonly parent: TemplateCompilerSiteCursorContextReference | null,
+    readonly sourceAvailability: TemplateCompilerFamilyContextSourceAvailability,
     readonly reachedDispositions: readonly TemplateCompilerFamilyReachDisposition[],
     readonly loweredDispositions: readonly TemplateCompilerFamilyReachDisposition[],
     readonly memberships: readonly TemplateCompilerFamilyOccurrenceMembershipDraft[],
@@ -376,6 +413,8 @@ export class TemplateCompilerFamilyContextRowAssembly {
     const templateControllerRowSet = new Set<TemplateCompilerFamilyTargetRowDraft>(templateControllerRows);
     if (
       parent !== this.context.parent
+      || !sourceAvailability.isModuleConstructed()
+      || sourceAvailability.traversal !== traversal
       || reachedDispositions.some((disposition) => disposition.reachedContext !== this.context)
       || loweredDispositions.some((disposition) => disposition.loweringContext !== this.context)
       || memberships.length !== loweredDispositions.length
@@ -669,6 +708,10 @@ export function assembleTemplateCompilerContextFamilyRows(
     contextAssemblies.push(new TemplateCompilerFamilyContextRowAssembly(
       contextTraversal,
       context.parent,
+      new TemplateCompilerFamilyContextSourceAvailability(
+        familyRowAssemblyAuthority,
+        contextTraversal,
+      ),
       reachedDispositions,
       loweredDispositions,
       memberships,

@@ -591,6 +591,12 @@ describe('template compiler projection logical extraction', () => {
     expect(root?.memberships.every((membership) =>
       membership.arrivalPosture === TemplateCompilerFamilyOccurrenceArrivalPosture.Initial
     )).toBe(true);
+    expect(assembly.contexts.map((context) => context.sourceAvailability.sourceArrivalPosture)).toEqual([
+      TemplateCompilerFamilyOccurrenceArrivalPosture.Initial,
+      TemplateCompilerFamilyOccurrenceArrivalPosture.IncomingTransfer,
+      TemplateCompilerFamilyOccurrenceArrivalPosture.IncomingTransfer,
+      TemplateCompilerFamilyOccurrenceArrivalPosture.IncomingTransfer,
+    ]);
   });
 
   test('splits two TC rows, rehomes the host solely to the adopted leaf, and preserves following root order', () => {
@@ -638,6 +644,11 @@ describe('template compiler projection logical extraction', () => {
     expect(leaf?.ordinaryRows.map((row) =>
       row.site.siteKind === 'element' ? row.site.event.element.tagName : '#text'
     )).toEqual(['div']);
+    expect(assembly.contexts.map((context) => context.sourceAvailability.sourceArrivalPosture)).toEqual([
+      TemplateCompilerFamilyOccurrenceArrivalPosture.Initial,
+      TemplateCompilerFamilyOccurrenceArrivalPosture.AdoptedInput,
+      TemplateCompilerFamilyOccurrenceArrivalPosture.AdoptedInput,
+    ]);
     expect(root?.attributeDispositions.some((disposition) =>
       disposition.site.event.element.tagName === 'template'
     )).toBe(true);
@@ -658,6 +669,13 @@ describe('template compiler projection logical extraction', () => {
     expect(result.state).toBe(TemplateCompilerContextFamilyRowAssemblyState.Pending);
     expect(root?.templateControllerRows).toHaveLength(1);
     expect(outer?.templateControllerRows).toHaveLength(1);
+    expect(assembly.contexts.map((context) => context.sourceAvailability.sourceArrivalPosture)).toEqual([
+      TemplateCompilerFamilyOccurrenceArrivalPosture.Initial,
+      TemplateCompilerFamilyOccurrenceArrivalPosture.IncomingTransfer,
+      TemplateCompilerFamilyOccurrenceArrivalPosture.IncomingTransfer,
+      TemplateCompilerFamilyOccurrenceArrivalPosture.IncomingTransfer,
+      TemplateCompilerFamilyOccurrenceArrivalPosture.IncomingTransfer,
+    ]);
     expect(leaf?.ordinaryRows.map((row) =>
       row.site.siteKind === 'element' ? row.site.event.element.tagName : '#text'
     )).toEqual(['projection-logical-leaf']);
