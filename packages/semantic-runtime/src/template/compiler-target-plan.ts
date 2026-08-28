@@ -1121,6 +1121,7 @@ function contextStructuralAuthorityIsCoherent(context: TemplateCompilerTargetCon
       return authority instanceof TemplateCompilerTemplateControllerContextStructuralAuthority
         && authority.instruction.productHandle === context.owner.productHandle
         && authority.instruction.identityHandle === context.owner.identityHandle
+        && context.sourceAddressHandle === authority.instruction.sourceAddressHandle
         && authority.instruction.node.productHandle != null
         && authority.instruction.childCompiledTemplate?.productHandle === context.compiledTemplate.productHandle
         && context.slotName === null;
@@ -1128,6 +1129,9 @@ function contextStructuralAuthorityIsCoherent(context: TemplateCompilerTargetCon
       return authority instanceof TemplateCompilerProjectionContextStructuralAuthority
         && authority.instruction.productHandle === context.owner.productHandle
         && authority.instruction.identityHandle === context.owner.identityHandle
+        && context.sourceAddressHandle === (
+          authority.projection.sourceAddressHandle ?? authority.instruction.sourceAddressHandle
+        )
         && authority.instruction.node.productHandle != null
         && authority.projection.compiledTemplate.productHandle === context.compiledTemplate.productHandle
         && authority.projection.slotName === context.slotName

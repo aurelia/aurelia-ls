@@ -7,6 +7,7 @@ import {
 import projectionLogicalHostTemplate from './projection-logical-host.html';
 import projectionLogicalContainerlessHostTemplate from './projection-logical-containerless-host.html';
 import projectionLogicalNativeTcSlotHostTemplate from './projection-logical-native-tc-slot-host.html';
+import projectionLogicalNestedTcHostTemplate from './projection-logical-nested-tc-host.html';
 import projectionLogicalNonsingularTcWireHostTemplate from './projection-logical-nonsingular-tc-wire-host.html';
 import projectionLogicalShadowHostTemplate from './projection-logical-shadow-host.html';
 import projectionLogicalTcHostTemplate from './projection-logical-tc-host.html';
@@ -61,6 +62,13 @@ class ProjectionLogicalContainerlessHost {
 class ProjectionLogicalNativeTcSlotHost {
   after = 'after';
 }
+
+@customElement({
+  name: 'projection-logical-nested-tc-host',
+  template: projectionLogicalNestedTcHostTemplate,
+  dependencies: [ProjectionLogicalOuterTemplateController, ProjectionLogicalInnerTemplateController],
+})
+class ProjectionLogicalNestedTcHost {}
 
 @customElement({
   name: 'projection-logical-nonsingular-tc-wire-host',
@@ -124,6 +132,7 @@ void new Aurelia()
     ProjectionLogicalWhitespaceHost,
     ProjectionLogicalContainerlessHost,
     ProjectionLogicalNativeTcSlotHost,
+    ProjectionLogicalNestedTcHost,
     ProjectionLogicalNonsingularTcWireHost,
     ProjectionLogicalTcHost,
     ProjectionLogicalTcOnlyHost,

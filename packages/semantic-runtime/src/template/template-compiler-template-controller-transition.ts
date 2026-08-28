@@ -4,7 +4,10 @@ import {
   type TemplateCompilerHydrateElementStagingResult,
 } from './template-compiler-hydrate-element-staging.js';
 import type { TemplateCompilerHydrateTemplateControllerDraft } from './template-compiler-instruction-staging.js';
-import type { TemplateCompilerLiveAttributeOwnerResult } from './template-compiler-live-attribute-assembly.js';
+import type {
+  TemplateCompilerLiveAttributeContribution,
+  TemplateCompilerLiveAttributeOwnerResult,
+} from './template-compiler-live-attribute-assembly.js';
 import type { TemplateCompilerElementOccurrence } from './template-compiler-occurrence.js';
 import type { TemplateCompilerProjectionLogicalExtractionRealization } from './template-compiler-projection-logical-extraction.js';
 import type { TemplateCompilerSiteCursorReachedElement } from './template-compiler-site-cursor.js';
@@ -32,6 +35,7 @@ export class TemplateCompilerTemplateControllerTransitionPreparation {
   readonly sourceContext: TemplateCompilerSiteCursorContextReference;
   readonly host: TemplateCompilerElementOccurrence;
   readonly drafts: readonly TemplateCompilerHydrateTemplateControllerDraft[];
+  readonly contributions: readonly TemplateCompilerLiveAttributeContribution[];
   readonly directRowTail: TemplateCompilerLiveAttributeOwnerResult['instructionStaging']['directRowTail'];
 
   constructor(
@@ -44,6 +48,7 @@ export class TemplateCompilerTemplateControllerTransitionPreparation {
     this.sourceContext = this.sourceSelection.context;
     this.host = request.reachedElement.elementEvent.element;
     this.drafts = request.owner.instructionStaging.templateControllers;
+    this.contributions = request.owner.templateControllers;
     this.directRowTail = request.owner.instructionStaging.directRowTail;
     if (
       authority !== templateControllerTransitionAuthority
@@ -59,7 +64,9 @@ export class TemplateCompilerTemplateControllerTransitionPreparation {
       || reachedSelectionEvent.binding.visit !== this.sourceSelection.visit
       || reachedSelectionEvent.binding.work !== this.sourceSelection.work
       || this.drafts.length === 0
+      || this.contributions.length !== this.drafts.length
       || new Set(this.drafts).size !== this.drafts.length
+      || new Set(this.contributions).size !== this.contributions.length
     ) {
       throw new Error('Template-controller transition preparation lost its reached host, owner, or ordered drafts.');
     }
@@ -89,6 +96,7 @@ export class TemplateCompilerTemplateControllerTransitionEdgeReceipt {
     readonly preparation: TemplateCompilerTemplateControllerTransitionPreparation,
     readonly ordinal: number,
     readonly draft: TemplateCompilerHydrateTemplateControllerDraft,
+    readonly contribution: TemplateCompilerLiveAttributeContribution,
     readonly rowContext: TemplateCompilerSiteCursorContextReference,
     readonly childContext: TemplateCompilerSiteCursorContextReference,
     readonly placementKind:
@@ -107,6 +115,7 @@ export class TemplateCompilerTemplateControllerTransitionEdgeReceipt {
       || !Number.isSafeInteger(ordinal)
       || ordinal < 0
       || preparation.drafts[ordinal] !== draft
+      || preparation.contributions[ordinal] !== contribution
       || !rowContext.isModuleConstructed()
       || !childContext.isModuleConstructed()
       || childContext.contextKind !== TemplateCompilerSiteCursorContextKind.TemplateController
@@ -224,6 +233,7 @@ export class TemplateCompilerTemplateControllerTransitionRealization {
         || edge.preparation !== preparation
         || edge.ordinal !== ordinal
         || edge.draft !== preparation.drafts[ordinal]
+        || edge.contribution !== preparation.contributions[ordinal]
         || edge.rowContext !== (ordinal === 0 ? preparation.sourceContext : this.contexts[ordinal - 1])
         || edge.childContext !== this.contexts[ordinal]
       )
@@ -279,6 +289,7 @@ export function realizeTemplateCompilerTemplateControllerTransition(
     preparation,
     ordinal,
     preparation.drafts[ordinal]!,
+    preparation.contributions[ordinal]!,
     ordinal === 0 ? preparation.sourceContext : contexts[ordinal - 1]!,
     context,
     ordinal === 0

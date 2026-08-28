@@ -27,11 +27,14 @@ export function templateCompilerTargetAttributeDispositionCauses(
   draft: TemplateCompilerOccurrenceAttributeDispositionDraft,
   hydrateElement: TemplateCompilerTargetHydrateElementDispositionFunding | null,
   additionalInstructionCauses: readonly ClaimEndpointHandle[] = [],
+  ownedBindableInstructions: readonly TemplateInstruction[] | null = null,
 ): readonly ClaimEndpointHandle[] {
   if (hydrateElement == null) {
+    const [inputCause, ...existingCauses] = draft.causeHandles;
     return [...new Set<ClaimEndpointHandle>([
+      ...(inputCause == null ? [] : [inputCause]),
       ...additionalInstructionCauses,
-      ...draft.causeHandles,
+      ...existingCauses,
     ])];
   }
   const contribution = draft.contribution;
@@ -48,7 +51,7 @@ export function templateCompilerTargetAttributeDispositionCauses(
     ...(inputCause == null ? [] : [inputCause]),
     ...(hydrateElementOwnsDisposition ? [hydrateElement.instruction.productHandle] : []),
     ...(capture == null ? [] : [capture.productHandle]),
-    ...templateCompilerBindableInstructionsForDisposition(draft, hydrateElement)
+    ...(ownedBindableInstructions ?? templateCompilerBindableInstructionsForDisposition(draft, hydrateElement))
       .map((instruction) => instruction.productHandle),
     ...additionalInstructionCauses,
     ...existingCauses,
@@ -70,4 +73,35 @@ export function templateCompilerBindableInstructionsForDisposition(
         && instructionAttribute.rawName === draft.contribution.frame.scalar.qualifiedName
       : instructionAttribute.productHandle === authoredAttribute.productHandle;
   });
+}
+
+/** Index exact element-bindable instruction ownership once for one funded HE site. */
+export function indexTemplateCompilerBindableInstructionsByDisposition(
+  drafts: readonly TemplateCompilerOccurrenceAttributeDispositionDraft[],
+  hydrateElement: TemplateCompilerTargetHydrateElementDispositionFunding,
+): ReadonlyMap<TemplateCompilerOccurrenceAttributeDispositionDraft, readonly TemplateInstruction[]> {
+  const instructionsByAttribute = new Map<string, TemplateInstruction[]>();
+  for (const instruction of hydrateElement.bindableInstructions) {
+    if (!('attribute' in instruction) || instruction.attribute == null) continue;
+    const key = instruction.attribute.productHandle == null
+      ? instruction.attribute.rawName == null ? null : `raw:${instruction.attribute.rawName}`
+      : `product:${instruction.attribute.productHandle}`;
+    if (key == null) continue;
+    const bucket = instructionsByAttribute.get(key);
+    if (bucket == null) instructionsByAttribute.set(key, [instruction]);
+    else bucket.push(instruction);
+  }
+  const indexed = new Map<
+    TemplateCompilerOccurrenceAttributeDispositionDraft,
+    readonly TemplateInstruction[]
+  >();
+  for (const draft of drafts) {
+    if (draft.contribution.targetLane !== TemplateCompilerLiveAttributeTargetLane.ElementBindable) continue;
+    const authoredAttribute = draft.contribution.frame.source.authoredAttribute;
+    const key = authoredAttribute == null
+      ? `raw:${draft.contribution.frame.scalar.qualifiedName}`
+      : `product:${authoredAttribute.productHandle}`;
+    indexed.set(draft, instructionsByAttribute.get(key) ?? []);
+  }
+  return indexed;
 }

@@ -818,7 +818,7 @@ describe('template compiler structural execution mechanics', () => {
             HydrateElementProjectionContributorDisposition.RetainedNode,
           ),
         ],
-        authoredDefault.sourceAddressHandle,
+        null,
       );
       const namedProjection = new HydrateElementProjectionDefinition(
         'named',
@@ -859,6 +859,8 @@ describe('template compiler structural execution mechanics', () => {
       );
       const defaultContext = targetPlan.createProjectionContext(targetPlan.root, hostInstruction, defaultProjection);
       const namedContext = targetPlan.createProjectionContext(targetPlan.root, hostInstruction, namedProjection);
+      expect(defaultContext.sourceAddressHandle).toBe(hostInstruction.sourceAddressHandle);
+      expect(namedContext.sourceAddressHandle).toBe(namedProjection.sourceAddressHandle);
       targetPlan.root.recordCompilerReachableNode(authoredHost.productHandle);
       for (const node of [authoredDefault, authoredDefaultText]) {
         defaultContext.recordCompilerReachableNode(node.productHandle);

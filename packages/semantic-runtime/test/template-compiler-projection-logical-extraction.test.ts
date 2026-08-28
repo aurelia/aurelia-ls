@@ -14,7 +14,11 @@ import {
   TemplateCompilerReadView,
   TemplateCompilerWorldAuthority,
 } from '../src/template/compiler-read-view.js';
-import { TemplateCompilerTargetRowPlacementKind } from '../src/template/compiler-target-plan.js';
+import {
+  TemplateCompilerTargetContextRole,
+  TemplateCompilerTargetRowPlacementKind,
+  TemplateCompilerTargetRowSourceKind,
+} from '../src/template/compiler-target-plan.js';
 import {
   TemplateCompilerExecutionSession,
   type TemplateCompilerSiteExecutionEndpointReceipt,
@@ -30,6 +34,10 @@ import {
   TemplateCompilerContextFamilyAllocationState,
   TemplateCompilerFundedContextDefinitionOwnerKind,
 } from '../src/template/template-compiler-context-family-allocation.js';
+import {
+  prepareTemplateCompilerContextFamilyTargetPlan,
+  TemplateCompilerContextFamilyTargetPlanState,
+} from '../src/template/template-compiler-context-family-target-plan.js';
 import {
   assembleTemplateCompilerContextFamilyRows,
   TemplateCompilerContextFamilyRowAssemblyState,
@@ -52,6 +60,7 @@ import {
   TemplateCompilerLiveAllocationLedgerState,
   TemplateCompilerLiveProductReservationRole,
 } from '../src/template/template-compiler-live-allocation.js';
+import { TemplateCompilerLiveAttributeTargetLane } from '../src/template/template-compiler-live-attribute-assembly.js';
 import { executeTemplateCompilerLocalExtraction } from '../src/template/template-compiler-local-extraction.js';
 import {
   buildTemplateCompilerNormalizedSiteIndex,
@@ -547,6 +556,9 @@ describe('template compiler projection logical extraction', () => {
     ).every((context, ordinal) =>
       context.templateControllerOwner?.edge === transition.realization.edges[ordinal]
     )).toBe(true);
+    for (const [ordinal, edge] of transition.realization.edges.entries()) {
+      expect(edge.contribution).toBe(transition.preparation.request.owner.templateControllers[ordinal]);
+    }
     expect(result.traversal?.templateControllerLeafRehomings[0]?.event).toBe(transition);
     expect(result.traversal?.templateControllerLeafRehomings[0]?.receipt)
       .toBe(transition.realization.leafRehoming);
@@ -873,8 +885,12 @@ describe('template compiler projection logical extraction', () => {
     if (preparation == null) {
       throw new Error(`Expected TC-only allocation: ${result.reasons[0]?.summary ?? 'unknown'}`);
     }
+    const targetResult = prepareTemplateCompilerContextFamilyTargetPlan(preparation);
+    const target = targetResult.preparation;
+    if (target == null) throw new Error('Expected TC-only target plan.');
 
     expect(result.state).toBe(TemplateCompilerContextFamilyAllocationState.Exact);
+    expect(targetResult.state).toBe(TemplateCompilerContextFamilyTargetPlanState.Exact);
     expect(namespace.readReservationCounts()).toEqual(countsBefore);
     expect(preparation.contextDefinitions.map((definition) => definition.ownerKind)).toEqual([
       TemplateCompilerFundedContextDefinitionOwnerKind.Root,
@@ -892,6 +908,127 @@ describe('template compiler projection logical extraction', () => {
       TemplateCompilerLiveProductReservationRole.GeneratedCompiledTemplate,
       TemplateCompilerLiveProductReservationRole.GeneratedCompiledTemplate,
     ]);
+    expect(target.targetPlan.readContexts()[1]?.readRows()[0]?.sourceKind)
+      .toBe(TemplateCompilerTargetRowSourceKind.GeneratedContextBoundary);
+    expect(target.targetPlan.readContexts()[2]?.readOccurrenceMemberships().every((membership) =>
+      membership.arrivalPosture === TemplateCompilerFamilyOccurrenceArrivalPosture.AdoptedInput
+    )).toBe(true);
+  });
+
+  test('seals a TC plus projection target plan without committing family allocation', () => {
+    const run = fixture.run(
+      'projection-logical-tc-host',
+      TemplateCompilerSiteCursorTraversalMode.ClosedContextFamily,
+    );
+    const completion = completeTemplateCompilerContextFamily(run.transcript, run.endpoint);
+    if (completion.receipt == null) throw new Error('Expected target-plan family completion.');
+    const rows = assembleTemplateCompilerContextFamilyRows(completion.receipt).assembly;
+    if (rows == null) throw new Error('Expected target-plan family rows.');
+    const wires = prepareTemplateCompilerFamilyWireFunding(rows).funding;
+    if (wires == null) throw new Error('Expected target-plan family wires.');
+    const allocation = prepareTemplateCompilerContextFamilyAllocation(rows, wires).preparation;
+    if (allocation == null) throw new Error('Expected target-plan family allocation.');
+    const namespace = run.transcript.allocationSnapshot.ledger.namespace;
+    const countsBefore = namespace.readReservationCounts();
+    const result = prepareTemplateCompilerContextFamilyTargetPlan(allocation);
+    const preparation = result.preparation;
+    if (preparation == null) {
+      throw new Error(`Expected sealed family target plan: ${result.reasons[0]?.summary ?? 'unknown'}`);
+    }
+    const contexts = preparation.targetPlan.readContexts();
+    const sourceRow = contexts[0]?.readRows()[0];
+    const host = rows.contexts[2]?.memberships.find((membership) =>
+      membership.occurrence instanceof TemplateCompilerElementOccurrence
+      && membership.occurrence.tagName === 'projection-logical-leaf'
+    )?.occurrence;
+    if (host == null) throw new Error('Expected terminal TC host membership.');
+
+    expect(result.state).toBe(TemplateCompilerContextFamilyTargetPlanState.Exact);
+    expect(preparation.isCurrent()).toBe(true);
+    expect(preparation.targetPlan.isSealed).toBe(true);
+    expect(allocation.preparedAllocation.ledger.state).toBe(TemplateCompilerLiveAllocationLedgerState.Prepared);
+    expect(namespace.readReservationCounts()).toEqual(countsBefore);
+    expect(contexts.map((context) => context.role)).toEqual([
+      TemplateCompilerTargetContextRole.Root,
+      TemplateCompilerTargetContextRole.TemplateController,
+      TemplateCompilerTargetContextRole.TemplateController,
+      TemplateCompilerTargetContextRole.Projection,
+      TemplateCompilerTargetContextRole.Projection,
+    ]);
+    expect(contexts.map((context) => context.readRows().map((row) => row.sourceKind))).toEqual([
+      [
+        TemplateCompilerTargetRowSourceKind.TemplateControllerTransitionSource,
+        TemplateCompilerTargetRowSourceKind.RetainedOccurrence,
+      ],
+      [TemplateCompilerTargetRowSourceKind.GeneratedContextBoundary],
+      [TemplateCompilerTargetRowSourceKind.RetainedOccurrence],
+      [TemplateCompilerTargetRowSourceKind.TextHole],
+      [TemplateCompilerTargetRowSourceKind.RetainedOccurrence],
+    ]);
+    expect(sourceRow?.transitionSourceAuthority?.sourceArrivalPosture)
+      .toBe(TemplateCompilerFamilyOccurrenceArrivalPosture.Initial);
+    expect(sourceRow?.transitionSourceAuthority?.destinationContext).toBe(contexts[2]);
+    expect(sourceRow?.transitionSourceAuthority?.destinationMembership)
+      .toBe(contexts[2]?.occurrenceMembershipFor(host));
+    const templateControllerDispositions = preparation.attributeDispositionMappings.filter((mapping) =>
+      mapping.draft.contribution.targetLane === TemplateCompilerLiveAttributeTargetLane.TemplateController
+    );
+    expect(templateControllerDispositions).toHaveLength(2);
+    for (const mapping of templateControllerDispositions) {
+      const funded = allocation.hydrateTemplateControllers.find((candidate) =>
+        candidate.draft.row.edge.contribution === mapping.draft.contribution
+      );
+      expect(mapping.causeHandles).toContain(funded?.instruction.productHandle);
+    }
+  });
+
+  test('inherits adopted source availability for a nested TC transition', () => {
+    const run = fixture.run(
+      'projection-logical-nested-tc-host',
+      TemplateCompilerSiteCursorTraversalMode.ClosedContextFamily,
+    );
+    const completion = completeTemplateCompilerContextFamily(run.transcript, run.endpoint);
+    if (completion.receipt == null) {
+      throw new Error(
+        `Expected nested TC family completion: ${completion.reasons.map((reason) => reason.summary).join(' ')}`,
+      );
+    }
+    const rows = assembleTemplateCompilerContextFamilyRows(completion.receipt).assembly;
+    if (rows == null) throw new Error('Expected nested TC family rows.');
+    const wires = prepareTemplateCompilerFamilyWireFunding(rows).funding;
+    if (wires == null) throw new Error('Expected nested TC family wires.');
+    const allocation = prepareTemplateCompilerContextFamilyAllocation(rows, wires).preparation;
+    if (allocation == null) throw new Error('Expected nested TC family allocation.');
+    const result = prepareTemplateCompilerContextFamilyTargetPlan(allocation);
+    const preparation = result.preparation;
+    if (preparation == null) throw new Error('Expected nested TC target plan.');
+    const contexts = preparation.targetPlan.readContexts();
+    const sourceRows = preparation.rowMappings.filter((mapping) =>
+      mapping.row.sourceKind === TemplateCompilerTargetRowSourceKind.TemplateControllerTransitionSource
+    );
+
+    expect(result.state).toBe(TemplateCompilerContextFamilyTargetPlanState.Exact);
+    expect(rows.contexts.map((context) => context.sourceAvailability.sourceArrivalPosture)).toEqual([
+      TemplateCompilerFamilyOccurrenceArrivalPosture.Initial,
+      TemplateCompilerFamilyOccurrenceArrivalPosture.AdoptedInput,
+      TemplateCompilerFamilyOccurrenceArrivalPosture.IncomingTransfer,
+    ]);
+    expect(contexts.map((context) => context.role)).toEqual([
+      TemplateCompilerTargetContextRole.Root,
+      TemplateCompilerTargetContextRole.TemplateController,
+      TemplateCompilerTargetContextRole.TemplateController,
+    ]);
+    expect(sourceRows).toHaveLength(2);
+    expect(sourceRows.map((mapping) => mapping.row.transitionSourceAuthority?.sourceArrivalPosture)).toEqual([
+      TemplateCompilerFamilyOccurrenceArrivalPosture.Initial,
+      TemplateCompilerFamilyOccurrenceArrivalPosture.AdoptedInput,
+    ]);
+    expect(contexts[1]?.readOccurrenceMemberships().some((membership) =>
+      membership.arrivalPosture === TemplateCompilerFamilyOccurrenceArrivalPosture.AdoptedInput
+    )).toBe(true);
+    expect(contexts[2]?.readOccurrenceMemberships().some((membership) =>
+      membership.arrivalPosture === TemplateCompilerFamilyOccurrenceArrivalPosture.IncomingTransfer
+    )).toBe(true);
   });
 
   test('funds empty projection definitions while leaving whitespace-only groups definition-free', () => {
@@ -933,8 +1070,12 @@ describe('template compiler projection logical extraction', () => {
       }
       const hydrateElement = preparation.hydrateElements[0]?.instruction;
       if (hydrateElement == null) throw new Error(`Expected funded HE for '${expected.name}'.`);
+      const targetResult = prepareTemplateCompilerContextFamilyTargetPlan(preparation);
+      const target = targetResult.preparation;
+      if (target == null) throw new Error(`Expected target plan for '${expected.name}'.`);
 
       expect(result.state, expected.name).toBe(TemplateCompilerContextFamilyAllocationState.Exact);
+      expect(targetResult.state, expected.name).toBe(TemplateCompilerContextFamilyTargetPlanState.Exact);
       expect(namespace.readReservationCounts(), expected.name).toEqual(countsBefore);
       expect(preparation.contextDefinitions.map((definition) => definition.ownerKind), expected.name)
         .toEqual(expected.ownerKinds);
@@ -945,6 +1086,13 @@ describe('template compiler projection logical extraction', () => {
       expect(hydrateElement.discardedProjectionContributors, expected.name).toHaveLength(expected.discarded);
       expect(preparation.preparedAllocation.productReservations, expected.name)
         .toHaveLength(expected.ownerKinds.length);
+      expect(target.targetPlan.readContexts().map((context) => context.role), expected.name).toEqual([
+        TemplateCompilerTargetContextRole.Root,
+        ...expected.ownerKinds.slice(1).map(() => TemplateCompilerTargetContextRole.Projection),
+      ]);
+      if (expected.name === 'projection-logical-host') {
+        expect(target.targetPlan.readContexts().at(-1)?.readRows()).toEqual([]);
+      }
     }
   });
 
