@@ -16,9 +16,18 @@ import {
 } from '../src/template/compiler-read-view.js';
 import {
   TemplateCompilerExecutionSession,
+  type TemplateCompilerSiteExecutionEndpointReceipt,
 } from '../src/template/template-compiler-execution.js';
+import {
+  completeTemplateCompilerContextFamily,
+  TemplateCompilerContextFamilyCompletionReasonKind,
+  TemplateCompilerContextFamilyCompletionState,
+} from '../src/template/template-compiler-context-family-completion.js';
 import { executeTemplateCompilerHookBootstrap } from '../src/template/template-compiler-hook-bootstrap.js';
-import type { TemplateCompilerHydrateElementEnvelopeDraft } from '../src/template/template-compiler-hydrate-element-staging.js';
+import {
+  TemplateCompilerHydrateElementBlockerKind,
+  type TemplateCompilerHydrateElementEnvelopeDraft,
+} from '../src/template/template-compiler-hydrate-element-staging.js';
 import { executeTemplateCompilerLocalExtraction } from '../src/template/template-compiler-local-extraction.js';
 import {
   buildTemplateCompilerNormalizedSiteIndex,
@@ -338,6 +347,94 @@ describe('template compiler projection logical extraction', () => {
       .toContain(TemplateCompilerOrdinaryRootCompletionRefusalKind.ContextFamilyTraversal);
   });
 
+  test('completes a drained projection-only context family without claiming target lowering', () => {
+    const run = fixture.run(
+      'projection-logical-host',
+      TemplateCompilerSiteCursorTraversalMode.ClosedContextFamily,
+    );
+    const result = completeTemplateCompilerContextFamily(run.transcript, run.endpoint);
+
+    expect(result.state).toBe(TemplateCompilerContextFamilyCompletionState.Complete);
+    expect(result.reasons).toEqual([]);
+    expect(result.receipt?.isCurrent()).toBe(true);
+    expect(result.traversal?.contexts.map((context) => [
+      context.context.contextKind,
+      context.projectionOwner?.staging.band.planned.group.slotName ?? null,
+      context.projectionOwner?.staging.works.length ?? null,
+    ])).toEqual([
+      [TemplateCompilerSiteCursorContextKind.Root, null, null],
+      [TemplateCompilerSiteCursorContextKind.Projection, 'default', 1],
+      [TemplateCompilerSiteCursorContextKind.Projection, 'named', 2],
+      [TemplateCompilerSiteCursorContextKind.Projection, 'empty', 0],
+    ]);
+    const host = result.traversal?.hydrateElements.find((entry) =>
+      entry.staging.element.tagName === 'projection-logical-leaf'
+    );
+    expect(host?.projectionExtraction).toBeDefined();
+    expect(host?.dischargedBlockers.map((blocker) => blocker.blockerKind))
+      .toContain(TemplateCompilerHydrateElementBlockerKind.ProjectionExtractionPending);
+    expect(host?.forwardedBlockers.map((blocker) => blocker.blockerKind))
+      .toContain(TemplateCompilerHydrateElementBlockerKind.TargetRowPlacementPending);
+  });
+
+  test('completes an all-whitespace extraction with an intentionally root-only family', () => {
+    const run = fixture.run(
+      'projection-logical-whitespace-host',
+      TemplateCompilerSiteCursorTraversalMode.ClosedContextFamily,
+    );
+    const extraction = eventsOf(run.transcript, TemplateCompilerSiteCursorProjectionExtractionEvent)[0];
+    const result = completeTemplateCompilerContextFamily(run.transcript, run.endpoint);
+
+    expect(run.transcript.taskSnapshot.contexts).toHaveLength(1);
+    expect(extraction?.preparation.discardedWhitespace).toHaveLength(1);
+    expect(extraction?.entrantBandStagings).toEqual([]);
+    expect(result.state).toBe(TemplateCompilerContextFamilyCompletionState.Complete);
+    expect(result.traversal?.contexts).toHaveLength(1);
+    expect(result.traversal?.projectionExtractions).toEqual([extraction]);
+  });
+
+  test('retains an exact TC plus projection traversal as specifically Pending', () => {
+    const run = fixture.run(
+      'projection-logical-tc-host',
+      TemplateCompilerSiteCursorTraversalMode.ClosedContextFamily,
+    );
+    const result = completeTemplateCompilerContextFamily(run.transcript, run.endpoint);
+
+    expect(result.state).toBe(TemplateCompilerContextFamilyCompletionState.Pending);
+    expect(result.receipt).toBeNull();
+    expect(result.traversal?.isCurrent()).toBe(true);
+    expect(result.reasons.map((reason) => reason.reasonKind)).toEqual([
+      TemplateCompilerContextFamilyCompletionReasonKind.TemplateControllerTransitionMissing,
+    ]);
+    expect(result.traversal?.hasTemplateControllerContexts).toBe(true);
+  });
+
+  test('refuses compatibility traversal mode instead of treating its frontier as a family', () => {
+    const run = fixture.run('projection-logical-host');
+    const result = completeTemplateCompilerContextFamily(run.transcript, run.endpoint);
+
+    expect(result.state).toBe(TemplateCompilerContextFamilyCompletionState.Ineligible);
+    expect(result.receipt).toBeNull();
+    expect(result.reasons.map((reason) => reason.reasonKind))
+      .toContain(TemplateCompilerContextFamilyCompletionReasonKind.TraversalModeMismatch);
+  });
+
+  test('closes projected containerless placement only after the drained projection contexts', () => {
+    const run = fixture.run(
+      'projection-logical-containerless-host',
+      TemplateCompilerSiteCursorTraversalMode.ClosedContextFamily,
+    );
+    const result = completeTemplateCompilerContextFamily(run.transcript, run.endpoint);
+    const host = result.traversal?.hydrateElements.find((entry) =>
+      entry.staging.element.tagName === 'projection-logical-containerless-leaf'
+    );
+
+    expect(result.state).toBe(TemplateCompilerContextFamilyCompletionState.Complete);
+    expect(host?.containerlessPlacement?.projectionExtraction).toBe(host?.projectionExtraction);
+    expect(host?.dischargedBlockers.map((blocker) => blocker.blockerKind))
+      .toContain(TemplateCompilerHydrateElementBlockerKind.ContainerlessPlacementPending);
+  });
+
   test('rejects realization replay through a fresh task session', () => {
     const run = fixture.run('projection-logical-host');
     const preparation = run.prepare();
@@ -375,6 +472,7 @@ class ProjectionFixtureRun {
     readonly binding: TemplateCompilerSiteInvocationBinding,
     readonly preWalk: TemplateCompilerPreWalkRemainderAuthority,
     readonly transcript: TemplateCompilerSiteCursorTranscript,
+    readonly endpoint: TemplateCompilerSiteExecutionEndpointReceipt,
     readonly completion: TemplateCompilerOrdinaryRootCompletionResult,
   ) {}
 
@@ -446,11 +544,20 @@ class ProjectionLogicalExtractionFixture {
     if (
       result.state !== TemplateCompilerSiteCursorResultState.Transcript
       || result.transcript == null
+      || result.siteEndpoint == null
       || result.completion == null
     ) {
       throw new Error(`Expected projection transcript: ${result.reasons.map((reason) => reason.summary).join(' ')}`);
     }
-    const run = new ProjectionFixtureRun(this, compilation, binding, preWalk, result.transcript, result.completion);
+    const run = new ProjectionFixtureRun(
+      this,
+      compilation,
+      binding,
+      preWalk,
+      result.transcript,
+      result.siteEndpoint,
+      result.completion,
+    );
     this.runs.set(runKey, run);
     return run;
   }

@@ -9,6 +9,7 @@ import projectionLogicalContainerlessHostTemplate from './projection-logical-con
 import projectionLogicalShadowHostTemplate from './projection-logical-shadow-host.html';
 import projectionLogicalTcHostTemplate from './projection-logical-tc-host.html';
 import projectionLogicalTcOnlyHostTemplate from './projection-logical-tc-only-host.html';
+import projectionLogicalWhitespaceHostTemplate from './projection-logical-whitespace-host.html';
 
 @customElement({ name: 'projection-logical-leaf' })
 class ProjectionLogicalLeaf {}
@@ -28,6 +29,15 @@ class ProjectionLogicalInnerTemplateController {}
   dependencies: [ProjectionLogicalLeaf],
 })
 class ProjectionLogicalHost {
+  after = 'after';
+}
+
+@customElement({
+  name: 'projection-logical-whitespace-host',
+  template: projectionLogicalWhitespaceHostTemplate,
+  dependencies: [ProjectionLogicalLeaf],
+})
+class ProjectionLogicalWhitespaceHost {
   after = 'after';
 }
 
@@ -85,6 +95,7 @@ void new Aurelia()
   .register(
     StandardConfiguration,
     ProjectionLogicalHost,
+    ProjectionLogicalWhitespaceHost,
     ProjectionLogicalContainerlessHost,
     ProjectionLogicalTcHost,
     ProjectionLogicalTcOnlyHost,
