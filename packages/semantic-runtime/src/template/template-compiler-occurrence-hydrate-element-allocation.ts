@@ -1,31 +1,29 @@
-import type { IdentityHandle, ProductHandle } from '../kernel/handles.js';
+import type { IdentityHandle } from '../kernel/handles.js';
 import { TemplateCompilerTargetRowPlacementKind } from './compiler-target-plan.js';
 import {
   TemplateCompilerHydrateElementProcessContentState,
   TemplateCompilerHydrateElementProjectionState,
 } from './template-compiler-hydrate-element-staging.js';
+import type { HydrateElementInstruction } from './instruction-ir.js';
 import {
-  stageTemplateCompilerHydrateElementInstruction,
-  TemplateCompilerHydrateElementInstructionStagingRequest,
-  TemplateCompilerInstructionStagingAllocation,
-  type TemplateCompilerInstructionStagingAllocationRequest,
-  type TemplateCompilerInstructionStagingAuthority,
-} from './template-compiler-instruction-staging.js';
-import type { HydrateElementInstruction, TemplateInstruction } from './instruction-ir.js';
+  fundTemplateCompilerHydrateElements,
+  TemplateCompilerEmptyHydrateElementProjectionFundingPlan,
+  TemplateCompilerHydrateElementFundingDraft,
+  type TemplateCompilerFundedHydrateElementHead,
+  type TemplateCompilerHydrateElementFundingRow,
+} from './template-compiler-hydrate-element-funding.js';
+export { TemplateCompilerAllocatedCaptureSyntaxReference } from './template-compiler-hydrate-element-funding.js';
+import type { TemplateCompilerAllocatedCaptureSyntaxReference } from './template-compiler-hydrate-element-funding.js';
 import {
   TemplateCompilerLiveAllocationSnapshotState,
-  TemplateCompilerLiveProductReservationRole,
   type TemplateCompilerLiveAllocationInventory,
-  type TemplateCompilerLiveAllocationLedger,
   type TemplateCompilerLivePreparedAllocationSnapshot,
   type TemplateCompilerLiveAllocationSnapshot,
   type TemplateCompilerLiveInstructionAllocation,
-  type TemplateCompilerLiveProductReservation,
 } from './template-compiler-live-allocation.js';
 import {
   TemplateCompilerCaptureSyntaxDecisionKind,
   TemplateCompilerOccurrencePrePlanEffectState,
-  type TemplateCompilerCapturedSyntaxRowDraft,
   type TemplateCompilerOccurrenceHydrateElementRowDraft,
   type TemplateCompilerOccurrenceRowAssembly,
   type TemplateCompilerOccurrenceTargetRowDraft,
@@ -65,68 +63,48 @@ export class TemplateCompilerOccurrenceHydrateElementAllocationReason {
   ) {}
 }
 
-/** Exact authored reuse or future effective-syntax reservation selected for one captured attribute. */
-export class TemplateCompilerAllocatedCaptureSyntaxReference {
-  readonly productHandle: ProductHandle;
-
-  constructor(
-    readonly draft: TemplateCompilerCapturedSyntaxRowDraft,
-    readonly effectiveReservation: TemplateCompilerLiveProductReservation | null,
-  ) {
-    const reused = draft.authoredSyntax;
-    const productHandle = reused?.productHandle ?? effectiveReservation?.productHandle ?? null;
-    if (
-      (draft.decisionKind === TemplateCompilerCaptureSyntaxDecisionKind.ReuseAuthored)
-        !== (reused != null && effectiveReservation == null)
-      || (draft.decisionKind === TemplateCompilerCaptureSyntaxDecisionKind.EffectiveSyntaxRequired)
-        !== (reused == null
-          && effectiveReservation?.role === TemplateCompilerLiveProductReservationRole.EffectiveAttributeSyntax)
-      || productHandle == null
-    ) {
-      throw new Error(`Captured syntax '${draft.stableSlotKey}' lost reuse/reservation authority.`);
-    }
-    this.productHandle = productHandle;
-  }
-}
-
 /** One funded HE row head; the instruction is real while effective capture products remain future reservations. */
 export class TemplateCompilerAllocatedHydrateElementHead {
   readonly instructionOwnerIdentityHandle: IdentityHandle;
+  readonly instructionAllocation: TemplateCompilerLiveInstructionAllocation;
+  readonly instruction: HydrateElementInstruction;
+  readonly captures: readonly TemplateCompilerAllocatedCaptureSyntaxReference[];
 
   constructor(
     readonly row: TemplateCompilerOccurrenceTargetRowDraft,
     readonly head: TemplateCompilerOccurrenceHydrateElementRowDraft,
-    readonly instructionAllocation: TemplateCompilerLiveInstructionAllocation,
-    readonly instruction: HydrateElementInstruction,
-    readonly captures: readonly TemplateCompilerAllocatedCaptureSyntaxReference[],
+    funded: TemplateCompilerFundedHydrateElementHead<
+      object,
+      TemplateCompilerHydrateElementFundingRow<object>
+    >,
   ) {
     const envelope = head.envelope;
     const instructionOwnerIdentityHandle = envelope.definition.identityHandle ?? head.instructionNode.identityHandle;
+    const draft = funded.draft;
+    this.instructionAllocation = funded.instructionAllocation;
+    this.instruction = funded.instruction;
+    this.captures = funded.captures;
     if (
       row.hydrateElement !== head
       || head.site !== row.site
-      || instructionAllocation.instruction !== instruction
-      || instruction.productHandle !== instructionAllocation.productHandle
-      || instruction.identityHandle !== instructionAllocation.identityHandle
-      || instruction.node !== head.instructionNode
-      || instruction.elementName !== envelope.elementName
-      || instruction.resourceLookupName !== envelope.resourceLookupName
-      || instruction.resource !== envelope.resource
-      || instruction.projections.length !== 0
-      || instruction.discardedProjectionContributors.length !== 0
-      || instruction.auSlotProcessContent !== null
-      || instruction.auSlotProcessContentRemovedChildNodes.length !== 0
-      || !sameObjects(
-        instruction.bindableInstructionProductHandles,
-        envelope.bindableInstructions.map((candidate) => candidate.productHandle),
-      )
-      || !sameObjects(
-        instruction.captureSyntaxProductHandles,
-        captures.map((capture) => capture.productHandle),
-      )
-      || instruction.containerless !== envelope.containerless.fromUsage
-      || instruction.sourceAddressHandle !== envelope.source.sourceAddressHandle
-      || !sameObjects(captures.map((capture) => capture.draft), head.captures)
+      || draft.row !== row
+      || draft.site !== row.site
+      || draft.instructionSlotKey !== head.instructionSlotKey
+      || draft.occurrenceKey !== row.occurrence.occurrenceKey
+      || draft.instructionNode !== head.instructionNode
+      || draft.instructionOwnerIdentityHandle !== instructionOwnerIdentityHandle
+      || funded.instructionOwnerIdentityHandle !== instructionOwnerIdentityHandle
+      || draft.elementName !== envelope.elementName
+      || draft.resourceLookupName !== envelope.resourceLookupName
+      || draft.resource !== envelope.resource
+      || !(draft.projectionFundingPlan instanceof TemplateCompilerEmptyHydrateElementProjectionFundingPlan)
+      || draft.discardedProjectionContributors.length !== 0
+      || draft.auSlotProcessContent !== null
+      || draft.auSlotProcessContentRemovedChildNodes.length !== 0
+      || !sameObjects(draft.bindableInstructions, envelope.bindableInstructions)
+      || !sameObjects(draft.captures, head.captures)
+      || draft.usageContainerless !== envelope.containerless.fromUsage
+      || draft.sourceAddressHandle !== envelope.source.sourceAddressHandle
       || instructionOwnerIdentityHandle == null
     ) {
       throw new Error(`HydrateElement head '${head.instructionSlotKey}' lost envelope or allocation authority.`);
@@ -374,52 +352,34 @@ export function allocateTemplateCompilerOccurrenceHydrateElements(
   const lane = rows.receipt.endpoint.lane;
   const phaseKey = `${lane.localKey}:occurrence-hydrate-elements`;
   const ledger = parentAllocation.ledger.namespace.preparePhase(phaseKey);
-  const authority = new HydrateElementAllocationInstructionAuthority(ledger, phaseKey);
-  const heads = hydrateRows.map((row) => {
+  const fundingDrafts = hydrateRows.map((row) => {
     const head = row.hydrateElement!;
-    const captures = head.captures.map((capture) => {
-      if (capture.decisionKind === TemplateCompilerCaptureSyntaxDecisionKind.ReuseAuthored) {
-        return new TemplateCompilerAllocatedCaptureSyntaxReference(capture, null);
-      }
-      const local = `${phaseKey}:${capture.stableSlotKey}:effective-attribute-syntax`;
-      return new TemplateCompilerAllocatedCaptureSyntaxReference(
-        capture,
-        ledger.reserveProduct(
-          `${phaseKey}:${capture.stableSlotKey}`,
-          'effective-attribute-syntax',
-          TemplateCompilerLiveProductReservationRole.EffectiveAttributeSyntax,
-          capture.capture.syntax.sourceAddressHandle,
-          local,
-        ),
-      );
-    });
-    const instruction = stageTemplateCompilerHydrateElementInstruction(
-      new TemplateCompilerHydrateElementInstructionStagingRequest(
-        authority,
-        head.instructionSlotKey,
-        row.occurrence.occurrenceKey,
-        head.instructionNode,
-        head.envelope.elementName,
-        head.envelope.resourceLookupName,
-        head.envelope.resource,
-        () => [],
-        [],
-        null,
-        [],
-        head.envelope.bindableInstructions,
-        captures.map((capture) => capture.productHandle),
-        head.envelope.containerless.fromUsage,
-        head.envelope.source.sourceAddressHandle,
-      ),
-    );
-    return new TemplateCompilerAllocatedHydrateElementHead(
+    return new TemplateCompilerHydrateElementFundingDraft(
       row,
-      head,
-      authority.allocationFor(instruction),
-      instruction,
-      captures,
+      row.site,
+      head.instructionSlotKey,
+      row.occurrence.occurrenceKey,
+      head.instructionNode,
+      head.envelope.definition.identityHandle ?? head.instructionNode.identityHandle!,
+      head.envelope.elementName,
+      head.envelope.resourceLookupName,
+      head.envelope.resource,
+      new TemplateCompilerEmptyHydrateElementProjectionFundingPlan(),
+      [],
+      null,
+      [],
+      head.envelope.bindableInstructions,
+      head.captures,
+      head.envelope.containerless.fromUsage,
+      head.envelope.source.sourceAddressHandle,
     );
   });
+  const funding = fundTemplateCompilerHydrateElements(ledger, phaseKey, fundingDrafts);
+  const heads = funding.heads.map((funded, ordinal) => new TemplateCompilerAllocatedHydrateElementHead(
+    hydrateRows[ordinal]!,
+    hydrateRows[ordinal]!.hydrateElement!,
+    funded,
+  ));
   let preparedAllocation: TemplateCompilerLivePreparedAllocationSnapshot;
   try {
     preparedAllocation = ledger.prepareSnapshot();
@@ -460,44 +420,6 @@ export function allocateTemplateCompilerOccurrenceHydrateElements(
   );
   exactAllocationsByRows.set(rows, result);
   return result;
-}
-
-class HydrateElementAllocationInstructionAuthority implements TemplateCompilerInstructionStagingAuthority {
-  private readonly allocationsByInstruction = new Map<TemplateInstruction, TemplateCompilerLiveInstructionAllocation>();
-
-  constructor(
-    private readonly ledger: TemplateCompilerLiveAllocationLedger,
-    private readonly phaseKey: string,
-  ) {}
-
-  create<TInstruction extends TemplateInstruction>(
-    request: TemplateCompilerInstructionStagingAllocationRequest,
-    factory: (allocation: TemplateCompilerInstructionStagingAllocation) => TInstruction,
-  ): TInstruction {
-    const siteKey = `${this.phaseKey}:${request.siteKey}`;
-    const instructionLocal = `${siteKey}:instruction:${request.local}`;
-    const retained = this.ledger.allocateInstruction(
-      siteKey,
-      request.local,
-      request.kind,
-      request.sourceAddressHandle,
-      instructionLocal,
-    );
-    const instruction = factory(new TemplateCompilerInstructionStagingAllocation(
-      retained.productHandle,
-      retained.identityHandle,
-      retained.instructionLocal,
-    ));
-    this.ledger.bindInstruction(instruction);
-    this.allocationsByInstruction.set(instruction, retained);
-    return instruction;
-  }
-
-  allocationFor(instruction: TemplateInstruction): TemplateCompilerLiveInstructionAllocation {
-    const allocation = this.allocationsByInstruction.get(instruction) ?? null;
-    if (allocation == null) throw new Error('HydrateElement instruction lost its downstream allocation.');
-    return allocation;
-  }
 }
 
 function refused(
