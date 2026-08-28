@@ -1,7 +1,4 @@
-import type { ClaimEndpointHandle } from '../kernel/claim.js';
-import { AttributeClassificationKind } from './attribute-syntax.js';
 import { CompiledTemplateReference } from './compiled-template.js';
-import type { TemplateInstruction } from './instruction-ir.js';
 import {
   TemplateCompilerContainerlessReplacementPlacement,
   TemplateCompilerMarkerTargetPlacement,
@@ -15,6 +12,12 @@ import {
   TemplateCompilerLiveAttributeTargetLane,
 } from './template-compiler-live-attribute-assembly.js';
 import {
+  templateCompilerBindableInstructionsForDisposition,
+  templateCompilerTargetAttributeDispositionCauses,
+  TemplateCompilerTargetAttributeDispositionMapping,
+  type TemplateCompilerTargetHydrateElementDispositionFunding,
+} from './template-compiler-target-attribute-disposition.js';
+import {
   TemplateCompilerLiveProductReservationRole,
   type TemplateCompilerLiveAllocationSnapshot,
   type TemplateCompilerLiveProductReservation,
@@ -25,7 +28,6 @@ import type {
   TemplateCompilerOccurrenceHydrateElementAllocationAssembly,
 } from './template-compiler-occurrence-hydrate-element-allocation.js';
 import {
-  type TemplateCompilerOccurrenceAttributeDispositionDraft,
   TemplateCompilerOccurrencePrePlanEffectState,
   TemplateCompilerOccurrenceSourcePosture,
   type TemplateCompilerOccurrenceRowAssembly,
@@ -112,16 +114,8 @@ export class TemplateCompilerOccurrenceTargetRowMapping {
 }
 
 /** Allocation-resolved final cause band for one reached attribute disposition. */
-export class TemplateCompilerOccurrenceTargetAttributeDispositionMapping {
-  constructor(
-    readonly draft: TemplateCompilerOccurrenceAttributeDispositionDraft,
-    readonly causeHandles: readonly ClaimEndpointHandle[],
-  ) {
-    if (causeHandles.length === 0 || new Set(causeHandles).size !== causeHandles.length) {
-      throw new Error(`Attribute disposition '${draft.stableSlotKey}' has no unique final causes.`);
-    }
-  }
-}
+export class TemplateCompilerOccurrenceTargetAttributeDispositionMapping
+  extends TemplateCompilerTargetAttributeDispositionMapping {}
 
 export const enum TemplateCompilerOccurrenceTargetPublicationPrerequisiteKind {
   EffectiveAttributeSyntaxMaterialization = 'effective-attribute-syntax-materialization',
@@ -353,7 +347,10 @@ export function allocateTemplateCompilerOccurrenceTargetPlan(
   const missingBindableCauses = rows.attributeDispositions.filter((draft) => {
     if (draft.contribution.targetLane !== TemplateCompilerLiveAttributeTargetLane.ElementBindable) return false;
     const head = hydrateElements?.headForSite(draft.site) ?? null;
-    return head != null && bindableInstructionsForDisposition(draft, head).length === 0;
+    return head != null && templateCompilerBindableInstructionsForDisposition(
+      draft,
+      occurrenceDispositionFunding(head),
+    ).length === 0;
   });
   if (missingBindableCauses.length > 0) {
     return ineligible(
@@ -365,7 +362,12 @@ export function allocateTemplateCompilerOccurrenceTargetPlan(
   const attributeDispositionMappings = rows.attributeDispositions.map((draft) =>
     new TemplateCompilerOccurrenceTargetAttributeDispositionMapping(
       draft,
-      finalAttributeDispositionCauses(draft, hydrateElements),
+      templateCompilerTargetAttributeDispositionCauses(
+        draft,
+        hydrateElements?.headForSite(draft.site) == null
+          ? null
+          : occurrenceDispositionFunding(hydrateElements.headForSite(draft.site)!),
+      ),
     )
   );
   const targetAllocation = parentAllocation.ledger.namespace.beginPhase(phaseKey);
@@ -465,47 +467,14 @@ function ineligible(
   );
 }
 
-function finalAttributeDispositionCauses(
-  draft: TemplateCompilerOccurrenceAttributeDispositionDraft,
-  hydrateElements: TemplateCompilerOccurrenceHydrateElementAllocationAssembly | null,
-): readonly ClaimEndpointHandle[] {
-  const head = hydrateElements?.headForSite(draft.site) ?? null;
-  if (head == null) return draft.causeHandles;
-  const contribution = draft.contribution;
-  const capture = head.captures.find((candidate) =>
-    candidate.draft.capture.contribution === contribution
-  ) ?? null;
-  const hydrateElementOwnsDisposition =
-    contribution.targetLane === TemplateCompilerLiveAttributeTargetLane.ElementBindable
-    || contribution.targetLane === TemplateCompilerLiveAttributeTargetLane.Capture
-    || contribution.classification.classificationKind === AttributeClassificationKind.CompilerControl;
-  if (!hydrateElementOwnsDisposition) return draft.causeHandles;
-  const [inputCause, ...existingCauses] = draft.causeHandles;
-  const ownedBindableInstructions = bindableInstructionsForDisposition(draft, head);
-  return [...new Set<ClaimEndpointHandle>([
-    ...(inputCause == null ? [] : [inputCause]),
-    head.instruction.productHandle,
-    ...(capture == null ? [] : [capture.productHandle]),
-    ...ownedBindableInstructions.map((instruction) => instruction.productHandle),
-    ...existingCauses,
-  ])];
-}
-
-function bindableInstructionsForDisposition(
-  draft: TemplateCompilerOccurrenceAttributeDispositionDraft,
+function occurrenceDispositionFunding(
   head: TemplateCompilerAllocatedHydrateElementHead,
-): readonly TemplateInstruction[] {
-  if (draft.contribution.targetLane !== TemplateCompilerLiveAttributeTargetLane.ElementBindable) return [];
-  return head.head.envelope.bindableInstructions.filter((instruction) => {
-    if (!('attribute' in instruction)) return false;
-    const instructionAttribute = instruction.attribute;
-    if (instructionAttribute == null) return false;
-    const authoredAttribute = draft.contribution.frame.source.authoredAttribute;
-    return authoredAttribute == null
-      ? instructionAttribute.productHandle == null
-        && instructionAttribute.rawName === draft.contribution.frame.scalar.qualifiedName
-      : instructionAttribute.productHandle === authoredAttribute.productHandle;
-  });
+): TemplateCompilerTargetHydrateElementDispositionFunding {
+  return {
+    instruction: head.instruction,
+    captures: head.captures,
+    bindableInstructions: head.head.envelope.bindableInstructions,
+  };
 }
 
 function sameObjects<T>(left: readonly T[], right: readonly T[]): boolean {
