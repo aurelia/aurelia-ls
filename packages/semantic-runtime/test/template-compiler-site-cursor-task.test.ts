@@ -215,8 +215,9 @@ describe('template compiler site cursor task scheduler', () => {
     const empty = session.createChildContext(
       session.rootContext,
       'zero:empty-child',
-      TemplateCompilerSiteCursorContextKind.TemplateController,
+      TemplateCompilerSiteCursorContextKind.Projection,
     );
+    expect(session.stageContextLogicalEntrantBand(empty, [])).toEqual([]);
     session.scheduleChildContext(session.rootContext, empty);
 
     const selected = session.next();
@@ -229,7 +230,10 @@ describe('template compiler site cursor task scheduler', () => {
       // Drain.
     }
     const snapshot = session.finish(null);
-    expect(snapshot.taskForContext(empty)?.state).toBe(TemplateCompilerSiteCursorContextTaskState.Drained);
+    expect(snapshot.taskForContext(empty)).toMatchObject({
+      state: TemplateCompilerSiteCursorContextTaskState.Drained,
+      logicalEntrantBandStaged: true,
+    });
   });
 
   test('preserves child creation order across separate scheduling calls', () => {

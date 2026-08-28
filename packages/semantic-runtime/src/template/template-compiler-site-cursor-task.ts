@@ -439,6 +439,7 @@ export class TemplateCompilerSiteCursorContextTaskSnapshot {
     readonly lastWork: TemplateCompilerSiteCursorLogicalWork | null,
     readonly frontier: TemplateCompilerSiteCursorFrontier | null,
     readonly stopKind: TemplateCompilerSiteCursorTaskStopKind | null,
+    readonly logicalEntrantBandStaged: boolean,
     eventBindings: readonly TemplateCompilerSiteCursorContextEventBinding[],
   ) {
     this.remainingWork = [...remainingWork];
@@ -799,6 +800,7 @@ class TemplateCompilerSiteCursorMutableContextTask {
       this.lastWork,
       this.frontier,
       this.stopKind,
+      this.logicalEntrantsStaged,
       eventBindings,
     );
   }
@@ -1009,7 +1011,6 @@ export class TemplateCompilerSiteCursorTaskSession {
     }
     if (
       this.finished
-      || inputs.length === 0
       || context.contextKind === TemplateCompilerSiteCursorContextKind.Root
       || task.state !== TemplateCompilerSiteCursorMutableTaskState.Pending
       || task.scheduled
@@ -1033,7 +1034,9 @@ export class TemplateCompilerSiteCursorTaskSession {
       inputs[logicalOrdinal]!.authority,
     ));
     task.logicalEntrantsStaged = true;
-    task.work.push(new TemplateCompilerSiteCursorMutableLogicalEntrantBand(context, entrants));
+    if (entrants.length > 0) {
+      task.work.push(new TemplateCompilerSiteCursorMutableLogicalEntrantBand(context, entrants));
+    }
     return entrants;
   }
 
