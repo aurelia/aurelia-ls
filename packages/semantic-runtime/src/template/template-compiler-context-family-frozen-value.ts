@@ -1,4 +1,4 @@
-import type { ProvenanceHandle } from '../kernel/handles.js';
+import type { ProductHandle, ProvenanceHandle } from '../kernel/handles.js';
 import { MaterializedProduct } from '../kernel/materialization.js';
 import { bindProductDetailEnvelope } from '../kernel/product-details.js';
 import { KernelVocabulary } from '../kernel/vocabulary.js';
@@ -35,6 +35,7 @@ import {
 } from './template-compiler-live-allocation.js';
 import {
   instructionReferencesFor,
+  nestedInstructionProductHandlesForInstruction,
   type TemplateInstruction,
   TemplateInstructionSequence,
 } from './instruction-ir.js';
@@ -206,13 +207,32 @@ export class TemplateCompilerContextFamilyFrozenValue {
 
   get instructions(): readonly TemplateInstruction[] {
     const allocation = this.preparation.execution.attachment.target.allocation;
-    return [...new Set([
-      ...this.preparation.contexts.flatMap((context) =>
-        context.context.readRows().flatMap((row) => row.instructions)
+    const roots = this.preparation.contexts.flatMap((context) =>
+      context.context.readRows().flatMap((row) => row.instructions)
+    );
+    const available = new Map<ProductHandle, TemplateInstruction>([
+      ...allocation.parentAllocation.instructionAllocations.flatMap((entry) =>
+        entry.instruction == null ? [] : [[entry.instruction.productHandle, entry.instruction] as const]
       ),
-      ...allocation.hydrateTemplateControllers.flatMap((edge) => edge.draft.props),
-      ...allocation.hydrateElements.flatMap((head) => head.draft.bindableInstructions),
-    ])];
+      ...allocation.fundedInstructions.map((entry) => [entry.instruction.productHandle, entry.instruction] as const),
+      ...roots.map((instruction) => [instruction.productHandle, instruction] as const),
+    ]);
+    const ordered: TemplateInstruction[] = [];
+    const seen = new Set<ProductHandle>();
+    const visit = (instruction: TemplateInstruction): void => {
+      if (seen.has(instruction.productHandle)) return;
+      seen.add(instruction.productHandle);
+      ordered.push(instruction);
+      for (const nestedHandle of nestedInstructionProductHandlesForInstruction(instruction)) {
+        const nested = available.get(nestedHandle) ?? null;
+        if (nested == null) {
+          throw new Error(`Frozen instruction '${instruction.productHandle}' has no nested '${nestedHandle}' value.`);
+        }
+        visit(nested);
+      }
+    };
+    roots.forEach(visit);
+    return ordered;
   }
 
   isModuleConstructed(): boolean {

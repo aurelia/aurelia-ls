@@ -900,14 +900,49 @@ export function expressionProductHandlesForInstruction(
 }
 
 /** Instruction products owned by another lowered instruction rather than dispatched as siblings. */
+export function nestedInstructionProductHandlesForInstruction(
+  instruction: TemplateInstruction,
+): readonly ProductHandle[] {
+  switch (instruction.instructionKind) {
+    case TemplateInstructionKind.HydrateElement:
+      return instruction.bindableInstructionProductHandles;
+    case TemplateInstructionKind.HydrateAttribute:
+    case TemplateInstructionKind.HydrateTemplateController:
+      return instruction.bindingInstructionProductHandles;
+    case TemplateInstructionKind.HydrateLetElement:
+      return instruction.instructionProductHandles;
+    case TemplateInstructionKind.IteratorBinding:
+      return instruction.tailInstructionProductHandles;
+    case TemplateInstructionKind.SpreadElementPropBinding:
+      return [instruction.instructionProductHandle];
+    case TemplateInstructionKind.PropertyBinding:
+    case TemplateInstructionKind.Interpolation:
+    case TemplateInstructionKind.ListenerBinding:
+    case TemplateInstructionKind.RefBinding:
+    case TemplateInstructionKind.LetBinding:
+    case TemplateInstructionKind.TextBinding:
+    case TemplateInstructionKind.SetProperty:
+    case TemplateInstructionKind.SetAttribute:
+    case TemplateInstructionKind.SetClassAttribute:
+    case TemplateInstructionKind.SetStyleAttribute:
+    case TemplateInstructionKind.StylePropertyBinding:
+    case TemplateInstructionKind.AttributeBinding:
+    case TemplateInstructionKind.MultiAttr:
+    case TemplateInstructionKind.SpreadTransferedBinding:
+    case TemplateInstructionKind.SpreadValueBinding:
+    case TemplateInstructionKind.TranslationBinding:
+    case TemplateInstructionKind.TranslationBindBinding:
+    case TemplateInstructionKind.TranslationParametersBinding:
+    case TemplateInstructionKind.StateBinding:
+    case TemplateInstructionKind.DispatchBinding:
+      return [];
+  }
+}
+
 export function nestedInstructionProductHandlesForInstructions(
   instructions: readonly TemplateInstruction[],
 ): readonly ProductHandle[] {
-  return instructions.flatMap((instruction) =>
-    instruction instanceof IteratorBindingInstruction
-      ? instruction.tailInstructionProductHandles
-      : []
-  );
+  return instructions.flatMap(nestedInstructionProductHandlesForInstruction);
 }
 
 function productHandleArray(handle: ProductHandle | null): readonly ProductHandle[] {

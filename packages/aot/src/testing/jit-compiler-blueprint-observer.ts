@@ -695,9 +695,17 @@ class BlueprintValueNormalizer {
     ancestors: Set<object>,
   ): CompilerCaseData {
     const result: Record<string, CompilerCaseData> = {};
+    const taggedTemplate = hasTaggedTemplateKind(value);
     for (const key of enumerableDataPropertyNames(value, `JIT blueprint value ${pathLabel(path)}`, true)) {
       const fieldValue = dataPropertyValue(value, key, `JIT blueprint value ${pathLabel(path)}`);
-      result[key] = this.value(fieldValue, location, [...path, key], ancestors);
+      if (taggedTemplate && key === "cooked") {
+        if (!Array.isArray(fieldValue)) {
+          throw new Error(`JIT tagged-template value ${pathLabel(path)} has no cooked array.`);
+        }
+        result[key] = normalizeJitTaggedTemplateCooked(fieldValue, pathLabel([...path, key]));
+      } else {
+        result[key] = this.value(fieldValue, location, [...path, key], ancestors);
+      }
     }
     return result;
   }
@@ -967,6 +975,73 @@ function assertCanonicalArray(value: readonly unknown[], label: string): void {
       throw new Error(`${label}[${index}] is not one enumerable data property.`);
     }
   }
+}
+
+function normalizeJitTaggedTemplateCooked(
+  value: readonly unknown[],
+  label: string,
+): CompilerCaseData {
+  const rawDescriptor = Object.getOwnPropertyDescriptor(value, "raw");
+  if (rawDescriptor == null) throw new Error(`${label} has no tagged-template raw array.`);
+  const rawValue: unknown = "value" in rawDescriptor ? rawDescriptor.value : null;
+  if (!rawDescriptor.enumerable || !Array.isArray(rawValue)) {
+    throw new Error(`${label} has no enumerable tagged-template raw string array.`);
+  }
+  assertTaggedTemplateCookedArray(value, label);
+  const raw = rawValue;
+  if (raw !== value) assertCanonicalArray(raw, `${label}.raw`);
+  assertTaggedTemplateStrings(raw, `${label}.raw`);
+  if (value.length !== raw.length) {
+    throw new Error(`${label} has different tagged-template cooked and raw lengths.`);
+  }
+  return {
+    kind: "tagged-template-cooked",
+    cooked: canonicalJitTaggedTemplateStrings(value, label),
+    raw: canonicalJitTaggedTemplateStrings(raw, `${label}.raw`),
+  };
+}
+
+function hasTaggedTemplateKind(value: object): boolean {
+  const descriptor = Object.getOwnPropertyDescriptor(value, "$kind");
+  return descriptor != null
+    && "value" in descriptor
+    && descriptor.enumerable === true
+    && descriptor.value === "TaggedTemplate";
+}
+
+function assertTaggedTemplateCookedArray(value: readonly unknown[], label: string): void {
+  const keys = Reflect.ownKeys(value);
+  if (keys.some((key) => typeof key !== "string")) {
+    throw new Error(`${label} contains an unsupported tagged-template symbol key.`);
+  }
+  const names = (keys as string[]).filter((key) => key !== "length" && key !== "raw");
+  if (names.length !== value.length) {
+    throw new Error(`${label} is sparse or contains an unsupported tagged-template property.`);
+  }
+  assertTaggedTemplateStrings(value, label);
+}
+
+function assertTaggedTemplateStrings(value: readonly unknown[], label: string): void {
+  for (let index = 0; index < value.length; ++index) {
+    const descriptor = Object.getOwnPropertyDescriptor(value, String(index));
+    if (
+      descriptor == null
+      || !("value" in descriptor)
+      || !descriptor.enumerable
+      || typeof descriptor.value !== "string"
+    ) {
+      throw new Error(`${label}[${index}] is not one enumerable tagged-template string.`);
+    }
+  }
+}
+
+function canonicalJitTaggedTemplateStrings(value: readonly unknown[], label: string): readonly string[] {
+  return value.map((entry, index) => {
+    if (typeof entry !== "string") {
+      throw new Error(`${label}[${index}] is not a tagged-template string value.`);
+    }
+    return entry;
+  });
 }
 
 function normalizedError(error: unknown): { readonly name: string; readonly code: string | null; readonly message: string } {

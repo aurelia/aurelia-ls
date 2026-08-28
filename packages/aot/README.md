@@ -74,15 +74,21 @@ evidence, not the later authority-validating or exhaustive-wire parity coordinat
 The public template-compilation summary contributes its own portable source/model basis. Rich compiler observations
 currently come from a synchronous `app.emission` bracket, are currentness-checked again before egress, and deliberately
 report no portable observation basis; the runtime incarnation is retired before the JSON result returns. Raw
-executable/frozen objects do not escape: only the plain-data structural characterization does. It explicitly lists the
-JIT fields it omits—full instruction values, expression AST wires, resource/runtime identities, definition metadata,
-dependencies, surrogate values, and executable identities—so structural coverage cannot masquerade as full parity.
-The next wire-value phase now has its required semantic authority: the context-family value retains candidate-owned
-live expression results alongside durable parse products, without exporting allocation ledgers or compiler-read
-objects. AOT must consume the shared semantic-runtime AST/wire projector over those values, never reparse source text.
-The shared runtime-AST value projector now covers the framework-compatible semantic AST families and explicitly keeps
-the remaining RC2 representation deltas Pending. The current exact gallery needs only AccessScope, CallScope,
-PrimitiveLiteral, and Interpolation roots; full instruction-wire projection remains the next join.
+executable/frozen objects do not escape. The structural characterization still lists every JIT field it omits so its
+coverage cannot masquerade as full parity, while a separate companion projection now compares the runtime instruction
+values that have actually been closed.
+
+That runtime-value lane consumes semantic-runtime's candidate-owned live expression results and durable parse products
+under the exact product-detail authority that constructed the family and one stable projection-revision read bracket;
+it never reparses source text or exports allocation/read objects. The shared framework-package-free AST projector preserves runtime fields, including distinct
+tagged-template cooked/raw strings, and keeps unresolved RC2 representation deltas Pending. The instruction projector
+currently closes PropertyBinding, Interpolation, ListenerBinding, TextBinding, HydrateTemplateController, and
+HydrateElement, recursively following the shared instruction-ownership graph. Across all 27 exact gallery worlds its
+78 recursive instruction values—including 69 row roots—normalize byte-for-byte to fresh JIT blueprints with zero
+mismatches. Canonical resource definition names cannot fall back to authored aliases, plugin-owned iterator type 200
+remains distinct from core iterator type 15, metadata/count/index mutations are falsifiers, and the comparator still
+returns `satisfiedClaimIds: []`. Definition headers, the other instruction kinds, dependencies, surrogate values, and
+the six non-exact family gates remain open before any exhaustive parity claim.
 The CLI separately content-addresses the executed AOT and semantic-runtime JavaScript trees and the full dirty-worktree
 delta so an ignored or already-dirty build artifact cannot masquerade as unchanged authority.
 

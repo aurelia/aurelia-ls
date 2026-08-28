@@ -30,6 +30,15 @@ import {
   SEMANTIC_FROZEN_FAMILY_COMMON_JIT_FIELDS,
   SemanticFrozenFamilyStructuralMismatchKind,
 } from "../src/testing/semantic-frozen-family-structural-comparison.js";
+import {
+  semanticRuntimeInstructionFamilyWireDigest,
+  SEMANTIC_RUNTIME_INSTRUCTION_FAMILY_OBSERVER_VERSION,
+} from "../src/testing/semantic-runtime-instruction-family-observer.js";
+import {
+  compareSemanticRuntimeInstructionsToJit,
+  SEMANTIC_RUNTIME_INSTRUCTION_COMMON_JIT_FIELDS,
+  SemanticRuntimeInstructionMismatchKind,
+} from "../src/testing/semantic-runtime-instruction-family-comparison.js";
 
 const packageRoot = path.resolve(fileURLToPath(new URL("..", import.meta.url)));
 const galleryRoot = path.join(packageRoot, "fixtures/semantic-compiler-gallery");
@@ -161,11 +170,25 @@ describe("semantic compiler gallery", () => {
     expect(exactFrozen).toHaveLength(27);
     expect(exactFrozen.reduce((count, frozen) => count + frozen.liveExpressionCount, 0)).toBe(52);
     expect(exactFrozen.reduce((count, frozen) => count + frozen.referencedLiveExpressionCount, 0)).toBe(49);
+    expect(exactFrozen.reduce((count, frozen) => count + frozen.instructionValueCount, 0)).toBe(78);
     expect(exactFrozen.every((frozen) =>
       /^sha256:[0-9a-f]{64}$/u.test(frozen.structuralDigest)
       && frozen.exactFields === SEMANTIC_FROZEN_FAMILY_EXACT_FIELDS
       && frozen.omittedJitFields === SEMANTIC_FROZEN_FAMILY_OMITTED_JIT_FIELDS
     )).toBe(true);
+    const exactRuntimeInstructions = run.observations.flatMap((observation) =>
+      observation.runtimeInstructions?.kind === "exact" ? [observation.runtimeInstructions] : []
+    );
+    expect(exactRuntimeInstructions).toHaveLength(27);
+    expect(exactRuntimeInstructions.reduce((count, observation) => count + observation.instructionCount, 0)).toBe(78);
+    expect(exactRuntimeInstructions.reduce((count, observation) => count + observation.rowInstructionCount, 0)).toBe(69);
+    expect(exactRuntimeInstructions.every((observation) =>
+      observation.schemaVersion === SEMANTIC_RUNTIME_INSTRUCTION_FAMILY_OBSERVER_VERSION
+      && observation.resourceRepresentation === "name"
+      && /^sha256:[0-9a-f]{64}$/u.test(observation.wireDigest)
+    )).toBe(true);
+    expect(run.observations.filter((observation) => observation.frozenFamily.kind !== "exact")
+      .every((observation) => observation.runtimeInstructions == null)).toBe(true);
     expect(observations.get("diagnostic.surrogate.unique-id")).toMatchObject({
       expectedJitProduct: "compiler-error",
       compilerProfile: { debug: false, resolveResources: true },
@@ -726,6 +749,109 @@ describe("semantic compiler gallery", () => {
       semanticHasSlotsTrue: 0,
       jitHasSlotsTrue: 0,
     });
+    const runtimeComparison = compareSemanticRuntimeInstructionsToJit(run.observations, jitBatch);
+    expect(runtimeComparison.isClean).toBe(true);
+    expect(runtimeComparison.comparisonPosture).toBe("runtime-instruction-characterization-only");
+    expect(runtimeComparison.comparedFields).toBe(SEMANTIC_RUNTIME_INSTRUCTION_COMMON_JIT_FIELDS);
+    expect(runtimeComparison.selectedExactCaseCount).toBe(27);
+    expect(runtimeComparison.joinedCaseCount).toBe(27);
+    expect(runtimeComparison.matchingCaseIds).toHaveLength(27);
+    expect(runtimeComparison.semanticInstructionCount).toBe(78);
+    expect(runtimeComparison.jitInstructionCount).toBe(78);
+    expect(runtimeComparison.semanticRowInstructionCount).toBe(69);
+    expect(runtimeComparison.jitRowInstructionCount).toBe(69);
+    expect(runtimeComparison.mismatches).toEqual([]);
+    expect(runtimeComparison.satisfiedClaimIds).toEqual([]);
+    const runtimeMutationSource = observations.get("binding.property.input-value")?.runtimeInstructions;
+    if (runtimeMutationSource?.kind !== "exact") throw new Error("Expected exact runtime-instruction mutation source.");
+    const runtimeMutationDefinition = runtimeMutationSource.definitions[0];
+    const runtimeMutationRow = runtimeMutationDefinition?.rows[0];
+    const runtimeMutationInstruction = runtimeMutationRow?.[0];
+    if (
+      runtimeMutationDefinition == null
+      || runtimeMutationRow == null
+      || runtimeMutationInstruction == null
+      || Array.isArray(runtimeMutationInstruction)
+      || typeof runtimeMutationInstruction !== "object"
+    ) {
+      throw new Error("Expected one runtime property-binding mutation source.");
+    }
+    const runtimeMutationDefinitions = [{
+      ...runtimeMutationDefinition,
+      rows: [[{ ...runtimeMutationInstruction, mode: 999 }]],
+    }];
+    const runtimeMutation = compareSemanticRuntimeInstructionsToJit([{
+      caseId: "binding.property.input-value",
+      runtimeInstructions: {
+        ...runtimeMutationSource,
+        definitions: runtimeMutationDefinitions,
+        wireDigest: semanticRuntimeInstructionFamilyWireDigest(runtimeMutationDefinitions),
+      },
+    }], jitBatch);
+    expect(runtimeMutation.isClean).toBe(false);
+    expect(runtimeMutation.mismatches).toMatchObject([{
+      caseId: "binding.property.input-value",
+      mismatchKind: SemanticRuntimeInstructionMismatchKind.InstructionRows,
+    }]);
+    const runtimeCountMutation = compareSemanticRuntimeInstructionsToJit([{
+      caseId: "binding.property.input-value",
+      runtimeInstructions: {
+        ...runtimeMutationSource,
+        instructionCount: runtimeMutationSource.instructionCount + 1,
+      },
+    }], jitBatch);
+    expect(runtimeCountMutation.isClean).toBe(false);
+    expect(runtimeCountMutation.semanticInstructionCount).toBe(1);
+    expect(runtimeCountMutation.mismatches).toMatchObject([{
+      caseId: "binding.property.input-value",
+      mismatchKind: SemanticRuntimeInstructionMismatchKind.InstructionCountMetadata,
+    }]);
+    const runtimeRowCountMutation = compareSemanticRuntimeInstructionsToJit([{
+      caseId: "binding.property.input-value",
+      runtimeInstructions: {
+        ...runtimeMutationSource,
+        rowInstructionCount: runtimeMutationSource.rowInstructionCount + 1,
+      },
+    }], jitBatch);
+    expect(runtimeRowCountMutation.isClean).toBe(false);
+    expect(runtimeRowCountMutation.semanticRowInstructionCount).toBe(1);
+    expect(runtimeRowCountMutation.mismatches).toMatchObject([{
+      caseId: "binding.property.input-value",
+      mismatchKind: SemanticRuntimeInstructionMismatchKind.RowInstructionCountMetadata,
+    }]);
+    const runtimeDigestMutation = compareSemanticRuntimeInstructionsToJit([{
+      caseId: "binding.property.input-value",
+      runtimeInstructions: {
+        ...runtimeMutationSource,
+        wireDigest: `sha256:${"0".repeat(64)}`,
+      },
+    }], jitBatch);
+    expect(runtimeDigestMutation.isClean).toBe(false);
+    expect(runtimeDigestMutation.mismatches).toMatchObject([{
+      caseId: "binding.property.input-value",
+      mismatchKind: SemanticRuntimeInstructionMismatchKind.WireDigestMetadata,
+    }]);
+    const runtimeIndexDefinitions = [{ ...runtimeMutationDefinition, definitionIndex: 1 }];
+    const runtimeIndexMutation = compareSemanticRuntimeInstructionsToJit([{
+      caseId: "binding.property.input-value",
+      runtimeInstructions: {
+        ...runtimeMutationSource,
+        definitions: runtimeIndexDefinitions,
+        wireDigest: semanticRuntimeInstructionFamilyWireDigest(runtimeIndexDefinitions),
+      },
+    }], jitBatch);
+    expect(runtimeIndexMutation.isClean).toBe(false);
+    expect(runtimeIndexMutation.mismatches).toMatchObject([{
+      caseId: "binding.property.input-value",
+      mismatchKind: SemanticRuntimeInstructionMismatchKind.DefinitionIndex,
+    }]);
+    expect(() => compareSemanticRuntimeInstructionsToJit([{
+      caseId: "binding.property.input-value",
+      runtimeInstructions: runtimeMutationSource,
+    }, {
+      caseId: "binding.property.input-value",
+      runtimeInstructions: runtimeMutationSource,
+    }], jitBatch)).toThrow(/unique semantic case ids/u);
     const mutationSource = observations.get("binding.property.input-value")?.frozenFamily;
     if (mutationSource?.kind !== "exact") throw new Error("Expected exact property-binding mutation source.");
     const mutationDefinition = mutationSource.definitions[0];
@@ -820,6 +946,15 @@ describe("semantic compiler gallery", () => {
         '"occurrenceKey"',
       ]) {
         expect(frozenSerialized).not.toContain(forbidden);
+      }
+      const runtimeInstructions = observation.runtimeInstructions;
+      if (runtimeInstructions != null) {
+        expect(Object.getPrototypeOf(runtimeInstructions)).toBe(Object.prototype);
+        expect(JSON.parse(JSON.stringify(runtimeInstructions))).toEqual(runtimeInstructions);
+        const runtimeSerialized = JSON.stringify(runtimeInstructions);
+        for (const forbidden of ["kernel:store", "productHandle", "sourceAddress", "compilerRead", "allocation"]) {
+          expect(runtimeSerialized).not.toContain(forbidden);
+        }
       }
     }
   }, 15_000);

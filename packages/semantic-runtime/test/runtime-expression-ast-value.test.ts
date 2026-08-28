@@ -73,6 +73,27 @@ describe('runtime expression AST value projection', () => {
     });
   });
 
+  test('materializes the current framework tagged-template raw field and preserves explicit raw strings', () => {
+    const result = new ExpressionParser().parse('tag`line\\n${value}`', 'IsFunction');
+    expect(result.kind).toBe(ExpressionParseResultKind.ExpressionSuccess);
+    if (result.kind !== ExpressionParseResultKind.ExpressionSuccess || result.ast.$kind !== 'TaggedTemplate') {
+      throw new Error('Expected tagged-template expression success.');
+    }
+    expect(result.ast.cooked.raw).toBeUndefined();
+
+    const currentFramework = projectRuntimeExpressionAstValue(result.ast);
+    expect(currentFramework.state).toBe(RuntimeExpressionAstProjectionState.Exact);
+    expect(currentFramework.value?.$kind).toBe('TaggedTemplate');
+    if (currentFramework.value?.$kind !== 'TaggedTemplate') throw new Error('Expected projected tagged template.');
+    expect([...currentFramework.value.cooked]).toEqual(['line\n', '']);
+    expect(currentFramework.value.cooked.raw).toEqual(['line\n', '']);
+
+    result.ast.cooked.raw = ['line\\n', ''];
+    const explicitRaw = projectRuntimeExpressionAstValue(result.ast);
+    if (explicitRaw.value?.$kind !== 'TaggedTemplate') throw new Error('Expected explicit-raw tagged template.');
+    expect(explicitRaw.value.cooked.raw).toEqual(['line\\n', '']);
+  });
+
   test.each([
     ['(fn)()', { $kind: 'CallScope', name: 'fn', ancestor: 0, optional: false }],
     ['(obj.fn)()', { $kind: 'CallMember', name: 'fn', optionalMember: false, optionalCall: false }],

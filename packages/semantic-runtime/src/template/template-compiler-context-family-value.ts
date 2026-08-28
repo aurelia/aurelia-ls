@@ -1,5 +1,6 @@
 import type { ProductHandle } from '../kernel/handles.js';
 import type { OpenSeam } from '../kernel/open-seam.js';
+import type { ProductDetailReadView } from '../kernel/product-details.js';
 import type { CustomElementDefinition } from '../resources/custom-element-definition.js';
 import type {
   CompiledTemplate,
@@ -136,6 +137,7 @@ export class TemplateCompilerContextFamilyValueContext {
 /** Narrow public view over one current in-process frozen family. */
 export class TemplateCompilerContextFamilyValue {
   readonly #authority: object;
+  readonly #productDetails: ProductDetailReadView;
   readonly #liveExpressionByProduct: ReadonlyMap<ProductHandle, TemplateCompilerContextFamilyExpressionValue>;
 
   constructor(
@@ -146,6 +148,7 @@ export class TemplateCompilerContextFamilyValue {
     readonly instructions: readonly TemplateInstruction[],
     readonly sourceOpenSeams: readonly OpenSeam[],
     readonly liveExpressions: readonly TemplateCompilerContextFamilyExpressionValue[],
+    productDetails: ProductDetailReadView,
     private readonly current: () => boolean,
   ) {
     this.#liveExpressionByProduct = new Map(liveExpressions.map((expression) => [
@@ -162,6 +165,7 @@ export class TemplateCompilerContextFamilyValue {
       throw new Error('Compiled context-family value lost root or family coverage.');
     }
     this.#authority = authority;
+    this.#productDetails = productDetails;
   }
 
   get root(): TemplateCompilerContextFamilyValueContext {
@@ -176,13 +180,22 @@ export class TemplateCompilerContextFamilyValue {
     return this.#liveExpressionByProduct.get(productHandle) ?? null;
   }
 
+  isModuleConstructed(): boolean {
+    return this.#authority === compiledFamilyValueAuthority;
+  }
+
+  hasProductDetailAuthority(productDetails: ProductDetailReadView): boolean {
+    return this.isModuleConstructed() && this.#productDetails === productDetails;
+  }
+
   isCurrent(): boolean {
-    return this.#authority === compiledFamilyValueAuthority && this.current();
+    return this.isModuleConstructed() && this.current();
   }
 }
 
 export function projectTemplateCompilerContextFamilyValue(
   frozen: TemplateCompilerContextFamilyFrozenValue,
+  productDetails: ProductDetailReadView,
 ): TemplateCompilerContextFamilyValue {
   const contexts = frozen.contexts.map((context) => projectContext(context));
   const instructions = frozen.instructions;
@@ -202,6 +215,7 @@ export function projectTemplateCompilerContextFamilyValue(
     instructions,
     frozen.browserInput.openSeams,
     liveExpressions,
+    productDetails,
     () => frozen.isCurrent(),
   );
 }

@@ -226,7 +226,7 @@ export function compileTemplateCompilerContextFamily(
   return new TemplateCompilerContextFamilyCompilationResult(
     TemplateCompilerContextFamilyCompilationState.Exact,
     TemplateCompilerContextFamilyCompilationStage.FrozenValue,
-    projectTemplateCompilerContextFamilyValue(frozen.value),
+    projectTemplateCompilerContextFamilyValue(frozen.value, request.compilerReadStore),
     [],
   );
 }

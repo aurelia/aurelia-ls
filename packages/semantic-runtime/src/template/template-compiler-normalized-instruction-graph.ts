@@ -15,17 +15,13 @@ import {
   type HtmlText,
 } from './html-ir.js';
 import {
-  HydrateAttributeInstruction,
   HydrateElementInstruction,
-  HydrateLetElementInstruction,
-  HydrateTemplateControllerInstruction,
   InterpolationInstruction,
   IteratorBindingInstruction,
   MultiAttrInstruction,
   SetPropertyInstruction,
-  SpreadElementPropBindingInstruction,
   expressionProductHandlesForInstruction,
-  nestedInstructionProductHandlesForInstructions,
+  nestedInstructionProductHandlesForInstruction,
   type TemplateInstruction,
 } from './instruction-ir.js';
 import type { TemplateResourceCompilationEmission } from './template-compilation-project-pass.js';
@@ -217,8 +213,10 @@ export class TemplateCompilerNormalizedInstructionGraphValidator {
       }
       this.validateInstructionExpressions(ownerProductHandle, instruction, parses, parsesByHandle);
       this.validateInstructionClaimRoles(ownerProductHandle, instruction);
-      const nested = instructionProductHandles(instruction);
-      const iteratorTails = new Set(nestedInstructionProductHandlesForInstructions([instruction]));
+      const nested = nestedInstructionProductHandlesForInstruction(instruction);
+      const iteratorTails = new Set(
+        instruction instanceof IteratorBindingInstruction ? instruction.tailInstructionProductHandles : [],
+      );
       this.context.validateUniqueHandles(nested, 'instruction/nested-products', instruction.productHandle);
       nested.forEach((handle, ordinal) => {
         const child = instructionByProduct.get(handle) ?? null;
@@ -531,7 +529,7 @@ export class TemplateCompilerNormalizedInstructionGraphValidator {
         );
       }
     }
-    const nestedHandles = instructionProductHandles(instruction);
+    const nestedHandles = nestedInstructionProductHandlesForInstruction(instruction);
     parity.unique(nestedHandles, 'compiled-created-instruction/product-references', instruction.productHandle);
     for (const handle of nestedHandles) {
       const nested = allInstructions.get(handle) ?? null;
@@ -590,18 +588,6 @@ function sameInstructionOrigin(
 
 function instructionAttributeReference(instruction: TemplateInstruction): HtmlAttributeReference | null {
   return 'attribute' in instruction ? instruction.attribute : null;
-}
-
-function instructionProductHandles(instruction: TemplateInstruction): readonly ProductHandle[] {
-  // Only intra-instruction ownership edges belong to this graph. Resource and generated-definition references retain
-  // their compiler-world/compiled-template authorities and are not normalized-site products.
-  if (instruction instanceof HydrateElementInstruction) return instruction.bindableInstructionProductHandles;
-  if (instruction instanceof HydrateAttributeInstruction) return instruction.bindingInstructionProductHandles;
-  if (instruction instanceof HydrateTemplateControllerInstruction) return instruction.bindingInstructionProductHandles;
-  if (instruction instanceof HydrateLetElementInstruction) return instruction.instructionProductHandles;
-  if (instruction instanceof IteratorBindingInstruction) return instruction.tailInstructionProductHandles;
-  if (instruction instanceof SpreadElementPropBindingInstruction) return [instruction.instructionProductHandle];
-  return [];
 }
 
 function sameHandleSequence(left: readonly ProductHandle[], right: readonly ProductHandle[]): boolean {

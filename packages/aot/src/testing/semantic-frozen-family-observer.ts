@@ -146,6 +146,7 @@ export type SemanticFrozenFamilyObservation =
       readonly sourceOpenSeams: readonly SemanticFrozenFamilySourceOpenSeam[];
       readonly liveExpressionCount: number;
       readonly referencedLiveExpressionCount: number;
+      readonly instructionValueCount: number;
       readonly exactFields: typeof SEMANTIC_FROZEN_FAMILY_EXACT_FIELDS;
       readonly omittedJitFields: typeof SEMANTIC_FROZEN_FAMILY_OMITTED_JIT_FIELDS;
     }
@@ -159,7 +160,7 @@ export type SemanticFrozenFamilyObservation =
       readonly omittedJitFields: typeof SEMANTIC_FROZEN_FAMILY_OMITTED_JIT_FIELDS;
     };
 
-interface OrderedDefinition {
+export interface SemanticFrozenFamilyOrderedDefinition {
   readonly context: TemplateCompilerContextFamilyValueContext;
   readonly owner: SemanticFrozenFamilyDefinitionOwner;
 }
@@ -324,7 +325,7 @@ export function observeSemanticFrozenFamily(
   if (!result.value.isCurrent()) {
     throw new Error("Semantic frozen-family value changed before portable observation.");
   }
-  const definitions = orderedDefinitions(result.value).map((record, definitionIndex) =>
+  const definitions = orderSemanticFrozenFamilyDefinitions(result.value).map((record, definitionIndex) =>
     normalizeDefinition(result.value!, record, definitionIndex)
   );
   const derivations = result.value.derivations.map((derivation): SemanticFrozenFamilyDerivation => {
@@ -349,6 +350,7 @@ export function observeSemanticFrozenFamily(
   const referencedLiveExpressionCount = result.value.liveExpressions.filter((expression) =>
     referencedExpressionHandles.has(expression.productHandle)
   ).length;
+  const instructionValueCount = result.value.instructions.length;
   const structuralValue = { definitions, derivations, sourceOpenSeams };
   const observation: SemanticFrozenFamilyObservation = {
     schemaVersion: SEMANTIC_FROZEN_FAMILY_OBSERVER_VERSION,
@@ -361,6 +363,7 @@ export function observeSemanticFrozenFamily(
     sourceOpenSeams,
     liveExpressionCount,
     referencedLiveExpressionCount,
+    instructionValueCount,
     exactFields: SEMANTIC_FROZEN_FAMILY_EXACT_FIELDS,
     omittedJitFields: SEMANTIC_FROZEN_FAMILY_OMITTED_JIT_FIELDS,
   };
@@ -368,7 +371,9 @@ export function observeSemanticFrozenFamily(
   return observation;
 }
 
-function orderedDefinitions(value: TemplateCompilerContextFamilyValue): readonly OrderedDefinition[] {
+export function orderSemanticFrozenFamilyDefinitions(
+  value: TemplateCompilerContextFamilyValue,
+): readonly SemanticFrozenFamilyOrderedDefinition[] {
   const uniqueProducts = new Set(value.contexts.map((context) => context.compiledTemplate.productHandle));
   const childrenByInstruction = new Map<object, TemplateCompilerContextFamilyValueContext[]>();
   for (const context of value.contexts) {
@@ -378,7 +383,7 @@ function orderedDefinitions(value: TemplateCompilerContextFamilyValue): readonly
     if (children == null) childrenByInstruction.set(instruction, [context]);
     else children.push(context);
   }
-  const records: OrderedDefinition[] = [];
+  const records: SemanticFrozenFamilyOrderedDefinition[] = [];
   const indexes = new Map<string, number>();
   const visit = (context: TemplateCompilerContextFamilyValueContext, owner: SemanticFrozenFamilyDefinitionOwner): void => {
     if (indexes.has(context.compiledTemplate.productHandle)) {
@@ -454,7 +459,7 @@ function orderedInstructionChildren(
 
 function normalizeDefinition(
   value: TemplateCompilerContextFamilyValue,
-  record: OrderedDefinition,
+  record: SemanticFrozenFamilyOrderedDefinition,
   definitionIndex: number,
 ): SemanticFrozenFamilyDefinition {
   const context = record.context;

@@ -285,6 +285,15 @@ classification, expression parsing, and instruction lowering converge on the sam
   runtime-accepted AST selection law in `expression-parse-projection.ts`; consumers must not reparse the retained raw
   strings. The value is still in-process rather than a portable wire and must be projected while its publication
   candidate remains current.
+- `template-instruction-runtime-value.ts` projects that current family into framework-package-free runtime instruction
+  values. The family retains the exact product-detail authority used by its compiler run, and durable reads must finish
+  inside one unchanged technical projection-revision bracket. This prevents torn reads without treating unrelated
+  store changes as a permanent semantic dependency. One shared recursive
+  instruction-ownership helper covers element, attribute, controller, let, iterator-tail, and spread-child edges. The current exact corridor materializes property,
+  interpolation, listener, text, template-controller, and custom-element wires, including canonical resource names,
+  child/projection definition references, containerless state, captures, and known `AuSlot` data. Unsupported kinds or
+  AST representations remain typed Pending. Exact values/results are module-constructed and cross-check family
+  instruction order plus every row/value link before they can leave semantic-runtime.
 - `template-compiler-deterministic-execution.ts` is an intentionally narrower assurance bridge. It spends one
   `TemplateResourceCompilationEmission` plus its exact browser-effective source family to replay supported built-in
   structural consequences over already-normalized compiler products. Exact means dispositions, context transfers,

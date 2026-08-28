@@ -175,6 +175,21 @@ describe("JIT compiler transformed-blueprint observer", () => {
         }],
       });
 
+      const taggedTemplate = await observer.observeCase(taggedTemplateExpressionCase(), oracle);
+      const taggedTemplateRoot = requireCompiledObservation(
+        taggedTemplate.data.outcome,
+        "tagged-template expression control",
+      ).definitions[0]!;
+      const taggedTemplateInstruction = asRecord(taggedTemplateRoot.rows[0]![0]);
+      expect(asRecord(taggedTemplateInstruction.from)).toMatchObject({
+        $kind: "TaggedTemplate",
+        cooked: {
+          kind: "tagged-template-cooked",
+          cooked: ["line\n", ""],
+          raw: ["line\n", ""],
+        },
+      });
+
       const authoredCollision = await observer.observeCase(authoredMarkerCollisionCase(), oracle);
       if (authoredCollision.data.outcome.kind !== "compiled-definition") {
         throw new Error("Authored marker collision case did not compile.");
@@ -525,6 +540,38 @@ function successfulCompileSpreadCase(): CompilerCase {
     oracles: {
       lanes: [{ id: "framework-jit", expectedProduct: "spread-instructions" }],
       claims: [],
+    },
+    invariants: [],
+    contrasts: [],
+  };
+}
+
+function taggedTemplateExpressionCase(): CompilerCase {
+  const authority = JIT_ORACLE_CASES.find((candidate) => candidate.id === "binding.property.input-value");
+  if (authority == null || authority.world.entry.kind !== "compile") {
+    throw new Error("Missing property-binding authority case.");
+  }
+  return {
+    ...authority,
+    id: "test.property-binding.tagged-template",
+    family: "compiler-blueprint",
+    tags: ["test", "binding", "tagged-template"],
+    requirement: "The observer retains both cooked and raw tagged-template strings.",
+    obligations: [],
+    effects: [],
+    world: {
+      ...authority.world,
+      entry: {
+        kind: "compile",
+        definition: {
+          ...authority.world.entry.definition,
+          name: "test-tagged-template",
+          template: {
+            kind: "markup",
+            value: '<template><input value.bind="tag`line\\n${value}`"></template>',
+          },
+        },
+      },
     },
     invariants: [],
     contrasts: [],

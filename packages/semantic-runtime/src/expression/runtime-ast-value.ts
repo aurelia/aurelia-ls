@@ -367,7 +367,9 @@ class RuntimeExpressionAstValueProjector {
         const expressions = this.projectAll(expression.expressions, [...path, 'expressions']);
         if (func == null || expressions == null) return null;
         const cooked: string[] & { raw?: string[] } = [...expression.cooked];
-        if (expression.cooked.raw != null) cooked.raw = [...expression.cooked.raw];
+        // RC2 currently constructs its runtime TaggedTemplate value with cooked.raw === cooked. Preserve an explicitly
+        // modeled raw sequence, but make the framework's present wire field explicit when the semantic parser has none.
+        cooked.raw = [...(expression.cooked.raw ?? expression.cooked)];
         return { $kind: 'TaggedTemplate', cooked, func, expressions };
       }
       case 'BindingIdentifier':

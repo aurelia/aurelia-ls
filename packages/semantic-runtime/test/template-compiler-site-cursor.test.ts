@@ -4,6 +4,9 @@ import { fileURLToPath } from 'node:url';
 import { afterAll, beforeAll, describe, expect, test, vi } from 'vitest';
 
 import { createSemanticRuntime } from '../src/api/runtime.js';
+import type { ProductHandle } from '../src/kernel/handles.js';
+import type { ProductDetailSlot } from '../src/kernel/product-details.js';
+import { KernelReadProjectionRevision } from '../src/kernel/store.js';
 import { runtimeAcceptedBindingExpressionAstForResult } from '../src/template/expression-parse-projection.js';
 import { AttributeClassificationKind } from '../src/template/attribute-syntax.js';
 import {
@@ -39,6 +42,13 @@ import {
 import type {
   TemplateCompilerContextFamilyExpressionValue,
 } from '../src/template/template-compiler-context-family-expression-value.js';
+import {
+  projectTemplateCompilerRuntimeInstructionFamily,
+  TemplateCompilerFrameworkInstructionType,
+  TemplateCompilerRuntimeInstructionFamilyState,
+  TemplateCompilerRuntimeInstructionReasonKind,
+  TemplateCompilerRuntimeResourceRepresentation,
+} from '../src/template/template-instruction-runtime-value.js';
 import {
   completeTemplateCompilerContextFamily,
   TemplateCompilerContextFamilyCompletionState,
@@ -1567,7 +1577,27 @@ describe('template compiler root site cursor', () => {
         const rows = value?.contexts.flatMap((context) => context.rows) ?? [];
         expect(rows.length, name).toBeGreaterThan(0);
         expect(rows.every((row) => row.geometry.marker.productHandle.length > 0), name).toBe(true);
-        if (ownerKind === 'projection' && value != null) {
+        if (value == null) throw new Error(`Expected exact public family value for '${name}'.`);
+        const runtimeInstructions = projectTemplateCompilerRuntimeInstructionFamily({
+          family: value,
+          productDetails: fixture.runtime.workspace.store,
+          resourceRepresentation: TemplateCompilerRuntimeResourceRepresentation.Name,
+        });
+        expect(runtimeInstructions.state, name).toBe(TemplateCompilerRuntimeInstructionFamilyState.Exact);
+        expect(runtimeInstructions.reasons, name).toEqual([]);
+        expect(runtimeInstructions.value?.instructions, name).toHaveLength(value.instructions.length);
+        if (ownerKind === 'projection') {
+          const foreignAuthority = projectTemplateCompilerRuntimeInstructionFamily({
+            family: value,
+            productDetails: {
+              readProductDetail: () => null,
+              readProjectionRevision: () => fixture.runtime.workspace.store.readProjectionRevision(),
+            },
+            resourceRepresentation: TemplateCompilerRuntimeResourceRepresentation.Name,
+          });
+          expect(foreignAuthority.state).toBe(TemplateCompilerRuntimeInstructionFamilyState.Ineligible);
+          expect(foreignAuthority.reasons.map((reason) => reason.reasonKind))
+            .toEqual([TemplateCompilerRuntimeInstructionReasonKind.ForeignProductDetailAuthority]);
           const instruction = value.instructions.find((candidate) =>
             candidate.instructionKind === TemplateInstructionKind.PropertyBinding
           );
@@ -1583,11 +1613,69 @@ describe('template compiler root site cursor', () => {
           expect(expression?.isCurrent()).toBe(true);
           expect(ast?.$kind).toBe('AccessScope');
           expect(ast?.$kind === 'AccessScope' ? ast.name.name : null).toBe('after');
+          const projectedInstruction = runtimeInstructions.value?.valueForInstruction(instruction);
+          expect(projectedInstruction).toMatchObject({
+            type: TemplateCompilerFrameworkInstructionType.PropertyBinding,
+            from: { $kind: 'AccessScope', name: 'after', ancestor: 0 },
+            to: 'title',
+          });
         }
       } finally {
         candidate.abort();
       }
       if (retainedExpression != null) expect(retainedExpression.isCurrent(), name).toBe(false);
+    }
+  });
+
+  test('refuses a runtime-value batch whose durable product-detail projection changes mid-read', () => {
+    const candidate = fixture.runtime.computationLifecycle.begin({
+      kind: 'template-compiler-runtime-instruction-product-detail-revision-test',
+      reconciliationKey: fixture.browserRun.locus.reconciliationKey,
+      summary: 'Runtime instruction durable product-detail read bracket proof.',
+    });
+    try {
+      const request = fixture.contextFamilyRequest('cursor-empty', candidate);
+      const delegate = request.compilerReadStore;
+      let controlledRevision: KernelReadProjectionRevision | null = null;
+      let advanceOnRead = false;
+      const compilerReadStore: typeof request.compilerReadStore = {
+        readMaterializationsByOwner(owner) {
+          return delegate.readMaterializationsByOwner(owner);
+        },
+        readProductDetail<TDetail>(slot: ProductDetailSlot<TDetail>, productHandle: ProductHandle) {
+          const value = delegate.readProductDetail(slot, productHandle);
+          if (advanceOnRead && controlledRevision != null) {
+            controlledRevision = new KernelReadProjectionRevision(
+              controlledRevision.projectionIdentity,
+              controlledRevision.committedMutationOrdinal + 1,
+              controlledRevision.candidateMutationOrdinal,
+            );
+            advanceOnRead = false;
+          }
+          return value;
+        },
+        readProjectionRevision() {
+          return controlledRevision ?? delegate.readProjectionRevision();
+        },
+      };
+      const result = compileTemplateCompilerContextFamily({ ...request, compilerReadStore });
+      expect(result.state).toBe(TemplateCompilerContextFamilyCompilationState.Exact);
+      if (result.value == null) throw new Error('Expected exact durable-expression family value.');
+
+      controlledRevision = delegate.readProjectionRevision();
+      advanceOnRead = true;
+      const runtimeInstructions = projectTemplateCompilerRuntimeInstructionFamily({
+        family: result.value,
+        productDetails: compilerReadStore,
+        resourceRepresentation: TemplateCompilerRuntimeResourceRepresentation.Name,
+      });
+      expect(advanceOnRead).toBe(false);
+      expect(runtimeInstructions.state).toBe(TemplateCompilerRuntimeInstructionFamilyState.Ineligible);
+      expect(runtimeInstructions.reasons.map((reason) => reason.reasonKind))
+        .toEqual([TemplateCompilerRuntimeInstructionReasonKind.ProductDetailProjectionChanged]);
+      expect(result.value.isCurrent()).toBe(true);
+    } finally {
+      candidate.abort();
     }
   });
 
