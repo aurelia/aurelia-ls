@@ -44,6 +44,9 @@ import {
   type TemplateCompilerProjectionGroupingPlan,
   TemplateCompilerProjectionGroupingInput,
 } from './template-compiler-projection-grouping.js';
+import type {
+  TemplateCompilerSiteCursorReachedSelectionEventAttestation,
+} from './template-compiler-site-cursor-task.js';
 
 const hydrateElementStagingAuthority = {};
 
@@ -61,6 +64,7 @@ export const enum TemplateCompilerHydrateElementBlockerScope {
 }
 
 export const enum TemplateCompilerHydrateElementBlockerKind {
+  ReachedSelectionForeign = 'reached-selection-foreign',
   ElementReadForeign = 'element-read-foreign',
   ElementReadStale = 'element-read-stale',
   ElementScopeOpen = 'element-scope-open',
@@ -178,6 +182,7 @@ export class TemplateCompilerHydrateElementEnvelopeDraft {
     authority: object,
     readonly siteKey: string,
     readonly element: TemplateCompilerElementOccurrence,
+    readonly reachedSelectionEvent: TemplateCompilerSiteCursorReachedSelectionEventAttestation,
     readonly owner: TemplateCompilerLiveAttributeOwnerResult,
     readonly elementRead: TemplateCompilerObservedValue<TemplateResolvedResource | null>,
     readonly resolveResourcesRead: TemplateCompilerObservedValue<boolean>,
@@ -195,6 +200,8 @@ export class TemplateCompilerHydrateElementEnvelopeDraft {
   ) {
     if (
       authority !== hydrateElementStagingAuthority
+      || !reachedSelectionEvent.isModuleConstructed()
+      || reachedSelectionEvent.selection.visit.node !== element
       || owner.element !== element
       || owner.instructionStaging.elementBindableInstructions !== bindableInstructions
       || owner.instructionStaging.captures !== captures
@@ -258,6 +265,7 @@ export interface TemplateCompilerHydrateElementStagingRequest {
   readonly familyOwnerKey: string;
   readonly compilerReads: TemplateCompilerReadView;
   readonly element: TemplateCompilerElementOccurrence;
+  readonly reachedSelectionEvent: TemplateCompilerSiteCursorReachedSelectionEventAttestation;
   readonly lookupName: string;
   readonly elementRead: TemplateCompilerObservedValue<TemplateResolvedResource | null>;
   readonly resolveResourcesRead: TemplateCompilerObservedValue<boolean> | null;
@@ -281,6 +289,16 @@ export function stageTemplateCompilerHydrateElementEnvelope(
     ...(request.resolveResourcesRead == null ? [] : [request.resolveResourcesRead.observation]),
   ];
   const blockers: TemplateCompilerHydrateElementBlocker[] = [];
+  if (
+    !request.reachedSelectionEvent.isModuleConstructed()
+    || request.reachedSelectionEvent.selection.visit.node !== request.element
+  ) {
+    blockers.push(envelopeBlocker(
+      TemplateCompilerHydrateElementBlockerKind.ReachedSelectionForeign,
+      'HydrateElement staging requires the exact reached selection/event attestation for this element.',
+    ));
+    return openResult(request, blockers, reads);
+  }
   const read = request.elementRead;
   if (!elementReadBelongsToRequest(request)) {
     blockers.push(envelopeBlocker(
@@ -500,6 +518,7 @@ export function stageTemplateCompilerHydrateElementEnvelope(
     hydrateElementStagingAuthority,
     `family:${request.familyOwnerKey}:element:${request.element.occurrenceKey}:hydrate-element`,
     request.element,
+    request.reachedSelectionEvent,
     request.owner,
     request.elementRead,
     request.resolveResourcesRead,

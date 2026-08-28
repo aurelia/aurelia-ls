@@ -421,6 +421,41 @@ export class TemplateCompilerSiteCursorContextEventBinding {
   }
 }
 
+/**
+ * Historical proof that one already-appended event was emitted for the scheduler's exact current reached selection.
+ *
+ * The attestation deliberately does not expose a currentness predicate: moving to later work does not invalidate the
+ * event-time selection/binding edge it records.
+ */
+export class TemplateCompilerSiteCursorReachedSelectionEventAttestation {
+  readonly #authority: object;
+
+  constructor(
+    authority: object,
+    readonly session: TemplateCompilerSiteCursorTaskSession,
+    readonly selection: TemplateCompilerSiteCursorTaskSelection,
+    readonly event: TemplateCompilerSiteCursorEvent,
+    readonly binding: TemplateCompilerSiteCursorContextEventBinding,
+  ) {
+    if (
+      authority !== cursorTaskAuthority
+      || !(session instanceof TemplateCompilerSiteCursorTaskSession)
+      || !selection.isModuleConstructed()
+      || binding.event !== event
+      || binding.context !== selection.context
+      || binding.visit !== selection.visit
+      || binding.work !== selection.work
+    ) {
+      throw new Error('Compiler cursor reached-event attestation lost its session, selection, or binding authority.');
+    }
+    this.#authority = authority;
+  }
+
+  isModuleConstructed(): boolean {
+    return this.#authority === cursorTaskAuthority;
+  }
+}
+
 /** Immutable terminal state of one logical cursor context task. */
 export class TemplateCompilerSiteCursorContextTaskSnapshot {
   readonly #authority: object;
@@ -809,6 +844,10 @@ class TemplateCompilerSiteCursorMutableContextTask {
 class TemplateCompilerSiteCursorEventLog {
   private readonly events: TemplateCompilerSiteCursorEvent[] = [];
   private readonly bindings: TemplateCompilerSiteCursorContextEventBinding[] = [];
+  private readonly bindingsByEvent = new Map<
+    TemplateCompilerSiteCursorEvent,
+    TemplateCompilerSiteCursorContextEventBinding
+  >();
   private readonly bindingsByContext = new Map<
     TemplateCompilerSiteCursorContextReference,
     TemplateCompilerSiteCursorContextEventBinding[]
@@ -819,7 +858,7 @@ class TemplateCompilerSiteCursorEventLog {
     event: TemplateCompilerSiteCursorEvent,
     selection: TemplateCompilerSiteCursorTaskSelection | null,
   ): void {
-    if (event.ordinal !== this.events.length) {
+    if (event.ordinal !== this.events.length || this.bindingsByEvent.has(event)) {
       throw new Error(`Compiler cursor event ${event.ordinal} does not continue total event order.`);
     }
     const contextBindings = this.bindingsByContext.get(context) ?? [];
@@ -834,6 +873,7 @@ class TemplateCompilerSiteCursorEventLog {
     );
     this.events.push(event);
     this.bindings.push(binding);
+    this.bindingsByEvent.set(event, binding);
     contextBindings.push(binding);
     if (!this.bindingsByContext.has(context)) this.bindingsByContext.set(context, contextBindings);
   }
@@ -849,8 +889,10 @@ class TemplateCompilerSiteCursorEventLog {
       ordinal < 0
       || this.events[ordinal] !== expected
       || binding?.event !== expected
+      || this.bindingsByEvent.get(expected) !== binding
       || (expectedContext != null && binding.context !== expectedContext)
       || replacement.ordinal !== ordinal
+      || (replacement !== expected && this.bindingsByEvent.has(replacement))
     ) {
       throw new Error('Compiler cursor terminal event replacement lost event or context authority.');
     }
@@ -868,6 +910,8 @@ class TemplateCompilerSiteCursorEventLog {
     );
     this.events[ordinal] = replacement;
     this.bindings[ordinal] = replacementBinding;
+    this.bindingsByEvent.delete(expected);
+    this.bindingsByEvent.set(replacement, replacementBinding);
     contextBindings[binding.contextOrdinal] = replacementBinding;
   }
 
@@ -882,6 +926,10 @@ class TemplateCompilerSiteCursorEventLog {
     context: TemplateCompilerSiteCursorContextReference,
   ): readonly TemplateCompilerSiteCursorContextEventBinding[] {
     return this.bindingsByContext.get(context) ?? [];
+  }
+
+  bindingForEvent(event: TemplateCompilerSiteCursorEvent): TemplateCompilerSiteCursorContextEventBinding | null {
+    return this.bindingsByEvent.get(event) ?? null;
   }
 }
 
@@ -1206,6 +1254,36 @@ export class TemplateCompilerSiteCursorTaskSession {
 
   appendRootEvent(event: TemplateCompilerSiteCursorEvent): void {
     this.appendContextEvent(this.rootContext, event);
+  }
+
+  /** Mint event-time proof only while the exact selection that emitted the event remains current. */
+  attestReachedSelectionEvent(
+    selection: TemplateCompilerSiteCursorTaskSelection,
+    event: TemplateCompilerSiteCursorEvent,
+  ): TemplateCompilerSiteCursorReachedSelectionEventAttestation {
+    this.requireOpen();
+    const binding = this.eventLog.bindingForEvent(event);
+    if (binding == null) {
+      throw new Error('Compiler cursor reached-event attestation requires one already-appended event.');
+    }
+    if (binding.visit == null) {
+      throw new Error('Compiler cursor event binding does not carry a reached selection.');
+    }
+    if (
+      this.currentSelection !== selection
+      || binding.context !== selection.context
+      || binding.visit !== selection.visit
+      || binding.work !== selection.work
+    ) {
+      throw new Error('Compiler cursor reached-event attestation requires the exact current task selection.');
+    }
+    return new TemplateCompilerSiteCursorReachedSelectionEventAttestation(
+      cursorTaskAuthority,
+      this,
+      selection,
+      event,
+      binding,
+    );
   }
 
   replaceTerminalEvent(

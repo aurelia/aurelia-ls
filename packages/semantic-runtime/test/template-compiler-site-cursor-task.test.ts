@@ -312,6 +312,59 @@ describe('template compiler site cursor task scheduler', () => {
     expect(snapshot.bindingForEvent(childEvent)?.work).toBe(childSelection.work);
   });
 
+  test('attests one exact reached selection/event binding as durable history', () => {
+    const forest = materializeForest(fixture, `attestation-${fixtureOrdinal++}`, familyMarkup);
+    const session = startSession('attestation', forest);
+    const selection = session.next()!;
+    const reachedEvent = phaseEvent(0);
+    session.appendEvent(reachedEvent);
+
+    const attestation = session.attestReachedSelectionEvent(selection, reachedEvent);
+
+    expect(attestation.isModuleConstructed()).toBe(true);
+    expect(attestation).toMatchObject({
+      session,
+      selection,
+      event: reachedEvent,
+      binding: {
+        ordinal: 0,
+        contextOrdinal: 0,
+        context: selection.context,
+        event: reachedEvent,
+        visit: selection.visit,
+        work: selection.work,
+      },
+    });
+
+    const foreignSession = startSession('attestation-foreign', forest);
+    const foreignSelection = foreignSession.next()!;
+    const foreignEvent = phaseEvent(0);
+    foreignSession.appendEvent(foreignEvent);
+    expect(() => session.attestReachedSelectionEvent(foreignSelection, reachedEvent))
+      .toThrow(/exact current task selection/u);
+    expect(() => session.attestReachedSelectionEvent(selection, foreignEvent))
+      .toThrow(/already-appended event/u);
+    expect(() => session.attestReachedSelectionEvent(selection, phaseEvent(1)))
+      .toThrow(/already-appended event/u);
+
+    const laterSelection = session.next()!;
+    expect(attestation.isModuleConstructed()).toBe(true);
+    expect(attestation.selection).toBe(selection);
+    expect(attestation.binding.visit).toBe(selection.visit);
+    expect(laterSelection).not.toBe(selection);
+    expect(session.next()).toBeNull();
+    const rootTail = phaseEvent(1);
+    session.appendRootEvent(rootTail);
+    expect(() => session.attestReachedSelectionEvent(laterSelection, rootTail))
+      .toThrow(/does not carry a reached selection/u);
+    session.finish(null);
+
+    while (foreignSession.next() != null) {
+      // Drain the independent task session.
+    }
+    foreignSession.finish(null);
+  });
+
   test('publishes drained, waiting, pending, and stopped historical task states without resumability', () => {
     const forest = materializeForest(fixture, `states-${fixtureOrdinal++}`, familyMarkup);
     const elements = elementsByTag(forest);

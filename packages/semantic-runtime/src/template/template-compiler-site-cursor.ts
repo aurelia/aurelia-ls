@@ -135,6 +135,7 @@ import {
 } from './template-compiler-root-completion.js';
 import {
   TemplateCompilerSiteCursorTaskSession,
+  type TemplateCompilerSiteCursorTaskSelection,
   type TemplateCompilerSiteCursorTaskSessionSnapshot,
 } from './template-compiler-site-cursor-task.js';
 
@@ -199,7 +200,11 @@ export class TemplateCompilerSiteCursorTranscript {
       || taskSnapshot.rootContext.localKey !== `${binding.lane.localKey}:cursor-context:root`
       || taskSnapshot.frontier !== frontier
       || !sameObjects(taskSnapshot.events, events)
-      || events.some((event) => taskSnapshot.contextForEvent(event) !== taskSnapshot.rootContext)
+      || events.some((event) => taskSnapshot.contextForEvent(event) == null)
+      || events.some((event) =>
+        rootOwnedCursorEvent(event)
+        && taskSnapshot.contextForEvent(event) !== taskSnapshot.rootContext
+      )
       || events.some((event, ordinal) =>
         !event.isOwnedBy(siteCursorConstructionAuthority)
         || event.ordinal !== ordinal
@@ -212,6 +217,7 @@ export class TemplateCompilerSiteCursorTranscript {
         binding,
         compilerReads,
         events,
+        taskSnapshot,
         attributeOwners,
         hydrateElementEnvelopes,
       )
@@ -482,15 +488,12 @@ class TemplateCompilerRootSiteCursor {
     this.phaseKind = TemplateCompilerSiteCursorPhaseKind.ContentStart;
     this.phase(TemplateCompilerSiteCursorPhaseKind.ContentStart);
     while (this.frontier == null) {
-      const visit = this.taskSession.nextRootVisit();
-      if (visit == null) break;
-      const childFrame = this.visitNode(
-        visit.node,
-        visit.parent,
-        visit.parentOrdinal,
-        visit.capturedSuccessor,
-      );
-      if (childFrame != null) this.taskSession.pushRootFrame(childFrame.parent, childFrame.children);
+      const selection = this.taskSession.next();
+      if (selection == null) break;
+      const childFrame = this.visitNode(selection);
+      if (childFrame != null) {
+        this.taskSession.pushContextFrame(selection.context, childFrame.parent, childFrame.children);
+      }
     }
     if (this.frontier == null) {
       this.phaseKind = TemplateCompilerSiteCursorPhaseKind.ContentEnd;
@@ -499,13 +502,11 @@ class TemplateCompilerRootSiteCursor {
   }
 
   private visitNode(
-    node: TemplateCompilerNodeOccurrence,
-    parent: TemplateCompilerParentOccurrence,
-    parentOrdinal: number,
-    successor: TemplateCompilerNodeOccurrence | null,
+    selection: TemplateCompilerSiteCursorTaskSelection,
   ): TemplateCompilerSiteCursorChildFrame | null {
+    const { node, parent, parentOrdinal, capturedSuccessor: successor } = selection.visit;
     if (node instanceof TemplateCompilerElementOccurrence) {
-      return this.visitElement(node, parent, parentOrdinal, successor);
+      return this.visitElement(selection, node, parent, parentOrdinal, successor);
     }
     if (node instanceof TemplateCompilerTextOccurrence) {
       this.visitText(node, parent, parentOrdinal, successor);
@@ -522,6 +523,7 @@ class TemplateCompilerRootSiteCursor {
   }
 
   private visitElement(
+    selection: TemplateCompilerSiteCursorTaskSelection,
     element: TemplateCompilerElementOccurrence,
     parent: TemplateCompilerParentOccurrence,
     parentOrdinal: number,
@@ -790,7 +792,7 @@ class TemplateCompilerRootSiteCursor {
     );
     const elementRead = this.semantics.readElement(lookupName);
     const elementDefinition = this.semantics.closedElementDefinition(elementRead);
-    this.appendEvent(new TemplateCompilerSiteCursorElementEvent(
+    const elementEvent = new TemplateCompilerSiteCursorElementEvent(
       siteCursorConstructionAuthority,
       this.transcriptOrdinal++,
       element,
@@ -804,7 +806,8 @@ class TemplateCompilerRootSiteCursor {
       asElement?.scalar ?? null,
       elementRead,
       elementDefinition,
-    ));
+    );
+    this.appendEvent(elementEvent);
     if (!this.semantics.elementReadIsClosed(elementRead)) {
       this.stop(
         TemplateCompilerSiteCursorFrontierKind.ElementResolutionOpen,
@@ -881,6 +884,8 @@ class TemplateCompilerRootSiteCursor {
     }
 
     return this.visitElementAttributesAndChildren(
+      selection,
+      elementEvent,
       element,
       authoredElement,
       elementDefinition,
@@ -894,6 +899,8 @@ class TemplateCompilerRootSiteCursor {
   }
 
   private visitElementAttributesAndChildren(
+    selection: TemplateCompilerSiteCursorTaskSelection,
+    elementEvent: TemplateCompilerSiteCursorElementEvent,
     element: TemplateCompilerElementOccurrence,
     authoredElement: HtmlElement | null,
     elementDefinition: CustomElementDefinition | null,
@@ -1013,10 +1020,12 @@ class TemplateCompilerRootSiteCursor {
       : this.compilerReads.readResolveResources();
     const globalOperationCount = this.binding.execution.sequence.readOperations().length;
     const laneOperationCount = this.binding.execution.sequence.readLaneOperations(this.binding.lane).length;
+    const reachedSelectionEvent = this.taskSession.attestReachedSelectionEvent(selection, elementEvent);
     const hydrateElementEnvelope = stageTemplateCompilerHydrateElementEnvelope({
       familyOwnerKey: String(this.binding.currentFamily.ownerHandle),
       compilerReads: this.compilerReads,
       element,
+      reachedSelectionEvent,
       lookupName,
       elementRead,
       resolveResourcesRead,
@@ -1835,6 +1844,7 @@ function hydrateElementEnvelopesAreCoherent(
   binding: TemplateCompilerSiteInvocationBinding,
   compilerReads: TemplateCompilerReadView,
   events: readonly TemplateCompilerSiteCursorEvent[],
+  taskSnapshot: TemplateCompilerSiteCursorTaskSessionSnapshot,
   owners: readonly TemplateCompilerLiveAttributeOwnerResult[],
   envelopes: readonly TemplateCompilerHydrateElementStagingResult[],
 ): boolean {
@@ -1875,6 +1885,10 @@ function hydrateElementEnvelopesAreCoherent(
       ) && draft != null)
       || (draft != null && (
         !draft.isModuleConstructed()
+        || !draft.reachedSelectionEvent.isModuleConstructed()
+        || draft.reachedSelectionEvent.event !== elementEvent
+        || draft.reachedSelectionEvent.selection.visit.node !== envelope.element
+        || draft.reachedSelectionEvent.binding !== taskSnapshot.bindingForEvent(elementEvent)
         || draft.owner !== owner
         || draft.elementRead !== elementEvent.elementRead
         || draft.definition !== elementEvent.elementDefinition
@@ -2025,6 +2039,11 @@ function sameSourceSpan(left: SourceSpan | null, right: SourceSpan | null): bool
 
 function sameObjects<T>(left: readonly T[], right: readonly T[]): boolean {
   return left.length === right.length && left.every((value, index) => value === right[index]);
+}
+
+function rootOwnedCursorEvent(event: TemplateCompilerSiteCursorEvent): boolean {
+  return event instanceof TemplateCompilerSiteCursorPhaseEvent
+    || event instanceof TemplateCompilerSiteCursorSurrogateValidationEvent;
 }
 
 function instructionStagingStateFor(
