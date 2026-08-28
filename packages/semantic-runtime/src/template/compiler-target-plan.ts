@@ -16,11 +16,12 @@ import type {
   HtmlElement,
   HtmlText,
 } from './html-ir.js';
-import type {
+import {
   TemplateCompilerElementOccurrence,
-  TemplateCompilerNodeOccurrence,
-  TemplateCompilerTextOccurrence,
+  type TemplateCompilerNodeOccurrence,
+  type TemplateCompilerTextOccurrence,
 } from './template-compiler-occurrence.js';
+import { TemplateCompilerOccurrenceMembershipArrivalPosture } from './template-compiler-occurrence-membership.js';
 import type { TemplateStructuralNodeReference } from './template-structure.js';
 import {
   HydrateElementProjectionContributorDisposition,
@@ -114,6 +115,8 @@ export const enum TemplateCompilerTargetRowSourceKind {
   Authored = 'authored',
   RetainedOccurrence = 'retained-occurrence',
   TextHole = 'text-hole',
+  /** Source-context TC replacement whose sole final occurrence membership belongs to another context. */
+  TemplateControllerTransitionSource = 'template-controller-transition-source',
   /** Append-only render-location row born inside a generated template-controller context. */
   GeneratedContextBoundary = 'generated-context-boundary',
 }
@@ -162,6 +165,37 @@ export type TemplateCompilerRenderLocationPlacement = Exclude<
   TemplateCompilerMarkerTargetPlacement
 >;
 
+/** Caller-owned permission for non-initial final membership in one exact target context. */
+export interface TemplateCompilerTargetOccurrenceMembershipArrivalAuthority {
+  readonly context: TemplateCompilerTargetContextPlan;
+  readonly occurrence: TemplateCompilerNodeOccurrence;
+  readonly arrivalPosture: Exclude<
+    TemplateCompilerOccurrenceMembershipArrivalPosture,
+    TemplateCompilerOccurrenceMembershipArrivalPosture.Initial
+  >;
+  authorizesMembership(
+    context: TemplateCompilerTargetContextPlan,
+    occurrence: TemplateCompilerNodeOccurrence,
+    arrivalPosture: TemplateCompilerOccurrenceMembershipArrivalPosture,
+  ): boolean;
+}
+
+/** Caller-owned cross-context authority for one outer TC source-replacement row. */
+export interface TemplateCompilerTemplateControllerTransitionSourceRowAuthority {
+  readonly sourceContext: TemplateCompilerTargetContextPlan;
+  readonly occurrence: TemplateCompilerElementOccurrence;
+  readonly sourceArrivalPosture: TemplateCompilerOccurrenceMembershipArrivalPosture;
+  readonly destinationContext: TemplateCompilerTargetContextPlan;
+  readonly destinationMembership: TemplateCompilerTargetOccurrenceMembership;
+  authorizesTransitionSourceRow(
+    sourceContext: TemplateCompilerTargetContextPlan,
+    occurrence: TemplateCompilerElementOccurrence,
+    sourceArrivalPosture: TemplateCompilerOccurrenceMembershipArrivalPosture,
+    destinationContext: TemplateCompilerTargetContextPlan,
+    destinationMembership: TemplateCompilerTargetOccurrenceMembership,
+  ): boolean;
+}
+
 export class TemplateCompilerTargetRowPlan {
   constructor(
     readonly localKey: string,
@@ -189,6 +223,7 @@ export class TemplateCompilerTargetRowPlan {
     readonly expressionChainIndex: number | null,
     readonly instructions: readonly TemplateInstruction[],
     readonly sourceAddressHandle: AddressHandle | null,
+    readonly transitionSourceAuthority: TemplateCompilerTemplateControllerTransitionSourceRowAuthority | null = null,
   ) {}
 
   targetPublicationLocal(compiledLocal: string, index: number): string {
@@ -206,7 +241,20 @@ export class TemplateCompilerTargetOccurrenceMembership {
     readonly ordinal: number,
     readonly occurrence: TemplateCompilerNodeOccurrence,
     readonly authoredNode: HtmlElement | HtmlText | null,
-  ) {}
+    readonly arrivalPosture: TemplateCompilerOccurrenceMembershipArrivalPosture,
+    readonly arrivalAuthority: TemplateCompilerTargetOccurrenceMembershipArrivalAuthority | null,
+  ) {
+    const initial = arrivalPosture === TemplateCompilerOccurrenceMembershipArrivalPosture.Initial;
+    if (
+      initial !== (arrivalAuthority == null)
+      || (arrivalAuthority != null && (
+        arrivalAuthority.occurrence !== occurrence
+        || arrivalAuthority.arrivalPosture !== arrivalPosture
+      ))
+    ) {
+      throw new Error(`Compiler occurrence membership '${stableSlotKey}' lost its arrival authority.`);
+    }
+  }
 
   get inputNode(): TemplateStructuralNodeReference | null {
     return this.occurrence.inputReference;
@@ -454,6 +502,73 @@ export class TemplateCompilerTargetContextPlan {
     return row;
   }
 
+  /** Append one outer TC source row without duplicating the occurrence's sole destination membership. */
+  appendTemplateControllerTransitionSourceRow(
+    stableSlotKey: string,
+    occurrence: TemplateCompilerElementOccurrence,
+    authoredNode: HtmlElement | null,
+    instruction: HydrateTemplateControllerInstruction,
+    destinationContext: TemplateCompilerTargetContextPlan,
+    destinationMembership: TemplateCompilerTargetOccurrenceMembership,
+    authority: TemplateCompilerTemplateControllerTransitionSourceRowAuthority,
+    sourceAddressHandle: AddressHandle | null = authoredNode?.sourceAddressHandle
+      ?? occurrence.inputReference?.addressHandle
+      ?? null,
+  ): TemplateCompilerTargetRowPlan {
+    this.requireMutable();
+    if (
+      stableSlotKey.length === 0
+      || this.stableRowSlots.has(stableSlotKey)
+      || this.occurrenceMembershipsByOccurrence.has(occurrence)
+      || destinationContext === this
+      || destinationContext.occurrenceMembershipFor(occurrence) !== destinationMembership
+      || destinationMembership.occurrence !== occurrence
+      || destinationMembership.authoredNode !== authoredNode
+      || destinationMembership.arrivalPosture === TemplateCompilerOccurrenceMembershipArrivalPosture.Initial
+      || authority.sourceContext !== this
+      || authority.occurrence !== occurrence
+      || !membershipArrivalPostureIsKnown(authority.sourceArrivalPosture)
+      || authority.destinationContext !== destinationContext
+      || authority.destinationMembership !== destinationMembership
+      || !authority.authorizesTransitionSourceRow(
+        this,
+        occurrence,
+        authority.sourceArrivalPosture,
+        destinationContext,
+        destinationMembership,
+      )
+      || (authoredNode != null && authoredNode.tagName !== occurrence.tagName)
+    ) {
+      throw new Error(`Compiler TC transition source row '${stableSlotKey}' lost destination membership authority.`);
+    }
+    const ordinal = this.rows.length;
+    const row = new TemplateCompilerTargetRowPlan(
+      `${this.localKey}:row:${stableSlotKey}`,
+      stableSlotKey,
+      stableSlotKey,
+      this.toReference(),
+      ordinal,
+      this.nextTargetOrdinal,
+      1,
+      TemplateCompilerTargetRowPosture.Complete,
+      [],
+      TemplateRenderTargetKind.RenderLocation,
+      new TemplateCompilerTemplateControllerSourceReplacementPlacement(instruction),
+      TemplateCompilerTargetRowSourceKind.TemplateControllerTransitionSource,
+      authoredNode,
+      occurrence,
+      occurrence.inputReference,
+      null,
+      [instruction],
+      sourceAddressHandle,
+      authority,
+    );
+    this.rows.push(row);
+    this.stableRowSlots.add(stableSlotKey);
+    this.nextTargetOrdinal += 1;
+    return row;
+  }
+
   recordFrontier(
     local: string,
     summary: string,
@@ -487,12 +602,23 @@ export class TemplateCompilerTargetContextPlan {
     stableSlotKey: string,
     occurrence: TemplateCompilerNodeOccurrence,
     authoredNode: HtmlElement | HtmlText | null,
+    arrivalPosture: TemplateCompilerOccurrenceMembershipArrivalPosture
+      = TemplateCompilerOccurrenceMembershipArrivalPosture.Initial,
+    arrivalAuthority: TemplateCompilerTargetOccurrenceMembershipArrivalAuthority | null = null,
   ): TemplateCompilerTargetOccurrenceMembership {
     this.requireMutable();
+    const initial = arrivalPosture === TemplateCompilerOccurrenceMembershipArrivalPosture.Initial;
     if (
       stableSlotKey.length === 0
       || this.stableMembershipSlots.has(stableSlotKey)
       || this.occurrenceMembershipsByOccurrence.has(occurrence)
+      || initial !== (arrivalAuthority == null)
+      || (arrivalAuthority != null && (
+        arrivalAuthority.context !== this
+        || arrivalAuthority.occurrence !== occurrence
+        || arrivalAuthority.arrivalPosture !== arrivalPosture
+        || !arrivalAuthority.authorizesMembership(this, occurrence, arrivalPosture)
+      ))
     ) {
       throw new Error(`Compiler occurrence membership '${stableSlotKey}' is empty or already admitted.`);
     }
@@ -501,6 +627,8 @@ export class TemplateCompilerTargetContextPlan {
       this.occurrenceMemberships.length,
       occurrence,
       authoredNode,
+      arrivalPosture,
+      arrivalAuthority,
     );
     this.occurrenceMemberships.push(membership);
     this.occurrenceMembershipsByOccurrence.set(occurrence, membership);
@@ -642,7 +770,29 @@ export class TemplateCompilerTargetPlan {
     const visited = new Set<TemplateCompilerTargetContextPlan>();
     const compiledTemplateProducts = new Set<ProductHandle>();
     const reachableNodeOwners = new Map<ProductHandle, string>();
-    const reachableOccurrenceOwners = new Map<TemplateCompilerNodeOccurrence, string>();
+    const occurrenceMembershipOwners = new Map<TemplateCompilerNodeOccurrence, {
+      readonly context: TemplateCompilerTargetContextPlan;
+      readonly membership: TemplateCompilerTargetOccurrenceMembership;
+    }>();
+    for (const context of this.contexts) {
+      for (const membership of context.readOccurrenceMemberships()) {
+        const initial = membership.arrivalPosture === TemplateCompilerOccurrenceMembershipArrivalPosture.Initial;
+        const authority = membership.arrivalAuthority;
+        if (
+          occurrenceMembershipOwners.has(membership.occurrence)
+          || initial !== (authority == null)
+          || (authority != null && (
+            authority.context !== context
+            || authority.occurrence !== membership.occurrence
+            || authority.arrivalPosture !== membership.arrivalPosture
+            || !authority.authorizesMembership(context, membership.occurrence, membership.arrivalPosture)
+          ))
+        ) {
+          throw new Error(`Compiler occurrence membership '${membership.stableSlotKey}' has incoherent arrival ownership.`);
+        }
+        occurrenceMembershipOwners.set(membership.occurrence, { context, membership });
+      }
+    }
     const instructionOccurrenceCountsByContext = new Map(
       this.contexts.map((context) => {
         const counts = new Map<TemplateInstruction, number>();
@@ -680,17 +830,17 @@ export class TemplateCompilerTargetPlan {
         throw new Error(`Compiler target context '${context.localKey}' has incoherent reachable-node ordinals.`);
       }
       for (const [ordinal, membership] of context.readOccurrenceMemberships().entries()) {
-        const priorOwner = reachableOccurrenceOwners.get(membership.occurrence) ?? null;
+        const indexed = occurrenceMembershipOwners.get(membership.occurrence) ?? null;
         if (
           membership.ordinal !== ordinal
           || membership.stableSlotKey.length === 0
-          || priorOwner != null
+          || indexed?.context !== context
+          || indexed.membership !== membership
           || (membership.authoredNode != null
             && context.compilerReachableNodeOrdinal(membership.authoredNode.productHandle) == null)
         ) {
           throw new Error(`Compiler occurrence membership '${membership.stableSlotKey}' is incoherent.`);
         }
-        reachableOccurrenceOwners.set(membership.occurrence, context.localKey);
       }
       if (!contextStructuralAuthorityIsCoherent(context)) {
         throw new Error(`Compiler target context '${context.localKey}' has incoherent structural authority.`);
@@ -734,6 +884,8 @@ export class TemplateCompilerTargetPlan {
           || row.projectedTargetOrdinal !== expectedTargetOrdinal
           || row.projectedTargetCount < 1
           || row.stableSlotKey.length === 0
+          || (row.sourceKind === TemplateCompilerTargetRowSourceKind.TemplateControllerTransitionSource)
+            !== (row.transitionSourceAuthority != null)
           || (row.sourceKind === TemplateCompilerTargetRowSourceKind.Authored
             && (row.node == null || row.occurrence != null || row.inputNode != null))
           || (row.sourceKind === TemplateCompilerTargetRowSourceKind.GeneratedContextBoundary
@@ -745,12 +897,19 @@ export class TemplateCompilerTargetPlan {
             ))
           || (row.sourceKind !== TemplateCompilerTargetRowSourceKind.Authored
             && row.sourceKind !== TemplateCompilerTargetRowSourceKind.GeneratedContextBoundary
+            && row.sourceKind !== TemplateCompilerTargetRowSourceKind.TemplateControllerTransitionSource
             && (
               row.occurrence == null
               || row.inputNode !== row.occurrence.inputReference
               || (row.inputNode == null && row.node == null && row.occurrence.generation == null)
               || occurrenceMembership == null
               || occurrenceMembership.authoredNode !== row.node
+            ))
+          || (row.sourceKind === TemplateCompilerTargetRowSourceKind.TemplateControllerTransitionSource
+            && !templateControllerTransitionSourceRowIsCoherent(
+              row,
+              context,
+              occurrenceMembershipOwners,
             ))
           || (row.sourceKind === TemplateCompilerTargetRowSourceKind.TextHole
             && (
@@ -882,6 +1041,50 @@ function rowPlacementIsCoherent(row: TemplateCompilerTargetRowPlan): boolean {
     && row.sourceKind === TemplateCompilerTargetRowSourceKind.GeneratedContextBoundary
     && row.instructions.length === 1
     && row.instructions[0] === placement.instruction;
+}
+
+function templateControllerTransitionSourceRowIsCoherent(
+  row: TemplateCompilerTargetRowPlan,
+  sourceContext: TemplateCompilerTargetContextPlan,
+  membershipOwners: ReadonlyMap<TemplateCompilerNodeOccurrence, {
+    readonly context: TemplateCompilerTargetContextPlan;
+    readonly membership: TemplateCompilerTargetOccurrenceMembership;
+  }>,
+): boolean {
+  const occurrence = row.occurrence;
+  const authority = row.transitionSourceAuthority;
+  if (!(occurrence instanceof TemplateCompilerElementOccurrence) || authority == null) return false;
+  const destination = membershipOwners.get(occurrence) ?? null;
+  return destination != null
+    && destination.context !== sourceContext
+    && destination.membership.arrivalPosture !== TemplateCompilerOccurrenceMembershipArrivalPosture.Initial
+    && sourceContext.occurrenceMembershipFor(occurrence) == null
+    && row.node === destination.membership.authoredNode
+    && row.inputNode === occurrence.inputReference
+    && row.expressionChainIndex == null
+    && authority.sourceContext === sourceContext
+    && authority.occurrence === occurrence
+    && membershipArrivalPostureIsKnown(authority.sourceArrivalPosture)
+    && authority.destinationContext === destination.context
+    && authority.destinationMembership === destination.membership
+    && authority.authorizesTransitionSourceRow(
+      sourceContext,
+      occurrence,
+      authority.sourceArrivalPosture,
+      destination.context,
+      destination.membership,
+    );
+}
+
+function membershipArrivalPostureIsKnown(
+  posture: TemplateCompilerOccurrenceMembershipArrivalPosture,
+): boolean {
+  switch (posture) {
+    case TemplateCompilerOccurrenceMembershipArrivalPosture.Initial:
+    case TemplateCompilerOccurrenceMembershipArrivalPosture.AdoptedInput:
+    case TemplateCompilerOccurrenceMembershipArrivalPosture.IncomingTransfer:
+      return true;
+  }
 }
 
 function rowTemplateControllerPlacementOwnsChild(

@@ -45,6 +45,7 @@ import type {
   TemplateCompilerOccurrenceForest,
   TemplateCompilerParentOccurrence,
 } from './template-compiler-occurrence.js';
+import { TemplateCompilerOccurrenceMembershipArrivalPosture } from './template-compiler-occurrence-membership.js';
 import type {
   TemplateStructuralAttributeReference,
   TemplateStructuralNodeReference,
@@ -770,30 +771,63 @@ export class TemplateCompilerStructuralExecutionSession {
     compilerContent: TemplateCompilerFragmentOccurrence,
   ): void {
     const memberships = context.readOccurrenceMemberships();
-    if (memberships.length === 0) return;
-    const expected: TemplateCompilerNodeOccurrence[] = [compilerCarrier];
+    const physical: TemplateCompilerNodeOccurrence[] = [compilerCarrier];
     contextPreorder(compilerContent, (node) => {
       if (node instanceof TemplateCompilerElementOccurrence || node instanceof TemplateCompilerTextOccurrence) {
-        expected.push(node);
+        physical.push(node);
       }
     });
-    if (
-      memberships.length !== expected.length
-      || memberships.some((membership, ordinal) => {
-        const occurrence = expected[ordinal] ?? null;
-        const exactAuthoredProduct = occurrence == null
-          ? null
-          : this.forest.exactAuthoredNodeOrigin(occurrence)?.authored.productHandle ?? null;
-        return membership.ordinal !== ordinal
-          || membership.occurrence !== occurrence
-          || (membership.authoredNode?.productHandle ?? null) !== exactAuthoredProduct;
-      })
-    ) {
-      throw new Error(
-        `Compiler target context '${context.localKey}' has divergent initial occurrence membership/order.`,
-      );
+    const physicalOrdinals = new Map(physical.map((occurrence, ordinal) => [occurrence, ordinal] as const));
+    let previousPresentOrdinal = -1;
+    for (const [ordinal, membership] of memberships.entries()) {
+      const physicalOrdinal = physicalOrdinals.get(membership.occurrence) ?? null;
+      const exactAuthoredProduct = this.forest.exactAuthoredNodeOrigin(membership.occurrence)
+        ?.authored.productHandle ?? null;
+      const incoming = membership.arrivalPosture
+        === TemplateCompilerOccurrenceMembershipArrivalPosture.IncomingTransfer;
+      if (
+        membership.ordinal !== ordinal
+        || (membership.authoredNode?.productHandle ?? null) !== exactAuthoredProduct
+        || (incoming ? physicalOrdinal != null : physicalOrdinal == null || physicalOrdinal <= previousPresentOrdinal)
+      ) {
+        throw new Error(
+          `Compiler target context '${context.localKey}' has divergent bind-time occurrence membership/order.`,
+        );
+      }
+      if (!incoming) previousPresentOrdinal = physicalOrdinal!;
     }
     for (const row of context.readRows()) {
+      if (
+        row.sourceKind === TemplateCompilerTargetRowSourceKind.Authored
+        || row.sourceKind === TemplateCompilerTargetRowSourceKind.GeneratedContextBoundary
+      ) continue;
+      if (row.sourceKind === TemplateCompilerTargetRowSourceKind.TemplateControllerTransitionSource) {
+        const occurrence = row.occurrence;
+        const authority = row.transitionSourceAuthority;
+        if (
+          !(occurrence instanceof TemplateCompilerElementOccurrence)
+          || authority == null
+          || authority.sourceContext !== context
+          || authority.occurrence !== occurrence
+          || authority.destinationMembership.occurrence !== occurrence
+          || authority.destinationContext.occurrenceMembershipFor(occurrence)
+            !== authority.destinationMembership
+          || !authority.authorizesTransitionSourceRow(
+            context,
+            occurrence,
+            authority.sourceArrivalPosture,
+            authority.destinationContext,
+            authority.destinationMembership,
+          )
+          || (authority.sourceArrivalPosture
+            === TemplateCompilerOccurrenceMembershipArrivalPosture.IncomingTransfer
+            ? contextContains(compilerContent, occurrence)
+            : !contextContains(compilerContent, occurrence))
+        ) {
+          throw new Error(`Compiler TC transition row '${row.localKey}' lost bind-time source authority.`);
+        }
+        continue;
+      }
       if (row.occurrence == null || context.occurrenceMembershipFor(row.occurrence) == null) {
         throw new Error(`Compiler target row '${row.localKey}' has no exact context occurrence membership.`);
       }
@@ -2753,7 +2787,8 @@ export class TemplateCompilerStructuralExecutionSession {
   private assertContextOccurrenceMembership(structure: TemplateCompilerContextStructure): void {
     const expected = structure.context.readOccurrenceMemberships();
     if (expected.length === 0) return;
-    const live: TemplateCompilerNodeOccurrence[] = [structure.compilerCarrier];
+    const carrierMembership = structure.context.occurrenceMembershipFor(structure.compilerCarrier);
+    const live: TemplateCompilerNodeOccurrence[] = carrierMembership == null ? [] : [structure.compilerCarrier];
     const represented = new Set<TemplateCompilerNodeOccurrence>(live);
     contextPreorder(structure.compilerContent, (node) => {
       let source: TemplateCompilerNodeOccurrence | null = null;
@@ -2768,7 +2803,11 @@ export class TemplateCompilerStructuralExecutionSession {
       } else if (node instanceof TemplateCompilerCommentOccurrence) {
         source = this.geometriesByEnd.get(node)?.replacedNode ?? null;
       }
-      if (source != null && !represented.has(source)) {
+      if (
+        source != null
+        && structure.context.occurrenceMembershipFor(source) != null
+        && !represented.has(source)
+      ) {
         represented.add(source);
         live.push(source);
       }

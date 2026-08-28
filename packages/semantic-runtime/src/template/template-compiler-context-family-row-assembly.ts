@@ -16,6 +16,10 @@ import type {
   TemplateCompilerElementOccurrence,
   TemplateCompilerTextOccurrence,
 } from './template-compiler-occurrence.js';
+import { TemplateCompilerOccurrenceMembershipArrivalPosture } from './template-compiler-occurrence-membership.js';
+export {
+  TemplateCompilerOccurrenceMembershipArrivalPosture as TemplateCompilerFamilyOccurrenceArrivalPosture,
+} from './template-compiler-occurrence-membership.js';
 import {
   lowerTemplateCompilerElementSite,
   lowerTemplateCompilerTextSite,
@@ -64,12 +68,6 @@ export class TemplateCompilerContextFamilyRowAssemblyReason {
     readonly reasonKind: TemplateCompilerContextFamilyRowAssemblyReasonKind,
     readonly summary: string,
   ) {}
-}
-
-export const enum TemplateCompilerFamilyOccurrenceArrivalPosture {
-  Initial = 'initial',
-  AdoptedInput = 'adopted-input',
-  IncomingTransfer = 'incoming-transfer',
 }
 
 export const enum TemplateCompilerFamilyTargetRowDraftKind {
@@ -193,25 +191,25 @@ export class TemplateCompilerFamilyReachDisposition {
     readonly reachedContext: TemplateCompilerSiteCursorContextReference,
     readonly loweringContext: TemplateCompilerSiteCursorContextReference,
     readonly rehoming: TemplateCompilerCompletedTemplateControllerLeafRehoming | null,
-    readonly arrivalPosture: TemplateCompilerFamilyOccurrenceArrivalPosture,
+    readonly arrivalPosture: TemplateCompilerOccurrenceMembershipArrivalPosture,
     readonly semanticOwner: TemplateCompilerFamilyOccurrenceSemanticOwner,
   ) {
     const ownerIsExact = loweringContext.contextKind === TemplateCompilerSiteCursorContextKind.Root
       ? semanticOwner instanceof TemplateCompilerCompletedContextTraversal
         && semanticOwner.context === loweringContext
         && rehoming == null
-        && arrivalPosture === TemplateCompilerFamilyOccurrenceArrivalPosture.Initial
+        && arrivalPosture === TemplateCompilerOccurrenceMembershipArrivalPosture.Initial
       : loweringContext.contextKind === TemplateCompilerSiteCursorContextKind.Projection
         ? semanticOwner instanceof TemplateCompilerCompletedProjectionContext
           && semanticOwner.context === loweringContext
           && rehoming == null
-          && arrivalPosture === TemplateCompilerFamilyOccurrenceArrivalPosture.IncomingTransfer
+          && arrivalPosture === TemplateCompilerOccurrenceMembershipArrivalPosture.IncomingTransfer
         : semanticOwner instanceof TemplateCompilerCompletedTemplateControllerLeafRehoming
           && semanticOwner === rehoming
           && semanticOwner.receipt.terminalLeaf === loweringContext
           && arrivalPosture === (semanticOwner.receipt.host.templateContent == null
-            ? TemplateCompilerFamilyOccurrenceArrivalPosture.IncomingTransfer
-            : TemplateCompilerFamilyOccurrenceArrivalPosture.AdoptedInput);
+            ? TemplateCompilerOccurrenceMembershipArrivalPosture.IncomingTransfer
+            : TemplateCompilerOccurrenceMembershipArrivalPosture.AdoptedInput);
     if (
       site.reach !== reach
       || site.reachedContext !== reachedContext
@@ -232,7 +230,7 @@ export class TemplateCompilerFamilyOccurrenceMembershipDraft {
   constructor(
     readonly disposition: TemplateCompilerFamilyReachDisposition,
     readonly context: TemplateCompilerSiteCursorContextReference,
-    readonly arrivalPosture: TemplateCompilerFamilyOccurrenceArrivalPosture,
+    readonly arrivalPosture: TemplateCompilerOccurrenceMembershipArrivalPosture,
     readonly semanticOwner: TemplateCompilerFamilyOccurrenceSemanticOwner,
   ) {
     this.membership = new TemplateCompilerOccurrenceMembership(disposition.site);
@@ -812,17 +810,17 @@ function semanticOwnerFor(
 function arrivalPostureFor(
   loweringContext: TemplateCompilerCompletedContextTraversal,
   leafRehoming: TemplateCompilerCompletedTemplateControllerLeafRehoming | null,
-): TemplateCompilerFamilyOccurrenceArrivalPosture {
+): TemplateCompilerOccurrenceMembershipArrivalPosture {
   if (loweringContext.context.contextKind === TemplateCompilerSiteCursorContextKind.Root) {
-    return TemplateCompilerFamilyOccurrenceArrivalPosture.Initial;
+    return TemplateCompilerOccurrenceMembershipArrivalPosture.Initial;
   }
   if (
     loweringContext.context.contextKind === TemplateCompilerSiteCursorContextKind.TemplateController
     && leafRehoming?.receipt.host.templateContent != null
   ) {
-    return TemplateCompilerFamilyOccurrenceArrivalPosture.AdoptedInput;
+    return TemplateCompilerOccurrenceMembershipArrivalPosture.AdoptedInput;
   }
-  return TemplateCompilerFamilyOccurrenceArrivalPosture.IncomingTransfer;
+  return TemplateCompilerOccurrenceMembershipArrivalPosture.IncomingTransfer;
 }
 
 function candidateEventOrdinal(candidate: LoweringCandidate): number {

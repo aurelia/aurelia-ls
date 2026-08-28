@@ -14,6 +14,9 @@ import {
   TemplateCompilerTemplateControllerSourceReplacementPlacement,
   TemplateCompilerTargetPlan,
   TemplateCompilerTargetRowPosture,
+  type TemplateCompilerTargetContextPlan,
+  type TemplateCompilerTargetOccurrenceMembershipArrivalAuthority,
+  type TemplateCompilerTemplateControllerTransitionSourceRowAuthority,
 } from '../src/template/compiler-target-plan.js';
 import {
   HtmlCommentSemanticKind,
@@ -39,8 +42,10 @@ import {
   TemplateCompilerOccurrenceEdgeKind,
   TemplateCompilerOccurrenceForest,
   TemplateCompilerOccurrenceGeneration,
+  type TemplateCompilerNodeOccurrence,
   TemplateCompilerTextOccurrence,
 } from '../src/template/template-compiler-occurrence.js';
+import { TemplateCompilerOccurrenceMembershipArrivalPosture } from '../src/template/template-compiler-occurrence-membership.js';
 import {
   type TemplateCompilerRenderLocationTargetGeometry,
   TemplateCompilerStructuralExecutionSession,
@@ -174,12 +179,24 @@ describe('template compiler structural execution mechanics', () => {
         new TemplateCompilerTemplateControllerSourceReplacementPlacement(instruction),
       );
       if (row == null) throw new Error('Expected source-replacement row.');
-      child.recordCompilerReachableOccurrence('context-axis-split:div', div, authoredDiv);
+      const arrival = membershipArrivalAuthority(
+        child,
+        div,
+        TemplateCompilerOccurrenceMembershipArrivalPosture.IncomingTransfer,
+      );
+      const membership = child.recordCompilerReachableOccurrence(
+        'context-axis-split:div',
+        div,
+        authoredDiv,
+        TemplateCompilerOccurrenceMembershipArrivalPosture.IncomingTransfer,
+        arrival,
+      );
 
       const session = TemplateCompilerStructuralExecutionSession.create(forest, targetPlan);
 
       expect(session.compilationContextForOccurrence(div)).toBe(child);
       expect(session.structuralContextForOccurrence(div)).toBe(targetPlan.root);
+      expect(membership.arrivalPosture).toBe(TemplateCompilerOccurrenceMembershipArrivalPosture.IncomingTransfer);
     } finally {
       fixture.dispose();
     }
@@ -1081,6 +1098,7 @@ describe('template compiler structural execution mechanics', () => {
           && node.tagName.toLowerCase() === 'template'
       );
       if (template?.templateContent == null) throw new Error('Expected input template carrier content.');
+      const span = requiredOccurrenceElement(forest, 'span');
       const targetPlan = createTargetPlan(fixture, 'input-carrier');
       const outerInstruction = templateControllerInstruction(fixture, authoredTemplate, 'input-carrier-outer');
       const outerContext = targetPlan.createTemplateControllerContext(targetPlan.root, outerInstruction);
@@ -1089,6 +1107,30 @@ describe('template compiler structural execution mechanics', () => {
       targetPlan.root.recordCompilerReachableNode(authoredDiv.productHandle);
       childContext.recordCompilerReachableNode(authoredTemplate.productHandle);
       childContext.recordCompilerReachableNode(authoredSpan.productHandle);
+      const templateArrival = membershipArrivalAuthority(
+        childContext,
+        template,
+        TemplateCompilerOccurrenceMembershipArrivalPosture.AdoptedInput,
+      );
+      const spanArrival = membershipArrivalAuthority(
+        childContext,
+        span,
+        TemplateCompilerOccurrenceMembershipArrivalPosture.AdoptedInput,
+      );
+      childContext.recordCompilerReachableOccurrence(
+        'input-template:membership',
+        template,
+        authoredTemplate,
+        TemplateCompilerOccurrenceMembershipArrivalPosture.AdoptedInput,
+        templateArrival,
+      );
+      childContext.recordCompilerReachableOccurrence(
+        'input-template:span:membership',
+        span,
+        authoredSpan,
+        TemplateCompilerOccurrenceMembershipArrivalPosture.AdoptedInput,
+        spanArrival,
+      );
       const row = targetPlan.root.appendRow(
         'input-template-controller',
         authoredTemplate,
@@ -1120,6 +1162,10 @@ describe('template compiler structural execution mechanics', () => {
       session.assertCoherent();
       expect(childStructure.compilerCarrier).toBe(template);
       expect(childStructure.compilerContent).toBe(template.templateContent);
+      expect(childContext.readOccurrenceMemberships().map((membership) => membership.arrivalPosture)).toEqual([
+        TemplateCompilerOccurrenceMembershipArrivalPosture.AdoptedInput,
+        TemplateCompilerOccurrenceMembershipArrivalPosture.AdoptedInput,
+      ]);
       expect(childStructure.compilerCarrier.generation).toBeNull();
       expect(childStructure.compilerContent.generation).toBeNull();
       expect(outerStructure.compilerContent.readChildren()).toEqual([
@@ -1128,6 +1174,278 @@ describe('template compiler structural execution mechanics', () => {
         outerGeometry.end,
       ]);
       expect(forest.readRoots()).toEqual([forest.compilerCarrier, outerStructure.compilerCarrier, template]);
+    } finally {
+      fixture.dispose();
+    }
+  });
+
+  test('binds an empty incoming TC leaf and validates one cross-context source row after transfer', () => {
+    const fixture = new BrowserEffectiveTemplateFixture('template-compiler-structural-incoming-membership');
+
+    try {
+      const input = fixture.materialize('incoming-membership', '<div></div>');
+      const forest = TemplateCompilerOccurrenceForest.fromBrowserEffective(input.emission);
+      const authoredDiv = requiredAuthoredElement(input.authoredHtml.nodes, 'div');
+      const div = requiredOccurrenceElement(forest, 'div');
+      const targetPlan = createTargetPlan(fixture, 'incoming-membership');
+      const instruction = templateControllerInstruction(fixture, authoredDiv, 'incoming-membership');
+      const leaf = targetPlan.createTemplateControllerContext(targetPlan.root, instruction);
+      const arrival = membershipArrivalAuthority(
+        leaf,
+        div,
+        TemplateCompilerOccurrenceMembershipArrivalPosture.IncomingTransfer,
+      );
+      const membership = leaf.recordCompilerReachableOccurrence(
+        'incoming-membership:div',
+        div,
+        authoredDiv,
+        TemplateCompilerOccurrenceMembershipArrivalPosture.IncomingTransfer,
+        arrival,
+      );
+      const foreignTransition = transitionSourceRowAuthority(
+        targetPlan.root,
+        div,
+        TemplateCompilerOccurrenceMembershipArrivalPosture.Initial,
+        targetPlan.root,
+        membership,
+      );
+      expect(() => targetPlan.root.appendTemplateControllerTransitionSourceRow(
+        'incoming-membership:foreign',
+        div,
+        authoredDiv,
+        instruction,
+        leaf,
+        membership,
+        foreignTransition,
+      )).toThrow(/destination membership authority/u);
+      const transition = transitionSourceRowAuthority(
+        targetPlan.root,
+        div,
+        TemplateCompilerOccurrenceMembershipArrivalPosture.Initial,
+        leaf,
+        membership,
+      );
+      const row = targetPlan.root.appendTemplateControllerTransitionSourceRow(
+        'incoming-membership:source',
+        div,
+        authoredDiv,
+        instruction,
+        leaf,
+        membership,
+        transition,
+      );
+
+      const session = TemplateCompilerStructuralExecutionSession.create(forest, targetPlan);
+      const leafStructure = session.createGeneratedContextStructure(leaf);
+      expect(leafStructure.compilerContent.readChildren()).toEqual([]);
+      expect(membership.arrivalPosture).toBe(TemplateCompilerOccurrenceMembershipArrivalPosture.IncomingTransfer);
+      session.realizeRenderLocationTarget(row, div);
+      session.moveNodeIntoContext(div, leaf, 0, [instruction.productHandle]);
+      session.assertCoherent();
+
+      expect(leafStructure.compilerContent.readChildren()).toEqual([div]);
+      expect(session.compilationContextForOccurrence(div)).toBe(leaf);
+      expect(session.structuralContextForOccurrence(div)).toBe(leaf);
+    } finally {
+      fixture.dispose();
+    }
+  });
+
+  test('binds a nested TC source row absent, then realizes it after its generated source context receives the host', () => {
+    const fixture = new BrowserEffectiveTemplateFixture('template-compiler-structural-nested-transition-source');
+
+    try {
+      const input = fixture.materialize('nested-transition-source', '<section><div></div></section>');
+      const forest = TemplateCompilerOccurrenceForest.fromBrowserEffective(input.emission);
+      const authoredSection = requiredAuthoredElement(input.authoredHtml.nodes, 'section');
+      const authoredDiv = requiredAuthoredElement(input.authoredHtml.nodes, 'div');
+      const section = requiredOccurrenceElement(forest, 'section');
+      const div = requiredOccurrenceElement(forest, 'div');
+      const targetPlan = createTargetPlan(fixture, 'nested-transition-source');
+      const outerInstruction = templateControllerInstruction(fixture, authoredSection, 'nested-transition:outer');
+      const sourceContext = targetPlan.createTemplateControllerContext(targetPlan.root, outerInstruction);
+      const innerInstruction = templateControllerInstruction(fixture, authoredDiv, 'nested-transition:inner');
+      const leaf = targetPlan.createTemplateControllerContext(sourceContext, innerInstruction);
+
+      const sectionArrival = membershipArrivalAuthority(
+        sourceContext,
+        section,
+        TemplateCompilerOccurrenceMembershipArrivalPosture.IncomingTransfer,
+      );
+      const sectionMembership = sourceContext.recordCompilerReachableOccurrence(
+        'nested-transition:section',
+        section,
+        authoredSection,
+        TemplateCompilerOccurrenceMembershipArrivalPosture.IncomingTransfer,
+        sectionArrival,
+      );
+      const divArrival = membershipArrivalAuthority(
+        leaf,
+        div,
+        TemplateCompilerOccurrenceMembershipArrivalPosture.IncomingTransfer,
+      );
+      const divMembership = leaf.recordCompilerReachableOccurrence(
+        'nested-transition:div',
+        div,
+        authoredDiv,
+        TemplateCompilerOccurrenceMembershipArrivalPosture.IncomingTransfer,
+        divArrival,
+      );
+      const outerAuthority = transitionSourceRowAuthority(
+        targetPlan.root,
+        section,
+        TemplateCompilerOccurrenceMembershipArrivalPosture.Initial,
+        sourceContext,
+        sectionMembership,
+      );
+      const outerRow = targetPlan.root.appendTemplateControllerTransitionSourceRow(
+        'nested-transition:outer-row',
+        section,
+        authoredSection,
+        outerInstruction,
+        sourceContext,
+        sectionMembership,
+        outerAuthority,
+      );
+      const innerAuthority = transitionSourceRowAuthority(
+        sourceContext,
+        div,
+        TemplateCompilerOccurrenceMembershipArrivalPosture.IncomingTransfer,
+        leaf,
+        divMembership,
+      );
+      const innerRow = sourceContext.appendTemplateControllerTransitionSourceRow(
+        'nested-transition:inner-row',
+        div,
+        authoredDiv,
+        innerInstruction,
+        leaf,
+        divMembership,
+        innerAuthority,
+      );
+
+      const session = TemplateCompilerStructuralExecutionSession.create(forest, targetPlan);
+      const sourceStructure = session.createGeneratedContextStructure(sourceContext);
+      const leafStructure = session.createGeneratedContextStructure(leaf);
+      expect(sourceStructure.compilerContent.readChildren()).toEqual([]);
+      expect(leafStructure.compilerContent.readChildren()).toEqual([]);
+
+      session.realizeRenderLocationTarget(outerRow, section);
+      session.moveNodeIntoContext(section, sourceContext, 0, [outerInstruction.productHandle]);
+      expect(sourceStructure.compilerContent.readChildren()).toEqual([section]);
+      session.realizeRenderLocationTarget(innerRow, div);
+      session.moveNodeIntoContext(div, leaf, 0, [innerInstruction.productHandle]);
+      session.assertCoherent();
+
+      expect(session.structuralContextForOccurrence(section)).toBe(sourceContext);
+      expect(session.structuralContextForOccurrence(div)).toBe(leaf);
+      expect(leafStructure.compilerContent.readChildren()).toEqual([div]);
+    } finally {
+      fixture.dispose();
+    }
+  });
+
+  test('rejects duplicate source membership and incoming membership already present at bind', () => {
+    const fixture = new BrowserEffectiveTemplateFixture('template-compiler-structural-arrival-refusal');
+
+    try {
+      {
+        const input = fixture.materialize('duplicate-source-membership', '<div></div>');
+        const forest = TemplateCompilerOccurrenceForest.fromBrowserEffective(input.emission);
+        const authoredDiv = requiredAuthoredElement(input.authoredHtml.nodes, 'div');
+        const div = requiredOccurrenceElement(forest, 'div');
+        const targetPlan = createTargetPlan(fixture, 'duplicate-source-membership');
+        const instruction = templateControllerInstruction(fixture, authoredDiv, 'duplicate-source-membership');
+        const leaf = targetPlan.createTemplateControllerContext(targetPlan.root, instruction);
+        const arrival = membershipArrivalAuthority(
+          leaf,
+          div,
+          TemplateCompilerOccurrenceMembershipArrivalPosture.IncomingTransfer,
+        );
+        const destinationMembership = leaf.recordCompilerReachableOccurrence(
+          'duplicate-source:leaf',
+          div,
+          authoredDiv,
+          TemplateCompilerOccurrenceMembershipArrivalPosture.IncomingTransfer,
+          arrival,
+        );
+        const sourceMembership = targetPlan.root.recordCompilerReachableOccurrence(
+          'duplicate-source:root',
+          div,
+          authoredDiv,
+        );
+        expect(sourceMembership).toMatchObject({
+          arrivalPosture: TemplateCompilerOccurrenceMembershipArrivalPosture.Initial,
+          arrivalAuthority: null,
+        });
+        const transition = transitionSourceRowAuthority(
+          targetPlan.root,
+          div,
+          TemplateCompilerOccurrenceMembershipArrivalPosture.Initial,
+          leaf,
+          destinationMembership,
+        );
+        expect(() => targetPlan.root.appendTemplateControllerTransitionSourceRow(
+          'duplicate-source:row',
+          div,
+          authoredDiv,
+          instruction,
+          leaf,
+          destinationMembership,
+          transition,
+        )).toThrow(/destination membership authority/u);
+      }
+
+      {
+        const input = fixture.materialize(
+          'incoming-present-at-bind',
+          '<div><template if.bind="value"><span></span></template></div>',
+        );
+        const forest = TemplateCompilerOccurrenceForest.fromBrowserEffective(input.emission);
+        const authoredTemplate = requiredAuthoredElement(input.authoredHtml.nodes, 'template');
+        const template = forest.readNodes().find((node): node is TemplateCompilerElementOccurrence =>
+          node instanceof TemplateCompilerElementOccurrence
+            && node !== forest.compilerCarrier
+            && node.tagName.toLowerCase() === 'template'
+        );
+        if (template?.templateContent == null) throw new Error('Expected an incoming-present template.');
+        const targetPlan = createTargetPlan(fixture, 'incoming-present-at-bind');
+        const instruction = templateControllerInstruction(fixture, authoredTemplate, 'incoming-present-at-bind');
+        const leaf = targetPlan.createTemplateControllerContext(targetPlan.root, instruction);
+        const arrival = membershipArrivalAuthority(
+          leaf,
+          template,
+          TemplateCompilerOccurrenceMembershipArrivalPosture.IncomingTransfer,
+        );
+        leaf.recordCompilerReachableOccurrence(
+          'incoming-present:template',
+          template,
+          authoredTemplate,
+          TemplateCompilerOccurrenceMembershipArrivalPosture.IncomingTransfer,
+          arrival,
+        );
+        const row = targetPlan.root.appendRow(
+          'incoming-present:source',
+          authoredTemplate,
+          [instruction],
+          TemplateRenderTargetKind.RenderLocation,
+          TemplateCompilerTargetRowPosture.Complete,
+          1,
+          [],
+          authoredTemplate.sourceAddressHandle,
+          new TemplateCompilerTemplateControllerSourceReplacementPlacement(instruction),
+        );
+        if (row == null) throw new Error('Expected incoming-present source row.');
+        const session = TemplateCompilerStructuralExecutionSession.create(forest, targetPlan);
+        session.realizeRenderLocationTarget(row, template);
+        expect(() => session.adoptInputContextStructure(
+          leaf,
+          template,
+          template.templateContent!,
+          [instruction.productHandle],
+        ))
+          .toThrow(/bind-time occurrence membership/u);
+      }
     } finally {
       fixture.dispose();
     }
@@ -1875,6 +2193,55 @@ describe('template compiler structural execution mechanics', () => {
     }
   });
 });
+
+function membershipArrivalAuthority(
+  context: TemplateCompilerTargetContextPlan,
+  occurrence: TemplateCompilerNodeOccurrence,
+  arrivalPosture: Exclude<
+    TemplateCompilerOccurrenceMembershipArrivalPosture,
+    TemplateCompilerOccurrenceMembershipArrivalPosture.Initial
+  >,
+): TemplateCompilerTargetOccurrenceMembershipArrivalAuthority {
+  return {
+    context,
+    occurrence,
+    arrivalPosture,
+    authorizesMembership(candidateContext, candidateOccurrence, candidatePosture): boolean {
+      return candidateContext === context
+        && candidateOccurrence === occurrence
+        && candidatePosture === arrivalPosture;
+    },
+  };
+}
+
+function transitionSourceRowAuthority(
+  sourceContext: TemplateCompilerTargetContextPlan,
+  occurrence: TemplateCompilerElementOccurrence,
+  sourceArrivalPosture: TemplateCompilerOccurrenceMembershipArrivalPosture,
+  destinationContext: TemplateCompilerTargetContextPlan,
+  destinationMembership: ReturnType<TemplateCompilerTargetContextPlan['recordCompilerReachableOccurrence']>,
+): TemplateCompilerTemplateControllerTransitionSourceRowAuthority {
+  return {
+    sourceContext,
+    occurrence,
+    sourceArrivalPosture,
+    destinationContext,
+    destinationMembership,
+    authorizesTransitionSourceRow(
+      candidateSource,
+      candidateOccurrence,
+      candidateSourcePosture,
+      candidateDestination,
+      candidateMembership,
+    ): boolean {
+      return candidateSource === sourceContext
+        && candidateOccurrence === occurrence
+        && candidateSourcePosture === sourceArrivalPosture
+        && candidateDestination === destinationContext
+        && candidateMembership === destinationMembership;
+    },
+  };
+}
 
 function createTargetPlan(
   fixture: BrowserEffectiveTemplateFixture,
