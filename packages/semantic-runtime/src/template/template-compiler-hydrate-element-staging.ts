@@ -16,7 +16,7 @@ import {
   TemplateResourceResolutionKind,
   type TemplateResolvedResource,
 } from './compiler-world.js';
-import type { HtmlElement } from './html-ir.js';
+import { HtmlNamespaceKind, type HtmlElement } from './html-ir.js';
 import { AuSlotProcessContentInstructionData } from './instruction-ir.js';
 import type { TemplateInstruction } from './instruction-ir.js';
 import {
@@ -33,8 +33,17 @@ import type {
 } from './template-compiler-process-content.js';
 import {
   TemplateCompilerElementOccurrence,
+  TemplateCompilerTextOccurrence,
+  type TemplateCompilerAttributeOccurrence,
   type TemplateCompilerNodeOccurrence,
 } from './template-compiler-occurrence.js';
+import { runtimeElementResourceName } from './runtime-dom-name.js';
+import {
+  groupTemplateCompilerProjectionChildren,
+  TemplateCompilerProjectionChildSnapshot,
+  type TemplateCompilerProjectionGroupingPlan,
+  TemplateCompilerProjectionGroupingInput,
+} from './template-compiler-projection-grouping.js';
 
 const hydrateElementStagingAuthority = {};
 
@@ -114,7 +123,26 @@ export class TemplateCompilerHydrateElementProjectionDraft {
   constructor(
     readonly state: TemplateCompilerHydrateElementProjectionState,
     readonly postProcessChildren: readonly TemplateCompilerNodeOccurrence[],
-  ) {}
+    readonly grouping: TemplateCompilerProjectionGroupingPlan<
+      TemplateCompilerNodeOccurrence,
+      TemplateCompilerAttributeOccurrence
+    >,
+  ) {
+    const groupedChildren = [
+      ...grouping.extractedContributors.map((contributor) => contributor.node),
+      ...grouping.residualChildren.map((child) => child.node),
+    ];
+    const groupedChildSet = new Set(groupedChildren);
+    if (
+      (state === TemplateCompilerHydrateElementProjectionState.PendingExtraction)
+        !== (grouping.extractedContributors.length > 0)
+      || groupedChildren.length !== postProcessChildren.length
+      || groupedChildSet.size !== groupedChildren.length
+      || postProcessChildren.some((child) => !groupedChildSet.has(child))
+    ) {
+      throw new Error('HydrateElement projection draft lost child grouping or extraction state authority.');
+    }
+  }
 }
 
 export class TemplateCompilerHydrateElementContainerlessDraft {
@@ -415,7 +443,7 @@ export function stageTemplateCompilerHydrateElementEnvelope(
   ) {
     return openResult(request, blockers, reads);
   }
-  const projection = projectionDraft(request.postProcessChildren, definition, blockers);
+  const projection = projectionDraft(request.element, request.postProcessChildren, definition, blockers);
   const fromUsage = request.owner.structuralEffects.includes(
     TemplateCompilerLiveAttributeStructuralEffectKind.UsageContainerless,
   );
@@ -599,21 +627,41 @@ function processContentDraft(
 }
 
 function projectionDraft(
+  host: TemplateCompilerElementOccurrence,
   children: readonly TemplateCompilerNodeOccurrence[],
   definition: CustomElementDefinition,
   blockers: TemplateCompilerHydrateElementBlocker[],
 ): TemplateCompilerHydrateElementProjectionDraft {
-  const pending = children.length > 0 && (
-    definition.shadowOptions == null
-    || children.some((child) =>
-      child instanceof TemplateCompilerElementOccurrence
-      && child.readAttributes().some((attribute) => qualifiedAttributeName(attribute) === 'au-slot')
-    )
-  );
+  const grouping = groupTemplateCompilerProjectionChildren(new TemplateCompilerProjectionGroupingInput(
+    host,
+    host.inputReference?.addressHandle ?? null,
+    definition.shadowOptions != null,
+    children.map((child) => {
+      const slotAttribute = child instanceof TemplateCompilerElementOccurrence
+        ? child.readAttributes().find((attribute) => qualifiedAttributeName(attribute) === 'au-slot') ?? null
+        : null;
+      return new TemplateCompilerProjectionChildSnapshot(
+        child,
+        slotAttribute,
+        slotAttribute?.value ?? null,
+        slotAttribute?.inputReference?.addressHandle ?? null,
+        null,
+        child.inputReference?.addressHandle ?? null,
+        child instanceof TemplateCompilerTextOccurrence && child.text.trim() === '',
+        child instanceof TemplateCompilerElementOccurrence
+          && child.namespace === HtmlNamespaceKind.Html
+          && runtimeElementResourceName(child.tagName, child.namespace) === 'template',
+        child instanceof TemplateCompilerElementOccurrence
+          ? child.readAttributes().filter((attribute) => attribute !== slotAttribute).length
+          : 0,
+      );
+    }),
+  ));
+  const pending = grouping.extractedContributors.length > 0;
   if (pending) {
     blockers.push(envelopeBlocker(
       TemplateCompilerHydrateElementBlockerKind.ProjectionExtractionPending,
-      'Post-process live children require ordered Aurelia projection extraction.',
+      'Post-process live children are grouped exactly and await context allocation and structural extraction.',
     ));
   }
   return new TemplateCompilerHydrateElementProjectionDraft(
@@ -621,6 +669,7 @@ function projectionDraft(
       ? TemplateCompilerHydrateElementProjectionState.PendingExtraction
       : TemplateCompilerHydrateElementProjectionState.None,
     [...children],
+    grouping,
   );
 }
 

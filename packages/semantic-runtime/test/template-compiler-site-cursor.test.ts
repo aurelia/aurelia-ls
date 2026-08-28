@@ -297,6 +297,17 @@ describe('template compiler root site cursor', () => {
     expect(envelope.draft?.projection.state).toBe(TemplateCompilerHydrateElementProjectionState.PendingExtraction);
     expect(envelope.draft?.projection.postProcessChildren).toHaveLength(1);
     expect((envelope.draft?.projection.postProcessChildren[0] as TemplateCompilerElementOccurrence).tagName).toBe('span');
+    expect(envelope.draft?.projection.grouping.groups.map((group) => [
+      group.slotName,
+      group.members.map((member) => [
+        member.node instanceof TemplateCompilerElementOccurrence ? member.node.tagName : member.node.nodeKind,
+        member.disposition,
+      ]),
+    ])).toEqual([[
+      'default',
+      [['span', HydrateElementProjectionContributorDisposition.RetainedNode]],
+    ]]);
+    expect(envelope.draft?.projection.grouping.residualChildren).toEqual([]);
     expect(envelope.draft?.processContent.state).toBe(TemplateCompilerHydrateElementProcessContentState.Absent);
     expect(envelope.draft?.containerless.effective).toBe(false);
   });
@@ -1392,8 +1403,22 @@ describe('template compiler root site cursor', () => {
 
     expect(fixture.transcript('cursor-context-family-tc').frontier?.frontierKind)
       .toBe(TemplateCompilerSiteCursorFrontierKind.AfterAttributesBeforeTemplateController);
-    expect(fixture.transcript('cursor-context-family-projection').frontier?.frontierKind)
+    const liveProjectionTranscript = fixture.transcript('cursor-context-family-projection');
+    expect(liveProjectionTranscript.frontier?.frontierKind)
       .toBe(TemplateCompilerSiteCursorFrontierKind.AfterAttributesBeforeProjection);
+    expect(liveProjectionTranscript.hydrateElementEnvelopes[0]?.draft?.projection.grouping.groups.map((group) => [
+      group.slotName,
+      group.members.map((member) => [
+        member.node instanceof TemplateCompilerElementOccurrence ? member.node.tagName : member.node.nodeKind,
+        member.disposition,
+      ]),
+    ])).toEqual([
+      ['default', [['span', HydrateElementProjectionContributorDisposition.RetainedNode]]],
+      ['named', [
+        ['b', HydrateElementProjectionContributorDisposition.RetainedNode],
+        ['template', HydrateElementProjectionContributorDisposition.UnwrappedTemplateContent],
+      ]],
+    ]);
   });
 
   test('keeps a wide attribute walk linear without consulting indexOf-backed ordinals', () => {

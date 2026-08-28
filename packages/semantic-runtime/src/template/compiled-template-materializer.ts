@@ -175,6 +175,12 @@ import {
   TemplateCompilerTextInstructionStagingRequest,
   stageTemplateCompilerTextInstructions,
 } from './template-compiler-text-instruction-staging.js';
+import {
+  groupTemplateCompilerProjectionChildren,
+  TemplateCompilerProjectionChildSnapshot,
+  type TemplateCompilerProjectionGroupPlan,
+  TemplateCompilerProjectionGroupingInput,
+} from './template-compiler-projection-grouping.js';
 
 export interface CompiledTemplateMaterializationRequest {
   /** Store-local key for this compiled-template pass. */
@@ -349,15 +355,28 @@ interface ElementInstructionPartBuckets {
   readonly hasOpenProcessContentHook: boolean;
 }
 
-class ElementProjectionChildGroup {
+class AuthoredElementProjectionChildGroup {
   constructor(
-    readonly slotName: string,
-    readonly extractedChildren: readonly HtmlNodeReferenceLike[],
-    readonly sequenceChildren: readonly HtmlNodeReferenceLike[],
+    readonly plan: TemplateCompilerProjectionGroupPlan<HtmlNodeReferenceLike, HtmlAttribute>,
     readonly contributors: readonly HydrateElementProjectionContributor[],
     readonly discardedContributors: readonly HydrateElementProjectionContributor[],
-    readonly sourceAddressHandle: AddressHandle | null,
   ) {}
+
+  get slotName(): string {
+    return this.plan.slotName;
+  }
+
+  get extractedChildren(): readonly HtmlNodeReferenceLike[] {
+    return this.plan.members.map((member) => member.node);
+  }
+
+  get sequenceChildren(): readonly HtmlNodeReferenceLike[] {
+    return this.plan.contributors.map((contributor) => contributor.node);
+  }
+
+  get sourceAddressHandle(): AddressHandle | null {
+    return this.plan.sourceAddressHandle;
+  }
 }
 
 interface HtmlNodeReferenceLike {
@@ -1184,70 +1203,62 @@ class CompiledTemplateInstructionTraversal {
     elementDefinition: CustomElementDefinition | null,
     parts: ElementInstructionParts,
     auSlotProcessContent: AuSlotCompilerProcessContentPlan<HtmlNodeReference, HtmlAttribute> | null,
-  ): readonly ElementProjectionChildGroup[] {
+  ): readonly AuthoredElementProjectionChildGroup[] {
     if (elementDefinition == null || parts.hasOpenProcessContentHook) {
       return [];
     }
-    const isShadowDom = elementDefinition.shadowOptions != null;
-    const groups = new Map<string, {
-      extractedChildren: HtmlNodeReferenceLike[];
-      sequenceChildren: HtmlNodeReferenceLike[];
-      contributors: HydrateElementProjectionContributor[];
-      discardedContributors: HydrateElementProjectionContributor[];
-      sourceAddressHandle: AddressHandle | null;
-    }>();
-    for (const childReference of node.children) {
-      const child = this.nodeForReference(childReference);
-      const auSlotAttribute = child instanceof HtmlElement ? this.attributeForElement(child, 'au-slot') : null;
-      if (auSlotProcessContent?.removedChildren.includes(childReference) === true) {
-        continue;
-      }
-      const shouldExtract = auSlotAttribute != null || !isShadowDom;
-      if (!shouldExtract) {
-        continue;
-      }
-      const slotName = auSlotAttribute?.rawValue || 'default';
-      const group = groups.get(slotName) ?? {
-        extractedChildren: [],
-        sequenceChildren: [],
-        contributors: [],
-        discardedContributors: [],
-        sourceAddressHandle: child?.sourceAddressHandle ?? auSlotAttribute?.sourceAddressHandle ?? node.sourceAddressHandle,
-      };
-      group.extractedChildren.push(childReference);
-      const isDiscardedWhitespace = child instanceof HtmlText && child.text.trim() === '';
-      const contributor = new HydrateElementProjectionContributor(
-        childReference,
-        slotName,
-        auSlotAttribute?.toReference() ?? null,
-        auSlotAttribute?.valueAddressHandle ?? null,
-        isDiscardedWhitespace
-          ? HydrateElementProjectionContributorDisposition.DiscardedWhitespace
-          : child instanceof HtmlElement && this.isUnwrappedProjectionTemplate(child)
-            ? HydrateElementProjectionContributorDisposition.UnwrappedTemplateContent
-            : HydrateElementProjectionContributorDisposition.RetainedNode,
-      );
-      if (isDiscardedWhitespace) {
-        group.discardedContributors.push(contributor);
-      } else {
-        group.contributors.push(contributor);
-        group.sequenceChildren.push(childReference);
-      }
-      groups.set(slotName, group);
-    }
-    return [...groups.entries()].map(([slotName, group]) => new ElementProjectionChildGroup(
-      slotName,
-      group.extractedChildren,
-      group.sequenceChildren,
-      group.contributors,
-      group.discardedContributors,
-      group.sourceAddressHandle,
+    const removedChildren = new Set(auSlotProcessContent?.removedChildren ?? []);
+    const grouping = groupTemplateCompilerProjectionChildren(new TemplateCompilerProjectionGroupingInput(
+      node.toReference(),
+      node.sourceAddressHandle,
+      elementDefinition.shadowOptions != null,
+      node.children.flatMap((childReference) => {
+        if (removedChildren.has(childReference)) return [];
+        const child = this.nodeForReference(childReference);
+        const auSlotAttribute = child instanceof HtmlElement
+          ? this.attributeForElement(child, 'au-slot')
+          : null;
+        const remainingAttributeCountAfterSlotRemoval = child instanceof HtmlElement
+          ? (this.indexes.ownersByElement.get(child.productHandle)?.attributes.filter((attribute) =>
+              runtimeAttributeName(attribute.rawName, child.namespace) !== 'au-slot'
+            ).length ?? 0)
+          : 0;
+        return [new TemplateCompilerProjectionChildSnapshot(
+          childReference,
+          auSlotAttribute,
+          auSlotAttribute?.rawValue ?? null,
+          auSlotAttribute?.sourceAddressHandle ?? null,
+          auSlotAttribute?.valueAddressHandle ?? null,
+          child?.sourceAddressHandle ?? null,
+          child instanceof HtmlText && child.text.trim() === '',
+          child instanceof HtmlElement
+            && child.namespace === HtmlNamespaceKind.Html
+            && runtimeElementResourceName(child.tagName, child.namespace) === 'template',
+          remainingAttributeCountAfterSlotRemoval,
+        )];
+      }),
     ));
+    return grouping.groups.map((group) => {
+      const toInstructionContributor = (
+        contributor: typeof group.members[number],
+      ): HydrateElementProjectionContributor => new HydrateElementProjectionContributor(
+        contributor.node,
+        contributor.slotName,
+        contributor.slotAttribute?.toReference() ?? null,
+        contributor.slotNameSourceAddressHandle,
+        contributor.disposition,
+      );
+      return new AuthoredElementProjectionChildGroup(
+        group,
+        group.contributors.map(toInstructionContributor),
+        group.discardedContributors.map(toInstructionContributor),
+      );
+    });
   }
 
   private addProjectionContexts(
     instruction: HydrateElementInstruction,
-    projectionGroups: readonly ElementProjectionChildGroup[],
+    projectionGroups: readonly AuthoredElementProjectionChildGroup[],
     parentContext: TemplateCompilerTargetContextPlan,
   ): void {
     for (const projection of instruction.projections) {
@@ -1260,9 +1271,14 @@ class CompiledTemplateInstructionTraversal {
         instruction,
         projection,
       );
-      for (const child of group.sequenceChildren) {
+      for (const contributor of group.plan.contributors) {
+        const child = contributor.node;
         const childNode = this.nodeForReference(child);
-        if (childNode instanceof HtmlElement && this.isUnwrappedProjectionTemplate(childNode)) {
+        if (
+          contributor.disposition
+            === HydrateElementProjectionContributorDisposition.UnwrappedTemplateContent
+          && childNode instanceof HtmlElement
+        ) {
           for (const grandchild of childNode.children) {
             this.visitNode(grandchild, projectionContext);
           }
@@ -1310,19 +1326,6 @@ class CompiledTemplateInstructionTraversal {
       attribute.rawValue,
       null,
     ));
-  }
-
-  private isUnwrappedProjectionTemplate(node: HtmlElement): boolean {
-    if (
-      node.namespace !== HtmlNamespaceKind.Html
-      || runtimeElementResourceName(node.tagName, node.namespace) !== 'template'
-    ) {
-      return false;
-    }
-    const owner = this.indexes.ownersByElement.get(node.productHandle) ?? null;
-    return owner?.attributes.every((attribute) =>
-      runtimeAttributeName(attribute.rawName, node.namespace) === 'au-slot'
-    ) ?? true;
   }
 
   private hasUnprojectedChildren(
