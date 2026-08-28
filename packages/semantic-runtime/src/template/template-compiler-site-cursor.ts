@@ -134,12 +134,54 @@ import {
   type TemplateCompilerOrdinaryRootCompletionResult,
 } from './template-compiler-root-completion.js';
 import {
+  type TemplateCompilerSiteCursorReachedSelectionEventAttestation,
   TemplateCompilerSiteCursorTaskSession,
   type TemplateCompilerSiteCursorTaskSelection,
   type TemplateCompilerSiteCursorTaskSessionSnapshot,
 } from './template-compiler-site-cursor-task.js';
 
 const siteCursorConstructionAuthority = {};
+
+/** Cursor-owned proof that one generic task/event binding is the reached element event used for semantic staging. */
+export class TemplateCompilerSiteCursorReachedElement {
+  readonly #authority: object;
+
+  constructor(
+    authority: object,
+    readonly reachedSelectionEvent: TemplateCompilerSiteCursorReachedSelectionEventAttestation,
+    readonly elementEvent: TemplateCompilerSiteCursorElementEvent,
+  ) {
+    const selection = reachedSelectionEvent.selection;
+    const visit = selection.visit;
+    if (
+      authority !== siteCursorConstructionAuthority
+      || !reachedSelectionEvent.isModuleConstructed()
+      || !elementEvent.isOwnedBy(authority)
+      || reachedSelectionEvent.event !== elementEvent
+      || reachedSelectionEvent.binding.event !== elementEvent
+      || reachedSelectionEvent.binding.visit !== visit
+      || !(visit.node instanceof TemplateCompilerElementOccurrence)
+      || elementEvent.element !== visit.node
+      || elementEvent.parent !== visit.parent
+      || elementEvent.parentOrdinal !== visit.parentOrdinal
+      || elementEvent.capturedSuccessor !== visit.capturedSuccessor
+      || !reachedSelectionEvent.session.reachedSelectionEventIsCurrent(reachedSelectionEvent)
+    ) {
+      throw new Error('Compiler cursor reached element lost its exact cursor-owned event and task selection.');
+    }
+    this.#authority = authority;
+  }
+
+  isModuleConstructed(): boolean {
+    return this.#authority === siteCursorConstructionAuthority;
+  }
+
+  isCurrent(): boolean {
+    return this.isModuleConstructed()
+      && this.elementEvent.isOwnedBy(siteCursorConstructionAuthority)
+      && this.reachedSelectionEvent.session.reachedSelectionEventIsCurrent(this.reachedSelectionEvent);
+  }
+}
 
 export const enum TemplateCompilerSiteCursorAdmissionReasonKind {
   ForeignBinding = 'foreign-binding',
@@ -844,6 +886,12 @@ class TemplateCompilerRootSiteCursor {
         return null;
       }
     }
+    const reachedSelectionEvent = this.taskSession.attestReachedSelectionEvent(selection, elementEvent);
+    const reachedElement = new TemplateCompilerSiteCursorReachedElement(
+      siteCursorConstructionAuthority,
+      reachedSelectionEvent,
+      elementEvent,
+    );
     let processContent: TemplateCompilerProcessContentResult | null = null;
     if (elementDefinition?.processContent != null) {
       const plan = planTemplateCompilerProcessContent({
@@ -884,8 +932,7 @@ class TemplateCompilerRootSiteCursor {
     }
 
     return this.visitElementAttributesAndChildren(
-      selection,
-      elementEvent,
+      reachedElement,
       element,
       authoredElement,
       elementDefinition,
@@ -899,8 +946,7 @@ class TemplateCompilerRootSiteCursor {
   }
 
   private visitElementAttributesAndChildren(
-    selection: TemplateCompilerSiteCursorTaskSelection,
-    elementEvent: TemplateCompilerSiteCursorElementEvent,
+    reachedElement: TemplateCompilerSiteCursorReachedElement,
     element: TemplateCompilerElementOccurrence,
     authoredElement: HtmlElement | null,
     elementDefinition: CustomElementDefinition | null,
@@ -1020,12 +1066,11 @@ class TemplateCompilerRootSiteCursor {
       : this.compilerReads.readResolveResources();
     const globalOperationCount = this.binding.execution.sequence.readOperations().length;
     const laneOperationCount = this.binding.execution.sequence.readLaneOperations(this.binding.lane).length;
-    const reachedSelectionEvent = this.taskSession.attestReachedSelectionEvent(selection, elementEvent);
     const hydrateElementEnvelope = stageTemplateCompilerHydrateElementEnvelope({
       familyOwnerKey: String(this.binding.currentFamily.ownerHandle),
       compilerReads: this.compilerReads,
       element,
-      reachedSelectionEvent,
+      reachedElement,
       lookupName,
       elementRead,
       resolveResourcesRead,
@@ -1885,10 +1930,10 @@ function hydrateElementEnvelopesAreCoherent(
       ) && draft != null)
       || (draft != null && (
         !draft.isModuleConstructed()
-        || !draft.reachedSelectionEvent.isModuleConstructed()
-        || draft.reachedSelectionEvent.event !== elementEvent
-        || draft.reachedSelectionEvent.selection.visit.node !== envelope.element
-        || draft.reachedSelectionEvent.binding !== taskSnapshot.bindingForEvent(elementEvent)
+        || !draft.reachedElement.isModuleConstructed()
+        || draft.reachedElement.elementEvent !== elementEvent
+        || draft.reachedElement.reachedSelectionEvent.selection.visit.node !== envelope.element
+        || draft.reachedElement.reachedSelectionEvent.binding !== taskSnapshot.bindingForEvent(elementEvent)
         || draft.owner !== owner
         || draft.elementRead !== elementEvent.elementRead
         || draft.definition !== elementEvent.elementDefinition

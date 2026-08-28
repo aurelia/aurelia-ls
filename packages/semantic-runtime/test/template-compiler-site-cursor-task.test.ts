@@ -322,6 +322,7 @@ describe('template compiler site cursor task scheduler', () => {
     const attestation = session.attestReachedSelectionEvent(selection, reachedEvent);
 
     expect(attestation.isModuleConstructed()).toBe(true);
+    expect(session.reachedSelectionEventIsCurrent(attestation)).toBe(true);
     expect(attestation).toMatchObject({
       session,
       selection,
@@ -348,6 +349,7 @@ describe('template compiler site cursor task scheduler', () => {
       .toThrow(/already-appended event/u);
 
     const laterSelection = session.next()!;
+    expect(session.reachedSelectionEventIsCurrent(attestation)).toBe(false);
     expect(attestation.isModuleConstructed()).toBe(true);
     expect(attestation.selection).toBe(selection);
     expect(attestation.binding.visit).toBe(selection.visit);
@@ -358,6 +360,7 @@ describe('template compiler site cursor task scheduler', () => {
     expect(() => session.attestReachedSelectionEvent(laterSelection, rootTail))
       .toThrow(/does not carry a reached selection/u);
     session.finish(null);
+    expect(session.reachedSelectionEventIsCurrent(attestation)).toBe(false);
 
     while (foreignSession.next() != null) {
       // Drain the independent task session.

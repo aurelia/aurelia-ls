@@ -1286,6 +1286,17 @@ export class TemplateCompilerSiteCursorTaskSession {
     );
   }
 
+  /** Whether an event-time attestation still names this session's exact current selection and binding. */
+  reachedSelectionEventIsCurrent(
+    attestation: TemplateCompilerSiteCursorReachedSelectionEventAttestation,
+  ): boolean {
+    return !this.finished
+      && attestation.isModuleConstructed()
+      && attestation.session === this
+      && this.currentSelection === attestation.selection
+      && this.eventLog.bindingForEvent(attestation.event) === attestation.binding;
+  }
+
   replaceTerminalEvent(
     expected: TemplateCompilerSiteCursorEvent,
     replacement: TemplateCompilerSiteCursorEvent,
