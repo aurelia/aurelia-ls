@@ -128,6 +128,17 @@ function normalizeInstruction(
         modifier: value.modifier,
         to: value.to,
       };
+    case TemplateCompilerFrameworkInstructionType.IteratorBinding:
+    case TemplateCompilerFrameworkInstructionType.VirtualizationIterateBinding:
+      return {
+        kind: value.type === TemplateCompilerFrameworkInstructionType.IteratorBinding
+          ? "iterator-binding"
+          : `instruction-${value.type}`,
+        type: value.type,
+        forOf: normalizeSemanticRuntimeExpressionAstForObservation(value.forOf),
+        props: value.props.map((instruction) => normalizeInstruction(instruction, definitionIndexes)),
+        to: value.to,
+      };
     case TemplateCompilerFrameworkInstructionType.TextBinding:
       return {
         kind: "text-binding",
@@ -169,7 +180,10 @@ function normalizeInstruction(
       return {
         kind: "hydrate-element",
         type: value.type,
-        captures: value.captures.map((capture) => normalizeUnknown(capture)),
+        captures: value.captures.map((capture) => ({
+          kind: "attribute-syntax",
+          fields: normalizeUnknown(capture),
+        })),
         containerless: value.containerless,
         data: normalizeElementData(value.data),
         projections: value.projections?.map((projection) => normalizeProjection(projection, definitionIndexes)) ?? null,
@@ -213,6 +227,13 @@ function normalizeInstruction(
       return {
         kind: "spread-transferred-binding",
         type: value.type,
+      };
+    case TemplateCompilerFrameworkInstructionType.SpreadValueBinding:
+      return {
+        kind: "spread-value-binding",
+        type: value.type,
+        from: value.from,
+        target: value.target,
       };
   }
 }

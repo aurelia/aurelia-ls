@@ -1,6 +1,7 @@
 import type { ProductHandle } from '../kernel/handles.js';
 import type { ProductDetailReadView } from '../kernel/product-details.js';
 import type { KernelReadProjectionRevisionView } from '../kernel/store.js';
+import { ExpressionParseResultKind } from '../expression/parse-result-algebra.js';
 import {
   projectRuntimeExpressionAstValue,
   RuntimeExpressionAstProjectionState,
@@ -12,6 +13,7 @@ import {
   runtimeAcceptedBindingExpressionAstForResultChain,
 } from './expression-parse-projection.js';
 import { readTemplateExpressionParse } from './expression-parse-product.js';
+import { TemplateProductDetails } from './product-details.js';
 import type {
   TemplateCompilerContextFamilyValue,
   TemplateCompilerContextFamilyValueContext,
@@ -87,6 +89,17 @@ export class TemplateCompilerRuntimeProjectionValue {
   ) {}
 }
 
+/** Framework AttrSyntax wire fields retained without semantic product/source identity. */
+export class TemplateCompilerRuntimeAttributeSyntaxValue {
+  constructor(
+    readonly rawName: string,
+    readonly rawValue: string,
+    readonly target: string,
+    readonly command: string | null,
+    readonly parts: readonly string[] | null,
+  ) {}
+}
+
 export const enum TemplateCompilerRuntimeElementDataKind {
   None = 'none',
   AuSlot = 'au-slot',
@@ -114,6 +127,14 @@ export type TemplateCompilerRuntimeInstructionValue =
       readonly to: string;
       readonly capture: boolean;
       readonly modifier: string | null;
+    }
+  | {
+      readonly type:
+        | TemplateCompilerFrameworkInstructionType.IteratorBinding
+        | TemplateCompilerFrameworkInstructionType.VirtualizationIterateBinding;
+      readonly forOf: RuntimeExpressionAstValue;
+      readonly to: string;
+      readonly props: readonly TemplateCompilerRuntimeInstructionValue[];
     }
   | {
       readonly type: TemplateCompilerFrameworkInstructionType.TextBinding;
@@ -148,7 +169,7 @@ export type TemplateCompilerRuntimeInstructionValue =
       readonly props: readonly TemplateCompilerRuntimeInstructionValue[];
       readonly projections: readonly TemplateCompilerRuntimeProjectionValue[] | null;
       readonly containerless: boolean;
-      readonly captures: readonly [];
+      readonly captures: readonly TemplateCompilerRuntimeAttributeSyntaxValue[];
       readonly data: TemplateCompilerRuntimeElementDataValue;
     }
   | {
@@ -176,6 +197,11 @@ export type TemplateCompilerRuntimeInstructionValue =
     }
   | {
       readonly type: TemplateCompilerFrameworkInstructionType.SpreadTransferedBinding;
+    }
+  | {
+      readonly type: TemplateCompilerFrameworkInstructionType.SpreadValueBinding;
+      readonly target: '$bindables' | '$element';
+      readonly from: string;
     };
 
 export const enum TemplateCompilerRuntimeInstructionFamilyState {
@@ -199,7 +225,7 @@ export const enum TemplateCompilerRuntimeInstructionReasonKind {
   MissingNestedInstruction = 'missing-nested-instruction',
   MissingChildDefinition = 'missing-child-definition',
   MissingResourceName = 'missing-resource-name',
-  CaptureSyntaxPending = 'capture-syntax-pending',
+  CaptureSyntaxUnavailable = 'capture-syntax-unavailable',
   UnsupportedHydrateElementData = 'unsupported-hydrate-element-data',
   LetBindingSourceIncoherent = 'let-binding-source-incoherent',
   UnsupportedInstructionKind = 'unsupported-instruction-kind',
@@ -489,6 +515,23 @@ class RuntimeInstructionFamilyProjector {
           modifier: instruction.eventModifier,
         };
       }
+      case TemplateInstructionKind.IteratorBinding: {
+        const forOf = this.iteratorExpression(instruction, instruction.iterableExpressionProductHandle);
+        const props = this.nested(instruction);
+        const type = frameworkInstructionTypeFor(instruction);
+        if (
+          type !== TemplateCompilerFrameworkInstructionType.IteratorBinding
+          && type !== TemplateCompilerFrameworkInstructionType.VirtualizationIterateBinding
+        ) {
+          throw new Error(`Iterator instruction '${instruction.productHandle}' lost framework type identity.`);
+        }
+        return forOf == null || props == null ? null : {
+          type,
+          forOf,
+          to: instruction.targetProperty,
+          props,
+        };
+      }
       case TemplateInstructionKind.TextBinding: {
         if (instruction.expressionChainIndex == null) {
           this.pending(
@@ -562,13 +605,9 @@ class RuntimeInstructionFamilyProjector {
       case TemplateInstructionKind.HydrateElement: {
         const props = this.nested(instruction);
         const res = this.resource(instruction, instruction.resource?.name ?? instruction.elementName);
-        if (instruction.captureSyntaxProductHandles.length > 0) {
-          this.pending(
-            instruction,
-            TemplateCompilerRuntimeInstructionReasonKind.CaptureSyntaxPending,
-            'Runtime capture AttrSyntax values are not materialized for this family.',
-          );
-        }
+        const captures = instruction.captureSyntaxProductHandles.map((handle) =>
+          this.captureSyntax(instruction, handle)
+        );
         const projections = instruction.projections.map((projection) => {
           const child = this.contextByCompiledTemplate.get(projection.compiledTemplate.productHandle) ?? null;
           if (child == null) {
@@ -589,7 +628,7 @@ class RuntimeInstructionFamilyProjector {
             };
         return props == null
           || res == null
-          || instruction.captureSyntaxProductHandles.length > 0
+          || captures.some((capture) => capture == null)
           || projections.some((projection) => projection == null)
           ? null
           : {
@@ -600,7 +639,7 @@ class RuntimeInstructionFamilyProjector {
                 ? null
                 : projections,
               containerless: instruction.containerless,
-              captures: [],
+              captures: captures as readonly TemplateCompilerRuntimeAttributeSyntaxValue[],
               data,
             };
       }
@@ -636,6 +675,12 @@ class RuntimeInstructionFamilyProjector {
       }
       case TemplateInstructionKind.SpreadTransferedBinding:
         return { type: TemplateCompilerFrameworkInstructionType.SpreadTransferedBinding };
+      case TemplateInstructionKind.SpreadValueBinding:
+        return {
+          type: TemplateCompilerFrameworkInstructionType.SpreadValueBinding,
+          target: instruction.target,
+          from: instruction.value,
+        };
       default:
         this.pending(
           instruction,
@@ -721,6 +766,82 @@ class RuntimeInstructionFamilyProjector {
       return null;
     }
     return projection.value;
+  }
+
+  private iteratorExpression(
+    instruction: TemplateInstruction,
+    expressionProductHandle: ProductHandle | null,
+  ): RuntimeExpressionAstValue | null {
+    if (expressionProductHandle == null) {
+      this.pending(
+        instruction,
+        TemplateCompilerRuntimeInstructionReasonKind.MissingExpressionAuthority,
+        'Iterator instruction has no expression product handle.',
+      );
+      return null;
+    }
+    const live = this.request.family.liveExpressionForProduct(expressionProductHandle);
+    const durable = readTemplateExpressionParse(this.request.productDetails, expressionProductHandle);
+    if (live != null && durable != null) {
+      this.fail(
+        instruction,
+        TemplateCompilerRuntimeInstructionReasonKind.ConflictingExpressionAuthority,
+        'Iterator expression product has both live and durable parser authorities.',
+      );
+      return null;
+    }
+    const result = live?.result ?? durable?.result ?? null;
+    if (result == null) {
+      this.pending(
+        instruction,
+        TemplateCompilerRuntimeInstructionReasonKind.MissingExpressionAuthority,
+        `Iterator expression '${expressionProductHandle}' has no live or durable parser authority.`,
+      );
+      return null;
+    }
+    if (result.kind !== ExpressionParseResultKind.IteratorSuccess) {
+      this.pending(
+        instruction,
+        TemplateCompilerRuntimeInstructionReasonKind.ExpressionAstUnavailable,
+        `Iterator expression result '${result.kind}' has no exact ForOfStatement wire.`,
+      );
+      return null;
+    }
+    const projection = projectRuntimeExpressionAstValue(result.ast);
+    if (projection.state !== RuntimeExpressionAstProjectionState.Exact || projection.value == null) {
+      this.pending(
+        instruction,
+        TemplateCompilerRuntimeInstructionReasonKind.ExpressionAstProjectionPending,
+        `Iterator runtime AST projection is pending: ${projection.reasons.map((reason) => reason.reasonKind).join(', ')}.`,
+      );
+      return null;
+    }
+    return projection.value;
+  }
+
+  private captureSyntax(
+    instruction: TemplateInstruction,
+    productHandle: ProductHandle,
+  ): TemplateCompilerRuntimeAttributeSyntaxValue | null {
+    const syntax = this.request.productDetails.readProductDetail(
+      TemplateProductDetails.AttributeSyntax,
+      productHandle,
+    );
+    if (syntax == null || syntax.productHandle !== productHandle) {
+      this.pending(
+        instruction,
+        TemplateCompilerRuntimeInstructionReasonKind.CaptureSyntaxUnavailable,
+        `Captured AttrSyntax '${productHandle}' is unavailable from the compiler product-detail authority.`,
+      );
+      return null;
+    }
+    return new TemplateCompilerRuntimeAttributeSyntaxValue(
+      syntax.rawName,
+      syntax.rawValue,
+      syntax.target,
+      syntax.command,
+      syntax.parts.length === 0 ? null : [...syntax.parts],
+    );
   }
 
   private resource(

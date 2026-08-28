@@ -1,5 +1,6 @@
 import { beforeAll, describe, expect, test } from 'vitest';
 
+import { SourceSpanAddress, SourceSpanRole } from '../src/kernel/address.js';
 import { KernelHandleFactory } from '../src/kernel/handles.js';
 import { AttributeClassificationEmission } from '../src/template/attribute-classification-materializer.js';
 import { AttributeSyntaxParseEmission } from '../src/template/attribute-syntax-materializer.js';
@@ -64,13 +65,15 @@ describe('template compiler normalized site index', () => {
   let repeatCompilation: TemplateResourceCompilationEmission;
   let openCompilation: TemplateResourceCompilationEmission;
   let invalidCompilation: TemplateResourceCompilationEmission;
+  let spreadShorthandCompilation: TemplateResourceCompilationEmission;
 
   beforeAll(async () => {
-    [compilation, repeatCompilation, openCompilation, invalidCompilation] = await Promise.all([
+    [compilation, repeatCompilation, openCompilation, invalidCompilation, spreadShorthandCompilation] = await Promise.all([
       fixtureCompilation('bindable-contracts-lab', 'bindable-lab-app'),
       fixtureCompilation('template-controller-scope-lab', 'scope-lab-app'),
       fixtureCompilation('template-compiler-fidelity', 'template-compiler-fidelity-app'),
       fixtureCompilation('template-compiler-errors', 'template-compiler-errors-app'),
+      fixtureCompilation('template-compiler-spread-shorthand', 'spread-shorthand-app'),
     ]);
   }, 30_000);
 
@@ -210,6 +213,39 @@ describe('template compiler normalized site index', () => {
       ...compilation.bindingCommandLowering.instructions.map((instruction) => instruction.productHandle),
     ];
     expect(normalizedOwnedHandles.every((handle) => index.ownership.ownerOf(handle) != null)).toBe(true);
+  });
+
+  test('accepts a shorthand spread value sourced from the attribute target substring', () => {
+    const result = buildTemplateCompilerNormalizedSiteIndex(spreadShorthandCompilation);
+    expect(result.state).toBe(TemplateCompilerNormalizedSiteIndexState.GraphExact);
+    expect(result.mismatches).toEqual([]);
+    const syntax = spreadShorthandCompilation.attributeSyntax.syntaxes.find((candidate) =>
+      candidate.target === '...item'
+    );
+    const site = spreadShorthandCompilation.valueSites.sites.find((candidate) =>
+      candidate.siteKind === TemplateValueSiteKind.SpreadValue
+    );
+    if (syntax?.targetSourceAddressHandle == null || site?.sourceAddressHandle == null) {
+      throw new Error('Expected shorthand spread syntax and value source addresses.');
+    }
+    const records = [
+      ...spreadShorthandCompilation.html.records,
+      ...spreadShorthandCompilation.attributeSyntax.records,
+      ...spreadShorthandCompilation.valueSites.records,
+    ];
+    const targetSource = records.find((record): record is SourceSpanAddress =>
+      record instanceof SourceSpanAddress && record.handle === syntax.targetSourceAddressHandle
+    );
+    const valueSource = records.find((record): record is SourceSpanAddress =>
+      record instanceof SourceSpanAddress && record.handle === site.sourceAddressHandle
+    );
+    expect(site.rawValue).toBe('item');
+    expect(valueSource).toMatchObject({
+      fileHandle: targetSource?.fileHandle,
+      start: (targetSource?.start ?? -3) + 3,
+      end: (targetSource?.start ?? -3) + 7,
+      role: SourceSpanRole.Value,
+    });
   });
 
   test('refuses a foreign attribute-owner progression as GraphExact authority', () => {

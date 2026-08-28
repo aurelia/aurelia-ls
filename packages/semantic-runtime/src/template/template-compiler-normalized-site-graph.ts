@@ -1,5 +1,5 @@
 import type { ProductHandle } from '../kernel/handles.js';
-import { SourceSpanAddress } from '../kernel/address.js';
+import { SourceSpanAddress, SourceSpanRole } from '../kernel/address.js';
 import type { AddressHandle } from '../kernel/handles.js';
 import type {
   AttributeClassification,
@@ -297,7 +297,13 @@ class TemplateCompilerNormalizedSiteGraphValidator {
     for (const record of this.compilation.html.records) {
       if (record instanceof SourceSpanAddress) this.sourceSpansByHandle.set(record.handle, record);
     }
+    for (const record of this.compilation.attributeSyntax.records) {
+      if (record instanceof SourceSpanAddress) this.sourceSpansByHandle.set(record.handle, record);
+    }
     for (const record of this.compilation.bindingCommandLowering.records) {
+      if (record instanceof SourceSpanAddress) this.sourceSpansByHandle.set(record.handle, record);
+    }
+    for (const record of this.compilation.valueSites.records) {
       if (record instanceof SourceSpanAddress) this.sourceSpansByHandle.set(record.handle, record);
     }
     this.registerProduct('html-document', this.compilation.html.document.productHandle);
@@ -786,7 +792,11 @@ class TemplateCompilerNormalizedSiteGraphValidator {
       );
     }
     const site = candidates.length === 1 ? candidates[0]! : null;
-    if (site != null && expectation != null && !sameValueSiteExpectation(site, expectation)) {
+    if (
+      site != null
+      && expectation != null
+      && !sameValueSiteExpectation(site, expectation, this.sourceSpansByHandle)
+    ) {
       this.crossReference(
         `${relation}/shape`,
         'Primary value site does not match the selector-owned kind, raw value, entry family, origin, or selection.',
@@ -1223,6 +1233,7 @@ function productHandle(handle: ProductHandle | null | undefined): readonly Produ
 function sameValueSiteExpectation(
   site: TemplateValueSite,
   expectation: TemplateValueSiteExpectation,
+  sourceSpansByHandle: ReadonlyMap<AddressHandle, SourceSpanAddress>,
 ): boolean {
   return site.siteKind === expectation.siteKind
     && site.rawValue === expectation.rawValue
@@ -1238,7 +1249,33 @@ function sameValueSiteExpectation(
     && site.classification === expectation.classification
     && sameNormalizedBindingCommandReference(site.bindingCommand, expectation.bindingCommand)
     && site.bindable === expectation.bindable
-    && site.sourceAddressHandle === expectation.sourceAddressHandle;
+    && sameValueSiteSource(site, expectation, sourceSpansByHandle);
+}
+
+function sameValueSiteSource(
+  site: TemplateValueSite,
+  expectation: TemplateValueSiteExpectation,
+  sourceSpansByHandle: ReadonlyMap<AddressHandle, SourceSpanAddress>,
+): boolean {
+  if (site.sourceAddressHandle === expectation.sourceAddressHandle) return true;
+  const syntax = expectation.syntax;
+  if (
+    site.siteKind !== TemplateValueSiteKind.SpreadValue
+    || syntax == null
+    || syntax.target === '...$bindables'
+    || !syntax.target.startsWith('...')
+    || expectation.rawValue.length === 0
+    || site.sourceAddressHandle == null
+    || syntax.targetSourceAddressHandle == null
+  ) return false;
+  const actual = sourceSpansByHandle.get(site.sourceAddressHandle) ?? null;
+  const target = sourceSpansByHandle.get(syntax.targetSourceAddressHandle) ?? null;
+  return actual != null
+    && target != null
+    && actual.fileHandle === target.fileHandle
+    && actual.start === target.start + 3
+    && actual.end === target.start + 3 + expectation.rawValue.length
+    && actual.role === SourceSpanRole.Value;
 }
 
 function uniqueBy<TValue, TKey>(
