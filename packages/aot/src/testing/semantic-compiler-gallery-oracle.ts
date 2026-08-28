@@ -21,6 +21,7 @@ import {
   executeDeterministicTemplateCompiler,
   observeTemplateCompilerRootSiteCursor,
   parseBrowserTemplateFragmentDraft,
+  projectTemplateCompilerCompiledDefinitionFamily,
   selectBrowserTemplateCompilerCarrier,
   TemplateCompilerCommentOccurrence,
   TemplateCompilerElementOccurrence,
@@ -42,6 +43,10 @@ import {
   type SemanticCompilerGalleryCase,
   type SemanticCompilerGalleryPlan,
 } from "./semantic-compiler-gallery-plan.js";
+import {
+  observeSemanticCompiledDefinitionFamily,
+  type SemanticCompiledDefinitionFamilyObservation,
+} from "./semantic-compiled-definition-family-observer.js";
 import {
   observeSemanticFrozenFamily,
   type SemanticFrozenFamilyObservation,
@@ -157,6 +162,7 @@ export class SemanticCompilerGalleryObservation {
     readonly siteCursor: TemplateCompilerRootSiteCursorObservation,
     readonly frozenFamily: SemanticFrozenFamilyObservation,
     readonly runtimeInstructions: SemanticRuntimeInstructionFamilyObservation | null,
+    readonly compiledDefinitions: SemanticCompiledDefinitionFamilyObservation | null,
   ) {}
 }
 
@@ -387,6 +393,7 @@ function observationsFor(
     const frozenStartedAt = performance.now();
     let frozenFamily: SemanticFrozenFamilyObservation;
     let runtimeInstructions: SemanticRuntimeInstructionFamilyObservation | null;
+    let compiledDefinitions: SemanticCompiledDefinitionFamilyObservation | null;
     try {
       const familyResult = compileTemplateCompilerContextFamily({
         compilationKey: `semantic-gallery:${candidate.candidate.id}`,
@@ -396,13 +403,26 @@ function observationsFor(
         compilerReadStore,
       });
       frozenFamily = observeSemanticFrozenFamily(familyResult);
-      runtimeInstructions = familyResult.value == null
-        ? null
-        : observeSemanticRuntimeInstructionFamily(projectTemplateCompilerRuntimeInstructionFamily({
+      if (familyResult.value == null) {
+        runtimeInstructions = null;
+        compiledDefinitions = null;
+      } else {
+        const runtimeInstructionResult = projectTemplateCompilerRuntimeInstructionFamily({
             family: familyResult.value,
             productDetails: compilerReadStore,
             resourceRepresentation: TemplateCompilerRuntimeResourceRepresentation.Name,
-          }));
+        });
+        runtimeInstructions = observeSemanticRuntimeInstructionFamily(runtimeInstructionResult);
+        compiledDefinitions = observeSemanticCompiledDefinitionFamily(
+          projectTemplateCompilerCompiledDefinitionFamily({
+            family: familyResult.value,
+            instructions: runtimeInstructionResult,
+            readView: compilerReadStore,
+          }),
+          frozenFamily,
+          runtimeInstructions,
+        );
+      }
     } catch (error) {
       throw new Error(
         `Semantic frozen-family case '${candidate.candidate.id}' failed its internal compiler invariant.`,
@@ -417,6 +437,7 @@ function observationsFor(
       siteCursor,
       frozenFamily,
       runtimeInstructions,
+      compiledDefinitions,
     )];
   });
   return new SemanticCompilerGalleryObservationProjection(
@@ -720,6 +741,7 @@ function observationFor(
   siteCursor: TemplateCompilerRootSiteCursorObservation,
   frozenFamily: SemanticFrozenFamilyObservation,
   runtimeInstructions: SemanticRuntimeInstructionFamilyObservation | null,
+  compiledDefinitions: SemanticCompiledDefinitionFamilyObservation | null,
 ): SemanticCompilerGalleryObservation {
   const compilation = resource.compilation;
   const emission = compilation.compiledTemplate;
@@ -807,6 +829,7 @@ function observationFor(
       siteCursor,
       frozenFamily,
       runtimeInstructions,
+      compiledDefinitions,
     })),
     expectedJitProduct(galleryCase.candidate),
     galleryCase.worldFingerprint,
@@ -822,6 +845,7 @@ function observationFor(
     siteCursor,
     frozenFamily,
     runtimeInstructions,
+    compiledDefinitions,
   );
 }
 

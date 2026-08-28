@@ -7,6 +7,7 @@ import { createSemanticRuntime } from '../src/api/runtime.js';
 import type { ProductHandle } from '../src/kernel/handles.js';
 import type { ProductDetailSlot } from '../src/kernel/product-details.js';
 import { KernelReadProjectionRevision } from '../src/kernel/store.js';
+import { ResourceProductDetails } from '../src/resources/product-details.js';
 import { runtimeAcceptedBindingExpressionAstForResult } from '../src/template/expression-parse-projection.js';
 import { AttributeClassificationKind } from '../src/template/attribute-syntax.js';
 import {
@@ -42,6 +43,13 @@ import {
 import type {
   TemplateCompilerContextFamilyExpressionValue,
 } from '../src/template/template-compiler-context-family-expression-value.js';
+import {
+  projectTemplateCompilerCompiledDefinitionFamily,
+  TemplateCompilerCompiledDefinitionFamilyState,
+  TemplateCompilerCompiledDefinitionHeaderKind,
+  TemplateCompilerCompiledDefinitionNameKind,
+  TemplateCompilerCompiledDefinitionReasonKind,
+} from '../src/template/template-compiler-compiled-definition-value.js';
 import {
   projectTemplateCompilerRuntimeInstructionFamily,
   TemplateCompilerFrameworkInstructionType,
@@ -1586,6 +1594,29 @@ describe('template compiler root site cursor', () => {
         expect(runtimeInstructions.state, name).toBe(TemplateCompilerRuntimeInstructionFamilyState.Exact);
         expect(runtimeInstructions.reasons, name).toEqual([]);
         expect(runtimeInstructions.value?.instructions, name).toHaveLength(value.instructions.length);
+        const definitions = projectTemplateCompilerCompiledDefinitionFamily({
+          family: value,
+          instructions: runtimeInstructions,
+          readView: fixture.runtime.workspace.store,
+        });
+        expect(definitions.state, name).toBe(TemplateCompilerCompiledDefinitionFamilyState.Exact);
+        expect(definitions.reasons, name).toEqual([]);
+        expect(definitions.value?.definitions, name).toHaveLength(value.contexts.length);
+        expect(definitions.value?.root).toMatchObject({
+          headerKind: TemplateCompilerCompiledDefinitionHeaderKind.RootResourceOverlay,
+          name: { nameKind: TemplateCompilerCompiledDefinitionNameKind.Declared, value: value.rootDefinition.name },
+          baseDefinition: value.rootDefinition,
+          needsCompile: false,
+        });
+        const generated = definitions.value?.definitions.slice(1) ?? [];
+        expect(generated.every((definition) =>
+          definition.headerKind === TemplateCompilerCompiledDefinitionHeaderKind.GeneratedChild
+          && definition.name.nameKind === TemplateCompilerCompiledDefinitionNameKind.CompilerGenerated
+          && definition.name.value == null
+          && definition.baseDefinition == null
+          && definition.hasSlots === false
+          && definition.dependencies.length === 0
+        ), name).toBe(true);
         if (ownerKind === 'projection') {
           const foreignAuthority = projectTemplateCompilerRuntimeInstructionFamily({
             family: value,
@@ -1598,6 +1629,18 @@ describe('template compiler root site cursor', () => {
           expect(foreignAuthority.state).toBe(TemplateCompilerRuntimeInstructionFamilyState.Ineligible);
           expect(foreignAuthority.reasons.map((reason) => reason.reasonKind))
             .toEqual([TemplateCompilerRuntimeInstructionReasonKind.ForeignProductDetailAuthority]);
+          const foreignDefinitions = projectTemplateCompilerCompiledDefinitionFamily({
+            family: value,
+            instructions: runtimeInstructions,
+            readView: {
+              readProductDetail: () => null,
+              readMaterializationsByOwner: () => [],
+              readProjectionRevision: () => fixture.runtime.workspace.store.readProjectionRevision(),
+            },
+          });
+          expect(foreignDefinitions.state).toBe(TemplateCompilerCompiledDefinitionFamilyState.Ineligible);
+          expect(foreignDefinitions.reasons.map((reason) => reason.reasonKind))
+            .toEqual([TemplateCompilerCompiledDefinitionReasonKind.ForeignProductDetailAuthority]);
           const instruction = value.instructions.find((candidate) =>
             candidate.instructionKind === TemplateInstructionKind.PropertyBinding
           );
@@ -1627,7 +1670,7 @@ describe('template compiler root site cursor', () => {
     }
   });
 
-  test('refuses a runtime-value batch whose durable product-detail projection changes mid-read', () => {
+  test('refuses runtime-value batches whose technical read projection changes mid-read', () => {
     const candidate = fixture.runtime.computationLifecycle.begin({
       kind: 'template-compiler-runtime-instruction-product-detail-revision-test',
       reconciliationKey: fixture.browserRun.locus.reconciliationKey,
@@ -1638,18 +1681,43 @@ describe('template compiler root site cursor', () => {
       const delegate = request.compilerReadStore;
       let controlledRevision: KernelReadProjectionRevision | null = null;
       let advanceOnRead = false;
+      let advanceOnMaterializationRead = false;
+      let replaceRootDefinition = false;
+      let addMetadataOpenSeam = false;
+      const replacementDefinition = fixture.compilation('cursor-context-family-projection').definition;
+      const syntheticOpenSeamHandle = fixture.runtime.workspace.store.handles.openSeam(
+        'template-compiler-compiled-definition-metadata-open-test',
+      );
+      const advanceRevision = (): void => {
+        if (controlledRevision == null) throw new Error('Expected controlled read projection revision.');
+        controlledRevision = new KernelReadProjectionRevision(
+          controlledRevision.projectionIdentity,
+          controlledRevision.committedMutationOrdinal + 1,
+          controlledRevision.candidateMutationOrdinal,
+        );
+      };
       const compilerReadStore: typeof request.compilerReadStore = {
         readMaterializationsByOwner(owner) {
-          return delegate.readMaterializationsByOwner(owner);
+          const retained = delegate.readMaterializationsByOwner(owner);
+          const values = addMetadataOpenSeam
+            ? retained.map((materialization) => ({
+                ...materialization,
+                openSeamHandles: [...materialization.openSeamHandles, syntheticOpenSeamHandle],
+              }))
+            : retained;
+          if (advanceOnMaterializationRead) {
+            advanceRevision();
+            advanceOnMaterializationRead = false;
+          }
+          return values;
         },
         readProductDetail<TDetail>(slot: ProductDetailSlot<TDetail>, productHandle: ProductHandle) {
+          if (replaceRootDefinition && slot === ResourceProductDetails.Definition) {
+            return replacementDefinition as unknown as TDetail;
+          }
           const value = delegate.readProductDetail(slot, productHandle);
-          if (advanceOnRead && controlledRevision != null) {
-            controlledRevision = new KernelReadProjectionRevision(
-              controlledRevision.projectionIdentity,
-              controlledRevision.committedMutationOrdinal + 1,
-              controlledRevision.candidateMutationOrdinal,
-            );
+          if (advanceOnRead) {
+            advanceRevision();
             advanceOnRead = false;
           }
           return value;
@@ -1661,6 +1729,47 @@ describe('template compiler root site cursor', () => {
       const result = compileTemplateCompilerContextFamily({ ...request, compilerReadStore });
       expect(result.state).toBe(TemplateCompilerContextFamilyCompilationState.Exact);
       if (result.value == null) throw new Error('Expected exact durable-expression family value.');
+
+      controlledRevision = delegate.readProjectionRevision();
+      const exactRuntimeInstructions = projectTemplateCompilerRuntimeInstructionFamily({
+        family: result.value,
+        productDetails: compilerReadStore,
+        resourceRepresentation: TemplateCompilerRuntimeResourceRepresentation.Name,
+      });
+      expect(exactRuntimeInstructions.state).toBe(TemplateCompilerRuntimeInstructionFamilyState.Exact);
+      replaceRootDefinition = true;
+      const changedDefinition = projectTemplateCompilerCompiledDefinitionFamily({
+        family: result.value,
+        instructions: exactRuntimeInstructions,
+        readView: compilerReadStore,
+      });
+      expect(changedDefinition.state).toBe(TemplateCompilerCompiledDefinitionFamilyState.Ineligible);
+      expect(changedDefinition.reasons.map((reason) => reason.reasonKind))
+        .toEqual([TemplateCompilerCompiledDefinitionReasonKind.RootDefinitionDetailChanged]);
+      replaceRootDefinition = false;
+
+      addMetadataOpenSeam = true;
+      const openMetadata = projectTemplateCompilerCompiledDefinitionFamily({
+        family: result.value,
+        instructions: exactRuntimeInstructions,
+        readView: compilerReadStore,
+      });
+      expect(openMetadata.state).toBe(TemplateCompilerCompiledDefinitionFamilyState.Pending);
+      expect(openMetadata.reasons.map((reason) => reason.reasonKind))
+        .toEqual([TemplateCompilerCompiledDefinitionReasonKind.RootDefinitionMetadataOpen]);
+      addMetadataOpenSeam = false;
+
+      advanceOnMaterializationRead = true;
+      const definitions = projectTemplateCompilerCompiledDefinitionFamily({
+        family: result.value,
+        instructions: exactRuntimeInstructions,
+        readView: compilerReadStore,
+      });
+      expect(advanceOnMaterializationRead).toBe(false);
+      expect(definitions.state).toBe(TemplateCompilerCompiledDefinitionFamilyState.Ineligible);
+      expect(definitions.reasons.map((reason) => reason.reasonKind))
+        .toEqual([TemplateCompilerCompiledDefinitionReasonKind.ProductDetailProjectionChanged]);
+      expect(result.value.isCurrent()).toBe(true);
 
       controlledRevision = delegate.readProjectionRevision();
       advanceOnRead = true;

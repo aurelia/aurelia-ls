@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, test } from "vitest";
 
 import { TemplateCompilerRootSiteCursorObservationAdmissionState } from "@aurelia-ls/semantic-runtime/browser-template";
+import type { CompilerCaseData } from "../src/testing/compiler-case.js";
 import { JIT_ORACLE_CASES } from "../src/testing/jit-oracle-case-registry.js";
 import {
   JitCompilerBlueprintBatch,
@@ -15,6 +16,16 @@ import {
   type SemanticCompilerGalleryObservation,
   SemanticCompilerGalleryOracle,
 } from "../src/testing/semantic-compiler-gallery-oracle.js";
+import {
+  semanticCompiledDefinitionDigest,
+  SEMANTIC_COMPILED_DEFINITION_COMMON_JIT_FIELDS,
+  SEMANTIC_COMPILED_DEFINITION_FAMILY_OBSERVER_VERSION,
+  SEMANTIC_COMPILED_DEFINITION_OMITTED_FIELDS,
+} from "../src/testing/semantic-compiled-definition-family-observer.js";
+import {
+  compareSemanticCompiledDefinitionsToJit,
+  SemanticCompiledDefinitionMismatchKind,
+} from "../src/testing/semantic-compiled-definition-family-comparison.js";
 import {
   SemanticCompilerGalleryPlanner,
   SemanticCompilerGalleryUnsupportedReason,
@@ -189,6 +200,19 @@ describe("semantic compiler gallery", () => {
     )).toBe(true);
     expect(run.observations.filter((observation) => observation.frozenFamily.kind !== "exact")
       .every((observation) => observation.runtimeInstructions == null)).toBe(true);
+    const exactCompiledDefinitions = run.observations.flatMap((observation) =>
+      observation.compiledDefinitions?.kind === "exact" ? [observation.compiledDefinitions] : []
+    );
+    expect(exactCompiledDefinitions).toHaveLength(27);
+    expect(exactCompiledDefinitions.reduce((count, observation) => count + observation.definitionCount, 0)).toBe(40);
+    expect(exactCompiledDefinitions.every((observation) =>
+      observation.schemaVersion === SEMANTIC_COMPILED_DEFINITION_FAMILY_OBSERVER_VERSION
+      && observation.commonJitFields === SEMANTIC_COMPILED_DEFINITION_COMMON_JIT_FIELDS
+      && observation.omittedFields === SEMANTIC_COMPILED_DEFINITION_OMITTED_FIELDS
+      && /^sha256:[0-9a-f]{64}$/u.test(observation.definitionDigest)
+    )).toBe(true);
+    expect(run.observations.filter((observation) => observation.frozenFamily.kind !== "exact")
+      .every((observation) => observation.compiledDefinitions == null)).toBe(true);
     expect(observations.get("diagnostic.surrogate.unique-id")).toMatchObject({
       expectedJitProduct: "compiler-error",
       compilerProfile: { debug: false, resolveResources: true },
@@ -762,6 +786,145 @@ describe("semantic compiler gallery", () => {
     expect(runtimeComparison.jitRowInstructionCount).toBe(69);
     expect(runtimeComparison.mismatches).toEqual([]);
     expect(runtimeComparison.satisfiedClaimIds).toEqual([]);
+    const definitionComparison = compareSemanticCompiledDefinitionsToJit(run.observations, jitBatch);
+    expect(definitionComparison.isClean).toBe(true);
+    expect(definitionComparison.comparisonPosture).toBe("compiled-definition-characterization-only");
+    expect(definitionComparison.comparedFields).toBe(SEMANTIC_COMPILED_DEFINITION_COMMON_JIT_FIELDS);
+    expect(definitionComparison.omittedFields).toBe(SEMANTIC_COMPILED_DEFINITION_OMITTED_FIELDS);
+    expect(definitionComparison.selectedExactCaseCount).toBe(27);
+    expect(definitionComparison.joinedCaseCount).toBe(27);
+    expect(definitionComparison.matchingCaseIds).toHaveLength(27);
+    expect(definitionComparison.semanticDefinitionCount).toBe(40);
+    expect(definitionComparison.jitDefinitionCount).toBe(40);
+    expect(definitionComparison.mismatches).toEqual([]);
+    expect(definitionComparison.satisfiedClaimIds).toEqual([]);
+    const definitionMutationSource = observations.get("binding.property.input-value")?.compiledDefinitions;
+    if (definitionMutationSource?.kind !== "exact") {
+      throw new Error("Expected exact compiled-definition mutation source.");
+    }
+    const definitionMutationRecord = definitionMutationSource.definitions[0];
+    if (
+      definitionMutationRecord == null
+      || Array.isArray(definitionMutationRecord)
+      || typeof definitionMutationRecord !== "object"
+    ) {
+      throw new Error("Expected one compiled-definition mutation record.");
+    }
+    const definitionMutationObject = definitionMutationRecord as Readonly<Record<string, CompilerCaseData>>;
+    const definitionMutationDefinitions = [{ ...definitionMutationObject, containerless: true }];
+    const definitionMutation = compareSemanticCompiledDefinitionsToJit([{
+      caseId: "binding.property.input-value",
+      compiledDefinitions: {
+        ...definitionMutationSource,
+        definitions: definitionMutationDefinitions,
+        definitionDigest: semanticCompiledDefinitionDigest(definitionMutationDefinitions),
+      },
+    }], jitBatch);
+    expect(definitionMutation.isClean).toBe(false);
+    expect(definitionMutation.mismatches).toMatchObject([{
+      caseId: "binding.property.input-value",
+      mismatchKind: SemanticCompiledDefinitionMismatchKind.DefinitionFields,
+    }]);
+    const definitionDigestMutation = compareSemanticCompiledDefinitionsToJit([{
+      caseId: "binding.property.input-value",
+      compiledDefinitions: {
+        ...definitionMutationSource,
+        definitionDigest: `sha256:${"0".repeat(64)}`,
+      },
+    }], jitBatch);
+    expect(definitionDigestMutation.isClean).toBe(false);
+    expect(definitionDigestMutation.mismatches).toMatchObject([{
+      caseId: "binding.property.input-value",
+      mismatchKind: SemanticCompiledDefinitionMismatchKind.DefinitionDigestMetadata,
+    }]);
+    const definitionCountMutation = compareSemanticCompiledDefinitionsToJit([{
+      caseId: "binding.property.input-value",
+      compiledDefinitions: {
+        ...definitionMutationSource,
+        definitionCount: definitionMutationSource.definitionCount + 1,
+      },
+    }], jitBatch);
+    expect(definitionCountMutation.isClean).toBe(false);
+    expect(definitionCountMutation.mismatches).toMatchObject([{
+      caseId: "binding.property.input-value",
+      mismatchKind: SemanticCompiledDefinitionMismatchKind.DefinitionCount,
+    }]);
+    const definitionIndexDefinitions = [{ ...definitionMutationObject, definitionIndex: 1 }];
+    const definitionIndexMutation = compareSemanticCompiledDefinitionsToJit([{
+      caseId: "binding.property.input-value",
+      compiledDefinitions: {
+        ...definitionMutationSource,
+        definitions: definitionIndexDefinitions,
+        definitionDigest: semanticCompiledDefinitionDigest(definitionIndexDefinitions),
+      },
+    }], jitBatch);
+    expect(definitionIndexMutation.isClean).toBe(false);
+    expect(definitionIndexMutation.mismatches.some((mismatch) =>
+      mismatch.mismatchKind === SemanticCompiledDefinitionMismatchKind.DefinitionIndex
+    )).toBe(true);
+    expect(() => compareSemanticCompiledDefinitionsToJit([{
+      caseId: "binding.property.input-value",
+      compiledDefinitions: definitionMutationSource,
+    }, {
+      caseId: "binding.property.input-value",
+      compiledDefinitions: definitionMutationSource,
+    }], jitBatch)).toThrow(/unique semantic case ids/u);
+    const executableFields = definitionMutationObject.executableFields;
+    if (executableFields == null || Array.isArray(executableFields) || typeof executableFields !== "object") {
+      throw new Error("Expected compiled-definition executable-field record.");
+    }
+    const executableOmissionDefinitions = [{
+      ...definitionMutationObject,
+      executableFields: { ...executableFields, hasType: false },
+    }];
+    const executableOmission = compareSemanticCompiledDefinitionsToJit([{
+      caseId: "binding.property.input-value",
+      compiledDefinitions: {
+        ...definitionMutationSource,
+        definitions: executableOmissionDefinitions,
+        definitionDigest: semanticCompiledDefinitionDigest(executableOmissionDefinitions),
+      },
+    }], jitBatch);
+    expect(executableOmission.isClean).toBe(true);
+    const generatedExecutableSource = observations.get("interaction.generated.double-sibling-if")?.compiledDefinitions;
+    if (generatedExecutableSource?.kind !== "exact") {
+      throw new Error("Expected exact generated-definition executable mutation source.");
+    }
+    const generatedExecutableDefinition = generatedExecutableSource.definitions[1];
+    if (
+      generatedExecutableDefinition == null
+      || Array.isArray(generatedExecutableDefinition)
+      || typeof generatedExecutableDefinition !== "object"
+    ) {
+      throw new Error("Expected one generated compiled-definition record.");
+    }
+    const generatedExecutableObject = generatedExecutableDefinition as Readonly<Record<string, CompilerCaseData>>;
+    const generatedExecutableFields = generatedExecutableObject.executableFields;
+    if (
+      generatedExecutableFields == null
+      || Array.isArray(generatedExecutableFields)
+      || typeof generatedExecutableFields !== "object"
+    ) {
+      throw new Error("Expected generated compiled-definition executable-field record.");
+    }
+    const generatedExecutableDefinitions = generatedExecutableSource.definitions.map((definition, index) =>
+      index === 1
+        ? { ...generatedExecutableObject, executableFields: { ...generatedExecutableFields, hasType: true } }
+        : definition
+    );
+    const generatedExecutableMutation = compareSemanticCompiledDefinitionsToJit([{
+      caseId: "interaction.generated.double-sibling-if",
+      compiledDefinitions: {
+        ...generatedExecutableSource,
+        definitions: generatedExecutableDefinitions,
+        definitionDigest: semanticCompiledDefinitionDigest(generatedExecutableDefinitions),
+      },
+    }], jitBatch);
+    expect(generatedExecutableMutation.isClean).toBe(false);
+    expect(generatedExecutableMutation.mismatches).toMatchObject([{
+      caseId: "interaction.generated.double-sibling-if",
+      mismatchKind: SemanticCompiledDefinitionMismatchKind.DefinitionFields,
+    }]);
     const runtimeMutationSource = observations.get("binding.property.input-value")?.runtimeInstructions;
     if (runtimeMutationSource?.kind !== "exact") throw new Error("Expected exact runtime-instruction mutation source.");
     const runtimeMutationDefinition = runtimeMutationSource.definitions[0];
@@ -954,6 +1117,22 @@ describe("semantic compiler gallery", () => {
         const runtimeSerialized = JSON.stringify(runtimeInstructions);
         for (const forbidden of ["kernel:store", "productHandle", "sourceAddress", "compilerRead", "allocation"]) {
           expect(runtimeSerialized).not.toContain(forbidden);
+        }
+      }
+      const compiledDefinitions = observation.compiledDefinitions;
+      if (compiledDefinitions != null) {
+        expect(Object.getPrototypeOf(compiledDefinitions)).toBe(Object.prototype);
+        expect(JSON.parse(JSON.stringify(compiledDefinitions))).toEqual(compiledDefinitions);
+        const definitionSerialized = JSON.stringify(compiledDefinitions);
+        for (const forbidden of [
+          "kernel:store",
+          "productHandle",
+          "identityHandle",
+          "sourceAddress",
+          "baseDefinition",
+          "compilerRead",
+        ]) {
+          expect(definitionSerialized).not.toContain(forbidden);
         }
       }
     }

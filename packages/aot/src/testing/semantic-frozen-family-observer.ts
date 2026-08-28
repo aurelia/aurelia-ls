@@ -423,7 +423,7 @@ function normalizeDefinition(
   return {
     definitionIndex,
     owner: record.owner,
-    name: definitionIndex === 0
+    name: definitionIndex === 0 && value.rootDefinition.name.length > 0
       ? { kind: "declared", value: value.rootDefinition.name }
       : { kind: "compiler-generated" },
     contextRole: context.compiledTemplate.context.role,

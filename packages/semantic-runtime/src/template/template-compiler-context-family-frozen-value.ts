@@ -197,6 +197,10 @@ export class TemplateCompilerContextFamilyFrozenValue {
     return binding(this.preparation).compilerWorld;
   }
 
+  get compilerAddedDependencyIdentityHandles() {
+    return binding(this.preparation).compilation.unit.rootContext.dependencyIdentityHandles;
+  }
+
   get browserInput() {
     return browserEmission(this.preparation);
   }

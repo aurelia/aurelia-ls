@@ -297,6 +297,16 @@ classification, expression parsing, and instruction lowering converge on the sam
   child/projection definition references, containerless state, captures, and known `AuSlot` data. Unsupported kinds or
   AST representations remain typed Pending. Exact values/results are module-constructed and cross-check family
   instruction order plus every row/value link before they can leave semantic-runtime.
+- `template-compiler-compiled-definition-value.ts` is the layered pre-rehydration compiler view. The root overlay keeps
+  its complete `CustomElementDefinition` base—including metadata the JIT blueprint does not report—while transformed
+  template, exact rows, final root `hasSlots`, empty surrogate values, and `needsCompile=false` come from the compiler
+  family. Generated controller/projection children use the framework's separate sparse/default header profile and keep
+  only compiler-generated name intent; concrete names remain artifact policy. Root materialization open seams, Open
+  capture/setter values, compiler-added local constructable dependencies, missing surrogate values, foreign authority,
+  changed root-definition details, and torn technical read projections remain typed gates. Exact values retain and
+  revalidate the root detail identity plus its materialization-open closure without treating unrelated store mutations
+  as semantic invalidation. This is not the later runtime-rehydrated
+  `CustomElementDefinition` object and does not manufacture functions, registry values, imports, or anonymous Types.
 - `template-compiler-deterministic-execution.ts` is an intentionally narrower assurance bridge. It spends one
   `TemplateResourceCompilationEmission` plus its exact browser-effective source family to replay supported built-in
   structural consequences over already-normalized compiler products. Exact means dispositions, context transfers,

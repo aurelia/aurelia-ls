@@ -87,8 +87,19 @@ HydrateElement, recursively following the shared instruction-ownership graph. Ac
 78 recursive instruction values—including 69 row roots—normalize byte-for-byte to fresh JIT blueprints with zero
 mismatches. Canonical resource definition names cannot fall back to authored aliases, plugin-owned iterator type 200
 remains distinct from core iterator type 15, metadata/count/index mutations are falsifiers, and the comparator still
-returns `satisfiedClaimIds: []`. Definition headers, the other instruction kinds, dependencies, surrogate values, and
-the six non-exact family gates remain open before any exhaustive parity claim.
+returns `satisfiedClaimIds: []`. Broader root metadata, the other instruction kinds, dependency/local-Type additions,
+surrogate values, and the six non-exact family gates remain open before any exhaustive parity claim.
+
+The next layered definition join is now explicit as well. Semantic-runtime preserves the root resource definition as
+the base, applies compiler-owned template/row/slot/compile-state overrides, and gives generated controller/projection
+views their sparse synthetic header profile before Aurelia runtime rehydration. This avoids flattening away aliases,
+keys, injectable metadata, watches, strictness, callable targets, or provenance merely because the JIT blueprint does
+not observe them. On the declared common pre-rehydration slice, all 40 definitions in the 27 exact worlds match fresh
+JIT definitions byte-for-byte, including ownership, name intent, normalized header values, transformed templates,
+target markers, instruction rows, and empty surrogates. Root Type/processContent presence and the retained base-only
+fields are explicit omissions; header bindables/dependencies, local generated-Type additions, positive native slots,
+surrogates, enhance, and executable metadata still need dedicated corpus pressure. This comparison also satisfies no
+claim IDs.
 The CLI separately content-addresses the executed AOT and semantic-runtime JavaScript trees and the full dirty-worktree
 delta so an ignored or already-dirty build artifact cannot masquerade as unchanged authority.
 

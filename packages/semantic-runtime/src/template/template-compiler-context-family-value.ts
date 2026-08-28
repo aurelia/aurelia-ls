@@ -1,4 +1,4 @@
-import type { ProductHandle } from '../kernel/handles.js';
+import type { IdentityHandle, ProductHandle } from '../kernel/handles.js';
 import type { OpenSeam } from '../kernel/open-seam.js';
 import type { ProductDetailReadView } from '../kernel/product-details.js';
 import type { CustomElementDefinition } from '../resources/custom-element-definition.js';
@@ -174,6 +174,8 @@ export class TemplateCompilerContextFamilyValue {
     readonly instructions: readonly TemplateInstruction[],
     readonly sourceOpenSeams: readonly OpenSeam[],
     readonly liveExpressions: readonly TemplateCompilerContextFamilyExpressionValue[],
+    /** Compiler-created local constructable dependencies; empty while local child lanes remain upstream-ineligible. */
+    readonly compilerAddedDependencyIdentityHandles: readonly IdentityHandle[],
     productDetails: ProductDetailReadView,
     private readonly current: () => boolean,
   ) {
@@ -327,6 +329,7 @@ export function projectTemplateCompilerContextFamilyValue(
     instructions,
     frozen.browserInput.openSeams,
     liveExpressions,
+    frozen.compilerAddedDependencyIdentityHandles,
     productDetails,
     () => frozen.isCurrent(),
   );
