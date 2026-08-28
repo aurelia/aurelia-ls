@@ -75,6 +75,12 @@ export type TemplateCompilerLoweringSite =
   | TemplateCompilerElementLoweringSite
   | TemplateCompilerTextLoweringSite;
 
+/** Owner-supplied semantic permission; the shared lowering layer never mints continuation authority. */
+export interface TemplateCompilerElementLoweringContinuationAuthority {
+  authorizesTemplateControllerContext(site: TemplateCompilerElementLoweringSite): boolean;
+  authorizesProjectionExtraction(site: TemplateCompilerElementLoweringSite): boolean;
+}
+
 export const enum TemplateCompilerOccurrenceSourcePosture {
   AuthoredExact = 'authored-exact',
   BrowserEffective = 'browser-effective',
@@ -584,10 +590,10 @@ export function assembleTemplateCompilerOrdinaryRootRows(
   const textExpansions: TemplateCompilerTextExpansionDraft[] = [];
   for (const site of receipt.orderedSites) {
     if (site.siteKind === 'element') {
-      const refusals = appendElementSite(site, rows, staticSites);
+      const refusals = lowerTemplateCompilerElementSite(site, rows, staticSites);
       if (refusals.length > 0) return new TemplateCompilerOccurrenceRowAssemblyResult(null, refusals);
     } else {
-      const refusal = appendTextSite(site, rows, staticSites, textExpansions);
+      const refusal = lowerTemplateCompilerTextSite(site, rows, staticSites, textExpansions);
       if (refusal != null) return new TemplateCompilerOccurrenceRowAssemblyResult(null, [refusal]);
     }
   }
@@ -608,20 +614,28 @@ export function assembleTemplateCompilerOrdinaryRootRows(
   );
 }
 
-function appendElementSite(
+export function lowerTemplateCompilerElementSite(
   site: TemplateCompilerElementLoweringSite,
   rows: TemplateCompilerOccurrenceTargetRowDraft[],
   staticSites: TemplateCompilerOccurrenceStaticSite[],
+  firstRowOrdinal = rows.length,
+  continuationAuthority: TemplateCompilerElementLoweringContinuationAuthority | null = null,
 ): readonly TemplateCompilerOccurrenceRowAssemblyReason[] {
   const envelope = site.hydrateElement.draft;
   const continuationReasons: TemplateCompilerOccurrenceRowAssemblyReason[] = [];
-  if (site.owner.instructionStaging.templateControllers.length > 0) {
+  if (
+    site.owner.instructionStaging.templateControllers.length > 0
+    && continuationAuthority?.authorizesTemplateControllerContext(site) !== true
+  ) {
     continuationReasons.push(new TemplateCompilerOccurrenceRowAssemblyReason(
       TemplateCompilerOccurrenceRowAssemblyReasonKind.TemplateControllerContextRequired,
       `Element '${site.event.element.occurrenceKey}' requires template-controller context placement.`,
     ));
   }
-  if (envelope?.projection.state === TemplateCompilerHydrateElementProjectionState.PendingExtraction) {
+  if (
+    envelope?.projection.state === TemplateCompilerHydrateElementProjectionState.PendingExtraction
+    && continuationAuthority?.authorizesProjectionExtraction(site) !== true
+  ) {
     continuationReasons.push(new TemplateCompilerOccurrenceRowAssemblyReason(
       TemplateCompilerOccurrenceRowAssemblyReasonKind.ProjectionExtractionRequired,
       `Element '${site.event.element.occurrenceKey}' requires projection extraction.`,
@@ -637,7 +651,7 @@ function appendElementSite(
     staticSites.push(new TemplateCompilerOccurrenceStaticSite(site, posture));
     return [];
   }
-  const ordinal = rows.length;
+  const ordinal = firstRowOrdinal;
   rows.push(new TemplateCompilerOccurrenceTargetRowDraft(
     site.rowSlotKey,
     ordinal,
@@ -663,11 +677,12 @@ function appendElementSite(
   return [];
 }
 
-function appendTextSite(
+export function lowerTemplateCompilerTextSite(
   site: TemplateCompilerTextLoweringSite,
   rows: TemplateCompilerOccurrenceTargetRowDraft[],
   staticSites: TemplateCompilerOccurrenceStaticSite[],
   textExpansions: TemplateCompilerTextExpansionDraft[],
+  firstRowOrdinal = rows.length,
 ): TemplateCompilerOccurrenceRowAssemblyReason | null {
   const staging = site.event.instructionStaging;
   const posture = sourcePostureForText(site);
@@ -717,7 +732,7 @@ function appendTextSite(
   );
   textExpansions.push(expansion);
   for (const [holeIndex, hole] of staging.holes.entries()) {
-    const ordinal = rows.length;
+    const ordinal = firstRowOrdinal + holeIndex;
     rows.push(new TemplateCompilerOccurrenceTargetRowDraft(
       site.holeSlotKeys[holeIndex]!,
       ordinal,
