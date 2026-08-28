@@ -6,6 +6,7 @@ import {
   CompiledTemplate,
   CompiledTemplateContext,
   CompiledTemplateContextRole,
+  type CompiledNativeSlotOutlet,
   CompiledTemplateState,
   TemplateRenderTarget,
 } from './compiled-template.js';
@@ -59,6 +60,10 @@ import {
   TemplateStructureDerivationTerm,
   TemplateStructureReference,
 } from './template-structure-derivation.js';
+import {
+  projectTemplateCompilerNativeSlotOutlets,
+  TemplateCompilerNativeSlotOutletValueState,
+} from './template-compiler-native-slot-outlet-value.js';
 
 const frozenContextFamilyAuthority = {};
 const frozenValues = new WeakMap<
@@ -77,6 +82,7 @@ export const enum TemplateCompilerContextFamilyFrozenValueReasonKind {
   StalePreparation = 'stale-preparation',
   EffectiveCaptureMaterializationPending = 'effective-capture-materialization-pending',
   NativeSlotMaterializationPending = 'native-slot-materialization-pending',
+  NativeSlotMaterializationIneligible = 'native-slot-materialization-ineligible',
 }
 
 export class TemplateCompilerContextFamilyFrozenValueReason {
@@ -311,11 +317,23 @@ export function materializeTemplateCompilerContextFamilyFrozenValue(
       preparation.effectiveCaptureReservations.map((reservation) => reservation.local),
     ));
   }
-  if (preparation.rootState.nativeSlots.length > 0) {
+  const nativeSlotOutlets = projectTemplateCompilerNativeSlotOutlets(
+    preparation.execution.attachment.target.allocation.rows.receipt.traversal.audit.transcript,
+    () => preparation.isCurrent(),
+  );
+  if (nativeSlotOutlets.state === TemplateCompilerNativeSlotOutletValueState.Ineligible) {
+    return unavailable(
+      TemplateCompilerContextFamilyFrozenValueState.Ineligible,
+      TemplateCompilerContextFamilyFrozenValueReasonKind.NativeSlotMaterializationIneligible,
+      'Native slot outlet projection is ineligible for this context family.',
+      nativeSlotOutlets.reasons.map((reason) => reason.reasonKind),
+    );
+  }
+  if (nativeSlotOutlets.state === TemplateCompilerNativeSlotOutletValueState.Pending) {
     pendingReasons.push(new TemplateCompilerContextFamilyFrozenValueReason(
       TemplateCompilerContextFamilyFrozenValueReasonKind.NativeSlotMaterializationPending,
-      'Native slot outlet name/value products must materialize before the root compiled definition can freeze.',
-      preparation.rootState.nativeSlots.map((slot) => slot.element.occurrenceKey),
+      'One or more reached native slot outlets lack exact live name/source authority.',
+      nativeSlotOutlets.reasons.map((reason) => reason.occurrenceKey ?? reason.reasonKind),
     ));
   }
   if (pendingReasons.length > 0) {
@@ -330,7 +348,12 @@ export function materializeTemplateCompilerContextFamilyFrozenValue(
   const provenanceHandle = publication.handles.provenance(
     `${preparation.preparedAllocation.ledger.rootSiteKey}:provenance`,
   );
-  const contexts = preparation.contexts.map((context) => materializeContext(context, preparation, provenanceHandle));
+  const contexts = preparation.contexts.map((context, index) => materializeContext(
+    context,
+    preparation,
+    provenanceHandle,
+    index === 0 ? nativeSlotOutlets.value?.outlets ?? [] : [],
+  ));
   const nodeOutputs = new Map<TemplateCompilerNodeOccurrence, CompilerTransformedTemplateNode>();
   const attributeOutputs = new Map<TemplateCompilerAttributeOccurrence, CompilerTransformedTemplateAttribute>();
   for (const context of contexts) {
@@ -372,6 +395,7 @@ function materializeContext(
   context: TemplateCompilerContextFamilyFreezeContextPreparation,
   family: TemplateCompilerContextFamilyFreezePreparation,
   provenanceHandle: ProvenanceHandle,
+  nativeSlotOutlets: readonly CompiledNativeSlotOutlet[],
 ): TemplateCompilerContextFamilyFrozenContext {
   const treeReference = new TemplateStructuralTreeReference(
     context.treeReservation.productHandle,
@@ -441,6 +465,7 @@ function materializeContext(
     rows,
     family,
     provenanceHandle,
+    nativeSlotOutlets,
   );
   return new TemplateCompilerContextFamilyFrozenContext(
     context,
@@ -547,6 +572,7 @@ function bindCompiledTemplate(
   rows: readonly TemplateCompilerContextFamilyFrozenRow[],
   family: TemplateCompilerContextFamilyFreezePreparation,
   provenanceHandle: ProvenanceHandle,
+  nativeSlotOutlets: readonly CompiledNativeSlotOutlet[],
 ): CompiledTemplate {
   const reservation = family.execution.attachment.target.contextMappings.find((mapping) =>
     mapping.targetContext === context.context
@@ -563,7 +589,7 @@ function bindCompiledTemplate(
     tree.toReference(),
     CompiledTemplateState.Complete,
     context.context.readCompilerReachableNodeProductHandles(),
-    [],
+    nativeSlotOutlets,
     false,
     rows.map((row) => row.target),
     null,

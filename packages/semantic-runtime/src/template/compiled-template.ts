@@ -115,7 +115,7 @@ export class CompiledNativeSlotOutlet {
     readonly nameKind: CompiledNativeSlotNameKind,
     /** Static outlet name, or null when runtime binding controls the name. */
     readonly name: string | null,
-    /** Exact authored `name` value span, or null only for the default slot. */
+    /** Exact authored `name` value span, or null for default/valueless or non-singular generated name authority. */
     readonly nameSourceAddressHandle: AddressHandle | null,
   ) {}
 }

@@ -267,7 +267,10 @@ classification, expression parsing, and instruction lowering converge on the sam
   as terminal uncertainty. Structural execution then proves exact mutations and transfers before sealing. Freeze
   constructs the existing `CompilerTransformedTemplateTree`, node/attribute, `TemplateStructureDerivation`,
   `TemplateRenderTarget`, `TemplateInstructionSequence`, and `CompiledTemplate` products in final structural order.
-  Effective captured syntax and native slot outlet values remain independent typed Pending gates. Wire funding keeps
+  Effective captured syntax remains an independent typed Pending gate. Reached native slots now join the root-global
+  accumulator to their completed live owners, share the existing default/static/dynamic name decision, and freeze
+  source-grounded `CompiledNativeSlotOutlet` values only on the root definition; browser-only/non-singular names and
+  unbounded spread writers remain Pending. Wire funding keeps
   exact lexical/source carrier identity separate from structural correspondence posture: paragraph auto-close can
   leave extent provenance Open while its uniquely grounded template-controller node/attribute wire remains Exact.
   Recursive schedule chronology also owns pre-attachment processContent adoption; context inventory order cannot assign

@@ -38,6 +38,7 @@ import cursorRowMergedTemplate from './cursor-row-merged.html';
 import cursorShapesTemplate from './cursor-shapes.html';
 import cursorShadowContainerlessTemplate from './cursor-shadow-containerless.html';
 import cursorSlotInertTemplate from './cursor-slot-inert.html';
+import cursorSlotInterpolationTemplate from './cursor-slot-interpolation.html';
 import cursorSlotInvalidTemplate from './cursor-slot-invalid.html';
 import cursorSlotValidTemplate from './cursor-slot-valid.html';
 import cursorSlotsContainerlessTemplate from './cursor-slots-containerless.html';
@@ -460,6 +461,15 @@ class CursorSlotValid {
 }
 
 @customElement({
+  name: 'cursor-slot-interpolation',
+  template: cursorSlotInterpolationTemplate,
+  shadowOptions: { mode: 'open' },
+})
+class CursorSlotInterpolation {
+  slotName = 'content';
+}
+
+@customElement({
   name: 'cursor-slot-invalid',
   template: cursorSlotInvalidTemplate,
 })
@@ -534,6 +544,7 @@ void new Aurelia()
     CursorShadowContainerless,
     CursorSlotsContainerless,
     CursorSlotValid,
+    CursorSlotInterpolation,
     CursorSlotInvalid,
     CursorSlotInert,
     CursorOpen,

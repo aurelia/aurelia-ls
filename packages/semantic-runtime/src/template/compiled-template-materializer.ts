@@ -66,7 +66,6 @@ import {
 } from './attribute-syntax.js';
 import type { AttributeSyntaxParseEmission } from './attribute-syntax-materializer.js';
 import {
-  CompiledNativeSlotNameKind,
   CompiledNativeSlotOutlet,
   CompiledTemplate,
   CompiledTemplateContext,
@@ -108,6 +107,7 @@ import {
 import type { HtmlParseEmission } from './html-parse-materializer.js';
 import {
   AuSlotProcessContentInstructionData,
+  AttributeBindingInstruction,
   type HydrateAttributeInstruction,
   type HydrateElementInstruction,
   HydrateElementProjectionContributor,
@@ -127,7 +127,9 @@ import {
 import { instructionKindKeyFor } from './instruction-vocabulary.js';
 import {
   decideTemplateCompilerNativeSlot,
+  decideTemplateCompilerNativeSlotName,
   TemplateCompilerNativeSlotDecisionKind,
+  TemplateCompilerNativeSlotNameInput,
 } from './native-slot-compiler-semantics.js';
 import { orderCompilerInstructionsForElement } from './compiler-instruction-order.js';
 import { TemplateSpecialAttributeName } from './special-attribute-source.js';
@@ -1394,28 +1396,40 @@ class CompiledTemplateInstructionTraversal {
         ...parts.attributeInstructions,
         ...parts.plainInstructions,
         ...parts.bindableInstructions,
-      ].find((instruction): instruction is PropertyBindingInstruction | InterpolationInstruction =>
+      ].find((instruction): instruction is
+        PropertyBindingInstruction | InterpolationInstruction | AttributeBindingInstruction =>
         instruction instanceof PropertyBindingInstruction
           ? instruction.targetProperty === 'name'
-          : instruction instanceof InterpolationInstruction && instruction.target === 'name'
+          : instruction instanceof InterpolationInstruction
+            ? instruction.target === 'name'
+            : instruction instanceof AttributeBindingInstruction
+              && instruction.attr === 'name'
+              && instruction.target === 'name'
       ) ?? null;
+      // Unknown/plugin commands retain the historical conservative Dynamic posture on this authored compatibility
+      // path. The live family projector admits only a proved runtime writer and otherwise returns typed Pending.
       const hasDynamicName = dynamicNameInstruction != null
         || (nameSyntax != null && nameSyntax.runtimeRawName !== 'name');
       const dynamicNameAttributeHandle = dynamicNameInstruction?.attribute?.productHandle ?? null;
       const dynamicNameAttribute = dynamicNameAttributeHandle == null
         ? null
         : this.indexes.attributesByProduct.get(dynamicNameAttributeHandle) ?? null;
+      const nameDecision = decideTemplateCompilerNativeSlotName(new TemplateCompilerNativeSlotNameInput(
+        nameAttribute != null && !hasDynamicName,
+        hasDynamicName ? null : nameAttribute?.rawValue ?? null,
+        hasDynamicName,
+        hasDynamicName
+          ? dynamicNameAttribute?.valueAddressHandle
+            ?? dynamicNameInstruction?.sourceAddressHandle
+            ?? nameSyntax?.sourceAddressHandle
+            ?? null
+          : nameAttribute?.valueAddressHandle ?? null,
+      ));
       this.assemblyState.nativeSlotOutlets.push(new CompiledNativeSlotOutlet(
         node.toReference(),
-        hasDynamicName
-          ? CompiledNativeSlotNameKind.Dynamic
-          : nameAttribute == null
-            ? CompiledNativeSlotNameKind.Default
-            : CompiledNativeSlotNameKind.Static,
-        hasDynamicName ? null : nameAttribute?.rawValue ?? '',
-        hasDynamicName
-          ? dynamicNameAttribute?.valueAddressHandle ?? dynamicNameInstruction?.sourceAddressHandle ?? nameSyntax?.sourceAddressHandle ?? null
-          : nameAttribute?.valueAddressHandle ?? null,
+        nameDecision.nameKind,
+        nameDecision.name,
+        nameDecision.sourceAddressHandle,
       ));
       return;
     }

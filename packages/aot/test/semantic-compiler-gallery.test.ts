@@ -168,11 +168,11 @@ describe("semantic compiler gallery", () => {
       ).length,
     ]));
     expect(frozenStates).toEqual({
-      "exact:frozen-value": 29,
+      "exact:frozen-value": 30,
       "ineligible:root-site-run": 1,
       "ineligible:family-completion": 2,
       "pending:family-completion": 2,
-      "pending:frozen-value": 1,
+      "pending:frozen-value": 0,
     });
     expect(run.observations.every((observation) =>
       observation.frozenFamily.schemaVersion === SEMANTIC_FROZEN_FAMILY_OBSERVER_VERSION
@@ -180,10 +180,10 @@ describe("semantic compiler gallery", () => {
     const exactFrozen = run.observations.flatMap((observation) =>
       observation.frozenFamily.kind === "exact" ? [observation.frozenFamily] : []
     );
-    expect(exactFrozen).toHaveLength(29);
-    expect(exactFrozen.reduce((count, frozen) => count + frozen.liveExpressionCount, 0)).toBe(52);
-    expect(exactFrozen.reduce((count, frozen) => count + frozen.referencedLiveExpressionCount, 0)).toBe(49);
-    expect(exactFrozen.reduce((count, frozen) => count + frozen.instructionValueCount, 0)).toBe(78);
+    expect(exactFrozen).toHaveLength(30);
+    expect(exactFrozen.reduce((count, frozen) => count + frozen.liveExpressionCount, 0)).toBe(53);
+    expect(exactFrozen.reduce((count, frozen) => count + frozen.referencedLiveExpressionCount, 0)).toBe(50);
+    expect(exactFrozen.reduce((count, frozen) => count + frozen.instructionValueCount, 0)).toBe(80);
     expect(exactFrozen.every((frozen) =>
       /^sha256:[0-9a-f]{64}$/u.test(frozen.structuralDigest)
       && frozen.exactFields === SEMANTIC_FROZEN_FAMILY_EXACT_FIELDS
@@ -192,9 +192,9 @@ describe("semantic compiler gallery", () => {
     const exactRuntimeInstructions = run.observations.flatMap((observation) =>
       observation.runtimeInstructions?.kind === "exact" ? [observation.runtimeInstructions] : []
     );
-    expect(exactRuntimeInstructions).toHaveLength(29);
-    expect(exactRuntimeInstructions.reduce((count, observation) => count + observation.instructionCount, 0)).toBe(78);
-    expect(exactRuntimeInstructions.reduce((count, observation) => count + observation.rowInstructionCount, 0)).toBe(69);
+    expect(exactRuntimeInstructions).toHaveLength(30);
+    expect(exactRuntimeInstructions.reduce((count, observation) => count + observation.instructionCount, 0)).toBe(80);
+    expect(exactRuntimeInstructions.reduce((count, observation) => count + observation.rowInstructionCount, 0)).toBe(70);
     expect(exactRuntimeInstructions.every((observation) =>
       observation.schemaVersion === SEMANTIC_RUNTIME_INSTRUCTION_FAMILY_OBSERVER_VERSION
       && observation.resourceRepresentation === "name"
@@ -205,8 +205,8 @@ describe("semantic compiler gallery", () => {
     const exactCompiledDefinitions = run.observations.flatMap((observation) =>
       observation.compiledDefinitions?.kind === "exact" ? [observation.compiledDefinitions] : []
     );
-    expect(exactCompiledDefinitions).toHaveLength(29);
-    expect(exactCompiledDefinitions.reduce((count, observation) => count + observation.definitionCount, 0)).toBe(42);
+    expect(exactCompiledDefinitions).toHaveLength(30);
+    expect(exactCompiledDefinitions.reduce((count, observation) => count + observation.definitionCount, 0)).toBe(44);
     expect(exactCompiledDefinitions.every((observation) =>
       observation.schemaVersion === SEMANTIC_COMPILED_DEFINITION_FAMILY_OBSERVER_VERSION
       && observation.commonJitFields === SEMANTIC_COMPILED_DEFINITION_COMMON_JIT_FIELDS
@@ -302,11 +302,23 @@ describe("semantic compiler gallery", () => {
         reasonKinds: ["template-structure-correspondence-open"],
       },
     ]);
-    expect(observations.get("slot.native.nested-has-slots")?.frozenFamily).toMatchObject({
-      kind: "unavailable",
-      state: "pending",
-      stage: "frozen-value",
-      reasons: [{ reasonKind: "native-slot-materialization-pending" }],
+    const frozenNativeSlot = observations.get("slot.native.nested-has-slots")?.frozenFamily;
+    expect(frozenNativeSlot?.kind).toBe("exact");
+    if (frozenNativeSlot?.kind !== "exact") throw new Error("Expected exact frozen native-slot family.");
+    expect(frozenNativeSlot.definitions.map((definition) => ({
+      owner: definition.owner.kind,
+      hasSlots: definition.hasSlots,
+      rows: definition.rows.length,
+    }))).toEqual([
+      { owner: "root", hasSlots: true, rows: 1 },
+      { owner: "template-controller", hasSlots: false, rows: 0 },
+    ]);
+    expect(observations.get("slot.native.nested-has-slots")?.compiledDefinitions).toMatchObject({
+      kind: "exact",
+      definitions: [
+        { hasSlots: true },
+        { hasSlots: false },
+      ],
     });
     expect(observations.get("interaction.generated.double-sibling-if")?.normalizedStructuralReplay).toEqual({
       state: "exact",
@@ -763,39 +775,39 @@ describe("semantic compiler gallery", () => {
     } finally {
       jitOracle.dispose();
     }
-    expect(exactJitCases).toHaveLength(29);
+    expect(exactJitCases).toHaveLength(30);
     expect(comparison.isClean).toBe(true);
     expect(comparison.comparisonPosture).toBe("structural-characterization-only");
-    expect(comparison.selectedExactCaseCount).toBe(29);
-    expect(comparison.joinedCaseCount).toBe(29);
-    expect(comparison.matchingCaseIds).toHaveLength(29);
+    expect(comparison.selectedExactCaseCount).toBe(30);
+    expect(comparison.joinedCaseCount).toBe(30);
+    expect(comparison.matchingCaseIds).toHaveLength(30);
     expect(comparison.mismatches).toEqual([]);
     expect(comparison.satisfiedClaimIds).toEqual([]);
     expect(comparison.comparedFields).toBe(SEMANTIC_FROZEN_FAMILY_COMMON_JIT_FIELDS);
     expect(comparison.omittedJitFields).toBe(SEMANTIC_FROZEN_FAMILY_OMITTED_JIT_FIELDS);
     expect(comparison.counts).toEqual({
-      semanticDefinitions: 42,
-      jitDefinitions: 42,
-      semanticRows: 52,
-      jitRows: 52,
-      semanticGeometries: 52,
-      jitGeometries: 52,
-      semanticInstructions: 69,
-      jitInstructions: 69,
-      semanticHasSlotsTrue: 0,
-      jitHasSlotsTrue: 0,
+      semanticDefinitions: 44,
+      jitDefinitions: 44,
+      semanticRows: 53,
+      jitRows: 53,
+      semanticGeometries: 53,
+      jitGeometries: 53,
+      semanticInstructions: 70,
+      jitInstructions: 70,
+      semanticHasSlotsTrue: 1,
+      jitHasSlotsTrue: 1,
     });
     const runtimeComparison = compareSemanticRuntimeInstructionsToJit(run.observations, jitBatch);
     expect(runtimeComparison.isClean).toBe(true);
     expect(runtimeComparison.comparisonPosture).toBe("runtime-instruction-characterization-only");
     expect(runtimeComparison.comparedFields).toBe(SEMANTIC_RUNTIME_INSTRUCTION_COMMON_JIT_FIELDS);
-    expect(runtimeComparison.selectedExactCaseCount).toBe(29);
-    expect(runtimeComparison.joinedCaseCount).toBe(29);
-    expect(runtimeComparison.matchingCaseIds).toHaveLength(29);
-    expect(runtimeComparison.semanticInstructionCount).toBe(78);
-    expect(runtimeComparison.jitInstructionCount).toBe(78);
-    expect(runtimeComparison.semanticRowInstructionCount).toBe(69);
-    expect(runtimeComparison.jitRowInstructionCount).toBe(69);
+    expect(runtimeComparison.selectedExactCaseCount).toBe(30);
+    expect(runtimeComparison.joinedCaseCount).toBe(30);
+    expect(runtimeComparison.matchingCaseIds).toHaveLength(30);
+    expect(runtimeComparison.semanticInstructionCount).toBe(80);
+    expect(runtimeComparison.jitInstructionCount).toBe(80);
+    expect(runtimeComparison.semanticRowInstructionCount).toBe(70);
+    expect(runtimeComparison.jitRowInstructionCount).toBe(70);
     expect(runtimeComparison.mismatches).toEqual([]);
     expect(runtimeComparison.satisfiedClaimIds).toEqual([]);
     const definitionComparison = compareSemanticCompiledDefinitionsToJit(run.observations, jitBatch);
@@ -803,13 +815,39 @@ describe("semantic compiler gallery", () => {
     expect(definitionComparison.comparisonPosture).toBe("compiled-definition-characterization-only");
     expect(definitionComparison.comparedFields).toBe(SEMANTIC_COMPILED_DEFINITION_COMMON_JIT_FIELDS);
     expect(definitionComparison.omittedFields).toBe(SEMANTIC_COMPILED_DEFINITION_OMITTED_FIELDS);
-    expect(definitionComparison.selectedExactCaseCount).toBe(29);
-    expect(definitionComparison.joinedCaseCount).toBe(29);
-    expect(definitionComparison.matchingCaseIds).toHaveLength(29);
-    expect(definitionComparison.semanticDefinitionCount).toBe(42);
-    expect(definitionComparison.jitDefinitionCount).toBe(42);
+    expect(definitionComparison.selectedExactCaseCount).toBe(30);
+    expect(definitionComparison.joinedCaseCount).toBe(30);
+    expect(definitionComparison.matchingCaseIds).toHaveLength(30);
+    expect(definitionComparison.semanticDefinitionCount).toBe(44);
+    expect(definitionComparison.jitDefinitionCount).toBe(44);
     expect(definitionComparison.mismatches).toEqual([]);
     expect(definitionComparison.satisfiedClaimIds).toEqual([]);
+    const nativeSlotDefinitionSource = observations.get("slot.native.nested-has-slots")?.compiledDefinitions;
+    if (nativeSlotDefinitionSource?.kind !== "exact") {
+      throw new Error("Expected exact native-slot definition ownership mutation source.");
+    }
+    const movedNativeSlotDefinitions = nativeSlotDefinitionSource.definitions.map((definition, index) => {
+      if (definition == null || Array.isArray(definition) || typeof definition !== "object") {
+        throw new Error("Expected native-slot compiled-definition record.");
+      }
+      return {
+        ...(definition as Readonly<Record<string, CompilerCaseData>>),
+        hasSlots: index !== 0,
+      };
+    });
+    const movedNativeSlot = compareSemanticCompiledDefinitionsToJit([{
+      caseId: "slot.native.nested-has-slots",
+      compiledDefinitions: {
+        ...nativeSlotDefinitionSource,
+        definitions: movedNativeSlotDefinitions,
+        definitionDigest: semanticCompiledDefinitionDigest(movedNativeSlotDefinitions),
+      },
+    }], jitBatch);
+    expect(movedNativeSlot.isClean).toBe(false);
+    expect(movedNativeSlot.mismatches).toMatchObject([{
+      caseId: "slot.native.nested-has-slots",
+      mismatchKind: SemanticCompiledDefinitionMismatchKind.DefinitionFields,
+    }]);
     const definitionMutationSource = observations.get("binding.property.input-value")?.compiledDefinitions;
     if (definitionMutationSource?.kind !== "exact") {
       throw new Error("Expected exact compiled-definition mutation source.");

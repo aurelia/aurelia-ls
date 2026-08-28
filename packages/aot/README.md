@@ -57,16 +57,16 @@ This lane is raw conservation pressure, not a parity oracle. Semantic-runtime cu
 `resolveResources=true`, while the JIT characterizations use `resolveResources=false`; gallery cases also share a
 resource scope, use generated concrete definition types, and traverse authored rather than browser-effective compiler
 structure. Those differences are explicit on every admitted row and recomputed from the observed compiler profile.
-The frozen-family lane currently reaches 29 exact final families across the 35 admitted worlds. It characterizes final
+The frozen-family lane currently reaches 30 exact final families across the 35 admitted worlds. It characterizes final
 definition ownership, transformed templates, row/instruction-kind order, target geometry, `needsCompile`, `hasSlots`,
-derivation cardinality, and retained source-correspondence seams. The remaining six worlds keep their exact typed gate:
-one local-definition diagnostic, two invalid compiler diagnostics, pending let/surrogate lowering, and pending native-
-slot value materialization. No standalone lane may satisfy a cross-lane equivalence claim. A later coordinator must
+derivation cardinality, and retained source-correspondence seams. The remaining five worlds keep their exact typed gate:
+one local-definition diagnostic, two invalid compiler diagnostics, and pending let/surrogate lowering. No standalone
+lane may satisfy a cross-lane equivalence claim. A later coordinator must
 validate both authority-bound receipts, compare an exhaustive shared product, and only then feed satisfied claim IDs
 into the obligation audit.
 
-The independent structural comparison currently joins all 29 exact semantic rows to fresh JIT blueprints with zero
-mismatches across 42 definitions, 52 rows/target geometries, and 69 ordered instruction kinds. It compares only the
+The independent structural comparison currently joins all 30 exact semantic rows to fresh JIT blueprints with zero
+mismatches across 44 definitions, 53 rows/target geometries, and 70 ordered instruction kinds. It compares only the
 declared common slice and deliberately returns `satisfiedClaimIds: []`; a falsifier regression changes one semantic
 instruction kind and proves the comparator does not report a false clean result. This is strong Chapter 1 conservation
 evidence, not the later authority-validating or exhaustive-wire parity coordinator.
@@ -83,22 +83,23 @@ under the exact product-detail authority that constructed the family and one sta
 it never reparses source text or exports allocation/read objects. The shared framework-package-free AST projector preserves runtime fields, including distinct
 tagged-template cooked/raw strings, and keeps unresolved RC2 representation deltas Pending. The instruction projector
 currently closes PropertyBinding, Interpolation, ListenerBinding, TextBinding, HydrateTemplateController, and
-HydrateElement, recursively following the shared instruction-ownership graph. Across all 29 exact gallery worlds its
-78 recursive instruction values—including 69 row roots—normalize byte-for-byte to fresh JIT blueprints with zero
+HydrateElement, recursively following the shared instruction-ownership graph. Across all 30 exact gallery worlds its
+80 recursive instruction values—including 70 row roots—normalize byte-for-byte to fresh JIT blueprints with zero
 mismatches. Canonical resource definition names cannot fall back to authored aliases, plugin-owned iterator type 200
 remains distinct from core iterator type 15, metadata/count/index mutations are falsifiers, and the comparator still
 returns `satisfiedClaimIds: []`. Broader root metadata, the other instruction kinds, dependency/local-Type additions,
-surrogate values, and the six non-exact family gates remain open before any exhaustive parity claim.
+surrogate values, and the five non-exact family gates remain open before any exhaustive parity claim.
 
 The next layered definition join is now explicit as well. Semantic-runtime preserves the root resource definition as
 the base, applies compiler-owned template/row/slot/compile-state overrides, and gives generated controller/projection
 views their sparse synthetic header profile before Aurelia runtime rehydration. This avoids flattening away aliases,
 keys, injectable metadata, watches, strictness, callable targets, or provenance merely because the JIT blueprint does
-not observe them. On the declared common pre-rehydration slice, all 42 definitions in the 29 exact worlds match fresh
+not observe them. On the declared common pre-rehydration slice, all 44 definitions in the 30 exact worlds match fresh
 JIT definitions byte-for-byte, including ownership, name intent, normalized header values, transformed templates,
 target markers, instruction rows, and empty surrogates. Root Type/processContent presence and the retained base-only
-fields are explicit omissions; header bindables/dependencies, local generated-Type additions, positive native slots,
-surrogates, enhance, and executable metadata still need dedicated corpus pressure. Boolean root capture and
+fields are explicit omissions; native-slot outlet values remain semantic-only because the JIT blueprint exposes only
+root `hasSlots`. Header bindables/dependencies, local generated-Type additions, surrogates, enhance, and executable
+metadata still need dedicated corpus pressure. Boolean root capture and
 definition-owned containerless are the first paired non-default header controls. This comparison also satisfies no
 claim IDs. One explicit bindable-header world remains outside the semantic lane because the JIT partial array, the
 semantic `BindableDefinition` value, and the later runtime-rehydrated object are three different representations.

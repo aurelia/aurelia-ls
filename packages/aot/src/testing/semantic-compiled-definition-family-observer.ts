@@ -52,6 +52,7 @@ export const SEMANTIC_COMPILED_DEFINITION_OMITTED_FIELDS = [
   "root-strict",
   "root-semantic-target-identity",
   "root-definition-provenance",
+  "native-slot-outlet-values",
   "concrete-generated-name",
   "runtime-rehydrated-anonymous-type",
 ] as const;

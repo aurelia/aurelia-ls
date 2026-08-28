@@ -71,6 +71,11 @@ import {
   TemplateCompilerContextFamilyTargetPlanState,
 } from '../src/template/template-compiler-context-family-target-plan.js';
 import {
+  projectTemplateCompilerNativeSlotOutlets,
+  TemplateCompilerNativeSlotOutletReasonKind,
+  TemplateCompilerNativeSlotOutletValueState,
+} from '../src/template/template-compiler-native-slot-outlet-value.js';
+import {
   prepareTemplateCompilerContextFamilyStructuralSchedule,
   TemplateCompilerFamilyContextInitializationKind,
   TemplateCompilerFamilyLoweredElementScheduleEntry,
@@ -418,6 +423,39 @@ describe('template compiler root site cursor', () => {
     );
     expect(completedSlot?.owner.contributions.map((contribution) => contribution.syntax?.target)).toEqual(['name']);
     expect(completedSlot?.owner.instructionStaging.directRowTail).toHaveLength(1);
+    const validOutlets = projectTemplateCompilerNativeSlotOutlets(valid, () => true);
+    expect(validOutlets.state).toBe(TemplateCompilerNativeSlotOutletValueState.Exact);
+    expect(validOutlets.value?.outlets).toMatchObject([{
+      nameKind: 'dynamic',
+      name: null,
+      nameSourceAddressHandle: expect.any(String),
+    }]);
+    expect(projectTemplateCompilerNativeSlotOutlets(valid, () => false)).toMatchObject({
+      state: TemplateCompilerNativeSlotOutletValueState.Ineligible,
+      reasons: [{ reasonKind: TemplateCompilerNativeSlotOutletReasonKind.CurrentnessLost }],
+    });
+    let currentnessChecks = 0;
+    expect(projectTemplateCompilerNativeSlotOutlets(valid, () => ++currentnessChecks === 1)).toMatchObject({
+      state: TemplateCompilerNativeSlotOutletValueState.Ineligible,
+      reasons: [{ reasonKind: TemplateCompilerNativeSlotOutletReasonKind.CurrentnessLost }],
+    });
+    const interpolationResult = fixture.run('cursor-slot-interpolation').execute();
+    const interpolation = requireTranscript(interpolationResult);
+    const interpolationOwner = interpolationResult.completion?.receipt?.elementSites.find((site) =>
+      site.event.lookupName === 'slot'
+    )?.owner;
+    expect(interpolationOwner?.contributions[0]?.instructions).toEqual([]);
+    expect(interpolationOwner?.instructionStaging.directRowTail).toHaveLength(1);
+    expect(projectTemplateCompilerNativeSlotOutlets(interpolation, () => true)).toMatchObject({
+      state: TemplateCompilerNativeSlotOutletValueState.Exact,
+      value: {
+        outlets: [{
+          nameKind: 'dynamic',
+          name: null,
+          nameSourceAddressHandle: expect.any(String),
+        }],
+      },
+    });
 
     const inert = fixture.transcript('cursor-slot-inert');
     expect(inert.frontier).toBeNull();
@@ -425,6 +463,10 @@ describe('template compiler root site cursor', () => {
     expect(inert.rootState.hasSlots).toBe(false);
     expect(inert.rootState.nativeSlots).toEqual([]);
     expect(eventsOf(inert, TemplateCompilerSiteCursorSubtreeExclusionEvent)).toHaveLength(1);
+    expect(projectTemplateCompilerNativeSlotOutlets(inert, () => true)).toMatchObject({
+      state: TemplateCompilerNativeSlotOutletValueState.Exact,
+      value: { outlets: [] },
+    });
   });
 
   test('rejects a reached native slot before attributes, descendants, and later siblings without Shadow DOM', () => {
@@ -446,6 +488,10 @@ describe('template compiler root site cursor', () => {
       TemplateCompilerOrdinaryRootCompletionRefusalKind.RootPhaseIncomplete,
     ]);
     expect(result.completion?.receipt).toBeNull();
+    expect(projectTemplateCompilerNativeSlotOutlets(transcript, () => true)).toMatchObject({
+      state: TemplateCompilerNativeSlotOutletValueState.Ineligible,
+      reasons: [{ reasonKind: TemplateCompilerNativeSlotOutletReasonKind.RootStateUnavailable }],
+    });
   });
 
   test('mints nominal ordinary-root receipts without using authored accounting openness as the gate', () => {
@@ -1557,6 +1603,30 @@ describe('template compiler root site cursor', () => {
       expect(result.value?.contexts).toHaveLength(1);
       expect(result.value?.root.owner.ownerKind).toBe('root');
       expect(result.value?.root.compiledTemplate.needsCompile).toBe(false);
+    } finally {
+      candidate.abort();
+    }
+  });
+
+  test('freezes reached native slot outlets onto the root compiled definition', () => {
+    const candidate = fixture.runtime.computationLifecycle.begin({
+      kind: 'template-compiler-context-family-native-slot-test',
+      reconciliationKey: fixture.browserRun.locus.reconciliationKey,
+      summary: 'Root-global native slot outlet freeze proof.',
+    });
+    try {
+      const result = fixture.compileContextFamily('cursor-slot-valid', candidate);
+      expect(result.state).toBe(TemplateCompilerContextFamilyCompilationState.Exact);
+      expect(result.value?.root.compiledTemplate.hasSlots).toBe(true);
+      expect(result.value?.root.compiledTemplate.nativeSlotOutlets).toMatchObject([{
+        nameKind: 'dynamic',
+        name: null,
+        nameSourceAddressHandle: expect.any(String),
+      }]);
+      expect(result.value?.contexts.slice(1).every((context) =>
+        context.compiledTemplate.hasSlots === false
+        && context.compiledTemplate.nativeSlotOutlets.length === 0
+      )).toBe(true);
     } finally {
       candidate.abort();
     }
