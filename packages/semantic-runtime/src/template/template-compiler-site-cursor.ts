@@ -99,6 +99,7 @@ import {
 } from './template-compiler-site-cursor-event.js';
 
 export * from './template-compiler-site-cursor-event.js';
+export * from './template-compiler-site-cursor-task.js';
 import {
   TemplateCompilerSiteCursorSemanticResolver,
 } from './template-compiler-site-cursor-semantics.js';
@@ -132,6 +133,10 @@ import {
   completeTemplateCompilerOrdinaryRoot,
   type TemplateCompilerOrdinaryRootCompletionResult,
 } from './template-compiler-root-completion.js';
+import {
+  TemplateCompilerSiteCursorTaskSession,
+  type TemplateCompilerSiteCursorTaskSessionSnapshot,
+} from './template-compiler-site-cursor-task.js';
 
 const siteCursorConstructionAuthority = {};
 
@@ -159,6 +164,7 @@ export class TemplateCompilerSiteCursorTranscript {
     readonly compilerReads: TemplateCompilerReadView,
     readonly preWalkAuthority: TemplateCompilerPreWalkRemainderAuthority,
     readonly events: readonly TemplateCompilerSiteCursorEvent[],
+    readonly taskSnapshot: TemplateCompilerSiteCursorTaskSessionSnapshot,
     readonly attributeOwners: readonly TemplateCompilerLiveAttributeOwnerResult[],
     readonly hydrateElementEnvelopes: readonly TemplateCompilerHydrateElementStagingResult[],
     readonly rootState: TemplateCompilerRootCompilationState,
@@ -189,6 +195,11 @@ export class TemplateCompilerSiteCursorTranscript {
       || preWalkAuthority.binding !== binding
       || preWalkAuthority.index !== binding.index
       || compilerReads.world !== binding.compilerWorld
+      || !taskSnapshot.isModuleConstructed()
+      || taskSnapshot.rootContext.localKey !== `${binding.lane.localKey}:cursor-context:root`
+      || taskSnapshot.frontier !== frontier
+      || !sameObjects(taskSnapshot.events, events)
+      || events.some((event) => taskSnapshot.contextForEvent(event) !== taskSnapshot.rootContext)
       || events.some((event, ordinal) =>
         !event.isOwnedBy(siteCursorConstructionAuthority)
         || event.ordinal !== ordinal
@@ -257,10 +268,9 @@ export interface TemplateCompilerRootSiteCursorRequest {
   readonly preWalkAuthority: TemplateCompilerPreWalkRemainderAuthority;
 }
 
-interface TemplateCompilerSiteCursorContainerFrame {
+interface TemplateCompilerSiteCursorChildFrame {
   readonly parent: TemplateCompilerParentOccurrence;
   readonly children: readonly TemplateCompilerNodeOccurrence[];
-  nextOrdinal: number;
 }
 
 /**
@@ -344,7 +354,7 @@ class TemplateCompilerRootSiteCursor {
   private readonly preWalk: TemplateCompilerPreWalkRemainderAuthority;
   private readonly ledger: TemplateCompilerSiteSpendLedger;
   private readonly semantics: TemplateCompilerSiteCursorSemanticResolver;
-  private readonly events: TemplateCompilerSiteCursorEvent[] = [];
+  private readonly taskSession: TemplateCompilerSiteCursorTaskSession;
   private readonly attributeOwners: TemplateCompilerLiveAttributeOwnerResult[] = [];
   private readonly hydrateElementEnvelopes: TemplateCompilerHydrateElementStagingResult[] = [];
   private readonly rootState: TemplateCompilerRootCompilationAccumulator;
@@ -369,6 +379,7 @@ class TemplateCompilerRootSiteCursor {
     this.rootState = new TemplateCompilerRootCompilationAccumulator(this.binding.definition);
     this.allocationNamespace = new TemplateCompilerLiveAllocationNamespace(this.binding.browserEmission.publication);
     this.allocations = this.allocationNamespace.beginPhase(this.binding.lane.localKey);
+    this.taskSession = TemplateCompilerSiteCursorTaskSession.createRoot(this.binding.lane.localKey);
     this.semantics = new TemplateCompilerSiteCursorSemanticResolver(
       this.binding,
       this.compilerReads,
@@ -377,10 +388,14 @@ class TemplateCompilerRootSiteCursor {
   }
 
   execute(): TemplateCompilerSiteCursorTranscript {
+    const root = this.binding.forest.compilerContent;
+    this.taskSession.startRoot(root, root.readChildren());
     this.primePreWalkRemainders();
     if (this.frontier == null) this.walkContent();
     if (this.frontier == null) this.validateSurrogate();
     this.ensureCurrentness();
+    const taskSnapshot = this.taskSession.finish(this.frontier);
+    const events = taskSnapshot.events;
 
     const completion = this.frontier == null
       ? TemplateCompilerSiteSpendCompletion.complete(this.ledger.nextSiteEventOrdinal)
@@ -403,7 +418,8 @@ class TemplateCompilerRootSiteCursor {
       this.binding,
       this.compilerReads,
       this.preWalk,
-      this.events,
+      events,
+      taskSnapshot,
       this.attributeOwners,
       this.hydrateElementEnvelopes,
       this.rootState.finish(),
@@ -443,7 +459,7 @@ class TemplateCompilerRootSiteCursor {
       }
       evidence.push(result);
     }
-    this.events.push(new TemplateCompilerSiteCursorPhaseEvent(
+    this.appendEvent(new TemplateCompilerSiteCursorPhaseEvent(
       siteCursorConstructionAuthority,
       this.transcriptOrdinal++,
       TemplateCompilerSiteCursorPhaseKind.PreWalkRemainders,
@@ -465,23 +481,16 @@ class TemplateCompilerRootSiteCursor {
   private walkContent(): void {
     this.phaseKind = TemplateCompilerSiteCursorPhaseKind.ContentStart;
     this.phase(TemplateCompilerSiteCursorPhaseKind.ContentStart);
-    const root = this.binding.forest.compilerContent;
-    const stack: TemplateCompilerSiteCursorContainerFrame[] = [{
-      parent: root,
-      children: root.readChildren(),
-      nextOrdinal: 0,
-    }];
-    while (stack.length > 0 && this.frontier == null) {
-      const frame = stack[stack.length - 1]!;
-      if (frame.nextOrdinal >= frame.children.length) {
-        stack.pop();
-        continue;
-      }
-      const ordinal = frame.nextOrdinal++;
-      const node = frame.children[ordinal]!;
-      const successor = frame.children[ordinal + 1] ?? null;
-      const childFrame = this.visitNode(node, frame.parent, ordinal, successor);
-      if (childFrame != null) stack.push(childFrame);
+    while (this.frontier == null) {
+      const visit = this.taskSession.nextRootVisit();
+      if (visit == null) break;
+      const childFrame = this.visitNode(
+        visit.node,
+        visit.parent,
+        visit.parentOrdinal,
+        visit.capturedSuccessor,
+      );
+      if (childFrame != null) this.taskSession.pushRootFrame(childFrame.parent, childFrame.children);
     }
     if (this.frontier == null) {
       this.phaseKind = TemplateCompilerSiteCursorPhaseKind.ContentEnd;
@@ -494,7 +503,7 @@ class TemplateCompilerRootSiteCursor {
     parent: TemplateCompilerParentOccurrence,
     parentOrdinal: number,
     successor: TemplateCompilerNodeOccurrence | null,
-  ): TemplateCompilerSiteCursorContainerFrame | null {
+  ): TemplateCompilerSiteCursorChildFrame | null {
     if (node instanceof TemplateCompilerElementOccurrence) {
       return this.visitElement(node, parent, parentOrdinal, successor);
     }
@@ -507,7 +516,7 @@ class TemplateCompilerRootSiteCursor {
       return null;
     }
     if (node instanceof TemplateCompilerFragmentOccurrence) {
-      return { parent: node, children: node.readChildren(), nextOrdinal: 0 };
+      return { parent: node, children: node.readChildren() };
     }
     return null;
   }
@@ -517,7 +526,7 @@ class TemplateCompilerRootSiteCursor {
     parent: TemplateCompilerParentOccurrence,
     parentOrdinal: number,
     successor: TemplateCompilerNodeOccurrence | null,
-  ): TemplateCompilerSiteCursorContainerFrame | null {
+  ): TemplateCompilerSiteCursorChildFrame | null {
     const origin = this.semantics.originRoute(element);
     const originState = this.semantics.originState(element);
     const authoredElement = origin?.routeKind === TemplateCompilerBrowserOriginRouteKind.Singular
@@ -530,7 +539,7 @@ class TemplateCompilerRootSiteCursor {
         element,
         TemplateCompilerOccurrenceOnlyDisposition.GeneratedSiteNeedsLowering,
       );
-      this.events.push(new TemplateCompilerSiteCursorElementEvent(
+      this.appendEvent(new TemplateCompilerSiteCursorElementEvent(
         siteCursorConstructionAuthority,
         this.transcriptOrdinal++,
         element,
@@ -565,7 +574,7 @@ class TemplateCompilerRootSiteCursor {
         TemplateCompilerOccurrenceOnlyDisposition.NonSingularBrowserOrigin,
       );
       if (elementOccurrenceRow == null) {
-        this.events.push(new TemplateCompilerSiteCursorElementEvent(
+        this.appendEvent(new TemplateCompilerSiteCursorElementEvent(
           siteCursorConstructionAuthority,
           this.transcriptOrdinal++,
           element,
@@ -597,7 +606,7 @@ class TemplateCompilerRootSiteCursor {
         TemplateCompilerOccurrenceOnlyDisposition.LiveElementAssembled,
       );
       if (elementOccurrenceRow == null) {
-        this.events.push(new TemplateCompilerSiteCursorElementEvent(
+        this.appendEvent(new TemplateCompilerSiteCursorElementEvent(
           siteCursorConstructionAuthority,
           this.transcriptOrdinal++,
           element,
@@ -624,7 +633,7 @@ class TemplateCompilerRootSiteCursor {
       }
     }
     if (originState === TemplateCompilerPreWalkBrowserOriginState.Unknown) {
-      this.events.push(new TemplateCompilerSiteCursorElementEvent(
+      this.appendEvent(new TemplateCompilerSiteCursorElementEvent(
         siteCursorConstructionAuthority,
         this.transcriptOrdinal++,
         element,
@@ -657,7 +666,7 @@ class TemplateCompilerRootSiteCursor {
         TemplateCompilerOccurrenceOnlyDisposition.BrowserImpliedElementPassThrough,
       );
       if (elementOccurrenceRow == null) {
-        this.events.push(new TemplateCompilerSiteCursorElementEvent(
+        this.appendEvent(new TemplateCompilerSiteCursorElementEvent(
           siteCursorConstructionAuthority,
           this.transcriptOrdinal++,
           element,
@@ -686,7 +695,7 @@ class TemplateCompilerRootSiteCursor {
       originState === TemplateCompilerPreWalkBrowserOriginState.Singular
       && authoredElement == null
     ) {
-      this.events.push(new TemplateCompilerSiteCursorElementEvent(
+      this.appendEvent(new TemplateCompilerSiteCursorElementEvent(
         siteCursorConstructionAuthority,
         this.transcriptOrdinal++,
         element,
@@ -713,7 +722,7 @@ class TemplateCompilerRootSiteCursor {
     }
 
     if (runtimeElementResourceName(element.tagName, element.namespace) === 'let') {
-      this.events.push(new TemplateCompilerSiteCursorElementEvent(
+      this.appendEvent(new TemplateCompilerSiteCursorElementEvent(
         siteCursorConstructionAuthority,
         this.transcriptOrdinal++,
         element,
@@ -749,7 +758,7 @@ class TemplateCompilerRootSiteCursor {
 
     const asElement = this.semantics.readAsElementScalar(element);
     if (asElement?.scalar != null && !asElement.scalar.isExact()) {
-      this.events.push(new TemplateCompilerSiteCursorElementEvent(
+      this.appendEvent(new TemplateCompilerSiteCursorElementEvent(
         siteCursorConstructionAuthority,
         this.transcriptOrdinal++,
         element,
@@ -781,7 +790,7 @@ class TemplateCompilerRootSiteCursor {
     );
     const elementRead = this.semantics.readElement(lookupName);
     const elementDefinition = this.semantics.closedElementDefinition(elementRead);
-    this.events.push(new TemplateCompilerSiteCursorElementEvent(
+    this.appendEvent(new TemplateCompilerSiteCursorElementEvent(
       siteCursorConstructionAuthority,
       this.transcriptOrdinal++,
       element,
@@ -859,7 +868,7 @@ class TemplateCompilerRootSiteCursor {
       }
       processContent = executeTemplateCompilerProcessContent({ plan, driver: this.siteDriver });
       const removedSpends: TemplateCompilerSiteSpend[] = [];
-      this.events.push(new TemplateCompilerSiteCursorProcessContentEvent(
+      this.appendEvent(new TemplateCompilerSiteCursorProcessContentEvent(
         siteCursorConstructionAuthority,
         this.transcriptOrdinal++,
         element,
@@ -894,7 +903,7 @@ class TemplateCompilerRootSiteCursor {
     parentOrdinal: number,
     successor: TemplateCompilerNodeOccurrence | null,
     processContent: TemplateCompilerProcessContentResult | null,
-  ): TemplateCompilerSiteCursorContainerFrame | null {
+  ): TemplateCompilerSiteCursorChildFrame | null {
     const assembly = assembleTemplateCompilerLiveAttributeOwner({
       localKey: `${this.binding.lane.localKey}:live-attributes:${element.occurrenceKey}`,
       execution: this.binding.execution,
@@ -957,7 +966,7 @@ class TemplateCompilerRootSiteCursor {
       }
 
       const outcome = liveAttributeOutcome(contribution);
-      this.events.push(new TemplateCompilerSiteCursorAttributeEvent(
+      this.appendEvent(new TemplateCompilerSiteCursorAttributeEvent(
         siteCursorConstructionAuthority,
         this.transcriptOrdinal++,
         element,
@@ -1086,7 +1095,7 @@ class TemplateCompilerRootSiteCursor {
         );
         return null;
       }
-      this.events.push(new TemplateCompilerSiteCursorContainerlessPlacementEvent(
+      this.appendEvent(new TemplateCompilerSiteCursorContainerlessPlacementEvent(
         siteCursorConstructionAuthority,
         this.transcriptOrdinal++,
         element,
@@ -1108,7 +1117,7 @@ class TemplateCompilerRootSiteCursor {
     }
     return element.readChildren().length === 0
       ? null
-      : { parent: element, children: element.readChildren(), nextOrdinal: 0 };
+      : { parent: element, children: element.readChildren() };
   }
 
   private visitText(
@@ -1127,7 +1136,7 @@ class TemplateCompilerRootSiteCursor {
       : null;
     if (text.generation != null || originState === TemplateCompilerPreWalkBrowserOriginState.Absent) {
       const row = this.recordOccurrenceOnly(text, TemplateCompilerOccurrenceOnlyDisposition.GeneratedSiteNeedsLowering);
-      this.events.push(new TemplateCompilerSiteCursorTextEvent(
+      this.appendEvent(new TemplateCompilerSiteCursorTextEvent(
         siteCursorConstructionAuthority,
         this.transcriptOrdinal++,
         text,
@@ -1155,7 +1164,7 @@ class TemplateCompilerRootSiteCursor {
     }
     if (originState === TemplateCompilerPreWalkBrowserOriginState.NonSingular) {
       const row = this.recordOccurrenceOnly(text, TemplateCompilerOccurrenceOnlyDisposition.NonSingularBrowserOrigin);
-      this.events.push(new TemplateCompilerSiteCursorTextEvent(
+      this.appendEvent(new TemplateCompilerSiteCursorTextEvent(
         siteCursorConstructionAuthority,
         this.transcriptOrdinal++,
         text,
@@ -1182,7 +1191,7 @@ class TemplateCompilerRootSiteCursor {
       return;
     }
     if (originState !== TemplateCompilerPreWalkBrowserOriginState.Singular) {
-      this.events.push(new TemplateCompilerSiteCursorTextEvent(
+      this.appendEvent(new TemplateCompilerSiteCursorTextEvent(
         siteCursorConstructionAuthority,
         this.transcriptOrdinal++,
         text,
@@ -1208,7 +1217,7 @@ class TemplateCompilerRootSiteCursor {
     }
     if (bundle == null) {
       if (authoredText == null || authoredText.text !== text.text) {
-        this.events.push(new TemplateCompilerSiteCursorTextEvent(
+        this.appendEvent(new TemplateCompilerSiteCursorTextEvent(
           siteCursorConstructionAuthority,
           this.transcriptOrdinal++,
           text,
@@ -1244,7 +1253,7 @@ class TemplateCompilerRootSiteCursor {
         );
         return;
       }
-      this.events.push(new TemplateCompilerSiteCursorTextEvent(
+      this.appendEvent(new TemplateCompilerSiteCursorTextEvent(
         siteCursorConstructionAuthority,
         this.transcriptOrdinal++,
         text,
@@ -1287,7 +1296,7 @@ class TemplateCompilerRootSiteCursor {
       && siteOutcome === TemplateCompilerSiteCursorSiteOutcome.Complete
       ? this.stageTextInstructions(text, bundle)
       : null;
-    this.events.push(new TemplateCompilerSiteCursorTextEvent(
+    this.appendEvent(new TemplateCompilerSiteCursorTextEvent(
       siteCursorConstructionAuthority,
       this.transcriptOrdinal++,
       text,
@@ -1379,7 +1388,7 @@ class TemplateCompilerRootSiteCursor {
     if (node.generation != null) {
       const row = this.recordOccurrenceOnly(node, TemplateCompilerOccurrenceOnlyDisposition.GeneratedSiteNeedsLowering);
       if (row != null) {
-        this.events.push(new TemplateCompilerSiteCursorIgnoredNodeEvent(
+        this.appendEvent(new TemplateCompilerSiteCursorIgnoredNodeEvent(
           siteCursorConstructionAuthority,
           this.transcriptOrdinal++,
           node,
@@ -1418,7 +1427,7 @@ class TemplateCompilerRootSiteCursor {
       );
       return;
     }
-    this.events.push(new TemplateCompilerSiteCursorIgnoredNodeEvent(
+    this.appendEvent(new TemplateCompilerSiteCursorIgnoredNodeEvent(
       siteCursorConstructionAuthority,
       this.transcriptOrdinal++,
       node,
@@ -1448,7 +1457,7 @@ class TemplateCompilerRootSiteCursor {
     roots: readonly TemplateCompilerNodeOccurrence[],
   ): void {
     const spends: TemplateCompilerSiteSpend[] = [];
-    this.events.push(new TemplateCompilerSiteCursorSubtreeExclusionEvent(
+    this.appendEvent(new TemplateCompilerSiteCursorSubtreeExclusionEvent(
       siteCursorConstructionAuthority,
       this.transcriptOrdinal++,
       owner,
@@ -1625,7 +1634,7 @@ class TemplateCompilerRootSiteCursor {
         : invalid
           ? TemplateCompilerSiteCursorSurrogateValidationOutcome.Refused
           : TemplateCompilerSiteCursorSurrogateValidationOutcome.Valid;
-      this.events.push(new TemplateCompilerSiteCursorSurrogateValidationEvent(
+      this.appendEvent(new TemplateCompilerSiteCursorSurrogateValidationEvent(
         siteCursorConstructionAuthority,
         this.transcriptOrdinal++,
         carrier,
@@ -1710,11 +1719,15 @@ class TemplateCompilerRootSiteCursor {
   }
 
   private phase(phaseKind: TemplateCompilerSiteCursorPhaseKind): void {
-    this.events.push(new TemplateCompilerSiteCursorPhaseEvent(
+    this.appendEvent(new TemplateCompilerSiteCursorPhaseEvent(
       siteCursorConstructionAuthority,
       this.transcriptOrdinal++,
       phaseKind,
     ));
+  }
+
+  private appendEvent(event: TemplateCompilerSiteCursorEvent): void {
+    this.taskSession.appendRootEvent(event);
   }
 
   private stop(
@@ -1741,7 +1754,7 @@ class TemplateCompilerRootSiteCursor {
       summary,
     );
     this.frontier = frontier;
-    this.events.push(frontier);
+    this.appendEvent(frontier);
   }
 
   private ensureCurrentness(): void {
@@ -1753,16 +1766,10 @@ class TemplateCompilerRootSiteCursor {
       this.binding.forest.mutationRevision !== expectedForestMutationRevision
       || this.binding.execution.sequence.readOperations().length !== expectedGlobalOperationCount
     ) {
-      if (this.frontier != null) {
-        if (this.events[this.events.length - 1] !== this.frontier) {
-          throw new Error('Compiler cursor currentness cannot replace a nonterminal frontier event.');
-        }
-        this.events.pop();
-        this.transcriptOrdinal--;
-      }
+      const replaced = this.frontier;
       const frontier = new TemplateCompilerSiteCursorFrontier(
         siteCursorConstructionAuthority,
-        this.transcriptOrdinal++,
+        replaced?.ordinal ?? this.transcriptOrdinal++,
         this.phaseKind,
         TemplateCompilerSiteCursorFrontierKind.CurrentnessLost,
         null,
@@ -1775,7 +1782,8 @@ class TemplateCompilerRootSiteCursor {
         'Compiler forest or operation frontier diverged from cursor-owned execution currentness.',
       );
       this.frontier = frontier;
-      this.events.push(frontier);
+      if (replaced == null) this.appendEvent(frontier);
+      else this.taskSession.replaceTerminalRootEvent(replaced, frontier);
     }
   }
 }
@@ -2010,6 +2018,10 @@ function sameSourceSpan(left: SourceSpan | null, right: SourceSpan | null): bool
     && left.end === right.end
     && left.file?.id === right.file?.id
   );
+}
+
+function sameObjects<T>(left: readonly T[], right: readonly T[]): boolean {
+  return left.length === right.length && left.every((value, index) => value === right[index]);
 }
 
 function instructionStagingStateFor(

@@ -39,6 +39,8 @@ import cursorSlotValidTemplate from './cursor-slot-valid.html';
 import cursorSlotsContainerlessTemplate from './cursor-slots-containerless.html';
 import cursorSurrogateInvalidTemplate from './cursor-surrogate-invalid.html';
 import cursorSurrogateValidTemplate from './cursor-surrogate-valid.html';
+import cursorTaskNestedProjectionTemplate from './cursor-task-nested-projection.html';
+import cursorTaskNestedTcTemplate from './cursor-task-nested-tc.html';
 import cursorTemplateControllerTemplate from './cursor-template-controller.html';
 import cursorTenHoleTemplate from './cursor-ten-hole.html';
 import cursorContainerlessTemplate from './cursor-containerless.html';
@@ -266,6 +268,21 @@ class CursorLeaf {}
 class CursorProjection {}
 
 @customElement({
+  name: 'cursor-task-nested-tc',
+  template: cursorTaskNestedTcTemplate,
+})
+class CursorTaskNestedTc {
+  condition = true;
+}
+
+@customElement({
+  name: 'cursor-task-nested-projection',
+  template: cursorTaskNestedProjectionTemplate,
+  dependencies: [CursorLeaf],
+})
+class CursorTaskNestedProjection {}
+
+@customElement({
   name: 'cursor-context-family-projection',
   template: cursorContextFamilyProjectionTemplate,
   dependencies: [CursorLeaf],
@@ -461,6 +478,8 @@ void new Aurelia()
     CursorAuthoredCarrierEmpty,
     CursorAuthoredCarrierStatic,
     CursorProjection,
+    CursorTaskNestedTc,
+    CursorTaskNestedProjection,
     CursorContextFamilyProjection,
     CursorMarker,
     CursorNativeContainerless,

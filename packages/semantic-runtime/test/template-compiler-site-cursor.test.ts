@@ -59,6 +59,7 @@ import {
   TemplateCompilerElementOccurrence,
   TemplateCompilerFragmentOccurrence,
   TemplateCompilerGeneratedOccurrenceRole,
+  type TemplateCompilerNodeOccurrence,
   TemplateCompilerOccurrenceForest,
   TemplateCompilerTextOccurrence,
 } from '../src/template/template-compiler-occurrence.js';
@@ -75,6 +76,8 @@ import {
   executeTemplateCompilerRootSiteCursor,
   TemplateCompilerSiteCursorAttributeEvent,
   TemplateCompilerSiteCursorContainerlessPlacementEvent,
+  TemplateCompilerSiteCursorContextKind,
+  TemplateCompilerSiteCursorContextTaskState,
   TemplateCompilerSiteCursorElementEvent,
   TemplateCompilerSiteCursorFrontierKind,
   TemplateCompilerSiteCursorPhaseEvent,
@@ -85,6 +88,7 @@ import {
   TemplateCompilerSiteCursorSurrogateValidationEvent,
   TemplateCompilerSiteCursorSurrogateValidationOutcome,
   TemplateCompilerSiteCursorTextEvent,
+  TemplateCompilerSiteCursorTaskStopKind,
   type TemplateCompilerSiteCursorTranscript,
   type TemplateCompilerSiteCursorResult,
 } from '../src/template/template-compiler-site-cursor.js';
@@ -1345,6 +1349,62 @@ describe('template compiler root site cursor', () => {
     expect(wrongPrewalk.state).toBe(TemplateCompilerSiteCursorResultState.Mismatch);
   });
 
+  test('drains one session-owned root task and binds every event to its exact context', () => {
+    const transcript = fixture.transcript('cursor-row-interleave');
+    const tasks = transcript.taskSnapshot;
+    const rootTask = tasks.contexts[0];
+
+    expect(tasks.contexts).toHaveLength(1);
+    expect(tasks.rootContext.contextKind).toBe(TemplateCompilerSiteCursorContextKind.Root);
+    expect(rootTask).toMatchObject({
+      context: tasks.rootContext,
+      state: TemplateCompilerSiteCursorContextTaskState.Drained,
+      stopKind: null,
+      frontier: null,
+      remainingFrames: [],
+    });
+    expect(tasks.events).toEqual(transcript.events);
+    expect(tasks.eventBindings.map((binding) => binding.event)).toEqual(transcript.events);
+    expect(tasks.eventBindings.every((binding) => binding.context === tasks.rootContext)).toBe(true);
+    expect(transcript.events.every((event) => tasks.contextForEvent(event) === tasks.rootContext)).toBe(true);
+
+    const terminal = fixture.transcript('cursor-open').taskSnapshot.contexts[0]!;
+    expect(terminal.state).toBe(TemplateCompilerSiteCursorContextTaskState.Stopped);
+    expect(terminal.stopKind).toBe(TemplateCompilerSiteCursorTaskStopKind.TerminalFrontier);
+  });
+
+  test('retains the full nested ancestor continuation at TC and projection structural frontiers', () => {
+    const cases = [
+      ['cursor-task-nested-tc', TemplateCompilerSiteCursorFrontierKind.AfterAttributesBeforeTemplateController],
+      ['cursor-task-nested-projection', TemplateCompilerSiteCursorFrontierKind.AfterAttributesBeforeProjection],
+    ] as const;
+    for (const [name, frontierKind] of cases) {
+      const transcript = fixture.transcript(name);
+      const task = transcript.taskSnapshot.contexts[0]!;
+      const frames = task.remainingFrames;
+
+      expect(transcript.frontier?.frontierKind, name).toBe(frontierKind);
+      expect(task.state, name).toBe(TemplateCompilerSiteCursorContextTaskState.Stopped);
+      expect(task.stopKind, name).toBe(TemplateCompilerSiteCursorTaskStopKind.StructuralFrontier);
+      expect(task.frontier, name).toBe(transcript.frontier);
+      expect(task.lastVisit?.node, name).toBe(transcript.frontier?.node);
+      expect(task.lastVisit?.capturedSuccessor, name).toBe(transcript.frontier?.capturedSuccessor);
+      expect(frames.map((frame) => cursorOccurrenceLabel(frame.parent)), name)
+        .toEqual(['#fragment', 'main', 'section']);
+      expect(frames.map((frame) => frame.nextOrdinal), name).toEqual([1, 1, 1]);
+      expect(frames.map((frame) => frame.readRemainingChildren().map(cursorOccurrenceLabel)), name).toEqual([
+        ['aside', '#text'],
+        ['footer'],
+        ['i'],
+      ]);
+      expect(frames[0]?.children[frames[0].nextOrdinal - 1], name).toBe(frames[1]?.parent);
+      expect(frames[1]?.children[frames[1].nextOrdinal - 1], name).toBe(frames[2]?.parent);
+      expect(cursorOccurrenceLabel(transcript.frontier!.capturedSuccessor!), name).toBe('i');
+      expect(frames[1]?.readRemainingChildren().map(cursorOccurrenceLabel), name).toContain('footer');
+      expect(frames[0]?.readRemainingChildren().map(cursorOccurrenceLabel), name).toContain('aside');
+    }
+  });
+
   test('pins the shared generated-context graph before live family scheduling', () => {
     const tcPlan = fixture.run('cursor-context-family-tc').compilation.compiledTemplate.targetPlan;
     const tcContexts = tcPlan.readContexts();
@@ -2196,6 +2256,14 @@ function requireTranscript(result: TemplateCompilerSiteCursorResult): TemplateCo
     throw new Error(`Expected cursor transcript: ${result.reasons.map((reason) => reason.summary).join(' ')}`);
   }
   return result.transcript;
+}
+
+function cursorOccurrenceLabel(node: TemplateCompilerNodeOccurrence): string {
+  if (node instanceof TemplateCompilerElementOccurrence) return node.tagName;
+  if (node instanceof TemplateCompilerTextOccurrence) return '#text';
+  if (node instanceof TemplateCompilerFragmentOccurrence) return '#fragment';
+  if (node instanceof TemplateCompilerCommentOccurrence) return '#comment';
+  return node.nodeKind;
 }
 
 function occurrenceShape(
