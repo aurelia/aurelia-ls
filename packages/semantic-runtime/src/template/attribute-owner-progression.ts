@@ -8,7 +8,7 @@ import {
   htmlElementAttributeOwnersByAttributeProduct,
 } from './html-ir.js';
 import type { HtmlParseEmission } from './html-parse-materializer.js';
-import { runtimeAttributeName, runtimeElementResourceName } from './runtime-dom-name.js';
+import { isRuntimeLetElement, runtimeAttributeName } from './runtime-dom-name.js';
 import { compilerRootTemplateElement } from './compiler-root-template.js';
 
 export const enum TemplateCompilerAttributeOwnerProgressionLaneKind {
@@ -128,7 +128,7 @@ export class TemplateCompilerAttributeOwnerProgression {
     this.ownersByAttributeProduct = htmlElementAttributeOwnersByAttributeProduct(html.nodes, html.attributes);
     const rootTemplate = compilerRootTemplateElement(html);
     for (const owner of new Set(this.ownersByAttributeProduct.values())) {
-      const laneKind = runtimeElementResourceName(owner.tagName, owner.namespace) === 'let'
+      const laneKind = isRuntimeLetElement(owner.tagName, owner.namespace)
         ? TemplateCompilerAttributeOwnerProgressionLaneKind.LetElementOpen
         : owner.element === rootTemplate
           ? TemplateCompilerAttributeOwnerProgressionLaneKind.SurrogateOpen

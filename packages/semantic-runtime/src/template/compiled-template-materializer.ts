@@ -137,7 +137,7 @@ import {
 } from './native-slot-compiler-semantics.js';
 import { orderCompilerInstructionsForElement } from './compiler-instruction-order.js';
 import { TemplateSpecialAttributeName } from './special-attribute-source.js';
-import { runtimeAttributeName, runtimeElementResourceName } from './runtime-dom-name.js';
+import { isRuntimeLetElement, runtimeAttributeName, runtimeElementResourceName } from './runtime-dom-name.js';
 import { compilerRootTemplateElement } from './compiler-root-template.js';
 import {
   BindingCommandLoweringState,
@@ -921,7 +921,7 @@ class CompiledTemplateInstructionTraversal {
     node: HtmlElement,
     contextPlan: TemplateCompilerTargetContextPlan,
   ): boolean {
-    if (runtimeElementResourceName(node.tagName, node.namespace) !== 'let') {
+    if (!isRuntimeLetElement(node.tagName, node.namespace)) {
       return false;
     }
     this.assemblyState.recordCompilerReachableNode(node, contextPlan);
@@ -1917,6 +1917,12 @@ class CompiledTemplateInstructionTraversal {
       if (syntax == null) {
         continue;
       }
+      const classification = this.input.attributeClassification.classifications.find((candidate) =>
+        candidate.syntaxProductHandle === syntax.productHandle
+      ) ?? null;
+      if (syntax.command != null && classification?.bindingCommand == null) {
+        continue;
+      }
       const decision = decideTemplateCompilerLetAttribute(
         syntax.runtimeRawName,
         syntax.rawValue,
@@ -1926,9 +1932,6 @@ class CompiledTemplateInstructionTraversal {
       if (decision.decisionKind === TemplateCompilerLetAttributeKind.ToBindingContext) {
         continue;
       }
-      const classification = this.input.attributeClassification.classifications.find((candidate) =>
-        candidate.syntaxProductHandle === syntax.productHandle
-      ) ?? null;
       if (decision.decisionKind === TemplateCompilerLetAttributeKind.InvalidCommand) {
         this.assemblyState.addCompilerIssue(
           `let-command:${attribute.productHandle}`,

@@ -22,6 +22,10 @@ import cursorLiveEmptyTemplate from './cursor-live-empty.html';
 import cursorLiveNonsingularTemplate from './cursor-live-nonsingular.html';
 import cursorLiveMultiBindingTemplate from './cursor-live-multi-binding.html';
 import cursorLiveStagingTemplate from './cursor-live-staging.html';
+import cursorLetControlsTemplate from './cursor-let-controls.html';
+import cursorLetInvalidTemplate from './cursor-let-invalid.html';
+import cursorLetNonsingularTemplate from './cursor-let-nonsingular.html';
+import cursorLetUnknownTemplate from './cursor-let-unknown.html';
 import cursorMarkerTemplate from './cursor-marker.html';
 import cursorNativeContainerlessTemplate from './cursor-native-containerless.html';
 import cursorOpenTemplate from './cursor-open.html';
@@ -81,6 +85,36 @@ class CursorShapes {
   inert = 'inert';
   message = 'message';
   suppressed = 'suppressed';
+}
+
+@customElement({
+  name: 'cursor-let-controls',
+  template: cursorLetControlsTemplate,
+})
+class CursorLetControls {
+  message = 'message';
+}
+
+@customElement({
+  name: 'cursor-let-nonsingular',
+  template: cursorLetNonsingularTemplate,
+})
+class CursorLetNonsingular {}
+
+@customElement({
+  name: 'cursor-let-invalid',
+  template: cursorLetInvalidTemplate,
+})
+class CursorLetInvalid {
+  message = 'message';
+}
+
+@customElement({
+  name: 'cursor-let-unknown',
+  template: cursorLetUnknownTemplate,
+})
+class CursorLetUnknown {
+  message = 'message';
 }
 
 @customElement({
@@ -505,6 +539,10 @@ void new Aurelia()
     CursorEmpty,
     CursorProgression,
     CursorShapes,
+    CursorLetControls,
+    CursorLetNonsingular,
+    CursorLetInvalid,
+    CursorLetUnknown,
     CursorSurrogateInvalid,
     CursorFoster,
     CursorLiveDuplicate,

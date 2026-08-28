@@ -55,7 +55,7 @@ import {
   TemplateCompilerOccurrenceOnlyDisposition,
 } from './template-compiler-site-spend-ledger.js';
 import type { TemplateCompilerAuthoredSiteRemainderEvidence } from './template-compiler-site-spend-ledger.js';
-import type { HtmlElement } from './html-ir.js';
+import { HtmlAttributeReference, type HtmlElement } from './html-ir.js';
 import {
   TemplateInstructionKind,
   type TemplateInstruction,
@@ -72,6 +72,7 @@ import {
   type TemplateCompilerProcessContentResult,
 } from './template-compiler-process-content.js';
 import {
+  isRuntimeLetElement,
   runtimeElementLookupName,
   runtimeElementResourceName,
 } from './runtime-dom-name.js';
@@ -89,6 +90,7 @@ import {
   TemplateCompilerSiteCursorFrontier,
   TemplateCompilerSiteCursorFrontierKind,
   TemplateCompilerSiteCursorIgnoredNodeEvent,
+  TemplateCompilerSiteCursorLetElementEvent,
   TemplateCompilerSiteCursorSiteOutcome,
   TemplateCompilerSiteCursorPhaseEvent,
   TemplateCompilerSiteCursorPhaseKind,
@@ -131,6 +133,12 @@ import {
   type TemplateCompilerLiveAllocationLedger,
   type TemplateCompilerLiveAllocationSnapshot,
 } from './template-compiler-live-allocation.js';
+import {
+  stageTemplateCompilerLetElement,
+  TemplateCompilerLetElementStagingReasonKind,
+  type TemplateCompilerLetElementStagingState,
+  TemplateCompilerLetReachedAttribute,
+} from './template-compiler-let-element-staging.js';
 import {
   TemplateCompilerRootCompilationAccumulator,
   type TemplateCompilerRootCompilationState,
@@ -284,6 +292,7 @@ export class TemplateCompilerSiteCursorTranscript {
         !event.isOwnedBy(siteCursorConstructionAuthority)
         || event.ordinal !== ordinal
         || (event instanceof TemplateCompilerSiteCursorProcessContentEvent && !event.isCoherent())
+        || (event instanceof TemplateCompilerSiteCursorLetElementEvent && !event.isCoherent())
         || (event instanceof TemplateCompilerSiteCursorAttributeEvent && !event.isCoherent())
         || (event instanceof TemplateCompilerSiteCursorTemplateControllerTransitionEvent && !event.isCoherent())
         || (event instanceof TemplateCompilerSiteCursorProjectionExtractionEvent && !event.isCoherent())
@@ -844,8 +853,8 @@ class TemplateCompilerRootSiteCursor {
       return null;
     }
 
-    if (runtimeElementResourceName(element.tagName, element.namespace) === 'let') {
-      this.appendEvent(new TemplateCompilerSiteCursorElementEvent(
+    if (isRuntimeLetElement(element.tagName, element.namespace)) {
+      const elementEvent = new TemplateCompilerSiteCursorElementEvent(
         siteCursorConstructionAuthority,
         this.transcriptOrdinal++,
         element,
@@ -859,7 +868,8 @@ class TemplateCompilerRootSiteCursor {
         null,
         null,
         null,
-      ));
+      );
+      this.appendEvent(elementEvent);
       if (element.readChildren().length > 0) {
         this.excludeSubtree(
           element,
@@ -868,14 +878,43 @@ class TemplateCompilerRootSiteCursor {
           element.readChildren(),
         );
       }
-      this.stop(
-        TemplateCompilerSiteCursorFrontierKind.LetElementLoweringRequired,
-        element,
-        null,
-        null,
-        successor,
-        '<let> uses a dedicated attribute grammar and lowering lane.',
-      );
+      if (authoredElement == null) {
+        this.stop(
+          TemplateCompilerSiteCursorFrontierKind.AuthoredPrecedentMismatch,
+          element,
+          null,
+          null,
+          successor,
+          'Reached let element has no singular authored node reference for instruction staging.',
+        );
+        return null;
+      }
+      const letResult = this.stageLetElement(element, authoredElement);
+      if (letResult?.staging != null) {
+        this.appendEvent(new TemplateCompilerSiteCursorLetElementEvent(
+          siteCursorConstructionAuthority,
+          this.transcriptOrdinal++,
+          elementEvent,
+          letResult.staging,
+          letResult.spends,
+          letResult.occurrenceOnlyRows,
+        ));
+      } else if (this.frontier == null) {
+        this.stop(
+          letResult?.reasonKind === TemplateCompilerLetElementStagingReasonKind.InvalidCommand
+            ? TemplateCompilerSiteCursorFrontierKind.InvalidLetCommand
+            : letResult?.reasonKind === TemplateCompilerLetElementStagingReasonKind.UnknownBindingCommand
+              ? TemplateCompilerSiteCursorFrontierKind.UnknownLetBindingCommand
+            : letResult?.reasonKind === TemplateCompilerLetElementStagingReasonKind.ExpressionParseInvalid
+                ? TemplateCompilerSiteCursorFrontierKind.InvalidLetExpression
+                : TemplateCompilerSiteCursorFrontierKind.LetElementOpen,
+          element,
+          letResult?.attribute ?? null,
+          null,
+          successor,
+          letResult?.summary ?? 'Reached <let> lowering remained open.',
+        );
+      }
       return null;
     }
 
@@ -1865,6 +1904,122 @@ class TemplateCompilerRootSiteCursor {
     ));
   }
 
+  private stageLetElement(
+    element: TemplateCompilerElementOccurrence,
+    authoredElement: HtmlElement,
+  ): {
+    readonly state: TemplateCompilerLetElementStagingState;
+    readonly staging: ReturnType<typeof stageTemplateCompilerLetElement>['staging'];
+    readonly spends: readonly TemplateCompilerSiteSpend[];
+    readonly occurrenceOnlyRows: readonly TemplateCompilerOccurrenceOnlyRow[];
+    readonly attribute: TemplateCompilerAttributeOccurrence | null;
+    readonly reasonKind: TemplateCompilerLetElementStagingReasonKind | null;
+    readonly summary: string | null;
+  } | null {
+    const spends: TemplateCompilerSiteSpend[] = [];
+    const occurrenceOnlyRows: TemplateCompilerOccurrenceOnlyRow[] = [];
+    const attributes = element.readAttributes();
+    const scalars = attributes.map((attribute, ordinal) =>
+      this.semantics.captureReachedAttributeScalar(element, attribute, ordinal)
+    );
+    const relation = this.semantics.elementOwnerRelation(
+      element,
+      authoredElement,
+      new Map(attributes.map((attribute, ordinal) => [attribute, scalars[ordinal]!] as const)),
+    );
+    const reachAttribute = (ordinal: number): TemplateCompilerLetReachedAttribute | null => {
+      const attribute = attributes[ordinal] ?? null;
+      if (attribute == null) return null;
+      const scalar = scalars[ordinal]!;
+      const bundle = this.semantics.singularAttributeBundle(attribute);
+      if (bundle == null) {
+        const route = this.semantics.originRoute(attribute);
+        const row = this.recordOccurrenceOnly(
+          attribute,
+          route?.routeKind === TemplateCompilerBrowserOriginRouteKind.NonSingular
+            ? TemplateCompilerOccurrenceOnlyDisposition.NonSingularBrowserOrigin
+            : TemplateCompilerOccurrenceOnlyDisposition.LiveAttributeAssembled,
+        );
+        if (row == null) {
+          this.stop(
+            TemplateCompilerSiteCursorFrontierKind.AccountingMismatch,
+            element,
+            attribute,
+            null,
+            null,
+            'Reached live let attribute conflicted with the occurrence accounting ledger.',
+          );
+          return null;
+        }
+        occurrenceOnlyRows.push(row);
+        const reached = new TemplateCompilerLetReachedAttribute(
+          attribute,
+          null,
+          scalar,
+          new HtmlAttributeReference(null, null, scalar.qualifiedName),
+          scalar.inputReference?.addressHandle ?? null,
+          null,
+        );
+        return reached;
+      }
+      const compatible = this.semantics.letAttributeIsCompatible(
+        element,
+        authoredElement,
+        bundle,
+        attribute,
+        scalar,
+        ordinal,
+        relation,
+      );
+      const spend = this.bindSpend(
+        bundle,
+        attribute,
+        compatible
+          ? TemplateCompilerSiteSpendDisposition.BrowserCompatible
+          : TemplateCompilerSiteSpendDisposition.BrowserReloweringRequired,
+      );
+      if (spend == null) {
+        this.stop(
+          TemplateCompilerSiteCursorFrontierKind.AccountingMismatch,
+          element,
+          attribute,
+          bundle,
+          null,
+          'Reached let attribute conflicted with the site ledger.',
+        );
+        return null;
+      }
+      spends.push(spend);
+      const reached = new TemplateCompilerLetReachedAttribute(
+        attribute,
+        bundle,
+        scalar,
+        bundle.attribute.toReference(),
+        bundle.attribute.valueAddressHandle ?? bundle.attribute.sourceAddressHandle,
+        bundle.syntax.targetSourceAddressHandle,
+      );
+      return reached;
+    };
+    const result = stageTemplateCompilerLetElement({
+      siteKey: `${this.binding.lane.localKey}:live-let:${element.occurrenceKey}`,
+      element,
+      authoredElement,
+      attributeCount: attributes.length,
+      reachAttribute,
+      compilerReads: this.compilerReads,
+      allocations: this.allocations,
+    });
+    return {
+      state: result.state,
+      staging: result.staging,
+      spends,
+      occurrenceOnlyRows,
+      attribute: result.reasons[0]?.attribute ?? null,
+      reasonKind: result.reasons[0]?.reasonKind ?? null,
+      summary: result.reasons[0]?.summary ?? null,
+    };
+  }
+
   private visitIgnored(
     node: TemplateCompilerCommentOccurrence | TemplateCompilerDoctypeOccurrence,
     parent: TemplateCompilerParentOccurrence,
@@ -2469,11 +2624,29 @@ function liveAllocationSnapshotIsCoherent(
     }
   }
   for (const event of events) {
-    if (!(event instanceof TemplateCompilerSiteCursorTextEvent)) continue;
-    for (const hole of event.instructionStaging?.holes ?? []) {
-      expectedInstructions.set(hole.instruction.productHandle, hole.instruction);
-      const sourceAddressHandle = hole.source.sourceAddressHandle;
-      if (sourceAddressHandle != null) expectedSources.set(sourceAddressHandle, hole.source);
+    if (event instanceof TemplateCompilerSiteCursorTextEvent) {
+      for (const hole of event.instructionStaging?.holes ?? []) {
+        expectedInstructions.set(hole.instruction.productHandle, hole.instruction);
+        const sourceAddressHandle = hole.source.sourceAddressHandle;
+        if (sourceAddressHandle != null) expectedSources.set(sourceAddressHandle, hole.source);
+      }
+    } else if (event instanceof TemplateCompilerSiteCursorLetElementEvent) {
+      expectedInstructions.set(event.staging.instruction.productHandle, event.staging.instruction);
+      for (const binding of event.staging.bindings) {
+        expectedInstructions.set(binding.instruction.productHandle, binding.instruction);
+        if (
+          binding.instruction.expressionProductHandle != null
+          && binding.expressionRead != null
+          && binding.expressionResult != null
+        ) {
+          retainExpression(
+            binding.instruction.expressionProductHandle,
+            binding.expressionRead,
+            binding.expressionResult,
+            null,
+          );
+        }
+      }
     }
   }
 

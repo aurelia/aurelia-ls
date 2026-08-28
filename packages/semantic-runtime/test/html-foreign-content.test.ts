@@ -10,6 +10,7 @@ import {
 } from '../src/template/html-ir.js';
 import { TemplateRecoveryPolicy } from '../src/template/parse-context.js';
 import {
+  isRuntimeLetElement,
   runtimeAttributeName,
   runtimeNodeName,
 } from '../src/template/runtime-dom-name.js';
@@ -100,6 +101,9 @@ describe('HTML foreign-content materialization', () => {
     expect(runtimeAttributeName('constructor', HtmlNamespaceKind.Svg)).toBe('constructor');
     expect(runtimeAttributeName('__proto__', HtmlNamespaceKind.Svg)).toBe('__proto__');
     expect(runtimeNodeName('custom-K', HtmlNamespaceKind.Html)).toBe('CUSTOM-K');
+    expect(isRuntimeLetElement('let', HtmlNamespaceKind.Html)).toBe(true);
+    expect(isRuntimeLetElement('let', HtmlNamespaceKind.Svg)).toBe(false);
+    expect(isRuntimeLetElement('let', HtmlNamespaceKind.Math)).toBe(false);
   });
 
   test('normalizes shorthand spread operands as HTML attribute names while explicit spread values retain authored case', () => {

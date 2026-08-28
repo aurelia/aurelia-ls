@@ -20,6 +20,7 @@ import {
   TemplateCompilerSiteCursorElementEvent,
   type TemplateCompilerSiteCursorEvent,
   TemplateCompilerSiteCursorIgnoredNodeEvent,
+  TemplateCompilerSiteCursorLetElementEvent,
   TemplateCompilerSiteCursorProcessContentEvent,
   type TemplateCompilerSiteCursorProjectionEntrantBandStaging,
   TemplateCompilerSiteCursorProjectionExtractionEvent,
@@ -199,9 +200,17 @@ export class TemplateCompilerCompletedFamilyTextReach {
   constructor(readonly event: TemplateCompilerSiteCursorTextEvent) {}
 }
 
+/** Reached let evidence with exact dedicated lowering and nested instruction staging. */
+export class TemplateCompilerCompletedFamilyLetReach {
+  readonly reachKind = 'let' as const;
+
+  constructor(readonly event: TemplateCompilerSiteCursorLetElementEvent) {}
+}
+
 export type TemplateCompilerCompletedFamilyReach =
   | TemplateCompilerCompletedFamilyElementReach
-  | TemplateCompilerCompletedFamilyTextReach;
+  | TemplateCompilerCompletedFamilyTextReach
+  | TemplateCompilerCompletedFamilyLetReach;
 
 /** Context-local reached-site summary. It deliberately does not claim final target-row or membership ownership. */
 export class TemplateCompilerCompletedContextTraversal {
@@ -212,6 +221,7 @@ export class TemplateCompilerCompletedContextTraversal {
     readonly reachedSites: readonly TemplateCompilerCompletedFamilyReach[],
     readonly elementSites: readonly TemplateCompilerCompletedFamilyElementReach[],
     readonly textSites: readonly TemplateCompilerCompletedFamilyTextReach[],
+    readonly letSites: readonly TemplateCompilerCompletedFamilyLetReach[],
     readonly ignoredNodes: readonly TemplateCompilerSiteCursorIgnoredNodeEvent[],
     readonly exclusions: readonly TemplateCompilerSiteCursorSubtreeExclusionEvent[],
     readonly processContentEffects: readonly TemplateCompilerSiteCursorProcessContentEvent[],
@@ -226,7 +236,7 @@ export class TemplateCompilerCompletedContextTraversal {
       task.state !== TemplateCompilerSiteCursorContextTaskState.Drained
       || task.remainingWork.length !== 0
       || task.frontier != null
-      || reachedSites.length !== elementSites.length + textSites.length
+      || reachedSites.length !== elementSites.length + textSites.length + letSites.length
       || reachedSites.some((site, ordinal) =>
         ordinal > 0 && reachedSites[ordinal - 1]!.event.ordinal >= site.event.ordinal
       )
@@ -943,15 +953,20 @@ function completedContext(
   const textEvents = task.events.filter((event): event is TemplateCompilerSiteCursorTextEvent =>
     event instanceof TemplateCompilerSiteCursorTextEvent && audit.textEvents.includes(event)
   );
+  const letEvents = task.events.filter((event): event is TemplateCompilerSiteCursorLetElementEvent =>
+    event instanceof TemplateCompilerSiteCursorLetElementEvent && audit.letEvents.includes(event)
+  );
   const elementSites = elementEvents.map((event) => new TemplateCompilerCompletedFamilyElementReach(
     event,
     audit.ownersByElement.get(event.element)!,
     hydrateElementByElement.get(event.element)!,
   ));
   const textSites = textEvents.map((event) => new TemplateCompilerCompletedFamilyTextReach(event));
+  const letSites = letEvents.map((event) => new TemplateCompilerCompletedFamilyLetReach(event));
   const siteByEvent = new Map<TemplateCompilerSiteCursorEvent, TemplateCompilerCompletedFamilyReach>([
     ...elementSites.map((site) => [site.event, site] as const),
     ...textSites.map((site) => [site.event, site] as const),
+    ...letSites.map((site) => [site.event, site] as const),
   ]);
   const reachedSites = task.events.flatMap((event) => {
     const site = siteByEvent.get(event);
@@ -962,6 +977,7 @@ function completedContext(
     reachedSites,
     elementSites,
     textSites,
+    letSites,
     task.events.filter((event): event is TemplateCompilerSiteCursorIgnoredNodeEvent =>
       event instanceof TemplateCompilerSiteCursorIgnoredNodeEvent
     ),
@@ -988,6 +1004,7 @@ function completedContext(
 function cursorEventNode(event: TemplateCompilerSiteCursorEvent): object | null {
   if (event instanceof TemplateCompilerSiteCursorElementEvent) return event.element;
   if (event instanceof TemplateCompilerSiteCursorTextEvent) return event.text;
+  if (event instanceof TemplateCompilerSiteCursorLetElementEvent) return event.elementEvent.element;
   if (event instanceof TemplateCompilerSiteCursorIgnoredNodeEvent) return event.node;
   return null;
 }

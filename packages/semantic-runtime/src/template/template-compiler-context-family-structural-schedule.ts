@@ -315,6 +315,7 @@ export const enum TemplateCompilerFamilyStructuralEntryKind {
   ReachedElement = 'reached-element',
   LoweredElement = 'lowered-element',
   Text = 'text',
+  Let = 'let',
 }
 
 export class TemplateCompilerFamilyReachedElementScheduleEntry {
@@ -386,10 +387,33 @@ export class TemplateCompilerFamilyTextScheduleEntry {
   }
 }
 
+/** One reached `<let>` lowered to its dedicated marker row in the final owning context. */
+export class TemplateCompilerFamilyLetScheduleEntry {
+  readonly entryKind = TemplateCompilerFamilyStructuralEntryKind.Let;
+
+  constructor(
+    readonly disposition: TemplateCompilerFamilyReachDisposition,
+    readonly contextMapping: TemplateCompilerContextFamilyTargetContextMapping,
+    readonly targetRow: TemplateCompilerContextFamilyOrdinaryTargetRowMapping,
+  ) {
+    if (
+      disposition.site.siteKind !== 'let'
+      || disposition.reach.reachKind !== 'let'
+      || disposition.reachedContext !== contextMapping.cursorContext
+      || disposition.loweringContext !== contextMapping.cursorContext
+      || targetRow.draft.site !== disposition.site
+      || targetRow.contextMapping !== contextMapping
+    ) {
+      throw new Error('Family let schedule lost reached site, final context, or target-row ownership.');
+    }
+  }
+}
+
 export type TemplateCompilerFamilyStructuralScheduleEntry =
   | TemplateCompilerFamilyReachedElementScheduleEntry
   | TemplateCompilerFamilyLoweredElementScheduleEntry
-  | TemplateCompilerFamilyTextScheduleEntry;
+  | TemplateCompilerFamilyTextScheduleEntry
+  | TemplateCompilerFamilyLetScheduleEntry;
 
 export class TemplateCompilerFamilyContextStructuralSchedule {
   constructor(
@@ -472,7 +496,8 @@ export class TemplateCompilerFamilyLoweredElementExecutionBand {
 export type TemplateCompilerFamilyExecutionEntry =
   | TemplateCompilerFamilyReachedElementExecutionBand
   | TemplateCompilerFamilyLoweredElementExecutionBand
-  | TemplateCompilerFamilyTextScheduleEntry;
+  | TemplateCompilerFamilyTextScheduleEntry
+  | TemplateCompilerFamilyLetScheduleEntry;
 
 /** Recursive execution band; returning from one child resumes the next entry in this array. */
 export class TemplateCompilerFamilyContextExecutionBand {
@@ -532,13 +557,19 @@ export class TemplateCompilerContextFamilyStructuralSchedulePreparation {
       (entry): entry is TemplateCompilerFamilyTextScheduleEntry =>
         entry instanceof TemplateCompilerFamilyTextScheduleEntry,
     );
+    const lets = contexts.flatMap((context) => context.entries).filter(
+      (entry): entry is TemplateCompilerFamilyLetScheduleEntry =>
+        entry instanceof TemplateCompilerFamilyLetScheduleEntry,
+    );
     const elementDispositions = rows.reachDispositions.filter((disposition) => disposition.site.siteKind === 'element');
     const textDispositions = rows.reachDispositions.filter((disposition) => disposition.site.siteKind === 'text');
+    const letDispositions = rows.reachDispositions.filter((disposition) => disposition.site.siteKind === 'let');
     const attributeMappings = reached.flatMap((entry) => entry.attributes).map((entry) => entry.mapping);
     const tcRows = reached.flatMap((entry) => entry.templateController?.rowMappings ?? []);
     const ordinaryRows = [
       ...loweredElements.flatMap((entry) => entry.targetRow == null ? [] : [entry.targetRow]),
       ...texts.flatMap((entry) => entry.rows),
+      ...lets.map((entry) => entry.targetRow),
     ];
     const scheduledRows = new Set<TemplateCompilerContextFamilyTargetRowMapping>([
       ...tcRows,
@@ -568,6 +599,8 @@ export class TemplateCompilerContextFamilyStructuralSchedulePreparation {
       || new Set(loweredElements.map((entry) => entry.disposition)).size !== elementDispositions.length
       || texts.length !== textDispositions.length
       || new Set(texts.map((entry) => entry.disposition)).size !== textDispositions.length
+      || lets.length !== letDispositions.length
+      || new Set(lets.map((entry) => entry.disposition)).size !== letDispositions.length
       || !sameObjects(attributeMappings, target.attributeDispositionMappings)
       || scheduledRows.size !== target.rowMappings.length
       || target.rowMappings.some((mapping) => !scheduledRows.has(mapping))
@@ -640,7 +673,7 @@ export function prepareTemplateCompilerContextFamilyStructuralSchedule(
   const ordinaryRowBySite = new Map(
     target.rowMappings.flatMap((mapping) =>
       mapping instanceof TemplateCompilerContextFamilyOrdinaryTargetRowMapping
-        && mapping.draft.site.siteKind === 'element'
+        && (mapping.draft.site.siteKind === 'element' || mapping.draft.site.siteKind === 'let')
         ? [[mapping.draft.site, mapping] as const]
         : []
     ),
@@ -723,6 +756,16 @@ export function prepareTemplateCompilerContextFamilyStructuralSchedule(
     );
   };
 
+  const loweredLet = (
+    disposition: TemplateCompilerFamilyReachDisposition,
+    contextMapping: TemplateCompilerContextFamilyTargetContextMapping,
+  ): TemplateCompilerFamilyLetScheduleEntry => {
+    if (disposition.site.siteKind !== 'let') throw new Error('Expected lowered let disposition.');
+    const targetRow = ordinaryRowBySite.get(disposition.site) ?? null;
+    if (targetRow == null) throw new Error('Reached let site has no dedicated marker target row.');
+    return new TemplateCompilerFamilyLetScheduleEntry(disposition, contextMapping, targetRow);
+  };
+
   const contexts = rows.contexts.map((context) => {
     const contextMapping = target.contextByCursor.get(context.context)!;
     const entries: TemplateCompilerFamilyStructuralScheduleEntry[] = [];
@@ -731,8 +774,10 @@ export function prepareTemplateCompilerContextFamilyStructuralSchedule(
     )) {
       if (disposition.site.siteKind === 'element') {
         entries.push(loweredElement(disposition, contextMapping));
-      } else {
+      } else if (disposition.site.siteKind === 'text') {
         entries.push(textEntry(disposition, contextMapping, textExpansionBySite, ordinaryRowsByTextSite));
+      } else {
+        entries.push(loweredLet(disposition, contextMapping));
       }
     }
     for (const disposition of context.reachedDispositions) {
@@ -749,7 +794,11 @@ export function prepareTemplateCompilerContextFamilyStructuralSchedule(
           entries.push(loweredElement(disposition, contextMapping));
         }
       } else if (disposition.loweringContext === context.context) {
-        entries.push(textEntry(disposition, contextMapping, textExpansionBySite, ordinaryRowsByTextSite));
+        if (disposition.site.siteKind === 'text') {
+          entries.push(textEntry(disposition, contextMapping, textExpansionBySite, ordinaryRowsByTextSite));
+        } else {
+          entries.push(loweredLet(disposition, contextMapping));
+        }
       }
     }
     return new TemplateCompilerFamilyContextStructuralSchedule(

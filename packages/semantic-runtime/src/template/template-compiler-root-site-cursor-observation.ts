@@ -59,6 +59,7 @@ import {
   type TemplateCompilerSiteCursorEvent,
   TemplateCompilerSiteCursorFrontier,
   TemplateCompilerSiteCursorIgnoredNodeEvent,
+  TemplateCompilerSiteCursorLetElementEvent,
   TemplateCompilerSiteCursorPhaseEvent,
   TemplateCompilerSiteCursorProcessContentEvent,
   TemplateCompilerSiteCursorSubtreeExclusionEvent,
@@ -135,6 +136,7 @@ export interface TemplateCompilerRootSiteCursorTranscriptObservation
   readonly completionReceiptPresent: boolean;
   readonly completedElementSiteCount: number;
   readonly completedTextSiteCount: number;
+  readonly completedLetSiteCount: number;
   readonly completedTextHoleCount: number;
   readonly completedRowSiteCount: number;
   readonly siteOperationCount: number;
@@ -366,6 +368,7 @@ export function observeTemplateCompilerRootSiteCursor(
     completionReceiptPresent: completionReceipt != null,
     completedElementSiteCount: completionReceipt?.elementSites.length ?? 0,
     completedTextSiteCount: completionReceipt?.textSites.length ?? 0,
+    completedLetSiteCount: completionReceipt?.letSites.length ?? 0,
     completedTextHoleCount: completionReceipt?.textSites.reduce(
       (count, site) => count + site.holeSlotKeys.length,
       0,
@@ -373,7 +376,8 @@ export function observeTemplateCompilerRootSiteCursor(
     completedRowSiteCount: completionReceipt == null
       ? 0
       : completionReceipt.elementSites.filter((site) => site.rowRequired).length
-        + completionReceipt.textSites.reduce((count, site) => count + site.holeSlotKeys.length, 0),
+        + completionReceipt.textSites.reduce((count, site) => count + site.holeSlotKeys.length, 0)
+        + completionReceipt.letSites.length,
     siteOperationCount: cursor.siteEndpoint?.siteOperations.length ?? 0,
     completionCompilerReadCount: completionReceipt?.compilerReads.length ?? 0,
     occurrenceRowAssemblyState: occurrenceRows?.state ?? 'not-applicable',
@@ -951,6 +955,42 @@ function cursorEventDigest(
                   hole.instruction.instructionKind,
                 ]) ?? null,
               ]
+            : event instanceof TemplateCompilerSiteCursorLetElementEvent
+              ? [
+                  event.eventKind,
+                  nodeIndex(event.elementEvent.element),
+                  event.elementEvent.ordinal,
+                  event.staging.toBindingContext,
+                  event.staging.reachedAttributes.map((reached) => [
+                    attributeIndexes.get(reached.occurrence) ?? null,
+                    reached.scalar.qualifiedName,
+                    reached.scalar.currentValue,
+                  ]),
+                  event.staging.bindings.map((binding) => [
+                    binding.decision.decisionKind,
+                    binding.decision.target,
+                    binding.decision.rawValue,
+                    binding.decision.command,
+                    binding.commandRead?.canonicalKey ?? null,
+                    binding.expressionResult?.kind ?? null,
+                    binding.instruction.instructionKind,
+                  ]),
+                  event.staging.instruction.instructionKind,
+                  event.spends.map((spend) => [
+                    spend.occurrence instanceof TemplateCompilerAttributeOccurrence
+                      ? attributeIndexes.get(spend.occurrence) ?? null
+                      : null,
+                    spend.disposition,
+                    spend.siteEventOrdinal,
+                  ]),
+                  event.occurrenceOnlyRows.map((row) => [
+                    row.occurrence instanceof TemplateCompilerAttributeOccurrence
+                      ? attributeIndexes.get(row.occurrence) ?? null
+                      : null,
+                    row.disposition,
+                    row.siteEventOrdinal,
+                  ]),
+                ]
             : event instanceof TemplateCompilerSiteCursorIgnoredNodeEvent
               ? [
                   event.eventKind,

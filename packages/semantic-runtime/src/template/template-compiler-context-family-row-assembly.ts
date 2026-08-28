@@ -2,6 +2,7 @@ import { TemplateRenderTargetKind } from './compiled-template.js';
 import {
   TemplateCompilerCompletedContextTraversal,
   type TemplateCompilerCompletedFamilyElementReach,
+  type TemplateCompilerCompletedFamilyLetReach,
   type TemplateCompilerCompletedFamilyReach,
   type TemplateCompilerCompletedFamilyTextReach,
   TemplateCompilerCompletedProjectionContext,
@@ -22,6 +23,7 @@ export {
 } from './template-compiler-occurrence-membership.js';
 import {
   lowerTemplateCompilerElementSite,
+  lowerTemplateCompilerLetSite,
   lowerTemplateCompilerTextSite,
   TemplateCompilerCaptureSyntaxDecisionKind,
   type TemplateCompilerElementLoweringContinuationAuthority,
@@ -32,6 +34,7 @@ import {
   TemplateCompilerOccurrenceSourcePosture,
   type TemplateCompilerOccurrenceStaticSite,
   type TemplateCompilerOccurrenceTargetRowDraft,
+  type TemplateCompilerLetLoweringSite,
   type TemplateCompilerTextExpansionDraft,
   type TemplateCompilerTextLoweringSite,
 } from './template-compiler-occurrence-row-assembly.js';
@@ -174,9 +177,33 @@ export class TemplateCompilerFamilyTextLoweringSite implements TemplateCompilerT
   }
 }
 
+/** Family-compatible let site with one dedicated marker row and nested let bindings. */
+export class TemplateCompilerFamilyLetLoweringSite implements TemplateCompilerLetLoweringSite {
+  readonly siteKind = 'let' as const;
+  readonly rowSlotKey: string;
+  readonly event;
+
+  constructor(
+    readonly reach: TemplateCompilerCompletedFamilyLetReach,
+    readonly reachedContext: TemplateCompilerSiteCursorContextReference,
+    readonly loweringContext: TemplateCompilerSiteCursorContextReference,
+    readonly rehoming: TemplateCompilerCompletedTemplateControllerLeafRehoming | null,
+  ) {
+    this.event = reach.event;
+    this.rowSlotKey = `let:${reach.event.elementEvent.element.occurrenceKey}:direct-row`;
+    if (
+      reachedContext !== loweringContext
+      || (rehoming != null && rehoming.receipt.terminalLeaf !== loweringContext)
+    ) {
+      throw new Error('Family let lowering site lost its direct final-context or TC leaf authority.');
+    }
+  }
+}
+
 export type TemplateCompilerFamilyLoweringSite =
   | TemplateCompilerFamilyElementLoweringSite
-  | TemplateCompilerFamilyTextLoweringSite;
+  | TemplateCompilerFamilyTextLoweringSite
+  | TemplateCompilerFamilyLetLoweringSite;
 
 export type TemplateCompilerFamilyOccurrenceSemanticOwner =
   | TemplateCompilerCompletedContextTraversal
@@ -479,7 +506,11 @@ export class TemplateCompilerContextFamilyRowAssembly {
   ) {
     this.contextByReference = new Map(contexts.map((context) => [context.context, context] as const));
     const occurrences = reachDispositions.map((disposition) =>
-      disposition.site.siteKind === 'element' ? disposition.site.event.element : disposition.site.event.text
+      disposition.site.siteKind === 'element'
+        ? disposition.site.event.element
+        : disposition.site.siteKind === 'text'
+          ? disposition.site.event.text
+          : disposition.site.event.elementEvent.element
     );
     if (
       authority !== familyRowAssemblyAuthority
@@ -594,12 +625,19 @@ export function assembleTemplateCompilerContextFamilyRows(
             loweringContext,
             leafRehoming,
           )
-        : new TemplateCompilerFamilyTextLoweringSite(
-            reach,
-            reachedContext.context,
-            loweringContext,
-            leafRehoming,
-          );
+        : reach.reachKind === 'text'
+          ? new TemplateCompilerFamilyTextLoweringSite(
+              reach,
+              reachedContext.context,
+              loweringContext,
+              leafRehoming,
+            )
+          : new TemplateCompilerFamilyLetLoweringSite(
+              reach,
+              reachedContext.context,
+              loweringContext,
+              leafRehoming,
+            );
       const semanticOwner = semanticOwnerFor(loweringTraversal, leafRehoming);
       if (semanticOwner == null) return ineligible('Generated lowering context has no exact semantic owner evidence.');
       const arrivalPosture = arrivalPostureFor(loweringTraversal, leafRehoming);
@@ -694,7 +732,7 @@ export function assembleTemplateCompilerContextFamilyRows(
             disposition.site,
           ),
         );
-      } else {
+      } else if (disposition.site.siteKind === 'text') {
         const reason = lowerTemplateCompilerTextSite(
           disposition.site,
           ordinaryRows,
@@ -703,6 +741,8 @@ export function assembleTemplateCompilerContextFamilyRows(
           rows.length,
         );
         loweringReasons = reason == null ? [] : [reason];
+      } else {
+        lowerTemplateCompilerLetSite(disposition.site, ordinaryRows, rows.length);
       }
       if (loweringReasons.length > 0) {
         return new TemplateCompilerContextFamilyRowAssemblyResult(

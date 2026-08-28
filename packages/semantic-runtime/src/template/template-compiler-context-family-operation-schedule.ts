@@ -15,6 +15,7 @@ import {
   type TemplateCompilerFamilyContextInitialization,
   TemplateCompilerFamilyLoweredElementExecutionBand,
   TemplateCompilerFamilyLoweredElementScheduleEntry,
+  TemplateCompilerFamilyLetScheduleEntry,
   type TemplateCompilerFamilyProjectionScheduleEntry,
   TemplateCompilerFamilyReachedElementExecutionBand,
   TemplateCompilerFamilyReachedElementScheduleEntry,
@@ -325,6 +326,10 @@ export class TemplateCompilerContextFamilyOperationSchedule {
       (entry): entry is TemplateCompilerFamilyTextScheduleEntry =>
         entry instanceof TemplateCompilerFamilyTextScheduleEntry,
     );
+    const lets = scheduledEntries.filter(
+      (entry): entry is TemplateCompilerFamilyLetScheduleEntry =>
+        entry instanceof TemplateCompilerFamilyLetScheduleEntry,
+    );
     const expectedGenerated = structural.contexts
       .map((context) => context.initialization)
       .filter((initialization) =>
@@ -338,7 +343,10 @@ export class TemplateCompilerContextFamilyOperationSchedule {
     );
     const expectedTcRows = expectedTransitions.flatMap((transition) => transition.rowMappings);
     const expectedProjections = lowered.flatMap((entry) => entry.projection == null ? [] : [entry.projection]);
-    const expectedOrdinaryRows = lowered.flatMap((entry) => entry.targetRow == null ? [] : [entry.targetRow]);
+    const expectedOrdinaryRows = [
+      ...lowered.flatMap((entry) => entry.targetRow == null ? [] : [entry.targetRow]),
+      ...lets.map((entry) => entry.targetRow),
+    ];
     const expectedTexts = texts.filter((entry) => entry.expansion != null);
     const generatedEntries = entries.filter(
       (entry): entry is TemplateCompilerFamilyGeneratedContextOperationScheduleEntry =>
@@ -470,6 +478,13 @@ export function buildTemplateCompilerContextFamilyOperationSchedule(
             executionContext(lowered.targetRow.contextMapping),
           ));
         }
+        continue;
+      }
+      if (entry instanceof TemplateCompilerFamilyLetScheduleEntry) {
+        entries.push(new TemplateCompilerFamilyOrdinaryTargetOperationScheduleEntry(
+          entry.targetRow,
+          executionContext(entry.contextMapping),
+        ));
         continue;
       }
       if (entry.expansion != null) {

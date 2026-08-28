@@ -50,6 +50,7 @@ import type {
 } from './template-compiler-process-content.js';
 import type { TemplateCompilerLiveAttributeContribution } from './template-compiler-live-attribute-assembly.js';
 import type { TemplateCompilerTextInstructionStaging } from './template-compiler-text-instruction-staging.js';
+import type { TemplateCompilerLetElementStaging } from './template-compiler-let-element-staging.js';
 import {
   isTemplateCompilerProcessContentSettledForHost,
   TemplateCompilerHydrateElementProjectionState,
@@ -59,6 +60,7 @@ import {
 export const enum TemplateCompilerSiteCursorEventKind {
   Phase = 'phase',
   Element = 'element',
+  LetElement = 'let-element',
   ProcessContent = 'process-content',
   Attribute = 'attribute',
   TemplateControllerTransition = 'template-controller-transition',
@@ -97,7 +99,10 @@ export const enum TemplateCompilerSiteCursorFrontierKind {
   HydrateElementEnvelopeInvalid = 'hydrate-element-envelope-invalid',
   ReachedNormalizedOpen = 'reached-normalized-open',
   ReachedNormalizedInvalid = 'reached-normalized-invalid',
-  LetElementLoweringRequired = 'let-element-lowering-required',
+  LetElementOpen = 'let-element-open',
+  InvalidLetCommand = 'invalid-let-command',
+  UnknownLetBindingCommand = 'unknown-let-binding-command',
+  InvalidLetExpression = 'invalid-let-expression',
   AfterAttributesBeforeTemplateController = 'after-attributes-before-template-controller',
   AfterAttributesBeforeProjection = 'after-attributes-before-projection',
   AfterAttributesBeforeContainerless = 'after-attributes-before-containerless',
@@ -168,6 +173,40 @@ export class TemplateCompilerSiteCursorElementEvent extends TemplateCompilerSite
     readonly elementDefinition: CustomElementDefinition | null,
   ) {
     super(authority, ordinal, TemplateCompilerSiteCursorEventKind.Element);
+  }
+}
+
+/** Exact dedicated `<let>` lowering after its element reach and child suppression. */
+export class TemplateCompilerSiteCursorLetElementEvent extends TemplateCompilerSiteCursorEvent {
+  constructor(
+    authority: object,
+    ordinal: number,
+    readonly elementEvent: TemplateCompilerSiteCursorElementEvent,
+    readonly staging: TemplateCompilerLetElementStaging,
+    readonly spends: readonly TemplateCompilerSiteSpend[],
+    readonly occurrenceOnlyRows: readonly TemplateCompilerOccurrenceOnlyRow[],
+  ) {
+    super(authority, ordinal, TemplateCompilerSiteCursorEventKind.LetElement);
+    if (!this.isCoherent()) throw new Error('Compiler let event lost element, staging, or spend ownership.');
+  }
+
+  isCoherent(): boolean {
+    return this.staging.isModuleConstructed()
+      && this.staging.element === this.elementEvent.element
+      && this.spends.length + this.occurrenceOnlyRows.length === this.staging.reachedAttributes.length
+      && this.staging.reachedAttributes.every((reached) => reached.bundle == null
+        ? this.occurrenceOnlyRows.some((row) => row.occurrence === reached.occurrence)
+        : this.spends.some((spend) =>
+            spend.occurrence === reached.occurrence && spend.bundle === reached.bundle
+          ))
+      && this.spends.every((spend) => this.staging.reachedAttributes.some((reached) =>
+        reached.bundle != null
+        && spend.occurrence === reached.occurrence
+        && spend.bundle === reached.bundle
+      ))
+      && this.occurrenceOnlyRows.every((row) => this.staging.reachedAttributes.some((reached) =>
+        reached.bundle == null && row.occurrence === reached.occurrence
+      ));
   }
 }
 

@@ -21,6 +21,7 @@ import {
 } from './template-compiler-hydrate-element-staging.js';
 import type {
   TemplateCompilerCompletedElementSite,
+  TemplateCompilerCompletedLetElementSite,
   TemplateCompilerCompletedTextSite,
   TemplateCompilerOrdinaryRootCursorCompletionReceipt,
 } from './template-compiler-root-completion.js';
@@ -71,7 +72,17 @@ export type TemplateCompilerTextLoweringSite = Pick<
   'siteKind' | 'holeSlotKeys' | 'event'
 >;
 
+export type TemplateCompilerLetLoweringSite = Pick<
+  TemplateCompilerCompletedLetElementSite,
+  'siteKind' | 'rowSlotKey' | 'event'
+>;
+
 export type TemplateCompilerLoweringSite =
+  | TemplateCompilerElementLoweringSite
+  | TemplateCompilerTextLoweringSite
+  | TemplateCompilerLetLoweringSite;
+
+export type TemplateCompilerStaticLoweringSite =
   | TemplateCompilerElementLoweringSite
   | TemplateCompilerTextLoweringSite;
 
@@ -262,7 +273,7 @@ export class TemplateCompilerOccurrenceTargetRowDraft {
 /** Reached ordinary site that contributes final static structure but no target row. */
 export class TemplateCompilerOccurrenceStaticSite {
   constructor(
-    readonly site: TemplateCompilerLoweringSite,
+    readonly site: TemplateCompilerStaticLoweringSite,
     readonly sourcePosture: TemplateCompilerOccurrenceSourcePosture,
   ) {}
 }
@@ -302,18 +313,30 @@ export class TemplateCompilerOccurrenceMembership {
   constructor(readonly site: TemplateCompilerLoweringSite) {
     this.stableSlotKey = site.siteKind === 'element'
       ? `element:${site.event.element.occurrenceKey}:membership`
-      : `text:${site.event.text.occurrenceKey}:membership`;
+      : site.siteKind === 'text'
+        ? `text:${site.event.text.occurrenceKey}:membership`
+        : `let:${site.event.elementEvent.element.occurrenceKey}:membership`;
     this.sourcePosture = site.siteKind === 'element'
       ? sourcePostureForElement(site)
-      : sourcePostureForText(site);
+      : site.siteKind === 'text'
+        ? sourcePostureForText(site)
+        : sourcePostureForLet(site);
   }
 
   get occurrence(): TemplateCompilerElementOccurrence | TemplateCompilerTextOccurrence {
-    return this.site.siteKind === 'element' ? this.site.event.element : this.site.event.text;
+    return this.site.siteKind === 'element'
+      ? this.site.event.element
+      : this.site.siteKind === 'text'
+        ? this.site.event.text
+        : this.site.event.elementEvent.element;
   }
 
   get authoredNode(): HtmlElement | HtmlText | null {
-    return this.site.siteKind === 'element' ? this.site.event.authoredElement : this.site.event.authoredText;
+    return this.site.siteKind === 'element'
+      ? this.site.event.authoredElement
+      : this.site.siteKind === 'text'
+        ? this.site.event.authoredText
+        : this.site.event.elementEvent.authoredElement;
   }
 }
 
@@ -398,7 +421,7 @@ export class TemplateCompilerOccurrenceRowAssembly {
     readonly textExpansions: readonly TemplateCompilerTextExpansionDraft[],
   ) {
     const rowSites = new Set(rows.map((row) => row.site));
-    const staticSiteSet = new Set(staticSites.map((site) => site.site));
+    const staticSiteSet = new Set<TemplateCompilerLoweringSite>(staticSites.map((site) => site.site));
     const rootAuthoredProduct = receipt.transcript.binding.forest
       .exactAuthoredNodeOrigin(rootMembership.compilerCarrier)?.authored.productHandle ?? null;
     const expectedContributions = receipt.elementSites.flatMap((site) => site.owner.contributions);
@@ -592,9 +615,11 @@ export function assembleTemplateCompilerOrdinaryRootRows(
     if (site.siteKind === 'element') {
       const refusals = lowerTemplateCompilerElementSite(site, rows, staticSites);
       if (refusals.length > 0) return new TemplateCompilerOccurrenceRowAssemblyResult(null, refusals);
-    } else {
+    } else if (site.siteKind === 'text') {
       const refusal = lowerTemplateCompilerTextSite(site, rows, staticSites, textExpansions);
       if (refusal != null) return new TemplateCompilerOccurrenceRowAssemblyResult(null, [refusal]);
+    } else {
+      lowerTemplateCompilerLetSite(site, rows);
     }
   }
   return new TemplateCompilerOccurrenceRowAssemblyResult(
@@ -612,6 +637,33 @@ export function assembleTemplateCompilerOrdinaryRootRows(
     ),
     [],
   );
+}
+
+export function lowerTemplateCompilerLetSite(
+  site: TemplateCompilerLetLoweringSite,
+  rows: TemplateCompilerOccurrenceTargetRowDraft[],
+  firstRowOrdinal = rows.length,
+): void {
+  const event = site.event;
+  const elementEvent = event.elementEvent;
+  const ordinal = firstRowOrdinal;
+  rows.push(new TemplateCompilerOccurrenceTargetRowDraft(
+    site.rowSlotKey,
+    ordinal,
+    ordinal,
+    TemplateRenderTargetKind.MarkerTarget,
+    TemplateCompilerTargetRowPlacementKind.Marker,
+    elementEvent.element,
+    elementEvent.authoredElement,
+    sourcePostureForLet(site),
+    elementEvent.authoredElement?.sourceAddressHandle
+      ?? elementEvent.element.inputReference?.addressHandle
+      ?? null,
+    site,
+    null,
+    null,
+    [event.staging.instruction],
+  ));
 }
 
 export function lowerTemplateCompilerElementSite(
@@ -767,6 +819,16 @@ function sourcePostureForText(
   if (site.event.authoredText != null) return TemplateCompilerOccurrenceSourcePosture.AuthoredExact;
   if (site.event.text.generation != null) return TemplateCompilerOccurrenceSourcePosture.Generated;
   if (site.event.text.inputReference != null) return TemplateCompilerOccurrenceSourcePosture.BrowserEffective;
+  return TemplateCompilerOccurrenceSourcePosture.Open;
+}
+
+function sourcePostureForLet(
+  site: TemplateCompilerLetLoweringSite,
+): TemplateCompilerOccurrenceSourcePosture {
+  const event = site.event.elementEvent;
+  if (event.authoredElement != null) return TemplateCompilerOccurrenceSourcePosture.AuthoredExact;
+  if (event.element.generation != null) return TemplateCompilerOccurrenceSourcePosture.Generated;
+  if (event.element.inputReference != null) return TemplateCompilerOccurrenceSourcePosture.BrowserEffective;
   return TemplateCompilerOccurrenceSourcePosture.Open;
 }
 

@@ -1,5 +1,7 @@
 import {
+  TemplateCompilerAttributeOwnerProgressionDisposition,
   TemplateCompilerAttributeOwnerProgressionLaneKind,
+  TemplateCompilerAttributeOwnerProgressionOpenReasonKind,
   TemplateCompilerAttributeOwnerProgressionState,
 } from './attribute-owner-progression.js';
 import {
@@ -109,27 +111,46 @@ export class TemplateCompilerSiteCursorSemanticResolver extends TemplateCompiler
     relation: TemplateCompilerCursorElementOwnerRelation,
   ): boolean {
     const progression = bundle.ownerProgressionSite;
-    return relation.exact
-      && relation.authoredElement === authoredElement
-      && authoredElement != null
-      && bundle.owner.element === authoredElement
-      && progression.owner?.element === bundle.owner.element
-      && progression.attribute === bundle.attribute
-      && progression.syntax === bundle.syntax
-      && progression.classification === bundle.classification
+    return this.attributeOriginIsCompatible(
+      element,
+      authoredElement,
+      bundle,
+      attribute,
+      scalar,
+      liveSite.originalForestOrdinal,
+      relation,
+    )
       && progression.laneKind === TemplateCompilerAttributeOwnerProgressionLaneKind.OrdinaryElement
       && progression.state === TemplateCompilerAttributeOwnerProgressionState.Exact
       && progression.ownerView != null
       && progression.disposition != null
-      && scalar.isExact()
-      && scalar.attribute === attribute
-      && scalar.owner === element
-      && scalar.liveOrdinal === liveSite.originalForestOrdinal
-      && scalar.qualifiedName === bundle.syntax.runtimeRawName
-      && scalar.inputReference?.name === scalar.qualifiedName
-      && scalar.currentValue === bundle.attribute.rawValue
-      && scalar.namespaceUri == null
-      && scalar.prefix == null;
+      && scalar.liveOrdinal === liveSite.originalForestOrdinal;
+  }
+
+  letAttributeIsCompatible(
+    element: TemplateCompilerElementOccurrence,
+    authoredElement: HtmlElement,
+    bundle: TemplateCompilerNormalizedSite,
+    attribute: TemplateCompilerAttributeOccurrence,
+    scalar: TemplateCompilerReachedAttributeScalarReceipt,
+    originalForestOrdinal: number,
+    relation: TemplateCompilerCursorElementOwnerRelation,
+  ): boolean {
+    const progression = bundle.ownerProgressionSite;
+    return this.attributeOriginIsCompatible(
+      element,
+      authoredElement,
+      bundle,
+      attribute,
+      scalar,
+      originalForestOrdinal,
+      relation,
+    )
+      && progression.laneKind === TemplateCompilerAttributeOwnerProgressionLaneKind.LetElementOpen
+      && progression.state === TemplateCompilerAttributeOwnerProgressionState.Open
+      && progression.ownerView == null
+      && progression.disposition === TemplateCompilerAttributeOwnerProgressionDisposition.Open
+      && progression.openReason?.reasonKind === TemplateCompilerAttributeOwnerProgressionOpenReasonKind.DedicatedLetOwner;
   }
 
   /** Native parents only reach this path to preserve the known `[au-slot]`-on-non-CE diagnostic frontier. */
@@ -138,6 +159,36 @@ export class TemplateCompilerSiteCursorSemanticResolver extends TemplateCompiler
       child instanceof TemplateCompilerElementOccurrence
       && child.readAttributes().some((attribute) => qualifiedAttributeName(attribute) === 'au-slot')
     );
+  }
+
+  private attributeOriginIsCompatible(
+    element: TemplateCompilerElementOccurrence,
+    authoredElement: HtmlElement | null,
+    bundle: TemplateCompilerNormalizedSite,
+    attribute: TemplateCompilerAttributeOccurrence,
+    scalar: TemplateCompilerReachedAttributeScalarReceipt,
+    originalForestOrdinal: number,
+    relation: TemplateCompilerCursorElementOwnerRelation,
+  ): boolean {
+    const progression = bundle.ownerProgressionSite;
+    return relation.exact
+      && relation.authoredElement === authoredElement
+      && authoredElement != null
+      && bundle.owner.element === authoredElement
+      && progression.owner?.element === bundle.owner.element
+      && progression.attribute === bundle.attribute
+      && progression.syntax === bundle.syntax
+      && progression.classification === bundle.classification
+      && progression.ownerOrdinal === originalForestOrdinal
+      && scalar.isExact()
+      && scalar.attribute === attribute
+      && scalar.owner === element
+      && scalar.liveOrdinal === originalForestOrdinal
+      && scalar.qualifiedName === bundle.syntax.runtimeRawName
+      && scalar.inputReference?.name === scalar.qualifiedName
+      && scalar.currentValue === bundle.attribute.rawValue
+      && scalar.namespaceUri == null
+      && scalar.prefix == null;
   }
 
 }

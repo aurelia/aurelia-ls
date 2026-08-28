@@ -289,12 +289,12 @@ function frontierOutcome(
     case TemplateCompilerSiteCursorFrontierKind.HydrateElementEnvelopeOpen:
     case TemplateCompilerSiteCursorFrontierKind.ReachedNormalizedOpen:
     case TemplateCompilerSiteCursorFrontierKind.SurrogateValidationOpen:
+    case TemplateCompilerSiteCursorFrontierKind.LetElementOpen:
       return TemplateCompilerContextFamilyCompilationState.Open;
     case TemplateCompilerSiteCursorFrontierKind.GeneratedSiteNeedsLowering:
     case TemplateCompilerSiteCursorFrontierKind.NonSingularBrowserOrigin:
     case TemplateCompilerSiteCursorFrontierKind.AuthoredPrecedentMismatch:
     case TemplateCompilerSiteCursorFrontierKind.AtLiveAttributeRelowering:
-    case TemplateCompilerSiteCursorFrontierKind.LetElementLoweringRequired:
     case TemplateCompilerSiteCursorFrontierKind.AfterAttributesBeforeTemplateController:
     case TemplateCompilerSiteCursorFrontierKind.AfterAttributesBeforeProjection:
     case TemplateCompilerSiteCursorFrontierKind.AfterAttributesBeforeContainerless:
@@ -308,6 +308,9 @@ function frontierOutcome(
     case TemplateCompilerSiteCursorFrontierKind.ReachedNormalizedInvalid:
     case TemplateCompilerSiteCursorFrontierKind.AuthoredCompilerMarkerReserved:
     case TemplateCompilerSiteCursorFrontierKind.InvalidSurrogateAttribute:
+    case TemplateCompilerSiteCursorFrontierKind.InvalidLetCommand:
+    case TemplateCompilerSiteCursorFrontierKind.UnknownLetBindingCommand:
+    case TemplateCompilerSiteCursorFrontierKind.InvalidLetExpression:
     case TemplateCompilerSiteCursorFrontierKind.AccountingMismatch:
       return TemplateCompilerContextFamilyCompilationState.Ineligible;
   }

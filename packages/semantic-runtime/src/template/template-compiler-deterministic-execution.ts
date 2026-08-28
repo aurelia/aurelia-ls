@@ -33,7 +33,7 @@ import {
   type HydrateElementProjectionContributor,
   type HydrateElementProjectionDefinition,
 } from './instruction-ir.js';
-import { runtimeAttributeName, runtimeElementResourceName } from './runtime-dom-name.js';
+import { isRuntimeLetElement, runtimeAttributeName } from './runtime-dom-name.js';
 import { isTemplateSpecialAttributeName } from './special-attribute-source.js';
 import {
   TemplateCompilerElementOccurrence,
@@ -1087,7 +1087,7 @@ function singleTemplateControllerInstruction(
 }
 
 function isLetOwner(owner: HtmlElementAttributeOwner): boolean {
-  return runtimeElementResourceName(owner.tagName, owner.namespace) === 'let';
+  return isRuntimeLetElement(owner.tagName, owner.namespace);
 }
 
 function reason(

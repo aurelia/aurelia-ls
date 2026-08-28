@@ -7,7 +7,7 @@ export const enum TemplateCompilerLetAttributeKind {
   InvalidCommand = 'invalid-command',
 }
 
-/** Representation-neutral decision for one reached `<let>` attribute in JIT order. */
+/** Representation-neutral post-resolution grammar decision for one reached `<let>` attribute in JIT order. */
 export class TemplateCompilerLetAttributeDecision {
   constructor(
     readonly decisionKind: TemplateCompilerLetAttributeKind,
@@ -18,8 +18,14 @@ export class TemplateCompilerLetAttributeDecision {
   ) {
     const emitsBinding = decisionKind === TemplateCompilerLetAttributeKind.PropertyBinding
       || decisionKind === TemplateCompilerLetAttributeKind.InterpolationOrLiteral;
-    if (emitsBinding !== (target != null)) {
-      throw new Error('Let attribute decision lost binding target ownership.');
+    if (
+      emitsBinding !== (target != null)
+      || (decisionKind === TemplateCompilerLetAttributeKind.PropertyBinding && command !== 'bind')
+      || (decisionKind === TemplateCompilerLetAttributeKind.InterpolationOrLiteral && command != null)
+      || (decisionKind === TemplateCompilerLetAttributeKind.InvalidCommand && (command == null || command === 'bind'))
+      || (decisionKind === TemplateCompilerLetAttributeKind.ToBindingContext && command != null)
+    ) {
+      throw new Error('Let attribute decision lost binding target or post-resolution command ownership.');
     }
   }
 }

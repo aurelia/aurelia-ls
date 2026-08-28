@@ -13,6 +13,7 @@ import {
 import {
   type TemplateCompilerSiteCursorContainerlessPlacementEvent,
   TemplateCompilerSiteCursorIgnoredNodeEvent,
+  TemplateCompilerSiteCursorLetElementEvent,
   TemplateCompilerSiteCursorSubtreeExclusionEvent,
   TemplateCompilerSiteCursorSurrogateValidationEvent,
   TemplateCompilerSiteCursorTextEvent,
@@ -104,9 +105,24 @@ export class TemplateCompilerCompletedTextSite {
   }
 }
 
+/** Completion-owned dedicated let row input. */
+export class TemplateCompilerCompletedLetElementSite {
+  readonly siteKind = 'let' as const;
+  readonly rowSlotKey: string;
+
+  constructor(readonly event: TemplateCompilerSiteCursorLetElementEvent) {
+    this.rowSlotKey = `let:${event.elementEvent.element.occurrenceKey}:direct-row`;
+  }
+
+  get rowRequired(): true {
+    return true;
+  }
+}
+
 export type TemplateCompilerCompletedOrdinarySite =
   | TemplateCompilerCompletedElementSite
-  | TemplateCompilerCompletedTextSite;
+  | TemplateCompilerCompletedTextSite
+  | TemplateCompilerCompletedLetElementSite;
 
 /** Nominal successful end of one no-local ordinary root cursor walk. */
 export class TemplateCompilerOrdinaryRootCursorCompletionReceipt {
@@ -120,6 +136,7 @@ export class TemplateCompilerOrdinaryRootCursorCompletionReceipt {
     readonly orderedSites: readonly TemplateCompilerCompletedOrdinarySite[],
     readonly elementSites: readonly TemplateCompilerCompletedElementSite[],
     readonly textSites: readonly TemplateCompilerCompletedTextSite[],
+    readonly letSites: readonly TemplateCompilerCompletedLetElementSite[],
     readonly ignoredNodes: readonly TemplateCompilerSiteCursorIgnoredNodeEvent[],
     readonly exclusions: readonly TemplateCompilerSiteCursorSubtreeExclusionEvent[],
     readonly surrogateValidations: readonly TemplateCompilerSiteCursorSurrogateValidationEvent[],
@@ -130,7 +147,7 @@ export class TemplateCompilerOrdinaryRootCursorCompletionReceipt {
       || endpoint.execution !== transcript.binding.execution
       || endpoint.lane !== transcript.binding.lane
       || endpoint.bootstrapClosure !== transcript.binding.bootstrapClosure
-      || orderedSites.length !== elementSites.length + textSites.length
+      || orderedSites.length !== elementSites.length + textSites.length + letSites.length
       || orderedSites.some((site, index) =>
         index > 0 && orderedSites[index - 1]!.event.ordinal >= site.event.ordinal
       )
@@ -267,12 +284,18 @@ export function completeTemplateCompilerOrdinaryRoot(
     audit.placementsByElement.get(event.element) ?? null,
   ));
   const textSites = audit.textEvents.map((event) => new TemplateCompilerCompletedTextSite(event));
+  const letSites = audit.letEvents.map((event) => new TemplateCompilerCompletedLetElementSite(event));
   const elementsByEvent = new Map(elementSites.map((site) => [site.event, site]));
   const textsByEvent = new Map(textSites.map((site) => [site.event, site]));
+  const letsByEvent = new Map(letSites.map((site) => [site.event, site]));
   const orderedSites: TemplateCompilerCompletedOrdinarySite[] = [];
   for (const event of transcript.events) {
-    if (event instanceof TemplateCompilerSiteCursorElementEvent) orderedSites.push(elementsByEvent.get(event)!);
+    if (event instanceof TemplateCompilerSiteCursorElementEvent) {
+      const site = elementsByEvent.get(event);
+      if (site != null) orderedSites.push(site);
+    }
     if (event instanceof TemplateCompilerSiteCursorTextEvent) orderedSites.push(textsByEvent.get(event)!);
+    if (event instanceof TemplateCompilerSiteCursorLetElementEvent) orderedSites.push(letsByEvent.get(event)!);
   }
   return new TemplateCompilerOrdinaryRootCompletionResult(
     new TemplateCompilerOrdinaryRootCursorCompletionReceipt(
@@ -283,6 +306,7 @@ export function completeTemplateCompilerOrdinaryRoot(
       orderedSites,
       elementSites,
       textSites,
+      letSites,
       transcript.events.filter((event): event is TemplateCompilerSiteCursorIgnoredNodeEvent =>
         event instanceof TemplateCompilerSiteCursorIgnoredNodeEvent
       ),

@@ -9,6 +9,7 @@ import {
   TemplateCompilerSiteCursorAttributeEvent,
   TemplateCompilerSiteCursorContainerlessPlacementEvent,
   TemplateCompilerSiteCursorElementEvent,
+  TemplateCompilerSiteCursorLetElementEvent,
   TemplateCompilerSiteCursorPhaseEvent,
   TemplateCompilerSiteCursorPhaseKind,
   TemplateCompilerSiteCursorProcessContentEvent,
@@ -71,6 +72,7 @@ export class TemplateCompilerTraversalCompletionAudit {
     readonly elementEvents: readonly TemplateCompilerSiteCursorElementEvent[],
     readonly attributeEvents: readonly TemplateCompilerSiteCursorAttributeEvent[],
     readonly textEvents: readonly TemplateCompilerSiteCursorTextEvent[],
+    readonly letEvents: readonly TemplateCompilerSiteCursorLetElementEvent[],
     readonly processContentEvents: readonly TemplateCompilerSiteCursorProcessContentEvent[],
     readonly containerlessPlacements: readonly TemplateCompilerSiteCursorContainerlessPlacementEvent[],
     readonly reasons: readonly TemplateCompilerTraversalCompletionAuditReason[],
@@ -250,11 +252,15 @@ export function auditTemplateCompilerTraversalCompletion(
     );
   }
 
+  const letEvents = transcript.events.filter((event): event is TemplateCompilerSiteCursorLetElementEvent =>
+    event instanceof TemplateCompilerSiteCursorLetElementEvent
+  );
+  const letElementEvents = new Set(letEvents.map((event) => event.elementEvent));
   const attributeEvents = transcript.events.filter((event): event is TemplateCompilerSiteCursorAttributeEvent =>
     event instanceof TemplateCompilerSiteCursorAttributeEvent
   );
   const elementEvents = transcript.events.filter((event): event is TemplateCompilerSiteCursorElementEvent =>
-    event instanceof TemplateCompilerSiteCursorElementEvent
+    event instanceof TemplateCompilerSiteCursorElementEvent && !letElementEvents.has(event)
   );
   const textEvents = transcript.events.filter((event): event is TemplateCompilerSiteCursorTextEvent =>
     event instanceof TemplateCompilerSiteCursorTextEvent
@@ -297,6 +303,7 @@ export function auditTemplateCompilerTraversalCompletion(
     elementEvents,
     attributeEvents,
     textEvents,
+    letEvents,
     processContentEvents,
     containerlessPlacements,
     reasons,

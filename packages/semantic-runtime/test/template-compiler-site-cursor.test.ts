@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { afterAll, beforeAll, describe, expect, test, vi } from 'vitest';
 
 import { createSemanticRuntime } from '../src/api/runtime.js';
+import { ExpressionParseResultKind } from '../src/expression/parse-result-algebra.js';
 import type { ProductHandle } from '../src/kernel/handles.js';
 import type { ProductDetailSlot } from '../src/kernel/product-details.js';
 import { KernelReadProjectionRevision } from '../src/kernel/store.js';
@@ -24,9 +25,11 @@ import {
   TemplateInstructionKind,
 } from '../src/template/instruction-ir.js';
 import {
+  TemplateCompilerReadKind,
   TemplateCompilerReadView,
   TemplateCompilerWorldAuthority,
 } from '../src/template/compiler-read-view.js';
+import { HtmlNamespaceKind } from '../src/template/html-ir.js';
 import {
   TemplateCompilerAttributeDetachmentMutation,
   TemplateCompilerExecutionSession,
@@ -156,6 +159,7 @@ import {
   TemplateCompilerSiteCursorContextTaskState,
   TemplateCompilerSiteCursorElementEvent,
   TemplateCompilerSiteCursorFrontierKind,
+  TemplateCompilerSiteCursorLetElementEvent,
   TemplateCompilerSiteCursorPhaseEvent,
   TemplateCompilerSiteCursorPhaseKind,
   TemplateCompilerSiteCursorProcessContentEvent,
@@ -308,10 +312,10 @@ describe('template compiler root site cursor', () => {
     )).toBe(true);
   });
 
-  test('visits implied table structure, excludes inert content, and stops at let after suppressing its children', () => {
-    const transcript = fixture.transcript('cursor-shapes');
-    expect(transcript.frontier?.frontierKind)
-      .toBe(TemplateCompilerSiteCursorFrontierKind.LetElementLoweringRequired);
+  test('visits implied table structure, excludes inert content, and lowers let after suppressing its children', () => {
+    const result = fixture.run('cursor-shapes').execute();
+    const transcript = requireTranscript(result);
+    expect(transcript.frontier).toBeNull();
     const implied = eventsOf(transcript, TemplateCompilerSiteCursorElementEvent).find((event) =>
       event.element.tagName === 'tbody'
     );
@@ -324,6 +328,106 @@ describe('template compiler root site cursor', () => {
     expect(exclusions[0]?.spends.length).toBeGreaterThanOrEqual(2);
     expect(exclusions[1]?.spends).toHaveLength(1);
     expect(elementTags(transcript)).not.toContain('span');
+    const letEvent = eventsOf(transcript, TemplateCompilerSiteCursorLetElementEvent)[0];
+    expect(letEvent?.spends.map((spend) => spend.disposition)).toEqual([
+      TemplateCompilerSiteSpendDisposition.BrowserCompatible,
+    ]);
+    expect(letEvent?.occurrenceOnlyRows).toEqual([]);
+    expect(letEvent?.staging).toMatchObject({
+      toBindingContext: false,
+      bindings: [expect.objectContaining({
+        decision: expect.objectContaining({ target: 'value', command: 'bind' }),
+        expressionResult: expect.objectContaining({ kind: 'expression-success' }),
+        instruction: expect.objectContaining({ instructionKind: TemplateInstructionKind.LetBinding }),
+      })],
+      instruction: expect.objectContaining({ instructionKind: TemplateInstructionKind.HydrateLetElement }),
+    });
+    const receipt = result.completion?.receipt;
+    expect(receipt?.letSites).toHaveLength(1);
+    const rows = receipt == null ? null : assembleTemplateCompilerOrdinaryRootRows(receipt).assembly;
+    expect(rows?.rows.filter((row) => row.site.siteKind === 'let')).toEqual([
+      expect.objectContaining({ instructionKinds: [TemplateInstructionKind.HydrateLetElement] }),
+    ]);
+  });
+
+  test('preserves let flag order, literal fallback, target normalization, and foreign-namespace dispatch', () => {
+    const result = fixture.run('cursor-let-controls').execute();
+    const transcript = requireTranscript(result);
+    expect(transcript.frontier).toBeNull();
+    const letEvents = eventsOf(transcript, TemplateCompilerSiteCursorLetElementEvent);
+    expect(letEvents).toHaveLength(2);
+    expect(letEvents.map((event) => event.staging.toBindingContext)).toEqual([true, true]);
+    expect(letEvents[0]?.staging.bindings.map((binding) => [
+      binding.decision.target,
+      binding.expressionResult.kind,
+      binding.instruction.literalValue,
+    ])).toEqual([
+      ['myValue', ExpressionParseResultKind.InterpolationAbsent, 'literal'],
+      ['my_otherName', ExpressionParseResultKind.InterpolationSuccess, null],
+      ['empty', ExpressionParseResultKind.InterpolationAbsent, ''],
+    ]);
+    expect(letEvents[1]?.staging.bindings).toEqual([
+      expect.objectContaining({
+        decision: expect.objectContaining({ target: 'later', command: 'bind' }),
+        commandRead: expect.objectContaining({
+          readKind: TemplateCompilerReadKind.BindingCommand,
+          canonicalKey: 'bind',
+        }),
+      }),
+    ]);
+    const foreignLet = eventsOf(transcript, TemplateCompilerSiteCursorElementEvent).find((event) =>
+      event.element.tagName === 'let' && event.element.namespace === HtmlNamespaceKind.Svg
+    );
+    expect(foreignLet).not.toBeNull();
+    expect(letEvents.every((event) => event.elementEvent !== foreignLet)).toBe(true);
+    expect(eventsOf(transcript, TemplateCompilerSiteCursorAttributeEvent).some((event) =>
+      event.owner === foreignLet?.element
+    )).toBe(true);
+    expect(result.completion?.receipt?.letSites).toHaveLength(2);
+  });
+
+  test('lowers a duplicate-survivor let attribute from its exact survivor without claiming owner compatibility', () => {
+    const result = fixture.run('cursor-let-nonsingular').execute();
+    const transcript = requireTranscript(result);
+    expect(transcript.frontier).toBeNull();
+    const event = eventsOf(transcript, TemplateCompilerSiteCursorLetElementEvent)[0];
+    expect(event?.spends).toEqual([
+      expect.objectContaining({
+        disposition: TemplateCompilerSiteSpendDisposition.BrowserReloweringRequired,
+      }),
+    ]);
+    expect(event?.occurrenceOnlyRows).toEqual([]);
+    expect(event?.staging.bindings).toEqual([
+      expect.objectContaining({
+        instruction: expect.objectContaining({
+          literalValue: 'first',
+          attribute: expect.objectContaining({
+            productHandle: event?.spends[0]?.bundle.attribute.productHandle,
+            rawName: 'value',
+          }),
+        }),
+      }),
+    ]);
+    expect(result.completion?.state).toBe(TemplateCompilerOrdinaryRootCompletionState.Complete);
+  });
+
+  test('stops let grammar at the first registered-invalid or absent command without allocating later work', () => {
+    const cases = [
+      ['cursor-let-invalid', TemplateCompilerSiteCursorFrontierKind.InvalidLetCommand, 1],
+      ['cursor-let-unknown', TemplateCompilerSiteCursorFrontierKind.UnknownLetBindingCommand, 0],
+    ] as const;
+    for (const [name, frontierKind, blockedCount] of cases) {
+      const transcript = fixture.transcript(name);
+      expect(transcript.frontier?.frontierKind, name).toBe(frontierKind);
+      expect(eventsOf(transcript, TemplateCompilerSiteCursorLetElementEvent), name).toEqual([]);
+      expect(transcript.ledger.spends, name).toHaveLength(1);
+      expect(transcript.ledger.blockedByFrontier, name).toHaveLength(blockedCount);
+      expect(transcript.allocationSnapshot.instructionAllocations, name).toEqual([]);
+      expect(transcript.allocationSnapshot.expressionAllocations, name).toEqual([]);
+      expect(transcript.compilerReads.readAll().filter((read) =>
+        read.readKind === TemplateCompilerReadKind.ExpressionParser
+      ), name).toEqual([]);
+    }
   });
 
   test('uses browser foster order rather than authored preorder', () => {
@@ -507,6 +611,7 @@ describe('template compiler root site cursor', () => {
       'cursor-progression',
       'cursor-row-interleave',
       'cursor-row-merged',
+      'cursor-shapes',
       'cursor-slot-inert',
       'cursor-slot-valid',
       'cursor-wide',
@@ -643,16 +748,17 @@ describe('template compiler root site cursor', () => {
     })).toEqual(['value']);
 
     const allRows = [...assemblies.values()].flatMap((assembly) => assembly.rows);
-    expect(allRows).toHaveLength(26);
-    expect(allRows.reduce((count, row) => count + row.instructionKinds.length, 0)).toBe(159);
+    expect(allRows).toHaveLength(28);
+    expect(allRows.reduce((count, row) => count + row.instructionKinds.length, 0)).toBe(161);
     const instructionKindCounts = Object.fromEntries([...new Set(allRows.flatMap((row) => row.instructionKinds))]
       .map((kind) => [kind, allRows.flatMap((row) => row.instructionKinds).filter((candidate) => candidate === kind).length]));
     expect(instructionKindCounts).toEqual({
-      'text-binding': 6,
+      'text-binding': 7,
       'property-binding': 141,
       interpolation: 3,
       'hydrate-attribute': 6,
       'hydrate-element': 3,
+      'hydrate-let-element': 1,
     });
 
     const hydratePending = new Map([
@@ -752,11 +858,11 @@ describe('template compiler root site cursor', () => {
         .toBe(targetAssembly);
       targetPlans.set(name, targetAssembly);
     }
-    expect(targetPlans.size).toBe(14);
+    expect(targetPlans.size).toBe(15);
     expect([...targetPlans.values()].reduce(
       (count, targetAssembly) => count + targetAssembly.targetPlan.root.readRows().length,
       0,
-    )).toBe(26);
+    )).toBe(28);
     const stagingPlan = targetPlans.get('cursor-live-staging')!;
     expect(stagingPlan.hydrateElements?.heads).toHaveLength(2);
     expect(stagingPlan.publicationPrerequisites).toMatchObject([{
@@ -926,7 +1032,6 @@ describe('template compiler root site cursor', () => {
       'cursor-process-content-arbitrary',
       'cursor-projection',
       'cursor-shadow-containerless',
-      'cursor-shapes',
       'cursor-slot-invalid',
       'cursor-slots-containerless',
       'cursor-surrogate-invalid',

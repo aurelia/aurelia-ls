@@ -53,6 +53,14 @@ export function runtimeElementResourceName(
   return runtimeNodeName(tagName, namespace).toLowerCase();
 }
 
+/** TemplateCompiler's HTML-only special-element dispatch, before ordinary resource lookup. */
+export function isRuntimeLetElement(
+  tagName: string,
+  namespace: HtmlRuntimeNamespace | undefined,
+): boolean {
+  return runtimeNodeName(tagName, namespace) === 'LET';
+}
+
 /** Runtime lookup spelling used by TemplateCompiler for an `as-element` value. */
 export function runtimeAsElementResourceName(value: string): string {
   return value.toLowerCase();

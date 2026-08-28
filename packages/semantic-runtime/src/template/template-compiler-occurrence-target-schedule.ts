@@ -14,6 +14,7 @@ import {
 import {
   TemplateCompilerTextExpansionOutputKind,
   type TemplateCompilerElementLoweringSite,
+  type TemplateCompilerLetLoweringSite,
   type TemplateCompilerOccurrenceAttributeDispositionDraft,
   type TemplateCompilerOccurrenceTargetRowDraft,
   type TemplateCompilerTextLoweringSite,
@@ -26,6 +27,10 @@ import type {
 } from './template-compiler-occurrence-target-plan.js';
 
 const occurrenceTargetScheduleAuthority = {};
+
+type TemplateCompilerElementTargetLoweringSite =
+  | TemplateCompilerElementLoweringSite
+  | TemplateCompilerLetLoweringSite;
 const schedulesByAssembly = new WeakMap<
   TemplateCompilerOccurrenceTargetPlanAssembly,
   TemplateCompilerOccurrenceTargetSchedule
@@ -136,7 +141,7 @@ export class TemplateCompilerOccurrenceTargetSchedule {
       readonly TemplateCompilerOccurrenceAttributeDispositionDraft[]
     >,
     readonly elementRowBySite: ReadonlyMap<
-      TemplateCompilerElementLoweringSite,
+      TemplateCompilerElementTargetLoweringSite,
       TemplateCompilerOccurrenceTargetRowMapping
     >,
     readonly textExpansionBySite: ReadonlyMap<
@@ -178,7 +183,7 @@ export function buildTemplateCompilerOccurrenceTargetSchedule(
   );
   const attributeDispositionsBySite = groupBy(rows.attributeDispositions, (disposition) => disposition.site);
   const elementRowBySite = new Map<
-    TemplateCompilerElementLoweringSite,
+    TemplateCompilerElementTargetLoweringSite,
     TemplateCompilerOccurrenceTargetRowMapping
   >();
   const textExpansionBySite = new Map<
@@ -196,7 +201,7 @@ export function buildTemplateCompilerOccurrenceTargetSchedule(
     if (mapping == null || mapping.row.occurrence !== draft.occurrence) {
       throw new Error(`Occurrence row '${draft.stableSlotKey}' lost its exact target-plan mapping.`);
     }
-    if (draft.site.siteKind === 'element') {
+    if (draft.site.siteKind === 'element' || draft.site.siteKind === 'let') {
       if (elementRowBySite.has(draft.site)) {
         throw new Error(`Element site '${draft.stableSlotKey}' is not one exact native row.`);
       }
@@ -215,7 +220,7 @@ export function buildTemplateCompilerOccurrenceTargetSchedule(
   }
   if (
     [...attributeDispositionsBySite.keys()].some((site) => site.siteKind !== 'element')
-    || [...elementRowBySite.keys()].some((site) => site.siteKind !== 'element')
+    || [...elementRowBySite.keys()].some((site) => site.siteKind !== 'element' && site.siteKind !== 'let')
     || [...textExpansionBySite.keys()].some((site) => site.siteKind !== 'text')
     || scheduledMappings.size !== assembly.rowMappings.length
     || assembly.rowMappings.some((mapping) => !scheduledMappings.has(mapping))
@@ -225,8 +230,11 @@ export function buildTemplateCompilerOccurrenceTargetSchedule(
 
   const entries: TemplateCompilerOccurrenceTargetScheduleEntry[] = [];
   for (const site of rows.receipt.orderedSites) {
-    if (site.siteKind === 'element') {
-      for (const disposition of attributeDispositionsBySite.get(site) ?? []) {
+    if (site.siteKind === 'element' || site.siteKind === 'let') {
+      const dispositions = site.siteKind === 'element'
+        ? attributeDispositionsBySite.get(site) ?? []
+        : [];
+      for (const disposition of dispositions) {
         if (disposition.disposition === TemplateCompilerLiveAttributeDisposition.Removed) {
           const mapping = dispositionMappingsByDraft.get(disposition) ?? null;
           if (mapping == null) {

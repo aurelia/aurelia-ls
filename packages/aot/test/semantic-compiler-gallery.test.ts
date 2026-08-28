@@ -168,10 +168,10 @@ describe("semantic compiler gallery", () => {
       ).length,
     ]));
     expect(frozenStates).toEqual({
-      "exact:frozen-value": 30,
+      "exact:frozen-value": 31,
       "ineligible:root-site-run": 1,
       "ineligible:family-completion": 2,
-      "pending:family-completion": 2,
+      "pending:family-completion": 1,
       "pending:frozen-value": 0,
     });
     expect(run.observations.every((observation) =>
@@ -180,10 +180,10 @@ describe("semantic compiler gallery", () => {
     const exactFrozen = run.observations.flatMap((observation) =>
       observation.frozenFamily.kind === "exact" ? [observation.frozenFamily] : []
     );
-    expect(exactFrozen).toHaveLength(30);
-    expect(exactFrozen.reduce((count, frozen) => count + frozen.liveExpressionCount, 0)).toBe(53);
-    expect(exactFrozen.reduce((count, frozen) => count + frozen.referencedLiveExpressionCount, 0)).toBe(50);
-    expect(exactFrozen.reduce((count, frozen) => count + frozen.instructionValueCount, 0)).toBe(80);
+    expect(exactFrozen).toHaveLength(31);
+    expect(exactFrozen.reduce((count, frozen) => count + frozen.liveExpressionCount, 0)).toBe(55);
+    expect(exactFrozen.reduce((count, frozen) => count + frozen.referencedLiveExpressionCount, 0)).toBe(52);
+    expect(exactFrozen.reduce((count, frozen) => count + frozen.instructionValueCount, 0)).toBe(83);
     expect(exactFrozen.every((frozen) =>
       /^sha256:[0-9a-f]{64}$/u.test(frozen.structuralDigest)
       && frozen.exactFields === SEMANTIC_FROZEN_FAMILY_EXACT_FIELDS
@@ -192,9 +192,9 @@ describe("semantic compiler gallery", () => {
     const exactRuntimeInstructions = run.observations.flatMap((observation) =>
       observation.runtimeInstructions?.kind === "exact" ? [observation.runtimeInstructions] : []
     );
-    expect(exactRuntimeInstructions).toHaveLength(30);
-    expect(exactRuntimeInstructions.reduce((count, observation) => count + observation.instructionCount, 0)).toBe(80);
-    expect(exactRuntimeInstructions.reduce((count, observation) => count + observation.rowInstructionCount, 0)).toBe(70);
+    expect(exactRuntimeInstructions).toHaveLength(31);
+    expect(exactRuntimeInstructions.reduce((count, observation) => count + observation.instructionCount, 0)).toBe(83);
+    expect(exactRuntimeInstructions.reduce((count, observation) => count + observation.rowInstructionCount, 0)).toBe(71);
     expect(exactRuntimeInstructions.every((observation) =>
       observation.schemaVersion === SEMANTIC_RUNTIME_INSTRUCTION_FAMILY_OBSERVER_VERSION
       && observation.resourceRepresentation === "name"
@@ -205,8 +205,8 @@ describe("semantic compiler gallery", () => {
     const exactCompiledDefinitions = run.observations.flatMap((observation) =>
       observation.compiledDefinitions?.kind === "exact" ? [observation.compiledDefinitions] : []
     );
-    expect(exactCompiledDefinitions).toHaveLength(30);
-    expect(exactCompiledDefinitions.reduce((count, observation) => count + observation.definitionCount, 0)).toBe(44);
+    expect(exactCompiledDefinitions).toHaveLength(31);
+    expect(exactCompiledDefinitions.reduce((count, observation) => count + observation.definitionCount, 0)).toBe(45);
     expect(exactCompiledDefinitions.every((observation) =>
       observation.schemaVersion === SEMANTIC_COMPILED_DEFINITION_FAMILY_OBSERVER_VERSION
       && observation.commonJitFields === SEMANTIC_COMPILED_DEFINITION_COMMON_JIT_FIELDS
@@ -376,18 +376,17 @@ describe("semantic compiler gallery", () => {
       "after-attributes-before-template-controller",
       "complete",
       "invalid-surrogate-attribute",
-      "let-element-lowering-required",
       "native-slot-without-shadow-dom-invalid",
       "surrogate-classification-required",
     ]);
     expect([...new Set(transcriptCursors.map((cursor) => cursor.ledgerState))].sort())
       .toEqual(["all-sites-accounted", "open"]);
-    expect(transcriptCursors.filter((cursor) => cursor.completionReceiptPresent)).toHaveLength(25);
-    expect(transcriptCursors.filter((cursor) => cursor.completionState === "complete")).toHaveLength(25);
-    expect(transcriptCursors.filter((cursor) => cursor.occurrenceRowAssemblyState === "exact")).toHaveLength(25);
-    expect(transcriptCursors.filter((cursor) => cursor.occurrenceTargetPlanState === "exact")).toHaveLength(25);
-    expect(transcriptCursors.filter((cursor) => cursor.occurrenceTargetAttachmentPresent)).toHaveLength(25);
-    expect(transcriptCursors.filter((cursor) => cursor.occurrenceTargetExecutionPresent)).toHaveLength(25);
+    expect(transcriptCursors.filter((cursor) => cursor.completionReceiptPresent)).toHaveLength(26);
+    expect(transcriptCursors.filter((cursor) => cursor.completionState === "complete")).toHaveLength(26);
+    expect(transcriptCursors.filter((cursor) => cursor.occurrenceRowAssemblyState === "exact")).toHaveLength(26);
+    expect(transcriptCursors.filter((cursor) => cursor.occurrenceTargetPlanState === "exact")).toHaveLength(26);
+    expect(transcriptCursors.filter((cursor) => cursor.occurrenceTargetAttachmentPresent)).toHaveLength(26);
+    expect(transcriptCursors.filter((cursor) => cursor.occurrenceTargetExecutionPresent)).toHaveLength(26);
     expect(transcriptCursors.filter((cursor) => cursor.occurrenceHydrateElementAllocationState === "exact"))
       .toHaveLength(0);
     expect(transcriptCursors.every((cursor) =>
@@ -411,6 +410,7 @@ describe("semantic compiler gallery", () => {
       "interaction.browser.foster-target-order",
       "interpolation.text.single-hole",
       "interpolation.text.ten-hole",
+      "let.bind-interpolation",
       "markup.static.platform-attribute",
       "native-order.checkbox.checked-before-matcher",
       "native-order.checkbox.checked-before-model",
@@ -426,13 +426,13 @@ describe("semantic compiler gallery", () => {
     const exactOccurrenceCursors = transcriptCursors.filter((cursor) =>
       cursor.occurrenceRowAssemblyState === "exact"
     );
-    expect(exactOccurrenceCursors.reduce((count, cursor) => count + cursor.occurrenceRowCount, 0)).toBe(33);
-    expect(exactOccurrenceCursors.reduce((count, cursor) => count + cursor.occurrenceTargetPlanRowCount, 0)).toBe(33);
+    expect(exactOccurrenceCursors.reduce((count, cursor) => count + cursor.occurrenceRowCount, 0)).toBe(34);
+    expect(exactOccurrenceCursors.reduce((count, cursor) => count + cursor.occurrenceTargetPlanRowCount, 0)).toBe(34);
     expect(exactOccurrenceCursors.reduce((count, cursor) => count + cursor.occurrenceStaticSiteCount, 0)).toBe(10);
     expect(exactOccurrenceCursors.reduce(
       (count, cursor) => count + cursor.occurrenceTargetExecutionOperationCount,
       0,
-    )).toBe(63);
+    )).toBe(64);
     expect(exactOccurrenceCursors.reduce(
       (count, cursor) => count + cursor.occurrenceTargetExecutionAttributeDispositionCount,
       0,
@@ -444,11 +444,11 @@ describe("semantic compiler gallery", () => {
     expect(exactOccurrenceCursors.reduce(
       (count, cursor) => count + cursor.occurrenceTargetExecutionGeometryCount,
       0,
-    )).toBe(33);
+    )).toBe(34);
     expect(exactOccurrenceCursors.reduce(
       (count, cursor) => count + cursor.occurrenceTargetExecutionForestMutationRevisionDelta,
       0,
-    )).toBe(129);
+    )).toBe(131);
     expect(exactOccurrenceCursors.reduce(
       (count, cursor) => count + (cursor.occurrenceTargetExecutionOperationKindCounts["attribute-disposition"] ?? 0),
       0,
@@ -456,7 +456,7 @@ describe("semantic compiler gallery", () => {
     expect(exactOccurrenceCursors.reduce(
       (count, cursor) => count + (cursor.occurrenceTargetExecutionOperationKindCounts["hydration-target-creation"] ?? 0),
       0,
-    )).toBe(22);
+    )).toBe(23);
     expect(exactOccurrenceCursors.reduce(
       (count, cursor) => count + (cursor.occurrenceTargetExecutionOperationKindCounts["text-interpolation-expansion"] ?? 0),
       0,
@@ -472,6 +472,7 @@ describe("semantic compiler gallery", () => {
       interpolation: 3,
       "listener-binding": 1,
       "text-binding": 11,
+      "hydrate-let-element": 1,
     });
     for (const cursor of transcriptCursors) {
       expect(cursor.authoredBundleCount).toBe(cursor.spendCount + cursor.rawUnspentCount);
@@ -503,7 +504,12 @@ describe("semantic compiler gallery", () => {
         expect(cursor.occurrencePrePlanEffectState).toBe("none");
         expect(cursor.occurrenceRowDigest).toMatch(/^sha256:[0-9a-f]{64}$/u);
         expect(cursor.occurrenceMembershipCount)
-          .toBe(1 + cursor.completedElementSiteCount + cursor.completedTextSiteCount);
+          .toBe(
+            1
+            + cursor.completedElementSiteCount
+            + cursor.completedTextSiteCount
+            + cursor.completedLetSiteCount
+          );
       } else {
         expect(cursor.occurrenceRowDigest).toBeNull();
       }
@@ -671,9 +677,22 @@ describe("semantic compiler gallery", () => {
       blockedByFrontierCount: 2,
     });
     expect(observations.get("let.bind-interpolation")?.siteCursor).toMatchObject({
-      frontierKind: "let-element-lowering-required",
-      spendCount: 0,
-      blockedByFrontierCount: 2,
+      frontierKind: null,
+      eventKindCounts: { "let-element": 1 },
+      spendDispositionCounts: { "browser-compatible": 2 },
+      spendCount: 2,
+      blockedByFrontierCount: 0,
+      completionState: "complete",
+      completionReceiptPresent: true,
+      completedLetSiteCount: 1,
+      completedRowSiteCount: 1,
+      instructionAllocationCount: 3,
+      expressionAllocationCount: 2,
+      occurrenceRowCount: 1,
+      occurrenceInstructionKindCounts: { "hydrate-let-element": 1 },
+      occurrenceTargetPlanRowCount: 1,
+      occurrenceTargetExecutionOperationCount: 1,
+      occurrenceTargetExecutionGeometryCount: 1,
     });
     expect(observations.get("projection.au-slot.interpolation-fallback")?.siteCursor).toMatchObject({
       frontierKind: "after-attributes-before-projection",
@@ -775,25 +794,25 @@ describe("semantic compiler gallery", () => {
     } finally {
       jitOracle.dispose();
     }
-    expect(exactJitCases).toHaveLength(30);
+    expect(exactJitCases).toHaveLength(31);
     expect(comparison.isClean).toBe(true);
     expect(comparison.comparisonPosture).toBe("structural-characterization-only");
-    expect(comparison.selectedExactCaseCount).toBe(30);
-    expect(comparison.joinedCaseCount).toBe(30);
-    expect(comparison.matchingCaseIds).toHaveLength(30);
+    expect(comparison.selectedExactCaseCount).toBe(31);
+    expect(comparison.joinedCaseCount).toBe(31);
+    expect(comparison.matchingCaseIds).toHaveLength(31);
     expect(comparison.mismatches).toEqual([]);
     expect(comparison.satisfiedClaimIds).toEqual([]);
     expect(comparison.comparedFields).toBe(SEMANTIC_FROZEN_FAMILY_COMMON_JIT_FIELDS);
     expect(comparison.omittedJitFields).toBe(SEMANTIC_FROZEN_FAMILY_OMITTED_JIT_FIELDS);
     expect(comparison.counts).toEqual({
-      semanticDefinitions: 44,
-      jitDefinitions: 44,
-      semanticRows: 53,
-      jitRows: 53,
-      semanticGeometries: 53,
-      jitGeometries: 53,
-      semanticInstructions: 70,
-      jitInstructions: 70,
+      semanticDefinitions: 45,
+      jitDefinitions: 45,
+      semanticRows: 54,
+      jitRows: 54,
+      semanticGeometries: 54,
+      jitGeometries: 54,
+      semanticInstructions: 71,
+      jitInstructions: 71,
       semanticHasSlotsTrue: 1,
       jitHasSlotsTrue: 1,
     });
@@ -801,13 +820,13 @@ describe("semantic compiler gallery", () => {
     expect(runtimeComparison.isClean).toBe(true);
     expect(runtimeComparison.comparisonPosture).toBe("runtime-instruction-characterization-only");
     expect(runtimeComparison.comparedFields).toBe(SEMANTIC_RUNTIME_INSTRUCTION_COMMON_JIT_FIELDS);
-    expect(runtimeComparison.selectedExactCaseCount).toBe(30);
-    expect(runtimeComparison.joinedCaseCount).toBe(30);
-    expect(runtimeComparison.matchingCaseIds).toHaveLength(30);
-    expect(runtimeComparison.semanticInstructionCount).toBe(80);
-    expect(runtimeComparison.jitInstructionCount).toBe(80);
-    expect(runtimeComparison.semanticRowInstructionCount).toBe(70);
-    expect(runtimeComparison.jitRowInstructionCount).toBe(70);
+    expect(runtimeComparison.selectedExactCaseCount).toBe(31);
+    expect(runtimeComparison.joinedCaseCount).toBe(31);
+    expect(runtimeComparison.matchingCaseIds).toHaveLength(31);
+    expect(runtimeComparison.semanticInstructionCount).toBe(83);
+    expect(runtimeComparison.jitInstructionCount).toBe(83);
+    expect(runtimeComparison.semanticRowInstructionCount).toBe(71);
+    expect(runtimeComparison.jitRowInstructionCount).toBe(71);
     expect(runtimeComparison.mismatches).toEqual([]);
     expect(runtimeComparison.satisfiedClaimIds).toEqual([]);
     const definitionComparison = compareSemanticCompiledDefinitionsToJit(run.observations, jitBatch);
@@ -815,11 +834,11 @@ describe("semantic compiler gallery", () => {
     expect(definitionComparison.comparisonPosture).toBe("compiled-definition-characterization-only");
     expect(definitionComparison.comparedFields).toBe(SEMANTIC_COMPILED_DEFINITION_COMMON_JIT_FIELDS);
     expect(definitionComparison.omittedFields).toBe(SEMANTIC_COMPILED_DEFINITION_OMITTED_FIELDS);
-    expect(definitionComparison.selectedExactCaseCount).toBe(30);
-    expect(definitionComparison.joinedCaseCount).toBe(30);
-    expect(definitionComparison.matchingCaseIds).toHaveLength(30);
-    expect(definitionComparison.semanticDefinitionCount).toBe(44);
-    expect(definitionComparison.jitDefinitionCount).toBe(44);
+    expect(definitionComparison.selectedExactCaseCount).toBe(31);
+    expect(definitionComparison.joinedCaseCount).toBe(31);
+    expect(definitionComparison.matchingCaseIds).toHaveLength(31);
+    expect(definitionComparison.semanticDefinitionCount).toBe(45);
+    expect(definitionComparison.jitDefinitionCount).toBe(45);
     expect(definitionComparison.mismatches).toEqual([]);
     expect(definitionComparison.satisfiedClaimIds).toEqual([]);
     const nativeSlotDefinitionSource = observations.get("slot.native.nested-has-slots")?.compiledDefinitions;
