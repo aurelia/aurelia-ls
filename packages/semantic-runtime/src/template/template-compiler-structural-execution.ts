@@ -982,11 +982,12 @@ export class TemplateCompilerStructuralExecutionSession {
   }
 
   /** Adopt one already-committed processContent detachment as a context-local 1→0 disposition. */
-  adoptProcessContentRemovedNode(
+  adoptCommittedProcessContentRemoval(
+    context: TemplateCompilerTargetContextPlan,
+    instruction: HydrateElementInstruction,
     result: TemplateCompilerProcessContentResult,
     removal: TemplateCompilerProcessContentRemoval,
-    context: TemplateCompilerTargetContextPlan,
-    causeHandles: readonly ClaimEndpointHandle[],
+    removalOrdinal: number,
   ): TemplateCompilerConsumedNodeDisposition {
     this.requireContextStructure(context);
     const node = removal.occurrence;
@@ -994,10 +995,14 @@ export class TemplateCompilerStructuralExecutionSession {
     this.requireForestNode(node);
     const seeded = this.forest.seededNodePlacement(node);
     const requiredSourceCause = this.requiredSourceConsumptionCause(node, context);
+    const exactOrigin = this.forest.exactAuthoredNodeOrigin(node)?.authored ?? null;
+    const removedReference = instruction.auSlotProcessContentRemovedChildNodes[removalOrdinal] ?? null;
     if (
       !result.isModuleConstructed()
       || result.plan.execution.forest !== this.forest
-      || !result.removals.includes(removal)
+      || !Number.isSafeInteger(removalOrdinal)
+      || removalOrdinal < 0
+      || result.removals[removalOrdinal] !== removal
       || mutation.node !== node
       || mutation.previousParent !== result.plan.host
       || mutation.previousEdgeKind !== TemplateCompilerOccurrenceEdgeKind.Child
@@ -1010,8 +1015,14 @@ export class TemplateCompilerStructuralExecutionSession {
       || node.generation != null
       || this.consumedNodes.has(node)
       || this.sourceTargetRowsByOccurrence.has(node)
-      || causeHandles.length === 0
-      || (requiredSourceCause != null && !causeHandles.includes(requiredSourceCause))
+      || instruction.auSlotProcessContent?.name !== result.metadata.name
+      || instruction.auSlotProcessContentRemovedChildNodes.length !== result.removals.length
+      || exactOrigin == null
+      || removedReference?.productHandle !== exactOrigin.productHandle
+      || removedReference.identityHandle !== exactOrigin.identityHandle
+      || removedReference.addressHandle !== exactOrigin.addressHandle
+      || !context.readRows().some((row) => row.instructions.includes(instruction))
+      || requiredSourceCause !== instruction.productHandle
     ) {
       throw new Error(`Compiler processContent removal '${node.occurrenceKey}' lost committed source-edge authority.`);
     }
@@ -1027,7 +1038,7 @@ export class TemplateCompilerStructuralExecutionSession {
       TemplateCompilerOccurrenceEdgeKind.Child,
       mutation.previousOrdinal,
       this.nextInputEventOrdinal++,
-      [...causeHandles],
+      [instruction.productHandle],
     );
     this.consumedNodes.set(node, disposition);
     appendMap(this.consumedNodesByContextKey, context.localKey, disposition);

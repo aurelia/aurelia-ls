@@ -1308,12 +1308,13 @@ describe('template compiler root site cursor', () => {
       rootTranscript.binding.execution.mutationAuthority,
     );
     const fundedHydrateElement = preparation.hydrateElements[0]!;
-    const adopted = rootProcessEvent.result.removals.map((removal) =>
-      structural.adoptProcessContentRemovedNode(
+    const adopted = rootProcessEvent.result.removals.map((removal, ordinal) =>
+      structural.adoptCommittedProcessContentRemoval(
+        target.targetPlan.root,
+        fundedHydrateElement.instruction,
         rootProcessEvent.result,
         removal,
-        target.targetPlan.root,
-        [fundedHydrateElement.instruction.productHandle],
+        ordinal,
       )
     );
     expect(adopted.map((disposition) => disposition.node)).toEqual(removed);
