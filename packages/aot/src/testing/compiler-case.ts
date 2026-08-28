@@ -254,7 +254,16 @@ export interface CompilerOraclePlan {
 }
 
 export type CompilerInvariantSelector =
-  | { readonly kind: "definition-field"; readonly field: "name" | "type" | "template" | "needsCompile" | "hasSlots" }
+  | {
+      readonly kind: "definition-field";
+      readonly field: "name" | "type" | "template" | "needsCompile" | "hasSlots" | "capture" | "containerless";
+    }
+  | { readonly kind: "definition-bindable-count" }
+  | {
+      readonly kind: "definition-bindable-field";
+      readonly bindable: number;
+      readonly field: "name" | "attribute" | "mode";
+    }
   | { readonly kind: "instruction-row-count" }
   | { readonly kind: "surrogate-count" }
   | { readonly kind: "template-node-name" }

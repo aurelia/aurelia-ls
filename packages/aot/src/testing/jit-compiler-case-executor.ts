@@ -528,6 +528,18 @@ function selectedInvariantValue(invariant: CompilerFocusedInvariant, outcome: Ji
   switch (selector.kind) {
     case "definition-field":
       return definitionOutcome(outcome, selector.kind)[selector.field];
+    case "definition-bindable-count": {
+      const bindables = definitionOutcome(outcome, selector.kind).bindables;
+      return Array.isArray(bindables) ? bindables.length : Object.keys(bindables ?? {}).length;
+    }
+    case "definition-bindable-field": {
+      const bindables = definitionOutcome(outcome, selector.kind).bindables;
+      if (!Array.isArray(bindables)) {
+        throw new Error(`${selector.kind}: expected authored bindable array input.`);
+      }
+      return (bindables[selector.bindable] as unknown as Readonly<Record<string, unknown>> | undefined)
+        ?.[selector.field];
+    }
     case "instruction-row-count":
       return definitionOutcome(outcome, selector.kind).instructions?.length;
     case "surrogate-count":

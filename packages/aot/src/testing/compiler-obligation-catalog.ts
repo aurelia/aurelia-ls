@@ -604,6 +604,9 @@ export const COMPILER_OBLIGATION_CATALOG: readonly CompilerObligationCatalogEntr
     runtime(renderingSource, 92, 166, "Compiled definitions are cached and their effective templates cloned."),
   ], exactUnqueried, [
     ["compiler.definition.name", "An absent name receives a generated anonymous name; explicit names remain stable."],
+    ["compiler.definition.capture", "Root capture metadata is preserved independently from compiler-owned rows and templates."],
+    ["compiler.definition.containerless", "Definition-owned containerless metadata is preserved on the root compiler view."],
+    ["compiler.definition.bindables", "Root bindable metadata is preserved on the pre-rehydration compiler view."],
     ["compiler.definition.dependencies", "Authored dependencies precede compiler-discovered local dependencies."],
     ["compiler.definition.template", "The final compiler-mutated effective template is retained."],
     ["compiler.definition.instructions", "Rows contain every instruction in target and execution order."],
