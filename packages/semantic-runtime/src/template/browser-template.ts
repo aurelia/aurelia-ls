@@ -11,6 +11,18 @@ export {
 } from './template-compiler-occurrence.js';
 export * from './template-compiler-deterministic-execution.js';
 export * from './template-compiler-root-site-cursor-observation.js';
+export * from './template-compiler-context-family-compilation.js';
+export {
+  TemplateCompilerContextFamilyMarkerGeometry,
+  TemplateCompilerContextFamilyRenderLocationGeometry,
+  TemplateCompilerContextFamilyValue,
+  TemplateCompilerContextFamilyValueContext,
+  TemplateCompilerContextFamilyValueGeometryKind,
+  TemplateCompilerContextFamilyValueOwner,
+  TemplateCompilerContextFamilyValueOwnerKind,
+  TemplateCompilerContextFamilyValueRow,
+  type TemplateCompilerContextFamilyValueGeometry,
+} from './template-compiler-context-family-value.js';
 export * from './template-compiler-occurrence-target-execution.js';
 export * from './template-compiler-occurrence-target-schedule.js';
 export * from './template-compiler-occurrence-hydrate-element-allocation.js';

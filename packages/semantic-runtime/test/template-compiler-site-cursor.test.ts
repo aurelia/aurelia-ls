@@ -31,6 +31,11 @@ import {
   TemplateCompilerOperationKind,
 } from '../src/template/template-compiler-execution.js';
 import {
+  compileTemplateCompilerContextFamily,
+  TemplateCompilerContextFamilyCompilationStage,
+  TemplateCompilerContextFamilyCompilationState,
+} from '../src/template/template-compiler-context-family-compilation.js';
+import {
   completeTemplateCompilerContextFamily,
   TemplateCompilerContextFamilyCompletionState,
 } from '../src/template/template-compiler-context-family-completion.js';
@@ -70,6 +75,10 @@ import {
 import { executeTemplateCompilerHookBootstrap } from '../src/template/template-compiler-hook-bootstrap.js';
 import { executeTemplateCompilerLocalExtraction } from '../src/template/template-compiler-local-extraction.js';
 import {
+  executeTemplateCompilerRootSiteRun,
+  TemplateCompilerRootSiteRunState,
+} from '../src/template/template-compiler-root-site-run.js';
+import {
   TemplateCompilerLiveAttributeCompletion,
   TemplateCompilerLiveAttributeSourceKind,
   TemplateCompilerLiveAttributeTargetLane,
@@ -98,6 +107,7 @@ import {
   TemplateCompilerElementOccurrence,
   TemplateCompilerFragmentOccurrence,
   TemplateCompilerGeneratedOccurrenceRole,
+  TemplateCompilerOccurrenceGeneration,
   type TemplateCompilerNodeOccurrence,
   TemplateCompilerOccurrenceForest,
   TemplateCompilerTextOccurrence,
@@ -133,6 +143,7 @@ import {
   type TemplateCompilerSiteCursorTranscript,
   type TemplateCompilerSiteCursorResult,
 } from '../src/template/template-compiler-site-cursor.js';
+import { TemplateCompilerSiteCursorTaskSession } from '../src/template/template-compiler-site-cursor-task.js';
 import {
   TemplateCompilerOrdinaryRootCompletionRefusalKind,
   TemplateCompilerOrdinaryRootCompletionState,
@@ -1365,6 +1376,211 @@ describe('template compiler root site cursor', () => {
       .toBe(frozen.value?.root.tree.productHandle);
   });
 
+  test('joins the shared root-site run as one nominal compiler capability', () => {
+    const candidate = fixture.runtime.computationLifecycle.begin({
+      kind: 'template-compiler-root-site-run-test',
+      reconciliationKey: fixture.browserRun.locus.reconciliationKey,
+      summary: 'Direct shared root-site run identity proof.',
+    });
+    try {
+      const run = fixture.rootSiteRun('cursor-empty', candidate);
+      expect(run.state).toBe(TemplateCompilerRootSiteRunState.CursorTranscript);
+      expect(run.execution?.forest).toBe(run.forest);
+      expect(run.execution?.sequence.readLanes()).toContain(run.lane);
+      expect(run.hook?.lane).toBe(run.lane);
+      expect(run.local?.lane).toBe(run.lane);
+      expect(run.bootstrapClosure?.hookBootstrap).toBe(run.hook);
+      expect(run.bootstrapClosure?.localExtraction).toBe(run.local);
+      expect(run.binding?.binding?.execution).toBe(run.execution);
+      expect(run.binding?.binding?.bootstrapClosure).toBe(run.bootstrapClosure);
+      expect(run.binding?.binding?.graphExact).toBe(run.graphExact);
+      expect(run.cursor?.transcript?.binding).toBe(run.binding?.binding);
+    } finally {
+      candidate.abort();
+    }
+  });
+
+  test('preserves a currentness-loss cursor as an observable shared-run transcript', () => {
+    const candidate = fixture.runtime.computationLifecycle.begin({
+      kind: 'template-compiler-root-site-currentness-loss-test',
+      reconciliationKey: fixture.browserRun.locus.reconciliationKey,
+      summary: 'Shared root-site currentness-loss transcript proof.',
+    });
+    const fromBrowserEffective = TemplateCompilerOccurrenceForest.fromBrowserEffective;
+    const appendEvent = TemplateCompilerSiteCursorTaskSession.prototype.appendEvent;
+    let forest: TemplateCompilerOccurrenceForest | null = null;
+    let mutated = false;
+    const forestSpy = vi.spyOn(TemplateCompilerOccurrenceForest, 'fromBrowserEffective')
+      .mockImplementation((emission) => {
+        forest = fromBrowserEffective(emission);
+        return forest;
+      });
+    const eventSpy = vi.spyOn(TemplateCompilerSiteCursorTaskSession.prototype, 'appendEvent')
+      .mockImplementation(function (event) {
+        appendEvent.call(this, event);
+        if (
+          !mutated
+          && forest != null
+          && event instanceof TemplateCompilerSiteCursorPhaseEvent
+          && event.phaseKind === TemplateCompilerSiteCursorPhaseKind.SurrogateEnd
+        ) {
+          const causeHandle = forest.compilerCarrier.inputReference?.productHandle;
+          if (causeHandle == null) throw new Error('Expected compiler carrier input cause for currentness test.');
+          forest.createGeneratedText(new TemplateCompilerOccurrenceGeneration(
+            {},
+            'currentness-loss-test',
+            'currentness-loss-test:out-of-band',
+            TemplateCompilerGeneratedOccurrenceRole.StaticTextSegment,
+            [causeHandle],
+            0,
+          ), 'out-of-band');
+          mutated = true;
+        }
+      });
+    try {
+      const run = fixture.rootSiteRun(
+        'cursor-empty',
+        candidate,
+        TemplateCompilerSiteCursorTraversalMode.CompatibilityStop,
+      );
+      expect(mutated).toBe(true);
+      expect(run.state).toBe(TemplateCompilerRootSiteRunState.CursorTranscript);
+      expect(run.cursor?.transcript?.frontier?.frontierKind)
+        .toBe(TemplateCompilerSiteCursorFrontierKind.CurrentnessLost);
+      expect(run.cursor?.siteEndpoint).toBeNull();
+      expect(run.cursor?.completion?.state).toBe(TemplateCompilerOrdinaryRootCompletionState.Ineligible);
+    } finally {
+      eventSpy.mockRestore();
+      forestSpy.mockRestore();
+      candidate.abort();
+    }
+  });
+
+  test('compiles a closed processContent family to one generation-bound frozen value', () => {
+    const candidate = fixture.runtime.computationLifecycle.begin({
+      kind: 'template-compiler-context-family-compilation-test',
+      reconciliationKey: fixture.browserRun.locus.reconciliationKey,
+      summary: 'Direct context-family compiler entry-point proof.',
+    });
+    const result = fixture.compileContextFamily('cursor-process-content-removals', candidate);
+    const value = result.value;
+    try {
+      expect(result.state).toBe(TemplateCompilerContextFamilyCompilationState.Exact);
+      expect(result.stage).toBe(TemplateCompilerContextFamilyCompilationStage.FrozenValue);
+      expect(result.reasons).toEqual([]);
+      expect(value?.isCurrent()).toBe(true);
+      expect(value?.contexts).toHaveLength(1);
+      expect(value?.root.compiledTemplate.transformedTree?.productHandle)
+        .toBe(value?.root.tree.productHandle);
+      expect(value?.derivations.some((derivation) => derivation.operationOrdinal != null)).toBe(true);
+      expect(value == null ? true : 'preparation' in value).toBe(false);
+      expect(value == null ? true : 'committedAllocation' in value).toBe(false);
+      expect(value?.contexts.some((context) => 'preparation' in context)).toBe(false);
+      expect(value?.contexts.flatMap((context) => context.rows).some((row) => 'preparation' in row)).toBe(false);
+    } finally {
+      candidate.abort();
+    }
+    expect(value?.isCurrent()).toBe(false);
+  });
+
+  test('uses the same family transaction for an ordinary root-only compilation', () => {
+    const candidate = fixture.runtime.computationLifecycle.begin({
+      kind: 'template-compiler-root-only-family-compilation-test',
+      reconciliationKey: fixture.browserRun.locus.reconciliationKey,
+      summary: 'Root-inclusive context-family compiler proof.',
+    });
+    try {
+      const result = fixture.compileContextFamily('cursor-authored-carrier-static', candidate);
+      expect(result.state).toBe(TemplateCompilerContextFamilyCompilationState.Exact);
+      expect(result.value?.contexts).toHaveLength(1);
+      expect(result.value?.root.owner.ownerKind).toBe('root');
+      expect(result.value?.root.compiledTemplate.needsCompile).toBe(false);
+    } finally {
+      candidate.abort();
+    }
+  });
+
+  test('projects generated definition owners and final row geometry without target-plan leakage', () => {
+    for (const [name, ownerKind] of [
+      ['cursor-context-family-containerless-tc', 'template-controller'],
+      ['cursor-context-family-projection', 'projection'],
+    ] as const) {
+      const candidate = fixture.runtime.computationLifecycle.begin({
+        kind: `template-compiler-context-family-value-${ownerKind}-test`,
+        reconciliationKey: fixture.browserRun.locus.reconciliationKey,
+        summary: `Public context-family ${ownerKind} value proof.`,
+      });
+      try {
+        const result = fixture.compileContextFamily(name, candidate);
+        expect(result.state, name).toBe(TemplateCompilerContextFamilyCompilationState.Exact);
+        const value = result.value;
+        const child = value?.contexts.find((context) => context.owner.ownerKind === ownerKind);
+        expect(child, name).toBeDefined();
+        expect(child?.owner.parentCompiledTemplateProductHandle, name)
+          .toBe(value?.root.compiledTemplate.productHandle);
+        expect(child?.owner.instruction, name).not.toBeNull();
+        const rows = value?.contexts.flatMap((context) => context.rows) ?? [];
+        expect(rows.length, name).toBeGreaterThan(0);
+        expect(rows.every((row) => row.geometry.marker.productHandle.length > 0), name).toBe(true);
+      } finally {
+        candidate.abort();
+      }
+    }
+  });
+
+  test('keeps arbitrary processContent open at its family-completion gate', () => {
+    const candidate = fixture.runtime.computationLifecycle.begin({
+      kind: 'template-compiler-context-family-open-test',
+      reconciliationKey: fixture.browserRun.locus.reconciliationKey,
+      summary: 'Context-family open-outcome proof.',
+    });
+    try {
+      const result = fixture.compileContextFamily('cursor-process-content-arbitrary', candidate);
+      expect(result.state).toBe(TemplateCompilerContextFamilyCompilationState.Open);
+      expect(result.stage).toBe(TemplateCompilerContextFamilyCompilationStage.FamilyCompletion);
+      expect(result.reasons.map((reason) => reason.reasonKind)).toContain('cursor-frontier');
+    } finally {
+      candidate.abort();
+    }
+  });
+
+  test('refuses a revoked browser-effective candidate before compiler execution', () => {
+    const candidate = fixture.runtime.computationLifecycle.begin({
+      kind: 'template-compiler-context-family-stale-browser-test',
+      reconciliationKey: fixture.browserRun.locus.reconciliationKey,
+      summary: 'Context-family stale browser input proof.',
+    });
+    const request = fixture.contextFamilyRequest('cursor-empty', candidate);
+    candidate.abort();
+
+    const result = compileTemplateCompilerContextFamily(request);
+    expect(result.state).toBe(TemplateCompilerContextFamilyCompilationState.Ineligible);
+    expect(result.stage).toBe(TemplateCompilerContextFamilyCompilationStage.RootSiteRun);
+    expect(result.reasons.map((reason) => reason.reasonKind)).toEqual([
+      'browser-publication-unavailable',
+    ]);
+  });
+
+  test('reports effective capture materialization at the frozen-value gate', () => {
+    const candidate = fixture.runtime.computationLifecycle.begin({
+      kind: 'template-compiler-context-family-capture-pending-test',
+      reconciliationKey: fixture.browserRun.locus.reconciliationKey,
+      summary: 'Direct context-family compiler pending-gate proof.',
+    });
+    try {
+      const result = fixture.compileContextFamily('cursor-context-family-capture-projection', candidate);
+      expect(result.state).toBe(TemplateCompilerContextFamilyCompilationState.Pending);
+      expect(result.stage).toBe(TemplateCompilerContextFamilyCompilationStage.FrozenValue);
+      expect(result.value).toBeNull();
+      expect(result.reasons.map((reason) => reason.reasonKind)).toEqual([
+        TemplateCompilerContextFamilyFrozenValueReasonKind.EffectiveCaptureMaterializationPending,
+      ]);
+      expect(result.reasons[0]?.stableKeys).not.toEqual([]);
+    } finally {
+      candidate.abort();
+    }
+  });
+
   test('places a TC-wrapped containerless host after its transition event', () => {
     const result = fixture.freshRun('cursor-context-family-containerless-tc').execute(
       TemplateCompilerSiteCursorTraversalMode.ClosedContextFamily,
@@ -2502,6 +2718,47 @@ class CursorFixture {
       compilation,
       this.bind(compilation, family, `cursor-browser:${name}:candidate:${ordinal}`, null, candidate),
     );
+  }
+
+  rootSiteRun(
+    name: string,
+    candidate: CursorCandidateRun,
+    traversalMode: TemplateCompilerSiteCursorTraversalMode = TemplateCompilerSiteCursorTraversalMode.CompatibilityStop,
+  ) {
+    const compilation = this.compilation(name);
+    const ordinal = this.freshRunOrdinal++;
+    return executeTemplateCompilerRootSiteRun({
+      runKey: `cursor-root-site-run:${name}:${ordinal}`,
+      compilation,
+      browserEmission: this.materializeBrowser(
+        compilation,
+        `cursor-root-site-run-browser:${name}:${ordinal}`,
+        candidate,
+      ),
+      currentFrontDoor: this.frontDoor,
+      compilerReadStore: this.runtime.workspace.store,
+      traversalMode,
+    });
+  }
+
+  compileContextFamily(name: string, candidate: CursorCandidateRun) {
+    return compileTemplateCompilerContextFamily(this.contextFamilyRequest(name, candidate));
+  }
+
+  contextFamilyRequest(name: string, candidate: CursorCandidateRun) {
+    const compilation = this.compilation(name);
+    const ordinal = this.freshRunOrdinal++;
+    return {
+      compilationKey: `cursor-context-family:${name}:${ordinal}`,
+      compilation,
+      browserEmission: this.materializeBrowser(
+        compilation,
+        `cursor-context-family-browser:${name}:${ordinal}`,
+        candidate,
+      ),
+      currentFrontDoor: this.frontDoor,
+      compilerReadStore: this.runtime.workspace.store,
+    };
   }
 
   transcriptWithUnledgeredRewrite(name: string, attributeName: string): TemplateCompilerSiteCursorTranscript {

@@ -251,9 +251,31 @@ classification, expression parsing, and instruction lowering converge on the sam
   `template-compiler-site-cursor.ts` join that transaction to current root invocation authority. Scalar capture and
   authored/browser routes are shared with the cursor rather than re-derived. Singular compatible sites, successfully
   relowered sites, non-singular/browser-only occurrences, authored remainders, and frontier-blocked bundles remain
-  separate axes. The cursor may complete live semantics while its accounting/lineage ledger stays Open; it still stops
-  before template-controller wrapping, projection extraction, containerless replacement, generated elements, and
-  other structural contexts that do not yet have a live target-plan join.
+  separate axes. The compatibility traversal may complete live semantics while its accounting/lineage ledger stays
+  Open and deliberately stops before structural context changes. The closed-context traversal instead schedules
+  template-controller and projection child work, processContent, containerless placement, and generated-context return
+  through the same event/context forest.
+- `template-compiler-root-site-run.ts` owns the shared nominal graph/bootstrap/local/binding/cursor prefix used by both
+  portable compatibility observation and closed-family compilation. Its exact result proves every retained artifact is
+  from the same forest, execution lane, bootstrap closure, binding, and cursor transcript. Candidate/publication
+  authority comes only from the browser-effective emission; callers cannot pair a second authority with that tree.
+  A currentness-loss cursor remains an observable transcript with no site endpoint, so the later completion audit—not
+  the shared prefix—owns its refusal.
+- The `template-compiler-context-family-*` completion, row, allocation, target, schedule, execution, freeze, and frozen-
+  value modules form the consumer-neutral whole-family compiler transaction. A Pending row assembly is a usable
+  pre-funding carrier: its compiled-template and instruction obligations are closed by allocation rather than treated
+  as terminal uncertainty. Structural execution then proves exact mutations and transfers before sealing. Freeze
+  constructs the existing `CompilerTransformedTemplateTree`, node/attribute, `TemplateStructureDerivation`,
+  `TemplateRenderTarget`, `TemplateInstructionSequence`, and `CompiledTemplate` products in final structural order.
+  Effective captured syntax and native slot outlet values remain independent typed Pending gates.
+- `template-compiler-context-family-compilation.ts` is the generation-bound in-process front door over that transaction.
+  Root-inclusive mode sends an ordinary one-context template through the same family transaction rather than retaining
+  a separate production corridor. It returns the final family or a stage-local Pending, Ineligible, Open, or Abrupt
+  result without converting invariant failures into ordinary compiler uncertainty. Revoked browser input is refused
+  before forest/hook execution. `template-compiler-context-family-value.ts` narrows the internal frozen owner to final
+  definition ownership, transformed products, instruction rows, target geometry, derivations, and currentness; target
+  plans, mutable occurrences, freeze reservations, and allocation ledgers do not cross the consumer boundary. The value
+  is still in-process rather than a portable wire and must be projected while its publication candidate remains current.
 - `template-compiler-deterministic-execution.ts` is an intentionally narrower assurance bridge. It spends one
   `TemplateResourceCompilationEmission` plus its exact browser-effective source family to replay supported built-in
   structural consequences over already-normalized compiler products. Exact means dispositions, context transfers,

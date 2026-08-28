@@ -364,7 +364,6 @@ function observationsFor(
       compilation: resource.compilation,
       browserEmission: replay.browserTemplate,
       currentFrontDoor: templates.frontDoor,
-      publication: browserMaterialization,
       compilerReadStore,
     });
     siteCursorMs += performance.now() - cursorStartedAt;

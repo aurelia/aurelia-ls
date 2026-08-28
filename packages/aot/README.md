@@ -56,14 +56,17 @@ This lane is raw conservation pressure, not a parity oracle. Semantic-runtime cu
 `resolveResources=true`, while the JIT characterizations use `resolveResources=false`; gallery cases also share a
 resource scope, use generated concrete definition types, and traverse authored rather than browser-effective compiler
 structure. Those differences are explicit on every admitted row and recomputed from the observed compiler profile. The
-semantic product still lacks the final compiler-mutated tree required by most `template.outerHTML` invariants, and no
-standalone lane may satisfy a cross-lane equivalence claim. A later coordinator must validate both authority-bound
-receipts, compare an exhaustive shared product, and only then feed satisfied claim IDs into the obligation audit.
+current gallery projection still omits the final compiler-mutated family required by most `template.outerHTML`
+invariants, and no standalone lane may satisfy a cross-lane equivalence claim. Semantic-runtime now exposes that family
+through a generation-bound in-process compiler result; the next AOT adapter must normalize it while its candidate is
+current. A later coordinator must validate both authority-bound receipts, compare an exhaustive shared product, and
+only then feed satisfied claim IDs into the obligation audit.
 
 The public template-compilation summary contributes its own portable source/model basis. Rich compiler observations
 currently come from a synchronous `app.emission` bracket, are currentness-checked again before egress, and deliberately
-report no portable observation basis; the runtime incarnation is retired before the JSON result returns. They cannot
-feed a later coordinator until semantic-runtime exposes a generation-guarded rich compiler-product query/capability.
+report no portable observation basis; the runtime incarnation is retired before the JSON result returns. The new
+context-family compiler capability closes that semantic-runtime prerequisite, but raw executable/frozen objects still
+must not escape this bracket; AOT needs a portable structural characterization before coordination.
 The CLI separately content-addresses the executed AOT and semantic-runtime JavaScript trees and the full dirty-worktree
 delta so an ignored or already-dirty build artifact cannot masquerade as unchanged authority.
 

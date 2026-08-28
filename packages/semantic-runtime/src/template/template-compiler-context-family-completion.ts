@@ -58,6 +58,11 @@ export const enum TemplateCompilerContextFamilyCompletionState {
   Ineligible = 'ineligible',
 }
 
+export const enum TemplateCompilerContextFamilyCompletionMode {
+  GeneratedOrEffectFamily = 'generated-or-effect-family',
+  RootInclusiveFamily = 'root-inclusive-family',
+}
+
 export const enum TemplateCompilerContextFamilyCompletionReasonKind {
   TraversalModeMismatch = 'traversal-mode-mismatch',
   ContextFamilyMissing = 'context-family-missing',
@@ -348,6 +353,8 @@ export class TemplateCompilerContextFamilyCompletionResult {
 export function completeTemplateCompilerContextFamily(
   transcript: TemplateCompilerSiteCursorTranscript,
   endpoint: TemplateCompilerSiteExecutionEndpointReceipt | null,
+  mode: TemplateCompilerContextFamilyCompletionMode =
+    TemplateCompilerContextFamilyCompletionMode.GeneratedOrEffectFamily,
 ): TemplateCompilerContextFamilyCompletionResult {
   const audit = auditTemplateCompilerTraversalCompletion(transcript, endpoint);
   const projectionEvents = transcript.events.filter(
@@ -374,12 +381,17 @@ export function completeTemplateCompilerContextFamily(
       'Context-family completion requires the opt-in closed-context-family cursor mode.',
     );
   }
-  if (
-    (transcript.taskSnapshot.contexts.length <= 1
+  if (transcript.taskSnapshot.contexts[0]?.context !== transcript.taskSnapshot.rootContext) {
+    refuse(
+      TemplateCompilerContextFamilyCompletionReasonKind.ContextFamilyMissing,
+      'Context-family completion requires the first task to own the exact root context.',
+    );
+  } else if (
+    mode === TemplateCompilerContextFamilyCompletionMode.GeneratedOrEffectFamily
+    && transcript.taskSnapshot.contexts.length <= 1
       && projectionEvents.length === 0
       && templateControllerEvents.length === 0
-      && audit.processContentEvents.length === 0)
-    || transcript.taskSnapshot.contexts[0]?.context !== transcript.taskSnapshot.rootContext
+      && audit.processContentEvents.length === 0
   ) {
     refuse(
       TemplateCompilerContextFamilyCompletionReasonKind.ContextFamilyMissing,

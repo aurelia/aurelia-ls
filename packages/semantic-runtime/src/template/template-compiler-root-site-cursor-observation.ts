@@ -1,6 +1,5 @@
 import { createHash } from 'node:crypto';
 
-import type { KernelPublicationContext } from '../kernel/publication.js';
 import type { ProductDetailReadView } from '../kernel/product-details.js';
 import type {
   KernelMaterializationReadView,
@@ -11,31 +10,16 @@ import type {
   TemplateResourceCompilationEmission,
 } from './template-compilation-project-pass.js';
 import type { BrowserEffectiveTemplateEmission } from './browser-effective-template-materializer.js';
-import { LocalTemplateDefinitionMaterializer } from './local-template-definition-materializer.js';
-import { TemplateCompilerReadView, TemplateCompilerWorldAuthority } from './compiler-read-view.js';
 import {
   TemplateCompilerAttributeDetachmentMutation,
-  TemplateCompilerExecutionSession,
   TemplateCompilerOccurrenceOperationTarget,
 } from './template-compiler-execution.js';
-import {
-  executeTemplateCompilerHookBootstrap,
-  TemplateCompilerHookBootstrapState,
-} from './template-compiler-hook-bootstrap.js';
-import {
-  executeTemplateCompilerLocalExtraction,
-  TemplateCompilerLocalExtractionState,
-} from './template-compiler-local-extraction.js';
-import {
-  buildTemplateCompilerNormalizedSiteIndex,
-  TemplateCompilerNormalizedSiteIndexState,
-} from './template-compiler-normalized-site-index.js';
 import {
   TemplateCompilerAttributeOccurrence,
   TemplateCompilerCommentOccurrence,
   TemplateCompilerElementOccurrence,
   TemplateCompilerFragmentOccurrence,
-  TemplateCompilerOccurrenceForest,
+  type TemplateCompilerOccurrenceForest,
   TemplateCompilerTextOccurrence,
   type TemplateCompilerNodeOccurrence,
 } from './template-compiler-occurrence.js';
@@ -59,16 +43,14 @@ import {
   executeTemplateCompilerOccurrenceTarget,
   type TemplateCompilerOccurrenceTargetExecution,
 } from './template-compiler-occurrence-target-execution.js';
-import { TemplateCompilerPreWalkRemainderAuthority } from './template-compiler-prewalk-remainder.js';
 import { templateInstructionSemanticSignature } from './instruction-ir.js';
 import {
-  bindTemplateCompilerRootSiteInvocation,
-  TemplateCompilerSiteInvocationBindingState,
-} from './template-compiler-site-invocation.js';
+  executeTemplateCompilerRootSiteRun,
+  TemplateCompilerRootSiteRunState,
+} from './template-compiler-root-site-run.js';
 import {
-  executeTemplateCompilerRootSiteCursor,
   type TemplateCompilerSiteCursorTranscript,
-  TemplateCompilerSiteCursorResultState,
+  TemplateCompilerSiteCursorTraversalMode,
 } from './template-compiler-site-cursor.js';
 import {
   TemplateCompilerSiteCursorAttributeEvent,
@@ -232,8 +214,6 @@ export interface TemplateCompilerRootSiteCursorObservationRequest {
   readonly compilation: TemplateResourceCompilationEmission;
   readonly browserEmission: BrowserEffectiveTemplateEmission;
   readonly currentFrontDoor: TemplateCompilationFrontDoorEmission;
-  /** Candidate-local publication context revoked with the caller's enclosing computation. */
-  readonly publication: KernelPublicationContext;
   /** Current committed/candidate read authority used by paired compiler-service receipts. */
   readonly compilerReadStore: Pick<KernelMaterializationReadView, 'readMaterializationsByOwner'>
     & ProductDetailReadView
@@ -248,171 +228,44 @@ export interface TemplateCompilerRootSiteCursorObservationRequest {
 export function observeTemplateCompilerRootSiteCursor(
   request: TemplateCompilerRootSiteCursorObservationRequest,
 ): TemplateCompilerRootSiteCursorObservation {
-  const graphExact = buildTemplateCompilerNormalizedSiteIndex(request.compilation);
-  if (graphExact.state !== TemplateCompilerNormalizedSiteIndexState.GraphExact || graphExact.index == null) {
-    return unavailable(
-      TemplateCompilerRootSiteCursorObservationAdmissionState.GraphMismatch,
-      graphExact.mismatches.map((mismatch) => mismatch.mismatchKind),
-      graphExact.state,
-      null,
-      null,
-      null,
-      0,
-    );
-  }
-  const authoredBundleCount = graphExact.index.attributeSites.length + graphExact.index.textSites.length;
-  const forest = TemplateCompilerOccurrenceForest.fromBrowserEffective(request.browserEmission);
-  const execution = TemplateCompilerExecutionSession.createForForest(
-    `root-site-cursor-observation:${request.observationKey}`,
-    forest,
-  );
-  const lane = execution.admitRootInvocation(request.compilation.localKey);
-  const hook = executeTemplateCompilerHookBootstrap({
-    execution,
-    lane,
-    compilerWorld: request.compilation.compilerWorld,
-    executionOpenSeamHandle: request.publication.handles.openSeam(
-      `root-site-cursor-observation:${request.observationKey}:hook-open`,
-    ),
-  });
-  if (hook.state !== TemplateCompilerHookBootstrapState.Exact) {
-    const admissionState = hook.state === TemplateCompilerHookBootstrapState.Abrupt
-      ? TemplateCompilerRootSiteCursorObservationAdmissionState.HookAbrupt
-      : TemplateCompilerRootSiteCursorObservationAdmissionState.HookOpen;
-    return unavailable(
-      admissionState,
-      [admissionState],
-      graphExact.state,
-      hook.state,
-      null,
-      null,
-      authoredBundleCount,
-      null,
-      null,
-      hook.boundaryEntryOrdinal,
-    );
-  }
-
-  const definitions = new LocalTemplateDefinitionMaterializer(request.publication);
-  const local = executeTemplateCompilerLocalExtraction({
-    execution,
-    lane,
-    hookBootstrap: hook,
-    ownerName: request.compilation.definition.name,
-    ownerCauseHandles: [
-      request.compilation.definition.productHandle ?? request.compilation.unit.templateSource.productHandle,
-    ],
-    reserveDefinition: (invocationKey) => definitions.reserveOccurrenceDefinition(invocationKey),
-  });
-  if (!local.isExact()) {
-    const admissionState = local.state === TemplateCompilerLocalExtractionState.Abrupt
-      ? TemplateCompilerRootSiteCursorObservationAdmissionState.LocalAbrupt
-      : TemplateCompilerRootSiteCursorObservationAdmissionState.LocalRefused;
-    const failure = local.failure;
-    return unavailable(
-      admissionState,
-      [failure?.issueKind ?? admissionState],
-      graphExact.state,
-      hook.state,
-      local.state,
-      null,
-      authoredBundleCount,
-      failure?.issueKind ?? null,
-      failure?.frameworkErrorCode ?? null,
-      hook.boundaryEntryOrdinal,
-      local.completedExtractions.length,
-      0,
-    );
-  }
-  const closure = execution.closeInvocationBootstrap(hook, local);
-  if (local.state === TemplateCompilerLocalExtractionState.Extracted) {
-    const admissionState = TemplateCompilerRootSiteCursorObservationAdmissionState.LocalExtractedUnsupported;
-    return unavailable(
-      admissionState,
-      [admissionState],
-      graphExact.state,
-      hook.state,
-      local.state,
-      null,
-      authoredBundleCount,
-      null,
-      null,
-      hook.boundaryEntryOrdinal,
-      local.completedExtractions.length,
-      local.completedExtractions.length,
-    );
-  }
-
-  const family = request.currentFrontDoor.familyForOwner(request.compilation.familyOwnerHandle);
-  if (family == null) {
-    const admissionState = TemplateCompilerRootSiteCursorObservationAdmissionState.FamilyMissing;
-    return unavailable(
-      admissionState,
-      [admissionState],
-      graphExact.state,
-      hook.state,
-      local.state,
-      null,
-      authoredBundleCount,
-      null,
-      null,
-      hook.boundaryEntryOrdinal,
-      local.completedExtractions.length,
-      0,
-    );
-  }
-  const binding = bindTemplateCompilerRootSiteInvocation({
-    execution,
-    bootstrapClosure: closure,
+  const run = executeTemplateCompilerRootSiteRun({
+    runKey: `root-site-cursor-observation:${request.observationKey}`,
+    compilation: request.compilation,
     browserEmission: request.browserEmission,
-    graphExact,
     currentFrontDoor: request.currentFrontDoor,
-    currentFamily: family,
+    compilerReadStore: request.compilerReadStore,
+    traversalMode: TemplateCompilerSiteCursorTraversalMode.CompatibilityStop,
   });
-  if (binding.state !== TemplateCompilerSiteInvocationBindingState.Exact || binding.binding == null) {
+  if (!run.isTranscript()) {
+    const admissionState = observationAdmissionState(run.state);
     return unavailable(
-      TemplateCompilerRootSiteCursorObservationAdmissionState.RootBindingMismatch,
-      binding.reasons.map((entry) => entry.reasonKind),
-      graphExact.state,
-      hook.state,
-      local.state,
-      binding.state,
-      authoredBundleCount,
-      null,
-      null,
-      hook.boundaryEntryOrdinal,
-      local.completedExtractions.length,
-      0,
+      admissionState,
+      run.reasons.map((reason) => reason.reasonKind),
+      run.graphExact.state,
+      run.hook?.state ?? null,
+      run.local?.state ?? null,
+      run.binding?.state ?? null,
+      run.authoredBundleCount,
+      run.local?.failure?.issueKind ?? null,
+      run.local?.failure?.frameworkErrorCode ?? null,
+      run.hook?.boundaryEntryOrdinal ?? null,
+      run.local?.completedExtractions.length ?? null,
+      run.state === TemplateCompilerRootSiteRunState.LocalExtractedUnsupported
+        ? run.local?.completedExtractions.length ?? 0
+        : 0,
     );
   }
+  const graphExact = run.graphExact;
+  const authoredBundleCount = run.authoredBundleCount;
+  const forest = run.forest!;
+  const execution = run.execution!;
+  const lane = run.lane!;
+  const hook = run.hook!;
+  const local = run.local!;
+  const binding = run.binding!;
+  const cursor = run.cursor!;
 
-  const compilerReads = new TemplateCompilerReadView(
-    request.compilerReadStore,
-    TemplateCompilerWorldAuthority.fixed(request.compilation.compilerWorld),
-  );
-  const cursor = executeTemplateCompilerRootSiteCursor({
-    binding: binding.binding,
-    compilerReads,
-    preWalkAuthority: TemplateCompilerPreWalkRemainderAuthority.capture(binding.binding),
-  });
-  if (cursor.state !== TemplateCompilerSiteCursorResultState.Transcript || cursor.transcript == null) {
-    return unavailable(
-      TemplateCompilerRootSiteCursorObservationAdmissionState.CursorAdmissionMismatch,
-      cursor.reasons.map((entry) => entry.reasonKind),
-      graphExact.state,
-      hook.state,
-      local.state,
-      binding.state,
-      authoredBundleCount,
-      null,
-      null,
-      hook.boundaryEntryOrdinal,
-      local.completedExtractions.length,
-      0,
-    );
-  }
-
-  const transcript = cursor.transcript;
+  const transcript = cursor.transcript!;
   const completion = cursor.completion;
   if (completion == null) {
     throw new Error('Cursor transcript observation lost its ordinary-root completion decision.');
@@ -881,6 +734,36 @@ function occurrenceProjection(node: TemplateCompilerNodeOccurrence): readonly un
     return ['comment', node.occurrenceKey, node.text, node.semanticKind, generationProjection(node.generation)];
   }
   return ['unknown', node.occurrenceKey, node.nodeKind, generationProjection(node.generation), children];
+}
+
+function observationAdmissionState(
+  state: TemplateCompilerRootSiteRunState,
+): Exclude<
+  TemplateCompilerRootSiteCursorObservationAdmissionState,
+  TemplateCompilerRootSiteCursorObservationAdmissionState.CursorTranscript
+> {
+  switch (state) {
+    case TemplateCompilerRootSiteRunState.GraphMismatch:
+      return TemplateCompilerRootSiteCursorObservationAdmissionState.GraphMismatch;
+    case TemplateCompilerRootSiteRunState.HookOpen:
+      return TemplateCompilerRootSiteCursorObservationAdmissionState.HookOpen;
+    case TemplateCompilerRootSiteRunState.HookAbrupt:
+      return TemplateCompilerRootSiteCursorObservationAdmissionState.HookAbrupt;
+    case TemplateCompilerRootSiteRunState.LocalRefused:
+      return TemplateCompilerRootSiteCursorObservationAdmissionState.LocalRefused;
+    case TemplateCompilerRootSiteRunState.LocalAbrupt:
+      return TemplateCompilerRootSiteCursorObservationAdmissionState.LocalAbrupt;
+    case TemplateCompilerRootSiteRunState.LocalExtractedUnsupported:
+      return TemplateCompilerRootSiteCursorObservationAdmissionState.LocalExtractedUnsupported;
+    case TemplateCompilerRootSiteRunState.FamilyMissing:
+      return TemplateCompilerRootSiteCursorObservationAdmissionState.FamilyMissing;
+    case TemplateCompilerRootSiteRunState.BindingMismatch:
+      return TemplateCompilerRootSiteCursorObservationAdmissionState.RootBindingMismatch;
+    case TemplateCompilerRootSiteRunState.CursorMismatch:
+      return TemplateCompilerRootSiteCursorObservationAdmissionState.CursorAdmissionMismatch;
+    case TemplateCompilerRootSiteRunState.CursorTranscript:
+      throw new Error('Exact root-site run cannot be projected as an unavailable observation.');
+  }
 }
 
 function unavailable(
