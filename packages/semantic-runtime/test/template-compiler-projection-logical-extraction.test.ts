@@ -39,6 +39,17 @@ import {
   TemplateCompilerContextFamilyTargetPlanState,
 } from '../src/template/template-compiler-context-family-target-plan.js';
 import {
+  prepareTemplateCompilerContextFamilyStructuralSchedule,
+  TemplateCompilerFamilyContextInitializationKind,
+  type TemplateCompilerFamilyContextExecutionBand,
+  TemplateCompilerFamilyLoweredElementExecutionBand,
+  TemplateCompilerFamilyLoweredElementScheduleEntry,
+  TemplateCompilerFamilyReachedElementExecutionBand,
+  TemplateCompilerFamilyReachedElementScheduleEntry,
+  TemplateCompilerFamilyTemplateControllerScheduleEntry,
+  TemplateCompilerFamilyTextScheduleEntry,
+} from '../src/template/template-compiler-context-family-structural-schedule.js';
+import {
   assembleTemplateCompilerContextFamilyRows,
   TemplateCompilerContextFamilyRowAssemblyState,
   TemplateCompilerFamilyOccurrenceArrivalPosture,
@@ -942,8 +953,17 @@ describe('template compiler projection logical extraction', () => {
       && membership.occurrence.tagName === 'projection-logical-leaf'
     )?.occurrence;
     if (host == null) throw new Error('Expected terminal TC host membership.');
+    const schedule = prepareTemplateCompilerContextFamilyStructuralSchedule(preparation);
 
     expect(result.state).toBe(TemplateCompilerContextFamilyTargetPlanState.Exact);
+    expect(schedule.isCurrent()).toBe(true);
+    expect(schedule.contexts.map((context) => context.initialization.initializationKind)).toEqual([
+      TemplateCompilerFamilyContextInitializationKind.RootBound,
+      TemplateCompilerFamilyContextInitializationKind.Generated,
+      TemplateCompilerFamilyContextInitializationKind.Generated,
+      TemplateCompilerFamilyContextInitializationKind.Generated,
+      TemplateCompilerFamilyContextInitializationKind.Generated,
+    ]);
     expect(preparation.isCurrent()).toBe(true);
     expect(preparation.targetPlan.isSealed).toBe(true);
     expect(allocation.preparedAllocation.ledger.state).toBe(TemplateCompilerLiveAllocationLedgerState.Prepared);
@@ -970,6 +990,58 @@ describe('template compiler projection logical extraction', () => {
     expect(sourceRow?.transitionSourceAuthority?.destinationContext).toBe(contexts[2]);
     expect(sourceRow?.transitionSourceAuthority?.destinationMembership)
       .toBe(contexts[2]?.occurrenceMembershipFor(host));
+    expect(schedule.contexts[0]?.entries.some((entry) =>
+      entry instanceof TemplateCompilerFamilyReachedElementScheduleEntry
+      && entry.templateController != null
+    )).toBe(true);
+    expect(schedule.contexts[2]?.entries.some((entry) =>
+      entry instanceof TemplateCompilerFamilyLoweredElementScheduleEntry
+      && entry.projection != null
+      && entry.targetRow != null
+    )).toBe(true);
+    const sourceHostSchedule = schedule.contexts[0]?.entries.find((entry) =>
+      entry instanceof TemplateCompilerFamilyReachedElementScheduleEntry
+      && entry.disposition.site.event.element.tagName === 'projection-logical-leaf'
+    );
+    const loweringHostSchedule = schedule.contexts[2]?.entries.find((entry) =>
+      entry instanceof TemplateCompilerFamilyLoweredElementScheduleEntry
+      && entry.disposition.site.event.element.tagName === 'projection-logical-leaf'
+    );
+    expect(sourceHostSchedule instanceof TemplateCompilerFamilyReachedElementScheduleEntry
+      ? sourceHostSchedule.attributes.every((attribute) =>
+          attribute.contextMapping === schedule.contexts[0]?.contextMapping
+        )
+      : false).toBe(true);
+    expect(loweringHostSchedule instanceof TemplateCompilerFamilyLoweredElementScheduleEntry
+      ? loweringHostSchedule.contextMapping
+      : null).toBe(schedule.contexts[2]?.contextMapping);
+    expect(schedule.contexts[3]?.entries.some((entry) =>
+      entry instanceof TemplateCompilerFamilyTextScheduleEntry
+      && entry.expansion != null
+      && entry.rows.length === 1
+    )).toBe(true);
+    const structuralTrace = familyStructuralTrace(schedule.rootExecution);
+    const requiredTrace = [
+      'reach:projection-logical-leaf',
+      'tc:enter:projection-logical-leaf',
+      'init:generated:template-controller:1',
+      'init:generated:template-controller:2',
+      'projection:default:enter',
+      'init:generated:projection:3',
+      'projection:default:return',
+      'projection:named:enter',
+      'init:generated:projection:4',
+      'projection:named:return',
+      'target:projection-logical-leaf',
+      'tc:return:projection-logical-leaf',
+      'reach:div',
+    ];
+    let previousTraceOrdinal = -1;
+    for (const label of requiredTrace) {
+      const ordinal = structuralTrace.indexOf(label);
+      expect(ordinal, label).toBeGreaterThan(previousTraceOrdinal);
+      previousTraceOrdinal = ordinal;
+    }
     const templateControllerDispositions = preparation.attributeDispositionMappings.filter((mapping) =>
       mapping.draft.contribution.targetLane === TemplateCompilerLiveAttributeTargetLane.TemplateController
     );
@@ -1002,6 +1074,7 @@ describe('template compiler projection logical extraction', () => {
     const result = prepareTemplateCompilerContextFamilyTargetPlan(allocation);
     const preparation = result.preparation;
     if (preparation == null) throw new Error('Expected nested TC target plan.');
+    const schedule = prepareTemplateCompilerContextFamilyStructuralSchedule(preparation);
     const contexts = preparation.targetPlan.readContexts();
     const sourceRows = preparation.rowMappings.filter((mapping) =>
       mapping.row.sourceKind === TemplateCompilerTargetRowSourceKind.TemplateControllerTransitionSource
@@ -1018,6 +1091,19 @@ describe('template compiler projection logical extraction', () => {
       TemplateCompilerTargetContextRole.TemplateController,
       TemplateCompilerTargetContextRole.TemplateController,
     ]);
+    expect(schedule.contexts.map((context) => context.initialization.initializationKind)).toEqual([
+      TemplateCompilerFamilyContextInitializationKind.RootBound,
+      TemplateCompilerFamilyContextInitializationKind.AdoptedInput,
+      TemplateCompilerFamilyContextInitializationKind.Generated,
+    ]);
+    expect(schedule.contexts[1]?.initialization.inputCarrier).toBeInstanceOf(TemplateCompilerElementOccurrence);
+    expect(schedule.contexts[1]?.initialization.inputCarrier?.tagName).toBe('template');
+    expect(schedule.contexts[1]?.initialization.inputContent)
+      .toBe(schedule.contexts[1]?.initialization.inputCarrier?.templateContent);
+    expect(schedule.contexts[1]?.initialization.adoptionOwner?.receipt.terminalLeaf)
+      .toBe(schedule.contexts[1]?.contextMapping.cursorContext);
+    expect(schedule.incomingOwnerByContext.get(schedule.contexts[1]!.contextMapping))
+      .toBeInstanceOf(TemplateCompilerFamilyTemplateControllerScheduleEntry);
     expect(sourceRows).toHaveLength(2);
     expect(sourceRows.map((mapping) => mapping.row.transitionSourceAuthority?.sourceArrivalPosture)).toEqual([
       TemplateCompilerFamilyOccurrenceArrivalPosture.Initial,
@@ -1073,9 +1159,11 @@ describe('template compiler projection logical extraction', () => {
       const targetResult = prepareTemplateCompilerContextFamilyTargetPlan(preparation);
       const target = targetResult.preparation;
       if (target == null) throw new Error(`Expected target plan for '${expected.name}'.`);
+      const schedule = prepareTemplateCompilerContextFamilyStructuralSchedule(target);
 
       expect(result.state, expected.name).toBe(TemplateCompilerContextFamilyAllocationState.Exact);
       expect(targetResult.state, expected.name).toBe(TemplateCompilerContextFamilyTargetPlanState.Exact);
+      expect(schedule.isCurrent(), expected.name).toBe(true);
       expect(namespace.readReservationCounts(), expected.name).toEqual(countsBefore);
       expect(preparation.contextDefinitions.map((definition) => definition.ownerKind), expected.name)
         .toEqual(expected.ownerKinds);
@@ -1092,6 +1180,30 @@ describe('template compiler projection logical extraction', () => {
       ]);
       if (expected.name === 'projection-logical-host') {
         expect(target.targetPlan.readContexts().at(-1)?.readRows()).toEqual([]);
+        expect(schedule.contexts.at(-1)?.entries).toEqual([]);
+        const projectionEntry = schedule.contexts[0]?.entries.find((entry) =>
+          entry instanceof TemplateCompilerFamilyLoweredElementScheduleEntry
+          && entry.projection != null
+        );
+        expect(projectionEntry instanceof TemplateCompilerFamilyLoweredElementScheduleEntry
+          ? projectionEntry.projection?.groups.map((group) => [
+              group.projection.slotName,
+              group.contributors.length,
+              group.band.entrants.length,
+            ])
+          : []).toEqual([
+          ['default', 1, 1],
+          ['named', 2, 2],
+          ['empty', 1, 0],
+        ]);
+        expect(projectionEntry instanceof TemplateCompilerFamilyLoweredElementScheduleEntry
+          ? projectionEntry.projection?.discardedContributors.length
+          : null).toBe(1);
+        const trace = familyStructuralTrace(schedule.rootExecution);
+        expect(trace.indexOf('projection:empty:enter'))
+          .toBeLessThan(trace.indexOf('target:projection-logical-leaf'));
+        expect(trace.indexOf('init:generated:projection:3'))
+          .toBeGreaterThan(trace.indexOf('projection:empty:enter'));
       }
     }
   });
@@ -1407,6 +1519,48 @@ function compilationFor(
   );
   if (compilation == null) throw new Error(`Expected projection fixture compilation '${name}'.`);
   return compilation;
+}
+
+function familyStructuralTrace(
+  band: TemplateCompilerFamilyContextExecutionBand,
+  trace: string[] = [],
+): readonly string[] {
+  const context = band.schedule.contextMapping.cursorContext;
+  trace.push(
+    `init:${band.schedule.initialization.initializationKind}:${context.contextKind}:${context.ordinal}`,
+  );
+  for (const entry of band.entries) {
+    if (entry instanceof TemplateCompilerFamilyReachedElementExecutionBand) {
+      const tagName = entry.schedule.disposition.site.event.element.tagName;
+      trace.push(`reach:${tagName}`);
+      for (const attribute of entry.schedule.attributes) {
+        trace.push(`attribute:${tagName}:${attribute.draft.qualifiedName}:${attribute.requiresConsumption}`);
+      }
+      if (entry.templateController != null) {
+        trace.push(`tc:enter:${tagName}`);
+        for (const child of entry.templateController.contextChain) familyStructuralTrace(child, trace);
+        trace.push(`tc:return:${tagName}`);
+      }
+      continue;
+    }
+    if (entry instanceof TemplateCompilerFamilyLoweredElementExecutionBand) {
+      const tagName = entry.schedule.disposition.site.event.element.tagName;
+      trace.push(`lower:${tagName}`);
+      for (const processContent of entry.schedule.processContent) {
+        trace.push(`process:${tagName}:${processContent.removalOrdinal}`);
+      }
+      for (const projection of entry.projectionGroups) {
+        trace.push(`projection:${projection.schedule.projection.slotName}:enter`);
+        familyStructuralTrace(projection.context, trace);
+        trace.push(`projection:${projection.schedule.projection.slotName}:return`);
+      }
+      if (entry.schedule.targetRow != null) trace.push(`target:${tagName}`);
+      continue;
+    }
+    trace.push(`text:${entry.expansion == null ? 'static' : 'expansion'}`);
+  }
+  trace.push(`return:${context.contextKind}:${context.ordinal}`);
+  return trace;
 }
 
 function occurrenceLabel(occurrence: TemplateCompilerNodeOccurrence): string {

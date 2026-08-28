@@ -44,6 +44,11 @@ import {
   TemplateCompilerContextFamilyTargetPlanState,
 } from '../src/template/template-compiler-context-family-target-plan.js';
 import {
+  prepareTemplateCompilerContextFamilyStructuralSchedule,
+  TemplateCompilerFamilyContextInitializationKind,
+  TemplateCompilerFamilyLoweredElementScheduleEntry,
+} from '../src/template/template-compiler-context-family-structural-schedule.js';
+import {
   assembleTemplateCompilerContextFamilyRows,
 } from '../src/template/template-compiler-context-family-row-assembly.js';
 import {
@@ -1196,6 +1201,7 @@ describe('template compiler root site cursor', () => {
     if (target == null) {
       throw new Error(`Expected root-only processContent target plan: ${targetResult.reasons[0]?.summary ?? 'unknown'}`);
     }
+    const schedule = prepareTemplateCompilerContextFamilyStructuralSchedule(target);
     const removed = rootProcessEvent.result.removedOccurrences;
     const removedSet = new Set(removed);
     const removedSiteSet = new Set(rootProcessEvent.result.removedSiteOccurrences);
@@ -1232,6 +1238,17 @@ describe('template compiler root site cursor', () => {
     expect(rootWires.state).toBe(TemplateCompilerFamilyWireFundingState.Exact);
     expect(allocation.state).toBe(TemplateCompilerContextFamilyAllocationState.Exact);
     expect(targetResult.state).toBe(TemplateCompilerContextFamilyTargetPlanState.Exact);
+    expect(schedule.contexts.map((context) => context.initialization.initializationKind)).toEqual([
+      TemplateCompilerFamilyContextInitializationKind.RootBound,
+    ]);
+    const processSchedule = schedule.contexts[0]?.entries.find((entry) =>
+      entry instanceof TemplateCompilerFamilyLoweredElementScheduleEntry
+      && entry.processContent.length > 0
+    );
+    expect(processSchedule).toBeInstanceOf(TemplateCompilerFamilyLoweredElementScheduleEntry);
+    expect(processSchedule instanceof TemplateCompilerFamilyLoweredElementScheduleEntry
+      ? processSchedule.processContent.map((entry) => entry.removal)
+      : []).toEqual(rootProcessEvent.result.removals);
     expect(namespace.readReservationCounts()).toEqual(countsBefore);
     expect(preparation.contextDefinitions.map((definition) => definition.ownerKind)).toEqual([
       TemplateCompilerFundedContextDefinitionOwnerKind.Root,
@@ -1367,9 +1384,15 @@ describe('template compiler root site cursor', () => {
     if (target == null) {
       throw new Error(`Expected capture-projection target plan: ${targetResult.reasons[0]?.summary ?? 'unknown'}`);
     }
+    const schedule = prepareTemplateCompilerContextFamilyStructuralSchedule(target);
 
     expect(allocation.state).toBe(TemplateCompilerContextFamilyAllocationState.Exact);
     expect(targetResult.state).toBe(TemplateCompilerContextFamilyTargetPlanState.Exact);
+    expect(schedule.contexts.map((context) => context.initialization.initializationKind)).toEqual([
+      TemplateCompilerFamilyContextInitializationKind.RootBound,
+      TemplateCompilerFamilyContextInitializationKind.Generated,
+      TemplateCompilerFamilyContextInitializationKind.Generated,
+    ]);
     expect(namespace.readReservationCounts()).toEqual(countsBefore);
     expect(preparation.contextDefinitions.map((definition) => definition.ownerKind)).toEqual([
       TemplateCompilerFundedContextDefinitionOwnerKind.Root,
