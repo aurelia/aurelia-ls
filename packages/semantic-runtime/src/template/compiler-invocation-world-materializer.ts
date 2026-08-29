@@ -47,14 +47,25 @@ export class TemplateCompilerWorldSelection {
 /** Shared world transitions for one compiler invocation before/after direct local discovery. */
 export class TemplateCompilerInvocationWorldMaterializer {
   private readonly materializer: TemplateCompilerWorldMaterializer;
-  private readonly projector: TemplateCompilerWorldMaterializer;
+  private readonly projector: TemplateCompilerWorldMaterializer | null;
 
-  constructor(
-    readonly store: KernelStore,
+  private constructor(
+    readonly store: KernelStore | null,
     readonly publication: ComputationRun,
   ) {
     this.materializer = new TemplateCompilerWorldMaterializer(publication);
-    this.projector = new TemplateCompilerWorldMaterializer(store);
+    this.projector = store == null ? null : new TemplateCompilerWorldMaterializer(store);
+  }
+
+  static committedReprojecting(
+    store: KernelStore,
+    publication: ComputationRun,
+  ): TemplateCompilerInvocationWorldMaterializer {
+    return new TemplateCompilerInvocationWorldMaterializer(store, publication);
+  }
+
+  static candidateStrict(publication: ComputationRun): TemplateCompilerInvocationWorldMaterializer {
+    return new TemplateCompilerInvocationWorldMaterializer(null, publication);
   }
 
   constructPostLocalWorld(
@@ -63,6 +74,7 @@ export class TemplateCompilerInvocationWorldMaterializer {
     localKey: string,
     sourceAddressHandle: AddressHandle | null,
   ): TemplateCompilerWorldSelection {
+    this.requirePublishingLifetime();
     const localResources = this.localResources(definitions, sourceAddressHandle);
     const parent = parentAuthority.current();
     const world = this.materializer.constructDerived(this.postLocalRequest(
@@ -78,12 +90,12 @@ export class TemplateCompilerInvocationWorldMaterializer {
         `template-compiler-world:${localKey}:local-template-world`,
         () => this.publication.isCurrent()
           ? world
-          : this.projector.projectDerived(this.postLocalRequest(
+          : this.projector?.projectDerived(this.postLocalRequest(
               parentAuthority.current(),
               localResources,
               localKey,
               sourceAddressHandle,
-            )),
+            )) ?? null,
       ),
     );
   }
@@ -109,6 +121,7 @@ export class TemplateCompilerInvocationWorldMaterializer {
     localKey: string,
     sourceAddressHandle: AddressHandle | null,
   ): TemplateCompilerWorldSelection {
+    this.requirePublishingLifetime();
     const parent = parentAuthority.current();
     const request = this.definitionHookRequest(
       parent,
@@ -126,7 +139,9 @@ export class TemplateCompilerInvocationWorldMaterializer {
         `template-compiler-world:${localKey}:hook-world`,
         () => this.publication.isCurrent()
           ? world
-          : this.projector.projectDerived(this.definitionHookRequest(
+          : this.projector == null || this.store == null
+            ? null
+            : this.projector.projectDerived(this.definitionHookRequest(
               parentAuthority.current(),
               definition,
               appRootDefinitionProductHandle,
@@ -270,5 +285,11 @@ export class TemplateCompilerInvocationWorldMaterializer {
       seams.push(seam);
     }
     return seams;
+  }
+
+  private requirePublishingLifetime(): void {
+    if (this.store == null) {
+      throw new Error('Candidate-only compiler invocation worlds may be projected but not published.');
+    }
   }
 }

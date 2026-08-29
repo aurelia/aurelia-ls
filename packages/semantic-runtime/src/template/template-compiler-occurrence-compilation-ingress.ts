@@ -104,6 +104,10 @@ export class TemplateCompilerOccurrenceCompilationIngressPreparation {
   isCurrent(): boolean {
     return occurrenceDefinitionPreparationFrontierIsCurrent(this.definitionPreparation);
   }
+
+  hasImmediateFrontier(): boolean {
+    return occurrenceDefinitionPreparationFrontierIsStructurallyCurrent(this.definitionPreparation);
+  }
 }
 
 /** Complete direct-sibling child-ingress preparation; nested cohorts are prepared only after their parent runs. */
@@ -135,6 +139,10 @@ export class TemplateCompilerOccurrenceCompilationIngressCohort {
 
   isCurrent(): boolean {
     return occurrenceDefinitionPreparationFrontierIsCurrent(this.definitionPreparation);
+  }
+
+  hasImmediateFrontier(): boolean {
+    return occurrenceDefinitionPreparationFrontierIsStructurallyCurrent(this.definitionPreparation);
   }
 }
 
@@ -232,13 +240,19 @@ export class TemplateCompilerOccurrenceCompilationIngressMaterializer {
 function occurrenceDefinitionPreparationFrontierIsCurrent(
   definitionPreparation: LocalTemplateOccurrenceDefinitionPreparation,
 ): boolean {
+  return definitionPreparation.rootPartition.incoming.family.isCurrent()
+    && occurrenceDefinitionPreparationFrontierIsStructurallyCurrent(definitionPreparation);
+}
+
+function occurrenceDefinitionPreparationFrontierIsStructurallyCurrent(
+  definitionPreparation: LocalTemplateOccurrenceDefinitionPreparation,
+): boolean {
   const partition = definitionPreparation.rootPartition;
   const family = partition.incoming.family;
   const binding = family.binding;
   const execution = binding.execution;
   return definitionPreparation.isModuleConstructed()
     && partition.isModuleConstructed()
-    && family.isCurrent()
     && partition.incoming === family.rootView
     && partition.closure === binding.bootstrapClosure
     && binding.forest.mutationRevision === partition.closure.forestMutationRevision

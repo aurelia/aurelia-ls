@@ -1,7 +1,7 @@
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { afterAll, beforeAll, describe, expect, test } from 'vitest';
+import { afterAll, beforeAll, describe, expect, test, vi } from 'vitest';
 
 import { createSemanticRuntime } from '../src/api/runtime.js';
 import {
@@ -18,6 +18,10 @@ import { LocalTemplateDefinitionMaterializer } from '../src/template/local-templ
 import {
   TemplateCompilerOccurrenceCompilationIngressMaterializer,
 } from '../src/template/template-compiler-occurrence-compilation-ingress.js';
+import {
+  TemplateCompilerOccurrenceWorldClosureMaterializer,
+} from '../src/template/template-compiler-occurrence-world-closure.js';
+import { TemplateCompilerInvocationWorldMaterializer } from '../src/template/compiler-invocation-world-materializer.js';
 import { TemplateProductDetails } from '../src/template/product-details.js';
 import { TemplateSourceKind } from '../src/template/compilation-unit.js';
 import {
@@ -237,8 +241,9 @@ describe('template compiler raw occurrence precedent', () => {
       expect(definitionPreparation.ownerDefinition).toBe(rootRuntime.definition);
       expect(definitionPreparation.entries.map((entry) => entry.definition.name))
         .toEqual(['mode-panel', 'local-icon']);
-      expect(definitionPreparation.entries.map((entry) => entry.siteTransfer))
-        .toEqual(rootPartition.transfers);
+      expect(definitionPreparation.entries.every((entry, index) =>
+        entry.siteTransfer === rootPartition.transfers[index]
+      )).toBe(true);
       for (const [entry, transfer] of definitionPreparation.entries.map((entry, index) => [
         entry,
         rootPartition.transfers[index]!,
@@ -304,12 +309,53 @@ describe('template compiler raw occurrence precedent', () => {
       const definitionMaterialization = definitions.publishOccurrenceHandoff(definitionPreparation);
       expect(definitionMaterialization.isModuleConstructed()).toBe(true);
       expect(definitionMaterialization.preparation).toBe(definitionPreparation);
-      expect(definitionMaterialization.entries).toEqual(definitionPreparation.entries);
+      expect(definitionMaterialization.entries.every((entry, index) =>
+        entry === definitionPreparation.entries[index]
+      )).toBe(true);
       for (const entry of definitionMaterialization.entries) {
         expect(run.readProductDetail(ResourceProductDetails.Definition, entry.definition.productHandle!))
           .toBe(entry.definition);
       }
       expect(() => definitions.publishOccurrenceHandoff(definitionPreparation)).toThrow(/already published/);
+
+      const beforeWorldProjection = run.readKernelCountSnapshot().totalRecords;
+      const projectWorld = vi.spyOn(TemplateCompilerInvocationWorldMaterializer.prototype, 'projectPostLocalWorld');
+      const worldMaterializer = new TemplateCompilerOccurrenceWorldClosureMaterializer(run);
+      const worldClosure = (() => {
+        try {
+          const result = worldMaterializer.projectRootCohort(definitionMaterialization, ingressCohort);
+          expect(projectWorld).toHaveBeenCalledTimes(1);
+          return result;
+        } finally {
+          projectWorld.mockRestore();
+        }
+      })();
+      expect(() => new TemplateCompilerOccurrenceWorldClosureMaterializer(run)
+        .projectRootCohort(definitionMaterialization, ingressCohort)).toThrow(/another materializer/);
+      expect(run.readKernelCountSnapshot().totalRecords).toBe(beforeWorldProjection);
+      expect(worldClosure.preLocalWorld).toBe(root.preLocalCompilerWorld);
+      expect(worldClosure.postLocalWorld).not.toBe(root.preLocalCompilerWorld);
+      expect(worldClosure.postLocalWorld.world.productHandle).toBe(rootRuntime.compilerWorld.world.productHandle);
+      expect(worldClosure.postLocalWorld.resourceScope.productHandle)
+        .toBe(rootRuntime.compilerWorld.resourceScope.productHandle);
+      expect(worldClosure.postLocalWorld).not.toBe(rootRuntime.compilerWorld);
+      expect(run.readProductDetail(TemplateProductDetails.World, worldClosure.postLocalWorld.world.productHandle))
+        .toBe(rootRuntime.compilerWorld.world);
+      expect(worldClosure.rootTraversalProjection.world).toBe(worldClosure.postLocalWorld);
+      expect(worldClosure.rootTraversalProjection.hasPendingFrontier()).toBe(true);
+      expect(worldClosure.childHookParentProjections.every((entry, index) =>
+        entry.definitionEntry === definitionMaterialization.entries[index]
+        && entry.ingress === ingressCohort.entries[index]
+      )).toBe(true);
+      expect(worldClosure.childHookParentProjections.every((entry) =>
+        entry.world === worldClosure.postLocalWorld
+        && entry.hasPendingFrontier()
+      )).toBe(true);
+      for (const entry of definitionMaterialization.entries) {
+        expect(worldClosure.postLocalWorld.resourceResolver.el(entry.definition.name)?.definitionProductHandle)
+          .toBe(entry.definition.productHandle);
+      }
+      expect(worldClosure.postLocalWorld.resourceResolver.el('owner-badge')).not.toBeNull();
 
       const partitionChild = (
         transfer: TemplateCompilerNormalizedSiteLaneTransfer,
@@ -415,8 +461,12 @@ describe('template compiler raw occurrence precedent', () => {
       )).toHaveLength(20);
       expect(ingressCohort.isCurrent()).toBe(false);
       expect(ingressCohort.entries.every((entry) => !entry.isCurrent())).toBe(true);
+      expect(worldClosure.rootTraversalProjection.hasPendingFrontier()).toBe(true);
+      expect(worldClosure.childHookParentProjections.every((entry) => !entry.hasPendingFrontier())).toBe(true);
       expect(() => ingressMaterializer.prepareRootChildren(definitionPreparation))
         .toThrow(/no longer at its immediate root frontier/);
+      expect(() => worldMaterializer.projectRootCohort(definitionMaterialization, ingressCohort))
+        .toThrow(/no longer at its claimable sibling frontier/);
 
       const mismatched = mismatchedPrecedent(root, rootRuntime);
       const mismatch = bindTemplateCompilerRootOccurrencePrecedentInvocation({
@@ -749,6 +799,9 @@ describe('template compiler raw occurrence precedent', () => {
       const definitionPreparation = definitions.prepareOccurrenceHandoff(partition);
       const ingressCohort = new TemplateCompilerOccurrenceCompilationIngressMaterializer(run)
         .prepareRootChildren(definitionPreparation);
+      const definitionMaterialization = definitions.publishOccurrenceHandoff(definitionPreparation);
+      const worldMaterializer = new TemplateCompilerOccurrenceWorldClosureMaterializer(run);
+      const worldClosure = worldMaterializer.projectRootCohort(definitionMaterialization, ingressCohort);
       return {
         run,
         execution,
@@ -759,6 +812,9 @@ describe('template compiler raw occurrence precedent', () => {
         lanes,
         definitionPreparation,
         ingressCohort,
+        definitionMaterialization,
+        worldMaterializer,
+        worldClosure,
       };
     };
 
@@ -783,6 +839,7 @@ describe('template compiler raw occurrence precedent', () => {
       expect(previousView.binding.isCurrent()).toBe(false);
       expect(previousView.lanes.isCurrent()).toBe(false);
       expect(previousView.ingressCohort.entries.every((entry) => !entry.isCurrent())).toBe(true);
+      expect(previousView.worldClosure.isCurrent()).toBe(false);
       const stale = bindTemplateCompilerRootOccurrencePrecedentInvocation({
         appCurrentness: app,
         execution: previousView.execution,
@@ -831,6 +888,14 @@ describe('template compiler raw occurrence precedent', () => {
             === previousView.ingressCohort.entries[index]?.unitIngress.templateSource.productHandle
         )).toBe(true);
         expect(nextView.ingressCohort.entries.every((entry) => entry.isCurrent())).toBe(true);
+        expect(nextView.worldClosure.isCurrent()).toBe(true);
+        expect(nextView.worldClosure.postLocalWorld).not.toBe(previousView.worldClosure.postLocalWorld);
+        expect(nextView.worldClosure.postLocalWorld.world.productHandle)
+          .toBe(previousView.worldClosure.postLocalWorld.world.productHandle);
+        expect(() => nextView.worldMaterializer.projectRootCohort(
+          previousView.definitionMaterialization,
+          nextView.ingressCohort,
+        )).toThrow(/foreign sibling materialization/);
       } finally {
         nextView.run.abort();
       }

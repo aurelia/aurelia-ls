@@ -235,6 +235,17 @@ classification, expression parsing, and instruction lowering converge on the sam
   legacy Markup child unit while its candidate details differ. It remains unpublished until an isolated replacement
   generation owns the atomic production cut and supplies the post-local compiler world. Repeated preparation returns the
   same cohort; another materializer cannot mint a competing ingress.
+- `template-compiler-occurrence-world-closure.ts` projects the complete direct-sibling post-local world exactly once
+  after the occurrence definitions are visible in the staged run. It uses the shared invocation-world transition, proves
+  every local lookup winner is the exact occurrence definition, and does not publish the legacy-colliding world/service
+  handles. The result keeps pre-local hook authority separate from root post-local traversal authority and gives every
+  child an ordered projection over the same post-local hook-parent world. App/browser or staged-definition loss makes
+  the projection stale and never reprojects uncommitted definitions from the store. It deliberately exposes no
+  spendable `TemplateCompilerWorldAuthority`: the later atomic replacement stage must publish/verify the canonical
+  world first. The
+  immediate ingress frontier remains only a claim precursor; child work invalidates claimability while the projected
+  world itself can remain current. A later atomic cohort claim/scheduler must spend all sibling capabilities before the
+  first hook runs.
 - `template-compiler-occurrence.ts` imports only the browser-effective compiler-carrier graph into a fresh mutable
   execution forest. Stable occurrence keys are independent of live paths; private edge collections and forest-owned
   move/detach operations preserve coherent root, child, template-content, and attribute ownership while the complete

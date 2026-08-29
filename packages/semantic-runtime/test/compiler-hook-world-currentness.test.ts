@@ -26,9 +26,11 @@ import {
 import {
   TemplateCompilerReadKind,
   TemplateCompilerReadObservation,
+  TemplateCompilerWorldAuthority,
 } from '../src/template/compiler-read-view.js';
 import { TemplateProductDetails } from '../src/template/product-details.js';
 import { CssClassMappingPropertyState } from '../src/template/css-class-mapping.js';
+import { TemplateCompilerInvocationWorldMaterializer } from '../src/template/compiler-invocation-world-materializer.js';
 import { TemplateCompilationLocus } from '../src/template/template-compilation-cohort.js';
 import type { TemplateResourceCompilationEmission } from '../src/template/template-compilation-project-pass.js';
 import { BrowserEffectiveTemplateMaterializer } from '../src/template/browser-effective-template-materializer.js';
@@ -167,6 +169,35 @@ describe('compiler-hook world currentness', () => {
         summary: 'Exercise exact CSS Modules hook membership before built-in hook execution lands.',
       });
       try {
+        const invocationWorlds = TemplateCompilerInvocationWorldMaterializer.candidateStrict(replayRun);
+        expect(() => invocationWorlds.constructPostLocalWorld(
+          TemplateCompilerWorldAuthority.fixed(changedMutable.compilerWorld),
+          [changedStable.definition],
+          'compiler-hook-currentness-replay:derived-local-world',
+          changedMutable.definition.sourceAddressHandle,
+        )).toThrow(/projected but not published/);
+        const derived = invocationWorlds.projectPostLocalWorld(
+          changedMutable.compilerWorld,
+          [changedStable.definition],
+          'compiler-hook-currentness-replay:derived-local-world',
+          changedMutable.definition.sourceAddressHandle,
+        );
+        expect(derived).not.toBe(changedMutable.compilerWorld);
+        expect(derived.compilerHooks.membershipState).toBe(changedMutable.compilerWorld.compilerHooks.membershipState);
+        expect(derived.compilerHooks.entries.length).toBe(changedMutable.compilerWorld.compilerHooks.entries.length);
+        expect(derived.compilerHooks.entries.every((entry, index) => {
+          const parent = changedMutable.compilerWorld.compilerHooks.entries[index];
+          return parent != null
+            && entry.lane === parent.lane
+            && entry.sourceOrdinal === parent.sourceOrdinal
+            && entry.hookKind === parent.hookKind
+            && entry.callable === parent.callable
+            && entry.cssClassMapping?.productHandle === derived.cssClassMapping.productHandle;
+        })).toBe(true);
+        expect(derived.cssClassMapping.lookup('mapped')).toEqual({
+          propertyState: CssClassMappingPropertyState.Value,
+          mappedClassName: 'mapped_hash',
+        });
         const browser = parseBrowserTemplateFragmentDraft(changedMarkup);
         const browserTemplate = new BrowserEffectiveTemplateMaterializer(replayRun).materialize({
           localKey: 'compiler-hook-currentness-replay:mutable-card',

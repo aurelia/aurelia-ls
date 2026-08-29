@@ -762,7 +762,7 @@ export class TemplateCompilationProjectPass {
     /** Stable framework support borrowed by standalone authoring compiler worlds. */
     readonly support: FrameworkSupportCatalogs,
   ) {
-    this.invocationWorlds = new TemplateCompilerInvocationWorldMaterializer(store, publication);
+    this.invocationWorlds = TemplateCompilerInvocationWorldMaterializer.committedReprojecting(store, publication);
     this.cohortPlanner = new TemplateCompilationCohortPlanner(store, publication, support);
     this.unitMaterializer = new TemplateCompilationUnitMaterializer(publication);
     this.htmlParser = new HtmlParseMaterializer(publication);
