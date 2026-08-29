@@ -20,6 +20,7 @@ import {
 } from './resource-reference.js';
 import type { FullResourceDefinition } from './resource-definition.js';
 import {
+  ResourceCarrierKind,
   ResourceDefinitionKind,
   runtimeResourceKeyForKind,
 } from './resource-kind.js';
@@ -59,8 +60,10 @@ export class ResourceDefinitionEffectConstraint {
 export class ResourceDefinitionIndex {
   static fromProject(project: ResourceRecognitionProjectResult): ResourceDefinitionIndex {
     const entries: ResourceDefinitionIndexEntry[] = [];
+    const aliasEntries: ResourceDefinitionIndexEntry[] = [];
     const effectConstraints: ResourceDefinitionEffectConstraint[] = [];
     const effectiveDefinitions = new Set(project.readDefinitions());
+    const carriersByDefinition = new Map<FullResourceDefinition, ResourceDefinitionCarrier>();
 
     for (const source of project.sources) {
       const moduleKey = normalizeModuleKey(source.moduleKey);
@@ -72,6 +75,9 @@ export class ResourceDefinitionIndex {
             ? []
             : [[addressHandle, observation] as const];
         }),
+      );
+      const headersBySourceAddress = new Map(
+        source.emission.definitions.map((header) => [header.sourceAddressHandle, header] as const),
       );
       for (const header of source.emission.definitions) {
         const observation = source.observations[header.observationIndex] ?? null;
@@ -92,22 +98,57 @@ export class ResourceDefinitionIndex {
         ));
       }
       for (const definition of source.convergence.definitions) {
+        const header = definition.sourceAddressHandle == null
+          ? null
+          : headersBySourceAddress.get(definition.sourceAddressHandle) ?? null;
+        const observation = header == null
+          ? null
+          : source.observations[header.observationIndex] ?? null;
+        if (observation == null) continue;
+        carriersByDefinition.set(definition, new ResourceDefinitionCarrier(
+          moduleKey,
+          observation.carrierKind,
+          observation.sourceNode,
+        ));
         if (!effectiveDefinitions.has(definition)) {
           continue;
         }
-        const observation = definition.target.addressHandle == null
+        const targetObservation = definition.target.addressHandle == null
           ? null
           : observationByTargetAddress.get(definition.target.addressHandle) ?? null;
         entries.push(new ResourceDefinitionIndexEntry(
           moduleKey,
           definition.target.localName,
-          observation?.sourceNode ?? null,
+          targetObservation?.sourceNode ?? null,
           definition,
         ));
       }
     }
 
-    return new ResourceDefinitionIndex(entries, effectConstraints);
+    for (const selection of project.definitionSelections) {
+      for (const candidate of [selection.definition, ...selection.supersededDefinitions]) {
+        const candidateCarrier = carriersByDefinition.get(candidate) ?? null;
+        const assigned = candidateCarrier == null
+          ? null
+          : assignedExpressionVariableDeclaration(candidateCarrier.sourceNode);
+        if (
+          candidateCarrier == null
+          || assigned == null
+          || !ts.isIdentifier(assigned.name)
+          || candidateCarrier.carrierKind !== ResourceCarrierKind.DefineCall
+        ) {
+          continue;
+        }
+        aliasEntries.push(new ResourceDefinitionIndexEntry(
+          candidateCarrier.moduleKey,
+          assigned.name.text,
+          candidateCarrier.sourceNode,
+          selection.definition,
+        ));
+      }
+    }
+
+    return new ResourceDefinitionIndex(entries, effectConstraints, aliasEntries);
   }
 
   private readonly byModuleLocal = new Map<string, readonly ResourceDefinitionIndexEntry[]>();
@@ -123,6 +164,7 @@ export class ResourceDefinitionIndex {
   constructor(
     readonly entries: readonly ResourceDefinitionIndexEntry[],
     readonly effectConstraints: readonly ResourceDefinitionEffectConstraint[] = [],
+    aliasEntries: readonly ResourceDefinitionIndexEntry[] = [],
   ) {
     for (const entry of entries) {
       if (entry.localName != null) {
@@ -155,6 +197,22 @@ export class ResourceDefinitionIndex {
           ...(this.byResourceName.get(nameKey) ?? []),
           entry.definition,
         ]);
+      }
+    }
+    for (const entry of aliasEntries) {
+      if (entry.localName != null) {
+        const moduleLocalKey = resourceDefinitionIndexKey(entry.moduleKey, entry.localName);
+        this.byModuleLocal.set(
+          moduleLocalKey,
+          appendUniqueEntry(this.byModuleLocal.get(moduleLocalKey) ?? [], entry),
+        );
+        this.byLocalName.set(
+          entry.localName,
+          appendUniqueDefinition(this.byLocalName.get(entry.localName) ?? [], entry.definition),
+        );
+      }
+      if (entry.sourceNode != null) {
+        this.bySourceNode.set(entry.sourceNode, entry.definition);
       }
     }
     for (const constraint of effectConstraints) {
@@ -193,6 +251,30 @@ export class ResourceDefinitionIndex {
     }
     const matching = new Set<FullResourceDefinition>();
     for (const declaration of symbol.declarations ?? []) {
+      for (const definition of this.lookupAllByTypeScriptDeclaration(typeSystem, declaration)) {
+        matching.add(definition);
+      }
+    }
+    return matching.size === 1 ? matching.values().next().value ?? null : null;
+  }
+
+  /** Resolve an authored expression only when TypeScript proves that its value binding cannot be reassigned. */
+  lookupByImmutableTypeScriptExpression(
+    typeSystem: TypeSystemProject,
+    expression: ts.Node,
+  ): FullResourceDefinition | null {
+    if (!ts.isExpression(expression)) {
+      return null;
+    }
+    const symbol = typeSystem.readProgramAliasedSymbolAtLocation(unwrapExpression(expression));
+    if (symbol == null) {
+      return null;
+    }
+    const matching = new Set<FullResourceDefinition>();
+    for (const declaration of symbol.declarations ?? []) {
+      if (!isImmutableResourceAliasDeclaration(declaration)) {
+        continue;
+      }
       for (const definition of this.lookupAllByTypeScriptDeclaration(typeSystem, declaration)) {
         matching.add(definition);
       }
@@ -294,10 +376,7 @@ export class ResourceDefinitionIndex {
     if (byIdentity != null) {
       return byIdentity;
     }
-    if (reference.localName == null) {
-      return null;
-    }
-    return this.lookupByLocalName(reference.localName);
+    return null;
   }
 
   lookupByDependencyReference(reference: ResourceDependencyReference | null): FullResourceDefinition | null {
@@ -392,6 +471,38 @@ export class ResourceDefinitionIndex {
     return this.effectConstraintBySourceNode.get(unwrapExpression(node)) ?? null;
   }
 
+}
+
+class ResourceDefinitionCarrier {
+  constructor(
+    readonly moduleKey: string,
+    readonly carrierKind: ResourceCarrierKind,
+    readonly sourceNode: ts.Node,
+  ) {}
+}
+
+function appendUniqueEntry(
+  entries: readonly ResourceDefinitionIndexEntry[],
+  entry: ResourceDefinitionIndexEntry,
+): readonly ResourceDefinitionIndexEntry[] {
+  return entries.some((candidate) => candidate.definition === entry.definition)
+    ? entries
+    : [...entries, entry];
+}
+
+function appendUniqueDefinition(
+  definitions: readonly FullResourceDefinition[],
+  definition: FullResourceDefinition,
+): readonly FullResourceDefinition[] {
+  return definitions.includes(definition)
+    ? definitions
+    : [...definitions, definition];
+}
+
+function isImmutableResourceAliasDeclaration(declaration: ts.Declaration): boolean {
+  return ts.isVariableDeclaration(declaration)
+    && ts.isVariableDeclarationList(declaration.parent)
+    && (declaration.parent.flags & ts.NodeFlags.Const) !== 0;
 }
 
 function resourceCarrierResultLocalName(node: ts.Node): string | null {

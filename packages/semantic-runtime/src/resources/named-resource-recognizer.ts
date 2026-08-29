@@ -401,12 +401,13 @@ function recognizeDefineCall(
   const targetRead = targetExpression == null
     ? null
     : readEvaluatedExpressionTarget(targetExpression, context.expressionReader);
-  // CustomElement.define returns the defined Type. When an explicit target remains dynamic but the call result is
-  // assigned to a declaration, that declaration is still an exact resource-only registration carrier. Preserve the
-  // target-evaluation seam below, but do not discard the define-call effect constraint or turn its later registration
-  // into an arbitrary unknown registry.
-  const target = (targetRead == null ? null : resourceTargetObservation(targetRead))
-    ?? generatedDefineCallTarget(call, resourceKind);
+  // CustomElement.define returns the defined Type. When an omitted, anonymous, or otherwise unaddressable target is
+  // assigned to a declaration, that declaration is the exact source identity through which later consumers receive
+  // the Type. Preserve genuine target-evaluation pressure below, but do not discard that addressable return carrier.
+  const evaluatedTarget = targetRead == null ? null : resourceTargetObservation(targetRead);
+  const target = evaluatedTarget?.localName != null && evaluatedTarget.declarationNode != null
+    ? evaluatedTarget
+    : generatedDefineCallTarget(call, resourceKind);
   const read = readNamedResourceDefinition(
     resourceKind,
     target,

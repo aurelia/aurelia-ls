@@ -599,7 +599,7 @@ export class AureliaApplicationMaterializer {
   ): ConfigurationTargetEmission {
     const source = this.recordsForTargetSource(context, observation, local);
     const records: KernelStoreRecord[] = [...source.records];
-    const definition = this.resourceDefinitionForTarget(observation, resources);
+    const definition = this.resourceDefinitionForTarget(context, observation, resources);
     const identityHandle = this.targetIdentityHandle(observation, local, definition);
     records.push(...this.recordsForTargetIdentity(context, observation, source, identityHandle, definition));
     return new ConfigurationTargetEmission(
@@ -631,10 +631,20 @@ export class AureliaApplicationMaterializer {
   }
 
   private resourceDefinitionForTarget(
+    context: ConfigurationRecognitionContext,
     observation: ConfigurationTargetObservation,
     resources: ResourceDefinitionIndex | null,
   ): FullResourceDefinition | null {
-    return resources?.lookupValue(observation.evaluation.value) ?? null;
+    if (resources == null) {
+      return null;
+    }
+    const evaluated = resources.lookupValue(observation.evaluation.value);
+    if (evaluated != null) {
+      return evaluated;
+    }
+    return context.typeSystem != null
+      ? resources.lookupByImmutableTypeScriptExpression(context.typeSystem, observation.node)
+      : null;
   }
 
   private targetIdentityHandle(
