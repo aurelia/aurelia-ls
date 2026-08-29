@@ -93,6 +93,66 @@ describe('resource definition source attachment', () => {
     expect(convention?.templateSource?.oldText).toContain('${message}');
   }, 30_000);
 
+  test('admits convention carriers through the AOT Vite provider and its nested convention options', async () => {
+    const workspaceRoot = await mkdtemp(path.join(packageRoot, '.resource-source-attachment-aot-vite-'));
+    try {
+      await writeWorkspaceFiles(workspaceRoot, {
+        'package.json': JSON.stringify({
+          name: 'aot-vite-convention-provider',
+          private: true,
+          type: 'module',
+          dependencies: { aurelia: '2.0.0-rc.2' },
+        }),
+        'tsconfig.json': JSON.stringify({
+          compilerOptions: {
+            target: 'ES2022',
+            module: 'ESNext',
+            moduleResolution: 'Bundler',
+            strict: true,
+            skipLibCheck: true,
+          },
+          include: ['src'],
+        }),
+        'vite.config.ts': [
+          "import { aureliaAot } from '@aurelia-ls/aot-vite';",
+          "import { defineConfig } from 'vite';",
+          'declare const provider: unknown;',
+          'export default defineConfig({',
+          '  plugins: aureliaAot({',
+          '    provider,',
+          "    conventions: { include: 'src/**/*.{ts,html}' },",
+          '  }),',
+          '});',
+        ].join('\n'),
+        'src/main.ts': [
+          "import Aurelia from 'aurelia';",
+          "import { App } from './app';",
+          'Aurelia.app(App).start();',
+        ].join('\n'),
+        'src/app.ts': 'export class App {}',
+        'src/app.html': '<aot-provider-card></aot-provider-card>',
+        'src/aot-provider-card.ts': 'export class AotProviderCard {}',
+        'src/aot-provider-card.html': '<p>${message}</p>',
+      });
+      const runtime = await createSemanticRuntime({
+        workspaceRoot,
+        storeKey: `contract:resource-definition-source-attachment:aot-vite:${path.basename(workspaceRoot)}`,
+      });
+      const app = await runtime.openApp({ analysisDepth: 'binding-observation' });
+      const attachment = namedSelection(
+        app.emission.resources.definitionSelections,
+        'aot-provider-card',
+      ).sourceAttachment;
+
+      expect(attachment?.carrierKind).toBe(ResourceCarrierKind.Convention);
+      expect(normalize(attachment?.carrier.sourcePath)).toBe('src/aot-provider-card.ts');
+      expect(normalize(attachment?.templateSource?.sourcePath)).toBe('src/aot-provider-card.html');
+      expect(attachment?.templateSource?.oldText).toBe('<p>${message}</p>');
+    } finally {
+      await rm(workspaceRoot, { force: true, recursive: true });
+    }
+  }, 30_000);
+
   test('retains recognition pressure with exact source text without deciding transform eligibility', async () => {
     const workspaceRoot = await mkdtemp(path.join(packageRoot, '.resource-source-attachment-open-'));
     try {

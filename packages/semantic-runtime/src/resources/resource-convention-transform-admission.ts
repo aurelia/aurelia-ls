@@ -51,7 +51,6 @@ import {
   EvaluationObjectPropertyState,
   EvaluationObjectValue,
   EvaluationUndefined,
-  EvaluationUndefinedValue,
   EvaluationValueKind,
   closedEvaluationPromiseFulfillment,
   type EvaluationValue,
@@ -82,7 +81,29 @@ import {
 } from '../kernel/publication.js';
 import { KernelVocabulary } from '../kernel/vocabulary.js';
 
-const AURELIA_VITE_PLUGIN_MODULES = new Set(['@aurelia/vite-plugin']);
+const enum ConventionPluginOptionsCarrier {
+  Direct = 'direct',
+  ConventionsProperty = 'conventions-property',
+}
+
+interface ConventionPluginFactoryDescriptor {
+  readonly moduleSpecifier: string;
+  readonly exportNames: readonly string[];
+  readonly optionsCarrier: ConventionPluginOptionsCarrier;
+}
+
+const AURELIA_VITE_PLUGIN_FACTORIES = new Map<string, ConventionPluginFactoryDescriptor>([
+  ['@aurelia/vite-plugin', {
+    moduleSpecifier: '@aurelia/vite-plugin',
+    exportNames: ['default'],
+    optionsCarrier: ConventionPluginOptionsCarrier.Direct,
+  }],
+  ['@aurelia-ls/aot-vite', {
+    moduleSpecifier: '@aurelia-ls/aot-vite',
+    exportNames: ['aureliaAot'],
+    optionsCarrier: ConventionPluginOptionsCarrier.ConventionsProperty,
+  }],
+]);
 const VITE_MODULES = new Set(['vite']);
 const DEFAULT_VITE_INCLUDE = 'src/**/*.{ts,js,html}';
 
@@ -123,6 +144,7 @@ class ResourceConventionTransformRead {
     readonly sourceNode: ts.Node,
     readonly include: readonly ConventionTransformSourcePattern[],
     readonly exclude: readonly ConventionTransformSourcePattern[],
+    readonly providerModuleSpecifier: string,
   ) {}
 }
 
@@ -159,6 +181,7 @@ class ConventionPluginEvaluation {
   constructor(
     readonly call: ts.CallExpression,
     readonly options: EvaluationValueEvidence,
+    readonly providerModuleSpecifier: string,
   ) {}
 }
 
@@ -179,7 +202,7 @@ function isConventionToolingFactoryValue(value: EvaluationValue): value is Conve
 /** Profile-owned interpretation state for one Vite convention-tooling evaluation generation. */
 export class ResourceConventionToolingEvaluationContext {
   private readonly plugins = new WeakMap<EvaluationObjectValue, ConventionPluginEvaluation>();
-  private readonly aureliaPluginFactories = new WeakSet<ConventionToolingFactoryValue>();
+  private readonly aureliaPluginFactories = new WeakMap<ConventionToolingFactoryValue, ConventionPluginFactoryDescriptor>();
   private readonly defineConfigFactories = new WeakSet<ConventionToolingFactoryValue>();
   private readonly executedAureliaPluginCalls = new WeakSet<ts.CallExpression>();
 
@@ -221,12 +244,14 @@ export class ResourceConventionToolingEvaluationContext {
             transfer.forkValue(plugin.options.value),
             plugin.options.openSeams,
           ),
+          plugin.providerModuleSpecifier,
         ));
       }
     }
     if (isConventionToolingFactoryValue(source) && isConventionToolingFactoryValue(target)) {
-      if (this.aureliaPluginFactories.has(source)) {
-        this.aureliaPluginFactories.add(target);
+      const pluginFactory = this.aureliaPluginFactories.get(source);
+      if (pluginFactory != null) {
+        this.aureliaPluginFactories.set(target, pluginFactory);
       }
       if (this.defineConfigFactories.has(source)) {
         this.defineConfigFactories.add(target);
@@ -257,10 +282,15 @@ export class ResourceConventionToolingEvaluationContext {
     }
     const firstArgument = arguments_[0]
       ?? new EvaluationValueEvidence(EvaluationUndefined, []);
-    if (this.aureliaPluginFactories.has(callee)) {
+    const pluginFactory = this.aureliaPluginFactories.get(callee);
+    if (pluginFactory != null) {
       this.executedAureliaPluginCalls.add(call);
       const marker = new EvaluationObjectValue(new Map(), false, call);
-      this.plugins.set(marker, new ConventionPluginEvaluation(call, firstArgument));
+      this.plugins.set(marker, new ConventionPluginEvaluation(
+        call,
+        this.conventionOptionsEvidence(pluginFactory, firstArgument, call, frame, host),
+        pluginFactory.moduleSpecifier,
+      ));
       return staticInvocationValue(marker, firstArgument.openSeams);
     }
     if (!this.defineConfigFactories.has(callee)) {
@@ -288,14 +318,50 @@ export class ResourceConventionToolingEvaluationContext {
     return staticInvocationValue(result, firstArgument.openSeams);
   }
 
+  private conventionOptionsEvidence(
+    factory: ConventionPluginFactoryDescriptor,
+    firstArgument: EvaluationValueEvidence,
+    call: ts.CallExpression,
+    frame: StaticInvocationFrame,
+    host: StaticIntrinsicEvaluationHost,
+  ): EvaluationValueEvidence {
+    if (factory.optionsCarrier === ConventionPluginOptionsCarrier.Direct) {
+      return firstArgument;
+    }
+    if (firstArgument.value.kind === EvaluationValueKind.Undefined) {
+      return new EvaluationValueEvidence(EvaluationUndefined, []);
+    }
+    if (firstArgument.value.kind !== EvaluationValueKind.Object) {
+      return new EvaluationValueEvidence(host.unknown(
+        'AOT Vite convention options did not close to an object.',
+        call.arguments[0] ?? call,
+        frame.moduleKey,
+        EvaluationOpenSeamKind.DynamicCall,
+      ), firstArgument.openSeams);
+    }
+    const read = readStaticValueProperty(firstArgument.value, 'conventions', firstArgument.value.node ?? call);
+    switch (read.kind) {
+      case StaticValueMemberReadKind.Value:
+      case StaticValueMemberReadKind.Candidate:
+        return new EvaluationValueEvidence(read.value, read.openSeams);
+      case StaticValueMemberReadKind.Getter:
+      case StaticValueMemberReadKind.Open:
+        return new EvaluationValueEvidence(host.unknown(
+          'AOT Vite conventions property remained open.',
+          call.arguments[0] ?? call,
+          frame.moduleKey,
+          EvaluationOpenSeamKind.DynamicCall,
+        ), read.openSeams);
+    }
+  }
+
   private resolveCommonJsRequire(
     moduleSpecifier: string,
     node: ts.Node,
   ): EvaluationValue | null {
-    if (AURELIA_VITE_PLUGIN_MODULES.has(moduleSpecifier)) {
-      const namespace = this.aureliaPluginModuleValue(moduleSpecifier, node);
-      this.aureliaPluginFactories.add(namespace);
-      return namespace;
+    const pluginFactory = AURELIA_VITE_PLUGIN_FACTORIES.get(moduleSpecifier);
+    if (pluginFactory != null) {
+      return this.aureliaPluginModuleValue(pluginFactory, node);
     }
     if (VITE_MODULES.has(moduleSpecifier)) {
       return this.viteModuleValue(moduleSpecifier, node);
@@ -304,15 +370,20 @@ export class ResourceConventionToolingEvaluationContext {
   }
 
   private resolveExternalImport(entry: EvaluationImportEntry): EvaluationValue | null {
-    if (AURELIA_VITE_PLUGIN_MODULES.has(entry.moduleSpecifier)) {
+    const pluginFactory = AURELIA_VITE_PLUGIN_FACTORIES.get(entry.moduleSpecifier);
+    if (pluginFactory != null) {
       if (
-        entry.importKind === EvaluationImportKind.Default
-        || (entry.importKind === EvaluationImportKind.Named && entry.exportName === 'default')
+        (entry.importKind === EvaluationImportKind.Default && pluginFactory.exportNames.includes('default'))
+        || (
+          entry.importKind === EvaluationImportKind.Named
+          && entry.exportName != null
+          && pluginFactory.exportNames.includes(entry.exportName)
+        )
       ) {
-        return this.aureliaPluginFactory(entry.moduleSpecifier, entry.node);
+        return this.aureliaPluginFactory(pluginFactory, entry.exportName ?? 'default', entry.node);
       }
       return entry.importKind === EvaluationImportKind.Namespace
-        ? this.aureliaPluginModuleValue(entry.moduleSpecifier, entry.node)
+        ? this.aureliaPluginModuleValue(pluginFactory, entry.node)
         : null;
     }
     if (!VITE_MODULES.has(entry.moduleSpecifier)) {
@@ -326,20 +397,35 @@ export class ResourceConventionToolingEvaluationContext {
       : null;
   }
 
-  private aureliaPluginModuleValue(moduleSpecifier: string, node: ts.Node): EvaluationObjectValue {
-    const factory = this.aureliaPluginFactory(moduleSpecifier, node);
-    return new EvaluationObjectValue(new Map([
-      ['default', new EvaluationObjectProperty('default', factory, node, EvaluationObjectPropertyState.Closed)],
-    ]), false, node);
+  private aureliaPluginModuleValue(
+    descriptor: ConventionPluginFactoryDescriptor,
+    node: ts.Node,
+  ): EvaluationObjectValue {
+    const properties = new Map<string, EvaluationObjectProperty>();
+    for (const exportName of descriptor.exportNames) {
+      properties.set(exportName, new EvaluationObjectProperty(
+        exportName,
+        this.aureliaPluginFactory(descriptor, exportName, node),
+        node,
+        EvaluationObjectPropertyState.Closed,
+      ));
+    }
+    const namespace = new EvaluationObjectValue(properties, false, node);
+    this.aureliaPluginFactories.set(namespace, descriptor);
+    return namespace;
   }
 
-  private aureliaPluginFactory(moduleSpecifier: string, node: ts.Node): EvaluationBoundaryValue {
+  private aureliaPluginFactory(
+    descriptor: ConventionPluginFactoryDescriptor,
+    exportName: string,
+    node: ts.Node,
+  ): EvaluationBoundaryValue {
     const factory = new EvaluationBoundaryValue(
       EvaluationBoundaryKind.ExternalModule,
-      `${moduleSpecifier}.default`,
+      `${descriptor.moduleSpecifier}.${exportName}`,
       node,
     );
-    this.aureliaPluginFactories.add(factory);
+    this.aureliaPluginFactories.set(factory, descriptor);
     return factory;
   }
 
@@ -480,7 +566,7 @@ function conventionTransformEmission(
         evidenceHandle,
         EvidenceKind.ConfigurationFlow,
         [EvidenceRole.Admission, EvidenceRole.Configuration],
-        '@aurelia/vite-plugin admits convention preprocessing for matching project sources.',
+        `${read.providerModuleSpecifier} admits convention preprocessing for matching project sources.`,
         sourceAddressHandle,
       ),
     ],
@@ -532,7 +618,12 @@ function readConventionTransforms(
       : new ConventionPluginOptionsRead(ConventionPluginOptionsState.Open);
     switch (options.state) {
       case ConventionPluginOptionsState.Enabled:
-        admissions.push(new ResourceConventionTransformRead(plugin.call, options.include, options.exclude));
+        admissions.push(new ResourceConventionTransformRead(
+          plugin.call,
+          options.include,
+          options.exclude,
+          plugin.providerModuleSpecifier,
+        ));
         break;
       case ConventionPluginOptionsState.Disabled:
         break;
