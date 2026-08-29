@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
@@ -120,6 +120,68 @@ describe('semantic AOT artifact provider', () => {
     });
     expect(runtime?.code).toContain('export function applyCompiledCustomElement');
   }, 15_000);
+
+  it('activates an explicitly nominated exported app factory without rewriting its source shape', async () => {
+    const root = await mkdtemp(path.resolve(repositoryRoot, 'packages/aot/.tmp-nominated-entry-'));
+    temporaryDirectories.push(root);
+    const sourceRoot = path.resolve(root, 'src');
+    const sourcePath = path.resolve(sourceRoot, 'index.js');
+    await mkdir(sourceRoot, { recursive: true });
+    await Promise.all([
+      writeFile(path.resolve(root, 'package.json'), JSON.stringify({
+        name: 'aot-nominated-entry-fixture',
+        private: true,
+        type: 'module',
+        dependencies: { '@aurelia/runtime-html': '2.0.0-rc.2' },
+      }), 'utf8'),
+      writeFile(path.resolve(root, 'tsconfig.json'), JSON.stringify({
+        compilerOptions: {
+          target: 'ES2022',
+          module: 'ESNext',
+          moduleResolution: 'Bundler',
+          allowJs: true,
+          checkJs: false,
+        },
+        include: ['src'],
+      }), 'utf8'),
+      writeFile(sourcePath, [
+        "import { Aurelia, CustomElement, StandardConfiguration } from '@aurelia/runtime-html';",
+        'let requestedCount = 0;',
+        'const App = CustomElement.define({',
+        "  name: 'benchmark-app',",
+        "  template: '<div repeat.for=\"item of items\">${item}</div>',",
+        '}, class { items = Array.from({ length: requestedCount }, (_, index) => index); });',
+        'export const start = (host, count = 0) => {',
+        '  requestedCount = count;',
+        '  return new Aurelia().register(StandardConfiguration).app({ component: App, host });',
+        '};',
+      ].join('\n'), 'utf8'),
+    ]);
+    const nominatedProvider = new SemanticAotArtifactProvider();
+    const nominatedSession = await nominatedProvider.openBuild({
+      root,
+      mode: 'production',
+      environmentName: 'client',
+      sourcemap: true,
+      nominatedEntry: {
+        sourceFilePath: 'src/index.js',
+        callable: { kind: 'export', name: 'start' },
+        arguments: [
+          { kind: 'host-environment', path: 'benchmark.host' },
+          { kind: 'primitive', value: 10 },
+        ],
+      },
+    });
+    const code = await readFile(sourcePath, 'utf8');
+    const transformed = await nominatedSession.transformSource({ sourcePath, code });
+
+    expect(transformed?.resources).toHaveLength(1);
+    expect(transformed?.resources[0]).toMatchObject({
+      definitionName: 'benchmark-app',
+      carrierKind: 'define-call',
+    });
+    expect(transformed?.code).toContain('const App = __auAotApply(CustomElement.define({');
+  }, 20_000);
 });
 
 function normalizePath(value: string): string {

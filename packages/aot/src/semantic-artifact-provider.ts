@@ -4,6 +4,7 @@ import path from 'node:path';
 
 import {
   createSemanticRuntime,
+  type SemanticAppNominatedEntry,
 } from '@aurelia-ls/semantic-runtime';
 import {
   materializeSemanticAppTemplateCompilerHandoffs,
@@ -38,6 +39,8 @@ export interface SemanticAotBuildRequest {
   readonly mode: string;
   readonly environmentName: string;
   readonly sourcemap: boolean | 'inline' | 'hidden';
+  /** Explicit dormant app factory activation; exported functions are never executed merely because they exist. */
+  readonly nominatedEntry?: SemanticAppNominatedEntry | null;
 }
 
 export interface SemanticAotTemplateRequest {
@@ -269,6 +272,7 @@ export class SemanticAotArtifactProvider {
         analysisDepth: 'runtime-topology',
         includeAuthoringTemplates: true,
         telemetry: { inquiryProfile: 'aot' },
+        nominatedEntry: request.nominatedEntry,
       });
       const batch = materializeSemanticAppTemplateCompilerHandoffs({
         app,
