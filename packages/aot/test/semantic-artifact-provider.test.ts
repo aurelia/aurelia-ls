@@ -1,4 +1,4 @@
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
@@ -15,6 +15,7 @@ const fixtureRoot = path.resolve(
   'packages/semantic-runtime/fixtures/pressure/app-pattern-convention-minimal-app',
 );
 const templatePath = path.resolve(fixtureRoot, 'src/my-app.html');
+const componentPath = path.resolve(fixtureRoot, 'src/my-app.ts');
 const temporaryDirectories: string[] = [];
 const provider = new SemanticAotArtifactProvider();
 let session: SemanticAotBuildSession;
@@ -83,4 +84,44 @@ describe('semantic AOT artifact provider', () => {
     await expect(session.artifactFor({ sourcePath: path.resolve(fixtureRoot, 'src/missing.html') }))
       .rejects.toMatchObject({ code: 'AOT_ARTIFACT_INVALID_HANDOFF' });
   }, 15_000);
+
+  it('transforms the owning resource module and serves resource-addressed patch modules', async () => {
+    const code = await readFile(componentPath, 'utf8');
+    const transformed = await session.transformSource({ sourcePath: componentPath, code });
+
+    expect(transformed).not.toBeNull();
+    expect(transformed?.sourcePath).toBe(componentPath);
+    expect(transformed?.resources).toHaveLength(1);
+    expect(transformed?.resources[0]).toMatchObject({
+      definitionName: 'my-app',
+      carrierKind: 'convention',
+      payloadDigest: expect.stringMatching(/^sha256:[0-9a-f]{64}$/u),
+      payloadSpecifier: expect.stringMatching(/^virtual:aurelia-aot\/payload\/[0-9a-f]{64}$/u),
+    });
+    expect(transformed?.code).toContain('applyCompiledCustomElement as __auAotApply');
+    expect(transformed?.code).toContain('__auAotApply(MyApp, __auAotPatch0);');
+    expect(transformed?.map.sources.map(normalizePath)).toEqual([normalizePath(componentPath)]);
+    expect(transformed?.map.sourcesContent).toEqual([code]);
+
+    const payloadSpecifier = transformed!.resources[0]!.payloadSpecifier;
+    const payload = await session.virtualModuleFor({ specifier: payloadSpecifier });
+    expect(payload).toMatchObject({
+      specifier: payloadSpecifier,
+      digest: transformed!.resources[0]!.payloadDigest,
+      map: expect.objectContaining({ sources: [templatePath] }),
+    });
+    expect(payload?.code).toContain('export default $definition0;');
+    expect(payload?.code).not.toContain('export const dependencies');
+
+    const runtime = await session.virtualModuleFor({ specifier: transformed!.runtimeModuleSpecifier });
+    expect(runtime).toMatchObject({
+      specifier: 'virtual:aurelia-aot/runtime',
+      map: null,
+    });
+    expect(runtime?.code).toContain('export function applyCompiledCustomElement');
+  }, 15_000);
 });
+
+function normalizePath(value: string): string {
+  return value.replaceAll('\\', '/');
+}

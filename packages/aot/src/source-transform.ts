@@ -4,9 +4,10 @@ import { ResourceCarrierKind } from '@aurelia-ls/semantic-runtime/browser-templa
 import MagicString from 'magic-string';
 import ts from 'typescript';
 
+import { AOT_COMPILER_PATCH_RUNTIME_MODULE_ID } from './compiler-patch-runtime-module.js';
 import type { AotRawSourceMap } from './template-module-emitter.js';
 
-export const AOT_RUNTIME_MODULE_SPECIFIER = 'virtual:aurelia-aot/runtime';
+export const AOT_RUNTIME_MODULE_SPECIFIER = AOT_COMPILER_PATCH_RUNTIME_MODULE_ID;
 
 export type AotSourceTransformErrorCode =
   | 'AOT_SOURCE_STALE'
@@ -58,6 +59,7 @@ export interface AotTransformedResource {
   readonly carrierStart: number;
   readonly carrierEnd: number;
   readonly payloadDigest: string;
+  readonly payloadSpecifier: string;
 }
 
 export interface AotSourceTransformArtifact {
@@ -65,6 +67,7 @@ export interface AotSourceTransformArtifact {
   readonly code: string;
   readonly map: AotRawSourceMap;
   readonly digest: string;
+  readonly runtimeModuleSpecifier: string;
   readonly resources: readonly AotTransformedResource[];
 }
 
@@ -89,9 +92,10 @@ export class AotSourceTransformEmitter {
       allocateIdentifier(`__auAotPatch${index}`, usedNames),
     ]));
     const edits = new MagicString(request.code);
+    const runtimeModuleSpecifier = request.runtimeModuleSpecifier ?? AOT_RUNTIME_MODULE_SPECIFIER;
     const importText = [
       `import { applyCompiledCustomElement as ${applyName} } from ${JSON.stringify(
-        request.runtimeModuleSpecifier ?? AOT_RUNTIME_MODULE_SPECIFIER,
+        runtimeModuleSpecifier,
       )};`,
       ...resources.map((resource) =>
         `import ${requireMap(patchNames, resource.compilerVariantKey, request.sourcePath)} from ${JSON.stringify(resource.payloadSpecifier)};`
@@ -168,6 +172,7 @@ export class AotSourceTransformEmitter {
       code,
       map,
       digest: `sha256:${createHash('sha256').update(code).update('\0').update(JSON.stringify(map)).digest('hex')}`,
+      runtimeModuleSpecifier,
       resources: resources.map((resource) => ({
         resourceKey: resource.resourceKey,
         compilerVariantKey: resource.compilerVariantKey,
@@ -176,6 +181,7 @@ export class AotSourceTransformEmitter {
         carrierStart: resource.carrier.start,
         carrierEnd: resource.carrier.end,
         payloadDigest: resource.payloadDigest,
+        payloadSpecifier: resource.payloadSpecifier,
       })),
     };
   }
