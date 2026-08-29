@@ -7,6 +7,7 @@ import { afterAll, beforeAll, describe, expect, test } from 'vitest';
 import {
   SEMANTIC_APP_ENTRY_ACTIVATION_ERROR_CODE,
   SemanticAppEntryActivationError,
+  type SemanticAppEntryArgument,
 } from '../src/configuration/nominated-app-entry.js';
 import { StaticProjectEvaluationSourceIndex } from '../src/evaluation/project-source-index.js';
 import { EvaluationValueKind } from '../src/evaluation/values.js';
@@ -39,14 +40,14 @@ describe('nominated synchronous app entry activation', () => {
     const ordinary = await runtime.openApp({ analysisDepth: 'runtime-topology' });
     expect(ordinary.emission.configuration.readConfiguration().appRoots).toHaveLength(0);
 
-    const nominated = await openBenchmarkEntry(runtime, 1_000);
+    const nominated = await openBenchmarkEntry(runtime);
     const roots = nominated.emission.configuration.readConfiguration().appRoots;
     expect(roots).toHaveLength(1);
     expect(roots[0]?.component?.localName).toBe('BenchmarkApp');
   });
 
   test('routes imported-helper effects to their owning source while retaining one activation order', async () => {
-    const app = await openBenchmarkEntry(runtime, 1_000);
+    const app = await openBenchmarkEntry(runtime);
     const evaluation = app.emission.evaluation;
     const main = evaluatedSource(app, 'src/main.ts');
     const helper = evaluatedSource(app, 'src/helper.ts');
@@ -117,13 +118,22 @@ describe('nominated synchronous app entry activation', () => {
   }, 60_000);
 
   test('segregates app-cache identity by the exact normalized activation descriptor', async () => {
-    const first = await openBenchmarkEntry(runtime, 1_000);
-    const same = await openBenchmarkEntry(runtime, 1_000);
+    const first = await openBenchmarkEntry(runtime);
+    const same = await openBenchmarkEntry(runtime);
     expect(same).toBe(first);
 
-    const differentArgument = await openBenchmarkEntry(runtime, 999);
+    const nestedItems: readonly SemanticAppEntryArgument[] = [{
+      kind: 'array',
+      elements: [
+        { kind: 'primitive', value: 'row' },
+        { kind: 'undefined' },
+        { kind: 'host-environment', path: 'window.externalRow' },
+      ],
+    }];
+    const differentArgument = await openBenchmarkEntry(runtime, nestedItems);
     expect(differentArgument).not.toBe(first);
-    expect(differentArgument.emission.configuration.readConfiguration().appRoots).toHaveLength(0);
+    expect(differentArgument.emission.configuration.readConfiguration().appRoots).toHaveLength(1);
+    expect(await openBenchmarkEntry(runtime, nestedItems)).toBe(differentArgument);
 
     const ordinary = await runtime.openApp({ analysisDepth: 'runtime-topology' });
     expect(ordinary).not.toBe(differentArgument);
@@ -157,7 +167,10 @@ describe('nominated synchronous app entry activation', () => {
   }
 });
 
-async function openBenchmarkEntry(runtime: SemanticRuntime, count: number): Promise<SemanticApp> {
+async function openBenchmarkEntry(
+  runtime: SemanticRuntime,
+  items: readonly SemanticAppEntryArgument[] = [],
+): Promise<SemanticApp> {
   return runtime.openApp({
     analysisDepth: 'runtime-topology',
     nominatedEntry: {
@@ -165,7 +178,7 @@ async function openBenchmarkEntry(runtime: SemanticRuntime, count: number): Prom
       callable: { kind: 'export', name: 'start' },
       arguments: [
         { kind: 'host-environment', path: "document.querySelector('#app')" },
-        { kind: 'primitive', value: count },
+        { kind: 'array', elements: items },
       ],
     },
   });
@@ -213,8 +226,8 @@ async function writeWorkspace(workspaceRoot: string): Promise<void> {
     writeFile(path.join(workspaceRoot, 'src', 'main.ts'), [
       "import { runApp } from './helper';",
       '',
-      'export function start(host: HTMLElement, count: number): void {',
-      '  if (count === 1000) {',
+      'export function start(host: HTMLElement, items: unknown[]): void {',
+      '  if (Array.isArray(items)) {',
       '    runApp(host);',
       '  }',
       '}',

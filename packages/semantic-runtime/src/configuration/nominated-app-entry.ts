@@ -20,6 +20,8 @@ import {
 } from '../evaluation/project-evaluation.js';
 import { StaticProjectEvaluationSourceIndex } from '../evaluation/project-source-index.js';
 import {
+  EvaluationArrayElement,
+  EvaluationArrayValue,
   EvaluationBooleanValue,
   EvaluationBoundaryKind,
   EvaluationBoundaryObjectValue,
@@ -47,6 +49,11 @@ export type SemanticAppEntryArgument =
       readonly kind: 'host-environment';
       /** Stable boundary path, such as `document.querySelector('#app')`. */
       readonly path: string;
+    }
+  | {
+      readonly kind: 'array';
+      /** Exact dense array elements, recursively described without host-owned collection behavior. */
+      readonly elements: readonly SemanticAppEntryArgument[];
     };
 
 /** Explicit synchronous function invocation used to activate an otherwise dormant app entry. */
@@ -97,16 +104,9 @@ export function normalizeSemanticAppNominatedEntry(
   if (callableName.length === 0) {
     throw new SemanticAppEntryActivationError('the callable selector name is empty.');
   }
-  const arguments_ = (descriptor.arguments ?? []).map((argument, index) => {
-    if (argument.kind !== 'host-environment') {
-      return argument;
-    }
-    const boundaryPath = argument.path.trim();
-    if (boundaryPath.length === 0) {
-      throw new SemanticAppEntryActivationError(`argument ${index} has an empty host-environment path.`);
-    }
-    return { kind: 'host-environment', path: boundaryPath } as const;
-  });
+  const arguments_ = (descriptor.arguments ?? []).map((argument, index) =>
+    normalizeNominatedEntryArgument(argument, `argument ${index}`)
+  );
   return new NormalizedSemanticAppNominatedEntry(
     sourceFilePath,
     { kind: descriptor.callable.kind, name: callableName },
@@ -337,6 +337,10 @@ function nominatedEntryArgumentValue(argument: SemanticAppEntryArgument): Evalua
       return EvaluationUndefined;
     case 'host-environment':
       return new EvaluationBoundaryObjectValue(EvaluationBoundaryKind.HostEnvironment, argument.path);
+    case 'array':
+      return new EvaluationArrayValue(argument.elements.map((element) =>
+        new EvaluationArrayElement(nominatedEntryArgumentValue(element), null)
+      ));
     case 'primitive':
       return argument.value == null
         ? new EvaluationNullValue()
@@ -354,12 +358,39 @@ function nominatedEntryArgumentIdentity(argument: SemanticAppEntryArgument): rea
       return ['undefined'];
     case 'host-environment':
       return ['host-environment', argument.path];
+    case 'array':
+      return ['array', argument.elements.map(nominatedEntryArgumentIdentity)];
     case 'primitive':
       return argument.value == null
         ? ['null']
         : typeof argument.value === 'number'
           ? ['number', Object.is(argument.value, -0) ? '-0' : String(argument.value)]
           : [typeof argument.value, argument.value];
+  }
+}
+
+function normalizeNominatedEntryArgument(
+  argument: SemanticAppEntryArgument,
+  locus: string,
+): SemanticAppEntryArgument {
+  switch (argument.kind) {
+    case 'primitive':
+    case 'undefined':
+      return argument;
+    case 'host-environment': {
+      const boundaryPath = argument.path.trim();
+      if (boundaryPath.length === 0) {
+        throw new SemanticAppEntryActivationError(`${locus} has an empty host-environment path.`);
+      }
+      return { kind: 'host-environment', path: boundaryPath };
+    }
+    case 'array':
+      return {
+        kind: 'array',
+        elements: argument.elements.map((element, index) =>
+          normalizeNominatedEntryArgument(element, `${locus} array element ${index}`)
+        ),
+      };
   }
 }
 
