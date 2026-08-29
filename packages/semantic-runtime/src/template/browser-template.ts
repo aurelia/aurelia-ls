@@ -44,6 +44,7 @@ export * from './template-instruction-runtime-value.js';
 export * from './template-compiler-compiled-definition-value.js';
 export * from './template-compiler-compiled-handoff-value.js';
 export * from './semantic-app-template-compiler-handoff.js';
+export * from '../configuration/standard-configuration-source-attachment.js';
 export { CustomElementCaptureKind } from '../resources/custom-element-definition.js';
 export {
   ResourceDefinitionAuthoredSourceSpan,
