@@ -1,6 +1,15 @@
 import {
   AppTaskSlot,
 } from '../configuration/app-task.js';
+import type { AureliaAppWorldEmission } from '../configuration/app-world-composer.js';
+import {
+  FrameworkCapabilityConfigurationState,
+  standardConfigurationCoercionConfigurationForAdmission,
+} from '../configuration/framework-capability-configuration.js';
+import type {
+  StandardConfigurationCoercionConfiguration,
+} from '../configuration/framework-capability-configuration.js';
+import type { KernelMaterializationReadView } from '../kernel/store.js';
 import {
   FrameworkRegistrationCapability,
   frameworkRegistrationCapabilitiesForKind,
@@ -13,6 +22,7 @@ import {
   ResolverStrategy,
 } from './resolver.js';
 import { FrameworkIntrinsicDiKey } from './framework-intrinsic-di-key.js';
+import type { ContainerRegistrationOperation } from './container-registration.js';
 
 export interface FrameworkResolverEffect {
   readonly capability: FrameworkRegistrationCapability;
@@ -52,7 +62,89 @@ export interface FrameworkDiRegistrationEffects {
   readonly appTasks: readonly FrameworkAppTaskEffect[];
 }
 
-const frameworkResolverEffects: readonly FrameworkResolverEffect[] = [
+/** Ordered framework-registration fact lane, independent of any consumer's retention or pruning policy. */
+export const enum FrameworkRegistrationEffectKind {
+  Configuration = 'configuration',
+  Resolver = 'resolver',
+  Capability = 'capability',
+}
+
+export class FrameworkConfigurationRegistrationEffect {
+  readonly effectKind = FrameworkRegistrationEffectKind.Configuration;
+  readonly keyName = 'ICoercionConfiguration';
+
+  constructor(
+    readonly configuration: StandardConfigurationCoercionConfiguration,
+  ) {}
+}
+
+export class FrameworkOrderedResolverEffect {
+  readonly effectKind = FrameworkRegistrationEffectKind.Resolver;
+
+  constructor(readonly resolver: FrameworkResolverEffect) {}
+}
+
+/**
+ * One catalog-bearing registration group at its exact position inside StandardConfiguration.
+ * Detailed syntax, resource, and renderer membership stays with the existing capability-owned catalogs.
+ */
+export class FrameworkCapabilityRegistrationEffect {
+  readonly effectKind = FrameworkRegistrationEffectKind.Capability;
+
+  constructor(
+    readonly capability: FrameworkRegistrationCapability,
+    readonly registrationKind: FrameworkRegistrationKind,
+    readonly exportName: string,
+  ) {}
+}
+
+export type FrameworkOrderedRegistrationEffect =
+  | FrameworkConfigurationRegistrationEffect
+  | FrameworkOrderedResolverEffect
+  | FrameworkCapabilityRegistrationEffect;
+
+/** Exact StandardConfiguration registration occurrence with its ordered, consumer-neutral effects. */
+export class StandardConfigurationRegistrationEffects {
+  constructor(
+    readonly operation: ContainerRegistrationOperation,
+    readonly coverageState: FrameworkDiEffectCoverageState,
+    readonly openSummary: string | null,
+    readonly effects: readonly FrameworkOrderedRegistrationEffect[],
+  ) {}
+}
+
+const standardConfigurationDirectResolverEffects: readonly FrameworkResolverEffect[] = [
+  {
+    capability: FrameworkRegistrationCapability.RuntimeHtmlCompilerServices,
+    keyName: 'ICoercionConfiguration',
+    strategy: ResolverStrategy.instance,
+    valueKind: RegistrationValueKind.Instance,
+    valueName: 'StandardConfiguration coercion options',
+  },
+  {
+    capability: FrameworkRegistrationCapability.RuntimeHtmlCompilerServices,
+    keyName: 'ExpressionParser',
+    strategy: ResolverStrategy.singleton,
+    valueKind: RegistrationValueKind.Constructable,
+    valueName: 'ExpressionParser',
+  },
+  {
+    capability: FrameworkRegistrationCapability.RuntimeHtmlCompilerServices,
+    keyName: 'IExpressionParser',
+    strategy: ResolverStrategy.alias,
+    valueKind: RegistrationValueKind.AliasTarget,
+    valueName: 'ExpressionParser',
+  },
+];
+
+const defaultComponentResolverEffects: readonly FrameworkResolverEffect[] = [
+  {
+    capability: FrameworkRegistrationCapability.RuntimeHtmlCompilerServices,
+    keyName: 'TemplateCompiler',
+    strategy: ResolverStrategy.singleton,
+    valueKind: RegistrationValueKind.Constructable,
+    valueName: 'TemplateCompiler',
+  },
   {
     capability: FrameworkRegistrationCapability.RuntimeHtmlCompilerServices,
     keyName: FrameworkIntrinsicDiKey.ITemplateCompiler,
@@ -60,6 +152,96 @@ const frameworkResolverEffects: readonly FrameworkResolverEffect[] = [
     valueKind: RegistrationValueKind.AliasTarget,
     valueName: 'TemplateCompiler',
   },
+  {
+    capability: FrameworkRegistrationCapability.RuntimeHtmlCompilerServices,
+    keyName: 'AttrMapper',
+    strategy: ResolverStrategy.singleton,
+    valueKind: RegistrationValueKind.Constructable,
+    valueName: 'AttrMapper',
+  },
+  {
+    capability: FrameworkRegistrationCapability.RuntimeHtmlCompilerServices,
+    keyName: 'IAttrMapper',
+    strategy: ResolverStrategy.alias,
+    valueKind: RegistrationValueKind.AliasTarget,
+    valueName: 'AttrMapper',
+  },
+  {
+    capability: FrameworkRegistrationCapability.RuntimeHtmlCompilerServices,
+    keyName: 'ResourceResolver',
+    strategy: ResolverStrategy.singleton,
+    valueKind: RegistrationValueKind.Constructable,
+    valueName: 'ResourceResolver',
+  },
+  {
+    capability: FrameworkRegistrationCapability.RuntimeHtmlCompilerServices,
+    keyName: 'IResourceResolver',
+    strategy: ResolverStrategy.alias,
+    valueKind: RegistrationValueKind.AliasTarget,
+    valueName: 'ResourceResolver',
+  },
+  {
+    capability: FrameworkRegistrationCapability.RuntimeHtmlCompilerServices,
+    keyName: 'DirtyChecker',
+    strategy: ResolverStrategy.singleton,
+    valueKind: RegistrationValueKind.Constructable,
+    valueName: 'DirtyChecker',
+  },
+  {
+    capability: FrameworkRegistrationCapability.RuntimeHtmlCompilerServices,
+    keyName: 'IDirtyChecker',
+    strategy: ResolverStrategy.alias,
+    valueKind: RegistrationValueKind.AliasTarget,
+    valueName: 'DirtyChecker',
+  },
+  {
+    capability: FrameworkRegistrationCapability.RuntimeHtmlCompilerServices,
+    keyName: 'NodeObserverLocator',
+    strategy: ResolverStrategy.singleton,
+    valueKind: RegistrationValueKind.Constructable,
+    valueName: 'NodeObserverLocator',
+  },
+  {
+    capability: FrameworkRegistrationCapability.RuntimeHtmlCompilerServices,
+    keyName: 'INodeObserverLocator',
+    strategy: ResolverStrategy.alias,
+    valueKind: RegistrationValueKind.AliasTarget,
+    valueName: 'NodeObserverLocator',
+  },
+];
+
+const eventModifierResolverEffects: readonly FrameworkResolverEffect[] = [
+  {
+    capability: FrameworkRegistrationCapability.RuntimeHtmlDefaultBindingSyntax,
+    keyName: 'IEventModifier',
+    strategy: ResolverStrategy.singleton,
+    valueKind: RegistrationValueKind.Constructable,
+    valueName: 'EventModifier',
+  },
+  {
+    capability: FrameworkRegistrationCapability.RuntimeHtmlDefaultBindingSyntax,
+    keyName: 'IModifiedEventHandlerCreator',
+    strategy: ResolverStrategy.singleton,
+    valueKind: RegistrationValueKind.Constructable,
+    valueName: 'ModifiedMouseEventHandler',
+  },
+  {
+    capability: FrameworkRegistrationCapability.RuntimeHtmlDefaultBindingSyntax,
+    keyName: 'IModifiedEventHandlerCreator',
+    strategy: ResolverStrategy.singleton,
+    valueKind: RegistrationValueKind.Constructable,
+    valueName: 'ModifiedKeyboardEventHandler',
+  },
+  {
+    capability: FrameworkRegistrationCapability.RuntimeHtmlDefaultBindingSyntax,
+    keyName: 'IModifiedEventHandlerCreator',
+    strategy: ResolverStrategy.singleton,
+    valueKind: RegistrationValueKind.Constructable,
+    valueName: 'ModifiedEventHandler',
+  },
+];
+
+const frameworkResolverEffects: readonly FrameworkResolverEffect[] = [
   {
     capability: FrameworkRegistrationCapability.RuntimeHtmlArrayLikeRepeatHandler,
     keyName: FrameworkIntrinsicDiKey.IRepeatableHandler,
@@ -305,7 +487,7 @@ export function frameworkDiRegistrationEffectsForKind(
       : FrameworkDiEffectCoverageState.Partial,
     openSummary,
     resolvers: keepLastFrameworkEffectByKey(
-      frameworkResolverEffects.filter((effect) => capabilities.has(effect.capability)),
+      frameworkResolverEffectsForKind(kind, capabilities),
     ),
     factories: keepLastFrameworkEffectByKey(
       frameworkFactoryEffects.filter((effect) => capabilities.has(effect.capability)),
@@ -314,24 +496,136 @@ export function frameworkDiRegistrationEffectsForKind(
   };
 }
 
+/**
+ * Project exact StandardConfiguration occurrences that were spent into the app world.
+ *
+ * This is intentionally an ordered fact view. It neither selects effects nor recommends a generated configuration.
+ * The legacy DI view above remains key-deduplicated for existing container-world consumers.
+ */
+export function standardConfigurationRegistrationEffectsForAppWorld(
+  store: KernelMaterializationReadView,
+  appWorld: Pick<AureliaAppWorldEmission, 'configuration' | 'diWorld'>,
+): readonly StandardConfigurationRegistrationEffects[] {
+  return appWorld.diWorld.registrationOperations.flatMap((operation) => {
+    const registrationKind = operation.frameworkRegistrationKind;
+    if (registrationKind !== FrameworkRegistrationKind.StandardConfiguration) {
+      return [];
+    }
+    const diEffects = frameworkDiRegistrationEffectsForKind(registrationKind);
+    const coercion = standardConfigurationCoercionConfigurationForAdmission(
+      store,
+      appWorld.configuration,
+      operation.admission,
+    );
+    return [new StandardConfigurationRegistrationEffects(
+      operation,
+      diEffects.coverageState,
+      frameworkRegistrationOperationOpenSummary(diEffects.openSummary, coercion),
+      orderedStandardConfigurationEffects(coercion),
+    )];
+  });
+}
+
+function orderedStandardConfigurationEffects(
+  coercion: StandardConfigurationCoercionConfiguration,
+): readonly FrameworkOrderedRegistrationEffect[] {
+  return [
+    new FrameworkConfigurationRegistrationEffect(coercion),
+    ...orderedResolvers(standardConfigurationDirectResolverEffects.slice(1)),
+    ...orderedResolvers(defaultComponentResolverEffects),
+    runtimeHtmlCapabilityEffect(
+      FrameworkRegistrationCapability.RuntimeHtmlDefaultResources,
+      FrameworkRegistrationKind.RuntimeHtmlDefaultResources,
+      'DefaultResources',
+    ),
+    runtimeHtmlCapabilityEffect(
+      FrameworkRegistrationCapability.RuntimeHtmlDefaultBindingSyntax,
+      FrameworkRegistrationKind.RuntimeHtmlDefaultBindingSyntax,
+      'DefaultBindingSyntax',
+    ),
+    ...orderedResolvers(eventModifierResolverEffects),
+    runtimeHtmlCapabilityEffect(
+      FrameworkRegistrationCapability.RuntimeHtmlDefaultBindingLanguage,
+      FrameworkRegistrationKind.RuntimeHtmlDefaultBindingLanguage,
+      'DefaultBindingLanguage',
+    ),
+    runtimeHtmlCapabilityEffect(
+      FrameworkRegistrationCapability.RuntimeHtmlDefaultRenderers,
+      FrameworkRegistrationKind.RuntimeHtmlDefaultRenderers,
+      'DefaultRenderers',
+    ),
+  ];
+}
+
+function frameworkResolverEffectsForKind(
+  kind: FrameworkRegistrationKind,
+  capabilities: ReadonlySet<FrameworkRegistrationCapability>,
+): readonly FrameworkResolverEffect[] {
+  const generic = frameworkResolverEffects.filter((effect) => capabilities.has(effect.capability));
+  switch (kind) {
+    case FrameworkRegistrationKind.StandardConfiguration:
+      return [
+        ...standardConfigurationDirectResolverEffects,
+        ...defaultComponentResolverEffects,
+        ...eventModifierResolverEffects,
+        ...generic,
+      ];
+    case FrameworkRegistrationKind.RuntimeHtmlDefaultComponents:
+      return [...defaultComponentResolverEffects, ...generic];
+    case FrameworkRegistrationKind.RuntimeHtmlDefaultBindingSyntax:
+      return [...eventModifierResolverEffects, ...generic];
+    default:
+      return generic;
+  }
+}
+
+function orderedResolvers(
+  resolvers: readonly FrameworkResolverEffect[],
+): readonly FrameworkOrderedResolverEffect[] {
+  return resolvers.map((resolver) => new FrameworkOrderedResolverEffect(resolver));
+}
+
+function runtimeHtmlCapabilityEffect(
+  capability: FrameworkRegistrationCapability,
+  registrationKind: FrameworkRegistrationKind,
+  exportName: string,
+): FrameworkCapabilityRegistrationEffect {
+  return new FrameworkCapabilityRegistrationEffect(capability, registrationKind, exportName);
+}
+
+function frameworkRegistrationOperationOpenSummary(
+  staticSummary: string | null,
+  coercion: StandardConfigurationCoercionConfiguration | null,
+): string | null {
+  const coercionOpen = coercion != null && (
+    coercion.enableCoercion.state === FrameworkCapabilityConfigurationState.Open
+    || coercion.coerceNullish.state === FrameworkCapabilityConfigurationState.Open
+  );
+  if (!coercionOpen) {
+    return staticSummary;
+  }
+  const coercionSummary = 'StandardConfiguration coercion customization retains open callback or value pressure.';
+  return staticSummary == null ? coercionSummary : `${staticSummary} ${coercionSummary}`;
+}
+
 function frameworkDiRegistrationOpenSummary(kind: FrameworkRegistrationKind): string | null {
   switch (kind) {
     case FrameworkRegistrationKind.RuntimeHtmlDefaultBindingSyntax:
-      return 'DefaultBindingSyntax catalog effects are modeled, but EventModifierRegistration and remaining DI provider effects are not replayed yet.';
+      return 'DefaultBindingSyntax catalogs and EventModifierRegistration providers are modeled, but individual attribute-pattern service mutations remain catalog-owned.';
     case FrameworkRegistrationKind.RuntimeHtmlShortHandBindingSyntax:
       return 'ShortHandBindingSyntax catalog effects are modeled, but its DI registration body is not replayed yet.';
     case FrameworkRegistrationKind.RuntimeHtmlDefaultBindingLanguage:
-      return 'DefaultBindingLanguage catalog effects are modeled, but its DI registration body is not replayed yet.';
+      return 'DefaultBindingLanguage catalog effects are modeled, but individual resource registration bodies are not replayed as ordered DI operations.';
     case FrameworkRegistrationKind.RuntimeHtmlDefaultResources:
-      return 'DefaultResources resource slots are modeled, but non-resource DI effects from the registration body remain open.';
+      return 'DefaultResources resource slots and Promise compiler-pattern syntax are modeled, but the public group mixes both families and remains a coarse registration package.';
     case FrameworkRegistrationKind.RuntimeHtmlArrayLikeHandler:
       return null;
     case FrameworkRegistrationKind.RuntimeHtmlDefaultComponents:
-      return 'DefaultComponents compiler services are modeled, but remaining DI registrations are not replayed yet.';
+      return 'DefaultComponents compiler and observer providers are modeled, but constructor-initialized service state remains outside registration-effect replay.';
     case FrameworkRegistrationKind.RuntimeHtmlDefaultRenderers:
-      return 'DefaultRenderers renderer catalog is modeled, but remaining DI registrations are not replayed yet.';
+      return 'DefaultRenderers catalog effects are modeled, but individual multi-resolver registration rows remain catalog-owned.';
     case FrameworkRegistrationKind.StandardConfiguration:
-      return 'StandardConfiguration catalogs and compiler-world services are modeled, but its complete DI provider and coercion-configuration effects are not replayed yet.';
+      return 'StandardConfiguration known providers, coercion options, and catalog groups are ordered; nested resource and syntax groups retain their declared partial posture.';
     case FrameworkRegistrationKind.I18nConfiguration:
     case FrameworkRegistrationKind.ValidationConfiguration:
     case FrameworkRegistrationKind.ValidationHtmlConfiguration:

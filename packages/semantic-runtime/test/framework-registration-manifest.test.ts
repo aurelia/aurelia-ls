@@ -39,6 +39,30 @@ describe('framework registration manifest', () => {
     ]);
   });
 
+  test('projects the known StandardConfiguration providers into the legacy key view', () => {
+    const standard = frameworkDiRegistrationEffectsForKind(
+      FrameworkRegistrationKind.StandardConfiguration,
+    );
+
+    expect(standard.resolvers.map((effect) => [effect.keyName, effect.valueName])).toEqual([
+      ['ICoercionConfiguration', 'StandardConfiguration coercion options'],
+      ['ExpressionParser', 'ExpressionParser'],
+      ['IExpressionParser', 'ExpressionParser'],
+      ['TemplateCompiler', 'TemplateCompiler'],
+      ['ITemplateCompiler', 'TemplateCompiler'],
+      ['AttrMapper', 'AttrMapper'],
+      ['IAttrMapper', 'AttrMapper'],
+      ['ResourceResolver', 'ResourceResolver'],
+      ['IResourceResolver', 'ResourceResolver'],
+      ['DirtyChecker', 'DirtyChecker'],
+      ['IDirtyChecker', 'DirtyChecker'],
+      ['NodeObserverLocator', 'NodeObserverLocator'],
+      ['INodeObserverLocator', 'NodeObserverLocator'],
+      ['IEventModifier', 'EventModifier'],
+      ['IModifiedEventHandlerCreator', 'ModifiedEventHandler'],
+    ]);
+  });
+
   test('selects a directly usable dialog configuration for generated registration source', () => {
     const source = aureliaFrameworkRegistrationAdmissionSource({
       capability: FrameworkRegistrationCapability.DialogServiceResolvers,

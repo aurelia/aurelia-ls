@@ -137,6 +137,14 @@ export class ValidationHtmlResourceConfiguration {
   }
 }
 
+/** Effective coercion options installed by one StandardConfiguration registration occurrence. */
+export class StandardConfigurationCoercionConfiguration {
+  constructor(
+    readonly enableCoercion: ConfiguredBooleanDecision,
+    readonly coerceNullish: ConfiguredBooleanDecision,
+  ) {}
+}
+
 export function i18nTranslationSyntaxConfigurationForAdmission(
   store: KernelMaterializationReadView,
   configuration: ConfigurationKernelEmission,
@@ -239,6 +247,134 @@ export function validationHtmlResourceConfigurationForAdmission(
     subscriberCustomAttribute,
     subscriberCustomElement,
   );
+}
+
+/**
+ * Converge StandardConfiguration's two defaulted coercion options for one exact admitted registry value.
+ *
+ * Direct assignments close independently. A callback with additional control flow keeps both fields open because the
+ * unmodeled part of that same callback may overwrite either field after the assignments that were recovered.
+ */
+export function standardConfigurationCoercionConfigurationForAdmission(
+  store: KernelMaterializationReadView,
+  configuration: ConfigurationKernelEmission,
+  admission: RegistrationAdmissionProduct,
+): StandardConfigurationCoercionConfiguration {
+  let enableCoercion = defaultCoercionDecision();
+  let coerceNullish = defaultCoercionDecision();
+  let callbackPressure: {
+    readonly sourceAddressHandle: AddressHandle | null;
+    readonly openSeamHandles: readonly OpenSeamHandle[];
+  } | null = null;
+
+  for (const contribution of configurationOptionContributionsForAdmission(configuration, admission)) {
+    if (contribution.configurationKind !== FrameworkRegistrationKind.StandardConfiguration) {
+      continue;
+    }
+    if (isOptionPath(contribution, 'customize')) {
+      const openSeamHandles = contributionAndStepOpenSeamHandles(store, configuration, contribution);
+      if (openSeamHandles.length > 0) {
+        callbackPressure = {
+          sourceAddressHandle: contribution.sourceAddressHandle,
+          openSeamHandles,
+        };
+      }
+      continue;
+    }
+    if (isOptionPath(contribution, 'coercingOptions')) {
+      const openSeamHandles = contributionAndStepOpenSeamHandles(store, configuration, contribution);
+      enableCoercion = openCoercionDecision(enableCoercion, contribution.sourceAddressHandle, openSeamHandles);
+      coerceNullish = openCoercionDecision(coerceNullish, contribution.sourceAddressHandle, openSeamHandles);
+      continue;
+    }
+    if (isOptionPath(contribution, 'coercingOptions', 'enableCoercion')) {
+      enableCoercion = coercionDecisionForContribution(store, configuration, contribution, enableCoercion.recoveryValue);
+      continue;
+    }
+    if (isOptionPath(contribution, 'coercingOptions', 'coerceNullish')) {
+      coerceNullish = coercionDecisionForContribution(store, configuration, contribution, coerceNullish.recoveryValue);
+    }
+  }
+
+  if (callbackPressure != null) {
+    enableCoercion = openCoercionDecision(
+      enableCoercion,
+      callbackPressure.sourceAddressHandle,
+      callbackPressure.openSeamHandles,
+    );
+    coerceNullish = openCoercionDecision(
+      coerceNullish,
+      callbackPressure.sourceAddressHandle,
+      callbackPressure.openSeamHandles,
+    );
+  }
+  return new StandardConfigurationCoercionConfiguration(enableCoercion, coerceNullish);
+}
+
+function defaultCoercionDecision(): ConfiguredBooleanDecision {
+  return new ConfiguredBooleanDecision(
+    FrameworkCapabilityConfigurationState.Default,
+    false,
+    null,
+  );
+}
+
+function coercionDecisionForContribution(
+  store: KernelMaterializationReadView,
+  configuration: ConfigurationKernelEmission,
+  contribution: ConfigurationOptionContribution,
+  recoveryValue: boolean,
+): ConfiguredBooleanDecision {
+  return contribution.value.valueKind === ConfigurationOptionValueKind.Boolean
+    ? new ConfiguredBooleanDecision(
+        FrameworkCapabilityConfigurationState.Closed,
+        contribution.value.value,
+        contribution.sourceAddressHandle,
+      )
+    : new ConfiguredBooleanDecision(
+        FrameworkCapabilityConfigurationState.Open,
+        recoveryValue,
+        contribution.sourceAddressHandle,
+        contributionAndStepOpenSeamHandles(store, configuration, contribution),
+      );
+}
+
+function openCoercionDecision(
+  decision: ConfiguredBooleanDecision,
+  sourceAddressHandle: AddressHandle | null,
+  openSeamHandles: readonly OpenSeamHandle[],
+): ConfiguredBooleanDecision {
+  return new ConfiguredBooleanDecision(
+    FrameworkCapabilityConfigurationState.Open,
+    decision.recoveryValue,
+    sourceAddressHandle,
+    openSeamHandles,
+  );
+}
+
+function isOptionPath(
+  contribution: ConfigurationOptionContribution,
+  ...path: readonly string[]
+): boolean {
+  return contribution.optionPath.length === path.length
+    && contribution.optionPath.every((part, index) => part === path[index]);
+}
+
+function contributionAndStepOpenSeamHandles(
+  store: KernelMaterializationReadView,
+  configuration: ConfigurationKernelEmission,
+  contribution: ConfigurationOptionContribution,
+): readonly OpenSeamHandle[] {
+  const step = configuration.steps.find((candidate) =>
+    candidate.producedProductHandles.includes(contribution.productHandle)
+  ) ?? null;
+  return [...new Set([
+    ...contributionOpenSeamHandles(store, contribution),
+    ...(step == null
+      ? []
+      : store.readMaterializationsByOwner(step.identityHandle)
+        .flatMap((materialization) => materialization.openSeamHandles)),
+  ])];
 }
 
 function contributionOpenSeamHandles(

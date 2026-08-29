@@ -35,6 +35,15 @@ export {
   SemanticAppAnalysisDepth,
 } from '../configuration/app-analysis.js';
 export {
+  SEMANTIC_APP_ENTRY_ACTIVATION_ERROR_CODE,
+  SemanticAppEntryActivationError,
+} from '../configuration/nominated-app-entry.js';
+export type {
+  SemanticAppEntryArgument,
+  SemanticAppEntryCallableSelector,
+  SemanticAppNominatedEntry,
+} from '../configuration/nominated-app-entry.js';
+export {
   BUILT_IN_RESOURCE_PACKAGES,
 } from '../resources/built-in-resources.js';
 export {
@@ -58,6 +67,21 @@ export {
   frameworkRegistrationCapabilityFromString,
   isFrameworkRegistrationCapability,
 } from '../registration/framework-registration-manifest.js';
+export {
+  FrameworkCapabilityRegistrationEffect,
+  FrameworkConfigurationRegistrationEffect,
+  FrameworkDiEffectCoverageState,
+  FrameworkOrderedResolverEffect,
+  FrameworkRegistrationEffectKind,
+  StandardConfigurationRegistrationEffects,
+  standardConfigurationRegistrationEffectsForAppWorld,
+  type FrameworkOrderedRegistrationEffect,
+} from '../di/framework-registration-effects.js';
+export {
+  ConfiguredBooleanDecision,
+  FrameworkCapabilityConfigurationState,
+  StandardConfigurationCoercionConfiguration,
+} from '../configuration/framework-capability-configuration.js';
 export {
   NodeSemanticRuntimeProjectInputHost,
   SemanticRuntimeProjectInputAuthority,
