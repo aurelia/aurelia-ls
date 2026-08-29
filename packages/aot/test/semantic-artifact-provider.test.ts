@@ -2,6 +2,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
+import { ResourceCarrierKind } from '@aurelia-ls/semantic-runtime/browser-template';
 import { JSDOM } from 'jsdom';
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 import {
@@ -267,7 +268,7 @@ function variantPlan(
     resourceKey,
     compilerVariantKey,
     definitionName: 'resource',
-    carrierKind: 'define-call',
+    carrierKind: ResourceCarrierKind.DefineCall,
     carrier: { start: 0, end: 1, oldText: 'x' },
     targetLocalName: null,
     targetDeclaration: null,
