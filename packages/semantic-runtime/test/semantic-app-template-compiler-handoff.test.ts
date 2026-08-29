@@ -165,6 +165,27 @@ describe('semantic app template compiler handoff', () => {
           to: 'width',
         }),
       ]));
+      const templateController = resource.value.definitions[0]?.rows.flat()
+        .find((instruction) =>
+          instruction.value.type === TemplateCompilerFrameworkInstructionType.HydrateTemplateController
+        )?.value;
+      expect(templateController).toMatchObject({
+        type: TemplateCompilerFrameworkInstructionType.HydrateTemplateController,
+        props: [{
+          type: TemplateCompilerFrameworkInstructionType.IteratorBinding,
+          props: [{
+            type: TemplateCompilerFrameworkInstructionType.MultiAttr,
+            to: 'key',
+            command: 'bind',
+          }],
+        }],
+      });
+      if (
+        templateController?.type !== TemplateCompilerFrameworkInstructionType.HydrateTemplateController
+      ) {
+        throw new Error('Expected one repeat template-controller instruction.');
+      }
+      expect(templateController.props).toHaveLength(1);
       const iterator = values.find((value) => value.type === TemplateCompilerFrameworkInstructionType.IteratorBinding);
       expect(iterator?.props).toEqual([
         expect.objectContaining({

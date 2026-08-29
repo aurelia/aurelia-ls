@@ -20,6 +20,7 @@ import type {
 } from './template-compiler-context-family-value.js';
 import {
   nestedInstructionProductHandlesForInstruction,
+  nestedInstructionProductHandlesForInstructions,
   TemplateBindingMode,
   TemplateInstructionKind,
   TemplateListenerStrategy,
@@ -737,15 +738,21 @@ class RuntimeInstructionFamilyProjector {
   }
 
   private nested(instruction: TemplateInstruction): readonly TemplateCompilerRuntimeInstructionValue[] | null {
-    const values = nestedInstructionProductHandlesForInstruction(instruction).map((handle) => {
-      const nested = this.instructionByProduct.get(handle) ?? null;
-      if (nested == null) {
+    const members = nestedInstructionProductHandlesForInstruction(instruction).map((handle) => {
+      const member = this.instructionByProduct.get(handle) ?? null;
+      if (member == null) {
         throw new Error(
           `Nested instruction '${handle}' is absent from final instruction '${instruction.productHandle}'.`,
         );
       }
-      return this.project(nested);
+      return member;
     });
+    // Semantic owners inventory every command product. The framework wire carries only the
+    // outermost members here; descendants travel through their owning instruction instead.
+    const nestedWithinMembers = new Set(nestedInstructionProductHandlesForInstructions(members));
+    const values = members
+      .filter((member) => !nestedWithinMembers.has(member.productHandle))
+      .map((member) => this.project(member));
     return values.some((value) => value == null)
       ? null
       : values as readonly TemplateCompilerRuntimeInstructionValue[];
