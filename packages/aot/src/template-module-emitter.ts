@@ -76,9 +76,20 @@ export interface AotTemplateModuleEmissionRequest {
   readonly sourceText: string;
 }
 
-/** Realize one detached semantic-runtime handoff as the module namespace consumed by Aurelia conventions. */
-export class AotTemplateModuleEmitter {
-  public emit(request: AotTemplateModuleEmissionRequest): AotTemplateModuleArtifact {
+export interface AotDefinitionDependencyPlan {
+  readonly imports: readonly string[];
+  readonly byDefinitionId: ReadonlyMap<string, readonly string[]>;
+}
+
+/** Shared compiler-final definition serializer used by complete HTML modules and carrier patches. */
+export class AotCompiledTemplateEmission {
+  public readonly definitions: readonly TemplateCompilerCompiledHandoffDefinition[];
+  public readonly root: TemplateCompilerCompiledHandoffDefinition;
+  readonly #definitionById: ReadonlyMap<string, TemplateCompilerCompiledHandoffDefinition>;
+  readonly #variableByDefinitionId: ReadonlyMap<string, string>;
+  readonly #realizedNameByDefinitionId: ReadonlyMap<string, string>;
+
+  public constructor(readonly request: AotTemplateModuleEmissionRequest) {
     const definitions = new Map(request.handoff.definitions.map((definition) => [
       definition.definitionId,
       definition,
@@ -93,40 +104,91 @@ export class AotTemplateModuleEmitter {
     if (root.header.name !== request.handoff.resourceName || root.header.name == null) {
       throw invalidHandoff(request, 'Compiled handoff root name disagrees with its resource name.');
     }
-
-    const variableByDefinitionId = new Map(request.handoff.definitions.map((definition, index) => [
+    this.definitions = request.handoff.definitions;
+    this.root = root;
+    this.#definitionById = definitions;
+    this.#variableByDefinitionId = new Map(request.handoff.definitions.map((definition, index) => [
       definition.definitionId,
       `$definition${index}`,
     ]));
-    const realizedNameByDefinitionId = new Map(request.handoff.definitions.map((definition, index) => [
+    this.#realizedNameByDefinitionId = new Map(request.handoff.definitions.map((definition, index) => [
       definition.definitionId,
       definition.header.name ?? `${request.handoff.resourceName}-view-${index}`,
     ]));
-    const dependencies = planDependencies(request);
+  }
+
+  public declarationLines(): readonly string[] {
+    return this.definitions.map((definition) =>
+      `const ${this.variableFor(definition.definitionId)} = {};`
+    );
+  }
+
+  public dependencyPlanFor(
+    definitions: readonly TemplateCompilerCompiledHandoffDefinition[],
+  ): AotDefinitionDependencyPlan {
+    return planDependencies(this.request, definitions);
+  }
+
+  public completeDefinitionValue(
+    definition: TemplateCompilerCompiledHandoffDefinition,
+    dependencies: AotDefinitionDependencyPlan,
+  ): string {
+    validateHeader(definition, this.request);
+    return definitionValue(
+      definition,
+      this.request,
+      this.#variableByDefinitionId,
+      this.#realizedNameByDefinitionId,
+      dependencies.byDefinitionId,
+    );
+  }
+
+  public compilerPatchValue(definition: TemplateCompilerCompiledHandoffDefinition = this.root): string {
+    if (definition.header.needsCompile !== false) {
+      throw invalidHandoff(this.request, `Definition '${definition.definitionId}' is not compiler-final.`);
+    }
+    return objectLiteral({
+      template: emitTemplateNodeValue(definition.tree, this.request),
+      instructions: instructionRows(definition.rows, this.request, this.#variableByDefinitionId),
+      surrogates: instructionList(
+        definition.surrogates.map((entry) => entry.value),
+        this.request,
+        this.#variableByDefinitionId,
+      ),
+      hasSlots: emitJavaScriptValue(definition.header.hasSlots, this.request),
+      needsCompile: 'false',
+      compilerAddedDependencies: '[]',
+    });
+  }
+
+  public variableFor(definitionId: string): string {
+    if (!this.#definitionById.has(definitionId)) {
+      throw invalidHandoff(this.request, `Compiled handoff cannot resolve '${definitionId}'.`);
+    }
+    return requireMap(this.#variableByDefinitionId, definitionId, this.request);
+  }
+}
+
+/** Realize one detached semantic-runtime handoff as the module namespace consumed by Aurelia conventions. */
+export class AotTemplateModuleEmitter {
+  public emit(request: AotTemplateModuleEmissionRequest): AotTemplateModuleArtifact {
+    const emission = new AotCompiledTemplateEmission(request);
+    const dependencies = emission.dependencyPlanFor(emission.definitions);
     const lines: string[] = [
       "import { CustomElement } from '@aurelia/runtime-html';",
       ...dependencies.imports,
       '',
-      ...request.handoff.definitions.map((definition) =>
-        `const ${requireMap(variableByDefinitionId, definition.definitionId, request)} = {};`
-      ),
+      ...emission.declarationLines(),
       '',
     ];
 
-    for (const definition of [...request.handoff.definitions].reverse()) {
-      validateHeader(definition, request);
-      const variable = requireMap(variableByDefinitionId, definition.definitionId, request);
-      const value = definitionValue(
-        definition,
-        request,
-        variableByDefinitionId,
-        realizedNameByDefinitionId,
-        dependencies.byDefinitionId,
-      );
+    for (const definition of [...emission.definitions].reverse()) {
+      const variable = emission.variableFor(definition.definitionId);
+      const value = emission.completeDefinitionValue(definition, dependencies);
       lines.push(`Object.assign(${variable}, ${value});`);
     }
 
-    const rootVariable = requireMap(variableByDefinitionId, root.definitionId, request);
+    const rootVariable = emission.variableFor(emission.root.definitionId);
     lines.push(
       '',
       `export const name = ${rootVariable}.name;`,
@@ -154,24 +216,35 @@ export class AotTemplateModuleEmitter {
     );
 
     const code = lines.join('\n');
-    const map: AotRawSourceMap = {
-      version: 3,
-      file: `${request.sourcePath}?aurelia-aot`,
-      sources: [request.sourcePath],
-      sourcesContent: [request.sourceText],
-      names: [],
-      // One honest coarse segment. Fine-grained generated-field mapping remains a separate G9 gate.
-      mappings: 'AAAA',
-    };
+    const map = createAotRawSourceMap(request, '?aurelia-aot');
     return {
       sourcePath: request.sourcePath,
       definitionName: request.handoff.resourceName,
       needsCompile: false,
       code,
       map,
-      digest: `sha256:${createHash('sha256').update(code).update('\0').update(JSON.stringify(map)).digest('hex')}`,
+      digest: digestAotArtifact(code, map),
     };
   }
+}
+
+export function createAotRawSourceMap(
+  request: AotTemplateModuleEmissionRequest,
+  generatedFileSuffix: string,
+): AotRawSourceMap {
+  return {
+    version: 3,
+    file: `${request.sourcePath}${generatedFileSuffix}`,
+    sources: [request.sourcePath],
+    sourcesContent: [request.sourceText],
+    names: [],
+    // One honest coarse segment. Fine-grained generated-field mapping remains a separate G9 gate.
+    mappings: 'AAAA',
+  };
+}
+
+export function digestAotArtifact(code: string, map: AotRawSourceMap): string {
+  return `sha256:${createHash('sha256').update(code).update('\0').update(JSON.stringify(map)).digest('hex')}`;
 }
 
 function definitionValue(
@@ -226,15 +299,13 @@ function validateHeader(
   }
 }
 
-interface DependencyPlan {
-  readonly imports: readonly string[];
-  readonly byDefinitionId: ReadonlyMap<string, readonly string[]>;
-}
-
-function planDependencies(request: AotTemplateModuleEmissionRequest): DependencyPlan {
+function planDependencies(
+  request: AotTemplateModuleEmissionRequest,
+  definitions: readonly TemplateCompilerCompiledHandoffDefinition[],
+): AotDefinitionDependencyPlan {
   const variableByModule = new Map<string, string>();
   const byDefinitionId = new Map<string, readonly string[]>();
-  for (const definition of request.handoff.definitions) {
+  for (const definition of definitions) {
     const variables = definition.header.dependencies.map((dependency) => {
       validateDependency(dependency, definition.definitionId, request);
       const moduleKey = dependency.moduleKey!;
