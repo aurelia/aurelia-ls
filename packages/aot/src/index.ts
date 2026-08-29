@@ -41,7 +41,8 @@ export {
 } from './source-transform.js';
 export {
   AOT_CONSERVATIVE_RUNTIME_REGISTRATION_ORDER,
-  AOT_RUNTIME_CONFIGURATION_MODULE_ID,
+  AOT_RUNTIME_CONFIGURATION_MODULE_PREFIX,
+  AOT_RUNTIME_CONFIGURATION_PROTOCOL,
   AotExpressionParser,
   AotRuntimeConfiguration,
   AotRuntimeConfigurationModuleEmitter,

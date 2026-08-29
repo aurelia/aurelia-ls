@@ -19,7 +19,8 @@ import { describe, expect, it } from 'vitest';
 
 import {
   AOT_CONSERVATIVE_RUNTIME_REGISTRATION_ORDER,
-  AOT_RUNTIME_CONFIGURATION_MODULE_ID,
+  AOT_RUNTIME_CONFIGURATION_MODULE_PREFIX,
+  AOT_RUNTIME_CONFIGURATION_PROTOCOL,
   AotExpressionParser,
   AotRuntimeConfiguration,
   AotRuntimeConfigurationModuleEmitter,
@@ -160,7 +161,12 @@ describe('AOT runtime configuration', () => {
     });
     const artifact = new AotRuntimeConfigurationModuleEmitter().emit(plan);
 
-    expect(artifact.moduleId).toBe(AOT_RUNTIME_CONFIGURATION_MODULE_ID);
+    expect(artifact.protocol).toBe(AOT_RUNTIME_CONFIGURATION_PROTOCOL);
+    expect(artifact.moduleId).toMatch(
+      /^virtual:aurelia-aot\/configuration\/[a-f0-9]{64}$/u,
+    );
+    expect(artifact.moduleId.startsWith(AOT_RUNTIME_CONFIGURATION_MODULE_PREFIX)).toBe(true);
+    expect(artifact.planDigest).toMatch(/^sha256:[a-f0-9]{64}$/u);
     expect(artifact.expressionCount).toBe(2);
     expect(artifact.registrationOrder).toBe(AOT_CONSERVATIVE_RUNTIME_REGISTRATION_ORDER);
     expect(artifact.digest).toMatch(/^sha256:[a-f0-9]{64}$/u);
@@ -173,9 +179,34 @@ describe('AOT runtime configuration', () => {
     expect(artifact.code).toContain('export class AotExpressionParser');
     expect(artifact.code).toContain('export class AotTemplateCompiler');
     expect(artifact.code).toContain('export class AotRuntimeConfiguration');
+    expect(artifact.code).toContain(
+      `export const aotRuntimeConfigurationProtocol = ${JSON.stringify(AOT_RUNTIME_CONFIGURATION_PROTOCOL)};`,
+    );
+    expect(artifact.code).toContain(
+      `export const aotRuntimeConfigurationPlanDigest = ${JSON.stringify(artifact.planDigest)};`,
+    );
     expect(artifact.code.indexOf('"IsIterator"')).toBeLessThan(artifact.code.indexOf('"IsProperty"'));
     expect(artifact.code).toContain('"enableCoercion": true');
     expect(new AotRuntimeConfigurationModuleEmitter().emit(plan)).toEqual(artifact);
+  });
+
+  it('addresses canonical plans independently of expression ordering', () => {
+    const emitter = new AotRuntimeConfigurationModuleEmitter();
+    const ordinary = emitter.emit(new AotRuntimeConfigurationPlan(expressions));
+    const reordered = emitter.emit(new AotRuntimeConfigurationPlan([...expressions].reverse()));
+    const coercing = emitter.emit(new AotRuntimeConfigurationPlan(expressions, {
+      enableCoercion: true,
+      coerceNullish: false,
+    }));
+    const changedAst = emitter.emit(new AotRuntimeConfigurationPlan([
+      { ...expressions[0]!, value: { $kind: 'AccessScope', name: 'other', ancestor: 0 } },
+      expressions[1]!,
+    ]));
+
+    expect(reordered.moduleId).toBe(ordinary.moduleId);
+    expect(reordered.planDigest).toBe(ordinary.planDigest);
+    expect(coercing.moduleId).not.toBe(ordinary.moduleId);
+    expect(changedAst.moduleId).not.toBe(ordinary.moduleId);
   });
 
   it('rejects ambiguous expression keys before emission', () => {

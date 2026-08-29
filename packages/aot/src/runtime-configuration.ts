@@ -4,7 +4,8 @@ import type { RuntimeExpressionAstValue } from '@aurelia-ls/semantic-runtime/bro
 
 import { emitAotJavaScriptValue } from './template-module-emitter.js';
 
-export const AOT_RUNTIME_CONFIGURATION_MODULE_ID = 'virtual:aurelia-aot/configuration';
+export const AOT_RUNTIME_CONFIGURATION_PROTOCOL = 'aurelia-aot/runtime-configuration/v1';
+export const AOT_RUNTIME_CONFIGURATION_MODULE_PREFIX = 'virtual:aurelia-aot/configuration/';
 
 export type AotRuntimeExpressionType =
   | 'None'
@@ -70,7 +71,9 @@ export class AotRuntimeConfigurationPlan {
 }
 
 export interface AotRuntimeConfigurationModuleArtifact {
-  readonly moduleId: typeof AOT_RUNTIME_CONFIGURATION_MODULE_ID;
+  readonly protocol: typeof AOT_RUNTIME_CONFIGURATION_PROTOCOL;
+  readonly moduleId: `${typeof AOT_RUNTIME_CONFIGURATION_MODULE_PREFIX}${string}`;
+  readonly planDigest: string;
   readonly code: string;
   readonly digest: string;
   readonly expressionCount: number;
@@ -179,6 +182,14 @@ export class AotRuntimeConfigurationModuleEmitter {
       entry.source,
       entry.value,
     ]);
+    const canonicalPlan = emitAotJavaScriptValue({
+      coercion: plan.coercion,
+      expressions: expressionValues,
+      protocol: AOT_RUNTIME_CONFIGURATION_PROTOCOL,
+    }, AOT_RUNTIME_CONFIGURATION_MODULE_PREFIX);
+    const planHash = createHash('sha256').update(canonicalPlan).digest('hex');
+    const planDigest = `sha256:${planHash}`;
+    const moduleId = `${AOT_RUNTIME_CONFIGURATION_MODULE_PREFIX}${planHash}` as const;
     const lines = [
       "import { Registration } from '@aurelia/kernel';",
       "import { IExpressionParser } from '@aurelia/expression-parser';",
@@ -197,11 +208,14 @@ export class AotRuntimeConfigurationModuleEmitter {
       '',
       `export ${AotRuntimeConfiguration.toString()}`,
       '',
-      `const $expressions = ${emitAotJavaScriptValue(expressionValues, AOT_RUNTIME_CONFIGURATION_MODULE_ID)}`,
+      `export const aotRuntimeConfigurationProtocol = ${JSON.stringify(AOT_RUNTIME_CONFIGURATION_PROTOCOL)};`,
+      `export const aotRuntimeConfigurationPlanDigest = ${JSON.stringify(planDigest)};`,
+      '',
+      `const $expressions = ${emitAotJavaScriptValue(expressionValues, moduleId)}`,
       '  .map(([expressionType, source, value]) => ({ expressionType, source, value }));',
       '',
       'export const AotConfiguration = new AotRuntimeConfiguration(',
-      `  Registration.instance(ICoercionConfiguration, ${emitAotJavaScriptValue(plan.coercion, AOT_RUNTIME_CONFIGURATION_MODULE_ID)}),`,
+      `  Registration.instance(ICoercionConfiguration, ${emitAotJavaScriptValue(plan.coercion, moduleId)}),`,
       '  Registration.instance(IExpressionParser, new AotExpressionParser($expressions)),',
       '  Registration.instance(ITemplateCompiler, new AotTemplateCompiler()),',
       '  DirtyChecker,',
@@ -216,7 +230,9 @@ export class AotRuntimeConfigurationModuleEmitter {
     ];
     const code = lines.join('\n');
     return {
-      moduleId: AOT_RUNTIME_CONFIGURATION_MODULE_ID,
+      protocol: AOT_RUNTIME_CONFIGURATION_PROTOCOL,
+      moduleId,
+      planDigest,
       code,
       digest: `sha256:${createHash('sha256').update(code).digest('hex')}`,
       expressionCount: expressions.length,
