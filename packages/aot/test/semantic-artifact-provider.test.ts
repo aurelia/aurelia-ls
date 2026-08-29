@@ -8,6 +8,11 @@ import {
   SemanticAotArtifactProvider,
   type SemanticAotBuildSession,
 } from '../src/index.js';
+import {
+  collapseEquivalentAotResourcePlans,
+  validateAotCarrierPatchHandoff,
+} from '../src/semantic-artifact-provider.js';
+import type { AotSourceTransformResourcePlan } from '../src/source-transform.js';
 
 const repositoryRoot = path.resolve(import.meta.dirname, '../../..');
 const fixtureRoot = path.resolve(
@@ -113,7 +118,7 @@ describe('semantic AOT artifact provider', () => {
     expect(payload?.code).toContain('export default $definition0;');
     expect(payload?.code).not.toContain('export const dependencies');
 
-    const runtime = await session.virtualModuleFor({ specifier: transformed!.runtimeModuleSpecifier });
+    const runtime = await session.virtualModuleFor({ specifier: transformed!.runtimeModuleSpecifier! });
     expect(runtime).toMatchObject({
       specifier: 'virtual:aurelia-aot/runtime',
       map: null,
@@ -182,8 +187,91 @@ describe('semantic AOT artifact provider', () => {
     });
     expect(transformed?.code).toContain('const App = __auAotApply(CustomElement.define({');
   }, 20_000);
+
+  it('collapses byte-identical compiler-world variants and refuses divergent global patches', () => {
+    const first = variantPlan('resource', 'variant-b', 'same-digest');
+    const second = variantPlan('resource', 'variant-a', 'same-digest');
+    const collapsed = collapseEquivalentAotResourcePlans(componentPath, [first, second]);
+
+    expect(collapsed).toEqual([second]);
+    expect(() => collapseEquivalentAotResourcePlans(componentPath, [
+      first,
+      { ...second, payloadDigest: 'different-digest' },
+    ])).toThrow(expect.objectContaining({
+      code: 'AOT_SOURCE_INVALID_PLAN',
+      resourceKey: 'resource',
+    }));
+  });
+
+  it('collapses one real resource compiled under two equivalent app-root worlds', async () => {
+    const root = path.resolve(
+      repositoryRoot,
+      'packages/semantic-runtime/fixtures/pressure/binding-uncertainty-explanation',
+    );
+    const multiRootProvider = new SemanticAotArtifactProvider();
+    const multiRootSession = await multiRootProvider.openBuild({
+      root,
+      mode: 'production',
+      environmentName: 'client',
+      sourcemap: true,
+    });
+    const sourcePath = path.resolve(root, 'src/shared-app.ts');
+    const transformed = await multiRootSession.transformSource({
+      sourcePath,
+      code: await readFile(sourcePath, 'utf8'),
+    });
+
+    expect(transformed?.resources).toHaveLength(1);
+    expect(transformed?.resources[0]?.definitionName).toBe('binding-explanation-shared-app');
+  }, 20_000);
+
+  it('refuses conventional in-file dependencies before conventions can relocate the target class', () => {
+    const handoff = {
+      schemaVersion: 'semantic-runtime/template-compiler-compiled-handoff/v1',
+      resourceName: 'moving-app',
+      rootDefinitionId: 'definition:0',
+      address: {
+        sourceAttachment: {
+          carrierKind: 'convention',
+          owningModuleKey: 'src/app.ts',
+        },
+      },
+      source: { source: { path: 'src/app.html' } },
+      definitions: [{
+        definitionId: 'definition:0',
+        header: {
+          dependencies: [{ moduleKey: 'src/app.ts', localName: 'LocalCard' }],
+        },
+      }],
+    } as unknown as Parameters<typeof validateAotCarrierPatchHandoff>[0];
+
+    expect(() => validateAotCarrierPatchHandoff(handoff, componentPath)).toThrow(
+      expect.objectContaining({
+        code: 'AOT_ARTIFACT_UNSUPPORTED_HEADER',
+        message: expect.stringContaining("in-file dependency 'LocalCard'"),
+      }),
+    );
+  });
 });
 
 function normalizePath(value: string): string {
   return value.replaceAll('\\', '/');
+}
+
+function variantPlan(
+  resourceKey: string,
+  compilerVariantKey: string,
+  payloadDigest: string,
+): AotSourceTransformResourcePlan {
+  return {
+    resourceKey,
+    compilerVariantKey,
+    definitionName: 'resource',
+    carrierKind: 'define-call',
+    carrier: { start: 0, end: 1, oldText: 'x' },
+    targetLocalName: null,
+    targetDeclaration: null,
+    payloadSpecifier: `virtual:aurelia-aot/payload/${compilerVariantKey}`,
+    payloadDigest,
+  };
 }

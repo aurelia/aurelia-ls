@@ -8,6 +8,7 @@ import {
 } from '@aurelia-ls/semantic-runtime';
 import {
   materializeSemanticAppTemplateCompilerHandoffs,
+  ResourceCarrierKind,
   TemplateCompilerCompiledHandoffState,
   type SemanticAppTemplateCompilerHandoffResource,
   type TemplateCompilerCompiledHandoffValue,
@@ -22,6 +23,7 @@ import {
 } from './compiler-patch-runtime-module.js';
 import {
   AotSourceTransformEmitter,
+  AotSourceTransformError,
   type AotSourceTransformArtifact,
   type AotSourceTransformResourcePlan,
 } from './source-transform.js';
@@ -172,6 +174,7 @@ export class SemanticAotBuildSession {
         );
       }
       const root = rootDefinition(resource.handoff);
+      validateAotCarrierPatchHandoff(resource.handoff, request.sourcePath);
       return {
         resourceKey: resource.resourceKey,
         compilerVariantKey: resource.compilerVariantKey,
@@ -187,7 +190,7 @@ export class SemanticAotBuildSession {
     return this.#sourceEmitter.emit({
       sourcePath: request.sourcePath,
       code: request.code,
-      resources: plans,
+      resources: collapseEquivalentAotResourcePlans(request.sourcePath, plans),
       runtimeModuleSpecifier: AOT_COMPILER_PATCH_RUNTIME_MODULE_ID,
     });
   }
@@ -206,6 +209,7 @@ export class SemanticAotBuildSession {
     const pending = this.#pendingByPayloadSpecifier.get(request.specifier);
     if (pending == null) return null;
     const artifact = await this.#patchArtifactFor(pending);
+    this.#recordEvidence(pending, artifact);
     return {
       specifier: request.specifier,
       code: artifact.code,
@@ -225,7 +229,6 @@ export class SemanticAotBuildSession {
       sourceText,
     });
     this.#patchArtifactsByVariant.set(pending.compilerVariantKey, artifact);
-    this.#recordEvidence(pending, artifact);
     return artifact;
   }
 
@@ -371,6 +374,69 @@ function rootDefinition(handoff: TemplateCompilerCompiledHandoffValue) {
   return root;
 }
 
+/** Collapse compiler-world variants only when they produce the same exact payload for one resource carrier. */
+export function collapseEquivalentAotResourcePlans(
+  sourcePath: string,
+  plans: readonly AotSourceTransformResourcePlan[],
+): readonly AotSourceTransformResourcePlan[] {
+  const byResource = new Map<string, AotSourceTransformResourcePlan[]>();
+  for (const plan of plans) {
+    const variants = byResource.get(plan.resourceKey) ?? [];
+    variants.push(plan);
+    byResource.set(plan.resourceKey, variants);
+  }
+  const collapsed: AotSourceTransformResourcePlan[] = [];
+  for (const [resourceKey, variants] of byResource) {
+    const ordered = [...variants].sort((left, right) =>
+      left.compilerVariantKey.localeCompare(right.compilerVariantKey)
+    );
+    const selected = ordered[0]!;
+    const incompatible = ordered.find((candidate) =>
+      candidate.payloadDigest !== selected.payloadDigest
+      || candidate.carrierKind !== selected.carrierKind
+      || candidate.carrier.start !== selected.carrier.start
+      || candidate.carrier.end !== selected.carrier.end
+      || candidate.carrier.oldText !== selected.carrier.oldText
+    );
+    if (incompatible != null) {
+      throw new AotSourceTransformError(
+        'AOT_SOURCE_INVALID_PLAN',
+        `Resource '${resourceKey}' has non-equivalent compiler variants '${selected.compilerVariantKey}' and '${incompatible.compilerVariantKey}' in one runtime module.`,
+        sourcePath,
+        resourceKey,
+      );
+    }
+    collapsed.push(selected);
+  }
+  return collapsed.sort((left, right) =>
+    left.carrier.start - right.carrier.start
+    || right.carrier.end - left.carrier.end
+    || left.compilerVariantKey.localeCompare(right.compilerVariantKey)
+  );
+}
+
+/** Refuse the known pre-conventions TDZ shape until conventions expose a cooperative post-transform attachment hook. */
+export function validateAotCarrierPatchHandoff(
+  handoff: TemplateCompilerCompiledHandoffValue,
+  sourcePath: string,
+): void {
+  const attachment = handoff.address.sourceAttachment;
+  if (attachment?.carrierKind !== ResourceCarrierKind.Convention) return;
+  const root = rootDefinition(handoff);
+  const inFileDependency = root.header.dependencies.find((dependency) =>
+    dependency.localName != null
+    && dependency.moduleKey != null
+    && normalizeModuleKey(dependency.moduleKey) === normalizeModuleKey(attachment.owningModuleKey)
+  );
+  if (inFileDependency == null) return;
+  const dependencyName = inFileDependency.localName ?? '(anonymous dependency)';
+  throw new AotArtifactError(
+    'AOT_ARTIFACT_UNSUPPORTED_HEADER',
+    `Convention resource '${handoff.resourceName}' has in-file dependency '${dependencyName}'. Aurelia conventions may relocate the class after the authored AOT attachment point.`,
+    sourcePath,
+  );
+}
+
 function groupPendingByPath(
   pending: readonly PendingResourceArtifact[],
   selectPath: (artifact: PendingResourceArtifact) => string,
@@ -394,4 +460,8 @@ function copyRawSourceMap(map: AotRawSourceMap): AotRawSourceMap {
     names: [...map.names],
     mappings: map.mappings,
   };
+}
+
+function normalizeModuleKey(value: string): string {
+  return value.replaceAll('\\', '/').replace(/^\.\//u, '').toLowerCase();
 }
