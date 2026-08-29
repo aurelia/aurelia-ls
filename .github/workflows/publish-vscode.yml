@@ -9,21 +9,33 @@ on:
         default: false
         type: boolean
 
-permissions:
-  contents: read
-  id-token: write
-  attestations: write
-  artifact-metadata: write
+permissions: {}
 
 concurrency:
   group: vscode-release-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
-  release:
-    name: Verify and publish the exact VSIX
+  candidate:
+    name: Package the exact VSIX candidate
     runs-on: windows-latest
-    timeout-minutes: 150
+    timeout-minutes: 30
+    permissions:
+      actions: read
+      contents: read
+    outputs:
+      version: ${{ steps.release.outputs.version }}
+      head: ${{ steps.release.outputs.head }}
+      short_head: ${{ steps.release.outputs.short_head }}
+      vsix_name: ${{ steps.release.outputs.vsix_name }}
+      receipt_name: ${{ steps.release.outputs.receipt_name }}
+      checksum_name: ${{ steps.release.outputs.checksum_name }}
+      candidate_artifact_name: ${{ steps.release.outputs.candidate_artifact_name }}
+      evidence_artifact_name: ${{ steps.release.outputs.evidence_artifact_name }}
+      candidate_artifact_id: ${{ steps.candidate_packet.outputs.artifact-id }}
+      candidate_artifact_digest: ${{ steps.candidate_packet.outputs.artifact-digest }}
+      ci_run_id: ${{ steps.ci.outputs.ci_run_id }}
+      ci_run_url: ${{ steps.ci.outputs.ci_run_url }}
     defaults:
       run:
         shell: pwsh
@@ -97,27 +109,48 @@ jobs:
 
           $shortHead = $head.Substring(0, 12)
           $stem = "aurelia-2-$version-$shortHead"
-          $releaseRoot = Join-Path $env:GITHUB_WORKSPACE 'packages/vscode/.release'
-          $evidenceRoot = Join-Path $env:GITHUB_WORKSPACE ".temp/vscode-vsix-installed/$shortHead"
           $outputs = [ordered]@{
             version = $version
             head = $head
             short_head = $shortHead
-            artifact_name = "$stem-release-evidence"
-            vsix_path = Join-Path $releaseRoot "$stem.vsix"
-            receipt_path = Join-Path $releaseRoot "$stem.manifest.json"
-            checksum_path = Join-Path $releaseRoot "$stem.sha256"
-            installed_evidence_path = Join-Path $evidenceRoot 'installed.evidence.json'
-            driver_report_path = Join-Path $evidenceRoot 'driver.report.json'
-            install_stdout_path = Join-Path $evidenceRoot 'install.stdout.txt'
-            install_stderr_path = Join-Path $evidenceRoot 'install.stderr.txt'
-            host_stdout_path = Join-Path $evidenceRoot 'host.stdout.txt'
-            host_stderr_path = Join-Path $evidenceRoot 'host.stderr.txt'
+            vsix_name = "$stem.vsix"
+            receipt_name = "$stem.manifest.json"
+            checksum_name = "$stem.sha256"
+            candidate_artifact_name = "$stem-candidate"
+            evidence_artifact_name = "$stem-release-evidence"
+            vsix_path = Join-Path $env:GITHUB_WORKSPACE "packages/vscode/.release/$stem.vsix"
+            receipt_path = Join-Path $env:GITHUB_WORKSPACE "packages/vscode/.release/$stem.manifest.json"
+            checksum_path = Join-Path $env:GITHUB_WORKSPACE "packages/vscode/.release/$stem.sha256"
           }
           foreach ($entry in $outputs.GetEnumerator()) {
             $value = ([string]$entry.Value).Replace('\', '/')
             Add-Content -LiteralPath $env:GITHUB_OUTPUT -Value "$($entry.Key)=$value"
           }
+
+      - name: Require successful full CI for the release commit
+        id: ci
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $runs = @(gh run list --repo $env:GITHUB_REPOSITORY --workflow ci.yml --commit $env:GITHUB_SHA --event push --status success --limit 100 --json databaseId,headSha,headBranch,event,status,conclusion,url | ConvertFrom-Json)
+          if ($LASTEXITCODE -ne 0) {
+            throw 'Unable to query CI runs for the release commit.'
+          }
+          $accepted = @($runs | Where-Object {
+            $_.headSha -eq $env:GITHUB_SHA `
+              -and $_.headBranch -eq 'main' `
+              -and $_.event -eq 'push' `
+              -and $_.status -eq 'completed' `
+              -and $_.conclusion -eq 'success'
+          } | Sort-Object databaseId -Descending)
+          if ($accepted.Count -eq 0) {
+            throw "No successful full CI push run exists on main for $env:GITHUB_SHA."
+          }
+          $selected = $accepted[0]
+          Add-Content -LiteralPath $env:GITHUB_OUTPUT -Value "ci_run_id=$($selected.databaseId)"
+          Add-Content -LiteralPath $env:GITHUB_OUTPUT -Value "ci_run_url=$($selected.url)"
+          Write-Host "Accepted full CI run $($selected.databaseId): $($selected.url)"
 
       - name: Verify exact submodules
         run: |
@@ -157,28 +190,6 @@ jobs:
           if ($pnpmVersion -ne '11.5.2') { throw "Expected pnpm 11.5.2; received $pnpmVersion." }
           if ($vsceVersion -ne '3.9.2') { throw "Expected VSCE 3.9.2; received $vsceVersion." }
 
-      - name: Build the IDE packages
-        run: pnpm build:ide
-
-      - name: Lint the shipping IDE packages
-        run: |
-          pnpm lint:language-server
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          pnpm lint:vscode
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-
-      - name: Test the IDE packages
-        run: node scripts/run-vitest.mjs packages/language-server/test packages/vscode/test
-
-      - name: Test the bounded IDE support contracts
-        run: pnpm test:ide:support
-
-      - name: Check aggregate IDE assurance
-        run: pnpm test:ide:assurance
-
-      - name: Test release VS Code Worker hosts
-        run: pnpm test:vscode:extension-host:release
-
       - name: Recheck exact clean release tree
         run: |
           $ErrorActionPreference = 'Stop'
@@ -208,7 +219,7 @@ jobs:
       - name: Verify the packaged VSIX
         run: pnpm verify:ide:vsix
 
-      - name: Require the exact release packet
+      - name: Require the exact candidate packet
         env:
           VSIX_PATH: ${{ steps.release.outputs.vsix_path }}
           RECEIPT_PATH: ${{ steps.release.outputs.receipt_path }}
@@ -228,6 +239,229 @@ jobs:
             }
           }
 
+      - name: Upload the exact candidate packet
+        id: candidate_packet
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: ${{ steps.release.outputs.candidate_artifact_name }}
+          path: |
+            ${{ steps.release.outputs.vsix_path }}
+            ${{ steps.release.outputs.receipt_path }}
+            ${{ steps.release.outputs.checksum_path }}
+          if-no-files-found: error
+          include-hidden-files: true
+          compression-level: 0
+          retention-days: 30
+
+  host:
+    name: Accept exact VSIX (Windows, ${{ matrix.label }})
+    needs: candidate
+    runs-on: windows-latest
+    timeout-minutes: 75
+    permissions:
+      actions: read
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - lane: current-stable
+            label: current stable
+          - lane: minimum
+            label: minimum 1.91
+    defaults:
+      run:
+        shell: pwsh
+        working-directory: .
+
+    steps:
+      - name: Checkout the release commit
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+          submodules: recursive
+
+      - name: Set up pnpm 11.5.2
+        uses: pnpm/action-setup@a7487c7e89a18df4991f7f222e4898a00d66ddda # v4.1.0
+        with:
+          version: 11.5.2
+          run_install: false
+
+      - name: Set up Node.js 22.19.0
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22.19.0
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Verify exact submodules
+        shell: bash
+        run: |
+          git submodule status --recursive
+          test -f aurelia/package.json
+          test -f aurelia2-plugins/packages/aurelia2-table/package.json
+
+      - name: Install locked dependencies
+        run: pnpm install --frozen-lockfile
+        env:
+          PNPM_APPROVE_BUILDS: esbuild
+
+      - name: Bootstrap linked Aurelia dependencies
+        run: pnpm bootstrap:aurelia
+
+      - name: Build exact VSIX verification inputs
+        run: |
+          pnpm build:ide:types
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          pnpm --filter aurelia-2 run bundle:minify
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Download the exact candidate packet
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          artifact-ids: ${{ needs.candidate.outputs.candidate_artifact_id }}
+          path: packages/vscode/.release
+          merge-multiple: true
+
+      - name: Require only the exact downloaded packet
+        env:
+          VSIX_NAME: ${{ needs.candidate.outputs.vsix_name }}
+          RECEIPT_NAME: ${{ needs.candidate.outputs.receipt_name }}
+          CHECKSUM_NAME: ${{ needs.candidate.outputs.checksum_name }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $releaseRoot = Join-Path $env:GITHUB_WORKSPACE 'packages/vscode/.release'
+          $expected = @($env:VSIX_NAME, $env:RECEIPT_NAME, $env:CHECKSUM_NAME) | Sort-Object
+          $entries = @(Get-ChildItem -LiteralPath $releaseRoot -Force)
+          $actual = @($entries | ForEach-Object Name | Sort-Object)
+          if (Compare-Object -ReferenceObject $expected -DifferenceObject $actual) {
+            throw "Downloaded release packet differs from the exact candidate set: $($actual -join ', ')"
+          }
+          foreach ($entry in $entries) {
+            if (-not $entry.PSIsContainer -and -not $entry.Attributes.HasFlag([IO.FileAttributes]::ReparsePoint)) {
+              continue
+            }
+            throw "Downloaded release packet contains a directory or reparse point: $($entry.FullName)"
+          }
+
+      - name: Verify the downloaded VSIX
+        run: pnpm verify:ide:vsix
+
+      - name: Test the exact installed VSIX on ${{ matrix.label }}
+        run: pnpm --filter aurelia-2 run test:extension-host:installed:${{ matrix.lane }}:built
+
+      - name: Re-verify the accepted VSIX
+        run: pnpm verify:ide:vsix
+
+      - name: Recheck release source state
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if ((git rev-parse HEAD).Trim() -ne '${{ needs.candidate.outputs.head }}') {
+            throw 'Host acceptance changed or checked out the wrong release commit.'
+          }
+          $status = @(git status --porcelain=v1 --untracked-files=all --ignore-submodules=none)
+          if ($LASTEXITCODE -ne 0 -or $status.Count -ne 0) {
+            throw "Host acceptance changed the tracked release tree:`n$($status -join "`n")"
+          }
+
+  release:
+    name: Attest and publish the accepted VSIX
+    needs: [candidate, host]
+    runs-on: windows-latest
+    timeout-minutes: 45
+    permissions:
+      actions: read
+      contents: read
+      id-token: write
+      attestations: write
+      artifact-metadata: write
+    defaults:
+      run:
+        shell: pwsh
+        working-directory: .
+
+    steps:
+      - name: Checkout the release commit
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+          submodules: recursive
+
+      - name: Set up pnpm 11.5.2
+        uses: pnpm/action-setup@a7487c7e89a18df4991f7f222e4898a00d66ddda # v4.1.0
+        with:
+          version: 11.5.2
+          run_install: false
+
+      - name: Set up Node.js 22.19.0
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22.19.0
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Verify exact submodules
+        shell: bash
+        run: |
+          git submodule status --recursive
+          test -f aurelia/package.json
+          test -f aurelia2-plugins/packages/aurelia2-table/package.json
+
+      - name: Install locked dependencies
+        run: pnpm install --frozen-lockfile
+        env:
+          PNPM_APPROVE_BUILDS: esbuild
+
+      - name: Bootstrap linked Aurelia dependencies
+        run: pnpm bootstrap:aurelia
+
+      - name: Verify pinned release tools
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if ((node --version).Trim() -ne 'v22.19.0') { throw 'Node version drifted.' }
+          if ((pnpm --version).Trim() -ne '11.5.2') { throw 'pnpm version drifted.' }
+          if ((pnpm --filter aurelia-2 exec vsce --version).Trim() -ne '3.9.2') { throw 'VSCE version drifted.' }
+
+      - name: Build exact VSIX verification inputs
+        run: |
+          pnpm build:ide:types
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          pnpm --filter aurelia-2 run bundle:minify
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Download the accepted candidate packet
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          artifact-ids: ${{ needs.candidate.outputs.candidate_artifact_id }}
+          path: packages/vscode/.release
+          merge-multiple: true
+
+      - name: Require only the exact accepted packet
+        env:
+          VSIX_NAME: ${{ needs.candidate.outputs.vsix_name }}
+          RECEIPT_NAME: ${{ needs.candidate.outputs.receipt_name }}
+          CHECKSUM_NAME: ${{ needs.candidate.outputs.checksum_name }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $releaseRoot = Join-Path $env:GITHUB_WORKSPACE 'packages/vscode/.release'
+          $expected = @($env:VSIX_NAME, $env:RECEIPT_NAME, $env:CHECKSUM_NAME) | Sort-Object
+          $entries = @(Get-ChildItem -LiteralPath $releaseRoot -Force)
+          $actual = @($entries | ForEach-Object Name | Sort-Object)
+          if (Compare-Object -ReferenceObject $expected -DifferenceObject $actual) {
+            throw "Accepted release packet differs from the exact candidate set: $($actual -join ', ')"
+          }
+          foreach ($entry in $entries) {
+            if (-not $entry.PSIsContainer -and -not $entry.Attributes.HasFlag([IO.FileAttributes]::ReparsePoint)) {
+              continue
+            }
+            throw "Accepted release packet contains a directory or reparse point: $($entry.FullName)"
+          }
+
+      - name: Verify the accepted VSIX
+        run: pnpm verify:ide:vsix
+
       - name: Install and accept the exact VSIX
         id: installed
         run: pnpm verify:ide:vsix:installed
@@ -237,7 +471,7 @@ jobs:
         if: ${{ always() }}
         env:
           ACCEPTANCE_OUTCOME: ${{ steps.installed.outcome }}
-          INSTALLED_EVIDENCE_PATH: ${{ steps.release.outputs.installed_evidence_path }}
+          INSTALLED_EVIDENCE_PATH: ${{ github.workspace }}/.temp/vscode-vsix-installed/${{ needs.candidate.outputs.short_head }}/installed.evidence.json
         run: |
           $ErrorActionPreference = 'Stop'
           if (-not (Test-Path -LiteralPath $env:INSTALLED_EVIDENCE_PATH -PathType Leaf)) {
@@ -272,13 +506,13 @@ jobs:
         id: provenance
         uses: actions/attest@a1948c3f048ba23858d222213b7c278aabede763 # v4.1.1
         with:
-          subject-path: ${{ steps.release.outputs.vsix_path }}
+          subject-path: packages/vscode/.release/${{ needs.candidate.outputs.vsix_name }}
 
       - name: Publish the exact accepted VSIX
         if: ${{ inputs.publish }}
         env:
           VSCE_PAT: ${{ secrets.VSCE_PAT }}
-          VSIX_PATH: ${{ steps.release.outputs.vsix_path }}
+          VSIX_PATH: ${{ github.workspace }}/packages/vscode/.release/${{ needs.candidate.outputs.vsix_name }}
         run: |
           $ErrorActionPreference = 'Stop'
           if ([string]::IsNullOrWhiteSpace($env:VSCE_PAT)) {
@@ -294,17 +528,17 @@ jobs:
         if: ${{ always() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: ${{ steps.release.outputs.artifact_name }}
+          name: ${{ needs.candidate.outputs.evidence_artifact_name }}
           path: |
-            ${{ steps.release.outputs.vsix_path }}
-            ${{ steps.release.outputs.receipt_path }}
-            ${{ steps.release.outputs.checksum_path }}
-            ${{ steps.release.outputs.installed_evidence_path }}
-            ${{ steps.release.outputs.driver_report_path }}
-            ${{ steps.release.outputs.install_stdout_path }}
-            ${{ steps.release.outputs.install_stderr_path }}
-            ${{ steps.release.outputs.host_stdout_path }}
-            ${{ steps.release.outputs.host_stderr_path }}
+            packages/vscode/.release/${{ needs.candidate.outputs.vsix_name }}
+            packages/vscode/.release/${{ needs.candidate.outputs.receipt_name }}
+            packages/vscode/.release/${{ needs.candidate.outputs.checksum_name }}
+            .temp/vscode-vsix-installed/${{ needs.candidate.outputs.short_head }}/installed.evidence.json
+            .temp/vscode-vsix-installed/${{ needs.candidate.outputs.short_head }}/driver.report.json
+            .temp/vscode-vsix-installed/${{ needs.candidate.outputs.short_head }}/install.stdout.txt
+            .temp/vscode-vsix-installed/${{ needs.candidate.outputs.short_head }}/install.stderr.txt
+            .temp/vscode-vsix-installed/${{ needs.candidate.outputs.short_head }}/host.stdout.txt
+            .temp/vscode-vsix-installed/${{ needs.candidate.outputs.short_head }}/host.stderr.txt
             ${{ steps.evidence.outputs.client_log_path }}
             ${{ steps.evidence.outputs.extension_host_log_path }}
           if-no-files-found: warn

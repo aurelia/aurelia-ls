@@ -998,7 +998,7 @@ describe("SemanticRuntimeLspSession", () => {
     }).toEqual({
       result: "answered",
       selection: "not-applicable",
-      coverage: "open",
+      coverage: "complete",
       completeness: {
         fullDefinitions: 601,
         headerOnly: 5,
@@ -1007,7 +1007,7 @@ describe("SemanticRuntimeLspSession", () => {
         excludedCompilerSyntax: 61,
         unnamedDefinitions: 0,
         unresolvedModules: 0,
-        openVisibility: 1,
+        openVisibility: 0,
       },
       rowCount: 606,
     });
@@ -2408,6 +2408,7 @@ describe("SemanticRuntimeLspSession", () => {
   });
 
   test("requests resource definitions without handles and keeps inventory type surfaces caller-selected", async () => {
+    const querySpy = vi.spyOn(SemanticRuntime.prototype, "answerAppQuery");
     const session = createSession(minimalFixtureRoot(), new TestDocumentStore());
     const result = await session.runRequest(null, async (operation) => {
       const summary = await operation.workspaceSummary();
@@ -2426,11 +2427,17 @@ describe("SemanticRuntimeLspSession", () => {
         richTypeSurfacesIncluded: rich.value.typeSurfacesIncluded,
       };
     });
+    const definitionQueries = querySpy.mock.calls
+      .map(([query]) => query)
+      .filter((query) => query.kind === SemanticAppQueryKind.ResourceDefinitions);
+    querySpy.mockRestore();
 
     expect(result.definitionRows).toBeGreaterThan(0);
     expect(result.definitionsHaveHandles).toBe(false);
     expect(result.compactTypeSurfacesIncluded).toBe(false);
     expect(result.richTypeSurfacesIncluded).toBe(true);
+    expect(definitionQueries.length).toBeGreaterThan(0);
+    expect(definitionQueries.every((query) => query.analysisDepth == null)).toBe(true);
   });
 
   test("requests one explicit project and drains every analysis-limitation page", async () => {

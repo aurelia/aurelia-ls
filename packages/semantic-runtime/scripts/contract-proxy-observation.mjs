@@ -11,7 +11,6 @@ import {
 import { exactObservedDependencySourceSpanFailures } from './contract-source-span-assertions.mjs';
 
 const packageRoot = path.resolve(fileURLToPath(new URL('..', import.meta.url)));
-const workspaceRoot = path.resolve(packageRoot, '../..');
 const fixtureRoot = path.join(packageRoot, 'fixtures/pressure/watcher-proxy-dependencies');
 
 const runtime = await createSemanticRuntime({
@@ -1102,25 +1101,38 @@ if (!detailedWatcherDependencies.some((row) =>
 )) {
   failures.push('Detailed watcher dependencies should retain handles on nested access-use targets.');
 }
+const authoredCollectionCalls = detailedWatcherDependencies.filter((row) =>
+  row.occurrence.dependencyKind === 'proxy-collection-read'
+    && row.occurrence.methodName !== 'Symbol.iterator'
+);
+if (
+  authoredCollectionCalls.length === 0
+  || authoredCollectionCalls.some((row) =>
+    row.occurrence.accessUse.accessForm !== 'member-call'
+      || row.occurrence.accessUse.role !== 'call'
+  )
+) {
+  failures.push('Every authored proxy collection call should retain its exact member-call access operation.');
+}
 failures.push(...exactObservedDependencySourceSpanFailures(snapshot.runtimeWatcherObservedDependencies, [
   {
-    summary: 'Computed watcher proxy collection dependency should publish its own function-body source span.',
+    summary: 'Computed watcher proxy collection dependency should publish its authored call source span.',
     path: 'src/watcher-proxy-dependencies-app.ts',
     occurrence: {
       sourceName: 'vm.products',
       methodName: 'some',
     },
-    sourceSpan: { start: 2386, end: 2397 },
+    sourceSpan: { start: 2386, end: 2402 },
     memberTokenSpan: { start: 2389, end: 2397 },
   },
   {
-    summary: 'Computed watcher callback-local dependency should publish its exact function-body source span.',
+    summary: 'Computed watcher callback-local dependency should publish its authored call source span.',
     path: 'src/watcher-proxy-dependencies-app.ts',
     occurrence: {
       sourceName: 'product.tags',
       methodName: 'includes',
     },
-    sourceSpan: { start: 2416, end: 2428 },
+    sourceSpan: { start: 2416, end: 2437 },
     memberTokenSpan: { start: 2424, end: 2428 },
   },
   ...[

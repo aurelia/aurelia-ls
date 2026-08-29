@@ -27,6 +27,11 @@ import {
 } from "node:path";
 import { fileURLToPath } from "node:url";
 import { extensionHostStaticContractSha256 } from "./extension-host-static-contract.mjs";
+import {
+  artifactPaths,
+  gitState,
+  verifyVsix,
+} from "./vsix-artifact.mjs";
 
 export const minimumVSCodeVersion = "1.91.0";
 export const resourceDiscoveryObservationLedgerMaxBytes = 192 * 1024 * 1024;
@@ -40,6 +45,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(__dirname, "../../..");
 const extensionDevelopmentPath = resolve(__dirname, "..");
 const extensionTestsPath = join(extensionDevelopmentPath, "test", "extension-host", "suite", "index.cjs");
+const installedDriverRoot = join(extensionDevelopmentPath, "test", "installed-driver");
 const sourceWorkspace = join(repoRoot, "fixtures", "hello-world");
 const semanticRuntimeDependencies = join(repoRoot, "packages", "semantic-runtime", "node_modules");
 const rootWorkspaceDependencySpecifiers = Object.freeze(["aurelia", "@aurelia/router"]);
@@ -152,6 +158,7 @@ const usage = [
   "[--worker|--ipc]",
   "[--current-stable|--minimum]",
   "[--shard=all|worker-lifecycle|rename-reliability|product-support]",
+  "[--installed-vsix]",
   "[--plan]",
 ].join(" ");
 
@@ -160,6 +167,7 @@ export function parseRunnerArguments(args) {
   let version;
   let shard;
   let planOnly = false;
+  let productMode = "development";
 
   for (const argument of args) {
     if (argument === "--worker" || argument === "--ipc") {
@@ -183,6 +191,11 @@ export function parseRunnerArguments(args) {
       planOnly = true;
       continue;
     }
+    if (argument === "--installed-vsix") {
+      if (productMode === "installed-vsix") fail("--installed-vsix may only be provided once.");
+      productMode = "installed-vsix";
+      continue;
+    }
     fail(`Unknown argument: ${argument}`);
   }
 
@@ -192,6 +205,9 @@ export function parseRunnerArguments(args) {
 
   if (transport === "ipc" && version !== "stable") {
     fail("Forced IPC is a current-stable control lane.");
+  }
+  if (productMode === "installed-vsix" && transport !== "worker") {
+    fail("Installed VSIX Extension Host acceptance is a worker-only lane.");
   }
   const shards = shard === "all" ? [...extensionHostShards] : [shard];
   for (const selectedShard of shards) {
@@ -211,10 +227,14 @@ export function parseRunnerArguments(args) {
     shards: Object.freeze(shards),
     launchCount: shards.length,
     planOnly,
+    productMode,
   });
 }
 
 export async function runExtensionHostTests(plan, dependencies = {}) {
+  if (plan.productMode === "installed-vsix") {
+    return runInstalledVsixExtensionHostTests(plan, dependencies);
+  }
   const electron = dependencies.electron ?? await import("@vscode/test-electron");
   const prepareWorkspace = dependencies.prepareWorkspace ?? prepareTestWorkspace;
   const authenticateReport = dependencies.authenticateReport
@@ -321,7 +341,149 @@ export async function runExtensionHostTests(plan, dependencies = {}) {
   }
 }
 
-function extensionHostEnvironment(plan, shard, workspace, resolvedVersion, renameUiPort) {
+/** Install and exercise the current-HEAD VSIX while the inert driver remains the sole development extension. */
+export async function runInstalledVsixExtensionHostTests(plan, dependencies = {}) {
+  const installedVerifier = dependencies.installedVerifier
+    ?? await import("./verify-installed-vsix.mjs");
+  const {
+    buildInstallInvocation,
+    discoverInstalledProduct,
+    requireArtifactReceipt,
+    requireSameRepositoryState,
+    requireSuccessfulProcess,
+    runChildProcess,
+    testElectronEvidence,
+    verifyInstalledInventory,
+  } = installedVerifier;
+  const electron = dependencies.electron ?? await import("@vscode/test-electron");
+  (dependencies.testElectronEvidence ?? testElectronEvidence)();
+  const readGitState = dependencies.gitState ?? gitState;
+  const before = readGitState(dependencies.gitDependencies ?? {}, { repoRoot });
+  const verifyArtifact = dependencies.verifyVsix ?? verifyVsix;
+  const receipt = await verifyArtifact(dependencies.archiveDependencies ?? {});
+  requireArtifactReceipt(receipt, before);
+  const packageJson = dependencies.packageJson
+    ?? JSON.parse(readFileSync(join(extensionDevelopmentPath, "package.json"), "utf8"));
+  const paths = (dependencies.artifactPaths ?? artifactPaths)(packageJson, join(extensionDevelopmentPath, ".release"), before.head);
+  const artifactPath = resolve(repoRoot, receipt.artifact.path);
+  if (!sameHostPath(artifactPath, paths.vsix)) {
+    throw new Error("VSIX receipt artifact path does not match the current-HEAD Extension Host artifact.");
+  }
+  if (sha256(readFileSync(artifactPath)) !== receipt.artifact.sha256) {
+    throw new Error("Verified VSIX bytes changed before Extension Host acceptance.");
+  }
+
+  const consoleReporter = await electron.makeConsoleReporter();
+  let resolvedVersion;
+  const vscodeExecutablePath = await electron.downloadAndUnzipVSCode({
+    version: plan.version,
+    extensionDevelopmentPath: installedDriverRoot,
+    reporter: {
+      error: (error) => consoleReporter.error(error),
+      report: (report) => {
+        consoleReporter.report(report);
+        if (report.stage === electron.ProgressReportStage.ResolvedVersion) resolvedVersion = report.version;
+      },
+    },
+  });
+  if (resolvedVersion == null) throw new Error("VS Code download resolution did not report an exact version.");
+  if (!/^\d+\.\d+\.\d+$/u.test(resolvedVersion)) {
+    throw new Error(`Installed Extension Host resolution reported a non-stable version: ${resolvedVersion}.`);
+  }
+  if (plan.versionLane === "minimum" && resolvedVersion !== minimumVSCodeVersion) {
+    throw new Error(`The minimum installed Extension Host lane resolved ${resolvedVersion}; expected ${minimumVSCodeVersion}.`);
+  }
+
+  const installedRoot = join(tempRoot, "installed", before.head.slice(0, 12), plan.versionLane);
+  const extensionsDirectory = join(installedRoot, "extensions");
+  assertInside(tempRoot, installedRoot);
+  if (existsSync(installedRoot)) removeDisposableTreeSafely(installedRoot);
+  mkdirSync(extensionsDirectory, { recursive: true });
+  const installStarted = Date.now();
+  const installProfile = join(installedRoot, "install-profile");
+  mkdirSync(installProfile, { recursive: true });
+  const installInvocation = buildInstallInvocation({
+    electron,
+    vscodeExecutablePath,
+    artifactPath,
+    layout: { extensionsDirectory, userDataDirectory: installProfile },
+  });
+  const installResult = await (dependencies.installVsix ?? runChildProcess)(installInvocation);
+  const installCompleted = Date.now();
+  requireSuccessfulProcess(installResult, "Installed VSIX Extension Host installation");
+  let product = discoverInstalledProduct(extensionsDirectory, receipt.identity);
+  verifyInstalledInventory(receipt, product.extensionPath, {
+    startedEpochMilliseconds: installStarted,
+    completedEpochMilliseconds: installCompleted,
+  });
+
+  const staticContractSha256 = extensionHostStaticContractSha256(product.extensionPath);
+  const installedProductPath = product.extensionPath;
+  for (const shard of plan.shards) {
+    const workspace = (dependencies.prepareWorkspace ?? prepareTestWorkspace)(shard, {
+      transport: plan.transport,
+      version: plan.version,
+      versionLane: plan.versionLane,
+      resolvedVersion,
+    });
+    const renameUiPort = shard === "rename-reliability"
+      ? await (dependencies.allocateRenameUiPort ?? allocateLoopbackPort)()
+      : null;
+    const env = extensionHostEnvironment(plan, shard, workspace, resolvedVersion, renameUiPort, {
+      product,
+      identity: receipt.identity,
+      extensionsDirectory,
+    });
+    await electron.runTests({
+      vscodeExecutablePath,
+      extensionDevelopmentPath: installedDriverRoot,
+      extensionTestsPath,
+      launchArgs: [
+        workspace.testWorkspace,
+        `--user-data-dir=${workspace.userDataDirectory}`,
+        `--extensions-dir=${extensionsDirectory}`,
+        "--disable-workspace-trust",
+        "--skip-welcome",
+        "--skip-release-notes",
+        ...(renameUiPort == null ? [] : ["--remote-debugging-address=127.0.0.1", `--remote-debugging-port=${renameUiPort}`]),
+      ],
+      extensionTestsEnv: env,
+    });
+    if (shard === "product-support") {
+      (dependencies.authenticateReport ?? authenticateProductSupportReport)({
+        plan, resolvedVersion, staticContractSha256, workspace,
+      });
+    }
+    product = discoverInstalledProduct(extensionsDirectory, receipt.identity);
+    if (!sameHostPath(product.extensionPath, installedProductPath)) {
+      throw new Error("Installed VSIX product path changed during full host acceptance.");
+    }
+    verifyInstalledInventory(receipt, product.extensionPath, {
+      startedEpochMilliseconds: installStarted,
+      completedEpochMilliseconds: installCompleted,
+    });
+    if (extensionHostStaticContractSha256(product.extensionPath) !== staticContractSha256) {
+      throw new Error("Installed VSIX static contract changed during full host acceptance.");
+    }
+  }
+  const finalReceipt = await verifyArtifact(dependencies.archiveDependencies ?? {});
+  requireArtifactReceipt(finalReceipt, before);
+  if (JSON.stringify(finalReceipt) !== JSON.stringify(receipt)) throw new Error("VSIX receipt changed during full host acceptance.");
+  if (sha256(readFileSync(artifactPath)) !== receipt.artifact.sha256) {
+    throw new Error("Installed Extension Host acceptance changed the verified VSIX bytes.");
+  }
+  requireSameRepositoryState(before, readGitState(dependencies.gitDependencies ?? {}, { repoRoot }));
+  return Object.freeze({
+    artifactPath,
+    artifactSha256: receipt.artifact.sha256,
+    installedProductPath,
+    productMode: plan.productMode,
+    resolvedVersion,
+    versionLane: plan.versionLane,
+  });
+}
+
+function extensionHostEnvironment(plan, shard, workspace, resolvedVersion, renameUiPort, installed = null) {
   return {
     AURELIA_LS_EXTENSION_HOST_WORKSPACE: workspace.aureliaWorkspace,
     AURELIA_LS_EXTENSION_HOST_SECONDARY_WORKSPACE: workspace.secondaryAureliaWorkspace,
@@ -337,6 +499,7 @@ function extensionHostEnvironment(plan, shard, workspace, resolvedVersion, renam
             workspace.resourceDiscoveryFixtureManifest,
           AURELIA_LS_RESOURCE_DISCOVERY_HOST_LEDGER: workspace.resourceDiscoveryLedger,
           AURELIA_LS_RESOURCE_DISCOVERY_HOST_REPORT: workspace.resourceDiscoveryReport,
+          AURELIA_LS_RESOURCE_DISCOVERY_HOST_SOURCE_MANIFEST: resourceDiscoveryFixtureManifest,
         }
       : {}),
     ...(shard === "worker-lifecycle" && plan.transport === "worker"
@@ -350,6 +513,19 @@ function extensionHostEnvironment(plan, shard, workspace, resolvedVersion, renam
     AURELIA_LS_EXTENSION_HOST_EXPECTED_TRANSPORT: plan.transport,
     AURELIA_LS_EXTENSION_HOST_OBSERVATION: "1",
     AURELIA_LS_FORCE_IPC_TRANSPORT: plan.transport === "worker" ? "0" : "1",
+    AURELIA_LS_EXTENSION_HOST_PRODUCT_MODE: installed == null ? "development" : "installed-vsix",
+    AURELIA_LS_EXTENSION_HOST_HARNESS_ROOT: extensionDevelopmentPath,
+    ...(installed == null ? {} : {
+      AURELIA_LS_INSTALLED_PRODUCT_PATH: installed.product.extensionPath,
+      AURELIA_LS_INSTALLED_EXTENSIONS_ROOT: installed.extensionsDirectory,
+      AURELIA_LS_INSTALLED_SOURCE_EXTENSION_ROOT: extensionDevelopmentPath,
+      AURELIA_LS_INSTALLED_DRIVER_ROOT: installedDriverRoot,
+      AURELIA_LS_INSTALLED_PRODUCT_VERSION: installed.identity.version,
+      AURELIA_LS_INSTALLED_PRODUCT_PUBLISHER: installed.identity.publisher,
+      AURELIA_LS_INSTALLED_PRODUCT_NAME: installed.identity.name,
+      AURELIA_LS_INSTALLED_PRODUCT_MAIN: installed.identity.main,
+      AURELIA_LS_INSTALLED_PRODUCT_ENGINE: installed.identity.vscodeEngine,
+    }),
     ...(renameUiPort == null
       ? {}
       : { AURELIA_LS_RENAME_UI_CDP_PORT: String(renameUiPort) }),
@@ -7534,6 +7710,7 @@ export function extensionHostRunnerPlanReceipt(plan) {
     transport: plan.transport,
     version: plan.version,
     versionLane: plan.versionLane,
+    productMode: plan.productMode,
     minimumVSCodeVersion: plan.minimumVSCodeVersion,
     shards: plan.shards,
     launchCount: plan.launchCount,

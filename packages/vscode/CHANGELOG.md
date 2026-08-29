@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.5.1
+
+### Fixes
+
+- Fixed the Outline view and workspace symbol search in projects with collection-based computed getters.
+
 ## 0.5.0
 
 Version 0.5 continues the extension and language-server migration to the shared

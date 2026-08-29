@@ -79,6 +79,12 @@ export class TrackableMethodDependenciesApp {
     return this.selected.label;
   }
 
+  @astTrack('products.filter(product => product.tags.includes(filter))')
+  explicitCollectionLabel(): string {
+    const names = this.products.map((product) => product.name);
+    return names.join(', ');
+  }
+
   @computed(undefined)
   nullishComputedLabel(): string {
     return this.nullishCounter.value.toString();

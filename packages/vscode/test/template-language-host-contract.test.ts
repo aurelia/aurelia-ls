@@ -240,7 +240,7 @@ describe("owned-template Extension Host contract", () => {
     expect(extensionManifest.scripts?.["test:extension-host:current-stable"])
       .toContain("test:extension-host");
     expect(extensionManifest.scripts?.["test:extension-host:minimum"])
-      .toContain("--worker --minimum");
+      .toContain("test:extension-host:minimum:built");
   });
 });
 

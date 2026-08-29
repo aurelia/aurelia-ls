@@ -78,7 +78,7 @@ import {
   type RuntimeSourceAccessUseDraft,
 } from '../runtime-expression/source-access-use-publication.js';
 import {
-  collectRuntimeTypeScriptAccessUseDrafts,
+  collectRuntimeTypeScriptAccessUseCollection,
 } from '../runtime-expression/typescript-access-use-collector.js';
 import {
   collectRuntimeTemplateAccessUseDrafts,
@@ -88,8 +88,7 @@ import {
 } from '../runtime-expression/checker-access-target-projection.js';
 import { RuntimeExpressionProductDetails } from '../runtime-expression/product-details.js';
 import {
-  collectRuntimeConnectableObservedDependencyDrafts,
-  type RuntimeConnectableObservedDependencyDraft,
+  runtimeConnectableObservedAccessUseDrafts,
 } from './connectable-observed-dependency.js';
 import {
   AURELIA_COMPUTED_DECORATOR_EXPORTS,
@@ -122,6 +121,7 @@ import {
 } from './observed-dependency-member-source.js';
 import {
   type RuntimeObservedDependencyAccessUseDraft,
+  type RuntimeObservedDependencyAccessDraft,
   type RuntimeObservedDependencyDraft,
 } from './runtime-observed-dependency-draft.js';
 import {
@@ -156,7 +156,11 @@ interface ComputedObserverSourcePublication {
 
 interface ComputedDependencyExpressionOperation {
   readonly expression: ExpressionAstNode | null;
-  readonly observedDependencies: readonly RuntimeConnectableObservedDependencyDraft[];
+}
+
+interface ComputedDependencyAccessOperation {
+  readonly drafts: readonly RuntimeSourceAccessUseDraft[];
+  readonly observedEffects: readonly RuntimeObservedDependencyAccessDraft<RuntimeSourceAccessUseDraft>[];
 }
 
 interface RuntimeControlledComputedDeepObservedDependencyDraft extends RuntimeObservedDependencyDraft {
@@ -416,13 +420,20 @@ function computedObserverOperationsForSite(
   const records: KernelStoreRecord[] = [];
   const observedDependencies: RuntimeObservedDependencyAccessUseDraft[] = [];
   const typeContext = ProxyObservable.typeContextForTypeSystem(typeSystem, store, publication);
-  const getterTracked = site.dependency.dependencyMode === ComputedObservationDependencyMode.ProxyAutoTrack
-    ? ProxyObservable.collectObservedDependencyOccurrenceDrafts(
+  const getterEffects = site.dependency.dependencyMode === ComputedObservationDependencyMode.ProxyAutoTrack
+    ? ProxyObservable.collectObservedAccessEffectDrafts(
         site.getter,
         typeContext,
         { rootNames: ['this'] },
       )
     : [];
+  const getterAccesses = collectRuntimeTypeScriptAccessUseCollection({
+    declaration: site.getter,
+    typeSystem,
+    store,
+    publication,
+    observedEffects: getterEffects,
+  });
   const getterPublication = publishRuntimeSourceAccessUses({
     store,
     publication,
@@ -438,13 +449,7 @@ function computedObserverOperationsForSite(
     reachability: RuntimeOperationReachability.Open,
     provenanceHandle,
     claimPredicateKey: KernelVocabulary.RuntimeExpression.SourceObserverUsesAccessUse.key,
-    drafts: collectRuntimeTypeScriptAccessUseDrafts({
-      declaration: site.getter,
-      typeSystem,
-      store,
-      publication,
-      trackedDependencies: getterTracked,
-    }),
+    drafts: getterAccesses.accessUses,
   });
   appendComputedAccessOperation(
     accessUses,
@@ -453,7 +458,7 @@ function computedObserverOperationsForSite(
   );
   observedDependencies.push(...observedDependencyAccessUseDrafts(
     publication,
-    getterTracked,
+    getterAccesses.observedEffects,
     getterPublication.publications,
   ));
 
@@ -476,14 +481,14 @@ function computedObserverOperationsForSite(
     const generated = deepDrafts.filter((draft) =>
       draft.spanStart === dependency.start && draft.spanEnd === dependency.end
     );
-    const authoredDrafts = computedDependencyKeyAccessDrafts(
+    const authored = computedDependencyKeyAccessOperation(
       site,
       dependency,
       operation,
       targetProjector,
     );
     const drafts: RuntimeSourceAccessUseDraft[] = [
-      ...authoredDrafts,
+      ...authored.drafts,
       ...generated.map((draft) => computedGeneratedDeepAccessDraft(site, dependency, draft)),
     ];
     const dependencyPublication = publishRuntimeSourceAccessUses({
@@ -510,11 +515,11 @@ function computedObserverOperationsForSite(
     );
     observedDependencies.push(...observedDependencyAccessUseDrafts(
       publication,
-      operation.observedDependencies,
-      dependencyPublication.publications.slice(0, authoredDrafts.length),
+      authored.observedEffects,
+      dependencyPublication.publications.slice(0, authored.drafts.length),
     ));
     generated.forEach((draft, generatedIndex) => {
-      const generatedAccess = dependencyPublication.accessUses[authoredDrafts.length + generatedIndex] ?? null;
+      const generatedAccess = dependencyPublication.accessUses[authored.drafts.length + generatedIndex] ?? null;
       if (generatedAccess == null) {
         throw new Error(`Computed deep dependency '${draft.sourceName ?? dependency.key}' lost its generated access use.`);
       }
@@ -527,10 +532,18 @@ function computedObserverOperationsForSite(
   });
 
   site.dependency.dependencyFunctions.forEach((dependency, index) => {
-    const tracked = ProxyObservable.collectObservedDependencyOccurrenceDrafts(
+    const effects = ProxyObservable.collectObservedAccessEffectDrafts(
       dependency,
       typeContext,
     );
+    const dependencyAccesses = collectRuntimeTypeScriptAccessUseCollection({
+      declaration: dependency,
+      typeSystem,
+      store,
+      publication,
+      observedEffects: effects,
+      role: RuntimeExpressionAccessRole.DeclarativeDependency,
+    });
     const dependencyPublication = publishRuntimeSourceAccessUses({
       store,
       publication,
@@ -546,14 +559,7 @@ function computedObserverOperationsForSite(
       reachability: RuntimeOperationReachability.Open,
       provenanceHandle,
       claimPredicateKey: KernelVocabulary.RuntimeExpression.SourceObserverUsesAccessUse.key,
-      drafts: collectRuntimeTypeScriptAccessUseDrafts({
-        declaration: dependency,
-        typeSystem,
-        store,
-        publication,
-        trackedDependencies: tracked,
-        role: RuntimeExpressionAccessRole.DeclarativeDependency,
-      }),
+      drafts: dependencyAccesses.accessUses,
     });
     appendComputedAccessOperation(
       accessUses,
@@ -562,7 +568,7 @@ function computedObserverOperationsForSite(
     );
     observedDependencies.push(...observedDependencyAccessUseDrafts(
       publication,
-      tracked,
+      dependencyAccesses.observedEffects,
       dependencyPublication.publications,
     ));
   });
@@ -583,18 +589,18 @@ function appendComputedAccessOperation(
   records.push(...publication.records);
 }
 
-function computedDependencyKeyAccessDrafts(
+function computedDependencyKeyAccessOperation(
   site: ComputedObserverSourceSite,
   dependency: ComputedDependencyKeyRead,
   operation: ComputedDependencyExpressionOperation,
   targetProjector: RuntimeRootExpressionAccessTargetProjector | null,
-): readonly RuntimeSourceAccessUseDraft[] {
+): ComputedDependencyAccessOperation {
   if (operation.expression != null) {
-    const drafts = collectRuntimeTemplateAccessUseDrafts({
+    const rawDrafts = collectRuntimeTemplateAccessUseDrafts({
       expression: operation.expression,
     });
-    if (drafts.length > 0) {
-      return drafts.map((draft) => {
+    if (rawDrafts.length > 0) {
+      const drafts = rawDrafts.map((draft) => {
         const target = targetProjector?.project(draft.expression) ?? null;
         const open = site.dependency.dependencyMode === ComputedObservationDependencyMode.Open;
         return {
@@ -611,6 +617,21 @@ function computedDependencyKeyAccessDrafts(
           targetLinks: target?.links ?? [],
         };
       });
+      const draftByRaw = new Map(rawDrafts.map((draft, index) => [draft, drafts[index]!] as const));
+      return {
+        drafts,
+        observedEffects: runtimeConnectableObservedAccessUseDrafts(
+          rawDrafts,
+          null,
+          operation.expression,
+        ).map((effect) => ({
+          accessUse: draftByRaw.get(effect.accessUse)!,
+          dependency: {
+            ...effect.dependency,
+            sourceFileAddressHandle: site.sourceFileAddressHandle,
+          },
+        })),
+      };
     }
   }
 
@@ -619,7 +640,7 @@ function computedDependencyKeyAccessDrafts(
     dependency.end ?? site.end,
     new SourceFileRef(site.sourceFileAddressHandle, site.sourcePath),
   );
-  return [{
+  return { drafts: [{
     origin: RuntimeExpressionAccessOrigin.Authored,
     accessForm: RuntimeExpressionAccessForm.Declarative,
     role: RuntimeExpressionAccessRole.DeclarativeDependency,
@@ -641,7 +662,7 @@ function computedDependencyKeyAccessDrafts(
     tracking: RuntimeExpressionAccessTracking.Connectable,
     targetResolution: RuntimeExpressionAccessTargetResolution.Open,
     targetLinks: [],
-  }];
+  }], observedEffects: [] };
 }
 
 function computedGeneratedDeepAccessDraft(
@@ -709,16 +730,10 @@ function computedDependencyExpressionOperation(
   ) {
     return {
       expression: null,
-      observedDependencies: [],
     };
   }
   return {
     expression: result.ast,
-    observedDependencies: collectRuntimeConnectableObservedDependencyDrafts(result.ast)
-      .map((draft) => ({
-        ...draft,
-        sourceFileAddressHandle: site.sourceFileAddressHandle,
-      })),
   };
 }
 

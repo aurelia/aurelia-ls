@@ -1,6 +1,7 @@
 import ts from 'typescript';
 import {
   checkerArrayOrTupleType,
+  checkerBaseTypes,
   checkerCollectionSymbolName,
   checkerNullishType,
   checkerNumberIndexValueType,
@@ -215,8 +216,8 @@ export function checkerTypeExtendsCollection(
   if ((names.has('Array') || names.has('ReadonlyArray')) && checkerArrayOrTupleType(checker, type)) {
     return true;
   }
-  return checker.getBaseTypes(type as ts.InterfaceType)
-    ?.some((base) => checkerTypeExtendsCollection(checker, base, collectionNames, seen)) ?? false;
+  return checkerBaseTypes(checker, type)
+    .some((base) => checkerTypeExtendsCollection(checker, base, collectionNames, seen));
 }
 
 /** Return the key type for Map or ReadonlyMap shapes. */

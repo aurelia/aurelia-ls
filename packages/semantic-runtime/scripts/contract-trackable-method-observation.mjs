@@ -263,6 +263,37 @@ const verification = verifyFixtureEffects(
 const failures = verification.effectResults
   .filter((result) => result.outcome !== 'satisfied')
   .map((result) => result.summary);
+const detailedDependencies = app.ask({
+  kind: 'binding-observed-dependencies',
+  detail: 'handles',
+  page: { size: 400 },
+}).value.rows;
+const authoredCollectionCalls = detailedDependencies.filter((row) =>
+  row.occurrence.dependencyKind === 'proxy-collection-read'
+    && row.occurrence.methodName !== 'Symbol.iterator'
+);
+if (
+  authoredCollectionCalls.length === 0
+  || authoredCollectionCalls.some((row) =>
+    row.occurrence.accessUse.accessForm !== 'member-call'
+      || row.occurrence.accessUse.role !== 'call'
+  )
+) {
+  failures.push('Trackable method collection effects should retain their exact member-call access operations.');
+}
+const explicitCollectionCalls = detailedDependencies.filter((row) =>
+  row.occurrence.dependencyKind === 'template-collection-read'
+    && (row.occurrence.methodName === 'filter' || row.occurrence.methodName === 'includes')
+);
+if (
+  explicitCollectionCalls.length !== 2
+  || explicitCollectionCalls.some((row) =>
+    row.occurrence.accessUse.accessForm !== 'member-call'
+      || row.occurrence.accessUse.role !== 'declarative-dependency'
+  )
+) {
+  failures.push('Explicit trackable collection dependencies should retain their exact parsed member-call operations.');
+}
 
 const summary = {
   fixture: 'trackable-method-dependencies',

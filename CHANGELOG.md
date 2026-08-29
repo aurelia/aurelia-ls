@@ -8,6 +8,13 @@ preserve the repository's earlier package line.
 
 ---
 
+## VS Code 0.5.1 and MCP 0.3.1 (2026-08-26)
+
+- Fixed collection observation in computed getters and tracked methods. This restores editor symbol requests and MCP
+  semantic queries in affected projects.
+
+---
+
 ## VS Code 0.5.0 and MCP 0.3.0 (2026-08-25)
 
 VS Code 0.5.0 and MCP 0.3.0 are the two product artifacts in this release.

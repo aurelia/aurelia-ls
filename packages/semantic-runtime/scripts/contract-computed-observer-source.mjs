@@ -22,10 +22,10 @@ const app = await runtime.openApp({
 
 const expectedEffects = [
   ExpectedSemanticEffect.exactly(
-    'The fixture should expose twelve getter observer sources: ten decorator-owned and two plain getter descriptors.',
+    'The fixture should expose seventeen getter observer sources: eleven decorator-owned and six plain getter descriptors.',
     'computed-observer-source',
     'app',
-    12,
+    17,
     null,
     [],
     'signature',
@@ -250,7 +250,7 @@ const expectedEffects = [
     'Decorator metadata should remain a separate definition lane and still include the method declaration.',
     'computed-observation-definition',
     'app',
-    11,
+    12,
     null,
     [],
     'signature',
@@ -277,6 +277,86 @@ const recursiveDependencies = detailedObservedDependencies.filter((row) =>
   row.memberName === 'recursiveSummary'
     && row.occurrence.dependencyKind === 'deep-property-read'
 );
+const miscWeaponDependencies = detailedObservedDependencies.filter((row) =>
+  row.memberName === 'miscWeaponOffers'
+    && row.occurrence.sourceName === 'this.weaponOffers'
+);
+const miscWeaponProperty = miscWeaponDependencies.find((row) =>
+  row.occurrence.dependencyKind === 'proxy-property-read'
+);
+const miscWeaponCollection = miscWeaponDependencies.find((row) =>
+  row.occurrence.dependencyKind === 'proxy-collection-read'
+    && row.occurrence.methodName === 'filter'
+);
+if (
+  miscWeaponProperty?.occurrence.accessUse.accessForm !== 'member'
+  || miscWeaponProperty.occurrence.accessUse.role !== 'read'
+) {
+  failures.push('The weaponOffers property dependency should retain the receiver member-read access.');
+}
+if (
+  miscWeaponCollection?.occurrence.accessUse.accessForm !== 'member-call'
+  || miscWeaponCollection.occurrence.accessUse.role !== 'call'
+) {
+  failures.push('The weaponOffers collection dependency should retain the authored filter member-call access.');
+}
+if (
+  miscWeaponProperty == null
+  || miscWeaponCollection == null
+  || miscWeaponProperty.occurrence.handles.accessUseProductHandle
+    === miscWeaponCollection.occurrence.handles.accessUseProductHandle
+) {
+  failures.push('Property and filter collection effects should retain distinct inducing access handles.');
+}
+const iteratedWeaponDependencies = detailedObservedDependencies.filter((row) =>
+  row.memberName === 'iteratedWeaponOfferIds'
+    && row.occurrence.sourceName === 'this.weaponOffers'
+);
+const iteratedProperty = iteratedWeaponDependencies.find((row) =>
+  row.occurrence.dependencyKind === 'proxy-property-read'
+);
+const iteratedCollection = iteratedWeaponDependencies.find((row) =>
+  row.occurrence.dependencyKind === 'proxy-collection-read'
+    && row.occurrence.methodName === 'Symbol.iterator'
+);
+if (
+  iteratedProperty == null
+  || iteratedCollection == null
+  || iteratedProperty.occurrence.handles.accessUseProductHandle
+    !== iteratedCollection.occurrence.handles.accessUseProductHandle
+) {
+  failures.push('A remotely reached for-of receiver should let one exact access induce property and iterator effects.');
+}
+const explicitWeaponCollection = detailedObservedDependencies.find((row) =>
+  row.memberName === 'explicitWeaponOfferCount'
+    && row.occurrence.dependencyKind === 'template-collection-read'
+    && row.occurrence.methodName === 'filter'
+);
+if (
+  explicitWeaponCollection?.occurrence.accessUse.accessForm !== 'member-call'
+  || explicitWeaponCollection.occurrence.accessUse.role !== 'declarative-dependency'
+) {
+  failures.push('Explicit computed collection dependencies should retain their parsed member-call access operation.');
+}
+const destructuredWeaponDependencies = detailedObservedDependencies.filter((row) =>
+  row.memberName === 'firstWeaponOfferId'
+    && row.occurrence.sourceName === 'this.weaponOffers'
+);
+const destructuredProperty = destructuredWeaponDependencies.find((row) =>
+  row.occurrence.dependencyKind === 'proxy-property-read'
+);
+const destructuredCollection = destructuredWeaponDependencies.find((row) =>
+  row.occurrence.dependencyKind === 'proxy-collection-read'
+    && row.occurrence.methodName === 'Symbol.iterator'
+);
+if (
+  destructuredProperty == null
+  || destructuredCollection == null
+  || destructuredProperty.occurrence.handles.accessUseProductHandle
+    !== destructuredCollection.occurrence.handles.accessUseProductHandle
+) {
+  failures.push('A remotely reached destructuring receiver should conserve one exact access across both effects.');
+}
 if (
   recursiveDependencies.length < 4
   || recursiveDependencies.length > 64

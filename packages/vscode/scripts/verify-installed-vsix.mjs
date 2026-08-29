@@ -972,7 +972,7 @@ export function validateResolution(resolution) {
   assertRegularRealFile(resolution.vscodeExecutablePath, "Resolved VS Code executable");
 }
 
-async function runChildProcess(invocation) {
+export async function runChildProcess(invocation) {
   return new Promise((resolve, reject) => {
     const child = spawn(invocation.command, invocation.args, {
       cwd: invocation.cwd,
@@ -1012,7 +1012,7 @@ async function runExtensionHost(electron, invocation) {
   }
 }
 
-function requireArtifactReceipt(receipt, repository) {
+export function requireArtifactReceipt(receipt, repository) {
   if (receipt?.schemaVersion !== artifactSchemaVersion) throw new Error("VSIX receipt schema drifted.");
   if (receipt?.repository?.before?.head !== repository.head || receipt?.repository?.after?.head !== repository.head) {
     throw new Error("VSIX receipt does not bind the current repository HEAD.");
@@ -1020,7 +1020,7 @@ function requireArtifactReceipt(receipt, repository) {
   if (receipt?.identity?.id !== productId) throw new Error("VSIX receipt product identity drifted.");
 }
 
-function requireSuccessfulProcess(result, label) {
+export function requireSuccessfulProcess(result, label) {
   if (result?.exitCode !== 0 || result?.signal != null || result?.error != null) {
     throw new Error(`${label} failed with exit=${String(result?.exitCode)} signal=${String(result?.signal)}: ${result?.error?.message ?? "no structured error"}`);
   }
@@ -1481,7 +1481,7 @@ function rejectAmbientTransportOverrides(environment, execArgv) {
   }
 }
 
-function requireSameRepositoryState(before, after) {
+export function requireSameRepositoryState(before, after) {
   if (before.head !== after.head || before.status !== after.status || before.submodules !== after.submodules) {
     throw new Error("Repository state changed during installed-VSIX acceptance.");
   }

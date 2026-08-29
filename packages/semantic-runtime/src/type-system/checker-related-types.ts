@@ -107,6 +107,14 @@ export function checkerArrayOrTupleType(
   return checker.isArrayType(type) || checker.isTupleType(type);
 }
 
+/** Return checker-visible base types for class, interface, and reference shapes. */
+export function checkerBaseTypes(
+  checker: ts.TypeChecker,
+  type: ts.Type,
+): readonly ts.BaseType[] {
+  return checker.getBaseTypes(type as ts.InterfaceType);
+}
+
 export function checkerStringIndexValueType(
   checker: ts.TypeChecker,
   type: ts.Type,

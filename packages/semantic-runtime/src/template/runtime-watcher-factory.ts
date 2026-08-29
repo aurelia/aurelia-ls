@@ -52,15 +52,15 @@ import {
   collectRuntimeTemplateAccessUseDrafts,
 } from '../runtime-expression/template-access-use-collector.js';
 import {
-  collectRuntimeTypeScriptAccessUseDrafts,
+  collectRuntimeTypeScriptAccessUseCollection,
 } from '../runtime-expression/typescript-access-use-collector.js';
 import {
   RuntimeRootExpressionAccessTargetProjector,
 } from '../runtime-expression/checker-access-target-projection.js';
 import {
   RuntimeOperationRealization,
-  RuntimeOperationReachability,
 } from '../runtime-expression/runtime-operation.js';
+import type { RuntimeOperationReachability } from '../runtime-expression/runtime-operation.js';
 import type { TypeSystemProject } from '../type-system/project.js';
 import type { CheckerExpressionTypeWorld } from '../type-system/expression-type-world.js';
 import type { RuntimeControllerFrame } from './runtime-controller.js';
@@ -349,20 +349,20 @@ function computedWatcherAccessUseEmission(
   reachability: RuntimeOperationReachability,
 ): RuntimeWatcherAccessUseEmission {
   const declaration = dependencyCollectionFunctionForTarget(typeSystem, publication, watch.expression.target);
-  const dependencies = declaration == null
+  const effects = declaration == null
     ? []
-    : ProxyObservable.collectObservedDependencyOccurrenceDrafts(
+    : ProxyObservable.collectObservedAccessEffectDrafts(
         declaration,
         ProxyObservable.typeContextForTypeSystem(typeSystem, store, publication),
       );
-  const drafts = declaration == null || typeSystem == null
-    ? []
-    : collectRuntimeTypeScriptAccessUseDrafts({
+  const collected = declaration == null || typeSystem == null
+    ? { accessUses: [], observedEffects: [] }
+    : collectRuntimeTypeScriptAccessUseCollection({
         declaration,
         typeSystem,
         store,
         publication,
-        trackedDependencies: dependencies,
+        observedEffects: effects,
       });
   const accessPublication = publishRuntimeWatcherAccessUses(
     store,
@@ -372,12 +372,12 @@ function computedWatcherAccessUseEmission(
     sourceAddressHandle,
     provenanceHandle,
     RuntimeExpressionOperationKind.WatcherGetter,
-    drafts,
+    collected.accessUses,
     reachability,
   );
   return new RuntimeWatcherAccessUseEmission(
     accessPublication,
-    observedDependencyAccessUseDrafts(publication, dependencies, accessPublication.publications),
+    observedDependencyAccessUseDrafts(publication, collected.observedEffects, accessPublication.publications),
   );
 }
 

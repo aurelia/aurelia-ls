@@ -71,7 +71,7 @@ import {
   collectRuntimeTemplateAccessUseDrafts,
 } from '../runtime-expression/template-access-use-collector.js';
 import {
-  collectRuntimeTypeScriptAccessUseDrafts,
+  collectRuntimeTypeScriptAccessUseCollection,
 } from '../runtime-expression/typescript-access-use-collector.js';
 import {
   runtimeCheckerAccessTargetProjection,
@@ -88,7 +88,6 @@ import {
   ContentBinding,
   RefBinding,
   SpreadValueBinding,
-  type RuntimeBinding,
 } from '../template/runtime-binding.js';
 import {
   RuntimeBindingBehaviorApplicationPhase,
@@ -751,12 +750,12 @@ export class RuntimeExpressionAccessMaterializer {
           `Trackable method '${method.methodName}' did not retain its template invocation access.`,
         );
       }
-      const drafts = collectRuntimeTypeScriptAccessUseDrafts({
+      const collected = collectRuntimeTypeScriptAccessUseCollection({
         declaration: method.declaration,
         typeSystem: input.typeSystem,
         store: this.store,
         publication: this.publication,
-        trackedDependencies: method.dependencies,
+        observedEffects: method.effects,
         executionHandoff: {
           sourceSpan: method.invocationSourceSpan,
           operationName: method.methodName,
@@ -764,7 +763,7 @@ export class RuntimeExpressionAccessMaterializer {
           coverageReason: 'A statically selected trackable method contributes these reads, but runtime dispatch can select another implementation.',
         },
       });
-      const methodPublications = drafts.map((draft, methodAccessIndex) =>
+      const methodPublications = collected.accessUses.map((draft, methodAccessIndex) =>
         publishRuntimeExpressionAccessUse({
           store: this.store,
           publication: this.publication,
@@ -798,7 +797,7 @@ export class RuntimeExpressionAccessMaterializer {
       );
       const dependencies = observedDependencyAccessUseDrafts(
         this.publication,
-        method.dependencies,
+        collected.observedEffects,
         methodPublications,
       );
       const accessUsesByHandle = new Map(

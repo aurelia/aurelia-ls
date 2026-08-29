@@ -23,6 +23,7 @@ interface PackageManifest {
 }
 
 interface RunnerPlan {
+  readonly productMode: "development" | "installed-vsix";
   readonly transport: "worker" | "ipc";
   readonly version: "stable" | "1.91.0";
   readonly versionLane: "current-stable" | "minimum";
@@ -625,6 +626,166 @@ describe("Extension Host support runner", () => {
     expect(plan.launches[0]?.productSupportAcceptance.authoritative).toBe(false);
   });
 
+  test("plans installed-VSIX acceptance only on Worker hosts", () => {
+    const plan = readPlan("--installed-vsix", "--minimum");
+    expect(plan).toEqual(expect.objectContaining({
+      productMode: "installed-vsix",
+      transport: "worker",
+      version: "1.91.0",
+      shards: ["worker-lifecycle", "rename-reliability", "product-support"],
+    }));
+    expect(readFailure("--installed-vsix", "--ipc"))
+      .toContain("Installed VSIX Extension Host acceptance is a worker-only lane");
+    expect(readFailure("--installed-vsix", "--installed-vsix"))
+      .toContain("--installed-vsix may only be provided once");
+  });
+
+  test("keeps installed hosts on the inert driver and does not disable installed extensions", () => {
+    const source = readFileSync(runnerPath, "utf8");
+    const suiteSource = readFileSync(
+      fileURLToPath(new URL("extension-host/suite/index.cjs", import.meta.url)),
+      "utf8",
+    );
+    const productSource = readFileSync(
+      fileURLToPath(new URL("extension-host/suite/product-surface.test.cjs", import.meta.url)),
+      "utf8",
+    );
+    const start = source.indexOf("export async function runInstalledVsixExtensionHostTests");
+    const end = source.indexOf("function extensionHostEnvironment", start);
+    const installed = source.slice(start, end);
+    expect(start).toBeGreaterThanOrEqual(0);
+    expect(installed).toContain("extensionDevelopmentPath: installedDriverRoot");
+    expect(installed).toContain("verifyInstalledInventory(receipt");
+    expect(installed).toContain("requireSameRepositoryState(before");
+    expect(installed).not.toContain('"--disable-extensions"');
+    expect(suiteSource).not.toContain("product.extensionMode");
+    expect(suiteSource).not.toContain("driver.extensionMode");
+    expect(suiteSource).toContain("driverApi?.extensionMode");
+    expect(productSource).not.toContain('path.join(extension.extensionPath, "out"');
+    expect(productSource).toContain('requiredAbsoluteHostPath("AURELIA_LS_EXTENSION_HOST_HARNESS_ROOT")');
+  });
+
+  test("installs one verified VSIX and revalidates it around the full host suite", async () => {
+    const root = join(contractTempRoot, randomUUID());
+    const repositoryRoot = resolve(dirname(runnerPath), "../../..");
+    const repositoryHead = "b".repeat(40);
+    const installedRoot = resolve(
+      dirname(runnerPath),
+      `../../../.temp/vscode-extension-host/installed/${repositoryHead.slice(0, 12)}/current-stable`,
+    );
+    try {
+      const artifactPath = join(root, "candidate.vsix");
+      const artifactBytes = Buffer.from("verified-vsix", "utf8");
+      const productRoot = join(root, "installed-product");
+      mkdirSync(root, { recursive: true });
+      writeFileSync(artifactPath, artifactBytes);
+      writeContractFiles(productRoot, {
+        "package.json": "{\"publisher\":\"AureliaEffect\",\"name\":\"aurelia-2\",\"version\":\"0.5.1\"}\n",
+        "dist/extension.cjs": "module.exports = 'extension';\n",
+        "dist/server/main.cjs": "module.exports = 'server';\n",
+      });
+      const receipt = Object.freeze({
+        artifact: Object.freeze({
+          path: relative(repositoryRoot, artifactPath).split("\\").join("/"),
+          sha256: createHash("sha256").update(artifactBytes).digest("hex"),
+        }),
+        identity: Object.freeze({
+          id: "AureliaEffect.aurelia-2",
+          publisher: "AureliaEffect",
+          name: "aurelia-2",
+          version: "0.5.1",
+          main: "./dist/extension.cjs",
+          vscodeEngine: "^1.91.0",
+        }),
+      });
+      const calls = {
+        artifactVerification: 0,
+        install: 0,
+        inventory: 0,
+        launch: 0,
+        receipt: 0,
+        repository: 0,
+        report: 0,
+      };
+      const runner = await import(pathToFileURL(runnerPath).href);
+      const plan = runner.parseRunnerArguments([
+        "--worker",
+        "--current-stable",
+        "--installed-vsix",
+        "--shard=product-support",
+      ]);
+      const result = await runner.runExtensionHostTests(plan, {
+        artifactPaths: () => ({ vsix: artifactPath }),
+        electron: {
+          ProgressReportStage: { ResolvedVersion: "resolvedVersion" },
+          makeConsoleReporter: async () => ({ error() {}, report() {} }),
+          downloadAndUnzipVSCode: async ({ reporter }: { reporter: { report(value: unknown): void } }) => {
+            reporter.report({ stage: "resolvedVersion", version: "1.123.4" });
+            return process.execPath;
+          },
+          runTests: async (options: {
+            extensionDevelopmentPath: string;
+            extensionTestsEnv: Record<string, string>;
+            launchArgs: string[];
+          }) => {
+            calls.launch += 1;
+            expect(options.extensionDevelopmentPath.replaceAll("\\", "/"))
+              .toMatch(/packages\/vscode\/test\/installed-driver$/u);
+            expect(options.extensionTestsEnv.AURELIA_LS_EXTENSION_HOST_PRODUCT_MODE)
+              .toBe("installed-vsix");
+            expect(options.extensionTestsEnv.AURELIA_LS_INSTALLED_PRODUCT_PATH)
+              .toBe(productRoot);
+            expect(options.launchArgs).not.toContain("--disable-extensions");
+          },
+        },
+        gitState: () => ({ head: repositoryHead, status: "", submodules: "exact" }),
+        installedVerifier: {
+          buildInstallInvocation: () => ({ command: process.execPath, args: [], cwd: repositoryRoot }),
+          discoverInstalledProduct: () => ({ extensionPath: productRoot }),
+          requireArtifactReceipt: () => { calls.receipt += 1; },
+          requireSameRepositoryState: () => { calls.repository += 1; },
+          requireSuccessfulProcess: () => {},
+          runChildProcess: async () => ({ exitCode: 0, signal: null, error: null }),
+          testElectronEvidence: () => ({}),
+          verifyInstalledInventory: () => { calls.inventory += 1; },
+        },
+        installVsix: async () => {
+          calls.install += 1;
+          return { exitCode: 0, signal: null, error: null };
+        },
+        packageJson: { name: "aurelia-2", version: "0.5.1" },
+        prepareWorkspace: () => mockProductSupportWorkspace(root),
+        authenticateReport: () => { calls.report += 1; },
+        verifyVsix: async () => {
+          calls.artifactVerification += 1;
+          return receipt;
+        },
+      });
+
+      expect(result).toMatchObject({
+        artifactPath,
+        artifactSha256: receipt.artifact.sha256,
+        installedProductPath: productRoot,
+        productMode: "installed-vsix",
+        resolvedVersion: "1.123.4",
+        versionLane: "current-stable",
+      });
+      expect(calls).toEqual({
+        artifactVerification: 2,
+        install: 1,
+        inventory: 2,
+        launch: 1,
+        receipt: 2,
+        repository: 1,
+        report: 1,
+      });
+    } finally {
+      assertContractTempPath(root);
+      rmSync(root, { recursive: true, force: true });
+      rmSync(installedRoot, { recursive: true, force: true });
+    }
+  });
+
   test("selects the exact minimum and individual Worker shards explicitly", () => {
     const plan = readPlan("--worker", "--minimum", "--shard=rename-reliability");
     expect(plan).toEqual(expect.objectContaining({
@@ -728,6 +889,7 @@ describe("Extension Host support runner", () => {
         "AURELIA_LS_RESOURCE_DISCOVERY_HOST_FIXTURE_MANIFEST",
         "AURELIA_LS_RESOURCE_DISCOVERY_HOST_LEDGER",
         "AURELIA_LS_RESOURCE_DISCOVERY_HOST_REPORT",
+        "AURELIA_LS_RESOURCE_DISCOVERY_HOST_SOURCE_MANIFEST",
       ],
     ]);
     expect(probe.authenticatedShards).toEqual(["product-support"]);
@@ -2726,19 +2888,27 @@ describe("Extension Host support runner", () => {
     expect(extensionManifest.engines?.vscode)
       .toBe(`^${minimumPlan.minimumVSCodeVersion}`);
     expect(extensionManifest.scripts?.["test:extension-host"])
-      .toContain("--worker --current-stable");
+      .toBe("pnpm -w run build:ide && pnpm run test:extension-host:current-stable:built");
     expect(extensionManifest.scripts?.["test:extension-host:worker"])
       .toBe("pnpm run test:extension-host");
     expect(extensionManifest.scripts?.["test:extension-host:ipc"])
       .toContain("--ipc --current-stable");
     expect(extensionManifest.scripts?.["test:extension-host:current-stable"])
       .toBe("pnpm run test:extension-host");
+    expect(extensionManifest.scripts?.["test:extension-host:current-stable:built"])
+      .toBe("node scripts/run-extension-host-tests.mjs --worker --current-stable");
     expect(extensionManifest.scripts?.["test:extension-host:minimum"])
-      .toContain("--worker --minimum");
+      .toBe("pnpm -w run build:ide && pnpm run test:extension-host:minimum:built");
+    expect(extensionManifest.scripts?.["test:extension-host:minimum:built"])
+      .toBe("node scripts/run-extension-host-tests.mjs --worker --minimum");
+    expect(extensionManifest.scripts?.["test:extension-host:installed:current-stable:built"])
+      .toBe("node scripts/run-extension-host-tests.mjs --worker --current-stable --installed-vsix");
+    expect(extensionManifest.scripts?.["test:extension-host:installed:minimum:built"])
+      .toBe("node scripts/run-extension-host-tests.mjs --worker --minimum --installed-vsix");
     expect(extensionManifest.scripts?.["test:extension-host:release:built"])
       .toBe(
-        "node scripts/run-extension-host-tests.mjs --worker --current-stable && "
-        + "node scripts/run-extension-host-tests.mjs --worker --minimum",
+        "pnpm run test:extension-host:current-stable:built && "
+        + "pnpm run test:extension-host:minimum:built",
       );
     expect(extensionManifest.scripts?.["test:extension-host:release"])
       .toBe("pnpm -w run build:ide:types && pnpm run bundle && pnpm run test:extension-host:release:built");

@@ -6,8 +6,10 @@ import {
   patternReleaseSentinels,
 } from './pattern-sentinels.mjs';
 
-const sourceReleaseVersion = '0.3.0';
-const publishedReleaseVersion = '0.3.0';
+const sourceReleaseVersion = '0.3.1';
+const publishedReleaseVersion = '0.3.1';
+const previousPublishedReleaseVersion = '0.3.0';
+const protocolVersion = '0.3.0';
 const historicalReleaseVersion = '0.2.0';
 const packageRoot = path.resolve(fileURLToPath(new URL('..', import.meta.url)));
 const workspaceRoot = path.resolve(packageRoot, '../..');
@@ -20,11 +22,12 @@ const sourceNotesPath = `release-notes/mcp-v${sourceReleaseVersion}.md`;
 const publishedTag = `mcp-v${publishedReleaseVersion}`;
 const publishedTarball = `aurelia-ls-mcp-${publishedReleaseVersion}.tgz`;
 const historicalTarball = `aurelia-ls-mcp-${historicalReleaseVersion}.tgz`;
-const historicalHostedReleaseFragments = [
-  `releases/tag/mcp-v${historicalReleaseVersion}`,
-  `releases/download/mcp-v${historicalReleaseVersion}`,
-  historicalTarball,
-];
+const supersededHostedReleaseFragments = [historicalReleaseVersion, previousPublishedReleaseVersion]
+  .flatMap((version) => [
+    `releases/tag/mcp-v${version}`,
+    `releases/download/mcp-v${version}`,
+    `aurelia-ls-mcp-${version}.tgz`,
+  ]);
 const taggedBaselineQueryKindCount = 73;
 const providerGuidePaths = [
   'docs/providers/README.md',
@@ -126,8 +129,9 @@ const docs = {
   readme: await readPackageFile('README.md'),
   release: await readPackageFile('RELEASE.md'),
   releaseNotes: await readPackageFile(sourceNotesPath),
+  protocolReleaseNotes: await readPackageFile(`release-notes/mcp-v${protocolVersion}.md`),
   historicalReleaseNotes: await readPackageFile(`release-notes/mcp-v${historicalReleaseVersion}.md`),
-  reference: await readPackageFile(`docs/reference-v${sourceReleaseVersion}.md`),
+  reference: await readPackageFile(`docs/reference-v${protocolVersion}.md`),
   aiAuthoring: await readPackageFile('docs/ai-authoring.md'),
   providers: providerGuides['docs/providers/README.md'],
   orientation: await readPackageFile('src/orientation.ts'),
@@ -172,7 +176,7 @@ if (publishedReleaseVersion === sourceReleaseVersion) {
   expectIncludes(docs.readme, 'Current source and next release target', 'README should identify the pending source protocol version.');
 }
 expectIncludes(docs.readme, publishedTag, 'README install guidance should identify the hosted release.');
-expectIncludes(docs.readme, `reference-v${sourceReleaseVersion}.md`, 'README should link the versioned source protocol reference.');
+expectIncludes(docs.readme, `reference-v${protocolVersion}.md`, 'README should link the current protocol reference.');
 expectIncludes(docs.readme, `mcp-v${sourceReleaseVersion}.md`, 'README should link the next release notes.');
 expectIncludes(docs.readme, 'no project-file writes', 'README should state the project-write boundary.');
 expectIncludes(docs.readme, 'cache-clear tool', 'README should distinguish analyzer-state mutation from project writes.');
@@ -204,6 +208,20 @@ for (const sentinel of patternReleaseSentinels) {
   expectIncludes(docs.release, sentinel.patternId, `Release checklist should name catalog sentinel ${sentinel.patternId}.`);
 }
 
+expectIncludes(docs.releaseNotes, `# Aurelia MCP ${sourceReleaseVersion}`, 'Patch release notes should identify the source release.');
+expectIncludes(docs.releaseNotes, sourceTag, 'Patch release notes should link the source release tag.');
+expectIncludes(docs.releaseNotes, sourceTarball, 'Patch release notes should link the source release tarball.');
+expectIncludes(
+  docs.releaseNotes,
+  `blob/${sourceTag}/packages/mcp/docs/reference-v${protocolVersion}.md`,
+  'Patch release notes should link the tag-pinned current protocol reference.',
+);
+expectIncludes(
+  docs.releaseNotes,
+  `blob/${sourceTag}/packages/mcp/docs/providers/README.md`,
+  'Patch release notes should link tag-pinned provider guidance.',
+);
+
 for (const fragment of [
   'Required Client Migration',
   'aurelia_project_configurations',
@@ -229,17 +247,15 @@ for (const fragment of [
   'retryAction=reissue-tool',
   'no project-file writes',
 ]) {
-  expectIncludes(docs.releaseNotes, fragment, `Release notes should cover required 0.3 contract fact: ${fragment}`);
+  expectIncludes(docs.protocolReleaseNotes, fragment, `Protocol release notes should cover required 0.3 contract fact: ${fragment}`);
 }
-expectIncludes(docs.releaseNotes, '73 to 91', 'Release notes should state the semantic query-kind delta.');
-expectIncludes(docs.releaseNotes, 'named tool', 'Release notes should distinguish named tools from query kinds.');
-expectIncludes(docs.releaseNotes, 'Project Configuration V1', 'Release notes should name the final project configuration contract.');
-expectIncludes(docs.releaseNotes, 'Aurelia Patterns', 'Release notes should retain the Patterns/docs release surface.');
-expectIncludes(docs.releaseNotes, 'docs/ai-authoring.md', 'Release notes should link persistent AI authoring guidance.');
-expectIncludes(docs.releaseNotes, `blob/${sourceTag}/packages/mcp/docs/reference-v${sourceReleaseVersion}.md`, 'Hosted release notes should link the tag-pinned protocol reference.');
-expectIncludes(docs.releaseNotes, `blob/${sourceTag}/packages/mcp/docs/providers/README.md`, 'Hosted release notes should link tag-pinned provider guidance.');
+expectIncludes(docs.protocolReleaseNotes, '73 to 91', 'Protocol release notes should state the semantic query-kind delta.');
+expectIncludes(docs.protocolReleaseNotes, 'named tool', 'Protocol release notes should distinguish named tools from query kinds.');
+expectIncludes(docs.protocolReleaseNotes, 'Project Configuration V1', 'Protocol release notes should name the final project configuration contract.');
+expectIncludes(docs.protocolReleaseNotes, 'Aurelia Patterns', 'Protocol release notes should retain the Patterns/docs release surface.');
+expectIncludes(docs.protocolReleaseNotes, 'docs/ai-authoring.md', 'Protocol release notes should link persistent AI authoring guidance.');
 for (const queryKind of addedQueryKinds) {
-  expectIncludes(docs.releaseNotes, queryKind, `Release notes should name added app-query kind ${queryKind}.`);
+  expectIncludes(docs.protocolReleaseNotes, queryKind, `Protocol release notes should name added app-query kind ${queryKind}.`);
   expectIncludes(docs.reference, queryKind, `Versioned reference should name added app-query kind ${queryKind}.`);
 }
 
@@ -279,8 +295,8 @@ if (publishedReleaseVersion === sourceReleaseVersion && historicalReleaseVersion
     ...providerGuides,
   };
   for (const [name, content] of Object.entries(currentInstallSurfaces)) {
-    for (const fragment of historicalHostedReleaseFragments) {
-      expectNotIncludes(content, fragment, `${name} should not retain the ${historicalReleaseVersion} hosted release after publication promotion.`);
+    for (const fragment of supersededHostedReleaseFragments) {
+      expectNotIncludes(content, fragment, `${name} should not retain a superseded hosted release after publication promotion: ${fragment}`);
     }
   }
 }
@@ -339,7 +355,7 @@ for (const stalePhrase of [
   'app-builder query family',
   'lowering guidance',
 ]) {
-  expectNotIncludes(docs.releaseNotes, stalePhrase, `Release notes should not contain stale phrase: ${stalePhrase}`);
+  expectNotIncludes(docs.protocolReleaseNotes, stalePhrase, `Protocol release notes should not contain stale phrase: ${stalePhrase}`);
 }
 
 console.log('MCP release docs contract passed.');

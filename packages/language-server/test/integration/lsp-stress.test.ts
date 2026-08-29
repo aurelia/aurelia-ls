@@ -42,6 +42,10 @@ interface LspDocumentSymbol {
   readonly children?: readonly LspDocumentSymbol[];
 }
 
+interface LspWorkspaceSymbol {
+  readonly name: string;
+}
+
 interface LspSelectionRange {
   readonly range: LspRange;
   readonly parent?: LspSelectionRange;
@@ -90,8 +94,35 @@ function addHintPanelFixtureFiles(fixture: string): void {
   ].join("\n"), "utf8");
 }
 
+function addObservationPairingCanary(fixture: string): void {
+  const productCardPath = path.join(fixture, "src/components/product-card.ts");
+  const source = fs.readFileSync(productCardPath, "utf8");
+  const canary = [
+    "interface ShopOffer { readonly itemId: string }",
+    "const itemRegistry: Readonly<Record<string, { readonly slot: string }>> = { sword: { slot: 'mainhand' } };",
+    "class RpgShopObservationCanary {",
+    "  filteredWeaponAndToolOffers: ShopOffer[] = [{ itemId: 'sword' }];",
+    "  get weaponOffers(): ShopOffer[] {",
+    "    return this.filteredWeaponAndToolOffers.filter(offer => itemRegistry[offer.itemId]?.slot === 'mainhand');",
+    "  }",
+    "  get miscWeaponOffers(): ShopOffer[] {",
+    "    const categorizedIds = new Set<string>();",
+    "    return this.weaponOffers.filter(offer => !categorizedIds.has(offer.itemId));",
+    "  }",
+    "  get iteratedWeaponOfferIds(): string { return this.collectWeaponOfferIds(); }",
+    "  private collectWeaponOfferIds(): string {",
+    "    const ids: string[] = [];",
+    "    for (const offer of this.weaponOffers) ids.push(offer.itemId);",
+    "    return ids.join(',');",
+    "  }",
+    "}",
+  ].join("\n");
+  fs.writeFileSync(productCardPath, source.replace("@customElement", `${canary}\n\n@customElement`), "utf8");
+}
+
 test("synced TypeScript documents feed source intelligence without claiming template-only lanes", async () => {
   const fixture = copyFixtureDirectory(helloWorldFixture);
+  addObservationPairingCanary(fixture);
   const { connection, child, dispose, getStderr } = startServer(fixture);
   const documents = new Map<string, TrackedDocument>();
   const openUris = new Set<string>();
@@ -147,6 +178,11 @@ test("synced TypeScript documents feed source intelligence without claiming temp
     expect(offsetAt(productCardTs.text, productCardSymbol!.range.end)).toBeGreaterThanOrEqual(
       offsetAt(productCardTs.text, itemSymbol!.range.end),
     );
+
+    const workspaceSymbols = await connection.sendRequest("workspace/symbol", {
+      query: "ProductCard",
+    }) as LspWorkspaceSymbol[];
+    expect(workspaceSymbols.some((symbol) => symbol.name === "ProductCard")).toBe(true);
   } finally {
     diagnostics.dispose();
     dispose();

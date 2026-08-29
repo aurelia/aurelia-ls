@@ -13,8 +13,8 @@ const workerFixture = path.resolve(
   "../../fixtures/language-client-restart-worker.mjs",
 );
 const transportModuleUrl = pathToFileURL(path.resolve(
-  __dirname,
-  "../../../out/worker-transport.js",
+  requiredEnvironment("AURELIA_LS_EXTENSION_HOST_HARNESS_ROOT"),
+  "out/worker-transport.js",
 ));
 const aureliaWorkspace = process.env.AURELIA_LS_EXTENSION_HOST_WORKSPACE;
 const extensionId = "AureliaEffect.aurelia-2";
@@ -24,6 +24,12 @@ const workerRestartHostControlSchema = "aurelia-worker-restart-host-control/1";
 
 if (!aureliaWorkspace) {
   throw new Error("AURELIA_LS_EXTENSION_HOST_WORKSPACE is required.");
+}
+
+function requiredEnvironment(name) {
+  const value = process.env[name];
+  if (typeof value !== "string" || value.length === 0) throw new Error(`${name} is required.`);
+  return value;
 }
 if (process.env.AURELIA_LS_WORKER_RESTART_HOST_ACCEPTANCE !== "1") {
   throw new Error("Worker lifecycle requires its exact host-acceptance gate.");

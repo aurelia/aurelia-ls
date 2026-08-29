@@ -33,6 +33,11 @@ Guidelines:
   `pnpm test:vscode:extension-host:ipc` only for the focused current-stable
   product/support control. Every process reports and asserts its actual VS Code
   version, selected transport, and shard before loading the journey.
+  CI runs the current-stable and minimum Worker lanes in parallel. Release
+  acceptance first packages one exact VSIX, then runs those same lanes in
+  parallel with `--installed-vsix`: the artifact is installed once per lane,
+  the inert test driver is the only development extension, and the installed
+  product inventory and receipt are revalidated after every shard.
   The automated attribute-explanation journey proves the exact invoked Quick
   Fix, hidden command, and production `showInformationMessage` request with
   `{ modal: true }`, including the engine-owned title and uncertainty, and
@@ -176,3 +181,10 @@ Guidelines:
   runners require an extension-development path before they execute an
   `--extensionTestsPath`; using only the inert driver keeps the installed
   Aurelia product off the development-extension path.
+- The publish workflow requires a successful full `main` CI push run for the
+  exact tagged commit. It packages the VSIX once, passes the exact artifact,
+  receipt, and checksum by artifact ID to parallel current/minimum installed
+  host jobs, and publishes those same bytes only after both lanes pass. The
+  final job repeats the focused installed-VSIX acceptance before attestation;
+  it does not rerun semantic, language-server, or source-extension suites that
+  the admitted CI run already owns.
