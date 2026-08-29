@@ -162,6 +162,7 @@ export class TemplateCompilerLocalSiteExclusionAuthority {
     TemplateCompilerSpendOccurrence,
     TemplateCompilerLocalSiteExclusionReceipt
   >();
+  readonly #orderedReceipts: TemplateCompilerLocalSiteExclusionReceipt[] = [];
 
   private constructor(
     constructionAuthority: object,
@@ -182,6 +183,10 @@ export class TemplateCompilerLocalSiteExclusionAuthority {
   owns(receipt: TemplateCompilerLocalSiteExclusionReceipt): boolean {
     return receipt.isOwnedBy(this.#receiptAuthority)
       && this.#receiptsByOccurrence.get(receipt.occurrence) === receipt;
+  }
+
+  readAll(): readonly TemplateCompilerLocalSiteExclusionReceipt[] {
+    return this.#orderedReceipts;
   }
 
   private captureRows(): void {
@@ -261,7 +266,7 @@ export class TemplateCompilerLocalSiteExclusionAuthority {
     if (this.#receiptsByOccurrence.has(occurrence)) {
       throw new Error(`Local exclusion occurrence '${occurrence.occurrenceKey}' has more than one disposition.`);
     }
-    this.#receiptsByOccurrence.set(occurrence, new TemplateCompilerLocalSiteExclusionReceipt(
+    const receipt = new TemplateCompilerLocalSiteExclusionReceipt(
       this.#receiptAuthority,
       occurrence,
       disposition,
@@ -269,7 +274,9 @@ export class TemplateCompilerLocalSiteExclusionAuthority {
       destinationLane,
       extraction,
       bindable,
-    ));
+    );
+    this.#receiptsByOccurrence.set(occurrence, receipt);
+    this.#orderedReceipts.push(receipt);
   }
 }
 

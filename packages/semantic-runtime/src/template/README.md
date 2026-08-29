@@ -189,12 +189,28 @@ classification, expression parsing, and instruction lowering converge on the sam
 - The project compiler front door can retain one opt-in raw occurrence precedent for a whole authored resource source.
   The precedent is compiled under the pre-local compiler world, keeps parser draft bindings, and is excluded from
   runtime compilation membership. Its normalized site index names the same authored product space used by exact
-  browser origins, so root and extracted child lanes can later derive disjoint views from transfer receipts instead of
+  browser origins, so root and extracted child lanes can later derive transfer-backed views instead of
   reparsing each local definition into unrelated identities. Admission currently means either overlap with legacy local
   extraction or a lexical `as-custom-element` candidate; the latter is deliberately an over-admitting posture, not a
   claim that static extraction found the local. Graph disagreement remains a typed normalized-index mismatch. The
   explicit `includeCompilerOccurrencePrecedents` app option owns the extra product and cache shape; telemetry profiles
   do not request it. Compatible deeper generations carry unchanged precedents and rebind their worlds and reads.
+- `template-compiler-site-invocation.ts` keeps raw-source admission separate from traversal admission. The new
+  occurrence-precedent binding joins an explicit current app authority that owns the exact front door, exact precedent
+  family membership, browser source/tree authority, the root execution lane, and its stored hook/local closure. It
+  permits extracted child lanes but claims only raw normalized-site identity under the pre-local hook world. The older
+  site-invocation binding remains the stricter no-local capability whose index compiler world is also the traversal
+  world; local support must not weaken that root-only contract.
+- `template-compiler-normalized-site-lane-view.ts` is the candidate-local temporal membership join over that binding.
+  It maps each raw attribute/interpolation bundle to its canonical seeded occurrence—generated clones may retain source
+  lineage but never acquire the bundle—then derives incoming child subsets from nominal extraction transfers and local
+  exclusion receipts. A lane partition distinguishes terminal retention, declaration consumption, bindable-metadata
+  consumption, and outgoing transfers. Sibling transfers are disjoint; a nested transfer is a subset of its parent's
+  incoming view, so transfer edges intentionally overlap by ancestry while eventual terminal membership does not.
+  Static-only locals legitimately receive an empty view. Views retain live occurrence/lane capabilities and therefore
+  are never kernel products or app-carry members; a carried precedent builds a fresh candidate-local family. This is a
+  normalized-site crosswalk only, not occurrence-backed HTML ingress: static text, elements, comments, template-content
+  structure, post-local compiler worlds, and final traversal membership remain separate work.
 - `template-compiler-occurrence.ts` imports only the browser-effective compiler-carrier graph into a fresh mutable
   execution forest. Stable occurrence keys are independent of live paths; private edge collections and forest-owned
   move/detach operations preserve coherent root, child, template-content, and attribute ownership while the complete

@@ -1,4 +1,5 @@
 import type { BrowserEffectiveTemplateEmission } from './browser-effective-template-materializer.js';
+import type { CurrentnessAuthority } from '../kernel/generation-authority.js';
 import {
   browserTemplateCorrespondenceMarkupDigest,
   browserTemplateCorrespondenceOccurrenceIdentityKey,
@@ -10,6 +11,7 @@ import type { TemplateSource } from './compilation-unit.js';
 import type {
   TemplateCompilationFrontDoorEmission,
   TemplateCompilationFamilyFrontDoorEmission,
+  TemplateCompilerOccurrencePrecedentEmission,
   TemplateResourceCompilationEmission,
 } from './template-compilation-project-pass.js';
 import {
@@ -31,6 +33,7 @@ import {
 } from './template-compiler-normalized-site-index.js';
 
 const siteInvocationBindingAuthority = {};
+const occurrencePrecedentInvocationBindingAuthority = {};
 const rootSiteInvocationIngressAuthority = {};
 
 export const enum TemplateCompilerSiteInvocationMembershipLane {
@@ -39,8 +42,11 @@ export const enum TemplateCompilerSiteInvocationMembershipLane {
 }
 
 export const enum TemplateCompilerSiteInvocationBindingReasonKind {
+  AppGenerationUnavailable = 'app-generation-unavailable',
+  AppFrontDoorAuthorityMismatch = 'app-front-door-authority-mismatch',
   GraphPrecedentMismatch = 'graph-precedent-mismatch',
   CurrentFrontDoorMembershipMismatch = 'current-front-door-membership-mismatch',
+  OccurrencePrecedentMembershipMismatch = 'occurrence-precedent-membership-mismatch',
   ExecutionClosureMismatch = 'execution-closure-mismatch',
   RootLaneMismatch = 'root-lane-mismatch',
   BootstrapMismatch = 'bootstrap-mismatch',
@@ -113,6 +119,125 @@ export interface TemplateCompilerRootSiteInvocationBindingRequest {
   readonly graphExact: TemplateCompilerNormalizedSiteIndexResult;
   readonly currentFrontDoor: TemplateCompilationFrontDoorEmission;
   readonly currentFamily: TemplateCompilationFamilyFrontDoorEmission;
+}
+
+export interface TemplateCompilerFrontDoorCurrentnessAuthority extends CurrentnessAuthority {
+  ownsTemplateCompilerFrontDoor(frontDoor: TemplateCompilationFrontDoorEmission): boolean;
+}
+
+export interface TemplateCompilerRootOccurrencePrecedentInvocationBindingRequest {
+  /** Current app generation that owns the supplied front door and family. */
+  readonly appCurrentness: TemplateCompilerFrontDoorCurrentnessAuthority;
+  readonly execution: TemplateCompilerExecutionSession;
+  readonly bootstrapClosure: TemplateCompilerInvocationBootstrapClosure;
+  readonly browserEmission: BrowserEffectiveTemplateEmission;
+  readonly occurrencePrecedent: TemplateCompilerOccurrencePrecedentEmission;
+  readonly currentFrontDoor: TemplateCompilationFrontDoorEmission;
+  readonly currentFamily: TemplateCompilationFamilyFrontDoorEmission;
+}
+
+/**
+ * Current raw-source authority for one root browser invocation, before a post-local traversal world is selected.
+ *
+ * Unlike `TemplateCompilerSiteInvocationBinding`, this capability may contain extracted child lanes. It proves only
+ * normalized authored-site identity and bootstrap provenance; it does not authorize a cursor or claim that the
+ * precedent's pre-local compiler world is the eventual traversal world.
+ */
+export class TemplateCompilerOccurrencePrecedentInvocationBinding {
+  readonly #authority: object;
+
+  constructor(
+    authority: object,
+    readonly appCurrentness: TemplateCompilerFrontDoorCurrentnessAuthority,
+    readonly execution: TemplateCompilerExecutionSession,
+    readonly bootstrapClosure: TemplateCompilerInvocationBootstrapClosure,
+    readonly ingress: TemplateCompilerRootSiteInvocationIngress,
+    readonly occurrencePrecedent: TemplateCompilerOccurrencePrecedentEmission,
+    readonly currentFrontDoor: TemplateCompilationFrontDoorEmission,
+    readonly currentFamily: TemplateCompilationFamilyFrontDoorEmission,
+    readonly membershipLane: TemplateCompilerSiteInvocationMembershipLane,
+    private readonly exactIndex: TemplateCompilerNormalizedSiteIndex,
+  ) {
+    if (authority !== occurrencePrecedentInvocationBindingAuthority) {
+      throw new Error('Occurrence-precedent invocation bindings are module-constructed capabilities.');
+    }
+    this.#authority = authority;
+  }
+
+  get lane(): TemplateCompilerExecutionLaneReference {
+    return this.bootstrapClosure.lane;
+  }
+
+  get forest(): TemplateCompilerOccurrenceForest {
+    return this.execution.forest;
+  }
+
+  get browserEmission(): BrowserEffectiveTemplateEmission {
+    return this.ingress.browserEmission;
+  }
+
+  get graphExact(): TemplateCompilerNormalizedSiteIndexResult {
+    return this.occurrencePrecedent.normalizedSites;
+  }
+
+  get index(): TemplateCompilerNormalizedSiteIndex {
+    return this.exactIndex;
+  }
+
+  get compilation(): TemplateResourceCompilationEmission {
+    return this.exactIndex.compilation;
+  }
+
+  get definition(): CustomElementDefinition {
+    return this.exactIndex.definition;
+  }
+
+  get unit(): TemplateCompilationUnitEmission {
+    return this.exactIndex.unit;
+  }
+
+  get source(): TemplateSource {
+    return this.exactIndex.unit.templateSource;
+  }
+
+  get preLocalCompilerWorld(): TemplateCompilerWorldEmission {
+    return this.occurrencePrecedent.preLocalCompilerWorld;
+  }
+
+  isModuleConstructed(): boolean {
+    return this.#authority === occurrencePrecedentInvocationBindingAuthority;
+  }
+
+  /** App/browser lifetime only; lane-frontier currentness belongs to the later ingress consumer. */
+  isCurrent(): boolean {
+    return this.appCurrentness.isCurrent()
+      && this.appCurrentness.ownsTemplateCompilerFrontDoor(this.currentFrontDoor)
+      && this.browserEmission.publication.isCurrent();
+  }
+}
+
+export const enum TemplateCompilerOccurrencePrecedentInvocationBindingState {
+  Exact = 'exact',
+  Open = 'open',
+  Mismatch = 'mismatch',
+}
+
+export class TemplateCompilerOccurrencePrecedentInvocationBindingResult {
+  readonly state: TemplateCompilerOccurrencePrecedentInvocationBindingState;
+
+  constructor(
+    readonly binding: TemplateCompilerOccurrencePrecedentInvocationBinding | null,
+    readonly reasons: readonly TemplateCompilerSiteInvocationBindingReason[],
+  ) {
+    this.state = binding != null
+      ? TemplateCompilerOccurrencePrecedentInvocationBindingState.Exact
+      : reasons.length > 0 && reasons.every((entry) =>
+          entry.reasonKind === TemplateCompilerSiteInvocationBindingReasonKind.AppGenerationUnavailable
+          || entry.reasonKind === TemplateCompilerSiteInvocationBindingReasonKind.BrowserPublicationUnavailable
+        )
+        ? TemplateCompilerOccurrencePrecedentInvocationBindingState.Open
+        : TemplateCompilerOccurrencePrecedentInvocationBindingState.Mismatch;
+  }
 }
 
 /**
@@ -214,6 +339,77 @@ export function bindTemplateCompilerRootSiteInvocation(
   });
 }
 
+/** Bind one current raw whole-source precedent to its exact root browser/bootstrap invocation. */
+export function bindTemplateCompilerRootOccurrencePrecedentInvocation(
+  request: TemplateCompilerRootOccurrencePrecedentInvocationBindingRequest,
+): TemplateCompilerOccurrencePrecedentInvocationBindingResult {
+  const reasons: TemplateCompilerSiteInvocationBindingReason[] = [];
+  const graphExact = request.occurrencePrecedent.normalizedSites;
+  const index = graphExact.state === TemplateCompilerNormalizedSiteIndexState.GraphExact
+    ? graphExact.index
+    : null;
+  if (
+    index == null
+    || index.compilation !== index.basis.compilation
+    || index.compilation !== request.occurrencePrecedent.compilation
+  ) {
+    reasons.push(reason(
+      TemplateCompilerSiteInvocationBindingReasonKind.GraphPrecedentMismatch,
+      'Occurrence invocation requires its retained raw precedent and exact normalized-site index.',
+    ));
+    return new TemplateCompilerOccurrencePrecedentInvocationBindingResult(null, reasons);
+  }
+  if (!request.appCurrentness.isCurrent()) {
+    reasons.push(reason(
+      TemplateCompilerSiteInvocationBindingReasonKind.AppGenerationUnavailable,
+      'Occurrence precedent front-door membership belongs to a stale or unavailable app generation.',
+    ));
+  } else if (!request.appCurrentness.ownsTemplateCompilerFrontDoor(request.currentFrontDoor)) {
+    reasons.push(reason(
+      TemplateCompilerSiteInvocationBindingReasonKind.AppFrontDoorAuthorityMismatch,
+      'Occurrence precedent front door does not belong to the supplied current app authority.',
+    ));
+  }
+
+  const ingress = prepareTemplateCompilerRootSiteInvocationIngress(request.browserEmission);
+  const membershipLane = validateCurrentOccurrencePrecedentMembership(request, reasons);
+  const sharedRequest: TemplateCompilerSiteInvocationBindingRequest = {
+    execution: request.execution,
+    bootstrapClosure: request.bootstrapClosure,
+    ingress,
+    graphExact,
+    currentFrontDoor: request.currentFrontDoor,
+    currentFamily: request.currentFamily,
+  };
+  validateExecutionClosure(sharedRequest, reasons);
+  validateRootExecutionIngress(sharedRequest, reasons);
+  validateBootstrapAuthority(sharedRequest, index, reasons);
+  validateRootBrowserInput(
+    sharedRequest,
+    index,
+    request.occurrencePrecedent.sourceRevision,
+    reasons,
+  );
+  if (reasons.length > 0 || membershipLane == null) {
+    return new TemplateCompilerOccurrencePrecedentInvocationBindingResult(null, reasons);
+  }
+  return new TemplateCompilerOccurrencePrecedentInvocationBindingResult(
+    new TemplateCompilerOccurrencePrecedentInvocationBinding(
+      occurrencePrecedentInvocationBindingAuthority,
+      request.appCurrentness,
+      request.execution,
+      request.bootstrapClosure,
+      ingress,
+      request.occurrencePrecedent,
+      request.currentFrontDoor,
+      request.currentFamily,
+      membershipLane,
+      index,
+    ),
+    [],
+  );
+}
+
 /** Bind one exact current invocation through its explicit compiler-input ingress authority. */
 function bindTemplateCompilerSiteInvocation(
   request: TemplateCompilerSiteInvocationBindingRequest,
@@ -233,8 +429,14 @@ function bindTemplateCompilerSiteInvocation(
   const membershipLane = validateCurrentMembership(request, index, reasons);
   validateExecutionClosure(request, reasons);
   validateRootExecutionIngress(request, reasons);
-  validateBootstrap(request, index, reasons);
-  validateRootBrowserInput(request, index, reasons);
+  validateBootstrapAuthority(request, index, reasons);
+  validateNoLocalBootstrap(request, reasons);
+  validateRootBrowserInput(
+    request,
+    index,
+    index.definition.template?.authoredSourceRevision ?? null,
+    reasons,
+  );
   if (reasons.length > 0 || membershipLane == null) {
     return new TemplateCompilerSiteInvocationBindingResult(null, reasons);
   }
@@ -284,6 +486,36 @@ function validateCurrentMembership(
     reasons.push(reason(
       TemplateCompilerSiteInvocationBindingReasonKind.CurrentFrontDoorMembershipMismatch,
       'GraphExact compilation is not one exact app/authoring member of the supplied current family and front door.',
+    ));
+    return null;
+  }
+  return appMembership
+    ? TemplateCompilerSiteInvocationMembershipLane.App
+    : TemplateCompilerSiteInvocationMembershipLane.Authoring;
+}
+
+function validateCurrentOccurrencePrecedentMembership(
+  request: TemplateCompilerRootOccurrencePrecedentInvocationBindingRequest,
+  reasons: TemplateCompilerSiteInvocationBindingReason[],
+): TemplateCompilerSiteInvocationMembershipLane | null {
+  const precedent = request.occurrencePrecedent;
+  const family = request.currentFamily;
+  const frontDoor = request.currentFrontDoor;
+  const familyAppCount = occurrenceCount(family.appOccurrencePrecedents, precedent);
+  const familyAuthoringCount = occurrenceCount(family.authoringOccurrencePrecedents, precedent);
+  const familyCount = occurrenceCount(frontDoor.families, family);
+  const appMembership = familyAppCount === 1 && familyAuthoringCount === 0;
+  const authoringMembership = familyAppCount === 0 && familyAuthoringCount === 1;
+  if (
+    !family.occurrencePrecedentsRequested
+    || frontDoor.familyForOwner(family.ownerHandle) !== family
+    || familyCount !== 1
+    || family.ownerHandle !== precedent.compilation.familyOwnerHandle
+    || (!appMembership && !authoringMembership)
+  ) {
+    reasons.push(reason(
+      TemplateCompilerSiteInvocationBindingReasonKind.OccurrencePrecedentMembershipMismatch,
+      'Raw occurrence precedent is not one exact app/authoring member of the supplied current family and front door.',
     ));
     return null;
   }
@@ -346,7 +578,7 @@ function validateRootExecutionIngress(
   }
 }
 
-function validateBootstrap(
+function validateBootstrapAuthority(
   request: TemplateCompilerSiteInvocationBindingRequest,
   index: TemplateCompilerNormalizedSiteIndex,
   reasons: TemplateCompilerSiteInvocationBindingReason[],
@@ -366,22 +598,10 @@ function validateBootstrap(
       'Stored hook/local bootstrap results are not exact, same-lane, failure-free invocation receipts.',
     ));
   }
-  if (
-    local.state !== TemplateCompilerLocalExtractionState.NoLocalTemplates
-    || local.operations.length !== 0
-    || local.completedExtractions.length !== 0
-    || local.handoff != null
-    || closure.childLaneTransfers.length !== 0
-  ) {
-    reasons.push(reason(
-      TemplateCompilerSiteInvocationBindingReasonKind.LocalTemplatesUnsupported,
-      'Only no-local invocations are supported; extracted lanes require occurrence-backed compilation ingress.',
-    ));
-  }
   if (hook.compilerWorld !== index.compilerWorld) {
     reasons.push(reason(
       TemplateCompilerSiteInvocationBindingReasonKind.CompilerWorldMismatch,
-      'Hook bootstrap compiler world is not the exact GraphExact compiler-world object.',
+      'Hook bootstrap compiler world is not the exact normalized precedent compiler-world object.',
     ));
   }
   const firstOperation = hook.operations[0] ?? null;
@@ -397,7 +617,27 @@ function validateBootstrap(
   ) {
     reasons.push(reason(
       TemplateCompilerSiteInvocationBindingReasonKind.HookSetMismatch,
-      'First exact bootstrap operation does not resolve the GraphExact world\'s exact hook set.',
+      'First exact bootstrap operation does not resolve the normalized world\'s exact hook set.',
+    ));
+  }
+}
+
+function validateNoLocalBootstrap(
+  request: TemplateCompilerSiteInvocationBindingRequest,
+  reasons: TemplateCompilerSiteInvocationBindingReason[],
+): void {
+  const closure = request.bootstrapClosure;
+  const local = closure.localExtraction;
+  if (
+    local.state !== TemplateCompilerLocalExtractionState.NoLocalTemplates
+    || local.operations.length !== 0
+    || local.completedExtractions.length !== 0
+    || local.handoff != null
+    || closure.childLaneTransfers.length !== 0
+  ) {
+    reasons.push(reason(
+      TemplateCompilerSiteInvocationBindingReasonKind.LocalTemplatesUnsupported,
+      'Only no-local invocations are supported; extracted lanes require occurrence-backed compilation ingress.',
     ));
   }
 }
@@ -405,6 +645,7 @@ function validateBootstrap(
 function validateRootBrowserInput(
   request: TemplateCompilerSiteInvocationBindingRequest,
   index: TemplateCompilerNormalizedSiteIndex,
+  expectedSourceRevision: string | null,
   reasons: TemplateCompilerSiteInvocationBindingReason[],
 ): void {
   const browser = request.ingress.browserEmission;
@@ -430,13 +671,12 @@ function validateRootBrowserInput(
   const source = index.unit.templateSource;
   const browserSource = browserTree.templateSource;
   const expectedOccurrenceIdentity = browserTemplateCorrespondenceOccurrenceIdentityKey(source.identityHandle);
-  const authoredSourceRevision = index.definition.template?.authoredSourceRevision ?? null;
   if (
     !sameTemplateSourceReference(browserSource, source)
     || browser.correspondence.templateIdentity !== source.identityHandle
     || browser.correspondence.occurrenceIdentityKey !== expectedOccurrenceIdentity
-    || authoredSourceRevision == null
-    || browser.correspondence.sourceRevision !== authoredSourceRevision
+    || expectedSourceRevision == null
+    || browser.correspondence.sourceRevision !== expectedSourceRevision
   ) {
     reasons.push(reason(
       TemplateCompilerSiteInvocationBindingReasonKind.BrowserSourceMismatch,

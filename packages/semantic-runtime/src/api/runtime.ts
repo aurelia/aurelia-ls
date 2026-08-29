@@ -3887,6 +3887,16 @@ export class SemanticApp {
       && this.appGeneration.isCurrent(validationScope);
   }
 
+  /** Require the complete committed app generation rather than only sampling its currentness. */
+  requireCurrent(): void {
+    this.appGeneration.requireCurrent();
+  }
+
+  /** Exact front-door ownership used by run-local compiler capabilities. */
+  ownsTemplateCompilerFrontDoor(frontDoor: AureliaAppWorldProjectEmission['templates']['frontDoor']): boolean {
+    return this.isCurrent() && this.committedEmission.templates.frontDoor === frontDoor;
+  }
+
   retireGeneration(): boolean {
     return this.runtime.appAnalysisComputations.retire(this.appGeneration);
   }
