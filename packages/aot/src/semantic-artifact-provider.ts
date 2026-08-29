@@ -4,13 +4,18 @@ import path from 'node:path';
 
 import {
   createSemanticRuntime,
+  FrameworkCapabilityConfigurationState,
+  FrameworkDiEffectCoverageState,
   type SemanticAppNominatedEntry,
 } from '@aurelia-ls/semantic-runtime';
 import {
   materializeSemanticAppTemplateCompilerHandoffs,
+  materializeSemanticAppStandardConfigurationSourceAttachments,
   ResourceCarrierKind,
+  StandardConfigurationSourceCarrierKind,
   TemplateCompilerCompiledHandoffState,
   type SemanticAppTemplateCompilerHandoffResource,
+  type StandardConfigurationSourceAttachment,
   type TemplateCompilerCompiledHandoffValue,
 } from '@aurelia-ls/semantic-runtime/browser-template';
 import {
@@ -25,8 +30,14 @@ import {
   AotSourceTransformEmitter,
   AotSourceTransformError,
   type AotSourceTransformArtifact,
+  type AotSourceTransformConfigurationPlan,
   type AotSourceTransformResourcePlan,
 } from './source-transform.js';
+import {
+  AotRuntimeConfigurationModuleEmitter,
+  AotRuntimeConfigurationPlan,
+  type AotRuntimeConfigurationModuleArtifact,
+} from './runtime-configuration.js';
 import {
   AotArtifactError,
   AotTemplateModuleEmitter,
@@ -36,6 +47,11 @@ import {
 
 export const AOT_COMPILER_PATCH_PAYLOAD_MODULE_PREFIX = 'virtual:aurelia-aot/payload/';
 
+export type SemanticAotRuntimeConfigurationMode =
+  | 'preserve'
+  | 'replace-explicit'
+  | 'require-replaceable';
+
 export interface SemanticAotBuildRequest {
   readonly root: string;
   readonly mode: string;
@@ -43,6 +59,8 @@ export interface SemanticAotBuildRequest {
   readonly sourcemap: boolean | 'inline' | 'hidden';
   /** Explicit dormant app factory activation; exported functions are never executed merely because they exist. */
   readonly nominatedEntry?: SemanticAppNominatedEntry | null;
+  /** Omit to preserve every authored StandardConfiguration occurrence. */
+  readonly runtimeConfiguration?: SemanticAotRuntimeConfigurationMode;
 }
 
 export interface SemanticAotTemplateRequest {
@@ -88,6 +106,36 @@ export interface SemanticAotArtifactEvidence {
     readonly digest: string;
     readonly map: AotRawSourceMap;
   }[];
+  readonly runtimeConfiguration: SemanticAotRuntimeConfigurationEvidence;
+}
+
+export interface SemanticAotRuntimeConfigurationEvidence {
+  readonly mode: SemanticAotRuntimeConfigurationMode;
+  readonly occurrences: readonly SemanticAotRuntimeConfigurationOccurrenceEvidence[];
+  readonly modules: readonly {
+    readonly moduleSpecifier: string;
+    readonly planDigest: string;
+    readonly digest: string;
+    readonly enableCoercion: boolean;
+    readonly coerceNullish: boolean;
+  }[];
+}
+
+export interface SemanticAotRuntimeConfigurationOccurrenceEvidence {
+  readonly operationProductHandle: string;
+  readonly operationOrdinal: number;
+  readonly carrierKind: string;
+  readonly coverageState: string;
+  readonly openSummary: string | null;
+  readonly nestedDiCoverageState: string;
+  readonly nestedDiOpenSummary: string | null;
+  readonly sourcePath: string | null;
+  readonly start: number | null;
+  readonly end: number | null;
+  readonly disposition: 'preserved' | 'replaced' | 'non-replaceable';
+  readonly moduleSpecifier: string | null;
+  readonly reasonKind: string | null;
+  readonly reason: string | null;
 }
 
 interface PendingResourceArtifact {
@@ -100,11 +148,25 @@ interface PendingResourceArtifact {
   readonly handoff: TemplateCompilerCompiledHandoffValue;
 }
 
+interface PendingRuntimeConfigurationReplacement {
+  readonly sourcePath: string;
+  readonly transform: AotSourceTransformConfigurationPlan;
+}
+
+interface RuntimeConfigurationBuildPlan {
+  readonly replacements: readonly PendingRuntimeConfigurationReplacement[];
+  readonly artifacts: ReadonlyMap<string, AotRuntimeConfigurationModuleArtifact>;
+  readonly evidence: SemanticAotRuntimeConfigurationEvidence;
+}
+
 export class SemanticAotBuildSession {
   readonly #pendingByVariant: ReadonlyMap<string, PendingResourceArtifact>;
   readonly #pendingByPayloadSpecifier: ReadonlyMap<string, PendingResourceArtifact>;
   readonly #pendingByCarrierPath: ReadonlyMap<string, readonly PendingResourceArtifact[]>;
   readonly #pendingByTemplatePath: ReadonlyMap<string, readonly PendingResourceArtifact[]>;
+  readonly #configurationByCarrierPath: ReadonlyMap<string, readonly PendingRuntimeConfigurationReplacement[]>;
+  readonly #configurationArtifacts: ReadonlyMap<string, AotRuntimeConfigurationModuleArtifact>;
+  readonly #runtimeConfigurationEvidence: SemanticAotRuntimeConfigurationEvidence;
   readonly #fullArtifactsByVariant = new Map<string, AotTemplateModuleArtifact>();
   readonly #patchArtifactsByVariant = new Map<string, AotCompilerPatchModuleArtifact>();
   readonly #evidenceByVariant = new Map<string, SemanticAotArtifactEvidence['artifacts'][number]>();
@@ -115,6 +177,7 @@ export class SemanticAotBuildSession {
   public constructor(
     readonly generation: string,
     pending: readonly PendingResourceArtifact[],
+    runtimeConfiguration: RuntimeConfigurationBuildPlan,
   ) {
     this.#pendingByVariant = new Map(pending.map((artifact) => [artifact.compilerVariantKey, artifact]));
     this.#pendingByPayloadSpecifier = new Map(pending.map((artifact) => [artifact.payloadSpecifier, artifact]));
@@ -123,6 +186,12 @@ export class SemanticAotBuildSession {
     }
     this.#pendingByCarrierPath = groupPendingByPath(pending, (artifact) => artifact.carrierSourcePath);
     this.#pendingByTemplatePath = groupPendingByPath(pending, (artifact) => artifact.templateSourcePath);
+    this.#configurationByCarrierPath = groupPendingByPath(
+      runtimeConfiguration.replacements,
+      (replacement) => replacement.sourcePath,
+    );
+    this.#configurationArtifacts = runtimeConfiguration.artifacts;
+    this.#runtimeConfigurationEvidence = runtimeConfiguration.evidence;
   }
 
   public async artifactFor(request: SemanticAotTemplateRequest): Promise<SemanticAotTemplateArtifact> {
@@ -162,7 +231,8 @@ export class SemanticAotBuildSession {
     request: SemanticAotSourceTransformRequest,
   ): Promise<SemanticAotSourceTransformArtifact | null> {
     const pending = this.#pendingByCarrierPath.get(canonicalPath(request.sourcePath)) ?? [];
-    if (pending.length === 0) return null;
+    const configurations = this.#configurationByCarrierPath.get(canonicalPath(request.sourcePath)) ?? [];
+    if (pending.length === 0 && configurations.length === 0) return null;
     const plans = await Promise.all(pending.map(async (resource): Promise<AotSourceTransformResourcePlan> => {
       const artifact = await this.#patchArtifactFor(resource);
       const attachment = resource.handoff.address.sourceAttachment;
@@ -191,6 +261,7 @@ export class SemanticAotBuildSession {
       sourcePath: request.sourcePath,
       code: request.code,
       resources: collapseEquivalentAotResourcePlans(request.sourcePath, plans),
+      configurations: configurations.map((configuration) => configuration.transform),
       runtimeModuleSpecifier: AOT_COMPILER_PATCH_RUNTIME_MODULE_ID,
     });
   }
@@ -204,6 +275,15 @@ export class SemanticAotBuildSession {
         code: AOT_COMPILER_PATCH_RUNTIME_MODULE_SOURCE,
         map: null,
         digest: `sha256:${createHash('sha256').update(AOT_COMPILER_PATCH_RUNTIME_MODULE_SOURCE).digest('hex')}`,
+      };
+    }
+    const configuration = this.#configurationArtifacts.get(request.specifier);
+    if (configuration != null) {
+      return {
+        specifier: configuration.moduleId,
+        code: configuration.code,
+        map: null,
+        digest: configuration.digest,
       };
     }
     const pending = this.#pendingByPayloadSpecifier.get(request.specifier);
@@ -254,6 +334,7 @@ export class SemanticAotBuildSession {
       generation: this.generation,
       analysisCount: 1,
       artifacts: [...this.#evidenceByVariant.values()],
+      runtimeConfiguration: this.#runtimeConfigurationEvidence,
     };
   }
 }
@@ -281,6 +362,11 @@ export class SemanticAotArtifactProvider {
         app,
         includeAuthoringResources: true,
       });
+      const runtimeConfiguration = runtimeConfigurationBuildPlan(
+        root,
+        request.runtimeConfiguration ?? 'preserve',
+        materializeSemanticAppStandardConfigurationSourceAttachments(app),
+      );
       const unavailable = batch.resources.filter((resource) =>
         resource.state !== TemplateCompilerCompiledHandoffState.Exact
       );
@@ -316,7 +402,7 @@ export class SemanticAotArtifactProvider {
       });
       app.requireCurrent();
       const generation = `${app.analysisGenerationReference.computationId}:${app.analysisGenerationReference.runSequence}`;
-      return this.#lastSession = new SemanticAotBuildSession(generation, pending);
+      return this.#lastSession = new SemanticAotBuildSession(generation, pending, runtimeConfiguration);
     } finally {
       runtime.retireWorkspaceIncarnation();
     }
@@ -325,6 +411,211 @@ export class SemanticAotArtifactProvider {
   public evidence(): SemanticAotArtifactEvidence | null {
     return this.#lastSession?.evidence() ?? null;
   }
+}
+
+interface RuntimeConfigurationSourceSlice {
+  readonly sourceFilePath: string;
+  readonly start: number;
+  readonly end: number;
+  readonly oldText: string;
+}
+
+interface RuntimeConfigurationRefusal {
+  readonly reasonKind: string;
+  readonly summary: string;
+}
+
+interface RuntimeConfigurationOccurrencePlan {
+  readonly attachment: StandardConfigurationSourceAttachment;
+  readonly source: RuntimeConfigurationSourceSlice | null;
+  readonly carrierKind: StandardConfigurationSourceCarrierKind;
+  readonly coercion: { readonly enableCoercion: boolean; readonly coerceNullish: boolean } | null;
+  readonly artifact: AotRuntimeConfigurationModuleArtifact | null;
+  refusal: RuntimeConfigurationRefusal | null;
+  replace: boolean;
+}
+
+function runtimeConfigurationBuildPlan(
+  root: string,
+  mode: SemanticAotRuntimeConfigurationMode,
+  attachments: readonly StandardConfigurationSourceAttachment[],
+): RuntimeConfigurationBuildPlan {
+  const emitter = new AotRuntimeConfigurationModuleEmitter();
+  const occurrences = attachments.map((attachment): RuntimeConfigurationOccurrencePlan => {
+    const carrier = attachment.carrier;
+    const source = carrier.carrierKind === StandardConfigurationSourceCarrierKind.ExplicitRegistrationValue
+      ? carrier.valueExpression
+      : carrier.source;
+    let refusal: RuntimeConfigurationRefusal | null = null;
+    if (carrier.carrierKind !== StandardConfigurationSourceCarrierKind.ExplicitRegistrationValue) {
+      refusal = {
+        reasonKind: carrier.reason.reasonKind,
+        summary: carrier.reason.summary,
+      };
+    }
+    const coercion = closedRuntimeCoercion(attachment);
+    if (refusal == null && coercion == null) {
+      refusal = {
+        reasonKind: 'open-coercion',
+        summary: `StandardConfiguration coercion is not statically closed (${attachment.openSummary ?? 'open configured value'}).`,
+      };
+    }
+    if (
+      refusal == null
+      && (
+        attachment.coverageState !== FrameworkDiEffectCoverageState.Closed
+        || attachment.openSummary != null
+      )
+    ) {
+      refusal = {
+        reasonKind: 'incomplete-effect-coverage',
+        summary: `StandardConfiguration effect coverage is '${attachment.coverageState}'${
+          attachment.openSummary == null ? '' : `: ${attachment.openSummary}`
+        }`,
+      };
+    }
+    const artifact = refusal == null && coercion != null && mode !== 'preserve'
+      ? emitter.emit(new AotRuntimeConfigurationPlan([], coercion))
+      : null;
+    return {
+      attachment,
+      source,
+      carrierKind: carrier.carrierKind,
+      coercion,
+      artifact,
+      refusal,
+      replace: false,
+    };
+  });
+
+  const candidatesBySlice = new Map<string, RuntimeConfigurationOccurrencePlan[]>();
+  if (mode !== 'preserve') {
+    for (const occurrence of occurrences) {
+      if (occurrence.source == null || occurrence.artifact == null || occurrence.refusal != null) continue;
+      const key = configurationSliceKey(occurrence.source);
+      const group = candidatesBySlice.get(key) ?? [];
+      group.push(occurrence);
+      candidatesBySlice.set(key, group);
+    }
+  }
+
+  const replacements: PendingRuntimeConfigurationReplacement[] = [];
+  const artifacts = new Map<string, AotRuntimeConfigurationModuleArtifact>();
+  const moduleEvidence = new Map<string, SemanticAotRuntimeConfigurationEvidence['modules'][number]>();
+  for (const candidates of candidatesBySlice.values()) {
+    const moduleSpecifiers = new Set(candidates.map((candidate) => candidate.artifact!.moduleId));
+    if (moduleSpecifiers.size !== 1) {
+      const refusal = {
+        reasonKind: 'conflicting-closed-coercion-plan',
+        summary: 'One authored StandardConfiguration expression produces different closed coercion plans across active app worlds.',
+      };
+      for (const candidate of candidates) candidate.refusal = refusal;
+      continue;
+    }
+    const selected = candidates[0]!;
+    const source = selected.source!;
+    const artifact = selected.artifact!;
+    for (const candidate of candidates) candidate.replace = true;
+    replacements.push({
+      sourcePath: path.resolve(source.sourceFilePath),
+      transform: {
+        value: {
+          start: source.start,
+          end: source.end,
+          oldText: source.oldText,
+        },
+        moduleSpecifier: artifact.moduleId,
+        expectedDigest: artifact.digest,
+        exportName: 'AotConfiguration',
+      },
+    });
+    artifacts.set(artifact.moduleId, artifact);
+    const coercion = selected.coercion!;
+    moduleEvidence.set(artifact.moduleId, {
+      moduleSpecifier: artifact.moduleId,
+      planDigest: artifact.planDigest,
+      digest: artifact.digest,
+      enableCoercion: coercion.enableCoercion,
+      coerceNullish: coercion.coerceNullish,
+    });
+  }
+
+  if (mode === 'require-replaceable') {
+    const refused = occurrences.filter((occurrence) => !occurrence.replace);
+    if (refused.length > 0) {
+      throw unavailableRuntimeConfigurationError(root, refused);
+    }
+  }
+
+  return {
+    replacements: replacements.sort((left, right) =>
+      canonicalPath(left.sourcePath).localeCompare(canonicalPath(right.sourcePath))
+      || left.transform.value.start - right.transform.value.start
+    ),
+    artifacts,
+    evidence: {
+      mode,
+      occurrences: occurrences.map((occurrence) => ({
+        operationProductHandle: occurrence.attachment.operationProductHandle,
+        operationOrdinal: occurrence.attachment.operationOrdinal,
+        carrierKind: occurrence.carrierKind,
+        coverageState: occurrence.attachment.coverageState,
+        openSummary: occurrence.attachment.openSummary,
+        nestedDiCoverageState: occurrence.attachment.nestedDiCoverageState,
+        nestedDiOpenSummary: occurrence.attachment.nestedDiOpenSummary,
+        sourcePath: occurrence.source == null ? null : path.resolve(occurrence.source.sourceFilePath),
+        start: occurrence.source?.start ?? null,
+        end: occurrence.source?.end ?? null,
+        disposition: mode === 'preserve'
+          ? 'preserved'
+          : occurrence.replace
+            ? 'replaced'
+            : 'non-replaceable',
+        moduleSpecifier: occurrence.replace ? occurrence.artifact!.moduleId : null,
+        reasonKind: occurrence.refusal?.reasonKind ?? null,
+        reason: occurrence.refusal?.summary ?? null,
+      })),
+      modules: [...moduleEvidence.values()].sort((left, right) =>
+        left.moduleSpecifier.localeCompare(right.moduleSpecifier)
+      ),
+    },
+  };
+}
+
+function closedRuntimeCoercion(
+  attachment: StandardConfigurationSourceAttachment,
+): { readonly enableCoercion: boolean; readonly coerceNullish: boolean } | null {
+  if (
+    attachment.coercion.enableCoercion.state === FrameworkCapabilityConfigurationState.Open
+    || attachment.coercion.coerceNullish.state === FrameworkCapabilityConfigurationState.Open
+  ) {
+    return null;
+  }
+  return {
+    enableCoercion: attachment.coercion.enableCoercion.recoveryValue,
+    coerceNullish: attachment.coercion.coerceNullish.recoveryValue,
+  };
+}
+
+function configurationSliceKey(source: RuntimeConfigurationSourceSlice): string {
+  return `${canonicalPath(source.sourceFilePath)}\0${source.start}\0${source.end}\0${source.oldText}`;
+}
+
+function unavailableRuntimeConfigurationError(
+  root: string,
+  occurrences: readonly RuntimeConfigurationOccurrencePlan[],
+): AotArtifactError {
+  const detail = occurrences.map((occurrence) => {
+    const source = occurrence.source == null
+      ? '(source unavailable)'
+      : `${occurrence.source.sourceFilePath}:${occurrence.source.start}`;
+    return `${source} [${occurrence.carrierKind}]: ${occurrence.refusal?.summary ?? 'no exact replacement plan'}`;
+  }).join('; ');
+  return new AotArtifactError(
+    'AOT_ARTIFACT_UNSUPPORTED_VALUE',
+    `AOT runtime configuration profile 'require-replaceable' could not replace every spent StandardConfiguration occurrence: ${detail}`,
+    root,
+  );
 }
 
 function unavailableHandoffError(
@@ -437,11 +728,11 @@ export function validateAotCarrierPatchHandoff(
   );
 }
 
-function groupPendingByPath(
-  pending: readonly PendingResourceArtifact[],
-  selectPath: (artifact: PendingResourceArtifact) => string,
-): ReadonlyMap<string, readonly PendingResourceArtifact[]> {
-  const groups = new Map<string, PendingResourceArtifact[]>();
+function groupPendingByPath<T>(
+  pending: readonly T[],
+  selectPath: (artifact: T) => string,
+): ReadonlyMap<string, readonly T[]> {
+  const groups = new Map<string, T[]>();
   for (const artifact of pending) {
     const key = canonicalPath(selectPath(artifact));
     const group = groups.get(key) ?? [];

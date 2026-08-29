@@ -417,9 +417,7 @@ function startBuildSession(
     environmentName: environment.name,
     sourcemap: environment.config.build.sourcemap,
     ...(options.nominatedEntry === undefined ? {} : { nominatedEntry: options.nominatedEntry }),
-    ...(options.runtimeConfiguration === undefined
-      ? {}
-      : { runtimeConfiguration: options.runtimeConfiguration }),
+    runtimeConfiguration: options.runtimeConfiguration ?? "preserve",
   });
 }
 

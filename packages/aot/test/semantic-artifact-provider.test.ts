@@ -53,7 +53,7 @@ describe('semantic AOT artifact provider', () => {
     expect(artifact.code).toContain('$document.createComment("au")');
     expect(artifact.code).toContain('"$kind": "AccessScope"');
 
-    const outputRoot = await mkdtemp(path.resolve(repositoryRoot, 'packages/aot/.tmp-artifact-'));
+    const outputRoot = await makeTemporaryDirectory('artifact-');
     temporaryDirectories.push(outputRoot);
     const outputPath = path.resolve(outputRoot, 'my-app.aot.mjs');
     await writeFile(outputPath, artifact.code, 'utf8');
@@ -128,7 +128,7 @@ describe('semantic AOT artifact provider', () => {
   }, 15_000);
 
   it('activates an explicitly nominated exported app factory without rewriting its source shape', async () => {
-    const root = await mkdtemp(path.resolve(repositoryRoot, 'packages/aot/.tmp-nominated-entry-'));
+    const root = await makeTemporaryDirectory('nominated-entry-');
     temporaryDirectories.push(root);
     const sourceRoot = path.resolve(root, 'src');
     const sourcePath = path.resolve(sourceRoot, 'index.js');
@@ -169,6 +169,7 @@ describe('semantic AOT artifact provider', () => {
       mode: 'production',
       environmentName: 'client',
       sourcemap: true,
+      runtimeConfiguration: 'require-replaceable',
       nominatedEntry: {
         sourceFilePath: 'src/index.js',
         callable: { kind: 'export', name: 'start' },
@@ -186,7 +187,202 @@ describe('semantic AOT artifact provider', () => {
       definitionName: 'benchmark-app',
       carrierKind: 'define-call',
     });
+    expect(transformed?.configurations).toHaveLength(1);
     expect(transformed?.code).toContain('const App = __auAotApply(CustomElement.define({');
+    expect(transformed?.code).toContain('import { AotConfiguration as __auAotConfiguration0 }');
+    expect(transformed?.code).toContain('.register(__auAotConfiguration0).app(');
+
+    const configurationSpecifier = transformed!.configurations[0]!.moduleSpecifier;
+    const configuration = await nominatedSession.virtualModuleFor({ specifier: configurationSpecifier });
+    expect(configuration).toMatchObject({
+      specifier: configurationSpecifier,
+      digest: transformed!.configurations[0]!.expectedDigest,
+      map: null,
+    });
+    expect(configuration?.code).not.toContain('StandardConfiguration');
+    expect(configuration?.code).not.toContain('DefaultBindingLanguage');
+    expect(configuration?.code).not.toContain('DefaultBindingSyntax');
+    expect(configuration?.code).toContain('"enableCoercion": false');
+    expect(nominatedProvider.evidence()?.runtimeConfiguration).toMatchObject({
+      mode: 'require-replaceable',
+      occurrences: [{
+        carrierKind: 'explicit-registration-value',
+        coverageState: 'closed',
+        openSummary: null,
+        nestedDiCoverageState: 'partial',
+        nestedDiOpenSummary: expect.any(String),
+        disposition: 'replaced',
+        moduleSpecifier: configurationSpecifier,
+      }],
+      modules: [{
+        moduleSpecifier: configurationSpecifier,
+        enableCoercion: false,
+        coerceNullish: false,
+      }],
+    });
+  }, 20_000);
+
+  it('emits a customized configuration for a configuration-only source module', async () => {
+    const root = await makeTemporaryDirectory('configuration-only-');
+    temporaryDirectories.push(root);
+    const sourceRoot = path.resolve(root, 'src');
+    const sourcePath = path.resolve(sourceRoot, 'configuration.ts');
+    await mkdir(sourceRoot, { recursive: true });
+    const code = [
+      "import { Aurelia, StandardConfiguration } from '@aurelia/runtime-html';",
+      'const configured = new Aurelia().register(StandardConfiguration.customize((options) => {',
+      '  options.coercingOptions.enableCoercion = true;',
+      '  options.coercingOptions.coerceNullish = true;',
+      '}));',
+      'declare const dynamicFlag: boolean;',
+      'const open = new Aurelia().register(StandardConfiguration.customize((options) => {',
+      '  if (dynamicFlag) options.coercingOptions.enableCoercion = true;',
+      '}));',
+      'void [configured, open];',
+    ].join('\n');
+    await Promise.all([
+      writeFile(path.resolve(root, 'package.json'), JSON.stringify({
+        name: 'aot-configuration-only-fixture',
+        private: true,
+        type: 'module',
+      }), 'utf8'),
+      writeFile(path.resolve(root, 'tsconfig.json'), JSON.stringify({
+        compilerOptions: {
+          target: 'ES2022',
+          module: 'ESNext',
+          moduleResolution: 'Bundler',
+          strict: true,
+        },
+        include: ['src'],
+      }), 'utf8'),
+      writeFile(sourcePath, code, 'utf8'),
+    ]);
+
+    const configurationProvider = new SemanticAotArtifactProvider();
+    const configurationSession = await configurationProvider.openBuild({
+      root,
+      mode: 'production',
+      environmentName: 'client',
+      sourcemap: true,
+      runtimeConfiguration: 'replace-explicit',
+    });
+    const transformed = await configurationSession.transformSource({ sourcePath, code });
+
+    expect(transformed).not.toBeNull();
+    expect(transformed?.resources).toEqual([]);
+    expect(transformed?.runtimeModuleSpecifier).toBeNull();
+    expect(transformed?.configurations).toHaveLength(1);
+    expect(transformed?.code).toContain('import { AotConfiguration as __auAotConfiguration0 }');
+    expect(transformed?.code).toContain('.register(__auAotConfiguration0);');
+    expect(transformed?.code).toContain('.register(StandardConfiguration.customize(');
+
+    const configurationEvidence = configurationProvider.evidence()!.runtimeConfiguration;
+    const occurrence = configurationEvidence.occurrences.find((candidate) =>
+      candidate.disposition === 'replaced'
+    )!;
+    const openOccurrence = configurationEvidence.occurrences.find((candidate) =>
+      candidate.reasonKind === 'open-coercion'
+    )!;
+    const moduleEvidence = configurationProvider.evidence()!.runtimeConfiguration.modules[0]!;
+    expect(occurrence).toMatchObject({
+      carrierKind: 'explicit-registration-value',
+      sourcePath,
+      disposition: 'replaced',
+      moduleSpecifier: moduleEvidence.moduleSpecifier,
+    });
+    expect(openOccurrence).toMatchObject({
+      carrierKind: 'explicit-registration-value',
+      coverageState: 'closed',
+      openSummary: expect.stringContaining('coercion customization retains open'),
+      nestedDiCoverageState: 'partial',
+      sourcePath,
+      disposition: 'non-replaceable',
+      moduleSpecifier: null,
+      reasonKind: 'open-coercion',
+    });
+    expect(moduleEvidence).toMatchObject({
+      enableCoercion: true,
+      coerceNullish: true,
+      digest: expect.stringMatching(/^sha256:[0-9a-f]{64}$/u),
+    });
+    const module = await configurationSession.virtualModuleFor({ specifier: moduleEvidence.moduleSpecifier });
+    expect(module).toMatchObject({
+      specifier: moduleEvidence.moduleSpecifier,
+      digest: moduleEvidence.digest,
+      map: null,
+    });
+    expect(module?.code).toContain('"enableCoercion": true');
+    expect(module?.code).toContain('"coerceNullish": true');
+
+    await expect(new SemanticAotArtifactProvider().openBuild({
+      root,
+      mode: 'production',
+      environmentName: 'client',
+      sourcemap: true,
+      runtimeConfiguration: 'require-replaceable',
+    })).rejects.toMatchObject({
+      code: 'AOT_ARTIFACT_UNSUPPORTED_VALUE',
+      message: expect.stringContaining('coercion is not statically closed'),
+    });
+  }, 20_000);
+
+  it('preserves a browser-facade default and causally refuses it under the strict profile', async () => {
+    const root = await makeTemporaryDirectory('browser-facade-');
+    temporaryDirectories.push(root);
+    const sourceRoot = path.resolve(root, 'src');
+    const sourcePath = path.resolve(sourceRoot, 'main.ts');
+    await mkdir(sourceRoot, { recursive: true });
+    const code = [
+      "import Aurelia from 'aurelia';",
+      'const app = new Aurelia();',
+      'void app;',
+    ].join('\n');
+    await Promise.all([
+      writeFile(path.resolve(root, 'package.json'), JSON.stringify({
+        name: 'aot-browser-facade-fixture',
+        private: true,
+        type: 'module',
+      }), 'utf8'),
+      writeFile(path.resolve(root, 'tsconfig.json'), JSON.stringify({
+        compilerOptions: {
+          target: 'ES2022',
+          module: 'ESNext',
+          moduleResolution: 'Bundler',
+          strict: true,
+        },
+        include: ['src'],
+      }), 'utf8'),
+      writeFile(sourcePath, code, 'utf8'),
+    ]);
+
+    const preservingProvider = new SemanticAotArtifactProvider();
+    const preservingSession = await preservingProvider.openBuild({
+      root,
+      mode: 'production',
+      environmentName: 'client',
+      sourcemap: true,
+    });
+    expect(await preservingSession.transformSource({ sourcePath, code })).toBeNull();
+    expect(preservingProvider.evidence()?.runtimeConfiguration).toMatchObject({
+      mode: 'preserve',
+      occurrences: [{
+        carrierKind: 'browser-facade-default',
+        disposition: 'preserved',
+        reasonKind: 'browser-facade-default',
+      }],
+      modules: [],
+    });
+
+    await expect(new SemanticAotArtifactProvider().openBuild({
+      root,
+      mode: 'production',
+      environmentName: 'client',
+      sourcemap: true,
+      runtimeConfiguration: 'require-replaceable',
+    })).rejects.toMatchObject({
+      code: 'AOT_ARTIFACT_UNSUPPORTED_VALUE',
+      message: expect.stringContaining('browser Aurelia facade installs StandardConfiguration implicitly'),
+    });
   }, 20_000);
 
   it('collapses byte-identical compiler-world variants and refuses divergent global patches', () => {
@@ -257,6 +453,12 @@ describe('semantic AOT artifact provider', () => {
 
 function normalizePath(value: string): string {
   return value.replaceAll('\\', '/');
+}
+
+async function makeTemporaryDirectory(prefix: string): Promise<string> {
+  const temporaryRoot = path.resolve(repositoryRoot, 'packages/aot/out/aot-provider-tests');
+  await mkdir(temporaryRoot, { recursive: true });
+  return mkdtemp(path.resolve(temporaryRoot, prefix));
 }
 
 function variantPlan(

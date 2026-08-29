@@ -76,6 +76,7 @@ describe("aureliaAot Vite preset", () => {
       mode: "production",
       environmentName: "client",
       sourcemap: true,
+      runtimeConfiguration: "preserve",
     });
     expect(context.resolve).toHaveBeenCalledWith("./app.html", "/app/main.ts", expect.objectContaining({
       skipSelf: true,
