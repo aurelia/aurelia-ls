@@ -567,7 +567,9 @@ function emitAttributes(
   }
 }
 
-function emitJavaScriptValue(value: unknown, request: AotTemplateModuleEmissionRequest): string {
+type AotArtifactSourceContext = Pick<AotTemplateModuleEmissionRequest, 'sourcePath'>;
+
+function emitJavaScriptValue(value: unknown, request: AotArtifactSourceContext): string {
   if (value === undefined) return 'void 0';
   if (value === null) return 'null';
   if (typeof value === 'string') return JSON.stringify(value);
@@ -594,6 +596,11 @@ function emitJavaScriptValue(value: unknown, request: AotTemplateModuleEmissionR
   return objectLiteral(fields);
 }
 
+/** Serialize one semantic-runtime value with the same wire rules used by compiled template payloads. */
+export function emitAotJavaScriptValue(value: unknown, sourcePath: string): string {
+  return emitJavaScriptValue(value, { sourcePath });
+}
+
 function objectLiteral(fields: Readonly<Record<string, string>>): string {
   return `{ ${Object.entries(fields).map(([name, value]) => `${JSON.stringify(name)}: ${value}`).join(', ')} }`;
 }
@@ -616,6 +623,6 @@ function unsupportedHeader(request: AotTemplateModuleEmissionRequest, message: s
   return new AotArtifactError('AOT_ARTIFACT_UNSUPPORTED_HEADER', message, request.sourcePath);
 }
 
-function unsupportedValue(request: AotTemplateModuleEmissionRequest, message: string): AotArtifactError {
+function unsupportedValue(request: AotArtifactSourceContext, message: string): AotArtifactError {
   return new AotArtifactError('AOT_ARTIFACT_UNSUPPORTED_VALUE', message, request.sourcePath);
 }

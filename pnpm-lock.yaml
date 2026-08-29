@@ -82,12 +82,18 @@ importers:
         specifier: 6.0.3
         version: 6.0.3
     devDependencies:
+      '@aurelia/expression-parser':
+        specifier: link:../../aurelia/packages/expression-parser
+        version: link:../../aurelia/packages/expression-parser
       '@aurelia/kernel':
         specifier: link:../../aurelia/packages/kernel
         version: link:../../aurelia/packages/kernel
       '@aurelia/platform-browser':
         specifier: link:../../aurelia/packages/platform-browser
         version: link:../../aurelia/packages/platform-browser
+      '@aurelia/runtime':
+        specifier: link:../../aurelia/packages/runtime
+        version: link:../../aurelia/packages/runtime
       '@aurelia/runtime-html':
         specifier: link:../../aurelia/packages/runtime-html
         version: link:../../aurelia/packages/runtime-html

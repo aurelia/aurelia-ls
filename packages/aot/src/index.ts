@@ -39,3 +39,17 @@ export {
   type AotSourceTransformSlice,
   type AotTransformedResource,
 } from './source-transform.js';
+export {
+  AOT_CONSERVATIVE_RUNTIME_REGISTRATION_ORDER,
+  AOT_RUNTIME_CONFIGURATION_MODULE_ID,
+  AotExpressionParser,
+  AotRuntimeConfiguration,
+  AotRuntimeConfigurationModuleEmitter,
+  AotRuntimeConfigurationPlan,
+  AotTemplateCompiler,
+  type AotRuntimeCoercionOptions,
+  type AotRuntimeConfigurationModuleArtifact,
+  type AotRuntimeExpressionEntry,
+  type AotRuntimeExpressionType,
+  type AotRuntimeRegistrationKind,
+} from './runtime-configuration.js';
