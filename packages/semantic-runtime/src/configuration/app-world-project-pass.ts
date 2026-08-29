@@ -64,6 +64,7 @@ import {
   normalizeSemanticAppAnalysisDepth,
   type SemanticAppAnalysisDepth,
 } from './app-analysis.js';
+import type { NormalizedSemanticAppNominatedEntry } from './nominated-app-entry.js';
 import {
   DEFAULT_SEMANTIC_RUNTIME_INQUIRY_PROFILE,
   type SemanticRuntimeInquiryProfile,
@@ -309,6 +310,8 @@ export interface AureliaAppWorldProjectOptions {
   readonly authoringTemplateSourceFiles?: readonly string[];
   readonly authoringTemplateLimit?: number | null;
   readonly telemetry?: SemanticRuntimeTelemetryOptions | null;
+  /** Explicit synchronous app entry already normalized to the selected project's source identity. */
+  readonly nominatedEntry?: NormalizedSemanticAppNominatedEntry | null;
 }
 
 /** Explicit project-analysis phases that own the work surrounding authored template families. */
@@ -340,6 +343,7 @@ export class AureliaAppAnalysisPhaseLocus implements ComputationLocus {
 export class AureliaAppWorldPreTemplateEmission {
   constructor(
     readonly analysisDepth: SemanticAppAnalysisDepth,
+    readonly nominatedEntry: NormalizedSemanticAppNominatedEntry | null,
     readonly project: ProjectBootFrame,
     readonly evaluationGeneration: StaticProjectEvaluationGeneration<null>,
     readonly conventionToolingEvaluationGeneration: StaticProjectEvaluationGeneration<ResourceConventionToolingEvaluationContext>,
@@ -513,6 +517,7 @@ class AureliaAppWorldProjectConstructionFrame {
   private readonly authoringTemplateSourceFiles: readonly string[];
   private readonly authoringTemplateLimit: number | null;
   private readonly telemetry: NormalizedSemanticRuntimeTelemetryOptions;
+  private readonly nominatedEntry: NormalizedSemanticAppNominatedEntry | null;
   private readonly phases: AureliaAppWorldProjectPhaseTiming[] = [];
 
   constructor(
@@ -542,6 +547,7 @@ class AureliaAppWorldProjectConstructionFrame {
       options.telemetry,
       DEFAULT_SEMANTIC_RUNTIME_INQUIRY_PROFILE,
     );
+    this.nominatedEntry = options.nominatedEntry ?? null;
   }
 
   constructAndEmit(): AureliaAppWorldProjectEmission {
@@ -663,6 +669,7 @@ class AureliaAppWorldProjectConstructionFrame {
     );
     return new AureliaAppWorldPreTemplateEmission(
       this.analysisDepth,
+      this.nominatedEntry,
       this.project,
       this.evaluationGeneration,
       this.conventionToolingEvaluation.generation,

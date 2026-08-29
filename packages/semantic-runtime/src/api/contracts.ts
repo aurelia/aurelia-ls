@@ -43,6 +43,7 @@ import type {
   TemplateCompletionSiteKind,
 } from '../inquiry/template-completion.js';
 import type { SemanticAppAnalysisDepth } from '../configuration/app-analysis.js';
+import type { SemanticAppNominatedEntry } from '../configuration/nominated-app-entry.js';
 import type {
   QueryClaimGraphDisposalSummary,
   QueryClaimRecord,
@@ -771,6 +772,8 @@ export interface OpenSemanticAppOptions {
   readonly authoringTemplateLimit?: number | null;
   /** Optional profiling controls; use only for telemetry lanes, not semantic feature gating. */
   readonly telemetry?: SemanticRuntimeTelemetryOptions | null;
+  /** Explicit synchronous app-entry function to invoke; exports are never activated merely because they exist. */
+  readonly nominatedEntry?: SemanticAppNominatedEntry | null;
 }
 
 export interface SemanticAppOverviewRequest {

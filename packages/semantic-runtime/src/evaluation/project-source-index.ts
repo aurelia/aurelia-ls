@@ -1,10 +1,10 @@
 import type ts from 'typescript';
 
 import type { AddressHandle } from '../kernel/handles.js';
-import {
-  type EvaluatedProjectSource,
-  type StaticProjectEvaluationResult,
-  type StaticProjectEvaluationSourceResult,
+import type {
+  EvaluatedProjectSource,
+  StaticProjectEvaluationResult,
+  StaticProjectEvaluationSourceResult,
 } from './project-evaluation.js';
 import type {
   StaticInvocationIdentity,
@@ -28,21 +28,9 @@ export class StaticProjectEvaluationSourceIndex {
         this.retain(source.sourceFile.fileName, source);
       }
     }
-    const evaluatedSourcesByModule = new Map(evaluation.readEvaluatedSources().map((source) => [
-      normalizeModuleKey(source.moduleKey),
-      source,
-    ]));
-    const indexedSources = new Set<EvaluatedProjectSource>();
     let executionOrdinal = 0;
-    for (const moduleKey of evaluation.evaluationOrderModuleKeys) {
-      const source = evaluatedSourcesByModule.get(normalizeModuleKey(moduleKey)) ?? null;
-      if (source == null || indexedSources.has(source)) {
-        continue;
-      }
-      indexedSources.add(source);
-      for (const invocation of source.evaluation.invocations) {
-        this.executionOrdinalsByInvocation.set(invocation.identity, executionOrdinal++);
-      }
+    for (const invocation of evaluation.executionOrderInvocations) {
+      this.executionOrdinalsByInvocation.set(invocation.identity, executionOrdinal++);
     }
   }
 

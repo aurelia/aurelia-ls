@@ -32,6 +32,7 @@ import {
   type AureliaAppWorldProjectOptions,
 } from './app-world-project-pass.js';
 import { aureliaAppProjectEvaluationProfile } from './aurelia-project-evaluation.js';
+import { activateNominatedSemanticAppEntry } from './nominated-app-entry.js';
 
 /** Stable replacement locus for one complete project semantic generation. */
 export class AureliaAppAnalysisLocus implements ComputationLocus {
@@ -293,16 +294,23 @@ export class AureliaAppWorldProjectComputationService implements KernelStoreSide
     const conventionToolingEvaluationProfile = conventionToolingEvaluationAccess.readProfile();
     const locus = new AureliaAppAnalysisLocus(project.projectKey);
     const authority = this.authorityFor(project.projectKey);
-    const incumbent = authority.committed()?.readCommittedEmission() ?? null;
+    const committedIncumbent = authority.committed()?.readCommittedEmission() ?? null;
+    const nominatedEntryKey = options.nominatedEntry?.identityKey ?? null;
+    const incumbent = (committedIncumbent?.preTemplate.nominatedEntry?.identityKey ?? null) === nominatedEntryKey
+      ? committedIncumbent
+      : null;
     const run = this.lifecycle.begin(locus);
     try {
       run.guardCurrent(project.inputGeneration.currentnessGuardKey, project.inputGeneration);
+      const evaluation = appEvaluationAccess.forkSession();
       const candidate = new AureliaAppWorldProjectPass(this.support).constructAndEmit(
         this.store,
         run,
         project,
         appEvaluationAccess.generation,
-        appEvaluationAccess.forkSession(),
+        options.nominatedEntry == null
+          ? evaluation
+          : activateNominatedSemanticAppEntry(evaluation, options.nominatedEntry),
         typeSystemProjectAccess.generation,
         typeSystemProjectAccess.readProject(),
         conventionToolingEvaluationAccess,

@@ -62,6 +62,7 @@ import {
   type EvaluationModuleRecord,
 } from './module-graph.js';
 import type { EvaluationOpenSeam } from './seams.js';
+import type { StaticInvocationOccurrence } from './invocation.js';
 import {
   DefaultStaticEvaluationPolicy,
   type StaticEvaluationPolicy,
@@ -158,6 +159,8 @@ export class StaticProjectEvaluationSourceResult {
 export class StaticProjectEvaluationResult {
   private projectFrame: ProjectBootFrame;
   private readonly packageOriginsByModuleKey = new Map<string, ResolvedEvaluationModuleOrigin>();
+  /** Definitely reached invocations in one project-wide modeled execution order. */
+  readonly executionOrderInvocations: readonly StaticInvocationOccurrence[];
 
   constructor(
     /** Project frame whose TS/JS source files were evaluated. */
@@ -174,8 +177,12 @@ export class StaticProjectEvaluationResult {
     private readonly inputReadScope: SemanticRuntimeProjectInputReadScope | null = null,
     /** Typed upstream products consumed while constructing this evaluator graph. */
     private readonly upstreamReads: readonly ComputationRead[] = [],
+    /** Explicit execution overlay order; omitted for ordinary dependency-before-entry module evaluation. */
+    executionOrderInvocations: readonly StaticInvocationOccurrence[] | null = null,
   ) {
     this.projectFrame = project;
+    this.executionOrderInvocations = executionOrderInvocations
+      ?? deriveProjectExecutionOrderInvocations(sources, evaluationOrderModuleKeys);
     for (const source of sources) {
       if (source.packageOrigin == null) {
         continue;
@@ -217,6 +224,23 @@ export class StaticProjectEvaluationResult {
     ];
   }
 
+  /** Replace session-local source execution evidence while preserving the exact baseline input authority. */
+  withExecutionOverlay(
+    sources: readonly StaticProjectEvaluationSourceResult[],
+    executionOrderInvocations: readonly StaticInvocationOccurrence[],
+  ): StaticProjectEvaluationResult {
+    return new StaticProjectEvaluationResult(
+      this.project,
+      sources,
+      this.evaluationOrderModuleKeys,
+      this.profile,
+      this.graphOpenValues,
+      this.inputReadScope,
+      this.upstreamReads,
+      executionOrderInvocations,
+    );
+  }
+
   /** Rebind unchanged evaluator inputs to the current project generation without rebuilding evaluator values. */
   tryRebaseCurrentInputGeneration(
     project: ProjectBootFrame,
@@ -238,26 +262,70 @@ export class StaticProjectEvaluationResult {
     const runtimeHost = this.readEvaluatedSources()[0]?.evaluation.runtimeHost
       ?? DefaultStaticEvaluationRuntimeHost;
     const session = new StaticEvaluationSessionFork(runtimeHost);
+    const forkedSources = this.sources.map((source) => isEvaluatedProjectSource(source)
+      ? new StaticProjectEvaluationSourceResult(
+          source.admission,
+          source.moduleKey,
+          source.sourceFile,
+          session.forkModuleEvaluation(source.evaluation),
+          source.unresolvedModules,
+          source.origins,
+          source.packageOrigin,
+        )
+      : source);
+    const forkedInvocationsBySourceIdentity = new Map<StaticInvocationOccurrence, StaticInvocationOccurrence>();
+    for (let sourceIndex = 0; sourceIndex < this.sources.length; sourceIndex++) {
+      const source = this.sources[sourceIndex];
+      const forkedSource = forkedSources[sourceIndex];
+      if (!isEvaluatedProjectSource(source!) || !isEvaluatedProjectSource(forkedSource!)) {
+        continue;
+      }
+      for (let invocationIndex = 0; invocationIndex < source.evaluation.invocations.length; invocationIndex++) {
+        const invocation = source.evaluation.invocations[invocationIndex];
+        const forkedInvocation = forkedSource.evaluation.invocations[invocationIndex];
+        if (invocation != null && forkedInvocation != null) {
+          forkedInvocationsBySourceIdentity.set(invocation, forkedInvocation);
+        }
+      }
+    }
     return new StaticProjectEvaluationResult(
       this.project,
-      this.sources.map((source) => isEvaluatedProjectSource(source)
-        ? new StaticProjectEvaluationSourceResult(
-            source.admission,
-            source.moduleKey,
-            source.sourceFile,
-            session.forkModuleEvaluation(source.evaluation),
-            source.unresolvedModules,
-            source.origins,
-            source.packageOrigin,
-          )
-        : source),
+      forkedSources,
       this.evaluationOrderModuleKeys,
       this.profile,
       this.graphOpenValues.map((value) => session.forkValue(value)),
       this.inputReadScope,
       this.upstreamReads,
+      this.executionOrderInvocations.map((invocation) => {
+        const forked = forkedInvocationsBySourceIdentity.get(invocation);
+        if (forked == null) {
+          throw new Error('Static project evaluation fork lost a globally ordered invocation occurrence.');
+        }
+        return forked;
+      }),
     );
   }
+}
+
+function deriveProjectExecutionOrderInvocations(
+  sources: readonly StaticProjectEvaluationSourceResult[],
+  evaluationOrderModuleKeys: readonly string[],
+): readonly StaticInvocationOccurrence[] {
+  const evaluatedSourcesByModule = new Map(sources.filter(isEvaluatedProjectSource).map((source) => [
+    normalizeModuleKey(source.moduleKey),
+    source,
+  ]));
+  const indexedSources = new Set<EvaluatedProjectSource>();
+  const invocations: StaticInvocationOccurrence[] = [];
+  for (const moduleKey of evaluationOrderModuleKeys) {
+    const source = evaluatedSourcesByModule.get(normalizeModuleKey(moduleKey));
+    if (source == null || indexedSources.has(source)) {
+      continue;
+    }
+    indexedSources.add(source);
+    invocations.push(...source.evaluation.invocations);
+  }
+  return invocations;
 }
 
 export class StaticProjectEvaluationOptions {

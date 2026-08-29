@@ -59,6 +59,11 @@ import {
   semanticAppAnalysisDepthSatisfies,
 } from '../configuration/app-analysis.js';
 import {
+  normalizeSemanticAppNominatedEntry,
+  SemanticAppEntryActivationError,
+  type NormalizedSemanticAppNominatedEntry,
+} from '../configuration/nominated-app-entry.js';
+import {
   StaticProjectEvaluationComputationService,
   type StaticProjectEvaluationAccess,
   type StaticProjectEvaluationResult,
@@ -512,6 +517,7 @@ interface SemanticAppOpenPlan {
   readonly authoringTemplateSourceFiles: readonly string[];
   readonly authoringTemplateLimit: number | null;
   readonly telemetry: OpenSemanticAppOptions['telemetry'];
+  readonly nominatedEntry: NormalizedSemanticAppNominatedEntry | null;
 }
 
 /** One completed cache lookup handed only into the synchronous routed-answer transaction that performed it. */
@@ -2338,23 +2344,30 @@ export class SemanticRuntime {
       const includeAuthoringTemplates = options.includeAuthoringTemplates === true;
       const includeCompilerOccurrencePrecedents = options.includeCompilerOccurrencePrecedents === true;
       const sourceFilePath = normalizeSourceFilePathOption(options.sourceFilePath);
+      const nominatedEntrySourceFilePath = normalizeSourceFilePathOption(options.nominatedEntry?.sourceFilePath);
+      if (options.nominatedEntry != null && nominatedEntrySourceFilePath == null) {
+        throw new SemanticAppEntryActivationError('the nominated source path is empty.');
+      }
+      const projectSelectionSourceFilePath = sourceFilePath ?? nominatedEntrySourceFilePath;
       const requestedAuthoringSourceFiles = normalizeAuthoringTemplateSourceFiles(options.authoringTemplateSourceFiles);
       const project = options.projectKey != null
         ? this.captureProject(selectProject(this.workspace.projects, options.projectKey), validationScope)
-        : sourceFilePath == null
+        : projectSelectionSourceFilePath == null
           ? this.selectDefaultProject(validationScope)
-          : this.captureProject(this.selectProjectForSourceFile(sourceFilePath), validationScope);
+          : this.captureProject(this.selectProjectForSourceFile(projectSelectionSourceFilePath), validationScope);
       const sourcePathReadScope = project.inputGeneration.createReadScope(
         `semantic-app-open-source-path:${this.nextAnalysisReadScopeOrdinal++}`,
       );
       let projectSourceFilePath: string | null;
+      let projectNominatedEntrySourceFilePath: string | null;
       let projectAuthoringSourceFiles: readonly string[];
       try {
-        ({ projectSourceFilePath, projectAuthoringSourceFiles } = project.inputGeneration.withReadScope(
+        ({ projectSourceFilePath, projectNominatedEntrySourceFilePath, projectAuthoringSourceFiles } = project.inputGeneration.withReadScope(
           sourcePathReadScope,
           () => {
             for (const requestedSourcePath of new Set([
               ...(sourceFilePath == null ? [] : [sourceFilePath]),
+              ...(nominatedEntrySourceFilePath == null ? [] : [nominatedEntrySourceFilePath]),
               ...requestedAuthoringSourceFiles,
               ...sourceFilePaths,
             ])) {
@@ -2364,6 +2377,9 @@ export class SemanticRuntime {
               projectSourceFilePath: sourceFilePath == null
                 ? null
                 : canonicalProjectSourceFilePath(project, sourceFilePath),
+              projectNominatedEntrySourceFilePath: nominatedEntrySourceFilePath == null
+                ? null
+                : canonicalProjectSourceFilePath(project, nominatedEntrySourceFilePath),
               projectAuthoringSourceFiles: canonicalProjectSourceFilePaths(project, requestedAuthoringSourceFiles),
             };
           },
@@ -2379,6 +2395,12 @@ export class SemanticRuntime {
       const authoringTemplateLimit = includeAuthoringTemplates
         ? normalizeAuthoringTemplateLimit(options.authoringTemplateLimit)
         : 0;
+      const nominatedEntry = options.nominatedEntry == null
+        ? null
+        : normalizeSemanticAppNominatedEntry(
+            projectNominatedEntrySourceFilePath as string,
+            options.nominatedEntry,
+          );
       return {
         project,
         planningReads: Object.freeze(
@@ -2390,6 +2412,7 @@ export class SemanticRuntime {
         authoringTemplateSourceFiles,
         authoringTemplateLimit,
         telemetry: options.telemetry ?? null,
+        nominatedEntry,
       };
     } finally {
       const active = this.activePlanningReadCollectors.pop();
@@ -2415,6 +2438,7 @@ export class SemanticRuntime {
       plan.authoringTemplateSourceFiles,
       plan.authoringTemplateLimit,
       plan.telemetry,
+      plan.nominatedEntry,
       transaction?.token,
       cachePreflight,
     );
@@ -2483,6 +2507,7 @@ export class SemanticRuntime {
     authoringTemplateSourceFiles: readonly string[],
     authoringTemplateLimit: number | null,
     telemetry: OpenSemanticAppOptions['telemetry'] = null,
+    nominatedEntry: NormalizedSemanticAppNominatedEntry | null = null,
     transactionToken?: object,
     cachePreflight: SemanticAppCachePreflight | null = null,
   ): SemanticApp {
@@ -2504,6 +2529,7 @@ export class SemanticRuntime {
           includeCompilerOccurrencePrecedents,
           authoringTemplateSourceFiles,
           authoringTemplateLimit,
+          nominatedEntry,
         )
       : cachePreflight.cachedApp;
     if (existing != null) {
@@ -2523,6 +2549,7 @@ export class SemanticRuntime {
       authoringTemplateSourceFiles,
       authoringTemplateLimit,
       telemetry,
+      nominatedEntry,
     }).commit();
     if (result.commit.state !== ComputationCommitState.Committed || result.committedGeneration == null) {
       throw computationCommitCurrentnessError(
@@ -2543,6 +2570,7 @@ export class SemanticRuntime {
         includeCompilerOccurrencePrecedents,
         authoringTemplateSourceFileCount: authoringTemplateSourceFiles.length,
         authoringTemplateLimit,
+        nominatedEntryIdentityKey: nominatedEntry?.identityKey ?? null,
         kernelMarker,
       },
     );
@@ -2555,6 +2583,7 @@ export class SemanticRuntime {
         includeCompilerOccurrencePrecedents,
         authoringTemplateSourceFiles,
         authoringTemplateLimit,
+        nominatedEntry?.identityKey ?? null,
       ),
       app,
     );
@@ -2575,6 +2604,7 @@ export class SemanticRuntime {
         plan.includeCompilerOccurrencePrecedents,
         plan.authoringTemplateSourceFiles,
         plan.authoringTemplateLimit,
+        plan.nominatedEntry,
         validationScope,
       ),
     });
@@ -2588,6 +2618,7 @@ export class SemanticRuntime {
     includeCompilerOccurrencePrecedents: boolean,
     authoringTemplateSourceFiles: readonly string[],
     authoringTemplateLimit: number | null,
+    nominatedEntry: NormalizedSemanticAppNominatedEntry | null,
     validationScope?: ComputationReadValidationScope,
   ): SemanticApp | null {
     const exactCacheKey = appCacheKey(
@@ -2598,6 +2629,7 @@ export class SemanticRuntime {
       includeCompilerOccurrencePrecedents,
       authoringTemplateSourceFiles,
       authoringTemplateLimit,
+      nominatedEntry?.identityKey ?? null,
     );
     const exact = this.appsByCacheKey.get(exactCacheKey);
     if (exact?.isCurrent(validationScope) === true) {
@@ -2614,6 +2646,7 @@ export class SemanticRuntime {
           includeCompilerOccurrencePrecedents,
           authoringTemplateSourceFiles,
           authoringTemplateLimit,
+          nominatedEntry?.identityKey ?? null,
           validationScope,
         )
       ) {
@@ -3910,6 +3943,7 @@ export class SemanticApp {
     includeCompilerOccurrencePrecedents: boolean,
     authoringTemplateSourceFiles: readonly string[],
     authoringTemplateLimit: number | null,
+    nominatedEntryIdentityKey: string | null,
     validationScope?: ComputationReadValidationScope,
   ): boolean {
     if (
@@ -3918,6 +3952,7 @@ export class SemanticApp {
       || !semanticAppAnalysisDepthSatisfies(this.cacheRequest.analysisDepth, requestedDepth)
       || (includeAuthoringTemplates && !this.cacheRequest.includeAuthoringTemplates)
       || (includeCompilerOccurrencePrecedents && !this.cacheRequest.includeCompilerOccurrencePrecedents)
+      || this.cacheRequest.nominatedEntryIdentityKey !== nominatedEntryIdentityKey
       || !this.isCurrent(validationScope)
     ) {
       return false;
@@ -6429,6 +6464,7 @@ interface SemanticAppCacheRequest {
   readonly includeCompilerOccurrencePrecedents: boolean;
   readonly authoringTemplateSourceFileCount: number;
   readonly authoringTemplateLimit: number | null;
+  readonly nominatedEntryIdentityKey: string | null;
   readonly kernelMarker: KernelStoreLifetimeMarker;
 }
 
@@ -7252,6 +7288,7 @@ function appCacheKey(
   includeCompilerOccurrencePrecedents: boolean,
   authoringTemplateSourceFiles: readonly string[],
   authoringTemplateLimit: number | null,
+  nominatedEntryIdentityKey: string | null,
 ): string {
   return JSON.stringify([
     projectKey,
@@ -7261,6 +7298,7 @@ function appCacheKey(
     includeCompilerOccurrencePrecedents,
     authoringTemplateSourceFiles,
     authoringTemplateLimit,
+    nominatedEntryIdentityKey,
   ]);
 }
 
