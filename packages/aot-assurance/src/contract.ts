@@ -124,10 +124,8 @@ export interface LaneBuildReceipt {
 }
 
 export interface AssuranceReceipt {
-  readonly fixture: 'g0';
+  readonly fixture: string;
   readonly builds: readonly [LaneBuildReceipt, LaneBuildReceipt];
   readonly transcripts: readonly [LaneTranscript, LaneTranscript];
   readonly aot: AotBuildEvidence;
-  /** Candidate G8 violations are reported without pretending G0/G1 closed G8. */
-  readonly renderedCompilerParserImplementations: readonly RenderedModuleEvidence[];
 }

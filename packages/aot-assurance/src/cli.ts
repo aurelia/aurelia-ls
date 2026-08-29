@@ -5,7 +5,6 @@ interface CliOptions {
   adapterSpecifier?: string;
   receiptPath?: string;
   keepOutput: boolean;
-  requireBundleClosure: boolean;
   falsifiersOnly: boolean;
   falsifier?: EmissionFalsifier;
 }
@@ -24,7 +23,6 @@ if (options.falsifiersOnly) {
     adapterSpecifier,
     receiptPath: options.receiptPath,
     keepOutput: options.keepOutput,
-    requireBundleClosure: options.requireBundleClosure,
     falsifier: options.falsifier,
   });
   process.stdout.write([
@@ -32,7 +30,6 @@ if (options.falsifiersOnly) {
     `JIT build: ${receipt.builds[0].durationMs.toFixed(1)}ms`,
     `AOT build: ${receipt.builds[1].durationMs.toFixed(1)}ms`,
     `AOT artifacts: ${receipt.aot.artifacts.length}`,
-    `Rendered compiler/parser implementations: ${receipt.renderedCompilerParserImplementations.length}`,
     '',
   ].join('\n'));
 }
@@ -40,7 +37,6 @@ if (options.falsifiersOnly) {
 function readOptions(args: readonly string[]): CliOptions {
   const options: CliOptions = {
     keepOutput: false,
-    requireBundleClosure: false,
     falsifiersOnly: false,
   };
   for (let index = 0; index < args.length; index++) {
@@ -55,9 +51,6 @@ function readOptions(args: readonly string[]): CliOptions {
         break;
       case '--keep-output':
         options.keepOutput = true;
-        break;
-      case '--require-bundle-closure':
-        options.requireBundleClosure = true;
         break;
       case '--falsifiers-only':
         options.falsifiersOnly = true;

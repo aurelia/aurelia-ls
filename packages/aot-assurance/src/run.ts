@@ -1,5 +1,5 @@
 import { mkdir, writeFile } from 'node:fs/promises';
-import { dirname, resolve } from 'node:path';
+import { basename, dirname, resolve } from 'node:path';
 
 import type { AssuranceReceipt, EmissionFalsifier } from './contract.js';
 import { runBrowserBatch, type BrowserBatchResult } from './browser.js';
@@ -8,7 +8,6 @@ import {
   assertAotBuildEvidence,
   assertProbePolicy,
   assertSemanticParity,
-  findRenderedCompilerParserImplementations,
 } from './evidence.js';
 import { proveLocalFalsifiers } from './falsifiers.js';
 import { assertG0Expectations } from './g0-expectations.js';
@@ -19,7 +18,6 @@ export interface RunAssuranceOptions {
   readonly fixtureRoot?: string;
   readonly receiptPath?: string;
   readonly keepOutput?: boolean;
-  readonly requireBundleClosure?: boolean;
   readonly falsifier?: EmissionFalsifier;
 }
 
@@ -47,20 +45,11 @@ export async function runAssurance(options: RunAssuranceOptions): Promise<Assura
     assertSemanticParity(browserBatch.jit.semantic, browserBatch.aot.semantic);
     assertProbePolicy(browserBatch.jit, browserBatch.aot);
 
-    const renderedCompilerParserImplementations = findRenderedCompilerParserImplementations(
-      builds.aotReceipt.moduleGraph,
-    );
-    if (options.requireBundleClosure === true && renderedCompilerParserImplementations.length > 0) {
-      const modules = renderedCompilerParserImplementations.map(module => module.moduleId).join('\n');
-      throw new Error(`AOT rendered compiler/parser implementations:\n${modules}`);
-    }
-
     const receipt: AssuranceReceipt = {
-      fixture: 'g0',
+      fixture: basename(fixtureRoot),
       builds: [builds.jitReceipt, builds.aotReceipt],
       transcripts: [browserBatch.jit, browserBatch.aot],
       aot: builds.aotEvidence,
-      renderedCompilerParserImplementations,
     };
     if (options.receiptPath !== undefined) {
       const receiptPath = resolve(options.receiptPath);

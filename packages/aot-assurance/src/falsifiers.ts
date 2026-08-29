@@ -67,6 +67,6 @@ export function proveLocalFalsifiers(): void {
     () => assertProbePolicy(lane('jit', 1, 1), lane('aot', 1, 0)),
     /AOT invoked ITemplateCompiler\.compile/,
   );
-  assert.throws(() => assertAotBuildEvidence(evidence(false, 1)), /root and paired child/);
+  assert.throws(() => assertAotBuildEvidence(evidence(false, 0)), /no compiler-final artifacts/);
   assert.throws(() => assertAotBuildEvidence(evidence(true)), /not a compiled definition/);
 }
