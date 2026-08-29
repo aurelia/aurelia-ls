@@ -19,7 +19,7 @@
   <let doubled.bind="count * 2"></let>
   <output id="doubled">${doubled}</output>
   <p id="conditional" if.bind="visible">visible:${message}</p>
-  <ul><li class="item" repeat.for="item of items">${item}</li></ul>
+  <ul><li class="item" repeat.for="item of items; key.bind: item">${item}</li></ul>
 
   <g0-child label.bind="message" child-change.trigger="fromChild($event.detail)">
     <span id="projection" au-slot="detail">${message}:${count}</span>

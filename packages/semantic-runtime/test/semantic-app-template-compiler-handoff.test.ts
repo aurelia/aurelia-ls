@@ -122,7 +122,7 @@ describe('semantic app template compiler handoff', () => {
     overlay.write(templateFileName, [
       '<main>',
       '  <div data-id.attr="id" width.style="width"></div>',
-      '  <div repeat.for="item of items; key.bind: item.id">${item.name}</div>',
+      '  <div repeat.for="item of items; key.bind: item.id; contextual: true">${item.name}</div>',
       '</main>',
     ].join('\n'));
     overlay.write(componentFileName, [
@@ -177,6 +177,10 @@ describe('semantic app template compiler handoff', () => {
             type: TemplateCompilerFrameworkInstructionType.MultiAttr,
             to: 'key',
             command: 'bind',
+          }, {
+            type: TemplateCompilerFrameworkInstructionType.MultiAttr,
+            to: 'contextual',
+            command: null,
           }],
         }],
       });
@@ -192,6 +196,12 @@ describe('semantic app template compiler handoff', () => {
           type: TemplateCompilerFrameworkInstructionType.MultiAttr,
           to: 'key',
           command: 'bind',
+        }),
+        expect.objectContaining({
+          type: TemplateCompilerFrameworkInstructionType.MultiAttr,
+          to: 'contextual',
+          command: null,
+          value: 'true',
         }),
       ]);
     } finally {
