@@ -33,10 +33,12 @@ export {
   AotSourceTransformEmitter,
   AotSourceTransformError,
   type AotSourceTransformArtifact,
+  type AotSourceTransformConfigurationPlan,
   type AotSourceTransformErrorCode,
   type AotSourceTransformRequest,
   type AotSourceTransformResourcePlan,
   type AotSourceTransformSlice,
+  type AotTransformedConfiguration,
   type AotTransformedResource,
 } from './source-transform.js';
 export {

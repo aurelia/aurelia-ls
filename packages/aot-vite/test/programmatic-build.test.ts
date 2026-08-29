@@ -21,8 +21,10 @@ describe("aureliaAot programmatic Vite 8 build", () => {
         code: [
           "import { applyProof as __applyAotProof } from 'virtual:aurelia-aot/runtime-proof';",
           "import __aotPayload from 'virtual:aurelia-aot/payload/programmatic-proof';",
+          "import { AotConfiguration as __aotConfiguration } from 'virtual:aurelia-aot/configuration/programmatic-proof';",
           code,
           "globalThis.__aureliaAotCarrierFixture = __applyAotProof(__aotPayload);",
+          "globalThis.__aureliaAotConfigurationFixture = __aotConfiguration;",
         ].join("\n"),
         map: null,
         digest: "programmatic-source-transform",
@@ -36,6 +38,14 @@ describe("aureliaAot programmatic Vite 8 build", () => {
           carrierEnd: 0,
           payloadDigest: "programmatic-payload",
           payloadSpecifier: "virtual:aurelia-aot/payload/programmatic-proof",
+        }],
+        configurations: [{
+          valueStart: 0,
+          valueEnd: 1,
+          moduleSpecifier: "virtual:aurelia-aot/configuration/programmatic-proof",
+          expectedDigest: "programmatic-configuration",
+          exportName: "AotConfiguration",
+          localName: "__aotConfiguration",
         }],
       };
     });
@@ -54,6 +64,13 @@ describe("aureliaAot programmatic Vite 8 build", () => {
             code: "export default 'programmatic-payload';",
             map: null,
             digest: "programmatic-payload",
+          };
+        case "virtual:aurelia-aot/configuration/programmatic-proof":
+          return {
+            specifier,
+            code: "export const AotConfiguration = 'build-specific-configuration';",
+            map: null,
+            digest: "programmatic-configuration",
           };
         default:
           return null;
@@ -106,10 +123,11 @@ describe("aureliaAot programmatic Vite 8 build", () => {
     expect(openBuild).toHaveBeenCalledTimes(1);
     expect(chunk?.code).toContain("aot-vite-programmatic-proof");
     expect(chunk?.code).toContain("carrier-neutral:");
+    expect(chunk?.code).toContain("build-specific-configuration");
     expect(transformSource).toHaveBeenCalledWith(expect.objectContaining({
       sourcePath: expect.stringMatching(/main\.js$/u),
     }));
-    expect(virtualModuleFor).toHaveBeenCalledTimes(2);
+    expect(virtualModuleFor).toHaveBeenCalledTimes(3);
     expect(receipt?.artifacts).toHaveLength(2);
     expect(receipt?.artifacts).toContainEqual(expect.objectContaining({
       digest: "programmatic-proof",
@@ -129,6 +147,10 @@ describe("aureliaAot programmatic Vite 8 build", () => {
       expect.objectContaining({
         id: expect.stringContaining("virtual:aurelia-aot/payload/programmatic-proof"),
         renderedExports: ["default"],
+      }),
+      expect.objectContaining({
+        id: expect.stringContaining("virtual:aurelia-aot/configuration/programmatic-proof"),
+        renderedExports: ["AotConfiguration"],
       }),
     ]));
   });

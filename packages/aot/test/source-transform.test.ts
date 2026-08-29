@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   AotSourceTransformEmitter,
+  type AotSourceTransformConfigurationPlan,
   type AotSourceTransformResourcePlan,
 } from '../src/source-transform.js';
 
@@ -130,6 +131,136 @@ describe('AOT source transform', () => {
       resources: [plan],
     })).toThrow(expect.objectContaining({ code: 'AOT_SOURCE_STALE', resourceKey: 'app' }));
   });
+
+  it('replaces configuration values without importing the resource patch runtime', () => {
+    const sourcePath = 'C:/app/src/main.ts';
+    const code = [
+      "import { Aurelia, StandardConfiguration } from '@aurelia/runtime-html';",
+      'new Aurelia().register(StandardConfiguration).app({ component: App });',
+    ].join('\n');
+    const plan = configuration(code, 'StandardConfiguration', 'virtual:aurelia-aot/configuration/build-a');
+
+    const artifact = new AotSourceTransformEmitter().emit({
+      sourcePath,
+      code,
+      resources: [],
+      configurations: [plan],
+    });
+
+    expect(artifact?.code).toContain(
+      'import { AotConfiguration as __auAotConfiguration0 } from "virtual:aurelia-aot/configuration/build-a";',
+    );
+    expect(artifact?.code).toContain('new Aurelia().register(__auAotConfiguration0).app({ component: App });');
+    expect(artifact?.runtimeModuleSpecifier).toBeNull();
+    expect(artifact?.resources).toEqual([]);
+    expect(artifact?.configurations).toEqual([{
+      valueStart: plan.value.start,
+      valueEnd: plan.value.end,
+      moduleSpecifier: plan.moduleSpecifier,
+      expectedDigest: plan.expectedDigest,
+      exportName: plan.exportName,
+      localName: '__auAotConfiguration0',
+    }]);
+    expect(artifact?.map.sources).toEqual([sourcePath]);
+    expect(artifact?.map.sourcesContent).toEqual([code]);
+    expect(artifact?.map.mappings.length).toBeGreaterThan(0);
+  });
+
+  it('composes configuration replacement with nested resource carrier edits', () => {
+    const child = "CustomElement.define({ name: 'child', template: 'child' })";
+    const parent = `CustomElement.define({ name: 'app', template: '<child></child>', dependencies: [${child}] }, class App {})`;
+    const code = [
+      "import { Aurelia, CustomElement, StandardConfiguration } from '@aurelia/runtime-html';",
+      `const App = ${parent};`,
+      'new Aurelia().register(StandardConfiguration).app({ component: App });',
+    ].join('\n');
+    const parentStart = code.indexOf(parent);
+    const childStart = code.indexOf(child, parentStart);
+
+    const artifact = new AotSourceTransformEmitter().emit({
+      sourcePath: 'C:/app/src/main.ts',
+      code,
+      resources: [
+        resource({
+          resourceKey: 'app',
+          variant: 'app:world',
+          name: 'app',
+          carrierKind: ResourceCarrierKind.DefineCall,
+          carrier: { start: parentStart, end: parentStart + parent.length, oldText: parent },
+        }),
+        resource({
+          resourceKey: 'child',
+          variant: 'child:world',
+          name: 'child',
+          carrierKind: ResourceCarrierKind.DefineCall,
+          carrier: { start: childStart, end: childStart + child.length, oldText: child },
+        }),
+      ],
+      configurations: [configuration(code, 'StandardConfiguration')],
+    });
+
+    expect(artifact?.code).toContain(
+      "const App = __auAotApply(CustomElement.define({ name: 'app', template: '<child></child>', dependencies: [__auAotApply(CustomElement.define({ name: 'child', template: 'child' }), __auAotPatch1)] }, class App {}), __auAotPatch0);",
+    );
+    expect(artifact?.code).toContain('register(__auAotConfiguration0)');
+    expect(artifact?.runtimeModuleSpecifier).toBe('virtual:aurelia-aot/runtime');
+    expect(artifact?.resources).toHaveLength(2);
+    expect(artifact?.configurations).toHaveLength(1);
+    expect(artifact?.map.sourcesContent).toEqual([code]);
+  });
+
+  it('imports multiple build-specific configuration modules with collision-safe bindings', () => {
+    const code = [
+      "import { StandardConfiguration } from '@aurelia/runtime-html';",
+      'const __auAotConfiguration0 = false;',
+      'const first = StandardConfiguration;',
+      'const second = StandardConfiguration;',
+    ].join('\n');
+    const first = code.indexOf('StandardConfiguration', code.indexOf('const first'));
+    const second = code.indexOf('StandardConfiguration', code.indexOf('const second'));
+    const expression = 'StandardConfiguration';
+
+    const artifact = new AotSourceTransformEmitter().emit({
+      sourcePath: 'C:/app/src/configurations.ts',
+      code,
+      resources: [],
+      configurations: [
+        {
+          value: { start: first, end: first + expression.length, oldText: expression },
+          moduleSpecifier: 'virtual:aurelia-aot/configuration/first',
+          expectedDigest: 'digest:first',
+          exportName: 'AotConfiguration',
+        },
+        {
+          value: { start: second, end: second + expression.length, oldText: expression },
+          moduleSpecifier: 'virtual:aurelia-aot/configuration/second',
+          expectedDigest: 'digest:second',
+          exportName: 'BuildConfiguration',
+        },
+      ],
+    });
+
+    expect(artifact?.code).toContain('AotConfiguration as __auAotConfiguration01');
+    expect(artifact?.code).toContain('BuildConfiguration as __auAotConfiguration1');
+    expect(artifact?.code).toContain('const first = __auAotConfiguration01;');
+    expect(artifact?.code).toContain('const second = __auAotConfiguration1;');
+    expect(artifact?.configurations.map((entry) => entry.moduleSpecifier)).toEqual([
+      'virtual:aurelia-aot/configuration/first',
+      'virtual:aurelia-aot/configuration/second',
+    ]);
+  });
+
+  it('refuses a stale configuration value slice', () => {
+    const code = 'bootstrap(StandardConfiguration);';
+    const plan = configuration(code, 'StandardConfiguration');
+
+    expect(() => new AotSourceTransformEmitter().emit({
+      sourcePath: 'C:/app/src/main.ts',
+      code: 'bootstrap(ChangedConfiguration);',
+      resources: [],
+      configurations: [plan],
+    })).toThrow(expect.objectContaining({ code: 'AOT_SOURCE_STALE', resourceKey: null }));
+  });
 });
 
 function resource(input: {
@@ -158,4 +289,19 @@ function slice(code: string, text: string): { readonly start: number; readonly e
   const start = code.indexOf(text);
   if (start < 0) throw new Error(`Missing source slice '${text}'.`);
   return { start, end: start + text.length, oldText: text };
+}
+
+function configuration(
+  code: string,
+  oldText: string,
+  moduleSpecifier = 'virtual:aurelia-aot/configuration/proof',
+): AotSourceTransformConfigurationPlan {
+  const start = code.lastIndexOf(oldText);
+  if (start < 0) throw new Error(`Missing configuration source slice '${oldText}'.`);
+  return {
+    value: { start, end: start + oldText.length, oldText },
+    moduleSpecifier,
+    expectedDigest: `digest:${moduleSpecifier}`,
+    exportName: 'AotConfiguration',
+  };
 }

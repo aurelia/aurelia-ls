@@ -87,6 +87,75 @@ describe("aureliaAot Vite preset", () => {
     expect(loaded).toEqual({ code: "export const template = 1;", map: null });
   });
 
+  it("forwards an explicit nominated app entry as structural build input", async () => {
+    const openBuild = vi.fn(async () => ({
+      artifactFor: async ({ sourcePath }: { readonly sourcePath: string }) => artifact(sourcePath, "html"),
+    }));
+    const nominatedEntry = {
+      sourceFilePath: "src/main.ts",
+      callable: { kind: "export" as const, name: "start" },
+      arguments: [
+        { kind: "host-environment" as const, path: "benchmark.host" },
+        {
+          kind: "array" as const,
+          elements: [{ kind: "primitive" as const, value: 10 }],
+        },
+      ],
+    };
+    const preset = aureliaAot({ provider: { openBuild }, nominatedEntry });
+    const guard = requiredPlugin(preset, "aurelia-aot:guard");
+    const sources = requiredPlugin(preset, "aurelia-aot:sources");
+    const context = pluginContext();
+
+    await invoke(guard, "configResolved", undefined, resolvedConfig());
+    await invoke(sources, "buildStart", context);
+
+    expect(openBuild).toHaveBeenCalledWith({
+      root: "C:/app",
+      mode: "production",
+      environmentName: "client",
+      sourcemap: true,
+      nominatedEntry,
+    });
+  });
+
+  it("does not transform queried TypeScript and JavaScript module variants", async () => {
+    const transformSource = vi.fn(async () => null);
+    const preset = aureliaAot({
+      provider: {
+        async openBuild() {
+          return {
+            artifactFor: async ({ sourcePath }) => artifact(sourcePath, "html"),
+            transformSource,
+          };
+        },
+      },
+    });
+    const guard = requiredPlugin(preset, "aurelia-aot:guard");
+    const sources = requiredPlugin(preset, "aurelia-aot:sources");
+    const context = pluginContext();
+    await invoke(guard, "configResolved", undefined, resolvedConfig());
+    await invoke(sources, "buildStart", context);
+
+    for (const id of ["C:/app/component.ts?raw", "C:/app/component.ts?url", "C:/app/component.js#worker"]) {
+      expect(await invoke(sources, "transform", context, "export const value = 1;", id, { ssr: false })).toBeNull();
+    }
+    await invoke(
+      sources,
+      "transform",
+      context,
+      "export const value = 1;",
+      "C:/app/component.ts",
+      { ssr: false },
+    );
+
+    expect(transformSource).toHaveBeenCalledTimes(1);
+    expect(transformSource).toHaveBeenCalledWith({
+      sourcePath: "C:/app/component.ts",
+      code: "export const value = 1;",
+    });
+  });
+
   it("transforms authored modules before conventions and strictly owns returned virtual modules", async () => {
     const sourceMap = {
       version: 3,
@@ -168,6 +237,59 @@ describe("aureliaAot Vite preset", () => {
       map: expect.objectContaining({ file: "payload.js" }),
     });
     expect(virtualModuleFor).toHaveBeenCalledTimes(2);
+  });
+
+  it("claims configuration modules directly from transformed-source evidence and enforces their digest", async () => {
+    const transformSource = vi.fn(async ({ sourcePath, code }) => configurationSourceTransform(sourcePath, code));
+    const virtualModuleFor = vi.fn(async ({ specifier }) => ({
+      specifier,
+      code: "export const AotConfiguration = {};",
+      map: null,
+      digest: "configuration-digest",
+    }));
+    const preset = aureliaAot({
+      provider: {
+        async openBuild() {
+          return {
+            artifactFor: async ({ sourcePath }) => artifact(sourcePath, "html"),
+            transformSource,
+            virtualModuleFor,
+          };
+        },
+      },
+    });
+    const guard = requiredPlugin(preset, "aurelia-aot:guard");
+    const sources = requiredPlugin(preset, "aurelia-aot:sources");
+    const context = pluginContext();
+    await invoke(guard, "configResolved", undefined, resolvedConfig());
+    await invoke(sources, "buildStart", context);
+    await invoke(sources, "transform", context, "bootstrap(StandardConfiguration);", "C:/app/main.ts", { ssr: false });
+
+    const resolution = await invoke(
+      sources,
+      "resolveId",
+      context,
+      "virtual:aurelia-aot/configuration/proof",
+      "C:/app/main.ts",
+      { attributes: {}, isEntry: false },
+    ) as { readonly id: string };
+    expect(resolution.id).toBe("\0aurelia-aot:virtual:aurelia-aot/configuration/proof");
+    expect(await invoke(sources, "load", context, resolution.id, { ssr: false })).toEqual({
+      code: "export const AotConfiguration = {};",
+      map: null,
+    });
+    expect(virtualModuleFor).toHaveBeenCalledWith({
+      specifier: "virtual:aurelia-aot/configuration/proof",
+    });
+
+    virtualModuleFor.mockResolvedValueOnce({
+      specifier: "virtual:aurelia-aot/configuration/proof",
+      code: "export const AotConfiguration = {};",
+      map: null,
+      digest: "stale-configuration-digest",
+    });
+    await expect(invoke(sources, "load", context, resolution.id, { ssr: false }))
+      .rejects.toMatchObject({ code: "AOT_VITE_INVALID_ARTIFACT" });
   });
 
   it("fails closed when a transformed source has no virtual-module session port", async () => {
@@ -453,6 +575,29 @@ function sourceTransform(
     digest: "source-transform-digest",
     runtimeModuleSpecifier: "virtual:aurelia-aot/runtime-proof",
     resources,
+    configurations: [],
+  };
+}
+
+function configurationSourceTransform(sourcePath: string, sourceCode: string): AotSourceTransformArtifact {
+  return {
+    sourcePath,
+    code: [
+      "import { AotConfiguration as __aotConfiguration } from 'virtual:aurelia-aot/configuration/proof';",
+      sourceCode.replace("StandardConfiguration", "__aotConfiguration"),
+    ].join("\n"),
+    map: null,
+    digest: "configuration-source-transform",
+    runtimeModuleSpecifier: null,
+    resources: [],
+    configurations: [{
+      valueStart: sourceCode.indexOf("StandardConfiguration"),
+      valueEnd: sourceCode.indexOf("StandardConfiguration") + "StandardConfiguration".length,
+      moduleSpecifier: "virtual:aurelia-aot/configuration/proof",
+      expectedDigest: "configuration-digest",
+      exportName: "AotConfiguration",
+      localName: "__aotConfiguration",
+    }],
   };
 }
 

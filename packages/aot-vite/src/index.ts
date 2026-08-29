@@ -13,6 +13,7 @@ import type {
   AotReceiptArtifact,
   AotSourceTransformArtifact,
   AotTemplateArtifact,
+  AotTransformedConfiguration,
   AotTransformedResource,
   AotVirtualModuleArtifact,
   AureliaAotOptions,
@@ -38,11 +39,15 @@ export type {
   AotReceiptOptions,
   AotReceiptRenderedModule,
   AotExistingRawSourceMap,
+  AotNominatedEntry,
+  AotNominatedEntryArgument,
+  AotNominatedEntryCallable,
   AotSourceMapInput,
   AotSourceTransformArtifact,
   AotSourceTransformRequest,
   AotTemplateArtifact,
   AotTemplateRequest,
+  AotTransformedConfiguration,
   AotTransformedResource,
   AotVirtualModuleArtifact,
   AotVirtualModuleRequest,
@@ -63,7 +68,7 @@ const authoredModuleExtension = /\.[cm]?[jt]sx?$/iu;
 interface VirtualModuleClaim {
   readonly specifier: string;
   readonly sourcePath: string;
-  readonly kind: "runtime" | "payload";
+  readonly kind: "runtime" | "payload" | "configuration";
   readonly expectedDigest: string | undefined;
   readonly compilerVariantKey: string | undefined;
 }
@@ -172,15 +177,20 @@ export function aureliaAot(options: AureliaAotOptions): Plugin[] {
         );
       }
       recordSourceTransform(state, artifact);
-      claimVirtualModule(state, {
-        specifier: artifact.runtimeModuleSpecifier,
-        sourcePath,
-        kind: "runtime",
-        expectedDigest: undefined,
-        compilerVariantKey: undefined,
-      });
+      if (artifact.runtimeModuleSpecifier != null) {
+        claimVirtualModule(state, {
+          specifier: artifact.runtimeModuleSpecifier,
+          sourcePath,
+          kind: "runtime",
+          expectedDigest: undefined,
+          compilerVariantKey: undefined,
+        });
+      }
       for (const resource of artifact.resources) {
         claimTransformedResource(state, artifact, resource);
+      }
+      for (const configuration of artifact.configurations) {
+        claimTransformedConfiguration(state, artifact, configuration);
       }
 
       return {
@@ -405,6 +415,7 @@ function startBuildSession(
     mode: resolved.mode,
     environmentName: environment.name,
     sourcemap: environment.config.build.sourcemap,
+    ...(options.nominatedEntry === undefined ? {} : { nominatedEntry: options.nominatedEntry }),
   });
 }
 
@@ -427,8 +438,10 @@ function authoredSourcePath(id: string): string | null {
     return null;
   }
   const queryAt = id.search(/[?#]/u);
-  const sourcePath = queryAt < 0 ? id : id.slice(0, queryAt);
-  return authoredModuleExtension.test(sourcePath) ? sourcePath : null;
+  if (queryAt >= 0) {
+    return null;
+  }
+  return authoredModuleExtension.test(id) ? id : null;
 }
 
 function resolvedVirtualId(specifier: string): string {
@@ -485,6 +498,20 @@ function claimTransformedResource(
     );
   }
   state.artifacts.set(key, receipt);
+}
+
+function claimTransformedConfiguration(
+  state: EnvironmentState,
+  artifact: AotSourceTransformArtifact,
+  configuration: AotTransformedConfiguration,
+): void {
+  claimVirtualModule(state, {
+    specifier: configuration.moduleSpecifier,
+    sourcePath: artifact.sourcePath,
+    kind: "configuration",
+    expectedDigest: configuration.expectedDigest,
+    compilerVariantKey: undefined,
+  });
 }
 
 function claimVirtualModule(state: EnvironmentState, claim: VirtualModuleClaim): void {
@@ -611,9 +638,24 @@ function validateSourceTransformArtifact(
   if (artifact.map === undefined) {
     throw invalidArtifact(sourcePath, "omitted the authored-source transform map");
   }
-  assertVirtualSpecifier(artifact.runtimeModuleSpecifier, sourcePath, "runtime");
+  if (
+    !isArrayValue(artifact.resources)
+    || !isArrayValue(artifact.configurations)
+  ) {
+    throw invalidArtifact(sourcePath, "omitted authored-source transform evidence");
+  }
+  if (artifact.resources.length === 0 && artifact.configurations.length === 0) {
+    throw invalidArtifact(sourcePath, "returned an authored-source transform without resources or configurations");
+  }
   if (artifact.resources.length === 0) {
-    throw invalidArtifact(sourcePath, "returned an authored-source transform without resources");
+    if (artifact.runtimeModuleSpecifier !== null) {
+      throw invalidArtifact(sourcePath, "returned a compiler-patch runtime for a configuration-only transform");
+    }
+  } else {
+    if (artifact.runtimeModuleSpecifier == null) {
+      throw invalidArtifact(sourcePath, "omitted the compiler-patch runtime for transformed resources");
+    }
+    assertVirtualSpecifier(artifact.runtimeModuleSpecifier, sourcePath, "runtime");
   }
 
   const resourceKeys = new Set<string>();
@@ -637,6 +679,10 @@ function validateSourceTransformArtifact(
     compilerVariantKeys.add(resource.compilerVariantKey);
     payloadSpecifiers.add(resource.payloadSpecifier);
   }
+
+  for (const configuration of artifact.configurations) {
+    validateTransformedConfiguration(configuration, sourcePath);
+  }
 }
 
 function validateTransformedResource(resource: AotTransformedResource, sourcePath: string): void {
@@ -656,6 +702,27 @@ function validateTransformedResource(resource: AotTransformedResource, sourcePat
     || resource.carrierEnd < resource.carrierStart
   ) {
     throw invalidArtifact(sourcePath, `returned invalid carrier offsets for '${resource.resourceKey}'`);
+  }
+}
+
+function validateTransformedConfiguration(
+  configuration: AotTransformedConfiguration,
+  sourcePath: string,
+): void {
+  if (configuration == null || typeof configuration !== "object") {
+    throw invalidArtifact(sourcePath, "returned a non-object transformed configuration");
+  }
+  assertVirtualSpecifier(configuration.moduleSpecifier, sourcePath, "configuration");
+  assertDigest(configuration.expectedDigest, sourcePath, "configuration module");
+  assertNonBlank(configuration.exportName, sourcePath, "configuration export name");
+  assertNonBlank(configuration.localName, sourcePath, "configuration local name");
+  if (
+    !Number.isInteger(configuration.valueStart)
+    || !Number.isInteger(configuration.valueEnd)
+    || configuration.valueStart < 0
+    || configuration.valueEnd < configuration.valueStart
+  ) {
+    throw invalidArtifact(sourcePath, "returned invalid configuration value offsets");
   }
 }
 
@@ -680,7 +747,7 @@ function validateVirtualModuleArtifact(
   if (claim.expectedDigest != null && artifact.digest !== claim.expectedDigest) {
     throw invalidArtifact(
       claim.sourcePath,
-      `returned digest '${artifact.digest}' for payload '${claim.specifier}', expected '${claim.expectedDigest}'`,
+      `returned digest '${artifact.digest}' for claimed module '${claim.specifier}', expected '${claim.expectedDigest}'`,
     );
   }
   if (artifact.map === undefined) {
@@ -703,6 +770,10 @@ function assertNonBlank(value: string, sourcePath: string, label: string): void 
   if (typeof value !== "string" || value.trim().length === 0) {
     throw invalidArtifact(sourcePath, `returned a blank ${label}`);
   }
+}
+
+function isArrayValue(value: unknown): boolean {
+  return Array.isArray(value);
 }
 
 function invalidArtifact(sourcePath: string, reason: string): AotViteError {

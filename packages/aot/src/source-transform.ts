@@ -44,10 +44,20 @@ export interface AotSourceTransformResourcePlan {
   readonly payloadDigest: string;
 }
 
+export interface AotSourceTransformConfigurationPlan {
+  /** Exact authored StandardConfiguration value expression to replace. */
+  readonly value: AotSourceTransformSlice;
+  /** Build-specific configuration module already produced by the build session. */
+  readonly moduleSpecifier: string;
+  readonly expectedDigest: string;
+  readonly exportName: string;
+}
+
 export interface AotSourceTransformRequest {
   readonly sourcePath: string;
   readonly code: string;
   readonly resources: readonly AotSourceTransformResourcePlan[];
+  readonly configurations?: readonly AotSourceTransformConfigurationPlan[];
   readonly runtimeModuleSpecifier?: string;
 }
 
@@ -62,19 +72,31 @@ export interface AotTransformedResource {
   readonly payloadSpecifier: string;
 }
 
+export interface AotTransformedConfiguration {
+  readonly valueStart: number;
+  readonly valueEnd: number;
+  readonly moduleSpecifier: string;
+  readonly expectedDigest: string;
+  readonly exportName: string;
+  readonly localName: string;
+}
+
 export interface AotSourceTransformArtifact {
   readonly sourcePath: string;
   readonly code: string;
   readonly map: AotRawSourceMap;
   readonly digest: string;
-  readonly runtimeModuleSpecifier: string;
+  /** Present only when resource patches need the shared compiler-patch runtime. */
+  readonly runtimeModuleSpecifier: string | null;
   readonly resources: readonly AotTransformedResource[];
+  readonly configurations: readonly AotTransformedConfiguration[];
 }
 
 /** Apply resource-addressed compiler patches to one authored TS/JS module without reconstructing its metadata. */
 export class AotSourceTransformEmitter {
   public emit(request: AotSourceTransformRequest): AotSourceTransformArtifact | null {
-    if (request.resources.length === 0) return null;
+    const configurations = orderedConfigurations(request.configurations ?? []);
+    if (request.resources.length === 0 && configurations.length === 0) return null;
 
     const sourceFile = ts.createSourceFile(
       request.sourcePath,
@@ -85,24 +107,52 @@ export class AotSourceTransformEmitter {
     );
     const resources = orderedResources(request.resources);
     assertDistinctPlanIdentity(request.sourcePath, resources);
+    assertConfigurationPlans(request.sourcePath, configurations);
     const usedNames = sourceIdentifierNames(sourceFile);
-    const applyName = allocateIdentifier('__auAotApply', usedNames);
+    const applyName = resources.length === 0
+      ? null
+      : allocateIdentifier('__auAotApply', usedNames);
     const patchNames = new Map(resources.map((resource, index) => [
       resource.compilerVariantKey,
       allocateIdentifier(`__auAotPatch${index}`, usedNames),
     ]));
+    const configurationNames = new Map<string, string>();
+    for (const configuration of configurations) {
+      const key = configurationImportKey(configuration);
+      if (!configurationNames.has(key)) {
+        configurationNames.set(
+          key,
+          allocateIdentifier(`__auAotConfiguration${configurationNames.size}`, usedNames),
+        );
+      }
+    }
     const edits = new MagicString(request.code);
-    const runtimeModuleSpecifier = request.runtimeModuleSpecifier ?? AOT_RUNTIME_MODULE_SPECIFIER;
+    const runtimeModuleSpecifier = resources.length === 0
+      ? null
+      : request.runtimeModuleSpecifier ?? AOT_RUNTIME_MODULE_SPECIFIER;
     const importText = [
-      `import { applyCompiledCustomElement as ${applyName} } from ${JSON.stringify(
-        runtimeModuleSpecifier,
-      )};`,
+      ...(runtimeModuleSpecifier == null || applyName == null
+        ? []
+        : [`import { applyCompiledCustomElement as ${applyName} } from ${JSON.stringify(runtimeModuleSpecifier)};`]),
       ...resources.map((resource) =>
         `import ${requireMap(patchNames, resource.compilerVariantKey, request.sourcePath)} from ${JSON.stringify(resource.payloadSpecifier)};`
       ),
+      ...[...configurationNames.entries()].map(([key, localName]) => {
+        const configuration = requireConfiguration(configurations, key, request.sourcePath);
+        return `import { ${configuration.exportName} as ${localName} } from ${JSON.stringify(configuration.moduleSpecifier)};`;
+      }),
       '',
     ].join(detectNewline(request.code));
     edits.appendLeft(importInsertionOffset(sourceFile), importText);
+
+    for (const configuration of configurations) {
+      assertSlice(request.sourcePath, request.code, null, 'configuration value', configuration.value);
+      edits.overwrite(
+        configuration.value.start,
+        configuration.value.end,
+        requireMap(configurationNames, configurationImportKey(configuration), request.sourcePath),
+      );
+    }
 
     const applyAfterDeclaration = new Map<number, string[]>();
     for (const resource of resources) {
@@ -110,7 +160,7 @@ export class AotSourceTransformEmitter {
       const patchName = requireMap(patchNames, resource.compilerVariantKey, request.sourcePath);
       switch (resource.carrierKind) {
         case ResourceCarrierKind.DefineCall:
-          edits.prependLeft(resource.carrier.start, `${applyName}(`);
+          edits.prependLeft(resource.carrier.start, `${requireApplyName(applyName, request.sourcePath)}(`);
           edits.appendLeft(resource.carrier.end, `, ${patchName})`);
           break;
         case ResourceCarrierKind.Decorator:
@@ -127,7 +177,7 @@ export class AotSourceTransformEmitter {
           }
           assertSlice(request.sourcePath, request.code, resource.resourceKey, 'target declaration', declaration);
           const calls = applyAfterDeclaration.get(declaration.end) ?? [];
-          calls.push(`${applyName}(${targetName}, ${patchName});`);
+          calls.push(`${requireApplyName(applyName, request.sourcePath)}(${targetName}, ${patchName});`);
           applyAfterDeclaration.set(declaration.end, calls);
           break;
         }
@@ -183,6 +233,18 @@ export class AotSourceTransformEmitter {
         payloadDigest: resource.payloadDigest,
         payloadSpecifier: resource.payloadSpecifier,
       })),
+      configurations: configurations.map((configuration) => ({
+        valueStart: configuration.value.start,
+        valueEnd: configuration.value.end,
+        moduleSpecifier: configuration.moduleSpecifier,
+        expectedDigest: configuration.expectedDigest,
+        exportName: configuration.exportName,
+        localName: requireMap(
+          configurationNames,
+          configurationImportKey(configuration),
+          request.sourcePath,
+        ),
+      })),
     };
   }
 }
@@ -194,6 +256,17 @@ function orderedResources(
     left.carrier.start - right.carrier.start
     || right.carrier.end - left.carrier.end
     || left.compilerVariantKey.localeCompare(right.compilerVariantKey)
+  );
+}
+
+function orderedConfigurations(
+  configurations: readonly AotSourceTransformConfigurationPlan[],
+): readonly AotSourceTransformConfigurationPlan[] {
+  return [...configurations].sort((left, right) =>
+    left.value.start - right.value.start
+    || right.value.end - left.value.end
+    || left.moduleSpecifier.localeCompare(right.moduleSpecifier)
+    || left.exportName.localeCompare(right.exportName)
   );
 }
 
@@ -215,10 +288,40 @@ function assertDistinctPlanIdentity(
   }
 }
 
+function assertConfigurationPlans(
+  sourcePath: string,
+  configurations: readonly AotSourceTransformConfigurationPlan[],
+): void {
+  const moduleDigests = new Map<string, string>();
+  let previous: AotSourceTransformConfigurationPlan | undefined;
+  for (const configuration of configurations) {
+    if (
+      configuration.moduleSpecifier.trim().length === 0
+      || configuration.expectedDigest.trim().length === 0
+      || !isIdentifierText(configuration.exportName)
+    ) {
+      throw invalidPlan(sourcePath, null, 'AOT configuration plans require a module specifier, digest, and identifier export name.');
+    }
+    const digest = moduleDigests.get(configuration.moduleSpecifier);
+    if (digest != null && digest !== configuration.expectedDigest) {
+      throw invalidPlan(
+        sourcePath,
+        null,
+        `AOT configuration module '${configuration.moduleSpecifier}' has conflicting expected digests.`,
+      );
+    }
+    moduleDigests.set(configuration.moduleSpecifier, configuration.expectedDigest);
+    if (previous != null && previous.value.end > configuration.value.start) {
+      throw invalidPlan(sourcePath, null, 'AOT configuration value slices overlap.');
+    }
+    previous = configuration;
+  }
+}
+
 function assertSlice(
   sourcePath: string,
   code: string,
-  resourceKey: string,
+  resourceKey: string | null,
   label: string,
   slice: AotSourceTransformSlice,
 ): void {
@@ -232,7 +335,7 @@ function assertSlice(
   ) {
     throw new AotSourceTransformError(
       'AOT_SOURCE_STALE',
-      `AOT ${label} source for '${resourceKey}' no longer matches '${sourcePath}'.`,
+      `AOT ${label} source for '${resourceKey ?? 'configuration'}' no longer matches '${sourcePath}'.`,
       sourcePath,
       resourceKey,
     );
@@ -291,6 +394,27 @@ function detectNewline(text: string): string {
 function requireMap<TKey, TValue>(values: ReadonlyMap<TKey, TValue>, key: TKey, sourcePath: string): TValue {
   const value = values.get(key);
   if (value == null) throw invalidPlan(sourcePath, null, `AOT source transform cannot resolve '${String(key)}'.`);
+  return value;
+}
+
+function configurationImportKey(configuration: AotSourceTransformConfigurationPlan): string {
+  return `${configuration.moduleSpecifier}\0${configuration.exportName}`;
+}
+
+function requireConfiguration(
+  configurations: readonly AotSourceTransformConfigurationPlan[],
+  key: string,
+  sourcePath: string,
+): AotSourceTransformConfigurationPlan {
+  const configuration = configurations.find((candidate) => configurationImportKey(candidate) === key);
+  if (configuration == null) {
+    throw invalidPlan(sourcePath, null, `AOT source transform cannot resolve configuration import '${key}'.`);
+  }
+  return configuration;
+}
+
+function requireApplyName(value: string | null, sourcePath: string): string {
+  if (value == null) throw invalidPlan(sourcePath, null, 'AOT resource transform has no runtime apply binding.');
   return value;
 }
 

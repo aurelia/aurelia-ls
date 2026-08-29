@@ -13,11 +13,29 @@ export interface AotExistingRawSourceMap {
 
 export type AotSourceMapInput = AotExistingRawSourceMap | string | null;
 
+export type AotNominatedEntryCallable =
+  | { readonly kind: "local"; readonly name: string }
+  | { readonly kind: "export"; readonly name: string };
+
+export type AotNominatedEntryArgument =
+  | { readonly kind: "primitive"; readonly value: string | number | boolean | null }
+  | { readonly kind: "undefined" }
+  | { readonly kind: "host-environment"; readonly path: string }
+  | { readonly kind: "array"; readonly elements: readonly AotNominatedEntryArgument[] };
+
+/** Explicit synchronous app factory activation forwarded unchanged to the semantic build provider. */
+export interface AotNominatedEntry {
+  readonly sourceFilePath: string;
+  readonly callable: AotNominatedEntryCallable;
+  readonly arguments?: readonly AotNominatedEntryArgument[];
+}
+
 export interface AotBuildRequest {
   readonly root: string;
   readonly mode: string;
   readonly environmentName: string;
   readonly sourcemap: boolean | "inline" | "hidden";
+  readonly nominatedEntry?: AotNominatedEntry | null;
 }
 
 export interface AotTemplateRequest {
@@ -51,6 +69,15 @@ export interface AotTransformedResource {
   readonly payloadSpecifier: string;
 }
 
+export interface AotTransformedConfiguration {
+  readonly valueStart: number;
+  readonly valueEnd: number;
+  readonly moduleSpecifier: string;
+  readonly expectedDigest: string;
+  readonly exportName: string;
+  readonly localName: string;
+}
+
 export interface AotSourceTransformArtifact {
   /** Must echo the canonical source path from the corresponding request. */
   readonly sourcePath: string;
@@ -61,9 +88,11 @@ export interface AotSourceTransformArtifact {
   /** Stable identity for the authored input and complete transform result. */
   readonly digest: string;
   /** Shared runtime support module imported by the transformed source. */
-  readonly runtimeModuleSpecifier: string;
+  readonly runtimeModuleSpecifier: string | null;
   /** Resource-addressed payloads imported by the transformed source. */
   readonly resources: readonly AotTransformedResource[];
+  /** Exact build-specific configurations imported by the transformed source. */
+  readonly configurations: readonly AotTransformedConfiguration[];
 }
 
 export interface AotVirtualModuleRequest {
@@ -112,6 +141,8 @@ export type AotConventionOptions = Omit<AureliaPluginOptions, ReservedConvention
 
 export interface AureliaAotOptions {
   readonly provider: AotArtifactProvider;
+  /** Explicit dormant app factory activation passed to the build provider. */
+  readonly nominatedEntry?: AotNominatedEntry | null;
   readonly conventions?: AotConventionOptions;
   /** Omit to avoid emitting or retaining build-graph evidence. */
   readonly receipt?: AotReceiptOptions;
