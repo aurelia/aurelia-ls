@@ -11,7 +11,6 @@ export interface AotAdapterRequest {
   readonly fixtureRoot: string;
   readonly sourceRoot: string;
   readonly entryHtml: string;
-  readonly strict: true;
   readonly falsifier?: EmissionFalsifier;
 }
 

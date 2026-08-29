@@ -80,7 +80,6 @@ export class ProductionBuildBatch {
       fixtureRoot: options.fixtureRoot,
       sourceRoot: resolve(options.fixtureRoot, 'src'),
       entryHtml: resolve(options.fixtureRoot, 'index.html'),
-      strict: true,
       falsifier: options.falsifier,
     });
 

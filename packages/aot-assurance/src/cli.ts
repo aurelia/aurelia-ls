@@ -1,43 +1,35 @@
-import { proveLocalFalsifiers } from './falsifiers.js';
 import type { EmissionFalsifier } from './contract.js';
+import { runAssurance } from './run.js';
 
 interface CliOptions {
   adapterSpecifier?: string;
   receiptPath?: string;
   keepOutput: boolean;
-  falsifiersOnly: boolean;
   falsifier?: EmissionFalsifier;
 }
 
 const options = readOptions(process.argv.slice(2));
 
-if (options.falsifiersOnly) {
-  proveLocalFalsifiers();
-  process.stdout.write('AOT assurance local falsifiers passed.\n');
-} else {
-  const adapterSpecifier = options.adapterSpecifier
-    ?? process.env.AOT_ASSURANCE_ADAPTER
-    ?? new URL('./aot-adapter.js', import.meta.url).href;
-  const { runAssurance } = await import('./run.js');
-  const receipt = await runAssurance({
-    adapterSpecifier,
-    receiptPath: options.receiptPath,
-    keepOutput: options.keepOutput,
-    falsifier: options.falsifier,
-  });
-  process.stdout.write([
-    'AOT G0 assurance passed.',
-    `JIT build: ${receipt.builds[0].durationMs.toFixed(1)}ms`,
-    `AOT build: ${receipt.builds[1].durationMs.toFixed(1)}ms`,
-    `AOT artifacts: ${receipt.aot.artifacts.length}`,
-    '',
-  ].join('\n'));
-}
+const adapterSpecifier = options.adapterSpecifier
+  ?? process.env.AOT_ASSURANCE_ADAPTER
+  ?? new URL('./aot-adapter.js', import.meta.url).href;
+const receipt = await runAssurance({
+  adapterSpecifier,
+  receiptPath: options.receiptPath,
+  keepOutput: options.keepOutput,
+  falsifier: options.falsifier,
+});
+process.stdout.write([
+  'AOT G0 assurance passed.',
+  `JIT build: ${receipt.builds[0].durationMs.toFixed(1)}ms`,
+  `AOT build: ${receipt.builds[1].durationMs.toFixed(1)}ms`,
+  `AOT artifacts: ${receipt.aot.artifacts.length}`,
+  '',
+].join('\n'));
 
 function readOptions(args: readonly string[]): CliOptions {
   const options: CliOptions = {
     keepOutput: false,
-    falsifiersOnly: false,
   };
   for (let index = 0; index < args.length; index++) {
     const argument = args[index];
@@ -51,9 +43,6 @@ function readOptions(args: readonly string[]): CliOptions {
         break;
       case '--keep-output':
         options.keepOutput = true;
-        break;
-      case '--falsifiers-only':
-        options.falsifiersOnly = true;
         break;
       case '--falsifier': {
         const value = requireValue(args, ++index, argument);

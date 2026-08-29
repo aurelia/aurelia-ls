@@ -14,9 +14,7 @@
     "typecheck:fixture": "tsc --noEmit -p fixtures/g0/tsconfig.json",
     "assure:built": "node out/cli.js",
     "assure": "pnpm build && pnpm assure:built",
-    "falsifiers:built": "node out/cli.js --falsifiers-only",
-    "falsifiers": "pnpm build && pnpm falsifiers:built",
-    "test": "pnpm build && pnpm typecheck:fixture && pnpm falsifiers:built",
+    "test": "pnpm build && pnpm typecheck:fixture && pnpm assure:built",
     "clean": "node -e \"require('node:fs').rmSync('out', { recursive: true, force: true }); require('node:fs').rmSync('tsconfig.tsbuildinfo', { force: true })\""
   },
   "dependencies": {

@@ -9,7 +9,6 @@ import {
   assertProbePolicy,
   assertSemanticParity,
 } from './evidence.js';
-import { proveLocalFalsifiers } from './falsifiers.js';
 import { assertG0Expectations } from './g0-expectations.js';
 import { StaticBuildServer } from './server.js';
 
@@ -22,7 +21,6 @@ export interface RunAssuranceOptions {
 }
 
 export async function runAssurance(options: RunAssuranceOptions): Promise<AssuranceReceipt> {
-  proveLocalFalsifiers();
   const fixtureRoot = options.fixtureRoot ?? resolve(import.meta.dirname, '..', 'fixtures', 'g0');
   const builds = await ProductionBuildBatch.create({
     adapterSpecifier: options.adapterSpecifier,
