@@ -1,0 +1,34 @@
+<import from="./g0-child"></import>
+
+<main
+  id="surface"
+  ref="hostRef"
+  class="surface"
+  active.class="enabled"
+  color.style="enabled ? 'green' : 'maroon'"
+  aria-label.attr="message">
+  <h1 id="headline">${message}</h1>
+
+  <label>Name <input id="name" data-live value.two-way="message"></label>
+  <label>Enabled <input id="enabled" data-live type="checkbox" checked.bind="enabled"></label>
+
+  <button id="increment" click.trigger="increment()">Increment</button>
+  <button id="toggle" click.trigger="toggle()">Toggle</button>
+  <button id="add-item" click.trigger="addItem()">Add</button>
+
+  <let doubled.bind="count * 2"></let>
+  <output id="doubled">${doubled}</output>
+  <p id="conditional" if.bind="visible">visible:${message}</p>
+  <ul><li class="item" repeat.for="item of items">${item}</li></ul>
+
+  <g0-child label.bind="message" child-change.trigger="fromChild($event.detail)">
+    <span id="projection" au-slot="detail">${message}:${count}</span>
+  </g0-child>
+
+  <section id="browser-recovery">
+    <div id="fostered">${message}</div>
+    <table id="foster-table"><tbody><tr><td id="table-cell">${count}</td></tr></tbody></table>
+  </section>
+
+  <svg viewBox="0 0 100 20"><text id="svg-message">${message}</text></svg>
+</main>

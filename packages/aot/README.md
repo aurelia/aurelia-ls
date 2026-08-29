@@ -1,19 +1,20 @@
 # @aurelia-ls/aot
 
-Clean-slate Aurelia AOT assurance and artifact-projection package over `@aurelia-ls/semantic-runtime`.
+Aurelia AOT artifact projection over `@aurelia-ls/semantic-runtime`.
 
-The current program chapter is broad compiler conservation against Aurelia's real JIT `ITemplateCompiler` and the
-framework compiler/runtime corpus. It is not an emitted-code vertical or a narrow normalized-parity milestone. The
-corpus must span browser-effective structure, built-in lowering, transformed effects, definition values, diagnostics,
-extension effects, provenance, and distinct closure claims before artifact projection begins.
+The executable G0/G1 baseline now exists. Semantic-runtime owns one detached compiled-handoff materializer over the
+browser-effective context-family compiler. This package spends that value on exact browser template nodes, runtime AST
+wires, definition references, dependency imports, JavaScript modules, coarse authored-source maps, and build evidence.
+`@aurelia-ls/aot-vite` claims those modules in Vite 8 and fails closed; `@aurelia-ls/aot-assurance` builds one broad app
+through both JIT and AOT and compares their browser transcripts.
 
 Reusable Aurelia/application semantics, compiler-effect outcomes, consumer-neutral framework definition values,
 causal open seams, provenance, and negative closure stay in semantic-runtime. This package will select target
 guarantees and later own residual policy, ordered registration/import planning, JavaScript serialization, generated
 source maps, artifact realization, and build integration.
 
-The package deliberately has no public compiler API yet. Do not expose private app-emission orchestration, freeze a
-wire format, or mirror semantic-runtime's expression/compiler rules merely to make this package larger.
+The API is internal and deliberately narrow: `SemanticAotArtifactProvider` and `AotTemplateModuleEmitter`. Neither
+exposes semantic-runtime's generation-bound compiler objects. The detached handoff is the sole product boundary.
 
 Current commands:
 
@@ -24,6 +25,9 @@ pnpm --filter @aurelia-ls/aot test
 pnpm --filter @aurelia-ls/aot oracle:browser
 pnpm --filter @aurelia-ls/aot oracle:jit -- --query=property-binding
 pnpm --filter @aurelia-ls/aot oracle:semantic -- --timing
+pnpm --filter @aurelia-ls/aot-vite test
+pnpm --filter @aurelia-ls/aot-assurance test
+pnpm run assure:aot
 ```
 
 `oracle:browser` is a separate 17-case batched Chromium contract and is intentionally absent from the default fast
@@ -181,8 +185,8 @@ world inside an imperative fixture. Case and obligation authority remains pinned
 runner refuses to relabel cases when the submodule moves without review.
 
 `src/testing` is package-private and absent from `exports`; it may use JSDOM and the JIT compiler for characterization.
-Before production compiler modules grow, move this tooling into a separate build boundary so core source cannot acquire
-an accidental JSDOM, `StandardConfiguration`, or JIT dependency.
+New executable browser assurance lives in the separate `aot-assurance` boundary. Existing characterization tooling is
+still subject to the commit-cluster revalidation backlog rather than being grandfathered into the product.
 
 The predecessor compiler, semantic-workspace, SSR, SSG, transform, Vite-plugin, and integration-harness packages were
 removed at `6dc45b640`. Historical evidence is available at
@@ -191,10 +195,10 @@ snapshots.
 
 ## Build-tool boundary
 
-The AOT artifact layer and conservation harness are bundler-neutral. They do not depend on Vite or treat the existing
-conventions plugin as semantic authority. The greenfield production integration may later be a thin latest-Vite
-adapter, an Aurelia-repo-owned wrapper, a standalone adapter, or a two-lane choice between the established conventions
-plugin and an experimental AOT-plus-conventions plugin.
+The AOT artifact layer remains bundler-neutral. The private `aot-vite` package is a thin Vite 8 adapter that composes
+the official conventions/decorator bridge, reserves an AOT query module, opens one semantic build session per
+environment, and records admitted plus rendered module graphs. Serve, watch, SSR, workers, and compatible JIT islands
+remain explicit later profiles.
 
 If two lanes remain supported, semantic-runtime must model which transform provider and convention dialect is admitted,
 including ordering, options, source maps, and open configuration, so IDE and MCP analyze the same effective build world.

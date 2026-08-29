@@ -1,0 +1,15 @@
+{
+  "extends": "../../tsconfig.test.base.json",
+  "compilerOptions": {
+    "strict": true,
+    "noImplicitAny": true,
+    "noUncheckedIndexedAccess": true,
+    "strictNullChecks": true,
+    "strictPropertyInitialization": true,
+    "useUnknownInCatchVariables": true
+  },
+  "include": ["test/**/*.ts"],
+  "references": [
+    { "path": "." }
+  ]
+}

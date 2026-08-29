@@ -3,6 +3,8 @@
   "references": [
     { "path": "packages/semantic-runtime" },
     { "path": "packages/aot" },
+    { "path": "packages/aot-vite" },
+    { "path": "packages/aot-assurance" },
     { "path": "packages/language-server" },
     { "path": "packages/vscode" },
     { "path": "packages/patterns" },

@@ -85,7 +85,9 @@ the model.
 | `aurelia-2` | VS Code extension | Current product |
 | `@aurelia-ls/mcp` | Local MCP server | Current product; GitHub tarball distribution |
 | `@aurelia-ls/semantic-runtime` | Shared semantic authority | Current internal substrate |
-| `@aurelia-ls/aot` | Greenfield AOT assurance and artifact projection | Internal research scaffold |
+| `@aurelia-ls/aot` | Semantic handoff and AOT artifact realization | Internal executable baseline |
+| `@aurelia-ls/aot-vite` | Strict build-only Vite 8 adapter | Internal experimental integration |
+| `@aurelia-ls/aot-assurance` | Same-source JIT/AOT production-build browser parity | Internal assurance tooling |
 | `@aurelia-ls/language-server` | LSP lifecycle and protocol adapter | Current internal VS Code path |
 | `@aurelia-ls/patterns` | Curated Patterns and Aurelia docs snapshot support | Current internal MCP content |
 | `@aurelia-ls/atlas` | Repository/framework navigation and architecture memory | Internal maintainer tooling |

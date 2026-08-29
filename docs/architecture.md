@@ -38,6 +38,9 @@ own host lifecycle and presentation.
 | `@aurelia-ls/language-server` | Document synchronization and LSP request/diagnostic lifecycle |
 | `aurelia-2` | Workspace and process lifecycle, native VS Code presentation, and host-specific edit checks |
 | `@aurelia-ls/mcp` | AI transport plus MCP-only prompts, resources, Patterns, and bundled docs |
+| `@aurelia-ls/aot` | Target admission and realization of detached semantic compiler handoffs as AOT artifacts |
+| `@aurelia-ls/aot-vite` | Vite 8 build lifecycle, claimed template modules, maps, and module-graph receipts |
+| `@aurelia-ls/aot-assurance` | Batched same-source JIT/AOT production builds and browser-observable parity |
 | `@aurelia-ls/patterns` | Curated authoring examples and the packaged Aurelia documentation snapshot |
 | `@aurelia-ls/atlas` | Internal repository/framework navigation, queryable architecture memory, and maintenance lenses |
 

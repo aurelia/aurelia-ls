@@ -1,0 +1,35 @@
+{
+  "name": "@aurelia-ls/aot-assurance",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Private executable parity harness for Aurelia JIT and AOT production builds",
+  "type": "module",
+  "main": "./out/index.js",
+  "types": "./out/index.d.ts",
+  "engines": {
+    "node": ">=22.13 <25"
+  },
+  "scripts": {
+    "build": "tsc -b tsconfig.json",
+    "typecheck:fixture": "tsc --noEmit -p fixtures/g0/tsconfig.json",
+    "assure:built": "node out/cli.js",
+    "assure": "pnpm build && pnpm assure:built",
+    "falsifiers:built": "node out/cli.js --falsifiers-only",
+    "falsifiers": "pnpm build && pnpm falsifiers:built",
+    "test": "pnpm build && pnpm typecheck:fixture && pnpm falsifiers:built",
+    "clean": "node -e \"require('node:fs').rmSync('out', { recursive: true, force: true }); require('node:fs').rmSync('tsconfig.tsbuildinfo', { force: true })\""
+  },
+  "dependencies": {
+    "@aurelia-ls/aot": "workspace:*",
+    "@aurelia-ls/aot-vite": "workspace:*",
+    "@aurelia/runtime-html": "link:../../aurelia/packages/runtime-html",
+    "@aurelia/vite-plugin": "link:../../aurelia/packages-tooling/vite-plugin",
+    "aurelia": "link:../../aurelia/packages/aurelia",
+    "playwright": "1.57.0",
+    "vite": "^8.2.2"
+  },
+  "devDependencies": {
+    "@types/node": "^22.5.4",
+    "typescript": "6.0.3"
+  }
+}

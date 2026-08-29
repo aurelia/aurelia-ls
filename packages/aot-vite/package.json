@@ -1,0 +1,37 @@
+{
+  "name": "@aurelia-ls/aot-vite",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Vite 8 adapter for Aurelia AOT artifacts",
+  "type": "module",
+  "main": "./out/index.js",
+  "types": "./out/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./out/index.js",
+      "types": "./out/index.d.ts"
+    }
+  },
+  "engines": {
+    "node": ">=22.13 <25"
+  },
+  "scripts": {
+    "build": "tsc -b tsconfig.json",
+    "typecheck:test": "tsc --noEmit -p tsconfig.test.json",
+    "test:built": "node ../../scripts/run-vitest.mjs --root ../.. --config vitest.config.ts packages/aot-vite/test",
+    "test": "pnpm build && pnpm typecheck:test && pnpm test:built",
+    "clean": "node -e \"require('node:fs').rmSync('out', { recursive: true, force: true }); require('node:fs').rmSync('tsconfig.tsbuildinfo', { force: true }); require('node:fs').rmSync('tsconfig.test.tsbuildinfo', { force: true })\""
+  },
+  "dependencies": {
+    "@aurelia/vite-plugin": "link:../../aurelia/packages-tooling/vite-plugin"
+  },
+  "peerDependencies": {
+    "vite": "^8.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.5.4",
+    "typescript": "6.0.3",
+    "vite": "^8.2.2",
+    "vitest": "^4.0.16"
+  }
+}
