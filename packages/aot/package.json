@@ -27,7 +27,9 @@
     "clean": "node -e \"require('node:fs').rmSync('out', { recursive: true, force: true }); require('node:fs').rmSync('tsconfig.tsbuildinfo', { force: true }); require('node:fs').rmSync('tsconfig.test.tsbuildinfo', { force: true })\""
   },
   "dependencies": {
-    "@aurelia-ls/semantic-runtime": "workspace:*"
+    "@aurelia-ls/semantic-runtime": "workspace:*",
+    "magic-string": "0.30.21",
+    "typescript": "6.0.3"
   },
   "devDependencies": {
     "@aurelia/kernel": "link:../../aurelia/packages/kernel",
@@ -37,7 +39,6 @@
     "@types/jsdom": "^21.1.7",
     "@types/node": "^22.5.4",
     "jsdom": "^25.0.1",
-    "playwright": "1.57.0",
-    "typescript": "6.0.3"
+    "playwright": "1.57.0"
   }
 }

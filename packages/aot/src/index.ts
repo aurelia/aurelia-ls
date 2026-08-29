@@ -14,3 +14,14 @@ export {
   type SemanticAotTemplateArtifact,
   type SemanticAotTemplateRequest,
 } from './semantic-artifact-provider.js';
+export {
+  AOT_RUNTIME_MODULE_SPECIFIER,
+  AotSourceTransformEmitter,
+  AotSourceTransformError,
+  type AotSourceTransformArtifact,
+  type AotSourceTransformErrorCode,
+  type AotSourceTransformRequest,
+  type AotSourceTransformResourcePlan,
+  type AotSourceTransformSlice,
+  type AotTransformedResource,
+} from './source-transform.js';
