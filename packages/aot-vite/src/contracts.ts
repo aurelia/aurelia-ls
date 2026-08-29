@@ -35,8 +35,60 @@ export interface AotTemplateArtifact {
   readonly digest: string;
 }
 
+export interface AotSourceTransformRequest {
+  readonly sourcePath: string;
+  readonly code: string;
+}
+
+export interface AotTransformedResource {
+  readonly resourceKey: string;
+  readonly compilerVariantKey: string;
+  readonly definitionName: string;
+  readonly carrierKind: string;
+  readonly carrierStart: number;
+  readonly carrierEnd: number;
+  readonly payloadDigest: string;
+  readonly payloadSpecifier: string;
+}
+
+export interface AotSourceTransformArtifact {
+  /** Must echo the canonical source path from the corresponding request. */
+  readonly sourcePath: string;
+  /** Complete transformed authored module. */
+  readonly code: string;
+  /** Map from the transformed module back to the authored module. */
+  readonly map: AotSourceMapInput;
+  /** Stable identity for the authored input and complete transform result. */
+  readonly digest: string;
+  /** Shared runtime support module imported by the transformed source. */
+  readonly runtimeModuleSpecifier: string;
+  /** Resource-addressed payloads imported by the transformed source. */
+  readonly resources: readonly AotTransformedResource[];
+}
+
+export interface AotVirtualModuleRequest {
+  readonly specifier: string;
+}
+
+export interface AotVirtualModuleArtifact {
+  /** Must echo the exact claimed specifier from the corresponding request. */
+  readonly specifier: string;
+  readonly code: string;
+  readonly map: AotSourceMapInput;
+  readonly digest: string;
+}
+
 export interface AotBuildSession {
+  /** Transitional standalone-HTML realization. */
   artifactFor(request: AotTemplateRequest): Promise<AotTemplateArtifact>;
+  /** Optional bundler-neutral authored-source transform port. */
+  transformSource?(
+    request: AotSourceTransformRequest,
+  ): Promise<AotSourceTransformArtifact | null>;
+  /** Required whenever a source transform returns virtual module specifiers. */
+  virtualModuleFor?(
+    request: AotVirtualModuleRequest,
+  ): Promise<AotVirtualModuleArtifact | null>;
 }
 
 export interface AotArtifactProvider {
@@ -69,6 +121,9 @@ export interface AotReceiptArtifact {
   readonly sourcePath: string;
   readonly virtualId: string;
   readonly digest: string;
+  readonly resourceKey?: string;
+  readonly compilerVariantKey?: string;
+  readonly definitionName?: string;
 }
 
 export interface AotReceiptGraphModule {

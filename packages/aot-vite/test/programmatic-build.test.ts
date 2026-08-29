@@ -4,12 +4,61 @@ import { describe, expect, it, vi } from "vitest";
 import {
   aureliaAot,
   type AotBuildReceipt,
+  type AotSourceTransformArtifact,
   type AotTemplateArtifact,
+  type AotVirtualModuleArtifact,
 } from "../src/index.js";
 
 describe("aureliaAot programmatic Vite 8 build", () => {
   it("carries the official convention rewrite through the AOT provider and final output", async () => {
     const root = fileURLToPath(new URL("./fixtures/programmatic", import.meta.url));
+    const transformSource = vi.fn(async ({ sourcePath, code }): Promise<AotSourceTransformArtifact | null> => {
+      if (!/[\\/]main\.js$/u.test(sourcePath)) {
+        return null;
+      }
+      return {
+        sourcePath,
+        code: [
+          "import { applyProof as __applyAotProof } from 'virtual:aurelia-aot/runtime-proof';",
+          "import __aotPayload from 'virtual:aurelia-aot/payload/programmatic-proof';",
+          code,
+          "globalThis.__aureliaAotCarrierFixture = __applyAotProof(__aotPayload);",
+        ].join("\n"),
+        map: null,
+        digest: "programmatic-source-transform",
+        runtimeModuleSpecifier: "virtual:aurelia-aot/runtime-proof",
+        resources: [{
+          resourceKey: "programmatic-resource",
+          compilerVariantKey: "programmatic-variant",
+          definitionName: "programmatic-carrier-proof",
+          carrierKind: "define-call",
+          carrierStart: 0,
+          carrierEnd: 0,
+          payloadDigest: "programmatic-payload",
+          payloadSpecifier: "virtual:aurelia-aot/payload/programmatic-proof",
+        }],
+      };
+    });
+    const virtualModuleFor = vi.fn(async ({ specifier }): Promise<AotVirtualModuleArtifact | null> => {
+      switch (specifier) {
+        case "virtual:aurelia-aot/runtime-proof":
+          return {
+            specifier,
+            code: "export const applyProof = value => `carrier-neutral:${value}`;",
+            map: null,
+            digest: "programmatic-runtime",
+          };
+        case "virtual:aurelia-aot/payload/programmatic-proof":
+          return {
+            specifier,
+            code: "export default 'programmatic-payload';",
+            map: null,
+            digest: "programmatic-payload",
+          };
+        default:
+          return null;
+      }
+    });
     const openBuild = vi.fn(async () => ({
       artifactFor: vi.fn(async ({ sourcePath }): Promise<AotTemplateArtifact> => ({
         sourcePath,
@@ -23,6 +72,8 @@ describe("aureliaAot programmatic Vite 8 build", () => {
         map: null,
         digest: "programmatic-proof",
       })),
+      transformSource,
+      virtualModuleFor,
     }));
     let receipt: AotBuildReceipt | undefined;
 
@@ -54,14 +105,29 @@ describe("aureliaAot programmatic Vite 8 build", () => {
     const chunk = output.find((candidate) => candidate.type === "chunk");
     expect(openBuild).toHaveBeenCalledTimes(1);
     expect(chunk?.code).toContain("aot-vite-programmatic-proof");
-    expect(receipt?.artifacts).toHaveLength(1);
-    expect(receipt?.artifacts[0]).toMatchObject({
+    expect(chunk?.code).toContain("carrier-neutral:");
+    expect(transformSource).toHaveBeenCalledWith(expect.objectContaining({
+      sourcePath: expect.stringMatching(/main\.js$/u),
+    }));
+    expect(virtualModuleFor).toHaveBeenCalledTimes(2);
+    expect(receipt?.artifacts).toHaveLength(2);
+    expect(receipt?.artifacts).toContainEqual(expect.objectContaining({
       digest: "programmatic-proof",
       sourcePath: expect.stringMatching(/app\.html$/),
-    });
+    }));
+    expect(receipt?.artifacts).toContainEqual(expect.objectContaining({
+      digest: "programmatic-payload",
+      sourcePath: expect.stringMatching(/main\.js$/),
+      compilerVariantKey: "programmatic-variant",
+      resourceKey: "programmatic-resource",
+    }));
     expect(receipt?.chunks[0]?.modules).toEqual(expect.arrayContaining([
       expect.objectContaining({
         id: expect.stringMatching(/app\.html\?aurelia-aot$/),
+        renderedExports: ["default"],
+      }),
+      expect.objectContaining({
+        id: expect.stringContaining("virtual:aurelia-aot/payload/programmatic-proof"),
         renderedExports: ["default"],
       }),
     ]));

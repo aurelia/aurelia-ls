@@ -40,7 +40,10 @@ export function createAotBuildReceipt(input: BuildReceiptInput): AotBuildReceipt
     sourcePath: artifact.sourcePath,
     virtualId: artifact.virtualId,
     digest: artifact.digest,
-  })).sort(compareSourcePath);
+    ...(artifact.resourceKey === undefined ? {} : { resourceKey: artifact.resourceKey }),
+    ...(artifact.compilerVariantKey === undefined ? {} : { compilerVariantKey: artifact.compilerVariantKey }),
+    ...(artifact.definitionName === undefined ? {} : { definitionName: artifact.definitionName }),
+  })).sort(compareArtifact);
 
   const graph: AotReceiptGraphModule[] = Array.from(input.graph, (module) => ({
     id: module.id,
@@ -80,9 +83,10 @@ function compareId(left: { readonly id: string }, right: { readonly id: string }
   return left.id.localeCompare(right.id);
 }
 
-function compareSourcePath(
-  left: { readonly sourcePath: string },
-  right: { readonly sourcePath: string },
+function compareArtifact(
+  left: Pick<AotReceiptArtifact, "sourcePath" | "virtualId">,
+  right: Pick<AotReceiptArtifact, "sourcePath" | "virtualId">,
 ): number {
-  return left.sourcePath.localeCompare(right.sourcePath);
+  return left.sourcePath.localeCompare(right.sourcePath)
+    || left.virtualId.localeCompare(right.virtualId);
 }
