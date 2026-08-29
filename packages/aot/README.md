@@ -2,19 +2,27 @@
 
 Bundler-neutral Aurelia AOT artifact projection over `@aurelia-ls/semantic-runtime`.
 
-Semantic-runtime owns reusable Aurelia semantics and the detached compiler-final handoff. This package turns that
-handoff into executable browser template nodes, runtime AST wires, definition references, dependency imports,
-JavaScript modules, source maps, and build evidence. It does not expose generation-bound semantic-runtime objects.
+Semantic-runtime owns reusable Aurelia semantics, effective resource/carrier identity, and the detached compiler-final
+handoff. This package turns those values into executable browser template nodes, runtime AST wires, resource-addressed
+compiler payloads, carrier-aware TypeScript/JavaScript transforms, source maps, and build evidence. It does not expose
+generation-bound semantic-runtime objects.
 
 The current public API is deliberately narrow:
 
-- `SemanticAotArtifactProvider` opens a semantic build session and materializes template artifacts.
-- `AotTemplateModuleEmitter` realizes a detached template artifact as an executable JavaScript module.
+- `SemanticAotArtifactProvider` opens one semantic build session, transforms owning source modules, and serves claimed
+  compiler-patch/runtime virtual modules.
+- `AotCompilerPatchModuleEmitter` emits only compiler-owned fields while retaining generated controller/projection
+  definitions.
+- `AotSourceTransformEmitter` attaches those payloads to decorators, static `$au`, conventions, and nested/anonymous
+  `CustomElement.define(...)` calls without reconstructing authored metadata.
+- `AotTemplateModuleEmitter` remains the standalone HTML-resource realization.
 
 The current emitter is a CSR baseline. It preserves the compiler's exact DOM node graph rather than serializing and
-reparsing HTML, because reparsing can merge adjacent text nodes that Aurelia instruction rows address separately.
-Resource-carrier-neutral source transforms, generated runtime configuration, finer source maps, and optimization are
-the next production boundaries. SSR and AOT remain independent axes.
+reparsing HTML, because reparsing can merge adjacent text nodes that Aurelia instruction rows address separately. A
+small virtual runtime helper applies compiler fields to Aurelia's cached definition after resource definition and
+before its first `Rendering.compile`; this is the candidate for a later additive framework hook. Generated runtime
+configuration, finer payload maps, and optimization are the next production boundaries. SSR and AOT remain independent
+axes.
 
 `src/testing` contains two retained low-level characterization lanes:
 
