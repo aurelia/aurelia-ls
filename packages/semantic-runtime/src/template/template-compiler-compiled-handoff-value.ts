@@ -1,7 +1,7 @@
 import type { SemanticSourceReference } from '../api/source-reference.js';
 import { describeAddress } from '../api/source-reference.js';
 import type { EvidenceKind, EvidenceRole } from '../kernel/evidence.js';
-import type { AddressHandle, IdentityHandle, ProvenanceHandle } from '../kernel/handles.js';
+import type { AddressHandle, IdentityHandle, ProductHandle, ProvenanceHandle } from '../kernel/handles.js';
 import type { FieldProvenance } from '../kernel/provenance.js';
 import type { KernelStore } from '../kernel/store.js';
 import type { RuntimeExpressionAstValue } from '../expression/runtime-ast-value.js';
@@ -12,6 +12,7 @@ import {
   type TemplateSourceOffsetMap,
 } from '../resources/custom-element-definition.js';
 import type { ResourceDefinitionKind } from '../resources/resource-kind.js';
+import type { ResourceDefinitionSourceAttachment } from '../resources/resource-definition-source-attachment.js';
 import type { ResourceDependencyReference, ResourceTargetReference } from '../resources/resource-reference.js';
 import type {
   WatchCallbackDefinition,
@@ -50,10 +51,20 @@ export const TEMPLATE_COMPILER_COMPILED_HANDOFF_VERSION =
 
 export interface TemplateCompilerCompiledHandoffValue {
   readonly schemaVersion: typeof TEMPLATE_COMPILER_COMPILED_HANDOFF_VERSION;
+  readonly address: TemplateCompilerCompiledHandoffAddress;
   readonly resourceName: string;
   readonly source: TemplateCompilerCompiledHandoffTemplateSource;
   readonly rootDefinitionId: string;
   readonly definitions: readonly TemplateCompilerCompiledHandoffDefinition[];
+}
+
+/** Resource and compiler-world address for one detached compiled variant. */
+export interface TemplateCompilerCompiledHandoffAddress {
+  readonly definitionProductHandle: ProductHandle;
+  readonly definitionIdentityHandle: IdentityHandle | null;
+  readonly compilerWorldProductHandle: ProductHandle;
+  readonly compilerWorldIdentityHandle: IdentityHandle;
+  readonly sourceAttachment: ResourceDefinitionSourceAttachment | null;
 }
 
 export interface TemplateCompilerCompiledHandoffTemplateSource {
@@ -317,6 +328,7 @@ export type TemplateCompilerCompiledHandoffInstructionValue =
 
 export interface TemplateCompilerCompiledHandoffProjectionRequest {
   readonly definitions: TemplateCompilerCompiledDefinitionFamilyValue;
+  readonly address: TemplateCompilerCompiledHandoffAddress;
   readonly markup: string;
   readonly authoredSourceRevision: string;
   readonly sourceMap: TemplateSourceOffsetMap | null;
@@ -338,6 +350,7 @@ export function projectTemplateCompilerCompiledHandoff(
   });
   return {
     schemaVersion: TEMPLATE_COMPILER_COMPILED_HANDOFF_VERSION,
+    address: request.address,
     resourceName: request.definitions.root.baseDefinition!.name,
     source: {
       markup: request.markup,

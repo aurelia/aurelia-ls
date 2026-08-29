@@ -49,6 +49,22 @@ describe('semantic app template compiler handoff', () => {
     expect(resource.source?.path).toMatch(/src\/my-app\.html$/u);
     expect(resource.value).toMatchObject({
       schemaVersion: TEMPLATE_COMPILER_COMPILED_HANDOFF_VERSION,
+      address: {
+        definitionProductHandle: expect.any(String),
+        definitionIdentityHandle: expect.any(String),
+        compilerWorldProductHandle: expect.any(String),
+        compilerWorldIdentityHandle: expect.any(String),
+        sourceAttachment: {
+          carrierKind: 'convention',
+          owningModuleKey: 'src/my-app.ts',
+          carrier: {
+            oldText: expect.stringContaining('export class MyApp'),
+          },
+          templateSource: {
+            oldText: '<main>\n  <h1>${message}</h1>\n</main>\n',
+          },
+        },
+      },
       resourceName: 'my-app',
       rootDefinitionId: 'definition:0',
       source: {

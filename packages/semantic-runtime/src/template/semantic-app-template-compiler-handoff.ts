@@ -230,12 +230,32 @@ function materializeResource(
   }
   const authoredSourceRevision = compilation.definition.template?.authoredSourceRevision
     ?? templateSource.productHandle;
+  const sourceAttachment = app.emission.resources.definitionSelections.find((selection) =>
+    selection.definition === compilation.definition
+  )?.sourceAttachment ?? null;
+  const definitionProductHandle = compilation.definition.productHandle;
+  if (definitionProductHandle == null) {
+    return unavailable(
+      TemplateCompilerCompiledHandoffState.Pending,
+      source,
+      TemplateCompilerCompiledHandoffStage.CompiledDefinitions,
+      'definition-product-unavailable',
+      'Template compiler handoff requires a materialized root resource definition identity.',
+    );
+  }
   return {
     state: TemplateCompilerCompiledHandoffState.Exact,
     source,
     reasons: [],
     value: projectTemplateCompilerCompiledHandoff({
       definitions: definitions.value,
+      address: {
+        definitionProductHandle,
+        definitionIdentityHandle: compilation.definition.identityHandle,
+        compilerWorldProductHandle: compilation.compilerWorld.world.productHandle,
+        compilerWorldIdentityHandle: compilation.compilerWorld.world.identityHandle,
+        sourceAttachment,
+      },
       markup: templateSource.markup,
       authoredSourceRevision,
       sourceMap: templateSource.sourceMap,
