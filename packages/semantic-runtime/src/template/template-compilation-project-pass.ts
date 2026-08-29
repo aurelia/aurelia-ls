@@ -31,16 +31,12 @@ import {
 } from '../resources/custom-element-definition.js';
 import type { ResourceDefinitionIndex } from '../resources/resource-definition-index.js';
 import { ResourceProductDetails } from '../resources/product-details.js';
-import {
-  NamedResourceDefinitionContributionKind,
-  ResourceDefinitionKind,
-} from '../resources/resource-kind.js';
+import { ResourceDefinitionKind } from '../resources/resource-kind.js';
 import type { KernelStore, KernelTelemetryReadView } from '../kernel/store.js';
 import { sourceFileAddressHostPath } from '../boot/source-ownership.js';
 import { sourceFileAddressForAddress } from '../kernel/source-address.js';
 import { sourceTextContentRevision } from '../kernel/source-text-revision.js';
 import { SemanticRuntimeAnalysisCurrentnessError } from '../kernel/analysis-currentness.js';
-import { OpenSeam, OpenSeamReasonKind } from '../kernel/open-seam.js';
 import {
   SemanticRuntimeProjectInputReadKind,
   semanticRuntimeProjectInputFileReadKey,
@@ -81,23 +77,14 @@ import {
   type AttributeSyntaxParseRequest,
 } from './attribute-syntax-materializer.js';
 import type { AttributeSyntax } from './attribute-syntax.js';
-import {
-  TemplateCompilerWorldDerivationRequest,
-  type TemplateCompilerWorldEmission,
-  TemplateCompilerWorldMaterializer,
-} from './compiler-world-materializer.js';
+import type { TemplateCompilerWorldEmission } from './compiler-world-materializer.js';
 import {
   TemplateCompilerCompileRequest,
   TemplateCompilerCompileState,
-  TemplateCompilerWorldKind,
   templateCompilerCompileState,
   type TemplateCompilerCompileHost,
   type TemplateCompilerService,
 } from './compiler-world.js';
-import {
-  TemplateResourceVisibilityKind,
-  type TemplateVisibleResource,
-} from './compiler-world-reference.js';
 import {
   TemplateCompilationUnitConstructionRequest,
   TemplateCompilationUnitMaterializer,
@@ -143,11 +130,9 @@ import {
 } from './template-runtime-analysis-context.js';
 import {
   directDependencyDefinitions,
-  visibleResourceForDefinition,
 } from './resource-scope-builder.js';
 import {
   LocalTemplateDefinitionMaterializer,
-  type LocalTemplateDefinitionMaterialization,
 } from './local-template-definition-materializer.js';
 import {
   TemplateCompilerReadObservation,
@@ -155,18 +140,9 @@ import {
   TemplateCompilerWorldAuthority,
 } from './compiler-read-view.js';
 import {
-  deriveTemplateCompilerHooksForDependencies,
-  templateCompilerHooksInheritedByLocalDefinition,
   TemplateCompilerHookKind,
-  TemplateCompilerHookLane,
-  TemplateCompilerHookOpenReason,
-  TemplateCompilerHookOpenReasonKind,
 } from './compiler-hook-world.js';
-import {
-  CssClassMappingOpenReason,
-  CssClassMappingOpenReasonKind,
-  deriveCssClassMappingForDependencies,
-} from './css-class-mapping.js';
+import { TemplateCompilerInvocationWorldMaterializer } from './compiler-invocation-world-materializer.js';
 import {
   TemplateCompilationCohortKind,
   TemplateCompilationLocus,
@@ -403,11 +379,6 @@ export type TemplateCompilationProjectPhaseName =
   | 'binding-command-lowering'
   | 'compiled-template'
   | 'runtime-analysis';
-
-type CompilerHookDependencyOpenReadView = Pick<
-  KernelStore,
-  'read' | 'readMaterializationsByOwner'
->;
 
 export type TemplateCompilationProjectPhaseTiming = SemanticRuntimePhaseTiming<TemplateCompilationProjectPhaseName>;
 
@@ -771,9 +742,7 @@ export class TemplateCompilationProjectEmission {
  * that exposed them.
  */
 export class TemplateCompilationProjectPass {
-  private readonly compilerWorldMaterializer: TemplateCompilerWorldMaterializer;
-  /** Store-backed side-effect-free projector used after the producing computation has finished. */
-  private readonly compilerWorldProjector: TemplateCompilerWorldMaterializer;
+  private readonly invocationWorlds: TemplateCompilerInvocationWorldMaterializer;
   private readonly cohortPlanner: TemplateCompilationCohortPlanner;
   private readonly unitMaterializer: TemplateCompilationUnitMaterializer;
   private readonly htmlParser: HtmlParseMaterializer;
@@ -793,8 +762,7 @@ export class TemplateCompilationProjectPass {
     /** Stable framework support borrowed by standalone authoring compiler worlds. */
     readonly support: FrameworkSupportCatalogs,
   ) {
-    this.compilerWorldMaterializer = new TemplateCompilerWorldMaterializer(publication);
-    this.compilerWorldProjector = new TemplateCompilerWorldMaterializer(store);
+    this.invocationWorlds = new TemplateCompilerInvocationWorldMaterializer(store, publication);
     this.cohortPlanner = new TemplateCompilationCohortPlanner(store, publication, support);
     this.unitMaterializer = new TemplateCompilationUnitMaterializer(publication);
     this.htmlParser = new HtmlParseMaterializer(publication);
@@ -1234,216 +1202,6 @@ export class TemplateCompilationProjectPass {
     return resources;
   }
 
-  private compilerWorldForLocalDefinitions(
-    parentCompilerWorldAuthority: TemplateCompilerWorldAuthority,
-    materialization: LocalTemplateDefinitionMaterialization,
-    localKey: string,
-    sourceAddressHandle: AddressHandle | null,
-  ): TemplateCompilerWorldSelection {
-    const localResources = materialization.definitions
-      .map((definition) =>
-        visibleResourceForDefinition(
-          definition,
-          TemplateResourceVisibilityKind.Local,
-          definition.sourceAddressHandle ?? sourceAddressHandle,
-        )
-      )
-      .filter((resource): resource is TemplateVisibleResource => resource != null);
-    const parentCompilerWorld = parentCompilerWorldAuthority.current();
-    const compilerWorld = this.compilerWorldWithPreferredResources(
-      parentCompilerWorld,
-      localResources,
-      `${localKey}:local-template-world`,
-      sourceAddressHandle,
-    );
-    if (compilerWorld === parentCompilerWorld) {
-      return new TemplateCompilerWorldSelection(parentCompilerWorld, parentCompilerWorldAuthority);
-    }
-    return new TemplateCompilerWorldSelection(
-      compilerWorld,
-      new TemplateCompilerWorldAuthority(
-        `template-compiler-world:${localKey}:local-template-world`,
-        () => this.publication.isCurrent()
-          ? compilerWorld
-          : this.projectCompilerWorldWithPreferredResources(
-              parentCompilerWorldAuthority.current(),
-              localResources,
-              `${localKey}:local-template-world`,
-              sourceAddressHandle,
-            ),
-      ),
-    );
-  }
-
-  private compilerWorldWithPreferredResources(
-    parentCompilerWorld: TemplateCompilerWorldEmission,
-    preferredResources: readonly TemplateVisibleResource[],
-    localKey: string,
-    sourceAddressHandle: AddressHandle | null,
-  ): TemplateCompilerWorldEmission {
-    const request = this.compilerWorldDerivationRequest(
-      parentCompilerWorld,
-      preferredResources,
-      localKey,
-      sourceAddressHandle,
-    );
-    return this.compilerWorldMaterializer.constructDerived(request);
-  }
-
-  private projectCompilerWorldWithPreferredResources(
-    parentCompilerWorld: TemplateCompilerWorldEmission,
-    preferredResources: readonly TemplateVisibleResource[],
-    localKey: string,
-    sourceAddressHandle: AddressHandle | null,
-  ): TemplateCompilerWorldEmission {
-    const request = this.compilerWorldDerivationRequest(
-      parentCompilerWorld,
-      preferredResources,
-      localKey,
-      sourceAddressHandle,
-    );
-    return this.compilerWorldProjector.projectDerived(request);
-  }
-
-  private compilerWorldDerivationRequest(
-    parentCompilerWorld: TemplateCompilerWorldEmission,
-    preferredResources: readonly TemplateVisibleResource[],
-    localKey: string,
-    sourceAddressHandle: AddressHandle | null,
-  ): TemplateCompilerWorldDerivationRequest {
-    return new TemplateCompilerWorldDerivationRequest(
-      localKey,
-      TemplateCompilerWorldKind.Component,
-      parentCompilerWorld,
-      preferredResources,
-      TemplateResourceVisibilityKind.Configured,
-      sourceAddressHandle,
-    );
-  }
-
-  private compilerWorldForDefinitionHooks(
-    parentAuthority: TemplateCompilerWorldAuthority,
-    definition: CustomElementDefinition,
-    appRootDefinitionProductHandle: ProductHandle | null,
-    localKey: string,
-    sourceAddressHandle: AddressHandle | null,
-  ): TemplateCompilerWorldSelection {
-    const parent = parentAuthority.current();
-    const request = this.compilerHookWorldDerivationRequest(
-      parent,
-      definition,
-      appRootDefinitionProductHandle,
-      localKey,
-      sourceAddressHandle,
-      this.publication,
-    );
-    const world = this.compilerWorldMaterializer.constructDerived(request);
-    if (world === parent) return new TemplateCompilerWorldSelection(parent, parentAuthority);
-    return new TemplateCompilerWorldSelection(
-      world,
-      new TemplateCompilerWorldAuthority(
-        `template-compiler-world:${localKey}:hook-world`,
-        () => this.publication.isCurrent()
-          ? world
-          : this.compilerWorldProjector.projectDerived(this.compilerHookWorldDerivationRequest(
-              parentAuthority.current(),
-              definition,
-              appRootDefinitionProductHandle,
-              localKey,
-              sourceAddressHandle,
-              this.store,
-            )),
-      ),
-    );
-  }
-
-  private compilerHookWorldDerivationRequest(
-    parent: TemplateCompilerWorldEmission,
-    definition: CustomElementDefinition,
-    appRootDefinitionProductHandle: ProductHandle | null,
-    localKey: string,
-    sourceAddressHandle: AddressHandle | null,
-    openReadView: CompilerHookDependencyOpenReadView,
-  ): TemplateCompilerWorldDerivationRequest {
-    const isLocalDefinition = definition.contributions.some((contribution) =>
-      contribution.contributionKind === NamedResourceDefinitionContributionKind.LocalTemplate
-    );
-    const parentHooks = isLocalDefinition
-      ? templateCompilerHooksInheritedByLocalDefinition(parent.compilerHooks.toCandidate())
-      : parent.compilerHooks.toCandidate();
-    const dependencyOpenSeams = this.resourceDependencyOpenSeams(definition, openReadView);
-    const dependencyOpenReasons = dependencyOpenSeams.map((seam) => new TemplateCompilerHookOpenReason(
-      TemplateCompilerHookOpenReasonKind.RegistryDependency,
-      TemplateCompilerHookLane.Leaf,
-      seam.summary,
-      seam.addressHandle,
-      [seam.handle],
-    ));
-    return new TemplateCompilerWorldDerivationRequest(
-      `${localKey}:hook-world`,
-      TemplateCompilerWorldKind.Component,
-      parent,
-      [],
-      TemplateResourceVisibilityKind.Configured,
-      sourceAddressHandle,
-      null,
-      deriveTemplateCompilerHooksForDependencies(
-        parentHooks,
-        definition.dependencies,
-        isLocalDefinition
-          || (definition.productHandle != null && definition.productHandle === appRootDefinitionProductHandle),
-        dependencyOpenReasons,
-      ),
-      isLocalDefinition
-        ? parent.cssClassMapping.toCandidate()
-        : deriveCssClassMappingForDependencies(
-            parent.cssClassMapping.toCandidate(),
-            definition.dependencies,
-            false,
-            dependencyOpenSeams
-              .filter((seam) => seam.reasonKinds.some((reasonKind) =>
-                reasonKind === OpenSeamReasonKind.ResourceDefinitionDependenciesOpen
-                || reasonKind === OpenSeamReasonKind.ResourceDefinitionDependencyEntryOpen
-              ))
-              .map((seam) => new CssClassMappingOpenReason(
-                CssClassMappingOpenReasonKind.DependencySet,
-                seam.summary,
-                null,
-                null,
-                null,
-                seam.addressHandle,
-                [seam.handle],
-              )),
-          ),
-    );
-  }
-
-  private resourceDependencyOpenSeams(
-    definition: CustomElementDefinition,
-    readView: CompilerHookDependencyOpenReadView,
-  ): readonly OpenSeam[] {
-    const ownerHandle = definition.identityHandle ?? definition.sourceAddressHandle;
-    if (ownerHandle == null || definition.productHandle == null) return [];
-    const openSeamHandles = readView.readMaterializationsByOwner(ownerHandle)
-      .filter((materialization) => materialization.productHandles.includes(definition.productHandle!))
-      .flatMap((materialization) => materialization.openSeamHandles);
-    const seams: OpenSeam[] = [];
-    const seen = new Set(openSeamHandles);
-    for (const handle of seen) {
-      const seam = readView.read(handle);
-      if (
-        !(seam instanceof OpenSeam)
-        || !seam.reasonKinds.some((reasonKind) =>
-          reasonKind === OpenSeamReasonKind.ResourceDefinitionDependenciesOpen
-          || reasonKind === OpenSeamReasonKind.ResourceDefinitionDependencyEntryOpen
-          || reasonKind === OpenSeamReasonKind.ResourceOpaqueRegistryEffectsOpen
-        )
-      ) continue;
-      seams.push(seam);
-    }
-    return seams;
-  }
-
   compileResourceTree(
     compilerWorldAuthority: TemplateCompilerWorldAuthority,
     familyOwnerHandle: IdentityHandle | ProductHandle,
@@ -1457,7 +1215,7 @@ export class TemplateCompilationProjectPass {
   ): TemplateResourceFamilyCompilationEmission {
     const definitionCompilerWorld = phases.measure(
       'compiler-hook-world',
-      () => this.compilerWorldForDefinitionHooks(
+      () => this.invocationWorlds.constructDefinitionHookWorld(
         compilerWorldAuthority,
         definition,
         appRootDefinitionProductHandle,
@@ -1474,9 +1232,9 @@ export class TemplateCompilationProjectPass {
       ? definitionCompilerWorld
       : phases.measure(
         TemplateCompilationCohortPlanningPhase.ComponentCompilerWorld,
-        () => this.compilerWorldForLocalDefinitions(
+        () => this.invocationWorlds.constructPostLocalWorld(
           definitionCompilerWorld.authority,
-          localDefinitions,
+          localDefinitions.definitions,
           localKey,
           template.addressHandle ?? definition.sourceAddressHandle,
         ),
@@ -1947,13 +1705,6 @@ function templateCompilerWorldContainers(
       compilation.compilerWorld.container,
     ]),
   ].map((container) => [container.identityHandle, container])).values()];
-}
-
-class TemplateCompilerWorldSelection {
-  constructor(
-    readonly world: TemplateCompilerWorldEmission,
-    readonly authority: TemplateCompilerWorldAuthority,
-  ) {}
 }
 
 class ProjectTemplateCompilerHost implements TemplateCompilerCompileHost<TemplateResourceFamilyCompilationEmission> {

@@ -29,6 +29,14 @@ classification, expression parsing, and instruction lowering converge on the sam
   spendable compiler-world state. Derived component worlds use one request shape for both construction and projection.
   Construction registers exact reads of the parent products whose values it inherits; side-effect-free projection is
   reserved for live-authority validation and does not pretend to publish or consume those products.
+- `compiler-invocation-world-materializer.ts` owns the two world transitions around direct local discovery. Post-local
+  derivation adds the complete direct-sibling definition set in one preferred-resource merge while inheriting the exact
+  pre-local hook/CSS locus. Definition-hook derivation then applies the existing local-definition hook inheritance,
+  dependency-open, and CSS mapping policy to one child over that shared parent world. The project compiler uses the
+  publishing forms and retains its committed store-backed reprojection authorities; occurrence compilation uses the
+  side-effect-free projection forms until an isolated replacement generation can publish the canonical colliding world
+  handles. Keep these transitions named and separate: root hooks run before locals, root traversal runs after locals,
+  and each child still derives its own hook-execution world.
 - `compiler-hook-world.ts` and `compiler-hook-world-projector.ts` own `TemplateCompilerHooks.findAll(...)` as a
   compiler-world service. Membership is exact-none, an exact leaf-then-root list, or Open; complete/Open/abrupt
   provider-array resolution is modeled before per-entry callable absence, built-in behavior, static authority,
