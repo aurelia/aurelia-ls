@@ -22,8 +22,6 @@
     "oracle:browser": "pnpm build && pnpm oracle:browser:built",
     "oracle:jit:built": "node scripts/run-jit-oracle.mjs",
     "oracle:jit": "pnpm build && pnpm oracle:jit:built",
-    "oracle:semantic:built": "node scripts/run-semantic-compiler-oracle.mjs",
-    "oracle:semantic": "pnpm build && pnpm oracle:semantic:built",
     "test:built": "node ../../scripts/run-vitest.mjs --root ../.. --config vitest.config.ts packages/aot/test",
     "test": "pnpm build && pnpm typecheck:test && pnpm test:built",
     "clean": "node -e \"require('node:fs').rmSync('out', { recursive: true, force: true }); require('node:fs').rmSync('tsconfig.tsbuildinfo', { force: true }); require('node:fs').rmSync('tsconfig.test.tsbuildinfo', { force: true })\""
