@@ -24,7 +24,6 @@ export {
   TemplateCompilerTextOccurrence,
 } from './template-compiler-occurrence.js';
 export * from './template-compiler-deterministic-execution.js';
-export * from './template-compiler-root-site-cursor-observation.js';
 export * from './template-compiler-context-family-compilation.js';
 export {
   TemplateCompilerContextFamilyMarkerGeometry,
