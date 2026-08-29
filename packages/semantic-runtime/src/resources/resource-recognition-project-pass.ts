@@ -48,6 +48,10 @@ import {
   PackageResourceBuildBridgeMaterializer,
   type PackageResourceBuildBridgeIndex,
 } from './package-resource-build-bridge.js';
+import {
+  materializeResourceDefinitionSourceAttachments,
+  type ResourceDefinitionSourceAttachment,
+} from './resource-definition-source-attachment.js';
 
 /** Resource-recognition result for one boot-admitted source file. */
 export class ResourceRecognitionSourceResult {
@@ -62,6 +66,8 @@ export class ResourceRecognitionSourceResult {
     readonly emission: ResourceRecognitionKernelEmission,
     /** Full definition convergence result for the source. */
     readonly convergence: ResourceDefinitionConvergenceEmission,
+    /** Detached authored geometry for the source's converged definitions. */
+    readonly definitionSourceAttachments: ReadonlyMap<FullResourceDefinition, ResourceDefinitionSourceAttachment>,
     /** Module edges left unresolved while preparing evaluation for this source. */
     readonly unresolvedModules: readonly EvaluationModuleResolutionOpen[],
     /** Phase timings for this source's recognition work. */
@@ -90,6 +96,8 @@ export class EffectiveResourceDefinitionSelection {
   constructor(
     readonly definition: FullResourceDefinition,
     readonly supersededDefinitions: readonly FullResourceDefinition[],
+    readonly sourceAttachment: ResourceDefinitionSourceAttachment | null,
+    readonly supersededSourceAttachments: readonly ResourceDefinitionSourceAttachment[],
   ) {}
 }
 
@@ -106,8 +114,12 @@ export class ResourceRecognitionProjectResult {
     /** Aggregate resource-recognition timings for app-world pressure. */
     readonly profile: ResourceRecognitionProjectProfile,
   ) {
+    const sourceAttachments = new Map(
+      sources.flatMap((source) => [...source.definitionSourceAttachments.entries()]),
+    );
     this.definitionSelections = effectiveResourceDefinitionSelections(
       sources.flatMap((source) => source.convergence.definitions),
+      sourceAttachments,
     );
     this.callableBindings = mergeStaticCallableExecutionBindings(
       sources.map((source) => source.convergence.callableBindings),
@@ -130,6 +142,16 @@ export class ResourceRecognitionProjectResult {
     return this.definitionSelections.flatMap((selection) => selection.supersededDefinitions);
   }
 
+  readDefinitionSourceAttachments(): readonly ResourceDefinitionSourceAttachment[] {
+    return this.definitionSelections.flatMap((selection) =>
+      selection.sourceAttachment == null ? [] : [selection.sourceAttachment]
+    );
+  }
+
+  readSupersededDefinitionSourceAttachments(): readonly ResourceDefinitionSourceAttachment[] {
+    return this.definitionSelections.flatMap((selection) => selection.supersededSourceAttachments);
+  }
+
   readUnresolvedModules(): readonly EvaluationModuleResolutionOpen[] {
     return this.sources.flatMap((source) => source.unresolvedModules);
   }
@@ -142,6 +164,7 @@ interface EffectiveResourceDefinitionSelectionFrame {
 
 function effectiveResourceDefinitionSelections(
   definitions: readonly FullResourceDefinition[],
+  sourceAttachments: ReadonlyMap<FullResourceDefinition, ResourceDefinitionSourceAttachment>,
 ): readonly EffectiveResourceDefinitionSelection[] {
   const selected: EffectiveResourceDefinitionSelectionFrame[] = [];
   const selectedIndexByTarget = new Map<string, number>();
@@ -166,6 +189,13 @@ function effectiveResourceDefinitionSelections(
   return selected.map((selection) => new EffectiveResourceDefinitionSelection(
     selection.definition,
     selection.candidates.filter((candidate) => candidate !== selection.definition),
+    sourceAttachments.get(selection.definition) ?? null,
+    selection.candidates
+      .filter((candidate) => candidate !== selection.definition)
+      .flatMap((candidate) => {
+        const attachment = sourceAttachments.get(candidate);
+        return attachment == null ? [] : [attachment];
+      }),
   ));
 }
 
@@ -265,6 +295,7 @@ export class ResourceRecognitionProjectPass {
       const sourceStarted = performance.now();
       const result = this.recognizeSource(
         store,
+        project,
         publication,
         recognition,
         source,
@@ -290,6 +321,7 @@ export class ResourceRecognitionProjectPass {
 
   private recognizeSource(
     store: KernelStore,
+    project: ProjectBootFrame,
     publication: KernelPublicationContext,
     recognition: ResourceRecognitionPass,
     source: StaticProjectEvaluationResult['sources'][number],
@@ -309,12 +341,21 @@ export class ResourceRecognitionProjectPass {
       publication,
       packageBuildBridges.observationsForContext(context),
     );
+    const definitionSourceAttachments = materializeResourceDefinitionSourceAttachments(
+      project,
+      context,
+      result.observations,
+      result.emission.definitions,
+      result.convergence.definitions,
+      publication,
+    );
     return new ResourceRecognitionSourceResult(
       source.admission,
       source.moduleKey,
       result.observations,
       result.emission,
       result.convergence,
+      definitionSourceAttachments,
       source.unresolvedModules,
       result.profile,
     );
@@ -329,6 +370,7 @@ export class ResourceRecognitionProjectPass {
       [],
       emptyResourceEmission(),
       emptyDefinitionConvergence(),
+      new Map(),
       source.unresolvedModules,
       emptyResourceRecognitionProfile(),
     );

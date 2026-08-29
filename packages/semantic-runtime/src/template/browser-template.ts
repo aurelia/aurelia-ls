@@ -45,6 +45,12 @@ export * from './template-compiler-compiled-definition-value.js';
 export * from './template-compiler-compiled-handoff-value.js';
 export * from './semantic-app-template-compiler-handoff.js';
 export { CustomElementCaptureKind } from '../resources/custom-element-definition.js';
+export {
+  ResourceDefinitionAuthoredSourceSpan,
+  ResourceDefinitionSourceAttachment,
+  ResourceDefinitionSourceOpenReason,
+} from '../resources/resource-definition-source-attachment.js';
+export { ResourceCarrierKind } from '../resources/resource-kind.js';
 export * from './template-compiler-occurrence-target-execution.js';
 export * from './template-compiler-occurrence-target-schedule.js';
 export * from './template-compiler-occurrence-hydrate-element-allocation.js';
