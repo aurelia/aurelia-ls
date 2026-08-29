@@ -59,8 +59,9 @@ classification, expression parsing, and instruction lowering converge on the sam
   and source addresses must still point back to the authored TypeScript text.
 - `compilation-unit-materializer.ts` materializes that front-door boundary once a template source and compiler world are
   known. It intentionally does not parse HTML yet; it establishes the product boundary where later template materializers
-  attach. Claim publication stays in `TemplateCompilationClaimMaterializer` so product construction does not also own
-  every `uses-*` relationship.
+  attach. Its prepared-ingress split can establish source/parse-context identity before local discovery selects the
+  final compiler world; the complete unit still publishes exactly once. Claim publication stays in
+  `TemplateCompilationClaimMaterializer` so product construction does not also own every `uses-*` relationship.
 - `template-compilation-cohort.ts` and `template-compilation-cohort-planner.ts` own the complete pre-compilation plan.
   `App` and `Authoring` are the compiler-cohort kinds; app visibility, route components and fallbacks, declared resource
   dependencies, and authoring policy are retained admission origins rather than competing cohort identities. The
@@ -211,6 +212,21 @@ classification, expression parsing, and instruction lowering converge on the sam
   are never kernel products or app-carry members; a carried precedent builds a fresh candidate-local family. This is a
   normalized-site crosswalk only, not occurrence-backed HTML ingress: static text, elements, comments, template-content
   structure, post-local compiler worlds, and final traversal membership remain separate work.
+- `local-template-definition-materializer.ts` now accepts only a current module-owned root lane partition for occurrence
+  definition preparation. Owner, forest, full-success handoff, ordered sibling transfers, reservations, and the immediate
+  pre-child frontier are derived from that capability rather than supplied as independently pairable arguments. One
+  complete direct-sibling batch retains each exact transfer on its definition entry, allocates every DomNode definition
+  before publication, and publishes the batch atomically into the surrounding staged compiler computation. Effective
+  hook-rewritten names and bindables keep carrier provenance without inheriting false authored scalar spans.
+- `template-compiler-occurrence-compilation-ingress.ts` is the next candidate-local join: each sibling definition entry
+  is associated by object identity with its exact child transfer/view and a prepared `CustomElement` compilation-unit
+  shell. The child source is `DomNode`, owns the occurrence definition, has null markup/source map, and retains the raw
+  precedent only as a provenance/product basis. It never passes the whole raw `HtmlParseEmission` through child authored
+  batch materializers and never fabricates a filtered HTML document; live carrier/content occurrences remain structural
+  authority. The prepared unit deliberately uses the child lane's logical local key, so its handles equal the incumbent
+  legacy Markup child unit while its candidate details differ. It remains unpublished until an isolated replacement
+  generation owns the atomic production cut and supplies the post-local compiler world. Repeated preparation returns the
+  same cohort; another materializer cannot mint a competing ingress.
 - `template-compiler-occurrence.ts` imports only the browser-effective compiler-carrier graph into a fresh mutable
   execution forest. Stable occurrence keys are independent of live paths; private edge collections and forest-owned
   move/detach operations preserve coherent root, child, template-content, and attribute ownership while the complete

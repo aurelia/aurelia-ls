@@ -11,9 +11,15 @@ import {
 import {
   BrowserEffectiveTemplateMaterializer,
 } from '../src/template/browser-effective-template-materializer.js';
+import { ResourceProductDetails } from '../src/resources/product-details.js';
 import { parseBrowserTemplateFragmentDraft } from '../src/template/browser-template-parser.js';
 import { selectBrowserTemplateCompilerCarrier } from '../src/template/browser-template-selection.js';
 import { LocalTemplateDefinitionMaterializer } from '../src/template/local-template-definition-materializer.js';
+import {
+  TemplateCompilerOccurrenceCompilationIngressMaterializer,
+} from '../src/template/template-compiler-occurrence-compilation-ingress.js';
+import { TemplateProductDetails } from '../src/template/product-details.js';
+import { TemplateSourceKind } from '../src/template/compilation-unit.js';
 import {
   TemplateCompilerOccurrencePrecedentAdmissionKind,
   TemplateCompilerOccurrencePrecedentEmission,
@@ -31,6 +37,7 @@ import {
   TemplateCompilerLocalExtractionState,
 } from '../src/template/template-compiler-local-extraction.js';
 import {
+  TemplateCompilerElementOccurrence,
   TemplateCompilerGeneratedOccurrenceRole,
   TemplateCompilerOccurrenceGeneration,
   TemplateCompilerOccurrenceForest,
@@ -212,6 +219,98 @@ describe('template compiler raw occurrence precedent', () => {
         [],
       )).toThrow(/disposition conservation/);
 
+      const beforeDefinitionPreparation = run.readKernelCountSnapshot().totalRecords;
+      const foreignDefinitionRun = runtime.computationLifecycle.begin({
+        kind: 'template-compiler-occurrence-precedent-foreign-definitions',
+        reconciliationKey: app.project.projectKey,
+        summary: 'Foreign occurrence definition materializer rejection.',
+      });
+      try {
+        expect(() => new LocalTemplateDefinitionMaterializer(foreignDefinitionRun)
+          .prepareOccurrenceHandoff(rootPartition)).toThrow(/current immediate root partition/);
+      } finally {
+        foreignDefinitionRun.abort();
+      }
+      const definitionPreparation = definitions.prepareOccurrenceHandoff(rootPartition);
+      expect(definitions.prepareOccurrenceHandoff(rootPartition)).toBe(definitionPreparation);
+      expect(definitionPreparation.isModuleConstructed()).toBe(true);
+      expect(definitionPreparation.ownerDefinition).toBe(rootRuntime.definition);
+      expect(definitionPreparation.entries.map((entry) => entry.definition.name))
+        .toEqual(['mode-panel', 'local-icon']);
+      expect(definitionPreparation.entries.map((entry) => entry.siteTransfer))
+        .toEqual(rootPartition.transfers);
+      for (const [entry, transfer] of definitionPreparation.entries.map((entry, index) => [
+        entry,
+        rootPartition.transfers[index]!,
+      ] as const)) {
+        expect(entry.extracted).toBe(transfer.transfer.extraction);
+        expect(entry.definition.productHandle).toBe(entry.extracted.definitionReservation.productHandle);
+        expect(entry.definition.identityHandle).toBe(entry.extracted.definitionReservation.identityHandle);
+        expect(entry.definition.sourceAddressHandle).not.toBeNull();
+        expect(run.readProductDetail(ResourceProductDetails.Definition, entry.definition.productHandle!)).toBeNull();
+      }
+      expect(run.readKernelCountSnapshot().totalRecords).toBe(beforeDefinitionPreparation);
+
+      const ingressMaterializer = new TemplateCompilerOccurrenceCompilationIngressMaterializer(run);
+      const ingressCohort = ingressMaterializer.prepareRootChildren(definitionPreparation);
+      expect(ingressCohort.isModuleConstructed()).toBe(true);
+      expect(ingressMaterializer.prepareRootChildren(definitionPreparation)).toBe(ingressCohort);
+      expect(() => new TemplateCompilerOccurrenceCompilationIngressMaterializer(run)
+        .prepareRootChildren(definitionPreparation)).toThrow(/another materializer/);
+      expect(ingressCohort.entries).toHaveLength(2);
+      expect(run.readKernelCountSnapshot().totalRecords).toBe(beforeDefinitionPreparation);
+      for (const [prepared, entry] of ingressCohort.entries.map((prepared, index) => [
+        prepared,
+        definitionPreparation.entries[index]!,
+      ] as const)) {
+        const legacy = requireCompilation(family, entry.definition.name);
+        expect(prepared.isModuleConstructed()).toBe(true);
+        expect(prepared.isCurrent()).toBe(true);
+        expect(prepared.definitionPreparation).toBe(definitionPreparation);
+        expect(prepared.definitionEntry).toBe(entry);
+        expect(prepared.siteTransfer).toBe(entry.siteTransfer);
+        expect(prepared.childView).toBe(entry.siteTransfer.childView);
+        expect(prepared.lane).toBe(entry.extracted.invocationLane);
+        expect(prepared.compilerCarrier).toBe(entry.extracted.carrier);
+        expect(prepared.compilerContent).toBe(entry.extracted.content);
+        expect(prepared.rawBinding).toBe(binding);
+        expect(prepared.rawHtml).toBe(root.compilation.html);
+        expect(prepared.unitIngress.localKey).toBe(prepared.lane.localKey);
+        expect(prepared.unitIngress.templateSource).toMatchObject({
+          sourceKind: TemplateSourceKind.DomNode,
+          markup: null,
+          sourceMap: null,
+          templateAddressHandle: expect.stringMatching(/^kernel:/u),
+          sourceAddressHandle: entry.definition.template?.addressHandle,
+          owner: {
+            productHandle: entry.definition.productHandle,
+            identityHandle: entry.definition.identityHandle,
+            localName: entry.definition.name,
+            addressHandle: entry.definition.sourceAddressHandle,
+          },
+        });
+        expect(prepared.unitIngress.templateSource.productHandle).toBe(legacy.unit.templateSource.productHandle);
+        expect(prepared.unitIngress.templateSource).not.toBe(legacy.unit.templateSource);
+        expect(legacy.unit.templateSource.sourceKind).toBe(TemplateSourceKind.Markup);
+        expect(run.readProductDetail(
+          TemplateProductDetails.Source,
+          prepared.unitIngress.templateSource.productHandle,
+        )).toBe(legacy.unit.templateSource);
+      }
+      expect(new Set(ingressCohort.entries.map((entry) => entry.unitIngress.templateSource.identityHandle)).size)
+        .toBe(2);
+      expect(() => new LocalTemplateDefinitionMaterializer(run).publishOccurrenceHandoff(definitionPreparation))
+        .toThrow(/another materializer/);
+      const definitionMaterialization = definitions.publishOccurrenceHandoff(definitionPreparation);
+      expect(definitionMaterialization.isModuleConstructed()).toBe(true);
+      expect(definitionMaterialization.preparation).toBe(definitionPreparation);
+      expect(definitionMaterialization.entries).toEqual(definitionPreparation.entries);
+      for (const entry of definitionMaterialization.entries) {
+        expect(run.readProductDetail(ResourceProductDetails.Definition, entry.definition.productHandle!))
+          .toBe(entry.definition);
+      }
+      expect(() => definitions.publishOccurrenceHandoff(definitionPreparation)).toThrow(/already published/);
+
       const partitionChild = (
         transfer: TemplateCompilerNormalizedSiteLaneTransfer,
       ): TemplateCompilerNormalizedSiteLanePartition => {
@@ -314,6 +413,10 @@ describe('template compiler raw occurrence precedent', () => {
       expect(excluded.filter((entry) =>
         entry.receipt.disposition === TemplateCompilerSiteSpendDisposition.LocalBindableMetadataConsumed
       )).toHaveLength(20);
+      expect(ingressCohort.isCurrent()).toBe(false);
+      expect(ingressCohort.entries.every((entry) => !entry.isCurrent())).toBe(true);
+      expect(() => ingressMaterializer.prepareRootChildren(definitionPreparation))
+        .toThrow(/no longer at its immediate root frontier/);
 
       const mismatched = mismatchedPrecedent(root, rootRuntime);
       const mismatch = bindTemplateCompilerRootOccurrencePrecedentInvocation({
@@ -332,6 +435,100 @@ describe('template compiler raw occurrence precedent', () => {
       ]);
     } finally {
       run.abort();
+    }
+  });
+
+  test('retains rewritten local provenance and refuses superseded definition publication', () => {
+    const precedent = requirePrecedent(family, 'template-local-template-semantics-app');
+    const rootRuntime = requireCompilation(family, 'template-local-template-semantics-app');
+    const markup = precedent.compilation.unit.templateSource.markup;
+    if (markup == null) throw new Error('Expected rewritten-provenance source markup.');
+    const run = runtime.computationLifecycle.begin({
+      kind: 'template-compiler-occurrence-precedent-rewritten-local',
+      reconciliationKey: app.project.projectKey,
+      summary: 'Rewritten local definition provenance and publication currentness.',
+    });
+    let replacement: ReturnType<typeof runtime.computationLifecycle.begin> | null = null;
+    try {
+      const browser = parseBrowserTemplateFragmentDraft(markup);
+      const browserEmission = new BrowserEffectiveTemplateMaterializer(run).materialize({
+        localKey: 'template-compiler-occurrence-precedent:rewritten-local',
+        sourceRevision: precedent.sourceRevision,
+        templateSource: precedent.compilation.unit.templateSource,
+        authoredHtml: precedent.compilation.html,
+        browser,
+        carrierSelection: selectBrowserTemplateCompilerCarrier(browser.fragment),
+      });
+      const forest = TemplateCompilerOccurrenceForest.fromBrowserEffective(browserEmission);
+      const carrier = forest.readNodes().find((node): node is TemplateCompilerElementOccurrence =>
+        node instanceof TemplateCompilerElementOccurrence
+        && node.tagName === 'template'
+        && node.readAttributes().some((attribute) =>
+          attribute.name === 'as-custom-element' && attribute.value === 'mode-panel'
+        )
+      );
+      if (carrier == null) throw new Error('Expected mode-panel local carrier.');
+      const declaration = carrier.readAttributes().find((attribute) => attribute.name === 'as-custom-element');
+      const firstBindable = carrier.templateContent?.readChildren().find(
+        (node): node is TemplateCompilerElementOccurrence =>
+          node instanceof TemplateCompilerElementOccurrence && node.tagName === 'bindable'
+      );
+      const bindableName = firstBindable?.readAttributes().find((attribute) => attribute.name === 'name') ?? null;
+      if (declaration == null || bindableName == null) throw new Error('Expected rewritten local metadata inputs.');
+      forest.rewriteAttributeValue(declaration, 'effective-panel');
+      forest.rewriteAttributeValue(bindableName, 'effectiveProp');
+
+      const execution = TemplateCompilerExecutionSession.createForForest('rewritten-local-family', forest);
+      const lane = execution.admitRootInvocation(rootRuntime.localKey);
+      const hook = executeTemplateCompilerHookBootstrap({
+        execution,
+        lane,
+        compilerWorld: precedent.preLocalCompilerWorld,
+        executionOpenSeamHandle: run.handles.openSeam('rewritten-local:hook-open'),
+      });
+      const definitions = new LocalTemplateDefinitionMaterializer(run);
+      const extraction = executeTemplateCompilerLocalExtraction({
+        execution,
+        lane,
+        hookBootstrap: hook,
+        ownerName: rootRuntime.definition.name,
+        ownerCauseHandles: [rootRuntime.definition.productHandle!],
+        reserveDefinition: (invocationKey) => definitions.reserveOccurrenceDefinition(invocationKey),
+      });
+      const closure = execution.closeInvocationBootstrap(hook, extraction);
+      const exclusions = TemplateCompilerLocalSiteExclusionAuthority.capture(execution, closure);
+      const binding = bindTemplateCompilerRootOccurrencePrecedentInvocation({
+        appCurrentness: app,
+        execution,
+        bootstrapClosure: closure,
+        browserEmission,
+        occurrencePrecedent: precedent,
+        currentFrontDoor: app.emission.templates.frontDoor,
+        currentFamily: family,
+      }).binding;
+      if (binding == null) throw new Error('Expected rewritten-local raw binding.');
+      const laneFamily = createTemplateCompilerNormalizedSiteLaneFamily(binding).family;
+      if (laneFamily == null) throw new Error('Expected rewritten-local lane family.');
+      const partition = laneFamily.partition(laneFamily.rootView, closure, exclusions).partition;
+      if (partition == null) throw new Error('Expected rewritten-local root partition.');
+      const preparation = definitions.prepareOccurrenceHandoff(partition);
+      const rewritten = preparation.entries.find((entry) => entry.definition.name === 'effective-panel')?.definition;
+      if (rewritten == null) throw new Error('Expected rewritten effective-panel definition.');
+      expect(rewritten.nameSourceAddressHandle).toBeNull();
+      expect(rewritten.bindables[0]).toMatchObject({
+        name: 'effectiveProp',
+        sourceAddressHandle: expect.stringMatching(/^kernel:/u),
+        nameSourceAddressHandle: null,
+      });
+
+      replacement = runtime.computationLifecycle.begin(run.locus);
+      expect(() => definitions.prepareOccurrenceHandoff(partition)).toThrow(/current immediate root partition/);
+      expect(() => definitions.publishOccurrenceHandoff(preparation)).toThrow(/current immediate root partition/);
+      expect(runtime.workspace.store.readProductDetail(ResourceProductDetails.Definition, rewritten.productHandle!))
+        .toBeNull();
+    } finally {
+      run.abort();
+      replacement?.abort();
     }
   });
 
@@ -459,6 +656,28 @@ describe('template compiler raw occurrence precedent', () => {
         expect(partition.transfers).toHaveLength(1);
         expect(partition.transfers[0]?.transfer.extraction.name).toBe('deep-local');
         expect(partition.transfers[0]?.childView.bundles).toEqual([]);
+        const definitionPreparation = definitions.prepareOccurrenceHandoff(partition);
+        expect(definitionPreparation.entries).toHaveLength(1);
+        const definition = definitionPreparation.entries[0]!.definition;
+        expect(definition).toMatchObject({
+          name: 'deep-local',
+          sourceAddressHandle: null,
+          nameSourceAddressHandle: null,
+          template: {
+            markup: null,
+            sourceMap: null,
+            authoredSourceRevision: precedent.sourceRevision,
+          },
+        });
+        const ingress = new TemplateCompilerOccurrenceCompilationIngressMaterializer(run)
+          .prepareRootChildren(definitionPreparation).entries[0]!;
+        expect(ingress.childView.bundles).toEqual([]);
+        expect(ingress.unitIngress.templateSource).toMatchObject({
+          sourceKind: TemplateSourceKind.DomNode,
+          markup: null,
+          sourceMap: null,
+          sourceAddressHandle: null,
+        });
       } finally {
         run.abort();
       }
@@ -524,7 +743,23 @@ describe('template compiler raw occurrence precedent', () => {
       if (bindingResult.binding == null) throw new Error(`Expected exact carried ${key} binding.`);
       const lanes = createTemplateCompilerNormalizedSiteLaneFamily(bindingResult.binding).family;
       if (lanes == null) throw new Error(`Expected exact carried ${key} lane family.`);
-      return { run, execution, closure, browserEmission, frontDoor, binding: bindingResult.binding, lanes };
+      const exclusions = TemplateCompilerLocalSiteExclusionAuthority.capture(execution, closure);
+      const partition = lanes.partition(lanes.rootView, closure, exclusions).partition;
+      if (partition == null) throw new Error(`Expected exact carried ${key} root partition.`);
+      const definitionPreparation = definitions.prepareOccurrenceHandoff(partition);
+      const ingressCohort = new TemplateCompilerOccurrenceCompilationIngressMaterializer(run)
+        .prepareRootChildren(definitionPreparation);
+      return {
+        run,
+        execution,
+        closure,
+        browserEmission,
+        frontDoor,
+        binding: bindingResult.binding,
+        lanes,
+        definitionPreparation,
+        ingressCohort,
+      };
     };
 
     const previousView = prepareView(app, family, previous, 'previous');
@@ -547,6 +782,7 @@ describe('template compiler raw occurrence precedent', () => {
       expect(nextFamily.occurrencePrecedentsRequested).toBe(true);
       expect(previousView.binding.isCurrent()).toBe(false);
       expect(previousView.lanes.isCurrent()).toBe(false);
+      expect(previousView.ingressCohort.entries.every((entry) => !entry.isCurrent())).toBe(true);
       const stale = bindTemplateCompilerRootOccurrencePrecedentInvocation({
         appCurrentness: app,
         execution: previousView.execution,
@@ -583,6 +819,18 @@ describe('template compiler raw occurrence precedent', () => {
         )).toBe(true);
         expect(nextView.lanes.rootView.bundles.map(normalizedBundleProductHandle))
           .toEqual(previousView.lanes.rootView.bundles.map(normalizedBundleProductHandle));
+        expect(nextView.definitionPreparation).not.toBe(previousView.definitionPreparation);
+        expect(nextView.definitionPreparation.entries.every((entry, index) =>
+          entry !== previousView.definitionPreparation.entries[index]
+          && entry.definition.productHandle
+            === previousView.definitionPreparation.entries[index]?.definition.productHandle
+        )).toBe(true);
+        expect(nextView.ingressCohort.entries.every((entry, index) =>
+          entry !== previousView.ingressCohort.entries[index]
+          && entry.unitIngress.templateSource.productHandle
+            === previousView.ingressCohort.entries[index]?.unitIngress.templateSource.productHandle
+        )).toBe(true);
+        expect(nextView.ingressCohort.entries.every((entry) => entry.isCurrent())).toBe(true);
       } finally {
         nextView.run.abort();
       }
