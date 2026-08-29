@@ -30,12 +30,18 @@ export interface AotNominatedEntry {
   readonly arguments?: readonly AotNominatedEntryArgument[];
 }
 
+export type AotRuntimeConfigurationMode =
+  | "preserve"
+  | "replace-explicit"
+  | "require-replaceable";
+
 export interface AotBuildRequest {
   readonly root: string;
   readonly mode: string;
   readonly environmentName: string;
   readonly sourcemap: boolean | "inline" | "hidden";
   readonly nominatedEntry?: AotNominatedEntry | null;
+  readonly runtimeConfiguration?: AotRuntimeConfigurationMode;
 }
 
 export interface AotTemplateRequest {
@@ -143,6 +149,8 @@ export interface AureliaAotOptions {
   readonly provider: AotArtifactProvider;
   /** Explicit dormant app factory activation passed to the build provider. */
   readonly nominatedEntry?: AotNominatedEntry | null;
+  /** Omit to preserve authored runtime configuration without requiring a replacement. */
+  readonly runtimeConfiguration?: AotRuntimeConfigurationMode;
   readonly conventions?: AotConventionOptions;
   /** Omit to avoid emitting or retaining build-graph evidence. */
   readonly receipt?: AotReceiptOptions;

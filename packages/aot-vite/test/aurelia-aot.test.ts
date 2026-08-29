@@ -102,7 +102,11 @@ describe("aureliaAot Vite preset", () => {
         },
       ],
     };
-    const preset = aureliaAot({ provider: { openBuild }, nominatedEntry });
+    const preset = aureliaAot({
+      provider: { openBuild },
+      nominatedEntry,
+      runtimeConfiguration: "require-replaceable",
+    });
     const guard = requiredPlugin(preset, "aurelia-aot:guard");
     const sources = requiredPlugin(preset, "aurelia-aot:sources");
     const context = pluginContext();
@@ -116,6 +120,7 @@ describe("aureliaAot Vite preset", () => {
       environmentName: "client",
       sourcemap: true,
       nominatedEntry,
+      runtimeConfiguration: "require-replaceable",
     });
   });
 
