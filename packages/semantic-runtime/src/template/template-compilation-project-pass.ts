@@ -180,6 +180,11 @@ import {
   TemplateCompilationCohortPlanningPhase,
   TemplateCompilationCohortPlanningRequest,
 } from './template-compilation-cohort-planner.js';
+import {
+  buildTemplateCompilerNormalizedSiteIndex,
+  TemplateCompilerNormalizedSiteIndexState,
+  type TemplateCompilerNormalizedSiteIndexResult,
+} from './template-compiler-normalized-site-index.js';
 
 /** Front-door template products produced for one compiler-visible custom element definition. */
 export class TemplateResourceCompilationEmission {
@@ -254,6 +259,69 @@ export class TemplateResourceCompilationEmission {
   }
 }
 
+/**
+ * Opt-in raw whole-source precedent for browser-occurrence compilation.
+ *
+ * This is not runtime compiled output. It preserves the original authored product space under the pre-local compiler
+ * world so later root/child lane views can spend the exact bundles referenced by browser occurrence origins.
+ */
+export const enum TemplateCompilerOccurrencePrecedentAdmissionKind {
+  /** Initial overlap corridor: legacy source extraction proved at least one authored local declaration. */
+  LegacyLocalOverlap = 'legacy-local-overlap',
+  /** Authored syntax names a possible local declaration even though legacy static extraction did not close. */
+  AuthoredLocalSyntaxCandidate = 'authored-local-syntax-candidate',
+}
+
+export class TemplateCompilerOccurrencePrecedentEmission {
+  readonly normalizedSites: TemplateCompilerNormalizedSiteIndexResult;
+
+  constructor(
+    readonly compilation: TemplateResourceCompilationEmission,
+    readonly preLocalCompilerWorld: TemplateCompilerWorldEmission,
+    readonly sourceRevision: string,
+    readonly admissionKind: TemplateCompilerOccurrencePrecedentAdmissionKind,
+  ) {
+    this.normalizedSites = buildTemplateCompilerNormalizedSiteIndex(compilation);
+    const template = compilation.definition.template;
+    const rootContext = compilation.unit.rootContext;
+    if (
+      template?.kind !== CustomElementTemplateKind.Markup
+      || template.markup == null
+      || template.authoredSourceRevision !== sourceRevision
+      || compilation.unit.templateSource.markup !== template.markup
+      || compilation.parentCompilerWorld !== preLocalCompilerWorld
+      || compilation.compilerWorld !== preLocalCompilerWorld
+      || compilation.html.draft == null
+      || (this.normalizedSites.state === TemplateCompilerNormalizedSiteIndexState.GraphExact
+        && this.normalizedSites.index?.compilation !== compilation)
+      || rootContext.localElementNames.length !== 0
+      || rootContext.dependencyIdentityHandles.length !== 0
+    ) {
+      throw new Error(
+        'Occurrence precedent lost raw source, pre-local world, normalized-site ownership, or local cohort authority.',
+      );
+    }
+  }
+}
+
+/** One recursive resource compilation plus the optional raw occurrence precedent for its owner lane. */
+export class TemplateResourceFamilyCompilationEmission {
+  constructor(
+    readonly compilations: readonly TemplateResourceCompilationEmission[],
+    readonly occurrencePrecedents: readonly TemplateCompilerOccurrencePrecedentEmission[],
+  ) {
+    const ordinary = new Set(compilations);
+    if (
+      (occurrencePrecedents.length > 0 && compilations.length === 0)
+      || occurrencePrecedents.some((precedent) => ordinary.has(precedent.compilation))
+      || new Set(occurrencePrecedents.map((precedent) => precedent.compilation.localKey)).size
+        !== occurrencePrecedents.length
+    ) {
+      throw new Error('Resource family compilation lost runtime output or mixed its occurrence precedent into it.');
+    }
+  }
+}
+
 /** Complete compiler-front-door input for one template occurrence in one compiler cohort. */
 export class TemplateResourceCompilationRequest {
   constructor(
@@ -268,6 +336,7 @@ export class TemplateResourceCompilationRequest {
     readonly compilerReads: TemplateCompilerReadView,
     readonly localElementNames: readonly string[] = [],
     readonly dependencyIdentityHandles: readonly IdentityHandle[] = [],
+    readonly retainDraftBindings: boolean = false,
   ) {}
 }
 
@@ -281,6 +350,7 @@ export class TemplateResourceFamilyCompilationRequest {
     readonly compilerWorldAuthority: TemplateCompilerWorldAuthority,
     readonly definition: CustomElementDefinition,
     readonly template: CustomElementTemplateDefinition,
+    readonly includeCompilerOccurrencePrecedents: boolean = false,
   ) {}
 }
 
@@ -352,6 +422,8 @@ export interface TemplateCompilationProjectOptions {
   /** Pre-template state visibility authority; omitted only when the standalone compiler has no state project. */
   readonly stateStoreVisibility?: StateStoreVisibility;
   readonly includeAuthoringTemplates?: boolean;
+  /** Retain raw whole-source compiler precedents for browser-occurrence/AOT compilation. */
+  readonly includeCompilerOccurrencePrecedents?: boolean;
   readonly authoringTemplateSourceFiles?: readonly string[];
   readonly authoringTemplateLimit?: number | null;
   readonly projectKey?: string;
@@ -369,6 +441,7 @@ export class TemplateCompilationProjectPlan {
     readonly stateStoreVisibility: StateStoreVisibility,
     readonly authoringTemplateSourceFiles: readonly string[],
     readonly authoringTemplateLimit: number | null,
+    readonly includeCompilerOccurrencePrecedents: boolean,
     readonly telemetry: NormalizedSemanticRuntimeTelemetryOptions,
     readonly profile: TemplateCompilationProjectProfile,
   ) {}
@@ -385,10 +458,27 @@ export class TemplateCompilationFamilyFrontDoorEmission {
     cohortKeys: readonly string[],
     appCompilations: readonly TemplateResourceCompilationEmission[],
     authoringCompilations: readonly TemplateResourceCompilationEmission[],
+    readonly appOccurrencePrecedents: readonly TemplateCompilerOccurrencePrecedentEmission[] = [],
+    readonly authoringOccurrencePrecedents: readonly TemplateCompilerOccurrencePrecedentEmission[] = [],
+    readonly occurrencePrecedentsRequested: boolean = false,
   ) {
     this.cohortKeys = Object.freeze([...cohortKeys]);
     this.appCompilations = Object.freeze([...appCompilations]);
     this.authoringCompilations = Object.freeze([...authoringCompilations]);
+    this.appOccurrencePrecedents = Object.freeze([...appOccurrencePrecedents]);
+    this.authoringOccurrencePrecedents = Object.freeze([...authoringOccurrencePrecedents]);
+    const ordinary = new Set([...appCompilations, ...authoringCompilations]);
+    const precedents = [...appOccurrencePrecedents, ...authoringOccurrencePrecedents];
+    if (
+      precedents.some((precedent) =>
+        ordinary.has(precedent.compilation)
+        || precedent.compilation.familyOwnerHandle !== ownerHandle
+      )
+      || (precedents.length > 0 && !occurrencePrecedentsRequested)
+      || new Set(precedents.map((precedent) => precedent.compilation.localKey)).size !== precedents.length
+    ) {
+      throw new Error('Template front-door family mixed occurrence precedents with runtime compilation membership.');
+    }
   }
 
   matches(owner: TemplateCompilationOwnerPlan): boolean {
@@ -423,7 +513,12 @@ class TemplateCompilationFamilyCarryRebaser {
       this.callableBindingsByContainerIdentity.set(world.container.identityHandle, world.callableBindings);
       this.worldsByScope.set(world.resourceScope.identityHandle, world);
     }
-    for (const compilation of [...previous.appCompilations, ...previous.authoringCompilations]) {
+    for (const compilation of [
+      ...previous.appCompilations,
+      ...previous.authoringCompilations,
+      ...previous.appOccurrencePrecedents.map((precedent) => precedent.compilation),
+      ...previous.authoringOccurrencePrecedents.map((precedent) => precedent.compilation),
+    ]) {
       this.rebaseWorld(compilation.parentCompilerWorld);
       this.rebaseWorld(compilation.compilerWorld);
     }
@@ -461,6 +556,9 @@ class TemplateCompilationFamilyCarryRebaser {
       this.owner.cohorts.map((cohort) => cohort.key),
       this.previous.appCompilations.map((compilation) => this.rebaseCompilation(compilation, carry)),
       this.previous.authoringCompilations.map((compilation) => this.rebaseCompilation(compilation, carry)),
+      this.previous.appOccurrencePrecedents.map((precedent) => this.rebasePrecedent(precedent, carry)),
+      this.previous.authoringOccurrencePrecedents.map((precedent) => this.rebasePrecedent(precedent, carry)),
+      this.previous.occurrencePrecedentsRequested,
     );
   }
 
@@ -478,6 +576,22 @@ class TemplateCompilationFamilyCarryRebaser {
       compilerWorld,
       compilation.definition,
       compilation.registeredReads.map((read) => carry.readFor(read)),
+    );
+  }
+
+  private rebasePrecedent(
+    precedent: TemplateCompilerOccurrencePrecedentEmission,
+    carry: ComputationChildCarry,
+  ): TemplateCompilerOccurrencePrecedentEmission {
+    const compilation = this.rebaseCompilation(precedent.compilation, carry);
+    if (compilation.compilerWorld !== compilation.parentCompilerWorld) {
+      throw new Error(`Carried occurrence precedent '${compilation.localKey}' lost its pre-local compiler world.`);
+    }
+    return new TemplateCompilerOccurrencePrecedentEmission(
+      compilation,
+      compilation.compilerWorld,
+      precedent.sourceRevision,
+      precedent.admissionKind,
     );
   }
 
@@ -739,6 +853,7 @@ export class TemplateCompilationProjectPass {
       options.stateStoreVisibility ?? StateStoreVisibility.empty(),
       authoringTemplateSourceFiles,
       authoringTemplateLimit,
+      options.includeCompilerOccurrencePrecedents === true,
       telemetry,
       templateCompilationProfile(started, phases.phases),
     );
@@ -754,6 +869,7 @@ export class TemplateCompilationProjectPass {
     const phases = new TemplateCompilationPhaseRecorder(this.publication, plan.telemetry);
     const families = this.activatePlannedFamilies(
       plan.cohortPlan,
+      plan.includeCompilerOccurrencePrecedents,
       phases,
       project,
       previous,
@@ -879,6 +995,7 @@ export class TemplateCompilationProjectPass {
   /** Activate the flat family layer in plan order: carry an exact prior closure or compile that owner afresh. */
   private activatePlannedFamilies(
     plan: TemplateCompilationCohortProjectPlan,
+    includeCompilerOccurrencePrecedents: boolean,
     phases: TemplateCompilationPhaseRecorder,
     project: ProjectBootFrame | null,
     previous: TemplateCompilationFrontDoorEmission | null,
@@ -896,7 +1013,11 @@ export class TemplateCompilationProjectPass {
       const familyRebaser = previousFamily == null
         ? null
         : new TemplateCompilationFamilyCarryRebaser(owner, previousFamily, project);
-      if (previousFamily?.matches(owner) === true && familyRebaser != null) {
+      if (
+        previousFamily?.matches(owner) === true
+        && previousFamily.occurrencePrecedentsRequested === includeCompilerOccurrencePrecedents
+        && familyRebaser != null
+      ) {
         const carry = this.publication.tryCarryChild(locus, familyRebaser.rebaseRead);
         if (carry != null) {
           families.push(familyRebaser.rebase(carry));
@@ -905,6 +1026,8 @@ export class TemplateCompilationProjectPass {
       }
       const app: TemplateResourceCompilationEmission[] = [];
       const authoring: TemplateResourceCompilationEmission[] = [];
+      const appOccurrencePrecedents: TemplateCompilerOccurrencePrecedentEmission[] = [];
+      const authoringOccurrencePrecedents: TemplateCompilerOccurrencePrecedentEmission[] = [];
       this.publication.withChild(locus, () => {
         const compileOwner = (): void => {
           const definition = this.requireCurrentTemplateOwnerDefinition(owner);
@@ -922,11 +1045,18 @@ export class TemplateCompilationProjectPass {
                 cohort.analysisContextProductHandle,
                 cohort.appRootDefinitionProductHandle,
                 phases,
+                includeCompilerOccurrencePrecedents,
               ),
             );
             if (result.output != null) {
               const target = cohort.kind === TemplateCompilationCohortKind.App ? app : authoring;
-              target.push(...result.output);
+              target.push(...result.output.compilations);
+              if (result.output.occurrencePrecedents.length > 0) {
+                const precedents = cohort.kind === TemplateCompilationCohortKind.App
+                  ? appOccurrencePrecedents
+                  : authoringOccurrencePrecedents;
+                precedents.push(...result.output.occurrencePrecedents);
+              }
             }
           }
         };
@@ -947,6 +1077,9 @@ export class TemplateCompilationProjectPass {
         owner.cohorts.map((cohort) => cohort.key),
         app,
         authoring,
+        appOccurrencePrecedents,
+        authoringOccurrencePrecedents,
+        includeCompilerOccurrencePrecedents,
       ));
     }
     return families;
@@ -1320,7 +1453,8 @@ export class TemplateCompilationProjectPass {
     template: CustomElementTemplateDefinition,
     localKey: string,
     phases: TemplateCompilationPhaseRecorder,
-  ): readonly TemplateResourceCompilationEmission[] {
+    includeCompilerOccurrencePrecedents: boolean,
+  ): TemplateResourceFamilyCompilationEmission {
     const definitionCompilerWorld = phases.measure(
       'compiler-hook-world',
       () => this.compilerWorldForDefinitionHooks(
@@ -1374,6 +1508,52 @@ export class TemplateCompilationProjectPass {
         phases,
       );
     const compilations: TemplateResourceCompilationEmission[] = owner == null ? [] : [owner];
+    const occurrenceSourceRevision = template.authoredSourceRevision;
+    const occurrenceAdmissionKind = !includeCompilerOccurrencePrecedents || occurrenceSourceRevision == null
+      ? null
+      : localDefinitions.definitions.length > 0
+        ? TemplateCompilerOccurrencePrecedentAdmissionKind.LegacyLocalOverlap
+        : hasAuthoredLocalTemplateSyntax(template.markup)
+          ? TemplateCompilerOccurrencePrecedentAdmissionKind.AuthoredLocalSyntaxCandidate
+          : null;
+    const occurrencePrecedentCompilation = owner == null
+      || occurrenceAdmissionKind == null
+      ? null
+      : this.compileResource(
+          new TemplateResourceCompilationRequest(
+            `${localKey}:occurrence-precedent`,
+            familyOwnerHandle,
+            analysisContextProductHandle,
+            appRootDefinitionProductHandle,
+            parentCompilerWorld,
+            parentCompilerWorld,
+            definition,
+            template,
+            new TemplateCompilerReadView(
+              this.publication.domainReadProjection,
+              definitionCompilerWorld.authority,
+            ),
+            [],
+            [],
+            true,
+          ),
+          phases,
+        );
+    let occurrencePrecedent: TemplateCompilerOccurrencePrecedentEmission | null = null;
+    if (occurrencePrecedentCompilation != null) {
+      if (occurrenceSourceRevision == null || occurrenceAdmissionKind == null) {
+        throw new Error('Occurrence precedent compilation lost its admitted source revision or syntax posture.');
+      }
+      occurrencePrecedent = new TemplateCompilerOccurrencePrecedentEmission(
+        occurrencePrecedentCompilation,
+        parentCompilerWorld,
+        occurrenceSourceRevision,
+        occurrenceAdmissionKind,
+      );
+    }
+    const occurrencePrecedents: TemplateCompilerOccurrencePrecedentEmission[] = occurrencePrecedent == null
+      ? []
+      : [occurrencePrecedent];
     for (let index = 0; index < localDefinitions.definitions.length; index++) {
       const localDefinition = localDefinitions.definitions[index]!;
       const childLocalKey = `${localKey}:local-template:${localDefinition.name}`;
@@ -1386,13 +1566,15 @@ export class TemplateCompilationProjectPass {
           analysisContextProductHandle,
           appRootDefinitionProductHandle,
           phases,
+          false,
         ),
       );
       if (result.output != null) {
-        compilations.push(...result.output);
+        compilations.push(...result.output.compilations);
+        occurrencePrecedents.push(...result.output.occurrencePrecedents);
       }
     }
-    return compilations;
+    return new TemplateResourceFamilyCompilationEmission(compilations, occurrencePrecedents);
   }
 
   compileResourceFamilyFrontDoor(
@@ -1414,7 +1596,8 @@ export class TemplateCompilationProjectPass {
           DEFAULT_SEMANTIC_RUNTIME_INQUIRY_PROFILE,
         ),
       ),
-    );
+      request.includeCompilerOccurrencePrecedents,
+    ).compilations;
   }
 
   compileResourceFrontDoor(
@@ -1449,6 +1632,7 @@ export class TemplateCompilationProjectPass {
       compilerReads,
       localElementNames,
       dependencyIdentityHandles,
+      retainDraftBindings,
     } = request;
     const sourceKind = templateSourceKind(template);
     if (sourceKind == null) {
@@ -1471,7 +1655,7 @@ export class TemplateCompilationProjectPass {
       dependencyIdentityHandles,
       phases,
     );
-    const html = this.parseHtml(localKey, unit, phases);
+    const html = this.parseHtml(localKey, unit, phases, retainDraftBindings);
     const attributeSyntax = this.parseAttributeSyntax(
       localKey,
       compilerWorld,
@@ -1586,6 +1770,7 @@ export class TemplateCompilationProjectPass {
     localKey: string,
     unit: TemplateCompilationUnitEmission,
     phases: TemplateCompilationPhaseRecorder,
+    retainDraftBindings: boolean,
   ): HtmlParseEmission {
     return phases.measure('html-parse', () =>
       this.htmlParser.parse({
@@ -1593,7 +1778,7 @@ export class TemplateCompilationProjectPass {
         templateSource: unit.templateSource,
         compilationUnit: unit.compilationUnit,
         parseContext: unit.parseContext,
-        retainDraftBindings: phases.telemetry.inquiryProfile === 'aot',
+        retainDraftBindings: retainDraftBindings || phases.telemetry.inquiryProfile === 'aot',
       } satisfies HtmlParseRequest)
     );
   }
@@ -1771,7 +1956,7 @@ class TemplateCompilerWorldSelection {
   ) {}
 }
 
-class ProjectTemplateCompilerHost implements TemplateCompilerCompileHost<readonly TemplateResourceCompilationEmission[]> {
+class ProjectTemplateCompilerHost implements TemplateCompilerCompileHost<TemplateResourceFamilyCompilationEmission> {
   constructor(
     private readonly pass: TemplateCompilationProjectPass,
     private readonly familyOwnerHandle: IdentityHandle | ProductHandle,
@@ -1779,12 +1964,13 @@ class ProjectTemplateCompilerHost implements TemplateCompilerCompileHost<readonl
     private readonly analysisContextProductHandle: ProductHandle,
     private readonly appRootDefinitionProductHandle: ProductHandle | null,
     private readonly phases: TemplateCompilationPhaseRecorder,
+    private readonly includeCompilerOccurrencePrecedents: boolean,
   ) {}
 
   compile(
     request: TemplateCompilerCompileRequest,
     _compiler: TemplateCompilerService,
-  ): readonly TemplateResourceCompilationEmission[] {
+  ): TemplateResourceFamilyCompilationEmission {
     const template = request.definition.template;
     if (template == null) {
       throw new Error(`TemplateCompiler admitted ${request.definition.name} without a template.`);
@@ -1798,6 +1984,7 @@ class ProjectTemplateCompilerHost implements TemplateCompilerCompileHost<readonl
       template,
       request.localKey,
       this.phases,
+      this.includeCompilerOccurrencePrecedents,
     );
   }
 }
@@ -1825,7 +2012,21 @@ function templateFrontDoorMembershipRevision(
     family.cohortKeys,
     family.appCompilations.map(templateCompilationMembership),
     family.authoringCompilations.map(templateCompilationMembership),
+    family.appOccurrencePrecedents.map(occurrencePrecedentMembership),
+    family.authoringOccurrencePrecedents.map(occurrencePrecedentMembership),
   ]));
+}
+
+function occurrencePrecedentMembership(
+  precedent: TemplateCompilerOccurrencePrecedentEmission,
+): readonly unknown[] {
+  return [
+    precedent.sourceRevision,
+    precedent.admissionKind,
+    precedent.normalizedSites.state,
+    precedent.normalizedSites.mismatches.map((mismatch) => mismatch.mismatchKind),
+    templateCompilationMembership(precedent.compilation),
+  ];
 }
 
 function templateCompilationMembership(
@@ -1888,6 +2089,10 @@ function templateSourceKind(template: CustomElementTemplateDefinition | null): T
     case CustomElementTemplateKind.None:
       return null;
   }
+}
+
+function hasAuthoredLocalTemplateSyntax(markup: string | null): boolean {
+  return markup != null && /\bas-custom-element\b/iu.test(markup);
 }
 
 function templateResourceCompilationKey(

@@ -508,6 +508,7 @@ interface SemanticAppOpenPlan {
   readonly planningReads: readonly SemanticRuntimeProjectInputRead[];
   readonly analysisDepth: SemanticAppAnalysisDepth;
   readonly includeAuthoringTemplates: boolean;
+  readonly includeCompilerOccurrencePrecedents: boolean;
   readonly authoringTemplateSourceFiles: readonly string[];
   readonly authoringTemplateLimit: number | null;
   readonly telemetry: OpenSemanticAppOptions['telemetry'];
@@ -1061,6 +1062,7 @@ export class SemanticRuntime {
         left.projectKey.localeCompare(right.projectKey)
         || String(left.analysisDepth).localeCompare(String(right.analysisDepth))
         || Number(left.includeAuthoringTemplates) - Number(right.includeAuthoringTemplates)
+        || Number(left.includeCompilerOccurrencePrecedents) - Number(right.includeCompilerOccurrencePrecedents)
         || left.authoringTemplateSourceFileCount - right.authoringTemplateSourceFileCount
       );
     const runtimeQueryClaimProfiles = this.runtimeQueryClaimProfileSummaries(rowLimit, request.includeQueryClaimRows === true);
@@ -2334,6 +2336,7 @@ export class SemanticRuntime {
     try {
       const analysisDepth = normalizeSemanticAppAnalysisDepth(options.analysisDepth);
       const includeAuthoringTemplates = options.includeAuthoringTemplates === true;
+      const includeCompilerOccurrencePrecedents = options.includeCompilerOccurrencePrecedents === true;
       const sourceFilePath = normalizeSourceFilePathOption(options.sourceFilePath);
       const requestedAuthoringSourceFiles = normalizeAuthoringTemplateSourceFiles(options.authoringTemplateSourceFiles);
       const project = options.projectKey != null
@@ -2383,6 +2386,7 @@ export class SemanticRuntime {
         ),
         analysisDepth,
         includeAuthoringTemplates,
+        includeCompilerOccurrencePrecedents,
         authoringTemplateSourceFiles,
         authoringTemplateLimit,
         telemetry: options.telemetry ?? null,
@@ -2407,6 +2411,7 @@ export class SemanticRuntime {
       plan.project,
       plan.analysisDepth,
       plan.includeAuthoringTemplates,
+      plan.includeCompilerOccurrencePrecedents,
       plan.authoringTemplateSourceFiles,
       plan.authoringTemplateLimit,
       plan.telemetry,
@@ -2474,6 +2479,7 @@ export class SemanticRuntime {
     project: ProjectBootFrame,
     analysisDepth: SemanticAppAnalysisDepth,
     includeAuthoringTemplates: boolean,
+    includeCompilerOccurrencePrecedents: boolean,
     authoringTemplateSourceFiles: readonly string[],
     authoringTemplateLimit: number | null,
     telemetry: OpenSemanticAppOptions['telemetry'] = null,
@@ -2495,6 +2501,7 @@ export class SemanticRuntime {
           project.inputGeneration.revision,
           analysisDepth,
           includeAuthoringTemplates,
+          includeCompilerOccurrencePrecedents,
           authoringTemplateSourceFiles,
           authoringTemplateLimit,
         )
@@ -2510,12 +2517,13 @@ export class SemanticRuntime {
       );
     }
     const result = this.appAnalysisComputations.prepare(project, {
-        analysisDepth,
-        includeAuthoringTemplates,
-        authoringTemplateSourceFiles,
-        authoringTemplateLimit,
-        telemetry,
-      }).commit();
+      analysisDepth,
+      includeAuthoringTemplates,
+      includeCompilerOccurrencePrecedents,
+      authoringTemplateSourceFiles,
+      authoringTemplateLimit,
+      telemetry,
+    }).commit();
     if (result.commit.state !== ComputationCommitState.Committed || result.committedGeneration == null) {
       throw computationCommitCurrentnessError(
         result.commit,
@@ -2532,6 +2540,7 @@ export class SemanticRuntime {
       {
         analysisDepth,
         includeAuthoringTemplates,
+        includeCompilerOccurrencePrecedents,
         authoringTemplateSourceFileCount: authoringTemplateSourceFiles.length,
         authoringTemplateLimit,
         kernelMarker,
@@ -2543,6 +2552,7 @@ export class SemanticRuntime {
         project.inputGeneration.revision,
         analysisDepth,
         includeAuthoringTemplates,
+        includeCompilerOccurrencePrecedents,
         authoringTemplateSourceFiles,
         authoringTemplateLimit,
       ),
@@ -2562,6 +2572,7 @@ export class SemanticRuntime {
         plan.project.inputGeneration.revision,
         plan.analysisDepth,
         plan.includeAuthoringTemplates,
+        plan.includeCompilerOccurrencePrecedents,
         plan.authoringTemplateSourceFiles,
         plan.authoringTemplateLimit,
         validationScope,
@@ -2574,6 +2585,7 @@ export class SemanticRuntime {
     projectInputRevision: string,
     requestedDepth: SemanticAppAnalysisDepth,
     includeAuthoringTemplates: boolean,
+    includeCompilerOccurrencePrecedents: boolean,
     authoringTemplateSourceFiles: readonly string[],
     authoringTemplateLimit: number | null,
     validationScope?: ComputationReadValidationScope,
@@ -2583,6 +2595,7 @@ export class SemanticRuntime {
       projectInputRevision,
       requestedDepth,
       includeAuthoringTemplates,
+      includeCompilerOccurrencePrecedents,
       authoringTemplateSourceFiles,
       authoringTemplateLimit,
     );
@@ -2598,6 +2611,7 @@ export class SemanticRuntime {
           projectInputRevision,
           requestedDepth,
           includeAuthoringTemplates,
+          includeCompilerOccurrencePrecedents,
           authoringTemplateSourceFiles,
           authoringTemplateLimit,
           validationScope,
@@ -3883,6 +3897,7 @@ export class SemanticApp {
     projectInputRevision: string,
     requestedDepth: SemanticAppAnalysisDepth,
     includeAuthoringTemplates: boolean,
+    includeCompilerOccurrencePrecedents: boolean,
     authoringTemplateSourceFiles: readonly string[],
     authoringTemplateLimit: number | null,
     validationScope?: ComputationReadValidationScope,
@@ -3892,6 +3907,7 @@ export class SemanticApp {
       || this.project.inputGeneration.revision !== projectInputRevision
       || !semanticAppAnalysisDepthSatisfies(this.cacheRequest.analysisDepth, requestedDepth)
       || (includeAuthoringTemplates && !this.cacheRequest.includeAuthoringTemplates)
+      || (includeCompilerOccurrencePrecedents && !this.cacheRequest.includeCompilerOccurrencePrecedents)
       || !this.isCurrent(validationScope)
     ) {
       return false;
@@ -3955,6 +3971,7 @@ export class SemanticApp {
       projectKey: this.project.projectKey,
       analysisDepth: this.cacheRequest.analysisDepth,
       includeAuthoringTemplates: this.cacheRequest.includeAuthoringTemplates,
+      includeCompilerOccurrencePrecedents: this.cacheRequest.includeCompilerOccurrencePrecedents,
       authoringTemplateSourceFileCount: this.cacheRequest.authoringTemplateSourceFileCount,
       authoringTemplateLimit: this.cacheRequest.authoringTemplateLimit,
       profile: {
@@ -6399,6 +6416,7 @@ export class SemanticApp {
 interface SemanticAppCacheRequest {
   readonly analysisDepth: SemanticAppAnalysisDepth;
   readonly includeAuthoringTemplates: boolean;
+  readonly includeCompilerOccurrencePrecedents: boolean;
   readonly authoringTemplateSourceFileCount: number;
   readonly authoringTemplateLimit: number | null;
   readonly kernelMarker: KernelStoreLifetimeMarker;
@@ -7221,6 +7239,7 @@ function appCacheKey(
   projectInputRevision: string,
   analysisDepth: SemanticAppAnalysisDepth,
   includeAuthoringTemplates: boolean,
+  includeCompilerOccurrencePrecedents: boolean,
   authoringTemplateSourceFiles: readonly string[],
   authoringTemplateLimit: number | null,
 ): string {
@@ -7229,6 +7248,7 @@ function appCacheKey(
     projectInputRevision,
     analysisDepth,
     includeAuthoringTemplates,
+    includeCompilerOccurrencePrecedents,
     authoringTemplateSourceFiles,
     authoringTemplateLimit,
   ]);

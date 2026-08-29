@@ -43,13 +43,15 @@ aggregate and slow-case timing, bounds failure output, and supports query/id/tag
 fail-fast, list, and JSON modes. This keeps large corpus iteration cheap and makes external process sharding possible
 without sharing mutable compiler containers.
 
-`oracle:semantic` is a separate observation lane over the same 53 canonical compiler worlds. It generates one
+`oracle:semantic` is a separate observation lane over the same 60 canonical compiler worlds. It generates one
 in-memory Aurelia source gallery and asks the real semantic-runtime app/compiler front door to analyze every admitted
 definition in one generation, amortizing TypeChecker, static evaluation, DI, and framework support. The current
-adapter admits 35 markup/no-setup worlds and reports all 18 unsupported worlds with typed reasons; it never filters
+adapter admits 49 worlds and reports all 11 unsupported worlds with typed reasons; it never filters
 them into apparent success. Each observation retains the canonical world fingerprint, declared effects, actual
 semantic compiler profile, root/surrogate instruction kinds, diagnostics, open seams, and authored recovery counts.
-The receipt explicitly labels the older compiler-input observation as authored HTML. In the same synchronous bracket,
+The app request also explicitly retains raw whole-source occurrence precedents; they remain separate from runtime
+compilation membership and preserve the authored product space needed for later local-lane transfer. In the same
+synchronous bracket,
 the browser-effective product now enters semantic-runtime's root-inclusive context-family compiler and is projected to
 the separate `aurelia-ls/aot-semantic-frozen-family/v1` structural characterization before its candidate retires.
 
@@ -57,7 +59,7 @@ This lane is raw conservation pressure, not a parity oracle. Semantic-runtime cu
 `resolveResources=true`, while the JIT characterizations use `resolveResources=false`; gallery cases also share a
 resource scope, use generated concrete definition types, and traverse authored rather than browser-effective compiler
 structure. Those differences are explicit on every admitted row and recomputed from the observed compiler profile.
-The frozen-family lane currently reaches 32 exact final families across the 35 admitted worlds; the other three are
+The frozen-family lane currently reaches 46 exact final families across the 49 admitted worlds; the other three are
 intentional invalid compiler worlds. It characterizes final
 definition ownership, transformed templates, row/instruction-kind order, target geometry, `needsCompile`, `hasSlots`,
 derivation cardinality, and retained source-correspondence seams. The remaining three worlds keep their exact typed
@@ -66,8 +68,8 @@ lane may satisfy a cross-lane equivalence claim. A later coordinator must
 validate both authority-bound receipts, compare an exhaustive shared product, and only then feed satisfied claim IDs
 into the obligation audit.
 
-The independent structural comparison currently joins all 32 exact semantic families to fresh JIT blueprints with zero
-mismatches across 46 definitions, 54 rows/target geometries, and 71 ordered row instruction kinds. It compares only the
+The independent structural comparison currently joins all 46 exact semantic families to fresh JIT blueprints with zero
+mismatches across 76 definitions, 85 rows/target geometries, and 103 ordered row instruction kinds. It compares only the
 declared common slice and deliberately returns `satisfiedClaimIds: []`; a falsifier regression changes one semantic
 instruction kind and proves the comparator does not report a false clean result. This is strong Chapter 1 conservation
 evidence, not the later authority-validating or exhaustive-wire parity coordinator.
@@ -86,8 +88,7 @@ tagged-template cooked/raw strings, and keeps unresolved RC2 representation delt
 currently closes PropertyBinding, Interpolation, ListenerBinding, TextBinding, HydrateTemplateController,
 HydrateElement, HydrateLetElement, nested LetBinding, SetAttribute, SetClassAttribute, and SetStyleAttribute values,
 recursively following the shared instruction-ownership
-graph. Across all 32 exact gallery worlds its 86 recursive instruction values—including 71 row roots and three flat
-surrogate roots—normalize
+graph. Across all 46 exact gallery worlds its 148 recursive instruction values—including 103 row roots—normalize
 byte-for-byte to fresh JIT blueprints with zero
 mismatches. Canonical resource definition names cannot fall back to authored aliases, plugin-owned iterator type 200
 remains distinct from core iterator type 15, metadata/count/index mutations are falsifiers, and the comparator still
@@ -102,11 +103,11 @@ not observe them. On the declared common pre-rehydration slice, all 46 definitio
 JIT definitions byte-for-byte, including ownership, name intent, normalized header values, transformed templates,
 target markers, instruction rows, and flat surrogate values. Root Type/processContent presence and the retained base-only
 fields are explicit omissions; native-slot outlet values remain semantic-only because the JIT blueprint exposes only
-root `hasSlots`. Header bindables/dependencies, local generated-Type additions, dynamic surrogates, enhance, and executable
-metadata still need dedicated corpus pressure. Boolean root capture and
-definition-owned containerless are the first paired non-default header controls. This comparison also satisfies no
-claim IDs. One explicit bindable-header world remains outside the semantic lane because the JIT partial array, the
-semantic `BindableDefinition` value, and the later runtime-rehydrated object are three different representations.
+root `hasSlots`. The narrow dependency comparison preserves 14 unique source-declared CE/CA identities while explicitly
+omitting general executable values, registration effects, post-rehydration changes, and compiler-added local Types.
+Boolean root capture and definition-owned containerless are the first paired non-default header controls. This
+comparison also satisfies no claim IDs. One explicit bindable-header world records the unresolved JIT-partial,
+semantic-definition, and runtime-rehydrated representation boundary instead of claiming false equality.
 
 The CLI separately content-addresses the executed AOT and semantic-runtime JavaScript trees and the full dirty-worktree
 delta so an ignored or already-dirty build artifact cannot masquerade as unchanged authority.

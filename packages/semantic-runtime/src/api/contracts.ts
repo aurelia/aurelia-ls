@@ -763,6 +763,8 @@ export interface OpenSemanticAppOptions {
   readonly analysisDepth?: SemanticAppAnalysisDepth | `${SemanticAppAnalysisDepth}` | null;
   /** Include standalone resource-library template analysis for authoring/LSP inquiries. */
   readonly includeAuthoringTemplates?: boolean | null;
+  /** Retain raw whole-source compiler precedents used by browser-occurrence/AOT compilation. */
+  readonly includeCompilerOccurrencePrecedents?: boolean | null;
   /** Optional source-file selection for authoring/LSP template compilation. */
   readonly authoringTemplateSourceFiles?: readonly string[] | null;
   /** Optional cap for standalone authoring templates compiled in this app open request. */
@@ -1534,6 +1536,7 @@ export interface SemanticRuntimeCachedAppSummary {
   readonly projectKey: string;
   readonly analysisDepth: SemanticAppAnalysisDepth | `${SemanticAppAnalysisDepth}`;
   readonly includeAuthoringTemplates: boolean;
+  readonly includeCompilerOccurrencePrecedents: boolean;
   readonly authoringTemplateSourceFileCount: number;
   readonly authoringTemplateLimit: number | null;
   readonly profile: SemanticRuntimeCachedAppProfileSummary;

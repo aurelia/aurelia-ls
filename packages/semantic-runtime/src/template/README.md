@@ -186,6 +186,15 @@ classification, expression parsing, and instruction lowering converge on the sam
   an explicit generated or selected compiler carrier, ordered tree-builder/factory derivation hyperedges, and typed
   seams for every unresolved partition. Parser envelopes remain witness data; authored addresses enter only through
   retained authored HTML product bindings. This is not yet wired into the production compiler front door.
+- The project compiler front door can retain one opt-in raw occurrence precedent for a whole authored resource source.
+  The precedent is compiled under the pre-local compiler world, keeps parser draft bindings, and is excluded from
+  runtime compilation membership. Its normalized site index names the same authored product space used by exact
+  browser origins, so root and extracted child lanes can later derive disjoint views from transfer receipts instead of
+  reparsing each local definition into unrelated identities. Admission currently means either overlap with legacy local
+  extraction or a lexical `as-custom-element` candidate; the latter is deliberately an over-admitting posture, not a
+  claim that static extraction found the local. Graph disagreement remains a typed normalized-index mismatch. The
+  explicit `includeCompilerOccurrencePrecedents` app option owns the extra product and cache shape; telemetry profiles
+  do not request it. Compatible deeper generations carry unchanged precedents and rebind their worlds and reads.
 - `template-compiler-occurrence.ts` imports only the browser-effective compiler-carrier graph into a fresh mutable
   execution forest. Stable occurrence keys are independent of live paths; private edge collections and forest-owned
   move/detach operations preserve coherent root, child, template-content, and attribute ownership while the complete

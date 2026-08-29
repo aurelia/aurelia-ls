@@ -289,6 +289,7 @@ export class SemanticCompilerGalleryOracle {
     try {
       const app = await runtime.openApp({
         analysisDepth: "runtime-topology",
+        includeCompilerOccurrencePrecedents: true,
         telemetry: { inquiryProfile: "aot" },
       });
       const analyzedAt = performance.now();

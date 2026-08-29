@@ -403,6 +403,15 @@ already know the project can still pass `projectKey` and `authoringTemplateSourc
 Retained-app reuse preserves the `includeAuthoringTemplates` admission bit separately from an empty/unbounded source
 selection. A project-only app therefore cannot satisfy a later source-locus authoring request merely because both
 requests normalize to an empty source-file list and no limit.
+
+Browser-occurrence compiler consumers can separately request `includeCompilerOccurrencePrecedents: true`. This retains
+one raw whole-source, pre-local-world compiler precedent for each admitted candidate-local resource family without
+mixing it into runtime compilation membership. The option is semantic app shape and therefore participates in cache
+identity and currentness; an enriched app may satisfy a later ordinary request, but an ordinary app cannot satisfy an
+enriched request. Inquiry telemetry does not imply the option. The current admission gate covers legacy-local overlap
+and lexical `as-custom-element` candidates, including sources beyond the legacy extractor's nesting limit; it does not
+yet claim compiler-hook-created local discovery authority.
+
 `TemplateCompilations` returns a `compilationLane` of `app-runtime` or `authoring` so callers can distinguish hydrated
 app templates from source-file-selected authoring templates. `compiledTemplates` counts the resource root plus every
 generated template-controller/projection definition; `generatedCompiledTemplates` excludes the root,

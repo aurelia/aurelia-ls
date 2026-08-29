@@ -305,6 +305,7 @@ export interface AureliaAppWorldProjectProfile {
 export interface AureliaAppWorldProjectOptions {
   readonly analysisDepth?: SemanticAppAnalysisDepth | `${SemanticAppAnalysisDepth}`;
   readonly includeAuthoringTemplates?: boolean;
+  readonly includeCompilerOccurrencePrecedents?: boolean;
   readonly authoringTemplateSourceFiles?: readonly string[];
   readonly authoringTemplateLimit?: number | null;
   readonly telemetry?: SemanticRuntimeTelemetryOptions | null;
@@ -508,6 +509,7 @@ class AureliaAppWorldProjectConstructionFrame {
   private readonly started = performance.now();
   private readonly analysisDepth: SemanticAppAnalysisDepth;
   private readonly includeAuthoringTemplates: boolean;
+  private readonly includeCompilerOccurrencePrecedents: boolean;
   private readonly authoringTemplateSourceFiles: readonly string[];
   private readonly authoringTemplateLimit: number | null;
   private readonly telemetry: NormalizedSemanticRuntimeTelemetryOptions;
@@ -533,6 +535,7 @@ class AureliaAppWorldProjectConstructionFrame {
       options.analysisDepth ?? DEFAULT_SEMANTIC_APP_ANALYSIS_DEPTH,
     );
     this.includeAuthoringTemplates = options.includeAuthoringTemplates === true;
+    this.includeCompilerOccurrencePrecedents = options.includeCompilerOccurrencePrecedents === true;
     this.authoringTemplateSourceFiles = options.authoringTemplateSourceFiles ?? [];
     this.authoringTemplateLimit = options.authoringTemplateLimit ?? null;
     this.telemetry = normalizeSemanticRuntimeTelemetryOptions(
@@ -922,6 +925,7 @@ class AureliaAppWorldProjectConstructionFrame {
       stateStoreVisibility: state.readStoreVisibility(),
       runtimeAnalysisDepth: this.analysisDepth,
       includeAuthoringTemplates: this.includeAuthoringTemplates,
+      includeCompilerOccurrencePrecedents: this.includeCompilerOccurrencePrecedents,
       authoringTemplateSourceFiles: this.authoringTemplateSourceFiles,
       authoringTemplateLimit: this.authoringTemplateLimit,
       telemetry: this.telemetry,
