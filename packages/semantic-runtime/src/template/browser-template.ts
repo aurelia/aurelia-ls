@@ -42,6 +42,8 @@ export {
 export { TemplateCompilerContextFamilyExpressionValue } from './template-compiler-context-family-expression-value.js';
 export * from './template-instruction-runtime-value.js';
 export * from './template-compiler-compiled-definition-value.js';
+export * from './template-compiler-compiled-handoff-value.js';
+export * from './semantic-app-template-compiler-handoff.js';
 export { CustomElementCaptureKind } from '../resources/custom-element-definition.js';
 export * from './template-compiler-occurrence-target-execution.js';
 export * from './template-compiler-occurrence-target-schedule.js';

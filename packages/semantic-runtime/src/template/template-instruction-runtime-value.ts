@@ -129,6 +129,23 @@ export type TemplateCompilerRuntimeInstructionValue =
       readonly modifier: string | null;
     }
   | {
+      readonly type: TemplateCompilerFrameworkInstructionType.StylePropertyBinding;
+      readonly from: RuntimeExpressionAstValue;
+      readonly to: string;
+    }
+  | {
+      readonly type: TemplateCompilerFrameworkInstructionType.AttributeBinding;
+      readonly attr: string;
+      readonly from: RuntimeExpressionAstValue;
+      readonly to: string;
+    }
+  | {
+      readonly type: TemplateCompilerFrameworkInstructionType.MultiAttr;
+      readonly value: string | RuntimeExpressionAstValue;
+      readonly to: string;
+      readonly command: string | null;
+    }
+  | {
       readonly type:
         | TemplateCompilerFrameworkInstructionType.IteratorBinding
         | TemplateCompilerFrameworkInstructionType.VirtualizationIterateBinding;
@@ -513,6 +530,34 @@ class RuntimeInstructionFamilyProjector {
           to: instruction.eventName,
           capture: instruction.strategy === TemplateListenerStrategy.Capture,
           modifier: instruction.eventModifier,
+        };
+      }
+      case TemplateInstructionKind.StylePropertyBinding: {
+        const from = this.expression(instruction, instruction.expressionProductHandle, null);
+        return from == null ? null : {
+          type: TemplateCompilerFrameworkInstructionType.StylePropertyBinding,
+          from,
+          to: instruction.targetProperty,
+        };
+      }
+      case TemplateInstructionKind.AttributeBinding: {
+        const from = this.expression(instruction, instruction.expressionProductHandle, null);
+        return from == null ? null : {
+          type: TemplateCompilerFrameworkInstructionType.AttributeBinding,
+          attr: instruction.attr,
+          from,
+          to: instruction.target,
+        };
+      }
+      case TemplateInstructionKind.MultiAttr: {
+        const value = instruction.expressionProductHandle == null
+          ? instruction.value
+          : this.expression(instruction, instruction.expressionProductHandle, null);
+        return value == null ? null : {
+          type: TemplateCompilerFrameworkInstructionType.MultiAttr,
+          value,
+          to: instruction.target,
+          command: instruction.command,
         };
       }
       case TemplateInstructionKind.IteratorBinding: {

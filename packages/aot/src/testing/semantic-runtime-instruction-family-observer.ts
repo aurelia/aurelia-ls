@@ -128,6 +128,31 @@ function normalizeInstruction(
         modifier: value.modifier,
         to: value.to,
       };
+    case TemplateCompilerFrameworkInstructionType.StylePropertyBinding:
+      return {
+        kind: "style-property-binding",
+        type: value.type,
+        from: normalizeSemanticRuntimeExpressionAstForObservation(value.from),
+        to: value.to,
+      };
+    case TemplateCompilerFrameworkInstructionType.AttributeBinding:
+      return {
+        kind: "attribute-binding",
+        type: value.type,
+        attr: value.attr,
+        from: normalizeSemanticRuntimeExpressionAstForObservation(value.from),
+        to: value.to,
+      };
+    case TemplateCompilerFrameworkInstructionType.MultiAttr:
+      return {
+        kind: "multi-attr",
+        type: value.type,
+        command: value.command,
+        value: typeof value.value === "string"
+          ? value.value
+          : normalizeSemanticRuntimeExpressionAstForObservation(value.value),
+        to: value.to,
+      };
     case TemplateCompilerFrameworkInstructionType.IteratorBinding:
     case TemplateCompilerFrameworkInstructionType.VirtualizationIterateBinding:
       return {

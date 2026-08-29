@@ -1518,3 +1518,22 @@ that reference before `Array.flat` or `flatMap` publishes a synthetic array cons
 member. The same contract also runs public completions after file diagnostics at `flat`, `join`, and `lastIndexOf`
 cursor sites; those answers should re-enter the expression/type projector when diagnostics disposed answer-local type
 products instead of returning `type-shape-detail` gaps from a stale expression cache entry.
+
+## Detached compiler handoff
+
+`materializeSemanticAppTemplateCompilerHandoffs(...)` is the opt-in build-consumer boundary over the browser-effective
+context-family compiler. It owns one run-local browser/compiler publication, executes the existing family compiler,
+projects runtime instruction and compiled-definition values, verifies app and product-detail currentness, detaches the
+complete value, and aborts the run before returning. No occurrence forest, cursor, allocation, store, executable Type,
+or generation-bound capability escapes.
+
+The detached value retains final node and attribute identities rather than reducing the tree to HTML. This is required:
+serializing and reparsing can merge adjacent Text nodes that are distinct JIT binding targets. It also replaces nested
+definition object references with stable definition IDs while retaining source references and field provenance for
+artifact mapping. AOT realizes those facts; semantic-runtime does not choose JavaScript names, Vite module IDs, DI
+substitutions, or source-map encoding.
+
+The materializer can select project-relative or absolute template paths and can explicitly include authoring resources
+for whole-project build discovery. Ordinary IDE/MCP app queries do not load this boundary or pay for parse5/compiler
+allocations. Local-template families and dynamic runtime compilation remain typed upstream gates rather than fallback
+inside the handoff.
