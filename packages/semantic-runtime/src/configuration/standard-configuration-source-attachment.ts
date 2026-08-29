@@ -120,8 +120,12 @@ export class StandardConfigurationSourceAttachment {
     readonly admissionIdentityHandle: IdentityHandle,
     readonly admissionKind: RegistrationAdmissionKind,
     readonly admissionSourceAddressHandle: AddressHandle | null,
+    /** Closure of the ordered top-level StandardConfiguration positions, treating catalog groups as retained wholes. */
     readonly coverageState: FrameworkDiEffectCoverageState,
+    /** Exact occurrence pressure only; nested generic DI/catalog partiality is retained separately below. */
     readonly openSummary: string | null,
+    readonly nestedDiCoverageState: FrameworkDiEffectCoverageState,
+    readonly nestedDiOpenSummary: string | null,
     /** Consumer-neutral effects in exact registration order; array position is the effect ordinal. */
     readonly effects: readonly FrameworkOrderedRegistrationEffect[],
     readonly coercion: StandardConfigurationCoercionConfiguration,
@@ -148,7 +152,7 @@ export function materializeSemanticAppStandardConfigurationSourceAttachments(
   ).map((effects) => sourceAttachmentForEffects(
     app,
     sourceIndex,
-    configuration.evaluationBindings.runtimeValueSourceNodeForProduct(
+    configuration.evaluationBindings.sourceNodeForProduct(
       effects.operation.admission.productHandle,
     ),
     effects,
@@ -160,7 +164,7 @@ export function materializeSemanticAppStandardConfigurationSourceAttachments(
 function sourceAttachmentForEffects(
   app: SemanticApp,
   sourceIndex: StaticProjectEvaluationSourceIndex,
-  runtimeValueSourceNode: ts.Node | null,
+  admissionSourceNode: ts.Node | null,
   registrationEffects: StandardConfigurationRegistrationEffects,
 ): StandardConfigurationSourceAttachment {
   const operation = registrationEffects.operation;
@@ -180,9 +184,11 @@ function sourceAttachmentForEffects(
     admission.sourceAddressHandle,
     registrationEffects.coverageState,
     registrationEffects.openSummary,
+    registrationEffects.nestedDiCoverageState,
+    registrationEffects.nestedDiOpenSummary,
     registrationEffects.effects,
     standardConfigurationCoercion(registrationEffects),
-    sourceCarrierForAdmission(sourceIndex, admission.admissionKind, runtimeValueSourceNode),
+    sourceCarrierForAdmission(sourceIndex, admission.admissionKind, admissionSourceNode),
   );
 }
 

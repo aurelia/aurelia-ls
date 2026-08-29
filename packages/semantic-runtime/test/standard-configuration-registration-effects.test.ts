@@ -91,6 +91,7 @@ describe('StandardConfiguration registration effects', () => {
     ) ?? null;
     const open = openEffects == null ? null : coercionEffect(openEffects).configuration;
     expect(openEffects?.openSummary).toContain('coercion customization retains open');
+    expect(openEffects?.openSummary).not.toContain('nested resource and syntax groups');
     expect(open?.enableCoercion.openSeamHandles.length).toBeGreaterThan(0);
     expect(open?.coerceNullish).toMatchObject({
       state: FrameworkCapabilityConfigurationState.Open,
@@ -98,8 +99,13 @@ describe('StandardConfiguration registration effects', () => {
     });
   });
 
-  test('preserves StandardConfiguration order and event-modifier multiplicity', () => {
-    expect(effects[0]?.coverageState).toBe(FrameworkDiEffectCoverageState.Partial);
+  test('closes whole-group replay while preserving nested DI partiality, order, and multiplicity', () => {
+    expect(effects[0]).toMatchObject({
+      coverageState: FrameworkDiEffectCoverageState.Closed,
+      openSummary: null,
+      nestedDiCoverageState: FrameworkDiEffectCoverageState.Partial,
+    });
+    expect(effects[0]?.nestedDiOpenSummary).toContain('nested resource and syntax groups');
     expect(effects[0]?.effects.map(effectKey)).toEqual([
       'configuration:ICoercionConfiguration',
       'resolver:ExpressionParser:ExpressionParser',

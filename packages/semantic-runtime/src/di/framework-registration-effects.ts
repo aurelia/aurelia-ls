@@ -107,8 +107,14 @@ export type FrameworkOrderedRegistrationEffect =
 export class StandardConfigurationRegistrationEffects {
   constructor(
     readonly operation: ContainerRegistrationOperation,
+    /** Every top-level StandardConfiguration position is represented, including whole catalog-bearing groups. */
     readonly coverageState: FrameworkDiEffectCoverageState,
+    /** Pressure that can change this exact ordered occurrence, excluding known nested catalog/DI partiality. */
     readonly openSummary: string | null,
+    /** Legacy key-oriented DI coverage retained independently for diagnostics and deeper membership analysis. */
+    readonly nestedDiCoverageState: FrameworkDiEffectCoverageState,
+    /** Residual explanation for the legacy nested DI/catalog projection. */
+    readonly nestedDiOpenSummary: string | null,
     readonly effects: readonly FrameworkOrderedRegistrationEffect[],
   ) {}
 }
@@ -519,8 +525,10 @@ export function standardConfigurationRegistrationEffectsForAppWorld(
     );
     return [new StandardConfigurationRegistrationEffects(
       operation,
+      FrameworkDiEffectCoverageState.Closed,
+      standardConfigurationOperationOpenSummary(appWorld, operation, diEffects.openSummary, coercion),
       diEffects.coverageState,
-      frameworkRegistrationOperationOpenSummary(diEffects.openSummary, coercion),
+      diEffects.openSummary,
       orderedStandardConfigurationEffects(coercion),
     )];
   });
@@ -593,19 +601,26 @@ function runtimeHtmlCapabilityEffect(
   return new FrameworkCapabilityRegistrationEffect(capability, registrationKind, exportName);
 }
 
-function frameworkRegistrationOperationOpenSummary(
-  staticSummary: string | null,
+function standardConfigurationOperationOpenSummary(
+  appWorld: Pick<AureliaAppWorldEmission, 'diWorld'>,
+  operation: ContainerRegistrationOperation,
+  nestedDiOpenSummary: string | null,
   coercion: StandardConfigurationCoercionConfiguration | null,
 ): string | null {
+  const summaries = appWorld.diWorld.registrationOpenSeamScopes.flatMap((scope) =>
+    scope.operation?.productHandle === operation.productHandle
+      && scope.seam.summary !== nestedDiOpenSummary
+      ? [scope.seam.summary]
+      : []
+  );
   const coercionOpen = coercion != null && (
     coercion.enableCoercion.state === FrameworkCapabilityConfigurationState.Open
     || coercion.coerceNullish.state === FrameworkCapabilityConfigurationState.Open
   );
-  if (!coercionOpen) {
-    return staticSummary;
+  if (coercionOpen) {
+    summaries.push('StandardConfiguration coercion customization retains open callback or value pressure.');
   }
-  const coercionSummary = 'StandardConfiguration coercion customization retains open callback or value pressure.';
-  return staticSummary == null ? coercionSummary : `${staticSummary} ${coercionSummary}`;
+  return summaries.length === 0 ? null : [...new Set(summaries)].join(' ');
 }
 
 function frameworkDiRegistrationOpenSummary(kind: FrameworkRegistrationKind): string | null {

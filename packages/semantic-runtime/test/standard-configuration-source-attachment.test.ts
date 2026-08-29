@@ -22,6 +22,7 @@ import {
   FrameworkCapabilityConfigurationState,
 } from '../src/configuration/framework-capability-configuration.js';
 import {
+  FrameworkDiEffectCoverageState,
   standardConfigurationRegistrationEffectsForAppWorld,
 } from '../src/di/framework-registration-effects.js';
 import { RegistrationAdmissionKind } from '../src/registration/registration-admission.js';
@@ -63,6 +64,10 @@ describe('StandardConfiguration source attachment', () => {
       operationOrdinal: attachment.operationOrdinal,
       admissionProductHandle: attachment.admissionProductHandle,
       admissionIdentityHandle: attachment.admissionIdentityHandle,
+      coverageState: attachment.coverageState,
+      openSummary: attachment.openSummary,
+      nestedDiCoverageState: attachment.nestedDiCoverageState,
+      nestedDiOpenSummary: attachment.nestedDiOpenSummary,
       effects: attachment.effects,
     }))).toEqual(expectedEffects.map((effects) => ({
       operationProductHandle: effects.operation.productHandle,
@@ -70,8 +75,20 @@ describe('StandardConfiguration source attachment', () => {
       operationOrdinal: effects.operation.ordinal,
       admissionProductHandle: effects.operation.admission.productHandle,
       admissionIdentityHandle: effects.operation.admission.identityHandle,
+      coverageState: effects.coverageState,
+      openSummary: effects.openSummary,
+      nestedDiCoverageState: effects.nestedDiCoverageState,
+      nestedDiOpenSummary: effects.nestedDiOpenSummary,
       effects: effects.effects,
     })));
+    expect(attachments.every((attachment) =>
+      attachment.coverageState === FrameworkDiEffectCoverageState.Closed
+      && attachment.openSummary == null
+    )).toBe(true);
+    expect(attachments.every((attachment) =>
+      attachment.nestedDiCoverageState === FrameworkDiEffectCoverageState.Partial
+      && attachment.nestedDiOpenSummary != null
+    )).toBe(true);
 
     const explicit = attachments.filter((attachment) =>
       attachment.carrier.carrierKind === StandardConfigurationSourceCarrierKind.ExplicitRegistrationValue
@@ -91,6 +108,32 @@ describe('StandardConfiguration source attachment', () => {
       ].join('\n'),
       'StandardConfiguration',
     ]);
+    const firstRegistrationStart = fixture.mainText.indexOf(
+      'StandardConfiguration',
+      fixture.mainText.indexOf('const first'),
+    );
+    const customizedRegistrationStart = fixture.mainText.indexOf(
+      'StandardConfiguration.customize',
+      fixture.mainText.indexOf('const customized'),
+    );
+    const lastRegistrationStart = fixture.mainText.indexOf(
+      'StandardConfiguration',
+      fixture.mainText.indexOf('const last'),
+    );
+    expect(explicit.map((attachment) =>
+      attachment.carrier.carrierKind === StandardConfigurationSourceCarrierKind.ExplicitRegistrationValue
+        ? attachment.carrier.valueExpression.start
+        : null
+    )).toEqual([
+      firstRegistrationStart,
+      customizedRegistrationStart,
+      lastRegistrationStart,
+    ]);
+    expect(explicit.map((attachment) =>
+      attachment.carrier.carrierKind === StandardConfigurationSourceCarrierKind.ExplicitRegistrationValue
+        ? attachment.carrier.valueExpression.start
+        : null
+    )).not.toContain(fixture.mainText.indexOf('StandardConfiguration'));
     for (const attachment of explicit) {
       if (attachment.carrier.carrierKind !== StandardConfigurationSourceCarrierKind.ExplicitRegistrationValue) {
         throw new Error('Expected an explicit StandardConfiguration source carrier.');
