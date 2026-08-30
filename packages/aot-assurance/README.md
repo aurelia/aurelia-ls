@@ -2,22 +2,30 @@
 
 Private executable parity harness for the Aurelia AOT program.
 
-It builds the same broad fixture twice with Vite 8, serves both production outputs, launches Chromium once, runs one
-ordered interaction program per lane, and compares DOM, live form state, model state, events, errors, teardown, and
-runtime compiler/parser probes. The AOT lane is supplied by the real semantic-runtime provider and `aot-vite` preset;
-there is no pass-through or hidden JIT fallback.
+Each scenario builds the same source twice with Vite 8, serves both production outputs, runs one ordered Chromium
+interaction program per lane, and compares source-derived DOM/live-state outcomes. The AOT lane is supplied by the real
+semantic-runtime provider and `aot-vite` preset; there is no pass-through or hidden JIT fallback.
+
+The default package assurance runs two complementary scenarios:
+
+- `g0` is the deeply instrumented compiler/parser/teardown control and owns the runtime no-fallback probes;
+- `hello-world` runs the canonical shared IDE fixture without source instrumentation, aligned to the standard decorator
+  pipeline required by Vite 8. It covers computed filtering, repeat/if/let, form writeback, child bindables and aliases,
+  custom-attribute callbacks, a value converter, SVG foreign content, and selected-item interactions. Its AOT build must
+  emit exactly `my-app`, `product-card`, and `stock-badge`.
 
 ```powershell
 pnpm --filter @aurelia-ls/aot-assurance test
 pnpm --filter @aurelia-ls/aot-assurance assure
 node packages/aot-assurance/out/cli.js --receipt .temp/aot-assurance-receipt.json
+node packages/aot-assurance/out/cli.js --scenario hello-world
+node packages/aot-assurance/out/cli.js --scenario all
 ```
 
-The default test and `assure` both perform the two production builds and real browser run; `test` additionally
-typechecks the fixture. Build evidence requires one semantic analysis, compiler-final artifacts,
-source maps, `needsCompile: false`, positive JIT probe controls, and zero AOT compiler/parser calls. Bundle size, heap,
-and timing outcomes belong to the benchmark scorecard; package or implementation names are diagnostic evidence rather
-than assurance purity gates.
+The default test and `assure` run both scenarios; `test` additionally typechecks both fixtures. Build evidence requires
+one semantic analysis per AOT build, compiler-final artifacts, source maps, and `needsCompile: false`. G0 additionally
+requires positive JIT probe controls and zero AOT compiler/parser calls. Bundle size, heap, and timing outcomes belong
+to the benchmark scorecard; package or implementation names are diagnostic evidence rather than assurance purity gates.
 
 The `--falsifier mutate-instruction`, `--falsifier restore-needs-compile`, and
 `--falsifier drop-nested-definition` options mutate emitted artifacts and are expected to make the real assurance run

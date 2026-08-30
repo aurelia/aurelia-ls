@@ -145,6 +145,21 @@ async function buildLane(
     mode: 'production',
     logLevel: 'warn',
     plugins: [laneDefinitionPlugin(lane), plugins],
+    resolve: {
+      alias: {
+        aurelia: resolve(import.meta.dirname, '..', 'node_modules', 'aurelia', 'dist', 'esm', 'index.mjs'),
+        '@aurelia/runtime-html': resolve(
+          import.meta.dirname,
+          '..',
+          'node_modules',
+          '@aurelia',
+          'runtime-html',
+          'dist',
+          'esm',
+          'index.mjs',
+        ),
+      },
+    },
     define: {
       __AOT_ASSURANCE_LANE__: JSON.stringify(lane),
     },

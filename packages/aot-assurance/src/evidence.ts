@@ -32,6 +32,8 @@ export function assertAotBuildEvidence(evidence: AotBuildEvidence): void {
 export function assertProbePolicy(jit: LaneTranscript, aot: LaneTranscript): void {
   assert.equal(jit.lane, 'jit');
   assert.equal(aot.lane, 'aot');
+  assert.ok(jit.probes != null, 'JIT runtime probe is absent');
+  assert.ok(aot.probes != null, 'AOT runtime probe is absent');
   assert.ok(jit.probes.compilerCompile > 0, 'JIT control did not prove the compiler probe is live');
   assert.ok(jit.probes.parserParse > 0, 'JIT control did not prove the parser probe is live');
   assert.equal(aot.probes.compilerCompile, 0, 'AOT invoked ITemplateCompiler.compile');

@@ -1,7 +1,7 @@
 import { mkdir, writeFile } from 'node:fs/promises';
 import { basename, dirname, resolve } from 'node:path';
 
-import type { AssuranceReceipt, EmissionFalsifier } from './contract.js';
+import type { AssuranceReceipt, AssuranceScenario, EmissionFalsifier } from './contract.js';
 import { runBrowserBatch, type BrowserBatchResult } from './browser.js';
 import { ProductionBuildBatch } from './build.js';
 import {
@@ -10,10 +10,15 @@ import {
   assertSemanticParity,
 } from './evidence.js';
 import { assertG0Expectations } from './g0-expectations.js';
+import {
+  assertHelloWorldBuildEvidence,
+  assertHelloWorldExpectations,
+} from './hello-world-expectations.js';
 import { StaticBuildServer } from './server.js';
 
 export interface RunAssuranceOptions {
   readonly adapterSpecifier: string;
+  readonly scenario?: AssuranceScenario;
   readonly fixtureRoot?: string;
   readonly receiptPath?: string;
   readonly keepOutput?: boolean;
@@ -21,7 +26,8 @@ export interface RunAssuranceOptions {
 }
 
 export async function runAssurance(options: RunAssuranceOptions): Promise<AssuranceReceipt> {
-  const fixtureRoot = options.fixtureRoot ?? resolve(import.meta.dirname, '..', 'fixtures', 'g0');
+  const scenario = options.scenario ?? 'g0';
+  const fixtureRoot = options.fixtureRoot ?? defaultFixtureRoot(scenario);
   const builds = await ProductionBuildBatch.create({
     adapterSpecifier: options.adapterSpecifier,
     fixtureRoot,
@@ -36,14 +42,21 @@ export async function runAssurance(options: RunAssuranceOptions): Promise<Assura
     assertAotBuildEvidence(builds.aotEvidence);
     const jitUrl = await jitServer.start();
     const aotUrl = await aotServer.start();
-    browserBatch = await runBrowserBatch(jitUrl, aotUrl);
+    browserBatch = await runBrowserBatch(jitUrl, aotUrl, scenario);
 
-    assertG0Expectations(browserBatch.jit);
-    assertG0Expectations(browserBatch.aot);
+    if (scenario === 'g0') {
+      assertG0Expectations(browserBatch.jit);
+      assertG0Expectations(browserBatch.aot);
+      assertProbePolicy(browserBatch.jit, browserBatch.aot);
+    } else {
+      assertHelloWorldBuildEvidence(builds.aotEvidence);
+      assertHelloWorldExpectations(browserBatch.jit);
+      assertHelloWorldExpectations(browserBatch.aot);
+    }
     assertSemanticParity(browserBatch.jit.semantic, browserBatch.aot.semantic);
-    assertProbePolicy(browserBatch.jit, browserBatch.aot);
 
     const receipt: AssuranceReceipt = {
+      scenario,
       fixture: basename(fixtureRoot),
       builds: [builds.jitReceipt, builds.aotReceipt],
       transcripts: [browserBatch.jit, browserBatch.aot],
@@ -60,4 +73,11 @@ export async function runAssurance(options: RunAssuranceOptions): Promise<Assura
     await Promise.allSettled([jitServer.close(), aotServer.close()]);
     await builds.close();
   }
+}
+
+function defaultFixtureRoot(scenario: AssuranceScenario): string {
+  const packageRoot = resolve(import.meta.dirname, '..');
+  return scenario === 'g0'
+    ? resolve(packageRoot, 'fixtures', 'g0')
+    : resolve(packageRoot, '..', '..', 'fixtures', 'hello-world');
 }

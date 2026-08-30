@@ -11,8 +11,8 @@
   },
   "scripts": {
     "build": "tsc -b tsconfig.json",
-    "typecheck:fixture": "tsc --noEmit -p fixtures/g0/tsconfig.json",
-    "assure:built": "node out/cli.js",
+    "typecheck:fixture": "tsc --noEmit -p fixtures/g0/tsconfig.json && tsc --noEmit -p ../../fixtures/hello-world/tsconfig.json",
+    "assure:built": "node out/cli.js --scenario all",
     "assure": "pnpm build && pnpm assure:built",
     "test": "pnpm build && pnpm typecheck:fixture && pnpm assure:built",
     "clean": "node -e \"require('node:fs').rmSync('out', { recursive: true, force: true }); require('node:fs').rmSync('tsconfig.tsbuildinfo', { force: true })\""

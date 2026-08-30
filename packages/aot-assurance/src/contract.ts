@@ -1,6 +1,7 @@
 import type { PluginOption } from 'vite';
 
 export type AssuranceLane = 'jit' | 'aot';
+export type AssuranceScenario = 'g0' | 'hello-world';
 
 export type EmissionFalsifier =
   | 'mutate-instruction'
@@ -85,10 +86,14 @@ export interface LiveElementTranscript {
   readonly selectedIndex?: number;
 }
 
-export interface ApplicationObservation {
-  readonly dom: readonly DomNodeTranscript[];
+interface ApplicationObservationBase {
   readonly live: readonly LiveElementTranscript[];
   readonly focus: string | null;
+}
+
+export interface G0ApplicationObservation extends ApplicationObservationBase {
+  readonly kind: 'g0';
+  readonly dom: readonly DomNodeTranscript[];
   readonly model: unknown;
   readonly events: readonly string[];
   readonly browserStructure: {
@@ -98,6 +103,13 @@ export interface ApplicationObservation {
   readonly svgNamespace: string | null;
 }
 
+export interface HelloWorldApplicationObservation extends ApplicationObservationBase {
+  readonly kind: 'hello-world';
+  readonly model: HelloWorldObservation;
+}
+
+export type ApplicationObservation = G0ApplicationObservation | HelloWorldApplicationObservation;
+
 export interface CheckpointTranscript {
   readonly label: string;
   readonly observation: ApplicationObservation;
@@ -105,7 +117,7 @@ export interface CheckpointTranscript {
 
 export interface SemanticTranscript {
   readonly checkpoints: readonly CheckpointTranscript[];
-  readonly teardownEvents: readonly string[];
+  readonly teardownEvents: readonly string[] | null;
   readonly console: readonly string[];
   readonly pageErrors: readonly string[];
 }
@@ -113,7 +125,7 @@ export interface SemanticTranscript {
 export interface LaneTranscript {
   readonly lane: AssuranceLane;
   readonly semantic: SemanticTranscript;
-  readonly probes: RuntimeProbeSnapshot;
+  readonly probes: RuntimeProbeSnapshot | null;
 }
 
 export interface LaneBuildReceipt {
@@ -123,8 +135,42 @@ export interface LaneBuildReceipt {
 }
 
 export interface AssuranceReceipt {
+  readonly scenario: AssuranceScenario;
   readonly fixture: string;
   readonly builds: readonly [LaneBuildReceipt, LaneBuildReceipt];
   readonly transcripts: readonly [LaneTranscript, LaneTranscript];
   readonly aot: AotBuildEvidence;
+}
+
+export interface HelloWorldCardObservation {
+  readonly label: string;
+  readonly description: string;
+  readonly sku: string;
+  readonly stockText: string;
+  readonly selected: boolean;
+  readonly progressWidth: string;
+  readonly svgLabel: string | null;
+  readonly svgNamespace: string | null;
+  readonly circleStrokeWidth: string;
+  readonly foreignObjectWidth: string;
+  readonly foreignObjectHtmlNamespace: string | null;
+}
+
+export interface HelloWorldObservation {
+  readonly heading: string;
+  readonly searchValue: string;
+  readonly onlyInStock: boolean;
+  readonly headerProgress: string;
+  readonly preview: {
+    readonly classes: readonly string[];
+    readonly title: string | null;
+    readonly displayTone: string | null;
+    readonly name: string;
+    readonly description: string;
+    readonly stockLabel: string;
+    readonly badgeClasses: readonly string[];
+    readonly badgeText: string;
+  };
+  readonly cards: readonly HelloWorldCardObservation[];
+  readonly emptyMessage: string | null;
 }

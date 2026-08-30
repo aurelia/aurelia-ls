@@ -4,7 +4,10 @@ export type {
   AotAssuranceAdapter,
   AotAssuranceAdapterModule,
   AotBuildEvidence,
+  AssuranceReceipt,
+  AssuranceScenario,
   EmissionFalsifier,
+  HelloWorldObservation,
   RenderedModuleEvidence,
 } from './contract.js';
 

@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 
 import type {
-  ApplicationObservation,
   DomNodeTranscript,
+  G0ApplicationObservation,
   LaneTranscript,
   LiveElementTranscript,
 } from './contract.js';
@@ -72,23 +72,25 @@ export function assertG0Expectations(transcript: LaneTranscript): void {
   assert.deepEqual(textsByClass(final.dom, 'item'), ['A', 'B', 'C']);
   assert.ok(final.events.includes('toggle:false'));
   assert.ok(final.events.includes('add:C'));
+  assert.ok(transcript.semantic.teardownEvents != null, `${transcript.lane} has no teardown transcript`);
   assert.ok(transcript.semantic.teardownEvents.includes('detaching'));
   assert.ok(transcript.semantic.teardownEvents.includes('unbinding'));
 }
 
-function observation(transcript: LaneTranscript, label: string): ApplicationObservation {
+function observation(transcript: LaneTranscript, label: string): G0ApplicationObservation {
   const checkpoint = transcript.semantic.checkpoints.find(candidate => candidate.label === label);
   assert.ok(checkpoint !== undefined, `${transcript.lane} has no ${label} checkpoint`);
+  assert.equal(checkpoint.observation.kind, 'g0', `${transcript.lane} ${label} is not a G0 observation`);
   return checkpoint.observation;
 }
 
-function model(observationValue: ApplicationObservation): G0Model {
+function model(observationValue: G0ApplicationObservation): G0Model {
   assert.equal(typeof observationValue.model, 'object');
   assert.notEqual(observationValue.model, null);
   return observationValue.model as G0Model;
 }
 
-function live(observationValue: ApplicationObservation, id: string): LiveElementTranscript {
+function live(observationValue: G0ApplicationObservation, id: string): LiveElementTranscript {
   const value = observationValue.live.find(candidate => candidate.id === id);
   assert.ok(value !== undefined, `no live-element observation for #${id}`);
   return value;

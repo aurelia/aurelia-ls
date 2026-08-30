@@ -9,7 +9,6 @@
       "DOM.Iterable"
     ],
     "strict": true,
-    "experimentalDecorators": true,
     "skipLibCheck": true,
     "allowArbitraryExtensions": true,
     "noEmit": true
