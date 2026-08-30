@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto';
+
 import { DI, Registration } from '@aurelia/kernel';
 import { IExpressionParser } from '@aurelia/expression-parser';
 import {
@@ -22,6 +24,8 @@ import {
   AOT_CONSERVATIVE_RUNTIME_REGISTRATION_ORDER,
   AOT_RUNTIME_CONFIGURATION_MODULE_PREFIX,
   AOT_RUNTIME_CONFIGURATION_PROTOCOL,
+  AOT_RUNTIME_SPREAD_PLAN,
+  AOT_RUNTIME_SPREAD_PLAN_PROTOCOL,
   AotExpressionParser,
   AotRuntimeConfiguration,
   AotRuntimeConfigurationModuleEmitter,
@@ -30,7 +34,10 @@ import {
   type AotRuntimeExpressionEntry,
   type AotRuntimeRegistrationPlan,
   type AotRuntimeRegistrationReference,
+  type AotRuntimeSpreadPlan,
+  type AotRuntimeSpreadPlanCase,
 } from '../src/runtime-configuration.js';
+import { emitAotJavaScriptValue } from '../src/template-module-emitter.js';
 
 const propertyAst = { $kind: 'AccessScope', name: 'message', ancestor: 0 } as const;
 const iteratorAst = {
@@ -102,13 +109,146 @@ describe('AOT runtime configuration', () => {
     expect(auSlot.needsCompile).toBe(false);
   });
 
-  it('refuses every real template compile and spread compile', () => {
+  it('refuses every real template compile', () => {
     const compiler = new AotTemplateCompiler();
 
     expect(() => compiler.compile({ name: 'late-view', template: '<p>late</p>', needsCompile: true }))
       .toThrowError('AOT template compiler refused runtime compilation for "late-view".');
-    expect(() => compiler.compileSpread())
-      .toThrowError('AOT template compiler refused runtime spread compilation.');
+  });
+
+  it('returns the cached instructions for one exact attached spread case', () => {
+    const compiler = new AotTemplateCompiler();
+    const requestor = {
+      name: 'field-shell',
+      key: 'au:resource:custom-element:field-shell',
+    };
+    const captures = [{
+      rawName: 'value.bind',
+      rawValue: 'request.customerName',
+      target: 'value',
+      command: 'bind',
+      parts: null,
+    }];
+    const target = {
+      namespaceURI: 'http://www.w3.org/1999/xhtml',
+      localName: 'input',
+      nodeName: 'INPUT',
+    };
+    const instructions = [{ type: 34, value: 'text', to: 'type' }] as const;
+    const spreadCase = {
+      requestorName: requestor.name,
+      requestorKey: requestor.key,
+      targetNamespaceUri: target.namespaceURI,
+      targetLocalName: target.localName,
+      targetDefinitionMatch: 'structural',
+      targetDefinitionName: null,
+      targetDefinitionKey: null,
+      instructions,
+    } satisfies AotRuntimeSpreadPlanCase;
+    Object.defineProperty(captures, AOT_RUNTIME_SPREAD_PLAN, {
+      value: [spreadCase] satisfies AotRuntimeSpreadPlan,
+    });
+    const unavailableContainer = new Proxy({}, {
+      get() {
+        throw new Error('compileSpread consulted the runtime container');
+      },
+    });
+
+    expect(AOT_RUNTIME_SPREAD_PLAN).toBe(Symbol.for(AOT_RUNTIME_SPREAD_PLAN_PROTOCOL));
+    expect(AotTemplateCompiler.spreadPlan).toBe(AOT_RUNTIME_SPREAD_PLAN);
+    expect(Object.getOwnPropertyDescriptor(captures, AOT_RUNTIME_SPREAD_PLAN)).toMatchObject({
+      enumerable: false,
+      value: [spreadCase],
+    });
+    expect(compiler.compileSpread(requestor, [], unavailableContainer, target)).toEqual([]);
+    expect(compiler.compileSpread(requestor, captures, unavailableContainer, target)).toBe(instructions);
+    expect(AotTemplateCompiler.toString()).toContain(AOT_RUNTIME_SPREAD_PLAN_PROTOCOL);
+    expect(AotTemplateCompiler.toString()).not.toContain('AOT_RUNTIME_SPREAD_PLAN');
+  });
+
+  it('fails closed for untagged, unmatched, and ambiguous spread plans', () => {
+    const compiler = new AotTemplateCompiler();
+    const requestor = {
+      name: 'field-shell',
+      key: 'au:resource:custom-element:field-shell',
+    };
+    const input = {
+      namespaceURI: 'http://www.w3.org/1999/xhtml',
+      localName: 'input',
+    };
+    const instructions = [{ type: 34, value: 'text', to: 'type' }] as const;
+    const spreadCase = {
+      requestorName: requestor.name,
+      requestorKey: requestor.key,
+      targetNamespaceUri: input.namespaceURI,
+      targetLocalName: input.localName,
+      targetDefinitionMatch: 'structural',
+      targetDefinitionName: null,
+      targetDefinitionKey: null,
+      instructions,
+    } satisfies AotRuntimeSpreadPlanCase;
+    const tagged = [{}];
+    Object.defineProperty(tagged, AOT_RUNTIME_SPREAD_PLAN, { value: [spreadCase] });
+    const ambiguous = [{}];
+    Object.defineProperty(ambiguous, AOT_RUNTIME_SPREAD_PLAN, {
+      value: [spreadCase, { ...spreadCase, instructions: [{ type: 34, value: 'email', to: 'type' }] }],
+    });
+    const customTarget = { ...input, localName: 'target-card' };
+    const firstCustomCase = {
+      ...spreadCase,
+      targetLocalName: customTarget.localName,
+      targetDefinitionName: 'first-target-card',
+      targetDefinitionKey: 'au:resource:custom-element:first-target-card',
+    };
+    const secondCustomCase = {
+      ...firstCustomCase,
+      targetDefinitionName: 'second-target-card',
+      targetDefinitionKey: 'au:resource:custom-element:second-target-card',
+      instructions: [{ type: 34, value: 'email', to: 'type' }] as const,
+    };
+    const explicitSecondCustomCase = {
+      ...secondCustomCase,
+      targetDefinitionMatch: 'explicit-definition' as const,
+    };
+    const singleCustomTarget = [{}];
+    Object.defineProperty(singleCustomTarget, AOT_RUNTIME_SPREAD_PLAN, { value: [firstCustomCase] });
+    const ambiguousCustomTarget = [{}];
+    Object.defineProperty(ambiguousCustomTarget, AOT_RUNTIME_SPREAD_PLAN, {
+      value: [firstCustomCase, secondCustomCase],
+    });
+    const explicitCustomTarget = [{}];
+    Object.defineProperty(explicitCustomTarget, AOT_RUNTIME_SPREAD_PLAN, {
+      value: [firstCustomCase, explicitSecondCustomCase],
+    });
+    const explicitOnlyCustomTarget = [{}];
+    Object.defineProperty(explicitOnlyCustomTarget, AOT_RUNTIME_SPREAD_PLAN, {
+      value: [explicitSecondCustomCase],
+    });
+
+    expect(() => compiler.compileSpread(requestor, [{}], {}, input)).toThrowError(
+      'AOT template compiler has no precompiled spread plan for 1 captured attributes on requestor "field-shell" ("au:resource:custom-element:field-shell").',
+    );
+    expect(() => compiler.compileSpread(requestor, tagged, {}, { ...input, localName: 'textarea' }))
+      .toThrowError(/spread plan has no case/u);
+    expect(() => compiler.compileSpread(requestor, tagged, {}, input, {
+      name: 'target-card',
+      key: 'au:resource:custom-element:target-card',
+    })).toThrowError(/spread plan has no case/u);
+    expect(() => compiler.compileSpread(requestor, ambiguous, {}, input))
+      .toThrowError(/spread plan has 2 ambiguous cases/u);
+    expect(compiler.compileSpread(requestor, singleCustomTarget, {}, customTarget))
+      .toBe(firstCustomCase.instructions);
+    expect(() => compiler.compileSpread(requestor, ambiguousCustomTarget, {}, customTarget))
+      .toThrowError(/spread plan has 2 ambiguous cases/u);
+    expect(() => compiler.compileSpread(requestor, explicitOnlyCustomTarget, {}, customTarget))
+      .toThrowError(/spread plan has no case/u);
+    expect(compiler.compileSpread(
+      requestor,
+      explicitCustomTarget,
+      {},
+      customTarget,
+      { name: explicitSecondCustomCase.targetDefinitionName, key: explicitSecondCustomCase.targetDefinitionKey },
+    )).toBe(explicitSecondCustomCase.instructions);
   });
 
   it('registers the conservative surface in StandardConfiguration-compatible order', () => {
@@ -326,6 +466,24 @@ describe('AOT runtime configuration', () => {
     expect(artifact.code.indexOf('"IsIterator"')).toBeLessThan(artifact.code.indexOf('"IsProperty"'));
     expect(artifact.code).toContain('"enableCoercion": true');
     expect(new AotRuntimeConfigurationModuleEmitter().emit(plan)).toEqual(artifact);
+  });
+
+  it('versions lookup compiler semantics into the runtime module address', () => {
+    const artifact = new AotRuntimeConfigurationModuleEmitter().emit(new AotRuntimeConfigurationPlan());
+    const legacyCanonicalPlan = emitAotJavaScriptValue({
+      coercion: { enableCoercion: false, coerceNullish: false },
+      expressions: [],
+      protocol: 'aurelia-aot/runtime-configuration/v1',
+      registrationOrder: artifact.registrationOrder,
+      registrations: artifact.registrations,
+    }, AOT_RUNTIME_CONFIGURATION_MODULE_PREFIX);
+    const legacyModuleId = `${AOT_RUNTIME_CONFIGURATION_MODULE_PREFIX}${
+      createHash('sha256').update(legacyCanonicalPlan).digest('hex')
+    }`;
+
+    expect(AOT_RUNTIME_CONFIGURATION_PROTOCOL).toBe('aurelia-aot/runtime-configuration/v2');
+    expect(artifact.moduleId).not.toBe(legacyModuleId);
+    expect(artifact.planDigest).not.toBe(`sha256:${legacyModuleId.slice(AOT_RUNTIME_CONFIGURATION_MODULE_PREFIX.length)}`);
   });
 
   it('emits the storefront exact leaves in semantic order without aggregate imports', () => {

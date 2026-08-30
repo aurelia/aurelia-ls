@@ -28,6 +28,7 @@ import {
 } from './instruction-ir.js';
 
 const runtimeInstructionFamilyAuthority = {};
+const runtimeInstructionClosureAuthority = {};
 
 export const enum TemplateCompilerFrameworkInstructionType {
   HydrateElement = 0,
@@ -217,6 +218,10 @@ export type TemplateCompilerRuntimeInstructionValue =
       readonly type: TemplateCompilerFrameworkInstructionType.SpreadTransferedBinding;
     }
   | {
+      readonly type: TemplateCompilerFrameworkInstructionType.SpreadElementProp;
+      readonly instruction: TemplateCompilerRuntimeInstructionValue;
+    }
+  | {
       readonly type: TemplateCompilerFrameworkInstructionType.SpreadValueBinding;
       readonly target: '$bindables' | '$element';
       readonly from: string;
@@ -391,7 +396,13 @@ export function projectTemplateCompilerRuntimeInstructionFamily(
     );
   }
   const productDetailRevision = request.productDetails.readProjectionRevision();
-  const projector = new RuntimeInstructionFamilyProjector(request);
+  const projector = new RuntimeInstructionValueProjector({
+    instructions: request.family.instructions,
+    contexts: request.family.contexts,
+    productDetails: request.productDetails,
+    resourceRepresentation: request.resourceRepresentation,
+    liveExpressionForProduct: (productHandle) => request.family.liveExpressionForProduct(productHandle),
+  });
   const entries = request.family.instructions.flatMap((instruction) => {
     const value = projector.project(instruction);
     return value == null ? [] : [new TemplateCompilerRuntimeInstructionValueEntry(instruction, value)];
@@ -448,7 +459,141 @@ export function projectTemplateCompilerRuntimeInstructionFamily(
   );
 }
 
-class RuntimeInstructionFamilyProjector {
+/** Exact runtime values for one ordered dynamic instruction closure and its ordered return roots. */
+export class TemplateCompilerRuntimeInstructionClosureValue {
+  readonly #authority: object;
+  readonly #valueByInstruction: ReadonlyMap<TemplateInstruction, TemplateCompilerRuntimeInstructionValue>;
+
+  constructor(
+    authority: object,
+    readonly resourceRepresentation: TemplateCompilerRuntimeResourceRepresentation.Name,
+    readonly roots: readonly TemplateCompilerRuntimeInstructionValue[],
+    readonly instructions: readonly TemplateCompilerRuntimeInstructionValueEntry[],
+    rootInstructions: readonly TemplateInstruction[],
+    createdInstructions: readonly TemplateInstruction[],
+  ) {
+    this.#valueByInstruction = new Map(instructions.map((entry) => [entry.instruction, entry.value]));
+    if (
+      authority !== runtimeInstructionClosureAuthority
+      || instructions.length !== createdInstructions.length
+      || instructions.some((entry, index) => entry.instruction !== createdInstructions[index])
+      || roots.length !== rootInstructions.length
+      || roots.some((value, index) => this.#valueByInstruction.get(rootInstructions[index]!) !== value)
+      || this.#valueByInstruction.size !== instructions.length
+    ) {
+      throw new Error('Runtime instruction closure value lost created-instruction or ordered-root coverage.');
+    }
+    this.#authority = authority;
+  }
+
+  valueForInstruction(instruction: TemplateInstruction): TemplateCompilerRuntimeInstructionValue | null {
+    return this.#valueByInstruction.get(instruction) ?? null;
+  }
+
+  isModuleConstructed(): boolean {
+    return this.#authority === runtimeInstructionClosureAuthority;
+  }
+}
+
+export class TemplateCompilerRuntimeInstructionClosureResult {
+  constructor(
+    readonly state: TemplateCompilerRuntimeInstructionFamilyState,
+    readonly value: TemplateCompilerRuntimeInstructionClosureValue | null,
+    readonly reasons: readonly TemplateCompilerRuntimeInstructionReason[],
+  ) {
+    if ((state === TemplateCompilerRuntimeInstructionFamilyState.Exact) !== (
+      value != null && value.isModuleConstructed() && reasons.length === 0
+    )) {
+      throw new Error('Runtime instruction closure result lost exact or unavailable ownership.');
+    }
+  }
+}
+
+export interface TemplateCompilerRuntimeInstructionClosureRequest {
+  readonly rootInstructions: readonly TemplateInstruction[];
+  readonly createdInstructions: readonly TemplateInstruction[];
+  readonly productDetails: ProductDetailReadView & KernelReadProjectionRevisionView;
+  readonly resourceRepresentation: TemplateCompilerRuntimeResourceRepresentation.Name;
+}
+
+/** Project a runtime-created instruction closure without requiring it to belong to a static context family. */
+export function projectTemplateCompilerRuntimeInstructionClosure(
+  request: TemplateCompilerRuntimeInstructionClosureRequest,
+): TemplateCompilerRuntimeInstructionClosureResult {
+  const createdByProduct = new Map(request.createdInstructions.map((instruction) => [
+    instruction.productHandle,
+    instruction,
+  ]));
+  if (
+    createdByProduct.size !== request.createdInstructions.length
+    || request.rootInstructions.some((instruction) => createdByProduct.get(instruction.productHandle) !== instruction)
+  ) {
+    throw new Error('Runtime instruction closure requires unique created products and roots drawn from that closure.');
+  }
+  const revision = request.productDetails.readProjectionRevision();
+  const projector = new RuntimeInstructionValueProjector({
+    instructions: request.createdInstructions,
+    contexts: [],
+    productDetails: request.productDetails,
+    resourceRepresentation: request.resourceRepresentation,
+    liveExpressionForProduct: () => null,
+  });
+  const entries = request.createdInstructions.flatMap((instruction) => {
+    const value = projector.project(instruction);
+    return value == null ? [] : [new TemplateCompilerRuntimeInstructionValueEntry(instruction, value)];
+  });
+  const roots = request.rootInstructions.flatMap((instruction) => {
+    const value = projector.project(instruction);
+    return value == null ? [] : [value];
+  });
+  if (!revision.equals(request.productDetails.readProjectionRevision())) {
+    return new TemplateCompilerRuntimeInstructionClosureResult(
+      TemplateCompilerRuntimeInstructionFamilyState.Ineligible,
+      null,
+      [new TemplateCompilerRuntimeInstructionReason(
+        TemplateCompilerRuntimeInstructionReasonKind.ProductDetailProjectionChanged,
+        request.rootInstructions[0]?.instructionKind ?? null,
+        request.rootInstructions[0]?.productHandle ?? null,
+        'Product-detail projection changed while dynamic runtime instruction values were being read.',
+        false,
+      )],
+    );
+  }
+  if (projector.reasons.length > 0) {
+    return new TemplateCompilerRuntimeInstructionClosureResult(
+      projector.reasons.some((reason) => !reason.pending)
+        ? TemplateCompilerRuntimeInstructionFamilyState.Ineligible
+        : TemplateCompilerRuntimeInstructionFamilyState.Pending,
+      null,
+      projector.reasons,
+    );
+  }
+  if (entries.length !== request.createdInstructions.length || roots.length !== request.rootInstructions.length) {
+    throw new Error('Exact runtime instruction closure projection lost instruction coverage.');
+  }
+  return new TemplateCompilerRuntimeInstructionClosureResult(
+    TemplateCompilerRuntimeInstructionFamilyState.Exact,
+    new TemplateCompilerRuntimeInstructionClosureValue(
+      runtimeInstructionClosureAuthority,
+      request.resourceRepresentation,
+      roots,
+      entries,
+      request.rootInstructions,
+      request.createdInstructions,
+    ),
+    [],
+  );
+}
+
+interface RuntimeInstructionValueProjectionRequest {
+  readonly instructions: readonly TemplateInstruction[];
+  readonly contexts: readonly TemplateCompilerContextFamilyValueContext[];
+  readonly productDetails: ProductDetailReadView & KernelReadProjectionRevisionView;
+  readonly resourceRepresentation: TemplateCompilerRuntimeResourceRepresentation.Name;
+  readonly liveExpressionForProduct: TemplateCompilerContextFamilyValue['liveExpressionForProduct'];
+}
+
+class RuntimeInstructionValueProjector {
   readonly reasons: TemplateCompilerRuntimeInstructionReason[] = [];
   private readonly instructionByProduct: ReadonlyMap<ProductHandle, TemplateInstruction>;
   private readonly contextByCompiledTemplate: ReadonlyMap<ProductHandle, TemplateCompilerContextFamilyValueContext>;
@@ -456,16 +601,16 @@ class RuntimeInstructionFamilyProjector {
   private readonly active = new Set<TemplateInstruction>();
   private readonly failed = new Set<TemplateInstruction>();
 
-  constructor(private readonly request: TemplateCompilerRuntimeInstructionFamilyRequest) {
-    this.instructionByProduct = new Map(request.family.instructions.map((instruction) => [
+  constructor(private readonly request: RuntimeInstructionValueProjectionRequest) {
+    this.instructionByProduct = new Map(request.instructions.map((instruction) => [
       instruction.productHandle,
       instruction,
     ]));
-    this.contextByCompiledTemplate = new Map(request.family.contexts.map((context) => [
+    this.contextByCompiledTemplate = new Map(request.contexts.map((context) => [
       context.compiledTemplate.productHandle,
       context,
     ]));
-    if (this.instructionByProduct.size !== request.family.instructions.length) {
+    if (this.instructionByProduct.size !== request.instructions.length) {
       throw new Error('Runtime instruction projection requires unique semantic instruction products.');
     }
   }
@@ -721,6 +866,21 @@ class RuntimeInstructionFamilyProjector {
       }
       case TemplateInstructionKind.SpreadTransferedBinding:
         return { type: TemplateCompilerFrameworkInstructionType.SpreadTransferedBinding };
+      case TemplateInstructionKind.SpreadElementPropBinding: {
+        const nested = this.nested(instruction);
+        if (nested?.length !== 1) {
+          this.pending(
+            instruction,
+            TemplateCompilerRuntimeInstructionReasonKind.MissingNestedInstruction,
+            'Spread element-prop runtime value requires exactly one wrapped instruction.',
+          );
+          return null;
+        }
+        return {
+          type: TemplateCompilerFrameworkInstructionType.SpreadElementProp,
+          instruction: nested[0]!,
+        };
+      }
       case TemplateInstructionKind.SpreadValueBinding:
         return {
           type: TemplateCompilerFrameworkInstructionType.SpreadValueBinding,
@@ -771,7 +931,7 @@ class RuntimeInstructionFamilyProjector {
       );
       return null;
     }
-    const live = this.request.family.liveExpressionForProduct(expressionProductHandle);
+    const live = this.request.liveExpressionForProduct(expressionProductHandle);
     const durable = readTemplateExpressionParse(this.request.productDetails, expressionProductHandle);
     if (live != null && durable != null) {
       this.fail(
@@ -832,7 +992,7 @@ class RuntimeInstructionFamilyProjector {
       );
       return null;
     }
-    const live = this.request.family.liveExpressionForProduct(expressionProductHandle);
+    const live = this.request.liveExpressionForProduct(expressionProductHandle);
     const durable = readTemplateExpressionParse(this.request.productDetails, expressionProductHandle);
     if (live != null && durable != null) {
       this.fail(

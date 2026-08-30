@@ -51,6 +51,8 @@ export {
   AOT_CONSERVATIVE_RUNTIME_REGISTRATION_ORDER,
   AOT_RUNTIME_CONFIGURATION_MODULE_PREFIX,
   AOT_RUNTIME_CONFIGURATION_PROTOCOL,
+  AOT_RUNTIME_SPREAD_PLAN,
+  AOT_RUNTIME_SPREAD_PLAN_PROTOCOL,
   AotExpressionParser,
   AotRuntimeConfiguration,
   AotRuntimeConfigurationModuleEmitter,
@@ -64,4 +66,7 @@ export {
   type AotRuntimeRegistrationReference,
   type AotRuntimeRegistrationKind,
   type AotRuntimeRegistrationSelection,
+  type AotRuntimeSpreadPlan,
+  type AotRuntimeSpreadPlanCase,
+  type AotRuntimeSpreadTargetDefinitionMatch,
 } from './runtime-configuration.js';

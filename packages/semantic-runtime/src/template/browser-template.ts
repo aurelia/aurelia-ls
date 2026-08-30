@@ -19,6 +19,12 @@ export {
   type TemplateCompilerCompiledHandoffDefinition,
   type TemplateCompilerCompiledHandoffElement,
   type TemplateCompilerCompiledHandoffInstructionValue,
+  type TemplateCompilerCompiledHandoffSpreadCase,
+  type TemplateCompilerCompiledHandoffSpreadClosure,
+  type TemplateCompilerCompiledHandoffSpreadClosureReason,
+  type TemplateCompilerCompiledHandoffSpreadExpressionEntry,
+  type TemplateCompilerCompiledHandoffSpreadPlan,
+  type TemplateCompilerCompiledHandoffSpreadTarget,
   type TemplateCompilerCompiledHandoffTree,
   type TemplateCompilerCompiledHandoffValue,
 } from './template-compiler-compiled-handoff-value.js';

@@ -7,6 +7,8 @@ import type {
   TemplateCompilerCompiledHandoffDefinition,
   TemplateCompilerCompiledHandoffElement,
   TemplateCompilerCompiledHandoffInstructionValue,
+  TemplateCompilerCompiledHandoffSpreadCase,
+  TemplateCompilerCompiledHandoffSpreadPlan,
   TemplateCompilerCompiledHandoffTree,
   TemplateCompilerCompiledHandoffValue,
 } from '@aurelia-ls/semantic-runtime/browser-template';
@@ -14,6 +16,11 @@ import {
   TemplateCompilerFrameworkInstructionType,
   TemplateCompilerRuntimeElementDataKind,
 } from '@aurelia-ls/semantic-runtime/browser-template';
+
+import {
+  AOT_RUNTIME_SPREAD_PLAN_PROTOCOL,
+  type AotRuntimeSpreadPlanCase,
+} from './runtime-spread-plan.js';
 
 const htmlNamespace = 'http://www.w3.org/1999/xhtml';
 const htmlVoidElements = new Set([
@@ -442,7 +449,7 @@ function instructionValue(
       props: instructionList(value.props, request, variableByDefinitionId),
       projections,
       containerless: emitJavaScriptValue(value.containerless, request),
-      captures: emitJavaScriptValue(value.captures, request),
+      captures: spreadCapturesValue(value.captures, value.spreadPlan, request, variableByDefinitionId),
       data,
     });
   }
@@ -464,7 +471,55 @@ function instructionValue(
       props: instructionList(value.props, request, variableByDefinitionId),
     });
   }
+  if (value.type === TemplateCompilerFrameworkInstructionType.SpreadElementProp) {
+    return objectLiteral({
+      type: emitJavaScriptValue(value.type, request),
+      instruction: instructionValue(value.instruction, request, variableByDefinitionId),
+    });
+  }
   return emitJavaScriptValue(value, request);
+}
+
+function spreadCapturesValue(
+  captures: readonly unknown[],
+  plan: TemplateCompilerCompiledHandoffSpreadPlan | null,
+  request: AotTemplateModuleEmissionRequest,
+  variableByDefinitionId: ReadonlyMap<string, string>,
+): string {
+  const value = emitJavaScriptValue(captures, request);
+  if (plan == null) return value;
+  const cases = plan.cases.map((entry) => spreadCaseValue(entry, request, variableByDefinitionId));
+  return `Object.defineProperty(${value}, Symbol.for(${JSON.stringify(AOT_RUNTIME_SPREAD_PLAN_PROTOCOL)}), { value: [${cases.join(', ')}] })`;
+}
+
+function spreadCaseValue(
+  value: TemplateCompilerCompiledHandoffSpreadCase,
+  request: AotTemplateModuleEmissionRequest,
+  variableByDefinitionId: ReadonlyMap<string, string>,
+): string {
+  const runtimeCase = {
+    requestorName: value.requestorName,
+    requestorKey: value.requestorKey,
+    targetNamespaceUri: value.target.namespaceUri,
+    targetLocalName: value.target.localName,
+    targetDefinitionMatch: value.target.targetDefinitionMatch,
+    targetDefinitionName: value.target.targetDefinitionMatch === 'explicit-definition'
+      ? value.target.definitionName
+      : null,
+    targetDefinitionKey: value.target.targetDefinitionMatch === 'explicit-definition'
+      ? value.target.definitionKey
+      : null,
+  } satisfies Omit<AotRuntimeSpreadPlanCase, 'instructions'>;
+  return objectLiteral({
+    requestorName: emitJavaScriptValue(runtimeCase.requestorName, request),
+    requestorKey: emitJavaScriptValue(runtimeCase.requestorKey, request),
+    targetNamespaceUri: emitJavaScriptValue(runtimeCase.targetNamespaceUri, request),
+    targetLocalName: emitJavaScriptValue(runtimeCase.targetLocalName, request),
+    targetDefinitionMatch: emitJavaScriptValue(runtimeCase.targetDefinitionMatch, request),
+    targetDefinitionName: emitJavaScriptValue(runtimeCase.targetDefinitionName, request),
+    targetDefinitionKey: emitJavaScriptValue(runtimeCase.targetDefinitionKey, request),
+    instructions: instructionList(value.instructions, request, variableByDefinitionId),
+  });
 }
 
 function emitTemplateNodeValue(

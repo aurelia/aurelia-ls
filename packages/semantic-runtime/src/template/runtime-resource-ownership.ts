@@ -37,6 +37,7 @@ import {
 import type { TemplateInstruction } from './instruction-ir.js';
 import { TemplateProductDetails } from './product-details.js';
 import type { RuntimeBindingBehaviorApplication } from './runtime-binding-behavior.js';
+import type { RuntimeSpreadCompilation } from './runtime-spread-compilation.js';
 import type { RuntimeValueConverterApplication } from './runtime-value-converter.js';
 import type { TemplateResourceRuntimeAnalysisEmission } from './template-compilation-project-pass.js';
 import type { TemplateExpressionParse, TemplateValueSite } from './value-site.js';
@@ -120,6 +121,19 @@ export function resourceLocalDynamicTemplateInstructions(
 ): readonly TemplateInstruction[] {
   return resource.runtimeAnalysis.runtimeRendering.dynamicInstructions.filter((instruction) =>
     dynamicInstructionBelongsToResource(resource, instruction)
+  );
+}
+
+/** Runtime spread invocations whose captured-attribute parent instruction is authored by this resource. */
+export function resourceLocalRuntimeSpreadCompilations(
+  resource: TemplateResourceRuntimeAnalysisEmission,
+): readonly RuntimeSpreadCompilation[] {
+  const authoredInstructionProductHandles = new Set(
+    resource.compilation.compiledTemplate.instructions.map((instruction) => instruction.productHandle),
+  );
+  return resource.runtimeAnalysis.runtimeRendering.spreadCompilations.filter((compilation) =>
+    compilation.capturedAttributeContextInstructionProductHandle != null
+    && authoredInstructionProductHandles.has(compilation.capturedAttributeContextInstructionProductHandle)
   );
 }
 

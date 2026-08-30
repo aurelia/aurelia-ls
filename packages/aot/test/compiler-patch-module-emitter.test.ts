@@ -18,13 +18,25 @@ import {
   AOT_COMPILER_PATCH_RUNTIME_MODULE_SOURCE,
 } from '../src/compiler-patch-runtime-module.js';
 import { AOT_RUNTIME_MODULE_SPECIFIER } from '../src/source-transform.js';
+import {
+  AOT_RUNTIME_SPREAD_PLAN,
+  AOT_RUNTIME_SPREAD_PLAN_PROTOCOL,
+  AotTemplateCompiler,
+} from '../src/runtime-configuration.js';
 import { AotTemplateModuleEmitter } from '../src/template-module-emitter.js';
 
 const repositoryRoot = path.resolve(import.meta.dirname, '../../..');
 const fixtureRoot = path.resolve(repositoryRoot, 'packages/aot-assurance/fixtures/g0');
 const templatePath = path.resolve(fixtureRoot, 'src/g0-app.html');
+const stateFormRoot = path.resolve(
+  repositoryRoot,
+  'packages/semantic-runtime/fixtures/pressure/app-pattern-state-backed-form',
+);
+const stateFormTemplatePath = path.resolve(stateFormRoot, 'src/components/state-backed-form.html');
 let handoff: TemplateCompilerCompiledHandoffValue;
 let sourceText: string;
+let stateFormHandoff: TemplateCompilerCompiledHandoffValue;
+let stateFormSourceText: string;
 
 beforeAll(async () => {
   const runtime = await createSemanticRuntime({
@@ -55,10 +67,60 @@ beforeAll(async () => {
   }
 }, 20_000);
 
+beforeAll(async () => {
+  const runtime = await createSemanticRuntime({
+    workspaceRoot: stateFormRoot,
+    projectDiscovery: 'single-root',
+    storeKey: 'aot-compiler-patch-module-emitter-state-form',
+  });
+  try {
+    const app = await runtime.openApp({
+      analysisDepth: 'runtime-topology',
+      includeAuthoringTemplates: true,
+      telemetry: { inquiryProfile: 'aot' },
+    });
+    const batch = materializeSemanticAppTemplateCompilerHandoffs({
+      app,
+      includeAuthoringResources: true,
+    });
+    const resource = batch.resources.find((candidate) => candidate.value?.resourceName === 'state-backed-form');
+    if (resource?.state !== TemplateCompilerCompiledHandoffState.Exact) {
+      throw new Error(resource?.reasons.map((reason) => reason.summary).join(' ') ?? 'No state-form handoff.');
+    }
+    stateFormHandoff = resource.value;
+    stateFormSourceText = await readFile(stateFormTemplatePath, 'utf8');
+    app.requireCurrent();
+  } finally {
+    runtime.retireWorkspaceIncarnation();
+  }
+}, 45_000);
+
 describe('AOT compiler patch module emitter', () => {
   it('shares the carrier transform runtime module contract', () => {
     expect(AOT_COMPILER_PATCH_RUNTIME_MODULE_ID).toBe(AOT_RUNTIME_MODULE_SPECIFIER);
     expect(AOT_COMPILER_PATCH_RUNTIME_MODULE_SOURCE).toContain('export function applyCompiledCustomElement');
+  });
+
+  it('keeps the static patch available when runtime spread closure is nonexact', () => {
+    const artifact = new AotCompilerPatchModuleEmitter().emit({
+      handoff: {
+        ...handoff,
+        spreadClosure: {
+          state: 'open',
+          reasons: [{
+            reasonKind: 'spread-compilation-open',
+            summary: 'Runtime spread compilation remains open.',
+            stableKeys: ['open-spread'],
+          }],
+        },
+      },
+      projectRoot: fixtureRoot,
+      sourcePath: templatePath,
+      sourceText,
+    });
+
+    expect(artifact.needsCompile).toBe(false);
+    expect(artifact.code).toContain('export default $definition0;');
   });
 
   it('emits only compiler-owned root fields while retaining complete generated definitions', async () => {
@@ -183,6 +245,65 @@ describe('AOT compiler patch module emitter', () => {
     expect(patched.watches).toEqual([authoredWatch]);
     expect(patched.processContent).toBe(authoredProcessContent);
   }, 20_000);
+
+  it('attaches exact state-form spread plans only to their captures arrays', async () => {
+    const semanticCases = stateFormHandoff.definitions.flatMap((definition) => definition.rows.flat())
+      .flatMap((instruction) => 'spreadPlan' in instruction.value
+        ? instruction.value.spreadPlan?.cases ?? []
+        : []
+      );
+    expect(semanticCases).toHaveLength(2);
+    for (const [index, spreadCase] of semanticCases.entries()) {
+      Object.assign(spreadCase.target, {
+        definitionName: `diagnostic-only-target-${index}`,
+        definitionKey: `au:resource:custom-element:diagnostic-only-target-${index}`,
+      });
+    }
+    const artifact = new AotCompilerPatchModuleEmitter().emit({
+      handoff: stateFormHandoff,
+      projectRoot: stateFormRoot,
+      sourcePath: stateFormTemplatePath,
+      sourceText: stateFormSourceText,
+    });
+    expect(artifact.code.match(/Object\.defineProperty\(/gu)).toHaveLength(2);
+    expect(artifact.code).toContain(`Symbol.for(${JSON.stringify(AOT_RUNTIME_SPREAD_PLAN_PROTOCOL)})`);
+    expect(artifact.code).not.toContain('spreadPlan:');
+    expect(artifact.code).not.toContain('ExpressionParser');
+    expect(artifact.code).not.toContain('.parse(');
+
+    const imported = await importPatchModule(artifact.code, artifact.digest);
+    const owners = collectRuntimeInstructions(imported.instructions).filter((instruction) =>
+      instruction.captures != null
+      && Object.prototype.hasOwnProperty.call(instruction.captures, AOT_RUNTIME_SPREAD_PLAN)
+    );
+    expect(owners).toHaveLength(2);
+    const compiler = new AotTemplateCompiler();
+    for (const owner of owners) {
+      const captures = owner.captures!;
+      const descriptor = Object.getOwnPropertyDescriptor(captures, AOT_RUNTIME_SPREAD_PLAN);
+      expect(descriptor).toMatchObject({ enumerable: false });
+      expect(Object.keys(owner)).not.toContain('spreadPlan');
+      const cases = descriptor!.value as readonly RuntimeSpreadPlanCase[];
+      expect(cases).toHaveLength(1);
+      expect(cases[0]).toMatchObject({
+        requestorName: 'field-shell',
+        requestorKey: 'au:resource:custom-element:field-shell',
+        targetNamespaceUri: 'http://www.w3.org/1999/xhtml',
+        targetLocalName: 'input',
+        targetDefinitionMatch: 'structural',
+        targetDefinitionName: null,
+        targetDefinitionKey: null,
+      });
+      const instructions = compiler.compileSpread(
+        { name: cases[0]!.requestorName, key: cases[0]!.requestorKey },
+        captures,
+        new Proxy({}, { get() { throw new Error('compileSpread read the runtime container'); } }),
+        { namespaceURI: cases[0]!.targetNamespaceUri, localName: cases[0]!.targetLocalName },
+      );
+      expect(instructions).toBe(cases[0]!.instructions);
+      expect(instructions.map((instruction) => instruction.type)).toEqual([34, 12]);
+    }
+  }, 20_000);
 });
 
 interface RuntimeCompilerPatch {
@@ -199,10 +320,23 @@ interface RuntimeCompilerPatchModule extends RuntimeCompilerPatch {
 }
 
 interface RuntimeInstruction extends Record<string, unknown> {
+  readonly captures?: readonly unknown[];
   readonly def?: RuntimeGeneratedDefinition;
+  readonly instruction?: RuntimeInstruction;
   readonly projections?: Readonly<Record<string, RuntimeGeneratedDefinition>> | null;
   readonly props?: readonly RuntimeInstruction[];
   readonly instructions?: readonly RuntimeInstruction[];
+}
+
+interface RuntimeSpreadPlanCase {
+  readonly requestorName: string;
+  readonly requestorKey: string;
+  readonly targetNamespaceUri: string | null;
+  readonly targetLocalName: string;
+  readonly targetDefinitionMatch: 'structural' | 'explicit-definition';
+  readonly targetDefinitionName: string | null;
+  readonly targetDefinitionKey: string | null;
+  readonly instructions: readonly { readonly type: number }[];
 }
 
 interface RuntimeGeneratedDefinition extends Record<string, unknown> {
@@ -251,6 +385,26 @@ function collectGeneratedDefinitions(rows: readonly (readonly RuntimeInstruction
   };
   rows.flat().forEach(visit);
   return definitions;
+}
+
+function collectRuntimeInstructions(rows: readonly (readonly RuntimeInstruction[])[]): RuntimeInstruction[] {
+  const instructions: RuntimeInstruction[] = [];
+  const definitions = new Set<RuntimeGeneratedDefinition>();
+  const visitDefinition = (definition: RuntimeGeneratedDefinition): void => {
+    if (definitions.has(definition)) return;
+    definitions.add(definition);
+    definition.instructions.flat().forEach(visit);
+  };
+  const visit = (instruction: RuntimeInstruction): void => {
+    instructions.push(instruction);
+    if (instruction.def != null) visitDefinition(instruction.def);
+    if (instruction.projections != null) Object.values(instruction.projections).forEach(visitDefinition);
+    instruction.props?.forEach(visit);
+    instruction.instructions?.forEach(visit);
+    if (instruction.instruction != null) visit(instruction.instruction);
+  };
+  rows.flat().forEach(visit);
+  return instructions;
 }
 
 function withAuthoredExecutableMetadata(

@@ -623,7 +623,7 @@ function programmaticReason(
   operation: string,
 ): RuntimeRegistrationRequirementReason {
   return reason(
-    RuntimeRegistrationRequirementReasonKind.ProgrammaticUseOpen,
+    RuntimeRegistrationRequirementReasonKind.ProgrammaticRuntimeRegistrationUse,
     `Programmatic runtime API '${exportName}' is used outside the template compiler corridor (${operation}).`,
     [fileName, exportName, operation],
   );

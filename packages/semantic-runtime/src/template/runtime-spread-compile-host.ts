@@ -141,6 +141,7 @@ export class RuntimeTemplateCompilerSpreadCompileHost implements TemplateCompile
       request,
       rootInstructions,
       createdInstructions,
+      targetDefinition?.productHandle ?? null,
     );
   }
 

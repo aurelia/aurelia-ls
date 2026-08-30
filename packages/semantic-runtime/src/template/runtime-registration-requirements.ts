@@ -348,7 +348,7 @@ function collectRendererUses(
       }
       if (value.type === TemplateCompilerFrameworkInstructionType.SpreadTransferedBinding) {
         const spreadReason = reason(
-          RuntimeRegistrationRequirementReasonKind.RuntimeTemplateCompilationRequired,
+          RuntimeRegistrationRequirementReasonKind.RuntimeSpreadCompilationRequired,
           'Spread transfer invokes TemplateCompiler.compileSpread at runtime.',
           [instruction.productHandle],
         );

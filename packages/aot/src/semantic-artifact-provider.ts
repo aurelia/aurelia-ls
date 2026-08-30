@@ -13,6 +13,7 @@ import {
   materializeSemanticAppStandardConfigurationSourceAttachments,
   CustomElementTemplateModuleRole,
   ResourceCarrierKind,
+  RuntimeRegistrationRequirementReasonKind,
   RuntimeRegistrationRequirementSelectionKind,
   StandardConfigurationSourceCarrierKind,
   TemplateCompilerCompiledHandoffState,
@@ -20,6 +21,7 @@ import {
   type SemanticAppRuntimeRegistrationRequirements,
   type SemanticAppTemplateCompilerHandoffResource,
   type StandardConfigurationSourceAttachment,
+  type TemplateCompilerCompiledHandoffInstructionValue,
   type TemplateCompilerCompiledHandoffValue,
 } from '@aurelia-ls/semantic-runtime/browser-template';
 import {
@@ -42,6 +44,7 @@ import {
   AotRuntimeConfigurationModuleEmitter,
   AotRuntimeConfigurationPlan,
   type AotRuntimeConfigurationModuleArtifact,
+  type AotRuntimeExpressionEntry,
   type AotRuntimeRegistrationPlan,
   type AotRuntimeRegistrationReference,
   type AotRuntimeRegistrationSelection,
@@ -51,6 +54,7 @@ import {
   AotTemplateModuleEmitter,
   createAotRawSourceMap,
   digestAotArtifact,
+  emitAotJavaScriptValue,
   type AotRawSourceMap,
   type AotTemplateModuleArtifact,
 } from './template-module-emitter.js';
@@ -420,11 +424,20 @@ export class SemanticAotArtifactProvider {
         app,
         includeAuthoringResources: true,
       });
+      const handoffs = batch.resources.flatMap((resource) => resource.value == null ? [] : [resource.value]);
+      const runtimeExpressions = collectAotRuntimeExpressions(
+        root,
+        handoffs,
+      );
+      const runtimeConfigurationMode = request.runtimeConfiguration ?? 'preserve';
       const runtimeConfiguration = runtimeConfigurationBuildPlan(
         root,
-        request.runtimeConfiguration ?? 'preserve',
+        runtimeConfigurationMode,
         materializeSemanticAppStandardConfigurationSourceAttachments(app),
         batch.runtimeRegistrationRequirements,
+        runtimeExpressions,
+        runtimeCompilerReplacementRefusal(runtimeConfigurationMode, batch.runtimeRegistrationRequirements)
+          ?? runtimeSpreadClosureRefusal(runtimeConfigurationMode, handoffs),
       );
       const unavailable = batch.resources.filter((resource) =>
         resource.state !== TemplateCompilerCompiledHandoffState.Exact
@@ -500,6 +513,8 @@ function runtimeConfigurationBuildPlan(
   mode: SemanticAotRuntimeConfigurationMode,
   attachments: readonly StandardConfigurationSourceAttachment[],
   requirements: SemanticAppRuntimeRegistrationRequirements,
+  expressions: readonly AotRuntimeExpressionEntry[],
+  compilerReplacementRefusal: RuntimeConfigurationRefusal | null,
 ): RuntimeConfigurationBuildPlan {
   const emitter = new AotRuntimeConfigurationModuleEmitter();
   const registrations = aotRuntimeRegistrationPlan(requirements);
@@ -525,6 +540,9 @@ function runtimeConfigurationBuildPlan(
         summary: carrier.reason?.summary ?? 'The browser Aurelia facade has no exact replaceable source reference.',
       };
     }
+    if (refusal == null && compilerReplacementRefusal != null) {
+      refusal = compilerReplacementRefusal;
+    }
     const coercion = closedRuntimeCoercion(attachment);
     if (refusal == null && coercion == null) {
       refusal = {
@@ -547,7 +565,7 @@ function runtimeConfigurationBuildPlan(
       };
     }
     const artifact = refusal == null && coercion != null && mode !== 'preserve'
-      ? emitter.emit(new AotRuntimeConfigurationPlan([], coercion, registrations))
+      ? emitter.emit(new AotRuntimeConfigurationPlan(expressions, coercion, registrations))
       : null;
     return {
       attachment,
@@ -672,6 +690,102 @@ function runtimeConfigurationBuildPlan(
       ),
     },
   };
+}
+
+export function runtimeSpreadClosureRefusal(
+  mode: SemanticAotRuntimeConfigurationMode,
+  handoffs: readonly TemplateCompilerCompiledHandoffValue[],
+): RuntimeConfigurationRefusal | null {
+  if (mode === 'preserve') return null;
+  const unavailable = handoffs.filter((handoff) => handoff.spreadClosure.state !== 'exact');
+  if (unavailable.length === 0) return null;
+  const detail = unavailable.map((handoff) => {
+    const closure = handoff.spreadClosure;
+    const reasons = closure.reasons.map((reason) =>
+      `${reason.reasonKind}${reason.stableKeys.length === 0 ? '' : ` [${reason.stableKeys.join(', ')}]`}`
+    );
+    return `${handoff.resourceName}: ${closure.state}${reasons.length === 0 ? '' : ` (${reasons.join('; ')})`}`;
+  });
+  return {
+    reasonKind: 'runtime-spread-closure-nonexact',
+    summary: `Generated AotTemplateCompiler requires exact runtime spread closure; ${detail.join('; ')}.`,
+  };
+}
+
+const runtimeCompilerReplacementBlockers = new Set<RuntimeRegistrationRequirementReasonKind>([
+  RuntimeRegistrationRequirementReasonKind.CompilerHandoffUnavailable,
+  RuntimeRegistrationRequirementReasonKind.CompilerCohortIncomplete,
+  RuntimeRegistrationRequirementReasonKind.RegistrationPressureOpen,
+  RuntimeRegistrationRequirementReasonKind.RuntimeTemplateCompilationRequired,
+  RuntimeRegistrationRequirementReasonKind.ProgrammaticUseOpen,
+]);
+
+/** Refuse the lookup-only compiler when typed app-wide pressure still requires a general runtime compiler. */
+export function runtimeCompilerReplacementRefusal(
+  mode: SemanticAotRuntimeConfigurationMode,
+  requirements: SemanticAppRuntimeRegistrationRequirements,
+): RuntimeConfigurationRefusal | null {
+  if (mode === 'preserve') return null;
+  const reasons = [...new Map([
+    ...requirements.resources.reasons,
+    ...requirements.renderers.reasons,
+    ...requirements.eventModifier.reasons,
+  ].filter((reason) => runtimeCompilerReplacementBlockers.has(reason.reasonKind)).map((reason) => [
+    JSON.stringify([reason.reasonKind, reason.stableKeys]),
+    reason,
+  ])).values()];
+  if (reasons.length === 0) return null;
+  return {
+    reasonKind: 'runtime-template-compiler-closure-open',
+    summary: `Generated AotTemplateCompiler cannot replace the general runtime compiler while ${reasons.map((reason) =>
+      `${reason.reasonKind}${reason.stableKeys.length === 0 ? '' : ` [${reason.stableKeys.join(', ')}]`}`
+    ).join('; ')}.`,
+  };
+}
+
+export function collectAotRuntimeExpressions(
+  root: string,
+  handoffs: readonly TemplateCompilerCompiledHandoffValue[],
+): readonly AotRuntimeExpressionEntry[] {
+  const entries = new Map<string, { readonly entry: AotRuntimeExpressionEntry; readonly ast: string }>();
+  const visit = (instruction: TemplateCompilerCompiledHandoffInstructionValue): void => {
+    if ('spreadPlan' in instruction && instruction.spreadPlan != null) {
+      for (const spreadCase of instruction.spreadPlan.cases) {
+        for (const expression of spreadCase.residualExpressions) {
+          const entry: AotRuntimeExpressionEntry = {
+            expressionType: expression.expressionType,
+            source: expression.source,
+            value: expression.value,
+          };
+          const key = `${entry.expressionType}\0${entry.source}`;
+          const ast = emitAotJavaScriptValue(entry.value, root);
+          const previous = entries.get(key);
+          if (previous != null && previous.ast !== ast) {
+            throw new AotArtifactError(
+              'AOT_ARTIFACT_INVALID_HANDOFF',
+              `AOT spread plans disagree on precompiled ${entry.expressionType} source ${JSON.stringify(entry.source)}.`,
+              root,
+            );
+          }
+          if (previous == null) entries.set(key, { entry, ast });
+        }
+      }
+    }
+    if ('props' in instruction) instruction.props.forEach(visit);
+    if ('instructions' in instruction) instruction.instructions.forEach(visit);
+    if ('instruction' in instruction) visit(instruction.instruction);
+  };
+  for (const handoff of handoffs) {
+    for (const definition of handoff.definitions) {
+      definition.rows.flat().forEach((instruction) => visit(instruction.value));
+      definition.surrogates.forEach((instruction) => visit(instruction.value));
+    }
+  }
+  return [...entries.values()]
+    .map((value) => value.entry)
+    .sort((left, right) =>
+      left.expressionType.localeCompare(right.expressionType) || left.source.localeCompare(right.source)
+    );
 }
 
 function aotRuntimeRegistrationPlan(

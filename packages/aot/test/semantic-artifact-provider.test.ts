@@ -2,7 +2,19 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
-import { ResourceCarrierKind } from '@aurelia-ls/semantic-runtime/browser-template';
+import {
+  ResourceCarrierKind,
+  SEMANTIC_APP_RUNTIME_REGISTRATION_REQUIREMENTS_VERSION,
+  RuntimeRegistrationRequirementGroupKind,
+  RuntimeRegistrationRequirementReasonKind,
+  RuntimeRegistrationRequirementSelectionKind,
+  TemplateCompilerFrameworkInstructionType,
+  type TemplateCompilerCompiledHandoffSpreadExpressionEntry,
+  type TemplateCompilerCompiledHandoffValue,
+  type RuntimeRegistrationRequirementReason,
+  type RuntimeRegistrationRequirementSelection,
+  type SemanticAppRuntimeRegistrationRequirements,
+} from '@aurelia-ls/semantic-runtime/browser-template';
 import { JSDOM } from 'jsdom';
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 import {
@@ -11,8 +23,12 @@ import {
 } from '../src/index.js';
 import {
   collapseEquivalentAotResourcePlans,
+  collectAotRuntimeExpressions,
+  runtimeCompilerReplacementRefusal,
+  runtimeSpreadClosureRefusal,
   validateAotCarrierPatchHandoff,
 } from '../src/semantic-artifact-provider.js';
+import { AOT_RUNTIME_SPREAD_PLAN_PROTOCOL } from '../src/runtime-configuration.js';
 import type { AotSourceTransformResourcePlan } from '../src/source-transform.js';
 
 const repositoryRoot = path.resolve(import.meta.dirname, '../../..');
@@ -22,6 +38,11 @@ const fixtureRoot = path.resolve(
 );
 const templatePath = path.resolve(fixtureRoot, 'src/my-app.html');
 const componentPath = path.resolve(fixtureRoot, 'src/my-app.ts');
+const stateFormRoot = path.resolve(
+  repositoryRoot,
+  'packages/semantic-runtime/fixtures/pressure/app-pattern-state-backed-form',
+);
+const stateFormTemplatePath = path.resolve(stateFormRoot, 'src/components/state-backed-form.html');
 const temporaryDirectories: string[] = [];
 const provider = new SemanticAotArtifactProvider();
 let session: SemanticAotBuildSession;
@@ -90,6 +111,110 @@ describe('semantic AOT artifact provider', () => {
     await expect(session.artifactFor({ sourcePath: path.resolve(fixtureRoot, 'src/missing.html') }))
       .rejects.toMatchObject({ code: 'AOT_ARTIFACT_INVALID_HANDOFF' });
   }, 15_000);
+
+  it('carries state-form spread plans while keeping its runtime parser table empty', async () => {
+    const stateFormProvider = new SemanticAotArtifactProvider();
+    const stateFormSession = await stateFormProvider.openBuild({
+      root: stateFormRoot,
+      mode: 'production',
+      environmentName: 'client',
+      sourcemap: true,
+      runtimeConfiguration: 'require-replaceable',
+    });
+    const artifact = await stateFormSession.artifactFor({ sourcePath: stateFormTemplatePath });
+    const payload = artifact.payload == null
+      ? artifact
+      : await stateFormSession.virtualModuleFor({ specifier: artifact.payload.payloadSpecifier });
+    if (payload == null) throw new Error('State-form compiler payload is unavailable.');
+
+    expect(payload.code.match(/Object\.defineProperty\(/gu)).toHaveLength(2);
+    expect(payload.code).toContain(`Symbol.for(${JSON.stringify(AOT_RUNTIME_SPREAD_PLAN_PROTOCOL)})`);
+    expect(payload.code).not.toContain('spreadPlan:');
+    const configurationEvidence = stateFormProvider.evidence()!.runtimeConfiguration.modules;
+    expect(configurationEvidence).toHaveLength(1);
+    const configuration = await stateFormSession.virtualModuleFor({
+      specifier: configurationEvidence[0]!.moduleSpecifier,
+    });
+    expect(configuration?.code).toContain('const $expressions = []');
+    expect(configuration?.code).not.toContain('request.customerName');
+    expect(configuration?.code).not.toContain('request.email');
+  }, 45_000);
+
+  it('preserves nonexact static spread handoffs but refuses generated compiler profiles', () => {
+    const handoff = {
+      resourceName: 'state-backed-form',
+      spreadClosure: {
+        state: 'open',
+        reasons: [{
+          reasonKind: 'spread-compilation-open',
+          summary: 'Open binding command.',
+          stableKeys: ['open-command'],
+        }],
+      },
+    } as unknown as TemplateCompilerCompiledHandoffValue;
+
+    expect(runtimeSpreadClosureRefusal('preserve', [handoff])).toBeNull();
+    for (const mode of ['replace-explicit', 'require-replaceable'] as const) {
+      expect(runtimeSpreadClosureRefusal(mode, [handoff])).toEqual({
+        reasonKind: 'runtime-spread-closure-nonexact',
+        summary: 'Generated AotTemplateCompiler requires exact runtime spread closure; state-backed-form: open (spread-compilation-open [open-command]).',
+      });
+    }
+  });
+
+  it('separates satisfiable spread lookup pressure from general compiler replacement blockers', () => {
+    const spreadRequirements = runtimeRequirements([
+      runtimeRequirementReason(RuntimeRegistrationRequirementReasonKind.RuntimeSpreadCompilationRequired),
+    ]);
+    expect(runtimeCompilerReplacementRefusal('require-replaceable', spreadRequirements)).toBeNull();
+
+    const compilerRequirements = runtimeRequirements([
+      runtimeRequirementReason(RuntimeRegistrationRequirementReasonKind.CompilerHandoffUnavailable),
+      runtimeRequirementReason(RuntimeRegistrationRequirementReasonKind.CompilerCohortIncomplete),
+      runtimeRequirementReason(RuntimeRegistrationRequirementReasonKind.RegistrationPressureOpen),
+      runtimeRequirementReason(RuntimeRegistrationRequirementReasonKind.RuntimeTemplateCompilationRequired),
+      runtimeRequirementReason(RuntimeRegistrationRequirementReasonKind.ProgrammaticUseOpen),
+    ]);
+    expect(runtimeCompilerReplacementRefusal('preserve', compilerRequirements)).toBeNull();
+    for (const mode of ['replace-explicit', 'require-replaceable'] as const) {
+      const refusal = runtimeCompilerReplacementRefusal(mode, compilerRequirements);
+      expect(refusal).toMatchObject({ reasonKind: 'runtime-template-compiler-closure-open' });
+      for (const kind of [
+        RuntimeRegistrationRequirementReasonKind.CompilerHandoffUnavailable,
+        RuntimeRegistrationRequirementReasonKind.CompilerCohortIncomplete,
+        RuntimeRegistrationRequirementReasonKind.RegistrationPressureOpen,
+        RuntimeRegistrationRequirementReasonKind.RuntimeTemplateCompilationRequired,
+        RuntimeRegistrationRequirementReasonKind.ProgrammaticUseOpen,
+      ]) {
+        expect(refusal?.summary).toContain(kind);
+      }
+    }
+  });
+
+  it('coalesces equal residual expression entries and rejects conflicting ASTs', () => {
+    const expression = {
+      expressionType: 'IsProperty',
+      source: 'spreadValues',
+      value: { $kind: 'AccessScope', name: 'spreadValues', ancestor: 0 },
+    } as const satisfies TemplateCompilerCompiledHandoffSpreadExpressionEntry;
+    const equal = { ...expression, value: { ...expression.value } };
+    const conflict = {
+      ...expression,
+      value: { $kind: 'AccessScope' as const, name: 'otherValues', ancestor: 0 },
+    };
+
+    expect(collectAotRuntimeExpressions(fixtureRoot, [
+      spreadExpressionHandoff(expression),
+      spreadExpressionHandoff(equal),
+    ])).toEqual([expression]);
+    expect(() => collectAotRuntimeExpressions(fixtureRoot, [
+      spreadExpressionHandoff(expression),
+      spreadExpressionHandoff(conflict),
+    ])).toThrow(expect.objectContaining({
+      code: 'AOT_ARTIFACT_INVALID_HANDOFF',
+      message: expect.stringContaining('spread plans disagree'),
+    }));
+  });
 
   it('transforms the owning resource module and serves resource-addressed patch modules', async () => {
     const code = await readFile(componentPath, 'utf8');
@@ -551,5 +676,68 @@ function variantPlan(
     targetDeclaration: null,
     payloadSpecifier: `virtual:aurelia-aot/payload/${compilerVariantKey}`,
     payloadDigest,
+  };
+}
+
+function spreadExpressionHandoff(
+  expression: TemplateCompilerCompiledHandoffSpreadExpressionEntry,
+): TemplateCompilerCompiledHandoffValue {
+  return {
+    definitions: [{
+      rows: [[{
+        value: {
+          type: TemplateCompilerFrameworkInstructionType.HydrateElement,
+          spreadPlan: {
+            cases: [{
+              residualExpressions: [expression],
+            }],
+          },
+        },
+      }]],
+      surrogates: [],
+    }],
+  } as unknown as TemplateCompilerCompiledHandoffValue;
+}
+
+function runtimeRequirementReason(
+  reasonKind: RuntimeRegistrationRequirementReasonKind,
+): RuntimeRegistrationRequirementReason {
+  return { reasonKind, summary: reasonKind, stableKeys: [`key:${reasonKind}`] };
+}
+
+function runtimeRequirements(
+  reasons: readonly RuntimeRegistrationRequirementReason[],
+): SemanticAppRuntimeRegistrationRequirements {
+  return {
+    schemaVersion: SEMANTIC_APP_RUNTIME_REGISTRATION_REQUIREMENTS_VERSION,
+    resources: runtimeRequirementSelection(
+      RuntimeRegistrationRequirementGroupKind.RuntimeHtmlDefaultResources,
+      'DefaultResources',
+      reasons,
+    ),
+    renderers: runtimeRequirementSelection(
+      RuntimeRegistrationRequirementGroupKind.RuntimeHtmlDefaultRenderers,
+      'DefaultRenderers',
+      reasons,
+    ),
+    eventModifier: runtimeRequirementSelection(
+      RuntimeRegistrationRequirementGroupKind.EventModifierRegistration,
+      'EventModifierRegistration',
+      reasons,
+    ),
+  };
+}
+
+function runtimeRequirementSelection(
+  groupKind: RuntimeRegistrationRequirementGroupKind,
+  exportName: string,
+  reasons: readonly RuntimeRegistrationRequirementReason[],
+): RuntimeRegistrationRequirementSelection {
+  return {
+    selectionKind: RuntimeRegistrationRequirementSelectionKind.ConservativeGroup,
+    groupKind,
+    conservativeGroup: { moduleSpecifier: '@aurelia/runtime-html', exportName },
+    leaves: [],
+    reasons,
   };
 }

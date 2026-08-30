@@ -1,4 +1,4 @@
-import type { ProductHandle } from '../kernel/handles.js';
+import type { IdentityHandle, ProductHandle } from '../kernel/handles.js';
 import { OpenSeamReasonKind } from '../kernel/open-seam.js';
 import type {
   KernelStore,
@@ -13,8 +13,10 @@ import {
   HydrateElementInstruction,
   type TemplateInstruction,
 } from './instruction-ir.js';
+import { ResourceProductDetails } from '../resources/product-details.js';
 import type { AttributeSyntax } from './attribute-syntax.js';
 import {
+  type TemplateCompilerSpreadCompileResult,
   TemplateCompilerSpreadCompileRequest,
   TemplateCompilerSpreadCompileState,
 } from './compiler-world.js';
@@ -23,6 +25,7 @@ import {
   RuntimeRendererSpreadCompileResult,
   type RuntimeRendererSpreadCompileRequest,
 } from './runtime-renderer.js';
+import { RuntimeSpreadCompilation } from './runtime-spread-compilation.js';
 import type { RuntimeRenderingSourceSet } from './runtime-rendering-source.js';
 import { RuntimeTemplateCompilerSpreadCompileHost } from './runtime-spread-compile-host.js';
 import { TemplateProductDetails } from './product-details.js';
@@ -49,6 +52,7 @@ export interface RuntimeSpreadBindingCreationState {
   readonly dynamicInstructionContexts: RuntimeDynamicInstructionContext[];
   readonly dynamicValueSites: TemplateValueSite[];
   readonly dynamicExpressionParses: TemplateExpressionParse[];
+  readonly spreadCompilations: RuntimeSpreadCompilation[];
   readController(productHandle: ProductHandle): RuntimeControllerFrame | null;
 }
 
@@ -67,6 +71,7 @@ interface RuntimeCapturedAttributeUsage {
   readonly requestorDefinitionProductHandle: ProductHandle;
   readonly hydrationContext: RuntimeHydrationContext;
   readonly contextController: RuntimeControllerFrame;
+  readonly contextInstruction: HydrateElementInstruction;
   readonly captureSyntaxProductHandles: readonly ProductHandle[];
 }
 
@@ -88,28 +93,86 @@ export class RuntimeSpreadBindingCreator {
     spread: RuntimeRendererSpreadCompileRequest,
     state: RuntimeSpreadBindingCreationState,
   ): RuntimeRendererSpreadCompileResult {
+    const expressionParseStart = state.dynamicExpressionParses.length;
+    const retain = (
+      runtimeResult: RuntimeRendererSpreadCompileResult,
+      usage: RuntimeCapturedAttributeUsage | null = null,
+      capturedSyntaxes: readonly AttributeSyntax[] = [],
+      compilerResult: TemplateCompilerSpreadCompileResult | null = null,
+      requestorDefinitionIdentityHandle: IdentityHandle | null = null,
+    ): RuntimeRendererSpreadCompileResult => {
+      const hydrationContext = usage?.hydrationContext ?? spread.hydrationContext;
+      const contextController = usage?.contextController ?? null;
+      const contextInstruction = usage?.contextInstruction ?? null;
+      const targetDefinitionProductHandle = compilerResult?.effectiveTargetDefinitionProductHandle
+        ?? compilerResult?.request.targetDefinitionProductHandle
+        ?? null;
+      const targetDefinition = targetDefinitionProductHandle == null
+        ? null
+        : this.publication.readProductDetail(ResourceProductDetails.Definition, targetDefinitionProductHandle);
+      state.spreadCompilations.push(new RuntimeSpreadCompilation({
+        state: runtimeResult.state,
+        requestorDefinitionProductHandle: usage?.requestorDefinitionProductHandle ?? null,
+        requestorDefinitionIdentityHandle,
+        spreadInstructionProductHandle: spread.instruction.productHandle,
+        spreadInstructionIdentityHandle: spread.instruction.identityHandle,
+        capturedAttributeContextInstructionProductHandle:
+          contextInstruction?.productHandle ?? hydrationContext?.instructionProductHandle ?? null,
+        capturedAttributeContextInstructionIdentityHandle: contextInstruction?.identityHandle ?? null,
+        capturedAttributeContextControllerProductHandle:
+          contextController?.productHandle ?? hydrationContext?.controller.productHandle ?? null,
+        capturedAttributeContextControllerIdentityHandle:
+          contextController?.identityHandle ?? hydrationContext?.controller.identityHandle ?? null,
+        hydrationContextProductHandle: hydrationContext?.productHandle ?? null,
+        hydrationContextIdentityHandle: hydrationContext?.identityHandle ?? null,
+        targetRenderTargetProductHandle: spread.target.productHandle,
+        targetRenderTargetIdentityHandle: spread.target.identityHandle,
+        targetHtmlNodeProductHandle: spread.target.htmlNode?.productHandle ?? null,
+        targetHtmlNodeIdentityHandle: spread.target.htmlNode?.identityHandle ?? null,
+        targetDefinitionExplicit: compilerResult?.request.targetDefinitionProductHandle != null,
+        targetDefinitionProductHandle,
+        targetDefinitionIdentityHandle: targetDefinition?.identityHandle ?? null,
+        capturedSyntaxProductHandles:
+          usage?.captureSyntaxProductHandles ?? capturedSyntaxes.map((syntax) => syntax.productHandle),
+        rootInstructionProductHandles: compilerResult?.instructions.map((instruction) => instruction.productHandle)
+          ?? runtimeResult.instructions.map((instruction) => instruction.productHandle),
+        createdInstructionProductHandles: compilerResult?.createdInstructions.map((instruction) => instruction.productHandle)
+          ?? runtimeResult.createdInstructions.map((instruction) => instruction.productHandle),
+        expressionParseProductHandles:
+          state.dynamicExpressionParses.slice(expressionParseStart).map((parse) => parse.productHandle),
+        summary: runtimeResult.summary,
+        reasonKinds: runtimeResult.reasonKinds,
+      }));
+      return runtimeResult;
+    };
     const usage = this.capturedAttributeUsage(spread, state);
     if (usage instanceof RuntimeRendererSpreadCompileResult) {
-      return usage;
+      return retain(usage);
+    }
+    if (usage.captureSyntaxProductHandles.length === 0) {
+      return retain(
+        RuntimeRendererSpreadCompileResult.noCapturedAttributes(spread.instruction.sourceAddressHandle),
+        usage,
+      );
     }
 
     const capturedSyntaxes = this.capturedSyntaxes(usage, state.input);
     if (capturedSyntaxes == null) {
-      return RuntimeRendererSpreadCompileResult.open(
+      return retain(RuntimeRendererSpreadCompileResult.open(
         'TemplateCompiler.compileSpread found captured attribute handles, but not every handle resolved to an AttrSyntax product.',
         spread.instruction.sourceAddressHandle,
         [OpenSeamReasonKind.FeatureNotYetModeled],
-      );
+      ), usage);
     }
 
     const requestorDefinitionProductHandle = usage.requestorDefinitionProductHandle;
     const runtimeResource = state.input.projectContext.readResourceForDefinition(requestorDefinitionProductHandle);
     if (runtimeResource == null) {
-      return RuntimeRendererSpreadCompileResult.open(
+      return retain(RuntimeRendererSpreadCompileResult.open(
         'TemplateCompiler.compileSpread could not recover the compiler world that owns the requesting custom-element view.',
         spread.instruction.sourceAddressHandle,
         [OpenSeamReasonKind.FeatureNotYetModeled],
-      );
+      ), usage, capturedSyntaxes);
     }
     const compilerWorld = runtimeResource.compilerWorld;
 
@@ -149,7 +212,13 @@ export class RuntimeSpreadBindingCreator {
         )
       ));
     }
-    return this.runtimeResultForTemplateCompilerResult(spread, result);
+    return retain(
+      this.runtimeResultForTemplateCompilerResult(spread, result),
+      usage,
+      capturedSyntaxes,
+      result,
+      runtimeResource.compilation.definition.identityHandle,
+    );
   }
 
   private capturedAttributeUsage(
@@ -199,8 +268,7 @@ export class RuntimeSpreadBindingCreator {
         TemplateProductDetails.Instruction,
         hydrationContext.instructionProductHandle,
       );
-    if (!(contextInstruction instanceof HydrateElementInstruction)
-      || contextInstruction.captureSyntaxProductHandles.length === 0) {
+    if (!(contextInstruction instanceof HydrateElementInstruction)) {
       return RuntimeRendererSpreadCompileResult.noCapturedAttributes(spread.instruction.sourceAddressHandle);
     }
 
@@ -208,6 +276,7 @@ export class RuntimeSpreadBindingCreator {
       requestorDefinitionProductHandle: contextController.definitionProductHandle ?? contextInstruction.definitionProductHandle!,
       hydrationContext,
       contextController,
+      contextInstruction,
       captureSyntaxProductHandles: contextInstruction.captureSyntaxProductHandles,
     };
   }

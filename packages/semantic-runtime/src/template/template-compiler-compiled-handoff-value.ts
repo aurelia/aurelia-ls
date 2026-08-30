@@ -5,6 +5,7 @@ import type { AddressHandle, IdentityHandle, ProductHandle, ProvenanceHandle } f
 import type { FieldProvenance } from '../kernel/provenance.js';
 import type { KernelStore } from '../kernel/store.js';
 import type { RuntimeExpressionAstValue } from '../expression/runtime-ast-value.js';
+import type { ExpressionType } from '../expression/ast.js';
 import type { BindableDefinition, BindableSetterKind } from '../resources/bindable-definition.js';
 import {
   CustomElementCaptureKind,
@@ -22,6 +23,7 @@ import type {
   WatchPropertyKeyDefinition,
 } from '../resources/watch-definition.js';
 import type { TemplateInstruction } from './instruction-ir.js';
+import type { HtmlNamespaceKind } from './html-ir.js';
 import {
   orderTemplateCompilerContextFamilyDefinitions,
   type TemplateCompilerContextFamilyDefinitionLocation,
@@ -47,7 +49,7 @@ import {
 } from './template-instruction-runtime-value.js';
 
 export const TEMPLATE_COMPILER_COMPILED_HANDOFF_VERSION =
-  'semantic-runtime/template-compiler-compiled-handoff/v1' as const;
+  'semantic-runtime/template-compiler-compiled-handoff/v2' as const;
 
 export interface TemplateCompilerCompiledHandoffValue {
   readonly schemaVersion: typeof TEMPLATE_COMPILER_COMPILED_HANDOFF_VERSION;
@@ -56,7 +58,22 @@ export interface TemplateCompilerCompiledHandoffValue {
   readonly source: TemplateCompilerCompiledHandoffTemplateSource;
   readonly rootDefinitionId: string;
   readonly definitions: readonly TemplateCompilerCompiledHandoffDefinition[];
+  readonly spreadClosure: TemplateCompilerCompiledHandoffSpreadClosure;
 }
+
+export interface TemplateCompilerCompiledHandoffSpreadClosureReason {
+  readonly reasonKind: string;
+  readonly summary: string;
+  readonly stableKeys: readonly string[];
+}
+
+/** Runtime spread lookup closure is independent from the exact static compiled-definition handoff. */
+export type TemplateCompilerCompiledHandoffSpreadClosure =
+  | { readonly state: 'exact'; readonly reasons: readonly [] }
+  | {
+      readonly state: 'open' | 'pending' | 'ineligible';
+      readonly reasons: readonly TemplateCompilerCompiledHandoffSpreadClosureReason[];
+    };
 
 /** Resource and compiler-world address for one detached compiled variant. */
 export interface TemplateCompilerCompiledHandoffAddress {
@@ -276,6 +293,35 @@ export interface TemplateCompilerCompiledHandoffProjectionReference {
   readonly definition: TemplateCompilerCompiledHandoffDefinitionReference;
 }
 
+/** One runtime parser lookup that remains string-valued after a spread instruction closure is precompiled. */
+export interface TemplateCompilerCompiledHandoffSpreadExpressionEntry {
+  readonly expressionType: ExpressionType;
+  readonly source: string;
+  readonly value: RuntimeExpressionAstValue;
+}
+
+export interface TemplateCompilerCompiledHandoffSpreadTarget {
+  readonly namespaceKind: HtmlNamespaceKind;
+  readonly namespaceUri: string | null;
+  readonly localName: string;
+  readonly targetDefinitionMatch: 'structural' | 'explicit-definition';
+  readonly definitionName: string | null;
+  readonly definitionKey: string | null;
+}
+
+/** One exact compileSpread result for an emitted HydrateElement captures array and one requestor target. */
+export interface TemplateCompilerCompiledHandoffSpreadCase {
+  readonly requestorName: string;
+  readonly requestorKey: string;
+  readonly target: TemplateCompilerCompiledHandoffSpreadTarget;
+  readonly instructions: readonly TemplateCompilerCompiledHandoffInstructionValue[];
+  readonly residualExpressions: readonly TemplateCompilerCompiledHandoffSpreadExpressionEntry[];
+}
+
+export interface TemplateCompilerCompiledHandoffSpreadPlan {
+  readonly cases: readonly TemplateCompilerCompiledHandoffSpreadCase[];
+}
+
 type HandoffUnchangedInstructionValue = Exclude<
   TemplateCompilerRuntimeInstructionValue,
   { readonly type:
@@ -285,6 +331,7 @@ type HandoffUnchangedInstructionValue = Exclude<
     | TemplateCompilerFrameworkInstructionType.HydrateLetElement
     | TemplateCompilerFrameworkInstructionType.IteratorBinding
     | TemplateCompilerFrameworkInstructionType.VirtualizationIterateBinding
+    | TemplateCompilerFrameworkInstructionType.SpreadElementProp
   }
 >;
 
@@ -311,6 +358,7 @@ export type TemplateCompilerCompiledHandoffInstructionValue =
       readonly containerless: boolean;
       readonly captures: readonly TemplateCompilerRuntimeAttributeSyntaxValue[];
       readonly data: TemplateCompilerRuntimeElementDataValue;
+      readonly spreadPlan: TemplateCompilerCompiledHandoffSpreadPlan | null;
     }
   | {
       readonly type: TemplateCompilerFrameworkInstructionType.HydrateLetElement;
@@ -324,6 +372,10 @@ export type TemplateCompilerCompiledHandoffInstructionValue =
       readonly forOf: RuntimeExpressionAstValue;
       readonly to: string;
       readonly props: readonly TemplateCompilerCompiledHandoffInstructionValue[];
+    }
+  | {
+      readonly type: TemplateCompilerFrameworkInstructionType.SpreadElementProp;
+      readonly instruction: TemplateCompilerCompiledHandoffInstructionValue;
     };
 
 export interface TemplateCompilerCompiledHandoffProjectionRequest {
@@ -334,6 +386,8 @@ export interface TemplateCompilerCompiledHandoffProjectionRequest {
   readonly sourceMap: TemplateSourceOffsetMap | null;
   readonly source: SemanticSourceReference | null;
   readonly store: KernelStore;
+  readonly spreadPlansByInstruction?: ReadonlyMap<TemplateInstruction, TemplateCompilerCompiledHandoffSpreadPlan>;
+  readonly spreadClosure: TemplateCompilerCompiledHandoffSpreadClosure;
 }
 
 /** Detach one exact compiled-definition family into the sole build-consumer value. */
@@ -346,7 +400,13 @@ export function projectTemplateCompilerCompiledHandoff(
   const definitions = locations.map((location) => {
     const overlay = overlays.get(location.context);
     if (overlay == null) throw new Error('Compiled handoff lost a definition overlay for an ordered context.');
-    return projectDefinition(location, overlay, definitionIds, request.store);
+    return projectDefinition(
+      location,
+      overlay,
+      definitionIds,
+      request.store,
+      request.spreadPlansByInstruction ?? new Map(),
+    );
   });
   return {
     schemaVersion: TEMPLATE_COMPILER_COMPILED_HANDOFF_VERSION,
@@ -360,6 +420,7 @@ export function projectTemplateCompilerCompiledHandoff(
     },
     rootDefinitionId: definitions[0]!.definitionId,
     definitions,
+    spreadClosure: request.spreadClosure,
   };
 }
 
@@ -368,6 +429,7 @@ function projectDefinition(
   overlay: TemplateCompilerCompiledDefinitionOverlay,
   definitionIds: ReadonlyMap<TemplateCompilerContextFamilyValueContext, string>,
   store: KernelStore,
+  spreadPlansByInstruction: ReadonlyMap<TemplateInstruction, TemplateCompilerCompiledHandoffSpreadPlan>,
 ): TemplateCompilerCompiledHandoffDefinition {
   const definitionId = requireMap(definitionIds, location.context, 'definition context');
   const values = overlay.instructions;
@@ -382,10 +444,17 @@ function projectDefinition(
         location.context.rows[rowIndex]!.instructions[instructionIndex]!,
         definitionIds,
         store,
+        spreadPlansByInstruction,
       )
     )),
     surrogates: values.surrogates.map((value, instructionIndex) =>
-      projectInstruction(value, location.context.surrogates[instructionIndex]!, definitionIds, store)
+      projectInstruction(
+        value,
+        location.context.surrogates[instructionIndex]!,
+        definitionIds,
+        store,
+        spreadPlansByInstruction,
+      )
     ),
   };
 }
@@ -512,17 +581,25 @@ function projectInstruction(
   instruction: TemplateInstruction,
   definitionIds: ReadonlyMap<TemplateCompilerContextFamilyValueContext, string>,
   store: KernelStore,
+  spreadPlansByInstruction: ReadonlyMap<TemplateInstruction, TemplateCompilerCompiledHandoffSpreadPlan>,
 ): TemplateCompilerCompiledHandoffInstruction {
   return {
-    value: instructionValue(value, definitionIds),
+    value: projectTemplateCompilerCompiledHandoffInstructionValue(
+      value,
+      definitionIds,
+      spreadPlansByInstruction,
+      instruction,
+    ),
     source: sourceReference(store, instruction.sourceAddressHandle),
     fieldProvenance: fieldProvenance(instruction.fieldProvenance, store),
   };
 }
 
-function instructionValue(
+export function projectTemplateCompilerCompiledHandoffInstructionValue(
   value: TemplateCompilerRuntimeInstructionValue,
   definitionIds: ReadonlyMap<TemplateCompilerContextFamilyValueContext, string>,
+  spreadPlansByInstruction: ReadonlyMap<TemplateInstruction, TemplateCompilerCompiledHandoffSpreadPlan>,
+  instruction: TemplateInstruction | null = null,
 ): TemplateCompilerCompiledHandoffInstructionValue {
   switch (value.type) {
     case TemplateCompilerFrameworkInstructionType.HydrateTemplateController:
@@ -531,20 +608,32 @@ function instructionValue(
         def: { definitionId: requireMap(definitionIds, value.def.definition, 'template-controller definition') },
         res: value.res.name,
         alias: undefined,
-        props: value.props.map((prop) => instructionValue(prop, definitionIds)),
+        props: value.props.map((prop) => projectTemplateCompilerCompiledHandoffInstructionValue(
+          prop,
+          definitionIds,
+          spreadPlansByInstruction,
+        )),
       };
     case TemplateCompilerFrameworkInstructionType.HydrateAttribute:
       return {
         type: value.type,
         res: value.res.name,
         alias: value.alias,
-        props: value.props.map((prop) => instructionValue(prop, definitionIds)),
+        props: value.props.map((prop) => projectTemplateCompilerCompiledHandoffInstructionValue(
+          prop,
+          definitionIds,
+          spreadPlansByInstruction,
+        )),
       };
     case TemplateCompilerFrameworkInstructionType.HydrateElement:
       return {
         type: value.type,
         res: value.res.name,
-        props: value.props.map((prop) => instructionValue(prop, definitionIds)),
+        props: value.props.map((prop) => projectTemplateCompilerCompiledHandoffInstructionValue(
+          prop,
+          definitionIds,
+          spreadPlansByInstruction,
+        )),
         projections: value.projections?.map((projection) => ({
           slotName: projection.slotName,
           definition: {
@@ -554,11 +643,16 @@ function instructionValue(
         containerless: value.containerless,
         captures: value.captures,
         data: value.data,
+        spreadPlan: instruction == null ? null : spreadPlansByInstruction.get(instruction) ?? null,
       };
     case TemplateCompilerFrameworkInstructionType.HydrateLetElement:
       return {
         type: value.type,
-        instructions: value.instructions.map((nested) => instructionValue(nested, definitionIds)),
+        instructions: value.instructions.map((nested) => projectTemplateCompilerCompiledHandoffInstructionValue(
+          nested,
+          definitionIds,
+          spreadPlansByInstruction,
+        )),
         toBindingContext: value.toBindingContext,
       };
     case TemplateCompilerFrameworkInstructionType.IteratorBinding:
@@ -567,7 +661,20 @@ function instructionValue(
         type: value.type,
         forOf: value.forOf,
         to: value.to,
-        props: value.props.map((prop) => instructionValue(prop, definitionIds)),
+        props: value.props.map((prop) => projectTemplateCompilerCompiledHandoffInstructionValue(
+          prop,
+          definitionIds,
+          spreadPlansByInstruction,
+        )),
+      };
+    case TemplateCompilerFrameworkInstructionType.SpreadElementProp:
+      return {
+        type: value.type,
+        instruction: projectTemplateCompilerCompiledHandoffInstructionValue(
+          value.instruction,
+          definitionIds,
+          spreadPlansByInstruction,
+        ),
       };
     default:
       return value;

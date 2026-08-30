@@ -122,7 +122,7 @@ describe('runtime registration requirements', () => {
     expect(requirements.renderers.selectionKind)
       .toBe(RuntimeRegistrationRequirementSelectionKind.ConservativeGroup);
     expect(requirements.renderers.reasons.map((reason) => reason.reasonKind)).toContain(
-      RuntimeRegistrationRequirementReasonKind.ProgrammaticUseOpen,
+      RuntimeRegistrationRequirementReasonKind.ProgrammaticRuntimeRegistrationUse,
     );
     expect(requirements.resources.selectionKind)
       .toBe(RuntimeRegistrationRequirementSelectionKind.ExactLeaves);
@@ -213,7 +213,7 @@ describe('runtime registration requirements', () => {
     for (const selection of [requirements.resources, requirements.renderers, requirements.eventModifier]) {
       expect(selection.selectionKind).toBe(RuntimeRegistrationRequirementSelectionKind.ConservativeGroup);
       expect(selection.reasons.map((reason) => reason.reasonKind)).toContain(
-        RuntimeRegistrationRequirementReasonKind.ProgrammaticUseOpen,
+        RuntimeRegistrationRequirementReasonKind.ProgrammaticRuntimeRegistrationUse,
       );
     }
     expect(requirements.resources.reasons.flatMap((reason) => reason.stableKeys)).toEqual(

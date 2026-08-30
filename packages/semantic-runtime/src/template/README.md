@@ -665,6 +665,14 @@ classification, expression parsing, and instruction lowering converge on the sam
   the instruction. Nested transfer can render an instruction under a descendant controller while compiling and binding
   it against an ancestor hydration context; binding render contexts spend the requestor definition plus context
   controller to recover the exact compiler resource scope, source-scope controller, and runtime DI container.
+  `RuntimeSpreadCompilation` now retains each `compileSpread(...)` invocation before rendering flattens its ordered
+  return roots, created-instruction closure, capture membership, expression parses, target, and outcome. The explicit
+  browser-template handoff prepares all selected resource families before detachment, reconciles each one-level spread
+  target against its requestor family's compiler-final row, and attaches exact lookup cases to the owning
+  HydrateElement capture array. Static definition closure and runtime spread closure remain independent: preserve/JIT
+  consumers can use an exact static handoff when spread closure is open, while generated-compiler consumers must
+  require exact closure. Recursive pass-through whose ultimate target belongs to a descendant resource family remains
+  typed Open until target-family ownership is indexed independently from requestor ownership.
 - `runtime-binding-issue.ts` owns binding-lifecycle diagnostics that are not binding-behavior or scope-effect
   diagnostics. `SpreadBinding` currently spends runtime-html `no_spread_scope_context_found` (`AUR9999`) when
   captured-attribute transfer cannot find the next hydration context, and `no_spread_template_controller` (`AUR9998`)
@@ -1541,6 +1549,10 @@ treated as their identity authority. Each group falls back independently when pr
 registration pressure, custom renderer precedence, dynamic template compilation, package export visibility, or ABI
 coverage remains open. Plugin configurations remain whole; they are not decomposed by this runtime-html projection.
 A selective template-source request is conservative unless it still covers the complete runtime resource cohort.
+Captured-spread interface demand is typed separately from general runtime template compilation: an exact AOT spread
+lookup can discharge the former, while `AuCompose`, `enhance`, and programmatic compiler demand still require a general
+runtime compiler. Classified programmatic resource/renderer/event use is likewise distinct from uninspected reachable
+code, unresolved modules, and external package boundaries that can hide compiler use.
 The exactness proof has a separate closure-pressure owner: evaluator reachability selects runtime-code sources, checker-
 owned Program trees provide canonical symbol/type identity, app-root route contexts exclude unresolved executable route
 members while accepting resolved lazy imports, and programmatic compiler/renderer/event/resource-key APIs plus

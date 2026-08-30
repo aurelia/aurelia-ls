@@ -4,7 +4,7 @@ import type { TemplateCompilerRuntimeInstructionFamilyValue } from './template-i
 import type { TemplateResourceRuntimeAnalysisEmission } from './template-compilation-project-pass.js';
 
 export const SEMANTIC_APP_RUNTIME_REGISTRATION_REQUIREMENTS_VERSION =
-  'semantic-runtime/runtime-registration-requirements/v1' as const;
+  'semantic-runtime/runtime-registration-requirements/v2' as const;
 
 export const enum RuntimeRegistrationRequirementSelectionKind {
   ExactLeaves = 'exact-leaves',
@@ -29,8 +29,10 @@ export const enum RuntimeRegistrationRequirementReasonKind {
   RuntimeRendererUnavailable = 'runtime-renderer-unavailable',
   RuntimeInstructionCreatedAtRuntime = 'runtime-instruction-created-at-runtime',
   RuntimeInstructionLaneOpen = 'runtime-instruction-lane-open',
+  RuntimeSpreadCompilationRequired = 'runtime-spread-compilation-required',
   RuntimeTemplateCompilationRequired = 'runtime-template-compilation-required',
   PackageExportUnavailable = 'package-export-unavailable',
+  ProgrammaticRuntimeRegistrationUse = 'programmatic-runtime-registration-use',
   ProgrammaticUseOpen = 'programmatic-use-open',
 }
 

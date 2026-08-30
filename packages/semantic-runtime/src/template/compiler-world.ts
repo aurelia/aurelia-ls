@@ -447,6 +447,8 @@ export class TemplateCompilerSpreadCompileResult {
     readonly instructions: readonly TemplateInstruction[],
     /** Every dynamic instruction allocated during spread compilation, including wrapped inner instructions. */
     readonly createdInstructions: readonly TemplateInstruction[],
+    /** Effective custom-element target definition after explicit targetDef or compiler-world lookup. */
+    readonly effectiveTargetDefinitionProductHandle: ProductHandle | null,
     readonly summary: string | null,
     readonly reasonKinds: readonly OpenSeamReasonKind[],
   ) {}
@@ -457,6 +459,7 @@ export class TemplateCompilerSpreadCompileResult {
       request,
       [],
       [],
+      null,
       null,
       [],
     );
@@ -472,6 +475,7 @@ export class TemplateCompilerSpreadCompileResult {
       request,
       [],
       [],
+      null,
       summary,
       reasonKinds,
     );
@@ -486,6 +490,7 @@ export class TemplateCompilerSpreadCompileResult {
       request,
       [],
       [],
+      null,
       summary,
       [],
     );
@@ -495,12 +500,14 @@ export class TemplateCompilerSpreadCompileResult {
     request: TemplateCompilerSpreadCompileRequest,
     instructions: readonly TemplateInstruction[],
     createdInstructions: readonly TemplateInstruction[],
+    effectiveTargetDefinitionProductHandle: ProductHandle | null,
   ): TemplateCompilerSpreadCompileResult {
     return new TemplateCompilerSpreadCompileResult(
       TemplateCompilerSpreadCompileState.Compiled,
       request,
       instructions,
       createdInstructions,
+      effectiveTargetDefinitionProductHandle,
       null,
       [],
     );

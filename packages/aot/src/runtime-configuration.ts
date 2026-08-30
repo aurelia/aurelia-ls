@@ -1,10 +1,24 @@
 import { createHash } from 'node:crypto';
 
-import type { RuntimeExpressionAstValue } from '@aurelia-ls/semantic-runtime/browser-template';
+import type {
+  RuntimeExpressionAstValue,
+  TemplateCompilerCompiledHandoffInstructionValue,
+} from '@aurelia-ls/semantic-runtime/browser-template';
 
+import {
+  type AotRuntimeSpreadPlan,
+} from './runtime-spread-plan.js';
 import { emitAotJavaScriptValue } from './template-module-emitter.js';
 
-export const AOT_RUNTIME_CONFIGURATION_PROTOCOL = 'aurelia-aot/runtime-configuration/v1';
+export {
+  AOT_RUNTIME_SPREAD_PLAN,
+  AOT_RUNTIME_SPREAD_PLAN_PROTOCOL,
+  type AotRuntimeSpreadPlan,
+  type AotRuntimeSpreadPlanCase,
+  type AotRuntimeSpreadTargetDefinitionMatch,
+} from './runtime-spread-plan.js';
+
+export const AOT_RUNTIME_CONFIGURATION_PROTOCOL = 'aurelia-aot/runtime-configuration/v2';
 export const AOT_RUNTIME_CONFIGURATION_MODULE_PREFIX = 'virtual:aurelia-aot/configuration/';
 
 export type AotRuntimeExpressionType =
@@ -161,12 +175,22 @@ export class AotExpressionParser {
 
 interface AotCompilableDefinition {
   readonly name?: string;
+  readonly key?: string;
   readonly template?: unknown;
   needsCompile?: boolean;
 }
 
+interface AotSpreadCompileTarget {
+  readonly namespaceURI?: string | null;
+  readonly localName?: string;
+  readonly nodeName?: string;
+}
+
 /** Compiler-interface closure for compiler-final definitions and Aurelia's null-template built-ins. */
 export class AotTemplateCompiler {
+  /** Keep the literal self-contained: the runtime module emits this class through `Function#toString()`. */
+  public static readonly spreadPlan = Symbol.for('aurelia-aot/runtime-spread-plan/v1');
+
   public debug = false;
   public resolveResources = true;
 
@@ -181,8 +205,51 @@ export class AotTemplateCompiler {
     );
   }
 
-  public compileSpread(): never {
-    throw new Error('AOT template compiler refused runtime spread compilation.');
+  public compileSpread(
+    requestor: AotCompilableDefinition,
+    captures: readonly unknown[],
+    _container: unknown,
+    target: AotSpreadCompileTarget,
+    targetDefinition?: AotCompilableDefinition,
+  ): TemplateCompilerCompiledHandoffInstructionValue[] {
+    if (captures.length === 0) return [];
+
+    const plan = (captures as unknown as Readonly<Record<symbol, AotRuntimeSpreadPlan | undefined>>)[
+      AotTemplateCompiler.spreadPlan
+    ];
+    const requestorName = requestor.name ?? null;
+    const requestorKey = requestor.key ?? null;
+    if (plan == null) {
+      throw new Error(
+        `AOT template compiler has no precompiled spread plan for ${captures.length} captured attributes on requestor ${JSON.stringify(requestorName ?? '(anonymous)')} (${JSON.stringify(requestorKey ?? '(no key)')}).`,
+      );
+    }
+
+    const targetNamespaceUri = target.namespaceURI ?? null;
+    const targetLocalName = target.localName ?? target.nodeName?.toLowerCase() ?? '';
+    const targetDefinitionName = targetDefinition?.name ?? null;
+    const targetDefinitionKey = targetDefinition?.key ?? null;
+    const matches = plan.filter((candidate) =>
+      candidate.requestorName === requestorName
+      && candidate.requestorKey === requestorKey
+      && candidate.targetNamespaceUri === targetNamespaceUri
+      && candidate.targetLocalName === targetLocalName
+      && (
+        candidate.targetDefinitionMatch === 'structural'
+          ? targetDefinition == null
+          : targetDefinition != null
+            && candidate.targetDefinitionName === targetDefinitionName
+            && candidate.targetDefinitionKey === targetDefinitionKey
+      )
+    );
+    const request = `requestor ${JSON.stringify(requestorName ?? '(anonymous)')} (${JSON.stringify(requestorKey ?? '(no key)')}), target ${JSON.stringify(`${targetNamespaceUri ?? '(no namespace)'}:${targetLocalName || '(anonymous)'}`)}, target definition ${JSON.stringify(targetDefinitionName ?? '(none)')} (${JSON.stringify(targetDefinitionKey ?? '(no key)')})`;
+    if (matches.length === 0) {
+      throw new Error(`AOT template compiler spread plan has no case for ${request}.`);
+    }
+    if (matches.length > 1) {
+      throw new Error(`AOT template compiler spread plan has ${matches.length} ambiguous cases for ${request}.`);
+    }
+    return matches[0]!.instructions as TemplateCompilerCompiledHandoffInstructionValue[];
   }
 }
 

@@ -140,6 +140,7 @@ import {
   type RuntimeDynamicInstructionContext,
   RuntimeSpreadBindingCreator,
 } from './runtime-spread-binding-creator.js';
+import type { RuntimeSpreadCompilation } from './runtime-spread-compilation.js';
 import type { RuntimeControllerIssue } from './runtime-controller-issue.js';
 import type { RuntimeBindingIssue } from './runtime-binding-issue.js';
 import type { TemplateCompilerIssue } from './compiler-issue.js';
@@ -215,6 +216,8 @@ export class RuntimeRenderingEmission {
   private readonly contentProjectionViewsByOutletController = new Map<ProductHandle, RuntimeContentProjectionView[]>();
   private readonly dynamicInstructionContextsByProduct = new Map<ProductHandle, RuntimeDynamicInstructionContext>();
   private readonly dynamicInstructionOriginSyntaxByProduct = new Map<ProductHandle, ProductHandle>();
+  private readonly spreadCompilationsBySpreadInstruction = new Map<ProductHandle, RuntimeSpreadCompilation[]>();
+  private readonly spreadCompilationsByContextInstruction = new Map<ProductHandle, RuntimeSpreadCompilation[]>();
   private readonly controllersByProduct = new Map<ProductHandle, RuntimeControllerFrame>();
 
   constructor(
@@ -262,6 +265,8 @@ export class RuntimeRenderingEmission {
     readonly dynamicValueSites: readonly TemplateValueSite[],
     /** Expression parses allocated during runtime TemplateCompiler.compileSpread emulation. */
     readonly dynamicExpressionParses: readonly TemplateExpressionParse[],
+    /** Invocation-owned compileSpread inputs, ordered roots, created closure, and exact parse membership. */
+    readonly spreadCompilations: readonly RuntimeSpreadCompilation[],
     /** Open renderer-loop pressures that should remain visible to inquiry. */
     readonly openSeams: readonly OpenSeam[],
     /** Statically reachable AuSlot projection/fallback/empty view relations. */
@@ -319,6 +324,23 @@ export class RuntimeRenderingEmission {
     }
     for (const context of dynamicInstructionContexts) {
       this.dynamicInstructionContextsByProduct.set(context.instructionProductHandle, context);
+    }
+    for (const compilation of spreadCompilations) {
+      const spreadRows = this.spreadCompilationsBySpreadInstruction.get(
+        compilation.spreadInstructionProductHandle,
+      ) ?? [];
+      spreadRows.push(compilation);
+      this.spreadCompilationsBySpreadInstruction.set(compilation.spreadInstructionProductHandle, spreadRows);
+      if (compilation.capturedAttributeContextInstructionProductHandle != null) {
+        const contextRows = this.spreadCompilationsByContextInstruction.get(
+          compilation.capturedAttributeContextInstructionProductHandle,
+        ) ?? [];
+        contextRows.push(compilation);
+        this.spreadCompilationsByContextInstruction.set(
+          compilation.capturedAttributeContextInstructionProductHandle,
+          contextRows,
+        );
+      }
     }
     for (const record of records) {
       if (
@@ -450,6 +472,16 @@ export class RuntimeRenderingEmission {
   readDynamicInstructionOriginSyntaxProductHandle(productHandle: ProductHandle): ProductHandle | null {
     return this.dynamicInstructionOriginSyntaxByProduct.get(productHandle) ?? null;
   }
+
+  readSpreadCompilationsForSpreadInstruction(productHandle: ProductHandle): readonly RuntimeSpreadCompilation[] {
+    return this.spreadCompilationsBySpreadInstruction.get(productHandle) ?? [];
+  }
+
+  readSpreadCompilationsForCapturedAttributeContextInstruction(
+    productHandle: ProductHandle,
+  ): readonly RuntimeSpreadCompilation[] {
+    return this.spreadCompilationsByContextInstruction.get(productHandle) ?? [];
+  }
 }
 
 class RuntimeEmbeddedViewRendering {
@@ -477,6 +509,7 @@ class RuntimeRenderingMaterializationState {
   readonly dynamicInstructionContexts: RuntimeDynamicInstructionContext[] = [];
   readonly dynamicValueSites: TemplateValueSite[] = [];
   readonly dynamicExpressionParses: TemplateExpressionParse[] = [];
+  readonly spreadCompilations: RuntimeSpreadCompilation[] = [];
   readonly openSeams: OpenSeam[] = [];
   readonly contentProjectionViews: RuntimeContentProjectionView[] = [];
   readonly claims: SemanticClaim[] = [];
@@ -885,6 +918,7 @@ export class RuntimeRenderingMaterializer {
       state.dynamicInstructionContexts,
       state.dynamicValueSites,
       state.dynamicExpressionParses,
+      state.spreadCompilations,
       state.openSeams,
       state.contentProjectionViews,
       state.records,

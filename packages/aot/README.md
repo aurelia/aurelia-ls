@@ -18,7 +18,8 @@ The current public API is deliberately narrow:
   browser-facade references with the build-specific AOT facade; it never searches source text for an `Aurelia` name.
 - `AotRuntimeConfigurationModuleEmitter` emits the compile-free parser/compiler services, conservative runtime
   fallbacks or exact semantic-runtime-selected resource/renderer leaves, BrowserPlatform container, and base-runtime
-  Aurelia facade used by strict AOT builds.
+  Aurelia facade used by strict AOT builds. Runtime-configuration protocol v2 includes the lookup-only captured-spread
+  compiler contract; its content address cannot collide with the earlier blanket-refusal module semantics.
 - `AotTemplateModuleEmitter` remains the standalone HTML-resource realization.
 
 Paired HTML has two explicit roles from semantic-runtime. A convention view-definition module keeps the complete
@@ -33,6 +34,10 @@ before its first `Rendering.compile`; this is the candidate for a later additive
 keeps Aurelia/AppRoot lifecycle while replacing implicit `StandardConfiguration` installation through an exact
 old-text-validated source carrier. Runtime-html resources, renderers, and event-modifier support are selected
 independently from the detached browser-final requirements; uncertainty retains only the affected aggregate group.
+Static compiler patches remain usable with the authored JIT configuration when runtime spread closure is nonexact;
+profiles that replace `StandardConfiguration` require exact spread closure for every admitted resource and refuse
+typed general-compiler pressure from incomplete cohorts, open registration/program sources, `AuCompose`, `enhance`, or
+other programmatic compiler use before emitting the lookup-only `AotTemplateCompiler`.
 Finer payload maps and broader observation/binding optimization are the next production boundaries. SSR and AOT remain
 independent axes.
 
