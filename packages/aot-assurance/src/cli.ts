@@ -17,7 +17,7 @@ const adapterSpecifier = options.adapterSpecifier
   ?? process.env.AOT_ASSURANCE_ADAPTER
   ?? new URL('./aot-adapter.js', import.meta.url).href;
 const scenarios: readonly AssuranceScenario[] = options.scenario === 'all'
-  ? ['g0', 'hello-world', 'routed-storefront', 'state-backed-form']
+  ? ['g0', 'hello-world', 'routed-storefront', 'state-backed-form', 'projects-and-milestones']
   : [options.scenario];
 if (options.falsifier != null && scenarios.some((scenario) => scenario !== 'g0')) {
   throw new Error('Emission falsifiers are G0-only controls; select --scenario g0.');
@@ -64,6 +64,7 @@ function readOptions(args: readonly string[]): CliOptions {
           && value !== 'hello-world'
           && value !== 'routed-storefront'
           && value !== 'state-backed-form'
+          && value !== 'projects-and-milestones'
           && value !== 'all'
         ) {
           throw new Error(`Unknown assurance scenario ${value}`);

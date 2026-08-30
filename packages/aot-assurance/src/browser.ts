@@ -14,6 +14,7 @@ import type {
   RuntimeProbeSnapshot,
   StateBackedFormObservation,
 } from './contract.js';
+import { runProjectsAndMilestonesLane } from './projects-and-milestones-browser.js';
 
 export interface BrowserBatchResult {
   readonly browser: Browser;
@@ -46,6 +47,7 @@ async function runLane(
   if (scenario === 'hello-world') return runHelloWorldLane(browser, lane, url);
   if (scenario === 'routed-storefront') return runRoutedStorefrontLane(browser, lane, url);
   if (scenario === 'state-backed-form') return runStateBackedFormLane(browser, lane, url);
+  if (scenario === 'projects-and-milestones') return runProjectsAndMilestonesLane(browser, lane, url);
   const context = await browser.newContext();
   const page = await context.newPage();
   const consoleMessages: string[] = [];

@@ -11,6 +11,7 @@ export type {
   AssuranceScenario,
   EmissionFalsifier,
   HelloWorldObservation,
+  ProjectsAndMilestonesObservation,
   RenderedModuleEvidence,
   RoutedStorefrontObservation,
   StateBackedFormObservation,

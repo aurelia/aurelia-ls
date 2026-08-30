@@ -1,0 +1,11 @@
+<section>
+  <a load="../">Back</a>
+  <article if.bind="taskItem">
+    <section>
+      <h2>${taskItem.title}</h2>
+      <p>Done: ${taskItem.done ? 'Done' : 'Open'}</p>
+      <p>Project: ${state.projectLabelForTaskItem(taskItem)}</p>
+    </section>
+  </article>
+  <p else>No assignment found for this route.</p>
+</section>

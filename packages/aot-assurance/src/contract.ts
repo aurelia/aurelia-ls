@@ -1,7 +1,12 @@
 import type { PluginOption } from 'vite';
 
 export type AssuranceLane = 'jit' | 'aot';
-export type AssuranceScenario = 'g0' | 'hello-world' | 'routed-storefront' | 'state-backed-form';
+export type AssuranceScenario =
+  | 'g0'
+  | 'hello-world'
+  | 'routed-storefront'
+  | 'state-backed-form'
+  | 'projects-and-milestones';
 
 export type EmissionFalsifier =
   | 'mutate-instruction'
@@ -141,11 +146,17 @@ export interface StateBackedFormApplicationObservation extends ApplicationObserv
   readonly model: StateBackedFormObservation;
 }
 
+export interface ProjectsAndMilestonesApplicationObservation extends ApplicationObservationBase {
+  readonly kind: 'projects-and-milestones';
+  readonly model: ProjectsAndMilestonesObservation;
+}
+
 export type ApplicationObservation =
   | G0ApplicationObservation
   | HelloWorldApplicationObservation
   | RoutedStorefrontApplicationObservation
-  | StateBackedFormApplicationObservation;
+  | StateBackedFormApplicationObservation
+  | ProjectsAndMilestonesApplicationObservation;
 
 export interface CheckpointTranscript {
   readonly label: string;
@@ -297,4 +308,117 @@ export interface StateBackedFormObservation {
   readonly primaryTopic: StateBackedFormSelectObservation;
   readonly assignee: StateBackedFormSelectObservation;
   readonly topics: StateBackedFormSelectObservation;
+}
+
+export interface ProjectsAndMilestonesLinkObservation {
+  readonly label: string;
+  readonly location: string;
+}
+
+export interface ProjectsAndMilestonesSelectObservation {
+  readonly options: readonly string[];
+  readonly selected: string;
+}
+
+export interface ProjectListRouteObservation {
+  readonly kind: 'project-list';
+  readonly heading: string;
+  readonly name: string;
+  readonly phase: string;
+  readonly projects: readonly {
+    readonly name: string;
+    readonly detailLocation: string;
+  }[];
+}
+
+export interface ProjectDetailRouteObservation {
+  readonly kind: 'project-detail';
+  readonly heading: string;
+  readonly phase: string;
+  readonly backLocation: string;
+  readonly assignments: readonly {
+    readonly title: string;
+    readonly status: string;
+    readonly detailLocation: string;
+  }[];
+}
+
+export interface MilestoneListRouteObservation {
+  readonly kind: 'milestone-list';
+  readonly heading: string;
+  readonly milestones: readonly {
+    readonly title: string;
+    readonly detailLocation: string;
+  }[];
+}
+
+export interface MilestoneDetailRouteObservation {
+  readonly kind: 'milestone-detail';
+  readonly heading: string;
+  readonly targetDate: string;
+  readonly backLocation: string;
+}
+
+export interface AssignmentListRouteObservation {
+  readonly kind: 'assignment-list';
+  readonly heading: string;
+  readonly title: string;
+  readonly done: boolean;
+  readonly project: ProjectsAndMilestonesSelectObservation;
+  readonly statusMessage: string | null;
+  readonly assignments: readonly {
+    readonly title: string;
+    readonly project: string;
+    readonly projectLocation: string;
+    readonly status: string;
+    readonly detailLocation: string;
+  }[];
+}
+
+export interface AssignmentDetailRouteObservation {
+  readonly kind: 'assignment-detail';
+  readonly heading: string;
+  readonly status: string;
+  readonly project: string;
+  readonly backLocation: string;
+}
+
+export interface ReviewListRouteObservation {
+  readonly kind: 'review-list';
+  readonly heading: string;
+  readonly title: string;
+  readonly done: boolean;
+  readonly reviewer: ProjectsAndMilestonesSelectObservation;
+  readonly statusMessage: string | null;
+  readonly reviews: readonly {
+    readonly title: string;
+    readonly reviewer: string;
+    readonly status: string;
+    readonly detailLocation: string;
+  }[];
+}
+
+export interface ReviewDetailRouteObservation {
+  readonly kind: 'review-detail';
+  readonly heading: string;
+  readonly status: string;
+  readonly reviewer: string;
+  readonly backLocation: string;
+}
+
+export type ProjectsAndMilestonesRouteObservation =
+  | ProjectListRouteObservation
+  | ProjectDetailRouteObservation
+  | MilestoneListRouteObservation
+  | MilestoneDetailRouteObservation
+  | AssignmentListRouteObservation
+  | AssignmentDetailRouteObservation
+  | ReviewListRouteObservation
+  | ReviewDetailRouteObservation;
+
+export interface ProjectsAndMilestonesObservation {
+  readonly location: string;
+  readonly documentTitle: string;
+  readonly navigation: readonly ProjectsAndMilestonesLinkObservation[];
+  readonly route: ProjectsAndMilestonesRouteObservation;
 }

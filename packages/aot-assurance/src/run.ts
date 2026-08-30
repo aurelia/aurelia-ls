@@ -22,6 +22,10 @@ import {
   assertStateBackedFormBuildEvidence,
   assertStateBackedFormExpectations,
 } from './state-backed-form-expectations.js';
+import {
+  assertProjectsAndMilestonesBuildEvidence,
+  assertProjectsAndMilestonesExpectations,
+} from './projects-and-milestones-expectations.js';
 import { StaticBuildServer } from './server.js';
 
 export interface RunAssuranceOptions {
@@ -64,10 +68,14 @@ export async function runAssurance(options: RunAssuranceOptions): Promise<Assura
       assertRoutedStorefrontBuildEvidence(builds.aotEvidence);
       assertRoutedStorefrontExpectations(browserBatch.jit);
       assertRoutedStorefrontExpectations(browserBatch.aot);
-    } else {
+    } else if (scenario === 'state-backed-form') {
       assertStateBackedFormBuildEvidence(builds.aotEvidence);
       assertStateBackedFormExpectations(browserBatch.jit);
       assertStateBackedFormExpectations(browserBatch.aot);
+    } else {
+      assertProjectsAndMilestonesBuildEvidence(builds.aotEvidence);
+      assertProjectsAndMilestonesExpectations(browserBatch.jit);
+      assertProjectsAndMilestonesExpectations(browserBatch.aot);
     }
     assertSemanticParity(browserBatch.jit.semantic, browserBatch.aot.semantic);
 
@@ -116,5 +124,7 @@ function defaultFixtureRoot(scenario: AssuranceScenario): string {
         'pressure',
         'app-pattern-state-backed-form',
       );
+    case 'projects-and-milestones':
+      return resolve(packageRoot, '..', '..', 'fixtures', 'projects-and-milestones');
   }
 }
