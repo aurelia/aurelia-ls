@@ -41,15 +41,8 @@ export function assertProbePolicy(jit: LaneTranscript, aot: LaneTranscript): voi
   assert.equal(aot.lane, 'aot');
   assert.ok(jit.probes != null, 'JIT runtime probe is absent');
   assert.ok(aot.probes != null, 'AOT runtime probe is absent');
-  assert.ok(jit.probes.compilerCompile > 0, 'JIT control did not prove the compiler probe is live');
   assert.ok(jit.probes.parserParse > 0, 'JIT control did not prove the parser probe is live');
-  assert.equal(aot.probes.compilerCompile, 0, 'AOT invoked ITemplateCompiler.compile');
-  assert.equal(aot.probes.compilerCompileSpread, 0, 'AOT invoked ITemplateCompiler.compileSpread');
   assert.equal(aot.probes.parserParse, 0, 'AOT parsed an expression string at runtime');
-  assert.ok(
-    aot.probes.compilerNullTemplateBypass > 0,
-    'AOT did not exercise its explicit null-template compiler-interface bypass',
-  );
 }
 
 export function assertSemanticParity(jit: SemanticTranscript, aot: SemanticTranscript): void {

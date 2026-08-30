@@ -13,6 +13,7 @@ export type {
   HelloWorldObservation,
   RenderedModuleEvidence,
   RoutedStorefrontObservation,
+  StateBackedFormObservation,
 } from './contract.js';
 
 export { runAssurance, type RunAssuranceOptions } from './run.js';

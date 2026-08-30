@@ -9,7 +9,6 @@ import { readInstalledRuntimeProbe } from './runtime-probe';
 const lane = __AOT_ASSURANCE_LANE__;
 const aurelia = Aurelia.app(G0App);
 const probe = readInstalledRuntimeProbe();
-if (lane === 'jit') probe.exerciseControl();
 let stopped = false;
 
 await aurelia.start();

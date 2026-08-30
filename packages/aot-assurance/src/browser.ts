@@ -12,6 +12,7 @@ import type {
   LiveElementTranscript,
   RoutedStorefrontObservation,
   RuntimeProbeSnapshot,
+  StateBackedFormObservation,
 } from './contract.js';
 
 export interface BrowserBatchResult {
@@ -44,6 +45,7 @@ async function runLane(
 ): Promise<LaneTranscript> {
   if (scenario === 'hello-world') return runHelloWorldLane(browser, lane, url);
   if (scenario === 'routed-storefront') return runRoutedStorefrontLane(browser, lane, url);
+  if (scenario === 'state-backed-form') return runStateBackedFormLane(browser, lane, url);
   const context = await browser.newContext();
   const page = await context.newPage();
   const consoleMessages: string[] = [];
@@ -105,6 +107,218 @@ async function runLane(
   } finally {
     await context.close();
   }
+}
+
+async function runStateBackedFormLane(
+  browser: Browser,
+  lane: AssuranceLane,
+  url: string,
+): Promise<LaneTranscript> {
+  const context = await browser.newContext();
+  const page = await context.newPage();
+  const consoleMessages: string[] = [];
+  const pageErrors: string[] = [];
+  page.on('console', message => consoleMessages.push(`${message.type()}:${message.text()}`));
+  page.on('pageerror', error => pageErrors.push(error.message));
+
+  try {
+    await page.goto(url, { waitUntil: 'load' });
+    try {
+      await waitForStateBackedForm(page, 'request-1', 'Ada Lovelace', 'ada.lovelace@example.test', 'form-ready', 0);
+    } catch (error) {
+      const detail = pageErrors.length === 0 ? '' : `\nBrowser errors:\n${pageErrors.join('\n')}`;
+      throw new Error(`${lane} state-backed form did not render${detail}`, { cause: error });
+    }
+
+    const checkpoints = [];
+    checkpoints.push({ label: 'initial-request-1', observation: await captureStateBackedForm(page) });
+
+    await page.locator('#customer-name').fill('');
+    await waitForStateBackedForm(page, 'request-1', '', 'ada.lovelace@example.test', 'form-pending', 0);
+    checkpoints.push({ label: 'missing-name', observation: await captureStateBackedForm(page) });
+
+    await page.locator('#customer-name').fill('Ada Lovelace');
+    await page.locator('#email').fill('');
+    await waitForStateBackedForm(page, 'request-1', 'Ada Lovelace', '', 'form-pending', 0);
+    checkpoints.push({ label: 'missing-email', observation: await captureStateBackedForm(page) });
+
+    await page.locator('#customer-name').fill('Augusta King');
+    await page.locator('#email').fill('augusta.king@example.test');
+    await page.locator('input[type="checkbox"]').check();
+    await page.locator('fieldset').getByLabel('Phone', { exact: true }).check();
+    await page.locator('#primary-topic').selectOption({ label: 'Billing' });
+    await page.locator('#assignee').selectOption({ label: 'Grace' });
+    await page.locator('#topics').selectOption([{ label: 'Hardware' }, { label: 'Billing' }]);
+    await page.locator('#notes').fill('Call after 5pm');
+    await waitForStateBackedForm(
+      page,
+      'request-1',
+      'Augusta King',
+      'augusta.king@example.test',
+      'form-ready',
+      0,
+    );
+    await waitForSelectedOptions(page, '#topics', ['Hardware', 'Billing']);
+    await page.getByRole('button', { name: 'Submit request' }).click();
+    await waitForStateBackedForm(
+      page,
+      'request-1',
+      'Augusta King',
+      'augusta.king@example.test',
+      'form-ready',
+      1,
+    );
+    checkpoints.push({ label: 'edited-and-submitted', observation: await captureStateBackedForm(page) });
+
+    await page.locator('#request-selector').selectOption('request-2');
+    await waitForStateBackedForm(page, 'request-2', 'Grace Hopper', 'grace.hopper@example.test', 'form-ready', 1);
+    await waitForSelectedOptions(page, '#topics', ['Support']);
+    checkpoints.push({ label: 'request-2', observation: await captureStateBackedForm(page) });
+
+    await page.locator('#request-selector').selectOption('request-1');
+    await waitForStateBackedForm(
+      page,
+      'request-1',
+      'Augusta King',
+      'augusta.king@example.test',
+      'form-ready',
+      1,
+    );
+    await waitForSelectedOptions(page, '#topics', ['Hardware', 'Billing']);
+    checkpoints.push({ label: 'restored-request-1', observation: await captureStateBackedForm(page) });
+
+    return {
+      lane,
+      semantic: {
+        checkpoints,
+        teardownEvents: null,
+        console: consoleMessages,
+        pageErrors,
+      },
+      probes: null,
+    };
+  } finally {
+    await context.close();
+  }
+}
+
+async function waitForSelectedOptions(
+  page: Page,
+  selector: string,
+  expectedLabels: readonly string[],
+): Promise<void> {
+  await page.waitForFunction(({ selector: expectedSelector, labels }) => {
+    const select = document.querySelector<HTMLSelectElement>(expectedSelector);
+    const selected = select == null
+      ? []
+      : Array.from(select.selectedOptions, option => option.textContent?.trim() ?? '');
+    return selected.length === labels.length
+      && selected.every((label, index) => label === labels[index]);
+  }, { selector, labels: expectedLabels });
+  await settle(page);
+}
+
+async function waitForStateBackedForm(
+  page: Page,
+  selectedRequest: string,
+  customerName: string,
+  email: string,
+  formClass: 'form-ready' | 'form-pending',
+  submissionCount: number,
+): Promise<void> {
+  await page.waitForFunction(expected => {
+    const request = document.querySelector<HTMLSelectElement>('#request-selector');
+    const name = document.querySelector<HTMLInputElement>('#customer-name');
+    const emailInput = document.querySelector<HTMLInputElement>('#email');
+    const form = document.querySelector('state-backed-form form');
+    const submit = form?.querySelector<HTMLButtonElement>('button[type="submit"]');
+    const count = document.querySelector('app-root > main > p')?.textContent?.trim();
+    return request?.value === expected.selectedRequest
+      && name?.value === expected.customerName
+      && emailInput?.value === expected.email
+      && form?.classList.contains(expected.formClass) === true
+      && submit?.disabled === (expected.formClass === 'form-pending')
+      && count === `Submissions: ${expected.submissionCount}`;
+  }, { selectedRequest, customerName, email, formClass, submissionCount });
+  await settle(page);
+}
+
+async function captureStateBackedForm(page: Page): Promise<ApplicationObservation> {
+  return page.evaluate(() => {
+    const required = <TElement extends Element>(root: ParentNode, selector: string): TElement => {
+      const element = root.querySelector<TElement>(selector);
+      if (element == null) throw new Error(`state-backed form observation is missing '${selector}'`);
+      return element;
+    };
+    const optionLabels = (select: HTMLSelectElement): readonly string[] =>
+      Array.from(select.options, option => option.textContent?.trim() ?? '');
+    const selectedLabels = (select: HTMLSelectElement): readonly string[] =>
+      Array.from(select.selectedOptions, option => option.textContent?.trim() ?? '');
+    const request = required<HTMLSelectElement>(document, '#request-selector');
+    const form = required<HTMLElement>(document, 'state-backed-form form');
+    const submit = required<HTMLButtonElement>(form, 'button[type="submit"]');
+    const customerName = required<HTMLInputElement>(document, '#customer-name');
+    const email = required<HTMLInputElement>(document, '#email');
+    const notes = required<HTMLTextAreaElement>(document, '#notes');
+    const urgent = required<HTMLInputElement>(form, 'input[type="checkbox"]');
+    const primaryTopic = required<HTMLSelectElement>(form, '#primary-topic');
+    const assignee = required<HTMLSelectElement>(form, '#assignee');
+    const topics = required<HTMLSelectElement>(form, '#topics');
+    const contactPreference = Array.from(form.querySelectorAll('fieldset label'), label => ({
+      label: label.textContent?.trim() ?? '',
+      checked: required<HTMLInputElement>(label, 'input[type="radio"]').checked,
+    }));
+    const field = (input: HTMLInputElement) => {
+      const label = required<HTMLElement>(document, `label[for="${input.id}"]`);
+      return {
+        label: label.textContent?.trim() ?? '',
+        labelFor: label.getAttribute('for') ?? '',
+        id: input.id,
+        type: input.type,
+        value: input.value,
+      };
+    };
+    const countText = required<HTMLElement>(document, 'app-root > main > p').textContent?.trim() ?? '';
+    const submissionCount = Number(countText.replace('Submissions:', '').trim());
+    const model: StateBackedFormObservation = {
+      selectedRequest: request.value,
+      requestOptions: optionLabels(request),
+      submissionCount,
+      formClasses: [...form.classList].sort(),
+      submitDisabled: submit.disabled,
+      fields: [field(customerName), field(email)],
+      notes: notes.value,
+      urgent: urgent.checked,
+      contactPreference,
+      primaryTopic: {
+        options: optionLabels(primaryTopic),
+        selected: selectedLabels(primaryTopic),
+      },
+      assignee: {
+        options: optionLabels(assignee),
+        selected: selectedLabels(assignee),
+      },
+      topics: {
+        options: optionLabels(topics),
+        selected: selectedLabels(topics),
+      },
+    };
+    const live: LiveElementTranscript[] = [
+      { id: 'request-selector', value: request.value, selectedIndex: request.selectedIndex },
+      { id: 'customer-name', value: customerName.value },
+      { id: 'email', value: email.value },
+      { id: 'primary-topic', value: primaryTopic.value, selectedIndex: primaryTopic.selectedIndex },
+      { id: 'assignee', value: assignee.value, selectedIndex: assignee.selectedIndex },
+      { id: 'topics', value: topics.value, selectedIndex: topics.selectedIndex },
+      { id: 'notes', value: notes.value },
+    ];
+    return {
+      kind: 'state-backed-form',
+      live,
+      focus: document.activeElement instanceof HTMLElement ? document.activeElement.localName : null,
+      model,
+    };
+  });
 }
 
 async function runRoutedStorefrontLane(

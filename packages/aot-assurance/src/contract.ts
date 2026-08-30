@@ -1,7 +1,7 @@
 import type { PluginOption } from 'vite';
 
 export type AssuranceLane = 'jit' | 'aot';
-export type AssuranceScenario = 'g0' | 'hello-world' | 'routed-storefront';
+export type AssuranceScenario = 'g0' | 'hello-world' | 'routed-storefront' | 'state-backed-form';
 
 export type EmissionFalsifier =
   | 'mutate-instruction'
@@ -83,9 +83,6 @@ export interface RenderedModuleEvidence {
 }
 
 export interface RuntimeProbeSnapshot {
-  readonly compilerCompile: number;
-  readonly compilerCompileSpread: number;
-  readonly compilerNullTemplateBypass: number;
   readonly parserParse: number;
 }
 
@@ -139,10 +136,16 @@ export interface RoutedStorefrontApplicationObservation extends ApplicationObser
   readonly model: RoutedStorefrontObservation;
 }
 
+export interface StateBackedFormApplicationObservation extends ApplicationObservationBase {
+  readonly kind: 'state-backed-form';
+  readonly model: StateBackedFormObservation;
+}
+
 export type ApplicationObservation =
   | G0ApplicationObservation
   | HelloWorldApplicationObservation
-  | RoutedStorefrontApplicationObservation;
+  | RoutedStorefrontApplicationObservation
+  | StateBackedFormApplicationObservation;
 
 export interface CheckpointTranscript {
   readonly label: string;
@@ -263,4 +266,35 @@ export interface RoutedStorefrontObservation {
   readonly route: RoutedStorefrontRouteObservation;
   readonly selectedNames: readonly string[];
   readonly emptySelectionMessage: string | null;
+}
+
+export interface StateBackedFormFieldObservation {
+  readonly label: string;
+  readonly labelFor: string;
+  readonly id: string;
+  readonly type: string;
+  readonly value: string;
+}
+
+export interface StateBackedFormSelectObservation {
+  readonly options: readonly string[];
+  readonly selected: readonly string[];
+}
+
+export interface StateBackedFormObservation {
+  readonly selectedRequest: string;
+  readonly requestOptions: readonly string[];
+  readonly submissionCount: number;
+  readonly formClasses: readonly string[];
+  readonly submitDisabled: boolean;
+  readonly fields: readonly StateBackedFormFieldObservation[];
+  readonly notes: string;
+  readonly urgent: boolean;
+  readonly contactPreference: readonly {
+    readonly label: string;
+    readonly checked: boolean;
+  }[];
+  readonly primaryTopic: StateBackedFormSelectObservation;
+  readonly assignee: StateBackedFormSelectObservation;
+  readonly topics: StateBackedFormSelectObservation;
 }

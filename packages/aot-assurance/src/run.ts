@@ -18,6 +18,10 @@ import {
   assertRoutedStorefrontBuildEvidence,
   assertRoutedStorefrontExpectations,
 } from './routed-storefront-expectations.js';
+import {
+  assertStateBackedFormBuildEvidence,
+  assertStateBackedFormExpectations,
+} from './state-backed-form-expectations.js';
 import { StaticBuildServer } from './server.js';
 
 export interface RunAssuranceOptions {
@@ -56,10 +60,14 @@ export async function runAssurance(options: RunAssuranceOptions): Promise<Assura
       assertHelloWorldBuildEvidence(builds.aotEvidence);
       assertHelloWorldExpectations(browserBatch.jit);
       assertHelloWorldExpectations(browserBatch.aot);
-    } else {
+    } else if (scenario === 'routed-storefront') {
       assertRoutedStorefrontBuildEvidence(builds.aotEvidence);
       assertRoutedStorefrontExpectations(browserBatch.jit);
       assertRoutedStorefrontExpectations(browserBatch.aot);
+    } else {
+      assertStateBackedFormBuildEvidence(builds.aotEvidence);
+      assertStateBackedFormExpectations(browserBatch.jit);
+      assertStateBackedFormExpectations(browserBatch.aot);
     }
     assertSemanticParity(browserBatch.jit.semantic, browserBatch.aot.semantic);
 
@@ -98,6 +106,15 @@ function defaultFixtureRoot(scenario: AssuranceScenario): string {
         'fixtures',
         'pressure',
         'app-pattern-routed-catalog-storefront',
+      );
+    case 'state-backed-form':
+      return resolve(
+        packageRoot,
+        '..',
+        'semantic-runtime',
+        'fixtures',
+        'pressure',
+        'app-pattern-state-backed-form',
       );
   }
 }
