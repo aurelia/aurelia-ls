@@ -837,6 +837,7 @@ function templateWitnessValue(
   return template == null
     ? null
     : [
+      template.moduleRole,
       template.addressHandle,
       template.authoredSourceRevision,
       template.sourceMap == null

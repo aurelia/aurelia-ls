@@ -216,6 +216,19 @@ and issue aggregation before the converger publishes the final definition produc
 lives in `watch-convergence.ts`; resource annotation policy lives in `resource-metadata-annotations.ts`. Keep these
 files aligned with runtime-html concepts rather than regrouping them by local call graph convenience.
 
+Custom-element templates separately retain their runtime module role: `template-value` for an exact imported scalar,
+`definition-module` for a convention-generated view namespace, `inline-value`, `local-template`, `none`, or `open`.
+This is not markup provenance—the template address still owns that—and it must not be inferred later from carrier kind
+or the outer definition expression. Selection follows the build/runtime composition shape: a non-undefined authored
+definition field wins, an eligible paired view precedes `Type.template`, explicit null is terminal, and explicit
+undefined falls through without reviving an overwritten paired view. Imported-template reads retain evaluator pressure
+instead of laundering a known import through an unknown spread. The detached source attachment carries the role so
+build consumers can distinguish a full view-definition module from a template-value import.
+
+The broader convention view-definition overlay remains separate work: HTML metadata can also contribute dependencies,
+aliases, bindables, capture, containerless, and shadow options, and static `$au` applies field replacement rather than
+one generic dependency merge. Do not treat the template module role as proof that those other fields are complete.
+
 Known resource-metadata failures are products too. `ResourceIssue` rows are for cases where the framework source shows
 an exact error path and static convergence or registration spending can prove it. Resource convergence currently owns malformed bindable
 decorator metadata (`AUR0227`, `AUR0228`, `AUR0229`), malformed `@processContent(...)` hooks (`AUR0766`),

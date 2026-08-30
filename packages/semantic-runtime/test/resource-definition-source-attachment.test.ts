@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, test } from 'vitest';
 
 import { createSemanticRuntime } from '../src/api/runtime.js';
+import { CustomElementTemplateModuleRole } from '../src/resources/custom-element-definition.js';
 import { ResourceCarrierKind } from '../src/resources/resource-kind.js';
 import type {
   EffectiveResourceDefinitionSelection,
@@ -40,11 +41,13 @@ describe('resource definition source attachment', () => {
       .toEqual([ResourceCarrierKind.Decorator]);
 
     const inline = namedSelection(selections, 'alias-carrier').sourceAttachment;
+    expect(inline?.templateModuleRole).toBe(CustomElementTemplateModuleRole.InlineValue);
     expect(inline?.templateSource?.sourceFileAddressHandle).toBe(inline?.owningSourceFileAddressHandle);
     expect(inline?.templateSource?.oldText).toBe('<template>${value}</template>');
 
     const imported = namedSelection(selections, 'effective-definitions-app').sourceAttachment;
     expect(imported?.carrierKind).toBe(ResourceCarrierKind.Decorator);
+    expect(imported?.templateModuleRole).toBe(CustomElementTemplateModuleRole.TemplateValue);
     expect(imported?.templateSource?.sourceFileAddressHandle).not.toBe(imported?.owningSourceFileAddressHandle);
     expect(normalize(imported?.templateSource?.sourcePath)).toBe('src/effective-definitions-app.html');
     expect(imported?.templateSource?.oldText).toContain('<template>');
@@ -85,6 +88,7 @@ describe('resource definition source attachment', () => {
     const convention = namedSelection(app.emission.resources.definitionSelections, 'convention-card').sourceAttachment;
 
     expect(convention?.carrierKind).toBe(ResourceCarrierKind.Convention);
+    expect(convention?.templateModuleRole).toBe(CustomElementTemplateModuleRole.DefinitionModule);
     expect(convention?.definitionExpression).toBeNull();
     expect(convention?.carrier.oldText).toContain('export class ConventionCard');
     expect(normalize(convention?.carrier.sourcePath)).toBe('src/convention-card.ts');
@@ -148,6 +152,143 @@ describe('resource definition source attachment', () => {
       expect(normalize(attachment?.carrier.sourcePath)).toBe('src/aot-provider-card.ts');
       expect(normalize(attachment?.templateSource?.sourcePath)).toBe('src/aot-provider-card.html');
       expect(attachment?.templateSource?.oldText).toBe('<p>${message}</p>');
+    } finally {
+      await rm(workspaceRoot, { force: true, recursive: true });
+    }
+  }, 30_000);
+
+  test('distinguishes template values from convention definition modules and incidental pairs', async () => {
+    const workspaceRoot = await mkdtemp(path.join(packageRoot, '.resource-template-module-role-'));
+    try {
+      await writeWorkspaceFiles(workspaceRoot, {
+        'package.json': JSON.stringify({
+          name: 'template-module-role-fixture',
+          private: true,
+          type: 'module',
+          dependencies: { aurelia: '2.0.0-rc.2' },
+        }),
+        'tsconfig.json': JSON.stringify({
+          compilerOptions: {
+            target: 'ES2022',
+            module: 'ESNext',
+            moduleResolution: 'Bundler',
+            strict: true,
+            skipLibCheck: true,
+          },
+          include: ['src'],
+        }),
+        'vite.config.ts': [
+          "import aurelia from '@aurelia/vite-plugin';",
+          "import { defineConfig } from 'vite';",
+          'export default defineConfig({ plugins: [aurelia()] });',
+        ].join('\n'),
+        'src/main.ts': [
+          "import Aurelia, { customElement } from 'aurelia';",
+          "import { ObjectNoTemplate } from './object-no-template';",
+          "import { ObjectNullTemplate } from './object-null-template';",
+          "import { ObjectUndefinedTemplate } from './object-undefined-template';",
+          "import { StaticAliasPair } from './static-alias-pair';",
+          "import { StaticPair } from './static-pair';",
+          "import { StringPair } from './string-pair';",
+          "import { ValuePair } from './value-pair';",
+          '@customElement({',
+          "  name: 'template-role-app',",
+          "  template: '<object-no-template></object-no-template>',",
+          '  dependencies: [ObjectNoTemplate, ObjectNullTemplate, ObjectUndefinedTemplate, StaticAliasPair, StaticPair, StringPair, ValuePair],',
+          '})',
+          'class TemplateRoleApp {}',
+          'Aurelia.app(TemplateRoleApp).start();',
+        ].join('\n'),
+        'src/object-no-template.ts': [
+          "import { customElement } from 'aurelia';",
+          "@customElement({ name: 'object-no-template' })",
+          'export class ObjectNoTemplate {}',
+        ].join('\n'),
+        'src/object-no-template.html': '<p>incidental pair</p>',
+        'src/object-null-template.ts': [
+          "import { customElement } from 'aurelia';",
+          "@customElement({ name: 'object-null-template', template: null })",
+          'export class ObjectNullTemplate {}',
+        ].join('\n'),
+        'src/object-null-template.html': '<p>suppressed pair</p>',
+        'src/object-undefined-template.ts': [
+          "import { customElement } from 'aurelia';",
+          "@customElement({ name: 'object-undefined-template', template: undefined })",
+          'export class ObjectUndefinedTemplate {',
+          "  static template = '<p>type fallback</p>';",
+          '}',
+        ].join('\n'),
+        'src/object-undefined-template.html': '<p>overwritten pair</p>',
+        'src/string-pair.ts': [
+          "import { customElement } from 'aurelia';",
+          "@customElement('string-pair')",
+          'export class StringPair {}',
+        ].join('\n'),
+        'src/string-pair.html': '<p>string pair</p>',
+        'src/static-alias-pair.ts': [
+          "import type { CustomElementStaticAuDefinition } from 'aurelia';",
+          'const definition: CustomElementStaticAuDefinition = {',
+          "  type: 'custom-element',",
+          "  name: 'static-alias-pair',",
+          '};',
+          'export class StaticAliasPair {',
+          '  static $au = definition;',
+          '}',
+        ].join('\n'),
+        'src/static-alias-pair.html': '<p>incidental static pair</p>',
+        'src/static-pair.ts': [
+          "import type { CustomElementStaticAuDefinition } from 'aurelia';",
+          'export class StaticPair {',
+          '  static $au: CustomElementStaticAuDefinition = {',
+          "    type: 'custom-element',",
+          "    name: 'static-pair',",
+          '  };',
+          '}',
+        ].join('\n'),
+        'src/static-pair.html': '<p>static pair</p>',
+        'src/value-pair.ts': [
+          "import { customElement } from 'aurelia';",
+          "import template from './value-pair.html';",
+          'const base = { template };',
+          "const definition = { ...base, name: 'value-pair' };",
+          '@customElement(definition)',
+          'export class ValuePair {}',
+        ].join('\n'),
+        'src/value-pair.html': '<p>value pair</p>',
+        'src/aurelia-assets.d.ts': "declare module '*.html' { const value: string; export default value; }",
+      });
+      const runtime = await createSemanticRuntime({
+        workspaceRoot,
+        storeKey: `contract:resource-template-module-role:${path.basename(workspaceRoot)}`,
+      });
+      const app = await runtime.openApp({ analysisDepth: 'binding-observation' });
+      const attachment = (name: string) => namedSelection(
+        app.emission.resources.definitionSelections,
+        name,
+      ).sourceAttachment!;
+
+      expect(attachment('object-no-template')).toMatchObject({
+        templateModuleRole: CustomElementTemplateModuleRole.None,
+        templateSource: null,
+      });
+      expect(attachment('object-null-template')).toMatchObject({
+        templateModuleRole: CustomElementTemplateModuleRole.None,
+        templateSource: null,
+      });
+      expect(attachment('object-undefined-template')).toMatchObject({
+        templateModuleRole: CustomElementTemplateModuleRole.InlineValue,
+        templateSource: expect.objectContaining({ oldText: '<p>type fallback</p>' }),
+      });
+      expect(attachment('string-pair').templateModuleRole)
+        .toBe(CustomElementTemplateModuleRole.DefinitionModule);
+      expect(attachment('static-alias-pair')).toMatchObject({
+        templateModuleRole: CustomElementTemplateModuleRole.None,
+        templateSource: null,
+      });
+      expect(attachment('static-pair').templateModuleRole)
+        .toBe(CustomElementTemplateModuleRole.DefinitionModule);
+      expect(attachment('value-pair').templateModuleRole)
+        .toBe(CustomElementTemplateModuleRole.TemplateValue);
     } finally {
       await rm(workspaceRoot, { force: true, recursive: true });
     }

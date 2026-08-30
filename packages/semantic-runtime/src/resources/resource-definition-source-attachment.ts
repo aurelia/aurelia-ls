@@ -16,6 +16,7 @@ import {
 } from '../kernel/source-address.js';
 import type { KernelStoreReadView } from '../kernel/store.js';
 import type { OpenSeamKindKey } from '../kernel/vocabulary.js';
+import { CustomElementTemplateModuleRole } from './custom-element-definition.js';
 import type { FullResourceDefinition } from './resource-definition.js';
 import type { ResourceDefinitionHeaderEmission } from './resource-definition-header-emission.js';
 import type { ResourceCarrierKind } from './resource-kind.js';
@@ -80,6 +81,7 @@ export class ResourceDefinitionSourceAttachment {
     readonly targetDeclaration: ResourceDefinitionAuthoredSourceSpan | null,
     /** Exact authored template carrier when convergence retained one, whether inline, imported, or conventional. */
     readonly templateSource: ResourceDefinitionAuthoredSourceSpan | null,
+    readonly templateModuleRole: CustomElementTemplateModuleRole,
     readonly recognitionOpenReasons: readonly ResourceDefinitionSourceOpenReason[],
   ) {}
 }
@@ -160,6 +162,9 @@ function sourceAttachmentForDefinition(
     sourceSpanForNode(context, target?.node ?? null, readView),
     sourceSpanForNode(context, target?.declarationNode ?? null, readView),
     templateSourceSpan(project, definition, readView),
+    'template' in definition
+      ? definition.template?.moduleRole ?? CustomElementTemplateModuleRole.None
+      : CustomElementTemplateModuleRole.None,
     observation.openSeams.map((open) => sourceOpenReason(context, open, readView)),
   );
 }

@@ -31,9 +31,10 @@ import {
   CustomElementDefinition,
   CustomElementTemplateDefinition,
   CustomElementTemplateKind,
+  CustomElementTemplateModuleRole,
 } from './custom-element-definition.js';
 import type { FullResourceDefinition } from './resource-definition.js';
-import { BuiltInResourceTargetTypeProjector } from './built-in-resource-target-type.js';
+import type { BuiltInResourceTargetTypeProjector } from './built-in-resource-target-type.js';
 import {
   ResourceDefinitionKind,
   runtimeResourceKeyForKind,
@@ -143,7 +144,10 @@ function builtInCustomElementDefinition(
     new CustomElementCaptureDefinition(resource.targetName === 'AuCompose'
       ? CustomElementCaptureKind.All
       : CustomElementCaptureKind.None),
-    new CustomElementTemplateDefinition(CustomElementTemplateKind.None),
+    new CustomElementTemplateDefinition(
+      CustomElementTemplateKind.None,
+      CustomElementTemplateModuleRole.None,
+    ),
     [],
     [],
     null,

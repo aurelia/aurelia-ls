@@ -49,7 +49,10 @@ import {
   recordsForSourceOpenSeam,
 } from '../kernel/source-open-seam.js';
 import { KernelVocabulary } from '../kernel/vocabulary.js';
-import { readStaticStringValue } from '../evaluation/expression-reader.js';
+import {
+  readStaticStringValue,
+  type EvaluationRead,
+} from '../evaluation/expression-reader.js';
 import { readEvaluationEnumerableOwnEntries } from '../evaluation/enumerable-own-properties.js';
 import { evaluationIteratorProjection } from '../evaluation/iterator-projection.js';
 import {
@@ -105,6 +108,7 @@ import {
   CustomElementDefinitionContribution,
   CustomElementTemplateDefinition,
   CustomElementTemplateKind,
+  CustomElementTemplateModuleRole,
   ShadowOptionsDefinition,
   ShadowRootMode,
   customElementRequiresShadowHost,
@@ -198,6 +202,7 @@ import {
   readBooleanField,
   readFieldValue,
   readObjectProperty,
+  readStaticClassPropertyValue,
   readStringField,
   targetReferenceForFunction,
 } from './resource-convergence-support.js';
@@ -1650,18 +1655,80 @@ function readCustomElementTemplate(
   local: string,
   sourceTextCache: AuthoredSourceTextCache,
 ): TemplateDefinitionRead {
-  const read = readFieldValue(context, definitionExpression, targetClass, 'template');
-  const imported = read?.node == null
-    ? null
-    : readImportedHtmlTemplate(store, context, read.node, local, sourceTextCache);
-  if (imported != null) {
-    return imported;
+  const definitionRead = readObjectProperty(context.expressionReader, definitionExpression, 'template');
+  if (definitionRead != null && definitionRead.value?.kind !== EvaluationValueKind.Undefined) {
+    return readTemplateField(
+      store,
+      context,
+      definitionRead,
+      CustomElementTemplateModuleRole.TemplateValue,
+      local,
+      sourceTextCache,
+    );
   }
 
-  const value = read?.value;
-  if (read != null && value == null) {
+  if (
+    definitionRead == null
+    && conventionalTemplateIsEligible(observation, definitionExpression)
+  ) {
+    const conventional = readConventionalHtmlTemplate(
+      store,
+      context,
+      targetClass,
+      observation,
+      local,
+      sourceTextCache,
+    );
+    if (conventional != null) return conventional;
+  }
+
+  const staticRead = readStaticClassPropertyValue(context, targetClass, 'template');
+  if (staticRead != null && staticRead.value?.kind !== EvaluationValueKind.Undefined) {
+    return readTemplateField(
+      store,
+      context,
+      staticRead,
+      CustomElementTemplateModuleRole.TemplateValue,
+      local,
+      sourceTextCache,
+    );
+  }
+  return new TemplateDefinitionRead(
+    new CustomElementTemplateDefinition(
+      CustomElementTemplateKind.None,
+      CustomElementTemplateModuleRole.None,
+    ),
+  );
+}
+
+function readTemplateField(
+  store: KernelStore,
+  context: ResourceRecognitionContext,
+  read: EvaluationRead<EvaluationValue>,
+  importedRole: CustomElementTemplateModuleRole,
+  local: string,
+  sourceTextCache: AuthoredSourceTextCache,
+): TemplateDefinitionRead {
+  const imported = read.node == null
+    ? null
+    : readImportedHtmlTemplate(store, context, read.node, importedRole, local, sourceTextCache);
+  const pressure = convergenceOpenForReadPressure('Custom element template metadata evaluation remained open.', read);
+  if (imported != null) {
     return new TemplateDefinitionRead(
-      new CustomElementTemplateDefinition(CustomElementTemplateKind.Open),
+      imported.template,
+      imported.records,
+      imported.dependencies,
+      [...imported.open, ...pressure],
+    );
+  }
+
+  const value = read.value;
+  if (value == null) {
+    return new TemplateDefinitionRead(
+      new CustomElementTemplateDefinition(
+        CustomElementTemplateKind.Open,
+        CustomElementTemplateModuleRole.Open,
+      ),
       [],
       new ResourceDependenciesRead([], []),
       convergenceOpenForRejectedReadShape(
@@ -1671,32 +1738,49 @@ function readCustomElementTemplate(
       ),
     );
   }
-  if (value == null || value.kind === EvaluationValueKind.Null || value.kind === EvaluationValueKind.Undefined) {
-    const conventional = readConventionalHtmlTemplate(store, context, targetClass, observation, local, sourceTextCache);
-    if (conventional != null) {
-      return conventional;
-    }
-    return new TemplateDefinitionRead(new CustomElementTemplateDefinition(CustomElementTemplateKind.None));
+  if (value.kind === EvaluationValueKind.Null) {
+    return new TemplateDefinitionRead(
+      new CustomElementTemplateDefinition(
+        CustomElementTemplateKind.None,
+        CustomElementTemplateModuleRole.None,
+      ),
+      [],
+      new ResourceDependenciesRead([], []),
+      pressure,
+    );
   }
   if (value.kind === EvaluationValueKind.String) {
-    const source = read?.node == null
+    const source = read.node == null
       ? null
       : templateMarkupSourceAddress(store, context, read.node, value.value, local);
     return new TemplateDefinitionRead(
       new CustomElementTemplateDefinition(
-        CustomElementTemplateKind.Markup,
-        value.value,
+        source == null ? CustomElementTemplateKind.Open : CustomElementTemplateKind.Markup,
+        source == null ? CustomElementTemplateModuleRole.Open : CustomElementTemplateModuleRole.InlineValue,
+        source == null ? null : value.value,
         source?.addressHandle ?? null,
         source?.sourceMap ?? null,
-        sourceTextContentRevision(context.sourceFile.text),
+        source == null ? null : sourceTextContentRevision(context.sourceFile.text),
       ),
       source?.records ?? [],
       new ResourceDependenciesRead([], []),
-      convergenceOpenForReadPressure('Custom element template metadata evaluation remained open.', read),
+      source == null
+        ? [
+            ...pressure,
+            ...convergenceOpenForRejectedReadShape(
+              'Custom element template string has no exact authored inline source.',
+              read,
+              [OpenSeamReasonKind.ResourceDefinitionFieldOpen],
+            ),
+          ]
+        : pressure,
     );
   }
   return new TemplateDefinitionRead(
-    new CustomElementTemplateDefinition(CustomElementTemplateKind.Open),
+    new CustomElementTemplateDefinition(
+      CustomElementTemplateKind.Open,
+      CustomElementTemplateModuleRole.Open,
+    ),
     [],
     new ResourceDependenciesRead([], []),
     convergenceOpenForRejectedReadShape(
@@ -1707,6 +1791,18 @@ function readCustomElementTemplate(
   );
 }
 
+function conventionalTemplateIsEligible(
+  observation: ResourceRecognitionObservation,
+  definitionExpression: ts.Expression | null,
+): boolean {
+  if (observation.carrierKind === ResourceCarrierKind.Convention) return true;
+  if (observation.carrierKind === ResourceCarrierKind.StaticAu) {
+    return definitionExpression != null && ts.isObjectLiteralExpression(definitionExpression);
+  }
+  return observation.carrierKind === ResourceCarrierKind.Decorator
+    && definitionExpression != null
+    && ts.isStringLiteral(definitionExpression);
+}
 function readConventionalHtmlTemplate(
   store: KernelStore,
   context: ResourceRecognitionContext,
@@ -1736,6 +1832,7 @@ function readConventionalHtmlTemplate(
     return new TemplateDefinitionRead(
       new CustomElementTemplateDefinition(
         CustomElementTemplateKind.Open,
+        CustomElementTemplateModuleRole.DefinitionModule,
         null,
         source.addressHandle,
       ),
@@ -1748,6 +1845,7 @@ function readConventionalHtmlTemplate(
   return new TemplateDefinitionRead(
     new CustomElementTemplateDefinition(
       CustomElementTemplateKind.Markup,
+      CustomElementTemplateModuleRole.DefinitionModule,
       metadata.markup,
       source.addressHandle,
       source.sourceMap,
@@ -1762,6 +1860,7 @@ function readImportedHtmlTemplate(
   store: KernelStore,
   context: ResourceRecognitionContext,
   node: ts.Node,
+  moduleRole: CustomElementTemplateModuleRole,
   local: string,
   sourceTextCache: AuthoredSourceTextCache,
 ): TemplateDefinitionRead | null {
@@ -1788,6 +1887,7 @@ function readImportedHtmlTemplate(
     return new TemplateDefinitionRead(
       new CustomElementTemplateDefinition(
         CustomElementTemplateKind.Open,
+        moduleRole,
         null,
         source.addressHandle,
       ),
@@ -1800,6 +1900,7 @@ function readImportedHtmlTemplate(
   return new TemplateDefinitionRead(
     new CustomElementTemplateDefinition(
       CustomElementTemplateKind.Markup,
+      moduleRole,
       metadata.markup,
       source.addressHandle,
       source.sourceMap,

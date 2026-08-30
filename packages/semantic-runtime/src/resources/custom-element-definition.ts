@@ -8,7 +8,9 @@ import { auLink } from '../kernel/au-link.js';
 import type { StaticCallableSlot } from '../evaluation/function-execution.js';
 import type { BindableDefinition, BindableDefinitionContribution } from './bindable-definition.js';
 import { ResourceDefinitionKind } from './resource-kind.js';
-import type { ComponentResourceDefinitionContributionKind } from './resource-kind.js';
+import type {
+  ComponentResourceDefinitionContributionKind,
+} from './resource-kind.js';
 import type {
   InstructionReference,
   ResourceAliasDefinition,
@@ -28,6 +30,16 @@ export const enum CustomElementTemplateKind {
   None = 'none',
   Markup = 'markup',
   DomNode = 'dom-node',
+  Open = 'open',
+}
+
+/** Runtime role of the authored template carrier, distinct from the markup file carrying its text. */
+export const enum CustomElementTemplateModuleRole {
+  None = 'none',
+  DefinitionModule = 'definition-module',
+  TemplateValue = 'template-value',
+  InlineValue = 'inline-value',
+  LocalTemplate = 'local-template',
   Open = 'open',
 }
 
@@ -69,6 +81,7 @@ export class CustomElementCaptureDefinition {
 export class CustomElementTemplateDefinition {
   constructor(
     readonly kind: CustomElementTemplateKind,
+    readonly moduleRole: CustomElementTemplateModuleRole,
     readonly markup: string | null = null,
     readonly addressHandle: AddressHandle | null = null,
     readonly sourceMap: TemplateSourceOffsetMap | null = null,

@@ -50,6 +50,7 @@ import {
   CustomElementDefinitionContribution,
   CustomElementTemplateDefinition,
   CustomElementTemplateKind,
+  CustomElementTemplateModuleRole,
 } from '../resources/custom-element-definition.js';
 import { ResourceProductDetails } from '../resources/product-details.js';
 import {
@@ -341,6 +342,7 @@ export class LocalTemplateDefinitionMaterializer {
         extracted.name,
         new CustomElementTemplateDefinition(
           CustomElementTemplateKind.DomNode,
+          CustomElementTemplateModuleRole.LocalTemplate,
           null,
           carrierSourceAddressHandle,
           null,
@@ -438,6 +440,7 @@ export class LocalTemplateDefinitionMaterializer {
     );
     const ownerTemplate = new CustomElementTemplateDefinition(
       template.kind,
+      template.moduleRole,
       blankTemplateSourceRanges(
         template.markup,
         syntaxes.map((syntax) => [syntax.node.start, syntax.node.end] as const),
@@ -499,6 +502,7 @@ export class LocalTemplateDefinitionMaterializer {
     ]);
     const template = new CustomElementTemplateDefinition(
       CustomElementTemplateKind.Markup,
+      CustomElementTemplateModuleRole.LocalTemplate,
       localMarkup,
       sourceAddressHandle,
       localSource.sourceMap,
