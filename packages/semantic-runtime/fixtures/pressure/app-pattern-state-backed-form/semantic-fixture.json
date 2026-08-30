@@ -338,7 +338,7 @@
         },
         {
           "field": "valueChannelKind",
-          "value": "raw-property"
+          "value": "value-attribute-observer-property"
         },
         {
           "field": "sourceAssignmentKind",
@@ -487,14 +487,19 @@
       "filters": []
     },
     {
-      "summary": "Generated form app has no open semantic seams.",
-      "effectKind": "open-seam-closure",
-      "scope": "app",
-      "topologyNodeKind": null,
-      "cardinality": "absent",
+      "summary": "Generated form app browser facade should retain its nested StandardConfiguration catalog pressure.",
+      "effectKind": "open-seam",
+      "scope": "di",
+      "topologyNodeKind": "container",
+      "cardinality": "present",
       "count": null,
       "role": "baseline",
-      "filters": []
+      "filters": [
+        {
+          "field": "seamKindKey",
+          "value": "di.open-registry-body"
+        }
+      ]
     },
     {
       "summary": "Generated form app adapts DI state lookups into a template-local request through LetBinding scope-slot data flow.",
@@ -960,7 +965,7 @@
         },
         {
           "field": "valueChannelKind",
-          "value": "raw-property"
+          "value": "value-attribute-observer-property"
         },
         {
           "field": "sourceToTargetAssignable",
@@ -1038,7 +1043,7 @@
         },
         {
           "field": "valueChannelKind",
-          "value": "raw-property"
+          "value": "value-attribute-observer-property"
         },
         {
           "field": "sourceToTargetAssignable",

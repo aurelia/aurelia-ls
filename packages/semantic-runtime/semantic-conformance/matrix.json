@@ -15148,8 +15148,8 @@
                 { "fields": { "bindingKind": "attribute", "sourceName": "attributeTwoWay", "direction": "source-to-target", "sourceEvaluationKind": "connectable-read" }, "source": { "marker": "data-lifecycle.attr=\"attributeTwoWay & twoWay\"", "token": "data-lifecycle.attr=\"attributeTwoWay & twoWay\"" }, "count": 1 },
                 { "fields": { "bindingKind": "interpolation", "direction": "source-to-target", "sourceEvaluationKind": "untracked-read" }, "source": { "marker": "title=\"${attributeInterpolationFromView & fromView}\"", "token": "${attributeInterpolationFromView & fromView}" }, "count": 1 },
                 { "fields": { "bindingKind": "interpolation", "direction": "source-to-target", "sourceEvaluationKind": "connectable-read" }, "source": { "marker": "title=\"${attributeInterpolationTwoWay & twoWay}\"", "token": "${attributeInterpolationTwoWay & twoWay}" }, "count": 1 },
-                { "fields": { "bindingKind": "content", "sourceName": "contentFromView", "direction": "source-to-target", "sourceEvaluationKind": "untracked-read" }, "source": { "marker": "${contentFromView & fromView}", "token": "${contentFromView & fromView}" }, "count": 1 },
-                { "fields": { "bindingKind": "content", "sourceName": "contentTwoWay", "direction": "source-to-target", "sourceEvaluationKind": "connectable-read" }, "source": { "marker": "${contentTwoWay & twoWay}", "token": "${contentTwoWay & twoWay}" }, "count": 1 }
+                { "fields": { "bindingKind": "content", "sourceName": "contentFromView", "direction": "source-to-target", "sourceEvaluationKind": "untracked-read" }, "source": { "marker": "${contentFromView & fromView}", "token": "contentFromView & fromView" }, "count": 1 },
+                { "fields": { "bindingKind": "content", "sourceName": "contentTwoWay", "direction": "source-to-target", "sourceEvaluationKind": "connectable-read" }, "source": { "marker": "${contentTwoWay & twoWay}", "token": "contentTwoWay & twoWay" }, "count": 1 }
               ]
             },
             {
