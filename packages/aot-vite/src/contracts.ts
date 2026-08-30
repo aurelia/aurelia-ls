@@ -95,6 +95,15 @@ export interface AotTransformedConfiguration {
   readonly localName: string;
 }
 
+export interface AotTransformedBrowserFacade {
+  readonly referenceStart: number;
+  readonly referenceEnd: number;
+  readonly moduleSpecifier: string;
+  readonly expectedDigest: string;
+  readonly exportName: string;
+  readonly localName: string;
+}
+
 export interface AotSourceTransformArtifact {
   /** Must echo the canonical source path from the corresponding request. */
   readonly sourcePath: string;
@@ -110,6 +119,8 @@ export interface AotSourceTransformArtifact {
   readonly resources: readonly AotTransformedResource[];
   /** Exact build-specific configurations imported by the transformed source. */
   readonly configurations: readonly AotTransformedConfiguration[];
+  /** Exact browser-facade references replaced by a generated AOT facade from a configuration module. */
+  readonly browserFacades: readonly AotTransformedBrowserFacade[];
 }
 
 export interface AotVirtualModuleRequest {

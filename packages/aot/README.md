@@ -14,7 +14,10 @@ The current public API is deliberately narrow:
 - `AotCompilerPatchModuleEmitter` emits only compiler-owned fields while retaining generated controller/projection
   definitions.
 - `AotSourceTransformEmitter` attaches those payloads to decorators, static `$au`, conventions, and nested/anonymous
-  `CustomElement.define(...)` calls without reconstructing authored metadata.
+  `CustomElement.define(...)` calls without reconstructing authored metadata. It also replaces exact semantic-runtime
+  browser-facade references with the build-specific AOT facade; it never searches source text for an `Aurelia` name.
+- `AotRuntimeConfigurationModuleEmitter` emits the compile-free parser/compiler services, conservative runtime
+  registrations, BrowserPlatform container, and base-runtime Aurelia facade used by strict AOT builds.
 - `AotTemplateModuleEmitter` remains the standalone HTML-resource realization.
 
 Paired HTML has two explicit roles from semantic-runtime. A convention view-definition module keeps the complete
@@ -25,9 +28,10 @@ identity and digest so bundlers do not depend on source-before-HTML traversal or
 The current emitter is a CSR baseline. It preserves the compiler's exact DOM node graph rather than serializing and
 reparsing HTML, because reparsing can merge adjacent text nodes that Aurelia instruction rows address separately. A
 small virtual runtime helper applies compiler fields to Aurelia's cached definition after resource definition and
-before its first `Rendering.compile`; this is the candidate for a later additive framework hook. Generated runtime
-configuration, finer payload maps, and optimization are the next production boundaries. SSR and AOT remain independent
-axes.
+before its first `Rendering.compile`; this is the candidate for a later additive framework hook. The generated facade
+keeps Aurelia/AppRoot lifecycle while replacing implicit `StandardConfiguration` installation through an exact
+old-text-validated source carrier. Selective resource/renderer registration, finer payload maps, and broader
+optimization are the next production boundaries. SSR and AOT remain independent axes.
 
 `src/testing` contains two retained low-level characterization lanes:
 

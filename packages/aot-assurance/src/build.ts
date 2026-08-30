@@ -158,6 +158,11 @@ async function buildLane(
           'esm',
           'index.mjs',
         ),
+        '@aurelia/kernel': frameworkEsmPackage('kernel'),
+        '@aurelia/expression-parser': frameworkEsmPackage('expression-parser'),
+        '@aurelia/platform-browser': frameworkEsmPackage('platform-browser'),
+        '@aurelia/runtime': frameworkEsmPackage('runtime'),
+        '@aurelia/template-compiler': frameworkEsmPackage('template-compiler'),
         '@aurelia/router': resolve(
           import.meta.dirname,
           '..',
@@ -191,6 +196,21 @@ async function buildLane(
     durationMs: performance.now() - started,
     moduleGraph: readModuleGraph(output),
   };
+}
+
+function frameworkEsmPackage(packageName: string): string {
+  return resolve(
+    import.meta.dirname,
+    '..',
+    '..',
+    '..',
+    'aurelia',
+    'packages',
+    packageName,
+    'dist',
+    'esm',
+    'index.mjs',
+  );
 }
 
 function laneDefinitionPlugin(lane: 'jit' | 'aot'): Plugin {

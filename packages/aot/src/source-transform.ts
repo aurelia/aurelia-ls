@@ -53,11 +53,21 @@ export interface AotSourceTransformConfigurationPlan {
   readonly exportName: string;
 }
 
+export interface AotSourceTransformBrowserFacadePlan {
+  /** Exact authored browser-facade reference to replace. */
+  readonly reference: AotSourceTransformSlice;
+  /** Build-specific configuration module that owns the AOT browser facade. */
+  readonly moduleSpecifier: string;
+  readonly expectedDigest: string;
+  readonly exportName: string;
+}
+
 export interface AotSourceTransformRequest {
   readonly sourcePath: string;
   readonly code: string;
   readonly resources: readonly AotSourceTransformResourcePlan[];
   readonly configurations?: readonly AotSourceTransformConfigurationPlan[];
+  readonly browserFacades?: readonly AotSourceTransformBrowserFacadePlan[];
   readonly runtimeModuleSpecifier?: string;
 }
 
@@ -81,6 +91,15 @@ export interface AotTransformedConfiguration {
   readonly localName: string;
 }
 
+export interface AotTransformedBrowserFacade {
+  readonly referenceStart: number;
+  readonly referenceEnd: number;
+  readonly moduleSpecifier: string;
+  readonly expectedDigest: string;
+  readonly exportName: string;
+  readonly localName: string;
+}
+
 export interface AotSourceTransformArtifact {
   readonly sourcePath: string;
   readonly code: string;
@@ -90,13 +109,15 @@ export interface AotSourceTransformArtifact {
   readonly runtimeModuleSpecifier: string | null;
   readonly resources: readonly AotTransformedResource[];
   readonly configurations: readonly AotTransformedConfiguration[];
+  readonly browserFacades: readonly AotTransformedBrowserFacade[];
 }
 
 /** Apply resource-addressed compiler patches to one authored TS/JS module without reconstructing its metadata. */
 export class AotSourceTransformEmitter {
   public emit(request: AotSourceTransformRequest): AotSourceTransformArtifact | null {
     const configurations = orderedConfigurations(request.configurations ?? []);
-    if (request.resources.length === 0 && configurations.length === 0) return null;
+    const browserFacades = orderedBrowserFacades(request.browserFacades ?? []);
+    if (request.resources.length === 0 && configurations.length === 0 && browserFacades.length === 0) return null;
 
     const sourceFile = ts.createSourceFile(
       request.sourcePath,
@@ -107,7 +128,7 @@ export class AotSourceTransformEmitter {
     );
     const resources = orderedResources(request.resources);
     assertDistinctPlanIdentity(request.sourcePath, resources);
-    assertConfigurationPlans(request.sourcePath, configurations);
+    assertRuntimeReplacementPlans(request.sourcePath, configurations, browserFacades);
     const usedNames = sourceIdentifierNames(sourceFile);
     const applyName = resources.length === 0
       ? null
@@ -126,6 +147,16 @@ export class AotSourceTransformEmitter {
         );
       }
     }
+    const browserFacadeNames = new Map<string, string>();
+    for (const browserFacade of browserFacades) {
+      const key = browserFacadeImportKey(browserFacade);
+      if (!browserFacadeNames.has(key)) {
+        browserFacadeNames.set(
+          key,
+          allocateIdentifier(`__auAotBrowserFacade${browserFacadeNames.size}`, usedNames),
+        );
+      }
+    }
     const edits = new MagicString(request.code);
     const runtimeModuleSpecifier = resources.length === 0
       ? null
@@ -141,6 +172,10 @@ export class AotSourceTransformEmitter {
         const configuration = requireConfiguration(configurations, key, request.sourcePath);
         return `import { ${configuration.exportName} as ${localName} } from ${JSON.stringify(configuration.moduleSpecifier)};`;
       }),
+      ...[...browserFacadeNames.entries()].map(([key, localName]) => {
+        const browserFacade = requireBrowserFacade(browserFacades, key, request.sourcePath);
+        return `import { ${browserFacade.exportName} as ${localName} } from ${JSON.stringify(browserFacade.moduleSpecifier)};`;
+      }),
       '',
     ].join(detectNewline(request.code));
     edits.appendLeft(importInsertionOffset(sourceFile), importText);
@@ -151,6 +186,15 @@ export class AotSourceTransformEmitter {
         configuration.value.start,
         configuration.value.end,
         requireMap(configurationNames, configurationImportKey(configuration), request.sourcePath),
+      );
+    }
+
+    for (const browserFacade of browserFacades) {
+      assertSlice(request.sourcePath, request.code, null, 'browser facade reference', browserFacade.reference);
+      edits.overwrite(
+        browserFacade.reference.start,
+        browserFacade.reference.end,
+        requireMap(browserFacadeNames, browserFacadeImportKey(browserFacade), request.sourcePath),
       );
     }
 
@@ -245,6 +289,18 @@ export class AotSourceTransformEmitter {
           request.sourcePath,
         ),
       })),
+      browserFacades: browserFacades.map((browserFacade) => ({
+        referenceStart: browserFacade.reference.start,
+        referenceEnd: browserFacade.reference.end,
+        moduleSpecifier: browserFacade.moduleSpecifier,
+        expectedDigest: browserFacade.expectedDigest,
+        exportName: browserFacade.exportName,
+        localName: requireMap(
+          browserFacadeNames,
+          browserFacadeImportKey(browserFacade),
+          request.sourcePath,
+        ),
+      })),
     };
   }
 }
@@ -270,6 +326,17 @@ function orderedConfigurations(
   );
 }
 
+function orderedBrowserFacades(
+  browserFacades: readonly AotSourceTransformBrowserFacadePlan[],
+): readonly AotSourceTransformBrowserFacadePlan[] {
+  return [...browserFacades].sort((left, right) =>
+    left.reference.start - right.reference.start
+    || right.reference.end - left.reference.end
+    || left.moduleSpecifier.localeCompare(right.moduleSpecifier)
+    || left.exportName.localeCompare(right.exportName)
+  );
+}
+
 function assertDistinctPlanIdentity(
   sourcePath: string,
   resources: readonly AotSourceTransformResourcePlan[],
@@ -288,34 +355,62 @@ function assertDistinctPlanIdentity(
   }
 }
 
-function assertConfigurationPlans(
+function assertRuntimeReplacementPlans(
   sourcePath: string,
   configurations: readonly AotSourceTransformConfigurationPlan[],
+  browserFacades: readonly AotSourceTransformBrowserFacadePlan[],
 ): void {
   const moduleDigests = new Map<string, string>();
-  let previous: AotSourceTransformConfigurationPlan | undefined;
   for (const configuration of configurations) {
-    if (
-      configuration.moduleSpecifier.trim().length === 0
-      || configuration.expectedDigest.trim().length === 0
-      || !isIdentifierText(configuration.exportName)
-    ) {
-      throw invalidPlan(sourcePath, null, 'AOT configuration plans require a module specifier, digest, and identifier export name.');
-    }
-    const digest = moduleDigests.get(configuration.moduleSpecifier);
-    if (digest != null && digest !== configuration.expectedDigest) {
+    assertRuntimeModuleReference(sourcePath, 'configuration', configuration, moduleDigests);
+  }
+  for (const browserFacade of browserFacades) {
+    assertRuntimeModuleReference(sourcePath, 'browser facade', browserFacade, moduleDigests);
+  }
+
+  const replacements = [
+    ...configurations.map((configuration) => ({ kind: 'configuration', slice: configuration.value })),
+    ...browserFacades.map((browserFacade) => ({ kind: 'browser facade', slice: browserFacade.reference })),
+  ].sort((left, right) =>
+    left.slice.start - right.slice.start
+    || right.slice.end - left.slice.end
+    || left.kind.localeCompare(right.kind)
+  );
+  let previous: typeof replacements[number] | undefined;
+  for (const replacement of replacements) {
+    if (previous != null && previous.slice.end > replacement.slice.start) {
       throw invalidPlan(
         sourcePath,
         null,
-        `AOT configuration module '${configuration.moduleSpecifier}' has conflicting expected digests.`,
+        `AOT ${previous.kind} and ${replacement.kind} replacement slices overlap.`,
       );
     }
-    moduleDigests.set(configuration.moduleSpecifier, configuration.expectedDigest);
-    if (previous != null && previous.value.end > configuration.value.start) {
-      throw invalidPlan(sourcePath, null, 'AOT configuration value slices overlap.');
-    }
-    previous = configuration;
+    previous = replacement;
   }
+}
+
+function assertRuntimeModuleReference(
+  sourcePath: string,
+  kind: 'configuration' | 'browser facade',
+  reference: Pick<AotSourceTransformConfigurationPlan, 'moduleSpecifier' | 'expectedDigest' | 'exportName'>,
+  moduleDigests: Map<string, string>,
+): void {
+  if (
+    reference.moduleSpecifier.trim().length === 0
+    || reference.expectedDigest.trim().length === 0
+    || !isIdentifierText(reference.exportName)
+  ) {
+    throw invalidPlan(sourcePath, null, `AOT ${kind} plans require a module specifier, digest, and identifier export name.`);
+  }
+  const digest = moduleDigests.get(reference.moduleSpecifier);
+  if (digest != null && digest !== reference.expectedDigest) {
+    throw invalidPlan(
+      sourcePath,
+      null,
+      `AOT runtime module '${reference.moduleSpecifier}' has conflicting expected digests.`,
+    );
+  }
+  moduleDigests.set(reference.moduleSpecifier, reference.expectedDigest);
 }
 
 function assertSlice(
@@ -401,6 +496,10 @@ function configurationImportKey(configuration: AotSourceTransformConfigurationPl
   return `${configuration.moduleSpecifier}\0${configuration.exportName}`;
 }
 
+function browserFacadeImportKey(browserFacade: AotSourceTransformBrowserFacadePlan): string {
+  return `${browserFacade.moduleSpecifier}\0${browserFacade.exportName}`;
+}
+
 function requireConfiguration(
   configurations: readonly AotSourceTransformConfigurationPlan[],
   key: string,
@@ -411,6 +510,18 @@ function requireConfiguration(
     throw invalidPlan(sourcePath, null, `AOT source transform cannot resolve configuration import '${key}'.`);
   }
   return configuration;
+}
+
+function requireBrowserFacade(
+  browserFacades: readonly AotSourceTransformBrowserFacadePlan[],
+  key: string,
+  sourcePath: string,
+): AotSourceTransformBrowserFacadePlan {
+  const browserFacade = browserFacades.find((candidate) => browserFacadeImportKey(candidate) === key);
+  if (browserFacade == null) {
+    throw invalidPlan(sourcePath, null, `AOT source transform cannot resolve browser facade import '${key}'.`);
+  }
+  return browserFacade;
 }
 
 function requireApplyName(value: string | null, sourcePath: string): string {

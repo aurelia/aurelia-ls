@@ -365,6 +365,54 @@ describe("aureliaAot Vite preset", () => {
       .rejects.toMatchObject({ code: "AOT_VITE_INVALID_ARTIFACT" });
   });
 
+  it("claims a generated browser facade from its configuration module", async () => {
+    const transformSource = vi.fn(async ({ sourcePath, code }) => browserFacadeSourceTransform(sourcePath, code));
+    const virtualModuleFor = vi.fn(async ({ specifier }) => ({
+      specifier,
+      code: "export class AotBrowserAurelia {}",
+      map: null,
+      digest: "configuration-digest",
+    }));
+    const preset = aureliaAot({
+      provider: {
+        async openBuild() {
+          return {
+            artifactFor: async ({ sourcePath }) => artifact(sourcePath, "html"),
+            transformSource,
+            virtualModuleFor,
+          };
+        },
+      },
+    });
+    const guard = requiredPlugin(preset, "aurelia-aot:guard");
+    const sources = requiredPlugin(preset, "aurelia-aot:sources");
+    const context = pluginContext();
+    await invoke(guard, "configResolved", undefined, resolvedConfig());
+    await invoke(sources, "buildStart", context);
+    const transformed = await invoke(
+      sources,
+      "transform",
+      context,
+      "Aurelia.app(App);",
+      "C:/app/main.ts",
+      { ssr: false },
+    ) as { readonly code: string };
+
+    expect(transformed.code).toContain("__aotBrowserFacade.app(App)");
+    const resolution = await invoke(
+      sources,
+      "resolveId",
+      context,
+      "virtual:aurelia-aot/configuration/proof",
+      "C:/app/main.ts",
+      { attributes: {}, isEntry: false },
+    ) as { readonly id: string };
+    expect(await invoke(sources, "load", context, resolution.id, { ssr: false })).toEqual({
+      code: "export class AotBrowserAurelia {}",
+      map: null,
+    });
+  });
+
   it("fails closed when a transformed source has no virtual-module session port", async () => {
     const preset = aureliaAot({
       provider: {
@@ -677,6 +725,7 @@ function sourceTransform(
     runtimeModuleSpecifier: "virtual:aurelia-aot/runtime-proof",
     resources,
     configurations: [],
+    browserFacades: [],
   };
 }
 
@@ -698,6 +747,31 @@ function configurationSourceTransform(sourcePath: string, sourceCode: string): A
       expectedDigest: "configuration-digest",
       exportName: "AotConfiguration",
       localName: "__aotConfiguration",
+    }],
+    browserFacades: [],
+  };
+}
+
+function browserFacadeSourceTransform(sourcePath: string, sourceCode: string): AotSourceTransformArtifact {
+  const referenceStart = sourceCode.indexOf("Aurelia");
+  return {
+    sourcePath,
+    code: [
+      "import { AotBrowserAurelia as __aotBrowserFacade } from 'virtual:aurelia-aot/configuration/proof';",
+      sourceCode.replace("Aurelia", "__aotBrowserFacade"),
+    ].join("\n"),
+    map: null,
+    digest: "browser-facade-source-transform",
+    runtimeModuleSpecifier: null,
+    resources: [],
+    configurations: [],
+    browserFacades: [{
+      referenceStart,
+      referenceEnd: referenceStart + "Aurelia".length,
+      moduleSpecifier: "virtual:aurelia-aot/configuration/proof",
+      expectedDigest: "configuration-digest",
+      exportName: "AotBrowserAurelia",
+      localName: "__aotBrowserFacade",
     }],
   };
 }

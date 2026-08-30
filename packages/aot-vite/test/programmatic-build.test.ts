@@ -47,6 +47,7 @@ describe("aureliaAot programmatic Vite 8 build", () => {
           exportName: "AotConfiguration",
           localName: "__aotConfiguration",
         }],
+        browserFacades: [],
       };
     });
     const virtualModuleFor = vi.fn(async ({ specifier }): Promise<AotVirtualModuleArtifact | null> => {

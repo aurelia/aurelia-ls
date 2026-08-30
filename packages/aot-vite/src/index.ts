@@ -16,6 +16,7 @@ import type {
   AotSourceTransformArtifact,
   AotTemplateArtifact,
   AotTemplatePayloadReference,
+  AotTransformedBrowserFacade,
   AotTransformedConfiguration,
   AotTransformedResource,
   AotVirtualModuleArtifact,
@@ -52,6 +53,7 @@ export type {
   AotTemplateArtifact,
   AotTemplatePayloadReference,
   AotTemplateRequest,
+  AotTransformedBrowserFacade,
   AotTransformedConfiguration,
   AotTransformedResource,
   AotVirtualModuleArtifact,
@@ -196,6 +198,9 @@ export function aureliaAot(options: AureliaAotOptions): Plugin[] {
       }
       for (const configuration of artifact.configurations) {
         claimTransformedConfiguration(state, artifact, configuration);
+      }
+      for (const browserFacade of artifact.browserFacades) {
+        claimTransformedBrowserFacade(state, artifact, browserFacade);
       }
 
       return {
@@ -538,6 +543,20 @@ function claimTransformedConfiguration(
   });
 }
 
+function claimTransformedBrowserFacade(
+  state: EnvironmentState,
+  artifact: AotSourceTransformArtifact,
+  browserFacade: AotTransformedBrowserFacade,
+): void {
+  claimVirtualModule(state, {
+    specifier: browserFacade.moduleSpecifier,
+    sourcePath: artifact.sourcePath,
+    kind: "configuration",
+    expectedDigest: browserFacade.expectedDigest,
+    compilerVariantKey: undefined,
+  });
+}
+
 function claimVirtualModule(state: EnvironmentState, claim: VirtualModuleClaim): void {
   const previous = state.virtualClaims.get(claim.specifier);
   if (previous == null) {
@@ -688,11 +707,12 @@ function validateSourceTransformArtifact(
   if (
     !isArrayValue(artifact.resources)
     || !isArrayValue(artifact.configurations)
+    || !isArrayValue(artifact.browserFacades)
   ) {
     throw invalidArtifact(sourcePath, "omitted authored-source transform evidence");
   }
-  if (artifact.resources.length === 0 && artifact.configurations.length === 0) {
-    throw invalidArtifact(sourcePath, "returned an authored-source transform without resources or configurations");
+  if (artifact.resources.length === 0 && artifact.configurations.length === 0 && artifact.browserFacades.length === 0) {
+    throw invalidArtifact(sourcePath, "returned an authored-source transform without resources, configurations, or browser facades");
   }
   if (artifact.resources.length === 0) {
     if (artifact.runtimeModuleSpecifier !== null) {
@@ -729,6 +749,9 @@ function validateSourceTransformArtifact(
 
   for (const configuration of artifact.configurations) {
     validateTransformedConfiguration(configuration, sourcePath);
+  }
+  for (const browserFacade of artifact.browserFacades) {
+    validateTransformedBrowserFacade(browserFacade, sourcePath);
   }
 }
 
@@ -770,6 +793,27 @@ function validateTransformedConfiguration(
     || configuration.valueEnd < configuration.valueStart
   ) {
     throw invalidArtifact(sourcePath, "returned invalid configuration value offsets");
+  }
+}
+
+function validateTransformedBrowserFacade(
+  browserFacade: AotTransformedBrowserFacade,
+  sourcePath: string,
+): void {
+  if (browserFacade == null || typeof browserFacade !== "object") {
+    throw invalidArtifact(sourcePath, "returned a non-object transformed browser facade");
+  }
+  assertVirtualSpecifier(browserFacade.moduleSpecifier, sourcePath, "browser facade configuration");
+  assertDigest(browserFacade.expectedDigest, sourcePath, "browser facade configuration module");
+  assertNonBlank(browserFacade.exportName, sourcePath, "browser facade export name");
+  assertNonBlank(browserFacade.localName, sourcePath, "browser facade local name");
+  if (
+    !Number.isInteger(browserFacade.referenceStart)
+    || !Number.isInteger(browserFacade.referenceEnd)
+    || browserFacade.referenceStart < 0
+    || browserFacade.referenceEnd < browserFacade.referenceStart
+  ) {
+    throw invalidArtifact(sourcePath, "returned invalid browser facade reference offsets");
   }
 }
 

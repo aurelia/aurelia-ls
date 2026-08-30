@@ -217,6 +217,15 @@ such as `Aurelia.register(...).app(...).start()`, retaining each reached constru
 argument evidence. Configuration recognition projects those events; it does not rescan the source and replay them
 against the final module environment. A source expression with no retained occurrence is not executable evidence.
 
+The detached StandardConfiguration source attachment keeps the full admitted browser-facade constructor or static-call
+locus for explanation and separately carries its exact facade-reference slice for build replacement. Constructor
+admissions use the authored `new` expression's constructor reference; static `app`/`register` admissions use the exact
+property- or element-access receiver, and the candidate must unwrap to one identifier. This deliberately rejects call
+or getter-bearing receiver shapes whose replacement could erase runtime effects. The projection is allowed only after
+evaluator-backed facade admission has proved identity, so import aliases work without source-name inference. If that
+admitted AST shape or source ownership cannot yield an exact reference, the carrier is honestly non-replaceable and
+reports why instead of widening the edit to the full call.
+
 Closed i18n `translationAttributeAliases` contributions are already consumed by built-in syntax materialization when they
 can be source-associated with the `I18nConfiguration.customize(...)` admission. That mirrors the runtime
 `coreComponents(options)` path without executing the callback body generally.

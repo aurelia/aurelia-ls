@@ -15,6 +15,8 @@ import {
 } from '../src/api/index.js';
 import {
   materializeSemanticAppStandardConfigurationSourceAttachments,
+  StandardConfigurationBrowserFacadeDefaultSourceCarrier,
+  StandardConfigurationSourceNonReplaceableReason,
   StandardConfigurationSourceCarrierKind,
   StandardConfigurationSourceNonReplaceableReasonKind,
 } from '../src/template/browser-template.js';
@@ -42,7 +44,7 @@ describe('StandardConfiguration source attachment', () => {
     ));
   });
 
-  test('detaches direct replacement expressions, effect order, coercion, and the browser default refusal', async () => {
+  test('detaches direct replacement expressions, effect order, coercion, and the browser facade source', async () => {
     const fixture = await createFixture();
     temporaryDirectories.push(fixture.root);
     const runtime = await createSemanticRuntime({
@@ -181,14 +183,17 @@ describe('StandardConfiguration source attachment', () => {
     ) ?? null;
     expect(browserDefault?.carrier).toMatchObject({
       carrierKind: StandardConfigurationSourceCarrierKind.BrowserFacadeDefault,
-      replaceable: false,
-      reason: {
-        reasonKind: StandardConfigurationSourceNonReplaceableReasonKind.BrowserFacadeDefault,
-      },
+      replaceable: true,
+      reason: null,
       source: {
         moduleKey: 'src/main.ts',
         sourcePath: 'src/main.ts',
         oldText: 'new BrowserAurelia()',
+      },
+      facadeReference: {
+        moduleKey: 'src/main.ts',
+        sourcePath: 'src/main.ts',
+        oldText: 'BrowserAurelia',
       },
     });
     if (browserDefault?.carrier.carrierKind !== StandardConfigurationSourceCarrierKind.BrowserFacadeDefault) {
@@ -197,6 +202,103 @@ describe('StandardConfiguration source attachment', () => {
     if (browserDefault.carrier.source != null) {
       await expectOldTextAtRange(browserDefault.carrier.source);
     }
+    if (browserDefault.carrier.facadeReference != null) {
+      await expectOldTextAtRange(browserDefault.carrier.facadeReference);
+    }
+  }, 30_000);
+
+  test('detaches exact constructor and static-call facade references through authored aliases', async () => {
+    const fixture = await createFacadeFixture();
+    temporaryDirectories.push(fixture.root);
+    const runtime = await createSemanticRuntime({
+      workspaceRoot: fixture.root,
+      storeKey: `test:standard-configuration-facade-reference:${path.basename(fixture.root)}`,
+    });
+    runtimes.push(runtime);
+    const app = await runtime.openApp({ analysisDepth: 'binding-observation' });
+    const browserDefaults = materializeSemanticAppStandardConfigurationSourceAttachments(app)
+      .filter((attachment) => attachment.admissionKind === RegistrationAdmissionKind.AureliaFacadeDefault);
+
+    expect(browserDefaults).toHaveLength(4);
+    expect(browserDefaults.map((attachment) => attachment.carrier)).toMatchObject([
+      {
+        carrierKind: StandardConfigurationSourceCarrierKind.BrowserFacadeDefault,
+        replaceable: true,
+        reason: null,
+        source: { oldText: 'new ConstructorAlias()' },
+        facadeReference: { oldText: 'ConstructorAlias' },
+      },
+      {
+        carrierKind: StandardConfigurationSourceCarrierKind.BrowserFacadeDefault,
+        replaceable: true,
+        reason: null,
+        source: { oldText: 'StaticAlias.register()' },
+        facadeReference: { oldText: 'StaticAlias' },
+      },
+      {
+        carrierKind: StandardConfigurationSourceCarrierKind.BrowserFacadeDefault,
+        replaceable: true,
+        reason: null,
+        source: { oldText: 'StaticAlias.app({ component: App })' },
+        facadeReference: { oldText: 'StaticAlias' },
+      },
+      {
+        carrierKind: StandardConfigurationSourceCarrierKind.BrowserFacadeDefault,
+        replaceable: false,
+        source: { oldText: 'readFacade().app({ component: App })' },
+        facadeReference: null,
+        reason: {
+          reasonKind: StandardConfigurationSourceNonReplaceableReasonKind.BrowserFacadeReferenceUnavailable,
+        },
+      },
+    ]);
+    const expectedReferenceStarts = [
+      fixture.mainText.indexOf('ConstructorAlias', fixture.mainText.indexOf('new ConstructorAlias')),
+      fixture.mainText.indexOf('StaticAlias', fixture.mainText.indexOf('StaticAlias.register()')),
+      fixture.mainText.indexOf('StaticAlias', fixture.mainText.indexOf('StaticAlias.app(')),
+    ];
+    expect(browserDefaults.slice(0, 3).map((attachment) =>
+      attachment.carrier.carrierKind === StandardConfigurationSourceCarrierKind.BrowserFacadeDefault
+        ? attachment.carrier.facadeReference?.start
+        : null
+    )).toEqual(expectedReferenceStarts);
+    expect(browserDefaults.slice(0, 3).map((attachment) =>
+      attachment.carrier.carrierKind === StandardConfigurationSourceCarrierKind.BrowserFacadeDefault
+        ? attachment.carrier.facadeReference?.end
+        : null
+    )).toEqual(expectedReferenceStarts.map((start, index) =>
+      start + (index === 0 ? 'ConstructorAlias'.length : 'StaticAlias'.length)
+    ));
+    for (const attachment of browserDefaults) {
+      if (attachment.carrier.carrierKind !== StandardConfigurationSourceCarrierKind.BrowserFacadeDefault) {
+        throw new Error('Expected the implicit browser-facade StandardConfiguration carrier.');
+      }
+      expect(attachment.carrier.source).not.toBeNull();
+      if (attachment.carrier.source != null) {
+        await expectOldTextAtRange(attachment.carrier.source);
+      }
+      if (attachment.carrier.facadeReference != null) {
+        await expectOldTextAtRange(attachment.carrier.facadeReference);
+      }
+    }
+
+    const unavailable = new StandardConfigurationBrowserFacadeDefaultSourceCarrier(
+      null,
+      null,
+      new StandardConfigurationSourceNonReplaceableReason(
+        StandardConfigurationSourceNonReplaceableReasonKind.BrowserFacadeReferenceUnavailable,
+        'No exact facade reference was retained.',
+      ),
+    );
+    expect(unavailable).toMatchObject({
+      carrierKind: StandardConfigurationSourceCarrierKind.BrowserFacadeDefault,
+      replaceable: false,
+      source: null,
+      facadeReference: null,
+      reason: {
+        reasonKind: StandardConfigurationSourceNonReplaceableReasonKind.BrowserFacadeReferenceUnavailable,
+      },
+    });
   }, 30_000);
 
   test('refuses stale materialization while previously detached values survive generation retirement', async () => {
@@ -254,6 +356,44 @@ async function createFixture(): Promise<{
     'const last = new Aurelia().register(StandardConfiguration);',
     'const browserDefault = new BrowserAurelia();',
     'void [first, customized, last, browserDefault];',
+  ].join('\n');
+  await mkdir(sourceRoot, { recursive: true });
+  await Promise.all([
+    writeFile(path.join(root, 'package.json'), JSON.stringify({ type: 'module' }), 'utf8'),
+    writeFile(path.join(root, 'tsconfig.json'), JSON.stringify({
+      compilerOptions: {
+        target: 'ES2022',
+        module: 'ESNext',
+        moduleResolution: 'Bundler',
+        strict: true,
+        skipLibCheck: true,
+        noEmit: true,
+      },
+      include: ['src'],
+    }), 'utf8'),
+    writeFile(mainFile, mainText, 'utf8'),
+  ]);
+  return { root, mainFile, mainText };
+}
+
+async function createFacadeFixture(): Promise<{
+  readonly root: string;
+  readonly mainFile: string;
+  readonly mainText: string;
+}> {
+  const root = await mkdtemp(path.join(packageRoot, '.standard-configuration-facade-reference-'));
+  const sourceRoot = path.join(root, 'src');
+  const mainFile = path.join(sourceRoot, 'main.ts');
+  const mainText = [
+    "import ConstructorAlias, { Aurelia as StaticAlias } from 'aurelia';",
+    '',
+    'class App {}',
+    'const constructorFacade = new ConstructorAlias();',
+    'const registeredFacade = StaticAlias.register();',
+    'const appFacade = StaticAlias.app({ component: App });',
+    'function readFacade() { return StaticAlias; }',
+    'const dynamicFacade = readFacade().app({ component: App });',
+    'void [constructorFacade, registeredFacade, appFacade, dynamicFacade];',
   ].join('\n');
   await mkdir(sourceRoot, { recursive: true });
   await Promise.all([

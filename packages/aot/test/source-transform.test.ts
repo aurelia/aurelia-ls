@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   AotSourceTransformEmitter,
+  type AotSourceTransformBrowserFacadePlan,
   type AotSourceTransformConfigurationPlan,
   type AotSourceTransformResourcePlan,
 } from '../src/source-transform.js';
@@ -261,6 +262,170 @@ describe('AOT source transform', () => {
       configurations: [plan],
     })).toThrow(expect.objectContaining({ code: 'AOT_SOURCE_STALE', resourceKey: null }));
   });
+
+  it('replaces static browser-facade app and register receivers through one build-specific import', () => {
+    const sourcePath = 'C:/app/src/main.ts';
+    const code = [
+      "import { Aurelia } from 'aurelia';",
+      'Aurelia.register(Feature);',
+      'Aurelia.app({ component: App, host });',
+    ].join('\n');
+    const moduleSpecifier = 'virtual:aurelia-aot/configuration/browser-static';
+    const first = code.indexOf('Aurelia', code.indexOf('Aurelia.register'));
+    const second = code.indexOf('Aurelia', code.indexOf('Aurelia.app'));
+
+    const artifact = new AotSourceTransformEmitter().emit({
+      sourcePath,
+      code,
+      resources: [],
+      browserFacades: [
+        browserFacade(code, first, moduleSpecifier),
+        browserFacade(code, second, moduleSpecifier),
+      ],
+    });
+
+    expect(artifact?.code.match(/import \{ AotBrowserAurelia as __auAotBrowserFacade0 \}/g)).toHaveLength(1);
+    expect(artifact?.code).toContain('__auAotBrowserFacade0.register(Feature);');
+    expect(artifact?.code).toContain('__auAotBrowserFacade0.app({ component: App, host });');
+    expect(artifact?.runtimeModuleSpecifier).toBeNull();
+    expect(artifact?.browserFacades).toEqual([
+      {
+        referenceStart: first,
+        referenceEnd: first + 'Aurelia'.length,
+        moduleSpecifier,
+        expectedDigest: `digest:${moduleSpecifier}`,
+        exportName: 'AotBrowserAurelia',
+        localName: '__auAotBrowserFacade0',
+      },
+      {
+        referenceStart: second,
+        referenceEnd: second + 'Aurelia'.length,
+        moduleSpecifier,
+        expectedDigest: `digest:${moduleSpecifier}`,
+        exportName: 'AotBrowserAurelia',
+        localName: '__auAotBrowserFacade0',
+      },
+    ]);
+  });
+
+  it('replaces an aliased browser-facade constructor reference', () => {
+    const code = [
+      "import { Aurelia as BrowserAurelia } from 'aurelia';",
+      'const app = new BrowserAurelia();',
+    ].join('\n');
+    const referenceStart = code.lastIndexOf('BrowserAurelia');
+
+    const artifact = new AotSourceTransformEmitter().emit({
+      sourcePath: 'C:/app/src/main.ts',
+      code,
+      resources: [],
+      browserFacades: [browserFacade(code, referenceStart)],
+    });
+
+    expect(artifact?.code).toContain('import { AotBrowserAurelia as __auAotBrowserFacade0 }');
+    expect(artifact?.code).toContain('const app = new __auAotBrowserFacade0();');
+  });
+
+  it('allocates a collision-safe browser-facade binding', () => {
+    const code = [
+      "import { Aurelia } from 'aurelia';",
+      'const __auAotBrowserFacade0 = false;',
+      'const app = new Aurelia();',
+    ].join('\n');
+    const referenceStart = code.lastIndexOf('Aurelia');
+
+    const artifact = new AotSourceTransformEmitter().emit({
+      sourcePath: 'C:/app/src/main.ts',
+      code,
+      resources: [],
+      browserFacades: [browserFacade(code, referenceStart)],
+    });
+
+    expect(artifact?.code).toContain('AotBrowserAurelia as __auAotBrowserFacade01');
+    expect(artifact?.code).toContain('const app = new __auAotBrowserFacade01();');
+  });
+
+  it('composes browser-facade, configuration, and compiler-payload edits', () => {
+    const call = "CustomElement.define({ name: 'app', template: '<p></p>' })";
+    const code = [
+      "import { Aurelia, CustomElement, StandardConfiguration } from '@aurelia/runtime-html';",
+      `const App = ${call};`,
+      'new Aurelia().register(StandardConfiguration).app({ component: App });',
+    ].join('\n');
+    const facadeStart = code.indexOf('Aurelia', code.indexOf('new Aurelia'));
+    const moduleSpecifier = 'virtual:aurelia-aot/configuration/composed';
+
+    const artifact = new AotSourceTransformEmitter().emit({
+      sourcePath: 'C:/app/src/main.ts',
+      code,
+      resources: [resource({
+        resourceKey: 'app',
+        variant: 'app:world',
+        name: 'app',
+        carrierKind: ResourceCarrierKind.DefineCall,
+        carrier: slice(code, call),
+      })],
+      configurations: [configuration(code, 'StandardConfiguration', moduleSpecifier)],
+      browserFacades: [browserFacade(code, facadeStart, moduleSpecifier)],
+    });
+
+    expect(artifact?.code).toContain('applyCompiledCustomElement as __auAotApply');
+    expect(artifact?.code).toContain('AotConfiguration as __auAotConfiguration0');
+    expect(artifact?.code).toContain('AotBrowserAurelia as __auAotBrowserFacade0');
+    expect(artifact?.code).toContain(
+      'new __auAotBrowserFacade0().register(__auAotConfiguration0).app({ component: App });',
+    );
+    expect(artifact?.resources).toHaveLength(1);
+    expect(artifact?.configurations).toHaveLength(1);
+    expect(artifact?.browserFacades).toHaveLength(1);
+  });
+
+  it('refuses stale and overlapping browser-facade replacement plans', () => {
+    const code = 'Aurelia.app({ component: App });';
+    const plan = browserFacade(code, 0);
+    const emitter = new AotSourceTransformEmitter();
+
+    expect(() => emitter.emit({
+      sourcePath: 'C:/app/src/main.ts',
+      code: 'Changed.app({ component: App });',
+      resources: [],
+      browserFacades: [plan],
+    })).toThrow(expect.objectContaining({ code: 'AOT_SOURCE_STALE', resourceKey: null }));
+
+    expect(() => emitter.emit({
+      sourcePath: 'C:/app/src/main.ts',
+      code,
+      resources: [],
+      configurations: [{
+        value: plan.reference,
+        moduleSpecifier: plan.moduleSpecifier,
+        expectedDigest: plan.expectedDigest,
+        exportName: 'AotConfiguration',
+      }],
+      browserFacades: [plan],
+    })).toThrow(expect.objectContaining({
+      code: 'AOT_SOURCE_INVALID_PLAN',
+      message: expect.stringContaining('replacement slices overlap'),
+    }));
+  });
+
+  it('refuses conflicting runtime-module digests across configuration and facade plans', () => {
+    const code = 'new Aurelia().register(StandardConfiguration);';
+    const moduleSpecifier = 'virtual:aurelia-aot/configuration/conflict';
+    const facade = browserFacade(code, code.indexOf('Aurelia'), moduleSpecifier);
+    const configured = configuration(code, 'StandardConfiguration', moduleSpecifier);
+
+    expect(() => new AotSourceTransformEmitter().emit({
+      sourcePath: 'C:/app/src/main.ts',
+      code,
+      resources: [],
+      configurations: [{ ...configured, expectedDigest: 'digest:configuration' }],
+      browserFacades: [{ ...facade, expectedDigest: 'digest:facade' }],
+    })).toThrow(expect.objectContaining({
+      code: 'AOT_SOURCE_INVALID_PLAN',
+      message: expect.stringContaining('conflicting expected digests'),
+    }));
+  });
 });
 
 function resource(input: {
@@ -303,5 +468,19 @@ function configuration(
     moduleSpecifier,
     expectedDigest: `digest:${moduleSpecifier}`,
     exportName: 'AotConfiguration',
+  };
+}
+
+function browserFacade(
+  code: string,
+  start: number,
+  moduleSpecifier = 'virtual:aurelia-aot/configuration/proof',
+): AotSourceTransformBrowserFacadePlan {
+  const oldText = code.slice(start, start + (code.startsWith('BrowserAurelia', start) ? 'BrowserAurelia'.length : 'Aurelia'.length));
+  return {
+    reference: { start, end: start + oldText.length, oldText },
+    moduleSpecifier,
+    expectedDigest: `digest:${moduleSpecifier}`,
+    exportName: 'AotBrowserAurelia',
   };
 }

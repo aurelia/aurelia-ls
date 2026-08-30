@@ -31,9 +31,15 @@ export {
 
 export {
   materializeSemanticAppStandardConfigurationSourceAttachments,
+  StandardConfigurationBrowserFacadeDefaultSourceCarrier,
+  StandardConfigurationSourceNonReplaceableReason,
   StandardConfigurationSourceCarrierKind,
   StandardConfigurationSourceNonReplaceableReasonKind,
+  type StandardConfigurationAuthoredSourceSlice,
+  type StandardConfigurationExplicitSourceCarrier,
+  type StandardConfigurationSourceCarrier,
   type StandardConfigurationSourceAttachment,
+  type StandardConfigurationUnavailableSourceCarrier,
 } from '../configuration/standard-configuration-source-attachment.js';
 
 export { CustomElementTemplateModuleRole } from '../resources/custom-element-definition.js';

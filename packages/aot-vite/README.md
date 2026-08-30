@@ -5,7 +5,8 @@ ordering and build lifecycle, not semantic analysis or artifact generation.
 
 `aureliaAot()` runs the AOT authored-source transform before the official
 conventions and standard-decorator transforms. A transformed module may claim
-shared runtime support and any number of resource-addressed payload modules;
+shared runtime support, build-specific configuration/browser-facade modules,
+and any number of resource-addressed payload modules;
 only exact specifiers returned by that transform are resolved, and every load
 must come back through the same build session with matching identity and digest.
 

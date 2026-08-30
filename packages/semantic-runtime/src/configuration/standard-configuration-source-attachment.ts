@@ -1,6 +1,6 @@
 import path from 'node:path';
 
-import type ts from 'typescript';
+import ts from 'typescript';
 
 import type { SemanticApp } from '../api/runtime.js';
 import {
@@ -11,6 +11,7 @@ import {
   type StandardConfigurationRegistrationEffects,
 } from '../di/framework-registration-effects.js';
 import { StaticProjectEvaluationSourceIndex } from '../evaluation/project-source-index.js';
+import { unwrapExpression } from '../evaluation/ts-syntax.js';
 import type {
   AddressHandle,
   IdentityHandle,
@@ -35,7 +36,7 @@ export const enum StandardConfigurationSourceCarrierKind {
 
 /** Causal reason why one spent StandardConfiguration occurrence has no replaceable value expression. */
 export const enum StandardConfigurationSourceNonReplaceableReasonKind {
-  BrowserFacadeDefault = 'browser-facade-default',
+  BrowserFacadeReferenceUnavailable = 'browser-facade-reference-unavailable',
   UnsupportedAdmissionKind = 'unsupported-admission-kind',
   RuntimeValueSourceUnavailable = 'runtime-value-source-unavailable',
   SourceOwnershipUnavailable = 'source-ownership-unavailable',
@@ -72,16 +73,21 @@ export class StandardConfigurationExplicitSourceCarrier {
   ) {}
 }
 
-/** Implicit browser-facade installation: the source locus is explanatory, not a replacement range. */
+/** Implicit browser-facade installation with the exact facade reference that a build consumer may replace. */
 export class StandardConfigurationBrowserFacadeDefaultSourceCarrier {
   readonly carrierKind = StandardConfigurationSourceCarrierKind.BrowserFacadeDefault;
-  readonly replaceable = false;
+  readonly replaceable: boolean;
 
   constructor(
-    /** Constructor/static-facade source that caused the default registration, when source ownership remains exact. */
+    /** Full constructor/static-call source that caused the default registration, retained for explanation. */
     readonly source: StandardConfigurationAuthoredSourceSlice | null,
-    readonly reason: StandardConfigurationSourceNonReplaceableReason,
-  ) {}
+    /** Exact constructor expression or static-call receiver that may be replaced without rewriting its surrounding use. */
+    readonly facadeReference: StandardConfigurationAuthoredSourceSlice | null,
+    /** Present only when no exact facade reference can be retained. */
+    readonly reason: StandardConfigurationSourceNonReplaceableReason | null,
+  ) {
+    this.replaceable = facadeReference != null;
+  }
 }
 
 /** Honest non-replaceable result for a StandardConfiguration source lane not yet covered by this attachment. */
@@ -213,12 +219,19 @@ function sourceCarrierForAdmission(
 ): StandardConfigurationSourceCarrier {
   const source = sourceSliceForNode(sourceIndex, node);
   if (admissionKind === RegistrationAdmissionKind.AureliaFacadeDefault) {
+    const facadeReferenceNode = browserFacadeReferenceNode(node);
+    const facadeReference = sourceSliceForNode(sourceIndex, facadeReferenceNode);
     return new StandardConfigurationBrowserFacadeDefaultSourceCarrier(
       source.slice,
-      new StandardConfigurationSourceNonReplaceableReason(
-        StandardConfigurationSourceNonReplaceableReasonKind.BrowserFacadeDefault,
-        'The browser Aurelia facade installs StandardConfiguration implicitly; no authored configuration value expression exists to replace.',
-      ),
+      facadeReference.slice,
+      facadeReference.slice == null
+        ? facadeReferenceNode == null
+          ? new StandardConfigurationSourceNonReplaceableReason(
+            StandardConfigurationSourceNonReplaceableReasonKind.BrowserFacadeReferenceUnavailable,
+            'The browser Aurelia facade source does not expose one side-effect-free identifier reference.',
+          )
+          : facadeReference.reason
+        : null,
     );
   }
   if (!isDirectRegistrationArgument(admissionKind)) {
@@ -240,6 +253,28 @@ function sourceCarrierForAdmission(
       'The direct StandardConfiguration admission has no retained runtime value source expression.',
     ),
   );
+}
+
+function browserFacadeReferenceNode(node: ts.Node | null): ts.Expression | null {
+  if (node == null) {
+    return null;
+  }
+  let candidate: ts.Expression | null;
+  if (ts.isNewExpression(node)) {
+    candidate = node.expression;
+  } else if (ts.isCallExpression(node)) {
+    const callee = unwrapExpression(node.expression);
+    candidate = ts.isPropertyAccessExpression(callee) || ts.isElementAccessExpression(callee)
+      ? callee.expression
+      : null;
+  } else {
+    candidate = null;
+  }
+  if (candidate == null) return null;
+  const reference = unwrapExpression(candidate);
+  // Replacing a call/property expression could erase runtime evaluation or getter effects. An identifier is the
+  // intentionally narrow first carrier; richer reference shapes require evaluator-backed side-effect conservation.
+  return ts.isIdentifier(reference) ? reference : null;
 }
 
 function isDirectRegistrationArgument(admissionKind: RegistrationAdmissionKind): boolean {

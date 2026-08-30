@@ -31,6 +31,7 @@ import {
   AotSourceTransformEmitter,
   AotSourceTransformError,
   type AotSourceTransformArtifact,
+  type AotSourceTransformBrowserFacadePlan,
   type AotSourceTransformConfigurationPlan,
   type AotSourceTransformResourcePlan,
 } from './source-transform.js';
@@ -163,7 +164,8 @@ interface PendingResourceArtifact {
 
 interface PendingRuntimeConfigurationReplacement {
   readonly sourcePath: string;
-  readonly transform: AotSourceTransformConfigurationPlan;
+  readonly configuration: AotSourceTransformConfigurationPlan | null;
+  readonly browserFacade: AotSourceTransformBrowserFacadePlan | null;
 }
 
 interface RuntimeConfigurationBuildPlan {
@@ -271,8 +273,8 @@ export class SemanticAotBuildSession {
     request: SemanticAotSourceTransformRequest,
   ): Promise<SemanticAotSourceTransformArtifact | null> {
     const pending = this.#pendingByCarrierPath.get(canonicalPath(request.sourcePath)) ?? [];
-    const configurations = this.#configurationByCarrierPath.get(canonicalPath(request.sourcePath)) ?? [];
-    if (pending.length === 0 && configurations.length === 0) return null;
+    const runtimeReplacements = this.#configurationByCarrierPath.get(canonicalPath(request.sourcePath)) ?? [];
+    if (pending.length === 0 && runtimeReplacements.length === 0) return null;
     const plans = await Promise.all(pending.map(async (resource): Promise<AotSourceTransformResourcePlan> => {
       const artifact = await this.#patchArtifactFor(resource);
       const attachment = resource.handoff.address.sourceAttachment;
@@ -301,7 +303,12 @@ export class SemanticAotBuildSession {
       sourcePath: request.sourcePath,
       code: request.code,
       resources: collapseEquivalentAotResourcePlans(request.sourcePath, plans),
-      configurations: configurations.map((configuration) => configuration.transform),
+      configurations: runtimeReplacements.flatMap((replacement) =>
+        replacement.configuration == null ? [] : [replacement.configuration]
+      ),
+      browserFacades: runtimeReplacements.flatMap((replacement) =>
+        replacement.browserFacade == null ? [] : [replacement.browserFacade]
+      ),
       runtimeModuleSpecifier: AOT_COMPILER_PATCH_RUNTIME_MODULE_ID,
     });
   }
@@ -471,6 +478,7 @@ interface RuntimeConfigurationRefusal {
 
 interface RuntimeConfigurationOccurrencePlan {
   readonly attachment: StandardConfigurationSourceAttachment;
+  readonly locus: RuntimeConfigurationSourceSlice | null;
   readonly source: RuntimeConfigurationSourceSlice | null;
   readonly carrierKind: StandardConfigurationSourceCarrierKind;
   readonly coercion: { readonly enableCoercion: boolean; readonly coerceNullish: boolean } | null;
@@ -487,14 +495,24 @@ function runtimeConfigurationBuildPlan(
   const emitter = new AotRuntimeConfigurationModuleEmitter();
   const occurrences = attachments.map((attachment): RuntimeConfigurationOccurrencePlan => {
     const carrier = attachment.carrier;
-    const source = carrier.carrierKind === StandardConfigurationSourceCarrierKind.ExplicitRegistrationValue
+    const locus = carrier.carrierKind === StandardConfigurationSourceCarrierKind.ExplicitRegistrationValue
       ? carrier.valueExpression
       : carrier.source;
+    const source = carrier.carrierKind === StandardConfigurationSourceCarrierKind.ExplicitRegistrationValue
+      ? carrier.valueExpression
+      : carrier.carrierKind === StandardConfigurationSourceCarrierKind.BrowserFacadeDefault
+        ? carrier.facadeReference
+        : carrier.source;
     let refusal: RuntimeConfigurationRefusal | null = null;
-    if (carrier.carrierKind !== StandardConfigurationSourceCarrierKind.ExplicitRegistrationValue) {
+    if (carrier.carrierKind === StandardConfigurationSourceCarrierKind.Unavailable) {
       refusal = {
         reasonKind: carrier.reason.reasonKind,
         summary: carrier.reason.summary,
+      };
+    } else if (carrier.carrierKind === StandardConfigurationSourceCarrierKind.BrowserFacadeDefault && !carrier.replaceable) {
+      refusal = {
+        reasonKind: carrier.reason?.reasonKind ?? 'browser-facade-reference-unavailable',
+        summary: carrier.reason?.summary ?? 'The browser Aurelia facade has no exact replaceable source reference.',
       };
     }
     const coercion = closedRuntimeCoercion(attachment);
@@ -523,6 +541,7 @@ function runtimeConfigurationBuildPlan(
       : null;
     return {
       attachment,
+      locus,
       source,
       carrierKind: carrier.carrierKind,
       coercion,
@@ -536,7 +555,11 @@ function runtimeConfigurationBuildPlan(
   if (mode !== 'preserve') {
     for (const occurrence of occurrences) {
       if (occurrence.source == null || occurrence.artifact == null || occurrence.refusal != null) continue;
-      const key = configurationSliceKey(occurrence.source);
+      if (
+        mode === 'replace-explicit'
+        && occurrence.carrierKind !== StandardConfigurationSourceCarrierKind.ExplicitRegistrationValue
+      ) continue;
+      const key = `${occurrence.carrierKind}\0${configurationSliceKey(occurrence.source)}`;
       const group = candidatesBySlice.get(key) ?? [];
       group.push(occurrence);
       candidatesBySlice.set(key, group);
@@ -560,18 +583,29 @@ function runtimeConfigurationBuildPlan(
     const source = selected.source!;
     const artifact = selected.artifact!;
     for (const candidate of candidates) candidate.replace = true;
+    const replacementSource = {
+      start: source.start,
+      end: source.end,
+      oldText: source.oldText,
+    };
     replacements.push({
       sourcePath: path.resolve(source.sourceFilePath),
-      transform: {
-        value: {
-          start: source.start,
-          end: source.end,
-          oldText: source.oldText,
-        },
-        moduleSpecifier: artifact.moduleId,
-        expectedDigest: artifact.digest,
-        exportName: 'AotConfiguration',
-      },
+      configuration: selected.carrierKind === StandardConfigurationSourceCarrierKind.ExplicitRegistrationValue
+        ? {
+            value: replacementSource,
+            moduleSpecifier: artifact.moduleId,
+            expectedDigest: artifact.digest,
+            exportName: 'AotConfiguration',
+          }
+        : null,
+      browserFacade: selected.carrierKind === StandardConfigurationSourceCarrierKind.BrowserFacadeDefault
+        ? {
+            reference: replacementSource,
+            moduleSpecifier: artifact.moduleId,
+            expectedDigest: artifact.digest,
+            exportName: 'AotBrowserAurelia',
+          }
+        : null,
     });
     artifacts.set(artifact.moduleId, artifact);
     const coercion = selected.coercion!;
@@ -594,7 +628,7 @@ function runtimeConfigurationBuildPlan(
   return {
     replacements: replacements.sort((left, right) =>
       canonicalPath(left.sourcePath).localeCompare(canonicalPath(right.sourcePath))
-      || left.transform.value.start - right.transform.value.start
+      || runtimeReplacementStart(left) - runtimeReplacementStart(right)
     ),
     artifacts,
     evidence: {
@@ -607,10 +641,13 @@ function runtimeConfigurationBuildPlan(
         openSummary: occurrence.attachment.openSummary,
         nestedDiCoverageState: occurrence.attachment.nestedDiCoverageState,
         nestedDiOpenSummary: occurrence.attachment.nestedDiOpenSummary,
-        sourcePath: occurrence.source == null ? null : path.resolve(occurrence.source.sourceFilePath),
-        start: occurrence.source?.start ?? null,
-        end: occurrence.source?.end ?? null,
-        disposition: mode === 'preserve'
+        sourcePath: occurrence.locus == null ? null : path.resolve(occurrence.locus.sourceFilePath),
+        start: occurrence.locus?.start ?? null,
+        end: occurrence.locus?.end ?? null,
+        disposition: mode === 'preserve' || (
+          mode === 'replace-explicit'
+          && occurrence.carrierKind !== StandardConfigurationSourceCarrierKind.ExplicitRegistrationValue
+        )
           ? 'preserved'
           : occurrence.replace
             ? 'replaced'
@@ -641,6 +678,10 @@ function closedRuntimeCoercion(
   };
 }
 
+function runtimeReplacementStart(replacement: PendingRuntimeConfigurationReplacement): number {
+  return replacement.configuration?.value.start ?? replacement.browserFacade?.reference.start ?? -1;
+}
+
 function configurationSliceKey(source: RuntimeConfigurationSourceSlice): string {
   return `${canonicalPath(source.sourceFilePath)}\0${source.start}\0${source.end}\0${source.oldText}`;
 }
@@ -650,9 +691,9 @@ function unavailableRuntimeConfigurationError(
   occurrences: readonly RuntimeConfigurationOccurrencePlan[],
 ): AotArtifactError {
   const detail = occurrences.map((occurrence) => {
-    const source = occurrence.source == null
+    const source = occurrence.locus == null
       ? '(source unavailable)'
-      : `${occurrence.source.sourceFilePath}:${occurrence.source.start}`;
+      : `${occurrence.locus.sourceFilePath}:${occurrence.locus.start}`;
     return `${source} [${occurrence.carrierKind}]: ${occurrence.refusal?.summary ?? 'no exact replacement plan'}`;
   }).join('; ');
   return new AotArtifactError(

@@ -5,6 +5,8 @@ Private executable parity harness for the Aurelia AOT program.
 Each scenario builds the same source twice with Vite 8, serves both production outputs, runs one ordered Chromium
 interaction program per lane, and compares source-derived DOM/live-state outcomes. The AOT lane is supplied by the real
 semantic-runtime provider and `aot-vite` preset; there is no pass-through or hidden JIT fallback.
+The AOT lane also requires every spent `StandardConfiguration` occurrence to be replaced. Browser quick-start sources
+therefore run through the generated base-runtime facade instead of retaining the ordinary facade defaults.
 
 The default package assurance runs three complementary scenarios:
 

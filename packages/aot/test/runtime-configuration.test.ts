@@ -154,7 +154,7 @@ describe('AOT runtime configuration', () => {
     expect(container.has(IRenderer, false)).toBe(true);
   });
 
-  it('emits one build-specific browser module without importing StandardConfiguration or AOT core', () => {
+  it('emits one build-specific browser module with an AOT-native quick-start facade', () => {
     const plan = new AotRuntimeConfigurationPlan([...expressions].reverse(), {
       enableCoercion: true,
       coerceNullish: true,
@@ -174,11 +174,30 @@ describe('AOT runtime configuration', () => {
     expect(artifact.code).not.toContain('DefaultBindingSyntax');
     expect(artifact.code).not.toContain('DefaultBindingLanguage');
     expect(artifact.code).not.toContain('@aurelia-ls/aot');
+    expect(artifact.code).not.toContain("from 'aurelia'");
+    expect(artifact.code).toContain("import { DI, Registration } from '@aurelia/kernel';");
     expect(artifact.code).toContain("import { IExpressionParser } from '@aurelia/expression-parser';");
+    expect(artifact.code).toContain("import { BrowserPlatform } from '@aurelia/platform-browser';");
     expect(artifact.code).toContain("import { ITemplateCompiler } from '@aurelia/template-compiler';");
+    expect(artifact.code).toContain('Aurelia as RuntimeHtmlAurelia');
     expect(artifact.code).toContain('export class AotExpressionParser');
     expect(artifact.code).toContain('export class AotTemplateCompiler');
     expect(artifact.code).toContain('export class AotRuntimeConfiguration');
+    expect(artifact.code).toContain(
+      'export const AotPlatform = BrowserPlatform.getOrCreate(globalThis);',
+    );
+    expect(artifact.code).toContain(
+      'export class AotBrowserAurelia extends RuntimeHtmlAurelia',
+    );
+    expect(artifact.code).toContain('constructor(container = createAotContainer())');
+    expect(artifact.code).toContain('Registration.instance(IPlatform, AotPlatform)');
+    expect(artifact.code).toContain('return new AotBrowserAurelia().app(config);');
+    expect(artifact.code).toContain('return new AotBrowserAurelia().enhance(config);');
+    expect(artifact.code).toContain('return new AotBrowserAurelia().register(...params);');
+    expect(artifact.code).toContain('if (CustomElement.isType(config))');
+    expect(artifact.code).toContain('let host = document.querySelector(definition.name);');
+    expect(artifact.code).toContain('host = document.body;');
+    expect(artifact.code).toContain('return super.app({ host, component: config });');
     expect(artifact.code).toContain(
       `export const aotRuntimeConfigurationProtocol = ${JSON.stringify(AOT_RUNTIME_CONFIGURATION_PROTOCOL)};`,
     );

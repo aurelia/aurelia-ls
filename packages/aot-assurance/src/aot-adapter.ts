@@ -26,6 +26,7 @@ export function createAotAssuranceAdapter(request: AotAdapterRequest): AotAssura
   return {
     plugins: aureliaAot({
       provider: falsification.provider,
+      runtimeConfiguration: 'require-replaceable',
       conventions: {
         include,
         transformStandardDecorators: true,

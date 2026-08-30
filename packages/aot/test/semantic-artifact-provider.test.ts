@@ -377,7 +377,7 @@ describe('semantic AOT artifact provider', () => {
     });
   }, 20_000);
 
-  it('preserves a browser-facade default and causally refuses it under the strict profile', async () => {
+  it('preserves a browser-facade default by default and replaces its exact reference under the strict profile', async () => {
     const root = await makeTemporaryDirectory('browser-facade-');
     temporaryDirectories.push(root);
     const sourceRoot = path.resolve(root, 'src');
@@ -419,21 +419,45 @@ describe('semantic AOT artifact provider', () => {
       occurrences: [{
         carrierKind: 'browser-facade-default',
         disposition: 'preserved',
-        reasonKind: 'browser-facade-default',
+        reasonKind: null,
       }],
       modules: [],
     });
 
-    await expect(new SemanticAotArtifactProvider().openBuild({
+    const replacingProvider = new SemanticAotArtifactProvider();
+    const replacingSession = await replacingProvider.openBuild({
       root,
       mode: 'production',
       environmentName: 'client',
       sourcemap: true,
       runtimeConfiguration: 'require-replaceable',
-    })).rejects.toMatchObject({
-      code: 'AOT_ARTIFACT_UNSUPPORTED_VALUE',
-      message: expect.stringContaining('browser Aurelia facade installs StandardConfiguration implicitly'),
     });
+    const transformed = await replacingSession.transformSource({ sourcePath, code });
+    expect(transformed?.browserFacades).toEqual([expect.objectContaining({
+      referenceStart: code.indexOf('Aurelia', code.indexOf('new Aurelia')),
+      referenceEnd: code.indexOf('Aurelia', code.indexOf('new Aurelia')) + 'Aurelia'.length,
+      exportName: 'AotBrowserAurelia',
+    })]);
+    expect(transformed?.code).toContain('new __auAotBrowserFacade0()');
+    expect(replacingProvider.evidence()?.runtimeConfiguration).toMatchObject({
+      mode: 'require-replaceable',
+      occurrences: [{
+        carrierKind: 'browser-facade-default',
+        disposition: 'replaced',
+        reasonKind: null,
+        sourcePath,
+        start: code.indexOf('new Aurelia()'),
+        end: code.indexOf('new Aurelia()') + 'new Aurelia()'.length,
+      }],
+      modules: [expect.objectContaining({
+        moduleSpecifier: transformed?.browserFacades[0]?.moduleSpecifier,
+      })],
+    });
+    const moduleSpecifier = transformed?.browserFacades[0]?.moduleSpecifier;
+    expect(moduleSpecifier).toBeDefined();
+    const module = await replacingSession.virtualModuleFor({ specifier: moduleSpecifier! });
+    expect(module?.code).toContain('export class AotBrowserAurelia extends RuntimeHtmlAurelia');
+    expect(module?.code).not.toContain('StandardConfiguration');
   }, 20_000);
 
   it('collapses byte-identical compiler-world variants and refuses divergent global patches', () => {

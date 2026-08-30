@@ -191,14 +191,18 @@ export class AotRuntimeConfigurationModuleEmitter {
     const planDigest = `sha256:${planHash}`;
     const moduleId = `${AOT_RUNTIME_CONFIGURATION_MODULE_PREFIX}${planHash}` as const;
     const lines = [
-      "import { Registration } from '@aurelia/kernel';",
+      "import { DI, Registration } from '@aurelia/kernel';",
       "import { IExpressionParser } from '@aurelia/expression-parser';",
+      "import { BrowserPlatform } from '@aurelia/platform-browser';",
       "import { DirtyChecker, ICoercionConfiguration } from '@aurelia/runtime';",
       "import { ITemplateCompiler } from '@aurelia/template-compiler';",
       'import {',
+      '  Aurelia as RuntimeHtmlAurelia,',
+      '  CustomElement,',
       '  DefaultRenderers,',
       '  DefaultResources,',
       '  EventModifierRegistration,',
+      '  IPlatform,',
       '  NodeObserverLocator,',
       "} from '@aurelia/runtime-html';",
       '',
@@ -225,6 +229,8 @@ export class AotRuntimeConfigurationModuleEmitter {
       '  DefaultRenderers,',
       ');',
       '',
+      ...emitAotBrowserFacade(),
+      '',
       'export default AotConfiguration;',
       '',
     ];
@@ -239,6 +245,55 @@ export class AotRuntimeConfigurationModuleEmitter {
       registrationOrder: plan.registrationOrder,
     };
   }
+}
+
+/**
+ * The browser facade is emitted explicitly because it belongs to the generated module, not to this
+ * Node-side package. Keeping its imported names visible here avoids a class-toString contract whose
+ * lexical dependencies could drift independently of the generated imports.
+ */
+function emitAotBrowserFacade(): string[] {
+  return [
+    'export const AotPlatform = BrowserPlatform.getOrCreate(globalThis);',
+    '',
+    'function createAotContainer() {',
+    '  return DI.createContainer().register(',
+    '    Registration.instance(IPlatform, AotPlatform),',
+    '    AotConfiguration,',
+    '  );',
+    '}',
+    '',
+    'export class AotBrowserAurelia extends RuntimeHtmlAurelia {',
+    '  constructor(container = createAotContainer()) {',
+    '    super(container);',
+    '  }',
+    '',
+    '  static app(config) {',
+    '    return new AotBrowserAurelia().app(config);',
+    '  }',
+    '',
+    '  static enhance(config) {',
+    '    return new AotBrowserAurelia().enhance(config);',
+    '  }',
+    '',
+    '  static register(...params) {',
+    '    return new AotBrowserAurelia().register(...params);',
+    '  }',
+    '',
+    '  app(config) {',
+    '    if (CustomElement.isType(config)) {',
+    '      const definition = CustomElement.getDefinition(config);',
+    '      let host = document.querySelector(definition.name);',
+    '      if (host === null) {',
+    '        host = document.body;',
+    '      }',
+    '      return super.app({ host, component: config });',
+    '    }',
+    '',
+    '    return super.app(config);',
+    '  }',
+    '}',
+  ];
 }
 
 function assertDistinctExpressions(expressions: readonly AotRuntimeExpressionEntry[]): void {
