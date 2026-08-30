@@ -18,6 +18,7 @@ import type {
   AotSourceTransformArtifact,
   AotTemplateArtifact,
   AotTemplatePayloadReference,
+  AotTemplateResourceIdentity,
   AotTransformedBrowserFacade,
   AotTransformedConfiguration,
   AotTransformedResource,
@@ -56,6 +57,7 @@ export type {
   AotSourceTransformRequest,
   AotTemplateArtifact,
   AotTemplatePayloadReference,
+  AotTemplateResourceIdentity,
   AotTemplateRequest,
   AotTransformedBrowserFacade,
   AotTransformedConfiguration,
@@ -329,20 +331,7 @@ export function aureliaAot(options: AureliaAotOptions): Plugin[] {
       if (artifact.payload != null) {
         claimResourcePayload(state, artifact.payload);
       }
-      const artifactKey = `template:${sourcePath}`;
-      const previous = state.artifacts.get(artifactKey);
-      if (previous != null && previous.digest !== artifact.digest) {
-        throw new AotViteError(
-          "AOT_VITE_INVALID_ARTIFACT",
-          `AOT provider returned two digests for '${sourcePath}' in one build session.`,
-          sourcePath,
-        );
-      }
-      state.artifacts.set(artifactKey, {
-        sourcePath,
-        virtualId: id,
-        digest: artifact.digest,
-      });
+      recordTemplateArtifact(state, artifact, sourcePath, id);
 
       return {
         code: artifact.code,
@@ -567,6 +556,42 @@ function claimResourcePayload(
   state.artifacts.set(key, receipt);
 }
 
+function recordTemplateArtifact(
+  state: EnvironmentState,
+  artifact: AotTemplateArtifact,
+  templateSourcePath: string,
+  virtualId: string,
+): void {
+  const resource = artifact.resource;
+  const receipt: AotReceiptArtifact = resource == null
+    ? {
+        sourcePath: templateSourcePath,
+        virtualId,
+        digest: artifact.digest,
+      }
+    : {
+        sourcePath: resource.carrierSourcePath.replaceAll("\\", "/"),
+        virtualId,
+        digest: artifact.digest,
+        resourceKey: resource.resourceKey,
+        compilerVariantKey: resource.compilerVariantKey,
+        definitionName: resource.definitionName,
+      };
+  const key = resource == null
+    ? `template:${templateSourcePath}`
+    : `resource:${resource.compilerVariantKey}`;
+  const previous = state.artifacts.get(key);
+  if (previous != null && !sameReceiptArtifact(previous, receipt)) {
+    throw invalidArtifact(
+      templateSourcePath,
+      resource == null
+        ? "returned two template artifacts for one source in one build session"
+        : `returned conflicting resource artifact '${resource.compilerVariantKey}' in one build session`,
+    );
+  }
+  state.artifacts.set(key, receipt);
+}
+
 function claimTransformedConfiguration(
   state: EnvironmentState,
   artifact: AotSourceTransformArtifact,
@@ -703,7 +728,24 @@ function validateArtifact(
   if (artifact.map === undefined) {
     throw invalidArtifact(sourcePath, "omitted the source-map result");
   }
+  if (artifact.resource != null && artifact.payload != null) {
+    throw invalidArtifact(sourcePath, "returned both a complete resource identity and a template payload claim");
+  }
+  if (artifact.resource != null) validateTemplateResourceIdentity(artifact.resource, sourcePath);
   if (artifact.payload != null) validateTemplatePayloadReference(artifact.payload, sourcePath);
+}
+
+function validateTemplateResourceIdentity(
+  resource: AotTemplateResourceIdentity,
+  templateSourcePath: string,
+): void {
+  if (typeof resource !== "object") {
+    throw invalidArtifact(templateSourcePath, "returned a non-object complete template resource identity");
+  }
+  assertNonBlank(resource.carrierSourcePath, templateSourcePath, "complete template carrier source path");
+  assertNonBlank(resource.resourceKey, templateSourcePath, "complete template resource key");
+  assertNonBlank(resource.compilerVariantKey, templateSourcePath, "complete template compiler variant key");
+  assertNonBlank(resource.definitionName, templateSourcePath, "complete template definition name");
 }
 
 function validateTemplatePayloadReference(

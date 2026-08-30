@@ -209,6 +209,93 @@ describe("aureliaAot Vite preset", () => {
     expect(transformSource).toHaveBeenCalledTimes(1);
   });
 
+  it("records a complete definition module as the sole resource realization", async () => {
+    let observed: AotBuildReceipt | undefined;
+    const transformSource = vi.fn(async () => null);
+    const virtualModuleFor = vi.fn(async () => null);
+    const preset = aureliaAot({
+      provider: {
+        async openBuild() {
+          return {
+            async artifactFor({ sourcePath }) {
+              return {
+                sourcePath,
+                code: "export const name = 'app'; export const needsCompile = false;",
+                map: null,
+                digest: "complete-definition-digest",
+                resource: {
+                  carrierSourcePath: "C:\\app\\component.ts",
+                  resourceKey: "resource-complete",
+                  compilerVariantKey: "variant-complete",
+                  definitionName: "app",
+                },
+                payload: null,
+              };
+            },
+            transformSource,
+            virtualModuleFor,
+          };
+        },
+      },
+      receipt: {
+        onReceipt(value) {
+          observed = value;
+        },
+      },
+    });
+    const guard = requiredPlugin(preset, "aurelia-aot:guard");
+    const sources = requiredPlugin(preset, "aurelia-aot:sources");
+    const loader = requiredPlugin(preset, "aurelia-aot:artifacts");
+    const receiptPlugin = requiredPlugin(preset, "aurelia-aot:receipt");
+    const context = pluginContext();
+    await invoke(guard, "configResolved", undefined, resolvedConfig());
+    await invoke(sources, "buildStart", context);
+
+    const loaded = await invoke(loader, "load", context, "C:/app/app.html?aurelia-aot", {});
+    const transformed = await invoke(
+      sources,
+      "transform",
+      context,
+      "export class Component {}",
+      "C:/app/component.ts",
+      { ssr: false },
+    );
+    const oldPayload = await invoke(
+      sources,
+      "resolveId",
+      context,
+      "virtual:aurelia-aot/payload/variant-complete",
+      "C:/app/component.ts",
+      { attributes: {}, isEntry: false },
+    );
+    const applyRuntime = await invoke(
+      sources,
+      "resolveId",
+      context,
+      "virtual:aurelia-aot/runtime",
+      "C:/app/component.ts",
+      { attributes: {}, isEntry: false },
+    );
+    await invoke(receiptPlugin, "generateBundle", context, {}, {});
+
+    expect(loaded).toEqual({
+      code: "export const name = 'app'; export const needsCompile = false;",
+      map: null,
+    });
+    expect(transformed).toBeNull();
+    expect(oldPayload).toBeNull();
+    expect(applyRuntime).toBeNull();
+    expect(virtualModuleFor).not.toHaveBeenCalled();
+    expect(observed?.artifacts).toEqual([{
+      sourcePath: "C:/app/component.ts",
+      virtualId: "C:/app/app.html?aurelia-aot",
+      digest: "complete-definition-digest",
+      resourceKey: "resource-complete",
+      compilerVariantKey: "variant-complete",
+      definitionName: "app",
+    }]);
+  });
+
   it("forwards an explicit nominated app entry as structural build input", async () => {
     const openBuild = vi.fn(async () => ({
       artifactFor: async ({ sourcePath }: { readonly sourcePath: string }) => artifact(sourcePath, "html"),
@@ -572,6 +659,41 @@ describe("aureliaAot Vite preset", () => {
     ).rejects.toMatchObject({
       code: "AOT_VITE_INVALID_ARTIFACT",
       sourcePath: "C:/app/app.html",
+    });
+  });
+
+  it("rejects a template artifact that claims both direct and virtual resource ownership", async () => {
+    const preset = aureliaAot({
+      provider: artifactProvider((sourcePath) => ({
+        ...artifact(sourcePath, "conflicting-resource-wire"),
+        resource: {
+          carrierSourcePath: "C:/app/component.ts",
+          resourceKey: "resource-0",
+          compilerVariantKey: "variant-0",
+          definitionName: "proof-0",
+        },
+        payload: {
+          carrierSourcePath: "C:/app/component.ts",
+          resourceKey: "resource-0",
+          compilerVariantKey: "variant-0",
+          definitionName: "proof-0",
+          payloadSpecifier: "virtual:aurelia-aot/payload/proof-0",
+          payloadDigest: "payload-digest-0",
+        },
+      })),
+    });
+    const guard = requiredPlugin(preset, "aurelia-aot:guard");
+    const loader = requiredPlugin(preset, "aurelia-aot:artifacts");
+    const context = pluginContext();
+    await invoke(guard, "configResolved", undefined, resolvedConfig());
+    await invoke(loader, "buildStart", context);
+
+    await expect(
+      invoke(loader, "load", context, "C:/app/app.html?aurelia-aot", {}),
+    ).rejects.toMatchObject({
+      code: "AOT_VITE_INVALID_ARTIFACT",
+      sourcePath: "C:/app/app.html",
+      message: expect.stringContaining("both a complete resource identity and a template payload claim"),
     });
   });
 

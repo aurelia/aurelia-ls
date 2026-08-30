@@ -73,6 +73,13 @@ describe('semantic AOT artifact provider', () => {
     expect(artifact.code).toContain('needsCompile: false');
     expect(artifact.code).toContain('$document.createComment("au")');
     expect(artifact.code).toContain('"$kind": "AccessScope"');
+    expect(artifact.payload).toBeNull();
+    expect(artifact.resource).toMatchObject({
+      carrierSourcePath: componentPath,
+      resourceKey: expect.any(String),
+      compilerVariantKey: expect.stringMatching(/^sha256:[0-9a-f]{64}$/u),
+      definitionName: 'my-app',
+    });
 
     const outputRoot = await makeTemporaryDirectory('artifact-');
     temporaryDirectories.push(outputRoot);
@@ -103,7 +110,13 @@ describe('semantic AOT artifact provider', () => {
     }]]);
     expect(provider.evidence()).toMatchObject({
       analysisCount: 1,
-      artifacts: [{ sourcePath: templatePath, definitionName: 'my-app', needsCompile: false }],
+      artifacts: [{
+        sourcePath: templatePath,
+        definitionName: 'my-app',
+        needsCompile: false,
+        digest: artifact.digest,
+        payloadSpecifier: null,
+      }],
     });
   }, 15_000);
 
@@ -277,40 +290,16 @@ describe('semantic AOT artifact provider', () => {
     }));
   });
 
-  it('transforms the owning resource module and serves resource-addressed patch modules', async () => {
+  it('lets a convention definition module own the compiled resource without a carrier patch', async () => {
     const code = await readFile(componentPath, 'utf8');
     const transformed = await session.transformSource({ sourcePath: componentPath, code });
+    expect(transformed).toBeNull();
 
-    expect(transformed).not.toBeNull();
-    expect(transformed?.sourcePath).toBe(componentPath);
-    expect(transformed?.resources).toHaveLength(1);
-    expect(transformed?.resources[0]).toMatchObject({
-      definitionName: 'my-app',
-      carrierKind: 'convention',
-      payloadDigest: expect.stringMatching(/^sha256:[0-9a-f]{64}$/u),
-      payloadSpecifier: expect.stringMatching(/^virtual:aurelia-aot\/payload\/[0-9a-f]{64}$/u),
-    });
-    expect(transformed?.code).toContain('applyCompiledCustomElement as __auAotApply');
-    expect(transformed?.code).toContain('__auAotApply(MyApp, __auAotPatch0);');
-    expect(transformed?.map.sources.map(normalizePath)).toEqual([normalizePath(componentPath)]);
-    expect(transformed?.map.sourcesContent).toEqual([code]);
-
-    const payloadSpecifier = transformed!.resources[0]!.payloadSpecifier;
-    const payload = await session.virtualModuleFor({ specifier: payloadSpecifier });
-    expect(payload).toMatchObject({
-      specifier: payloadSpecifier,
-      digest: transformed!.resources[0]!.payloadDigest,
-      map: expect.objectContaining({ sources: [templatePath] }),
-    });
-    expect(payload?.code).toContain('export default $definition0;');
-    expect(payload?.code).not.toContain('export const dependencies');
-
-    const runtime = await session.virtualModuleFor({ specifier: transformed!.runtimeModuleSpecifier! });
-    expect(runtime).toMatchObject({
-      specifier: 'virtual:aurelia-aot/runtime',
-      map: null,
-    });
-    expect(runtime?.code).toContain('export function applyCompiledCustomElement');
+    const artifact = await session.artifactFor({ sourcePath: templatePath });
+    if (artifact.resource == null) throw new Error('Expected a complete convention resource identity.');
+    const oldPayloadSpecifier = `virtual:aurelia-aot/payload/${artifact.resource.compilerVariantKey.slice('sha256:'.length)}`;
+    expect(await session.virtualModuleFor({ specifier: oldPayloadSpecifier })).toBeNull();
+    expect(artifact.code).not.toContain('applyCompiledCustomElement');
   }, 15_000);
 
   it('bridges paired decorator template imports to their source-owned compiler payloads', async () => {
@@ -326,6 +315,7 @@ describe('semantic AOT artifact provider', () => {
     const pairedTemplatePath = path.resolve(root, 'src/my-app.html');
     const bridge = await decoratorSession.artifactFor({ sourcePath: pairedTemplatePath });
     if (bridge.payload == null) throw new Error('Expected an artifact-first compiler payload reference.');
+    expect(bridge.resource).toBeNull();
     expect(decoratorProvider.evidence()).toMatchObject({
       analysisCount: 1,
       artifacts: [expect.objectContaining({

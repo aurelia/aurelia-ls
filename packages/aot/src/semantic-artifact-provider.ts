@@ -89,7 +89,16 @@ export interface SemanticAotTemplateArtifact {
   readonly code: string;
   readonly map: AotRawSourceMap;
   readonly digest: string;
+  /** Resource realized directly by this complete view-definition module. */
+  readonly resource: SemanticAotTemplateResourceIdentity | null;
   readonly payload: SemanticAotTemplatePayloadReference | null;
+}
+
+export interface SemanticAotTemplateResourceIdentity {
+  readonly carrierSourcePath: string;
+  readonly resourceKey: string;
+  readonly compilerVariantKey: string;
+  readonly definitionName: string;
 }
 
 export interface SemanticAotTemplatePayloadReference {
@@ -127,7 +136,7 @@ export interface SemanticAotArtifactEvidence {
     readonly carrierSourcePath: string;
     readonly resourceKey: string;
     readonly compilerVariantKey: string;
-    readonly payloadSpecifier: string;
+    readonly payloadSpecifier: string | null;
     readonly definitionName: string;
     readonly needsCompile: false;
     readonly digest: string;
@@ -209,11 +218,20 @@ export class SemanticAotBuildSession {
     runtimeConfiguration: RuntimeConfigurationBuildPlan,
   ) {
     this.#pendingByVariant = new Map(pending.map((artifact) => [artifact.compilerVariantKey, artifact]));
-    this.#pendingByPayloadSpecifier = new Map(pending.map((artifact) => [artifact.payloadSpecifier, artifact]));
-    if (this.#pendingByVariant.size !== pending.length || this.#pendingByPayloadSpecifier.size !== pending.length) {
+    const compilerPatchPending = pending.filter(requiresCarrierCompilerPatch);
+    this.#pendingByPayloadSpecifier = new Map(
+      compilerPatchPending.map((artifact) => [artifact.payloadSpecifier, artifact]),
+    );
+    if (
+      this.#pendingByVariant.size !== pending.length
+      || this.#pendingByPayloadSpecifier.size !== compilerPatchPending.length
+    ) {
       throw new Error('AOT semantic build produced duplicate resource compiler variants.');
     }
-    this.#pendingByCarrierPath = groupPendingByPath(pending, (artifact) => artifact.carrierSourcePath);
+    this.#pendingByCarrierPath = groupPendingByPath(
+      compilerPatchPending,
+      (artifact) => artifact.carrierSourcePath,
+    );
     this.#pendingByTemplatePath = groupPendingByPath(pending, (artifact) => artifact.templateSourcePath);
     this.#configurationByCarrierPath = groupPendingByPath(
       runtimeConfiguration.replacements,
@@ -236,10 +254,13 @@ export class SemanticAotBuildSession {
       );
     }
     const pending = candidates[0]!;
-    const bridge = pending.handoff.address.sourceAttachment?.templateModuleRole
-      === CustomElementTemplateModuleRole.TemplateValue;
-    const compilerPayload = await this.#patchArtifactFor(pending);
-    this.#recordEvidence(pending, compilerPayload);
+    const templateModuleRole = pending.handoff.address.sourceAttachment?.templateModuleRole;
+    const bridge = templateModuleRole === CustomElementTemplateModuleRole.TemplateValue;
+    const completeDefinitionModule = templateModuleRole === CustomElementTemplateModuleRole.DefinitionModule;
+    const compilerPayload = completeDefinitionModule ? null : await this.#patchArtifactFor(pending);
+    if (compilerPayload != null) {
+      this.#recordEvidence(pending, compilerPayload, pending.payloadSpecifier);
+    }
     let artifact = this.#templateArtifactsByVariant.get(pending.compilerVariantKey);
     if (artifact == null) {
       const sourceText = await readFile(pending.templateSourcePath, 'utf8');
@@ -265,21 +286,37 @@ export class SemanticAotBuildSession {
       }
       this.#templateArtifactsByVariant.set(pending.compilerVariantKey, artifact);
     }
+    if (completeDefinitionModule) {
+      this.#recordEvidence(pending, artifact, null);
+    }
+    let payload: SemanticAotTemplatePayloadReference | null = null;
+    if (bridge) {
+      if (compilerPayload == null) {
+        throw new Error('AOT template-value bridge unexpectedly has no compiler payload.');
+      }
+      payload = {
+        carrierSourcePath: pending.carrierSourcePath,
+        resourceKey: pending.resourceKey,
+        compilerVariantKey: pending.compilerVariantKey,
+        definitionName: pending.handoff.resourceName,
+        payloadSpecifier: pending.payloadSpecifier,
+        payloadDigest: compilerPayload.digest,
+      };
+    }
     return {
       sourcePath: request.sourcePath,
       code: artifact.code,
       map: artifact.map,
       digest: artifact.digest,
-      payload: !bridge
+      resource: !completeDefinitionModule
         ? null
         : {
             carrierSourcePath: pending.carrierSourcePath,
             resourceKey: pending.resourceKey,
             compilerVariantKey: pending.compilerVariantKey,
             definitionName: pending.handoff.resourceName,
-            payloadSpecifier: pending.payloadSpecifier,
-            payloadDigest: compilerPayload.digest,
           },
+      payload,
     };
   }
 
@@ -350,7 +387,7 @@ export class SemanticAotBuildSession {
     const pending = this.#pendingByPayloadSpecifier.get(request.specifier);
     if (pending == null) return null;
     const artifact = await this.#patchArtifactFor(pending);
-    this.#recordEvidence(pending, artifact);
+    this.#recordEvidence(pending, artifact, pending.payloadSpecifier);
     return {
       specifier: request.specifier,
       code: artifact.code,
@@ -380,13 +417,14 @@ export class SemanticAotBuildSession {
   #recordEvidence(
     pending: PendingResourceArtifact,
     artifact: Pick<AotTemplateModuleArtifact, 'sourcePath' | 'definitionName' | 'needsCompile' | 'digest' | 'map'>,
+    payloadSpecifier: string | null,
   ): void {
     this.#evidenceByVariant.set(pending.compilerVariantKey, {
       sourcePath: artifact.sourcePath,
       carrierSourcePath: pending.carrierSourcePath,
       resourceKey: pending.resourceKey,
       compilerVariantKey: pending.compilerVariantKey,
-      payloadSpecifier: pending.payloadSpecifier,
+      payloadSpecifier,
       definitionName: artifact.definitionName,
       needsCompile: artifact.needsCompile,
       digest: artifact.digest,
@@ -903,6 +941,11 @@ function compilerVariantKeyFor(handoff: TemplateCompilerCompiledHandoffValue): s
     .update(handoff.schemaVersion)
     .digest('hex');
   return `sha256:${digest}`;
+}
+
+function requiresCarrierCompilerPatch(artifact: PendingResourceArtifact): boolean {
+  return artifact.handoff.address.sourceAttachment?.templateModuleRole
+    !== CustomElementTemplateModuleRole.DefinitionModule;
 }
 
 function rootDefinition(handoff: TemplateCompilerCompiledHandoffValue) {

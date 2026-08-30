@@ -1,5 +1,3 @@
-import path from 'node:path';
-
 import {
   SemanticAotArtifactProvider,
 } from '@aurelia-ls/aot';
@@ -59,8 +57,6 @@ export function createAotAssuranceAdapter(request: AotAdapterRequest): AotAssura
         artifacts: semantic.artifacts.map((artifact) => {
           const vite = receipt!.artifacts.find((candidate) =>
             candidate.compilerVariantKey === artifact.compilerVariantKey
-          ) ?? receipt!.artifacts.find((candidate) =>
-            candidate.compilerVariantKey == null && samePath(candidate.sourcePath, artifact.sourcePath)
           );
           if (vite == null) {
             throw new Error(`Vite receipt omitted semantic artifact '${artifact.sourcePath}'.`);
@@ -170,12 +166,4 @@ function replaceCode<TArtifact extends { readonly code: string; readonly digest:
   const code = artifact.code.replace(pattern, replacement);
   if (code !== artifact.code) onMutation();
   return { ...artifact, code, digest: `${artifact.digest}:falsified` };
-}
-
-function samePath(left: string, right: string): boolean {
-  const normalize = (value: string): string => {
-    const resolved = path.resolve(value).replaceAll('\\', '/');
-    return process.platform === 'win32' ? resolved.toLowerCase() : resolved;
-  };
-  return normalize(left) === normalize(right);
 }

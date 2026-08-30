@@ -29,6 +29,7 @@ export {
   type SemanticAotTemplateArtifact,
   type SemanticAotTemplatePayloadReference,
   type SemanticAotTemplateRequest,
+  type SemanticAotTemplateResourceIdentity,
   type SemanticAotVirtualModuleArtifact,
   type SemanticAotVirtualModuleRequest,
 } from './semantic-artifact-provider.js';

@@ -68,8 +68,17 @@ export interface AotTemplateArtifact {
   readonly map: AotSourceMapInput;
   /** Stable identity for the semantic input and emitted artifact. */
   readonly digest: string;
+  /** Resource realized directly by this complete view-definition module. */
+  readonly resource?: AotTemplateResourceIdentity | null;
   /** Compiler payload imported by a template-value bridge; absent/null for complete view-definition modules. */
   readonly payload?: AotTemplatePayloadReference | null;
+}
+
+export interface AotTemplateResourceIdentity {
+  readonly carrierSourcePath: string;
+  readonly resourceKey: string;
+  readonly compilerVariantKey: string;
+  readonly definitionName: string;
 }
 
 export interface AotTemplatePayloadReference {

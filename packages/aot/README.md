@@ -9,27 +9,35 @@ generation-bound semantic-runtime objects.
 
 The current public API is deliberately narrow:
 
-- `SemanticAotArtifactProvider` opens one semantic build session, transforms owning source modules, and serves claimed
-  compiler-patch/runtime virtual modules.
+- `SemanticAotArtifactProvider` opens one semantic build session, emits complete convention definition modules,
+  transforms compiler-patch-owning source modules, and serves the virtual modules required by compiler-patch routes.
 - `AotCompilerPatchModuleEmitter` emits only compiler-owned fields while retaining generated controller/projection
   definitions.
-- `AotSourceTransformEmitter` attaches those payloads to decorators, static `$au`, conventions, and nested/anonymous
-  `CustomElement.define(...)` calls without reconstructing authored metadata. It also replaces exact semantic-runtime
-  browser-facade references with the build-specific AOT facade; it never searches source text for an `Aurelia` name.
+- `AotSourceTransformEmitter` attaches those payloads to carrier-owned decorators, static `$au`, and nested/anonymous
+  `CustomElement.define(...)` calls without reconstructing authored metadata. Convention resources whose HTML module
+  is already the complete definition do not receive a second carrier patch. The transform also replaces exact
+  semantic-runtime browser-facade references with the build-specific AOT facade; it never searches source text for an
+  `Aurelia` name.
 - `AotRuntimeConfigurationModuleEmitter` emits the compile-free parser/compiler services, conservative runtime
   fallbacks or exact semantic-runtime-selected resource/renderer leaves, BrowserPlatform container, and base-runtime
   Aurelia facade used by strict AOT builds. Runtime-configuration protocol v2 includes the lookup-only captured-spread
   compiler contract; its content address cannot collide with the earlier blanket-refusal module semantics.
 - `AotTemplateModuleEmitter` remains the standalone HTML-resource realization.
 
-Paired HTML has two explicit roles from semantic-runtime. A convention view-definition module keeps the complete
-namespace/header surface. A template-value import instead re-exports `template` from the already-validated compiler
-payload owned by the source transform, avoiding a second dependency/header realization. The bridge carries its payload
-identity and digest so bundlers do not depend on source-before-HTML traversal order.
+Paired HTML has two explicit roles from semantic-runtime. A convention view-definition module is the sole
+compiler-final namespace/header realization; the official conventions transform attaches that namespace at the final
+class location without an AOT-injected pre-conventions class reference. Its template artifact carries resource and
+compiler-variant identity directly and does not pretend to own a virtual patch. A template-value import instead
+re-exports `template` from the already-validated compiler payload owned by the source transform, avoiding a second
+dependency/header realization. The bridge carries its payload identity and digest so bundlers do not depend on
+source-before-HTML traversal order. Inline and other carrier-owned templates use the same patch route without an HTML
+bridge.
+This split does not infer unresolved convention composition: named/local dependencies, registry-valued dependencies,
+and executable header values remain subject to the complete emitter's existing fail-closed checks.
 
 The current emitter is a CSR baseline. It preserves the compiler's exact DOM node graph rather than serializing and
 reparsing HTML, because reparsing can merge adjacent text nodes that Aurelia instruction rows address separately. A
-small virtual runtime helper applies compiler fields to Aurelia's cached definition after resource definition and
+small virtual runtime helper applies compiler fields to carrier-owned Aurelia definitions after resource definition and
 before its first `Rendering.compile`; this is the candidate for a later additive framework hook. The generated facade
 keeps Aurelia/AppRoot lifecycle while replacing implicit `StandardConfiguration` installation through an exact
 old-text-validated source carrier. Runtime-html resources, renderers, and event-modifier support are selected
