@@ -1,3 +1,5 @@
+import path from "node:path";
+
 import * as aureliaPluginModule from "@aurelia/vite-plugin";
 import type { AureliaPluginOptions } from "@aurelia/vite-plugin";
 import type { Plugin, ResolvedConfig } from "vite";
@@ -13,6 +15,7 @@ import type {
   AotReceiptArtifact,
   AotSourceTransformArtifact,
   AotTemplateArtifact,
+  AotTemplatePayloadReference,
   AotTransformedConfiguration,
   AotTransformedResource,
   AotVirtualModuleArtifact,
@@ -47,6 +50,7 @@ export type {
   AotSourceTransformArtifact,
   AotSourceTransformRequest,
   AotTemplateArtifact,
+  AotTemplatePayloadReference,
   AotTemplateRequest,
   AotTransformedConfiguration,
   AotTransformedResource,
@@ -311,6 +315,9 @@ export function aureliaAot(options: AureliaAotOptions): Plugin[] {
       }
 
       validateArtifact(artifact, sourcePath);
+      if (artifact.payload != null) {
+        claimResourcePayload(state, artifact.payload);
+      }
       const artifactKey = `template:${sourcePath}`;
       const previous = state.artifacts.get(artifactKey);
       if (previous != null && previous.digest !== artifact.digest) {
@@ -475,28 +482,43 @@ function claimTransformedResource(
   artifact: AotSourceTransformArtifact,
   resource: AotTransformedResource,
 ): void {
-  claimVirtualModule(state, {
-    specifier: resource.payloadSpecifier,
-    sourcePath: artifact.sourcePath,
-    kind: "payload",
-    expectedDigest: resource.payloadDigest,
-    compilerVariantKey: resource.compilerVariantKey,
-  });
-
-  const receipt: AotReceiptArtifact = {
-    sourcePath: artifact.sourcePath,
-    virtualId: resolvedVirtualId(resource.payloadSpecifier),
-    digest: resource.payloadDigest,
+  claimResourcePayload(state, {
+    carrierSourcePath: artifact.sourcePath,
     resourceKey: resource.resourceKey,
     compilerVariantKey: resource.compilerVariantKey,
     definitionName: resource.definitionName,
+    payloadSpecifier: resource.payloadSpecifier,
+    payloadDigest: resource.payloadDigest,
+  });
+}
+
+function claimResourcePayload(
+  state: EnvironmentState,
+  payload: AotTemplatePayloadReference,
+): void {
+  const carrierSourcePath = payload.carrierSourcePath.replaceAll("\\", "/");
+  claimVirtualModule(state, {
+    specifier: payload.payloadSpecifier,
+    sourcePath: carrierSourcePath,
+    kind: "payload",
+    expectedDigest: payload.payloadDigest,
+    compilerVariantKey: payload.compilerVariantKey,
+  });
+
+  const receipt: AotReceiptArtifact = {
+    sourcePath: carrierSourcePath,
+    virtualId: resolvedVirtualId(payload.payloadSpecifier),
+    digest: payload.payloadDigest,
+    resourceKey: payload.resourceKey,
+    compilerVariantKey: payload.compilerVariantKey,
+    definitionName: payload.definitionName,
   };
-  const key = `resource:${resource.compilerVariantKey}`;
+  const key = `resource:${payload.compilerVariantKey}`;
   const previous = state.artifacts.get(key);
   if (previous != null && !sameReceiptArtifact(previous, receipt)) {
     throw invalidArtifact(
-      artifact.sourcePath,
-      `returned conflicting resource artifact '${resource.compilerVariantKey}' in one build session`,
+      carrierSourcePath,
+      `returned conflicting resource artifact '${payload.compilerVariantKey}' in one build session`,
     );
   }
   state.artifacts.set(key, receipt);
@@ -549,12 +571,19 @@ function recordVirtualDigest(
 }
 
 function sameReceiptArtifact(left: AotReceiptArtifact, right: AotReceiptArtifact): boolean {
-  return left.sourcePath === right.sourcePath
+  return sourcePathKey(left.sourcePath) === sourcePathKey(right.sourcePath)
     && left.virtualId === right.virtualId
     && left.digest === right.digest
     && left.resourceKey === right.resourceKey
     && left.compilerVariantKey === right.compilerVariantKey
     && left.definitionName === right.definitionName;
+}
+
+function sourcePathKey(value: string): string {
+  const slash = value.replaceAll("\\", "/");
+  return /^[A-Za-z]:\//u.test(slash)
+    ? path.win32.normalize(value).replaceAll("\\", "/").toLowerCase()
+    : path.posix.normalize(slash);
 }
 
 function assertSupportedConfig(config: ResolvedConfig): void {
@@ -617,6 +646,22 @@ function validateArtifact(
   if (artifact.map === undefined) {
     throw invalidArtifact(sourcePath, "omitted the source-map result");
   }
+  if (artifact.payload != null) validateTemplatePayloadReference(artifact.payload, sourcePath);
+}
+
+function validateTemplatePayloadReference(
+  payload: AotTemplatePayloadReference,
+  templateSourcePath: string,
+): void {
+  if (typeof payload !== "object") {
+    throw invalidArtifact(templateSourcePath, "returned a non-object template payload reference");
+  }
+  assertNonBlank(payload.carrierSourcePath, templateSourcePath, "template payload carrier source path");
+  assertNonBlank(payload.resourceKey, templateSourcePath, "template payload resource key");
+  assertNonBlank(payload.compilerVariantKey, templateSourcePath, "template payload compiler variant key");
+  assertNonBlank(payload.definitionName, templateSourcePath, "template payload definition name");
+  assertVirtualSpecifier(payload.payloadSpecifier, templateSourcePath, "template payload");
+  assertDigest(payload.payloadDigest, templateSourcePath, "template payload");
 }
 
 function validateSourceTransformArtifact(

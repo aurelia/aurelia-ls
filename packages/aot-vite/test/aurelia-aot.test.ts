@@ -88,6 +88,73 @@ describe("aureliaAot Vite preset", () => {
     expect(loaded).toEqual({ code: "export const template = 1;", map: null });
   });
 
+  it("claims a template bridge payload before its owning source transform", async () => {
+    const transformSource = vi.fn(async ({ sourcePath, code }) => sourceTransform(sourcePath, code));
+    const virtualModuleFor = vi.fn(async ({ specifier }) => virtualArtifact(specifier));
+    const payloadSpecifier = "virtual:aurelia-aot/payload/proof-0";
+    const preset = aureliaAot({
+      provider: {
+        async openBuild() {
+          return {
+            async artifactFor({ sourcePath }) {
+              return {
+                sourcePath,
+                code: `export { template, template as default } from ${JSON.stringify(payloadSpecifier)};`,
+                map: null,
+                digest: "bridge-digest",
+                payload: {
+                  carrierSourcePath: "c:\\app\\component.ts",
+                  resourceKey: "resource-0",
+                  compilerVariantKey: "variant-0",
+                  definitionName: "proof-0",
+                  payloadSpecifier,
+                  payloadDigest: "payload-digest-0",
+                },
+              };
+            },
+            transformSource,
+            virtualModuleFor,
+          };
+        },
+      },
+    });
+    const guard = requiredPlugin(preset, "aurelia-aot:guard");
+    const sources = requiredPlugin(preset, "aurelia-aot:sources");
+    const loader = requiredPlugin(preset, "aurelia-aot:artifacts");
+    const context = pluginContext();
+    await invoke(guard, "configResolved", undefined, resolvedConfig());
+    await invoke(loader, "buildStart", context);
+
+    await invoke(loader, "load", context, "C:/app/app.html?aurelia-aot", {});
+    const resolution = await invoke(
+      sources,
+      "resolveId",
+      context,
+      payloadSpecifier,
+      "C:/app/app.html?aurelia-aot",
+      { attributes: {}, isEntry: false },
+    ) as { readonly id: string };
+    expect(resolution.id).toBe(`\0aurelia-aot:${payloadSpecifier}`);
+    expect(virtualModuleFor).not.toHaveBeenCalled();
+
+    const payload = await invoke(sources, "load", context, resolution.id, { ssr: false });
+    expect(payload).toEqual({
+      code: "export default 'compiled-payload';",
+      map: expect.objectContaining({ file: "payload.js" }),
+    });
+    expect(virtualModuleFor).toHaveBeenCalledTimes(1);
+
+    await invoke(
+      sources,
+      "transform",
+      context,
+      "export class Component {}",
+      "C:/app/component.ts",
+      { ssr: false },
+    );
+    expect(transformSource).toHaveBeenCalledTimes(1);
+  });
+
   it("forwards an explicit nominated app entry as structural build input", async () => {
     const openBuild = vi.fn(async () => ({
       artifactFor: async ({ sourcePath }: { readonly sourcePath: string }) => artifact(sourcePath, "html"),
@@ -368,6 +435,34 @@ describe("aureliaAot Vite preset", () => {
       invoke(loader, "load", context, "C:/app/app.html?aurelia-aot", {}),
     ).rejects.toMatchObject({
       code: "AOT_VITE_SOURCE_AUTHORITY",
+      sourcePath: "C:/app/app.html",
+    });
+  });
+
+  it("rejects a template bridge that claims a non-virtual payload", async () => {
+    const preset = aureliaAot({
+      provider: artifactProvider((sourcePath) => ({
+        ...artifact(sourcePath, "bridge"),
+        payload: {
+          carrierSourcePath: "C:/app/component.ts",
+          resourceKey: "resource-0",
+          compilerVariantKey: "variant-0",
+          definitionName: "proof-0",
+          payloadSpecifier: "./payload.js",
+          payloadDigest: "payload-digest-0",
+        },
+      })),
+    });
+    const guard = requiredPlugin(preset, "aurelia-aot:guard");
+    const loader = requiredPlugin(preset, "aurelia-aot:artifacts");
+    const context = pluginContext();
+    await invoke(guard, "configResolved", undefined, resolvedConfig());
+    await invoke(loader, "buildStart", context);
+
+    await expect(
+      invoke(loader, "load", context, "C:/app/app.html?aurelia-aot", {}),
+    ).rejects.toMatchObject({
+      code: "AOT_VITE_INVALID_ARTIFACT",
       sourcePath: "C:/app/app.html",
     });
   });

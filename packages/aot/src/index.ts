@@ -27,6 +27,7 @@ export {
   type SemanticAotSourceTransformArtifact,
   type SemanticAotSourceTransformRequest,
   type SemanticAotTemplateArtifact,
+  type SemanticAotTemplatePayloadReference,
   type SemanticAotTemplateRequest,
   type SemanticAotVirtualModuleArtifact,
   type SemanticAotVirtualModuleRequest,

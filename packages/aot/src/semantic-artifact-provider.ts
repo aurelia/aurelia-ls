@@ -11,6 +11,7 @@ import {
 import {
   materializeSemanticAppTemplateCompilerHandoffs,
   materializeSemanticAppStandardConfigurationSourceAttachments,
+  CustomElementTemplateModuleRole,
   ResourceCarrierKind,
   StandardConfigurationSourceCarrierKind,
   TemplateCompilerCompiledHandoffState,
@@ -41,6 +42,8 @@ import {
 import {
   AotArtifactError,
   AotTemplateModuleEmitter,
+  createAotRawSourceMap,
+  digestAotArtifact,
   type AotRawSourceMap,
   type AotTemplateModuleArtifact,
 } from './template-module-emitter.js';
@@ -72,6 +75,16 @@ export interface SemanticAotTemplateArtifact {
   readonly code: string;
   readonly map: AotRawSourceMap;
   readonly digest: string;
+  readonly payload: SemanticAotTemplatePayloadReference | null;
+}
+
+export interface SemanticAotTemplatePayloadReference {
+  readonly carrierSourcePath: string;
+  readonly resourceKey: string;
+  readonly compilerVariantKey: string;
+  readonly definitionName: string;
+  readonly payloadSpecifier: string;
+  readonly payloadDigest: string;
 }
 
 export interface SemanticAotSourceTransformRequest {
@@ -167,8 +180,8 @@ export class SemanticAotBuildSession {
   readonly #configurationByCarrierPath: ReadonlyMap<string, readonly PendingRuntimeConfigurationReplacement[]>;
   readonly #configurationArtifacts: ReadonlyMap<string, AotRuntimeConfigurationModuleArtifact>;
   readonly #runtimeConfigurationEvidence: SemanticAotRuntimeConfigurationEvidence;
-  readonly #fullArtifactsByVariant = new Map<string, AotTemplateModuleArtifact>();
-  readonly #patchArtifactsByVariant = new Map<string, AotCompilerPatchModuleArtifact>();
+  readonly #templateArtifactsByVariant = new Map<string, AotTemplateModuleArtifact>();
+  readonly #patchArtifactPromisesByVariant = new Map<string, Promise<AotCompilerPatchModuleArtifact>>();
   readonly #evidenceByVariant = new Map<string, SemanticAotArtifactEvidence['artifacts'][number]>();
   readonly #fullEmitter = new AotTemplateModuleEmitter();
   readonly #patchEmitter = new AotCompilerPatchModuleEmitter();
@@ -207,23 +220,50 @@ export class SemanticAotBuildSession {
       );
     }
     const pending = candidates[0]!;
-    let artifact = this.#fullArtifactsByVariant.get(pending.compilerVariantKey);
+    const bridge = pending.handoff.address.sourceAttachment?.templateModuleRole
+      === CustomElementTemplateModuleRole.TemplateValue;
+    const compilerPayload = await this.#patchArtifactFor(pending);
+    this.#recordEvidence(pending, compilerPayload);
+    let artifact = this.#templateArtifactsByVariant.get(pending.compilerVariantKey);
     if (artifact == null) {
       const sourceText = await readFile(pending.templateSourcePath, 'utf8');
-      artifact = this.#fullEmitter.emit({
+      const emissionRequest = {
         handoff: pending.handoff,
         projectRoot: pending.projectRoot,
         sourcePath: pending.templateSourcePath,
         sourceText,
-      });
-      this.#fullArtifactsByVariant.set(pending.compilerVariantKey, artifact);
-      this.#recordEvidence(pending, artifact);
+      };
+      if (bridge) {
+        const code = `export { template, template as default } from ${JSON.stringify(pending.payloadSpecifier)};\n`;
+        const map = createAotRawSourceMap(emissionRequest, '?aurelia-aot-template-bridge');
+        artifact = {
+          sourcePath: pending.templateSourcePath,
+          definitionName: pending.handoff.resourceName,
+          needsCompile: false,
+          code,
+          map,
+          digest: digestAotArtifact(code, map),
+        };
+      } else {
+        artifact = this.#fullEmitter.emit(emissionRequest);
+      }
+      this.#templateArtifactsByVariant.set(pending.compilerVariantKey, artifact);
     }
     return {
       sourcePath: request.sourcePath,
       code: artifact.code,
       map: artifact.map,
       digest: artifact.digest,
+      payload: !bridge
+        ? null
+        : {
+            carrierSourcePath: pending.carrierSourcePath,
+            resourceKey: pending.resourceKey,
+            compilerVariantKey: pending.compilerVariantKey,
+            definitionName: pending.handoff.resourceName,
+            payloadSpecifier: pending.payloadSpecifier,
+            payloadDigest: compilerPayload.digest,
+          },
     };
   }
 
@@ -299,17 +339,21 @@ export class SemanticAotBuildSession {
   }
 
   async #patchArtifactFor(pending: PendingResourceArtifact): Promise<AotCompilerPatchModuleArtifact> {
-    let artifact = this.#patchArtifactsByVariant.get(pending.compilerVariantKey);
+    let artifact = this.#patchArtifactPromisesByVariant.get(pending.compilerVariantKey);
     if (artifact != null) return artifact;
+    artifact = this.#emitPatchArtifact(pending);
+    this.#patchArtifactPromisesByVariant.set(pending.compilerVariantKey, artifact);
+    return artifact;
+  }
+
+  async #emitPatchArtifact(pending: PendingResourceArtifact): Promise<AotCompilerPatchModuleArtifact> {
     const sourceText = await readFile(pending.templateSourcePath, 'utf8');
-    artifact = this.#patchEmitter.emit({
+    return this.#patchEmitter.emit({
       handoff: pending.handoff,
       projectRoot: pending.projectRoot,
       sourcePath: pending.templateSourcePath,
       sourceText,
     });
-    this.#patchArtifactsByVariant.set(pending.compilerVariantKey, artifact);
-    return artifact;
   }
 
   #recordEvidence(

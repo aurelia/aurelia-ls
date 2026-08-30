@@ -127,6 +127,57 @@ describe('semantic AOT artifact provider', () => {
     expect(runtime?.code).toContain('export function applyCompiledCustomElement');
   }, 15_000);
 
+  it('bridges paired decorator template imports to their source-owned compiler payloads', async () => {
+    const root = path.resolve(repositoryRoot, 'fixtures/hello-world');
+    const decoratorProvider = new SemanticAotArtifactProvider();
+    const decoratorSession = await decoratorProvider.openBuild({
+      root,
+      mode: 'production',
+      environmentName: 'client',
+      sourcemap: true,
+    });
+    const sourcePath = path.resolve(root, 'src/my-app.ts');
+    const pairedTemplatePath = path.resolve(root, 'src/my-app.html');
+    const bridge = await decoratorSession.artifactFor({ sourcePath: pairedTemplatePath });
+    if (bridge.payload == null) throw new Error('Expected an artifact-first compiler payload reference.');
+    expect(decoratorProvider.evidence()).toMatchObject({
+      analysisCount: 1,
+      artifacts: [expect.objectContaining({
+        sourcePath: pairedTemplatePath,
+        definitionName: 'my-app',
+        needsCompile: false,
+        digest: bridge.payload.payloadDigest,
+      })],
+    });
+
+    const transformed = await decoratorSession.transformSource({
+      sourcePath,
+      code: await readFile(sourcePath, 'utf8'),
+    });
+    const resource = transformed?.resources[0];
+    if (resource == null) throw new Error('Expected the decorated my-app resource transform.');
+
+    expect(bridge.code).toBe(
+      `export { template, template as default } from ${JSON.stringify(resource.payloadSpecifier)};\n`,
+    );
+    expect(bridge.map.sources).toEqual([pairedTemplatePath]);
+    expect(bridge.code).not.toContain('dependencies');
+    expect(bridge.code).not.toContain('@aurelia/runtime-html');
+    expect(bridge.payload).toMatchObject({
+      carrierSourcePath: sourcePath,
+      resourceKey: resource.resourceKey,
+      compilerVariantKey: resource.compilerVariantKey,
+      definitionName: 'my-app',
+      payloadSpecifier: resource.payloadSpecifier,
+      payloadDigest: resource.payloadDigest,
+    });
+    const payload = await decoratorSession.virtualModuleFor({ specifier: resource.payloadSpecifier });
+    expect(payload?.code).toContain('export const template = $definition0.template;');
+    expect(payload?.code).toContain('export default $definition0;');
+    expect(payload?.code).not.toContain('DisplayHint');
+    expect(decoratorProvider.evidence()?.artifacts).toHaveLength(1);
+  }, 20_000);
+
   it('activates an explicitly nominated exported app factory without rewriting its source shape', async () => {
     const root = await makeTemporaryDirectory('nominated-entry-');
     temporaryDirectories.push(root);

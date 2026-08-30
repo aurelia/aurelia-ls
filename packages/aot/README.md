@@ -17,6 +17,11 @@ The current public API is deliberately narrow:
   `CustomElement.define(...)` calls without reconstructing authored metadata.
 - `AotTemplateModuleEmitter` remains the standalone HTML-resource realization.
 
+Paired HTML has two explicit roles from semantic-runtime. A convention view-definition module keeps the complete
+namespace/header surface. A template-value import instead re-exports `template` from the already-validated compiler
+payload owned by the source transform, avoiding a second dependency/header realization. The bridge carries its payload
+identity and digest so bundlers do not depend on source-before-HTML traversal order.
+
 The current emitter is a CSR baseline. It preserves the compiler's exact DOM node graph rather than serializing and
 reparsing HTML, because reparsing can merge adjacent text nodes that Aurelia instruction rows address separately. A
 small virtual runtime helper applies compiler fields to Aurelia's cached definition after resource definition and
