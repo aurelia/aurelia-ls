@@ -31,6 +31,9 @@ import {
   ResourceDefinitionIndex,
 } from '../resources/resource-definition-index.js';
 import type {
+  NormalizedResourceConventionTransformAdmission,
+} from '../resources/resource-convention-transform-admission.js';
+import type {
   ResourceConventionToolingEvaluationContext,
 } from '../resources/resource-convention-transform-admission.js';
 import {
@@ -312,6 +315,8 @@ export interface AureliaAppWorldProjectOptions {
   readonly telemetry?: SemanticRuntimeTelemetryOptions | null;
   /** Explicit synchronous app entry already normalized to the selected project's source identity. */
   readonly nominatedEntry?: NormalizedSemanticAppNominatedEntry | null;
+  /** Invocation-scoped convention-transform reach declared by active build providers. */
+  readonly conventionTransformAdmissions?: readonly NormalizedResourceConventionTransformAdmission[];
 }
 
 /** Explicit project-analysis phases that own the work surrounding authored template families. */
@@ -344,6 +349,7 @@ export class AureliaAppWorldPreTemplateEmission {
   constructor(
     readonly analysisDepth: SemanticAppAnalysisDepth,
     readonly nominatedEntry: NormalizedSemanticAppNominatedEntry | null,
+    readonly conventionTransformAdmissions: readonly NormalizedResourceConventionTransformAdmission[],
     readonly project: ProjectBootFrame,
     readonly evaluationGeneration: StaticProjectEvaluationGeneration<null>,
     readonly conventionToolingEvaluationGeneration: StaticProjectEvaluationGeneration<ResourceConventionToolingEvaluationContext>,
@@ -518,6 +524,7 @@ class AureliaAppWorldProjectConstructionFrame {
   private readonly authoringTemplateLimit: number | null;
   private readonly telemetry: NormalizedSemanticRuntimeTelemetryOptions;
   private readonly nominatedEntry: NormalizedSemanticAppNominatedEntry | null;
+  private readonly conventionTransformAdmissions: readonly NormalizedResourceConventionTransformAdmission[];
   private readonly phases: AureliaAppWorldProjectPhaseTiming[] = [];
 
   constructor(
@@ -548,6 +555,7 @@ class AureliaAppWorldProjectConstructionFrame {
       DEFAULT_SEMANTIC_RUNTIME_INQUIRY_PROFILE,
     );
     this.nominatedEntry = options.nominatedEntry ?? null;
+    this.conventionTransformAdmissions = options.conventionTransformAdmissions ?? [];
   }
 
   constructAndEmit(): AureliaAppWorldProjectEmission {
@@ -670,6 +678,7 @@ class AureliaAppWorldProjectConstructionFrame {
     return new AureliaAppWorldPreTemplateEmission(
       this.analysisDepth,
       this.nominatedEntry,
+      this.conventionTransformAdmissions,
       this.project,
       this.evaluationGeneration,
       this.conventionToolingEvaluation.generation,
@@ -1054,6 +1063,7 @@ class AureliaAppWorldProjectConstructionFrame {
         this.conventionToolingEvaluation,
         typeSystem,
         this.publication,
+        this.conventionTransformAdmissions,
       )
     );
   }

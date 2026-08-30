@@ -7,6 +7,7 @@ import {
   FrameworkCapabilityConfigurationState,
   FrameworkDiEffectCoverageState,
   type SemanticAppNominatedEntry,
+  type ResourceConventionTransformAdmissionInput,
 } from '@aurelia-ls/semantic-runtime';
 import {
   materializeSemanticAppTemplateCompilerHandoffs,
@@ -75,6 +76,8 @@ export interface SemanticAotBuildRequest {
   readonly nominatedEntry?: SemanticAppNominatedEntry | null;
   /** Omit to preserve every authored StandardConfiguration occurrence. */
   readonly runtimeConfiguration?: SemanticAotRuntimeConfigurationMode;
+  /** Exact source reach declared by the active build conventions provider. */
+  readonly conventionTransformAdmission?: ResourceConventionTransformAdmissionInput | null;
 }
 
 export interface SemanticAotTemplateRequest {
@@ -419,6 +422,9 @@ export class SemanticAotArtifactProvider {
         includeAuthoringTemplates: true,
         telemetry: { inquiryProfile: 'aot' },
         nominatedEntry: request.nominatedEntry,
+        conventionTransformAdmissions: request.conventionTransformAdmission == null
+          ? []
+          : [request.conventionTransformAdmission],
       });
       const batch = materializeSemanticAppTemplateCompilerHandoffs({
         app,

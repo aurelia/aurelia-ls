@@ -23,6 +23,7 @@ import {
   sourcePathFromAotTemplateId,
   toAotTemplateSpecifier,
   type AotArtifactProvider,
+  type AotBuildRequest,
   type AotBuildReceipt,
   type AotSourceTransformArtifact,
   type AotTemplateArtifact,
@@ -77,6 +78,12 @@ describe("aureliaAot Vite preset", () => {
       environmentName: "client",
       sourcemap: true,
       runtimeConfiguration: "preserve",
+      conventionTransformAdmission: {
+        providerModuleSpecifier: "@aurelia-ls/aot-vite",
+        patternResolutionBase: process.cwd(),
+        include: ["src/**/*.{ts,js,html}"],
+        exclude: [],
+      },
     });
     expect(context.resolve).toHaveBeenCalledWith("./app.html", "/app/main.ts", expect.objectContaining({
       skipSelf: true,
@@ -86,6 +93,53 @@ describe("aureliaAot Vite preset", () => {
       moduleSideEffects: true,
     });
     expect(loaded).toEqual({ code: "export const template = 1;", map: null });
+  });
+
+  it("declares exact convention filter reach and preserves explicit disablement", async () => {
+    const includedPattern = /components\/[a-z-]+\.ts$/u;
+    const included = [includedPattern];
+    const excluded = ["**/*.spec.ts", /generated/u];
+    const admittedOpenBuild = vi.fn(async (_request: AotBuildRequest) => ({
+      artifactFor: async ({ sourcePath }: { readonly sourcePath: string }) => artifact(sourcePath, "html"),
+    }));
+    const admitted = aureliaAot({
+      provider: { openBuild: admittedOpenBuild },
+      conventions: { include: included, exclude: excluded },
+    });
+    included.push(/added-after-preset/u);
+    excluded.push("**/*.late.ts");
+    const admittedGuard = requiredPlugin(admitted, "aurelia-aot:guard");
+    const admittedSources = requiredPlugin(admitted, "aurelia-aot:sources");
+    await invoke(admittedGuard, "configResolved", undefined, resolvedConfig());
+    await invoke(admittedSources, "buildStart", pluginContext());
+
+    expect(admittedOpenBuild).toHaveBeenCalledWith(expect.objectContaining({
+      conventionTransformAdmission: {
+        providerModuleSpecifier: "@aurelia-ls/aot-vite",
+        patternResolutionBase: process.cwd(),
+        include: [includedPattern],
+        exclude: ["**/*.spec.ts", /generated/u],
+      },
+    }));
+    const admittedRequest = admittedOpenBuild.mock.calls[0]?.[0];
+    expect(admittedRequest?.conventionTransformAdmission?.include).not.toBe(included);
+    expect(admittedRequest?.conventionTransformAdmission?.exclude).not.toBe(excluded);
+
+    const disabledOpenBuild = vi.fn(async () => ({
+      artifactFor: async ({ sourcePath }: { readonly sourcePath: string }) => artifact(sourcePath, "html"),
+    }));
+    const disabled = aureliaAot({
+      provider: { openBuild: disabledOpenBuild },
+      conventions: { enableConventions: false },
+    });
+    const disabledGuard = requiredPlugin(disabled, "aurelia-aot:guard");
+    const disabledSources = requiredPlugin(disabled, "aurelia-aot:sources");
+    await invoke(disabledGuard, "configResolved", undefined, resolvedConfig());
+    await invoke(disabledSources, "buildStart", pluginContext());
+
+    expect(disabledOpenBuild).toHaveBeenCalledWith(expect.objectContaining({
+      conventionTransformAdmission: null,
+    }));
   });
 
   it("claims a template bridge payload before its owning source transform", async () => {
@@ -189,6 +243,12 @@ describe("aureliaAot Vite preset", () => {
       sourcemap: true,
       nominatedEntry,
       runtimeConfiguration: "require-replaceable",
+      conventionTransformAdmission: {
+        providerModuleSpecifier: "@aurelia-ls/aot-vite",
+        patternResolutionBase: process.cwd(),
+        include: ["src/**/*.{ts,js,html}"],
+        exclude: [],
+      },
     });
   });
 

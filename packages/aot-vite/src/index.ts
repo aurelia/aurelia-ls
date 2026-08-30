@@ -12,6 +12,8 @@ import {
 import { createAotBuildReceipt, type ReceiptChunkInput } from "./build-receipt.js";
 import type {
   AotBuildSession,
+  AotConventionOptions,
+  AotConventionTransformAdmission,
   AotReceiptArtifact,
   AotSourceTransformArtifact,
   AotTemplateArtifact,
@@ -36,6 +38,8 @@ export type {
   AotBuildReceipt,
   AotBuildRequest,
   AotBuildSession,
+  AotConventionTransformAdmission,
+  AotConventionTransformSourcePattern,
   AotConventionOptions,
   AotReceiptArtifact,
   AotReceiptChunk,
@@ -71,6 +75,7 @@ const officialAureliaPlugin = (
 
 const AOT_RESOLVED_VIRTUAL_PREFIX = "\0aurelia-aot:";
 const authoredModuleExtension = /\.[cm]?[jt]sx?$/iu;
+const DEFAULT_CONVENTION_INCLUDE = "src/**/*.{ts,js,html}";
 
 interface VirtualModuleClaim {
   readonly specifier: string;
@@ -116,6 +121,7 @@ class EnvironmentBuildRegistry {
  */
 export function aureliaAot(options: AureliaAotOptions): Plugin[] {
   const registry = new EnvironmentBuildRegistry();
+  const conventionAdmission = conventionTransformAdmission(options.conventions);
   let config: ResolvedConfig | undefined;
 
   const guard: Plugin = {
@@ -145,7 +151,7 @@ export function aureliaAot(options: AureliaAotOptions): Plugin[] {
     name: "aurelia-aot:sources",
     enforce: "pre",
     buildStart() {
-      startBuildSession(registry, options, config, this.environment);
+      startBuildSession(registry, options, conventionAdmission, config, this.environment);
     },
     async transform(code, id, transformOptions) {
       rejectSsr(transformOptions?.ssr);
@@ -271,7 +277,7 @@ export function aureliaAot(options: AureliaAotOptions): Plugin[] {
     name: "aurelia-aot:artifacts",
     enforce: "pre",
     buildStart() {
-      startBuildSession(registry, options, config, this.environment);
+      startBuildSession(registry, options, conventionAdmission, config, this.environment);
     },
     async resolveId(source, importer, resolveOptions) {
       if (!isAotTemplateId(source)) {
@@ -417,6 +423,7 @@ interface AotViteEnvironment {
 function startBuildSession(
   registry: EnvironmentBuildRegistry,
   options: AureliaAotOptions,
+  conventionAdmission: AotConventionTransformAdmission | null,
   config: ResolvedConfig | undefined,
   environment: AotViteEnvironment,
 ): void {
@@ -430,7 +437,38 @@ function startBuildSession(
     sourcemap: environment.config.build.sourcemap,
     ...(options.nominatedEntry === undefined ? {} : { nominatedEntry: options.nominatedEntry }),
     runtimeConfiguration: options.runtimeConfiguration ?? "preserve",
+    conventionTransformAdmission: conventionAdmission,
   });
+}
+
+function conventionTransformAdmission(
+  options: AotConventionOptions | undefined,
+): AotConventionTransformAdmission | null {
+  if (options?.enableConventions === false) {
+    return null;
+  }
+  return {
+    providerModuleSpecifier: "@aurelia-ls/aot-vite",
+    patternResolutionBase: process.cwd(),
+    include: conventionTransformSourcePatterns(options?.include, [DEFAULT_CONVENTION_INCLUDE]),
+    exclude: conventionTransformSourcePatterns(options?.exclude, []),
+  };
+}
+
+function conventionTransformSourcePatterns(
+  value: AotConventionOptions['include'],
+  defaults: readonly (string | RegExp)[],
+): readonly (string | RegExp)[] {
+  if (value === undefined) {
+    return defaults;
+  }
+  if (value === null) {
+    return [];
+  }
+  const patterns = typeof value === "string" || value instanceof RegExp ? [value] : value;
+  return patterns.map((pattern) => typeof pattern === "string"
+    ? pattern
+    : new RegExp(pattern.source, pattern.flags));
 }
 
 function requireBuildSession(

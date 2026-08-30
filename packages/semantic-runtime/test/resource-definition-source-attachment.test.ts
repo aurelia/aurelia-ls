@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, test } from 'vitest';
 
 import { createSemanticRuntime } from '../src/api/runtime.js';
+import { EvidenceKind, EvidenceRecord, EvidenceRole } from '../src/kernel/evidence.js';
 import { CustomElementTemplateModuleRole } from '../src/resources/custom-element-definition.js';
 import { ResourceCarrierKind } from '../src/resources/resource-kind.js';
 import type {
@@ -152,6 +153,103 @@ describe('resource definition source attachment', () => {
       expect(normalize(attachment?.carrier.sourcePath)).toBe('src/aot-provider-card.ts');
       expect(normalize(attachment?.templateSource?.sourcePath)).toBe('src/aot-provider-card.html');
       expect(attachment?.templateSource?.oldText).toBe('<p>${message}</p>');
+
+      const merged = await runtime.openApp({
+        analysisDepth: 'binding-observation',
+        conventionTransformAdmissions: [{
+          providerModuleSpecifier: '@aurelia-ls/aot-vite',
+          patternResolutionBase: workspaceRoot,
+          include: ['src/**/*.{ts,html}'],
+          exclude: [],
+        }],
+      });
+      expect(merged.emission.resources.definitionSelections.filter((selection) =>
+        'name' in selection.definition && selection.definition.name === 'aot-provider-card'
+      )).toHaveLength(1);
+    } finally {
+      await rm(workspaceRoot, { force: true, recursive: true });
+    }
+  }, 30_000);
+
+  test('admits convention carriers from an invocation-scoped provider without a tooling source', async () => {
+    const workspaceRoot = await mkdtemp(path.join(packageRoot, '.resource-source-attachment-provider-input-'));
+    try {
+      await writeWorkspaceFiles(workspaceRoot, {
+        'package.json': JSON.stringify({
+          name: 'invocation-scoped-convention-provider',
+          private: true,
+          type: 'module',
+          dependencies: { aurelia: '2.0.0-rc.2' },
+        }),
+        'tsconfig.json': JSON.stringify({
+          compilerOptions: {
+            target: 'ES2022',
+            module: 'ESNext',
+            moduleResolution: 'Bundler',
+            strict: true,
+            skipLibCheck: true,
+          },
+          include: ['src'],
+        }),
+        'src/main.ts': [
+          "import Aurelia from 'aurelia';",
+          "import { HostApp } from './host-app';",
+          'Aurelia.app(HostApp).start();',
+        ].join('\n'),
+        'src/host-app.ts': [
+          "import { CustomElement } from 'aurelia';",
+          'export class HostApp {}',
+          "CustomElement.define({ name: 'host-app', template: '<provider-card></provider-card>' }, HostApp);",
+        ].join('\n'),
+        'src/provider-card.ts': 'export class ProviderCard {}',
+        'src/provider-card.html': '<p>${message}</p>',
+      });
+      const runtime = await createSemanticRuntime({
+        workspaceRoot,
+        storeKey: `contract:resource-definition-source-attachment:provider-input:${path.basename(workspaceRoot)}`,
+      });
+      const withoutProvider = await runtime.openApp({ analysisDepth: 'binding-observation' });
+      expect(withoutProvider.emission.resources.definitionSelections.some((selection) =>
+        'name' in selection.definition && selection.definition.name === 'provider-card'
+      )).toBe(false);
+
+      const providerAdmission = {
+        providerModuleSpecifier: '@aurelia-ls/aot-vite',
+        patternResolutionBase: path.dirname(workspaceRoot),
+        include: [`${path.basename(workspaceRoot)}/src/**/*.{ts,html}`],
+        exclude: [],
+      };
+      const withProvider = await runtime.openApp({
+        analysisDepth: 'binding-observation',
+        conventionTransformAdmissions: [providerAdmission],
+      });
+      const attachment = namedSelection(
+        withProvider.emission.resources.definitionSelections,
+        'provider-card',
+      ).sourceAttachment;
+      expect(attachment?.carrierKind).toBe(ResourceCarrierKind.Convention);
+      expect(normalize(attachment?.carrier.sourcePath)).toBe('src/provider-card.ts');
+
+      const providerEvidence = runtime.workspace.store.readAllRecords().filter((record) =>
+        record instanceof EvidenceRecord
+        && record.evidenceKind === EvidenceKind.External
+        && record.summary.includes('@aurelia-ls/aot-vite declares convention preprocessing')
+      );
+      expect(providerEvidence).toHaveLength(1);
+      expect(providerEvidence[0]?.roles).toEqual([EvidenceRole.Admission, EvidenceRole.Configuration]);
+      expect(providerEvidence[0]?.addressHandle).toBeNull();
+
+      const excluded = await runtime.openApp({
+        analysisDepth: 'binding-observation',
+        conventionTransformAdmissions: [{
+          ...providerAdmission,
+          exclude: [`${path.basename(workspaceRoot)}/src/provider-card.ts`],
+        }],
+      });
+      expect(excluded).not.toBe(withProvider);
+      expect(excluded.emission.resources.definitionSelections.some((selection) =>
+        'name' in selection.definition && selection.definition.name === 'provider-card'
+      )).toBe(false);
     } finally {
       await rm(workspaceRoot, { force: true, recursive: true });
     }

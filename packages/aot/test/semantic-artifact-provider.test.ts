@@ -162,6 +162,67 @@ describe('semantic AOT artifact provider', () => {
     }
   });
 
+  it('consumes invocation-scoped convention admission without a checked-in Vite configuration', async () => {
+    const root = await makeTemporaryDirectory('provider-conventions-');
+    temporaryDirectories.push(root);
+    const sourceRoot = path.resolve(root, 'src');
+    await mkdir(sourceRoot, { recursive: true });
+    await Promise.all([
+      writeFile(path.resolve(root, 'package.json'), JSON.stringify({
+        name: 'aot-provider-conventions',
+        private: true,
+        type: 'module',
+        dependencies: { aurelia: '2.0.0-rc.2' },
+      }), 'utf8'),
+      writeFile(path.resolve(root, 'tsconfig.json'), JSON.stringify({
+        compilerOptions: {
+          target: 'ES2022',
+          module: 'ESNext',
+          moduleResolution: 'Bundler',
+          lib: ['ES2022', 'DOM'],
+          strict: true,
+          skipLibCheck: true,
+          noEmit: true,
+        },
+        include: ['src'],
+      }), 'utf8'),
+      writeFile(path.resolve(sourceRoot, 'main.ts'), [
+        "import Aurelia from 'aurelia';",
+        "import { MyApp } from './my-app';",
+        'Aurelia.app(MyApp).start();',
+      ].join('\n'), 'utf8'),
+      writeFile(path.resolve(sourceRoot, 'my-app.ts'), "export class MyApp { message = 'provider'; }\n", 'utf8'),
+      writeFile(path.resolve(sourceRoot, 'my-app.html'), '<main>${message}</main>\n', 'utf8'),
+    ]);
+
+    const withoutAdmission = await new SemanticAotArtifactProvider().openBuild({
+      root,
+      mode: 'production',
+      environmentName: 'client',
+      sourcemap: true,
+    });
+    await expect(withoutAdmission.artifactFor({ sourcePath: path.resolve(sourceRoot, 'my-app.html') }))
+      .rejects.toMatchObject({ code: 'AOT_ARTIFACT_INVALID_HANDOFF' });
+
+    const withAdmission = await new SemanticAotArtifactProvider().openBuild({
+      root,
+      mode: 'production',
+      environmentName: 'client',
+      sourcemap: true,
+      conventionTransformAdmission: {
+        providerModuleSpecifier: '@aurelia-ls/aot-vite',
+        patternResolutionBase: root,
+        include: ['src/**/*.{ts,js,html}'],
+        exclude: [],
+      },
+    });
+    const artifact = await withAdmission.artifactFor({
+      sourcePath: path.resolve(sourceRoot, 'my-app.html'),
+    });
+    expect(artifact.code).toContain('name: "my-app"');
+    expect(artifact.code).toContain('needsCompile: false');
+  }, 30_000);
+
   it('separates satisfiable spread lookup pressure from general compiler replacement blockers', () => {
     const spreadRequirements = runtimeRequirements([
       runtimeRequirementReason(RuntimeRegistrationRequirementReasonKind.RuntimeSpreadCompilationRequired),

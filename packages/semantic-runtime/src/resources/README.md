@@ -46,6 +46,11 @@ an authored name token exists. ESM imports/exports and CommonJS `require(...)`/`
 and admission path. This reader currently owns Vite configuration only. Webpack-loader, Gulp, Parcel, and ts-jest use the
 same Aurelia preprocessor through different configuration carriers and need their own admission readers and pressure
 fixtures before they are treated as covered. Non-static filter values remain open rather than being approximated.
+An active build adapter may additionally declare its exact convention include/exclude reach and pattern-resolution
+base for one app-analysis invocation. The materializer merges that addressless external configuration evidence with
+authored tooling-config evidence, while app cache and incumbent identity retain the declaration as part of analysis
+currentness. This is a provider fact, not inferred source truth: semantic-runtime does not enable conventions merely
+because source names and file pairs happen to match.
 Generic expression and value reads belong in `evaluation`; resource field readers should only interpret Aurelia
 definition fields such as `type`, `name`, `aliases`, `pattern`, and `symbols`.
 `resource-definition-source.ts` is the product-free companion for source

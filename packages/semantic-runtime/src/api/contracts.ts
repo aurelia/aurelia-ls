@@ -9,6 +9,7 @@ import type {
 import type { ApplicationFileRole } from '../application/topology.js';
 import type { SourceFileRole } from '../kernel/address.js';
 import type { SemanticRuntimeProjectInputAuthority } from '../kernel/project-input.js';
+import type { ResourceConventionTransformAdmissionInput } from '../resources/resource-convention-transform-admission.js';
 import type {
   DiagnosticRepairAffordance,
   DiagnosticSuggestion,
@@ -774,6 +775,8 @@ export interface OpenSemanticAppOptions {
   readonly telemetry?: SemanticRuntimeTelemetryOptions | null;
   /** Explicit synchronous app-entry function to invoke; exports are never activated merely because they exist. */
   readonly nominatedEntry?: SemanticAppNominatedEntry | null;
+  /** Exact convention-transform reach declared by active build providers for this app-analysis invocation. */
+  readonly conventionTransformAdmissions?: readonly ResourceConventionTransformAdmissionInput[] | null;
 }
 
 export interface SemanticAppOverviewRequest {

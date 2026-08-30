@@ -41,6 +41,7 @@ import {
 } from './resource-kind.js';
 import {
   ResourceConventionTransformAdmissionMaterializer,
+  type NormalizedResourceConventionTransformAdmission,
   type ResourceConventionToolingEvaluationContext,
   type ResourceConventionTransformAdmissionIndex,
 } from './resource-convention-transform-admission.js';
@@ -273,6 +274,7 @@ export class ResourceRecognitionProjectPass {
     conventionToolingEvaluation: StaticProjectEvaluationAccess<ResourceConventionToolingEvaluationContext>,
     typeSystem: TypeSystemProject | null,
     publication: KernelPublicationContext,
+    providerConventionTransforms: readonly NormalizedResourceConventionTransformAdmission[] = [],
   ): ResourceRecognitionProjectResult {
     const started = performance.now();
     const phases: ResourceRecognitionProjectPhaseTiming[] = [];
@@ -283,7 +285,13 @@ export class ResourceRecognitionProjectPass {
       resourceRecognitionSourceFiles(project, evaluation, packageBuildBridges)
     );
     const conventionTransforms = new ResourceConventionTransformAdmissionMaterializer()
-      .materializeAndEmit(store, project, conventionToolingEvaluation, publication);
+      .materializeAndEmit(
+        store,
+        project,
+        conventionToolingEvaluation,
+        publication,
+        providerConventionTransforms,
+      );
     const contexts = evaluatedResourceRecognitionContexts(
       project,
       evaluation,

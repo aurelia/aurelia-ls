@@ -35,6 +35,16 @@ export type AotRuntimeConfigurationMode =
   | "replace-explicit"
   | "require-replaceable";
 
+export type AotConventionTransformSourcePattern = string | RegExp;
+
+/** Exact source reach of the active conventions transform for this build invocation. */
+export interface AotConventionTransformAdmission {
+  readonly providerModuleSpecifier: "@aurelia-ls/aot-vite";
+  readonly patternResolutionBase: string;
+  readonly include: readonly AotConventionTransformSourcePattern[];
+  readonly exclude: readonly AotConventionTransformSourcePattern[];
+}
+
 export interface AotBuildRequest {
   readonly root: string;
   readonly mode: string;
@@ -42,6 +52,7 @@ export interface AotBuildRequest {
   readonly sourcemap: boolean | "inline" | "hidden";
   readonly nominatedEntry?: AotNominatedEntry | null;
   readonly runtimeConfiguration?: AotRuntimeConfigurationMode;
+  readonly conventionTransformAdmission?: AotConventionTransformAdmission | null;
 }
 
 export interface AotTemplateRequest {

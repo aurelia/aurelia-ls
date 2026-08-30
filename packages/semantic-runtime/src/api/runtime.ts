@@ -45,6 +45,11 @@ import {
 } from '../kernel/computation-lifecycle.js';
 import { isSemanticRuntimeAnalysisCurrentnessError } from '../kernel/analysis-currentness.js';
 import { FrameworkSupportAuthority } from '../framework/framework-support-authority.js';
+import {
+  normalizeResourceConventionTransformAdmissions,
+  resourceConventionTransformAdmissionsIdentityKey,
+  type NormalizedResourceConventionTransformAdmission,
+} from '../resources/resource-convention-transform-admission.js';
 import { AureliaAppWorldProjectEmission } from '../configuration/app-world-project-pass.js';
 import {
   AureliaAppWorldProjectComputationService,
@@ -518,6 +523,8 @@ interface SemanticAppOpenPlan {
   readonly authoringTemplateLimit: number | null;
   readonly telemetry: OpenSemanticAppOptions['telemetry'];
   readonly nominatedEntry: NormalizedSemanticAppNominatedEntry | null;
+  readonly conventionTransformAdmissions: readonly NormalizedResourceConventionTransformAdmission[];
+  readonly conventionTransformAdmissionsIdentityKey: string;
 }
 
 /** One completed cache lookup handed only into the synchronous routed-answer transaction that performed it. */
@@ -2401,6 +2408,9 @@ export class SemanticRuntime {
             projectNominatedEntrySourceFilePath as string,
             options.nominatedEntry,
           );
+      const conventionTransformAdmissions = normalizeResourceConventionTransformAdmissions(
+        options.conventionTransformAdmissions,
+      );
       return {
         project,
         planningReads: Object.freeze(
@@ -2413,6 +2423,10 @@ export class SemanticRuntime {
         authoringTemplateLimit,
         telemetry: options.telemetry ?? null,
         nominatedEntry,
+        conventionTransformAdmissions,
+        conventionTransformAdmissionsIdentityKey: resourceConventionTransformAdmissionsIdentityKey(
+          conventionTransformAdmissions,
+        ),
       };
     } finally {
       const active = this.activePlanningReadCollectors.pop();
@@ -2439,6 +2453,8 @@ export class SemanticRuntime {
       plan.authoringTemplateLimit,
       plan.telemetry,
       plan.nominatedEntry,
+      plan.conventionTransformAdmissions,
+      plan.conventionTransformAdmissionsIdentityKey,
       transaction?.token,
       cachePreflight,
     );
@@ -2508,6 +2524,10 @@ export class SemanticRuntime {
     authoringTemplateLimit: number | null,
     telemetry: OpenSemanticAppOptions['telemetry'] = null,
     nominatedEntry: NormalizedSemanticAppNominatedEntry | null = null,
+    conventionTransformAdmissions: readonly NormalizedResourceConventionTransformAdmission[] = [],
+    conventionTransformAdmissionsIdentityKey: string = resourceConventionTransformAdmissionsIdentityKey(
+      conventionTransformAdmissions,
+    ),
     transactionToken?: object,
     cachePreflight: SemanticAppCachePreflight | null = null,
   ): SemanticApp {
@@ -2530,6 +2550,7 @@ export class SemanticRuntime {
           authoringTemplateSourceFiles,
           authoringTemplateLimit,
           nominatedEntry,
+          conventionTransformAdmissionsIdentityKey,
         )
       : cachePreflight.cachedApp;
     if (existing != null) {
@@ -2550,6 +2571,7 @@ export class SemanticRuntime {
       authoringTemplateLimit,
       telemetry,
       nominatedEntry,
+      conventionTransformAdmissions,
     }).commit();
     if (result.commit.state !== ComputationCommitState.Committed || result.committedGeneration == null) {
       throw computationCommitCurrentnessError(
@@ -2571,6 +2593,7 @@ export class SemanticRuntime {
         authoringTemplateSourceFileCount: authoringTemplateSourceFiles.length,
         authoringTemplateLimit,
         nominatedEntryIdentityKey: nominatedEntry?.identityKey ?? null,
+        conventionTransformAdmissionsIdentityKey,
         kernelMarker,
       },
     );
@@ -2584,6 +2607,7 @@ export class SemanticRuntime {
         authoringTemplateSourceFiles,
         authoringTemplateLimit,
         nominatedEntry?.identityKey ?? null,
+        conventionTransformAdmissionsIdentityKey,
       ),
       app,
     );
@@ -2605,6 +2629,7 @@ export class SemanticRuntime {
         plan.authoringTemplateSourceFiles,
         plan.authoringTemplateLimit,
         plan.nominatedEntry,
+        plan.conventionTransformAdmissionsIdentityKey,
         validationScope,
       ),
     });
@@ -2619,6 +2644,7 @@ export class SemanticRuntime {
     authoringTemplateSourceFiles: readonly string[],
     authoringTemplateLimit: number | null,
     nominatedEntry: NormalizedSemanticAppNominatedEntry | null,
+    conventionTransformAdmissionsIdentityKey: string,
     validationScope?: ComputationReadValidationScope,
   ): SemanticApp | null {
     const exactCacheKey = appCacheKey(
@@ -2630,6 +2656,7 @@ export class SemanticRuntime {
       authoringTemplateSourceFiles,
       authoringTemplateLimit,
       nominatedEntry?.identityKey ?? null,
+      conventionTransformAdmissionsIdentityKey,
     );
     const exact = this.appsByCacheKey.get(exactCacheKey);
     if (exact?.isCurrent(validationScope) === true) {
@@ -2647,6 +2674,7 @@ export class SemanticRuntime {
           authoringTemplateSourceFiles,
           authoringTemplateLimit,
           nominatedEntry?.identityKey ?? null,
+          conventionTransformAdmissionsIdentityKey,
           validationScope,
         )
       ) {
@@ -3944,6 +3972,7 @@ export class SemanticApp {
     authoringTemplateSourceFiles: readonly string[],
     authoringTemplateLimit: number | null,
     nominatedEntryIdentityKey: string | null,
+    conventionTransformAdmissionsIdentityKey: string,
     validationScope?: ComputationReadValidationScope,
   ): boolean {
     if (
@@ -3953,6 +3982,7 @@ export class SemanticApp {
       || (includeAuthoringTemplates && !this.cacheRequest.includeAuthoringTemplates)
       || (includeCompilerOccurrencePrecedents && !this.cacheRequest.includeCompilerOccurrencePrecedents)
       || this.cacheRequest.nominatedEntryIdentityKey !== nominatedEntryIdentityKey
+      || this.cacheRequest.conventionTransformAdmissionsIdentityKey !== conventionTransformAdmissionsIdentityKey
       || !this.isCurrent(validationScope)
     ) {
       return false;
@@ -6465,6 +6495,7 @@ interface SemanticAppCacheRequest {
   readonly authoringTemplateSourceFileCount: number;
   readonly authoringTemplateLimit: number | null;
   readonly nominatedEntryIdentityKey: string | null;
+  readonly conventionTransformAdmissionsIdentityKey: string;
   readonly kernelMarker: KernelStoreLifetimeMarker;
 }
 
@@ -7289,6 +7320,7 @@ function appCacheKey(
   authoringTemplateSourceFiles: readonly string[],
   authoringTemplateLimit: number | null,
   nominatedEntryIdentityKey: string | null,
+  conventionTransformAdmissionsIdentityKey: string,
 ): string {
   return JSON.stringify([
     projectKey,
@@ -7299,6 +7331,7 @@ function appCacheKey(
     authoringTemplateSourceFiles,
     authoringTemplateLimit,
     nominatedEntryIdentityKey,
+    conventionTransformAdmissionsIdentityKey,
   ]);
 }
 

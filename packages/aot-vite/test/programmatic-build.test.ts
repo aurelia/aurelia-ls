@@ -122,6 +122,14 @@ describe("aureliaAot programmatic Vite 8 build", () => {
     const output = buildOutput(result as Rollup.RolldownOutput | Rollup.RolldownOutput[]);
     const chunk = output.find((candidate) => candidate.type === "chunk");
     expect(openBuild).toHaveBeenCalledTimes(1);
+    expect(openBuild).toHaveBeenCalledWith(expect.objectContaining({
+      conventionTransformAdmission: {
+        providerModuleSpecifier: "@aurelia-ls/aot-vite",
+        patternResolutionBase: process.cwd(),
+        include: ["**/*.{ts,js,html}"],
+        exclude: [],
+      },
+    }));
     expect(chunk?.code).toContain("aot-vite-programmatic-proof");
     expect(chunk?.code).toContain("carrier-neutral:");
     expect(chunk?.code).toContain("build-specific-configuration");

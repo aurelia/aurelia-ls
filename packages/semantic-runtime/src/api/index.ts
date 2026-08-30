@@ -43,6 +43,10 @@ export type {
   SemanticAppEntryCallableSelector,
   SemanticAppNominatedEntry,
 } from '../configuration/nominated-app-entry.js';
+export type {
+  ConventionTransformSourcePattern,
+  ResourceConventionTransformAdmissionInput,
+} from '../resources/resource-convention-transform-admission.js';
 export {
   BUILT_IN_RESOURCE_PACKAGES,
 } from '../resources/built-in-resources.js';

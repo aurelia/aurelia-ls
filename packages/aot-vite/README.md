@@ -20,6 +20,12 @@ digest/variant fails closed. Neither path falls through to JIT generation.
 The provider and session types are a narrow structural port. `@aurelia-ls/aot`'s
 `SemanticAotArtifactProvider` implements it without making the Vite adapter own
 or import semantic-runtime. The private assurance adapter composes both packages.
+Each build session also carries the exact convention include/exclude reach and
+string-pattern resolution base captured by the active `aureliaAot()` invocation.
+That invocation-scoped declaration lets the semantic provider recognize
+convention output in programmatic builds without a redundant `vite.config`
+source; a missing declaration or explicit disablement never asks semantic-runtime
+to infer convention eligibility from class/file shape.
 
 The initial adapter accepts only one-shot client production builds. Serve,
 watch, SSR, workers, and non-client environments fail explicitly. Optional

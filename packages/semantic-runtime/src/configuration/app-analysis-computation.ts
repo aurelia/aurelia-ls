@@ -25,7 +25,10 @@ import type { ProjectBootFrame } from '../boot/frames.js';
 import type { StaticProjectEvaluationComputationService } from '../evaluation/project-evaluation.js';
 import type { SemanticRuntimeSupport } from '../framework/framework-support-authority.js';
 import type { TypeSystemProjectComputationService } from '../type-system/project-computation.js';
-import { resourceConventionToolingEvaluationProfile } from '../resources/resource-convention-transform-admission.js';
+import {
+  resourceConventionToolingEvaluationProfile,
+  resourceConventionTransformAdmissionsIdentityKey,
+} from '../resources/resource-convention-transform-admission.js';
 import {
   AureliaAppWorldProjectPass,
   type AureliaAppWorldProjectEmission,
@@ -296,7 +299,15 @@ export class AureliaAppWorldProjectComputationService implements KernelStoreSide
     const authority = this.authorityFor(project.projectKey);
     const committedIncumbent = authority.committed()?.readCommittedEmission() ?? null;
     const nominatedEntryKey = options.nominatedEntry?.identityKey ?? null;
-    const incumbent = (committedIncumbent?.preTemplate.nominatedEntry?.identityKey ?? null) === nominatedEntryKey
+    const conventionTransformAdmissionsKey = resourceConventionTransformAdmissionsIdentityKey(
+      options.conventionTransformAdmissions ?? [],
+    );
+    const incumbent = (
+      (committedIncumbent?.preTemplate.nominatedEntry?.identityKey ?? null) === nominatedEntryKey
+      && resourceConventionTransformAdmissionsIdentityKey(
+        committedIncumbent?.preTemplate.conventionTransformAdmissions ?? [],
+      ) === conventionTransformAdmissionsKey
+    )
       ? committedIncumbent
       : null;
     const run = this.lifecycle.begin(locus);

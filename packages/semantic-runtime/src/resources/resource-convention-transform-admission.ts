@@ -68,6 +68,7 @@ import {
 import type {
   EvidenceHandle,
 } from '../kernel/handles.js';
+import { stableKernelLocalHash } from '../kernel/handles.js';
 import { OpenSeamReasonKind } from '../kernel/open-seam.js';
 import { recordsForSourceOpenMaterialization } from '../kernel/source-open-seam.js';
 import {
@@ -107,7 +108,63 @@ const AURELIA_VITE_PLUGIN_FACTORIES = new Map<string, ConventionPluginFactoryDes
 const VITE_MODULES = new Set(['vite']);
 const DEFAULT_VITE_INCLUDE = 'src/**/*.{ts,js,html}';
 
-type ConventionTransformSourcePattern = string | RegExp;
+export type ConventionTransformSourcePattern = string | RegExp;
+
+/** Exact convention-transform reach declared by an active build provider for one app-analysis invocation. */
+export interface ResourceConventionTransformAdmissionInput {
+  readonly providerModuleSpecifier: string;
+  /** Absolute or relative base used by the provider when resolving string filter patterns. */
+  readonly patternResolutionBase: string;
+  readonly include: readonly ConventionTransformSourcePattern[];
+  readonly exclude: readonly ConventionTransformSourcePattern[];
+}
+
+/** Captured provider declaration whose identity participates in app-analysis reuse. */
+export class NormalizedResourceConventionTransformAdmission {
+  readonly identityKey: string;
+
+  constructor(
+    readonly providerModuleSpecifier: string,
+    readonly patternResolutionBase: string,
+    readonly include: readonly ConventionTransformSourcePattern[],
+    readonly exclude: readonly ConventionTransformSourcePattern[],
+  ) {
+    this.identityKey = JSON.stringify([
+      providerModuleSpecifier,
+      patternResolutionBase,
+      include.map(conventionTransformSourcePatternIdentity),
+      exclude.map(conventionTransformSourcePatternIdentity),
+    ]);
+  }
+}
+
+export function normalizeResourceConventionTransformAdmissions(
+  inputs: readonly ResourceConventionTransformAdmissionInput[] | null | undefined,
+): readonly NormalizedResourceConventionTransformAdmission[] {
+  const normalized = (inputs ?? []).map((input, index) => {
+    const providerModuleSpecifier = input.providerModuleSpecifier.trim();
+    if (providerModuleSpecifier.length === 0) {
+      throw new Error(`Convention-transform admission ${index} has a blank provider module specifier.`);
+    }
+    const patternResolutionBase = input.patternResolutionBase.trim();
+    if (patternResolutionBase.length === 0) {
+      throw new Error(`Convention-transform admission ${index} has a blank pattern resolution base.`);
+    }
+    return new NormalizedResourceConventionTransformAdmission(
+      providerModuleSpecifier,
+      path.normalize(path.resolve(patternResolutionBase)),
+      normalizeConventionTransformSourcePatterns(input.include, index, 'include'),
+      normalizeConventionTransformSourcePatterns(input.exclude, index, 'exclude'),
+    );
+  });
+  return [...new Map(normalized.map((admission) => [admission.identityKey, admission])).values()];
+}
+
+export function resourceConventionTransformAdmissionsIdentityKey(
+  admissions: readonly NormalizedResourceConventionTransformAdmission[],
+): string {
+  return JSON.stringify(admissions.map((admission) => admission.identityKey));
+}
 
 export class ResourceConventionTransformAdmission {
   private readonly filter: (id: unknown) => boolean;
@@ -115,10 +172,11 @@ export class ResourceConventionTransformAdmission {
   constructor(
     readonly evidenceHandles: readonly EvidenceHandle[],
     private readonly projectRootDir: string,
+    private readonly patternResolutionBase: string,
     include: readonly ConventionTransformSourcePattern[],
     exclude: readonly ConventionTransformSourcePattern[],
   ) {
-    this.filter = createFilter(include, exclude, { resolve: projectRootDir });
+    this.filter = createFilter(include, exclude, { resolve: patternResolutionBase });
   }
 
   admits(source: SourceFileAdmission): boolean {
@@ -486,6 +544,7 @@ export class ResourceConventionTransformAdmissionMaterializer {
     project: ProjectBootFrame,
     evaluationAccess: StaticProjectEvaluationAccess<ResourceConventionToolingEvaluationContext>,
     publication: KernelPublicationContext,
+    providerAdmissions: readonly NormalizedResourceConventionTransformAdmission[] = [],
   ): ResourceConventionTransformAdmissionIndex {
     if (!evaluationAccess.generation.belongsToProject(project)) {
       throw new Error(`Convention-tooling evaluation belongs to another project semantic frame.`);
@@ -527,6 +586,9 @@ export class ResourceConventionTransformAdmissionMaterializer {
         }).records
       ));
     }
+    emissions.push(...providerAdmissions.map((admission) =>
+      providerConventionTransformEmission(store, project, admission)
+    ));
     const records = [
       ...emissions.flatMap((emission) => emission.records),
       ...openRecords,
@@ -540,6 +602,33 @@ export class ResourceConventionTransformAdmissionMaterializer {
       emissions.map((emission) => emission.admission),
     );
   }
+}
+
+function providerConventionTransformEmission(
+  store: KernelStore,
+  project: ProjectBootFrame,
+  input: NormalizedResourceConventionTransformAdmission,
+): ResourceConventionTransformEmission {
+  const local = `resource-convention-transform-provider:${project.projectKey}:${stableKernelLocalHash(input.identityKey)}`;
+  const evidenceHandle = store.handles.evidence(local);
+  return new ResourceConventionTransformEmission(
+    [
+      new EvidenceRecord(
+        evidenceHandle,
+        EvidenceKind.External,
+        [EvidenceRole.Admission, EvidenceRole.Configuration],
+        `${input.providerModuleSpecifier} declares convention preprocessing for matching project sources `
+        + `with string patterns resolved from ${input.patternResolutionBase}.`,
+      ),
+    ],
+    new ResourceConventionTransformAdmission(
+      [evidenceHandle],
+      project.rootDir,
+      input.patternResolutionBase,
+      input.include,
+      input.exclude,
+    ),
+  );
 }
 
 function conventionTransformEmission(
@@ -572,6 +661,7 @@ function conventionTransformEmission(
     ],
     new ResourceConventionTransformAdmission(
       [source.evidenceHandle, evidenceHandle],
+      project.rootDir,
       project.rootDir,
       read.include,
       read.exclude,
@@ -792,6 +882,34 @@ function readSourcePatterns(
     default:
       return null;
   }
+}
+
+function normalizeConventionTransformSourcePatterns(
+  patterns: readonly ConventionTransformSourcePattern[],
+  admissionIndex: number,
+  lane: 'include' | 'exclude',
+): readonly ConventionTransformSourcePattern[] {
+  return patterns.map((pattern, patternIndex) => {
+    if (typeof pattern === 'string') {
+      return pattern;
+    }
+    if (pattern instanceof RegExp) {
+      // Capture the invocation value rather than retaining a caller-mutable lastIndex.
+      return new RegExp(pattern.source, pattern.flags);
+    }
+    throw new Error(
+      `Convention-transform admission ${admissionIndex} ${lane} pattern ${patternIndex} `
+      + 'must be a string or RegExp.',
+    );
+  });
+}
+
+function conventionTransformSourcePatternIdentity(
+  pattern: ConventionTransformSourcePattern,
+): readonly string[] {
+  return typeof pattern === 'string'
+    ? ['string', pattern]
+    : ['regexp', pattern.source, pattern.flags];
 }
 
 function isViteConfigPath(sourcePath: string): boolean {
