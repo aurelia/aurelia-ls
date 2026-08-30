@@ -33,6 +33,12 @@ import {
   type TemplateCompilerRuntimeInstructionReason,
 } from './template-instruction-runtime-value.js';
 import type { TemplateResourceRuntimeAnalysisEmission } from './template-compilation-project-pass.js';
+import {
+  projectSemanticAppRuntimeRegistrationRequirements,
+  RuntimeRegistrationRequirementReasonKind,
+  type RuntimeRegistrationRequirementCompilerInput,
+  type SemanticAppRuntimeRegistrationRequirements,
+} from './runtime-registration-requirements.js';
 
 type BrowserMaterializationContext = ConstructorParameters<typeof BrowserEffectiveTemplateMaterializer>[0];
 
@@ -71,6 +77,15 @@ export class SemanticAppTemplateCompilerHandoffBatch {
   constructor(
     readonly resources: readonly SemanticAppTemplateCompilerHandoffResource[],
     readonly unmatchedTemplateSourcePaths: readonly string[],
+    readonly runtimeRegistrationRequirements: SemanticAppRuntimeRegistrationRequirements,
+  ) {}
+}
+
+class SemanticAppTemplateCompilerMaterialization {
+  constructor(
+    readonly resource: TemplateResourceRuntimeAnalysisEmission,
+    readonly handoff: SemanticAppTemplateCompilerHandoffResource,
+    readonly requirementInput: RuntimeRegistrationRequirementCompilerInput,
   ) {}
 }
 
@@ -90,6 +105,11 @@ export type SemanticAppTemplateCompilerHandoffResource =
       readonly reasons: readonly TemplateCompilerCompiledHandoffReason[];
       readonly value: null;
     };
+
+type UnavailableSemanticAppTemplateCompilerHandoffResource = Extract<
+  SemanticAppTemplateCompilerHandoffResource,
+  { readonly value: null }
+>;
 
 /**
  * Materialize app template compiler output and detach it before retiring the run-local browser/compiler world.
@@ -123,7 +143,7 @@ export function materializeSemanticAppTemplateCompilerHandoffs(
     summary: 'Materialize detached browser-effective compiled template handoffs.',
   });
   try {
-    const detached = resources.map((resource, ordinal) => materializeResource(
+    const materialized = resources.map((resource, ordinal) => materializeResource(
       app,
       resource,
       ordinal,
@@ -132,8 +152,21 @@ export function materializeSemanticAppTemplateCompilerHandoffs(
     ));
     app.requireCurrent();
     return new SemanticAppTemplateCompilerHandoffBatch(
-      detached,
+      materialized.map((entry) => entry.handoff),
       requestedPaths.filter((filePath) => !matchedPaths.has(filePath)),
+      projectSemanticAppRuntimeRegistrationRequirements(
+        app,
+        materialized.map((entry) => entry.requirementInput),
+        resources.length === candidates.length
+          ? []
+          : [{
+              reasonKind: RuntimeRegistrationRequirementReasonKind.CompilerCohortIncomplete,
+              summary: 'Selective template handoff materialization does not cover the complete app runtime cohort.',
+              stableKeys: candidates
+                .filter((candidate) => !resources.includes(candidate))
+                .map((candidate) => candidate.compilation.localKey),
+            }],
+      ),
     );
   } finally {
     run.abort();
@@ -152,27 +185,27 @@ function materializeResource(
   ordinal: number,
   run: BrowserMaterializationContext,
   store: KernelStore,
-): SemanticAppTemplateCompilerHandoffResource {
+): SemanticAppTemplateCompilerMaterialization {
   const compilation = resource.compilation;
   const templateSource = compilation.unit.templateSource;
   const source = sourceReference(store, templateSource.sourceAddressHandle);
   if (templateSource.markup == null) {
-    return unavailable(
+    return unavailableMaterialization(resource, unavailable(
       TemplateCompilerCompiledHandoffState.Ineligible,
       source,
       TemplateCompilerCompiledHandoffStage.Input,
       'markup-unavailable',
       'Template compiler handoff requires authored markup.',
-    );
+    ));
   }
   if (compilation.html.draft == null) {
-    return unavailable(
+    return unavailableMaterialization(resource, unavailable(
       TemplateCompilerCompiledHandoffState.Pending,
       source,
       TemplateCompilerCompiledHandoffStage.Input,
       'authored-draft-unavailable',
       'Template compiler handoff requires retained authored HTML draft bindings; open the app with the aot profile.',
-    );
+    ));
   }
   const localKey = `compiled-handoff:${ordinal}:${compilation.localKey}`;
   const browserDraft = parseBrowserTemplateFragmentDraft(templateSource.markup);
@@ -192,12 +225,12 @@ function materializeResource(
     compilerReadStore: store,
   });
   if (family.state !== TemplateCompilerContextFamilyCompilationState.Exact || family.value == null) {
-    return {
+    return unavailableMaterialization(resource, {
       state: familyState(family.state),
       source,
       reasons: family.reasons.map(contextFamilyReason),
       value: null,
-    };
+    });
   }
   const instructions = projectTemplateCompilerRuntimeInstructionFamily({
     family: family.value,
@@ -205,12 +238,12 @@ function materializeResource(
     resourceRepresentation: TemplateCompilerRuntimeResourceRepresentation.Name,
   });
   if (instructions.state !== TemplateCompilerRuntimeInstructionFamilyState.Exact || instructions.value == null) {
-    return {
+    return unavailableMaterialization(resource, {
       state: instructionState(instructions.state),
       source,
       reasons: instructions.reasons.map(runtimeInstructionReason),
       value: null,
-    };
+    });
   }
   const definitions = projectTemplateCompilerCompiledDefinitionFamily({
     family: family.value,
@@ -218,12 +251,12 @@ function materializeResource(
     readView: store,
   });
   if (definitions.state !== TemplateCompilerCompiledDefinitionFamilyState.Exact || definitions.value == null) {
-    return {
+    return unavailableMaterialization(resource, {
       state: definitionState(definitions.state),
       source,
       reasons: definitions.reasons.map(compiledDefinitionReason),
       value: null,
-    };
+    });
   }
   if (!definitions.value.isCurrent()) {
     throw new Error(`Compiled handoff for '${compilation.definition.name}' changed before detachment.`);
@@ -235,15 +268,15 @@ function materializeResource(
   )?.sourceAttachment ?? null;
   const definitionProductHandle = compilation.definition.productHandle;
   if (definitionProductHandle == null) {
-    return unavailable(
+    return unavailableMaterialization(resource, unavailable(
       TemplateCompilerCompiledHandoffState.Pending,
       source,
       TemplateCompilerCompiledHandoffStage.CompiledDefinitions,
       'definition-product-unavailable',
       'Template compiler handoff requires a materialized root resource definition identity.',
-    );
+    ));
   }
-  return {
+  const handoff: SemanticAppTemplateCompilerHandoffResource = {
     state: TemplateCompilerCompiledHandoffState.Exact,
     source,
     reasons: [],
@@ -263,6 +296,36 @@ function materializeResource(
       store,
     }),
   };
+  return new SemanticAppTemplateCompilerMaterialization(
+    resource,
+    handoff,
+    {
+      resource,
+      family: family.value,
+      instructions: instructions.value,
+      unavailableReasons: [],
+    },
+  );
+}
+
+function unavailableMaterialization(
+  resource: TemplateResourceRuntimeAnalysisEmission,
+  handoff: UnavailableSemanticAppTemplateCompilerHandoffResource,
+): SemanticAppTemplateCompilerMaterialization {
+  return new SemanticAppTemplateCompilerMaterialization(
+    resource,
+    handoff,
+    {
+      resource,
+      family: null,
+      instructions: null,
+      unavailableReasons: handoff.reasons.map((reason) => ({
+        reasonKind: RuntimeRegistrationRequirementReasonKind.CompilerHandoffUnavailable,
+        summary: reason.summary,
+        stableKeys: [reason.stage, reason.reasonKind, ...reason.stableKeys],
+      })),
+    },
+  );
 }
 
 function resourceMatchesPath(
@@ -323,7 +386,7 @@ function unavailable(
   stage: TemplateCompilerCompiledHandoffStage,
   reasonKind: string,
   summary: string,
-): SemanticAppTemplateCompilerHandoffResource {
+): UnavailableSemanticAppTemplateCompilerHandoffResource {
   return { state, source, value: null, reasons: [{ stage, reasonKind, summary, stableKeys: [] }] };
 }
 

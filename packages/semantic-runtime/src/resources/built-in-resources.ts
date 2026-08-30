@@ -38,6 +38,12 @@ export const enum BuiltInResourceGroup {
   DefaultResources = 'default-resources',
 }
 
+/** Whether one modeled built-in resource target is importable from its public package entrypoint. */
+export const enum BuiltInResourceExportVisibility {
+  Public = 'public',
+  PackageInternal = 'package-internal',
+}
+
 export enum BuiltInBindingBehaviorName {
   /** Runtime-html `& attr` behavior that forces attribute binding. */
   Attr = 'attr',
@@ -1070,6 +1076,16 @@ export function builtInResourcePackageModuleSpecifier(
   }
 }
 
+/** Public export authority for selective runtime registration. */
+export function builtInResourceExportVisibility(
+  resource: BuiltInResource,
+): BuiltInResourceExportVisibility {
+  // Runtime-html registers Show by default but does not export the target from its package entrypoint.
+  return resource instanceof RuntimeHtmlShowResource
+    ? BuiltInResourceExportVisibility.PackageInternal
+    : BuiltInResourceExportVisibility.Public;
+}
+
 /** All built-in resource catalog inputs known to semantic-runtime. */
 export function allBuiltInResourceCatalogInputs(): readonly BuiltInResourceCatalogInput[] {
   return [
@@ -1094,6 +1110,10 @@ export function findBuiltInResource(
   return allBuiltInResources().find((resource) =>
     resource.packageId === key.packageId
     && resource.resourceKind === key.resourceKind
-    && resource.name === key.name
+    && builtInResourceName(resource) === key.name
   ) ?? null;
+}
+
+function builtInResourceName(resource: BuiltInResource): string {
+  return resource.name;
 }

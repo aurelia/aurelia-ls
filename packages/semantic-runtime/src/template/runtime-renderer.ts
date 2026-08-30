@@ -14,8 +14,8 @@ import {
 import type { FrameworkRegistrationKind } from '../registration/registration-reference.js';
 import type { RuntimeHydrationContext } from '../configuration/controller.js';
 import {
-  TemplateRenderTarget,
   TemplateRenderTargetKind,
+  type TemplateRenderTarget,
 } from './compiled-template.js';
 import {
   AttributeBindingInstruction,
@@ -83,8 +83,8 @@ import {
 import {
   RuntimeControllerCreationRequest,
   RuntimeControllerCreationKind,
-  RuntimeControllerFrame,
   runtimeControllerCurrentRenderingReachability,
+  type RuntimeControllerFrame,
 } from './runtime-controller.js';
 import {
   RuntimeRendererKind,
@@ -95,6 +95,7 @@ import {
   RuntimeRendererIssueKind,
   RuntimeRendererIssuePhase,
 } from './runtime-renderer-issue.js';
+import { TemplateCompilerFrameworkInstructionType } from './template-instruction-runtime-value.js';
 
 export const enum RuntimeRendererPackage {
   RuntimeHtml = 'runtime-html',
@@ -108,8 +109,17 @@ export const enum RuntimeRendererGroup {
   StateDefaultRenderers = 'state-default-renderers',
 }
 
+/** Whether a modeled renderer target can be imported from its owning package entrypoint. */
+export const enum RuntimeRendererExportVisibility {
+  Public = 'public',
+  PackageInternal = 'package-internal',
+}
+
 export type RuntimeRendererField =
+  | 'targetName'
+  | 'exportVisibility'
   | 'rendererKind'
+  | 'targetInstructionType'
   | 'targetInstructionKind'
   | 'runtimeBindingKind'
   | 'bindingKind'
@@ -117,6 +127,20 @@ export type RuntimeRendererField =
   | 'package'
   | 'group'
   | 'source';
+
+/** Public package module that owns a modeled runtime renderer. */
+export function runtimeRendererPackageModuleSpecifier(
+  packageId: RuntimeRendererPackage,
+): string {
+  switch (packageId) {
+    case RuntimeRendererPackage.RuntimeHtml:
+      return '@aurelia/runtime-html';
+    case RuntimeRendererPackage.I18n:
+      return '@aurelia/i18n';
+    case RuntimeRendererPackage.State:
+      return '@aurelia/state';
+  }
+}
 
 export type BuiltInRuntimeRendererCatalogField =
   | 'package'
@@ -512,7 +536,10 @@ export class ConfiguredBuiltInRuntimeRendererCatalogSelection {
 
 @auLink('runtime-html:SetPropertyRenderer')
 export class SetPropertyRenderer {
+  readonly targetName = 'SetPropertyRenderer';
+  readonly exportVisibility = RuntimeRendererExportVisibility.Public;
   readonly rendererKind = RuntimeRendererKind.SetProperty;
+  readonly targetInstructionType = TemplateCompilerFrameworkInstructionType.SetProperty;
   readonly packageId = RuntimeRendererPackage.RuntimeHtml;
   readonly group = RuntimeRendererGroup.RuntimeHtmlDefaultRenderers;
   readonly targetInstructionKind = TemplateInstructionKind.SetProperty;
@@ -538,7 +565,10 @@ export class SetPropertyRenderer {
 
 @auLink('runtime-html:CustomElementRenderer')
 export class CustomElementRenderer {
+  readonly targetName = 'CustomElementRenderer';
+  readonly exportVisibility = RuntimeRendererExportVisibility.Public;
   readonly rendererKind = RuntimeRendererKind.CustomElement;
+  readonly targetInstructionType = TemplateCompilerFrameworkInstructionType.HydrateElement;
   readonly packageId = RuntimeRendererPackage.RuntimeHtml;
   readonly group = RuntimeRendererGroup.RuntimeHtmlDefaultRenderers;
   readonly targetInstructionKind = TemplateInstructionKind.HydrateElement;
@@ -583,7 +613,10 @@ export class CustomElementRenderer {
 
 @auLink('runtime-html:CustomAttributeRenderer')
 export class CustomAttributeRenderer {
+  readonly targetName = 'CustomAttributeRenderer';
+  readonly exportVisibility = RuntimeRendererExportVisibility.Public;
   readonly rendererKind = RuntimeRendererKind.CustomAttribute;
+  readonly targetInstructionType = TemplateCompilerFrameworkInstructionType.HydrateAttribute;
   readonly packageId = RuntimeRendererPackage.RuntimeHtml;
   readonly group = RuntimeRendererGroup.RuntimeHtmlDefaultRenderers;
   readonly targetInstructionKind = TemplateInstructionKind.HydrateAttribute;
@@ -628,7 +661,10 @@ export class CustomAttributeRenderer {
 
 @auLink('runtime-html:TemplateControllerRenderer')
 export class TemplateControllerRenderer {
+  readonly targetName = 'TemplateControllerRenderer';
+  readonly exportVisibility = RuntimeRendererExportVisibility.Public;
   readonly rendererKind = RuntimeRendererKind.TemplateController;
+  readonly targetInstructionType = TemplateCompilerFrameworkInstructionType.HydrateTemplateController;
   readonly packageId = RuntimeRendererPackage.RuntimeHtml;
   readonly group = RuntimeRendererGroup.RuntimeHtmlDefaultRenderers;
   readonly targetInstructionKind = TemplateInstructionKind.HydrateTemplateController;
@@ -692,7 +728,10 @@ function renderOwnedBindingInstructions(
 
 @auLink('runtime-html:LetElementRenderer')
 export class LetElementRenderer {
+  readonly targetName = 'LetElementRenderer';
+  readonly exportVisibility = RuntimeRendererExportVisibility.Public;
   readonly rendererKind = RuntimeRendererKind.LetElement;
+  readonly targetInstructionType = TemplateCompilerFrameworkInstructionType.HydrateLetElement;
   readonly packageId = RuntimeRendererPackage.RuntimeHtml;
   readonly group = RuntimeRendererGroup.RuntimeHtmlDefaultRenderers;
   readonly targetInstructionKind = TemplateInstructionKind.HydrateLetElement;
@@ -740,7 +779,10 @@ export class LetElementRenderer {
 
 @auLink('runtime-html:RefBindingRenderer')
 export class RefBindingRenderer {
+  readonly targetName = 'RefBindingRenderer';
+  readonly exportVisibility = RuntimeRendererExportVisibility.Public;
   readonly rendererKind = RuntimeRendererKind.RefBinding;
+  readonly targetInstructionType = TemplateCompilerFrameworkInstructionType.RefBinding;
   readonly packageId = RuntimeRendererPackage.RuntimeHtml;
   readonly group = RuntimeRendererGroup.RuntimeHtmlDefaultRenderers;
   readonly targetInstructionKind = TemplateInstructionKind.RefBinding;
@@ -766,7 +808,10 @@ export class RefBindingRenderer {
 
 @auLink('runtime-html:InterpolationBindingRenderer')
 export class InterpolationBindingRenderer {
+  readonly targetName = 'InterpolationBindingRenderer';
+  readonly exportVisibility = RuntimeRendererExportVisibility.Public;
   readonly rendererKind = RuntimeRendererKind.InterpolationBinding;
+  readonly targetInstructionType = TemplateCompilerFrameworkInstructionType.Interpolation;
   readonly packageId = RuntimeRendererPackage.RuntimeHtml;
   readonly group = RuntimeRendererGroup.RuntimeHtmlDefaultRenderers;
   readonly targetInstructionKind = TemplateInstructionKind.Interpolation;
@@ -792,7 +837,10 @@ export class InterpolationBindingRenderer {
 
 @auLink('runtime-html:PropertyBindingRenderer')
 export class PropertyBindingRenderer {
+  readonly targetName = 'PropertyBindingRenderer';
+  readonly exportVisibility = RuntimeRendererExportVisibility.Public;
   readonly rendererKind = RuntimeRendererKind.PropertyBinding;
+  readonly targetInstructionType = TemplateCompilerFrameworkInstructionType.PropertyBinding;
   readonly packageId = RuntimeRendererPackage.RuntimeHtml;
   readonly group = RuntimeRendererGroup.RuntimeHtmlDefaultRenderers;
   readonly targetInstructionKind = TemplateInstructionKind.PropertyBinding;
@@ -818,7 +866,10 @@ export class PropertyBindingRenderer {
 
 @auLink('runtime-html:IteratorBindingRenderer')
 export class IteratorBindingRenderer {
+  readonly targetName = 'IteratorBindingRenderer';
+  readonly exportVisibility = RuntimeRendererExportVisibility.Public;
   readonly rendererKind = RuntimeRendererKind.IteratorBinding;
+  readonly targetInstructionType = TemplateCompilerFrameworkInstructionType.IteratorBinding;
   readonly packageId = RuntimeRendererPackage.RuntimeHtml;
   readonly group = RuntimeRendererGroup.RuntimeHtmlDefaultRenderers;
   readonly targetInstructionKind = TemplateInstructionKind.IteratorBinding;
@@ -844,7 +895,10 @@ export class IteratorBindingRenderer {
 
 @auLink('runtime-html:TextBindingRenderer')
 export class TextBindingRenderer {
+  readonly targetName = 'TextBindingRenderer';
+  readonly exportVisibility = RuntimeRendererExportVisibility.Public;
   readonly rendererKind = RuntimeRendererKind.TextBinding;
+  readonly targetInstructionType = TemplateCompilerFrameworkInstructionType.TextBinding;
   readonly packageId = RuntimeRendererPackage.RuntimeHtml;
   readonly group = RuntimeRendererGroup.RuntimeHtmlDefaultRenderers;
   readonly targetInstructionKind = TemplateInstructionKind.TextBinding;
@@ -870,7 +924,10 @@ export class TextBindingRenderer {
 
 @auLink('runtime-html:ListenerBindingRenderer')
 export class ListenerBindingRenderer {
+  readonly targetName = 'ListenerBindingRenderer';
+  readonly exportVisibility = RuntimeRendererExportVisibility.Public;
   readonly rendererKind = RuntimeRendererKind.ListenerBinding;
+  readonly targetInstructionType = TemplateCompilerFrameworkInstructionType.ListenerBinding;
   readonly packageId = RuntimeRendererPackage.RuntimeHtml;
   readonly group = RuntimeRendererGroup.RuntimeHtmlDefaultRenderers;
   readonly targetInstructionKind = TemplateInstructionKind.ListenerBinding;
@@ -896,7 +953,10 @@ export class ListenerBindingRenderer {
 
 @auLink('runtime-html:SetAttributeRenderer')
 export class SetAttributeRenderer {
+  readonly targetName = 'SetAttributeRenderer';
+  readonly exportVisibility = RuntimeRendererExportVisibility.Public;
   readonly rendererKind = RuntimeRendererKind.SetAttribute;
+  readonly targetInstructionType = TemplateCompilerFrameworkInstructionType.SetAttribute;
   readonly packageId = RuntimeRendererPackage.RuntimeHtml;
   readonly group = RuntimeRendererGroup.RuntimeHtmlDefaultRenderers;
   readonly targetInstructionKind = TemplateInstructionKind.SetAttribute;
@@ -922,7 +982,10 @@ export class SetAttributeRenderer {
 
 @auLink('runtime-html:SetClassAttributeRenderer')
 export class SetClassAttributeRenderer {
+  readonly targetName = 'SetClassAttributeRenderer';
+  readonly exportVisibility = RuntimeRendererExportVisibility.Public;
   readonly rendererKind = RuntimeRendererKind.SetClassAttribute;
+  readonly targetInstructionType = TemplateCompilerFrameworkInstructionType.SetClassAttribute;
   readonly packageId = RuntimeRendererPackage.RuntimeHtml;
   readonly group = RuntimeRendererGroup.RuntimeHtmlDefaultRenderers;
   readonly targetInstructionKind = TemplateInstructionKind.SetClassAttribute;
@@ -948,7 +1011,10 @@ export class SetClassAttributeRenderer {
 
 @auLink('runtime-html:SetStyleAttributeRenderer')
 export class SetStyleAttributeRenderer {
+  readonly targetName = 'SetStyleAttributeRenderer';
+  readonly exportVisibility = RuntimeRendererExportVisibility.Public;
   readonly rendererKind = RuntimeRendererKind.SetStyleAttribute;
+  readonly targetInstructionType = TemplateCompilerFrameworkInstructionType.SetStyleAttribute;
   readonly packageId = RuntimeRendererPackage.RuntimeHtml;
   readonly group = RuntimeRendererGroup.RuntimeHtmlDefaultRenderers;
   readonly targetInstructionKind = TemplateInstructionKind.SetStyleAttribute;
@@ -974,7 +1040,10 @@ export class SetStyleAttributeRenderer {
 
 @auLink('runtime-html:StylePropertyBindingRenderer')
 export class StylePropertyBindingRenderer {
+  readonly targetName = 'StylePropertyBindingRenderer';
+  readonly exportVisibility = RuntimeRendererExportVisibility.Public;
   readonly rendererKind = RuntimeRendererKind.StylePropertyBinding;
+  readonly targetInstructionType = TemplateCompilerFrameworkInstructionType.StylePropertyBinding;
   readonly packageId = RuntimeRendererPackage.RuntimeHtml;
   readonly group = RuntimeRendererGroup.RuntimeHtmlDefaultRenderers;
   readonly targetInstructionKind = TemplateInstructionKind.StylePropertyBinding;
@@ -1000,7 +1069,10 @@ export class StylePropertyBindingRenderer {
 
 @auLink('runtime-html:AttributeBindingRenderer')
 export class AttributeBindingRenderer {
+  readonly targetName = 'AttributeBindingRenderer';
+  readonly exportVisibility = RuntimeRendererExportVisibility.Public;
   readonly rendererKind = RuntimeRendererKind.AttributeBinding;
+  readonly targetInstructionType = TemplateCompilerFrameworkInstructionType.AttributeBinding;
   readonly packageId = RuntimeRendererPackage.RuntimeHtml;
   readonly group = RuntimeRendererGroup.RuntimeHtmlDefaultRenderers;
   readonly targetInstructionKind = TemplateInstructionKind.AttributeBinding;
@@ -1026,7 +1098,10 @@ export class AttributeBindingRenderer {
 
 @auLink('runtime-html:SpreadRenderer')
 export class SpreadRenderer {
+  readonly targetName = 'SpreadRenderer';
+  readonly exportVisibility = RuntimeRendererExportVisibility.Public;
   readonly rendererKind = RuntimeRendererKind.Spread;
+  readonly targetInstructionType = TemplateCompilerFrameworkInstructionType.SpreadTransferedBinding;
   readonly packageId = RuntimeRendererPackage.RuntimeHtml;
   readonly group = RuntimeRendererGroup.RuntimeHtmlDefaultRenderers;
   readonly targetInstructionKind = TemplateInstructionKind.SpreadTransferedBinding;
@@ -1052,7 +1127,10 @@ export class SpreadRenderer {
 
 @auLink('runtime-html:SpreadValueRenderer')
 export class SpreadValueRenderer {
+  readonly targetName = 'SpreadValueRenderer';
+  readonly exportVisibility = RuntimeRendererExportVisibility.PackageInternal;
   readonly rendererKind = RuntimeRendererKind.SpreadValue;
+  readonly targetInstructionType = TemplateCompilerFrameworkInstructionType.SpreadValueBinding;
   readonly packageId = RuntimeRendererPackage.RuntimeHtml;
   readonly group = RuntimeRendererGroup.RuntimeHtmlDefaultRenderers;
   readonly targetInstructionKind = TemplateInstructionKind.SpreadValueBinding;
@@ -1078,7 +1156,10 @@ export class SpreadValueRenderer {
 
 @auLink('i18n:TranslationBindingRenderer')
 export class TranslationBindingRenderer {
+  readonly targetName = 'TranslationBindingRenderer';
+  readonly exportVisibility = RuntimeRendererExportVisibility.Public;
   readonly rendererKind = RuntimeRendererKind.TranslationBinding;
+  readonly targetInstructionType = TemplateCompilerFrameworkInstructionType.TranslationBinding;
   readonly packageId = RuntimeRendererPackage.I18n;
   readonly group = RuntimeRendererGroup.I18nTranslationRenderers;
   readonly targetInstructionKind = TemplateInstructionKind.TranslationBinding;
@@ -1104,7 +1185,10 @@ export class TranslationBindingRenderer {
 
 @auLink('i18n:TranslationBindBindingRenderer')
 export class TranslationBindBindingRenderer {
+  readonly targetName = 'TranslationBindBindingRenderer';
+  readonly exportVisibility = RuntimeRendererExportVisibility.Public;
   readonly rendererKind = RuntimeRendererKind.TranslationBindBinding;
+  readonly targetInstructionType = TemplateCompilerFrameworkInstructionType.TranslationBindBinding;
   readonly packageId = RuntimeRendererPackage.I18n;
   readonly group = RuntimeRendererGroup.I18nTranslationRenderers;
   readonly targetInstructionKind = TemplateInstructionKind.TranslationBindBinding;
@@ -1130,7 +1214,10 @@ export class TranslationBindBindingRenderer {
 
 @auLink('i18n:TranslationParametersBindingRenderer')
 export class TranslationParametersBindingRenderer {
+  readonly targetName = 'TranslationParametersBindingRenderer';
+  readonly exportVisibility = RuntimeRendererExportVisibility.Public;
   readonly rendererKind = RuntimeRendererKind.TranslationParametersBinding;
+  readonly targetInstructionType = TemplateCompilerFrameworkInstructionType.TranslationParametersBinding;
   readonly packageId = RuntimeRendererPackage.I18n;
   readonly group = RuntimeRendererGroup.I18nTranslationRenderers;
   readonly targetInstructionKind = TemplateInstructionKind.TranslationParametersBinding;
@@ -1156,7 +1243,10 @@ export class TranslationParametersBindingRenderer {
 
 @auLink('state:StateBindingInstructionRenderer')
 export class StateBindingInstructionRenderer {
+  readonly targetName = 'StateBindingInstructionRenderer';
+  readonly exportVisibility = RuntimeRendererExportVisibility.Public;
   readonly rendererKind = RuntimeRendererKind.StateBinding;
+  readonly targetInstructionType = TemplateCompilerFrameworkInstructionType.StateBinding;
   readonly packageId = RuntimeRendererPackage.State;
   readonly group = RuntimeRendererGroup.StateDefaultRenderers;
   readonly targetInstructionKind = TemplateInstructionKind.StateBinding;
@@ -1182,7 +1272,10 @@ export class StateBindingInstructionRenderer {
 
 @auLink('state:DispatchBindingInstructionRenderer')
 export class DispatchBindingInstructionRenderer {
+  readonly targetName = 'DispatchBindingInstructionRenderer';
+  readonly exportVisibility = RuntimeRendererExportVisibility.Public;
   readonly rendererKind = RuntimeRendererKind.DispatchBinding;
+  readonly targetInstructionType = TemplateCompilerFrameworkInstructionType.DispatchBinding;
   readonly packageId = RuntimeRendererPackage.State;
   readonly group = RuntimeRendererGroup.StateDefaultRenderers;
   readonly targetInstructionKind = TemplateInstructionKind.DispatchBinding;
@@ -1232,22 +1325,22 @@ export type RuntimeRenderer =
   | DispatchBindingInstructionRenderer;
 
 export const RuntimeHtmlDefaultRenderers = [
+  new PropertyBindingRenderer(),
+  new IteratorBindingRenderer(),
+  new RefBindingRenderer(),
+  new InterpolationBindingRenderer(),
   new SetPropertyRenderer(),
   new CustomElementRenderer(),
   new CustomAttributeRenderer(),
   new TemplateControllerRenderer(),
   new LetElementRenderer(),
-  new RefBindingRenderer(),
-  new InterpolationBindingRenderer(),
-  new PropertyBindingRenderer(),
-  new IteratorBindingRenderer(),
-  new TextBindingRenderer(),
   new ListenerBindingRenderer(),
+  new AttributeBindingRenderer(),
   new SetAttributeRenderer(),
   new SetClassAttributeRenderer(),
   new SetStyleAttributeRenderer(),
   new StylePropertyBindingRenderer(),
-  new AttributeBindingRenderer(),
+  new TextBindingRenderer(),
   new SpreadRenderer(),
   new SpreadValueRenderer(),
 ] as const;

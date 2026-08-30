@@ -13,8 +13,11 @@ import {
   materializeSemanticAppStandardConfigurationSourceAttachments,
   CustomElementTemplateModuleRole,
   ResourceCarrierKind,
+  RuntimeRegistrationRequirementSelectionKind,
   StandardConfigurationSourceCarrierKind,
   TemplateCompilerCompiledHandoffState,
+  type RuntimeRegistrationRequirementSelection,
+  type SemanticAppRuntimeRegistrationRequirements,
   type SemanticAppTemplateCompilerHandoffResource,
   type StandardConfigurationSourceAttachment,
   type TemplateCompilerCompiledHandoffValue,
@@ -39,6 +42,9 @@ import {
   AotRuntimeConfigurationModuleEmitter,
   AotRuntimeConfigurationPlan,
   type AotRuntimeConfigurationModuleArtifact,
+  type AotRuntimeRegistrationPlan,
+  type AotRuntimeRegistrationReference,
+  type AotRuntimeRegistrationSelection,
 } from './runtime-configuration.js';
 import {
   AotArtifactError,
@@ -132,6 +138,7 @@ export interface SemanticAotRuntimeConfigurationEvidence {
     readonly digest: string;
     readonly enableCoercion: boolean;
     readonly coerceNullish: boolean;
+    readonly registrations: AotRuntimeRegistrationPlan;
   }[];
 }
 
@@ -417,6 +424,7 @@ export class SemanticAotArtifactProvider {
         root,
         request.runtimeConfiguration ?? 'preserve',
         materializeSemanticAppStandardConfigurationSourceAttachments(app),
+        batch.runtimeRegistrationRequirements,
       );
       const unavailable = batch.resources.filter((resource) =>
         resource.state !== TemplateCompilerCompiledHandoffState.Exact
@@ -491,8 +499,10 @@ function runtimeConfigurationBuildPlan(
   root: string,
   mode: SemanticAotRuntimeConfigurationMode,
   attachments: readonly StandardConfigurationSourceAttachment[],
+  requirements: SemanticAppRuntimeRegistrationRequirements,
 ): RuntimeConfigurationBuildPlan {
   const emitter = new AotRuntimeConfigurationModuleEmitter();
+  const registrations = aotRuntimeRegistrationPlan(requirements);
   const occurrences = attachments.map((attachment): RuntimeConfigurationOccurrencePlan => {
     const carrier = attachment.carrier;
     const locus = carrier.carrierKind === StandardConfigurationSourceCarrierKind.ExplicitRegistrationValue
@@ -537,7 +547,7 @@ function runtimeConfigurationBuildPlan(
       };
     }
     const artifact = refusal == null && coercion != null && mode !== 'preserve'
-      ? emitter.emit(new AotRuntimeConfigurationPlan([], coercion))
+      ? emitter.emit(new AotRuntimeConfigurationPlan([], coercion, registrations))
       : null;
     return {
       attachment,
@@ -615,6 +625,7 @@ function runtimeConfigurationBuildPlan(
       digest: artifact.digest,
       enableCoercion: coercion.enableCoercion,
       coerceNullish: coercion.coerceNullish,
+      registrations: artifact.registrations,
     });
   }
 
@@ -661,6 +672,42 @@ function runtimeConfigurationBuildPlan(
       ),
     },
   };
+}
+
+function aotRuntimeRegistrationPlan(
+  requirements: SemanticAppRuntimeRegistrationRequirements,
+): AotRuntimeRegistrationPlan {
+  return {
+    resources: aotRuntimeRegistrationSelection(requirements.resources),
+    eventModifier: aotEventModifierRegistration(requirements.eventModifier),
+    renderers: aotRuntimeRegistrationSelection(requirements.renderers),
+  };
+}
+
+function aotRuntimeRegistrationSelection(
+  selection: RuntimeRegistrationRequirementSelection,
+): AotRuntimeRegistrationSelection {
+  return selection.selectionKind === RuntimeRegistrationRequirementSelectionKind.ExactLeaves
+    ? { kind: 'exact-leaves', leaves: selection.leaves.map(aotRuntimeRegistrationReference) }
+    : { kind: 'conservative-group', group: aotRuntimeRegistrationReference(selection.conservativeGroup) };
+}
+
+function aotEventModifierRegistration(
+  selection: RuntimeRegistrationRequirementSelection,
+): AotRuntimeRegistrationReference | null {
+  if (selection.selectionKind === RuntimeRegistrationRequirementSelectionKind.ConservativeGroup) {
+    return aotRuntimeRegistrationReference(selection.conservativeGroup);
+  }
+  if (selection.leaves.length > 1) {
+    throw new Error('Semantic runtime registration requirements selected more than one event-modifier registration.');
+  }
+  return selection.leaves[0] == null ? null : aotRuntimeRegistrationReference(selection.leaves[0]);
+}
+
+function aotRuntimeRegistrationReference(
+  reference: { readonly moduleSpecifier: string; readonly exportName: string },
+): AotRuntimeRegistrationReference {
+  return { moduleSpecifier: reference.moduleSpecifier, exportName: reference.exportName };
 }
 
 function closedRuntimeCoercion(

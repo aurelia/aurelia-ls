@@ -7,6 +7,8 @@ interaction program per lane, and compares source-derived DOM/live-state outcome
 semantic-runtime provider and `aot-vite` preset; there is no pass-through or hidden JIT fallback.
 The AOT lane also requires every spent `StandardConfiguration` occurrence to be replaced. Browser quick-start sources
 therefore run through the generated base-runtime facade instead of retaining the ordinary facade defaults.
+The routed storefront additionally requires its exact 11-resource/11-renderer plan and an omitted event modifier, so
+browser parity exercises the optimized configuration rather than only a compile-free conservative fallback.
 
 The default package assurance runs three complementary scenarios:
 

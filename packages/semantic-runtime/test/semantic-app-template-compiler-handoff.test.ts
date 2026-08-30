@@ -13,6 +13,8 @@ import {
   TEMPLATE_COMPILER_COMPILED_HANDOFF_VERSION,
   TemplateCompilerFrameworkInstructionType,
   TemplateCompilerCompiledHandoffState,
+  RuntimeRegistrationRequirementReasonKind,
+  RuntimeRegistrationRequirementSelectionKind,
   type TemplateCompilerCompiledHandoffInstructionValue,
 } from '../src/template/browser-template.js';
 import { MutableProjectSourceOverlay } from './support/incremental-conformance.js';
@@ -112,6 +114,11 @@ describe('semantic app template compiler handoff', () => {
       });
       expect(batch.resources).toEqual([]);
       expect(batch.unmatchedTemplateSourcePaths).toEqual(['src/not-a-template.html']);
+      expect(batch.runtimeRegistrationRequirements.resources.selectionKind)
+        .toBe(RuntimeRegistrationRequirementSelectionKind.ConservativeGroup);
+      expect(batch.runtimeRegistrationRequirements.resources.reasons.map((reason) => reason.reasonKind)).toContain(
+        RuntimeRegistrationRequirementReasonKind.CompilerCohortIncomplete,
+      );
     } finally {
       runtime.retireWorkspaceIncarnation();
     }

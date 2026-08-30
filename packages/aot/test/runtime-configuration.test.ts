@@ -11,6 +11,7 @@ import {
   DefaultResources,
   EventModifierRegistration,
   IEventModifier,
+  IModifiedEventHandlerCreator,
   IRenderer,
   NodeObserverLocator,
 } from '@aurelia/runtime-html';
@@ -27,6 +28,8 @@ import {
   AotRuntimeConfigurationPlan,
   AotTemplateCompiler,
   type AotRuntimeExpressionEntry,
+  type AotRuntimeRegistrationPlan,
+  type AotRuntimeRegistrationReference,
 } from '../src/runtime-configuration.js';
 
 const propertyAst = { $kind: 'AccessScope', name: 'message', ancestor: 0 } as const;
@@ -41,6 +44,39 @@ const expressions: readonly AotRuntimeExpressionEntry[] = [
   { expressionType: 'IsProperty', source: 'message', value: propertyAst },
   { expressionType: 'IsIterator', source: 'item of items', value: iteratorAst },
 ];
+
+const runtimeHtmlReference = (exportName: string): AotRuntimeRegistrationReference => ({
+  moduleSpecifier: '@aurelia/runtime-html',
+  exportName,
+});
+
+const storefrontResourceReferences = [
+  'DebounceBindingBehavior',
+  'If',
+  'Else',
+  'Repeat',
+  'Switch',
+  'Case',
+  'DefaultCase',
+  'PromiseTemplateController',
+  'PendingTemplateController',
+  'FulfilledTemplateController',
+  'RejectedTemplateController',
+].map(runtimeHtmlReference);
+
+const storefrontRendererReferences = [
+  'PropertyBindingRenderer',
+  'IteratorBindingRenderer',
+  'InterpolationBindingRenderer',
+  'SetPropertyRenderer',
+  'CustomElementRenderer',
+  'CustomAttributeRenderer',
+  'TemplateControllerRenderer',
+  'LetElementRenderer',
+  'ListenerBindingRenderer',
+  'AttributeBindingRenderer',
+  'TextBindingRenderer',
+].map(runtimeHtmlReference);
 
 describe('AOT runtime configuration', () => {
   it('returns only exact precompiled expression values and preserves their identity', () => {
@@ -127,6 +163,89 @@ describe('AOT runtime configuration', () => {
     ]);
   });
 
+  it('omits an absent event modifier without registering a null placeholder', () => {
+    const groups = {
+      coercion: Symbol('coercion'),
+      parser: Symbol('parser'),
+      compiler: Symbol('compiler'),
+      dirty: Symbol('dirty'),
+      node: Symbol('node'),
+      resource: Symbol('resource'),
+      renderer: Symbol('renderer'),
+    };
+    let registrations: readonly unknown[] = [];
+    const container = {
+      register(...values: unknown[]) {
+        registrations = values;
+        return this;
+      },
+    };
+    const configuration = new AotRuntimeConfiguration(
+      groups.coercion,
+      groups.parser,
+      groups.compiler,
+      groups.dirty,
+      groups.node,
+      [groups.resource],
+      null,
+      [groups.renderer],
+    );
+
+    expect(configuration.register(container)).toBe(container);
+    expect(registrations).toEqual([
+      groups.coercion,
+      groups.parser,
+      groups.compiler,
+      groups.dirty,
+      groups.node,
+      groups.resource,
+      groups.renderer,
+    ]);
+    expect(registrations).not.toContain(null);
+  });
+
+  it('retains conservative event services when exact resource and renderer groups are empty', () => {
+    const eventModifier = runtimeHtmlReference('EventModifierRegistration');
+    const registrations: AotRuntimeRegistrationPlan = {
+      resources: { kind: 'exact-leaves', leaves: [] },
+      eventModifier,
+      renderers: { kind: 'exact-leaves', leaves: [] },
+    };
+    const artifact = new AotRuntimeConfigurationModuleEmitter().emit(
+      new AotRuntimeConfigurationPlan([], void 0, registrations),
+    );
+    const eventAlias = importedRegistrationAlias(artifact.code, eventModifier);
+
+    expect(artifact.registrationOrder).toEqual([
+      'coercion',
+      'expression-parser',
+      'template-compiler',
+      'dirty-checker',
+      'node-observer-locator',
+      'event-modifier',
+    ]);
+    expect(artifact.code).toContain(`  [],\n  ${eventAlias},\n  [],\n);`);
+    expect(artifact.code).not.toContain('DefaultResources');
+    expect(artifact.code).not.toContain('DefaultRenderers');
+    expect(artifact.code).not.toContain('DefaultBindingSyntax');
+
+    const container = DI.createContainer();
+    new AotRuntimeConfiguration(
+      null,
+      null,
+      null,
+      null,
+      null,
+      [],
+      EventModifierRegistration,
+      [],
+    ).register(container);
+
+    expect(container.getAll(IEventModifier)).toHaveLength(1);
+    expect(container.has(IModifiedEventHandlerCreator, false)).toBe(true);
+    expect(container.get(IModifiedEventHandlerCreator)).toBeDefined();
+  });
+
   it('replaces compiler/parser services while retaining the ordinary framework registrations', () => {
     const container = DI.createContainer();
     const parser = new AotExpressionParser(expressions);
@@ -175,10 +294,10 @@ describe('AOT runtime configuration', () => {
     expect(artifact.code).not.toContain('DefaultBindingLanguage');
     expect(artifact.code).not.toContain('@aurelia-ls/aot');
     expect(artifact.code).not.toContain("from 'aurelia'");
-    expect(artifact.code).toContain("import { DI, Registration } from '@aurelia/kernel';");
-    expect(artifact.code).toContain("import { IExpressionParser } from '@aurelia/expression-parser';");
-    expect(artifact.code).toContain("import { BrowserPlatform } from '@aurelia/platform-browser';");
-    expect(artifact.code).toContain("import { ITemplateCompiler } from '@aurelia/template-compiler';");
+    expect(artifact.code).toContain('import { DI, Registration } from "@aurelia/kernel";');
+    expect(artifact.code).toContain('import { IExpressionParser } from "@aurelia/expression-parser";');
+    expect(artifact.code).toContain('import { BrowserPlatform } from "@aurelia/platform-browser";');
+    expect(artifact.code).toContain('import { ITemplateCompiler } from "@aurelia/template-compiler";');
     expect(artifact.code).toContain('Aurelia as RuntimeHtmlAurelia');
     expect(artifact.code).toContain('export class AotExpressionParser');
     expect(artifact.code).toContain('export class AotTemplateCompiler');
@@ -209,6 +328,71 @@ describe('AOT runtime configuration', () => {
     expect(new AotRuntimeConfigurationModuleEmitter().emit(plan)).toEqual(artifact);
   });
 
+  it('emits the storefront exact leaves in semantic order without aggregate imports', () => {
+    const registrations: AotRuntimeRegistrationPlan = {
+      resources: { kind: 'exact-leaves', leaves: storefrontResourceReferences },
+      eventModifier: null,
+      renderers: { kind: 'exact-leaves', leaves: storefrontRendererReferences },
+    };
+    const artifact = new AotRuntimeConfigurationModuleEmitter().emit(
+      new AotRuntimeConfigurationPlan([], void 0, registrations),
+    );
+
+    expect(artifact.registrations).toBe(registrations);
+    expect(artifact.registrationOrder).toEqual(
+      AOT_CONSERVATIVE_RUNTIME_REGISTRATION_ORDER.filter((kind) => kind !== 'event-modifier'),
+    );
+    expect(artifact.code).not.toContain('DefaultResources');
+    expect(artifact.code).not.toContain('DefaultRenderers');
+    expect(artifact.code).not.toContain('EventModifierRegistration');
+    for (const reference of [...storefrontResourceReferences, ...storefrontRendererReferences]) {
+      expect(artifact.code).toContain(reference.exportName);
+    }
+    expect(artifact.code.match(/from "@aurelia\/runtime-html";/gu)).toHaveLength(1);
+
+    const resourceAliases = storefrontResourceReferences.map((reference) =>
+      importedRegistrationAlias(artifact.code, reference)
+    );
+    const rendererAliases = storefrontRendererReferences.map((reference) =>
+      importedRegistrationAlias(artifact.code, reference)
+    );
+    expect(artifact.code).toContain(`  [${resourceAliases.join(', ')}],`);
+    expect(artifact.code).toContain(`  [${rendererAliases.join(', ')}],`);
+  });
+
+  it('groups collision-safe leaf imports by module and admits empty slots', () => {
+    const duplicateNameFromA = { moduleSpecifier: 'example-a', exportName: 'Shared' };
+    const duplicateNameFromB = { moduleSpecifier: 'example-b', exportName: 'Shared' };
+    const registrations: AotRuntimeRegistrationPlan = {
+      resources: {
+        kind: 'exact-leaves',
+        leaves: [duplicateNameFromB, duplicateNameFromA],
+      },
+      eventModifier: null,
+      renderers: { kind: 'exact-leaves', leaves: [] },
+    };
+    const artifact = new AotRuntimeConfigurationModuleEmitter().emit(
+      new AotRuntimeConfigurationPlan([], void 0, registrations),
+    );
+    const aliasA = importedRegistrationAlias(artifact.code, duplicateNameFromA);
+    const aliasB = importedRegistrationAlias(artifact.code, duplicateNameFromB);
+
+    expect(aliasA).not.toBe(aliasB);
+    expect(artifact.code).toContain(`import { Shared as ${aliasA} } from "example-a";`);
+    expect(artifact.code).toContain(`import { Shared as ${aliasB} } from "example-b";`);
+    expect(artifact.code).toContain(`  [${aliasB}, ${aliasA}],`);
+    expect(artifact.code).toContain('  null,');
+    expect(artifact.code).toContain('  [],');
+    expect(artifact.registrationOrder).toEqual([
+      'coercion',
+      'expression-parser',
+      'template-compiler',
+      'dirty-checker',
+      'node-observer-locator',
+      'default-resources',
+    ]);
+  });
+
   it('addresses canonical plans independently of expression ordering', () => {
     const emitter = new AotRuntimeConfigurationModuleEmitter();
     const ordinary = emitter.emit(new AotRuntimeConfigurationPlan(expressions));
@@ -228,6 +412,34 @@ describe('AOT runtime configuration', () => {
     expect(changedAst.moduleId).not.toBe(ordinary.moduleId);
   });
 
+  it('addresses registration selection shape, event inclusion, and ordered leaves', () => {
+    const emitter = new AotRuntimeConfigurationModuleEmitter();
+    const first = runtimeHtmlReference('First');
+    const second = runtimeHtmlReference('Second');
+    const exact = (leaves: readonly AotRuntimeRegistrationReference[], eventModifier = false) =>
+      emitter.emit(new AotRuntimeConfigurationPlan([], void 0, {
+        resources: { kind: 'exact-leaves', leaves },
+        eventModifier: eventModifier ? runtimeHtmlReference('EventModifierRegistration') : null,
+        renderers: { kind: 'exact-leaves', leaves: [] },
+      }));
+    const ordered = exact([first, second]);
+    const reordered = exact([second, first]);
+    const withEventModifier = exact([first, second], true);
+    const conservative = emitter.emit(new AotRuntimeConfigurationPlan([], void 0, {
+      resources: { kind: 'conservative-group', group: first },
+      eventModifier: null,
+      renderers: { kind: 'exact-leaves', leaves: [] },
+    }));
+
+    expect(reordered.planDigest).not.toBe(ordered.planDigest);
+    expect(withEventModifier.planDigest).not.toBe(ordered.planDigest);
+    expect(conservative.planDigest).not.toBe(exact([first]).planDigest);
+    expect(ordered.registrations.resources).toEqual({
+      kind: 'exact-leaves',
+      leaves: [first, second],
+    });
+  });
+
   it('rejects ambiguous expression keys before emission', () => {
     expect(() => new AotRuntimeConfigurationPlan([
       expressions[0]!,
@@ -235,3 +447,17 @@ describe('AOT runtime configuration', () => {
     ])).toThrowError('AOT runtime plan contains duplicate IsProperty source "message".');
   });
 });
+
+function importedRegistrationAlias(
+  code: string,
+  reference: AotRuntimeRegistrationReference,
+): string {
+  const importLine = code.split('\n').find((line) =>
+    line.endsWith(`from ${JSON.stringify(reference.moduleSpecifier)};`)
+  );
+  const match = importLine?.match(new RegExp(`\\b${reference.exportName} as (\\$aotRegistration\\d+)\\b`, 'u'));
+  if (match?.[1] == null) {
+    throw new Error(`Missing generated import for ${reference.moduleSpecifier}:${reference.exportName}.`);
+  }
+  return match[1];
+}

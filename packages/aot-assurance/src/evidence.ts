@@ -9,6 +9,13 @@ import type {
 export function assertAotBuildEvidence(evidence: AotBuildEvidence): void {
   assert.equal(evidence.analysisCount, 1, 'the AOT lane must perform exactly one application analysis');
   assert.ok(evidence.artifacts.length > 0, 'the AOT lane produced no compiler-final artifacts');
+  assert.equal(evidence.runtimeConfiguration.mode, 'require-replaceable');
+  assert.ok(evidence.runtimeConfiguration.occurrences.length > 0, 'the AOT lane found no runtime configuration');
+  assert.ok(
+    evidence.runtimeConfiguration.occurrences.every((occurrence) => occurrence.disposition === 'replaced'),
+    'the AOT lane preserved or refused a runtime configuration occurrence',
+  );
+  assert.ok(evidence.runtimeConfiguration.modules.length > 0, 'the AOT lane emitted no runtime configuration module');
 
   const moduleIds = new Set<string>();
   const generations = new Set<string>();

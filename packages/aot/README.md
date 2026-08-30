@@ -17,7 +17,8 @@ The current public API is deliberately narrow:
   `CustomElement.define(...)` calls without reconstructing authored metadata. It also replaces exact semantic-runtime
   browser-facade references with the build-specific AOT facade; it never searches source text for an `Aurelia` name.
 - `AotRuntimeConfigurationModuleEmitter` emits the compile-free parser/compiler services, conservative runtime
-  registrations, BrowserPlatform container, and base-runtime Aurelia facade used by strict AOT builds.
+  fallbacks or exact semantic-runtime-selected resource/renderer leaves, BrowserPlatform container, and base-runtime
+  Aurelia facade used by strict AOT builds.
 - `AotTemplateModuleEmitter` remains the standalone HTML-resource realization.
 
 Paired HTML has two explicit roles from semantic-runtime. A convention view-definition module keeps the complete
@@ -30,8 +31,10 @@ reparsing HTML, because reparsing can merge adjacent text nodes that Aurelia ins
 small virtual runtime helper applies compiler fields to Aurelia's cached definition after resource definition and
 before its first `Rendering.compile`; this is the candidate for a later additive framework hook. The generated facade
 keeps Aurelia/AppRoot lifecycle while replacing implicit `StandardConfiguration` installation through an exact
-old-text-validated source carrier. Selective resource/renderer registration, finer payload maps, and broader
-optimization are the next production boundaries. SSR and AOT remain independent axes.
+old-text-validated source carrier. Runtime-html resources, renderers, and event-modifier support are selected
+independently from the detached browser-final requirements; uncertainty retains only the affected aggregate group.
+Finer payload maps and broader observation/binding optimization are the next production boundaries. SSR and AOT remain
+independent axes.
 
 `src/testing` contains two retained low-level characterization lanes:
 

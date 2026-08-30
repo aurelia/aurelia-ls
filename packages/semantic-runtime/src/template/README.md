@@ -1531,3 +1531,17 @@ The materializer can select project-relative or absolute template paths and can 
 for whole-project build discovery. Ordinary IDE/MCP app queries do not load this boundary or pay for parse5/compiler
 allocations. Local-template families and dynamic runtime compilation remain typed upstream gates rather than fallback
 inside the handoff.
+
+The same detached batch carries app-wide runtime registration requirements for runtime-html `DefaultResources`,
+`DefaultRenderers`, and `EventModifierRegistration`. Exact leaves come from browser-final instruction resource
+identities, the runtime expression-resource plan, actual numeric instruction ABI, effective catalog order, visible
+catalog-provider admissions, and authored-family renderer claims used only as a product-participation cross-check.
+Browser-final instructions are regenerated products, so the older runtime-rendering claim subjects are deliberately not
+treated as their identity authority. Each group falls back independently when provider attribution, relevant
+registration pressure, custom renderer precedence, dynamic template compilation, package export visibility, or ABI
+coverage remains open. Plugin configurations remain whole; they are not decomposed by this runtime-html projection.
+A selective template-source request is conservative unless it still covers the complete runtime resource cohort.
+The exactness proof has a separate closure-pressure owner: evaluator reachability selects runtime-code sources, checker-
+owned Program trees provide canonical symbol/type identity, app-root route contexts exclude unresolved executable route
+members while accepting resolved lazy imports, and programmatic compiler/renderer/event/resource-key APIs plus
+unresolved module/package boundaries retain conservative registration for only the affected families.

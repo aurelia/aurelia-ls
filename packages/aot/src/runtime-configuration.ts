@@ -28,6 +28,30 @@ export interface AotRuntimeCoercionOptions {
   readonly coerceNullish: boolean;
 }
 
+/** One public runtime registration value that a generated module can import directly. */
+export interface AotRuntimeRegistrationReference {
+  readonly moduleSpecifier: string;
+  readonly exportName: string;
+}
+
+/** Aggregate fallback or exact ordered leaves for one independently residualizable runtime slot. */
+export type AotRuntimeRegistrationSelection =
+  | {
+    readonly kind: 'conservative-group';
+    readonly group: AotRuntimeRegistrationReference;
+  }
+  | {
+    readonly kind: 'exact-leaves';
+    readonly leaves: readonly AotRuntimeRegistrationReference[];
+  };
+
+/** Build-owned registration selections. Semantic-runtime decides whether each slot is closed. */
+export interface AotRuntimeRegistrationPlan {
+  readonly resources: AotRuntimeRegistrationSelection;
+  readonly eventModifier: AotRuntimeRegistrationReference | null;
+  readonly renderers: AotRuntimeRegistrationSelection;
+}
+
 export type AotRuntimeRegistrationKind =
   | 'coercion'
   | 'expression-parser'
@@ -39,8 +63,8 @@ export type AotRuntimeRegistrationKind =
   | 'default-renderers';
 
 /**
- * The first AOT configuration deliberately preserves StandardConfiguration's ordinary runtime surface.
- * Selective registration pruning is a later whole-program decision.
+ * Default registration order used when semantic-runtime cannot close an independently selectable runtime group.
+ * Exact leaf plans retain the same relative family order while omitting families with no required members.
  */
 export const AOT_CONSERVATIVE_RUNTIME_REGISTRATION_ORDER: readonly AotRuntimeRegistrationKind[] = [
   'coercion',
@@ -58,15 +82,36 @@ const defaultCoercionOptions: AotRuntimeCoercionOptions = {
   coerceNullish: false,
 };
 
-/** Build-owned inputs for one conservative AOT runtime module. */
+const runtimeHtmlRegistration = (exportName: string): AotRuntimeRegistrationReference => ({
+  moduleSpecifier: '@aurelia/runtime-html',
+  exportName,
+});
+
+const conservativeRuntimeRegistrations: AotRuntimeRegistrationPlan = {
+  resources: {
+    kind: 'conservative-group',
+    group: runtimeHtmlRegistration('DefaultResources'),
+  },
+  eventModifier: runtimeHtmlRegistration('EventModifierRegistration'),
+  renderers: {
+    kind: 'conservative-group',
+    group: runtimeHtmlRegistration('DefaultRenderers'),
+  },
+};
+
+/** Build-owned inputs for one AOT runtime module. */
 export class AotRuntimeConfigurationPlan {
-  public readonly registrationOrder = AOT_CONSERVATIVE_RUNTIME_REGISTRATION_ORDER;
+  public readonly registrationOrder: readonly AotRuntimeRegistrationKind[];
 
   public constructor(
     public readonly expressions: readonly AotRuntimeExpressionEntry[] = [],
     public readonly coercion: AotRuntimeCoercionOptions = defaultCoercionOptions,
+    public readonly registrations: AotRuntimeRegistrationPlan = conservativeRuntimeRegistrations,
   ) {
     assertDistinctExpressions(expressions);
+    this.registrationOrder = registrations === conservativeRuntimeRegistrations
+      ? AOT_CONSERVATIVE_RUNTIME_REGISTRATION_ORDER
+      : effectiveRuntimeRegistrationOrder(registrations);
   }
 }
 
@@ -78,6 +123,7 @@ export interface AotRuntimeConfigurationModuleArtifact {
   readonly digest: string;
   readonly expressionCount: number;
   readonly registrationOrder: readonly AotRuntimeRegistrationKind[];
+  readonly registrations: AotRuntimeRegistrationPlan;
 }
 
 /** A string-only expression service: every admitted runtime request must have an emitted AST. */
@@ -152,21 +198,33 @@ export class AotRuntimeConfiguration {
     public readonly templateCompilerRegistration: unknown,
     public readonly dirtyCheckerRegistration: unknown,
     public readonly nodeObserverLocatorRegistration: unknown,
-    public readonly defaultResources: readonly unknown[],
+    public readonly resources: readonly unknown[],
+    /** Null is the generated-module sentinel for an omitted event modifier registration. */
     public readonly eventModifierRegistration: unknown,
-    public readonly defaultRenderers: readonly unknown[],
+    public readonly renderers: readonly unknown[],
   ) {}
 
   public register(container: AotRegistrationContainer): unknown {
+    if (this.eventModifierRegistration == null) {
+      return container.register(
+        this.coercionRegistration,
+        this.expressionParserRegistration,
+        this.templateCompilerRegistration,
+        this.dirtyCheckerRegistration,
+        this.nodeObserverLocatorRegistration,
+        ...this.resources,
+        ...this.renderers,
+      );
+    }
     return container.register(
       this.coercionRegistration,
       this.expressionParserRegistration,
       this.templateCompilerRegistration,
       this.dirtyCheckerRegistration,
       this.nodeObserverLocatorRegistration,
-      ...this.defaultResources,
+      ...this.resources,
       this.eventModifierRegistration,
-      ...this.defaultRenderers,
+      ...this.renderers,
     );
   }
 }
@@ -186,25 +244,15 @@ export class AotRuntimeConfigurationModuleEmitter {
       coercion: plan.coercion,
       expressions: expressionValues,
       protocol: AOT_RUNTIME_CONFIGURATION_PROTOCOL,
+      registrationOrder: plan.registrationOrder,
+      registrations: plan.registrations,
     }, AOT_RUNTIME_CONFIGURATION_MODULE_PREFIX);
     const planHash = createHash('sha256').update(canonicalPlan).digest('hex');
     const planDigest = `sha256:${planHash}`;
     const moduleId = `${AOT_RUNTIME_CONFIGURATION_MODULE_PREFIX}${planHash}` as const;
+    const registrationImports = runtimeRegistrationImports(plan.registrations);
     const lines = [
-      "import { DI, Registration } from '@aurelia/kernel';",
-      "import { IExpressionParser } from '@aurelia/expression-parser';",
-      "import { BrowserPlatform } from '@aurelia/platform-browser';",
-      "import { DirtyChecker, ICoercionConfiguration } from '@aurelia/runtime';",
-      "import { ITemplateCompiler } from '@aurelia/template-compiler';",
-      'import {',
-      '  Aurelia as RuntimeHtmlAurelia,',
-      '  CustomElement,',
-      '  DefaultRenderers,',
-      '  DefaultResources,',
-      '  EventModifierRegistration,',
-      '  IPlatform,',
-      '  NodeObserverLocator,',
-      "} from '@aurelia/runtime-html';",
+      ...registrationImports.lines,
       '',
       `export ${AotExpressionParser.toString()}`,
       '',
@@ -224,9 +272,11 @@ export class AotRuntimeConfigurationModuleEmitter {
       '  Registration.instance(ITemplateCompiler, new AotTemplateCompiler()),',
       '  DirtyChecker,',
       '  NodeObserverLocator,',
-      '  DefaultResources,',
-      '  EventModifierRegistration,',
-      '  DefaultRenderers,',
+      `  ${runtimeRegistrationSelectionExpression(plan.registrations.resources, registrationImports)},`,
+      `  ${plan.registrations.eventModifier == null
+        ? 'null'
+        : registrationImports.localNameFor(plan.registrations.eventModifier)},`,
+      `  ${runtimeRegistrationSelectionExpression(plan.registrations.renderers, registrationImports)},`,
       ');',
       '',
       ...emitAotBrowserFacade(),
@@ -243,8 +293,160 @@ export class AotRuntimeConfigurationModuleEmitter {
       digest: `sha256:${createHash('sha256').update(code).digest('hex')}`,
       expressionCount: expressions.length,
       registrationOrder: plan.registrationOrder,
+      registrations: plan.registrations,
     };
   }
+}
+
+interface RuntimeRegistrationImports {
+  readonly lines: readonly string[];
+  localNameFor(reference: AotRuntimeRegistrationReference): string;
+}
+
+function runtimeRegistrationImports(plan: AotRuntimeRegistrationPlan): RuntimeRegistrationImports {
+  const fixedBindings = [
+    { moduleSpecifier: '@aurelia/kernel', exportName: 'DI', localName: 'DI' },
+    { moduleSpecifier: '@aurelia/kernel', exportName: 'Registration', localName: 'Registration' },
+    {
+      moduleSpecifier: '@aurelia/expression-parser',
+      exportName: 'IExpressionParser',
+      localName: 'IExpressionParser',
+    },
+    {
+      moduleSpecifier: '@aurelia/platform-browser',
+      exportName: 'BrowserPlatform',
+      localName: 'BrowserPlatform',
+    },
+    { moduleSpecifier: '@aurelia/runtime', exportName: 'DirtyChecker', localName: 'DirtyChecker' },
+    {
+      moduleSpecifier: '@aurelia/runtime',
+      exportName: 'ICoercionConfiguration',
+      localName: 'ICoercionConfiguration',
+    },
+    {
+      moduleSpecifier: '@aurelia/template-compiler',
+      exportName: 'ITemplateCompiler',
+      localName: 'ITemplateCompiler',
+    },
+    {
+      moduleSpecifier: '@aurelia/runtime-html',
+      exportName: 'Aurelia',
+      localName: 'RuntimeHtmlAurelia',
+    },
+    {
+      moduleSpecifier: '@aurelia/runtime-html',
+      exportName: 'CustomElement',
+      localName: 'CustomElement',
+    },
+    {
+      moduleSpecifier: '@aurelia/runtime-html',
+      exportName: 'IPlatform',
+      localName: 'IPlatform',
+    },
+    {
+      moduleSpecifier: '@aurelia/runtime-html',
+      exportName: 'NodeObserverLocator',
+      localName: 'NodeObserverLocator',
+    },
+  ] as const;
+  const references = [
+    ...runtimeRegistrationSelectionReferences(plan.resources),
+    ...(plan.eventModifier == null ? [] : [plan.eventModifier]),
+    ...runtimeRegistrationSelectionReferences(plan.renderers),
+  ];
+  const uniqueReferences = new Map<string, AotRuntimeRegistrationReference>();
+  for (const reference of references) {
+    uniqueReferences.set(runtimeRegistrationReferenceKey(reference), reference);
+  }
+
+  const orderedReferences = [...uniqueReferences.values()].sort((left, right) =>
+    left.moduleSpecifier.localeCompare(right.moduleSpecifier)
+    || left.exportName.localeCompare(right.exportName)
+  );
+  const localNames = new Map<string, string>();
+  const bindingsByModule = new Map<string, { exportName: string; localName: string }[]>();
+  for (const binding of fixedBindings) {
+    let bindings = bindingsByModule.get(binding.moduleSpecifier);
+    if (bindings == null) {
+      bindingsByModule.set(binding.moduleSpecifier, bindings = []);
+    }
+    bindings.push({ exportName: binding.exportName, localName: binding.localName });
+    localNames.set(runtimeRegistrationReferenceKey(binding), binding.localName);
+  }
+
+  let generatedIndex = 0;
+  for (const reference of orderedReferences) {
+    const key = runtimeRegistrationReferenceKey(reference);
+    if (localNames.has(key)) continue;
+
+    const localName = `$aotRegistration${generatedIndex++}`;
+    localNames.set(key, localName);
+    let bindings = bindingsByModule.get(reference.moduleSpecifier);
+    if (bindings == null) {
+      bindingsByModule.set(reference.moduleSpecifier, bindings = []);
+    }
+    bindings.push({ exportName: reference.exportName, localName });
+  }
+
+  const lines = [...bindingsByModule.entries()].map(([moduleSpecifier, bindings]) =>
+    `import { ${bindings.map(({ exportName, localName }) =>
+      exportName === localName ? exportName : `${exportName} as ${localName}`
+    ).join(', ')} } from ${JSON.stringify(moduleSpecifier)};`
+  );
+  return {
+    lines,
+    localNameFor(reference) {
+      const localName = localNames.get(runtimeRegistrationReferenceKey(reference));
+      if (localName == null) {
+        throw new Error(
+          `AOT runtime registration import is missing ${reference.moduleSpecifier}:${reference.exportName}.`,
+        );
+      }
+      return localName;
+    },
+  };
+}
+
+function runtimeRegistrationSelectionExpression(
+  selection: AotRuntimeRegistrationSelection,
+  imports: RuntimeRegistrationImports,
+): string {
+  if (selection.kind === 'conservative-group') {
+    return imports.localNameFor(selection.group);
+  }
+  return `[${selection.leaves.map((leaf) => imports.localNameFor(leaf)).join(', ')}]`;
+}
+
+function runtimeRegistrationSelectionReferences(
+  selection: AotRuntimeRegistrationSelection,
+): readonly AotRuntimeRegistrationReference[] {
+  return selection.kind === 'conservative-group' ? [selection.group] : selection.leaves;
+}
+
+function runtimeRegistrationReferenceKey(reference: AotRuntimeRegistrationReference): string {
+  return `${reference.moduleSpecifier}\0${reference.exportName}`;
+}
+
+function effectiveRuntimeRegistrationOrder(
+  plan: AotRuntimeRegistrationPlan,
+): readonly AotRuntimeRegistrationKind[] {
+  const order: AotRuntimeRegistrationKind[] = [
+    'coercion',
+    'expression-parser',
+    'template-compiler',
+    'dirty-checker',
+    'node-observer-locator',
+  ];
+  if (runtimeRegistrationSelectionReferences(plan.resources).length > 0) {
+    order.push('default-resources');
+  }
+  if (plan.eventModifier != null) {
+    order.push('event-modifier');
+  }
+  if (runtimeRegistrationSelectionReferences(plan.renderers).length > 0) {
+    order.push('default-renderers');
+  }
+  return order;
 }
 
 /**

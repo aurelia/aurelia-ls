@@ -30,6 +30,18 @@ export {
 } from './semantic-app-template-compiler-handoff.js';
 
 export {
+  SEMANTIC_APP_RUNTIME_REGISTRATION_REQUIREMENTS_VERSION,
+  RuntimeRegistrationRequirementGroupKind,
+  RuntimeRegistrationRequirementReasonKind,
+  RuntimeRegistrationRequirementSelectionKind,
+  type RuntimeRegistrationRequirementGroupReference,
+  type RuntimeRegistrationRequirementLeaf,
+  type RuntimeRegistrationRequirementReason,
+  type RuntimeRegistrationRequirementSelection,
+  type SemanticAppRuntimeRegistrationRequirements,
+} from './runtime-registration-requirements.js';
+
+export {
   materializeSemanticAppStandardConfigurationSourceAttachments,
   StandardConfigurationBrowserFacadeDefaultSourceCarrier,
   StandardConfigurationSourceNonReplaceableReason,

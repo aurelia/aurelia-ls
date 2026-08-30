@@ -31,6 +31,37 @@ export function assertRoutedStorefrontBuildEvidence(evidence: AotBuildEvidence):
     ['app-root', 'item-card', 'item-detail-route', 'item-list-route'],
     'routed storefront did not emit its exact routed custom-element cohort',
   );
+  assert.equal(evidence.runtimeConfiguration.modules.length, 1);
+  const registrations = evidence.runtimeConfiguration.modules[0]!.registrations;
+  assert.equal(registrations.resources.kind, 'exact-leaves');
+  assert.deepEqual(registrations.resources.leaves.map((leaf) => leaf.exportName), [
+    'DebounceBindingBehavior',
+    'If',
+    'Else',
+    'Repeat',
+    'Switch',
+    'Case',
+    'DefaultCase',
+    'PromiseTemplateController',
+    'PendingTemplateController',
+    'FulfilledTemplateController',
+    'RejectedTemplateController',
+  ]);
+  assert.equal(registrations.eventModifier, null);
+  assert.equal(registrations.renderers.kind, 'exact-leaves');
+  assert.deepEqual(registrations.renderers.leaves.map((leaf) => leaf.exportName), [
+    'PropertyBindingRenderer',
+    'IteratorBindingRenderer',
+    'InterpolationBindingRenderer',
+    'SetPropertyRenderer',
+    'CustomElementRenderer',
+    'CustomAttributeRenderer',
+    'TemplateControllerRenderer',
+    'LetElementRenderer',
+    'ListenerBindingRenderer',
+    'AttributeBindingRenderer',
+    'TextBindingRenderer',
+  ]);
 }
 
 export function assertRoutedStorefrontExpectations(transcript: LaneTranscript): void {

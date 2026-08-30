@@ -16,7 +16,9 @@ import {
   type CheckerTypeReference,
 } from '../type-system/type-shape.js';
 import {
+  BuiltInResourceExportVisibility,
   BuiltInResourcePackage,
+  builtInResourceExportVisibility,
   builtInResourcePackageModuleSpecifier,
   type BuiltInResource,
 } from './built-in-resources.js';
@@ -89,9 +91,7 @@ function builtInResourcePublicModuleSpecifier(
 function builtInResourceInternalModuleSpecifier(
   resource: BuiltInResource,
 ): string | null {
-  // `Show` is part of runtime-html DefaultResources, but it is not re-exported from the package entrypoint.
-  // The semantic catalog still needs its framework type because runtime registration can instantiate it.
-  if (resource.packageId === BuiltInResourcePackage.RuntimeHtml && resource.targetName === 'Show') {
+  if (builtInResourceExportVisibility(resource) === BuiltInResourceExportVisibility.PackageInternal) {
     return '@aurelia/runtime-html/dist/types/resources/custom-attributes/show';
   }
   // `AuSlot` is default-registered and some installed runtime-html type entrypoints do not expose it as a value export.

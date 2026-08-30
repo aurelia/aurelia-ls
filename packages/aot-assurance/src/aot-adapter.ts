@@ -45,6 +45,17 @@ export function createAotAssuranceAdapter(request: AotAdapterRequest): AotAssura
       }
       return Promise.resolve({
         analysisCount: semantic.analysisCount,
+        runtimeConfiguration: {
+          mode: semantic.runtimeConfiguration.mode,
+          occurrences: semantic.runtimeConfiguration.occurrences.map((occurrence) => ({
+            carrierKind: occurrence.carrierKind,
+            disposition: occurrence.disposition,
+          })),
+          modules: semantic.runtimeConfiguration.modules.map((module) => ({
+            moduleSpecifier: module.moduleSpecifier,
+            registrations: module.registrations,
+          })),
+        },
         artifacts: semantic.artifacts.map((artifact) => {
           const vite = receipt!.artifacts.find((candidate) =>
             candidate.compilerVariantKey === artifact.compilerVariantKey

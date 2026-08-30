@@ -47,6 +47,32 @@ export interface AotBuildEvidence {
   /** There must be exactly one semantic application analysis for this build. */
   readonly analysisCount: number;
   readonly artifacts: readonly AotArtifactReceipt[];
+  readonly runtimeConfiguration: AotRuntimeConfigurationEvidence;
+}
+
+export interface AotRuntimeRegistrationReference {
+  readonly moduleSpecifier: string;
+  readonly exportName: string;
+}
+
+export type AotRuntimeRegistrationSelection =
+  | { readonly kind: 'conservative-group'; readonly group: AotRuntimeRegistrationReference }
+  | { readonly kind: 'exact-leaves'; readonly leaves: readonly AotRuntimeRegistrationReference[] };
+
+export interface AotRuntimeConfigurationEvidence {
+  readonly mode: string;
+  readonly occurrences: readonly {
+    readonly carrierKind: string;
+    readonly disposition: string;
+  }[];
+  readonly modules: readonly {
+    readonly moduleSpecifier: string;
+    readonly registrations: {
+      readonly resources: AotRuntimeRegistrationSelection;
+      readonly eventModifier: AotRuntimeRegistrationReference | null;
+      readonly renderers: AotRuntimeRegistrationSelection;
+    };
+  }[];
 }
 
 export interface RenderedModuleEvidence {

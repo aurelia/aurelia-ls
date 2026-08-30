@@ -60,5 +60,8 @@ export {
   type AotRuntimeConfigurationModuleArtifact,
   type AotRuntimeExpressionEntry,
   type AotRuntimeExpressionType,
+  type AotRuntimeRegistrationPlan,
+  type AotRuntimeRegistrationReference,
   type AotRuntimeRegistrationKind,
+  type AotRuntimeRegistrationSelection,
 } from './runtime-configuration.js';
