@@ -174,16 +174,18 @@ classification, expression parsing, and instruction lowering converge on the sam
   browser-effective template boundary. The parse5 adapter is pinned to an explicit HTML-template fragment context with
   scripting disabled, retains effective structure plus raw UTF-16 source locations, and leaves implied or unresolved
   location associations explicit. Carrier selection separately reproduces the framework's current string-input wrapper
-  rule, including discarded immediate-sibling effects. The parse5 AST never enters semantic products, and the helper is available only through the explicit
-  `@aurelia-ls/semantic-runtime/browser-template` subpath so ordinary IDE/MCP imports do not load the parser. This is a
-  characterized candidate input boundary, not yet a durable kernel product or the production compiler traversal.
+  rule, including discarded immediate-sibling effects. The parse5 AST never enters semantic products. The explicit
+  `@aurelia-ls/semantic-runtime/browser-template` subpath exposes the two parser/tree helpers needed by browser-oracle
+  assurance alongside the detached build/configuration contract, while keeping run-local compiler internals private;
+  ordinary IDE/MCP imports do not load the parser. This is a run-local input boundary rather than a durable kernel
+  product.
 - `browser-template-correspondence.ts` conservatively relates one authored draft to the exact browser draft and parser
   authorities before carrier selection. It uses opening-token/range anchors for exact occurrences, reconstruction
   cohorts for one-to-many recovery, named implied/drop/factory derivations, and explicit unresolved partitions for
   composite, partial, normalized-subspan, or profile-divergent cases. Stable occurrence keys combine template identity
   with unambiguous authored or browser paths; a separate currentness receipt includes source revision, markup digest,
-  authored recovery policy, parser authority, and planner schemas. The helper is product-free and exported only through
-  the explicit browser-template subpath; the materializer spends it into structural and derivation products.
+  authored recovery policy, parser authority, and planner schemas. The helper remains product-free and internal; the
+  compiled-handoff owner spends it into structural and derivation products before detaching the build-consumer value.
 - `template-structure.ts` and `template-structure-derivation.ts` define the durable, parse5-independent structural
   vocabulary behind that boundary: parallel immutable browser-effective and compiler-transformed tree/node/attribute
   records plus ordered many-input/many-output derivations. Cardinality carries merge, reconstruction, drop, and
@@ -377,14 +379,6 @@ classification, expression parsing, and instruction lowering converge on the sam
   revalidate the root detail identity plus its materialization-open closure without treating unrelated store mutations
   as semantic invalidation. This is not the later runtime-rehydrated
   `CustomElementDefinition` object and does not manufacture functions, registry values, imports, or anonymous Types.
-- `template-compiler-deterministic-execution.ts` is an intentionally narrower assurance bridge. It spends one
-  `TemplateResourceCompilationEmission` plus its exact browser-effective source family to replay supported built-in
-  structural consequences over already-normalized compiler products. Exact means dispositions, context transfers,
-  text expansion, and target geometry only; it does not prove instruction lowering, hook absence/effects, local-family
-  construction, surrogate compilation, or whole-JIT equivalence. Browser membership/order disagreement, non-singular
-  origins, nonempty surrogates, debug, locals, and open compiler products return typed Open/Refused outcomes before a
-  structural session is exposed. The final production owner remains a browser-occurrence/site walk inside the atomic
-  `compileResourceTree(...)` family boundary.
 - `template-source-coordinate.ts` is the shared decoded-template range boundary used by authored HTML materialization and
   future exact structural correspondence. It validates offset-map shape and maps only a caller-proved contiguous range;
   parse5 token envelopes must never be passed through it merely because they are non-null.

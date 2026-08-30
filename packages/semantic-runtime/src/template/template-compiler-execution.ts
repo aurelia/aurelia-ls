@@ -13,9 +13,6 @@ import {
   type TemplateCompilerTargetRowPlan,
 } from './compiler-target-plan.js';
 import type { TemplateCompilerHookSet } from './compiler-hook-world.js';
-import type {
-  TemplateCompilerOccurrenceTargetPlanAssembly,
-} from './template-compiler-occurrence-target-plan.js';
 import type { TemplateCompilerContextFamilyTargetPlanPreparation } from './template-compiler-context-family-target-plan.js';
 import {
   buildTemplateCompilerContextFamilyOperationSchedule,
@@ -36,21 +33,11 @@ import type {
 import type { TemplateCompilerHookBootstrapResult } from './template-compiler-hook-bootstrap.js';
 import { HydrateElementProjectionContributorDisposition } from './instruction-ir.js';
 import { TemplateCompilerOperationKind } from './template-compiler-operation.js';
-import { TemplateCompilerLiveAttributeDisposition } from './template-compiler-live-attribute-owner.js';
 import {
   TemplateCompilerTextExpansionOutputKind,
   type TemplateCompilerOccurrenceTargetRowDraft,
   type TemplateCompilerTextExpansionDraft,
 } from './template-compiler-occurrence-row-assembly.js';
-import {
-  buildTemplateCompilerOccurrenceTargetSchedule,
-  TemplateCompilerOccurrenceAttributeScheduleEntry,
-  TemplateCompilerOccurrenceElementTargetScheduleEntry,
-  TemplateCompilerOccurrenceSurrogateAttributeScheduleEntry,
-  TemplateCompilerOccurrenceTextExpansionScheduleEntry,
-  type TemplateCompilerOccurrenceTargetSchedule,
-  type TemplateCompilerOccurrenceTargetScheduleEntry,
-} from './template-compiler-occurrence-target-schedule.js';
 import type {
   TemplateCompilerExtractedLocalTemplate,
   TemplateCompilerLocalExtractionResult,
@@ -87,8 +74,6 @@ export { TemplateCompilerOperationKind } from './template-compiler-operation.js'
 const compilerExecutionForests = new WeakSet<TemplateCompilerOccurrenceForest>();
 const compilerExecutionStructuralFamilies = new WeakSet<TemplateCompilerStructuralExecutionSession>();
 const siteExecutionEndpointAuthority = {};
-const occurrenceTargetAttachmentAuthority = {};
-const occurrenceTargetExecutionClosureAuthority = {};
 const contextFamilyTargetAttachmentPreparationAuthority = {};
 const contextFamilyTargetAttachmentAuthority = {};
 const contextFamilyTargetExecutionClosureAuthority = {};
@@ -917,59 +902,6 @@ export class TemplateCompilerSiteExecutionEndpointReceipt {
   }
 }
 
-/** Historical one-shot join from ordinary-root completion into shared structural/target execution. */
-export class TemplateCompilerOccurrenceTargetAttachment {
-  readonly #authority: object;
-
-  constructor(
-    authority: object,
-    readonly execution: TemplateCompilerExecutionSession,
-    readonly assembly: TemplateCompilerOccurrenceTargetPlanAssembly,
-    readonly schedule: TemplateCompilerOccurrenceTargetSchedule,
-    readonly structuralExecution: TemplateCompilerStructuralExecutionSession,
-    readonly contexts: readonly TemplateCompilerExecutionContextReference[],
-    readonly forestMutationRevision: number,
-    readonly globalOperationCount: number,
-    readonly laneOperationCount: number,
-  ) {
-    const lane = assembly.rows.receipt.endpoint.lane;
-    const targetContexts = assembly.targetPlan.readContexts();
-    const structuralContexts = structuralExecution.readContexts();
-    const globalContextBase = execution.sequence.readContexts().length;
-    if (
-      authority !== occurrenceTargetAttachmentAuthority
-      || assembly.rows.receipt.transcript.binding.execution !== execution
-      || schedule.assembly !== assembly
-      || !schedule.isModuleConstructed()
-      || structuralExecution.forest !== execution.forest
-      || structuralExecution.mutationAuthority !== execution.mutationAuthority
-      || forestMutationRevision !== execution.forest.mutationRevision
-      || globalOperationCount !== execution.sequence.readOperations().length
-      || laneOperationCount !== execution.sequence.readLaneOperations(lane).length
-      || contexts.length !== targetContexts.length
-      || structuralContexts.length !== targetContexts.length
-      || contexts.some((context, ordinal) =>
-        context.lane !== lane
-        || context.targetContext !== targetContexts[ordinal]
-        || structuralContexts[ordinal] !== targetContexts[ordinal]
-        || context.ordinal !== globalContextBase + ordinal
-        || context.laneOrdinal !== ordinal
-      )
-    ) {
-      throw new Error('Occurrence target attachment lost execution, plan, or structural-family authority.');
-    }
-    this.#authority = authority;
-  }
-
-  isModuleConstructed(): boolean {
-    return this.#authority === occurrenceTargetAttachmentAuthority;
-  }
-
-  isCurrent(): boolean {
-    return this.isModuleConstructed() && this.execution.occurrenceTargetAttachmentIsCurrent(this);
-  }
-}
-
 /** Fully validated family attachment while allocation handles and structural ownership remain uncommitted. */
 export class TemplateCompilerContextFamilyTargetAttachmentPreparation {
   readonly #authority: object;
@@ -1101,28 +1033,6 @@ export class TemplateCompilerContextFamilyTargetExecutionClosure {
   }
 }
 
-/** Terminal proof that one attached occurrence plan completed all structural target mechanics. */
-export class TemplateCompilerOccurrenceTargetExecutionClosure {
-  readonly #authority: object;
-
-  constructor(
-    authority: object,
-    readonly attachment: TemplateCompilerOccurrenceTargetAttachment,
-    readonly forestMutationRevision: number,
-    readonly globalOperationCount: number,
-    readonly laneOperationCount: number,
-  ) {
-    if (authority !== occurrenceTargetExecutionClosureAuthority) {
-      throw new Error('Occurrence target-execution closures are module-constructed capabilities.');
-    }
-    this.#authority = authority;
-  }
-
-  isModuleConstructed(): boolean {
-    return this.#authority === occurrenceTargetExecutionClosureAuthority;
-  }
-}
-
 /** Whether a reached attribute's current scalar is fully explained by the committed execution ledger. */
 export const enum TemplateCompilerReachedAttributeScalarState {
   Exact = 'exact',
@@ -1244,18 +1154,6 @@ export class TemplateCompilerExecutionSession {
   private readonly invocationPhases = new Map<
     TemplateCompilerExecutionLaneReference,
     TemplateCompilerInvocationPhase
-  >();
-  private readonly occurrenceAttachments = new WeakMap<
-    TemplateCompilerOccurrenceTargetPlanAssembly,
-    TemplateCompilerOccurrenceTargetAttachment
-  >();
-  private readonly occurrenceAttachmentsByLane = new Map<
-    TemplateCompilerExecutionLaneReference,
-    TemplateCompilerOccurrenceTargetAttachment
-  >();
-  private readonly occurrenceTargetClosuresByLane = new Map<
-    TemplateCompilerExecutionLaneReference,
-    TemplateCompilerOccurrenceTargetExecutionClosure
   >();
   private readonly preparedContextFamilyAttachments = new WeakMap<
     TemplateCompilerContextFamilyTargetPlanPreparation,
@@ -1399,90 +1297,6 @@ export class TemplateCompilerExecutionSession {
     }
     this.structuralFamily = structuralExecution;
     compilerExecutionStructuralFamilies.add(structuralExecution);
-  }
-
-  /** Atomically consume one exact receipt-bound occurrence plan into target execution. */
-  attachOccurrenceTargetPlan(
-    assembly: TemplateCompilerOccurrenceTargetPlanAssembly,
-  ): TemplateCompilerOccurrenceTargetAttachment {
-    const existing = this.occurrenceAttachments.get(assembly) ?? null;
-    if (existing != null) return existing;
-    this.requireMutable();
-    this.requireNoPendingAttempt('attach an occurrence target plan');
-    this.requireNoActiveSiteExecutionDriver('attach an occurrence target plan');
-    const receipt = assembly.rows.receipt;
-    const lane = receipt.endpoint.lane;
-    const targetPlan = assembly.targetPlan;
-    this.requireLane(lane);
-    this.requireOpenLane(lane);
-    if (
-      !assembly.isModuleConstructed()
-      || !assembly.isCurrent()
-      || receipt.transcript.binding.execution !== this
-      || receipt.transcript.binding.lane !== lane
-      || !this.siteExecutionEndpointIsCurrent(receipt.endpoint)
-      || this.structuralFamily != null
-      || lane.targetPlan != null
-      || targetPlan.localKey !== lane.localKey
-      || !targetPlan.isSealed
-      || this.lanesByTargetPlan.has(targetPlan)
-      || (this.contextsByLane.get(lane)?.length ?? 0) !== 0
-      || targetPlan.readContexts().some((context) =>
-        this.contextsByLocalKey.has(context.localKey)
-        || this.contextsByTargetContext.has(context)
-      )
-    ) {
-      throw new Error(`Occurrence target plan '${targetPlan.localKey}' is foreign, stale, or already attached.`);
-    }
-    targetPlan.assertCoherent();
-    const schedule = buildTemplateCompilerOccurrenceTargetSchedule(assembly);
-    const structuralExecution = TemplateCompilerStructuralExecutionSession.prepareBorrowing(
-      this.forest,
-      targetPlan,
-      this.mutationAuthority,
-    );
-    if (compilerExecutionStructuralFamilies.has(structuralExecution)) {
-      throw new Error('Occurrence structural execution already belongs to another ordered execution session.');
-    }
-    const laneContexts = this.contextsByLane.get(lane)!;
-    const contexts = targetPlan.readContexts().map((targetContext, ordinal) => {
-      return new TemplateCompilerExecutionContextReference(
-        this.familyAuthority,
-        lane,
-        targetContext,
-        this.contexts.length + ordinal,
-        ordinal,
-      );
-    });
-    const attachment = new TemplateCompilerOccurrenceTargetAttachment(
-      occurrenceTargetAttachmentAuthority,
-      this,
-      assembly,
-      schedule,
-      structuralExecution,
-      contexts,
-      this.forest.mutationRevision,
-      this.operations.length,
-      this.operationsByLane.get(lane)!.length,
-    );
-
-    // Every throwing semantic check is complete. The remaining ownership commit only installs prevalidated objects.
-    TemplateCompilerStructuralExecutionSession.commitPreparedBorrowing(structuralExecution);
-    this.structuralFamily = structuralExecution;
-    compilerExecutionStructuralFamilies.add(structuralExecution);
-    lane.bindTargetPlan(this.familyAuthority, targetPlan);
-    this.lanesByTargetPlan.set(targetPlan, lane);
-    for (const context of contexts) {
-      this.contexts.push(context);
-      laneContexts.push(context);
-      this.contextsByTargetContext.set(context.targetContext, context);
-      this.contextsByLocalKey.set(context.localKey, context);
-      this.operationsByContext.set(context, []);
-    }
-    this.invocationPhases.set(lane, TemplateCompilerInvocationPhase.TargetExecution);
-    this.occurrenceAttachments.set(assembly, attachment);
-    this.occurrenceAttachmentsByLane.set(lane, attachment);
-    return attachment;
   }
 
   /** Prepare a family target/schedule attachment without exposing allocation handles or claiming structural state. */
@@ -1707,70 +1521,6 @@ export class TemplateCompilerExecutionSession {
       this.operationsByLane.get(lane)!.length,
     );
     this.contextFamilyTargetClosuresByLane.set(lane, closure);
-    this.invocationPhases.set(lane, TemplateCompilerInvocationPhase.TargetClosed);
-    return closure;
-  }
-
-  /** Whether an attached plan still owns the exact untouched target-execution frontier. */
-  occurrenceTargetAttachmentIsCurrent(
-    attachment: TemplateCompilerOccurrenceTargetAttachment,
-  ): boolean {
-    const lane = attachment.assembly.rows.receipt.endpoint.lane;
-    return attachment.isModuleConstructed()
-      && !this.sealed
-      && this.pendingAttempt == null
-      && this.activeSiteExecutionDriver == null
-      && attachment.execution === this
-      && this.occurrenceAttachmentsByLane.get(lane) === attachment
-      && this.occurrenceTargetClosuresByLane.get(lane) == null
-      && this.structuralFamily === attachment.structuralExecution
-      && lane.targetPlan === attachment.assembly.targetPlan
-      && this.invocationPhases.get(lane) === TemplateCompilerInvocationPhase.TargetExecution
-      && this.forest.mutationRevision === attachment.forestMutationRevision
-      && this.operations.length === attachment.globalOperationCount
-      && this.operationsByLane.get(lane)?.length === attachment.laneOperationCount
-      && attachment.assembly.targetAllocation.isCurrent()
-      && attachment.assembly.rows.receipt.compilerReads.every((read) =>
-        read.validate().isCurrent
-      );
-  }
-
-  /** Close one attached occurrence plan only after its complete structural result is exact. */
-  closeOccurrenceTargetExecution(
-    attachment: TemplateCompilerOccurrenceTargetAttachment,
-  ): TemplateCompilerOccurrenceTargetExecutionClosure {
-    const lane = attachment.assembly.rows.receipt.endpoint.lane;
-    const existing = this.occurrenceTargetClosuresByLane.get(lane) ?? null;
-    if (existing != null) {
-      if (existing.attachment !== attachment) {
-        throw new Error(`Compiler invocation lane '${lane.localKey}' already closed another occurrence target.`);
-      }
-      return existing;
-    }
-    this.requireMutable();
-    this.requireNoPendingAttempt('close occurrence target execution');
-    this.requireNoActiveSiteExecutionDriver('close occurrence target execution');
-    this.requireLane(lane);
-    this.requireOpenLane(lane);
-    if (
-      !attachment.isModuleConstructed()
-      || attachment.execution !== this
-      || this.occurrenceAttachmentsByLane.get(lane) !== attachment
-      || this.structuralFamily !== attachment.structuralExecution
-      || lane.targetPlan !== attachment.assembly.targetPlan
-      || this.invocationPhases.get(lane) !== TemplateCompilerInvocationPhase.TargetExecution
-    ) {
-      throw new Error(`Occurrence target attachment '${lane.localKey}' is foreign or no longer executable.`);
-    }
-    this.assertOccurrenceTargetExecutionComplete(attachment);
-    const closure = new TemplateCompilerOccurrenceTargetExecutionClosure(
-      occurrenceTargetExecutionClosureAuthority,
-      attachment,
-      this.forest.mutationRevision,
-      this.operations.length,
-      this.operationsByLane.get(lane)!.length,
-    );
-    this.occurrenceTargetClosuresByLane.set(lane, closure);
     this.invocationPhases.set(lane, TemplateCompilerInvocationPhase.TargetClosed);
     return closure;
   }
@@ -3041,37 +2791,7 @@ export class TemplateCompilerExecutionSession {
     ) {
       throw new Error(`Compiler execution family '${this.familyKey}' advanced after context-family target closure.`);
     }
-    let lastOccurrenceForestRevision = -1;
-    let lastOccurrenceGlobalOperationCount = -1;
-    for (const [lane, attachment] of this.occurrenceAttachmentsByLane) {
-      const closure = this.occurrenceTargetClosuresByLane.get(lane) ?? null;
-      if (closure?.attachment !== attachment) {
-        throw new Error(`Compiler invocation lane '${lane.localKey}' has not closed occurrence target execution.`);
-      }
-      if (
-        !attachment.assembly.targetAllocation.isCurrent()
-      ) {
-        throw new Error(`Compiler invocation lane '${lane.localKey}' lost terminal allocation authority.`);
-      }
-      lastOccurrenceForestRevision = Math.max(
-        lastOccurrenceForestRevision,
-        closure.forestMutationRevision,
-      );
-      lastOccurrenceGlobalOperationCount = Math.max(
-        lastOccurrenceGlobalOperationCount,
-        closure.globalOperationCount,
-      );
-    }
-    if (
-      this.occurrenceAttachmentsByLane.size > 0
-      && (
-        lastOccurrenceForestRevision !== this.forest.mutationRevision
-        || lastOccurrenceGlobalOperationCount !== this.operations.length
-      )
-    ) {
-      throw new Error(`Compiler execution family '${this.familyKey}' advanced after occurrence target closure.`);
-    }
-    if (this.occurrenceAttachmentsByLane.size > 0 || this.contextFamilyAttachmentsByLane.size > 0) {
+    if (this.contextFamilyAttachmentsByLane.size > 0) {
       this.requireStructuralExecution().assertCoherent();
     }
     this.assertCoherent();
@@ -3105,28 +2825,6 @@ export class TemplateCompilerExecutionSession {
     ) {
       throw new Error(`Compiler execution family '${this.familyKey}' has incomplete structural-plan coverage.`);
     }
-    for (const [lane, attachment] of this.occurrenceAttachmentsByLane) {
-      const closure = this.occurrenceTargetClosuresByLane.get(lane) ?? null;
-      const laneOperations = this.operationsByLane.get(lane) ?? [];
-      if (
-        attachment.execution !== this
-        || attachment.assembly.rows.receipt.endpoint.lane !== lane
-        || attachment.structuralExecution !== structuralExecution
-        || lane.targetPlan !== attachment.assembly.targetPlan
-        || (closure != null && (
-          !closure.isModuleConstructed()
-          || closure.attachment !== attachment
-          || closure.forestMutationRevision > this.forest.mutationRevision
-          || closure.globalOperationCount > this.operations.length
-          || closure.laneOperationCount !== laneOperations.length
-          || this.invocationPhases.get(lane) !== TemplateCompilerInvocationPhase.TargetClosed
-        ))
-        || (closure == null
-          && this.invocationPhases.get(lane) !== TemplateCompilerInvocationPhase.TargetExecution)
-      ) {
-        throw new Error(`Compiler invocation lane '${lane.localKey}' has incoherent occurrence target ownership.`);
-      }
-    }
     for (const [lane, attachment] of this.contextFamilyAttachmentsByLane) {
       const contexts = this.contextsByLane.get(lane) ?? [];
       const closure = this.contextFamilyTargetClosuresByLane.get(lane) ?? null;
@@ -3153,11 +2851,6 @@ export class TemplateCompilerExecutionSession {
       ) {
         throw new Error(`Compiler invocation lane '${lane.localKey}' has incoherent context-family target ownership.`);
       }
-    }
-    if ([...this.occurrenceTargetClosuresByLane.keys()].some((lane) =>
-      !this.occurrenceAttachmentsByLane.has(lane)
-    )) {
-      throw new Error(`Compiler execution family '${this.familyKey}' has a closure without an occurrence attachment.`);
     }
     if ([...this.contextFamilyTargetClosuresByLane.keys()].some((lane) =>
       !this.contextFamilyAttachmentsByLane.has(lane)
@@ -4005,119 +3698,6 @@ export class TemplateCompilerExecutionSession {
     return this.structuralFamily;
   }
 
-  private assertOccurrenceTargetExecutionComplete(
-    attachment: TemplateCompilerOccurrenceTargetAttachment,
-  ): void {
-    const rows = attachment.assembly.rows;
-    const structural = attachment.structuralExecution;
-    const context = attachment.contexts.length === 1 ? attachment.contexts[0] : null;
-    if (context == null || context.targetContext !== attachment.assembly.targetPlan.root) {
-      throw new Error('Occurrence target completion requires one exact root execution context.');
-    }
-    const schedule = attachment.schedule;
-    const allAttributeDispositions = [
-      ...rows.attributeDispositions,
-      ...rows.surrogateAttributeDispositions,
-    ];
-    const removed = allAttributeDispositions.filter((disposition) =>
-      disposition.disposition === TemplateCompilerLiveAttributeDisposition.Removed
-    );
-    const removedEntries = schedule.entries.filter((entry) =>
-      entry instanceof TemplateCompilerOccurrenceAttributeScheduleEntry
-      || entry instanceof TemplateCompilerOccurrenceSurrogateAttributeScheduleEntry
-    );
-    const retained = allAttributeDispositions.filter((disposition) =>
-      disposition.disposition === TemplateCompilerLiveAttributeDisposition.Retained
-    );
-    const consumed = structural.readConsumedAttributeDispositions(context.targetContext);
-    const expansions = structural.readInputTextExpansions(context.targetContext);
-    const geometries = structural.readTargetGeometries(context.targetContext);
-    const finalOwnerAttributesAreExact = rows.receipt.elementSites.every((site) => {
-      const dispositions = schedule.attributeDispositionsBySite.get(site) ?? [];
-      const retainedDispositions = dispositions.filter((disposition) =>
-        disposition.disposition === TemplateCompilerLiveAttributeDisposition.Retained
-      );
-      const actual = site.event.element.readAttributes();
-      return actual.length === retainedDispositions.length
-        && actual.every((attribute, ordinal) => attribute === retainedDispositions[ordinal]?.attribute)
-        && retainedDispositions.every((disposition) => disposition.attribute.value === disposition.finalValue);
-    });
-    const surrogate = rows.receipt.surrogateClassification?.result.staging ?? null;
-    const retainedSurrogates = rows.surrogateAttributeDispositions.filter((disposition) =>
-      disposition.disposition === TemplateCompilerLiveAttributeDisposition.Retained
-    );
-    const finalSurrogateAttributesAreExact = surrogate == null
-      ? rows.surrogateAttributeDispositions.length === 0
-      : surrogate.owner.element.readAttributes().length === retainedSurrogates.length
-        && surrogate.owner.element.readAttributes().every((attribute, ordinal) =>
-          attribute === retainedSurrogates[ordinal]?.attribute
-        )
-        && retainedSurrogates.every((disposition) => disposition.attribute.value === disposition.finalValue);
-    if (
-      consumed.length !== removed.length
-      || consumed.some((disposition, ordinal) =>
-        disposition.attribute !== removedEntries[ordinal]?.disposition.attribute
-        || disposition.ownerOrdinal !== removedEntries[ordinal]?.disposition.simulatedLiveOrdinal
-        || !sameOccurrences(disposition.causeHandles, removedEntries[ordinal]?.causeHandles ?? [])
-      )
-      || retained.some((disposition) => disposition.attribute.owner !== disposition.owner.element)
-      || !finalOwnerAttributesAreExact
-      || !finalSurrogateAttributesAreExact
-      || expansions.length !== rows.textExpansions.length
-      || expansions.some((expansion, ordinal) =>
-        !this.targetTextExpansionIsExact(
-          structural,
-          context,
-          rows.textExpansions[ordinal]!,
-          attachment.assembly.rowMappings.filter((mapping) =>
-            mapping.draft.site === rows.textExpansions[ordinal]!.site
-          ),
-          expansion,
-        )
-      )
-      || geometries.length !== rows.rows.length
-      || attachment.assembly.rowMappings.some((mapping, ordinal) =>
-        geometries[ordinal]?.row !== mapping.row
-      )
-    ) {
-      throw new Error('Occurrence target execution has incomplete structural disposition coverage.');
-    }
-
-    const expected = schedule.entries;
-    const operations = this.sequence.readContextOperations(context);
-    if (
-      operations.length !== expected.length
-      || this.operations.length !== attachment.globalOperationCount + expected.length
-      || this.operationsByLane.get(context.lane)!.length
-        !== attachment.laneOperationCount + expected.length
-      || operations.some((operation, ordinal) => {
-        const entry = expected[ordinal];
-        return entry == null
-          || operation.executionOrdinal !== attachment.globalOperationCount + ordinal
-          || operation.laneOperationOrdinal !== attachment.laneOperationCount + ordinal
-          || operation.startForestMutationRevision !== (ordinal === 0
-            ? attachment.forestMutationRevision
-            : operations[ordinal - 1]!.endForestMutationRevision)
-          || operation.operationKey !== entry.operationKey
-          || operation.operationKind !== operationKindForScheduleEntry(entry)
-          || operation.executionMechanism !== TemplateCompilerOperationExecutionMechanism.BuiltIn
-          || operation.completion.completionKind !== TemplateCompilerOperationCompletionKind.Complete
-          || operation.mutationBatch.state !== TemplateCompilerMutationBatchState.Committed
-          || !(operation.target instanceof TemplateCompilerOccurrenceOperationTarget)
-          || operation.target.occurrence !== entry.occurrence
-          || !sameOccurrences(operation.causeHandles, entry.causeHandles)
-          || operation.sourceAddressHandle !== entry.sourceAddressHandle
-          || operation.producedProductHandles.length !== 0
-          || !this.occurrenceOperationMutationIsExact(attachment, entry, operation);
-      })
-      || (operations.at(-1)?.endForestMutationRevision ?? attachment.forestMutationRevision)
-        !== this.forest.mutationRevision
-    ) {
-      throw new Error('Occurrence target execution diverged from its receipt-bound operation schedule.');
-    }
-    structural.assertCoherent();
-  }
-
   private assertContextFamilyTargetExecutionComplete(
     attachment: TemplateCompilerContextFamilyTargetAttachment,
   ): void {
@@ -4564,44 +4144,6 @@ export class TemplateCompilerExecutionSession {
     });
   }
 
-  private occurrenceOperationMutationIsExact(
-    attachment: TemplateCompilerOccurrenceTargetAttachment,
-    expected: TemplateCompilerOccurrenceTargetScheduleEntry,
-    operation: TemplateCompilerOperation,
-  ): boolean {
-    const structural = attachment.structuralExecution;
-    const context = attachment.assembly.targetPlan.root;
-    if (
-      expected instanceof TemplateCompilerOccurrenceAttributeScheduleEntry
-      || expected instanceof TemplateCompilerOccurrenceSurrogateAttributeScheduleEntry
-    ) {
-      return this.targetAttributeOperationMutationIsExact(
-        structural,
-        context,
-        expected.disposition.attribute,
-        operation,
-      );
-    }
-    if (expected instanceof TemplateCompilerOccurrenceElementTargetScheduleEntry) {
-      return this.ordinaryTargetOperationMutationIsExact(
-        structural,
-        expected.mapping.row,
-        expected.mapping.draft.occurrence,
-        operation,
-      );
-    }
-    if (expected instanceof TemplateCompilerOccurrenceTextExpansionScheduleEntry) {
-      return this.textTargetOperationMutationIsExact(
-        structural,
-        context,
-        expected.expansion.site.event.text,
-        expected.mappings.map((mapping) => mapping.row),
-        operation,
-      );
-    }
-    return false;
-  }
-
   private advanceInvocationPhase(
     context: TemplateCompilerOperationContextReference,
     operationKind: TemplateCompilerOperationKind,
@@ -4699,23 +4241,6 @@ function contextFamilyOperationTargetIsExact(
     && target instanceof TemplateCompilerOccurrenceOperationTarget
     && target.context === entry.context
     && target.occurrence === occurrence;
-}
-
-function operationKindForScheduleEntry(
-  entry: TemplateCompilerOccurrenceTargetScheduleEntry,
-): TemplateCompilerOperationKind {
-  if (
-    entry instanceof TemplateCompilerOccurrenceAttributeScheduleEntry
-    || entry instanceof TemplateCompilerOccurrenceSurrogateAttributeScheduleEntry
-  ) {
-    return TemplateCompilerOperationKind.AttributeDisposition;
-  }
-  if (entry instanceof TemplateCompilerOccurrenceElementTargetScheduleEntry) {
-    return entry.mapping.row.placement instanceof TemplateCompilerContainerlessReplacementPlacement
-      ? TemplateCompilerOperationKind.ContainerlessReplacement
-      : TemplateCompilerOperationKind.HydrationTargetCreation;
-  }
-  return TemplateCompilerOperationKind.TextInterpolationExpansion;
 }
 
 function isTerminalCompilerCompletion(completionKind: TemplateCompilerOperationCompletionKind): boolean {

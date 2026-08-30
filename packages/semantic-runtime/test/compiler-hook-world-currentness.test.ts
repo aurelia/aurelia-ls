@@ -33,14 +33,10 @@ import { CssClassMappingPropertyState } from '../src/template/css-class-mapping.
 import { TemplateCompilerInvocationWorldMaterializer } from '../src/template/compiler-invocation-world-materializer.js';
 import { TemplateCompilationLocus } from '../src/template/template-compilation-cohort.js';
 import type { TemplateResourceCompilationEmission } from '../src/template/template-compilation-project-pass.js';
-import { BrowserEffectiveTemplateMaterializer } from '../src/template/browser-effective-template-materializer.js';
-import { parseBrowserTemplateFragmentDraft } from '../src/template/browser-template-parser.js';
-import { selectBrowserTemplateCompilerCarrier } from '../src/template/browser-template-selection.js';
 import {
-  executeDeterministicTemplateCompiler,
-  TemplateCompilerDeterministicExecutionReasonKind,
-  TemplateCompilerDeterministicExecutionState,
-} from '../src/template/template-compiler-deterministic-execution.js';
+  materializeSemanticAppTemplateCompilerHandoffs,
+  TemplateCompilerCompiledHandoffState,
+} from '../src/template/browser-template.js';
 import { MutableProjectSourceOverlay } from './support/incremental-conformance.js';
 
 const packageRoot = path.resolve(fileURLToPath(new URL('..', import.meta.url)));
@@ -159,27 +155,23 @@ describe('compiler-hook world currentness', () => {
         }],
         openReasons: [],
       });
-      const changedMarkup = changedMutable.unit.templateSource.markup;
-      if (changedMarkup == null || changedMutable.html.draft == null) {
-        throw new Error('Expected changed mutable-card browser replay authority.');
-      }
-      const replayRun = runtime.computationLifecycle.begin({
-        kind: 'compiler-hook-currentness-replay',
-        reconciliationKey: 'compiler-hook-currentness-replay',
-        summary: 'Exercise exact CSS Modules hook membership before built-in hook execution lands.',
+      const projectionRun = runtime.computationLifecycle.begin({
+        kind: 'compiler-hook-currentness-world-projection',
+        reconciliationKey: 'compiler-hook-currentness-world-projection',
+        summary: 'Exercise candidate-local compiler-world projection.',
       });
       try {
-        const invocationWorlds = TemplateCompilerInvocationWorldMaterializer.candidateStrict(replayRun);
+        const invocationWorlds = TemplateCompilerInvocationWorldMaterializer.candidateStrict(projectionRun);
         expect(() => invocationWorlds.constructPostLocalWorld(
           TemplateCompilerWorldAuthority.fixed(changedMutable.compilerWorld),
           [changedStable.definition],
-          'compiler-hook-currentness-replay:derived-local-world',
+          'compiler-hook-currentness-world-projection:derived-local-world',
           changedMutable.definition.sourceAddressHandle,
         )).toThrow(/projected but not published/);
         const derived = invocationWorlds.projectPostLocalWorld(
           changedMutable.compilerWorld,
           [changedStable.definition],
-          'compiler-hook-currentness-replay:derived-local-world',
+          'compiler-hook-currentness-world-projection:derived-local-world',
           changedMutable.definition.sourceAddressHandle,
         );
         expect(derived).not.toBe(changedMutable.compilerWorld);
@@ -198,26 +190,10 @@ describe('compiler-hook world currentness', () => {
           propertyState: CssClassMappingPropertyState.Value,
           mappedClassName: 'mapped_hash',
         });
-        const browser = parseBrowserTemplateFragmentDraft(changedMarkup);
-        const browserTemplate = new BrowserEffectiveTemplateMaterializer(replayRun).materialize({
-          localKey: 'compiler-hook-currentness-replay:mutable-card',
-          sourceRevision: changedMutable.definition.template?.authoredSourceRevision ?? 'test:mutable-card',
-          templateSource: changedMutable.unit.templateSource,
-          authoredHtml: changedMutable.html,
-          browser,
-          carrierSelection: selectBrowserTemplateCompilerCarrier(browser.fragment),
-        });
-        const replay = executeDeterministicTemplateCompiler({
-          browserTemplate,
-          compilation: changedMutable,
-        });
-        expect(replay.state).toBe(TemplateCompilerDeterministicExecutionState.Open);
-        expect(replay.reasons.map((reason) => reason.reasonKind)).toContain(
-          TemplateCompilerDeterministicExecutionReasonKind.CompilerHookCallableOpen,
-        );
       } finally {
-        replayRun.abort();
+        projectionRun.abort();
       }
+      expectCompiledClass(changed, 'mapped_hash');
       expect(changedStable.compilerWorld.compilerHooks.membershipState)
         .toBe(TemplateCompilerHookMembershipState.ExactNone);
       expect(changedMutableRead.observedRevision).not.toBe(baselineMutableRead.observedRevision);
@@ -261,6 +237,7 @@ describe('compiler-hook world currentness', () => {
         propertyState: CssClassMappingPropertyState.Value,
         mappedClassName: 'mapped_hash_v2',
       });
+      expectCompiledClass(remapped, 'mapped_hash_v2');
       expect(remappedMutableRead.observedRevision).not.toBe(changedMutableRead.observedRevision);
       expect(remappedMappingRead.observedRevision).not.toBe(changedMappingRead.observedRevision);
       expectFamilyTransition(
@@ -378,6 +355,20 @@ function requireCssClassMappingRead(
     );
   }
   return read;
+}
+
+function expectCompiledClass(app: SemanticApp, expected: string): void {
+  const batch = materializeSemanticAppTemplateCompilerHandoffs({
+    app,
+    templateSourcePaths: ['src/mutable-card.html'],
+  });
+  const resource = batch.resources[0];
+  if (resource?.state !== TemplateCompilerCompiledHandoffState.Exact || resource.value == null) {
+    throw new Error(resource?.reasons.map((reason) => reason.summary).join(' ') ?? 'Missing mutable-card handoff.');
+  }
+  const classAttribute = resource.value.definitions.flatMap((definition) => definition.tree.attributes)
+    .find((attribute) => attribute.name === 'class');
+  expect(classAttribute?.value).toBe(expected);
 }
 
 function expectFamilyTransition(

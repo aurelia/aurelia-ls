@@ -27,14 +27,6 @@ import {
   CssClassMappingPropertyState,
 } from '../src/template/css-class-mapping.js';
 import { TemplateCompilerReadKind } from '../src/template/compiler-read-view.js';
-import { BrowserEffectiveTemplateMaterializer } from '../src/template/browser-effective-template-materializer.js';
-import { parseBrowserTemplateFragmentDraft } from '../src/template/browser-template-parser.js';
-import { selectBrowserTemplateCompilerCarrier } from '../src/template/browser-template-selection.js';
-import {
-  executeDeterministicTemplateCompiler,
-  TemplateCompilerDeterministicExecutionReasonKind,
-  TemplateCompilerDeterministicExecutionState,
-} from '../src/template/template-compiler-deterministic-execution.js';
 
 const packageRoot = path.resolve(fileURLToPath(new URL('..', import.meta.url)));
 
@@ -534,33 +526,6 @@ describe('component-local compiler-hook registry dependencies', () => {
         openSeamHandles: [expect.stringMatching(/^kernel:/u)],
       }),
     ]));
-    const markup = cssCompilation.unit.templateSource.markup;
-    if (markup == null || cssCompilation.html.draft == null) {
-      throw new Error('Expected retained css-hook-host browser replay authority.');
-    }
-    const replayRun = runtime.computationLifecycle.begin({
-      kind: 'compiler-hook-admission-test',
-      reconciliationKey: 'compiler-hook-admission-test',
-      summary: 'Prove that built-in CSS hook execution remains explicit before browser mutation.',
-    });
-    try {
-      const browser = parseBrowserTemplateFragmentDraft(markup);
-      const browserTemplate = new BrowserEffectiveTemplateMaterializer(replayRun).materialize({
-        localKey: 'compiler-hook-admission:css-hook-host',
-        sourceRevision: cssCompilation.definition.template?.authoredSourceRevision ?? 'test:css-hook-host',
-        templateSource: cssCompilation.unit.templateSource,
-        authoredHtml: cssCompilation.html,
-        browser,
-        carrierSelection: selectBrowserTemplateCompilerCarrier(browser.fragment),
-      });
-      const replay = executeDeterministicTemplateCompiler({ browserTemplate, compilation: cssCompilation });
-      expect(replay.state).toBe(TemplateCompilerDeterministicExecutionState.Open);
-      expect(replay.reasons.map((reason) => reason.reasonKind)).toContain(
-        TemplateCompilerDeterministicExecutionReasonKind.CompilerHookCallableOpen,
-      );
-    } finally {
-      replayRun.abort();
-    }
   }, 30_000);
 });
 
