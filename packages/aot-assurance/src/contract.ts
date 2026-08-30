@@ -1,7 +1,7 @@
 import type { PluginOption } from 'vite';
 
 export type AssuranceLane = 'jit' | 'aot';
-export type AssuranceScenario = 'g0' | 'hello-world';
+export type AssuranceScenario = 'g0' | 'hello-world' | 'routed-storefront';
 
 export type EmissionFalsifier =
   | 'mutate-instruction'
@@ -108,7 +108,15 @@ export interface HelloWorldApplicationObservation extends ApplicationObservation
   readonly model: HelloWorldObservation;
 }
 
-export type ApplicationObservation = G0ApplicationObservation | HelloWorldApplicationObservation;
+export interface RoutedStorefrontApplicationObservation extends ApplicationObservationBase {
+  readonly kind: 'routed-storefront';
+  readonly model: RoutedStorefrontObservation;
+}
+
+export type ApplicationObservation =
+  | G0ApplicationObservation
+  | HelloWorldApplicationObservation
+  | RoutedStorefrontApplicationObservation;
 
 export interface CheckpointTranscript {
   readonly label: string;
@@ -173,4 +181,60 @@ export interface HelloWorldObservation {
   };
   readonly cards: readonly HelloWorldCardObservation[];
   readonly emptyMessage: string | null;
+}
+
+export interface RoutedStorefrontLinkObservation {
+  readonly label: string;
+  readonly location: string;
+  readonly active: boolean;
+}
+
+export interface RoutedStorefrontCardObservation {
+  readonly name: string;
+  readonly summary: string;
+  readonly price: string;
+  readonly stock: string;
+  readonly availability: string;
+  readonly classes: readonly string[];
+  readonly padding: string;
+  readonly borderColor: string;
+  readonly detailLocation: string;
+  readonly selectDisabled: boolean;
+}
+
+export interface RoutedStorefrontListObservation {
+  readonly kind: 'list';
+  readonly heading: string;
+  readonly searchValue: string;
+  readonly onlyInStock: boolean;
+  readonly badgeFilter: string;
+  readonly badgeOptions: readonly string[];
+  readonly messages: readonly string[];
+  readonly cards: readonly RoutedStorefrontCardObservation[];
+}
+
+export interface RoutedStorefrontDetailObservation {
+  readonly kind: 'detail';
+  readonly heading: string;
+  readonly summary: string;
+  readonly fields: readonly { readonly label: string; readonly value: string }[];
+  readonly allItemsLocation: string;
+  readonly selectDisabled: boolean;
+}
+
+export type RoutedStorefrontRouteObservation =
+  | RoutedStorefrontListObservation
+  | RoutedStorefrontDetailObservation;
+
+export interface RoutedStorefrontObservation {
+  readonly location: string;
+  readonly documentTitle: string;
+  readonly shellClasses: readonly string[];
+  readonly selectionCount: number;
+  readonly selectionProgress: string;
+  readonly catalogStatus: string;
+  readonly navigation: readonly RoutedStorefrontLinkObservation[];
+  readonly route: RoutedStorefrontRouteObservation;
+  readonly selectedNames: readonly string[];
+  readonly emptySelectionMessage: string | null;
 }

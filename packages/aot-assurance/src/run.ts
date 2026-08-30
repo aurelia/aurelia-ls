@@ -14,6 +14,10 @@ import {
   assertHelloWorldBuildEvidence,
   assertHelloWorldExpectations,
 } from './hello-world-expectations.js';
+import {
+  assertRoutedStorefrontBuildEvidence,
+  assertRoutedStorefrontExpectations,
+} from './routed-storefront-expectations.js';
 import { StaticBuildServer } from './server.js';
 
 export interface RunAssuranceOptions {
@@ -48,10 +52,14 @@ export async function runAssurance(options: RunAssuranceOptions): Promise<Assura
       assertG0Expectations(browserBatch.jit);
       assertG0Expectations(browserBatch.aot);
       assertProbePolicy(browserBatch.jit, browserBatch.aot);
-    } else {
+    } else if (scenario === 'hello-world') {
       assertHelloWorldBuildEvidence(builds.aotEvidence);
       assertHelloWorldExpectations(browserBatch.jit);
       assertHelloWorldExpectations(browserBatch.aot);
+    } else {
+      assertRoutedStorefrontBuildEvidence(builds.aotEvidence);
+      assertRoutedStorefrontExpectations(browserBatch.jit);
+      assertRoutedStorefrontExpectations(browserBatch.aot);
     }
     assertSemanticParity(browserBatch.jit.semantic, browserBatch.aot.semantic);
 
@@ -77,7 +85,19 @@ export async function runAssurance(options: RunAssuranceOptions): Promise<Assura
 
 function defaultFixtureRoot(scenario: AssuranceScenario): string {
   const packageRoot = resolve(import.meta.dirname, '..');
-  return scenario === 'g0'
-    ? resolve(packageRoot, 'fixtures', 'g0')
-    : resolve(packageRoot, '..', '..', 'fixtures', 'hello-world');
+  switch (scenario) {
+    case 'g0':
+      return resolve(packageRoot, 'fixtures', 'g0');
+    case 'hello-world':
+      return resolve(packageRoot, '..', '..', 'fixtures', 'hello-world');
+    case 'routed-storefront':
+      return resolve(
+        packageRoot,
+        '..',
+        'semantic-runtime',
+        'fixtures',
+        'pressure',
+        'app-pattern-routed-catalog-storefront',
+      );
+  }
 }

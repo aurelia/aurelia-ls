@@ -158,6 +158,18 @@ async function buildLane(
           'esm',
           'index.mjs',
         ),
+        '@aurelia/router': resolve(
+          import.meta.dirname,
+          '..',
+          '..',
+          '..',
+          'aurelia',
+          'packages',
+          'router',
+          'dist',
+          'esm',
+          'index.mjs',
+        ),
       },
     },
     define: {

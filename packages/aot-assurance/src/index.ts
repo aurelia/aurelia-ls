@@ -9,6 +9,7 @@ export type {
   EmissionFalsifier,
   HelloWorldObservation,
   RenderedModuleEvidence,
+  RoutedStorefrontObservation,
 } from './contract.js';
 
 export { runAssurance, type RunAssuranceOptions } from './run.js';

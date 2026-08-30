@@ -356,8 +356,8 @@
       ]
     },
     {
-      "summary": "Routed catalog cards should recognize data-driven detail links.",
-      "effectKind": "route",
+      "summary": "Routed catalog cards should retain explicit runtime-value pressure for data-driven detail links.",
+      "effectKind": "open-seam",
       "scope": "route",
       "topologyNodeKind": "route",
       "cardinality": "present",
@@ -365,12 +365,8 @@
       "role": "signature",
       "filters": [
         {
-          "field": "routeProductKind",
-          "value": "recognized-route"
-        },
-        {
-          "field": "parameterValuePairs",
-          "value": "itemId=__au_dynamic_0__"
+          "field": "seamKindKey",
+          "value": "router.open-instruction"
         }
       ]
     },
@@ -700,7 +696,7 @@
         },
         {
           "field": "hydrationHandoffKind",
-          "value": "instruction-sequence"
+          "value": "compiled-template"
         }
       ]
     },
@@ -781,7 +777,7 @@
         },
         {
           "field": "hydrationHandoffKind",
-          "value": "instruction-sequence"
+          "value": "compiled-template"
         }
       ]
     },
@@ -843,7 +839,7 @@
         },
         {
           "field": "hydrationHandoffKind",
-          "value": "instruction-sequence"
+          "value": "compiled-template"
         },
         {
           "field": "templateControllerLinkKind",
@@ -913,7 +909,7 @@
         },
         {
           "field": "hydrationHandoffKind",
-          "value": "instruction-sequence"
+          "value": "compiled-template"
         },
         {
           "field": "templateControllerLinkKind",
@@ -1650,7 +1646,7 @@
         },
         {
           "field": "hydrationHandoffKind",
-          "value": "instruction-sequence"
+          "value": "compiled-template"
         }
       ]
     },
@@ -1681,7 +1677,7 @@
         },
         {
           "field": "hydrationHandoffKind",
-          "value": "instruction-sequence"
+          "value": "compiled-template"
         }
       ]
     },
@@ -1712,7 +1708,7 @@
         },
         {
           "field": "hydrationHandoffKind",
-          "value": "instruction-sequence"
+          "value": "compiled-template"
         }
       ]
     },
@@ -1774,7 +1770,7 @@
         },
         {
           "field": "hydrationHandoffKind",
-          "value": "instruction-sequence"
+          "value": "compiled-template"
         },
         {
           "field": "templateControllerLinkKind",
@@ -1844,7 +1840,7 @@
         },
         {
           "field": "hydrationHandoffKind",
-          "value": "instruction-sequence"
+          "value": "compiled-template"
         },
         {
           "field": "templateControllerLinkKind",
@@ -1914,7 +1910,7 @@
         },
         {
           "field": "hydrationHandoffKind",
-          "value": "instruction-sequence"
+          "value": "compiled-template"
         },
         {
           "field": "templateControllerLinkKind",
@@ -2559,14 +2555,19 @@
       ]
     },
     {
-      "summary": "Routed catalog storefront has no open semantic seams.",
-      "effectKind": "open-seam-closure",
-      "scope": "app",
-      "topologyNodeKind": null,
-      "cardinality": "absent",
+      "summary": "Routed catalog browser facade should retain its nested StandardConfiguration catalog pressure.",
+      "effectKind": "open-seam",
+      "scope": "di",
+      "topologyNodeKind": "container",
+      "cardinality": "present",
       "count": null,
       "role": "baseline",
-      "filters": []
+      "filters": [
+        {
+          "field": "seamKindKey",
+          "value": "di.open-registry-body"
+        }
+      ]
     }
   ]
 }

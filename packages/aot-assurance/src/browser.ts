@@ -1,4 +1,4 @@
-/* global window, document, Node, Element, HTMLElement, HTMLInputElement, HTMLTextAreaElement, HTMLSelectElement, ParentNode, SVGElement, SVGCircleElement, requestAnimationFrame */
+/* global window, document, Node, Element, HTMLElement, HTMLAnchorElement, HTMLButtonElement, HTMLInputElement, HTMLTextAreaElement, HTMLSelectElement, ParentNode, SVGElement, SVGCircleElement, requestAnimationFrame */
 
 import { chromium, type Browser, type Page } from 'playwright';
 
@@ -10,6 +10,7 @@ import type {
   HelloWorldObservation,
   LaneTranscript,
   LiveElementTranscript,
+  RoutedStorefrontObservation,
   RuntimeProbeSnapshot,
 } from './contract.js';
 
@@ -42,6 +43,7 @@ async function runLane(
   scenario: AssuranceScenario,
 ): Promise<LaneTranscript> {
   if (scenario === 'hello-world') return runHelloWorldLane(browser, lane, url);
+  if (scenario === 'routed-storefront') return runRoutedStorefrontLane(browser, lane, url);
   const context = await browser.newContext();
   const page = await context.newPage();
   const consoleMessages: string[] = [];
@@ -103,6 +105,216 @@ async function runLane(
   } finally {
     await context.close();
   }
+}
+
+async function runRoutedStorefrontLane(
+  browser: Browser,
+  lane: AssuranceLane,
+  url: string,
+): Promise<LaneTranscript> {
+  const context = await browser.newContext();
+  const page = await context.newPage();
+  const consoleMessages: string[] = [];
+  const pageErrors: string[] = [];
+  page.on('console', message => consoleMessages.push(`${message.type()}:${message.text()}`));
+  page.on('pageerror', error => pageErrors.push(error.message));
+
+  try {
+    await page.goto(url, { waitUntil: 'load' });
+    try {
+      await waitForStorefrontCards(page, ['Title 1', 'Title 2', 'Title 3']);
+      await page.getByText('Featured items refreshes daily.').waitFor();
+    } catch (error) {
+      const detail = pageErrors.length === 0 ? '' : `\nBrowser errors:\n${pageErrors.join('\n')}`;
+      throw new Error(`${lane} routed storefront did not render${detail}`, { cause: error });
+    }
+
+    const checkpoints = [];
+    checkpoints.push({ label: 'initial-list', observation: await captureRoutedStorefront(page) });
+
+    await page.getByLabel('Search').fill('Title 2');
+    await waitForStorefrontCards(page, ['Title 2']);
+    checkpoints.push({ label: 'debounced-search', observation: await captureRoutedStorefront(page) });
+
+    await page.getByLabel('Search').fill('missing');
+    await waitForStorefrontCards(page, []);
+    await page.getByText('No items match the current filters.').waitFor();
+    checkpoints.push({ label: 'no-match', observation: await captureRoutedStorefront(page) });
+
+    await page.getByLabel('Search').fill('');
+    await page.getByLabel('Badge').selectOption({ label: 'seasonal' });
+    await waitForStorefrontCards(page, ['Title 3']);
+    checkpoints.push({ label: 'badge-filter', observation: await captureRoutedStorefront(page) });
+
+    await page.getByLabel('Badge').selectOption({ label: 'all' });
+    await page.getByLabel('In stock only').check();
+    await waitForStorefrontCards(page, ['Title 1', 'Title 2']);
+    checkpoints.push({ label: 'stock-filter', observation: await captureRoutedStorefront(page) });
+
+    await page.getByLabel('In stock only').uncheck();
+    await waitForStorefrontCards(page, ['Title 1', 'Title 2', 'Title 3']);
+    await page.locator('item-card').filter({ hasText: 'Title 1' }).getByRole('button', { name: 'Select' }).click();
+    await waitForSelectionCount(page, 1);
+    checkpoints.push({ label: 'first-selection', observation: await captureRoutedStorefront(page) });
+
+    await page.locator('item-card').filter({ hasText: 'Title 1' }).getByRole('link', { name: 'View details' }).click();
+    await waitForStorefrontDetail(page, 'Title 1', 'catalog');
+    checkpoints.push({ label: 'first-detail', observation: await captureRoutedStorefront(page) });
+
+    await page.locator('app-root > main > header nav').getByRole('link', { name: 'Items', exact: true }).click();
+    await waitForStorefrontCards(page, ['Title 1', 'Title 2', 'Title 3']);
+    checkpoints.push({ label: 'return-to-list', observation: await captureRoutedStorefront(page) });
+
+    await page.locator('item-card').filter({ hasText: 'Title 2' }).getByRole('link', { name: 'View details' }).click();
+    await waitForStorefrontDetail(page, 'Title 2', 'catalog');
+    checkpoints.push({ label: 'dynamic-detail', observation: await captureRoutedStorefront(page) });
+
+    await page.getByRole('button', { name: 'Select' }).click();
+    await waitForSelectionCount(page, 2);
+    checkpoints.push({ label: 'second-selection', observation: await captureRoutedStorefront(page) });
+
+    return {
+      lane,
+      semantic: {
+        checkpoints,
+        teardownEvents: null,
+        console: consoleMessages,
+        pageErrors,
+      },
+      probes: null,
+    };
+  } finally {
+    await context.close();
+  }
+}
+
+async function waitForStorefrontCards(page: Page, expected: readonly string[]): Promise<void> {
+  await page.waitForFunction(labels => {
+    const actual = Array.from(document.querySelectorAll('item-card h3'), node => node.textContent?.trim() ?? '');
+    return actual.length === labels.length && actual.every((value, index) => value === labels[index]);
+  }, expected);
+  await settle(page);
+}
+
+async function waitForSelectionCount(page: Page, count: number): Promise<void> {
+  await page.waitForFunction(expected => {
+    const text = document.querySelector('app-root header > p')?.textContent?.trim();
+    return text === `Selected items: ${expected}`;
+  }, count);
+  await settle(page);
+}
+
+async function waitForStorefrontDetail(page: Page, heading: string, openedFrom: string): Promise<void> {
+  await page.waitForFunction(([expectedHeading, expectedSource]) => {
+    const detail = document.querySelector('item-detail-route section.item-detail');
+    if (detail == null || detail.querySelector('h1')?.textContent?.trim() !== expectedHeading) return false;
+    const terms = Array.from(detail.querySelectorAll('dt'), node => node.textContent?.trim() ?? '');
+    const index = terms.indexOf('Opened from');
+    return index >= 0 && detail.querySelectorAll('dd')[index]?.textContent?.trim() === expectedSource;
+  }, [heading, openedFrom]);
+  await settle(page);
+}
+
+async function captureRoutedStorefront(page: Page): Promise<ApplicationObservation> {
+  return page.evaluate(() => {
+    const required = <TElement extends Element>(root: ParentNode, selector: string): TElement => {
+      const element = root.querySelector<TElement>(selector);
+      if (element == null) throw new Error(`routed storefront observation is missing '${selector}'`);
+      return element;
+    };
+    const text = (root: ParentNode, selector: string): string =>
+      required(root, selector).textContent?.trim() ?? '';
+    const linkLocation = (link: HTMLAnchorElement): string => {
+      const target = new URL(link.href, window.location.href);
+      return `${target.pathname}${target.search}${target.hash}`;
+    };
+    const shell = required<HTMLElement>(document, 'app-root main.catalog-shell');
+    const selectionText = text(shell, ':scope > header > p');
+    const count = Number(selectionText.replace('Selected items:', '').trim());
+    const navigation = Array.from(shell.querySelectorAll<HTMLAnchorElement>(':scope > header nav a'), link => ({
+      label: link.textContent?.trim() ?? '',
+      location: linkLocation(link),
+      active: link.classList.contains('active-route'),
+    }));
+    const detail = shell.querySelector<HTMLElement>('item-detail-route section.item-detail');
+    let route: RoutedStorefrontObservation['route'];
+    const live: LiveElementTranscript[] = [];
+    if (detail != null) {
+      const terms = Array.from(detail.querySelectorAll('dt'));
+      const values = Array.from(detail.querySelectorAll('dd'));
+      route = {
+        kind: 'detail',
+        heading: text(detail, 'h1'),
+        summary: text(detail, ':scope > h1 + p'),
+        fields: terms.map((term, index) => ({
+          label: term.textContent?.trim() ?? '',
+          value: values[index]?.textContent?.trim() ?? '',
+        })),
+        allItemsLocation: linkLocation(required<HTMLAnchorElement>(detail, ':scope > a')),
+        selectDisabled: required<HTMLButtonElement>(detail, 'button').disabled,
+      };
+    } else {
+      const list = required<HTMLElement>(shell, 'item-list-route > section');
+      const search = required<HTMLInputElement>(list, 'input[type="search"]');
+      const onlyInStock = required<HTMLInputElement>(list, 'input[type="checkbox"]');
+      const badge = required<HTMLSelectElement>(list, 'select');
+      live.push(
+        { id: 'catalog-search', value: search.value },
+        { id: 'catalog-stock', value: onlyInStock.value, checked: onlyInStock.checked },
+        { id: 'catalog-badge', value: badge.value, selectedIndex: badge.selectedIndex },
+      );
+      route = {
+        kind: 'list',
+        heading: text(list, 'h2'),
+        searchValue: search.value,
+        onlyInStock: onlyInStock.checked,
+        badgeFilter: badge.value,
+        badgeOptions: Array.from(badge.options, option => option.textContent?.trim() ?? ''),
+        messages: Array.from(list.querySelectorAll(':scope > p, :scope > div > p'), node =>
+          node.textContent?.trim() ?? ''
+        ),
+        cards: Array.from(list.querySelectorAll<HTMLElement>('item-card'), host => {
+          const article = required<HTMLElement>(host, 'article.item-card');
+          const paragraphs = Array.from(article.querySelectorAll(':scope > p'));
+          const detailLink = required<HTMLAnchorElement>(article, 'a');
+          return {
+            name: text(article, 'h3'),
+            summary: paragraphs[0]?.textContent?.trim() ?? '',
+            price: paragraphs[1]?.textContent?.trim() ?? '',
+            stock: paragraphs[2]?.textContent?.trim() ?? '',
+            availability: paragraphs[3]?.textContent?.trim() ?? '',
+            classes: [...article.classList].sort(),
+            padding: article.style.padding,
+            borderColor: article.style.borderColor,
+            detailLocation: linkLocation(detailLink),
+            selectDisabled: required<HTMLButtonElement>(article, 'button').disabled,
+          };
+        }),
+      };
+    }
+    const selectedNames = Array.from(shell.querySelectorAll(':scope > aside li'), node => node.textContent?.trim() ?? '');
+    const emptySelection = Array.from(shell.children).find((element) =>
+      element.localName === 'p' && element.textContent?.includes('Select a featured Item.') === true
+    );
+    const model: RoutedStorefrontObservation = {
+      location: `${window.location.pathname}${window.location.search}${window.location.hash}`,
+      documentTitle: document.title,
+      shellClasses: [...shell.classList].sort(),
+      selectionCount: count,
+      selectionProgress: required<HTMLElement>(shell, ':scope > header .selection-progress > span').style.width,
+      catalogStatus: text(shell, ':scope > header section[aria-label="Catalog status"]'),
+      navigation,
+      route,
+      selectedNames,
+      emptySelectionMessage: emptySelection?.textContent?.trim() ?? null,
+    };
+    return {
+      kind: 'routed-storefront',
+      live,
+      focus: document.activeElement instanceof HTMLElement ? document.activeElement.localName : null,
+      model,
+    };
+  });
 }
 
 async function runHelloWorldLane(browser: Browser, lane: AssuranceLane, url: string): Promise<LaneTranscript> {
