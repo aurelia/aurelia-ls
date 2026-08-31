@@ -6,9 +6,9 @@ import {
   patternReleaseSentinels,
 } from './pattern-sentinels.mjs';
 
-const sourceReleaseVersion = '0.3.1';
-const publishedReleaseVersion = '0.3.1';
-const previousPublishedReleaseVersion = '0.3.0';
+const sourceReleaseVersion = '0.3.2';
+const publishedReleaseVersion = '0.3.2';
+const previousPublishedReleaseVersion = '0.3.1';
 const protocolVersion = '0.3.0';
 const historicalReleaseVersion = '0.2.0';
 const packageRoot = path.resolve(fileURLToPath(new URL('..', import.meta.url)));

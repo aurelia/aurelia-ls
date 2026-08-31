@@ -8,9 +8,10 @@ preserve the repository's earlier package line.
 
 ---
 
-## VS Code 0.5.2 (2026-08-31)
+## VS Code 0.5.2 and MCP 0.3.2 (2026-08-31)
 
-- Improved large-project startup, memory use, request cancellation, Resource Explorer refreshes, and Worker recovery.
+- Improved large-project semantic analysis by reducing repeated template work and evaluator graph copies.
+- Improved VS Code startup, request cancellation, Resource Explorer refreshes, and Worker recovery.
 - Added a local support report with bounded client, server, request, memory, and cache evidence.
 
 ---

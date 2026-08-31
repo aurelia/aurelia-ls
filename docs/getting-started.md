@@ -78,14 +78,14 @@ tooling.
 curated Patterns, and bundled Aurelia docs. The MCP server makes no project-file
 writes; cache management changes only in-memory analysis state.
 
-The latest hosted release is 0.3.1. See the
+The latest hosted release is 0.3.2. See the
 [MCP package README](../packages/mcp/README.md) for the versioned protocol reference.
 
 To align MCP diagnostics with the project's TypeScript, install the hosted MCP
 release tarball inside the project being analyzed:
 
 ```bash
-npm i -D https://github.com/aurelia/aurelia-ls/releases/download/mcp-v0.3.1/aurelia-ls-mcp-0.3.1.tgz
+npm i -D https://github.com/aurelia/aurelia-ls/releases/download/mcp-v0.3.2/aurelia-ls-mcp-0.3.2.tgz
 ```
 
 Configure the MCP client to launch the app-local package:
