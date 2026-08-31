@@ -144,6 +144,23 @@ export async function runPromotedBaseline(
       repositoryRoot,
       browserVersion: browser.identity.version,
     });
+    progress('Running exact minified browser assurance for production size applications');
+    const assuranceByApplication = new Map<string, Awaited<ReturnType<typeof assertProductionBuildAssurance>>>();
+    const primaryBuildByKey = new Map(primaryBuilds.map(build => [
+      `${build.applicationId}/${build.mode}`,
+      build,
+    ]));
+    for (const application of portfolio.applications) {
+      if (application.assuranceScenario == null) continue;
+      const assurance = await assertProductionBuildAssurance({
+        scenario: application.assuranceScenario,
+        jit: primaryBuildByKey.get(`${application.id}/jit`)!,
+        aot: primaryBuildByKey.get(`${application.id}/aot`)!,
+        browserExecutablePath: browser.executablePath,
+        browserArguments: browser.identity.flags,
+      });
+      assuranceByApplication.set(application.id, assurance);
+    }
     const runtimeBuilds = primaryBuilds.filter(build =>
       portfolio.applications.find(application => application.id === build.applicationId)?.role === 'runtime'
     );
@@ -197,7 +214,6 @@ export async function runPromotedBaseline(
       runRoot,
     });
 
-    progress('Running exact minified browser assurance for production size applications');
     const evidenceInputs: HashedFileIdentity[] = [
       manifest.file,
       calibrationManifestFile,
@@ -227,13 +243,8 @@ export async function runPromotedBaseline(
       evidenceInputs.push(semanticFile);
 
       if (application.assuranceScenario != null) {
-        const assurance = await assertProductionBuildAssurance({
-          scenario: application.assuranceScenario,
-          jit: measuredJitByApplication.get(application.id)!.build,
-          aot: aot.build,
-          browserExecutablePath: browser.executablePath,
-          browserArguments: browser.identity.flags,
-        });
+        const assurance = assuranceByApplication.get(application.id);
+        if (assurance == null) throw new Error(`Application '${application.id}' has no browser assurance evidence.`);
         const evidence = await persistJsonEvidence({
           outputPath: path.join(runRoot, 'evidence', `${application.id}.browser-assurance.json`),
           relativeTo: runRoot,

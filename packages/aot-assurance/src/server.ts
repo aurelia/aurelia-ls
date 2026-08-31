@@ -62,6 +62,10 @@ async function serveFile(
 ): Promise<void> {
   try {
     const requestUrl = new URL(request.url ?? '/', 'http://127.0.0.1');
+    if (requestUrl.pathname === '/favicon.ico') {
+      response.writeHead(204, { 'cache-control': 'no-store' }).end();
+      return;
+    }
     const relative = decodeURIComponent(requestUrl.pathname === '/' ? '/index.html' : requestUrl.pathname);
     const file = resolve(root, `.${relative}`);
     if (file !== root && !file.startsWith(rootPrefix)) {
