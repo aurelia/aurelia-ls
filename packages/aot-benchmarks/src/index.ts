@@ -16,7 +16,6 @@ export * from './repeat-scenarios.js';
 export * from './report.js';
 export * from './result-support.js';
 export * from './run-identity.js';
-export * from './semantic-framework-preflight.js';
 export * from './staging.js';
 export * from './storefront-scenarios.js';
 export * from './tachometer-result.js';

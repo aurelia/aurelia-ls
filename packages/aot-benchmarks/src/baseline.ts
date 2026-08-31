@@ -49,7 +49,6 @@ import {
   captureBaselineToolchainIdentity,
   persistScenarioManifestIdentity,
 } from './run-identity.js';
-import { preflightSemanticFrameworkEntries } from './semantic-framework-preflight.js';
 import {
   stageLockedBrowserWorkloads,
   type StagedBrowserRoot,
@@ -105,21 +104,6 @@ export async function runPromotedBaseline(
   });
 
   try {
-    progress('Checking the semantic and executable framework graphs');
-    const semanticFrameworkPreflight = await preflightSemanticFrameworkEntries({
-      repositoryRoot,
-      applications: portfolio.applications.map(application => ({
-        applicationId: application.id,
-        root: application.root,
-      })),
-      framework,
-    });
-    const semanticFrameworkPreflightFile = await persistJsonEvidence({
-      outputPath: path.join(runRoot, 'inputs', 'semantic-framework-preflight.json'),
-      relativeTo: runRoot,
-      value: semanticFrameworkPreflight,
-    });
-
     progress('Building all applications through official JIT and current AOT');
     const primaryBuilds = await buildApplications(
       portfolio.applications,
@@ -209,7 +193,6 @@ export async function runPromotedBaseline(
     progress('Running exact minified browser assurance for production size applications');
     const evidenceInputs: HashedFileIdentity[] = [
       manifest.file,
-      semanticFrameworkPreflightFile,
       calibrationManifestFile,
       ...stagingFiles,
       ...calibration.rawResults,
