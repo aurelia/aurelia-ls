@@ -89,6 +89,13 @@ export async function preflightSemanticFrameworkEntries(request: {
       roots,
     }));
   }
+  const reachedPackages = new Set(applicationEvidence.flatMap(application =>
+    application.packages.map(entry => entry.packageName)
+  ));
+  const missingPackages = [...packages.keys()].filter(packageName => !reachedPackages.has(packageName));
+  if (missingPackages.length > 0) {
+    throw new Error(`Prepared framework packages are unreachable from every application: ${missingPackages.join(', ')}.`);
+  }
 
   const fingerprintInput = {
     schemaVersion: SEMANTIC_FRAMEWORK_PREFLIGHT_VERSION,
@@ -127,7 +134,10 @@ async function preflightApplication(input: {
     if (expected === undefined) {
       throw new Error(`Prepared framework dependency '${request.packageName}' has no provenance entry.`);
     }
-    const workspace = await resolveWorkspacePackage(request.packageName, request.issuerFile);
+    const workspace = request.issuer === 'application-root'
+      ? await resolveOptionalWorkspacePackage(request.packageName, request.issuerFile)
+      : await resolveWorkspacePackage(request.packageName, request.issuerFile);
+    if (workspace == null) continue;
     assertInside(input.frameworkRoot, workspace.packageRoot, `${request.packageName} workspace package`);
     const semanticEntryPath = repositoryPath(input.repositoryRoot, workspace.entry);
     const preparedEntry = await realpath(input.framework.entryFor(request.packageName));
@@ -186,9 +196,8 @@ async function preflightApplication(input: {
       resolutionIssuers: [...evidence.issuers].sort((left, right) => left.localeCompare(right)),
       identical: true,
     }));
-  if (packageEvidence.length !== input.packages.size) {
-    const missing = [...input.packages.keys()].filter((name) => !resolved.has(name));
-    throw new Error(`Prepared framework packages are unreachable from its roots: ${missing.join(', ')}.`);
+  if (packageEvidence.length === 0) {
+    throw new Error(`${input.application.applicationId} resolves none of the prepared framework roots.`);
   }
   return {
     applicationId: input.application.applicationId,
@@ -215,6 +224,18 @@ async function resolveWorkspacePackage(packageName: string, issuerFile: string):
     entrySha256: sha256(await readFile(entry)),
     version: manifest.version,
   };
+}
+
+async function resolveOptionalWorkspacePackage(
+  packageName: string,
+  issuerFile: string,
+): Promise<WorkspacePackageResolution | null> {
+  try {
+    return await resolveWorkspacePackage(packageName, issuerFile);
+  } catch (error) {
+    if (error instanceof Error && hasCode(error.cause, 'MODULE_NOT_FOUND')) return null;
+    throw error;
+  }
 }
 
 async function findPackageRoot(resolvedEntry: string, packageName: string): Promise<string> {

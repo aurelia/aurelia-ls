@@ -66,6 +66,18 @@ describe('semantic framework entry preflight', () => {
     })).rejects.toThrow(/app-a resolves different semantic and Vite bytes for @aurelia\/runtime-html/u);
   });
 
+  test('requires portfolio union coverage without forcing unused roots into every app', async () => {
+    const fixture = await createFixture({ routerOnlyInAppB: true });
+    const evidence = await preflightSemanticFrameworkEntries({
+      repositoryRoot: fixture.repositoryRoot,
+      applications: fixture.applications,
+      framework: fixture.framework,
+    });
+
+    expect(evidence.applications[0]?.packages.some(entry => entry.packageName === '@aurelia/router')).toBe(false);
+    expect(evidence.applications[1]?.packages.some(entry => entry.packageName === '@aurelia/router')).toBe(true);
+  });
+
   test('refuses byte-identical split package copies reached through two issuers', async () => {
     const fixture = await createFixture({
       roots: ['aurelia', '@aurelia/runtime-html'],
@@ -84,6 +96,7 @@ interface FixtureOptions {
   readonly semanticRuntimeHtml?: string;
   readonly nestedRuntimeHtml?: boolean;
   readonly roots?: readonly FrameworkBenchmarkRootPackage[];
+  readonly routerOnlyInAppB?: boolean;
 }
 
 async function createFixture(options: FixtureOptions = {}): Promise<{
@@ -114,6 +127,13 @@ async function createFixture(options: FixtureOptions = {}): Promise<{
       'export const identity = "runtime-html";\n',
     );
   }
+  if (options.routerOnlyInAppB === true) {
+    await writePackage(
+      path.join(appB, 'node_modules', '@aurelia', 'router'),
+      '@aurelia/router',
+      'export const identity = "router";\n',
+    );
+  }
 
   const preparedAurelia = await writePackage(
     path.join(repositoryRoot, 'prepared', 'aurelia'),
@@ -125,15 +145,25 @@ async function createFixture(options: FixtureOptions = {}): Promise<{
     '@aurelia/runtime-html',
     'export const identity = "runtime-html";\n',
   );
-  const entries = new Map([
+  const entries = new Map<string, string>([
     ['aurelia', preparedAurelia],
     ['@aurelia/runtime-html', preparedRuntimeHtml],
   ]);
-  const packages = [
+  const packages: FrameworkPackageEntryProvenance[] = [
     packageEvidence('aurelia', ['@aurelia/runtime-html']),
     packageEvidence('@aurelia/runtime-html', []),
-  ].sort((left, right) => left.packageName.localeCompare(right.packageName));
-  const roots = options.roots ?? ['aurelia'];
+  ];
+  if (options.routerOnlyInAppB === true) {
+    const preparedRouter = await writePackage(
+      path.join(repositoryRoot, 'prepared', '@aurelia', 'router'),
+      '@aurelia/router',
+      'export const identity = "router";\n',
+    );
+    entries.set('@aurelia/router', preparedRouter);
+    packages.push(packageEvidence('@aurelia/router', []));
+  }
+  packages.sort((left, right) => left.packageName.localeCompare(right.packageName));
+  const roots = options.roots ?? (options.routerOnlyInAppB === true ? ['aurelia', '@aurelia/router'] : ['aurelia']);
   const framework: PreparedFrameworkPackageGraph = {
     root: path.join(repositoryRoot, 'prepared'),
     installRoot: path.join(repositoryRoot, 'prepared'),
@@ -225,7 +255,11 @@ function packageEvidence(
 }
 
 function fixtureEntrySha256(packageName: string): string {
-  const name = packageName === '@aurelia/runtime-html' ? 'runtime-html' : 'aurelia';
+  const name = packageName === '@aurelia/runtime-html'
+    ? 'runtime-html'
+    : packageName === '@aurelia/router'
+      ? 'router'
+      : 'aurelia';
   const text = `export const identity = "${name}";\n`;
   return createHash('sha256').update(text).digest('hex');
 }
