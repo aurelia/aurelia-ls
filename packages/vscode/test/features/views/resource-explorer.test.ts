@@ -341,6 +341,44 @@ function findNode(nodes: readonly Node[], label: string): Node | undefined {
 }
 
 describe("ResourceExplorerProvider", () => {
+  test("projects bounded provider-owned support state without tree labels or identities", async () => {
+    const privateUri = "file:///private/game/src/secret-card.ts";
+    const harness = createHarness(async () => response([
+      readyProject([resource({
+        identityKey: "private-resource-identity",
+        name: "secret-card",
+        uri: privateUri,
+      })]),
+    ], workspace("file:///private/game", "private-game")));
+
+    expect(harness.provider.supportState()).toMatchObject({
+      phase: "empty",
+      refreshGeneration: 0,
+      treeRootCount: 0,
+      hasInventory: false,
+      counts: { boundaries: 0, projects: 0, resources: 0 },
+    });
+
+    await harness.provider.refresh();
+
+    const state = harness.provider.supportState();
+    expect(state).toEqual({
+      phase: "current",
+      refreshGeneration: 1,
+      treeRootCount: 1,
+      hasInventory: true,
+      updatingAll: false,
+      updatingWorkspaceCount: 0,
+      staleWorkspaceCount: 0,
+      hasIssues: false,
+      hasAnalysisReview: false,
+      counts: { boundaries: 1, projects: 1, resources: 1, failures: 0, incomplete: 0 },
+    });
+    expect(JSON.stringify(state)).not.toContain("private");
+    expect(JSON.stringify(state)).not.toContain("secret-card");
+    expect(JSON.stringify(state)).not.toContain(privateUri);
+  });
+
   test("publishes an exact explanation subject only for a live top-level resource object", async () => {
     const row = resource({
       identityKey: "resource:product-card",
@@ -928,7 +966,7 @@ describe("ResourceExplorerProvider", () => {
       name: "product-card",
       uri: "file:///repo/src/product-card.ts",
       aliases: ["store-card"],
-      bindables: [{ name: "labelText", attribute: "display-label", valueType: "string" }],
+      bindables: [{ name: "labelText", attribute: "display-label" }],
     });
     const attribute = resource({
       identityKey: "resource:focus:v1",
@@ -936,7 +974,11 @@ describe("ResourceExplorerProvider", () => {
       kind: "custom-attribute",
       uri: "file:///repo/src/focus.ts",
     });
-    const harness = createHarness(async () => response([readyProject([card, attribute]) ]));
+    const inventory = readyProject([card, attribute]);
+    const harness = createHarness(async () => response([{
+      ...inventory,
+      typeSurfacesIncluded: false,
+    }]));
 
     await harness.provider.refresh();
 
@@ -945,8 +987,11 @@ describe("ResourceExplorerProvider", () => {
     const cardNode = tree[0]!.children![0]!;
     expect(cardNode.description).toContain("project");
     expect(cardNode.children?.map((node) => node.label)).toEqual(["store-card", "labelText (display-label)"]);
-    expect(cardNode.children?.[1]?.description).toBe("mode default · type string");
-    expect(harness.getResourceInventory).toHaveBeenCalledWith({ includeTypeSurfaces: true });
+    expect(cardNode.children?.[1]?.description).toBe("mode default");
+    expect(harness.getResourceInventory).toHaveBeenCalledWith(
+      { includeTypeSurfaces: false },
+      expect.anything(),
+    );
     expect(harness.provider.getTreeItem(cardNode as never).command).toEqual(expect.objectContaining({
       command: AureliaCommand.OpenResource,
     }));
@@ -1420,10 +1465,13 @@ describe("ResourceExplorerProvider", () => {
       workspaceKey: workspaceB.key,
       fingerprint: "b:stable",
     });
-    expect(harness.getResourceInventory).toHaveBeenLastCalledWith({
-      workspaceKey: workspaceA.key,
-      includeTypeSurfaces: true,
-    });
+    expect(harness.getResourceInventory).toHaveBeenLastCalledWith(
+      {
+        workspaceKey: workspaceA.key,
+        includeTypeSurfaces: false,
+      },
+      expect.anything(),
+    );
   });
 
   test("retains scoped transport errors stale, recovers, then retires an absent workspace", async () => {
@@ -1633,7 +1681,10 @@ describe("ResourceExplorerProvider", () => {
 
     await harness.provider.refreshWorkspace(workspaceA.key);
 
-    expect(harness.getResourceInventory).toHaveBeenCalledWith({ includeTypeSurfaces: true });
+    expect(harness.getResourceInventory).toHaveBeenCalledWith(
+      { includeTypeSurfaces: false },
+      expect.anything(),
+    );
     expect((await roots(harness.provider)).map((node) => node.label)).toEqual([
       "a · app",
       "b · app",
@@ -1703,8 +1754,7 @@ describe("ResourceExplorerProvider", () => {
     const observation = captureResourceDiscoveryObservations("resource-explorer");
     try {
       const owner = workspace("file:///repo/a");
-      let resolvePredecessor!: (value: unknown) => void;
-      const predecessor = new Promise<unknown>((resolve) => { resolvePredecessor = resolve; });
+      const predecessor = new Promise<unknown>(() => undefined);
       const getResourceInventory = vi.fn()
         .mockResolvedValueOnce(response([readyProject([])], owner, "baseline"))
         .mockImplementationOnce(() => predecessor);
@@ -1715,14 +1765,13 @@ describe("ResourceExplorerProvider", () => {
       const pending = harness.provider.refreshWorkspace(owner.key);
       await vi.waitFor(() => expect(getResourceInventory).toHaveBeenCalledTimes(2));
       harness.provider.supersedeRefresh(owner.key);
-      resolvePredecessor(response([readyProject([])], owner, "retired-predecessor"));
       await pending;
 
       expect(observation.events).toEqual(expect.arrayContaining([
         expect.objectContaining({
           phase: "discarded",
           reason: "superseded",
-          fingerprint: "retired-predecessor",
+          fingerprint: null,
         }),
       ]));
       const discarded = observation.events.find((event) => event.phase === "discarded")!;
@@ -2012,6 +2061,40 @@ describe("ResourceExplorerProvider", () => {
     await harness.provider.refresh();
     expect((await roots(harness.provider))[0]?.id).toBe("no-session");
     expect(harness.recorded.contextValues.get("aurelia.resourceExplorerHasIssues")).toBe(false);
+  });
+
+  test("keeps protocol cancellation transient instead of publishing a failed inventory", async () => {
+    const cancellation = Object.assign(new Error("cancelled"), { code: -32800 });
+    const current = resource({
+      identityKey: "resource:current-after-cancellation",
+      name: "current-card",
+      uri: "file:///repo/current.ts",
+    });
+    const getResourceInventory = vi.fn()
+      .mockRejectedValueOnce(cancellation)
+      .mockResolvedValueOnce(response([readyProject([current])]))
+      .mockRejectedValueOnce(cancellation);
+    const harness = createHarness(getResourceInventory);
+
+    await harness.provider.refresh();
+
+    expect(await roots(harness.provider)).toEqual([]);
+    expect(harness.view.message).toBeUndefined();
+    expect(harness.recorded.contextValues.get("aurelia.resourceExplorerHasIssues")).toBe(false);
+
+    await harness.provider.refresh();
+    const settledTree = await roots(harness.provider);
+    await harness.provider.refresh();
+
+    expect(await roots(harness.provider)).toEqual(settledTree);
+    expect(JSON.stringify(settledTree)).toContain("current-card");
+    expect(JSON.stringify(settledTree)).not.toContain("out of date");
+    expect(harness.view.message).toBeUndefined();
+    expect(harness.recorded.contextValues.get("aurelia.resourceExplorerHasIssues")).toBe(false);
+    expect(harness.logger.warn).not.toHaveBeenCalledWith(
+      "resourceExplorer.refresh.failed",
+      expect.anything(),
+    );
   });
 
   test("retains the last coherent tree when a refresh fails", async () => {

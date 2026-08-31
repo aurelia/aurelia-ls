@@ -143,7 +143,7 @@ export class LspFacade implements Disposable {
         );
         return { ...session.workspace, status: "ready" as const, response };
       } catch (err) {
-        if (err instanceof StaleLanguageClientSessionError) throw err;
+        if (err instanceof StaleLanguageClientSessionError || isRequestCancelledError(err)) throw err;
         return { ...session.workspace, status: "error" as const, error: errorMessage(err) };
       }
     }));
@@ -185,7 +185,7 @@ export class LspFacade implements Disposable {
         );
         return { ...session.workspace, status: "ready" as const, response };
       } catch (error) {
-        if (error instanceof StaleLanguageClientSessionError) throw error;
+        if (error instanceof StaleLanguageClientSessionError || isRequestCancelledError(error)) throw error;
         return { ...session.workspace, status: "error" as const, error: errorMessage(error) };
       }
     }));
@@ -512,19 +512,29 @@ export class LspFacade implements Disposable {
         if (!this.#sessionIsCurrent(session)) {
           throw new StaleLanguageClientSessionError(session, method);
         }
+        const requestCancelled = isRequestCancelledError(error);
         if (
           retryPolicy === "read-currentness"
           && attempt < READ_CURRENTNESS_RETRY_LIMIT
           && !token?.isCancellationRequested
-          && isContentModifiedError(error)
+          && (isContentModifiedError(error) || requestCancelled)
         ) {
           this.#logger.debug("request.retry", {
             method,
             workspace: session.workspace.uri,
             attempt: attempt + 2,
-            reason: "content-modified",
+            reason: requestCancelled ? "request-cancelled" : "content-modified",
           });
           continue;
+        }
+        if (requestCancelled && token?.isCancellationRequested) {
+          this.#logger.debug("request.cancelled", {
+            method,
+            workspace: session.workspace.uri,
+            durationMs: Math.round((performance.now() - started) * 10) / 10,
+            attempt: attempt + 1,
+          });
+          throw error;
         }
         this.#logger.warn("request.failed", {
           method,
@@ -735,6 +745,17 @@ function isContentModifiedError(error: unknown): boolean {
       && typeof error === "object"
       && "code" in error
       && error.code === LSPErrorCodes.ContentModified;
+  } catch {
+    return false;
+  }
+}
+
+export function isRequestCancelledError(error: unknown): boolean {
+  try {
+    return error != null
+      && typeof error === "object"
+      && "code" in error
+      && error.code === LSPErrorCodes.RequestCancelled;
   } catch {
     return false;
   }

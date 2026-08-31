@@ -36,6 +36,7 @@
   },
   "license": "MIT",
   "activationEvents": [
+    "onCommand:aurelia.createSupportReport",
     "onLanguage:html",
     "onLanguage:aurelia-html",
     "onLanguage:typescript",
@@ -173,6 +174,12 @@
       ]
     },
     "commands": [
+      {
+        "command": "aurelia.createSupportReport",
+        "title": "Create Support Report",
+        "icon": "$(report)",
+        "category": "Aurelia"
+      },
       {
         "command": "aurelia.explainAttributeInterpretation",
         "title": "Explain Attribute",
@@ -333,6 +340,9 @@
         }
       ],
       "commandPalette": [
+        {
+          "command": "aurelia.createSupportReport"
+        },
         {
           "command": "aurelia.explainAttributeInterpretation",
           "when": "false"

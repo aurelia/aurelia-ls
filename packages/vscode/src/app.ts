@@ -19,6 +19,7 @@ import {
   OwnedTemplateLanguageController,
 } from "./template-language.js";
 import { emitWorkerRestartContextObservation } from "./worker-restart-host-control.js";
+import type { SupportReportService } from "./support-report.js";
 
 export interface ClientAppServices {
   readonly vscode: VscodeApi;
@@ -27,6 +28,7 @@ export interface ClientAppServices {
   /** Root output resource owned by ClientApp. */
   readonly outputChannel: LogOutputChannel;
   readonly languageClient: AureliaLanguageClient;
+  readonly supportReport?: SupportReportService;
   readonly features: readonly ClientFeature[];
 }
 
@@ -68,7 +70,7 @@ export class ClientApp {
     }
     this.#activationStarted = true;
 
-    const { vscode, logger, languageClient, features } = this.#services;
+    const { vscode, logger, languageClient, supportReport, features } = this.#services;
     const errors = new ErrorReporter(logger, vscode);
     try {
       await setClientContextKeys(vscode, false, false, false, null);
@@ -83,6 +85,7 @@ export class ClientApp {
         errors,
         languageClient,
         lsp,
+        ...(supportReport == null ? {} : { supportReport }),
       });
       this.#ctx = ctx;
 

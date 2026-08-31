@@ -63,6 +63,46 @@ export interface AureliaLanguageClientSession {
   readonly availability: "active" | "restarting";
 }
 
+export interface AureliaSupportIdentityProjector {
+  (kind: string, value: string): string;
+}
+
+export interface AureliaLanguageClientSupportSessionState {
+  readonly workspaceId: string;
+  readonly publication: "published" | "transitioning-only";
+  readonly activationMode: AureliaActivationMode;
+  readonly activationEvidence: WorkspaceActivationEvidenceKind;
+  readonly availability: AureliaLanguageClientSession["availability"];
+  readonly incarnation: number;
+  readonly clientState: "stopped" | "running" | "starting" | "start-failed" | "unknown";
+  readonly nativeProjectConfigurationCount: number;
+  readonly excludedFolderCount: number;
+  readonly projectRootHintCount: number;
+  readonly status: null | {
+    readonly fingerprintId: string;
+    readonly projectAnalysisCounts: WorkspaceStatusResponse["projectAnalysisCounts"];
+    readonly nativeProjectConfigurationCount: number;
+    readonly nativeProjectConfigurationDiagnosticCount: number;
+  };
+}
+
+export interface AureliaLanguageClientSupportState {
+  readonly status: "available";
+  readonly lifecycle: {
+    readonly startConsumed: boolean;
+    readonly started: boolean;
+    readonly acceptingRequests: boolean;
+    readonly stopping: boolean;
+    readonly lifecycleGeneration: number;
+    readonly pendingGlobalReconciliation: boolean;
+    readonly pendingTopologyChangeCount: number;
+    readonly retiringClientCount: number;
+    readonly transitioningClientCount: number;
+  };
+  readonly sessionCount: number;
+  readonly sessions: readonly AureliaLanguageClientSupportSessionState[];
+}
+
 /** Whether a document has an active, temporarily unpublished, or absent Aurelia session owner. */
 export enum AureliaSemanticSessionState {
   Active = "active",
@@ -257,6 +297,65 @@ export class AureliaLanguageClient {
     return [...this.#sessions.values()]
       .filter((session) => session.availability === "active")
       .sort((left, right) => left.workspace.uri.localeCompare(right.workspace.uri));
+  }
+
+  /** Bounded client-owned lifecycle facts for a user-created privacy projection. */
+  supportState(identify: AureliaSupportIdentityProjector): AureliaLanguageClientSupportState {
+    const supportSessions = new Map<LanguageClient, {
+      readonly session: AureliaLanguageClientSession;
+      readonly publication: AureliaLanguageClientSupportSessionState["publication"];
+    }>();
+    for (const session of this.#sessions.values()) {
+      supportSessions.set(session.client, { session, publication: "published" });
+    }
+    for (const entry of this.#transitioningSemanticScopes.values()) {
+      if (!supportSessions.has(entry.session.client)) {
+        supportSessions.set(entry.session.client, {
+          session: entry.session,
+          publication: "transitioning-only",
+        });
+      }
+    }
+    const sessions = [...supportSessions.values()].map(({ session, publication }) => ({
+      workspaceId: identify("workspace", session.workspace.uri),
+      publication,
+      activationMode: session.activationMode,
+      activationEvidence: session.activationEvidence,
+      availability: session.availability,
+      incarnation: session.incarnation,
+      clientState: languageClientStateLabel(session.client.state),
+      nativeProjectConfigurationCount: session.nativeProjectConfigurationUris.length,
+      excludedFolderCount: session.excludedFolders.length,
+      projectRootHintCount: session.projectRootHintFolders.length,
+      status: session.status == null
+        ? null
+        : {
+            fingerprintId: identify("semantic-fingerprint", session.status.fingerprint),
+            projectAnalysisCounts: session.status.projectAnalysisCounts.map((row) => ({ ...row })),
+            nativeProjectConfigurationCount: session.status.nativeProjectConfigurations.rows.length,
+            nativeProjectConfigurationDiagnosticCount:
+              session.status.nativeProjectConfigurations.rows.reduce(
+                (count, row) => count + row.diagnosticCount,
+                0,
+              ),
+          },
+    })).sort((left, right) => left.workspaceId.localeCompare(right.workspaceId));
+    return Object.freeze({
+      status: "available",
+      lifecycle: Object.freeze({
+        startConsumed: this.#startConsumed,
+        started: this.#started,
+        acceptingRequests: this.#acceptingLifecycleRequests,
+        stopping: this.#stopRequest != null,
+        lifecycleGeneration: this.#lifecycleIntent.generation,
+        pendingGlobalReconciliation: this.#pendingGlobalReconciliation,
+        pendingTopologyChangeCount: this.#pendingTopologyChanges.size,
+        retiringClientCount: this.#retirements.size,
+        transitioningClientCount: this.#transitioningSemanticScopes.size,
+      }),
+      sessionCount: sessions.length,
+      sessions: Object.freeze(sessions.map((session) => Object.freeze(session))),
+    });
   }
 
   get hasSessions(): boolean {
@@ -1466,6 +1565,23 @@ function sameWorkspaceFolders(
 ): boolean {
   return left.length === right.length
     && left.every((folder, index) => workspaceFolderKey(folder) === workspaceFolderKey(right[index]!));
+}
+
+function languageClientStateLabel(
+  state: State,
+): AureliaLanguageClientSupportSessionState["clientState"] {
+  switch (state) {
+    case LANGUAGE_CLIENT_STATE_STOPPED:
+      return "stopped";
+    case LANGUAGE_CLIENT_STATE_RUNNING:
+      return "running";
+    case LANGUAGE_CLIENT_STATE_STARTING:
+      return "starting";
+    case LANGUAGE_CLIENT_STATE_START_FAILED:
+      return "start-failed";
+    default:
+      return "unknown";
+  }
 }
 
 function containmentConnectedWorkspaceKeys(

@@ -178,6 +178,7 @@ function createHarness(options: {
   const getResourceInventory = vi.fn(options.getResourceInventory ?? (async () => null));
   const getAnalysisLimitations = vi.fn(options.getAnalysisLimitations ?? (async () => null));
   const logger = { debug: vi.fn(), warn: vi.fn(), show: vi.fn() };
+  let supportStateReader: (() => unknown) | null = null;
   const contributions: Disposable[] = [];
   ViewsFeature.activate({
     vscode: stubVscode as unknown as VscodeApi,
@@ -188,6 +189,16 @@ function createHarness(options: {
     },
     languageClient: {
       onDidChangeSessions: sessionsChanged.event,
+    },
+    supportReport: {
+      registerResourceExplorerState: (read: () => unknown) => {
+        supportStateReader = read;
+        return {
+          dispose: () => {
+            if (supportStateReader === read) supportStateReader = null;
+          },
+        };
+      },
     },
     logger,
   } as never, (contribution) => {
@@ -205,6 +216,7 @@ function createHarness(options: {
     vscode: stubVscode,
     withProgress,
     showInformationMessage,
+    readSupportState: () => supportStateReader?.() as any,
     fireAnalysisChanged: (
       workspaceKey = "file:///work/a",
       changeKind: "source-text" | "topology" = "source-text",
@@ -245,6 +257,40 @@ async function resourceRoots(
 }
 
 describe("ViewsFeature resource inventory lifecycle", () => {
+  test("reports hidden, active, and settled refresh ownership from the view closure", async () => {
+    const pending = deferred<null>();
+    const harness = createHarness({ getResourceInventory: () => pending.promise });
+
+    expect(harness.readSupportState()).toMatchObject({
+      visible: false,
+      acceptingRefreshes: true,
+      dirtyAll: true,
+      dirtyWorkspaceCount: 0,
+      refreshInFlight: false,
+      activeRefreshScope: "none",
+      provider: { phase: "empty", hasInventory: false },
+    });
+
+    harness.setVisible(true);
+    await vi.waitFor(() => expect(harness.getResourceInventory).toHaveBeenCalledOnce());
+    expect(harness.readSupportState()).toMatchObject({
+      visible: true,
+      dirtyAll: false,
+      refreshInFlight: true,
+      activeRefreshScope: "all",
+      provider: { phase: "loading" },
+    });
+
+    pending.resolve(null);
+    await vi.waitFor(() => expect(harness.readSupportState()).toMatchObject({
+      refreshInFlight: false,
+      activeRefreshScope: "none",
+      provider: { phase: "current" },
+    }));
+    harness.dispose();
+    expect(harness.readSupportState()).toBeUndefined();
+  });
+
   test("observes visibility, progress, matching supersede, and requeue as one view lifecycle", async () => {
     const observation = captureViewObservations();
     try {
@@ -510,10 +556,13 @@ describe("ViewsFeature resource inventory lifecycle", () => {
       await harness.recorded.commandHandlers.get(AureliaCommand.RetryResourceProject)?.(roots[1]);
       await harness.recorded.commandHandlers.get(AureliaCommand.OpenAureliaOutput)?.();
 
-      expect(harness.getResourceInventory).toHaveBeenLastCalledWith({
-        workspaceKey: "file:///work/b",
-        includeTypeSurfaces: true,
-      });
+      expect(harness.getResourceInventory).toHaveBeenLastCalledWith(
+        {
+          workspaceKey: "file:///work/b",
+          includeTypeSurfaces: false,
+        },
+        expect.anything(),
+      );
       expect(observation.events).toEqual(expect.arrayContaining([
         expect.objectContaining({ phase: "retry", workspaceKey: "file:///work/b", admitted: true }),
         expect.objectContaining({ phase: "output-requested", origin: "tree-action" }),
@@ -532,18 +581,27 @@ describe("ViewsFeature resource inventory lifecycle", () => {
 
     await vi.waitFor(() => expect(harness.getResourceInventory).toHaveBeenCalledOnce());
     await waitForRootCount(harness.treeDataProvider, 2);
-    expect(harness.getResourceInventory).toHaveBeenLastCalledWith({ includeTypeSurfaces: true });
+    expect(harness.getResourceInventory).toHaveBeenLastCalledWith(
+      { includeTypeSurfaces: false },
+      expect.anything(),
+    );
 
     harness.fireAnalysisChanged("file:///work/a");
     await vi.waitFor(() => expect(harness.getResourceInventory).toHaveBeenCalledTimes(2));
-    expect(harness.getResourceInventory).toHaveBeenLastCalledWith({
-      workspaceKey: "file:///work/a",
-      includeTypeSurfaces: true,
-    });
+    expect(harness.getResourceInventory).toHaveBeenLastCalledWith(
+      {
+        workspaceKey: "file:///work/a",
+        includeTypeSurfaces: false,
+      },
+      expect.anything(),
+    );
 
     harness.fireAnalysisChanged("file:///work/a", "topology");
     await vi.waitFor(() => expect(harness.getResourceInventory).toHaveBeenCalledTimes(3));
-    expect(harness.getResourceInventory).toHaveBeenLastCalledWith({ includeTypeSurfaces: true });
+    expect(harness.getResourceInventory).toHaveBeenLastCalledWith(
+      { includeTypeSurfaces: false },
+      expect.anything(),
+    );
     harness.dispose();
   });
 
@@ -560,7 +618,10 @@ describe("ViewsFeature resource inventory lifecycle", () => {
     harness.setVisible(true);
 
     await vi.waitFor(() => expect(harness.getResourceInventory).toHaveBeenCalledTimes(2));
-    expect(harness.getResourceInventory).toHaveBeenLastCalledWith({ includeTypeSurfaces: true });
+    expect(harness.getResourceInventory).toHaveBeenLastCalledWith(
+      { includeTypeSurfaces: false },
+      expect.anything(),
+    );
     harness.dispose();
   });
 
@@ -589,20 +650,24 @@ describe("ViewsFeature resource inventory lifecycle", () => {
     firstWorkspaceRefresh.resolve(inventorySnapshot("file:///work/a"));
     await vi.waitFor(() => expect(harness.getResourceInventory).toHaveBeenCalledTimes(4));
     expect(harness.getResourceInventory.mock.calls.map(([options]) => options)).toEqual([
-      { includeTypeSurfaces: true },
-      { workspaceKey: "file:///work/a", includeTypeSurfaces: true },
-      { workspaceKey: "file:///work/a", includeTypeSurfaces: true },
-      { workspaceKey: "file:///work/b", includeTypeSurfaces: true },
+      { includeTypeSurfaces: false },
+      { workspaceKey: "file:///work/a", includeTypeSurfaces: false },
+      { workspaceKey: "file:///work/a", includeTypeSurfaces: false },
+      { workspaceKey: "file:///work/b", includeTypeSurfaces: false },
     ]);
     harness.dispose();
   });
 
   test("supersedes a held workspace predecessor and publishes only its trailing current result", async () => {
-    const predecessor = deferred<unknown>();
+    const predecessor = new Promise<unknown>(() => undefined);
     const trailing = deferred<unknown>();
+    let predecessorToken: { readonly isCancellationRequested: boolean } | undefined;
     const getResourceInventory = vi.fn()
       .mockResolvedValueOnce(inventorySnapshot("file:///work/a", "file:///work/b"))
-      .mockImplementationOnce(() => predecessor.promise)
+      .mockImplementationOnce((_options, token) => {
+        predecessorToken = token;
+        return predecessor;
+      })
       .mockImplementationOnce(() => trailing.promise);
     const harness = createHarness({ visible: true, getResourceInventory });
     await vi.waitFor(() => expect(getResourceInventory).toHaveBeenCalledOnce());
@@ -611,15 +676,16 @@ describe("ViewsFeature resource inventory lifecycle", () => {
     harness.fireAnalysisChanged("file:///work/a");
     await vi.waitFor(() => expect(getResourceInventory).toHaveBeenCalledTimes(2));
     harness.fireAnalysisChanged("file:///work/a");
-    predecessor.resolve(failedInventorySnapshot("file:///work/a"));
+    harness.fireAnalysisChanged("file:///work/a");
     await vi.waitFor(() => expect(getResourceInventory).toHaveBeenCalledTimes(3));
+    expect(predecessorToken?.isCancellationRequested).toBe(true);
 
     expect(JSON.stringify(await Promise.resolve(harness.treeDataProvider?.getChildren())))
       .not.toContain("Couldn't load Aurelia resources");
     expect(getResourceInventory.mock.calls.map(([options]) => options)).toEqual([
-      { includeTypeSurfaces: true },
-      { workspaceKey: "file:///work/a", includeTypeSurfaces: true },
-      { workspaceKey: "file:///work/a", includeTypeSurfaces: true },
+      { includeTypeSurfaces: false },
+      { workspaceKey: "file:///work/a", includeTypeSurfaces: false },
+      { workspaceKey: "file:///work/a", includeTypeSurfaces: false },
     ]);
     trailing.resolve(inventorySnapshot("file:///work/a"));
     await vi.waitFor(() => expect(harness.view.message).toBeUndefined());
@@ -774,9 +840,9 @@ describe("ViewsFeature resource inventory lifecycle", () => {
       expect(current).toEqual(expect.objectContaining({ workspaceIdentity: null, fingerprint: null }));
       expect(harness.view.message).toBeUndefined();
       expect(getResourceInventory.mock.calls.map(([options]) => options)).toEqual([
-        { includeTypeSurfaces: true },
-        { includeTypeSurfaces: true },
-        { includeTypeSurfaces: true },
+        { includeTypeSurfaces: false },
+        { includeTypeSurfaces: false },
+        { includeTypeSurfaces: false },
       ]);
     } finally {
       predecessor.resolve(failedInventorySnapshot("file:///work/a", "file:///work/b"));
@@ -807,7 +873,7 @@ describe("ViewsFeature resource inventory lifecycle", () => {
       .toContain("product-card");
     expect(getResourceInventory.mock.calls[2]?.[0]).toEqual({
       workspaceKey: "file:///work/b",
-      includeTypeSurfaces: true,
+      includeTypeSurfaces: false,
     });
     workspaceB.resolve(inventorySnapshot("file:///work/b"));
     await Promise.resolve();
@@ -953,9 +1019,9 @@ describe("ViewsFeature resource inventory lifecycle", () => {
     await vi.waitFor(() => expect(harness.getResourceInventory).toHaveBeenCalledTimes(3));
     await Promise.resolve();
     expect(harness.getResourceInventory.mock.calls.map(([options]) => options)).toEqual([
-      { includeTypeSurfaces: true },
-      { workspaceKey: "file:///work/a", includeTypeSurfaces: true },
-      { includeTypeSurfaces: true },
+      { includeTypeSurfaces: false },
+      { workspaceKey: "file:///work/a", includeTypeSurfaces: false },
+      { includeTypeSurfaces: false },
     ]);
     harness.dispose();
   });
@@ -971,7 +1037,10 @@ describe("ViewsFeature resource inventory lifecycle", () => {
 
     harness.setVisible(true);
     await vi.waitFor(() => expect(harness.getResourceInventory).toHaveBeenCalledOnce());
-    expect(harness.getResourceInventory).toHaveBeenCalledWith({ includeTypeSurfaces: true });
+    expect(harness.getResourceInventory).toHaveBeenCalledWith(
+      { includeTypeSurfaces: false },
+      expect.anything(),
+    );
 
     harness.setVisible(false);
     harness.fireAnalysisChanged();
@@ -1008,7 +1077,10 @@ describe("ViewsFeature resource inventory lifecycle", () => {
 
     await harness.refreshCommand();
     expect(harness.getResourceInventory).toHaveBeenCalledOnce();
-    expect(harness.getResourceInventory).toHaveBeenCalledWith({ includeTypeSurfaces: true });
+    expect(harness.getResourceInventory).toHaveBeenCalledWith(
+      { includeTypeSurfaces: false },
+      expect.anything(),
+    );
 
     harness.setVisible(true);
     await Promise.resolve();
@@ -1040,8 +1112,8 @@ describe("ViewsFeature resource inventory lifecycle", () => {
     await refresh;
     expect(getResourceInventory).toHaveBeenCalledTimes(2);
     expect(getResourceInventory.mock.calls.map(([options]) => options)).toEqual([
-      { includeTypeSurfaces: true },
-      { includeTypeSurfaces: true },
+      { includeTypeSurfaces: false },
+      { includeTypeSurfaces: false },
     ]);
     harness.dispose();
   });

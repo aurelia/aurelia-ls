@@ -1,5 +1,6 @@
 /** Client-owned contribution identifiers mirrored by package.json and guarded by a manifest contract test. */
 export const AureliaCommand = {
+  CreateSupportReport: "aurelia.createSupportReport",
   ExplainAttributeInterpretation: "aurelia.explainAttributeInterpretation",
   ExplainBindingUncertainty: "aurelia.explainBindingUncertainty",
   ExplainFrameworkCapability: "aurelia.explainFrameworkCapability",
