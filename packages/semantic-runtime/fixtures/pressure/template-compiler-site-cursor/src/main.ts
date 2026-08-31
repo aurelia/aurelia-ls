@@ -14,6 +14,7 @@ import cursorContextFamilyCaptureProjectionTemplate from './cursor-context-famil
 import cursorContextFamilyContainerlessTcTemplate from './cursor-context-family-containerless-tc.html';
 import cursorContextFamilyNestedProcessContentTemplate from './cursor-context-family-nested-process-content.html';
 import cursorContextFamilyProjectionTemplate from './cursor-context-family-projection.html';
+import cursorContextFamilyProjectionSiblingsTemplate from './cursor-context-family-projection-siblings.html';
 import cursorContextFamilyTcTemplate from './cursor-context-family-tc.html';
 import cursorEmptyTemplate from './cursor-empty.html';
 import cursorFosterTemplate from './cursor-foster.html';
@@ -358,6 +359,13 @@ class CursorContextFamilyProjection {
 }
 
 @customElement({
+  name: 'cursor-context-family-projection-siblings',
+  template: cursorContextFamilyProjectionSiblingsTemplate,
+  dependencies: [CursorLeaf],
+})
+class CursorContextFamilyProjectionSiblings {}
+
+@customElement({
   name: 'cursor-marker',
   template: cursorMarkerTemplate,
 })
@@ -586,6 +594,7 @@ void new Aurelia()
     CursorTaskNestedTc,
     CursorTaskNestedProjection,
     CursorContextFamilyProjection,
+    CursorContextFamilyProjectionSiblings,
     CursorMarker,
     CursorNativeContainerless,
     CursorWide,

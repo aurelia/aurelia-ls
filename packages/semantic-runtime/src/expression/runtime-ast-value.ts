@@ -1,10 +1,14 @@
 import type {
+  ArrayBindingPattern,
   AssignmentOperator,
   BinaryOperator,
+  BindingIdentifierOrPattern,
   ExpressionAstNode,
   ExpressionPrimitiveLiteralValue,
+  ObjectBindingPattern,
   UnaryOperator,
 } from './ast.js';
+import { admitRepeatObjectBindingPattern } from './repeat-object-binding-pattern.js';
 
 export type RuntimeExpressionAstPath = readonly (string | number)[];
 
@@ -103,6 +107,23 @@ export type RuntimeExpressionAstValue =
       readonly expressions: readonly RuntimeExpressionAstValue[];
     }
   | { readonly $kind: 'BindingIdentifier'; readonly name: string }
+  | {
+      readonly $kind: 'ArrayDestructuring';
+      readonly list: readonly RuntimeExpressionAstValue[];
+      readonly source: undefined;
+      readonly initializer: undefined;
+    }
+  | {
+      readonly $kind: 'DestructuringAssignmentLeaf';
+      readonly target: RuntimeExpressionAstValue;
+      readonly source: RuntimeExpressionAstValue;
+      readonly initializer: undefined;
+    }
+  | {
+      readonly $kind: 'ObjectBindingPattern';
+      readonly keys: readonly (number | string)[];
+      readonly values: readonly RuntimeExpressionAstValue[];
+    }
   | {
       readonly $kind: 'ForOfStatement';
       readonly declaration: RuntimeExpressionAstValue;
@@ -376,16 +397,7 @@ class RuntimeExpressionAstValueProjector {
         return { $kind: 'BindingIdentifier', name: expression.name.name };
       case 'ForOfStatement': {
         const iterable = this.project(expression.iterable, [...path, 'iterable']);
-        if (expression.declaration.$kind !== 'BindingIdentifier') {
-          this.pending(
-            RuntimeExpressionAstProjectionReasonKind.BindingPatternRepresentationPending,
-            expression.declaration,
-            [...path, 'declaration'],
-            'Semantic binding-pattern representation needs an explicit RC2 runtime pattern conversion.',
-          );
-          return null;
-        }
-        const declaration = this.project(expression.declaration, [...path, 'declaration']);
+        const declaration = this.projectForOfDeclaration(expression.declaration, [...path, 'declaration']);
         return declaration == null || iterable == null ? null : {
           $kind: 'ForOfStatement',
           declaration,
@@ -436,6 +448,108 @@ class RuntimeExpressionAstValueProjector {
           'CustomExpression requires runtime behavior methods and cannot project as plain data.',
         );
     }
+  }
+
+  private projectForOfDeclaration(
+    declaration: BindingIdentifierOrPattern,
+    path: RuntimeExpressionAstPath,
+  ): RuntimeExpressionAstValue | null {
+    switch (declaration.$kind) {
+      case 'BindingIdentifier':
+        return this.project(declaration, path);
+      case 'ArrayBindingPattern':
+        return this.projectRepeatArrayBindingPattern(declaration, path);
+      case 'ObjectBindingPattern':
+        return this.projectRepeatObjectBindingPattern(declaration, path);
+      case 'BindingPatternDefault':
+      case 'BindingPatternHole':
+        return this.pending(
+          RuntimeExpressionAstProjectionReasonKind.BindingPatternRepresentationPending,
+          declaration,
+          path,
+          'Semantic binding-pattern representation has no admitted RC2 repeat declaration wire.',
+        );
+    }
+  }
+
+  private projectRepeatArrayBindingPattern(
+    pattern: ArrayBindingPattern,
+    path: RuntimeExpressionAstPath,
+  ): RuntimeExpressionAstValue | null {
+    const bindingContext: RuntimeExpressionAstValue = { $kind: 'AccessThis', ancestor: 0 };
+    const list: RuntimeExpressionAstValue[] = [];
+    let exact = true;
+    pattern.elements.forEach((element, index) => {
+      if (element.$kind === 'BindingPatternHole') {
+        return;
+      }
+      if (element.$kind !== 'BindingIdentifier') {
+        exact = false;
+        this.pending(
+          RuntimeExpressionAstProjectionReasonKind.BindingPatternRepresentationPending,
+          element,
+          [...path, 'elements', index],
+          'RC2 array repeat declarations admit identifiers and holes only.',
+        );
+        return;
+      }
+      list.push({
+        $kind: 'DestructuringAssignmentLeaf',
+        target: {
+          $kind: 'AccessMember',
+          accessGlobal: false,
+          object: bindingContext,
+          name: element.name.name,
+          optional: false,
+        },
+        source: {
+          $kind: 'AccessKeyed',
+          accessGlobal: false,
+          object: bindingContext,
+          key: { $kind: 'PrimitiveLiteral', value: index },
+          optional: false,
+        },
+        initializer: undefined,
+      });
+    });
+    if (pattern.rest != null) {
+      exact = false;
+      this.pending(
+        RuntimeExpressionAstProjectionReasonKind.BindingPatternRepresentationPending,
+        pattern.rest,
+        [...path, 'rest'],
+        'RC2 array repeat declarations do not admit rest bindings.',
+      );
+    }
+    return exact ? {
+      $kind: 'ArrayDestructuring',
+      list,
+      source: undefined,
+      initializer: undefined,
+    } : null;
+  }
+
+  private projectRepeatObjectBindingPattern(
+    pattern: ObjectBindingPattern,
+    path: RuntimeExpressionAstPath,
+  ): RuntimeExpressionAstValue | null {
+    const admission = admitRepeatObjectBindingPattern(pattern);
+    return admission.admitted
+      ? {
+          $kind: 'ObjectBindingPattern',
+          keys: [...admission.sourceKeys],
+          values: admission.localNames.map((name): RuntimeExpressionAstValue => ({
+            $kind: 'AccessScope',
+            name,
+            ancestor: 0,
+          })),
+        }
+      : this.pending(
+          RuntimeExpressionAstProjectionReasonKind.BindingPatternRepresentationPending,
+          pattern,
+          path,
+          'Semantic object binding pattern is outside RC2 Repeat admission.',
+        );
   }
 
   private projectAll(

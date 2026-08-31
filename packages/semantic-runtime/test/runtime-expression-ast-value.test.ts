@@ -3,11 +3,14 @@ import { describe, expect, test } from 'vitest';
 import {
   AccessScopeExpression,
   ArrayBindingPattern,
+  BindingIdentifier,
   BindingPatternHole,
   CallScopeExpression,
   CustomExpression,
   ForOfStatement,
   Identifier,
+  ObjectBindingPattern,
+  ObjectBindingPatternProperty,
 } from '../src/expression/ast.js';
 import { ExpressionParser } from '../src/expression/expression-parser.js';
 import { ExpressionParseResultKind } from '../src/expression/parse-result-algebra.js';
@@ -144,19 +147,108 @@ describe('runtime expression AST value projection', () => {
     ]);
   });
 
-  test('names the iterator binding-pattern representation boundary', () => {
-    const result = new ExpressionParser().parse('[item] of items', 'IsIterator');
+  test.each([
+    [
+      '[key, product] of productEntries',
+      'productEntries',
+      [['key', 0], ['product', 1]],
+    ],
+    [
+      '[tripleKey, , tripleProduct] of productTriples',
+      'productTriples',
+      [['tripleKey', 0], ['tripleProduct', 2]],
+    ],
+    [
+      '[compactKey, compactProduct]of productEntries',
+      'productEntries',
+      [['compactKey', 0], ['compactProduct', 1]],
+    ],
+  ] as const)('projects admitted array repeat declaration %s to the RC2 assignment wire', (source, iterable, locals) => {
+    const result = new ExpressionParser().parse(source, 'IsIterator');
     expect(result.kind).toBe(ExpressionParseResultKind.IteratorSuccess);
     if (result.kind !== ExpressionParseResultKind.IteratorSuccess) throw new Error('Expected iterator success.');
 
     const projection = projectRuntimeExpressionAstValue(result.ast);
+    expect(projection.state).toBe(RuntimeExpressionAstProjectionState.Exact);
+    expect(projection.value).toStrictEqual({
+      $kind: 'ForOfStatement',
+      declaration: {
+        $kind: 'ArrayDestructuring',
+        list: locals.map(([name, index]) => rc2ArrayDestructuringLeaf(name, index)),
+        source: undefined,
+        initializer: undefined,
+      },
+      iterable: { $kind: 'AccessScope', name: iterable, ancestor: 0 },
+      semiIdx: -1,
+    });
+  });
+
+  test('projects admitted object repeat aliases and source keys to the RC2 binding-pattern wire', () => {
+    const result = new ExpressionParser().parse(
+      `{ id, name: label, 'role-name': roleName, 0: first } of items`,
+      'IsIterator',
+    );
+    expect(result.kind).toBe(ExpressionParseResultKind.IteratorSuccess);
+    if (result.kind !== ExpressionParseResultKind.IteratorSuccess) throw new Error('Expected iterator success.');
+
+    const projection = projectRuntimeExpressionAstValue(result.ast);
+    expect(projection.state).toBe(RuntimeExpressionAstProjectionState.Exact);
+    expect(projection.reasons).toEqual([]);
+    expect(projection.value).toStrictEqual({
+      $kind: 'ForOfStatement',
+      declaration: {
+        $kind: 'ObjectBindingPattern',
+        keys: ['id', 'name', 'role-name', 0],
+        values: [
+          { $kind: 'AccessScope', name: 'id', ancestor: 0 },
+          { $kind: 'AccessScope', name: 'label', ancestor: 0 },
+          { $kind: 'AccessScope', name: 'roleName', ancestor: 0 },
+          { $kind: 'AccessScope', name: 'first', ancestor: 0 },
+        ],
+      },
+      iterable: { $kind: 'AccessScope', name: 'items', ancestor: 0 },
+      semiIdx: -1,
+    });
+  });
+
+  test('keeps binding-pattern nodes pending outside their admitted ForOf wire', () => {
+    const result = new ExpressionParser().parse('[item] of items', 'IsIterator');
+    expect(result.kind).toBe(ExpressionParseResultKind.IteratorSuccess);
+    if (result.kind !== ExpressionParseResultKind.IteratorSuccess) throw new Error('Expected iterator success.');
+
+    const projection = projectRuntimeExpressionAstValue(result.ast.declaration);
     expect(projection.state).toBe(RuntimeExpressionAstProjectionState.Pending);
     expect(projection.reasons.map((reason) => reason.reasonKind)).toEqual([
       RuntimeExpressionAstProjectionReasonKind.BindingPatternRepresentationPending,
     ]);
   });
 
-  test('aggregates independent parent and child representation gaps with exact paths', () => {
+  test('keeps richer manually constructed iterator patterns pending at their exact pattern path', () => {
+    const span = new SourceSpan(0, 5);
+    const item = new BindingIdentifier(span, new Identifier(span, 'item'));
+    const iterable = new AccessScopeExpression(span, new Identifier(span, 'items'), 0, null, false);
+    const nestedArray = new ForOfStatement(
+      span,
+      new ArrayBindingPattern(span, [new ArrayBindingPattern(span, [item])]),
+      iterable,
+      -1,
+    );
+    const nestedObject = new ForOfStatement(
+      span,
+      new ObjectBindingPattern(span, [
+        new ObjectBindingPatternProperty('value', new ArrayBindingPattern(span, [item])),
+      ]),
+      iterable,
+      -1,
+    );
+
+    expect(projectRuntimeExpressionAstValue(nestedArray).reasons.map((reason) => [reason.reasonKind, reason.path]))
+      .toEqual([[RuntimeExpressionAstProjectionReasonKind.BindingPatternRepresentationPending, ['declaration', 'elements', 0]]]);
+    expect(projectRuntimeExpressionAstValue(nestedObject).reasons.map((reason) => [reason.reasonKind, reason.path]))
+      .toEqual([[RuntimeExpressionAstProjectionReasonKind.BindingPatternRepresentationPending, ['declaration']]]);
+  });
+
+  test('aggregates independent child gaps without retaining a closed array-pattern reason', () => {
     const span = new SourceSpan(0, 5);
     const identifier = new Identifier(span, 'value');
     const call = new CallScopeExpression(
@@ -181,7 +273,28 @@ describe('runtime expression AST value projection', () => {
     ]);
     expect(projectRuntimeExpressionAstValue(iterator).reasons.map((reason) => [reason.reasonKind, reason.path])).toEqual([
       [RuntimeExpressionAstProjectionReasonKind.OptionalScopeAccessUnsupported, ['iterable']],
-      [RuntimeExpressionAstProjectionReasonKind.BindingPatternRepresentationPending, ['declaration']],
     ]);
   });
 });
+
+function rc2ArrayDestructuringLeaf(name: string, index: number): object {
+  const bindingContext = { $kind: 'AccessThis', ancestor: 0 };
+  return {
+    $kind: 'DestructuringAssignmentLeaf',
+    target: {
+      $kind: 'AccessMember',
+      accessGlobal: false,
+      object: bindingContext,
+      name,
+      optional: false,
+    },
+    source: {
+      $kind: 'AccessKeyed',
+      accessGlobal: false,
+      object: bindingContext,
+      key: { $kind: 'PrimitiveLiteral', value: index },
+      optional: false,
+    },
+    initializer: undefined,
+  };
+}

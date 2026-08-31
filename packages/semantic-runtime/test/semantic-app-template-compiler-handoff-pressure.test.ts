@@ -33,6 +33,7 @@ describe('semantic app template compiler handoff pressure', () => {
         'static-projection-probe',
         'projection-whitespace-probe',
         'projection-explicit-slot-probe',
+        'static-object-repeat-probe',
         'native-containerless-probe',
         'au-slot-removal-probe',
         'containerless-usage-probe',
@@ -91,6 +92,28 @@ describe('semantic app template compiler handoff pressure', () => {
         ['element:i', ['text:empty']],
       ]);
       expect(explicitSlot.definitions[1]!.tree.attributes).toEqual([]);
+
+      const objectRepeat = values.get('static-object-repeat-probe')!;
+      const objectIterator = recursiveInstructionValues(objectRepeat).find((value) =>
+        value.type === TemplateCompilerFrameworkInstructionType.IteratorBinding
+      );
+      expect(objectIterator?.type).toBe(TemplateCompilerFrameworkInstructionType.IteratorBinding);
+      if (objectIterator?.type !== TemplateCompilerFrameworkInstructionType.IteratorBinding) {
+        throw new Error('Expected object-repeat IteratorBinding instruction.');
+      }
+      expect(objectIterator.forOf).toEqual({
+        $kind: 'ForOfStatement',
+        declaration: {
+          $kind: 'ObjectBindingPattern',
+          keys: ['id', 'name'],
+          values: [
+            { $kind: 'AccessScope', name: 'id', ancestor: 0 },
+            { $kind: 'AccessScope', name: 'label', ancestor: 0 },
+          ],
+        },
+        iterable: { $kind: 'AccessScope', name: 'items', ancestor: 0 },
+        semiIdx: -1,
+      });
 
       const nativeContainerless = values.get('native-containerless-probe')!;
       expect(instructionValues(nativeContainerless).map((value) => [value.type, targetOf(value)])).toEqual([
@@ -291,6 +314,135 @@ describe('semantic app template compiler handoff pressure', () => {
     }
   }, 20_000);
 
+  test('detaches one causal frontier while preserving exact sibling resources', async () => {
+    const spreadRuntime = await createSemanticRuntime({
+      workspaceRoot: path.join(pressureRoot, 'template-spread-capture-semantics'),
+      storeKey: 'contract:template-compiler-production-spread-frontier',
+    });
+    try {
+      const app = await spreadRuntime.openApp({
+        analysisDepth: 'runtime-topology',
+        telemetry: { inquiryProfile: 'aot' },
+      });
+      const batch = materializeSemanticAppTemplateCompilerHandoffs({ app });
+      const resource = batch.resources.find((candidate) =>
+        sourcePath(candidate).endsWith('src/template-spread-capture-semantics-app.html')
+      );
+
+      expect(batch.resources.filter((candidate) => candidate.state === TemplateCompilerCompiledHandoffState.Exact))
+        .toHaveLength(6);
+      expect(resource?.state).toBe(TemplateCompilerCompiledHandoffState.Ineligible);
+      expect(resource?.reasons).toHaveLength(1);
+      const reason = resource?.reasons[0];
+      expect(reason).toMatchObject({
+        stage: 'context-family',
+        reasonKind: 'family-completion:reserved-spread-syntax',
+        summary: 'Spreading syntax "...xxx" is reserved. Encountered "...$element".',
+        frontierCause: {
+          frontierKind: 'reached-live-attribute-invalid',
+          nodeOccurrenceKey: expect.any(String),
+          attributeOccurrenceKey: expect.any(String),
+          issue: {
+            productHandle: expect.any(String),
+            identityHandle: expect.any(String),
+            issueKind: 'reserved-spread-syntax',
+            frameworkErrorCode: 'AUR0720',
+          },
+          source: {
+            path: 'src/template-spread-capture-semantics-app.html',
+            start: 1521,
+            end: 1532,
+          },
+        },
+      });
+      expect(reason?.stableKeys).toEqual(expect.arrayContaining([
+        reason?.frontierCause?.nodeOccurrenceKey,
+        reason?.frontierCause?.attributeOccurrenceKey,
+        reason?.frontierCause?.issue?.productHandle,
+      ]));
+    } finally {
+      spreadRuntime.retireWorkspaceIncarnation();
+    }
+
+    const projectionRuntime = await createSemanticRuntime({
+      workspaceRoot: path.join(pressureRoot, 'content-projection-topology'),
+      storeKey: 'contract:template-compiler-production-projection-frontier',
+    });
+    try {
+      const app = await projectionRuntime.openApp({
+        analysisDepth: 'runtime-topology',
+        telemetry: { inquiryProfile: 'aot' },
+      });
+      const batch = materializeSemanticAppTemplateCompilerHandoffs({ app });
+      const resource = batch.resources.find((candidate) =>
+        sourcePath(candidate).endsWith('src/content-projection-topology-app.html')
+      );
+
+      expect(batch.resources.filter((candidate) => candidate.state === TemplateCompilerCompiledHandoffState.Exact))
+        .toHaveLength(7);
+      expect(resource?.state).toBe(TemplateCompilerCompiledHandoffState.Pending);
+      expect(resource?.reasons).toEqual([expect.objectContaining({
+        stage: 'context-family',
+        reasonKind: 'family-completion:after-attributes-before-projection',
+        summary: 'Explicit-shadow projection retains residual host children that require same-context selected traversal.',
+        frontierCause: {
+          frontierKind: 'after-attributes-before-projection',
+          nodeOccurrenceKey: expect.any(String),
+          attributeOccurrenceKey: null,
+          issue: null,
+          source: null,
+        },
+      })]);
+    } finally {
+      projectionRuntime.retireWorkspaceIncarnation();
+    }
+  }, 30_000);
+
+  test('detaches built-in template controllers with exact array repeat declarations', async () => {
+    const runtime = await createSemanticRuntime({
+      workspaceRoot: path.join(pressureRoot, 'template-controller-built-ins'),
+      storeKey: 'contract:template-compiler-production-built-in-template-controllers',
+    });
+    try {
+      const app = await runtime.openApp({
+        analysisDepth: 'runtime-topology',
+        telemetry: { inquiryProfile: 'aot' },
+      });
+      const batch = materializeSemanticAppTemplateCompilerHandoffs({ app });
+      const value = requireExactHandoff(batch, 'template-controller-built-ins-app');
+      expect(batch.resources).toHaveLength(1);
+
+      const arrayDeclarations = recursiveInstructionValues(value).flatMap((instruction) => {
+        if (
+          instruction.type !== TemplateCompilerFrameworkInstructionType.IteratorBinding
+          || instruction.forOf.$kind !== 'ForOfStatement'
+          || instruction.forOf.declaration.$kind !== 'ArrayDestructuring'
+        ) {
+          return [];
+        }
+        return [instruction.forOf.declaration];
+      });
+      expect(arrayDeclarations.map((declaration) => declaration.list.map((leaf) => {
+        if (
+          leaf.$kind !== 'DestructuringAssignmentLeaf'
+          || leaf.target.$kind !== 'AccessMember'
+          || leaf.source.$kind !== 'AccessKeyed'
+          || leaf.source.key.$kind !== 'PrimitiveLiteral'
+          || typeof leaf.source.key.value !== 'number'
+        ) {
+          throw new Error('Expected RC2 array-destructuring assignment leaf.');
+        }
+        return [leaf.target.name, leaf.source.key.value];
+      }))).toEqual([
+        [['key', 0], ['product', 1]],
+        [['tripleKey', 0], ['tripleProduct', 2]],
+        [['contextualEnabled', 0], ['contextualProduct', 1]],
+      ]);
+    } finally {
+      runtime.retireWorkspaceIncarnation();
+    }
+  }, 20_000);
+
   test('reports reached local-template invalidity at the production boundary', async () => {
     const runtime = await createSemanticRuntime({
       workspaceRoot: path.join(pressureRoot, 'resource-registration-local-template-errors'),
@@ -340,6 +492,25 @@ function instructionValues(
   value: TemplateCompilerCompiledHandoffValue,
 ): readonly TemplateCompilerCompiledHandoffInstructionValue[] {
   return value.definitions.flatMap((definition) => definition.rows.flat().map((instruction) => instruction.value));
+}
+
+function recursiveInstructionValues(
+  value: TemplateCompilerCompiledHandoffValue,
+): readonly TemplateCompilerCompiledHandoffInstructionValue[] {
+  return value.definitions.flatMap((definition) => [
+    ...definition.rows.flat(),
+    ...definition.surrogates,
+  ]).flatMap((instruction) => recursiveInstructionValue(instruction.value));
+}
+
+function recursiveInstructionValue(
+  value: TemplateCompilerCompiledHandoffInstructionValue,
+): readonly TemplateCompilerCompiledHandoffInstructionValue[] {
+  const nested: TemplateCompilerCompiledHandoffInstructionValue[] = [];
+  if ('props' in value) nested.push(...value.props);
+  if ('instructions' in value) nested.push(...value.instructions);
+  if ('instruction' in value) nested.push(value.instruction);
+  return [value, ...nested.flatMap(recursiveInstructionValue)];
 }
 
 function requireHydrateElement(value: TemplateCompilerCompiledHandoffValue) {

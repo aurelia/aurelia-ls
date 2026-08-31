@@ -6,7 +6,7 @@ import {
   type SemanticSourceReference,
 } from '../api/source-reference.js';
 import type { KernelStore } from '../kernel/store.js';
-import type { ProductHandle } from '../kernel/handles.js';
+import type { IdentityHandle, ProductHandle } from '../kernel/handles.js';
 import {
   BrowserEffectiveTemplateMaterializer,
 } from './browser-effective-template-materializer.js';
@@ -14,6 +14,7 @@ import { parseBrowserTemplateFragmentDraft } from './browser-template-parser.js'
 import { selectBrowserTemplateCompilerCarrier } from './browser-template-selection.js';
 import {
   compileTemplateCompilerContextFamily,
+  TemplateCompilerContextFamilyCompilationReasonRole,
   TemplateCompilerContextFamilyCompilationState,
   type TemplateCompilerContextFamilyCompilationReason,
 } from './template-compiler-context-family-compilation.js';
@@ -72,6 +73,22 @@ export interface TemplateCompilerCompiledHandoffReason {
   readonly reasonKind: string;
   readonly summary: string;
   readonly stableKeys: readonly string[];
+  readonly frontierCause: TemplateCompilerCompiledHandoffFrontierCause | null;
+}
+
+export interface TemplateCompilerCompiledHandoffFrontierCause {
+  readonly frontierKind: string;
+  readonly nodeOccurrenceKey: string | null;
+  readonly attributeOccurrenceKey: string | null;
+  readonly issue: TemplateCompilerCompiledHandoffIssueAuthority | null;
+  readonly source: SemanticSourceReference | null;
+}
+
+export interface TemplateCompilerCompiledHandoffIssueAuthority {
+  readonly productHandle: ProductHandle;
+  readonly identityHandle: IdentityHandle;
+  readonly issueKind: string;
+  readonly frameworkErrorCode: string | null;
 }
 
 export interface SemanticAppTemplateCompilerHandoffRequest {
@@ -261,7 +278,11 @@ function prepareResource(
     return unavailablePreparation(unavailableMaterialization(resource, {
       state: familyState(family.state),
       source,
-      reasons: family.reasons.map(contextFamilyReason),
+      reasons: family.reasons
+        .filter((reason) =>
+          reason.role !== TemplateCompilerContextFamilyCompilationReasonRole.FrontierDerivative
+        )
+        .map((reason) => contextFamilyReason(reason, store)),
       value: null,
     }));
   }
@@ -445,12 +466,31 @@ function resourceMatchesPath(
 
 function contextFamilyReason(
   reason: TemplateCompilerContextFamilyCompilationReason,
+  store: KernelStore,
 ): TemplateCompilerCompiledHandoffReason {
+  const cause = reason.frontierCause;
+  const issue = cause?.issue ?? null;
   return {
     stage: TemplateCompilerCompiledHandoffStage.ContextFamily,
     reasonKind: `${reason.stage}:${reason.reasonKind}`,
     summary: reason.summary,
     stableKeys: reason.stableKeys,
+    frontierCause: cause == null
+      ? null
+      : {
+          frontierKind: cause.frontierKind,
+          nodeOccurrenceKey: cause.nodeOccurrenceKey,
+          attributeOccurrenceKey: cause.attributeOccurrenceKey,
+          issue: issue == null
+            ? null
+            : {
+                productHandle: issue.productHandle,
+                identityHandle: issue.identityHandle,
+                issueKind: issue.issueKind,
+                frameworkErrorCode: issue.frameworkErrorCode,
+              },
+          source: sourceReference(store, cause.sourceAddressHandle),
+        },
   };
 }
 
@@ -464,6 +504,7 @@ function runtimeInstructionReason(
     stableKeys: [reason.instructionKind, reason.instructionProductHandle]
       .filter((value) => value != null)
       .map(String),
+    frontierCause: null,
   };
 }
 
@@ -475,6 +516,7 @@ function compiledDefinitionReason(
     reasonKind: reason.reasonKind,
     summary: reason.summary,
     stableKeys: reason.stableKeys,
+    frontierCause: null,
   };
 }
 
@@ -485,7 +527,12 @@ function unavailable(
   reasonKind: string,
   summary: string,
 ): UnavailableSemanticAppTemplateCompilerHandoffResource {
-  return { state, source, value: null, reasons: [{ stage, reasonKind, summary, stableKeys: [] }] };
+  return {
+    state,
+    source,
+    value: null,
+    reasons: [{ stage, reasonKind, summary, stableKeys: [], frontierCause: null }],
+  };
 }
 
 function familyState(

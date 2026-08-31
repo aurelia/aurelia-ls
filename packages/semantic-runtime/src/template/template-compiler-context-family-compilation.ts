@@ -1,3 +1,4 @@
+import type { AddressHandle } from '../kernel/handles.js';
 import type { ProductDetailReadView } from '../kernel/product-details.js';
 import type {
   KernelMaterializationReadView,
@@ -12,10 +13,12 @@ import {
 import {
   completeTemplateCompilerContextFamily,
   TemplateCompilerContextFamilyCompletionMode,
+  TemplateCompilerContextFamilyCompletionReasonKind,
   TemplateCompilerContextFamilyCompletionState,
   type TemplateCompilerContextFamilyCompletionReason,
 } from './template-compiler-context-family-completion.js';
 import { TemplateCompilerTraversalCompletionAuditReasonKind } from './template-compiler-completion-audit.js';
+import type { TemplateCompilerIssue } from './compiler-issue.js';
 import {
   materializeTemplateCompilerContextFamilyFrozenValue,
   type TemplateCompilerContextFamilyFrozenValueReason,
@@ -54,7 +57,10 @@ import {
   TemplateCompilerRootSiteRunState,
 } from './template-compiler-root-site-run.js';
 import { TemplateCompilerSiteCursorTraversalMode } from './template-compiler-site-cursor.js';
-import { TemplateCompilerSiteCursorFrontierKind } from './template-compiler-site-cursor-event.js';
+import {
+  TemplateCompilerSiteCursorAttributeEvent,
+  TemplateCompilerSiteCursorFrontierKind,
+} from './template-compiler-site-cursor-event.js';
 import type {
   TemplateCompilationFrontDoorEmission,
   TemplateResourceCompilationEmission,
@@ -79,12 +85,32 @@ export const enum TemplateCompilerContextFamilyCompilationStage {
   FrozenValue = 'frozen-value',
 }
 
+export const enum TemplateCompilerContextFamilyCompilationReasonRole {
+  Independent = 'independent',
+  PrimaryFrontier = 'primary-frontier',
+  FrontierDerivative = 'frontier-derivative',
+}
+
+/** Exact reached frontier and existing compiler issue that caused one family compilation to stop. */
+export class TemplateCompilerContextFamilyFrontierCause {
+  constructor(
+    readonly frontierKind: TemplateCompilerSiteCursorFrontierKind,
+    readonly nodeOccurrenceKey: string | null,
+    readonly attributeOccurrenceKey: string | null,
+    readonly issue: TemplateCompilerIssue | null,
+    readonly sourceAddressHandle: AddressHandle | null,
+  ) {}
+}
+
 export class TemplateCompilerContextFamilyCompilationReason {
   constructor(
     readonly stage: TemplateCompilerContextFamilyCompilationStage,
     readonly reasonKind: string,
     readonly summary: string,
     readonly stableKeys: readonly string[] = [],
+    readonly role: TemplateCompilerContextFamilyCompilationReasonRole =
+      TemplateCompilerContextFamilyCompilationReasonRole.Independent,
+    readonly frontierCause: TemplateCompilerContextFamilyFrontierCause | null = null,
   ) {}
 }
 
@@ -158,7 +184,7 @@ export function compileTemplateCompilerContextFamily(
     return unavailable(
       completionOutcome(completion),
       TemplateCompilerContextFamilyCompilationStage.FamilyCompletion,
-      completion.reasons.map(completionReason),
+      completionReasons(completion),
     );
   }
   const rows = assembleTemplateCompilerContextFamilyRows(completion.receipt);
@@ -350,8 +376,95 @@ function rootRunReason(reason: TemplateCompilerRootSiteRunReason): TemplateCompi
 
 function completionReason(
   reason: TemplateCompilerContextFamilyCompletionReason,
+  role: TemplateCompilerContextFamilyCompilationReasonRole =
+    TemplateCompilerContextFamilyCompilationReasonRole.Independent,
 ): TemplateCompilerContextFamilyCompilationReason {
-  return reasonFor(TemplateCompilerContextFamilyCompilationStage.FamilyCompletion, reason.reasonKind, reason.summary);
+  return reasonFor(
+    TemplateCompilerContextFamilyCompilationStage.FamilyCompletion,
+    reason.reasonKind,
+    reason.summary,
+    [],
+    role,
+  );
+}
+
+function completionReasons(
+  completion: ReturnType<typeof completeTemplateCompilerContextFamily>,
+): readonly TemplateCompilerContextFamilyCompilationReason[] {
+  const primary = primaryFrontierReason(completion);
+  const reasons = completion.reasons.map((reason) => completionReason(
+    reason,
+    primary != null && isFrontierDerivative(reason.reasonKind)
+      ? TemplateCompilerContextFamilyCompilationReasonRole.FrontierDerivative
+      : TemplateCompilerContextFamilyCompilationReasonRole.Independent,
+  ));
+  return primary == null ? reasons : [primary, ...reasons];
+}
+
+function primaryFrontierReason(
+  completion: ReturnType<typeof completeTemplateCompilerContextFamily>,
+): TemplateCompilerContextFamilyCompilationReason | null {
+  const transcript = completion.audit.transcript;
+  const frontier = transcript.frontier;
+  if (frontier == null) return null;
+
+  const attributeEvent = frontier.attribute == null
+    ? null
+    : transcript.events.find((event): event is TemplateCompilerSiteCursorAttributeEvent =>
+        event instanceof TemplateCompilerSiteCursorAttributeEvent
+        && event.attribute === frontier.attribute
+      ) ?? null;
+  const decisionIssue = attributeEvent?.liveContribution?.classification.issue ?? null;
+  const bundle = attributeEvent?.bundle ?? null;
+  const sourceCandidates = bundle == null
+    ? []
+    : [
+        bundle.syntax.targetSourceAddressHandle,
+        bundle.syntax.commandSourceAddressHandle,
+        bundle.classification.sourceAddressHandle,
+        bundle.syntax.sourceAddressHandle,
+      ].filter((handle): handle is AddressHandle => handle != null);
+  const issue = decisionIssue == null || bundle == null
+    ? null
+    : bundle.outcomeRoute.attributeClassificationAuthority.issues.find((candidate) =>
+        candidate.issueKind === decisionIssue.issueKind
+        && candidate.frameworkErrorCode === decisionIssue.frameworkErrorCode
+        && candidate.message === decisionIssue.message
+        && candidate.sourceAddressHandle != null
+        && sourceCandidates.includes(candidate.sourceAddressHandle)
+      ) ?? null;
+  const cause = new TemplateCompilerContextFamilyFrontierCause(
+    frontier.frontierKind,
+    frontier.node?.occurrenceKey ?? null,
+    frontier.attribute?.occurrenceKey ?? null,
+    issue,
+    issue?.sourceAddressHandle ?? bundle?.syntax.sourceAddressHandle ?? null,
+  );
+  return reasonFor(
+    TemplateCompilerContextFamilyCompilationStage.FamilyCompletion,
+    issue?.issueKind ?? frontier.frontierKind,
+    issue?.message ?? frontier.summary,
+    [
+      frontier.frontierKind,
+      ...(cause.nodeOccurrenceKey == null ? [] : [cause.nodeOccurrenceKey]),
+      ...(cause.attributeOccurrenceKey == null ? [] : [cause.attributeOccurrenceKey]),
+      ...(bundle == null ? [] : [bundle.attributeProductHandle]),
+      ...(issue == null ? [] : [issue.productHandle]),
+    ],
+    TemplateCompilerContextFamilyCompilationReasonRole.PrimaryFrontier,
+    cause,
+  );
+}
+
+const frontierDerivativeReasonKinds = new Set<string>([
+  TemplateCompilerTraversalCompletionAuditReasonKind.CursorFrontier,
+  TemplateCompilerTraversalCompletionAuditReasonKind.RootPhaseIncomplete,
+  TemplateCompilerTraversalCompletionAuditReasonKind.LiveSiteIncomplete,
+  TemplateCompilerContextFamilyCompletionReasonKind.ContextTaskIncomplete,
+]);
+
+function isFrontierDerivative(reasonKind: string): boolean {
+  return frontierDerivativeReasonKinds.has(reasonKind);
 }
 
 function rowAssemblyReason(
@@ -418,8 +531,18 @@ function reasonFor(
   reasonKind: string,
   summary: string,
   stableKeys: readonly string[] = [],
+  role: TemplateCompilerContextFamilyCompilationReasonRole =
+    TemplateCompilerContextFamilyCompilationReasonRole.Independent,
+  frontierCause: TemplateCompilerContextFamilyFrontierCause | null = null,
 ): TemplateCompilerContextFamilyCompilationReason {
-  return new TemplateCompilerContextFamilyCompilationReason(stage, reasonKind, summary, stableKeys);
+  return new TemplateCompilerContextFamilyCompilationReason(
+    stage,
+    reasonKind,
+    summary,
+    stableKeys,
+    role,
+    frontierCause,
+  );
 }
 
 function unavailable(

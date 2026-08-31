@@ -67,6 +67,14 @@ class StaticContextProbe {}
 class StaticProjectionProbe {}
 
 @customElement({
+  name: 'static-object-repeat-probe',
+  template: '<div repeat.for="{ id, name: label } of items"></div>',
+})
+class StaticObjectRepeatProbe {
+  items: readonly { readonly id: number; readonly name: string }[] = [];
+}
+
+@customElement({
   name: 'projection-whitespace-probe',
   template: '<projection-card> \n </projection-card>',
   dependencies: [ProjectionCard],
@@ -136,6 +144,7 @@ class OpenClassificationProbe {
     ProjectionExplicitSlotProbe,
     ProjectionCard,
     StaticContextProbe,
+    StaticObjectRepeatProbe,
     StaticProjectionProbe,
     NativeContainerlessProbe,
     ContainerlessUsageProbe,

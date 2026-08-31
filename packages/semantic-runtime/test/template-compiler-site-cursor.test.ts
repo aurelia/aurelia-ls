@@ -36,6 +36,7 @@ import {
 } from '../src/template/template-compiler-execution.js';
 import {
   compileTemplateCompilerContextFamily,
+  TemplateCompilerContextFamilyCompilationReasonRole,
   TemplateCompilerContextFamilyCompilationStage,
   TemplateCompilerContextFamilyCompilationState,
 } from '../src/template/template-compiler-context-family-compilation.js';
@@ -1636,7 +1637,69 @@ describe('template compiler root site cursor', () => {
       const result = fixture.compileContextFamily('cursor-process-content-arbitrary', candidate);
       expect(result.state).toBe(TemplateCompilerContextFamilyCompilationState.Open);
       expect(result.stage).toBe(TemplateCompilerContextFamilyCompilationStage.FamilyCompletion);
-      expect(result.reasons.map((reason) => reason.reasonKind)).toContain('cursor-frontier');
+      expect(result.reasons[0]).toMatchObject({
+        reasonKind: TemplateCompilerSiteCursorFrontierKind.BeforeProcessContent,
+        role: TemplateCompilerContextFamilyCompilationReasonRole.PrimaryFrontier,
+        frontierCause: {
+          frontierKind: TemplateCompilerSiteCursorFrontierKind.BeforeProcessContent,
+          nodeOccurrenceKey: expect.any(String),
+          attributeOccurrenceKey: null,
+          issue: null,
+        },
+      });
+      expect(result.reasons.filter((reason) =>
+        reason.role === TemplateCompilerContextFamilyCompilationReasonRole.FrontierDerivative
+      ).map((reason) => reason.reasonKind)).toEqual(expect.arrayContaining([
+        'cursor-frontier',
+        'root-phase-incomplete',
+        'context-task-incomplete',
+      ]));
+    } finally {
+      candidate.abort();
+    }
+  });
+
+  test('keeps sibling projection hosts in distinct generated context families', () => {
+    const candidate = fixture.runtime.computationLifecycle.begin({
+      kind: 'template-compiler-context-family-sibling-projection-test',
+      reconciliationKey: fixture.browserRun.locus.reconciliationKey,
+      summary: 'Sibling projection host context-identity proof.',
+    });
+    try {
+      const result = fixture.compileContextFamily('cursor-context-family-projection-siblings', candidate);
+      expect(result.state).toBe(TemplateCompilerContextFamilyCompilationState.Exact);
+      if (result.value == null) throw new Error('Expected exact sibling-projection context family.');
+
+      const hydrateElements = result.value.root.rows
+        .flatMap((row) => row.instructions)
+        .filter((instruction): instruction is HydrateElementInstruction =>
+          instruction instanceof HydrateElementInstruction
+        );
+      expect(hydrateElements).toHaveLength(2);
+      const projectionContexts = result.value.contexts.slice(1);
+      expect(projectionContexts.map((context) => context.owner.ownerKind)).toEqual([
+        'projection',
+        'projection',
+        'projection',
+        'projection',
+      ]);
+      expect(new Set(projectionContexts.map((context) => context.compiledTemplate.productHandle)).size).toBe(4);
+
+      const contextsByHost = hydrateElements.map((instruction) =>
+        projectionContexts.filter((context) => context.owner.instruction === instruction)
+      );
+      expect(contextsByHost.map((contexts) => contexts.map((context) => context.owner.slotName))).toEqual([
+        ['default', 'named:detail'],
+        ['default', 'named:detail'],
+      ]);
+      expect(contextsByHost.every((contexts) => contexts.every((context) =>
+        context.owner.parentCompiledTemplateProductHandle === result.value?.root.compiledTemplate.productHandle
+      ))).toBe(true);
+      expect(hydrateElements.map((instruction) => instruction.projections.map((projection) =>
+        projection.compiledTemplate.productHandle
+      ))).toEqual(contextsByHost.map((contexts) => contexts.map((context) =>
+        context.compiledTemplate.productHandle
+      )));
     } finally {
       candidate.abort();
     }

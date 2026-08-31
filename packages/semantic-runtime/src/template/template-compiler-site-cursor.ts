@@ -1,5 +1,6 @@
 import type { CustomElementDefinition } from '../resources/custom-element-definition.js';
 import type { AddressHandle, ProductHandle } from '../kernel/handles.js';
+import { localKeyPart } from '../kernel/local-key.js';
 import { ExpressionParseResultKind, type ExpressionParseResult } from '../expression/parse-result-algebra.js';
 import type { SourceSpan } from '../expression/source-span.js';
 import {
@@ -1378,11 +1379,11 @@ class TemplateCompilerRootSiteCursor {
       templateControllerContexts.push(terminalContext);
     }
 
-    const projectionContextInputs = preparation?.plannedEntrantBands.map((band, ordinal) => ({
+    const projectionContextInputs = preparation?.plannedEntrantBands.map((band) => ({
       group: band.group,
       context: this.taskSession.createChildContext(
         terminalContext,
-        `${terminalContext.localKey}:projection:${ordinal}:${band.group.slotName}`,
+        `${terminalContext.localKey}:element:${localKeyPart(element.occurrenceKey)}:projection:${localKeyPart(band.group.slotName)}`,
         TemplateCompilerSiteCursorContextKind.Projection,
       ),
     })) ?? [];
