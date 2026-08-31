@@ -8,6 +8,10 @@ import type {
 
 export function assertAotBuildEvidence(evidence: AotBuildEvidence): void {
   assert.equal(evidence.analysisCount, 1, 'the AOT lane must perform exactly one application analysis');
+  assert.deepEqual(evidence.analysis, {
+    depth: 'runtime-topology',
+    templateBreadth: 'app-aggregate',
+  });
   assert.ok(evidence.artifacts.length > 0, 'the AOT lane produced no compiler-final artifacts');
   assert.equal(evidence.runtimeConfiguration.mode, 'require-replaceable');
   assert.ok(evidence.runtimeConfiguration.occurrences.length > 0, 'the AOT lane found no runtime configuration');

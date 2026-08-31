@@ -110,6 +110,10 @@ describe('semantic AOT artifact provider', () => {
     }]]);
     expect(provider.evidence()).toMatchObject({
       analysisCount: 1,
+      analysis: {
+        depth: 'runtime-topology',
+        templateBreadth: 'app-aggregate',
+      },
       artifacts: [{
         sourcePath: templatePath,
         definitionName: 'my-app',

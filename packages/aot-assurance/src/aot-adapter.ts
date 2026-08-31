@@ -43,6 +43,7 @@ export function createAotAssuranceAdapter(request: AotAdapterRequest): AotAssura
       }
       return Promise.resolve({
         analysisCount: semantic.analysisCount,
+        analysis: semantic.analysis,
         runtimeConfiguration: {
           mode: semantic.runtimeConfiguration.mode,
           occurrences: semantic.runtimeConfiguration.occurrences.map((occurrence) => ({

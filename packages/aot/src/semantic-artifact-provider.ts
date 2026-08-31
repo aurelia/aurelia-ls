@@ -131,6 +131,7 @@ export interface SemanticAotVirtualModuleArtifact {
 export interface SemanticAotArtifactEvidence {
   readonly generation: string;
   readonly analysisCount: 1;
+  readonly analysis: SemanticAotAnalysisEvidence;
   readonly artifacts: readonly {
     readonly sourcePath: string;
     readonly carrierSourcePath: string;
@@ -143,6 +144,11 @@ export interface SemanticAotArtifactEvidence {
     readonly map: AotRawSourceMap;
   }[];
   readonly runtimeConfiguration: SemanticAotRuntimeConfigurationEvidence;
+}
+
+export interface SemanticAotAnalysisEvidence {
+  readonly depth: 'runtime-topology';
+  readonly templateBreadth: 'app-aggregate';
 }
 
 export interface SemanticAotRuntimeConfigurationEvidence {
@@ -205,6 +211,7 @@ export class SemanticAotBuildSession {
   readonly #configurationByCarrierPath: ReadonlyMap<string, readonly PendingRuntimeConfigurationReplacement[]>;
   readonly #configurationArtifacts: ReadonlyMap<string, AotRuntimeConfigurationModuleArtifact>;
   readonly #runtimeConfigurationEvidence: SemanticAotRuntimeConfigurationEvidence;
+  readonly #analysisEvidence: SemanticAotAnalysisEvidence;
   readonly #templateArtifactsByVariant = new Map<string, AotTemplateModuleArtifact>();
   readonly #patchArtifactPromisesByVariant = new Map<string, Promise<AotCompilerPatchModuleArtifact>>();
   readonly #evidenceByVariant = new Map<string, SemanticAotArtifactEvidence['artifacts'][number]>();
@@ -216,6 +223,7 @@ export class SemanticAotBuildSession {
     readonly generation: string,
     pending: readonly PendingResourceArtifact[],
     runtimeConfiguration: RuntimeConfigurationBuildPlan,
+    analysisEvidence: SemanticAotAnalysisEvidence,
   ) {
     this.#pendingByVariant = new Map(pending.map((artifact) => [artifact.compilerVariantKey, artifact]));
     const compilerPatchPending = pending.filter(requiresCarrierCompilerPatch);
@@ -239,6 +247,7 @@ export class SemanticAotBuildSession {
     );
     this.#configurationArtifacts = runtimeConfiguration.artifacts;
     this.#runtimeConfigurationEvidence = runtimeConfiguration.evidence;
+    this.#analysisEvidence = analysisEvidence;
   }
 
   public async artifactFor(request: SemanticAotTemplateRequest): Promise<SemanticAotTemplateArtifact> {
@@ -436,6 +445,7 @@ export class SemanticAotBuildSession {
     return {
       generation: this.generation,
       analysisCount: 1,
+      analysis: this.#analysisEvidence,
       artifacts: [...this.#evidenceByVariant.values()],
       runtimeConfiguration: this.#runtimeConfigurationEvidence,
     };
@@ -455,8 +465,13 @@ export class SemanticAotArtifactProvider {
       storeKey,
     });
     try {
+      const analysis = {
+        depth: 'runtime-topology',
+        templateBreadth: 'app-aggregate',
+      } as const satisfies SemanticAotAnalysisEvidence;
       const app = await runtime.openApp({
-        analysisDepth: 'runtime-topology',
+        analysisDepth: analysis.depth,
+        templateAnalysisBreadth: analysis.templateBreadth,
         includeAuthoringTemplates: true,
         includeCompilerOccurrencePrecedents: true,
         telemetry: { inquiryProfile: 'aot' },
@@ -519,7 +534,12 @@ export class SemanticAotArtifactProvider {
       });
       app.requireCurrent();
       const generation = `${app.analysisGenerationReference.computationId}:${app.analysisGenerationReference.runSequence}`;
-      return this.#lastSession = new SemanticAotBuildSession(generation, pending, runtimeConfiguration);
+      return this.#lastSession = new SemanticAotBuildSession(
+        generation,
+        pending,
+        runtimeConfiguration,
+        analysis,
+      );
     } finally {
       runtime.retireWorkspaceIncarnation();
     }

@@ -52,6 +52,10 @@ export interface AotArtifactReceipt {
 export interface AotBuildEvidence {
   /** There must be exactly one semantic application analysis for this build. */
   readonly analysisCount: number;
+  readonly analysis: {
+    readonly depth: string;
+    readonly templateBreadth: string;
+  };
   readonly artifacts: readonly AotArtifactReceipt[];
   readonly runtimeConfiguration: AotRuntimeConfigurationEvidence;
 }
