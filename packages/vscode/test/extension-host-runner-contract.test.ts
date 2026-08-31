@@ -749,6 +749,7 @@ describe("Extension Host support runner", () => {
         repository: 0,
         report: 0,
       };
+      const inventoryContexts: unknown[][] = [];
       const runner = await import(pathToFileURL(runnerPath).href);
       const plan = runner.parseRunnerArguments([
         "--worker",
@@ -784,12 +785,19 @@ describe("Extension Host support runner", () => {
         installedVerifier: {
           buildInstallInvocation: () => ({ command: process.execPath, args: [], cwd: repositoryRoot }),
           discoverInstalledProduct: () => ({ extensionPath: productRoot }),
+          installedPackageManifestProfile: {
+            Minimum191: "vscode-1.91-vsix-source",
+            Current: "vscode-target-platform-size",
+          },
           requireArtifactReceipt: () => { calls.receipt += 1; },
           requireSameRepositoryState: () => { calls.repository += 1; },
           requireSuccessfulProcess: () => {},
           runChildProcess: async () => ({ exitCode: 0, signal: null, error: null }),
           testElectronEvidence: () => ({}),
-          verifyInstalledInventory: () => { calls.inventory += 1; },
+          verifyInstalledInventory: (...args: unknown[]) => {
+            calls.inventory += 1;
+            inventoryContexts.push(args.slice(-2));
+          },
         },
         installVsix: async () => {
           calls.install += 1;
@@ -821,6 +829,10 @@ describe("Extension Host support runner", () => {
         repository: 1,
         report: 1,
       });
+      expect(inventoryContexts).toEqual([
+        ["1.123.4", "vscode-target-platform-size"],
+        ["1.123.4", "vscode-target-platform-size"],
+      ]);
     } finally {
       assertContractTempPath(root);
       rmSync(root, { recursive: true, force: true });

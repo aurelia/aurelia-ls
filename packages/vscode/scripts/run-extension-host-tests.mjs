@@ -349,6 +349,7 @@ export async function runInstalledVsixExtensionHostTests(plan, dependencies = {}
   const {
     buildInstallInvocation,
     discoverInstalledProduct,
+    installedPackageManifestProfile,
     requireArtifactReceipt,
     requireSameRepositoryState,
     requireSuccessfulProcess,
@@ -413,10 +414,13 @@ export async function runInstalledVsixExtensionHostTests(plan, dependencies = {}
   const installCompleted = Date.now();
   requireSuccessfulProcess(installResult, "Installed VSIX Extension Host installation");
   let product = discoverInstalledProduct(extensionsDirectory, receipt.identity);
+  const packageManifestProfile = plan.versionLane === "minimum"
+    ? installedPackageManifestProfile.Minimum191
+    : installedPackageManifestProfile.Current;
   verifyInstalledInventory(receipt, product.extensionPath, {
     startedEpochMilliseconds: installStarted,
     completedEpochMilliseconds: installCompleted,
-  });
+  }, resolvedVersion, packageManifestProfile);
 
   const staticContractSha256 = extensionHostStaticContractSha256(product.extensionPath);
   const installedProductPath = product.extensionPath;
@@ -462,7 +466,7 @@ export async function runInstalledVsixExtensionHostTests(plan, dependencies = {}
     verifyInstalledInventory(receipt, product.extensionPath, {
       startedEpochMilliseconds: installStarted,
       completedEpochMilliseconds: installCompleted,
-    });
+    }, resolvedVersion, packageManifestProfile);
     if (extensionHostStaticContractSha256(product.extensionPath) !== staticContractSha256) {
       throw new Error("Installed VSIX static contract changed during full host acceptance.");
     }

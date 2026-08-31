@@ -739,16 +739,30 @@ describe("installed VSIX release gate", () => {
       startedEpochMilliseconds: installedTimestamp - 1,
       completedEpochMilliseconds: installedTimestamp + 1,
     };
+    const verifyInventory = (
+      candidateReceipt: any = receipt,
+      candidateWindow: any = installWindow,
+      installerVersion = "1.135.0",
+      metadataProfile: string = gate.installedPackageManifestProfile.Current,
+    ) => gate.verifyInstalledInventory(
+      candidateReceipt,
+      payloadRoot,
+      candidateWindow,
+      installerVersion,
+      metadataProfile,
+    );
     const installedPackage = {
       __metadata: { installedTimestamp, targetPlatform: "undefined", size: packagedBytes },
     };
     writeFileSync(path.join(payloadRoot, "package.json"), JSON.stringify(installedPackage, null, "\t"));
-    expect(gate.verifyInstalledInventory(receipt, payloadRoot, installWindow)).toMatchObject({
+    expect(verifyInventory()).toMatchObject({
       payload: [],
       packageManifest: {
         path: "package.json",
         classification: "vscode-installer-transformed-manifest",
         exactTransform: true,
+        installerVersion: "1.135.0",
+        metadataProfile: "vscode-target-platform-size",
       },
       installerMetadata: {
         path: ".vsixmanifest",
@@ -758,43 +772,41 @@ describe("installed VSIX release gate", () => {
       },
     });
     writeFileSync(path.join(payloadRoot, "stale.js"), "stale\n");
-    expect(() => gate.verifyInstalledInventory(receipt, payloadRoot, installWindow)).toThrow(/inventory mismatch/u);
+    expect(() => verifyInventory()).toThrow(/inventory mismatch/u);
     unlinkSync(path.join(payloadRoot, "stale.js"));
     writeFileSync(path.join(payloadRoot, ".vsixmanifest"), "wrong control\n");
-    expect(() => gate.verifyInstalledInventory(receipt, payloadRoot, installWindow)).toThrow(/payload bytes drifted/u);
+    expect(() => verifyInventory()).toThrow(/payload bytes drifted/u);
     writeFileSync(path.join(payloadRoot, ".vsixmanifest"), manifestBytes);
-    expect(() => gate.verifyInstalledInventory({ entries: receipt.entries.slice(1) }, payloadRoot, installWindow)).toThrow(/exactly one extension\.vsixmanifest/u);
-    expect(() => gate.verifyInstalledInventory(
+    expect(() => verifyInventory({ entries: receipt.entries.slice(1) })).toThrow(/exactly one extension\.vsixmanifest/u);
+    expect(() => verifyInventory(
       { entries: [receipt.entries[0], ...receipt.entries] },
-      payloadRoot,
-      installWindow,
     )).toThrow(/received 2/u);
-    expect(() => gate.verifyInstalledInventory({
+    expect(() => verifyInventory({
       entries: receipt.entries.map((entry) => entry.path === "extension.vsixmanifest"
         ? { ...entry, source: { kind: "local" } }
         : entry),
-    }, payloadRoot, installWindow)).toThrow(/generated control/u);
-    expect(() => gate.verifyInstalledInventory({
+    })).toThrow(/generated control/u);
+    expect(() => verifyInventory({
       entries: [
         ...receipt.entries,
         { path: "extension/.vsixmanifest", bytes: 1, sha256: gate.sha256("x") },
       ],
-    }, payloadRoot, installWindow)).toThrow(/same installed path/u);
+    })).toThrow(/same installed path/u);
     expect(() => gate.verifyInstalledInventory(receipt, payloadRoot)).toThrow(/sole-install timestamp window/u);
-    expect(() => gate.verifyInstalledInventory(receipt, payloadRoot, {
+    expect(() => verifyInventory(receipt, {
       startedEpochMilliseconds: installedTimestamp + 1,
       completedEpochMilliseconds: installedTimestamp,
     })).toThrow(/sole-install timestamp window/u);
-    expect(() => gate.verifyInstalledInventory({
+    expect(() => verifyInventory({
       entries: receipt.entries.filter((entry) => entry.path !== "extension/package.json"),
-    }, payloadRoot, installWindow)).toThrow(/exactly one extension\/package\.json/u);
-    expect(() => gate.verifyInstalledInventory({
+    })).toThrow(/exactly one extension\/package\.json/u);
+    expect(() => verifyInventory({
       entries: receipt.entries.map((entry) => entry.path === "extension/package.json"
         ? { ...entry, source: { ...entry.source, sha256: "0".repeat(64) } }
         : entry),
-    }, payloadRoot, installWindow)).toThrow(/archive authority bytes drifted/u);
+    })).toThrow(/archive authority bytes drifted/u);
     writeFileSync(packageAuthorityPath, "source authority drift\n");
-    expect(() => gate.verifyInstalledInventory(receipt, payloadRoot, installWindow)).toThrow(/archive authority bytes drifted/u);
+    expect(() => verifyInventory()).toThrow(/archive authority bytes drifted/u);
     writeFileSync(packageAuthorityPath, sourcePackageBytes);
 
     for (const mutation of [
@@ -824,7 +836,88 @@ describe("installed VSIX release gate", () => {
       else if (mutation === "authored") (drifted as any).name = "forged";
       const serialized = `${JSON.stringify(drifted, null, mutation === "serialization" ? 2 : "\t")}${mutation === "newline" ? "\n" : ""}`;
       writeFileSync(path.join(payloadRoot, "package.json"), serialized);
-      expect(() => gate.verifyInstalledInventory(receipt, payloadRoot, installWindow)).toThrow(/package\.json/iu);
+      expect(() => verifyInventory()).toThrow(/package\.json/iu);
+    }
+
+    const legacyInstalledPackage = {
+      __metadata: {
+        isApplicationScoped: false,
+        installedTimestamp,
+        pinned: false,
+        source: "vsix",
+      },
+    };
+    writeFileSync(path.join(payloadRoot, "package.json"), JSON.stringify(legacyInstalledPackage, null, "\t"));
+    expect(verifyInventory(
+      receipt,
+      installWindow,
+      "1.91.0",
+      gate.installedPackageManifestProfile.Minimum191,
+    )).toMatchObject({
+      packageManifest: {
+        exactTransform: true,
+        installerVersion: "1.91.0",
+        metadataProfile: "vscode-1.91-vsix-source",
+      },
+    });
+    expect(() => verifyInventory(
+      receipt,
+      installWindow,
+      "1.91.0",
+      gate.installedPackageManifestProfile.Current,
+    )).toThrow(/profile does not match/iu);
+    expect(() => verifyInventory(
+      receipt,
+      installWindow,
+      "1.135.0",
+      gate.installedPackageManifestProfile.Minimum191,
+    )).toThrow(/profile does not match/iu);
+    expect(() => verifyInventory(receipt, installWindow, "1.135.0", "unknown-profile"))
+      .toThrow(/recognized.*profile/iu);
+    expect(() => gate.verifyInstalledInventory(
+      receipt,
+      payloadRoot,
+      installWindow,
+      undefined,
+      gate.installedPackageManifestProfile.Current,
+    )).toThrow(/resolved VS Code installer version/iu);
+
+    for (const mutation of [
+      "timestamp",
+      "upper-timestamp",
+      "application-scope",
+      "pinned",
+      "source",
+      "missing-key",
+      "extra-key",
+      "key-order",
+      "authored",
+      "serialization",
+      "newline",
+    ] as const) {
+      const drifted = structuredClone(legacyInstalledPackage);
+      if (mutation === "timestamp") drifted.__metadata.installedTimestamp = installWindow.startedEpochMilliseconds - 1;
+      else if (mutation === "upper-timestamp") drifted.__metadata.installedTimestamp = installWindow.completedEpochMilliseconds + 1;
+      else if (mutation === "application-scope") drifted.__metadata.isApplicationScoped = true;
+      else if (mutation === "pinned") drifted.__metadata.pinned = true;
+      else if (mutation === "source") drifted.__metadata.source = "marketplace";
+      else if (mutation === "missing-key") delete (drifted.__metadata as any).source;
+      else if (mutation === "extra-key") (drifted.__metadata as any).extra = true;
+      else if (mutation === "key-order") drifted.__metadata = {
+        installedTimestamp: drifted.__metadata.installedTimestamp,
+        isApplicationScoped: drifted.__metadata.isApplicationScoped,
+        pinned: drifted.__metadata.pinned,
+        source: drifted.__metadata.source,
+      } as any;
+      else if (mutation === "authored") (drifted as any).name = "forged";
+      const serialized = `${JSON.stringify(drifted, null, mutation === "serialization" ? 2 : "\t")}${mutation === "newline" ? "\n" : ""}`;
+      writeFileSync(path.join(payloadRoot, "package.json"), serialized);
+      expect(() => verifyInventory(
+        receipt,
+        installWindow,
+        "1.91.0",
+        gate.installedPackageManifestProfile.Minimum191,
+      )).toThrow(/package\.json/iu);
     }
   });
 
