@@ -2575,9 +2575,17 @@ describe("SemanticRuntimeLspSession", () => {
     )).toBe(true);
   });
 
-  test("opens template ownership at the complete retained editor depth", async () => {
+  test("keeps automatic ownership, semantic tokens, and folding at resource-local topology depth", async () => {
     const querySpy = vi.spyOn(SemanticRuntime.prototype, "answerAppQuery");
-    const session = createSession(minimalFixtureRoot(), new TestDocumentStore());
+    const fixtureRoot = minimalFixtureRoot();
+    const templatePath = path.join(fixtureRoot, "src", "app.html");
+    const templateDocument = TextDocument.create(
+      pathToFileURL(templatePath).toString(),
+      "html",
+      1,
+      fs.readFileSync(templatePath, "utf8"),
+    );
+    const session = createSession(fixtureRoot, new TestDocumentStore());
 
     await session.runRequest(null, async (operation) => {
       const summary = await operation.workspaceSummary();
@@ -2585,19 +2593,51 @@ describe("SemanticRuntimeLspSession", () => {
       if (projectKey == null) {
         throw new Error("Expected the fixture to expose one app candidate.");
       }
-      return operation.templateDocumentOwnership(projectKey);
+      await operation.templateDocumentOwnership(projectKey);
+      await operation.templateSemanticTokens(templateDocument);
+      await operation.templateFoldingRanges(templateDocument);
     });
 
-    const ownershipQueries = querySpy.mock.calls
+    const automaticQueries = querySpy.mock.calls
       .map(([query]) => query)
-      .filter((query) => query.kind === SemanticAppQueryKind.TemplateDocumentOwnership);
-    expect(ownershipQueries).toHaveLength(1);
-    expect(ownershipQueries[0]).toMatchObject({
-      analysisDepth: "binding-observation",
-      includeAuthoringTemplates: false,
-      inquiryProfile: "lsp-cursor",
-      appRetention: "retain-app",
-    });
+      .filter((query) => [
+        SemanticAppQueryKind.TemplateDocumentOwnership,
+        SemanticAppQueryKind.TemplateSemanticTokens,
+        SemanticAppQueryKind.TemplateFoldingRanges,
+      ].includes(query.kind));
+    expect(automaticQueries.map((query) => ({
+      kind: query.kind,
+      analysisDepth: query.analysisDepth,
+      templateAnalysisBreadth: query.templateAnalysisBreadth,
+      includeAuthoringTemplates: query.includeAuthoringTemplates,
+      inquiryProfile: query.inquiryProfile,
+      appRetention: query.appRetention,
+    }))).toEqual([
+      {
+        kind: SemanticAppQueryKind.TemplateDocumentOwnership,
+        analysisDepth: "runtime-topology",
+        templateAnalysisBreadth: "resource-local",
+        includeAuthoringTemplates: false,
+        inquiryProfile: "lsp-cursor",
+        appRetention: "retain-app",
+      },
+      {
+        kind: SemanticAppQueryKind.TemplateSemanticTokens,
+        analysisDepth: "runtime-topology",
+        templateAnalysisBreadth: "resource-local",
+        includeAuthoringTemplates: true,
+        inquiryProfile: "lsp-cursor",
+        appRetention: "retain-app",
+      },
+      {
+        kind: SemanticAppQueryKind.TemplateFoldingRanges,
+        analysisDepth: "runtime-topology",
+        templateAnalysisBreadth: "resource-local",
+        includeAuthoringTemplates: true,
+        inquiryProfile: "lsp-cursor",
+        appRetention: "retain-app",
+      },
+    ]);
   });
 
   test("requests one explicit project and drains every analysis-limitation page", async () => {
