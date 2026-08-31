@@ -156,6 +156,9 @@ import {
   measureSemanticRuntimePhase,
   type SemanticRuntimePhaseSink,
 } from '../telemetry/phase.js';
+import {
+  SemanticTemplateAnalysisBreadth,
+} from '../configuration/app-analysis.js';
 
 type RuntimeRenderingFinePhaseName =
   | 'source-records'
@@ -181,6 +184,9 @@ type RuntimeRenderingFinePhaseName =
   | `render-dispatch:${string}`
   | `controller-creation:${string}`;
 
+/** Maximum cross-resource receiver chain expanded beneath one resource-local template root. */
+export const RESOURCE_LOCAL_TEMPLATE_RECEIVER_EXPANSION_LIMIT = 8;
+
 export interface RuntimeRenderingMaterializationRequest {
   /** Store-local key shared with the template compilation pass. */
   readonly localKey: string;
@@ -196,6 +202,8 @@ export interface RuntimeRenderingMaterializationRequest {
   readonly compilerWorld: TemplateCompilerWorldEmission;
   /** Project-level compiled-template index available for controller hydration facts. */
   readonly projectContext: TemplateRuntimeAnalysisProjectContext;
+  /** Whether child custom-element views are expanded into this root's aggregate runtime graph. */
+  readonly analysisBreadth: SemanticTemplateAnalysisBreadth | `${SemanticTemplateAnalysisBreadth}`;
   /** Project resource index used to spend controller-local dependency registrations. */
   readonly resourceDefinitions: ResourceDefinitionIndex | null;
   /** Current TypeChecker epoch available to controller hydration observer setup, when available. */
@@ -1021,13 +1029,15 @@ export class RuntimeRenderingMaterializer {
       if (isRecursiveRenderableCustomElementController(controller)
         && !expandedCustomElementControllers.has(controller.productHandle)) {
         expandedCustomElementControllers.add(controller.productHandle);
-        const result = this.renderCustomElementViewForController(
-          `${state.input.localKey}:controller:${controller.productHandle}:custom-element-view`,
-          state,
-          controller,
-        );
-        if (result != null) {
-          recursiveResults.push(result);
+        if (this.shouldRenderCustomElementView(state, controller)) {
+          const result = this.renderCustomElementViewForController(
+            `${state.input.localKey}:controller:${controller.productHandle}:custom-element-view`,
+            state,
+            controller,
+          );
+          if (result != null) {
+            recursiveResults.push(result);
+          }
         }
       }
       if (this.auSlotInstructionForController(state, controller) != null
@@ -1051,6 +1061,50 @@ export class RuntimeRenderingMaterializer {
     }
 
     return results;
+  }
+
+  private shouldRenderCustomElementView(
+    state: RuntimeRenderingMaterializationState,
+    controller: RuntimeControllerFrame,
+  ): boolean {
+    if (state.input.analysisBreadth === SemanticTemplateAnalysisBreadth.AppAggregate) {
+      return true;
+    }
+    const instruction = state.input.projectContext.readInstruction(controller.instructionProductHandle)
+      ?? (controller.instructionProductHandle == null
+        ? null
+        : this.publication.readProductDetail(
+            TemplateProductDetails.Instruction,
+            controller.instructionProductHandle,
+          ));
+    // Provider content and captured attributes are authored in the declaring resource, but their runtime instructions
+    // are materialized only after the receiver view exposes AuSlot outlets or a transfer site. Preserve those exact
+    // handoffs while avoiding unrelated child-view expansion.
+    const requiresReceiverView = instruction instanceof HydrateElementInstruction
+      && (
+        instruction.projectionInstructionSequences.length > 0
+        || instruction.captureSyntaxProductHandles.length > 0
+      );
+    if (!requiresReceiverView) {
+      return false;
+    }
+    const receiverDepth = customElementControllerDepth(controller);
+    if (receiverDepth <= RESOURCE_LOCAL_TEMPLATE_RECEIVER_EXPANSION_LIMIT) {
+      return true;
+    }
+    this.recordOpenSeam(
+      `${state.input.localKey}:controller:${controller.productHandle}:resource-local-receiver-limit`,
+      controller.identityHandle,
+      `Resource-local template analysis stopped receiver-view expansion at depth ${receiverDepth} `
+        + `(limit ${RESOURCE_LOCAL_TEMPLATE_RECEIVER_EXPANSION_LIMIT}); deeper projection or captured-attribute `
+        + 'runtime context remains available through app-aggregate analysis.',
+      controller.sourceAddressHandle,
+      state.source,
+      state.records,
+      state.openSeams,
+      [OpenSeamReasonKind.TemplateAnalysisBreadthGuardrail],
+    );
+    return false;
   }
 
   private renderCustomElementViewForController(
@@ -1802,4 +1856,16 @@ function isRecursiveRenderableCustomElementController(
 ): boolean {
   return controller.creationKind === RuntimeControllerCreationKind.CustomElement
     || controller.creationKind === RuntimeControllerCreationKind.RoutedCustomElement;
+}
+
+function customElementControllerDepth(controller: RuntimeControllerFrame): number {
+  let depth = 0;
+  let current: RuntimeControllerFrame | null = controller;
+  while (current != null) {
+    if (isRecursiveRenderableCustomElementController(current)) {
+      depth += 1;
+    }
+    current = current.parent;
+  }
+  return depth;
 }

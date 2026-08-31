@@ -1,4 +1,5 @@
 import { SemanticClaim } from '../kernel/claim.js';
+import { SemanticTemplateAnalysisBreadth } from '../configuration/app-analysis.js';
 import {
   EvidenceKind,
   EvidenceRecord,
@@ -147,7 +148,10 @@ import {
 import { TemplateProductDetails } from './product-details.js';
 import { readTemplateExpressionParse } from './expression-parse-product.js';
 import type { RuntimeRenderingEmission } from './runtime-rendering-materializer.js';
-import type { RuntimeControllerFrame } from './runtime-controller.js';
+import {
+  RuntimeControllerAssemblyStepKind,
+  type RuntimeControllerFrame,
+} from './runtime-controller.js';
 import {
   RuntimeContentProjectionSelectionKind,
   type RuntimeContentProjectionView,
@@ -286,6 +290,8 @@ export interface TemplateScopeConstructionRequest {
   readonly expressionResourcePlan: RuntimeExpressionResourcePlan;
   /** Project-level runtime-analysis context for controller/resource lookups owned by adjacent runtime phases. */
   readonly projectContext: TemplateRuntimeAnalysisProjectContext;
+  /** Whether child custom-element views belong to this resource's aggregate scope graph. */
+  readonly analysisBreadth: SemanticTemplateAnalysisBreadth | `${SemanticTemplateAnalysisBreadth}`;
   /** Shared static evaluation available for runtime Scope value carriers. */
   readonly evaluation: StaticProjectEvaluationResult | null;
   /** Current TypeChecker epoch, if resource recognition supplied one. */
@@ -2218,6 +2224,15 @@ export class TemplateControllerScopeMaterializer {
       controller?.definitionProductHandle ?? instruction.definitionProductHandle,
     );
     if (resource == null || this.hasRecursiveCustomElementDefinitionAncestor(controller)) {
+      return;
+    }
+    if (
+      frame.input.analysisBreadth === SemanticTemplateAnalysisBreadth.ResourceLocal
+      && controller?.readAssemblySteps().some((step) =>
+        step.stepKind === RuntimeControllerAssemblyStepKind.RenderInstructions
+        && step.relatedProductHandle === resource.compiledTemplateEmission.compiledTemplate.productHandle
+      ) !== true
+    ) {
       return;
     }
     this.constructCompiledTemplateScopes(

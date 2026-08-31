@@ -102,6 +102,8 @@ export const enum OpenSeamReasonKind {
   RuntimeRenderingRendererUnavailable = 'runtime-rendering-renderer-unavailable',
   /** Runtime rendering could not close the container or hydration context required for nested composition. */
   RuntimeRenderingContextOpen = 'runtime-rendering-context-open',
+  /** Resource-local template analysis stopped a deep cross-resource projection/capture expansion at its guardrail. */
+  TemplateAnalysisBreadthGuardrail = 'template-analysis-breadth-guardrail',
   /** Configuration recognition could not close the configured application/container target. */
   ConfigurationTargetOpen = 'configuration-target-open',
   /** Configuration recognition could not close an authored callback or callback body. */
@@ -232,6 +234,7 @@ export function openSeamBoundaryKindForReason(
       return OpenSeamBoundaryKind.RuntimeExecutionBoundary;
 
     case OpenSeamReasonKind.StaticEvaluationGuardrailLimit:
+    case OpenSeamReasonKind.TemplateAnalysisBreadthGuardrail:
     case OpenSeamReasonKind.RouterRouteConfigRecursiveApplication:
       return OpenSeamBoundaryKind.AnalysisGuardrail;
 

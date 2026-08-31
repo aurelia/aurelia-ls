@@ -13,6 +13,7 @@ import { TextDocument } from "vscode-languageserver-textdocument";
 import { describe, expect, test, vi } from "vitest";
 import {
   handleInitialize,
+  readLifecycleSupportSnapshot,
   registerLifecycleHandlers,
   runServerOperation,
   scheduleAnalysisRefreshForRequestCurrentness,
@@ -20,6 +21,7 @@ import {
 import { SemanticRuntimeLspRequestAbortedError } from "../../src/runtime/semantic-runtime-session.js";
 import { runSemanticRuntimeRequest } from "../../src/handlers/request-guard.js";
 import { WorkspaceDocumentUris } from "../../src/utils/document-uri.js";
+import { LanguageServerSupportLedger } from "../../src/support-snapshot.js";
 
 const workspaceRoot = path.resolve("test-workspace");
 const workspaceUri = pathToFileURL(workspaceRoot).toString();
@@ -123,6 +125,7 @@ function createLifecycleHarness() {
     semanticRuntime,
     clientSupport,
     logger,
+    supportLedger: new LanguageServerSupportLedger(),
     clientSupportsCodeActionResolveEdit: false,
     projectConfigurationParserDiagnostics: "semantic-runtime",
     typeScriptProgramDiagnostics: "semantic-runtime",
@@ -293,6 +296,49 @@ describe("initialization", () => {
 });
 
 describe("document source authority", () => {
+  test("projects bounded lifecycle invalidation and settled-wave counters", async () => {
+    vi.useFakeTimers();
+    try {
+      const harness = createLifecycleHarness();
+      const source = document();
+      harness.setHostFile(source.uri, "<template>host</template>");
+
+      harness.emitOpen(source);
+      harness.synchronize(source);
+      const pending = readLifecycleSupportSnapshot(harness.ctx as never);
+      expect(pending).toMatchObject({
+        registered: true,
+        pendingAnalysisRefresh: true,
+        pendingAnalysisChangeKind: "source-text",
+        pendingChangedSourceCount: 1,
+        counters: {
+          documentOpen: 1,
+          documentSynchronizations: 1,
+          sourceTextInvalidations: 1,
+          sourceTextInvalidatedFileCount: 1,
+          analysisRefreshSchedules: 1,
+          analysisWavesStarted: 0,
+          analysisWavesPublished: 0,
+        },
+      });
+
+      await vi.advanceTimersByTimeAsync(300);
+      await settleAsyncWork();
+      expect(readLifecycleSupportSnapshot(harness.ctx as never)).toMatchObject({
+        pendingAnalysisRefresh: false,
+        pendingAnalysisChangeKind: null,
+        pendingChangedSourceCount: 0,
+        counters: {
+          analysisWavesStarted: 1,
+          analysisWavesPublished: 1,
+        },
+      });
+    } finally {
+      vi.clearAllTimers();
+      vi.useRealTimers();
+    }
+  });
+
   test("advances synchronized dependency inputs inside an excluded workspace subtree", async () => {
     const harness = createLifecycleHarness();
     harness.ctx.configureWorkspace(workspaceUri, [workspaceFileUri("packages/disabled")]);

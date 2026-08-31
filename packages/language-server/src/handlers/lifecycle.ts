@@ -24,6 +24,7 @@ import { AureliaProtocolNotification } from "../protocol.js";
 import type {
   AnalysisChangedPayload,
   AureliaInitializeOptions,
+  AureliaSupportLifecycleSnapshot,
 } from "../protocol.js";
 import { isAnalyzedSourceDocumentUri } from "../utils/document-kind.js";
 import {
@@ -43,7 +44,12 @@ interface LifecycleRefreshState {
   pendingAnalysisRefresh: ReturnType<typeof setTimeout> | null;
   pendingAnalysisChangeKind: AnalysisChangedPayload["changeKind"] | null;
   shutdown: Promise<void> | null;
+  readonly supportCounters: MutableLifecycleSupportCounters;
 }
+
+type MutableLifecycleSupportCounters = {
+  -readonly [Key in keyof AureliaSupportLifecycleSnapshot["counters"]]: number;
+};
 
 const lifecycleRefreshStates = new WeakMap<ServerContext, LifecycleRefreshState>();
 
@@ -129,6 +135,9 @@ function recordProjectTopologyChanged(
   reason: string,
   filePaths: readonly string[],
 ): void {
+  const support = lifecycleRefreshState(ctx).supportCounters;
+  support.topologyInvalidations += 1;
+  support.topologyInvalidatedFileCount += filePaths.length;
   ctx.semanticRuntime.recordProjectTopologyChanged(filePaths);
   ctx.logger.info(`[workspace] semantic-runtime invalidated (${reason})`);
   scheduleAnalysisRefresh(ctx, reason, "topology");
@@ -139,6 +148,9 @@ function recordSourceTextChanged(
   reason: string,
   filePaths: readonly string[],
 ): void {
+  const support = lifecycleRefreshState(ctx).supportCounters;
+  support.sourceTextInvalidations += 1;
+  support.sourceTextInvalidatedFileCount += filePaths.length;
   ctx.semanticRuntime.recordSourceTextChanged(filePaths);
   ctx.logger.log(`${reason}: semantic-runtime source generation advanced for ${filePaths.length} file(s)`);
   scheduleAnalysisRefresh(
@@ -154,6 +166,9 @@ function recordProjectConfigurationChanged(
   reason: string,
   filePaths: readonly string[],
 ): void {
+  const support = lifecycleRefreshState(ctx).supportCounters;
+  support.configurationInvalidations += 1;
+  support.configurationInvalidatedFileCount += filePaths.length;
   ctx.semanticRuntime.recordProjectConfigurationChanged(filePaths);
   ctx.logger.log(`${reason}: semantic-runtime configuration value advanced for ${filePaths.length} file(s)`);
   // Configuration remains topology-significant to host presentation (ownership/context may change), while the shared
@@ -169,6 +184,7 @@ function scheduleAnalysisRefresh(
 ): void {
   const state = lifecycleRefreshState(ctx);
   if (state.shutdown != null) return;
+  state.supportCounters.analysisRefreshSchedules += 1;
   if (changeKind === "source-text") {
     for (const uri of changedSourceUris) {
       state.pendingAnalysisChangedSourceUris.set(ctx.documentUris.key(uri), uri);
@@ -179,6 +195,7 @@ function scheduleAnalysisRefresh(
     changeKind,
   );
   if (state.pendingAnalysisRefresh != null) {
+    state.supportCounters.analysisRefreshCoalesces += 1;
     clearTimeout(state.pendingAnalysisRefresh);
   }
   state.pendingAnalysisRefresh = setTimeout(() => {
@@ -188,6 +205,7 @@ function scheduleAnalysisRefresh(
       .sort((left, right) => left < right ? -1 : left > right ? 1 : 0);
     state.pendingAnalysisChangeKind = null;
     state.pendingAnalysisChangedSourceUris.clear();
+    state.supportCounters.analysisWavesStarted += 1;
     ctx.logger.log(`[workspace] processing settled analysis (${reason})`);
     runLifecycleTask(ctx, "workspace analysis refresh", () =>
       notifyAnalysisChanged(ctx, settledChangeKind, settledChangedSourceUris));
@@ -213,6 +231,7 @@ export function scheduleAnalysisRefreshForRequestCurrentness(
   const analysisCurrentness = isSemanticRuntimeLspRequestAborted(error)
     && isSemanticRuntimeAnalysisCurrentnessError(error.cause);
   if (managedStale == null && !analysisCurrentness) return false;
+  lifecycleRefreshState(ctx).supportCounters.requestCurrentnessRefreshes += 1;
   scheduleAnalysisRefresh(
     ctx,
     "request-discovered semantic currentness",
@@ -231,6 +250,7 @@ function dominantAnalysisChangeKind(
 }
 
 export function handleInitialize(ctx: ServerContext, params: InitializeParams): InitializeResult {
+  lifecycleRefreshState(ctx).supportCounters.initialize += 1;
   const rootUri = initializeRootUri(ctx, params);
   const options = initializeOptions(params.initializationOptions);
   try {
@@ -428,6 +448,7 @@ export function registerLifecycleHandlers(ctx: ServerContext): void {
   });
 
   ctx.documents.onDidOpen((e) => {
+    lifecycleRefreshState(ctx).supportCounters.documentOpen += 1;
     const filePath = ctx.documentUris.workspaceHostPath(e.document.uri);
     if (filePath == null || !tracksSynchronizedDocumentValue(e.document.uri, filePath)) return;
     const state = lifecycleRefreshState(ctx);
@@ -444,6 +465,7 @@ export function registerLifecycleHandlers(ctx: ServerContext): void {
 
   ctx.connection.onDidChangeWatchedFiles((e: DidChangeWatchedFilesParams) => {
     if (!e.changes?.length) return;
+    lifecycleRefreshState(ctx).supportCounters.watchedFileBatches += 1;
     const changes = e.changes.filter((change) => ctx.documentUris.workspaceHostPath(change.uri) != null);
     if (changes.length === 0) return;
 
@@ -473,6 +495,7 @@ export function registerLifecycleHandlers(ctx: ServerContext): void {
   });
 
   ctx.documents.onDidChangeContent((e) => {
+    lifecycleRefreshState(ctx).supportCounters.documentSynchronizations += 1;
     const uri = e.document.uri;
     const filePath = ctx.documentUris.workspaceHostPath(uri);
     if (filePath == null) return;
@@ -494,6 +517,7 @@ export function registerLifecycleHandlers(ctx: ServerContext): void {
   });
 
   ctx.documents.onDidClose((e) => {
+    lifecycleRefreshState(ctx).supportCounters.documentClose += 1;
     const uri = e.document.uri;
     const filePath = ctx.documentUris.workspaceHostPath(uri);
     if (filePath == null) return;
@@ -541,6 +565,7 @@ async function notifyAnalysisChanged(
   } catch (error) {
     if (lifecycleRefreshState(ctx).shutdown != null) return;
     if (!isSettledAnalysisStale(error)) throw error;
+    lifecycleRefreshState(ctx).supportCounters.analysisWaveStaleRetries += 1;
     // A pull can discover source-world movement which did not arrive through the
     // editor event stream. Retry from a new managed ingress instead of publishing
     // or logging a generation which failed egress currentness.
@@ -564,6 +589,7 @@ async function notifyAnalysisChanged(
         changeKind,
       };
   await ctx.connection.sendNotification(AureliaProtocolNotification.AnalysisChanged, analysisChanged);
+  lifecycleRefreshState(ctx).supportCounters.analysisWavesPublished += 1;
   if (lifecycleRefreshState(ctx).shutdown != null) return;
   // This is the single post-change diagnostic scheduler. The client deliberately
   // disables pull-on-change: starting a speculative pull before this semantic
@@ -571,14 +597,17 @@ async function notifyAnalysisChanged(
   // analysis. One source can invalidate diagnostics owned by any visible file,
   // so the standard workspace refresh remains project-wide.
   if (ctx.clientSupport.diagnosticRefresh) {
+    lifecycleRefreshState(ctx).supportCounters.diagnosticRefreshRequests += 1;
     requestClientRefresh(ctx, "diagnostics", () =>
       ctx.connection.languages.diagnostics.refresh());
   }
   if (ctx.clientSupport.inlayHintRefresh) {
+    lifecycleRefreshState(ctx).supportCounters.inlayHintRefreshRequests += 1;
     requestClientRefresh(ctx, "inlay hints", () =>
       ctx.connection.languages.inlayHint.refresh());
   }
   if (ctx.clientSupport.semanticTokensRefresh) {
+    lifecycleRefreshState(ctx).supportCounters.semanticTokenRefreshRequests += 1;
     requestClientRefresh(ctx, "semantic tokens", () =>
       ctx.connection.languages.semanticTokens.refresh());
   }
@@ -633,6 +662,7 @@ export function shutdownLifecycle(ctx: ServerContext): Promise<void> {
   if (state.shutdown != null) {
     return state.shutdown;
   }
+  state.supportCounters.shutdown += 1;
   const shutdown = Promise.resolve().then(() => {
     if (state.pendingAnalysisRefresh != null) {
       clearTimeout(state.pendingAnalysisRefresh);
@@ -669,6 +699,7 @@ function runLifecycleTask(
   void runServerOperation(ctx, operation).then(
     () => undefined,
     (error: unknown) => {
+      lifecycleRefreshState(ctx).supportCounters.backgroundTaskFailures += 1;
       const message = error instanceof Error ? error.stack ?? error.message : String(error);
       ctx.logger.error(`${label} failed: ${message}`);
     },
@@ -706,7 +737,50 @@ function lifecycleRefreshState(ctx: ServerContext): LifecycleRefreshState {
     pendingAnalysisRefresh: null,
     pendingAnalysisChangeKind: null,
     shutdown: null,
+    supportCounters: createLifecycleSupportCounters(),
   };
   lifecycleRefreshStates.set(ctx, state);
   return state;
+}
+
+/** Detached count-only lifecycle view; no source values or identities cross this boundary. */
+export function readLifecycleSupportSnapshot(ctx: ServerContext): AureliaSupportLifecycleSnapshot {
+  const state = lifecycleRefreshState(ctx);
+  return Object.freeze({
+    registered: state.lifecycleRegistered,
+    shuttingDown: state.shutdown != null,
+    trackedTaskCount: state.tasks.size,
+    trackedOpenDocumentCount: state.openDocumentEffectiveValues.size,
+    pendingAnalysisRefresh: state.pendingAnalysisRefresh != null,
+    pendingAnalysisChangeKind: state.pendingAnalysisChangeKind,
+    pendingChangedSourceCount: state.pendingAnalysisChangedSourceUris.size,
+    counters: Object.freeze({ ...state.supportCounters }),
+  });
+}
+
+function createLifecycleSupportCounters(): MutableLifecycleSupportCounters {
+  return {
+    initialize: 0,
+    shutdown: 0,
+    documentOpen: 0,
+    documentSynchronizations: 0,
+    documentClose: 0,
+    watchedFileBatches: 0,
+    topologyInvalidations: 0,
+    topologyInvalidatedFileCount: 0,
+    sourceTextInvalidations: 0,
+    sourceTextInvalidatedFileCount: 0,
+    configurationInvalidations: 0,
+    configurationInvalidatedFileCount: 0,
+    requestCurrentnessRefreshes: 0,
+    analysisRefreshSchedules: 0,
+    analysisRefreshCoalesces: 0,
+    analysisWavesStarted: 0,
+    analysisWavesPublished: 0,
+    analysisWaveStaleRetries: 0,
+    backgroundTaskFailures: 0,
+    diagnosticRefreshRequests: 0,
+    inlayHintRefreshRequests: 0,
+    semanticTokenRefreshRequests: 0,
+  };
 }

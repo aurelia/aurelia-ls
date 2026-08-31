@@ -14,6 +14,7 @@ import {
   runSemanticRuntimeRequest,
 } from "../../src/handlers/request-guard.js";
 import { SemanticRuntimeLspRequestAbortedError } from "../../src/runtime/semantic-runtime-session.js";
+import { LanguageServerSupportLedger } from "../../src/support-snapshot.js";
 
 function context() {
   const generation = {
@@ -51,6 +52,7 @@ function context() {
       warn: vi.fn(),
       error: vi.fn(),
     },
+    supportLedger: new LanguageServerSupportLedger(),
   };
 }
 
@@ -82,12 +84,42 @@ describe("semantic-runtime request boundary", () => {
     );
 
     await expect(request).rejects.toMatchObject({ code });
-    expect(ctx.logger.log).toHaveBeenCalledWith(expect.stringContaining(reason));
     if (reason === "stale") {
+      expect(ctx.logger.log).toHaveBeenCalledWith(expect.stringContaining(reason));
       expect(ctx.logger.log).toHaveBeenCalledWith(expect.stringContaining(
         '"staleOrigin":"request-generation"',
       ));
+    } else {
+      expect(ctx.logger.log).not.toHaveBeenCalled();
     }
+    expect(ctx.supportLedger.snapshot(new Uint8Array(32).fill(9)).recentTerminals).toEqual([
+      expect.objectContaining({
+        feature: "hover",
+        outcome: reason === "cancelled" ? "client-cancelled" : "stale",
+      }),
+    ]);
+  });
+
+  test("keeps an internal failure distinct when cancellation happens concurrently", async () => {
+    const ctx = context();
+    const cancelledToken = { ...token, isCancellationRequested: true };
+
+    const request = runSemanticRuntimeRequest(
+      ctx as never,
+      "completion",
+      cancelledToken as never,
+      () => { throw new Error("internal failure won"); },
+      "file:///app/src/app.html",
+    );
+
+    await expect(request).rejects.toMatchObject({ code: LSPErrorCodes.RequestFailed });
+    expect(ctx.supportLedger.snapshot(new Uint8Array(32).fill(9)).recentTerminals).toEqual([
+      expect.objectContaining({
+        outcome: "failed",
+        clientCancellationRequested: true,
+        underlyingStale: false,
+      }),
+    ]);
   });
 
   test("preserves deliberate protocol errors without logging or reclassification", () => {
@@ -405,6 +437,14 @@ describe("semantic-runtime request boundary", () => {
     const failure = await request.catch((error: unknown) => error);
     expect(failure).toMatchObject({ code: LSPErrorCodes.RequestCancelled });
     expect(failure).not.toMatchObject({ data: { retriggerRequest: true } });
+    expect(ctx.supportLedger.snapshot(new Uint8Array(32).fill(9)).recentTerminals).toEqual([
+      expect.objectContaining({
+        outcome: "client-cancelled",
+        clientCancellationRequested: true,
+        underlyingStale: true,
+        staleFacts: expect.objectContaining({ origin: "managed-operation" }),
+      }),
+    ]);
   });
 
   test("asks diagnostic clients to retrigger nominal managed-operation staleness", async () => {

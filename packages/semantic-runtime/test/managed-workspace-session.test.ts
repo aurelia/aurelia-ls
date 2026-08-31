@@ -1479,6 +1479,30 @@ describe('managed semantic workspace session', () => {
     completed.receipt.dispose();
   });
 
+  test('returns detached cache counters only from an idle published incarnation', async () => {
+    const workspaceRoot = await createWorkspace();
+    await writeWorkspaceFile(workspaceRoot, 'src/main.ts', 'export const main = true;\n');
+    const session = createSession(workspaceRoot);
+
+    expect(session.tryAnalysisCacheOverview({}, (answer) => answer.value.cachedAppCount)).toBeNull();
+    await captureRuntime(session);
+    expect(session.tryAnalysisCacheOverview({}, (answer) => answer.value.cachedAppCount))
+      .toBeGreaterThanOrEqual(0);
+
+    const entered = deferred<void>();
+    const release = deferred<void>();
+    const active = session.run(async () => {
+      entered.resolve();
+      await release.promise;
+    });
+    await entered.promise;
+    expect(session.tryAnalysisCacheOverview({}, (answer) => answer.value.cachedAppCount)).toBeNull();
+    release.resolve();
+    await active;
+    expect(session.tryAnalysisCacheOverview({}, (answer) => answer.value.cachedAppCount))
+      .toBeGreaterThanOrEqual(0);
+  });
+
   test('serializes queued clears without reopening reader admission between them', async () => {
     const workspaceRoot = await createWorkspace();
     await writeWorkspaceFile(workspaceRoot, 'src/main.ts', 'export const main = true;\n');

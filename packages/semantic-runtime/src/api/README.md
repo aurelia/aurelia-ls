@@ -144,6 +144,12 @@ Default `openApp()` uses `runtime-topology`, the cheapest complete app-world tie
 methods default to `binding-observation` because those answers intentionally need observer/data-flow diagnostics and
 weak-member pressure. Generic adapters should read `runtime.appQueryCatalog()` and open the catalog row's
 `minimumAnalysisDepth` instead of treating the deepest tier as a default.
+Template runtime breadth is a separate axis. `app-aggregate` expands child custom-element views beneath every analyzed
+resource for topology/build questions; `resource-local` analyzes each authored resource once and retains only the
+cross-resource receiver handoffs needed by projected content and captured attributes. Routed source/cursor queries use
+the catalog row's minimum breadth, while global queries use its explicit default. Answers report
+`templateAnalysisBreadth`, and retained app epochs match breadth exactly so an editor request can downshift from a large
+aggregate epoch instead of retaining it accidentally.
 An opened `SemanticApp` pins one exact committed app-analysis generation from static evaluation through resources, DI,
 templates, observation, state, capability, and router fan-in. Same-runtime replacement or lifetime disposal makes that
 app stale; `ask(...)`, profile/cache reads,
@@ -504,7 +510,7 @@ instead of a cursor-bearing page when samples are needed. Use the specific route
 clients can see the route/runtime-tree counts, issue state, and row-sampling policy before opening raw router rows.
 `readSemanticAppQueryCatalog()` and `runtime.appQueryCatalog()` expose the supported app query vocabulary with group,
 result-role, paging/detail, source-file, cursor, type-surface capability, materialization policy, router-product, and
-minimum analysis-depth metadata. `pagingKind`
+minimum analysis-depth plus template-breadth metadata. `pagingKind`
 distinguishes ordinary offset row cursors from router row-sample sizing and cursor-locus
 continuations. Public adapters such as MCP should use `minimumAnalysisDepth` for default generic-query opening so first reads can stay at
 `runtime-topology` while binding-owned rows still request their required substrate. The catalog accepts `group` and

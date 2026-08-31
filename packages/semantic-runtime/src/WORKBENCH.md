@@ -952,6 +952,12 @@ the checker phase, with checker creation second and project-options discovery mu
 cost work as either project-scope policy, shared project-program substrate, or a deliberate TypeScript-program volume
 cost; do not hide it under resource/template/router phase labels.
 
+Template analysis breadth now sits beside depth. `resource-local` keeps authored template-controller views and exact
+projection/capture receiver handoffs but avoids repeating ordinary child custom-element views below every resource root;
+`app-aggregate` preserves recursive controller topology for topology/AOT-style consumers. Query catalog rows own both
+their minimum and no-locus default breadth. Editor caches match breadth exactly, and deep receiver chains stop at a
+typed guardrail seam, so aggregate work cannot remain hidden behind a nominally local answer.
+
 ### Deliberate Cleanup Pressure
 
 The default `pressure:product-architecture` function-pressure lane is currently clear. Treat that as a clean navigation

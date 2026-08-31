@@ -162,6 +162,9 @@ export function mapRuntimeAnswer(answer: SemanticRuntimeAnswer<unknown>): Runtim
     ...(answer.analysisBasis == null ? {} : { analysisBasis: answer.analysisBasis }),
     page: answer.page,
     ...(answer.analysisDepth == null ? {} : { analysisDepth: answer.analysisDepth }),
+    ...(answer.templateAnalysisBreadth == null
+      ? {}
+      : { templateAnalysisBreadth: answer.templateAnalysisBreadth }),
     ...(answer.continuations == null ? {} : { continuations: answer.continuations }),
   };
 }

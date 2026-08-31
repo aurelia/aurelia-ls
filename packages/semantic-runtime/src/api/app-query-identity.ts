@@ -1,5 +1,6 @@
 import type {
   SemanticAppAnalysisDepth,
+  SemanticTemplateAnalysisBreadth,
 } from '../configuration/app-analysis.js';
 import type {
   SemanticAppQuery,
@@ -17,6 +18,7 @@ import { canonicalTypeSystemSourcePath } from '../type-system/source-file-path.j
 
 export interface SemanticRuntimeRoutedAppQueryKeyPlan {
   readonly analysisDepth: SemanticAppAnalysisDepth;
+  readonly templateAnalysisBreadth: SemanticTemplateAnalysisBreadth;
   readonly includeAuthoringTemplates: boolean;
   readonly authoringTemplateSourceFiles: readonly string[];
   readonly authoringTemplateLimit: number | null;
@@ -90,6 +92,7 @@ export function semanticRuntimeRoutedAppQueryKey(
   return [
     semanticAppQueryKey(query),
     `analysis:${plan.analysisDepth}`,
+    `template-analysis:${plan.templateAnalysisBreadth}`,
     `authoring:${plan.includeAuthoringTemplates}`,
     `authoring-sources:${plan.authoringTemplateSourceFiles.length === 0
       ? 'project'
@@ -115,6 +118,7 @@ export function semanticRuntimeRoutedAppQueryBatchKey(
     'app-query-batch',
     `queries:${request.queries.map((query, index) => `${index}:${semanticAppQueryRequestKey(query)}`).join(',')}`,
     `analysis:${plan.analysisDepth}`,
+    `template-analysis:${plan.templateAnalysisBreadth}`,
     `authoring:${plan.includeAuthoringTemplates}`,
     `authoring-sources:${plan.authoringTemplateSourceFiles.length === 0
       ? 'project'

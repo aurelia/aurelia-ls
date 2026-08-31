@@ -2,8 +2,11 @@ import { performance } from 'node:perf_hooks';
 
 import {
   DEFAULT_SEMANTIC_APP_ANALYSIS_DEPTH,
+  DEFAULT_SEMANTIC_TEMPLATE_ANALYSIS_BREADTH,
   SemanticAppAnalysisDepth,
+  SemanticTemplateAnalysisBreadth,
   normalizeSemanticAppAnalysisDepth,
+  normalizeSemanticTemplateAnalysisBreadth,
   semanticAppAnalysisDepthSatisfies,
 } from '../configuration/app-analysis.js';
 import {
@@ -136,6 +139,8 @@ export class TemplateRuntimeAnalysisRequest {
     readonly computedObserverSources: ComputedObserverSourceProjectResult | null = null,
     /** Analysis depth requested by the app-world inquiry. */
     readonly analysisDepth: SemanticAppAnalysisDepth | `${SemanticAppAnalysisDepth}` = DEFAULT_SEMANTIC_APP_ANALYSIS_DEPTH,
+    /** Template runtime graph breadth requested by the app-world inquiry. */
+    readonly analysisBreadth: SemanticTemplateAnalysisBreadth | `${SemanticTemplateAnalysisBreadth}` = DEFAULT_SEMANTIC_TEMPLATE_ANALYSIS_BREADTH,
     /** Shared expression TypeChecker world for the surrounding template-analysis pass. */
     readonly expressionWorld: CheckerExpressionTypeWorld | null = null,
     /** Telemetry policy inherited from the app-world inquiry boundary. */
@@ -173,6 +178,8 @@ export class TemplateRuntimeAnalysisEmission {
   constructor(
     /** Depth that was actually materialized for this resource. */
     readonly analysisDepth: SemanticAppAnalysisDepth,
+    /** Runtime graph breadth that was actually materialized for this resource. */
+    readonly analysisBreadth: SemanticTemplateAnalysisBreadth,
     /** Runtime renderer emulation over compiled-template target rows. */
     readonly runtimeRendering: RuntimeRenderingEmission,
     /** Pre-bind behavior reachability and state mutations spent by every later binding phase. */
@@ -205,6 +212,7 @@ export class TemplateRuntimeAnalysisEmission {
   forExpressionWorld(expressionWorld: CheckerExpressionTypeWorld): TemplateRuntimeAnalysisEmission {
     return new TemplateRuntimeAnalysisEmission(
       this.analysisDepth,
+      this.analysisBreadth,
       this.runtimeRendering,
       this.expressionResourcePlan,
       this.scopes,
@@ -225,6 +233,7 @@ export class TemplateRuntimeAnalysisEmission {
   forCarriedExpressionWorld(expressionWorld: CheckerExpressionTypeWorld): TemplateRuntimeAnalysisEmission {
     return new TemplateRuntimeAnalysisEmission(
       this.analysisDepth,
+      this.analysisBreadth,
       this.runtimeRendering,
       this.expressionResourcePlan,
       this.scopes,
@@ -368,6 +377,7 @@ interface TemplateRuntimeAnalysisServices {
 class TemplateRuntimeAnalysisFrame {
   private readonly started = performance.now();
   private readonly analysisDepth: SemanticAppAnalysisDepth;
+  private readonly analysisBreadth: SemanticTemplateAnalysisBreadth;
   private readonly phases: TemplateRuntimeAnalysisPhaseTiming[] = [];
   private readonly expressionWorld: CheckerExpressionTypeWorld;
   private readonly expressionCacheMarker: CheckerExpressionTypeEvaluationCacheMarker;
@@ -382,6 +392,7 @@ class TemplateRuntimeAnalysisFrame {
     private readonly services: TemplateRuntimeAnalysisServices,
   ) {
     this.analysisDepth = normalizeSemanticAppAnalysisDepth(request.analysisDepth);
+    this.analysisBreadth = normalizeSemanticTemplateAnalysisBreadth(request.analysisBreadth);
     this.expressionWorld = request.expressionWorld
       ?? new CheckerExpressionTypeWorld(store, new CheckerTypeProjector(store, publication));
     this.expressionCacheMarker = this.expressionWorld.cacheMarker();
@@ -462,6 +473,7 @@ class TemplateRuntimeAnalysisFrame {
 
     return new TemplateRuntimeAnalysisEmission(
       this.analysisDepth,
+      this.analysisBreadth,
       runtimeRendering,
       expressionResourcePlan,
       scopes,
@@ -617,6 +629,7 @@ class TemplateRuntimeAnalysisFrame {
       attributeSyntax: this.request.attributeSyntax,
       compilerWorld: this.request.compilerWorld,
       projectContext: this.request.projectContext,
+      analysisBreadth: this.analysisBreadth,
       resourceDefinitions: this.request.resourceDefinitions,
       computedObserverSources: this.request.computedObserverSources,
       typeSystem: this.request.typeSystem,
@@ -651,6 +664,7 @@ class TemplateRuntimeAnalysisFrame {
       runtimeBindings: runtimeRendering,
       expressionResourcePlan,
       projectContext: this.request.projectContext,
+      analysisBreadth: this.analysisBreadth,
       evaluation: this.request.evaluation,
       typeSystem: this.request.typeSystem,
       expressionWorld: this.expressionWorld,

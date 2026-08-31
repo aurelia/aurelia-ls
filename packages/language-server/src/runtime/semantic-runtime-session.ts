@@ -56,6 +56,7 @@ import type { DocumentUri, WorkspaceDocumentUris } from "../utils/document-uri.j
 import { languageIdForSource } from "../utils/document-kind.js";
 import { stableDigest } from "../utils/stable-digest.js";
 import { loadExtensionHostTestSemanticWorkspaceDescriptor } from "./extension-host-test-topology.js";
+import type { AureliaSupportSemanticSessionSnapshot } from "../protocol.js";
 
 export interface SemanticRuntimeLspOpenDocumentMetadata {
   readonly uri: DocumentUri;
@@ -611,6 +612,32 @@ export class SemanticRuntimeLspSession {
     } catch (error) {
       this.throwRequestFailure(state, error);
     }
+  }
+
+  /** Cheap lifecycle counters only; this does not acquire, open, or reconcile a semantic workspace incarnation. */
+  supportState(): AureliaSupportSemanticSessionSnapshot {
+    return Object.freeze({
+      workspaceConfigured: this.workspace != null,
+      workspaceGeneration: this.workspaceGeneration,
+      requestEpoch: this.requestEpoch,
+      diagnosticCacheEntries: this.diagnosticCache.size,
+      retiringWorkspaceCount: this.retiringSessions.size,
+      retirementFailureCount: this.retirementFailures.length,
+      closing: this.closing,
+      disposalStarted: this.disposal != null,
+    });
+  }
+
+  /** Existing-incarnation cache counters only; never boots, reconciles, opens, or deepens semantic analysis. */
+  detachedAnalysisCacheOverview(
+    request: SemanticRuntimeSessionAnalysisCacheOverviewRequest = {},
+  ): SemanticRuntimeSessionAnalysisCacheOverviewResult | null {
+    const workspace = this.workspace;
+    if (workspace == null) return null;
+    return workspace.session.tryAnalysisCacheOverview(
+      request,
+      (answer) => structuredClone(answer.value),
+    );
   }
 
   async runDiagnosticRequest<TItem>(
@@ -1279,6 +1306,7 @@ export class SemanticRuntimeLspSession {
       readPage: (cursor) => runtime.answerAppQuery({
         kind: SemanticAppQueryKind.ResourceInventory,
         projectKey,
+        templateAnalysisBreadth: "resource-local",
         includeTypeSurfaces,
         page: { size: 500, cursor },
         inquiryProfile: "lsp-cursor",
@@ -1303,6 +1331,7 @@ export class SemanticRuntimeLspSession {
       readPage: (cursor) => runtime.answerAppQuery({
         kind: SemanticAppQueryKind.AnalysisLimitations,
         projectKey,
+        templateAnalysisBreadth: "resource-local",
         page: { size: 500, cursor },
         inquiryProfile: "lsp-cursor",
         appRetention: "retain-app",
@@ -1469,7 +1498,7 @@ export class SemanticRuntimeLspSession {
       kind: SemanticAppQueryKind.TemplateDocumentOwnership,
       projectKey,
       inquiryProfile: "lsp-cursor",
-      analysisDepth: "runtime-topology",
+      analysisDepth: "binding-observation",
       includeAuthoringTemplates: false,
       appRetention: "retain-app",
     }) as SemanticRuntimeAnswer<SemanticTemplateDocumentOwnershipResult>;
@@ -1519,7 +1548,7 @@ export class SemanticRuntimeLspSession {
         sourceFilePath: filePath,
         page: { size: 500, cursor },
         inquiryProfile: "lsp-cursor",
-        analysisDepth: "runtime-topology",
+        analysisDepth: "binding-observation",
         includeAuthoringTemplates: true,
         appRetention: "retain-app",
       }) as Promise<SemanticRuntimeAnswer<SemanticTemplateSemanticTokensResult>>,
@@ -1546,7 +1575,7 @@ export class SemanticRuntimeLspSession {
         sourceFilePath: filePath,
         page: { size: 500, cursor },
         inquiryProfile: "lsp-cursor",
-        analysisDepth: "runtime-topology",
+        analysisDepth: "binding-observation",
         includeAuthoringTemplates: true,
         appRetention: "retain-app",
       }) as Promise<SemanticRuntimeAnswer<SemanticTemplateFoldingRangesResult>>,

@@ -774,6 +774,49 @@ class TestDocumentStore implements OpenTextDocumentStore {
 }
 
 describe("SemanticRuntimeLspSession", () => {
+  test("projects generation and retention counters without opening semantic analysis", async () => {
+    const workspaceRoot = minimalFixtureRoot();
+    const session = createSession(workspaceRoot, new TestDocumentStore());
+
+    expect(session.supportState()).toEqual({
+      workspaceConfigured: true,
+      workspaceGeneration: 0,
+      requestEpoch: 0,
+      diagnosticCacheEntries: 0,
+      retiringWorkspaceCount: 0,
+      retirementFailureCount: 0,
+      closing: false,
+      disposalStarted: false,
+    });
+    expect(session.detachedAnalysisCacheOverview({ cachedAppLimit: 1 })).toBeNull();
+
+    await session.runRequest(null, (operation) => operation.workspaceSummary());
+    expect(session.detachedAnalysisCacheOverview({ cachedAppLimit: 1 })).toMatchObject({
+      cachedAppCount: 0,
+      cachedApps: [],
+    });
+
+    const entered = deferred<void>();
+    const release = deferred<void>();
+    const active = session.runRequest(null, async () => {
+      entered.resolve();
+      await release.promise;
+    });
+    await entered.promise;
+    expect(session.detachedAnalysisCacheOverview({ cachedAppLimit: 1 })).toBeNull();
+    release.resolve();
+    await active;
+    expect(session.detachedAnalysisCacheOverview({ cachedAppLimit: 1 })).toMatchObject({
+      cachedAppCount: 0,
+    });
+
+    session.recordSourceTextChanged([path.join(workspaceRoot, "src", "app.html")]);
+    expect(session.supportState()).toMatchObject({ requestEpoch: 1, workspaceGeneration: 0 });
+    const disposal = session.dispose();
+    expect(session.supportState()).toMatchObject({ closing: true, disposalStarted: true });
+    await disposal;
+  });
+
   test("keeps the host-acceptance topology inert unless both exact gates are present", () => {
     const environment = {
       [RESOURCE_DISCOVERY_HOST_DESCRIPTOR_ENVIRONMENT]: "not-an-absolute-descriptor",
@@ -1005,10 +1048,10 @@ describe("SemanticRuntimeLspSession", () => {
         headerOnly: 5,
         visibilityOnly: 0,
         localTemplates: 5,
-        excludedCompilerSyntax: 61,
+        excludedCompilerSyntax: 60,
         unnamedDefinitions: 0,
         unresolvedModules: 0,
-        openVisibility: 1,
+        openVisibility: 2,
       },
       rowCount: 606,
     });
@@ -1017,6 +1060,9 @@ describe("SemanticRuntimeLspSession", () => {
       .filter((query) => query.kind === SemanticAppQueryKind.ResourceInventory
         && query.projectKey === "host-alpha");
     expect(inventoryPageQueries).toHaveLength(2);
+    expect(inventoryPageQueries.every((query) =>
+      query.templateAnalysisBreadth === "resource-local"
+    )).toBe(true);
     expect(inventoryPageQueries.map((query) => query.page?.size)).toEqual([500, 500]);
     expect(inventoryPageQueries[0]?.page?.cursor).toBeUndefined();
     expect(inventoryPageQueries[1]?.page?.cursor).toEqual(expect.any(String));
@@ -2512,6 +2558,9 @@ describe("SemanticRuntimeLspSession", () => {
     const definitionQueries = querySpy.mock.calls
       .map(([query]) => query)
       .filter((query) => query.kind === SemanticAppQueryKind.ResourceDefinitions);
+    const inventoryQueries = querySpy.mock.calls
+      .map(([query]) => query)
+      .filter((query) => query.kind === SemanticAppQueryKind.ResourceInventory);
     querySpy.mockRestore();
 
     expect(result.definitionRows).toBeGreaterThan(0);
@@ -2520,6 +2569,35 @@ describe("SemanticRuntimeLspSession", () => {
     expect(result.richTypeSurfacesIncluded).toBe(true);
     expect(definitionQueries.length).toBeGreaterThan(0);
     expect(definitionQueries.every((query) => query.analysisDepth == null)).toBe(true);
+    expect(inventoryQueries.length).toBeGreaterThan(0);
+    expect(inventoryQueries.every((query) =>
+      query.templateAnalysisBreadth === "resource-local"
+    )).toBe(true);
+  });
+
+  test("opens template ownership at the complete retained editor depth", async () => {
+    const querySpy = vi.spyOn(SemanticRuntime.prototype, "answerAppQuery");
+    const session = createSession(minimalFixtureRoot(), new TestDocumentStore());
+
+    await session.runRequest(null, async (operation) => {
+      const summary = await operation.workspaceSummary();
+      const projectKey = summary.value.appCandidates[0]?.projectKey;
+      if (projectKey == null) {
+        throw new Error("Expected the fixture to expose one app candidate.");
+      }
+      return operation.templateDocumentOwnership(projectKey);
+    });
+
+    const ownershipQueries = querySpy.mock.calls
+      .map(([query]) => query)
+      .filter((query) => query.kind === SemanticAppQueryKind.TemplateDocumentOwnership);
+    expect(ownershipQueries).toHaveLength(1);
+    expect(ownershipQueries[0]).toMatchObject({
+      analysisDepth: "binding-observation",
+      includeAuthoringTemplates: false,
+      inquiryProfile: "lsp-cursor",
+      appRetention: "retain-app",
+    });
   });
 
   test("requests one explicit project and drains every analysis-limitation page", async () => {
@@ -2569,18 +2647,21 @@ describe("SemanticRuntimeLspSession", () => {
       projectKey: query.projectKey,
       page: query.page,
       inquiryProfile: query.inquiryProfile,
+      templateAnalysisBreadth: query.templateAnalysisBreadth,
       appRetention: query.appRetention,
     }))).toEqual([
       {
         projectKey: result.projectKey,
         page: { size: 500, cursor: undefined },
         inquiryProfile: "lsp-cursor",
+        templateAnalysisBreadth: "resource-local",
         appRetention: "retain-app",
       },
       {
         projectKey: result.projectKey,
         page: { size: 500, cursor: "analysis-page-2" },
         inquiryProfile: "lsp-cursor",
+        templateAnalysisBreadth: "resource-local",
         appRetention: "retain-app",
       },
     ]);

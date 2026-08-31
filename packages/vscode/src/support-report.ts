@@ -1,11 +1,15 @@
 import { createHmac, randomBytes, randomUUID } from "node:crypto";
 import { open, readdir, stat } from "node:fs/promises";
 import path from "node:path";
-import type { Disposable, ExtensionContext, Uri } from "vscode";
+import type { CancellationToken, Disposable, Event, ExtensionContext, Uri } from "vscode";
 import type {
   AureliaLanguageClient,
   AureliaLanguageClientSupportState,
 } from "./client-core.js";
+import {
+  AureliaProtocolRequest,
+  type AureliaSupportSnapshotResponse,
+} from "@aurelia-ls/language-server/protocol";
 import { AureliaCommand } from "./product-contract.js";
 import type { VscodeApi } from "./vscode-api.js";
 import type { WorkerTransportEvent } from "./worker-transport.js";
@@ -22,7 +26,9 @@ const MAX_LOG_BYTES_PER_FILE = 64 * 1_024;
 const MAX_TOTAL_LOG_BYTES = 256 * 1_024;
 const MAX_LOG_LINES_PER_FILE = 240;
 const MAX_LOG_LINE_CHARACTERS = 1_000;
-const MAX_ERROR_MESSAGE_CHARACTERS = 2_000;
+const MAX_SERVER_SNAPSHOTS = 8;
+const DEFAULT_SERVER_SNAPSHOT_DEADLINE_MS = 2_500;
+const MAX_TOTAL_SERVER_SNAPSHOT_BYTES = 512 * 1_024;
 
 type SupportTransportMode = "worker" | "ipc";
 
@@ -71,10 +77,25 @@ interface PersistedLogTailRead {
 
 interface WorkerEventRecord {
   readonly recordedAt: string;
-  readonly clientId: string;
-  readonly clientName: string;
-  readonly event: WorkerTransportEvent;
+  readonly clientIdDigest: string;
+  readonly clientNameDigest: string;
+  readonly event: WorkerEventEvidence;
 }
+
+type WorkerEventEvidence =
+  | { readonly type: "online" }
+  | { readonly type: "stdout" | "stderr"; readonly characterCount: number; readonly lineCount: number }
+  | {
+      readonly type: "error";
+      readonly error: {
+        readonly name: string;
+        readonly code: string | number | null;
+        readonly messageKind: "worker-out-of-memory" | "other";
+        readonly messageCharacterCount: number;
+      };
+    }
+  | { readonly type: "exit"; readonly code: number }
+  | { readonly type: "force-terminate"; readonly graceMilliseconds: number };
 
 export interface SupportReportServiceOptions {
   readonly transportMode: SupportTransportMode;
@@ -82,6 +103,7 @@ export interface SupportReportServiceOptions {
   readonly randomSalt?: () => Uint8Array;
   readonly reportId?: () => string;
   readonly readLogTails?: (logUri: Uri) => Promise<PersistedLogTailRead>;
+  readonly serverSnapshotDeadlineMilliseconds?: number;
 }
 
 /**
@@ -97,7 +119,9 @@ export class SupportReportService implements Disposable {
   readonly #randomSalt: () => Uint8Array;
   readonly #reportId: () => string;
   readonly #readLogTails: (logUri: Uri) => Promise<PersistedLogTailRead>;
+  readonly #serverSnapshotDeadlineMilliseconds: number;
   readonly #workerEvents: WorkerEventRecord[] = [];
+  readonly #workerIdentityKey = randomBytes(32);
   #languageClient: AureliaLanguageClient | null = null;
   #resourceExplorerState: (() => ResourceExplorerSupportState) | null = null;
   #disposed = false;
@@ -114,6 +138,8 @@ export class SupportReportService implements Disposable {
     this.#randomSalt = options.randomSalt ?? (() => randomBytes(32));
     this.#reportId = options.reportId ?? randomUUID;
     this.#readLogTails = options.readLogTails ?? readPersistedSupportLogTails;
+    this.#serverSnapshotDeadlineMilliseconds = options.serverSnapshotDeadlineMilliseconds
+      ?? DEFAULT_SERVER_SNAPSHOT_DEADLINE_MS;
   }
 
   attachLanguageClient(languageClient: AureliaLanguageClient): void {
@@ -140,9 +166,9 @@ export class SupportReportService implements Disposable {
     if (this.#disposed) return;
     this.#workerEvents.push({
       recordedAt: this.#now().toISOString(),
-      clientId: client.id,
-      clientName: client.name,
-      event,
+      clientIdDigest: privateIngressIdentity(this.#workerIdentityKey, "language-client", client.id),
+      clientNameDigest: privateIngressIdentity(this.#workerIdentityKey, "language-client-name", client.name),
+      event: projectWorkerEventAtIngress(event),
     });
     if (this.#workerEvents.length > MAX_WORKER_EVENTS) {
       this.#workerEvents.splice(0, this.#workerEvents.length - MAX_WORKER_EVENTS);
@@ -171,7 +197,10 @@ export class SupportReportService implements Disposable {
     const failures: Array<{ readonly section: string; readonly reason: string }> = [];
     const client = this.#readClientState(identities, failures);
     const explorer = this.#readResourceExplorerState(failures);
-    const logs = await this.#readPersistedLogs(identities, failures);
+    const [servers, logs] = await Promise.all([
+      this.#readServerSnapshots(identities, failures),
+      this.#readPersistedLogs(identities, failures),
+    ]);
     const report = {
       schemaVersion: AURELIA_SUPPORT_REPORT_SCHEMA,
       reportId: this.#reportId(),
@@ -182,6 +211,8 @@ export class SupportReportService implements Disposable {
         configurationFilesRead: false,
         packageManifestsRead: false,
         identityPolicy: "fresh per-report HMAC pseudonyms",
+        liveServerSnapshots:
+          "bounded schema-projected counters only; collection is skipped for explicit server overrides",
         persistedLogs: "bounded tails with paths, URIs, and source-like file names pseudonymized",
         persistedLogCaveat:
           "Log messages are not source files, but may still contain authored identifiers or short text emitted by an error. Review the report before sharing.",
@@ -196,6 +227,7 @@ export class SupportReportService implements Disposable {
         recentEvents: this.#workerEvents.map((record) =>
           projectWorkerEvent(record, identities)),
       },
+      servers,
       resourceExplorer: explorer,
       persistedLogs: logs,
       collection: {
@@ -238,6 +270,103 @@ export class SupportReportService implements Disposable {
       failures.push({ section: "resourceExplorer", reason: safeFailureReason(error) });
       return { status: "unavailable" };
     }
+  }
+
+  async #readServerSnapshots(
+    identities: SupportReportIdentities,
+    failures: Array<{ readonly section: string; readonly reason: string }>,
+  ): Promise<Readonly<Record<string, unknown>>> {
+    const languageClient = this.#languageClient;
+    if (languageClient == null) return { status: "unavailable" };
+    if (process.env.AURELIA_LS_SERVER_PATH != null) {
+      failures.push({ section: "servers", reason: "ServerOverridePresent" });
+      return { status: "unavailable", reason: "ServerOverridePresent" };
+    }
+    const collectionStartedAt = this.#now().toISOString();
+    const startLifecycleGeneration = readClientLifecycleGeneration(languageClient, identities);
+    const sessions = [...(languageClient.sessions ?? [])]
+      .sort((left, right) => left.workspace.key.localeCompare(right.workspace.key));
+    const selected = sessions.slice(0, MAX_SERVER_SNAPSHOTS);
+    const identitySalt = identities.requestSalt();
+    const settled = await Promise.allSettled(selected.map(async (session) => {
+      const rawSnapshot = await withDeadline(
+        (token) => session.client.sendRequest<AureliaSupportSnapshotResponse>(
+          AureliaProtocolRequest.SupportSnapshot,
+          { identitySalt },
+          token,
+        ),
+        this.#serverSnapshotDeadlineMilliseconds,
+      );
+      const snapshot = projectServerSnapshot(rawSnapshot);
+      if (snapshot == null) {
+        throw Object.assign(new Error("Server returned an incompatible support snapshot."), {
+          code: "SUPPORT_SNAPSHOT_INCOMPATIBLE",
+        });
+      }
+      if (!languageClient.sessions.some((candidate) =>
+        candidate.workspace.key === session.workspace.key
+        && candidate.client === session.client
+        && candidate.incarnation === session.incarnation
+      )) {
+        throw Object.assign(new Error("Language server session changed during support collection."), {
+          code: "SUPPORT_SNAPSHOT_SESSION_CHANGED",
+        });
+      }
+      return {
+        workspaceId: identities.id("workspace", session.workspace.uri),
+        incarnation: session.incarnation,
+        status: "available" as const,
+        snapshot,
+      };
+    }));
+    let remainingBytes = MAX_TOTAL_SERVER_SNAPSHOT_BYTES;
+    const snapshots = settled.map((result, index) => {
+      if (result.status === "fulfilled") {
+        const bytes = Buffer.byteLength(JSON.stringify(result.value.snapshot), "utf8");
+        if (bytes <= remainingBytes) {
+          remainingBytes -= bytes;
+          return result.value;
+        }
+        failures.push({ section: `servers[${index}]`, reason: "SnapshotSizeLimitExceeded" });
+        return {
+          workspaceId: result.value.workspaceId,
+          incarnation: result.value.incarnation,
+          status: "unavailable" as const,
+          reason: "SnapshotSizeLimitExceeded",
+        };
+      }
+      const session = selected[index]!;
+      failures.push({
+        section: `servers[${index}]`,
+        reason: safeFailureReason(result.reason),
+      });
+      return {
+        workspaceId: identities.id("workspace", session.workspace.uri),
+        incarnation: session.incarnation,
+        status: "unavailable" as const,
+        reason: safeFailureReason(result.reason),
+      };
+    });
+    if (sessions.length > selected.length) {
+      failures.push({ section: "servers", reason: "SessionLimitExceeded" });
+    }
+    const endLifecycleGeneration = readClientLifecycleGeneration(languageClient, identities);
+    return deepFreeze({
+      status: "available",
+      collectionStartedAt,
+      collectionCompletedAt: this.#now().toISOString(),
+      clientLifecycleGenerationStart: startLifecycleGeneration,
+      clientLifecycleGenerationEnd: endLifecycleGeneration,
+      clientStateChangedDuringCollection:
+        startLifecycleGeneration == null
+        || endLifecycleGeneration == null
+        || startLifecycleGeneration !== endLifecycleGeneration,
+      sessionCount: sessions.length,
+      snapshots,
+      omittedSessionCount: Math.max(0, sessions.length - selected.length),
+      maximumSnapshotBytes: MAX_TOTAL_SERVER_SNAPSHOT_BYTES,
+      returnedSnapshotBytes: MAX_TOTAL_SERVER_SNAPSHOT_BYTES - remainingBytes,
+    });
   }
 
   async #readPersistedLogs(
@@ -317,6 +446,20 @@ export class SupportReportService implements Disposable {
   }
 }
 
+function readClientLifecycleGeneration(
+  languageClient: AureliaLanguageClient,
+  identities: SupportReportIdentities,
+): number | null {
+  try {
+    const generation = languageClient
+      .supportState((kind, value) => identities.id(kind, value))
+      .lifecycle.lifecycleGeneration;
+    return Number.isSafeInteger(generation) ? generation : null;
+  } catch {
+    return null;
+  }
+}
+
 export async function readPersistedSupportLogTails(logUri: Uri): Promise<PersistedLogTailRead> {
   if (logUri.scheme !== "file") {
     return { tails: [], failures: ["The extension log directory is not a local file URI."] };
@@ -384,7 +527,7 @@ export class SupportReportIdentities {
   readonly #key: Uint8Array;
 
   constructor(key: Uint8Array) {
-    if (key.byteLength < 16) throw new Error("Support report identity salt must be at least 16 bytes.");
+    if (key.byteLength !== 32) throw new Error("Support report identity salt must contain exactly 32 bytes.");
     this.#key = Uint8Array.from(key);
   }
 
@@ -397,7 +540,309 @@ export class SupportReportIdentities {
       .slice(0, 20);
     return `${safeIdentityKind(kind)}:${digest}`;
   }
+
+  /** Local request token for server-side per-report pseudonyms. Never include this value in report JSON. */
+  requestSalt(): string {
+    return Buffer.from(this.#key).toString("base64url");
+  }
 }
+
+async function withDeadline<T>(
+  request: (token: CancellationToken) => Promise<T>,
+  deadlineMilliseconds: number,
+): Promise<T> {
+  if (!Number.isFinite(deadlineMilliseconds) || deadlineMilliseconds <= 0) {
+    throw new RangeError("Support report server deadline must be a positive finite duration.");
+  }
+  const cancellation = new SupportRequestCancellation();
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  try {
+    return await Promise.race([
+      request(cancellation.token),
+      new Promise<never>((_resolve, reject) => {
+        timer = setTimeout(() => {
+          cancellation.cancel();
+          reject(Object.assign(new Error("Server support snapshot timed out."), {
+            code: "SUPPORT_SNAPSHOT_TIMEOUT",
+          }));
+        }, deadlineMilliseconds);
+        timer.unref?.();
+      }),
+    ]);
+  } finally {
+    if (timer != null) clearTimeout(timer);
+    cancellation.dispose();
+  }
+}
+
+class SupportRequestCancellation {
+  readonly #listeners = new Set<(event: unknown) => unknown>();
+  readonly #tokenState: {
+    isCancellationRequested: boolean;
+    onCancellationRequested: Event<unknown>;
+  };
+  #cancelled = false;
+  readonly token: CancellationToken;
+
+  constructor() {
+    this.#tokenState = {
+      isCancellationRequested: false,
+      onCancellationRequested: ((listener: (event: unknown) => unknown): Disposable => {
+        if (this.#cancelled) {
+          listener(undefined);
+          return { dispose() {} };
+        }
+        this.#listeners.add(listener);
+        return { dispose: () => this.#listeners.delete(listener) };
+      }) as Event<unknown>,
+    };
+    this.token = this.#tokenState;
+  }
+
+  cancel(): void {
+    if (this.#cancelled) return;
+    this.#cancelled = true;
+    this.#tokenState.isCancellationRequested = true;
+    for (const listener of [...this.#listeners]) listener(undefined);
+    this.#listeners.clear();
+  }
+
+  dispose(): void {
+    this.#listeners.clear();
+  }
+}
+
+function projectServerSnapshot(value: unknown): AureliaSupportSnapshotResponse | null {
+  if (
+    value == null
+    || typeof value !== "object"
+    || Array.isArray(value)
+    || (value as Record<string, unknown>)["schemaVersion"] !== "aurelia-support-snapshot/1"
+  ) {
+    return null;
+  }
+  // A server override can return arbitrary JSON. Re-serialize through the exact v1 property catalog so unknown fields
+  // cannot bypass the support report's privacy or payload assumptions merely by spoofing the schema version.
+  const projected = JSON.parse(JSON.stringify(value, [...SERVER_SUPPORT_PROPERTY_ALLOWLIST])) as unknown;
+  return projected != null
+    && typeof projected === "object"
+    && !Array.isArray(projected)
+    && (projected as Record<string, unknown>)["schemaVersion"] === "aurelia-support-snapshot/1"
+    ? projected as AureliaSupportSnapshotResponse
+    : null;
+}
+
+const SERVER_SUPPORT_PROPERTY_ALLOWLIST = [
+  "addresses",
+  "ageMilliseconds",
+  "aggregateCount",
+  "aggregates",
+  "analysisCache",
+  "analysisDepth",
+  "analysisRefreshCoalesces",
+  "analysisRefreshSchedules",
+  "analysisWavesPublished",
+  "analysisWavesStarted",
+  "analysisWaveStaleRetries",
+  "answered",
+  "answerLeaseKind",
+  "answerLocalKernelPolicy",
+  "approximatePayloadBytes",
+  "architecture",
+  "arrayBuffersBytes",
+  "authoringTemplateLimit",
+  "authoringTemplateSourceFileCount",
+  "backgroundTaskFailures",
+  "bounds",
+  "budgetDisposedRecords",
+  "bypasses",
+  "cachedAppCount",
+  "cachedApps",
+  "capacityEvictions",
+  "capturedAt",
+  "childRecords",
+  "claims",
+  "clearedEntries",
+  "clearedSourceTextCharacters",
+  "clearedTypeSystemDependencySourceFiles",
+  "clearedTypeSystemDependencySourceTextCharacters",
+  "clearOperations",
+  "clientCancellationRequested",
+  "clientCancelled",
+  "clientCancelledWithUnderlyingStale",
+  "closing",
+  "configurationInvalidatedFileCount",
+  "configurationInvalidations",
+  "count",
+  "counters",
+  "createdRecords",
+  "currentnessKind",
+  "declarationEntries",
+  "declarationSourceTextCharacters",
+  "defaultLibraryEntries",
+  "defaultLibrarySourceTextCharacters",
+  "diagnosticCacheEntries",
+  "diagnosticRefreshRequests",
+  "disposalStarted",
+  "disposed",
+  "disposedHotDetails",
+  "disposedKernelHandleCharacters",
+  "disposedKernelRecords",
+  "disposedProductDetails",
+  "distinctCanonicalPaths",
+  "documentSynchronizations",
+  "documentClose",
+  "documentId",
+  "documentOpen",
+  "dominantSourceTextBucket",
+  "duplicateCanonicalPathEntries",
+  "durationMilliseconds",
+  "entries",
+  "entryLimit",
+  "evidence",
+  "externalBytes",
+  "externalDeclarationEntries",
+  "externalDeclarationSourceTextCharacters",
+  "failed",
+  "feature",
+  "handleCharacters",
+  "heapLimitBytes",
+  "heapTotalBytes",
+  "heapUsedBytes",
+  "hits",
+  "hotDetailKinds",
+  "hotDetails",
+  "identities",
+  "includeAuthoringTemplates",
+  "inFlight",
+  "inFlightCount",
+  "initialize",
+  "inlayHintRefreshRequests",
+  "inquiryProfile",
+  "itemCount",
+  "key",
+  "lifecycle",
+  "materializations",
+  "maxDepth",
+  "maximumBreakdownRows",
+  "maximumCachedApps",
+  "maximumDurationMilliseconds",
+  "maximumFeatureAggregates",
+  "maximumInFlightRows",
+  "maximumRecentTerminals",
+  "maximumSerializedBytes",
+  "memory",
+  "milliseconds",
+  "misses",
+  "name",
+  "netHotDetailDelta",
+  "netKernelHandleCharacterDelta",
+  "netKernelRecordDelta",
+  "netProductDetailDelta",
+  "nodeModuleEntries",
+  "nodeModuleSourceTextCharacters",
+  "nodeVersion",
+  "oldestInFlightAgeMilliseconds",
+  "omittedAggregateCount",
+  "omittedCachedAppCount",
+  "omittedInFlightCount",
+  "omittedRecentTerminalCount",
+  "openSeamKinds",
+  "openSeams",
+  "origin",
+  "outcome",
+  "pending",
+  "pendingAnalysisChangeKind",
+  "pendingAnalysisRefresh",
+  "pendingChangedSourceCount",
+  "phaseCount",
+  "platform",
+  "process",
+  "productDetailKinds",
+  "productDetails",
+  "productKinds",
+  "products",
+  "profile",
+  "programDeclarationSourceFileCount",
+  "programDefaultLibrarySourceFileCount",
+  "programNodeModuleSourceFileCount",
+  "programProjectSourceFileCount",
+  "programSourceFileCount",
+  "programSourceTextCharacters",
+  "projectId",
+  "projectionOnly",
+  "provenance",
+  "queryClaims",
+  "queryTypeProjection",
+  "reason",
+  "recentTerminalCount",
+  "recentTerminals",
+  "recordKinds",
+  "registered",
+  "requestCurrentnessRefreshes",
+  "requestEpoch",
+  "requests",
+  "retainedAnswerBytes",
+  "retainedAnswerHits",
+  "retainedAnswerValues",
+  "retainedRecordLimit",
+  "retainedRecords",
+  "retentionKind",
+  "retirementFailureCount",
+  "retiringWorkspaceCount",
+  "rootRecords",
+  "rssBytes",
+  "rssOtherBytes",
+  "runtimeQueryClaims",
+  "schemaVersion",
+  "semanticSession",
+  "semanticTokenRefreshRequests",
+  "sequence",
+  "shutdown",
+  "shuttingDown",
+  "sourceTextCharacterLimit",
+  "sourceTextCharacters",
+  "sourceTextInvalidatedFileCount",
+  "sourceTextInvalidations",
+  "stale",
+  "staleFacts",
+  "started",
+  "staticCatalog",
+  "status",
+  "succeeded",
+  "suggestedClearPolicy",
+  "suggestedClearSourceTextCharacters",
+  "supersededRevisionEvictions",
+  "templateAnalysisBreadth",
+  "topologyInvalidatedFileCount",
+  "topologyInvalidations",
+  "topPhases",
+  "totalDurationMilliseconds",
+  "totalMilliseconds",
+  "totalRecords",
+  "trackedOpenDocumentCount",
+  "trackedTaskCount",
+  "typeSystemAcquisitionKind",
+  "typeSystemAcquisitionMilliseconds",
+  "typeSystemConstructionMilliseconds",
+  "typeSystemDependencyCache",
+  "typeSystemProjectCount",
+  "underlyingStale",
+  "uptimeMilliseconds",
+  "v8DetachedContextCount",
+  "v8ExternalMemoryBytes",
+  "v8HeapAvailableBytes",
+  "v8HeapPhysicalBytes",
+  "v8MallocedMemoryBytes",
+  "v8NativeContextCount",
+  "v8PeakMallocedMemoryBytes",
+  "watchedFileBatches",
+  "workspaceConfigured",
+  "workspaceGeneration",
+  "workspaceKernel",
+  "writes",
+  "writeSourceTextCharacters",
+] as const;
 
 function projectWorkerEvent(
   record: WorkerEventRecord,
@@ -405,8 +850,8 @@ function projectWorkerEvent(
 ): Readonly<Record<string, unknown>> {
   const base = {
     recordedAt: record.recordedAt,
-    clientId: identities.id("language-client", record.clientId),
-    clientNameId: identities.id("language-client-name", record.clientName),
+    clientId: identities.id("language-client", record.clientIdDigest),
+    clientNameId: identities.id("language-client-name", record.clientNameDigest),
     type: record.event.type,
   };
   switch (record.event.type) {
@@ -414,21 +859,15 @@ function projectWorkerEvent(
       return base;
     case "stdout":
     case "stderr":
-      return {
-        ...base,
-        characterCount: record.event.text.length,
-        lineCount: lineCount(record.event.text),
-      };
+      return { ...base, characterCount: record.event.characterCount, lineCount: record.event.lineCount };
     case "error":
       return {
         ...base,
         error: {
           name: record.event.error.name,
           code: errorCode(record.event.error),
-          message: sanitizeLogLine(
-            boundedText(record.event.error.message, MAX_ERROR_MESSAGE_CHARACTERS),
-            identities,
-          ),
+          messageKind: record.event.error.messageKind,
+          messageCharacterCount: record.event.error.messageCharacterCount,
         },
       };
     case "exit":
@@ -436,6 +875,53 @@ function projectWorkerEvent(
     case "force-terminate":
       return { ...base, graceMilliseconds: record.event.graceMilliseconds };
   }
+}
+
+function projectWorkerEventAtIngress(event: WorkerTransportEvent): WorkerEventEvidence {
+  switch (event.type) {
+    case "online":
+      return { type: event.type };
+    case "stdout":
+    case "stderr":
+      return {
+        type: event.type,
+        characterCount: event.text.length,
+        lineCount: lineCount(event.text),
+      };
+    case "error": {
+      const code = safeWorkerErrorCode(errorCode(event.error));
+      return {
+        type: event.type,
+        error: {
+          name: /^[A-Za-z][A-Za-z0-9_.-]{0,99}$/.test(event.error.name) ? event.error.name : "Error",
+          code,
+          messageKind: code === "ERR_WORKER_OUT_OF_MEMORY"
+            || /(?:heap out of memory|reaching memory limit)/iu.test(event.error.message)
+            ? "worker-out-of-memory"
+            : "other",
+          messageCharacterCount: event.error.message.length,
+        },
+      };
+    }
+    case "exit":
+      return { type: event.type, code: event.code };
+    case "force-terminate":
+      return { type: event.type, graceMilliseconds: event.graceMilliseconds };
+  }
+}
+
+function safeWorkerErrorCode(code: string | number | null): string | number | null {
+  if (typeof code === "number") return Number.isSafeInteger(code) ? code : null;
+  return typeof code === "string" && /^[A-Z][A-Z0-9_]{0,63}$/.test(code) ? code : null;
+}
+
+function privateIngressIdentity(key: Uint8Array, kind: string, value: string): string {
+  return createHmac("sha256", key)
+    .update(kind)
+    .update("\0")
+    .update(value)
+    .digest("hex")
+    .slice(0, 20);
 }
 
 function sanitizeLogLine(line: string, identities: SupportReportIdentities): string {
@@ -458,15 +944,15 @@ function sanitizeLogLine(line: string, identities: SupportReportIdentities): str
     (value) => `<${identities.id("uri", value)}>`,
   );
   result = result.replace(
-    /\b[A-Za-z]:[\\/][^\s"'`<>|),;]*/gu,
+    /\b[A-Za-z]:[\\/][^\r\n"'`<>|]*/gu,
     (value) => `<${identities.id("path", value)}>`,
   );
   result = result.replace(
-    /\\\\[^\s"'`<>|),;]+/gu,
+    /\\\\[^\r\n"'`<>|]*/gu,
     (value) => `<${identities.id("path", value)}>`,
   );
   result = result.replace(
-    /(^|[\s(])\/(?!\/)[^\s"'`<>|),;]+/gu,
+    /(^|[\s(])\/(?!\/)[^\r\n"'`<>|]*/gu,
     (_value, prefix: string) => `${prefix}<${identities.id("path", _value.slice(prefix.length))}>`,
   );
   result = result.replace(

@@ -6,6 +6,7 @@ import {
   handleResourceInventory,
   handleTemplateResourceAvailability,
 } from "../../src/handlers/custom.js";
+import { mapRuntimeAnswer } from "../../src/mapping/resource-discovery.js";
 import {
   createContextTestOperation,
   testAnalysisGeneration,
@@ -18,6 +19,17 @@ const componentUri = pathToFileURL(componentPath).toString();
 const sourceText = "class ProductCard {}";
 
 describe("resource discovery protocol boundary", () => {
+  test("preserves template analysis breadth in runtime answer transport", () => {
+    expect(mapRuntimeAnswer({
+      ...answer({}),
+      analysisDepth: "binding-observation",
+      templateAnalysisBreadth: "resource-local",
+    } as never)).toMatchObject({
+      analysisDepth: "binding-observation",
+      templateAnalysisBreadth: "resource-local",
+    });
+  });
+
   test("queries every explicit app project and preserves partial project failure", async () => {
     const first = project("first", workspaceRoot);
     const second = project("second", path.join(workspaceRoot, "nested"));
