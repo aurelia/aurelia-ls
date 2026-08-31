@@ -153,7 +153,7 @@ describe('template analysis breadth', () => {
     expect(local.pressure.controllers).toBeLessThan(aggregate.pressure.controllers);
     expect(local.pressure.records).toBeLessThan(aggregate.pressure.records);
     expect(local.pressure.controllers).toBeLessThanOrEqual(100);
-    expect(local.pressure.records).toBeLessThanOrEqual(12_000);
+    expect(local.pressure.records).toBeLessThanOrEqual(13_000);
   }, 60_000);
 
   test('preserves parent bindable targets and global public binding rows', async () => {

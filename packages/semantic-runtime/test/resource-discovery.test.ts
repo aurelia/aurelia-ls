@@ -38,10 +38,10 @@ describe('resource discovery', () => {
       workspaceRoot: fixtureRoot,
       storeKey: 'resource-discovery-inventory',
     });
-    await runtime.answerAppQuery({
-      kind: SemanticAppQueryKind.Summary,
+    await runtime.openApp({
+      analysisDepth: 'runtime-topology',
+      templateAnalysisBreadth: 'resource-local',
       includeAuthoringTemplates: true,
-      appRetention: 'retain-app',
     });
     const memberValueAccess = vi.spyOn(CheckerTypeShapeAccess.prototype, 'memberValueAccess');
     const first = await resourceInventory(runtime);
@@ -481,6 +481,11 @@ describe('resource discovery', () => {
       workspaceRoot: fixtureRoot,
       storeKey: 'resource-discovery-ambiguous-scope',
     });
+    await runtime.openApp({
+      analysisDepth: 'runtime-topology',
+      templateAnalysisBreadth: 'resource-local',
+      includeAuthoringTemplates: true,
+    });
 
     const answer = await templateAvailability(runtime, templateFile, '<template>');
 
@@ -500,6 +505,7 @@ describe('resource discovery', () => {
     memberValueAccess.mockClear();
     const richMissingCursor = await runtime.answerAppQuery({
       kind: SemanticAppQueryKind.TemplateResourceAvailability,
+      templateAnalysisBreadth: 'resource-local',
       includeTypeSurfaces: true,
       includeAuthoringTemplates: true,
       appRetention: 'retain-app',
@@ -627,10 +633,10 @@ describe('resource discovery', () => {
       workspaceRoot: fixtureRoot,
       storeKey: 'resource-discovery-inventory-paging',
     });
-    await runtime.answerAppQuery({
-      kind: SemanticAppQueryKind.Summary,
+    await runtime.openApp({
+      analysisDepth: 'runtime-topology',
+      templateAnalysisBreadth: 'resource-local',
       includeAuthoringTemplates: true,
-      appRetention: 'retain-app',
     });
     const memberValueAccess = vi.spyOn(CheckerTypeShapeAccess.prototype, 'memberValueAccess');
 
@@ -698,9 +704,10 @@ describe('resource discovery', () => {
       workspaceRoot: fixtureRoot,
       storeKey: 'resource-definitions-projection-lazy-paging',
     });
-    await runtime.answerAppQuery({
-      kind: SemanticAppQueryKind.Summary,
-      appRetention: 'retain-app',
+    await runtime.openApp({
+      analysisDepth: 'runtime-topology',
+      templateAnalysisBreadth: 'resource-local',
+      includeAuthoringTemplates: false,
     });
     const memberValueAccess = vi.spyOn(CheckerTypeShapeAccess.prototype, 'memberValueAccess');
 

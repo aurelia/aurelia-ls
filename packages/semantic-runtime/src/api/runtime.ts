@@ -73,6 +73,12 @@ import {
 } from '../type-system/project.js';
 import { TypeSystemProjectComputationService } from '../type-system/project-computation.js';
 import type { TemplateResourceCompilationEmission } from '../template/template-compilation-project-pass.js';
+import { CustomElementDefinition } from '../resources/custom-element-definition.js';
+import type { FullResourceDefinition } from '../resources/resource-definition.js';
+import {
+  templateCompilerCompileState,
+  TemplateCompilerCompileState,
+} from '../template/compiler-world.js';
 import type {
   CheckerExpressionTypeEvaluationCacheStats,
 } from '../type-system/expression-type-evaluation.js';
@@ -3948,6 +3954,7 @@ export class SemanticApp {
     const appCompilationsSatisfyRequest = authoredTemplateSourceFileRequestSatisfiedByCompilations(
       this.runtime.workspace.store,
       emission.templates.frontDoor.appCompilations,
+      emission.resourceIndex.entries.map((entry) => entry.definition),
       authoringTemplateSourceFiles,
     );
     if (appCompilationsSatisfyRequest) {
@@ -7597,22 +7604,43 @@ function authoringTemplateSourceFileRequestSatisfied(
 function authoredTemplateSourceFileRequestSatisfiedByCompilations(
   store: KernelStore,
   compilations: readonly TemplateResourceCompilationEmission[],
+  definitions: readonly FullResourceDefinition[],
   requestedSourceFiles: readonly string[],
 ): boolean {
   if (requestedSourceFiles.length === 0) {
     return false;
   }
-  const compiledSourceFiles = compilations.flatMap((compilation) => {
-    const source = compilation.unit.templateSource;
-    const sourceFile = sourceFileAddressForAddress(
-      store,
-      source.sourceAddressHandle ?? source.templateAddressHandle,
-    );
-    return sourceFile == null ? [] : [sourceFile.path];
+  const appOwnerHandles = new Set(compilations.map((compilation) => compilation.familyOwnerHandle));
+  return requestedSourceFiles.every((requested) => {
+    const requestedOwnerHandles = definitions.flatMap((definition) => {
+      if (
+        !(definition instanceof CustomElementDefinition)
+        || templateCompilerCompileState(definition) !== TemplateCompilerCompileState.Compiled
+        || !customElementDefinitionBelongsToSourceFile(store, definition, requested)
+      ) {
+        return [];
+      }
+      const ownerHandle = definition.identityHandle ?? definition.productHandle;
+      return ownerHandle == null ? [] : [ownerHandle];
+    });
+    return requestedOwnerHandles.length > 0
+      && requestedOwnerHandles.every((ownerHandle) => appOwnerHandles.has(ownerHandle));
   });
-  return requestedSourceFiles.every((requested) =>
-    compiledSourceFiles.some((compiled) => sameTypeSystemSourcePath(compiled, requested))
-  );
+}
+
+function customElementDefinitionBelongsToSourceFile(
+  store: KernelStore,
+  definition: CustomElementDefinition,
+  requestedSourceFile: string,
+): boolean {
+  return [
+    definition.template?.addressHandle ?? null,
+    definition.sourceAddressHandle,
+    definition.target.addressHandle,
+  ].some((handle) => {
+    const sourceFile = sourceFileAddressForAddress(store, handle);
+    return sourceFile != null && sameTypeSystemSourcePath(sourceFile.path, requestedSourceFile);
+  });
 }
 
 function authoringTemplateLimitSatisfied(
