@@ -33,10 +33,20 @@ const stateFormRoot = path.resolve(
   'packages/semantic-runtime/fixtures/pressure/app-pattern-state-backed-form',
 );
 const stateFormTemplatePath = path.resolve(stateFormRoot, 'src/components/state-backed-form.html');
+const builtInTemplateControllerRoot = path.resolve(
+  repositoryRoot,
+  'packages/semantic-runtime/fixtures/pressure/template-controller-built-ins',
+);
+const builtInTemplateControllerPath = path.resolve(
+  builtInTemplateControllerRoot,
+  'src/template-controller-built-ins-app.html',
+);
 let handoff: TemplateCompilerCompiledHandoffValue;
 let sourceText: string;
 let stateFormHandoff: TemplateCompilerCompiledHandoffValue;
 let stateFormSourceText: string;
+let builtInTemplateControllerHandoff: TemplateCompilerCompiledHandoffValue;
+let builtInTemplateControllerSourceText: string;
 
 beforeAll(async () => {
   const runtime = await createSemanticRuntime({
@@ -95,6 +105,37 @@ beforeAll(async () => {
   }
 }, 45_000);
 
+beforeAll(async () => {
+  const runtime = await createSemanticRuntime({
+    workspaceRoot: builtInTemplateControllerRoot,
+    projectDiscovery: 'single-root',
+    storeKey: 'aot-compiler-patch-module-emitter-built-in-template-controllers',
+  });
+  try {
+    const app = await runtime.openApp({
+      analysisDepth: 'runtime-topology',
+      includeAuthoringTemplates: true,
+      telemetry: { inquiryProfile: 'aot' },
+    });
+    const batch = materializeSemanticAppTemplateCompilerHandoffs({
+      app,
+      templateSourcePaths: [builtInTemplateControllerPath],
+      includeAuthoringResources: true,
+    });
+    const resource = batch.resources.find((candidate) =>
+      candidate.value?.resourceName === 'template-controller-built-ins-app'
+    );
+    if (resource?.state !== TemplateCompilerCompiledHandoffState.Exact) {
+      throw new Error(resource?.reasons.map((reason) => reason.summary).join(' ') ?? 'No built-in-TC handoff.');
+    }
+    builtInTemplateControllerHandoff = resource.value;
+    builtInTemplateControllerSourceText = await readFile(builtInTemplateControllerPath, 'utf8');
+    app.requireCurrent();
+  } finally {
+    runtime.retireWorkspaceIncarnation();
+  }
+}, 30_000);
+
 describe('AOT compiler patch module emitter', () => {
   it('shares the carrier transform runtime module contract', () => {
     expect(AOT_COMPILER_PATCH_RUNTIME_MODULE_ID).toBe(AOT_RUNTIME_MODULE_SPECIFIER);
@@ -122,6 +163,25 @@ describe('AOT compiler patch module emitter', () => {
     expect(artifact.needsCompile).toBe(false);
     expect(artifact.code).toContain('export default $definition0;');
   });
+
+  it('emits and imports exact built-in template-controller array repeat wires', async () => {
+    const artifact = new AotCompilerPatchModuleEmitter().emit({
+      handoff: builtInTemplateControllerHandoff,
+      projectRoot: builtInTemplateControllerRoot,
+      sourcePath: builtInTemplateControllerPath,
+      sourceText: builtInTemplateControllerSourceText,
+    });
+    expect(artifact.needsCompile).toBe(false);
+    expect(artifact.code.match(/ArrayDestructuring/gu)).toHaveLength(3);
+    expect(artifact.code.match(/DestructuringAssignmentLeaf/gu)).toHaveLength(6);
+    expect(artifact.code).toContain('void 0');
+
+    const imported = await importPatchModule(artifact.code, artifact.digest);
+    expect(imported.needsCompile).toBe(false);
+    const serialized = JSON.stringify(imported.instructions);
+    expect(serialized.match(/ArrayDestructuring/gu)).toHaveLength(3);
+    expect(serialized).toContain('"value":2');
+  }, 20_000);
 
   it('emits only compiler-owned root fields while retaining complete generated definitions', async () => {
     const pressuredHandoff = withAuthoredExecutableMetadata(handoff);
