@@ -27,8 +27,13 @@ export async function runBrowserBatch(
   jitUrl: string,
   aotUrl: string,
   scenario: AssuranceScenario,
+  launch: { readonly executablePath?: string; readonly args?: readonly string[] } = {},
 ): Promise<BrowserBatchResult> {
-  const browser = await chromium.launch({ headless: true });
+  const browser = await chromium.launch({
+    headless: true,
+    ...(launch.executablePath == null ? {} : { executablePath: launch.executablePath }),
+    ...(launch.args == null ? {} : { args: [...launch.args] }),
+  });
   try {
     const jit = await runLane(browser, 'jit', jitUrl, scenario);
     const aot = await runLane(browser, 'aot', aotUrl, scenario);

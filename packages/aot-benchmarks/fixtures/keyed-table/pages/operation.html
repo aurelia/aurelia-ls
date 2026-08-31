@@ -1,0 +1,15 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <title>Aurelia keyed-table operation</title>
+  </head>
+  <body>
+    <keyed-table-app></keyed-table-app>
+    <script type="module">
+      import { runKeyedTableBenchmarkPage } from './keyed-table-page-harness.js';
+
+      await runKeyedTableBenchmarkPage(new URLSearchParams(location.search).get('operation'));
+    </script>
+  </body>
+</html>

@@ -17,5 +17,13 @@ export type {
   StateBackedFormObservation,
 } from './contract.js';
 
-export { runAssurance, type RunAssuranceOptions } from './run.js';
+export {
+  assertScenarioBrowserEvidence,
+  assertScenarioBuildEvidence,
+  runAssurance,
+  type RunAssuranceOptions,
+} from './run.js';
+export { runBrowserBatch, type BrowserBatchResult } from './browser.js';
+export { StaticBuildServer } from './server.js';
+export { assertAotBuildEvidence } from './evidence.js';
 export { createAotAssuranceAdapter } from './aot-adapter.js';

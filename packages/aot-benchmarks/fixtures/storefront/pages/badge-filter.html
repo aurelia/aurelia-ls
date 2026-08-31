@@ -1,0 +1,38 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Storefront seasonal badge filter 500 to 125</title>
+<script type="module">
+  import {
+    appendStorefrontHost,
+    assertFullStorefront,
+    assertSeasonalStorefront,
+    dispatchSelectChange,
+    loadStorefrontVariant,
+    publishDurationMeasurement,
+    readImmediateUsedJsHeap,
+    seasonalFilterSelect,
+    settleStorefrontList,
+  } from './storefront-page-harness.js';
+
+  const module = await loadStorefrontVariant();
+  const host = appendStorefrontHost();
+  const aurelia = module.createStorefrontBenchmarkApplication(host);
+  await aurelia.start();
+  await settleStorefrontList(module, aurelia, host, 500);
+  assertFullStorefront(aurelia, host);
+  const select = seasonalFilterSelect(host);
+
+  performance.mark('storefront-badge-filter-start');
+  dispatchSelectChange(select);
+  await settleStorefrontList(module, aurelia, host, 125);
+  performance.mark('storefront-badge-filter-end');
+
+  const usedJSHeapSizeBytes = readImmediateUsedJsHeap();
+  assertSeasonalStorefront(aurelia, host);
+  publishDurationMeasurement(
+    'storefront-badge-filter-500',
+    'storefront-badge-filter-start',
+    'storefront-badge-filter-end',
+    usedJSHeapSizeBytes,
+  );
+</script>

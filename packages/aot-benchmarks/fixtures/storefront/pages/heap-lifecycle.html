@@ -1,0 +1,43 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Storefront heap lifecycle 500</title>
+<script type="module">
+  import {
+    appendStorefrontHost,
+    assertFullStorefront,
+    loadStorefrontVariant,
+    measureUsedJsHeapAfterGc,
+    settleStorefrontList,
+    stopStorefront,
+  } from './storefront-page-harness.js';
+
+  const module = await loadStorefrontVariant();
+
+  async function runLifecycle(measureLiveHeap) {
+    let host = appendStorefrontHost();
+    let aurelia = module.createStorefrontBenchmarkApplication(host);
+    await aurelia.start();
+    await settleStorefrontList(module, aurelia, host, 500);
+    assertFullStorefront(aurelia, host);
+
+    const liveApplicationUsedJSHeapAfterGcBytes = measureLiveHeap
+      ? await measureUsedJsHeapAfterGc()
+      : undefined;
+
+    await stopStorefront(module, aurelia, host);
+    aurelia = host = undefined;
+    return liveApplicationUsedJSHeapAfterGcBytes;
+  }
+
+  for (let cycle = 0; cycle < 2; cycle++) {
+    await runLifecycle(false);
+    await measureUsedJsHeapAfterGc();
+  }
+
+  const liveApplicationUsedJSHeapAfterGcBytes = await runLifecycle(true);
+  const postTeardownUsedJSHeapAfterGcBytes = await measureUsedJsHeapAfterGc();
+  globalThis.heapLifecycle = {
+    liveApplicationUsedJSHeapAfterGcBytes,
+    postTeardownUsedJSHeapAfterGcBytes,
+  };
+</script>

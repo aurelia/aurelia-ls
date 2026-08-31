@@ -1,0 +1,29 @@
+{
+  "$schema": "https://raw.githubusercontent.com/Polymer/tachometer/master/config.schema.json",
+  "root": "..",
+  
+  "benchmarks": [
+    {
+      "browser": {
+        "name": "chrome",
+        "headless": true,
+        "addArguments": ["--enable-precise-memory-info"]
+      },
+      "measurement": [
+        { "name": "perf", "mode": "performance", "entryName": "update-1k" },
+        { "name": "used JS heap", "mode": "expression", "expression": "window.usedJSHeapSizeBytes" }
+      ],
+      "expand": [
+        {
+          "name": "update 1k base",
+          "url": "update1k.html?variant=base"
+        },
+        {
+          "name": "update 1k candidate",
+          "url": "update1k.html?variant=candidate"
+        }
+      ]
+    }
+  ],
+  "timeout": 0.15
+}

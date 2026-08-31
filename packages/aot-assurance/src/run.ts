@@ -60,32 +60,8 @@ export async function runAssurance(options: RunAssuranceOptions): Promise<Assura
     const aotUrl = await aotServer.start();
     browserBatch = await runBrowserBatch(jitUrl, aotUrl, scenario);
 
-    if (scenario === 'g0') {
-      assertG0Expectations(browserBatch.jit);
-      assertG0Expectations(browserBatch.aot);
-      assertProbePolicy(browserBatch.jit, browserBatch.aot);
-    } else if (scenario === 'hello-world') {
-      assertHelloWorldBuildEvidence(builds.aotEvidence);
-      assertHelloWorldExpectations(browserBatch.jit);
-      assertHelloWorldExpectations(browserBatch.aot);
-    } else if (scenario === 'local-templates') {
-      assertLocalTemplatesBuildEvidence(builds.aotEvidence);
-      assertLocalTemplatesExpectations(browserBatch.jit);
-      assertLocalTemplatesExpectations(browserBatch.aot);
-    } else if (scenario === 'routed-storefront') {
-      assertRoutedStorefrontBuildEvidence(builds.aotEvidence);
-      assertRoutedStorefrontExpectations(browserBatch.jit);
-      assertRoutedStorefrontExpectations(browserBatch.aot);
-    } else if (scenario === 'state-backed-form') {
-      assertStateBackedFormBuildEvidence(builds.aotEvidence);
-      assertStateBackedFormExpectations(browserBatch.jit);
-      assertStateBackedFormExpectations(browserBatch.aot);
-    } else {
-      assertProjectsAndMilestonesBuildEvidence(builds.aotEvidence);
-      assertProjectsAndMilestonesExpectations(browserBatch.jit);
-      assertProjectsAndMilestonesExpectations(browserBatch.aot);
-    }
-    assertSemanticParity(browserBatch.jit.semantic, browserBatch.aot.semantic);
+    assertScenarioBuildEvidence(scenario, builds.aotEvidence);
+    assertScenarioBrowserEvidence(scenario, browserBatch);
 
     const receipt: AssuranceReceipt = {
       scenario,
@@ -105,6 +81,44 @@ export async function runAssurance(options: RunAssuranceOptions): Promise<Assura
     await Promise.allSettled([jitServer.close(), aotServer.close()]);
     await builds.close();
   }
+}
+
+export function assertScenarioBuildEvidence(
+  scenario: AssuranceScenario,
+  evidence: AssuranceReceipt['aot'],
+): void {
+  if (scenario === 'hello-world') assertHelloWorldBuildEvidence(evidence);
+  else if (scenario === 'local-templates') assertLocalTemplatesBuildEvidence(evidence);
+  else if (scenario === 'routed-storefront') assertRoutedStorefrontBuildEvidence(evidence);
+  else if (scenario === 'state-backed-form') assertStateBackedFormBuildEvidence(evidence);
+  else if (scenario === 'projects-and-milestones') assertProjectsAndMilestonesBuildEvidence(evidence);
+}
+
+export function assertScenarioBrowserEvidence(
+  scenario: AssuranceScenario,
+  browserBatch: BrowserBatchResult,
+): void {
+    if (scenario === 'g0') {
+      assertG0Expectations(browserBatch.jit);
+      assertG0Expectations(browserBatch.aot);
+      assertProbePolicy(browserBatch.jit, browserBatch.aot);
+    } else if (scenario === 'hello-world') {
+      assertHelloWorldExpectations(browserBatch.jit);
+      assertHelloWorldExpectations(browserBatch.aot);
+    } else if (scenario === 'local-templates') {
+      assertLocalTemplatesExpectations(browserBatch.jit);
+      assertLocalTemplatesExpectations(browserBatch.aot);
+    } else if (scenario === 'routed-storefront') {
+      assertRoutedStorefrontExpectations(browserBatch.jit);
+      assertRoutedStorefrontExpectations(browserBatch.aot);
+    } else if (scenario === 'state-backed-form') {
+      assertStateBackedFormExpectations(browserBatch.jit);
+      assertStateBackedFormExpectations(browserBatch.aot);
+    } else {
+      assertProjectsAndMilestonesExpectations(browserBatch.jit);
+      assertProjectsAndMilestonesExpectations(browserBatch.aot);
+    }
+    assertSemanticParity(browserBatch.jit.semantic, browserBatch.aot.semantic);
 }
 
 function defaultFixtureRoot(scenario: AssuranceScenario): string {

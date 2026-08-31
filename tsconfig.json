@@ -5,6 +5,7 @@
     { "path": "packages/aot" },
     { "path": "packages/aot-vite" },
     { "path": "packages/aot-assurance" },
+    { "path": "packages/aot-benchmarks" },
     { "path": "packages/language-server" },
     { "path": "packages/vscode" },
     { "path": "packages/patterns" },

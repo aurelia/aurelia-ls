@@ -1,0 +1,38 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Storefront list to detail 500</title>
+<script type="module">
+  import {
+    appendStorefrontHost,
+    assertFullStorefront,
+    assertStorefrontDetail,
+    loadStorefrontVariant,
+    nominatedDetailLink,
+    publishDurationMeasurement,
+    readImmediateUsedJsHeap,
+    settleStorefrontDetail,
+    settleStorefrontList,
+  } from './storefront-page-harness.js';
+
+  const module = await loadStorefrontVariant();
+  const host = appendStorefrontHost();
+  const aurelia = module.createStorefrontBenchmarkApplication(host);
+  await aurelia.start();
+  await settleStorefrontList(module, aurelia, host, 500);
+  assertFullStorefront(aurelia, host);
+  const detailLink = nominatedDetailLink(host);
+
+  performance.mark('storefront-list-to-detail-start');
+  detailLink.click();
+  await settleStorefrontDetail(module, host);
+  performance.mark('storefront-list-to-detail-end');
+
+  const usedJSHeapSizeBytes = readImmediateUsedJsHeap();
+  assertStorefrontDetail(aurelia, host);
+  publishDurationMeasurement(
+    'storefront-list-to-detail-500',
+    'storefront-list-to-detail-start',
+    'storefront-list-to-detail-end',
+    usedJSHeapSizeBytes,
+  );
+</script>

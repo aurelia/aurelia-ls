@@ -1,0 +1,31 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Storefront activation and render 500</title>
+<script type="module">
+  import {
+    appendStorefrontHost,
+    assertFullStorefront,
+    loadStorefrontVariant,
+    publishDurationMeasurement,
+    readImmediateUsedJsHeap,
+    settleStorefrontList,
+  } from './storefront-page-harness.js';
+
+  const module = await loadStorefrontVariant();
+  const host = appendStorefrontHost();
+  const aurelia = module.createStorefrontBenchmarkApplication(host);
+
+  performance.mark('storefront-activation-render-start');
+  await aurelia.start();
+  await settleStorefrontList(module, aurelia, host, 500);
+  performance.mark('storefront-activation-render-end');
+
+  const usedJSHeapSizeBytes = readImmediateUsedJsHeap();
+  assertFullStorefront(aurelia, host);
+  publishDurationMeasurement(
+    'storefront-activation-render-500',
+    'storefront-activation-render-start',
+    'storefront-activation-render-end',
+    usedJSHeapSizeBytes,
+  );
+</script>
