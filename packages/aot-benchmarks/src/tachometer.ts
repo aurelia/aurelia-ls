@@ -40,6 +40,7 @@ export interface TachometerScenarioRequest {
 
 export async function writeTachometerScenarioConfig(request: TachometerScenarioRequest): Promise<void> {
   await mkdir(path.dirname(request.configPath), { recursive: true });
+  const pageUrl = pageUrlFromConfig(request);
   const variants = request.order === 'jit-aot'
     ? ([{ role: 'base', mode: 'jit' }, { role: 'candidate', mode: 'aot' }] as const)
     : request.order === 'aot-jit'
@@ -68,11 +69,25 @@ export async function writeTachometerScenarioConfig(request: TachometerScenarioR
       measurement: request.measurements,
       expand: variants.map(variant => ({
         name: `${request.scenarioId} ${variant.role}`,
-        url: `${request.pagePath}${request.pagePath.includes('?') ? '&' : '?'}variant=${variant.role}&buildMode=${variant.mode}&order=${request.order}`,
+        url: `${pageUrl}${pageUrl.includes('?') ? '&' : '?'}variant=${variant.role}&buildMode=${variant.mode}&order=${request.order}`,
       })),
     }],
   };
   await writeFile(request.configPath, `${JSON.stringify(config, null, 2)}\n`, 'utf8');
+}
+
+function pageUrlFromConfig(request: TachometerScenarioRequest): string {
+  const queryIndex = request.pagePath.indexOf('?');
+  const pagePath = queryIndex === -1 ? request.pagePath : request.pagePath.slice(0, queryIndex);
+  const query = queryIndex === -1 ? '' : request.pagePath.slice(queryIndex);
+  const browserRoot = path.resolve(request.browserRoot);
+  const absolutePage = path.resolve(browserRoot, ...pagePath.split('/'));
+  const withinRoot = path.relative(browserRoot, absolutePage);
+  if (withinRoot.startsWith('..') || path.isAbsolute(withinRoot)) {
+    throw new Error(`Tachometer page '${request.pagePath}' is outside its browser root.`);
+  }
+  const fromConfig = path.relative(path.dirname(path.resolve(request.configPath)), absolutePage);
+  return `${fromConfig.replaceAll('\\', '/')}${query}`;
 }
 
 export async function runTachometerScenario(request: TachometerScenarioRequest): Promise<void> {
