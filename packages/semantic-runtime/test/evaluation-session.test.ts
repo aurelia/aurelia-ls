@@ -744,6 +744,96 @@ describe('static evaluation sessions', () => {
     expect(classValue.properties.get('instance')?.value).toBe(instance);
   });
 
+  test('does not rescan a produced graph that is already owned by the same session', () => {
+    const source = ts.createSourceFile(
+      'src/already-owned.ts',
+      'const value = 1;',
+      ts.ScriptTarget.Latest,
+      true,
+      ts.ScriptKind.TS,
+    );
+    const properties = new IterationCountingMap<string, EvaluationObjectProperty>();
+    const child = new EvaluationObjectValue(new Map(), false, source);
+    const root = new EvaluationObjectValue(properties, false, source);
+    properties.set('child', property('child', child, source));
+    const graph = new StaticEvaluationSessionFork({});
+
+    expect(graph.retainProduced(root)).toBe(root);
+    expect(evaluationValueGraphOwner(root)).toBe(graph);
+    expect(evaluationValueGraphOwner(child)).toBe(graph);
+    expect(properties.iterations).toBe(1);
+
+    properties.resetIterations();
+    expect(graph.retainProduced(root)).toBe(root);
+    expect(properties.iterations).toBe(0);
+
+    const wrapper = new EvaluationObjectValue(new Map([
+      ['root', property('root', root, source)],
+    ]), false, source);
+    expect(graph.retainProduced(wrapper)).toBe(wrapper);
+    expect(evaluationValueGraphOwner(wrapper)).toBe(graph);
+    expect(properties.iterations).toBe(0);
+  });
+
+  test('still normalizes foreign children when an owned graph crosses the external boundary', () => {
+    const source = ts.createSourceFile(
+      'src/owned-external.ts',
+      'const value = 1;',
+      ts.ScriptTarget.Latest,
+      true,
+      ts.ScriptKind.TS,
+    );
+    const graph = new StaticEvaluationSessionFork({});
+    const root = graph.retainProduced(new EvaluationObjectValue(new Map(), false, source));
+    const foreign = new EvaluationObjectValue(new Map(), false, source);
+    root.properties.set('foreign', property('foreign', foreign, source));
+
+    const adopted = graph.adoptExternal(root);
+    const child = adopted.properties.get('foreign')?.value ?? null;
+
+    expect(adopted).toBe(root);
+    expect(child).not.toBe(foreign);
+    expect(child == null ? null : evaluationValueGraphOwner(child)).toBe(graph);
+    expect(evaluationValueGraphOwner(foreign)).toBeNull();
+  });
+
+  test('can omit invocation snapshots for value-only follow-up evaluation', () => {
+    const source = ts.createSourceFile(
+      'src/value-only-follow-up.ts',
+      [
+        'const values = [1, 2];',
+        'function doubled() { return values.map(value => value * 2); }',
+      ].join('\n'),
+      ts.ScriptTarget.Latest,
+      true,
+      ts.ScriptKind.TS,
+    );
+    let metadataTransfers = 0;
+    const runtimeHost: StaticEvaluationRuntimeHost = {
+      transferValueMetadata: () => {
+        metadataTransfers += 1;
+      },
+    };
+    const original = new StaticEvaluator(undefined, runtimeHost).evaluateSourceFile(source);
+    const session = new StaticEvaluationSessionFork(original.runtimeHost).forkModuleEvaluation(original);
+    const doubled = requireValueKind(
+      session.environment.readValue('doubled'),
+      EvaluationValueKind.Function,
+    );
+    metadataTransfers = 0;
+
+    const result = new StaticEvaluator(session.policy, session.runtimeHost, {
+      captureExecutionTopology: false,
+    }).evaluateFunctionValue(doubled, doubled.declaration, session.moduleKey, []);
+    const values = requireValueKind(result.value, EvaluationValueKind.Array);
+
+    expect(values.elements.map((element) =>
+      element.value.kind === EvaluationValueKind.Number ? element.value.value : null
+    )).toEqual([2, 4]);
+    expect(result.executionTopology.events).toEqual([]);
+    expect(metadataTransfers).toBe(0);
+  });
+
   test('preserves runtime-host semantic identities on cloned values', () => {
     const source = ts.createSourceFile(
       'src/configuration.ts',
@@ -1271,6 +1361,19 @@ function property(
   node: ts.Node,
 ): EvaluationObjectProperty {
   return new EvaluationObjectProperty(name, value, node, EvaluationObjectPropertyState.Closed);
+}
+
+class IterationCountingMap<TKey, TValue> extends Map<TKey, TValue> {
+  iterations = 0;
+
+  override [Symbol.iterator]() {
+    this.iterations += 1;
+    return super[Symbol.iterator]();
+  }
+
+  resetIterations(): void {
+    this.iterations = 0;
+  }
 }
 
 function aureliaImportValues(source: ts.SourceFile): Map<string, EvaluationValueEvidence> {

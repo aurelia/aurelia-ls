@@ -485,7 +485,13 @@ export class StaticEvaluationSessionFork implements StaticEvaluationForkLineage 
     if (owner != null && owner !== this) {
       throw new Error('Evaluator produced a value already owned by another mutable graph.');
     }
-    ownEvaluationValue(value, this);
+    // Values already owned by this session have crossed the produced-value boundary before. Evaluator-local writes
+    // retain or adopt their inputs before installing them, so walking that complete reachable graph again cannot add
+    // ownership information. External runtime-host writes use adoptExternal/reconcileEnvironmentAfterExternal, whose
+    // full normalization remains the boundary that repairs foreign children introduced outside the evaluator.
+    if (owner === this) {
+      return value;
+    }
     return this.normalizeRetainedValue(
       value,
       StaticEvaluationGraphRetentionKind.Produced,
@@ -532,6 +538,13 @@ export class StaticEvaluationSessionFork implements StaticEvaluationForkLineage 
       return value;
     }
     const mapped = this.values.get(value);
+    const retained = (mapped ?? value) as TValue;
+    if (
+      retention === StaticEvaluationGraphRetentionKind.Produced
+      && evaluationValueBelongsToGraph(retained, this)
+    ) {
+      return retained;
+    }
     if (mapped != null) {
       return this.normalizeRetainedValue(mapped, retention, values, environments) as TValue;
     }
@@ -649,6 +662,9 @@ export class StaticEvaluationSessionFork implements StaticEvaluationForkLineage 
       return;
     }
     const owner = environment.readGraphOwner();
+    if (retention === StaticEvaluationGraphRetentionKind.Produced && owner === this) {
+      return;
+    }
     if (owner == null && retention === StaticEvaluationGraphRetentionKind.Produced) {
       environment.adoptGraphOwner(this);
     } else if (owner !== this) {

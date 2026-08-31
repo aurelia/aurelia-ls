@@ -174,7 +174,12 @@ export class RuntimeBindingSourceEvaluationFrame {
       const runtimeHost = this.activationSession == null
         ? source.evaluation.runtimeHost
         : this.activationSession.runtimeHostFor(source.evaluation.runtimeHost, () => this.activeContainer);
-      evaluator = new StaticEvaluator(source.evaluation.policy, runtimeHost);
+      evaluator = new StaticEvaluator(source.evaluation.policy, runtimeHost, {
+        // Binding-source readers consume values, pressure, and abrupt completion only. Baseline project evaluation
+        // already owns invocation topology for configuration/DI/router consumers, so cloning complete receiver graphs
+        // for transient template getter and repeat reads adds no evidence at this boundary.
+        captureExecutionTopology: false,
+      });
       this.evaluatorsByModuleKey.set(moduleKey, evaluator);
     }
     return evaluator;

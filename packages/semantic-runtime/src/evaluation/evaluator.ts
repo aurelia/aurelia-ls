@@ -307,6 +307,11 @@ export interface StaticEvaluationRuntimeHost extends StaticEvaluationRuntimeHost
   readonly graphIsolatedBranchOperations?: StaticEvaluationRuntimeHostOperations;
 }
 
+export interface StaticEvaluatorOptions {
+  /** Retain immutable invocation/branch evidence for consumers such as configuration and DI recognition. */
+  readonly captureExecutionTopology?: boolean;
+}
+
 interface StaticInvocationPreparationEvidence {
   readonly identity: StaticInvocationFrame['identity'];
   readonly reference: StaticInvocationReference;
@@ -474,6 +479,7 @@ export class StaticEvaluator {
   constructor(
     readonly policy: StaticEvaluationPolicy = DefaultStaticEvaluationPolicy,
     readonly runtimeHost: StaticEvaluationRuntimeHost = DefaultStaticEvaluationRuntimeHost,
+    readonly options: StaticEvaluatorOptions = {},
   ) {}
 
   /** Evaluate one TypeScript source file as an ECMAScript module body. */
@@ -2138,6 +2144,9 @@ export class StaticEvaluator {
     frame: StaticInvocationFrame<TNode>,
     evaluate: () => EvaluationValue,
   ): EvaluationValue {
+    if (this.options.captureExecutionTopology === false) {
+      return evaluate();
+    }
     const ordinal = this.nextExecutionOrdinal++;
     const pressureCheckpoint = this.causalOpenSeams.length;
     const preparation = this.snapshotInvocationPreparation(frame);
@@ -2197,6 +2206,9 @@ export class StaticEvaluator {
     reference: StaticInvocationReference,
     argumentList: EvaluationArgumentList,
   ): void {
+    if (this.options.captureExecutionTopology === false) {
+      return;
+    }
     const preparation = this.snapshotInvocationPreparation({
       identity: new StaticInvocationIdentity(),
       reference,
@@ -3014,21 +3026,23 @@ export class StaticEvaluator {
     if (joined == null) {
       return null;
     }
-    this.executionEvents.push(new StaticConditionalExecution(
-      this.nextExecutionOrdinal++,
-      expression,
-      moduleKey,
-      condition,
-      branchSeam,
-      joined.leftExecutionTopology,
-      joined.rightExecutionTopology,
-    ));
+    if (this.options.captureExecutionTopology !== false) {
+      this.executionEvents.push(new StaticConditionalExecution(
+        this.nextExecutionOrdinal++,
+        expression,
+        moduleKey,
+        condition,
+        branchSeam,
+        joined.leftExecutionTopology,
+        joined.rightExecutionTopology,
+      ));
+    }
     this.replayOpenSeams(joined.openSeams);
     return joined.value;
   }
 
   private branchEvaluator(runtimeHost: StaticEvaluationRuntimeHost): StaticEvaluator {
-    const evaluator = new StaticEvaluator(this.policy, runtimeHost);
+    const evaluator = new StaticEvaluator(this.policy, runtimeHost, this.options);
     evaluator.executionBudget = this.executionBudget;
     return evaluator;
   }
@@ -3362,6 +3376,9 @@ export class StaticEvaluator {
   }
 
   private orderedExecutionTopologySince(index: number): StaticEvaluationExecutionTopology {
+    if (this.options.captureExecutionTopology === false) {
+      return StaticEvaluationExecutionTopology.Empty;
+    }
     return new StaticEvaluationExecutionTopology(
       this.executionEvents.slice(index).sort((left, right) => left.ordinal - right.ordinal),
     );
