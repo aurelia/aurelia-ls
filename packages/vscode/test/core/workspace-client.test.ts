@@ -572,6 +572,206 @@ describe("AureliaLanguageClient workspace ownership", () => {
     }
   });
 
+  test("retains a client-free factory failure for scoped template recovery", async () => {
+    vi.useFakeTimers();
+    try {
+      const workspaceUri = "file:///work/app";
+      const { vscode, recorded } = createVscodeApi({
+        workspaceFolders: [{ name: "app", uri: workspaceUri }],
+        files: {
+          [`${workspaceUri}/package.json`]: JSON.stringify({ dependencies: { aurelia: "latest" } }),
+        },
+      });
+      const harness = createClientHarness(new Map([
+        [workspaceUri, workspaceStatus("app-world")],
+      ]));
+      const createClient = harness.createClient.getMockImplementation()!;
+      harness.createClient
+        .mockImplementationOnce(() => { throw new Error("factory unavailable"); })
+        .mockImplementation(createClient);
+      const manager = createManager(vscode, harness);
+
+      await manager.start(stubExtensionContext(vscode));
+
+      expect(harness.clients).toEqual([]);
+      expect(manager.sessions).toEqual([]);
+      expect(manager.semanticSessionStateForUri(`${workspaceUri}/src/app.html`))
+        .toBe(AureliaSemanticSessionState.Unavailable);
+      expect(manager.supportState((kind) => `${kind}:test`)).toMatchObject({
+        lifecycle: { clientFreeRecoveryCount: 1 },
+        sessionCount: 0,
+        sessions: [],
+      });
+
+      recorded.fireDocumentChanged({
+        uri: vscode.Uri.parse(`${workspaceUri}/src/app.html`),
+        languageId: "html",
+      } as never);
+      await vi.advanceTimersByTimeAsync(0);
+      await vi.waitFor(() => expect(harness.clients).toHaveLength(1));
+      await vi.waitFor(() => expect(manager.sessions).toEqual([
+        expect.objectContaining({ client: harness.clients[0]?.raw, availability: "active" }),
+      ]));
+
+      await manager.stop();
+    } finally {
+      vi.clearAllTimers();
+      vi.useRealTimers();
+    }
+  });
+
+  test("restores an unconsumed circuit attempt after scoped reconciliation rejects", async () => {
+    vi.useFakeTimers();
+    try {
+      const workspaceUri = "file:///work/app";
+      const { vscode, recorded } = createVscodeApi({
+        workspaceFolders: [{ name: "app", uri: workspaceUri }],
+        files: {
+          [`${workspaceUri}/package.json`]: JSON.stringify({ dependencies: { aurelia: "latest" } }),
+        },
+      });
+      const harness = createClientHarness(new Map([
+        [workspaceUri, workspaceStatus("app-world")],
+      ]), {
+        clientStart: (_uri, clientIndex) => clientIndex < 3
+          ? Promise.reject(new Error("Worker terminated during startup"))
+          : undefined,
+      });
+      const manager = createManager(vscode, harness);
+      await manager.start(stubExtensionContext(vscode));
+      await vi.advanceTimersByTimeAsync(0);
+      await vi.waitFor(() => expect(harness.clients).toHaveLength(2));
+      await vi.advanceTimersByTimeAsync(2_000);
+      await vi.waitFor(() => expect(harness.clients).toHaveLength(3));
+      expect(manager.supportState((kind) => `${kind}:test`).sessions[0]?.recovery.phase)
+        .toBe("circuit-open");
+
+      const getConfiguration = vscode.workspace.getConfiguration.bind(vscode.workspace);
+      let configurationReads = 0;
+      Object.assign(vscode.workspace, {
+        getConfiguration: (...args: Parameters<typeof getConfiguration>) => {
+          configurationReads += 1;
+          if (configurationReads > 1) throw new Error("injected recovery reconciliation failure");
+          return getConfiguration(...args);
+        },
+      });
+      recorded.fireDocumentChanged({
+        uri: vscode.Uri.parse(`${workspaceUri}/src/app.html`),
+        languageId: "html",
+      } as never);
+      await vi.advanceTimersByTimeAsync(0);
+      await vi.waitFor(() => expect(
+        manager.supportState((kind) => `${kind}:test`).sessions[0]?.recovery.phase,
+      ).toBe("circuit-open"));
+      expect(configurationReads).toBeGreaterThan(1);
+      expect(harness.clients).toHaveLength(3);
+
+      Object.assign(vscode.workspace, { getConfiguration });
+      await vi.advanceTimersByTimeAsync(10_000);
+      recorded.fireDocumentChanged({
+        uri: vscode.Uri.parse(`${workspaceUri}/src/app.html`),
+        languageId: "html",
+      } as never);
+      await vi.advanceTimersByTimeAsync(0);
+      await vi.waitFor(() => expect(harness.clients).toHaveLength(4));
+      await vi.waitFor(() => expect(manager.sessions).toEqual([
+        expect.objectContaining({ client: harness.clients[3]?.raw, availability: "active" }),
+      ]));
+
+      await manager.stop();
+    } finally {
+      vi.clearAllTimers();
+      vi.useRealTimers();
+    }
+  });
+
+  test("keeps an unavailable workspace recovery isolated from a disjoint slow root", async () => {
+    vi.useFakeTimers();
+    try {
+      const workspaceA = "file:///work/a";
+      const workspaceB = "file:///work/b";
+      const { vscode, recorded } = createVscodeApi({
+        workspaceFolders: [
+          { name: "a", uri: workspaceA },
+          { name: "b", uri: workspaceB },
+        ],
+        files: {
+          [`${workspaceA}/package.json`]: JSON.stringify({ dependencies: { aurelia: "latest" } }),
+          [`${workspaceB}/package.json`]: JSON.stringify({ dependencies: { aurelia: "latest" } }),
+        },
+      });
+      let workspaceAAttempts = 0;
+      const harness = createClientHarness(new Map([
+        [workspaceA, workspaceStatus("app-world")],
+        [workspaceB, workspaceStatus("app-world")],
+      ]), {
+        clientStart: (workspaceUri) => workspaceUri === workspaceA && workspaceAAttempts++ < 3
+          ? Promise.reject(new Error("workspace A Worker failed"))
+          : undefined,
+      });
+      const manager = createManager(vscode, harness);
+      await manager.start(stubExtensionContext(vscode));
+      const workspaceBClient = harness.clients.find((client) => client.workspaceUri === workspaceB)!;
+      await vi.advanceTimersByTimeAsync(0);
+      await vi.advanceTimersByTimeAsync(2_000);
+      await vi.waitFor(() => expect(workspaceAAttempts).toBe(3));
+      expect(manager.sessions).toEqual([
+        expect.objectContaining({ client: workspaceBClient.raw, availability: "active" }),
+      ]);
+
+      workspaceBClient.sendRequest.mockReset();
+      workspaceBClient.sendRequest.mockImplementation(() => new Promise<never>(() => undefined));
+      recorded.fireDocumentChanged({
+        uri: vscode.Uri.parse(`${workspaceA}/src/app.html`),
+        languageId: "html",
+      } as never);
+      await vi.advanceTimersByTimeAsync(0);
+      await vi.waitFor(() => expect(manager.sessions).toHaveLength(2));
+
+      expect(manager.sessions).toEqual(expect.arrayContaining([
+        expect.objectContaining({ workspace: expect.objectContaining({ uri: workspaceA }) }),
+        expect.objectContaining({ client: workspaceBClient.raw, workspace: expect.objectContaining({ uri: workspaceB }) }),
+      ]));
+      expect(workspaceBClient.sendRequest).not.toHaveBeenCalled();
+
+      await manager.stop();
+    } finally {
+      vi.clearAllTimers();
+      vi.useRealTimers();
+    }
+  });
+
+  test("cancels client-free recovery timers during shutdown", async () => {
+    vi.useFakeTimers();
+    try {
+      const workspaceUri = "file:///work/app";
+      const { vscode } = createVscodeApi({
+        workspaceFolders: [{ name: "app", uri: workspaceUri }],
+        files: {
+          [`${workspaceUri}/package.json`]: JSON.stringify({ dependencies: { aurelia: "latest" } }),
+        },
+      });
+      const harness = createClientHarness(new Map([
+        [workspaceUri, workspaceStatus("app-world")],
+      ]));
+      harness.createClient.mockImplementation(() => {
+        throw new Error("factory remains unavailable");
+      });
+      const manager = createManager(vscode, harness);
+
+      await manager.start(stubExtensionContext(vscode));
+      expect(vi.getTimerCount()).toBeGreaterThan(0);
+      await manager.stop();
+      expect(vi.getTimerCount()).toBe(0);
+
+      await vi.advanceTimersByTimeAsync(60_000);
+      expect(harness.createClient).toHaveBeenCalledOnce();
+    } finally {
+      vi.clearAllTimers();
+      vi.useRealTimers();
+    }
+  });
+
   test("uses native config to recover and retain a session without an app world", async () => {
     const { vscode, recorded } = createVscodeApi({
       workspaceFolders: [{ name: "candidate", uri: "file:///work/candidate" }],

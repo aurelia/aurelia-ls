@@ -105,6 +105,7 @@ export interface AureliaLanguageClientSupportState {
     readonly pendingTopologyChangeCount: number;
     readonly retiringClientCount: number;
     readonly transitioningClientCount: number;
+    readonly clientFreeRecoveryCount: number;
   };
   readonly sessionCount: number;
   readonly sessions: readonly AureliaLanguageClientSupportSessionState[];
@@ -148,7 +149,9 @@ interface ClientRestartControl {
 type WorkspaceRecoveryPhase = "restarting" | "stabilizing" | "backoff" | "attempting" | "circuit-open";
 
 interface WorkspaceRecoveryState {
-  session: AureliaLanguageClientSession;
+  session: AureliaLanguageClientSession | null;
+  folder: WorkspaceFolder;
+  excludedFolders: readonly WorkspaceFolder[];
   consecutiveFailureCount: number;
   lastFailureAt: number;
   phase: WorkspaceRecoveryPhase;
@@ -409,6 +412,8 @@ export class AureliaLanguageClient {
         pendingTopologyChangeCount: this.#pendingTopologyChanges.size,
         retiringClientCount: this.#retirements.size,
         transitioningClientCount: this.#transitioningSemanticScopes.size,
+        clientFreeRecoveryCount: [...this.#workspaceRecoveries.values()]
+          .filter((recovery) => recovery.session == null).length,
       }),
       sessionCount: sessions.length,
       sessions: Object.freeze(sessions.map((session) => Object.freeze(session))),
@@ -438,14 +443,11 @@ export class AureliaLanguageClient {
       return AureliaSemanticSessionState.Active;
     }
     const target = typeof uri === "string" ? this.#vscode.Uri.parse(uri) : uri;
-    const unavailable = [...this.#sessions.values()]
-      .filter((session) =>
-        session.availability === "unavailable"
-        && workspaceFolderContainsUri(session.folder, target)
-        && !session.excludedFolders.some((folder) => workspaceFolderContainsUri(folder, target))
-      )
-      .sort((left, right) => right.folder.uri.fsPath.length - left.folder.uri.fsPath.length)[0];
-    if (unavailable != null) {
+    if (this.#unavailableSessionForUri(target) != null) {
+      return AureliaSemanticSessionState.Unavailable;
+    }
+    const clientFreeRecovery = this.#workspaceRecoveryForUri(target);
+    if (clientFreeRecovery != null && clientFreeRecovery.session == null) {
       return AureliaSemanticSessionState.Unavailable;
     }
     const transitioningSessions = new Map<LanguageClient, AureliaLanguageClientSession>();
@@ -769,9 +771,9 @@ export class AureliaLanguageClient {
     ) {
       return;
     }
-    const session = this.#unavailableSessionForUri(document.uri);
-    if (session == null) return;
-    this.#armWorkspaceRecovery(session.workspace.key, "source document activity");
+    const recovery = this.#workspaceRecoveryForUri(document.uri);
+    if (recovery == null) return;
+    this.#armWorkspaceRecovery(workspaceFolderKey(recovery.folder), "source document activity");
   }
 
   #unavailableSessionForUri(uri: Uri): AureliaLanguageClientSession | null {
@@ -780,6 +782,16 @@ export class AureliaLanguageClient {
         session.availability === "unavailable"
         && workspaceFolderContainsUri(session.folder, uri)
         && !session.excludedFolders.some((folder) => workspaceFolderContainsUri(folder, uri))
+      )
+      .sort((left, right) => right.folder.uri.fsPath.length - left.folder.uri.fsPath.length)[0]
+      ?? null;
+  }
+
+  #workspaceRecoveryForUri(uri: Uri): WorkspaceRecoveryState | null {
+    return [...this.#workspaceRecoveries.values()]
+      .filter((recovery) =>
+        workspaceFolderContainsUri(recovery.folder, uri)
+        && !recovery.excludedFolders.some((folder) => workspaceFolderContainsUri(folder, uri))
       )
       .sort((left, right) => right.folder.uri.fsPath.length - left.folder.uri.fsPath.length)[0]
       ?? null;
@@ -926,6 +938,15 @@ export class AureliaLanguageClient {
     };
 
     const admissionKeys = new Set(admissions.map((admission) => workspaceFolderKey(admission.folder)));
+    for (const [workspaceKey, recovery] of this.#workspaceRecoveries) {
+      if (
+        recovery.session == null
+        && (scope == null || scope.workspaceKeys.has(workspaceKey))
+        && !admissionKeys.has(workspaceKey)
+      ) {
+        this.#clearWorkspaceRecovery(workspaceKey);
+      }
+    }
     for (const session of previousSessions.values()) {
       if (scope != null && !scope.workspaceKeys.has(session.workspace.key)) continue;
       if (!admissionKeys.has(session.workspace.key)) {
@@ -979,14 +1000,21 @@ export class AureliaLanguageClient {
       }
 
       let session = nextSessions.get(key);
+      let createdSession = false;
+      const workspaceRecovery = this.#workspaceRecoveries.get(key);
+      if (session == null && workspaceRecovery != null && workspaceRecovery.session == null) {
+        if (workspaceRecovery.phase !== "attempting") {
+          accepted.push(admission);
+          continue;
+        }
+      }
       const unavailableSession = session?.availability === "unavailable" ? session : null;
       if (session?.availability === "restarting") {
         accepted.push(admission);
         continue;
       }
       if (unavailableSession != null) {
-        const recovery = this.#workspaceRecoveries.get(key);
-        if (recovery?.phase !== "attempting") {
+        if (workspaceRecovery?.phase !== "attempting") {
           accepted.push(admission);
           continue;
         }
@@ -1021,16 +1049,37 @@ export class AureliaLanguageClient {
             accepted.push(admission);
             this.#recordWorkspaceFailure(failedSession);
             nextSessions.set(key, this.#publishUnavailableSession(failedSession, false));
+          } else {
+            recoveryStartFailed = true;
+            accepted.push(admission);
+            const recovery = this.#recordClientFreeWorkspaceFailure(
+              admission.folder,
+              excludedFolders,
+            );
+            this.#scheduleWorkspaceRecovery(recovery);
+            const currentUnavailable = nextSessions.get(key);
+            if (currentUnavailable?.availability === "unavailable") {
+              this.#publishSessions(new Map(nextSessions).set(key, { ...currentUnavailable }));
+            }
           }
           this.#logger.warn(`[client] failed to start ${key}: ${errorMessage(error)}`);
         }
-        if (session != null) createdSessions.push(session);
+        if (session != null) {
+          createdSession = true;
+          createdSessions.push(session);
+        }
         if (!this.#isCurrentLifecycle(intent)) {
           rollbackCreatedSessions();
           return;
         }
         if (session == null) {
-          if (unavailableSession != null && !recoveryStartFailed) {
+          if (
+            !recoveryStartFailed
+            && (
+              unavailableSession != null
+              || (workspaceRecovery != null && workspaceRecovery.session == null)
+            )
+          ) {
             nextSessions.delete(key);
             this.#clearWorkspaceRecovery(key);
             this.#publishSessions(new Map(nextSessions));
@@ -1043,7 +1092,6 @@ export class AureliaLanguageClient {
             incarnation: unavailableSession.incarnation + 1,
           };
         }
-        this.#markWorkspaceRunning(session);
       } else if (reconfirmExisting && admission.mode === AureliaActivationMode.Auto) {
         const statusResult = await this.#awaitLifecycle(
           readWorkspaceStatus(
@@ -1088,6 +1136,7 @@ export class AureliaLanguageClient {
       }
       nextSessions.set(key, session);
       this.#publishSessions(new Map(nextSessions));
+      if (createdSession) this.#markWorkspaceRunning(session);
       accepted.push(admission);
     }
 
@@ -1318,6 +1367,8 @@ export class AureliaLanguageClient {
         : 1;
     const recovery: WorkspaceRecoveryState = {
       session,
+      folder: session.folder,
+      excludedFolders: session.excludedFolders,
       consecutiveFailureCount,
       lastFailureAt: now,
       phase: "restarting",
@@ -1325,6 +1376,32 @@ export class AureliaLanguageClient {
       timer: null,
     };
     this.#workspaceRecoveries.set(session.workspace.key, recovery);
+    return recovery;
+  }
+
+  #recordClientFreeWorkspaceFailure(
+    folder: WorkspaceFolder,
+    excludedFolders: readonly WorkspaceFolder[],
+  ): WorkspaceRecoveryState {
+    const workspaceKey = workspaceFolderKey(folder);
+    const now = Date.now();
+    const existing = this.#workspaceRecoveries.get(workspaceKey);
+    if (existing?.timer != null) clearTimeout(existing.timer);
+    const consecutiveFailureCount = existing != null
+      && now - existing.lastFailureAt <= LANGUAGE_CLIENT_FAILURE_WINDOW_MS
+        ? existing.consecutiveFailureCount + 1
+        : 1;
+    const recovery: WorkspaceRecoveryState = {
+      session: existing?.session ?? null,
+      folder,
+      excludedFolders,
+      consecutiveFailureCount,
+      lastFailureAt: now,
+      phase: "restarting",
+      retryNotBefore: 0,
+      timer: null,
+    };
+    this.#workspaceRecoveries.set(workspaceKey, recovery);
     return recovery;
   }
 
@@ -1369,48 +1446,54 @@ export class AureliaLanguageClient {
     if (retireClient) {
       void this.#retireSession(failedSession);
     }
+    this.#scheduleWorkspaceRecovery(recovery);
+    return unavailable;
+  }
 
+  #scheduleWorkspaceRecovery(recovery: WorkspaceRecoveryState): void {
+    const workspaceKey = workspaceFolderKey(recovery.folder);
+    const workspaceUri = recovery.folder.uri.toString();
     if (recovery.consecutiveFailureCount >= LANGUAGE_CLIENT_CIRCUIT_FAILURE_COUNT) {
       recovery.phase = "circuit-open";
       recovery.retryNotBefore = recovery.consecutiveFailureCount === LANGUAGE_CLIENT_CIRCUIT_FAILURE_COUNT
         ? Date.now()
         : Date.now() + LANGUAGE_CLIENT_CIRCUIT_RETRY_THROTTLE_MS;
       this.#logger.error(
-        `[client] server unavailable for ${unavailable.workspace.uri} after `
+        `[client] server unavailable for ${workspaceUri} after `
         + `${recovery.consecutiveFailureCount} rapid failures; edit or reopen an Aurelia source to retry`,
       );
-      return unavailable;
+      return;
     }
 
     const delay = recovery.consecutiveFailureCount === 1
       ? 0
       : LANGUAGE_CLIENT_REPLACEMENT_BACKOFF_MS;
     if (delay === 0) {
-      this.#logger.info(`[client] replacing unavailable server for ${unavailable.workspace.uri}`);
+      this.#logger.info(`[client] replacing unavailable server for ${workspaceUri}`);
     } else {
       this.#logger.warn(
-        `[client] server unavailable for ${unavailable.workspace.uri}; retrying in ${delay}ms`,
+        `[client] server unavailable for ${workspaceUri}; retrying in ${delay}ms`,
       );
     }
     recovery.phase = "backoff";
     recovery.retryNotBefore = Date.now() + delay;
     const timer = setTimeout(() => {
-      if (this.#workspaceRecoveries.get(unavailable.workspace.key) !== recovery) return;
+      if (this.#workspaceRecoveries.get(workspaceKey) !== recovery) return;
       recovery.timer = null;
-      this.#armWorkspaceRecovery(unavailable.workspace.key, "bounded automatic recovery");
+      this.#armWorkspaceRecovery(workspaceKey, "bounded automatic recovery");
     }, delay);
     timer.unref?.();
     recovery.timer = timer;
-    return unavailable;
   }
 
   #armWorkspaceRecovery(workspaceKey: string, reason: string): void {
     if (!this.#acceptingLifecycleRequests) return;
     const recovery = this.#workspaceRecoveries.get(workspaceKey);
     const session = this.#sessions.get(workspaceKey);
+    const publishedUnavailable = session?.availability === "unavailable";
     if (
       recovery == null
-      || session?.availability !== "unavailable"
+      || (!publishedUnavailable && recovery.session != null)
       || recovery.phase === "attempting"
       || Date.now() < recovery.retryNotBefore
     ) {
@@ -1418,14 +1501,84 @@ export class AureliaLanguageClient {
     }
     if (recovery.timer != null) clearTimeout(recovery.timer);
     recovery.timer = null;
+    const fallbackPhase = recovery.phase === "circuit-open" ? "circuit-open" : "backoff";
+    const fallbackDelay = fallbackPhase === "circuit-open"
+      ? LANGUAGE_CLIENT_CIRCUIT_RETRY_THROTTLE_MS
+      : LANGUAGE_CLIENT_REPLACEMENT_BACKOFF_MS;
     recovery.phase = "attempting";
     recovery.retryNotBefore = 0;
-    recovery.session = session;
-    const next = new Map(this.#sessions);
-    next.set(workspaceKey, { ...session });
-    this.#publishSessions(next);
-    this.#logger.info(`[client] retrying unavailable server for ${session.workspace.uri} (${reason})`);
-    this.#requestReconcile({ reconfirmExisting: true });
+    if (publishedUnavailable) {
+      recovery.session = session;
+      const next = new Map(this.#sessions);
+      next.set(workspaceKey, { ...session });
+      this.#publishSessions(next);
+    }
+    this.#logger.info(`[client] retrying unavailable server for ${recovery.folder.uri.toString()} (${reason})`);
+    void this.#runWorkspaceRecoveryAttempt(
+      workspaceKey,
+      recovery,
+      fallbackPhase,
+      fallbackDelay,
+    );
+  }
+
+  async #runWorkspaceRecoveryAttempt(
+    workspaceKey: string,
+    recovery: WorkspaceRecoveryState,
+    fallbackPhase: "backoff" | "circuit-open",
+    fallbackDelay: number,
+  ): Promise<void> {
+    // Recovery is subordinate to the current lifecycle and owns only this workspace. It neither invalidates an
+    // unrelated in-flight reconcile nor spends status reads or withdrawal decisions on disjoint roots.
+    const intent = this.#lifecycleIntent;
+    try {
+      await this.#enqueueTransition(async () => {
+        if (!this.#isCurrentLifecycle(intent)) return;
+        await this.#reconcileSessions(true, intent, {
+          workspaceKeys: new Set([workspaceKey]),
+        });
+      });
+    } catch (error) {
+      this.#logger.warn(
+        `[client] unavailable workspace recovery failed for ${recovery.folder.uri.toString()}: ${errorMessage(error)}`,
+      );
+    } finally {
+      this.#settleWorkspaceRecoveryAttempt(
+        workspaceKey,
+        recovery,
+        fallbackPhase,
+        fallbackDelay,
+      );
+    }
+  }
+
+  #settleWorkspaceRecoveryAttempt(
+    workspaceKey: string,
+    recovery: WorkspaceRecoveryState,
+    fallbackPhase: "backoff" | "circuit-open",
+    fallbackDelay: number,
+  ): void {
+    if (
+      this.#workspaceRecoveries.get(workspaceKey) !== recovery
+      || recovery.phase !== "attempting"
+    ) {
+      return;
+    }
+    const owned = this.#sessions.get(workspaceKey);
+    if (owned?.availability === "active") {
+      this.#markWorkspaceRunning(owned);
+      return;
+    }
+    recovery.phase = fallbackPhase;
+    recovery.retryNotBefore = Date.now() + fallbackDelay;
+    if (owned?.availability === "unavailable") {
+      const next = new Map(this.#sessions);
+      next.set(workspaceKey, { ...owned });
+      this.#publishSessions(next);
+    }
+    this.#logger.warn(
+      `[client] unavailable workspace recovery for ${recovery.folder.uri.toString()} did not consume its attempt`,
+    );
   }
 
   #clearWorkspaceRecovery(workspaceKey: string): void {
