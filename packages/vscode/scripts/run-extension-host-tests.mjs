@@ -2324,7 +2324,7 @@ export function predecessorRaceFact(value, label = "predecessor race") {
     "pendingTreePublicationCount",
     "pendingViewStateCount",
     "invalidated",
-    "released",
+    "cancelled",
     "discarded",
     "successorPublished",
     "predecessorGeneration",
@@ -2416,12 +2416,12 @@ function validateTreeFacts(value, context) {
     blocked,
     invalidated,
   } = resolvePredecessorPendingEvidence(race, context, `${label}.predecessorRace`);
-  const released = resolveLedgerReference(
-    race.released,
-    `${label}.predecessorRace.released`,
+  const cancelled = resolveLedgerReference(
+    race.cancelled,
+    `${label}.predecessorRace.cancelled`,
     context,
     "resource-discovery-host-control",
-    "released",
+    "cancelled",
   );
   const discarded = resolveLedgerReference(
     race.discarded,
@@ -2451,18 +2451,18 @@ function validateTreeFacts(value, context) {
   requireEqual(blocked.event.responseFingerprint, race.predecessorFingerprint, `${label}.predecessorRace.blocked.responseFingerprint`);
   requireEqual(blocked.event.operation, "inventory", `${label}.predecessorRace.blocked.operation`);
   requireEqual(blocked.event.stage, "after-response", `${label}.predecessorRace.blocked.stage`);
-  requireEqual(blocked.event.includeTypeSurfaces, true, `${label}.predecessorRace.blocked.includeTypeSurfaces`);
-  requireEqual(released.event.observationId, blocked.event.observationId, `${label}.predecessorRace control id`);
-  requireEqual(released.event.requestOrdinal, blocked.event.requestOrdinal, `${label}.predecessorRace request ordinal`);
+  requireEqual(blocked.event.includeTypeSurfaces, false, `${label}.predecessorRace.blocked.includeTypeSurfaces`);
+  requireEqual(cancelled.event.observationId, blocked.event.observationId, `${label}.predecessorRace control id`);
+  requireEqual(cancelled.event.requestOrdinal, blocked.event.requestOrdinal, `${label}.predecessorRace request ordinal`);
   requireEqual(discarded.event.reason, "superseded", `${label}.predecessorRace.discarded.reason`);
   requireEqual(discarded.event.generation, race.predecessorGeneration, `${label}.predecessorRace.discarded.generation`);
-  requireEqual(discarded.event.fingerprint, race.predecessorFingerprint, `${label}.predecessorRace.discarded.fingerprint`);
+  requireEqual(discarded.event.fingerprint, null, `${label}.predecessorRace.discarded.fingerprint`);
   requirePositiveInteger(discarded.event.currentGeneration, `${label}.predecessorRace.discarded.currentGeneration`);
   requireEqual(successor.event.generation, race.successorGeneration, `${label}.predecessorRace.successor.generation`);
   requireEqual(successor.event.fingerprint, race.successorFingerprint, `${label}.predecessorRace.successor.fingerprint`);
   requireEqual(successor.event.publicationKind, "current", `${label}.predecessorRace.successor.publicationKind`);
   requireStrictOrdinalOrder(
-    [pendingInvalidated, blocked, invalidated, released, discarded, successor],
+    [pendingInvalidated, blocked, invalidated, cancelled, discarded, successor],
     `${label}.predecessorRace`,
   );
   const latePredecessorPublishes = context.ledgerRecords.filter((record) => (

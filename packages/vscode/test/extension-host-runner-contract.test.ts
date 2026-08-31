@@ -2202,12 +2202,32 @@ describe("Extension Host support runner", () => {
     const { pendingInvalidated: _omitted, ...missingInvalidation } = predecessor;
     expect(() => runner.predecessorRaceFact(missingInvalidation, "predecessor"))
       .toThrow(/fields must be exactly/u);
+    const { cancelled: _cancelled, ...missingCancellation } = predecessor;
+    expect(() => runner.predecessorRaceFact(missingCancellation, "predecessor"))
+      .toThrow(/fields must be exactly/u);
+    expect(() => runner.predecessorRaceFact({
+      ...missingCancellation,
+      released: null,
+    }, "predecessor")).toThrow(/fields must be exactly/u);
     expect(() => runner.predecessorRaceFact({
       ...predecessor,
       extraPendingInvalidated: null,
     }, "predecessor")).toThrow(/fields must be exactly/u);
     expect(() => runner.predecessorRaceFact({ ...predecessor, forged: null }, "predecessor"))
       .toThrow(/fields must be exactly/u);
+
+    const source = readFileSync(runnerPath, "utf8");
+    const validationStart = source.indexOf("function validateTreeFacts(");
+    const validationEnd = source.indexOf("function validateBaselineTreeFacts(", validationStart);
+    expect(validationStart).toBeGreaterThanOrEqual(0);
+    expect(validationEnd).toBeGreaterThan(validationStart);
+    const validation = source.slice(validationStart, validationEnd);
+    expect(validation).toContain("race.cancelled");
+    expect(validation).toContain('"resource-discovery-host-control",\n    "cancelled",');
+    expect(validation).toContain("blocked.event.includeTypeSurfaces, false");
+    expect(validation).toContain("discarded.event.fingerprint, null");
+    expect(validation).toContain("[pendingInvalidated, blocked, invalidated, cancelled, discarded, successor]");
+    expect(validation).not.toContain("race.released");
   });
 
   test("authenticates one-use scoped predecessor pending evidence", async () => {
@@ -3660,7 +3680,7 @@ function runnerPredecessorRaceFact() {
     pendingTreePublicationCount: 0,
     pendingViewStateCount: 0,
     invalidated: null,
-    released: null,
+    cancelled: null,
     discarded: null,
     successorPublished: null,
     predecessorGeneration: 1,
