@@ -91,8 +91,10 @@ export async function runPromotedBaseline(
   const createdAt = new Date().toISOString();
   const revision = await git(repositoryRoot, ['rev-parse', '--short=12', 'HEAD']);
   const runId = `${createdAt.replace(/[-:.TZ]/gu, '')}-${revision}`;
-  const runRoot = path.join(repositoryRoot, '.temp', 'aot-benchmarks', 'runs', runId);
-  await mkdir(runRoot, { recursive: false });
+  const runsRoot = path.join(repositoryRoot, '.temp', 'aot-benchmarks', 'runs');
+  const runRoot = path.join(runsRoot, runId);
+  await mkdir(runsRoot, { recursive: true });
+  await mkdir(runRoot);
 
   const portfolio = createLockedPerformancePortfolio(repositoryRoot);
   const manifest = await persistScenarioManifestIdentity({ manifest: portfolio.manifest, runRoot });
