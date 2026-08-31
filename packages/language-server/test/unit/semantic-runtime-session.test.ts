@@ -1048,10 +1048,10 @@ describe("SemanticRuntimeLspSession", () => {
         headerOnly: 5,
         visibilityOnly: 0,
         localTemplates: 5,
-        excludedCompilerSyntax: 60,
+        excludedCompilerSyntax: 61,
         unnamedDefinitions: 0,
         unresolvedModules: 0,
-        openVisibility: 2,
+        openVisibility: 1,
       },
       rowCount: 606,
     });
