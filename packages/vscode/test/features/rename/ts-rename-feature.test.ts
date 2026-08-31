@@ -124,7 +124,7 @@ function createContext(options: {
   renameResponse?: RenameResponse;
   textDocuments?: StubDocument[];
   ownsDocument?: boolean;
-  sessionState?: "active" | "transitioning" | "unowned";
+  sessionState?: "active" | "transitioning" | "unavailable" | "unowned";
 } = {}) {
   const providers: StubProvider[] = [];
   const selectors: unknown[] = [];
@@ -402,6 +402,17 @@ describe("TsRenameFeature", () => {
       .rejects.toThrow("workspace ownership reconciles");
     await expect(harness.providers[0]?.provideRenameEdits(document, position, "heading"))
       .rejects.toThrow("workspace ownership reconciles");
+    expect(harness.renameFromTs).not.toHaveBeenCalled();
+  });
+
+  test("falls through while the Aurelia Worker circuit is unavailable", async () => {
+    const harness = createContext({ sessionState: "unavailable" });
+    await activateFeature(harness.ctx);
+    const document = createDocument();
+    const position = new StubPosition(2, 11);
+
+    expect(await harness.providers[0]?.prepareRename(document, position)).toBeUndefined();
+    expect(await harness.providers[0]?.provideRenameEdits(document, position, "heading")).toBeUndefined();
     expect(harness.renameFromTs).not.toHaveBeenCalled();
   });
 

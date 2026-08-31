@@ -18,6 +18,7 @@ import type {
   EventEmitter,
   ExtensionContext,
   FileSystemWatcher,
+  TextDocument,
   Uri,
   WorkspaceFolder,
 } from "vscode";
@@ -60,7 +61,8 @@ export interface AureliaLanguageClientSession {
   readonly fileEvents: readonly FileSystemWatcher[];
   /** Manager-owned server-process incarnation; advances when one LanguageClient restarts its Worker. */
   readonly incarnation: number;
-  readonly availability: "active" | "restarting";
+  /** Provider publication state; unavailable retains only bounded recovery/support identity for a retired client. */
+  readonly availability: "active" | "restarting" | "unavailable";
 }
 
 export interface AureliaSupportIdentityProjector {
@@ -83,6 +85,11 @@ export interface AureliaLanguageClientSupportSessionState {
     readonly projectAnalysisCounts: WorkspaceStatusResponse["projectAnalysisCounts"];
     readonly nativeProjectConfigurationCount: number;
     readonly nativeProjectConfigurationDiagnosticCount: number;
+  };
+  readonly recovery: {
+    readonly phase: "healthy" | "restarting" | "stabilizing" | "backoff" | "attempting" | "circuit-open";
+    readonly consecutiveFailureCount: number;
+    readonly automaticRetryScheduled: boolean;
   };
 }
 
@@ -107,6 +114,7 @@ export interface AureliaLanguageClientSupportState {
 export enum AureliaSemanticSessionState {
   Active = "active",
   Transitioning = "transitioning",
+  Unavailable = "unavailable",
   Unowned = "unowned",
 }
 
@@ -131,8 +139,31 @@ type ForceTerminableLanguageClient = LanguageClient & {
 
 interface ClientRestartControl {
   retiring: boolean;
+  automaticRestartUsed: boolean;
+  allowAutomaticRestart: () => boolean;
   delegate: ErrorHandler | null;
   handler: ErrorHandler;
+}
+
+type WorkspaceRecoveryPhase = "restarting" | "stabilizing" | "backoff" | "attempting" | "circuit-open";
+
+interface WorkspaceRecoveryState {
+  session: AureliaLanguageClientSession;
+  consecutiveFailureCount: number;
+  lastFailureAt: number;
+  phase: WorkspaceRecoveryPhase;
+  retryNotBefore: number;
+  timer: ReturnType<typeof setTimeout> | null;
+}
+
+class AureliaLanguageClientStartError extends Error {
+  constructor(
+    readonly unavailableSession: AureliaLanguageClientSession,
+    cause: unknown,
+  ) {
+    super(`Aurelia language-client session failed while starting: ${errorMessage(cause)}`, { cause });
+    this.name = "AureliaLanguageClientStartError";
+  }
 }
 
 export interface AureliaLanguageClientOptions {
@@ -179,6 +210,8 @@ const SCRIPT_LANGUAGE_IDS = new Set([
   "javascriptreact",
 ]);
 
+const TEMPLATE_LANGUAGE_IDS = new Set(["html", "aurelia-html"]);
+
 const ANALYZED_DOCUMENT_LANGUAGE_IDS = [
   "html",
   "aurelia-html",
@@ -195,6 +228,14 @@ const ANALYZED_DOCUMENT_LANGUAGE_IDS = [
 const LANGUAGE_SERVER_SHUTDOWN_TIMEOUT_MS = 30_000;
 const LANGUAGE_SERVER_START_TIMEOUT_MS = 30_000;
 const LANGUAGE_CLIENT_RESTART_GRACE_MS = 250;
+// One isolated failure keeps vscode-languageclient's in-place restart. A second rapid failure replaces the client
+// after a short backoff; the third opens a circuit. The open circuit has no timer and can be retried only by fresh
+// Aurelia source activity, with failed user-triggered attempts throttled so an OOM cannot become a process loop.
+const LANGUAGE_CLIENT_FAILURE_WINDOW_MS = 60_000;
+const LANGUAGE_CLIENT_STABILITY_RESET_MS = 60_000;
+const LANGUAGE_CLIENT_REPLACEMENT_BACKOFF_MS = 2_000;
+const LANGUAGE_CLIENT_CIRCUIT_FAILURE_COUNT = 3;
+const LANGUAGE_CLIENT_CIRCUIT_RETRY_THROTTLE_MS = 10_000;
 const WORKSPACE_STATUS_STALE_RETRY_LIMIT = 2;
 // Keep the runtime module free of a vscode-languageclient value import so the
 // client core remains testable outside the Extension Host. These are the
@@ -268,6 +309,8 @@ export class AureliaLanguageClient {
   readonly #clientRestartControls = new WeakMap<LanguageClient, ClientRestartControl>();
   readonly #stoppedClientRecoveryTimers = new Map<LanguageClient, ReturnType<typeof setTimeout>>();
   readonly #startingClientRecoveryTimers = new Map<LanguageClient, ReturnType<typeof setTimeout>>();
+  readonly #workspaceRecoveries = new Map<string, WorkspaceRecoveryState>();
+  readonly #recordedClientFailures = new WeakSet<LanguageClient>();
   #lifecycleIntent = createLifecycleIntent(0);
   #pendingTopologyChanges = new Map<string, PendingTopologyChange>();
   // A global request dominates later topology-only requests until one current
@@ -316,30 +359,44 @@ export class AureliaLanguageClient {
         });
       }
     }
-    const sessions = [...supportSessions.values()].map(({ session, publication }) => ({
-      workspaceId: identify("workspace", session.workspace.uri),
+    const sessions = [...supportSessions.values()].map(({
+      session,
       publication,
-      activationMode: session.activationMode,
-      activationEvidence: session.activationEvidence,
-      availability: session.availability,
-      incarnation: session.incarnation,
-      clientState: languageClientStateLabel(session.client.state),
-      nativeProjectConfigurationCount: session.nativeProjectConfigurationUris.length,
-      excludedFolderCount: session.excludedFolders.length,
-      projectRootHintCount: session.projectRootHintFolders.length,
-      status: session.status == null
-        ? null
-        : {
-            fingerprintId: identify("semantic-fingerprint", session.status.fingerprint),
-            projectAnalysisCounts: session.status.projectAnalysisCounts.map((row) => ({ ...row })),
-            nativeProjectConfigurationCount: session.status.nativeProjectConfigurations.rows.length,
-            nativeProjectConfigurationDiagnosticCount:
-              session.status.nativeProjectConfigurations.rows.reduce(
-                (count, row) => count + row.diagnosticCount,
-                0,
-              ),
-          },
-    })).sort((left, right) => left.workspaceId.localeCompare(right.workspaceId));
+    }): AureliaLanguageClientSupportSessionState => {
+      const recovery = this.#workspaceRecoveries.get(session.workspace.key);
+      return {
+        workspaceId: identify("workspace", session.workspace.uri),
+        publication,
+        activationMode: session.activationMode,
+        activationEvidence: session.activationEvidence,
+        availability: session.availability,
+        incarnation: session.incarnation,
+        clientState: languageClientStateLabel(session.client.state),
+        nativeProjectConfigurationCount: session.nativeProjectConfigurationUris.length,
+        excludedFolderCount: session.excludedFolders.length,
+        projectRootHintCount: session.projectRootHintFolders.length,
+        status: session.status == null
+          ? null
+          : {
+              fingerprintId: identify("semantic-fingerprint", session.status.fingerprint),
+              projectAnalysisCounts: session.status.projectAnalysisCounts.map((row) => ({ ...row })),
+              nativeProjectConfigurationCount: session.status.nativeProjectConfigurations.rows.length,
+              nativeProjectConfigurationDiagnosticCount:
+                session.status.nativeProjectConfigurations.rows.reduce(
+                  (count, row) => count + row.diagnosticCount,
+                  0,
+                ),
+            },
+        recovery: {
+          phase: recovery?.phase ?? "healthy",
+          consecutiveFailureCount: Math.min(
+            recovery?.consecutiveFailureCount ?? 0,
+            LANGUAGE_CLIENT_CIRCUIT_FAILURE_COUNT,
+          ),
+          automaticRetryScheduled: recovery?.timer != null && recovery.phase === "backoff",
+        },
+      };
+    }).sort((left, right) => left.workspaceId.localeCompare(right.workspaceId));
     return Object.freeze({
       status: "available",
       lifecycle: Object.freeze({
@@ -381,6 +438,16 @@ export class AureliaLanguageClient {
       return AureliaSemanticSessionState.Active;
     }
     const target = typeof uri === "string" ? this.#vscode.Uri.parse(uri) : uri;
+    const unavailable = [...this.#sessions.values()]
+      .filter((session) =>
+        session.availability === "unavailable"
+        && workspaceFolderContainsUri(session.folder, target)
+        && !session.excludedFolders.some((folder) => workspaceFolderContainsUri(folder, target))
+      )
+      .sort((left, right) => right.folder.uri.fsPath.length - left.folder.uri.fsPath.length)[0];
+    if (unavailable != null) {
+      return AureliaSemanticSessionState.Unavailable;
+    }
     const transitioningSessions = new Map<LanguageClient, AureliaLanguageClientSession>();
     for (const session of this.#sessions.values()) {
       if (session.availability === "restarting") transitioningSessions.set(session.client, session);
@@ -567,10 +634,16 @@ export class AureliaLanguageClient {
     this.#pendingTopologyChanges.clear();
     this.#pendingGlobalReconciliation = false;
     this.#latestTopologyFingerprintByClient.clear();
+    for (const recovery of this.#workspaceRecoveries.values()) {
+      if (recovery.timer != null) clearTimeout(recovery.timer);
+    }
+    this.#workspaceRecoveries.clear();
     const sessions = [...this.#sessions.values()];
     this.#publishSessions(new Map());
     for (const session of sessions) {
-      void this.#retireSession(session);
+      if (session.availability !== "unavailable") {
+        void this.#retireSession(session);
+      }
     }
     await this.#enqueueTransition(async () => {
       await this.#drainRetirements();
@@ -621,6 +694,7 @@ export class AureliaLanguageClient {
       this.#requestReconcile({ reconfirmExisting: true });
     }));
     lifecycle.push(this.#vscode.workspace.onDidOpenTextDocument((document) => {
+      this.#requestUnavailableRecoveryForDocument(document);
       if (
         SCRIPT_LANGUAGE_IDS.has(document.languageId)
         && !this.#isDisabledUri(document.uri)
@@ -629,7 +703,11 @@ export class AureliaLanguageClient {
         this.#scheduleSourceAdmission();
       }
     }));
+    lifecycle.push(this.#vscode.workspace.onDidChangeTextDocument((event) => {
+      this.#requestUnavailableRecoveryForDocument(event.document);
+    }));
     lifecycle.push(this.#vscode.workspace.onDidSaveTextDocument((document) => {
+      this.#requestUnavailableRecoveryForDocument(document);
       const session = this.sessionForUri(document.uri);
       if (
         SCRIPT_LANGUAGE_IDS.has(document.languageId)
@@ -682,6 +760,29 @@ export class AureliaLanguageClient {
       this.#sourceAdmissionTimer = null;
       this.#requestReconcile({ reconfirmExisting: true });
     }, 300);
+  }
+
+  #requestUnavailableRecoveryForDocument(document: Pick<TextDocument, "languageId" | "uri">): void {
+    if (
+      (!TEMPLATE_LANGUAGE_IDS.has(document.languageId) && !SCRIPT_LANGUAGE_IDS.has(document.languageId))
+      || this.#isDisabledUri(document.uri)
+    ) {
+      return;
+    }
+    const session = this.#unavailableSessionForUri(document.uri);
+    if (session == null) return;
+    this.#armWorkspaceRecovery(session.workspace.key, "source document activity");
+  }
+
+  #unavailableSessionForUri(uri: Uri): AureliaLanguageClientSession | null {
+    return [...this.#sessions.values()]
+      .filter((session) =>
+        session.availability === "unavailable"
+        && workspaceFolderContainsUri(session.folder, uri)
+        && !session.excludedFolders.some((folder) => workspaceFolderContainsUri(folder, uri))
+      )
+      .sort((left, right) => right.folder.uri.fsPath.length - left.folder.uri.fsPath.length)[0]
+      ?? null;
   }
 
   #isDisabledUri(uri: Uri): boolean {
@@ -818,7 +919,10 @@ export class AureliaLanguageClient {
         nextSessions.delete(session.workspace.key);
         this.#publishSessions(new Map(nextSessions));
       }
-      void this.#retireSession(session);
+      this.#clearWorkspaceRecovery(session.workspace.key);
+      if (session.availability !== "unavailable") {
+        void this.#retireSession(session);
+      }
     };
 
     const admissionKeys = new Set(admissions.map((admission) => workspaceFolderKey(admission.folder)));
@@ -875,6 +979,19 @@ export class AureliaLanguageClient {
       }
 
       let session = nextSessions.get(key);
+      const unavailableSession = session?.availability === "unavailable" ? session : null;
+      if (session?.availability === "restarting") {
+        accepted.push(admission);
+        continue;
+      }
+      if (unavailableSession != null) {
+        const recovery = this.#workspaceRecoveries.get(key);
+        if (recovery?.phase !== "attempting") {
+          accepted.push(admission);
+          continue;
+        }
+        session = undefined;
+      }
       if (
         session != null
         && (
@@ -886,6 +1003,7 @@ export class AureliaLanguageClient {
         session = undefined;
       }
       if (session == null) {
+        let recoveryStartFailed = false;
         try {
           session = await this.#createStartedSession(
             admission,
@@ -894,6 +1012,16 @@ export class AureliaLanguageClient {
             intent,
           ) ?? undefined;
         } catch (error) {
+          if (error instanceof AureliaLanguageClientStartError) {
+            recoveryStartFailed = true;
+            const failedSession = {
+              ...error.unavailableSession,
+              incarnation: (unavailableSession?.incarnation ?? 0) + 1,
+            };
+            accepted.push(admission);
+            this.#recordWorkspaceFailure(failedSession);
+            nextSessions.set(key, this.#publishUnavailableSession(failedSession, false));
+          }
           this.#logger.warn(`[client] failed to start ${key}: ${errorMessage(error)}`);
         }
         if (session != null) createdSessions.push(session);
@@ -901,7 +1029,21 @@ export class AureliaLanguageClient {
           rollbackCreatedSessions();
           return;
         }
-        if (session == null) continue;
+        if (session == null) {
+          if (unavailableSession != null && !recoveryStartFailed) {
+            nextSessions.delete(key);
+            this.#clearWorkspaceRecovery(key);
+            this.#publishSessions(new Map(nextSessions));
+          }
+          continue;
+        }
+        if (unavailableSession != null) {
+          session = {
+            ...session,
+            incarnation: unavailableSession.incarnation + 1,
+          };
+        }
+        this.#markWorkspaceRunning(session);
       } else if (reconfirmExisting && admission.mode === AureliaActivationMode.Auto) {
         const statusResult = await this.#awaitLifecycle(
           readWorkspaceStatus(
@@ -982,7 +1124,9 @@ export class AureliaLanguageClient {
     let client: LanguageClient | undefined;
     let start: Promise<void> | undefined;
     let startCompleted = false;
-    const restartControl = createClientRestartControl();
+    const key = workspaceFolderKey(admission.folder);
+    const restartControl = createClientRestartControl(() =>
+      this.#workspaceMayUseAutomaticRestart(key));
     const middlewareClient = {
       get client() {
         return client;
@@ -1021,7 +1165,6 @@ export class AureliaLanguageClient {
         middlewareClient,
       ),
     };
-    const key = workspaceFolderKey(admission.folder);
     const workspace: AureliaWorkspaceIdentity = {
       key,
       name: admission.folder.name,
@@ -1104,6 +1247,22 @@ export class AureliaLanguageClient {
       };
       return session;
     } catch (error) {
+      const unavailableSession: AureliaLanguageClientSession | null = client == null
+        ? null
+        : {
+            workspace,
+            folder: admission.folder,
+            client,
+            activationMode: admission.mode,
+            activationEvidence: admission.evidence,
+            nativeProjectConfigurationUris: admission.nativeProjectConfigurationUris,
+            status: null,
+            excludedFolders,
+            projectRootHintFolders,
+            fileEvents: [],
+            incarnation: 1,
+            availability: "unavailable",
+          };
       if (client != null) {
         if (start != null && !startCompleted) {
           this.#retireAfterStart(client, start, fileEvents, workspace.uri, 0);
@@ -1112,6 +1271,9 @@ export class AureliaLanguageClient {
         }
       }
       disposeWatchers(fileEvents, this.#logger, workspace.uri);
+      if (unavailableSession != null) {
+        throw new AureliaLanguageClientStartError(unavailableSession, error);
+      }
       throw error;
     }
   }
@@ -1134,6 +1296,142 @@ export class AureliaLanguageClient {
     ].map((glob) => this.#vscode.workspace.createFileSystemWatcher(
       new this.#vscode.RelativePattern(folder, glob),
     ));
+  }
+
+  #workspaceMayUseAutomaticRestart(workspaceKey: string): boolean {
+    const recovery = this.#workspaceRecoveries.get(workspaceKey);
+    if (recovery == null) return true;
+    const withinFailureWindow = Date.now() - recovery.lastFailureAt <= LANGUAGE_CLIENT_FAILURE_WINDOW_MS;
+    const nextFailureCount = withinFailureWindow
+      ? recovery.consecutiveFailureCount + 1
+      : 1;
+    return nextFailureCount < 2;
+  }
+
+  #recordWorkspaceFailure(session: AureliaLanguageClientSession): WorkspaceRecoveryState {
+    const now = Date.now();
+    const existing = this.#workspaceRecoveries.get(session.workspace.key);
+    if (existing?.timer != null) clearTimeout(existing.timer);
+    const consecutiveFailureCount = existing != null
+      && now - existing.lastFailureAt <= LANGUAGE_CLIENT_FAILURE_WINDOW_MS
+        ? existing.consecutiveFailureCount + 1
+        : 1;
+    const recovery: WorkspaceRecoveryState = {
+      session,
+      consecutiveFailureCount,
+      lastFailureAt: now,
+      phase: "restarting",
+      retryNotBefore: 0,
+      timer: null,
+    };
+    this.#workspaceRecoveries.set(session.workspace.key, recovery);
+    return recovery;
+  }
+
+  #markWorkspaceRunning(session: AureliaLanguageClientSession): void {
+    const recovery = this.#workspaceRecoveries.get(session.workspace.key);
+    if (recovery == null) return;
+    if (recovery.timer != null) clearTimeout(recovery.timer);
+    recovery.session = session;
+    recovery.phase = "stabilizing";
+    recovery.retryNotBefore = 0;
+    const timer = setTimeout(() => {
+      if (
+        this.#workspaceRecoveries.get(session.workspace.key) !== recovery
+        || this.#sessions.get(session.workspace.key)?.client !== session.client
+        || this.#sessions.get(session.workspace.key)?.availability !== "active"
+      ) {
+        return;
+      }
+      recovery.timer = null;
+      this.#workspaceRecoveries.delete(session.workspace.key);
+      const restartControl = this.#clientRestartControls.get(session.client);
+      if (restartControl != null) restartControl.automaticRestartUsed = false;
+    }, LANGUAGE_CLIENT_STABILITY_RESET_MS);
+    timer.unref?.();
+    recovery.timer = timer;
+  }
+
+  #publishUnavailableSession(
+    failedSession: AureliaLanguageClientSession,
+    retireClient: boolean,
+  ): AureliaLanguageClientSession {
+    const recovery = this.#workspaceRecoveries.get(failedSession.workspace.key)
+      ?? this.#recordWorkspaceFailure(failedSession);
+    const unavailable: AureliaLanguageClientSession = {
+      ...failedSession,
+      availability: "unavailable",
+    };
+    recovery.session = unavailable;
+    const next = new Map(this.#sessions);
+    next.set(unavailable.workspace.key, unavailable);
+    this.#publishSessions(next);
+    if (retireClient) {
+      void this.#retireSession(failedSession);
+    }
+
+    if (recovery.consecutiveFailureCount >= LANGUAGE_CLIENT_CIRCUIT_FAILURE_COUNT) {
+      recovery.phase = "circuit-open";
+      recovery.retryNotBefore = recovery.consecutiveFailureCount === LANGUAGE_CLIENT_CIRCUIT_FAILURE_COUNT
+        ? Date.now()
+        : Date.now() + LANGUAGE_CLIENT_CIRCUIT_RETRY_THROTTLE_MS;
+      this.#logger.error(
+        `[client] server unavailable for ${unavailable.workspace.uri} after `
+        + `${recovery.consecutiveFailureCount} rapid failures; edit or reopen an Aurelia source to retry`,
+      );
+      return unavailable;
+    }
+
+    const delay = recovery.consecutiveFailureCount === 1
+      ? 0
+      : LANGUAGE_CLIENT_REPLACEMENT_BACKOFF_MS;
+    if (delay === 0) {
+      this.#logger.info(`[client] replacing unavailable server for ${unavailable.workspace.uri}`);
+    } else {
+      this.#logger.warn(
+        `[client] server unavailable for ${unavailable.workspace.uri}; retrying in ${delay}ms`,
+      );
+    }
+    recovery.phase = "backoff";
+    recovery.retryNotBefore = Date.now() + delay;
+    const timer = setTimeout(() => {
+      if (this.#workspaceRecoveries.get(unavailable.workspace.key) !== recovery) return;
+      recovery.timer = null;
+      this.#armWorkspaceRecovery(unavailable.workspace.key, "bounded automatic recovery");
+    }, delay);
+    timer.unref?.();
+    recovery.timer = timer;
+    return unavailable;
+  }
+
+  #armWorkspaceRecovery(workspaceKey: string, reason: string): void {
+    if (!this.#acceptingLifecycleRequests) return;
+    const recovery = this.#workspaceRecoveries.get(workspaceKey);
+    const session = this.#sessions.get(workspaceKey);
+    if (
+      recovery == null
+      || session?.availability !== "unavailable"
+      || recovery.phase === "attempting"
+      || Date.now() < recovery.retryNotBefore
+    ) {
+      return;
+    }
+    if (recovery.timer != null) clearTimeout(recovery.timer);
+    recovery.timer = null;
+    recovery.phase = "attempting";
+    recovery.retryNotBefore = 0;
+    recovery.session = session;
+    const next = new Map(this.#sessions);
+    next.set(workspaceKey, { ...session });
+    this.#publishSessions(next);
+    this.#logger.info(`[client] retrying unavailable server for ${session.workspace.uri} (${reason})`);
+    this.#requestReconcile({ reconfirmExisting: true });
+  }
+
+  #clearWorkspaceRecovery(workspaceKey: string): void {
+    const recovery = this.#workspaceRecoveries.get(workspaceKey);
+    if (recovery?.timer != null) clearTimeout(recovery.timer);
+    this.#workspaceRecoveries.delete(workspaceKey);
   }
 
   #requestReconcile(options: ReconcileOptions): void {
@@ -1208,15 +1506,21 @@ export class AureliaLanguageClient {
       // cannot republish the stopped incarnation after an awaited status read.
       this.#advanceLifecycleIntent();
       this.#latestTopologyFingerprintByClient.delete(client);
+      let restartingSession = session;
       if (session.availability === "active") {
         const next = new Map(this.#sessions);
-        next.set(session.workspace.key, {
+        restartingSession = {
           ...session,
           incarnation: session.incarnation + 1,
           availability: "restarting",
-        });
+        };
+        next.set(session.workspace.key, restartingSession);
         this.#logger.warn(`[client] server connection stopped for ${session.workspace.uri}; semantic state is re-proving`);
         this.#publishSessions(next);
+      }
+      if (!this.#recordedClientFailures.has(client)) {
+        this.#recordedClientFailures.add(client);
+        this.#recordWorkspaceFailure(restartingSession);
       }
       this.#scheduleStoppedClientRecovery(client);
       return;
@@ -1227,15 +1531,18 @@ export class AureliaLanguageClient {
       return;
     }
     if (event.newState !== LANGUAGE_CLIENT_STATE_RUNNING) return;
+    this.#recordedClientFailures.delete(client);
     this.#clearStoppedClientRecovery(client);
     this.#clearStartingClientRecovery(client);
     const session = this.#sessionForClient(client);
     if (session?.availability !== "restarting") return;
     this.#advanceLifecycleIntent();
     const next = new Map(this.#sessions);
-    next.set(session.workspace.key, { ...session, availability: "active" });
+    const activeSession: AureliaLanguageClientSession = { ...session, availability: "active" };
+    next.set(session.workspace.key, activeSession);
     this.#logger.log(`[client] server connection restarted for ${session.workspace.uri}; semantic incarnation ${session.incarnation} is active`);
     this.#publishSessions(next);
+    this.#markWorkspaceRunning(activeSession);
     // The replacement Worker starts from current host inputs, but its original
     // initialization boundary may have become obsolete during downtime.
     this.#requestReconcile({ reconfirmExisting: true });
@@ -1254,13 +1561,7 @@ export class AureliaLanguageClient {
       ) {
         return;
       }
-      const next = new Map(this.#sessions);
-      if (next.get(session.workspace.key)?.client === client) {
-        next.delete(session.workspace.key);
-        this.#publishSessions(next);
-      }
-      void this.#retireSession(session);
-      this.#requestReconcile({ reconfirmExisting: true });
+      this.#publishUnavailableSession(session, true);
     }, LANGUAGE_CLIENT_RESTART_GRACE_MS);
     this.#stoppedClientRecoveryTimers.set(client, timer);
   }
@@ -1284,13 +1585,7 @@ export class AureliaLanguageClient {
       ) {
         return;
       }
-      const next = new Map(this.#sessions);
-      if (next.get(session.workspace.key)?.client === client) {
-        next.delete(session.workspace.key);
-        this.#publishSessions(next);
-      }
-      void this.#retireSession(session);
-      this.#requestReconcile({ reconfirmExisting: true });
+      this.#publishUnavailableSession(session, true);
     }, LANGUAGE_SERVER_START_TIMEOUT_MS);
     timer.unref?.();
     this.#startingClientRecoveryTimers.set(client, timer);
@@ -1639,9 +1934,13 @@ function createLifecycleIntent(generation: number): LifecycleIntent {
   };
 }
 
-function createClientRestartControl(): ClientRestartControl {
+function createClientRestartControl(
+  allowAutomaticRestart: () => boolean,
+): ClientRestartControl {
   const control: ClientRestartControl = {
     retiring: false,
+    automaticRestartUsed: false,
+    allowAutomaticRestart,
     delegate: null,
     handler: fallbackClientErrorHandler(),
   };
@@ -1656,6 +1955,14 @@ function createClientRestartControl(): ClientRestartControl {
           message: "Aurelia language-client retirement closed its server transport.",
         };
       }
+      if (control.automaticRestartUsed || !control.allowAutomaticRestart()) {
+        return {
+          action: LANGUAGE_CLIENT_CLOSE_DO_NOT_RESTART,
+          handled: true,
+          message: "Aurelia bounded automatic Worker restart to prevent a repeated failure loop.",
+        };
+      }
+      control.automaticRestartUsed = true;
       return control.delegate?.closed()
         ?? { action: LANGUAGE_CLIENT_CLOSE_RESTART };
     },
