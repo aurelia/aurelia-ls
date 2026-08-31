@@ -59,10 +59,16 @@ import {
   TemplateCompilerSiteSpendDisposition,
 } from '../src/template/template-compiler-site-spend-ledger.js';
 import {
+  bindTemplateCompilerOccurrenceSiteInvocation,
   bindTemplateCompilerRootOccurrencePrecedentInvocation,
   TemplateCompilerOccurrencePrecedentInvocationBindingState,
   TemplateCompilerSiteInvocationBindingReasonKind,
+  TemplateCompilerSiteInvocationBindingState,
 } from '../src/template/template-compiler-site-invocation.js';
+import {
+  compileTemplateCompilerOccurrenceFamily,
+  TemplateCompilerOccurrenceFamilyValue,
+} from '../src/template/template-compiler-occurrence-family-compilation.js';
 
 const packageRoot = path.resolve(fileURLToPath(new URL('..', import.meta.url)));
 const fixtureRoot = path.join(packageRoot, 'fixtures/pressure/template-local-template-semantics');
@@ -132,6 +138,68 @@ describe('template compiler raw occurrence precedent', () => {
     expect(mismatched.normalizedSites.state).toBe('mismatch');
     expect(mismatched.normalizedSites.mismatches.length).toBeGreaterThan(0);
   });
+
+  test('compiles the root, sibling, and nested local lanes through one browser occurrence family', () => {
+    const precedent = requirePrecedent(family, 'template-local-template-semantics-app');
+    const rootRuntime = requireCompilation(family, 'template-local-template-semantics-app');
+    const markup = precedent.compilation.unit.templateSource.markup;
+    if (markup == null) throw new Error('Expected occurrence-family source markup.');
+    const run = runtime.computationLifecycle.begin({
+      kind: 'template-compiler-occurrence-family-test',
+      reconciliationKey: app.project.projectKey,
+      summary: 'Compile one complete browser-effective local-template family.',
+    });
+    try {
+      const browser = parseBrowserTemplateFragmentDraft(markup);
+      const browserEmission = new BrowserEffectiveTemplateMaterializer(run).materialize({
+        localKey: 'template-compiler-occurrence-family:browser',
+        sourceRevision: precedent.sourceRevision,
+        templateSource: precedent.compilation.unit.templateSource,
+        authoredHtml: precedent.compilation.html,
+        browser,
+        carrierSelection: selectBrowserTemplateCompilerCarrier(browser.fragment),
+      });
+      const result = compileTemplateCompilerOccurrenceFamily({
+        compilationKey: 'template-compiler-occurrence-family',
+        appCurrentness: app,
+        occurrencePrecedent: precedent,
+        browserEmission,
+        currentFrontDoor: app.emission.templates.frontDoor,
+        currentFamily: family,
+        appRootDefinitionProductHandle: rootRuntime.appRootDefinitionProductHandle,
+        publication: run,
+      });
+      expect(result.state, result.reasons.map((reason) =>
+        `${reason.reasonKind}: ${reason.summary} [${reason.stableKeys.join(', ')}]`
+      ).join(' ')).toBe('exact');
+      if (result.value == null) throw new Error(result.reasons.map((reason) => reason.summary).join(' '));
+      expect(result.value.rootFamily.rootDefinition).toBe(precedent.compilation.definition);
+      expect(result.value.locals.map((local) => local.definition.name)).toEqual([
+        'mode-panel',
+        'local-icon',
+        'nested-note',
+      ]);
+      expect(result.value.locals.map((local) => local.declarationOrdinal)).toEqual([0, 1, 0]);
+      expect(result.value.locals.filter((local) =>
+        local.parentDefinitionProductHandle === precedent.compilation.definition.productHandle
+      ).map((local) =>
+        local.definition.name
+      )).toEqual(['mode-panel', 'local-icon']);
+      const modePanel = result.value.locals[0]!;
+      expect(result.value.locals.filter((local) =>
+        local.parentDefinitionProductHandle === modePanel.localDefinitionProductHandle
+      ).map((local) =>
+        local.definition.name
+      )).toEqual(['nested-note']);
+      expect(result.value.locals.every((local) => local.family.rootDefinition === local.definition)).toBe(true);
+      expect(() => new TemplateCompilerOccurrenceFamilyValue(
+        result.value!.rootFamily,
+        [result.value!.locals[2]!, ...result.value!.locals.slice(0, 2)],
+      )).toThrow(/recursive parent/);
+    } finally {
+      run.abort();
+    }
+  }, 30_000);
 
   test('conserves raw normalized sites through root, sibling, and nested local lanes', () => {
     const root = requirePrecedent(family, 'template-local-template-semantics-app');
@@ -231,12 +299,14 @@ describe('template compiler raw occurrence precedent', () => {
       });
       try {
         expect(() => new LocalTemplateDefinitionMaterializer(foreignDefinitionRun)
-          .prepareOccurrenceHandoff(rootPartition)).toThrow(/current immediate root partition/);
+          .prepareOccurrenceHandoff(rootPartition)).toThrow(/current immediate invocation partition/);
       } finally {
         foreignDefinitionRun.abort();
       }
       const definitionPreparation = definitions.prepareOccurrenceHandoff(rootPartition);
       expect(definitions.prepareOccurrenceHandoff(rootPartition)).toBe(definitionPreparation);
+      expect(() => new LocalTemplateDefinitionMaterializer(run).prepareOccurrenceHandoff(rootPartition))
+        .toThrow(/another definition materializer/);
       expect(definitionPreparation.isModuleConstructed()).toBe(true);
       expect(definitionPreparation.ownerDefinition).toBe(rootRuntime.definition);
       expect(definitionPreparation.entries.map((entry) => entry.definition.name))
@@ -257,11 +327,11 @@ describe('template compiler raw occurrence precedent', () => {
       expect(run.readKernelCountSnapshot().totalRecords).toBe(beforeDefinitionPreparation);
 
       const ingressMaterializer = new TemplateCompilerOccurrenceCompilationIngressMaterializer(run);
-      const ingressCohort = ingressMaterializer.prepareRootChildren(definitionPreparation);
+      const ingressCohort = ingressMaterializer.prepareChildren(definitionPreparation);
       expect(ingressCohort.isModuleConstructed()).toBe(true);
-      expect(ingressMaterializer.prepareRootChildren(definitionPreparation)).toBe(ingressCohort);
+      expect(ingressMaterializer.prepareChildren(definitionPreparation)).toBe(ingressCohort);
       expect(() => new TemplateCompilerOccurrenceCompilationIngressMaterializer(run)
-        .prepareRootChildren(definitionPreparation)).toThrow(/another materializer/);
+        .prepareChildren(definitionPreparation)).toThrow(/another materializer/);
       expect(ingressCohort.entries).toHaveLength(2);
       expect(run.readKernelCountSnapshot().totalRecords).toBe(beforeDefinitionPreparation);
       for (const [prepared, entry] of ingressCohort.entries.map((prepared, index) => [
@@ -323,7 +393,7 @@ describe('template compiler raw occurrence precedent', () => {
       const worldMaterializer = new TemplateCompilerOccurrenceWorldClosureMaterializer(run);
       const worldClosure = (() => {
         try {
-          const result = worldMaterializer.projectRootCohort(definitionMaterialization, ingressCohort);
+          const result = worldMaterializer.projectCohort(definitionMaterialization, ingressCohort);
           expect(projectWorld).toHaveBeenCalledTimes(1);
           return result;
         } finally {
@@ -331,7 +401,7 @@ describe('template compiler raw occurrence precedent', () => {
         }
       })();
       expect(() => new TemplateCompilerOccurrenceWorldClosureMaterializer(run)
-        .projectRootCohort(definitionMaterialization, ingressCohort)).toThrow(/another materializer/);
+        .projectCohort(definitionMaterialization, ingressCohort)).toThrow(/another materializer/);
       expect(run.readKernelCountSnapshot().totalRecords).toBe(beforeWorldProjection);
       expect(worldClosure.preLocalWorld).toBe(root.preLocalCompilerWorld);
       expect(worldClosure.postLocalWorld).not.toBe(root.preLocalCompilerWorld);
@@ -341,8 +411,8 @@ describe('template compiler raw occurrence precedent', () => {
       expect(worldClosure.postLocalWorld).not.toBe(rootRuntime.compilerWorld);
       expect(run.readProductDetail(TemplateProductDetails.World, worldClosure.postLocalWorld.world.productHandle))
         .toBe(rootRuntime.compilerWorld.world);
-      expect(worldClosure.rootTraversalProjection.world).toBe(worldClosure.postLocalWorld);
-      expect(worldClosure.rootTraversalProjection.hasPendingFrontier()).toBe(true);
+      expect(worldClosure.traversalProjection.world).toBe(worldClosure.postLocalWorld);
+      expect(worldClosure.traversalProjection.hasPendingFrontier()).toBe(true);
       expect(worldClosure.childHookParentProjections.every((entry, index) =>
         entry.definitionEntry === definitionMaterialization.entries[index]
         && entry.ingress === ingressCohort.entries[index]
@@ -356,6 +426,26 @@ describe('template compiler raw occurrence precedent', () => {
           .toBe(entry.definition.productHandle);
       }
       expect(worldClosure.postLocalWorld.resourceResolver.el('owner-badge')).not.toBeNull();
+      const childHookParentClaim = worldMaterializer.claimChildHookParents(worldClosure);
+      expect(childHookParentClaim.transfers.every((transfer) => transfer.isPendingCurrent())).toBe(true);
+      expect(bindTemplateCompilerOccurrenceSiteInvocation({
+        occurrenceBinding: binding,
+        partition: rootPartition,
+        definition: rootRuntime.definition,
+        compilerWorld: worldClosure.postLocalWorld,
+        postLocalWorldProjection: worldClosure.traversalProjection,
+      }).state).toBe(TemplateCompilerSiteInvocationBindingState.Exact);
+      const foreignTraversalWorld = bindTemplateCompilerOccurrenceSiteInvocation({
+        occurrenceBinding: binding,
+        partition: rootPartition,
+        definition: rootRuntime.definition,
+        compilerWorld: worldClosure.preLocalWorld,
+        postLocalWorldProjection: worldClosure.traversalProjection,
+      });
+      expect(foreignTraversalWorld.state).toBe(TemplateCompilerSiteInvocationBindingState.Mismatch);
+      expect(foreignTraversalWorld.reasons.map((reason) => reason.reasonKind)).toEqual([
+        TemplateCompilerSiteInvocationBindingReasonKind.CompilerWorldMismatch,
+      ]);
 
       const partitionChild = (
         transfer: TemplateCompilerNormalizedSiteLaneTransfer,
@@ -392,6 +482,9 @@ describe('template compiler raw occurrence precedent', () => {
       expect(modePanelPartition.transfers.map((transfer) => transfer.transfer.extraction.name))
         .toEqual(['nested-note']);
       const nestedNotePartition = partitionChild(modePanelPartition.transfers[0]!);
+      expect(worldClosure.childHookParentProjections.every((projection) => !projection.isPendingCurrent())).toBe(true);
+      expect(childHookParentClaim.transfers[0]!.isPendingCurrent()).toBe(false);
+      expect(childHookParentClaim.transfers[1]!.isPendingCurrent()).toBe(true);
       const localIconPartition = partitionChild(localIconTransfer);
 
       const matrix = [
@@ -461,11 +554,11 @@ describe('template compiler raw occurrence precedent', () => {
       )).toHaveLength(20);
       expect(ingressCohort.isCurrent()).toBe(false);
       expect(ingressCohort.entries.every((entry) => !entry.isCurrent())).toBe(true);
-      expect(worldClosure.rootTraversalProjection.hasPendingFrontier()).toBe(true);
+      expect(worldClosure.traversalProjection.hasPendingFrontier()).toBe(true);
       expect(worldClosure.childHookParentProjections.every((entry) => !entry.hasPendingFrontier())).toBe(true);
-      expect(() => ingressMaterializer.prepareRootChildren(definitionPreparation))
-        .toThrow(/no longer at its immediate root frontier/);
-      expect(() => worldMaterializer.projectRootCohort(definitionMaterialization, ingressCohort))
+      expect(() => ingressMaterializer.prepareChildren(definitionPreparation))
+        .toThrow(/no longer at its immediate invocation frontier/);
+      expect(() => worldMaterializer.projectCohort(definitionMaterialization, ingressCohort))
         .toThrow(/no longer at its claimable sibling frontier/);
 
       const mismatched = mismatchedPrecedent(root, rootRuntime);
@@ -572,8 +665,8 @@ describe('template compiler raw occurrence precedent', () => {
       });
 
       replacement = runtime.computationLifecycle.begin(run.locus);
-      expect(() => definitions.prepareOccurrenceHandoff(partition)).toThrow(/current immediate root partition/);
-      expect(() => definitions.publishOccurrenceHandoff(preparation)).toThrow(/current immediate root partition/);
+      expect(() => definitions.prepareOccurrenceHandoff(partition)).toThrow(/current immediate invocation partition/);
+      expect(() => definitions.publishOccurrenceHandoff(preparation)).toThrow(/current immediate invocation partition/);
       expect(runtime.workspace.store.readProductDetail(ResourceProductDetails.Definition, rewritten.productHandle!))
         .toBeNull();
     } finally {
@@ -720,7 +813,7 @@ describe('template compiler raw occurrence precedent', () => {
           },
         });
         const ingress = new TemplateCompilerOccurrenceCompilationIngressMaterializer(run)
-          .prepareRootChildren(definitionPreparation).entries[0]!;
+          .prepareChildren(definitionPreparation).entries[0]!;
         expect(ingress.childView.bundles).toEqual([]);
         expect(ingress.unitIngress.templateSource).toMatchObject({
           sourceKind: TemplateSourceKind.DomNode,
@@ -798,10 +891,10 @@ describe('template compiler raw occurrence precedent', () => {
       if (partition == null) throw new Error(`Expected exact carried ${key} root partition.`);
       const definitionPreparation = definitions.prepareOccurrenceHandoff(partition);
       const ingressCohort = new TemplateCompilerOccurrenceCompilationIngressMaterializer(run)
-        .prepareRootChildren(definitionPreparation);
+        .prepareChildren(definitionPreparation);
       const definitionMaterialization = definitions.publishOccurrenceHandoff(definitionPreparation);
       const worldMaterializer = new TemplateCompilerOccurrenceWorldClosureMaterializer(run);
-      const worldClosure = worldMaterializer.projectRootCohort(definitionMaterialization, ingressCohort);
+      const worldClosure = worldMaterializer.projectCohort(definitionMaterialization, ingressCohort);
       return {
         run,
         execution,
@@ -892,7 +985,7 @@ describe('template compiler raw occurrence precedent', () => {
         expect(nextView.worldClosure.postLocalWorld).not.toBe(previousView.worldClosure.postLocalWorld);
         expect(nextView.worldClosure.postLocalWorld.world.productHandle)
           .toBe(previousView.worldClosure.postLocalWorld.world.productHandle);
-        expect(() => nextView.worldMaterializer.projectRootCohort(
+        expect(() => nextView.worldMaterializer.projectCohort(
           previousView.definitionMaterialization,
           nextView.ingressCohort,
         )).toThrow(/foreign sibling materialization/);

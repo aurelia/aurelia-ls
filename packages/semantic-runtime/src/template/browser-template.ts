@@ -17,6 +17,7 @@ export {
   type TemplateCompilerCompiledHandoffBindable,
   type TemplateCompilerCompiledHandoffDependencyReference,
   type TemplateCompilerCompiledHandoffDefinition,
+  type TemplateCompilerCompiledHandoffDefinitionOwner,
   type TemplateCompilerCompiledHandoffElement,
   type TemplateCompilerCompiledHandoffInstructionValue,
   type TemplateCompilerCompiledHandoffSpreadCase,
@@ -25,6 +26,7 @@ export {
   type TemplateCompilerCompiledHandoffSpreadExpressionEntry,
   type TemplateCompilerCompiledHandoffSpreadPlan,
   type TemplateCompilerCompiledHandoffSpreadTarget,
+  type TemplateCompilerCompiledHandoffSourceCompiledTemplate,
   type TemplateCompilerCompiledHandoffTree,
   type TemplateCompilerCompiledHandoffValue,
 } from './template-compiler-compiled-handoff-value.js';

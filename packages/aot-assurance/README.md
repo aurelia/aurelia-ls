@@ -10,13 +10,18 @@ therefore run through the generated base-runtime facade instead of retaining the
 The routed storefront additionally requires its exact 11-resource/11-renderer plan and an omitted event modifier, so
 browser parity exercises the optimized configuration rather than only a compile-free conservative fallback.
 
-The default package assurance runs five complementary scenarios:
+The default package assurance runs six complementary scenarios:
 
 - `g0` is the deeply instrumented parser/teardown control and owns the runtime string-parse guard;
 - `hello-world` runs the canonical shared IDE fixture without source instrumentation, aligned to the standard decorator
   pipeline required by Vite 8. It covers computed filtering, repeat/if/let, form writeback, child bindables and aliases,
   custom-attribute callbacks, a value converter, SVG foreign content, and selected-item interactions. Its AOT build must
   emit exactly `my-app`, `product-card`, and `stock-badge`.
+- `local-templates` is the G6 scoped-Type golden. It uses locals before declaration, preserves owner and sibling
+  visibility, recursively nests a local cohort, and exercises repeated/conditional use sites through owner update
+  propagation, repeat growth, removal, and restoration. One decorated template-value component exercises the
+  source-owned compiler patch; one paired convention component exercises the complete DefinitionModule owner-Type
+  realization. Both realize local graphs without runtime JIT compilation.
 - `routed-storefront` runs the semantic-runtime/IDE pressure fixture through its real router bootstrap. It covers the
   fulfilled promise branch, debounced search, checkbox and select observation, switch branches, class/style output,
   no-match structure, shared DI state, route-state persistence, and data-bound detail navigation. Its AOT build must
@@ -36,6 +41,7 @@ pnpm --filter @aurelia-ls/aot-assurance test
 pnpm --filter @aurelia-ls/aot-assurance assure
 node packages/aot-assurance/out/cli.js --receipt .temp/aot-assurance-receipt.json
 node packages/aot-assurance/out/cli.js --scenario hello-world
+node packages/aot-assurance/out/cli.js --scenario local-templates
 node packages/aot-assurance/out/cli.js --scenario routed-storefront
 node packages/aot-assurance/out/cli.js --scenario state-backed-form
 node packages/aot-assurance/out/cli.js --scenario projects-and-milestones

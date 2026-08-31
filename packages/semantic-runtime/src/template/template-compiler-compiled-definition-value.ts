@@ -63,6 +63,7 @@ export class TemplateCompilerCompiledDefinitionName {
 export class TemplateCompilerCompiledDefinitionOverlay {
   readonly needsCompile = false as const;
   readonly type = ResourceDefinitionKind.CustomElement;
+  /** Constructable runtime values live on the scoped local-family handoff, never on this semantic definition overlay. */
   readonly compilerAddedDependencies: readonly [] = [];
 
   constructor(
@@ -121,7 +122,7 @@ export class TemplateCompilerCompiledDefinitionOverlay {
     return this.baseDefinition?.bindables ?? [];
   }
 
-  /** Exact while local-template child lanes remain an upstream family-compiler gate. */
+  /** Authored resource dependencies; compiler-created local Types remain a separate scoped relation. */
   get dependencies(): readonly ResourceDependencyReference[] {
     return this.baseDefinition?.dependencies ?? [];
   }

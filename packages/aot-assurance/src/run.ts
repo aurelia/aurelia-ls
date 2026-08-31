@@ -15,6 +15,10 @@ import {
   assertHelloWorldExpectations,
 } from './hello-world-expectations.js';
 import {
+  assertLocalTemplatesBuildEvidence,
+  assertLocalTemplatesExpectations,
+} from './local-templates-expectations.js';
+import {
   assertRoutedStorefrontBuildEvidence,
   assertRoutedStorefrontExpectations,
 } from './routed-storefront-expectations.js';
@@ -64,6 +68,10 @@ export async function runAssurance(options: RunAssuranceOptions): Promise<Assura
       assertHelloWorldBuildEvidence(builds.aotEvidence);
       assertHelloWorldExpectations(browserBatch.jit);
       assertHelloWorldExpectations(browserBatch.aot);
+    } else if (scenario === 'local-templates') {
+      assertLocalTemplatesBuildEvidence(builds.aotEvidence);
+      assertLocalTemplatesExpectations(browserBatch.jit);
+      assertLocalTemplatesExpectations(browserBatch.aot);
     } else if (scenario === 'routed-storefront') {
       assertRoutedStorefrontBuildEvidence(builds.aotEvidence);
       assertRoutedStorefrontExpectations(browserBatch.jit);
@@ -106,6 +114,8 @@ function defaultFixtureRoot(scenario: AssuranceScenario): string {
       return resolve(packageRoot, 'fixtures', 'g0');
     case 'hello-world':
       return resolve(packageRoot, '..', '..', 'fixtures', 'hello-world');
+    case 'local-templates':
+      return resolve(packageRoot, 'fixtures', 'local-templates');
     case 'routed-storefront':
       return resolve(
         packageRoot,

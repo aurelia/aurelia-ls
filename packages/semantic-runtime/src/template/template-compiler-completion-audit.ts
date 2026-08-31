@@ -272,7 +272,7 @@ export function auditTemplateCompilerTraversalCompletion(
     (event): event is TemplateCompilerSiteCursorSurrogateValidationEvent =>
       event instanceof TemplateCompilerSiteCursorSurrogateValidationEvent,
   );
-  const surrogateCarrier = transcript.binding.forest.compilerCarrier;
+  const surrogateCarrier = transcript.binding.lane.compilerCarrier;
   const surrogateAttributes = surrogateCarrier.readAttributes();
   const letElementEvents = new Set(letEvents.map((event) => event.elementEvent));
   const attributeEvents = transcript.events.filter((event): event is TemplateCompilerSiteCursorAttributeEvent =>

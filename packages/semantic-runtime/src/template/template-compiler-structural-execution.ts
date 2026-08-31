@@ -365,6 +365,9 @@ export class TemplateCompilerStructuralExecutionSession {
     readonly parent: TemplateCompilerParentOccurrence | null;
     readonly edgeKind: TemplateCompilerOccurrenceEdgeKind;
   }>();
+  /** Browser inputs detached by exact local-template extraction before their later lane plans are admitted. */
+  private readonly compilerExtractedDetachedNodes = new Set<TemplateCompilerNodeOccurrence>();
+  private readonly compilerExtractedDetachedAttributes = new Set<TemplateCompilerAttributeOccurrence>();
   private readonly seededNodesByExactAuthoredProduct = new Map<ProductHandle, TemplateCompilerNodeOccurrence[]>();
   private readonly seededAttributesByExactAuthoredProduct = new Map<
     ProductHandle,
@@ -476,7 +479,15 @@ export class TemplateCompilerStructuralExecutionSession {
     this.admitTargetPlanFamily(targetPlan);
   }
 
-  private admitTargetPlanFamily(targetPlan: TemplateCompilerTargetPlan): void {
+  /** Validate an additional target-plan namespace without mutating structural-family membership. */
+  assertCanAdmitTargetPlan(targetPlan: TemplateCompilerTargetPlan): void {
+    if (!targetPlan.isSealed) {
+      throw new Error(`Additional compiler target plan '${targetPlan.localKey}' must be sealed before family admission.`);
+    }
+    this.admitTargetPlanFamily(targetPlan, false);
+  }
+
+  private admitTargetPlanFamily(targetPlan: TemplateCompilerTargetPlan, commit = true): void {
     if (this.admittedContextsByTargetPlan.has(targetPlan)) {
       throw new Error(`Compiler target plan '${targetPlan.localKey}' is already admitted to this structural family.`);
     }
@@ -546,6 +557,8 @@ export class TemplateCompilerStructuralExecutionSession {
       }
     }
 
+    if (!commit) return;
+
     this.targetPlans.push(targetPlan);
     this.targetPlansByLocalKey.set(targetPlan.localKey, targetPlan);
     this.admittedContextsByTargetPlan.set(targetPlan, contexts);
@@ -572,6 +585,52 @@ export class TemplateCompilerStructuralExecutionSession {
 
   readTargetGeometry(row: TemplateCompilerTargetRowPlan): TemplateCompilerTargetGeometry | null {
     return this.geometriesByRow.get(row) ?? null;
+  }
+
+  /** Admit exact compiler-local extraction detachments that precede structural target-plan availability. */
+  admitCompilerExtractedDetachedNodes(nodes: readonly TemplateCompilerNodeOccurrence[]): void {
+    for (const node of nodes) {
+      this.requireForestNode(node);
+      const seeded = this.forest.seededNodePlacement(node);
+      if (
+        seeded == null
+        || node.parent !== null
+        || node.parentEdgeKind !== TemplateCompilerOccurrenceEdgeKind.Detached
+      ) {
+        throw new Error(`Compiler-extracted input '${node.occurrenceKey}' is not one exact detached browser node.`);
+      }
+      const admitSubtree = (candidate: TemplateCompilerNodeOccurrence): void => {
+        if (this.forest.seededNodePlacement(candidate) != null) {
+          this.compilerExtractedDetachedNodes.add(candidate);
+        }
+        if (candidate instanceof TemplateCompilerElementOccurrence) {
+          for (const attribute of candidate.readAttributes()) {
+            if (this.forest.seededAttributePlacement(attribute) != null) {
+              this.compilerExtractedDetachedAttributes.add(attribute);
+            }
+          }
+          candidate.readChildren().forEach(admitSubtree);
+          if (candidate.templateContent != null) admitSubtree(candidate.templateContent);
+        } else if (candidate instanceof TemplateCompilerFragmentOccurrence) {
+          candidate.readChildren().forEach(admitSubtree);
+        }
+      };
+      admitSubtree(node);
+    }
+  }
+
+  admitCompilerExtractedDetachedAttributes(attributes: readonly TemplateCompilerAttributeOccurrence[]): void {
+    for (const attribute of attributes) {
+      const seeded = this.forest.seededAttributePlacement(attribute);
+      if (
+        this.forest.attributeForOccurrenceKey(attribute.occurrenceKey) !== attribute
+        || seeded == null
+        || attribute.owner !== null
+      ) {
+        throw new Error(`Compiler-extracted attribute '${attribute.occurrenceKey}' is not one exact detached input.`);
+      }
+      this.compilerExtractedDetachedAttributes.add(attribute);
+    }
   }
 
   readTargetGeometries(
@@ -895,6 +954,80 @@ export class TemplateCompilerStructuralExecutionSession {
       causeHandles,
     );
     return this.bindContextStructure(context, compilerCarrier, compilerContent);
+  }
+
+  /** Adopt a compiler-extracted local-template carrier as the root of its already-admitted invocation context. */
+  assertCanAdoptExtractedInvocationContextStructure(
+    context: TemplateCompilerTargetContextPlan,
+    compilerCarrier: TemplateCompilerElementOccurrence,
+    compilerContent: TemplateCompilerFragmentOccurrence,
+    causeHandles: readonly ClaimEndpointHandle[],
+  ): void {
+    this.assertExtractedInvocationContextStructureInput(
+      context,
+      compilerCarrier,
+      compilerContent,
+      causeHandles,
+      false,
+    );
+  }
+
+  adoptExtractedInvocationContextStructure(
+    context: TemplateCompilerTargetContextPlan,
+    compilerCarrier: TemplateCompilerElementOccurrence,
+    compilerContent: TemplateCompilerFragmentOccurrence,
+    causeHandles: readonly ClaimEndpointHandle[],
+  ): TemplateCompilerContextStructure {
+    this.assertExtractedInvocationContextStructureInput(
+      context,
+      compilerCarrier,
+      compilerContent,
+      causeHandles,
+      true,
+    );
+    this.transferInputNode(
+      compilerCarrier,
+      context,
+      null,
+      TemplateCompilerOccurrenceEdgeKind.Root,
+      this.forest.readRoots().length,
+      causeHandles,
+      null,
+      true,
+    );
+    return this.bindContextStructure(context, compilerCarrier, compilerContent);
+  }
+
+  private assertExtractedInvocationContextStructureInput(
+    context: TemplateCompilerTargetContextPlan,
+    compilerCarrier: TemplateCompilerElementOccurrence,
+    compilerContent: TemplateCompilerFragmentOccurrence,
+    causeHandles: readonly ClaimEndpointHandle[],
+    admitted: boolean,
+  ): void {
+    if (admitted) this.requireContext(context);
+    else {
+      this.requireForestNode(compilerCarrier);
+      this.requireForestNode(compilerContent);
+    }
+    if (
+      this.structuresByContextKey.has(context.localKey)
+      || this.contextKeysByCarrierOccurrence.has(compilerCarrier.occurrenceKey)
+      || !causeHandles.includes(context.owner.productHandle)
+      || compilerCarrier.tagName.toLowerCase() !== 'template'
+      || compilerCarrier.namespace !== HtmlNamespaceKind.Html
+      || compilerCarrier.namespaceUri !== 'http://www.w3.org/1999/xhtml'
+      || compilerCarrier.readChildren().length !== 0
+      || compilerCarrier.templateContent !== compilerContent
+      || compilerContent.parent !== compilerCarrier
+      || compilerContent.parentEdgeKind !== TemplateCompilerOccurrenceEdgeKind.TemplateContent
+      || compilerCarrier.parent !== null
+      || compilerCarrier.parentEdgeKind !== TemplateCompilerOccurrenceEdgeKind.Detached
+      || !this.compilerExtractedDetachedNodes.has(compilerCarrier)
+    ) {
+      throw new Error(`Compiler target context '${context.localKey}' cannot adopt an inexact local-template carrier.`);
+    }
+    this.requireInitialOccurrenceMembership(context, compilerCarrier, compilerContent);
   }
 
   /** Transfer a retained browser-input occurrence into one context without changing occurrence identity. */
@@ -1639,6 +1772,7 @@ export class TemplateCompilerStructuralExecutionSession {
       destinationParent: TemplateCompilerParentOccurrence,
       destinationOrdinal: number,
     ) => void) | null = null,
+    invocationCarrier = false,
   ): TemplateCompilerInputNodeTransfer {
     this.requireContext(context);
     this.requireForestNode(node);
@@ -1656,13 +1790,16 @@ export class TemplateCompilerStructuralExecutionSession {
     if (transfersByNode.has(node)) {
       throw new Error(`Compiler occurrence '${node.occurrenceKey}' already transferred into '${context.localKey}'.`);
     }
-    const structuralEntrantProductHandle = this.structuralEntrantForNode(node, context);
+    const structuralEntrantProductHandle = this.structuralEntrantForNode(node, context)
+      ?? (invocationCarrier ? context.owner.productHandle : null);
     if (structuralEntrantProductHandle == null) {
       throw new Error(
         `Compiler transfer '${node.occurrenceKey}' is not admitted by target context '${context.localKey}'.`,
       );
     }
-    const requiredCause = this.requiredContextStructuralCause(context);
+    const requiredCause = invocationCarrier
+      ? context.owner.productHandle
+      : this.requiredContextStructuralCause(context);
     if (requiredCause == null || !causeHandles.includes(requiredCause)) {
       throw new Error(`Compiler transfer '${node.occurrenceKey}' omits its owning instruction cause.`);
     }
@@ -1675,8 +1812,18 @@ export class TemplateCompilerStructuralExecutionSession {
     const sourceParent = node.parent;
     const sourceEdgeKind = node.parentEdgeKind;
     const sourceOrdinal = node.readParentOrdinal();
-    this.requireCurrentInputEdgeAuthority(node);
-    this.assertSeededSourceOrder(node);
+    if (invocationCarrier) {
+      if (
+        !this.compilerExtractedDetachedNodes.has(node)
+        || sourceParent !== null
+        || sourceEdgeKind !== TemplateCompilerOccurrenceEdgeKind.Detached
+      ) {
+        throw new Error(`Compiler invocation carrier '${node.occurrenceKey}' lost its extracted source edge.`);
+      }
+    } else {
+      this.requireCurrentInputEdgeAuthority(node);
+      this.assertSeededSourceOrder(node);
+    }
     const startForestMutationRevision = this.forest.mutationRevision;
     if (moveNode == null) {
       this.forest.moveNode(node, destinationParent, destinationEdgeKind, destinationOrdinal);
@@ -2362,7 +2509,12 @@ export class TemplateCompilerStructuralExecutionSession {
       for (const transfer of transfers) {
         this.requireContext(transfer.context);
         const structure = this.requireContextStructure(transfer.context);
-        const admittedEntrant = this.structuralEntrantForNode(node, transfer.context);
+        const sourceIsCompilerLocalExtraction = transfer.sourceParent === null
+          && transfer.sourceEdgeKind === TemplateCompilerOccurrenceEdgeKind.Detached
+          && this.compilerExtractedDetachedNodes.has(node)
+          && structure.compilerCarrier === node;
+        const admittedEntrant = this.structuralEntrantForNode(node, transfer.context)
+          ?? (sourceIsCompilerLocalExtraction ? transfer.context.owner.productHandle : null);
         const sourceIsSeeded = transfer.sourceParent === seededPlacement.parent
           && transfer.sourceEdgeKind === seededPlacement.edgeKind;
         const sourceIsPriorDestination = priorDestination != null
@@ -2385,7 +2537,10 @@ export class TemplateCompilerStructuralExecutionSession {
             !== (this.forest.exactAuthoredNodeOrigin(node)?.authored.productHandle ?? null)
           || admittedEntrant == null
           || transfer.structuralEntrantProductHandle !== admittedEntrant
-          || (!sourceIsSeeded && !sourceIsPriorDestination && !sourceIsCompilerReplacement)
+          || (!sourceIsSeeded
+            && !sourceIsPriorDestination
+            && !sourceIsCompilerReplacement
+            && !sourceIsCompilerLocalExtraction)
           || (transfer.sourceEdgeKind === TemplateCompilerOccurrenceEdgeKind.Detached) !== (transfer.sourceOrdinal == null)
           || (!destinationIsContextContent && !destinationIsContextCarrier)
           || !Number.isSafeInteger(transfer.destinationOrdinal)
@@ -2664,7 +2819,10 @@ export class TemplateCompilerStructuralExecutionSession {
       if (
         node.parentEdgeKind !== TemplateCompilerOccurrenceEdgeKind.Detached
         || node.parent !== null
-        || !(node instanceof TemplateCompilerTextOccurrence && this.inputTextExpansions.has(node))
+        || !(
+          (node instanceof TemplateCompilerTextOccurrence && this.inputTextExpansions.has(node))
+          || this.compilerExtractedDetachedNodes.has(node)
+        )
       ) {
         throw new Error(`Browser input node '${node.occurrenceKey}' changed topology without a compiler operation.`);
       }
@@ -2860,6 +3018,7 @@ export class TemplateCompilerStructuralExecutionSession {
       if (
         !this.consumedNodes.has(node)
         && !(node instanceof TemplateCompilerTextOccurrence && this.inputTextExpansions.has(node))
+        && !this.compilerExtractedDetachedNodes.has(node)
         && !this.hasNodeReplacementCoverage(node, replacementCoverage)
       ) {
         throw new Error(`Browser input node '${node.occurrenceKey}' has no final compiler disposition.`);
@@ -2877,7 +3036,12 @@ export class TemplateCompilerStructuralExecutionSession {
       const seededOwnerCovered = this.forest.seededAttributePlacement(attribute)?.owner;
       const originalOwnerCovered = seededOwnerCovered != null
         && this.hasNodeReplacementCoverage(seededOwnerCovered, replacementCoverage);
-      if (!this.consumedAttributes.has(attribute) && !ownerCovered && !originalOwnerCovered) {
+      if (
+        !this.consumedAttributes.has(attribute)
+        && !this.compilerExtractedDetachedAttributes.has(attribute)
+        && !ownerCovered
+        && !originalOwnerCovered
+      ) {
         throw new Error(`Browser input attribute '${attribute.occurrenceKey}' has no final compiler disposition.`);
       }
     }

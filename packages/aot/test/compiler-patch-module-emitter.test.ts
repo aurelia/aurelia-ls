@@ -41,12 +41,19 @@ const builtInTemplateControllerPath = path.resolve(
   builtInTemplateControllerRoot,
   'src/template-controller-built-ins-app.html',
 );
+const localTemplateRoot = path.resolve(
+  repositoryRoot,
+  'packages/semantic-runtime/fixtures/pressure/resource-registration-local-templates',
+);
+const localTemplatePath = path.resolve(localTemplateRoot, 'src/local-templates-app.html');
 let handoff: TemplateCompilerCompiledHandoffValue;
 let sourceText: string;
 let stateFormHandoff: TemplateCompilerCompiledHandoffValue;
 let stateFormSourceText: string;
 let builtInTemplateControllerHandoff: TemplateCompilerCompiledHandoffValue;
 let builtInTemplateControllerSourceText: string;
+let localTemplateHandoff: TemplateCompilerCompiledHandoffValue;
+let localTemplateSourceText: string;
 
 beforeAll(async () => {
   const runtime = await createSemanticRuntime({
@@ -135,6 +142,31 @@ beforeAll(async () => {
     runtime.retireWorkspaceIncarnation();
   }
 }, 30_000);
+
+beforeAll(async () => {
+  const runtime = await createSemanticRuntime({
+    workspaceRoot: localTemplateRoot,
+    projectDiscovery: 'single-root',
+    storeKey: 'aot-compiler-patch-module-emitter-local-templates',
+  });
+  try {
+    const app = await runtime.openApp({
+      analysisDepth: 'runtime-topology',
+      includeCompilerOccurrencePrecedents: true,
+      telemetry: { inquiryProfile: 'aot' },
+    });
+    const batch = materializeSemanticAppTemplateCompilerHandoffs({ app });
+    const resource = batch.resources.find((candidate) => candidate.value?.resourceName === 'local-templates-app');
+    if (resource?.state !== TemplateCompilerCompiledHandoffState.Exact) {
+      throw new Error(resource?.reasons.map((reason) => reason.summary).join(' ') ?? 'No local-template handoff.');
+    }
+    localTemplateHandoff = resource.value;
+    localTemplateSourceText = await readFile(localTemplatePath, 'utf8');
+    app.requireCurrent();
+  } finally {
+    runtime.retireWorkspaceIncarnation();
+  }
+}, 45_000);
 
 describe('AOT compiler patch module emitter', () => {
   it('shares the carrier transform runtime module contract', () => {
@@ -305,6 +337,83 @@ describe('AOT compiler patch module emitter', () => {
     expect(patched.watches).toEqual([authoredWatch]);
     expect(patched.processContent).toBe(authoredProcessContent);
   }, 20_000);
+
+  it('materializes scoped local Types in two passes with exact owner, peer, and nested dependencies', async () => {
+    const artifact = new AotCompilerPatchModuleEmitter().emit({
+      handoff: localTemplateHandoff,
+      projectRoot: localTemplateRoot,
+      sourcePath: localTemplatePath,
+      sourceText: localTemplateSourceText,
+    });
+    expect(artifact.code).toContain('CustomElement.generateType');
+    expect(artifact.code).toContain('materializeCompilerAddedDependencies');
+    const standaloneHandoff: TemplateCompilerCompiledHandoffValue = {
+      ...localTemplateHandoff,
+      definitions: localTemplateHandoff.definitions.map((definition) =>
+        definition.definitionId !== localTemplateHandoff.rootDefinitionId
+          ? definition
+          : { ...definition, header: { ...definition.header, dependencies: [] } }
+      ),
+    };
+    const completeArtifact = new AotTemplateModuleEmitter().emit({
+      handoff: standaloneHandoff,
+      projectRoot: localTemplateRoot,
+      sourcePath: localTemplatePath,
+      sourceText: localTemplateSourceText,
+    });
+    const complete = await importPatchModule(completeArtifact.code, completeArtifact.digest) as unknown as {
+      readonly dependencies: readonly Function[];
+    };
+    expect(complete.dependencies.map((Type) => CustomElement.getDefinition(Type).name)).toEqual([
+      'local-chip',
+      'local-icon',
+      'outer-local',
+    ]);
+    const standaloneOwnerType = CustomElement.getDefinition(complete.dependencies[0]!).dependencies[0] as Function;
+    expect(standaloneOwnerType.name).toBe('LocalTemplatesApp');
+    expect(CustomElement.getDefinition(standaloneOwnerType).dependencies).toEqual(complete.dependencies);
+
+    const imported = await importPatchModule(artifact.code, artifact.digest);
+    const helper = await importRuntimeHelper();
+    const authoredDependency = class AuthoredDependency {};
+    class LocalOwner {}
+    const OwnerType = CustomElement.define({
+      name: 'local-templates-app',
+      template: '<p>authored</p>',
+      dependencies: [authoredDependency],
+    }, LocalOwner);
+    helper.applyCompiledCustomElement(OwnerType, imported.default);
+    const ownerDefinition = CustomElement.getDefinition(OwnerType);
+    const directTypes = ownerDefinition.dependencies.slice(1) as Function[];
+    expect(directTypes.map((Type) => Type.name)).toEqual(['LocalChip', 'LocalIcon', 'OuterLocal']);
+    expect(directTypes.map((Type) => CustomElement.getDefinition(Type).name)).toEqual([
+      'local-chip',
+      'local-icon',
+      'outer-local',
+    ]);
+
+    const [localChip, localIcon, outerLocal] = directTypes;
+    const localChipDefinition = CustomElement.getDefinition(localChip!);
+    const localIconDefinition = CustomElement.getDefinition(localIcon!);
+    const outerLocalDefinition = CustomElement.getDefinition(outerLocal!);
+    expect(localChipDefinition.dependencies).toEqual([authoredDependency, OwnerType, localIcon, outerLocal]);
+    expect(localIconDefinition.dependencies).toEqual([authoredDependency, OwnerType, localChip, outerLocal]);
+    expect(outerLocalDefinition.dependencies.slice(0, 4)).toEqual([
+      authoredDependency,
+      OwnerType,
+      localChip,
+      localIcon,
+    ]);
+    const nestedType = outerLocalDefinition.dependencies[4] as Function;
+    expect(CustomElement.getDefinition(nestedType).name).toBe('nested-local');
+    expect(CustomElement.getDefinition(nestedType).dependencies).toEqual([
+      authoredDependency,
+      OwnerType,
+      localChip,
+      localIcon,
+      outerLocal,
+    ]);
+  }, 30_000);
 
   it('attaches exact state-form spread plans only to their captures arrays', async () => {
     const semanticCases = stateFormHandoff.definitions.flatMap((definition) => definition.rows.flat())

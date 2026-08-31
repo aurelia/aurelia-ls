@@ -12,7 +12,9 @@ The current public API is deliberately narrow:
 - `SemanticAotArtifactProvider` opens one semantic build session, emits complete convention definition modules,
   transforms compiler-patch-owning source modules, and serves the virtual modules required by compiler-patch routes.
 - `AotCompilerPatchModuleEmitter` emits only compiler-owned fields while retaining generated controller/projection
-  definitions.
+  definitions. Source-owned local-template forests allocate every generated Type shell first, then wire the exact
+  owner/peer/nested dependency graph before attaching compiler-final definitions and appending only direct local Types
+  to the authored owner.
 - `AotSourceTransformEmitter` attaches those payloads to carrier-owned decorators, static `$au`, and nested/anonymous
   `CustomElement.define(...)` calls without reconstructing authored metadata. Convention resources whose HTML module
   is already the complete definition do not receive a second carrier patch. The transform also replaces exact
@@ -23,6 +25,12 @@ The current public API is deliberately narrow:
   Aurelia facade used by strict AOT builds. Runtime-configuration protocol v2 includes the lookup-only captured-spread
   compiler contract; its content address cannot collide with the earlier blanket-refusal module semantics.
 - `AotTemplateModuleEmitter` remains the standalone HTML-resource realization.
+
+Local-template execution has two exact owner-Type realizations. Carrier-owned compiler patches receive the authored
+owner Type and its converged dependency prefix; standalone convention DefinitionModules allocate their root Type shell
+before local shells, wire the same cyclic graph, then define and register that root Type. Generated local Types retain
+only compiler-final definition metadata in this first wire; JIT's separate raw static `$au`/initial dependency surface
+remains an explicit introspection/SSR parity cell rather than a hidden approximation.
 
 Paired HTML has two explicit roles from semantic-runtime. A convention view-definition module is the sole
 compiler-final namespace/header realization; the official conventions transform attaches that namespace at the final

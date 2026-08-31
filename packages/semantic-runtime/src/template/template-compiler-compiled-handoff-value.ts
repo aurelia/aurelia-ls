@@ -23,9 +23,19 @@ import type {
   WatchPropertyKeyDefinition,
 } from '../resources/watch-definition.js';
 import type { TemplateInstruction } from './instruction-ir.js';
+import {
+  HydrateElementInstruction,
+  HydrateTemplateControllerInstruction,
+} from './instruction-ir.js';
 import type { HtmlNamespaceKind } from './html-ir.js';
 import {
+  CompiledTemplateContextRole,
+  type CompiledTemplateReference,
+} from './compiled-template.js';
+import type { CompiledTemplateEmission } from './compiled-template-materializer.js';
+import {
   orderTemplateCompilerContextFamilyDefinitions,
+  TemplateCompilerContextFamilyValueOwnerKind,
   type TemplateCompilerContextFamilyDefinitionLocation,
   type TemplateCompilerContextFamilyValueContext,
 } from './template-compiler-context-family-value.js';
@@ -49,7 +59,7 @@ import {
 } from './template-instruction-runtime-value.js';
 
 export const TEMPLATE_COMPILER_COMPILED_HANDOFF_VERSION =
-  'semantic-runtime/template-compiler-compiled-handoff/v2' as const;
+  'semantic-runtime/template-compiler-compiled-handoff/v3' as const;
 
 export interface TemplateCompilerCompiledHandoffValue {
   readonly schemaVersion: typeof TEMPLATE_COMPILER_COMPILED_HANDOFF_VERSION;
@@ -94,14 +104,41 @@ export interface TemplateCompilerCompiledHandoffTemplateSource {
 export interface TemplateCompilerCompiledHandoffDefinition {
   readonly definitionId: string;
   readonly owner: TemplateCompilerCompiledHandoffDefinitionOwner;
+  /** Compiler-front-door identity used by runtime controller topology; distinct from the final browser-family product. */
+  readonly sourceCompiledTemplate: TemplateCompilerCompiledHandoffSourceCompiledTemplate;
   readonly header: TemplateCompilerCompiledHandoffDefinitionHeader;
   readonly tree: TemplateCompilerCompiledHandoffTree;
   readonly rows: readonly (readonly TemplateCompilerCompiledHandoffInstruction[])[];
   readonly surrogates: readonly TemplateCompilerCompiledHandoffInstruction[];
 }
 
+export interface TemplateCompilerCompiledHandoffSourceCompiledTemplate {
+  readonly productHandle: ProductHandle;
+  readonly identityHandle: IdentityHandle;
+}
+
+/** Resource-local semantic unavailability while joining final definitions back to runtime controller topology. */
+export class TemplateCompilerSourceCompiledTemplateUnavailable extends Error {
+  constructor(
+    readonly reasonKind: string,
+    message: string,
+    readonly stableKeys: readonly string[],
+  ) {
+    super(message);
+    this.name = 'TemplateCompilerSourceCompiledTemplateUnavailable';
+  }
+}
+
 export type TemplateCompilerCompiledHandoffDefinitionOwner =
   | { readonly ownerKind: 'root' }
+  | {
+      readonly ownerKind: 'local-template';
+      readonly parentDefinitionId: string;
+      readonly declarationOrdinal: number;
+      readonly compilerAddedDependencyOrdinal: number;
+      readonly definitionProductHandle: ProductHandle;
+      readonly definitionIdentityHandle: IdentityHandle;
+    }
   | {
       readonly ownerKind: 'template-controller' | 'projection';
       readonly parentDefinitionId: string;
@@ -380,6 +417,8 @@ export type TemplateCompilerCompiledHandoffInstructionValue =
 
 export interface TemplateCompilerCompiledHandoffProjectionRequest {
   readonly definitions: TemplateCompilerCompiledDefinitionFamilyValue;
+  /** Original compiler-front-door family whose products are referenced by runtime controllers and view factories. */
+  readonly sourceCompiledTemplates: CompiledTemplateEmission;
   readonly address: TemplateCompilerCompiledHandoffAddress;
   readonly markup: string;
   readonly authoredSourceRevision: string;
@@ -390,24 +429,64 @@ export interface TemplateCompilerCompiledHandoffProjectionRequest {
   readonly spreadClosure: TemplateCompilerCompiledHandoffSpreadClosure;
 }
 
+export interface TemplateCompilerCompiledHandoffLocalFamilyProjection {
+  readonly definitions: TemplateCompilerCompiledDefinitionFamilyValue;
+  readonly sourceCompiledTemplates: CompiledTemplateEmission;
+  readonly parentDefinitions: TemplateCompilerCompiledDefinitionFamilyValue;
+  readonly localDefinitionProductHandle: ProductHandle;
+  readonly localDefinitionIdentityHandle: IdentityHandle;
+  readonly parentDefinitionProductHandle: ProductHandle;
+  readonly declarationOrdinal: number;
+  readonly compilerAddedDependencyOrdinal: number;
+}
+
+export interface TemplateCompilerOccurrenceCompiledHandoffProjectionRequest
+  extends TemplateCompilerCompiledHandoffProjectionRequest {
+  readonly locals: readonly TemplateCompilerCompiledHandoffLocalFamilyProjection[];
+}
+
+interface DefinitionProjectionEntry {
+  readonly location: TemplateCompilerContextFamilyDefinitionLocation;
+  readonly overlay: TemplateCompilerCompiledDefinitionOverlay;
+  readonly sourceCompiledTemplates: CompiledTemplateEmission;
+  readonly local: TemplateCompilerCompiledHandoffLocalFamilyProjection | null;
+}
+
 /** Detach one exact compiled-definition family into the sole build-consumer value. */
 export function projectTemplateCompilerCompiledHandoff(
   request: TemplateCompilerCompiledHandoffProjectionRequest,
 ): TemplateCompilerCompiledHandoffValue {
-  const locations = orderTemplateCompilerContextFamilyDefinitions(request.definitions.family);
-  const definitionIds = new Map(locations.map((location, index) => [location.context, `definition:${index}`]));
-  const overlays = new Map(request.definitions.definitions.map((definition) => [definition.context, definition]));
-  const definitions = locations.map((location) => {
-    const overlay = overlays.get(location.context);
-    if (overlay == null) throw new Error('Compiled handoff lost a definition overlay for an ordered context.');
-    return projectDefinition(
-      location,
-      overlay,
-      definitionIds,
-      request.store,
-      request.spreadPlansByInstruction ?? new Map(),
-    );
-  });
+  return projectCompiledHandoff(request, []);
+}
+
+/** Detach one root and its scoped local-definition forest into a single source-owned compiler artifact. */
+export function projectTemplateCompilerOccurrenceCompiledHandoff(
+  request: TemplateCompilerOccurrenceCompiledHandoffProjectionRequest,
+): TemplateCompilerCompiledHandoffValue {
+  return projectCompiledHandoff(request, request.locals);
+}
+
+function projectCompiledHandoff(
+  request: TemplateCompilerCompiledHandoffProjectionRequest,
+  locals: readonly TemplateCompilerCompiledHandoffLocalFamilyProjection[],
+): TemplateCompilerCompiledHandoffValue {
+  const entries = [
+    ...projectionEntries(request.definitions, request.sourceCompiledTemplates, null),
+    ...locals.flatMap((local) => projectionEntries(local.definitions, local.sourceCompiledTemplates, local)),
+  ];
+  const definitionIds = new Map(entries.map((entry, index) => [entry.location.context, `definition:${index}`]));
+  if (definitionIds.size !== entries.length) {
+    throw new Error('Compiled handoff repeats one context across root or local definition families.');
+  }
+  const definitions = entries.map((entry) => projectDefinition(
+    entry.location,
+    entry.overlay,
+    definitionIds,
+    entry.sourceCompiledTemplates,
+    request.store,
+    request.spreadPlansByInstruction ?? new Map(),
+    entry.local,
+  ));
   return {
     schemaVersion: TEMPLATE_COMPILER_COMPILED_HANDOFF_VERSION,
     address: request.address,
@@ -424,18 +503,34 @@ export function projectTemplateCompilerCompiledHandoff(
   };
 }
 
+function projectionEntries(
+  definitions: TemplateCompilerCompiledDefinitionFamilyValue,
+  sourceCompiledTemplates: CompiledTemplateEmission,
+  local: TemplateCompilerCompiledHandoffLocalFamilyProjection | null,
+): readonly DefinitionProjectionEntry[] {
+  const overlays = new Map(definitions.definitions.map((definition) => [definition.context, definition]));
+  return orderTemplateCompilerContextFamilyDefinitions(definitions.family).map((location) => {
+    const overlay = overlays.get(location.context);
+    if (overlay == null) throw new Error('Compiled handoff lost a definition overlay for an ordered context.');
+    return { location, overlay, sourceCompiledTemplates, local };
+  });
+}
+
 function projectDefinition(
   location: TemplateCompilerContextFamilyDefinitionLocation,
   overlay: TemplateCompilerCompiledDefinitionOverlay,
   definitionIds: ReadonlyMap<TemplateCompilerContextFamilyValueContext, string>,
+  sourceCompiledTemplates: CompiledTemplateEmission,
   store: KernelStore,
   spreadPlansByInstruction: ReadonlyMap<TemplateInstruction, TemplateCompilerCompiledHandoffSpreadPlan>,
+  local: TemplateCompilerCompiledHandoffLocalFamilyProjection | null,
 ): TemplateCompilerCompiledHandoffDefinition {
   const definitionId = requireMap(definitionIds, location.context, 'definition context');
   const values = overlay.instructions;
   return {
     definitionId,
-    owner: projectOwner(location, definitionIds),
+    owner: projectOwner(location, definitionIds, local),
+    sourceCompiledTemplate: projectSourceCompiledTemplate(location, sourceCompiledTemplates, store),
     header: projectHeader(overlay, store),
     tree: projectTree(location.context, store),
     rows: values.rows.map((row, rowIndex) => row.map((value, instructionIndex) =>
@@ -459,11 +554,170 @@ function projectDefinition(
   };
 }
 
+function projectSourceCompiledTemplate(
+  location: TemplateCompilerContextFamilyDefinitionLocation,
+  source: CompiledTemplateEmission,
+  store: KernelStore,
+): TemplateCompilerCompiledHandoffSourceCompiledTemplate {
+  if (location.parentContext == null) {
+    return requireSourceCompiledTemplate(
+      source,
+      source.compiledTemplate.toReference(),
+      CompiledTemplateContextRole.Root,
+      'root definition',
+    );
+  }
+
+  const owner = location.context.owner;
+  const instruction = owner.instruction;
+  if (owner.ownerKind === TemplateCompilerContextFamilyValueOwnerKind.TemplateController) {
+    if (!(instruction instanceof HydrateTemplateControllerInstruction)) {
+      throw new Error('Template-controller definition lost its final hydrate-template-controller instruction.');
+    }
+    const matches = source.instructions.filter((candidate): candidate is HydrateTemplateControllerInstruction =>
+      candidate instanceof HydrateTemplateControllerInstruction
+      && sameSourceNodeReference(candidate.node, instruction.node, store)
+      && sameSourceAttributeReference(candidate.attribute, instruction.attribute, store)
+    );
+    const match = matches[0] ?? null;
+    if (matches.length !== 1 || match?.childCompiledTemplate == null) {
+      throw new TemplateCompilerSourceCompiledTemplateUnavailable(
+        'template-controller-source-compiled-template-unavailable',
+        'Template-controller definition has no unique compiler-front-door child template.',
+        [instruction.productHandle, ...matches.map((candidate) => candidate.productHandle)],
+      );
+    }
+    return requireSourceCompiledTemplate(
+      source,
+      match.childCompiledTemplate,
+      CompiledTemplateContextRole.TemplateController,
+      'template-controller definition',
+    );
+  }
+
+  if (!(instruction instanceof HydrateElementInstruction) || owner.slotName == null) {
+    throw new Error('Projection definition lost its final hydrate-element instruction or slot.');
+  }
+  const matches = source.instructions.filter((candidate): candidate is HydrateElementInstruction =>
+    candidate instanceof HydrateElementInstruction
+    && sameSourceNodeReference(candidate.node, instruction.node, store)
+  );
+  const projections = matches.flatMap((candidate) =>
+    candidate.projections.filter((projection) => projection.slotName === owner.slotName)
+  );
+  if (matches.length !== 1 || projections.length !== 1) {
+    throw new TemplateCompilerSourceCompiledTemplateUnavailable(
+      'projection-source-compiled-template-unavailable',
+      'Projection definition has no unique compiler-front-door host and slot template.',
+      [instruction.productHandle, owner.slotName, ...matches.map((candidate) => candidate.productHandle)],
+    );
+  }
+  return requireSourceCompiledTemplate(
+    source,
+    projections[0]!.compiledTemplate,
+    CompiledTemplateContextRole.Projection,
+    'projection definition',
+  );
+}
+
+function sameSourceNodeReference(
+  left: HydrateElementInstruction['node'],
+  right: HydrateElementInstruction['node'],
+  store: KernelStore,
+): boolean {
+  return left.productHandle === right.productHandle
+    || (
+      left.nodeKind === right.nodeKind
+      && sameSourceAddress(left.addressHandle, right.addressHandle, store)
+    );
+}
+
+function sameSourceAttributeReference(
+  left: HydrateTemplateControllerInstruction['attribute'],
+  right: HydrateTemplateControllerInstruction['attribute'],
+  store: KernelStore,
+): boolean {
+  return left.productHandle === right.productHandle
+    || (
+      left.rawName === right.rawName
+      && sameSourceAddress(left.addressHandle, right.addressHandle, store)
+    );
+}
+
+function sameSourceAddress(
+  left: AddressHandle | null,
+  right: AddressHandle | null,
+  store: KernelStore,
+): boolean {
+  if (left == null || right == null) return false;
+  if (left === right) return true;
+  const leftSource = describeAddress(store, left);
+  const rightSource = describeAddress(store, right);
+  return leftSource != null
+    && rightSource != null
+    && leftSource.kind !== 'unexpanded-address'
+    && rightSource.kind !== 'unexpanded-address'
+    && leftSource.path === rightSource.path
+    && leftSource.start === rightSource.start
+    && leftSource.end === rightSource.end
+    && leftSource.role === rightSource.role;
+}
+
+function requireSourceCompiledTemplate(
+  source: CompiledTemplateEmission,
+  reference: CompiledTemplateReference,
+  role: CompiledTemplateContextRole,
+  label: string,
+): TemplateCompilerCompiledHandoffSourceCompiledTemplate {
+  const compiledTemplate = source.readCompiledTemplate(reference.productHandle);
+  if (
+    compiledTemplate == null
+    || compiledTemplate.identityHandle !== reference.identityHandle
+    || compiledTemplate.context.role !== role
+  ) {
+    throw new TemplateCompilerSourceCompiledTemplateUnavailable(
+      'source-compiled-template-identity-unavailable',
+      `Compiled handoff ${label} lost its compiler-front-door template identity or role.`,
+      [reference.productHandle, reference.identityHandle, role],
+    );
+  }
+  return {
+    productHandle: reference.productHandle,
+    identityHandle: reference.identityHandle,
+  };
+}
+
 function projectOwner(
   location: TemplateCompilerContextFamilyDefinitionLocation,
   definitionIds: ReadonlyMap<TemplateCompilerContextFamilyValueContext, string>,
+  local: TemplateCompilerCompiledHandoffLocalFamilyProjection | null,
 ): TemplateCompilerCompiledHandoffDefinitionOwner {
-  if (location.parentContext == null) return { ownerKind: 'root' };
+  if (location.parentContext == null) {
+    if (local == null) return { ownerKind: 'root' };
+    const definition = local.definitions.root.baseDefinition;
+    if (
+      definition == null
+      || definition.productHandle == null
+      || definition.identityHandle == null
+      || definition.productHandle !== local.localDefinitionProductHandle
+      || definition.identityHandle !== local.localDefinitionIdentityHandle
+      || local.parentDefinitions.root.baseDefinition?.productHandle !== local.parentDefinitionProductHandle
+    ) {
+      throw new Error('Compiled local handoff lost its generated definition identity.');
+    }
+    return {
+      ownerKind: 'local-template',
+      parentDefinitionId: requireMap(
+        definitionIds,
+        local.parentDefinitions.family.root,
+        'local parent definition context',
+      ),
+      declarationOrdinal: local.declarationOrdinal,
+      compilerAddedDependencyOrdinal: local.compilerAddedDependencyOrdinal,
+      definitionProductHandle: local.localDefinitionProductHandle,
+      definitionIdentityHandle: local.localDefinitionIdentityHandle,
+    };
+  }
   return {
     ownerKind: location.context.owner.ownerKind,
     parentDefinitionId: requireMap(definitionIds, location.parentContext, 'parent definition context'),

@@ -922,15 +922,15 @@ export class TemplateCompilerContextFamilyTargetAttachmentPreparation {
     const rows = target.allocation.rows;
     const lane = rows.receipt.endpoint.lane;
     const targetContexts = target.targetPlan.readContexts();
-    const globalContextBase = execution.sequence.readContexts().length;
+    const globalContextBase = contexts[0]?.ordinal ?? execution.sequence.readContexts().length;
     const scheduledProcessRemovals = schedule.processContentExecutionOrder;
     if (
       authority !== contextFamilyTargetAttachmentPreparationAuthority
       || schedule.target !== target
       || structuralExecution.forest !== execution.forest
       || structuralExecution.mutationAuthority !== execution.mutationAuthority
-      || structuralExecution.readTargetPlans().length !== 1
-      || structuralExecution.readTargetPlans()[0] !== target.targetPlan
+      || !structuralExecution.readTargetPlans().includes(target.targetPlan)
+      || globalContextBase < execution.sequence.readContexts().length
       || contexts.length !== targetContexts.length
       || contexts.some((context, ordinal) =>
         context.lane !== lane
@@ -1345,6 +1345,16 @@ export class TemplateCompilerExecutionSession {
       targetPlan,
       this.mutationAuthority,
     );
+    structuralExecution.admitCompilerExtractedDetachedNodes(
+      receipt.traversal.audit.transcript.binding.bootstrapClosure.localExtraction.operations.flatMap((operation) =>
+        operation.mutationBatch.nodeDetachmentMutations.map((mutation) => mutation.node)
+      ),
+    );
+    structuralExecution.admitCompilerExtractedDetachedAttributes(
+      receipt.traversal.audit.transcript.binding.bootstrapClosure.localExtraction.operations.flatMap((operation) =>
+        operation.mutationBatch.attributeDetachmentMutations.map((mutation) => mutation.attribute)
+      ),
+    );
     const adoptedProcessContent: TemplateCompilerConsumedNodeDisposition[] = [];
     for (const processContent of schedule.processContentExecutionOrder) {
       adoptedProcessContent.push(structuralExecution.adoptCommittedProcessContentRemoval(
@@ -1422,6 +1432,126 @@ export class TemplateCompilerExecutionSession {
     this.invocationPhases.set(lane, TemplateCompilerInvocationPhase.TargetExecution);
     this.preparedContextFamilyAttachments.delete(target);
     this.preparedContextFamilyAttachmentsByLane.delete(lane);
+    this.contextFamilyAttachments.set(target, attachment);
+    this.contextFamilyAttachmentsByLane.set(lane, attachment);
+    return attachment;
+  }
+
+  /** Commit one later extracted-lane family into the existing shared structural execution. */
+  commitAdditionalContextFamilyTargetAttachment(
+    target: TemplateCompilerContextFamilyTargetPlanPreparation,
+    schedule: TemplateCompilerContextFamilyStructuralSchedulePreparation,
+  ): TemplateCompilerContextFamilyTargetAttachment {
+    const existing = this.contextFamilyAttachments.get(target) ?? null;
+    if (existing != null) return existing;
+    this.requireMutable();
+    this.requireNoPendingAttempt('commit an additional context-family target attachment');
+    this.requireNoActiveSiteExecutionDriver('commit an additional context-family target attachment');
+    const structuralExecution = this.structuralFamily;
+    const rows = target.allocation.rows;
+    const receipt = rows.receipt;
+    const lane = receipt.endpoint.lane;
+    const targetPlan = target.targetPlan;
+    this.requireLane(lane);
+    this.requireOpenLane(lane);
+    if (
+      structuralExecution == null
+      || !target.isModuleConstructed()
+      || !target.isCurrent()
+      || !schedule.isModuleConstructed()
+      || !schedule.isCurrent()
+      || schedule.target !== target
+      || receipt.traversal.audit.transcript.binding.execution !== this
+      || receipt.traversal.audit.transcript.binding.lane !== lane
+      || !this.siteExecutionEndpointIsCurrent(receipt.endpoint)
+      || lane.ordinal === 0
+      || lane.targetPlan != null
+      || targetPlan.localKey !== lane.localKey
+      || !targetPlan.isSealed
+      || this.lanesByTargetPlan.has(targetPlan)
+      || this.contextFamilyAttachmentsByLane.has(lane)
+      || (this.contextsByLane.get(lane)?.length ?? 0) !== 0
+      || targetPlan.readContexts().some((context) =>
+        this.contextsByLocalKey.has(context.localKey)
+        || this.contextsByTargetContext.has(context)
+      )
+    ) {
+      throw new Error(`Additional context-family target plan '${targetPlan.localKey}' cannot attach.`);
+    }
+    targetPlan.assertCoherent();
+    structuralExecution.admitCompilerExtractedDetachedNodes(
+      receipt.traversal.audit.transcript.binding.bootstrapClosure.localExtraction.operations.flatMap((operation) =>
+        operation.mutationBatch.nodeDetachmentMutations.map((mutation) => mutation.node)
+      ),
+    );
+    structuralExecution.admitCompilerExtractedDetachedAttributes(
+      receipt.traversal.audit.transcript.binding.bootstrapClosure.localExtraction.operations.flatMap((operation) =>
+        operation.mutationBatch.attributeDetachmentMutations.map((mutation) => mutation.attribute)
+      ),
+    );
+    if (schedule.processContentExecutionOrder.length > 0) {
+      throw new Error('Additional local context-family processContent adoption requires a typed extension boundary.');
+    }
+    structuralExecution.assertCanAdmitTargetPlan(targetPlan);
+    structuralExecution.assertCanAdoptExtractedInvocationContextStructure(
+      targetPlan.root,
+      lane.compilerCarrier,
+      lane.compilerContent,
+      [targetPlan.root.owner.productHandle],
+    );
+    const globalContextBase = this.contexts.length;
+    const contexts = targetPlan.readContexts().map((targetContext, ordinal) =>
+      new TemplateCompilerExecutionContextReference(
+        this.familyAuthority,
+        lane,
+        targetContext,
+        globalContextBase + ordinal,
+        ordinal,
+      )
+    );
+    const operationSchedule = buildTemplateCompilerContextFamilyOperationSchedule(schedule, contexts);
+
+    // The prepared allocation is the final fallible boundary. Remaining installation spends prevalidated identities.
+    const allocation = target.allocation;
+    const committedAllocation = allocation.preparedAllocation.ledger.commitPrepared(
+      allocation.preparedAllocation,
+    );
+    structuralExecution.admitTargetPlan(targetPlan);
+    structuralExecution.adoptExtractedInvocationContextStructure(
+      targetPlan.root,
+      lane.compilerCarrier,
+      lane.compilerContent,
+      [targetPlan.root.owner.productHandle],
+    );
+    const preparation = new TemplateCompilerContextFamilyTargetAttachmentPreparation(
+      contextFamilyTargetAttachmentPreparationAuthority,
+      this,
+      target,
+      schedule,
+      structuralExecution,
+      contexts,
+      operationSchedule,
+      [],
+      this.forest.mutationRevision,
+      this.operations.length,
+      this.operationsByLane.get(lane)!.length,
+    );
+    const attachment = new TemplateCompilerContextFamilyTargetAttachment(
+      contextFamilyTargetAttachmentAuthority,
+      preparation,
+      committedAllocation,
+    );
+    lane.bindTargetPlan(this.familyAuthority, targetPlan);
+    this.lanesByTargetPlan.set(targetPlan, lane);
+    const laneContexts = this.contextsByLane.get(lane)!;
+    for (const context of contexts) {
+      this.contexts.push(context);
+      laneContexts.push(context);
+      this.contextsByTargetContext.set(context.targetContext, context);
+      this.contextsByLocalKey.set(context.localKey, context);
+      this.operationsByContext.set(context, []);
+    }
+    this.invocationPhases.set(lane, TemplateCompilerInvocationPhase.TargetExecution);
     this.contextFamilyAttachments.set(target, attachment);
     this.contextFamilyAttachmentsByLane.set(lane, attachment);
     return attachment;
@@ -2136,7 +2266,6 @@ export class TemplateCompilerExecutionSession {
       !bootstrapClosure.isOwnedBy(this.familyAuthority)
       || this.bootstrapClosuresByLane.get(lane) !== bootstrapClosure
       || lane.targetPlan != null
-      || this.structuralFamily != null
       || (this.contextsByLane.get(lane)?.length ?? 0) > 0
       || (siteContext == null) !== (siteOperations.length === 0)
       || (siteContext == null
@@ -2175,7 +2304,6 @@ export class TemplateCompilerExecutionSession {
         ? phase === TemplateCompilerInvocationPhase.BootstrapClosed
         : phase === TemplateCompilerInvocationPhase.SiteExecution)
       && lane.targetPlan == null
-      && this.structuralFamily == null
       && (this.contextsByLane.get(lane)?.length ?? 0) === 0
       && this.forest.mutationRevision === endpoint.forestMutationRevision
       && this.operations.length === endpoint.globalOperationCount

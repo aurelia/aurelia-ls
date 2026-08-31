@@ -462,8 +462,17 @@ export class TemplateCompilerSiteSpendLedger {
   private finishedResult: TemplateCompilerSiteSpendLedgerResult | null = null;
   private finishedCompletion: TemplateCompilerSiteSpendCompletion | null = null;
   private _nextSiteEventOrdinal = 0;
+  private readonly scopedBundles: ReadonlySet<TemplateCompilerNormalizedSiteBundle>;
 
-  constructor(readonly index: TemplateCompilerNormalizedSiteIndex) {}
+  constructor(
+    readonly index: TemplateCompilerNormalizedSiteIndex,
+    bundles: readonly TemplateCompilerNormalizedSiteBundle[] = [...index.attributeSites, ...index.textSites],
+  ) {
+    this.scopedBundles = new Set(bundles);
+    if (this.scopedBundles.size !== bundles.length || bundles.some((bundle) => !this.isIndexBundle(bundle))) {
+      throw new Error('Site spend ledger scope contains duplicate or foreign authored bundles.');
+    }
+  }
 
   /** Next contiguous ledger-local site-event ordinal; unrelated cursor element events do not create gaps here. */
   get nextSiteEventOrdinal(): number {
@@ -805,10 +814,7 @@ export class TemplateCompilerSiteSpendLedger {
       );
     }
     const unspent: TemplateCompilerNormalizedSiteBundle[] = [];
-    for (const bundle of this.index.attributeSites) {
-      if (!this.spendsByBundle.has(bundle)) unspent.push(bundle);
-    }
-    for (const bundle of this.index.textSites) {
+    for (const bundle of this.scopedBundles) {
       if (!this.spendsByBundle.has(bundle)) unspent.push(bundle);
     }
     const blockedByFrontier = completion.completionKind === TemplateCompilerSiteSpendCompletionKind.Complete
@@ -933,6 +939,10 @@ export class TemplateCompilerSiteSpendLedger {
   }
 
   private isOwnedBundle(bundle: TemplateCompilerNormalizedSiteBundle): boolean {
+    return this.scopedBundles.has(bundle) && this.isIndexBundle(bundle);
+  }
+
+  private isIndexBundle(bundle: TemplateCompilerNormalizedSiteBundle): boolean {
     return bundle instanceof TemplateCompilerNormalizedSite
       ? this.index.siteForAttribute(bundle.attributeProductHandle) === bundle
       : bundle instanceof TemplateCompilerNormalizedTextSite

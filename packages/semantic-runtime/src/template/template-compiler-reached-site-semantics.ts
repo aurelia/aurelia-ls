@@ -59,9 +59,10 @@ export class TemplateCompilerReachedSiteSemanticResolver {
 
   constructor(readonly request: TemplateCompilerReachedSiteSemanticResolverRequest) {
     const { execution, bootstrapClosure, compilerReads, preWalk, index } = request;
+    const traversalWorld = preWalk?.binding.compilerWorld ?? bootstrapClosure.hookBootstrap.compilerWorld;
     if (
       execution.bootstrapClosure(bootstrapClosure.lane) !== bootstrapClosure
-      || compilerReads.world !== bootstrapClosure.hookBootstrap.compilerWorld
+      || compilerReads.world !== traversalWorld
       || (preWalk != null && (
         preWalk.binding.execution !== execution
         || preWalk.binding.bootstrapClosure !== bootstrapClosure

@@ -89,18 +89,29 @@ export function executeTemplateCompilerContextFamilyTarget(
   const execution = attachment.execution;
   const structural = attachment.structuralExecution;
   const rootContext = attachment.target.targetPlan.root;
+  const attachmentContexts = new Set(attachment.contexts.map((context) => context.targetContext));
+  const rootStructure = structural.readContextStructure(rootContext);
+  const existingTransfers = structural.readInputNodeTransfers().filter((entry) =>
+    attachmentContexts.has(entry.context)
+  );
+  const unexpectedExistingTransfer = existingTransfers.find((entry) =>
+    rootStructure == null
+    || entry.context !== rootContext
+    || entry.node !== rootStructure.compilerCarrier
+    || entry.destinationParent !== null
+  ) ?? null;
   if (
     execution.structuralExecution !== structural
-    || structural.readTargetPlans().length !== 1
-    || structural.readTargetPlans()[0] !== attachment.target.targetPlan
+    || !structural.readTargetPlans().includes(attachment.target.targetPlan)
     || attachment.contexts.some((context) => execution.sequence.readContextOperations(context).length > 0)
-    || structural.readContextStructure(rootContext) == null
+    || rootStructure == null
     || attachment.contexts.slice(1).some((context) =>
       structural.readContextStructure(context.targetContext) != null
     )
-    || structural.readConsumedAttributeDispositions().length !== 0
-    || structural.readInputNodeTransfers().length !== 0
-    || structural.readInputTextExpansions().length !== 0
+    || structural.readConsumedAttributeDispositions().some((entry) => attachmentContexts.has(entry.context))
+    || existingTransfers.length > 1
+    || unexpectedExistingTransfer != null
+    || structural.readInputTextExpansions().some((entry) => attachmentContexts.has(entry.context))
     || structural.readTargetGeometries(rootContext).length !== 0
   ) {
     throw new Error('Context-family target execution requires its exact untouched attached structural frontier.');
@@ -315,15 +326,14 @@ export function executeTemplateCompilerContextFamilyTarget(
 
   assertFinalAttributeState(attachment);
   const closure = execution.closeContextFamilyTargetExecution(attachment);
-  execution.assertCoherent();
   const result = new TemplateCompilerContextFamilyTargetExecution(
     familyTargetExecutionAuthority,
     attachment,
     operations,
-    structural.readConsumedNodeDispositions(),
-    structural.readConsumedAttributeDispositions(),
-    structural.readInputNodeTransfers(),
-    structural.readInputTextExpansions(),
+    structural.readConsumedNodeDispositions().filter((entry) => attachmentContexts.has(entry.context)),
+    structural.readConsumedAttributeDispositions().filter((entry) => attachmentContexts.has(entry.context)),
+    structural.readInputNodeTransfers().filter((entry) => attachmentContexts.has(entry.context)),
+    structural.readInputTextExpansions().filter((entry) => attachmentContexts.has(entry.context)),
     attachment.target.targetPlan.readContexts().flatMap((context) => structural.readTargetGeometries(context)),
     closure,
   );

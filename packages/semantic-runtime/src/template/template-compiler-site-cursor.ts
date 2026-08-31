@@ -40,9 +40,7 @@ import {
   TemplateCompilerPreWalkBrowserOriginState,
 } from './template-compiler-prewalk-remainder.js';
 import {
-  bindTemplateCompilerRootSiteInvocation,
   type TemplateCompilerSiteInvocationBinding,
-  TemplateCompilerSiteInvocationBindingState,
 } from './template-compiler-site-invocation.js';
 import {
   type TemplateCompilerNormalizedSiteBundle,
@@ -463,16 +461,8 @@ function cursorAdmissionReasons(
       'Root cursor browser-effective publication authority is no longer current.',
     ));
   }
-  const current = bindTemplateCompilerRootSiteInvocation({
-    execution: binding.execution,
-    bootstrapClosure: binding.bootstrapClosure,
-    browserEmission: binding.browserEmission,
-    graphExact: binding.graphExact,
-    currentFrontDoor: binding.currentFrontDoor,
-    currentFamily: binding.currentFamily,
-  });
   if (
-    current.state !== TemplateCompilerSiteInvocationBindingState.Exact
+    !binding.isCurrent()
     || binding.execution.forest.mutationRevision !== binding.bootstrapClosure.forestMutationRevision
   ) {
     reasons.push(new TemplateCompilerSiteCursorAdmissionReason(
@@ -514,7 +504,7 @@ class TemplateCompilerRootSiteCursor {
     this.compilerReads = request.compilerReads;
     this.preWalk = request.preWalkAuthority;
     this.traversalMode = request.traversalMode ?? TemplateCompilerSiteCursorTraversalMode.CompatibilityStop;
-    this.ledger = new TemplateCompilerSiteSpendLedger(this.binding.index);
+    this.ledger = new TemplateCompilerSiteSpendLedger(this.binding.index, this.binding.siteBundles);
     this.startForestMutationRevision = this.binding.forest.mutationRevision;
     this.startGlobalOperationCount = this.binding.execution.sequence.readOperations().length;
     this.startLaneOperationCount = this.binding.execution.sequence.readLaneOperations(this.binding.lane).length;
@@ -530,7 +520,7 @@ class TemplateCompilerRootSiteCursor {
   }
 
   execute(): TemplateCompilerSiteCursorTranscript {
-    const root = this.binding.forest.compilerContent;
+    const root = this.binding.lane.compilerContent;
     this.taskSession.startRoot(root, root.readChildren());
     this.primePreWalkRemainders();
     if (this.frontier == null) this.walkContent();
@@ -2265,7 +2255,7 @@ class TemplateCompilerRootSiteCursor {
   }
 
   private validateSurrogate(): void {
-    const carrier = this.binding.forest.compilerCarrier;
+    const carrier = this.binding.lane.compilerCarrier;
     const attributes = carrier.readAttributes();
     this.phaseKind = TemplateCompilerSiteCursorPhaseKind.SurrogateValidationStart;
     this.phase(TemplateCompilerSiteCursorPhaseKind.SurrogateValidationStart);

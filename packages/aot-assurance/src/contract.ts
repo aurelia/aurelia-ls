@@ -4,6 +4,7 @@ export type AssuranceLane = 'jit' | 'aot';
 export type AssuranceScenario =
   | 'g0'
   | 'hello-world'
+  | 'local-templates'
   | 'routed-storefront'
   | 'state-backed-form'
   | 'projects-and-milestones';
@@ -146,6 +147,11 @@ export interface StateBackedFormApplicationObservation extends ApplicationObserv
   readonly model: StateBackedFormObservation;
 }
 
+export interface LocalTemplatesApplicationObservation extends ApplicationObservationBase {
+  readonly kind: 'local-templates';
+  readonly model: LocalTemplatesObservation;
+}
+
 export interface ProjectsAndMilestonesApplicationObservation extends ApplicationObservationBase {
   readonly kind: 'projects-and-milestones';
   readonly model: ProjectsAndMilestonesObservation;
@@ -154,6 +160,7 @@ export interface ProjectsAndMilestonesApplicationObservation extends Application
 export type ApplicationObservation =
   | G0ApplicationObservation
   | HelloWorldApplicationObservation
+  | LocalTemplatesApplicationObservation
   | RoutedStorefrontApplicationObservation
   | StateBackedFormApplicationObservation
   | ProjectsAndMilestonesApplicationObservation;
@@ -202,6 +209,15 @@ export interface HelloWorldCardObservation {
   readonly circleStrokeWidth: string;
   readonly foreignObjectWidth: string;
   readonly foreignObjectHtmlNamespace: string | null;
+}
+
+export interface LocalTemplatesObservation {
+  readonly message: string;
+  readonly cardValues: readonly string[];
+  readonly ownedDependencyCount: number;
+  readonly peerCardValue: string | null;
+  readonly nestedValue: string | null;
+  readonly conventionValue: string | null;
 }
 
 export interface HelloWorldObservation {

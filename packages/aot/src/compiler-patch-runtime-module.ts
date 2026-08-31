@@ -15,7 +15,10 @@ export function applyCompiledCustomElement(Type, patch) {
   definition.surrogates = patch.surrogates;
   definition.hasSlots = patch.hasSlots;
   definition.needsCompile = false;
-  definition.dependencies.push(...patch.compilerAddedDependencies);
+  const compilerAddedDependencies = typeof patch.materializeCompilerAddedDependencies === 'function'
+    ? patch.materializeCompilerAddedDependencies(Type, definition)
+    : patch.compilerAddedDependencies;
+  definition.dependencies.push(...compilerAddedDependencies);
   return Type;
 }
 `.trimStart();

@@ -7,6 +7,7 @@ import {
 } from '../api/source-reference.js';
 import type { KernelStore } from '../kernel/store.js';
 import type { IdentityHandle, ProductHandle } from '../kernel/handles.js';
+import type { ComputationRun } from '../kernel/computation-lifecycle.js';
 import {
   BrowserEffectiveTemplateMaterializer,
 } from './browser-effective-template-materializer.js';
@@ -26,7 +27,10 @@ import {
 } from './template-compiler-compiled-definition-value.js';
 import {
   projectTemplateCompilerCompiledHandoff,
+  projectTemplateCompilerOccurrenceCompiledHandoff,
   sourceReference,
+  TemplateCompilerSourceCompiledTemplateUnavailable,
+  type TemplateCompilerCompiledHandoffLocalFamilyProjection,
   type TemplateCompilerCompiledHandoffSpreadClosure,
   type TemplateCompilerCompiledHandoffValue,
 } from './template-compiler-compiled-handoff-value.js';
@@ -38,7 +42,10 @@ import {
   type TemplateCompilerRuntimeInstructionReason,
 } from './template-instruction-runtime-value.js';
 import type { TemplateCompilerContextFamilyValue } from './template-compiler-context-family-value.js';
-import type { TemplateResourceRuntimeAnalysisEmission } from './template-compilation-project-pass.js';
+import type {
+  TemplateCompilerOccurrencePrecedentEmission,
+  TemplateResourceRuntimeAnalysisEmission,
+} from './template-compilation-project-pass.js';
 import {
   projectSemanticAppRuntimeRegistrationRequirements,
   RuntimeRegistrationRequirementReasonKind,
@@ -50,8 +57,10 @@ import {
   type RuntimeSpreadCompilationHandoffResult,
   RuntimeSpreadCompilationHandoffState,
 } from './runtime-spread-compilation-handoff.js';
-
-type BrowserMaterializationContext = ConstructorParameters<typeof BrowserEffectiveTemplateMaterializer>[0];
+import {
+  compileTemplateCompilerOccurrenceFamily,
+  type TemplateCompilerOccurrenceLocalDefinitionValue,
+} from './template-compiler-occurrence-family-compilation.js';
 
 export const enum TemplateCompilerCompiledHandoffState {
   Exact = 'exact',
@@ -112,7 +121,17 @@ class SemanticAppTemplateCompilerMaterialization {
   constructor(
     readonly resource: TemplateResourceRuntimeAnalysisEmission,
     readonly handoff: SemanticAppTemplateCompilerHandoffResource,
-    readonly requirementInput: RuntimeRegistrationRequirementCompilerInput,
+    readonly requirementInputs: readonly RuntimeRegistrationRequirementCompilerInput[],
+  ) {}
+}
+
+class SemanticAppTemplateCompilerLocalPreparation {
+  constructor(
+    readonly relation: TemplateCompilerOccurrenceLocalDefinitionValue,
+    readonly resource: TemplateResourceRuntimeAnalysisEmission,
+    readonly family: TemplateCompilerContextFamilyValue,
+    readonly instructions: TemplateCompilerRuntimeInstructionFamilyValue,
+    readonly definitions: TemplateCompilerCompiledDefinitionFamilyValue,
   ) {}
 }
 
@@ -132,6 +151,8 @@ type SemanticAppTemplateCompilerPreparation =
       readonly authoredSourceRevision: string;
       readonly sourceAttachment: TemplateCompilerCompiledHandoffValue['address']['sourceAttachment'];
       readonly definitionProductHandle: ProductHandle;
+      readonly localPreparations: readonly SemanticAppTemplateCompilerLocalPreparation[];
+      readonly occurrenceSource: TemplateCompilerOccurrencePrecedentEmission | null;
     };
 
 export type SemanticAppTemplateCompilerHandoffResource =
@@ -176,11 +197,18 @@ export function materializeSemanticAppTemplateCompilerHandoffs(
         ...app.emission.templates.authoringResources,
       ])
     : app.emission.templates.resources;
-  const resources = candidates.filter((resource) =>
+  const selectedResources = candidates.filter((resource) =>
     requestedPaths.length === 0 || requestedPaths.some((filePath) => resourceMatchesPath(app, resource, filePath, store))
   );
+  const localDefinitionIdentities = new Set(selectedResources.flatMap((resource) =>
+    resource.compilation.unit.rootContext.dependencyIdentityHandles
+  ));
+  const resources = selectedResources.filter((resource) =>
+    resource.compilation.definition.identityHandle == null
+    || !localDefinitionIdentities.has(resource.compilation.definition.identityHandle)
+  );
   const matchedPaths = new Set(requestedPaths.filter((filePath) =>
-    resources.some((resource) => resourceMatchesPath(app, resource, filePath, store))
+    selectedResources.some((resource) => resourceMatchesPath(app, resource, filePath, store))
   ));
   const run = app.runtime.computationLifecycle.begin({
     kind: 'semantic-app-template-compiler-handoff',
@@ -206,14 +234,14 @@ export function materializeSemanticAppTemplateCompilerHandoffs(
       requestedPaths.filter((filePath) => !matchedPaths.has(filePath)),
       projectSemanticAppRuntimeRegistrationRequirements(
         app,
-        materialized.map((entry) => entry.requirementInput),
-        resources.length === candidates.length
+        materialized.flatMap((entry) => entry.requirementInputs),
+        selectedResources.length === candidates.length
           ? []
           : [{
               reasonKind: RuntimeRegistrationRequirementReasonKind.CompilerCohortIncomplete,
               summary: 'Selective template handoff materialization does not cover the complete app runtime cohort.',
               stableKeys: candidates
-                .filter((candidate) => !resources.includes(candidate))
+                .filter((candidate) => !selectedResources.includes(candidate))
                 .map((candidate) => candidate.compilation.localKey),
             }],
       ),
@@ -233,10 +261,14 @@ function prepareResource(
   app: SemanticApp,
   resource: TemplateResourceRuntimeAnalysisEmission,
   ordinal: number,
-  run: BrowserMaterializationContext,
+  run: ComputationRun,
   store: KernelStore,
 ): SemanticAppTemplateCompilerPreparation {
   const compilation = resource.compilation;
+  const occurrenceSource = occurrencePrecedentForResource(app, resource);
+  if (occurrenceSource != null) {
+    return prepareOccurrenceResource(app, resource, occurrenceSource, ordinal, run, store);
+  }
   const templateSource = compilation.unit.templateSource;
   const source = sourceReference(store, templateSource.sourceAddressHandle);
   if (templateSource.markup == null) {
@@ -341,6 +373,179 @@ function prepareResource(
     authoredSourceRevision,
     sourceAttachment,
     definitionProductHandle,
+    localPreparations: [],
+    occurrenceSource: null,
+  };
+}
+
+function occurrencePrecedentForResource(
+  app: SemanticApp,
+  resource: TemplateResourceRuntimeAnalysisEmission,
+): TemplateCompilerOccurrencePrecedentEmission | null {
+  if (resource.compilation.unit.rootContext.dependencyIdentityHandles.length === 0) return null;
+  const family = app.emission.templates.frontDoor.familyForOwner(resource.compilation.familyOwnerHandle);
+  if (family == null) return null;
+  const productHandle = resource.compilation.definition.productHandle;
+  const matches = [...family.appOccurrencePrecedents, ...family.authoringOccurrencePrecedents].filter((precedent) =>
+    precedent.compilation.definition.productHandle === productHandle
+  );
+  return matches.length === 1 ? matches[0]! : null;
+}
+
+function prepareOccurrenceResource(
+  app: SemanticApp,
+  resource: TemplateResourceRuntimeAnalysisEmission,
+  occurrenceSource: TemplateCompilerOccurrencePrecedentEmission,
+  ordinal: number,
+  run: ComputationRun,
+  store: KernelStore,
+): SemanticAppTemplateCompilerPreparation {
+  const compilation = resource.compilation;
+  const templateSource = occurrenceSource.compilation.unit.templateSource;
+  const source = sourceReference(store, templateSource.sourceAddressHandle);
+  if (templateSource.markup == null || occurrenceSource.compilation.html.draft == null) {
+    return unavailablePreparation(unavailableMaterialization(resource, unavailable(
+      TemplateCompilerCompiledHandoffState.Pending,
+      source,
+      TemplateCompilerCompiledHandoffStage.Input,
+      'occurrence-source-unavailable',
+      'Occurrence-first local-template handoff requires retained raw markup and authored draft bindings.',
+    )));
+  }
+  const localKey = `compiled-handoff:${ordinal}:${compilation.localKey}:occurrence-family`;
+  const browserDraft = parseBrowserTemplateFragmentDraft(templateSource.markup);
+  const browser = new BrowserEffectiveTemplateMaterializer(run).materialize({
+    localKey,
+    sourceRevision: occurrenceSource.sourceRevision,
+    templateSource,
+    authoredHtml: occurrenceSource.compilation.html,
+    browser: browserDraft,
+    carrierSelection: selectBrowserTemplateCompilerCarrier(browserDraft.fragment),
+  });
+  const currentFamily = app.emission.templates.frontDoor.familyForOwner(compilation.familyOwnerHandle);
+  if (currentFamily == null) {
+    return unavailablePreparation(unavailableMaterialization(resource, unavailable(
+      TemplateCompilerCompiledHandoffState.Ineligible,
+      source,
+      TemplateCompilerCompiledHandoffStage.Input,
+      'occurrence-family-unavailable',
+      'Occurrence-first local-template handoff lost its current front-door family.',
+    )));
+  }
+  const occurrence = compileTemplateCompilerOccurrenceFamily({
+    compilationKey: localKey,
+    appCurrentness: app,
+    occurrencePrecedent: occurrenceSource,
+    browserEmission: browser,
+    currentFrontDoor: app.emission.templates.frontDoor,
+    currentFamily,
+    appRootDefinitionProductHandle: compilation.appRootDefinitionProductHandle,
+    publication: run,
+  });
+  if (occurrence.state !== TemplateCompilerContextFamilyCompilationState.Exact || occurrence.value == null) {
+    return unavailablePreparation(unavailableMaterialization(resource, {
+      state: familyState(occurrence.state),
+      source,
+      reasons: occurrence.reasons
+        .filter((reason) => reason.role !== TemplateCompilerContextFamilyCompilationReasonRole.FrontierDerivative)
+        .map((reason) => contextFamilyReason(reason, store)),
+      value: null,
+    }));
+  }
+
+  const projected = [occurrence.value.rootFamily, ...occurrence.value.locals.map((local) => local.family)].map((family) => {
+    const instructions = projectTemplateCompilerRuntimeInstructionFamily({
+      family,
+      productDetails: run.domainReadProjection,
+      resourceRepresentation: TemplateCompilerRuntimeResourceRepresentation.Name,
+    });
+    if (instructions.state !== TemplateCompilerRuntimeInstructionFamilyState.Exact || instructions.value == null) {
+      return { state: 'unavailable' as const, instructions };
+    }
+    const definitions = projectTemplateCompilerCompiledDefinitionFamily({
+      family,
+      instructions,
+      readView: run.domainReadProjection,
+    });
+    if (definitions.state !== TemplateCompilerCompiledDefinitionFamilyState.Exact || definitions.value == null) {
+      return { state: 'unavailable' as const, instructions, definitions };
+    }
+    return { state: 'exact' as const, family, instructions: instructions.value, definitions: definitions.value };
+  });
+  const unavailableProjection = projected.find((entry) => entry.state === 'unavailable') ?? null;
+  if (unavailableProjection != null) {
+    const definitionFailure = 'definitions' in unavailableProjection
+      ? unavailableProjection.definitions ?? null
+      : null;
+    const reasons = definitionFailure != null
+      ? definitionFailure.reasons.map(compiledDefinitionReason)
+      : unavailableProjection.instructions.reasons.map(runtimeInstructionReason);
+    const state = definitionFailure != null
+      ? definitionState(definitionFailure.state)
+      : instructionState(unavailableProjection.instructions.state);
+    return unavailablePreparation(unavailableMaterialization(resource, {
+      state,
+      source,
+      reasons,
+      value: null,
+    }));
+  }
+  const exactProjected = projected.filter((entry): entry is Extract<typeof entry, { readonly state: 'exact' }> =>
+    entry.state === 'exact'
+  );
+  const root = exactProjected[0];
+  if (root == null) throw new Error('Exact occurrence family lost its projected root.');
+  const sourceResources = new Map([
+    ...app.emission.templates.resources,
+    ...app.emission.templates.authoringResources,
+  ].map((candidate) => [candidate.compilation.unit.templateSource.productHandle, candidate] as const));
+  const localPreparations = occurrence.value.locals.map((relation, index) => {
+    const localResource = sourceResources.get(relation.sourceTemplateProductHandle) ?? null;
+    const projection = exactProjected[index + 1] ?? null;
+    if (localResource == null || projection == null) {
+      throw new Error(
+        `Occurrence local definition '${relation.definition.name}' lost its source compilation `
+        + `(resource=${localResource == null ? 'missing' : 'exact'}, projection=${projection == null ? 'missing' : 'exact'}, `
+        + `product=${relation.localDefinitionProductHandle}).`,
+      );
+    }
+    return new SemanticAppTemplateCompilerLocalPreparation(
+      relation,
+      localResource,
+      projection.family,
+      projection.instructions,
+      projection.definitions,
+    );
+  });
+  if (!root.definitions.isCurrent() || localPreparations.some((local) => !local.definitions.isCurrent())) {
+    throw new Error(`Occurrence compiled handoff for '${compilation.definition.name}' changed before detachment.`);
+  }
+  const sourceAttachment = app.emission.resources.definitionSelections.find((selection) =>
+    selection.definition === compilation.definition
+  )?.sourceAttachment ?? null;
+  const definitionProductHandle = compilation.definition.productHandle;
+  if (definitionProductHandle == null) {
+    return unavailablePreparation(unavailableMaterialization(resource, unavailable(
+      TemplateCompilerCompiledHandoffState.Pending,
+      source,
+      TemplateCompilerCompiledHandoffStage.CompiledDefinitions,
+      'definition-product-unavailable',
+      'Occurrence compiler handoff requires a materialized root resource definition identity.',
+    )));
+  }
+  return {
+    state: 'exact',
+    resource,
+    source,
+    family: root.family,
+    instructions: root.instructions,
+    definitions: root.definitions,
+    markup: templateSource.markup,
+    authoredSourceRevision: occurrenceSource.sourceRevision,
+    sourceAttachment,
+    definitionProductHandle,
+    localPreparations,
+    occurrenceSource,
   };
 }
 
@@ -353,51 +558,123 @@ function finalizeResource(
     !preparation.family.isCurrent()
     || !preparation.instructions.isCurrent()
     || !preparation.definitions.isCurrent()
+    || preparation.localPreparations.some((local) =>
+      !local.family.isCurrent() || !local.instructions.isCurrent() || !local.definitions.isCurrent()
+    )
   ) {
     throw new Error(`Compiled handoff for '${preparation.resource.compilation.definition.name}' changed before final detachment.`);
   }
   const resource = preparation.resource;
   const compilation = resource.compilation;
-  const spreadCompilations = projectRuntimeSpreadCompilationHandoffs({
-    resource,
-    family: preparation.family,
-    requestorFamiliesByDefinitionProduct,
+  const spreadCompilations = [
+    projectRuntimeSpreadCompilationHandoffs({
+      resource,
+      family: preparation.family,
+      requestorFamiliesByDefinitionProduct,
+      store,
+    }),
+    ...preparation.localPreparations.map((local) => projectRuntimeSpreadCompilationHandoffs({
+      resource: local.resource,
+      family: local.family,
+      requestorFamiliesByDefinitionProduct,
+      store,
+    })),
+  ];
+  const spreadClosure = combinedSpreadCompilationClosure(spreadCompilations);
+  const spreadPlansByInstruction = new Map(spreadCompilations.flatMap((result) =>
+    result.state === RuntimeSpreadCompilationHandoffState.Exact ? [...result.plansByInstruction] : []
+  ));
+  const definitionsByRootProduct = new Map<ProductHandle, TemplateCompilerCompiledDefinitionFamilyValue>([
+    [preparation.definitionProductHandle, preparation.definitions],
+    ...preparation.localPreparations.map((local) => [
+      local.relation.localDefinitionProductHandle,
+      local.definitions,
+    ] as const),
+  ]);
+  const localProjections: TemplateCompilerCompiledHandoffLocalFamilyProjection[] = preparation.localPreparations.map(
+    (local) => {
+      const parentDefinitions = definitionsByRootProduct.get(local.relation.parentDefinitionProductHandle) ?? null;
+      if (parentDefinitions == null) {
+        throw new Error(`Local definition '${local.relation.definition.name}' lost its parent compiled family.`);
+      }
+      return {
+        definitions: local.definitions,
+        sourceCompiledTemplates: local.resource.compilation.compiledTemplate,
+        parentDefinitions,
+        localDefinitionProductHandle: local.relation.localDefinitionProductHandle,
+        localDefinitionIdentityHandle: local.relation.localDefinitionIdentityHandle,
+        parentDefinitionProductHandle: local.relation.parentDefinitionProductHandle,
+        declarationOrdinal: local.relation.declarationOrdinal,
+        compilerAddedDependencyOrdinal: local.relation.compilerAddedDependencyOrdinal,
+      };
+    },
+  );
+  const sourceMap = preparation.occurrenceSource?.compilation.unit.templateSource.sourceMap
+    ?? compilation.unit.templateSource.sourceMap;
+  const handoffValueRequest = {
+    definitions: preparation.definitions,
+    sourceCompiledTemplates: compilation.compiledTemplate,
+    address: {
+      definitionProductHandle: preparation.definitionProductHandle,
+      definitionIdentityHandle: compilation.definition.identityHandle,
+      compilerWorldProductHandle: compilation.compilerWorld.world.productHandle,
+      compilerWorldIdentityHandle: compilation.compilerWorld.world.identityHandle,
+      sourceAttachment: preparation.sourceAttachment,
+    },
+    markup: preparation.markup,
+    authoredSourceRevision: preparation.authoredSourceRevision,
+    sourceMap,
+    source: preparation.source,
     store,
-  });
-  const spreadClosure = spreadCompilationClosure(spreadCompilations);
+    spreadPlansByInstruction,
+    spreadClosure,
+  } as const;
+  let detachedValue: TemplateCompilerCompiledHandoffValue;
+  try {
+    detachedValue = localProjections.length === 0
+      ? projectTemplateCompilerCompiledHandoff(handoffValueRequest)
+      : projectTemplateCompilerOccurrenceCompiledHandoff({
+          ...handoffValueRequest,
+          locals: localProjections,
+        });
+  } catch (error) {
+    if (!(error instanceof TemplateCompilerSourceCompiledTemplateUnavailable)) throw error;
+    return unavailableMaterialization(resource, {
+      state: TemplateCompilerCompiledHandoffState.Ineligible,
+      source: preparation.source,
+      value: null,
+      reasons: [{
+        stage: TemplateCompilerCompiledHandoffStage.CompiledDefinitions,
+        reasonKind: error.reasonKind,
+        summary: error.message,
+        stableKeys: error.stableKeys,
+        frontierCause: null,
+      }],
+    });
+  }
   const handoff: SemanticAppTemplateCompilerHandoffResource = {
     state: TemplateCompilerCompiledHandoffState.Exact,
     source: preparation.source,
     reasons: [],
-    value: projectTemplateCompilerCompiledHandoff({
-      definitions: preparation.definitions,
-      address: {
-        definitionProductHandle: preparation.definitionProductHandle,
-        definitionIdentityHandle: compilation.definition.identityHandle,
-        compilerWorldProductHandle: compilation.compilerWorld.world.productHandle,
-        compilerWorldIdentityHandle: compilation.compilerWorld.world.identityHandle,
-        sourceAttachment: preparation.sourceAttachment,
-      },
-      markup: preparation.markup,
-      authoredSourceRevision: preparation.authoredSourceRevision,
-      sourceMap: compilation.unit.templateSource.sourceMap,
-      source: preparation.source,
-      store,
-      spreadPlansByInstruction: spreadCompilations.state === RuntimeSpreadCompilationHandoffState.Exact
-        ? spreadCompilations.plansByInstruction
-        : new Map(),
-      spreadClosure,
-    }),
+    value: detachedValue,
   };
   return new SemanticAppTemplateCompilerMaterialization(
     resource,
     handoff,
-    {
-      resource,
-      family: preparation.family,
-      instructions: preparation.instructions,
-      unavailableReasons: [],
-    },
+    [
+      {
+        resource,
+        family: preparation.family,
+        instructions: preparation.instructions,
+        unavailableReasons: [],
+      },
+      ...preparation.localPreparations.map((local) => ({
+        resource: local.resource,
+        family: local.family,
+        instructions: local.instructions,
+        unavailableReasons: [],
+      })),
+    ],
   );
 }
 
@@ -407,11 +684,19 @@ function uniquePreparedFamiliesByDefinitionProduct(
   const grouped = new Map<ProductHandle, TemplateCompilerContextFamilyValue[]>();
   for (const preparation of preparations) {
     if (preparation.state !== 'exact') continue;
-    const families = grouped.get(preparation.definitionProductHandle);
-    if (families == null) {
-      grouped.set(preparation.definitionProductHandle, [preparation.family]);
-    } else {
-      families.push(preparation.family);
+    for (const [definitionProductHandle, family] of [
+      [preparation.definitionProductHandle, preparation.family] as const,
+      ...preparation.localPreparations.map((local) => [
+        local.relation.localDefinitionProductHandle,
+        local.family,
+      ] as const),
+    ]) {
+      const families = grouped.get(definitionProductHandle);
+      if (families == null) {
+        grouped.set(definitionProductHandle, [family]);
+      } else {
+        families.push(family);
+      }
     }
   }
   return new Map([...grouped].flatMap(([definitionProductHandle, families]) =>
@@ -434,7 +719,7 @@ function unavailableMaterialization(
   return new SemanticAppTemplateCompilerMaterialization(
     resource,
     handoff,
-    {
+    [{
       resource,
       family: null,
       instructions: null,
@@ -443,7 +728,7 @@ function unavailableMaterialization(
         summary: reason.summary,
         stableKeys: [reason.stage, reason.reasonKind, ...reason.stableKeys],
       })),
-    },
+    }],
   );
 }
 
@@ -559,19 +844,24 @@ function instructionState(
     : TemplateCompilerCompiledHandoffState.Ineligible;
 }
 
-function spreadCompilationClosure(
-  result: RuntimeSpreadCompilationHandoffResult,
+function combinedSpreadCompilationClosure(
+  results: readonly RuntimeSpreadCompilationHandoffResult[],
 ): TemplateCompilerCompiledHandoffSpreadClosure {
-  return result.state === RuntimeSpreadCompilationHandoffState.Exact
-    ? { state: 'exact', reasons: [] }
-    : {
-        state: result.state,
-        reasons: result.reasons.map((reason) => ({
-          reasonKind: reason.reasonKind,
-          summary: reason.summary,
-          stableKeys: reason.stableKeys,
-        })),
-      };
+  const unavailable = results.filter((result) => result.state !== RuntimeSpreadCompilationHandoffState.Exact);
+  if (unavailable.length === 0) return { state: 'exact', reasons: [] };
+  const state = unavailable.some((result) => result.state === RuntimeSpreadCompilationHandoffState.Ineligible)
+    ? 'ineligible'
+    : unavailable.some((result) => result.state === RuntimeSpreadCompilationHandoffState.Open)
+      ? 'open'
+      : 'pending';
+  return {
+    state,
+    reasons: unavailable.flatMap((result) => result.reasons.map((reason) => ({
+      reasonKind: reason.reasonKind,
+      summary: reason.summary,
+      stableKeys: reason.stableKeys,
+    }))),
+  };
 }
 
 function definitionState(

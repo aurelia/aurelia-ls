@@ -13,13 +13,14 @@ import type {
 } from './template-compiler-occurrence-compilation-ingress.js';
 
 const occurrenceWorldClosureAuthority = {};
+const occurrenceWorldTransferAuthority = {};
 const occurrenceWorldClosureOwners = new WeakMap<
   TemplateCompilerOccurrenceCompilationIngressCohort,
   TemplateCompilerOccurrenceWorldClosureMaterializer
 >();
 
-/** Root traversal transition from the completed pre-local bootstrap to the projected post-local world. */
-export class TemplateCompilerOccurrenceRootTraversalWorldProjection {
+/** Invocation traversal transition from the completed pre-local bootstrap to the projected post-local world. */
+export class TemplateCompilerOccurrenceTraversalWorldProjection {
   readonly #authority: object;
 
   constructor(
@@ -43,13 +44,14 @@ export class TemplateCompilerOccurrenceRootTraversalWorldProjection {
   }
 
   hasPendingFrontier(): boolean {
-    const binding = this.closure.binding;
-    const execution = binding.execution;
+    const execution = this.closure.binding.execution;
+    const lane = this.closure.lane;
+    const bootstrapClosure = this.closure.bootstrapClosure;
     return this.#authority === occurrenceWorldClosureAuthority
-      && execution.invocationPhase(binding.lane) === TemplateCompilerInvocationPhase.BootstrapClosed
-      && binding.lane.targetPlan == null
-      && execution.sequence.readLaneOperations(binding.lane).length === binding.bootstrapClosure.laneOperationCount
-      && !execution.sequence.readContexts().some((context) => context.lane === binding.lane);
+      && execution.invocationPhase(lane) === TemplateCompilerInvocationPhase.BootstrapClosed
+      && lane.targetPlan == null
+      && execution.sequence.readLaneOperations(lane).length === bootstrapClosure.laneOperationCount
+      && !execution.sequence.readContexts().some((context) => context.lane === lane);
   }
 }
 
@@ -99,10 +101,73 @@ export class TemplateCompilerOccurrenceChildHookParentWorldProjection {
   }
 }
 
+/** Durable one-shot child hook-parent authority claimed while the complete sibling frontier is still atomic. */
+export class TemplateCompilerOccurrenceChildHookParentWorldTransfer {
+  readonly #authority: object;
+
+  constructor(
+    authority: object,
+    readonly projection: TemplateCompilerOccurrenceChildHookParentWorldProjection,
+  ) {
+    if (authority !== occurrenceWorldTransferAuthority || !projection.isPendingCurrent()) {
+      throw new Error('Occurrence child hook-parent transfer requires one current claimed projection.');
+    }
+    this.#authority = authority;
+  }
+
+  get world(): TemplateCompilerWorldEmission {
+    return this.projection.world;
+  }
+
+  get lane() {
+    return this.projection.lane;
+  }
+
+  get ingress() {
+    return this.projection.ingress;
+  }
+
+  get definitionEntry() {
+    return this.projection.definitionEntry;
+  }
+
+  isPendingCurrent(): boolean {
+    return this.#authority === occurrenceWorldTransferAuthority
+      && this.projection.closure.isCurrent()
+      && this.projection.hasPendingFrontier();
+  }
+}
+
+/** Atomic claim over every direct sibling child-world transfer before any parent or child target work begins. */
+export class TemplateCompilerOccurrenceChildHookParentWorldClaim {
+  readonly #authority: object;
+
+  constructor(
+    authority: object,
+    readonly closure: TemplateCompilerOccurrencePostLocalWorldClosure,
+    readonly transfers: readonly TemplateCompilerOccurrenceChildHookParentWorldTransfer[],
+  ) {
+    if (
+      authority !== occurrenceWorldTransferAuthority
+      || transfers.length !== closure.childHookParentProjections.length
+      || transfers.some((transfer, ordinal) =>
+        transfer.projection !== closure.childHookParentProjections[ordinal]
+      )
+    ) {
+      throw new Error('Occurrence child hook-parent claim lost complete sibling transfer coverage.');
+    }
+    this.#authority = authority;
+  }
+
+  isModuleConstructed(): boolean {
+    return this.#authority === occurrenceWorldTransferAuthority;
+  }
+}
+
 /** Candidate-only world projection over one published direct-sibling occurrence cohort. */
 export class TemplateCompilerOccurrencePostLocalWorldClosure {
   readonly #authority: object;
-  readonly rootTraversalProjection: TemplateCompilerOccurrenceRootTraversalWorldProjection;
+  readonly traversalProjection: TemplateCompilerOccurrenceTraversalWorldProjection;
   readonly childHookParentProjections: readonly TemplateCompilerOccurrenceChildHookParentWorldProjection[];
 
   constructor(
@@ -117,7 +182,7 @@ export class TemplateCompilerOccurrencePostLocalWorldClosure {
       throw new Error('Occurrence post-local world closures are materializer-owned capabilities.');
     }
     this.#authority = authority;
-    this.rootTraversalProjection = new TemplateCompilerOccurrenceRootTraversalWorldProjection(
+    this.traversalProjection = new TemplateCompilerOccurrenceTraversalWorldProjection(
       occurrenceWorldClosureAuthority,
       this,
     );
@@ -133,7 +198,15 @@ export class TemplateCompilerOccurrencePostLocalWorldClosure {
   }
 
   get binding() {
-    return this.ingressCohort.definitionPreparation.rootPartition.incoming.family.binding;
+    return this.ingressCohort.definitionPreparation.ownerPartition.incoming.family.binding;
+  }
+
+  get lane() {
+    return this.ingressCohort.definitionPreparation.ownerPartition.incoming.lane;
+  }
+
+  get bootstrapClosure() {
+    return this.ingressCohort.definitionPreparation.ownerPartition.closure;
   }
 
   isCurrent(): boolean {
@@ -152,7 +225,7 @@ export class TemplateCompilerOccurrencePostLocalWorldClosure {
   isClaimable(): boolean {
     return this.isCurrent()
       && this.ingressCohort.hasImmediateFrontier()
-      && this.rootTraversalProjection.hasPendingFrontier()
+      && this.traversalProjection.hasPendingFrontier()
       && this.childHookParentProjections.every((entry) => entry.hasPendingFrontier());
   }
 }
@@ -164,12 +237,16 @@ export class TemplateCompilerOccurrenceWorldClosureMaterializer {
     TemplateCompilerOccurrenceCompilationIngressCohort,
     TemplateCompilerOccurrencePostLocalWorldClosure
   >();
+  private readonly claimsByClosure = new WeakMap<
+    TemplateCompilerOccurrencePostLocalWorldClosure,
+    TemplateCompilerOccurrenceChildHookParentWorldClaim
+  >();
 
   constructor(readonly publication: ComputationRun) {
     this.worlds = TemplateCompilerInvocationWorldMaterializer.candidateStrict(publication);
   }
 
-  projectRootCohort(
+  projectCohort(
     definitionMaterialization: LocalTemplateOccurrenceDefinitionMaterialization,
     ingressCohort: TemplateCompilerOccurrenceCompilationIngressCohort,
   ): TemplateCompilerOccurrencePostLocalWorldClosure {
@@ -192,7 +269,7 @@ export class TemplateCompilerOccurrenceWorldClosureMaterializer {
       throw new Error('Occurrence post-local world closure belongs to another materializer.');
     }
     const preparation = ingressCohort.definitionPreparation;
-    const partition = preparation.rootPartition;
+    const partition = preparation.ownerPartition;
     const binding = partition.incoming.family.binding;
     if (
       !definitionMaterialization.isModuleConstructed()
@@ -216,15 +293,20 @@ export class TemplateCompilerOccurrenceWorldClosureMaterializer {
       throw new Error('Occurrence post-local world projection requires one current published sibling cohort.');
     }
 
-    const sourceAddressHandle = binding.definition.template?.addressHandle ?? binding.definition.sourceAddressHandle;
+    const ownerDefinition = definitionMaterialization.ownerDefinition;
+    const sourceAddressHandle = ownerDefinition.template?.addressHandle ?? ownerDefinition.sourceAddressHandle;
+    const preLocalWorld = partition.closure.hookBootstrap.compilerWorld;
+    if (preLocalWorld == null) {
+      throw new Error('Occurrence post-local world projection lost the exact hook compiler world.');
+    }
     const postLocalWorld = this.worlds.projectPostLocalWorld(
-      binding.preLocalCompilerWorld,
+      preLocalWorld,
       definitionMaterialization.definitions,
-      binding.lane.localKey,
+      partition.incoming.lane.localKey,
       sourceAddressHandle,
     );
     if (
-      postLocalWorld === binding.preLocalCompilerWorld
+      postLocalWorld === preLocalWorld
       || definitionMaterialization.entries.some((entry) =>
         postLocalWorld.resourceResolver.el(entry.definition.name)?.definitionProductHandle
           !== entry.definition.productHandle
@@ -237,11 +319,37 @@ export class TemplateCompilerOccurrenceWorldClosureMaterializer {
       this.publication,
       definitionMaterialization,
       ingressCohort,
-      binding.preLocalCompilerWorld,
+      preLocalWorld,
       postLocalWorld,
     );
     this.closuresByIngressCohort.set(ingressCohort, closure);
     occurrenceWorldClosureOwners.set(ingressCohort, this);
     return closure;
+  }
+
+  /** Claim the whole sibling child-world band before parent traversal can invalidate the immediate frontier. */
+  claimChildHookParents(
+    closure: TemplateCompilerOccurrencePostLocalWorldClosure,
+  ): TemplateCompilerOccurrenceChildHookParentWorldClaim {
+    const existing = this.claimsByClosure.get(closure) ?? null;
+    if (existing != null) return existing;
+    if (
+      this.closuresByIngressCohort.get(closure.ingressCohort) !== closure
+      || !closure.isClaimable()
+    ) {
+      throw new Error('Occurrence child hook-parent claim requires one current complete sibling frontier.');
+    }
+    const claim = new TemplateCompilerOccurrenceChildHookParentWorldClaim(
+      occurrenceWorldTransferAuthority,
+      closure,
+      closure.childHookParentProjections.map((projection) =>
+        new TemplateCompilerOccurrenceChildHookParentWorldTransfer(
+          occurrenceWorldTransferAuthority,
+          projection,
+        )
+      ),
+    );
+    this.claimsByClosure.set(closure, claim);
+    return claim;
   }
 }

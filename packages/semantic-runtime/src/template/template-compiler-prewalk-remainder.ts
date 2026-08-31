@@ -36,9 +36,7 @@ import {
   type TemplateCompilerNormalizedTextSite,
 } from './template-compiler-normalized-site-index.js';
 import {
-  bindTemplateCompilerRootSiteInvocation,
   type TemplateCompilerSiteInvocationBinding,
-  TemplateCompilerSiteInvocationBindingState,
 } from './template-compiler-site-invocation.js';
 import {
   BrowserEffectiveTemplateElement,
@@ -132,16 +130,8 @@ export class TemplateCompilerPreWalkRemainderAuthority {
     if (!binding.isModuleConstructed()) {
       throw new Error('Pre-walk remainder capture requires one module-constructed site invocation binding.');
     }
-    const current = bindTemplateCompilerRootSiteInvocation({
-      execution: binding.execution,
-      bootstrapClosure: binding.bootstrapClosure,
-      browserEmission: binding.browserEmission,
-      graphExact: binding.graphExact,
-      currentFrontDoor: binding.currentFrontDoor,
-      currentFamily: binding.currentFamily,
-    });
-    if (current.state !== TemplateCompilerSiteInvocationBindingState.Exact) {
-      throw new Error('Pre-walk remainder capture requires a still-current exact root invocation binding.');
+    if (!binding.isCurrent()) {
+      throw new Error('Pre-walk remainder capture requires a still-current exact invocation binding.');
     }
     const authority = new TemplateCompilerPreWalkRemainderAuthority(
       preWalkRemainderConstructionAuthority,
@@ -225,7 +215,7 @@ export class TemplateCompilerPreWalkRemainderAuthority {
       origins,
     );
 
-    for (const bundle of [...this.index.attributeSites, ...this.index.textSites]) {
+    for (const bundle of this.binding.siteBundles) {
       const authoredProductHandle = bundleProductHandle(bundle);
       const route = origins.routeForAuthoredProduct(authoredProductHandle);
       const partitions = correspondence.partitionsForAuthoredProduct(authoredProductHandle);

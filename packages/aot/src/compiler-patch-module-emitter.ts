@@ -6,6 +6,7 @@ import type {
 import {
   AotArtifactError,
   AotCompiledTemplateEmission,
+  AotLocalDefinitionEmission,
   createAotRawSourceMap,
   digestAotArtifact,
   type AotDefinitionDependencyPlan,
@@ -32,6 +33,7 @@ export type AotCompilerPatchModuleEmissionRequest = AotTemplateModuleEmissionReq
 export class AotCompilerPatchModuleEmitter {
   public emit(request: AotCompilerPatchModuleEmissionRequest): AotCompilerPatchModuleArtifact {
     const emission = new AotCompiledTemplateEmission(request);
+    const locals = new AotLocalDefinitionEmission(emission);
     const generatedDefinitions = emission.definitions.filter((definition) => definition !== emission.root);
     assertGeneratedDefinitionsHaveNoDependencies(generatedDefinitions, request);
     const generatedDependencies: AotDefinitionDependencyPlan = {
@@ -40,8 +42,13 @@ export class AotCompilerPatchModuleEmitter {
     };
     const rootVariable = emission.variableFor(emission.root.definitionId);
     const lines: string[] = [
+      ...(!locals.hasLocals
+        ? []
+        : ["import { CustomElement } from '@aurelia/runtime-html';", '']),
       ...emission.declarationLines(),
       '',
+      ...locals.typeDeclarationLines(),
+      ...(locals.hasLocals ? [''] : []),
     ];
 
     for (const definition of [...generatedDefinitions].reverse()) {
@@ -49,8 +56,17 @@ export class AotCompilerPatchModuleEmitter {
         `Object.assign(${emission.variableFor(definition.definitionId)}, ${emission.completeDefinitionValue(definition, generatedDependencies)});`,
       );
     }
+    lines.push(`Object.assign(${rootVariable}, ${emission.compilerPatchValue()});`);
+    if (locals.hasLocals) {
+      lines.push(
+        'function $materializeCompilerAddedDependencies($ownerType, $ownerDefinition) {',
+        ...locals.materializationLines('$ownerType', '$ownerDefinition', '  '),
+        `  return [${locals.directRootTypeVariables().join(', ')}];`,
+        '}',
+        `${rootVariable}.materializeCompilerAddedDependencies = $materializeCompilerAddedDependencies;`,
+      );
+    }
     lines.push(
-      `Object.assign(${rootVariable}, ${emission.compilerPatchValue()});`,
       '',
       `export const template = ${rootVariable}.template;`,
       `export const instructions = ${rootVariable}.instructions;`,

@@ -101,6 +101,10 @@ import type {
 } from './template-compiler-normalized-site-lane-view.js';
 
 const localTemplateOccurrencePreparationAuthority = {};
+const localTemplateOccurrencePreparationOwners = new WeakMap<
+  TemplateCompilerNormalizedSiteLanePartition,
+  LocalTemplateDefinitionMaterializer
+>();
 
 export class LocalTemplateDefinitionMaterialization {
   constructor(
@@ -149,23 +153,20 @@ export class LocalTemplateOccurrenceDefinitionPreparation {
 
   constructor(
     authority: object,
-    readonly rootPartition: TemplateCompilerNormalizedSiteLanePartition,
+    readonly ownerPartition: TemplateCompilerNormalizedSiteLanePartition,
+    /** Exact root or generated-local definition whose extraction produced this direct sibling cohort. */
+    readonly ownerDefinition: CustomElementDefinition,
     readonly entries: readonly LocalTemplateOccurrenceDefinitionEntry[],
     readonly records: readonly KernelStoreRecord[],
   ) {
-    if (authority !== localTemplateOccurrencePreparationAuthority) {
+    if (authority !== localTemplateOccurrencePreparationAuthority || ownerDefinition.productHandle == null) {
       throw new Error('Local-template occurrence preparations are materializer-owned capabilities.');
     }
     this.#authority = authority;
   }
 
-  /** Owner dependencies plus ordered sibling entries remain the authority for later generated-Type wiring. */
-  get ownerDefinition(): CustomElementDefinition {
-    return this.rootPartition.incoming.family.binding.definition;
-  }
-
   get handoff(): TemplateCompilerLocalExtractionHandoff {
-    return this.rootPartition.closure.localExtraction.handoff!;
+    return this.ownerPartition.closure.localExtraction.handoff!;
   }
 
   isModuleConstructed(): boolean {
@@ -193,8 +194,8 @@ export class LocalTemplateOccurrenceDefinitionMaterialization {
     return this.preparation.ownerDefinition;
   }
 
-  get rootPartition(): TemplateCompilerNormalizedSiteLanePartition {
-    return this.preparation.rootPartition;
+  get ownerPartition(): TemplateCompilerNormalizedSiteLanePartition {
+    return this.preparation.ownerPartition;
   }
 
   get definitions(): readonly CustomElementDefinition[] {
@@ -297,7 +298,7 @@ export class LocalTemplateDefinitionMaterializer {
   private readonly materializations = new Map<string, LocalTemplateDefinitionMaterialization>();
   private readonly reservationsByInvocationKey = new Map<string, LocalTemplateDefinitionHandleReservation>();
   private readonly occurrencePreparations = new WeakSet<LocalTemplateOccurrenceDefinitionPreparation>();
-  private readonly occurrencePreparationsByRootPartition = new WeakMap<
+  private readonly occurrencePreparationsByPartition = new WeakMap<
     TemplateCompilerNormalizedSiteLanePartition,
     LocalTemplateOccurrenceDefinitionPreparation
   >();
@@ -322,16 +323,20 @@ export class LocalTemplateDefinitionMaterializer {
     return reservation;
   }
 
-  /** Build all root-level DomNode definitions from one current normalized-site partition without publishing them. */
+  /** Build all direct-child DomNode definitions from one current invocation partition without publishing them. */
   prepareOccurrenceHandoff(
-    rootPartition: TemplateCompilerNormalizedSiteLanePartition,
+    ownerPartition: TemplateCompilerNormalizedSiteLanePartition,
   ): LocalTemplateOccurrenceDefinitionPreparation {
-    const { ownerDefinition, forest, handoff } = this.validateRootOccurrencePartition(rootPartition);
-    const existing = this.occurrencePreparationsByRootPartition.get(rootPartition);
+    const { ownerDefinition, forest, handoff } = this.validateOccurrencePartition(ownerPartition);
+    const existing = this.occurrencePreparationsByPartition.get(ownerPartition);
     if (existing != null) return existing;
+    const priorOwner = localTemplateOccurrencePreparationOwners.get(ownerPartition);
+    if (priorOwner != null && priorOwner !== this) {
+      throw new Error('Local-template occurrence partition belongs to another definition materializer.');
+    }
     this.validateOccurrenceHandoff(forest, handoff);
     const records: KernelStoreRecord[] = [];
-    const entries = rootPartition.transfers.map((siteTransfer) => {
+    const entries = ownerPartition.transfers.map((siteTransfer) => {
       const extracted = siteTransfer.transfer.extraction;
       const reservation = extracted.definitionReservation;
       const carrierSourceAddressHandle = this.authoredElementSourceAddress(forest, extracted.carrier);
@@ -361,12 +366,14 @@ export class LocalTemplateDefinitionMaterializer {
     });
     const preparation = new LocalTemplateOccurrenceDefinitionPreparation(
       localTemplateOccurrencePreparationAuthority,
-      rootPartition,
+      ownerPartition,
+      ownerDefinition,
       entries,
       records,
     );
     this.occurrencePreparations.add(preparation);
-    this.occurrencePreparationsByRootPartition.set(rootPartition, preparation);
+    this.occurrencePreparationsByPartition.set(ownerPartition, preparation);
+    localTemplateOccurrencePreparationOwners.set(ownerPartition, this);
     return preparation;
   }
 
@@ -380,7 +387,7 @@ export class LocalTemplateDefinitionMaterializer {
     if (this.publishedOccurrencePreparations.has(preparation)) {
       throw new Error('Local-template occurrence preparation is already published.');
     }
-    this.validateRootOccurrencePartition(preparation.rootPartition);
+    this.validateOccurrencePartition(preparation.ownerPartition);
     const repeatedInvocation = preparation.entries.find((entry) =>
       this.publishedOccurrenceInvocationKeys.has(entry.extracted.invocationKey)
     ) ?? null;
@@ -673,38 +680,53 @@ export class LocalTemplateDefinitionMaterializer {
     );
   }
 
-  private validateRootOccurrencePartition(
-    rootPartition: TemplateCompilerNormalizedSiteLanePartition,
+  private validateOccurrencePartition(
+    ownerPartition: TemplateCompilerNormalizedSiteLanePartition,
   ): {
     readonly ownerDefinition: CustomElementDefinition;
     readonly forest: TemplateCompilerOccurrenceForest;
     readonly handoff: TemplateCompilerLocalExtractionHandoff;
   } {
-    const incoming = rootPartition.incoming;
+    const incoming = ownerPartition.incoming;
     const family = incoming.family;
     const binding = family.binding;
     const execution = binding.execution;
-    const closure = rootPartition.closure;
+    const closure = ownerPartition.closure;
     const handoff = closure.localExtraction.handoff;
+    const rootInvocation = incoming === family.rootView;
+    const extractedTransfer = 'transfer' in incoming.ingress ? incoming.ingress.transfer : null;
+    const ownerDefinition = rootInvocation
+      ? binding.definition
+      : extractedTransfer == null
+        ? null
+        : this.store.readProductDetail(
+            ResourceProductDetails.Definition,
+            extractedTransfer.extraction.definitionReservation.productHandle,
+          );
     if (
-      !rootPartition.isModuleConstructed()
+      !ownerPartition.isModuleConstructed()
       || !family.isCurrent()
-      || incoming !== family.rootView
-      || incoming.lane !== binding.lane
-      || closure !== binding.bootstrapClosure
+      || !incoming.isOwnedBy(family)
+      || incoming.lane !== closure.lane
       || this.store !== binding.browserEmission.publication
-      || execution.bootstrapClosure(binding.lane) !== closure
-      || execution.invocationPhase(binding.lane) !== TemplateCompilerInvocationPhase.BootstrapClosed
-      || binding.lane.targetPlan != null
-      || execution.sequence.readLaneOperations(binding.lane).length !== closure.laneOperationCount
-      || execution.sequence.readContexts().some((context) => context.lane === binding.lane)
-      || rootPartition.exclusionAuthority.closure !== closure
-      || rootPartition.exclusionAuthority.execution !== execution
+      || execution.bootstrapClosure(incoming.lane) !== closure
+      || execution.invocationPhase(incoming.lane) !== TemplateCompilerInvocationPhase.BootstrapClosed
+      || incoming.lane.targetPlan != null
+      || execution.sequence.readLaneOperations(incoming.lane).length !== closure.laneOperationCount
+      || execution.sequence.readContexts().some((context) => context.lane === incoming.lane)
+      || ownerPartition.exclusionAuthority.closure !== closure
+      || ownerPartition.exclusionAuthority.execution !== execution
+      || !(ownerDefinition instanceof CustomElementDefinition)
+      || ownerDefinition.productHandle == null
+      || (!rootInvocation && (
+        ownerDefinition.productHandle !== extractedTransfer?.extraction.definitionReservation.productHandle
+        || ownerDefinition.identityHandle !== extractedTransfer?.extraction.definitionReservation.identityHandle
+      ))
       || handoff == null
       || !handoff.isFullSuccessReceipt()
       || handoff.entries.length === 0
-      || rootPartition.transfers.length !== handoff.entries.length
-      || rootPartition.transfers.some((transfer, ordinal) =>
+      || ownerPartition.transfers.length !== handoff.entries.length
+      || ownerPartition.transfers.some((transfer, ordinal) =>
         transfer.transfer !== closure.childLaneTransfers[ordinal]
         || transfer.transfer.extraction !== handoff.entries[ordinal]
       )
@@ -715,10 +737,10 @@ export class LocalTemplateDefinitionMaterializer {
         || execution.sequence.readLaneOperations(transfer.childLane).length !== 0
       )
     ) {
-      throw new Error('Local-template occurrence preparation requires the current immediate root partition frontier.');
+      throw new Error('Local-template occurrence preparation requires the current immediate invocation partition frontier.');
     }
     return {
-      ownerDefinition: binding.definition,
+      ownerDefinition,
       forest: binding.forest,
       handoff,
     };

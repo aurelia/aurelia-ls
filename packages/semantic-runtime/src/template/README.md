@@ -196,7 +196,8 @@ classification, expression parsing, and instruction lowering converge on the sam
   selection, and correspondence plan into one atomic kernel publication. It materializes every structural occurrence,
   an explicit generated or selected compiler carrier, ordered tree-builder/factory derivation hyperedges, and typed
   seams for every unresolved partition. Parser envelopes remain witness data; authored addresses enter only through
-  retained authored HTML product bindings. This is not yet wired into the production compiler front door.
+  retained authored HTML product bindings. The opt-in detached build handoff now consumes it; ordinary project
+  compilation, MCP, and IDE paths remain on their cheaper authored products unless a browser-effective inquiry asks.
 - The project compiler front door can retain one opt-in raw occurrence precedent for a whole authored resource source.
   The precedent is compiled under the pre-local compiler world, keeps parser draft bindings, and is excluded from
   runtime compilation membership. Its normalized site index names the same authored product space used by exact
@@ -209,9 +210,10 @@ classification, expression parsing, and instruction lowering converge on the sam
 - `template-compiler-site-invocation.ts` keeps raw-source admission separate from traversal admission. The new
   occurrence-precedent binding joins an explicit current app authority that owns the exact front door, exact precedent
   family membership, browser source/tree authority, the root execution lane, and its stored hook/local closure. It
-  permits extracted child lanes but claims only raw normalized-site identity under the pre-local hook world. The older
-  site-invocation binding remains the stricter no-local capability whose index compiler world is also the traversal
-  world; local support must not weaken that root-only contract.
+  permits extracted child lanes but claims only raw normalized-site identity under the pre-local hook world. The
+  traversal binding separately requires either that exact hook world for a leaf or the nominal post-local projection
+  for a direct-local cohort; matching lookup names alone cannot authorize a foreign world. The older root binder keeps
+  its stricter no-local contract.
 - `template-compiler-normalized-site-lane-view.ts` is the candidate-local temporal membership join over that binding.
   It maps each raw attribute/interpolation bundle to its canonical seeded occurrence—generated clones may retain source
   lineage but never acquire the bundle—then derives incoming child subsets from nominal extraction transfers and local
@@ -221,8 +223,8 @@ classification, expression parsing, and instruction lowering converge on the sam
   Static-only locals legitimately receive an empty view. Views retain live occurrence/lane capabilities and therefore
   are never kernel products or app-carry members; a carried precedent builds a fresh candidate-local family. This is a
   normalized-site crosswalk only, not occurrence-backed HTML ingress: static text, elements, comments, template-content
-  structure, post-local compiler worlds, and final traversal membership remain separate work.
-- `local-template-definition-materializer.ts` now accepts only a current module-owned root lane partition for occurrence
+  structure and post-local compiler worlds remain separate authorities joined by the occurrence family coordinator.
+- `local-template-definition-materializer.ts` accepts only a current module-owned invocation partition for occurrence
   definition preparation. Owner, forest, full-success handoff, ordered sibling transfers, reservations, and the immediate
   pre-child frontier are derived from that capability rather than supplied as independently pairable arguments. One
   complete direct-sibling batch retains each exact transfer on its definition entry, allocates every DomNode definition
@@ -235,19 +237,21 @@ classification, expression parsing, and instruction lowering converge on the sam
   batch materializers and never fabricates a filtered HTML document; live carrier/content occurrences remain structural
   authority. The prepared unit deliberately uses the child lane's logical local key, so its handles equal the incumbent
   legacy Markup child unit while its candidate details differ. It remains unpublished until an isolated replacement
-  generation owns the atomic production cut and supplies the post-local compiler world. Repeated preparation returns the
-  same cohort; another materializer cannot mint a competing ingress.
+  build run owns the isolated occurrence transaction and supplies the post-local compiler world. Repeated preparation
+  returns the same cohort; another materializer cannot mint a competing definition or ingress.
 - `template-compiler-occurrence-world-closure.ts` projects the complete direct-sibling post-local world exactly once
   after the occurrence definitions are visible in the staged run. It uses the shared invocation-world transition, proves
   every local lookup winner is the exact occurrence definition, and does not publish the legacy-colliding world/service
-  handles. The result keeps pre-local hook authority separate from root post-local traversal authority and gives every
+  handles. The result keeps pre-local hook authority separate from invocation post-local traversal authority and gives every
   child an ordered projection over the same post-local hook-parent world. App/browser or staged-definition loss makes
   the projection stale and never reprojects uncommitted definitions from the store. It deliberately exposes no
-  spendable `TemplateCompilerWorldAuthority`: the later atomic replacement stage must publish/verify the canonical
-  world first. The
-  immediate ingress frontier remains only a claim precursor; child work invalidates claimability while the projected
-  world itself can remain current. A later atomic cohort claim/scheduler must spend all sibling capabilities before the
-  first hook runs.
+  spendable `TemplateCompilerWorldAuthority`. The coordinator atomically claims every sibling child-world transfer
+  while the parent frontier is current; those one-shot transfers remain valid for untouched child lanes after parent
+  target execution spends the immediate frontier. This prevents saved raw worlds from bypassing temporal authority.
+- `template-compiler-occurrence-family-compilation.ts` is the build-only coordinator over those existing owners. It
+  extracts and publishes complete sibling cohorts, runs root/direct/nested invocation lanes in admission order through
+  one structural session, closes every target, seals once, and returns the root plus scoped local relation. It does not
+  mutate authored `CustomElementDefinition.dependencies` or create a second resource/hook policy.
 - `template-compiler-occurrence.ts` imports only the browser-effective compiler-carrier graph into a fresh mutable
   execution forest. Stable occurrence keys are independent of live paths; private edge collections and forest-owned
   move/detach operations preserve coherent root, child, template-content, and attribute ownership while the complete
@@ -1537,8 +1541,10 @@ substitutions, or source-map encoding.
 
 The materializer can select project-relative or absolute template paths and can explicitly include authoring resources
 for whole-project build discovery. Ordinary IDE/MCP app queries do not load this boundary or pay for parse5/compiler
-allocations. Local-template families and dynamic runtime compilation remain typed upstream gates rather than fallback
-inside the handoff.
+  allocations. Local-template roots are grouped with their nearest source-attached owner; parent identity, declaration/
+  compiler-tail order, exact source product, and each compiler-final child family detach together. Each detached
+  definition also retains the compiler-front-door compiled-template identity consumed by the existing 0..N runtime
+  controller claim graph. Dynamic runtime compilation and unsupported local carrier realizations remain typed gates.
 
 The same detached batch carries app-wide runtime registration requirements for runtime-html `DefaultResources`,
 `DefaultRenderers`, and `EventModifierRegistration`. Exact leaves come from browser-final instruction resource

@@ -110,7 +110,7 @@ export class TemplateCompilerOccurrenceCompilationIngressPreparation {
   }
 }
 
-/** Complete direct-sibling child-ingress preparation; nested cohorts are prepared only after their parent runs. */
+  /** Complete one direct-sibling child-ingress preparation; nested cohorts are prepared after their parent bootstrap. */
 export class TemplateCompilerOccurrenceCompilationIngressCohort {
   readonly #authority: object;
 
@@ -158,13 +158,13 @@ export class TemplateCompilerOccurrenceCompilationIngressMaterializer {
     this.unitMaterializer = new TemplateCompilationUnitMaterializer(store);
   }
 
-  prepareRootChildren(
+  prepareChildren(
     definitionPreparation: LocalTemplateOccurrenceDefinitionPreparation,
   ): TemplateCompilerOccurrenceCompilationIngressCohort {
     const existing = this.cohortsByPreparation.get(definitionPreparation);
     if (existing != null) {
       if (!existing.isCurrent()) {
-        throw new Error('Occurrence compilation ingress cohort is no longer at its immediate root frontier.');
+        throw new Error('Occurrence compilation ingress cohort is no longer at its immediate invocation frontier.');
       }
       return existing;
     }
@@ -172,7 +172,7 @@ export class TemplateCompilerOccurrenceCompilationIngressMaterializer {
     if (owner != null && owner !== this) {
       throw new Error('Occurrence compilation ingress preparation belongs to another materializer.');
     }
-    const partition = definitionPreparation.rootPartition;
+    const partition = definitionPreparation.ownerPartition;
     const family = partition.incoming.family;
     const binding = family.binding;
     const execution = binding.execution;
@@ -180,8 +180,8 @@ export class TemplateCompilerOccurrenceCompilationIngressMaterializer {
       !definitionPreparation.isModuleConstructed()
       || !partition.isModuleConstructed()
       || !occurrenceDefinitionPreparationFrontierIsCurrent(definitionPreparation)
-      || partition.incoming !== family.rootView
-      || partition.closure !== binding.bootstrapClosure
+      || !partition.incoming.isOwnedBy(family)
+      || partition.closure.lane !== partition.incoming.lane
       || this.store !== binding.browserEmission.publication
       || definitionPreparation.entries.length !== partition.transfers.length
       || definitionPreparation.entries.some((entry, ordinal) =>
@@ -194,7 +194,7 @@ export class TemplateCompilerOccurrenceCompilationIngressMaterializer {
         || execution.sequence.readLaneOperations(entry.siteTransfer.childView.lane).length !== 0
       )
     ) {
-      throw new Error('Occurrence compilation ingress requires one current immediate root sibling preparation.');
+      throw new Error('Occurrence compilation ingress requires one current immediate invocation sibling preparation.');
     }
 
     const entries = definitionPreparation.entries.map((entry) => {
@@ -240,26 +240,28 @@ export class TemplateCompilerOccurrenceCompilationIngressMaterializer {
 function occurrenceDefinitionPreparationFrontierIsCurrent(
   definitionPreparation: LocalTemplateOccurrenceDefinitionPreparation,
 ): boolean {
-  return definitionPreparation.rootPartition.incoming.family.isCurrent()
+  return definitionPreparation.ownerPartition.incoming.family.isCurrent()
     && occurrenceDefinitionPreparationFrontierIsStructurallyCurrent(definitionPreparation);
 }
 
 function occurrenceDefinitionPreparationFrontierIsStructurallyCurrent(
   definitionPreparation: LocalTemplateOccurrenceDefinitionPreparation,
 ): boolean {
-  const partition = definitionPreparation.rootPartition;
+  const partition = definitionPreparation.ownerPartition;
   const family = partition.incoming.family;
   const binding = family.binding;
   const execution = binding.execution;
+  const lane = partition.incoming.lane;
   return definitionPreparation.isModuleConstructed()
     && partition.isModuleConstructed()
-    && partition.incoming === family.rootView
-    && partition.closure === binding.bootstrapClosure
+    && partition.incoming.isOwnedBy(family)
+    && partition.closure.lane === lane
+    && execution.bootstrapClosure(lane) === partition.closure
     && binding.forest.mutationRevision === partition.closure.forestMutationRevision
-    && execution.invocationPhase(binding.lane) === TemplateCompilerInvocationPhase.BootstrapClosed
-    && binding.lane.targetPlan == null
-    && execution.sequence.readLaneOperations(binding.lane).length === partition.closure.laneOperationCount
-    && !execution.sequence.readContexts().some((context) => context.lane === binding.lane)
+    && execution.invocationPhase(lane) === TemplateCompilerInvocationPhase.BootstrapClosed
+    && lane.targetPlan == null
+    && execution.sequence.readLaneOperations(lane).length === partition.closure.laneOperationCount
+    && !execution.sequence.readContexts().some((context) => context.lane === lane)
     && definitionPreparation.entries.length === partition.transfers.length
     && definitionPreparation.entries.every((entry, ordinal) =>
       entry.isModuleConstructed()

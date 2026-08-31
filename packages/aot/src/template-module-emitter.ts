@@ -16,6 +16,7 @@ import {
   TemplateCompilerFrameworkInstructionType,
   TemplateCompilerRuntimeElementDataKind,
 } from '@aurelia-ls/semantic-runtime/browser-template';
+import { pascalCase } from '@aurelia/kernel';
 
 import {
   AOT_RUNTIME_SPREAD_PLAN_PROTOCOL,
@@ -176,17 +177,126 @@ export class AotCompiledTemplateEmission {
   }
 }
 
+/** Shared two-pass generated-Type plan for one source-owned scoped local-definition forest. */
+export class AotLocalDefinitionEmission {
+  readonly definitions: readonly TemplateCompilerCompiledHandoffDefinition[];
+  readonly #localTypeByDefinitionId: ReadonlyMap<string, string>;
+  readonly #initialByDefinitionId: ReadonlyMap<string, string>;
+  readonly #localsByParent: ReadonlyMap<string, readonly TemplateCompilerCompiledHandoffDefinition[]>;
+
+  public constructor(readonly emission: AotCompiledTemplateEmission) {
+    this.definitions = emission.definitions.filter((definition) => definition.owner.ownerKind === 'local-template');
+    this.#localTypeByDefinitionId = new Map(this.definitions.map((definition, index) => [
+      definition.definitionId,
+      `$localType${index}`,
+    ]));
+    this.#initialByDefinitionId = new Map(this.definitions.map((definition, index) => [
+      definition.definitionId,
+      `$localInitialDependencies${index}`,
+    ]));
+    const mutableByParent = new Map<string, TemplateCompilerCompiledHandoffDefinition[]>();
+    for (const definition of this.definitions) {
+      if (definition.owner.ownerKind !== 'local-template') continue;
+      const siblings = mutableByParent.get(definition.owner.parentDefinitionId);
+      if (siblings == null) mutableByParent.set(definition.owner.parentDefinitionId, [definition]);
+      else siblings.push(definition);
+    }
+    for (const siblings of mutableByParent.values()) {
+      siblings.sort((left, right) => {
+        if (left.owner.ownerKind !== 'local-template' || right.owner.ownerKind !== 'local-template') return 0;
+        return left.owner.compilerAddedDependencyOrdinal - right.owner.compilerAddedDependencyOrdinal;
+      });
+      if (siblings.some((sibling, ordinal) =>
+        sibling.owner.ownerKind !== 'local-template'
+        || sibling.owner.compilerAddedDependencyOrdinal !== ordinal
+      )) {
+        throw new Error('AOT local sibling cohort has a sparse or duplicate compiler-added dependency order.');
+      }
+    }
+    this.#localsByParent = mutableByParent;
+  }
+
+  public get hasLocals(): boolean {
+    return this.definitions.length > 0;
+  }
+
+  public typeDeclarationLines(): readonly string[] {
+    return this.definitions.map((definition, index) =>
+      `const ${this.typeVariable(definition.definitionId)} = CustomElement.generateType(${JSON.stringify(
+        pascalCase(definition.header.name ?? `local-${index}`),
+      )});`
+    );
+  }
+
+  public rootTypeDeclarationLine(variable: string): string {
+    return `const ${variable} = CustomElement.generateType(${JSON.stringify(pascalCase(this.emission.root.header.name!))});`;
+  }
+
+  public materializationLines(
+    ownerType: string,
+    ownerDefinition: string,
+    indent = '',
+  ): readonly string[] {
+    const lines: string[] = [];
+    for (const definition of this.definitions) {
+      if (definition.owner.ownerKind !== 'local-template') continue;
+      const parentId = definition.owner.parentDefinitionId;
+      const siblings = this.#localsByParent.get(parentId) ?? [];
+      const siblingTypes = siblings
+        .filter((sibling) => sibling !== definition)
+        .map((sibling) => this.typeVariable(sibling.definitionId));
+      const parentIsRoot = parentId === this.emission.root.definitionId;
+      const parentInitial = parentIsRoot ? `${ownerDefinition}.dependencies` : this.initialVariable(parentId);
+      const parentType = parentIsRoot ? ownerType : this.typeVariable(parentId);
+      lines.push(
+        `${indent}const ${this.initialVariable(definition.definitionId)} = [`
+        + `...${parentInitial}, ${parentType}${siblingTypes.length === 0 ? '' : `, ${siblingTypes.join(', ')}`}];`,
+      );
+    }
+    for (const definition of this.definitions) {
+      const directChildren = this.#localsByParent.get(definition.definitionId) ?? [];
+      const finalDependencies = [
+        `...${this.initialVariable(definition.definitionId)}`,
+        ...directChildren.map((child) => this.typeVariable(child.definitionId)),
+      ];
+      const definitionVariable = this.emission.variableFor(definition.definitionId);
+      lines.push(
+        `${indent}${definitionVariable}.dependencies = [${finalDependencies.join(', ')}];`,
+        `${indent}CustomElement.define(${definitionVariable}, ${this.typeVariable(definition.definitionId)});`,
+      );
+    }
+    return lines;
+  }
+
+  public directRootTypeVariables(): readonly string[] {
+    return (this.#localsByParent.get(this.emission.root.definitionId) ?? [])
+      .map((definition) => this.typeVariable(definition.definitionId));
+  }
+
+  private typeVariable(definitionId: string): string {
+    return requireLocalValue(this.#localTypeByDefinitionId, definitionId, 'Type shell');
+  }
+
+  private initialVariable(definitionId: string): string {
+    return requireLocalValue(this.#initialByDefinitionId, definitionId, 'initial dependency plan');
+  }
+}
+
 /** Realize one detached semantic-runtime handoff as the module namespace consumed by Aurelia conventions. */
 export class AotTemplateModuleEmitter {
   public emit(request: AotTemplateModuleEmissionRequest): AotTemplateModuleArtifact {
     const emission = new AotCompiledTemplateEmission(request);
+    const locals = new AotLocalDefinitionEmission(emission);
     const dependencies = emission.dependencyPlanFor(emission.definitions);
+    const rootVariable = emission.variableFor(emission.root.definitionId);
+    const rootTypeVariable = '$rootType';
     const lines: string[] = [
       "import { CustomElement } from '@aurelia/runtime-html';",
       ...dependencies.imports,
       '',
       ...emission.declarationLines(),
       '',
+      ...(locals.hasLocals ? [locals.rootTypeDeclarationLine(rootTypeVariable), ...locals.typeDeclarationLines(), ''] : []),
     ];
 
     for (const definition of [...emission.definitions].reverse()) {
@@ -195,7 +305,26 @@ export class AotTemplateModuleEmitter {
       lines.push(`Object.assign(${variable}, ${value});`);
     }
 
-    const rootVariable = emission.variableFor(emission.root.definitionId);
+    if (locals.hasLocals) {
+      lines.push(
+        ...locals.materializationLines(rootTypeVariable, rootVariable),
+        `${rootVariable}.dependencies.push(${locals.directRootTypeVariables().join(', ')});`,
+        `const $rootResourceType = CustomElement.define(${rootVariable}, ${rootTypeVariable});`,
+      );
+    }
+    const registrationLines = locals.hasLocals
+      ? [
+          'export function register(container) {',
+          '  container.register($rootResourceType);',
+          '}',
+        ]
+      : [
+          'let $registeredDefinition;',
+          'export function register(container) {',
+          `  $registeredDefinition ??= CustomElement.define(${rootVariable});`,
+          '  container.register($registeredDefinition);',
+          '}',
+        ];
     lines.push(
       '',
       `export const name = ${rootVariable}.name;`,
@@ -214,11 +343,7 @@ export class AotTemplateModuleEmitter {
       `export const instructions = ${rootVariable}.instructions;`,
       `export const surrogates = ${rootVariable}.surrogates;`,
       '',
-      'let $registeredDefinition;',
-      'export function register(container) {',
-      `  $registeredDefinition ??= CustomElement.define(${rootVariable});`,
-      '  container.register($registeredDefinition);',
-      '}',
+      ...registrationLines,
       '',
     );
 
@@ -667,6 +792,12 @@ function requireMap<T>(
 ): T {
   const value = values.get(key);
   if (value == null) throw invalidHandoff(request, `Compiled handoff cannot resolve '${key}'.`);
+  return value;
+}
+
+function requireLocalValue(values: ReadonlyMap<string, string>, definitionId: string, label: string): string {
+  const value = values.get(definitionId);
+  if (value == null) throw new Error(`AOT local definition '${definitionId}' has no ${label}.`);
   return value;
 }
 

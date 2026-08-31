@@ -31,6 +31,9 @@ import {
   type TemplateCompilerNormalizedSiteIndex,
   type TemplateCompilerNormalizedSiteIndexResult,
 } from './template-compiler-normalized-site-index.js';
+import type { TemplateCompilerNormalizedSiteLanePartition } from './template-compiler-normalized-site-lane-view.js';
+import type { TemplateCompilerNormalizedSiteBundle } from './template-compiler-site-spend-ledger.js';
+import type { TemplateCompilerOccurrenceTraversalWorldProjection } from './template-compiler-occurrence-world-closure.js';
 
 const siteInvocationBindingAuthority = {};
 const occurrencePrecedentInvocationBindingAuthority = {};
@@ -100,9 +103,17 @@ interface TemplateCompilerSiteInvocationBindingRequest {
   readonly currentFamily: TemplateCompilationFamilyFrontDoorEmission;
 }
 
-/** Extracted lanes remain unsupported until occurrence-backed HTML ingress or an exact authored-site crosswalk exists. */
-export const enum TemplateCompilerSiteInvocationFrontierKind {
-  ExtractedOccurrenceIngressUnavailable = 'extracted-occurrence-ingress-unavailable',
+export interface TemplateCompilerOccurrenceSiteInvocationBindingRequest {
+  /** Current raw-source/root authority from which this lane's normalized sites were partitioned. */
+  readonly occurrenceBinding: TemplateCompilerOccurrencePrecedentInvocationBinding;
+  /** Exact terminal-site partition after this lane completed local extraction. */
+  readonly partition: TemplateCompilerNormalizedSiteLanePartition;
+  /** Effective definition owned by this root or extracted local invocation. */
+  readonly definition: CustomElementDefinition;
+  /** Post-local world used by live traversal after direct sibling definitions became visible. */
+  readonly compilerWorld: TemplateCompilerWorldEmission;
+  /** Exact post-local derivation capability; null only when this invocation discovered no direct locals. */
+  readonly postLocalWorldProjection: TemplateCompilerOccurrenceTraversalWorldProjection | null;
 }
 
 export class TemplateCompilerSiteInvocationBindingReason {
@@ -258,7 +269,11 @@ export class TemplateCompilerSiteInvocationBinding {
     readonly currentFrontDoor: TemplateCompilationFrontDoorEmission,
     readonly currentFamily: TemplateCompilationFamilyFrontDoorEmission,
     readonly membershipLane: TemplateCompilerSiteInvocationMembershipLane,
+    readonly definition: CustomElementDefinition,
+    readonly compilerWorld: TemplateCompilerWorldEmission,
+    readonly siteBundles: readonly TemplateCompilerNormalizedSiteBundle[],
     private readonly exactIndex: TemplateCompilerNormalizedSiteIndex,
+    private readonly current: () => boolean,
   ) {
     if (authority !== siteInvocationBindingAuthority) {
       throw new Error('Template compiler site invocation bindings are module-constructed capabilities.');
@@ -286,10 +301,6 @@ export class TemplateCompilerSiteInvocationBinding {
     return this.exactIndex.compilation;
   }
 
-  get definition(): CustomElementDefinition {
-    return this.exactIndex.definition;
-  }
-
   get unit(): TemplateCompilationUnitEmission {
     return this.exactIndex.unit;
   }
@@ -298,12 +309,12 @@ export class TemplateCompilerSiteInvocationBinding {
     return this.exactIndex.unit.templateSource;
   }
 
-  get compilerWorld(): TemplateCompilerWorldEmission {
-    return this.exactIndex.compilerWorld;
-  }
-
   isModuleConstructed(): boolean {
     return this.#authority === siteInvocationBindingAuthority;
+  }
+
+  isCurrent(): boolean {
+    return this.isModuleConstructed() && this.current();
   }
 }
 
@@ -337,6 +348,103 @@ export function bindTemplateCompilerRootSiteInvocation(
     currentFrontDoor: request.currentFrontDoor,
     currentFamily: request.currentFamily,
   });
+}
+
+/** Bind one root or extracted local lane after its occurrence partition selected the exact post-local world. */
+export function bindTemplateCompilerOccurrenceSiteInvocation(
+  request: TemplateCompilerOccurrenceSiteInvocationBindingRequest,
+): TemplateCompilerSiteInvocationBindingResult {
+  const raw = request.occurrenceBinding;
+  const partition = request.partition;
+  const incoming = partition.incoming;
+  const closure = partition.closure;
+  const execution = raw.execution;
+  const lane = incoming.lane;
+  const reasons: TemplateCompilerSiteInvocationBindingReason[] = [];
+  const rootInvocation = incoming === incoming.family.rootView;
+  const extractedTransfer = 'transfer' in incoming.ingress ? incoming.ingress.transfer : null;
+  const expectedDefinitionProductHandle = rootInvocation
+    ? raw.definition.productHandle
+    : extractedTransfer?.extraction.definitionReservation.productHandle ?? null;
+  const expectedDefinitionIdentityHandle = rootInvocation
+    ? raw.definition.identityHandle
+    : extractedTransfer?.extraction.definitionReservation.identityHandle ?? null;
+
+  if (
+    !raw.isModuleConstructed()
+    || !raw.isCurrent()
+    || !partition.isModuleConstructed()
+    || !incoming.isOwnedBy(incoming.family)
+    || incoming.family.binding !== raw
+    || closure.lane !== lane
+    || execution.bootstrapClosure(lane) !== closure
+    || execution.invocationPhase(lane) !== TemplateCompilerInvocationPhase.BootstrapClosed
+    || lane.targetPlan != null
+    || execution.sequence.readContexts().some((context) => context.lane === lane)
+    || execution.sequence.readLaneOperations(lane).length !== closure.laneOperationCount
+    || partition.exclusionAuthority.execution !== execution
+    || partition.exclusionAuthority.closure !== closure
+  ) {
+    reasons.push(reason(
+      TemplateCompilerSiteInvocationBindingReasonKind.ExecutionClosureMismatch,
+      'Occurrence invocation partition is not at its exact same-lane post-local traversal frontier.',
+    ));
+  }
+  if (
+    request.definition.productHandle == null
+    || request.definition.productHandle !== expectedDefinitionProductHandle
+    || request.definition.identityHandle !== expectedDefinitionIdentityHandle
+  ) {
+    reasons.push(reason(
+      TemplateCompilerSiteInvocationBindingReasonKind.GraphPrecedentMismatch,
+      'Occurrence invocation definition does not match the root or extracted-lane resource reservation.',
+    ));
+  }
+  const hookWorld = closure.hookBootstrap.compilerWorld;
+  const postLocal = request.postLocalWorldProjection;
+  const worldMismatch = partition.transfers.length === 0
+    ? postLocal != null || request.compilerWorld !== hookWorld
+    : postLocal == null
+      || postLocal.closure.bootstrapClosure !== closure
+      || postLocal.world !== request.compilerWorld
+      || !postLocal.isPendingCurrent()
+      || request.compilerWorld === hookWorld
+      || partition.transfers.some((transfer) =>
+        request.compilerWorld.resourceResolver.el(transfer.transfer.extraction.name)?.definitionProductHandle
+          !== transfer.transfer.extraction.definitionReservation.productHandle
+      );
+  if (worldMismatch) {
+    reasons.push(reason(
+      TemplateCompilerSiteInvocationBindingReasonKind.CompilerWorldMismatch,
+      'Occurrence invocation post-local world does not expose its complete direct local cohort.',
+    ));
+  }
+  if (reasons.length > 0) return new TemplateCompilerSiteInvocationBindingResult(null, reasons);
+
+  const current = (): boolean => raw.isCurrent()
+    && execution.bootstrapClosure(lane) === closure
+    && execution.invocationPhase(lane) === TemplateCompilerInvocationPhase.BootstrapClosed
+    && lane.targetPlan == null
+    && execution.sequence.readContexts().every((context) => context.lane !== lane)
+    && execution.sequence.readLaneOperations(lane).length === closure.laneOperationCount;
+  return new TemplateCompilerSiteInvocationBindingResult(
+    new TemplateCompilerSiteInvocationBinding(
+      siteInvocationBindingAuthority,
+      execution,
+      closure,
+      raw.ingress,
+      raw.graphExact,
+      raw.currentFrontDoor,
+      raw.currentFamily,
+      raw.membershipLane,
+      request.definition,
+      request.compilerWorld,
+      partition.terminalSites.map((site) => site.bundle),
+      raw.index,
+      current,
+    ),
+    [],
+  );
 }
 
 /** Bind one current raw whole-source precedent to its exact root browser/bootstrap invocation. */
@@ -450,7 +558,11 @@ function bindTemplateCompilerSiteInvocation(
       request.currentFrontDoor,
       request.currentFamily,
       membershipLane,
+      index.definition,
+      index.compilerWorld,
+      [...index.attributeSites, ...index.textSites],
       index,
+      () => bindTemplateCompilerSiteInvocation(request).state === TemplateCompilerSiteInvocationBindingState.Exact,
     ),
     [],
   );

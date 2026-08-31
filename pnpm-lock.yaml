@@ -75,6 +75,9 @@ importers:
       '@aurelia-ls/semantic-runtime':
         specifier: workspace:*
         version: link:../semantic-runtime
+      '@aurelia/kernel':
+        specifier: link:../../aurelia/packages/kernel
+        version: link:../../aurelia/packages/kernel
       magic-string:
         specifier: 0.30.21
         version: 0.30.21
@@ -85,9 +88,6 @@ importers:
       '@aurelia/expression-parser':
         specifier: link:../../aurelia/packages/expression-parser
         version: link:../../aurelia/packages/expression-parser
-      '@aurelia/kernel':
-        specifier: link:../../aurelia/packages/kernel
-        version: link:../../aurelia/packages/kernel
       '@aurelia/platform-browser':
         specifier: link:../../aurelia/packages/platform-browser
         version: link:../../aurelia/packages/platform-browser

@@ -458,6 +458,7 @@ export class SemanticAotArtifactProvider {
       const app = await runtime.openApp({
         analysisDepth: 'runtime-topology',
         includeAuthoringTemplates: true,
+        includeCompilerOccurrencePrecedents: true,
         telemetry: { inquiryProfile: 'aot' },
         nominatedEntry: request.nominatedEntry,
         conventionTransformAdmissions: request.conventionTransformAdmission == null

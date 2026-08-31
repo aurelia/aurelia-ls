@@ -179,7 +179,7 @@ export class TemplateCompilerContextFamilyValue {
     readonly instructions: readonly TemplateInstruction[],
     readonly sourceOpenSeams: readonly OpenSeam[],
     readonly liveExpressions: readonly TemplateCompilerContextFamilyExpressionValue[],
-    /** Compiler-created local constructable dependencies; empty while local child lanes remain upstream-ineligible. */
+    /** Legacy compiler-created local resource identities; occurrence-first families detach constructables separately. */
     readonly compilerAddedDependencyIdentityHandles: readonly IdentityHandle[],
     productDetails: ProductDetailReadView,
     private readonly current: () => boolean,

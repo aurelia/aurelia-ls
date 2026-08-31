@@ -10,6 +10,7 @@ import type {
   HelloWorldObservation,
   LaneTranscript,
   LiveElementTranscript,
+  LocalTemplatesObservation,
   RoutedStorefrontObservation,
   RuntimeProbeSnapshot,
   StateBackedFormObservation,
@@ -45,6 +46,7 @@ async function runLane(
   scenario: AssuranceScenario,
 ): Promise<LaneTranscript> {
   if (scenario === 'hello-world') return runHelloWorldLane(browser, lane, url);
+  if (scenario === 'local-templates') return runLocalTemplatesLane(browser, lane, url);
   if (scenario === 'routed-storefront') return runRoutedStorefrontLane(browser, lane, url);
   if (scenario === 'state-backed-form') return runStateBackedFormLane(browser, lane, url);
   if (scenario === 'projects-and-milestones') return runProjectsAndMilestonesLane(browser, lane, url);
@@ -109,6 +111,95 @@ async function runLane(
   } finally {
     await context.close();
   }
+}
+
+async function runLocalTemplatesLane(
+  browser: Browser,
+  lane: AssuranceLane,
+  url: string,
+): Promise<LaneTranscript> {
+  const context = await browser.newContext();
+  const page = await context.newPage();
+  const consoleMessages: string[] = [];
+  const pageErrors: string[] = [];
+  page.on('console', message => consoleMessages.push(`${message.type()}:${message.text()}`));
+  page.on('pageerror', error => pageErrors.push(error.message));
+  try {
+    await page.goto(url, { waitUntil: 'load' });
+    try {
+      await page.waitForFunction(() =>
+        window.__localTemplatesAssurance?.ready === true
+        && document.querySelectorAll('#cards > local-card .local-card').length === 2
+        && document.querySelector('.nested-local')?.textContent?.trim() === 'alpha'
+        && document.querySelector('.convention-local')?.textContent?.trim() === 'alpha'
+      , undefined, { timeout: 15_000 });
+    } catch (error) {
+      const detail = pageErrors.length === 0 ? '' : `\nBrowser errors:\n${pageErrors.join('\n')}`;
+      throw new Error(`${lane} local-template application did not render${detail}`, { cause: error });
+    }
+    const checkpoints = [];
+    checkpoints.push({ label: 'initial', observation: await captureLocalTemplates(page) });
+
+    await page.locator('#message').fill('bravo');
+    await page.waitForFunction(() =>
+      Array.from(document.querySelectorAll('#cards > local-card .local-card'))
+        .every(element => element.textContent?.trim() === 'bravo')
+      && document.querySelector('.nested-local')?.textContent?.trim() === 'bravo'
+      && document.querySelector('.convention-local')?.textContent?.trim() === 'bravo'
+    );
+    await settle(page);
+    checkpoints.push({ label: 'owner-update-propagation', observation: await captureLocalTemplates(page) });
+
+    await page.locator('#add').click();
+    await page.waitForFunction(() => document.querySelectorAll('#cards > local-card .local-card').length === 3);
+    await settle(page);
+    checkpoints.push({ label: 'repeat-growth', observation: await captureLocalTemplates(page) });
+
+    await page.locator('#toggle-outer').click();
+    await page.waitForFunction(() => document.querySelector('.nested-local') == null);
+    await settle(page);
+    checkpoints.push({ label: 'nested-hidden', observation: await captureLocalTemplates(page) });
+
+    await page.locator('#toggle-outer').click();
+    await page.waitForFunction(() => document.querySelector('.nested-local')?.textContent?.trim() === 'bravo');
+    await settle(page);
+    checkpoints.push({ label: 'nested-restored', observation: await captureLocalTemplates(page) });
+
+    await page.evaluate(() => window.__localTemplatesAssurance!.stop());
+    return {
+      lane,
+      semantic: {
+        checkpoints,
+        teardownEvents: null,
+        console: consoleMessages,
+        pageErrors,
+      },
+      probes: null,
+    };
+  } finally {
+    await context.close();
+  }
+}
+
+async function captureLocalTemplates(page: Page): Promise<ApplicationObservation> {
+  return page.evaluate(() => {
+    const message = document.querySelector<HTMLInputElement>('#message');
+    const text = (element: Element): string => element.textContent?.trim() ?? '';
+    const model: LocalTemplatesObservation = {
+      message: message?.value ?? '',
+      cardValues: Array.from(document.querySelectorAll('#cards > local-card .local-card'), text),
+      ownedDependencyCount: document.querySelectorAll('.owned-dependency').length,
+      peerCardValue: document.querySelector('local-peer .local-card')?.textContent?.trim() ?? null,
+      nestedValue: document.querySelector('.nested-local')?.textContent?.trim() ?? null,
+      conventionValue: document.querySelector('.convention-local')?.textContent?.trim() ?? null,
+    };
+    return {
+      kind: 'local-templates' as const,
+      model,
+      live: message == null ? [] : [{ id: message.id, value: message.value }],
+      focus: document.activeElement instanceof HTMLElement ? document.activeElement.id || null : null,
+    };
+  });
 }
 
 async function runStateBackedFormLane(
@@ -757,6 +848,11 @@ declare global {
       events: string[];
       readModel(): unknown;
       readProbes(): RuntimeProbeSnapshot;
+      stop(): Promise<void>;
+    };
+    __localTemplatesAssurance?: {
+      lane: AssuranceLane;
+      ready: boolean;
       stop(): Promise<void>;
     };
   }

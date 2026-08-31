@@ -1,0 +1,34 @@
+<template>
+  <main>
+    <input id="message" value.bind="message">
+    <button id="add" click.trigger="add()">add</button>
+    <button id="toggle-outer" click.trigger="toggleOuter()">toggle outer</button>
+    <section id="cards">
+      <local-card repeat.for="index of count" value.bind="message"></local-card>
+    </section>
+    <local-peer value.bind="peer"></local-peer>
+    <outer-local if.bind="showOuter" value.bind="message"></outer-local>
+    <convention-local-app value.bind="message"></convention-local-app>
+  </main>
+
+  <template as-custom-element="local-card">
+    <bindable name="value"></bindable>
+    <span class="local-card">${value}</span>
+    <owned-dependency></owned-dependency>
+  </template>
+
+  <template as-custom-element="local-peer">
+    <bindable name="value"></bindable>
+    <local-card value.bind="value"></local-card>
+    <local-aot-app if.bind="false"></local-aot-app>
+  </template>
+
+  <template as-custom-element="outer-local">
+    <bindable name="value"></bindable>
+    <template as-custom-element="nested-local">
+      <bindable name="value"></bindable>
+      <em class="nested-local">${value}</em>
+    </template>
+    <nested-local value.bind="value"></nested-local>
+  </template>
+</template>

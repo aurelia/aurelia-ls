@@ -12,11 +12,77 @@ import {
   type TemplateCompilerCompiledHandoffInstructionValue,
   type TemplateCompilerCompiledHandoffValue,
 } from '../src/template/browser-template.js';
+import {
+  HydrateElementInstruction,
+  HydrateTemplateControllerInstruction,
+  type TemplateInstruction,
+} from '../src/template/instruction-ir.js';
+import { readRuntimeControllerRows } from '../src/api/controller-projections.js';
 
 const packageRoot = path.resolve(fileURLToPath(new URL('..', import.meta.url)));
 const pressureRoot = path.join(packageRoot, 'fixtures/pressure');
 
 describe('semantic app template compiler handoff pressure', () => {
+  test('detaches scoped sibling and nested locals into their nearest source-owned handoffs', async () => {
+    const runtime = await createSemanticRuntime({
+      workspaceRoot: path.join(pressureRoot, 'resource-registration-local-templates'),
+      storeKey: 'contract:template-compiler-local-family-handoff',
+    });
+    try {
+      const app = await runtime.openApp({
+        analysisDepth: 'runtime-topology',
+        includeCompilerOccurrencePrecedents: true,
+        telemetry: { inquiryProfile: 'aot' },
+      });
+      const batch = materializeSemanticAppTemplateCompilerHandoffs({ app });
+      const root = requireExactHandoff(batch, 'local-templates-app');
+      const localDefinitions = root.definitions.filter((definition) => definition.owner.ownerKind === 'local-template');
+      expect(localDefinitions.map((definition) => definition.header.name)).toEqual([
+        'local-chip',
+        'local-icon',
+        'outer-local',
+        'nested-local',
+      ]);
+      expect(localDefinitions.map((definition) => definition.owner.ownerKind === 'local-template'
+        ? definition.owner.declarationOrdinal
+        : null
+      )).toEqual([0, 1, 2, 0]);
+      const rootId = root.rootDefinitionId;
+      const outer = localDefinitions.find((definition) => definition.header.name === 'outer-local');
+      const nested = localDefinitions.find((definition) => definition.header.name === 'nested-local');
+      expect(localDefinitions.slice(0, 3).every((definition) =>
+        definition.owner.ownerKind === 'local-template' && definition.owner.parentDefinitionId === rootId
+      )).toBe(true);
+      expect(nested?.owner).toMatchObject({
+        ownerKind: 'local-template',
+        parentDefinitionId: outer?.definitionId,
+      });
+      expect(new Set(localDefinitions.map((definition) =>
+        definition.owner.ownerKind === 'local-template' ? definition.owner.definitionIdentityHandle : null
+      )).size).toBe(4);
+      const controllerTemplateHandles = new Set(readRuntimeControllerRows(
+        app.emission,
+        runtime.workspace.store,
+        true,
+      ).flatMap((row) => [
+        row.handles?.compiledTemplateProductHandle,
+        row.handles?.viewFactoryCompiledTemplateProductHandle,
+      ].filter((handle): handle is string => handle != null)));
+      expect(localDefinitions.every((definition) =>
+        controllerTemplateHandles.has(definition.sourceCompiledTemplate.productHandle)
+      )).toBe(true);
+
+      const secondary = requireExactHandoff(batch, 'secondary-host');
+      const secondaryLocal = secondary.definitions.find((definition) =>
+        definition.owner.ownerKind === 'local-template'
+      );
+      expect(secondaryLocal?.header.name).toBe('local-chip');
+      expect(secondaryLocal?.owner).not.toEqual(localDefinitions[0]?.owner);
+    } finally {
+      runtime.retireWorkspaceIncarnation();
+    }
+  }, 30_000);
+
   test('detaches the broad compiler-fidelity substrate through the production family', async () => {
     const runtime = await createSemanticRuntime({
       workspaceRoot: path.join(pressureRoot, 'template-compiler-fidelity'),
@@ -40,11 +106,26 @@ describe('semantic app template compiler handoff pressure', () => {
         'slot-under-template-controller-probe',
       ] as const;
       const values = new Map(names.map((name) => [name, requireExactHandoff(batch, name)]));
+      const semanticResources = new Map([
+        ...app.emission.templates.resources,
+        ...app.emission.templates.authoringResources,
+      ].map((resource) => [resource.compilation.definition.name, resource] as const));
 
       const staticContext = values.get('static-context-probe')!;
       expect(staticContext.definitions.map((definition) => definition.owner.ownerKind)).toEqual([
         'root',
         'template-controller',
+      ]);
+      const staticContextSource = semanticResources.get('static-context-probe')?.compilation.compiledTemplate;
+      if (staticContextSource == null) throw new Error('Expected static-context-probe compiler-front-door products.');
+      const sourceTemplateController = staticContextSource.instructions.filter(
+        (instruction): instruction is HydrateTemplateControllerInstruction =>
+          instruction instanceof HydrateTemplateControllerInstruction,
+      );
+      expect(sourceTemplateController).toHaveLength(1);
+      expect(staticContext.definitions.map((definition) => definition.sourceCompiledTemplate)).toEqual([
+        staticContextSource.compiledTemplate.toReference(),
+        sourceTemplateController[0]!.childCompiledTemplate,
       ]);
       expect(contentShape(rootDefinition(staticContext))).toEqual([
         'comment:compiler-marker',
@@ -61,6 +142,19 @@ describe('semantic app template compiler handoff pressure', () => {
         'projection',
         'projection',
       ]);
+      const staticProjectionSource = semanticResources.get('static-projection-probe')?.compilation.compiledTemplate;
+      if (staticProjectionSource == null) throw new Error('Expected static-projection-probe compiler-front-door products.');
+      const sourceHydrateElement = staticProjectionSource.instructions.find(
+        (instruction): instruction is HydrateElementInstruction => instruction instanceof HydrateElementInstruction,
+      );
+      if (sourceHydrateElement == null) throw new Error('Expected the source projection HydrateElement instruction.');
+      expect(staticProjection.definitions.map((definition) => definition.sourceCompiledTemplate)).toEqual([
+        staticProjectionSource.compiledTemplate.toReference(),
+        ...sourceHydrateElement.projections.map((projection) => projection.compiledTemplate),
+      ]);
+      expect(new Set(staticProjection.definitions.map((definition) =>
+        definition.sourceCompiledTemplate.productHandle
+      )).size).toBe(3);
       expect(contentShape(rootDefinition(staticProjection))).toEqual([
         'comment:compiler-marker',
         ['element:projection-card', []],
@@ -395,6 +489,38 @@ describe('semantic app template compiler handoff pressure', () => {
       })]);
     } finally {
       projectionRuntime.retireWorkspaceIncarnation();
+    }
+  }, 30_000);
+
+  test('keeps an ambiguous source compiled-template join resource-local and typed', async () => {
+    const runtime = await createSemanticRuntime({
+      workspaceRoot: path.join(pressureRoot, 'template-compiler-fidelity'),
+      storeKey: 'contract:template-compiler-source-template-ambiguity',
+    });
+    try {
+      const app = await runtime.openApp({
+        analysisDepth: 'runtime-topology',
+        telemetry: { inquiryProfile: 'aot' },
+      });
+      const source = app.emission.templates.resources.find((resource) =>
+        resource.compilation.definition.name === 'static-context-probe'
+      );
+      const instruction = source?.compilation.compiledTemplate.instructions.find(
+        (candidate): candidate is HydrateTemplateControllerInstruction =>
+          candidate instanceof HydrateTemplateControllerInstruction,
+      );
+      if (source == null || instruction == null) throw new Error('Expected static-context source controller instruction.');
+      (source.compilation.compiledTemplate.instructions as TemplateInstruction[]).push(instruction);
+
+      const batch = materializeSemanticAppTemplateCompilerHandoffs({ app });
+      const ambiguous = batch.resources.filter((resource) => resource.reasons.some((reason) =>
+        reason.reasonKind === 'template-controller-source-compiled-template-unavailable'
+      ));
+      expect(ambiguous).toHaveLength(1);
+      expect(ambiguous[0]?.state).toBe(TemplateCompilerCompiledHandoffState.Ineligible);
+      expect(requireExactHandoff(batch, 'static-projection-probe')).not.toBeNull();
+    } finally {
+      runtime.retireWorkspaceIncarnation();
     }
   }, 30_000);
 

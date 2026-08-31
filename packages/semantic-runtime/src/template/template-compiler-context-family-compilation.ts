@@ -41,6 +41,7 @@ import { prepareTemplateCompilerContextFamilyStructuralSchedule } from './templa
 import { executeTemplateCompilerContextFamilyTarget } from './template-compiler-context-family-target-execution.js';
 import {
   prepareTemplateCompilerContextFamilyTargetPlan,
+  type TemplateCompilerContextFamilyTargetPlanPreparation,
   type TemplateCompilerContextFamilyTargetPlanReason,
   TemplateCompilerContextFamilyTargetPlanState,
 } from './template-compiler-context-family-target-plan.js';
@@ -56,7 +57,10 @@ import {
   type TemplateCompilerRootSiteRunReason,
   TemplateCompilerRootSiteRunState,
 } from './template-compiler-root-site-run.js';
-import { TemplateCompilerSiteCursorTraversalMode } from './template-compiler-site-cursor.js';
+import {
+  TemplateCompilerSiteCursorTraversalMode,
+  type TemplateCompilerSiteCursorResult,
+} from './template-compiler-site-cursor.js';
 import {
   TemplateCompilerSiteCursorAttributeEvent,
   TemplateCompilerSiteCursorFrontierKind,
@@ -151,6 +155,21 @@ export class TemplateCompilerContextFamilyCompilationResult {
   }
 }
 
+/** Exact pre-allocation target plan for one invocation lane, or its owning typed frontier. */
+export class TemplateCompilerContextFamilyTargetPreparationResult {
+  constructor(
+    readonly state: TemplateCompilerContextFamilyCompilationState,
+    readonly stage: TemplateCompilerContextFamilyCompilationStage,
+    readonly target: TemplateCompilerContextFamilyTargetPlanPreparation | null,
+    readonly reasons: readonly TemplateCompilerContextFamilyCompilationReason[],
+  ) {
+    const exact = state === TemplateCompilerContextFamilyCompilationState.Exact;
+    if (exact !== (target != null && reasons.length === 0) || !exact !== (target == null && reasons.length > 0)) {
+      throw new Error('Context-family target preparation lost exact or unavailable ownership.');
+    }
+  }
+}
+
 /**
  * Execute one browser-effective template through the closed-context compiler and construct its final in-process family.
  *
@@ -174,14 +193,46 @@ export function compileTemplateCompilerContextFamily(
       root.reasons.map(rootRunReason),
     );
   }
-  const cursor = root.cursor!;
+  const prepared = prepareTemplateCompilerContextFamilyTarget(root.cursor!);
+  if (prepared.target == null) {
+    if (prepared.state === TemplateCompilerContextFamilyCompilationState.Exact) {
+      throw new Error('Exact context-family target preparation lost its target.');
+    }
+    return unavailable(prepared.state, prepared.stage, prepared.reasons);
+  }
+  const target = prepared.target;
+  const execution = root.execution!;
+  const schedule = prepareTemplateCompilerContextFamilyStructuralSchedule(target);
+  const attachment = execution.commitPreparedContextFamilyTargetAttachment(
+    execution.prepareContextFamilyTargetAttachment(target, schedule),
+  );
+  const targetExecution = executeTemplateCompilerContextFamilyTarget(attachment);
+  execution.seal();
+  return freezeTemplateCompilerContextFamilyTargetExecution(targetExecution, request.compilerReadStore);
+}
+
+/** Prepare one exact cursor transcript through completion, rows, wires, allocation, and target planning. */
+export function prepareTemplateCompilerContextFamilyTarget(
+  cursor: TemplateCompilerSiteCursorResult,
+): TemplateCompilerContextFamilyTargetPreparationResult {
+  if (cursor.transcript == null || cursor.siteEndpoint == null) {
+    return unavailableTarget(
+      TemplateCompilerContextFamilyCompilationState.Ineligible,
+      TemplateCompilerContextFamilyCompilationStage.FamilyCompletion,
+      [new TemplateCompilerContextFamilyCompilationReason(
+        TemplateCompilerContextFamilyCompilationStage.FamilyCompletion,
+        'cursor-transcript-unavailable',
+        'Context-family target preparation requires one exact cursor transcript and endpoint.',
+      )],
+    );
+  }
   const completion = completeTemplateCompilerContextFamily(
-    cursor.transcript!,
+    cursor.transcript,
     cursor.siteEndpoint,
     TemplateCompilerContextFamilyCompletionMode.RootInclusiveFamily,
   );
   if (completion.state !== TemplateCompilerContextFamilyCompletionState.Complete || completion.receipt == null) {
-    return unavailable(
+    return unavailableTarget(
       completionOutcome(completion),
       TemplateCompilerContextFamilyCompilationStage.FamilyCompletion,
       completionReasons(completion),
@@ -190,7 +241,7 @@ export function compileTemplateCompilerContextFamily(
   const rows = assembleTemplateCompilerContextFamilyRows(completion.receipt);
   // Pending row assemblies deliberately carry the obligations closed by the following allocation phase.
   if (rows.assembly == null) {
-    return unavailable(
+    return unavailableTarget(
       TemplateCompilerContextFamilyCompilationState.Ineligible,
       TemplateCompilerContextFamilyCompilationStage.RowAssembly,
       rows.reasons.map(rowAssemblyReason),
@@ -198,7 +249,7 @@ export function compileTemplateCompilerContextFamily(
   }
   const wires = prepareTemplateCompilerFamilyWireFunding(rows.assembly);
   if (wires.state !== TemplateCompilerFamilyWireFundingState.Exact || wires.funding == null) {
-    return unavailable(
+    return unavailableTarget(
       wireFundingOutcome(wires),
       TemplateCompilerContextFamilyCompilationStage.WireFunding,
       wires.reasons.map(wireFundingReason),
@@ -206,7 +257,7 @@ export function compileTemplateCompilerContextFamily(
   }
   const allocation = prepareTemplateCompilerContextFamilyAllocation(rows.assembly, wires.funding);
   if (allocation.state !== TemplateCompilerContextFamilyAllocationState.Exact || allocation.preparation == null) {
-    return unavailable(
+    return unavailableTarget(
       allocation.state === TemplateCompilerContextFamilyAllocationState.Pending
         ? TemplateCompilerContextFamilyCompilationState.Pending
         : TemplateCompilerContextFamilyCompilationState.Ineligible,
@@ -216,7 +267,7 @@ export function compileTemplateCompilerContextFamily(
   }
   const target = prepareTemplateCompilerContextFamilyTargetPlan(allocation.preparation);
   if (target.state !== TemplateCompilerContextFamilyTargetPlanState.Exact || target.preparation == null) {
-    return unavailable(
+    return unavailableTarget(
       target.state === TemplateCompilerContextFamilyTargetPlanState.Pending
         ? TemplateCompilerContextFamilyCompilationState.Pending
         : TemplateCompilerContextFamilyCompilationState.Ineligible,
@@ -224,13 +275,19 @@ export function compileTemplateCompilerContextFamily(
       target.reasons.map(targetPlanReason),
     );
   }
-  const execution = root.execution!;
-  const schedule = prepareTemplateCompilerContextFamilyStructuralSchedule(target.preparation);
-  const attachment = execution.commitPreparedContextFamilyTargetAttachment(
-    execution.prepareContextFamilyTargetAttachment(target.preparation, schedule),
+  return new TemplateCompilerContextFamilyTargetPreparationResult(
+    TemplateCompilerContextFamilyCompilationState.Exact,
+    TemplateCompilerContextFamilyCompilationStage.TargetPlan,
+    target.preparation,
+    [],
   );
-  const targetExecution = executeTemplateCompilerContextFamilyTarget(attachment);
-  execution.seal();
+}
+
+/** Freeze and project one already-executed lane after its shared execution session reached one global seal. */
+export function freezeTemplateCompilerContextFamilyTargetExecution(
+  targetExecution: ReturnType<typeof executeTemplateCompilerContextFamilyTarget>,
+  compilerReadStore: TemplateCompilerContextFamilyCompilationRequest['compilerReadStore'],
+): TemplateCompilerContextFamilyCompilationResult {
   const freeze = prepareTemplateCompilerContextFamilyFreeze(targetExecution);
   if (freeze.state !== TemplateCompilerContextFamilyFreezePreparationState.Exact || freeze.preparation == null) {
     return unavailable(
@@ -252,9 +309,17 @@ export function compileTemplateCompilerContextFamily(
   return new TemplateCompilerContextFamilyCompilationResult(
     TemplateCompilerContextFamilyCompilationState.Exact,
     TemplateCompilerContextFamilyCompilationStage.FrozenValue,
-    projectTemplateCompilerContextFamilyValue(frozen.value, request.compilerReadStore),
+    projectTemplateCompilerContextFamilyValue(frozen.value, compilerReadStore),
     [],
   );
+}
+
+function unavailableTarget(
+  state: Exclude<TemplateCompilerContextFamilyCompilationState, TemplateCompilerContextFamilyCompilationState.Exact>,
+  stage: TemplateCompilerContextFamilyCompilationStage,
+  reasons: readonly TemplateCompilerContextFamilyCompilationReason[],
+): TemplateCompilerContextFamilyTargetPreparationResult {
+  return new TemplateCompilerContextFamilyTargetPreparationResult(state, stage, null, reasons);
 }
 
 function wireFundingOutcome(
