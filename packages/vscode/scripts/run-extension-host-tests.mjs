@@ -27,13 +27,14 @@ import {
 } from "node:path";
 import { fileURLToPath } from "node:url";
 import { extensionHostStaticContractSha256 } from "./extension-host-static-contract.mjs";
+import { minimumVSCodeVersion } from "./extension-host-version-contract.mjs";
 import {
   artifactPaths,
   gitState,
   verifyVsix,
 } from "./vsix-artifact.mjs";
 
-export const minimumVSCodeVersion = "1.91.0";
+export { minimumVSCodeVersion };
 export const resourceDiscoveryObservationLedgerMaxBytes = 192 * 1024 * 1024;
 export const extensionHostShards = Object.freeze([
   "worker-lifecycle",

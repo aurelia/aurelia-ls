@@ -21,7 +21,7 @@ import path from "node:path";
 import process from "node:process";
 import { Writable } from "node:stream";
 import { fileURLToPath } from "node:url";
-import { minimumVSCodeVersion } from "./run-extension-host-tests.mjs";
+import { minimumVSCodeVersion } from "./extension-host-version-contract.mjs";
 import {
   invocationSchemaVersion as electronInvocationSchemaVersion,
   resultSchemaVersion as electronResultSchemaVersion,

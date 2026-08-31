@@ -95,6 +95,12 @@ interface MutableAmbiguityScope {
 const runnerPath = fileURLToPath(
   new URL("../scripts/run-extension-host-tests.mjs", import.meta.url),
 );
+const collectorPath = fileURLToPath(
+  new URL("../scripts/collect-extension-host-tails.mjs", import.meta.url),
+);
+const versionContractPath = fileURLToPath(
+  new URL("../scripts/extension-host-version-contract.mjs", import.meta.url),
+);
 const staticContractPath = fileURLToPath(
   new URL("../scripts/extension-host-static-contract.mjs", import.meta.url),
 );
@@ -112,6 +118,42 @@ const extensionManifest = readManifest(new URL("../package.json", import.meta.ur
 const rootManifest = readManifest(new URL("../../../package.json", import.meta.url));
 
 describe("Extension Host support runner", () => {
+  test("keeps installed acceptance outside the runner's module cycle", () => {
+    const runner = readFileSync(runnerPath, "utf8");
+    const collector = readFileSync(collectorPath, "utf8");
+    const versionContract = readFileSync(versionContractPath, "utf8");
+
+    expect(runner).toContain('from "./extension-host-version-contract.mjs"');
+    expect(collector).toContain('from "./extension-host-version-contract.mjs"');
+    expect(collector).not.toContain('from "./run-extension-host-tests.mjs"');
+    expect(versionContract).toContain('minimumVSCodeVersion = "1.91.0"');
+  });
+
+  test("enters installed acceptance without an unresolved top-level await", () => {
+    const environment = { ...process.env };
+    for (const key of Object.keys(environment)) {
+      if (key.toLowerCase() === "npm_execpath") delete environment[key];
+    }
+    const result = spawnSync(
+      process.execPath,
+      [runnerPath, "--worker", "--current-stable", "--installed-vsix"],
+      {
+        cwd: resolve(dirname(runnerPath), "../../.."),
+        encoding: "utf8",
+        env: environment,
+        timeout: 10_000,
+        windowsHide: true,
+      },
+    );
+    const output = `${result.stdout ?? ""}\n${result.stderr ?? ""}`;
+
+    expect(result.error).toBeUndefined();
+    expect(result.signal).toBeNull();
+    expect(result.status).toBe(1);
+    expect(output).toContain("VSIX packaging must run from a pnpm lifecycle with npm_execpath available.");
+    expect(output).not.toContain("unsettled top-level await");
+  });
+
   test("binds recovery presentations to their navigation fault controls", () => {
     const source = readFileSync(runnerPath, "utf8");
     const newestStart = source.indexOf("function validateRecoveryFacts(");
