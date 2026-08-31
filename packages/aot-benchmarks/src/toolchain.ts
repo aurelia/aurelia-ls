@@ -79,14 +79,20 @@ function canonicalJson(value: unknown): string {
 }
 
 function packageImportEntry(manifest: PackageManifest): string {
-  const rootExport = typeof manifest.exports === 'object' && manifest.exports != null
-    ? (manifest.exports as Record<string, unknown>)['.']
+  const exports = typeof manifest.exports === 'object' && manifest.exports != null
+    ? manifest.exports as Record<string, unknown>
     : null;
+  const rootExport = exports?.['.'] ?? exports;
   const selected = selectExport(rootExport) ?? manifest.module ?? manifest.main;
-  if (typeof selected !== 'string' || !selected.startsWith('./')) {
+  if (
+    typeof selected !== 'string'
+    || selected.length === 0
+    || path.isAbsolute(selected)
+    || selected.replaceAll('\\', '/').split('/').some(part => part === '..')
+  ) {
     throw new Error('@aurelia/vite-plugin has no package-relative ESM entry.');
   }
-  return selected;
+  return selected.startsWith('./') ? selected.slice(2) : selected;
 }
 
 function selectExport(value: unknown): string | null {

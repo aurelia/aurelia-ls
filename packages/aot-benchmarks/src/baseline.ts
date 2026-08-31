@@ -107,6 +107,16 @@ export async function runPromotedBaseline(
   });
 
   try {
+    progress('Capturing exact source, browser, and build-toolchain identity');
+    const sourceWorld = await captureAotSourceWorldIdentity({ repositoryRoot, framework });
+    const browser = await resolveBenchmarkBrowserIdentity();
+    const browserDriver = await resolveBenchmarkBrowserDriverIdentity({
+      repositoryRoot,
+      browserVersion: browser.identity.version,
+    });
+    const toolchain = await captureBaselineToolchainIdentity(packageRoot, browserDriver);
+    const tachometerVersion = await readPackageVersion(path.join(packageRoot, 'node_modules', 'tachometer'));
+
     progress('Building all applications through official JIT and current AOT');
     const primaryBuilds = await buildApplications(
       portfolio.applications,
@@ -139,11 +149,6 @@ export async function runPromotedBaseline(
     });
     assertDeterministicAot(aotCohort, deterministicCohort, firstAotReceipt, secondAotReceipt);
 
-    const browser = await resolveBenchmarkBrowserIdentity();
-    const browserDriver = await resolveBenchmarkBrowserDriverIdentity({
-      repositoryRoot,
-      browserVersion: browser.identity.version,
-    });
     progress('Running exact minified browser assurance for production size applications');
     const assuranceByApplication = new Map<string, Awaited<ReturnType<typeof assertProductionBuildAssurance>>>();
     const primaryBuildByKey = new Map(primaryBuilds.map(build => [
@@ -276,9 +281,6 @@ export async function runPromotedBaseline(
       evidenceInputs.push(evidence);
     }
 
-    const sourceWorld = await captureAotSourceWorldIdentity({ repositoryRoot, framework });
-    const toolchain = await captureBaselineToolchainIdentity(packageRoot, browserDriver);
-    const tachometerVersion = await readPackageVersion(path.join(packageRoot, 'node_modules', 'tachometer'));
     const rawResultFiles = sortIdentities([...calibration.rawResults, ...measured.rawResults]);
     const sampling = createSamplingIdentity({
       producerVersion: tachometerVersion,
