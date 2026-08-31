@@ -4,7 +4,9 @@ import type { ProjectBootFrame } from '../boot/frames.js';
 import type { AureliaAppWorldEmission } from '../configuration/app-world-composer.js';
 import {
   DEFAULT_SEMANTIC_APP_ANALYSIS_DEPTH,
+  DEFAULT_SEMANTIC_TEMPLATE_ANALYSIS_BREADTH,
   type SemanticAppAnalysisDepth,
+  type SemanticTemplateAnalysisBreadth,
 } from '../configuration/app-analysis.js';
 import {
   DEFAULT_SEMANTIC_RUNTIME_INQUIRY_PROFILE,
@@ -59,8 +61,8 @@ import {
   noDiProviderActivationValues,
 } from '../di/provider-activation.js';
 import {
+  RuntimeBoundControllerValueTable,
   runtimeBoundControllerValueTableForTemplateResources,
-  type RuntimeBoundControllerValueTable,
 } from '../observation/runtime-bound-controller-value.js';
 import type {
   ComputedObserverSourceProjectResult,
@@ -389,6 +391,7 @@ export interface TemplateCompilationProjectProfile {
 
 export interface TemplateCompilationProjectOptions {
   readonly runtimeAnalysisDepth?: SemanticAppAnalysisDepth | `${SemanticAppAnalysisDepth}`;
+  readonly runtimeAnalysisBreadth?: SemanticTemplateAnalysisBreadth | `${SemanticTemplateAnalysisBreadth}`;
   readonly evaluation?: StaticProjectEvaluationResult | null;
   /** Pre-template state visibility authority; omitted only when the standalone compiler has no state project. */
   readonly stateStoreVisibility?: StateStoreVisibility;
@@ -870,6 +873,7 @@ export class TemplateCompilationProjectPass {
         );
     const phaseRecorder = new TemplateCompilationPhaseRecorder(this.publication, frontDoor.plan.telemetry);
     const runtimeAnalysisDepth = options.runtimeAnalysisDepth ?? DEFAULT_SEMANTIC_APP_ANALYSIS_DEPTH;
+    const runtimeAnalysisBreadth = options.runtimeAnalysisBreadth ?? DEFAULT_SEMANTIC_TEMPLATE_ANALYSIS_BREADTH;
     const stateStoreVisibility = frontDoor.plan.stateStoreVisibility
       .withContainers(templateCompilerWorldContainers(frontDoor));
     const expressionWorld = new CheckerExpressionTypeWorld(
@@ -887,6 +891,7 @@ export class TemplateCompilationProjectPass {
       resourceDefinitions,
       options.computedObserverSources ?? null,
       runtimeAnalysisDepth,
+      runtimeAnalysisBreadth,
       expressionWorld,
       phaseRecorder,
     );
@@ -899,6 +904,7 @@ export class TemplateCompilationProjectPass {
       resourceDefinitions,
       options.computedObserverSources ?? null,
       runtimeAnalysisDepth,
+      runtimeAnalysisBreadth,
       expressionWorld,
       phaseRecorder,
     );
@@ -922,10 +928,14 @@ export class TemplateCompilationProjectPass {
     options: TemplateCompilationProjectOptions = {},
   ): TemplateCompilationProjectEmission | null {
     const runtimeAnalysisDepth = options.runtimeAnalysisDepth ?? DEFAULT_SEMANTIC_APP_ANALYSIS_DEPTH;
+    const runtimeAnalysisBreadth = options.runtimeAnalysisBreadth ?? DEFAULT_SEMANTIC_TEMPLATE_ANALYSIS_BREADTH;
     if (
       !frontDoor.hasSameMembershipAs(previous.frontDoor)
       || [...previous.resources, ...previous.authoringResources].some(
         (resource) => resource.runtimeAnalysis.analysisDepth !== runtimeAnalysisDepth,
+      )
+      || [...previous.resources, ...previous.authoringResources].some(
+        (resource) => resource.runtimeAnalysis.analysisBreadth !== runtimeAnalysisBreadth,
       )
     ) {
       return null;
@@ -1159,6 +1169,7 @@ export class TemplateCompilationProjectPass {
     resourceDefinitions: ResourceDefinitionIndex | null,
     computedObserverSources: ComputedObserverSourceProjectResult | null,
     runtimeAnalysisDepth: SemanticAppAnalysisDepth | `${SemanticAppAnalysisDepth}`,
+    runtimeAnalysisBreadth: SemanticTemplateAnalysisBreadth | `${SemanticTemplateAnalysisBreadth}`,
     expressionWorld: CheckerExpressionTypeWorld,
     phases: TemplateCompilationPhaseRecorder,
   ): readonly TemplateResourceRuntimeAnalysisEmission[] {
@@ -1170,9 +1181,15 @@ export class TemplateCompilationProjectPass {
       const currentCohort = cohort.map((compilation) => projectContext.requireCompilation(compilation));
       const cohortResources: TemplateResourceRuntimeAnalysisEmission[] = [];
       for (const group of runtimeAnalysisScheduleGroups(currentCohort, resourceDefinitions)) {
-        const boundControllerValues = runtimeBoundControllerValueTableForTemplateResources(
+        const predecessorBoundControllerValues = runtimeBoundControllerValueTableForTemplateResources(
           cohortResources,
         );
+        // A resource-local SCC deliberately does not render peer views. Predecessor writers are therefore an
+        // incomplete specialization basis for every member of a cycle; fall back to each declared bindable type rather
+        // than narrowing from whichever external writer happened to reach the SCC first.
+        const boundControllerValues = runtimeAnalysisBreadth === 'resource-local' && group.length > 1
+          ? RuntimeBoundControllerValueTable.empty
+          : predecessorBoundControllerValues;
         const groupResources = group.map((compilation) =>
           new TemplateResourceRuntimeAnalysisEmission(
             compilation,
@@ -1188,6 +1205,7 @@ export class TemplateCompilationProjectPass {
                 resourceDefinitions,
                 computedObserverSources,
                 runtimeAnalysisDepth,
+                runtimeAnalysisBreadth,
                 expressionWorld,
                 phases.telemetry,
                 boundControllerValues,
@@ -1666,6 +1684,7 @@ export class TemplateCompilationProjectPass {
     resourceDefinitions: ResourceDefinitionIndex | null,
     computedObserverSources: ComputedObserverSourceProjectResult | null,
     analysisDepth: SemanticAppAnalysisDepth | `${SemanticAppAnalysisDepth}` = DEFAULT_SEMANTIC_APP_ANALYSIS_DEPTH,
+    analysisBreadth: SemanticTemplateAnalysisBreadth | `${SemanticTemplateAnalysisBreadth}` = DEFAULT_SEMANTIC_TEMPLATE_ANALYSIS_BREADTH,
     expressionWorld: CheckerExpressionTypeWorld | null = null,
     telemetry: SemanticRuntimeTelemetryOptions | null = null,
     boundControllerValues?: RuntimeBoundControllerValueTable,
@@ -1685,6 +1704,7 @@ export class TemplateCompilationProjectPass {
       resourceDefinitions,
       computedObserverSources,
       analysisDepth,
+      analysisBreadth,
       expressionWorld,
       telemetry,
       boundControllerValues,

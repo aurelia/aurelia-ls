@@ -66,13 +66,13 @@ and checks that TypeScript resolves from the same package context as the app.
 ## Promote Published Documentation
 
 Source documentation can target the next MCP protocol while install guidance
-continues to identify the last hosted tarball. Before creating the 0.3.1 tag:
+continues to identify the last hosted tarball. Before creating the 0.3.2 tag:
 
-1. Set `publishedReleaseVersion` to `0.3.1` in
+1. Set `publishedReleaseVersion` to `0.3.2` in
    `scripts/contract-release-docs.mjs`.
 2. Promote the MCP release/status/install links in the root README,
    `docs/getting-started.md`, the package README, and every provider guide from
-   0.3.0 to 0.3.1, and remove the package README's source-versus-published
+   0.3.1 to 0.3.2, and remove the package README's source-versus-published
    transition wording.
 3. Run `pnpm --filter @aurelia-ls/mcp contract:release` again.
 
@@ -83,9 +83,9 @@ protocol reference are excluded from that promotion.
 ## GitHub Release Flow
 
 ```powershell
-git tag mcp-v0.3.1
-git push origin mcp-v0.3.1
-gh release create mcp-v0.3.1 packages/mcp/.release/aurelia-ls-mcp-0.3.1.tgz --title "Aurelia MCP 0.3.1" --notes-file packages/mcp/release-notes/mcp-v0.3.1.md
+git tag mcp-v0.3.2
+git push origin mcp-v0.3.2
+gh release create mcp-v0.3.2 packages/mcp/.release/aurelia-ls-mcp-0.3.2.tgz --title "Aurelia MCP 0.3.2" --notes-file packages/mcp/release-notes/mcp-v0.3.2.md
 ```
 
 Do not add npm publish steps to this flow yet.
@@ -96,7 +96,7 @@ For diagnostic-authoritative use, install the tarball as a dev
 dependency in the Aurelia app being analyzed:
 
 ```powershell
-npm i -D https://github.com/aurelia/aurelia-ls/releases/download/mcp-v0.3.1/aurelia-ls-mcp-0.3.1.tgz
+npm i -D https://github.com/aurelia/aurelia-ls/releases/download/mcp-v0.3.2/aurelia-ls-mcp-0.3.2.tgz
 ```
 
 Then configure the MCP server from that project:
@@ -150,7 +150,7 @@ Use the release asset URL directly in an MCP client config:
   "mcpServers": {
     "aurelia": {
       "command": "npx",
-      "args": ["-y", "https://github.com/aurelia/aurelia-ls/releases/download/mcp-v0.3.1/aurelia-ls-mcp-0.3.1.tgz"]
+      "args": ["-y", "https://github.com/aurelia/aurelia-ls/releases/download/mcp-v0.3.2/aurelia-ls-mcp-0.3.2.tgz"]
     }
   }
 }
@@ -175,7 +175,7 @@ After uploading the release asset, run a real hosted-URL smoke before sharing
 the docs:
 
 ```powershell
-npx -y https://github.com/aurelia/aurelia-ls/releases/download/mcp-v0.3.1/aurelia-ls-mcp-0.3.1.tgz
+npx -y https://github.com/aurelia/aurelia-ls/releases/download/mcp-v0.3.2/aurelia-ls-mcp-0.3.2.tgz
 ```
 
 For a full check, point an MCP client at the same URL and run

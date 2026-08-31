@@ -128,6 +128,10 @@ function semanticAnswerDisplayText(value: unknown): string | null {
   if (analysisDepth != null) {
     lines.push(analysisDepth);
   }
+  const templateAnalysisBreadth = semanticAnswerTemplateAnalysisBreadthText(value.templateAnalysisBreadth);
+  if (templateAnalysisBreadth != null) {
+    lines.push(templateAnalysisBreadth);
+  }
   const page = semanticAnswerPageText(value.page);
   if (page != null) {
     lines.push(page);
@@ -164,6 +168,12 @@ function semanticAnswerStateText(value: Record<string, unknown>): string | null 
 function semanticAnswerAnalysisDepthText(value: unknown): string | null {
   return typeof value === 'string' && value.length > 0
     ? `Analysis depth used: ${value}.`
+    : null;
+}
+
+function semanticAnswerTemplateAnalysisBreadthText(value: unknown): string | null {
+  return typeof value === 'string' && value.length > 0
+    ? `Template analysis breadth used: ${value}.`
     : null;
 }
 

@@ -19,22 +19,29 @@ import {
   shouldUseWorkerTransport,
 } from "./worker-transport.js";
 import { createWorkerRestartHostControl } from "./worker-restart-host-control.js";
+import { SupportReportService } from "./support-report.js";
 
 let app: ClientApp | undefined;
 let workerRestartHostControl: vscode.Disposable | undefined;
+let supportReport: SupportReportService | undefined;
 
 /** VS Code composition root. The extension intentionally exports no product API. */
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
   const outputChannel = vscode.window.createOutputChannel("Aurelia LS (Client)", { log: true });
   const logger = new ClientLogger(outputChannel);
+  const transportMode = shouldUseWorkerTransport() ? "worker" : "ipc";
+  supportReport = new SupportReportService(context, vscode, { transportMode });
+  context.subscriptions.push(supportReport.registerCommand());
   const languageClient = new AureliaLanguageClient(logger, vscode, {
-    createClient: createLanguageClient(logger.child("worker-transport")),
+    createClient: createLanguageClient(logger.child("worker-transport"), supportReport),
   });
+  supportReport.attachLanguageClient(languageClient);
   app = new ClientApp(context, {
     vscode,
     logger,
     outputChannel,
     languageClient,
+    supportReport,
     features: DefaultFeatures,
   });
   await app.activate();
@@ -46,9 +53,14 @@ export async function deactivate(): Promise<void> {
   workerRestartHostControl = undefined;
   await app?.deactivate();
   app = undefined;
+  supportReport?.dispose();
+  supportReport = undefined;
 }
 
-const createLanguageClient = (logger: ClientLogger): LanguageClientFactory => (
+const createLanguageClient = (
+  logger: ClientLogger,
+  support: SupportReportService,
+): LanguageClientFactory => (
   id: string,
   name: string,
   serverModule: string,
@@ -63,6 +75,7 @@ const createLanguageClient = (logger: ClientLogger): LanguageClientFactory => (
       () => {
         const transport = createWorkerMessageTransports(serverModule, {
           onEvent: (event) => {
+            support.recordWorkerTransportEvent({ id, name }, event);
             switch (event.type) {
               case "online":
                 transportLogger.debug("Worker transport is online");

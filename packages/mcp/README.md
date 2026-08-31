@@ -12,10 +12,10 @@ coding agent.
 
 | Surface | Version | Status |
 |---|---:|---|
-| [GitHub tarball](https://github.com/aurelia/aurelia-ls/releases/tag/mcp-v0.3.1) | 0.3.1 | Latest published release |
+| [GitHub tarball](https://github.com/aurelia/aurelia-ls/releases/tag/mcp-v0.3.2) | 0.3.2 | Latest published release |
 | [Protocol reference](./docs/reference-v0.3.0.md) | 0.3.0 | Current protocol |
 
-The [0.3.1 release notes](./release-notes/mcp-v0.3.1.md) cover the current fix.
+The [0.3.2 release notes](./release-notes/mcp-v0.3.2.md) cover the current reliability improvements.
 The [0.3.0 notes](./release-notes/mcp-v0.3.0.md) describe the client migration
 from 0.2.0.
 
@@ -25,7 +25,7 @@ For diagnostics that should agree with project-local `tsc`, install the
 tarball as a dev dependency in the Aurelia app:
 
 ```powershell
-npm i -D https://github.com/aurelia/aurelia-ls/releases/download/mcp-v0.3.1/aurelia-ls-mcp-0.3.1.tgz
+npm i -D https://github.com/aurelia/aurelia-ls/releases/download/mcp-v0.3.2/aurelia-ls-mcp-0.3.2.tgz
 ```
 
 Configure the MCP client to launch the app-local package:
@@ -40,7 +40,7 @@ Provider-specific configuration is available for
 For a quick trial:
 
 ```powershell
-npx -y https://github.com/aurelia/aurelia-ls/releases/download/mcp-v0.3.1/aurelia-ls-mcp-0.3.1.tgz
+npx -y https://github.com/aurelia/aurelia-ls/releases/download/mcp-v0.3.2/aurelia-ls-mcp-0.3.2.tgz
 ```
 
 Direct URL `npx` runs in a temporary package-manager context. A project-local
@@ -50,7 +50,7 @@ install lets the analyzer use the workspace's TypeScript package. Then call
 
 ## Tool Surface
 
-The 0.3.1 server registers 19 tools:
+The 0.3.2 server registers 19 tools:
 
 | Area | Tools |
 |---|---|

@@ -32,7 +32,9 @@ export type {
 } from '../inquiry/answer.js';
 export {
   SEMANTIC_APP_ANALYSIS_DEPTHS,
+  SEMANTIC_TEMPLATE_ANALYSIS_BREADTHS,
   SemanticAppAnalysisDepth,
+  SemanticTemplateAnalysisBreadth,
 } from '../configuration/app-analysis.js';
 export {
   SEMANTIC_APP_ENTRY_ACTIVATION_ERROR_CODE,

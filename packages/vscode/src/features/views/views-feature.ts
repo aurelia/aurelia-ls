@@ -63,6 +63,21 @@ export const ViewsFeature: ClientFeature = {
     let refreshDrain: Promise<void> | null = null;
     const noActiveRefresh = Symbol("no-active-resource-refresh");
     let activeRefreshScope: string | null | typeof noActiveRefresh = noActiveRefresh;
+    const supportStateRegistration = ctx.supportReport?.registerResourceExplorerState(() => ({
+      visible: view.visible,
+      acceptingRefreshes,
+      dirtyAll,
+      dirtyWorkspaceCount: dirtyWorkspaceKeys.size,
+      forcedWhileHidden: forceWhileHidden,
+      refreshInFlight: refreshDrain != null,
+      activeRefreshScope: activeRefreshScope === noActiveRefresh
+        ? "none"
+        : activeRefreshScope == null
+          ? "all"
+          : "workspace",
+      provider: explorer.supportState(),
+    }));
+    if (supportStateRegistration != null) own(supportStateRegistration);
     const hasDirtyRefresh = (): boolean => dirtyAll || dirtyWorkspaceKeys.size > 0;
     const drainRefresh = (): Promise<void> => {
       if (!acceptingRefreshes) return Promise.resolve();

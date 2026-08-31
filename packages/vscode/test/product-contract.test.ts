@@ -189,6 +189,16 @@ describe("VS Code product contract", () => {
       AureliaProtocolCommand.ExplainResourceAvailability,
     );
     expect(manifest.contributes?.commands).toContainEqual({
+      command: AureliaCommand.CreateSupportReport,
+      title: "Create Support Report",
+      icon: "$(report)",
+      category: "Aurelia",
+    });
+    expect(manifest.activationEvents).toContain(`onCommand:${AureliaCommand.CreateSupportReport}`);
+    expect(manifest.contributes?.menus?.commandPalette).toContainEqual({
+      command: AureliaCommand.CreateSupportReport,
+    });
+    expect(manifest.contributes?.commands).toContainEqual({
       command: AureliaCommand.ExplainFrameworkCapability,
       title: "Explain Diagnostic",
       category: "Aurelia",

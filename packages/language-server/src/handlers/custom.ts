@@ -5,7 +5,12 @@
  * request boundary keeps cancellation, staleness, and operational failure
  * distinct from normal semantic absence and refusal.
  */
-import type { CancellationToken } from "vscode-languageserver/node";
+import {
+  ErrorCodes,
+  LSPErrorCodes,
+  ResponseError,
+  type CancellationToken,
+} from "vscode-languageserver/node";
 import {
   canonicalTypeSystemPath,
   frameworkRegistrationCapabilityFromString,
@@ -14,6 +19,8 @@ import {
 import type { ServerContext } from "../context.js";
 import type {
   AnalysisLimitationsResponse,
+  AureliaSupportSnapshotParams,
+  AureliaSupportSnapshotResponse,
   AttributeInterpretationExplanationAnswerTransport,
   AttributeInterpretationExplanationContender,
   AttributeInterpretationExplanationParams,
@@ -49,6 +56,7 @@ import type {
   WorkspaceStatusResponse,
   WorkspaceStatusParams,
 } from "../protocol.js";
+import { createLanguageServerSupportSnapshot } from "../support-snapshot.js";
 import {
   AureliaProtocolRequest,
   attributeInterpretationExplanationRefusal,
@@ -124,6 +132,32 @@ export type {
   TemplateResourceAvailabilityParams,
   TemplateResourceAvailabilityResponse,
 } from "../protocol.js";
+
+export function handleSupportSnapshot(
+  ctx: ServerContext,
+  params: AureliaSupportSnapshotParams,
+  token?: CancellationToken,
+): AureliaSupportSnapshotResponse {
+  try {
+    if (supportSnapshotCancelled(token)) {
+      throw new ResponseError(LSPErrorCodes.RequestCancelled, "Aurelia support snapshot was cancelled.");
+    }
+    const snapshot = createLanguageServerSupportSnapshot(ctx, params);
+    if (supportSnapshotCancelled(token)) {
+      throw new ResponseError(LSPErrorCodes.RequestCancelled, "Aurelia support snapshot was cancelled.");
+    }
+    return snapshot;
+  } catch (error) {
+    if (error instanceof TypeError) {
+      throw new ResponseError(ErrorCodes.InvalidParams, error.message);
+    }
+    throw error;
+  }
+}
+
+function supportSnapshotCancelled(token: CancellationToken | undefined): boolean {
+  return token?.isCancellationRequested === true;
+}
 
 export async function handleAttributeInterpretationExplanation(
   ctx: ServerContext,
@@ -1083,6 +1117,12 @@ export async function handleGetRelatedFiles(
  * Registers all custom Aurelia request handlers on the connection.
  */
 export function registerCustomHandlers(ctx: ServerContext): void {
+  // Support inspection is deliberately detached from semantic request admission. It may read existing cache counters,
+  // but it never asks an app query or causes an app epoch to open/deepen.
+  ctx.connection.onRequest(AureliaProtocolRequest.SupportSnapshot, (
+    params: AureliaSupportSnapshotParams,
+    token: CancellationToken,
+  ) => handleSupportSnapshot(ctx, params, token));
   ctx.connection.onRequest(AureliaProtocolRequest.AnalysisLimitations, (_params: unknown, token: CancellationToken) =>
     request(ctx, "analysisLimitations", token, undefined,
       (guard) => handleAnalysisLimitations(ctx, guard)));

@@ -502,6 +502,10 @@ describe('app analysis computation', () => {
     expect(runtime.workspace.store.read(compositionSource.productHandle)).not.toBeNull();
     expect(runtime.analysisCacheOverview().value?.cachedAppCount).toBe(2);
     expect(runtime.analysisCacheOverview().value?.typeSystemProjectCount).toBe(2);
+    expect(runtime.sessionAnalysisCacheOverview({ cachedAppLimit: 1 }).value).toMatchObject({
+      cachedAppCount: 2,
+      cachedApps: [expect.any(Object)],
+    });
 
     const deeperCompletion = await runtime.openApp({
       projectKey: 'completion',

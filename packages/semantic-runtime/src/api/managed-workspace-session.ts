@@ -322,6 +322,34 @@ export class ManagedSemanticWorkspaceSession {
   }
 
   /**
+   * Read the already-published incarnation without acquiring, reconciling, or booting a source world.
+   *
+   * This deliberately weaker detached view is for bounded crash/support inspection. A null result means there is no
+   * safely published incumbent right now. The projector must remain synchronous and must not retain the runtime answer.
+   */
+  tryAnalysisCacheOverview<TResult>(
+    request: SemanticRuntimeSessionAnalysisCacheOverviewRequest,
+    project: (answer: SemanticRuntimeAnswer<SemanticRuntimeSessionAnalysisCacheOverviewResult>) => TResult,
+  ): TResult | null {
+    this.assertNotReentrant('analysis-cache-overview');
+    if (typeof project !== 'function') {
+      throw new TypeError('Managed semantic workspace analysis-cache overview projector must be a function.');
+    }
+    const incarnation = this.activeIncarnation;
+    if (
+      this.isClosing
+      || incarnation == null
+      || !incarnation.acceptingOperations
+      || incarnation.activeOperationCount > 0
+      || incarnation.invalidation != null
+      || this.queuedTransitionCount > 0
+    ) {
+      return null;
+    }
+    return project(incarnation.runtime.sessionAnalysisCacheOverview(request));
+  }
+
+  /**
    * Stop admission, drain every shared reader, clear the FIFO-selected incumbent exactly once, and project the result.
    * A topology change observed while draining queues reconciliation but never stale-rejects or replays the applied clear.
    */

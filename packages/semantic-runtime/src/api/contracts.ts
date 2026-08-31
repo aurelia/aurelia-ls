@@ -43,7 +43,10 @@ import type {
   TemplateCompletionScopeRole,
   TemplateCompletionSiteKind,
 } from '../inquiry/template-completion.js';
-import type { SemanticAppAnalysisDepth } from '../configuration/app-analysis.js';
+import type {
+  SemanticAppAnalysisDepth,
+  SemanticTemplateAnalysisBreadth,
+} from '../configuration/app-analysis.js';
 import type { SemanticAppNominatedEntry } from '../configuration/nominated-app-entry.js';
 import type {
   QueryClaimGraphDisposalSummary,
@@ -763,6 +766,8 @@ export interface OpenSemanticAppOptions {
   readonly sourceFilePath?: string | null;
   /** Runtime/checker product depth requested for this app-world emission. Omit for the default runtime topology. */
   readonly analysisDepth?: SemanticAppAnalysisDepth | `${SemanticAppAnalysisDepth}` | null;
+  /** Runtime template graph breadth. Omit for aggregate app topology. */
+  readonly templateAnalysisBreadth?: SemanticTemplateAnalysisBreadth | `${SemanticTemplateAnalysisBreadth}` | null;
   /** Include standalone resource-library template analysis for authoring/LSP inquiries. */
   readonly includeAuthoringTemplates?: boolean | null;
   /** Retain raw whole-source compiler precedents used by browser-occurrence/AOT compilation. */
@@ -943,6 +948,8 @@ export interface SemanticRuntimeAppQueryRequest extends SemanticAppQuery {
   readonly sourceFilePath?: string | null;
   /** Override the app-world depth selected from the query catalog. */
   readonly analysisDepth?: SemanticAppAnalysisDepth | `${SemanticAppAnalysisDepth}` | null;
+  /** Override the template runtime breadth selected from the query catalog. */
+  readonly templateAnalysisBreadth?: SemanticTemplateAnalysisBreadth | `${SemanticTemplateAnalysisBreadth}` | null;
   /** Override authoring-template inclusion selected from cursor/file locus. */
   readonly includeAuthoringTemplates?: boolean | null;
   /** Optional source-file selection for standalone authoring template compilation. */
@@ -972,6 +979,8 @@ export interface SemanticRuntimeAppQueryBatchRequest {
   readonly sourceFilePath?: string | null;
   /** Open the smallest app-world depth satisfying every child query unless explicitly overridden. */
   readonly analysisDepth?: SemanticAppAnalysisDepth | `${SemanticAppAnalysisDepth}` | null;
+  /** Open the narrowest template runtime graph satisfying every child query unless explicitly overridden. */
+  readonly templateAnalysisBreadth?: SemanticTemplateAnalysisBreadth | `${SemanticTemplateAnalysisBreadth}` | null;
   /** Include standalone resource-library template analysis when any child cursor/file query needs it by default. */
   readonly includeAuthoringTemplates?: boolean | null;
   /** Optional source-file selection for standalone authoring templates. Defaults to child cursor/file loci. */
@@ -1023,6 +1032,8 @@ export interface SemanticRuntimeAppQueryBatchResult {
   readonly projectKey: string | null;
   /** Null when every child query is runtime-static and no app-world analysis tier was selected. */
   readonly analysisDepth: SemanticAppAnalysisDepth | `${SemanticAppAnalysisDepth}` | null;
+  /** Null when every child query was answered without an app-world template runtime. */
+  readonly templateAnalysisBreadth: SemanticTemplateAnalysisBreadth | `${SemanticTemplateAnalysisBreadth}` | null;
   readonly displayText: string;
   readonly includeAuthoringTemplates: boolean;
   readonly authoringTemplateSourceFileCount: number;
@@ -1077,6 +1088,10 @@ export interface SemanticAppQueryCatalogRow {
   readonly materializationPolicy: SemanticQueryMaterializationPolicy;
   readonly pagingKind: 'none' | 'offset-cursor' | 'row-sample' | 'continuation-cursor';
   readonly minimumAnalysisDepth: SemanticAppAnalysisDepth | `${SemanticAppAnalysisDepth}`;
+  /** Smallest template runtime graph that preserves this query's answer contract. */
+  readonly minimumTemplateAnalysisBreadth: SemanticTemplateAnalysisBreadth | `${SemanticTemplateAnalysisBreadth}`;
+  /** Template runtime breadth used for a global/no-locus call when the caller does not override it. */
+  readonly defaultTemplateAnalysisBreadth: SemanticTemplateAnalysisBreadth | `${SemanticTemplateAnalysisBreadth}`;
   readonly supportsPaging: boolean;
   readonly supportsDetail: boolean;
   readonly supportsSourceFile: boolean;
@@ -1110,6 +1125,8 @@ export interface SemanticTemplateCursorQuery {
   readonly projectKey?: string | null;
   /** Runtime/checker product depth requested for this cursor query. */
   readonly analysisDepth?: SemanticAppAnalysisDepth | `${SemanticAppAnalysisDepth}` | null;
+  /** Template runtime graph breadth requested for this cursor query. */
+  readonly templateAnalysisBreadth?: SemanticTemplateAnalysisBreadth | `${SemanticTemplateAnalysisBreadth}` | null;
   /** Include standalone resource-library template analysis. Defaults to true for cursor-locus queries. */
   readonly includeAuthoringTemplates?: boolean | null;
   /** Optional source-file selection for authoring template compilation. Defaults to the cursor file. */
@@ -1129,6 +1146,8 @@ export interface SemanticTemplateDiagnosticsQuery {
   readonly projectKey?: string | null;
   /** Runtime/checker product depth requested for this diagnostic query. */
   readonly analysisDepth?: SemanticAppAnalysisDepth | `${SemanticAppAnalysisDepth}` | null;
+  /** Template runtime graph breadth requested for this diagnostic query. */
+  readonly templateAnalysisBreadth?: SemanticTemplateAnalysisBreadth | `${SemanticTemplateAnalysisBreadth}` | null;
   /** Include standalone resource-library template analysis. Defaults to true for file-locus diagnostics. */
   readonly includeAuthoringTemplates?: boolean | null;
   /** Optional source-file selection for authoring template compilation. Defaults to the diagnostic source file. */
@@ -1158,6 +1177,8 @@ export interface SemanticRuntimeAnswer<TValue> {
   readonly page?: SemanticRuntimePageResult | null;
   /** App-world depth that actually answered this query; absent for runtime-static/project-frame answers. */
   readonly analysisDepth?: SemanticAppAnalysisDepth | `${SemanticAppAnalysisDepth}` | null;
+  /** Template runtime graph breadth that actually answered this app-world query. */
+  readonly templateAnalysisBreadth?: SemanticTemplateAnalysisBreadth | `${SemanticTemplateAnalysisBreadth}` | null;
   /** Optional typed follow-up moves. Most current answers omit this until their continuation surface is explicit. */
   readonly continuations?: readonly SemanticRuntimeContinuationRow[];
   /** Optional answer-envelope telemetry, present only when a telemetry request asks the runtime to expose it. */
@@ -1322,6 +1343,8 @@ export interface SemanticRuntimeSessionAnalysisCacheOverviewRequest {
   readonly includeQueryClaimRows?: boolean | null;
   /** Cap high-cardinality breakdown rows; defaults to 8. */
   readonly rowLimit?: number | null;
+  /** Cap detailed cached-app rows while preserving cachedAppCount as the total retained count. */
+  readonly cachedAppLimit?: number | null;
 }
 
 /** Legacy combined session and process overview request. */
@@ -1541,6 +1564,7 @@ export interface SemanticRuntimeQueryClaimDisposeProfileSummary {
 export interface SemanticRuntimeCachedAppSummary {
   readonly projectKey: string;
   readonly analysisDepth: SemanticAppAnalysisDepth | `${SemanticAppAnalysisDepth}`;
+  readonly templateAnalysisBreadth: SemanticTemplateAnalysisBreadth | `${SemanticTemplateAnalysisBreadth}`;
   readonly includeAuthoringTemplates: boolean;
   readonly includeCompilerOccurrencePrecedents: boolean;
   readonly authoringTemplateSourceFileCount: number;

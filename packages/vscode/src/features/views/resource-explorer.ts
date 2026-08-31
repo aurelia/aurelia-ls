@@ -4,7 +4,10 @@ import type {
   ResourceInventoryProjectResult,
   ResourceSourceLocation,
 } from "@aurelia-ls/language-server/protocol";
+import { LSPErrorCodes } from "vscode-languageserver-protocol";
 import type {
+  CancellationToken,
+  CancellationTokenSource,
   Disposable,
   Event,
   ProviderResult,
@@ -13,7 +16,10 @@ import type {
   TreeView,
 } from "vscode";
 import { createHash } from "node:crypto";
-import type { LspFacade } from "../../core/lsp-facade.js";
+import {
+  isRequestCancelledError,
+  type LspFacade,
+} from "../../core/lsp-facade.js";
 import type { ClientLogger } from "../../log.js";
 import { AureliaCommand, AureliaContext } from "../../product-contract.js";
 import type {
@@ -26,6 +32,7 @@ import type {
 } from "../../types.js";
 import type { AnalysisLimitationReviewEntry } from "../analysis-limitations/review.js";
 import type { VscodeApi } from "../../vscode-api.js";
+import type { ResourceExplorerProviderSupportState } from "../../support-report.js";
 import {
   emitResourceDiscoveryHostObservation,
   nextResourceDiscoveryHostObservationId,
@@ -69,6 +76,36 @@ type StatusIconColorId =
   | "problemsInfoIcon.foreground"
   | "problemsWarningIcon.foreground"
   | "problemsErrorIcon.foreground";
+
+class ResourceExplorerRefreshCancelledError extends Error {
+  readonly code = LSPErrorCodes.RequestCancelled;
+
+  constructor() {
+    super("Resource Explorer refresh was superseded.");
+    this.name = "Canceled";
+  }
+}
+
+async function untilResourceExplorerCancellation<T>(
+  operation: Promise<T>,
+  token: CancellationToken,
+): Promise<T> {
+  if (token.isCancellationRequested) {
+    throw new ResourceExplorerRefreshCancelledError();
+  }
+  let subscription: Disposable | undefined;
+  const cancellation = new Promise<never>((_resolve, reject) => {
+    subscription = token.onCancellationRequested(() => {
+      reject(new ResourceExplorerRefreshCancelledError());
+    });
+  });
+  try {
+    return await Promise.race([operation, cancellation]);
+  } finally {
+    subscription?.dispose();
+  }
+}
+
 type ResourceExplorerPhase = { readonly kind: "empty" | "loading" | "current" | "failed" };
 type ResourceExplorerObservedRowState =
   | ResourceTreeRowState
@@ -843,6 +880,7 @@ export class ResourceExplorerProvider implements TreeDataProvider<TreeNode>, Dis
   #issueContext: boolean | null = null;
   #analysisReviewContext: boolean | null = null;
   #analysisLimitations: readonly AnalysisLimitationPublication[] = [];
+  #activeRefreshCancellation: CancellationTokenSource | null = null;
 
   constructor(
     vscode: VscodeApi,
@@ -868,6 +906,7 @@ export class ResourceExplorerProvider implements TreeDataProvider<TreeNode>, Dis
 
   dispose(): void {
     this.#refreshGeneration += 1;
+    this.#activeRefreshCancellation?.cancel();
     this.#tree = [];
     this.#response = null;
     this.#analysisLimitations = [];
@@ -943,6 +982,23 @@ export class ResourceExplorerProvider implements TreeDataProvider<TreeNode>, Dis
     );
   }
 
+  /** Exact provider-owned state for the source-free user-created support report. */
+  supportState(): ResourceExplorerProviderSupportState {
+    const counts = resourceResponseCounts(this.#response);
+    return Object.freeze({
+      phase: this.#phase.kind,
+      refreshGeneration: this.#refreshGeneration,
+      treeRootCount: this.#tree.length,
+      hasInventory: this.#response != null,
+      updatingAll: this.#updatingAll,
+      updatingWorkspaceCount: this.#updatingWorkspaceKeys.size,
+      staleWorkspaceCount: this.#staleWorkspaceKeys.size,
+      hasIssues: this.#issueContext === true,
+      hasAnalysisReview: this.#analysisReviewContext === true,
+      counts: Object.freeze({ ...counts }),
+    });
+  }
+
   async refresh(): Promise<void> {
     return this.#refresh(null);
   }
@@ -968,11 +1024,15 @@ export class ResourceExplorerProvider implements TreeDataProvider<TreeNode>, Dis
    */
   supersedeRefresh(workspaceKey: string | null): void {
     this.#refreshGeneration += 1;
+    this.#activeRefreshCancellation?.cancel();
     this.markUpdating(workspaceKey);
   }
 
   async #refresh(requestedWorkspaceKey: string | null): Promise<void> {
     const generation = ++this.#refreshGeneration;
+    this.#activeRefreshCancellation?.cancel();
+    const cancellation = new this.#vscode.CancellationTokenSource();
+    this.#activeRefreshCancellation = cancellation;
     const hasPrevious = this.#response != null;
     const hadTree = this.#tree.length > 0;
     const workspaceKey = hasPrevious ? requestedWorkspaceKey : null;
@@ -993,7 +1053,7 @@ export class ResourceExplorerProvider implements TreeDataProvider<TreeNode>, Dis
     }
     try {
       this.#logger.debug("resourceExplorer.refresh.start");
-      let requested = await this.#requestSnapshots(workspaceKey);
+      let requested = await this.#requestSnapshots(workspaceKey, cancellation.token);
       if (generation !== this.#refreshGeneration) {
         this.#observe("discarded", {
           generation,
@@ -1014,7 +1074,7 @@ export class ResourceExplorerProvider implements TreeDataProvider<TreeNode>, Dis
       // A semantic generation can settle between the two independent requests.
       // Retry the pair once; never spin while the workspace keeps changing.
       if (limitationAdmission.retrySuggested) {
-        requested = await this.#requestSnapshots(workspaceKey);
+        requested = await this.#requestSnapshots(workspaceKey, cancellation.token);
         if (generation !== this.#refreshGeneration) return;
         admission = admitResourceInventorySnapshot(this.#response, workspaceKey, requested.inventory);
         limitationAdmission = reconcileAnalysisLimitations(
@@ -1045,7 +1105,33 @@ export class ResourceExplorerProvider implements TreeDataProvider<TreeNode>, Dis
       this.#publishViewState();
       this.#logger.debug("resourceExplorer.refresh.complete", resourceResponseCounts(this.#response));
     } catch (error) {
-      if (generation !== this.#refreshGeneration) return;
+      const cancelled = cancellation.token.isCancellationRequested
+        || isRequestCancelledError(error);
+      if (generation !== this.#refreshGeneration) {
+        if (cancelled) {
+          this.#observe("discarded", {
+            generation,
+            currentGeneration: this.#refreshGeneration,
+            reason: "superseded",
+            workspaceIdentity: observedIdentity("workspace", workspaceKey),
+            fingerprint: null,
+          });
+        }
+        return;
+      }
+      if (cancelled) {
+        this.#phase = hasPrevious ? { kind: "current" } : { kind: "empty" };
+        this.#clearUpdating(workspaceKey);
+        this.#observe("discarded", {
+          generation,
+          currentGeneration: this.#refreshGeneration,
+          reason: "cancelled",
+          workspaceIdentity: observedIdentity("workspace", workspaceKey),
+          fingerprint: null,
+        });
+        this.#publishViewState();
+        return;
+      }
       this.#logger.warn("resourceExplorer.refresh.failed", {
         message: error instanceof Error ? error.message : String(error),
       });
@@ -1075,21 +1161,30 @@ export class ResourceExplorerProvider implements TreeDataProvider<TreeNode>, Dis
       this.#observeTreePublication(hasPrevious ? "out-of-date" : "failed");
       this.#changeEmitter.fire();
       this.#publishViewState();
+    } finally {
+      if (this.#activeRefreshCancellation === cancellation) {
+        this.#activeRefreshCancellation = null;
+      }
+      cancellation.dispose();
     }
   }
 
-  async #requestSnapshots(workspaceKey: string | null): Promise<{
+  async #requestSnapshots(workspaceKey: string | null, token: CancellationToken): Promise<{
     readonly inventory: ResourceInventorySnapshot | null;
     readonly limitations: AnalysisLimitationsSnapshot | null;
   }> {
     return this.#runWithProgress(async () => {
       const options = workspaceKey == null ? {} : { workspaceKey };
-      const [inventory, limitations] = await Promise.allSettled([
-        this.#lsp.getResourceInventory({ ...options, includeTypeSurfaces: true }),
-        this.#lsp.getAnalysisLimitations(options),
-      ]);
+      const [inventory, limitations] = await untilResourceExplorerCancellation(Promise.allSettled([
+        // The tree needs authored bindable metadata, not checker-projected value types. Type surfaces are a deliberate
+        // deep query: projecting every bindable can briefly double a large app's live heap and must not run merely
+        // because the Resource Explorer is visible.
+        this.#lsp.getResourceInventory({ ...options, includeTypeSurfaces: false }, token),
+        this.#lsp.getAnalysisLimitations(options, token),
+      ]), token);
       if (inventory.status === "rejected") throw inventory.reason;
       if (limitations.status === "rejected") {
+        if (isRequestCancelledError(limitations.reason)) throw limitations.reason;
         this.#logger.warn("resourceExplorer.analysisLimitations.failed", {
           message: limitations.reason instanceof Error
             ? limitations.reason.message

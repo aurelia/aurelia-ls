@@ -45,7 +45,10 @@ export const TsRenameFeature: ClientFeature = {
           return undefined;
         }
         const sessionState = ctx.languageClient.semanticSessionStateForUri(document.uri);
-        if (sessionState === AureliaSemanticSessionState.Unowned) return undefined;
+        if (
+          sessionState === AureliaSemanticSessionState.Unowned
+          || sessionState === AureliaSemanticSessionState.Unavailable
+        ) return undefined;
         if (sessionState === AureliaSemanticSessionState.Transitioning) {
           throw new Error("Aurelia cross-domain rename is temporarily unavailable while workspace ownership reconciles; retry the rename.");
         }
@@ -110,7 +113,10 @@ export const TsRenameFeature: ClientFeature = {
           return undefined;
         }
         const sessionState = ctx.languageClient.semanticSessionStateForUri(document.uri);
-        if (sessionState === AureliaSemanticSessionState.Unowned) return undefined;
+        if (
+          sessionState === AureliaSemanticSessionState.Unowned
+          || sessionState === AureliaSemanticSessionState.Unavailable
+        ) return undefined;
         if (sessionState === AureliaSemanticSessionState.Transitioning) {
           throw new Error("Aurelia cross-domain rename is temporarily unavailable while workspace ownership reconciles; retry the rename.");
         }

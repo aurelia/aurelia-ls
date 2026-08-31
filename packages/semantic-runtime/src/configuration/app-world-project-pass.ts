@@ -64,8 +64,11 @@ import {
 } from './app-world-composer.js';
 import {
   DEFAULT_SEMANTIC_APP_ANALYSIS_DEPTH,
+  DEFAULT_SEMANTIC_TEMPLATE_ANALYSIS_BREADTH,
   normalizeSemanticAppAnalysisDepth,
+  normalizeSemanticTemplateAnalysisBreadth,
   type SemanticAppAnalysisDepth,
+  type SemanticTemplateAnalysisBreadth,
 } from './app-analysis.js';
 import type { NormalizedSemanticAppNominatedEntry } from './nominated-app-entry.js';
 import {
@@ -308,6 +311,7 @@ export interface AureliaAppWorldProjectProfile {
 
 export interface AureliaAppWorldProjectOptions {
   readonly analysisDepth?: SemanticAppAnalysisDepth | `${SemanticAppAnalysisDepth}`;
+  readonly templateAnalysisBreadth?: SemanticTemplateAnalysisBreadth | `${SemanticTemplateAnalysisBreadth}`;
   readonly includeAuthoringTemplates?: boolean;
   readonly includeCompilerOccurrencePrecedents?: boolean;
   readonly authoringTemplateSourceFiles?: readonly string[];
@@ -348,6 +352,7 @@ export class AureliaAppAnalysisPhaseLocus implements ComputationLocus {
 export class AureliaAppWorldPreTemplateEmission {
   constructor(
     readonly analysisDepth: SemanticAppAnalysisDepth,
+    readonly templateAnalysisBreadth: SemanticTemplateAnalysisBreadth,
     readonly nominatedEntry: NormalizedSemanticAppNominatedEntry | null,
     readonly conventionTransformAdmissions: readonly NormalizedResourceConventionTransformAdmission[],
     readonly project: ProjectBootFrame,
@@ -423,6 +428,9 @@ export class AureliaAppWorldPostTemplateEmission {
  */
 export class AureliaAppWorldProjectEmission {
   get analysisDepth(): SemanticAppAnalysisDepth { return this.preTemplate.analysisDepth; }
+  get templateAnalysisBreadth(): SemanticTemplateAnalysisBreadth {
+    return this.preTemplate.templateAnalysisBreadth;
+  }
   get project(): ProjectBootFrame { return this.preTemplate.project; }
   get evaluation(): StaticProjectEvaluationResult { return this.preTemplate.evaluation; }
   get typeSystem(): TypeSystemProject { return this.preTemplate.typeSystem; }
@@ -518,6 +526,7 @@ export class AureliaAppWorldProjectPass {
 class AureliaAppWorldProjectConstructionFrame {
   private readonly started = performance.now();
   private readonly analysisDepth: SemanticAppAnalysisDepth;
+  private readonly templateAnalysisBreadth: SemanticTemplateAnalysisBreadth;
   private readonly includeAuthoringTemplates: boolean;
   private readonly includeCompilerOccurrencePrecedents: boolean;
   private readonly authoringTemplateSourceFiles: readonly string[];
@@ -545,6 +554,9 @@ class AureliaAppWorldProjectConstructionFrame {
   ) {
     this.analysisDepth = normalizeSemanticAppAnalysisDepth(
       options.analysisDepth ?? DEFAULT_SEMANTIC_APP_ANALYSIS_DEPTH,
+    );
+    this.templateAnalysisBreadth = normalizeSemanticTemplateAnalysisBreadth(
+      options.templateAnalysisBreadth ?? DEFAULT_SEMANTIC_TEMPLATE_ANALYSIS_BREADTH,
     );
     this.includeAuthoringTemplates = options.includeAuthoringTemplates === true;
     this.includeCompilerOccurrencePrecedents = options.includeCompilerOccurrencePrecedents === true;
@@ -677,6 +689,7 @@ class AureliaAppWorldProjectConstructionFrame {
     );
     return new AureliaAppWorldPreTemplateEmission(
       this.analysisDepth,
+      this.templateAnalysisBreadth,
       this.nominatedEntry,
       this.conventionTransformAdmissions,
       this.project,
@@ -721,6 +734,7 @@ class AureliaAppWorldProjectConstructionFrame {
     if (
       previous == null
       || preTemplate.analysisDepth !== previous.analysisDepth
+      || preTemplate.templateAnalysisBreadth !== previous.templateAnalysisBreadth
       || preTemplate.evaluationGeneration !== previous.preTemplate.evaluationGeneration
       || preTemplate.conventionToolingEvaluationGeneration
         !== previous.preTemplate.conventionToolingEvaluationGeneration
@@ -940,6 +954,7 @@ class AureliaAppWorldProjectConstructionFrame {
       evaluation,
       stateStoreVisibility: state.readStoreVisibility(),
       runtimeAnalysisDepth: this.analysisDepth,
+      runtimeAnalysisBreadth: this.templateAnalysisBreadth,
       includeAuthoringTemplates: this.includeAuthoringTemplates,
       includeCompilerOccurrencePrecedents: this.includeCompilerOccurrencePrecedents,
       authoringTemplateSourceFiles: this.authoringTemplateSourceFiles,

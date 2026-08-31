@@ -16,6 +16,7 @@ import type {
   ProjectConfigurationParserDiagnosticsOwner,
   TypeScriptProgramDiagnosticsOwner,
 } from "./protocol.js";
+import { LanguageServerSupportLedger } from "./support-snapshot.js";
 
 /**
  * Shared server context passed to all handlers.
@@ -26,6 +27,7 @@ export interface ServerContext {
   readonly documents: TextDocuments<TextDocument>;
   readonly logger: Logger;
   readonly semanticRuntime: SemanticRuntimeLspSession;
+  readonly supportLedger: LanguageServerSupportLedger;
   readonly clientSupport: ServerClientSupport;
   readonly documentUris: WorkspaceDocumentUris;
 
@@ -99,6 +101,7 @@ export function createServerContext(init: ServerContextInit): ServerContext {
       }
     },
   });
+  const supportLedger = new LanguageServerSupportLedger();
   const clientSupport: ServerClientSupport = {
     configurationPull: false,
     configurationChangeRegistration: false,
@@ -132,6 +135,7 @@ export function createServerContext(init: ServerContextInit): ServerContext {
     documents,
     logger,
     semanticRuntime,
+    supportLedger,
     clientSupport,
     documentUris,
 

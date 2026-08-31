@@ -95,6 +95,12 @@ interface MutableAmbiguityScope {
 const runnerPath = fileURLToPath(
   new URL("../scripts/run-extension-host-tests.mjs", import.meta.url),
 );
+const collectorPath = fileURLToPath(
+  new URL("../scripts/collect-extension-host-tails.mjs", import.meta.url),
+);
+const versionContractPath = fileURLToPath(
+  new URL("../scripts/extension-host-version-contract.mjs", import.meta.url),
+);
 const staticContractPath = fileURLToPath(
   new URL("../scripts/extension-host-static-contract.mjs", import.meta.url),
 );
@@ -112,6 +118,42 @@ const extensionManifest = readManifest(new URL("../package.json", import.meta.ur
 const rootManifest = readManifest(new URL("../../../package.json", import.meta.url));
 
 describe("Extension Host support runner", () => {
+  test("keeps installed acceptance outside the runner's module cycle", () => {
+    const runner = readFileSync(runnerPath, "utf8");
+    const collector = readFileSync(collectorPath, "utf8");
+    const versionContract = readFileSync(versionContractPath, "utf8");
+
+    expect(runner).toContain('from "./extension-host-version-contract.mjs"');
+    expect(collector).toContain('from "./extension-host-version-contract.mjs"');
+    expect(collector).not.toContain('from "./run-extension-host-tests.mjs"');
+    expect(versionContract).toContain('minimumVSCodeVersion = "1.91.0"');
+  });
+
+  test("enters installed acceptance without an unresolved top-level await", () => {
+    const environment = { ...process.env };
+    for (const key of Object.keys(environment)) {
+      if (key.toLowerCase() === "npm_execpath") delete environment[key];
+    }
+    const result = spawnSync(
+      process.execPath,
+      [runnerPath, "--worker", "--current-stable", "--installed-vsix"],
+      {
+        cwd: resolve(dirname(runnerPath), "../../.."),
+        encoding: "utf8",
+        env: environment,
+        timeout: 10_000,
+        windowsHide: true,
+      },
+    );
+    const output = `${result.stdout ?? ""}\n${result.stderr ?? ""}`;
+
+    expect(result.error).toBeUndefined();
+    expect(result.signal).toBeNull();
+    expect(result.status).toBe(1);
+    expect(output).toContain("VSIX packaging must run from a pnpm lifecycle with npm_execpath available.");
+    expect(output).not.toContain("unsettled top-level await");
+  });
+
   test("binds recovery presentations to their navigation fault controls", () => {
     const source = readFileSync(runnerPath, "utf8");
     const newestStart = source.indexOf("function validateRecoveryFacts(");
@@ -707,6 +749,7 @@ describe("Extension Host support runner", () => {
         repository: 0,
         report: 0,
       };
+      const inventoryContexts: unknown[][] = [];
       const runner = await import(pathToFileURL(runnerPath).href);
       const plan = runner.parseRunnerArguments([
         "--worker",
@@ -742,12 +785,19 @@ describe("Extension Host support runner", () => {
         installedVerifier: {
           buildInstallInvocation: () => ({ command: process.execPath, args: [], cwd: repositoryRoot }),
           discoverInstalledProduct: () => ({ extensionPath: productRoot }),
+          installedPackageManifestProfile: {
+            Minimum191: "vscode-1.91-vsix-source",
+            Current: "vscode-target-platform-size",
+          },
           requireArtifactReceipt: () => { calls.receipt += 1; },
           requireSameRepositoryState: () => { calls.repository += 1; },
           requireSuccessfulProcess: () => {},
           runChildProcess: async () => ({ exitCode: 0, signal: null, error: null }),
           testElectronEvidence: () => ({}),
-          verifyInstalledInventory: () => { calls.inventory += 1; },
+          verifyInstalledInventory: (...args: unknown[]) => {
+            calls.inventory += 1;
+            inventoryContexts.push(args.slice(-2));
+          },
         },
         installVsix: async () => {
           calls.install += 1;
@@ -779,6 +829,10 @@ describe("Extension Host support runner", () => {
         repository: 1,
         report: 1,
       });
+      expect(inventoryContexts).toEqual([
+        ["1.123.4", "vscode-target-platform-size"],
+        ["1.123.4", "vscode-target-platform-size"],
+      ]);
     } finally {
       assertContractTempPath(root);
       rmSync(root, { recursive: true, force: true });
@@ -2202,12 +2256,32 @@ describe("Extension Host support runner", () => {
     const { pendingInvalidated: _omitted, ...missingInvalidation } = predecessor;
     expect(() => runner.predecessorRaceFact(missingInvalidation, "predecessor"))
       .toThrow(/fields must be exactly/u);
+    const { cancelled: _cancelled, ...missingCancellation } = predecessor;
+    expect(() => runner.predecessorRaceFact(missingCancellation, "predecessor"))
+      .toThrow(/fields must be exactly/u);
+    expect(() => runner.predecessorRaceFact({
+      ...missingCancellation,
+      released: null,
+    }, "predecessor")).toThrow(/fields must be exactly/u);
     expect(() => runner.predecessorRaceFact({
       ...predecessor,
       extraPendingInvalidated: null,
     }, "predecessor")).toThrow(/fields must be exactly/u);
     expect(() => runner.predecessorRaceFact({ ...predecessor, forged: null }, "predecessor"))
       .toThrow(/fields must be exactly/u);
+
+    const source = readFileSync(runnerPath, "utf8");
+    const validationStart = source.indexOf("function validateTreeFacts(");
+    const validationEnd = source.indexOf("function validateBaselineTreeFacts(", validationStart);
+    expect(validationStart).toBeGreaterThanOrEqual(0);
+    expect(validationEnd).toBeGreaterThan(validationStart);
+    const validation = source.slice(validationStart, validationEnd);
+    expect(validation).toContain("race.cancelled");
+    expect(validation).toContain('"resource-discovery-host-control",\n    "cancelled",');
+    expect(validation).toContain("blocked.event.includeTypeSurfaces, false");
+    expect(validation).toContain("discarded.event.fingerprint, null");
+    expect(validation).toContain("[pendingInvalidated, blocked, invalidated, cancelled, discarded, successor]");
+    expect(validation).not.toContain("race.released");
   });
 
   test("authenticates one-use scoped predecessor pending evidence", async () => {
@@ -3660,7 +3734,7 @@ function runnerPredecessorRaceFact() {
     pendingTreePublicationCount: 0,
     pendingViewStateCount: 0,
     invalidated: null,
-    released: null,
+    cancelled: null,
     discarded: null,
     successorPublished: null,
     predecessorGeneration: 1,

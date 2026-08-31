@@ -56,6 +56,7 @@ import type { DocumentUri, WorkspaceDocumentUris } from "../utils/document-uri.j
 import { languageIdForSource } from "../utils/document-kind.js";
 import { stableDigest } from "../utils/stable-digest.js";
 import { loadExtensionHostTestSemanticWorkspaceDescriptor } from "./extension-host-test-topology.js";
+import type { AureliaSupportSemanticSessionSnapshot } from "../protocol.js";
 
 export interface SemanticRuntimeLspOpenDocumentMetadata {
   readonly uri: DocumentUri;
@@ -207,7 +208,6 @@ interface SemanticRuntimeLspRequestState {
 interface SemanticRuntimeLspOperationScope {
   readonly session: SemanticRuntimeLspSession;
   readonly parent: SemanticRuntimeLspOperationScope | null;
-  readonly kind: "request" | "callback";
   readonly assertActive: () => void;
   active: boolean;
 }
@@ -254,7 +254,7 @@ const MAX_DIAGNOSTIC_CACHE_ENTRIES = 256;
 const DIAGNOSTIC_RESULT_ID_SCHEMA = "semantic-runtime-lsp-diagnostic-result/v1";
 const semanticRuntimeLspOperationScopes = new AsyncLocalStorage<SemanticRuntimeLspOperationScope>();
 
-/** Poll the exact active LSP request when called from its async lineage; otherwise do nothing. */
+/** Poll exact request-owned callback work without binding shared workspace admission to its first waiter. */
 export function checkpointSemanticRuntimeLspOperation(): void {
   const scope = semanticRuntimeLspOperationScopes.getStore();
   if (scope?.active === true) {
@@ -575,11 +575,10 @@ export class SemanticRuntimeLspSession {
     this.assertRequestStateActive(state);
     let completed: SemanticRuntimeLspOperationCompletion<TResult>;
     try {
-      completed = await this.runInRequestScope(
-        state,
-        () => state.workspace.session.run((context) =>
-          this.runOperationCallback(state, context, (operation) => callback(operation))),
-      );
+      // Admission and reconciliation are shared by every waiter. Only the consumer callback below enters the exact
+      // request scope, so one cancelled waiter cannot abort workspace progress owned by the session.
+      completed = await state.workspace.session.run((context) =>
+        this.runOperationCallback(state, context, (operation) => callback(operation)));
     } catch (error) {
       this.throwRequestFailure(state, error);
     }
@@ -604,18 +603,41 @@ export class SemanticRuntimeLspSession {
     const state = this.captureRequestState(null);
     this.assertRequestStateActive(state);
     try {
-      const value = await this.runInRequestScope(
-        state,
-        () => state.workspace.session.analysisCacheOverview(
-          request,
-          (answer) => structuredClone(answer.value),
-        ),
+      const value = await state.workspace.session.analysisCacheOverview(
+        request,
+        (answer) => structuredClone(answer.value),
       );
       this.assertRequestStateActive(state);
       return value;
     } catch (error) {
       this.throwRequestFailure(state, error);
     }
+  }
+
+  /** Cheap lifecycle counters only; this does not acquire, open, or reconcile a semantic workspace incarnation. */
+  supportState(): AureliaSupportSemanticSessionSnapshot {
+    return Object.freeze({
+      workspaceConfigured: this.workspace != null,
+      workspaceGeneration: this.workspaceGeneration,
+      requestEpoch: this.requestEpoch,
+      diagnosticCacheEntries: this.diagnosticCache.size,
+      retiringWorkspaceCount: this.retiringSessions.size,
+      retirementFailureCount: this.retirementFailures.length,
+      closing: this.closing,
+      disposalStarted: this.disposal != null,
+    });
+  }
+
+  /** Existing-incarnation cache counters only; never boots, reconciles, opens, or deepens semantic analysis. */
+  detachedAnalysisCacheOverview(
+    request: SemanticRuntimeSessionAnalysisCacheOverviewRequest = {},
+  ): SemanticRuntimeSessionAnalysisCacheOverviewResult | null {
+    const workspace = this.workspace;
+    if (workspace == null) return null;
+    return workspace.session.tryAnalysisCacheOverview(
+      request,
+      (answer) => structuredClone(answer.value),
+    );
   }
 
   async runDiagnosticRequest<TItem>(
@@ -724,8 +746,7 @@ export class SemanticRuntimeLspSession {
     const operation = this.createOperation(token);
     const operationScope: SemanticRuntimeLspOperationScope = {
       session: this,
-      parent: this.callbackOperationScopeParent(),
-      kind: "callback",
+      parent: semanticRuntimeLspOperationScopes.getStore() ?? null,
       assertActive: () => this.assertRequestTokenActive(token),
       active: true,
     };
@@ -757,39 +778,12 @@ export class SemanticRuntimeLspSession {
     readonly receipt: ManagedSemanticWorkspaceOperationReceipt;
   }> {
     try {
-      return await this.runInRequestScope(
-        state,
-        () => state.workspace.session.runWithReceipt((context) =>
-          this.runOperationCallback(state, context, callback)),
-      );
+      // Receipt admission shares the same workspace transition; request cancellation begins with its callback.
+      return await state.workspace.session.runWithReceipt((context) =>
+        this.runOperationCallback(state, context, callback));
     } catch (error) {
       this.throwRequestFailure(state, error);
     }
-  }
-
-  private async runInRequestScope<TResult>(
-    state: SemanticRuntimeLspRequestState,
-    callback: () => TResult | PromiseLike<TResult>,
-  ): Promise<TResult> {
-    const requestScope: SemanticRuntimeLspOperationScope = {
-      session: this,
-      parent: semanticRuntimeLspOperationScopes.getStore() ?? null,
-      kind: "request",
-      assertActive: () => this.assertRequestStateActive(state),
-      active: true,
-    };
-    try {
-      return await semanticRuntimeLspOperationScopes.run(requestScope, callback);
-    } finally {
-      requestScope.active = false;
-    }
-  }
-
-  private callbackOperationScopeParent(): SemanticRuntimeLspOperationScope | null {
-    const enclosing = semanticRuntimeLspOperationScopes.getStore() ?? null;
-    return enclosing?.kind === "request" && enclosing.session === this
-      ? enclosing.parent
-      : enclosing;
   }
 
   private publishDiagnosticCacheEntry(
@@ -1312,6 +1306,7 @@ export class SemanticRuntimeLspSession {
       readPage: (cursor) => runtime.answerAppQuery({
         kind: SemanticAppQueryKind.ResourceInventory,
         projectKey,
+        templateAnalysisBreadth: "resource-local",
         includeTypeSurfaces,
         page: { size: 500, cursor },
         inquiryProfile: "lsp-cursor",
@@ -1336,6 +1331,7 @@ export class SemanticRuntimeLspSession {
       readPage: (cursor) => runtime.answerAppQuery({
         kind: SemanticAppQueryKind.AnalysisLimitations,
         projectKey,
+        templateAnalysisBreadth: "resource-local",
         page: { size: 500, cursor },
         inquiryProfile: "lsp-cursor",
         appRetention: "retain-app",
@@ -1503,6 +1499,7 @@ export class SemanticRuntimeLspSession {
       projectKey,
       inquiryProfile: "lsp-cursor",
       analysisDepth: "runtime-topology",
+      templateAnalysisBreadth: "resource-local",
       includeAuthoringTemplates: false,
       appRetention: "retain-app",
     }) as SemanticRuntimeAnswer<SemanticTemplateDocumentOwnershipResult>;
@@ -1553,6 +1550,7 @@ export class SemanticRuntimeLspSession {
         page: { size: 500, cursor },
         inquiryProfile: "lsp-cursor",
         analysisDepth: "runtime-topology",
+        templateAnalysisBreadth: "resource-local",
         includeAuthoringTemplates: true,
         appRetention: "retain-app",
       }) as Promise<SemanticRuntimeAnswer<SemanticTemplateSemanticTokensResult>>,
@@ -1580,6 +1578,7 @@ export class SemanticRuntimeLspSession {
         page: { size: 500, cursor },
         inquiryProfile: "lsp-cursor",
         analysisDepth: "runtime-topology",
+        templateAnalysisBreadth: "resource-local",
         includeAuthoringTemplates: true,
         appRetention: "retain-app",
       }) as Promise<SemanticRuntimeAnswer<SemanticTemplateFoldingRangesResult>>,

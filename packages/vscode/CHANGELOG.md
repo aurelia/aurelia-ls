@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.5.2
+
+### Fixes
+
+- Improved large-project reliability by reducing repeated child-view analysis and removing eager bindable type projection from the Resource Explorer.
+- Kept shared workspace analysis available when individual editor requests are cancelled, and bounded Worker recovery after repeated startup failures.
+- Added **Aurelia: Create Support Report**, which opens a local, reviewable report with session, Worker, request, memory, and cache evidence.
+
 ## 0.5.1
 
 ### Fixes

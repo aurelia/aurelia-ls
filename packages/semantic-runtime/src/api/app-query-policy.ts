@@ -1,8 +1,13 @@
 import {
   semanticAppAnalysisDepthMax,
   normalizeSemanticAppAnalysisDepth,
+  normalizeSemanticTemplateAnalysisBreadth,
+  semanticTemplateAnalysisBreadthMax,
 } from '../configuration/app-analysis.js';
-import type { SemanticAppAnalysisDepth } from '../configuration/app-analysis.js';
+import type {
+  SemanticAppAnalysisDepth,
+  SemanticTemplateAnalysisBreadth,
+} from '../configuration/app-analysis.js';
 import {
   readSemanticRuntimeInquiryProfileDefinition,
   type SemanticRuntimeInquiryProfile,
@@ -204,6 +209,42 @@ export function routedAppQueryBatchAnalysisDepth(
     ...request.queries.map((query) => {
       const row = semanticAppQueryCatalogRow(query.kind as SemanticAppQueryKind);
       return routedAppQueryAnalysisDepth(query as SemanticRuntimeAppQueryRequest, row.minimumAnalysisDepth);
+    }),
+  ]);
+}
+
+export function routedAppQueryTemplateAnalysisBreadth(
+  request: SemanticRuntimeAppQueryRequest,
+  catalogBreadth: SemanticTemplateAnalysisBreadth | `${SemanticTemplateAnalysisBreadth}`,
+): SemanticTemplateAnalysisBreadth {
+  const minimum = normalizeSemanticTemplateAnalysisBreadth(catalogBreadth);
+  if (request.templateAnalysisBreadth != null) {
+    return semanticTemplateAnalysisBreadthMax([
+      minimum,
+      request.templateAnalysisBreadth,
+    ]);
+  }
+  const shapedRequest = semanticAppQueryCatalogShape(request);
+  const hasAuthoredLocus = shapedRequest.cursor != null || shapedRequest.sourceFile != null;
+  const catalogDefault = semanticAppQueryCatalogRow(request.kind as SemanticAppQueryKind)
+    .defaultTemplateAnalysisBreadth;
+  return semanticTemplateAnalysisBreadthMax([
+    minimum,
+    hasAuthoredLocus ? minimum : catalogDefault,
+  ]);
+}
+
+export function routedAppQueryBatchTemplateAnalysisBreadth(
+  request: SemanticRuntimeAppQueryBatchRequest,
+): SemanticTemplateAnalysisBreadth {
+  return semanticTemplateAnalysisBreadthMax([
+    request.templateAnalysisBreadth,
+    ...request.queries.map((query) => {
+      const row = semanticAppQueryCatalogRow(query.kind as SemanticAppQueryKind);
+      return routedAppQueryTemplateAnalysisBreadth(
+        query as SemanticRuntimeAppQueryRequest,
+        row.minimumTemplateAnalysisBreadth,
+      );
     }),
   ]);
 }

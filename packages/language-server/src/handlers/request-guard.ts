@@ -40,12 +40,17 @@ export async function runSemanticRuntimeRequest<T>(
   request: (operation: SemanticRuntimeLspOperation) => T | Promise<T>,
   uri?: string,
 ): Promise<T> {
+  const observation = beginSupportObservation(ctx, feature, uri);
   try {
-    return await runServerOperation(ctx, () =>
+    const result = await runServerOperation(ctx, () =>
       ctx.semanticRuntime.runRequest(semanticRuntimeCancellationProbe(token), request));
+    observation.finish({ outcome: "succeeded" });
+    return result;
   } catch (error) {
+    const failure = cancellationPrecedence(error, token);
+    observation.finish(supportTerminalFacts(error, failure, token));
     scheduleAnalysisRefreshForRequestCurrentness(ctx, error);
-    throw requestFailure(ctx, feature, cancellationPrecedence(error, token), uri);
+    throw requestFailure(ctx, feature, failure, uri);
   }
 }
 
@@ -70,8 +75,9 @@ export async function runSemanticRuntimeDocumentRequest<T>(
   request: (operation: SemanticRuntimeLspOperation) => T | Promise<T>,
   options: { readonly requireExactProjectOwner?: boolean } = {},
 ): Promise<T> {
+  const observation = beginSupportObservation(ctx, feature, uri);
   try {
-    return await runServerOperation(ctx, () =>
+    const result = await runServerOperation(ctx, () =>
       ctx.semanticRuntime.runRequest(
         semanticRuntimeCancellationProbe(token),
         async (operation) => {
@@ -92,9 +98,13 @@ export async function runSemanticRuntimeDocumentRequest<T>(
           return await request(operation);
         },
       ));
+    observation.finish({ outcome: "succeeded" });
+    return result;
   } catch (error) {
+    const failure = cancellationPrecedence(error, token);
+    observation.finish(supportTerminalFacts(error, failure, token));
     scheduleAnalysisRefreshForRequestCurrentness(ctx, error);
-    throw requestFailure(ctx, feature, cancellationPrecedence(error, token), uri);
+    throw requestFailure(ctx, feature, failure, uri);
   }
 }
 
@@ -111,16 +121,20 @@ export async function runSemanticRuntimeDiagnosticRequest<TItem>(
   request: SemanticRuntimeLspDiagnosticRequest,
   render: SemanticRuntimeLspDiagnosticRenderer<TItem>,
 ): Promise<SemanticRuntimeLspDiagnosticReport<TItem>> {
+  const observation = beginSupportObservation(ctx, "diagnostics", request.uri);
   try {
-    return await runServerOperation(ctx, () =>
+    const result = await runServerOperation(ctx, () =>
       ctx.semanticRuntime.runDiagnosticRequest(
         semanticRuntimeCancellationProbe(token),
         request,
         render,
       ));
+    observation.finish({ outcome: "succeeded" });
+    return result;
   } catch (error) {
     scheduleAnalysisRefreshForRequestCurrentness(ctx, error);
     const failure = cancellationPrecedence(error, token);
+    observation.finish(supportTerminalFacts(error, failure, token));
     if (isSemanticRuntimeRequestStale(failure)) {
       ctx.logger.log(
         `[diagnostics] stale semantic-runtime request for ${request.uri}${semanticRuntimeStaleFacts(failure)}`,
@@ -149,9 +163,13 @@ export function requestFailure(
     const code = error.reason === "cancelled"
       ? LSPErrorCodes.RequestCancelled
       : LSPErrorCodes.ContentModified;
-    ctx.logger.log(
-      `[${feature}] ${error.reason} semantic-runtime request${location}${semanticRuntimeStaleFacts(error)}`,
-    );
+    // Client cancellation is routine provider supersession. Keep it in the bounded support ledger without flooding
+    // the user-facing output channel; stale requests remain actionable currentness evidence and are still logged.
+    if (error.reason === "stale") {
+      ctx.logger.log(
+        `[${feature}] stale semantic-runtime request${location}${semanticRuntimeStaleFacts(error)}`,
+      );
+    }
     return new ResponseError(code, error.reason === "cancelled"
       ? `Aurelia ${feature} request was cancelled.`
       : `Aurelia ${feature} request used stale document content.`);
@@ -259,4 +277,70 @@ function cancellationPrecedence(
   return token.isCancellationRequested && isSemanticRuntimeRequestStale(error)
     ? new SemanticRuntimeLspRequestAbortedError("cancelled", error)
     : error;
+}
+
+function supportTerminalFacts(
+  originalError: unknown,
+  visibleError: unknown,
+  token: CancellationToken,
+) {
+  const underlyingStale = staleCause(originalError) != null;
+  const clientCancellationRequested = token.isCancellationRequested;
+  const outcome = (isSemanticRuntimeLspRequestAborted(visibleError) && visibleError.reason === "cancelled")
+    || (visibleError instanceof ResponseError && visibleError.code === LSPErrorCodes.RequestCancelled)
+    ? "client-cancelled" as const
+    : staleCause(visibleError) != null
+      || (visibleError instanceof ResponseError && (
+        visibleError.code === LSPErrorCodes.ContentModified
+        || visibleError.code === LSPErrorCodes.ServerCancelled
+      ))
+      ? "stale" as const
+      : "failed" as const;
+  return {
+    outcome,
+    clientCancellationRequested,
+    underlyingStale,
+    staleFacts: staleCause(originalError) ?? staleCause(visibleError),
+  };
+}
+
+function staleCause(error: unknown) {
+  if (error instanceof ManagedSemanticWorkspaceOperationStaleError) {
+    return {
+      origin: "managed-operation" as const,
+      currentnessKind: error.currentnessKind == null ? null : String(error.currentnessKind),
+      reason: error.reason,
+      answerLeaseKind: error.analysisCurrentness?.answerLeaseKind ?? null,
+    };
+  }
+  if (!isSemanticRuntimeLspRequestAborted(error)) return null;
+  if (error.cause instanceof ManagedSemanticWorkspaceOperationStaleError) {
+    return staleCause(error.cause);
+  }
+  if (isSemanticRuntimeAnalysisCurrentnessError(error.cause)) {
+    return {
+      origin: "analysis-currentness" as const,
+      currentnessKind: null,
+      reason: error.cause.reason,
+      answerLeaseKind: error.cause.answerLeaseKind,
+    };
+  }
+  if (error.reason === "stale") {
+    return {
+      origin: "request-generation" as const,
+      currentnessKind: null,
+      reason: error.reason,
+      answerLeaseKind: null,
+    };
+  }
+  return null;
+}
+
+function beginSupportObservation(
+  ctx: ServerContext,
+  feature: string,
+  uri?: string,
+) {
+  // Focused embedding/test hosts predating the support surface remain valid; the production context always owns it.
+  return ctx.supportLedger?.beginRequest(feature, uri) ?? { finish() {} };
 }

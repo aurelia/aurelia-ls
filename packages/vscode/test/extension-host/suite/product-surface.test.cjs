@@ -340,6 +340,7 @@ suite("extension-host product surface", () => {
   test("ships only the retained command and Explorer surface", async () => {
     const commands = new Set(await vscode.commands.getCommands(true));
     for (const command of [
+      "aurelia.createSupportReport",
       "aurelia.goToResource",
       "aurelia.goToAvailableResource",
       "aurelia.openRelatedFile",
@@ -4223,7 +4224,7 @@ suite("extension-host product surface", () => {
       operation: "inventory",
       stage: "after-response",
       effect: "barrier",
-      includeTypeSurfaces: true,
+      includeTypeSurfaces: false,
     });
     const predecessorText = `// predecessor resource\n${baseline}`;
     try {
@@ -4248,7 +4249,7 @@ suite("extension-host product surface", () => {
       );
       assert.strictEqual(blocked.operation, "inventory");
       assert.strictEqual(blocked.stage, "after-response");
-      assert.strictEqual(blocked.includeTypeSurfaces, true);
+      assert.strictEqual(blocked.includeTypeSurfaces, false);
       assert.strictEqual(blocked.workspaceKey, resourceDiscoveryAcceptance.workspaceKey);
       assert(typeof blocked.responseFingerprint === "string" && blocked.responseFingerprint.length > 0);
       const pendingEvidence = assertScopedStablePendingEvidence({
@@ -4278,14 +4279,20 @@ suite("extension-host product surface", () => {
         "E2 should supersede the active E1 generation",
       );
 
-      const released = await releaseResourceDiscoveryControl(controlId);
+      const cancelled = await waitForResourceDiscoveryObservation(
+        secondEditStart,
+        (event) => event.source === "resource-discovery-host-control"
+          && event.observationId === controlId
+          && event.phase === "cancelled",
+        "superseding E1 should cancel its blocked inventory request",
+      );
       const discarded = await waitForResourceDiscoveryObservation(
         secondEditStart,
         (event) => event.source === "resource-explorer"
           && event.phase === "discarded"
           && event.reason === "superseded"
-          && event.fingerprint === blocked.responseFingerprint,
-        "the released E1 response should be discarded rather than published",
+          && event.fingerprint == null,
+        "the cancelled E1 response should be discarded without awaiting its payload",
       );
       const successor = await waitForResourceDiscoveryObservation(
         secondEditStart,
@@ -4338,7 +4345,7 @@ suite("extension-host product surface", () => {
         blocked,
         ...pendingEvidence,
         invalidated: successorInvalidated,
-        released,
+        cancelled,
         discarded,
         successorPublished: successor,
         predecessorGeneration: discarded.generation,
@@ -6554,7 +6561,7 @@ async function publishControlledTreeFault({
     operation: "inventory",
     stage: "after-response",
     effect,
-    includeTypeSurfaces: true,
+    includeTypeSurfaces: false,
     projectKey,
     stableCode,
   });

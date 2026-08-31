@@ -15,7 +15,7 @@ const predecessorRaceFactKeys = Object.freeze([
   "pendingTreePublicationCount",
   "pendingViewStateCount",
   "invalidated",
-  "released",
+  "cancelled",
   "discarded",
   "successorPublished",
   "predecessorGeneration",
@@ -193,7 +193,7 @@ function assertScopedStablePendingEvidence({
   assert.strictEqual(blocked?.operation, "inventory", `${label} barrier operation`);
   assert.strictEqual(blocked?.stage, "after-response", `${label} barrier stage`);
   assert.strictEqual(blocked?.workspaceKey, blockedWorkspaceKey, `${label} barrier workspace`);
-  assert.strictEqual(blocked?.includeTypeSurfaces, true, `${label} barrier type surfaces`);
+  assert.strictEqual(blocked?.includeTypeSurfaces, false, `${label} barrier type surfaces`);
   assert(
     Number.isInteger(blocked?.requestOrdinal) && blocked.requestOrdinal > 0,
     `${label} barrier request ordinal must be positive.`,

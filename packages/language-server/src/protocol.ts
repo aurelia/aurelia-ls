@@ -36,6 +36,7 @@ import type {
 import type { Position, Range, WorkspaceEdit } from "vscode-languageserver/node";
 
 export const AureliaProtocolRequest = {
+  SupportSnapshot: "aurelia/supportSnapshot",
   SourceOwnership: "aurelia/sourceOwnership",
   AnalysisLimitations: "aurelia/analysisLimitations",
   FrameworkCapabilityExplanation: "aurelia/frameworkCapabilityExplanation",
@@ -48,6 +49,291 @@ export const AureliaProtocolRequest = {
   WorkspaceStatus: "aurelia/workspaceStatus",
   RenameFromTypeScript: "aurelia/renameFromTs",
 } as const;
+
+export const AURELIA_SUPPORT_SNAPSHOT_SCHEMA = "aurelia-support-snapshot/1" as const;
+
+export interface AureliaSupportSnapshotParams {
+  /** Canonical base64url encoding of 32 random bytes. The salt is used locally and is never echoed. */
+  readonly identitySalt: string;
+}
+
+export type AureliaSupportRequestOutcome =
+  | "succeeded"
+  | "client-cancelled"
+  | "stale"
+  | "failed";
+
+export interface AureliaSupportRequestStaleFacts {
+  readonly origin: "managed-operation" | "analysis-currentness" | "request-generation";
+  readonly currentnessKind: string | null;
+  readonly reason: string | null;
+  readonly answerLeaseKind: string | null;
+}
+
+export interface AureliaSupportRequestAggregate {
+  readonly feature: string;
+  readonly started: number;
+  readonly succeeded: number;
+  readonly clientCancelled: number;
+  readonly stale: number;
+  readonly failed: number;
+  readonly clientCancelledWithUnderlyingStale: number;
+  readonly totalDurationMilliseconds: number;
+  readonly maximumDurationMilliseconds: number;
+}
+
+export interface AureliaSupportRequestTerminalEvent {
+  readonly sequence: number;
+  readonly feature: string;
+  readonly outcome: AureliaSupportRequestOutcome;
+  readonly durationMilliseconds: number;
+  /** Per-report HMAC id using the client convention `document:<20 lowercase hex>`. */
+  readonly documentId: string | null;
+  readonly clientCancellationRequested: boolean;
+  readonly underlyingStale: boolean;
+  readonly staleFacts: AureliaSupportRequestStaleFacts | null;
+}
+
+export interface AureliaSupportInFlightRequest {
+  readonly sequence: number;
+  readonly feature: string;
+  readonly ageMilliseconds: number;
+  readonly documentId: string | null;
+}
+
+export interface AureliaSupportRequestSnapshot {
+  readonly aggregateCount: number;
+  readonly aggregates: readonly AureliaSupportRequestAggregate[];
+  readonly omittedAggregateCount: number;
+  readonly recentTerminalCount: number;
+  readonly recentTerminals: readonly AureliaSupportRequestTerminalEvent[];
+  readonly omittedRecentTerminalCount: number;
+  readonly inFlightCount: number;
+  readonly oldestInFlightAgeMilliseconds: number | null;
+  readonly inFlight: readonly AureliaSupportInFlightRequest[];
+  readonly omittedInFlightCount: number;
+}
+
+export interface AureliaSupportLifecycleSnapshot {
+  readonly registered: boolean;
+  readonly shuttingDown: boolean;
+  readonly trackedTaskCount: number;
+  readonly trackedOpenDocumentCount: number;
+  readonly pendingAnalysisRefresh: boolean;
+  readonly pendingAnalysisChangeKind: "source-text" | "topology" | null;
+  readonly pendingChangedSourceCount: number;
+  readonly counters: {
+    readonly initialize: number;
+    readonly shutdown: number;
+    readonly documentOpen: number;
+    /** TextDocuments synchronization events; includes didOpen's initial synchronized content. */
+    readonly documentSynchronizations: number;
+    readonly documentClose: number;
+    readonly watchedFileBatches: number;
+    readonly topologyInvalidations: number;
+    readonly topologyInvalidatedFileCount: number;
+    readonly sourceTextInvalidations: number;
+    readonly sourceTextInvalidatedFileCount: number;
+    readonly configurationInvalidations: number;
+    readonly configurationInvalidatedFileCount: number;
+    readonly requestCurrentnessRefreshes: number;
+    readonly analysisRefreshSchedules: number;
+    readonly analysisRefreshCoalesces: number;
+    readonly analysisWavesStarted: number;
+    readonly analysisWavesPublished: number;
+    readonly analysisWaveStaleRetries: number;
+    readonly backgroundTaskFailures: number;
+    readonly diagnosticRefreshRequests: number;
+    readonly inlayHintRefreshRequests: number;
+    readonly semanticTokenRefreshRequests: number;
+  };
+}
+
+export interface AureliaSupportSemanticSessionSnapshot {
+  readonly workspaceConfigured: boolean;
+  readonly workspaceGeneration: number;
+  readonly requestEpoch: number;
+  readonly diagnosticCacheEntries: number;
+  readonly retiringWorkspaceCount: number;
+  readonly retirementFailureCount: number;
+  readonly closing: boolean;
+  readonly disposalStarted: boolean;
+}
+
+export interface AureliaSupportMemorySnapshot {
+  readonly rssBytes: number;
+  readonly heapTotalBytes: number;
+  readonly heapUsedBytes: number;
+  readonly heapLimitBytes: number;
+  readonly externalBytes: number;
+  readonly arrayBuffersBytes: number;
+  readonly rssOtherBytes: number;
+  readonly v8HeapPhysicalBytes: number;
+  readonly v8HeapAvailableBytes: number;
+  readonly v8MallocedMemoryBytes: number;
+  readonly v8PeakMallocedMemoryBytes: number;
+  readonly v8ExternalMemoryBytes: number;
+  readonly v8NativeContextCount: number;
+  readonly v8DetachedContextCount: number;
+}
+
+export interface AureliaSupportTypeSystemCacheSnapshot {
+  readonly entries: number;
+  readonly entryLimit: number;
+  readonly sourceTextCharacters: number;
+  readonly sourceTextCharacterLimit: number;
+  readonly distinctCanonicalPaths: number;
+  readonly duplicateCanonicalPathEntries: number;
+  readonly nodeModuleEntries: number;
+  readonly nodeModuleSourceTextCharacters: number;
+  readonly declarationEntries: number;
+  readonly declarationSourceTextCharacters: number;
+  readonly defaultLibraryEntries: number;
+  readonly defaultLibrarySourceTextCharacters: number;
+  readonly externalDeclarationEntries: number;
+  readonly externalDeclarationSourceTextCharacters: number;
+  readonly hits: number;
+  readonly misses: number;
+  readonly writes: number;
+  readonly writeSourceTextCharacters: number;
+  readonly supersededRevisionEvictions: number;
+  readonly capacityEvictions: number;
+  readonly bypasses: number;
+  readonly clearOperations: number;
+  readonly clearedEntries: number;
+  readonly clearedSourceTextCharacters: number;
+  readonly dominantSourceTextBucket: string;
+  readonly suggestedClearPolicy: string;
+  readonly suggestedClearSourceTextCharacters: number;
+}
+
+export interface AureliaSupportCountRow {
+  readonly key: string;
+  readonly count: number;
+}
+
+export interface AureliaSupportKernelSnapshot {
+  readonly totalRecords: number;
+  readonly addresses: number;
+  readonly identities: number;
+  readonly evidence: number;
+  readonly provenance: number;
+  readonly claims: number;
+  readonly openSeams: number;
+  readonly products: number;
+  readonly materializations: number;
+  readonly productDetails: number;
+  readonly hotDetails: number;
+  readonly handleCharacters: number;
+  readonly recordKinds: readonly AureliaSupportCountRow[];
+  readonly productKinds: readonly AureliaSupportCountRow[];
+  readonly productDetailKinds: readonly AureliaSupportCountRow[];
+  readonly hotDetailKinds: readonly AureliaSupportCountRow[];
+  readonly openSeamKinds: readonly AureliaSupportCountRow[];
+}
+
+export interface AureliaSupportQueryClaimSnapshot {
+  readonly profile: string;
+  readonly retentionKind: string;
+  readonly answerLocalKernelPolicy: string;
+  readonly createdRecords: number;
+  readonly retainedRecords: number;
+  readonly rootRecords: number;
+  readonly childRecords: number;
+  readonly maxDepth: number;
+  readonly pending: number;
+  readonly answered: number;
+  readonly failed: number;
+  readonly disposed: number;
+  readonly projectionOnly: number;
+  readonly queryTypeProjection: number;
+  readonly staticCatalog: number;
+  readonly approximatePayloadBytes: number;
+  readonly retainedAnswerBytes: number;
+  readonly retainedAnswerValues: number;
+  readonly retainedAnswerHits: number;
+  readonly retainedRecordLimit: number | null;
+  readonly budgetDisposedRecords: number;
+  readonly disposedKernelRecords: number;
+  readonly disposedProductDetails: number;
+  readonly disposedHotDetails: number;
+  readonly disposedKernelHandleCharacters: number;
+  readonly clearedTypeSystemDependencySourceFiles: number;
+  readonly clearedTypeSystemDependencySourceTextCharacters: number;
+  readonly netKernelRecordDelta: number;
+  readonly netProductDetailDelta: number;
+  readonly netHotDetailDelta: number;
+  readonly netKernelHandleCharacterDelta: number;
+}
+
+export interface AureliaSupportPhaseSnapshot {
+  readonly name: string;
+  readonly milliseconds: number;
+  readonly itemCount: number | null;
+}
+
+export interface AureliaSupportCachedAppSnapshot {
+  /** Per-report HMAC id using the same kind/NUL/value convention as client support identities. */
+  readonly projectId: string;
+  readonly analysisDepth: string;
+  readonly templateAnalysisBreadth: string;
+  readonly includeAuthoringTemplates: boolean;
+  readonly authoringTemplateSourceFileCount: number;
+  readonly authoringTemplateLimit: number | null;
+  readonly profile: {
+    readonly inquiryProfile: string;
+    readonly totalMilliseconds: number;
+    readonly phaseCount: number;
+    readonly topPhases: readonly AureliaSupportPhaseSnapshot[];
+    readonly typeSystemAcquisitionKind: string;
+    readonly typeSystemAcquisitionMilliseconds: number;
+    readonly typeSystemConstructionMilliseconds: number;
+    readonly programSourceFileCount: number;
+    readonly programProjectSourceFileCount: number;
+    readonly programNodeModuleSourceFileCount: number;
+    readonly programDeclarationSourceFileCount: number;
+    readonly programDefaultLibrarySourceFileCount: number;
+    readonly programSourceTextCharacters: number;
+  };
+  readonly queryClaims: AureliaSupportQueryClaimSnapshot;
+}
+
+export type AureliaSupportAnalysisCacheSnapshot =
+  | {
+      readonly status: "available";
+      readonly cachedAppCount: number;
+      readonly typeSystemProjectCount: number;
+      readonly cachedApps: readonly AureliaSupportCachedAppSnapshot[];
+      readonly omittedCachedAppCount: number;
+      readonly runtimeQueryClaims: readonly AureliaSupportQueryClaimSnapshot[];
+      readonly workspaceKernel: AureliaSupportKernelSnapshot;
+    }
+  | { readonly status: "unavailable" };
+
+export interface AureliaSupportSnapshotResponse {
+  readonly schemaVersion: typeof AURELIA_SUPPORT_SNAPSHOT_SCHEMA;
+  readonly capturedAt: string;
+  readonly process: {
+    readonly uptimeMilliseconds: number;
+    readonly nodeVersion: string;
+    readonly platform: string;
+    readonly architecture: string;
+    readonly memory: AureliaSupportMemorySnapshot;
+    readonly typeSystemDependencyCache: AureliaSupportTypeSystemCacheSnapshot;
+  };
+  readonly requests: AureliaSupportRequestSnapshot;
+  readonly lifecycle: AureliaSupportLifecycleSnapshot;
+  readonly semanticSession: AureliaSupportSemanticSessionSnapshot;
+  readonly analysisCache: AureliaSupportAnalysisCacheSnapshot;
+  readonly bounds: {
+    readonly maximumFeatureAggregates: number;
+    readonly maximumRecentTerminals: number;
+    readonly maximumInFlightRows: number;
+    readonly maximumCachedApps: number;
+    readonly maximumBreakdownRows: number;
+    readonly maximumSerializedBytes: number;
+  };
+}
 
 /** Client-owned commands surfaced by protocol features. */
 export const AureliaProtocolCommand = {
@@ -220,7 +506,7 @@ export function templateCodeActionResolveRefusalFromValue(
 
 type RuntimeAnswerTransportFields = Pick<
   SemanticRuntimeAnswer<unknown>,
-  "schemaVersion" | "result" | "selection" | "coverage" | "summary" | "analysisBasis" | "page" | "analysisDepth" | "continuations"
+  "schemaVersion" | "result" | "selection" | "coverage" | "summary" | "analysisBasis" | "page" | "analysisDepth" | "templateAnalysisBreadth" | "continuations"
 >;
 
 /** JSON transport form of semantic-runtime's const-enum answer vocabulary. */

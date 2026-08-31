@@ -31,6 +31,7 @@ import {
   readExtensionHostLogEvidence,
   validateWorkspaceDependencies,
 } from "./collect-extension-host-tails.mjs";
+import { minimumVSCodeVersion } from "./extension-host-version-contract.mjs";
 
 export { sha256 };
 
@@ -39,9 +40,13 @@ export const installedEvidenceSchemaVersion = "aurelia-ls/installed-vsix-evidenc
 export const installedDriverReportSchemaVersion = "aurelia-ls/installed-vsix-driver-report/v2";
 export const requestedVSCodeVersion = "stable";
 export const expectedTestElectronVersion = "3.0.0";
+export const installedPackageManifestProfile = Object.freeze({
+  Minimum191: "vscode-1.91-vsix-source",
+  Current: "vscode-target-platform-size",
+});
 export const installedInventoryPolicy = Object.freeze({
   payload: "every extension/ receipt entry except package.json installed byte-for-byte with no extra payload files or directories",
-  packageManifest: "archive package fields plus exact VS Code __metadata transform; timestamp bounded to the sole install, targetPlatform undefined, size equal to packaged extension bytes",
+  packageManifest: "archive package fields plus exact VS Code __metadata transform selected by resolved version; timestamp bounded to the sole install, with the 1.91 VSIX source flags or the current target-platform and packaged-size fields",
   installerMetadataPath: ".vsixmanifest",
   installerMetadataArchivePath: "extension.vsixmanifest",
   installerMetadataAuthority: "exact byte equality with the generated VSIX control entry",
@@ -280,8 +285,9 @@ export function discoverInstalledProduct(extensionsDirectory, identity) {
   });
 }
 
-export function verifyInstalledInventory(receipt, extensionPath, installWindow) {
+export function verifyInstalledInventory(receipt, extensionPath, installWindow, installerVersion, metadataProfile) {
   requireInstallWindow(installWindow);
+  requireInstallerContext(installerVersion, metadataProfile);
   const payload = receipt.entries
     .filter((entry) => entry.path.startsWith("extension/"))
     .map((entry) => Object.freeze({
@@ -347,7 +353,14 @@ export function verifyInstalledInventory(receipt, extensionPath, installWindow) 
     assertRegularRealFile(filePath, "Installed payload file");
     const bytes = readFileSync(filePath);
     if (entry.classification === "vscode-installer-transformed-manifest") {
-      return verifyInstalledPackageManifest(receipt, entry, bytes, installWindow);
+      return verifyInstalledPackageManifest(
+        receipt,
+        entry,
+        bytes,
+        installWindow,
+        installerVersion,
+        metadataProfile,
+      );
     }
     const digest = sha256(bytes);
     if (bytes.length !== entry.bytes || digest !== entry.sha256) {
@@ -381,7 +394,7 @@ function requireInstallWindow(installWindow) {
   }
 }
 
-function verifyInstalledPackageManifest(receipt, entry, installedBytes, installWindow) {
+function verifyInstalledPackageManifest(receipt, entry, installedBytes, installWindow, installerVersion, metadataProfile) {
   const source = entry.source;
   if (
     source?.kind !== "local"
@@ -432,23 +445,13 @@ function verifyInstalledPackageManifest(receipt, entry, installedBytes, installW
   if (!Number.isSafeInteger(packagedBytes) || packagedBytes <= 0) {
     throw new Error("VSIX receipt packaged-byte total was invalid.");
   }
-  if (
-    JSON.stringify(metadataKeys) !== JSON.stringify(["installedTimestamp", "targetPlatform", "size"])
-    || !Number.isSafeInteger(metadata?.installedTimestamp)
-    || metadata.installedTimestamp < installWindow.startedEpochMilliseconds
-    || metadata.installedTimestamp > installWindow.completedEpochMilliseconds
-    || metadata.targetPlatform !== "undefined"
-    || metadata.size !== packagedBytes
-  ) {
+  const profile = installedPackageMetadataTransform(metadataProfile, metadata, metadataKeys, installWindow, packagedBytes);
+  if (profile == null) {
     throw new Error("Installed package.json metadata did not match the exact VS Code installer transform.");
   }
   const transformedBytes = Buffer.from(JSON.stringify({
     ...sourceManifest,
-    __metadata: {
-      installedTimestamp: metadata.installedTimestamp,
-      targetPlatform: "undefined",
-      size: packagedBytes,
-    },
+    __metadata: profile.metadata,
   }, null, "\t"));
   if (!installedBytes.equals(transformedBytes)) {
     throw new Error("Installed package.json bytes did not equal the exact VS Code installer transform.");
@@ -468,9 +471,64 @@ function verifyInstalledPackageManifest(receipt, entry, installedBytes, installW
       equal: true,
     }),
     metadata: Object.freeze({ ...metadata }),
+    metadataProfile: profile.id,
+    installerVersion,
     packagedBytes,
     exactTransform: true,
   });
+}
+
+function installedPackageMetadataTransform(metadataProfile, metadata, metadataKeys, installWindow, packagedBytes) {
+  if (
+    !Number.isSafeInteger(metadata?.installedTimestamp)
+    || metadata.installedTimestamp < installWindow.startedEpochMilliseconds
+    || metadata.installedTimestamp > installWindow.completedEpochMilliseconds
+  ) return null;
+  if (metadataProfile === installedPackageManifestProfile.Minimum191) {
+    if (
+      JSON.stringify(metadataKeys) !== JSON.stringify(["isApplicationScoped", "installedTimestamp", "pinned", "source"])
+      || metadata.isApplicationScoped !== false
+      || metadata.pinned !== false
+      || metadata.source !== "vsix"
+    ) return null;
+    return Object.freeze({
+      id: installedPackageManifestProfile.Minimum191,
+      metadata: Object.freeze({
+        isApplicationScoped: false,
+        installedTimestamp: metadata.installedTimestamp,
+        pinned: false,
+        source: "vsix",
+      }),
+    });
+  }
+  if (
+    JSON.stringify(metadataKeys) !== JSON.stringify(["installedTimestamp", "targetPlatform", "size"])
+    || metadata.targetPlatform !== "undefined"
+    || metadata.size !== packagedBytes
+  ) return null;
+  return Object.freeze({
+    id: installedPackageManifestProfile.Current,
+    metadata: Object.freeze({
+      installedTimestamp: metadata.installedTimestamp,
+      targetPlatform: "undefined",
+      size: packagedBytes,
+    }),
+  });
+}
+
+function requireInstallerContext(installerVersion, metadataProfile) {
+  if (typeof installerVersion !== "string" || !/^\d+\.\d+\.\d+$/u.test(installerVersion)) {
+    throw new Error("Installed inventory requires the exact resolved VS Code installer version.");
+  }
+  if (!Object.values(installedPackageManifestProfile).includes(metadataProfile)) {
+    throw new Error("Installed inventory requires a recognized VS Code package-manifest metadata profile.");
+  }
+  const expectedProfile = installerVersion === minimumVSCodeVersion
+    ? installedPackageManifestProfile.Minimum191
+    : installedPackageManifestProfile.Current;
+  if (compareVersions(installerVersion, minimumVSCodeVersion) < 0 || metadataProfile !== expectedProfile) {
+    throw new Error("Installed inventory metadata profile does not match the resolved VS Code installer version.");
+  }
 }
 
 export function snapshotRegularTree(root, options = {}) {
@@ -656,7 +714,13 @@ export async function verifyInstalledVsix(dependencies = {}) {
     requireSuccessfulProcess(installResult, "VSIX installation");
 
     const product = discoverInstalledProduct(layout.extensionsDirectory, receipt.identity);
-    const installedBeforeHost = verifyInstalledInventory(receipt, product.extensionPath, state.install);
+    const installedBeforeHost = verifyInstalledInventory(
+      receipt,
+      product.extensionPath,
+      state.install,
+      resolution.resolvedVersion,
+      installedPackageManifestProfile.Current,
+    );
     state.product = {
       extensionPath: product.extensionPath,
       productionClassification: "inferred-installed-production",
@@ -744,7 +808,13 @@ export async function verifyInstalledVsix(dependencies = {}) {
     if (!samePath(productAfterHost.extensionPath, product.extensionPath)) {
       throw new Error("Installed product path changed during host acceptance.");
     }
-    state.product.inventoryAfterHost = verifyInstalledInventory(receipt, productAfterHost.extensionPath, state.install);
+    state.product.inventoryAfterHost = verifyInstalledInventory(
+      receipt,
+      productAfterHost.extensionPath,
+      state.install,
+      resolution.resolvedVersion,
+      installedPackageManifestProfile.Current,
+    );
     state.method.verifyCount += 1;
     const finalReceipt = await verifyArtifact(dependencies.archiveDependencies ?? {});
     requireArtifactReceipt(finalReceipt, before);
@@ -1287,7 +1357,13 @@ function auditRetainedEvidence(state, layout, receipt, dependencies) {
     if (!samePath(product.extensionPath, state.product.extensionPath)) {
       throw new Error("Installed product path changed after its post-host validation.");
     }
-    const currentInventory = verifyInstalledInventory(receipt, product.extensionPath, state.install);
+    const currentInventory = verifyInstalledInventory(
+      receipt,
+      product.extensionPath,
+      state.install,
+      state.vscode?.resolvedVersion,
+      installedPackageManifestProfile.Current,
+    );
     const expectedInventory = state.product.inventoryAfterHost ?? state.product.inventoryBeforeHost;
     if (JSON.stringify(currentInventory) !== JSON.stringify(expectedInventory)) {
       throw new Error("Installed product inventory changed after its post-host validation.");

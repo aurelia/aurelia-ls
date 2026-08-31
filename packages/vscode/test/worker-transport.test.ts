@@ -81,6 +81,66 @@ describe("Worker transport", () => {
     }
   });
 
+  test("keeps an uncancelled semantic bootstrap follower independent from its cancelled leader", async () => {
+    const transports = createWorkerMessageTransports(WORKER_FIXTURE);
+    const connection = createMessageConnection(
+      transports.reader,
+      transports.writer,
+      undefined,
+      { cancellationStrategy: createWorkerCancellationStrategy() },
+    );
+    connection.listen();
+
+    try {
+      await connection.sendRequest("initialize", {
+        processId: process.pid,
+        rootUri: null,
+        capabilities: {},
+      });
+      await connection.sendNotification("initialized", {});
+
+      const bootstrapStarted = new Promise<void>((resolve) => {
+        connection.onNotification("test/semanticBootstrapStarted", resolve);
+      });
+      const bootstrapSettled = new Promise<readonly [{
+        readonly status: "rejected";
+        readonly reason: string | null;
+      }, {
+        readonly status: "fulfilled";
+        readonly value: { readonly result: string; readonly projectCount: number };
+      }]>((resolve) => {
+        connection.onNotification("test/semanticBootstrapSettled", resolve);
+      });
+      const cancellation = new CancellationTokenSource();
+      const leaderRequest = connection.sendRequest(
+        "test/concurrentSemanticBootstrap",
+        null,
+        cancellation.token,
+      );
+
+      await bootstrapStarted;
+      cancellation.cancel();
+      const expectedOutcomes = [
+        { status: "rejected", name: "SemanticRuntimeLspRequestAbortedError", reason: "cancelled" },
+        {
+          status: "fulfilled",
+          value: { result: "answered", projectCount: 1 },
+        },
+      ];
+      await expect(leaderRequest).resolves.toEqual(expectedOutcomes);
+      await expect(bootstrapSettled).resolves.toEqual(expectedOutcomes);
+      cancellation.dispose();
+
+      await connection.sendRequest("shutdown");
+      await connection.sendNotification("exit");
+      expect(await transports.exited).toBe(0);
+    } finally {
+      connection.end();
+      connection.dispose();
+      await transports.terminate();
+    }
+  }, 20_000);
+
   test("reports an abnormal crash once, closes once, and permits a fresh transport", async () => {
     const events: WorkerTransportEvent[] = [];
     const transports = createWorkerMessageTransports("unused", {

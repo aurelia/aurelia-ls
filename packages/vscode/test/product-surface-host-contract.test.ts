@@ -1969,7 +1969,7 @@ function scopedStablePendingEvidence() {
     stage: "after-response",
     requestOrdinal: 7,
     workspaceKey,
-    includeTypeSurfaces: true,
+    includeTypeSurfaces: false,
     responseFingerprint: "semantic-runtime:routed-response",
   };
   return {
