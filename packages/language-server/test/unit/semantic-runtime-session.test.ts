@@ -2600,11 +2600,11 @@ describe("SemanticRuntimeLspSession", () => {
 
     const automaticQueries = querySpy.mock.calls
       .map(([query]) => query)
-      .filter((query) => [
-        SemanticAppQueryKind.TemplateDocumentOwnership,
-        SemanticAppQueryKind.TemplateSemanticTokens,
-        SemanticAppQueryKind.TemplateFoldingRanges,
-      ].includes(query.kind));
+      .filter((query) =>
+        query.kind === SemanticAppQueryKind.TemplateDocumentOwnership
+        || query.kind === SemanticAppQueryKind.TemplateSemanticTokens
+        || query.kind === SemanticAppQueryKind.TemplateFoldingRanges
+      );
     expect(automaticQueries.map((query) => ({
       kind: query.kind,
       analysisDepth: query.analysisDepth,
