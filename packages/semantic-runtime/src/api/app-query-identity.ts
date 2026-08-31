@@ -1,5 +1,6 @@
 import type {
   SemanticAppAnalysisDepth,
+  SemanticApplicationEntrypointPolicy,
   SemanticTemplateAnalysisBreadth,
 } from '../configuration/app-analysis.js';
 import type {
@@ -18,6 +19,7 @@ import { canonicalTypeSystemSourcePath } from '../type-system/source-file-path.j
 
 export interface SemanticRuntimeRoutedAppQueryKeyPlan {
   readonly analysisDepth: SemanticAppAnalysisDepth;
+  readonly applicationEntrypointPolicy: SemanticApplicationEntrypointPolicy;
   readonly templateAnalysisBreadth: SemanticTemplateAnalysisBreadth;
   readonly includeAuthoringTemplates: boolean;
   readonly authoringTemplateSourceFiles: readonly string[];
@@ -92,6 +94,7 @@ export function semanticRuntimeRoutedAppQueryKey(
   return [
     semanticAppQueryKey(query),
     `analysis:${plan.analysisDepth}`,
+    `application-entrypoints:${plan.applicationEntrypointPolicy}`,
     `template-analysis:${plan.templateAnalysisBreadth}`,
     `authoring:${plan.includeAuthoringTemplates}`,
     `authoring-sources:${plan.authoringTemplateSourceFiles.length === 0
@@ -118,6 +121,7 @@ export function semanticRuntimeRoutedAppQueryBatchKey(
     'app-query-batch',
     `queries:${request.queries.map((query, index) => `${index}:${semanticAppQueryRequestKey(query)}`).join(',')}`,
     `analysis:${plan.analysisDepth}`,
+    `application-entrypoints:${plan.applicationEntrypointPolicy}`,
     `template-analysis:${plan.templateAnalysisBreadth}`,
     `authoring:${plan.includeAuthoringTemplates}`,
     `authoring-sources:${plan.authoringTemplateSourceFiles.length === 0

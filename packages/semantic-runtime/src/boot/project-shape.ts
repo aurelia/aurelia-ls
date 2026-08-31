@@ -76,6 +76,14 @@ export interface SemanticProjectAureliaSourceSignalCount {
   readonly count: number;
 }
 
+/** Per-source boot syntax needed to prove direct Aurelia activations before static value evaluation. */
+export interface SemanticProjectAppSourceSyntax {
+  readonly sourcePath: string;
+  readonly signals: readonly SemanticProjectAureliaSourceSignalCount[];
+  /** Direct `.app(...)` calls whose enclosing syntax executes as part of module initialization. */
+  readonly authoredDirectApplicationEntrypointCount: number;
+}
+
 export interface SemanticProjectShapeReasonCount {
   readonly reason: SemanticProjectShapeReasonKind;
   readonly count: number;
@@ -269,7 +277,21 @@ function isSameOrDescendantPath(parent: string, child: string): boolean {
 
 function aureliaSourceSignals(project: ProjectBootFrame): readonly SemanticProjectAureliaSourceSignalCount[] {
   const counts = new Map<SemanticProjectAureliaSourceSignalKind, number>();
+  for (const source of readSemanticProjectAppSourceSyntax(project)) {
+    for (const row of source.signals) {
+      counts.set(row.signal, (counts.get(row.signal) ?? 0) + row.count);
+    }
+  }
+  return [...counts.entries()]
+    .map(([signal, count]) => ({ signal, count }));
+}
+
+/** Read per-source direct Aurelia syntax signals once for this immutable boot frame. */
+export function readSemanticProjectAppSourceSyntax(
+  project: ProjectBootFrame,
+): readonly SemanticProjectAppSourceSyntax[] {
   const sourceText = new AuthoredSourceTextCache(project.rootDir, project.inputGeneration.host);
+  const rows: SemanticProjectAppSourceSyntax[] = [];
   for (const source of project.sourceFiles) {
     if (source.role !== SourceFileRole.AppSource) {
       continue;
@@ -278,14 +300,26 @@ function aureliaSourceSignals(project: ProjectBootFrame): readonly SemanticProje
     if (authoredSource == null) {
       continue;
     }
-    const text = authoredSource.text;
-    if (!textCanContainAureliaFacadeSignal(text)) {
-      continue;
+    const signalCounts = new Map<SemanticProjectAureliaSourceSignalKind, number>();
+    let authoredDirectApplicationEntrypointCount = 0;
+    if (textCanContainAureliaFacadeSignal(authoredSource.text)) {
+      const sourceFile = ts.createSourceFile(
+        source.path,
+        authoredSource.text,
+        ts.ScriptTarget.Latest,
+        true,
+        scriptKindForPath(source.path),
+      );
+      authoredDirectApplicationEntrypointCount = countSourceFileSignals(signalCounts, sourceFile);
     }
-    countSourceFileSignals(counts, source.path, text);
+    rows.push(Object.freeze({
+      sourcePath: source.path,
+      signals: Object.freeze([...signalCounts.entries()].map(([signal, count]) => ({ signal, count }))),
+      authoredDirectApplicationEntrypointCount,
+    }));
   }
-  return [...counts.entries()]
-    .map(([signal, count]) => ({ signal, count }));
+  project.requireCurrent();
+  return Object.freeze(rows);
 }
 
 function textCanContainAureliaFacadeSignal(text: string): boolean {
@@ -294,26 +328,20 @@ function textCanContainAureliaFacadeSignal(text: string): boolean {
 
 function countSourceFileSignals(
   counts: Map<SemanticProjectAureliaSourceSignalKind, number>,
-  sourcePath: string,
-  text: string,
-): void {
-  const sourceFile = ts.createSourceFile(
-    sourcePath,
-    text,
-    ts.ScriptTarget.Latest,
-    true,
-    scriptKindForPath(sourcePath),
-  );
+  sourceFile: ts.SourceFile,
+): number {
   const bindings = new SourceAureliaBindings();
+  let authoredDirectApplicationEntrypointCount = 0;
   for (const statement of sourceFile.statements) {
     if (ts.isImportDeclaration(statement)) {
       readAureliaImportBindings(statement, bindings, counts);
     }
   }
+  readDirectModuleAureliaInstances(sourceFile, bindings);
 
   const visit = (node: ts.Node): void => {
     if (ts.isVariableDeclaration(node) && node.initializer != null && ts.isIdentifier(node.name)) {
-      if (isAureliaFacadeValue(node.initializer, bindings)) {
+      if (isConstVariableDeclaration(node) && isAureliaFacadeValue(node.initializer, bindings)) {
         bindings.aureliaInstances.add(node.name.text);
       }
     }
@@ -322,7 +350,17 @@ function countSourceFileSignals(
     }
     if (ts.isCallExpression(node) && ts.isPropertyAccessExpression(node.expression)) {
       const method = node.expression.name.text;
-      countAureliaAppActivationSignal(counts, method, node.expression.expression, bindings);
+      const activationSignal = aureliaAppActivationSignal(method, node.expression.expression, bindings);
+      if (activationSignal != null) {
+        incrementSignal(counts, activationSignal);
+        if (
+          activationSignal === SemanticProjectAureliaSourceSignalKind.AureliaAppCall
+          && isDirectModuleExecution(node)
+          && isDirectAureliaFacadeValue(node.expression.expression, bindings)
+        ) {
+          authoredDirectApplicationEntrypointCount += 1;
+        }
+      }
       if (method === 'register' && isAureliaFacadeValue(node.expression.expression, bindings)) {
         incrementSignal(counts, SemanticProjectAureliaSourceSignalKind.AureliaRegisterCall);
       }
@@ -330,29 +368,81 @@ function countSourceFileSignals(
     ts.forEachChild(node, visit);
   };
   ts.forEachChild(sourceFile, visit);
+  return authoredDirectApplicationEntrypointCount;
 }
 
-function countAureliaAppActivationSignal(
-  counts: Map<SemanticProjectAureliaSourceSignalKind, number>,
+function aureliaAppActivationSignal(
   method: string,
   receiver: ts.Expression,
   bindings: SourceAureliaBindings,
-): void {
+): SemanticProjectAureliaSourceSignalKind | null {
   if (!isAureliaFacadeValue(receiver, bindings)) {
-    return;
+    return null;
   }
   if (method === 'app') {
-    incrementSignal(counts, SemanticProjectAureliaSourceSignalKind.AureliaAppCall);
+    return SemanticProjectAureliaSourceSignalKind.AureliaAppCall;
   }
   if (method === 'enhance') {
-    incrementSignal(counts, SemanticProjectAureliaSourceSignalKind.AureliaEnhanceCall);
+    return SemanticProjectAureliaSourceSignalKind.AureliaEnhanceCall;
   }
+  return null;
+}
+
+function isDirectModuleExecution(node: ts.Node): boolean {
+  let current: ts.Node = node;
+  while (!ts.isSourceFile(current.parent)) {
+    current = current.parent;
+    if (
+      ts.isFunctionLike(current)
+      || ts.isClassLike(current)
+      || ts.isIfStatement(current)
+      || ts.isSwitchStatement(current)
+      || ts.isCaseClause(current)
+      || ts.isDefaultClause(current)
+      || ts.isIterationStatement(current, false)
+      || ts.isConditionalExpression(current)
+      || (
+        ts.isBinaryExpression(current)
+        && (
+          current.operatorToken.kind === ts.SyntaxKind.AmpersandAmpersandToken
+          || current.operatorToken.kind === ts.SyntaxKind.BarBarToken
+          || current.operatorToken.kind === ts.SyntaxKind.QuestionQuestionToken
+        )
+      )
+    ) {
+      return false;
+    }
+  }
+  return ts.isExpressionStatement(current)
+    || ts.isVariableStatement(current)
+    || ts.isExportAssignment(current);
 }
 
 class SourceAureliaBindings {
   readonly aureliaIdentifiers = new Set<string>();
   readonly aureliaNamespaces = new Set<string>();
   readonly aureliaInstances = new Set<string>();
+  readonly directAureliaInstances = new Set<string>();
+}
+
+function readDirectModuleAureliaInstances(
+  sourceFile: ts.SourceFile,
+  bindings: SourceAureliaBindings,
+): void {
+  for (const statement of sourceFile.statements) {
+    if (!ts.isVariableStatement(statement) || (statement.declarationList.flags & ts.NodeFlags.Const) === 0) {
+      continue;
+    }
+    for (const declaration of statement.declarationList.declarations) {
+      if (
+        ts.isIdentifier(declaration.name)
+        && declaration.initializer != null
+        && isDirectAureliaFacadeValue(declaration.initializer, bindings)
+      ) {
+        bindings.directAureliaInstances.add(declaration.name.text);
+      }
+    }
+  }
 }
 
 function readAureliaImportBindings(
@@ -364,12 +454,16 @@ function readAureliaImportBindings(
   if (specifier == null || !AURELIA_FACADE_MODULES.has(specifier)) {
     return;
   }
-  const defaultImport = statement.importClause?.name ?? null;
+  const importClause = statement.importClause ?? null;
+  if (importClause?.isTypeOnly === true) {
+    return;
+  }
+  const defaultImport = importClause?.name ?? null;
   if (defaultImport != null) {
     bindings.aureliaIdentifiers.add(defaultImport.text);
     incrementSignal(counts, SemanticProjectAureliaSourceSignalKind.AureliaImport);
   }
-  const namedBindings = statement.importClause?.namedBindings ?? null;
+  const namedBindings = importClause?.namedBindings ?? null;
   if (namedBindings == null) {
     return;
   }
@@ -379,12 +473,20 @@ function readAureliaImportBindings(
     return;
   }
   for (const element of namedBindings.elements) {
+    if (element.isTypeOnly) {
+      continue;
+    }
     const importedName = element.propertyName?.text ?? element.name.text;
     if (importedName === 'Aurelia') {
       bindings.aureliaIdentifiers.add(element.name.text);
       incrementSignal(counts, SemanticProjectAureliaSourceSignalKind.AureliaImport);
     }
   }
+}
+
+function isConstVariableDeclaration(node: ts.VariableDeclaration): boolean {
+  return ts.isVariableDeclarationList(node.parent)
+    && (node.parent.flags & ts.NodeFlags.Const) !== 0;
 }
 
 function isAureliaFacadeValue(
@@ -409,6 +511,30 @@ function isAureliaFacadeValue(
       || current.expression.name.text === 'enhance'
     )
     && isAureliaFacadeValue(current.expression.expression, bindings);
+}
+
+function isDirectAureliaFacadeValue(
+  expression: ts.Expression,
+  bindings: SourceAureliaBindings,
+): boolean {
+  const current = unwrapParentheses(expression);
+  if (isImportedAureliaExpression(current, bindings)) {
+    return true;
+  }
+  if (ts.isIdentifier(current) && bindings.directAureliaInstances.has(current.text)) {
+    return true;
+  }
+  if (ts.isNewExpression(current)) {
+    return isImportedAureliaExpression(current.expression, bindings);
+  }
+  return ts.isCallExpression(current)
+    && ts.isPropertyAccessExpression(current.expression)
+    && (
+      current.expression.name.text === 'register'
+      || current.expression.name.text === 'app'
+      || current.expression.name.text === 'enhance'
+    )
+    && isDirectAureliaFacadeValue(current.expression.expression, bindings);
 }
 
 function unwrapParentheses(expression: ts.Expression): ts.Expression {

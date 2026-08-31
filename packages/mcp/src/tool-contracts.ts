@@ -186,6 +186,7 @@ export interface AureliaMcpTemplateCursorInput extends AureliaMcpWorkspaceInput,
   readonly cursor: SemanticRuntimeSourceCursorInput;
   readonly projectKey?: string | null;
   readonly analysisDepth?: OpenSemanticAppOptions['analysisDepth'] | null;
+  readonly applicationEntrypointPolicy?: OpenSemanticAppOptions['applicationEntrypointPolicy'] | null;
   readonly includeAuthoringTemplates?: boolean | null;
   readonly authoringTemplateSourceFiles?: readonly string[] | null;
   readonly authoringTemplateLimit?: number | null;
@@ -199,6 +200,7 @@ export interface AureliaMcpTemplateDiagnosticsInput extends AureliaMcpWorkspaceI
   readonly diagnosticProjection?: SemanticAppQuery['diagnosticProjection'];
   readonly projectKey?: string | null;
   readonly analysisDepth?: OpenSemanticAppOptions['analysisDepth'] | null;
+  readonly applicationEntrypointPolicy?: OpenSemanticAppOptions['applicationEntrypointPolicy'] | null;
   readonly includeAuthoringTemplates?: boolean | null;
   readonly authoringTemplateSourceFiles?: readonly string[] | null;
   readonly authoringTemplateLimit?: number | null;

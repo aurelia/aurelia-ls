@@ -236,7 +236,10 @@ describe("openResourceNavigation", () => {
       request(role, child),
     )).resolves.toBe(true);
 
-    expect(current.lsp.getResourceInventory).toHaveBeenCalledWith({ workspaceKey: "file:///repo" });
+    expect(current.lsp.getResourceInventory).toHaveBeenCalledWith({
+      workspaceKey: "file:///repo",
+      projectKey: "app",
+    });
     expect(current.recorded.shownDocuments[0]?.opts).toEqual(expect.objectContaining({
       preview: true,
       selection: expect.objectContaining({

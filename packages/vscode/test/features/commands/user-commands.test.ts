@@ -448,8 +448,8 @@ describe("UserCommandsFeature", () => {
 
     expect(harness.getResourceInventory).toHaveBeenCalledTimes(2);
     expect(harness.getResourceInventory.mock.calls.map(([options]) => options)).toEqual([
-      {},
-      { workspaceKey: owner.key },
+      { projectSelection: "default-app" },
+      { workspaceKey: owner.key, projectKey: "shop-app" },
     ]);
     expect(harness.recorded.openedDocuments.at(-1)?.uri.toString()).toBe("file:///repo/src/product-card.ts");
     expect(harness.recorded.shownDocuments.at(-1)?.opts).toMatchObject({

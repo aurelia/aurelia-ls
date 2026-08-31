@@ -6,6 +6,7 @@ import {
   handleResourceInventory,
   handleTemplateResourceAvailability,
 } from "../../src/handlers/custom.js";
+import { AppProjectSelection } from "../../src/protocol.js";
 import { mapRuntimeAnswer } from "../../src/mapping/resource-discovery.js";
 import {
   createContextTestOperation,
@@ -19,13 +20,15 @@ const componentUri = pathToFileURL(componentPath).toString();
 const sourceText = "class ProductCard {}";
 
 describe("resource discovery protocol boundary", () => {
-  test("preserves template analysis breadth in runtime answer transport", () => {
+  test("preserves app entrypoint policy and template analysis breadth in runtime answer transport", () => {
     expect(mapRuntimeAnswer({
       ...answer({}),
       analysisDepth: "binding-observation",
+      applicationEntrypointPolicy: "aggregate-independent-graphs",
       templateAnalysisBreadth: "resource-local",
     } as never)).toMatchObject({
       analysisDepth: "binding-observation",
+      applicationEntrypointPolicy: "aggregate-independent-graphs",
       templateAnalysisBreadth: "resource-local",
     });
   });
@@ -72,6 +75,111 @@ describe("resource discovery protocol boundary", () => {
       project: { projectKey: "second" },
       message: "second project failed",
     });
+  });
+
+  test("opens only the summary-selected default app when requested", async () => {
+    const first = project("first", workspaceRoot);
+    const second = project("second", path.join(workspaceRoot, "nested"));
+    const resourceInventory = vi.fn(async (projectKey: string) =>
+      answer({ ...inventoryValue(resourceRow()), projectKey }));
+    const ctx = context({
+      workspaceSummary: vi.fn(async () => answer({
+        appCandidates: [first, second],
+        defaultAppProjectKey: second.projectKey,
+      })),
+      resourceInventory,
+    });
+
+    const result = await handleResourceInventory(
+      ctx as never,
+      { projectSelection: AppProjectSelection.DefaultApp },
+      createContextTestOperation(ctx),
+    );
+
+    expect(resourceInventory.mock.calls.map(([projectKey]) => projectKey)).toEqual(["second"]);
+    expect(result.projects.map((entry) => entry.project.projectKey)).toEqual(["second"]);
+  });
+
+  test("opens one exact app project without falling back or combining selection modes", async () => {
+    const first = project("first", workspaceRoot);
+    const second = project("second", path.join(workspaceRoot, "nested"));
+    const resourceInventory = vi.fn(async (projectKey: string) =>
+      answer({ ...inventoryValue(resourceRow()), projectKey }));
+    const ctx = context({
+      workspaceSummary: vi.fn(async () => answer({
+        appCandidates: [first, second],
+        defaultAppProjectKey: first.projectKey,
+      })),
+      resourceInventory,
+    });
+
+    const exact = await handleResourceInventory(
+      ctx as never,
+      { projectKey: second.projectKey },
+      createContextTestOperation(ctx),
+    );
+    expect(exact.projects.map((entry) => entry.project.projectKey)).toEqual(["second"]);
+
+    resourceInventory.mockClear();
+    const missing = await handleResourceInventory(
+      ctx as never,
+      { projectKey: "missing" },
+      createContextTestOperation(ctx),
+    );
+    expect(missing.projects).toEqual([]);
+    expect(resourceInventory).not.toHaveBeenCalled();
+
+    await expect(handleResourceInventory(
+      ctx as never,
+      { projectKey: second.projectKey, projectSelection: AppProjectSelection.DefaultApp },
+      createContextTestOperation(ctx),
+    )).rejects.toThrow(/mutually exclusive/u);
+  });
+
+  test("does not broaden default-app selection when the summary has no matching default identity", async () => {
+    const owner = project("first", workspaceRoot);
+    for (const defaultAppProjectKey of [null, "missing"]) {
+      const resourceInventory = vi.fn();
+      const ctx = context({
+        workspaceSummary: vi.fn(async () => answer({
+          appCandidates: [owner],
+          defaultAppProjectKey,
+        })),
+        resourceInventory,
+      });
+
+      const result = await handleResourceInventory(
+        ctx as never,
+        { projectSelection: AppProjectSelection.DefaultApp },
+        createContextTestOperation(ctx),
+      );
+
+      expect(resourceInventory).not.toHaveBeenCalled();
+      expect(result.projects).toEqual([]);
+    }
+  });
+
+  test("rejects a cross-project inventory answer instead of relabeling it", async () => {
+    const requested = project("requested", workspaceRoot);
+    const ctx = context({
+      workspaceSummary: vi.fn(async () => answer({
+        appCandidates: [requested],
+        defaultAppProjectKey: requested.projectKey,
+      })),
+      resourceInventory: vi.fn(async () => answer(inventoryValue(resourceRow()))),
+    });
+
+    const result = await handleResourceInventory(
+      ctx as never,
+      { projectKey: requested.projectKey },
+      createContextTestOperation(ctx),
+    );
+
+    expect(result.projects).toEqual([expect.objectContaining({
+      status: "error",
+      project: expect.objectContaining({ projectKey: "requested" }),
+      message: "Resource inventory returned project 'first' for requested project 'requested'.",
+    })]);
   });
 
   test("forwards explicit inventory type-surface policy to every selected project", async () => {

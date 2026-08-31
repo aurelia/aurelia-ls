@@ -13,6 +13,7 @@ import {
   mapAnalysisLimitationItem,
 } from "../../src/mapping/analysis-limitations.js";
 import { handleAnalysisLimitations } from "../../src/handlers/custom.js";
+import { AppProjectSelection } from "../../src/protocol.js";
 import { WorkspaceDocumentUris } from "../../src/utils/document-uri.js";
 import {
   createContextTestOperation,
@@ -57,7 +58,7 @@ describe("analysis limitation request boundary", () => {
       },
     };
 
-    const response = await handleAnalysisLimitations(ctx as never, createContextTestOperation(ctx));
+    const response = await handleAnalysisLimitations(ctx as never, undefined, createContextTestOperation(ctx));
 
     expect(analysisLimitations.mock.calls.map(([projectKey]) => projectKey)).toEqual(["first", "second"]);
     expect(response.fingerprint).toBe(testAnalysisGeneration.fingerprint);
@@ -90,6 +91,57 @@ describe("analysis limitation request boundary", () => {
     expect(deepKeys(response)).not.toContain("filePath");
   });
 
+  test("opens only the exact summary default and stays empty when that identity is absent", async () => {
+    const root = path.resolve("analysis-limitations-default-project");
+    const first = project("first", root);
+    const second = project("second", path.join(root, "nested"));
+    const analysisLimitations = vi.fn(async (projectKey: string) => runtimeAnswer({
+      projectKey,
+      policyFile: { filePath: path.join(root, "aurelia.project.json"), exists: false },
+      effectivePolicies: [],
+      candidateCount: 0,
+      suppressedCandidateCount: 0,
+      displayText: "No configured analysis limitations.",
+      rows: [],
+    }));
+    const semanticRuntime = {
+      workspaceSummary: vi.fn(async () => runtimeAnswer({
+        appCandidates: [first, second],
+        defaultAppProjectKey: second.projectKey,
+      })),
+      analysisLimitations,
+    };
+    const ctx = {
+      documentUris: testWorkspaceDocumentUris(root),
+      lookupText: vi.fn(() => null),
+      semanticRuntime,
+    };
+
+    const selected = await handleAnalysisLimitations(
+      ctx as never,
+      { projectSelection: AppProjectSelection.DefaultApp },
+      createContextTestOperation(ctx),
+    );
+
+    expect(analysisLimitations.mock.calls.map(([projectKey]) => projectKey)).toEqual(["second"]);
+    expect(selected.projects.map((entry) => entry.projectKey)).toEqual(["second"]);
+
+    for (const defaultAppProjectKey of [null, "missing"]) {
+      analysisLimitations.mockClear();
+      semanticRuntime.workspaceSummary.mockResolvedValueOnce(runtimeAnswer({
+        appCandidates: [first, second],
+        defaultAppProjectKey,
+      }));
+      const missing = await handleAnalysisLimitations(
+        ctx as never,
+        { projectSelection: AppProjectSelection.DefaultApp },
+        createContextTestOperation(ctx),
+      );
+      expect(analysisLimitations).not.toHaveBeenCalled();
+      expect(missing.projects).toEqual([]);
+    }
+  });
+
   test("rejects a cross-project semantic answer instead of silently relabeling it", async () => {
     const root = path.resolve("analysis-limitations-handler-mismatch");
     const owner = project("requested", root);
@@ -110,7 +162,7 @@ describe("analysis limitation request boundary", () => {
       },
     };
 
-    const response = await handleAnalysisLimitations(ctx as never, createContextTestOperation(ctx));
+    const response = await handleAnalysisLimitations(ctx as never, undefined, createContextTestOperation(ctx));
 
     expect(response.projects).toEqual([{
       status: "error",

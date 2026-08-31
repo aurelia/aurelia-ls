@@ -112,7 +112,25 @@ export function checkerBaseTypes(
   checker: ts.TypeChecker,
   type: ts.Type,
 ): readonly ts.BaseType[] {
-  return checker.getBaseTypes(type as ts.InterfaceType);
+  if (checker.isTupleType(type)) {
+    return checker.getBaseTypes((type as ts.TupleTypeReference).target) ?? [];
+  }
+  const carrier = checkerClassOrInterfaceCarrier(type);
+  if (carrier == null) {
+    return [];
+  }
+  return checker.getBaseTypes(carrier) ?? [];
+}
+
+function checkerClassOrInterfaceCarrier(type: ts.Type): ts.InterfaceType | null {
+  if ((type.flags & ts.TypeFlags.Object) === 0) {
+    return null;
+  }
+  const symbol = type.getSymbol();
+  return symbol != null
+    && (symbol.flags & (ts.SymbolFlags.Class | ts.SymbolFlags.Interface)) !== 0
+      ? type as ts.InterfaceType
+      : null;
 }
 
 export function checkerStringIndexValueType(

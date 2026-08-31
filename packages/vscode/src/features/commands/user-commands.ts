@@ -1,9 +1,10 @@
-import type {
-  ResourceInventoryItem,
-  ResourceProject,
-  RuntimeAnswerTransport,
-  TemplateResourceAvailabilityItem,
-  TemplateResourceScopeCandidate,
+import {
+  AppProjectSelection,
+  type ResourceInventoryItem,
+  type ResourceProject,
+  type RuntimeAnswerTransport,
+  type TemplateResourceAvailabilityItem,
+  type TemplateResourceScopeCandidate,
 } from "@aurelia-ls/language-server/protocol";
 import type { QuickPickItem, QuickPickItemKind, TextDocument, TextEditor } from "vscode";
 import { createHash } from "node:crypto";
@@ -198,7 +199,9 @@ export const UserCommandsFeature: ClientFeature = {
             outcome = await showResourceQuickPick(
               vscode,
               "Go to Aurelia Resource",
-              async (token) => inventoryQuickPickModel(await lsp.getResourceInventory({}, token)),
+              async (token) => inventoryQuickPickModel(await lsp.getResourceInventory({
+                projectSelection: AppProjectSelection.DefaultApp,
+              }, token)),
               false,
               undefined,
               (action) => handleResourceQuickPickTitleAction(ctx.logger, action),

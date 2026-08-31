@@ -2,6 +2,7 @@ import { z } from 'zod/v4';
 import {
   SEMANTIC_APP_RETENTION_POLICIES,
   SEMANTIC_APP_ANALYSIS_DEPTHS,
+  SEMANTIC_APPLICATION_ENTRYPOINT_POLICIES,
   SEMANTIC_DIAGNOSTIC_PROJECTION_POLICIES,
   INQUIRY_CONTINUATION_INTENTS,
   SEMANTIC_RUNTIME_DETAIL_VALUES,
@@ -37,6 +38,9 @@ const sourceFilePathSchema = z.string().nullable().optional()
 
 const analysisDepthSchema = z.enum(SEMANTIC_APP_ANALYSIS_DEPTHS).nullable().optional()
   .describe('Optional analysis depth; omit for catalog-driven auto-depth.');
+
+const applicationEntrypointPolicySchema = z.enum(SEMANTIC_APPLICATION_ENTRYPOINT_POLICIES).nullable().optional()
+  .describe('Entrypoint admission policy; aggregate independent graphs only when that cross-entrypoint analysis is intentional.');
 
 const includeAuthoringTemplatesSchema = z.boolean().nullable().optional()
   .describe('Include standalone resource-library templates; omit normally.');
@@ -130,6 +134,7 @@ const openAppShape = {
   projectKey: projectKeySchema,
   sourceFilePath: sourceFilePathSchema,
   analysisDepth: analysisDepthSchema,
+  applicationEntrypointPolicy: applicationEntrypointPolicySchema,
   includeAuthoringTemplates: includeAuthoringTemplatesSchema,
   authoringTemplateSourceFiles: authoringTemplateSourceFilesSchema,
   authoringTemplateLimit: authoringTemplateLimitSchema,
@@ -374,6 +379,7 @@ const templateCursorShape = {
   cursor: cursorSchema,
   projectKey: projectKeySchema,
   analysisDepth: analysisDepthSchema,
+  applicationEntrypointPolicy: applicationEntrypointPolicySchema,
   includeAuthoringTemplates: includeAuthoringTemplatesSchema,
   authoringTemplateSourceFiles: authoringTemplateSourceFilesSchema,
   authoringTemplateLimit: authoringTemplateLimitSchema,
@@ -397,6 +403,7 @@ export const templateDiagnosticsInputSchema = {
     .describe('Optional template diagnostics file scope.'),
   projectKey: projectKeySchema,
   analysisDepth: analysisDepthSchema,
+  applicationEntrypointPolicy: applicationEntrypointPolicySchema,
   includeAuthoringTemplates: includeAuthoringTemplatesSchema,
   authoringTemplateSourceFiles: authoringTemplateSourceFilesSchema,
   authoringTemplateLimit: authoringTemplateLimitSchema,

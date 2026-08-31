@@ -22,7 +22,17 @@ import {
   type GenerationCurrentnessWitness,
 } from '../kernel/generation-authority.js';
 import type { ProjectBootFrame } from '../boot/frames.js';
-import type { StaticProjectEvaluationComputationService } from '../evaluation/project-evaluation.js';
+import type {
+  StaticProjectEvaluationAccess,
+  StaticProjectEvaluationComputationService,
+  StaticProjectEvaluationGeneration,
+  StaticProjectEvaluationResult,
+} from '../evaluation/project-evaluation.js';
+import { StaticProjectEvaluationAcquisitionKind } from '../evaluation/project-evaluation.js';
+import {
+  SemanticApplicationEntrypointPolicy,
+  normalizeSemanticApplicationEntrypointPolicy,
+} from './app-analysis.js';
 import type { SemanticRuntimeSupport } from '../framework/framework-support-authority.js';
 import type { TypeSystemProjectComputationService } from '../type-system/project-computation.js';
 import { resourceConventionToolingEvaluationProfile } from '../resources/resource-convention-transform-admission.js';
@@ -32,6 +42,12 @@ import {
   type AureliaAppWorldProjectOptions,
 } from './app-world-project-pass.js';
 import { aureliaAppProjectEvaluationProfile } from './aurelia-project-evaluation.js';
+import {
+  readSemanticApplicationEntrypointPreflight,
+  readSemanticApplicationEntrypointSourcePreflight,
+  requireSupportedSemanticApplicationEntrypoints,
+  type SemanticApplicationEntrypointPreflightResult,
+} from './application-entrypoint-preflight.js';
 
 /** Stable replacement locus for one complete project semantic generation. */
 export class AureliaAppAnalysisLocus implements ComputationLocus {
@@ -224,6 +240,10 @@ export class AureliaAppWorldProjectComputationResult {
 /** Prepares and atomically publishes one complete Aurelia app-analysis generation. */
 export class AureliaAppWorldProjectComputationService implements KernelStoreSidecarIndex {
   private readonly authoritiesByProjectKey = new Map<string, AureliaAppWorldProjectAuthority>();
+  private readonly entrypointPreflights = new WeakMap<
+    StaticProjectEvaluationGeneration<null>,
+    SemanticApplicationEntrypointPreflightResult
+  >();
   readonly key = 'aurelia-app-analysis-authorities';
   readonly summary = 'Current committed complete Aurelia app-analysis generations.';
 
@@ -268,15 +288,70 @@ export class AureliaAppWorldProjectComputationService implements KernelStoreSide
     return this.lifecycle.retireCommittedGeneration(generation.computationId, generation.runSequence);
   }
 
+  /** Run the nominal entrypoint boundary without acquiring TypeScript or opening an app-analysis transaction. */
+  requireSupportedApplicationEntrypoints(
+    project: ProjectBootFrame,
+    policy:
+      | SemanticApplicationEntrypointPolicy
+      | `${SemanticApplicationEntrypointPolicy}`
+      | null
+      | undefined,
+    validationScope: ComputationReadValidationScope = new ComputationReadValidationScope(),
+  ): void {
+    project.requireCurrent();
+    const normalizedPolicy = normalizeSemanticApplicationEntrypointPolicy(policy);
+    if (normalizedPolicy === SemanticApplicationEntrypointPolicy.AggregateIndependentGraphs) {
+      return;
+    }
+    // Probe an incumbent before source-only reads can affect its input rebase. Never construct a replacement merely to
+    // decide whether incumbent answer state is disposable.
+    const currentProbe = this.projectEvaluations.hasCommittedGeneration(
+      project.projectKey,
+      aureliaAppProjectEvaluationProfile,
+    )
+      ? this.projectEvaluations.probeCurrent(
+          project,
+          aureliaAppProjectEvaluationProfile,
+          validationScope,
+        )
+      : null;
+    const current = currentProbe?.access ?? null;
+    if (current != null) {
+      requireSupportedSemanticApplicationEntrypoints(
+        project.projectKey,
+        this.readEntrypointPreflight(current.generation, () => current.readBaseline()),
+        normalizedPolicy,
+      );
+      return;
+    }
+    try {
+      requireSupportedSemanticApplicationEntrypoints(
+        project.projectKey,
+        this.readSourceEntrypointPreflight(project),
+        normalizedPolicy,
+      );
+    } catch (error) {
+      if (currentProbe?.replacementProof != null) {
+        this.projectEvaluations.retireProbedIncumbent(
+          project,
+          aureliaAppProjectEvaluationProfile,
+          currentProbe.replacementProof,
+        );
+      }
+      this.projectEvaluations.retireStaleProject(project);
+      throw error;
+    }
+  }
+
   prepare(
     project: ProjectBootFrame,
     options: AureliaAppWorldProjectOptions = {},
   ): AureliaAppWorldProjectComputationAttempt {
     project.requireCurrent();
     const validationScope = new ComputationReadValidationScope();
-    const appEvaluationAccess = this.projectEvaluations.acquire(
+    const appEvaluationAccess = this.acquireSupportedAppEvaluation(
       project,
-      aureliaAppProjectEvaluationProfile,
+      options.applicationEntrypointPolicy,
       validationScope,
     );
     const conventionToolingEvaluationAccess = this.projectEvaluations.acquire(
@@ -330,5 +405,141 @@ export class AureliaAppWorldProjectComputationService implements KernelStoreSide
       run.abort();
       throw error;
     }
+  }
+
+  private readEntrypointPreflight(
+    generation: StaticProjectEvaluationGeneration<null>,
+    readEvaluation: () => StaticProjectEvaluationResult,
+  ): SemanticApplicationEntrypointPreflightResult {
+    const retained = this.entrypointPreflights.get(generation);
+    if (retained != null) {
+      return retained;
+    }
+    const computed = readSemanticApplicationEntrypointPreflight(readEvaluation());
+    this.entrypointPreflights.set(generation, computed);
+    return computed;
+  }
+
+  private acquireSupportedAppEvaluation(
+    project: ProjectBootFrame,
+    policy:
+      | SemanticApplicationEntrypointPolicy
+      | `${SemanticApplicationEntrypointPolicy}`
+      | null
+      | undefined,
+    validationScope: ComputationReadValidationScope,
+  ): StaticProjectEvaluationAccess<null> {
+    const normalizedPolicy = normalizeSemanticApplicationEntrypointPolicy(policy);
+    let sourcePreflightRead = false;
+    const hasIncumbent = this.projectEvaluations.hasCommittedGeneration(
+      project.projectKey,
+      aureliaAppProjectEvaluationProfile,
+    );
+    if (
+      !hasIncumbent
+      && normalizedPolicy !== SemanticApplicationEntrypointPolicy.AggregateIndependentGraphs
+    ) {
+      requireSupportedSemanticApplicationEntrypoints(
+        project.projectKey,
+        this.readSourceEntrypointPreflight(project),
+        normalizedPolicy,
+      );
+      sourcePreflightRead = true;
+    }
+    // Prove cached evaluator currentness before the source-only guard samples the new input generation. This keeps a
+    // preflight read from changing which stale evaluator inputs must be compared during a replacement decision.
+    // Keep a failed incumbent probe out of the fresh scope that will own a replacement plus its ambient, convention,
+    // and TypeSystem acquisitions. Validation scopes memoize negative generation facts by computation locus.
+    let currentProbe = hasIncumbent
+      ? this.projectEvaluations.probeCurrent(
+          project,
+          aureliaAppProjectEvaluationProfile,
+          new ComputationReadValidationScope(),
+        )
+      : null;
+    const current = currentProbe?.access ?? null;
+    if (current != null) {
+      if (normalizedPolicy !== SemanticApplicationEntrypointPolicy.AggregateIndependentGraphs) {
+        requireSupportedSemanticApplicationEntrypoints(
+          project.projectKey,
+          this.readEntrypointPreflight(current.generation, () => current.readBaseline()),
+          normalizedPolicy,
+        );
+      }
+      return current;
+    }
+    if (
+      !sourcePreflightRead
+      && normalizedPolicy !== SemanticApplicationEntrypointPolicy.AggregateIndependentGraphs
+    ) {
+      try {
+        requireSupportedSemanticApplicationEntrypoints(
+          project.projectKey,
+          this.readSourceEntrypointPreflight(project),
+          normalizedPolicy,
+        );
+      } catch (error) {
+        if (currentProbe?.replacementProof != null) {
+          this.projectEvaluations.retireProbedIncumbent(
+            project,
+            aureliaAppProjectEvaluationProfile,
+            currentProbe.replacementProof,
+          );
+        }
+        this.projectEvaluations.retireStaleProject(project);
+        throw error;
+      }
+    }
+    currentProbe ??= this.projectEvaluations.probeCurrent(
+      project,
+      aureliaAppProjectEvaluationProfile,
+      new ComputationReadValidationScope(),
+    );
+    const lateCurrent = currentProbe.access;
+    if (lateCurrent != null) {
+      if (normalizedPolicy !== SemanticApplicationEntrypointPolicy.AggregateIndependentGraphs) {
+        requireSupportedSemanticApplicationEntrypoints(
+          project.projectKey,
+          this.readEntrypointPreflight(lateCurrent.generation, () => lateCurrent.readBaseline()),
+          normalizedPolicy,
+        );
+      }
+      return lateCurrent;
+    }
+    if (currentProbe.replacementProof == null) {
+      throw new Error('Static project-evaluation currentness probe returned no access or replacement proof.');
+    }
+    const access = this.projectEvaluations.acquireReplacement(
+      project,
+      aureliaAppProjectEvaluationProfile,
+      validationScope,
+      currentProbe.replacementProof,
+    );
+    if (normalizedPolicy !== SemanticApplicationEntrypointPolicy.AggregateIndependentGraphs) {
+      try {
+        requireSupportedSemanticApplicationEntrypoints(
+          project.projectKey,
+          this.readEntrypointPreflight(access.generation, () => access.readBaseline()),
+          normalizedPolicy,
+        );
+      } catch (error) {
+        if (access.kind === StaticProjectEvaluationAcquisitionKind.Computed) {
+          this.projectEvaluations.retire(access.generation);
+        }
+        throw error;
+      }
+    }
+    return access;
+  }
+
+  private readSourceEntrypointPreflight(
+    project: ProjectBootFrame,
+  ): SemanticApplicationEntrypointPreflightResult {
+    // The source graph carries host reads whose currentness authorizes an early refusal. Rebuild this bounded preflight
+    // instead of reusing detached cluster counts after an external pull-validated edit.
+    return readSemanticApplicationEntrypointSourcePreflight(
+      project,
+      aureliaAppProjectEvaluationProfile.prepare().options.moduleResolutionPolicy!,
+    );
   }
 }

@@ -12,6 +12,7 @@ import {
   NodeSemanticRuntimeProjectInputHost,
   SEMANTIC_RUNTIME_API_VERSION,
   SemanticAppQueryKind,
+  SemanticApplicationEntrypointPolicy,
   SemanticRuntime,
   SemanticRuntimeAnswerCoverage,
   SemanticRuntimeAnswerResult,
@@ -977,10 +978,11 @@ describe("SemanticRuntimeLspSession", () => {
     const templateDocument = TextDocument.create(templateUri, "html", 1, templateText);
     const session = createSession(topology.workspaceRoot, new TestDocumentStore());
     const querySpy = vi.spyOn(SemanticRuntime.prototype, "answerAppQuery");
+    const entrypointPolicy = SemanticApplicationEntrypointPolicy.AggregateIndependentGraphs;
 
     const preflight = await session.runRequest(null, async (operation) => {
       const summary = await operation.workspaceSummary();
-      const inventory = await operation.resourceInventory("host-alpha", true);
+      const inventory = await operation.resourceInventory("host-alpha", true, entrypointPolicy);
       const owners = await operation.projectsOwningDocument(
         templateDocument,
         summary.value.appCandidates,
@@ -992,6 +994,7 @@ describe("SemanticRuntimeLspSession", () => {
           templateUri,
           position,
           null,
+          entrypointPolicy,
         );
         const selected = await Promise.all(ambiguous.value.candidates.map((candidate) =>
           operation.templateResourceAvailability(
@@ -999,6 +1002,7 @@ describe("SemanticRuntimeLspSession", () => {
             templateUri,
             position,
             candidate.scopeIdentityKey,
+            entrypointPolicy,
           )));
         return { owner, ambiguous, selected };
       }));
@@ -1062,6 +1066,7 @@ describe("SemanticRuntimeLspSession", () => {
     expect(inventoryPageQueries).toHaveLength(2);
     expect(inventoryPageQueries.every((query) =>
       query.templateAnalysisBreadth === "resource-local"
+      && query.applicationEntrypointPolicy === entrypointPolicy
     )).toBe(true);
     expect(inventoryPageQueries.map((query) => query.page?.size)).toEqual([500, 500]);
     expect(inventoryPageQueries[0]?.page?.cursor).toBeUndefined();

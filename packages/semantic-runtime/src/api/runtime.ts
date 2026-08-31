@@ -56,11 +56,14 @@ import {
 } from '../configuration/aurelia-project-evaluation.js';
 import {
   SemanticAppAnalysisDepth,
+  SemanticApplicationEntrypointPolicy,
   SemanticTemplateAnalysisBreadth,
   normalizeSemanticAppAnalysisDepth,
+  normalizeSemanticApplicationEntrypointPolicy,
   normalizeSemanticTemplateAnalysisBreadth,
   semanticAppAnalysisDepthSatisfies,
 } from '../configuration/app-analysis.js';
+import { isSemanticApplicationEntrypointSelectionRequiredError } from '../configuration/application-entrypoint-preflight.js';
 import {
   StaticProjectEvaluationComputationService,
   type StaticProjectEvaluationAccess,
@@ -519,6 +522,7 @@ interface SemanticAppOpenPlan {
   /** Exact shape/selection reads consumed before the reusable query-claim boundary opens. */
   readonly planningReads: readonly SemanticRuntimeProjectInputRead[];
   readonly analysisDepth: SemanticAppAnalysisDepth;
+  readonly applicationEntrypointPolicy: SemanticApplicationEntrypointPolicy;
   readonly templateAnalysisBreadth: SemanticTemplateAnalysisBreadth;
   readonly includeAuthoringTemplates: boolean;
   readonly authoringTemplateSourceFiles: readonly string[];
@@ -1076,6 +1080,7 @@ export class SemanticRuntime {
     cachedApps.sort((left, right) =>
         left.projectKey.localeCompare(right.projectKey)
         || String(left.analysisDepth).localeCompare(String(right.analysisDepth))
+        || String(left.applicationEntrypointPolicy).localeCompare(String(right.applicationEntrypointPolicy))
         || Number(left.includeAuthoringTemplates) - Number(right.includeAuthoringTemplates)
         || left.authoringTemplateSourceFileCount - right.authoringTemplateSourceFileCount
       );
@@ -1476,6 +1481,7 @@ export class SemanticRuntime {
       projectKey: request.projectKey,
       sourceFilePath: appQuerySourceFilePath(request),
       analysisDepth: request.analysisDepth ?? routedAppQueryAnalysisDepth(request, catalogRow.minimumAnalysisDepth),
+      applicationEntrypointPolicy: request.applicationEntrypointPolicy,
       templateAnalysisBreadth: routedAppQueryTemplateAnalysisBreadth(
         request,
         catalogRow.minimumTemplateAnalysisBreadth,
@@ -1585,6 +1591,7 @@ export class SemanticRuntime {
       projectKey: request.projectKey,
       sourceFilePath: appQueryBatchSourceFilePath(request),
       analysisDepth: routedAppQueryBatchAnalysisDepth(request),
+      applicationEntrypointPolicy: request.applicationEntrypointPolicy,
       templateAnalysisBreadth: routedAppQueryBatchTemplateAnalysisBreadth(request),
       includeAuthoringTemplates: request.includeAuthoringTemplates ?? appQueryBatchNeedsAuthoringTemplates(queries),
       authoringTemplateSourceFiles: request.authoringTemplateSourceFiles ?? appQueryBatchAuthoringTemplateSourceFiles(queries),
@@ -1656,10 +1663,12 @@ export class SemanticRuntime {
         const value: SemanticRuntimeAppQueryBatchResult = {
           projectKey: null,
           analysisDepth: null,
+          applicationEntrypointPolicy: null,
           templateAnalysisBreadth: null,
           displayText: appQueryBatchDisplayText({
             projectKey: null,
             analysisDepth: null,
+            applicationEntrypointPolicy: null,
             templateAnalysisBreadth: null,
             rows,
             appWorldOpened: false,
@@ -1784,10 +1793,12 @@ export class SemanticRuntime {
         const value: SemanticRuntimeAppQueryBatchResult = {
           projectKey: plan.project.projectKey,
           analysisDepth: plan.analysisDepth,
+          applicationEntrypointPolicy: null,
           templateAnalysisBreadth: null,
           displayText: appQueryBatchDisplayText({
             projectKey: plan.project.projectKey,
             analysisDepth: plan.analysisDepth,
+            applicationEntrypointPolicy: null,
             templateAnalysisBreadth: null,
             rows,
             appWorldOpened: false,
@@ -1940,10 +1951,12 @@ export class SemanticRuntime {
         const value: SemanticRuntimeAppQueryBatchResult = {
           projectKey: plan.project.projectKey,
           analysisDepth: plan.analysisDepth,
+          applicationEntrypointPolicy: plan.applicationEntrypointPolicy,
           templateAnalysisBreadth: plan.templateAnalysisBreadth,
           displayText: appQueryBatchDisplayText({
             projectKey: plan.project.projectKey,
             analysisDepth: plan.analysisDepth,
+            applicationEntrypointPolicy: plan.applicationEntrypointPolicy,
             templateAnalysisBreadth: plan.templateAnalysisBreadth,
             rows,
             appWorldOpened: true,
@@ -1969,6 +1982,7 @@ export class SemanticRuntime {
             COMPLETE_COLLECTION_ANSWER_OPTIONS,
           ),
           plan.analysisDepth,
+          plan.applicationEntrypointPolicy,
           plan.templateAnalysisBreadth,
         );
       },
@@ -2361,6 +2375,9 @@ export class SemanticRuntime {
     this.activePlanningReadCollectors.push(planningReads);
     try {
       const analysisDepth = normalizeSemanticAppAnalysisDepth(options.analysisDepth);
+      const applicationEntrypointPolicy = normalizeSemanticApplicationEntrypointPolicy(
+        options.applicationEntrypointPolicy,
+      );
       const templateAnalysisBreadth = normalizeSemanticTemplateAnalysisBreadth(options.templateAnalysisBreadth);
       const includeAuthoringTemplates = options.includeAuthoringTemplates === true;
       const sourceFilePath = normalizeSourceFilePathOption(options.sourceFilePath);
@@ -2411,6 +2428,7 @@ export class SemanticRuntime {
           [...planningReads.values()].sort((left, right) => left.readKey.localeCompare(right.readKey)),
         ),
         analysisDepth,
+        applicationEntrypointPolicy,
         templateAnalysisBreadth,
         includeAuthoringTemplates,
         authoringTemplateSourceFiles,
@@ -2436,6 +2454,7 @@ export class SemanticRuntime {
     return this.openProjectApp(
       plan.project,
       plan.analysisDepth,
+      plan.applicationEntrypointPolicy,
       plan.templateAnalysisBreadth,
       plan.includeAuthoringTemplates,
       plan.authoringTemplateSourceFiles,
@@ -2453,6 +2472,7 @@ export class SemanticRuntime {
       kind: SemanticAppQueryKind.TemplateCompletions,
       projectKey: query.projectKey,
       analysisDepth: query.analysisDepth ?? SemanticAppAnalysisDepth.BindingObservation,
+      applicationEntrypointPolicy: query.applicationEntrypointPolicy,
       templateAnalysisBreadth: query.templateAnalysisBreadth,
       includeAuthoringTemplates: query.includeAuthoringTemplates ?? true,
       authoringTemplateSourceFiles: query.authoringTemplateSourceFiles,
@@ -2472,6 +2492,7 @@ export class SemanticRuntime {
       kind: SemanticAppQueryKind.TemplateCursorInfo,
       projectKey: query.projectKey,
       analysisDepth: query.analysisDepth ?? SemanticAppAnalysisDepth.BindingObservation,
+      applicationEntrypointPolicy: query.applicationEntrypointPolicy,
       templateAnalysisBreadth: query.templateAnalysisBreadth,
       includeAuthoringTemplates: query.includeAuthoringTemplates ?? true,
       authoringTemplateSourceFiles: query.authoringTemplateSourceFiles,
@@ -2491,6 +2512,7 @@ export class SemanticRuntime {
       kind: SemanticAppQueryKind.TemplateDiagnostics,
       projectKey: query.projectKey,
       analysisDepth: query.analysisDepth ?? SemanticAppAnalysisDepth.BindingObservation,
+      applicationEntrypointPolicy: query.applicationEntrypointPolicy,
       templateAnalysisBreadth: query.templateAnalysisBreadth,
       includeAuthoringTemplates: query.includeAuthoringTemplates ?? query.sourceFile != null,
       authoringTemplateSourceFiles: query.authoringTemplateSourceFiles,
@@ -2507,6 +2529,7 @@ export class SemanticRuntime {
   private openProjectApp(
     project: ProjectBootFrame,
     analysisDepth: SemanticAppAnalysisDepth,
+    applicationEntrypointPolicy: SemanticApplicationEntrypointPolicy,
     templateAnalysisBreadth: SemanticTemplateAnalysisBreadth,
     includeAuthoringTemplates: boolean,
     authoringTemplateSourceFiles: readonly string[],
@@ -2529,6 +2552,7 @@ export class SemanticRuntime {
           project.projectKey,
           project.inputGeneration.revision,
           analysisDepth,
+          applicationEntrypointPolicy,
           templateAnalysisBreadth,
           includeAuthoringTemplates,
           authoringTemplateSourceFiles,
@@ -2538,21 +2562,41 @@ export class SemanticRuntime {
     if (existing != null) {
       return existing;
     }
-    if (this.hasCachedAppForProject(project.projectKey)) {
-      this.disposeCachedProjectAppAnswerState(
-        project.projectKey,
-        QueryClaimDisposalReason.AppEpochDisposed,
-        transactionToken,
-      );
-    }
-    const result = this.appAnalysisComputations.prepare(project, {
-        analysisDepth,
-        templateAnalysisBreadth,
-        includeAuthoringTemplates,
-        authoringTemplateSourceFiles,
-        authoringTemplateLimit,
-        telemetry,
-      }).commit();
+    // Policy is part of cache compatibility, so a stale variant may not have reached `isCurrent` during lookup.
+    // Retire stale state for this project before a new policy request can itself be refused by entrypoint preflight.
+    const disposedStaleApps = this.disposeStaleProjectAppEpochsBeforeReplacement(
+      project.projectKey,
+      QueryClaimDisposalReason.AppEpochDisposed,
+    );
+    const result = (() => {
+      try {
+        if (this.hasCachedAppForProject(project.projectKey)) {
+          // A policy-mismatched request may be refused before construction. Prove that boundary before reclaiming any
+          // valid incumbent answer state so an accidental default request cannot disturb an explicit aggregate cache.
+          this.appAnalysisComputations.requireSupportedApplicationEntrypoints(
+            project,
+            applicationEntrypointPolicy,
+          );
+          this.disposeCachedProjectAppAnswerState(
+            project.projectKey,
+            QueryClaimDisposalReason.AppEpochDisposed,
+            transactionToken,
+          );
+        }
+        return this.appAnalysisComputations.prepare(project, {
+          analysisDepth,
+          applicationEntrypointPolicy,
+          templateAnalysisBreadth,
+          includeAuthoringTemplates,
+          authoringTemplateSourceFiles,
+          authoringTemplateLimit,
+          telemetry,
+        }).commit();
+      } catch (error) {
+        this.retireStaleProjectUpstreamsAfterRefusal(project.projectKey, disposedStaleApps, error);
+        throw error;
+      }
+    })();
     if (result.commit.state !== ComputationCommitState.Committed || result.committedGeneration == null) {
       throw computationCommitCurrentnessError(
         result.commit,
@@ -2574,6 +2618,7 @@ export class SemanticRuntime {
       committedEmission,
       {
         analysisDepth,
+        applicationEntrypointPolicy,
         templateAnalysisBreadth,
         includeAuthoringTemplates,
         authoringTemplateSourceFileCount: authoringTemplateSourceFiles.length,
@@ -2586,6 +2631,7 @@ export class SemanticRuntime {
         project.projectKey,
         project.inputGeneration.revision,
         analysisDepth,
+        applicationEntrypointPolicy,
         templateAnalysisBreadth,
         includeAuthoringTemplates,
         authoringTemplateSourceFiles,
@@ -2606,6 +2652,7 @@ export class SemanticRuntime {
         plan.project.projectKey,
         plan.project.inputGeneration.revision,
         plan.analysisDepth,
+        plan.applicationEntrypointPolicy,
         plan.templateAnalysisBreadth,
         plan.includeAuthoringTemplates,
         plan.authoringTemplateSourceFiles,
@@ -2619,6 +2666,7 @@ export class SemanticRuntime {
     projectKey: string,
     projectInputRevision: string,
     requestedDepth: SemanticAppAnalysisDepth,
+    applicationEntrypointPolicy: SemanticApplicationEntrypointPolicy,
     requestedTemplateBreadth: SemanticTemplateAnalysisBreadth,
     includeAuthoringTemplates: boolean,
     authoringTemplateSourceFiles: readonly string[],
@@ -2629,6 +2677,7 @@ export class SemanticRuntime {
       projectKey,
       projectInputRevision,
       requestedDepth,
+      applicationEntrypointPolicy,
       requestedTemplateBreadth,
       includeAuthoringTemplates,
       authoringTemplateSourceFiles,
@@ -2645,6 +2694,7 @@ export class SemanticRuntime {
           projectKey,
           projectInputRevision,
           requestedDepth,
+          applicationEntrypointPolicy,
           requestedTemplateBreadth,
           includeAuthoringTemplates,
           authoringTemplateSourceFiles,
@@ -2678,6 +2728,50 @@ export class SemanticRuntime {
       app.disposeAnswerState(reason);
     }
     return queryClaimRecords;
+  }
+
+  private retireStaleProjectUpstreamsAfterRefusal(
+    projectKey: string,
+    disposedStaleApps: number,
+    error: unknown,
+  ): void {
+    if (
+      disposedStaleApps === 0
+      || !isSemanticApplicationEntrypointSelectionRequiredError(error)
+    ) {
+      return;
+    }
+    this.typeSystemProjects.retire(projectKey);
+    this.projectEvaluations.retireProject(projectKey);
+    this.typeSystemProjects.compactProgramSources();
+  }
+
+  /** Retire stale variants before a request that may refuse without publishing their replacement. */
+  private disposeStaleProjectAppEpochsBeforeReplacement(
+    projectKey: string,
+    reason: QueryClaimDisposalReason,
+  ): number {
+    const staleApps = new Set<SemanticApp>();
+    for (const [cacheKey, app] of this.appsByCacheKey) {
+      if (app.project.projectKey !== projectKey || app.isCurrent()) {
+        continue;
+      }
+      this.appsByCacheKey.delete(cacheKey);
+      staleApps.add(app);
+    }
+    if (staleApps.size === 0) {
+      return 0;
+    }
+    const earliestMarker = earliestKernelMarker([...staleApps].map((app) => app.kernelMarker));
+    for (const app of staleApps) {
+      app.disposeAnswerState(reason);
+    }
+    this.workspace.store.disposeUnownedSince(earliestMarker);
+    for (const app of staleApps) {
+      app.retireGeneration();
+      app.disposeAnswerState(reason);
+    }
+    return staleApps.size;
   }
 
   /** Reclaim one project's answer-local publications while preserving every incumbent semantic generation. */
@@ -3251,6 +3345,7 @@ function countRowsKeyDisplay(rows: readonly { readonly key: string; readonly cou
 interface AppQueryBatchDisplayInput {
   readonly projectKey: string | null;
   readonly analysisDepth: SemanticRuntimeAppQueryBatchResult['analysisDepth'];
+  readonly applicationEntrypointPolicy: SemanticRuntimeAppQueryBatchResult['applicationEntrypointPolicy'];
   readonly templateAnalysisBreadth: SemanticRuntimeAppQueryBatchResult['templateAnalysisBreadth'];
   readonly rows: SemanticRuntimeAppQueryBatchResult['rows'];
   readonly appWorldOpened: boolean;
@@ -3264,7 +3359,9 @@ function appQueryBatchDisplayText(input: AppQueryBatchDisplayInput): string {
   const lines = [
     input.projectKey == null
       ? `Batch: ${input.rows.length} runtime-static query claim(s); no app epoch opened.`
-      : `Batch: ${input.rows.length} query claim(s) for ${input.projectKey}; analysisDepth=${input.analysisDepth}; templateAnalysis=${input.templateAnalysisBreadth ?? 'none'}; appWorld=${input.appWorldOpened ? 'opened' : 'not opened'}.`,
+      : `Batch: ${input.rows.length} query claim(s) for ${input.projectKey}; analysisDepth=${input.analysisDepth}; `
+        + `applicationEntrypoints=${input.applicationEntrypointPolicy ?? 'none'}; `
+        + `templateAnalysis=${input.templateAnalysisBreadth ?? 'none'}; appWorld=${input.appWorldOpened ? 'opened' : 'not opened'}.`,
   ];
   if (input.includeAuthoringTemplates) {
     lines.push(`Authoring templates: included ${input.authoringTemplateSourceFileCount} selected source file(s).`);
@@ -3932,6 +4029,7 @@ export class SemanticApp {
     projectKey: string,
     projectInputRevision: string,
     requestedDepth: SemanticAppAnalysisDepth,
+    applicationEntrypointPolicy: SemanticApplicationEntrypointPolicy,
     requestedTemplateBreadth: SemanticTemplateAnalysisBreadth,
     includeAuthoringTemplates: boolean,
     authoringTemplateSourceFiles: readonly string[],
@@ -3942,6 +4040,7 @@ export class SemanticApp {
       this.project.projectKey !== projectKey
       || this.project.inputGeneration.revision !== projectInputRevision
       || !semanticAppAnalysisDepthSatisfies(this.cacheRequest.analysisDepth, requestedDepth)
+      || this.cacheRequest.applicationEntrypointPolicy !== applicationEntrypointPolicy
       || this.cacheRequest.templateAnalysisBreadth !== requestedTemplateBreadth
       || !this.isCurrent(validationScope)
     ) {
@@ -4017,6 +4116,7 @@ export class SemanticApp {
     return {
       projectKey: this.project.projectKey,
       analysisDepth: this.cacheRequest.analysisDepth,
+      applicationEntrypointPolicy: this.cacheRequest.applicationEntrypointPolicy,
       templateAnalysisBreadth: this.cacheRequest.templateAnalysisBreadth,
       includeAuthoringTemplates: this.cacheRequest.includeAuthoringTemplates,
       authoringTemplateSourceFileCount: this.cacheRequest.authoringTemplateSourceFileCount,
@@ -4517,6 +4617,7 @@ export class SemanticApp {
       const projected = withAnswerAppAnalysisShape(
         withSemanticRuntimeAnalysisReceipt(claimed, observedReceipt),
         this.cacheRequest.analysisDepth,
+        this.cacheRequest.applicationEntrypointPolicy,
         this.cacheRequest.templateAnalysisBreadth,
       );
       if (ownsTransaction) {
@@ -6463,6 +6564,7 @@ export class SemanticApp {
 
 interface SemanticAppCacheRequest {
   readonly analysisDepth: SemanticAppAnalysisDepth;
+  readonly applicationEntrypointPolicy: SemanticApplicationEntrypointPolicy;
   readonly templateAnalysisBreadth: SemanticTemplateAnalysisBreadth;
   readonly includeAuthoringTemplates: boolean;
   readonly authoringTemplateSourceFileCount: number;
@@ -7257,11 +7359,13 @@ function countMapToRecord(source: Map<string, number>): Readonly<Record<string, 
 function withAnswerAppAnalysisShape<TValue>(
   result: SemanticRuntimeAnswer<TValue>,
   analysisDepth: SemanticAppAnalysisDepth,
+  applicationEntrypointPolicy: SemanticApplicationEntrypointPolicy,
   templateAnalysisBreadth: SemanticTemplateAnalysisBreadth,
 ): SemanticRuntimeAnswer<TValue> {
   return {
     ...result,
     analysisDepth,
+    applicationEntrypointPolicy,
     templateAnalysisBreadth,
   };
 }
@@ -7295,6 +7399,7 @@ function appCacheKey(
   projectKey: string,
   projectInputRevision: string,
   analysisDepth: SemanticAppAnalysisDepth,
+  applicationEntrypointPolicy: SemanticApplicationEntrypointPolicy,
   templateAnalysisBreadth: SemanticTemplateAnalysisBreadth,
   includeAuthoringTemplates: boolean,
   authoringTemplateSourceFiles: readonly string[],
@@ -7304,6 +7409,7 @@ function appCacheKey(
     projectKey,
     projectInputRevision,
     analysisDepth,
+    applicationEntrypointPolicy,
     templateAnalysisBreadth,
     includeAuthoringTemplates,
     authoringTemplateSourceFiles,

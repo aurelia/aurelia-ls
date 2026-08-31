@@ -92,6 +92,252 @@ test("activates the language client and product contributions once", async () =>
   expect(disposed).toBe(1);
 });
 
+test("holds feature activation behind delayed initial document ownership", async () => {
+  const ownership = deferred<ReturnType<typeof sourceOwnershipResponse>>();
+  const { vscode: stubVscode, recorded } = createVscodeApi();
+  const document = {
+    uri: stubVscode.Uri.parse("file:///workspace/src/app.html"),
+    languageId: "html",
+  };
+  stubVscode.window.activeTextEditor = { document };
+  const lsp = stubProtocolClient({ sourceOwnership: () => ownership.promise });
+  const languageClient = new StubLanguageClient(lsp);
+  const featureActivated = vi.fn(() => {
+    expect(recorded.contextValues.get("aurelia.active")).toBe(true);
+    expect(recorded.contextValues.get("aurelia.documentOwned")).toBe(true);
+    expect(recorded.contextValues.get("aurelia.activeTemplateOwned")).toBe(true);
+  });
+  const app = createApp(stubVscode, languageClient, [{
+    id: "test.readiness",
+    activate: featureActivated,
+  }]);
+
+  const activation = app.activate();
+  await vi.waitFor(() => expect(lsp.sendRequestMock).toHaveBeenCalledOnce());
+  expect(featureActivated).not.toHaveBeenCalled();
+
+  ownership.resolve(sourceOwnershipResponse(document.uri.toString(), true, "initial-context"));
+  await activation;
+  expect(featureActivated).toHaveBeenCalledOnce();
+  await app.deactivate();
+});
+
+test("holds feature activation behind the newest superseding initial context", async () => {
+  const firstOwnership = deferred<ReturnType<typeof sourceOwnershipResponse>>();
+  const secondOwnership = deferred<ReturnType<typeof sourceOwnershipResponse>>();
+  const { vscode: stubVscode, recorded } = createVscodeApi();
+  const firstDocument = {
+    uri: stubVscode.Uri.parse("file:///workspace/src/first.html"),
+    languageId: "html",
+  };
+  const secondDocument = {
+    uri: stubVscode.Uri.parse("file:///workspace/src/second.html"),
+    languageId: "html",
+  };
+  stubVscode.window.activeTextEditor = { document: firstDocument };
+  const lsp = stubProtocolClient({
+    sourceOwnership: (uri) => uri.endsWith("/first.html")
+      ? firstOwnership.promise
+      : secondOwnership.promise,
+  });
+  const featureActivated = vi.fn(() => {
+    expect(recorded.contextValues.get("aurelia.documentOwned")).toBe(true);
+    expect(recorded.contextValues.get("aurelia.activeTemplateOwned")).toBe(true);
+  });
+  const app = createApp(stubVscode, new StubLanguageClient(lsp), [{
+    id: "test.latest-readiness",
+    activate: featureActivated,
+  }]);
+
+  const activation = app.activate();
+  await vi.waitFor(() => expect(lsp.sendRequestMock).toHaveBeenCalledOnce());
+  recorded.fireActiveTextEditorChanged({ document: secondDocument });
+  await vi.waitFor(() => expect(lsp.sendRequestMock).toHaveBeenCalledTimes(2));
+  firstOwnership.resolve(sourceOwnershipResponse(firstDocument.uri.toString(), true, "first"));
+  await settleAsyncWork();
+  expect(featureActivated).not.toHaveBeenCalled();
+
+  secondOwnership.resolve(sourceOwnershipResponse(secondDocument.uri.toString(), true, "second"));
+  await activation;
+  expect(featureActivated).toHaveBeenCalledOnce();
+  await app.deactivate();
+});
+
+test("bounds initial context readiness and activates features with neutral ownership", async () => {
+  vi.useFakeTimers();
+  try {
+    const { vscode: stubVscode, recorded } = createVscodeApi();
+    const document = {
+      uri: stubVscode.Uri.parse("file:///workspace/src/slow.html"),
+      languageId: "html",
+    };
+    stubVscode.window.activeTextEditor = { document };
+    const lsp = stubProtocolClient({ sourceOwnership: () => new Promise(() => undefined) });
+    const featureActivated = vi.fn(() => {
+      expect(recorded.contextValues.get("aurelia.active")).toBe(true);
+      expect(recorded.contextValues.get("aurelia.documentOwned")).toBe(false);
+      expect(recorded.contextValues.get("aurelia.activeTemplateOwned")).toBe(false);
+    });
+    const app = createApp(stubVscode, new StubLanguageClient(lsp), [{
+      id: "test.bounded-readiness",
+      activate: featureActivated,
+    }]);
+
+    const activation = app.activate();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(lsp.sendRequestMock).toHaveBeenCalledOnce();
+    await vi.advanceTimersByTimeAsync(15_000);
+    await activation;
+
+    expect(featureActivated).toHaveBeenCalledOnce();
+    const token = lsp.sendRequestMock.mock.calls[0]?.[2] as { readonly isCancellationRequested?: boolean } | undefined;
+    expect(token?.isCancellationRequested).toBe(true);
+    await app.deactivate();
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+test("does not activate features after deactivation interrupts initial readiness", async () => {
+  const { vscode: stubVscode } = createVscodeApi();
+  const document = {
+    uri: stubVscode.Uri.parse("file:///workspace/src/slow.html"),
+    languageId: "html",
+  };
+  stubVscode.window.activeTextEditor = { document };
+  const lsp = stubProtocolClient({ sourceOwnership: () => new Promise(() => undefined) });
+  const featureActivated = vi.fn();
+  const languageClient = new StubLanguageClient(lsp);
+  const app = createApp(stubVscode, languageClient, [{
+    id: "test.deactivated-readiness",
+    activate: featureActivated,
+  }]);
+
+  const activation = app.activate();
+  await vi.waitFor(() => expect(lsp.sendRequestMock).toHaveBeenCalledOnce());
+  await app.deactivate();
+  await activation;
+
+  expect(featureActivated).not.toHaveBeenCalled();
+  expect(languageClient.stopCalls).toBe(1);
+});
+
+test("disposes contributions when deactivation interrupts asynchronous feature activation", async () => {
+  const heldActivation = deferred<void>();
+  const { vscode: stubVscode } = createVscodeApi();
+  const lsp = stubProtocolClient();
+  const languageClient = new StubLanguageClient(lsp);
+  const disposed: string[] = [];
+  const heldFeatureStarted = vi.fn();
+  const successorActivated = vi.fn();
+  const app = createApp(stubVscode, languageClient, [{
+    id: "test.held-feature",
+    activate: async (_ctx, own) => {
+      heldFeatureStarted();
+      own({ dispose: () => { disposed.push("early"); } });
+      await heldActivation.promise;
+      own({ dispose: () => { disposed.push("late"); } });
+    },
+  }, {
+    id: "test.successor-feature",
+    activate: successorActivated,
+  }]);
+
+  const activation = app.activate();
+  await vi.waitFor(() => expect(heldFeatureStarted).toHaveBeenCalledOnce());
+  await app.deactivate();
+  expect(disposed).toEqual(["early"]);
+
+  heldActivation.resolve();
+  await activation;
+
+  expect(disposed).toEqual(["early", "late"]);
+  expect(successorActivated).not.toHaveBeenCalled();
+  expect(languageClient.stopCalls).toBe(1);
+});
+
+test("does not let a readiness retry supersede a newer editor context", async () => {
+  vi.useFakeTimers();
+  try {
+    const successorOwnership = deferred<ReturnType<typeof sourceOwnershipResponse>>();
+    const { vscode: stubVscode, recorded } = createVscodeApi();
+    const firstDocument = {
+      uri: stubVscode.Uri.parse("file:///workspace/src/slow.html"),
+      languageId: "html",
+    };
+    const secondDocument = {
+      uri: stubVscode.Uri.parse("file:///workspace/src/current.html"),
+      languageId: "html",
+    };
+    stubVscode.window.activeTextEditor = { document: firstDocument };
+    const lsp = stubProtocolClient({
+      sourceOwnership: (uri) => uri.endsWith("/slow.html")
+        ? new Promise(() => undefined)
+        : successorOwnership.promise,
+    });
+    const app = createApp(stubVscode, new StubLanguageClient(lsp), [{
+      id: "test.non-superseding-retry",
+      activate: vi.fn(),
+    }]);
+
+    const activation = app.activate();
+    await vi.advanceTimersByTimeAsync(0);
+    await vi.advanceTimersByTimeAsync(15_000);
+    await activation;
+    expect(lsp.sendRequestMock).toHaveBeenCalledOnce();
+
+    await vi.advanceTimersByTimeAsync(500);
+    recorded.fireActiveTextEditorChanged({ document: secondDocument });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(lsp.sendRequestMock).toHaveBeenCalledTimes(2);
+    const successorToken = lsp.sendRequestMock.mock.calls[1]?.[2] as {
+      readonly isCancellationRequested?: boolean;
+    } | undefined;
+
+    await vi.advanceTimersByTimeAsync(500);
+    expect(lsp.sendRequestMock).toHaveBeenCalledTimes(2);
+    expect(successorToken?.isCancellationRequested).toBe(false);
+
+    successorOwnership.resolve(sourceOwnershipResponse(secondDocument.uri.toString(), true, "successor"));
+    await vi.advanceTimersByTimeAsync(0);
+    await app.deactivate();
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+test.each([
+  ["no active document", null, 0],
+  ["an unowned active document", "file:///workspace/golden/generated.html", 1],
+] as const)("releases feature activation for %s", async (_label, activeUri, requestCount) => {
+  const { vscode: stubVscode, recorded } = createVscodeApi();
+  if (activeUri != null) {
+    stubVscode.window.activeTextEditor = {
+      document: {
+        uri: stubVscode.Uri.parse(activeUri),
+        languageId: "html",
+      },
+    };
+  }
+  const lsp = stubProtocolClient();
+  const languageClient = new StubLanguageClient(lsp);
+  const featureActivated = vi.fn(() => {
+    expect(recorded.contextValues.get("aurelia.active")).toBe(true);
+    expect(recorded.contextValues.get("aurelia.documentOwned")).toBe(false);
+    expect(recorded.contextValues.get("aurelia.activeTemplateOwned")).toBe(false);
+  });
+  const app = createApp(stubVscode, languageClient, [{
+    id: "test.value-neutral-readiness",
+    activate: featureActivated,
+  }]);
+
+  await app.activate();
+
+  expect(lsp.sendRequestMock).toHaveBeenCalledTimes(requestCount);
+  expect(featureActivated).toHaveBeenCalledOnce();
+  await app.deactivate();
+});
+
 test("reconciles sessions only when workspace activation policy changes", async () => {
   const { vscode: stubVscode, recorded } = createVscodeApi();
   const languageClient = new StubLanguageClient(stubProtocolClient());
@@ -296,7 +542,7 @@ test("rejects late template ownership and rechecks active document language-mode
   const document = stubVscode.workspace.textDocuments[0]!;
   stubVscode.window.activeTextEditor = { document };
   const lsp = stubProtocolClient({
-    sourceOwnership: (uri, requestIndex) => requestIndex < 2
+    sourceOwnership: (uri, requestIndex) => requestIndex < 1
       ? firstOwnership.promise
       : sourceOwnershipResponse(uri, true, `language-${requestIndex}`),
   });
@@ -304,7 +550,7 @@ test("rejects late template ownership and rechecks active document language-mode
   const app = createApp(stubVscode, languageClient, []);
 
   const activation = app.activate();
-  await vi.waitFor(() => expect(lsp.sendRequestMock).toHaveBeenCalledTimes(2));
+  await vi.waitFor(() => expect(lsp.sendRequestMock).toHaveBeenCalledOnce());
 
   document.languageId = "typescript";
   firstOwnership.resolve(sourceOwnershipResponse(document.uri.toString(), true, "language-0"));
@@ -314,13 +560,13 @@ test("rejects late template ownership and rechecks active document language-mode
   expect(recorded.contextValues.get("aurelia.activeTemplateOwned")).toBe(false);
 
   recorded.fireDocumentOpened(document);
-  await vi.waitFor(() => expect(lsp.sendRequestMock).toHaveBeenCalledTimes(3));
+  await vi.waitFor(() => expect(lsp.sendRequestMock).toHaveBeenCalledTimes(2));
   await vi.waitFor(() => expect(recorded.contextValues.get("aurelia.documentOwned")).toBe(true));
   expect(recorded.contextValues.get("aurelia.activeTemplateOwned")).toBe(false);
 
   document.languageId = "html";
   recorded.fireDocumentClosed(document);
-  await vi.waitFor(() => expect(lsp.sendRequestMock).toHaveBeenCalledTimes(4));
+  await vi.waitFor(() => expect(lsp.sendRequestMock).toHaveBeenCalledTimes(3));
   await vi.waitFor(() => expect(recorded.contextValues.get("aurelia.activeTemplateOwned")).toBe(true));
 
   await app.deactivate();

@@ -2893,6 +2893,34 @@ describe("LspFacade workspace routing", () => {
       undefined,
     );
 
+    await facade.getResourceInventory({
+      workspaceKey: "file:///work/b",
+      projectSelection: "default-app",
+    });
+    expect(harness.clients[1]?.sendRequest).toHaveBeenLastCalledWith(
+      "aurelia/resourceInventory",
+      { projectSelection: "default-app" },
+      undefined,
+    );
+    await facade.getResourceInventory({
+      workspaceKey: "file:///work/b",
+      projectKey: "secondary-app",
+    });
+    expect(harness.clients[1]?.sendRequest).toHaveBeenLastCalledWith(
+      "aurelia/resourceInventory",
+      { projectKey: "secondary-app" },
+      undefined,
+    );
+    await facade.getAnalysisLimitations({
+      workspaceKey: "file:///work/b",
+      projectSelection: "default-app",
+    });
+    expect(harness.clients[1]?.sendRequest).toHaveBeenLastCalledWith(
+      "aurelia/analysisLimitations",
+      { projectSelection: "default-app" },
+      undefined,
+    );
+
     const workspaceAInventoryCalls = harness.clients[0]!.sendRequest.mock.calls
       .filter(([method]) => method === "aurelia/resourceInventory").length;
     const workspaceBInventoryCalls = harness.clients[1]!.sendRequest.mock.calls

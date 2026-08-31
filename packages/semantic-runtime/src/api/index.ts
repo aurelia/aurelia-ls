@@ -32,10 +32,21 @@ export type {
 } from '../inquiry/answer.js';
 export {
   SEMANTIC_APP_ANALYSIS_DEPTHS,
+  SEMANTIC_APPLICATION_ENTRYPOINT_POLICIES,
   SEMANTIC_TEMPLATE_ANALYSIS_BREADTHS,
   SemanticAppAnalysisDepth,
+  SemanticApplicationEntrypointPolicy,
   SemanticTemplateAnalysisBreadth,
 } from '../configuration/app-analysis.js';
+export {
+  SEMANTIC_RUNTIME_APP_ENTRYPOINT_SELECTION_REQUIRED_ERROR_CODE,
+  SemanticApplicationEntrypointSelectionRequiredError,
+  isSemanticApplicationEntrypointSelectionRequiredError,
+} from '../configuration/application-entrypoint-preflight.js';
+export type {
+  SemanticApplicationEntrypointEvidenceKind,
+  SemanticApplicationEntrypointSelectionReason,
+} from '../configuration/application-entrypoint-preflight.js';
 export {
   BUILT_IN_RESOURCE_PACKAGES,
 } from '../resources/built-in-resources.js';

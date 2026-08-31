@@ -15,10 +15,14 @@ import {
   canonicalTypeSystemPath,
   frameworkRegistrationCapabilityFromString,
   semanticTemplateDocumentOwnershipOwnsSource,
+  type SemanticProjectCandidateSummary,
+  type SemanticRuntimeSummary,
 } from "@aurelia-ls/semantic-runtime";
 import type { ServerContext } from "../context.js";
 import type {
+  AnalysisLimitationsParams,
   AnalysisLimitationsResponse,
+  AppProjectSelectionKind,
   AureliaSupportSnapshotParams,
   AureliaSupportSnapshotResponse,
   AttributeInterpretationExplanationAnswerTransport,
@@ -58,6 +62,7 @@ import type {
 } from "../protocol.js";
 import { createLanguageServerSupportSnapshot } from "../support-snapshot.js";
 import {
+  AppProjectSelection,
   AureliaProtocolRequest,
   attributeInterpretationExplanationRefusal,
   bindingUncertaintyExplanationRefusal,
@@ -114,6 +119,7 @@ import {
 } from "../runtime/semantic-runtime-session.js";
 
 export type {
+  AnalysisLimitationsParams,
   AnalysisLimitationsResponse,
   AttributeInterpretationExplanationParams,
   AttributeInterpretationExplanationResponse,
@@ -633,6 +639,7 @@ export async function handleFrameworkCapabilityExplanation(
 
 export async function handleAnalysisLimitations(
   ctx: ServerContext,
+  params: AnalysisLimitationsParams | null | undefined,
   operation: SemanticRuntimeLspOperation,
 ): Promise<AnalysisLimitationsResponse> {
   const generation = operation.generation;
@@ -642,7 +649,7 @@ export async function handleAnalysisLimitations(
     lookupText: (uri: string) => operation.documents.lookupText(uri),
   };
   const projects: AnalysisLimitationsResponse["projects"][number][] = [];
-  for (const candidate of summary.value.appCandidates) {
+  for (const candidate of selectedAppProjects(summary.value, params?.projectSelection)) {
     try {
       const answer = await operation.analysisLimitations(candidate.projectKey);
       if (answer.value.projectKey !== candidate.projectKey) {
@@ -749,13 +756,22 @@ export async function handleResourceInventory(
     lookupText: (uri: string) => operation.documents.lookupText(uri),
   };
   const projects: ResourceInventoryResponse["projects"][number][] = [];
-  for (const candidate of summary.value.appCandidates) {
+  for (const candidate of selectedAppProjects(
+    summary.value,
+    params?.projectSelection,
+    params?.projectKey,
+  )) {
     const project = mapResourceProject(candidate, ctx.documentUris);
     try {
       const answer = await operation.resourceInventory(
         candidate.projectKey,
         params?.includeTypeSurfaces === true,
       );
+      if (answer.value.projectKey !== candidate.projectKey) {
+        throw new Error(
+          `Resource inventory returned project '${answer.value.projectKey}' for requested project '${candidate.projectKey}'.`,
+        );
+      }
       projects.push({
         status: "ready",
         project,
@@ -770,6 +786,34 @@ export async function handleResourceInventory(
     }
   }
   return { fingerprint: generation.fingerprint, projects };
+}
+
+function selectedAppProjects(
+  summary: Pick<SemanticRuntimeSummary, "appCandidates" | "defaultAppProjectKey">,
+  selection: AppProjectSelectionKind | null | undefined,
+  projectKey: string | null | undefined = null,
+): readonly SemanticProjectCandidateSummary[] {
+  if (projectKey != null) {
+    if (selection != null) {
+      throw new TypeError("App project selection and an exact project key are mutually exclusive.");
+    }
+    const selected = summary.appCandidates.find((candidate) => candidate.projectKey === projectKey);
+    return selected == null ? [] : [selected];
+  }
+  switch (selection) {
+    case null:
+    case undefined:
+      return summary.appCandidates;
+    case AppProjectSelection.DefaultApp: {
+      const defaultProjectKey = summary.defaultAppProjectKey;
+      if (defaultProjectKey == null) return [];
+      const selected = summary.appCandidates.find((candidate) =>
+        candidate.projectKey === defaultProjectKey);
+      return selected == null ? [] : [selected];
+    }
+    default:
+      throw new TypeError(`Unsupported app project selection '${String(selection)}'.`);
+  }
 }
 
 export async function handleTemplateResourceAvailability(
@@ -1123,9 +1167,9 @@ export function registerCustomHandlers(ctx: ServerContext): void {
     params: AureliaSupportSnapshotParams,
     token: CancellationToken,
   ) => handleSupportSnapshot(ctx, params, token));
-  ctx.connection.onRequest(AureliaProtocolRequest.AnalysisLimitations, (_params: unknown, token: CancellationToken) =>
+  ctx.connection.onRequest(AureliaProtocolRequest.AnalysisLimitations, (params: AnalysisLimitationsParams, token: CancellationToken) =>
     request(ctx, "analysisLimitations", token, undefined,
-      (guard) => handleAnalysisLimitations(ctx, guard)));
+      (guard) => handleAnalysisLimitations(ctx, params, guard)));
   ctx.connection.onRequest(AureliaProtocolRequest.SourceOwnership, (params: SourceOwnershipParams, token: CancellationToken) =>
     request(ctx, "sourceOwnership", token, params?.uri,
       (guard) => handleSourceOwnership(ctx, params, guard)));

@@ -31,6 +31,42 @@ export const SEMANTIC_TEMPLATE_ANALYSIS_BREADTHS = [
 
 export const DEFAULT_SEMANTIC_TEMPLATE_ANALYSIS_BREADTH = SemanticTemplateAnalysisBreadth.AppAggregate;
 
+/** How one project frame may combine statically independent Aurelia application entrypoint graphs. */
+export const enum SemanticApplicationEntrypointPolicy {
+  /** Require every recognized `.app(...)` activation to belong to one connected entrypoint graph. */
+  RequireSingleGraph = 'require-single-graph',
+  /** Deliberately compose independent entrypoint graphs into one aggregate semantic app world. */
+  AggregateIndependentGraphs = 'aggregate-independent-graphs',
+}
+
+export const SEMANTIC_APPLICATION_ENTRYPOINT_POLICIES = [
+  'require-single-graph',
+  'aggregate-independent-graphs',
+] as const;
+
+export const DEFAULT_SEMANTIC_APPLICATION_ENTRYPOINT_POLICY =
+  SemanticApplicationEntrypointPolicy.RequireSingleGraph;
+
+export function normalizeSemanticApplicationEntrypointPolicy(
+  policy:
+    | SemanticApplicationEntrypointPolicy
+    | `${SemanticApplicationEntrypointPolicy}`
+    | null
+    | undefined,
+): SemanticApplicationEntrypointPolicy {
+  switch (policy) {
+    case null:
+    case undefined:
+      return DEFAULT_SEMANTIC_APPLICATION_ENTRYPOINT_POLICY;
+    case SemanticApplicationEntrypointPolicy.RequireSingleGraph:
+      return SemanticApplicationEntrypointPolicy.RequireSingleGraph;
+    case SemanticApplicationEntrypointPolicy.AggregateIndependentGraphs:
+      return SemanticApplicationEntrypointPolicy.AggregateIndependentGraphs;
+    default:
+      throw new Error(`Unknown semantic application entrypoint policy '${String(policy)}'.`);
+  }
+}
+
 export function normalizeSemanticTemplateAnalysisBreadth(
   breadth: SemanticTemplateAnalysisBreadth | `${SemanticTemplateAnalysisBreadth}` | null | undefined,
 ): SemanticTemplateAnalysisBreadth {
@@ -43,7 +79,7 @@ export function normalizeSemanticTemplateAnalysisBreadth(
     case SemanticTemplateAnalysisBreadth.AppAggregate:
       return SemanticTemplateAnalysisBreadth.AppAggregate;
     default:
-      throw new Error(`Unknown semantic template analysis breadth '${breadth}'.`);
+      throw new Error(`Unknown semantic template analysis breadth '${String(breadth)}'.`);
   }
 }
 
@@ -87,7 +123,7 @@ export function normalizeSemanticAppAnalysisDepth(
     case SemanticAppAnalysisDepth.BindingObservation:
       return SemanticAppAnalysisDepth.BindingObservation;
     default:
-      throw new Error(`Unknown semantic app analysis depth '${depth}'.`);
+      throw new Error(`Unknown semantic app analysis depth '${String(depth)}'.`);
   }
 }
 

@@ -50,6 +50,13 @@ export const AureliaProtocolRequest = {
   RenameFromTypeScript: "aurelia/renameFromTs",
 } as const;
 
+/** App-project scope for workspace product requests; omission preserves the historical all-app contract. */
+export const AppProjectSelection = {
+  DefaultApp: "default-app",
+} as const;
+
+export type AppProjectSelectionKind = typeof AppProjectSelection[keyof typeof AppProjectSelection];
+
 export const AURELIA_SUPPORT_SNAPSHOT_SCHEMA = "aurelia-support-snapshot/1" as const;
 
 export interface AureliaSupportSnapshotParams {
@@ -506,7 +513,7 @@ export function templateCodeActionResolveRefusalFromValue(
 
 type RuntimeAnswerTransportFields = Pick<
   SemanticRuntimeAnswer<unknown>,
-  "schemaVersion" | "result" | "selection" | "coverage" | "summary" | "analysisBasis" | "page" | "analysisDepth" | "templateAnalysisBreadth" | "continuations"
+  "schemaVersion" | "result" | "selection" | "coverage" | "summary" | "analysisBasis" | "page" | "analysisDepth" | "applicationEntrypointPolicy" | "templateAnalysisBreadth" | "continuations"
 >;
 
 /** JSON transport form of semantic-runtime's const-enum answer vocabulary. */
@@ -1107,10 +1114,14 @@ export type AnalysisLimitationsProjectResult =
       readonly message: string;
     };
 
-/** One workspace-generation answer with explicit results for every admitted app project. */
+/** One workspace-generation answer with explicit results for every selected app project. */
 export interface AnalysisLimitationsResponse {
   readonly fingerprint: string;
   readonly projects: readonly AnalysisLimitationsProjectResult[];
+}
+
+export interface AnalysisLimitationsParams {
+  readonly projectSelection?: AppProjectSelectionKind;
 }
 
 export interface SourceOwnershipParams {
@@ -1137,9 +1148,12 @@ export interface SourceOwnershipResponse {
   readonly owners: readonly SourceOwnershipOwner[];
 }
 
-/** Optional projection policy for the shared semantic resource inventory. */
+/** Optional project and projection policy for the shared semantic resource inventory. */
 export interface ResourceInventoryParams {
   readonly includeTypeSurfaces?: boolean;
+  readonly projectSelection?: AppProjectSelectionKind;
+  /** Exact app project to inventory; mutually exclusive with projectSelection. */
+  readonly projectKey?: string;
 }
 
 /** JSON transport form of semantic-runtime's author-facing resource taxonomy. */
