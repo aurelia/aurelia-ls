@@ -8,6 +8,13 @@ preserve the repository's earlier package line.
 
 ---
 
+## VS Code 0.5.2 (2026-08-31)
+
+- Improved large-project startup, memory use, request cancellation, Resource Explorer refreshes, and Worker recovery.
+- Added a local support report with bounded client, server, request, memory, and cache evidence.
+
+---
+
 ## VS Code 0.5.1 and MCP 0.3.1 (2026-08-26)
 
 - Fixed collection observation in computed getters and tracked methods. This restores editor symbol requests and MCP

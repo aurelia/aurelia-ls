@@ -318,8 +318,8 @@ describe("VS Code publish workflow contract", () => {
     expect(text(workflow)).not.toMatch(/\bnpx\b|(?:^|\s)npm version|vsce package|--skip-duplicate|git (?:commit|tag|push)\b/u);
   });
 
-  test("binds live 0.5.1 artifact commands and release contracts", () => {
-    expect(extensionPackage.version).toBe("0.5.1");
+  test("binds live 0.5.2 artifact commands and release contracts", () => {
+    expect(extensionPackage.version).toBe("0.5.2");
     expect(rootPackage.scripts["package:ide:vsix"]).toBe("tsc -b --force packages/semantic-runtime packages/language-server packages/vscode && pnpm --filter aurelia-2 run release:pack");
     expect(rootPackage.scripts["verify:ide:vsix"]).toBe("pnpm --filter aurelia-2 run release:verify");
     expect(rootPackage.scripts["verify:ide:vsix:installed"]).toBe("pnpm --filter aurelia-2 run release:verify-installed");
