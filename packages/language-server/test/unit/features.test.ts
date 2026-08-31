@@ -51,6 +51,7 @@ function createInlayRegistrationHarness(operationOverrides: Record<string, unkno
   let semanticTokensHandler: ((params: unknown, token: unknown) => Promise<unknown>) | null = null;
   let codeActionHandler: ((params: unknown, token: unknown) => Promise<unknown>) | null = null;
   let codeActionResolveHandler: ((action: unknown, token: unknown) => Promise<unknown>) | null = null;
+  let documentSymbolHandler: ((params: unknown, token: unknown) => Promise<unknown>) | null = null;
   const managedAdmission = vi.fn();
   const getConfiguration = vi.fn(async () => false);
   const semanticRuntime = {
@@ -84,7 +85,9 @@ function createInlayRegistrationHarness(operationOverrides: Record<string, unkno
     onCodeActionResolve: vi.fn((handler: (action: unknown, token: unknown) => Promise<unknown>) => {
       codeActionResolveHandler = handler;
     }),
-    onDocumentSymbol: vi.fn(),
+    onDocumentSymbol: vi.fn((handler: (params: unknown, token: unknown) => Promise<unknown>) => {
+      documentSymbolHandler = handler;
+    }),
     onWorkspaceSymbol: vi.fn(),
     onSelectionRanges: vi.fn(),
     onFoldingRanges: vi.fn(),
@@ -118,6 +121,7 @@ function createInlayRegistrationHarness(operationOverrides: Record<string, unkno
   if (semanticTokensHandler == null) throw new Error("Semantic-token registration was not captured.");
   if (codeActionHandler == null) throw new Error("Code-action registration was not captured.");
   if (codeActionResolveHandler == null) throw new Error("Code-action resolve registration was not captured.");
+  if (documentSymbolHandler == null) throw new Error("Document-symbol registration was not captured.");
   return {
     ctx,
     getConfiguration,
@@ -127,6 +131,7 @@ function createInlayRegistrationHarness(operationOverrides: Record<string, unkno
     semanticTokensHandler,
     codeActionHandler,
     codeActionResolveHandler,
+    documentSymbolHandler,
   };
 }
 
@@ -1041,6 +1046,37 @@ describe("inlay-hint request admission", () => {
 
     expect(templateSemanticTokens).not.toHaveBeenCalled();
     expect(templateCodeActions).not.toHaveBeenCalled();
+  });
+});
+
+describe("document-symbol request admission", () => {
+  const token = {
+    isCancellationRequested: false,
+    onCancellationRequested: vi.fn(),
+  };
+
+  test("returns before managed admission for an HTML document", async () => {
+    const harness = createInlayRegistrationHarness();
+
+    await expect(harness.documentSymbolHandler(
+      { textDocument: { uri: templateUri } },
+      token,
+    )).resolves.toBeNull();
+
+    expect(harness.semanticRuntime.runRequest).not.toHaveBeenCalled();
+    expect(harness.managedAdmission).not.toHaveBeenCalled();
+  });
+
+  test("retains managed admission for a script document", async () => {
+    const harness = createInlayRegistrationHarness();
+
+    await expect(harness.documentSymbolHandler(
+      { textDocument: { uri: definitionLspUri } },
+      token,
+    )).resolves.toBeNull();
+
+    expect(harness.semanticRuntime.runRequest).toHaveBeenCalledOnce();
+    expect(harness.managedAdmission).toHaveBeenCalledOnce();
   });
 });
 

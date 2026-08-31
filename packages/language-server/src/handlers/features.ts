@@ -75,7 +75,7 @@ import {
   runSemanticRuntimeRequest,
 } from "./request-guard.js";
 import type { SemanticRuntimeLspOperation } from "../runtime/semantic-runtime-session.js";
-import { isTemplateDocument } from "../utils/document-kind.js";
+import { isScriptDocument, isTemplateDocument } from "../utils/document-kind.js";
 
 // ============================================================================
 // Completion Handler
@@ -585,9 +585,12 @@ export function registerFeatureHandlers(ctx: ServerContext): void {
           () => refusedResolvedCodeAction(action, "semanticPlanNoLongerMatches"),
           (guard) => handleCodeActionResolve(ctx, action, guard));
   });
-  ctx.connection.onDocumentSymbol((params, token) => documentRequest(ctx, "documentSymbol", token, params.textDocument.uri,
-    () => null,
-    (guard) => handleDocumentSymbols(ctx, params, guard)));
+  ctx.connection.onDocumentSymbol((params, token) =>
+    isScriptDocument(params.textDocument)
+      ? documentRequest(ctx, "documentSymbol", token, params.textDocument.uri,
+          () => null,
+          (guard) => handleDocumentSymbols(ctx, params, guard))
+      : Promise.resolve(null));
   ctx.connection.onWorkspaceSymbol((params, token) => request(ctx, "workspaceSymbol", token, undefined,
     (guard) => handleWorkspaceSymbols(ctx, params, guard)));
   ctx.connection.onSelectionRanges((params, token) => documentRequest(ctx, "selectionRange", token, params.textDocument.uri,

@@ -42,6 +42,7 @@ import {
   drainSemanticRuntimePages,
   isSemanticRuntimeLspRequestAborted,
   type SemanticRuntimeLspGeneration,
+  type SemanticRuntimeLspOperation,
 } from "../../src/runtime/semantic-runtime-session.js";
 import {
   OpenDocumentSourceTextOverlay,
@@ -2168,7 +2169,7 @@ describe("SemanticRuntimeLspSession", () => {
     expect(callback).not.toHaveBeenCalled();
   });
 
-  test("checks cancellation during source-world admission before opening the callback", async () => {
+  test("checks cancellation again after shared source-world admission before opening the callback", async () => {
     const fixtureRoot = minimalFixtureRoot();
     const callback = vi.fn();
     let cancellationPolls = 0;
@@ -2186,6 +2187,87 @@ describe("SemanticRuntimeLspSession", () => {
 
     expect(cancellationPolls).toBeGreaterThan(1);
     expect(callback).not.toHaveBeenCalled();
+    await expect(session.dispose()).resolves.toBeUndefined();
+  });
+
+  test("keeps cold shared workspace admission independent from a cancelled leading request", async () => {
+    const fixtureRoot = minimalFixtureRoot();
+    const leaderCallback = vi.fn((operation: SemanticRuntimeLspOperation) =>
+      operation.workspaceSummary());
+    const followerCallback = vi.fn((operation: SemanticRuntimeLspOperation) =>
+      operation.workspaceSummary());
+    const session = createSession(
+      fixtureRoot,
+      new TestDocumentStore(),
+      () => undefined,
+      checkpointSemanticRuntimeLspOperation,
+    );
+    let leaderCancelled = false;
+
+    const leaderFailure = session.runRequest(
+      () => leaderCancelled,
+      leaderCallback,
+    ).then(
+      () => null,
+      (error: unknown) => error,
+    );
+    const follower = session.runRequest(
+      () => false,
+      followerCallback,
+    );
+    leaderCancelled = true;
+
+    await expect(leaderFailure).resolves.toMatchObject({ reason: "cancelled" });
+    await expect(follower).resolves.toMatchObject({ result: "answered" });
+    expect(leaderCallback).not.toHaveBeenCalled();
+    expect(followerCallback).toHaveBeenCalledOnce();
+    await expect(session.dispose()).resolves.toBeUndefined();
+  });
+
+  test("keeps post-edit reconciliation independent from a cancelled leading request", async () => {
+    const fixtureRoot = minimalFixtureRoot();
+    const htmlPath = path.join(fixtureRoot, "src/app.html");
+    const htmlUri = pathToFileURL(htmlPath).toString();
+    const documents = new TestDocumentStore();
+    const initialText = fs.readFileSync(htmlPath, "utf8");
+    documents.add(TextDocument.create(htmlUri, "html", 1, initialText));
+    const session = createSession(
+      fixtureRoot,
+      documents,
+      () => undefined,
+      checkpointSemanticRuntimeLspOperation,
+    );
+    await session.runRequest(null, (operation) => operation.workspaceSummary());
+    const changedText = `${initialText}\n<!-- reconciled edit -->\n`;
+    documents.add(TextDocument.create(htmlUri, "html", 2, changedText));
+    session.recordSourceTextChanged([htmlPath]);
+    const leaderCallback = vi.fn((operation: SemanticRuntimeLspOperation) =>
+      operation.documents.lookupDocumentSnapshot(htmlUri));
+    const followerCallback = vi.fn((operation: SemanticRuntimeLspOperation) =>
+      operation.documents.lookupDocumentSnapshot(htmlUri));
+    let leaderCancelled = false;
+
+    const leaderFailure = session.runRequest(
+      () => leaderCancelled,
+      leaderCallback,
+    ).then(
+      () => null,
+      (error: unknown) => error,
+    );
+    const follower = session.runRequest(
+      () => false,
+      followerCallback,
+    );
+    leaderCancelled = true;
+
+    await expect(leaderFailure).resolves.toMatchObject({ reason: "cancelled" });
+    await expect(follower).resolves.toMatchObject({
+      uri: htmlUri,
+      version: 2,
+      text: changedText,
+    });
+    expect(leaderCallback).not.toHaveBeenCalled();
+    expect(followerCallback).toHaveBeenCalledOnce();
     await expect(session.dispose()).resolves.toBeUndefined();
   });
 

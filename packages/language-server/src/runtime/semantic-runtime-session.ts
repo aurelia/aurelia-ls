@@ -207,7 +207,6 @@ interface SemanticRuntimeLspRequestState {
 interface SemanticRuntimeLspOperationScope {
   readonly session: SemanticRuntimeLspSession;
   readonly parent: SemanticRuntimeLspOperationScope | null;
-  readonly kind: "request" | "callback";
   readonly assertActive: () => void;
   active: boolean;
 }
@@ -254,7 +253,7 @@ const MAX_DIAGNOSTIC_CACHE_ENTRIES = 256;
 const DIAGNOSTIC_RESULT_ID_SCHEMA = "semantic-runtime-lsp-diagnostic-result/v1";
 const semanticRuntimeLspOperationScopes = new AsyncLocalStorage<SemanticRuntimeLspOperationScope>();
 
-/** Poll the exact active LSP request when called from its async lineage; otherwise do nothing. */
+/** Poll exact request-owned callback work without binding shared workspace admission to its first waiter. */
 export function checkpointSemanticRuntimeLspOperation(): void {
   const scope = semanticRuntimeLspOperationScopes.getStore();
   if (scope?.active === true) {
@@ -575,11 +574,10 @@ export class SemanticRuntimeLspSession {
     this.assertRequestStateActive(state);
     let completed: SemanticRuntimeLspOperationCompletion<TResult>;
     try {
-      completed = await this.runInRequestScope(
-        state,
-        () => state.workspace.session.run((context) =>
-          this.runOperationCallback(state, context, (operation) => callback(operation))),
-      );
+      // Admission and reconciliation are shared by every waiter. Only the consumer callback below enters the exact
+      // request scope, so one cancelled waiter cannot abort workspace progress owned by the session.
+      completed = await state.workspace.session.run((context) =>
+        this.runOperationCallback(state, context, (operation) => callback(operation)));
     } catch (error) {
       this.throwRequestFailure(state, error);
     }
@@ -604,12 +602,9 @@ export class SemanticRuntimeLspSession {
     const state = this.captureRequestState(null);
     this.assertRequestStateActive(state);
     try {
-      const value = await this.runInRequestScope(
-        state,
-        () => state.workspace.session.analysisCacheOverview(
-          request,
-          (answer) => structuredClone(answer.value),
-        ),
+      const value = await state.workspace.session.analysisCacheOverview(
+        request,
+        (answer) => structuredClone(answer.value),
       );
       this.assertRequestStateActive(state);
       return value;
@@ -724,8 +719,7 @@ export class SemanticRuntimeLspSession {
     const operation = this.createOperation(token);
     const operationScope: SemanticRuntimeLspOperationScope = {
       session: this,
-      parent: this.callbackOperationScopeParent(),
-      kind: "callback",
+      parent: semanticRuntimeLspOperationScopes.getStore() ?? null,
       assertActive: () => this.assertRequestTokenActive(token),
       active: true,
     };
@@ -757,39 +751,12 @@ export class SemanticRuntimeLspSession {
     readonly receipt: ManagedSemanticWorkspaceOperationReceipt;
   }> {
     try {
-      return await this.runInRequestScope(
-        state,
-        () => state.workspace.session.runWithReceipt((context) =>
-          this.runOperationCallback(state, context, callback)),
-      );
+      // Receipt admission shares the same workspace transition; request cancellation begins with its callback.
+      return await state.workspace.session.runWithReceipt((context) =>
+        this.runOperationCallback(state, context, callback));
     } catch (error) {
       this.throwRequestFailure(state, error);
     }
-  }
-
-  private async runInRequestScope<TResult>(
-    state: SemanticRuntimeLspRequestState,
-    callback: () => TResult | PromiseLike<TResult>,
-  ): Promise<TResult> {
-    const requestScope: SemanticRuntimeLspOperationScope = {
-      session: this,
-      parent: semanticRuntimeLspOperationScopes.getStore() ?? null,
-      kind: "request",
-      assertActive: () => this.assertRequestStateActive(state),
-      active: true,
-    };
-    try {
-      return await semanticRuntimeLspOperationScopes.run(requestScope, callback);
-    } finally {
-      requestScope.active = false;
-    }
-  }
-
-  private callbackOperationScopeParent(): SemanticRuntimeLspOperationScope | null {
-    const enclosing = semanticRuntimeLspOperationScopes.getStore() ?? null;
-    return enclosing?.kind === "request" && enclosing.session === this
-      ? enclosing.parent
-      : enclosing;
   }
 
   private publishDiagnosticCacheEntry(
