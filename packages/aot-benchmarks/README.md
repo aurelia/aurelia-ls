@@ -24,3 +24,5 @@ The runner requires a clean repository and RC2 framework checkout. It writes one
 `.temp/aot-benchmarks/runs/`, including raw Tachometer output, exact build/evidence files, `run.json`, `result.json`,
 and `report.md`. Set `AURELIA_AOT_BENCHMARK_CHROME` to select a specific installed Chrome binary; otherwise the runner
 locates stable Google Chrome and records its exact executable hash and version.
+The repository pins ChromeDriver independently; promotion refuses when its major version does not match the selected
+Chrome, so a browser auto-update requires an explicit toolchain update and a new baseline generation.

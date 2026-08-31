@@ -3,6 +3,7 @@ packages:
 
 allowBuilds:
   '@vscode/vsce-sign': false
+  chromedriver: true
   esbuild: true
   keytar: false
 

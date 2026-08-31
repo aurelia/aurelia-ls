@@ -287,6 +287,7 @@ function createRun(): PerformanceRun {
       vite: { name: 'vite', version: '8.2.2' },
       rolldown: { name: 'rolldown', version: '1.2.6' },
       oxc: { name: 'oxc', version: '0.99.0' },
+      browserDriver: { name: 'chromedriver', version: '151.0.7922.77' },
       officialConventionsProvider: { name: '@aurelia/vite-plugin', version: '2.0.0-rc.2' },
       buildMode: 'production',
       sourceMap: false,

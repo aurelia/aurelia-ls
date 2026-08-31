@@ -15,6 +15,7 @@ vi.mock('playwright', () => ({ chromium: { launch } }));
 const {
   BENCHMARK_CHROME_ENVIRONMENT_VARIABLE,
   conventionalChromeSearchPlan,
+  resolveBenchmarkBrowserDriverIdentity,
   resolveBenchmarkBrowserIdentity,
   resolveBenchmarkChromeExecutable,
 } = await import('../src/browser.js');
@@ -105,6 +106,22 @@ describe('benchmark Chrome identity', () => {
       homeDirectory: '/home/test',
     })).rejects.toThrow(/No installed Google Chrome executable.*AURELIA_AOT_BENCHMARK_CHROME/us);
     expect(launch).not.toHaveBeenCalled();
+  });
+
+  test('fingerprints the pinned ChromeDriver and refuses a browser-major mismatch', async () => {
+    const identity = await resolveBenchmarkBrowserDriverIdentity({
+      repositoryRoot: path.resolve(import.meta.dirname, '../../..'),
+      browserVersion: '151.0.8123.4',
+    });
+    expect(identity).toMatchObject({
+      name: 'chromedriver',
+      version: expect.stringMatching(/^151\.0\.5\/151\./u),
+      entry: { sha256: expect.stringMatching(/^[0-9a-f]{64}$/u) },
+    });
+    await expect(resolveBenchmarkBrowserDriverIdentity({
+      repositoryRoot: path.resolve(import.meta.dirname, '../../..'),
+      browserVersion: '152.0.1.2',
+    })).rejects.toThrow(/does not support recorded Chrome/u);
   });
 });
 

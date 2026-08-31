@@ -14,6 +14,7 @@ import {
   type Sha256,
   type SourceWorldIdentity,
   type ToolchainIdentity,
+  type ToolVersionIdentity,
 } from './contracts.js';
 import { persistJsonEvidence } from './result-support.js';
 import { captureRepositorySourceIdentity } from './source-identity.js';
@@ -113,7 +114,10 @@ export async function persistScenarioManifestIdentity(request: {
   };
 }
 
-export function captureBaselineToolchainIdentity(packageRoot: string): Promise<ToolchainIdentity> {
+export function captureBaselineToolchainIdentity(
+  packageRoot: string,
+  browserDriver: ToolVersionIdentity,
+): Promise<ToolchainIdentity> {
   return captureBenchmarkToolchainIdentity({
     packageRoot,
     target: 'es2022',
@@ -128,5 +132,6 @@ export function captureBaselineToolchainIdentity(packageRoot: string): Promise<T
       target: 'es2022',
       transformStandardDecorators: true,
     },
+    browserDriver,
   });
 }

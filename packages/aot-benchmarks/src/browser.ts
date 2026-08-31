@@ -1,7 +1,8 @@
 import { execFile } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { constants, createReadStream } from 'node:fs';
-import { access, realpath } from 'node:fs/promises';
+import { access, readFile, realpath } from 'node:fs/promises';
+import { createRequire } from 'node:module';
 import { homedir } from 'node:os';
 import path from 'node:path';
 import { promisify } from 'node:util';
@@ -13,7 +14,8 @@ import {
   BENCHMARK_BROWSER_FLAGS,
   BENCHMARK_BROWSER_VIEWPORT,
 } from './tachometer.js';
-import type { BrowserIdentity, Sha256 } from './contracts.js';
+import type { BrowserIdentity, Sha256, ToolVersionIdentity } from './contracts.js';
+import { hashedFileIdentity } from './toolchain.js';
 
 const execFileAsync = promisify(execFile);
 
@@ -22,6 +24,55 @@ export const BENCHMARK_CHROME_ENVIRONMENT_VARIABLE = 'AURELIA_AOT_BENCHMARK_CHRO
 export interface BenchmarkBrowserResolution {
   readonly executablePath: string;
   readonly identity: BrowserIdentity;
+}
+
+interface ChromeDriverModule {
+  readonly path: string;
+  readonly version: string;
+}
+
+interface ChromeDriverManifest {
+  readonly name: string;
+  readonly version: string;
+}
+
+/** Resolve, activate, fingerprint, and version-check the repository-pinned ChromeDriver. */
+export async function resolveBenchmarkBrowserDriverIdentity(request: {
+  readonly repositoryRoot: string;
+  readonly browserVersion: string;
+}): Promise<ToolVersionIdentity> {
+  const require = createRequire(import.meta.url);
+  const modulePath = require.resolve('chromedriver');
+  const manifestPath = require.resolve('chromedriver/package.json');
+  // ChromeDriver is CommonJS and its import intentionally prepends the exact bundled executable to PATH for Selenium.
+  // eslint-disable-next-line no-restricted-syntax
+  const driver = require(modulePath) as ChromeDriverModule;
+  const manifest = JSON.parse(await readFile(manifestPath, 'utf8')) as ChromeDriverManifest;
+  if (manifest.name !== 'chromedriver' || manifest.version.trim().length === 0) {
+    throw new Error(`Pinned ChromeDriver manifest '${manifestPath}' is invalid.`);
+  }
+  const executablePath = await realpath(driver.path);
+  await access(executablePath, process.platform === 'win32' ? constants.F_OK : constants.X_OK);
+  const { stdout } = await execFileAsync(executablePath, ['--version'], {
+    encoding: 'utf8',
+    windowsHide: true,
+  });
+  const match = /^ChromeDriver\s+(\d+(?:\.\d+){1,3})/u.exec(stdout.trim());
+  if (match == null || match[1] !== driver.version) {
+    throw new Error(`Pinned ChromeDriver returned an unexpected version: '${stdout.trim()}'.`);
+  }
+  const browserMajor = majorVersion(request.browserVersion, 'Chrome');
+  const driverMajor = majorVersion(driver.version, 'ChromeDriver');
+  if (browserMajor !== driverMajor) {
+    throw new Error(
+      `Pinned ChromeDriver ${driver.version} does not support recorded Chrome ${request.browserVersion}.`,
+    );
+  }
+  return {
+    name: 'chromedriver',
+    version: `${manifest.version}/${driver.version}`,
+    entry: await hashedFileIdentity(executablePath, request.repositoryRoot),
+  };
 }
 
 export interface ChromeSearchPlan {
@@ -176,4 +227,10 @@ async function hashFile(file: string): Promise<Sha256> {
 
 function unique(values: readonly string[]): string[] {
   return [...new Set(values)];
+}
+
+function majorVersion(value: string, label: string): number {
+  const match = /^(\d+)\./u.exec(value);
+  if (match == null) throw new Error(`${label} version '${value}' has no major component.`);
+  return Number(match[1]);
 }

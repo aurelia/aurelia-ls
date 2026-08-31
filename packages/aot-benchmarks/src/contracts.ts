@@ -69,6 +69,7 @@ export interface ToolchainIdentity {
   readonly vite: ToolVersionIdentity;
   readonly rolldown: ToolVersionIdentity;
   readonly oxc: ToolVersionIdentity;
+  readonly browserDriver: ToolVersionIdentity;
   readonly officialConventionsProvider: ToolVersionIdentity;
   readonly buildMode: 'production';
   readonly sourceMap: false;
@@ -458,7 +459,9 @@ function assertFrameworkGraphIdentity(value: unknown): asserts value is Framewor
 function assertToolchainIdentity(value: unknown): asserts value is ToolchainIdentity {
   const record = requireRecord(value, 'toolchain identity');
   requireNonEmpty(record.node, 'Node version');
-  for (const key of ['vite', 'rolldown', 'oxc', 'officialConventionsProvider'] as const) assertToolVersion(record[key], key);
+  for (const key of ['vite', 'rolldown', 'oxc', 'browserDriver', 'officialConventionsProvider'] as const) {
+    assertToolVersion(record[key], key);
+  }
   if (record.buildMode !== 'production' || record.sourceMap !== false) throw new Error('Baseline toolchain must be a production build without source maps.');
   requireNonEmpty(record.target, 'build target');
   assertSha256(record.defineSha256, 'build defines');

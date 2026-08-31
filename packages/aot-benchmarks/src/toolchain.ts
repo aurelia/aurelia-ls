@@ -8,6 +8,7 @@ import type {
   HashedFileIdentity,
   Sha256,
   ToolchainIdentity,
+  ToolVersionIdentity,
 } from './contracts.js';
 
 interface PackageManifest {
@@ -22,6 +23,7 @@ export async function captureBenchmarkToolchainIdentity(request: {
   readonly target: string;
   readonly define: Readonly<Record<string, string>>;
   readonly options: unknown;
+  readonly browserDriver: ToolVersionIdentity;
 }): Promise<ToolchainIdentity> {
   const pluginRoot = await realpath(path.resolve(
     request.packageRoot,
@@ -40,6 +42,7 @@ export async function captureBenchmarkToolchainIdentity(request: {
     rolldown: { name: 'rolldown', version: rolldownVersion },
     // Rolldown owns the OXC final minifier in this Vite generation; no independently versioned JS package is loaded.
     oxc: { name: 'oxc-via-rolldown', version: rolldownVersion },
+    browserDriver: request.browserDriver,
     officialConventionsProvider: {
       name: '@aurelia/vite-plugin',
       version: manifest.version,

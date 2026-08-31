@@ -18,7 +18,10 @@ import {
   type ScenarioResult,
 } from './contracts.js';
 import { assertProductionBuildAssurance } from './assurance.js';
-import { resolveBenchmarkBrowserIdentity } from './browser.js';
+import {
+  resolveBenchmarkBrowserDriverIdentity,
+  resolveBenchmarkBrowserIdentity,
+} from './browser.js';
 import {
   measureBuildCohort,
   writeJoinedAotReceipt,
@@ -137,6 +140,10 @@ export async function runPromotedBaseline(
     assertDeterministicAot(aotCohort, deterministicCohort, firstAotReceipt, secondAotReceipt);
 
     const browser = await resolveBenchmarkBrowserIdentity();
+    const browserDriver = await resolveBenchmarkBrowserDriverIdentity({
+      repositoryRoot,
+      browserVersion: browser.identity.version,
+    });
     const runtimeBuilds = primaryBuilds.filter(build =>
       portfolio.applications.find(application => application.id === build.applicationId)?.role === 'runtime'
     );
@@ -259,7 +266,7 @@ export async function runPromotedBaseline(
     }
 
     const sourceWorld = await captureAotSourceWorldIdentity({ repositoryRoot, framework });
-    const toolchain = await captureBaselineToolchainIdentity(packageRoot);
+    const toolchain = await captureBaselineToolchainIdentity(packageRoot, browserDriver);
     const tachometerVersion = await readPackageVersion(path.join(packageRoot, 'node_modules', 'tachometer'));
     const rawResultFiles = sortIdentities([...calibration.rawResults, ...measured.rawResults]);
     const sampling = createSamplingIdentity({
