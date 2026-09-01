@@ -172,6 +172,120 @@ describe('runtime registration requirements', () => {
     }
   }, 20_000);
 
+  test('keeps runtime groups for direct compiler and parser API use', async () => {
+    const overlay = new MutableProjectSourceOverlay();
+    overlay.write(path.join(minimalRoot, 'src/main.ts'), [
+      "import Aurelia from 'aurelia';",
+      "import { ExpressionParser, IExpressionParser, parseExpression } from '@aurelia/expression-parser';",
+      "import { AttributePattern, isInstruction } from '@aurelia/template-compiler';",
+      "import { MyApp } from './my-app';",
+      '',
+      'void ExpressionParser;',
+      'void IExpressionParser;',
+      'void parseExpression;',
+      'void AttributePattern;',
+      'void isInstruction;',
+      'Aurelia.app(MyApp).start();',
+    ].join('\n'));
+
+    const requirements = await readRequirements(minimalRoot, overlay, 'programmatic-expression-parser');
+
+    for (const selection of [requirements.resources, requirements.renderers, requirements.eventModifier]) {
+      expect(selection.selectionKind).toBe(RuntimeRegistrationRequirementSelectionKind.ConservativeGroup);
+      expect(selection.reasons.map((reason) => reason.reasonKind)).toContain(
+        RuntimeRegistrationRequirementReasonKind.RuntimeTemplateCompilationRequired,
+      );
+      expect(selection.reasons.flatMap((reason) => reason.stableKeys)).toEqual(
+        expect.arrayContaining([
+          'ExpressionParser',
+          'IExpressionParser',
+          'parseExpression',
+          'AttributePattern',
+          'isInstruction',
+        ]),
+      );
+    }
+  }, 20_000);
+
+  test('keeps exact groups for explicitly preserved compiler-package runtime ABI values', async () => {
+    const overlay = new MutableProjectSourceOverlay();
+    overlay.write(path.join(minimalRoot, 'src/main.ts'), [
+      "import Aurelia from 'aurelia';",
+      "import type { ExpressionType } from '@aurelia/expression-parser';",
+      "import { CustomExpression, createAccessScopeExpression, createInterpolation } from '@aurelia/expression-parser';",
+      "import type { Instruction } from '@aurelia/template-compiler';",
+      "import { AttrSyntax, BindingMode, itPropertyBinding } from '@aurelia/template-compiler';",
+      "import { MyApp } from './my-app';",
+      '',
+      'type PreservedTypes = ExpressionType | Instruction;',
+      'void (null as PreservedTypes | null);',
+      'void CustomExpression;',
+      'void createAccessScopeExpression;',
+      'void createInterpolation;',
+      'void AttrSyntax;',
+      'void BindingMode;',
+      'void itPropertyBinding;',
+      'Aurelia.app(MyApp).start();',
+    ].join('\n'));
+
+    const requirements = await readRequirements(minimalRoot, overlay, 'preserved-compiler-runtime-abi');
+
+    for (const selection of [requirements.resources, requirements.renderers, requirements.eventModifier]) {
+      expect(selection.selectionKind).toBe(RuntimeRegistrationRequirementSelectionKind.ExactLeaves);
+      expect(selection.reasons.map((reason) => reason.reasonKind)).not.toContain(
+        RuntimeRegistrationRequirementReasonKind.RuntimeTemplateCompilationRequired,
+      );
+    }
+  }, 20_000);
+
+  test('keeps runtime groups for computed and escaped compiler-package namespaces', async () => {
+    const overlay = new MutableProjectSourceOverlay();
+    overlay.write(path.join(minimalRoot, 'src/main.ts'), [
+      "import Aurelia from 'aurelia';",
+      "import * as expressionParser from '@aurelia/expression-parser';",
+      "import * as templateCompiler from '@aurelia/template-compiler';",
+      "import { MyApp } from './my-app';",
+      '',
+      "void expressionParser['createAccessScopeExpression'];",
+      'function pass(value: unknown): unknown { return value; }',
+      'void pass(templateCompiler);',
+      'Aurelia.app(MyApp).start();',
+    ].join('\n'));
+
+    const requirements = await readRequirements(minimalRoot, overlay, 'open-compiler-package-namespace');
+
+    for (const selection of [requirements.resources, requirements.renderers, requirements.eventModifier]) {
+      expect(selection.selectionKind).toBe(RuntimeRegistrationRequirementSelectionKind.ConservativeGroup);
+      expect(selection.reasons.map((reason) => reason.reasonKind)).toContain(
+        RuntimeRegistrationRequirementReasonKind.RuntimeTemplateCompilationRequired,
+      );
+      expect(selection.reasons.flatMap((reason) => reason.stableKeys)).toEqual(
+        expect.arrayContaining(['namespace-computed-access', 'namespace-escape']),
+      );
+    }
+  }, 20_000);
+
+  test('keeps runtime groups for compiler values re-exported by aurelia', async () => {
+    const overlay = new MutableProjectSourceOverlay();
+    overlay.write(path.join(minimalRoot, 'src/main.ts'), [
+      "import Aurelia, { IExpressionParser as ParserToken } from 'aurelia';",
+      "import { MyApp } from './my-app';",
+      '',
+      'void ParserToken;',
+      'Aurelia.app(MyApp).start();',
+    ].join('\n'));
+
+    const requirements = await readRequirements(minimalRoot, overlay, 'aurelia-reexported-compiler-api');
+
+    for (const selection of [requirements.resources, requirements.renderers, requirements.eventModifier]) {
+      expect(selection.selectionKind).toBe(RuntimeRegistrationRequirementSelectionKind.ConservativeGroup);
+      expect(selection.reasons.map((reason) => reason.reasonKind)).toContain(
+        RuntimeRegistrationRequirementReasonKind.RuntimeTemplateCompilationRequired,
+      );
+      expect(selection.reasons.flatMap((reason) => reason.stableKeys)).toContain('IExpressionParser');
+    }
+  }, 20_000);
+
   test('retains groups for re-exported runtime tokens, decorators, and resource keys', async () => {
     const overlay = new MutableProjectSourceOverlay();
     overlay.write(path.join(minimalRoot, 'src/runtime-api-barrel.ts'), [
