@@ -8,6 +8,7 @@ import {
 import {
   aureliaAot,
   type AotBuildReceipt,
+  type AotFrameworkLinksOptions,
   type AotNominatedEntry,
   type AotRuntimeConfigurationMode,
 } from '@aurelia-ls/aot-vite';
@@ -57,6 +58,7 @@ export interface BenchmarkOutputAsset {
 export interface BenchmarkLaneBuild {
   readonly applicationId: string;
   readonly mode: BenchmarkBuildMode;
+  readonly outputLabel: string | null;
   readonly outDir: string;
   readonly durationMs: number;
   readonly chunks: readonly BenchmarkOutputChunk[];
@@ -109,10 +111,20 @@ export async function buildBenchmarkLane(request: {
   readonly mode: BenchmarkBuildMode;
   readonly outputRoot: string;
   readonly framework: PreparedFrameworkPackageGraph;
+  readonly frameworkLinks?: AotFrameworkLinksOptions;
+  readonly outputLabel?: string;
 }): Promise<BenchmarkLaneBuild> {
   const application = request.application;
   const mode = request.mode;
-  const outDir = path.join(request.outputRoot, application.id, mode);
+  const outputLabel = normalizeOutputLabel(request.outputLabel);
+  if (mode !== 'aot' && request.frameworkLinks !== undefined) {
+    throw new Error('Framework linking is available only for an AOT benchmark lane.');
+  }
+  if (request.frameworkLinks !== undefined && outputLabel === null) {
+    throw new Error('A framework-link benchmark lane requires an explicit output label.');
+  }
+  const laneDirectory = outputLabel === null ? mode : `${mode}-${outputLabel}`;
+  const outDir = path.join(request.outputRoot, application.id, laneDirectory);
   const frameworkEntries = new Map<string, string>();
   const isolation = frameworkPackageIsolationPlugin(request.framework, frameworkEntries);
   const semanticProvider = mode === 'aot' ? new SemanticAotArtifactProvider() : null;
@@ -124,6 +136,7 @@ export async function buildBenchmarkLane(request: {
         provider: semanticProvider!,
         nominatedEntry: application.nominatedEntry,
         runtimeConfiguration: application.runtimeConfiguration ?? 'require-replaceable',
+        ...(request.frameworkLinks === undefined ? {} : { frameworkLinks: request.frameworkLinks }),
         conventions: {
           include,
           standardDecoratorInclude: include,
@@ -207,6 +220,7 @@ export async function buildBenchmarkLane(request: {
   return {
     applicationId: application.id,
     mode,
+    outputLabel,
     outDir,
     durationMs: Number(durationMs.toFixed(3)),
     chunks: chunks.map((chunk) => ({
@@ -224,6 +238,16 @@ export async function buildBenchmarkLane(request: {
       [...frameworkEntries].sort(([left], [right]) => left.localeCompare(right)),
     ),
   };
+}
+
+function normalizeOutputLabel(value: string | undefined): string | null {
+  if (value === undefined) return null;
+  if (!/^[a-z0-9](?:[a-z0-9._-]{0,62}[a-z0-9])?$/u.test(value)) {
+    throw new Error(
+      `Benchmark output label '${value}' must be a lowercase filesystem-safe segment of at most 64 characters.`,
+    );
+  }
+  return value;
 }
 
 function frameworkPackageIsolationPlugin(

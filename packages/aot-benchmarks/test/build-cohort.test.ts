@@ -197,6 +197,7 @@ async function writeBuild(input: {
   return {
     applicationId: input.applicationId,
     mode: input.mode,
+    outputLabel: null,
     outDir,
     durationMs: input.durationMs,
     chunks: input.chunks,

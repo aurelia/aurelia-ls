@@ -6,10 +6,20 @@ import type { BenchmarkLaneBuild, BenchmarkBuildMode } from './build.js';
 import type { Sha256 } from './contracts.js';
 import { lockedRuntimeScenarios } from './portfolio.js';
 
-export const BROWSER_STAGING_MANIFEST_SCHEMA_VERSION = 1 as const;
+export const BROWSER_STAGING_MANIFEST_SCHEMA_VERSION = 2 as const;
 
-export type BenchmarkLaneOrder = 'jit-aot' | 'aot-jit' | 'jit-jit';
+export type BenchmarkLaneOrder = 'jit-aot' | 'aot-jit' | 'jit-jit' | 'aot-aot';
 export type StagedVariant = 'base' | 'candidate';
+
+export interface BrowserStagingLaneIdentity {
+  readonly mode: BenchmarkBuildMode;
+  readonly outputLabel: string | null;
+}
+
+export interface BrowserStagingVariants {
+  readonly base: BrowserStagingLaneIdentity;
+  readonly candidate: BrowserStagingLaneIdentity;
+}
 
 export interface BrowserStagingFileIdentity {
   readonly kind: 'authored' | 'built-variant';
@@ -28,10 +38,7 @@ export interface StagedScenarioPage {
 export interface BrowserStagingManifest {
   readonly schemaVersion: typeof BROWSER_STAGING_MANIFEST_SCHEMA_VERSION;
   readonly order: BenchmarkLaneOrder;
-  readonly variants: {
-    readonly base: BenchmarkBuildMode;
-    readonly candidate: BenchmarkBuildMode;
-  };
+  readonly variants: BrowserStagingVariants;
   readonly scenarioPages: readonly StagedScenarioPage[];
   readonly files: readonly BrowserStagingFileIdentity[];
   readonly manifestSha256: Sha256;
@@ -42,16 +49,30 @@ export interface StagedBrowserRoot {
   readonly manifest: BrowserStagingManifest;
 }
 
-export async function stageLockedBrowserWorkloads(request: {
+interface BrowserStagingRequestBase {
   readonly packageRoot: string;
   readonly browserRoot: string;
-  readonly order: BenchmarkLaneOrder;
   readonly builds: readonly BenchmarkLaneBuild[];
-}): Promise<StagedBrowserRoot> {
+}
+
+export type StageLockedBrowserWorkloadsRequest = BrowserStagingRequestBase & (
+  | {
+      readonly order: 'jit-aot' | 'aot-jit' | 'jit-jit';
+      readonly variants?: undefined;
+    }
+  | {
+      readonly order: 'aot-aot';
+      readonly variants: BrowserStagingVariants;
+    }
+);
+
+export async function stageLockedBrowserWorkloads(
+  request: StageLockedBrowserWorkloadsRequest,
+): Promise<StagedBrowserRoot> {
   const packageRoot = path.resolve(request.packageRoot);
   const browserRoot = path.resolve(request.browserRoot);
   assertLaneOrder(request.order);
-  const variants = variantsForOrder(request.order);
+  const variants = variantsForRequest(request);
   const builds = indexBuilds(request.builds, variants);
   await mkdir(path.dirname(browserRoot), { recursive: true });
   await mkdir(browserRoot);
@@ -94,8 +115,8 @@ export async function stageLockedBrowserWorkloads(request: {
 
   for (const application of STAGED_APPLICATIONS) {
     for (const variant of ['base', 'candidate'] as const) {
-      const mode = variants[variant];
-      const build = builds.get(buildKey(application.applicationId, mode))!;
+      const identity = variants[variant];
+      const build = builds.get(buildKey(application.applicationId, identity))!;
       const source = path.join(build.outDir, 'app.js');
       const destinationPath = `${application.destinationFamily}/results/variants/${variant}/${application.destinationApplicationId}/app.js`;
       const destination = path.join(browserRoot, ...destinationPath.split('/'));
@@ -104,7 +125,7 @@ export async function stageLockedBrowserWorkloads(request: {
       files.push(await readCopiedIdentity({
         kind: 'built-variant',
         source,
-        sourcePath: `build:${application.applicationId}/${mode}/app.js`,
+        sourcePath: `build:${application.applicationId}/${lanePath(identity)}/app.js`,
         destination,
         destinationPath,
       }));
@@ -135,17 +156,14 @@ export function assertBrowserStagingManifest(value: unknown): asserts value is B
   }
   assertLaneOrder(manifest.order);
   const variants = requireRecord(manifest.variants, 'staging variants');
-  const expectedVariants = variantsForOrder(manifest.order);
-  if (variants.base !== expectedVariants.base || variants.candidate !== expectedVariants.candidate) {
-    throw new Error('Staging variants do not agree with lane order.');
-  }
+  const normalizedVariants = assertManifestVariants(manifest.order, variants);
   assertScenarioPages(manifest.scenarioPages);
   assertStagingFiles(manifest.files);
   assertDigest(manifest.manifestSha256, 'staging manifest');
   const body = {
     schemaVersion: manifest.schemaVersion,
     order: manifest.order,
-    variants: manifest.variants,
+    variants: normalizedVariants,
     scenarioPages: manifest.scenarioPages,
     files: manifest.files,
   };
@@ -206,7 +224,7 @@ function indexBuilds(
   ]));
   const result = new Map<string, BenchmarkLaneBuild>();
   for (const build of builds) {
-    const key = buildKey(build.applicationId, build.mode);
+    const key = buildKey(build.applicationId, build);
     if (!required.has(key)) throw new Error(`Browser staging received unexpected build "${key}".`);
     if (result.has(key)) throw new Error(`Browser staging received duplicate build "${key}".`);
     if (build.entryFiles.length !== 1 || build.entryFiles[0] !== 'app.js'
@@ -305,20 +323,111 @@ function removePrefix(value: string, prefix: string): string {
   return value.slice(prefix.length);
 }
 
-function buildKey(applicationId: string, mode: BenchmarkBuildMode): string {
-  return `${applicationId}/${mode}`;
+function buildKey(
+  applicationId: string,
+  identity: Pick<BrowserStagingLaneIdentity, 'mode' | 'outputLabel'>,
+): string {
+  return `${applicationId}/${lanePath(identity)}`;
+}
+
+function lanePath(identity: Pick<BrowserStagingLaneIdentity, 'mode' | 'outputLabel'>): string {
+  return `${identity.mode}/${identity.outputLabel ?? '@unlabeled'}`;
 }
 
 function assertLaneOrder(value: unknown): asserts value is BenchmarkLaneOrder {
-  if (value !== 'jit-aot' && value !== 'aot-jit' && value !== 'jit-jit') {
+  if (value !== 'jit-aot' && value !== 'aot-jit' && value !== 'jit-jit' && value !== 'aot-aot') {
     throw new Error('Browser staging lane order is unsupported.');
   }
 }
 
-function variantsForOrder(order: BenchmarkLaneOrder): BrowserStagingManifest['variants'] {
-  if (order === 'jit-aot') return { base: 'jit', candidate: 'aot' };
-  if (order === 'aot-jit') return { base: 'aot', candidate: 'jit' };
-  return { base: 'jit', candidate: 'jit' };
+function variantsForRequest(request: StageLockedBrowserWorkloadsRequest): BrowserStagingVariants {
+  if (request.order === 'jit-aot') return defaultVariants('jit', 'aot');
+  if (request.order === 'aot-jit') return defaultVariants('aot', 'jit');
+  if (request.order === 'jit-jit') return defaultVariants('jit', 'jit');
+  const variants = request.variants;
+  if (variants === undefined) {
+    throw new Error('The aot-aot order requires explicit base and candidate variant identities.');
+  }
+  assertAotAotVariants(variants);
+  return {
+    base: { mode: variants.base.mode, outputLabel: variants.base.outputLabel },
+    candidate: { mode: variants.candidate.mode, outputLabel: variants.candidate.outputLabel },
+  };
+}
+
+function defaultVariants(
+  base: BenchmarkBuildMode,
+  candidate: BenchmarkBuildMode,
+): BrowserStagingVariants {
+  return {
+    base: { mode: base, outputLabel: null },
+    candidate: { mode: candidate, outputLabel: null },
+  };
+}
+
+function assertManifestVariants(
+  order: BenchmarkLaneOrder,
+  value: Record<string, unknown>,
+): BrowserStagingVariants {
+  const variants = {
+    base: readLaneIdentity(value.base, 'staging base variant'),
+    candidate: readLaneIdentity(value.candidate, 'staging candidate variant'),
+  };
+  if (order === 'aot-aot') {
+    assertAotAotVariants(variants);
+    return variants;
+  }
+  const expected = order === 'jit-aot'
+    ? defaultVariants('jit', 'aot')
+    : order === 'aot-jit'
+      ? defaultVariants('aot', 'jit')
+      : defaultVariants('jit', 'jit');
+  if (!sameLaneIdentity(variants.base, expected.base)
+    || !sameLaneIdentity(variants.candidate, expected.candidate)) {
+    throw new Error('Staging variants do not agree with lane order.');
+  }
+  return variants;
+}
+
+function assertAotAotVariants(variants: BrowserStagingVariants): void {
+  assertLaneIdentity(variants.base, 'staging base variant');
+  assertLaneIdentity(variants.candidate, 'staging candidate variant');
+  if (variants.base.mode !== 'aot' || variants.candidate.mode !== 'aot') {
+    throw new Error('The aot-aot order requires two AOT variant identities.');
+  }
+  if (sameLaneIdentity(variants.base, variants.candidate)) {
+    throw new Error('The aot-aot order requires distinct AOT variant identities.');
+  }
+}
+
+function readLaneIdentity(value: unknown, label: string): BrowserStagingLaneIdentity {
+  const identity = requireRecord(value, label);
+  assertLaneIdentity(identity, label);
+  return { mode: identity.mode, outputLabel: identity.outputLabel };
+}
+
+function assertLaneIdentity(
+  identity: { readonly mode?: unknown; readonly outputLabel?: unknown },
+  label: string,
+): asserts identity is BrowserStagingLaneIdentity {
+  if (identity.mode !== 'jit' && identity.mode !== 'aot') {
+    throw new Error(`${label} has an unsupported build mode.`);
+  }
+  if (identity.outputLabel !== null
+    && (typeof identity.outputLabel !== 'string' || !isOutputLabel(identity.outputLabel))) {
+    throw new Error(`${label} has an invalid output label.`);
+  }
+}
+
+function sameLaneIdentity(
+  left: BrowserStagingLaneIdentity,
+  right: BrowserStagingLaneIdentity,
+): boolean {
+  return left.mode === right.mode && left.outputLabel === right.outputLabel;
+}
+
+function isOutputLabel(value: string): boolean {
+  return /^[a-z0-9](?:[a-z0-9._-]{0,62}[a-z0-9])?$/u.test(value);
 }
 
 function assertRelativePath(value: unknown, label: string, allowBuildPrefix: boolean): asserts value is string {

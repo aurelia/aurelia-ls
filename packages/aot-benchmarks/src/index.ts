@@ -9,6 +9,7 @@ export * from './calibration.js';
 export * from './contracts.js';
 export * from './environment.js';
 export * from './framework-graph.js';
+export * from './framework-link-profile.js';
 export * from './keyed-table-scenarios.js';
 export * from './manifest.js';
 export * from './portfolio.js';

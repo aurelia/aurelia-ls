@@ -205,6 +205,7 @@ function lane(
   const build: BenchmarkLaneBuild = {
     applicationId,
     mode,
+    outputLabel: null,
     outDir: 'unused',
     durationMs: mode === 'jit' ? 11 : 17,
     chunks: [],
