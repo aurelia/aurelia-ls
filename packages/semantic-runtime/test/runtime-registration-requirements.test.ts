@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -15,11 +16,16 @@ import {
   RuntimeRegistrationRequirementSelectionKind,
   type SemanticAppRuntimeRegistrationRequirements,
 } from '../src/template/browser-template.js';
+import { resourceLocalRuntimeSpreadCompilations } from '../src/template/runtime-resource-ownership.js';
+import type { RuntimeSpreadCompilation } from '../src/template/runtime-spread-compilation.js';
+import type { TemplateInstruction } from '../src/template/instruction-ir.js';
 import { MutableProjectSourceOverlay } from './support/incremental-conformance.js';
 
 const packageRoot = path.resolve(fileURLToPath(new URL('..', import.meta.url)));
 const helloWorldRoot = path.resolve(packageRoot, '../../fixtures/hello-world');
 const storefrontRoot = path.join(packageRoot, 'fixtures/pressure/app-pattern-routed-catalog-storefront');
+const stateBackedFormRoot = path.join(packageRoot, 'fixtures/pressure/app-pattern-state-backed-form');
+const stateBackedFormTemplate = path.join(stateBackedFormRoot, 'src/components/state-backed-form.html');
 const minimalRoot = path.join(packageRoot, 'fixtures/pressure/app-pattern-convention-minimal-app');
 const virtualizationRoot = path.join(packageRoot, 'fixtures/pressure/ui-virtualization-template-controller');
 const routeConfigIdentityRoot = path.join(packageRoot, 'fixtures/pressure/router-route-config-identity');
@@ -159,6 +165,132 @@ describe('runtime registration requirements', () => {
     expect(requirements.eventModifier).toMatchObject({
       selectionKind: RuntimeRegistrationRequirementSelectionKind.ExactLeaves,
       leaves: [],
+      reasons: [],
+    });
+  }, 30_000);
+
+  test('spends exact runtime spread closures and reopens incomplete dynamic instruction coverage', async () => {
+    const runtime = await createSemanticRuntime({
+      workspaceRoot: stateBackedFormRoot,
+      projectDiscovery: 'single-root',
+      storeKey: 'runtime-registration-requirements:state-backed-form-spread-closure',
+    });
+    try {
+      const app = await runtime.openApp({
+        analysisDepth: 'runtime-topology',
+        telemetry: { inquiryProfile: 'aot' },
+      });
+      const exact = materializeSemanticAppTemplateCompilerHandoffs({ app })
+        .runtimeRegistrationRequirements;
+      expect([
+        exact.resources.selectionKind,
+        exact.renderers.selectionKind,
+        exact.eventModifier.selectionKind,
+      ]).toEqual([
+        RuntimeRegistrationRequirementSelectionKind.ExactLeaves,
+        RuntimeRegistrationRequirementSelectionKind.ExactLeaves,
+        RuntimeRegistrationRequirementSelectionKind.ExactLeaves,
+      ]);
+      expect(exact.resources.leaves.map((leaf) => leaf.exportName)).toEqual(['If', 'Else', 'Repeat']);
+      expect(exact.renderers.leaves.map((leaf) => leaf.exportName)).toEqual([
+        'PropertyBindingRenderer',
+        'IteratorBindingRenderer',
+        'SetPropertyRenderer',
+        'CustomElementRenderer',
+        'TemplateControllerRenderer',
+        'LetElementRenderer',
+        'ListenerBindingRenderer',
+        'SetAttributeRenderer',
+        'TextBindingRenderer',
+        'SpreadRenderer',
+      ]);
+      expect(exact.renderers.leaves.find((leaf) => leaf.exportName === 'SetAttributeRenderer')?.staticUseCount)
+        .toBe(2);
+      expect(exact.eventModifier.leaves).toEqual([]);
+
+      const resource = app.emission.templates.resources.find((candidate) =>
+        candidate.compilation.definition.name === 'state-backed-form'
+      );
+      if (resource == null) throw new Error('Expected the state-backed form template resource.');
+      const spreadCompilations = resource.runtimeAnalysis.runtimeRendering
+        .spreadCompilations as RuntimeSpreadCompilation[];
+      const original = resourceLocalRuntimeSpreadCompilations(resource).find((compilation) =>
+        compilation.createdInstructionProductHandles.length > 0
+      );
+      if (original == null) throw new Error('Expected an exact state-form runtime spread compilation.');
+      const index = spreadCompilations.indexOf(original);
+      spreadCompilations.splice(index, 1);
+      try {
+        const open = materializeSemanticAppTemplateCompilerHandoffs({ app })
+          .runtimeRegistrationRequirements;
+        for (const selection of [open.resources, open.renderers, open.eventModifier]) {
+          expect(selection.selectionKind)
+            .toBe(RuntimeRegistrationRequirementSelectionKind.ConservativeGroup);
+          expect(selection.reasons).toEqual(expect.arrayContaining([
+            expect.objectContaining({
+              reasonKind: RuntimeRegistrationRequirementReasonKind.RuntimeSpreadCompilationRequired,
+              stableKeys: expect.arrayContaining(['spread-invocation-coverage-incomplete']),
+            }),
+          ]));
+        }
+      } finally {
+        spreadCompilations.splice(index, 0, original);
+      }
+
+      const dynamicInstructions = resource.runtimeAnalysis.runtimeRendering
+        .dynamicInstructions as TemplateInstruction[];
+      const missingInstructionIndex = dynamicInstructions.findIndex((instruction) =>
+        instruction.productHandle === original.createdInstructionProductHandles[0]
+      );
+      const [missingInstruction] = dynamicInstructions.splice(missingInstructionIndex, 1);
+      if (missingInstruction == null) throw new Error('Expected one dynamic instruction to falsify.');
+      try {
+        const open = materializeSemanticAppTemplateCompilerHandoffs({ app })
+          .runtimeRegistrationRequirements;
+        for (const selection of [open.resources, open.renderers, open.eventModifier]) {
+          expect(selection.selectionKind)
+            .toBe(RuntimeRegistrationRequirementSelectionKind.ConservativeGroup);
+          expect(selection.reasons).toEqual(expect.arrayContaining([
+            expect.objectContaining({
+              reasonKind: RuntimeRegistrationRequirementReasonKind.RuntimeSpreadCompilationRequired,
+              stableKeys: expect.arrayContaining(['spread-compilation-product-unavailable']),
+            }),
+          ]));
+        }
+      } finally {
+        dynamicInstructions.splice(missingInstructionIndex, 0, missingInstruction);
+      }
+    } finally {
+      runtime.retireWorkspaceIncarnation();
+    }
+  }, 45_000);
+
+  test('counts event modifiers created inside an exact runtime spread closure', async () => {
+    const overlay = new MutableProjectSourceOverlay();
+    overlay.write(
+      stateBackedFormTemplate,
+      readFileSync(stateBackedFormTemplate, 'utf8').replace(
+        '      type="text"\n      value.bind="request.customerName">',
+        '      type="text"\n      click.trigger:prevent="state.submitRequest(requestId)"\n'
+          + '      value.bind="request.customerName">',
+      ),
+    );
+    const requirements = await readRequirements(
+      stateBackedFormRoot,
+      overlay,
+      'state-backed-form-dynamic-event-modifier',
+    );
+
+    expect(requirements.resources.selectionKind)
+      .toBe(RuntimeRegistrationRequirementSelectionKind.ExactLeaves);
+    expect(requirements.renderers.selectionKind)
+      .toBe(RuntimeRegistrationRequirementSelectionKind.ExactLeaves);
+    expect(requirements.eventModifier).toMatchObject({
+      selectionKind: RuntimeRegistrationRequirementSelectionKind.ExactLeaves,
+      leaves: [expect.objectContaining({
+        exportName: 'EventModifierRegistration',
+        staticUseCount: 1,
+      })],
       reasons: [],
     });
   }, 30_000);

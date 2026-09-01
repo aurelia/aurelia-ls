@@ -2,6 +2,7 @@ import type { ProductHandle, IdentityHandle } from '../kernel/handles.js';
 import type { TemplateCompilerContextFamilyValue } from './template-compiler-context-family-value.js';
 import type { TemplateCompilerRuntimeInstructionFamilyValue } from './template-instruction-runtime-value.js';
 import type { TemplateResourceRuntimeAnalysisEmission } from './template-compilation-project-pass.js';
+import type { RuntimeSpreadCompilationHandoffResult } from './runtime-spread-compilation-handoff.js';
 
 export const SEMANTIC_APP_RUNTIME_REGISTRATION_REQUIREMENTS_VERSION =
   'semantic-runtime/runtime-registration-requirements/v2' as const;
@@ -27,7 +28,6 @@ export const enum RuntimeRegistrationRequirementReasonKind {
   RuntimeInstructionAbiUnmodeled = 'runtime-instruction-abi-unmodeled',
   RuntimeRendererClaimMismatch = 'runtime-renderer-claim-mismatch',
   RuntimeRendererUnavailable = 'runtime-renderer-unavailable',
-  RuntimeInstructionCreatedAtRuntime = 'runtime-instruction-created-at-runtime',
   RuntimeInstructionLaneOpen = 'runtime-instruction-lane-open',
   RuntimeSpreadCompilationRequired = 'runtime-spread-compilation-required',
   RuntimeTemplateCompilationRequired = 'runtime-template-compilation-required',
@@ -93,6 +93,8 @@ export interface RuntimeRegistrationRequirementCompilerInput {
   readonly resource: TemplateResourceRuntimeAnalysisEmission;
   readonly family: TemplateCompilerContextFamilyValue | null;
   readonly instructions: TemplateCompilerRuntimeInstructionFamilyValue | null;
+  /** Exact or refused runtime-spread closure paired with this compiler family. */
+  readonly spreadHandoff: RuntimeSpreadCompilationHandoffResult | null;
   readonly unavailableReasons: readonly RuntimeRegistrationRequirementReason[];
 }
 

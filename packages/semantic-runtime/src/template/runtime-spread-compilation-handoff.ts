@@ -17,7 +17,10 @@ import {
   type TemplateInstruction,
 } from './instruction-ir.js';
 import { TemplateProductDetails } from './product-details.js';
-import { resourceLocalRuntimeSpreadCompilations } from './runtime-resource-ownership.js';
+import {
+  resourceLocalDynamicTemplateInstructions,
+  resourceLocalRuntimeSpreadCompilations,
+} from './runtime-resource-ownership.js';
 import type { RuntimeSpreadCompilation } from './runtime-spread-compilation.js';
 import { RuntimeRendererSpreadCompileState } from './runtime-renderer.js';
 import {
@@ -33,6 +36,7 @@ import {
   projectTemplateCompilerRuntimeInstructionClosure,
   TemplateCompilerRuntimeInstructionFamilyState,
   TemplateCompilerRuntimeResourceRepresentation,
+  type TemplateCompilerRuntimeInstructionClosureValue,
 } from './template-instruction-runtime-value.js';
 import { runtimeAcceptedBindingExpressionAstForParse } from './expression-parse-projection.js';
 import type { TemplateResourceRuntimeAnalysisEmission } from './template-compilation-project-pass.js';
@@ -57,9 +61,15 @@ export class RuntimeSpreadCompilationHandoffResult {
   constructor(
     readonly state: RuntimeSpreadCompilationHandoffState,
     readonly plansByInstruction: ReadonlyMap<HydrateElementInstruction, TemplateCompilerCompiledHandoffSpreadPlan>,
+    /** Exact run-local instruction closures whose detached roots populate the spread plans. */
+    readonly instructionClosures: readonly TemplateCompilerRuntimeInstructionClosureValue[],
     readonly reasons: readonly RuntimeSpreadCompilationHandoffReason[],
   ) {
-    if ((state === RuntimeSpreadCompilationHandoffState.Exact) !== (reasons.length === 0)) {
+    const exact = state === RuntimeSpreadCompilationHandoffState.Exact;
+    if (
+      exact !== (reasons.length === 0)
+      || (!exact && (plansByInstruction.size > 0 || instructionClosures.length > 0))
+    ) {
       throw new Error('Runtime spread compilation handoff lost exact or unavailable ownership.');
     }
   }
@@ -86,6 +96,7 @@ export function projectRuntimeSpreadCompilationHandoffs(
   request: RuntimeSpreadCompilationHandoffRequest,
 ): RuntimeSpreadCompilationHandoffResult {
   const accumulators = new Map<HydrateElementInstruction, SpreadPlanAccumulator>();
+  const instructionClosures: TemplateCompilerRuntimeInstructionClosureValue[] = [];
   const dynamicInstructions = new Map(
     request.resource.runtimeAnalysis.runtimeRendering.dynamicInstructions.map((instruction) => [
       instruction.productHandle,
@@ -109,6 +120,7 @@ export function projectRuntimeSpreadCompilationHandoffs(
         ? RuntimeSpreadCompilationHandoffState.Ineligible
         : RuntimeSpreadCompilationHandoffState.Open,
       new Map(),
+      [],
       [coverage],
     );
   }
@@ -149,6 +161,7 @@ export function projectRuntimeSpreadCompilationHandoffs(
       return new RuntimeSpreadCompilationHandoffResult(
         RuntimeSpreadCompilationHandoffState.Open,
         new Map(),
+        [],
         [finalTarget],
       );
     }
@@ -198,6 +211,7 @@ export function projectRuntimeSpreadCompilationHandoffs(
           ? RuntimeSpreadCompilationHandoffState.Pending
           : RuntimeSpreadCompilationHandoffState.Ineligible,
         new Map(),
+        [],
         projected.reasons.map((reason) => new RuntimeSpreadCompilationHandoffReason(
           reason.reasonKind,
           reason.summary,
@@ -238,6 +252,7 @@ export function projectRuntimeSpreadCompilationHandoffs(
       return new RuntimeSpreadCompilationHandoffResult(
         RuntimeSpreadCompilationHandoffState.Pending,
         new Map(),
+        [],
         [residual],
       );
     }
@@ -261,6 +276,7 @@ export function projectRuntimeSpreadCompilationHandoffs(
       ),
       residualExpressions: residual,
     };
+    instructionClosures.push(projected.value);
     let accumulator = accumulators.get(owner);
     if (accumulator == null) {
       accumulator = { cases: [], caseByRuntimeKey: new Map() };
@@ -283,12 +299,38 @@ export function projectRuntimeSpreadCompilationHandoffs(
     accumulator.cases.push(spreadCase);
   }
 
+  const localDynamicInstructions = resourceLocalDynamicTemplateInstructions(request.resource);
+  const coveredDynamicInstructions = instructionClosures.flatMap((closure) =>
+    closure.instructions.map((entry) => entry.instruction)
+  );
+  const localProducts = new Set(localDynamicInstructions.map((instruction) => instruction.productHandle));
+  const coveredProducts = new Set(coveredDynamicInstructions.map((instruction) => instruction.productHandle));
+  const missingProducts = [...localProducts].filter((productHandle) => !coveredProducts.has(productHandle));
+  const foreignProducts = [...coveredProducts].filter((productHandle) => !localProducts.has(productHandle));
+  if (missingProducts.length > 0 || foreignProducts.length > 0) {
+    return unavailable(
+      RuntimeSpreadCompilationHandoffState.Open,
+      'spread-dynamic-instruction-coverage-incomplete',
+      'Exact runtime spread handoff does not cover the complete resource-local dynamic instruction inventory.',
+      [...missingProducts, ...foreignProducts],
+    );
+  }
+  if (coveredProducts.size !== coveredDynamicInstructions.length) {
+    return unavailable(
+      RuntimeSpreadCompilationHandoffState.Ineligible,
+      'spread-dynamic-instruction-coverage-ambiguous',
+      'More than one runtime spread closure claims the same resource-local dynamic instruction.',
+      coveredDynamicInstructions.map((instruction) => instruction.productHandle),
+    );
+  }
+
   return new RuntimeSpreadCompilationHandoffResult(
     RuntimeSpreadCompilationHandoffState.Exact,
     new Map([...accumulators].map(([instruction, accumulator]) => [
       instruction,
       { cases: accumulator.cases },
     ])),
+    instructionClosures,
     [],
   );
 }
@@ -684,6 +726,7 @@ function unavailable(
   return new RuntimeSpreadCompilationHandoffResult(
     state,
     new Map(),
+    [],
     [new RuntimeSpreadCompilationHandoffReason(reasonKind, summary, stableKeys.map(String))],
   );
 }

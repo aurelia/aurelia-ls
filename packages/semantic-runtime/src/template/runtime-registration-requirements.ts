@@ -36,6 +36,7 @@ import type { BuiltInRuntimeRendererEmission } from './runtime-renderer-catalog-
 import {
   collectRuntimeRegistrationClosurePressure,
 } from './runtime-registration-closure-pressure.js';
+import { RuntimeSpreadCompilationHandoffState } from './runtime-spread-compilation-handoff.js';
 import type { TemplateInstruction } from './instruction-ir.js';
 import { TemplateInstructionKind } from './instruction-ir.js';
 import {
@@ -141,7 +142,7 @@ export function projectSemanticAppRuntimeRegistrationRequirements(
   eventReasons.push(...closurePressure.eventModifier);
 
   const resourceUses = collectRuntimeHtmlResourceUses(app, compilerInputs, resourceReasons, rendererReasons, eventReasons);
-  const rendererProjection = collectRendererUses(compilerInputs, rendererReasons, resourceReasons, eventReasons);
+  const rendererProjection = collectRendererUses(compilerInputs, rendererReasons);
   const providerAttribution = new ProviderAttributionIndex(app, compilerInputs);
   const resourceSelection = resourceReasons.length === 0
     ? exactResourceSelection(app, providerAttribution, resourceUses, resourceReasons)
@@ -194,7 +195,18 @@ function collectRuntimeHtmlResourceUses(
     const family = input.family;
     if (family == null) continue;
     const compilerWorldProductHandle = input.resource.compilation.compilerWorld.world.productHandle;
-    for (const instruction of family.instructions) {
+    const spreadPressure = runtimeSpreadRegistrationPressure(input);
+    if (spreadPressure != null) {
+      resourceReasons.push(spreadPressure);
+      rendererReasons.push(spreadPressure);
+      eventReasons.push(spreadPressure);
+    }
+    const dynamicInstructions = input.spreadHandoff?.state === RuntimeSpreadCompilationHandoffState.Exact
+      ? input.spreadHandoff.instructionClosures.flatMap((closure) =>
+          closure.instructions.map((entry) => entry.instruction)
+        )
+      : [];
+    for (const instruction of [...family.instructions, ...dynamicInstructions]) {
       const reference = instructionResourceReference(instruction);
       if (reference == null) continue;
       const emission = builtInEmissionForReference(reference, byDefinition, byResource);
@@ -239,16 +251,6 @@ function collectRuntimeHtmlResourceUses(
     }
 
     const runtimeRendering = input.resource.runtimeAnalysis.runtimeRendering;
-    if (runtimeRendering.dynamicInstructions.length > 0) {
-      const dynamicReason = reason(
-        RuntimeRegistrationRequirementReasonKind.RuntimeInstructionCreatedAtRuntime,
-        'Runtime spread compilation created instructions outside the browser-final static family.',
-        runtimeRendering.dynamicInstructions.map((instruction) => instruction.productHandle),
-      );
-      resourceReasons.push(dynamicReason);
-      rendererReasons.push(dynamicReason);
-      eventReasons.push(dynamicReason);
-    }
     const instructionLaneSeams = runtimeRendering.openSeams.filter((seam) => seam.reasonKinds.some((kind) =>
       kind === OpenSeamReasonKind.RuntimeRenderingProductMissing
       || kind === OpenSeamReasonKind.RuntimeRenderingRendererUnavailable
@@ -268,11 +270,35 @@ function collectRuntimeHtmlResourceUses(
   return [...uses.values()];
 }
 
+function runtimeSpreadRegistrationPressure(
+  input: RuntimeRegistrationRequirementCompilerInput,
+): RuntimeRegistrationRequirementReason | null {
+  const handoff = input.spreadHandoff;
+  if (handoff?.state === RuntimeSpreadCompilationHandoffState.Exact) return null;
+  const compilerWorldProductHandle = input.resource.compilation.compilerWorld.world.productHandle;
+  if (handoff == null) {
+    return reason(
+      RuntimeRegistrationRequirementReasonKind.RuntimeSpreadCompilationRequired,
+      'Runtime registration projection has no paired runtime spread compilation handoff.',
+      [compilerWorldProductHandle, 'spread-handoff-unavailable'],
+    );
+  }
+  return reason(
+    RuntimeRegistrationRequirementReasonKind.RuntimeSpreadCompilationRequired,
+    `Runtime spread compilation handoff is ${handoff.state}: ${handoff.reasons
+      .map((entry) => entry.summary)
+      .join(' ')}`,
+    [
+      compilerWorldProductHandle,
+      handoff.state,
+      ...handoff.reasons.flatMap((entry) => [entry.reasonKind, ...entry.stableKeys]),
+    ],
+  );
+}
+
 function collectRendererUses(
   inputs: readonly RuntimeRegistrationRequirementCompilerInput[],
   rendererReasons: RuntimeRegistrationRequirementReason[],
-  resourceReasons: RuntimeRegistrationRequirementReason[],
-  eventReasons: RuntimeRegistrationRequirementReason[],
 ): { readonly uses: readonly RuntimeRendererUse[]; readonly eventModifierUseCount: number } {
   const uses = new Map<string, RuntimeRendererUse>();
   let eventModifierUseCount = 0;
@@ -281,7 +307,15 @@ function collectRendererUses(
     const instructions = input.instructions;
     if (family == null || instructions == null) continue;
     const compilerWorld = input.resource.compilation.compilerWorld;
-    const instructionByValue = new Map(instructions.instructions.map((entry) => [entry.value, entry.instruction]));
+    const exactSpreadClosures = input.spreadHandoff?.state === RuntimeSpreadCompilationHandoffState.Exact
+      ? input.spreadHandoff.instructionClosures
+      : [];
+    const instructionByValue = new Map([
+      ...instructions.instructions.map((entry) => [entry.value, entry.instruction] as const),
+      ...exactSpreadClosures.flatMap((closure) => closure.instructions.map((entry) =>
+        [entry.value, entry.instruction] as const
+      )),
+    ]);
     // RuntimeRendering claims belong to the authored compiler family and predate browser-final regeneration. They
     // cross-check renderer-product participation; the browser-final numeric ABI plus effective ordered catalog remains
     // the dispatch authority, so instruction-product identity is deliberately not joined across those two families.
@@ -299,6 +333,11 @@ function collectRendererUses(
           'A browser-final runtime wire has no paired semantic instruction identity.',
           [compilerWorld.world.productHandle, String(value.type)],
         ));
+        return;
+      }
+      // SpreadBinding consumes the type-51 wrapper itself and dispatches only its inner instruction through IRenderer.
+      if (value.type === TemplateCompilerFrameworkInstructionType.SpreadElementProp) {
+        visit(value.instruction);
         return;
       }
       if (value.type === TemplateCompilerFrameworkInstructionType.ListenerBinding && value.modifier != null) {
@@ -346,30 +385,28 @@ function collectRendererUses(
           staticUseCount: (existing?.staticUseCount ?? 0) + 1,
         });
       }
-      if (value.type === TemplateCompilerFrameworkInstructionType.SpreadTransferedBinding) {
-        const spreadReason = reason(
-          RuntimeRegistrationRequirementReasonKind.RuntimeSpreadCompilationRequired,
-          'Spread transfer invokes TemplateCompiler.compileSpread at runtime.',
-          [instruction.productHandle],
-        );
-        resourceReasons.push(spreadReason);
-        rendererReasons.push(spreadReason);
-        eventReasons.push(spreadReason);
-      }
-      if (
-        value.type === TemplateCompilerFrameworkInstructionType.HydrateElement
-        || value.type === TemplateCompilerFrameworkInstructionType.HydrateAttribute
-        || value.type === TemplateCompilerFrameworkInstructionType.HydrateTemplateController
-      ) {
-        value.props.forEach(visit);
-      }
+      nestedRuntimeInstructionValues(value).forEach(visit);
     };
     for (const context of instructions.contexts) {
       context.rows.flat().forEach(visit);
       context.surrogates.forEach(visit);
     }
+    exactSpreadClosures.forEach((closure) => closure.roots.forEach(visit));
   }
   return { uses: [...uses.values()], eventModifierUseCount };
+}
+
+function nestedRuntimeInstructionValues(
+  value: TemplateCompilerRuntimeInstructionValue,
+): readonly TemplateCompilerRuntimeInstructionValue[] {
+  switch (value.type) {
+    case TemplateCompilerFrameworkInstructionType.HydrateElement:
+    case TemplateCompilerFrameworkInstructionType.HydrateAttribute:
+    case TemplateCompilerFrameworkInstructionType.HydrateTemplateController:
+      return value.props;
+    default:
+      return [];
+  }
 }
 
 function exactResourceSelection(

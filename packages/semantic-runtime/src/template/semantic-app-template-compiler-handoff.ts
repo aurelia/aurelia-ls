@@ -666,12 +666,14 @@ function finalizeResource(
         resource,
         family: preparation.family,
         instructions: preparation.instructions,
+        spreadHandoff: spreadCompilations[0]!,
         unavailableReasons: [],
       },
-      ...preparation.localPreparations.map((local) => ({
+      ...preparation.localPreparations.map((local, index) => ({
         resource: local.resource,
         family: local.family,
         instructions: local.instructions,
+        spreadHandoff: spreadCompilations[index + 1]!,
         unavailableReasons: [],
       })),
     ],
@@ -723,6 +725,7 @@ function unavailableMaterialization(
       resource,
       family: null,
       instructions: null,
+      spreadHandoff: null,
       unavailableReasons: handoff.reasons.map((reason) => ({
         reasonKind: RuntimeRegistrationRequirementReasonKind.CompilerHandoffUnavailable,
         summary: reason.summary,
