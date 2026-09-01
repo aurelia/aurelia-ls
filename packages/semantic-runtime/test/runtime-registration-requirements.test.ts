@@ -8,6 +8,7 @@ import {
   NodeSemanticRuntimeProjectInputHost,
   SemanticRuntimeProjectInputAuthority,
 } from '../src/kernel/project-input.js';
+import { readDiResolveCallSites } from '../src/di/resolve-call-recognition.js';
 import {
   materializeSemanticAppTemplateCompilerHandoffs,
   RuntimeRegistrationRequirementReasonKind,
@@ -17,6 +18,7 @@ import {
 import { MutableProjectSourceOverlay } from './support/incremental-conformance.js';
 
 const packageRoot = path.resolve(fileURLToPath(new URL('..', import.meta.url)));
+const helloWorldRoot = path.resolve(packageRoot, '../../fixtures/hello-world');
 const storefrontRoot = path.join(packageRoot, 'fixtures/pressure/app-pattern-routed-catalog-storefront');
 const minimalRoot = path.join(packageRoot, 'fixtures/pressure/app-pattern-convention-minimal-app');
 const virtualizationRoot = path.join(packageRoot, 'fixtures/pressure/ui-virtualization-template-controller');
@@ -24,6 +26,91 @@ const routeConfigIdentityRoot = path.join(packageRoot, 'fixtures/pressure/router
 const routeConfigValidationRoot = path.join(packageRoot, 'fixtures/pressure/router-route-config-validation-errors');
 
 describe('runtime registration requirements', () => {
+  test('spends imported framework intrinsic identity before a broad local declaration', async () => {
+    const runtime = await createSemanticRuntime({
+      workspaceRoot: helloWorldRoot,
+      projectDiscovery: 'single-root',
+      storeKey: 'runtime-registration-requirements:hello-world-intrinsic-resolve',
+    });
+    try {
+      const app = await runtime.openApp({
+        analysisDepth: 'runtime-topology',
+        telemetry: { inquiryProfile: 'aot' },
+      });
+      const resolveSite = readDiResolveCallSites(app.project, app.emission.typeSystem).find((site) =>
+        site.sourcePath.replaceAll('\\', '/').endsWith('src/attributes/display-hint.ts')
+      );
+      expect(resolveSite).toMatchObject({
+        keyExpressionText: 'INode',
+        keyDeclarationKind: 'variable',
+        keyDeclarationName: 'INode',
+        keyDeclarationSourcePath: 'src/aurelia-shim.d.ts',
+        keyImportModuleSpecifier: 'aurelia',
+        keyImportName: 'INode',
+        keyImportKind: 'named',
+      });
+
+      const requirements = materializeSemanticAppTemplateCompilerHandoffs({ app })
+        .runtimeRegistrationRequirements;
+      expect(requirements.resources.selectionKind)
+        .toBe(RuntimeRegistrationRequirementSelectionKind.ExactLeaves);
+      expect(requirements.resources.leaves.map((leaf) => leaf.exportName)).toEqual(['If', 'Repeat']);
+      expect(requirements.renderers.selectionKind)
+        .toBe(RuntimeRegistrationRequirementSelectionKind.ExactLeaves);
+      expect(requirements.eventModifier.selectionKind)
+        .toBe(RuntimeRegistrationRequirementSelectionKind.ExactLeaves);
+    } finally {
+      runtime.retireWorkspaceIncarnation();
+    }
+  }, 30_000);
+
+  test('uses the imported export identity through a local alias and broad declaration', async () => {
+    const overlay = broadAureliaResolveOverlay([
+      "import Aurelia, { INode as HostNode, resolve } from 'aurelia';",
+      "import { MyApp } from './my-app';",
+      '',
+      'class HostConsumer {',
+      '  readonly host = resolve(HostNode);',
+      '}',
+      'void HostConsumer;',
+      'Aurelia.app(MyApp).start();',
+    ].join('\n'));
+
+    const requirements = await readRequirements(minimalRoot, overlay, 'aliased-intrinsic-resolve');
+
+    expect(requirements.resources.selectionKind)
+      .toBe(RuntimeRegistrationRequirementSelectionKind.ExactLeaves);
+    expect(requirements.resources.reasons).toEqual([]);
+  }, 20_000);
+
+  test('keeps a non-framework any-typed resolve key conservative despite its intrinsic-like name', async () => {
+    const overlay = broadAureliaResolveOverlay([
+      "import Aurelia, { resolve } from 'aurelia';",
+      "import { INode as LocalNode, MyApp } from './my-app';",
+      '',
+      'class HostConsumer {',
+      '  readonly host = resolve(LocalNode);',
+      '}',
+      'void HostConsumer;',
+      'Aurelia.app(MyApp).start();',
+    ].join('\n'));
+    overlay.write(path.join(minimalRoot, 'src/my-app.ts'), [
+      'export const INode: any = {};',
+      "export class MyApp { message = 'Hello semantic runtime'; }",
+    ].join('\n'));
+
+    const requirements = await readRequirements(minimalRoot, overlay, 'non-framework-any-intrinsic-lookalike');
+
+    expect(requirements.resources.selectionKind)
+      .toBe(RuntimeRegistrationRequirementSelectionKind.ConservativeGroup);
+    expect(requirements.resources.reasons).toEqual([
+      expect.objectContaining({
+        reasonKind: RuntimeRegistrationRequirementReasonKind.ProgrammaticRuntimeRegistrationUse,
+        stableKeys: expect.arrayContaining(['resolve', 'resolve-resource-key-use']),
+      }),
+    ]);
+  }, 20_000);
+
   test('projects the routed storefront to exact runtime-html leaves in framework order', async () => {
     const requirements = await readRequirements(storefrontRoot, null, 'storefront');
 
@@ -436,4 +523,30 @@ async function readRequirements(
   } finally {
     runtime.retireWorkspaceIncarnation();
   }
+}
+
+function broadAureliaResolveOverlay(mainSource: string): MutableProjectSourceOverlay {
+  const overlay = new MutableProjectSourceOverlay();
+  overlay.write(path.join(minimalRoot, 'src/aurelia-assets.d.ts'), [
+    "declare module '*.html' {",
+    '  const template: string;',
+    '  export default template;',
+    '}',
+    '',
+    "declare module '*.css' {",
+    '  const css: string;',
+    '  export default css;',
+    '}',
+    '',
+    "declare module 'aurelia' {",
+    '  export const INode: any;',
+    '  export const resolve: any;',
+    '  const Aurelia: {',
+    '    app(component: unknown): { start(): Promise<void> | void };',
+    '  };',
+    '  export default Aurelia;',
+    '}',
+  ].join('\n'));
+  overlay.write(path.join(minimalRoot, 'src/main.ts'), mainSource);
+  return overlay;
 }

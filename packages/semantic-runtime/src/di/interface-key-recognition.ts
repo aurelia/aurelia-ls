@@ -7,6 +7,7 @@ import {
   declarationMatchesFrameworkSource,
   frameworkDeclarationSourceSpec,
   typeMatchesFrameworkDeclarationSource,
+  type FrameworkDeclarationSourceSpec,
 } from '../type-system/framework-declaration-source.js';
 import type { TypeSystemProject } from '../type-system/project.js';
 import {
@@ -151,9 +152,33 @@ export function isAureliaFrameworkIntrinsicDiKeyDeclaration(
   key: FrameworkIntrinsicDiKey,
   declaration: ts.Declaration,
 ): boolean {
+  return declarationMatchesFrameworkSource(
+    declaration,
+    new Map(),
+    frameworkIntrinsicDiKeySource(key),
+  );
+}
+
+/** Recover an intrinsic DI key from one exact public framework import. */
+export function aureliaFrameworkIntrinsicDiKeyForImportedExport(
+  moduleSpecifier: string | null,
+  exportName: string | null,
+): FrameworkIntrinsicDiKey | null {
+  const key = exportName == null ? null : frameworkIntrinsicDiKeyForName(exportName);
+  if (key == null || moduleSpecifier == null) {
+    return null;
+  }
+  return frameworkIntrinsicDiKeySource(key).packageNames?.includes(moduleSpecifier) === true
+    ? key
+    : null;
+}
+
+function frameworkIntrinsicDiKeySource(
+  key: FrameworkIntrinsicDiKey,
+): FrameworkDeclarationSourceSpec {
   switch (key) {
     case FrameworkIntrinsicDiKey.IContainer:
-      return declarationMatchesFrameworkSource(declaration, new Map(), kernelIntrinsicDiKeySource);
+      return kernelIntrinsicDiKeySource;
     case FrameworkIntrinsicDiKey.IAurelia:
     case FrameworkIntrinsicDiKey.IAppRoot:
     case FrameworkIntrinsicDiKey.INode:
@@ -163,15 +188,15 @@ export function isAureliaFrameworkIntrinsicDiKeyDeclaration(
     case FrameworkIntrinsicDiKey.IAuSlotsInfo:
     case FrameworkIntrinsicDiKey.IHydrationContext:
     case FrameworkIntrinsicDiKey.IRepeatableHandler:
-      return declarationMatchesFrameworkSource(declaration, new Map(), runtimeHtmlIntrinsicDiKeySource);
+      return runtimeHtmlIntrinsicDiKeySource;
     case FrameworkIntrinsicDiKey.IInstruction:
     case FrameworkIntrinsicDiKey.ITemplateCompiler:
-      return declarationMatchesFrameworkSource(declaration, new Map(), templateCompilerIntrinsicDiKeySource);
+      return templateCompilerIntrinsicDiKeySource;
     case FrameworkIntrinsicDiKey.ITemplateCompilerHooks:
-      return declarationMatchesFrameworkSource(declaration, new Map(), templateCompilerHooksIntrinsicDiKeySource);
+      return templateCompilerHooksIntrinsicDiKeySource;
     case FrameworkIntrinsicDiKey.IRouteContext:
     case FrameworkIntrinsicDiKey.IContextRouter:
-      return declarationMatchesFrameworkSource(declaration, new Map(), routerIntrinsicDiKeySource);
+      return routerIntrinsicDiKeySource;
   }
 }
 

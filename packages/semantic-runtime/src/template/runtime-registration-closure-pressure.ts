@@ -13,10 +13,17 @@ import {
 } from '../di/container-api-recognition.js';
 import { ContainerLookupKeyKind } from '../di/container-key.js';
 import {
+  aureliaFrameworkIntrinsicDiKeyForImportedExport,
+} from '../di/interface-key-recognition.js';
+import {
   registrationOpenPressureFacts,
   registrationOpenSeamCanHideFrameworkCapability,
   registrationOpenSeamCanHideResource,
 } from '../di/registration-open-pressure.js';
+import {
+  readDiResolveCallSites,
+  type DiResolveCallSite,
+} from '../di/resolve-call-recognition.js';
 import { containerLookupKeyKindForExpression } from '../di/source-key-expression.js';
 import { ResolvedEvaluationModuleSourceScope } from '../evaluation/package-origin.js';
 import { unwrapExpression } from '../evaluation/ts-syntax.js';
@@ -368,6 +375,10 @@ function programmaticUsePressure(app: SemanticApp): RuntimeRegistrationClosurePr
     ['/packages/aurelia/', '/packages/runtime-html/'],
   );
   const sourcePathByFileName = typeSystemSourcePathIndex(app.project, app.emission.typeSystem);
+  const resolveCallSites = new WeakMap<ts.CallExpression, DiResolveCallSite>(
+    readDiResolveCallSites(app.project, app.emission.typeSystem)
+      .map((site) => [site.sourceNode, site] as const),
+  );
   const runtimeCompilerPackageSources: Readonly<Record<RuntimeCompilerPackageKind, FrameworkDeclarationSourceSpec>> = {
     'expression-parser': frameworkDeclarationSourceSpec(
       new Set(),
@@ -775,7 +786,11 @@ function programmaticUsePressure(app: SemanticApp): RuntimeRegistrationClosurePr
         }
       }
       if (ts.isCallExpression(node) && importedExport(node.expression) === 'resolve') {
-        if (resourceKeyMayAddressRuntimeResource(app, node.arguments[0] ?? null)) {
+        if (resourceKeyMayAddressRuntimeResource(
+          app,
+          node.arguments[0] ?? null,
+          resolveCallSites.get(node) ?? null,
+        )) {
           resourceReasons.push(programmaticReason(
             sourceFile.fileName,
             'resolve',
@@ -795,7 +810,7 @@ function programmaticUsePressure(app: SemanticApp): RuntimeRegistrationClosurePr
             containerMethodKind,
             sourcePathByFileName,
           )
-          && resourceKeyMayAddressRuntimeResource(app, node.arguments[0] ?? null)
+          && resourceKeyMayAddressRuntimeResource(app, node.arguments[0] ?? null, null)
         ) {
           resourceReasons.push(programmaticReason(
             sourceFile.fileName,
@@ -936,7 +951,17 @@ function diContainerApiMethodKind(method: string): DiContainerApiMethodKind | nu
 function resourceKeyMayAddressRuntimeResource(
   app: SemanticApp,
   expression: ts.Expression | null,
+  resolveCallSite: DiResolveCallSite | null,
 ): boolean {
+  if (
+    resolveCallSite != null
+    && aureliaFrameworkIntrinsicDiKeyForImportedExport(
+      resolveCallSite.keyImportModuleSpecifier,
+      resolveCallSite.keyImportName,
+    ) != null
+  ) {
+    return false;
+  }
   if (expression == null) return false;
   const current = unwrapExpression(expression);
   if (ts.isStringLiteralLike(current)) return current.text.startsWith('au:resource:');
