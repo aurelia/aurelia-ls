@@ -1,5 +1,6 @@
 import type {
   AotBuildReceipt,
+  AotFrameworkLinksReceipt,
   AotReceiptArtifact,
   AotReceiptChunk,
   AotReceiptGraphModule,
@@ -33,6 +34,7 @@ export interface BuildReceiptInput {
   readonly artifacts: Iterable<AotReceiptArtifact>;
   readonly graph: Iterable<ReceiptGraphModuleInput>;
   readonly chunks: Iterable<ReceiptChunkInput>;
+  readonly frameworkLinks?: AotFrameworkLinksReceipt;
 }
 
 export function createAotBuildReceipt(input: BuildReceiptInput): AotBuildReceipt {
@@ -72,6 +74,7 @@ export function createAotBuildReceipt(input: BuildReceiptInput): AotBuildReceipt
     artifacts,
     graph,
     chunks,
+    ...(input.frameworkLinks === undefined ? {} : { frameworkLinks: input.frameworkLinks }),
   };
 }
 

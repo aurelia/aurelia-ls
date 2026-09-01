@@ -1,5 +1,3 @@
-import path from "node:path";
-
 import * as aureliaPluginModule from "@aurelia/vite-plugin";
 import type { AureliaPluginOptions } from "@aurelia/vite-plugin";
 import type { Plugin, ResolvedConfig } from "vite";
@@ -10,6 +8,11 @@ import {
   toAotTemplateSpecifier,
 } from "./aot-template-query.js";
 import { createAotBuildReceipt, type ReceiptChunkInput } from "./build-receipt.js";
+import {
+  FrameworkLinkCoordinator,
+  normalizeFrameworkLinksOptions,
+  sourcePathKey,
+} from "./framework-links.js";
 import type {
   AotBuildSession,
   AotConventionOptions,
@@ -42,9 +45,25 @@ export type {
   AotConventionTransformAdmission,
   AotConventionTransformSourcePattern,
   AotConventionOptions,
+  AotFrameworkLinkMapPosture,
+  AotFrameworkLinkModuleInput,
+  AotFrameworkLinkModuleRole,
+  AotFrameworkLinkPolicy,
+  AotFrameworkLinksC0FallbackReason,
+  AotFrameworkLinksC0FallbackReasonKind,
+  AotFrameworkLinksOptions,
+  AotFrameworkLinksReceipt,
+  AotLinkedFrameworkModuleArtifact,
+  AotObservedFrameworkLinkModule,
+  AotPrepareFrameworkLinksRequest,
+  AotPreparedFrameworkLinksApplied,
+  AotPreparedFrameworkLinksC0Fallback,
+  AotPreparedFrameworkLinksResult,
   AotReceiptArtifact,
   AotReceiptChunk,
   AotReceiptGraphModule,
+  AotReceiptFrameworkLinkModule,
+  AotReceiptFrameworkLinkModuleDisposition,
   AotReceiptOptions,
   AotReceiptRenderedModule,
   AotRuntimeConfigurationMode,
@@ -123,7 +142,14 @@ class EnvironmentBuildRegistry {
  */
 export function aureliaAot(options: AureliaAotOptions): Plugin[] {
   const registry = new EnvironmentBuildRegistry();
-  const conventionAdmission = conventionTransformAdmission(options.conventions);
+  const frameworkLinks = options.frameworkLinks == null
+    ? undefined
+    : normalizeFrameworkLinksOptions(options.frameworkLinks);
+  const frameworkLinkCoordinator = frameworkLinks === undefined
+    ? undefined
+    : new FrameworkLinkCoordinator(frameworkLinks);
+  const effectiveOptions = frameworkLinks === undefined ? options : { ...options, frameworkLinks };
+  const conventionAdmission = conventionTransformAdmission(effectiveOptions.conventions);
   let config: ResolvedConfig | undefined;
 
   const guard: Plugin = {
@@ -141,7 +167,7 @@ export function aureliaAot(options: AureliaAotOptions): Plugin[] {
   };
 
   const officialPlugins = officialAureliaPlugin({
-    ...options.conventions,
+    ...effectiveOptions.conventions,
     pre: true,
     useDev: false,
     hmr: false,
@@ -153,7 +179,7 @@ export function aureliaAot(options: AureliaAotOptions): Plugin[] {
     name: "aurelia-aot:sources",
     enforce: "pre",
     buildStart() {
-      startBuildSession(registry, options, conventionAdmission, config, this.environment);
+      startBuildSession(registry, effectiveOptions, conventionAdmission, config, this.environment);
     },
     async transform(code, id, transformOptions) {
       rejectSsr(transformOptions?.ssr);
@@ -279,7 +305,7 @@ export function aureliaAot(options: AureliaAotOptions): Plugin[] {
     name: "aurelia-aot:artifacts",
     enforce: "pre",
     buildStart() {
-      startBuildSession(registry, options, conventionAdmission, config, this.environment);
+      startBuildSession(registry, effectiveOptions, conventionAdmission, config, this.environment);
     },
     async resolveId(source, importer, resolveOptions) {
       if (!isAotTemplateId(source)) {
@@ -340,14 +366,35 @@ export function aureliaAot(options: AureliaAotOptions): Plugin[] {
     },
   };
 
-  const preset = [guard, sources, ...officialPlugins, artifacts];
-  if (options.receipt != null) {
-    preset.push(createReceiptPlugin(registry, options));
+  const preset = [
+    guard,
+    ...(frameworkLinkCoordinator === undefined
+      ? []
+      : [frameworkLinkCoordinator.createPlugin({
+          startBuildSession: (environment) => {
+            startBuildSession(registry, effectiveOptions, conventionAdmission, config, environment as AotViteEnvironment);
+          },
+          requireBuildSession: async (environment) => requireBuildSession(
+            registry.for(environment),
+            "framework-link-plan",
+          ),
+          rejectSsr,
+        })]),
+    sources,
+    ...officialPlugins,
+    artifacts,
+  ];
+  if (effectiveOptions.receipt != null) {
+    preset.push(createReceiptPlugin(registry, effectiveOptions, frameworkLinkCoordinator));
   }
   return preset;
 }
 
-function createReceiptPlugin(registry: EnvironmentBuildRegistry, options: AureliaAotOptions): Plugin {
+function createReceiptPlugin(
+  registry: EnvironmentBuildRegistry,
+  options: AureliaAotOptions,
+  frameworkLinkCoordinator: FrameworkLinkCoordinator | undefined,
+): Plugin {
   return {
     name: "aurelia-aot:receipt",
     enforce: "post",
@@ -383,11 +430,15 @@ function createReceiptPlugin(registry: EnvironmentBuildRegistry, options: Aureli
         });
       }
 
+      const frameworkLinks = frameworkLinkCoordinator?.receipt(this.environment);
       const receipt = createAotBuildReceipt({
         environmentName: this.environment.name,
         artifacts: state.artifacts.values(),
         graph,
         chunks,
+        ...(frameworkLinks === undefined
+          ? {}
+          : { frameworkLinks }),
       });
       this.emitFile({
         type: "asset",
@@ -427,6 +478,7 @@ function startBuildSession(
     ...(options.nominatedEntry === undefined ? {} : { nominatedEntry: options.nominatedEntry }),
     runtimeConfiguration: options.runtimeConfiguration ?? "preserve",
     conventionTransformAdmission: conventionAdmission,
+    ...(options.frameworkLinks === undefined ? {} : { frameworkLinks: options.frameworkLinks }),
   });
 }
 
@@ -659,13 +711,6 @@ function sameReceiptArtifact(left: AotReceiptArtifact, right: AotReceiptArtifact
     && left.resourceKey === right.resourceKey
     && left.compilerVariantKey === right.compilerVariantKey
     && left.definitionName === right.definitionName;
-}
-
-function sourcePathKey(value: string): string {
-  const slash = value.replaceAll("\\", "/");
-  return /^[A-Za-z]:\//u.test(slash)
-    ? path.win32.normalize(value).replaceAll("\\", "/").toLowerCase()
-    : path.posix.normalize(slash);
 }
 
 function assertSupportedConfig(config: ResolvedConfig): void {

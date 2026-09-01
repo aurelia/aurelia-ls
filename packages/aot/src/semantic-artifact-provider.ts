@@ -34,6 +34,13 @@ import {
   AOT_COMPILER_PATCH_RUNTIME_MODULE_SOURCE,
 } from './compiler-patch-runtime-module.js';
 import {
+  AotFrameworkLinkEmitter,
+  type AotFrameworkLinksOptions,
+  type AotFrameworkLinkSessionAdmission,
+  type AotPrepareFrameworkLinksRequest,
+  type AotPrepareFrameworkLinksResult,
+} from './framework-link.js';
+import {
   AotSourceTransformEmitter,
   AotSourceTransformError,
   type AotSourceTransformArtifact,
@@ -78,6 +85,8 @@ export interface SemanticAotBuildRequest {
   readonly runtimeConfiguration?: SemanticAotRuntimeConfigurationMode;
   /** Exact source reach declared by the active build conventions provider. */
   readonly conventionTransformAdmission?: ResourceConventionTransformAdmissionInput | null;
+  /** Exact framework ESM inventory offered to the optional link preparation port. */
+  readonly frameworkLinks?: AotFrameworkLinksOptions;
 }
 
 export interface SemanticAotTemplateRequest {
@@ -212,18 +221,25 @@ export class SemanticAotBuildSession {
   readonly #configurationArtifacts: ReadonlyMap<string, AotRuntimeConfigurationModuleArtifact>;
   readonly #runtimeConfigurationEvidence: SemanticAotRuntimeConfigurationEvidence;
   readonly #analysisEvidence: SemanticAotAnalysisEvidence;
+  readonly #frameworkLinkAdmission: AotFrameworkLinkSessionAdmission;
   readonly #templateArtifactsByVariant = new Map<string, AotTemplateModuleArtifact>();
   readonly #patchArtifactPromisesByVariant = new Map<string, Promise<AotCompilerPatchModuleArtifact>>();
   readonly #evidenceByVariant = new Map<string, SemanticAotArtifactEvidence['artifacts'][number]>();
   readonly #fullEmitter = new AotTemplateModuleEmitter();
   readonly #patchEmitter = new AotCompilerPatchModuleEmitter();
   readonly #sourceEmitter = new AotSourceTransformEmitter();
+  readonly #frameworkLinkEmitter = new AotFrameworkLinkEmitter();
 
   public constructor(
     readonly generation: string,
     pending: readonly PendingResourceArtifact[],
     runtimeConfiguration: RuntimeConfigurationBuildPlan,
     analysisEvidence: SemanticAotAnalysisEvidence,
+    frameworkLinkAdmission: AotFrameworkLinkSessionAdmission = {
+      state: 'c0-fallback',
+      reasonKind: 'framework-link-session-unadmitted',
+      reason: 'This semantic AOT session has no admitted framework-link closure.',
+    },
   ) {
     this.#pendingByVariant = new Map(pending.map((artifact) => [artifact.compilerVariantKey, artifact]));
     const compilerPatchPending = pending.filter(requiresCarrierCompilerPatch);
@@ -248,6 +264,13 @@ export class SemanticAotBuildSession {
     this.#configurationArtifacts = runtimeConfiguration.artifacts;
     this.#runtimeConfigurationEvidence = runtimeConfiguration.evidence;
     this.#analysisEvidence = analysisEvidence;
+    this.#frameworkLinkAdmission = frameworkLinkAdmission;
+  }
+
+  public prepareFrameworkLinks(
+    request: AotPrepareFrameworkLinksRequest,
+  ): Promise<AotPrepareFrameworkLinksResult> {
+    return Promise.resolve(this.#frameworkLinkEmitter.prepare(request, this.#frameworkLinkAdmission));
   }
 
   public async artifactFor(request: SemanticAotTemplateRequest): Promise<SemanticAotTemplateArtifact> {
@@ -490,15 +513,25 @@ export class SemanticAotArtifactProvider {
         handoffs,
       );
       const runtimeConfigurationMode = request.runtimeConfiguration ?? 'preserve';
+      const compilerReplacementRefusal = runtimeCompilerReplacementRefusal(
+        runtimeConfigurationMode,
+        batch.runtimeRegistrationRequirements,
+      );
+      const spreadClosureRefusal = runtimeSpreadClosureRefusal(runtimeConfigurationMode, handoffs);
       const runtimeConfiguration = runtimeConfigurationBuildPlan(
         root,
         runtimeConfigurationMode,
         materializeSemanticAppStandardConfigurationSourceAttachments(app),
         batch.runtimeRegistrationRequirements,
         runtimeExpressions,
-        runtimeCompilerReplacementRefusal(runtimeConfigurationMode, batch.runtimeRegistrationRequirements)
-          ?? runtimeSpreadClosureRefusal(runtimeConfigurationMode, handoffs),
+        compilerReplacementRefusal ?? spreadClosureRefusal,
       );
+      const frameworkLinkAdmission = frameworkLinkSessionAdmission({
+        requirements: batch.runtimeRegistrationRequirements,
+        runtimeConfiguration: runtimeConfiguration.evidence,
+        compilerReplacementRefusal,
+        spreadClosureRefusal,
+      });
       const unavailable = batch.resources.filter((resource) =>
         resource.state !== TemplateCompilerCompiledHandoffState.Exact
       );
@@ -539,6 +572,7 @@ export class SemanticAotArtifactProvider {
         pending,
         runtimeConfiguration,
         analysis,
+        frameworkLinkAdmission,
       );
     } finally {
       runtime.retireWorkspaceIncarnation();
@@ -806,6 +840,57 @@ export function runtimeCompilerReplacementRefusal(
       `${reason.reasonKind}${reason.stableKeys.length === 0 ? '' : ` [${reason.stableKeys.join(', ')}]`}`
     ).join('; ')}.`,
   };
+}
+
+export function frameworkLinkSessionAdmission(request: {
+  readonly requirements: SemanticAppRuntimeRegistrationRequirements;
+  readonly runtimeConfiguration: SemanticAotRuntimeConfigurationEvidence;
+  readonly compilerReplacementRefusal: RuntimeConfigurationRefusal | null;
+  readonly spreadClosureRefusal: RuntimeConfigurationRefusal | null;
+}): AotFrameworkLinkSessionAdmission {
+  if (request.compilerReplacementRefusal != null) {
+    return {
+      state: 'c0-fallback',
+      reasonKind: 'framework-link-runtime-compiler-closure-open',
+      reason: request.compilerReplacementRefusal.summary,
+    };
+  }
+  if (request.spreadClosureRefusal != null) {
+    return {
+      state: 'c0-fallback',
+      reasonKind: 'framework-link-runtime-spread-closure-open',
+      reason: request.spreadClosureRefusal.summary,
+    };
+  }
+  const selections: readonly (readonly [string, RuntimeRegistrationRequirementSelection])[] = [
+    ['resources', request.requirements.resources],
+    ['renderers', request.requirements.renderers],
+    ['event-modifier', request.requirements.eventModifier],
+  ];
+  const nonExactSelections = selections.filter((entry) =>
+    entry[1].selectionKind !== RuntimeRegistrationRequirementSelectionKind.ExactLeaves
+  );
+  if (nonExactSelections.length > 0) {
+    return {
+      state: 'c0-fallback',
+      reasonKind: 'framework-link-runtime-registration-selection-nonexact',
+      reason: `Framework linking requires exact resources, renderers, and event-modifier selections; nonexact: ${nonExactSelections.map(([name]) => name).join(', ')}.`,
+    };
+  }
+  const runtimeConfiguration = request.runtimeConfiguration;
+  if (
+    runtimeConfiguration.mode === 'preserve'
+    || runtimeConfiguration.occurrences.length === 0
+    || runtimeConfiguration.modules.length === 0
+    || runtimeConfiguration.occurrences.some((occurrence) => occurrence.disposition !== 'replaced')
+  ) {
+    return {
+      state: 'c0-fallback',
+      reasonKind: 'framework-link-runtime-configuration-not-fully-replaced',
+      reason: 'Framework linking requires every active runtime configuration occurrence to use the generated AOT parser and compiler registrations.',
+    };
+  }
+  return { state: 'admitted' };
 }
 
 export function collectAotRuntimeExpressions(

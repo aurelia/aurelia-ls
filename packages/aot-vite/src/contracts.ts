@@ -53,7 +53,85 @@ export interface AotBuildRequest {
   readonly nominatedEntry?: AotNominatedEntry | null;
   readonly runtimeConfiguration?: AotRuntimeConfigurationMode;
   readonly conventionTransformAdmission?: AotConventionTransformAdmission | null;
+  /** Exact framework ESM inventory available to an optional link preparation port. */
+  readonly frameworkLinks?: AotFrameworkLinksOptions;
 }
+
+export type AotFrameworkLinkMapPosture = "performance-no-map" | "mapped";
+export type AotFrameworkLinkPolicy = "require-applied" | "allow-c0-fallback";
+export type AotFrameworkLinkModuleRole = "target" | "guard";
+
+/** One exact resolved framework ESM module supplied by the build host. */
+export interface AotFrameworkLinkModuleInput {
+  readonly role: AotFrameworkLinkModuleRole;
+  readonly packageName: string;
+  readonly packageRelativePath: string;
+  readonly resolvedId: string;
+  readonly expectedSha256: string;
+}
+
+/** Optional exact-fingerprinted framework-link input for one build environment. */
+export interface AotFrameworkLinksOptions {
+  readonly protocol: 1;
+  readonly graphFingerprint: string;
+  readonly mapPosture: AotFrameworkLinkMapPosture;
+  readonly policy: AotFrameworkLinkPolicy;
+  readonly modules: readonly AotFrameworkLinkModuleInput[];
+}
+
+/** Atomically captured framework module passed to the AOT link preparation port. */
+export interface AotObservedFrameworkLinkModule extends AotFrameworkLinkModuleInput {
+  readonly observedSha256: string;
+  readonly code: string;
+}
+
+export interface AotPrepareFrameworkLinksRequest {
+  readonly protocol: 1;
+  readonly graphFingerprint: string;
+  readonly mapPosture: AotFrameworkLinkMapPosture;
+  readonly policy: AotFrameworkLinkPolicy;
+  readonly modules: readonly AotObservedFrameworkLinkModule[];
+}
+
+export type AotFrameworkLinksC0FallbackReasonKind =
+  | "input-hash-mismatch"
+  | "map-unavailable"
+  | "recipe-unavailable"
+  | "target-unreached"
+  | "unsupported-input";
+
+export interface AotFrameworkLinksC0FallbackReason {
+  readonly kind: AotFrameworkLinksC0FallbackReasonKind;
+  readonly summary: string;
+  readonly packageName?: string;
+  readonly packageRelativePath?: string;
+}
+
+/** Complete linked realization for one target module; guard modules never return artifacts. */
+export interface AotLinkedFrameworkModuleArtifact {
+  readonly packageName: string;
+  readonly packageRelativePath: string;
+  readonly resolvedId: string;
+  readonly inputSha256: string;
+  readonly linkedSha256: string;
+  readonly code: string;
+  readonly map: AotSourceMapInput;
+}
+
+export interface AotPreparedFrameworkLinksApplied {
+  readonly disposition: "applied";
+  readonly recipeFingerprint: string;
+  readonly modules: readonly AotLinkedFrameworkModuleArtifact[];
+}
+
+export interface AotPreparedFrameworkLinksC0Fallback {
+  readonly disposition: "c0-fallback";
+  readonly reason: AotFrameworkLinksC0FallbackReason;
+}
+
+export type AotPreparedFrameworkLinksResult =
+  | AotPreparedFrameworkLinksApplied
+  | AotPreparedFrameworkLinksC0Fallback;
 
 export interface AotTemplateRequest {
   readonly sourcePath: string;
@@ -166,6 +244,10 @@ export interface AotBuildSession {
   virtualModuleFor?(
     request: AotVirtualModuleRequest,
   ): Promise<AotVirtualModuleArtifact | null>;
+  /** Optional atomic exact-version framework ESM link preparation. */
+  prepareFrameworkLinks?(
+    request: AotPrepareFrameworkLinksRequest,
+  ): Promise<AotPreparedFrameworkLinksResult>;
 }
 
 export interface AotArtifactProvider {
@@ -194,6 +276,7 @@ export interface AureliaAotOptions {
   /** Omit to preserve authored runtime configuration without requiring a replacement. */
   readonly runtimeConfiguration?: AotRuntimeConfigurationMode;
   readonly conventions?: AotConventionOptions;
+  readonly frameworkLinks?: AotFrameworkLinksOptions;
   /** Omit to avoid emitting or retaining build-graph evidence. */
   readonly receipt?: AotReceiptOptions;
 }
@@ -230,10 +313,41 @@ export interface AotReceiptChunk {
   readonly modules: readonly AotReceiptRenderedModule[];
 }
 
+export type AotReceiptFrameworkLinkModuleDisposition =
+  | "applied"
+  | "guard-verified"
+  | "c0-fallback";
+
+export interface AotReceiptFrameworkLinkModule {
+  readonly role: AotFrameworkLinkModuleRole;
+  readonly packageName: string;
+  readonly packageRelativePath: string;
+  readonly expectedSha256: string;
+  readonly observedSha256: string;
+  readonly linkedSha256: string | null;
+  readonly disposition: AotReceiptFrameworkLinkModuleDisposition;
+  readonly loaded: boolean;
+  readonly map: "mapped" | "none";
+}
+
+export interface AotFrameworkLinksReceipt {
+  readonly version: 1;
+  readonly protocol: 1;
+  readonly graphFingerprint: string;
+  readonly mapPosture: AotFrameworkLinkMapPosture;
+  readonly policy: AotFrameworkLinkPolicy;
+  readonly disposition: "applied" | "c0-fallback";
+  readonly recipeFingerprint: string | null;
+  readonly reason: AotFrameworkLinksC0FallbackReason | null;
+  readonly modules: readonly AotReceiptFrameworkLinkModule[];
+}
+
 export interface AotBuildReceipt {
   readonly version: 1;
   readonly environmentName: string;
   readonly artifacts: readonly AotReceiptArtifact[];
   readonly graph: readonly AotReceiptGraphModule[];
   readonly chunks: readonly AotReceiptChunk[];
+  /** Present only when exact-fingerprinted framework linking was requested. */
+  readonly frameworkLinks?: AotFrameworkLinksReceipt;
 }

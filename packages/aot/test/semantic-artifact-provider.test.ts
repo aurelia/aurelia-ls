@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -18,12 +19,17 @@ import {
 import { JSDOM } from 'jsdom';
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 import {
+  AOT_FRAMEWORK_LINK_PROTOCOL,
+  AOT_RC2_FRAMEWORK_LINK_EXPECTATIONS,
+  AOT_RC2_FRAMEWORK_LINK_GRAPH_FINGERPRINT,
   SemanticAotArtifactProvider,
   type SemanticAotBuildSession,
+  type AotPrepareFrameworkLinksRequest,
 } from '../src/index.js';
 import {
   collapseEquivalentAotResourcePlans,
   collectAotRuntimeExpressions,
+  frameworkLinkSessionAdmission,
   runtimeCompilerReplacementRefusal,
   runtimeSpreadClosureRefusal,
   validateAotCarrierPatchHandoff,
@@ -43,6 +49,10 @@ const stateFormRoot = path.resolve(
   'packages/semantic-runtime/fixtures/pressure/app-pattern-state-backed-form',
 );
 const stateFormTemplatePath = path.resolve(stateFormRoot, 'src/components/state-backed-form.html');
+const repeatViewRoot = path.resolve(
+  repositoryRoot,
+  'packages/aot-benchmarks/fixtures/repeat/benchmarks/app-repeat-view',
+);
 const temporaryDirectories: string[] = [];
 const provider = new SemanticAotArtifactProvider();
 let session: SemanticAotBuildSession;
@@ -128,6 +138,47 @@ describe('semantic AOT artifact provider', () => {
     await expect(session.artifactFor({ sourcePath: path.resolve(fixtureRoot, 'src/missing.html') }))
       .rejects.toMatchObject({ code: 'AOT_ARTIFACT_INVALID_HANDOFF' });
   }, 15_000);
+
+  it('keeps framework linking on C0 when the semantic session did not replace its runtime configuration', async () => {
+    const result = await session.prepareFrameworkLinks(await exactFrameworkLinkRequest());
+
+    expect(result).toMatchObject({
+      disposition: 'c0-fallback',
+      reason: { kind: 'unsupported-input' },
+    });
+  });
+
+  it('admits the exact RC2 ABI recipe only for a compiler-final, exactly registered app session', async () => {
+    const exactProvider = new SemanticAotArtifactProvider();
+    const exactSession = await exactProvider.openBuild({
+      root: repeatViewRoot,
+      mode: 'production',
+      environmentName: 'client',
+      sourcemap: false,
+      runtimeConfiguration: 'require-replaceable',
+      nominatedEntry: {
+        sourceFilePath: path.resolve(repeatViewRoot, 'index.js'),
+        callable: { kind: 'export', name: 'start' },
+        arguments: [
+          { kind: 'host-environment', path: "document.querySelector('#app')" },
+          { kind: 'primitive', value: 1_000 },
+        ],
+      },
+    });
+    const result = await exactSession.prepareFrameworkLinks(await exactFrameworkLinkRequest());
+
+    expect(result).toMatchObject({
+      disposition: 'applied',
+      recipeFingerprint: expect.stringMatching(/^[0-9a-f]{64}$/u),
+      modules: [
+        { packageName: '@aurelia/expression-parser', map: null },
+        { packageName: '@aurelia/template-compiler', map: null },
+      ],
+    });
+    const runtimeConfiguration = exactProvider.evidence()!.runtimeConfiguration;
+    expect(runtimeConfiguration.occurrences.every((occurrence) => occurrence.disposition === 'replaced')).toBe(true);
+    expect(runtimeConfiguration.modules).toHaveLength(1);
+  }, 45_000);
 
   it('carries state-form spread plans while keeping its runtime parser table empty', async () => {
     const stateFormProvider = new SemanticAotArtifactProvider();
@@ -267,6 +318,54 @@ describe('semantic AOT artifact provider', () => {
         expect(refusal?.summary).toContain(kind);
       }
     }
+  });
+
+  it('admits framework linking only after every runtime-selection and replacement gate closes', () => {
+    const requirements = exactRuntimeRequirements();
+    const runtimeConfiguration = {
+      mode: 'require-replaceable',
+      occurrences: [{ disposition: 'replaced' }],
+      modules: [{}],
+    } as unknown as Parameters<typeof frameworkLinkSessionAdmission>[0]['runtimeConfiguration'];
+    const admitted = {
+      requirements,
+      runtimeConfiguration,
+      compilerReplacementRefusal: null,
+      spreadClosureRefusal: null,
+    };
+
+    expect(frameworkLinkSessionAdmission(admitted)).toEqual({ state: 'admitted' });
+    expect(frameworkLinkSessionAdmission({
+      ...admitted,
+      requirements: runtimeRequirements([]),
+    })).toMatchObject({
+      state: 'c0-fallback',
+      reasonKind: 'framework-link-runtime-registration-selection-nonexact',
+    });
+    expect(frameworkLinkSessionAdmission({
+      ...admitted,
+      compilerReplacementRefusal: { reasonKind: 'open', summary: 'Compiler closure is open.' },
+    })).toMatchObject({
+      state: 'c0-fallback',
+      reasonKind: 'framework-link-runtime-compiler-closure-open',
+    });
+    expect(frameworkLinkSessionAdmission({
+      ...admitted,
+      spreadClosureRefusal: { reasonKind: 'open', summary: 'Spread closure is open.' },
+    })).toMatchObject({
+      state: 'c0-fallback',
+      reasonKind: 'framework-link-runtime-spread-closure-open',
+    });
+    expect(frameworkLinkSessionAdmission({
+      ...admitted,
+      runtimeConfiguration: {
+        ...runtimeConfiguration,
+        occurrences: [{ disposition: 'preserved' }],
+      } as unknown as typeof runtimeConfiguration,
+    })).toMatchObject({
+      state: 'c0-fallback',
+      reasonKind: 'framework-link-runtime-configuration-not-fully-replaced',
+    });
   });
 
   it('coalesces equal residual expression entries and rejects conflicting ASTs', () => {
@@ -783,6 +882,34 @@ function runtimeRequirements(
   };
 }
 
+function exactRuntimeRequirements(): SemanticAppRuntimeRegistrationRequirements {
+  const exactSelection = (
+    groupKind: RuntimeRegistrationRequirementGroupKind,
+    exportName: string,
+  ): RuntimeRegistrationRequirementSelection => ({
+    selectionKind: RuntimeRegistrationRequirementSelectionKind.ExactLeaves,
+    groupKind,
+    conservativeGroup: { moduleSpecifier: '@aurelia/runtime-html', exportName },
+    leaves: [],
+    reasons: [],
+  });
+  return {
+    schemaVersion: SEMANTIC_APP_RUNTIME_REGISTRATION_REQUIREMENTS_VERSION,
+    resources: exactSelection(
+      RuntimeRegistrationRequirementGroupKind.RuntimeHtmlDefaultResources,
+      'DefaultResources',
+    ),
+    renderers: exactSelection(
+      RuntimeRegistrationRequirementGroupKind.RuntimeHtmlDefaultRenderers,
+      'DefaultRenderers',
+    ),
+    eventModifier: exactSelection(
+      RuntimeRegistrationRequirementGroupKind.EventModifierRegistration,
+      'EventModifierRegistration',
+    ),
+  };
+}
+
 function runtimeRequirementSelection(
   groupKind: RuntimeRegistrationRequirementGroupKind,
   exportName: string,
@@ -794,5 +921,44 @@ function runtimeRequirementSelection(
     conservativeGroup: { moduleSpecifier: '@aurelia/runtime-html', exportName },
     leaves: [],
     reasons,
+  };
+}
+
+async function exactFrameworkLinkRequest(): Promise<AotPrepareFrameworkLinksRequest> {
+  const modules = await Promise.all(AOT_RC2_FRAMEWORK_LINK_EXPECTATIONS.map(async (expectation) => {
+    const packageDirectory = expectation.packageName === 'aurelia'
+      ? 'aurelia'
+      : expectation.packageName.slice('@aurelia/'.length);
+    const code = await readFile(
+      path.resolve(repositoryRoot, 'aurelia/packages', packageDirectory, expectation.packageRelativePath),
+      'utf8',
+    );
+    const observedSha256 = createHash('sha256').update(code, 'utf8').digest('hex');
+    if (observedSha256 !== expectation.expectedSha256) {
+      throw new Error(
+        `Framework-link test input ${expectation.packageName} drifted from ${expectation.expectedSha256} to ${observedSha256}.`,
+      );
+    }
+    return {
+      role: expectation.role,
+      packageName: expectation.packageName,
+      packageRelativePath: expectation.packageRelativePath,
+      resolvedId: path.resolve(
+        repositoryRoot,
+        '.temp/aot-framework-link-test/node_modules',
+        expectation.packageName,
+        expectation.packageRelativePath,
+      ),
+      expectedSha256: expectation.expectedSha256,
+      observedSha256,
+      code,
+    };
+  }));
+  return {
+    protocol: AOT_FRAMEWORK_LINK_PROTOCOL,
+    graphFingerprint: AOT_RC2_FRAMEWORK_LINK_GRAPH_FINGERPRINT,
+    mapPosture: 'performance-no-map',
+    policy: 'allow-c0-fallback',
+    modules,
   };
 }
