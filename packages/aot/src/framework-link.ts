@@ -1,10 +1,14 @@
 import { createHash } from 'node:crypto';
 import path from 'node:path';
+import { AotFrameworkLinkPackageError, readAotFrameworkLinkPackage } from './framework-link-package.js';
 
 export const AOT_FRAMEWORK_LINK_PROTOCOL = 1 as const;
 export const AOT_FRAMEWORK_LINK_MAP_POSTURE = 'performance-no-map' as const;
 export const AOT_RC2_FRAMEWORK_LINK_GRAPH_FINGERPRINT =
   'e1580a29e782b3c5ae7681384fea90be87ca6df55e9ad60483f04f117a03639e' as const;
+// One build-only RC2 derivation; replace at the GA framework catch-up.
+export const AOT_RC2_LINK_MODULES_GRAPH_FINGERPRINT =
+  '780e014fb526407e271bae23cfcd9703195382047dda12774b910737a52ea107' as const;
 
 export type AotFrameworkLinkMapPosture = 'performance-no-map' | 'mapped';
 export type AotFrameworkLinkPolicy = 'require-applied' | 'allow-c0-fallback';
@@ -24,6 +28,30 @@ export interface AotFrameworkLinksOptions {
   readonly mapPosture: AotFrameworkLinkMapPosture;
   readonly policy: AotFrameworkLinkPolicy;
   readonly modules: readonly AotFrameworkLinkModuleInput[];
+  readonly packages?: readonly AotFrameworkLinkPackageInput[];
+}
+
+export interface AotFrameworkLinkPackageInput {
+  readonly packageName: string;
+  readonly packageRoot: string;
+  readonly expectedManifestSha256: string;
+  readonly expectedStandardEntrySha256: string;
+}
+
+export interface AotFrameworkLinkPackageModuleArtifact {
+  readonly resolvedId: string;
+  readonly sha256: string;
+  readonly code: string;
+  /** Verified adjacent source map, retained without narrowing the framework's map contract. */
+  readonly map: string;
+}
+
+export interface AotLinkedFrameworkPackageArtifact {
+  readonly packageName: string;
+  readonly packageRoot: string;
+  readonly manifestSha256: string;
+  readonly entryResolvedId: string;
+  readonly modules: readonly AotFrameworkLinkPackageModuleArtifact[];
 }
 
 export interface AotPrepareFrameworkLinkModule extends AotFrameworkLinkModuleInput {
@@ -37,6 +65,7 @@ export interface AotPrepareFrameworkLinksRequest {
   readonly mapPosture: AotFrameworkLinkMapPosture;
   readonly policy: AotFrameworkLinkPolicy;
   readonly modules: readonly AotPrepareFrameworkLinkModule[];
+  readonly packages?: readonly AotFrameworkLinkPackageInput[];
 }
 
 export interface AotLinkedFrameworkModuleArtifact {
@@ -53,6 +82,7 @@ export interface AotPreparedFrameworkLinksApplied {
   readonly disposition: 'applied';
   readonly recipeFingerprint: string;
   readonly modules: readonly AotLinkedFrameworkModuleArtifact[];
+  readonly packages?: readonly AotLinkedFrameworkPackageArtifact[];
 }
 
 export type AotFrameworkLinksC0FallbackReasonKind =
@@ -322,6 +352,31 @@ export const AOT_RC2_FRAMEWORK_LINK_EXPECTATIONS = recipeModules.map((module) =>
   operation: module.operation,
 }));
 
+const linkEntryForwarder = "export * from '../link/index.mjs';\n";
+const linkPackageNames = ['@aurelia/kernel', '@aurelia/runtime', '@aurelia/runtime-html'] as const;
+const linkPackageManifestHashes = [
+  '6f8fc882405178e94eab168ca1ebdced234188db34520595e432a6b7e6920a9b',
+  '042a1ac1597f1e7e3c2dab641fe3b4243c7183696867b9bc5b82ddb9c64228ae',
+  '5c525c4f886fc28dc35c428bdc7c3bedcfbccd3fc22865883c3497888da580ed',
+] as const;
+const linkModulesRecipe = ([
+  ...recipeModules.map((module): FrameworkLinkRecipeModule => module.packageName === '@aurelia/runtime-html'
+    ? { ...module, role: 'target', operation: 'framework-link/package-entry/v1', linkedCode: linkEntryForwarder }
+    : module),
+  {
+    role: 'target', packageName: '@aurelia/kernel', packageRelativePath: 'dist/esm/index.mjs',
+    expectedSha256: '6e5a9925ce2b2b1efbbbee43607d67e83aae7b4e6e93938081006df5c1728b23',
+    operation: 'framework-link/package-entry/v1', linkedCode: linkEntryForwarder,
+  },
+  {
+    role: 'target', packageName: '@aurelia/runtime', packageRelativePath: 'dist/esm/index.mjs',
+    expectedSha256: 'ee9d1f96e3b2e7d22276f09a9b6f1a8661261d70cf8484ae91271f079f2fc998',
+    operation: 'framework-link/package-entry/v1', linkedCode: linkEntryForwarder,
+  },
+] satisfies FrameworkLinkRecipeModule[]).sort(compareFrameworkLinkModules);
+
+export const AOT_RC2_LINK_MODULES_EXPECTATIONS = linkModulesRecipe.map(({ linkedCode: _code, ...module }) => module);
+
 export const AOT_RC2_FRAMEWORK_LINK_RECIPE_FINGERPRINT = digest(JSON.stringify({
   protocol: AOT_FRAMEWORK_LINK_PROTOCOL,
   graphFingerprint: AOT_RC2_FRAMEWORK_LINK_GRAPH_FINGERPRINT,
@@ -337,18 +392,21 @@ export const AOT_RC2_FRAMEWORK_LINK_RECIPE_FINGERPRINT = digest(JSON.stringify({
 }));
 
 export class AotFrameworkLinkEmitter {
-  public prepare(
+  public async prepare(
     request: AotPrepareFrameworkLinksRequest,
     admission: AotFrameworkLinkSessionAdmission,
-  ): AotPrepareFrameworkLinksResult {
-    const modules = validateRequest(request);
+  ): Promise<AotPrepareFrameworkLinksResult> {
+    const hasPackages = request.packages !== undefined;
+    const recipe = hasPackages ? linkModulesRecipe : recipeModules;
+    const graphFingerprint = hasPackages ? AOT_RC2_LINK_MODULES_GRAPH_FINGERPRINT : AOT_RC2_FRAMEWORK_LINK_GRAPH_FINGERPRINT;
+    const modules = validateRequest(request, recipe);
     if (admission.state === 'c0-fallback') {
       return fallback('unsupported-input', `${admission.reasonKind}: ${admission.reason}`);
     }
-    if (request.graphFingerprint !== AOT_RC2_FRAMEWORK_LINK_GRAPH_FINGERPRINT) {
+    if (request.graphFingerprint !== graphFingerprint) {
       return fallback(
         'unsupported-input',
-        `RC2 framework linking expected graph '${AOT_RC2_FRAMEWORK_LINK_GRAPH_FINGERPRINT}', but received '${request.graphFingerprint}'.`,
+        `RC2 framework linking expected graph '${graphFingerprint}', but received '${request.graphFingerprint}'.`,
       );
     }
     if (request.mapPosture !== AOT_FRAMEWORK_LINK_MAP_POSTURE) {
@@ -366,7 +424,7 @@ export class AotFrameworkLinkEmitter {
       );
     }
     const recipeMismatchIndex = modules.findIndex((module, index) =>
-      module.expectedSha256 !== recipeModules[index]!.expectedSha256
+      module.expectedSha256 !== recipe[index]!.expectedSha256
     );
     if (recipeMismatchIndex >= 0) {
       const module = modules[recipeMismatchIndex]!;
@@ -377,11 +435,46 @@ export class AotFrameworkLinkEmitter {
       );
     }
 
+    let packages: readonly AotLinkedFrameworkPackageArtifact[] | undefined;
+    if (request.packages !== undefined) {
+      const inputs = validatePackageInputs(request.packages, modules);
+      if (inputs.some((input, index) => input.expectedManifestSha256 !== linkPackageManifestHashes[index])) {
+        return fallback('unsupported-input', 'RC2 framework linking has no recipe for the supplied package manifests.');
+      }
+      try {
+        const verified = await Promise.all(inputs.map(readAotFrameworkLinkPackage));
+        if (new Set(verified.map((pkg) => pkg.buildPolicySha256)).size !== 1) {
+          return fallback('unsupported-input', 'The three framework link packages do not share one build policy.');
+        }
+        packages = verified.map((pkg) => ({
+          packageName: pkg.packageName,
+          packageRoot: pkg.packageRoot,
+          manifestSha256: pkg.manifestSha256,
+          entryResolvedId: pkg.linkEntry,
+          modules: pkg.modules.map((module) => ({
+            resolvedId: module.resolvedId,
+            sha256: module.sha256,
+            code: module.code,
+            map: module.map.code,
+          })),
+        }));
+      } catch (error) {
+        if (!(error instanceof AotFrameworkLinkPackageError)) throw error;
+        return fallback('unsupported-input', error.message);
+      }
+    }
+
     return {
       disposition: 'applied',
-      recipeFingerprint: AOT_RC2_FRAMEWORK_LINK_RECIPE_FINGERPRINT,
+      recipeFingerprint: packages === undefined ? AOT_RC2_FRAMEWORK_LINK_RECIPE_FINGERPRINT : digest(JSON.stringify({
+        graphFingerprint,
+        facadeRecipe: AOT_RC2_FRAMEWORK_LINK_RECIPE_FINGERPRINT,
+        forwarder: linkEntryForwarder,
+        packages: packages.map((pkg) => ({ packageName: pkg.packageName, manifestSha256: pkg.manifestSha256 })),
+      })),
+      ...(packages === undefined ? {} : { packages }),
       modules: modules.flatMap((module, index): AotLinkedFrameworkModuleArtifact[] => {
-        const code = recipeModules[index]!.linkedCode;
+        const code = recipe[index]!.linkedCode;
         return code == null ? [] : [{
           packageName: module.packageName,
           packageRelativePath: module.packageRelativePath,
@@ -398,6 +491,7 @@ export class AotFrameworkLinkEmitter {
 
 function validateRequest(
   request: AotPrepareFrameworkLinksRequest,
+  recipe: readonly FrameworkLinkRecipeModule[],
 ): readonly AotPrepareFrameworkLinkModule[] {
   if (request.protocol !== AOT_FRAMEWORK_LINK_PROTOCOL) {
     invalidRequest('Framework-link protocol must be 1.');
@@ -410,8 +504,8 @@ function validateRequest(
     invalidRequest(`Unsupported framework-link policy '${String(request.policy)}'.`);
   }
   const rawModules: unknown = request.modules;
-  if (!Array.isArray(rawModules) || rawModules.length !== recipeModules.length) {
-    invalidRequest(`Framework-link request must contain exactly ${recipeModules.length} recipe modules.`);
+  if (!Array.isArray(rawModules) || rawModules.length !== recipe.length) {
+    invalidRequest(`Framework-link request must contain exactly ${recipe.length} recipe modules.`);
   }
   const moduleValues: readonly unknown[] = rawModules;
   const modules = moduleValues.map((value, index): AotPrepareFrameworkLinkModule => {
@@ -420,28 +514,28 @@ function validateRequest(
     }
     return value as AotPrepareFrameworkLinkModule;
   }).sort(compareFrameworkLinkModules);
-  for (let index = 0; index < recipeModules.length; index++) {
+  for (let index = 0; index < recipe.length; index++) {
     const module = modules[index]!;
-    const recipe = recipeModules[index]!;
+    const expected = recipe[index]!;
     if (
-      module.role !== recipe.role
-      || module.packageName !== recipe.packageName
-      || module.packageRelativePath !== recipe.packageRelativePath
+      module.role !== expected.role
+      || module.packageName !== expected.packageName
+      || module.packageRelativePath !== expected.packageRelativePath
     ) {
       invalidModule(
-        `Framework-link module ${index} must be ${recipe.role} ${recipe.packageName}/${recipe.packageRelativePath}.`,
+        `Framework-link module ${index} must be ${expected.role} ${expected.packageName}/${expected.packageRelativePath}.`,
       );
     }
     assertResolvedModulePath(module);
     if (typeof module.code !== 'string' || module.code.length === 0) {
-      invalidModule(`Framework-link module ${recipe.packageName} has no source code.`);
+      invalidModule(`Framework-link module ${expected.packageName} has no source code.`);
     }
-    assertSha256(module.expectedSha256, `${recipe.packageName}.expectedSha256`, 'AOT_FRAMEWORK_LINK_INVALID_MODULE');
-    assertSha256(module.observedSha256, `${recipe.packageName}.observedSha256`, 'AOT_FRAMEWORK_LINK_INVALID_MODULE');
+    assertSha256(module.expectedSha256, `${expected.packageName}.expectedSha256`, 'AOT_FRAMEWORK_LINK_INVALID_MODULE');
+    assertSha256(module.observedSha256, `${expected.packageName}.observedSha256`, 'AOT_FRAMEWORK_LINK_INVALID_MODULE');
     const actual = digest(module.code);
     if (actual !== module.observedSha256) {
       invalidModule(
-        `Framework-link module ${recipe.packageName} observed hash '${module.observedSha256}' does not match its bytes '${actual}'.`,
+        `Framework-link module ${expected.packageName} observed hash '${module.observedSha256}' does not match its bytes '${actual}'.`,
       );
     }
   }
@@ -449,13 +543,34 @@ function validateRequest(
 }
 
 function compareFrameworkLinkModules(
-  left: AotPrepareFrameworkLinkModule,
-  right: AotPrepareFrameworkLinkModule,
+  left: Pick<AotPrepareFrameworkLinkModule, 'role' | 'packageName' | 'packageRelativePath'>,
+  right: Pick<AotPrepareFrameworkLinkModule, 'role' | 'packageName' | 'packageRelativePath'>,
 ): number {
   return roleOrdinal(left.role) - roleOrdinal(right.role)
     || left.packageName.localeCompare(right.packageName)
-    || left.packageRelativePath.localeCompare(right.packageRelativePath)
-    || left.resolvedId.localeCompare(right.resolvedId);
+    || left.packageRelativePath.localeCompare(right.packageRelativePath);
+}
+
+function validatePackageInputs(
+  inputs: readonly AotFrameworkLinkPackageInput[],
+  modules: readonly AotPrepareFrameworkLinkModule[],
+): readonly AotFrameworkLinkPackageInput[] {
+  if (!Array.isArray(inputs) || inputs.length !== linkPackageNames.length) {
+    invalidRequest('Framework linking requires kernel, runtime and runtime-html packages together.');
+  }
+  return linkPackageNames.map((packageName) => {
+    const matches = inputs.filter((input) => input.packageName === packageName);
+    if (matches.length !== 1) invalidRequest(`Framework linking requires exactly one '${packageName}' package.`);
+    const input = matches[0]!;
+    const module = modules.find((candidate) => candidate.packageName === packageName)!;
+    if (typeof input.packageRoot !== 'string' || !path.isAbsolute(input.packageRoot)
+      || path.resolve(input.packageRoot, 'dist/esm/index.mjs') !== path.resolve(module.resolvedId)
+      || input.expectedStandardEntrySha256 !== module.expectedSha256) {
+      invalidRequest(`Framework link package '${packageName}' does not match its exact default entry.`);
+    }
+    assertSha256(input.expectedManifestSha256, `${packageName}.expectedManifestSha256`, 'AOT_FRAMEWORK_LINK_INVALID_REQUEST');
+    return input;
+  });
 }
 
 function roleOrdinal(role: AotFrameworkLinkModuleRole): number {

@@ -1,3 +1,4 @@
+import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 
 import {
@@ -5,6 +6,8 @@ import {
   AOT_FRAMEWORK_LINK_PROTOCOL,
   AOT_RC2_FRAMEWORK_LINK_EXPECTATIONS,
   AOT_RC2_FRAMEWORK_LINK_GRAPH_FINGERPRINT,
+  AOT_RC2_LINK_MODULES_EXPECTATIONS,
+  AOT_RC2_LINK_MODULES_GRAPH_FINGERPRINT,
 } from '@aurelia-ls/aot';
 import type {
   AotFrameworkLinkModuleInput,
@@ -40,7 +43,79 @@ export function createRc2FrameworkLinkProfile(
     );
   }
   const packages = indexPackages(framework.provenance.packages);
-  const modules = AOT_RC2_FRAMEWORK_LINK_EXPECTATIONS.map((expectation): AotFrameworkLinkModuleInput => {
+  const modules = recipeModules(framework, packages, AOT_RC2_FRAMEWORK_LINK_EXPECTATIONS);
+
+  return {
+    protocol: AOT_FRAMEWORK_LINK_PROTOCOL,
+    graphFingerprint,
+    mapPosture: AOT_FRAMEWORK_LINK_MAP_POSTURE,
+    policy: request.policy ?? 'require-applied',
+    modules,
+  };
+}
+
+/** Join the temporary RC2 build-only derivation to its published link packages. */
+export async function createRc2LinkedModulesProfile(
+  request: Rc2FrameworkLinkProfileRequest,
+): Promise<AotFrameworkLinksOptions> {
+  const framework = request.framework;
+  const graphFingerprint = framework.provenance.graphFingerprint;
+  if (graphFingerprint !== AOT_RC2_LINK_MODULES_GRAPH_FINGERPRINT) {
+    throw new Error(
+      `RC2 linked-modules recipe expects graph '${AOT_RC2_LINK_MODULES_GRAPH_FINGERPRINT}', `
+      + `but the prepared graph is '${graphFingerprint}'.`,
+    );
+  }
+  const entries = indexPackages(framework.provenance.packages);
+  const modules = recipeModules(framework, entries, AOT_RC2_LINK_MODULES_EXPECTATIONS);
+  const packages = await Promise.all(([
+    '@aurelia/kernel', '@aurelia/runtime', '@aurelia/runtime-html',
+  ] as const).map(async packageName => {
+    const entry = entries.get(packageName)!; // recipeModules has admitted the complete inventory.
+    const packageRoot = path.resolve(path.dirname(framework.entryFor(packageName)), '../..');
+    const manifestPath = path.join(packageRoot, 'dist/link/manifest.json');
+    const manifest = JSON.parse(await readFile(manifestPath, 'utf8')) as {
+      readonly schema: string;
+      readonly protocol: string;
+      readonly package: { readonly name: string; readonly version: string };
+      readonly origin: { readonly standardEntry: { readonly path: string; readonly sha256: string } };
+      readonly manifestSha256: string;
+    };
+    if (
+      manifest.schema !== 'aurelia-framework-link-package/v1'
+      || manifest.protocol !== 'aurelia-framework-link/v1'
+      || manifest.package.name !== packageName
+      || manifest.package.version !== entry.version
+      || manifest.origin.standardEntry.path !== entry.esmEntry
+      || manifest.origin.standardEntry.sha256 !== entry.installedEsmSha256
+    ) {
+      throw new Error(`Link manifest '${manifestPath}' does not describe the prepared package entry.`);
+    }
+    assertSha256(manifest.manifestSha256, `${packageName} canonical manifest hash`);
+    return {
+      packageName,
+      packageRoot,
+      expectedManifestSha256: manifest.manifestSha256,
+      expectedStandardEntrySha256: entry.installedEsmSha256,
+    };
+  }));
+  return {
+    protocol: AOT_FRAMEWORK_LINK_PROTOCOL,
+    graphFingerprint,
+    mapPosture: AOT_FRAMEWORK_LINK_MAP_POSTURE,
+    policy: request.policy ?? 'require-applied',
+    modules,
+    packages,
+  };
+}
+
+function recipeModules(
+  framework: PreparedFrameworkPackageGraph,
+  packages: ReadonlyMap<string, FrameworkPackageEntryProvenance>,
+  expectations: readonly Pick<AotFrameworkLinkModuleInput,
+    'role' | 'packageName' | 'packageRelativePath' | 'expectedSha256'>[],
+): AotFrameworkLinkModuleInput[] {
+  return expectations.map((expectation): AotFrameworkLinkModuleInput => {
     const entry = packages.get(expectation.packageName);
     if (entry === undefined) {
       throw new Error(
@@ -62,14 +137,6 @@ export function createRc2FrameworkLinkProfile(
       expectedSha256: expectation.expectedSha256,
     };
   });
-
-  return {
-    protocol: AOT_FRAMEWORK_LINK_PROTOCOL,
-    graphFingerprint,
-    mapPosture: AOT_FRAMEWORK_LINK_MAP_POSTURE,
-    policy: request.policy ?? 'require-applied',
-    modules,
-  };
 }
 
 function indexPackages(

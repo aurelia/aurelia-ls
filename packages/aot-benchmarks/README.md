@@ -26,3 +26,9 @@ and `report.md`. Set `AURELIA_AOT_BENCHMARK_CHROME` to select a specific install
 locates stable Google Chrome and records its exact executable hash and version.
 The repository pins ChromeDriver independently; promotion refuses when its major version does not match the selected
 Chrome, so a browser auto-update requires an explicit toolchain update and a new baseline generation.
+
+`createRc2LinkedModulesProfile` supports the bounded FW-030 build-only RC2 derivation for local link experiments.
+It joins the exact packed package graph with the three published manifest identities and requests atomic consumption
+through the ordinary AOT/Vite coordinator. This does not repin the framework or change the promoted RC2 measurement
+contract. The derived graph has its own identity, and local parity/size checkpoints are not automatically promoted
+runtime baselines.

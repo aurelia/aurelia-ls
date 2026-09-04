@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -13,6 +13,7 @@ import {
   type AotFrameworkLinksOptions,
   type AotPreparedFrameworkLinksResult,
 } from "../src/index.js";
+import { frameworkPackageFixture } from "./framework-link-package-fixture.js";
 
 const temporaryRoots: string[] = [];
 
@@ -333,6 +334,105 @@ describe("exact-fingerprinted framework links", () => {
       code: "AOT_VITE_FRAMEWORK_LINK_FAILED",
       message: expect.stringContaining("returned no usable source map"),
     });
+  });
+});
+
+describe("manifest-backed framework package graphs", () => {
+  it("admits all three associated entry targets together and rejects incomplete or mismatched requests", async () => {
+    const fixture = await frameworkPackageFixture(temporaryRoots);
+    const create = (options: AotFrameworkLinksOptions) => aureliaAot({
+      provider: provider(async () => fixture.result), frameworkLinks: options,
+    });
+    expect(() => create({ ...fixture.options, packages: fixture.options.packages!.slice(1) }))
+      .toThrow(/complete kernel, runtime, and runtime-html graph/u);
+    expect(() => create({ ...fixture.options, packages: fixture.options.packages!.map((pkg, i) =>
+      i === 0 ? { ...pkg, expectedStandardEntrySha256: sha256("other") } : pkg) }))
+      .toThrow(/matching exact standard-entry target/u);
+    expect(() => create({ ...fixture.options, packages: fixture.options.packages!.map((pkg, i) =>
+      i === 0 ? { ...pkg, packageRoot: "relative" } : pkg) }))
+      .toThrow(/exact absolute path/u);
+  });
+
+  it("loads captured code and maps, refuses unlisted modules and post-load drift, and permits unused modules", async () => {
+    const fixture = await frameworkPackageFixture(temporaryRoots);
+    const prepare = vi.fn(async () => fixture.result);
+    const preset = aureliaAot({ provider: provider(prepare), frameworkLinks: fixture.options, receipt: {} });
+    await resolvePreset(preset);
+    const linker = requiredPlugin(preset, "aurelia-aot:framework-links");
+    const context = pluginContext();
+    await invoke(linker, "buildStart", context);
+    expect(prepare).toHaveBeenCalledWith(expect.objectContaining({ packages: fixture.options.packages }));
+    for (const pkg of fixture.packages) {
+      const module = pkg.modules[0]!;
+      await writeFile(module.resolvedId, "throw new Error('disk graph changed');");
+      expect(await invoke(linker, "load", context, module.resolvedId, {})).toEqual({
+        code: module.code, map: module.map, moduleSideEffects: false,
+      });
+      expect(await invoke(linker, "transform", context, module.code, module.resolvedId, {})).toBeNull();
+      expect(context.addWatchFile).toHaveBeenCalledWith(path.join(pkg.packageRoot, "dist/link/manifest.json"));
+      expect(context.addWatchFile).toHaveBeenCalledWith(`${module.resolvedId}.map`);
+    }
+    const first = fixture.packages[0]!.modules[0]!;
+    await expect(invoke(linker, "transform", context, "changed", first.resolvedId, {}))
+      .rejects.toThrow(/changed after its package snapshot/u);
+    await expect(invoke(linker, "load", context, first.resolvedId + "?other", {}))
+      .rejects.toThrow(/outside the armed package snapshot/u);
+    await expect(invoke(linker, "load", context, path.join(path.dirname(first.resolvedId), "unknown.mjs"), {}))
+      .rejects.toThrow(/outside the armed package snapshot/u);
+    for (const module of fixture.options.modules) {
+      const code = await readFile(module.resolvedId, "utf8");
+      await invoke(linker, "transform", context, code, module.resolvedId, {});
+    }
+    await invoke(linker, "buildEnd", context, undefined);
+    await invoke(requiredPlugin(preset, "aurelia-aot:receipt"), "generateBundle", context, {}, {});
+    const emitted = context.emitFile.mock.calls[0]![0] as { source: string };
+    const receipt = JSON.parse(emitted.source) as AotBuildReceipt;
+    expect(receipt.frameworkLinks?.packages).toEqual(fixture.packages.map((pkg) => ({
+      packageName: pkg.packageName, manifestSha256: pkg.manifestSha256, moduleCount: 2, loadedModuleCount: 1,
+    })));
+  });
+
+  it("does not arm a dishonest package result and cannot downgrade partial package consumption to C0", async () => {
+    const fixture = await frameworkPackageFixture(temporaryRoots);
+    const first = fixture.packages[0]!;
+    const broken = [
+      fixture.packages.slice(1),
+      [{ ...first, manifestSha256: sha256("wrong") }, ...fixture.packages.slice(1)],
+      [{ ...first, entryResolvedId: path.join(first.packageRoot, "dist/link/missing.mjs") }, ...fixture.packages.slice(1)],
+      [{ ...first, modules: first.modules.map((m) => ({ ...m, code: "bad snapshot" })) }, ...fixture.packages.slice(1)],
+    ];
+    for (const packages of broken) {
+      const preset = aureliaAot({
+        provider: provider(async () => ({ ...fixture.result, packages })), frameworkLinks: fixture.options,
+      });
+      await resolvePreset(preset);
+      await expect(invoke(requiredPlugin(preset, "aurelia-aot:framework-links"), "buildStart", pluginContext()))
+        .rejects.toMatchObject({ code: "AOT_VITE_FRAMEWORK_LINK_FAILED" });
+    }
+    const partial = aureliaAot({ provider: provider(async () => fixture.result), frameworkLinks: fixture.options });
+    await resolvePreset(partial);
+    const linker = requiredPlugin(partial, "aurelia-aot:framework-links");
+    const context = pluginContext();
+    await invoke(linker, "buildStart", context);
+    await invoke(linker, "load", context, first.entryResolvedId, {});
+    await expect(invoke(linker, "buildEnd", context, undefined)).rejects.toThrow(/partial linkage cannot fall back/u);
+  });
+
+  it("leaves package loading and ordinary entries untouched after an allowed preparation refusal", async () => {
+    const fixture = await frameworkPackageFixture(temporaryRoots);
+    const preset = aureliaAot({
+      provider: provider(async () => ({
+        disposition: "c0-fallback", reason: { kind: "input-hash-mismatch", summary: "Link package is stale." },
+      })), frameworkLinks: fixture.options,
+    });
+    await resolvePreset(preset);
+    const linker = requiredPlugin(preset, "aurelia-aot:framework-links");
+    const context = pluginContext();
+    await invoke(linker, "buildStart", context);
+    expect(await invoke(linker, "load", context, fixture.packages[0]!.entryResolvedId, {})).toBeNull();
+    const module = fixture.options.modules[0]!;
+    expect(await invoke(linker, "transform", context, "ordinary", module.resolvedId, {})).toBeNull();
+    await invoke(linker, "buildEnd", context, undefined);
   });
 });
 

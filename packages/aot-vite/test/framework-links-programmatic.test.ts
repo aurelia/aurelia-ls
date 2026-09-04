@@ -13,6 +13,7 @@ import {
   type AotFrameworkLinksOptions,
   type AotPreparedFrameworkLinksResult,
 } from "../src/index.js";
+import { frameworkPackageFixture } from "./framework-link-package-fixture.js";
 
 const temporaryRoots: string[] = [];
 
@@ -21,6 +22,25 @@ afterEach(async () => {
 });
 
 describe("framework links through a real Vite build", () => {
+  it("redirects three package entries through one captured graph without splitting runtime identity", async () => {
+    const fixture = await frameworkPackageFixture(temporaryRoots);
+    const applied = await buildPreparedPlan(fixture, fixture.options, fixture.result);
+    const evaluated = await import(`data:text/javascript;base64,${Buffer.from(applied.chunk.code).toString("base64")}`) as {
+      sameIdentity: boolean;
+      marker: string;
+    };
+    expect(evaluated).toMatchObject({ sameIdentity: true, marker: "linked" });
+    expect(applied.receipt?.frameworkLinks?.packages).toEqual(fixture.packages.map((pkg) => ({
+      packageName: pkg.packageName, manifestSha256: pkg.manifestSha256, moduleCount: 2, loadedModuleCount: 1,
+    })));
+    expect(applied.chunk.code).not.toContain("unreached");
+    const fallback = await buildPreparedPlan(fixture, fixture.options, {
+      disposition: "c0-fallback", reason: { kind: "recipe-unavailable", summary: "Intentional whole-graph control." },
+    });
+    expect(fallback.chunk.code).toContain("ordinary");
+    expect(fallback.chunk.code).not.toContain("linked");
+  });
+
   it("links the exact resolved id, composes its map, and emits deterministic receipts", async () => {
     const fixture = await fixtureProject();
     const first = await buildVariant(fixture, "applied", true);
@@ -224,7 +244,7 @@ function artifactProvider(
 }
 
 async function buildPreparedPlan(
-  fixture: FixtureProject,
+  fixture: Pick<FixtureProject, "root" | "entry">,
   frameworkLinks: AotFrameworkLinksOptions,
   result: AotPreparedFrameworkLinksResult,
   external: readonly string[] = [],

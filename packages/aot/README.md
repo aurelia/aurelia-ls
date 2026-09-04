@@ -25,6 +25,10 @@ The current public API is deliberately narrow:
   Aurelia facade used by strict AOT builds. Runtime-configuration protocol v2 includes the lookup-only captured-spread
   compiler contract; its content address cannot collide with the earlier blanket-refusal module semantics.
 - `AotTemplateModuleEmitter` remains the standalone HTML-resource realization.
+- `AotFrameworkLinkEmitter` combines compiler/parser ABI facades with optional framework-published link graphs.
+  The current RC2 build-only derivation pins all three core package manifests independently of the original RC2
+  package graph. It admits them only after the session's existing compiler/spread/configuration closure checks;
+  `readAotFrameworkLinkPackage` verifies the published file contract and captures modules/maps before emission.
 
 Local-template execution has two exact owner-Type realizations. Carrier-owned compiler patches receive the authored
 owner Type and its converged dependency prefix; standalone convention DefinitionModules allocate their root Type shell
@@ -54,8 +58,8 @@ Static compiler patches remain usable with the authored JIT configuration when r
 profiles that replace `StandardConfiguration` require exact spread closure for every admitted resource and refuse
 typed general-compiler pressure from incomplete cohorts, open registration/program sources, `AuCompose`, `enhance`, or
 other programmatic compiler use before emitting the lookup-only `AotTemplateCompiler`.
-Finer payload maps and broader observation/binding optimization are the next production boundaries. SSR and AOT remain
-independent axes.
+Generated binding evaluation/dependency specialization and broader compiler admission remain separate production
+boundaries. Full mapped framework-link profiles remain open; SSR and AOT remain independent axes.
 
 `src/testing` contains two retained low-level characterization lanes:
 

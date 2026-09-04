@@ -7,10 +7,13 @@ import { AotViteError } from "./aot-vite-error.js";
 import type {
   AotBuildSession,
   AotFrameworkLinkModuleInput,
+  AotFrameworkLinkPackageInput,
+  AotFrameworkLinkPackageModuleArtifact,
   AotFrameworkLinksC0FallbackReason,
   AotFrameworkLinksOptions,
   AotFrameworkLinksReceipt,
   AotLinkedFrameworkModuleArtifact,
+  AotLinkedFrameworkPackageArtifact,
   AotObservedFrameworkLinkModule,
   AotPreparedFrameworkLinksResult,
 } from "./contracts.js";
@@ -23,6 +26,18 @@ interface AppliedFrameworkLinkModule extends ObservedFrameworkLinkModule {
   readonly artifact: AotLinkedFrameworkModuleArtifact;
 }
 
+interface AppliedFrameworkPackageModule {
+  readonly artifact: AotFrameworkLinkPackageModuleArtifact;
+  loaded: boolean;
+}
+
+interface AppliedFrameworkPackage {
+  readonly artifact: AotLinkedFrameworkPackageArtifact;
+  readonly linkRootKey: string;
+  readonly modules: readonly AppliedFrameworkPackageModule[];
+  readonly entry: AppliedFrameworkPackageModule;
+}
+
 type PreparedFrameworkLinksState =
   | {
       readonly disposition: "applied";
@@ -31,6 +46,8 @@ type PreparedFrameworkLinksState =
       readonly modules: readonly (AppliedFrameworkLinkModule | ObservedFrameworkLinkModule)[];
       readonly modulesById: ReadonlyMap<string, AppliedFrameworkLinkModule | ObservedFrameworkLinkModule>;
       readonly targetsById: ReadonlyMap<string, AppliedFrameworkLinkModule>;
+      readonly packages: readonly AppliedFrameworkPackage[];
+      readonly packageModulesById: ReadonlyMap<string, AppliedFrameworkPackageModule>;
     }
   | {
       readonly disposition: "c0-fallback";
@@ -80,8 +97,31 @@ export class FrameworkLinkCoordinator {
         host.startBuildSession(this.environment);
         const state = stateFor(this.environment);
         for (const module of options.modules) this.addWatchFile(module.resolvedId);
+        for (const pkg of options.packages ?? []) this.addWatchFile(path.join(pkg.packageRoot, "dist/link/manifest.json"));
         state.preparation ??= prepare(state, this.environment);
         await state.preparation;
+        if (state.prepared?.disposition === "applied") {
+          for (const pkg of state.prepared.packages) {
+            for (const module of pkg.modules) {
+              this.addWatchFile(module.artifact.resolvedId);
+              this.addWatchFile(`${module.artifact.resolvedId}.map`);
+            }
+          }
+        }
+      },
+      async load(id, loadOptions) {
+        host.rejectSsr(loadOptions?.ssr);
+        const state = stateFor(this.environment);
+        await state.preparation;
+        const prepared = state.prepared;
+        if (prepared?.disposition !== "applied") return null;
+        const module = prepared.packageModulesById.get(sourcePathKey(id));
+        if (module == null) {
+          assertNoUnlistedPackageModule(prepared.packages, id);
+          return null;
+        }
+        module.loaded = true;
+        return { code: module.artifact.code, map: module.artifact.map, moduleSideEffects: false };
       },
       async transform(code, id, transformOptions) {
         host.rejectSsr(transformOptions?.ssr);
@@ -94,6 +134,14 @@ export class FrameworkLinkCoordinator {
           if (module != null) module.loaded = true;
           return null;
         }
+        const packageModule = prepared.packageModulesById.get(sourcePathKey(id));
+        if (packageModule != null) {
+          if (sha256(code) !== packageModule.artifact.sha256) {
+            throw frameworkLinkError(`Framework link module '${id}' changed after its package snapshot was armed.`, id);
+          }
+          return null;
+        }
+        assertNoUnlistedPackageModule(prepared.packages, id);
         const module = prepared.modulesById.get(sourcePathKey(id));
         if (module == null) return null;
         const currentSha256 = sha256(code);
@@ -170,6 +218,7 @@ export class FrameworkLinkCoordinator {
         mapPosture: options.mapPosture,
         policy: options.policy,
         modules: observed.map(({ loaded: _loaded, ...module }) => module),
+        ...(options.packages === undefined ? {} : { packages: options.packages }),
       });
     } catch (cause) {
       throw frameworkLinkError("AOT framework-link preparation failed before the plan could be armed.", undefined, cause);
@@ -224,6 +273,7 @@ export class FrameworkLinkCoordinator {
         `Framework-link recipe returned artifact(s) outside the prepared target set: ${[...artifactsById.keys()].join(", ")}.`,
       );
     }
+    const { packages, packageModulesById } = preparePackageSnapshots(options.packages, result.packages);
     state.prepared = {
       disposition: "applied",
       options,
@@ -231,6 +281,8 @@ export class FrameworkLinkCoordinator {
       modules: armed,
       modulesById,
       targetsById,
+      packages,
+      packageModulesById,
     };
   }
 
@@ -256,10 +308,13 @@ export class FrameworkLinkCoordinator {
     if (prepared == null || prepared.disposition === "c0-fallback") return;
     const targets = prepared.modules.filter((module) => module.role === "target");
     const consumed = targets.filter((module) => module.loaded);
-    if (consumed.length === targets.length) return;
-    if (consumed.length > 0) {
+    const enteredPackages = prepared.packages.filter((pkg) => pkg.entry.loaded);
+    if (consumed.length === targets.length && enteredPackages.length === prepared.packages.length) return;
+    const packageModuleConsumed = prepared.packages.some((pkg) => pkg.modules.some((module) => module.loaded));
+    if (consumed.length > 0 || packageModuleConsumed) {
       throw frameworkLinkError(
-        `Framework-link plan consumed ${consumed.length} of ${targets.length} target modules; partial linkage cannot fall back to C0.`,
+        `Framework-link plan consumed ${consumed.length} of ${targets.length} target modules`
+        + ` and ${enteredPackages.length} of ${prepared.packages.length} package entries; partial linkage cannot fall back to C0.`,
       );
     }
     const reason: AotFrameworkLinksC0FallbackReason = {
@@ -337,12 +392,14 @@ export function normalizeFrameworkLinksOptions(input: AotFrameworkLinksOptions):
   if (!modules.some((module) => module.role === "target")) {
     throw frameworkLinkError("Framework-link options require at least one target module.");
   }
+  const packages = normalizeFrameworkLinkPackages(input.packages, modules);
   return {
     protocol: 1,
     graphFingerprint: input.graphFingerprint,
     mapPosture: input.mapPosture,
     policy: input.policy,
     modules,
+    ...(packages === undefined ? {} : { packages }),
   };
 }
 
@@ -351,6 +408,114 @@ export function sourcePathKey(value: string): string {
   return /^[A-Za-z]:\//u.test(slash)
     ? path.win32.normalize(value).replaceAll("\\", "/").toLowerCase()
     : path.posix.normalize(slash);
+}
+
+const linkedCorePackages = ["@aurelia/kernel", "@aurelia/runtime", "@aurelia/runtime-html"];
+
+function normalizeFrameworkLinkPackages(
+  inputs: readonly AotFrameworkLinkPackageInput[] | undefined,
+  modules: readonly AotFrameworkLinkModuleInput[],
+): readonly AotFrameworkLinkPackageInput[] | undefined {
+  if (inputs === undefined) return undefined;
+  if (!Array.isArray(inputs) || inputs.length !== linkedCorePackages.length) {
+    throw frameworkLinkError("Framework package linkage requires the complete kernel, runtime, and runtime-html graph.");
+  }
+  const names = new Set<string>();
+  const packages = inputs.map((pkg): AotFrameworkLinkPackageInput => {
+    if (pkg == null || !linkedCorePackages.includes(pkg.packageName) || names.has(pkg.packageName)) {
+      throw frameworkLinkError("Framework package linkage must name kernel, runtime, and runtime-html exactly once.");
+    }
+    names.add(pkg.packageName);
+    assertExactAbsolutePath(pkg.packageRoot, `Framework package '${pkg.packageName}' root`);
+    assertSha256(pkg.expectedManifestSha256, `${pkg.packageName} manifest`);
+    assertSha256(pkg.expectedStandardEntrySha256, `${pkg.packageName} standard entry`);
+    const packageRoot = path.resolve(pkg.packageRoot);
+    const entry = modules.find((module) => module.packageName === pkg.packageName
+      && module.packageRelativePath === "dist/esm/index.mjs");
+    if (entry?.role !== "target"
+      || sourcePathKey(entry.resolvedId) !== sourcePathKey(path.join(packageRoot, "dist/esm/index.mjs"))
+      || entry.expectedSha256 !== pkg.expectedStandardEntrySha256) {
+      throw frameworkLinkError(`Framework package '${pkg.packageName}' has no matching exact standard-entry target.`);
+    }
+    return {
+      packageName: pkg.packageName,
+      packageRoot,
+      expectedManifestSha256: pkg.expectedManifestSha256,
+      expectedStandardEntrySha256: pkg.expectedStandardEntrySha256,
+    };
+  });
+  return packages.sort((left, right) => left.packageName.localeCompare(right.packageName));
+}
+
+function preparePackageSnapshots(
+  inputs: readonly AotFrameworkLinkPackageInput[] | undefined,
+  artifacts: readonly AotLinkedFrameworkPackageArtifact[] | undefined,
+): {
+  readonly packages: readonly AppliedFrameworkPackage[];
+  readonly packageModulesById: ReadonlyMap<string, AppliedFrameworkPackageModule>;
+} {
+  const packages: AppliedFrameworkPackage[] = [];
+  const packageModulesById = new Map<string, AppliedFrameworkPackageModule>();
+  if (inputs === undefined && artifacts === undefined) return { packages, packageModulesById };
+  if (inputs === undefined || !Array.isArray(artifacts) || artifacts.length !== inputs.length) {
+    throw frameworkLinkError("Framework-link recipe did not return the complete requested package graph.");
+  }
+  const inputsByName = new Map(inputs.map((pkg) => [pkg.packageName, pkg]));
+  for (const artifact of artifacts) {
+    const input = inputsByName.get(artifact.packageName);
+    if (input == null) {
+      throw frameworkLinkError(`Framework-link recipe returned an unexpected or repeated package '${artifact.packageName}'.`);
+    }
+    inputsByName.delete(input.packageName);
+    assertExactAbsolutePath(artifact.packageRoot, `Framework package '${input.packageName}' artifact root`);
+    if (sourcePathKey(artifact.packageRoot) !== sourcePathKey(input.packageRoot)
+      || artifact.manifestSha256 !== input.expectedManifestSha256) {
+      throw frameworkLinkError(`Framework-link package '${input.packageName}' does not match its requested identity.`);
+    }
+    if (!Array.isArray(artifact.modules) || artifact.modules.length === 0) {
+      throw frameworkLinkError(`Framework-link package '${input.packageName}' returned no module snapshot.`);
+    }
+    const linkRootKey = sourcePathKey(path.join(input.packageRoot, "dist/link")) + "/";
+    const modules: AppliedFrameworkPackageModule[] = [];
+    for (const module of artifact.modules) {
+      assertExactAbsolutePath(module.resolvedId, `Framework link package '${input.packageName}' module`);
+      const key = sourcePathKey(module.resolvedId);
+      if (!key.startsWith(linkRootKey) || !key.endsWith(".mjs") || packageModulesById.has(key)) {
+        throw frameworkLinkError(`Framework link module '${module.resolvedId}' is duplicated or outside its package graph.`, module.resolvedId);
+      }
+      assertSha256(module.sha256, `framework link module '${module.resolvedId}'`);
+      if (typeof module.code !== "string" || sha256(module.code) !== module.sha256) {
+        throw frameworkLinkError(`Framework link module '${module.resolvedId}' has an invalid snapshot digest.`, module.resolvedId);
+      }
+      if (!isFrameworkLinkSourceMap(module.map, false)) {
+        throw frameworkLinkError(`Framework link module '${module.resolvedId}' has no usable source map.`, module.resolvedId);
+      }
+      const snapshot: AppliedFrameworkPackageModule = { artifact: module, loaded: false };
+      modules.push(snapshot);
+      packageModulesById.set(key, snapshot);
+    }
+    assertExactAbsolutePath(artifact.entryResolvedId, `Framework link package '${input.packageName}' entry`);
+    const entry = modules.find((module) => sourcePathKey(module.artifact.resolvedId) === sourcePathKey(artifact.entryResolvedId));
+    if (entry == null) {
+      throw frameworkLinkError(`Framework link package '${input.packageName}' omitted its entry module.`);
+    }
+    packages.push({ artifact, linkRootKey, modules, entry });
+  }
+  packages.sort((left, right) => left.artifact.packageName.localeCompare(right.artifact.packageName));
+  return { packages, packageModulesById };
+}
+
+function assertNoUnlistedPackageModule(packages: readonly AppliedFrameworkPackage[], id: string): void {
+  const key = sourcePathKey(id);
+  if (/\.mjs(?:[?#]|$)/u.test(key) && packages.some((pkg) => key.startsWith(pkg.linkRootKey))) {
+    throw frameworkLinkError(`Framework link module '${id}' is outside the armed package snapshot.`, id);
+  }
+}
+
+function assertExactAbsolutePath(value: string, label: string): void {
+  if (typeof value !== "string" || !path.isAbsolute(value) || /[\0?#]/u.test(value)) {
+    throw frameworkLinkError(`${label} must be an exact absolute path.`);
+  }
 }
 
 async function readObservedFrameworkModule(
@@ -425,12 +590,15 @@ function validateLinkedFrameworkModuleArtifact(
   if (artifact.map === undefined) {
     throw frameworkLinkError(`Framework-link artifact for '${module.resolvedId}' omitted its map result.`, module.resolvedId);
   }
-  if (mapPosture === "mapped" && !isUsableFrameworkLinkSourceMap(artifact.map)) {
+  if (mapPosture === "mapped" && !isFrameworkLinkSourceMap(artifact.map, true)) {
     throw frameworkLinkError(`Mapped framework-link artifact for '${module.resolvedId}' returned no usable source map.`, module.resolvedId);
   }
 }
 
-function isUsableFrameworkLinkSourceMap(value: AotLinkedFrameworkModuleArtifact["map"]): boolean {
+function isFrameworkLinkSourceMap(
+  value: AotLinkedFrameworkModuleArtifact["map"],
+  requireAuthoredSources: boolean,
+): boolean {
   let map: unknown = value;
   if (typeof map === "string") {
     try {
@@ -445,7 +613,7 @@ function isUsableFrameworkLinkSourceMap(value: AotLinkedFrameworkModuleArtifact[
     && typeof map.mappings === "string"
     && "sources" in map
     && Array.isArray(map.sources)
-    && map.sources.length > 0
+    && (!requireAuthoredSources || map.sources.length > 0)
     && map.sources.every((source) => typeof source === "string" && source.length > 0);
 }
 
@@ -496,7 +664,8 @@ function frameworkLinksReceipt(state: PreparedFrameworkLinksState): AotFramework
   const options = state.options;
   if (
     state.disposition === "applied"
-    && state.modules.some((module) => module.role === "target" && !module.loaded)
+    && (state.modules.some((module) => module.role === "target" && !module.loaded)
+      || state.packages.some((pkg) => !pkg.entry.loaded))
   ) {
     throw frameworkLinkError("Framework-link receipt cannot label an unconsumed target as applied.");
   }
@@ -530,6 +699,14 @@ function frameworkLinksReceipt(state: PreparedFrameworkLinksState): AotFramework
     recipeFingerprint: state.disposition === "applied" ? state.recipeFingerprint : null,
     reason: state.disposition === "c0-fallback" ? state.reason : null,
     modules,
+    ...(state.disposition === "applied" && state.packages.length > 0 ? {
+      packages: state.packages.map((pkg) => ({
+        packageName: pkg.artifact.packageName,
+        manifestSha256: pkg.artifact.manifestSha256,
+        moduleCount: pkg.modules.length,
+        loadedModuleCount: pkg.modules.filter((module) => module.loaded).length,
+      })),
+    } : {}),
   };
 }
 

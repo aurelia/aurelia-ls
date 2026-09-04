@@ -1,4 +1,12 @@
 export {
+  AotFrameworkLinkPackageError,
+  readAotFrameworkLinkPackage,
+  type AotFrameworkLinkPackage,
+  type AotFrameworkLinkPackageFile,
+  type AotFrameworkLinkPackageModule,
+  type AotFrameworkLinkPackageRequest,
+} from './framework-link-package.js';
+export {
   AotCompilerPatchModuleEmitter,
   type AotCompilerPatchModuleArtifact,
   type AotCompilerPatchModuleEmissionRequest,
@@ -14,6 +22,8 @@ export {
   AOT_RC2_FRAMEWORK_LINK_GRAPH_FINGERPRINT,
   AOT_RC2_FRAMEWORK_LINK_OPERATION,
   AOT_RC2_FRAMEWORK_LINK_RECIPE_FINGERPRINT,
+  AOT_RC2_LINK_MODULES_GRAPH_FINGERPRINT,
+  AOT_RC2_LINK_MODULES_EXPECTATIONS,
   AotFrameworkLinkEmitter,
   AotFrameworkLinkError,
   type AotFrameworkLinkErrorCode,
@@ -24,6 +34,9 @@ export {
   type AotFrameworkLinkMapPosture,
   type AotFrameworkLinkModuleInput,
   type AotFrameworkLinkModuleRole,
+  type AotFrameworkLinkPackageInput,
+  type AotFrameworkLinkPackageModuleArtifact,
+  type AotLinkedFrameworkPackageArtifact,
   type AotFrameworkLinkSessionAdmission,
   type AotLinkedFrameworkModuleArtifact,
   type AotPrepareFrameworkLinkModule,

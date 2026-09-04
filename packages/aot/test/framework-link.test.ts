@@ -11,6 +11,8 @@ import {
   AOT_RC2_FRAMEWORK_LINK_EXPECTATIONS,
   AOT_RC2_FRAMEWORK_LINK_GRAPH_FINGERPRINT,
   AOT_RC2_FRAMEWORK_LINK_RECIPE_FINGERPRINT,
+  AOT_RC2_LINK_MODULES_EXPECTATIONS,
+  AOT_RC2_LINK_MODULES_GRAPH_FINGERPRINT,
   AotFrameworkLinkEmitter,
   type AotPrepareFrameworkLinkModule,
   type AotPrepareFrameworkLinksRequest,
@@ -24,7 +26,7 @@ describe('RC2 framework link', () => {
   it('emits deterministic compiler/parser ABI facades and unchanged guards', async () => {
     const request = await exactRequest();
     const emitter = new AotFrameworkLinkEmitter();
-    const result = emitter.prepare(request, { state: 'admitted' });
+    const result = await emitter.prepare(request, { state: 'admitted' });
 
     expect(result.disposition).toBe('applied');
     if (result.disposition !== 'applied') return;
@@ -58,14 +60,14 @@ describe('RC2 framework link', () => {
   it('canonicalizes module order before emission', async () => {
     const request = await exactRequest();
     const emitter = new AotFrameworkLinkEmitter();
-    const forward = emitter.prepare(request, { state: 'admitted' });
-    const reversed = emitter.prepare({ ...request, modules: [...request.modules].reverse() }, { state: 'admitted' });
+    const forward = await emitter.prepare(request, { state: 'admitted' });
+    const reversed = await emitter.prepare({ ...request, modules: [...request.modules].reverse() }, { state: 'admitted' });
 
     expect(reversed).toEqual(forward);
   });
 
   it('preserves the framework emptyArray identity for empty interpolation expressions', async () => {
-    const result = new AotFrameworkLinkEmitter().prepare(await exactRequest(), { state: 'admitted' });
+    const result = await new AotFrameworkLinkEmitter().prepare(await exactRequest(), { state: 'admitted' });
     expect(result.disposition).toBe('applied');
     if (result.disposition !== 'applied') return;
     const expressionParser = result.modules.find((module) =>
@@ -91,7 +93,7 @@ describe('RC2 framework link', () => {
   it('returns typed C0 fallbacks for valid but unadmitted, mapped, or drifted inputs', async () => {
     const request = await exactRequest();
     const emitter = new AotFrameworkLinkEmitter();
-    expect(emitter.prepare(request, {
+    expect(await emitter.prepare(request, {
       state: 'c0-fallback',
       reasonKind: 'semantic-framework-link-guard-open',
       reason: 'Namespace import authority is open.',
@@ -103,13 +105,13 @@ describe('RC2 framework link', () => {
       },
     });
 
-    expect(emitter.prepare({ ...request, mapPosture: 'mapped' }, { state: 'admitted' }))
+    expect(await emitter.prepare({ ...request, mapPosture: 'mapped' }, { state: 'admitted' }))
       .toMatchObject({
         disposition: 'c0-fallback',
         reason: { kind: 'map-unavailable' },
       });
 
-    expect(emitter.prepare({ ...request, graphFingerprint: '7'.repeat(64) }, { state: 'admitted' }))
+    expect(await emitter.prepare({ ...request, graphFingerprint: '7'.repeat(64) }, { state: 'admitted' }))
       .toMatchObject({
         disposition: 'c0-fallback',
         reason: {
@@ -123,7 +125,7 @@ describe('RC2 framework link', () => {
       code: changedCode,
       observedSha256: digest(changedCode),
     });
-    expect(emitter.prepare(changed, { state: 'admitted' })).toMatchObject({
+    expect(await emitter.prepare(changed, { state: 'admitted' })).toMatchObject({
       disposition: 'c0-fallback',
       reason: { kind: 'input-hash-mismatch' },
     });
@@ -133,7 +135,7 @@ describe('RC2 framework link', () => {
       expectedSha256: digest(changedCode),
       observedSha256: digest(changedCode),
     });
-    expect(emitter.prepare(honestDrift, { state: 'admitted' })).toMatchObject({
+    expect(await emitter.prepare(honestDrift, { state: 'admitted' })).toMatchObject({
       disposition: 'c0-fallback',
       reason: {
         kind: 'unsupported-input',
@@ -146,8 +148,8 @@ describe('RC2 framework link', () => {
     const request = await exactRequest();
     const changed = replaceModule(request, 0, { code: `${request.modules[0]!.code}\n` });
 
-    expect(() => new AotFrameworkLinkEmitter().prepare(changed, { state: 'admitted' }))
-      .toThrowError(/observed hash .* does not match its bytes/u);
+    await expect(new AotFrameworkLinkEmitter().prepare(changed, { state: 'admitted' }))
+      .rejects.toThrowError(/observed hash .* does not match its bytes/u);
   });
 
   it('fails closed for malformed graph, recipe hash, module set, and resolved path structure', async () => {
@@ -155,31 +157,61 @@ describe('RC2 framework link', () => {
     const emitter = new AotFrameworkLinkEmitter();
     const admitted = { state: 'admitted' } as const;
 
-    expect(() => emitter.prepare({ ...request, graphFingerprint: `sha256:${'7'.repeat(64)}` }, admitted))
-      .toThrowError(/graphFingerprint must be a lowercase sha256 digest/u);
-    expect(() => emitter.prepare({ ...request, modules: request.modules.slice(1) }, admitted))
-      .toThrowError(/exactly 4 recipe modules/u);
-    expect(() => emitter.prepare(replaceModule(request, 0, {
+    await expect(emitter.prepare({ ...request, graphFingerprint: `sha256:${'7'.repeat(64)}` }, admitted))
+      .rejects.toThrowError(/graphFingerprint must be a lowercase sha256 digest/u);
+    await expect(emitter.prepare({ ...request, modules: request.modules.slice(1) }, admitted))
+      .rejects.toThrowError(/exactly 4 recipe modules/u);
+    await expect(emitter.prepare(replaceModule(request, 0, {
       expectedSha256: `sha256:${'8'.repeat(64)}`,
-    }), admitted)).toThrowError(/expectedSha256 must be a lowercase sha256 digest/u);
-    expect(() => emitter.prepare(replaceModule(request, 0, {
+    }), admitted)).rejects.toThrowError(/expectedSha256 must be a lowercase sha256 digest/u);
+    await expect(emitter.prepare(replaceModule(request, 0, {
       observedSha256: 'NOT-A-SHA256',
-    }), admitted)).toThrowError(/observedSha256 must be a lowercase sha256 digest/u);
-    expect(() => emitter.prepare({
+    }), admitted)).rejects.toThrowError(/observedSha256 must be a lowercase sha256 digest/u);
+    await expect(emitter.prepare({
       ...request,
       modules: request.modules.map((module, index) => index === 1 ? request.modules[0]! : module),
-    }, admitted)).toThrowError(/module 1 must be target @aurelia\/template-compiler/u);
-    expect(() => emitter.prepare(replaceModule(request, 0, {
+    }, admitted)).rejects.toThrowError(/module 1 must be target @aurelia\/template-compiler/u);
+    await expect(emitter.prepare(replaceModule(request, 0, {
       resolvedId: `${request.modules[0]!.resolvedId}?development`,
-    }), admitted)).toThrowError(/invalid resolvedId/u);
-    expect(() => emitter.prepare(replaceModule(request, 0, {
+    }), admitted)).rejects.toThrowError(/invalid resolvedId/u);
+    await expect(emitter.prepare(replaceModule(request, 0, {
       resolvedId: path.resolve(repositoryRoot, 'outside/index.mjs'),
-    }), admitted)).toThrowError(/does not end in/u);
+    }), admitted)).rejects.toThrowError(/does not end in/u);
+  });
+
+  it('admits no package graph by borrowing the original RC2 identity or omitting a core package', async () => {
+    const modulesRequest = await exactRequest(AOT_RC2_LINK_MODULES_EXPECTATIONS);
+    const packages = modulesRequest.modules.filter((module) =>
+      ['@aurelia/kernel', '@aurelia/runtime', '@aurelia/runtime-html'].includes(module.packageName)
+    ).map((module) => ({
+      packageName: module.packageName,
+      packageRoot: path.resolve(module.resolvedId, '../../..'),
+      expectedStandardEntrySha256: module.expectedSha256,
+      expectedManifestSha256: '1'.repeat(64),
+    }));
+    const emitter = new AotFrameworkLinkEmitter();
+    const admitted = { state: 'admitted' } as const;
+    expect(await emitter.prepare({ ...modulesRequest, packages }, admitted)).toMatchObject({
+      disposition: 'c0-fallback', reason: { kind: 'unsupported-input' },
+    });
+    const request = { ...modulesRequest, graphFingerprint: AOT_RC2_LINK_MODULES_GRAPH_FINGERPRINT, packages };
+    await expect(emitter.prepare({ ...request, packages: packages.slice(1) }, admitted))
+      .rejects.toThrowError(/requires kernel, runtime and runtime-html packages together/u);
+    await expect(emitter.prepare({ ...request, packages: [packages[0]!, packages[0]!, packages[2]!] }, admitted))
+      .rejects.toThrowError(/exactly one/u);
+    await expect(emitter.prepare({ ...request, packages: packages.map((pkg) => ({
+      ...pkg, packageRoot: path.join(pkg.packageRoot, 'other'),
+    })) }, admitted)).rejects.toThrowError(/does not match its exact default entry/u);
+    expect(await emitter.prepare(request, admitted)).toMatchObject({
+      disposition: 'c0-fallback', reason: { summary: expect.stringContaining('no recipe for the supplied package manifests') },
+    });
   });
 });
 
-async function exactRequest(): Promise<AotPrepareFrameworkLinksRequest> {
-  const modules = await Promise.all(AOT_RC2_FRAMEWORK_LINK_EXPECTATIONS.map(
+async function exactRequest(
+  expectations = AOT_RC2_FRAMEWORK_LINK_EXPECTATIONS,
+): Promise<AotPrepareFrameworkLinksRequest> {
+  const modules = await Promise.all(expectations.map(
     async (expectation): Promise<AotPrepareFrameworkLinkModule> => {
       const packageDirectory = expectation.packageName === 'aurelia'
         ? 'aurelia'

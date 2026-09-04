@@ -70,6 +70,14 @@ export interface AotFrameworkLinkModuleInput {
   readonly expectedSha256: string;
 }
 
+/** Exact additive package graph accompanying its ordinary ESM entry target. */
+export interface AotFrameworkLinkPackageInput {
+  readonly packageName: string;
+  readonly packageRoot: string;
+  readonly expectedManifestSha256: string;
+  readonly expectedStandardEntrySha256: string;
+}
+
 /** Optional exact-fingerprinted framework-link input for one build environment. */
 export interface AotFrameworkLinksOptions {
   readonly protocol: 1;
@@ -77,6 +85,7 @@ export interface AotFrameworkLinksOptions {
   readonly mapPosture: AotFrameworkLinkMapPosture;
   readonly policy: AotFrameworkLinkPolicy;
   readonly modules: readonly AotFrameworkLinkModuleInput[];
+  readonly packages?: readonly AotFrameworkLinkPackageInput[];
 }
 
 /** Atomically captured framework module passed to the AOT link preparation port. */
@@ -91,6 +100,7 @@ export interface AotPrepareFrameworkLinksRequest {
   readonly mapPosture: AotFrameworkLinkMapPosture;
   readonly policy: AotFrameworkLinkPolicy;
   readonly modules: readonly AotObservedFrameworkLinkModule[];
+  readonly packages?: readonly AotFrameworkLinkPackageInput[];
 }
 
 export type AotFrameworkLinksC0FallbackReasonKind =
@@ -118,10 +128,27 @@ export interface AotLinkedFrameworkModuleArtifact {
   readonly map: AotSourceMapInput;
 }
 
+export interface AotFrameworkLinkPackageModuleArtifact {
+  readonly resolvedId: string;
+  readonly sha256: string;
+  readonly code: string;
+  readonly map: AotSourceMapInput;
+}
+
+/** Validated, complete package snapshot. Loading never returns to the mutable disk graph. */
+export interface AotLinkedFrameworkPackageArtifact {
+  readonly packageName: string;
+  readonly packageRoot: string;
+  readonly manifestSha256: string;
+  readonly entryResolvedId: string;
+  readonly modules: readonly AotFrameworkLinkPackageModuleArtifact[];
+}
+
 export interface AotPreparedFrameworkLinksApplied {
   readonly disposition: "applied";
   readonly recipeFingerprint: string;
   readonly modules: readonly AotLinkedFrameworkModuleArtifact[];
+  readonly packages?: readonly AotLinkedFrameworkPackageArtifact[];
 }
 
 export interface AotPreparedFrameworkLinksC0Fallback {
@@ -340,6 +367,14 @@ export interface AotFrameworkLinksReceipt {
   readonly recipeFingerprint: string | null;
   readonly reason: AotFrameworkLinksC0FallbackReason | null;
   readonly modules: readonly AotReceiptFrameworkLinkModule[];
+  readonly packages?: readonly AotReceiptFrameworkLinkPackage[];
+}
+
+export interface AotReceiptFrameworkLinkPackage {
+  readonly packageName: string;
+  readonly manifestSha256: string;
+  readonly moduleCount: number;
+  readonly loadedModuleCount: number;
 }
 
 export interface AotBuildReceipt {

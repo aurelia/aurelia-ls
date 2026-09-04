@@ -270,7 +270,7 @@ export class SemanticAotBuildSession {
   public prepareFrameworkLinks(
     request: AotPrepareFrameworkLinksRequest,
   ): Promise<AotPrepareFrameworkLinksResult> {
-    return Promise.resolve(this.#frameworkLinkEmitter.prepare(request, this.#frameworkLinkAdmission));
+    return this.#frameworkLinkEmitter.prepare(request, this.#frameworkLinkAdmission);
   }
 
   public async artifactFor(request: SemanticAotTemplateRequest): Promise<SemanticAotTemplateArtifact> {

@@ -35,3 +35,18 @@ The initial adapter accepts only one-shot client production builds. Serve,
 watch, SSR, workers, and non-client environments fail explicitly. Optional
 receipts expose resource-addressed artifacts, the input graph, and final
 chunk-module rendering without assuming one artifact per source filename.
+
+Optional `frameworkLinks` consumes an exact AOT-prepared framework recipe.
+For the RC2 build-only link derivation, normal kernel/runtime/runtime-html
+entries forward to their framework-published `dist/link` entries. The provider
+verifies the pinned manifests and preloads the complete module/map graphs;
+the coordinator arms these together with the compiler/parser facades and serves
+the captured modules through ordinary Vite loading. There is no separate package
+resolver and no second copy of framework DI or observation state.
+
+Unsupported inputs may retain the original C0 build when explicitly permitted.
+Once any replacement is consumed, incomplete package/target consumption or
+intervening transforms of the verified inputs fail the build. Individual unused
+link modules may still be tree-shaken. The current recipe remains a one-shot,
+performance-no-map profile; its adjacent module maps do not imply complete mapped
+support for the generated compiler/parser facades.
