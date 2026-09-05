@@ -102,6 +102,18 @@ describe('benchmark lane build identity', () => {
     expect(viteOutDir(harness.buildConfigs[0]!)).toBe(lane.outDir);
   });
 
+  test('keeps experimental transforms explicit and after ordinary build plugins', async () => {
+    const fixture = buildFixture();
+    const plugin = { name: 'binding-experiment' };
+    const request = {
+      application: fixture.application, mode: 'aot' as const,
+      outputRoot: fixture.outputRoot, framework: fixture.framework, plugins: [plugin],
+    };
+    await expect(buildBenchmarkLane(request)).rejects.toThrow(/explicit output label/u);
+    await buildBenchmarkLane({ ...request, outputLabel: 'binding-candidate' });
+    expect((harness.buildConfigs[0]!.plugins as unknown[]).at(-1)).toBe(plugin);
+  });
+
   test('plumbs applied and fallback profiles into isolated labeled sibling outputs and receipts', async () => {
     const fixture = buildFixture();
     const appliedProfile = frameworkLinks('require-applied');

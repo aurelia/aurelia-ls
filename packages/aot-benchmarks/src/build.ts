@@ -113,10 +113,15 @@ export async function buildBenchmarkLane(request: {
   readonly framework: PreparedFrameworkPackageGraph;
   readonly frameworkLinks?: AotFrameworkLinksOptions;
   readonly outputLabel?: string;
+  /** Additional controlled transforms for labelled experimental lanes. */
+  readonly plugins?: readonly PluginOption[];
 }): Promise<BenchmarkLaneBuild> {
   const application = request.application;
   const mode = request.mode;
   const outputLabel = normalizeOutputLabel(request.outputLabel);
+  if (request.plugins !== undefined && outputLabel === null) {
+    throw new Error('An experimental benchmark transform requires an explicit output label.');
+  }
   if (mode !== 'aot' && request.frameworkLinks !== undefined) {
     throw new Error('Framework linking is available only for an AOT benchmark lane.');
   }
@@ -163,7 +168,7 @@ export async function buildBenchmarkLane(request: {
     configFile: false,
     mode: 'production',
     logLevel: 'warn',
-    plugins: [isolation, aureliaPlugins],
+    plugins: [isolation, aureliaPlugins, ...(request.plugins ?? [])],
     resolve: { preserveSymlinks: true },
     build: {
       outDir,
