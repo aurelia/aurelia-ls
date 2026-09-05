@@ -118,6 +118,16 @@ rather than requiring an observation row that cannot honestly exist.
 Publish the inner read as `SpreadMemberSource`, retain its exact or governing TypeChecker target, and qualify it with the
 runtime object/member guard. Do not manufacture that read by borrowing the outer expression occurrence.
 
+Content bindings and attribute interpolation parts also consume the **evaluated result**, after `astEvaluate` returns:
+when that result is an Array, the binding observes the collection. `BindingResultObservation` is a generated `Result`
+access with no authored occurrence, resolution, or name token. Its source is the expression producing the value, and
+its operation index retains the interpolation-hole identity. Bind, source refresh, and collection refresh are separate
+call sites, not three simultaneous subscriptions. RC2 `ContentBinding` only re-observes a changed result on its
+source-refresh path; the generated use retains that additional guard rather than silently repairing the framework.
+These effects use the connectable even when a mode behavior makes the AST evaluation itself untracked. Primitive
+literal results can suppress the operation from syntax alone; declared/inferred primitive types do not authorize that
+suppression.
+
 ## Observation Derivation
 
 Observation products are effects derived from access uses:
@@ -126,6 +136,11 @@ Observation products are effects derived from access uses:
 - watcher, runtime-effect, and computed-observer execution publish owner-specific dependencies;
 - explicit trackable dependencies and method-body handoffs retain their own operation slots; and
 - untracked, blocked, or open access uses remain queryable without pretending that a concrete subscription exists.
+
+`BindingResultCollectionRead` derives from the generated result operation rather than an authored AST access. Complete
+authored-access coverage is therefore not a complete binding subscription inventory. Keep the result guard and phase
+when deriving later capacity summaries; per-evaluation access bounds do not bound lifetime subscriptions or the
+temporary union of old and new dependencies during reconnection.
 
 Conserve occurrence-level rows through this boundary. Aurelia may coalesce repeated reads onto one observer subscription
 inside a connectable execution, but that runtime optimization does not erase authored access loci. Subscription

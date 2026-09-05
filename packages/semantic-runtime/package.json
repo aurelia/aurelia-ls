@@ -61,6 +61,7 @@
     "contract:binding-uncertainty-explanation": "pnpm build && node scripts/contract-binding-uncertainty-explanation.mjs",
     "contract:attribute-interpretation-explanation": "pnpm build && node scripts/contract-attribute-interpretation-explanation.mjs",
     "contract:binding-observed-dependency-summary": "pnpm build && node scripts/contract-binding-observed-dependency-summary.mjs",
+    "contract:binding-result-observation": "pnpm build && node scripts/contract-binding-result-observation.mjs",
     "contract:control-use-inventory": "pnpm build && node scripts/contract-control-use-inventory.mjs",
     "contract:binding-source-arrow-callbacks": "pnpm build && node scripts/contract-binding-source-arrow-callbacks.mjs",
     "contract:binding-source-value-converters": "pnpm build && node scripts/contract-binding-source-value-converters.mjs",

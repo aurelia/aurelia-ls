@@ -21,10 +21,10 @@ const dataFlows = app.ask({
   kind: 'binding-data-flows',
   page: { size: 100 },
 }).value.rows;
-const observedDependencies = app.ask({
+const observedDependencies = collectPagedRows((page) => app.ask({
   kind: 'binding-observed-dependencies',
-  page: { size: 100 },
-}).value.rows;
+  page,
+}));
 const targetAccesses = app.ask({
   kind: 'binding-target-accesses',
   page: { size: 100 },
@@ -313,4 +313,15 @@ function contractSummary() {
     classChannelCount: valueChannels.filter((row) => row.channelKind === 'class-attribute-tokens').length,
     styleChannelCount: valueChannels.filter((row) => row.channelKind === 'style-attribute-rules').length,
   };
+}
+
+function collectPagedRows(readPage) {
+  const rows = [];
+  let cursor = null;
+  do {
+    const answer = readPage({ size: 100, cursor });
+    rows.push(...answer.value.rows);
+    cursor = answer.page?.nextCursor ?? null;
+  } while (cursor != null);
+  return rows;
 }

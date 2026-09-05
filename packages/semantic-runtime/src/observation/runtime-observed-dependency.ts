@@ -7,6 +7,8 @@ import type { CheckerTypeMemberKind } from '../type-system/type-shape.js';
 export const enum RuntimeObservedDependencyKind {
   TemplateExpressionRead = 'template-expression-read',
   TemplateCollectionRead = 'template-collection-read',
+  /** Binding-owned Array-result observation, independent from astEvaluate's expression reads and tracking mode. */
+  BindingResultCollectionRead = 'binding-result-collection-read',
   ProxyPropertyRead = 'proxy-property-read',
   ProxyCollectionRead = 'proxy-collection-read',
   ObservablePropertyRead = 'observable-property-read',

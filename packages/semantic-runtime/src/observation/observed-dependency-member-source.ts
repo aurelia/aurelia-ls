@@ -480,6 +480,10 @@ function isDirectScopeRootDependency(
 function isTemporaryObservedCollectionOwner(
   dependency: RuntimeObservedDependencyDraft,
 ): boolean {
+  if (dependency.dependencyKind === RuntimeObservedDependencyKind.BindingResultCollectionRead) {
+    // The result can alias a source property, but this effect observes the returned collection, not its declaration.
+    return true;
+  }
   return (
     (
       dependency.dependencyKind === RuntimeObservedDependencyKind.TemplateCollectionRead

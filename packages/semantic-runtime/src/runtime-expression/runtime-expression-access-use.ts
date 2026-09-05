@@ -58,6 +58,8 @@ export const enum RuntimeExpressionAccessForm {
   This = 'this',
   /** Dependency declared as metadata rather than ordinary executable syntax. */
   Declarative = 'declarative',
+  /** A framework operation consumes the evaluated expression result rather than an authored property token. */
+  Result = 'result',
 }
 
 /** Semantic role of one access within its exact runtime operation. */
@@ -80,6 +82,8 @@ export const enum RuntimeExpressionAccessPhase {
   Bind = 'bind',
   /** Source value evaluation during normal binding refresh. */
   SourceEvaluation = 'source-evaluation',
+  /** Binding refresh entered through a collection notification. */
+  BindingCollectionRefresh = 'binding-collection-refresh',
   /** Assignment back into a binding source. */
   SourceAssignment = 'source-assignment',
   /** Repeat key/contextual evaluation while reconciling collection views. */
@@ -110,6 +114,8 @@ export const enum RuntimeExpressionOperationKind {
   BindingSource = 'binding-source',
   /** One independently bound hole of an interpolation. */
   InterpolationPart = 'interpolation-part',
+  /** Content/interpolation-part binding observes an Array returned from its source evaluation. */
+  BindingResultObservation = 'binding-result-observation',
   /** Source-member read performed by a runtime-generated inner binding for `...$bindables`. */
   SpreadMemberSource = 'spread-member-source',
   /** One bind-time binding-behavior argument. */
@@ -164,6 +170,10 @@ export const enum RuntimeExpressionExecutionQualifierKind {
   LoopBody = 'loop-body',
   /** Runtime object/member guard that admits a generated read only when the source property exists. */
   RuntimeObjectMemberGuard = 'runtime-object-member-guard',
+  /** Binding-owned observation runs only when the evaluated result is a runtime Array. */
+  RuntimeArrayResultGuard = 'runtime-array-result-guard',
+  /** ContentBinding's source-change path observes the result only when it differs from the prior value. */
+  BindingResultChangedGuard = 'binding-result-changed-guard',
   /** TypeScript method-body access admitted by an owning template call operation. */
   MethodBodyHandoff = 'method-body-handoff',
   /** Callback or call boundary whose invocation count cannot be closed. */

@@ -106,6 +106,7 @@ import {
 import type { RuntimeValueConverterEmission } from '../template/runtime-value-converter-materializer.js';
 import {
   bindingExpressionAstForProduct,
+  bindingExpressionAstForProductChain,
 } from '../template/expression-parse-product.js';
 import { TemplateProductDetails } from '../template/product-details.js';
 import type {
@@ -195,6 +196,7 @@ import {
 import {
   collectRuntimeTrackableMethodObservedDependencyDrafts,
 } from './trackable-method-observed-dependency.js';
+import { bindingResultObservations } from './binding-result-observation.js';
 
 export class RuntimeExpressionAccessMaterializationRequest {
   constructor(
@@ -492,6 +494,14 @@ export class RuntimeExpressionAccessMaterializer {
               observationEffects.push(...trackable.effects);
             }
           });
+          const resultObservations = this.resultObservationUsesForContext(
+            accessContext,
+            `${bindingLocal}:result-observation:${contextIndex}`,
+            source,
+          );
+          accessUses.push(...resultObservations.publications.map((publication) => publication.detail));
+          records.push(...resultObservations.publications.flatMap((publication) => publication.records));
+          observationEffects.push(...resultObservations.effects);
         });
         if (binding instanceof SpreadValueBinding) {
           const spreadMembers = this.spreadMemberAccessUsesForBinding(
@@ -533,6 +543,78 @@ export class RuntimeExpressionAccessMaterializer {
       ],
     ));
     return emission;
+  }
+
+  private resultObservationUsesForContext(
+    context: RuntimeBindingExpressionAccessContext,
+    local: string,
+    source: RuntimeExpressionAccessUseSourceSet,
+  ): {
+    readonly publications: readonly RuntimeExpressionAccessPublication[];
+    readonly effects: readonly RuntimeBindingObservationEffectDraft[];
+  } {
+    const sourceOperation = context.runtimeOperations[0];
+    if (context.contextKind !== RuntimeBindingExpressionAccessContextKind.SourceValue || sourceOperation == null) {
+      return { publications: [], effects: [] };
+    }
+    // The projected evaluation context can already have erased a binding-behavior wrapper. Use the retained authored
+    // chain for syntax-only absence: a primitive under a resource wrapper is not an unwrapped literal guarantee.
+    const expression = bindingExpressionAstForProductChain(
+      this.publication,
+      context.expressionProductHandle,
+      sourceOperation.operationIndex ?? 0,
+    ) ?? context.expression;
+    const publications = bindingResultObservations(context.binding, expression).map((observation, index) =>
+      publishRuntimeExpressionAccessUse({
+        store: this.store,
+        publication: this.publication,
+        local: `${local}:${observation.phase}`,
+        index,
+        ownerKind: RuntimeExpressionAccessOwnerKind.Binding,
+        ownerProductHandle: context.binding.productHandle,
+        ownerIdentityHandle: context.binding.identityHandle,
+        operationProductHandle: null,
+        expressionProductHandle: context.expressionProductHandle,
+        scopeProductHandle: context.scope?.productHandle ?? null,
+        operationKind: RuntimeExpressionOperationKind.BindingResultObservation,
+        operationIndex: sourceOperation.operationIndex,
+        phase: observation.phase,
+        tracking: RuntimeExpressionAccessTracking.Connectable,
+        realization: RuntimeOperationRealization.Conditional,
+        reachability: sourceOperation.reachability,
+        draft: observation.access,
+        resolution: null,
+        targetResolution: RuntimeExpressionAccessTargetResolution.Open,
+        targetLinks: [],
+        carrierSourceAddressHandle: context.binding.sourceAddressHandle,
+        provenanceHandle: source.provenanceHandle,
+        claims: [{
+          localName: 'owner',
+          subjectProductHandle: context.binding.productHandle,
+          predicateKey: KernelVocabulary.RuntimeExpression.RuntimeBindingUsesAccessUse.key,
+        }],
+      })
+    );
+    const effects = publications.map((publication) => new RuntimeBindingObservationEffectDraft(
+      publication.detail,
+      {
+        accessUseProductHandle: publication.detail.productHandle,
+        accessUseSourceAddressHandle: publication.detail.sourceAddressHandle,
+        dependencyKind: RuntimeObservedDependencyKind.BindingResultCollectionRead,
+        expressionKind: expression.$kind,
+        sourceName: expressionSourceName(expression),
+        sourceRootName: expressionSourceRootName(expression),
+        memberName: null,
+        keyExpression: null,
+        methodName: 'observeCollection',
+        scopeLookupAncestor: null,
+        spanStart: expression.span.start,
+        spanEnd: expression.span.end,
+      },
+      context.scope,
+      null,
+    ));
+    return { publications, effects };
   }
 
   private spreadMemberAccessUsesForBinding(

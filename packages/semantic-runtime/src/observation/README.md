@@ -877,6 +877,14 @@ operation, value channel, access-use family, observed-dependency family, and dat
 retain the aggregate parse handle plus the original chain index; equal AST shapes in adjacent holes remain independent.
 One compiled text instruction may still produce several runtime binding/data-flow families when projection or recursive
 rendering spends it in several render contexts.
+`binding-result-observation.ts` additionally models `ContentBinding` / `InterpolationPartBinding` collection observation
+of an evaluated Array result. These framework-generated operations travel through the same access-use, effect, and
+data-flow products as authored reads without fabricating an authored access token. Their binding-result-collection-read
+dependencies are conditional on the runtime Array guard, including for `any` or declared primitive source types, and
+survive one-time AST evaluation because the framework observes the result outside its mode guard. Literal primitive
+expressions have no such effect. Bind, source refresh, and collection refresh retain distinct phases; the RC2 content
+source-refresh path additionally requires changed result identity after clearing stale dependencies. Neither the
+three call-site rows nor ordinary authored dependency occurrence counts are simultaneous subscription capacities.
 Recursive rendering can expose one child binding through both its parent aggregate analysis and its own resource
 analysis. Project-wide observation producers therefore select `resourceLocalBindingObservedDependencies(...)` through
 the template runtime ownership boundary before publishing source-owned facts. Handle identity is compilation-context

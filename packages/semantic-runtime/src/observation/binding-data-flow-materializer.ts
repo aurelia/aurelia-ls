@@ -128,6 +128,7 @@ import {
 } from '../runtime-expression/runtime-operation.js';
 import {
   RuntimeExpressionOperationKind,
+  RuntimeExpressionAccessTracking,
   type RuntimeExpressionAccessUse,
 } from '../runtime-expression/runtime-expression-access-use.js';
 import {
@@ -752,7 +753,6 @@ export class RuntimeBindingDataFlowMaterializer {
   ): readonly RuntimeBindingObservedDependency[] {
     if (
       draft.ast == null
-      || draft.sourceEvaluationKind !== RuntimeBindingSourceEvaluationKind.ConnectableRead
       || draft.sourceEvaluationReachability !== RuntimeOperationReachability.Reached
     ) {
       return [];
@@ -762,12 +762,23 @@ export class RuntimeBindingDataFlowMaterializer {
       target,
       input.expressionAccesses.readObservationEffectsForBinding(binding.productHandle),
     )
+      .filter((effect) =>
+        effect.accessUse.tracking === RuntimeExpressionAccessTracking.Connectable
+        && effect.accessUse.reachability === RuntimeOperationReachability.Reached
+        && (
+          draft.sourceEvaluationKind === RuntimeBindingSourceEvaluationKind.ConnectableRead
+          || effect.accessUse.operationKind === RuntimeExpressionOperationKind.BindingResultObservation
+        )
+      )
       .map((effect, index) => this.observedDependencyForDraft(
         `${local}:observed-dependency:${index}`,
         binding,
         dataFlow,
         effect.accessUse.expressionProductHandle,
         effect.scope,
+        effect.accessUse.operationKind === RuntimeExpressionOperationKind.BindingResultObservation
+          ? effect.accessUse.realization
+          : dataFlow.realization,
         effect.dependency,
         effect.memberProjection,
       ));
@@ -779,6 +790,7 @@ export class RuntimeBindingDataFlowMaterializer {
     dataFlow: RuntimeBindingDataFlow,
     expressionProductHandle: ProductHandle | null,
     scope: BindingScope | null,
+    realization: RuntimeOperationRealization,
     dependency: RuntimeObservedDependencyAccessUseDraft,
     memberProjection: RuntimeObservedMemberSourceProjection | null,
   ): RuntimeBindingObservedDependency {
@@ -789,7 +801,7 @@ export class RuntimeBindingDataFlowMaterializer {
       dataFlow.productHandle,
       expressionProductHandle,
       scope?.toReference() ?? null,
-      dataFlow.realization,
+      realization,
       runtimeObservedDependencyOccurrence({
         dependency,
         scope,
@@ -921,6 +933,7 @@ function runtimeExpressionAccessUseParticipatesInDataFlow(
   switch (accessUse.operationKind) {
     case RuntimeExpressionOperationKind.BindingSource:
     case RuntimeExpressionOperationKind.InterpolationPart:
+    case RuntimeExpressionOperationKind.BindingResultObservation:
     case RuntimeExpressionOperationKind.SpreadMemberSource:
     case RuntimeExpressionOperationKind.ValueConverterArgument:
       return true;

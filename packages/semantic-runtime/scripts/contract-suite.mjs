@@ -217,6 +217,12 @@ const contractSuites = [
   contract('observation', 'fast', [
     'observation',
     'binding',
+    'template',
+    'lifecycle',
+  ], 'contract-binding-result-observation.mjs', 'Generated content/interpolation Array-result observation conserves phase, mode independence, and data-flow ownership.'),
+  contract('observation', 'fast', [
+    'observation',
+    'binding',
     'value-converter',
     'template',
   ], 'contract-binding-source-value-converters.mjs', 'Binding-source value reduction invokes evaluator-local value converter toView for static repeat locals.'),

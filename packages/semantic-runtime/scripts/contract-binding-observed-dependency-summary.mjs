@@ -26,22 +26,23 @@ const summary = app.bindingObservedDependencySummary({ size: 20 }).value;
 const stateOnlyAnswer = app.bindingObservedDependencySummary({ size: 0 });
 const stateOnlySummary = stateOnlyAnswer.value;
 const rawRows = collectPagedRows((page) => app.bindingObservedDependencies(page));
+const summaryRows = collectPagedRows((page) => app.bindingObservedDependencySummary(page));
 const failures = [];
 
 const sourceState = summary.memberSourceStateRows.find((row) => row.observedMemberSourceState === 'source');
-const stateExpressionRead = summary.rows.find((row) =>
+const stateExpressionRead = summaryRows.find((row) =>
   row.dependencyKind === 'template-expression-read'
   && row.sourceRootNames.includes('state')
   && row.observedMemberSourceState === 'source'
   && row.observedMemberKind === 'property'
 );
-const stateAccessorRead = summary.rows.find((row) =>
+const stateAccessorRead = summaryRows.find((row) =>
   row.dependencyKind === 'template-expression-read'
   && row.sourceRootNames.includes('state')
   && row.observedMemberSourceState === 'source'
   && row.observedMemberKind === 'accessor'
 );
-const repeatLocalRead = summary.rows.find((row) =>
+const repeatLocalRead = summaryRows.find((row) =>
   row.dependencyKind === 'template-expression-read'
   && row.sourceRootNames.some((name) => name === 'user' || name === 'column')
   && row.observedMemberSourceState === 'source'
