@@ -762,13 +762,12 @@ export class RuntimeBindingDataFlowMaterializer {
       target,
       input.expressionAccesses.readObservationEffectsForBinding(binding.productHandle),
     )
+      // Result observation has its own tracking lifecycle; AST mode still governs expression-owned effects.
       .filter((effect) =>
-        effect.accessUse.tracking === RuntimeExpressionAccessTracking.Connectable
-        && effect.accessUse.reachability === RuntimeOperationReachability.Reached
-        && (
-          draft.sourceEvaluationKind === RuntimeBindingSourceEvaluationKind.ConnectableRead
-          || effect.accessUse.operationKind === RuntimeExpressionOperationKind.BindingResultObservation
-        )
+        effect.accessUse.operationKind === RuntimeExpressionOperationKind.BindingResultObservation
+          ? effect.accessUse.tracking === RuntimeExpressionAccessTracking.Connectable
+            && effect.accessUse.reachability === RuntimeOperationReachability.Reached
+          : draft.sourceEvaluationKind === RuntimeBindingSourceEvaluationKind.ConnectableRead
       )
       .map((effect, index) => this.observedDependencyForDraft(
         `${local}:observed-dependency:${index}`,
