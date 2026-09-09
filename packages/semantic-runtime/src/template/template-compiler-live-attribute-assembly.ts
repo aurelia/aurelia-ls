@@ -255,7 +255,7 @@ export class TemplateCompilerLiveAttributeOwnerResult {
       || ownerInput.element !== element
       || progression.ownerInput !== ownerInput
     ) {
-      throw new Error('Live attribute owner result lost its exact logical owner input.');
+      throw new Error('Live attribute owner result lost its exact captured owner input.');
     }
     this.templateControllers = contributions.filter((entry) =>
       entry.targetLane === TemplateCompilerLiveAttributeTargetLane.TemplateController
@@ -299,7 +299,6 @@ export interface TemplateCompilerLiveAttributeOwnerAssemblyRequest {
   readonly element: TemplateCompilerElementOccurrence;
   readonly lookupName: string;
   readonly allocations: TemplateCompilerLiveAllocationLedger;
-  readonly ownerInput?: TemplateCompilerLiveAttributeOwnerInput | null;
   readonly elementDefinitionEligible?: boolean;
   readonly staticAttributePolicy?: TemplateCompilerStaticAttributePolicy;
 }
@@ -334,19 +333,11 @@ class TemplateCompilerLiveAttributeOwnerAssembly {
     this.debugRead = request.compilerReads.readCompilerDebug();
     const forestMutationRevision = request.siteDriver?.expectedForestMutationRevision
       ?? request.bootstrapClosure.forestMutationRevision;
-    const ownerInput = request.ownerInput ?? TemplateCompilerLiveAttributeOwnerInput.capture(
+    const ownerInput = TemplateCompilerLiveAttributeOwnerInput.capture(
       request.execution.forest,
       request.element,
       forestMutationRevision,
     );
-    if (
-      !ownerInput.isCurrent()
-      || ownerInput.forest !== request.execution.forest
-      || ownerInput.element !== request.element
-      || ownerInput.forestMutationRevision !== forestMutationRevision
-    ) {
-      throw new Error('Live attribute assembly received a foreign or stale logical owner input.');
-    }
     this.ownerInput = ownerInput;
     this.progression = new TemplateCompilerLiveAttributeOwnerProgression(ownerInput);
     this.handles = new LiveAttributeAssemblyHandleAuthority(

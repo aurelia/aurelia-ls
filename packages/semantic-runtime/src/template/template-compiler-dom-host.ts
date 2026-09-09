@@ -229,7 +229,9 @@ export class TemplateCompilerDomHost {
     switch (member) {
       case 'nodeType': return new EvaluationNumberValue(nodeType(occurrence));
       case 'nodeName': return new EvaluationStringValue(nodeName(occurrence));
-      case 'ownerDocument': return this.referenceValue(this.document);
+      // JIT adopts generated projection contents, but authored/retained template contents can stay inert.
+      // Node affiliation must follow those operations before document identity can be answered exactly.
+      case 'ownerDocument': return this.unsupported(member, node, moduleKey, host, 'dom-document-affiliation');
       case 'parentNode':
       case 'parentElement':
         if (occurrence === this.rootElement) return this.outside(member, node, moduleKey, host);

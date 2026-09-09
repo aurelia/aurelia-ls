@@ -20,51 +20,36 @@ const siteDispositions = new WeakMap<
 >();
 const liveAttributeOwnerInputAuthority = {};
 
-/** Exact semantic authority for a physical-attribute subset hidden before one logical JIT owner walk. */
-export interface TemplateCompilerLiveAttributeSuppressionAuthority {
-  readonly forest: TemplateCompilerOccurrenceForest;
-  readonly element: TemplateCompilerElementOccurrence;
-  readonly forestMutationRevision: number;
-  readonly suppressedAttributes: readonly TemplateCompilerAttributeOccurrence[];
-  isCurrent(): boolean;
-}
-
-/** Nominal immutable physical/visible attribute partition for one logical JIT owner walk. */
+/** Nominal immutable capture of the live attributes at one JIT owner walk. */
 export class TemplateCompilerLiveAttributeOwnerInput {
   static capture(
     forest: TemplateCompilerOccurrenceForest,
     element: TemplateCompilerElementOccurrence,
     forestMutationRevision: number,
-    suppression: TemplateCompilerLiveAttributeSuppressionAuthority | null = null,
   ): TemplateCompilerLiveAttributeOwnerInput {
     return new TemplateCompilerLiveAttributeOwnerInput(
       liveAttributeOwnerInputAuthority,
       forest,
       element,
       forestMutationRevision,
-      suppression,
     );
   }
 
   readonly #authority: object;
   readonly #originalOrdinalByAttribute: ReadonlyMap<TemplateCompilerAttributeOccurrence, number>;
   readonly #valueByAttribute: ReadonlyMap<TemplateCompilerAttributeOccurrence, string>;
-  readonly #suppressed: ReadonlySet<TemplateCompilerAttributeOccurrence>;
-  readonly physicalAttributes: readonly TemplateCompilerAttributeOccurrence[];
-  readonly visibleAttributes: readonly TemplateCompilerAttributeOccurrence[];
-  readonly suppressedAttributes: readonly TemplateCompilerAttributeOccurrence[];
+  readonly attributes: readonly TemplateCompilerAttributeOccurrence[];
 
   private constructor(
     authority: object,
     readonly forest: TemplateCompilerOccurrenceForest,
     readonly element: TemplateCompilerElementOccurrence,
     readonly forestMutationRevision: number,
-    readonly suppression: TemplateCompilerLiveAttributeSuppressionAuthority | null,
   ) {
-    const physicalAttributes = [...element.readAttributes()];
+    const attributes = [...element.readAttributes()];
     const originalOrdinalByAttribute = new Map<TemplateCompilerAttributeOccurrence, number>();
     const qualifiedNames = new Set<string>();
-    for (const [ordinal, attribute] of physicalAttributes.entries()) {
+    for (const [ordinal, attribute] of attributes.entries()) {
       const qualifiedName = qualifiedAttributeName(attribute);
       if (
         forest.attributeForOccurrenceKey(attribute.occurrenceKey) !== attribute
@@ -77,42 +62,17 @@ export class TemplateCompilerLiveAttributeOwnerInput {
       originalOrdinalByAttribute.set(attribute, ordinal);
       qualifiedNames.add(qualifiedName);
     }
-    const suppressedAttributes = suppression?.suppressedAttributes ?? [];
-    const suppressed = new Set(suppressedAttributes);
-    let nextSuppressedOrdinal = 0;
-    for (const attribute of physicalAttributes) {
-      if (attribute === suppressedAttributes[nextSuppressedOrdinal]) nextSuppressedOrdinal++;
-    }
     if (
       authority !== liveAttributeOwnerInputAuthority
       || forest.mutationRevision !== forestMutationRevision
       || forest.nodeForOccurrenceKey(element.occurrenceKey) !== element
-      || (suppression != null && (
-        suppression.forest !== forest
-        || suppression.element !== element
-        || suppression.forestMutationRevision !== forestMutationRevision
-        || !suppression.isCurrent()
-        || suppressedAttributes.length === 0
-        || suppressed.size !== suppressedAttributes.length
-        || nextSuppressedOrdinal !== suppressedAttributes.length
-        || suppressedAttributes.some((attribute) =>
-          originalOrdinalByAttribute.get(attribute) == null
-          || forest.attributeForOccurrenceKey(attribute.occurrenceKey) !== attribute
-          || attribute.owner !== element
-        )
-      ))
     ) {
-      throw new Error('Live attribute owner input lost forest, owner, revision, or suppression authority.');
+      throw new Error('Live attribute owner input lost forest, owner, or revision authority.');
     }
     this.#authority = authority;
     this.#originalOrdinalByAttribute = originalOrdinalByAttribute;
-    this.#valueByAttribute = new Map(physicalAttributes.map((attribute) => [attribute, attribute.value] as const));
-    this.#suppressed = suppressed;
-    this.physicalAttributes = physicalAttributes;
-    this.suppressedAttributes = [...suppressedAttributes];
-    this.visibleAttributes = suppression == null
-      ? physicalAttributes
-      : physicalAttributes.filter((attribute) => !suppressed.has(attribute));
+    this.#valueByAttribute = new Map(attributes.map((attribute) => [attribute, attribute.value] as const));
+    this.attributes = attributes;
   }
 
   isModuleConstructed(): boolean {
@@ -121,8 +81,7 @@ export class TemplateCompilerLiveAttributeOwnerInput {
 
   isCurrent(): boolean {
     return this.isModuleConstructed()
-      && this.forest.mutationRevision === this.forestMutationRevision
-      && (this.suppression?.isCurrent() ?? true);
+      && this.forest.mutationRevision === this.forestMutationRevision;
   }
 
   originalOrdinalFor(attribute: TemplateCompilerAttributeOccurrence): number | null {
@@ -131,10 +90,6 @@ export class TemplateCompilerLiveAttributeOwnerInput {
 
   capturedValueFor(attribute: TemplateCompilerAttributeOccurrence): string | null {
     return this.#valueByAttribute.get(attribute) ?? null;
-  }
-
-  isSuppressed(attribute: TemplateCompilerAttributeOccurrence): boolean {
-    return this.#suppressed.has(attribute);
   }
 }
 
@@ -251,22 +206,17 @@ export class TemplateCompilerLiveAttributeOwnerProgression {
       this.element.occurrenceKey,
       String(this.forestMutationRevision),
     ];
-    const suppressedAttributes = input.suppressedAttributes;
-    if (suppressedAttributes.length > 0) {
-      stateParts.push('initial-suppression', ...suppressedAttributes.map((attribute) => attribute.occurrenceKey));
-    }
     this.stateRevision = stateDigest(stateParts);
 
-    for (const attribute of input.visibleAttributes) {
+    for (const attribute of input.attributes) {
       const qualifiedName = qualifiedAttributeName(attribute);
       this.attributeByQualifiedName.set(qualifiedName, attribute);
     }
-    for (const attribute of suppressedAttributes) this.removedBeforeVersion.set(attribute, 0);
   }
 
   readAttributesToVisit(): readonly TemplateCompilerAttributeOccurrence[] {
     this.assertForestRevision();
-    return this.input.visibleAttributes;
+    return this.input.attributes;
   }
 
   get ownerInput(): TemplateCompilerLiveAttributeOwnerInput {
@@ -286,7 +236,7 @@ export class TemplateCompilerLiveAttributeOwnerProgression {
     ) {
       throw new Error(`Attribute '${attribute.occurrenceKey}' does not belong to this live attribute owner.`);
     }
-    const expected = this.input.visibleAttributes[this.nextVisibleIndex] ?? null;
+    const expected = this.input.attributes[this.nextVisibleIndex] ?? null;
     if (expected !== attribute) {
       const expectedOriginalOrdinal = expected == null ? null : this.input.originalOrdinalFor(expected);
       const expectedOrdinal = expectedOriginalOrdinal == null ? 'end' : String(expectedOriginalOrdinal);
@@ -352,9 +302,9 @@ export class TemplateCompilerLiveAttributeOwnerProgression {
     if (this.pending != null) {
       throw new Error(`Live attribute site '${this.pending.attribute.occurrenceKey}' is still pending.`);
     }
-    if (!this.terminalOpen && this.nextVisibleIndex !== this.input.visibleAttributes.length) {
+    if (!this.terminalOpen && this.nextVisibleIndex !== this.input.attributes.length) {
       throw new Error(
-        `Live attribute owner '${this.element.occurrenceKey}' stopped at ${this.nextVisibleIndex}/${this.input.visibleAttributes.length}.`,
+        `Live attribute owner '${this.element.occurrenceKey}' stopped at ${this.nextVisibleIndex}/${this.input.attributes.length}.`,
       );
     }
     this.finished = true;

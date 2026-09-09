@@ -2,9 +2,11 @@ import { customElement } from 'aurelia';
 import { AttributeLab } from './attribute-lab.js';
 import { AttributeCard } from './attribute-card.js';
 import { Stamp } from './stamp.js';
+import { ProjectionLab } from './projection-lab.js';
+import { ProjectionProbe } from './projection-probe.js';
 import template from './content-attributes-app.html';
 
-@customElement({ name: 'content-attributes-app', template, dependencies: [AttributeLab, AttributeCard, Stamp] })
+@customElement({ name: 'content-attributes-app', template, dependencies: [AttributeLab, AttributeCard, Stamp, ProjectionLab, ProjectionProbe] })
 export class ContentAttributesApp {
   message = 'alpha';
   discarded = 'discarded-must-not-survive';

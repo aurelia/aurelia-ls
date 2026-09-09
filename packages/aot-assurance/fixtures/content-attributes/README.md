@@ -15,6 +15,23 @@ namespace-aware and ordinary HTML lookups therefore differ. Both hook readback a
 The input starts with two real authored bindings to a deliberately wrong-valued property: one is removed permanently,
 the other is removed and recreated with a different expression. Stale authored binding reuse therefore changes visible output.
 
+`ProjectionProbe.processContent` runs inside two named projection groups, a bare named template that flattens into
+its group, and a named template with nested `repeat`/`if` controllers. It records the post-projection host attribute
+view through ordinary and namespace-aware reads, recreates the consumed `au-slot` qualified name as a fresh host
+attribute, and generates a live title binding. The hook also removes and recreates its child's authored slot assignment
+to target its own named outlet, adding a live custom-attribute binding. Readbacks are written into DOM attributes;
+no hook inputs or results are retained in captured mutable state.
+
+JIT characterization of the same fixture found `host.ownerDocument === platform.document` is false for `AttributeLab`
+in the authored root and for `ProjectionProbe` inside retained template-controller content, but true for direct
+named probes and the flattened bare-template probe. `CompilationContext.h` explicitly adopts generated template
+content into the platform document (`aurelia/packages/template-compiler/src/template-compiler.ts:1560`), whereas
+`TemplateElementFactory.t` creates authored template content without adoption
+(`aurelia/packages/template-compiler/src/template-element-factory.ts:24`). This characterization is not an assertion
+of the strict golden: source hooks refuse `ownerDocument` reads until document affiliation is modeled together with
+native inert-template construction. A single platform-document or inert-document reference would misrepresent one
+of these cases.
+
 The existing shared assurance harness runs seven browser checkpoints and teardown. Multiple-select model order is
 intentionally separate from selected-options DOM order: RC2 retains the already selected `b` and appends newly
-selected `a` to the model array. The scenario requires three AOT artifacts and no JIT fallback.
+selected `a` to the model array. The scenario requires five AOT artifacts and no JIT fallback.

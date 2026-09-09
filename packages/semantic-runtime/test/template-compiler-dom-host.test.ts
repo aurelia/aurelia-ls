@@ -33,14 +33,14 @@ describe('interpreted compiler DOM host', () => {
     const run = new DomHookRun('<div id="host">lead<!--comment--><i></i><b>tail</b><template><span>inert</span></template><svg><linearGradient></linearGradient></svg></div>');
     try {
       const result = run.invoke(`
-        function hook(node, platform) {
+        function hook(node) {
           const children = node.children;
           const nested = children[2];
           const fragment = nested.content;
           const first = node.firstElementChild;
           return [node.nodeType === 1, node.nodeName === 'DIV', node.tagName === 'DIV',
             node.localName === 'div', node.namespaceURI === 'http://www.w3.org/1999/xhtml',
-            node.ownerDocument === platform.document, first === children.item(0),
+            first === children.item(0),
             first !== children[1], first.parentElement === node, first.parentNode === node,
             first.previousSibling.nodeType === 8, first.nextElementSibling === children[1],
             node.childNodes === node.childNodes, children === node.children,
@@ -424,6 +424,7 @@ describe('interpreted compiler DOM host', () => {
     ['geometry', 'node.getBoundingClientRect();', 'getBoundingClientRect', 'unsupported-dom-member'],
     ['outside parent', 'node.parentNode;', 'parentNode', 'outside-compiler-root'],
     ['ambient document', 'platform.document.body;', 'body', 'unsupported-dom-member'],
+    ['document affiliation', 'node.ownerDocument === platform.document;', 'ownerDocument', 'dom-document-affiliation'],
     ['dataset', 'node.dataset.key = "x";', 'dataset', 'unsupported-dom-member'],
     ['markup write', 'node.innerHTML = "<b></b>";', 'innerHTML', 'unsupported-dom-member'],
     ['text write', 'node.textContent = "changed";', 'textContent', 'unsupported-dom-member'],

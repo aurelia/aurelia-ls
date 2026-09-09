@@ -20,6 +20,17 @@ export interface ContentAttributesApplicationObservation {
     readonly rows: readonly string[];
     readonly selection: { readonly multiple: boolean; readonly values: readonly string[]; readonly model: string };
     readonly classes: { readonly value: string | null; readonly tokens: string | null };
+    readonly projections: readonly {
+      readonly group: string;
+      readonly id: string;
+      readonly slot: string | null;
+      readonly readback: string | null;
+      readonly beforeNames: string | null;
+      readonly childSlotBefore: string | null;
+      readonly title: string | null;
+      readonly child: { readonly slot: string | null; readonly stamped: string | null; readonly text: string };
+    }[];
+    readonly projectionFallbacks: number;
     readonly svg: {
       readonly viewBox: string | null;
       readonly classes: string | null;
@@ -109,6 +120,20 @@ async function capture(page: Page): Promise<ContentAttributesApplicationObservat
         rows: Array.from(root.querySelectorAll('.generated-row'), (row) => row.textContent),
         selection: { multiple: select.multiple, values: Array.from(select.selectedOptions, (option) => option.value), model: root.querySelector('#selected-value')!.textContent },
         classes: { value: root.querySelector('#classes-case')!.getAttribute('class'), tokens: root.querySelector('#classes-case')!.getAttribute('data-tokens') },
+        projections: Array.from(root.querySelectorAll('.projection-probe'), (host) => {
+          const child = host.querySelector('.projected-value')!;
+          return {
+            group: host.parentElement!.id,
+            id: host.id,
+            slot: host.getAttribute('au-slot'),
+            readback: host.getAttribute('data-projection-read'),
+            beforeNames: host.getAttribute('data-before-names'),
+            childSlotBefore: host.getAttribute('data-child-slot-before'),
+            title: host.getAttribute('title'),
+            child: { slot: child.getAttribute('au-slot'), stamped: child.getAttribute('data-stamped'), text: child.textContent },
+          };
+        }),
+        projectionFallbacks: root.querySelectorAll('.projection-fallback').length,
         svg: {
           viewBox: root.querySelector('#svg-case')!.getAttribute('viewBox'),
           classes: link.getAttribute('class'),
@@ -125,7 +150,7 @@ export function assertContentAttributesBuildEvidence(evidence: AotBuildEvidence)
   assert.equal(evidence.compilation.mode, 'strict');
   assert.equal(evidence.compilation.fallbackScope, 'none');
   assert.deepEqual(evidence.artifacts.map((artifact) => artifact.definitionName).sort(), [
-    'attribute-card', 'attribute-lab', 'content-attributes-app',
+    'attribute-card', 'attribute-lab', 'content-attributes-app', 'projection-lab', 'projection-probe',
   ]);
 }
 
@@ -171,6 +196,18 @@ export function assertContentAttributesExpectations(transcript: LaneTranscript):
           // SelectValueObserver preserves existing model members and appends new selections, independently of DOM order.
           selection: { multiple: true, values: selection, model: selection.length === 1 ? 'b' : 'b,a' },
           classes: { value: 'base highlight active', tokens: '3:highlight:true' },
+          projections: ([
+            ['projection-first', 'projected-first', 'first'],
+            ['projection-first', 'projected-flat', 'flat'],
+            ['projection-second', 'projected-second', 'second'],
+            ...(active ? ['one', 'two', 'three'].slice(0, count).filter((item) => item !== 'two').map((item) => ['projection-second', '', item] as const) : []),
+          ] as const).map(([group, id, value]) => ({
+            group, id, slot: 'hook-created', readback: 'null:false:null:false',
+            beforeNames: `${id === '' ? 'class' : 'id'}|data-projection-read`,
+            childSlotBefore: 'authored', title: message,
+            child: { slot: null, stamped: message, text: `${value}:${message}` },
+          })),
+          projectionFallbacks: 0,
           svg: {
             viewBox: '0 0 10 10', classes: 'base highlight active', readback: 'true:#final',
             namespaced: [

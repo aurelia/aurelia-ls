@@ -57,7 +57,7 @@ export function assertTemplateCompilerFinalAttributeOwnerState(
   dispositions: readonly TemplateCompilerAttributeDispositionDraft[],
 ): void {
   const element = owner.element;
-  const visible = owner.ownerInput.visibleAttributes;
+  const captured = owner.ownerInput.attributes;
   const retained = dispositions.filter((disposition) =>
     disposition.disposition === TemplateCompilerLiveAttributeDisposition.Retained
   );
@@ -66,8 +66,8 @@ export function assertTemplateCompilerFinalAttributeOwnerState(
   );
   const actual = element.readAttributes();
   if (
-    dispositions.length !== visible.length
-    || dispositions.some((disposition, ordinal) => disposition.attribute !== visible[ordinal])
+    dispositions.length !== captured.length
+    || dispositions.some((disposition, ordinal) => disposition.attribute !== captured[ordinal])
     || actual.length !== retained.length
     || actual.some((attribute, ordinal) => attribute !== retained[ordinal]?.attribute)
     || retained.some((disposition) =>
@@ -75,7 +75,6 @@ export function assertTemplateCompilerFinalAttributeOwnerState(
       || disposition.attribute.value !== disposition.finalValue
     )
     || removed.some((disposition) => disposition.attribute.owner != null)
-    || owner.ownerInput.suppressedAttributes.some((attribute) => attribute.owner != null)
   ) {
     throw new Error(`Element '${element.occurrenceKey}' diverged from its final JIT attribute view.`);
   }

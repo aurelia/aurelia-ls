@@ -329,10 +329,13 @@ classification, expression parsing, and instruction lowering converge on the sam
   recorded. New nodes, reparenting, markup/text writes, selectors, dataset and metadata effects remain explicit
   unsupported operations until their complete lowering paths are admitted. Namespace-duplicate qualified names and
   browser-version-sensitive name spellings remain explicit compatibility boundaries, not invented DOM exceptions.
-  Source hooks on named projection entrants also remain unsupported while the parent's consumed au-slot attribute is
-  represented only by logical suppression: the hook must not read the stale physical attribute. Ordinary/default
-  projection hooks and canonical built-ins retain their existing admission. Completing that prior-mutation DOM view
-  is separate from adding more attribute methods.
+  Projection removes original au-slot attributes through one ordered site operation before projected hooks execute.
+  Hooks and the ordinary attribute owner read that same physical state; no projection suppression mask remains.
+  Later structural execution adopts the original consumption, so a hook-created same-name Attr survives. Generated
+  child slot assignments use committed HookAttribute insertion and addressless wires, not invented authored spans.
+  ownerDocument reads remain explicitly unsupported until document affiliation follows JIT's template construction
+  and adoption: generated projection contents can belong to platform.document while retained authored contents stay
+  inert. A universal document identity would select incorrect hook branches.
   Unsupported attempted hooks discard their
   pending forest mutations; they are not successful no-ops or ordinary thrown exceptions. The forest journals touched
   state in place, preserving node/live-collection identity without cloning a second DOM. Source-hook removals use the
@@ -361,9 +364,10 @@ classification, expression parsing, and instruction lowering converge on the sam
   unbounded spread writers remain Pending. Wire funding keeps
   exact lexical/source carrier identity separate from structural correspondence posture: paragraph auto-close can
   leave extent provenance Open while its uniquely grounded template-controller node/attribute wire remains Exact.
-  Recursive schedule chronology also owns pre-attachment processContent adoption; context inventory order cannot assign
-  event ordinals, and already-committed removals require admitted target context rather than a generated root that the
-  later target execution has not created yet.
+  Pre-attachment adoption merges processContent removals and projection slot consumption in their actual operation/
+  mutation order; context inventory order cannot assign event ordinals. Already-committed removals require admitted
+  target context rather than a generated root that later target execution has not created yet. Unsupported hooks roll
+  back only their pending operation, preserving earlier compiler consumption and the original authored fallback input.
   `orderTemplateCompilerContextFamilyDefinitions(...)` projects the final root/controller/projection family into the
   framework's recursive child-definition discovery order. Structural assurance and runtime definition values share
   this owner-location law; context inventory order remains a separate construction axis.

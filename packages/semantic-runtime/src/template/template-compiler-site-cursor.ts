@@ -21,7 +21,6 @@ import {
   type TemplateCompilerLiveAttributeContribution,
   type TemplateCompilerLiveAttributeOwnerResult,
 } from './template-compiler-live-attribute-assembly.js';
-import { TemplateCompilerLiveAttributeOwnerInput } from './template-compiler-live-attribute-owner.js';
 import {
   TemplateCompilerElementInstructionStagingState,
   TemplateCompilerStaticAttributePolicy,
@@ -156,10 +155,8 @@ import {
 import {
   prepareTemplateCompilerProjectionLogicalExtraction,
   realizeTemplateCompilerProjectionLogicalExtraction,
-  rebaseTemplateCompilerProjectionLiveSlotSuppression,
   type TemplateCompilerProjectionLogicalExtractionPreparation,
   type TemplateCompilerProjectionLogicalExtractionRealization,
-  type TemplateCompilerProjectionSlotConsumptionReceipt,
 } from './template-compiler-projection-logical-extraction.js';
 import {
   prepareTemplateCompilerTemplateControllerTransition,
@@ -173,7 +170,6 @@ import {
 import {
   TemplateCompilerSiteCursorContextKind,
   type TemplateCompilerSiteCursorContextReference,
-  TemplateCompilerSiteCursorLogicalEntrantWork,
   type TemplateCompilerSiteCursorReachedSelectionEventAttestation,
   TemplateCompilerSiteCursorSelectionKind,
   TemplateCompilerSiteCursorStagedElementContinuationWork,
@@ -405,11 +401,6 @@ class TemplateCompilerClosedElementContinuation {
   ) {}
 }
 
-interface TemplateCompilerProjectedEntrantSemantics {
-  readonly preparation: TemplateCompilerProjectionLogicalExtractionPreparation;
-  readonly slotConsumption: TemplateCompilerProjectionSlotConsumptionReceipt | null;
-}
-
 /**
  * Execute one product-free no-local root prefix without admitting a target plan.
  * Forest mutation is admitted only through exact cursor-owned built-in site operations.
@@ -494,7 +485,6 @@ class TemplateCompilerRootSiteCursor {
     TemplateCompilerSiteCursorStagedElementContinuationWork,
     TemplateCompilerClosedElementContinuation
   >();
-  private readonly projectedEntrantSemantics = new Map<object, TemplateCompilerProjectedEntrantSemantics>();
   private readonly startForestMutationRevision: number;
   private readonly startGlobalOperationCount: number;
   private readonly startLaneOperationCount: number;
@@ -1035,16 +1025,6 @@ class TemplateCompilerRootSiteCursor {
         );
         return null;
       }
-      if (plan.callableTarget != null
-        && (this.projectedOwnerInput(reachedElement)?.suppressedAttributes.length ?? 0) > 0) {
-        this.stop(
-          TemplateCompilerSiteCursorFrontierKind.ProcessContentUnsupported,
-          element, null, null, successor,
-          'Source processContent requires the post-projection DOM view; compiler-consumed au-slot attributes are still represented only by logical suppression.',
-          elementDefinition.processContent.addressHandle ?? elementDefinition.sourceAddressHandle,
-        );
-        return null;
-      }
       if (this.siteDriver == null) {
         this.siteDriver = this.binding.execution.beginSiteExecutionDriver(plan.frontier);
         this.semantics.useSiteDriver(this.siteDriver);
@@ -1101,7 +1081,6 @@ class TemplateCompilerRootSiteCursor {
     successor: TemplateCompilerNodeOccurrence | null,
     processContent: TemplateCompilerProcessContentResult | null,
   ): TemplateCompilerSiteCursorChildFrame | null {
-    const ownerInput = this.projectedOwnerInput(reachedElement);
     const assembly = assembleTemplateCompilerLiveAttributeOwner({
       localKey: `${this.binding.lane.localKey}:live-attributes:${element.occurrenceKey}`,
       execution: this.binding.execution,
@@ -1112,7 +1091,6 @@ class TemplateCompilerRootSiteCursor {
       element,
       lookupName,
       allocations: this.allocations,
-      ownerInput,
     });
     this.attributeOwners.push(assembly);
     const receipts = new Map(assembly.contributions.map((contribution) => [
@@ -1421,11 +1399,6 @@ class TemplateCompilerRootSiteCursor {
           if (work.entrantAuthority !== entrant) {
             throw new Error('Projection cursor staging replaced its realized entrant authority.');
           }
-          const consumption = entrant.planned.contributor.slotConsumption;
-          this.projectedEntrantSemantics.set(entrant, {
-            preparation,
-            slotConsumption: consumption?.element === entrant.node ? consumption : null,
-          });
         }
       }
     }
@@ -1450,6 +1423,16 @@ class TemplateCompilerRootSiteCursor {
     if (templateControllerEvent != null) this.appendEvent(templateControllerEvent);
 
     if (preparation != null && realization != null) {
+      let slotOperation: TemplateCompilerOperation | null = null;
+      if (preparation.slotConsumptions.length > 0) {
+        if (this.siteDriver == null) {
+          this.siteDriver = this.binding.execution.beginSiteExecutionDriver(
+            this.binding.execution.captureSiteExecutionFrontier(this.binding.bootstrapClosure),
+          );
+          this.semantics.useSiteDriver(this.siteDriver);
+        }
+        slotOperation = this.binding.execution.consumeProjectionSlots(this.siteDriver, preparation);
+      }
       projectionEvent = new TemplateCompilerSiteCursorProjectionExtractionEvent(
         siteCursorConstructionAuthority,
         this.transcriptOrdinal++,
@@ -1459,6 +1442,7 @@ class TemplateCompilerRootSiteCursor {
         entrantBandStagings,
         slotAccounting!.authoredSpends,
         slotAccounting!.occurrenceRows,
+        slotOperation,
       );
       this.appendEvent(projectionEvent);
     }
@@ -1532,26 +1516,6 @@ class TemplateCompilerRootSiteCursor {
       }
     }
     return { authoredSpends, occurrenceRows };
-  }
-
-  private projectedOwnerInput(
-    reachedElement: TemplateCompilerSiteCursorReachedElement,
-  ): TemplateCompilerLiveAttributeOwnerInput | null {
-    const work = reachedElement.reachedSelectionEvent.selection.work;
-    if (!(work instanceof TemplateCompilerSiteCursorLogicalEntrantWork)) return null;
-    const semantics = this.projectedEntrantSemantics.get(work.entrantAuthority) ?? null;
-    if (semantics?.slotConsumption == null) return null;
-    const suppression = rebaseTemplateCompilerProjectionLiveSlotSuppression(
-      semantics.preparation,
-      semantics.slotConsumption,
-      reachedElement,
-    );
-    return TemplateCompilerLiveAttributeOwnerInput.capture(
-      this.binding.forest,
-      reachedElement.elementEvent.element,
-      this.binding.forest.mutationRevision,
-      suppression,
-    );
   }
 
   private continueClosedElement(

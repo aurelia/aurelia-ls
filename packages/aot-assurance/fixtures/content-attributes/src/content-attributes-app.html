@@ -14,4 +14,10 @@
     <div id="classes-case" data-case="classes" class="authored">classes</div>
     <svg id="svg-case" data-case="svg" viewBox="0 0 20 20" xmlns:xlink="http://www.w3.org/1999/xlink"><a id="svg-link" class="base old old" xlink:href="#old"><text>vector</text></a></svg>
   </attribute-lab>
+  <projection-lab>
+    <projection-probe id="projected-first" au-slot="first"><span au-slot="authored" class="projected-value">first:${message}</span></projection-probe>
+    <projection-probe id="projected-second" au-slot="second"><span au-slot="authored" class="projected-value">second:${message}</span></projection-probe>
+    <template au-slot="first"><projection-probe id="projected-flat"><span au-slot="authored" class="projected-value">flat:${message}</span></projection-probe></template>
+    <template au-slot="second" repeat.for="item of items" if.bind="active && item !== 'two'"><projection-probe class="projected-repeat"><span au-slot="authored" class="projected-value">${item}:${message}</span></projection-probe></template>
+  </projection-lab>
 </template>

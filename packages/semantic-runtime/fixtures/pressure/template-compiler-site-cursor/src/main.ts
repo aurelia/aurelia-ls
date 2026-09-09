@@ -365,6 +365,39 @@ class CursorContextFamilyProjection {
 })
 class CursorContextFamilyProjectionSiblings {}
 
+@customElement({ name: 'cursor-projection-slot-probe', template: '' })
+class CursorProjectionSlotProbe {
+  static processContent(element: HTMLElement) {
+    const seen = element.hasAttribute('au-slot');
+    element.removeAttribute('data-remove');
+    element.setAttribute('au-slot', 'fresh');
+    element.setAttribute('data-seen', String(seen));
+  }
+}
+
+@customElement({
+  name: 'cursor-projection-slot-identity',
+  template: '<cursor-leaf><cursor-projection-slot-probe data-remove="gone" au-slot="named" data-tail="tail"></cursor-projection-slot-probe></cursor-leaf>',
+  dependencies: [CursorLeaf, CursorProjectionSlotProbe],
+})
+class CursorProjectionSlotIdentity {}
+
+@customElement({ name: 'cursor-projection-slot-rewriter', template: '' })
+class CursorProjectionSlotRewriter {
+  static processContent(element: HTMLElement) {
+    const child = element.firstElementChild!;
+    child.removeAttribute('au-slot');
+    child.setAttribute('au-slot', 'rewritten');
+  }
+}
+
+@customElement({
+  name: 'cursor-projection-generated-slot',
+  template: '<cursor-projection-slot-rewriter><cursor-projection-slot-probe data-remove="gone" au-slot="authored" data-tail="tail"></cursor-projection-slot-probe></cursor-projection-slot-rewriter>',
+  dependencies: [CursorProjectionSlotRewriter, CursorProjectionSlotProbe],
+})
+class CursorProjectionGeneratedSlot {}
+
 @customElement({
   name: 'cursor-marker',
   template: cursorMarkerTemplate,
@@ -595,6 +628,8 @@ void new Aurelia()
     CursorTaskNestedProjection,
     CursorContextFamilyProjection,
     CursorContextFamilyProjectionSiblings,
+    CursorProjectionSlotIdentity,
+    CursorProjectionGeneratedSlot,
     CursorMarker,
     CursorNativeContainerless,
     CursorWide,

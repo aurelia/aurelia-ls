@@ -13,6 +13,7 @@ import {
   TemplateCompilerSiteCursorPhaseEvent,
   TemplateCompilerSiteCursorPhaseKind,
   TemplateCompilerSiteCursorProcessContentEvent,
+  TemplateCompilerSiteCursorProjectionExtractionEvent,
   TemplateCompilerSiteCursorSiteOutcome,
   TemplateCompilerSiteCursorSurrogateClassificationEvent,
   TemplateCompilerSiteCursorSurrogateValidationEvent,
@@ -210,7 +211,10 @@ export function auditTemplateCompilerTraversalCompletion(
   if (
     endpoint != null
     && !sameObjects(endpoint.siteOperations, [
-      ...processContentEvents.map((event) => event.result.operation),
+      ...transcript.events.flatMap(event => event instanceof TemplateCompilerSiteCursorProcessContentEvent
+        ? [event.result.operation]
+        : event instanceof TemplateCompilerSiteCursorProjectionExtractionEvent && event.slotOperation != null
+          ? [event.slotOperation] : []),
       ...(transcript.frontier?.terminalOperation == null ? [] : [transcript.frontier.terminalOperation]),
     ])
   ) {

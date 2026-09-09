@@ -7,7 +7,6 @@ import {
   type TemplateCompilerHydrateElementEnvelopeDraft,
 } from './template-compiler-hydrate-element-staging.js';
 import { HydrateElementProjectionContributorDisposition } from './instruction-ir.js';
-import type { TemplateCompilerLiveAttributeSuppressionAuthority } from './template-compiler-live-attribute-owner.js';
 import {
   TemplateCompilerAttributeOccurrence,
   TemplateCompilerElementOccurrence,
@@ -218,60 +217,6 @@ export class TemplateCompilerProjectionSlotConsumptionReceipt {
 
   isModuleConstructed(): boolean {
     return this.#authority === projectionLogicalExtractionAuthority;
-  }
-}
-
-/** Short-lived logical NamedNodeMap authority rebased when the exact projected contributor is reached. */
-export class TemplateCompilerProjectionLiveSlotSuppressionAuthority
-  implements TemplateCompilerLiveAttributeSuppressionAuthority {
-  readonly #authority: object;
-  readonly suppressedAttributes: readonly TemplateCompilerAttributeOccurrence[];
-
-  constructor(
-    authority: object,
-    readonly consumption: TemplateCompilerProjectionSlotConsumptionReceipt,
-    readonly reachedElement: TemplateCompilerSiteCursorReachedElement,
-    readonly forest: TemplateCompilerOccurrenceForest,
-    readonly element: TemplateCompilerElementOccurrence,
-    readonly forestMutationRevision: number,
-    readonly attribute: TemplateCompilerAttributeOccurrence,
-    readonly physicalOrdinal: number,
-    readonly capturedSuccessor: TemplateCompilerAttributeOccurrence | null,
-  ) {
-    this.suppressedAttributes = [attribute];
-    const attributes = element.readAttributes();
-    const reachedSelectionEvent = reachedElement.reachedSelectionEvent;
-    if (
-      authority !== projectionLogicalExtractionAuthority
-      || !consumption.isModuleConstructed()
-      || !reachedElement.isModuleConstructed()
-      || !reachedElement.isCurrent()
-      || forest !== consumption.forest
-      || forest.mutationRevision !== forestMutationRevision
-      || element !== consumption.element
-      || attribute !== consumption.attribute
-      || reachedElement.elementEvent.element !== element
-      || reachedSelectionEvent.selection.visit.node !== element
-      || attributes[physicalOrdinal] !== attribute
-      || (attributes[physicalOrdinal + 1] ?? null) !== capturedSuccessor
-    ) {
-      throw new Error('Projection live slot suppression lost its consumption, visit, or current attribute authority.');
-    }
-    this.#authority = authority;
-  }
-
-  isModuleConstructed(): boolean {
-    return this.#authority === projectionLogicalExtractionAuthority;
-  }
-
-  isCurrent(): boolean {
-    return this.isModuleConstructed()
-      && this.forest.mutationRevision === this.forestMutationRevision
-      && this.forest.nodeForOccurrenceKey(this.element.occurrenceKey) === this.element
-      && this.forest.attributeForOccurrenceKey(this.attribute.occurrenceKey) === this.attribute
-      && this.attribute.owner === this.element
-      && this.element.readAttributes()[this.physicalOrdinal] === this.attribute
-      && (this.element.readAttributes()[this.physicalOrdinal + 1] ?? null) === this.capturedSuccessor;
   }
 }
 
@@ -503,10 +448,6 @@ export class TemplateCompilerProjectionLogicalExtractionPreparation {
   readonly grouping: ProjectionGrouping;
   readonly #contributorsByPlan: ReadonlyMap<ProjectionContributor, TemplateCompilerProjectionContributorReceipt>;
   readonly #bandsByGroup: ReadonlyMap<ProjectionGroup, TemplateCompilerProjectionPlannedEntrantBand>;
-  readonly #consumptionsByElement: ReadonlyMap<
-    TemplateCompilerElementOccurrence,
-    TemplateCompilerProjectionSlotConsumptionReceipt
-  >;
 
   constructor(
     authority: object,
@@ -528,7 +469,7 @@ export class TemplateCompilerProjectionLogicalExtractionPreparation {
     this.grouping = request.envelope.projection.grouping;
     this.#contributorsByPlan = new Map(contributorReceipts.map((receipt) => [receipt.contributor, receipt]));
     this.#bandsByGroup = new Map(plannedEntrantBands.map((band) => [band.group, band]));
-    this.#consumptionsByElement = new Map(slotConsumptions.map((receipt) => [receipt.element, receipt]));
+    const consumedElements = new Set(slotConsumptions.map((receipt) => receipt.element));
     const groupByContributor = new Map<ProjectionContributor, ProjectionGroup>();
     for (const group of this.grouping.groups) {
       for (const contributor of group.members) groupByContributor.set(contributor, group);
@@ -558,7 +499,7 @@ export class TemplateCompilerProjectionLogicalExtractionPreparation {
           && contributorReceipts[ordinal - 1]!.source.sourceOrdinal >= receipt.source.sourceOrdinal)
       )
       || slotConsumptions.length !== expectedSlotContributors.length
-      || this.#consumptionsByElement.size !== slotConsumptions.length
+      || consumedElements.size !== slotConsumptions.length
       || slotConsumptions.some((receipt, ordinal) =>
         !receipt.isModuleConstructed()
         || receipt.grouping !== this.grouping
@@ -607,11 +548,6 @@ export class TemplateCompilerProjectionLogicalExtractionPreparation {
     return this.#bandsByGroup.get(group) ?? null;
   }
 
-  slotConsumptionFor(
-    element: TemplateCompilerElementOccurrence,
-  ): TemplateCompilerProjectionSlotConsumptionReceipt | null {
-    return this.#consumptionsByElement.get(element) ?? null;
-  }
 }
 
 /** Exact projection context allocated by the caller for one definition-producing group. */
@@ -933,61 +869,6 @@ export function realizeTemplateCompilerProjectionLogicalExtraction(
       sourceOrdinal: residual.source.sourceOrdinal,
       authority: residual,
     })),
-  );
-}
-
-/** Rebase a durable slot-consumption fact into one immediate live-owner suppression capability. */
-export function rebaseTemplateCompilerProjectionLiveSlotSuppression(
-  preparation: TemplateCompilerProjectionLogicalExtractionPreparation,
-  consumption: TemplateCompilerProjectionSlotConsumptionReceipt,
-  reachedElement: TemplateCompilerSiteCursorReachedElement,
-): TemplateCompilerProjectionLiveSlotSuppressionAuthority {
-  const forest = preparation.request.forest;
-  const reachedSelectionEvent = reachedElement.reachedSelectionEvent;
-  const event = reachedElement.elementEvent;
-  const selection = reachedSelectionEvent.selection;
-  const element = consumption.element;
-  const contributorReceipt = preparation.contributorReceiptFor(consumption.contributor);
-  if (
-    !preparation.isModuleConstructed()
-    || preparation.slotConsumptionFor(element) !== consumption
-    || contributorReceipt == null
-    || !consumption.isModuleConstructed()
-    || !reachedElement.isModuleConstructed()
-    || !reachedElement.isCurrent()
-    || reachedSelectionEvent.session !== preparation.taskSession
-    || event.element !== element
-    || selection.visit.node !== element
-    || event.parent !== selection.visit.parent
-    || event.parentOrdinal !== selection.visit.parentOrdinal
-    || event.capturedSuccessor !== selection.visit.capturedSuccessor
-    || selection.visit.parent !== contributorReceipt.source.parent
-    || selection.visit.parentOrdinal !== contributorReceipt.source.sourceOrdinal
-    || selection.visit.capturedSuccessor !== contributorReceipt.source.capturedSuccessor
-  ) {
-    throw new Error('Projection live slot suppression requires the exact planned contributor reached by its session.');
-  }
-  const attributes = element.readAttributes();
-  let physicalOrdinal = -1;
-  for (let ordinal = 0; ordinal < attributes.length; ordinal++) {
-    if (attributes[ordinal] === consumption.attribute) {
-      physicalOrdinal = ordinal;
-      break;
-    }
-  }
-  if (physicalOrdinal < 0) {
-    throw new Error('Projection live slot suppression attribute is absent at its reached owner visit.');
-  }
-  return new TemplateCompilerProjectionLiveSlotSuppressionAuthority(
-    projectionLogicalExtractionAuthority,
-    consumption,
-    reachedElement,
-    forest,
-    element,
-    forest.mutationRevision,
-    consumption.attribute,
-    physicalOrdinal,
-    attributes[physicalOrdinal + 1] ?? null,
   );
 }
 

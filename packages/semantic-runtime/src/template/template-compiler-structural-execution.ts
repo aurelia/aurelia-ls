@@ -50,6 +50,8 @@ import type {
   TemplateCompilerProcessContentRemoval,
   TemplateCompilerProcessContentResult,
 } from './template-compiler-process-content.js';
+import type { TemplateCompilerProjectionSlotConsumptionReceipt } from './template-compiler-projection-logical-extraction.js';
+import { TemplateCompilerOperationKind } from './template-compiler-operation.js';
 import type {
   TemplateStructuralAttributeReference,
   TemplateStructuralNodeReference,
@@ -59,6 +61,7 @@ import type { TemplateCompilerSiteCursorSubtreeExclusionEvent } from './template
 import {
   type TemplateCompilerAttributeDetachmentMutation,
   type TemplateCompilerAttributeInsertionMutation,
+  type TemplateCompilerOperation,
   TemplateCompilerOperationMutationBatch,
   TemplateCompilerMutationBatchState,
 } from './template-compiler-execution.js';
@@ -70,6 +73,7 @@ interface TemplateCompilerProjectionContributorInput {
   readonly host: TemplateCompilerElementOccurrence;
   readonly contributor: TemplateCompilerNodeOccurrence;
   readonly contributorProductHandle: ProductHandle;
+  readonly slotAttribute: TemplateCompilerAttributeOccurrence | null;
 }
 
 /** One exact structural root assigned to an existing compiler target context. */
@@ -680,6 +684,11 @@ export class TemplateCompilerStructuralExecutionSession {
     );
   }
 
+  /** Resolve one exact consumed Attr without collecting or sorting the context-family inventory. */
+  readConsumedAttributeDisposition(attribute: TemplateCompilerAttributeOccurrence): TemplateCompilerConsumedAttributeDisposition | null {
+    return this.consumedAttributes.get(attribute) ?? null;
+  }
+
   /** Read caused retained-input transfers in compiler execution order. */
   readInputNodeTransfers(
     context?: TemplateCompilerTargetContextPlan,
@@ -1270,6 +1279,75 @@ export class TemplateCompilerStructuralExecutionSession {
     );
     this.consumedAttributes.set(attribute, disposition);
     appendMap(this.consumedAttributesByContextKey, context.localKey, disposition);
+    return disposition;
+  }
+
+  /** Adopt the exact slot Attr consumed at extraction, before any projected contributor hook ran. */
+  adoptCommittedProjectionSlotConsumption(
+    context: TemplateCompilerTargetContextPlan,
+    instruction: HydrateElementInstruction,
+    consumption: TemplateCompilerProjectionSlotConsumptionReceipt,
+    operation: TemplateCompilerOperation,
+    mutation: TemplateCompilerAttributeDetachmentMutation,
+  ): TemplateCompilerConsumedAttributeDisposition {
+    this.requireContext(context);
+    const attribute = consumption.attribute;
+    const owner = consumption.element;
+    const hookInsertion = this.hookAttributeInsertion(attribute);
+    const sourceOwner = attribute.generation == null
+      ? this.forest.seededAttributePlacement(attribute)?.owner
+      : hookInsertion?.owner;
+    const authoredAttribute = this.forest.exactAuthoredAttributeOrigin(attribute)?.authored.productHandle ?? null;
+    const authoredOwner = this.forest.exactAuthoredNodeOrigin(owner)?.authored.productHandle ?? null;
+    const contributor = instruction.projections
+      .find((projection) => projection.slotName === consumption.group.slotName)?.contributors
+      .find((entry) => entry.node.productHandle === authoredOwner) ?? null;
+    const projectionContext = contributor == null ? null : context.readOwnedContexts().find((child) =>
+      child.structuralAuthority instanceof TemplateCompilerProjectionContextStructuralAuthority
+      && child.structuralAuthority.instruction === instruction
+      && child.structuralAuthority.projection.contributors.includes(contributor)
+    ) ?? null;
+    const input = contributor == null ? null : this.projectionHostChild(instruction, contributor);
+    const slotWire = contributor?.slotAttribute;
+    const slotWireIsExact = authoredAttribute != null
+      ? slotWire?.productHandle === authoredAttribute
+      : hookInsertion != null && slotWire != null
+        && slotWire.productHandle == null && slotWire.addressHandle == null && slotWire.rawName === 'au-slot'
+        && contributor?.slotNameSourceAddressHandle == null
+        && consumption.origin.exactAuthoredOrigin == null;
+    if (!consumption.isModuleConstructed()
+      || consumption.forest !== this.forest
+      || operation.operationKind !== TemplateCompilerOperationKind.ProjectionSlotConsumption
+      || operation.mutationBatch.state !== TemplateCompilerMutationBatchState.Committed
+      || !operation.mutationBatch.attributeDetachmentMutations.includes(mutation)
+      || operation.startForestMutationRevision !== consumption.extractionForestMutationRevision
+      || operation.endForestMutationRevision <= operation.startForestMutationRevision
+      || mutation.attribute !== attribute
+      || mutation.previousOwner !== owner
+      || mutation.previousOrdinal !== consumption.physicalOrdinal
+      || this.forest.attributeForOccurrenceKey(attribute.occurrenceKey) !== attribute
+      || attribute.owner != null
+      || sourceOwner !== owner
+      || this.consumedAttributes.has(attribute)
+      || (attribute.inputReference == null && attribute.generation == null)
+      || !slotWireIsExact
+      || contributor == null
+      || projectionContext == null
+      || input == null || input.contributor !== owner
+      || contributor.disposition !== consumption.contributor.disposition
+      || !context.readRows().some((row) => row.instructions.includes(instruction))) {
+      throw new Error(`Compiler projection slot '${attribute.occurrenceKey}' lost committed extraction authority.`);
+    }
+    const disposition = new TemplateCompilerConsumedAttributeDisposition(
+      context, attribute, attribute.inputReference, authoredAttribute,
+      owner, mutation.previousOrdinal, this.nextInputEventOrdinal++,
+      [instruction.productHandle],
+    );
+    this.consumedAttributes.set(attribute, disposition);
+    appendMap(this.consumedAttributesByContextKey, context.localKey, disposition);
+    // Addressless hook output has no authored Attr lookup. The committed receipt restores
+    // its exact occurrence on the existing contributor/entrant index before target movement.
+    this.indexProjectionContributorInput(projectionContext, contributor, { ...input, slotAttribute: attribute });
     return disposition;
   }
 
@@ -1971,25 +2049,34 @@ export class TemplateCompilerStructuralExecutionSession {
       for (const contributor of authority.projection.contributors) {
         this.projectionAuthorityByContributor.set(contributor, authority);
         const input = this.resolveProjectionContributorInput(authority, contributor);
-        this.projectionInputsByContributor.set(contributor, input);
-        if (input == null) continue;
-        switch (contributor.disposition) {
-          case HydrateElementProjectionContributorDisposition.RetainedNode:
-            entrants.set(input.contributor, input.contributorProductHandle);
-            break;
-          case HydrateElementProjectionContributorDisposition.UnwrappedTemplateContent: {
-            const content = input.contributor instanceof TemplateCompilerElementOccurrence
-              ? input.contributor.templateContent
-              : null;
-            for (const child of content == null ? [] : this.seededChildNodesByParent.get(content) ?? []) {
-              entrants.set(child, input.contributorProductHandle);
-            }
-            break;
-          }
-          case HydrateElementProjectionContributorDisposition.DiscardedWhitespace:
-            break;
-        }
+        this.indexProjectionContributorInput(context, contributor, input);
       }
+    }
+  }
+
+  private indexProjectionContributorInput(
+    context: TemplateCompilerTargetContextPlan,
+    contributor: HydrateElementProjectionContributor,
+    input: TemplateCompilerProjectionContributorInput | null,
+  ): void {
+    this.projectionInputsByContributor.set(contributor, input);
+    if (input == null) return;
+    const entrants = this.structuralEntrantsByContextKey.get(context.localKey)!;
+    switch (contributor.disposition) {
+      case HydrateElementProjectionContributorDisposition.RetainedNode:
+        entrants.set(input.contributor, input.contributorProductHandle);
+        break;
+      case HydrateElementProjectionContributorDisposition.UnwrappedTemplateContent: {
+        const content = input.contributor instanceof TemplateCompilerElementOccurrence
+          ? input.contributor.templateContent
+          : null;
+        for (const child of content == null ? [] : this.seededChildNodesByParent.get(content) ?? []) {
+          entrants.set(child, input.contributorProductHandle);
+        }
+        break;
+      }
+      case HydrateElementProjectionContributorDisposition.DiscardedWhitespace:
+        break;
     }
   }
 
@@ -2151,7 +2238,7 @@ export class TemplateCompilerStructuralExecutionSession {
         || !(this.seededAttributesByOwner.get(contributorNode) ?? [])
           .every((attribute) => attribute.name.toLowerCase() === 'au-slot'))
     ) return null;
-    return input;
+    return { ...input, slotAttribute };
   }
 
   private projectionHostChild(
@@ -2745,9 +2832,7 @@ export class TemplateCompilerStructuralExecutionSession {
     beforeEventOrdinal: number,
   ): void {
     if (contributor.slotAttribute == null) return;
-    const auSlotAttribute = contributor.slotAttribute.productHandle == null
-      ? null
-      : this.exactSeededAttributeForAuthored(contributor.slotAttribute.productHandle);
+    const auSlotAttribute = this.projectionContributorInput(authority, contributor)?.slotAttribute ?? null;
     const ownerContext = context.ownerContext == null
       ? null
       : this.contextForLocalKey(context.ownerContext.localKey);

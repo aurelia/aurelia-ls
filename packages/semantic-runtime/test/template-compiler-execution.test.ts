@@ -253,7 +253,7 @@ describe('template compiler execution sequence', () => {
         target: execution.occurrenceTarget(context, attribute),
         causeHandles: [browser.run.handles.product('site-process:definition')],
         siteExecutionDriver: driver,
-      })).toThrow(/currently admits only processContent/);
+      })).toThrow(/requires an admitted operation under its exact active driver/);
       const attempt = execution.beginOperation({
         operationKey: 'site-process:invoke',
         context,
@@ -305,7 +305,7 @@ describe('template compiler execution sequence', () => {
         target: execution.callableEffectTarget(context, callable, element),
         causeHandles: [browser.run.handles.product('site-process:definition')],
         siteExecutionDriver: driver,
-      })).toThrow(/currently admits only processContent/);
+      })).toThrow(/requires an admitted operation under its exact active driver/);
 
       const targetPlan = createRootTargetPlan(browser, lane.localKey);
       recordReachableCompilerInputs(targetPlan, forest);

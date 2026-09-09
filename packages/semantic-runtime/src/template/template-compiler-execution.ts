@@ -31,6 +31,10 @@ import type {
   TemplateCompilerContextFamilyStructuralSchedulePreparation,
 } from './template-compiler-context-family-structural-schedule.js';
 import type { TemplateCompilerHookBootstrapResult } from './template-compiler-hook-bootstrap.js';
+import type {
+  TemplateCompilerProjectionLogicalExtractionPreparation,
+  TemplateCompilerProjectionSlotConsumptionReceipt,
+} from './template-compiler-projection-logical-extraction.js';
 import { HydrateElementProjectionContributorDisposition } from './instruction-ir.js';
 import { TemplateCompilerOperationKind } from './template-compiler-operation.js';
 import {
@@ -1150,6 +1154,10 @@ export class TemplateCompilerReachedAttributeScalarReceipt {
  * boundaries terminate only the affected exact lane.
  */
 export class TemplateCompilerExecutionSession {
+  private readonly projectionSlotConsumptions = new Map<TemplateCompilerProjectionSlotConsumptionReceipt, {
+    readonly operation: TemplateCompilerOperation;
+    readonly mutation: TemplateCompilerAttributeDetachmentMutation;
+  }>();
   /** Compatibility entry for already-planned structural replay. New compiler execution starts with `createForForest`. */
   static create(
     familyKey: string,
@@ -1408,18 +1416,7 @@ export class TemplateCompilerExecutionSession {
         operation.mutationBatch.attributeDetachmentMutations.map((mutation) => mutation.attribute)
       ),
     );
-    const adoptedProcessContent: (TemplateCompilerConsumedNodeDisposition | TemplateCompilerConsumedAttributeDisposition)[] = [];
-    for (const processContent of schedule.processContentExecutionOrder) {
-      adoptedProcessContent.push(processContent.removal instanceof TemplateCompilerAttributeDetachmentMutation
-        ? structuralExecution.adoptCommittedProcessContentAttributeRemoval(
-            processContent.contextMapping.targetContext, processContent.hydrateElement.instruction,
-            processContent.result, processContent.removal,
-          )
-        : structuralExecution.adoptCommittedProcessContentRemoval(
-            processContent.contextMapping.targetContext, processContent.hydrateElement.instruction,
-            processContent.result, processContent.removal, processContent.removalOrdinal,
-          ));
-    }
+    const adoptedProcessContent = this.adoptCommittedSiteMutations(structuralExecution, schedule);
     const globalContextBase = this.contexts.length;
     const contexts = targetPlan.readContexts().map((targetContext, ordinal) =>
       new TemplateCompilerExecutionContextReference(
@@ -1572,6 +1569,7 @@ export class TemplateCompilerExecutionSession {
       allocation.preparedAllocation,
     );
     structuralExecution.admitTargetPlan(targetPlan);
+    this.adoptCommittedSiteMutations(structuralExecution, schedule);
     structuralExecution.adoptExtractedInvocationContextStructure(
       targetPlan.root,
       lane.compilerCarrier,
@@ -1610,6 +1608,52 @@ export class TemplateCompilerExecutionSession {
     this.contextFamilyAttachments.set(target, attachment);
     this.contextFamilyAttachmentsByLane.set(lane, attachment);
     return attachment;
+  }
+
+  private adoptCommittedSiteMutations(
+    structural: TemplateCompilerStructuralExecutionSession,
+    schedule: TemplateCompilerContextFamilyStructuralSchedulePreparation,
+  ): (TemplateCompilerConsumedNodeDisposition | TemplateCompilerConsumedAttributeDisposition)[] {
+    const hooks: (TemplateCompilerConsumedNodeDisposition | TemplateCompilerConsumedAttributeDisposition)[] = [];
+    const adoptions: { operationOrdinal: number; mutationOrdinal: number; apply(): void }[] = [];
+    schedule.processContentExecutionOrder.forEach((entry, index) => {
+      const mutation = entry.removal instanceof TemplateCompilerAttributeDetachmentMutation
+        ? entry.removal : entry.removal.mutation;
+      adoptions.push({
+        operationOrdinal: entry.result.operation.executionOrdinal,
+        mutationOrdinal: mutation.eventOrdinal,
+        apply: () => {
+          hooks[index] = entry.removal instanceof TemplateCompilerAttributeDetachmentMutation
+            ? structural.adoptCommittedProcessContentAttributeRemoval(
+                entry.contextMapping.targetContext, entry.hydrateElement.instruction, entry.result, entry.removal,
+              )
+            : structural.adoptCommittedProcessContentRemoval(
+                entry.contextMapping.targetContext, entry.hydrateElement.instruction, entry.result, entry.removal, entry.removalOrdinal,
+              );
+        },
+      });
+    });
+    for (const projection of schedule.projectionExecutionOrder) {
+      for (const consumption of projection.event.preparation.slotConsumptions) {
+        const committed = this.readProjectionSlotConsumption(consumption);
+        if (committed == null || committed.operation !== projection.event.slotOperation) {
+          throw new Error('Projection slot has no matching committed site operation.');
+        }
+        adoptions.push({
+          operationOrdinal: committed.operation.executionOrdinal,
+          mutationOrdinal: committed.mutation.eventOrdinal,
+          apply: () => {
+            structural.adoptCommittedProjectionSlotConsumption(
+              projection.ownerContext.targetContext, projection.hydrateElement.instruction,
+              consumption, committed.operation, committed.mutation,
+            );
+          },
+        });
+      }
+    }
+    adoptions.sort((left, right) => left.operationOrdinal - right.operationOrdinal || left.mutationOrdinal - right.mutationOrdinal);
+    for (const adoption of adoptions) adoption.apply();
+    return hooks;
   }
 
   contextFamilyTargetAttachmentPreparationIsCurrent(
@@ -1716,6 +1760,62 @@ export class TemplateCompilerExecutionSession {
 
   readPendingAttempt(): TemplateCompilerPendingOperationAttempt | null {
     return this.pendingAttempt;
+  }
+
+  /** Apply the original slot-attribute removals before any projection group can invoke a source hook. */
+  consumeProjectionSlots(
+    driver: TemplateCompilerSiteExecutionDriverReference,
+    preparation: TemplateCompilerProjectionLogicalExtractionPreparation,
+  ): TemplateCompilerOperation | null {
+    this.assertCurrentSiteExecutionDriver(driver);
+    if (!preparation.isModuleConstructed() || !preparation.isCurrent() || preparation.request.forest !== this.forest) {
+      throw new Error('Projection slot consumption requires the current extraction preparation.');
+    }
+    const consumptions = preparation.slotConsumptions;
+    if (consumptions.length === 0) return null;
+    if (consumptions.some(consumption => this.projectionSlotConsumptions.has(consumption))) {
+      throw new Error('Projection slot consumption was already executed.');
+    }
+    const envelope = preparation.request.envelope;
+    const cause = envelope.definition.productHandle;
+    if (cause == null) throw new Error('Projection extraction has no owning resource definition.');
+    const attempt = this.beginOperation({
+      operationKey: `${driver.lane.localKey}:projection-slots:${envelope.element.occurrenceKey}:${driver.expectedLaneOperationCount}`,
+      context: driver.context,
+      operationKind: TemplateCompilerOperationKind.ProjectionSlotConsumption,
+      executionMechanism: TemplateCompilerOperationExecutionMechanism.BuiltIn,
+      target: this.occurrenceTarget(driver.context, envelope.element),
+      causeHandles: [cause],
+      sourceAddressHandle: envelope.source.sourceAddressHandle,
+      siteExecutionDriver: driver,
+    });
+    const overlay = this.requirePendingMutationOverlay(attempt);
+    for (const consumption of consumptions) {
+      const { attribute, element, physicalOrdinal } = consumption;
+      if (!consumption.isModuleConstructed() || consumption.forest !== this.forest
+        || attribute.owner !== element || element.readAttributes()[physicalOrdinal] !== attribute) {
+        throw new Error('Projection slot consumption lost its original attribute occurrence.');
+      }
+      const mutation = new TemplateCompilerAttributeDetachmentMutation(
+        overlay.nextTopologyMutationOrdinal, attribute, element, physicalOrdinal,
+      );
+      this.forest.detachAttribute(attribute);
+      overlay.recordAttributeDetachment(mutation);
+    }
+    const operation = this.completeOperation(attempt,
+      new TemplateCompilerOperationCompletion(TemplateCompilerOperationCompletionKind.Complete));
+    const mutations = operation.mutationBatch.attributeDetachmentMutations;
+    consumptions.forEach((consumption, index) => this.projectionSlotConsumptions.set(consumption, {
+      operation, mutation: mutations[index]!,
+    }));
+    return operation;
+  }
+
+  readProjectionSlotConsumption(consumption: TemplateCompilerProjectionSlotConsumptionReceipt): {
+    readonly operation: TemplateCompilerOperation;
+    readonly mutation: TemplateCompilerAttributeDetachmentMutation;
+  } | null {
+    return this.projectionSlotConsumptions.get(consumption) ?? null;
   }
 
   readAttributeValue(
@@ -2090,31 +2190,6 @@ export class TemplateCompilerExecutionSession {
       destinationOrdinal,
     );
     overlay.recordNodeDetachment(mutation);
-  }
-
-  /** Detach one explicit `au-slot` attribute in the enclosing HE projection-extraction operation. */
-  detachProjectionSlotAttribute(
-    attempt: TemplateCompilerPendingOperationAttempt,
-    attribute: TemplateCompilerAttributeOccurrence,
-  ): void {
-    const overlay = this.requireProjectionMutationOverlay(attempt);
-    const previousOwner = attribute.owner;
-    const previousOrdinal = attribute.readOwnerOrdinal();
-    if (
-      this.forest.attributeForOccurrenceKey(attribute.occurrenceKey) !== attribute
-      || previousOwner == null
-      || previousOrdinal == null
-    ) {
-      throw new Error(`Compiler projection attribute '${attribute.occurrenceKey}' has no live owner to detach.`);
-    }
-    const mutation = new TemplateCompilerAttributeDetachmentMutation(
-      overlay.nextTopologyMutationOrdinal,
-      attribute,
-      previousOwner,
-      previousOrdinal,
-    );
-    this.forest.detachAttribute(attribute);
-    overlay.recordAttributeDetachment(mutation);
   }
 
   /** Detach the exact attribute owned by one target-execution disposition operation. */
@@ -2882,10 +2957,14 @@ export class TemplateCompilerExecutionSession {
     );
     const isSiteExecution = attempt.context instanceof TemplateCompilerSiteExecutionContextReference;
     const siteNodeDetachments = mutationBatch.nodeDetachmentMutations;
-    const siteTopologyIsExact = mutationBatch.isSourceHookTopology()
-      && (attempt.executionMechanism === TemplateCompilerOperationExecutionMechanism.StaticCallable
-        || (mutationBatch.topologyMutations.length === siteNodeDetachments.length
-          && mutationBatch.occurrenceGenerationReservations.length === 0));
+    const siteTopologyIsExact = attempt.operationKind === TemplateCompilerOperationKind.ProjectionSlotConsumption
+      ? attempt.executionMechanism === TemplateCompilerOperationExecutionMechanism.BuiltIn
+        && mutationBatch.topologyMutations.length === mutationBatch.attributeDetachmentMutations.length
+        && mutationBatch.occurrenceGenerationReservations.length === 0 && mutationBatch.attributeValueMutations.length === 0
+      : mutationBatch.isSourceHookTopology()
+        && (attempt.executionMechanism === TemplateCompilerOperationExecutionMechanism.StaticCallable
+          || (mutationBatch.topologyMutations.length === siteNodeDetachments.length
+            && mutationBatch.occurrenceGenerationReservations.length === 0));
     if (
       isSiteExecution
       && (
@@ -3285,7 +3364,8 @@ export class TemplateCompilerExecutionSession {
         || this.operationsByKey.get(operation.operationKey) !== operation
         || !admittedOperationContexts.has(operation.context)
         || (operation.context instanceof TemplateCompilerSiteExecutionContextReference
-          && operation.operationKind !== TemplateCompilerOperationKind.ProcessContent)
+          && operation.operationKind !== TemplateCompilerOperationKind.ProcessContent
+          && operation.operationKind !== TemplateCompilerOperationKind.ProjectionSlotConsumption)
       ) {
         throw new Error(`Compiler operation '${operation.operationKey}' has incoherent family order or ownership.`);
       }
@@ -3323,6 +3403,16 @@ export class TemplateCompilerExecutionSession {
         );
       const isSiteProcessContent = operation.context instanceof TemplateCompilerSiteExecutionContextReference
         && operation.operationKind === TemplateCompilerOperationKind.ProcessContent;
+      const isSiteProjectionSlots = operation.context instanceof TemplateCompilerSiteExecutionContextReference
+        && operation.operationKind === TemplateCompilerOperationKind.ProjectionSlotConsumption;
+      if (isSiteProjectionSlots && (
+        operation.executionMechanism !== TemplateCompilerOperationExecutionMechanism.BuiltIn
+        || operation.completion.completionKind !== TemplateCompilerOperationCompletionKind.Complete
+        || operation.mutationBatch.attributeValueMutations.length > 0
+        || operation.mutationBatch.occurrenceGenerationReservations.length > 0
+        || operation.mutationBatch.topologyMutations.length !== operation.mutationBatch.attributeDetachmentMutations.length
+        || operation.endForestMutationRevision !== operation.startForestMutationRevision + operation.mutationBatch.topologyMutations.length
+      )) throw new Error('Projection slot operation lost its exact attribute-removal history.');
       const isTargetAttributeDisposition = operation.context instanceof TemplateCompilerExecutionContextReference
         && operation.operationKind === TemplateCompilerOperationKind.AttributeDisposition
         && operation.executionMechanism === TemplateCompilerOperationExecutionMechanism.BuiltIn
@@ -3377,6 +3467,7 @@ export class TemplateCompilerExecutionSession {
         throw new Error(`Compiler site operation '${operation.operationKey}' has incoherent mutation currentness.`);
       }
       const topologyIsAdmitted = operation.operationKind === TemplateCompilerOperationKind.LocalTemplateExtraction
+        || isSiteProjectionSlots
         || isTargetAttributeDisposition
         || isTargetTextExpansion
         || isTargetContainerlessReplacement
@@ -3833,10 +3924,11 @@ export class TemplateCompilerExecutionSession {
         driver == null
         || active !== driver
         || driver.context !== context
-        || operationKind !== TemplateCompilerOperationKind.ProcessContent
+        || (operationKind !== TemplateCompilerOperationKind.ProcessContent
+          && operationKind !== TemplateCompilerOperationKind.ProjectionSlotConsumption)
       ) {
         throw new Error(
-          `Compiler site context currently admits only processContent under its exact active driver.`,
+          `Compiler site context requires an admitted operation under its exact active driver.`,
         );
       }
       this.requireCurrentSiteExecutionDriver(driver);
@@ -4261,20 +4353,15 @@ export class TemplateCompilerExecutionSession {
         const targetContext = group.contextMapping.targetContext;
         const slotAttribute = receipt.slotConsumption?.attribute ?? null;
         if (slotAttribute != null) {
-          const disposition = structural.readConsumedAttributeDispositions(expected.context.targetContext)
-            .find((candidate) => candidate.attribute === slotAttribute) ?? null;
+          const disposition = structural.readConsumedAttributeDisposition(slotAttribute);
           if (
             disposition == null
+            || disposition.context !== expected.context.targetContext
             || !sameOccurrences(disposition.causeHandles, operation.causeHandles)
           ) return false;
-          expectedTopology.push({
-            node: null,
-            attribute: slotAttribute,
-            previousParent: disposition.owner,
-            previousOrdinal: disposition.ownerOrdinal,
-            forestDelta: 1,
-            transfer: null,
-          });
+          const committed = this.readProjectionSlotConsumption(receipt.slotConsumption!);
+          if (committed == null || committed.operation.executionOrdinal >= operation.executionOrdinal
+            || committed.mutation.attribute !== slotAttribute || slotAttribute.owner != null) return false;
         }
         if (receipt.contributor.disposition === HydrateElementProjectionContributorDisposition.RetainedNode) {
           const transfer = structural.readInputNodeTransfers(targetContext)

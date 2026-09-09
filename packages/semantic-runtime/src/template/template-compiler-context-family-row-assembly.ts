@@ -14,9 +14,10 @@ import {
   TemplateCompilerHydrateElementBlockerKind,
 } from './template-compiler-hydrate-element-staging.js';
 import type { HtmlElement, HtmlText } from './html-ir.js';
-import type {
-  TemplateCompilerElementOccurrence,
-  TemplateCompilerTextOccurrence,
+import {
+  TemplateCompilerGeneratedOccurrenceRole,
+  type TemplateCompilerElementOccurrence,
+  type TemplateCompilerTextOccurrence,
 } from './template-compiler-occurrence.js';
 import { TemplateCompilerOccurrenceMembershipArrivalPosture } from './template-compiler-occurrence-membership.js';
 export {
@@ -851,6 +852,10 @@ export function assembleTemplateCompilerContextFamilyRows(
     const extraction = hydrateElement.projectionExtraction;
     if (extraction != null) {
       for (const contributor of extraction.preparation.contributorReceipts) {
+        const slot = contributor.slotConsumption?.attribute;
+        // Family wire funding validates the committed insertion of addressless hook-created slots.
+        const hookGeneratedSlot = slot?.generation?.role === TemplateCompilerGeneratedOccurrenceRole.HookAttribute
+          && slot.inputReference == null;
         if (contributor.source.origin.exactAuthoredOrigin == null) {
           pendingReasons.push(new TemplateCompilerContextFamilyRowAssemblyReason(
             TemplateCompilerContextFamilyRowAssemblyReasonKind.SourceWireReferencePending,
@@ -859,6 +864,7 @@ export function assembleTemplateCompilerContextFamilyRows(
         }
         if (
           contributor.slotConsumption != null
+          && !hookGeneratedSlot
           && contributor.slotConsumption.origin.exactAuthoredOrigin == null
         ) {
           pendingReasons.push(new TemplateCompilerContextFamilyRowAssemblyReason(
@@ -868,6 +874,7 @@ export function assembleTemplateCompilerContextFamilyRows(
         }
         if (
           contributor.contributor.slotAttribute != null
+          && !hookGeneratedSlot
           && contributor.contributor.slotAttribute.value.length > 0
           && contributor.contributor.slotNameSourceAddressHandle == null
         ) {

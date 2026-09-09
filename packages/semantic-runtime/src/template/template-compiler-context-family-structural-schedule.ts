@@ -567,6 +567,8 @@ export class TemplateCompilerContextFamilyStructuralSchedulePreparation {
   >;
   /** Exact child-before-return order for adopting already-committed processContent removals. */
   readonly processContentExecutionOrder: readonly TemplateCompilerFamilyProcessContentAdoptionEntry[];
+  /** Extraction order for adopting the explicit slot attributes consumed before projected sites execute. */
+  readonly projectionExecutionOrder: readonly TemplateCompilerFamilyProjectionScheduleEntry[];
   /** Root attribute outcomes execute only after the complete recursive content band returns. */
   readonly surrogateAttributes: readonly TemplateCompilerFamilySurrogateAttributeScheduleEntry[];
 
@@ -620,6 +622,7 @@ export class TemplateCompilerContextFamilyStructuralSchedulePreparation {
     ]);
     const executionOrder = structuralScheduleExecutionOrder(rootExecution);
     this.processContentExecutionOrder = executionOrder.processContent;
+    this.projectionExecutionOrder = executionOrder.projections;
     const expectedProcessRemovals = rows.receipt.traversal.audit.processContentEvents.flatMap(
       (event) => orderedProcessContentRemovals(event.result),
     );

@@ -3,6 +3,7 @@ export const enum TemplateCompilerOperationKind {
   CompilerHook = 'compiler-hook',
   LocalTemplateExtraction = 'local-template-extraction',
   ProcessContent = 'process-content',
+  ProjectionSlotConsumption = 'projection-slot-consumption',
   ProjectionExtraction = 'projection-extraction',
   TemplateControllerWrapping = 'template-controller-wrapping',
   ContainerlessReplacement = 'containerless-replacement',

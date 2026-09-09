@@ -101,9 +101,14 @@ export function executeTemplateCompilerContextFamilyTarget(
     || entry.node !== rootStructure.compilerCarrier
     || entry.destinationParent !== null
   ) ?? null;
-  const hookRemovedAttributes = new Set(attachment.schedule.processContentExecutionOrder.flatMap((entry) =>
-    entry.removal instanceof TemplateCompilerAttributeDetachmentMutation ? [entry.removal.attribute] : []
-  ));
+  const adoptedAttributes = new Set([
+    ...attachment.schedule.processContentExecutionOrder.flatMap((entry) =>
+      entry.removal instanceof TemplateCompilerAttributeDetachmentMutation ? [entry.removal.attribute] : []
+    ),
+    ...attachment.schedule.projectionExecutionOrder.flatMap((entry) =>
+      entry.event.preparation.slotConsumptions.map((consumption) => consumption.attribute)
+    ),
+  ]);
   if (
     execution.structuralExecution !== structural
     || !structural.readTargetPlans().includes(attachment.target.targetPlan)
@@ -113,7 +118,7 @@ export function executeTemplateCompilerContextFamilyTarget(
       structural.readContextStructure(context.targetContext) != null
     )
     || structural.readConsumedAttributeDispositions().some((entry) => attachmentContexts.has(entry.context)
-      && !hookRemovedAttributes.has(entry.attribute))
+      && !adoptedAttributes.has(entry.attribute))
     || existingTransfers.length > 1
     || unexpectedExistingTransfer != null
     || structural.readInputTextExpansions().some((entry) => attachmentContexts.has(entry.context))
@@ -245,14 +250,19 @@ export function executeTemplateCompilerContextFamilyTarget(
         }
         const targetContext = scheduled.contextMapping.targetContext;
         let destinationOrdinal = destinationOrdinals.get(targetContext) ?? 0;
-        const slotAttribute = receipt.slotConsumption?.attribute ?? null;
-        if (slotAttribute != null) {
-          structural.consumeAttributeForContext(
-            slotAttribute,
-            entry.context.targetContext,
-            entry.causeHandles,
-            (attribute) => execution.detachProjectionSlotAttribute(attempt, attribute),
-          );
+        const slotConsumption = receipt.slotConsumption;
+        if (slotConsumption != null) {
+          const committed = execution.readProjectionSlotConsumption(slotConsumption);
+          const consumed = structural.readConsumedAttributeDisposition(slotConsumption.attribute);
+          if (committed == null
+            || committed.operation !== entry.projection.event.slotOperation
+            || consumed?.context !== entry.context.targetContext
+            || consumed.owner !== committed.mutation.previousOwner
+            || consumed.ownerOrdinal !== committed.mutation.previousOrdinal
+            || !consumed.causeHandles.includes(entry.instruction.productHandle)
+            || slotConsumption.attribute.owner != null) {
+            throw new Error(`Projection slot '${slotConsumption.attribute.occurrenceKey}' lost its adopted consumption.`);
+          }
         }
         switch (receipt.contributor.disposition) {
           case HydrateElementProjectionContributorDisposition.RetainedNode:

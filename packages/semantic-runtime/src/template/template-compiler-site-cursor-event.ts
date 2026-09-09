@@ -6,6 +6,11 @@ import type { TemplateCompilerAttributeOwnerProgressionSite } from './attribute-
 import type { TemplateResolvedResource } from './compiler-world.js';
 import { TemplateCompilerScopeClosureState, type TemplateCompilerObservedValue } from './compiler-read-view.js';
 import type { TemplateCompilerOperation, TemplateCompilerReachedAttributeScalarReceipt } from './template-compiler-execution.js';
+import {
+  TemplateCompilerOperationKind,
+  TemplateCompilerOperationCompletionKind,
+  TemplateCompilerOperationExecutionMechanism,
+} from './template-compiler-execution.js';
 import type {
   TemplateCompilerNormalizedSite,
   TemplateCompilerNormalizedTextSite,
@@ -352,6 +357,7 @@ export class TemplateCompilerSiteCursorProjectionExtractionEvent extends Templat
     readonly entrantBandStagings: readonly TemplateCompilerSiteCursorProjectionEntrantBandStaging[],
     readonly authoredSlotSpends: readonly TemplateCompilerSiteSpend[],
     readonly occurrenceOnlySlotRows: readonly TemplateCompilerOccurrenceOnlyRow[],
+    readonly slotOperation: TemplateCompilerOperation | null = null,
   ) {
     super(authority, ordinal, TemplateCompilerSiteCursorEventKind.ProjectionExtraction);
     if (!this.isCoherent()) {
@@ -367,6 +373,18 @@ export class TemplateCompilerSiteCursorProjectionExtractionEvent extends Templat
       || this.preparation.elementEvent.element !== this.host
       || this.preparation.elementEvent.ordinal >= this.ordinal
       || this.realization.request.preparation !== this.preparation
+      || (this.slotOperation == null) !== (this.preparation.slotConsumptions.length === 0)
+      || (this.slotOperation != null && (
+        this.slotOperation.operationKind !== TemplateCompilerOperationKind.ProjectionSlotConsumption
+        || this.slotOperation.executionMechanism !== TemplateCompilerOperationExecutionMechanism.BuiltIn
+        || this.slotOperation.completion.completionKind !== TemplateCompilerOperationCompletionKind.Complete
+        || this.slotOperation.mutationBatch.attributeDetachmentMutations.length !== this.preparation.slotConsumptions.length
+        || this.slotOperation.mutationBatch.attributeDetachmentMutations.some((mutation, ordinal) => {
+          const consumption = this.preparation.slotConsumptions[ordinal];
+          return mutation.attribute !== consumption?.attribute || mutation.previousOwner !== consumption.element
+            || mutation.previousOrdinal !== consumption.physicalOrdinal;
+        })
+      ))
       || this.entrantBandStagings.length !== this.realization.entrantBands.length
       || this.entrantBandStagings.some((staging, ordinal) =>
         staging.band !== this.realization.entrantBands[ordinal]

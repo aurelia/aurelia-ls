@@ -80,6 +80,7 @@ import {
   TemplateCompilerFamilyLoweredElementScheduleEntry,
 } from '../src/template/template-compiler-context-family-structural-schedule.js';
 import { executeTemplateCompilerContextFamilyTarget } from '../src/template/template-compiler-context-family-target-execution.js';
+import { TemplateCompilerStructuralExecutionSession } from '../src/template/template-compiler-structural-execution.js';
 import { TemplateCompilerFamilySurrogateAttributeOperationScheduleEntry } from '../src/template/template-compiler-context-family-operation-schedule.js';
 import {
   prepareTemplateCompilerContextFamilyFreeze,
@@ -161,6 +162,7 @@ import {
   TemplateCompilerSiteCursorPhaseEvent,
   TemplateCompilerSiteCursorPhaseKind,
   TemplateCompilerSiteCursorProcessContentEvent,
+  TemplateCompilerSiteCursorProjectionExtractionEvent,
   TemplateCompilerSiteCursorResultState,
   TemplateCompilerSiteCursorSubtreeExclusionEvent,
   TemplateCompilerSiteCursorSurrogateClassificationEvent,
@@ -1876,6 +1878,133 @@ describe('template compiler root site cursor', () => {
     expect(transcript.binding.execution.siteExecutionContext(transcript.binding.lane)).not.toBeNull();
     expect(transcript.endForestMutationRevision).toBe(transcript.startForestMutationRevision);
     expect(transcript.endGlobalOperationCount).toBe(transcript.startGlobalOperationCount + 1);
+  });
+
+  test('adopts the original slot Attr before projected hook removals and freezes its extraction once', () => {
+    const run = fixture.freshRun('cursor-projection-slot-identity');
+    const forest = run.binding.forest;
+    const originalSlot = forest.readAttributes().find((attribute) => attribute.name === 'au-slot');
+    const removedByHook = forest.readAttributes().find((attribute) => attribute.name === 'data-remove');
+    const probe = originalSlot?.owner;
+    if (originalSlot == null || originalSlot.inputReference == null || removedByHook == null || probe == null) {
+      throw new Error('Expected original projected slot and hook-removal attributes.');
+    }
+    expect(originalSlot.readOwnerOrdinal()).toBe(1);
+    const result = run.execute(TemplateCompilerSiteCursorTraversalMode.ClosedContextFamily);
+    const transcript = requireTranscript(result);
+    expect(transcript.frontier).toBeNull();
+    const extraction = eventsOf(transcript, TemplateCompilerSiteCursorProjectionExtractionEvent)[0];
+    const slotReceipt = extraction?.preparation.slotConsumptions[0];
+    const slotOperation = extraction?.slotOperation;
+    const hook = eventsOf(transcript, TemplateCompilerSiteCursorProcessContentEvent)
+      .find((event) => event.result.plan.host === probe)?.result;
+    if (slotReceipt == null || slotOperation == null || hook == null) {
+      throw new Error('Expected projection extraction followed by its contributor hook.');
+    }
+    const committed = run.binding.execution.readProjectionSlotConsumption(slotReceipt);
+    expect(slotReceipt.attribute).toBe(originalSlot);
+    expect(committed?.operation).toBe(slotOperation);
+    expect(committed?.mutation).toMatchObject({ attribute: originalSlot, previousOwner: probe, previousOrdinal: 1 });
+    expect(originalSlot.owner).toBeNull();
+    expect(slotOperation.operationKind).toBe(TemplateCompilerOperationKind.ProjectionSlotConsumption);
+    expect(slotOperation.executionOrdinal).toBeLessThan(hook.operation.executionOrdinal);
+    expect(slotOperation.endForestMutationRevision).toBeLessThanOrEqual(hook.operation.startForestMutationRevision);
+    expect(hook.operation.mutationBatch.attributeDetachmentMutations.map((mutation) => mutation.attribute))
+      .toEqual([removedByHook]);
+    const freshSlot = probe.readAttributes().find((attribute) => attribute.name === 'au-slot');
+    expect(freshSlot).toBeDefined();
+    expect(freshSlot).not.toBe(originalSlot);
+    expect(freshSlot?.inputReference).toBeNull();
+    expect(freshSlot?.value).toBe('fresh');
+    expect(probe.readAttributes().map((attribute) => [attribute.name, attribute.value])).toEqual([
+      ['data-tail', 'tail'], ['au-slot', 'fresh'], ['data-seen', 'false'],
+    ]);
+
+    const completion = completeTemplateCompilerContextFamily(transcript, result.siteEndpoint);
+    if (completion.receipt == null) throw new Error('Expected projected hook family completion.');
+    const rows = assembleTemplateCompilerContextFamilyRows(completion.receipt).assembly;
+    if (rows == null) throw new Error('Expected projected hook family rows.');
+    const wires = prepareTemplateCompilerFamilyWireFunding(rows).funding;
+    if (wires == null) throw new Error('Expected projected hook family wires.');
+    const allocation = prepareTemplateCompilerContextFamilyAllocation(rows, wires).preparation;
+    if (allocation == null) throw new Error('Expected projected hook family allocation.');
+    const target = prepareTemplateCompilerContextFamilyTargetPlan(allocation).preparation;
+    if (target == null) throw new Error('Expected projected hook family target plan.');
+    const schedule = prepareTemplateCompilerContextFamilyStructuralSchedule(target);
+    const attachmentPreparation = run.binding.execution.prepareContextFamilyTargetAttachment(target, schedule);
+    const adopted = attachmentPreparation.structuralExecution.readConsumedAttributeDispositions();
+    const slotDisposition = adopted.find((disposition) => disposition.attribute === originalSlot);
+    const hookDisposition = adopted.find((disposition) => disposition.attribute === removedByHook);
+    expect(adopted.filter((disposition) => disposition.attribute === originalSlot)).toHaveLength(1);
+    expect(slotDisposition?.context).toBe(target.targetPlan.root);
+    expect(slotDisposition?.owner).toBe(probe);
+    expect(slotDisposition?.ownerOrdinal).toBe(1);
+    expect(slotDisposition?.eventOrdinal).toBeLessThan(hookDisposition!.eventOrdinal);
+    const attachment = run.binding.execution.commitPreparedContextFamilyTargetAttachment(attachmentPreparation);
+    const targetExecution = executeTemplateCompilerContextFamilyTarget(attachment);
+    expect(targetExecution.consumedAttributes.filter((disposition) => disposition.attribute === originalSlot))
+      .toEqual([slotDisposition]);
+    expect(freshSlot?.owner).toBe(probe);
+    expect(run.binding.execution.sequence.readOperations().flatMap((operation) =>
+      operation.mutationBatch.attributeDetachmentMutations.filter((mutation) => mutation.attribute === originalSlot)
+    )).toHaveLength(1);
+    run.binding.execution.seal();
+    const freeze = prepareTemplateCompilerContextFamilyFreeze(targetExecution);
+    if (freeze.preparation == null) throw new Error('Expected projected hook family freeze preparation.');
+    const frozen = materializeTemplateCompilerContextFamilyFrozenValue(freeze.preparation);
+    expect(frozen.state).toBe(TemplateCompilerContextFamilyFrozenValueState.Exact);
+    const slotDerivations = frozen.value?.derivations.filter((derivation) =>
+      derivation.inputs.some((term) => term.structure.productHandle === originalSlot.inputReference!.productHandle)
+    );
+    expect(slotDerivations).toHaveLength(1);
+    expect(slotDerivations?.[0]?.operationOrdinal).toBe(slotOperation.executionOrdinal);
+    expect(slotDerivations?.[0]?.inputs).toHaveLength(1);
+    expect(slotDerivations?.[0]?.outputs).toEqual([]);
+    const frozenFreshSlot = frozen.value?.contexts.flatMap((context) =>
+      [...context.attributeByOccurrence].filter(([occurrence]) => occurrence === freshSlot)
+    );
+    expect(frozenFreshSlot).toHaveLength(1);
+    expect(frozenFreshSlot?.[0]?.[1].value).toBe('fresh');
+  });
+
+  test('consumes a hook-created projection slot without inventing its authored origin', () => {
+    const candidate = fixture.runtime.computationLifecycle.begin({
+      kind: 'template-compiler-generated-projection-slot-test',
+      reconciliationKey: fixture.browserRun.locus.reconciliationKey,
+      summary: 'Committed hook Attr projection and source-absence proof.',
+    });
+    const adoptions = vi.spyOn(TemplateCompilerStructuralExecutionSession.prototype, 'adoptCommittedProjectionSlotConsumption');
+    try {
+      const result = fixture.compileContextFamily('cursor-projection-generated-slot', candidate);
+      expect(result.state, result.reasons.map((reason) => reason.summary).join('\n'))
+        .toBe(TemplateCompilerContextFamilyCompilationState.Exact);
+      expect(adoptions).toHaveBeenCalledTimes(1);
+      const [context, instruction, receipt, operation, mutation] = adoptions.mock.calls[0]!;
+      const disposition = adoptions.mock.results[0]?.value;
+      expect(receipt.attribute.generation?.role).toBe(TemplateCompilerGeneratedOccurrenceRole.HookAttribute);
+      expect(receipt.attribute.inputReference).toBeNull();
+      expect(receipt.origin.exactAuthoredOrigin).toBeNull();
+      expect(receipt.attribute.value).toBe('rewritten');
+      expect(mutation.attribute).toBe(receipt.attribute);
+      expect(disposition).toMatchObject({
+        context, attribute: receipt.attribute, inputReference: null, authoredProductHandle: null,
+        owner: receipt.element, ownerOrdinal: receipt.physicalOrdinal,
+      });
+      const contributor = instruction.projections[0]?.contributors[0];
+      expect(contributor?.slotName).toBe('rewritten');
+      expect(contributor?.slotAttribute).toMatchObject({ productHandle: null, addressHandle: null, rawName: 'au-slot' });
+      expect(contributor?.slotNameSourceAddressHandle).toBeNull();
+      expect(receipt.element.readAttributes().map((attribute) => [attribute.name, attribute.value])).toEqual([
+        ['data-tail', 'tail'], ['au-slot', 'fresh'], ['data-seen', 'false'],
+      ]);
+      expect(receipt.element.readAttributes().find((attribute) => attribute.name === 'au-slot')).not.toBe(receipt.attribute);
+      // Addressless syntax consumed before final DOM has execution history, but no invented 0→0 source edge.
+      expect(result.value?.derivations.some((derivation) => derivation.operationOrdinal === operation.executionOrdinal)).toBe(false);
+      expect(result.value?.contexts.some((entry) => entry.owner.ownerKind === 'projection')).toBe(true);
+    } finally {
+      adoptions.mockRestore();
+      candidate.abort();
+    }
   });
 
   test('does not execute AuSlot from an unledgered name scalar', () => {
