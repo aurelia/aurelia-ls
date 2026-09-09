@@ -49,6 +49,7 @@ import type {
   TemplateCompilerTemplateControllerLeafRehomingReceipt,
   TemplateCompilerTemplateControllerTransitionEdgeReceipt,
 } from './template-compiler-template-controller-transition.js';
+import { TemplateCompilerProjectionResidualReceipt } from './template-compiler-projection-logical-extraction.js';
 
 const contextFamilyTraversalAuthority = {};
 const contextFamilyCompletionAuthority = {};
@@ -75,7 +76,7 @@ export const enum TemplateCompilerContextFamilyCompletionReasonKind {
   ProjectionContextOrderMismatch = 'projection-context-order-mismatch',
   ProjectionAccountingMismatch = 'projection-accounting-mismatch',
   EffectAccountingMismatch = 'effect-accounting-mismatch',
-  ExplicitShadowUnsupported = 'explicit-shadow-unsupported',
+  ProjectionResidualTraversalMismatch = 'projection-residual-traversal-mismatch',
   ContainerlessPlacementMismatch = 'containerless-placement-mismatch',
   TemplateControllerTransitionMissing = 'template-controller-transition-missing',
   TemplateControllerTransitionEvidenceMismatch = 'template-controller-transition-evidence-mismatch',
@@ -506,14 +507,11 @@ function validateProjectionContexts(
     let previousNonEmptyContextEventEnd = -1;
     if (
       !event.isCoherent()
-      || event.preparation.residuals.length > 0
       || tasks.contextForEvent(event) !== tasks.contextForEvent(event.preparation.elementEvent)
     ) {
       refuse(
-        event.preparation.residuals.length > 0
-          ? TemplateCompilerContextFamilyCompletionReasonKind.ExplicitShadowUnsupported
-          : TemplateCompilerContextFamilyCompletionReasonKind.ProjectionEvidenceMismatch,
-        'Projection extraction lost same-context host ownership or retained explicit-shadow residuals.',
+        TemplateCompilerContextFamilyCompletionReasonKind.ProjectionEvidenceMismatch,
+        'Projection extraction lost same-context host ownership.',
       );
       continue;
     }
@@ -537,6 +535,7 @@ function validateProjectionContexts(
       }
       const primaryWorkByEvent = task.eventBindings.flatMap((binding) => {
         if (!(binding.work instanceof TemplateCompilerSiteCursorLogicalEntrantWork)) return [];
+        if (binding.work.entrantAuthority instanceof TemplateCompilerProjectionResidualReceipt) return [];
         return cursorEventNode(binding.event) === binding.work.node ? [binding.work] : [];
       });
       if (
@@ -561,6 +560,34 @@ function validateProjectionContexts(
         previousNonEmptyContextEventEnd = last;
       }
       owners.set(context, new TemplateCompilerCompletedProjectionContext(event, staging));
+    }
+    const residuals = event.preparation.residuals;
+    const residualVisits = tasks.eventBindings.filter((binding) =>
+      binding.work instanceof TemplateCompilerSiteCursorLogicalEntrantWork
+      && binding.work.entrantAuthority instanceof TemplateCompilerProjectionResidualReceipt
+      && binding.work.entrantAuthority.grouping === event.preparation.grouping
+      && cursorEventNode(binding.event) === binding.work.node
+    );
+    if (
+      residualVisits.length !== residuals.length
+      || residualVisits.some((binding, ordinal) => {
+        const work = binding.work as TemplateCompilerSiteCursorLogicalEntrantWork;
+        const residual = residuals[ordinal]!;
+        return binding.context !== expectedParent
+          || binding.ordinal <= Math.max(event.ordinal, previousNonEmptyContextEventEnd)
+          || work.entrantAuthority !== residual
+          || work.node !== residual.source.node
+          || work.physicalSource.parent !== residual.source.parent
+          || work.physicalSource.sourceOrdinal !== residual.source.sourceOrdinal
+          || work.physicalSource.capturedSuccessor !== residual.source.capturedSuccessor
+          || work.logicalOrdinal !== ordinal
+          || work.logicalSuccessor !== (residuals[ordinal + 1]?.source.node ?? null);
+      })
+    ) {
+      refuse(
+        TemplateCompilerContextFamilyCompletionReasonKind.ProjectionResidualTraversalMismatch,
+        'Projection residual children did not drain once in host order after the projection contexts, in the owning host context.',
+      );
     }
   }
   const projectionTasks = tasks.contexts.filter((task) =>
@@ -1004,7 +1031,6 @@ function completedContext(
 function cursorEventNode(event: TemplateCompilerSiteCursorEvent): object | null {
   if (event instanceof TemplateCompilerSiteCursorElementEvent) return event.element;
   if (event instanceof TemplateCompilerSiteCursorTextEvent) return event.text;
-  if (event instanceof TemplateCompilerSiteCursorLetElementEvent) return event.elementEvent.element;
   if (event instanceof TemplateCompilerSiteCursorIgnoredNodeEvent) return event.node;
   return null;
 }

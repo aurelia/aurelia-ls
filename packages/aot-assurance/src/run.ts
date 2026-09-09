@@ -38,6 +38,10 @@ import {
   assertBrowserRecoveryBuildEvidence,
   assertBrowserRecoveryExpectations,
 } from './browser-recovery-scenario.js';
+import {
+  assertExplicitShadowBuildEvidence,
+  assertExplicitShadowExpectations,
+} from './explicit-shadow-scenario.js';
 import { StaticBuildServer } from './server.js';
 
 export interface RunAssuranceOptions {
@@ -100,6 +104,7 @@ export function assertScenarioBuildEvidence(
   else if (scenario === 'local-templates') assertLocalTemplatesBuildEvidence(evidence);
   else if (scenario === 'built-in-controllers') assertBuiltInControllersBuildEvidence(evidence);
   else if (scenario === 'browser-recovery') assertBrowserRecoveryBuildEvidence(evidence);
+  else if (scenario === 'explicit-shadow') assertExplicitShadowBuildEvidence(evidence);
   else if (scenario === 'routed-storefront') assertRoutedStorefrontBuildEvidence(evidence);
   else if (scenario === 'state-backed-form') assertStateBackedFormBuildEvidence(evidence);
   else if (scenario === 'projects-and-milestones') assertProjectsAndMilestonesBuildEvidence(evidence);
@@ -125,6 +130,9 @@ export function assertScenarioBrowserEvidence(
     } else if (scenario === 'browser-recovery') {
       assertBrowserRecoveryExpectations(browserBatch.jit);
       assertBrowserRecoveryExpectations(browserBatch.aot);
+    } else if (scenario === 'explicit-shadow') {
+      assertExplicitShadowExpectations(browserBatch.jit);
+      assertExplicitShadowExpectations(browserBatch.aot);
     } else if (scenario === 'routed-storefront') {
       assertRoutedStorefrontExpectations(browserBatch.jit);
       assertRoutedStorefrontExpectations(browserBatch.aot);
@@ -151,6 +159,8 @@ function defaultFixtureRoot(scenario: AssuranceScenario): string {
       return resolve(packageRoot, '..', 'semantic-runtime', 'fixtures', 'pressure', 'template-controller-built-ins');
     case 'browser-recovery':
       return resolve(packageRoot, 'fixtures', 'browser-recovery');
+    case 'explicit-shadow':
+      return resolve(packageRoot, 'fixtures', 'explicit-shadow');
     case 'routed-storefront':
       return resolve(
         packageRoot,

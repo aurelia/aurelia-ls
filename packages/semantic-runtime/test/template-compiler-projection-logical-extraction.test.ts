@@ -123,6 +123,8 @@ import {
   type TemplateCompilerSiteCursorEvent,
   TemplateCompilerSiteCursorFrontierKind,
   TemplateCompilerSiteCursorProjectionExtractionEvent,
+  TemplateCompilerSiteCursorLogicalEntrantWork,
+  TemplateCompilerSiteCursorTextEvent,
   TemplateCompilerSiteCursorResultState,
   TemplateCompilerSiteCursorTaskSession,
   TemplateCompilerSiteCursorTemplateControllerTransitionEvent,
@@ -254,16 +256,79 @@ describe('template compiler projection logical extraction', () => {
     expect(preparation.discardedWhitespace).toEqual([]);
   });
 
-  test('keeps explicit-shadow residual traversal at its named closed-family frontier', () => {
+  test('compiles explicit-shadow residual children in the host context after extracted groups', () => {
     const run = fixture.run(
       'projection-logical-shadow-host',
       TemplateCompilerSiteCursorTraversalMode.ClosedContextFamily,
     );
 
-    expect(run.transcript.frontier?.frontierKind)
-      .toBe(TemplateCompilerSiteCursorFrontierKind.AfterAttributesBeforeProjection);
-    expect(run.transcript.taskSnapshot.contexts).toHaveLength(1);
-    expect(eventsOf(run.transcript, TemplateCompilerSiteCursorProjectionExtractionEvent)).toEqual([]);
+    expect(run.transcript.frontier).toBeNull();
+    const tasks = run.transcript.taskSnapshot;
+    const extraction = eventsOf(run.transcript, TemplateCompilerSiteCursorProjectionExtractionEvent)[0]!;
+    const elements = eventsOf(run.transcript, TemplateCompilerSiteCursorElementEvent);
+    expect(tasks.contexts).toHaveLength(2);
+    expect(contextForElement(tasks, elements, 'span')).toBe(tasks.rootContext);
+    expect(contextForElement(tasks, elements, 'b')).toBe(tasks.contexts[1]!.context);
+    expect(elements.map((event) => event.element.tagName)).toEqual(['projection-logical-shadow-leaf', 'b', 'span']);
+    const span = elements.find((event) => event.element.tagName === 'span')!;
+    const visit = tasks.bindingForEvent(span)!.visit!;
+    expect(visit.parentOrdinal).toBe(0);
+    expect(visit.capturedSuccessor).toBe(extraction.preparation.grouping.extractedContributors[0]!.node);
+    expect(visit.logicalOrdinal).toBe(0);
+    expect(visit.logicalSuccessor).toBeNull();
+    expect(completeTemplateCompilerContextFamily(run.transcript, run.endpoint).state)
+      .toBe(TemplateCompilerContextFamilyCompletionState.Complete);
+  });
+
+  test('retains interleaved text, let and nested controller child spines without revisiting extracted nodes', () => {
+    const run = fixture.run('projection-logical-shadow-breadth-host', TemplateCompilerSiteCursorTraversalMode.ClosedContextFamily);
+    expect(run.transcript.frontier).toBeNull();
+    const tasks = run.transcript.taskSnapshot;
+    const extractions = eventsOf(run.transcript, TemplateCompilerSiteCursorProjectionExtractionEvent);
+    const elements = eventsOf(run.transcript, TemplateCompilerSiteCursorElementEvent);
+    const texts = eventsOf(run.transcript, TemplateCompilerSiteCursorTextEvent);
+    const elementById = (id: string) => elements.find((event) =>
+      event.element.readAttributes().some((attribute) => attribute.name === 'id' && attribute.value === id)
+    )!;
+    for (const extraction of extractions) {
+      const inputs = extraction.realization.residualInputs;
+      for (const [ordinal, input] of inputs.entries()) {
+        const primary = tasks.eventBindings.filter((binding) =>
+          binding.work instanceof TemplateCompilerSiteCursorLogicalEntrantWork
+          && binding.work.entrantAuthority === input.authority
+          && (binding.event instanceof TemplateCompilerSiteCursorElementEvent || binding.event instanceof TemplateCompilerSiteCursorTextEvent)
+        );
+        expect(primary).toHaveLength(1);
+        const binding = primary[0]!;
+        expect(binding.context).toBe(extraction.realization.request.continuation.context);
+        expect(binding.visit?.parentOrdinal).toBe(input.sourceOrdinal);
+        expect(binding.visit?.capturedSuccessor).toBe(input.source.children[input.sourceOrdinal + 1] ?? null);
+        expect(binding.visit?.logicalOrdinal).toBe(ordinal);
+        expect(binding.visit?.logicalSuccessor).toBe(inputs[ordinal + 1]?.source.children[inputs[ordinal + 1]!.sourceOrdinal] ?? null);
+      }
+    }
+    const ordinary = elementById('ordinary');
+    const controlled = elementById('controlled');
+    const transition = eventsOf(run.transcript, TemplateCompilerSiteCursorTemplateControllerTransitionEvent)
+      .find((event) => event.host === controlled.element)!;
+    const ordinaryTexts = texts.filter((event) => event.parent === ordinary.element);
+    const controlledTexts = texts.filter((event) => event.parent === controlled.element);
+    expect(ordinaryTexts.map((event) => event.text.text)).toEqual(['${before}', '${after}']);
+    expect(controlledTexts.map((event) => event.text.text)).toEqual(['${before}', '${after}']);
+    expect(ordinaryTexts.every((event) => tasks.contextForEvent(event) === tasks.rootContext)).toBe(true);
+    expect(controlledTexts.every((event) => tasks.contextForEvent(event) === transition.realization.terminalLeaf)).toBe(true);
+    expect(contextForElement(tasks, elements, 'let')).toBe(tasks.rootContext);
+    expect(contextForElement(tasks, elements, 'footer')).toBe(tasks.rootContext);
+    expect(contextForElement(tasks, elements, 'aside')).toBe(tasks.rootContext);
+    expect(elements.filter((event) => event.element.tagName === 'b')).toHaveLength(2);
+    expect(completeTemplateCompilerContextFamily(run.transcript, run.endpoint).state)
+      .toBe(TemplateCompilerContextFamilyCompletionState.Complete);
+    const executed = executeClosedFamily(run);
+    expect(executed.execution).toBeDefined();
+    expect(ordinary.element.readChildren().filter((node) => node instanceof TemplateCompilerTextOccurrence)
+      .map((node) => node.text)).toEqual([' ', ' ']);
+    expect(controlled.element.readChildren().filter((node) => node instanceof TemplateCompilerTextOccurrence)
+      .map((node) => node.text)).toEqual([' ', ' ']);
   });
 
   test('traverses non-TC projection groups and resumes the following source sibling in closed-family mode', () => {

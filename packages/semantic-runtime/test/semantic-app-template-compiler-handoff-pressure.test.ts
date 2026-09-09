@@ -474,13 +474,13 @@ describe('semantic app template compiler handoff pressure', () => {
 
       expect(batch.resources.filter((candidate) => candidate.state === TemplateCompilerCompiledHandoffState.Exact))
         .toHaveLength(7);
-      expect(resource?.state).toBe(TemplateCompilerCompiledHandoffState.Pending);
+      expect(resource?.state).toBe(TemplateCompilerCompiledHandoffState.Open);
       expect(resource?.reasons).toEqual([expect.objectContaining({
         stage: 'context-family',
-        reasonKind: 'family-completion:after-attributes-before-projection',
-        summary: 'Explicit-shadow projection retains residual host children that require same-context selected traversal.',
+        reasonKind: 'family-completion:before-process-content',
+        summary: "Custom element 'opaque-content-shell' has an arbitrary processContent hook outside the exact built-in executor.",
         frontierCause: {
-          frontierKind: 'after-attributes-before-projection',
+          frontierKind: 'before-process-content',
           nodeOccurrenceKey: expect.any(String),
           attributeOccurrenceKey: null,
           issue: null,

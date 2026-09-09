@@ -1338,18 +1338,6 @@ class TemplateCompilerRootSiteCursor {
           envelope: hydrateElement.draft,
         })
       : null;
-    if (preparation?.residuals.length) {
-      this.stop(
-        TemplateCompilerSiteCursorFrontierKind.AfterAttributesBeforeProjection,
-        element,
-        null,
-        null,
-        elementEvent.capturedSuccessor,
-        'Explicit-shadow projection retains residual host children that require same-context selected traversal.',
-      );
-      return null;
-    }
-
     const slotAccounting = preparation == null
       ? null
       : this.accountProjectionSlotConsumptions(preparation);
@@ -1597,7 +1585,9 @@ class TemplateCompilerRootSiteCursor {
       return null;
     }
     if (draft?.containerless.effective === true) {
-      const hasUnsupportedChildren = state.projectionEvent == null && element.readChildren().length > 0;
+      const hasUnsupportedChildren = state.projectionEvent == null
+        ? element.readChildren().length > 0
+        : state.projectionEvent.preparation.residuals.length > 0;
       if (
         !(
           draft.processContent.state === TemplateCompilerHydrateElementProcessContentState.Absent
@@ -1630,7 +1620,10 @@ class TemplateCompilerRootSiteCursor {
       ));
       return null;
     }
-    if (state.projectionEvent != null) return null;
+    if (state.realization != null) {
+      this.taskSession.pushContextLogicalChildBand(state.terminalContext, state.realization.residualInputs);
+      return null;
+    }
     if (!state.hasTemplateControllers) {
       throw new Error('Closed compiler continuation has neither projection nor template-controller work.');
     }

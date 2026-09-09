@@ -1,0 +1,43 @@
+<template>
+  <input id="message" value.bind="message">
+  <input id="suffix" value.bind="suffix">
+  <button id="toggle-light" click.trigger="lightVisible = !lightVisible">Toggle light content</button>
+  <button id="toggle-projection" click.trigger="projectionVisible = !projectionVisible">Toggle projection</button>
+  <button id="toggle-host" click.trigger="showConditional = !showConditional">Toggle host</button>
+  <button id="reorder" click.trigger="reorder()">Reorder</button>
+  <button id="remove" click.trigger="remove()">Remove</button>
+  <button id="append" click.trigger="append()">Append</button>
+  <output id="selected">${selectedAction}</output>
+
+  <shadow-card id="ordinary" label.bind="message"><!--retained-light-->
+    ${message}:direct
+    <em class="lead" slot="native" title.bind="message">${message}:native-first</em>
+    ${message}:adjacent-left
+    <b au-slot="heading">${message}:projected:${$host.label}:${$host.count}</b>
+    ${suffix}:adjacent-right
+    <span class="light" title.bind="message">${message}:default</span>
+    <template au-slot="actions" repeat.for="action of actions">
+      <button click.trigger="select(action)">${action}:${$parent.$host.label}:${$parent.$host.count}</button>
+    </template>
+    <strong class="conditional-light" slot="native" if.bind="lightVisible">${message}:native-if</strong>
+    <i au-slot="heading" if.bind="projectionVisible">conditional:${message}:${$host.label}</i>
+    <p class="row" repeat.for="item of items" slot="native">${$index}:${item}:${message}</p>
+    <u au-slot="heading">${message}:last</u>
+    <small class="last">${message}:tail</small>
+  </shadow-card>
+
+  <shadow-card if.bind="showConditional" id="conditional" label.bind="'conditional-' + message">
+    <span slot="native">${message}:conditional-native</span>
+    <b au-slot="heading">${message}:conditional:${$host.label}</b>
+    <small>${message}:conditional-default</small>
+  </shadow-card>
+
+  <shadow-card repeat.for="card of cards; key: id" id.bind="'card-' + card.id" label.bind="card.label">
+    <strong au-slot="heading">${card.label}:${$host.label}:${$host.count}</strong>
+    <span slot="native">${$index}:${card.label}:${message}</span>
+    <em>${card.id}:default</em>
+  </shadow-card>
+
+  <shadow-card id="fallback" label="empty"></shadow-card>
+  <p id="after-hosts">${message}:${suffix}:after</p>
+</template>

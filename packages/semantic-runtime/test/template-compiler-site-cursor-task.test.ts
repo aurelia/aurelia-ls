@@ -456,6 +456,63 @@ describe('template compiler site cursor task scheduler', () => {
       remainingFrames: [],
     });
   });
+
+  test('walks a selected child spine while retaining original source successors and following siblings', () => {
+    const forest = materializeForest(fixture, `selected-${fixtureOrdinal++}`,
+      '<main><section><i></i></section><b></b><aside><em></em></aside></main><footer></footer>');
+    const elements = elementsByTag(forest);
+    const main = elements.get('main')!;
+    const session = startSession('selected', forest);
+    const owner = session.next()!;
+    const source = session.capturePhysicalChildren(main, main.readChildren());
+    const inputs = [0, 2].map((sourceOrdinal) => ({ source, sourceOrdinal, authority: { sourceOrdinal } }));
+    expect(() => session.pushContextLogicalChildBand(session.rootContext, [...inputs].reverse()))
+      .toThrow(/ordered physical child selection/u);
+    const works = session.pushContextLogicalChildBand(session.rootContext, inputs);
+    const first = session.next()!;
+    expect(first.visit).toMatchObject({
+      node: elements.get('section'), parentOrdinal: 0, logicalOrdinal: 0,
+      capturedSuccessor: elements.get('b'), logicalSuccessor: elements.get('aside'), entrantWork: works[0],
+    });
+    session.pushContextFrame(session.rootContext, elements.get('section')!, elements.get('section')!.readChildren());
+    expect(session.next()?.visit.node).toBe(elements.get('i'));
+    const second = session.next()!;
+    expect(second.visit).toMatchObject({
+      node: elements.get('aside'), parentOrdinal: 2, logicalOrdinal: 1,
+      capturedSuccessor: null, logicalSuccessor: null, entrantWork: works[1],
+    });
+    expect(session.next()?.visit.node).toBe(elements.get('footer'));
+    expect(session.next()).toBeNull();
+    expect(session.finish(null).contexts[0]?.state).toBe(TemplateCompilerSiteCursorContextTaskState.Drained);
+    expect(owner.visit.node).toBe(main);
+  });
+
+  test('retains a stopped descendant stack inside a selected child band', () => {
+    const forest = materializeForest(fixture, `selected-stop-${fixtureOrdinal++}`,
+      '<main><section><i></i></section><b></b><aside></aside></main><footer></footer>');
+    const elements = elementsByTag(forest);
+    const main = elements.get('main')!;
+    const session = startSession('selected-stop', forest);
+    const owner = session.next()!;
+    const source = session.capturePhysicalChildren(main, main.readChildren());
+    const works = session.pushContextLogicalChildBand(session.rootContext,
+      [0, 2].map((sourceOrdinal) => ({ source, sourceOrdinal, authority: { sourceOrdinal } })));
+    session.next();
+    session.pushContextFrame(session.rootContext, elements.get('section')!, elements.get('section')!.readChildren());
+    const selected = session.next()!;
+    const frontier = new TemplateCompilerSiteCursorFrontier(
+      eventAuthority, 0, TemplateCompilerSiteCursorPhaseKind.ContentStart,
+      TemplateCompilerSiteCursorFrontierKind.AfterAttributesBeforeProjection,
+      selected.visit.node, null, null, selected.visit.capturedSuccessor, 0, 0, 0, 'Selected descendant stop.',
+    );
+    session.appendEvent(frontier);
+    const stopped = session.finish(frontier).contexts[0]!;
+    expect(stopped.state).toBe(TemplateCompilerSiteCursorContextTaskState.Stopped);
+    expect(stopped.remainingEntrantBands[0]?.parentVisit).toBe(owner.visit);
+    expect(stopped.remainingEntrantBands[0]?.readRemainingEntrants()).toEqual([works[1]]);
+    expect(stopped.remainingFrames.map((frame) => frame.parent))
+      .toEqual([forest.compilerContent, elements.get('section')]);
+  });
 });
 
 function startSession(

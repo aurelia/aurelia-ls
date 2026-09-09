@@ -10,7 +10,7 @@ therefore run through the generated base-runtime facade instead of retaining the
 The routed storefront additionally requires its exact 11-resource/11-renderer plan and an omitted event modifier, so
 browser parity exercises the optimized configuration rather than only a compile-free conservative fallback.
 
-The default package assurance runs eight complementary scenarios:
+The default package assurance runs nine complementary scenarios:
 
 - `g0` is the deeply instrumented parser/teardown control and owns the runtime string-parse guard;
 - `hello-world` runs the canonical shared IDE fixture without source instrumentation, aligned to the standard decorator
@@ -51,6 +51,12 @@ The default package assurance runs eight complementary scenarios:
   the initial router redirect, four routed list/detail areas, shared DI state, project and assignment creation, boolean
   and numeric-model form channels, async review loading and creation, and object-model selection through a matcher.
   Its AOT build must emit exactly the shell plus its eight route resources. Registration breadth remains provisional.
+- `explicit-shadow` combines explicit open shadow roots with native named/default slots and Aurelia `au-slot`
+  projections. It checks retained light-child order, native assignment identities and parentage, adjacent text bindings
+  separated by extracted contributors, authored whitespace/comment retention, `$host` versus source scope, projected
+  events, independent retained/projected controllers, and shadow-host if/repeat lifecycle with keyed DOM reuse. Both
+  native and Aurelia fallbacks are checked. Containerless shadow hosts and implicit `hasSlots` policy are outside this
+  scenario. Its AOT build must emit exactly `explicit-shadow-app` and `shadow-card`.
 
 ```powershell
 pnpm --filter @aurelia-ls/aot-assurance test
@@ -60,6 +66,7 @@ node packages/aot-assurance/out/cli.js --scenario hello-world
 node packages/aot-assurance/out/cli.js --scenario local-templates
 node packages/aot-assurance/out/cli.js --scenario built-in-controllers
 node packages/aot-assurance/out/cli.js --scenario browser-recovery
+node packages/aot-assurance/out/cli.js --scenario explicit-shadow
 node packages/aot-assurance/out/cli.js --scenario routed-storefront
 node packages/aot-assurance/out/cli.js --scenario state-backed-form
 node packages/aot-assurance/out/cli.js --scenario projects-and-milestones

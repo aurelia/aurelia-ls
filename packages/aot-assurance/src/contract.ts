@@ -1,6 +1,7 @@
 import type { PluginOption } from 'vite';
 import type { BuiltInControllersObservation } from './built-in-controllers-scenario.js';
 import type { BrowserRecoveryApplicationObservation } from './browser-recovery-scenario.js';
+import type { ExplicitShadowApplicationObservation } from './explicit-shadow-scenario.js';
 
 export type AssuranceLane = 'jit' | 'aot';
 export type AssuranceScenario =
@@ -9,6 +10,7 @@ export type AssuranceScenario =
   | 'local-templates'
   | 'built-in-controllers'
   | 'browser-recovery'
+  | 'explicit-shadow'
   | 'routed-storefront'
   | 'state-backed-form'
   | 'projects-and-milestones';
@@ -171,6 +173,7 @@ export type ApplicationObservation =
   | LocalTemplatesApplicationObservation
   | BuiltInControllersObservation
   | BrowserRecoveryApplicationObservation
+  | ExplicitShadowApplicationObservation
   | RoutedStorefrontApplicationObservation
   | StateBackedFormApplicationObservation
   | ProjectsAndMilestonesApplicationObservation;

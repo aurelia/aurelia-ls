@@ -354,6 +354,8 @@ export class TemplateCompilerSiteCursorLogicalEntrantBandSnapshot {
     readonly context: TemplateCompilerSiteCursorContextReference,
     entrants: readonly TemplateCompilerSiteCursorLogicalEntrantWork[],
     readonly nextOrdinal: number,
+    /** Null for a generated context's root band; otherwise the reached owner of this selected child spine. */
+    readonly parentVisit: TemplateCompilerSiteCursorNodeVisit | null = null,
   ) {
     this.entrants = [...entrants];
     if (
@@ -370,6 +372,10 @@ export class TemplateCompilerSiteCursorLogicalEntrantBandSnapshot {
         || entrant.logicalOrdinal !== ordinal
         || entrant.logicalSuccessor !== (this.entrants[ordinal + 1]?.node ?? null)
       )
+      || (parentVisit != null && (
+        !parentVisit.isModuleConstructed()
+        || !logicalChildrenFollowVisit(this.entrants, parentVisit)
+      ))
     ) {
       throw new Error('Compiler cursor logical entrant band lost context or contiguous order.');
     }
@@ -713,6 +719,7 @@ class TemplateCompilerSiteCursorMutableLogicalEntrantBand {
   constructor(
     readonly context: TemplateCompilerSiteCursorContextReference,
     readonly entrants: readonly TemplateCompilerSiteCursorLogicalEntrantWork[],
+    readonly parentVisit: TemplateCompilerSiteCursorNodeVisit | null = null,
   ) {}
 
   nextVisit(): {
@@ -744,6 +751,7 @@ class TemplateCompilerSiteCursorMutableLogicalEntrantBand {
       this.context,
       this.entrants,
       this.nextOrdinal,
+      this.parentVisit,
     );
   }
 }
@@ -769,7 +777,7 @@ class TemplateCompilerSiteCursorMutableContextTask {
   stopKind: TemplateCompilerSiteCursorTaskStopKind | null = null;
   state = TemplateCompilerSiteCursorMutableTaskState.Pending;
   scheduled = false;
-  /** One context-root band; additional selected spines require a distinct logical-parent carrier. */
+  /** Generated-context root staging is separate from selected child bands within an active context. */
   logicalEntrantsStaged = false;
 
   constructor(readonly context: TemplateCompilerSiteCursorContextReference) {}
@@ -1065,25 +1073,34 @@ export class TemplateCompilerSiteCursorTaskSession {
     ) {
       throw new Error('Compiler cursor logical entrant band requires one unscheduled pending generated context.');
     }
-    const physical = inputs.map((input) => new TemplateCompilerSiteCursorPhysicalSourcePlacement(
-      cursorTaskAuthority,
-      input.source,
-      input.sourceOrdinal,
-    ));
-    if (new Set(physical.map((source) => source.node)).size !== physical.length) {
-      throw new Error('Compiler cursor logical entrant band repeats one source occurrence.');
-    }
-    const entrants = physical.map((source, logicalOrdinal) => new TemplateCompilerSiteCursorLogicalEntrantWork(
-      cursorTaskAuthority,
-      context,
-      source,
-      logicalOrdinal,
-      physical[logicalOrdinal + 1]?.node ?? null,
-      inputs[logicalOrdinal]!.authority,
-    ));
+    const entrants = createLogicalEntrants(context, inputs);
     task.logicalEntrantsStaged = true;
     if (entrants.length > 0) {
       task.work.push(new TemplateCompilerSiteCursorMutableLogicalEntrantBand(context, entrants));
+    }
+    return entrants;
+  }
+
+  /** Traverse selected children of the current host in its existing context after extraction has claimed the rest. */
+  pushContextLogicalChildBand(
+    context: TemplateCompilerSiteCursorContextReference,
+    inputs: readonly TemplateCompilerSiteCursorLogicalEntrantInput[],
+  ): readonly TemplateCompilerSiteCursorLogicalEntrantWork[] {
+    const task = this.requireActiveTask(context);
+    const selection = this.currentSelection;
+    const entrants = createLogicalEntrants(context, inputs);
+    if (
+      selection?.context !== context
+      || !logicalChildrenFollowVisit(entrants, selection.visit)
+      || (entrants.length > 0 && !sameObjects(
+        entrants[0]!.physicalSource.children,
+        entrants[0]!.physicalSource.parent.readChildren(),
+      ))
+    ) {
+      throw new Error('Compiler cursor logical child band requires the current host and an ordered physical child selection.');
+    }
+    if (entrants.length > 0) {
+      task.work.push(new TemplateCompilerSiteCursorMutableLogicalEntrantBand(context, entrants, selection.visit));
     }
     return entrants;
   }
@@ -1453,14 +1470,19 @@ function workStackChainIsExact(
 ): boolean {
   for (let index = 1; index < work.length; index++) {
     const current = work[index]!;
-    if (!(current instanceof TemplateCompilerSiteCursorFrameSnapshot)) continue;
+    const parent = current instanceof TemplateCompilerSiteCursorFrameSnapshot
+      ? current.parent
+      : current instanceof TemplateCompilerSiteCursorLogicalEntrantBandSnapshot && current.parentVisit != null
+        ? current.entrants[0]!.physicalSource.parent
+        : null;
+    if (parent == null) continue;
     const previous = work[index - 1]!;
     const previousNode = previous instanceof TemplateCompilerSiteCursorFrameSnapshot
       ? previous.nextOrdinal === 0 ? null : previous.children[previous.nextOrdinal - 1] ?? null
       : previous instanceof TemplateCompilerSiteCursorLogicalEntrantBandSnapshot
         ? previous.nextOrdinal === 0 ? null : previous.entrants[previous.nextOrdinal - 1]?.node ?? null
         : previous.visit.node;
-    if (previousNode == null || !frameParentFollowsNode(current.parent, previousNode)) return false;
+    if (previousNode == null || !frameParentFollowsNode(parent, previousNode)) return false;
   }
   if (state === TemplateCompilerSiteCursorContextTaskState.Pending) {
     return lastVisit == null && lastWork == null;
@@ -1498,6 +1520,32 @@ function contextIsSelfOrDescendant(
     current = current.parent;
   }
   return false;
+}
+
+function createLogicalEntrants(
+  context: TemplateCompilerSiteCursorContextReference,
+  inputs: readonly TemplateCompilerSiteCursorLogicalEntrantInput[],
+): readonly TemplateCompilerSiteCursorLogicalEntrantWork[] {
+  const physical = inputs.map((input) => new TemplateCompilerSiteCursorPhysicalSourcePlacement(
+    cursorTaskAuthority, input.source, input.sourceOrdinal,
+  ));
+  if (new Set(physical.map((source) => source.node)).size !== physical.length) {
+    throw new Error('Compiler cursor logical entrant band repeats one source occurrence.');
+  }
+  return physical.map((source, ordinal) => new TemplateCompilerSiteCursorLogicalEntrantWork(
+    cursorTaskAuthority, context, source, ordinal, physical[ordinal + 1]?.node ?? null, inputs[ordinal]!.authority,
+  ));
+}
+
+function logicalChildrenFollowVisit(
+  entrants: readonly TemplateCompilerSiteCursorLogicalEntrantWork[],
+  visit: TemplateCompilerSiteCursorNodeVisit,
+): boolean {
+  const source = entrants[0]?.physicalSource.source;
+  return source == null || (frameParentFollowsVisit(source.parent, visit) && entrants.every((entrant, ordinal) =>
+    entrant.physicalSource.source === source
+    && (ordinal === 0 || entrants[ordinal - 1]!.physicalSource.sourceOrdinal < entrant.physicalSource.sourceOrdinal)
+  ));
 }
 
 function frameParentFollowsVisit(

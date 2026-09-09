@@ -710,6 +710,7 @@ export class TemplateCompilerProjectionLogicalExtractionRealization {
     authority: object,
     readonly request: TemplateCompilerProjectionLogicalExtractionRealizationRequest,
     readonly entrantBands: readonly TemplateCompilerProjectionRealizedEntrantBand[],
+    readonly residualInputs: readonly TemplateCompilerSiteCursorLogicalEntrantInput[],
   ) {
     if (
       authority !== projectionLogicalExtractionAuthority
@@ -720,6 +721,14 @@ export class TemplateCompilerProjectionLogicalExtractionRealization {
         || band.planned !== request.preparation.plannedEntrantBands[ordinal]
         || band.context !== request.contexts[ordinal]?.context
       )
+      || residualInputs.length !== request.preparation.residuals.length
+      || residualInputs.some((input, ordinal) => {
+        const residual = request.preparation.residuals[ordinal]!;
+        return input.authority !== residual
+          || input.source.parent !== residual.source.parent
+          || !sameObjects(input.source.children, residual.source.source.children)
+          || input.sourceOrdinal !== residual.source.sourceOrdinal;
+      })
     ) {
       throw new Error('Projection extraction realization lost preparation or context-bound band coverage.');
     }
@@ -919,6 +928,11 @@ export function realizeTemplateCompilerProjectionLogicalExtraction(
     projectionLogicalExtractionAuthority,
     request,
     entrantBands,
+    preparation.residuals.map((residual) => ({
+      source: sequenceFor(residual.source.source),
+      sourceOrdinal: residual.source.sourceOrdinal,
+      authority: residual,
+    })),
   );
 }
 

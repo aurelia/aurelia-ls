@@ -321,6 +321,12 @@ classification, expression parsing, and instruction lowering converge on the sam
   Open and deliberately stops before structural context changes. The closed-context traversal instead schedules
   template-controller and projection child work, processContent, containerless placement, and generated-context return
   through the same event/context forest.
+  Explicit-shadow hosts extract their `au-slot` contributors first, then traverse retained light children in that same
+  host context (or terminal template-controller context). The existing cursor task's logical child band retains the
+  captured physical source ordinals/successors separately from selected traversal order. Projection extraction owns
+  the selection; completion verifies one visit per retained child after projection groups. No additional transfer or
+  tree is created for light children, and text nodes remain separate when extraction makes them adjacent. Containerless
+  residuals, open processContent, and implicit `hasSlots` extraction policy retain their independent boundaries.
 - `template-compiler-root-site-run.ts` owns the shared nominal graph/bootstrap/local/binding/cursor prefix used by both
   portable compatibility observation and closed-family compilation. Its exact result proves every retained artifact is
   from the same forest, execution lane, bootstrap closure, binding, and cursor transcript. Candidate/publication

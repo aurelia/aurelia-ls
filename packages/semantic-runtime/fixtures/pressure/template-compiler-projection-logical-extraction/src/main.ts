@@ -11,6 +11,7 @@ import projectionLogicalNativeTcSlotHostTemplate from './projection-logical-nati
 import projectionLogicalNestedTcHostTemplate from './projection-logical-nested-tc-host.html';
 import projectionLogicalNonsingularTcWireHostTemplate from './projection-logical-nonsingular-tc-wire-host.html';
 import projectionLogicalShadowHostTemplate from './projection-logical-shadow-host.html';
+import projectionLogicalShadowBreadthHostTemplate from './projection-logical-shadow-breadth-host.html';
 import projectionLogicalTcHostTemplate from './projection-logical-tc-host.html';
 import projectionLogicalTcOnlyHostTemplate from './projection-logical-tc-only-host.html';
 import projectionLogicalValuelessSlotHostTemplate from './projection-logical-valueless-slot-host.html';
@@ -133,6 +134,18 @@ class ProjectionLogicalShadowLeaf {}
 })
 class ProjectionLogicalShadowHost {}
 
+@customElement({
+  name: 'projection-logical-shadow-breadth-host',
+  template: projectionLogicalShadowBreadthHostTemplate,
+  dependencies: [ProjectionLogicalLeaf, ProjectionLogicalShadowLeaf, ProjectionLogicalOuterTemplateController, ProjectionLogicalInnerTemplateController],
+})
+class ProjectionLogicalShadowBreadthHost {
+  before = 'before';
+  after = 'after';
+  projected = 'projected';
+  visible = true;
+}
+
 void new Aurelia()
   .register(
     StandardConfiguration,
@@ -147,6 +160,7 @@ void new Aurelia()
     ProjectionLogicalTcOnlyHost,
     ProjectionLogicalValuelessSlotHost,
     ProjectionLogicalShadowHost,
+    ProjectionLogicalShadowBreadthHost,
   )
   .app({
     component: ProjectionLogicalHost,
