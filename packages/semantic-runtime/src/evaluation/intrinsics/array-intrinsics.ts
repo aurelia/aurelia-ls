@@ -1,4 +1,4 @@
-import ts from 'typescript';
+import type ts from 'typescript';
 import type { StaticInvocationFrame } from '../invocation.js';
 import {
   EvaluationArrayCallbackClosure,
@@ -70,6 +70,7 @@ import { readArrayAtIndex, readArrayLastIndexStart } from '../value-coercion.js'
 import { evaluateStringPredicateFromReceiver } from './string-intrinsics.js';
 import {
   EvaluationBuiltinIterator,
+  drainEvaluationIterator,
   EvaluationIteratorStepKind,
   evaluationIteratorProjection,
 } from '../iterator-projection.js';
@@ -376,23 +377,29 @@ export function evaluateArrayFrom(
     return unknownFromEvidence(sourceEvidence, 'Array.from source retained open pressure.', call, host);
   }
   const source = sourceEvidence.value;
-  if (isBoundaryEvaluationValue(source)) {
+  const hostedIterator = host.openIterator?.(source, call, moduleKey) ?? null;
+  if (hostedIterator == null && isBoundaryEvaluationValue(source)) {
     return boundaryIntrinsicCallValue(source, 'Array.from', call);
   }
-  const sourceElements = arrayFromSourceElements(source, call);
-  if (sourceElements == null) {
+  const sourceElements = hostedIterator == null ? arrayFromSourceElements(source, call) : null;
+  if (hostedIterator == null && sourceElements == null) {
     return host.unknown('Array.from source did not reduce to a known iterable or array-like value.', call, moduleKey, EvaluationOpenSeamKind.DynamicCall);
   }
-  if (!sourceElements.shape.hasExactPositions || sourceElements.shape.exactLength == null) {
+  if (sourceElements != null && (!sourceElements.shape.hasExactPositions || sourceElements.shape.exactLength == null)) {
     return host.unknown('Array.from source iteration order did not close statically.', call, moduleKey, EvaluationOpenSeamKind.DynamicCall);
   }
-  if (sourceElements.shape.exactLength > host.guardrails.maxLoopIterations) {
+  if (sourceElements?.shape.exactLength != null && sourceElements.shape.exactLength > host.guardrails.maxLoopIterations) {
     return host.unknown('Array.from source exceeds the static iteration guardrail.', call, moduleKey, EvaluationOpenSeamKind.DynamicCall);
   }
   const mapperEvidence = arguments_[1] ?? null;
   if (mapperEvidence == null) {
+    const projection = hostedIterator == null ? sourceElements! : drainEvaluationIterator(hostedIterator, host.guardrails.maxLoopIterations);
+    if (!projection.shape.hasExactPositions) {
+      host.replayOpenSeams(projection.shape.aggregateOpenSeams);
+      return host.unknown('Array.from owned iterator did not close within the static iteration guardrail.', call, moduleKey, EvaluationOpenSeamKind.DynamicCall);
+    }
     return new EvaluationArrayValue(
-      sourceElements.elements,
+      projection.elements,
       call,
     );
   }
@@ -416,7 +423,7 @@ export function evaluateArrayFrom(
   }
   const callbackFrame = preparedFrame.frame;
   const elements: EvaluationArrayElement[] = [];
-  const iterator = new EvaluationBuiltinIterator(source, call);
+  const iterator = hostedIterator ?? new EvaluationBuiltinIterator(source, call);
   for (let index = 0; ; index += 1) {
     const step = iterator.next();
     if (step.kind === EvaluationIteratorStepKind.Done) {
@@ -927,7 +934,7 @@ export function evaluateArrayIndexOf(
     ? readArrayLastIndexStart(startEvidence?.value ?? EvaluationUndefined, receiverLength)
     : startEvidence == null
       ? 0
-      : readArrayStartIndex(startEvidence!.value, receiverLength);
+      : readArrayStartIndex(startEvidence.value, receiverLength);
   if (start == null) {
     return host.unknown(`${intrinsicName} start index did not close statically.`, call, moduleKey, EvaluationOpenSeamKind.DynamicCall);
   }

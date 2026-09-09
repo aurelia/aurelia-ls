@@ -23,7 +23,7 @@ import {
 import {
   EvaluationBoundaryKind,
   EvaluationBoundaryValue,
-  EvaluationFunctionValue,
+  type EvaluationFunctionValue,
   EvaluationPromiseValue,
   EvaluationUndefined,
   type EvaluationUnknownValue,
@@ -32,6 +32,7 @@ import {
 
 export interface StaticFunctionEvaluationHost {
   readonly bindingHost: StaticBindingPatternHost;
+  requiresClosedSynchronousEffects?(): boolean;
 
   raise(completion: EvaluationExpressionAbruptCompletion): never;
 
@@ -72,6 +73,14 @@ export function evaluateStaticFunctionWithArguments(
     return host.unknown('Generator functions are not evaluated.', call, moduleKey, EvaluationOpenSeamKind.DynamicCall);
   }
   if (isAsyncFunctionLike(callee.declaration)) {
+    if (host.requiresClosedSynchronousEffects?.()) {
+      return host.unknown(
+        'Async function effects are not closed by synchronous evaluation.',
+        call,
+        moduleKey,
+        EvaluationOpenSeamKind.DynamicCall,
+      );
+    }
     return EvaluationPromiseValue.open(
       new EvaluationValueEvidence(new EvaluationBoundaryValue(
         EvaluationBoundaryKind.AsyncExecution,

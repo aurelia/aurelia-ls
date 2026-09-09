@@ -4,7 +4,10 @@ import {
   StaticEvaluator,
   type StaticEvaluationRuntimeHost,
   type StaticExpressionEvaluationResult,
+  type StaticEvaluatorOptions,
 } from './evaluator.js';
+import { EvaluationBindingKind, type ModuleEnvironmentRecord } from './environment.js';
+import { evaluationValueHasMutableGraph } from './evaluation-graph.js';
 import { StaticEvaluationSessionFork } from './evaluation-session.js';
 import {
   StaticEvaluationBranchMode,
@@ -17,6 +20,7 @@ import type {
 } from './values.js';
 import {
   EvaluationValueKind,
+  isEvaluationPrimitiveValue,
   readEvaluationTruthiness,
 } from './values.js';
 
@@ -121,6 +125,26 @@ export type StaticCallableRuntimeHostDecorator = (
   baseHost: StaticEvaluationRuntimeHost,
 ) => StaticEvaluationRuntimeHost;
 
+export const enum StaticCallableCompletionKind {
+  Normal = 'normal',
+  Abrupt = 'abrupt',
+  Open = 'open',
+}
+
+/** One isolated synchronous invocation whose consumer separately interprets the return value. */
+export class StaticCallableCompletionResult {
+  constructor(
+    readonly kind: StaticCallableCompletionKind,
+    readonly evaluation: StaticExpressionEvaluationResult | null,
+    readonly reason: string | null,
+  ) {}
+}
+
+export interface StaticCallableCompletionOptions {
+  /** Refuse captured mutable state rather than freezing the current candidate's values at compile time. */
+  readonly requireStableCapturedInputs?: boolean;
+}
+
 /** Execute one retained function while admitting effects only from a statically proven path. */
 export function executeStaticFunctionEffects(
   fn: EvaluationFunctionValue,
@@ -129,6 +153,9 @@ export function executeStaticFunctionEffects(
   runtimeHost: StaticEvaluationRuntimeHost,
   argumentValues: readonly EvaluationValue[],
   thisValue: EvaluationValue | null = null,
+  requireClosedSynchronousEffects = false,
+  inputReadGuard: StaticEvaluatorOptions['inputReadGuard'] = undefined,
+  mutationOwnership: StaticEvaluatorOptions['mutationOwnership'] = undefined,
 ): StaticExpressionEvaluationResult {
   const evaluator = new StaticEvaluator(
     new StaticEvaluationPolicy(
@@ -137,6 +164,7 @@ export function executeStaticFunctionEffects(
       StaticEvaluationBranchMode.PathProvenEffects,
     ),
     runtimeHost,
+    { requireClosedSynchronousEffects, inputReadGuard, mutationOwnership },
   );
   return evaluator.evaluateFunctionValue(
     fn,
@@ -148,19 +176,31 @@ export function executeStaticFunctionEffects(
 }
 
 /**
- * Execute one retained policy predicate inside an isolated value graph.
+ * Execute one retained callable inside an isolated value graph.
  *
- * Consumers may close only over effect-free truthiness. The fork prevents speculative writes from escaping even when
- * the answer remains open, while `mutationCount` prevents stateful policy code from masquerading as a pure decision.
+ * A normal completion closes effects, not the returned value. Consumers such as processContent distinguish strict
+ * false, while compiling hooks ignore the value. Writes and unexecuted effects remain open even if their results were
+ * discarded. The fork keeps speculative writes out of the retained source graph.
  */
-export function evaluateStaticCallableTruthiness(
+export function evaluateStaticCallableCompletion(
   target: StaticCallableTarget,
   argumentValues: readonly EvaluationValue[],
   decorateRuntimeHost: StaticCallableRuntimeHostDecorator | null = null,
-): StaticCallableTruthinessResult {
+  options: StaticCallableCompletionOptions = {},
+): StaticCallableCompletionResult {
+  return evaluateCallableCompletion(target, argumentValues, decorateRuntimeHost, true, options);
+}
+
+function evaluateCallableCompletion(
+  target: StaticCallableTarget,
+  argumentValues: readonly EvaluationValue[],
+  decorateRuntimeHost: StaticCallableRuntimeHostDecorator | null,
+  requireClosedSynchronousEffects: boolean,
+  options: StaticCallableCompletionOptions = {},
+): StaticCallableCompletionResult {
   if (target.openSeams.length > 0) {
-    return new StaticCallableTruthinessResult(
-      StaticCallableTruthinessKind.Open,
+    return new StaticCallableCompletionResult(
+      StaticCallableCompletionKind.Open,
       null,
       'Callable resolution retained open evaluation pressure.',
     );
@@ -177,28 +217,79 @@ export function evaluateStaticCallableTruthiness(
     runtimeHost,
     argumentValues.map((value) => session.forkValue(value)),
     target.receiver == null ? null : session.forkValue(target.receiver),
+    requireClosedSynchronousEffects,
+    options.requireStableCapturedInputs ? capturedInputReadGuard(session) : undefined,
+    requireClosedSynchronousEffects ? invocationMutationOwnership(session) : undefined,
   );
-  if (result.abruptCompletion != null) {
-    return new StaticCallableTruthinessResult(
-      StaticCallableTruthinessKind.Open,
-      result,
-      'Callable execution completed abruptly.',
-    );
-  }
   if (result.auditOpenSeams.length > 0) {
-    return new StaticCallableTruthinessResult(
-      StaticCallableTruthinessKind.Open,
+    return new StaticCallableCompletionResult(
+      StaticCallableCompletionKind.Open,
       result,
       'Callable execution retained open evaluation pressure.',
     );
   }
-  if (result.mutationCount > 0) {
-    return new StaticCallableTruthinessResult(
-      StaticCallableTruthinessKind.Open,
+  if (result.mutationCount > (requireClosedSynchronousEffects ? result.localMutationCount : 0)) {
+    return new StaticCallableCompletionResult(
+      StaticCallableCompletionKind.Open,
       result,
       'Callable execution reached modeled mutation.',
     );
   }
+  return new StaticCallableCompletionResult(
+    result.abruptCompletion == null ? StaticCallableCompletionKind.Normal : StaticCallableCompletionKind.Abrupt,
+    result,
+    result.abruptCompletion == null ? null : 'Callable execution completed abruptly.',
+  );
+}
+
+function capturedInputReadGuard(session: StaticEvaluationSessionFork): NonNullable<StaticEvaluatorOptions['inputReadGuard']> {
+  return {
+    binding(environment, name) {
+      let owner: ModuleEnvironmentRecord | null = environment;
+      while (owner != null && owner.readOwnBinding(name) == null) owner = owner.outer;
+      if (owner == null || session.sourceEnvironment(owner) == null) return null;
+      const binding = owner.readOwnBinding(name)!;
+      if (binding.mutable || binding.bindingKind === EvaluationBindingKind.Import || binding.bindingKind === EvaluationBindingKind.Function) {
+        return `Captured binding '${name}' is not proven stable through runtime compilation.`;
+      }
+      return !isEvaluationPrimitiveValue(binding.value) && binding.value.kind !== EvaluationValueKind.Function
+        ? `Captured value '${name}' has mutable state outside the invocation.`
+        : null;
+    },
+    property(receiver) {
+      return session.sourceValue(receiver) == null
+        ? null
+        : 'Property read reaches captured mutable state outside the invocation.';
+    },
+  };
+}
+
+function invocationMutationOwnership(session: StaticEvaluationSessionFork): NonNullable<StaticEvaluatorOptions['mutationOwnership']> {
+  return {
+    binding(environment, name) {
+      let owner: ModuleEnvironmentRecord | null = environment;
+      while (owner != null && owner.readOwnBinding(name) == null) owner = owner.outer;
+      return owner != null && session.sourceEnvironment(owner) == null;
+    },
+    value(value) {
+      return evaluationValueHasMutableGraph(value) && session.sourceValue(value) == null;
+    },
+  };
+}
+
+/** Retain the existing predicate contract, including its consumer-admitted runtime host intrinsics. */
+export function evaluateStaticCallableTruthiness(
+  target: StaticCallableTarget,
+  argumentValues: readonly EvaluationValue[],
+  decorateRuntimeHost: StaticCallableRuntimeHostDecorator | null = null,
+): StaticCallableTruthinessResult {
+  const completion = evaluateCallableCompletion(target, argumentValues, decorateRuntimeHost, false);
+  if (completion.kind !== StaticCallableCompletionKind.Normal || completion.evaluation == null) {
+    return new StaticCallableTruthinessResult(
+      StaticCallableTruthinessKind.Open, completion.evaluation, completion.reason,
+    );
+  }
+  const result = completion.evaluation;
   const truthiness = result.value == null || result.value.kind === EvaluationValueKind.Unknown
     ? null
     : readEvaluationTruthiness(result.value);

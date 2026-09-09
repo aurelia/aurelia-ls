@@ -1,4 +1,4 @@
-import ts from 'typescript';
+import type ts from 'typescript';
 import type { StaticInvocationFrame } from './invocation.js';
 import {
   evaluateArrayConcat,
@@ -256,6 +256,9 @@ function evaluateStaticIntrinsicCall(
     return evaluateArrayFrom(frame, host);
   }
   if (calleeText === 'Object.freeze') {
+    if (host.requiresClosedSynchronousEffects?.()) {
+      return host.unknown('Object.freeze property-descriptor effects are not modeled by synchronous evaluation.', call, frame.moduleKey, EvaluationOpenSeamKind.DynamicMutation);
+    }
     const argumentRead = evaluatePositionalIntrinsicArguments(
       frame.argumentList,
       call,
@@ -268,7 +271,11 @@ function evaluateStaticIntrinsicCall(
       : argumentRead.evidence[0]?.value ?? null;
   }
   if (calleeText === 'Object.assign') {
+    // The current transfer projects a merged result, not exact target identity and setter effects.
     host.recordMutation();
+    if (host.requiresClosedSynchronousEffects?.()) {
+      return host.unknown('Object.assign target mutation, identity, and setter effects are not modeled by synchronous evaluation.', call, frame.moduleKey, EvaluationOpenSeamKind.DynamicMutation);
+    }
     return evaluateObjectAssign(frame, host);
   }
   if (calleeText === 'Object.values') {
@@ -338,22 +345,22 @@ function evaluatePrototypeIntrinsicCall(
     case 'flat':
       return evaluateArrayFlat(frame, host);
     case 'fill':
-      host.recordMutation();
+      host.recordMutation(frame.thisValue?.value);
       return evaluateArrayFill(frame, host);
     case 'push':
-      host.recordMutation();
+      host.recordMutation(frame.thisValue?.value);
       return evaluateArrayPush(frame, host);
     case 'unshift':
-      host.recordMutation();
+      host.recordMutation(frame.thisValue?.value);
       return evaluateArrayUnshift(frame, host);
     case 'pop':
-      host.recordMutation();
+      host.recordMutation(frame.thisValue?.value);
       return evaluateArrayPop(frame, host);
     case 'shift':
-      host.recordMutation();
+      host.recordMutation(frame.thisValue?.value);
       return evaluateArrayShift(frame, host);
     case 'reverse':
-      host.recordMutation();
+      host.recordMutation(frame.thisValue?.value);
       return evaluateArrayReverse(frame, host);
     case 'toReversed':
       return evaluateArrayToReversed(frame, host);
@@ -362,7 +369,7 @@ function evaluatePrototypeIntrinsicCall(
     case 'with':
       return evaluateArrayWith(frame, host);
     case 'splice':
-      host.recordMutation();
+      host.recordMutation(frame.thisValue?.value);
       return evaluateArraySplice(frame, host);
     case 'slice':
       return evaluateArrayOrStringSlice(frame, host);
@@ -394,7 +401,7 @@ function evaluatePrototypeIntrinsicCall(
     case 'replaceAll':
       return evaluateStringReplace(frame, host, methodName);
     case 'sort':
-      host.recordMutation();
+      host.recordMutation(frame.thisValue?.value);
       return evaluateArraySort(frame, host);
     case 'toSorted':
       return evaluateArrayToSorted(frame, host);
@@ -403,18 +410,18 @@ function evaluatePrototypeIntrinsicCall(
     case 'get':
       return evaluateMapGet(frame, host);
     case 'set':
-      host.recordMutation();
+      host.recordMutation(frame.thisValue?.value);
       return evaluateMapSet(frame, host);
     case 'has':
       return evaluateCollectionHas(frame, host);
     case 'add':
-      host.recordMutation();
+      host.recordMutation(frame.thisValue?.value);
       return evaluateSetAdd(frame, host);
     case 'delete':
-      host.recordMutation();
+      host.recordMutation(frame.thisValue?.value);
       return evaluateCollectionDelete(frame, host);
     case 'clear':
-      host.recordMutation();
+      host.recordMutation(frame.thisValue?.value);
       return evaluateCollectionClear(frame, host);
     case 'then':
       return evaluatePromiseThen(frame, host);

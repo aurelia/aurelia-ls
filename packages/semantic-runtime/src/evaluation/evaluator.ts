@@ -29,7 +29,7 @@ import {
   type StaticFunctionEvaluationHost,
 } from './function-values.js';
 import {
-  EvaluationArgumentList,
+  type EvaluationArgumentList,
   EvaluationArgumentListOutcome,
   evaluateStaticArgumentList,
 } from './argument-list.js';
@@ -82,6 +82,9 @@ import {
 import { StaticModuleEvaluationResult } from './module-evaluation-result.js';
 import {
   EvaluationBuiltinIterator,
+  drainEvaluationIterator,
+  type EvaluationIterator,
+  type EvaluationIteratorProjection,
   EvaluationIteratorStepKind,
 } from './iterator-projection.js';
 import { evaluateStaticGlobalAccess } from './global-intrinsics.js';
@@ -144,6 +147,7 @@ import { openSeamReasonKindForEvaluationBoundary } from './boundary-open-reason.
 import {
   DefaultStaticEvaluationRuntimeHost,
   graphIsolatedStaticEvaluationRuntimeHost,
+  isStaticEvaluationCallableExternallyOwned,
 } from './runtime-host.js';
 import {
   evaluateStaticArrayLiteral,
@@ -257,7 +261,32 @@ export class StaticEvaluationRuntimeValueResult {
   }
 }
 
+/** Explicitly admitted synchronous operations over consumer-owned tentative state, never ambient host effects. */
+export interface StaticEvaluationClosedOperations {
+  openIterator?(source: EvaluationValue, node: ts.Node, moduleKey: string, host: StaticIntrinsicEvaluationHost): EvaluationIterator | null;
+  readProperty?(
+    receiver: EvaluationValue,
+    propertyName: string,
+    node: ts.Node,
+    moduleKey: string,
+    host: StaticIntrinsicEvaluationHost,
+  ): StaticEvaluationRuntimeValueResult | null;
+  writeProperty?(
+    receiver: EvaluationValue,
+    propertyName: string,
+    value: EvaluationValueEvidence,
+    node: ts.Node,
+    moduleKey: string,
+    host: StaticIntrinsicEvaluationHost,
+  ): StaticEvaluationRuntimeValueResult | null;
+  evaluateInvocation?(frame: StaticInvocationFrame, host: StaticIntrinsicEvaluationHost): StaticInvocationDispatch;
+}
+
 export interface StaticEvaluationRuntimeHostOperations {
+  /** Owner must discard its tentative state on open/abrupt completion; this lane grants no ambient execution. */
+  readonly closedOperations?: StaticEvaluationClosedOperations;
+  /** Read host callable ownership without executing it. False permits source evaluation, not a purity claim. */
+  isCallableExternallyOwned?(value: EvaluationFunctionValue | EvaluationClassValue): boolean;
   /** Transfer host-owned semantic identity when a speculative session clones an evaluator value. */
   transferValueMetadata?(
     source: EvaluationValue,
@@ -308,14 +337,32 @@ export interface StaticEvaluationRuntimeHost extends StaticEvaluationRuntimeHost
 }
 
 export interface StaticEvaluatorOptions {
+  readonly mutationOwnership?: {
+    binding(environment: ModuleEnvironmentRecord, name: string): boolean;
+    value(value: EvaluationValue): boolean;
+  };
   /** Retain immutable invocation/branch evidence for consumers such as configuration and DI recognition. */
   readonly captureExecutionTopology?: boolean;
+  /** Refuse skipped or externally executed effects when a consumer needs a closed synchronous invocation. */
+  readonly requireClosedSynchronousEffects?: boolean;
+  /** Invocation-specific lifetime policy; a current analysis snapshot alone does not establish stable inputs. */
+  readonly inputReadGuard?: {
+    binding(environment: ModuleEnvironmentRecord, name: string): string | null;
+    property(receiver: EvaluationValue): string | null;
+  };
 }
 
 interface StaticInvocationPreparationEvidence {
   readonly identity: StaticInvocationFrame['identity'];
   readonly reference: StaticInvocationReference;
   readonly argumentList: EvaluationArgumentList;
+}
+
+/** A reference is evaluated before the right operand and reused for compound/update writes. */
+interface StaticAssignmentReference {
+  readonly target: ts.Expression;
+  readonly receiver: EvaluationValue | null;
+  readonly argument: EvaluationValue | null;
 }
 
 /** Result of evaluating one expression against an existing module environment. */
@@ -337,6 +384,8 @@ export class StaticExpressionEvaluationResult {
     auditOpenSeams: readonly EvaluationOpenSeam[] = openSeams,
     /** Number of modeled writes reached while evaluating this expression. */
     readonly mutationCount: number = 0,
+    /** Writes confined to bindings/objects created inside the current invocation. */
+    readonly localMutationCount: number = 0,
   ) {
     this.openSeams = compactEvaluationOpenSeams(openSeams);
     this.auditOpenSeams = compactEvaluationOpenSeams(auditOpenSeams);
@@ -396,6 +445,7 @@ export class StaticEvaluator {
   /** Seams still causal to the value currently flowing outward through evaluator calls. */
   private readonly causalOpenSeams: EvaluationOpenSeam[] = [];
   private readonly literalHost: StaticLiteralEvaluationHost = {
+    projectHostedIterable: (value, node, moduleKey) => this.projectHostedIterable(value, node, moduleKey),
     maxArrayIterations: () => this.policy.guardrails.maxLoopIterations,
     evaluateExpression: (expression, environment, moduleKey, depth) =>
       this.evaluateExpression(expression, environment, moduleKey, depth),
@@ -412,10 +462,14 @@ export class StaticEvaluator {
     syntaxKindName: (node) => this.syntaxKindName(node),
   };
   private readonly bindingHost: StaticBindingPatternHost = {
+    requiresClosedSynchronousEffects: () => this.options.requireClosedSynchronousEffects === true,
     maxArrayIterations: () => this.policy.guardrails.maxLoopIterations,
     evaluateExpression: (expression, environment, moduleKey, depth) =>
       this.evaluateExpression(expression, environment, moduleKey, depth),
     readOwnProperty: (receiver, name) => readStaticOwnProperty(receiver, name),
+    readHostedProperty: (receiver, name, node, moduleKey) => this.options.requireClosedSynchronousEffects
+      ? evaluateStaticPropertyValue(receiver, name, node, moduleKey, 0, this.propertyAccessHost)
+      : null,
     readPropertyName: (name, environment, moduleKey, depth) =>
       this.readPropertyName(name, environment, moduleKey, depth),
     unknown: (reason, node, moduleKey, seamKind) =>
@@ -426,6 +480,8 @@ export class StaticEvaluator {
     consumeOpenSeamsSince: (checkpoint) => this.consumeOpenSeamsSince(checkpoint),
   };
   private readonly propertyAccessHost: StaticPropertyAccessEvaluationHost = {
+    requiresClosedSynchronousEffects: () => this.options.requireClosedSynchronousEffects === true,
+    readHostedProperty: (receiver, name, node, moduleKey) => this.readHostedProperty(receiver, name, node, moduleKey),
     evaluateExpression: (expression, environment, moduleKey, depth) =>
       this.evaluateExpression(expression, environment, moduleKey, depth),
     evaluateFunctionWithArguments: (callee, call, argumentValues, moduleKey, depth, thisValue) =>
@@ -457,6 +513,7 @@ export class StaticEvaluator {
   };
   private readonly functionHost: StaticFunctionEvaluationHost = {
     bindingHost: this.bindingHost,
+    requiresClosedSynchronousEffects: () => this.options.requireClosedSynchronousEffects === true,
     raise: (completion) => this.raise(completion),
     evaluateExpression: (expression, environment, moduleKey, depth) =>
       this.evaluateExpression(expression, environment, moduleKey, depth),
@@ -474,6 +531,7 @@ export class StaticEvaluator {
   private nextExecutionOrdinal = 0;
   private statementCount = 0;
   private mutationCount = 0;
+  private localMutationCount = 0;
   private executionBudget = new StaticEvaluationExecutionBudget();
 
   constructor(
@@ -690,6 +748,7 @@ export class StaticEvaluator {
           this.orderedExecutionTopologySince(checkpoint.executionEventCount),
           this.auditOpenSeams.slice(checkpoint.auditOpenSeamCount),
           this.mutationCount - checkpoint.mutationCount,
+          this.localMutationCount - (checkpoint.localMutationCount ?? 0),
         );
       } catch (error) {
         if (!(error instanceof EvaluationAbruptCompletionSignal)) {
@@ -701,6 +760,7 @@ export class StaticEvaluator {
           this.orderedExecutionTopologySince(checkpoint.executionEventCount),
           this.auditOpenSeams.slice(checkpoint.auditOpenSeamCount),
           this.mutationCount - checkpoint.mutationCount,
+          this.localMutationCount - (checkpoint.localMutationCount ?? 0),
         );
       } finally {
         this.restoreEvaluationCheckpoint(checkpoint);
@@ -1128,6 +1188,14 @@ export class StaticEvaluator {
       this.policy.dispositionForExpressionStatement(statement.expression, environment, moduleKey)
       === StaticEvaluationExpressionStatementDisposition.ExternallyOwned
     ) {
+      if (this.options.requireClosedSynchronousEffects) {
+        this.open(
+          EvaluationOpenSeamKind.DynamicMutation,
+          'Externally owned expression effects are not executed by this synchronous invocation.',
+          statement.expression,
+          moduleKey,
+        );
+      }
       this.evaluateExternallyOwnedInputs(statement.expression, environment, moduleKey, depth + 1);
       return new NormalEvaluationCompletion();
     }
@@ -1191,10 +1259,26 @@ export class StaticEvaluator {
       [],
       evaluatedBase?.kind === EvaluationValueKind.Class ? evaluatedBase : null,
     );
-    this.runtimeHost.observeClassValue?.(classValue, {
-      evaluateExpression: (expression) =>
-        this.evaluateExpressionEvidence(expression, environment, moduleKey, depth + 1),
-    });
+    if (this.options.requireClosedSynchronousEffects) {
+      const decorated = hasRuntimeDecorators(declaration)
+        || declaration.members.some(member => hasRuntimeDecorators(member)
+          || ((ts.isConstructorDeclaration(member) || ts.isMethodDeclaration(member)
+            || ts.isGetAccessorDeclaration(member) || ts.isSetAccessorDeclaration(member))
+            && member.parameters.some(hasRuntimeDecorators)));
+      if (decorated) {
+        this.open(
+          EvaluationOpenSeamKind.UnsupportedStatement,
+          'Local class decorator effects are not closed by synchronous evaluation.',
+          declaration,
+          moduleKey,
+        );
+      }
+    } else {
+      this.runtimeHost.observeClassValue?.(classValue, {
+        evaluateExpression: (expression) =>
+          this.evaluateExpressionEvidence(expression, environment, moduleKey, depth + 1),
+      });
+    }
     const propertyEvaluation = readStaticClassProperties(
       declaration,
       environment,
@@ -1391,7 +1475,8 @@ export class StaticEvaluator {
       );
       return new OpenEvaluationCompletion('For-await-of continuation is not reduced synchronously.');
     }
-    if (iterable.kind === EvaluationValueKind.BoundaryValue) {
+    const hostedIterator = this.openHostedIterator(iterable, statement.expression, moduleKey);
+    if (hostedIterator == null && iterable.kind === EvaluationValueKind.BoundaryValue) {
       this.openPathBoundary(
         'For-of statement depended on a boundary iterable.',
         statement.expression,
@@ -1404,12 +1489,12 @@ export class StaticEvaluator {
       this.materializeUnknownUse(iterable, statement.expression, moduleKey, 'For-of statement depended on an open iterable.', EvaluationOpenSeamKind.DynamicLoop);
       return new NormalEvaluationCompletion();
     }
-    if (
+    if (hostedIterator == null && (
       iterable.kind !== EvaluationValueKind.Array
       && iterable.kind !== EvaluationValueKind.Set
       && iterable.kind !== EvaluationValueKind.Map
       && iterable.kind !== EvaluationValueKind.String
-    ) {
+    )) {
       this.open(EvaluationOpenSeamKind.DynamicLoop, 'For-of iterable did not reduce to a modeled iterable value.', statement.expression, moduleKey);
       return new NormalEvaluationCompletion();
     }
@@ -1421,7 +1506,7 @@ export class StaticEvaluator {
       return new NormalEvaluationCompletion();
     }
 
-    const iterator = new EvaluationBuiltinIterator(iterable, statement.expression);
+    const iterator = hostedIterator ?? new EvaluationBuiltinIterator(iterable, statement.expression);
     for (let iteration = 0; ; iteration += 1) {
       const step = iterator.next();
       if (step.kind === EvaluationIteratorStepKind.Done) {
@@ -1568,7 +1653,7 @@ export class StaticEvaluator {
     }
     if (ts.isIdentifier(initializer)) {
       if (environment.setBinding(initializer.text, evidence.value, evidence.openSeams)) {
-        this.mutationCount++;
+        this.recordBindingMutation(environment, initializer.text);
       } else {
         environment.initializeBinding(
           initializer.text,
@@ -1735,8 +1820,7 @@ export class StaticEvaluator {
       case ts.SyntaxKind.NullKeyword:
         return new EvaluationNullValue(current);
       case ts.SyntaxKind.ThisKeyword:
-        return environment.readValue('this')
-          ?? this.unknown('`this` is not available in the current static evaluation environment.', current, moduleKey, EvaluationOpenSeamKind.UnresolvedIdentifier);
+        return this.evaluateThis(current, environment, moduleKey);
       case ts.SyntaxKind.MetaProperty:
         return this.evaluateMetaProperty(current as ts.MetaProperty, moduleKey);
       case ts.SyntaxKind.Identifier:
@@ -1776,6 +1860,15 @@ export class StaticEvaluator {
     }
   }
 
+  private evaluateThis(node: ts.Node, environment: ModuleEnvironmentRecord, moduleKey: string): EvaluationValue {
+    const value = environment.readValue('this');
+    if (value == null) {
+      return this.unknown('`this` is not available in the current static evaluation environment.', node, moduleKey, EvaluationOpenSeamKind.UnresolvedIdentifier);
+    }
+    const unstable = this.options.inputReadGuard?.property(value);
+    return unstable == null ? value : this.unknown(unstable, node, moduleKey, EvaluationOpenSeamKind.UnresolvedIdentifier);
+  }
+
   private evaluateIdentifier(
     identifier: ts.Identifier,
     environment: ModuleEnvironmentRecord,
@@ -1794,6 +1887,10 @@ export class StaticEvaluator {
     }
     if (binding.state === EvaluationBindingState.Uninitialized) {
       return this.unknown(`Identifier '${identifier.text}' is declared but not initialized in the current environment.`, identifier, moduleKey, EvaluationOpenSeamKind.UnresolvedIdentifier);
+    }
+    const unstable = this.options.inputReadGuard?.binding(environment, identifier.text);
+    if (unstable != null) {
+      return this.unknown(unstable, identifier, moduleKey, EvaluationOpenSeamKind.UnresolvedIdentifier);
     }
     if (binding.openSeams.length > 0) {
       this.replayOpenSeams(binding.openSeams);
@@ -2259,7 +2356,9 @@ export class StaticEvaluator {
     frame: StaticInvocationFrame<ts.CallExpression>,
   ): EvaluationValue {
     const host = this.intrinsicHost();
-    const hosted = this.runtimeHost.evaluateInvocation?.(frame, host);
+    const hosted = this.options.requireClosedSynchronousEffects
+      ? this.runtimeHost.closedOperations?.evaluateInvocation?.(frame, host)
+      : this.runtimeHost.evaluateInvocation?.(frame, host);
     if (hosted?.kind === StaticInvocationDispatchKind.Handled) {
       this.runtimeHost.evaluationValueGraph?.reconcileEnvironmentAfterExternal(frame.environment);
       this.replayOpenSeams(hosted.openSeams);
@@ -2286,6 +2385,14 @@ export class StaticEvaluator {
       return this.materializeUnknownUse(callee, frame.node, frame.moduleKey, 'Call expression depended on an open callee.', EvaluationOpenSeamKind.DynamicCall);
     }
     if (callee.kind === EvaluationValueKind.BoundaryValue || callee.kind === EvaluationValueKind.BoundaryObject) {
+      if (this.options.requireClosedSynchronousEffects) {
+        return this.unknown(
+          'Boundary call effects are not closed by synchronous evaluation.',
+          frame.node,
+          frame.moduleKey,
+          EvaluationOpenSeamKind.DynamicCall,
+        );
+      }
       return boundaryDependencyValue(
         frame.node,
         callee,
@@ -2405,7 +2512,9 @@ export class StaticEvaluator {
       );
     }
     const host = this.intrinsicHost();
-    const hosted = this.runtimeHost.evaluateInvocation?.(frame, host);
+    const hosted = this.options.requireClosedSynchronousEffects
+      ? this.runtimeHost.closedOperations?.evaluateInvocation?.(frame, host)
+      : this.runtimeHost.evaluateInvocation?.(frame, host);
     if (hosted?.kind === StaticInvocationDispatchKind.Handled) {
       this.runtimeHost.evaluationValueGraph?.reconcileEnvironmentAfterExternal(frame.environment);
       this.replayOpenSeams(hosted.openSeams);
@@ -2426,6 +2535,14 @@ export class StaticEvaluator {
       return this.materializeUnknownUse(callee, frame.node, frame.moduleKey, 'New expression depended on an open constructor.', EvaluationOpenSeamKind.DynamicCall);
     }
     if (callee.kind === EvaluationValueKind.BoundaryValue || callee.kind === EvaluationValueKind.BoundaryObject) {
+      if (this.options.requireClosedSynchronousEffects) {
+        return this.unknown(
+          'Boundary constructor effects are not closed by synchronous evaluation.',
+          frame.node,
+          frame.moduleKey,
+          EvaluationOpenSeamKind.DynamicCall,
+        );
+      }
       return boundaryDependencyValue(
         frame.node,
         callee,
@@ -2448,6 +2565,17 @@ export class StaticEvaluator {
     moduleKey: string,
     depth: number,
   ): EvaluationValue {
+    if (
+      this.options.requireClosedSynchronousEffects
+      && isStaticEvaluationCallableExternallyOwned(this.runtimeHost, callee)
+    ) {
+      return this.unknown(
+        'Host-owned constructor effects require their external execution authority.',
+        expression,
+        moduleKey,
+        EvaluationOpenSeamKind.DynamicCall,
+      );
+    }
     return evaluateStaticClassInstantiation(callee, expression, argumentValues, moduleKey, depth, this.classHost);
   }
 
@@ -2469,6 +2597,7 @@ export class StaticEvaluator {
     depth: number,
   ): EvaluationArgumentList {
     return evaluateStaticArgumentList(expressions, environment, moduleKey, depth, {
+      projectHostedIterable: (value, node) => this.projectHostedIterable(value, node, moduleKey),
       maxSpreadIterations: this.policy.guardrails.maxLoopIterations,
       evaluateExpressionEvidence: (expression, currentEnvironment, currentModuleKey, currentDepth) =>
         this.evaluateExpressionEvidence(expression, currentEnvironment, currentModuleKey, currentDepth),
@@ -2567,6 +2696,8 @@ export class StaticEvaluator {
 
   private intrinsicHost(): StaticIntrinsicEvaluationHost {
     return {
+      openIterator: (source, node, moduleKey) => this.openHostedIterator(source, node, moduleKey),
+      requiresClosedSynchronousEffects: () => this.options.requireClosedSynchronousEffects === true,
       guardrails: this.policy.guardrails,
       raise: (completion) => this.raise(new ThrowEvaluationCompletion(
         this.adoptExternalValue(completion.value),
@@ -2601,9 +2732,7 @@ export class StaticEvaluator {
         this.open(seamKind, summary, node, currentModuleKey, reasonKinds),
       unknown: (reason, node, currentModuleKey, seamKind) =>
         this.unknown(reason, node, currentModuleKey, seamKind),
-      recordMutation: () => {
-        this.mutationCount++;
-      },
+      recordMutation: value => this.recordValueMutation(value),
       checkpoint: () => ({
         auditOpenSeamCount: this.auditOpenSeams.length,
         openSeamCount: this.causalOpenSeams.length,
@@ -2611,6 +2740,7 @@ export class StaticEvaluator {
         nextExecutionOrdinal: this.nextExecutionOrdinal,
         statementCount: this.statementCount,
         mutationCount: this.mutationCount,
+        localMutationCount: this.localMutationCount,
       }),
       restore: (checkpoint) => {
         this.restoreEvaluationCheckpoint(checkpoint);
@@ -2619,6 +2749,14 @@ export class StaticEvaluator {
       consumeOpenSeamsSince: (checkpoint) => this.consumeOpenSeamsSince(checkpoint.openSeamCount),
       replayOpenSeams: (openSeams) => this.replayOpenSeams(openSeams),
       resolveCommonJsRequire: (currentModuleKey, moduleSpecifier, node) => {
+        if (this.options.requireClosedSynchronousEffects) {
+          return this.unknown(
+            'CommonJS module loading effects are not closed by synchronous invocation evaluation.',
+            node,
+            currentModuleKey,
+            EvaluationOpenSeamKind.DynamicImport,
+          );
+        }
         const result = this.runtimeHost.resolveCommonJsRequire?.(currentModuleKey, moduleSpecifier, node) ?? null;
         if (result != null) {
           this.replayOpenSeams(result.openSeams);
@@ -2630,10 +2768,19 @@ export class StaticEvaluator {
               result.abruptCompletion.openSeams,
             ));
       },
-      resolveDynamicImport: (currentModuleKey, moduleSpecifier, node) =>
-        this.adoptNullableExternalValue(
+      resolveDynamicImport: (currentModuleKey, moduleSpecifier, node) => {
+        if (this.options.requireClosedSynchronousEffects) {
+          return this.unknown(
+            'Dynamic module loading effects are not closed by synchronous invocation evaluation.',
+            node,
+            currentModuleKey,
+            EvaluationOpenSeamKind.DynamicImport,
+          );
+        }
+        return this.adoptNullableExternalValue(
           this.runtimeHost.resolveDynamicImport?.(currentModuleKey, moduleSpecifier, node) ?? null,
-        ),
+        );
+      },
     };
   }
 
@@ -2653,6 +2800,17 @@ export class StaticEvaluator {
     depth: number,
     thisValue: EvaluationValueEvidence | null,
   ): EvaluationValue {
+    if (
+      this.options.requireClosedSynchronousEffects
+      && isStaticEvaluationCallableExternallyOwned(this.runtimeHost, callee)
+    ) {
+      return this.unknown(
+        'Host-owned callable effects require their external execution authority.',
+        call,
+        moduleKey,
+        EvaluationOpenSeamKind.DynamicCall,
+      );
+    }
     return evaluateStaticFunctionWithArguments(
       callee,
       call,
@@ -2833,8 +2991,9 @@ export class StaticEvaluator {
     if (identifier.text === 'undefined') {
       return EvaluationUndefined;
     }
-    const value = environment.readValue(identifier.text)
-      ?? this.resolveUnboundIdentifier(identifier, environment, moduleKey);
+    const value = environment.readBinding(identifier.text) != null
+      ? this.evaluateIdentifier(identifier, environment, moduleKey)
+      : this.resolveUnboundIdentifier(identifier, environment, moduleKey);
     return value ?? EvaluationUndefined;
   }
 
@@ -3054,19 +3213,19 @@ export class StaticEvaluator {
     depth: number,
   ): EvaluationValue {
     const checkpoint = this.causalOpenSeams.length;
-    const left = skipStaticOuterExpression(expression.left);
+    const left = this.prepareAssignmentReference(expression.left, environment, moduleKey, depth + 1);
     const value = expression.operatorToken.kind === ts.SyntaxKind.EqualsToken
       ? this.evaluateExpression(expression.right, environment, moduleKey, depth + 1)
       : this.evaluateCompoundAssignmentValue(expression, left, environment, moduleKey, depth + 1);
     const evidence = evaluationValueEvidence(value, this.consumeOpenSeamsSince(checkpoint));
-    this.writeAssignmentTarget(left, evidence, environment, moduleKey, depth + 1, expression);
+    this.writeAssignmentTarget(left, evidence, environment, moduleKey, expression);
     this.replayOpenSeams(evidence.openSeams);
     return value;
   }
 
   private evaluateCompoundAssignmentValue(
     expression: ts.BinaryExpression,
-    left: ts.Expression,
+    left: StaticAssignmentReference,
     environment: ModuleEnvironmentRecord,
     moduleKey: string,
     depth: number,
@@ -3084,7 +3243,7 @@ export class StaticEvaluator {
     const current = this.readAssignmentTarget(left, environment, moduleKey, depth + 1, expression);
     const right = this.evaluateExpression(expression.right, environment, moduleKey, depth + 1);
     if (current.kind === EvaluationValueKind.Unknown) {
-      return this.materializeUnknownUse(current, left, moduleKey, 'Compound assignment depended on an open target value.', EvaluationOpenSeamKind.DynamicMutation);
+      return this.materializeUnknownUse(current, left.target, moduleKey, 'Compound assignment depended on an open target value.', EvaluationOpenSeamKind.DynamicMutation);
     }
     if (right.kind === EvaluationValueKind.Unknown) {
       return this.materializeUnknownUse(right, expression.right, moduleKey, 'Compound assignment depended on an open right value.', EvaluationOpenSeamKind.DynamicMutation);
@@ -3110,7 +3269,7 @@ export class StaticEvaluator {
     operator: ts.PostfixUnaryOperator | ts.PrefixUnaryOperator,
     prefix: boolean,
   ): EvaluationValue {
-    const left = skipStaticOuterExpression(target);
+    const left = this.prepareAssignmentReference(target, environment, moduleKey, depth + 1);
     const current = this.readAssignmentTarget(left, environment, moduleKey, depth + 1, expression);
     if (current.kind === EvaluationValueKind.Unknown) {
       return this.materializeUnknownUse(current, target, moduleKey, 'Update expression depended on an open target value.', EvaluationOpenSeamKind.DynamicMutation);
@@ -3133,44 +3292,60 @@ export class StaticEvaluator {
       new EvaluationValueEvidence(next, []),
       environment,
       moduleKey,
-      depth + 1,
       expression,
     );
     return prefix ? next : current;
   }
 
-  private readAssignmentTarget(
+  private prepareAssignmentReference(
     target: ts.Expression,
+    environment: ModuleEnvironmentRecord,
+    moduleKey: string,
+    depth: number,
+  ): StaticAssignmentReference {
+    target = skipStaticOuterExpression(target);
+    if (!ts.isPropertyAccessExpression(target) && !ts.isElementAccessExpression(target)) {
+      return { target, receiver: null, argument: null };
+    }
+    const receiver = this.evaluateExpression(target.expression, environment, moduleKey, depth + 1);
+    const argument = ts.isElementAccessExpression(target) && target.argumentExpression != null
+      ? this.evaluateExpression(target.argumentExpression, environment, moduleKey, depth + 1)
+      : null;
+    return { target, receiver, argument };
+  }
+
+  private readAssignmentTarget(
+    reference: StaticAssignmentReference,
     environment: ModuleEnvironmentRecord,
     moduleKey: string,
     depth: number,
     node: ts.Node,
   ): EvaluationValue {
+    const target = reference.target;
     if (ts.isIdentifier(target)) {
       return this.evaluateIdentifier(target, environment, moduleKey);
     }
     if (ts.isPropertyAccessExpression(target)) {
-      const receiver = this.evaluateExpression(target.expression, environment, moduleKey, depth + 1);
+      const receiver = reference.receiver!;
       if (receiver.kind === EvaluationValueKind.Unknown) {
         return this.materializeUnknownUse(receiver, target.expression, moduleKey, 'Assignment target property depended on an open receiver.', EvaluationOpenSeamKind.DynamicMutation);
       }
-      if (receiver.kind === EvaluationValueKind.BoundaryValue) {
+      if (receiver.kind === EvaluationValueKind.BoundaryValue && !this.options.requireClosedSynchronousEffects) {
         return boundaryDependencyValue(node, receiver);
       }
       return evaluateStaticPropertyValue(receiver, target.name.text, target, moduleKey, depth + 1, this.propertyAccessHost);
     }
     if (ts.isElementAccessExpression(target)) {
-      const receiver = this.evaluateExpression(target.expression, environment, moduleKey, depth + 1);
-      const argument = target.argumentExpression == null
-        ? null
-        : this.evaluateExpression(target.argumentExpression, environment, moduleKey, depth + 1);
+      const receiver = reference.receiver!;
+      const argument = reference.argument;
       if (receiver.kind === EvaluationValueKind.Unknown) {
         return this.materializeUnknownUse(receiver, target.expression, moduleKey, 'Assignment target element depended on an open receiver.', EvaluationOpenSeamKind.DynamicMutation);
       }
       if (argument?.kind === EvaluationValueKind.Unknown) {
         return this.materializeUnknownUse(argument, target.argumentExpression ?? target, moduleKey, 'Assignment target element depended on an open key.', EvaluationOpenSeamKind.DynamicMutation);
       }
-      if (receiver.kind === EvaluationValueKind.BoundaryValue || argument?.kind === EvaluationValueKind.BoundaryValue) {
+      if (!this.options.requireClosedSynchronousEffects
+        && (receiver.kind === EvaluationValueKind.BoundaryValue || argument?.kind === EvaluationValueKind.BoundaryValue)) {
         return boundaryDependencyValue(node, receiver, argument ?? EvaluationUndefined);
       }
       if (argument == null) {
@@ -3182,26 +3357,27 @@ export class StaticEvaluator {
   }
 
   private writeAssignmentTarget(
-    target: ts.Expression,
+    reference: StaticAssignmentReference,
     evidence: EvaluationValueEvidence,
     environment: ModuleEnvironmentRecord,
     moduleKey: string,
-    depth: number,
     node: ts.Node,
   ): void {
+    const target = reference.target;
     const value = evidence.value;
     if (ts.isIdentifier(target)) {
       if (environment.setBinding(target.text, value, evidence.openSeams)) {
-        this.mutationCount++;
+        this.recordBindingMutation(environment, target.text);
       } else {
         this.open(EvaluationOpenSeamKind.DynamicMutation, `Assignment target '${target.text}' is not a known mutable binding.`, target, moduleKey);
       }
       return;
     }
     if (ts.isPropertyAccessExpression(target)) {
-      const receiver = this.evaluateExpression(target.expression, environment, moduleKey, depth + 1);
+      const receiver = reference.receiver!;
+      if (this.writeHostedProperty(receiver, target.name.text, evidence, target, moduleKey)) return;
       if (writeStaticOwnProperty(receiver, target.name.text, value, node, evidence.openSeams) || receiver.kind === EvaluationValueKind.BoundaryValue) {
-        this.mutationCount++;
+        this.recordValueMutation(receiver);
         return;
       }
       if (receiver.kind === EvaluationValueKind.Unknown) {
@@ -3212,18 +3388,17 @@ export class StaticEvaluator {
       return;
     }
     if (ts.isElementAccessExpression(target)) {
-      const receiver = this.evaluateExpression(target.expression, environment, moduleKey, depth + 1);
-      const argument = target.argumentExpression == null
-        ? null
-        : this.evaluateExpression(target.argumentExpression, environment, moduleKey, depth + 1);
+      const receiver = reference.receiver!;
+      const argument = reference.argument;
+      const name = argument == null ? null : evaluationPropertyKeyString(argument);
+      if (name != null && this.writeHostedProperty(receiver, name, evidence, target, moduleKey)) return;
       if (receiver.kind === EvaluationValueKind.BoundaryValue) {
-        this.mutationCount++;
+        this.recordValueMutation(receiver);
         return;
       }
-      const name = argument == null ? null : evaluationPropertyKeyString(argument);
       if (name != null) {
         if (writeStaticOwnProperty(receiver, name, value, node, evidence.openSeams)) {
-          this.mutationCount++;
+          this.recordValueMutation(receiver);
           return;
         }
       }
@@ -3247,6 +3422,101 @@ export class StaticEvaluator {
       return;
     }
     this.open(EvaluationOpenSeamKind.DynamicMutation, 'Assignment target is not a supported identifier or object property.', target, moduleKey);
+  }
+
+  private recordBindingMutation(environment: ModuleEnvironmentRecord, name: string): void {
+    this.mutationCount++;
+    if (this.options.mutationOwnership?.binding(environment, name)) this.localMutationCount++;
+  }
+
+  private recordValueMutation(value?: EvaluationValue): void {
+    this.mutationCount++;
+    if (value != null && this.options.mutationOwnership?.value(value)) this.localMutationCount++;
+  }
+
+  private readHostedProperty(
+    receiver: EvaluationValue,
+    name: string,
+    node: ts.Node,
+    moduleKey: string,
+  ): EvaluationValue | null {
+    if (this.options.requireClosedSynchronousEffects) {
+      const result = this.runtimeHost.closedOperations?.readProperty?.(receiver, name, node, moduleKey, this.intrinsicHost());
+      if (result != null) return this.consumeRuntimeValue(result);
+    }
+    const unstable = this.options.inputReadGuard?.property(receiver);
+    if (unstable != null) {
+      return this.unknown(unstable, node, moduleKey, EvaluationOpenSeamKind.UnresolvedIdentifier);
+    }
+    return null;
+  }
+
+  private openHostedIterator(source: EvaluationValue, node: ts.Node, moduleKey: string): EvaluationIterator | null {
+    return this.options.requireClosedSynchronousEffects
+      ? this.runtimeHost.closedOperations?.openIterator?.(source, node, moduleKey, this.intrinsicHost()) ?? null
+      : null;
+  }
+
+  private projectHostedIterable(source: EvaluationValue, node: ts.Node, moduleKey: string): EvaluationIteratorProjection | null {
+    const iterator = this.openHostedIterator(source, node, moduleKey);
+    if (iterator == null) return null;
+    const projection = drainEvaluationIterator(iterator, this.policy.guardrails.maxLoopIterations);
+    if (!projection.shape.hasExactPositions) {
+      this.replayOpenSeams(projection.shape.aggregateOpenSeams);
+      this.open(EvaluationOpenSeamKind.DynamicLoop, 'Owned iterator did not close within the static iteration guardrail.', node, moduleKey);
+    }
+    return projection;
+  }
+
+  private writeHostedProperty(
+    receiver: EvaluationValue,
+    name: string,
+    evidence: EvaluationValueEvidence,
+    node: ts.Node,
+    moduleKey: string,
+  ): boolean {
+    if (!this.options.requireClosedSynchronousEffects) return false;
+    if (evidence.openSeams.length > 0 || evidence.value.kind === EvaluationValueKind.Unknown) {
+      this.replayOpenSeams(evidence.openSeams);
+      this.open(EvaluationOpenSeamKind.DynamicMutation, 'Property write depends on an open value.', node, moduleKey);
+      return true;
+    }
+    const result = this.runtimeHost.closedOperations?.writeProperty?.(receiver, name, evidence, node, moduleKey, this.intrinsicHost());
+    if (result != null) {
+      this.consumeRuntimeValue(result);
+      return true;
+    }
+    if (this.assignmentMayReachAccessor(receiver, name)) {
+      this.open(EvaluationOpenSeamKind.DynamicMutation, 'Accessor assignment requires setter/descriptor execution not modeled by direct property writes.', node, moduleKey);
+      return true;
+    }
+    return false;
+  }
+
+  private assignmentMayReachAccessor(receiver: EvaluationValue, name: string): boolean {
+    const ownNode = readStaticOwnProperty(receiver, name)?.node;
+    if (ownNode != null && (ts.isGetAccessorDeclaration(ownNode) || ts.isSetAccessorDeclaration(ownNode))) return true;
+    if (ownNode != null && ts.isPropertyDeclaration(ownNode)) return false;
+    const isStatic = receiver.kind === EvaluationValueKind.Class;
+    let value = isStatic ? receiver : receiver.kind === EvaluationValueKind.Instance ? receiver.classValue : null;
+    while (value != null) {
+      for (const member of value.declaration.members) {
+        if ((!ts.isGetAccessorDeclaration(member) && !ts.isSetAccessorDeclaration(member))
+          || hasModifier(member, ts.SyntaxKind.StaticKeyword) !== isStatic) continue;
+        if (ts.isComputedPropertyName(member.name) || member.name.text === name) return true;
+      }
+      value = value.baseClass;
+    }
+    return false;
+  }
+
+  private consumeRuntimeValue(result: StaticEvaluationRuntimeValueResult): EvaluationValue {
+    this.replayOpenSeams(result.openSeams);
+    return result.abruptCompletion == null
+      ? this.adoptNullableExternalValue(result.value) ?? EvaluationUndefined
+      : this.raise(new ThrowEvaluationCompletion(
+          this.adoptExternalValue(result.abruptCompletion.value), result.abruptCompletion.openSeams,
+        ));
   }
 
   private unsupportedStatement(
@@ -3364,6 +3634,7 @@ export class StaticEvaluator {
       nextExecutionOrdinal: this.nextExecutionOrdinal,
       statementCount: this.statementCount,
       mutationCount: this.mutationCount,
+      localMutationCount: this.localMutationCount,
     };
   }
 
@@ -3373,6 +3644,7 @@ export class StaticEvaluator {
     this.nextExecutionOrdinal = checkpoint.nextExecutionOrdinal;
     this.statementCount = checkpoint.statementCount;
     this.mutationCount = checkpoint.mutationCount;
+    this.localMutationCount = checkpoint.localMutationCount ?? 0;
   }
 
   private orderedExecutionTopologySince(index: number): StaticEvaluationExecutionTopology {
@@ -3548,6 +3820,10 @@ function declarationListBindingKind(list: ts.VariableDeclarationList): Evaluatio
     return EvaluationBindingKind.Let;
   }
   return EvaluationBindingKind.Var;
+}
+
+function hasRuntimeDecorators(node: ts.Node): boolean {
+  return ts.canHaveDecorators(node) && (ts.getDecorators(node)?.length ?? 0) > 0;
 }
 
 function boundaryDependencyValue(

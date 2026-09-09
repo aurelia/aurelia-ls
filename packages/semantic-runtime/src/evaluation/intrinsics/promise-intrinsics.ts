@@ -1,4 +1,4 @@
-import ts from 'typescript';
+import type ts from 'typescript';
 import type { StaticInvocationFrame } from '../invocation.js';
 import {
   EvaluationOpenSeamKind,
@@ -23,6 +23,14 @@ export function evaluatePromiseResolve(
   frame: StaticInvocationFrame<ts.CallExpression>,
   host: StaticIntrinsicEvaluationHost,
 ): EvaluationValue {
+  if (host.requiresClosedSynchronousEffects?.()) {
+    return host.unknown(
+      'Promise resolution effects are outside closed synchronous evaluation.',
+      frame.node,
+      frame.moduleKey,
+      EvaluationOpenSeamKind.DynamicCall,
+    );
+  }
   const { node: call } = frame;
   const argumentRead = promiseInvocationArguments(frame, host, 'Promise.resolve argument list did not close.');
   if (argumentRead.kind === 'open') {
@@ -42,6 +50,14 @@ export function evaluatePromiseReject(
   frame: StaticInvocationFrame<ts.CallExpression>,
   host: StaticIntrinsicEvaluationHost,
 ): EvaluationValue {
+  if (host.requiresClosedSynchronousEffects?.()) {
+    return host.unknown(
+      'Promise rejection effects are outside closed synchronous evaluation.',
+      frame.node,
+      frame.moduleKey,
+      EvaluationOpenSeamKind.DynamicCall,
+    );
+  }
   const argumentRead = promiseInvocationArguments(frame, host, 'Promise.reject argument list did not close.');
   if (argumentRead.kind === 'open') {
     return argumentRead.value;

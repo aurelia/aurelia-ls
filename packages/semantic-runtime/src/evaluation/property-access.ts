@@ -5,6 +5,7 @@ import {
 import { OpenSeamReasonKind } from '../kernel/open-seam.js';
 import { openSeamReasonKindsForEvaluationValue } from './boundary-open-reason.js';
 import type { ModuleEnvironmentRecord } from './environment.js';
+import { readStaticGlobalDataMember } from './global-intrinsics.js';
 import {
   staticStringPrototypeBoundaryMethods,
 } from './intrinsics/string-intrinsics.js';
@@ -24,12 +25,12 @@ import {
   EvaluationBoundaryKind,
   EvaluationBoundaryValue,
   EvaluationBooleanValue,
-  EvaluationFunctionValue,
+  type EvaluationFunctionValue,
   EvaluationNumberValue,
   EvaluationObjectProperty,
   EvaluationObjectPropertyPresence,
   EvaluationObjectPropertyState,
-  EvaluationRegularExpressionValue,
+  type EvaluationRegularExpressionValue,
   EvaluationStringValue,
   EvaluationUndefinedValue,
   EvaluationUnknownValue,
@@ -123,6 +124,8 @@ export function closedStaticValueMemberValue(
 }
 
 export interface StaticPropertyAccessEvaluationHost {
+  requiresClosedSynchronousEffects?(): boolean;
+  readHostedProperty?(receiver: EvaluationValue, name: string, node: ts.Node, moduleKey: string): EvaluationValue | null;
   evaluateExpression(
     expression: ts.Expression,
     environment: ModuleEnvironmentRecord,
@@ -224,6 +227,22 @@ export function evaluateStaticPropertyValue(
   depth: number,
   host: StaticPropertyAccessEvaluationHost,
 ): EvaluationValue {
+  const hosted = host.readHostedProperty?.(receiver, propertyName, node, moduleKey);
+  if (hosted != null) return hosted;
+  const intrinsic = host.requiresClosedSynchronousEffects?.() ? readStaticGlobalDataMember(receiver, propertyName, node) : null;
+  if (intrinsic != null) return intrinsic;
+  if (
+    host.requiresClosedSynchronousEffects?.()
+    && (receiver.kind === EvaluationValueKind.BoundaryValue || receiver.kind === EvaluationValueKind.BoundaryObject)
+  ) {
+    return host.unknown(
+      'Boundary property read effects are not closed by synchronous evaluation.',
+      node,
+      moduleKey,
+      EvaluationOpenSeamKind.UnsupportedExpression,
+      openSeamReasonKindsForEvaluationValue(receiver),
+    );
+  }
   return evaluateStaticValueMemberRead(
     readStaticValueProperty(receiver, propertyName, node),
     node,
@@ -241,6 +260,26 @@ export function evaluateStaticElementValue(
   depth: number,
   host: StaticPropertyAccessEvaluationHost,
 ): EvaluationValue {
+  const propertyName = evaluationPropertyKeyString(argument);
+  if (propertyName != null) {
+    const hosted = host.readHostedProperty?.(receiver, propertyName, node, moduleKey);
+    if (hosted != null) return hosted;
+    const intrinsic = host.requiresClosedSynchronousEffects?.() ? readStaticGlobalDataMember(receiver, propertyName, node) : null;
+    if (intrinsic != null) return intrinsic;
+  }
+  if (
+    host.requiresClosedSynchronousEffects?.()
+    && (receiver.kind === EvaluationValueKind.BoundaryValue || receiver.kind === EvaluationValueKind.BoundaryObject
+      || argument.kind === EvaluationValueKind.BoundaryValue || argument.kind === EvaluationValueKind.BoundaryObject)
+  ) {
+    return host.unknown(
+      'Boundary keyed property read effects are not closed by synchronous evaluation.',
+      node,
+      moduleKey,
+      EvaluationOpenSeamKind.UnsupportedExpression,
+      [...openSeamReasonKindsForEvaluationValue(receiver), ...openSeamReasonKindsForEvaluationValue(argument)],
+    );
+  }
   return evaluateStaticValueMemberRead(
     readStaticValueElement(receiver, argument, node),
     node,

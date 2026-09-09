@@ -51,6 +51,29 @@ export class EvaluationIteratorStep {
   }
 }
 
+/** One live iterator, including a consumer-owned structural collection. */
+export interface EvaluationIterator {
+  next(): EvaluationIteratorStep;
+}
+
+/** Drain without callbacks; an open step or growth beyond the guardrail retains an open projection. */
+export function drainEvaluationIterator(iterator: EvaluationIterator, maxIterations: number): EvaluationIteratorProjection {
+  const elements: EvaluationArrayElement[] = [];
+  for (;;) {
+    const step = iterator.next();
+    if (step.kind === EvaluationIteratorStepKind.Done) {
+      return new EvaluationIteratorProjection(elements, EvaluationArrayShape.exact(elements.length));
+    }
+    if (step.kind === EvaluationIteratorStepKind.Open || step.element == null || elements.length >= maxIterations) {
+      return new EvaluationIteratorProjection(elements, EvaluationArrayShape.from({
+        exactLength: null, hasExactElements: false, hasExactOrder: true, uncertainties: [],
+        extentOpenSeams: step.openSeams, elementOpenSeams: step.openSeams, orderOpenSeams: [],
+      }));
+    }
+    elements.push(step.element.withRuntimeIndex(elements.length));
+  }
+}
+
 /** Live evaluator iterator for built-in Array, Set, Map, and String values. */
 export class EvaluationBuiltinIterator {
   private nextIndex = 0;

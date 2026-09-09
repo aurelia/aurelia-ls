@@ -111,6 +111,47 @@ export function evaluateStaticGlobalAccess(
   }
 }
 
+/** Read a standard global's own data slot without invoking accessors or importing ambient browser state. */
+export function readStaticGlobalDataMember(
+  receiver: EvaluationValue,
+  name: string,
+  node: ts.Node,
+): EvaluationValue | null {
+  if (receiver.kind !== EvaluationValueKind.BoundaryObject || receiver.boundaryKind !== EvaluationBoundaryKind.HostEnvironment) return null;
+  const global = standardGlobalDataReceiver(receiver.path);
+  if (global == null) return null;
+  const descriptor = Object.getOwnPropertyDescriptor(global, name);
+  if (descriptor == null || !('value' in descriptor)) return null;
+  if (typeof descriptor.value === 'function') {
+    return new EvaluationBoundaryValue(EvaluationBoundaryKind.HostEnvironment, `${receiver.path}.${name}`, node);
+  }
+  if (typeof descriptor.value === 'number') return new EvaluationNumberValue(descriptor.value, node);
+  if (typeof descriptor.value === 'string') return new EvaluationStringValue(descriptor.value, node);
+  if (typeof descriptor.value === 'boolean') return new EvaluationBooleanValue(descriptor.value, node);
+  return null;
+}
+
+function standardGlobalDataReceiver(path: string): object | null {
+  switch (path) {
+    case 'Array': return Array;
+    case 'Object': return Object;
+    case 'Math': return Math;
+    case 'JSON': return JSON;
+    case 'Number': return Number;
+    case 'String': return String;
+    case 'Boolean': return Boolean;
+    case 'BigInt': return BigInt;
+    case 'Promise': return Promise;
+    case 'Date': return Date;
+    case 'RegExp': return RegExp;
+    case 'Map': return Map;
+    case 'Set': return Set;
+    case 'WeakMap': return WeakMap;
+    case 'WeakSet': return WeakSet;
+    default: return null;
+  }
+}
+
 /** Evaluates a modeled ECMAScript global call when the host function is static enough. */
 export function evaluateStaticGlobalCall(
   name: string,

@@ -1,7 +1,7 @@
 import ts from 'typescript';
 
 import type { ModuleEnvironmentRecord } from './environment.js';
-import { evaluationIteratorProjection } from './iterator-projection.js';
+import { evaluationIteratorProjection, type EvaluationIteratorProjection } from './iterator-projection.js';
 import {
   EvaluationArrayElement,
   EvaluationArrayShape,
@@ -18,6 +18,7 @@ import {
 } from './value-pressure.js';
 
 export interface StaticArgumentListEvaluationHost {
+  projectHostedIterable?(value: EvaluationValue, node: ts.Node): EvaluationIteratorProjection | null;
   readonly maxSpreadIterations: number;
 
   evaluateExpressionEvidence(
@@ -218,7 +219,7 @@ function spreadArgumentElements(
   /** Whether ECMAScript is known to continue with later authored arguments. */
   readonly canContinueArguments: boolean;
 } {
-  const projection = evaluationIteratorProjection(value, node);
+  const projection = host.projectHostedIterable?.(value, node) ?? evaluationIteratorProjection(value, node);
   if (projection == null) {
     return {
       kind: 'open',

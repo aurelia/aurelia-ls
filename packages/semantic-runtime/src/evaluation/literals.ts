@@ -32,9 +32,10 @@ import {
   type EvaluationUnknownValue,
   type EvaluationValue,
 } from './values.js';
-import { evaluationIteratorProjection } from './iterator-projection.js';
+import { evaluationIteratorProjection, type EvaluationIteratorProjection } from './iterator-projection.js';
 
 export interface StaticLiteralEvaluationHost {
+  projectHostedIterable?(value: EvaluationValue, node: ts.Node, moduleKey: string): EvaluationIteratorProjection | null;
   maxArrayIterations(): number;
 
   evaluateExpression(
@@ -101,7 +102,8 @@ export function evaluateStaticArrayLiteral(
     }
     if (ts.isSpreadElement(element)) {
       const spread = host.evaluateExpression(element.expression, environment, moduleKey, depth + 1);
-      if (spread.kind === EvaluationValueKind.BoundaryValue) {
+      const hostedProjection = host.projectHostedIterable?.(spread, element, moduleKey);
+      if (hostedProjection == null && spread.kind === EvaluationValueKind.BoundaryValue) {
         exactLength = null;
         hasExactElements = false;
         uncertainties.push(evaluationArrayBoundarySpreadUncertainty(spread, element));
@@ -122,7 +124,7 @@ export function evaluateStaticArrayLiteral(
         continue;
       }
       const directPressure = unretainedEvaluationOpenSeams(spread, host.openSeamsSince(checkpoint));
-      const projection = evaluationIteratorProjection(spread, element);
+      const projection = hostedProjection ?? evaluationIteratorProjection(spread, element);
       if (projection == null) {
         exactLength = null;
         hasExactElements = false;
@@ -275,17 +277,14 @@ export function evaluateStaticObjectLiteral(
       continue;
     }
     if (ts.isShorthandPropertyAssignment(property)) {
-      const binding = environment.readBinding(property.name.text);
-      const value = binding?.value
-        ?? host.unknown(`Shorthand property '${property.name.text}' did not resolve to a binding.`, property.name, moduleKey, EvaluationOpenSeamKind.UnresolvedIdentifier);
+      const value = host.evaluateExpression(property.name, environment, moduleKey, depth + 1);
+      const evidence = evaluationValueEvidence(value, host.consumeOpenSeamsSince(checkpoint));
       properties.set(property.name.text, new EvaluationObjectProperty(
         property.name.text,
-        value,
+        evidence.value,
         property,
         EvaluationObjectPropertyState.Closed,
-        binding == null
-          ? unretainedEvaluationOpenSeams(value, host.consumeOpenSeamsSince(checkpoint))
-          : binding.openSeams,
+        evidence.openSeams,
       ));
       continue;
     }

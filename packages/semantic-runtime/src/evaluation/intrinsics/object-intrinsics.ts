@@ -1,4 +1,4 @@
-import ts from 'typescript';
+import type ts from 'typescript';
 import type { StaticInvocationFrame } from '../invocation.js';
 import { readEvaluationEnumerableOwnEntries } from '../enumerable-own-properties.js';
 import {
@@ -368,6 +368,13 @@ function objectInvocationSource(
   }
   const source = argumentRead.evidence[0]
     ?? new EvaluationValueEvidence(EvaluationUndefined, []);
+  if (host.requiresClosedSynchronousEffects?.()
+    && (source.value.kind === EvaluationValueKind.Class || source.value.kind === EvaluationValueKind.Instance || source.value.kind === EvaluationValueKind.Function)) {
+    return {
+      kind: 'open',
+      value: host.unknown('Exact own property descriptors of class/function instances are not modeled for synchronous enumeration.', frame.node, frame.moduleKey, EvaluationOpenSeamKind.DynamicCall),
+    };
+  }
   return source.openSeams.length === 0
     ? { kind: 'known', value: source.value }
     : {

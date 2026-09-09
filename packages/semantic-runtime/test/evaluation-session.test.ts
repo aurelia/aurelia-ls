@@ -6,7 +6,9 @@ import { StaticEvaluationSessionFork } from '../src/evaluation/evaluation-sessio
 import { StaticEvaluator, type StaticEvaluationRuntimeHost } from '../src/evaluation/evaluator.js';
 import { evaluationValueGraphOwner } from '../src/evaluation/evaluation-graph.js';
 import {
+  evaluateStaticCallableCompletion,
   evaluateStaticCallableTruthiness,
+  StaticCallableCompletionKind,
   StaticCallableExecutionBinding,
   StaticCallableExecutionBindings,
   StaticCallableSlot,
@@ -28,6 +30,7 @@ import {
   EvaluationArrayElement,
   EvaluationArrayValue,
   EvaluationBoundaryKind,
+  EvaluationBoundaryObjectValue,
   EvaluationBoundaryValue,
   EvaluationClassValue,
   EvaluationDateValue,
@@ -66,6 +69,50 @@ import {
 import { FrameworkRegistrationKind } from '../src/registration/registration-reference.js';
 
 describe('static evaluation sessions', () => {
+  test('separates closed callable completion from return policy without committing receiver writes', () => {
+    const source = ts.createSourceFile('src/callable-completion.ts', [
+      'const receiver = {',
+      '  calls: 0, flag: false,',
+      '  noReturn() {},',
+      '  strictFalse() { return this.flag; },',
+      '  zero() { return 0; },',
+      '  nullValue() { return null; },',
+      '  empty() { return ""; },',
+      '  opaqueReturn(template) { return template; },',
+      '  write() { this.calls++; return false; },',
+      '  thrown() { throw "rejected"; },',
+      '};',
+    ].join('\n'), ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
+    const evaluator = new StaticEvaluator();
+    const evaluation = evaluator.evaluateSourceFile(source);
+    const receiver = requireValueKind(evaluation.environment.readValue('receiver'), EvaluationValueKind.Object);
+    const invoke = (name: string) => evaluateStaticCallableCompletion(new StaticCallableTarget(
+      requireValueKind(receiver.properties.get(name)?.value ?? null, EvaluationValueKind.Function),
+      evaluator.policy, evaluation.runtimeHost, [], receiver,
+    ), [new EvaluationBoundaryObjectValue(EvaluationBoundaryKind.HostEnvironment, 'compiler.template')]);
+    for (const [name, kind] of [
+      ['noReturn', EvaluationValueKind.Undefined],
+      ['strictFalse', EvaluationValueKind.Boolean],
+      ['zero', EvaluationValueKind.Number],
+      ['nullValue', EvaluationValueKind.Null],
+      ['empty', EvaluationValueKind.String],
+      ['opaqueReturn', EvaluationValueKind.BoundaryObject],
+    ] as const) {
+      const result = invoke(name);
+      expect(result.kind, name).toBe(StaticCallableCompletionKind.Normal);
+      expect(result.evaluation?.value?.kind, name).toBe(kind);
+    }
+    expect(invoke('write')).toMatchObject({
+      kind: StaticCallableCompletionKind.Open,
+      reason: 'Callable execution reached modeled mutation.',
+    });
+    expect(receiver.properties.get('calls')?.value).toMatchObject({ kind: EvaluationValueKind.Number, value: 0 });
+    expect(invoke('thrown')).toMatchObject({
+      kind: StaticCallableCompletionKind.Abrupt,
+      evaluation: { abruptCompletion: { kind: 'throw', value: { kind: EvaluationValueKind.String, value: 'rejected' } } },
+    });
+  });
+
   test('revokes candidate-local callable bindings before exposing stale closure targets', () => {
     const source = ts.createSourceFile(
       'src/callable-currentness.ts',

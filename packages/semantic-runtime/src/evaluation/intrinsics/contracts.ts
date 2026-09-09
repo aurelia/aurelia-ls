@@ -1,11 +1,11 @@
-import ts from 'typescript';
+import type ts from 'typescript';
 import type { OpenSeamReasonKind } from '../../kernel/open-seam.js';
 import type { ModuleEnvironmentRecord } from '../environment.js';
 import type { StaticEvaluationGuardrails } from '../policy.js';
 import type { EvaluationExpressionAbruptCompletion } from '../completion.js';
-import {
+import type {
   EvaluationOpenSeamKind,
-  type EvaluationOpenSeam,
+  EvaluationOpenSeam,
 } from '../seams.js';
 import type {
   EvaluationClassValue,
@@ -14,9 +14,12 @@ import type {
   EvaluationValue,
 } from '../values.js';
 import type { EvaluationValueEvidence } from '../value-pressure.js';
+import type { EvaluationIterator } from '../iterator-projection.js';
 
 export interface StaticIntrinsicEvaluationHost {
+  openIterator?(source: EvaluationValue, node: ts.Node, moduleKey: string): EvaluationIterator | null;
   readonly guardrails: StaticEvaluationGuardrails;
+  requiresClosedSynchronousEffects?(): boolean;
 
   /** Propagate modeled abrupt control flow through expression-shaped host APIs. */
   raise(completion: EvaluationExpressionAbruptCompletion): never;
@@ -68,7 +71,7 @@ export interface StaticIntrinsicEvaluationHost {
   ): EvaluationUnknownValue;
 
   /** Record one modeled write so speculative callable consumers can require an effect-free result. */
-  recordMutation(): void;
+  recordMutation(target?: EvaluationValue): void;
 
   checkpoint(): StaticIntrinsicEvaluationCheckpoint;
 
@@ -100,4 +103,5 @@ export interface StaticIntrinsicEvaluationCheckpoint {
   readonly nextExecutionOrdinal: number;
   readonly statementCount: number;
   readonly mutationCount: number;
+  readonly localMutationCount?: number;
 }

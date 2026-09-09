@@ -2,7 +2,7 @@ import ts from 'typescript';
 
 import {
   EvaluationBindingKind,
-  ModuleEnvironmentRecord,
+  type ModuleEnvironmentRecord,
 } from './environment.js';
 import {
   EvaluationOpenSeamKind,
@@ -18,11 +18,11 @@ import {
   EvaluationArrayValue,
   EvaluationBoundaryValue,
   EvaluationNumberValue,
-  EvaluationObjectProperty,
+  type EvaluationObjectProperty,
   EvaluationObjectValue,
   EvaluationUndefined,
   EvaluationUndefinedValue,
-  EvaluationUnknownValue,
+  type EvaluationUnknownValue,
   EvaluationValueKind,
   type EvaluationValue,
 } from './values.js';
@@ -30,6 +30,7 @@ import { denseEvaluationArrayElements } from './array-value-operations.js';
 
 /** Host hooks that keep binding-pattern evaluation inside the owning evaluator's policy and seam stream. */
 export interface StaticBindingPatternHost {
+  requiresClosedSynchronousEffects?(): boolean;
   maxArrayIterations(): number;
 
   evaluateExpression(
@@ -40,6 +41,7 @@ export interface StaticBindingPatternHost {
   ): EvaluationValue;
 
   readOwnProperty(receiver: EvaluationValue, name: string): EvaluationObjectProperty | null;
+  readHostedProperty?(receiver: EvaluationValue, name: string, node: ts.Node, moduleKey: string): EvaluationValue | null;
 
   readPropertyName(
     name: ts.PropertyName,
@@ -319,6 +321,9 @@ function readArrayBindingValue(
   host: StaticBindingPatternHost,
 ): EvaluationValueEvidence {
   const value = source.value;
+  if (host.requiresClosedSynchronousEffects?.() && value.kind === EvaluationValueKind.BoundaryValue) {
+    return unknownBindingEvidence(source, 'Boundary iteration is not closed by synchronous evaluation.', node, moduleKey, host);
+  }
   if (value.kind === EvaluationValueKind.Array) {
     if (value.mayHaveUnknownElements || value.mayHaveUnknownOrder) {
       return unknownBindingEvidence(
@@ -366,9 +371,12 @@ function readArrayBindingRest(
   host: StaticBindingPatternHost,
 ): EvaluationValueEvidence {
   const value = source.value;
+  if (host.requiresClosedSynchronousEffects?.() && value.kind === EvaluationValueKind.BoundaryValue) {
+    return unknownBindingEvidence(source, 'Boundary iteration is not closed by synchronous evaluation.', node, moduleKey, host);
+  }
   if (value.kind === EvaluationValueKind.Array) {
     const exact = !value.mayHaveUnknownElements && !value.mayHaveUnknownOrder && value.exactLength != null;
-    if (exact && value.exactLength! - startIndex > host.maxArrayIterations()) {
+    if (exact && value.exactLength - startIndex > host.maxArrayIterations()) {
       return unknownBindingEvidence(
         source,
         'Array binding rest exceeds the static iteration guardrail.',
@@ -386,7 +394,7 @@ function readArrayBindingRest(
       restElements,
       node,
       exact
-        ? EvaluationArrayShape.exact(Math.max(0, value.exactLength! - startIndex))
+        ? EvaluationArrayShape.exact(Math.max(0, value.exactLength - startIndex))
         : EvaluationArrayShape.from({
             exactLength: value.exactLength == null
               ? null
@@ -432,6 +440,13 @@ function readObjectBindingValue(
   host: StaticBindingPatternHost,
 ): EvaluationValueEvidence {
   const value = source.value;
+  if (host.readHostedProperty != null) {
+    const checkpoint = host.openSeamCheckpoint();
+    const property = host.readHostedProperty(value, propertyName, node, moduleKey);
+    if (property != null) {
+      return evaluationValueEvidence(property, [...source.openSeams, ...host.consumeOpenSeamsSince(checkpoint)]);
+    }
+  }
   if (value.kind === EvaluationValueKind.Unknown) {
     const checkpoint = host.openSeamCheckpoint();
     const materialized = host.materializeUnknownUse(value, node, moduleKey, 'Object binding pattern depended on an open source value.', EvaluationOpenSeamKind.UnsupportedBindingPattern);
@@ -519,6 +534,10 @@ function readObjectBindingRest(
   host: StaticBindingPatternHost,
 ): EvaluationValueEvidence {
   const value = source.value;
+  if (host.requiresClosedSynchronousEffects?.()
+    && (value.kind === EvaluationValueKind.BoundaryValue || value.kind === EvaluationValueKind.BoundaryObject)) {
+    return unknownBindingEvidence(source, 'Boundary property enumeration is not closed by synchronous evaluation.', node, moduleKey, host);
+  }
   if (value.kind === EvaluationValueKind.Object || value.kind === EvaluationValueKind.BoundaryObject) {
     const properties = new Map<string, EvaluationObjectProperty>();
     for (const [name, property] of value.properties) {

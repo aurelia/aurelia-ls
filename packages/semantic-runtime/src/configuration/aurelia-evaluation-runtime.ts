@@ -354,6 +354,12 @@ for (const statement of syntheticSource.statements) {
 }
 
 const aureliaStaticEvaluationRuntimeHostOperations: StaticEvaluationRuntimeHostOperations = {
+  isCallableExternallyOwned(value): boolean {
+    return value.kind === EvaluationValueKind.Function
+      && (value.declaration.getSourceFile() === syntheticSource
+        || aureliaSyntheticCallsByFunction.has(value)
+        || aureliaFacadeModulesByConstructor.has(value));
+  },
   transferValueMetadata(source, target, transfer): void {
     const frameworkRegistration = frameworkRegistrationEvaluationsByValue.get(source);
     if (frameworkRegistration != null) {
